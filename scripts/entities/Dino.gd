@@ -69,6 +69,7 @@ var raycast: RayCast3D = null
 var attack_timer: Timer = null
 var collision_shape: CollisionShape3D = null
 var mesh_instance: MeshInstance3D = null
+var _shape_query: PhysicsShapeQueryParameters3D = null
 
 # ==============================================================================
 # Lifecycle & Initialization
@@ -254,21 +255,40 @@ func check_obstacle() -> Node:
 		if collider is Node and collider.get_parent() and _is_target_valid(collider.get_parent()):
 			return collider.get_parent()
 
-	# Fallback overlap check for dinos overlapping or spawned inside building geometry
-	if is_inside_tree():
+	# Multi-ray and volume checks using DirectSpaceState
+	if is_inside_tree() and get_world_3d():
 		var space_state = get_world_3d().direct_space_state
-		var query = PhysicsPointQueryParameters3D.new()
-		query.position = global_position + Vector3(0.0, 0.4, 0.0)
-		query.collision_mask = 2 # Layer 2: Buildings
-		query.collide_with_bodies = true
-		query.collide_with_areas = true
-		var hits = space_state.intersect_point(query, 1)
-		if not hits.is_empty():
-			var collider = hits[0].get("collider")
-			if _is_target_valid(collider):
-				return collider
-			if collider is Node and collider.get_parent() and _is_target_valid(collider.get_parent()):
-				return collider.get_parent()
+		var reach: float = maxf(1.2, speed * 0.15)
+		var forward = -global_transform.basis.z.normalized()
+		var right = global_transform.basis.x.normalized()
+		var center_origin = global_position + Vector3(0.0, 0.4, 0.0)
+
+		# 1. Lateral multi-ray detection across body width (left: -0.35m, right: +0.35m)
+		var offsets = [-0.35, 0.35]
+		for offset in offsets:
+			var ray_from = center_origin + right * offset
+			var ray_to = ray_from + forward * reach
+			var ray_query = PhysicsRayQueryParameters3D.create(ray_from, ray_to, 2)
+			ray_query.collide_with_bodies = true
+			ray_query.collide_with_areas = true
+			var hit = space_state.intersect_ray(ray_query)
+			if not hit.is_empty():
+				var collider = hit.get("collider")
+				if _is_target_valid(collider):
+					return collider
+				if collider is Node and collider.get_parent() and _is_target_valid(collider.get_parent()):
+					return collider.get_parent()
+
+		# 2. Volume intersection check for dinos touching or penetrating building geometry
+		if _shape_query:
+			_shape_query.transform = Transform3D(global_transform.basis, center_origin)
+			var shape_hits = space_state.intersect_shape(_shape_query, 1)
+			if not shape_hits.is_empty():
+				var collider = shape_hits[0].get("collider")
+				if _is_target_valid(collider):
+					return collider
+				if collider is Node and collider.get_parent() and _is_target_valid(collider.get_parent()):
+					return collider.get_parent()
 
 	return null
 
@@ -456,6 +476,16 @@ func _ensure_components() -> void:
 		attack_timer.autostart = false
 		add_child(attack_timer)
 		attack_timer.timeout.connect(_on_attack_timer_timeout)
+
+	# 5. Cached Shape Query for Volume Obstacle Detection
+	if _shape_query == null:
+		_shape_query = PhysicsShapeQueryParameters3D.new()
+		var box = BoxShape3D.new()
+		box.size = Vector3(0.8, 0.8, 0.8)
+		_shape_query.shape = box
+		_shape_query.collision_mask = 2 # Layer 2: Buildings
+		_shape_query.collide_with_bodies = true
+		_shape_query.collide_with_areas = true
 
 # ==============================================================================
 # Resolvers

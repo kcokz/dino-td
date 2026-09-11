@@ -26,6 +26,7 @@ var is_game_over: bool = false
 var is_game_won: bool = false
 var nests_alive: int = 1
 var active_buildings: Array[Node] = []
+var _produce_timer: Timer = null
 
 # ==============================================================================
 # 3. Compatibility Aliases (Ensures 100% interoperability with specs & tests)
@@ -130,6 +131,7 @@ func _emit_game_lost() -> void:
 # ==============================================================================
 ## Fully restores pristine starting game state from Config constants.
 func reset_game() -> void:
+	_cancel_produce_timer()
 	is_game_over = false
 	is_game_won = false
 	current_phase = Phase.PLAN
@@ -281,11 +283,13 @@ func set_phase(new_phase: Phase) -> void:
 	
 	match current_phase:
 		Phase.PLAN:
+			_cancel_produce_timer()
 			reset_ap()
 		Phase.ATTACK:
-			pass
+			_cancel_produce_timer()
 		Phase.PRODUCE:
 			_emit_produce_phase()
+			_schedule_auto_end_produce()
 
 ## Compatibility alias for set_phase.
 func change_phase(new_phase: int) -> void:
@@ -305,8 +309,40 @@ func end_plan_phase() -> void:
 
 ## Concludes production and transitions back to PLAN phase.
 func end_produce_phase() -> void:
+	_cancel_produce_timer()
 	if current_phase == Phase.PRODUCE and not is_game_over:
 		advance_phase()
+
+func _schedule_auto_end_produce() -> void:
+	if not is_inside_tree():
+		return
+	var cfg = _get_config()
+	var duration: float = 1.0
+	if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
+		duration = float(cfg.MAP.get("produce_duration", 1.0))
+	elif cfg and "PRODUCE_DELAY" in cfg:
+		duration = float(cfg.PRODUCE_DELAY)
+	
+	if duration <= 0.0:
+		return
+	
+	if _produce_timer == null or not is_instance_valid(_produce_timer):
+		_produce_timer = Timer.new()
+		_produce_timer.name = "ProduceAutoTimer"
+		_produce_timer.one_shot = true
+		_produce_timer.timeout.connect(_on_produce_timer_timeout)
+		add_child(_produce_timer)
+	
+	_produce_timer.start(duration)
+
+func _on_produce_timer_timeout() -> void:
+	if current_phase == Phase.PRODUCE and not is_game_over:
+		end_produce_phase()
+
+func _cancel_produce_timer() -> void:
+	if _produce_timer and is_instance_valid(_produce_timer) and not _produce_timer.is_stopped():
+		_produce_timer.stop()
+
 
 # ==============================================================================
 # 10. Reactive Event Handlers (EventBus Listeners)

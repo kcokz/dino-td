@@ -187,3 +187,15 @@ const INITIAL_DINO_MULTIPLIERS: Dictionary = {
 	"speed": 1.0
 }
 const INITIAL_NESTS_ALIVE: int = 1
+
+# ==============================================================================
+# 8. Level & Map Layout Configuration
+# ==============================================================================
+const MAP: Dictionary = {
+	"default_core_cell": Vector2i(0, 0),
+	"default_nest_cell": Vector2i(0, -9),
+	"path_column_x": 0,
+	"produce_duration": 1.0, # Duration (seconds) of PRODUCE phase before auto-advancing to PLAN
+}
+const PRODUCE_DELAY: float = 1.0
+

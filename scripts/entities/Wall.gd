@@ -7,5 +7,3 @@ extends "res://scripts/entities/Building.gd"
 func _init() -> void:
 	super("wall")
 	building_type = "wall"
-	max_hp = 30.0
-	current_hp = 30.0

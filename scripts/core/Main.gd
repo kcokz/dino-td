@@ -42,9 +42,16 @@ var waypoints: Array[Vector3] = []
 # ==============================================================================
 
 func _ready() -> void:
+	_init_level_coordinates()
 	_ensure_scene_dependencies()
 	_wire_signals()
 	setup_level()
+
+func _init_level_coordinates() -> void:
+	var cfg = _get_config()
+	if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
+		core_cell = cfg.MAP.get("default_core_cell", Vector2i(0, 0))
+		nest_cell = cfg.MAP.get("default_nest_cell", Vector2i(0, -9))
 
 func _ensure_scene_dependencies() -> void:
 	# 1. Camera3D (fixed 45-degree isometric projection looking at grid center (0, 0, -9))
@@ -121,15 +128,25 @@ func _discover_waypoints() -> void:
 				waypoints.append(child.global_position)
 
 	if waypoints.is_empty():
-		# Canonical waypoints from Nest (0, 0, -18) to Core (0, 0, 0)
-		waypoints = [
-			Vector3(0.0, 0.0, -18.0),
-			Vector3(0.0, 0.0, -14.0),
-			Vector3(0.0, 0.0, -10.0),
-			Vector3(0.0, 0.0, -6.0),
-			Vector3(0.0, 0.0, -2.0),
-			Vector3(0.0, 0.0, 0.0)
-		]
+		_init_level_coordinates()
+		var col_x: int = 0
+		var cfg = _get_config()
+		if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
+			col_x = int(cfg.MAP.get("path_column_x", 0))
+		if grid_manager and grid_manager.has_method("cell_to_world"):
+			var step: int = 2 if nest_cell.y < core_cell.y else -2
+			for cz in range(nest_cell.y, core_cell.y, step):
+				waypoints.append(grid_manager.cell_to_world(Vector2i(col_x, cz)))
+			waypoints.append(grid_manager.cell_to_world(core_cell))
+		else:
+			waypoints = [
+				Vector3(1.0, 0.0, -17.0),
+				Vector3(1.0, 0.0, -13.0),
+				Vector3(1.0, 0.0, -9.0),
+				Vector3(1.0, 0.0, -5.0),
+				Vector3(1.0, 0.0, -1.0),
+				Vector3(1.0, 0.0, 1.0)
+			]
 
 	if wave_manager:
 		wave_manager.waypoints = waypoints.duplicate()
@@ -153,31 +170,53 @@ func setup_level() -> void:
 
 ## Provisions initial CoreCampfire and Nest on the map and in GridManager.
 func setup_initial_entities() -> void:
-	# 1. Place CoreCampfire at core_cell (0, 0) / world (0, 0, 0)
+	_init_level_coordinates()
+
+	# 1. Place CoreCampfire (Scene Marker -> Config Fallback -> Grid Snapping)
 	if current_core == null or not is_instance_valid(current_core):
+		var core_pos: Vector3
+		var core_marker = find_child("CoreSpawn", true, false)
+		if core_marker is Node3D and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
+			core_cell = grid_manager.world_to_cell(core_marker.global_position)
+			core_pos = grid_manager.cell_to_world(core_cell)
+		elif grid_manager and grid_manager.has_method("cell_to_world"):
+			core_pos = grid_manager.cell_to_world(core_cell)
+		else:
+			core_pos = Vector3(1.0, 0.0, 1.0)
+
 		var core = core_campfire_script.new()
 		core.name = "CoreCampfire"
 		core.add_to_group("core")
 		core.setup("core", core_cell)
-		core.position = Vector3(0.0, 0.0, 0.0)
+		core.position = core_pos
 		buildings_container.add_child(core)
 
-		if grid_manager:
+		if grid_manager and grid_manager.has_method("occupy_cell"):
 			grid_manager.occupy_cell(core_cell, core)
 		current_core = core
 
-	# 2. Place Nest at nest_cell (0, -9) / world (0, 0, -18)
+	# 2. Place Nest (Scene Marker -> Config Fallback -> Grid Snapping)
 	if current_nest == null or not is_instance_valid(current_nest):
+		var nest_pos: Vector3
+		var nest_marker = find_child("NestSpawn", true, false)
+		if nest_marker is Node3D and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
+			nest_cell = grid_manager.world_to_cell(nest_marker.global_position)
+			nest_pos = grid_manager.cell_to_world(nest_cell)
+		elif grid_manager and grid_manager.has_method("cell_to_world"):
+			nest_pos = grid_manager.cell_to_world(nest_cell)
+		else:
+			nest_pos = Vector3(1.0, 0.0, -17.0)
+
 		var nest = nest_script.new()
 		nest.name = "Nest"
 		nest.add_to_group("nest")
 		nest.setup(nest_cell)
-		nest.position = Vector3(0.0, 0.0, -18.0)
+		nest.position = nest_pos
 
 		var target_nest_parent = nest_holder if is_instance_valid(nest_holder) else self
 		target_nest_parent.add_child(nest)
 
-		if grid_manager:
+		if grid_manager and grid_manager.has_method("occupy_cell"):
 			grid_manager.occupy_cell(nest_cell, nest)
 		current_nest = nest
 
