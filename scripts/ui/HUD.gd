@@ -34,6 +34,8 @@ var result_label: Label = null
 var details_label: Label = null
 var restart_btn: Button = null
 
+var hint_label: Label = null
+var _hint_timer: Timer = null
 var selected_build_type: String = ""
 
 # ==============================================================================
@@ -160,17 +162,38 @@ func _connect_buttons() -> void:
 		restart_btn.pressed.connect(_on_restart_pressed)
 
 func _on_tower_btn_pressed() -> void:
-	select_build_type("tower")
+	if selected_build_type == "tower":
+		deselect_build()
+	else:
+		_check_ap_hint()
+		select_build_type("tower")
 
 func _on_wall_btn_pressed() -> void:
-	select_build_type("wall")
+	if selected_build_type == "wall":
+		deselect_build()
+	else:
+		_check_ap_hint()
+		select_build_type("wall")
 
 func _on_lumber_btn_pressed() -> void:
-	select_build_type("lumber_hut")
+	if selected_build_type == "lumber_hut":
+		deselect_build()
+	else:
+		_check_ap_hint()
+		select_build_type("lumber_hut")
+
+func _check_ap_hint() -> void:
+	var gs = _get_game_state()
+	if gs and "current_ap" in gs and gs.current_ap <= 0:
+		show_hint("行动点不足 (0 AP)！请点击【结束行动】推进回合并恢复 AP")
 
 func select_build_type(type_id: String) -> void:
 	selected_build_type = type_id
 	build_requested.emit(type_id)
+
+func deselect_build() -> void:
+	selected_build_type = ""
+	build_requested.emit("")
 
 func _on_end_action_pressed() -> void:
 	end_action_clicked.emit()
@@ -228,19 +251,40 @@ func _update_building_button_labels() -> void:
 		var wall_data: Dictionary = cfg.BUILDINGS["wall"]
 		var wall_name: String = wall_data.get("name", "木墙")
 		var wall_cost: int = int(wall_data.get("cost", {}).get("wood", 2))
-		build_wall_btn.text = "%s (%d木)" % [wall_name, wall_cost]
+		var wall_ap: int = int(wall_data.get("ap_cost", 1))
+		build_wall_btn.text = "%s (%d木, %dAP)" % [wall_name, wall_cost, wall_ap]
 
 	if build_lumber_btn and cfg.BUILDINGS.has("lumber_hut"):
 		var lumber_data: Dictionary = cfg.BUILDINGS["lumber_hut"]
 		var lumber_name: String = lumber_data.get("name", "伐木屋")
 		var lumber_cost: int = int(lumber_data.get("cost", {}).get("wood", 3))
-		build_lumber_btn.text = "%s (%d木)" % [lumber_name, lumber_cost]
+		var lumber_ap: int = int(lumber_data.get("ap_cost", 1))
+		build_lumber_btn.text = "%s (%d木, %dAP)" % [lumber_name, lumber_cost, lumber_ap]
 
 	if build_tower_btn and cfg.BUILDINGS.has("tower"):
 		var tower_data: Dictionary = cfg.BUILDINGS["tower"]
 		var tower_name: String = tower_data.get("name", "自动哨位")
 		var tower_cost: int = int(tower_data.get("cost", {}).get("wood", 4))
-		build_tower_btn.text = "%s (%d木)" % [tower_name, tower_cost]
+		var tower_ap: int = int(tower_data.get("ap_cost", 1))
+		build_tower_btn.text = "%s (%d木, %dAP)" % [tower_name, tower_cost, tower_ap]
+
+func show_hint(msg: String, duration: float = 2.5) -> void:
+	if hint_label == null:
+		_ensure_ui_components()
+	if hint_label == null:
+		return
+	hint_label.text = msg
+	hint_label.visible = true
+	if _hint_timer == null or not is_instance_valid(_hint_timer):
+		_hint_timer = Timer.new()
+		_hint_timer.name = "HintTimer"
+		_hint_timer.one_shot = true
+		_hint_timer.timeout.connect(func(): if hint_label and is_instance_valid(hint_label): hint_label.visible = false)
+		add_child(_hint_timer)
+	_hint_timer.start(duration)
+
+func get_hint_text() -> String:
+	return hint_label.text if (hint_label and hint_label.visible) else ""
 
 func _set_action_buttons_enabled(enabled: bool) -> void:
 	if build_tower_btn: build_tower_btn.disabled = not enabled
@@ -303,6 +347,7 @@ func _ensure_ui_components() -> void:
 	wave_label = find_child("WaveLabel", true, false) as Label
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
+	hint_label = find_child("HintLabel", true, false) as Label
 
 	build_tower_btn = find_child("BuildTowerBtn", true, false) as Button
 	build_wall_btn = find_child("BuildWallBtn", true, false) as Button
@@ -356,6 +401,15 @@ func _ensure_ui_components() -> void:
 		phase_label = Label.new()
 		phase_label.name = "PhaseLabel"
 		root_control.add_child(phase_label)
+
+	if hint_label == null:
+		hint_label = Label.new()
+		hint_label.name = "HintLabel"
+		hint_label.visible = false
+		hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		hint_label.position = Vector2(0, 70)
+		root_control.add_child(hint_label)
 
 	if build_tower_btn == null:
 		build_tower_btn = Button.new()

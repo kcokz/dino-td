@@ -1,4 +1,4 @@
-﻿# res://tests/test_gameplay_fixes.gd
+# res://tests/test_gameplay_fixes.gd
 # Targeted Verification Suite for Gameplay Fixes:
 # 1. Wooden Wall collision & obstacle detection along grid column path.
 # 2. PRODUCE phase auto-advance timer unlocking player for the next turn.
@@ -183,3 +183,108 @@ func test_06_manual_end_produce_cancels_timer_and_avoids_double_advance() -> voi
 
 	# It must still be in PLAN phase, not pushed to ATTACK
 	assert_eq(game_state_node.current_phase, 0, "Phase must remain in PLAN (0) without ghost advance")
+
+# ==============================================================================
+# 5. Continuous Placement, Cancellation & AP Feedback Tests
+# ==============================================================================
+
+func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
+	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
+	var main_inst = main_scene_packed.instantiate()
+	_cleanup_nodes.append(main_inst)
+	tree.root.add_child(main_inst)
+
+	var hud = main_inst.find_child("HUD", true, false)
+	assert_not_null(hud, "HUD must exist in Main")
+	assert_true(hud.build_wall_btn.text.contains("1AP"), "BuildWallBtn should display 1AP cost")
+	assert_true(hud.build_lumber_btn.text.contains("1AP"), "BuildLumberHutBtn should display 1AP cost")
+	assert_true(hud.build_tower_btn.text.contains("1AP"), "BuildTowerBtn should display 1AP cost")
+
+func test_08_continuous_building_placement_until_ap_exhausted() -> void:
+	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
+	var main_inst = main_scene_packed.instantiate()
+	_cleanup_nodes.append(main_inst)
+	tree.root.add_child(main_inst)
+
+	game_state_node.reset_game()
+	assert_eq(game_state_node.current_ap, 3, "Starting AP must be 3")
+
+	# Select wall
+	main_inst.on_build_selected("wall")
+	assert_eq(main_inst.current_build_type, "wall", "Selected build type is wall")
+
+	# Place wall 1 at cell (1, -1)
+	var cell1 = Vector2i(1, -1)
+	var placed1 = main_inst.build_system.place_building("wall", cell1, main_inst.buildings_container)
+	assert_not_null(placed1, "Wall 1 placed successfully")
+	if not main_inst._can_afford_building(main_inst.current_build_type):
+		main_inst.cancel_building_selection()
+	assert_eq(main_inst.current_build_type, "wall", "Selection persists after Wall 1 (AP=2)")
+
+	# Place wall 2 at cell (1, -2)
+	var cell2 = Vector2i(1, -2)
+	var placed2 = main_inst.build_system.place_building("wall", cell2, main_inst.buildings_container)
+	assert_not_null(placed2, "Wall 2 placed successfully")
+	if not main_inst._can_afford_building(main_inst.current_build_type):
+		main_inst.cancel_building_selection()
+	assert_eq(main_inst.current_build_type, "wall", "Selection persists after Wall 2 (AP=1)")
+
+	# Place wall 3 at cell (1, -3)
+	var cell3 = Vector2i(1, -3)
+	var placed3 = main_inst.build_system.place_building("wall", cell3, main_inst.buildings_container)
+	assert_not_null(placed3, "Wall 3 placed successfully")
+	if not main_inst._can_afford_building(main_inst.current_build_type):
+		main_inst.cancel_building_selection()
+	assert_eq(game_state_node.current_ap, 0, "AP is now 0")
+	assert_eq(main_inst.current_build_type, "", "Build selection automatically exits when AP is exhausted")
+
+func test_09_cancel_building_selection_and_hud_hint() -> void:
+	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
+	var main_inst = main_scene_packed.instantiate()
+	_cleanup_nodes.append(main_inst)
+	tree.root.add_child(main_inst)
+
+	var hud = main_inst.find_child("HUD", true, false)
+	assert_not_null(hud, "HUD must exist")
+
+	main_inst.on_build_selected("tower")
+	assert_eq(main_inst.current_build_type, "tower", "Tower selected")
+
+	# Cancel via helper
+	main_inst.cancel_building_selection()
+	assert_eq(main_inst.current_build_type, "", "Build type cleared after cancel")
+	assert_eq(hud.selected_build_type, "", "HUD selection cleared after cancel")
+
+	# Test hint message display
+	hud.show_hint("测试提示信息", 1.0)
+	assert_eq(hud.get_hint_text(), "测试提示信息", "Hint text matches")
+	assert_true(hud.hint_label.visible, "HintLabel is visible")
+
+# ==============================================================================
+# 6. Dinosaur Anti-Overlap Soft Separation Tests
+# ==============================================================================
+
+func test_10_dinosaurs_maintain_separation_without_overlapping() -> void:
+	assert_not_null(dino_script, "Dino script must exist")
+
+	var dino1 = dino_script.new("raptor")
+	var dino2 = dino_script.new("raptor")
+	_cleanup_nodes.append(dino1)
+	_cleanup_nodes.append(dino2)
+
+	tree.root.add_child(dino1)
+	tree.root.add_child(dino2)
+
+	# Spawn both dinos at the exact same location
+	dino1.global_position = Vector3(1.0, 0.0, -5.0)
+	dino2.global_position = Vector3(1.0, 0.0, -5.0)
+
+	await wait_frames(1)
+
+	# Run a few physics steps of separation
+	for i in range(10):
+		dino1._apply_dino_separation(0.05)
+		dino2._apply_dino_separation(0.05)
+
+	var final_dist: float = dino1.global_position.distance_to(dino2.global_position)
+	assert_true(final_dist >= 0.8, "Dinos must be pushed apart to at least 0.8m distance (got %f)" % final_dist)

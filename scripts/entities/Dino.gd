@@ -184,6 +184,8 @@ func _physics_process(delta: float) -> void:
 		State.ATTACKING:
 			_process_attacking(delta)
 
+	_apply_dino_separation(delta)
+
 ## Advances along waypoints. Checks for obstacles and Core arrival.
 func advance_towards_waypoint(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
@@ -227,8 +229,9 @@ func advance_towards_waypoint(delta: float) -> void:
 		look_at(global_position + dir, Vector3.UP)
 
 	global_position += velocity * delta
+	_apply_dino_separation(delta)
 
-func _process_attacking(_delta: float) -> void:
+func _process_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
 
 	# Verify target validity
@@ -239,6 +242,51 @@ func _process_attacking(_delta: float) -> void:
 			current_target = next_obstacle
 		else:
 			on_obstacle_cleared()
+
+	if delta > 0.0:
+		_apply_dino_separation(delta)
+
+## Soft flocking separation to prevent dinosaur cubes from penetrating or overlapping each other.
+func _apply_dino_separation(delta: float) -> void:
+	if not is_inside_tree() or is_dead or current_state == State.DEAD:
+		return
+	if delta <= 0.0:
+		return
+	var dinos = get_tree().get_nodes_in_group("dinos")
+	if dinos.size() <= 1:
+		return
+
+	var min_dist: float = 0.85 # Raptor body box is 0.8 x 0.8 x 0.8
+	var total_push: Vector3 = Vector3.ZERO
+
+	for other in dinos:
+		if other == self or not is_instance_valid(other) or not (other is Node3D):
+			continue
+		if not other.is_inside_tree():
+			continue
+		if "is_dead" in other and other.is_dead:
+			continue
+		if "current_state" in other and other.current_state == State.DEAD:
+			continue
+
+		var diff: Vector3 = global_position - other.global_position
+		diff.y = 0.0
+		var dist_sq: float = diff.length_squared()
+		if dist_sq < min_dist * min_dist:
+			var dist: float = sqrt(dist_sq)
+			if dist > 0.001:
+				var push_mag: float = (min_dist - dist)
+				total_push += (diff / dist) * push_mag
+			else:
+				# Perfectly coincident: deterministic lateral displacement by instance ID
+				var side: float = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
+				total_push += Vector3(side * 0.45, 0.0, 0.0)
+
+	if total_push.length_squared() > 0.0001:
+		var push_rate: float = maxf(speed * 2.0, 5.0)
+		var max_step: float = push_rate * delta
+		var push_step: Vector3 = total_push.normalized() * minf(total_push.length(), max_step)
+		global_position += push_step
 
 func check_obstacle() -> Node:
 	if raycast == null or not is_instance_valid(raycast):

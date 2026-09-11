@@ -159,6 +159,14 @@ func _wire_signals() -> void:
 			hud.build_requested.connect(on_build_selected)
 		if not hud.restart_requested.is_connected(restart_game):
 			hud.restart_requested.connect(restart_game)
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("phase_changed"):
+		if not eb.phase_changed.is_connected(_on_phase_changed):
+			eb.phase_changed.connect(_on_phase_changed)
+
+func _on_phase_changed(phase: int) -> void:
+	if phase != 0:
+		cancel_building_selection()
 
 # ==============================================================================
 # Entity Setup & Placement
@@ -240,17 +248,78 @@ func setup_initial_entities() -> void:
 func on_build_selected(type_id: String) -> void:
 	current_build_type = type_id
 
+func cancel_building_selection() -> void:
+	current_build_type = ""
+	if hud and is_instance_valid(hud) and hud.has_method("deselect_build"):
+		hud.deselect_build()
+
+func _can_afford_building(type_id: String) -> bool:
+	if type_id.is_empty():
+		return false
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs == null or cfg == null:
+		return false
+	if not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(type_id):
+		return false
+	var b_data: Dictionary = cfg.BUILDINGS[type_id]
+	var ap_cost: int = int(b_data.get("ap_cost", 1))
+	var cost: Dictionary = b_data.get("cost", {})
+	return gs.can_spend_ap(ap_cost) and gs.can_afford(cost)
+
 func _unhandled_input(event: InputEvent) -> void:
-	if current_build_type == "" or camera == null or grid_manager == null or build_system == null:
+	if camera == null or grid_manager == null or build_system == null:
+		return
+
+	# Right-click or ESC to cancel current building selection
+	if current_build_type != "":
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			cancel_building_selection()
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			cancel_building_selection()
+			get_viewport().set_input_as_handled()
+			return
+
+	if current_build_type == "":
 		return
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null:
 			var cell = grid_manager.world_to_cell(hit_pos)
+			if grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell):
+				if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+					hud.show_hint("该地块已被占用！")
+				return
+
 			var placed = build_system.place_building(current_build_type, cell, buildings_container)
 			if placed != null:
-				current_build_type = ""
+				# Continuous Placement: keep mode if player can afford another one
+				if not _can_afford_building(current_build_type):
+					cancel_building_selection()
+					var gs = _get_game_state()
+					if gs and gs.current_ap <= 0:
+						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+							hud.show_hint("行动点已耗尽 (0 AP)！请点击【结束行动】推进回合")
+			else:
+				# Placement rejected by BuildSystem: provide user guidance
+				var gs = _get_game_state()
+				var cfg = _get_config()
+				if gs and cfg and cfg.BUILDINGS.has(current_build_type):
+					var b_data: Dictionary = cfg.BUILDINGS[current_build_type]
+					var ap_cost: int = int(b_data.get("ap_cost", 1))
+					var cost: Dictionary = b_data.get("cost", {})
+					if not gs.can_spend_ap(ap_cost):
+						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+							hud.show_hint("行动点不足 (%d AP)！请点击【结束行动】推进回合并恢复 AP" % gs.current_ap)
+					elif not gs.can_afford(cost):
+						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+							hud.show_hint("资源不足，无法建造！")
+					elif "current_phase" in gs and int(gs.current_phase) != 0:
+						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+							hud.show_hint("非规划阶段，无法建造！")
 
 func _raycast_ground(screen_pos: Vector2) -> Variant:
 	if camera == null or not is_inside_tree():
@@ -285,7 +354,7 @@ func place_building_at_cell(type_id: String, cell: Vector2i) -> Node:
 
 ## Completely restores pristine starting game state without reloading scene.
 func restart_game() -> void:
-	current_build_type = ""
+	cancel_building_selection()
 
 	# 1. Reset GameState (AP, resources, multipliers, wave, phase, game_over flag)
 	var gs = _get_game_state()
