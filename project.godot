@@ -11,13 +11,29 @@ config_version=5
 [application]
 
 config/name="dino"
+run/main_scene="uid://cnyi5iua1qo6c"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+Config="*res://scripts/autoload/Config.gd"
+EventBus="*res://scripts/autoload/EventBus.gd"
+GameState="*res://scripts/autoload/GameState.gd"
+
 [display]
 
+window/size/viewport_width=1280
+window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[layer_names]
+
+3d_physics/layer_1="Ground"
+3d_physics/layer_2="Buildings"
+3d_physics/layer_3="Dinos"
+3d_physics/layer_4="Nest"
 
 [physics]
 
