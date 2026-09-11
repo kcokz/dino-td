@@ -1,0 +1,155 @@
+[gd_scene load_steps=2 format=3 uid="uid://d1hudscene001"]
+
+[ext_resource type="Script" path="res://scripts/ui/HUD.gd" id="1_hud"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TopBar" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 10.0
+offset_right = -20.0
+offset_bottom = 55.0
+grow_horizontal = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Root/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 5
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Root/TopBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="APLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "AP: 3 / 3"
+
+[node name="VSeparator1" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="WoodLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Wood: 10"
+
+[node name="VSeparator2" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="WaveLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Wave: 0"
+
+[node name="VSeparator3" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="CoreHPLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Core HP: 10 / 10"
+
+[node name="VSeparator4" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="PhaseLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Phase: PLAN"
+
+[node name="BottomBar" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -65.0
+offset_right = -20.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="Root/BottomBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 5
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Root/BottomBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="BuildWallBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "木墙 (2木)"
+
+[node name="BuildLumberHutBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "伐木屋 (3木)"
+
+[node name="BuildTowerBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "自动哨位 (4木)"
+
+[node name="Spacer" type="Control" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EndActionBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "结束行动"
+
+[node name="GameOverPanel" type="CenterContainer" parent="Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="Root/GameOverPanel"]
+custom_minimum_size = Vector2(360, 200)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Root/GameOverPanel/PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Root/GameOverPanel/PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="ResultTitle" type="Label" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "VICTORY!"
+horizontal_alignment = 1
+
+[node name="ResultSubtitle" type="Label" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "恐龙巢穴已被消灭！"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="RestartButton" type="Button" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "重新开始"

@@ -1,0 +1,84 @@
+[gd_scene load_steps=9 format=3 uid="uid://c3mainscene0001"]
+
+[ext_resource type="Script" path="res://scripts/core/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/core/GridManager.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scripts/core/BuildSystem.gd" id="3_build"]
+[ext_resource type="Script" path="res://scripts/core/WaveManager.gd" id="4_wave"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="5_hud"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(40, 40)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.28, 0.32, 0.24, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(40, 0.2, 40)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.819152, -0.40558, 0.40558, 0, 0.707107, 0.707107, -0.573576, -0.579228, 0.579228, 12, 18, 5)
+current = true
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.766044, -0.422618, 0.48481, 0, 0.75471, 0.656059, -0.642788, -0.50257, 0.578142, 0, 15, 0)
+shadow_enabled = true
+
+[node name="Map" type="Node3D" parent="."]
+
+[node name="Ground" type="MeshInstance3D" parent="Map"]
+mesh = SubResource("PlaneMesh_ground")
+surface_material_override/0 = SubResource("StandardMaterial3D_ground")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="Map/Ground"]
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Map/Ground/StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("BoxShape3D_ground")
+
+[node name="GridManager" type="Node3D" parent="Map"]
+script = ExtResource("2_grid")
+
+[node name="Path" type="Node3D" parent="Map"]
+
+[node name="WP0" type="Marker3D" parent="Map/Path"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
+
+[node name="WP1" type="Marker3D" parent="Map/Path"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -14)
+
+[node name="WP2" type="Marker3D" parent="Map/Path"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10)
+
+[node name="WP3" type="Marker3D" parent="Map/Path"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6)
+
+[node name="WP4" type="Marker3D" parent="Map/Path"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2)
+
+[node name="WP5" type="Marker3D" parent="Map/Path"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="NestSpawn" type="Marker3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
+
+[node name="CoreSpawn" type="Marker3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="Dinos" type="Node3D" parent="."]
+
+[node name="NestHolder" type="Node3D" parent="."]
+
+[node name="BuildSystem" type="Node" parent="."]
+script = ExtResource("3_build")
+
+[node name="WaveManager" type="Node3D" parent="."]
+script = ExtResource("4_wave")
+
+[node name="HUD" parent="." instance=ExtResource("5_hud")]
