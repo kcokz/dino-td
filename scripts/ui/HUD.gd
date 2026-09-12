@@ -23,6 +23,7 @@ var wood_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var phase_label: Label = null
+var version_label: Label = null
 
 var build_tower_btn: Button = null
 var build_wall_btn: Button = null
@@ -336,6 +337,9 @@ func trigger_end_action() -> void:
 func trigger_restart() -> void:
 	_on_restart_pressed()
 
+func get_version_text() -> String:
+	return version_label.text if version_label else ""
+
 # ==============================================================================
 # Procedural Component Fallbacks (Headless & Scene Support)
 # ==============================================================================
@@ -348,6 +352,7 @@ func _ensure_ui_components() -> void:
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
 	hint_label = find_child("HintLabel", true, false) as Label
+	version_label = find_child("VersionLabel", true, false) as Label
 
 	build_tower_btn = find_child("BuildTowerBtn", true, false) as Button
 	build_wall_btn = find_child("BuildWallBtn", true, false) as Button
@@ -401,6 +406,17 @@ func _ensure_ui_components() -> void:
 		phase_label = Label.new()
 		phase_label.name = "PhaseLabel"
 		root_control.add_child(phase_label)
+
+	if version_label == null:
+		version_label = Label.new()
+		version_label.name = "VersionLabel"
+		root_control.add_child(version_label)
+
+	var app_info_script = load("res://scripts/core/AppInfo.gd")
+	var v_str: String = "v0.0"
+	if app_info_script and app_info_script.has_method("get_version"):
+		v_str = app_info_script.get_version()
+	version_label.text = v_str
 
 	if hint_label == null:
 		hint_label = Label.new()

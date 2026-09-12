@@ -360,3 +360,35 @@ func test_12_dinos_disperse_in_lanes_across_path_corridor() -> void:
 	for d in [d0, d1, d2]:
 		assert_true(d.global_position.x >= 0.4 and d.global_position.x <= 1.6, "Dinos must stay inside road corridor [0.4, 1.6] (got x=%f)" % d.global_position.x)
 
+func test_13_version_metadata_and_hud_display() -> void:
+	var app_info_script = load("res://scripts/core/AppInfo.gd")
+	assert_not_null(app_info_script, "AppInfo script must exist in res://scripts/core/AppInfo.gd")
+
+	var ver: String = app_info_script.get_version()
+	assert_eq(ver, "v0.0", "Version must be v0.0")
+
+	var meta: Dictionary = app_info_script.get_metadata()
+	assert_eq(meta.get("version"), "v0.0", "Metadata version is v0.0")
+	assert_eq(meta.get("app_name"), "Defend Dinosaur", "Metadata app_name is Defend Dinosaur")
+
+	# Test HUD scene displays version label
+	var hud_packed = load("res://scenes/ui/HUD.tscn")
+	assert_not_null(hud_packed, "HUD scene packed must exist")
+	var hud = hud_packed.instantiate()
+	_cleanup_nodes.append(hud)
+	tree.root.add_child(hud)
+	await wait_frames(2)
+
+	var version_label = hud.find_child("VersionLabel", true, false) as Label
+	assert_not_null(version_label, "HUD must contain VersionLabel")
+	assert_eq(version_label.text, "v0.0", "HUD VersionLabel displays v0.0")
+
+	# Test HUD programmatic fallback as well
+	var hud_script = load("res://scripts/ui/HUD.gd")
+	var programmatic_hud = hud_script.new()
+	_cleanup_nodes.append(programmatic_hud)
+	tree.root.add_child(programmatic_hud)
+	await wait_frames(2)
+	assert_eq(programmatic_hud.get_version_text(), "v0.0", "Programmatic HUD must resolve version text v0.0")
+
+
