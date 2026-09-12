@@ -228,10 +228,26 @@ func _spawn_single_dino() -> Node:
 
 	if dino.has_method("setup"):
 		dino.setup("raptor", multipliers)
+
+	var cfg = _get_config()
+	var lane_offsets: Array = cfg.DINO_LANE_OFFSETS if (cfg and "DINO_LANE_OFFSETS" in cfg) else [-0.35, 0.35, 0.0]
+	var offset: float = 0.0
+	if not lane_offsets.is_empty():
+		offset = float(lane_offsets[dinos_spawned_count % lane_offsets.size()])
+
+	if "lane_offset" in dino:
+		dino.lane_offset = offset
 	if "waypoints" in dino:
 		dino.waypoints = waypoints.duplicate()
 	if "position" in dino:
-		dino.position = nest_spawn_position
+		var spawn_offset = Vector3(offset, 0.0, 0.0)
+		if waypoints.size() >= 2:
+			var seg: Vector3 = waypoints[1] - waypoints[0]
+			seg.y = 0.0
+			if seg.length_squared() > 0.001:
+				var perp: Vector3 = seg.normalized().cross(Vector3.UP).normalized()
+				spawn_offset = perp * offset
+		dino.position = nest_spawn_position + spawn_offset
 
 	# Add to container
 	var target_parent = dinos_container if is_instance_valid(dinos_container) else self

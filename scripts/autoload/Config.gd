@@ -136,6 +136,9 @@ const DINOS: Dictionary = {
 		"size": Vector3(0.8, 0.5, 0.8),
 	}
 }
+const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
+const DINO_SEPARATION_MIN_DIST: float = 1.15
+const DINO_MAX_LATERAL_OFFSET: float = 0.60
 
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)

@@ -23,6 +23,7 @@ enum State {
 @export var attack_rate: float = 1.0
 @export var targeting: String = "blocker_then_core"
 @export var arrival_threshold: float = 0.3
+@export var lane_offset: float = 0.0
 
 # Compatibility aliases
 var move_speed: float:
@@ -151,15 +152,38 @@ func set_waypoints(wps: Array) -> void:
 	has_reached_destination = false
 	_orient_to_next_waypoint()
 
+func _get_path_normal(target_index: int) -> Vector3:
+	if waypoints.is_empty():
+		return Vector3.RIGHT
+	var seg: Vector3 = Vector3.ZERO
+	if target_index > 0 and target_index < waypoints.size():
+		seg = waypoints[target_index] - waypoints[target_index - 1]
+	elif waypoints.size() >= 2:
+		seg = waypoints[1] - waypoints[0]
+	seg.y = 0.0
+	if seg.length_squared() < 0.001:
+		return Vector3.RIGHT
+	var fwd: Vector3 = seg.normalized()
+	return fwd.cross(Vector3.UP).normalized()
+
+func _get_lane_target_pos(target_index: int) -> Vector3:
+	if target_index >= waypoints.size():
+		return global_position
+	var base_pos: Vector3 = waypoints[target_index]
+	if absf(lane_offset) > 0.001:
+		var perp: Vector3 = _get_path_normal(target_index)
+		return base_pos + perp * lane_offset
+	return base_pos
+
 func _orient_to_next_waypoint() -> void:
 	if not is_inside_tree():
 		return
 	if current_waypoint_index < waypoints.size():
-		var target_pos: Vector3 = waypoints[current_waypoint_index]
+		var target_pos: Vector3 = _get_lane_target_pos(current_waypoint_index)
 		var diff: Vector3 = target_pos - global_position
 		diff.y = 0.0
 		if diff.length() <= arrival_threshold and current_waypoint_index + 1 < waypoints.size():
-			target_pos = waypoints[current_waypoint_index + 1]
+			target_pos = _get_lane_target_pos(current_waypoint_index + 1)
 			diff = target_pos - global_position
 			diff.y = 0.0
 		if diff.length_squared() > 0.001:
@@ -208,7 +232,7 @@ func advance_towards_waypoint(delta: float) -> void:
 		_reach_destination()
 		return
 
-	var target_pos: Vector3 = waypoints[current_waypoint_index]
+	var target_pos: Vector3 = _get_lane_target_pos(current_waypoint_index)
 	var diff: Vector3 = target_pos - global_position
 	diff.y = 0.0
 
@@ -218,7 +242,7 @@ func advance_towards_waypoint(delta: float) -> void:
 		if current_waypoint_index >= waypoints.size():
 			_reach_destination()
 			return
-		target_pos = waypoints[current_waypoint_index]
+		target_pos = _get_lane_target_pos(current_waypoint_index)
 		diff = target_pos - global_position
 		diff.y = 0.0
 		dist = diff.length()
@@ -256,7 +280,8 @@ func _apply_dino_separation(delta: float) -> void:
 	if dinos.size() <= 1:
 		return
 
-	var min_dist: float = 0.85 # Raptor body box is 0.8 x 0.8 x 0.8
+	var cfg = _get_config()
+	var min_dist: float = cfg.DINO_SEPARATION_MIN_DIST if (cfg and "DINO_SEPARATION_MIN_DIST" in cfg) else 1.15
 	var total_push: Vector3 = Vector3.ZERO
 
 	for other in dinos:
@@ -276,7 +301,16 @@ func _apply_dino_separation(delta: float) -> void:
 			var dist: float = sqrt(dist_sq)
 			if dist > 0.001:
 				var push_mag: float = (min_dist - dist)
-				total_push += (diff / dist) * push_mag
+				var push_dir: Vector3 = diff / dist
+				# If dinos are nearly collinear (small lateral difference),
+				# inject lateral separation bias to prevent single-file conga lines
+				if absf(diff.x) < 0.35:
+					var side: float = 1.0 if (global_position.x >= other.global_position.x) else -1.0
+					if absf(diff.x) < 0.01:
+						side = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
+					push_dir.x += side * 0.5
+					push_dir = push_dir.normalized()
+				total_push += push_dir * push_mag
 			else:
 				# Perfectly coincident: deterministic lateral displacement by instance ID
 				var side: float = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
@@ -287,6 +321,20 @@ func _apply_dino_separation(delta: float) -> void:
 		var max_step: float = push_rate * delta
 		var push_step: Vector3 = total_push.normalized() * minf(total_push.length(), max_step)
 		global_position += push_step
+
+	# Bound lateral drift to path corridor if waypoints are defined
+	if not waypoints.is_empty():
+		var max_lat: float = cfg.DINO_MAX_LATERAL_OFFSET if (cfg and "DINO_MAX_LATERAL_OFFSET" in cfg) else 0.60
+		var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
+		var centerline_pos: Vector3 = waypoints[wp_idx]
+		var perp: Vector3 = _get_path_normal(wp_idx)
+		if perp.length_squared() > 0.001:
+			var to_dino: Vector3 = global_position - centerline_pos
+			to_dino.y = 0.0
+			var lat_dist: float = to_dino.dot(perp)
+			if absf(lat_dist) > max_lat:
+				var excess: float = lat_dist - signf(lat_dist) * max_lat
+				global_position -= perp * excess
 
 func check_obstacle() -> Node:
 	if raycast == null or not is_instance_valid(raycast):
@@ -368,8 +416,6 @@ func _is_target_valid(target: Variant) -> bool:
 	if "current_hp" in target and target.current_hp <= 0.0:
 		return false
 	if not target.has_method("take_damage"):
-		return false
-	if target is Node and "building_type" in target and target.building_type == "tower":
 		return false
 	return true
 

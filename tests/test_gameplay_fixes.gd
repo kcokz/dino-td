@@ -288,3 +288,75 @@ func test_10_dinosaurs_maintain_separation_without_overlapping() -> void:
 
 	var final_dist: float = dino1.global_position.distance_to(dino2.global_position)
 	assert_true(final_dist >= 0.8, "Dinos must be pushed apart to at least 0.8m distance (got %f)" % final_dist)
+
+func test_11_dino_detects_and_attacks_tower_without_clipping() -> void:
+	assert_not_null(dino_script, "Dino script must exist")
+	var tower_script = load("res://scripts/entities/Tower.gd")
+	assert_not_null(tower_script, "Tower script must exist")
+
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	tower.setup("tower", Vector2i(0, -2))
+	tower.global_position = Vector3(1.0, 0.0, -4.0)
+
+	var dino = dino_script.new("raptor")
+	_cleanup_nodes.append(dino)
+	tree.root.add_child(dino)
+	dino.global_position = Vector3(1.0, 0.0, -8.0)
+	dino.set_waypoints([Vector3(1.0, 0.0, -8.0), Vector3(1.0, 0.0, 0.0)])
+
+	await wait_frames(2)
+
+	# Step dino towards tower
+	for step in range(60):
+		if dino.current_state == 1: # ATTACKING
+			break
+		dino.advance_towards_waypoint(0.05)
+		await wait_frames(1)
+
+	assert_eq(int(dino.current_state), 1, "Dino must detect tower and enter ATTACKING state")
+	var dist_to_tower: float = dino.global_position.distance_to(tower.global_position)
+	assert_true(dist_to_tower >= 0.7, "Dino must halt in front of tower rather than clipping inside (dist=%f)" % dist_to_tower)
+	assert_true(dino.global_position.z <= -4.0 - 0.7, "Dino must remain outside tower box on Z axis (z=%f)" % dino.global_position.z)
+
+	# Verify dino can damage tower
+	var initial_hp: float = tower.current_hp
+	dino.perform_attack()
+	assert_true(tower.current_hp < initial_hp, "Dino attack must inflict damage to the blocking tower")
+
+func test_12_dinos_disperse_in_lanes_across_path_corridor() -> void:
+	var wave_manager_script = load("res://scripts/core/WaveManager.gd")
+	assert_not_null(wave_manager_script, "WaveManager script must exist")
+
+	var wm = wave_manager_script.new()
+	_cleanup_nodes.append(wm)
+	tree.root.add_child(wm)
+	wm.waypoints = [Vector3(1.0, 0.0, -18.0), Vector3(1.0, 0.0, 0.0)]
+	wm.nest_spawn_position = Vector3(1.0, 0.0, -18.0)
+
+	var d0 = wm.spawn_dino()
+	var d1 = wm.spawn_dino()
+	var d2 = wm.spawn_dino()
+	_cleanup_nodes.append(d0)
+	_cleanup_nodes.append(d1)
+	_cleanup_nodes.append(d2)
+
+	await wait_frames(2)
+
+	# Verify lane offsets assigned
+	assert_true(d0.lane_offset != d1.lane_offset, "Dino 0 and Dino 1 must have different lane offsets")
+	assert_true(absf(d0.global_position.x - d1.global_position.x) >= 0.5, "Dinos must spawn staggered across path lanes")
+
+	# Step forward and verify corridor adherence
+	for step in range(20):
+		d0.advance_towards_waypoint(0.05)
+		d1.advance_towards_waypoint(0.05)
+		d2.advance_towards_waypoint(0.05)
+		d0._apply_dino_separation(0.05)
+		d1._apply_dino_separation(0.05)
+		d2._apply_dino_separation(0.05)
+
+	for d in [d0, d1, d2]:
+		assert_true(d.global_position.x >= 0.4 and d.global_position.x <= 1.6, "Dinos must stay inside road corridor [0.4, 1.6] (got x=%f)" % d.global_position.x)
+
