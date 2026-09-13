@@ -365,10 +365,10 @@ func test_13_version_metadata_and_hud_display() -> void:
 	assert_not_null(app_info_script, "AppInfo script must exist in res://scripts/core/AppInfo.gd")
 
 	var ver: String = app_info_script.get_version()
-	assert_eq(ver, "v0.0", "Version must be v0.0")
+	assert_eq(ver, "v0.1", "Version must be v0.1")
 
 	var meta: Dictionary = app_info_script.get_metadata()
-	assert_eq(meta.get("version"), "v0.0", "Metadata version is v0.0")
+	assert_eq(meta.get("version"), "v0.1", "Metadata version is v0.1")
 	assert_eq(meta.get("app_name"), "Defend Dinosaur", "Metadata app_name is Defend Dinosaur")
 
 	# Test HUD scene displays version label
@@ -381,7 +381,7 @@ func test_13_version_metadata_and_hud_display() -> void:
 
 	var version_label = hud.find_child("VersionLabel", true, false) as Label
 	assert_not_null(version_label, "HUD must contain VersionLabel")
-	assert_eq(version_label.text, "v0.0", "HUD VersionLabel displays v0.0")
+	assert_eq(version_label.text, "v0.1", "HUD VersionLabel displays v0.1")
 
 	# Test HUD programmatic fallback as well
 	var hud_script = load("res://scripts/ui/HUD.gd")
@@ -389,6 +389,6 @@ func test_13_version_metadata_and_hud_display() -> void:
 	_cleanup_nodes.append(programmatic_hud)
 	tree.root.add_child(programmatic_hud)
 	await wait_frames(2)
-	assert_eq(programmatic_hud.get_version_text(), "v0.0", "Programmatic HUD must resolve version text v0.0")
+	assert_eq(programmatic_hud.get_version_text(), "v0.1", "Programmatic HUD must resolve version text v0.1")
 
 

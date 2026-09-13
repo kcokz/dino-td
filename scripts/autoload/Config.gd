@@ -22,11 +22,12 @@ const TILE_SIZE: float = 2.0
 # ==============================================================================
 const BUILDINGS: Dictionary = {
 	"core": {
-		"name": "营火",
+		"name": "废弃船舱",
 		"kind": "core",
 		"hp": 10.0,
 		"cost": {},
 		"ap_cost": 0,
+		"build_time": 0.0,
 		"upgrades_to": "",
 	},
 	"tower": {
@@ -35,6 +36,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 20.0,
 		"cost": {"wood": 4},
 		"ap_cost": 1,
+		"build_time": 6.0,
 		"range": 5.0,
 		"damage": 1.0,
 		"fire_rate": 1.0,
@@ -46,6 +48,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 30.0,
 		"cost": {"wood": 2},
 		"ap_cost": 1,
+		"build_time": 2.0,
 		"upgrades_to": "",
 	},
 	"lumber_hut": {
@@ -54,6 +57,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {"wood": 3},
 		"ap_cost": 1,
+		"build_time": 4.0,
 		"produces": {"wood": 2},
 		"upgrades_to": "",
 	},
@@ -63,6 +67,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {"wood": 3},
 		"ap_cost": 1,
+		"build_time": 3.0,
 		"ap_bonus": 0,
 		"upgrades_to": "wood_house",
 	},
@@ -72,6 +77,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 20.0,
 		"cost": {"wood": 6},
 		"ap_cost": 1,
+		"build_time": 5.0,
 		"ap_bonus": 1,
 		"upgrades_to": "barracks",
 	},
@@ -81,6 +87,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 30.0,
 		"cost": {"wood": 10, "stone": 5},
 		"ap_cost": 1,
+		"build_time": 8.0,
 		"ap_bonus": 2,
 		"upgrades_to": "",
 	},
@@ -90,6 +97,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 15.0,
 		"cost": {"wood": 5},
 		"ap_cost": 1,
+		"build_time": 5.0,
 		"produces": {"stone": 1},
 		"upgrades_to": "",
 	},
@@ -99,6 +107,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {"wood": 4},
 		"ap_cost": 1,
+		"build_time": 4.0,
 		"produces": {"food": 1},
 		"upgrades_to": "",
 	}
@@ -201,4 +210,29 @@ const MAP: Dictionary = {
 	"produce_duration": 1.0, # Duration (seconds) of PRODUCE phase before auto-advancing to PLAN
 }
 const PRODUCE_DELAY: float = 1.0
+
+# ==============================================================================
+# 9. Real-Time Deployment & Modern Hero Configuration (v0.1)
+# ==============================================================================
+const TIME: Dictionary = {
+	"deploy_length": 90.0,        # 部署时长（秒）
+	"produce_length": 3.0,        # 夜晚产出结算展示时长（秒）
+	"build_range": 1.5,           # 就位施工判定半径（米）
+	"allow_pause": true,
+}
+
+const HERO: Dictionary = {
+	"hp": 10.0,                   # 生命值（归零直接 Game Over）
+	"move_speed": 4.0,            # 移动速度（米/秒）
+	"damage": 1.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
+	"attack_rate": 1.0,           # 攻击间隔（秒）
+	"attack_range": 2.0,          # 攻击距离（米）
+}
+
+const NEST_GUARDS: Dictionary = {
+	"count": 3,                   # 巢穴外守卫数量
+	"post_radius": 3.0,           # 岗位游荡半径（米）
+	"aggro_radius": 6.0,          # 警戒半径：目标进入即脱离岗位追击
+	"leash_radius": 12.0,         # 追出此距离放弃并返回岗位
+}
 

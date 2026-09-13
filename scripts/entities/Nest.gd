@@ -17,6 +17,7 @@ signal hp_changed(current: float, max_hp: float)
 @export var cell_pos: Vector2i = Vector2i(0, -9)
 
 var is_destroyed: bool = false
+var guard_dinos: Array[Node] = []
 
 # Child components
 var collision_shape: CollisionShape3D = null
@@ -39,6 +40,32 @@ func _ready() -> void:
 	collision_layer = 8
 	collision_mask = 0
 	_ensure_components()
+
+## Spawns NEST_GUARDS.count guard dinosaurs in orbit around the nest.
+func spawn_guards(target_parent: Node = null) -> void:
+	var p = target_parent if target_parent != null else get_parent()
+	if p == null or not is_instance_valid(p):
+		return
+	var cfg = _get_config()
+	var count: int = 3
+	var post_radius: float = 3.0
+	if cfg and "NEST_GUARDS" in cfg and cfg.NEST_GUARDS is Dictionary:
+		count = int(cfg.NEST_GUARDS.get("count", 3))
+		post_radius = float(cfg.NEST_GUARDS.get("post_radius", 3.0))
+
+	var guard_script = load("res://scripts/entities/GuardDino.gd")
+	if guard_script == null:
+		return
+
+	for i in range(count):
+		var guard = guard_script.new()
+		guard.name = "GuardDino_%d" % i
+		var angle = (float(i) / float(maxi(1, count))) * TAU
+		var offset = Vector3(cos(angle) * post_radius, 0.0, sin(angle) * post_radius)
+		var post_pos = global_position + offset
+		p.add_child(guard)
+		guard.setup_post(post_pos)
+		guard_dinos.append(guard)
 
 ## Flexible setup helper supporting both setup(cell), setup(hp, cell), or setup().
 func setup(arg1: Variant = null, arg2: Variant = null) -> void:
@@ -93,6 +120,11 @@ func destroy() -> void:
 		return
 	is_destroyed = true
 
+	for g in guard_dinos:
+		if is_instance_valid(g):
+			g.queue_free()
+	guard_dinos.clear()
+
 	var eb = _get_event_bus()
 	if eb:
 		if eb.has_signal("nest_destroyed"):
@@ -123,9 +155,9 @@ func _ensure_components() -> void:
 		collision_shape.position = Vector3(0.0, 0.6, 0.0)
 		add_child(collision_shape)
 
-	# 2. MeshInstance3D (BoxMesh 2x1.2x2 at (0, 0.6, 0) with purple material)
+	# 2. MeshInstance3D (BoxMesh 2x1.2x2 at (0, 0.6, 0) with dark purple/blackbox material)
 	for child in get_children():
-		if child is MeshInstance3D:
+		if child is MeshInstance3D and child.name != "EntranceMarker":
 			mesh_instance = child
 			break
 	if mesh_instance == null:
@@ -141,6 +173,24 @@ func _ensure_components() -> void:
 		mat.albedo_color = cfg.COLORS.get("nest", Color(0.4, 0.1, 0.5)) if (cfg and "COLORS" in cfg) else Color(0.4, 0.1, 0.5)
 		mesh_instance.material_override = mat
 		add_child(mesh_instance)
+
+	# 3. Entrance Marker (Blackbox cave mouth)
+	var has_entrance: bool = false
+	for child in get_children():
+		if child.name == "EntranceMarker":
+			has_entrance = true
+			break
+	if not has_entrance:
+		var entrance = MeshInstance3D.new()
+		entrance.name = "EntranceMarker"
+		var e_mesh = BoxMesh.new()
+		e_mesh.size = Vector3(0.8, 0.6, 0.2)
+		entrance.mesh = e_mesh
+		entrance.position = Vector3(0.0, 0.3, 1.01)
+		var e_mat = StandardMaterial3D.new()
+		e_mat.albedo_color = Color(0.05, 0.05, 0.05)
+		entrance.material_override = e_mat
+		add_child(entrance)
 
 # ==============================================================================
 # Autoload Resolvers

@@ -1,4 +1,4 @@
-﻿# res://scripts/core/AppInfo.gd
+# res://scripts/core/AppInfo.gd
 class_name AppInfo
 extends RefCounted
 
@@ -6,11 +6,11 @@ extends RefCounted
 ## Houses external build information, version numbers, release notes references,
 ## and environment metadata decoupled from game balance configs.
 
-const VERSION: String = "v0.0"
+const VERSION: String = "v0.1"
 const APP_NAME: String = "Defend Dinosaur"
-const BUILD_STAGE: String = "Prototype"
+const BUILD_STAGE: String = "Alpha"
 const ENGINE_TARGET: String = "Godot 4.7"
-const RELEASE_DATE: String = "2026-09-11"
+const RELEASE_DATE: String = "2026-09-13"
 
 ## Returns the active application version string.
 ## Priority order for build-time stamping:

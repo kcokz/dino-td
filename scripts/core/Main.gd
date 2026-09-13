@@ -15,6 +15,7 @@ var grid_manager_script: GDScript = preload("res://scripts/core/GridManager.gd")
 var build_system_script: GDScript = preload("res://scripts/core/BuildSystem.gd")
 var wave_manager_script: GDScript = preload("res://scripts/core/WaveManager.gd")
 var hud_script: GDScript = preload("res://scripts/ui/HUD.gd")
+var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 
 # ==============================================================================
 # Node References
@@ -25,8 +26,10 @@ var hud_script: GDScript = preload("res://scripts/ui/HUD.gd")
 @export var wave_manager: Node3D = null
 @export var buildings_container: Node3D = null
 @export var dinos_container: Node3D = null
+@export var guards_container: Node3D = null
 @export var nest_holder: Node3D = null
 @export var hud: CanvasLayer = null
+@export var hero: CharacterBody3D = null
 
 var current_core: Node = null
 var current_nest: Node = null
@@ -78,6 +81,13 @@ func _ensure_scene_dependencies() -> void:
 		dinos_container = Node3D.new()
 		dinos_container.name = "Dinos"
 		add_child(dinos_container)
+
+	if guards_container == null:
+		guards_container = find_child("Guards", true, false) as Node3D
+	if guards_container == null:
+		guards_container = Node3D.new()
+		guards_container.name = "Guards"
+		add_child(guards_container)
 
 	if nest_holder == null:
 		nest_holder = find_child("NestHolder", true, false) as Node3D
@@ -228,7 +238,21 @@ func setup_initial_entities() -> void:
 			grid_manager.occupy_cell(nest_cell, nest)
 		current_nest = nest
 
-	# 3. Fire initial Core HP notification
+		if current_nest.has_method("spawn_guards"):
+			current_nest.spawn_guards(guards_container if is_instance_valid(guards_container) else self)
+
+	# 3. Place Hero (Modern Person)
+	if hero == null or not is_instance_valid(hero):
+		var hero_pos = Vector3(1.0, 0.0, 3.0)
+		if current_core != null and is_instance_valid(current_core):
+			hero_pos = current_core.global_position + Vector3(0.0, 0.0, 2.0)
+		var hero_inst = hero_script.new()
+		hero_inst.name = "Hero"
+		hero_inst.position = hero_pos
+		add_child(hero_inst)
+		hero = hero_inst
+
+	# 4. Fire initial Core HP notification
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("core_hp_changed"):
 		var core_max_hp: float = 10.0
@@ -271,6 +295,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if camera == null or grid_manager == null or build_system == null:
 		return
 
+	# Space key to toggle pause
+	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
+		var gs = _get_game_state()
+		if gs and gs.has_method("toggle_pause"):
+			gs.toggle_pause()
+			get_viewport().set_input_as_handled()
+			return
+
 	# Right-click or ESC to cancel current building selection
 	if current_build_type != "":
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
@@ -283,6 +315,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 
 	if current_build_type == "":
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var hit_pos = _raycast_ground(event.position)
+			if hit_pos != null and hero != null and is_instance_valid(hero):
+				hero.move_to(hit_pos)
 		return
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -294,15 +330,17 @@ func _unhandled_input(event: InputEvent) -> void:
 					hud.show_hint("该地块已被占用！")
 				return
 
-			var placed = build_system.place_building(current_build_type, cell, buildings_container)
+			var placed = build_system.place_building(current_build_type, cell, buildings_container, true)
 			if placed != null:
+				if hero != null and is_instance_valid(hero):
+					hero.order_build(placed)
 				# Continuous Placement: keep mode if player can afford another one
 				if not _can_afford_building(current_build_type):
 					cancel_building_selection()
 					var gs = _get_game_state()
 					if gs and gs.current_ap <= 0:
 						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint("行动点已耗尽 (0 AP)！请点击【结束行动】推进回合")
+							hud.show_hint("行动点已耗尽 (0 AP)！请点击【提前结束部署】推进回合")
 			else:
 				# Placement rejected by BuildSystem: provide user guidance
 				var gs = _get_game_state()
@@ -393,6 +431,19 @@ func restart_game() -> void:
 			current_nest.get_parent().remove_child(current_nest)
 		current_nest.queue_free()
 		current_nest = null
+
+	# 5b. Clean leftover Hero immediately
+	if hero and is_instance_valid(hero):
+		if hero.is_inside_tree():
+			hero.get_parent().remove_child(hero)
+		hero.queue_free()
+		hero = null
+
+	# 5c. Clean leftover Guards immediately
+	if guards_container and is_instance_valid(guards_container):
+		for g in guards_container.get_children():
+			guards_container.remove_child(g)
+			g.queue_free()
 
 	# 6. Reset GridManager occupancy
 	if grid_manager and is_instance_valid(grid_manager):

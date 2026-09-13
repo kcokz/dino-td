@@ -13,6 +13,7 @@ signal build_requested(building_type: String)
 signal end_action_clicked()
 signal restart_clicked()
 signal restart_requested()
+signal pause_clicked()
 
 # ==============================================================================
 # UI Node References
@@ -22,6 +23,8 @@ var ap_label: Label = null
 var wood_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
+var hero_hp_label: Label = null
+var deploy_timer_label: Label = null
 var phase_label: Label = null
 var version_label: Label = null
 
@@ -29,6 +32,7 @@ var build_tower_btn: Button = null
 var build_wall_btn: Button = null
 var build_lumber_btn: Button = null
 var end_action_btn: Button = null
+var pause_btn: Button = null
 
 var game_over_panel: Control = null
 var result_label: Label = null
@@ -74,6 +78,12 @@ func _connect_event_bus() -> void:
 			eb.game_won.connect(_on_game_won)
 		if eb.has_signal("game_lost") and not eb.game_lost.is_connected(_on_game_lost):
 			eb.game_lost.connect(_on_game_lost)
+		if eb.has_signal("deploy_time_changed") and not eb.deploy_time_changed.is_connected(_on_deploy_time_changed):
+			eb.deploy_time_changed.connect(_on_deploy_time_changed)
+		if eb.has_signal("pause_toggled") and not eb.pause_toggled.is_connected(_on_pause_toggled):
+			eb.pause_toggled.connect(_on_pause_toggled)
+		if eb.has_signal("hero_hp_changed") and not eb.hero_hp_changed.is_connected(_on_hero_hp_changed):
+			eb.hero_hp_changed.connect(_on_hero_hp_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -92,10 +102,28 @@ func _disconnect_event_bus() -> void:
 			eb.game_won.disconnect(_on_game_won)
 		if eb.has_signal("game_lost") and eb.game_lost.is_connected(_on_game_lost):
 			eb.game_lost.disconnect(_on_game_lost)
+		if eb.has_signal("deploy_time_changed") and eb.deploy_time_changed.is_connected(_on_deploy_time_changed):
+			eb.deploy_time_changed.disconnect(_on_deploy_time_changed)
+		if eb.has_signal("pause_toggled") and eb.pause_toggled.is_connected(_on_pause_toggled):
+			eb.pause_toggled.disconnect(_on_pause_toggled)
+		if eb.has_signal("hero_hp_changed") and eb.hero_hp_changed.is_connected(_on_hero_hp_changed):
+			eb.hero_hp_changed.disconnect(_on_hero_hp_changed)
 
 func _on_ap_changed(cur: int, max_val: int) -> void:
 	if ap_label:
 		ap_label.text = "AP: %d / %d" % [cur, max_val]
+
+func _on_deploy_time_changed(remaining: float, _total: float) -> void:
+	if deploy_timer_label:
+		deploy_timer_label.text = "部署: %.1fs" % remaining
+
+func _on_pause_toggled(is_paused: bool) -> void:
+	if pause_btn:
+		pause_btn.text = "继续 (Space)" if is_paused else "暂停 (Space)"
+
+func _on_hero_hp_changed(cur: float, max_val: float) -> void:
+	if hero_hp_label:
+		hero_hp_label.text = "Hero HP: %d / %d" % [int(ceil(cur)), int(ceil(max_val))]
 
 func _on_resources_changed(res: Dictionary) -> void:
 	if wood_label:
@@ -120,6 +148,8 @@ func _on_phase_changed(phase_idx: int) -> void:
 	var is_game_over = gs and "is_game_over" in gs and gs.is_game_over
 	var is_plan: bool = (phase_idx == 0) and not is_game_over
 	_set_action_buttons_enabled(is_plan)
+	if pause_btn:
+		pause_btn.disabled = not is_plan
 
 func _on_game_won() -> void:
 	var gs = _get_game_state()
@@ -135,7 +165,7 @@ func _on_game_lost() -> void:
 		return
 	if is_game_over_visible():
 		return
-	_show_game_over("DEFEAT!", "核心营火已被摧毁！")
+	_show_game_over("DEFEAT!", "废弃船舱被毁或角色阵亡！")
 
 func _show_game_over(title: String, details: String) -> void:
 	if result_label:
@@ -161,6 +191,14 @@ func _connect_buttons() -> void:
 		end_action_btn.pressed.connect(_on_end_action_pressed)
 	if restart_btn and not restart_btn.pressed.is_connected(_on_restart_pressed):
 		restart_btn.pressed.connect(_on_restart_pressed)
+	if pause_btn and not pause_btn.pressed.is_connected(_on_pause_pressed):
+		pause_btn.pressed.connect(_on_pause_pressed)
+
+func _on_pause_pressed() -> void:
+	pause_clicked.emit()
+	var gs = _get_game_state()
+	if gs and gs.has_method("toggle_pause"):
+		gs.toggle_pause()
 
 func _on_tower_btn_pressed() -> void:
 	if selected_build_type == "tower":
@@ -242,6 +280,15 @@ func reset_hud() -> void:
 
 	var p_val: int = int(gs.current_phase) if (gs and "current_phase" in gs) else 0
 	_on_phase_changed(p_val)
+
+	var rem_time: float = float(gs.remaining_deploy_time) if (gs and "remaining_deploy_time" in gs) else 90.0
+	var tot_time: float = float(gs.deploy_length) if (gs and "deploy_length" in gs) else 90.0
+	_on_deploy_time_changed(rem_time, tot_time)
+
+	var is_p: bool = bool(gs.is_paused) if (gs and "is_paused" in gs) else false
+	_on_pause_toggled(is_p)
+
+	_on_hero_hp_changed(10.0, 10.0)
 
 func _update_building_button_labels() -> void:
 	var cfg = _get_config()
@@ -353,11 +400,14 @@ func _ensure_ui_components() -> void:
 	phase_label = find_child("PhaseLabel", true, false) as Label
 	hint_label = find_child("HintLabel", true, false) as Label
 	version_label = find_child("VersionLabel", true, false) as Label
+	deploy_timer_label = find_child("DeployTimerLabel", true, false) as Label
+	hero_hp_label = find_child("HeroHPLabel", true, false) as Label
 
 	build_tower_btn = find_child("BuildTowerBtn", true, false) as Button
 	build_wall_btn = find_child("BuildWallBtn", true, false) as Button
 	build_lumber_btn = find_child("BuildLumberHutBtn", true, false) as Button
 	end_action_btn = find_child("EndActionBtn", true, false) as Button
+	pause_btn = find_child("PauseBtn", true, false) as Button
 
 	game_over_panel = find_child("GameOverPanel", true, false) as Control
 	if game_over_panel == null:
@@ -446,6 +496,25 @@ func _ensure_ui_components() -> void:
 		end_action_btn = Button.new()
 		end_action_btn.name = "EndActionBtn"
 		root_control.add_child(end_action_btn)
+	end_action_btn.text = "提前结束部署"
+
+	if deploy_timer_label == null:
+		deploy_timer_label = Label.new()
+		deploy_timer_label.name = "DeployTimerLabel"
+		deploy_timer_label.text = "部署: 90.0s"
+		root_control.add_child(deploy_timer_label)
+
+	if hero_hp_label == null:
+		hero_hp_label = Label.new()
+		hero_hp_label.name = "HeroHPLabel"
+		hero_hp_label.text = "Hero HP: 10 / 10"
+		root_control.add_child(hero_hp_label)
+
+	if pause_btn == null:
+		pause_btn = Button.new()
+		pause_btn.name = "PauseBtn"
+		pause_btn.text = "暂停 (Space)"
+		root_control.add_child(pause_btn)
 
 	if game_over_panel == null:
 		game_over_panel = PanelContainer.new()

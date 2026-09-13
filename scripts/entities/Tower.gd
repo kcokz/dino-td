@@ -82,6 +82,10 @@ func acquire_nearest_target() -> Node3D:
 
 ## Scans, filters, and returns the nearest valid enemy in range.
 func acquire_target() -> Node3D:
+	if not is_constructed:
+		current_target = null
+		return null
+
 	var candidates: Array[Node3D] = []
 	var seen: Dictionary = {}
 
@@ -191,7 +195,7 @@ func fire_at(target: Node3D) -> void:
 			current_target = null
 
 func _on_fire_timer_timeout() -> void:
-	if is_destroyed or current_hp <= 0.0 or is_queued_for_deletion():
+	if is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion():
 		return
 
 	# Re-verify target or acquire new nearest

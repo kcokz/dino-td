@@ -67,3 +67,21 @@ signal dino_reached_core(dino: Node)
 # ==============================================================================
 ## Emitted when the Dinosaur Nest HP reaches 0, prior to deletion.
 signal nest_destroyed(nest: Node)
+
+# ==============================================================================
+# 7. Real-Time Deployment & Modern Hero Signals (v0.1)
+# ==============================================================================
+## Emitted as deployment countdown updates.
+signal deploy_time_changed(remaining: float, total: float)
+
+## Emitted when the game is paused or resumed during DEPLOY phase.
+signal pause_toggled(is_paused: bool)
+
+## Emitted when Modern Hero takes damage or heals.
+signal hero_hp_changed(current: float, max: float)
+
+## Emitted when Modern Hero dies, triggering game over.
+signal hero_died()
+
+## Emitted when a building's construction progress changes.
+signal build_progress_updated(building: Node, progress: float)

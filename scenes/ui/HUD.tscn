@@ -58,6 +58,14 @@ text = "AP: 3 / 3"
 [node name="VSeparator1" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 
+[node name="DeployTimerLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "部署: 90.0s"
+
+[node name="VSeparatorDeploy" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
 [node name="WoodLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 text = "Wood: 10"
@@ -79,18 +87,30 @@ text = "Core HP: 10 / 10"
 [node name="VSeparator4" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 
+[node name="HeroHPLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 0.9, 0.9, 1)
+text = "Hero HP: 10 / 10"
+
+[node name="VSeparatorHero" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
 [node name="PhaseLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
-text = "Phase: PLAN"
+text = "Phase: DEPLOY"
 
 [node name="TopSpacer" type="Control" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="PauseBtn" type="Button" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "暂停 (Space)"
+
 [node name="VersionLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 0.8)
-text = "v0.0"
+text = "v0.1"
 
 [node name="BottomBar" type="PanelContainer" parent="Root"]
 layout_mode = 1
@@ -134,7 +154,7 @@ size_flags_horizontal = 3
 
 [node name="EndActionBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
-text = "结束行动"
+text = "提前结束部署"
 
 [node name="GameOverPanel" type="CenterContainer" parent="Root"]
 visible = false
@@ -183,5 +203,5 @@ text = "重新开始"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 0.8)
 theme_override_font_sizes/font_size = 12
-text = "Defend Dinosaur v0.0"
+text = "Defend Dinosaur v0.1"
 horizontal_alignment = 1

@@ -50,7 +50,7 @@ func _disconnect_produce_signal() -> void:
 			eb.produce_phase.disconnect(_on_produce_phase)
 
 func _on_produce_phase() -> void:
-	if is_destroyed or current_hp <= 0.0 or is_queued_for_deletion():
+	if is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion():
 		return
 	var gs = _get_game_state()
 	if gs and gs.has_method("add_resources"):

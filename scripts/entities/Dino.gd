@@ -227,6 +227,17 @@ func advance_towards_waypoint(delta: float) -> void:
 		on_obstacle_detected(obstacle)
 		return
 
+	# 1b. Dynamic Flanking & Surround for Large Flocks (10+ Dinos):
+	# If an ally ahead is already attacking, check if this dino is within surround reach
+	var attacking_ally = _find_front_attacking_ally()
+	if attacking_ally != null and "current_target" in attacking_ally and attacking_ally.current_target != null:
+		var ally_tgt = attacking_ally.current_target
+		if _is_target_valid(ally_tgt):
+			var dist_to_tgt = global_position.distance_to(ally_tgt.global_position)
+			if dist_to_tgt <= 2.2:
+				on_obstacle_detected(ally_tgt)
+				return
+
 	# 2. Check waypoint navigation
 	if current_waypoint_index >= waypoints.size():
 		_reach_destination()
@@ -248,6 +259,16 @@ func advance_towards_waypoint(delta: float) -> void:
 		dist = diff.length()
 
 	var dir: Vector3 = diff.normalized()
+
+	# Lateral flanking steer around front attacking ally to find open attack slot
+	if attacking_ally != null:
+		var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
+		var perp = _get_path_normal(wp_idx)
+		var side: float = 1.0 if (global_position.x >= attacking_ally.global_position.x) else -1.0
+		if absf(global_position.x - attacking_ally.global_position.x) < 0.05:
+			side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
+		dir = (dir + perp * (side * 0.75)).normalized()
+
 	velocity = dir * speed
 	if diff.length_squared() > 0.001:
 		look_at(global_position + dir, Vector3.UP)
@@ -386,6 +407,24 @@ func check_obstacle() -> Node:
 				if collider is Node and collider.get_parent() and _is_target_valid(collider.get_parent()):
 					return collider.get_parent()
 
+	return null
+
+func _find_front_attacking_ally() -> Node:
+	if not is_inside_tree():
+		return null
+	var dinos = get_tree().get_nodes_in_group("dinos")
+	var fwd = -global_transform.basis.z.normalized()
+	fwd.y = 0.0
+	for other in dinos:
+		if other == self or not is_instance_valid(other) or not (other is Node3D):
+			continue
+		if "current_state" in other and int(other.current_state) == 1: # State.ATTACKING
+			var to_other = other.global_position - global_position
+			to_other.y = 0.0
+			var dist = to_other.length()
+			if dist > 0.01 and dist <= 2.5:
+				if fwd.dot(to_other.normalized()) > 0.2:
+					return other
 	return null
 
 func on_obstacle_detected(obstacle: Node) -> void:

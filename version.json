@@ -1,7 +1,7 @@
 ﻿{
   "name": "Defend Dinosaur",
-  "version": "v0.0",
-  "stage": "Prototype",
+  "version": "v0.1",
+  "stage": "Alpha",
   "engine": "Godot 4.7",
-  "release_date": "2026-09-11"
+  "release_date": "2026-09-13"
 }

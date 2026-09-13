@@ -10,6 +10,10 @@ extends StaticBody3D
 @export var current_hp: float = 10.0
 @export var cell_pos: Vector2i = Vector2i.ZERO
 
+@export var build_time: float = 2.0
+@export var build_progress: float = 1.0
+@export var is_constructed: bool = true
+
 var is_destroyed: bool = false
 
 func _init(p_type: String = "") -> void:
@@ -18,6 +22,7 @@ func _init(p_type: String = "") -> void:
 
 func _ready() -> void:
 	_ensure_physics_and_visuals()
+	_update_construction_state()
 
 ## Configures building stats from Config.BUILDINGS dictionary.
 func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO) -> void:
@@ -28,6 +33,84 @@ func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO) -> void:
 		var data: Dictionary = cfg.BUILDINGS[type_id]
 		max_hp = float(data.get("hp", 10.0))
 		current_hp = max_hp
+		build_time = float(data.get("build_time", 2.0))
+
+# ==============================================================================
+# Construction & Semi-finished Progress (v0.1)
+# ==============================================================================
+
+## Starts construction mode, turning the building into an unconstructed blueprint.
+func start_construction(time_required: float = -1.0) -> void:
+	var cfg = _get_config()
+	if time_required >= 0.0:
+		build_time = time_required
+	elif cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
+		build_time = float(cfg.BUILDINGS[building_type].get("build_time", 2.0))
+	
+	if build_time <= 0.0:
+		complete_construction()
+		return
+	
+	is_constructed = false
+	build_progress = 0.0
+	_update_construction_state()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("build_progress_updated"):
+		eb.build_progress_updated.emit(self, build_progress)
+
+## Advances construction progress by delta_time. Returns true when 100% finished.
+func add_build_progress(delta_time: float) -> bool:
+	if is_constructed:
+		return true
+	if build_time <= 0.0:
+		complete_construction()
+		return true
+	
+	build_progress = minf(1.0, build_progress + (delta_time / build_time))
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("build_progress_updated"):
+		eb.build_progress_updated.emit(self, build_progress)
+	
+	if build_progress >= 1.0:
+		complete_construction()
+		return true
+	
+	_update_visuals_progress()
+	return false
+
+## Finalizes construction, restoring collision layer and full interactivity.
+func complete_construction() -> void:
+	is_constructed = true
+	build_progress = 1.0
+	_update_construction_state()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("build_progress_updated"):
+		eb.build_progress_updated.emit(self, 1.0)
+
+func _update_construction_state() -> void:
+	if is_constructed:
+		collision_layer = 2
+		for child in get_children():
+			if child is CollisionShape3D:
+				child.disabled = false
+	else:
+		collision_layer = 0
+		for child in get_children():
+			if child is CollisionShape3D:
+				child.disabled = true
+	_update_visuals_progress()
+
+func _update_visuals_progress() -> void:
+	for child in get_children():
+		if child is MeshInstance3D:
+			var mat = child.material_override
+			if mat is StandardMaterial3D:
+				if is_constructed:
+					mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+					mat.albedo_color.a = 1.0
+				else:
+					mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+					mat.albedo_color.a = 0.4 + 0.5 * build_progress
 
 ## Deducts damage from current_hp. Destroys entity if HP reaches <= 0.
 func take_damage(amount: float) -> void:

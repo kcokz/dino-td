@@ -8,6 +8,7 @@ extends Node
 # 1. Enums & State Definitions
 # ==============================================================================
 enum Phase {
+	DEPLOY = 0,
 	PLAN = 0,
 	ATTACK = 1,
 	PRODUCE = 2
@@ -16,7 +17,7 @@ enum Phase {
 # ==============================================================================
 # 2. Canonical State Variables
 # ==============================================================================
-var current_phase: Phase = Phase.PLAN
+var current_phase: Phase = Phase.DEPLOY
 var current_ap: int = 3
 var max_ap: int = 3
 var resources: Dictionary = {}
@@ -27,6 +28,11 @@ var is_game_won: bool = false
 var nests_alive: int = 1
 var active_buildings: Array[Node] = []
 var _produce_timer: Timer = null
+
+# v0.1 Real-Time Deployment & Pause
+var deploy_length: float = 90.0
+var remaining_deploy_time: float = 90.0
+var is_paused: bool = false
 
 # ==============================================================================
 # 3. Compatibility Aliases (Ensures 100% interoperability with specs & tests)
@@ -57,13 +63,29 @@ func _init() -> void:
 	max_ap = 3
 	is_game_over = false
 	is_game_won = false
+	deploy_length = 90.0
+	remaining_deploy_time = 90.0
+	is_paused = false
 
 func _ready() -> void:
+	set_process(true)
 	_connect_event_bus()
 	reset_game()
-	print("[GameState] Initialized. Phase: %s, AP: %d/%d, Resources: %s" % [
-		Phase.keys()[current_phase], current_ap, max_ap, str(resources)
+	print("[GameState] Initialized. Phase: %s, AP: %d/%d, Deploy: %.1fs, Resources: %s" % [
+		Phase.keys()[current_phase], current_ap, max_ap, remaining_deploy_time, str(resources)
 	])
+
+func _process(delta: float) -> void:
+	if is_game_over:
+		return
+	if current_phase == Phase.DEPLOY:
+		if not is_paused:
+			remaining_deploy_time = maxf(0.0, remaining_deploy_time - delta)
+			var eb = _get_event_bus()
+			if eb and eb.has_signal("deploy_time_changed"):
+				eb.deploy_time_changed.emit(remaining_deploy_time, deploy_length)
+			if remaining_deploy_time <= 0.0:
+				advance_phase()
 
 # ==============================================================================
 # 5. Internal Node Resolvers & Signal Helpers
@@ -95,6 +117,8 @@ func _connect_event_bus() -> void:
 			eb.building_placed.connect(register_building)
 		if eb.has_signal("building_destroyed") and not eb.building_destroyed.is_connected(unregister_building):
 			eb.building_destroyed.connect(unregister_building)
+		if eb.has_signal("hero_died") and not eb.hero_died.is_connected(_on_hero_died):
+			eb.hero_died.connect(_on_hero_died)
 
 func _emit_phase_changed(phase_val: int) -> void:
 	var eb = _get_event_bus()
@@ -150,9 +174,17 @@ func reset_game() -> void:
 	wave_number = 0
 	active_buildings.clear()
 	
+	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
+	deploy_length = float(time_cfg.get("deploy_length", 90.0))
+	remaining_deploy_time = deploy_length
+	is_paused = false
+	
 	_emit_phase_changed(current_phase)
 	_emit_ap_changed(current_ap, max_ap)
 	_emit_resources_changed(resources)
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("deploy_time_changed"):
+		eb.deploy_time_changed.emit(remaining_deploy_time, deploy_length)
 
 ## Alias for reset_game to initialize play.
 func start_game() -> void:
@@ -285,9 +317,20 @@ func set_phase(new_phase: Phase) -> void:
 		Phase.PLAN:
 			_cancel_produce_timer()
 			reset_ap()
+			var cfg = _get_config()
+			var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
+			deploy_length = float(time_cfg.get("deploy_length", 90.0))
+			remaining_deploy_time = deploy_length
+			is_paused = false
+			var eb = _get_event_bus()
+			if eb and eb.has_signal("deploy_time_changed"):
+				eb.deploy_time_changed.emit(remaining_deploy_time, deploy_length)
 		Phase.ATTACK:
 			_cancel_produce_timer()
+			is_paused = false
 		Phase.PRODUCE:
+			_cancel_produce_timer()
+			is_paused = false
 			_emit_produce_phase()
 			_schedule_auto_end_produce()
 
@@ -298,10 +341,47 @@ func change_phase(new_phase: int) -> void:
 		return
 	set_phase(new_phase as Phase)
 
-## Triggered by HUD "End Action" button to conclude planning and unleash horde.
-func trigger_end_action() -> void:
-	if current_phase == Phase.PLAN and not is_game_over:
+## Toggles pause during DEPLOY phase. Returns new pause state.
+func toggle_pause() -> bool:
+	var cfg = _get_config()
+	var allow: bool = true
+	if cfg and "TIME" in cfg and cfg.TIME is Dictionary:
+		allow = bool(cfg.TIME.get("allow_pause", true))
+	if not allow or is_game_over or current_phase != Phase.DEPLOY:
+		return is_paused
+	is_paused = !is_paused
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("pause_toggled"):
+		eb.pause_toggled.emit(is_paused)
+	return is_paused
+
+## Sets pause state explicitly during DEPLOY phase.
+func set_paused(p: bool) -> bool:
+	var cfg = _get_config()
+	var allow: bool = true
+	if cfg and "TIME" in cfg and cfg.TIME is Dictionary:
+		allow = bool(cfg.TIME.get("allow_pause", true))
+	if not allow or is_game_over or current_phase != Phase.DEPLOY:
+		return is_paused
+	if is_paused != p:
+		is_paused = p
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("pause_toggled"):
+			eb.pause_toggled.emit(is_paused)
+	return is_paused
+
+## Triggered to immediately conclude DEPLOY phase and unleash horde.
+func trigger_early_end_deploy() -> void:
+	if current_phase == Phase.DEPLOY and not is_game_over:
 		advance_phase()
+
+## Alias for trigger_early_end_deploy.
+func end_deploy_phase() -> void:
+	trigger_early_end_deploy()
+
+## Triggered by HUD "End Action" button to conclude planning/deploy and unleash horde.
+func trigger_end_action() -> void:
+	trigger_early_end_deploy()
 
 ## Alias for trigger_end_action.
 func end_plan_phase() -> void:
@@ -379,3 +459,7 @@ func _on_game_lost() -> void:
 		return
 	is_game_won = false
 	is_game_over = true
+
+func _on_hero_died() -> void:
+	if not is_game_over:
+		_emit_game_lost()

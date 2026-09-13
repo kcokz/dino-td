@@ -94,7 +94,7 @@ func can_place_building(type_id: String, cell: Vector2i) -> bool:
 
 ## Atomically deducts costs, instances the building entity, and registers occupancy.
 ## Returns the instantiated building Node, or null if validation fails.
-func place_building(type_id: String, cell: Vector2i, parent_node: Node = null) -> Node:
+func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, start_as_blueprint: bool = false) -> Node:
 	if not can_place_building(type_id, cell):
 		return null
 	
@@ -185,7 +185,11 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null) -
 			building.free()
 			return null
 	
-	# 7. Broadcast placement event
+	# 7. Start construction if designated as blueprint
+	if start_as_blueprint and building.has_method("start_construction"):
+		building.start_construction()
+
+	# 8. Broadcast placement event
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_placed"):
 		eb.building_placed.emit(building)

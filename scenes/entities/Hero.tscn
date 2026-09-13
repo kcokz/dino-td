@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3 uid="uid://c4heroscene01"]
+
+[ext_resource type="Script" path="res://scripts/entities/Hero.gd" id="1_hero"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hero"]
+size = Vector3(0.8, 1.6, 0.8)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hero"]
+albedo_color = Color(0.1, 0.8, 0.8, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hero"]
+material = SubResource("StandardMaterial3D_hero")
+size = Vector3(0.8, 1.6, 0.8)
+
+[node name="Hero" type="CharacterBody3D" groups=["hero", "players"]]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_hero")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("BoxShape3D_hero")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("BoxMesh_hero")
