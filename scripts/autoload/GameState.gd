@@ -29,10 +29,11 @@ var nests_alive: int = 1
 var active_buildings: Array[Node] = []
 var _produce_timer: Timer = null
 
-# v0.1 Real-Time Deployment & Pause
+# v0.1 Real-Time Deployment & Pause & Infinite AP
 var deploy_length: float = 90.0
 var remaining_deploy_time: float = 90.0
 var is_paused: bool = false
+var infinite_ap: bool = false
 
 # ==============================================================================
 # 3. Compatibility Aliases (Ensures 100% interoperability with specs & tests)
@@ -158,6 +159,7 @@ func reset_game() -> void:
 	_cancel_produce_timer()
 	is_game_over = false
 	is_game_won = false
+	infinite_ap = false
 	current_phase = Phase.PLAN
 	var cfg = _get_config()
 	if cfg:
@@ -242,12 +244,18 @@ func add_resources(gains: Dictionary) -> void:
 # ==============================================================================
 ## Checks whether player has at least amount AP available.
 func can_spend_ap(amount: int) -> bool:
-	return not is_game_over and amount >= 0 and current_ap >= amount
+	if is_game_over:
+		return false
+	if infinite_ap:
+		return true
+	return amount >= 0 and current_ap >= amount
 
 ## Deducts AP if sufficient. Returns true on success, false otherwise.
 func spend_ap(amount: int) -> bool:
 	if not can_spend_ap(amount):
 		return false
+	if infinite_ap:
+		return true
 	current_ap -= amount
 	_emit_ap_changed(current_ap, max_ap)
 	return true

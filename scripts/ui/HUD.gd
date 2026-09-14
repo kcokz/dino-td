@@ -112,6 +112,10 @@ func _disconnect_event_bus() -> void:
 func _on_ap_changed(cur: int, max_val: int) -> void:
 	if ap_label:
 		ap_label.text = "AP: %d / %d" % [cur, max_val]
+		ap_label.visible = false
+	var vsep1 = find_child("VSeparator1", true, false)
+	if vsep1:
+		vsep1.visible = false
 
 func _on_deploy_time_changed(remaining: float, _total: float) -> void:
 	if deploy_timer_label:
@@ -223,8 +227,10 @@ func _on_lumber_btn_pressed() -> void:
 
 func _check_ap_hint() -> void:
 	var gs = _get_game_state()
+	if gs and "infinite_ap" in gs and gs.infinite_ap:
+		return
 	if gs and "current_ap" in gs and gs.current_ap <= 0:
-		show_hint("行动点不足 (0 AP)！请点击【结束行动】推进回合并恢复 AP")
+		show_hint("行动点不足 (0 AP)！请推进回合并恢复 AP")
 
 func select_build_type(type_id: String) -> void:
 	selected_build_type = type_id
@@ -267,6 +273,12 @@ func reset_hud() -> void:
 	var max_ap: int = gs.max_ap if (gs and "max_ap" in gs) else default_ap
 	_on_ap_changed(cur_ap, max_ap)
 
+	if ap_label:
+		ap_label.visible = false
+	var vsep1 = find_child("VSeparator1", true, false)
+	if vsep1:
+		vsep1.visible = false
+
 	var default_res: Dictionary = cfg.INITIAL_RESOURCES if (cfg and "INITIAL_RESOURCES" in cfg) else {"wood": 10}
 	var res_dict: Dictionary = gs.resources if (gs and "resources" in gs) else default_res
 	_on_resources_changed(res_dict)
@@ -299,22 +311,19 @@ func _update_building_button_labels() -> void:
 		var wall_data: Dictionary = cfg.BUILDINGS["wall"]
 		var wall_name: String = wall_data.get("name", "木墙")
 		var wall_cost: int = int(wall_data.get("cost", {}).get("wood", 2))
-		var wall_ap: int = int(wall_data.get("ap_cost", 1))
-		build_wall_btn.text = "%s (%d木, %dAP)" % [wall_name, wall_cost, wall_ap]
+		build_wall_btn.text = "%s (%d木)" % [wall_name, wall_cost]
 
 	if build_lumber_btn and cfg.BUILDINGS.has("lumber_hut"):
 		var lumber_data: Dictionary = cfg.BUILDINGS["lumber_hut"]
 		var lumber_name: String = lumber_data.get("name", "伐木屋")
 		var lumber_cost: int = int(lumber_data.get("cost", {}).get("wood", 3))
-		var lumber_ap: int = int(lumber_data.get("ap_cost", 1))
-		build_lumber_btn.text = "%s (%d木, %dAP)" % [lumber_name, lumber_cost, lumber_ap]
+		build_lumber_btn.text = "%s (%d木)" % [lumber_name, lumber_cost]
 
 	if build_tower_btn and cfg.BUILDINGS.has("tower"):
 		var tower_data: Dictionary = cfg.BUILDINGS["tower"]
 		var tower_name: String = tower_data.get("name", "自动哨位")
 		var tower_cost: int = int(tower_data.get("cost", {}).get("wood", 4))
-		var tower_ap: int = int(tower_data.get("ap_cost", 1))
-		build_tower_btn.text = "%s (%d木, %dAP)" % [tower_name, tower_cost, tower_ap]
+		build_tower_btn.text = "%s (%d木)" % [tower_name, tower_cost]
 
 func show_hint(msg: String, duration: float = 2.5) -> void:
 	if hint_label == null:
@@ -536,6 +545,12 @@ func _ensure_ui_components() -> void:
 		restart_btn = Button.new()
 		restart_btn.name = "RestartButton"
 		game_over_panel.add_child(restart_btn)
+
+	if ap_label:
+		ap_label.visible = false
+	var vsep1 = find_child("VSeparator1", true, false)
+	if vsep1:
+		vsep1.visible = false
 
 	_update_building_button_labels()
 

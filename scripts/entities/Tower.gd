@@ -146,6 +146,11 @@ func _is_target_valid(target: Variant) -> bool:
 		return false
 	if target == self:
 		return false
+	# Defense towers must never attack friendly units or structures (Hero, Core, Walls, Producers, etc.)
+	if target.name == "Hero" or target.is_in_group("hero") or target.is_in_group("players") or ("is_hero" in target and target.is_hero):
+		return false
+	if target is Building or target.is_in_group("buildings") or target.is_in_group("friendly"):
+		return false
 	if "is_destroyed" in target and target.is_destroyed:
 		return false
 	if "is_dead" in target and target.is_dead:

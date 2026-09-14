@@ -16,6 +16,7 @@ func _init() -> void:
 	_connect_event_bus()
 
 func _ready() -> void:
+	add_to_group("grid_manager")
 	_init_tile_size()
 	_connect_event_bus()
 
@@ -162,3 +163,171 @@ func _on_building_destroyed(building: Node) -> void:
 		if occupied_cells[c] == building:
 			vacate_cell(c)
 			break
+
+# ==============================================================================
+# 4. Grid Pathfinding & Navigation API (v0.1)
+# ==============================================================================
+
+## Checks whether a cell can be traversed by units (Hero / Dinos).
+## Unfinished blueprints (is_constructed == false) are walkable.
+## If ignore_building is specified, its cell is treated as walkable.
+func is_cell_walkable(cell: Vector2i, ignore_building: Node = null) -> bool:
+	if not occupied_cells.has(cell):
+		return true
+	var b = occupied_cells[cell]
+	if not is_instance_valid(b) or b.is_queued_for_deletion():
+		occupied_cells.erase(cell)
+		return true
+	if "is_destroyed" in b and b.is_destroyed:
+		occupied_cells.erase(cell)
+		return true
+	# Unfinished blueprints do NOT physically block navigation
+	if "is_constructed" in b and not b.is_constructed:
+		return true
+	# Caller-specified ignored building
+	if ignore_building != null and b == ignore_building:
+		return true
+	return false
+
+## Finds an A* path of 3D world waypoints around completed buildings from from_pos to to_pos.
+func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null) -> Array[Vector3]:
+	var start_cell: Vector2i = world_to_cell(from_pos)
+	var goal_cell: Vector2i = world_to_cell(to_pos)
+
+	if start_cell == goal_cell:
+		return [to_pos]
+
+	# If goal_cell is blocked by an obstacle, locate the closest walkable adjacent cell
+	if not is_cell_walkable(goal_cell, ignore_building):
+		var best_adj: Vector2i = goal_cell
+		var best_dist: float = 999999.0
+		var offsets = [
+			Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+			Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)
+		]
+		for off in offsets:
+			var adj = goal_cell + off
+			if is_cell_walkable(adj, ignore_building):
+				var d = cell_to_world(adj).distance_to(from_pos)
+				if d < best_dist:
+					best_dist = d
+					best_adj = adj
+		if best_adj != goal_cell:
+			goal_cell = best_adj
+		else:
+			return [to_pos]
+
+	# A* Graph Search
+	var open_set: Array[Vector2i] = [start_cell]
+	var came_from: Dictionary = {}
+	var g_score: Dictionary = {start_cell: 0.0}
+	var f_score: Dictionary = {start_cell: float(start_cell.distance_to(goal_cell))}
+
+	var cardinals = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var diagonals = [Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]
+
+	var iterations: int = 0
+	var max_iterations: int = 800
+
+	while not open_set.is_empty() and iterations < max_iterations:
+		iterations += 1
+
+		# Pop lowest f_score node
+		var current: Vector2i = open_set[0]
+		var lowest_f: float = f_score.get(current, 999999.0)
+		var lowest_idx: int = 0
+		for idx in range(1, open_set.size()):
+			var node = open_set[idx]
+			var f: float = f_score.get(node, 999999.0)
+			if f < lowest_f:
+				lowest_f = f
+				current = node
+				lowest_idx = idx
+
+		if current == goal_cell:
+			# Reconstruct path
+			var cell_path: Array[Vector2i] = [current]
+			while came_from.has(current):
+				current = came_from[current]
+				cell_path.append(current)
+			cell_path.reverse()
+
+			var raw_world_path: Array[Vector3] = []
+			for i in range(1, cell_path.size()):
+				if i == cell_path.size() - 1:
+					raw_world_path.append(to_pos)
+				else:
+					raw_world_path.append(cell_to_world(cell_path[i]))
+
+			return _smooth_path(from_pos, raw_world_path, ignore_building)
+
+		open_set.remove_at(lowest_idx)
+		var cur_g: float = g_score.get(current, 999999.0)
+
+		# 1. Cardinal neighbors
+		for off in cardinals:
+			var neighbor = current + off
+			if not is_cell_walkable(neighbor, ignore_building):
+				continue
+			var tent_g = cur_g + 1.0
+			if tent_g < g_score.get(neighbor, 999999.0):
+				came_from[neighbor] = current
+				g_score[neighbor] = tent_g
+				f_score[neighbor] = tent_g + float(neighbor.distance_to(goal_cell))
+				if not (neighbor in open_set):
+					open_set.append(neighbor)
+
+		# 2. Diagonal neighbors (cutting corner prevention)
+		for off in diagonals:
+			var neighbor = current + off
+			if not is_cell_walkable(neighbor, ignore_building):
+				continue
+			var side1 = current + Vector2i(off.x, 0)
+			var side2 = current + Vector2i(0, off.y)
+			if not is_cell_walkable(side1, ignore_building) or not is_cell_walkable(side2, ignore_building):
+				continue
+			var tent_g = cur_g + 1.414
+			if tent_g < g_score.get(neighbor, 999999.0):
+				came_from[neighbor] = current
+				g_score[neighbor] = tent_g
+				f_score[neighbor] = tent_g + float(neighbor.distance_to(goal_cell))
+				if not (neighbor in open_set):
+					open_set.append(neighbor)
+
+	# Fallback if unreached
+	return [to_pos]
+
+## Optimizes waypoint sequence by removing redundant intermediate nodes with unobstructed line-of-sight.
+func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building: Node = null) -> Array[Vector3]:
+	if raw_path.size() <= 1:
+		return raw_path
+
+	var smoothed: Array[Vector3] = []
+	var curr: Vector3 = start_pos
+	var i: int = 0
+
+	while i < raw_path.size():
+		var furthest: int = i
+		for j in range(raw_path.size() - 1, i, -1):
+			if _has_line_of_sight(curr, raw_path[j], ignore_building):
+				furthest = j
+				break
+		smoothed.append(raw_path[furthest])
+		curr = raw_path[furthest]
+		i = furthest + 1
+
+	return smoothed
+
+## Line-of-sight ray tracing on grid cells. Returns true if straight path is unobstructed.
+func _has_line_of_sight(from_pt: Vector3, to_pt: Vector3, ignore_building: Node = null) -> bool:
+	var dist = from_pt.distance_to(to_pt)
+	if dist <= 0.1:
+		return true
+	var steps: int = int(ceil(dist / (tile_size * 0.4)))
+	for s in range(1, steps + 1):
+		var t = float(s) / float(steps)
+		var sample = from_pt.lerp(to_pt, t)
+		var c = world_to_cell(sample)
+		if not is_cell_walkable(c, ignore_building):
+			return false
+	return true

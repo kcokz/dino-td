@@ -46,11 +46,15 @@ var target_building: Node:
 	get: return current_target
 	set(v): current_target = v
 
+var assigned_slot: Vector3 = Vector3.ZERO
 var is_dead: bool = false
 var is_blocked: bool = false
 var is_initialized: bool = false
 var has_reached_destination: bool = false
 var current_multipliers: Dictionary = {}
+
+# Static building attack slots registry
+static var _building_slots: Dictionary = {}
 
 # Compatibility aliases
 var has_reached_core: bool:
@@ -83,6 +87,7 @@ func _ready() -> void:
 	add_to_group("dinos")
 	_ensure_components()
 	_apply_collision_configuration()
+	_connect_event_bus()
 	if not is_initialized:
 		_load_config_stats()
 	elif attack_timer and is_instance_valid(attack_timer):
@@ -91,9 +96,118 @@ func _ready() -> void:
 		else:
 			attack_timer.wait_time = 1.0
 
+func _connect_event_bus() -> void:
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("building_destroyed"):
+		if not eb.building_destroyed.is_connected(_on_building_destroyed):
+			eb.building_destroyed.connect(_on_building_destroyed)
+
 func _exit_tree() -> void:
+	var eb = _get_event_bus()
+	if eb and is_instance_valid(eb) and eb.has_signal("building_destroyed"):
+		if eb.building_destroyed.is_connected(_on_building_destroyed):
+			eb.building_destroyed.disconnect(_on_building_destroyed)
+	if current_target != null:
+		release_attack_slot(current_target, self)
+	assigned_slot = Vector3.ZERO
 	if attack_timer and is_instance_valid(attack_timer):
 		attack_timer.stop()
+
+func _on_building_destroyed(building: Node) -> void:
+	if building == null:
+		return
+	release_all_building_slots(building)
+	if current_target == building or (assigned_slot != Vector3.ZERO and is_instance_valid(current_target) and current_target == building):
+		on_obstacle_cleared()
+
+# ==============================================================================
+# Attack Slot System (v0.1 Industry Best-Practice Perimeter Encircling)
+# ==============================================================================
+
+static func claim_attack_slot(building: Node, dino: Node) -> Vector3:
+	if building == null or not is_instance_valid(building) or not (building is Node3D):
+		return Vector3.ZERO
+	var b_id: int = building.get_instance_id()
+	if not _building_slots.has(b_id):
+		_init_building_slots(building as Node3D)
+	var slots: Array = _building_slots[b_id]
+	var dino_id: int = dino.get_instance_id()
+
+	# Check if this dino already holds a claimed slot
+	for s in slots:
+		if s.get("dino_id", 0) == dino_id:
+			return s["pos"]
+
+	var dino_pos: Vector3 = (dino as Node3D).global_position
+	var best_idx: int = -1
+	var min_dist_sq: float = 1e9
+
+	# 1. Inner Ring Priority (0..7)
+	for i in range(mini(8, slots.size())):
+		if slots[i].get("dino_id", 0) == 0:
+			var d_sq = dino_pos.distance_squared_to(slots[i]["pos"])
+			if d_sq < min_dist_sq:
+				min_dist_sq = d_sq
+				best_idx = i
+
+	# 2. Outer Ring Priority (8..15)
+	if best_idx == -1:
+		for i in range(8, slots.size()):
+			if slots[i].get("dino_id", 0) == 0:
+				var d_sq = dino_pos.distance_squared_to(slots[i]["pos"])
+				if d_sq < min_dist_sq:
+					min_dist_sq = d_sq
+					best_idx = i
+
+	if best_idx != -1:
+		slots[best_idx]["dino_id"] = dino_id
+		return slots[best_idx]["pos"]
+
+	# Fallback if all 16 slots are occupied: queue behind closest slot
+	return (building as Node3D).global_position + Vector3(0.0, 0.0, -2.6)
+
+static func release_attack_slot(building: Node, dino: Node) -> void:
+	if building == null or not is_instance_valid(building):
+		return
+	var b_id: int = building.get_instance_id()
+	if not _building_slots.has(b_id):
+		return
+	var dino_id: int = dino.get_instance_id()
+	var slots: Array = _building_slots[b_id]
+	for s in slots:
+		if s.get("dino_id", 0) == dino_id:
+			s["dino_id"] = 0
+			break
+
+static func release_all_building_slots(building: Node) -> void:
+	if building == null:
+		return
+	var b_id: int = building.get_instance_id()
+	_building_slots.erase(b_id)
+
+static func clear_all_attack_slots() -> void:
+	_building_slots.clear()
+
+static func _init_building_slots(building: Node3D) -> void:
+	var b_id: int = building.get_instance_id()
+	var slots: Array = []
+	var center: Vector3 = building.global_position
+	var r_inner: float = 1.6
+	var r_outer: float = 2.6
+
+	# 8 inner perimeter slots
+	for i in range(8):
+		var angle: float = float(i) * (PI / 4.0)
+		var offset = Vector3(sin(angle) * r_inner, 0.0, cos(angle) * r_inner)
+		slots.append({ "pos": center + offset, "dino_id": 0 })
+
+	# 8 outer secondary ring slots
+	for i in range(8):
+		var angle: float = (float(i) + 0.5) * (PI / 4.0)
+		var offset = Vector3(sin(angle) * r_outer, 0.0, cos(angle) * r_outer)
+		slots.append({ "pos": center + offset, "dino_id": 0 })
+
+	_building_slots[b_id] = slots
 
 static func _safe_float(val: Variant, default_val: float = 1.0) -> float:
 	if val == null:
@@ -208,8 +322,6 @@ func _physics_process(delta: float) -> void:
 		State.ATTACKING:
 			_process_attacking(delta)
 
-	_apply_dino_separation(delta)
-
 ## Advances along waypoints. Checks for obstacles and Core arrival.
 func advance_towards_waypoint(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
@@ -221,22 +333,50 @@ func advance_towards_waypoint(delta: float) -> void:
 	# Dynamically scale raycast reach to prevent tunneling under high speeds
 	_update_raycast_reach(delta)
 
-	# 1. Check frontal RayCast3D for obstacle buildings
+	# 1. Direct frontal RayCast3D for obstacle buildings
 	var obstacle = check_obstacle()
 	if obstacle != null:
 		on_obstacle_detected(obstacle)
 		return
 
-	# 1b. Dynamic Flanking & Surround for Large Flocks (10+ Dinos):
-	# If an ally ahead is already attacking, check if this dino is within surround reach
+	# 1b. Dynamic Flanking & Attack Slots for Large Flocks (10+ Dinos):
 	var attacking_ally = _find_front_attacking_ally()
 	if attacking_ally != null and "current_target" in attacking_ally and attacking_ally.current_target != null:
 		var ally_tgt = attacking_ally.current_target
 		if _is_target_valid(ally_tgt):
 			var dist_to_tgt = global_position.distance_to(ally_tgt.global_position)
-			if dist_to_tgt <= 2.2:
+			if dist_to_tgt <= 1.8:
 				on_obstacle_detected(ally_tgt)
 				return
+			# Claim a perimeter attack slot around ally's target
+			if assigned_slot == Vector3.ZERO:
+				assigned_slot = claim_attack_slot(ally_tgt, self)
+				current_target = ally_tgt
+
+	# 1c. If navigating toward an assigned attack slot:
+	if assigned_slot != Vector3.ZERO and current_target != null and _is_target_valid(current_target):
+		var diff_slot = assigned_slot - global_position
+		diff_slot.y = 0.0
+		var dist_slot = diff_slot.length()
+		var dist_to_tgt = global_position.distance_to(current_target.global_position)
+		if dist_slot <= 0.45 or dist_to_tgt <= 1.8:
+			on_obstacle_detected(current_target)
+			return
+
+		var slot_dir = diff_slot.normalized()
+		if attacking_ally != null:
+			var side: float = 1.0 if (global_position.x >= attacking_ally.global_position.x) else -1.0
+			if absf(global_position.x - attacking_ally.global_position.x) < 0.05:
+				side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
+			slot_dir = (slot_dir + Vector3(side * 0.75, 0.0, 0.0)).normalized()
+
+		var sep_steer = _calculate_steering_separation()
+		velocity = (slot_dir * speed + sep_steer).limit_length(speed)
+		if velocity.length_squared() > 0.001:
+			look_at(global_position + velocity.normalized(), Vector3.UP)
+		global_position += velocity * delta
+		_resolve_dino_overlaps()
+		return
 
 	# 2. Check waypoint navigation
 	if current_waypoint_index >= waypoints.size():
@@ -260,7 +400,7 @@ func advance_towards_waypoint(delta: float) -> void:
 
 	var dir: Vector3 = diff.normalized()
 
-	# Lateral flanking steer around front attacking ally to find open attack slot
+	# If an attacking ally is ahead, inject lateral steering bias so rear dinos flank
 	if attacking_ally != null:
 		var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
 		var perp = _get_path_normal(wp_idx)
@@ -269,41 +409,92 @@ func advance_towards_waypoint(delta: float) -> void:
 			side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
 		dir = (dir + perp * (side * 0.75)).normalized()
 
-	velocity = dir * speed
-	if diff.length_squared() > 0.001:
-		look_at(global_position + dir, Vector3.UP)
+	# Anti-tailgating: check if another ally is directly in front
+	var speed_throttle: float = 1.0
+	var front_dino = _find_immediate_front_dino(1.4)
+	if front_dino != null:
+		var to_front = front_dino.global_position - global_position
+		to_front.y = 0.0
+		var d_front = to_front.length()
+		var side: float = 1.0 if (global_position.x >= front_dino.global_position.x) else -1.0
+		if absf(global_position.x - front_dino.global_position.x) < 0.05:
+			side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
+		dir = (dir + Vector3(side * 0.8, 0.0, 0.0)).normalized()
+		if d_front < 1.15:
+			speed_throttle = clampf((d_front - 0.88) / 0.27, 0.0, 1.0)
+
+	# Pure steering separation velocity (no hard teleportation)
+	var sep_force: Vector3 = _calculate_steering_separation()
+	velocity = (dir * (speed * speed_throttle) + sep_force).limit_length(speed)
+
+	if velocity.length_squared() > 0.001:
+		look_at(global_position + velocity.normalized(), Vector3.UP)
 
 	global_position += velocity * delta
-	_apply_dino_separation(delta)
+	_clamp_to_corridor(delta)
+	_resolve_dino_overlaps()
 
-func _process_attacking(delta: float) -> void:
+func _find_immediate_front_dino(max_dist: float = 1.4) -> Node3D:
+	if not is_inside_tree():
+		return null
+	var dinos = get_tree().get_nodes_in_group("dinos")
+	var fwd = -global_transform.basis.z.normalized()
+	fwd.y = 0.0
+	if fwd.length_squared() < 0.001:
+		fwd = Vector3.FORWARD
+
+	var best_dino: Node3D = null
+	var min_d: float = max_dist
+
+	for other in dinos:
+		if other == self or not is_instance_valid(other) or not (other is Node3D):
+			continue
+		if not other.is_inside_tree():
+			continue
+		if "is_dead" in other and other.is_dead:
+			continue
+		if "current_state" in other and other.current_state == State.DEAD:
+			continue
+
+		var to_other = other.global_position - global_position
+		to_other.y = 0.0
+		var dist = to_other.length()
+		if dist > 0.01 and dist < min_d:
+			var dir_to = to_other / dist
+			if fwd.dot(dir_to) > 0.35:
+				min_d = dist
+				best_dino = other
+
+	return best_dino
+
+func _process_attacking(_delta: float) -> void:
 	velocity = Vector3.ZERO
 
 	# Verify target validity
 	if not _is_target_valid(current_target):
+		if current_target != null:
+			release_attack_slot(current_target, self)
 		current_target = null
+		assigned_slot = Vector3.ZERO
 		var next_obstacle = check_obstacle()
 		if next_obstacle != null:
 			current_target = next_obstacle
+			assigned_slot = claim_attack_slot(next_obstacle, self)
 		else:
 			on_obstacle_cleared()
+	# ATTACKING stance is exempt from separation forces (anti-jitter fix)
 
-	if delta > 0.0:
-		_apply_dino_separation(delta)
-
-## Soft flocking separation to prevent dinosaur cubes from penetrating or overlapping each other.
-func _apply_dino_separation(delta: float) -> void:
+## Calculates Reynolds-style steering separation force (steers velocity, no position teleporting).
+func _calculate_steering_separation() -> Vector3:
 	if not is_inside_tree() or is_dead or current_state == State.DEAD:
-		return
-	if delta <= 0.0:
-		return
+		return Vector3.ZERO
 	var dinos = get_tree().get_nodes_in_group("dinos")
 	if dinos.size() <= 1:
-		return
+		return Vector3.ZERO
 
 	var cfg = _get_config()
 	var min_dist: float = cfg.DINO_SEPARATION_MIN_DIST if (cfg and "DINO_SEPARATION_MIN_DIST" in cfg) else 1.15
-	var total_push: Vector3 = Vector3.ZERO
+	var steer: Vector3 = Vector3.ZERO
 
 	for other in dinos:
 		if other == self or not is_instance_valid(other) or not (other is Node3D):
@@ -321,41 +512,91 @@ func _apply_dino_separation(delta: float) -> void:
 		if dist_sq < min_dist * min_dist:
 			var dist: float = sqrt(dist_sq)
 			if dist > 0.001:
-				var push_mag: float = (min_dist - dist)
+				var push_mag: float = (min_dist - dist) / min_dist
 				var push_dir: Vector3 = diff / dist
-				# If dinos are nearly collinear (small lateral difference),
-				# inject lateral separation bias to prevent single-file conga lines
 				if absf(diff.x) < 0.35:
 					var side: float = 1.0 if (global_position.x >= other.global_position.x) else -1.0
 					if absf(diff.x) < 0.01:
 						side = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
 					push_dir.x += side * 0.5
 					push_dir = push_dir.normalized()
-				total_push += push_dir * push_mag
+				steer += push_dir * push_mag * speed * 0.75
 			else:
-				# Perfectly coincident: deterministic lateral displacement by instance ID
 				var side: float = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
-				total_push += Vector3(side * 0.45, 0.0, 0.0)
+				steer += Vector3(side * speed * 0.75, 0.0, 0.0)
 
-	if total_push.length_squared() > 0.0001:
-		var push_rate: float = maxf(speed * 2.0, 5.0)
-		var max_step: float = push_rate * delta
-		var push_step: Vector3 = total_push.normalized() * minf(total_push.length(), max_step)
-		global_position += push_step
+	return steer
 
-	# Bound lateral drift to path corridor if waypoints are defined
-	if not waypoints.is_empty():
-		var max_lat: float = cfg.DINO_MAX_LATERAL_OFFSET if (cfg and "DINO_MAX_LATERAL_OFFSET" in cfg) else 0.60
-		var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
-		var centerline_pos: Vector3 = waypoints[wp_idx]
-		var perp: Vector3 = _get_path_normal(wp_idx)
-		if perp.length_squared() > 0.001:
-			var to_dino: Vector3 = global_position - centerline_pos
-			to_dino.y = 0.0
-			var lat_dist: float = to_dino.dot(perp)
-			if absf(lat_dist) > max_lat:
-				var excess: float = lat_dist - signf(lat_dist) * max_lat
-				global_position -= perp * excess
+## Strict anti-penetration relaxation preventing dino 3D models from overlapping.
+func _resolve_dino_overlaps() -> void:
+	if not is_inside_tree() or is_dead or current_state == State.DEAD:
+		return
+	var dinos = get_tree().get_nodes_in_group("dinos")
+	if dinos.size() <= 1:
+		return
+
+	var min_dist: float = 0.88
+	for _pass in range(2):
+		for other in dinos:
+			if other == self or not is_instance_valid(other) or not (other is Node3D):
+				continue
+			if not other.is_inside_tree():
+				continue
+			if "is_dead" in other and other.is_dead:
+				continue
+			if "current_state" in other and other.current_state == State.DEAD:
+				continue
+
+			var diff: Vector3 = global_position - other.global_position
+			diff.y = 0.0
+			var dist: float = diff.length()
+			if dist < min_dist:
+				var overlap: float = min_dist - dist
+				var push_dir: Vector3
+				if dist > 0.001:
+					push_dir = diff / dist
+				else:
+					var side: float = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
+					push_dir = Vector3(side, 0.0, 0.0)
+
+				if "current_state" in other and other.current_state == State.ATTACKING:
+					if current_state != State.ATTACKING:
+						global_position += push_dir * overlap
+				elif current_state == State.ATTACKING:
+					pass
+				else:
+					global_position += push_dir * (overlap * 0.5)
+
+## Soft flocking separation fallback for compatibility.
+func _apply_dino_separation(delta: float) -> void:
+	if current_state == State.ATTACKING or delta <= 0.0:
+		return
+	var steer = _calculate_steering_separation()
+	if steer.length_squared() > 0.001:
+		global_position += steer.limit_length(speed) * delta
+	_resolve_dino_overlaps()
+
+func _clamp_to_corridor(delta: float = 0.05) -> void:
+	# Encircled or attacking dinos are exempted from path corridor constraint
+	if current_target != null or assigned_slot != Vector3.ZERO:
+		return
+	if waypoints.is_empty():
+		return
+
+	var cfg = _get_config()
+	var max_lat: float = cfg.DINO_MAX_LATERAL_OFFSET if (cfg and "DINO_MAX_LATERAL_OFFSET" in cfg) else 0.6
+	var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
+	var centerline_pos: Vector3 = waypoints[wp_idx]
+	var perp: Vector3 = _get_path_normal(wp_idx)
+	if perp.length_squared() > 0.001:
+		var to_dino: Vector3 = global_position - centerline_pos
+		to_dino.y = 0.0
+		var lat_dist: float = to_dino.dot(perp)
+		if absf(lat_dist) > max_lat:
+			var excess: float = lat_dist - signf(lat_dist) * max_lat
+			var max_step: float = maxf(0.1, speed * delta * 1.5)
+			var return_step: float = minf(absf(excess), max_step)
+			global_position -= perp * signf(excess) * return_step
 
 func check_obstacle() -> Node:
 	if raycast == null or not is_instance_valid(raycast):
@@ -432,16 +673,25 @@ func on_obstacle_detected(obstacle: Node) -> void:
 	current_state = State.ATTACKING
 	current_target = obstacle
 	velocity = Vector3.ZERO
+	if obstacle is Node3D:
+		var look_tgt = (obstacle as Node3D).global_position
+		look_tgt.y = global_position.y
+		if global_position.distance_squared_to(look_tgt) > 0.001:
+			look_at(look_tgt, Vector3.UP)
 	if attack_timer and is_instance_valid(attack_timer) and attack_timer.is_inside_tree():
 		if attack_timer.is_stopped():
 			attack_timer.start()
 
 func on_obstacle_cleared() -> void:
+	if current_target != null:
+		release_attack_slot(current_target, self)
 	is_blocked = false
 	current_state = State.WALKING
 	current_target = null
+	assigned_slot = Vector3.ZERO
 	if attack_timer and is_instance_valid(attack_timer) and not attack_timer.is_stopped():
 		attack_timer.stop()
+	_resolve_dino_overlaps()
 
 func _is_target_valid(target: Variant) -> bool:
 	if target == null or typeof(target) != TYPE_OBJECT or not is_instance_valid(target):
@@ -515,6 +765,9 @@ func take_damage(amount: float) -> void:
 func die() -> void:
 	if is_dead or current_state == State.DEAD:
 		return
+	if current_target != null:
+		release_attack_slot(current_target, self)
+	assigned_slot = Vector3.ZERO
 	is_dead = true
 	current_state = State.DEAD
 	set_physics_process(false)

@@ -147,7 +147,7 @@ const DINOS: Dictionary = {
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
 const DINO_SEPARATION_MIN_DIST: float = 1.15
-const DINO_MAX_LATERAL_OFFSET: float = 0.60
+const DINO_MAX_LATERAL_OFFSET: float = 0.6
 
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)
@@ -235,4 +235,21 @@ const NEST_GUARDS: Dictionary = {
 	"aggro_radius": 6.0,          # 警戒半径：目标进入即脱离岗位追击
 	"leash_radius": 12.0,         # 追出此距离放弃并返回岗位
 }
+
+# ==============================================================================
+# 10. Control Configuration (v0.1 SSoT, extensible for v0.x player customization)
+# ==============================================================================
+const CONTROLS: Dictionary = {
+	"hero_move_button": MOUSE_BUTTON_RIGHT,       # Default: Right-click moves Hero
+	"build_place_button": MOUSE_BUTTON_LEFT,      # Default: Left-click places building / selects
+	"build_cancel_button": MOUSE_BUTTON_RIGHT,    # Right-click cancels build preview
+	"cancel_key": KEY_ESCAPE,                     # ESC cancels build preview
+	"pause_key": KEY_SPACE                        # Space toggles pause
+}
+
+# ==============================================================================
+# 11. Dinosaur Flocking & Attack Slots (v0.1)
+# ==============================================================================
+const DINO_ATTACK_SLOT_RADIUS_INNER: float = 1.6
+const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
 

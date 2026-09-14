@@ -40,7 +40,7 @@ func _auto_resolve_dependencies() -> void:
 
 ## Validates whether a building of type_id can be placed at cell.
 ## Checks config validity, occupancy, game-over state, AP, and resource affordability.
-func can_place_building(type_id: String, cell: Vector2i) -> bool:
+func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = false) -> bool:
 	if type_id.is_empty():
 		return false
 	
@@ -69,12 +69,15 @@ func can_place_building(type_id: String, cell: Vector2i) -> bool:
 	
 	# Check AP
 	var ap_cost: int = int(b_data.get("ap_cost", 1))
-	if gs.has_method("can_spend_ap"):
-		if not gs.can_spend_ap(ap_cost):
-			return false
-	elif "current_ap" in gs:
-		if gs.current_ap < ap_cost:
-			return false
+	if is_blueprint or (gs and "infinite_ap" in gs and gs.infinite_ap):
+		ap_cost = 0
+	if ap_cost > 0:
+		if gs.has_method("can_spend_ap"):
+			if not gs.can_spend_ap(ap_cost):
+				return false
+		elif "current_ap" in gs:
+			if gs.current_ap < ap_cost:
+				return false
 	
 	# Check Resources
 	var cost: Dictionary = b_data.get("cost", {})
@@ -95,18 +98,20 @@ func can_place_building(type_id: String, cell: Vector2i) -> bool:
 ## Atomically deducts costs, instances the building entity, and registers occupancy.
 ## Returns the instantiated building Node, or null if validation fails.
 func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, start_as_blueprint: bool = false) -> Node:
-	if not can_place_building(type_id, cell):
+	if not can_place_building(type_id, cell, start_as_blueprint):
 		return null
 	
 	var cfg = _get_config()
 	var gs = _get_game_state()
 	var b_data: Dictionary = cfg.BUILDINGS[type_id]
-	var ap_cost: int = int(b_data.get("ap_cost", 1))
+	var ap_cost: int = 0 if (start_as_blueprint or (gs and "infinite_ap" in gs and gs.infinite_ap)) else int(b_data.get("ap_cost", 1))
 	var cost: Dictionary = b_data.get("cost", {})
 	
 	# 1. Deduct AP
 	var ap_spent: bool = false
-	if gs.has_method("spend_ap"):
+	if ap_cost <= 0:
+		ap_spent = true
+	elif gs.has_method("spend_ap"):
 		ap_spent = gs.spend_ap(ap_cost)
 	elif "current_ap" in gs and gs.current_ap >= ap_cost:
 		gs.current_ap -= ap_cost
@@ -132,7 +137,7 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 	
 	if not res_spent:
 		# Rollback AP
-		if "current_ap" in gs:
+		if ap_cost > 0 and "current_ap" in gs:
 			gs.current_ap += ap_cost
 		return null
 	

@@ -287,41 +287,59 @@ func _can_afford_building(type_id: String) -> bool:
 	if not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(type_id):
 		return false
 	var b_data: Dictionary = cfg.BUILDINGS[type_id]
-	var ap_cost: int = int(b_data.get("ap_cost", 1))
 	var cost: Dictionary = b_data.get("cost", {})
+	if "infinite_ap" in gs and gs.infinite_ap:
+		return gs.can_afford(cost)
+	var ap_cost: int = int(b_data.get("ap_cost", 1))
 	return gs.can_spend_ap(ap_cost) and gs.can_afford(cost)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if camera == null or grid_manager == null or build_system == null:
 		return
 
+	var cfg = _get_config()
+	var controls: Dictionary = cfg.CONTROLS if (cfg and "CONTROLS" in cfg and cfg.CONTROLS is Dictionary) else {}
+	var pause_key: int = int(controls.get("pause_key", KEY_SPACE))
+	var cancel_key: int = int(controls.get("cancel_key", KEY_ESCAPE))
+	var move_btn: int = int(controls.get("hero_move_button", MOUSE_BUTTON_RIGHT))
+	var place_btn: int = int(controls.get("build_place_button", MOUSE_BUTTON_LEFT))
+
 	# Space key to toggle pause
-	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
+	if event is InputEventKey and event.pressed and event.keycode == pause_key:
 		var gs = _get_game_state()
 		if gs and gs.has_method("toggle_pause"):
 			gs.toggle_pause()
 			get_viewport().set_input_as_handled()
 			return
 
-	# Right-click or ESC to cancel current building selection
-	if current_build_type != "":
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-			cancel_building_selection()
-			get_viewport().set_input_as_handled()
-			return
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+	# ESC key to cancel current building selection
+	if event is InputEventKey and event.pressed and event.keycode == cancel_key:
+		if current_build_type != "":
 			cancel_building_selection()
 			get_viewport().set_input_as_handled()
 			return
 
-	if current_build_type == "":
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			var hit_pos = _raycast_ground(event.position)
-			if hit_pos != null and hero != null and is_instance_valid(hero):
+	# Right-click (Default hero move button)
+	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
+		if current_build_type != "":
+			cancel_building_selection()
+		var hit_pos = _raycast_ground(event.position)
+		if hit_pos != null and hero != null and is_instance_valid(hero):
+			var cell = grid_manager.world_to_cell(hit_pos) if grid_manager else Vector2i.ZERO
+			var b = grid_manager.get_building_at(cell) if grid_manager else null
+			if b != null and is_instance_valid(b) and "is_constructed" in b and not b.is_constructed:
+				hero.order_build(b, true)
+			else:
 				hero.move_to(hit_pos)
+		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	# Left-click (Default build place button)
+	if event is InputEventMouseButton and event.pressed and event.button_index == place_btn:
+		if current_build_type == "":
+			# Reserved for future unit / building selection
+			return
+
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null:
 			var cell = grid_manager.world_to_cell(hit_pos)
@@ -333,31 +351,24 @@ func _unhandled_input(event: InputEvent) -> void:
 			var placed = build_system.place_building(current_build_type, cell, buildings_container, true)
 			if placed != null:
 				if hero != null and is_instance_valid(hero):
-					hero.order_build(placed)
+					hero.order_build(placed, false)
 				# Continuous Placement: keep mode if player can afford another one
 				if not _can_afford_building(current_build_type):
 					cancel_building_selection()
-					var gs = _get_game_state()
-					if gs and gs.current_ap <= 0:
-						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint("行动点已耗尽 (0 AP)！请点击【提前结束部署】推进回合")
 			else:
 				# Placement rejected by BuildSystem: provide user guidance
 				var gs = _get_game_state()
-				var cfg = _get_config()
 				if gs and cfg and cfg.BUILDINGS.has(current_build_type):
 					var b_data: Dictionary = cfg.BUILDINGS[current_build_type]
-					var ap_cost: int = int(b_data.get("ap_cost", 1))
 					var cost: Dictionary = b_data.get("cost", {})
-					if not gs.can_spend_ap(ap_cost):
-						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint("行动点不足 (%d AP)！请点击【结束行动】推进回合并恢复 AP" % gs.current_ap)
-					elif not gs.can_afford(cost):
+					if not gs.can_afford(cost):
 						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 							hud.show_hint("资源不足，无法建造！")
 					elif "current_phase" in gs and int(gs.current_phase) != 0:
 						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint("非规划阶段，无法建造！")
+							hud.show_hint("非部署阶段，无法建造！")
+		get_viewport().set_input_as_handled()
+		return
 
 func _raycast_ground(screen_pos: Vector2) -> Variant:
 	if camera == null or not is_inside_tree():
@@ -398,6 +409,8 @@ func restart_game() -> void:
 	var gs = _get_game_state()
 	if gs:
 		gs.reset_game()
+
+	Dino.clear_all_attack_slots()
 
 	# 2. Deactivate and reset WaveManager
 	if wave_manager and is_instance_valid(wave_manager):

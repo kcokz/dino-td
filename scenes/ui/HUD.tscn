@@ -52,10 +52,12 @@ layout_mode = 2
 theme_override_constants/separation = 20
 
 [node name="APLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 text = "AP: 3 / 3"
 
 [node name="VSeparator1" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 
 [node name="DeployTimerLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]

@@ -201,7 +201,6 @@ func _on_spawn_timer_timeout() -> void:
 
 	if dinos_spawned_count < dinos_to_spawn:
 		_spawn_single_dino()
-		dinos_spawned_count += 1
 
 	if dinos_spawned_count >= dinos_to_spawn:
 		if spawn_timer:
@@ -234,6 +233,7 @@ func _spawn_single_dino() -> Node:
 	var offset: float = 0.0
 	if not lane_offsets.is_empty():
 		offset = float(lane_offsets[dinos_spawned_count % lane_offsets.size()])
+	dinos_spawned_count += 1
 
 	if "lane_offset" in dino:
 		dino.lane_offset = offset

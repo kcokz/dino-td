@@ -22,6 +22,8 @@ var building_script: GDScript = null
 var wall_script: GDScript = null
 var tower_script: GDScript = null
 var lumber_script: GDScript = null
+var grid_manager_script: GDScript = null
+var build_system_script: GDScript = null
 
 var _cleanup_nodes: Array[Node] = []
 
@@ -47,6 +49,10 @@ func before_all() -> void:
 		tower_script = load("res://scripts/entities/Tower.gd")
 	if ResourceLoader.exists("res://scripts/entities/LumberHut.gd"):
 		lumber_script = load("res://scripts/entities/LumberHut.gd")
+	if ResourceLoader.exists("res://scripts/core/GridManager.gd"):
+		grid_manager_script = load("res://scripts/core/GridManager.gd")
+	if ResourceLoader.exists("res://scripts/core/BuildSystem.gd"):
+		build_system_script = load("res://scripts/core/BuildSystem.gd")
 
 func after_each() -> void:
 	for node in _cleanup_nodes:
@@ -56,8 +62,11 @@ func after_each() -> void:
 			node.free()
 	_cleanup_nodes.clear()
 
-	if game_state_node and game_state_node.has_method("reset_game"):
-		game_state_node.reset_game()
+	if game_state_node:
+		if "infinite_ap" in game_state_node:
+			game_state_node.infinite_ap = false
+		if game_state_node.has_method("reset_game"):
+			game_state_node.reset_game()
 
 # ==============================================================================
 # 1. Configuration Constants Integrity (v0.1)
@@ -382,3 +391,396 @@ func test_12_dino_flock_flanking_and_surround() -> void:
 	dino_back.advance_towards_waypoint(0.1)
 	assert_true(absf(dino_back.velocity.x) > 0.001 or dino_back.current_state == 1,
 		"Back dino performs lateral flanking steer or attacks target directly instead of stalling")
+
+# ==============================================================================
+# 13. Hero Physics Collision with Buildings (Cannot Penetrate Walls)
+# ==============================================================================
+
+func test_13_hero_physics_collision_with_walls_cannot_penetrate() -> void:
+	assert_not_null(hero_script, "Hero.gd must exist")
+	assert_not_null(wall_script, "Wall.gd must exist")
+
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	wall.position = Vector3(2.0, 0.0, 0.0)
+	wall.complete_construction() # collision_layer = 2
+
+	var hero = hero_script.new()
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	hero.position = Vector3(0.0, 0.0, 0.0)
+
+	# Verify hero collision mask includes Layer 2 (Buildings)
+	assert_true((hero.collision_mask & 2) != 0, "Hero collision_mask must include Layer 2 (Buildings)")
+
+	# Wait for physics engine broadphase synchronization
+	await wait_frames(2)
+
+	# Command hero to move past the wall to X=5.0
+	hero.move_to(Vector3(5.0, 0.0, 0.0))
+	assert_eq(int(hero.current_state), 1, "Hero is MOVING towards destination")
+
+	# Simulate multiple physics frames
+	for _frame in range(30):
+		await wait_frames(1)
+		hero._physics_process(0.05)
+
+	# Hero must be stopped by the wall and cannot penetrate through it (X must remain < 1.6)
+	assert_lt(hero.global_position.x, 1.6, "Hero is physically blocked by Wall and cannot penetrate it")
+
+# ==============================================================================
+# 14. Infinite AP Mode Allows Building Gated Strictly by Resources
+# ==============================================================================
+
+func test_14_infinite_ap_mode_allows_continuous_building_with_resources() -> void:
+	assert_not_null(game_state_node, "GameState must exist")
+	assert_not_null(grid_manager_script, "GridManager must exist")
+	assert_not_null(build_system_script, "BuildSystem must exist")
+
+	var grid_mgr = grid_manager_script.new()
+	_cleanup_nodes.append(grid_mgr)
+	tree.root.add_child(grid_mgr)
+
+	var build_sys = build_system_script.new()
+	_cleanup_nodes.append(build_sys)
+	tree.root.add_child(build_sys)
+	build_sys.setup(grid_mgr)
+
+	game_state_node.reset_game()
+	game_state_node.infinite_ap = true
+	game_state_node.resources = {"wood": 8, "stone": 0, "food": 0}
+
+	# Infinite AP: can_spend_ap returns true regardless of amount
+	assert_true(game_state_node.can_spend_ap(99), "infinite_ap mode allows can_spend_ap for any amount")
+
+	# Place 4 walls (each costs 2 wood, total 8 wood)
+	for i in range(4):
+		var cell = Vector2i(20 + i, 20)
+		var b = build_sys.place_building("wall", cell)
+		if b is Node: _cleanup_nodes.append(b)
+		assert_not_null(b, "Wall %d placed successfully under infinite AP" % (i + 1))
+
+	assert_eq(game_state_node.resources["wood"], 0, "All 8 wood consumed across 4 walls")
+	# 5th placement fails due to 0 wood, not AP
+	var fail_b = build_sys.place_building("wall", Vector2i(25, 20))
+	assert_null(fail_b, "5th placement rejected due to wood shortage")
+
+# ==============================================================================
+# 15. Dinosaur Perimeter Attack Slots Encircle & Anti-Jitter Lock
+# ==============================================================================
+
+func test_15_dino_attack_slots_encircle_and_anti_jitter_lock() -> void:
+	assert_not_null(dino_script, "Dino.gd must exist")
+	assert_not_null(wall_script, "Wall.gd must exist")
+
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	wall.position = Vector3(0.0, 0.0, 0.0)
+
+	# Claim distinct attack slots for 4 dinos around the wall
+	var claimed_slots: Array[Vector3] = []
+	for i in range(4):
+		var dino = dino_script.new()
+		_cleanup_nodes.append(dino)
+		tree.root.add_child(dino)
+		dino.position = Vector3(float(i) * 0.5, 0.0, -3.0)
+
+		var slot = dino_script.claim_attack_slot(wall, dino)
+		assert_true(slot != Vector3.ZERO, "Dino %d claimed a valid attack slot" % i)
+		assert_false(claimed_slots.has(slot), "Dino %d claimed a unique attack slot" % i)
+		claimed_slots.append(slot)
+
+	# Verify attacking state locks velocity to ZERO (Anti-Jitter)
+	var attacker = dino_script.new()
+	_cleanup_nodes.append(attacker)
+	tree.root.add_child(attacker)
+	attacker.position = Vector3(0.0, 0.0, -1.2)
+	attacker.on_obstacle_detected(wall)
+
+	assert_eq(int(attacker.current_state), 1, "Attacker state is ATTACKING (1)")
+	assert_eq(attacker.velocity, Vector3.ZERO, "Attacker velocity locked at ZERO")
+
+	# Running _process_attacking preserves ZERO velocity (no separation jitter)
+	attacker._process_attacking(0.1)
+	assert_eq(attacker.velocity, Vector3.ZERO, "Attacker velocity remains ZERO without jitter")
+
+# ==============================================================================
+# 16. Controls Configuration SSoT & RTS Right-Click Move Default
+# ==============================================================================
+
+func test_16_controls_configuration_and_rts_defaults() -> void:
+	assert_not_null(config_node, "Config autoload must exist")
+	assert_true("CONTROLS" in config_node, "Config must define CONTROLS dictionary")
+
+	var controls: Dictionary = config_node.CONTROLS
+	assert_eq(controls.get("hero_move_button"), MOUSE_BUTTON_RIGHT, "hero_move_button must default to MOUSE_BUTTON_RIGHT")
+	assert_eq(controls.get("build_place_button"), MOUSE_BUTTON_LEFT, "build_place_button must default to MOUSE_BUTTON_LEFT")
+	assert_eq(controls.get("cancel_key"), KEY_ESCAPE, "cancel_key must default to KEY_ESCAPE")
+	assert_eq(controls.get("pause_key"), KEY_SPACE, "pause_key must default to KEY_SPACE")
+
+# ==============================================================================
+# 17. Defense Tower Never Targets or Attacks Hero
+# ==============================================================================
+
+func test_17_tower_never_targets_or_attacks_hero() -> void:
+	assert_not_null(tower_script, "Tower.gd must exist")
+	assert_not_null(hero_script, "Hero.gd must exist")
+
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	tower.position = Vector3(0.0, 0.0, 0.0)
+	tower.complete_construction()
+
+	var hero = hero_script.new()
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	hero.position = Vector3(1.0, 0.0, 0.0) # 1.0m away (well within 5.0m attack range)
+
+	await wait_frames(2)
+
+	# Verify tower target validation explicitly rejects Hero
+	assert_false(tower._is_target_valid(hero), "Tower._is_target_valid must return false for Hero")
+
+	# Target scanning should not select Hero
+	var acquired = tower.acquire_target()
+	assert_null(acquired, "Tower must not acquire Hero as a target")
+
+	# Attempt to force fire at Hero
+	var initial_hp = hero.current_hp
+	tower.fire_at(hero)
+	assert_eq(hero.current_hp, initial_hp, "Hero HP must not decrease when Tower attempts fire")
+
+	# Simulating fire timer timeout with Hero in range
+	tower._on_fire_timer_timeout()
+	assert_eq(hero.current_hp, initial_hp, "Tower periodic attack tick must not damage Hero")
+
+# ==============================================================================
+# 18. HUD Hides AP Label and Displays Resource Costs on Buttons
+# ==============================================================================
+
+func test_18_hud_hides_ap_in_v01() -> void:
+	var hud_packed = load("res://scenes/ui/HUD.tscn")
+	assert_not_null(hud_packed, "HUD.tscn must exist")
+	var hud = hud_packed.instantiate()
+	_cleanup_nodes.append(hud)
+	tree.root.add_child(hud)
+	await wait_frames(1)
+
+	assert_false(hud.ap_label.visible, "APLabel must be invisible on the UI")
+	assert_false(hud.build_wall_btn.text.contains("AP"), "BuildWallBtn must not show AP cost (got '%s')" % hud.build_wall_btn.text)
+	assert_false(hud.build_lumber_btn.text.contains("AP"), "BuildLumberHutBtn must not show AP cost (got '%s')" % hud.build_lumber_btn.text)
+	assert_false(hud.build_tower_btn.text.contains("AP"), "BuildTowerBtn must not show AP cost (got '%s')" % hud.build_tower_btn.text)
+	assert_true(hud.build_wall_btn.text.contains("木"), "BuildWallBtn shows wood cost")
+
+# ==============================================================================
+# 19. Hero A* Pathfinding Navigates Around Wall Obstacles
+# ==============================================================================
+
+func test_19_hero_pathfinding_around_wall_obstacle() -> void:
+	assert_not_null(hero_script, "Hero.gd must exist")
+	assert_not_null(wall_script, "Wall.gd must exist")
+	assert_not_null(grid_manager_script, "GridManager.gd must exist")
+
+	var grid_mgr = grid_manager_script.new()
+	_cleanup_nodes.append(grid_mgr)
+	tree.root.add_child(grid_mgr)
+
+	# Place an intervening wall blocking direct movement at cell (1, 0)
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	wall.position = grid_mgr.cell_to_world(Vector2i(1, 0))
+	wall.complete_construction()
+	grid_mgr.occupy_cell(Vector2i(1, 0), wall)
+
+	var hero = hero_script.new()
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	hero.position = grid_mgr.cell_to_world(Vector2i(0, 0))
+
+	# Move to cell (2, 0) on the other side of the wall
+	var dest = grid_mgr.cell_to_world(Vector2i(2, 0))
+	hero.move_to(dest)
+
+	# Pathfinding must route around cell (1, 0)
+	assert_gt(hero.current_path.size(), 1, "Hero path must contain intermediate waypoints around the wall")
+	for pt in hero.current_path:
+		var c = grid_mgr.world_to_cell(pt)
+		assert_ne(c, Vector2i(1, 0), "Waypoint must not route directly through occupied cell (1, 0)")
+
+	# Simulate movement over time
+	for _i in range(50):
+		hero._physics_process(0.05)
+		if hero.current_state == hero_script.State.IDLE:
+			break
+
+	var end_cell = grid_mgr.world_to_cell(hero.global_position)
+	assert_eq(end_cell, Vector2i(2, 0), "Hero successfully reached cell (2, 0) on opposite side of wall")
+
+# ==============================================================================
+# 20. Hero Builds Blueprint Placed Directly Adjacent to Wall
+# ==============================================================================
+
+func test_20_hero_builds_blueprint_adjacent_to_wall() -> void:
+	assert_not_null(hero_script, "Hero.gd must exist")
+	assert_not_null(wall_script, "Wall.gd must exist")
+	assert_not_null(grid_manager_script, "GridManager.gd must exist")
+
+	var grid_mgr = grid_manager_script.new()
+	_cleanup_nodes.append(grid_mgr)
+	tree.root.add_child(grid_mgr)
+
+	# Completed wall at (1, 0)
+	var completed_wall = wall_script.new()
+	_cleanup_nodes.append(completed_wall)
+	tree.root.add_child(completed_wall)
+	completed_wall.position = grid_mgr.cell_to_world(Vector2i(1, 0))
+	completed_wall.complete_construction()
+	grid_mgr.occupy_cell(Vector2i(1, 0), completed_wall)
+
+	# Unfinished blueprint directly adjacent at (2, 0)
+	var blueprint = wall_script.new()
+	_cleanup_nodes.append(blueprint)
+	tree.root.add_child(blueprint)
+	blueprint.position = grid_mgr.cell_to_world(Vector2i(2, 0))
+	blueprint.start_construction(1.0)
+	grid_mgr.occupy_cell(Vector2i(2, 0), blueprint)
+
+	# Hero starts on opposite side at (0, 0)
+	var hero = hero_script.new()
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	hero.position = grid_mgr.cell_to_world(Vector2i(0, 0))
+
+	# Order hero to build blueprint
+	hero.order_build(blueprint)
+	assert_eq(int(hero.current_state), 1, "Hero enters MOVING towards blueprint")
+
+	# Simulate frames until hero starts building
+	for _i in range(50):
+		hero._physics_process(0.05)
+		if hero.current_state == hero_script.State.BUILDING:
+			break
+
+	assert_eq(int(hero.current_state), 2, "Hero successfully navigated around wall and entered BUILDING")
+
+	# Continue building until completion
+	for _i in range(30):
+		hero._physics_process(0.05)
+		if blueprint.is_constructed:
+			break
+
+	assert_true(blueprint.is_constructed, "Blueprint successfully finished construction")
+	assert_almost_eq(blueprint.build_progress, 1.0, 0.01, "Blueprint progress reached 100%")
+
+# ==============================================================================
+# 21. Hero Automatically Discovers and Builds Queued Blueprints
+# ==============================================================================
+
+func test_21_hero_auto_builds_queued_blueprints() -> void:
+	assert_not_null(hero_script, "Hero.gd must exist")
+	assert_not_null(wall_script, "Wall.gd must exist")
+	assert_not_null(grid_manager_script, "GridManager.gd must exist")
+
+	var grid_mgr = grid_manager_script.new()
+	_cleanup_nodes.append(grid_mgr)
+	tree.root.add_child(grid_mgr)
+
+	# Blueprint 1 at (1, 0) (0.5s build time)
+	var bp1 = wall_script.new()
+	_cleanup_nodes.append(bp1)
+	tree.root.add_child(bp1)
+	bp1.position = grid_mgr.cell_to_world(Vector2i(1, 0))
+	bp1.start_construction(0.5)
+	grid_mgr.occupy_cell(Vector2i(1, 0), bp1)
+
+	# Blueprint 2 at (2, 0) (0.5s build time)
+	var bp2 = wall_script.new()
+	_cleanup_nodes.append(bp2)
+	tree.root.add_child(bp2)
+	bp2.position = grid_mgr.cell_to_world(Vector2i(2, 0))
+	bp2.start_construction(0.5)
+	grid_mgr.occupy_cell(Vector2i(2, 0), bp2)
+
+	# Hero at (0, 0)
+	var hero = hero_script.new()
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	hero.position = grid_mgr.cell_to_world(Vector2i(0, 0))
+
+	# Order build bp1
+	hero.order_build(bp1)
+
+	# Simulate until both are built
+	for _i in range(70):
+		hero._physics_process(0.05)
+		if bp1.is_constructed and bp2.is_constructed:
+			break
+
+	assert_true(bp1.is_constructed, "Blueprint 1 finished construction")
+	assert_true(bp2.is_constructed, "Blueprint 2 automatically finished construction via auto-queue")
+
+# ==============================================================================
+# 22. Dinosaurs Never Overlap or Pass Through Each Other After Building Breach
+# ==============================================================================
+
+func test_22_dinos_never_overlap_after_building_breach() -> void:
+	assert_not_null(dino_script, "Dino.gd must exist")
+	assert_not_null(wall_script, "Wall.gd must exist")
+
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	wall.position = Vector3(1.0, 0.0, -7.0)
+	wall.complete_construction()
+
+	var waypoints_list: Array[Vector3] = [
+		Vector3(1.0, 0.0, -18.0),
+		Vector3(1.0, 0.0, -7.0),
+		Vector3(1.0, 0.0, 0.0)
+	]
+
+	# Spawn 4 dinos encircling the wall: North, South, East, West
+	var dinos: Array[Node] = []
+	var offsets = [
+		Vector3(0.0, 0.0, -1.6), # North (behind wall)
+		Vector3(0.0, 0.0, 1.6),  # South (in front of wall)
+		Vector3(1.6, 0.0, 0.0),  # East (right flank)
+		Vector3(-1.6, 0.0, 0.0)  # West (left flank)
+	]
+
+	for i in range(4):
+		var d = dino_script.new("raptor")
+		_cleanup_nodes.append(d)
+		tree.root.add_child(d)
+		d.position = wall.position + offsets[i]
+		d.set_waypoints(waypoints_list)
+		d.current_waypoint_index = 2
+		d.on_obstacle_detected(wall)
+		dinos.append(d)
+		assert_eq(int(d.current_state), 1, "Dino %d is initially ATTACKING the wall" % i)
+
+	# Destroy the wall (simulating breach)
+	wall.take_damage(999.0)
+	assert_true(wall.is_destroyed, "Wall must be destroyed")
+
+	# Simulate 30 physics frames as dinos transition to WALKING and march through
+	for frame in range(30):
+		for d in dinos:
+			d._physics_process(0.05)
+
+		# Strict pairwise anti-penetration invariant:
+		# Distance between any two 0.8m dino cube models must NEVER be < 0.8m (no overlapping/clipping)
+		for i in range(dinos.size()):
+			for j in range(i + 1, dinos.size()):
+				var dist = dinos[i].global_position.distance_to(dinos[j].global_position)
+				assert_true(dist >= 0.8,
+					"Dinos %d and %d must not overlap on frame %d (distance was %f < 0.8m)" % [i, j, frame, dist])
+
+	# Verify all dinos are in WALKING state and have advanced forward
+	for i in range(dinos.size()):
+		assert_eq(int(dinos[i].current_state), 0, "Dino %d is WALKING after breach" % i)
+		assert_gt(dinos[i].global_position.z, -8.6, "Dino %d has advanced forward along path" % i)

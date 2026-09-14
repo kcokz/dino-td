@@ -196,9 +196,9 @@ func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
 
 	var hud = main_inst.find_child("HUD", true, false)
 	assert_not_null(hud, "HUD must exist in Main")
-	assert_true(hud.build_wall_btn.text.contains("1AP"), "BuildWallBtn should display 1AP cost")
-	assert_true(hud.build_lumber_btn.text.contains("1AP"), "BuildLumberHutBtn should display 1AP cost")
-	assert_true(hud.build_tower_btn.text.contains("1AP"), "BuildTowerBtn should display 1AP cost")
+	assert_true(hud.build_wall_btn.text.contains("木"), "BuildWallBtn should display resource cost")
+	assert_true(hud.build_lumber_btn.text.contains("木"), "BuildLumberHutBtn should display resource cost")
+	assert_true(hud.build_tower_btn.text.contains("木"), "BuildTowerBtn should display resource cost")
 
 func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
@@ -332,7 +332,8 @@ func test_12_dinos_disperse_in_lanes_across_path_corridor() -> void:
 	var wm = wave_manager_script.new()
 	_cleanup_nodes.append(wm)
 	tree.root.add_child(wm)
-	wm.waypoints = [Vector3(1.0, 0.0, -18.0), Vector3(1.0, 0.0, 0.0)]
+	var wps: Array[Vector3] = [Vector3(1.0, 0.0, -18.0), Vector3(1.0, 0.0, 0.0)]
+	wm.waypoints = wps
 	wm.nest_spawn_position = Vector3(1.0, 0.0, -18.0)
 
 	var d0 = wm.spawn_dino()

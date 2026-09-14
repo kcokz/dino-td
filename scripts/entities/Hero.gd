@@ -32,8 +32,14 @@ var target_building: Node = null
 var target_enemy: Node3D = null
 var attack_cooldown: float = 0.0
 
+var current_path: Array[Vector3] = []
+var current_path_index: int = 0
+var _stuck_timer: float = 0.0
+var _last_pos: Vector3 = Vector3.ZERO
+
 var collision_shape: CollisionShape3D = null
 var mesh_instance: MeshInstance3D = null
+var is_hero: bool = true
 
 # ==============================================================================
 # Lifecycle & Initialization
@@ -105,52 +111,117 @@ func _process_idle(_delta: float) -> void:
 			current_state = State.ATTACKING
 
 func _process_moving(delta: float) -> void:
-	# If tasked to build, check if in range
-	if target_building != null and is_instance_valid(target_building):
-		if "is_destroyed" in target_building and target_building.is_destroyed:
+	# 1. Target building check
+	if target_building != null:
+		if not is_instance_valid(target_building) or ("is_destroyed" in target_building and target_building.is_destroyed):
 			target_building = null
-			current_state = State.IDLE
+			_continue_to_next_pending_building_or_idle()
 			return
-		target_destination = target_building.global_position
-		var dist_to_b = global_position.distance_to(target_destination)
-		if dist_to_b <= build_range:
+		if _is_in_build_range(global_position, target_building):
 			velocity = Vector3.ZERO
 			current_state = State.BUILDING
 			return
-	
-	# If tasked to attack enemy, check if in range
-	elif target_enemy != null and _is_enemy_valid(target_enemy):
-		target_destination = target_enemy.global_position
-		var dist_to_e = global_position.distance_to(target_destination)
+
+	# 2. Target enemy check
+	elif target_enemy != null:
+		if not _is_enemy_valid(target_enemy):
+			target_enemy = null
+			current_state = State.IDLE
+			return
+		var dist_to_e = global_position.distance_to(target_enemy.global_position)
 		if dist_to_e <= attack_range:
 			velocity = Vector3.ZERO
 			current_state = State.ATTACKING
 			return
 
-	# Move toward destination
-	var diff = target_destination - global_position
-	diff.y = 0.0
-	if diff.length() <= 0.15:
+	# 3. Ensure path is not empty
+	if current_path.is_empty():
+		current_path = [target_destination]
+		current_path_index = 0
+
+	# Advance waypoints if close enough
+	while current_path_index < current_path.size():
+		var wp = current_path[current_path_index]
+		var d_wp = Vector2(global_position.x - wp.x, global_position.z - wp.z).length()
+		var threshold = 0.15 if current_path_index == current_path.size() - 1 else 0.3
+		if d_wp <= threshold:
+			current_path_index += 1
+		else:
+			break
+
+	# Check if all waypoints reached
+	if current_path_index >= current_path.size():
 		velocity = Vector3.ZERO
-		current_state = State.IDLE
+		if target_building != null and is_instance_valid(target_building):
+			if _is_in_build_range(global_position, target_building):
+				current_state = State.BUILDING
+			else:
+				_plan_path_to_building(target_building)
+				if current_path_index >= current_path.size():
+					current_state = State.IDLE
+		else:
+			current_state = State.IDLE
 		return
+
+	# Move toward current waypoint
+	var target_pt = current_path[current_path_index]
+	var diff = target_pt - global_position
+	diff.y = 0.0
 
 	var dir = diff.normalized()
 	velocity = dir * speed
 	if dir.length_squared() > 0.001:
 		look_at(global_position + dir, Vector3.UP)
 
-	global_position += velocity * delta
+	var motion = velocity * delta
+	if is_inside_tree() and get_world_3d() != null:
+		var col = move_and_collide(motion)
+		if col != null:
+			# If obstacle is the target building or within build range, transition to building
+			if target_building != null and (col.get_collider() == target_building or _is_in_build_range(global_position, target_building, 0.2)):
+				velocity = Vector3.ZERO
+				current_state = State.BUILDING
+				return
+			# Slide along the obstacle surface
+			var slide_normal = col.get_normal()
+			slide_normal.y = 0.0
+			if slide_normal.length_squared() > 0.001:
+				slide_normal = slide_normal.normalized()
+				var remainder = col.get_remainder()
+				var slide_motion = remainder.slide(slide_normal)
+				move_and_collide(slide_motion)
+	else:
+		global_position += motion
+
+	# 4. Stuck detection & auto-recovery
+	var moved_dist = global_position.distance_to(_last_pos)
+	if moved_dist < (speed * delta * 0.2):
+		_stuck_timer += delta
+		if _stuck_timer >= 0.4:
+			_stuck_timer = 0.0
+			if target_building != null and is_instance_valid(target_building):
+				if _is_in_build_range(global_position, target_building, 0.2):
+					velocity = Vector3.ZERO
+					current_state = State.BUILDING
+					return
+				_plan_path_to_building(target_building)
+			elif target_enemy != null and _is_enemy_valid(target_enemy):
+				_plan_path(target_enemy.global_position)
+			else:
+				_plan_path(target_destination)
+	else:
+		_stuck_timer = 0.0
+	_last_pos = global_position
 
 func _process_building(delta: float) -> void:
 	velocity = Vector3.ZERO
 	if target_building == null or not is_instance_valid(target_building) or target_building.is_destroyed:
 		target_building = null
-		current_state = State.IDLE
+		_continue_to_next_pending_building_or_idle()
 		return
 
-	var dist = global_position.distance_to(target_building.global_position)
-	if dist > (build_range + 0.5):
+	if not _is_in_build_range(global_position, target_building, 0.5):
+		_plan_path_to_building(target_building)
 		current_state = State.MOVING
 		return
 
@@ -164,9 +235,9 @@ func _process_building(delta: float) -> void:
 		var completed = target_building.add_build_progress(delta)
 		if completed:
 			target_building = null
-			current_state = State.IDLE
+			_continue_to_next_pending_building_or_idle()
 	else:
-		current_state = State.IDLE
+		_continue_to_next_pending_building_or_idle()
 
 func _process_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -193,6 +264,131 @@ func _process_attacking(delta: float) -> void:
 			target_enemy.take_damage(damage)
 
 # ==============================================================================
+# Navigation & Range Detection
+# ==============================================================================
+
+func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> bool:
+	if b == null or not is_instance_valid(b):
+		return false
+	var b_pos = b.global_position
+	# Check 1: Euclidean distance to center
+	var dist_center = pos.distance_to(b_pos)
+	if dist_center <= (build_range + extra_buffer):
+		return true
+
+	# Check 2: 2D bounding box distance to building cell perimeter
+	var half_size: float = 1.0
+	var gm = _get_grid_manager()
+	if gm and "tile_size" in gm:
+		half_size = float(gm.tile_size) * 0.5
+	var dx = maxf(0.0, absf(pos.x - b_pos.x) - half_size)
+	var dz = maxf(0.0, absf(pos.z - b_pos.z) - half_size)
+	var dist_box = sqrt(dx * dx + dz * dz)
+	var max_box_dist = maxf(0.6, build_range - half_size + 0.2) + extra_buffer
+	return dist_box <= max_box_dist
+
+func _plan_path(dest: Vector3, ignore_b: Node = null) -> void:
+	target_destination = dest
+	target_destination.y = global_position.y
+	current_path.clear()
+	current_path_index = 0
+	_stuck_timer = 0.0
+	_last_pos = global_position
+
+	var gm = _get_grid_manager()
+	if gm and gm.has_method("find_path"):
+		var pts = gm.find_path(global_position, target_destination, ignore_b)
+		if pts.size() > 0:
+			current_path = pts
+			current_path_index = 0
+			return
+
+	current_path = [target_destination]
+	current_path_index = 0
+
+func _plan_path_to_building(b: Node) -> void:
+	if b == null or not is_instance_valid(b):
+		return
+	var b_pos = b.global_position
+	b_pos.y = global_position.y
+
+	var gm = _get_grid_manager()
+	if gm and gm.has_method("find_path") and gm.has_method("world_to_cell") and gm.has_method("is_cell_walkable"):
+		var cell = gm.world_to_cell(b_pos)
+		var stand_dist: float = minf(build_range * 0.7, 1.0)
+		# Candidate approach points:
+		# 1. 4 cardinal edge stand-points within build range facing open adjacent cells
+		# 2. Target building center itself
+		var candidates: Array[Vector3] = []
+		var offsets = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+		for off in offsets:
+			var adj_cell = cell + off
+			if gm.is_cell_walkable(adj_cell, b):
+				var edge_pt = b_pos + Vector3(float(off.x) * stand_dist, 0.0, float(off.y) * stand_dist)
+				candidates.append(edge_pt)
+
+		if gm.is_cell_walkable(cell, b):
+			candidates.append(b_pos)
+
+		candidates.sort_custom(func(a: Vector3, b_pt: Vector3) -> bool:
+			return global_position.distance_squared_to(a) < global_position.distance_squared_to(b_pt)
+		)
+
+		for cand in candidates:
+			var path = gm.find_path(global_position, cand, b)
+			if path.size() > 0:
+				current_path = path
+				current_path_index = 0
+				target_destination = path[path.size() - 1]
+				_stuck_timer = 0.0
+				_last_pos = global_position
+				return
+
+	# Fallback
+	_plan_path(b_pos, b)
+
+func _find_nearest_unfinished_building() -> Node:
+	if not is_inside_tree():
+		return null
+	var unfinished: Array[Node] = []
+	var gm = _get_grid_manager()
+	if gm and gm.has_method("get_all_buildings"):
+		for b in gm.get_all_buildings():
+			if is_instance_valid(b) and not b.is_queued_for_deletion():
+				if "is_constructed" in b and not b.is_constructed:
+					if not ("is_destroyed" in b and b.is_destroyed):
+						unfinished.append(b)
+
+	if unfinished.is_empty():
+		for group_name in ["buildings", "blueprints"]:
+			for node in get_tree().get_nodes_in_group(group_name):
+				if is_instance_valid(node) and not node.is_queued_for_deletion():
+					if "is_constructed" in node and not node.is_constructed:
+						if not ("is_destroyed" in node and node.is_destroyed):
+							if not unfinished.has(node):
+								unfinished.append(node)
+
+	if unfinished.is_empty():
+		return null
+
+	var nearest: Node = null
+	var min_dist_sq: float = 999999.0
+	for b in unfinished:
+		var d_sq = global_position.distance_squared_to(b.global_position)
+		if d_sq < min_dist_sq:
+			min_dist_sq = d_sq
+			nearest = b
+	return nearest
+
+func _continue_to_next_pending_building_or_idle() -> void:
+	target_building = null
+	var next_b = _find_nearest_unfinished_building()
+	if next_b != null:
+		order_build(next_b)
+	else:
+		current_state = State.IDLE
+
+# ==============================================================================
 # Orders API
 # ==============================================================================
 
@@ -201,18 +397,26 @@ func move_to(dest: Vector3) -> void:
 		return
 	target_building = null
 	target_enemy = null
-	target_destination = dest
-	target_destination.y = global_position.y
+	_plan_path(dest)
 	current_state = State.MOVING
 
-func order_build(building: Node) -> void:
+func order_build(building: Node, force: bool = false) -> void:
 	if current_state == State.DEAD:
+		return
+	if building == null or not is_instance_valid(building):
+		current_state = State.IDLE
+		return
+	if not force and current_state == State.BUILDING and target_building != null and is_instance_valid(target_building) and target_building != building:
 		return
 	target_building = building
 	target_enemy = null
-	if building and is_instance_valid(building):
-		target_destination = building.global_position
-		target_destination.y = global_position.y
+
+	if _is_in_build_range(global_position, building):
+		velocity = Vector3.ZERO
+		current_state = State.BUILDING
+		return
+
+	_plan_path_to_building(building)
 	current_state = State.MOVING
 
 func order_attack(enemy: Node3D) -> void:
@@ -221,8 +425,7 @@ func order_attack(enemy: Node3D) -> void:
 	target_building = null
 	target_enemy = enemy
 	if enemy and is_instance_valid(enemy):
-		target_destination = enemy.global_position
-		target_destination.y = global_position.y
+		_plan_path(enemy.global_position)
 	current_state = State.MOVING
 
 # ==============================================================================
@@ -299,8 +502,8 @@ func _on_phase_changed(phase: int) -> void:
 	elif phase == 0: # Phase.DEPLOY
 		if current_state != State.DEAD:
 			visible = true
-			collision_layer = 4
-			collision_mask = 1
+			collision_layer = 4 # Layer 3: Hero/Player
+			collision_mask = 3 # Layer 1 Ground + Layer 2 Buildings
 			current_state = State.IDLE
 
 # ==============================================================================
@@ -309,7 +512,7 @@ func _on_phase_changed(phase: int) -> void:
 
 func _ensure_components() -> void:
 	collision_layer = 4 # Layer 3: Hero/Player
-	collision_mask = 1  # Layer 1: Ground
+	collision_mask = 3  # Layer 1 Ground + Layer 2 Buildings
 
 	if collision_shape == null:
 		for child in get_children():
@@ -380,4 +583,13 @@ func _get_game_state() -> Node:
 		return get_node_or_null("/root/GameState")
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("GameState")
+	return null
+
+func _get_grid_manager() -> Node:
+	if is_inside_tree():
+		var gms = get_tree().get_nodes_in_group("grid_manager")
+		if gms.size() > 0 and is_instance_valid(gms[0]):
+			return gms[0]
+		if get_tree().root:
+			return get_tree().root.find_child("GridManager", true, false)
 	return null
