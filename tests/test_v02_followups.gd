@@ -440,3 +440,35 @@ func test_20_reset_game_clears_continuous_mode() -> void:
 	game_state_node.continuous_mode = true
 	game_state_node.reset_game()
 	assert_false(game_state_node.continuous_mode, "reset_game() restores the default mode")
+
+# ==============================================================================
+# 6. Opening balance is playable
+# ==============================================================================
+
+func test_21_opening_wallet_affords_a_first_economy_building() -> void:
+	# A wallet that cannot cover the cheapest producer leaves the player staring at
+	# a disabled build menu on turn one, with nothing to do but hand-harvest.
+	var wallet: int = int(config_node.INITIAL_RESOURCES.get("wood", 0))
+	var cheapest_producer: int = -1
+	var cheapest_name: String = ""
+	for b_type in config_node.BUILDABLE_TYPES:
+		var data: Dictionary = config_node.BUILDINGS[b_type]
+		if not data.has("produces_per_sec"):
+			continue
+		var c: int = int(data.get("cost", {}).get("wood", 0))
+		if cheapest_producer < 0 or c < cheapest_producer:
+			cheapest_producer = c
+			cheapest_name = b_type
+
+	assert_gt(cheapest_producer, 0, "At least one buildable producer must exist")
+	assert_gte(wallet, cheapest_producer,
+		"Opening wood (%d) must cover the cheapest producer '%s' (%d)" % [wallet, cheapest_name, cheapest_producer])
+
+func test_22_opening_wallet_does_not_trivially_buy_the_whole_defence() -> void:
+	# The flip side: the opening should not hand the player a tower plus an economy,
+	# or the first real decision never happens.
+	var wallet: int = int(config_node.INITIAL_RESOURCES.get("wood", 0))
+	var tower: int = cost_of("tower")
+	var hut: int = cost_of("lumber_hut")
+	assert_lt(wallet, tower + hut,
+		"Opening wood (%d) must force a choice between a tower (%d) and an economy building (%d)" % [wallet, tower, hut])

@@ -137,7 +137,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Initial Phase must be PLAN (0)")
 	assert_eq(int(game_state_node.current_ap), 3, "Initial AP must be 3")
 	assert_eq(int(game_state_node.max_ap), 3, "Initial max_ap must be 3")
-	assert_eq(int(game_state_node.resources.get("wood", 0)), 10, "Initial wood must be 10")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_wood(), "Wood starts at the Config opening balance")
 	assert_eq(int(game_state_node.wave_number), 0, "Initial wave_number must be 0")
 	assert_false(bool(game_state_node.get("is_game_over")), "Initial is_game_over must be false")
 	assert_false(bool(game_state_node.get("is_game_won")), "Initial is_game_won must be false")
@@ -157,7 +157,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	var hud = main.hud
 	assert_not_null(hud, "HUD exists in Main")
 	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
-	assert_eq(hud.get_wood_text(), "Wood: 10", "HUD displays Wood: 10")
+	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_wood(), "HUD displays the opening wood balance")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 	assert_false(hud.is_game_over_visible(), "GameOver modal is hidden initially")
@@ -399,7 +399,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Phase reset to PLAN (0)")
 	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3")
 	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to 3")
-	assert_eq(int(game_state_node.resources["wood"]), 10, "Wood reset to 10")
+	assert_eq(int(game_state_node.resources["wood"]), opening_wood(), "Wood reset to the Config opening balance")
 	assert_eq(int(game_state_node.wave_number), 0, "wave_number reset to 0")
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.0, 0.001, "HP mult reset to 1.0")
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.0, 0.001, "Damage mult reset to 1.0")
@@ -423,7 +423,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after restart")
 	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
-	assert_eq(hud.get_wood_text(), "Wood: 10", "HUD displays Wood: 10")
+	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_wood(), "HUD displays the opening wood balance")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 
@@ -479,7 +479,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Phase reset to PLAN (0)")
 	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3")
 	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to 3")
-	assert_eq(int(game_state_node.resources["wood"]), 10, "Wood reset to 10")
+	assert_eq(int(game_state_node.resources["wood"]), opening_wood(), "Wood reset to the Config opening balance")
 	assert_eq(int(game_state_node.wave_number), 0, "wave_number reset to 0")
 
 	assert_not_null(main.current_core, "Pristine Core exists after 2nd restart")
@@ -490,7 +490,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after 2nd restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after 2nd restart")
 	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
-	assert_eq(hud.get_wood_text(), "Wood: 10", "HUD displays Wood: 10")
+	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_wood(), "HUD displays the opening wood balance")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
 
 # ==============================================================================
@@ -611,7 +611,7 @@ func test_03_multi_producer_economy_scaling_stress() -> void:
 	main.restart_game()
 	await wait_frames(2)
 
-	assert_eq(int(game_state_node.resources["wood"]), 10, "Wood reset to initial 10")
+	assert_eq(int(game_state_node.resources["wood"]), opening_wood(), "Wood reset to the Config opening balance")
 	assert_eq(main.buildings_container.get_child_count(), 1, "Only Core remains")
 
 	# Advance wave in pristine state with 0 huts -> Wood must remain 10
@@ -619,7 +619,7 @@ func test_03_multi_producer_economy_scaling_stress() -> void:
 	event_bus_node.dino_died.emit(null)
 	event_bus_node.dino_died.emit(null)
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE")
-	assert_eq(int(game_state_node.resources["wood"]), 10, "Zero huts produce zero phantom wood")
+	assert_eq(int(game_state_node.resources["wood"]), opening_wood(), "Zero huts produce zero phantom wood")
 
 # ==============================================================================
 # Test 4: Rapid Alternating Victory-Defeat-Restart Stress Loop
@@ -681,5 +681,5 @@ func test_05_strict_lockout_adversarial_hammering_oracle() -> void:
 		main.hud.simulate_end_action_click()
 
 	assert_eq(int(game_state_node.current_ap), 3, "AP untouched through bombardment")
-	assert_eq(int(game_state_node.resources["wood"]), 10, "Wood untouched through bombardment")
+	assert_eq(int(game_state_node.resources["wood"]), opening_wood(), "Wood untouched through bombardment")
 	assert_eq(main.buildings_container.get_child_count(), 0, "No buildings placed")

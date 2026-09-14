@@ -9,6 +9,10 @@
 # 6. CoreCampfire lifecycle, game_lost emission, and absolute halting of all future placements.
 extends "res://tests/test_base.gd"
 
+## Wood this suite seeds in before_each. It asserts exact balances, so it owns
+## its wallet rather than inheriting Config.INITIAL_RESOURCES (production tuning).
+const SEED_WOOD: int = 10
+
 var config_node: Object = null
 var event_bus_node: Object = null
 var game_state_node: Object = null
@@ -58,11 +62,13 @@ func before_each() -> void:
 	if game_state_node != null:
 		if game_state_node.has_method("reset_game"):
 			game_state_node.call("reset_game")
-		else:
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
-			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
-			if "current_phase" in game_state_node: game_state_node.current_phase = 0
+		# reset_game() seeds Config.INITIAL_RESOURCES, which is production tuning.
+		# This suite asserts exact balances, so pin its own wallet and stay decoupled
+		# from whatever the opening balance happens to be.
+		if "current_ap" in game_state_node: game_state_node.current_ap = 3
+		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
+		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
+		if "current_phase" in game_state_node: game_state_node.current_phase = 0
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -155,7 +161,7 @@ func test_challenge_duplicate_placement_identical_type() -> void:
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "Initial wall placement must succeed")
 	assert_eq(_get_ap(), 2, "AP decremented to 2 after initial placement")
-	assert_eq(_get_wood(), 10 - cost_of("wall"), "Wood decremented by the wall cost")
+	assert_eq(_get_wood(), SEED_WOOD - cost_of("wall"), "Wood decremented by the wall cost")
 
 	var watcher = watch_signal(event_bus_node, "building_placed")
 	assert_false(build_sys.can_place_building("wall", cell), "can_place_building must return false for occupied cell")
@@ -164,7 +170,7 @@ func test_challenge_duplicate_placement_identical_type() -> void:
 	if b2 is Node: _cleanup_nodes.append(b2)
 	assert_null(b2, "Duplicate placement of same type must return null")
 	assert_eq(_get_ap(), 2, "AP must NOT be deducted on duplicate placement attempt")
-	assert_eq(_get_wood(), 10 - cost_of("wall"), "Wood must NOT be deducted again on duplicate placement")
+	assert_eq(_get_wood(), SEED_WOOD - cost_of("wall"), "Wood must NOT be deducted again on duplicate placement")
 	assert_false(watcher.emitted, "building_placed signal must NOT be emitted for duplicate attempt")
 	assert_eq(grid_mgr.get_building_at(cell), b1, "Cell must retain original building instance")
 
@@ -211,7 +217,7 @@ func test_challenge_duplicate_placement_preoccupied_grid() -> void:
 	if b is Node: _cleanup_nodes.append(b)
 	assert_null(b, "place_building must return null when cell is preoccupied")
 	assert_eq(_get_ap(), 3, "AP remains unspent")
-	assert_eq(_get_wood(), 10, "Wood remains unspent")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood remains unspent")
 
 func test_challenge_duplicate_placement_extreme_quadrants() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -259,7 +265,7 @@ func test_challenge_rapid_duplicate_placement_loop() -> void:
 	assert_eq(successful_count, 1, "Exactly 1 placement must succeed in rapid loop on same cell")
 	assert_eq(rejected_count, 49, "Exactly 49 duplicate attempts must be rejected")
 	assert_eq(_get_ap(), 2, "AP decremented exactly once (3 -> 2)")
-	assert_eq(_get_wood(), 10 - cost_of("wall"), "Wood decremented exactly once")
+	assert_eq(_get_wood(), SEED_WOOD - cost_of("wall"), "Wood decremented exactly once")
 
 # ==============================================================================
 # Category 2: Phase Enforcement Challenges (ATTACK, PRODUCE, Invalid Phases)
@@ -283,7 +289,7 @@ func test_challenge_placement_blocked_during_attack_phase() -> void:
 
 	assert_null(b, "place_building must return null during ATTACK phase")
 	assert_eq(_get_ap(), 3, "AP must remain unchanged during ATTACK attempt")
-	assert_eq(_get_wood(), 10, "Wood must remain unchanged during ATTACK attempt")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood must remain unchanged during ATTACK attempt")
 	assert_false(watcher.emitted, "No building_placed signal during ATTACK phase")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell must remain empty")
 
@@ -305,7 +311,7 @@ func test_challenge_placement_blocked_during_produce_phase() -> void:
 
 	assert_null(b, "place_building must return null during PRODUCE phase")
 	assert_eq(_get_ap(), 3, "AP must remain unchanged during PRODUCE attempt")
-	assert_eq(_get_wood(), 10, "Wood must remain unchanged during PRODUCE attempt")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood must remain unchanged during PRODUCE attempt")
 	assert_false(watcher.emitted, "No building_placed signal during PRODUCE phase")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell must remain empty")
 
@@ -386,7 +392,7 @@ func test_challenge_placement_rejected_when_ap_zero() -> void:
 
 		assert_null(b, "place_building for '%s' when AP=0 must return null" % t)
 		assert_eq(_get_ap(), 0, "AP must remain 0")
-		assert_eq(_get_wood(), 10, "Wood must remain 10")
+		assert_eq(_get_wood(), SEED_WOOD, "Wood must remain 10")
 		assert_false(watcher.emitted, "building_placed must not emit when AP=0")
 		assert_false(grid_mgr.is_cell_occupied(cell), "Cell %s must remain unoccupied" % str(cell))
 		watcher.disconnect_watcher()
@@ -405,7 +411,7 @@ func test_challenge_placement_negative_ap_rejection() -> void:
 	if b is Node: _cleanup_nodes.append(b)
 	assert_null(b, "place_building with negative AP must return null")
 	assert_eq(_get_ap(), -5, "AP remains untouched")
-	assert_eq(_get_wood(), 10, "Wood remains untouched")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood remains untouched")
 
 func test_challenge_ap_depletion_boundary_enforcement() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -476,7 +482,7 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	if b_a is Node: _cleanup_nodes.append(b_a)
 
 	assert_null(b_a, "Barracks placement must return null when stone is insufficient")
-	assert_eq(_get_wood(), 10, "Wood must NOT be partially deducted (must remain 10)")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood must NOT be partially deducted (must remain 10)")
 	assert_eq(_get_stone(), 4, "Stone must NOT be partially deducted (must remain 4)")
 	assert_eq(_get_ap(), 3, "AP must NOT be deducted (must remain 3)")
 
@@ -715,7 +721,7 @@ func test_challenge_campfire_destruction_emits_game_lost_and_halts_all_placement
 
 	# Assert AP and resources remained untouched despite attempted placements
 	assert_eq(_get_ap(), 3, "AP remains unspent after game_lost")
-	assert_eq(_get_wood(), 10, "Wood remains unspent after game_lost")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood remains unspent after game_lost")
 
 func test_challenge_game_over_state_blocks_placement_even_with_excess_resources() -> void:
 	var grid_mgr = _create_grid_manager()

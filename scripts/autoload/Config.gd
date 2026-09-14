@@ -11,7 +11,7 @@ extends Node
 const BASE_AP: int = 3
 const RESOURCES: Array[String] = ["wood", "stone", "water", "food"]
 const INITIAL_RESOURCES: Dictionary = {
-	"wood": 10,
+	"wood": 20,
 	"stone": 0,
 	"water": 0,
 	"food": 0
@@ -27,8 +27,13 @@ const TILE_SIZE: float = 2.0
 ##   quarry      cost 22  ->  0.15/s * 40s =  6 stone
 ##   hunting_hut cost 18  ->  0.20/s * 40s =  8 water
 ## A tower costs 20 wood, i.e. two tends of a single lumber hut -- roughly one raid
-## cycle (RAIDS.interval_min/max is 45-90s) of a modest economy. Opening 10 wood does
-## not cover a hut, so the first move is always to go out and harvest by hand. Hand-harvesting a node yields RESOURCE_NODES.harvest_rate per
+## cycle (RAIDS.interval_min/max is 45-90s) of a modest economy.
+##
+## Opening wallet is 20 wood, which deliberately affords a real first decision
+## rather than a forced one: a lumber hut (12) plus a wall (5), or a single tower
+## (20) and no economy at all. It must stay at or above the cheapest producer, or
+## the player starts unable to build anything and has to hand-harvest first while
+## staring at a disabled build menu. Hand-harvesting a node yields RESOURCE_NODES.harvest_rate per
 ## second but occupies the Hero completely, so machines win on hero-time even
 ## though they cost wood up front.
 const BUILDINGS: Dictionary = {

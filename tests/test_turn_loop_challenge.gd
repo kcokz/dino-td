@@ -10,6 +10,10 @@
 # 7. Dynamic AP capacity shifts and clamping across multi-turn loops
 extends "res://tests/test_base.gd"
 
+## Wood this suite seeds in before_each. It asserts exact balances, so it owns
+## its wallet rather than inheriting Config.INITIAL_RESOURCES (production tuning).
+const SEED_WOOD: int = 10
+
 var config_node: Object = null
 var event_bus_node: Object = null
 var game_state_node: Object = null
@@ -53,13 +57,15 @@ func before_each() -> void:
 	if game_state_node != null:
 		if game_state_node.has_method("reset_game"):
 			game_state_node.call("reset_game")
-		else:
-			if "current_phase" in game_state_node: game_state_node.current_phase = 0
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "max_ap" in game_state_node: game_state_node.max_ap = 3
-			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
-			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
-			if "wave_number" in game_state_node: game_state_node.wave_number = 0
+		# reset_game() seeds Config.INITIAL_RESOURCES, which is production tuning.
+		# This suite asserts exact balances, so pin its own wallet and stay decoupled
+		# from whatever the opening balance happens to be.
+		if "current_phase" in game_state_node: game_state_node.current_phase = 0
+		if "current_ap" in game_state_node: game_state_node.current_ap = 3
+		if "max_ap" in game_state_node: game_state_node.max_ap = 3
+		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
+		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
+		if "wave_number" in game_state_node: game_state_node.wave_number = 0
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -658,12 +664,12 @@ func test_challenge_mixed_building_destruction_during_turn_loop() -> void:
 	_cleanup_nodes.append(dummy)
 	game_state_node.register_building(dummy)
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Initial wood is 10")
 
 	# Turn 1: Both huts produce
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(1)
-	assert_eq(_get_wood(), 14, "Turn 1: 10 + 4 = 14 wood")
+	assert_eq(_get_wood(), SEED_WOOD + 4, "Turn 1: 10 + 4 = 14 wood")
 	game_state_node.end_produce_phase()
 
 	# Turn 2: Destroy hut_a in PLAN
@@ -672,14 +678,14 @@ func test_challenge_mixed_building_destruction_during_turn_loop() -> void:
 
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(2)
-	assert_eq(_get_wood(), 16, "Turn 2: 14 + 2 = 16 wood (only hut_b produces)")
+	assert_eq(_get_wood(), SEED_WOOD + 6, "Turn 2: 14 + 2 = 16 wood (only hut_b produces)")
 	game_state_node.end_produce_phase()
 
 	# Turn 3: Unregister dummy, hut_b still produces
 	game_state_node.unregister_building(dummy)
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(3)
-	assert_eq(_get_wood(), 18, "Turn 3: 16 + 2 = 18 wood")
+	assert_eq(_get_wood(), SEED_WOOD + 8, "Turn 3: 16 + 2 = 18 wood")
 	game_state_node.end_produce_phase()
 
 # ==============================================================================

@@ -4,6 +4,10 @@
 # compounding multipliers up to wave 30, phase state locking, and boundary enforcement.
 extends "res://tests/test_base.gd"
 
+## Wood this suite seeds in before_each. It asserts exact balances, so it owns
+## its wallet rather than inheriting Config.INITIAL_RESOURCES (production tuning).
+const SEED_WOOD: int = 10
+
 var game_state: Object = null
 var event_bus: Object = null
 var config_node: Object = null
@@ -39,6 +43,10 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state != null and game_state.has_method("reset_game"):
 		game_state.reset_game()
+	# reset_game() seeds Config.INITIAL_RESOURCES, which is production tuning.
+	# This suite asserts exact balances, so pin its own wallet.
+	if game_state != null and "resources" in game_state:
+		game_state.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 
 func after_all() -> void:
 	for n in _allocated_nodes:
@@ -191,8 +199,10 @@ func test_stress_resource_non_numeric_and_complex_types() -> void:
 func test_stress_resource_float_conversion_and_exact_deduction() -> void:
 	assert_not_null(game_state, "GameState must exist")
 	game_state.reset_game()
+	# This test is about float-to-int truncation in the transaction, so pin the
+	# wallet rather than inheriting whatever Config's opening balance is.
+	game_state.resources = {"wood": 10, "stone": 0, "water": 0, "food": 0}
 
-	# Initial wood is 10
 	assert_true(game_state.can_afford({"wood": 3.9}), "Float cost 3.9 can_afford should evaluate int(3.9)=3 <= 10")
 	assert_true(game_state.spend_resources({"wood": 3.9}), "spend_resources with 3.9 should deduct 3")
 	assert_eq(game_state.resources.get("wood", 0), 7, "Wood should be 10 - 3 = 7")

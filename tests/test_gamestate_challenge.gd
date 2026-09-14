@@ -4,6 +4,10 @@
 # repeated resets, and adversarial edge cases.
 extends "res://tests/test_base.gd"
 
+## Wood this suite seeds in before_each. It asserts exact balances, so it owns
+## its wallet rather than inheriting Config.INITIAL_RESOURCES (production tuning).
+const SEED_WOOD: int = 10
+
 var game_state: Object = null
 var event_bus: Object = null
 var config_node: Object = null
@@ -39,6 +43,10 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state != null and game_state.has_method("reset_game"):
 		game_state.reset_game()
+	# reset_game() seeds Config.INITIAL_RESOURCES, which is production tuning.
+	# This suite asserts exact balances, so pin its own wallet.
+	if game_state != null and "resources" in game_state:
+		game_state.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 
 func after_all() -> void:
 	for n in _allocated_nodes:
@@ -233,7 +241,7 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		assert_eq(game_state.active_buildings.size(), 0, "active_buildings must be empty after reset (cycle %d)" % cycle)
 
 		var res = game_state.resources
-		assert_eq(res.get("wood", 0), 10, "wood must be 10 (cycle %d)" % cycle)
+		assert_eq(res.get("wood", 0), opening_wood(), "wood resets to the Config opening balance (cycle %d)" % cycle)
 		assert_eq(res.get("stone", 0), 0, "stone must be 0 (cycle %d)" % cycle)
 		assert_eq(res.get("food", 0), 0, "food must be 0 (cycle %d)" % cycle)
 		assert_false(res.has("corrupted_item"), "corrupted_item must be gone (cycle %d)" % cycle)

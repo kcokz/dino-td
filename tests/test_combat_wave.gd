@@ -5,6 +5,10 @@
 # and WaveManager (Wave 1: 2 dinos, Wave 2: 3 dinos, Wave 3: 8 dinos horde, wave signals, post-horde buff).
 extends "res://tests/test_base.gd"
 
+## Wood this suite seeds in before_each. It asserts exact balances, so it owns
+## its wallet rather than inheriting Config.INITIAL_RESOURCES (production tuning).
+const SEED_WOOD: int = 10
+
 var config_node: Object = null
 var event_bus_node: Object = null
 var game_state_node: Object = null
@@ -73,14 +77,16 @@ func before_each() -> void:
 	if game_state_node != null:
 		if game_state_node.has_method("reset_game"):
 			game_state_node.call("reset_game")
-		else:
-			if "current_phase" in game_state_node: game_state_node.current_phase = 0
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "max_ap" in game_state_node: game_state_node.max_ap = 3
-			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
-			if "dino_stat_multipliers" in game_state_node:
-				game_state_node.dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
-			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
+		# reset_game() seeds Config.INITIAL_RESOURCES, which is production tuning.
+		# This suite asserts exact balances, so pin its own wallet and stay decoupled
+		# from whatever the opening balance happens to be.
+		if "current_phase" in game_state_node: game_state_node.current_phase = 0
+		if "current_ap" in game_state_node: game_state_node.current_ap = 3
+		if "max_ap" in game_state_node: game_state_node.max_ap = 3
+		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
+		if "dino_stat_multipliers" in game_state_node:
+			game_state_node.dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
+		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 
 func after_each() -> void:
 	# Clean up any instantiated nodes to prevent ObjectDB leaks

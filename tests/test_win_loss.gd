@@ -659,7 +659,7 @@ func test_restart_01_resets_gamestate_values() -> void:
 
 	assert_eq(int(game_state_node.current_ap), 3, "current_ap reset to BASE_AP (3)")
 	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to BASE_AP (3)")
-	assert_eq(int(game_state_node.resources.get("wood", 0)), 10, "wood reset to INITIAL_RESOURCES (10)")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_wood(), "wood reset to Config.INITIAL_RESOURCES")
 	assert_false(bool(game_state_node.get("is_game_over")), "is_game_over reset to false")
 	assert_false(bool(game_state_node.get("is_game_won")), "is_game_won reset to false")
 	assert_eq(int(game_state_node.current_phase), 0, "current_phase reset to PLAN (0)")
