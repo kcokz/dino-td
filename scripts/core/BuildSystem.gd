@@ -58,6 +58,12 @@ func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = fa
 	if grid_manager.is_cell_occupied(cell):
 		return false
 	
+	# Verify Natural Resource Node overlap (v0.2)
+	if is_inside_tree():
+		var main_node = get_tree().root.find_child("Main", true, false)
+		if main_node and main_node.has_method("is_resource_at_cell") and main_node.is_resource_at_cell(cell):
+			return false
+	
 	# Verify GameState transactions
 	var gs = _get_game_state()
 	if gs == null:

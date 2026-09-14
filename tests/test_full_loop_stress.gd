@@ -282,7 +282,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	# Verify horde count: (base_count 2 + 2) * 2.0 = 8 dinos
 	assert_eq(wave_mgr.dinos_alive_count, 8, "Wave 3 horde spawns exactly 8 dinos")
-	assert_true("大波" in hud.get_wave_text(), "HUD wave label announces horde wave: '%s'" % hud.get_wave_text())
+	assert_true("大波" in hud.get_wave_text() or "Horde" in hud.get_wave_text(), "HUD wave label announces horde wave: '%s'" % hud.get_wave_text())
 
 	# Initial multipliers before wave 3 ends
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.0, 0.001, "Pre-horde HP multiplier is 1.0")

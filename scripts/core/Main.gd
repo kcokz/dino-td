@@ -30,7 +30,9 @@ var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 @export var nest_holder: Node3D = null
 @export var hud: CanvasLayer = null
 @export var hero: CharacterBody3D = null
+@export var resource_nodes_container: Node3D = null
 
+var resource_node_script: GDScript = null
 var current_core: Node = null
 var current_nest: Node = null
 var current_build_type: String = ""
@@ -95,6 +97,15 @@ func _ensure_scene_dependencies() -> void:
 		nest_holder = Node3D.new()
 		nest_holder.name = "NestHolder"
 		add_child(nest_holder)
+
+	if resource_nodes_container == null:
+		resource_nodes_container = find_child("ResourceNodes", true, false) as Node3D
+	if resource_nodes_container == null:
+		resource_nodes_container = Node3D.new()
+		resource_nodes_container.name = "ResourceNodes"
+		add_child(resource_nodes_container)
+	if resource_node_script == null and ResourceLoader.exists("res://scripts/entities/ResourceNode.gd"):
+		resource_node_script = load("res://scripts/entities/ResourceNode.gd")
 
 	# 3. GridManager
 	if grid_manager == null:
@@ -185,6 +196,11 @@ func _on_phase_changed(phase: int) -> void:
 ## Sets up initial level entities: CoreCampfire and Dinosaur Nest.
 func setup_level() -> void:
 	setup_initial_entities()
+	spawn_resource_nodes()
+	if hero and is_instance_valid(hero):
+		hero.continuous_mode = true
+	if wave_manager and is_instance_valid(wave_manager):
+		wave_manager.auto_raid_enabled = true
 
 ## Provisions initial CoreCampfire and Nest on the map and in GridManager.
 func setup_initial_entities() -> void:
@@ -265,6 +281,46 @@ func setup_initial_entities() -> void:
 		var core_cur_hp: float = float(current_core.current_hp) if (current_core != null and is_instance_valid(current_core) and "current_hp" in current_core) else core_max_hp
 		eb.core_hp_changed.emit(core_cur_hp, core_max_hp)
 
+func is_resource_at_cell(cell: Vector2i) -> bool:
+	if resource_nodes_container == null:
+		return false
+	for child in resource_nodes_container.get_children():
+		if is_instance_valid(child) and "cell_pos" in child and child.cell_pos == cell:
+			return true
+	return false
+
+func get_resource_node_at_cell(cell: Vector2i) -> Node:
+	if resource_nodes_container == null:
+		return null
+	for child in resource_nodes_container.get_children():
+		if is_instance_valid(child) and "cell_pos" in child and child.cell_pos == cell:
+			return child
+	return null
+
+func spawn_resource_nodes() -> void:
+	if resource_nodes_container == null:
+		_ensure_scene_dependencies()
+	if resource_nodes_container == null or resource_node_script == null:
+		return
+	for child in resource_nodes_container.get_children():
+		resource_nodes_container.remove_child(child)
+		child.queue_free()
+
+	var nodes_def = [
+		{"type": "wood", "cell": Vector2i(-4, -2)},
+		{"type": "wood", "cell": Vector2i(4, -2)},
+		{"type": "stone", "cell": Vector2i(-4, -6)},
+		{"type": "stone", "cell": Vector2i(4, -6)},
+		{"type": "water", "cell": Vector2i(-4, -4)}
+	]
+
+	for item in nodes_def:
+		var node = resource_node_script.new(item["type"], item["cell"])
+		node.name = "ResourceNode_%s_%d_%d" % [item["type"], item["cell"].x, item["cell"].y]
+		var world_pos = grid_manager.cell_to_world(item["cell"]) if grid_manager else Vector3(float(item["cell"].x * 2.0), 0.0, float(item["cell"].y * 2.0))
+		node.position = world_pos
+		resource_nodes_container.add_child(node)
+
 # ==============================================================================
 # Interactive & Programmatic Building Placement
 # ==============================================================================
@@ -319,33 +375,65 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
-	# Right-click (Default hero move button)
+	# Right-click (Default hero move / context command button)
 	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
 		if current_build_type != "":
 			cancel_building_selection()
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null and hero != null and is_instance_valid(hero):
 			var cell = grid_manager.world_to_cell(hit_pos) if grid_manager else Vector2i.ZERO
+			var res_node = get_resource_node_at_cell(cell)
 			var b = grid_manager.get_building_at(cell) if grid_manager else null
-			if b != null and is_instance_valid(b) and "is_constructed" in b and not b.is_constructed:
-				hero.order_build(b, true)
+			if res_node != null and is_instance_valid(res_node):
+				hero.order_harvest(res_node)
+			elif b != null and is_instance_valid(b):
+				if "is_constructed" in b and not b.is_constructed:
+					hero.order_build(b, true)
+				elif "is_operating" in b:
+					hero.order_tend(b)
+				else:
+					hero.move_to(hit_pos)
 			else:
-				hero.move_to(hit_pos)
+				var hit_obj = _raycast_object(event.position)
+				if hit_obj != null and is_instance_valid(hit_obj):
+					if hit_obj.is_in_group("resource_nodes") or ("resource_type" in hit_obj):
+						hero.order_harvest(hit_obj)
+					elif hit_obj.is_in_group("dinos"):
+						hero.order_attack(hit_obj)
+					elif hit_obj.is_in_group("buildings"):
+						if "is_constructed" in hit_obj and not hit_obj.is_constructed:
+							hero.order_build(hit_obj, true)
+						elif "is_operating" in hit_obj:
+							hero.order_tend(hit_obj)
+						else:
+							hero.move_to(hit_pos)
+					else:
+						hero.move_to(hit_pos)
+				else:
+					hero.move_to(hit_pos)
 		get_viewport().set_input_as_handled()
 		return
 
-	# Left-click (Default build place button)
+	# Left-click (Default build place button / Unit selection)
 	if event is InputEventMouseButton and event.pressed and event.button_index == place_btn:
 		if current_build_type == "":
-			# Reserved for future unit / building selection
+			var hit_obj = _raycast_object(event.position)
+			var eb = _get_event_bus()
+			if hit_obj != null and is_instance_valid(hit_obj) and (hit_obj.is_in_group("selectable") or hit_obj.is_in_group("hero") or hit_obj.is_in_group("buildings")):
+				if eb and eb.has_signal("unit_selected"):
+					eb.unit_selected.emit(hit_obj)
+			else:
+				if eb and eb.has_signal("unit_selected") and hero != null and is_instance_valid(hero):
+					eb.unit_selected.emit(hero)
+			get_viewport().set_input_as_handled()
 			return
 
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null:
 			var cell = grid_manager.world_to_cell(hit_pos)
-			if grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell):
+			if (grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell)) or is_resource_at_cell(cell):
 				if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-					hud.show_hint("该地块已被占用！")
+					hud.show_hint(tr("HINT_CELL_OCCUPIED"))
 				return
 
 			var placed = build_system.place_building(current_build_type, cell, buildings_container, true)
@@ -363,10 +451,10 @@ func _unhandled_input(event: InputEvent) -> void:
 					var cost: Dictionary = b_data.get("cost", {})
 					if not gs.can_afford(cost):
 						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint("资源不足，无法建造！")
+							hud.show_hint(tr("HINT_NO_RESOURCES"))
 					elif "current_phase" in gs and int(gs.current_phase) != 0:
 						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint("非部署阶段，无法建造！")
+							hud.show_hint(tr("HINT_NOT_PLAN_PHASE"))
 		get_viewport().set_input_as_handled()
 		return
 
@@ -382,6 +470,20 @@ func _raycast_ground(screen_pos: Vector2) -> Variant:
 	var result = space_state.intersect_ray(query)
 	if result and result.has("position"):
 		return result["position"]
+	return null
+
+func _raycast_object(screen_pos: Vector2) -> Node:
+	if camera == null or not is_inside_tree() or get_world_3d() == null:
+		return null
+	var space_state = get_world_3d().direct_space_state
+	var from = camera.project_ray_origin(screen_pos)
+	var to = from + camera.project_ray_normal(screen_pos) * 1000.0
+
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 1 | 2 | 4 # Layer 1: Ground/Obstacles, Layer 2: Buildings, Layer 4: Units
+	var result = space_state.intersect_ray(query)
+	if result and result.has("collider"):
+		return result["collider"]
 	return null
 
 ## Direct programmatic placement API for automated tests and scripts.
@@ -458,6 +560,12 @@ func restart_game() -> void:
 			guards_container.remove_child(g)
 			g.queue_free()
 
+	# 5d. Clean leftover ResourceNodes immediately
+	if resource_nodes_container and is_instance_valid(resource_nodes_container):
+		for r in resource_nodes_container.get_children():
+			resource_nodes_container.remove_child(r)
+			r.queue_free()
+
 	# 6. Reset GridManager occupancy
 	if grid_manager and is_instance_valid(grid_manager):
 		grid_manager.clear_grid()
@@ -465,6 +573,11 @@ func restart_game() -> void:
 	# 7. Re-instantiate pristine Core and Nest
 	current_core = null
 	setup_initial_entities()
+	spawn_resource_nodes()
+	if hero and is_instance_valid(hero):
+		hero.continuous_mode = true
+	if wave_manager and is_instance_valid(wave_manager):
+		wave_manager.auto_raid_enabled = true
 
 	# 8. Reset HUD
 	if hud and is_instance_valid(hud):

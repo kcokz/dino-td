@@ -23,6 +23,13 @@ var dinos_spawned_count: int = 0
 var dinos_alive_count: int = 0
 var is_wave_active: bool = false
 
+# v0.2 Continuous Random Raids
+var raid_timer: float = 60.0
+var warning_lead_time: float = 15.0
+var warning_emitted: bool = false
+var elapsed_time: float = 0.0
+var auto_raid_enabled: bool = false
+
 # Compatibility alias for tests
 var dinos_alive: int:
 	get: return dinos_alive_count
@@ -41,6 +48,7 @@ func _init() -> void:
 	_load_waves_config()
 
 func _ready() -> void:
+	set_process(true)
 	_load_waves_config()
 	_ensure_components()
 	_connect_event_bus()
@@ -56,6 +64,26 @@ func _notification(what: int) -> void:
 		if spawn_timer and is_instance_valid(spawn_timer):
 			spawn_timer.stop()
 
+func _process(delta: float) -> void:
+	if not auto_raid_enabled or is_wave_active:
+		return
+	var gs = _get_game_state()
+	if gs and ("is_paused" in gs and gs.is_paused or "is_game_over" in gs and gs.is_game_over):
+		return
+
+	elapsed_time += delta
+	raid_timer -= delta
+
+	var eb = _get_event_bus()
+	if not warning_emitted and raid_timer <= warning_lead_time and raid_timer > 0.0:
+		warning_emitted = true
+		if eb and eb.has_signal("raid_warning"):
+			eb.raid_warning.emit(maxf(0.0, raid_timer))
+
+	if raid_timer <= 0.0:
+		warning_emitted = false
+		start_next_raid()
+
 func _load_waves_config() -> void:
 	var cfg = _get_config()
 	if cfg and "WAVES" in cfg:
@@ -65,6 +93,11 @@ func _load_waves_config() -> void:
 		big_every = int(w_cfg.get("big_every", 3))
 		big_multiplier = float(w_cfg.get("big_multiplier", 2.0))
 		spawn_interval = float(w_cfg.get("spawn_interval", 0.8))
+
+	if cfg and "RAIDS" in cfg:
+		var r_cfg: Dictionary = cfg.RAIDS
+		raid_timer = float(r_cfg.get("first_raid_delay", 60.0))
+		warning_lead_time = float(r_cfg.get("warning_lead_time", 15.0))
 
 	if spawn_timer:
 		spawn_timer.wait_time = spawn_interval
@@ -171,6 +204,21 @@ func start_next_wave() -> void:
 	var gs = _get_game_state()
 	var next_n: int = (gs.wave_number + 1) if gs else (current_wave + 1)
 	start_wave(next_n)
+
+## Starts next raid in continuous real-time mode.
+func start_next_raid() -> void:
+	start_next_wave()
+
+func _reset_raid_timer() -> void:
+	var cfg = _get_config()
+	var min_i: float = 45.0
+	var max_i: float = 90.0
+	if cfg and "RAIDS" in cfg:
+		var r_cfg: Dictionary = cfg.RAIDS
+		min_i = float(r_cfg.get("min_interval", 45.0))
+		max_i = float(r_cfg.get("max_interval", 90.0))
+	raid_timer = randf_range(min_i, max_i)
+	warning_emitted = false
 
 ## Starts a specific wave number.
 func start_wave(wave_num: int) -> void:
@@ -289,6 +337,9 @@ func _end_wave() -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("wave_ended"):
 		eb.wave_ended.emit(current_wave)
+
+	if auto_raid_enabled:
+		_reset_raid_timer()
 
 # ==============================================================================
 # Resolvers

@@ -339,6 +339,17 @@ func advance_towards_waypoint(delta: float) -> void:
 		on_obstacle_detected(obstacle)
 		return
 
+	# 1a. Threat Priority Target Check (v0.2: Tower > Buildings > Hero)
+	var threat_tgt = _find_threat_priority_target()
+	if threat_tgt != null:
+		var dist_to_threat = global_position.distance_to(threat_tgt.global_position)
+		if dist_to_threat <= 1.8:
+			on_obstacle_detected(threat_tgt)
+			return
+		if assigned_slot == Vector3.ZERO:
+			assigned_slot = claim_attack_slot(threat_tgt, self)
+			current_target = threat_tgt
+
 	# 1b. Dynamic Flanking & Attack Slots for Large Flocks (10+ Dinos):
 	var attacking_ally = _find_front_attacking_ally()
 	if attacking_ally != null and "current_target" in attacking_ally and attacking_ally.current_target != null:
@@ -647,6 +658,52 @@ func check_obstacle() -> Node:
 					return collider
 				if collider is Node and collider.get_parent() and _is_target_valid(collider.get_parent()):
 					return collider.get_parent()
+
+	return null
+
+## Threat-based Aggro (v0.2): Tower > Other Buildings > Hero (unless Hero provoked dinos).
+func _find_threat_priority_target() -> Node:
+	if not is_inside_tree():
+		return null
+
+	var hero = get_tree().get_first_node_in_group("hero")
+	var is_hero_provoked: bool = hero != null and is_instance_valid(hero) and "has_provoked_dinos" in hero and bool(hero.has_provoked_dinos)
+	var hero_dist: float = global_position.distance_to(hero.global_position) if (hero and is_instance_valid(hero)) else 999.0
+
+	var buildings = get_tree().get_nodes_in_group("buildings")
+	var nearest_tower: Node = null
+	var min_tower_dist: float = 4.5
+
+	var nearest_other_building: Node = null
+	var min_b_dist: float = 2.0
+
+	for b in buildings:
+		if not is_instance_valid(b) or not _is_target_valid(b):
+			continue
+		var dist = global_position.distance_to(b.global_position)
+		if "building_type" in b and b.building_type == "tower":
+			if dist <= min_tower_dist:
+				min_tower_dist = dist
+				nearest_tower = b
+		elif dist <= min_b_dist:
+			min_b_dist = dist
+			nearest_other_building = b
+
+	# If Hero provoked dinos, Hero threat matches Tower!
+	if is_hero_provoked and hero_dist <= 4.0:
+		if nearest_tower == null or hero_dist < min_tower_dist:
+			if _is_target_valid(hero):
+				return hero
+
+	if nearest_tower != null:
+		return nearest_tower
+
+	if nearest_other_building != null:
+		return nearest_other_building
+
+	# If no towers or buildings nearby, but Hero is close (<= 3.0m)
+	if hero != null and is_instance_valid(hero) and hero_dist <= 3.0 and _is_target_valid(hero):
+		return hero
 
 	return null
 

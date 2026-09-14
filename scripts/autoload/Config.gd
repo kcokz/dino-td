@@ -9,10 +9,11 @@ extends Node
 # 1. Economy & Action Points
 # ==============================================================================
 const BASE_AP: int = 3
-const RESOURCES: Array[String] = ["wood", "stone", "food"]
+const RESOURCES: Array[String] = ["wood", "stone", "water", "food"]
 const INITIAL_RESOURCES: Dictionary = {
 	"wood": 10,
 	"stone": 0,
+	"water": 0,
 	"food": 0
 }
 const TILE_SIZE: float = 2.0
@@ -22,7 +23,7 @@ const TILE_SIZE: float = 2.0
 # ==============================================================================
 const BUILDINGS: Dictionary = {
 	"core": {
-		"name": "废弃船舱",
+		"name": "BUILDING_CORE_NAME",
 		"kind": "core",
 		"hp": 10.0,
 		"cost": {},
@@ -31,7 +32,7 @@ const BUILDINGS: Dictionary = {
 		"upgrades_to": "",
 	},
 	"tower": {
-		"name": "自动哨位",
+		"name": "BUILDING_TOWER_NAME",
 		"kind": "tower",
 		"hp": 20.0,
 		"cost": {"wood": 4},
@@ -43,7 +44,7 @@ const BUILDINGS: Dictionary = {
 		"upgrades_to": "",
 	},
 	"wall": {
-		"name": "木墙",
+		"name": "BUILDING_WALL_NAME",
 		"kind": "wall",
 		"hp": 30.0,
 		"cost": {"wood": 2},
@@ -52,17 +53,20 @@ const BUILDINGS: Dictionary = {
 		"upgrades_to": "",
 	},
 	"lumber_hut": {
-		"name": "伐木屋",
+		"name": "BUILDING_LUMBER_HUT_NAME",
 		"kind": "producer",
 		"hp": 10.0,
 		"cost": {"wood": 3},
 		"ap_cost": 1,
 		"build_time": 4.0,
+		"tend_duration": 40.0,
+		"tend_time": 2.0,
+		"produces_per_sec": {"wood": 0.5},
 		"produces": {"wood": 2},
 		"upgrades_to": "",
 	},
 	"hut": {
-		"name": "茅屋",
+		"name": "BUILDING_HUT_NAME",
 		"kind": "ap",
 		"hp": 10.0,
 		"cost": {"wood": 3},
@@ -72,7 +76,7 @@ const BUILDINGS: Dictionary = {
 		"upgrades_to": "wood_house",
 	},
 	"wood_house": {
-		"name": "木屋",
+		"name": "BUILDING_WOOD_HOUSE_NAME",
 		"kind": "ap",
 		"hp": 20.0,
 		"cost": {"wood": 6},
@@ -82,7 +86,7 @@ const BUILDINGS: Dictionary = {
 		"upgrades_to": "barracks",
 	},
 	"barracks": {
-		"name": "营房",
+		"name": "BUILDING_BARRACKS_NAME",
 		"kind": "ap",
 		"hp": 30.0,
 		"cost": {"wood": 10, "stone": 5},
@@ -92,23 +96,26 @@ const BUILDINGS: Dictionary = {
 		"upgrades_to": "",
 	},
 	"quarry": {
-		"name": "采石场",
+		"name": "BUILDING_QUARRY_NAME",
 		"kind": "producer",
 		"hp": 15.0,
 		"cost": {"wood": 5},
 		"ap_cost": 1,
 		"build_time": 5.0,
+		"tend_duration": 40.0,
+		"tend_time": 2.5,
+		"produces_per_sec": {"stone": 0.3},
 		"produces": {"stone": 1},
 		"upgrades_to": "",
 	},
 	"hunting_hut": {
-		"name": "猎屋",
+		"name": "BUILDING_HUNTING_HUT_NAME",
 		"kind": "producer",
 		"hp": 10.0,
 		"cost": {"wood": 4},
 		"ap_cost": 1,
 		"build_time": 4.0,
-		"produces": {"food": 1},
+		"produces": {"water": 1},
 		"upgrades_to": "",
 	}
 }
@@ -118,7 +125,7 @@ const BUILDINGS: Dictionary = {
 # ==============================================================================
 const DINOS: Dictionary = {
 	"raptor": {
-		"name": "迅猛龙",
+		"name": "DINO_RAPTOR_NAME",
 		"hp": 3.0,
 		"speed": 4.0,
 		"damage": 1.0,
@@ -127,7 +134,7 @@ const DINOS: Dictionary = {
 		"size": Vector3(0.8, 0.8, 0.8),
 	},
 	"big_theropod": {
-		"name": "大型兽脚类",
+		"name": "DINO_BIG_THEROPOD_NAME",
 		"hp": 15.0,
 		"speed": 2.0,
 		"damage": 3.0,
@@ -136,7 +143,7 @@ const DINOS: Dictionary = {
 		"size": Vector3(1.6, 1.6, 1.6),
 	},
 	"pterosaur": {
-		"name": "翼龙",
+		"name": "DINO_PTEROSAUR_NAME",
 		"hp": 2.0,
 		"speed": 6.0,
 		"damage": 1.0,
@@ -252,4 +259,54 @@ const CONTROLS: Dictionary = {
 # ==============================================================================
 const DINO_ATTACK_SLOT_RADIUS_INNER: float = 1.6
 const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
+
+# ==============================================================================
+# 12. Continuous Real-Time Raids & Resource Nodes (v0.2)
+# ==============================================================================
+const RAIDS: Dictionary = {
+	"interval_min": 45.0,         # Minimum raid interval (seconds)
+	"interval_max": 90.0,         # Maximum raid interval (seconds)
+	"first_raid_delay": 60.0,     # Grace period before 1st raid (seconds)
+	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
+	"intensity_per_minute": 0.15, # Raid intensity escalation slope per minute
+	"intensity_jitter": 0.3,      # Random intensity fluctuation (+/- 30%)
+}
+
+const RESOURCE_NODES: Dictionary = {
+	"wood": {
+		"name": "RESOURCE_WOOD",
+		"capacity": 30,
+		"harvest_rate": 1.0,      # 1 wood per second
+		"color": Color(0.35, 0.55, 0.25),
+		"depleted_color": Color(0.3, 0.3, 0.3),
+	},
+	"stone": {
+		"name": "RESOURCE_STONE",
+		"capacity": 20,
+		"harvest_rate": 0.8,      # 0.8 stone per second
+		"color": Color(0.6, 0.6, 0.65),
+		"depleted_color": Color(0.3, 0.3, 0.3),
+	},
+	"water": {
+		"name": "RESOURCE_WATER",
+		"capacity": 40,
+		"harvest_rate": 1.5,      # 1.5 water per second
+		"color": Color(0.2, 0.5, 0.8),
+		"depleted_color": Color(0.25, 0.3, 0.35),
+	}
+}
+
+## Helper returning localized display name for any building type.
+static func get_building_name(type_id: String) -> String:
+	if BUILDINGS.has(type_id):
+		var raw_key = BUILDINGS[type_id].get("name", type_id)
+		return TranslationServer.translate(raw_key)
+	return TranslationServer.translate(type_id)
+
+## Helper returning localized display name for any dinosaur type.
+static func get_dino_name(type_id: String) -> String:
+	if DINOS.has(type_id):
+		var raw_key = DINOS[type_id].get("name", type_id)
+		return TranslationServer.translate(raw_key)
+	return TranslationServer.translate(type_id)
 

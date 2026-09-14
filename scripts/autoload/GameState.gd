@@ -239,6 +239,11 @@ func add_resources(gains: Dictionary) -> void:
 			resources[res_id] = resources[res_id] + amount
 	_emit_resources_changed(resources)
 
+## Adds a single resource by name.
+func add_resource(res_id: String, amount: int) -> void:
+	add_resources({res_id: amount})
+
+
 # ==============================================================================
 # 8. Action Point (AP) Transactions & Capacity
 # ==============================================================================

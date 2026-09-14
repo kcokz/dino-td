@@ -196,9 +196,9 @@ func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
 
 	var hud = main_inst.find_child("HUD", true, false)
 	assert_not_null(hud, "HUD must exist in Main")
-	assert_true(hud.build_wall_btn.text.contains("木"), "BuildWallBtn should display resource cost")
-	assert_true(hud.build_lumber_btn.text.contains("木"), "BuildLumberHutBtn should display resource cost")
-	assert_true(hud.build_tower_btn.text.contains("木"), "BuildTowerBtn should display resource cost")
+	assert_true(hud.build_wall_btn.text.contains("木") or hud.build_wall_btn.text.contains("Wood"), "BuildWallBtn should display resource cost")
+	assert_true(hud.build_lumber_btn.text.contains("木") or hud.build_lumber_btn.text.contains("Wood"), "BuildLumberHutBtn should display resource cost")
+	assert_true(hud.build_tower_btn.text.contains("木") or hud.build_tower_btn.text.contains("Wood"), "BuildTowerBtn should display resource cost")
 
 func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")

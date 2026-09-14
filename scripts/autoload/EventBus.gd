@@ -85,3 +85,24 @@ signal hero_died()
 
 ## Emitted when a building's construction progress changes.
 signal build_progress_updated(building: Node, progress: float)
+
+# ==============================================================================
+# 8. Continuous Real-Time, Selection & v0.2 Ecosystem Signals
+# ==============================================================================
+## Emitted when active locale changes ('en' or 'zh_CN').
+signal locale_changed(locale: String)
+
+## Emitted prior to a dinosaur raid (e.g. 15s warning) with remaining countdown.
+signal raid_warning(time_left: float)
+
+## Emitted when player selects an interactive unit (Hero, Building, Dino, Resource).
+signal unit_selected(unit: Node)
+
+## Emitted when unit selection is cleared.
+signal unit_deselected()
+
+## Emitted when a production machine is tended and begins timed run.
+signal building_tended(building: Node)
+
+## Emitted when game speed multiplier changes (1x, 2x, 3x).
+signal game_speed_changed(multiplier: float)

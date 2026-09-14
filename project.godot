@@ -21,6 +21,11 @@ config/icon="res://icon.svg"
 Config="*res://scripts/autoload/Config.gd"
 EventBus="*res://scripts/autoload/EventBus.gd"
 GameState="*res://scripts/autoload/GameState.gd"
+I18n="*res://scripts/autoload/I18n.gd"
+
+[internationalization]
+
+locale/fallback="en"
 
 [display]
 

@@ -573,7 +573,7 @@ func test_18_hud_hides_ap_in_v01() -> void:
 	assert_false(hud.build_wall_btn.text.contains("AP"), "BuildWallBtn must not show AP cost (got '%s')" % hud.build_wall_btn.text)
 	assert_false(hud.build_lumber_btn.text.contains("AP"), "BuildLumberHutBtn must not show AP cost (got '%s')" % hud.build_lumber_btn.text)
 	assert_false(hud.build_tower_btn.text.contains("AP"), "BuildTowerBtn must not show AP cost (got '%s')" % hud.build_tower_btn.text)
-	assert_true(hud.build_wall_btn.text.contains("木"), "BuildWallBtn shows wood cost")
+	assert_true(hud.build_wall_btn.text.contains("木") or hud.build_wall_btn.text.contains("Wood"), "BuildWallBtn shows wood cost")
 
 # ==============================================================================
 # 19. Hero A* Pathfinding Navigates Around Wall Obstacles

@@ -33,6 +33,12 @@ var build_wall_btn: Button = null
 var build_lumber_btn: Button = null
 var end_action_btn: Button = null
 var pause_btn: Button = null
+var speed_btn: Button = null
+var raid_warning_banner: Label = null
+var option_panel: Node = null
+
+var current_speed: float = 1.0
+const SPEEDS: Array[float] = [1.0, 2.0, 3.0]
 
 var game_over_panel: Control = null
 var result_label: Label = null
@@ -84,6 +90,10 @@ func _connect_event_bus() -> void:
 			eb.pause_toggled.connect(_on_pause_toggled)
 		if eb.has_signal("hero_hp_changed") and not eb.hero_hp_changed.is_connected(_on_hero_hp_changed):
 			eb.hero_hp_changed.connect(_on_hero_hp_changed)
+		if eb.has_signal("locale_changed") and not eb.locale_changed.is_connected(_on_locale_changed):
+			eb.locale_changed.connect(_on_locale_changed)
+		if eb.has_signal("raid_warning") and not eb.raid_warning.is_connected(_on_raid_warning):
+			eb.raid_warning.connect(_on_raid_warning)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -108,6 +118,13 @@ func _disconnect_event_bus() -> void:
 			eb.pause_toggled.disconnect(_on_pause_toggled)
 		if eb.has_signal("hero_hp_changed") and eb.hero_hp_changed.is_connected(_on_hero_hp_changed):
 			eb.hero_hp_changed.disconnect(_on_hero_hp_changed)
+		if eb.has_signal("locale_changed") and eb.locale_changed.is_connected(_on_locale_changed):
+			eb.locale_changed.disconnect(_on_locale_changed)
+		if eb.has_signal("raid_warning") and eb.raid_warning.is_connected(_on_raid_warning):
+			eb.raid_warning.disconnect(_on_raid_warning)
+
+func _on_locale_changed(_new_locale: String) -> void:
+	reset_hud()
 
 func _on_ap_changed(cur: int, max_val: int) -> void:
 	if ap_label:
@@ -119,28 +136,58 @@ func _on_ap_changed(cur: int, max_val: int) -> void:
 
 func _on_deploy_time_changed(remaining: float, _total: float) -> void:
 	if deploy_timer_label:
-		deploy_timer_label.text = "部署: %.1fs" % remaining
+		deploy_timer_label.text = tr("HUD_DEPLOY_TIMER") % remaining
 
 func _on_pause_toggled(is_paused: bool) -> void:
 	if pause_btn:
-		pause_btn.text = "继续 (Space)" if is_paused else "暂停 (Space)"
+		pause_btn.text = tr("HUD_RESUME_BTN") if is_paused else tr("HUD_PAUSE_BTN")
 
 func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 	if hero_hp_label:
-		hero_hp_label.text = "Hero HP: %d / %d" % [int(ceil(cur)), int(ceil(max_val))]
+		hero_hp_label.text = tr("HUD_HERO_HP") % [int(ceil(cur)), int(ceil(max_val))]
 
 func _on_resources_changed(res: Dictionary) -> void:
 	if wood_label:
 		var wood = res.get("wood", 0)
-		wood_label.text = "Wood: %d" % wood
+		wood_label.text = tr("HUD_WOOD") % wood
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
-		wave_label.text = "Wave: %d%s" % [n, " (大波!)" if is_big else ""]
+		wave_label.text = tr("HUD_BIG_WAVE") % n if is_big else tr("HUD_WAVE") % n
+	if raid_warning_banner:
+		raid_warning_banner.visible = false
+
+func _on_raid_warning(time_left: float) -> void:
+	if raid_warning_banner == null:
+		return
+	if time_left <= 0.0:
+		raid_warning_banner.visible = false
+		return
+	raid_warning_banner.visible = true
+	raid_warning_banner.text = tr("HUD_RAID_WARNING") % int(ceil(time_left))
+
+func _on_speed_btn_pressed() -> void:
+	var cur_idx = SPEEDS.find(current_speed)
+	if cur_idx == -1:
+		cur_idx = 0
+	var next_idx = (cur_idx + 1) % SPEEDS.size()
+	set_game_speed(SPEEDS[next_idx])
+
+func set_game_speed(multiplier: float) -> void:
+	current_speed = multiplier
+	Engine.time_scale = current_speed
+	_update_speed_btn_label()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("game_speed_changed"):
+		eb.game_speed_changed.emit(current_speed)
+
+func _update_speed_btn_label() -> void:
+	if speed_btn:
+		speed_btn.text = tr("HUD_SPEED_BTN") % str(int(current_speed))
 
 func _on_core_hp_changed(cur: float, max_val: float) -> void:
 	if core_hp_label:
-		core_hp_label.text = "Core HP: %d / %d" % [int(ceil(cur)), int(ceil(max_val))]
+		core_hp_label.text = tr("HUD_CORE_HP") % [int(ceil(cur)), int(ceil(max_val))]
 
 func _on_phase_changed(phase_idx: int) -> void:
 	var phase_names = ["PLAN", "ATTACK", "PRODUCE"]
@@ -161,7 +208,7 @@ func _on_game_won() -> void:
 		return
 	if is_game_over_visible():
 		return
-	_show_game_over("VICTORY!", "恐龙巢穴已被消灭！")
+	_show_game_over(tr("GAME_VICTORY_TITLE"), tr("GAME_VICTORY_DESC"))
 
 func _on_game_lost() -> void:
 	var gs = _get_game_state()
@@ -169,7 +216,7 @@ func _on_game_lost() -> void:
 		return
 	if is_game_over_visible():
 		return
-	_show_game_over("DEFEAT!", "废弃船舱被毁或角色阵亡！")
+	_show_game_over(tr("GAME_DEFEAT_TITLE"), tr("GAME_DEFEAT_DESC"))
 
 func _show_game_over(title: String, details: String) -> void:
 	if result_label:
@@ -204,6 +251,9 @@ func _on_pause_pressed() -> void:
 	if gs and gs.has_method("toggle_pause"):
 		gs.toggle_pause()
 
+func _on_speed_button_pressed() -> void:
+	_on_speed_btn_pressed()
+
 func _on_tower_btn_pressed() -> void:
 	if selected_build_type == "tower":
 		deselect_build()
@@ -230,7 +280,7 @@ func _check_ap_hint() -> void:
 	if gs and "infinite_ap" in gs and gs.infinite_ap:
 		return
 	if gs and "current_ap" in gs and gs.current_ap <= 0:
-		show_hint("行动点不足 (0 AP)！请推进回合并恢复 AP")
+		show_hint(tr("HINT_NO_AP"))
 
 func select_build_type(type_id: String) -> void:
 	selected_build_type = type_id
@@ -261,6 +311,11 @@ func reset_hud() -> void:
 	selected_build_type = ""
 	if game_over_panel:
 		game_over_panel.visible = false
+	if raid_warning_banner:
+		raid_warning_banner.visible = false
+	_update_speed_btn_label()
+	if option_panel and is_instance_valid(option_panel) and option_panel.has_method("clear_selection"):
+		option_panel.clear_selection()
 
 	# Synchronize baseline values from GameState & Config
 	var gs = _get_game_state()
@@ -302,6 +357,9 @@ func reset_hud() -> void:
 
 	_on_hero_hp_changed(10.0, 10.0)
 
+	if restart_btn:
+		restart_btn.text = tr("BTN_RESTART")
+
 func _update_building_button_labels() -> void:
 	var cfg = _get_config()
 	if cfg == null or not ("BUILDINGS" in cfg) or not (cfg.BUILDINGS is Dictionary):
@@ -309,21 +367,21 @@ func _update_building_button_labels() -> void:
 
 	if build_wall_btn and cfg.BUILDINGS.has("wall"):
 		var wall_data: Dictionary = cfg.BUILDINGS["wall"]
-		var wall_name: String = wall_data.get("name", "木墙")
+		var wall_name: String = tr(wall_data.get("name", "BUILDING_WALL_NAME"))
 		var wall_cost: int = int(wall_data.get("cost", {}).get("wood", 2))
-		build_wall_btn.text = "%s (%d木)" % [wall_name, wall_cost]
+		build_wall_btn.text = tr("BUILD_COST_FORMAT") % [wall_name, wall_cost]
 
 	if build_lumber_btn and cfg.BUILDINGS.has("lumber_hut"):
 		var lumber_data: Dictionary = cfg.BUILDINGS["lumber_hut"]
-		var lumber_name: String = lumber_data.get("name", "伐木屋")
+		var lumber_name: String = tr(lumber_data.get("name", "BUILDING_LUMBER_HUT_NAME"))
 		var lumber_cost: int = int(lumber_data.get("cost", {}).get("wood", 3))
-		build_lumber_btn.text = "%s (%d木)" % [lumber_name, lumber_cost]
+		build_lumber_btn.text = tr("BUILD_COST_FORMAT") % [lumber_name, lumber_cost]
 
 	if build_tower_btn and cfg.BUILDINGS.has("tower"):
 		var tower_data: Dictionary = cfg.BUILDINGS["tower"]
-		var tower_name: String = tower_data.get("name", "自动哨位")
+		var tower_name: String = tr(tower_data.get("name", "BUILDING_TOWER_NAME"))
 		var tower_cost: int = int(tower_data.get("cost", {}).get("wood", 4))
-		build_tower_btn.text = "%s (%d木)" % [tower_name, tower_cost]
+		build_tower_btn.text = tr("BUILD_COST_FORMAT") % [tower_name, tower_cost]
 
 func show_hint(msg: String, duration: float = 2.5) -> void:
 	if hint_label == null:
@@ -545,6 +603,40 @@ func _ensure_ui_components() -> void:
 		restart_btn = Button.new()
 		restart_btn.name = "RestartButton"
 		game_over_panel.add_child(restart_btn)
+
+	if speed_btn == null:
+		speed_btn = find_child("SpeedBtn", true, false) as Button
+	if speed_btn == null:
+		speed_btn = Button.new()
+		speed_btn.name = "SpeedBtn"
+		root_control.add_child(speed_btn)
+	if not speed_btn.pressed.is_connected(_on_speed_btn_pressed):
+		speed_btn.pressed.connect(_on_speed_btn_pressed)
+	_update_speed_btn_label()
+
+	if raid_warning_banner == null:
+		raid_warning_banner = find_child("RaidWarningBanner", true, false) as Label
+	if raid_warning_banner == null:
+		raid_warning_banner = Label.new()
+		raid_warning_banner.name = "RaidWarningBanner"
+		raid_warning_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		raid_warning_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		raid_warning_banner.position = Vector2(0, 110)
+		raid_warning_banner.add_theme_color_override("font_color", Color(1.0, 0.45, 0.1))
+		raid_warning_banner.add_theme_font_size_override("font_size", 18)
+		raid_warning_banner.visible = false
+		root_control.add_child(raid_warning_banner)
+
+	if option_panel == null:
+		option_panel = find_child("OptionPanel", true, false)
+	if option_panel == null:
+		var opt_script = load("res://scripts/ui/OptionPanel.gd")
+		if opt_script:
+			option_panel = opt_script.new()
+			option_panel.name = "OptionPanel"
+			root_control.add_child(option_panel)
+			if option_panel.has_signal("build_option_selected"):
+				option_panel.build_option_selected.connect(select_build_type)
 
 	if ap_label:
 		ap_label.visible = false

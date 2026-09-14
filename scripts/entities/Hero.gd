@@ -12,7 +12,9 @@ enum State {
 	MOVING = 1,
 	BUILDING = 2,
 	ATTACKING = 3,
-	DEAD = 4
+	DEAD = 4,
+	HARVESTING = 5,
+	TENDING = 6
 }
 
 # ==============================================================================
@@ -30,7 +32,12 @@ var current_state: State = State.IDLE
 var target_destination: Vector3 = Vector3.ZERO
 var target_building: Node = null
 var target_enemy: Node3D = null
+var target_resource_node: Node = null
+var target_tend_building: Node = null
 var attack_cooldown: float = 0.0
+var harvest_timer: float = 0.0
+var tend_progress: float = 0.0
+const TEND_TIME_REQUIRED: float = 2.0
 
 var current_path: Array[Vector3] = []
 var current_path_index: int = 0
@@ -40,6 +47,9 @@ var _last_pos: Vector3 = Vector3.ZERO
 var collision_shape: CollisionShape3D = null
 var mesh_instance: MeshInstance3D = null
 var is_hero: bool = true
+var continuous_mode: bool = false
+var has_provoked_dinos: bool = false
+var provoke_timer: float = 0.0
 
 # ==============================================================================
 # Lifecycle & Initialization
@@ -89,7 +99,13 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_paused():
 		return
-	if _get_current_phase() != 0: # Only active during DEPLOY (phase 0)
+
+	if provoke_timer > 0.0:
+		provoke_timer -= delta
+		if provoke_timer <= 0.0:
+			has_provoked_dinos = false
+
+	if not continuous_mode and _get_current_phase() != 0: # Only restricted during legacy DEPLOY phase
 		return
 
 	match current_state:
@@ -101,6 +117,10 @@ func _physics_process(delta: float) -> void:
 			_process_building(delta)
 		State.ATTACKING:
 			_process_attacking(delta)
+		State.HARVESTING:
+			_process_harvesting(delta)
+		State.TENDING:
+			_process_tending(delta)
 
 func _process_idle(_delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -120,6 +140,30 @@ func _process_moving(delta: float) -> void:
 		if _is_in_build_range(global_position, target_building):
 			velocity = Vector3.ZERO
 			current_state = State.BUILDING
+			return
+
+	# 1b. Target resource node check (v0.2 Harvesting)
+	elif target_resource_node != null:
+		if not is_instance_valid(target_resource_node) or ("is_depleted" in target_resource_node and target_resource_node.is_depleted):
+			target_resource_node = null
+			current_state = State.IDLE
+			return
+		if _is_in_node_range(global_position, target_resource_node, 0.4):
+			velocity = Vector3.ZERO
+			current_state = State.HARVESTING
+			harvest_timer = 0.0
+			return
+
+	# 1c. Target tend building check (v0.2 Machinery Tending)
+	elif target_tend_building != null:
+		if not is_instance_valid(target_tend_building) or ("is_destroyed" in target_tend_building and target_tend_building.is_destroyed):
+			target_tend_building = null
+			current_state = State.IDLE
+			return
+		if _is_in_build_range(global_position, target_tend_building, 0.4):
+			velocity = Vector3.ZERO
+			current_state = State.TENDING
+			tend_progress = 0.0
 			return
 
 	# 2. Target enemy check
@@ -159,6 +203,22 @@ func _process_moving(delta: float) -> void:
 				_plan_path_to_building(target_building)
 				if current_path_index >= current_path.size():
 					current_state = State.IDLE
+		elif target_resource_node != null and is_instance_valid(target_resource_node):
+			if _is_in_node_range(global_position, target_resource_node, 0.4):
+				current_state = State.HARVESTING
+				harvest_timer = 0.0
+			else:
+				_plan_path_to_node(target_resource_node)
+				if current_path_index >= current_path.size():
+					current_state = State.IDLE
+		elif target_tend_building != null and is_instance_valid(target_tend_building):
+			if _is_in_build_range(global_position, target_tend_building, 0.4):
+				current_state = State.TENDING
+				tend_progress = 0.0
+			else:
+				_plan_path_to_building(target_tend_building)
+				if current_path_index >= current_path.size():
+					current_state = State.IDLE
 		else:
 			current_state = State.IDLE
 		return
@@ -181,6 +241,16 @@ func _process_moving(delta: float) -> void:
 			if target_building != null and (col.get_collider() == target_building or _is_in_build_range(global_position, target_building, 0.2)):
 				velocity = Vector3.ZERO
 				current_state = State.BUILDING
+				return
+			if target_resource_node != null and (col.get_collider() == target_resource_node or _is_in_node_range(global_position, target_resource_node, 0.2)):
+				velocity = Vector3.ZERO
+				current_state = State.HARVESTING
+				harvest_timer = 0.0
+				return
+			if target_tend_building != null and (col.get_collider() == target_tend_building or _is_in_build_range(global_position, target_tend_building, 0.2)):
+				velocity = Vector3.ZERO
+				current_state = State.TENDING
+				tend_progress = 0.0
 				return
 			# Slide along the obstacle surface
 			var slide_normal = col.get_normal()
@@ -205,6 +275,20 @@ func _process_moving(delta: float) -> void:
 					current_state = State.BUILDING
 					return
 				_plan_path_to_building(target_building)
+			elif target_resource_node != null and is_instance_valid(target_resource_node):
+				if _is_in_node_range(global_position, target_resource_node, 0.2):
+					velocity = Vector3.ZERO
+					current_state = State.HARVESTING
+					harvest_timer = 0.0
+					return
+				_plan_path_to_node(target_resource_node)
+			elif target_tend_building != null and is_instance_valid(target_tend_building):
+				if _is_in_build_range(global_position, target_tend_building, 0.2):
+					velocity = Vector3.ZERO
+					current_state = State.TENDING
+					tend_progress = 0.0
+					return
+				_plan_path_to_building(target_tend_building)
 			elif target_enemy != null and _is_enemy_valid(target_enemy):
 				_plan_path(target_enemy.global_position)
 			else:
@@ -260,8 +344,88 @@ func _process_attacking(delta: float) -> void:
 	attack_cooldown -= delta
 	if attack_cooldown <= 0.0:
 		attack_cooldown = attack_rate
+		has_provoked_dinos = true
+		provoke_timer = 5.0
 		if target_enemy.has_method("take_damage"):
 			target_enemy.take_damage(damage)
+
+func _process_harvesting(delta: float) -> void:
+	velocity = Vector3.ZERO
+	if target_resource_node == null or not is_instance_valid(target_resource_node):
+		target_resource_node = null
+		current_state = State.IDLE
+		return
+
+	if "is_depleted" in target_resource_node and target_resource_node.is_depleted:
+		target_resource_node = null
+		current_state = State.IDLE
+		return
+
+	if not _is_in_node_range(global_position, target_resource_node, 0.4):
+		_plan_path_to_node(target_resource_node)
+		current_state = State.MOVING
+		return
+
+	# Face the node
+	var diff = target_resource_node.global_position - global_position
+	diff.y = 0.0
+	if diff.length_squared() > 0.001:
+		look_at(global_position + diff.normalized(), Vector3.UP)
+
+	harvest_timer += delta
+	var rate: float = 1.0
+	if "harvest_rate" in target_resource_node:
+		rate = float(target_resource_node.harvest_rate)
+	var interval = 1.0 / maxf(rate, 0.1)
+
+	if harvest_timer >= interval:
+		harvest_timer -= interval
+		var res_type: String = target_resource_node.resource_type if "resource_type" in target_resource_node else "wood"
+		var yielded: int = target_resource_node.harvest(1) if target_resource_node.has_method("harvest") else 0
+		if yielded > 0:
+			var gs = _get_game_state()
+			if gs and gs.has_method("add_resource"):
+				gs.add_resource(res_type, yielded)
+			elif gs and "resources" in gs:
+				gs.resources[res_type] = gs.resources.get(res_type, 0) + yielded
+				var eb = _get_event_bus()
+				if eb and eb.has_signal("resources_changed"):
+					eb.resources_changed.emit(gs.resources)
+
+		if "is_depleted" in target_resource_node and target_resource_node.is_depleted:
+			target_resource_node = null
+			current_state = State.IDLE
+
+func _process_tending(delta: float) -> void:
+	velocity = Vector3.ZERO
+	if target_tend_building == null or not is_instance_valid(target_tend_building):
+		target_tend_building = null
+		current_state = State.IDLE
+		return
+
+	if "is_destroyed" in target_tend_building and target_tend_building.is_destroyed:
+		target_tend_building = null
+		current_state = State.IDLE
+		return
+
+	if not _is_in_build_range(global_position, target_tend_building, 0.4):
+		_plan_path_to_building(target_tend_building)
+		current_state = State.MOVING
+		return
+
+	# Face the building
+	var diff = target_tend_building.global_position - global_position
+	diff.y = 0.0
+	if diff.length_squared() > 0.001:
+		look_at(global_position + diff.normalized(), Vector3.UP)
+
+	tend_progress += delta
+	if tend_progress >= TEND_TIME_REQUIRED:
+		tend_progress = 0.0
+		if target_tend_building.has_method("tend"):
+			target_tend_building.tend(40.0)
+		target_tend_building = null
+		current_state = State.IDLE
 
 # ==============================================================================
 # Navigation & Range Detection
@@ -286,6 +450,17 @@ func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> boo
 	var dist_box = sqrt(dx * dx + dz * dz)
 	var max_box_dist = maxf(0.6, build_range - half_size + 0.2) + extra_buffer
 	return dist_box <= max_box_dist
+
+func _is_in_node_range(pos: Vector3, node: Node, extra_buffer: float = 0.0) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	var dist = pos.distance_to(node.global_position)
+	return dist <= (build_range + 0.8 + extra_buffer)
+
+func _plan_path_to_node(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	_plan_path_to_building(node)
 
 func _plan_path(dest: Vector3, ignore_b: Node = null) -> void:
 	target_destination = dest
@@ -424,9 +599,77 @@ func order_attack(enemy: Node3D) -> void:
 		return
 	target_building = null
 	target_enemy = enemy
+	target_resource_node = null
+	target_tend_building = null
 	if enemy and is_instance_valid(enemy):
 		_plan_path(enemy.global_position)
 	current_state = State.MOVING
+
+func order_harvest(node: Node) -> void:
+	if current_state == State.DEAD:
+		return
+	if node == null or not is_instance_valid(node):
+		current_state = State.IDLE
+		return
+	if "is_depleted" in node and node.is_depleted:
+		current_state = State.IDLE
+		return
+
+	target_resource_node = node
+	target_building = null
+	target_enemy = null
+	target_tend_building = null
+
+	if _is_in_node_range(global_position, node):
+		velocity = Vector3.ZERO
+		current_state = State.HARVESTING
+		harvest_timer = 0.0
+		return
+
+	_plan_path_to_node(node)
+	current_state = State.MOVING
+
+func order_tend(building: Node) -> void:
+	if current_state == State.DEAD:
+		return
+	if building == null or not is_instance_valid(building):
+		current_state = State.IDLE
+		return
+
+	target_tend_building = building
+	target_building = null
+	target_enemy = null
+	target_resource_node = null
+
+	if _is_in_build_range(global_position, building):
+		velocity = Vector3.ZERO
+		current_state = State.TENDING
+		tend_progress = 0.0
+		return
+
+	_plan_path_to_building(building)
+	current_state = State.MOVING
+
+func order_stop() -> void:
+	target_building = null
+	target_enemy = null
+	target_resource_node = null
+	target_tend_building = null
+	current_path.clear()
+	current_path_index = 0
+	velocity = Vector3.ZERO
+	if current_state != State.DEAD:
+		current_state = State.IDLE
+
+func get_display_info() -> Dictionary:
+	var name_str = TranslationServer.translate("HERO_NAME")
+	return {
+		"title": name_str,
+		"type": "hero",
+		"hp": current_hp,
+		"max_hp": max_hp,
+		"status": TranslationServer.translate("STATUS_HP") % [int(ceil(current_hp)), int(ceil(max_hp))]
+	}
 
 # ==============================================================================
 # Combat & Damage
@@ -491,6 +734,8 @@ func _find_nearest_enemy(max_dist: float) -> Node3D:
 # ==============================================================================
 
 func _on_phase_changed(phase: int) -> void:
+	if continuous_mode:
+		return
 	if phase == 1: # Phase.ATTACK
 		visible = false
 		collision_layer = 0
