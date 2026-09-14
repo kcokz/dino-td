@@ -449,19 +449,19 @@ func test_14_infinite_ap_mode_allows_continuous_building_with_resources() -> voi
 
 	game_state_node.reset_game()
 	game_state_node.infinite_ap = true
-	game_state_node.resources = {"wood": 8, "stone": 0, "food": 0}
+	game_state_node.resources = {"wood": cost_of("wall") * 4, "stone": 0, "water": 0, "food": 0}
 
 	# Infinite AP: can_spend_ap returns true regardless of amount
 	assert_true(game_state_node.can_spend_ap(99), "infinite_ap mode allows can_spend_ap for any amount")
 
-	# Place 4 walls (each costs 2 wood, total 8 wood)
+	# Place exactly as many walls as the seeded wood affords
 	for i in range(4):
 		var cell = Vector2i(20 + i, 20)
 		var b = build_sys.place_building("wall", cell)
 		if b is Node: _cleanup_nodes.append(b)
 		assert_not_null(b, "Wall %d placed successfully under infinite AP" % (i + 1))
 
-	assert_eq(game_state_node.resources["wood"], 0, "All 8 wood consumed across 4 walls")
+	assert_eq(game_state_node.resources["wood"], 0, "All seeded wood consumed across 4 walls")
 	# 5th placement fails due to 0 wood, not AP
 	var fail_b = build_sys.place_building("wall", Vector2i(25, 20))
 	assert_null(fail_b, "5th placement rejected due to wood shortage")
@@ -570,10 +570,20 @@ func test_18_hud_hides_ap_in_v01() -> void:
 	await wait_frames(1)
 
 	assert_false(hud.ap_label.visible, "APLabel must be invisible on the UI")
-	assert_false(hud.build_wall_btn.text.contains("AP"), "BuildWallBtn must not show AP cost (got '%s')" % hud.build_wall_btn.text)
-	assert_false(hud.build_lumber_btn.text.contains("AP"), "BuildLumberHutBtn must not show AP cost (got '%s')" % hud.build_lumber_btn.text)
-	assert_false(hud.build_tower_btn.text.contains("AP"), "BuildTowerBtn must not show AP cost (got '%s')" % hud.build_tower_btn.text)
-	assert_true(hud.build_wall_btn.text.contains("木") or hud.build_wall_btn.text.contains("Wood"), "BuildWallBtn shows wood cost")
+
+	# Build costs moved to the Hero Option Panel in v0.2; they must still quote
+	# wood and never AP, which no longer exists.
+	var panel = hud.find_child("OptionPanel", true, false)
+	assert_not_null(panel, "OptionPanel must exist in the HUD")
+	panel.current_menu = "build"
+	panel._populate_hero_buttons()
+	var saw_wood: bool = false
+	for btn in panel.button_container.get_children():
+		var t: String = str(btn.text)
+		assert_false(t.contains("AP"), "Build button must not show AP cost (got '%s')" % t)
+		if t.contains("木") or t.contains("Wood"):
+			saw_wood = true
+	assert_true(saw_wood, "Build buttons show wood cost")
 
 # ==============================================================================
 # 19. Hero A* Pathfinding Navigates Around Wall Obstacles

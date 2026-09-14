@@ -37,6 +37,15 @@ var current_core: Node = null
 var current_nest: Node = null
 var current_build_type: String = ""
 
+# v0.2 build preview: a translucent ghost of the pending building that follows the
+# cursor, together with its coverage ring and a highlight on the resource nodes that
+# ring would cover.
+var build_preview: Node3D = null
+var build_preview_mesh: MeshInstance3D = null
+var build_preview_ring: MeshInstance3D = null
+var _preview_cell: Vector2i = Vector2i(999999, 999999)
+var _preview_highlighted: Array[Node] = []
+
 # Canonical coordinates
 var core_cell: Vector2i = Vector2i(0, 0)
 var nest_cell: Vector2i = Vector2i(0, -9)
@@ -51,6 +60,9 @@ func _ready() -> void:
 	_ensure_scene_dependencies()
 	_wire_signals()
 	setup_level()
+
+func _process(delta: float) -> void:
+	_handle_camera_pan(delta)
 
 func _init_level_coordinates() -> void:
 	var cfg = _get_config()
@@ -201,6 +213,11 @@ func setup_level() -> void:
 		hero.continuous_mode = true
 	if wave_manager and is_instance_valid(wave_manager):
 		wave_manager.auto_raid_enabled = true
+	var gs_cont = _get_game_state()
+	if gs_cont and "continuous_mode" in gs_cont:
+		gs_cont.continuous_mode = true
+		if wave_manager.has_method("reset_raid_state"):
+			wave_manager.reset_raid_state()
 
 ## Provisions initial CoreCampfire and Nest on the map and in GridManager.
 func setup_initial_entities() -> void:
@@ -282,6 +299,9 @@ func setup_initial_entities() -> void:
 		eb.core_hp_changed.emit(core_cur_hp, core_max_hp)
 
 func is_resource_at_cell(cell: Vector2i) -> bool:
+	if grid_manager and is_instance_valid(grid_manager) and grid_manager.has_method("is_resource_at_cell"):
+		if grid_manager.is_resource_at_cell(cell):
+			return true
 	if resource_nodes_container == null:
 		return false
 	for child in resource_nodes_container.get_children():
@@ -290,6 +310,10 @@ func is_resource_at_cell(cell: Vector2i) -> bool:
 	return false
 
 func get_resource_node_at_cell(cell: Vector2i) -> Node:
+	if grid_manager and is_instance_valid(grid_manager) and grid_manager.has_method("get_resource_at"):
+		var res_node = grid_manager.get_resource_at(cell)
+		if res_node != null:
+			return res_node
 	if resource_nodes_container == null:
 		return null
 	for child in resource_nodes_container.get_children():
@@ -302,24 +326,37 @@ func spawn_resource_nodes() -> void:
 		_ensure_scene_dependencies()
 	if resource_nodes_container == null or resource_node_script == null:
 		return
+	if grid_manager and grid_manager.has_method("clear_resource_cells"):
+		grid_manager.clear_resource_cells()
 	for child in resource_nodes_container.get_children():
 		resource_nodes_container.remove_child(child)
 		child.queue_free()
 
-	var nodes_def = [
-		{"type": "wood", "cell": Vector2i(-4, -2)},
-		{"type": "wood", "cell": Vector2i(4, -2)},
-		{"type": "stone", "cell": Vector2i(-4, -6)},
-		{"type": "stone", "cell": Vector2i(4, -6)},
-		{"type": "water", "cell": Vector2i(-4, -4)}
-	]
+	var nodes_def: Array = []
+	var cfg = _get_config()
+	if cfg and "MAP" in cfg and cfg.MAP is Dictionary and cfg.MAP.has("default_resource_nodes"):
+		nodes_def = cfg.MAP["default_resource_nodes"]
+	else:
+		nodes_def = [
+			{"type": "wood", "cell": Vector2i(-4, -2)},
+			{"type": "wood", "cell": Vector2i(4, -2)},
+			{"type": "stone", "cell": Vector2i(-4, -6)},
+			{"type": "stone", "cell": Vector2i(4, -6)},
+			{"type": "water", "cell": Vector2i(-4, -4)}
+		]
+
+	var t_size: float = 2.0
+	if cfg and "TILE_SIZE" in cfg:
+		t_size = float(cfg.TILE_SIZE)
 
 	for item in nodes_def:
 		var node = resource_node_script.new(item["type"], item["cell"])
 		node.name = "ResourceNode_%s_%d_%d" % [item["type"], item["cell"].x, item["cell"].y]
-		var world_pos = grid_manager.cell_to_world(item["cell"]) if grid_manager else Vector3(float(item["cell"].x * 2.0), 0.0, float(item["cell"].y * 2.0))
+		var world_pos = grid_manager.cell_to_world(item["cell"]) if grid_manager else Vector3(float(item["cell"].x) * t_size, 0.0, float(item["cell"].y) * t_size)
 		node.position = world_pos
 		resource_nodes_container.add_child(node)
+		if grid_manager and grid_manager.has_method("occupy_resource_cell"):
+			grid_manager.occupy_resource_cell(item["cell"], node)
 
 # ==============================================================================
 # Interactive & Programmatic Building Placement
@@ -327,9 +364,11 @@ func spawn_resource_nodes() -> void:
 
 func on_build_selected(type_id: String) -> void:
 	current_build_type = type_id
+	_rebuild_build_preview(type_id)
 
 func cancel_building_selection() -> void:
 	current_build_type = ""
+	_clear_build_preview()
 	if hud and is_instance_valid(hud) and hud.has_method("deselect_build"):
 		hud.deselect_build()
 
@@ -360,6 +399,62 @@ func _unhandled_input(event: InputEvent) -> void:
 	var move_btn: int = int(controls.get("hero_move_button", MOUSE_BUTTON_RIGHT))
 	var place_btn: int = int(controls.get("build_place_button", MOUSE_BUTTON_LEFT))
 
+	# F11 to toggle fullscreen
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F11:
+		toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+		return
+
+	# Mouse Wheel Zoom
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom_camera(1.8)
+			get_viewport().set_input_as_handled()
+			return
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom_camera(-1.8)
+			get_viewport().set_input_as_handled()
+			return
+
+	# Build preview follows the cursor while a building type is selected
+	if event is InputEventMouseMotion and current_build_type != "" and not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
+		_update_build_preview(event.position)
+
+	# Middle mouse drag camera pan
+	if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
+		if camera:
+			var right = camera.global_transform.basis.x
+			var cam_fwd = Vector3(camera.global_transform.basis.z.x, 0.0, camera.global_transform.basis.z.z).normalized()
+			var speed = 0.015 * (camera.global_position.y / 18.0)
+			camera.global_position -= (right * event.relative.x - cam_fwd * event.relative.y) * speed
+			get_viewport().set_input_as_handled()
+			return
+
+	# Keyboard Zoom (+/- / PageUp/PageDown) & UI Scale (Ctrl +/-)
+	if event is InputEventKey and event.pressed:
+		if event.ctrl_pressed or event.meta_pressed:
+			if event.keycode == KEY_EQUAL or event.keycode == KEY_PLUS:
+				set_ui_scale(get_ui_scale() + 0.1)
+				get_viewport().set_input_as_handled()
+				return
+			elif event.keycode == KEY_MINUS:
+				set_ui_scale(get_ui_scale() - 0.1)
+				get_viewport().set_input_as_handled()
+				return
+			elif event.keycode == KEY_0:
+				set_ui_scale(1.0)
+				get_viewport().set_input_as_handled()
+				return
+		else:
+			if event.keycode == KEY_PAGEUP or event.keycode == KEY_EQUAL:
+				zoom_camera(1.8)
+				get_viewport().set_input_as_handled()
+				return
+			elif event.keycode == KEY_PAGEDOWN or event.keycode == KEY_MINUS:
+				zoom_camera(-1.8)
+				get_viewport().set_input_as_handled()
+				return
+
 	# Space key to toggle pause
 	if event is InputEventKey and event.pressed and event.keycode == pause_key:
 		var gs = _get_game_state()
@@ -368,12 +463,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
-	# ESC key to cancel current building selection
+	# ESC key to cancel current building selection or deselect unit
 	if event is InputEventKey and event.pressed and event.keycode == cancel_key:
 		if current_build_type != "":
 			cancel_building_selection()
 			get_viewport().set_input_as_handled()
 			return
+		else:
+			var eb = _get_event_bus()
+			if eb and eb.has_signal("unit_deselected"):
+				eb.unit_deselected.emit()
+				get_viewport().set_input_as_handled()
+				return
 
 	# Right-click (Default hero move / context command button)
 	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
@@ -423,8 +524,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				if eb and eb.has_signal("unit_selected"):
 					eb.unit_selected.emit(hit_obj)
 			else:
-				if eb and eb.has_signal("unit_selected") and hero != null and is_instance_valid(hero):
-					eb.unit_selected.emit(hero)
+				if eb and eb.has_signal("unit_deselected"):
+					eb.unit_deselected.emit()
 			get_viewport().set_input_as_handled()
 			return
 
@@ -452,9 +553,6 @@ func _unhandled_input(event: InputEvent) -> void:
 					if not gs.can_afford(cost):
 						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 							hud.show_hint(tr("HINT_NO_RESOURCES"))
-					elif "current_phase" in gs and int(gs.current_phase) != 0:
-						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint(tr("HINT_NOT_PLAN_PHASE"))
 		get_viewport().set_input_as_handled()
 		return
 
@@ -522,6 +620,8 @@ func restart_game() -> void:
 		wave_manager.current_wave = 0
 		wave_manager.dinos_alive_count = 0
 		wave_manager.dinos_to_spawn = 0
+		if wave_manager.has_method("reset_raid_state"):
+			wave_manager.reset_raid_state()
 
 	# 3. Clean leftover Dinos immediately
 	if dinos_container and is_instance_valid(dinos_container):
@@ -570,14 +670,9 @@ func restart_game() -> void:
 	if grid_manager and is_instance_valid(grid_manager):
 		grid_manager.clear_grid()
 
-	# 7. Re-instantiate pristine Core and Nest
+	# 7. Re-instantiate pristine level entities (Core, Nest, Resources, Hero, Raids)
 	current_core = null
-	setup_initial_entities()
-	spawn_resource_nodes()
-	if hero and is_instance_valid(hero):
-		hero.continuous_mode = true
-	if wave_manager and is_instance_valid(wave_manager):
-		wave_manager.auto_raid_enabled = true
+	setup_level()
 
 	# 8. Reset HUD
 	if hud and is_instance_valid(hud):
@@ -607,3 +702,188 @@ func _get_config() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("Config")
 	return null
+
+# ==============================================================================
+# Camera & View Controls (Zoom, Pan, Fullscreen, UI Scale)
+# ==============================================================================
+
+func zoom_camera(amount: float) -> void:
+	if camera == null or not is_instance_valid(camera):
+		return
+	var forward = -camera.global_transform.basis.z
+	var new_pos = camera.global_position + forward * amount
+	# Clamped camera height between 6.0m (close zoom) and 32.0m (tactical overview)
+	if new_pos.y >= 6.0 and new_pos.y <= 32.0:
+		camera.global_position = new_pos
+
+func toggle_fullscreen() -> void:
+	var cur_mode = DisplayServer.window_get_mode()
+	if cur_mode == DisplayServer.WINDOW_MODE_FULLSCREEN or cur_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+func get_ui_scale() -> float:
+	var win = get_window()
+	return win.content_scale_factor if win else 1.0
+
+func set_ui_scale(p_scale: float) -> void:
+	var win = get_window()
+	if win:
+		win.content_scale_factor = clampf(p_scale, 0.75, 2.0)
+
+func _handle_camera_pan(delta: float) -> void:
+	if camera == null or not is_instance_valid(camera):
+		return
+	var pan_vec = Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		pan_vec.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		pan_vec.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		pan_vec.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		pan_vec.y += 1.0
+
+	if pan_vec != Vector2.ZERO:
+		pan_vec = pan_vec.normalized()
+		var right = camera.global_transform.basis.x
+		var cam_fwd = Vector3(camera.global_transform.basis.z.x, 0.0, camera.global_transform.basis.z.z).normalized()
+		var pan_speed = 18.0 * (camera.global_position.y / 18.0) * delta
+		camera.global_position += (right * pan_vec.x + cam_fwd * pan_vec.y) * pan_speed
+
+# ==============================================================================
+# Build Preview Ghost (v0.2 follow-up)
+# ==============================================================================
+
+## (Re)creates the ghost for `type_id`: a translucent box the size of the building
+## plus, when the type has an area of effect, a ring showing what it would cover.
+func _rebuild_build_preview(type_id: String) -> void:
+	_clear_build_preview()
+	var cfg = _get_config()
+	if cfg == null or not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(type_id):
+		return
+
+	build_preview = Node3D.new()
+	build_preview.name = "BuildPreview"
+	add_child(build_preview)
+
+	var tile: float = float(cfg.TILE_SIZE) if "TILE_SIZE" in cfg else 2.0
+	build_preview_mesh = MeshInstance3D.new()
+	build_preview_mesh.name = "PreviewMesh"
+	var box := BoxMesh.new()
+	box.size = Vector3(tile * 0.8, tile * 0.8, tile * 0.8)
+	build_preview_mesh.mesh = box
+	build_preview_mesh.position = Vector3(0.0, tile * 0.4, 0.0)
+	build_preview_mesh.material_override = _make_preview_material(Color.WHITE)
+	build_preview.add_child(build_preview_mesh)
+
+	var r: float = _preview_range_for(type_id)
+	if r > 0.0:
+		build_preview_ring = MeshInstance3D.new()
+		build_preview_ring.name = "PreviewRing"
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = r
+		cyl.bottom_radius = r
+		cyl.height = 0.05
+		build_preview_ring.mesh = cyl
+		build_preview_ring.position = Vector3(0.0, 0.06, 0.0)
+		build_preview_ring.material_override = _make_preview_material(_preview_ring_color(type_id), 0.16)
+		build_preview.add_child(build_preview_ring)
+
+	build_preview.visible = false
+	_preview_cell = Vector2i(999999, 999999)
+
+## Area of effect a pending building would have: attack range for towers,
+## harvest range for producers, nothing for plain walls.
+func _preview_range_for(type_id: String) -> float:
+	var cfg = _get_config()
+	if cfg == null or not cfg.BUILDINGS.has(type_id):
+		return 0.0
+	var b: Dictionary = cfg.BUILDINGS[type_id]
+	if b.has("harvest_range"):
+		return float(b["harvest_range"])
+	if b.has("range"):
+		return float(b["range"])
+	return 0.0
+
+func _preview_ring_color(type_id: String) -> Color:
+	var cfg = _get_config()
+	if cfg == null or not cfg.BUILDINGS.has(type_id):
+		return Color(0.4, 0.8, 0.4)
+	var b: Dictionary = cfg.BUILDINGS[type_id]
+	if b.has("produces_per_sec") and "RESOURCE_NODES" in cfg:
+		for res_id in b["produces_per_sec"]:
+			if cfg.RESOURCE_NODES.has(res_id):
+				return cfg.RESOURCE_NODES[res_id].get("color", Color(0.4, 0.8, 0.4))
+	if b.has("range"):
+		return Color(0.35, 0.65, 1.0)
+	return Color(0.4, 0.8, 0.4)
+
+func _make_preview_material(col: Color, alpha: float = 0.38) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(col.r, col.g, col.b, alpha)
+	return mat
+
+## Snaps the ghost to the hovered cell and recolours it by whether placement
+## would actually succeed there.
+func _update_build_preview(screen_pos: Vector2) -> void:
+	if build_preview == null or not is_instance_valid(build_preview):
+		_rebuild_build_preview(current_build_type)
+		if build_preview == null:
+			return
+
+	var hit = _raycast_ground(screen_pos)
+	if hit == null:
+		build_preview.visible = false
+		_clear_preview_highlights()
+		return
+
+	var cell: Vector2i = grid_manager.world_to_cell(hit)
+	build_preview.visible = true
+	if cell == _preview_cell:
+		return
+	_preview_cell = cell
+	build_preview.global_position = grid_manager.cell_to_world(cell)
+
+	var ok: bool = _can_afford_building(current_build_type)
+	if ok and build_system and build_system.has_method("can_place_building"):
+		ok = bool(build_system.can_place_building(current_build_type, cell))
+	elif ok and grid_manager and grid_manager.has_method("is_cell_occupied"):
+		ok = not grid_manager.is_cell_occupied(cell)
+
+	var tint: Color = Color(0.35, 1.0, 0.4) if ok else Color(1.0, 0.3, 0.25)
+	if build_preview_mesh:
+		build_preview_mesh.material_override = _make_preview_material(tint)
+
+	_refresh_preview_highlights()
+
+## Lights up every resource node the pending building's ring would cover.
+func _refresh_preview_highlights() -> void:
+	_clear_preview_highlights()
+	var r: float = _preview_range_for(current_build_type)
+	if r <= 0.0 or build_preview == null:
+		return
+	for n in get_tree().get_nodes_in_group("resource_nodes"):
+		if not is_instance_valid(n) or not n.has_method("set_highlighted"):
+			continue
+		if build_preview.global_position.distance_to(n.global_position) <= r:
+			n.set_highlighted(true)
+			_preview_highlighted.append(n)
+
+func _clear_preview_highlights() -> void:
+	for n in _preview_highlighted:
+		if is_instance_valid(n) and n.has_method("set_highlighted"):
+			n.set_highlighted(false)
+	_preview_highlighted.clear()
+
+func _clear_build_preview() -> void:
+	_clear_preview_highlights()
+	if build_preview and is_instance_valid(build_preview):
+		build_preview.queue_free()
+	build_preview = null
+	build_preview_mesh = null
+	build_preview_ring = null
+	_preview_cell = Vector2i(999999, 999999)

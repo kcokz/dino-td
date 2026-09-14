@@ -20,7 +20,7 @@ var button_container: Container = null
 var _last_refresh_time: float = 0.0
 
 func _init() -> void:
-	custom_minimum_size = Vector2(280, 180)
+	custom_minimum_size = _panel_size()
 
 func _ready() -> void:
 	_ensure_components()
@@ -98,14 +98,20 @@ func _on_back_pressed() -> void:
 	_refresh_ui()
 
 func _process(delta: float) -> void:
-	if selected_unit != null:
-		if not is_instance_valid(selected_unit) or selected_unit.is_queued_for_deletion():
-			clear_selection()
-			return
-		_last_refresh_time += delta
-		if _last_refresh_time >= 0.25:
-			_last_refresh_time = 0.0
-			_update_status_display()
+	if selected_unit == null:
+		# The panel is built before Main spawns the Hero, so the initial _refresh_ui()
+		# finds nothing. Keep trying until the Hero exists, then default to it.
+		var hero = _get_hero()
+		if hero != null and is_instance_valid(hero):
+			set_selected_unit(hero)
+		return
+	if not is_instance_valid(selected_unit) or selected_unit.is_queued_for_deletion():
+		clear_selection()
+		return
+	_last_refresh_time += delta
+	if _last_refresh_time >= 0.25:
+		_last_refresh_time = 0.0
+		_update_status_display()
 
 func _ensure_components() -> void:
 	name = "OptionPanel"
@@ -114,10 +120,13 @@ func _ensure_components() -> void:
 	anchor_top = 1.0
 	anchor_right = 1.0
 	anchor_bottom = 1.0
-	offset_left = -300.0
-	offset_top = -210.0
-	offset_right = -16.0
-	offset_bottom = -16.0
+	var p_size: Vector2 = _panel_size()
+	var margin: float = _panel_margin()
+	offset_left = -(p_size.x + margin)
+	offset_top = -(p_size.y + margin)
+	offset_right = -margin
+	offset_bottom = -margin
+	custom_minimum_size = p_size
 
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.12, 0.15, 0.9)
@@ -145,8 +154,9 @@ func _ensure_components() -> void:
 	if title_label == null:
 		title_label = Label.new()
 		title_label.name = "TitleLabel"
-		title_label.text = "Unit Info"
+		title_label.text = tr("OPTION_UNIT_INFO")
 		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title_label.add_theme_font_size_override("font_size", _ui_size("panel_title_font_size", 30))
 		main_vbox.add_child(title_label)
 
 	if status_label == null:
@@ -154,8 +164,9 @@ func _ensure_components() -> void:
 	if status_label == null:
 		status_label = Label.new()
 		status_label.name = "StatusLabel"
-		status_label.text = "Status"
+		status_label.text = tr("OPTION_DEFAULT_STATUS")
 		status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		status_label.add_theme_font_size_override("font_size", _ui_size("panel_status_font_size", 22))
 		status_label.modulate = Color(0.85, 0.85, 0.85)
 		main_vbox.add_child(status_label)
 
@@ -240,8 +251,10 @@ func _clear_buttons() -> void:
 func _create_action_button(text: String, callback: Callable) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(120, 32)
+	var btn_font: int = _ui_size("panel_button_font_size", 24)
+	btn.custom_minimum_size = Vector2(150, btn_font * 2)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.add_theme_font_size_override("font_size", btn_font)
 	btn.pressed.connect(callback)
 	button_container.add_child(btn)
 	return btn
@@ -258,9 +271,14 @@ func _populate_hero_buttons() -> void:
 				selected_unit.order_stop()
 		)
 	elif current_menu == "build":
-		# Level 2: [ Wall ], [ Tower ], [ Lumber Hut ], [ Back ]
+		# Level 2: one button per Config.BUILDABLE_TYPES, then [ Back ]
 		var cfg = _get_config()
-		for b_type in ["wall", "tower", "lumber_hut"]:
+		var buildable: Array = []
+		if cfg and "BUILDABLE_TYPES" in cfg:
+			buildable = cfg.BUILDABLE_TYPES
+		else:
+			buildable = ["wall", "tower", "lumber_hut"]
+		for b_type in buildable:
 			var b_name = Config.get_building_name(b_type) if (cfg and cfg.has_method("get_building_name")) else b_type
 			var cost_wood: int = 2
 			if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(b_type):
@@ -276,7 +294,7 @@ func _populate_hero_buttons() -> void:
 		)
 
 func _populate_building_buttons() -> void:
-	var is_producer: bool = (selected_unit is LumberHut) or ("is_operating" in selected_unit)
+	var is_producer: bool = (selected_unit is ProducerBuilding) or ("is_operating" in selected_unit)
 	if is_producer:
 		_create_action_button(TranslationServer.translate("CMD_TEND"), func():
 			var hero = _get_hero()
@@ -334,3 +352,22 @@ func _get_event_bus() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("EventBus")
 	return null
+
+## Reads a font size out of Config.UI so panel sizing lives with the rest of the data.
+func _ui_size(key: String, fallback: int) -> int:
+	var cfg = _get_config()
+	if cfg and "UI" in cfg:
+		return int(cfg.UI.get(key, fallback))
+	return fallback
+
+func _panel_size() -> Vector2:
+	var cfg = _get_config()
+	if cfg and "UI" in cfg:
+		return cfg.UI.get("option_panel_size", Vector2(430, 300))
+	return Vector2(430, 300)
+
+func _panel_margin() -> float:
+	var cfg = _get_config()
+	if cfg and "UI" in cfg:
+		return float(cfg.UI.get("option_panel_margin", 16.0))
+	return 16.0

@@ -690,7 +690,11 @@ func _find_threat_priority_target() -> Node:
 			nearest_other_building = b
 
 	# If Hero provoked dinos, Hero threat matches Tower!
-	if is_hero_provoked and hero_dist <= 4.0:
+	var p_rad: float = 4.0
+	var cfg = _get_config()
+	if cfg and "HERO" in cfg:
+		p_rad = float(cfg.HERO.get("provoke_radius", 4.0))
+	if is_hero_provoked and hero_dist <= p_rad:
 		if nearest_tower == null or hero_dist < min_tower_dist:
 			if _is_target_valid(hero):
 				return hero

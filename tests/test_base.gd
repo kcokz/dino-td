@@ -221,3 +221,25 @@ func wait_for_signal(p_target: Object, p_signal_name: String, timeout_sec: float
 	if p_target.is_connected(p_signal_name, cb):
 		p_target.disconnect(p_signal_name, cb)
 	return fired[0]
+
+# ==============================================================================
+# Balance helpers
+# ==============================================================================
+
+## Cost of a building straight from Config. Tests that only care about "the right
+## amount was deducted" should use this instead of restating the tuning values,
+## so a balance pass does not break them.
+func cost_of(type_id: String, res_id: String = "wood") -> int:
+	var cfg = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	if cfg == null or not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(type_id):
+		return 0
+	return int(cfg.BUILDINGS[type_id].get("cost", {}).get(res_id, 0))
+
+## Total wood needed to place every type in `type_ids` once.
+func total_cost_of(type_ids: Array, res_id: String = "wood") -> int:
+	var sum: int = 0
+	for t in type_ids:
+		sum += cost_of(String(t), res_id)
+	return sum

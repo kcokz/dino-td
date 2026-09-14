@@ -15,7 +15,10 @@ var current_locale: String = DEFAULT_LOCALE
 func _ready() -> void:
 	load_translations()
 	var saved_locale = load_saved_locale()
-	set_locale(saved_locale)
+	if saved_locale != current_locale:
+		set_locale(saved_locale, false)
+	else:
+		TranslationServer.set_locale(current_locale)
 
 ## Reads strings.csv and builds runtime Translation resources registered to TranslationServer.
 func load_translations() -> void:
@@ -74,17 +77,19 @@ static func get_locale_display_name(loc: String) -> String:
 		_:
 			return loc
 
-## Changes the active locale, saves to settings, and emits signal.
-func set_locale(new_locale: String) -> void:
+## Changes the active locale, optionally saves to settings, and emits signal.
+func set_locale(new_locale: String, save: bool = true) -> void:
 	var target = new_locale
 	if target == "zh":
 		target = "zh_CN"
 	if not (target in SUPPORTED_LOCALES):
 		target = DEFAULT_LOCALE
 
+	var prev_locale = current_locale
 	current_locale = target
 	TranslationServer.set_locale(target)
-	save_saved_locale(target)
+	if save and (prev_locale != target or not FileAccess.file_exists(SETTINGS_PATH)):
+		save_saved_locale(target)
 
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("locale_changed"):

@@ -37,7 +37,6 @@ var target_tend_building: Node = null
 var attack_cooldown: float = 0.0
 var harvest_timer: float = 0.0
 var tend_progress: float = 0.0
-const TEND_TIME_REQUIRED: float = 2.0
 
 var current_path: Array[Vector3] = []
 var current_path_index: int = 0
@@ -130,41 +129,57 @@ func _process_idle(_delta: float) -> void:
 		if target_enemy != null:
 			current_state = State.ATTACKING
 
-func _process_moving(delta: float) -> void:
-	# 1. Target building check
+func _check_and_transition_interaction_target(extra_buffer: float, collider: Node = null) -> bool:
 	if target_building != null:
 		if not is_instance_valid(target_building) or ("is_destroyed" in target_building and target_building.is_destroyed):
 			target_building = null
 			_continue_to_next_pending_building_or_idle()
-			return
-		if _is_in_build_range(global_position, target_building):
+			return true
+		if (collider != null and collider == target_building) or _is_in_build_range(global_position, target_building, extra_buffer):
 			velocity = Vector3.ZERO
 			current_state = State.BUILDING
-			return
+			return true
 
-	# 1b. Target resource node check (v0.2 Harvesting)
 	elif target_resource_node != null:
 		if not is_instance_valid(target_resource_node) or ("is_depleted" in target_resource_node and target_resource_node.is_depleted):
 			target_resource_node = null
 			current_state = State.IDLE
-			return
-		if _is_in_node_range(global_position, target_resource_node, 0.4):
+			return true
+		if (collider != null and collider == target_resource_node) or _is_in_node_range(global_position, target_resource_node, extra_buffer):
 			velocity = Vector3.ZERO
 			current_state = State.HARVESTING
 			harvest_timer = 0.0
-			return
+			return true
 
-	# 1c. Target tend building check (v0.2 Machinery Tending)
 	elif target_tend_building != null:
 		if not is_instance_valid(target_tend_building) or ("is_destroyed" in target_tend_building and target_tend_building.is_destroyed):
 			target_tend_building = null
 			current_state = State.IDLE
-			return
-		if _is_in_build_range(global_position, target_tend_building, 0.4):
+			return true
+		if (collider != null and collider == target_tend_building) or _is_in_build_range(global_position, target_tend_building, extra_buffer):
 			velocity = Vector3.ZERO
 			current_state = State.TENDING
 			tend_progress = 0.0
-			return
+			return true
+
+	return false
+
+func _replan_current_target_path() -> void:
+	if target_building != null and is_instance_valid(target_building):
+		_plan_path_to_building(target_building)
+	elif target_resource_node != null and is_instance_valid(target_resource_node):
+		_plan_path_to_node(target_resource_node)
+	elif target_tend_building != null and is_instance_valid(target_tend_building):
+		_plan_path_to_building(target_tend_building)
+	elif target_enemy != null and _is_enemy_valid(target_enemy):
+		_plan_path(target_enemy.global_position)
+	else:
+		_plan_path(target_destination)
+
+func _process_moving(delta: float) -> void:
+	# 1. Target interaction check
+	if _check_and_transition_interaction_target(0.4):
+		return
 
 	# 2. Target enemy check
 	elif target_enemy != null:
@@ -196,30 +211,10 @@ func _process_moving(delta: float) -> void:
 	# Check if all waypoints reached
 	if current_path_index >= current_path.size():
 		velocity = Vector3.ZERO
-		if target_building != null and is_instance_valid(target_building):
-			if _is_in_build_range(global_position, target_building):
-				current_state = State.BUILDING
-			else:
-				_plan_path_to_building(target_building)
-				if current_path_index >= current_path.size():
-					current_state = State.IDLE
-		elif target_resource_node != null and is_instance_valid(target_resource_node):
-			if _is_in_node_range(global_position, target_resource_node, 0.4):
-				current_state = State.HARVESTING
-				harvest_timer = 0.0
-			else:
-				_plan_path_to_node(target_resource_node)
-				if current_path_index >= current_path.size():
-					current_state = State.IDLE
-		elif target_tend_building != null and is_instance_valid(target_tend_building):
-			if _is_in_build_range(global_position, target_tend_building, 0.4):
-				current_state = State.TENDING
-				tend_progress = 0.0
-			else:
-				_plan_path_to_building(target_tend_building)
-				if current_path_index >= current_path.size():
-					current_state = State.IDLE
-		else:
+		if _check_and_transition_interaction_target(0.4):
+			return
+		_replan_current_target_path()
+		if current_path_index >= current_path.size():
 			current_state = State.IDLE
 		return
 
@@ -237,20 +232,7 @@ func _process_moving(delta: float) -> void:
 	if is_inside_tree() and get_world_3d() != null:
 		var col = move_and_collide(motion)
 		if col != null:
-			# If obstacle is the target building or within build range, transition to building
-			if target_building != null and (col.get_collider() == target_building or _is_in_build_range(global_position, target_building, 0.2)):
-				velocity = Vector3.ZERO
-				current_state = State.BUILDING
-				return
-			if target_resource_node != null and (col.get_collider() == target_resource_node or _is_in_node_range(global_position, target_resource_node, 0.2)):
-				velocity = Vector3.ZERO
-				current_state = State.HARVESTING
-				harvest_timer = 0.0
-				return
-			if target_tend_building != null and (col.get_collider() == target_tend_building or _is_in_build_range(global_position, target_tend_building, 0.2)):
-				velocity = Vector3.ZERO
-				current_state = State.TENDING
-				tend_progress = 0.0
+			if _check_and_transition_interaction_target(0.2, col.get_collider()):
 				return
 			# Slide along the obstacle surface
 			var slide_normal = col.get_normal()
@@ -269,30 +251,9 @@ func _process_moving(delta: float) -> void:
 		_stuck_timer += delta
 		if _stuck_timer >= 0.4:
 			_stuck_timer = 0.0
-			if target_building != null and is_instance_valid(target_building):
-				if _is_in_build_range(global_position, target_building, 0.2):
-					velocity = Vector3.ZERO
-					current_state = State.BUILDING
-					return
-				_plan_path_to_building(target_building)
-			elif target_resource_node != null and is_instance_valid(target_resource_node):
-				if _is_in_node_range(global_position, target_resource_node, 0.2):
-					velocity = Vector3.ZERO
-					current_state = State.HARVESTING
-					harvest_timer = 0.0
-					return
-				_plan_path_to_node(target_resource_node)
-			elif target_tend_building != null and is_instance_valid(target_tend_building):
-				if _is_in_build_range(global_position, target_tend_building, 0.2):
-					velocity = Vector3.ZERO
-					current_state = State.TENDING
-					tend_progress = 0.0
-					return
-				_plan_path_to_building(target_tend_building)
-			elif target_enemy != null and _is_enemy_valid(target_enemy):
-				_plan_path(target_enemy.global_position)
-			else:
-				_plan_path(target_destination)
+			if _check_and_transition_interaction_target(0.2):
+				return
+			_replan_current_target_path()
 	else:
 		_stuck_timer = 0.0
 	_last_pos = global_position
@@ -345,7 +306,11 @@ func _process_attacking(delta: float) -> void:
 	if attack_cooldown <= 0.0:
 		attack_cooldown = attack_rate
 		has_provoked_dinos = true
-		provoke_timer = 5.0
+		var p_dur: float = 5.0
+		var cfg = _get_config()
+		if cfg and "HERO" in cfg:
+			p_dur = float(cfg.HERO.get("provoke_duration", 5.0))
+		provoke_timer = p_dur
 		if target_enemy.has_method("take_damage"):
 			target_enemy.take_damage(damage)
 
@@ -378,8 +343,10 @@ func _process_harvesting(delta: float) -> void:
 		rate = float(target_resource_node.harvest_rate)
 	var interval = 1.0 / maxf(rate, 0.1)
 
-	if harvest_timer >= interval:
+	while harvest_timer >= interval:
 		harvest_timer -= interval
+		if target_resource_node == null or not is_instance_valid(target_resource_node):
+			break
 		var res_type: String = target_resource_node.resource_type if "resource_type" in target_resource_node else "wood"
 		var yielded: int = target_resource_node.harvest(1) if target_resource_node.has_method("harvest") else 0
 		if yielded > 0:
@@ -395,6 +362,7 @@ func _process_harvesting(delta: float) -> void:
 		if "is_depleted" in target_resource_node and target_resource_node.is_depleted:
 			target_resource_node = null
 			current_state = State.IDLE
+			break
 
 func _process_tending(delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -420,10 +388,30 @@ func _process_tending(delta: float) -> void:
 		look_at(global_position + diff.normalized(), Vector3.UP)
 
 	tend_progress += delta
-	if tend_progress >= TEND_TIME_REQUIRED:
+	var needed_tend_time: float = 2.0
+	var needed_duration: float = 40.0
+	if target_tend_building.has_method("get_tend_time"):
+		needed_tend_time = target_tend_building.get_tend_time()
+	elif "tend_time" in target_tend_building:
+		needed_tend_time = float(target_tend_building.tend_time)
+	else:
+		var cfg = _get_config()
+		if cfg and "BUILDINGS" in cfg and "building_type" in target_tend_building and cfg.BUILDINGS.has(target_tend_building.building_type):
+			needed_tend_time = float(cfg.BUILDINGS[target_tend_building.building_type].get("tend_time", 2.0))
+
+	if target_tend_building.has_method("get_tend_duration"):
+		needed_duration = target_tend_building.get_tend_duration()
+	elif "tend_duration" in target_tend_building:
+		needed_duration = float(target_tend_building.tend_duration)
+	else:
+		var cfg = _get_config()
+		if cfg and "BUILDINGS" in cfg and "building_type" in target_tend_building and cfg.BUILDINGS.has(target_tend_building.building_type):
+			needed_duration = float(cfg.BUILDINGS[target_tend_building.building_type].get("tend_duration", 40.0))
+
+	if tend_progress >= needed_tend_time:
 		tend_progress = 0.0
 		if target_tend_building.has_method("tend"):
-			target_tend_building.tend(40.0)
+			target_tend_building.tend(needed_duration)
 		target_tend_building = null
 		current_state = State.IDLE
 

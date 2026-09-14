@@ -65,7 +65,7 @@ func before_each() -> void:
 			if "current_phase" in game_state_node: game_state_node.current_phase = 0
 			if "current_ap" in game_state_node: game_state_node.current_ap = 3
 			if "max_ap" in game_state_node: game_state_node.max_ap = 3
-			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
+			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "water": 0, "food": 0}
 			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 			if "active_buildings" in game_state_node: game_state_node.active_buildings.clear()
 
@@ -170,7 +170,7 @@ func test_challenge_10_concurrent_lumber_huts_single_turn_wood_payout() -> void:
 		huts.append(hut)
 
 	assert_eq(huts.size(), 10, "10 LumberHuts must be present")
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	var res_watcher = watch_signal(event_bus_node, "resources_changed")
 
@@ -197,7 +197,7 @@ func test_challenge_15_concurrent_lumber_huts_across_10_turns_compounding() -> v
 		assert_not_null(hut, "LumberHut %d must be created" % i)
 		huts.append(hut)
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	# Run 10 consecutive full turn cycles: PLAN -> ATTACK -> PRODUCE -> PLAN
 	var expected_wood = 10
@@ -242,7 +242,7 @@ func test_challenge_30_concurrent_lumber_huts_high_load_stress() -> void:
 		huts.append(hut)
 
 	assert_eq(huts.size(), 30, "30 LumberHuts created")
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	# 3 turns high-load simulation (30 * 2 = 60 wood per turn)
 	for turn in range(1, 4):
@@ -265,7 +265,7 @@ func test_challenge_destroy_single_lumber_hut_during_attack_zero_payout() -> voi
 
 	var hut = _create_lumber_hut()
 	assert_not_null(hut, "LumberHut created")
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	# 1. PLAN -> ATTACK
 	game_state_node.trigger_end_action()
@@ -297,7 +297,7 @@ func test_challenge_destroy_all_10_lumber_huts_during_attack_zero_payout() -> vo
 		var hut = _create_lumber_hut()
 		huts.append(hut)
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	# Enter ATTACK phase
 	game_state_node.trigger_end_action()
@@ -326,7 +326,7 @@ func test_challenge_selective_destruction_during_attack_phase() -> void:
 	for i in range(12):
 		huts.append(_create_lumber_hut())
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	# Enter ATTACK phase
 	game_state_node.trigger_end_action()
@@ -360,7 +360,7 @@ func test_challenge_various_attack_destruction_modes() -> void:
 	var h2 = _create_lumber_hut() # multi-hit
 	var h3 = _create_lumber_hut() # direct destroy()
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	game_state_node.trigger_end_action()
 	assert_eq(_get_phase(), 1, "In ATTACK phase")
@@ -400,7 +400,7 @@ func test_challenge_damaged_but_alive_lumber_huts_still_produce() -> void:
 	var h2 = _create_lumber_hut() # near death (0.5 HP left)
 	var h3 = _create_lumber_hut() # dead (0 HP)
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	game_state_node.trigger_end_action()
 	assert_eq(_get_phase(), 1, "In ATTACK phase")
@@ -431,7 +431,7 @@ func test_challenge_deferred_deletion_frame_safety_in_attack_phase() -> void:
 	var h_dead = _create_lumber_hut()
 	var h_alive = _create_lumber_hut()
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	game_state_node.trigger_end_action()
 	assert_eq(_get_phase(), 1, "In ATTACK phase")
@@ -466,6 +466,13 @@ func test_challenge_deferred_deletion_frame_safety_in_attack_phase() -> void:
 # ==============================================================================
 
 func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding() -> void:
+	# Track wood as a running total derived from Config, so the balance can change
+	# without invalidating what this test is really about: the place/destroy/rebuild loop.
+	var hut_cost: int = cost_of("lumber_hut")
+	var hut_yield: int = int(Engine.get_main_loop().root.get_node("Config").BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
+	var hut_budget: int = hut_cost * 4 + 4
+	var wood: int = hut_budget
+	if game_state_node: game_state_node.resources["wood"] = hut_budget
 	assert_not_null(game_state_node, "GameState must exist")
 	assert_not_null(event_bus_node, "EventBus must exist")
 	var grid_mgr = _create_grid_manager()
@@ -473,15 +480,15 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	assert_not_null(grid_mgr, "GridManager must exist")
 	assert_not_null(build_sys, "BuildSystem must exist")
 
-	# Standard initial game resources: 3 AP, 10 wood
+	# Seeded above; AP still starts at 3
 	assert_eq(_get_ap(), 3, "Initial AP is 3")
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), wood, "Wood starts at the seeded budget")
 
 	var cell0 = Vector2i(1, 1)
 	var cell1 = Vector2i(1, 2)
 	var cell2 = Vector2i(1, 3)
 
-	# Place 2 LumberHuts via BuildSystem (cost: 2 AP, 6 wood)
+	# Place 2 LumberHuts via BuildSystem (2 AP plus two hut costs)
 	var b0 = build_sys.place_building("lumber_hut", cell0)
 	var b1 = build_sys.place_building("lumber_hut", cell1)
 
@@ -491,9 +498,10 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	_cleanup_nodes.append(b0)
 	_cleanup_nodes.append(b1)
 
-	# Remaining AP: 3 - 2 = 1. Remaining wood: 10 - 6 = 4.
+	# Remaining AP: 3 - 2 = 1. Wood: the seeded budget minus two hut costs.
 	assert_eq(_get_ap(), 1, "AP is 1 after placing 2 huts")
-	assert_eq(_get_wood(), 4, "Wood is 4 after placing 2 huts")
+	wood -= hut_cost * 2
+	assert_eq(_get_wood(), wood, "Wood reduced by two hut costs")
 	assert_true(grid_mgr.is_cell_occupied(cell0), "cell0 occupied")
 	assert_true(grid_mgr.is_cell_occupied(cell1), "cell1 occupied")
 
@@ -513,8 +521,9 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	event_bus_node.wave_ended.emit(1)
 	assert_eq(_get_phase(), 2, "In PRODUCE phase")
 
-	# 1 surviving hut (b1) produces 2 wood (4 -> 6)
-	assert_eq(_get_wood(), 6, "1 surviving hut produces +2 wood, destroyed b0 produces 0 (4 + 2 = 6)")
+	# Only the surviving hut pays out; the destroyed one contributes nothing.
+	wood += hut_yield
+	assert_eq(_get_wood(), wood, "1 surviving hut pays out, the destroyed one does not")
 
 	# Conclude turn -> return to PLAN phase (Turn 2)
 	game_state_node.advance_phase()
@@ -528,20 +537,23 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	_cleanup_nodes.append(b_new)
 	assert_true(grid_mgr.is_cell_occupied(cell0), "cell0 occupied once again")
 	assert_eq(_get_ap(), 2, "AP deducted for new build (3 -> 2)")
-	assert_eq(_get_wood(), 3, "Wood deducted for new build (6 -> 3)")
+	wood -= hut_cost
+	assert_eq(_get_wood(), wood, "Wood deducted for the rebuilt hut")
 
 	# Player places another LumberHut on cell2
 	var b2 = build_sys.place_building("lumber_hut", cell2)
 	assert_not_null(b2, "b2 placed")
 	_cleanup_nodes.append(b2)
 	assert_eq(_get_ap(), 1, "AP deducted for 2nd build in Turn 2 (2 -> 1)")
-	assert_eq(_get_wood(), 0, "Wood deducted for 2nd build in Turn 2 (3 -> 0)")
+	wood -= hut_cost
+	assert_eq(_get_wood(), wood, "Wood deducted for the 2nd build in Turn 2")
 
-	# Complete Turn 2: all 3 huts (b1, b_new, b2) produce 6 wood
+	# Complete Turn 2: all 3 huts pay out
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(2)
 	assert_eq(_get_phase(), 2, "Turn 2 in PRODUCE phase")
-	assert_eq(_get_wood(), 6, "3 surviving huts produce 6 wood (0 + 6 = 6)")
+	wood += hut_yield * 3
+	assert_eq(_get_wood(), wood, "3 surviving huts each pay out once")
 
 	game_state_node.advance_phase()
 	assert_eq(_get_phase(), 0, "Turn 3 back in PLAN")
@@ -557,7 +569,7 @@ func test_challenge_multi_turn_dynamic_attrition_and_reconstruction() -> void:
 	for i in range(10):
 		huts.append(_create_lumber_hut())
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), 10, "Wood starts at the default opening balance")
 
 	# Turn 1: All 10 survive -> +20 wood (10 -> 30)
 	game_state_node.trigger_end_action()

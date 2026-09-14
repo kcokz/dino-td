@@ -205,9 +205,40 @@ func start_next_wave() -> void:
 	var next_n: int = (gs.wave_number + 1) if gs else (current_wave + 1)
 	start_wave(next_n)
 
-## Starts next raid in continuous real-time mode.
+## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter.
 func start_next_raid() -> void:
-	start_next_wave()
+	var gs = _get_game_state()
+	var next_n: int = (gs.wave_number + 1) if gs else (current_wave + 1)
+
+	var cfg = _get_config()
+	var per_min: float = 0.15
+	var jitter_range: float = 0.3
+	if cfg and "RAIDS" in cfg:
+		per_min = float(cfg.RAIDS.get("intensity_per_minute", 0.15))
+		jitter_range = float(cfg.RAIDS.get("intensity_jitter", 0.3))
+
+	var minutes: float = elapsed_time / 60.0
+	var intensity_baseline: float = 1.0 + minutes * per_min
+	var jitter: float = randf_range(-jitter_range, jitter_range)
+	var multiplier: float = maxf(0.5, intensity_baseline * (1.0 + jitter))
+
+	var base_cnt: int = get_wave_dino_count(next_n)
+	var final_count: int = maxi(1, int(round(float(base_cnt) * multiplier)))
+
+	start_wave(next_n, final_count)
+
+## Resets raid timers and state for continuous real-time mode (v0.2).
+func reset_raid_state() -> void:
+	elapsed_time = 0.0
+	var cfg = _get_config()
+	var first_delay: float = 60.0
+	var lead_time: float = 15.0
+	if cfg and "RAIDS" in cfg:
+		first_delay = float(cfg.RAIDS.get("first_raid_delay", 60.0))
+		lead_time = float(cfg.RAIDS.get("warning_lead_time", 15.0))
+	raid_timer = first_delay
+	warning_lead_time = lead_time
+	warning_emitted = false
 
 func _reset_raid_timer() -> void:
 	var cfg = _get_config()
@@ -215,19 +246,19 @@ func _reset_raid_timer() -> void:
 	var max_i: float = 90.0
 	if cfg and "RAIDS" in cfg:
 		var r_cfg: Dictionary = cfg.RAIDS
-		min_i = float(r_cfg.get("min_interval", 45.0))
-		max_i = float(r_cfg.get("max_interval", 90.0))
+		min_i = float(r_cfg.get("interval_min", 45.0))
+		max_i = float(r_cfg.get("interval_max", 90.0))
 	raid_timer = randf_range(min_i, max_i)
 	warning_emitted = false
 
-## Starts a specific wave number.
-func start_wave(wave_num: int) -> void:
+## Starts a specific wave number. Optionally accepts override_count.
+func start_wave(wave_num: int, override_count: int = -1) -> void:
 	if is_wave_active:
 		if spawn_timer and is_instance_valid(spawn_timer):
 			spawn_timer.stop()
 
 	current_wave = wave_num
-	dinos_to_spawn = get_wave_dino_count(current_wave)
+	dinos_to_spawn = override_count if override_count > 0 else get_wave_dino_count(current_wave)
 	dinos_spawned_count = 0
 	dinos_alive_count = dinos_to_spawn
 	is_wave_active = true
@@ -345,7 +376,11 @@ func _end_wave() -> void:
 # Resolvers
 # ==============================================================================
 
-func _get_config() -> Node:
+var config_override: Object = null
+
+func _get_config() -> Object:
+	if config_override != null:
+		return config_override
 	if is_inside_tree():
 		return get_node_or_null("/root/Config")
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:

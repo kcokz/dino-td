@@ -4,6 +4,10 @@
 # AP/Wood Resource Transactions, and Campfire Core Base Lifecycle.
 extends "res://tests/test_base.gd"
 
+## Wood each test starts with: generous enough to cover any single building
+## under any balance, so these tests measure transactions rather than affordability.
+const START_WOOD: int = 100
+
 var config_node: Object = null
 var event_bus_node: Object = null
 var game_state_node: Object = null
@@ -77,10 +81,12 @@ func before_each() -> void:
 	if game_state_node != null:
 		if game_state_node.has_method("reset_game"):
 			game_state_node.call("reset_game")
-		else:
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
-			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
+		if "current_ap" in game_state_node: game_state_node.current_ap = 3
+		# reset_game() seeds Config.INITIAL_RESOURCES, which is deliberately lean.
+		# Top the wallet up so these tests measure the placement transaction rather
+		# than whether the opening balance happens to cover a given building.
+		if "resources" in game_state_node: game_state_node.resources = {"wood": START_WOOD, "stone": START_WOOD, "water": START_WOOD, "food": 0}
+		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 
 func after_each() -> void:
 	# Clean up any instantiated nodes from the test to prevent ObjectDB leaks
@@ -439,7 +445,7 @@ func test_place_wall_success_transactions() -> void:
 
 	assert_not_null(building, "place_building should return the instantiated building")
 	assert_eq(_get_ap(), 2, "Wall placement should consume 1 AP (3 -> 2)")
-	assert_eq(_get_wood(), 8, "Wall placement should consume 2 wood (10 -> 8)")
+	assert_eq(_get_wood(), START_WOOD - cost_of("wall"), "Wall placement consumes its wood cost")
 	assert_true(watcher.emitted, "building_placed signal must be emitted")
 	if not watcher.last_args.is_empty():
 		assert_eq(watcher.last_args[0], building, "building_placed signal argument must be the placed building")
@@ -459,7 +465,7 @@ func test_place_lumber_hut_success_transactions() -> void:
 
 	assert_not_null(building, "place_building lumber_hut should succeed")
 	assert_eq(_get_ap(), 2, "LumberHut placement consumes 1 AP (3 -> 2)")
-	assert_eq(_get_wood(), 7, "LumberHut placement consumes 3 wood (10 -> 7)")
+	assert_eq(_get_wood(), START_WOOD - cost_of("lumber_hut"), "LumberHut placement consumes its wood cost")
 	assert_true(watcher.emitted, "building_placed emitted for LumberHut")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (2,1) occupied in GridManager")
 
@@ -476,7 +482,7 @@ func test_place_tower_success_transactions() -> void:
 
 	assert_not_null(building, "place_building tower should succeed")
 	assert_eq(_get_ap(), 2, "Tower placement consumes 1 AP (3 -> 2)")
-	assert_eq(_get_wood(), 6, "Tower placement consumes 4 wood (10 -> 6)")
+	assert_eq(_get_wood(), START_WOOD - cost_of("tower"), "Tower placement consumes its wood cost")
 	assert_true(watcher.emitted, "building_placed emitted for Tower")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (3,1) occupied in GridManager")
 
@@ -492,7 +498,7 @@ func test_duplicate_placement_rejected_no_deductions() -> void:
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "Initial wall placement should succeed")
 	assert_eq(_get_ap(), 2, "AP is 2 after first placement")
-	assert_eq(_get_wood(), 8, "Wood is 8 after first placement")
+	assert_eq(_get_wood(), START_WOOD - cost_of("wall"), "Wood reduced by the wall cost after first placement")
 
 	# 2. Watcher for second placement attempt
 	var watcher = watch_signal(event_bus_node, "building_placed")
@@ -506,7 +512,7 @@ func test_duplicate_placement_rejected_no_deductions() -> void:
 
 	assert_null(b2, "Duplicate placement on occupied cell must return null")
 	assert_eq(_get_ap(), 2, "AP must NOT be deducted on rejected duplicate placement")
-	assert_eq(_get_wood(), 8, "Wood must NOT be deducted on rejected duplicate placement")
+	assert_eq(_get_wood(), START_WOOD - cost_of("wall"), "Wood must NOT be deducted again on rejected duplicate placement")
 	assert_false(watcher.emitted, "building_placed signal must NOT be emitted for rejected placement")
 	assert_eq(grid_mgr.get_building_at(cell), b1, "Cell must retain original building b1")
 
@@ -527,7 +533,7 @@ func test_placement_rejected_insufficient_ap() -> void:
 
 	assert_null(b, "place_building must return null when AP is insufficient")
 	assert_eq(_get_ap(), 0, "AP must remain 0")
-	assert_eq(_get_wood(), 10, "Wood must remain untouched (10)")
+	assert_eq(_get_wood(), START_WOOD, "Wood must remain untouched")
 	assert_false(watcher.emitted, "No signal emitted on AP failure")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell must remain empty")
 
@@ -557,9 +563,9 @@ func test_placement_exact_cost_boundary() -> void:
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or game_state_node == null: return
 
-	# Exactly 1 AP and exactly 2 wood (exact cost of Wall)
+	# Exactly 1 AP and exactly the wall's cost in wood
 	game_state_node.current_ap = 1
-	game_state_node.resources["wood"] = 2
+	game_state_node.resources["wood"] = cost_of("wall")
 	var cell = Vector2i(7, 7)
 
 	assert_true(build_sys.can_place_building("wall", cell), "can_place_building with exact cost must be true")
@@ -589,7 +595,7 @@ func test_placement_invalid_building_type_rejected() -> void:
 
 	assert_null(b, "place_building with invalid type must return null")
 	assert_eq(_get_ap(), 3, "AP unchanged on invalid type")
-	assert_eq(_get_wood(), 10, "Wood unchanged on invalid type")
+	assert_eq(_get_wood(), START_WOOD, "Wood unchanged on invalid type")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell remains empty")
 
 # ==============================================================================
@@ -674,7 +680,7 @@ func test_core_cannot_be_overwritten_by_build_system() -> void:
 
 	assert_null(wall, "Attempting to build over CoreCampfire must return null")
 	assert_eq(_get_ap(), 3, "AP must not be deducted")
-	assert_eq(_get_wood(), 10, "Wood must not be deducted")
+	assert_eq(_get_wood(), START_WOOD, "Wood must not be deducted")
 	assert_eq(grid_mgr.get_building_at(origin_cell), core, "Core remains at cell (0,0)")
 
 # ==============================================================================
@@ -686,15 +692,14 @@ func test_rapid_consecutive_placements_drain_ap() -> void:
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return
 
-	# Starting AP = 3, Wood = 10
-	# Place 3 walls in distinct cells (costs 1 AP, 2 wood each)
+	# Starting AP = 3. Place 3 walls in distinct cells (1 AP + one wall cost each).
 	for i in range(3):
 		var cell = Vector2i(10 + i, 10)
 		var b = build_sys.place_building("wall", cell)
 		if b is Node: _cleanup_nodes.append(b)
 		assert_not_null(b, "Placement %d must succeed" % (i + 1))
 		assert_eq(_get_ap(), 2 - i, "AP correctly decremented to %d" % (2 - i))
-		assert_eq(_get_wood(), 10 - (i + 1) * 2, "Wood correctly decremented")
+		assert_eq(_get_wood(), START_WOOD - (i + 1) * cost_of("wall"), "Wood correctly decremented")
 
 	# 4th placement must fail due to 0 AP
 	var fail_cell = Vector2i(13, 10)
@@ -703,7 +708,7 @@ func test_rapid_consecutive_placements_drain_ap() -> void:
 	if fail_b is Node: _cleanup_nodes.append(fail_b)
 	assert_null(fail_b, "4th placement returns null")
 	assert_eq(_get_ap(), 0, "AP clamped at 0")
-	assert_eq(_get_wood(), 4, "Wood remains at 4")
+	assert_eq(_get_wood(), START_WOOD - 3 * cost_of("wall"), "Wood unchanged by the rejected 4th placement")
 
 func test_negative_coordinates_placement() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -756,19 +761,21 @@ func test_lumber_hut_production_on_produce_phase() -> void:
 	var hut = lumber_hut_script.new()
 	_cleanup_nodes.append(hut)
 
-	# Initial wood is 10
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	var wood_before: int = _get_wood()
 
 	# Emit produce_phase signal
 	event_bus_node.produce_phase.emit()
 
-	# LumberHut should have produced 2 wood -> 12
-	assert_eq(_get_wood(), 12, "Wood should increase to 12 (+2 from living LumberHut)")
+	# A living LumberHut pays out its Config `produces` on the legacy produce_phase
+	var per_payout: int = 0
+	var cfg_node = Engine.get_main_loop().root.get_node_or_null("Config")
+	if cfg_node: per_payout = int(cfg_node.BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
+	assert_eq(_get_wood(), wood_before + per_payout, "Living LumberHut pays out its produce_phase yield")
 
 	# Destroy hut and emit again -> wood should remain 12
 	hut.take_damage(10.0)
 	event_bus_node.produce_phase.emit()
-	assert_eq(_get_wood(), 12, "Destroyed LumberHut must not produce wood")
+	assert_eq(_get_wood(), wood_before + per_payout, "Destroyed LumberHut must not produce wood")
 
 func test_building_collision_layer_layer2() -> void:
 	assert_not_null(building_script, "Building.gd script must exist")

@@ -21,6 +21,16 @@ const TILE_SIZE: float = 2.0
 # ==============================================================================
 # 2. Building Definitions (BUILDINGS)
 # ==============================================================================
+## Economy shape (v0.2 balance pass). One tend = tend_duration seconds of autonomous
+## running, so a machine's yield per tend is produces_per_sec * tend_duration:
+##   lumber_hut  cost 12  ->  0.25/s * 40s = 10 wood   (pays back in ~1.2 tends)
+##   quarry      cost 22  ->  0.15/s * 40s =  6 stone
+##   hunting_hut cost 18  ->  0.20/s * 40s =  8 water
+## A tower costs 20 wood, i.e. two tends of a single lumber hut -- roughly one raid
+## cycle (RAIDS.interval_min/max is 45-90s) of a modest economy. Opening 10 wood does
+## not cover a hut, so the first move is always to go out and harvest by hand. Hand-harvesting a node yields RESOURCE_NODES.harvest_rate per
+## second but occupies the Hero completely, so machines win on hero-time even
+## though they cost wood up front.
 const BUILDINGS: Dictionary = {
 	"core": {
 		"name": "BUILDING_CORE_NAME",
@@ -35,9 +45,9 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_TOWER_NAME",
 		"kind": "tower",
 		"hp": 20.0,
-		"cost": {"wood": 4},
+		"cost": {"wood": 20},
 		"ap_cost": 1,
-		"build_time": 6.0,
+		"build_time": 8.0,
 		"range": 5.0,
 		"damage": 1.0,
 		"fire_rate": 1.0,
@@ -47,7 +57,7 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_WALL_NAME",
 		"kind": "wall",
 		"hp": 30.0,
-		"cost": {"wood": 2},
+		"cost": {"wood": 5},
 		"ap_cost": 1,
 		"build_time": 2.0,
 		"upgrades_to": "",
@@ -56,12 +66,13 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_LUMBER_HUT_NAME",
 		"kind": "producer",
 		"hp": 10.0,
-		"cost": {"wood": 3},
+		"cost": {"wood": 12},
 		"ap_cost": 1,
 		"build_time": 4.0,
 		"tend_duration": 40.0,
 		"tend_time": 2.0,
-		"produces_per_sec": {"wood": 0.5},
+		"harvest_range": 12.0,
+		"produces_per_sec": {"wood": 0.25},
 		"produces": {"wood": 2},
 		"upgrades_to": "",
 	},
@@ -99,12 +110,13 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_QUARRY_NAME",
 		"kind": "producer",
 		"hp": 15.0,
-		"cost": {"wood": 5},
+		"cost": {"wood": 22},
 		"ap_cost": 1,
 		"build_time": 5.0,
 		"tend_duration": 40.0,
 		"tend_time": 2.5,
-		"produces_per_sec": {"stone": 0.3},
+		"harvest_range": 12.0,
+		"produces_per_sec": {"stone": 0.15},
 		"produces": {"stone": 1},
 		"upgrades_to": "",
 	},
@@ -112,13 +124,22 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_HUNTING_HUT_NAME",
 		"kind": "producer",
 		"hp": 10.0,
-		"cost": {"wood": 4},
+		"cost": {"wood": 18},
 		"ap_cost": 1,
 		"build_time": 4.0,
+		"tend_duration": 40.0,
+		"tend_time": 2.0,
+		"harvest_range": 12.0,
+		"produces_per_sec": {"water": 0.2},
 		"produces": {"water": 1},
 		"upgrades_to": "",
 	}
 }
+
+## Types offered in the Hero's build menu, in display order.
+## Buildings absent here exist in BUILDINGS but cannot be placed by the player
+## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
+const BUILDABLE_TYPES: Array[String] = ["wall", "tower", "lumber_hut", "quarry", "hunting_hut"]
 
 # ==============================================================================
 # 3. Dinosaur Definitions (DINOS)
@@ -215,6 +236,13 @@ const MAP: Dictionary = {
 	"default_nest_cell": Vector2i(0, -9),
 	"path_column_x": 0,
 	"produce_duration": 1.0, # Duration (seconds) of PRODUCE phase before auto-advancing to PLAN
+	"default_resource_nodes": [
+		{"type": "wood", "cell": Vector2i(-4, -2)},
+		{"type": "wood", "cell": Vector2i(4, -2)},
+		{"type": "stone", "cell": Vector2i(-4, -6)},
+		{"type": "stone", "cell": Vector2i(4, -6)},
+		{"type": "water", "cell": Vector2i(-4, -4)}
+	],
 }
 const PRODUCE_DELAY: float = 1.0
 
@@ -234,6 +262,27 @@ const HERO: Dictionary = {
 	"damage": 1.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
 	"attack_rate": 1.0,           # 攻击间隔（秒）
 	"attack_range": 2.0,          # 攻击距离（米）
+	"provoke_duration": 5.0,      # 挑衅仇恨持续时长（秒）
+	"provoke_radius": 4.0,        # 挑衅仇恨生效半径（米）
+}
+
+## Presentation sizing. The project renders at a 1280x720 design viewport with
+## `canvas_items` stretch, so every value here is in design pixels and the engine
+## scales the whole UI up on larger displays (1.5x at 1080p, 3x at 4K).
+const UI: Dictionary = {
+	"hud_font_size": 20,               # 顶栏资源/状态文字
+	"hud_button_font_size": 18,        # 顶栏按钮
+	"panel_title_font_size": 24,       # 右下角 Option 栏标题
+	"panel_status_font_size": 18,      # Option 栏状态文字
+	"panel_button_font_size": 18,      # Option 栏指令按钮
+	"gameover_title_font_size": 40,
+	# 世界空间文字的实际高度 = font_size * pixel_size（米）。
+	# TILE_SIZE 是 2.0m，所以 48 * 0.005 = 0.24m 约为格子的 1/8，一个建筑名大致一格宽。
+	"world_label_font_size": 48,       # 建筑/资源点头顶的 3D 文字
+	"world_label_pixel_size": 0.005,   # 3D 文字的世界尺寸（每像素米数）
+	"world_label_fixed_size": false,   # true 会让文字屏幕尺寸恒定并无视 pixel_size 缩放，导致巨大
+	"option_panel_size": Vector2(430, 300),  # 右下角 Option 栏尺寸（设计像素）
+	"option_panel_margin": 16.0,       # Option 栏距屏幕边缘的留白
 }
 
 const NEST_GUARDS: Dictionary = {
@@ -275,22 +324,22 @@ const RAIDS: Dictionary = {
 const RESOURCE_NODES: Dictionary = {
 	"wood": {
 		"name": "RESOURCE_WOOD",
-		"capacity": 30,
-		"harvest_rate": 1.0,      # 1 wood per second
+		"capacity": 150,
+		"harvest_rate": 0.5,      # 0.5 wood/s by hand
 		"color": Color(0.35, 0.55, 0.25),
 		"depleted_color": Color(0.3, 0.3, 0.3),
 	},
 	"stone": {
 		"name": "RESOURCE_STONE",
-		"capacity": 20,
-		"harvest_rate": 0.8,      # 0.8 stone per second
+		"capacity": 100,
+		"harvest_rate": 0.35,     # 0.35 stone/s by hand
 		"color": Color(0.6, 0.6, 0.65),
 		"depleted_color": Color(0.3, 0.3, 0.3),
 	},
 	"water": {
 		"name": "RESOURCE_WATER",
-		"capacity": 40,
-		"harvest_rate": 1.5,      # 1.5 water per second
+		"capacity": 120,
+		"harvest_rate": 0.5,      # 0.5 water/s by hand
 		"color": Color(0.2, 0.5, 0.8),
 		"depleted_color": Color(0.25, 0.3, 0.35),
 	}

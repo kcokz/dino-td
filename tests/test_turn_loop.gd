@@ -5,6 +5,9 @@
 # Action Point (AP) Consumption and Restoration, and Multi-Turn Simulation.
 extends "res://tests/test_base.gd"
 
+## Wood every test in this suite starts with (see before_each).
+const SEED_WOOD: int = 100
+
 var config_node: Object = null
 var event_bus_node: Object = null
 var game_state_node: Object = null
@@ -63,12 +66,13 @@ func before_each() -> void:
 	if game_state_node != null:
 		if game_state_node.has_method("reset_game"):
 			game_state_node.call("reset_game")
-		else:
-			if "current_phase" in game_state_node: game_state_node.current_phase = 0
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "max_ap" in game_state_node: game_state_node.max_ap = 3
-			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
-			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
+		if "current_phase" in game_state_node: game_state_node.current_phase = 0
+		if "current_ap" in game_state_node: game_state_node.current_ap = 3
+		if "max_ap" in game_state_node: game_state_node.max_ap = 3
+		# Top up past Config's lean opening balance so these tests exercise the turn
+		# loop rather than affordability.
+		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": SEED_WOOD, "water": SEED_WOOD, "food": 0}
+		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 
 func after_each() -> void:
 	# Clean up any instantiated nodes from the test to prevent ObjectDB leaks
@@ -163,7 +167,7 @@ func test_initial_phase_is_plan() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Game must start in PLAN phase (0)")
 	assert_eq(_get_ap(), 3, "Initial AP must equal Config.BASE_AP (3)")
 	assert_eq(int(game_state_node.max_ap), 3, "Initial max_ap must be 3")
-	assert_eq(_get_wood(), 10, "Initial wood must be 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 	assert_false(game_state_node.is_game_over, "is_game_over must initially be false")
 
 func test_trigger_end_action_transitions_plan_to_attack() -> void:
@@ -333,7 +337,7 @@ func test_single_lumber_hut_produces_two_wood() -> void:
 	var hut = _create_lumber_hut()
 	if hut == null or game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 	var res_watcher = watch_signal(event_bus_node, "resources_changed")
 
 	# Transition through ATTACK to PRODUCE
@@ -341,7 +345,7 @@ func test_single_lumber_hut_produces_two_wood() -> void:
 	event_bus_node.wave_ended.emit(1)
 
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE phase")
-	assert_eq(_get_wood(), 12, "Single LumberHut must produce +2 wood (10 -> 12)")
+	assert_eq(_get_wood(), SEED_WOOD + _hut_yield(), "Single LumberHut pays out once")
 	assert_true(res_watcher.emitted, "resources_changed signal must be emitted on production")
 
 func test_multiple_lumber_huts_produce_additive_wood() -> void:
@@ -350,7 +354,7 @@ func test_multiple_lumber_huts_produce_additive_wood() -> void:
 	var h3 = _create_lumber_hut()
 	if h1 == null or h2 == null or h3 == null or game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 
 	# Transition through ATTACK to PRODUCE
 	game_state_node.trigger_end_action()
@@ -358,13 +362,13 @@ func test_multiple_lumber_huts_produce_additive_wood() -> void:
 
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE phase")
 	# 3 LumberHuts each produce 2 wood -> 3 * 2 = 6 wood
-	assert_eq(_get_wood(), 16, "3 LumberHuts must produce 3 * 2 = 6 wood (10 -> 16)")
+	assert_eq(_get_wood(), SEED_WOOD + 3 * _hut_yield(), "3 LumberHuts pay out additively")
 
 func test_destroyed_lumber_hut_does_not_produce() -> void:
 	var hut = _create_lumber_hut()
 	if hut == null or game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 
 	# Deal lethal damage to LumberHut (HP is 10.0)
 	hut.take_damage(10.0)
@@ -376,13 +380,13 @@ func test_destroyed_lumber_hut_does_not_produce() -> void:
 	event_bus_node.wave_ended.emit(1)
 
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE phase")
-	assert_eq(_get_wood(), 10, "Destroyed LumberHut must NOT produce wood (wood remains 10)")
+	assert_eq(_get_wood(), SEED_WOOD, "Destroyed LumberHut must NOT produce wood")
 
 func test_freed_lumber_hut_does_not_produce_or_crash() -> void:
 	var hut = _create_lumber_hut()
 	if hut == null or game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 
 	# Erase from cleanup tracking and free the LumberHut node immediately
 	_cleanup_nodes.erase(hut)
@@ -393,7 +397,7 @@ func test_freed_lumber_hut_does_not_produce_or_crash() -> void:
 	event_bus_node.wave_ended.emit(1)
 
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE phase")
-	assert_eq(_get_wood(), 10, "Freed LumberHut must NOT produce wood and must not crash")
+	assert_eq(_get_wood(), SEED_WOOD, "Freed LumberHut must NOT produce wood and must not crash")
 
 func test_mixed_living_and_dead_lumber_huts() -> void:
 	var h1 = _create_lumber_hut()
@@ -401,7 +405,7 @@ func test_mixed_living_and_dead_lumber_huts() -> void:
 	var h3 = _create_lumber_hut()
 	if h1 == null or h2 == null or h3 == null or game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Initial wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 
 	# Destroy only h2
 	h2.take_damage(10.0)
@@ -414,7 +418,7 @@ func test_mixed_living_and_dead_lumber_huts() -> void:
 	event_bus_node.wave_ended.emit(1)
 
 	# h1 and h3 produce (+4 wood), h2 produces nothing
-	assert_eq(_get_wood(), 14, "2 living LumberHuts must produce +4 wood while 1 destroyed produces 0 (10 -> 14)")
+	assert_eq(_get_wood(), SEED_WOOD + 2 * _hut_yield(), "2 living LumberHuts pay out, the destroyed one does not")
 
 func test_ap_spent_during_plan_restored_upon_returning_to_plan() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -474,14 +478,14 @@ func test_zero_lumber_huts_produce_zero_wood() -> void:
 	assert_not_null(event_bus_node, "EventBus must exist")
 	if game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Starting wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 
 	# Transition to PRODUCE with 0 LumberHuts
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(1)
 
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE phase")
-	assert_eq(_get_wood(), 10, "Wood remains exactly 10 when 0 LumberHuts exist")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood is unchanged when no LumberHuts exist")
 
 func test_production_config_driven_values() -> void:
 	var hut = _create_lumber_hut()
@@ -515,7 +519,7 @@ func test_full_three_turn_complete_loop() -> void:
 
 	event_bus_node.wave_ended.emit(1)
 	assert_eq(int(game_state_node.current_phase), 2, "Turn 1: PRODUCE")
-	assert_eq(_get_wood(), 12, "Turn 1: Wood increased to 12")
+	assert_eq(_get_wood(), SEED_WOOD + 1 * _hut_yield(), "Turn 1: wood grew by one hut payout")
 
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), 0, "Turn 2: PLAN")
@@ -530,7 +534,7 @@ func test_full_three_turn_complete_loop() -> void:
 
 	event_bus_node.wave_ended.emit(2)
 	assert_eq(int(game_state_node.current_phase), 2, "Turn 2: PRODUCE")
-	assert_eq(_get_wood(), 14, "Turn 2: Wood increased to 14")
+	assert_eq(_get_wood(), SEED_WOOD + 2 * _hut_yield(), "Turn 2: wood grew by one hut payout")
 
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), 0, "Turn 3: PLAN")
@@ -542,7 +546,7 @@ func test_full_three_turn_complete_loop() -> void:
 
 	event_bus_node.wave_ended.emit(3)
 	assert_eq(int(game_state_node.current_phase), 2, "Turn 3: PRODUCE")
-	assert_eq(_get_wood(), 16, "Turn 3: Wood increased to 16")
+	assert_eq(_get_wood(), SEED_WOOD + 3 * _hut_yield(), "Turn 3: wood grew by one hut payout")
 
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), 0, "Turn 4: PLAN")
@@ -553,14 +557,14 @@ func test_multi_turn_resource_compounding() -> void:
 	var h2 = _create_lumber_hut()
 	if h1 == null or h2 == null or game_state_node == null or event_bus_node == null: return
 
-	assert_eq(_get_wood(), 10, "Starting wood is 10")
+	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 
-	# 4 consecutive production cycles: 2 huts * 2 wood = +4 wood per cycle
+	# 4 consecutive production cycles, each paying out both huts.
 	for cycle in range(1, 5):
 		game_state_node.trigger_end_action()
 		event_bus_node.wave_ended.emit(cycle)
-		var expected_wood = 10 + cycle * 4
-		assert_eq(_get_wood(), expected_wood, "Cycle %d: Wood should compound to %d" % [cycle, expected_wood])
+		var expected_wood = SEED_WOOD + cycle * 2 * _hut_yield()
+		assert_eq(_get_wood(), expected_wood, "Cycle %d: wood compounds by two hut payouts" % cycle)
 		game_state_node.advance_phase()
 
 func test_wave_3_big_wave_stat_buff_on_wave_ended() -> void:
@@ -597,14 +601,14 @@ func test_integrated_build_system_turn_loop() -> void:
 	if grid_mgr == null or build_sys == null or game_state_node == null or event_bus_node == null: return
 
 	# 1. PLAN Phase: Place LumberHut at cell (1, 1)
-	# Costs 1 AP and 3 Wood
+	var wood_before: int = _get_wood()
 	var target_cell = Vector2i(1, 1)
 	var hut = build_sys.place_building("lumber_hut", target_cell)
 	if hut is Node: _cleanup_nodes.append(hut)
 
 	assert_not_null(hut, "LumberHut successfully placed via BuildSystem")
 	assert_eq(_get_ap(), 2, "AP deducted (3 -> 2)")
-	assert_eq(_get_wood(), 7, "Wood deducted (10 -> 7)")
+	assert_eq(_get_wood(), wood_before - cost_of("lumber_hut"), "Wood deducted by the hut cost")
 	assert_true(grid_mgr.is_cell_occupied(target_cell), "Grid cell (1,1) is occupied")
 
 	# 2. Trigger End Action -> ATTACK
@@ -614,7 +618,8 @@ func test_integrated_build_system_turn_loop() -> void:
 	# 3. Wave Ends -> PRODUCE
 	event_bus_node.wave_ended.emit(1)
 	assert_eq(int(game_state_node.current_phase), 2, "Entered PRODUCE phase")
-	assert_eq(_get_wood(), 9, "LumberHut produced +2 wood (7 -> 9)")
+	var hut_yield: int = int(Engine.get_main_loop().root.get_node("Config").BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
+	assert_eq(_get_wood(), wood_before - cost_of("lumber_hut") + hut_yield, "LumberHut paid out its produce_phase yield")
 
 	# 4. End Produce -> Return to PLAN
 	game_state_node.advance_phase()
@@ -665,4 +670,11 @@ func test_resources_changed_payload_integrity() -> void:
 		var payload = res_watcher.last_args[0]
 		assert_true(payload is Dictionary, "resources_changed argument must be a Dictionary")
 		assert_has(payload, "wood", "Payload dictionary must contain 'wood'")
-		assert_eq(int(payload.get("wood", 0)), 12, "Payload 'wood' must equal updated amount (12)")
+		assert_eq(int(payload.get("wood", 0)), SEED_WOOD + _hut_yield(), "Payload 'wood' must equal the updated amount")
+
+## Wood a single LumberHut pays out on the legacy produce_phase, from Config.
+func _hut_yield() -> int:
+	var cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	if cfg == null:
+		return 0
+	return int(cfg.BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))

@@ -21,6 +21,8 @@ signal pause_clicked()
 var root_control: Control = null
 var ap_label: Label = null
 var wood_label: Label = null
+var stone_label: Label = null
+var water_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var hero_hp_label: Label = null
@@ -28,9 +30,6 @@ var deploy_timer_label: Label = null
 var phase_label: Label = null
 var version_label: Label = null
 
-var build_tower_btn: Button = null
-var build_wall_btn: Button = null
-var build_lumber_btn: Button = null
 var end_action_btn: Button = null
 var pause_btn: Button = null
 var speed_btn: Button = null
@@ -55,7 +54,8 @@ var selected_build_type: String = ""
 
 func _ready() -> void:
 	_ensure_ui_components()
-	_update_building_button_labels()
+	_apply_ui_scale()
+	_hide_legacy_phase_controls()
 	_connect_event_bus()
 	_connect_buttons()
 	reset_hud()
@@ -128,7 +128,7 @@ func _on_locale_changed(_new_locale: String) -> void:
 
 func _on_ap_changed(cur: int, max_val: int) -> void:
 	if ap_label:
-		ap_label.text = "AP: %d / %d" % [cur, max_val]
+		ap_label.text = tr("HUD_AP") % [cur, max_val]
 		ap_label.visible = false
 	var vsep1 = find_child("VSeparator1", true, false)
 	if vsep1:
@@ -148,8 +148,11 @@ func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 
 func _on_resources_changed(res: Dictionary) -> void:
 	if wood_label:
-		var wood = res.get("wood", 0)
-		wood_label.text = tr("HUD_WOOD") % wood
+		wood_label.text = tr("HUD_WOOD") % int(res.get("wood", 0))
+	if stone_label:
+		stone_label.text = tr("HUD_STONE") % int(res.get("stone", 0))
+	if water_label:
+		water_label.text = tr("HUD_WATER") % int(res.get("water", 0))
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
@@ -193,7 +196,7 @@ func _on_phase_changed(phase_idx: int) -> void:
 	var phase_names = ["PLAN", "ATTACK", "PRODUCE"]
 	var p_str = phase_names[phase_idx] if (phase_idx >= 0 and phase_idx < phase_names.size()) else "UNKNOWN"
 	if phase_label:
-		phase_label.text = "Phase: %s" % p_str
+		phase_label.text = tr("HUD_PHASE") % p_str
 
 	var gs = _get_game_state()
 	var is_game_over = gs and "is_game_over" in gs and gs.is_game_over
@@ -232,12 +235,6 @@ func _show_game_over(title: String, details: String) -> void:
 # ==============================================================================
 
 func _connect_buttons() -> void:
-	if build_tower_btn and not build_tower_btn.pressed.is_connected(_on_tower_btn_pressed):
-		build_tower_btn.pressed.connect(_on_tower_btn_pressed)
-	if build_wall_btn and not build_wall_btn.pressed.is_connected(_on_wall_btn_pressed):
-		build_wall_btn.pressed.connect(_on_wall_btn_pressed)
-	if build_lumber_btn and not build_lumber_btn.pressed.is_connected(_on_lumber_btn_pressed):
-		build_lumber_btn.pressed.connect(_on_lumber_btn_pressed)
 	if end_action_btn and not end_action_btn.pressed.is_connected(_on_end_action_pressed):
 		end_action_btn.pressed.connect(_on_end_action_pressed)
 	if restart_btn and not restart_btn.pressed.is_connected(_on_restart_pressed):
@@ -253,27 +250,6 @@ func _on_pause_pressed() -> void:
 
 func _on_speed_button_pressed() -> void:
 	_on_speed_btn_pressed()
-
-func _on_tower_btn_pressed() -> void:
-	if selected_build_type == "tower":
-		deselect_build()
-	else:
-		_check_ap_hint()
-		select_build_type("tower")
-
-func _on_wall_btn_pressed() -> void:
-	if selected_build_type == "wall":
-		deselect_build()
-	else:
-		_check_ap_hint()
-		select_build_type("wall")
-
-func _on_lumber_btn_pressed() -> void:
-	if selected_build_type == "lumber_hut":
-		deselect_build()
-	else:
-		_check_ap_hint()
-		select_build_type("lumber_hut")
 
 func _check_ap_hint() -> void:
 	var gs = _get_game_state()
@@ -321,7 +297,6 @@ func reset_hud() -> void:
 	var gs = _get_game_state()
 	var cfg = _get_config()
 
-	_update_building_button_labels()
 
 	var default_ap: int = cfg.BASE_AP if (cfg and "BASE_AP" in cfg) else 3
 	var cur_ap: int = gs.current_ap if (gs and "current_ap" in gs) else default_ap
@@ -357,31 +332,11 @@ func reset_hud() -> void:
 
 	_on_hero_hp_changed(10.0, 10.0)
 
+	if end_action_btn:
+		end_action_btn.text = tr("HUD_END_DEPLOY_BTN")
+
 	if restart_btn:
 		restart_btn.text = tr("BTN_RESTART")
-
-func _update_building_button_labels() -> void:
-	var cfg = _get_config()
-	if cfg == null or not ("BUILDINGS" in cfg) or not (cfg.BUILDINGS is Dictionary):
-		return
-
-	if build_wall_btn and cfg.BUILDINGS.has("wall"):
-		var wall_data: Dictionary = cfg.BUILDINGS["wall"]
-		var wall_name: String = tr(wall_data.get("name", "BUILDING_WALL_NAME"))
-		var wall_cost: int = int(wall_data.get("cost", {}).get("wood", 2))
-		build_wall_btn.text = tr("BUILD_COST_FORMAT") % [wall_name, wall_cost]
-
-	if build_lumber_btn and cfg.BUILDINGS.has("lumber_hut"):
-		var lumber_data: Dictionary = cfg.BUILDINGS["lumber_hut"]
-		var lumber_name: String = tr(lumber_data.get("name", "BUILDING_LUMBER_HUT_NAME"))
-		var lumber_cost: int = int(lumber_data.get("cost", {}).get("wood", 3))
-		build_lumber_btn.text = tr("BUILD_COST_FORMAT") % [lumber_name, lumber_cost]
-
-	if build_tower_btn and cfg.BUILDINGS.has("tower"):
-		var tower_data: Dictionary = cfg.BUILDINGS["tower"]
-		var tower_name: String = tr(tower_data.get("name", "BUILDING_TOWER_NAME"))
-		var tower_cost: int = int(tower_data.get("cost", {}).get("wood", 4))
-		build_tower_btn.text = tr("BUILD_COST_FORMAT") % [tower_name, tower_cost]
 
 func show_hint(msg: String, duration: float = 2.5) -> void:
 	if hint_label == null:
@@ -402,9 +357,6 @@ func get_hint_text() -> String:
 	return hint_label.text if (hint_label and hint_label.visible) else ""
 
 func _set_action_buttons_enabled(enabled: bool) -> void:
-	if build_tower_btn: build_tower_btn.disabled = not enabled
-	if build_wall_btn: build_wall_btn.disabled = not enabled
-	if build_lumber_btn: build_lumber_btn.disabled = not enabled
 	if end_action_btn: end_action_btn.disabled = not enabled
 
 # Testing Query API
@@ -462,6 +414,8 @@ func _ensure_ui_components() -> void:
 	# Search existing scene tree first
 	ap_label = find_child("APLabel", true, false) as Label
 	wood_label = find_child("WoodLabel", true, false) as Label
+	stone_label = find_child("StoneLabel", true, false) as Label
+	water_label = find_child("WaterLabel", true, false) as Label
 	wave_label = find_child("WaveLabel", true, false) as Label
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
@@ -470,9 +424,6 @@ func _ensure_ui_components() -> void:
 	deploy_timer_label = find_child("DeployTimerLabel", true, false) as Label
 	hero_hp_label = find_child("HeroHPLabel", true, false) as Label
 
-	build_tower_btn = find_child("BuildTowerBtn", true, false) as Button
-	build_wall_btn = find_child("BuildWallBtn", true, false) as Button
-	build_lumber_btn = find_child("BuildLumberHutBtn", true, false) as Button
 	end_action_btn = find_child("EndActionBtn", true, false) as Button
 	pause_btn = find_child("PauseBtn", true, false) as Button
 
@@ -509,6 +460,16 @@ func _ensure_ui_components() -> void:
 		wood_label.name = "WoodLabel"
 		root_control.add_child(wood_label)
 
+	if stone_label == null:
+		stone_label = Label.new()
+		stone_label.name = "StoneLabel"
+		root_control.add_child(stone_label)
+
+	if water_label == null:
+		water_label = Label.new()
+		water_label.name = "WaterLabel"
+		root_control.add_child(water_label)
+
 	if wave_label == null:
 		wave_label = Label.new()
 		wave_label.name = "WaveLabel"
@@ -544,44 +505,33 @@ func _ensure_ui_components() -> void:
 		hint_label.position = Vector2(0, 70)
 		root_control.add_child(hint_label)
 
-	if build_tower_btn == null:
-		build_tower_btn = Button.new()
-		build_tower_btn.name = "BuildTowerBtn"
-		root_control.add_child(build_tower_btn)
-
-	if build_wall_btn == null:
-		build_wall_btn = Button.new()
-		build_wall_btn.name = "BuildWallBtn"
-		root_control.add_child(build_wall_btn)
-
-	if build_lumber_btn == null:
-		build_lumber_btn = Button.new()
-		build_lumber_btn.name = "BuildLumberHutBtn"
-		root_control.add_child(build_lumber_btn)
-
 	if end_action_btn == null:
 		end_action_btn = Button.new()
 		end_action_btn.name = "EndActionBtn"
 		root_control.add_child(end_action_btn)
-	end_action_btn.text = "提前结束部署"
+	end_action_btn.text = tr("HUD_END_DEPLOY_BTN")
 
 	if deploy_timer_label == null:
 		deploy_timer_label = Label.new()
 		deploy_timer_label.name = "DeployTimerLabel"
-		deploy_timer_label.text = "部署: 90.0s"
 		root_control.add_child(deploy_timer_label)
+	var init_dep: float = 90.0
+	var cfg = _get_config()
+	if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
+		init_dep = float(cfg.MAP.get("deploy_length", 90.0))
+	deploy_timer_label.text = tr("HUD_DEPLOY_TIMER") % init_dep
 
 	if hero_hp_label == null:
 		hero_hp_label = Label.new()
 		hero_hp_label.name = "HeroHPLabel"
-		hero_hp_label.text = "Hero HP: 10 / 10"
 		root_control.add_child(hero_hp_label)
+	hero_hp_label.text = tr("HUD_HERO_HP") % [10, 10]
 
 	if pause_btn == null:
 		pause_btn = Button.new()
 		pause_btn.name = "PauseBtn"
-		pause_btn.text = "暂停 (Space)"
 		root_control.add_child(pause_btn)
+	pause_btn.text = tr("HUD_PAUSE_BTN")
 
 	if game_over_panel == null:
 		game_over_panel = PanelContainer.new()
@@ -644,7 +594,6 @@ func _ensure_ui_components() -> void:
 	if vsep1:
 		vsep1.visible = false
 
-	_update_building_button_labels()
 
 # ==============================================================================
 # Resolvers
@@ -670,3 +619,41 @@ func _get_game_state() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("GameState")
 	return null
+
+# ==============================================================================
+# Presentation: Config-driven font sizing & legacy control retirement
+# ==============================================================================
+
+## Applies Config.UI font sizes to every HUD control, overriding whatever the
+## scene happens to specify. Keeps sizing in one place instead of per-node .tscn
+## overrides, and keeps the scene and the headless fallback identical.
+func _apply_ui_scale() -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("UI" in cfg):
+		return
+	var label_size: int = int(cfg.UI.get("hud_font_size", 26))
+	var button_size: int = int(cfg.UI.get("hud_button_font_size", 24))
+	var title_size: int = int(cfg.UI.get("gameover_title_font_size", 48))
+
+	for lbl in [ap_label, wood_label, stone_label, water_label, wave_label, core_hp_label, hero_hp_label,
+			deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
+		if lbl and is_instance_valid(lbl):
+			lbl.add_theme_font_size_override("font_size", label_size)
+
+	for btn in [end_action_btn, pause_btn, speed_btn, restart_btn]:
+		if btn and is_instance_valid(btn):
+			btn.add_theme_font_size_override("font_size", button_size)
+
+	if result_label and is_instance_valid(result_label):
+		result_label.add_theme_font_size_override("font_size", title_size)
+	if details_label and is_instance_valid(details_label):
+		details_label.add_theme_font_size_override("font_size", label_size)
+
+## v0.2 removed the deploy/attack/produce phases, so the phase-era top-bar controls
+## (AP, deploy countdown, phase name, "end deployment") no longer describe anything
+## the player can act on. They stay instantiated for API compatibility until the
+## phase machine itself is deleted from GameState, but are hidden from the player.
+func _hide_legacy_phase_controls() -> void:
+	for ctrl in [ap_label, deploy_timer_label, phase_label, end_action_btn]:
+		if ctrl and is_instance_valid(ctrl):
+			ctrl.visible = false

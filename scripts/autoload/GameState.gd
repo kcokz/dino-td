@@ -18,6 +18,12 @@ enum Phase {
 # 2. Canonical State Variables
 # ==============================================================================
 var current_phase: Phase = Phase.DEPLOY
+
+## v0.2 runs as one continuous real-time state: there is no deploy countdown and no
+## attack/produce phase to switch into, so the phase stays pinned at DEPLOY and every
+## legacy `current_phase` guard becomes a no-op. The legacy turn machine is kept intact
+## behind this flag so the v0.0/v0.1 suites can still drive it explicitly.
+var continuous_mode: bool = false
 var current_ap: int = 3
 var max_ap: int = 3
 var resources: Dictionary = {}
@@ -58,7 +64,7 @@ var dino_multipliers: Dictionary:
 # 4. Engine Lifecycle
 # ==============================================================================
 func _init() -> void:
-	resources = {"wood": 10, "stone": 0, "food": 0}
+	resources = _default_resources()
 	dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
 	current_ap = 3
 	max_ap = 3
@@ -78,6 +84,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if is_game_over:
+		return
+	if continuous_mode:
 		return
 	if current_phase == Phase.DEPLOY:
 		if not is_paused:
@@ -160,16 +168,20 @@ func reset_game() -> void:
 	is_game_over = false
 	is_game_won = false
 	infinite_ap = false
+	# GameState is an autoload, so this flag would otherwise leak from any test that
+	# instantiates Main into every test that runs after it. Main re-enables it in
+	# setup_level(), which runs after reset_game() on the restart path.
+	continuous_mode = false
 	current_phase = Phase.PLAN
 	var cfg = _get_config()
 	if cfg:
 		max_ap = cfg.get("BASE_AP") if "BASE_AP" in cfg else 3
-		resources = cfg.get("INITIAL_RESOURCES").duplicate(true) if "INITIAL_RESOURCES" in cfg else {"wood": 10, "stone": 0, "food": 0}
+		resources = cfg.get("INITIAL_RESOURCES").duplicate(true) if "INITIAL_RESOURCES" in cfg else _default_resources()
 		dino_stat_multipliers = cfg.get("INITIAL_DINO_MULTIPLIERS").duplicate(true) if "INITIAL_DINO_MULTIPLIERS" in cfg else {"hp": 1.0, "damage": 1.0, "speed": 1.0}
 		nests_alive = cfg.get("INITIAL_NESTS_ALIVE") if "INITIAL_NESTS_ALIVE" in cfg else 1
 	else:
 		max_ap = 3
-		resources = {"wood": 10, "stone": 0, "food": 0}
+		resources = _default_resources()
 		dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
 		nests_alive = 1
 	current_ap = max_ap
@@ -360,7 +372,7 @@ func toggle_pause() -> bool:
 	var allow: bool = true
 	if cfg and "TIME" in cfg and cfg.TIME is Dictionary:
 		allow = bool(cfg.TIME.get("allow_pause", true))
-	if not allow or is_game_over or current_phase != Phase.DEPLOY:
+	if not allow or is_game_over or (not continuous_mode and current_phase != Phase.DEPLOY):
 		return is_paused
 	is_paused = !is_paused
 	var eb = _get_event_bus()
@@ -374,7 +386,7 @@ func set_paused(p: bool) -> bool:
 	var allow: bool = true
 	if cfg and "TIME" in cfg and cfg.TIME is Dictionary:
 		allow = bool(cfg.TIME.get("allow_pause", true))
-	if not allow or is_game_over or current_phase != Phase.DEPLOY:
+	if not allow or is_game_over or (not continuous_mode and current_phase != Phase.DEPLOY):
 		return is_paused
 	if is_paused != p:
 		is_paused = p
@@ -476,3 +488,18 @@ func _on_game_lost() -> void:
 func _on_hero_died() -> void:
 	if not is_game_over:
 		_emit_game_lost()
+
+## Zeroed resource wallet covering every id in Config.RESOURCES.
+## Used only when Config is unavailable: a wallet that is missing a key would make
+## add_resources() silently discard gains of that resource.
+func _default_resources() -> Dictionary:
+	var out: Dictionary = {}
+	var cfg = _get_config()
+	if cfg and "RESOURCES" in cfg:
+		for res_id in cfg.RESOURCES:
+			out[res_id] = 0
+		if cfg and "INITIAL_RESOURCES" in cfg:
+			for res_id in cfg.INITIAL_RESOURCES:
+				out[res_id] = cfg.INITIAL_RESOURCES[res_id]
+		return out
+	return {"wood": 10, "stone": 0, "water": 0, "food": 0}

@@ -36,8 +36,7 @@ offset_right = 300.0
 offset_bottom = 105.0
 grow_horizontal = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.25, 1)
-theme_override_font_sizes/font_size = 18
-text = "提示信息"
+text = "Hint"
 horizontal_alignment = 1
 
 [node name="MarginContainer" type="MarginContainer" parent="Root/TopBar"]
@@ -61,16 +60,26 @@ visible = false
 layout_mode = 2
 
 [node name="DeployTimerLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
-text = "部署: 90.0s"
+text = "Deploy: 90.0s"
 
 [node name="VSeparatorDeploy" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 
 [node name="WoodLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 text = "Wood: 10"
+
+[node name="StoneLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Stone: 0"
+
+[node name="WaterLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Water: 0"
 
 [node name="VSeparator2" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
@@ -95,9 +104,11 @@ theme_override_colors/font_color = Color(0.2, 0.9, 0.9, 1)
 text = "Hero HP: 10 / 10"
 
 [node name="VSeparatorHero" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 
 [node name="PhaseLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 text = "Phase: DEPLOY"
 
@@ -105,58 +116,23 @@ text = "Phase: DEPLOY"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="EndActionBtn" type="Button" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
+layout_mode = 2
+text = "End Deployment"
+
+[node name="SpeedBtn" type="Button" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Speed: 1x"
+
 [node name="PauseBtn" type="Button" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
-text = "暂停 (Space)"
+text = "Pause (Space)"
 
 [node name="VersionLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 0.8)
-text = "v0.1"
-
-[node name="BottomBar" type="PanelContainer" parent="Root"]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = -65.0
-offset_right = -20.0
-offset_bottom = -15.0
-grow_horizontal = 2
-grow_vertical = 0
-
-[node name="MarginContainer" type="MarginContainer" parent="Root/BottomBar"]
-layout_mode = 2
-theme_override_constants/margin_left = 15
-theme_override_constants/margin_top = 5
-theme_override_constants/margin_right = 15
-theme_override_constants/margin_bottom = 5
-
-[node name="HBoxContainer" type="HBoxContainer" parent="Root/BottomBar/MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 15
-
-[node name="BuildWallBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
-layout_mode = 2
-text = "木墙 (2木)"
-
-[node name="BuildLumberHutBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
-layout_mode = 2
-text = "伐木屋 (3木)"
-
-[node name="BuildTowerBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
-layout_mode = 2
-text = "自动哨位 (4木)"
-
-[node name="Spacer" type="Control" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="EndActionBtn" type="Button" parent="Root/BottomBar/MarginContainer/HBoxContainer"]
-layout_mode = 2
-text = "提前结束部署"
+text = "v0.2"
 
 [node name="GameOverPanel" type="CenterContainer" parent="Root"]
 visible = false
@@ -185,13 +161,12 @@ alignment = 1
 
 [node name="ResultTitle" type="Label" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
 text = "VICTORY!"
 horizontal_alignment = 1
 
 [node name="ResultSubtitle" type="Label" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "恐龙巢穴已被消灭！"
+text = "The dinosaur nest has been destroyed!"
 horizontal_alignment = 1
 
 [node name="HSeparator" type="HSeparator" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
@@ -199,11 +174,10 @@ layout_mode = 2
 
 [node name="RestartButton" type="Button" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "重新开始"
+text = "Restart"
 
 [node name="VersionBadge" type="Label" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 0.8)
-theme_override_font_sizes/font_size = 12
-text = "Defend Dinosaur v0.1"
+text = "Defend Dinosaur v0.2"
 horizontal_alignment = 1

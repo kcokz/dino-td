@@ -16,6 +16,7 @@ var is_depleted: bool = false
 var mesh_instance: MeshInstance3D = null
 var collision_shape: CollisionShape3D = null
 var label_3d: Label3D = null
+var is_highlighted: bool = false
 
 func _init(p_type: String = "wood", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	resource_type = p_type
@@ -117,10 +118,9 @@ func _ensure_components() -> void:
 		label_3d = Label3D.new()
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label_3d.font_size = 20
-		label_3d.outline_size = 4
 		label_3d.outline_modulate = Color(0, 0, 0, 0.9)
-		label_3d.position = Vector3(0.0, 1.4, 0.0)
+		label_3d.position = Vector3(0.0, 1.7, 0.0)
+		_apply_label_sizing(label_3d)
 		add_child(label_3d)
 
 func _update_visuals() -> void:
@@ -134,6 +134,12 @@ func _update_visuals() -> void:
 		col = data.get("depleted_color", Color(0.3, 0.3, 0.3)) if is_depleted else data.get("color", Color(0.5, 0.5, 0.5))
 	
 	mat.albedo_color = col
+	if is_highlighted:
+		# Covered by a selected building's or build preview's range: make it glow
+		# so the player can see exactly which nodes that placement would work.
+		mat.emission_enabled = true
+		mat.emission = col.lightened(0.5)
+		mat.emission_energy_multiplier = 1.6
 	mesh_instance.material_override = mat
 
 	if is_depleted:
@@ -181,3 +187,25 @@ func _get_event_bus() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("EventBus")
 	return null
+
+## Applies Config.UI sizing so world-space text stays readable at any zoom.
+func _apply_label_sizing(lbl: Label3D) -> void:
+	var fs: int = 64
+	var px: float = 0.0045
+	var fixed: bool = true
+	var cfg = _get_config()
+	if cfg and "UI" in cfg:
+		fs = int(cfg.UI.get("world_label_font_size", fs))
+		px = float(cfg.UI.get("world_label_pixel_size", px))
+		fixed = bool(cfg.UI.get("world_label_fixed_size", fixed))
+	lbl.font_size = fs
+	lbl.pixel_size = px
+	lbl.fixed_size = fixed
+	lbl.outline_size = maxi(1, int(round(fs / 6.0)))
+
+## Highlights this node while something's coverage ring includes it.
+func set_highlighted(on: bool) -> void:
+	if is_highlighted == on:
+		return
+	is_highlighted = on
+	_update_visuals()

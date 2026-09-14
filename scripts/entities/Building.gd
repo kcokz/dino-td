@@ -16,6 +16,7 @@ extends StaticBody3D
 
 var is_destroyed: bool = false
 var label_3d: Label3D = null
+var range_indicator: MeshInstance3D = null
 
 func _init(p_type: String = "") -> void:
 	if p_type != "":
@@ -27,9 +28,12 @@ func _ready() -> void:
 	_ensure_physics_and_visuals()
 	_update_construction_state()
 	_connect_event_bus()
+	_create_range_indicator()
+	_connect_selection_events()
 	_update_info_label()
 
 func _exit_tree() -> void:
+	_disconnect_selection_events()
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb) and eb.has_signal("locale_changed"):
 		if eb.locale_changed.is_connected(_on_locale_changed):
@@ -221,6 +225,14 @@ func _update_info_label() -> void:
 			label_3d.text = b_name
 
 func get_display_info() -> Dictionary:
+	var status_str = ""
+	if not is_constructed:
+		var raw = tr("STATUS_CONSTRUCTING")
+		status_str = (raw % int(build_progress * 100.0)) if ("%" in raw) else raw
+	else:
+		var raw = tr("STATUS_HP")
+		status_str = (raw % [int(ceil(current_hp)), int(ceil(max_hp))]) if ("%" in raw) else raw
+
 	return {
 		"title": get_localized_name(),
 		"type": "building",
@@ -229,7 +241,7 @@ func get_display_info() -> Dictionary:
 		"max_hp": max_hp,
 		"is_constructed": is_constructed,
 		"build_progress": build_progress,
-		"status": TranslationServer.translate("STATUS_CONSTRUCTING") % int(build_progress * 100.0) if not is_constructed else (TranslationServer.translate("STATUS_HP") % [int(ceil(current_hp)), int(ceil(max_hp))])
+		"status": status_str
 	}
 
 # ==============================================================================
@@ -280,10 +292,9 @@ func _ensure_physics_and_visuals() -> void:
 		label_3d = Label3D.new()
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label_3d.font_size = 20
-		label_3d.outline_size = 4
 		label_3d.outline_modulate = Color(0, 0, 0, 0.9)
-		label_3d.position = Vector3(0.0, 1.6, 0.0)
+		label_3d.position = Vector3(0.0, 1.8, 0.0)
+		_apply_label_sizing(label_3d)
 		add_child(label_3d)
 
 func _get_placeholder_color() -> Color:
@@ -321,3 +332,100 @@ func _get_game_state() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("GameState")
 	return null
+
+## Applies Config.UI sizing so world-space text stays readable at any zoom.
+func _apply_label_sizing(lbl: Label3D) -> void:
+	var fs: int = 64
+	var px: float = 0.0045
+	var fixed: bool = true
+	var cfg = _get_config()
+	if cfg and "UI" in cfg:
+		fs = int(cfg.UI.get("world_label_font_size", fs))
+		px = float(cfg.UI.get("world_label_pixel_size", px))
+		fixed = bool(cfg.UI.get("world_label_fixed_size", fixed))
+	lbl.font_size = fs
+	lbl.pixel_size = px
+	lbl.fixed_size = fixed
+	lbl.outline_size = maxi(1, int(round(fs / 6.0)))
+
+
+# ==============================================================================
+# Coverage ring (shown while this building is selected)
+# ==============================================================================
+
+## Radius of this building's area of effect, in metres. 0 means "no ring".
+## Towers override with their attack range; producers with their harvest range.
+func _get_display_range() -> float:
+	return 0.0
+
+func _get_range_indicator_color() -> Color:
+	var c := _get_placeholder_color()
+	return Color(c.r, c.g, c.b, 0.16)
+
+func _create_range_indicator() -> void:
+	var r := _get_display_range()
+	if r <= 0.0:
+		return
+	if range_indicator == null:
+		range_indicator = find_child("RangeIndicator", true, false) as MeshInstance3D
+	if range_indicator != null:
+		return
+	range_indicator = MeshInstance3D.new()
+	range_indicator.name = "RangeIndicator"
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = r
+	cyl.bottom_radius = r
+	cyl.height = 0.05
+	range_indicator.mesh = cyl
+	range_indicator.position = Vector3(0.0, 0.05, 0.0)
+
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = _get_range_indicator_color()
+	range_indicator.material_override = mat
+	range_indicator.visible = false
+	add_child(range_indicator)
+
+func set_range_visible(p_visible: bool) -> void:
+	if range_indicator and is_instance_valid(range_indicator):
+		range_indicator.visible = p_visible
+	_highlight_covered_nodes(p_visible)
+
+## Lights up the resource nodes this building's ring actually covers, so the player
+## can see at a glance what a producer is working with.
+func _highlight_covered_nodes(on: bool) -> void:
+	var r := _get_display_range()
+	if r <= 0.0 or not is_inside_tree():
+		return
+	for n in get_tree().get_nodes_in_group("resource_nodes"):
+		if not is_instance_valid(n) or not n.has_method("set_highlighted"):
+			continue
+		if on and global_position.distance_to(n.global_position) <= r:
+			n.set_highlighted(true)
+		elif not on:
+			n.set_highlighted(false)
+
+func _connect_selection_events() -> void:
+	var eb = _get_event_bus()
+	if eb == null:
+		return
+	if eb.has_signal("unit_selected") and not eb.unit_selected.is_connected(_on_unit_selected):
+		eb.unit_selected.connect(_on_unit_selected)
+	if eb.has_signal("unit_deselected") and not eb.unit_deselected.is_connected(_on_unit_deselected):
+		eb.unit_deselected.connect(_on_unit_deselected)
+
+func _disconnect_selection_events() -> void:
+	var eb = _get_event_bus()
+	if eb == null or not is_instance_valid(eb):
+		return
+	if eb.has_signal("unit_selected") and eb.unit_selected.is_connected(_on_unit_selected):
+		eb.unit_selected.disconnect(_on_unit_selected)
+	if eb.has_signal("unit_deselected") and eb.unit_deselected.is_connected(_on_unit_deselected):
+		eb.unit_deselected.disconnect(_on_unit_deselected)
+
+func _on_unit_selected(unit: Node) -> void:
+	set_range_visible(unit == self)
+
+func _on_unit_deselected() -> void:
+	set_range_visible(false)

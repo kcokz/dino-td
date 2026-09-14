@@ -10,6 +10,8 @@ const SCRIPT_PATHS: Dictionary = {
 	"wall": "res://scripts/entities/Wall.gd",
 	"lumber_hut": "res://scripts/entities/LumberHut.gd",
 	"tower": "res://scripts/entities/Tower.gd",
+	"quarry": "res://scripts/entities/ProducerBuilding.gd",
+	"hunting_hut": "res://scripts/entities/ProducerBuilding.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 
@@ -50,15 +52,17 @@ func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = fa
 	
 	var b_data: Dictionary = cfg.BUILDINGS[type_id]
 	
-	# Verify GridManager occupancy
+	# Verify GridManager occupancy & Resource Node overlap
 	if grid_manager == null:
 		_auto_resolve_dependencies()
 	if grid_manager == null or not grid_manager.has_method("is_cell_occupied"):
 		return false
 	if grid_manager.is_cell_occupied(cell):
 		return false
+	if grid_manager.has_method("is_resource_at_cell") and grid_manager.is_resource_at_cell(cell):
+		return false
 	
-	# Verify Natural Resource Node overlap (v0.2)
+	# Verify Natural Resource Node overlap via Main fallback (v0.2)
 	if is_inside_tree():
 		var main_node = get_tree().root.find_child("Main", true, false)
 		if main_node and main_node.has_method("is_resource_at_cell") and main_node.is_resource_at_cell(cell):

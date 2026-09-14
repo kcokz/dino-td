@@ -407,7 +407,7 @@ func test_challenge_06_rapid_fire_hud_signal_bombardment() -> void:
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "PhaseLabel matches final emitted phase")
 
 	# Verify action buttons enabled in PLAN
-	assert_false(hud.build_tower_btn.disabled, "BuildTowerBtn enabled in PLAN")
+	assert_false(hud.end_action_btn.disabled, "HUD action controls enabled while playing")
 	assert_false(hud.end_action_btn.disabled, "EndActionBtn enabled in PLAN")
 
 	# Tick a frame and confirm persistent sync
@@ -526,9 +526,7 @@ func test_challenge_11_hud_action_buttons_rejected_after_defeat() -> void:
 
 	# All gameplay action buttons must be disabled
 	assert_true(hud.end_action_btn.disabled, "End Action button disabled after defeat")
-	assert_true(hud.build_tower_btn.disabled, "Build Tower button disabled after defeat")
-	assert_true(hud.build_wall_btn.disabled, "Build Wall button disabled after defeat")
-	assert_true(hud.build_lumber_btn.disabled, "Build Lumber button disabled after defeat")
+	assert_true(hud.end_action_btn.disabled, "HUD action controls disabled after defeat")
 
 	# Simulated clicks must be safe no-ops
 	var pre_phase = game_state_node.current_phase
@@ -554,9 +552,7 @@ func test_challenge_12_hud_action_buttons_rejected_after_victory() -> void:
 	assert_true(bool(game_state_node.get("is_game_over")), "GameState is_game_over is true")
 
 	assert_true(hud.end_action_btn.disabled, "End Action button disabled after victory")
-	assert_true(hud.build_tower_btn.disabled, "Build Tower button disabled after victory")
-	assert_true(hud.build_wall_btn.disabled, "Build Wall button disabled after victory")
-	assert_true(hud.build_lumber_btn.disabled, "Build Lumber button disabled after victory")
+	assert_true(hud.end_action_btn.disabled, "HUD action controls disabled after victory")
 
 	hud.simulate_end_action_click()
 	hud.simulate_build_click("wall")

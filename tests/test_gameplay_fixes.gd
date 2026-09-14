@@ -196,9 +196,26 @@ func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
 
 	var hud = main_inst.find_child("HUD", true, false)
 	assert_not_null(hud, "HUD must exist in Main")
-	assert_true(hud.build_wall_btn.text.contains("木") or hud.build_wall_btn.text.contains("Wood"), "BuildWallBtn should display resource cost")
-	assert_true(hud.build_lumber_btn.text.contains("木") or hud.build_lumber_btn.text.contains("Wood"), "BuildLumberHutBtn should display resource cost")
-	assert_true(hud.build_tower_btn.text.contains("木") or hud.build_tower_btn.text.contains("Wood"), "BuildTowerBtn should display resource cost")
+
+	# v0.2: building moved off the HUD top bar and onto the Hero's Option Panel,
+	# so the cost labels now live on that panel's level-2 build menu.
+	var panel = hud.find_child("OptionPanel", true, false)
+	assert_not_null(panel, "OptionPanel must exist in the HUD")
+	var hero = main_inst.find_child("Hero", true, false)
+	assert_not_null(hero, "Hero must exist in Main")
+	panel.select_target(hero)
+	panel._on_build_pressed()
+	assert_eq(panel.current_menu_level, 2, "Option Panel is in the build menu")
+
+	var labels: Array[String] = []
+	for btn in panel.button_container.get_children():
+		labels.append(str(btn.text))
+	assert_gt(labels.size(), 1, "Build menu lists buildable types plus Back")
+	var with_cost: int = 0
+	for l in labels:
+		if l.contains("木") or l.contains("Wood"):
+			with_cost += 1
+	assert_gte(with_cost, 3, "Build buttons display their resource cost (got %s)" % str(labels))
 
 func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
@@ -207,6 +224,9 @@ func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	tree.root.add_child(main_inst)
 
 	game_state_node.reset_game()
+	# This test is about AP exhaustion, so fund the walls from Config and let AP
+	# be the only thing that runs out.
+	game_state_node.resources["wood"] = cost_of("wall") * 4
 	assert_eq(game_state_node.current_ap, 3, "Starting AP must be 3")
 
 	# Select wall
@@ -366,10 +386,10 @@ func test_13_version_metadata_and_hud_display() -> void:
 	assert_not_null(app_info_script, "AppInfo script must exist in res://scripts/core/AppInfo.gd")
 
 	var ver: String = app_info_script.get_version()
-	assert_eq(ver, "v0.1", "Version must be v0.1")
+	assert_eq(ver, "v0.2", "Version must be v0.2")
 
 	var meta: Dictionary = app_info_script.get_metadata()
-	assert_eq(meta.get("version"), "v0.1", "Metadata version is v0.1")
+	assert_eq(meta.get("version"), "v0.2", "Metadata version is v0.2")
 	assert_eq(meta.get("app_name"), "Defend Dinosaur", "Metadata app_name is Defend Dinosaur")
 
 	# Test HUD scene displays version label
@@ -382,7 +402,7 @@ func test_13_version_metadata_and_hud_display() -> void:
 
 	var version_label = hud.find_child("VersionLabel", true, false) as Label
 	assert_not_null(version_label, "HUD must contain VersionLabel")
-	assert_eq(version_label.text, "v0.1", "HUD VersionLabel displays v0.1")
+	assert_eq(version_label.text, "v0.2", "HUD VersionLabel displays v0.2")
 
 	# Test HUD programmatic fallback as well
 	var hud_script = load("res://scripts/ui/HUD.gd")
@@ -390,6 +410,6 @@ func test_13_version_metadata_and_hud_display() -> void:
 	_cleanup_nodes.append(programmatic_hud)
 	tree.root.add_child(programmatic_hud)
 	await wait_frames(2)
-	assert_eq(programmatic_hud.get_version_text(), "v0.1", "Programmatic HUD must resolve version text v0.1")
+	assert_eq(programmatic_hud.get_version_text(), "v0.2", "Programmatic HUD must resolve version text v0.2")
 
 

@@ -155,7 +155,7 @@ func test_challenge_duplicate_placement_identical_type() -> void:
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "Initial wall placement must succeed")
 	assert_eq(_get_ap(), 2, "AP decremented to 2 after initial placement")
-	assert_eq(_get_wood(), 8, "Wood decremented to 8 after initial placement")
+	assert_eq(_get_wood(), 10 - cost_of("wall"), "Wood decremented by the wall cost")
 
 	var watcher = watch_signal(event_bus_node, "building_placed")
 	assert_false(build_sys.can_place_building("wall", cell), "can_place_building must return false for occupied cell")
@@ -164,7 +164,7 @@ func test_challenge_duplicate_placement_identical_type() -> void:
 	if b2 is Node: _cleanup_nodes.append(b2)
 	assert_null(b2, "Duplicate placement of same type must return null")
 	assert_eq(_get_ap(), 2, "AP must NOT be deducted on duplicate placement attempt")
-	assert_eq(_get_wood(), 8, "Wood must NOT be deducted on duplicate placement attempt")
+	assert_eq(_get_wood(), 10 - cost_of("wall"), "Wood must NOT be deducted again on duplicate placement")
 	assert_false(watcher.emitted, "building_placed signal must NOT be emitted for duplicate attempt")
 	assert_eq(grid_mgr.get_building_at(cell), b1, "Cell must retain original building instance")
 
@@ -259,7 +259,7 @@ func test_challenge_rapid_duplicate_placement_loop() -> void:
 	assert_eq(successful_count, 1, "Exactly 1 placement must succeed in rapid loop on same cell")
 	assert_eq(rejected_count, 49, "Exactly 49 duplicate attempts must be rejected")
 	assert_eq(_get_ap(), 2, "AP decremented exactly once (3 -> 2)")
-	assert_eq(_get_wood(), 8, "Wood decremented exactly once (10 -> 8)")
+	assert_eq(_get_wood(), 10 - cost_of("wall"), "Wood decremented exactly once")
 
 # ==============================================================================
 # Category 2: Phase Enforcement Challenges (ATTACK, PRODUCE, Invalid Phases)
@@ -528,6 +528,8 @@ func test_challenge_missing_resource_keys_handled_safely() -> void:
 # ==============================================================================
 
 func test_challenge_replacement_after_lethal_damage() -> void:
+	# Budget generously so this test exercises placement, not affordability.
+	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or event_bus_node == null: return
@@ -549,7 +551,7 @@ func test_challenge_replacement_after_lethal_damage() -> void:
 
 	# 3. Re-place a Tower on the same cell
 	game_state_node.current_ap = 3
-	game_state_node.resources["wood"] = 10
+	game_state_node.resources["wood"] = 9999 # ample under any balance
 
 	assert_true(build_sys.can_place_building("tower", cell), "can_place_building returns true on vacated cell")
 	var tower = build_sys.place_building("tower", cell)
@@ -561,6 +563,8 @@ func test_challenge_replacement_after_lethal_damage() -> void:
 	assert_ne(tower, wall, "New building is a distinct instance from destroyed wall")
 
 func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
+	# Budget generously so this test exercises placement, not affordability.
+	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return
@@ -572,7 +576,7 @@ func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 		var b_type = sequence[idx]
 		# Ensure sufficient AP and wood for each cycle
 		game_state_node.current_ap = 3
-		game_state_node.resources["wood"] = 10
+		game_state_node.resources["wood"] = 9999 # ample under any balance
 
 		assert_true(build_sys.can_place_building(b_type, cell), "Cycle %d: cell %s must be eligible for %s" % [idx, str(cell), b_type])
 		var b = build_sys.place_building(b_type, cell)
@@ -590,6 +594,8 @@ func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 		assert_false(grid_mgr.is_cell_occupied(cell), "Cycle %d: cell vacated immediately after destruction" % idx)
 
 func test_challenge_replacement_after_direct_destroy_call() -> void:
+	# Budget generously so this test exercises placement, not affordability.
+	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return
@@ -770,6 +776,8 @@ func test_challenge_core_campfire_double_destroy_idempotency() -> void:
 	assert_eq(lost_watcher.emit_count, 1, "game_lost MUST NOT be emitted a second time (idempotent)")
 
 func test_challenge_replacement_immediately_after_queue_free_same_frame() -> void:
+	# Budget generously so this test exercises placement, not affordability.
+	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return
@@ -787,7 +795,7 @@ func test_challenge_replacement_immediately_after_queue_free_same_frame() -> voi
 	assert_true(build_sys.can_place_building("tower", cell), "Immediate re-placement permitted in same frame")
 
 	game_state_node.current_ap = 3
-	game_state_node.resources["wood"] = 10
+	game_state_node.resources["wood"] = 9999 # ample under any balance
 	var b2 = build_sys.place_building("tower", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
 	assert_not_null(b2, "New tower successfully placed over queued-for-deletion cell")

@@ -20,3 +20,6 @@ Thumbs.db
 # Teamwork Multi-Agent traces
 .agents/
 *:Zone.Identifier
+
+# Review / scratch output
+tmp/

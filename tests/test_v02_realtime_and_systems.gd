@@ -25,6 +25,10 @@ var dino_script: GDScript = null
 var wave_mgr_script: GDScript = null
 var option_panel_script: GDScript = null
 var hud_script: GDScript = null
+var grid_mgr_script: GDScript = null
+var build_system_script: GDScript = null
+var producer_building_script: GDScript = null
+var main_script: GDScript = null
 
 var _cleanup_nodes: Array[Node] = []
 
@@ -44,6 +48,10 @@ func before_all() -> void:
 	wave_mgr_script = _load_script(["res://scripts/core/WaveManager.gd"])
 	option_panel_script = _load_script(["res://scripts/ui/OptionPanel.gd"])
 	hud_script = _load_script(["res://scripts/ui/HUD.gd"])
+	grid_mgr_script = _load_script(["res://scripts/core/GridManager.gd"])
+	build_system_script = _load_script(["res://scripts/core/BuildSystem.gd"])
+	producer_building_script = _load_script(["res://scripts/entities/ProducerBuilding.gd"])
+	main_script = _load_script(["res://scripts/core/Main.gd"])
 
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
@@ -59,6 +67,21 @@ func after_each() -> void:
 			node.free()
 	_cleanup_nodes.clear()
 	super.after_each()
+
+## Seconds of operation needed for `type_id` to bank `units` of `res_id`,
+## derived from Config so a balance pass does not invalidate these tests.
+func _secs_for(type_id: String, res_id: String, units: int) -> float:
+	var rate: float = 0.5
+	if config_node and "BUILDINGS" in config_node and config_node.BUILDINGS.has(type_id):
+		rate = float(config_node.BUILDINGS[type_id].get("produces_per_sec", {}).get(res_id, 0.5))
+	return float(units) / maxf(rate, 0.01)
+
+## Seconds the Hero must spend to hand-harvest `units` from a node of `res_type`.
+func _hand_secs_for(res_type: String, units: int) -> float:
+	var rate: float = 1.0
+	if config_node and "RESOURCE_NODES" in config_node and config_node.RESOURCE_NODES.has(res_type):
+		rate = float(config_node.RESOURCE_NODES[res_type].get("harvest_rate", 1.0))
+	return float(units) / maxf(rate, 0.01)
 
 func _load_script(paths: Array[String]) -> GDScript:
 	for p in paths:
@@ -148,9 +171,10 @@ func test_03_hero_harvest_order_and_deposit() -> void:
 	hero.order_harvest(res_node)
 	assert_eq(int(hero.current_state), int(hero_script.State.HARVESTING), "Hero enters HARVESTING state")
 
-	# Simulate 1.5 seconds of harvesting
-	hero._physics_process(1.0)
-	hero._physics_process(0.5)
+	# Harvest long enough to bank at least one unit at the configured rate.
+	var harvest_secs: float = _hand_secs_for("stone", 1) + 0.5
+	hero._physics_process(harvest_secs * 0.5)
+	hero._physics_process(harvest_secs * 0.5)
 
 	var current_stone = game_state_node.resources.get("stone", 0)
 	assert_gt(current_stone, init_stone, "Stone resources deposited into GameState from harvesting")
@@ -174,15 +198,30 @@ func test_04_lumber_hut_machinery_tending_lifecycle() -> void:
 	hut._process(5.0)
 	assert_eq(game_state_node.resources.get("wood", 10), init_wood, "No wood produced while untended")
 
-	# Hero tends the hut for 40 seconds
+	# Tended but with no tree in range: machinery runs yet banks nothing.
 	hut.tend(40.0)
 	assert_true(hut.is_operating, "LumberHut is now operating after tending")
 	assert_almost_eq(hut.operation_timer, 40.0, 0.1, "Operation timer set to 40.0s")
+	hut._process(1.0)
+	hut._process(1.0)
+	assert_eq(game_state_node.resources.get("wood", 10), init_wood,
+		"No wood banked while operating with no tree in harvest range")
+	assert_null(hut.target_source, "No source acquired when none is in range")
 
-	# 2 seconds of operation -> +2 wood
-	hut._process(1.0)
-	hut._process(1.0)
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 2, "Produced 2 wood during 2s of operation")
+	# Plant a tree inside harvest_range, then the same 2s at 0.5 wood/s yields 1 wood.
+	var tree_node = resource_node_script.new("wood", Vector2i(0, 1))
+	_cleanup_nodes.append(tree_node)
+	tree.root.add_child(tree_node)
+	tree_node.position = hut.global_position + Vector3(2.0, 0.0, 0.0)
+	var tree_before: int = tree_node.current_amount
+
+	var one_wood_secs: float = _secs_for("lumber_hut", "wood", 1)
+	hut.tend(one_wood_secs + 5.0)
+	hut._process(one_wood_secs * 0.5)
+	hut._process(one_wood_secs * 0.5)
+	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 1, "Produced 1 wood at the configured rate")
+	assert_eq(tree_node.current_amount, tree_before - 1, "The wood came out of the tree's remaining amount")
+	assert_eq(hut.target_source, tree_node, "Hut locked onto the nearby tree as its source")
 
 	# Advance until operation timer expires (38 remaining seconds)
 	hut._process(38.0)
@@ -234,10 +273,11 @@ func test_06_building_demolish_and_half_refund() -> void:
 
 	var init_wood = game_state_node.resources.get("wood", 10)
 
-	# Demolishing completed wall (cost 2 wood) refunds 50% (1 wood)
+	# Demolishing a completed wall refunds half its Config cost (min 1).
+	var refund: int = maxi(1, int(cost_of("wall") / 2))
 	wall.demolish()
 	assert_true(wall.is_destroyed, "Building is marked destroyed on demolish")
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 1, "50% refund (1 wood) deposited into GameState")
+	assert_eq(game_state_node.resources.get("wood", 10), init_wood + refund, "Half the build cost is refunded")
 
 # ==============================================================================
 # Feature 8: In-World 3D Labels
@@ -405,3 +445,296 @@ func test_11_hud_game_speed_controls() -> void:
 	hud._on_speed_button_pressed()
 	assert_eq(hud.current_speed, 1.0, "Speed wrapped back to 1.0x")
 	assert_eq(Engine.time_scale, 1.0, "Engine time_scale restored to 1.0")
+
+# ==============================================================================
+# Feature 13: Config-Driven Raid Interval Verification (Finding 1)
+# ==============================================================================
+
+func test_12_config_raid_interval_override_effective() -> void:
+	assert_not_null(wave_mgr_script, "WaveManager.gd must exist")
+	assert_not_null(config_node, "Config autoload must exist")
+
+	var wm = wave_mgr_script.new()
+	_cleanup_nodes.append(wm)
+	tree.root.add_child(wm)
+
+	# 1. Verify default range from Config.RAIDS
+	var min_i = float(config_node.RAIDS["interval_min"])
+	var max_i = float(config_node.RAIDS["interval_max"])
+	wm._reset_raid_timer()
+	assert_true(wm.raid_timer >= min_i and wm.raid_timer <= max_i, "Default raid timer respects Config.RAIDS [%.1f, %.1f]" % [min_i, max_i])
+
+	# 2. Test override with custom config
+	var mock_cfg = RefCounted.new()
+	var script = GDScript.new()
+	script.source_code = "extends RefCounted\nvar RAIDS: Dictionary = {'interval_min': 10.0, 'interval_max': 12.0}\n"
+	script.reload()
+	mock_cfg.set_script(script)
+
+	wm.config_override = mock_cfg
+	wm._reset_raid_timer()
+	assert_true(wm.raid_timer >= 10.0 and wm.raid_timer <= 12.0, "Raid timer dynamically respects overridden interval_min/max [10, 12]")
+
+# ==============================================================================
+# Feature 14: Dynamic Producer Building & Quarry Tending (Findings 4, 5, 6)
+# ==============================================================================
+
+func test_13_quarry_tending_produces_stone_dynamically() -> void:
+	assert_not_null(producer_building_script, "ProducerBuilding.gd must exist")
+	assert_not_null(hero_script, "Hero.gd must exist")
+
+	var quarry = producer_building_script.new("quarry")
+	var hero = hero_script.new()
+	_cleanup_nodes.append(quarry)
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(quarry)
+	tree.root.add_child(hero)
+
+	quarry.setup("quarry", Vector2i(2, 2))
+	quarry.complete_construction()
+
+	assert_eq(quarry.get_tend_duration(), 40.0, "Quarry tend duration from Config is 40.0s")
+	assert_eq(quarry.get_tend_time(), 2.5, "Quarry tend time from Config is 2.5s")
+
+	# Hero approaches quarry and tends it
+	hero.position = Vector3.ZERO
+	quarry.position = Vector3(1.0, 0.0, 0.0)
+	hero.order_tend(quarry)
+	assert_eq(int(hero.current_state), int(hero_script.State.TENDING), "Hero enters TENDING")
+
+	# Advance 2.5s tending duration
+	hero._physics_process(1.5)
+	hero._physics_process(1.1)
+	assert_true(quarry.is_operating, "Quarry is operating after 2.5s Hero tending")
+
+	# Quarries must draw from a real stone outcrop inside harvest_range.
+	var rock = resource_node_script.new("stone", Vector2i(3, 2))
+	_cleanup_nodes.append(rock)
+	tree.root.add_child(rock)
+	rock.position = quarry.global_position + Vector3(3.0, 0.0, 0.0)
+
+	var init_stone = game_state_node.resources.get("stone", 0)
+	var three_stone_secs: float = _secs_for("quarry", "stone", 3)
+	quarry.tend(three_stone_secs + 5.0)
+	quarry._process(three_stone_secs)
+	assert_eq(game_state_node.resources.get("stone", 0), init_stone + 3, "Quarry produces 3 stone at the configured rate")
+
+# ==============================================================================
+# Feature 15: GridManager Natural Resource Obstacle (Finding 3)
+# ==============================================================================
+
+func test_14_grid_manager_resource_obstacle_blocks_building_and_pathfinding() -> void:
+	assert_not_null(grid_mgr_script, "GridManager.gd must exist")
+	assert_not_null(build_system_script, "BuildSystem.gd must exist")
+	assert_not_null(resource_node_script, "ResourceNode.gd must exist")
+
+	var gm = grid_mgr_script.new()
+	var bs = build_system_script.new()
+	var res = resource_node_script.new("wood", Vector2i(3, 3))
+	_cleanup_nodes.append(gm)
+	_cleanup_nodes.append(bs)
+	_cleanup_nodes.append(res)
+	tree.root.add_child(gm)
+	tree.root.add_child(bs)
+	tree.root.add_child(res)
+
+	bs.setup(gm, null)
+
+	# Register resource node in GridManager
+	gm.occupy_resource_cell(Vector2i(3, 3), res)
+	assert_true(gm.is_resource_at_cell(Vector2i(3, 3)), "GridManager tracks resource at (3, 3)")
+	assert_false(gm.is_cell_walkable(Vector2i(3, 3)), "Cell (3, 3) is NOT walkable due to resource node")
+	assert_false(bs.can_place_building("wall", Vector2i(3, 3)), "BuildSystem prevents placing building on resource cell")
+
+# ==============================================================================
+# Feature 16: Raid State Reset on Game Restart (Finding 8)
+# ==============================================================================
+
+func test_15_restart_game_resets_raid_timer_and_warning() -> void:
+	assert_not_null(wave_mgr_script, "WaveManager.gd must exist")
+	var wm = wave_mgr_script.new()
+	_cleanup_nodes.append(wm)
+	tree.root.add_child(wm)
+
+	wm.auto_raid_enabled = true
+	wm.elapsed_time = 50.0
+	wm.raid_timer = 10.0
+	wm.warning_emitted = true
+
+	# Reset raid state
+	wm.reset_raid_state()
+	var expected_delay: float = float(config_node.RAIDS.get("first_raid_delay", 60.0))
+	assert_eq(wm.raid_timer, expected_delay, "Raid timer reset to first_raid_delay")
+	assert_false(wm.warning_emitted, "warning_emitted reset to false")
+	assert_eq(wm.elapsed_time, 0.0, "elapsed_time reset to 0.0")
+
+# ==============================================================================
+# Feature 17: UI English & Chinese Cleanliness (Finding 2)
+# ==============================================================================
+
+func test_16_ui_locale_english_no_chinese_and_chinese_no_english_leak() -> void:
+	assert_not_null(hud_script, "HUD.gd must exist")
+	assert_not_null(option_panel_script, "OptionPanel.gd must exist")
+	assert_not_null(i18n_node, "I18n autoload must exist")
+
+	var hud = hud_script.new()
+	var panel = option_panel_script.new()
+	_cleanup_nodes.append(hud)
+	_cleanup_nodes.append(panel)
+	tree.root.add_child(hud)
+	tree.root.add_child(panel)
+
+	# 1. Test in English
+	i18n_node.set_locale("en")
+	hud.reset_hud()
+	assert_false(hud.end_action_btn.text.contains("提前结束"), "English HUD does not contain Chinese characters")
+	assert_false(hud.pause_btn.text.contains("暂停"), "English Pause button does not contain Chinese characters")
+	assert_eq(hud.end_action_btn.text, "Early End Deploy", "English End Deploy button text is correct")
+
+	# 2. Test in Chinese
+	i18n_node.set_locale("zh_CN")
+	hud.reset_hud()
+	assert_true(hud.end_action_btn.text.contains("提前结束"), "Chinese HUD displays translated button text")
+	assert_true(hud.pause_btn.text.contains("暂停"), "Chinese HUD displays translated Pause text")
+
+	# Restore English
+	i18n_node.set_locale("en")
+
+# ==============================================================================
+# Feature 18: Real Tree Harvesting in Range (v0.2 Follow-up Item 4)
+# ==============================================================================
+
+func test_17_lumber_hut_real_tree_harvesting_and_target_switching() -> void:
+	assert_not_null(lumber_hut_script, "LumberHut.gd must exist")
+	assert_not_null(resource_node_script, "ResourceNode.gd must exist")
+
+	var hut = lumber_hut_script.new()
+	var tree_near = resource_node_script.new("wood")
+	var tree_far = resource_node_script.new("wood")
+	var tree_out_of_range = resource_node_script.new("wood")
+
+	_cleanup_nodes.append(hut)
+	_cleanup_nodes.append(tree_near)
+	_cleanup_nodes.append(tree_far)
+	_cleanup_nodes.append(tree_out_of_range)
+
+	tree.root.add_child(hut)
+	tree.root.add_child(tree_near)
+	tree.root.add_child(tree_far)
+	tree.root.add_child(tree_out_of_range)
+
+	hut.complete_construction()
+	hut.position = Vector3.ZERO
+
+	tree_near.position = Vector3(3.0, 0.0, 0.0)
+	tree_near.setup("wood", Vector2i(1, 0), 2) # Near tree: 2 wood
+
+	tree_far.position = Vector3(7.0, 0.0, 0.0)
+	tree_far.setup("wood", Vector2i(3, 0), 5) # Far tree: 5 wood
+
+	tree_out_of_range.position = Vector3(25.0, 0.0, 0.0) # > 12.0m away
+	tree_out_of_range.setup("wood", Vector2i(12, 0), 10)
+
+	# 1. Nearest tree is chosen (tree_near at 3m < tree_far at 7m)
+	var found_tree = hut.find_nearest_tree()
+	assert_eq(found_tree, tree_near, "Lumber Hut selects the closest tree within range")
+
+	# 2. Tend hut and harvest 2 wood (depleting tree_near)
+	var init_wood = game_state_node.resources.get("wood", 10)
+	hut.tend(40.0)
+
+	var per_wood: float = _secs_for("lumber_hut", "wood", 1)
+	hut._process(per_wood)
+	assert_eq(tree_near.current_amount, 1, "First tree depleted by 1 wood")
+	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 1, "GameState wood increased by 1")
+
+	hut._process(per_wood)
+	assert_eq(tree_near.current_amount, 0, "First tree fully depleted")
+	assert_true(tree_near.is_depleted, "First tree is marked depleted")
+	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 2, "GameState wood increased by 2")
+
+	# 3. Next tick automatically switches to tree_far
+	hut._process(per_wood)
+	assert_eq(hut.target_tree, tree_far, "Lumber Hut switched to the next nearest tree")
+	assert_eq(tree_far.current_amount, 4, "Second tree was harvested")
+	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 3, "GameState received 3rd wood")
+
+	# 4. Exhaust second tree
+	tree_far.harvest(4)
+	assert_true(tree_far.is_depleted, "Second tree is now depleted")
+
+	# 5. When no trees remain in range, no wood is harvested even though out-of-range tree has 10 wood
+	var wood_before = game_state_node.resources.get("wood", 10)
+	hut._process(10.0)
+	assert_eq(game_state_node.resources.get("wood", 10), wood_before, "No wood harvested when all trees in range are depleted")
+	assert_eq(tree_out_of_range.current_amount, 10, "Out of range tree remains untouched")
+	assert_null(hut.find_nearest_tree(), "No tree found in range")
+	assert_true(hut.get_display_info()["status"].contains("No trees in range") or hut.get_display_info()["status"].contains("范围内无可用树木"), "Status indicates no trees in range")
+
+# ==============================================================================
+# Feature 19: Camera Zoom and Clamping Bounds (v0.2 Follow-up Item 3)
+# ==============================================================================
+
+func test_18_camera_zoom_and_clamping() -> void:
+	assert_not_null(main_script, "Main.gd must exist")
+	var main = main_script.new()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	main._ensure_scene_dependencies()
+
+	var cam = main.camera
+	assert_not_null(cam, "Camera exists in Main")
+
+	var init_y = cam.global_position.y
+	assert_almost_eq(init_y, 18.0, 0.1, "Initial camera height is ~18.0m")
+
+	# Zoom in (moves camera forward and downward)
+	main.zoom_camera(4.0)
+	assert_lt(cam.global_position.y, init_y, "Camera zoomed in closer to the ground")
+
+	# Extreme zoom in clamped at 6.0m
+	for i in range(20):
+		main.zoom_camera(5.0)
+	assert_gte(cam.global_position.y, 6.0, "Camera zoom in clamped at min height >= 6.0m")
+
+	# Extreme zoom out clamped at 32.0m
+	for i in range(30):
+		main.zoom_camera(-5.0)
+	assert_lte(cam.global_position.y, 32.0, "Camera zoom out clamped at max height <= 32.0m")
+
+# ==============================================================================
+# Feature 20: HUD Cleanliness & In-World Label Sizes (v0.2 Follow-up Items 1 & 2)
+# ==============================================================================
+
+func test_19_hud_no_legacy_buttons_and_larger_option_panel() -> void:
+	var hud_scene = load("res://scenes/ui/HUD.tscn")
+	assert_not_null(hud_scene, "HUD.tscn must be loadable")
+	var hud_inst = hud_scene.instantiate()
+	_cleanup_nodes.append(hud_inst)
+	tree.root.add_child(hud_inst)
+
+	# Verify BottomBar is gone from the scene
+	assert_null(hud_inst.find_child("BottomBar", true, false), "BottomBar was removed from HUD scene")
+
+	# OptionPanel has larger minimum dimensions
+	var panel = option_panel_script.new()
+	_cleanup_nodes.append(panel)
+	tree.root.add_child(panel)
+	assert_gte(panel.custom_minimum_size.x, 300.0, "OptionPanel width >= 300")
+	assert_gte(panel.custom_minimum_size.y, 200.0, "OptionPanel height >= 200")
+
+func test_20_in_world_label3d_enlarged_fonts() -> void:
+	var wall = wall_script.new()
+	var res = resource_node_script.new("wood")
+	_cleanup_nodes.append(wall)
+	_cleanup_nodes.append(res)
+	tree.root.add_child(wall)
+	tree.root.add_child(res)
+
+	assert_not_null(wall.label_3d, "Building has Label3D")
+	assert_gte(wall.label_3d.font_size, 32, "Building Label3D font_size >= 32")
+	assert_gte(wall.label_3d.outline_size, 5, "Building Label3D outline_size >= 5")
+
+	assert_not_null(res.label_3d, "ResourceNode has Label3D")
+	assert_gte(res.label_3d.font_size, 32, "ResourceNode Label3D font_size >= 32")
+	assert_gte(res.label_3d.outline_size, 5, "ResourceNode Label3D outline_size >= 5")

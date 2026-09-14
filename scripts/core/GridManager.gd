@@ -11,6 +11,9 @@ extends Node3D
 ## Sparse lookup map: Vector2i -> Node (occupying building instance)
 var occupied_cells: Dictionary = {}
 
+## Sparse lookup map: Vector2i -> Node (occupying natural resource node)
+var resource_cells: Dictionary = {}
+
 func _init() -> void:
 	_init_tile_size()
 	_connect_event_bus()
@@ -129,6 +132,7 @@ func get_building_at(cell: Vector2i) -> Node:
 ## Clears all occupied cells. Useful for level resets and unit test isolation.
 func clear_grid() -> void:
 	occupied_cells.clear()
+	resource_cells.clear()
 
 ## Returns an array of all living building nodes tracked by the grid.
 func get_all_buildings() -> Array[Node]:
@@ -143,6 +147,49 @@ func get_all_buildings() -> Array[Node]:
 	for c in cells_to_clean:
 		occupied_cells.erase(c)
 	return result
+
+# ==============================================================================
+# 2b. Resource Occupancy Tracking API (v0.2)
+# ==============================================================================
+
+## Checks whether a cell currently contains an undepleted natural resource node.
+func is_resource_at_cell(cell: Vector2i) -> bool:
+	if not resource_cells.has(cell):
+		return false
+	var node = resource_cells[cell]
+	if not is_instance_valid(node) or node.is_queued_for_deletion():
+		resource_cells.erase(cell)
+		return false
+	if "is_depleted" in node and node.is_depleted:
+		resource_cells.erase(cell)
+		return false
+	return true
+
+## Marks a cell as occupied by a natural resource node.
+func occupy_resource_cell(cell: Vector2i, node: Node) -> bool:
+	if node == null:
+		return false
+	if is_resource_at_cell(cell):
+		return false
+	resource_cells[cell] = node
+	if "cell_pos" in node:
+		node.cell_pos = cell
+	return true
+
+## Vacates the natural resource from the specified cell.
+func vacate_resource_cell(cell: Vector2i) -> void:
+	if resource_cells.has(cell):
+		resource_cells.erase(cell)
+
+## Returns the resource Node at cell, or null if unoccupied or depleted.
+func get_resource_at(cell: Vector2i) -> Node:
+	if not is_resource_at_cell(cell):
+		return null
+	return resource_cells.get(cell, null)
+
+## Clears all tracked resource cells.
+func clear_resource_cells() -> void:
+	resource_cells.clear()
 
 # ==============================================================================
 # 3. Reactive Lifecycle Handlers
@@ -169,9 +216,15 @@ func _on_building_destroyed(building: Node) -> void:
 # ==============================================================================
 
 ## Checks whether a cell can be traversed by units (Hero / Dinos).
+## Resource nodes block navigation (unless ignored).
 ## Unfinished blueprints (is_constructed == false) are walkable.
 ## If ignore_building is specified, its cell is treated as walkable.
 func is_cell_walkable(cell: Vector2i, ignore_building: Node = null) -> bool:
+	if is_resource_at_cell(cell):
+		if ignore_building != null and resource_cells.get(cell) == ignore_building:
+			pass
+		else:
+			return false
 	if not occupied_cells.has(cell):
 		return true
 	var b = occupied_cells[cell]

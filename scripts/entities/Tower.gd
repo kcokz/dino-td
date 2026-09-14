@@ -341,3 +341,13 @@ func _on_before_destroy() -> void:
 	targets_in_range.clear()
 	tracked_enemies.clear()
 	current_target = null
+
+# ==============================================================================
+# Coverage ring (Building base draws it; this only states size and colour)
+# ==============================================================================
+
+func _get_display_range() -> float:
+	return attack_range
+
+func _get_range_indicator_color() -> Color:
+	return Color(0.35, 0.65, 1.0, 0.16)
