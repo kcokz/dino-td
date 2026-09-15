@@ -5,8 +5,16 @@ extends Node3D
 ## A small world-space bar drawn above a unit: health once it is built, build
 ## progress while it is not.
 ##
-## It shares the info layer with the Label3D that carries the name, so the two are
-## positioned together rather than each picking its own height and drifting apart.
+## Built the way 3D health bars normally are: a billboarded quad with an UNSHADED
+## material, so lighting never changes what the bar reads as; `cast_shadow` off, so
+## it does not paint its own silhouette onto the ground; and depth test off with a
+## high render priority, so it is never buried inside the model it belongs to.
+##
+## The alternative is a screen-space overlay projected from the unit's position --
+## sharper and a constant size, which is what most RTS games use -- but it needs a
+## UI layer tracking every unit. This stays in world space so it sits with the
+## Label3D that carries the name, and the two cannot drift apart.
+##
 ## Sizing comes from Config.FEEDBACK.
 
 var _back: MeshInstance3D = null
@@ -52,7 +60,12 @@ func _make_quad(colour: Color, w: float, h: float, z: float) -> MeshInstance3D:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	mat.no_depth_test = true
+	# The fill has to win over the backing plate at the same depth.
+	mat.render_priority = 1 if z > 0.0 else 0
 	mi.material_override = mat
+	# A UI element must not cast a shadow: the Hero's bar was drawing its own
+	# silhouette on the ground next to him.
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
 
 ## `ratio` is 0..1. `colour` tints the fill, so the caller decides whether this bar

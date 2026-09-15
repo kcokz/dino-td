@@ -378,6 +378,9 @@ func _ensure_physics_and_visuals() -> void:
 			selection_ring = ring_script.new()
 			selection_ring.name = "SelectionRing"
 			add_child(selection_ring)
+	# Buildings are square, so the outline traces their own footprint.
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
+		selection_ring.configure(SelectionRing3D.Shape.BOX, _footprint())
 
 func _get_placeholder_color() -> Color:
 	var cfg = _get_config()
@@ -425,6 +428,7 @@ func _apply_label_sizing(lbl: Label3D) -> void:
 		fs = int(cfg.UI.get("world_label_font_size", fs))
 		px = float(cfg.UI.get("world_label_pixel_size", px))
 		fixed = bool(cfg.UI.get("world_label_fixed_size", fixed))
+	lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	lbl.font_size = fs
 	lbl.pixel_size = px
 	lbl.fixed_size = fixed
@@ -466,6 +470,7 @@ func _create_range_indicator() -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = _get_range_indicator_color()
 	range_indicator.material_override = mat
+	range_indicator.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	range_indicator.visible = false
 	add_child(range_indicator)
 

@@ -23,3 +23,6 @@ Thumbs.db
 
 # Review / scratch output
 tmp/
+
+# Written by the build pipeline; the version lives in project.godot
+version.json

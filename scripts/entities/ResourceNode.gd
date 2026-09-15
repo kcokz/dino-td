@@ -198,6 +198,7 @@ func _apply_label_sizing(lbl: Label3D) -> void:
 		fs = int(cfg.UI.get("world_label_font_size", fs))
 		px = float(cfg.UI.get("world_label_pixel_size", px))
 		fixed = bool(cfg.UI.get("world_label_fixed_size", fixed))
+	lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	lbl.font_size = fs
 	lbl.pixel_size = px
 	lbl.fixed_size = fixed

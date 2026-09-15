@@ -17,7 +17,7 @@
 ---
 
 ## 当前版本
-- **版本号**：`v0.1`
+- **版本号**：`v0.3`（唯一来源：`project.godot` 的 `application/config/version`）
 - **构建阶段**：Alpha / Feature Delivery (Real-Time Deployment & Modern Hero)
 - **目标引擎**：Godot 4.7 (Forward+ / Jolt Physics)
 - **交付时间**：2026-09-13
@@ -503,8 +503,17 @@
 
 ## 版本号构建与注入规范
 
-项目已建立独立的元数据配置文件 [`scripts/core/AppInfo.gd`](scripts/core/AppInfo.gd)：
-1. **代码默认版本**：`AppInfo.VERSION = "v0.1"`；
+**版本号只在一个地方维护：`project.godot` 的 `application/config/version`。**
+
+此前 `version.json`、`project.godot`、`AppInfo.VERSION` 三处各写一份，发版时要记得改三遍——结果是 v0.3 已经开发时三处仍然都写着 v0.2。而且**签入仓库的 `version.json` 优先级最高**，它一旦过期就会静默压过项目设置，这种错误从表现上和"真的就是那个版本"完全一样。
+
+现在的规则：
+1. **仓库里改这一处**：`project.godot` 的 `application/config/version`；
+2. **构建时注入**：流水线可写出根目录 `version.json` 覆盖它（该文件已加入 `.gitignore`，**不再签入仓库**）；
+3. **代码兜底**：`AppInfo.VERSION` 固定为 `"unknown"`——**刻意不是一个版本号**。一个看起来合理的字面量只是第四个会忘记更新的地方，而过期的它无法与真相区分。
+4. **测试从 `ProjectSettings` 读取**，不复述字面量，所以升版本不需要改任何测试。
+
+[`scripts/core/AppInfo.gd`](scripts/core/AppInfo.gd) 的解析优先级：
 2. **构建时注入支持**：
    - CI/CD 构建流水线可通过生成或覆盖根目录下的 `version.json` 自动生效；
    - 或通过 Godot 命令行 `--export` 传递 `application/config/version` 配置覆写；

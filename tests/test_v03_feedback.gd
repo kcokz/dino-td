@@ -223,11 +223,14 @@ func test_10_selection_ring_is_separate_from_the_coverage_ring() -> void:
 	assert_not_null(hut.range_indicator, "And, being a producer, a coverage ring")
 	assert_false(hut.selection_ring.visible, "Neither shows until it is selected")
 
-	# The two must not be the same size, or one reads as the other: the selection
-	# ring says "you clicked this", the coverage ring says "this is its reach".
-	var ring_r: float = float(config_node.FEEDBACK["selection_ring_radius"])
-	assert_ne(ring_r, hut.harvest_range, "A fixed marker, not the building's reach")
-	assert_lt(ring_r, hut.harvest_range, "And smaller, so it reads as a marker")
+	# The two must not read as each other: the selection ring hugs the base and says
+	# "you clicked this", the coverage ring is sized by reach and says "this is what
+	# it affects".
+	var margin: float = float(config_node.FEEDBACK["selection_ring_margin"])
+	var ring_span: float = hut._footprint() + margin * 2.0
+	assert_lt(ring_span, hut.harvest_range, "The selection outline is far smaller than the reach")
+	assert_almost_eq(hut.selection_ring.base_size, hut._footprint(), 0.001,
+		"The outline traces this building's own footprint")
 
 func test_11_selecting_shows_the_ring_and_deselecting_hides_it() -> void:
 	var hut = _spawn(lumber_hut_script)
@@ -272,7 +275,8 @@ func test_14_feedback_numbers_all_live_in_config() -> void:
 	assert_true("FEEDBACK" in config_node, "Config owns a FEEDBACK section")
 	for key in ["hit_flash_duration", "hit_flash_strength", "debris_count", "debris_size",
 			"debris_speed", "debris_lifetime", "health_bar_width", "health_bar_height",
-			"health_bar_hide_at_full", "selection_ring_radius", "selection_ring_color",
+			"health_bar_hide_at_full", "selection_ring_margin", "selection_ring_thickness",
+			"selection_ring_color",
 			"audio_volume_db", "audio_enabled"]:
 		assert_true(config_node.FEEDBACK.has(key), "Config.FEEDBACK declares '%s'" % key)
 
@@ -281,3 +285,87 @@ func test_15_audio_can_be_switched_off_wholesale() -> void:
 	var before: int = fx_node._next_voice
 	fx_node.play(fx_node.Sound.HIT)
 	assert_ne(fx_node._next_voice, before, "Sound plays while enabled")
+
+# ==============================================================================
+# 7. The ring traces the base; nothing decorative casts a shadow
+# ==============================================================================
+
+func test_16_the_ring_traces_each_units_own_base() -> void:
+	# A fixed radius does not work. Wooden stakes are 1.9m across, and the old
+	# 0.85m ring sat entirely inside the box, invisible.
+	var stake = _spawn(wall_script, Vector3(-6.0, 0.0, 0.0))
+	var turret = _spawn(tower_script, Vector3(6.0, 0.0, 0.0))
+	stake.complete_construction()
+	turret.complete_construction()
+	await wait_frames(1)
+
+	var margin: float = float(config_node.FEEDBACK["selection_ring_margin"])
+	for b in [stake, turret]:
+		var fp: float = b._footprint()
+		assert_almost_eq(b.selection_ring.base_size, fp, 0.001,
+			"The outline is sized from this building's own footprint")
+		assert_gt(fp + margin * 2.0, fp, "And sits outside the base, not buried in it")
+		assert_eq(b.selection_ring.shape, SelectionRing3D.Shape.BOX,
+			"A square building gets a square outline")
+		assert_eq(b.selection_ring._parts.size(), 4, "Drawn as a four-sided frame")
+
+	# The two buildings differ in size, so their outlines must differ too.
+	assert_ne(stake.selection_ring.base_size, turret.selection_ring.base_size,
+		"Different footprints produce different outlines")
+
+func test_17_a_stakes_ring_is_actually_visible_outside_it() -> void:
+	var stake = _spawn(wall_script)
+	stake.complete_construction()
+	await wait_frames(1)
+	event_bus_node.unit_selected.emit(stake)
+
+	var margin: float = float(config_node.FEEDBACK["selection_ring_margin"])
+	var half_box: float = stake._footprint() * 0.5
+	var half_ring: float = (stake._footprint() + margin * 2.0) * 0.5
+	assert_gt(half_ring, half_box, "The outline clears the stake it belongs to")
+	assert_true(stake.selection_ring.visible, "And is shown when selected")
+
+func test_18_nothing_in_the_feedback_layer_casts_a_shadow() -> void:
+	# A UI element painting its own silhouette on the ground reads as a bug: the
+	# Hero's health bar was doing exactly that.
+	var hero = _spawn(hero_script)
+	await wait_frames(1)
+	hero.take_damage(1.0)
+	await wait_frames(1)
+
+	var decorations: Array[GeometryInstance3D] = []
+	decorations.append(hero.status_bar._back)
+	decorations.append(hero.status_bar._fill)
+	for part in hero.selection_ring._parts:
+		decorations.append(part)
+
+	var hut = _spawn(lumber_hut_script, Vector3(8.0, 0.0, 0.0))
+	hut.complete_construction()
+	await wait_frames(1)
+	decorations.append(hut.range_indicator)
+	decorations.append(hut.label_3d)
+
+	for d in decorations:
+		assert_not_null(d, "Decoration exists")
+		assert_eq(d.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"%s must not cast a shadow" % d.name)
+
+# ==============================================================================
+# 8. One place holds the version
+# ==============================================================================
+
+func test_19_the_version_is_declared_in_exactly_one_place() -> void:
+	var declared: String = str(ProjectSettings.get_setting("application/config/version", ""))
+	assert_ne(declared, "", "project.godot declares the version")
+
+	var app_info = load("res://scripts/core/AppInfo.gd")
+	assert_eq(app_info.get_version(), declared, "Everything reads it from there")
+
+	# The in-code constant must not be a plausible-looking version: a stale literal
+	# is indistinguishable from the truth, which is how three copies drifted to v0.2
+	# while the game was v0.3.
+	assert_eq(app_info.VERSION, "unknown", "The fallback reports 'unknown' rather than guessing")
+
+	# And no stale copy is checked in to outrank the project setting.
+	assert_false(FileAccess.file_exists("res://version.json"),
+		"version.json is a build-injection artifact, not something the repo carries")

@@ -65,6 +65,11 @@ func _ready() -> void:
 	add_to_group("selectable")
 	_ensure_components()
 	_ensure_feedback_nodes(2.0, true)
+	var ring_w: float = 0.8
+	var cfg_ring = _get_config()
+	if cfg_ring and "HERO" in cfg_ring:
+		ring_w = float(cfg_ring.HERO.get("width", 0.8))
+	_configure_selection_ring(ring_w)
 	_connect_feedback_events()
 	_load_config()
 	_connect_event_bus()
@@ -942,3 +947,6 @@ func _get_fx() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("Fx")
 	return null
+func _configure_selection_ring(base_size: float) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
+		selection_ring.configure(SelectionRing3D.Shape.BOX, base_size)

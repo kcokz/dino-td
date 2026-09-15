@@ -86,6 +86,7 @@ func debris(world_pos: Vector3, colour: Color = Color(0.8, 0.8, 0.8), count: int
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		piece.material_override = mat
+		piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 		piece.position = world_pos + Vector3(0.0, size, 0.0)
 		root.add_child(piece)

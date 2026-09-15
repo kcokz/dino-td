@@ -328,7 +328,10 @@ const FEEDBACK: Dictionary = {
 	"health_bar_width": 1.1,          # 血条宽度（米）
 	"health_bar_height": 0.13,        # 血条高度（米）
 	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
-	"selection_ring_radius": 0.85,    # 选中圈半径（米）——与作用范围圈无关
+	# 选中圈沿单位底座绘制，尺寸由该单位的实际占地推导，不是固定半径——
+	# 木栅栏宽 1.9m，固定 0.85m 的圈会整个埋进方块里看不见。
+	"selection_ring_margin": 0.18,    # 圈比底座向外扩出多少（米）
+	"selection_ring_thickness": 0.09, # 圈线粗细（米）
 	"selection_ring_color": Color(0.35, 1.0, 0.5, 0.9),
 	"audio_volume_db": -8.0,
 	"audio_enabled": true,

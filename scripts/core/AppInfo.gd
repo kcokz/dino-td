@@ -6,17 +6,21 @@ extends RefCounted
 ## Houses external build information, version numbers, release notes references,
 ## and environment metadata decoupled from game balance configs.
 
-const VERSION: String = "v0.2"
+## Last-resort value only. Deliberately NOT a version number: a plausible-looking
+## literal here is a fourth place to forget, and a stale one is indistinguishable
+## from the truth. The version lives in project.godot (application/config/version);
+## a build pipeline may override it by writing version.json.
+const VERSION: String = "unknown"
 const APP_NAME: String = "Defend Dinosaur"
 const BUILD_STAGE: String = "Alpha"
 const ENGINE_TARGET: String = "Godot 4.7"
-const RELEASE_DATE: String = "2026-09-14"
+const RELEASE_DATE: String = "2026-09-15"
 
 ## Returns the active application version string.
 ## Priority order for build-time stamping:
 ## 1. External version.json file if present on disk (CI/CD build pipeline injection)
 ## 2. ProjectSettings "application/config/version" if configured
-## 3. Internal default VERSION constant ("v0.0")
+## 3. Internal fallback, which reports "unknown" rather than guessing
 static func get_version() -> String:
 	if FileAccess.file_exists("res://version.json"):
 		var file = FileAccess.open("res://version.json", FileAccess.READ)

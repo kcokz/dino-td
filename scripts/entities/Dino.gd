@@ -1032,3 +1032,6 @@ func _refresh_health_bar() -> void:
 func set_selected_visual(on: bool) -> void:
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
 		selection_ring.set_shown(on)
+func _configure_selection_ring(base_size: float) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
+		selection_ring.configure(SelectionRing3D.Shape.BOX, base_size)
