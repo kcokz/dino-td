@@ -826,3 +826,21 @@ func _get_grid_manager() -> Node:
 		if get_tree().root:
 			return get_tree().root.find_child("GridManager", true, false)
 	return null
+
+## The thing the Hero is currently working on (or walking towards), or null when
+## he has nothing queued. The Option Panel follows this so the player watches the
+## job in progress without having to click it, and gets the Hero back when it ends.
+func get_active_task_target() -> Node:
+	match current_state:
+		State.BUILDING:
+			return target_building if is_instance_valid(target_building) else null
+		State.HARVESTING:
+			return target_resource_node if is_instance_valid(target_resource_node) else null
+		State.TENDING:
+			return target_tend_building if is_instance_valid(target_tend_building) else null
+		State.MOVING:
+			# En route: show whatever he is on his way to, if anything.
+			for t in [target_building, target_tend_building, target_resource_node]:
+				if t != null and is_instance_valid(t):
+					return t
+	return null

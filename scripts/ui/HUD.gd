@@ -338,6 +338,8 @@ func reset_hud() -> void:
 	if restart_btn:
 		restart_btn.text = tr("BTN_RESTART")
 
+	_hide_legacy_phase_controls()
+
 func show_hint(msg: String, duration: float = 2.5) -> void:
 	if hint_label == null:
 		_ensure_ui_components()
@@ -649,11 +651,15 @@ func _apply_ui_scale() -> void:
 	if details_label and is_instance_valid(details_label):
 		details_label.add_theme_font_size_override("font_size", label_size)
 
-## v0.2 removed the deploy/attack/produce phases, so the phase-era top-bar controls
-## (AP, deploy countdown, phase name, "end deployment") no longer describe anything
-## the player can act on. They stay instantiated for API compatibility until the
-## phase machine itself is deleted from GameState, but are hidden from the player.
+## v0.2 removed the deploy/attack/produce phases and made raids continuous/random,
+## so phase-era top-bar controls (AP, deploy countdown, phase name, "end deployment")
+## and the wave counter no longer describe anything the player acts on directly.
+## They stay instantiated for API compatibility until legacy systems are deleted,
+## but are hidden from the player.
 func _hide_legacy_phase_controls() -> void:
-	for ctrl in [ap_label, deploy_timer_label, phase_label, end_action_btn]:
+	for ctrl in [ap_label, deploy_timer_label, phase_label, end_action_btn, wave_label]:
 		if ctrl and is_instance_valid(ctrl):
 			ctrl.visible = false
+	var vsep3 = find_child("VSeparator3", true, false)
+	if vsep3 and is_instance_valid(vsep3):
+		vsep3.visible = false

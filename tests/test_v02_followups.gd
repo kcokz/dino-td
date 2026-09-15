@@ -89,6 +89,7 @@ func test_02_phase_era_controls_are_hidden() -> void:
 	assert_false(hud.deploy_timer_label.visible, "Deploy countdown hidden (no phases in v0.2)")
 	assert_false(hud.phase_label.visible, "Phase label hidden (no phases in v0.2)")
 	assert_false(hud.end_action_btn.visible, "End-deployment button hidden (no phases in v0.2)")
+	assert_false(hud.wave_label.visible, "Wave label hidden (hidden concept in v0.2 continuous mode)")
 
 func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 	assert_not_null(option_panel_script, "OptionPanel.gd must exist")
@@ -472,3 +473,112 @@ func test_22_opening_wallet_does_not_trivially_buy_the_whole_defence() -> void:
 	var hut: int = cost_of("lumber_hut")
 	assert_lt(wallet, tower + hut,
 		"Opening wood (%d) must force a choice between a tower (%d) and an economy building (%d)" % [wallet, tower, hut])
+
+# ==============================================================================
+# 7. Option Panel follows the Hero's current job
+# ==============================================================================
+
+func _panel_and_hero() -> Array:
+	var panel = option_panel_script.new()
+	var hero = hero_script.new()
+	_cleanup_nodes.append(panel)
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	tree.root.add_child(panel)
+	await wait_frames(1)
+	return [panel, hero]
+
+func test_23_panel_rests_on_the_hero_when_idle() -> void:
+	var pair = await _panel_and_hero()
+	var panel = pair[0]
+	var hero = pair[1]
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, hero, "With nothing happening the panel shows the Hero")
+	assert_false(panel.selection_is_manual, "A resting selection is not pinned")
+
+func test_24_panel_follows_the_job_then_returns_to_the_hero() -> void:
+	var pair = await _panel_and_hero()
+	var panel = pair[0]
+	var hero = pair[1]
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3(2.0, 0.0, 0.0)
+	await wait_frames(1)
+
+	hero.order_tend(hut)
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, hut, "Panel follows the building the Hero is working on")
+
+	# Job over: the Hero goes idle and the panel comes back to him on its own.
+	hero.order_stop()
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, hero, "Panel returns to the Hero when the job ends")
+
+func test_25_a_clicked_unit_is_pinned_and_not_stolen() -> void:
+	var pair = await _panel_and_hero()
+	var panel = pair[0]
+	var hero = pair[1]
+	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
+	var tower = tower_script.new()
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(tower)
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(tower)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3(2.0, 0.0, 0.0)
+	await wait_frames(1)
+
+	# The player clicks a tower to read it, then the Hero starts a job elsewhere.
+	panel._on_unit_selected(tower)
+	assert_true(panel.selection_is_manual, "Clicking a unit pins the panel to it")
+	hero.order_tend(hut)
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, tower, "Auto-follow must not yank the panel off a pinned unit")
+
+	# Clicking the Hero is the resting choice, so it releases the pin.
+	panel._on_unit_selected(hero)
+	assert_false(panel.selection_is_manual, "Selecting the Hero releases the pin")
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, hut, "Auto-follow resumes once the pin is released")
+
+func test_26_deselecting_releases_the_pin() -> void:
+	var pair = await _panel_and_hero()
+	var panel = pair[0]
+	var hero = pair[1]
+	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	await wait_frames(1)
+
+	panel._on_unit_selected(tower)
+	assert_true(panel.selection_is_manual, "Pinned to the tower")
+
+	# Clicking empty ground deselects.
+	panel._on_unit_deselected()
+	assert_false(panel.selection_is_manual, "Deselecting releases the pin")
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, hero, "Panel falls back to the Hero")
+
+func test_27_a_pinned_unit_that_disappears_releases_the_pin() -> void:
+	var pair = await _panel_and_hero()
+	var panel = pair[0]
+	var hero = pair[1]
+	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
+	var wall = wall_script.new()
+	tree.root.add_child(wall)
+	wall.complete_construction()
+	await wait_frames(1)
+
+	panel._on_unit_selected(wall)
+	assert_eq(panel.selected_unit, wall, "Pinned to the wall")
+
+	# The wall is destroyed while the player is looking at it.
+	wall.queue_free()
+	await wait_frames(2)
+	panel._process(0.0)
+	assert_false(panel.selection_is_manual, "A vanished pin is released")
+	assert_eq(panel.selected_unit, hero, "Panel falls back to the Hero")

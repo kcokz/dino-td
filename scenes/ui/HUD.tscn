@@ -85,10 +85,12 @@ text = "Water: 0"
 layout_mode = 2
 
 [node name="WaveLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 text = "Wave: 0"
 
 [node name="VSeparator3" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
+visible = false
 layout_mode = 2
 
 [node name="CoreHPLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
