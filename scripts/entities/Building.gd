@@ -323,29 +323,22 @@ func _ensure_physics_and_visuals() -> void:
 		var col = CollisionShape3D.new()
 		var box = BoxShape3D.new()
 		var fp: float = _footprint()
-		box.size = Vector3(fp, 1.0, fp)
+		var h: float = _building_height()
+		box.size = Vector3(fp, h, fp)
 		col.shape = box
-		col.position = Vector3(0.0, 0.5, 0.0)
+		col.position = Vector3(0.0, h * 0.5, 0.0)
 		add_child(col)
 	
-	# 3. Add MeshInstance3D if missing
+	# 3. Add the body if missing. A "spikes" body is a holder of uprights rather
+	# than a MeshInstance3D of its own, so it has to be recognised by name or a
+	# second call here would quietly draw a second fence on top of the first.
 	var has_mesh = false
 	for child in get_children():
-		if child is MeshInstance3D:
+		if child is MeshInstance3D or (child is Node3D and child.name == "Body"):
 			has_mesh = true
 			break
 	if not has_mesh:
-		var mesh_inst = MeshInstance3D.new()
-		var box_mesh = BoxMesh.new()
-		var fp_m: float = _footprint()
-		box_mesh.size = Vector3(fp_m, 1.0, fp_m)
-		mesh_inst.mesh = box_mesh
-		mesh_inst.position = Vector3(0.0, 0.5, 0.0)
-		
-		var mat = StandardMaterial3D.new()
-		mat.albedo_color = _get_placeholder_color()
-		mesh_inst.material_override = mat
-		add_child(mesh_inst)
+		_build_body_mesh()
 
 	# 4. Add Label3D if missing (v0.2 In-World 3D Building Text & Info)
 	if label_3d == null:
@@ -355,7 +348,7 @@ func _ensure_physics_and_visuals() -> void:
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label_3d.outline_modulate = Color(0, 0, 0, 0.9)
-		label_3d.position = Vector3(0.0, 1.8, 0.0)
+		label_3d.position = Vector3(0.0, _building_height() + 0.8, 0.0)
 		_apply_label_sizing(label_3d)
 		add_child(label_3d)
 
@@ -367,7 +360,7 @@ func _ensure_physics_and_visuals() -> void:
 		if bar_script:
 			status_bar = bar_script.new()
 			status_bar.name = "StatusBar"
-			status_bar.position = Vector3(0.0, 1.55, 0.0)
+			status_bar.position = Vector3(0.0, _building_height() + 0.55, 0.0)
 			add_child(status_bar)
 
 	if selection_ring == null:
@@ -381,6 +374,56 @@ func _ensure_physics_and_visuals() -> void:
 	# Buildings are square, so the outline traces their own footprint.
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
 		selection_ring.configure(SelectionRing3D.Shape.BOX, _footprint())
+
+## The visible body. Height is what makes a building read as imposing -- widening
+## one eats into the lane the Hero needs to get past, while height costs nothing.
+## "spikes" draws a row of thin uprights instead of a block, so stakes look like
+## stakes driven into the ground while still occupying the whole tile.
+func _build_body_mesh() -> void:
+	var fp: float = _footprint()
+	var h: float = _building_height()
+	var colour: Color = _get_placeholder_color()
+
+	if _mesh_style() == "spikes":
+		var holder := Node3D.new()
+		holder.name = "Body"
+		add_child(holder)
+		var count: int = 3
+		var thickness: float = fp / (count * 2.2)
+		for i in range(count):
+			var t: float = (float(i) / float(count - 1)) - 0.5   # -0.5 .. 0.5
+			var spike := MeshInstance3D.new()
+			var pm := BoxMesh.new()
+			pm.size = Vector3(thickness, h, thickness)
+			spike.mesh = pm
+			spike.position = Vector3(t * (fp - thickness), h * 0.5, 0.0)
+			var m := StandardMaterial3D.new()
+			m.albedo_color = colour
+			spike.material_override = m
+			holder.add_child(spike)
+		return
+
+	var mesh_inst = MeshInstance3D.new()
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = Vector3(fp, h, fp)
+	mesh_inst.mesh = box_mesh
+	mesh_inst.position = Vector3(0.0, h * 0.5, 0.0)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = colour
+	mesh_inst.material_override = mat
+	add_child(mesh_inst)
+
+func _building_height() -> float:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_building_height"):
+		return float(cfg.get_building_height(building_type))
+	return 1.0
+
+func _mesh_style() -> String:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_building_mesh_style"):
+		return String(cfg.get_building_mesh_style(building_type))
+	return "box"
 
 func _get_placeholder_color() -> Color:
 	var cfg = _get_config()
@@ -586,6 +629,10 @@ func _visual_mesh() -> MeshInstance3D:
 	for child in get_children():
 		if child is MeshInstance3D and child != range_indicator:
 			return child
+		if child is Node3D and child.name == "Body":
+			for g in child.get_children():
+				if g is MeshInstance3D:
+					return g
 	return null
 
 ## Throws debris in this building's own colour as it comes down.

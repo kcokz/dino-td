@@ -31,8 +31,9 @@ const TILE_SIZE: float = 2.0
 ## run 70-120s apart with 90s of grace, which is roughly hut -> tend -> turret.
 ##
 ## Opening wallet is 20 wood, which deliberately affords a real first decision
-## rather than a forced one: a lumber hut (12) plus a wall (5), or a single tower
-## (20) and no economy at all. It must stay at or above the cheapest producer, or
+## rather than a forced one: a lumber hut (12) with a short stake fence in front of
+## it, or a tower (12) straight away and no economy at all. It must stay at or
+## above the cheapest producer, or
 ## the player starts unable to build anything and has to hand-harvest first while
 ## staring at a disabled build menu. Hand-harvesting a node yields RESOURCE_NODES.harvest_rate per
 ## second but occupies the Hero completely, so machines win on hero-time even
@@ -49,6 +50,8 @@ const BUILDINGS: Dictionary = {
 	"tower": {
 		"name": "BUILDING_TOWER_NAME",
 		"kind": "tower",
+		"footprint": 1.1,
+		"height": 2.4,
 		"hp": 20.0,
 		"cost": {"wood": 12},
 		"ap_cost": 1,
@@ -63,7 +66,24 @@ const BUILDINGS: Dictionary = {
 		"hp": 8.0,
 		# A barrier: neighbouring stakes close up into a fence the Hero cannot slip
 		# through. Being fenced in is undone by demolishing one of them.
+		#
+		# Wide and low is the whole silhouette: the width is what closes the gap, and
+		# staying below BUILDING_HEIGHT_DEFAULT keeps a row of stakes reading as a
+		# fence you see over rather than as a wall of buildings. A turret is the
+		# opposite -- narrow enough to walk past, tall enough to spot across the map.
 		"footprint": 1.9,
+		"height": 0.85,
+		"mesh_style": "spikes",
+		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
+		# fence line wears a raid down instead of only delaying it. Deliberately a
+		# chip rather than a kill -- a raptor (DINOS.raptor.hp) chewing through these
+		# 8 HP comes out alive but nearly dead, leaving the finishing to a tower or
+		# the Hero. contact_range must reach DINO_ATTACK_SLOT_RADIUS_INNER, which is
+		# where a dino stands while attacking; a range tied to the footprint alone
+		# would leave the attacker just out of reach and the stakes harmless.
+		"contact_damage": 0.15,
+		"contact_tick": 0.5,
+		"contact_range": 2.0,
 		"cost": {"wood": 1},
 		"ap_cost": 1,
 		"upgrades_to": "",
@@ -139,9 +159,6 @@ const BUILDINGS: Dictionary = {
 	}
 }
 
-## Types offered in the Hero's build menu, in display order.
-## Buildings absent here exist in BUILDINGS but cannot be placed by the player
-## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
 ## How much of its tile a building's box takes up, in metres.
 ##
 ## Most buildings leave a strip free, so two neighbours always have a lane between
@@ -151,6 +168,35 @@ const BUILDINGS: Dictionary = {
 ## does shut a gap. Getting boxed in on purpose is recoverable: select any adjacent
 ## building and demolish it.
 const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metres
+
+## How tall a building stands when it does not say otherwise. Height is the honest
+## lever for "this thing is imposing": widening a building eats into the lane the
+## Hero needs, while making it taller costs nothing.
+const BUILDING_HEIGHT_DEFAULT: float = 1.0
+
+static func get_building_height(type_id: String) -> float:
+	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("height"):
+		return maxf(0.2, float(BUILDINGS[type_id]["height"]))
+	return BUILDING_HEIGHT_DEFAULT
+
+## "box" (one solid block) or "spikes" (several thin uprights spanning the tile).
+static func get_building_mesh_style(type_id: String) -> String:
+	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("mesh_style"):
+		return String(BUILDINGS[type_id]["mesh_style"])
+	return "box"
+
+## Damage per second a building deals to whatever is pressed against it. Zero for
+## everything that is not sharpened. The one place damage-per-tick is turned into
+## damage-per-second, so the build menu and Wall itself cannot disagree.
+static func get_contact_dps(type_id: String) -> float:
+	if not BUILDINGS.has(type_id):
+		return 0.0
+	var data: Dictionary = BUILDINGS[type_id]
+	var dmg: float = float(data.get("contact_damage", 0.0))
+	var tick: float = float(data.get("contact_tick", 0.0))
+	if dmg <= 0.0 or tick <= 0.0:
+		return 0.0
+	return dmg / tick
 
 ## Footprint for a building that has not declared one: wide as the tile allows
 ## while still leaving the Hero a way past.
@@ -170,6 +216,9 @@ static func is_barrier_building(type_id: String) -> bool:
 	var fp: float = get_building_footprint(type_id)
 	return (TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
 
+## Types offered in the Hero's build menu, in display order.
+## Buildings absent here exist in BUILDINGS but cannot be placed by the player
+## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
 const BUILDABLE_TYPES: Array[String] = ["wall", "tower", "lumber_hut", "quarry", "hunting_hut"]
 
 # ==============================================================================
@@ -404,8 +453,13 @@ const RESOURCE_NODES: Dictionary = {
 ##   wooden stakes (1 wood)  -> 0.5s (the floor)
 ##   lumber hut   (12 wood)  -> 4.8s
 ##   auto turret  (20 wood)  -> 8.0s
-const BUILD_SECONDS_PER_RESOURCE: float = 0.4
-const BUILD_TIME_MIN: float = 0.5
+## Superlinear on purpose: at a flat rate per resource the gap between a cheap and
+## an expensive building is barely noticeable, and raising a turret should feel
+## like work next to hammering in a stake.
+##   time = max(BUILD_TIME_MIN, total_cost ^ BUILD_TIME_EXPONENT * BUILD_SECONDS_PER_RESOURCE)
+const BUILD_SECONDS_PER_RESOURCE: float = 0.55
+const BUILD_TIME_EXPONENT: float = 1.25
+const BUILD_TIME_MIN: float = 1.0
 
 ## Seconds the Hero must spend to raise `type_id`. Free buildings (the cabin, which
 ## the level spawns rather than the player) take no time at all.
@@ -418,7 +472,7 @@ static func get_build_time(type_id: String) -> float:
 		total += float(cost[res_id])
 	if total <= 0.0:
 		return 0.0
-	return maxf(BUILD_TIME_MIN, total * BUILD_SECONDS_PER_RESOURCE)
+	return maxf(BUILD_TIME_MIN, pow(total, BUILD_TIME_EXPONENT) * BUILD_SECONDS_PER_RESOURCE)
 
 ## Helper returning localized display name for any building type.
 static func get_building_name(type_id: String) -> String:

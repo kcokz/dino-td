@@ -331,6 +331,8 @@ func _populate_hero_buttons() -> void:
 		)
 
 ## Cost and build time for the hovered entry, or a prompt when nothing is hovered.
+## Anything that bites what touches it says so here: a stake fence only reads as a
+## weapon rather than a speed bump if the player learns it before paying for it.
 func _show_build_detail(b_type: String) -> void:
 	if status_label == null:
 		return
@@ -341,7 +343,11 @@ func _show_build_detail(b_type: String) -> void:
 	var cost: int = int(cfg.BUILDINGS[b_type].get("cost", {}).get("wood", 0))
 	if _can_afford(b_type):
 		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
-		status_label.text = tr("BUILD_DETAIL_FORMAT") % [b_name, cost, secs]
+		var dps: float = float(cfg.get_contact_dps(b_type)) if cfg.has_method("get_contact_dps") else 0.0
+		if dps > 0.0:
+			status_label.text = tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, cost, secs, dps]
+		else:
+			status_label.text = tr("BUILD_DETAIL_FORMAT") % [b_name, cost, secs]
 		status_label.modulate = Color(0.85, 0.85, 0.85)
 	else:
 		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, cost, _wood()]

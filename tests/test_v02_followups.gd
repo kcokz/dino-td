@@ -587,15 +587,24 @@ func test_28_build_time_is_a_function_of_price() -> void:
 				assert_lte(config_node.get_build_time(String(a)), config_node.get_build_time(String(b)),
 					"%s is cheaper than %s, so it may not take longer" % [a, b])
 
-	# The relationship is the stated formula, not an accident of hand-tuning.
+	# The relationship is the stated formula, not an accident of hand-tuning. It is
+	# superlinear, so an expensive building is disproportionately slower than a
+	# cheap one rather than merely proportionally slower.
 	var per: float = float(config_node.BUILD_SECONDS_PER_RESOURCE)
+	var expo: float = float(config_node.BUILD_TIME_EXPONENT)
 	var floor_t: float = float(config_node.BUILD_TIME_MIN)
+	assert_gt(expo, 1.0, "The curve is superlinear, so price differences are felt")
 	for b_type in config_node.BUILDABLE_TYPES:
 		var cost_sum: float = 0.0
 		for res_id in config_node.BUILDINGS[b_type].get("cost", {}):
 			cost_sum += float(config_node.BUILDINGS[b_type]["cost"][res_id])
-		assert_almost_eq(config_node.get_build_time(b_type), maxf(floor_t, cost_sum * per), 0.001,
+		assert_almost_eq(config_node.get_build_time(b_type), maxf(floor_t, pow(cost_sum, expo) * per), 0.001,
 			"%s build time follows the price formula" % b_type)
+
+	# Doubling the price must more than double the wait, which is the whole point.
+	var cheap: float = config_node.get_build_time("lumber_hut")
+	var dear: float = maxf(floor_t, pow(cost_of("lumber_hut") * 2.0, expo) * per)
+	assert_gt(dear, cheap * 2.0, "Twice the price costs more than twice the time")
 
 	# No building may restate a build_time of its own, or the two can drift apart.
 	for b_type in config_node.BUILDINGS:
