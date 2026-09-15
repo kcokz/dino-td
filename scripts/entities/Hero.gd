@@ -590,7 +590,10 @@ func order_build(building: Node, force: bool = false) -> void:
 	if building == null or not is_instance_valid(building):
 		current_state = State.IDLE
 		return
-	if not force and current_state == State.BUILDING and target_building != null and is_instance_valid(target_building) and target_building != building:
+	# A non-forced order must not retarget a Hero who already has a blueprint in
+	# hand. Guarding only the BUILDING state let every fresh click steal him while
+	# he was still WALKING to the previous one, so a row went up in reverse order.
+	if not force and target_building != null and is_instance_valid(target_building) 			and not target_building.is_queued_for_deletion() 			and "is_constructed" in target_building and not target_building.is_constructed 			and target_building != building 			and current_state in [State.BUILDING, State.MOVING]:
 		return
 	target_building = building
 	target_enemy = null
@@ -777,7 +780,11 @@ func _ensure_components() -> void:
 		collision_shape = CollisionShape3D.new()
 		collision_shape.name = "CollisionShape3D"
 		var box = BoxShape3D.new()
-		box.size = Vector3(0.8, 1.6, 0.8)
+		var w: float = 0.8
+		var cfg_h = _get_config()
+		if cfg_h and "HERO" in cfg_h:
+			w = float(cfg_h.HERO.get("width", 0.8))
+		box.size = Vector3(w, 1.6, w)
 		collision_shape.shape = box
 		collision_shape.position = Vector3(0.0, 0.8, 0.0)
 		add_child(collision_shape)

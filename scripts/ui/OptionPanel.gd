@@ -394,18 +394,11 @@ func _populate_building_buttons() -> void:
 			unit_to_demolish.demolish()
 	)
 
+## Resource nodes are scenery, not units: they take no orders. Right-clicking one
+## while the Hero is selected already sends him to harvest it, so a button here
+## would only be a second, slower way to do the same thing.
 func _populate_resource_buttons() -> void:
-	var is_depleted: bool = false
-	if "is_depleted" in selected_unit:
-		is_depleted = bool(selected_unit.is_depleted)
-	
-	if not is_depleted:
-		_create_action_button(TranslationServer.translate("CMD_HARVEST"), func():
-			var hero = _get_hero()
-			if hero and is_instance_valid(hero) and hero.has_method("order_harvest") and is_instance_valid(selected_unit):
-				hero.order_harvest(selected_unit)
-				action_triggered.emit("harvest", selected_unit)
-		)
+	pass
 
 func _trigger_build(type_id: String) -> void:
 	build_option_selected.emit(type_id)

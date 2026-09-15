@@ -271,7 +271,8 @@ func _ensure_physics_and_visuals() -> void:
 	if not has_shape:
 		var col = CollisionShape3D.new()
 		var box = BoxShape3D.new()
-		box.size = Vector3(1.8, 1.0, 1.8)
+		var fp: float = _footprint()
+		box.size = Vector3(fp, 1.0, fp)
 		col.shape = box
 		col.position = Vector3(0.0, 0.5, 0.0)
 		add_child(col)
@@ -285,7 +286,8 @@ func _ensure_physics_and_visuals() -> void:
 	if not has_mesh:
 		var mesh_inst = MeshInstance3D.new()
 		var box_mesh = BoxMesh.new()
-		box_mesh.size = Vector3(1.8, 1.0, 1.8)
+		var fp_m: float = _footprint()
+		box_mesh.size = Vector3(fp_m, 1.0, fp_m)
 		mesh_inst.mesh = box_mesh
 		mesh_inst.position = Vector3(0.0, 0.5, 0.0)
 		
@@ -446,3 +448,11 @@ func _resolve_build_time() -> float:
 	if cfg and cfg.has_method("get_build_time"):
 		return float(cfg.get_build_time(building_type))
 	return 2.0
+
+## Side length of this building's box. Derived from Config so the gap between two
+## neighbouring buildings always stays wider than the Hero (see BUILDING_CLEARANCE).
+func _footprint() -> float:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_building_footprint"):
+		return float(cfg.get_building_footprint())
+	return 1.0

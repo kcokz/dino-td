@@ -582,9 +582,12 @@ func _hint(key: String) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 		hud.show_hint(tr(key))
 
-## True when the Option Panel is resting on the Hero, i.e. he is the unit the
-## player is currently commanding. With nothing selected at all the Hero is still
-## the default subject, so orders work.
+## Whether a right-click should command the Hero.
+##
+## Only one of the player's own buildings takes the subject away from him -- those
+## have their own actions, so clicking a turret to read it must not double as
+## "walk over there". Selecting scenery (a tree, a rock) is purely informational
+## and must not cost the player control, or clicking a tree strands the Hero.
 func _is_hero_selected() -> bool:
 	if hero == null or not is_instance_valid(hero):
 		return false
@@ -592,7 +595,9 @@ func _is_hero_selected() -> bool:
 	if panel == null or not is_instance_valid(panel):
 		return true
 	var sel = panel.selected_unit if "selected_unit" in panel else null
-	return sel == null or sel == hero
+	if sel == null or sel == hero or not is_instance_valid(sel):
+		return true
+	return not sel.is_in_group("buildings")
 
 func _get_option_panel() -> Node:
 	if hud and is_instance_valid(hud):

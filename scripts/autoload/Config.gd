@@ -135,6 +135,16 @@ const BUILDINGS: Dictionary = {
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
+## A building never fills its whole tile: the leftover strip guarantees a lane
+## between two neighbours wider than the Hero, so a ring of buildings can never
+## seal him in. Placement stays one-building-per-tile; only the footprint shrinks.
+const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metres
+
+## Side length of a building's box, in metres.
+static func get_building_footprint() -> float:
+	var hero_w: float = float(HERO.get("width", 0.8))
+	return maxf(0.5, TILE_SIZE - hero_w - BUILDING_CLEARANCE)
+
 const BUILDABLE_TYPES: Array[String] = ["wall", "tower", "lumber_hut", "quarry", "hunting_hut"]
 
 # ==============================================================================
@@ -260,6 +270,7 @@ const HERO: Dictionary = {
 	"attack_range": 2.0,          # 攻击距离（米）
 	"provoke_duration": 5.0,      # 挑衅仇恨持续时长（秒）
 	"provoke_radius": 4.0,        # 挑衅仇恨生效半径（米）
+	"width": 0.8,                 # 碰撞体宽度（米）——建筑占地由它推导
 }
 
 ## Presentation sizing. The project renders at a 1280x720 design viewport with

@@ -138,14 +138,14 @@ func _on_language_selected(index: int) -> void:
 # ==============================================================================
 
 func _ensure_components() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	if find_child("Dimmer", true, false) == null:
 		var dimmer := ColorRect.new()
 		dimmer.name = "Dimmer"
 		dimmer.color = Color(0.0, 0.0, 0.0, 0.55)
-		dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(dimmer)
 
@@ -157,7 +157,7 @@ func _ensure_components() -> void:
 	if centerer == null:
 		centerer = CenterContainer.new()
 		centerer.name = "Centerer"
-		centerer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		centerer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		centerer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(centerer)
 

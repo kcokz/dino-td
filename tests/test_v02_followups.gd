@@ -875,10 +875,106 @@ func test_42_pause_menu_is_centred_not_cornered() -> void:
 	menu.open()
 	await wait_frames(2)
 
-	assert_not_null(menu.centerer, "The menu centres its panel with a CenterContainer")
-	assert_not_null(menu.panel, "The menu has a panel")
-	assert_eq(menu.panel.get_parent(), menu.centerer,
-		"The panel sits inside the centring container, not anchored to a corner")
+	# Measure where it actually lands. The structural check (panel inside a
+	# CenterContainer) passed while the menu still sat in the corner, because the
+	# menu itself was 0x0: set_anchors_preset() recomputes offsets to PRESERVE the
+	# current rect, so a control that starts empty stays empty.
+	var view: Vector2 = menu.get_viewport_rect().size
+	assert_gt(menu.size.x, 0.0, "The menu Control fills its parent rather than collapsing to 0x0")
+	assert_almost_eq(menu.size.x, view.x, 1.0, "Menu spans the viewport width")
+	assert_almost_eq(menu.size.y, view.y, 1.0, "Menu spans the viewport height")
+
+	var centre: Vector2 = menu.panel.global_position + menu.panel.size * 0.5
+	assert_almost_eq(centre.x, view.x * 0.5, 2.0, "Panel is horizontally centred")
+	assert_almost_eq(centre.y, view.y * 0.5, 2.0, "Panel is vertically centred")
 	assert_not_null(menu.find_child("Dimmer", true, false),
 		"A dimmed backdrop makes the menu read as a modal layer")
 	menu.close()
+
+# ==============================================================================
+# 12. Trapping, scenery selection, and the walking-Hero retarget bug
+# ==============================================================================
+
+func test_43_buildings_leave_a_lane_wider_than_the_hero() -> void:
+	# Two buildings on neighbouring tiles must leave a gap the Hero fits through,
+	# otherwise a ring of them seals him in with no way out.
+	var tile: float = float(config_node.TILE_SIZE)
+	var footprint: float = float(config_node.get_building_footprint())
+	var hero_w: float = float(config_node.HERO.get("width", 0.8))
+	var gap: float = tile - footprint
+
+	assert_gt(gap, hero_w, "The lane between two neighbouring buildings is wider than the Hero")
+	assert_almost_eq(gap - hero_w, float(config_node.BUILDING_CLEARANCE), 0.001,
+		"The slack is exactly the configured clearance")
+
+	# And the entity actually uses it, rather than restating a size of its own.
+	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	await wait_frames(1)
+	var shape: CollisionShape3D = null
+	for child in wall.get_children():
+		if child is CollisionShape3D:
+			shape = child
+			break
+	assert_not_null(shape, "A building has a collision shape")
+	assert_almost_eq(shape.shape.size.x, footprint, 0.001, "Its footprint comes from Config")
+
+func test_44_clicking_scenery_does_not_strand_the_hero() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+	var panel = main._get_option_panel()
+
+	# A tree is scenery: reading it must not cost the player control of the Hero.
+	var node = resource_node_script.new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(node)
+	tree.root.add_child(node)
+	await wait_frames(1)
+	panel._on_unit_selected(node)
+	assert_true(main._is_hero_selected(), "Selecting a tree leaves the Hero commandable")
+
+	# One of the player's own buildings does take the subject away.
+	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	await wait_frames(1)
+	panel._on_unit_selected(tower)
+	assert_false(main._is_hero_selected(), "A selected building does take the subject")
+
+func test_45_trees_offer_no_redundant_harvest_button() -> void:
+	var panel = option_panel_script.new()
+	_cleanup_nodes.append(panel)
+	tree.root.add_child(panel)
+	var node = resource_node_script.new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(node)
+	tree.root.add_child(node)
+	await wait_frames(1)
+
+	panel._on_unit_selected(node)
+	assert_eq(panel.button_container.get_child_count(), 0,
+		"A tree carries no command buttons; right-click already harvests it")
+
+func test_46_a_new_click_does_not_steal_a_hero_already_walking_to_a_blueprint() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+
+	game_state_node.resources["wood"] = cost_of("wall") * 4
+	main.on_build_selected("wall")
+
+	var first = main.try_place_at_cell(Vector2i(9, 9))
+	assert_not_null(first, "First stake placed")
+	# He is walking to it, not yet building it -- the state the old guard missed.
+	assert_eq(int(main.hero.current_state), int(hero_script.State.MOVING), "Hero sets off towards it")
+
+	var second = main.try_place_at_cell(Vector2i(3, 3))
+	assert_not_null(second, "Second stake placed")
+	assert_eq(main.hero.target_building, first,
+		"A stake clicked while he is still walking must not steal him from the first")
