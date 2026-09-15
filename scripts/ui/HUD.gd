@@ -35,6 +35,7 @@ var pause_btn: Button = null
 var speed_btn: Button = null
 var raid_warning_banner: Label = null
 var option_panel: Node = null
+var pause_menu: Node = null
 
 var current_speed: float = 1.0
 const SPEEDS: Array[float] = [1.0, 2.0, 3.0]
@@ -579,6 +580,14 @@ func _ensure_ui_components() -> void:
 		raid_warning_banner.visible = false
 		root_control.add_child(raid_warning_banner)
 
+	if pause_menu == null:
+		pause_menu = find_child("PauseMenu", true, false)
+	if pause_menu == null:
+		var menu_script = load("res://scripts/ui/PauseMenu.gd")
+		if menu_script:
+			pause_menu = menu_script.new()
+			root_control.add_child(pause_menu)
+
 	if option_panel == null:
 		option_panel = find_child("OptionPanel", true, false)
 	if option_panel == null:
@@ -663,3 +672,13 @@ func _hide_legacy_phase_controls() -> void:
 	var vsep3 = find_child("VSeparator3", true, false)
 	if vsep3 and is_instance_valid(vsep3):
 		vsep3.visible = false
+
+## ESC handling lives in Main; this is the HUD's side of it.
+func toggle_pause_menu() -> void:
+	if pause_menu and is_instance_valid(pause_menu) and pause_menu.has_method("toggle"):
+		pause_menu.toggle()
+
+func is_pause_menu_open() -> bool:
+	if pause_menu and is_instance_valid(pause_menu) and "is_open" in pause_menu:
+		return bool(pause_menu.is_open)
+	return false

@@ -98,7 +98,7 @@ func test_04_dynamic_locale_switching_to_chinese() -> void:
 	# Verify instant reactive translations in zh_CN
 	assert_eq(tr("BUILDING_TOWER_NAME"), "自动哨位", "In 'zh_CN', BUILDING_TOWER_NAME must be '自动哨位'")
 	assert_eq(tr("BUILDING_CORE_NAME"), "废弃船舱", "In 'zh_CN', BUILDING_CORE_NAME must be '废弃船舱'")
-	assert_eq(tr("BUILDING_WALL_NAME"), "木墙", "In 'zh_CN', BUILDING_WALL_NAME must be '木墙'")
+	assert_eq(tr("BUILDING_WALL_NAME"), "木栅栏", "In 'zh_CN', BUILDING_WALL_NAME must be '木栅栏'")
 	assert_eq(tr("DINO_RAPTOR_NAME"), "迅猛龙", "In 'zh_CN', DINO_RAPTOR_NAME must be '迅猛龙'")
 	assert_eq(tr("BTN_RESTART"), "重新开始", "In 'zh_CN', BTN_RESTART must be '重新开始'")
 

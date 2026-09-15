@@ -43,7 +43,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {},
 		"ap_cost": 0,
-		"build_time": 0.0,
 		"upgrades_to": "",
 	},
 	"tower": {
@@ -52,7 +51,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 20.0,
 		"cost": {"wood": 20},
 		"ap_cost": 1,
-		"build_time": 8.0,
 		"range": 5.0,
 		"damage": 1.0,
 		"fire_rate": 1.0,
@@ -61,10 +59,9 @@ const BUILDINGS: Dictionary = {
 	"wall": {
 		"name": "BUILDING_WALL_NAME",
 		"kind": "wall",
-		"hp": 30.0,
-		"cost": {"wood": 5},
+		"hp": 8.0,
+		"cost": {"wood": 1},
 		"ap_cost": 1,
-		"build_time": 2.0,
 		"upgrades_to": "",
 	},
 	"lumber_hut": {
@@ -73,7 +70,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {"wood": 12},
 		"ap_cost": 1,
-		"build_time": 4.0,
 		"tend_duration": 40.0,
 		"tend_time": 2.0,
 		"harvest_range": 12.0,
@@ -87,7 +83,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {"wood": 3},
 		"ap_cost": 1,
-		"build_time": 3.0,
 		"ap_bonus": 0,
 		"upgrades_to": "wood_house",
 	},
@@ -97,7 +92,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 20.0,
 		"cost": {"wood": 6},
 		"ap_cost": 1,
-		"build_time": 5.0,
 		"ap_bonus": 1,
 		"upgrades_to": "barracks",
 	},
@@ -107,7 +101,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 30.0,
 		"cost": {"wood": 10, "stone": 5},
 		"ap_cost": 1,
-		"build_time": 8.0,
 		"ap_bonus": 2,
 		"upgrades_to": "",
 	},
@@ -117,7 +110,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 15.0,
 		"cost": {"wood": 22},
 		"ap_cost": 1,
-		"build_time": 5.0,
 		"tend_duration": 40.0,
 		"tend_time": 2.5,
 		"harvest_range": 12.0,
@@ -131,7 +123,6 @@ const BUILDINGS: Dictionary = {
 		"hp": 10.0,
 		"cost": {"wood": 18},
 		"ap_cost": 1,
-		"build_time": 4.0,
 		"tend_duration": 40.0,
 		"tend_time": 2.0,
 		"harvest_range": 12.0,
@@ -349,6 +340,28 @@ const RESOURCE_NODES: Dictionary = {
 		"depleted_color": Color(0.25, 0.3, 0.35),
 	}
 }
+
+## Construction time is a function of price: the more a building costs, the longer
+## the Hero stands there making it. Keeping it derived means a designer tunes one
+## number (cost) instead of two that can drift apart.
+##   wooden stakes (1 wood)  -> 0.5s (the floor)
+##   lumber hut   (12 wood)  -> 4.8s
+##   auto turret  (20 wood)  -> 8.0s
+const BUILD_SECONDS_PER_RESOURCE: float = 0.4
+const BUILD_TIME_MIN: float = 0.5
+
+## Seconds the Hero must spend to raise `type_id`. Free buildings (the cabin, which
+## the level spawns rather than the player) take no time at all.
+static func get_build_time(type_id: String) -> float:
+	if not BUILDINGS.has(type_id):
+		return BUILD_TIME_MIN
+	var cost: Dictionary = BUILDINGS[type_id].get("cost", {})
+	var total: float = 0.0
+	for res_id in cost:
+		total += float(cost[res_id])
+	if total <= 0.0:
+		return 0.0
+	return maxf(BUILD_TIME_MIN, total * BUILD_SECONDS_PER_RESOURCE)
 
 ## Helper returning localized display name for any building type.
 static func get_building_name(type_id: String) -> String:

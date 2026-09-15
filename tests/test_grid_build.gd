@@ -380,8 +380,8 @@ func test_building_wall_initialization() -> void:
 	assert_has(wall, "building_type", "Wall must declare building_type")
 	assert_eq(wall.building_type, "wall", "Wall building_type should be 'wall'")
 	assert_has(wall, "max_hp", "Wall must declare max_hp")
-	assert_almost_eq(float(wall.max_hp), 30.0, 0.01, "Wall max_hp should match Config (30.0)")
-	assert_almost_eq(float(wall.current_hp), 30.0, 0.01, "Wall initial current_hp should be full (30.0)")
+	assert_almost_eq(float(wall.max_hp), float(config_node.BUILDINGS["wall"]["hp"]), 0.01, "Wall max_hp matches Config")
+	assert_almost_eq(float(wall.current_hp), float(config_node.BUILDINGS["wall"]["hp"]), 0.01, "Wall starts at full hp")
 
 func test_building_lumber_hut_initialization() -> void:
 	assert_not_null(lumber_hut_script, "LumberHut.gd script must exist")
@@ -412,6 +412,10 @@ func test_building_take_damage_and_destruction_signal() -> void:
 	_cleanup_nodes.append(wall)
 
 	var watcher = watch_signal(event_bus_node, "building_destroyed")
+
+	# This test is about the damage/destroy signal, not about balance: pin the hp.
+	wall.max_hp = 30.0
+	wall.current_hp = 30.0
 
 	# Take non-lethal damage
 	assert_has_method(wall, "take_damage", "Building must implement take_damage")
@@ -542,8 +546,8 @@ func test_placement_rejected_insufficient_wood() -> void:
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or game_state_node == null: return
 
-	# Set wood to 1 (Wall costs 2)
-	game_state_node.resources["wood"] = 1
+	# One wood short of a wall, so the placement below must be rejected.
+	game_state_node.resources["wood"] = maxi(0, cost_of("wall") - 1)
 	var cell = Vector2i(6, 6)
 
 	assert_false(build_sys.can_place_building("wall", cell), "can_place_building must return false when wood is insufficient")
@@ -554,7 +558,7 @@ func test_placement_rejected_insufficient_wood() -> void:
 
 	assert_null(b, "place_building must return null when wood is insufficient")
 	assert_eq(_get_ap(), 3, "AP must remain untouched (3)")
-	assert_eq(_get_wood(), 1, "Wood must remain untouched (1)")
+	assert_eq(_get_wood(), maxi(0, cost_of("wall") - 1), "Wood must remain untouched")
 	assert_false(watcher.emitted, "No signal emitted on wood failure")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell must remain empty")
 

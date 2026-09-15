@@ -298,7 +298,7 @@ func test_dino_attacks_wall_periodically() -> void:
 	if dino == null or wall == null: return
 
 	var initial_hp = float(wall.current_hp)
-	assert_almost_eq(initial_hp, 30.0, 0.01, "Wall initial HP is 30.0")
+	assert_almost_eq(initial_hp, float(config_node.BUILDINGS["wall"]["hp"]), 0.01, "Wall starts at its Config hp")
 
 	# Trigger attack
 	if dino.has_method("attack_target"):

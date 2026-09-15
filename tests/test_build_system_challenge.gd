@@ -812,8 +812,9 @@ func test_challenge_rapid_failed_placements_resource_non_leak() -> void:
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or game_state_node == null: return
 
-	# Wood = 1 (Wall costs 2, Tower costs 4)
-	game_state_node.resources["wood"] = 1
+	# One wood short of a wall, so every placement below must be rejected.
+	var broke: int = maxi(0, cost_of("wall") - 1)
+	game_state_node.resources["wood"] = broke
 	game_state_node.current_ap = 3
 
 	for i in range(100):
@@ -821,7 +822,7 @@ func test_challenge_rapid_failed_placements_resource_non_leak() -> void:
 		var b = build_sys.place_building("wall", dummy_cell)
 		if b is Node: _cleanup_nodes.append(b)
 
-	assert_eq(_get_wood(), 1, "Wood must remain exactly 1 after 100 failed placements (no drift/leak)")
+	assert_eq(_get_wood(), broke, "Wood must be untouched after 100 failed placements (no drift/leak)")
 	assert_eq(_get_ap(), 3, "AP must remain exactly 3 after 100 failed placements (no drift/leak)")
 
 func test_challenge_zero_ap_cost_core_placement_boundary() -> void:

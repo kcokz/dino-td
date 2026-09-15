@@ -322,6 +322,11 @@ func test_multiple_concurrent_dinos_attacking_same_wall() -> void:
 		assert_eq(int(d.current_state), 1, "Dino is in ATTACKING state")
 		assert_eq(d.current_target, wall, "Dino target is the shared wall")
 
+	# This test is about damage accumulating from many attackers, not about balance,
+	# so give the wall enough hp to survive the barrage whatever a stake costs.
+	wall.max_hp = 30.0
+	wall.current_hp = 30.0
+
 	# Each dino performs 2 attacks (8 * 2 = 16 damage total)
 	for d in dinos:
 		d.perform_attack()

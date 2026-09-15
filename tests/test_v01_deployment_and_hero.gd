@@ -95,9 +95,10 @@ func test_01_config_v01_parameters_integrity() -> void:
 	assert_almost_eq(float(guards_cfg.get("leash_radius", 0.0)), 12.0, 0.01, "leash_radius must be 12.0m")
 
 	var buildings: Dictionary = config_node.get("BUILDINGS")
-	assert_true(buildings.has("wall") and buildings["wall"].has("build_time"), "Wall has build_time")
-	assert_true(buildings.has("tower") and buildings["tower"].has("build_time"), "Tower has build_time")
-	assert_true(buildings.has("lumber_hut") and buildings["lumber_hut"].has("build_time"), "LumberHut has build_time")
+	# Build time is derived from price rather than stated per building.
+	for b_type in ["wall", "tower", "lumber_hut"]:
+		assert_true(buildings.has(b_type), "%s is in the catalog" % b_type)
+		assert_gt(config_node.get_build_time(b_type), 0.0, "%s has a positive derived build time" % b_type)
 
 # ==============================================================================
 # 2. Real-Time Deployment Countdown & Auto-Advance

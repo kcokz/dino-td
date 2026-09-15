@@ -57,7 +57,7 @@ func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO) -> void:
 		var data: Dictionary = cfg.BUILDINGS[type_id]
 		max_hp = float(data.get("hp", 10.0))
 		current_hp = max_hp
-		build_time = float(data.get("build_time", 2.0))
+		build_time = _resolve_build_time()
 	_update_info_label()
 
 # ==============================================================================
@@ -70,7 +70,7 @@ func start_construction(time_required: float = -1.0) -> void:
 	if time_required >= 0.0:
 		build_time = time_required
 	elif cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
-		build_time = float(cfg.BUILDINGS[building_type].get("build_time", 2.0))
+		build_time = _resolve_build_time()
 	
 	if build_time <= 0.0:
 		complete_construction()
@@ -429,3 +429,11 @@ func _on_unit_selected(unit: Node) -> void:
 
 func _on_unit_deselected() -> void:
 	set_range_visible(false)
+
+## Construction time is derived from the building's price (Config.get_build_time),
+## so cost is the single number a designer tunes.
+func _resolve_build_time() -> float:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_build_time"):
+		return float(cfg.get_build_time(building_type))
+	return 2.0

@@ -102,13 +102,13 @@ func test_01_i18n_runtime_switching_and_translation() -> void:
 	# Test switching to English
 	i18n_node.set_locale("en")
 	assert_eq(i18n_node.get_current_locale(), "en", "Current locale switched to en")
-	assert_eq(tr("BUILDING_WALL_NAME"), "Wood Wall", "Wall translated in English")
+	assert_eq(tr("BUILDING_WALL_NAME"), "Wooden Stakes", "Wall translated in English")
 	assert_eq(tr("CMD_BUILD"), "Build", "Build command translated in English")
 
 	# Test switching to Chinese
 	i18n_node.set_locale("zh_CN")
 	assert_eq(i18n_node.get_current_locale(), "zh_CN", "Current locale switched to zh_CN")
-	assert_eq(tr("BUILDING_WALL_NAME"), "木墙", "Wall translated in Simplified Chinese")
+	assert_eq(tr("BUILDING_WALL_NAME"), "木栅栏", "Wall translated in Simplified Chinese")
 	assert_eq(tr("CMD_BUILD"), "建造", "Build command translated in Simplified Chinese")
 
 	# Restore initial locale

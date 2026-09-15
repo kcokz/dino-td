@@ -148,7 +148,7 @@ func test_config_buildings_catalog() -> void:
 
 	if "wall" in b:
 		assert_eq(b["wall"].get("kind", ""), "wall", "wall kind should be 'wall'")
-		assert_almost_eq(float(b["wall"].get("hp", 0.0)), 30.0, 0.01, "wall hp should be 30.0")
+		assert_gt(float(b["wall"].get("hp", 0.0)), 0.0, "wall must have positive hp")
 		assert_gt(b["wall"].get("cost", {}).get("wood", 0), 0, "wall must cost wood")
 
 	if "lumber_hut" in b:

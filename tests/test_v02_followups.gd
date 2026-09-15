@@ -582,3 +582,183 @@ func test_27_a_pinned_unit_that_disappears_releases_the_pin() -> void:
 	panel._process(0.0)
 	assert_false(panel.selection_is_manual, "A vanished pin is released")
 	assert_eq(panel.selected_unit, hero, "Panel falls back to the Hero")
+
+# ==============================================================================
+# 8. Build time derives from price; stakes queue up in a row
+# ==============================================================================
+
+func test_28_build_time_is_a_function_of_price() -> void:
+	# Cost is the single number a designer tunes; time follows from it.
+	assert_true(config_node.has_method("get_build_time"), "Config exposes get_build_time()")
+
+	var wall_t: float = config_node.get_build_time("wall")
+	var hut_t: float = config_node.get_build_time("lumber_hut")
+	var tower_t: float = config_node.get_build_time("tower")
+
+	assert_lt(wall_t, hut_t, "Cheap stakes go up faster than a lumber hut")
+	assert_lt(hut_t, tower_t, "A lumber hut goes up faster than a pricier tower")
+
+	# The relationship is the stated formula, not an accident of hand-tuning.
+	var per: float = float(config_node.BUILD_SECONDS_PER_RESOURCE)
+	var floor_t: float = float(config_node.BUILD_TIME_MIN)
+	for b_type in config_node.BUILDABLE_TYPES:
+		var cost_sum: float = 0.0
+		for res_id in config_node.BUILDINGS[b_type].get("cost", {}):
+			cost_sum += float(config_node.BUILDINGS[b_type]["cost"][res_id])
+		assert_almost_eq(config_node.get_build_time(b_type), maxf(floor_t, cost_sum * per), 0.001,
+			"%s build time follows the price formula" % b_type)
+
+	# No building may restate a build_time of its own, or the two can drift apart.
+	for b_type in config_node.BUILDINGS:
+		assert_false(config_node.BUILDINGS[b_type].has("build_time"),
+			"%s must not hardcode build_time; it is derived from cost" % b_type)
+
+func test_29_a_building_takes_its_derived_build_time() -> void:
+	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	await wait_frames(1)
+	assert_almost_eq(wall.build_time, config_node.get_build_time("wall"), 0.001,
+		"A placed building uses the derived time, not a per-building field")
+
+func test_30_stakes_are_cheap_enough_to_lay_a_row() -> void:
+	# The point of one-wood stakes is that a whole fence is affordable in one go.
+	var stake: int = cost_of("wall")
+	assert_eq(stake, 1, "A wooden stake costs one wood")
+	var wallet: int = int(config_node.INITIAL_RESOURCES.get("wood", 0))
+	assert_gte(wallet / stake, 10, "The opening wallet affords at least ten stakes")
+
+func test_31_placement_mode_survives_until_the_next_one_is_unaffordable() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+
+	var stake: int = cost_of("wall")
+	game_state_node.resources["wood"] = stake * 3
+	main.on_build_selected("wall")
+	assert_not_null(main.build_preview, "The ghost is up while laying stakes")
+
+	# Three clicks in a row leave three blueprints and never drop the build mode.
+	var placed: Array[Node] = []
+	for i in range(3):
+		var b = main.try_place_at_cell(Vector2i(6 + i, 6))
+		assert_not_null(b, "Stake %d placed" % (i + 1))
+		placed.append(b)
+		if i < 2:
+			assert_eq(main.current_build_type, "wall", "Build mode survives placement %d" % (i + 1))
+
+	# The wallet is empty now, so the mode drops on its own.
+	assert_eq(main.current_build_type, "", "Build mode ends when the next stake is unaffordable")
+	assert_true(main.build_preview == null or not is_instance_valid(main.build_preview),
+		"The ghost goes away with the build mode")
+
+	# Every stake is a blueprint waiting for the Hero, not a finished wall.
+	for b in placed:
+		assert_false(b.is_constructed, "Each stake is left as a blueprint for the Hero to raise")
+
+# ==============================================================================
+# 9. Right-click obeys the selection; ESC menu
+# ==============================================================================
+
+func test_32_right_click_only_commands_the_hero() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+
+	var panel = main._get_option_panel()
+	assert_not_null(panel, "Main can find the Option Panel")
+
+	# Resting on the Hero: he is the subject, so orders go through.
+	panel.set_selected_unit(main.hero)
+	assert_true(main._is_hero_selected(), "The Hero takes orders while he is selected")
+
+	# Pinned to a building: right-click must not double as 'walk over there'.
+	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	await wait_frames(1)
+	panel._on_unit_selected(tower)
+	assert_false(main._is_hero_selected(), "A pinned building blocks Hero orders")
+
+	# Releasing the pin hands the Hero back.
+	panel._on_unit_deselected()
+	panel._process(0.0)
+	assert_true(main._is_hero_selected(), "Deselecting returns command to the Hero")
+
+func test_33_pause_menu_opens_pauses_and_restores() -> void:
+	var hud = _spawn_hud()
+	await wait_frames(1)
+	assert_not_null(hud.pause_menu, "HUD hosts a pause menu")
+	var menu = hud.pause_menu
+
+	assert_false(menu.is_open, "Menu starts closed")
+	assert_false(menu.visible, "Menu starts hidden")
+
+	game_state_node.continuous_mode = true
+	game_state_node.set_paused(false)
+	hud.toggle_pause_menu()
+	assert_true(menu.is_open, "ESC opens the menu")
+	assert_true(bool(game_state_node.is_paused), "Opening the menu pauses the world behind it")
+
+	hud.toggle_pause_menu()
+	assert_false(menu.is_open, "ESC closes it again")
+	assert_false(bool(game_state_node.is_paused), "Closing lifts the pause the menu applied")
+
+func test_34_menu_does_not_unpause_a_game_the_player_paused() -> void:
+	var hud = _spawn_hud()
+	await wait_frames(1)
+	var menu = hud.pause_menu
+
+	game_state_node.continuous_mode = true
+	game_state_node.set_paused(true) # the player paused it themselves
+	menu.open()
+	menu.close()
+	assert_true(bool(game_state_node.is_paused), "Closing the menu leaves the player's own pause intact")
+	game_state_node.set_paused(false)
+
+func test_35_menu_has_three_entries_and_a_language_picker() -> void:
+	var hud = _spawn_hud()
+	await wait_frames(1)
+	var menu = hud.pause_menu
+
+	menu.open()
+	for btn in [menu.resume_btn, menu.settings_btn, menu.quit_btn]:
+		assert_not_null(btn, "Root menu entry exists")
+		assert_true(btn.visible, "Root menu entry is shown: %s" % btn.name)
+	assert_false(menu.language_row.visible, "Language lives on the settings page, not the root menu")
+
+	menu.open_settings()
+	assert_true(menu.language_row.visible, "Settings shows the language picker")
+	assert_true(menu.back_btn.visible, "Settings offers a way back")
+	assert_false(menu.resume_btn.visible, "Root entries are hidden on the settings page")
+	assert_gte(menu.language_picker.item_count, 2, "Both supported locales are offered")
+
+	menu.back_to_root()
+	assert_true(menu.resume_btn.visible, "Back returns to the root menu")
+	menu.close()
+
+func test_36_language_picker_switches_locale() -> void:
+	var hud = _spawn_hud()
+	await wait_frames(1)
+	var menu = hud.pause_menu
+	var i18n = tree.root.get_node_or_null("I18n")
+	assert_not_null(i18n, "I18n autoload exists")
+	var before: String = i18n.get_current_locale()
+
+	menu.open()
+	menu.open_settings()
+	# Pick whichever entry is not the current locale.
+	for i in range(menu.language_picker.item_count):
+		if String(menu.language_picker.get_item_metadata(i)) != before:
+			menu._on_language_selected(i)
+			break
+	assert_ne(i18n.get_current_locale(), before, "Choosing a language switches the locale")
+
+	i18n.set_locale(before)
+	menu.close()

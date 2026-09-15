@@ -464,22 +464,37 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 
 	# ESC key to cancel current building selection or deselect unit
+	# ESC peels off one layer at a time: the build ghost first, then a pinned
+	# selection, and only when there is nothing left to cancel does it open the menu.
 	if event is InputEventKey and event.pressed and event.keycode == cancel_key:
+		get_viewport().set_input_as_handled()
+		if hud and is_instance_valid(hud) and hud.has_method("is_pause_menu_open") and hud.is_pause_menu_open():
+			hud.toggle_pause_menu()
+			return
+		if current_build_type != "":
+			cancel_building_selection()
+			return
+		var eb = _get_event_bus()
+		var panel = _get_option_panel()
+		var has_pin: bool = panel != null and is_instance_valid(panel) and "selection_is_manual" in panel and panel.selection_is_manual
+		if has_pin and eb and eb.has_signal("unit_deselected"):
+			eb.unit_deselected.emit()
+			return
+		if hud and is_instance_valid(hud) and hud.has_method("toggle_pause_menu"):
+			hud.toggle_pause_menu()
+		return
+
+	# Right-click issues an order to whatever is SELECTED. Only the Hero takes orders,
+	# so while the player has a building pinned in the Option Panel right-click does
+	# nothing -- clicking a turret to read it must not double as "walk over there".
+	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
 		if current_build_type != "":
 			cancel_building_selection()
 			get_viewport().set_input_as_handled()
 			return
-		else:
-			var eb = _get_event_bus()
-			if eb and eb.has_signal("unit_deselected"):
-				eb.unit_deselected.emit()
-				get_viewport().set_input_as_handled()
-				return
-
-	# Right-click (Default hero move / context command button)
-	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
-		if current_build_type != "":
-			cancel_building_selection()
+		if not _is_hero_selected():
+			get_viewport().set_input_as_handled()
+			return
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null and hero != null and is_instance_valid(hero):
 			var cell = grid_manager.world_to_cell(hit_pos) if grid_manager else Vector2i.ZERO
@@ -531,30 +546,60 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null:
-			var cell = grid_manager.world_to_cell(hit_pos)
-			if (grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell)) or is_resource_at_cell(cell):
-				if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-					hud.show_hint(tr("HINT_CELL_OCCUPIED"))
-				return
-
-			var placed = build_system.place_building(current_build_type, cell, buildings_container, true)
-			if placed != null:
-				if hero != null and is_instance_valid(hero):
-					hero.order_build(placed, false)
-				# Continuous Placement: keep mode if player can afford another one
-				if not _can_afford_building(current_build_type):
-					cancel_building_selection()
-			else:
-				# Placement rejected by BuildSystem: provide user guidance
-				var gs = _get_game_state()
-				if gs and cfg and cfg.BUILDINGS.has(current_build_type):
-					var b_data: Dictionary = cfg.BUILDINGS[current_build_type]
-					var cost: Dictionary = b_data.get("cost", {})
-					if not gs.can_afford(cost):
-						if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-							hud.show_hint(tr("HINT_NO_RESOURCES"))
+			try_place_at_cell(grid_manager.world_to_cell(hit_pos))
 		get_viewport().set_input_as_handled()
 		return
+
+## Places the currently selected building type at `cell` and keeps the build mode
+## alive so the player can lay down a whole row of blueprints in one go, dropping
+## it only when the next one is no longer affordable. The Hero picks the blueprints
+## up one at a time. Returns the blueprint, or null if the spot was rejected.
+func try_place_at_cell(cell: Vector2i) -> Node:
+	if current_build_type == "" or build_system == null:
+		return null
+
+	if (grid_manager and grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell)) or is_resource_at_cell(cell):
+		_hint("HINT_CELL_OCCUPIED")
+		return null
+
+	var placed = build_system.place_building(current_build_type, cell, buildings_container, true)
+	if placed != null:
+		if hero != null and is_instance_valid(hero):
+			hero.order_build(placed, false)
+		if not _can_afford_building(current_build_type):
+			cancel_building_selection()
+		return placed
+
+	# Rejected: the only reason the player can act on is affordability.
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs and cfg and cfg.BUILDINGS.has(current_build_type):
+		if not gs.can_afford(cfg.BUILDINGS[current_build_type].get("cost", {})):
+			_hint("HINT_NO_RESOURCES")
+	return null
+
+func _hint(key: String) -> void:
+	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+		hud.show_hint(tr(key))
+
+## True when the Option Panel is resting on the Hero, i.e. he is the unit the
+## player is currently commanding. With nothing selected at all the Hero is still
+## the default subject, so orders work.
+func _is_hero_selected() -> bool:
+	if hero == null or not is_instance_valid(hero):
+		return false
+	var panel = _get_option_panel()
+	if panel == null or not is_instance_valid(panel):
+		return true
+	var sel = panel.selected_unit if "selected_unit" in panel else null
+	return sel == null or sel == hero
+
+func _get_option_panel() -> Node:
+	if hud and is_instance_valid(hud):
+		if "option_panel" in hud and hud.option_panel != null and is_instance_valid(hud.option_panel):
+			return hud.option_panel
+		return hud.find_child("OptionPanel", true, false)
+	return null
 
 func _raycast_ground(screen_pos: Vector2) -> Variant:
 	if camera == null or not is_inside_tree():
