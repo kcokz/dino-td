@@ -511,5 +511,5 @@ func _resolve_build_time() -> float:
 func _footprint() -> float:
 	var cfg = _get_config()
 	if cfg and cfg.has_method("get_building_footprint"):
-		return float(cfg.get_building_footprint())
+		return float(cfg.get_building_footprint(building_type))
 	return 1.0

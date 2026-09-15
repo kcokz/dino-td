@@ -60,6 +60,9 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_WALL_NAME",
 		"kind": "wall",
 		"hp": 8.0,
+		# A barrier: neighbouring stakes close up into a fence the Hero cannot slip
+		# through. Being fenced in is undone by demolishing one of them.
+		"footprint": 1.9,
 		"cost": {"wood": 1},
 		"ap_cost": 1,
 		"upgrades_to": "",
@@ -138,15 +141,33 @@ const BUILDINGS: Dictionary = {
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
-## A building never fills its whole tile: the leftover strip guarantees a lane
-## between two neighbours wider than the Hero, so a ring of buildings can never
-## seal him in. Placement stays one-building-per-tile; only the footprint shrinks.
+## How much of its tile a building's box takes up, in metres.
+##
+## Most buildings leave a strip free, so two neighbours always have a lane between
+## them the Hero fits through and a ring of workshops can never seal him in. A
+## barrier -- stakes, and later any wall -- declares a `footprint` of its own that
+## fills the tile instead, so a row of them reads as a continuous fence and really
+## does shut a gap. Getting boxed in on purpose is recoverable: select any adjacent
+## building and demolish it.
 const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metres
 
-## Side length of a building's box, in metres.
-static func get_building_footprint() -> float:
+## Footprint for a building that has not declared one: wide as the tile allows
+## while still leaving the Hero a way past.
+static func get_default_building_footprint() -> float:
 	var hero_w: float = float(HERO.get("width", 0.8))
 	return maxf(0.5, TILE_SIZE - hero_w - BUILDING_CLEARANCE)
+
+## Side length of `type_id`'s box, in metres. Declared per building, else derived.
+static func get_building_footprint(type_id: String = "") -> float:
+	if type_id != "" and BUILDINGS.has(type_id) and BUILDINGS[type_id].has("footprint"):
+		return maxf(0.1, float(BUILDINGS[type_id]["footprint"]))
+	return get_default_building_footprint()
+
+## True when neighbouring copies of `type_id` close the gap between them rather
+## than leaving the Hero a lane.
+static func is_barrier_building(type_id: String) -> bool:
+	var fp: float = get_building_footprint(type_id)
+	return (TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
 
 const BUILDABLE_TYPES: Array[String] = ["wall", "tower", "lumber_hut", "quarry", "hunting_hut"]
 

@@ -882,19 +882,49 @@ func test_42_pause_menu_is_centred_not_cornered() -> void:
 # 12. Trapping, scenery selection, and the walking-Hero retarget bug
 # ==============================================================================
 
-func test_43_buildings_leave_a_lane_wider_than_the_hero() -> void:
-	# Two buildings on neighbouring tiles must leave a gap the Hero fits through,
-	# otherwise a ring of them seals him in with no way out.
+func test_43_ordinary_buildings_leave_a_lane_wider_than_the_hero() -> void:
+	# Workshops must never be able to box the Hero in by accident, so two of them
+	# on neighbouring tiles always leave a gap he fits through.
 	var tile: float = float(config_node.TILE_SIZE)
-	var footprint: float = float(config_node.get_building_footprint())
 	var hero_w: float = float(config_node.HERO.get("width", 0.8))
-	var gap: float = tile - footprint
+	var default_fp: float = float(config_node.get_default_building_footprint())
 
-	assert_gt(gap, hero_w, "The lane between two neighbouring buildings is wider than the Hero")
-	assert_almost_eq(gap - hero_w, float(config_node.BUILDING_CLEARANCE), 0.001,
+	assert_gt(tile - default_fp, hero_w, "The default footprint leaves the Hero a lane")
+	assert_almost_eq((tile - default_fp) - hero_w, float(config_node.BUILDING_CLEARANCE), 0.001,
 		"The slack is exactly the configured clearance")
 
-	# And the entity actually uses it, rather than restating a size of its own.
+	for b_type in ["tower", "lumber_hut", "quarry", "hunting_hut"]:
+		assert_false(config_node.is_barrier_building(b_type),
+			"%s is a workshop, not a barrier" % b_type)
+		assert_gt(tile - config_node.get_building_footprint(b_type), hero_w,
+			"Two %s side by side still leave a lane" % b_type)
+
+	# And the entity uses its own type's number rather than restating a size.
+	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	await wait_frames(1)
+	var shape: CollisionShape3D = null
+	for child in tower.get_children():
+		if child is CollisionShape3D:
+			shape = child
+			break
+	assert_not_null(shape, "A building has a collision shape")
+	assert_almost_eq(shape.shape.size.x, config_node.get_building_footprint("tower"), 0.001,
+		"Its footprint comes from its own Config entry")
+
+func test_43b_stakes_are_a_barrier_that_actually_closes() -> void:
+	# A fence only reads as a fence, and only stops anything, if neighbouring
+	# stakes close up instead of leaving a Hero-sized hole between them.
+	var tile: float = float(config_node.TILE_SIZE)
+	var hero_w: float = float(config_node.HERO.get("width", 0.8))
+	var fp: float = float(config_node.get_building_footprint("wall"))
+
+	assert_true(config_node.is_barrier_building("wall"), "Stakes are a barrier")
+	assert_lt(tile - fp, hero_w, "Two neighbouring stakes leave no lane for the Hero")
+	assert_lte(fp, tile, "A stake still fits inside its own tile")
+
 	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
 	var wall = wall_script.new()
 	_cleanup_nodes.append(wall)
@@ -905,8 +935,44 @@ func test_43_buildings_leave_a_lane_wider_than_the_hero() -> void:
 		if child is CollisionShape3D:
 			shape = child
 			break
-	assert_not_null(shape, "A building has a collision shape")
-	assert_almost_eq(shape.shape.size.x, footprint, 0.001, "Its footprint comes from Config")
+	assert_almost_eq(shape.shape.size.x, fp, 0.001, "The stake is built at its barrier footprint")
+
+func test_43c_being_fenced_in_is_undone_by_demolishing() -> void:
+	# Barriers can seal the Hero in, which is the point; the way out is to pull one
+	# down. Demolishing must free the tile so he can walk through it.
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+	game_state_node.resources["wood"] = 999
+
+	var centre := Vector2i(6, 6)
+	main.hero.global_position = main.grid_manager.cell_to_world(centre)
+	main.on_build_selected("wall")
+
+	var ring: Array[Node] = []
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			if dx == 0 and dy == 0:
+				continue
+			var b = main.try_place_at_cell(centre + Vector2i(dx, dy))
+			if b != null:
+				b.complete_construction()
+				ring.append(b)
+	assert_eq(ring.size(), 8, "The Hero is ringed by eight stakes")
+
+	for b in ring:
+		assert_true(main.grid_manager.is_cell_occupied(b.cell), "Every ring tile is occupied")
+
+	# Pull one down and that tile opens up again.
+	var door = ring[0]
+	var door_cell: Vector2i = door.cell
+	door.demolish()
+	await wait_frames(2)
+	assert_true(door.is_destroyed, "The stake comes down")
+	assert_false(main.grid_manager.is_cell_occupied(door_cell),
+		"Demolishing frees the tile, so the Hero has a way out")
 
 func test_44_inspecting_a_tree_does_not_strand_the_hero() -> void:
 	var main_packed: PackedScene = load("res://scenes/Main.tscn")
