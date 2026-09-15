@@ -479,3 +479,91 @@ func test_25_a_blueprint_shows_progress_and_no_health() -> void:
 	hut.complete_construction()
 	hut._update_info_label()
 	assert_false(hut.status_bar.visible, "Finished and undamaged: nothing to report")
+
+# ==============================================================================
+# 11. Build menu affordability, and who a right-click is addressed to
+# ==============================================================================
+
+func test_26_build_entries_light_up_when_the_wood_arrives() -> void:
+	# The menu only re-checked affordability when it was opened, so an entry greyed
+	# out for want of wood stayed grey after the wood came in.
+	var option_panel_script: GDScript = _load("res://scripts/ui/OptionPanel.gd")
+	var panel = option_panel_script.new()
+	var hero = hero_script.new()
+	_cleanup_nodes.append(panel)
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	tree.root.add_child(panel)
+	await wait_frames(1)
+
+	var tower_cost: int = int(config_node.BUILDINGS["tower"]["cost"]["wood"])
+	game_state_node.resources["wood"] = maxi(0, tower_cost - 1)
+	panel.select_target(hero)
+	panel._on_build_pressed()
+
+	var idx: int = config_node.BUILDABLE_TYPES.find("tower")
+	assert_gte(idx, 0, "The turret is in the build menu")
+	var btn = panel.button_container.get_child(idx)
+	assert_true(btn.disabled, "One wood short, so the entry is greyed out")
+
+	# Earning the last of it must light the entry without reopening the menu.
+	game_state_node.add_resource("wood", 1)
+	await wait_frames(1)
+	assert_false(btn.disabled, "It lights up as soon as the wood arrives")
+
+	# And the same in reverse.
+	game_state_node.resources["wood"] = 0
+	event_bus_node.resources_changed.emit(game_state_node.resources)
+	assert_true(btn.disabled, "And greys out again when it is spent")
+
+func test_27_a_right_click_is_addressed_to_the_selected_unit() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+	var panel = main._get_option_panel()
+
+	# Resting on the Hero: he is the subject, so orders go through.
+	panel.set_selected_unit(main.hero)
+	assert_true(main._selected_unit_takes_orders(), "The Hero takes orders while selected")
+
+	# A building is inspected, not commanded. Right-click must do nothing rather
+	# than quietly ordering the Hero, who is not what the player is looking at.
+	var turret = _spawn(tower_script, Vector3(5.0, 0.0, 5.0))
+	turret.complete_construction()
+	await wait_frames(1)
+	panel._on_unit_selected(turret)
+	assert_false(main._selected_unit_takes_orders(), "A selected turret takes no orders, so nothing happens")
+
+	# Scenery likewise.
+	var node = _load("res://scripts/entities/ResourceNode.gd").new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(node)
+	tree.root.add_child(node)
+	await wait_frames(1)
+	panel._on_unit_selected(node)
+	assert_false(main._selected_unit_takes_orders(), "A selected tree takes no orders either")
+
+	# Clicking empty ground hands the Hero back, which is the way out.
+	panel._on_unit_deselected()
+	assert_true(main._selected_unit_takes_orders(), "Deselecting returns command to the Hero")
+
+func test_28_the_opening_affords_a_hut_then_a_turret_one_tend_later() -> void:
+	# The shape of the opening, stated so a balance pass cannot quietly break it:
+	# buy a hut, tend it once, and the first turret is affordable -- comfortably
+	# inside the grace period before the first raid.
+	var start: int = int(config_node.INITIAL_RESOURCES["wood"])
+	var hut: int = int(config_node.BUILDINGS["lumber_hut"]["cost"]["wood"])
+	var turret: int = int(config_node.BUILDINGS["tower"]["cost"]["wood"])
+	var per_tend: float = float(config_node.BUILDINGS["lumber_hut"]["produces_per_sec"]["wood"]) 		* float(config_node.BUILDINGS["lumber_hut"]["tend_duration"])
+
+	assert_gte(start, hut, "The opening buys a lumber hut outright")
+	assert_gte(float(start - hut) + per_tend, float(turret),
+		"And one tend later the first turret is affordable")
+
+	var grace: float = float(config_node.RAIDS["first_raid_delay"])
+	var build_span: float = config_node.get_build_time("lumber_hut") 		+ float(config_node.BUILDINGS["lumber_hut"]["tend_duration"]) 		+ config_node.get_build_time("tower")
+	assert_gt(grace, build_span,
+		"The grace period covers hut -> tend -> turret (%.0fs of work in %.0fs)" % [build_span, grace])
+	assert_gte(float(config_node.RAIDS["interval_min"]), grace * 0.6,
+		"And raids do not then arrive faster than that rhythm")

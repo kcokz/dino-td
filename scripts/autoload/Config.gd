@@ -24,10 +24,11 @@ const TILE_SIZE: float = 2.0
 ## Economy shape (v0.2 balance pass). One tend = tend_duration seconds of autonomous
 ## running, so a machine's yield per tend is produces_per_sec * tend_duration:
 ##   lumber_hut  cost 12  ->  0.25/s * 40s = 10 wood   (pays back in ~1.2 tends)
-##   quarry      cost 22  ->  0.15/s * 40s =  6 stone
-##   hunting_hut cost 18  ->  0.20/s * 40s =  8 water
-## A tower costs 20 wood, i.e. two tends of a single lumber hut -- roughly one raid
-## cycle (RAIDS.interval_min/max is 45-90s) of a modest economy.
+##   quarry      cost 16  ->  0.15/s * 40s =  6 stone
+##   hunting_hut cost 14  ->  0.20/s * 40s =  8 water
+## A turret costs 12 wood, about one tend of a single lumber hut, so the opening
+## 20 buys a hut and leaves the first turret one tend away rather than two. Raids
+## run 70-120s apart with 90s of grace, which is roughly hut -> tend -> turret.
 ##
 ## Opening wallet is 20 wood, which deliberately affords a real first decision
 ## rather than a forced one: a lumber hut (12) plus a wall (5), or a single tower
@@ -49,7 +50,7 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_TOWER_NAME",
 		"kind": "tower",
 		"hp": 20.0,
-		"cost": {"wood": 20},
+		"cost": {"wood": 12},
 		"ap_cost": 1,
 		"range": 5.0,
 		"damage": 1.0,
@@ -112,7 +113,7 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_QUARRY_NAME",
 		"kind": "producer",
 		"hp": 15.0,
-		"cost": {"wood": 22},
+		"cost": {"wood": 16},
 		"ap_cost": 1,
 		"tend_duration": 40.0,
 		"tend_time": 2.5,
@@ -126,7 +127,7 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_HUNTING_HUT_NAME",
 		"kind": "producer",
 		"hp": 10.0,
-		"cost": {"wood": 18},
+		"cost": {"wood": 14},
 		"ap_cost": 1,
 		"tend_duration": 40.0,
 		"tend_time": 2.0,
@@ -365,9 +366,9 @@ const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
 # 12. Continuous Real-Time Raids & Resource Nodes (v0.2)
 # ==============================================================================
 const RAIDS: Dictionary = {
-	"interval_min": 45.0,         # Minimum raid interval (seconds)
-	"interval_max": 90.0,         # Maximum raid interval (seconds)
-	"first_raid_delay": 60.0,     # Grace period before 1st raid (seconds)
+	"interval_min": 70.0,         # 两次来袭的最小间隔（秒）
+	"interval_max": 120.0,        # 最大间隔——区间内随机，不是固定周期
+	"first_raid_delay": 90.0,     # 开局宽限期：够建一座伐木屋、照料一轮、再架一座哨位
 	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
 	"intensity_per_minute": 0.15, # Raid intensity escalation slope per minute
 	"intensity_jitter": 0.3,      # Random intensity fluctuation (+/- 30%)

@@ -484,13 +484,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.toggle_pause_menu()
 		return
 
-	# Right-click ACTS: the Hero does whatever the thing under the cursor affords --
-	# harvest a tree, raise a blueprint, tend a machine, attack a dino, or just walk
-	# there. It never changes what the Option Panel is showing; that is left-click's
-	# job alone, so inspecting something never costs you the ability to command.
+	# Right-click ACTS, and it acts on whatever is SELECTED. The Hero is the only
+	# unit that takes orders, so while a building or a tree is selected right-click
+	# does nothing at all rather than quietly commanding the Hero instead -- issuing
+	# an order to something the player is not looking at is worse than doing nothing.
+	# Left-clicking empty ground (or pressing ESC) hands the Hero back.
+	#
+	# It still never changes what the panel shows; that is left-click's job alone.
 	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
 		if current_build_type != "":
 			cancel_building_selection()
+			get_viewport().set_input_as_handled()
+			return
+		if not _selected_unit_takes_orders():
 			get_viewport().set_input_as_handled()
 			return
 		var hit_pos = _raycast_ground(event.position)
@@ -579,6 +585,20 @@ func try_place_at_cell(cell: Vector2i) -> Node:
 func _hint(key: String) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 		hud.show_hint(tr(key))
+
+## Whether the currently selected unit is one that can be given an order. Only the
+## Hero can; everything else is inspected, not commanded. With nothing selected the
+## Hero is the default subject, so orders still work.
+func _selected_unit_takes_orders() -> bool:
+	if hero == null or not is_instance_valid(hero):
+		return false
+	var panel = _get_option_panel()
+	if panel == null or not is_instance_valid(panel):
+		return true
+	var sel = panel.selected_unit if "selected_unit" in panel else null
+	if sel == null or not is_instance_valid(sel):
+		return true
+	return sel == hero
 
 func _get_option_panel() -> Node:
 	if hud and is_instance_valid(hud):

@@ -39,6 +39,8 @@ func _connect_event_bus() -> void:
 			eb.unit_deselected.connect(_on_unit_deselected)
 		if eb.has_signal("locale_changed") and not eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.connect(_on_locale_changed)
+		if eb.has_signal("resources_changed") and not eb.resources_changed.is_connected(_on_resources_changed):
+			eb.resources_changed.connect(_on_resources_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -49,6 +51,8 @@ func _disconnect_event_bus() -> void:
 			eb.unit_deselected.disconnect(_on_unit_deselected)
 		if eb.has_signal("locale_changed") and eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.disconnect(_on_locale_changed)
+		if eb.has_signal("resources_changed") and eb.resources_changed.is_connected(_on_resources_changed):
+			eb.resources_changed.disconnect(_on_resources_changed)
 
 ## Left-click is the only thing that changes what the panel shows. Right-click
 ## gives the Hero an order and deliberately leaves the panel alone, so inspecting
@@ -61,6 +65,25 @@ func _on_unit_deselected() -> void:
 
 func _on_locale_changed(_locale: String) -> void:
 	_refresh_ui()
+
+## The wallet changed, so what the player can afford changed with it. Only the
+## enabled state is touched -- rebuilding the menu here would throw away whichever
+## entry the cursor is currently over, and with it the detail line.
+func _on_resources_changed(_res: Dictionary) -> void:
+	refresh_build_affordability()
+
+func refresh_build_affordability() -> void:
+	if current_menu != "build" or button_container == null:
+		return
+	var cfg = _get_config()
+	var buildable: Array = cfg.BUILDABLE_TYPES if (cfg and "BUILDABLE_TYPES" in cfg) else []
+	var children: Array = button_container.get_children()
+	for i in range(buildable.size()):
+		if i >= children.size():
+			break
+		var btn = children[i]
+		if btn is Button:
+			btn.disabled = not _can_afford(String(buildable[i]))
 
 func set_selected_unit(unit: Node) -> void:
 	selected_unit = unit

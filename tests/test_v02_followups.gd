@@ -577,12 +577,15 @@ func test_28_build_time_is_a_function_of_price() -> void:
 	# Cost is the single number a designer tunes; time follows from it.
 	assert_true(config_node.has_method("get_build_time"), "Config exposes get_build_time()")
 
-	var wall_t: float = config_node.get_build_time("wall")
-	var hut_t: float = config_node.get_build_time("lumber_hut")
-	var tower_t: float = config_node.get_build_time("tower")
-
-	assert_lt(wall_t, hut_t, "Cheap stakes go up faster than a lumber hut")
-	assert_lt(hut_t, tower_t, "A lumber hut goes up faster than a pricier tower")
+	# The invariant is that time tracks price, not that any two particular buildings
+	# sit in a given order -- prices move with every balance pass.
+	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("lumber_hut"),
+		"Cheap stakes go up faster than a lumber hut")
+	for a in config_node.BUILDABLE_TYPES:
+		for b in config_node.BUILDABLE_TYPES:
+			if cost_of(String(a)) < cost_of(String(b)):
+				assert_lte(config_node.get_build_time(String(a)), config_node.get_build_time(String(b)),
+					"%s is cheaper than %s, so it may not take longer" % [a, b])
 
 	# The relationship is the stated formula, not an accident of hand-tuning.
 	var per: float = float(config_node.BUILD_SECONDS_PER_RESOURCE)
@@ -798,7 +801,8 @@ func test_38_detail_line_reports_cost_and_build_time() -> void:
 	panel._show_build_detail("tower")
 	var detail: String = str(panel.status_label.text)
 	assert_true(detail.contains(str(cost_of("tower"))), "Detail names the cost (got '%s')" % detail)
-	assert_true(detail.contains("8.0") or detail.contains("8,0"),
+	var secs: String = "%.1f" % config_node.get_build_time("tower")
+	assert_true(detail.contains(secs) or detail.contains(secs.replace(".", ",")),
 		"Detail names the derived build time (got '%s')" % detail)
 
 func test_39_detail_line_says_what_is_missing_when_broke() -> void:
