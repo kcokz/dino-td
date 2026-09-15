@@ -221,6 +221,8 @@ func _ensure_components() -> void:
 		button_container = grid
 
 func _update_status_display() -> void:
+	if current_menu == "build":
+		return # the build page uses this line for the hovered entry's detail
 	if selected_unit == null or not is_instance_valid(selected_unit):
 		return
 	if selected_unit.has_method("get_display_info"):
@@ -310,20 +312,70 @@ func _populate_hero_buttons() -> void:
 			buildable = cfg.BUILDABLE_TYPES
 		else:
 			buildable = ["wall", "tower", "lumber_hut"]
+		_clear_build_detail()
+		# Buttons carry only the name. The cost and build time go in the detail line
+		# below, shown for whichever button the cursor is over, and a button the
+		# player cannot afford is disabled -- so affordability is read at a glance
+		# instead of by comparing numbers on every button against the wallet.
 		for b_type in buildable:
-			var b_name = Config.get_building_name(b_type) if (cfg and cfg.has_method("get_building_name")) else b_type
-			var cost_wood: int = 2
-			if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(b_type):
-				cost_wood = int(cfg.BUILDINGS[b_type].get("cost", {}).get("wood", 2))
-			var label_str = TranslationServer.translate("BUILD_COST_FORMAT") % [b_name, cost_wood]
-			_create_action_button(label_str, func():
+			var b_name: String = _building_name(b_type)
+			var btn := _create_action_button(b_name, func():
 				_trigger_build(b_type)
 			)
+			btn.disabled = not _can_afford(b_type)
+			btn.mouse_entered.connect(func(): _show_build_detail(b_type))
+			btn.focus_entered.connect(func(): _show_build_detail(b_type))
+			btn.mouse_exited.connect(_clear_build_detail)
+
 		
 		_create_action_button(TranslationServer.translate("CMD_BACK"), func():
 			current_menu = "default"
 			_refresh_ui()
 		)
+
+## Cost and build time for the hovered entry, or a prompt when nothing is hovered.
+func _show_build_detail(b_type: String) -> void:
+	if status_label == null:
+		return
+	var cfg = _get_config()
+	if cfg == null or not cfg.BUILDINGS.has(b_type):
+		return
+	var b_name: String = _building_name(b_type)
+	var cost: int = int(cfg.BUILDINGS[b_type].get("cost", {}).get("wood", 0))
+	if _can_afford(b_type):
+		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
+		status_label.text = tr("BUILD_DETAIL_FORMAT") % [b_name, cost, secs]
+		status_label.modulate = Color(0.85, 0.85, 0.85)
+	else:
+		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, cost, _wood()]
+		status_label.modulate = Color(1.0, 0.45, 0.4)
+
+func _clear_build_detail() -> void:
+	if status_label == null:
+		return
+	status_label.text = tr("BUILD_HINT_PICK")
+	status_label.modulate = Color(0.85, 0.85, 0.85)
+
+func _building_name(b_type: String) -> String:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_building_name"):
+		return String(cfg.get_building_name(b_type))
+	return b_type
+
+func _wood() -> int:
+	var gs = _get_game_state()
+	if gs and "resources" in gs:
+		return int(gs.resources.get("wood", 0))
+	return 0
+
+func _can_afford(b_type: String) -> bool:
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs == null or cfg == null or not cfg.BUILDINGS.has(b_type):
+		return false
+	if gs.has_method("can_afford"):
+		return bool(gs.can_afford(cfg.BUILDINGS[b_type].get("cost", {})))
+	return true
 
 func _populate_building_buttons() -> void:
 	var is_producer: bool = (selected_unit is ProducerBuilding) or ("is_operating" in selected_unit)
@@ -403,3 +455,10 @@ func _panel_margin() -> float:
 	if cfg and "UI" in cfg:
 		return float(cfg.UI.get("option_panel_margin", 16.0))
 	return 16.0
+
+func _get_game_state() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/GameState")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("GameState")
+	return null

@@ -18,6 +18,12 @@ var is_destroyed: bool = false
 var label_3d: Label3D = null
 var range_indicator: MeshInstance3D = null
 
+## Order this blueprint was laid down in. The Hero works through pending blueprints
+## oldest-first, so a row of stakes goes up in the order the player clicked them
+## rather than in whatever order happens to be closest to him.
+static var _next_build_order: int = 0
+var build_order: int = -1
+
 func _init(p_type: String = "") -> void:
 	if p_type != "":
 		setup(p_type)
@@ -78,6 +84,9 @@ func start_construction(time_required: float = -1.0) -> void:
 	
 	is_constructed = false
 	build_progress = 0.0
+	if build_order < 0:
+		build_order = _next_build_order
+		_next_build_order += 1
 	_update_construction_state()
 	_update_info_label()
 	var eb = _get_event_bus()

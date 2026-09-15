@@ -762,3 +762,123 @@ func test_36_language_picker_switches_locale() -> void:
 
 	i18n.set_locale(before)
 	menu.close()
+
+# ==============================================================================
+# 10. Build menu reads at a glance
+# ==============================================================================
+
+func _build_menu() -> Array:
+	var panel = option_panel_script.new()
+	var hero = hero_script.new()
+	_cleanup_nodes.append(panel)
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	tree.root.add_child(panel)
+	await wait_frames(1)
+	panel.select_target(hero)
+	panel._on_build_pressed()
+	return [panel, hero]
+
+func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
+	# Affordability should be visible without comparing numbers on every button.
+	game_state_node.resources["wood"] = cost_of("wall") # enough for a stake, nothing else
+	var pair = await _build_menu()
+	var panel = pair[0]
+
+	var seen: Dictionary = {}
+	var idx: int = 0
+	for b_type in config_node.BUILDABLE_TYPES:
+		var btn = panel.button_container.get_child(idx)
+		seen[b_type] = btn
+		idx += 1
+
+	assert_false(seen["wall"].disabled, "A stake is affordable, so its entry is live")
+	assert_true(seen["tower"].disabled, "A turret is out of reach, so its entry is greyed out")
+
+	# Paying for it lights the entry back up.
+	game_state_node.resources["wood"] = cost_of("tower")
+	panel._refresh_ui()
+	assert_false(panel.button_container.get_child(1).disabled, "The turret entry lights up once affordable")
+
+func test_38_detail_line_reports_cost_and_build_time() -> void:
+	game_state_node.resources["wood"] = 999
+	var pair = await _build_menu()
+	var panel = pair[0]
+
+	# Nothing hovered: the line prompts instead of showing a stale unit status.
+	assert_eq(panel.status_label.text, tr("BUILD_HINT_PICK"), "The build page prompts when nothing is hovered")
+
+	panel._show_build_detail("tower")
+	var detail: String = str(panel.status_label.text)
+	assert_true(detail.contains(str(cost_of("tower"))), "Detail names the cost (got '%s')" % detail)
+	assert_true(detail.contains("8.0") or detail.contains("8,0"),
+		"Detail names the derived build time (got '%s')" % detail)
+
+func test_39_detail_line_says_what_is_missing_when_broke() -> void:
+	var short_by: int = maxi(0, cost_of("tower") - 1)
+	game_state_node.resources["wood"] = short_by
+	var pair = await _build_menu()
+	var panel = pair[0]
+
+	panel._show_build_detail("tower")
+	var detail: String = str(panel.status_label.text)
+	assert_true(detail.contains(str(cost_of("tower"))), "Says what the turret costs")
+	assert_true(detail.contains(str(short_by)), "Says what the player actually has")
+	assert_gt(panel.status_label.modulate.r, panel.status_label.modulate.g,
+		"The shortfall is tinted red rather than left for the player to notice")
+
+func test_40_unit_status_does_not_overwrite_the_build_detail() -> void:
+	game_state_node.resources["wood"] = 999
+	var pair = await _build_menu()
+	var panel = pair[0]
+
+	panel._show_build_detail("lumber_hut")
+	var detail: String = str(panel.status_label.text)
+	# The per-unit status ticker must leave the build page's line alone.
+	panel._update_status_display()
+	assert_eq(str(panel.status_label.text), detail, "Build detail survives the status refresh")
+
+# ==============================================================================
+# 11. Blueprint order and menu placement
+# ==============================================================================
+
+func test_41_blueprints_are_built_in_the_order_they_were_placed() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+
+	game_state_node.resources["wood"] = cost_of("wall") * 5
+	main.on_build_selected("wall")
+
+	# Lay stakes walking away from the Hero, so "nearest" and "first" disagree:
+	# the far one is clicked first and must still be raised first.
+	var far = main.try_place_at_cell(Vector2i(8, 8))
+	var mid = main.try_place_at_cell(Vector2i(4, 4))
+	var near = main.try_place_at_cell(Vector2i(2, 2))
+	assert_not_null(far, "First stake placed")
+	assert_not_null(mid, "Second stake placed")
+	assert_not_null(near, "Third stake placed")
+
+	assert_lt(far.build_order, mid.build_order, "Stakes are stamped in click order")
+	assert_lt(mid.build_order, near.build_order, "Stakes are stamped in click order")
+
+	main.hero.global_position = near.global_position
+	var next_up = main.hero._find_nearest_unfinished_building()
+	assert_eq(next_up, far, "The Hero starts with the stake clicked first, not the closest one")
+
+func test_42_pause_menu_is_centred_not_cornered() -> void:
+	var hud = _spawn_hud()
+	await wait_frames(1)
+	var menu = hud.pause_menu
+	menu.open()
+	await wait_frames(2)
+
+	assert_not_null(menu.centerer, "The menu centres its panel with a CenterContainer")
+	assert_not_null(menu.panel, "The menu has a panel")
+	assert_eq(menu.panel.get_parent(), menu.centerer,
+		"The panel sits inside the centring container, not anchored to a corner")
+	assert_not_null(menu.find_child("Dimmer", true, false),
+		"A dimmed backdrop makes the menu read as a modal layer")
+	menu.close()

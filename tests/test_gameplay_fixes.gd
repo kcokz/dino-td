@@ -197,8 +197,9 @@ func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
 	var hud = main_inst.find_child("HUD", true, false)
 	assert_not_null(hud, "HUD must exist in Main")
 
-	# v0.2: building moved off the HUD top bar and onto the Hero's Option Panel,
-	# so the cost labels now live on that panel's level-2 build menu.
+	# v0.2: building moved off the HUD top bar and onto the Hero's Option Panel.
+	# Buttons carry only the building name; cost and build time live in the detail
+	# line, shown for whichever entry the cursor is over.
 	var panel = hud.find_child("OptionPanel", true, false)
 	assert_not_null(panel, "OptionPanel must exist in the HUD")
 	var hero = main_inst.find_child("Hero", true, false)
@@ -211,11 +212,17 @@ func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
 	for btn in panel.button_container.get_children():
 		labels.append(str(btn.text))
 	assert_gt(labels.size(), 1, "Build menu lists buildable types plus Back")
-	var with_cost: int = 0
-	for l in labels:
-		if l.contains("木") or l.contains("Wood"):
-			with_cost += 1
-	assert_gte(with_cost, 3, "Build buttons display their resource cost (got %s)" % str(labels))
+
+	# Each build entry reads exactly as the building's name, with no cost appended.
+	for b_type in config_node.BUILDABLE_TYPES:
+		var b_name: String = config_node.get_building_name(b_type)
+		assert_has(labels, b_name, "Build menu offers '%s' by name alone" % b_name)
+
+	# Hovering an entry reports its cost and build time.
+	panel._show_build_detail("wall")
+	var detail: String = str(panel.status_label.text)
+	assert_true(detail.contains(str(cost_of("wall"))), "Detail line states the wood cost (got '%s')" % detail)
+	assert_true(detail.contains("木") or detail.contains("wood"), "Detail line names the resource (got '%s')" % detail)
 
 func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")

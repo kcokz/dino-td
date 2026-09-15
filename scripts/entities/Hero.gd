@@ -510,6 +510,7 @@ func _plan_path_to_building(b: Node) -> void:
 	# Fallback
 	_plan_path(b_pos, b)
 
+## Next blueprint the Hero should work on: the one queued earliest.
 func _find_nearest_unfinished_building() -> Node:
 	if not is_inside_tree():
 		return null
@@ -534,14 +535,34 @@ func _find_nearest_unfinished_building() -> Node:
 	if unfinished.is_empty():
 		return null
 
-	var nearest: Node = null
-	var min_dist_sq: float = 999999.0
+	# Oldest blueprint first: when the player lays a row of stakes, they go up in
+	# the order they were clicked. Nearest-first looks arbitrary from the outside,
+	# because the Hero's position is not something the player was thinking about.
+	var best: Node = null
+	var best_order: int = -1
+	var best_dist_sq: float = 0.0
 	for b in unfinished:
-		var d_sq = global_position.distance_squared_to(b.global_position)
-		if d_sq < min_dist_sq:
-			min_dist_sq = d_sq
-			nearest = b
-	return nearest
+		var order: int = int(b.build_order) if "build_order" in b else -1
+		var d_sq: float = global_position.distance_squared_to(b.global_position)
+		if best == null:
+			best = b
+			best_order = order
+			best_dist_sq = d_sq
+			continue
+		# Fall back to distance only between blueprints with no order stamp.
+		if order >= 0 and best_order >= 0:
+			if order < best_order:
+				best = b
+				best_order = order
+				best_dist_sq = d_sq
+		elif order >= 0 and best_order < 0:
+			best = b
+			best_order = order
+			best_dist_sq = d_sq
+		elif order < 0 and best_order < 0 and d_sq < best_dist_sq:
+			best = b
+			best_dist_sq = d_sq
+	return best
 
 func _continue_to_next_pending_building_or_idle() -> void:
 	target_building = null

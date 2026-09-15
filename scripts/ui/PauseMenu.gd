@@ -17,6 +17,7 @@ enum Page { ROOT = 0, SETTINGS = 1 }
 var current_page: int = Page.ROOT
 var is_open: bool = false
 
+var centerer: CenterContainer = null
 var panel: PanelContainer = null
 var page_vbox: VBoxContainer = null
 var title_label: Label = null
@@ -140,13 +141,32 @@ func _ensure_components() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
+	if find_child("Dimmer", true, false) == null:
+		var dimmer := ColorRect.new()
+		dimmer.name = "Dimmer"
+		dimmer.color = Color(0.0, 0.0, 0.0, 0.55)
+		dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(dimmer)
+
+	# A CenterContainer that fills the screen keeps the panel in the middle at any
+	# resolution; anchoring the panel itself leaves it pinned to a corner whenever
+	# its size is decided after layout.
+	if centerer == null:
+		centerer = find_child("Centerer", true, false) as CenterContainer
+	if centerer == null:
+		centerer = CenterContainer.new()
+		centerer.name = "Centerer"
+		centerer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		centerer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(centerer)
+
 	if panel == null:
 		panel = find_child("MenuPanel", true, false) as PanelContainer
 	if panel == null:
 		panel = PanelContainer.new()
 		panel.name = "MenuPanel"
-		panel.set_anchors_preset(Control.PRESET_CENTER)
-		panel.custom_minimum_size = Vector2(320, 240)
+		panel.custom_minimum_size = Vector2(360, 260)
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.1, 0.13, 0.96)
 		style.border_width_left = 2
@@ -163,7 +183,7 @@ func _ensure_components() -> void:
 		style.content_margin_top = 20
 		style.content_margin_bottom = 20
 		panel.add_theme_stylebox_override("panel", style)
-		add_child(panel)
+		centerer.add_child(panel)
 
 	if page_vbox == null:
 		page_vbox = find_child("PageVBox", true, false) as VBoxContainer
