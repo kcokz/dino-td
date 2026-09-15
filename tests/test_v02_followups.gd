@@ -963,3 +963,76 @@ func test_46_a_new_click_does_not_steal_a_hero_already_walking_to_a_blueprint() 
 	assert_not_null(second, "Second stake placed")
 	assert_eq(main.hero.target_building, first,
 		"A stake clicked while he is still walking must not steal him from the first")
+
+# ==============================================================================
+# 13. A new order fully replaces the previous one
+# ==============================================================================
+
+func _hero_in_world() -> Array:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+	game_state_node.resources["wood"] = 999
+	return [main, main.hero]
+
+func test_47_every_order_clears_the_previous_one() -> void:
+	# The Hero tracks four possible targets. Five order functions used to re-list
+	# them by hand and move_to() only cleared two, so a half-finished tend or
+	# harvest quietly dragged him back and he looked unresponsive.
+	var pair = await _hero_in_world()
+	var main = pair[0]
+	var hero = pair[1]
+
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3(4.0, 0.0, 2.0)
+	var node = resource_node_script.new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(node)
+	tree.root.add_child(node)
+	node.position = Vector3(-4.0, 0.0, 2.0)
+	await wait_frames(1)
+
+	var targets := ["target_building", "target_enemy", "target_resource_node", "target_tend_building"]
+
+	# Whichever order came before, a move order must leave nothing behind.
+	for setup in [func(): hero.order_tend(hut), func(): hero.order_harvest(node)]:
+		setup.call()
+		hero.move_to(Vector3(-10.0, 0.0, 8.0))
+		for t in targets:
+			assert_null(hero.get(t), "move_to() clears %s" % t)
+
+	# And the same in the other direction: tending must drop a harvest.
+	hero.order_harvest(node)
+	hero.order_tend(hut)
+	assert_null(hero.target_resource_node, "order_tend() drops an outstanding harvest")
+	assert_eq(hero.target_tend_building, hut, "and takes the machine as its target")
+
+func test_48_a_move_order_mid_tend_is_actually_obeyed() -> void:
+	var pair = await _hero_in_world()
+	var main = pair[0]
+	var hero = pair[1]
+
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3(4.0, 0.0, 2.0)
+	await wait_frames(1)
+
+	hero.order_tend(hut)
+	for i in range(120):
+		hero._physics_process(1.0 / 60.0)
+
+	var dest := Vector3(-14.0, 0.0, 6.0)
+	hero.move_to(dest)
+	for i in range(600):
+		hero._physics_process(1.0 / 60.0)
+
+	var to_dest: float = hero.global_position.distance_to(dest)
+	var to_hut: float = hero.global_position.distance_to(hut.global_position)
+	assert_lt(to_dest, to_hut, "He walks where he was sent, not back to the machine")
+	assert_lt(to_dest, 2.0, "And he actually arrives")

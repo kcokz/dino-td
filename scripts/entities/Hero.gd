@@ -576,11 +576,20 @@ func _continue_to_next_pending_building_or_idle() -> void:
 # Orders API
 # ==============================================================================
 
+## Drops every outstanding target. Each order starts by calling this so a new
+## command fully replaces the previous one -- move_to() used to clear only two of
+## the four, which let a half-finished tend or harvest quietly drag the Hero back
+## and made him look unresponsive.
+func _clear_orders() -> void:
+	target_building = null
+	target_enemy = null
+	target_resource_node = null
+	target_tend_building = null
+
 func move_to(dest: Vector3) -> void:
 	if current_state == State.DEAD:
 		return
-	target_building = null
-	target_enemy = null
+	_clear_orders()
 	_plan_path(dest)
 	current_state = State.MOVING
 
@@ -595,8 +604,8 @@ func order_build(building: Node, force: bool = false) -> void:
 	# he was still WALKING to the previous one, so a row went up in reverse order.
 	if not force and target_building != null and is_instance_valid(target_building) 			and not target_building.is_queued_for_deletion() 			and "is_constructed" in target_building and not target_building.is_constructed 			and target_building != building 			and current_state in [State.BUILDING, State.MOVING]:
 		return
+	_clear_orders()
 	target_building = building
-	target_enemy = null
 
 	if _is_in_build_range(global_position, building):
 		velocity = Vector3.ZERO
@@ -609,10 +618,8 @@ func order_build(building: Node, force: bool = false) -> void:
 func order_attack(enemy: Node3D) -> void:
 	if current_state == State.DEAD:
 		return
-	target_building = null
+	_clear_orders()
 	target_enemy = enemy
-	target_resource_node = null
-	target_tend_building = null
 	if enemy and is_instance_valid(enemy):
 		_plan_path(enemy.global_position)
 	current_state = State.MOVING
@@ -627,10 +634,8 @@ func order_harvest(node: Node) -> void:
 		current_state = State.IDLE
 		return
 
+	_clear_orders()
 	target_resource_node = node
-	target_building = null
-	target_enemy = null
-	target_tend_building = null
 
 	if _is_in_node_range(global_position, node):
 		velocity = Vector3.ZERO
@@ -648,10 +653,8 @@ func order_tend(building: Node) -> void:
 		current_state = State.IDLE
 		return
 
+	_clear_orders()
 	target_tend_building = building
-	target_building = null
-	target_enemy = null
-	target_resource_node = null
 
 	if _is_in_build_range(global_position, building):
 		velocity = Vector3.ZERO
@@ -663,10 +666,7 @@ func order_tend(building: Node) -> void:
 	current_state = State.MOVING
 
 func order_stop() -> void:
-	target_building = null
-	target_enemy = null
-	target_resource_node = null
-	target_tend_building = null
+	_clear_orders()
 	current_path.clear()
 	current_path_index = 0
 	velocity = Vector3.ZERO
