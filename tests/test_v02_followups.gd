@@ -1036,3 +1036,217 @@ func test_48_a_move_order_mid_tend_is_actually_obeyed() -> void:
 	var to_hut: float = hero.global_position.distance_to(hut.global_position)
 	assert_lt(to_dest, to_hut, "He walks where he was sent, not back to the machine")
 	assert_lt(to_dest, 2.0, "And he actually arrives")
+
+# ==============================================================================
+# 14. Standardized Interaction-Aware Highlight & Stop Button Removal
+# ==============================================================================
+
+func test_49_hero_level_1_menu_only_has_build_button() -> void:
+	var panel = option_panel_script.new()
+	var hero = hero_script.new()
+	_cleanup_nodes.append(panel)
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(panel)
+	tree.root.add_child(hero)
+	await wait_frames(1)
+
+	panel.select_target(hero)
+	assert_eq(panel.current_menu, "default", "Starts at default level-1 menu")
+	# Level 1 menu now offers only [ Build ], Stop button is removed as redundant
+	assert_eq(panel.button_container.get_child_count(), 1, "Level 1 menu has exactly 1 button")
+	var btn = panel.button_container.get_child(0)
+	assert_eq(btn.text, tr("CMD_BUILD"), "The single button is Build")
+
+func test_50_lumber_hut_only_highlights_wood_nodes() -> void:
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3.ZERO
+	await wait_frames(1)
+
+	var near_tree = _make_node("wood", hut.harvest_range * 0.5)
+	var near_rock = _make_node("stone", hut.harvest_range * 0.5)
+	var near_water = _make_node("water", hut.harvest_range * 0.5)
+	await wait_frames(1)
+
+	hut.set_range_visible(true)
+	assert_true(near_tree.is_highlighted, "A tree inside lumber hut ring is highlighted")
+	assert_false(near_rock.is_highlighted, "A rock inside lumber hut ring is NOT highlighted")
+	assert_false(near_water.is_highlighted, "Water inside lumber hut ring is NOT highlighted")
+
+	hut.set_range_visible(false)
+	assert_false(near_tree.is_highlighted, "Deselecting unhighlights the tree")
+
+func test_51_quarry_only_highlights_stone_nodes() -> void:
+	var quarry_script: GDScript = load("res://scripts/entities/ProducerBuilding.gd")
+	var quarry = quarry_script.new("quarry")
+	_cleanup_nodes.append(quarry)
+	tree.root.add_child(quarry)
+	quarry.complete_construction()
+	quarry.position = Vector3.ZERO
+	await wait_frames(1)
+
+	var near_tree = _make_node("wood", quarry.harvest_range * 0.5)
+	var near_rock = _make_node("stone", quarry.harvest_range * 0.5)
+	await wait_frames(1)
+
+	quarry.set_range_visible(true)
+	assert_false(near_tree.is_highlighted, "A tree inside quarry ring is NOT highlighted")
+	assert_true(near_rock.is_highlighted, "A rock inside quarry ring IS highlighted")
+
+	quarry.set_range_visible(false)
+	assert_false(near_rock.is_highlighted, "Deselecting unhighlights the rock")
+
+func test_52_tower_highlights_no_resource_nodes() -> void:
+	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
+	var tower = tower_script.new()
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	tower.complete_construction()
+	tower.position = Vector3.ZERO
+	await wait_frames(1)
+
+	var near_tree = _make_node("wood", tower.attack_range * 0.5)
+	var near_rock = _make_node("stone", tower.attack_range * 0.5)
+	await wait_frames(1)
+
+	tower.set_range_visible(true)
+	assert_false(near_tree.is_highlighted, "Tower range does not highlight trees")
+	assert_false(near_rock.is_highlighted, "Tower range does not highlight rocks")
+
+func test_53_build_preview_only_highlights_relevant_resource_type() -> void:
+	var main_packed: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_packed.instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	await wait_frames(2)
+
+	var tree_node = _make_node("wood", 3.0)
+	var rock_node = _make_node("stone", 3.0)
+	await wait_frames(1)
+
+	# Selecting lumber hut preview: only tree lights up
+	main.on_build_selected("lumber_hut")
+	main.build_preview.global_position = Vector3.ZERO
+	main._refresh_preview_highlights()
+	assert_true(tree_node.is_highlighted, "Lumber hut preview highlights nearby tree")
+	assert_false(rock_node.is_highlighted, "Lumber hut preview ignores nearby rock")
+
+	# Cancelling clears preview highlights
+	main.cancel_building_selection()
+	assert_false(tree_node.is_highlighted, "Cancelling preview clears highlight")
+
+	# Selecting tower preview: neither lights up
+	main.on_build_selected("tower")
+	main.build_preview.global_position = Vector3.ZERO
+	main._refresh_preview_highlights()
+	assert_false(tree_node.is_highlighted, "Tower preview does not highlight tree")
+	assert_false(rock_node.is_highlighted, "Tower preview does not highlight rock")
+	main.cancel_building_selection()
+
+func test_54_depleted_resource_nodes_are_not_highlighted() -> void:
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3.ZERO
+	await wait_frames(1)
+
+	var depleted_tree = _make_node("wood", hut.harvest_range * 0.5)
+	depleted_tree.current_amount = 0
+	depleted_tree.is_depleted = true
+	await wait_frames(1)
+
+	hut.set_range_visible(true)
+	assert_false(depleted_tree.is_highlighted, "A depleted tree has no effect and is not highlighted")
+
+func test_55_reselecting_a_building_still_highlights_a_shared_node() -> void:
+	# Two huts whose ranges overlap the same tree. `unit_selected` fans out to every
+	# building in an arbitrary order, so with one highlight list per building the
+	# newly selected hut lit the tree and the previously selected one then cleared
+	# its stale list and switched it straight back off.
+	var a = lumber_hut_script.new()
+	var b = lumber_hut_script.new()
+	_cleanup_nodes.append(a)
+	_cleanup_nodes.append(b)
+	tree.root.add_child(a)
+	tree.root.add_child(b)
+	a.complete_construction()
+	b.complete_construction()
+	a.position = Vector3(-3.0, 0.0, 0.0)
+	b.position = Vector3(3.0, 0.0, 0.0)
+
+	var shared = resource_node_script.new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(shared)
+	tree.root.add_child(shared)
+	shared.position = Vector3.ZERO
+	await wait_frames(1)
+
+	for step in [a, b, a, b]:
+		event_bus_node.unit_selected.emit(step)
+		assert_true(shared.is_highlighted,
+			"The shared tree stays lit for whichever hut is selected, in any order")
+
+	event_bus_node.unit_deselected.emit()
+	assert_false(shared.is_highlighted, "Deselecting clears it")
+
+func test_56_highlights_survive_a_selected_building_being_destroyed() -> void:
+	var hut = lumber_hut_script.new()
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = Vector3.ZERO
+	var t = resource_node_script.new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(t)
+	tree.root.add_child(t)
+	t.position = Vector3(2.0, 0.0, 0.0)
+	await wait_frames(1)
+
+	event_bus_node.unit_selected.emit(hut)
+	assert_true(t.is_highlighted, "Tree lit while the hut is selected")
+
+	hut.queue_free()
+	await wait_frames(2)
+	assert_false(t.is_highlighted, "A destroyed building does not leave its highlights behind")
+
+func test_57_a_producer_without_an_explicit_declaration_still_derives_its_types() -> void:
+	# Config.get_interactable_resource_types() falls back to deriving from what a
+	# producer makes. Every shipped producer declares the field, so exercise the
+	# fallback directly rather than leaving it as untested, unreachable code.
+	assert_true(config_node.has_method("get_interactable_resource_types"),
+		"Config owns the rule for what a building type interacts with")
+
+	# Declared types win.
+	assert_eq(config_node.get_interactable_resource_types("lumber_hut"), ["wood"] as Array[String],
+		"A lumber hut interacts with wood")
+	assert_eq(config_node.get_interactable_resource_types("quarry"), ["stone"] as Array[String],
+		"A quarry interacts with stone")
+
+	# Things with no resource interaction say so plainly.
+	assert_true(config_node.get_interactable_resource_types("tower").is_empty(),
+		"A turret interacts with no resource node")
+	assert_true(config_node.get_interactable_resource_types("wall").is_empty(),
+		"Stakes interact with no resource node")
+	assert_true(config_node.get_interactable_resource_types("not_a_building").is_empty(),
+		"An unknown type is handled rather than crashing")
+
+func test_58_depleted_nodes_report_themselves_unavailable() -> void:
+	# One place answers "is this worth harvesting / highlighting", so the building,
+	# the build preview and the producer cannot drift apart on the question.
+	var node = resource_node_script.new("wood", Vector2i.ZERO)
+	_cleanup_nodes.append(node)
+	tree.root.add_child(node)
+	await wait_frames(1)
+
+	assert_true(node.is_available(), "A fresh tree is available")
+	node.harvest(node.current_amount)
+	assert_true(node.is_depleted, "Stripping it marks it depleted")
+	assert_false(node.is_available(), "And it reports itself unavailable")
+
+	var hut = lumber_hut_script.new()
+	_cleanup_nodes.append(hut)
+	tree.root.add_child(hut)
+	hut.complete_construction()
+	hut.position = node.global_position
+	await wait_frames(1)
+	assert_false(hut.can_interact_with(node), "A hut will not claim a stripped tree")

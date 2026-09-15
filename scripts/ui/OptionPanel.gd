@@ -273,14 +273,10 @@ func _create_action_button(text: String, callback: Callable) -> Button:
 
 func _populate_hero_buttons() -> void:
 	if current_menu == "default":
-		# Level 1: [ Build ] and [ Stop ]
+		# Level 1: [ Build ]
 		_create_action_button(TranslationServer.translate("CMD_BUILD"), func():
 			current_menu = "build"
 			_refresh_ui()
-		)
-		_create_action_button(TranslationServer.translate("CMD_STOP"), func():
-			if selected_unit and is_instance_valid(selected_unit) and selected_unit.has_method("order_stop"):
-				selected_unit.order_stop()
 		)
 	elif current_menu == "build":
 		# Level 2: one button per Config.BUILDABLE_TYPES, then [ Back ]

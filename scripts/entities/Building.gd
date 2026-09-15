@@ -17,6 +17,18 @@ extends StaticBody3D
 var is_destroyed: bool = false
 var label_3d: Label3D = null
 var range_indicator: MeshInstance3D = null
+## Nodes lit up by the current selection. This is deliberately ONE list shared by
+## every building rather than one per building: `unit_selected` fans out to all of
+## them in an arbitrary order, so with per-building lists the newly selected
+## building would highlight its nodes and the previously selected one would then
+## clear its stale list and switch them straight back off. Exactly one thing is
+## selected at a time, so exactly one list is the honest model.
+static var _selection_highlights: Array[Node] = []
+
+## Which building lit them. Only the owner may switch them off, so a building
+## reacting to somebody else's selection can never undo the highlight that
+## selection just applied, whatever order the signal reaches them in.
+static var _highlight_owner: Node = null
 
 ## Order this blueprint was laid down in. The Hero works through pending blueprints
 ## oldest-first, so a row of stakes goes up in the order the player clicked them
@@ -39,6 +51,8 @@ func _ready() -> void:
 	_update_info_label()
 
 func _exit_tree() -> void:
+	if _highlight_owner == self:
+		clear_selection_highlights()
 	_disconnect_selection_events()
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb) and eb.has_signal("locale_changed"):
@@ -403,19 +417,60 @@ func set_range_visible(p_visible: bool) -> void:
 		range_indicator.visible = p_visible
 	_highlight_covered_nodes(p_visible)
 
+## Returns the list of resource node types this building interacts with.
+func get_interactable_resource_types() -> Array[String]:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_interactable_resource_types"):
+		return cfg.get_interactable_resource_types(building_type)
+	return []
+
+## Checks whether this building can interact with / has an effect on a given target.
+## By default, checks if target is an active (non-depleted) resource node matching its interactable types.
+func can_interact_with(target: Node) -> bool:
+	if target == null or not is_instance_valid(target) or target.is_queued_for_deletion():
+		return false
+	if target.is_in_group("resource_nodes") or ("resource_type" in target):
+		if target.has_method("is_available") and not target.is_available():
+			return false
+		var res_type: String = str(target.get("resource_type"))
+		return get_interactable_resource_types().has(res_type)
+	return false
+
+## Turns off everything the current selection lit up, whoever owns it.
+static func clear_selection_highlights() -> void:
+	for n in _selection_highlights:
+		if is_instance_valid(n) and n.has_method("set_highlighted"):
+			n.set_highlighted(false)
+	_selection_highlights.clear()
+	_highlight_owner = null
+
 ## Lights up the resource nodes this building's ring actually covers, so the player
-## can see at a glance what a producer is working with.
+## can see at a glance what a producer is working with. Only nodes that this building
+## can interact with (e.g. trees for a lumber hut) are highlighted.
 func _highlight_covered_nodes(on: bool) -> void:
+	if not on:
+		# Only the building that lit them may put them out. Otherwise a building
+		# reacting to another one's selection would clear the highlight that
+		# selection had just applied.
+		if _highlight_owner == self:
+			clear_selection_highlights()
+		return
+	clear_selection_highlights()
+	if not is_inside_tree():
+		return
 	var r := _get_display_range()
-	if r <= 0.0 or not is_inside_tree():
+	if r <= 0.0:
+		return
+	var interactable := get_interactable_resource_types()
+	if interactable.is_empty():
 		return
 	for n in get_tree().get_nodes_in_group("resource_nodes"):
 		if not is_instance_valid(n) or not n.has_method("set_highlighted"):
 			continue
-		if on and global_position.distance_to(n.global_position) <= r:
+		if can_interact_with(n) and global_position.distance_to(n.global_position) <= r:
 			n.set_highlighted(true)
-		elif not on:
-			n.set_highlighted(false)
+			_selection_highlights.append(n)
+			_highlight_owner = self
 
 func _connect_selection_events() -> void:
 	var eb = _get_event_bus()
@@ -440,6 +495,8 @@ func _on_unit_selected(unit: Node) -> void:
 
 func _on_unit_deselected() -> void:
 	set_range_visible(false)
+	if _highlight_owner == self:
+		clear_selection_highlights()
 
 ## Construction time is derived from the building's price (Config.get_build_time),
 ## so cost is the single number a designer tunes.

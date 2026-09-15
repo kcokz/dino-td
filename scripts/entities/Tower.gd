@@ -48,6 +48,7 @@ func _ready() -> void:
 	_ensure_detection_components()
 
 func _exit_tree() -> void:
+	super._exit_tree()
 	if fire_timer and is_instance_valid(fire_timer):
 		fire_timer.stop()
 

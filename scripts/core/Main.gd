@@ -891,14 +891,25 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 
 	_refresh_preview_highlights()
 
-## Lights up every resource node the pending building's ring would cover.
+## Lights up resource nodes the pending building's ring would cover, but only those
+## that this building type can interact with (e.g. trees for a lumber hut).
 func _refresh_preview_highlights() -> void:
 	_clear_preview_highlights()
 	var r: float = _preview_range_for(current_build_type)
 	if r <= 0.0 or build_preview == null:
 		return
+	var cfg = _get_config()
+	var interactable_types: Array[String] = []
+	if cfg and cfg.has_method("get_interactable_resource_types"):
+		interactable_types = cfg.get_interactable_resource_types(current_build_type)
+	if interactable_types.is_empty():
+		return
 	for n in get_tree().get_nodes_in_group("resource_nodes"):
 		if not is_instance_valid(n) or not n.has_method("set_highlighted"):
+			continue
+		if n.has_method("is_available") and not n.is_available():
+			continue
+		if not ("resource_type" in n) or not interactable_types.has(str(n.resource_type)):
 			continue
 		if build_preview.global_position.distance_to(n.global_position) <= r:
 			n.set_highlighted(true)

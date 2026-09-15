@@ -73,6 +73,7 @@ const BUILDINGS: Dictionary = {
 		"tend_duration": 40.0,
 		"tend_time": 2.0,
 		"harvest_range": 12.0,
+		"interacts_with_resources": ["wood"],
 		"produces_per_sec": {"wood": 0.25},
 		"produces": {"wood": 2},
 		"upgrades_to": "",
@@ -113,6 +114,7 @@ const BUILDINGS: Dictionary = {
 		"tend_duration": 40.0,
 		"tend_time": 2.5,
 		"harvest_range": 12.0,
+		"interacts_with_resources": ["stone"],
 		"produces_per_sec": {"stone": 0.15},
 		"produces": {"stone": 1},
 		"upgrades_to": "",
@@ -126,6 +128,7 @@ const BUILDINGS: Dictionary = {
 		"tend_duration": 40.0,
 		"tend_time": 2.0,
 		"harvest_range": 12.0,
+		"interacts_with_resources": ["water"],
 		"produces_per_sec": {"water": 0.2},
 		"produces": {"water": 1},
 		"upgrades_to": "",
@@ -387,4 +390,31 @@ static func get_dino_name(type_id: String) -> String:
 		var raw_key = DINOS[type_id].get("name", type_id)
 		return TranslationServer.translate(raw_key)
 	return TranslationServer.translate(type_id)
+
+## Returns the resource types that this building type interacts with (e.g. lumber_hut -> ["wood"]).
+## Buildings without resource interaction (towers, walls, etc.) return an empty array.
+static func get_interactable_resource_types(b_type: String) -> Array[String]:
+	if not BUILDINGS.has(b_type):
+		return []
+	var b_cfg: Dictionary = BUILDINGS[b_type]
+	if b_cfg.has("interacts_with_resources"):
+		var raw: Array = b_cfg["interacts_with_resources"]
+		var res: Array[String] = []
+		for item in raw:
+			res.append(str(item))
+		return res
+	# Automatic fallback derivation for producer buildings
+	if b_cfg.get("kind", "") != "producer":
+		return []
+	var res: Array[String] = []
+	var pps: Dictionary = b_cfg.get("produces_per_sec", {})
+	for res_id in pps:
+		if RESOURCE_NODES.has(res_id) and not res.has(res_id):
+			res.append(res_id)
+	var prod: Dictionary = b_cfg.get("produces", {})
+	for res_id in prod:
+		if RESOURCE_NODES.has(res_id) and not res.has(res_id):
+			res.append(res_id)
+	return res
+
 

@@ -209,3 +209,9 @@ func set_highlighted(on: bool) -> void:
 		return
 	is_highlighted = on
 	_update_visuals()
+
+## Whether this node still has something to give. Asked by buildings, by the build
+## preview and by the producers, so "is this worth highlighting / harvesting" is
+## answered in exactly one place.
+func is_available() -> bool:
+	return not is_depleted and current_amount > 0 and not is_queued_for_deletion()
