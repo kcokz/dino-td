@@ -476,23 +476,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var eb = _get_event_bus()
 		var panel = _get_option_panel()
-		var has_pin: bool = panel != null and is_instance_valid(panel) and "selection_is_manual" in panel and panel.selection_is_manual
-		if has_pin and eb and eb.has_signal("unit_deselected"):
+		var showing_other: bool = panel != null and is_instance_valid(panel) 			and "selected_unit" in panel and panel.selected_unit != null and panel.selected_unit != hero
+		if showing_other and eb and eb.has_signal("unit_deselected"):
 			eb.unit_deselected.emit()
 			return
 		if hud and is_instance_valid(hud) and hud.has_method("toggle_pause_menu"):
 			hud.toggle_pause_menu()
 		return
 
-	# Right-click issues an order to whatever is SELECTED. Only the Hero takes orders,
-	# so while the player has a building pinned in the Option Panel right-click does
-	# nothing -- clicking a turret to read it must not double as "walk over there".
+	# Right-click ACTS: the Hero does whatever the thing under the cursor affords --
+	# harvest a tree, raise a blueprint, tend a machine, attack a dino, or just walk
+	# there. It never changes what the Option Panel is showing; that is left-click's
+	# job alone, so inspecting something never costs you the ability to command.
 	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
 		if current_build_type != "":
 			cancel_building_selection()
-			get_viewport().set_input_as_handled()
-			return
-		if not _is_hero_selected():
 			get_viewport().set_input_as_handled()
 			return
 		var hit_pos = _raycast_ground(event.position)
@@ -581,23 +579,6 @@ func try_place_at_cell(cell: Vector2i) -> Node:
 func _hint(key: String) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 		hud.show_hint(tr(key))
-
-## Whether a right-click should command the Hero.
-##
-## Only one of the player's own buildings takes the subject away from him -- those
-## have their own actions, so clicking a turret to read it must not double as
-## "walk over there". Selecting scenery (a tree, a rock) is purely informational
-## and must not cost the player control, or clicking a tree strands the Hero.
-func _is_hero_selected() -> bool:
-	if hero == null or not is_instance_valid(hero):
-		return false
-	var panel = _get_option_panel()
-	if panel == null or not is_instance_valid(panel):
-		return true
-	var sel = panel.selected_unit if "selected_unit" in panel else null
-	if sel == null or sel == hero or not is_instance_valid(sel):
-		return true
-	return not sel.is_in_group("buildings")
 
 func _get_option_panel() -> Node:
 	if hud and is_instance_valid(hud):

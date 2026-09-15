@@ -13,12 +13,6 @@ signal action_triggered(action_name: String, target_node: Node)
 var selected_unit: Node = null
 var current_menu: String = "default" # "default" or "build"
 
-## True while the player has deliberately pinned a unit by clicking it. Auto-follow
-## never steals a pinned selection: yanking the panel away while someone is reading
-## it is the classic way this kind of UI feels broken. Clicking the Hero, or clicking
-## empty ground, releases the pin and hands control back to auto-follow.
-var selection_is_manual: bool = false
-
 # UI Nodes
 var title_label: Label = null
 var status_label: Label = null
@@ -56,12 +50,13 @@ func _disconnect_event_bus() -> void:
 		if eb.has_signal("locale_changed") and eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.disconnect(_on_locale_changed)
 
+## Left-click is the only thing that changes what the panel shows. Right-click
+## gives the Hero an order and deliberately leaves the panel alone, so inspecting
+## and commanding never interfere with each other.
 func _on_unit_selected(unit: Node) -> void:
-	selection_is_manual = not _is_hero(unit)
 	set_selected_unit(unit)
 
 func _on_unit_deselected() -> void:
-	selection_is_manual = false
 	clear_selection()
 
 func _on_locale_changed(_locale: String) -> void:
@@ -106,39 +101,22 @@ func _on_back_pressed() -> void:
 	_refresh_ui()
 
 func _process(delta: float) -> void:
-	# A pinned unit that disappears (destroyed, depleted) releases the pin.
+	# Whatever the panel was showing has gone (destroyed, depleted): fall back to
+	# the Hero, who is the resting subject.
 	if selected_unit != null and (not is_instance_valid(selected_unit) or selected_unit.is_queued_for_deletion()):
-		selection_is_manual = false
 		clear_selection()
 		return
-
-	_follow_hero_task()
-
 	if selected_unit == null:
+		# The panel is built before Main spawns the Hero, so the first refresh finds
+		# nothing. Keep trying until he exists.
+		var hero = _get_hero()
+		if hero != null and is_instance_valid(hero):
+			set_selected_unit(hero)
 		return
 	_last_refresh_time += delta
 	if _last_refresh_time >= 0.25:
 		_last_refresh_time = 0.0
 		_update_status_display()
-
-## Keeps the panel on whatever the Hero is working on, and returns it to the Hero
-## the moment that job finishes. Does nothing while the player has pinned a unit.
-func _follow_hero_task() -> void:
-	var hero = _get_hero()
-	if hero == null or not is_instance_valid(hero):
-		return
-	if selection_is_manual:
-		return
-
-	var task: Node = null
-	if hero.has_method("get_active_task_target"):
-		task = hero.get_active_task_target()
-	if task != null and not is_instance_valid(task):
-		task = null
-
-	var want: Node = task if task != null else hero
-	if want != selected_unit:
-		set_selected_unit(want)
 
 func _is_hero(unit: Node) -> bool:
 	if unit == null or not is_instance_valid(unit):

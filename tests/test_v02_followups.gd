@@ -475,7 +475,7 @@ func test_22_opening_wallet_does_not_trivially_buy_the_whole_defence() -> void:
 		"Opening wood (%d) must force a choice between a tower (%d) and an economy building (%d)" % [wallet, tower, hut])
 
 # ==============================================================================
-# 7. Option Panel follows the Hero's current job
+# 7. Left-click inspects, right-click acts -- and the two never interfere
 # ==============================================================================
 
 func _panel_and_hero() -> Array:
@@ -488,15 +488,16 @@ func _panel_and_hero() -> Array:
 	await wait_frames(1)
 	return [panel, hero]
 
-func test_23_panel_rests_on_the_hero_when_idle() -> void:
+func test_23_panel_rests_on_the_hero() -> void:
 	var pair = await _panel_and_hero()
 	var panel = pair[0]
 	var hero = pair[1]
 	panel._process(0.0)
-	assert_eq(panel.selected_unit, hero, "With nothing happening the panel shows the Hero")
-	assert_false(panel.selection_is_manual, "A resting selection is not pinned")
+	assert_eq(panel.selected_unit, hero, "With nothing clicked the panel shows the Hero")
 
-func test_24_panel_follows_the_job_then_returns_to_the_hero() -> void:
+func test_24_ordering_the_hero_around_does_not_change_the_panel() -> void:
+	# Right-click is a command, not an inspection. Sending the Hero to work on
+	# something must leave the panel exactly where the player left it.
 	var pair = await _panel_and_hero()
 	var panel = pair[0]
 	var hero = pair[1]
@@ -507,44 +508,36 @@ func test_24_panel_follows_the_job_then_returns_to_the_hero() -> void:
 	hut.position = Vector3(2.0, 0.0, 0.0)
 	await wait_frames(1)
 
+	assert_eq(panel.selected_unit, hero, "Resting on the Hero")
 	hero.order_tend(hut)
 	panel._process(0.0)
-	assert_eq(panel.selected_unit, hut, "Panel follows the building the Hero is working on")
+	assert_eq(panel.selected_unit, hero, "Giving an order does not pull the panel onto the target")
 
-	# Job over: the Hero goes idle and the panel comes back to him on its own.
 	hero.order_stop()
 	panel._process(0.0)
-	assert_eq(panel.selected_unit, hero, "Panel returns to the Hero when the job ends")
+	assert_eq(panel.selected_unit, hero, "Still on the Hero once the job ends")
 
-func test_25_a_clicked_unit_is_pinned_and_not_stolen() -> void:
+func test_25_left_click_is_what_changes_the_panel() -> void:
 	var pair = await _panel_and_hero()
 	var panel = pair[0]
 	var hero = pair[1]
 	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
 	var tower = tower_script.new()
-	var hut = lumber_hut_script.new()
 	_cleanup_nodes.append(tower)
-	_cleanup_nodes.append(hut)
 	tree.root.add_child(tower)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3(2.0, 0.0, 0.0)
 	await wait_frames(1)
 
-	# The player clicks a tower to read it, then the Hero starts a job elsewhere.
 	panel._on_unit_selected(tower)
-	assert_true(panel.selection_is_manual, "Clicking a unit pins the panel to it")
-	hero.order_tend(hut)
-	panel._process(0.0)
-	assert_eq(panel.selected_unit, tower, "Auto-follow must not yank the panel off a pinned unit")
+	assert_eq(panel.selected_unit, tower, "Left-clicking a turret shows the turret")
 
-	# Clicking the Hero is the resting choice, so it releases the pin.
+	# And it stays there: nothing the Hero does pulls it away.
+	panel._process(0.0)
+	assert_eq(panel.selected_unit, tower, "The panel stays on what the player clicked")
+
 	panel._on_unit_selected(hero)
-	assert_false(panel.selection_is_manual, "Selecting the Hero releases the pin")
-	panel._process(0.0)
-	assert_eq(panel.selected_unit, hut, "Auto-follow resumes once the pin is released")
+	assert_eq(panel.selected_unit, hero, "Left-clicking the Hero shows the Hero")
 
-func test_26_deselecting_releases_the_pin() -> void:
+func test_26_clicking_empty_ground_returns_to_the_hero() -> void:
 	var pair = await _panel_and_hero()
 	var panel = pair[0]
 	var hero = pair[1]
@@ -555,15 +548,10 @@ func test_26_deselecting_releases_the_pin() -> void:
 	await wait_frames(1)
 
 	panel._on_unit_selected(tower)
-	assert_true(panel.selection_is_manual, "Pinned to the tower")
-
-	# Clicking empty ground deselects.
 	panel._on_unit_deselected()
-	assert_false(panel.selection_is_manual, "Deselecting releases the pin")
-	panel._process(0.0)
-	assert_eq(panel.selected_unit, hero, "Panel falls back to the Hero")
+	assert_eq(panel.selected_unit, hero, "Deselecting falls back to the Hero")
 
-func test_27_a_pinned_unit_that_disappears_releases_the_pin() -> void:
+func test_27_a_selected_unit_that_disappears_falls_back_to_the_hero() -> void:
 	var pair = await _panel_and_hero()
 	var panel = pair[0]
 	var hero = pair[1]
@@ -574,13 +562,11 @@ func test_27_a_pinned_unit_that_disappears_releases_the_pin() -> void:
 	await wait_frames(1)
 
 	panel._on_unit_selected(wall)
-	assert_eq(panel.selected_unit, wall, "Pinned to the wall")
+	assert_eq(panel.selected_unit, wall, "Showing the wall")
 
-	# The wall is destroyed while the player is looking at it.
 	wall.queue_free()
 	await wait_frames(2)
 	panel._process(0.0)
-	assert_false(panel.selection_is_manual, "A vanished pin is released")
 	assert_eq(panel.selected_unit, hero, "Panel falls back to the Hero")
 
 # ==============================================================================
@@ -663,7 +649,10 @@ func test_31_placement_mode_survives_until_the_next_one_is_unaffordable() -> voi
 # 9. Right-click obeys the selection; ESC menu
 # ==============================================================================
 
-func test_32_right_click_only_commands_the_hero() -> void:
+func test_32_right_click_commands_the_hero_whatever_is_on_screen() -> void:
+	# A single avatar means right-click is always his order. Inspecting a turret
+	# must never cost the player the ability to move him -- that is what stranded
+	# the Hero when a tree was selected.
 	var main_packed: PackedScene = load("res://scenes/Main.tscn")
 	var main = main_packed.instantiate()
 	_cleanup_nodes.append(main)
@@ -672,24 +661,22 @@ func test_32_right_click_only_commands_the_hero() -> void:
 
 	var panel = main._get_option_panel()
 	assert_not_null(panel, "Main can find the Option Panel")
+	assert_false(main.has_method("_is_hero_selected"),
+		"The selection no longer gates whether the Hero takes orders")
 
-	# Resting on the Hero: he is the subject, so orders go through.
-	panel.set_selected_unit(main.hero)
-	assert_true(main._is_hero_selected(), "The Hero takes orders while he is selected")
-
-	# Pinned to a building: right-click must not double as 'walk over there'.
+	# Whatever the panel happens to be showing, ordering him still works.
 	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
 	var tower = tower_script.new()
 	_cleanup_nodes.append(tower)
 	tree.root.add_child(tower)
 	await wait_frames(1)
 	panel._on_unit_selected(tower)
-	assert_false(main._is_hero_selected(), "A pinned building blocks Hero orders")
 
-	# Releasing the pin hands the Hero back.
-	panel._on_unit_deselected()
-	panel._process(0.0)
-	assert_true(main._is_hero_selected(), "Deselecting returns command to the Hero")
+	var dest := Vector3(6.0, 0.0, 6.0)
+	main.hero.move_to(dest)
+	assert_ne(int(main.hero.current_state), int(hero_script.State.IDLE),
+		"The Hero accepts a move order while a turret is being inspected")
+	assert_eq(panel.selected_unit, tower, "And the order did not disturb the panel")
 
 func test_33_pause_menu_opens_pauses_and_restores() -> void:
 	var hud = _spawn_hud()
@@ -921,7 +908,7 @@ func test_43_buildings_leave_a_lane_wider_than_the_hero() -> void:
 	assert_not_null(shape, "A building has a collision shape")
 	assert_almost_eq(shape.shape.size.x, footprint, 0.001, "Its footprint comes from Config")
 
-func test_44_clicking_scenery_does_not_strand_the_hero() -> void:
+func test_44_inspecting_a_tree_does_not_strand_the_hero() -> void:
 	var main_packed: PackedScene = load("res://scenes/Main.tscn")
 	var main = main_packed.instantiate()
 	_cleanup_nodes.append(main)
@@ -929,22 +916,20 @@ func test_44_clicking_scenery_does_not_strand_the_hero() -> void:
 	await wait_frames(2)
 	var panel = main._get_option_panel()
 
-	# A tree is scenery: reading it must not cost the player control of the Hero.
 	var node = resource_node_script.new("wood", Vector2i.ZERO)
 	_cleanup_nodes.append(node)
 	tree.root.add_child(node)
+	node.position = Vector3(3.0, 0.0, 0.0)
 	await wait_frames(1)
-	panel._on_unit_selected(node)
-	assert_true(main._is_hero_selected(), "Selecting a tree leaves the Hero commandable")
 
-	# One of the player's own buildings does take the subject away.
-	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
-	var tower = tower_script.new()
-	_cleanup_nodes.append(tower)
-	tree.root.add_child(tower)
-	await wait_frames(1)
-	panel._on_unit_selected(tower)
-	assert_false(main._is_hero_selected(), "A selected building does take the subject")
+	# Left-click the tree to read it...
+	panel._on_unit_selected(node)
+	assert_eq(panel.selected_unit, node, "Left-click shows the tree's status")
+
+	# ...and the Hero is still perfectly commandable.
+	main.hero.order_harvest(node)
+	assert_ne(int(main.hero.current_state), int(hero_script.State.IDLE),
+		"The Hero still takes orders while a tree is being inspected")
 
 func test_45_trees_offer_no_redundant_harvest_button() -> void:
 	var panel = option_panel_script.new()
