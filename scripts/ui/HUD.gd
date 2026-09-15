@@ -36,6 +36,7 @@ var speed_btn: Button = null
 var raid_warning_banner: Label = null
 var option_panel: Node = null
 var pause_menu: Node = null
+var _raid_horn_sounded: bool = false
 
 var current_speed: float = 1.0
 const SPEEDS: Array[float] = [1.0, 2.0, 3.0]
@@ -166,7 +167,14 @@ func _on_raid_warning(time_left: float) -> void:
 		return
 	if time_left <= 0.0:
 		raid_warning_banner.visible = false
+		_raid_horn_sounded = false
 		return
+	# Sound the horn once as the warning appears, not on every countdown tick.
+	if not _raid_horn_sounded:
+		_raid_horn_sounded = true
+		var fx = get_node_or_null("/root/Fx")
+		if fx:
+			fx.play(fx.Sound.RAID_WARNING)
 	raid_warning_banner.visible = true
 	raid_warning_banner.text = tr("HUD_RAID_WARNING") % int(ceil(time_left))
 

@@ -963,14 +963,15 @@ func test_43c_being_fenced_in_is_undone_by_demolishing() -> void:
 	assert_eq(ring.size(), 8, "The Hero is ringed by eight stakes")
 
 	for b in ring:
-		assert_true(main.grid_manager.is_cell_occupied(b.cell), "Every ring tile is occupied")
+		assert_true(main.grid_manager.is_cell_occupied(b.cell_pos), "Every ring tile is occupied")
 
 	# Pull one down and that tile opens up again.
 	var door = ring[0]
-	var door_cell: Vector2i = door.cell
+	var door_cell: Vector2i = door.cell_pos
 	door.demolish()
-	await wait_frames(2)
+	# Read the flag before the node is actually freed a frame later.
 	assert_true(door.is_destroyed, "The stake comes down")
+	await wait_frames(2)
 	assert_false(main.grid_manager.is_cell_occupied(door_cell),
 		"Demolishing frees the tile, so the Hero has a way out")
 

@@ -45,6 +45,8 @@ var _last_pos: Vector3 = Vector3.ZERO
 
 var collision_shape: CollisionShape3D = null
 var mesh_instance: MeshInstance3D = null
+var status_bar: Node3D = null
+var selection_ring: Node3D = null
 var is_hero: bool = true
 var continuous_mode: bool = false
 var has_provoked_dinos: bool = false
@@ -60,7 +62,10 @@ func _init() -> void:
 func _ready() -> void:
 	add_to_group("hero")
 	add_to_group("players")
+	add_to_group("selectable")
 	_ensure_components()
+	_ensure_feedback_nodes(2.0, true)
+	_connect_feedback_events()
 	_load_config()
 	_connect_event_bus()
 
@@ -691,6 +696,12 @@ func take_damage(amount: float) -> void:
 	if current_state == State.DEAD or amount <= 0.0:
 		return
 	current_hp = maxf(0.0, current_hp - amount)
+	_ensure_feedback_nodes(2.0, true)
+	_refresh_health_bar()
+	var fx = _get_fx()
+	if fx:
+		fx.flash(mesh_instance)
+		fx.play(fx.Sound.HIT)
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("hero_hp_changed"):
 		eb.hero_hp_changed.emit(current_hp, max_hp)
@@ -871,4 +882,63 @@ func get_active_task_target() -> Node:
 			for t in [target_building, target_tend_building, target_resource_node]:
 				if t != null and is_instance_valid(t):
 					return t
+	return null
+# ==============================================================================
+# Feedback layer (v0.3)
+# ==============================================================================
+
+func _ensure_feedback_nodes(bar_height: float, want_ring: bool) -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		status_bar = find_child("StatusBar", true, false)
+	if status_bar == null:
+		var bar_script = load("res://scripts/fx/StatusBar3D.gd")
+		if bar_script:
+			status_bar = bar_script.new()
+			status_bar.name = "StatusBar"
+			status_bar.position = Vector3(0.0, bar_height, 0.0)
+			add_child(status_bar)
+	if want_ring and (selection_ring == null or not is_instance_valid(selection_ring)):
+		selection_ring = find_child("SelectionRing", true, false)
+		if selection_ring == null:
+			var ring_script = load("res://scripts/fx/SelectionRing3D.gd")
+			if ring_script:
+				selection_ring = ring_script.new()
+				selection_ring.name = "SelectionRing"
+				add_child(selection_ring)
+
+func _refresh_health_bar() -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		return
+	var ratio: float = (current_hp / max_hp) if max_hp > 0.0 else 0.0
+	var hide_full: bool = true
+	var cfg = _get_config()
+	if cfg and "FEEDBACK" in cfg:
+		hide_full = bool(cfg.FEEDBACK.get("health_bar_hide_at_full", true))
+	status_bar.visible = not (hide_full and ratio >= 0.999)
+	status_bar.set_ratio(ratio, Color(0.85, 0.3, 0.25, 0.95) if ratio < 0.35 else Color(0.3, 0.85, 0.35, 0.95))
+
+func set_selected_visual(on: bool) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
+		selection_ring.set_shown(on)
+
+func _connect_feedback_events() -> void:
+	var eb = _get_event_bus()
+	if eb == null:
+		return
+	if eb.has_signal("unit_selected") and not eb.unit_selected.is_connected(_on_fx_unit_selected):
+		eb.unit_selected.connect(_on_fx_unit_selected)
+	if eb.has_signal("unit_deselected") and not eb.unit_deselected.is_connected(_on_fx_unit_deselected):
+		eb.unit_deselected.connect(_on_fx_unit_deselected)
+
+func _on_fx_unit_selected(unit: Node) -> void:
+	set_selected_visual(unit == self)
+
+func _on_fx_unit_deselected() -> void:
+	set_selected_visual(false)
+
+func _get_fx() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/Fx")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("Fx")
 	return null

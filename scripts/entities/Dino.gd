@@ -74,6 +74,8 @@ var raycast: RayCast3D = null
 var attack_timer: Timer = null
 var collision_shape: CollisionShape3D = null
 var mesh_instance: MeshInstance3D = null
+var status_bar: Node3D = null
+var selection_ring: Node3D = null
 var _shape_query: PhysicsShapeQueryParameters3D = null
 
 # ==============================================================================
@@ -819,6 +821,7 @@ func take_damage(amount: float) -> void:
 		return
 
 	current_hp = maxf(0.0, current_hp - amount)
+	_on_hit_fx()
 	if is_nan(current_hp) or is_inf(current_hp) or current_hp <= 0.0:
 		die()
 
@@ -836,6 +839,8 @@ func die() -> void:
 
 	if attack_timer and is_instance_valid(attack_timer):
 		attack_timer.stop()
+
+	_on_death_fx()
 
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("dino_died"):
@@ -958,3 +963,72 @@ func _get_game_state() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("GameState")
 	return null
+
+# ==============================================================================
+# Feedback hooks (v0.3)
+# ==============================================================================
+
+## A dinosaur taking fire used to look identical to one that was not: the numbers
+## changed and nothing on screen did.
+func _on_hit_fx() -> void:
+	_ensure_feedback_nodes(1.1, false)
+	_refresh_health_bar()
+	var fx = _get_fx()
+	if fx:
+		fx.flash(mesh_instance)
+
+## Dinosaurs used to simply vanish on death.
+func _on_death_fx() -> void:
+	var fx = _get_fx()
+	if fx == null or not is_inside_tree():
+		return
+	var colour := Color(0.9, 0.15, 0.15)
+	var cfg = _get_config()
+	if cfg and "COLORS" in cfg and cfg.COLORS.has(dino_type):
+		colour = cfg.COLORS[dino_type]
+	fx.debris(global_position, colour)
+	fx.play(fx.Sound.DEATH)
+
+func _get_fx() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/Fx")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("Fx")
+	return null
+# ==============================================================================
+# Feedback layer (v0.3)
+# ==============================================================================
+
+func _ensure_feedback_nodes(bar_height: float, want_ring: bool) -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		status_bar = find_child("StatusBar", true, false)
+	if status_bar == null:
+		var bar_script = load("res://scripts/fx/StatusBar3D.gd")
+		if bar_script:
+			status_bar = bar_script.new()
+			status_bar.name = "StatusBar"
+			status_bar.position = Vector3(0.0, bar_height, 0.0)
+			add_child(status_bar)
+	if want_ring and (selection_ring == null or not is_instance_valid(selection_ring)):
+		selection_ring = find_child("SelectionRing", true, false)
+		if selection_ring == null:
+			var ring_script = load("res://scripts/fx/SelectionRing3D.gd")
+			if ring_script:
+				selection_ring = ring_script.new()
+				selection_ring.name = "SelectionRing"
+				add_child(selection_ring)
+
+func _refresh_health_bar() -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		return
+	var ratio: float = (current_hp / max_hp) if max_hp > 0.0 else 0.0
+	var hide_full: bool = true
+	var cfg = _get_config()
+	if cfg and "FEEDBACK" in cfg:
+		hide_full = bool(cfg.FEEDBACK.get("health_bar_hide_at_full", true))
+	status_bar.visible = not (hide_full and ratio >= 0.999)
+	status_bar.set_ratio(ratio, Color(0.85, 0.3, 0.25, 0.95) if ratio < 0.35 else Color(0.3, 0.85, 0.35, 0.95))
+
+func set_selected_visual(on: bool) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
+		selection_ring.set_shown(on)

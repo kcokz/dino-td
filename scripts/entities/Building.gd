@@ -17,6 +17,8 @@ extends StaticBody3D
 var is_destroyed: bool = false
 var label_3d: Label3D = null
 var range_indicator: MeshInstance3D = null
+var status_bar: Node3D = null
+var selection_ring: Node3D = null
 ## Nodes lit up by the current selection. This is deliberately ONE list shared by
 ## every building rather than one per building: `unit_selected` fans out to all of
 ## them in an arbitrary order, so with per-building lists the newly selected
@@ -130,8 +132,13 @@ func add_build_progress(delta_time: float) -> bool:
 
 ## Finalizes construction, restoring collision layer and full interactivity.
 func complete_construction() -> void:
+	var was_under_construction: bool = not is_constructed
 	is_constructed = true
 	build_progress = 1.0
+	if was_under_construction:
+		var fx = _get_fx()
+		if fx:
+			fx.play(fx.Sound.BUILD_DONE)
 	_update_construction_state()
 	_update_info_label()
 	var eb = _get_event_bus()
@@ -176,15 +183,21 @@ func take_damage(amount: float) -> void:
 		destroy()
 
 ## Subclass hook triggered upon taking non-fatal or fatal damage.
+## Feedback only. Until v0.3 this was empty, so a building being chewed on gave the
+## player nothing to see or hear.
 func _on_damaged(_amount: float) -> void:
-	pass
+	var fx = _get_fx()
+	if fx == null:
+		return
+	fx.flash(_visual_mesh())
+	fx.play(fx.Sound.HIT)
 
 ## Executes destruction sequence: signals EventBus, marks is_destroyed, queues free.
 func destroy() -> void:
 	if is_destroyed:
 		return
 	is_destroyed = true
-	
+	_spawn_destruction_fx()
 	_on_before_destroy()
 	
 	var eb = _get_event_bus()
@@ -229,6 +242,7 @@ func _get_extra_status_text() -> String:
 	return ""
 
 func _update_info_label() -> void:
+	_update_status_bar()
 	if label_3d == null:
 		return
 	var b_name = get_localized_name()
@@ -246,6 +260,29 @@ func _update_info_label() -> void:
 		else:
 			label_3d.modulate = Color(1.0, 1.0, 1.0)
 			label_3d.text = b_name
+
+## Health once built, construction progress before that. Hidden at full health so
+## an untouched base is not covered in bars.
+func _update_status_bar() -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		return
+	if not is_constructed:
+		status_bar.visible = true
+		status_bar.set_ratio(build_progress, Color(1.0, 0.82, 0.25, 0.95))
+		return
+	var ratio: float = (current_hp / max_hp) if max_hp > 0.0 else 0.0
+	var hide_full: bool = true
+	var cfg = _get_config()
+	if cfg and "FEEDBACK" in cfg:
+		hide_full = bool(cfg.FEEDBACK.get("health_bar_hide_at_full", true))
+	status_bar.visible = not (hide_full and ratio >= 0.999)
+	status_bar.set_ratio(ratio, Color(0.85, 0.3, 0.25, 0.95) if ratio < 0.35 else Color(0.3, 0.85, 0.35, 0.95))
+
+## The selection ring says "this is what you clicked". The coverage ring, handled
+## separately, says "this is what it affects" -- keeping them distinct matters.
+func set_selected_visual(on: bool) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
+		selection_ring.set_shown(on)
 
 func get_display_info() -> Dictionary:
 	var status_str = ""
@@ -321,6 +358,26 @@ func _ensure_physics_and_visuals() -> void:
 		label_3d.position = Vector3(0.0, 1.8, 0.0)
 		_apply_label_sizing(label_3d)
 		add_child(label_3d)
+
+	# 5. Status bar and selection ring (v0.3 feedback layer)
+	if status_bar == null:
+		status_bar = find_child("StatusBar", true, false)
+	if status_bar == null:
+		var bar_script = load("res://scripts/fx/StatusBar3D.gd")
+		if bar_script:
+			status_bar = bar_script.new()
+			status_bar.name = "StatusBar"
+			status_bar.position = Vector3(0.0, 1.55, 0.0)
+			add_child(status_bar)
+
+	if selection_ring == null:
+		selection_ring = find_child("SelectionRing", true, false)
+	if selection_ring == null:
+		var ring_script = load("res://scripts/fx/SelectionRing3D.gd")
+		if ring_script:
+			selection_ring = ring_script.new()
+			selection_ring.name = "SelectionRing"
+			add_child(selection_ring)
 
 func _get_placeholder_color() -> Color:
 	var cfg = _get_config()
@@ -492,8 +549,10 @@ func _disconnect_selection_events() -> void:
 
 func _on_unit_selected(unit: Node) -> void:
 	set_range_visible(unit == self)
+	set_selected_visual(unit == self)
 
 func _on_unit_deselected() -> void:
+	set_selected_visual(false)
 	set_range_visible(false)
 	if _highlight_owner == self:
 		clear_selection_highlights()
@@ -513,3 +572,28 @@ func _footprint() -> float:
 	if cfg and cfg.has_method("get_building_footprint"):
 		return float(cfg.get_building_footprint(building_type))
 	return 1.0
+
+# ==============================================================================
+# Feedback hooks
+# ==============================================================================
+
+func _visual_mesh() -> MeshInstance3D:
+	for child in get_children():
+		if child is MeshInstance3D and child != range_indicator:
+			return child
+	return null
+
+## Throws debris in this building's own colour as it comes down.
+func _spawn_destruction_fx() -> void:
+	var fx = _get_fx()
+	if fx == null or not is_inside_tree():
+		return
+	fx.debris(global_position, _get_placeholder_color())
+	fx.play(fx.Sound.DEATH)
+
+func _get_fx() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/Fx")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("Fx")
+	return null

@@ -316,6 +316,24 @@ const UI: Dictionary = {
 	"option_panel_margin": 16.0,       # Option 栏距屏幕边缘的留白
 }
 
+## Presentation feedback (v0.3). None of this changes what happens in the game;
+## it changes whether the player can tell that it happened.
+const FEEDBACK: Dictionary = {
+	"hit_flash_duration": 0.12,       # 受击闪白持续（秒）
+	"hit_flash_strength": 0.85,       # 闪白强度 0~1
+	"debris_count": 7,                # 死亡碎块数量
+	"debris_size": 0.16,              # 碎块边长（米）
+	"debris_speed": 3.4,              # 碎块初速（米/秒）
+	"debris_lifetime": 0.7,           # 碎块存在时长（秒）
+	"health_bar_width": 1.1,          # 血条宽度（米）
+	"health_bar_height": 0.13,        # 血条高度（米）
+	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
+	"selection_ring_radius": 0.85,    # 选中圈半径（米）——与作用范围圈无关
+	"selection_ring_color": Color(0.35, 1.0, 0.5, 0.9),
+	"audio_volume_db": -8.0,
+	"audio_enabled": true,
+}
+
 const NEST_GUARDS: Dictionary = {
 	"count": 3,                   # 巢穴外守卫数量
 	"post_radius": 3.0,           # 岗位游荡半径（米）
