@@ -48,6 +48,13 @@ func _build() -> void:
 	add_child(holder)
 	_fill_mat = _fill.material_override
 
+	# Start full and hidden. Until set_ratio() runs the fill sits unscaled at its
+	# left anchor, overhanging one end and leaving the dark backing plate exposed
+	# at the other -- which reads as a grey smudge beside the unit, not as a bar.
+	# An owner that never refreshes should therefore show nothing at all.
+	set_ratio(1.0, Color(0.3, 0.85, 0.35, 0.95))
+	visible = false
+
 func _make_quad(colour: Color, w: float, h: float, z: float) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var quad := QuadMesh.new()

@@ -70,6 +70,9 @@ func _ready() -> void:
 	if cfg_ring and "HERO" in cfg_ring:
 		ring_w = float(cfg_ring.HERO.get("width", 0.8))
 	_configure_selection_ring(ring_w)
+	# Without this the bar keeps whatever state it was built in and shows at full
+	# health, which is exactly what it is supposed to stay out of the way for.
+	_refresh_health_bar()
 	_connect_feedback_events()
 	_load_config()
 	_connect_event_bus()

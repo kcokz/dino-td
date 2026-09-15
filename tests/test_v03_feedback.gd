@@ -369,3 +369,56 @@ func test_19_the_version_is_declared_in_exactly_one_place() -> void:
 	# And no stale copy is checked in to outrank the project setting.
 	assert_false(FileAccess.file_exists("res://version.json"),
 		"version.json is a build-injection artifact, not something the repo carries")
+
+# ==============================================================================
+# 9. A bar that has not been refreshed must not be visible garbage
+# ==============================================================================
+
+func _bar_span(bar) -> Vector2:
+	# Left and right edge of the fill, in the bar's local space.
+	var half: float = bar._width * bar._fill.scale.x * 0.5
+	return Vector2(bar._fill.position.x - half, bar._fill.position.x + half)
+
+func test_20_a_bar_starts_hidden_and_fully_drawn() -> void:
+	# Before this fix the bar was created visible with its fill still unscaled at
+	# the left anchor: it overhung one end and left the dark backing plate exposed
+	# at the other, which read as a grey smudge beside the unit rather than a bar.
+	var hero = _spawn(hero_script)
+	await wait_frames(1)
+	var bar = hero.status_bar
+	assert_not_null(bar, "The Hero carries a status bar")
+	assert_false(bar.visible, "At full health it stays out of the way")
+	assert_almost_eq(bar._last_ratio, 1.0, 0.001, "And is sized, not left unset")
+
+	var span := _bar_span(bar)
+	var back_half: float = bar._width * 0.5
+	assert_almost_eq(span.x, -back_half, 0.01, "A full bar covers the plate's left edge")
+	assert_almost_eq(span.y, back_half, 0.01, "And its right edge, so no plate shows through")
+
+func test_21_a_drained_bar_empties_from_the_right() -> void:
+	var hero = _spawn(hero_script)
+	await wait_frames(1)
+	var bar = hero.status_bar
+
+	hero.take_damage(hero.max_hp * 0.4)
+	assert_true(bar.visible, "Damage brings the bar out")
+	assert_almost_eq(bar._last_ratio, 0.6, 0.02, "Showing what is left")
+
+	var span := _bar_span(bar)
+	var back_half: float = bar._width * 0.5
+	assert_almost_eq(span.x, -back_half, 0.01, "The fill stays anchored to the left edge")
+	assert_lt(span.y, back_half, "And retreats from the right rather than shrinking centrally")
+
+func test_22_buildings_and_dinosaurs_start_clean_too() -> void:
+	var wall = _spawn(wall_script)
+	wall.complete_construction()
+	await wait_frames(1)
+	assert_false(wall.status_bar.visible, "An undamaged building shows no bar")
+
+	var dino = _spawn(dino_script, Vector3(6.0, 0.0, 0.0))
+	dino.setup("raptor", {"hp": 1.0, "damage": 1.0, "speed": 1.0})
+	await wait_frames(1)
+	dino.take_damage(dino.max_hp * 0.5)
+	var span := _bar_span(dino.status_bar)
+	assert_almost_eq(span.x, -dino.status_bar._width * 0.5, 0.01,
+		"A dinosaur's bar is anchored the same way")
