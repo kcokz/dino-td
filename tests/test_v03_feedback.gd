@@ -375,9 +375,7 @@ func test_19_the_version_is_declared_in_exactly_one_place() -> void:
 # ==============================================================================
 
 func _bar_span(bar) -> Vector2:
-	# Left and right edge of the fill, in the bar's local space.
-	var half: float = bar._width * bar._fill.scale.x * 0.5
-	return Vector2(bar._fill.position.x - half, bar._fill.position.x + half)
+	return bar.fill_span()
 
 func test_20_a_bar_starts_hidden_and_fully_drawn() -> void:
 	# Before this fix the bar was created visible with its fill still unscaled at
@@ -422,3 +420,62 @@ func test_22_buildings_and_dinosaurs_start_clean_too() -> void:
 	var span := _bar_span(dino.status_bar)
 	assert_almost_eq(span.x, -dino.status_bar._width * 0.5, 0.01,
 		"A dinosaur's bar is anchored the same way")
+
+# ==============================================================================
+# 10. The bar must not drift, and a blueprint has no health to show
+# ==============================================================================
+
+func test_23_the_bar_is_one_rigid_billboard_not_two_loose_quads() -> void:
+	# Billboarding each quad through its material makes them pivot about their own
+	# origins, so the plate and the fill swing apart at any camera angle and the
+	# dark plate shows through -- read on screen as a shadow beside the unit.
+	var hero = _spawn(hero_script)
+	await wait_frames(1)
+	var bar = hero.status_bar
+
+	for quad in [bar._back, bar._fill]:
+		var mat: StandardMaterial3D = quad.material_override as StandardMaterial3D
+		assert_eq(mat.billboard_mode, BaseMaterial3D.BILLBOARD_DISABLED,
+			"Quads are not billboarded individually; the bar turns as a whole")
+	assert_true(bar.has_method("_face_camera"), "The bar itself faces the camera")
+
+func test_24_the_fill_quad_never_moves_as_the_value_changes() -> void:
+	# The other half of the drift: scaling a quad whose own origin travels.
+	var hero = _spawn(hero_script)
+	await wait_frames(1)
+	var bar = hero.status_bar
+	var origin: Vector3 = bar._fill.position
+
+	for r in [0.0, 0.25, 0.5, 0.75, 1.0]:
+		bar.set_ratio(r, Color.GREEN)
+		assert_eq(bar._fill.position, origin, "The fill quad stays put at ratio %.2f" % r)
+		var span: Vector2 = bar.fill_span()
+		assert_almost_eq(span.x, bar.plate_span().x, 0.001,
+			"Its left edge stays pinned to the plate at ratio %.2f" % r)
+		assert_lte(span.y, bar.plate_span().y + 0.001,
+			"And it never overhangs the plate at ratio %.2f" % r)
+
+	bar.set_ratio(1.0, Color.GREEN)
+	assert_almost_eq(bar.fill_span().y, bar.plate_span().y, 0.001,
+		"A full bar covers the plate exactly, so none of it shows through")
+
+func test_25_a_blueprint_shows_progress_and_no_health() -> void:
+	var hut = _spawn(lumber_hut_script)
+	await wait_frames(1)
+	hut.start_construction(4.0)
+	hut._update_info_label()
+
+	assert_false(hut.is_constructed, "Still a blueprint")
+	assert_true(hut.status_bar.visible, "It shows how far along it is")
+	assert_almost_eq(hut.status_bar._last_ratio, hut.build_progress, 0.01,
+		"The bar reads construction progress, not health")
+
+	# Half built but undamaged: a health reading would be a full bar, so the two
+	# are only distinguishable if the blueprint state wins outright.
+	hut.add_build_progress(2.0)
+	assert_almost_eq(hut.status_bar._last_ratio, 0.5, 0.05, "Progress, not the untouched health")
+	assert_false(str(hut.label_3d.text).contains("HP"), "And the label quotes percent, not hit points")
+
+	hut.complete_construction()
+	hut._update_info_label()
+	assert_false(hut.status_bar.visible, "Finished and undamaged: nothing to report")
