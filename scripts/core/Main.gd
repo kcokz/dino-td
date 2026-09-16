@@ -45,7 +45,6 @@ var build_preview: Node3D = null
 var build_preview_mesh: MeshInstance3D = null
 var build_preview_ring: MeshInstance3D = null
 var _preview_cell: Vector2i = Vector2i(999999, 999999)
-var _preview_highlighted: Array[Node] = []
 
 # Canonical coordinates
 var core_cell: Vector2i = Vector2i(0, 0)
@@ -554,8 +553,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif b != null and is_instance_valid(b):
 				if "is_constructed" in b and not b.is_constructed:
 					hero.order_build(b, true)
-				elif "is_operating" in b:
-					hero.order_tend(b)
 				else:
 					hero.move_to(hit_pos)
 			else:
@@ -568,8 +565,6 @@ func _unhandled_input(event: InputEvent) -> void:
 					elif hit_obj.is_in_group("buildings"):
 						if "is_constructed" in hit_obj and not hit_obj.is_constructed:
 							hero.order_build(hit_obj, true)
-						elif "is_operating" in hit_obj:
-							hero.order_tend(hit_obj)
 						else:
 							hero.move_to(hit_pos)
 					else:
@@ -901,7 +896,7 @@ func _rebuild_build_preview(type_id: String) -> void:
 	_preview_cell = Vector2i(999999, 999999)
 
 ## Area of effect a pending building would have: attack range for towers,
-## harvest range for producers, nothing for plain walls.
+## attack range for turrets, nothing for plain stakes.
 func _preview_range_for(type_id: String) -> float:
 	var cfg = _get_config()
 	if cfg == null or not cfg.BUILDINGS.has(type_id):
@@ -944,7 +939,6 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	var hit = _raycast_ground(screen_pos)
 	if hit == null:
 		build_preview.visible = false
-		_clear_preview_highlights()
 		return
 
 	var cell: Vector2i = grid_manager.world_to_cell(hit)
@@ -964,40 +958,10 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	if build_preview_mesh:
 		build_preview_mesh.material_override = _make_preview_material(tint)
 
-	_refresh_preview_highlights()
 
-## Lights up resource nodes the pending building's ring would cover, but only those
-## that this building type can interact with (e.g. trees for a lumber hut).
-func _refresh_preview_highlights() -> void:
-	_clear_preview_highlights()
-	var r: float = _preview_range_for(current_build_type)
-	if r <= 0.0 or build_preview == null:
-		return
-	var cfg = _get_config()
-	var interactable_types: Array[String] = []
-	if cfg and cfg.has_method("get_interactable_resource_types"):
-		interactable_types = cfg.get_interactable_resource_types(current_build_type)
-	if interactable_types.is_empty():
-		return
-	for n in get_tree().get_nodes_in_group("resource_nodes"):
-		if not is_instance_valid(n) or not n.has_method("set_highlighted"):
-			continue
-		if n.has_method("is_available") and not n.is_available():
-			continue
-		if not ("resource_type" in n) or not interactable_types.has(str(n.resource_type)):
-			continue
-		if build_preview.global_position.distance_to(n.global_position) <= r:
-			n.set_highlighted(true)
-			_preview_highlighted.append(n)
 
-func _clear_preview_highlights() -> void:
-	for n in _preview_highlighted:
-		if is_instance_valid(n) and n.has_method("set_highlighted"):
-			n.set_highlighted(false)
-	_preview_highlighted.clear()
 
 func _clear_build_preview() -> void:
-	_clear_preview_highlights()
 	if build_preview and is_instance_valid(build_preview):
 		build_preview.queue_free()
 	build_preview = null

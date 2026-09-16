@@ -21,7 +21,6 @@ var nest_script: GDScript = null
 var building_script: GDScript = null
 var wall_script: GDScript = null
 var tower_script: GDScript = null
-var lumber_script: GDScript = null
 var grid_manager_script: GDScript = null
 var build_system_script: GDScript = null
 
@@ -47,8 +46,6 @@ func before_all() -> void:
 		wall_script = load("res://scripts/entities/Wall.gd")
 	if ResourceLoader.exists("res://scripts/entities/Tower.gd"):
 		tower_script = load("res://scripts/entities/Tower.gd")
-	if ResourceLoader.exists("res://scripts/entities/LumberHut.gd"):
-		lumber_script = load("res://scripts/entities/LumberHut.gd")
 	if ResourceLoader.exists("res://scripts/core/GridManager.gd"):
 		grid_manager_script = load("res://scripts/core/GridManager.gd")
 	if ResourceLoader.exists("res://scripts/core/BuildSystem.gd"):
@@ -96,7 +93,7 @@ func test_01_config_v01_parameters_integrity() -> void:
 
 	var buildings: Dictionary = config_node.get("BUILDINGS")
 	# Build time is derived from price rather than stated per building.
-	for b_type in ["wall", "tower", "lumber_hut"]:
+	for b_type in ["wall", "tower"]:
 		assert_true(buildings.has(b_type), "%s is in the catalog" % b_type)
 		assert_gt(config_node.get_build_time(b_type), 0.0, "%s has a positive derived build time" % b_type)
 
@@ -233,8 +230,6 @@ func test_06_hero_walk_to_build_and_construction() -> void:
 
 func test_07_semifinished_buildings_have_no_collision_or_production() -> void:
 	assert_not_null(tower_script, "Tower.gd must exist")
-	assert_not_null(lumber_script, "LumberHut.gd must exist")
-
 	var tower = tower_script.new()
 	_cleanup_nodes.append(tower)
 	tree.root.add_child(tower)
@@ -243,15 +238,14 @@ func test_07_semifinished_buildings_have_no_collision_or_production() -> void:
 	assert_eq(tower.collision_layer, 0, "Unfinished tower collision_layer is 0")
 	assert_null(tower.acquire_target(), "Unfinished tower cannot acquire targets")
 
-	var lumber = lumber_script.new()
-	_cleanup_nodes.append(lumber)
-	tree.root.add_child(lumber)
-	lumber.start_construction(4.0)
-	assert_false(lumber.is_constructed, "LumberHut is unconstructed")
-
-	var init_wood = game_state_node.resources.get("wood", 10)
-	event_bus_node.produce_phase.emit()
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood, "Unfinished lumber hut produces nothing")
+	# A blueprint is also invisible to the fence's contact damage and to anything
+	# else that asks whether a building is finished.
+	var stakes = wall_script.new()
+	_cleanup_nodes.append(stakes)
+	tree.root.add_child(stakes)
+	stakes.start_construction(4.0)
+	assert_false(stakes.is_constructed, "Stakes are unconstructed")
+	assert_eq(stakes.collision_layer, 0, "Unfinished stakes have no collision either")
 
 # ==============================================================================
 # 8. Hero Death Triggers Immediate Game Over (game_lost)

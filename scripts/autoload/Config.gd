@@ -25,23 +25,15 @@ const TILE_SIZE: float = 2.0
 # ==============================================================================
 # 2. Building Definitions (BUILDINGS)
 # ==============================================================================
-## Economy shape (v0.2 balance pass). One tend = tend_duration seconds of autonomous
-## running, so a machine's yield per tend is produces_per_sec * tend_duration:
-##   lumber_hut  cost 12  ->  0.25/s * 40s = 10 wood   (pays back in ~1.2 tends)
-##   quarry      cost 16  ->  0.15/s * 40s =  6 stone
-##   hunting_hut cost 14  ->  0.20/s * 40s =  8 water
-## A turret costs 12 wood, about one tend of a single lumber hut, so the opening
-## 20 buys a hut and leaves the first turret one tend away rather than two. Raids
-## run 70-120s apart with 90s of grace, which is roughly hut -> tend -> turret.
+## Economy shape (v0.4). There are no production buildings any more: the Hero's own
+## hands are the only source of resources, and buildings are only defence. Tending
+## made the building the worker and the Hero a maintenance man, which is backwards
+## for a game whose premise is that one body holds up a whole base -- and it was a
+## machine for buying time with wood, which is exactly the tension worth keeping.
 ##
-## Opening wallet is 20 wood, which deliberately affords a real first decision
-## rather than a forced one: a lumber hut (12) with a short stake fence in front of
-## it, or a tower (12) straight away and no economy at all. It must stay at or
-## above the cheapest producer, or
-## the player starts unable to build anything and has to hand-harvest first while
-## staring at a disabled build menu. Hand-harvesting a node yields RESOURCE_NODES.harvest_rate per
-## second but occupies the Hero completely, so machines win on hero-time even
-## though they cost wood up front.
+## Hand-harvesting yields RESOURCE_NODES.harvest_rate per second and occupies the
+## Hero completely, so every second of gathering is a second not spent building.
+## That trade is now the whole economy.
 const BUILDINGS: Dictionary = {
 	"core": {
 		"name": "BUILDING_CORE_NAME",
@@ -92,20 +84,6 @@ const BUILDINGS: Dictionary = {
 		"ap_cost": 1,
 		"upgrades_to": "",
 	},
-	"lumber_hut": {
-		"name": "BUILDING_LUMBER_HUT_NAME",
-		"kind": "producer",
-		"hp": 10.0,
-		"cost": {"wood": 12},
-		"ap_cost": 1,
-		"tend_duration": 40.0,
-		"tend_time": 2.0,
-		"harvest_range": 12.0,
-		"interacts_with_resources": ["wood"],
-		"produces_per_sec": {"wood": 0.25},
-		"produces": {"wood": 2},
-		"upgrades_to": "",
-	},
 	"hut": {
 		"name": "BUILDING_HUT_NAME",
 		"kind": "ap",
@@ -133,34 +111,6 @@ const BUILDINGS: Dictionary = {
 		"ap_bonus": 2,
 		"upgrades_to": "",
 	},
-	"quarry": {
-		"name": "BUILDING_QUARRY_NAME",
-		"kind": "producer",
-		"hp": 15.0,
-		"cost": {"wood": 16},
-		"ap_cost": 1,
-		"tend_duration": 40.0,
-		"tend_time": 2.5,
-		"harvest_range": 12.0,
-		"interacts_with_resources": ["stone"],
-		"produces_per_sec": {"stone": 0.15},
-		"produces": {"stone": 1},
-		"upgrades_to": "",
-	},
-	"hunting_hut": {
-		"name": "BUILDING_HUNTING_HUT_NAME",
-		"kind": "producer",
-		"hp": 10.0,
-		"cost": {"wood": 14},
-		"ap_cost": 1,
-		"tend_duration": 40.0,
-		"tend_time": 2.0,
-		"harvest_range": 12.0,
-		"interacts_with_resources": ["water"],
-		"produces_per_sec": {"water": 0.2},
-		"produces": {"water": 1},
-		"upgrades_to": "",
-	}
 }
 
 ## How much of its tile a building's box takes up, in metres.
@@ -223,7 +173,7 @@ static func is_barrier_building(type_id: String) -> bool:
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
-const BUILDABLE_TYPES: Array[String] = ["wall", "tower", "lumber_hut", "quarry", "hunting_hut"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "tower"]
 
 # ==============================================================================
 # 3. Dinosaur Definitions (DINOS)
@@ -300,7 +250,6 @@ const COLORS: Dictionary = {
 	"core": Color(0.9, 0.3, 0.1),
 	"tower": Color(0.2, 0.5, 0.9),
 	"wall": Color(0.5, 0.35, 0.2),
-	"lumber_hut": Color(0.15, 0.7, 0.3),
 	"hut": Color(0.7, 0.6, 0.3),
 	"wood_house": Color(0.65, 0.55, 0.25),
 	"barracks": Color(0.6, 0.45, 0.2),
@@ -527,7 +476,6 @@ static func get_resource_color(res_id: String) -> Color:
 ## number (cost) instead of two that can drift apart.
 ##   wooden stakes (1 wood)  -> 1.0s (the floor)
 ##   lumber hut   (12 wood)  -> 12.3s
-##   quarry       (16 wood)  -> 17.6s
 ## Superlinear on purpose: at a flat rate per resource the gap between a cheap and
 ## an expensive building is barely noticeable, and raising a turret should feel
 ## like work next to hammering in a stake.
@@ -563,30 +511,5 @@ static func get_dino_name(type_id: String) -> String:
 		return TranslationServer.translate(raw_key)
 	return TranslationServer.translate(type_id)
 
-## Returns the resource types that this building type interacts with (e.g. lumber_hut -> ["wood"]).
-## Buildings without resource interaction (towers, walls, etc.) return an empty array.
-static func get_interactable_resource_types(b_type: String) -> Array[String]:
-	if not BUILDINGS.has(b_type):
-		return []
-	var b_cfg: Dictionary = BUILDINGS[b_type]
-	if b_cfg.has("interacts_with_resources"):
-		var raw: Array = b_cfg["interacts_with_resources"]
-		var res: Array[String] = []
-		for item in raw:
-			res.append(str(item))
-		return res
-	# Automatic fallback derivation for producer buildings
-	if b_cfg.get("kind", "") != "producer":
-		return []
-	var res: Array[String] = []
-	var pps: Dictionary = b_cfg.get("produces_per_sec", {})
-	for res_id in pps:
-		if RESOURCE_NODES.has(res_id) and not res.has(res_id):
-			res.append(res_id)
-	var prod: Dictionary = b_cfg.get("produces", {})
-	for res_id in prod:
-		if RESOURCE_NODES.has(res_id) and not res.has(res_id):
-			res.append(res_id)
-	return res
 
 

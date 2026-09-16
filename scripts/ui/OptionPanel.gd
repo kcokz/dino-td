@@ -5,7 +5,7 @@ extends PanelContainer
 ## RTS-style Command Card & Unit Option Panel (v0.2).
 ## Docked at the bottom-right corner of the HUD.
 ## Displays selected unit information (Name, HP/Reserves, Operating status)
-## and dynamic action buttons (Hero 2-level build menu, Building tend/demolish, Resource harvest).
+## and dynamic action buttons (Hero 2-level build menu, Building demolish, Resource harvest).
 
 signal build_option_selected(building_type: String)
 signal action_triggered(action_name: String, target_node: Node)
@@ -308,7 +308,7 @@ func _populate_hero_buttons() -> void:
 		if cfg and "BUILDABLE_TYPES" in cfg:
 			buildable = cfg.BUILDABLE_TYPES
 		else:
-			buildable = ["wall", "tower", "lumber_hut"]
+			buildable = ["wall", "tower"]
 		_clear_build_detail()
 		# Buttons carry only the name. The cost and build time go in the detail line
 		# below, shown for whichever button the cursor is over, and a button the
@@ -381,15 +381,6 @@ func _can_afford(b_type: String) -> bool:
 	return true
 
 func _populate_building_buttons() -> void:
-	var is_producer: bool = (selected_unit is ProducerBuilding) or ("is_operating" in selected_unit)
-	if is_producer:
-		_create_action_button(TranslationServer.translate("CMD_TEND"), func():
-			var hero = _get_hero()
-			if hero and is_instance_valid(hero) and hero.has_method("order_tend") and is_instance_valid(selected_unit):
-				hero.order_tend(selected_unit)
-				action_triggered.emit("tend", selected_unit)
-		)
-
 	_create_action_button(TranslationServer.translate("CMD_DEMOLISH"), func():
 		if selected_unit and is_instance_valid(selected_unit) and selected_unit.has_method("demolish"):
 			var unit_to_demolish = selected_unit

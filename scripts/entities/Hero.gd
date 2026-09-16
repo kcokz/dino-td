@@ -14,7 +14,6 @@ enum State {
 	ATTACKING = 3,
 	DEAD = 4,
 	HARVESTING = 5,
-	TENDING = 6
 }
 
 # ==============================================================================
@@ -33,10 +32,8 @@ var target_destination: Vector3 = Vector3.ZERO
 var target_building: Node = null
 var target_enemy: Node3D = null
 var target_resource_node: Node = null
-var target_tend_building: Node = null
 var attack_cooldown: float = 0.0
 var harvest_timer: float = 0.0
-var tend_progress: float = 0.0
 
 var current_path: Array[Vector3] = []
 var current_path_index: int = 0
@@ -136,8 +133,6 @@ func _physics_process(delta: float) -> void:
 			_process_attacking(delta)
 		State.HARVESTING:
 			_process_harvesting(delta)
-		State.TENDING:
-			_process_tending(delta)
 
 # ==============================================================================
 # Carrying things home
@@ -203,17 +198,6 @@ func _check_and_transition_interaction_target(extra_buffer: float, collider: Nod
 			harvest_timer = 0.0
 			return true
 
-	elif target_tend_building != null:
-		if not is_instance_valid(target_tend_building) or ("is_destroyed" in target_tend_building and target_tend_building.is_destroyed):
-			target_tend_building = null
-			current_state = State.IDLE
-			return true
-		if (collider != null and collider == target_tend_building) or _is_in_build_range(global_position, target_tend_building, extra_buffer):
-			velocity = Vector3.ZERO
-			current_state = State.TENDING
-			tend_progress = 0.0
-			return true
-
 	return false
 
 func _replan_current_target_path() -> void:
@@ -221,8 +205,6 @@ func _replan_current_target_path() -> void:
 		_plan_path_to_building(target_building)
 	elif target_resource_node != null and is_instance_valid(target_resource_node):
 		_plan_path_to_node(target_resource_node)
-	elif target_tend_building != null and is_instance_valid(target_tend_building):
-		_plan_path_to_building(target_tend_building)
 	elif target_enemy != null and _is_enemy_valid(target_enemy):
 		_plan_path(target_enemy.global_position)
 	else:
@@ -414,61 +396,6 @@ func _process_harvesting(delta: float) -> void:
 			current_state = State.IDLE
 			break
 
-func _process_tending(delta: float) -> void:
-	velocity = Vector3.ZERO
-	if target_tend_building == null or not is_instance_valid(target_tend_building):
-		target_tend_building = null
-		current_state = State.IDLE
-		return
-
-	if "is_destroyed" in target_tend_building and target_tend_building.is_destroyed:
-		target_tend_building = null
-		current_state = State.IDLE
-		return
-
-	if not _is_in_build_range(global_position, target_tend_building, 0.4):
-		_plan_path_to_building(target_tend_building)
-		current_state = State.MOVING
-		return
-
-	# Face the building
-	var diff = target_tend_building.global_position - global_position
-	diff.y = 0.0
-	if diff.length_squared() > 0.001:
-		look_at(global_position + diff.normalized(), Vector3.UP)
-
-	tend_progress += delta
-	var needed_tend_time: float = 2.0
-	var needed_duration: float = 40.0
-	if target_tend_building.has_method("get_tend_time"):
-		needed_tend_time = target_tend_building.get_tend_time()
-	elif "tend_time" in target_tend_building:
-		needed_tend_time = float(target_tend_building.tend_time)
-	else:
-		var cfg = _get_config()
-		if cfg and "BUILDINGS" in cfg and "building_type" in target_tend_building and cfg.BUILDINGS.has(target_tend_building.building_type):
-			needed_tend_time = float(cfg.BUILDINGS[target_tend_building.building_type].get("tend_time", 2.0))
-
-	if target_tend_building.has_method("get_tend_duration"):
-		needed_duration = target_tend_building.get_tend_duration()
-	elif "tend_duration" in target_tend_building:
-		needed_duration = float(target_tend_building.tend_duration)
-	else:
-		var cfg = _get_config()
-		if cfg and "BUILDINGS" in cfg and "building_type" in target_tend_building and cfg.BUILDINGS.has(target_tend_building.building_type):
-			needed_duration = float(cfg.BUILDINGS[target_tend_building.building_type].get("tend_duration", 40.0))
-
-	if tend_progress >= needed_tend_time:
-		tend_progress = 0.0
-		if target_tend_building.has_method("tend"):
-			target_tend_building.tend(needed_duration)
-		target_tend_building = null
-		current_state = State.IDLE
-
-# ==============================================================================
-# Navigation & Range Detection
-# ==============================================================================
-
 func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> bool:
 	if b == null or not is_instance_valid(b):
 		return false
@@ -627,14 +554,13 @@ func _continue_to_next_pending_building_or_idle() -> void:
 # ==============================================================================
 
 ## Drops every outstanding target. Each order starts by calling this so a new
-## command fully replaces the previous one -- move_to() used to clear only two of
-## the four, which let a half-finished tend or harvest quietly drag the Hero back
-## and made him look unresponsive.
+## command fully replaces the previous one -- move_to() used to clear only some of
+## them, which let a half-finished harvest quietly drag the Hero back and made him
+## look unresponsive.
 func _clear_orders() -> void:
 	target_building = null
 	target_enemy = null
 	target_resource_node = null
-	target_tend_building = null
 
 func move_to(dest: Vector3) -> void:
 	if current_state == State.DEAD:
@@ -694,25 +620,6 @@ func order_harvest(node: Node) -> void:
 		return
 
 	_plan_path_to_node(node)
-	current_state = State.MOVING
-
-func order_tend(building: Node) -> void:
-	if current_state == State.DEAD:
-		return
-	if building == null or not is_instance_valid(building):
-		current_state = State.IDLE
-		return
-
-	_clear_orders()
-	target_tend_building = building
-
-	if _is_in_build_range(global_position, building):
-		velocity = Vector3.ZERO
-		current_state = State.TENDING
-		tend_progress = 0.0
-		return
-
-	_plan_path_to_building(building)
 	current_state = State.MOVING
 
 func order_stop() -> void:
@@ -920,11 +827,9 @@ func get_active_task_target() -> Node:
 			return target_building if is_instance_valid(target_building) else null
 		State.HARVESTING:
 			return target_resource_node if is_instance_valid(target_resource_node) else null
-		State.TENDING:
-			return target_tend_building if is_instance_valid(target_tend_building) else null
 		State.MOVING:
 			# En route: show whatever he is on his way to, if anything.
-			for t in [target_building, target_tend_building, target_resource_node]:
+			for t in [target_building, target_resource_node]:
 				if t != null and is_instance_valid(t):
 					return t
 	return null

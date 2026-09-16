@@ -17,7 +17,6 @@ var build_system_script: GDScript = null
 var building_script: GDScript = null
 var core_campfire_script: GDScript = null
 var wall_script: GDScript = null
-var lumber_hut_script: GDScript = null
 var tower_script: GDScript = null
 
 var _cleanup_nodes: Array[Node] = []
@@ -66,10 +65,6 @@ func before_all() -> void:
 	wall_script = _load_script([
 		"res://scripts/entities/Wall.gd",
 		"res://scripts/entities/wall.gd"
-	])
-	lumber_hut_script = _load_script([
-		"res://scripts/entities/LumberHut.gd",
-		"res://scripts/entities/lumber_hut.gd"
 	])
 	tower_script = _load_script([
 		"res://scripts/entities/Tower.gd",
@@ -383,16 +378,17 @@ func test_building_wall_initialization() -> void:
 	assert_almost_eq(float(wall.max_hp), float(config_node.BUILDINGS["wall"]["hp"]), 0.01, "Wall max_hp matches Config")
 	assert_almost_eq(float(wall.current_hp), float(config_node.BUILDINGS["wall"]["hp"]), 0.01, "Wall starts at full hp")
 
-func test_building_lumber_hut_initialization() -> void:
-	assert_not_null(lumber_hut_script, "LumberHut.gd script must exist")
-	if lumber_hut_script == null: return
+func test_building_turret_initialization() -> void:
+	assert_not_null(tower_script, "Tower.gd script must exist")
+	if tower_script == null: return
 
-	var hut = lumber_hut_script.new()
+	var hut = tower_script.new()
 	_cleanup_nodes.append(hut)
 
-	assert_eq(hut.building_type, "lumber_hut", "LumberHut building_type should be 'lumber_hut'")
-	assert_almost_eq(float(hut.max_hp), 10.0, 0.01, "LumberHut max_hp should match Config (10.0)")
-	assert_almost_eq(float(hut.current_hp), 10.0, 0.01, "LumberHut current_hp should be 10.0")
+	assert_eq(hut.building_type, "tower", "Tower building_type should be 'tower'")
+	var want_hp: float = float(config_node.BUILDINGS["tower"]["hp"])
+	assert_almost_eq(float(hut.max_hp), want_hp, 0.01, "Tower max_hp comes from Config")
+	assert_almost_eq(float(hut.current_hp), want_hp, 0.01, "And it starts at full")
 
 func test_building_tower_initialization() -> void:
 	assert_not_null(tower_script, "Tower.gd script must exist")
@@ -456,7 +452,7 @@ func test_place_wall_success_transactions() -> void:
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (1,1) must be occupied in GridManager")
 	assert_eq(grid_mgr.get_building_at(cell), building, "GridManager building at (1,1) matches return instance")
 
-func test_place_lumber_hut_success_transactions() -> void:
+func test_place_turret_success_transactions() -> void:
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or event_bus_node == null: return
@@ -464,13 +460,13 @@ func test_place_lumber_hut_success_transactions() -> void:
 	var watcher = watch_signal(event_bus_node, "building_placed")
 	var cell = Vector2i(2, 1)
 
-	var building = build_sys.place_building("lumber_hut", cell)
+	var building = build_sys.place_building("tower", cell)
 	if building is Node: _cleanup_nodes.append(building)
 
-	assert_not_null(building, "place_building lumber_hut should succeed")
-	assert_eq(_get_ap(), 2, "LumberHut placement consumes 1 AP (3 -> 2)")
-	assert_eq(_get_wood(), START_WOOD - cost_of("lumber_hut"), "LumberHut placement consumes its wood cost")
-	assert_true(watcher.emitted, "building_placed emitted for LumberHut")
+	assert_not_null(building, "place_building tower should succeed")
+	assert_eq(_get_ap(), 2, "Placement consumes 1 AP (3 -> 2)")
+	assert_eq(_get_wood(), START_WOOD - cost_of("tower"), "Placement consumes its wood cost")
+	assert_true(watcher.emitted, "building_placed emitted")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (2,1) occupied in GridManager")
 
 func test_place_tower_success_transactions() -> void:
@@ -508,10 +504,10 @@ func test_duplicate_placement_rejected_no_deductions() -> void:
 	var watcher = watch_signal(event_bus_node, "building_placed")
 
 	# Check validation
-	assert_false(build_sys.can_place_building("lumber_hut", cell), "can_place_building on occupied cell must return false")
+	assert_false(build_sys.can_place_building("tower", cell), "can_place_building on occupied cell must return false")
 
 	# Execute duplicate placement attempt
-	var b2 = build_sys.place_building("lumber_hut", cell)
+	var b2 = build_sys.place_building("tower", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
 
 	assert_null(b2, "Duplicate placement on occupied cell must return null")
@@ -758,28 +754,6 @@ func test_grid_auto_vacate_on_building_destroyed() -> void:
 	assert_not_null(new_wall, "New wall placed successfully on reclaimed cell")
 	assert_true(grid_mgr.is_cell_occupied(target_cell), "Cell (1, 0) is re-occupied")
 
-func test_lumber_hut_production_on_produce_phase() -> void:
-	assert_not_null(lumber_hut_script, "LumberHut.gd script must exist")
-	if lumber_hut_script == null or event_bus_node == null or game_state_node == null: return
-
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-
-	var wood_before: int = _get_wood()
-
-	# Emit produce_phase signal
-	event_bus_node.produce_phase.emit()
-
-	# A living LumberHut pays out its Config `produces` on the legacy produce_phase
-	var per_payout: int = 0
-	var cfg_node = Engine.get_main_loop().root.get_node_or_null("Config")
-	if cfg_node: per_payout = int(cfg_node.BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
-	assert_eq(_get_wood(), wood_before + per_payout, "Living LumberHut pays out its produce_phase yield")
-
-	# Destroy hut and emit again -> wood should remain 12
-	hut.take_damage(10.0)
-	event_bus_node.produce_phase.emit()
-	assert_eq(_get_wood(), wood_before + per_payout, "Destroyed LumberHut must not produce wood")
 
 func test_building_collision_layer_layer2() -> void:
 	assert_not_null(building_script, "Building.gd script must exist")

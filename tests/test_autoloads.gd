@@ -133,7 +133,6 @@ func test_config_buildings_catalog() -> void:
 	assert_has(b, "core", "BUILDINGS must define 'core'")
 	assert_has(b, "tower", "BUILDINGS must define 'tower'")
 	assert_has(b, "wall", "BUILDINGS must define 'wall'")
-	assert_has(b, "lumber_hut", "BUILDINGS must define 'lumber_hut'")
 
 	if "core" in b:
 		assert_eq(b["core"].get("kind", ""), "core", "core kind should be 'core'")

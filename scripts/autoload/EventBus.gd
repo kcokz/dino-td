@@ -11,7 +11,7 @@ extends Node
 ## Emitted when game transitions phase (0: PLAN, 1: ATTACK, 2: PRODUCE).
 signal phase_changed(phase: int)
 
-## Broadcast to all surviving producer buildings to harvest resources during PRODUCE phase.
+## Legacy phase-machine broadcast. Continuous mode never emits it.
 signal produce_phase()
 
 ## Broadcast when all nests are destroyed, transitioning game to Victory state.
@@ -100,9 +100,6 @@ signal unit_selected(unit: Node)
 
 ## Emitted when unit selection is cleared.
 signal unit_deselected()
-
-## Emitted when a production machine is tended and begins timed run.
-signal building_tended(building: Node)
 
 ## Emitted when game speed multiplier changes (1x, 2x, 3x).
 signal game_speed_changed(multiplier: float)

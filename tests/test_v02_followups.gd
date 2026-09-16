@@ -3,8 +3,6 @@
 # 1. Legacy HUD build buttons removed; building lives only on the Hero Option Panel.
 # 2. Config.UI drives HUD / panel / world-label sizing (no hardcoded font sizes).
 # 3. Phase-era top-bar controls (AP, deploy countdown, phase, end-deployment) hidden.
-# 4. All producer machinery draws from real ResourceNodes within harvest_range,
-#    and produces nothing when there is no source in range.
 # 5. Stone and Water are visible in the HUD, not just Wood.
 extends "res://tests/test_base.gd"
 
@@ -14,8 +12,7 @@ var game_state_node: Object = null
 
 var hud_packed: PackedScene = null
 var option_panel_script: GDScript = null
-var producer_building_script: GDScript = null
-var lumber_hut_script: GDScript = null
+var tower_script: GDScript = null
 var resource_node_script: GDScript = null
 var hero_script: GDScript = null
 var build_system_script: GDScript = null
@@ -31,8 +28,7 @@ func before_all() -> void:
 	if ResourceLoader.exists("res://scenes/ui/HUD.tscn"):
 		hud_packed = load("res://scenes/ui/HUD.tscn")
 	option_panel_script = _load_script("res://scripts/ui/OptionPanel.gd")
-	producer_building_script = _load_script("res://scripts/entities/ProducerBuilding.gd")
-	lumber_hut_script = _load_script("res://scripts/entities/LumberHut.gd")
+	tower_script = _load_script("res://scripts/entities/Tower.gd")
 	resource_node_script = _load_script("res://scripts/entities/ResourceNode.gd")
 	hero_script = _load_script("res://scripts/entities/Hero.gd")
 	build_system_script = _load_script("res://scripts/core/BuildSystem.gd")
@@ -112,9 +108,10 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 	assert_eq(panel.button_container.get_child_count(), expected,
 		"Build menu shows %d buttons (one per BUILDABLE_TYPES entry plus Back)" % expected)
 
-	# Quarry and Hunting Hut are registered in BuildSystem, so they must be reachable.
-	assert_has(config_node.BUILDABLE_TYPES, "quarry", "Quarry is offered in the build menu")
-	assert_has(config_node.BUILDABLE_TYPES, "hunting_hut", "Hunting Hut is offered in the build menu")
+	# v0.4: buildings are defence and nothing else, so the menu is stakes and a
+	# turret. Anything offered has to be buildable.
+	assert_has(config_node.BUILDABLE_TYPES, "wall", "Stakes are offered in the build menu")
+	assert_has(config_node.BUILDABLE_TYPES, "tower", "So is the turret")
 	for b_type in config_node.BUILDABLE_TYPES:
 		assert_has(build_system_script.SCRIPT_PATHS, b_type,
 			"Buildable type '%s' must have an entity script registered" % b_type)
@@ -137,8 +134,8 @@ func test_04_config_ui_drives_hud_font_sizes() -> void:
 			"HUD label font size comes from Config.UI.hud_font_size")
 
 func test_05_config_ui_drives_world_label_sizing() -> void:
-	assert_not_null(lumber_hut_script, "LumberHut.gd must exist")
-	var hut = lumber_hut_script.new()
+	assert_not_null(tower_script, "Tower.gd must exist")
+	var hut = tower_script.new()
 	_cleanup_nodes.append(hut)
 	tree.root.add_child(hut)
 	await wait_frames(1)
@@ -167,14 +164,6 @@ func test_06_option_panel_sizing_from_config() -> void:
 # 3. Machinery harvests real resource nodes
 # ==============================================================================
 
-func _make_producer(type_id: String) -> Node:
-	var p = producer_building_script.new(type_id)
-	_cleanup_nodes.append(p)
-	tree.root.add_child(p)
-	p.setup(type_id, Vector2i.ZERO)
-	p.complete_construction()
-	p.position = Vector3.ZERO
-	return p
 
 func _make_node(res_type: String, dist: float) -> Node:
 	var n = resource_node_script.new(res_type, Vector2i.ZERO)
@@ -183,133 +172,12 @@ func _make_node(res_type: String, dist: float) -> Node:
 	n.position = Vector3(dist, 0.0, 0.0)
 	return n
 
-func test_07_producer_requires_a_source_in_range() -> void:
-	var hut = _make_producer("lumber_hut")
-	var before: int = int(game_state_node.resources.get("wood", 0))
 
-	# No tree anywhere: operating but banking nothing.
-	hut.tend(40.0)
-	hut._process(10.0)
-	assert_eq(int(game_state_node.resources.get("wood", 0)), before,
-		"A producer with no source in range must not invent resources")
-	assert_null(hut.target_source, "No source acquired when none exists")
-	assert_true(hut.requires_source("wood"), "Wood is a map resource and must be sourced")
 
-func test_08_producer_draws_down_the_node_it_harvests() -> void:
-	var hut = _make_producer("lumber_hut")
-	var tree_node = _make_node("wood", 3.0)
-	var stock_before: int = tree_node.current_amount
-	var earned_before: int = earned_total("wood")
-	var wallet_before: int = int(game_state_node.resources.get("wood", 0))
 
-	var rate: float = float(config_node.BUILDINGS["lumber_hut"]["produces_per_sec"]["wood"])
-	var secs: float = 10.0
-	var expected: int = int(rate * secs)
-	hut.tend(40.0)
-	hut._process(secs)
 
-	var gained: int = earned_total("wood") - earned_before
-	assert_eq(gained, expected, "%ds at %s wood/s makes %d wood" % [int(secs), str(rate), expected])
-	assert_eq(tree_node.current_amount, stock_before - gained,
-		"Every unit came out of the tree's remaining amount")
-	# v0.3: the machine leaves it in a pile. Nobody has walked over it, so the
-	# warehouse is still exactly as empty as it was.
-	assert_eq(int(game_state_node.resources.get("wood", 0)), wallet_before,
-		"Production alone does not fill the warehouse")
-	assert_eq(ground_total("wood"), gained, "It is all lying beside the hut")
-	assert_eq(hut.target_source, tree_node, "Hut locked onto the in-range tree")
 
-func test_09_source_outside_range_is_ignored() -> void:
-	var hut = _make_producer("lumber_hut")
-	var far: float = hut.harvest_range + 5.0
-	var tree_node = _make_node("wood", far)
-	var before: int = earned_total("wood")
 
-	hut.tend(40.0)
-	hut._process(10.0)
-	assert_eq(earned_total("wood"), before,
-		"A tree beyond harvest_range must not be harvested")
-	assert_eq(tree_node.current_amount, tree_node.max_capacity, "Out-of-range tree untouched")
-
-func test_10_producer_only_harvests_its_own_resource_type() -> void:
-	var hut = _make_producer("lumber_hut")
-	var rock = _make_node("stone", 2.0)
-	var before: int = earned_total("wood")
-
-	hut.tend(40.0)
-	hut._process(10.0)
-	assert_eq(earned_total("wood"), before,
-		"A lumber hut must not harvest wood out of a stone outcrop")
-	assert_eq(rock.current_amount, rock.max_capacity, "Stone node untouched by a lumber hut")
-
-func test_11_producer_moves_on_when_its_node_is_exhausted() -> void:
-	var hut = _make_producer("lumber_hut")
-	var near = _make_node("wood", 2.0)
-	var spare = _make_node("wood", 5.0)
-	var rate: float = float(config_node.BUILDINGS["lumber_hut"]["produces_per_sec"]["wood"])
-	# Run long enough to draw more than the 2 units left in the nearer tree,
-	# whatever the configured rate happens to be.
-	var secs: float = 5.0 / maxf(rate, 0.01)
-	var want: int = int(rate * secs)
-	assert_gt(want, 2, "This test needs to out-draw the nearer tree")
-	# Leave only two units in the nearer tree so it runs dry mid-operation.
-	near.harvest(near.current_amount - 2)
-	var earned_before: int = earned_total("wood")
-
-	hut.tend(secs + 5.0)
-	hut._process(secs)
-
-	assert_true(near.is_depleted, "The nearer tree is exhausted")
-	assert_eq(earned_total("wood") - earned_before, want,
-		"Production continues by switching to the next tree in range")
-	assert_eq(spare.current_amount, spare.max_capacity - (want - 2), "Remaining units came from the spare tree")
-
-func test_12_quarry_and_hunting_hut_are_node_backed_producers() -> void:
-	for pair in [["quarry", "stone"], ["hunting_hut", "water"]]:
-		var type_id: String = pair[0]
-		var res_id: String = pair[1]
-		var machine = _make_producer(type_id)
-		assert_true(machine is ProducerBuilding, "%s is a ProducerBuilding" % type_id)
-		assert_gt(machine.harvest_range, 0.0, "%s has a harvest_range from Config" % type_id)
-		assert_true(machine.requires_source(res_id), "%s must source %s from the map" % [type_id, res_id])
-
-		var src = _make_node(res_id, 2.0)
-		var before: int = earned_total(res_id)
-		machine.tend(40.0)
-		machine._process(20.0)
-		assert_gt(earned_total(res_id), before,
-			"%s produces %s when a node is in range" % [type_id, res_id])
-		assert_lt(src.current_amount, src.max_capacity, "%s drew down its %s node" % [type_id, res_id])
-
-func test_13_status_text_reports_missing_and_active_sources() -> void:
-	# The base class reports the generic wording...
-	var generic = _make_producer("quarry")
-	generic.tend(40.0)
-	generic._process(0.1)
-	var generic_status: String = generic._get_extra_status_text()
-	assert_true(generic_status.contains(TranslationServer.translate("STATUS_NO_SOURCE_IN_RANGE")),
-		"ProducerBuilding reports the generic missing-source wording (got '%s')" % generic_status)
-
-	# ...and LumberHut overrides it with tree-specific wording.
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3(40.0, 0.0, 40.0) # far from the quarry's stone search
-	hut.tend(40.0)
-	hut._process(0.1)
-	var no_src: String = hut._get_extra_status_text()
-	assert_true(no_src.contains(TranslationServer.translate("STATUS_NO_TREES_IN_RANGE")),
-		"LumberHut names the missing-tree condition (got '%s')" % no_src)
-
-	var t = _make_node("wood", 2.0)
-	t.position = hut.global_position + Vector3(2.0, 0.0, 0.0)
-	hut._process(0.5)
-	var with_src: String = hut._get_extra_status_text()
-	assert_false(with_src.contains(TranslationServer.translate("STATUS_NO_TREES_IN_RANGE")),
-		"Status stops warning once a tree is in range (got '%s')" % with_src)
-	assert_true(with_src.contains(TranslationServer.translate("STATUS_CHOPPING_TREE").split(":")[0]),
-		"Status switches to the chopping readout (got '%s')" % with_src)
 
 # ==============================================================================
 # 4. Stone and Water are visible in the HUD
@@ -375,15 +243,12 @@ func test_16_preview_ring_size_matches_the_building() -> void:
 	assert_eq(main._preview_range_for("wall"), 0.0, "A wall has no coverage range")
 	assert_null(main.build_preview_ring, "A wall ghost draws no ring")
 
-	# A tower's ring is its attack range; a producer's is its harvest range.
+	# A turret's ring is its attack range, and it is the only building with one.
 	assert_almost_eq(main._preview_range_for("tower"),
 		float(config_node.BUILDINGS["tower"]["range"]), 0.001,
 		"Tower preview ring uses its Config attack range")
-	assert_almost_eq(main._preview_range_for("lumber_hut"),
-		float(config_node.BUILDINGS["lumber_hut"]["harvest_range"]), 0.001,
-		"Producer preview ring uses its Config harvest range")
 
-func test_17_tower_and_producer_expose_coverage_rings() -> void:
+func test_17_only_the_turret_has_a_coverage_ring() -> void:
 	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
 	var tower = tower_script.new()
 	_cleanup_nodes.append(tower)
@@ -396,13 +261,6 @@ func test_17_tower_and_producer_expose_coverage_rings() -> void:
 	tower.set_range_visible(true)
 	assert_true(tower.range_indicator.visible, "Selecting the tower shows its range")
 
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	await wait_frames(1)
-	assert_almost_eq(hut._get_display_range(), hut.harvest_range, 0.001,
-		"Producer reports its harvest range as its coverage")
-
 	# A wall has no area of effect and therefore no ring at all.
 	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
 	var wall = wall_script.new()
@@ -412,24 +270,6 @@ func test_17_tower_and_producer_expose_coverage_rings() -> void:
 	assert_eq(wall._get_display_range(), 0.0, "A wall has no coverage range")
 	assert_null(wall.range_indicator, "A wall builds no ring")
 
-func test_18_selecting_a_producer_highlights_what_it_covers() -> void:
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3.ZERO
-	await wait_frames(1)
-
-	var near_node = _make_node("wood", hut.harvest_range * 0.5)
-	var far_node = _make_node("wood", hut.harvest_range + 6.0)
-	await wait_frames(1)
-
-	hut.set_range_visible(true)
-	assert_true(near_node.is_highlighted, "A node inside the ring is highlighted")
-	assert_false(far_node.is_highlighted, "A node outside the ring is not")
-
-	hut.set_range_visible(false)
-	assert_false(near_node.is_highlighted, "Deselecting clears the highlight")
 
 func test_19_continuous_mode_retires_the_phase_machine() -> void:
 	# v0.2 is one continuous state: the deploy countdown must not run and must
@@ -463,35 +303,33 @@ func test_20_reset_game_clears_continuous_mode() -> void:
 # 6. Opening balance is playable
 # ==============================================================================
 
-func test_21_opening_wallet_affords_a_first_economy_building() -> void:
-	# An opening that cannot cover the cheapest producer leaves the player staring
-	# at a disabled build menu on turn one, with nothing to do but hand-harvest.
-	# Since v0.3 the opening arrives as wood on the ground by the cabin, so this is
-	# what the player holds once it has been fetched.
+func test_21_the_opening_can_buy_something() -> void:
+	# An opening that cannot cover anything on the menu leaves the player staring at
+	# a wholly disabled build page with nothing to do but chop. Since v0.3 the
+	# opening arrives as wood on the ground by the cabin, so this is what the player
+	# holds once it has been fetched.
 	var wallet: int = opening_wood()
-	var cheapest_producer: int = -1
+	var cheapest: int = -1
 	var cheapest_name: String = ""
 	for b_type in config_node.BUILDABLE_TYPES:
-		var data: Dictionary = config_node.BUILDINGS[b_type]
-		if not data.has("produces_per_sec"):
-			continue
-		var c: int = int(data.get("cost", {}).get("wood", 0))
-		if cheapest_producer < 0 or c < cheapest_producer:
-			cheapest_producer = c
-			cheapest_name = b_type
+		var c: int = cost_of(String(b_type))
+		if cheapest < 0 or c < cheapest:
+			cheapest = c
+			cheapest_name = String(b_type)
 
-	assert_gt(cheapest_producer, 0, "At least one buildable producer must exist")
-	assert_gte(wallet, cheapest_producer,
-		"Opening wood (%d) must cover the cheapest producer '%s' (%d)" % [wallet, cheapest_name, cheapest_producer])
+	assert_gt(cheapest, 0, "Something on the menu has a price")
+	assert_gte(wallet, cheapest,
+		"Opening wood (%d) must cover the cheapest building '%s' (%d)" % [wallet, cheapest_name, cheapest])
 
-func test_22_opening_wallet_does_not_trivially_buy_the_whole_defence() -> void:
-	# The flip side: the opening should not hand the player a tower plus an economy,
-	# or the first real decision never happens.
+func test_22_the_opening_does_not_trivially_buy_the_whole_defence() -> void:
+	# The flip side: the opening must not hand over a turret and still leave enough
+	# for a fence, or the first real decision never happens.
 	var wallet: int = opening_wood()
 	var tower: int = cost_of("tower")
-	var hut: int = cost_of("lumber_hut")
-	assert_lt(wallet, tower + hut,
-		"Opening wood (%d) must force a choice between a tower (%d) and an economy building (%d)" % [wallet, tower, hut])
+	assert_lt(wallet, tower * 2,
+		"Opening wood (%d) must not buy two turrets (%d each) outright" % [wallet, tower])
+	assert_gte(wallet, tower,
+		"But it must buy one, or the opening has no defensive option at all")
 
 # ==============================================================================
 # 7. Left-click inspects, right-click acts -- and the two never interfere
@@ -520,15 +358,14 @@ func test_24_ordering_the_hero_around_does_not_change_the_panel() -> void:
 	var pair = await _panel_and_hero()
 	var panel = pair[0]
 	var hero = pair[1]
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3(2.0, 0.0, 0.0)
+	var tree_node = resource_node_script.new("wood", Vector2i(1, 0))
+	_cleanup_nodes.append(tree_node)
+	tree.root.add_child(tree_node)
+	tree_node.position = Vector3(2.0, 0.0, 0.0)
 	await wait_frames(1)
 
 	assert_eq(panel.selected_unit, hero, "Resting on the Hero")
-	hero.order_tend(hut)
+	hero.order_harvest(tree_node)
 	panel._process(0.0)
 	assert_eq(panel.selected_unit, hero, "Giving an order does not pull the panel onto the target")
 
@@ -598,8 +435,8 @@ func test_28_build_time_is_a_function_of_price() -> void:
 
 	# The invariant is that time tracks price, not that any two particular buildings
 	# sit in a given order -- prices move with every balance pass.
-	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("lumber_hut"),
-		"Cheap stakes go up faster than a lumber hut")
+	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("tower"),
+		"Cheap stakes go up faster than a turret")
 	for a in config_node.BUILDABLE_TYPES:
 		for b in config_node.BUILDABLE_TYPES:
 			if cost_of(String(a)) < cost_of(String(b)):
@@ -621,8 +458,8 @@ func test_28_build_time_is_a_function_of_price() -> void:
 			"%s build time follows the price formula" % b_type)
 
 	# Doubling the price must more than double the wait, which is the whole point.
-	var cheap: float = config_node.get_build_time("lumber_hut")
-	var dear: float = maxf(floor_t, pow(cost_of("lumber_hut") * 2.0, expo) * per)
+	var cheap: float = config_node.get_build_time("tower")
+	var dear: float = maxf(floor_t, pow(cost_of("tower") * 2.0, expo) * per)
 	assert_gt(dear, cheap * 2.0, "Twice the price costs more than twice the time")
 
 	# No building may restate a build_time of its own, or the two can drift apart.
@@ -851,7 +688,7 @@ func test_40_unit_status_does_not_overwrite_the_build_detail() -> void:
 	var pair = await _build_menu()
 	var panel = pair[0]
 
-	panel._show_build_detail("lumber_hut")
+	panel._show_build_detail("tower")
 	var detail: String = str(panel.status_label.text)
 	# The per-unit status ticker must leave the build page's line alone.
 	panel._update_status_display()
@@ -925,9 +762,9 @@ func test_43_ordinary_buildings_leave_a_lane_wider_than_the_hero() -> void:
 	assert_almost_eq((tile - default_fp) - hero_w, float(config_node.BUILDING_CLEARANCE), 0.001,
 		"The slack is exactly the configured clearance")
 
-	for b_type in ["tower", "lumber_hut", "quarry", "hunting_hut"]:
+	for b_type in ["tower"]:
 		assert_false(config_node.is_barrier_building(b_type),
-			"%s is a workshop, not a barrier" % b_type)
+			"%s leaves a lane, it is not a barrier" % b_type)
 		assert_gt(tile - config_node.get_building_footprint(b_type), hero_w,
 			"Two %s side by side still leave a lane" % b_type)
 
@@ -1077,52 +914,51 @@ func _hero_in_world() -> Array:
 	return [main, main.hero]
 
 func test_47_every_order_clears_the_previous_one() -> void:
-	# The Hero tracks four possible targets. Five order functions used to re-list
-	# them by hand and move_to() only cleared two, so a half-finished tend or
-	# harvest quietly dragged him back and he looked unresponsive.
+	# The Hero tracks three possible targets. The order functions used to re-list
+	# them by hand and move_to() only cleared some, so a half-finished harvest
+	# quietly dragged him back and he looked unresponsive.
 	var pair = await _hero_in_world()
 	var main = pair[0]
 	var hero = pair[1]
 
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3(4.0, 0.0, 2.0)
+	var blueprint = tower_script.new()
+	_cleanup_nodes.append(blueprint)
+	tree.root.add_child(blueprint)
+	blueprint.position = Vector3(4.0, 0.0, 2.0)
+	blueprint.start_construction()
 	var node = resource_node_script.new("wood", Vector2i.ZERO)
 	_cleanup_nodes.append(node)
 	tree.root.add_child(node)
 	node.position = Vector3(-4.0, 0.0, 2.0)
 	await wait_frames(1)
 
-	var targets := ["target_building", "target_enemy", "target_resource_node", "target_tend_building"]
+	var targets := ["target_building", "target_enemy", "target_resource_node"]
 
 	# Whichever order came before, a move order must leave nothing behind.
-	for setup in [func(): hero.order_tend(hut), func(): hero.order_harvest(node)]:
+	for setup in [func(): hero.order_build(blueprint, true), func(): hero.order_harvest(node)]:
 		setup.call()
 		hero.move_to(Vector3(-10.0, 0.0, 8.0))
 		for t in targets:
 			assert_null(hero.get(t), "move_to() clears %s" % t)
 
-	# And the same in the other direction: tending must drop a harvest.
+	# And the same in the other direction: a build order must drop a harvest.
 	hero.order_harvest(node)
-	hero.order_tend(hut)
-	assert_null(hero.target_resource_node, "order_tend() drops an outstanding harvest")
-	assert_eq(hero.target_tend_building, hut, "and takes the machine as its target")
+	hero.order_build(blueprint, true)
+	assert_null(hero.target_resource_node, "order_build() drops an outstanding harvest")
+	assert_eq(hero.target_building, blueprint, "and takes the blueprint as its target")
 
-func test_48_a_move_order_mid_tend_is_actually_obeyed() -> void:
+func test_48_a_move_order_mid_harvest_is_actually_obeyed() -> void:
 	var pair = await _hero_in_world()
 	var main = pair[0]
 	var hero = pair[1]
 
-	var hut = lumber_hut_script.new()
+	var hut = resource_node_script.new("wood", Vector2i(2, 1))
 	_cleanup_nodes.append(hut)
 	tree.root.add_child(hut)
-	hut.complete_construction()
 	hut.position = Vector3(4.0, 0.0, 2.0)
 	await wait_frames(1)
 
-	hero.order_tend(hut)
+	hero.order_harvest(hut)
 	for i in range(120):
 		hero._physics_process(1.0 / 60.0)
 
@@ -1133,7 +969,7 @@ func test_48_a_move_order_mid_tend_is_actually_obeyed() -> void:
 
 	var to_dest: float = hero.global_position.distance_to(dest)
 	var to_hut: float = hero.global_position.distance_to(hut.global_position)
-	assert_lt(to_dest, to_hut, "He walks where he was sent, not back to the machine")
+	assert_lt(to_dest, to_hut, "He walks where he was sent, not back to the tree")
 	assert_lt(to_dest, 2.0, "And he actually arrives")
 
 # ==============================================================================
@@ -1156,182 +992,17 @@ func test_49_hero_level_1_menu_only_has_build_button() -> void:
 	var btn = panel.button_container.get_child(0)
 	assert_eq(btn.text, tr("CMD_BUILD"), "The single button is Build")
 
-func test_50_lumber_hut_only_highlights_wood_nodes() -> void:
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3.ZERO
-	await wait_frames(1)
 
-	var near_tree = _make_node("wood", hut.harvest_range * 0.5)
-	var near_rock = _make_node("stone", hut.harvest_range * 0.5)
-	var near_water = _make_node("water", hut.harvest_range * 0.5)
-	await wait_frames(1)
 
-	hut.set_range_visible(true)
-	assert_true(near_tree.is_highlighted, "A tree inside lumber hut ring is highlighted")
-	assert_false(near_rock.is_highlighted, "A rock inside lumber hut ring is NOT highlighted")
-	assert_false(near_water.is_highlighted, "Water inside lumber hut ring is NOT highlighted")
 
-	hut.set_range_visible(false)
-	assert_false(near_tree.is_highlighted, "Deselecting unhighlights the tree")
 
-func test_51_quarry_only_highlights_stone_nodes() -> void:
-	var quarry_script: GDScript = load("res://scripts/entities/ProducerBuilding.gd")
-	var quarry = quarry_script.new("quarry")
-	_cleanup_nodes.append(quarry)
-	tree.root.add_child(quarry)
-	quarry.complete_construction()
-	quarry.position = Vector3.ZERO
-	await wait_frames(1)
 
-	var near_tree = _make_node("wood", quarry.harvest_range * 0.5)
-	var near_rock = _make_node("stone", quarry.harvest_range * 0.5)
-	await wait_frames(1)
 
-	quarry.set_range_visible(true)
-	assert_false(near_tree.is_highlighted, "A tree inside quarry ring is NOT highlighted")
-	assert_true(near_rock.is_highlighted, "A rock inside quarry ring IS highlighted")
 
-	quarry.set_range_visible(false)
-	assert_false(near_rock.is_highlighted, "Deselecting unhighlights the rock")
-
-func test_52_tower_highlights_no_resource_nodes() -> void:
-	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
-	var tower = tower_script.new()
-	_cleanup_nodes.append(tower)
-	tree.root.add_child(tower)
-	tower.complete_construction()
-	tower.position = Vector3.ZERO
-	await wait_frames(1)
-
-	var near_tree = _make_node("wood", tower.attack_range * 0.5)
-	var near_rock = _make_node("stone", tower.attack_range * 0.5)
-	await wait_frames(1)
-
-	tower.set_range_visible(true)
-	assert_false(near_tree.is_highlighted, "Tower range does not highlight trees")
-	assert_false(near_rock.is_highlighted, "Tower range does not highlight rocks")
-
-func test_53_build_preview_only_highlights_relevant_resource_type() -> void:
-	var main_packed: PackedScene = load("res://scenes/Main.tscn")
-	var main = main_packed.instantiate()
-	_cleanup_nodes.append(main)
-	tree.root.add_child(main)
-	await wait_frames(2)
-
-	var tree_node = _make_node("wood", 3.0)
-	var rock_node = _make_node("stone", 3.0)
-	await wait_frames(1)
-
-	# Selecting lumber hut preview: only tree lights up
-	main.on_build_selected("lumber_hut")
-	main.build_preview.global_position = Vector3.ZERO
-	main._refresh_preview_highlights()
-	assert_true(tree_node.is_highlighted, "Lumber hut preview highlights nearby tree")
-	assert_false(rock_node.is_highlighted, "Lumber hut preview ignores nearby rock")
-
-	# Cancelling clears preview highlights
-	main.cancel_building_selection()
-	assert_false(tree_node.is_highlighted, "Cancelling preview clears highlight")
-
-	# Selecting tower preview: neither lights up
-	main.on_build_selected("tower")
-	main.build_preview.global_position = Vector3.ZERO
-	main._refresh_preview_highlights()
-	assert_false(tree_node.is_highlighted, "Tower preview does not highlight tree")
-	assert_false(rock_node.is_highlighted, "Tower preview does not highlight rock")
-	main.cancel_building_selection()
-
-func test_54_depleted_resource_nodes_are_not_highlighted() -> void:
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3.ZERO
-	await wait_frames(1)
-
-	var depleted_tree = _make_node("wood", hut.harvest_range * 0.5)
-	depleted_tree.current_amount = 0
-	depleted_tree.is_depleted = true
-	await wait_frames(1)
-
-	hut.set_range_visible(true)
-	assert_false(depleted_tree.is_highlighted, "A depleted tree has no effect and is not highlighted")
-
-func test_55_reselecting_a_building_still_highlights_a_shared_node() -> void:
-	# Two huts whose ranges overlap the same tree. `unit_selected` fans out to every
-	# building in an arbitrary order, so with one highlight list per building the
-	# newly selected hut lit the tree and the previously selected one then cleared
-	# its stale list and switched it straight back off.
-	var a = lumber_hut_script.new()
-	var b = lumber_hut_script.new()
-	_cleanup_nodes.append(a)
-	_cleanup_nodes.append(b)
-	tree.root.add_child(a)
-	tree.root.add_child(b)
-	a.complete_construction()
-	b.complete_construction()
-	a.position = Vector3(-3.0, 0.0, 0.0)
-	b.position = Vector3(3.0, 0.0, 0.0)
-
-	var shared = resource_node_script.new("wood", Vector2i.ZERO)
-	_cleanup_nodes.append(shared)
-	tree.root.add_child(shared)
-	shared.position = Vector3.ZERO
-	await wait_frames(1)
-
-	for step in [a, b, a, b]:
-		event_bus_node.unit_selected.emit(step)
-		assert_true(shared.is_highlighted,
-			"The shared tree stays lit for whichever hut is selected, in any order")
-
-	event_bus_node.unit_deselected.emit()
-	assert_false(shared.is_highlighted, "Deselecting clears it")
-
-func test_56_highlights_survive_a_selected_building_being_destroyed() -> void:
-	var hut = lumber_hut_script.new()
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = Vector3.ZERO
-	var t = resource_node_script.new("wood", Vector2i.ZERO)
-	_cleanup_nodes.append(t)
-	tree.root.add_child(t)
-	t.position = Vector3(2.0, 0.0, 0.0)
-	await wait_frames(1)
-
-	event_bus_node.unit_selected.emit(hut)
-	assert_true(t.is_highlighted, "Tree lit while the hut is selected")
-
-	hut.queue_free()
-	await wait_frames(2)
-	assert_false(t.is_highlighted, "A destroyed building does not leave its highlights behind")
-
-func test_57_a_producer_without_an_explicit_declaration_still_derives_its_types() -> void:
-	# Config.get_interactable_resource_types() falls back to deriving from what a
-	# producer makes. Every shipped producer declares the field, so exercise the
-	# fallback directly rather than leaving it as untested, unreachable code.
-	assert_true(config_node.has_method("get_interactable_resource_types"),
-		"Config owns the rule for what a building type interacts with")
-
-	# Declared types win.
-	assert_eq(config_node.get_interactable_resource_types("lumber_hut"), ["wood"] as Array[String],
-		"A lumber hut interacts with wood")
-	assert_eq(config_node.get_interactable_resource_types("quarry"), ["stone"] as Array[String],
-		"A quarry interacts with stone")
-
-	# Things with no resource interaction say so plainly.
-	assert_true(config_node.get_interactable_resource_types("tower").is_empty(),
-		"A turret interacts with no resource node")
-	assert_true(config_node.get_interactable_resource_types("wall").is_empty(),
-		"Stakes interact with no resource node")
-	assert_true(config_node.get_interactable_resource_types("not_a_building").is_empty(),
-		"An unknown type is handled rather than crashing")
 
 func test_58_depleted_nodes_report_themselves_unavailable() -> void:
-	# One place answers "is this worth harvesting / highlighting", so the building,
-	# the build preview and the producer cannot drift apart on the question.
+	# One place answers "is this worth harvesting", so the Hero and the build
+	# preview cannot drift apart on the question.
 	var node = resource_node_script.new("wood", Vector2i.ZERO)
 	_cleanup_nodes.append(node)
 	tree.root.add_child(node)
@@ -1341,11 +1012,3 @@ func test_58_depleted_nodes_report_themselves_unavailable() -> void:
 	node.harvest(node.current_amount)
 	assert_true(node.is_depleted, "Stripping it marks it depleted")
 	assert_false(node.is_available(), "And it reports itself unavailable")
-
-	var hut = lumber_hut_script.new()
-	_cleanup_nodes.append(hut)
-	tree.root.add_child(hut)
-	hut.complete_construction()
-	hut.position = node.global_position
-	await wait_frames(1)
-	assert_false(hut.can_interact_with(node), "A hut will not claim a stripped tree")

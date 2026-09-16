@@ -8,10 +8,7 @@ extends Node
 const SCRIPT_PATHS: Dictionary = {
 	"core": "res://scripts/entities/CoreCampfire.gd",
 	"wall": "res://scripts/entities/Wall.gd",
-	"lumber_hut": "res://scripts/entities/LumberHut.gd",
 	"tower": "res://scripts/entities/Tower.gd",
-	"quarry": "res://scripts/entities/ProducerBuilding.gd",
-	"hunting_hut": "res://scripts/entities/ProducerBuilding.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 

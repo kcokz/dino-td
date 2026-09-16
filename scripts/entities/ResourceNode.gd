@@ -16,7 +16,6 @@ var is_depleted: bool = false
 var mesh_instance: MeshInstance3D = null
 var collision_shape: CollisionShape3D = null
 var label_3d: Label3D = null
-var is_highlighted: bool = false
 
 func _init(p_type: String = "wood", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	resource_type = p_type
@@ -134,12 +133,6 @@ func _update_visuals() -> void:
 		col = data.get("depleted_color", Color(0.3, 0.3, 0.3)) if is_depleted else data.get("color", Color(0.5, 0.5, 0.5))
 	
 	mat.albedo_color = col
-	if is_highlighted:
-		# Covered by a selected building's or build preview's range: make it glow
-		# so the player can see exactly which nodes that placement would work.
-		mat.emission_enabled = true
-		mat.emission = col.lightened(0.5)
-		mat.emission_energy_multiplier = 1.6
 	mesh_instance.material_override = mat
 
 	if is_depleted:
@@ -204,15 +197,7 @@ func _apply_label_sizing(lbl: Label3D) -> void:
 	lbl.fixed_size = fixed
 	lbl.outline_size = maxi(1, int(round(fs / 6.0)))
 
-## Highlights this node while something's coverage ring includes it.
-func set_highlighted(on: bool) -> void:
-	if is_highlighted == on:
-		return
-	is_highlighted = on
-	_update_visuals()
-
-## Whether this node still has something to give. Asked by buildings, by the build
-## preview and by the producers, so "is this worth highlighting / harvesting" is
-## answered in exactly one place.
+## Whether this node still has something to give. Asked by the Hero and by the
+## build preview, so "is this worth harvesting" is answered in exactly one place.
 func is_available() -> bool:
 	return not is_depleted and current_amount > 0 and not is_queued_for_deletion()

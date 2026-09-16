@@ -22,7 +22,6 @@ var build_system_script: GDScript = null
 var building_script: GDScript = null
 var core_campfire_script: GDScript = null
 var wall_script: GDScript = null
-var lumber_hut_script: GDScript = null
 var tower_script: GDScript = null
 
 var _cleanup_nodes: Array[Node] = []
@@ -55,7 +54,6 @@ func before_all() -> void:
 	building_script = _load_script(["res://scripts/entities/Building.gd"])
 	core_campfire_script = _load_script(["res://scripts/entities/CoreCampfire.gd"])
 	wall_script = _load_script(["res://scripts/entities/Wall.gd"])
-	lumber_hut_script = _load_script(["res://scripts/entities/LumberHut.gd"])
 	tower_script = _load_script(["res://scripts/entities/Tower.gd"])
 
 func before_each() -> void:
@@ -187,7 +185,7 @@ func test_challenge_duplicate_placement_different_types() -> void:
 	var ap_before = _get_ap()
 	var wood_before = _get_wood()
 
-	var types_to_test = ["tower", "lumber_hut", "wall", "core"]
+	var types_to_test = ["tower", "wall", "core"]
 	for t in types_to_test:
 		var watcher = watch_signal(event_bus_node, "building_placed")
 		assert_false(build_sys.can_place_building(t, cell), "can_place_building for type '%s' on occupied cell must be false" % t)
@@ -379,7 +377,7 @@ func test_challenge_placement_rejected_when_ap_zero() -> void:
 	if grid_mgr == null or build_sys == null or game_state_node == null: return
 
 	game_state_node.current_ap = 0
-	var test_types = ["wall", "tower", "lumber_hut"]
+	var test_types = ["wall", "tower"]
 
 	for i in range(test_types.size()):
 		var t = test_types[i]
@@ -576,7 +574,7 @@ func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 	if grid_mgr == null or build_sys == null: return
 
 	var cell = Vector2i(75, 75)
-	var sequence = ["wall", "tower", "lumber_hut", "wall", "tower", "lumber_hut", "wall", "tower"]
+	var sequence = ["wall", "tower", "wall", "tower", "wall", "tower", "wall", "tower"]
 
 	for idx in range(sequence.size()):
 		var b_type = sequence[idx]
@@ -607,7 +605,7 @@ func test_challenge_replacement_after_direct_destroy_call() -> void:
 	if grid_mgr == null or build_sys == null: return
 
 	var cell = Vector2i(78, 78)
-	var b1 = build_sys.place_building("lumber_hut", cell)
+	var b1 = build_sys.place_building("tower", cell)
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "LumberHut placed")
 
@@ -700,7 +698,7 @@ func test_challenge_campfire_destruction_emits_game_lost_and_halts_all_placement
 	var test_attempts = [
 		{"type": "wall", "cell": Vector2i(1, 1)},
 		{"type": "tower", "cell": Vector2i(2, 2)},
-		{"type": "lumber_hut", "cell": Vector2i(3, 3)},
+		{"type": "tower", "cell": Vector2i(3, 3)},
 		{"type": "core", "cell": Vector2i(4, 4)},
 		{"type": "wall", "cell": Vector2i(0, 0)}
 	]
@@ -752,7 +750,7 @@ func test_challenge_cannot_overwrite_living_core_campfire() -> void:
 	var origin = Vector2i(0, 0)
 	grid_mgr.occupy_cell(origin, core)
 
-	var place_types = ["wall", "tower", "lumber_hut", "core"]
+	var place_types = ["wall", "tower", "core"]
 	for t in place_types:
 		assert_false(build_sys.can_place_building(t, origin), "Cannot place '%s' over living CoreCampfire at (0,0)" % t)
 		var b = build_sys.place_building(t, origin)

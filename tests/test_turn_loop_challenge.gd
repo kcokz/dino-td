@@ -18,7 +18,6 @@ var config_node: Object = null
 var event_bus_node: Object = null
 var game_state_node: Object = null
 
-var lumber_hut_script: GDScript = null
 var building_script: GDScript = null
 var grid_manager_script: GDScript = null
 var build_system_script: GDScript = null
@@ -48,7 +47,6 @@ func before_all() -> void:
 		game_state_node = load("res://scripts/autoload/GameState.gd").new()
 		_cleanup_objects.append(game_state_node)
 
-	lumber_hut_script = _load_script(["res://scripts/entities/LumberHut.gd", "res://scripts/entities/lumber_hut.gd"])
 	building_script = _load_script(["res://scripts/entities/Building.gd", "res://scripts/entities/building.gd"])
 	grid_manager_script = _load_script(["res://scripts/core/GridManager.gd", "res://scripts/core/grid_manager.gd"])
 	build_system_script = _load_script(["res://scripts/core/BuildSystem.gd", "res://scripts/core/build_system.gd"])
@@ -102,15 +100,6 @@ func _load_script(paths: Array[String]) -> GDScript:
 				return res
 	return null
 
-func _create_lumber_hut() -> Object:
-	if lumber_hut_script == null:
-		return null
-	var hut = lumber_hut_script.new()
-	if hut is Node:
-		_cleanup_nodes.append(hut)
-	else:
-		_cleanup_objects.append(hut)
-	return hut
 
 func _get_wood() -> int:
 	if game_state_node != null and "resources" in game_state_node:
@@ -191,57 +180,6 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Final state after 60 cycles must be PLAN")
 	assert_false(game_state_node.is_game_over, "Game must still be active after 60 cycles")
 
-func test_challenge_50_plus_continuous_cycles_with_economy_compounding() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	assert_not_null(event_bus_node, "EventBus must exist")
-	if game_state_node == null or event_bus_node == null:
-		return
-
-	# Setup 3 LumberHuts
-	var hut1 = _create_lumber_hut()
-	var hut2 = _create_lumber_hut()
-	var hut3 = _create_lumber_hut()
-	if hut1 == null or hut2 == null or hut3 == null:
-		return
-
-	var current_expected_wood = 10
-	assert_eq(_get_wood(), current_expected_wood, "Initial wood is 10")
-
-	# Run 55 continuous cycles
-	for cycle in range(1, 56):
-		# Cycle 25: destroy hut2
-		if cycle == 26:
-			hut2.take_damage(10.0)
-			assert_true(hut2.is_destroyed, "Hut 2 destroyed at start of cycle 26")
-
-		# Cycle 40: destroy hut3
-		if cycle == 41:
-			hut3.take_damage(10.0)
-			assert_true(hut3.is_destroyed, "Hut 3 destroyed at start of cycle 41")
-
-		# PLAN -> ATTACK
-		game_state_node.trigger_end_action()
-
-		# ATTACK -> PRODUCE
-		event_bus_node.wave_ended.emit(cycle)
-
-		# Production calculation:
-		# Cycles 1..25: 3 huts alive = +6 wood
-		# Cycles 26..40: 2 huts alive = +4 wood
-		# Cycles 41..55: 1 hut alive = +2 wood
-		if cycle <= 25:
-			current_expected_wood += 6
-		elif cycle <= 40:
-			current_expected_wood += 4
-		else:
-			current_expected_wood += 2
-
-		assert_eq(_get_wood(), current_expected_wood, "Cycle %d: Wood expected %d, got %d" % [cycle, current_expected_wood, _get_wood()])
-
-		# PRODUCE -> PLAN
-		game_state_node.end_produce_phase()
-
-	assert_eq(_get_wood(), current_expected_wood, "Final compounded wood matches exact expectation after 55 turns")
 
 func test_challenge_ap_drain_and_restoration_across_50_cycles() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -651,42 +589,6 @@ func test_challenge_100_continuous_cycles_stress() -> void:
 # 10. Test Category 8: Mixed Building Destruction in Multi-Turn Loop
 # ==============================================================================
 
-func test_challenge_mixed_building_destruction_during_turn_loop() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	assert_not_null(event_bus_node, "EventBus must exist")
-	if game_state_node == null or event_bus_node == null:
-		return
-
-	# Place 2 LumberHuts and 1 dummy building
-	var hut_a = _create_lumber_hut()
-	var hut_b = _create_lumber_hut()
-	var dummy = Node.new()
-	_cleanup_nodes.append(dummy)
-	game_state_node.register_building(dummy)
-
-	assert_eq(_get_wood(), SEED_WOOD, "Initial wood is 10")
-
-	# Turn 1: Both huts produce
-	game_state_node.trigger_end_action()
-	event_bus_node.wave_ended.emit(1)
-	assert_eq(_get_wood(), SEED_WOOD + 4, "Turn 1: 10 + 4 = 14 wood")
-	game_state_node.end_produce_phase()
-
-	# Turn 2: Destroy hut_a in PLAN
-	hut_a.take_damage(10.0)
-	assert_true(hut_a.is_destroyed, "hut_a is destroyed")
-
-	game_state_node.trigger_end_action()
-	event_bus_node.wave_ended.emit(2)
-	assert_eq(_get_wood(), SEED_WOOD + 6, "Turn 2: 14 + 2 = 16 wood (only hut_b produces)")
-	game_state_node.end_produce_phase()
-
-	# Turn 3: Unregister dummy, hut_b still produces
-	game_state_node.unregister_building(dummy)
-	game_state_node.trigger_end_action()
-	event_bus_node.wave_ended.emit(3)
-	assert_eq(_get_wood(), SEED_WOOD + 8, "Turn 3: 16 + 2 = 18 wood")
-	game_state_node.end_produce_phase()
 
 # ==============================================================================
 # 11. Test Category 9: Empirical Wave Ended Behavior Outside Attack

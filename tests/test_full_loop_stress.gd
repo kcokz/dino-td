@@ -26,7 +26,6 @@ var main_scene_packed: PackedScene = null
 var dino_script: GDScript = null
 var tower_script: GDScript = null
 var wall_script: GDScript = null
-var lumber_hut_script: GDScript = null
 var core_campfire_script: GDScript = null
 var nest_script: GDScript = null
 
@@ -62,7 +61,6 @@ func before_all() -> void:
 	dino_script = _load_script(["res://scripts/entities/Dino.gd"])
 	tower_script = _load_script(["res://scripts/entities/Tower.gd"])
 	wall_script = _load_script(["res://scripts/entities/Wall.gd"])
-	lumber_hut_script = _load_script(["res://scripts/entities/LumberHut.gd"])
 	core_campfire_script = _load_script(["res://scripts/entities/CoreCampfire.gd"])
 	nest_script = _load_script(["res://scripts/entities/Nest.gd"])
 
@@ -167,7 +165,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Phase B: Plan Phase Building Placement (Wall, LumberHut, Tower)
 	# --------------------------------------------------------------------------
 	# Fund the placements from Config so this test measures the loop, not the balance.
-	var expected_wood: int = total_cost_of(["wall", "lumber_hut", "tower"]) + 1
+	var expected_wood: int = total_cost_of(["wall", "tower", "tower"]) + 1
 	game_state_node.resources["wood"] = expected_wood
 	await wait_frames(1)
 
@@ -180,11 +178,11 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(1, 1)), "Cell (1, 1) is occupied")
 
 	# 2. Place LumberHut at (2, 2)
-	var lumber_node = main.place_building_at_cell("lumber_hut", Vector2i(2, 2))
-	assert_not_null(lumber_node, "LumberHut placed successfully at (2, 2)")
+	var lumber_node = main.place_building_at_cell("tower", Vector2i(2, 2))
+	assert_not_null(lumber_node, "Second turret placed successfully at (2, 2)")
 	assert_eq(int(game_state_node.current_ap), 1, "AP deducted by 1 (2 -> 1)")
-	expected_wood -= cost_of("lumber_hut")
-	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the lumber hut cost")
+	expected_wood -= cost_of("tower")
+	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the turret cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(2, 2)), "Cell (2, 2) is occupied")
 
 	# 3. Place Tower at (1, -1)
@@ -236,10 +234,9 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 2, "Transitioned to PRODUCE (2)")
 	assert_eq(hud.get_phase_text(), "Phase: PRODUCE", "HUD displays Phase: PRODUCE")
 
-	# LumberHut generated +2 wood during produce_phase (1 + 2 = 3)
-	expected_wood += int(Engine.get_main_loop().root.get_node("Config").BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
-	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood collected by LumberHut")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "HUD displays the collected wood")
+	# v0.4: buildings produce nothing, so a produce phase moves no numbers at all.
+	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "A produce phase pays out nothing")
+	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "And the HUD agrees")
 
 	# Advance PRODUCE -> PLAN
 	game_state_node.end_produce_phase()
@@ -267,10 +264,8 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(wave_mgr.is_wave_active, "Wave 2 ended")
 	assert_eq(int(game_state_node.current_phase), 2, "Transitioned to PRODUCE (2)")
 
-	# LumberHut produced +2 wood again (3 + 2 = 5)
-	expected_wood += int(Engine.get_main_loop().root.get_node("Config").BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
-	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood collected by LumberHut")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "HUD displays the collected wood")
+	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Still nothing produced")
+	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "And the HUD still agrees")
 
 	# Advance PRODUCE -> PLAN
 	game_state_node.end_produce_phase()
@@ -309,10 +304,8 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.3, 0.001, "Post-horde HP mult scaled to 1.3")
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.2, 0.001, "Post-horde damage mult scaled to 1.2")
 
-	# Produce phase of turn 3 (+2 wood: 5 -> 7)
 	assert_eq(int(game_state_node.current_phase), 2, "Transitioned to PRODUCE (2)")
-	expected_wood += int(Engine.get_main_loop().root.get_node("Config").BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
-	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood collected by LumberHut")
+	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Nothing produced on turn 3 either")
 
 	# Advance to PLAN
 	game_state_node.end_produce_phase()
@@ -555,71 +548,6 @@ func test_02_horde_progression_and_stat_compounding_stress() -> void:
 # Test 3: Multiple Lumber Huts Economy Compounding & Clean Restart
 # ==============================================================================
 
-func test_03_multi_producer_economy_scaling_stress() -> void:
-	var main = _create_main_scene()
-	if main == null: return
-	await wait_frames(2)
-
-	# Enough wood for three huts plus change, taken from Config.
-	var hut_cost: int = cost_of("lumber_hut")
-	var hut_yield: int = int(Engine.get_main_loop().root.get_node("Config").BUILDINGS["lumber_hut"].get("produces", {}).get("wood", 0))
-	var wood: int = hut_cost * 3 + 10
-	game_state_node.resources["wood"] = wood
-
-	# Turn 1: place hut 1
-	var hut1 = main.place_building_at_cell("lumber_hut", Vector2i(1, 2))
-	assert_not_null(hut1, "Hut 1 placed")
-	wood -= hut_cost
-	assert_eq(int(game_state_node.resources["wood"]), wood, "Wood after hut 1")
-
-	# Run turn 1: one hut pays out once
-	main.hud.simulate_end_action_click()
-	event_bus_node.dino_died.emit(null)
-	event_bus_node.dino_died.emit(null)
-	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE")
-	wood += hut_yield
-	assert_eq(int(game_state_node.resources["wood"]), wood, "1 hut produced one payout")
-	game_state_node.end_produce_phase()
-
-	# Turn 2: place hut 2
-	var hut2 = main.place_building_at_cell("lumber_hut", Vector2i(2, 2))
-	assert_not_null(hut2, "Hut 2 placed")
-	wood -= hut_cost
-	assert_eq(int(game_state_node.resources["wood"]), wood, "Wood after hut 2")
-
-	# Run turn 2: two huts pay out
-	main.hud.simulate_end_action_click()
-	for i in range(3): event_bus_node.dino_died.emit(null)
-	wood += hut_yield * 2
-	assert_eq(int(game_state_node.resources["wood"]), wood, "2 huts produced two payouts")
-	game_state_node.end_produce_phase()
-
-	# Turn 3: place hut 3
-	var hut3 = main.place_building_at_cell("lumber_hut", Vector2i(3, 2))
-	assert_not_null(hut3, "Hut 3 placed")
-	wood -= hut_cost
-	assert_eq(int(game_state_node.resources["wood"]), wood, "Wood after hut 3")
-
-	# Run turn 3: three huts pay out
-	main.hud.simulate_end_action_click()
-	for i in range(8): event_bus_node.dino_died.emit(null)
-	wood += hut_yield * 3
-	assert_eq(int(game_state_node.resources["wood"]), wood, "3 huts produced three payouts")
-	game_state_node.end_produce_phase()
-
-	# Now Restart -> Wood resets to 10, all 3 huts purged, zero phantom production
-	main.restart_game()
-	await wait_frames(2)
-
-	assert_eq(int(game_state_node.resources["wood"]), opening_banked_wood(), "Wood reset to the Config opening balance")
-	assert_eq(main.buildings_container.get_child_count(), 1, "Only Core remains")
-
-	# Advance wave in pristine state with 0 huts -> Wood must remain 10
-	main.hud.simulate_end_action_click()
-	event_bus_node.dino_died.emit(null)
-	event_bus_node.dino_died.emit(null)
-	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE")
-	assert_eq(int(game_state_node.resources["wood"]), opening_banked_wood(), "Zero huts produce zero phantom wood")
 
 # ==============================================================================
 # Test 4: Rapid Alternating Victory-Defeat-Restart Stress Loop
