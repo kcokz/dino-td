@@ -190,6 +190,9 @@ func _ready() -> void:
 	_base_y = global_position.y
 	_ensure_visuals()
 	_refresh_label()
+	# Drops that never rot have nothing to tick. With a couple of hundred piles
+	# allowed on the ground, that is a couple of hundred no-op calls a frame.
+	set_process(lifetime > 0.0)
 
 func _process(delta: float) -> void:
 	if is_collected or lifetime <= 0.0:
