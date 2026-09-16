@@ -22,6 +22,12 @@ extends Node3D
 
 const GROUP: String = "drops"
 const CONTAINER_NAME: String = "Drops"
+## The level's own drop container joins this group. Name lookup alone is not
+## enough: a scene scatters its opening stock from _ready(), which runs before
+## SceneTree.current_scene has been assigned, so "look under the running scene"
+## would miss the container the level had already made and stash everything under
+## the tree root instead -- where a restart's sweep would never find it.
+const CONTAINER_GROUP: String = "drops_container"
 
 var resource_type: String = "wood"
 var amount: int = 1
@@ -122,11 +128,28 @@ static func _find_pile_to_join(context: Node, world_pos: Vector3, res_id: String
 	return null
 
 ## Drops live under the running scene, so restarting a level takes them with it.
-## A bare test tree has no current scene, and the tree root stands in.
+## The level declares its own container (see CONTAINER_GROUP); a bare test tree
+## has neither, and one is made under the tree root.
 static func _container(context: Node) -> Node:
 	var tree_ref := context.get_tree()
 	if tree_ref == null:
 		return null
+
+	# A level's own container wins over the ad-hoc one a bare tree gets. They are
+	# told apart by where they hang: the fallback below is always a child of the
+	# tree root, and a level's container never is.
+	var fallback: Node = null
+	for holder in tree_ref.get_nodes_in_group(CONTAINER_GROUP):
+		if not is_instance_valid(holder) or not holder.is_inside_tree():
+			continue
+		if holder.get_parent() == tree_ref.root:
+			if fallback == null:
+				fallback = holder
+		else:
+			return holder
+	if fallback != null:
+		return fallback
+
 	var host: Node = tree_ref.current_scene
 	if host == null or not is_instance_valid(host):
 		host = tree_ref.root
@@ -134,10 +157,9 @@ static func _container(context: Node) -> Node:
 		return null
 	var holder: Node = host.get_node_or_null(CONTAINER_NAME)
 	if holder == null:
-		holder = host.find_child(CONTAINER_NAME, false, false)
-	if holder == null:
 		holder = Node3D.new()
 		holder.name = CONTAINER_NAME
+		holder.add_to_group(CONTAINER_GROUP)
 		host.add_child(holder)
 	return holder
 

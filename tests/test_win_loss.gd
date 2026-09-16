@@ -659,7 +659,7 @@ func test_restart_01_resets_gamestate_values() -> void:
 
 	assert_eq(int(game_state_node.current_ap), 3, "current_ap reset to BASE_AP (3)")
 	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to BASE_AP (3)")
-	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_wood(), "wood reset to Config.INITIAL_RESOURCES")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "wood reset to Config.INITIAL_RESOURCES")
 	assert_false(bool(game_state_node.get("is_game_over")), "is_game_over reset to false")
 	assert_false(bool(game_state_node.get("is_game_won")), "is_game_won reset to false")
 	assert_eq(int(game_state_node.current_phase), 0, "current_phase reset to PLAN (0)")
@@ -776,13 +776,16 @@ func test_restart_05_reenables_gameplay_actions() -> void:
 	assert_true(game_state_node.spend_ap(1), "spend_ap must succeed after restart")
 	assert_eq(int(game_state_node.current_ap), 2, "AP drops from 3 to 2")
 
-	# Verify building placement re-enabled
+	# Verify building placement re-enabled. A reset wallet holds nothing since
+	# v0.3 -- the opening stock is on the ground -- and this test is about the
+	# lockout lifting, not about affording anything, so it seeds its own wood.
 	if build_system_script and grid_manager_script:
 		var grid = grid_manager_script.new()
 		var bs = build_system_script.new()
 		_cleanup_nodes.append(grid)
 		_cleanup_nodes.append(bs)
 		bs.setup(grid)
+		game_state_node.resources["wood"] = cost_of("wall") * 2
 
 		assert_true(bs.can_place_building("wall", Vector2i(1, 1)), "can_place_building must succeed after restart")
 		var placed = bs.place_building("wall", Vector2i(1, 1))

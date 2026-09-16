@@ -552,7 +552,9 @@ func test_28_the_opening_affords_a_hut_then_a_turret_one_tend_later() -> void:
 	# The shape of the opening, stated so a balance pass cannot quietly break it:
 	# buy a hut, tend it once, and the first turret is affordable -- comfortably
 	# inside the grace period before the first raid.
-	var start: int = int(config_node.INITIAL_RESOURCES["wood"])
+	# v0.3: the opening arrives as wood on the ground by the cabin, so "what the
+	# player starts with" is what is there to be fetched, not what is banked.
+	var start: int = opening_wood()
 	var hut: int = int(config_node.BUILDINGS["lumber_hut"]["cost"]["wood"])
 	var turret: int = int(config_node.BUILDINGS["tower"]["cost"]["wood"])
 	var per_tend: float = float(config_node.BUILDINGS["lumber_hut"]["produces_per_sec"]["wood"]) 		* float(config_node.BUILDINGS["lumber_hut"]["tend_duration"])

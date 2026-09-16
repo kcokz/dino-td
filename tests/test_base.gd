@@ -237,15 +237,25 @@ func cost_of(type_id: String, res_id: String = "wood") -> int:
 		return 0
 	return int(cfg.BUILDINGS[type_id].get("cost", {}).get(res_id, 0))
 
-## The wood a fresh game starts with, straight from Config. Tests that mean
-## "the wallet is untouched" should compare against this rather than a literal.
+## The wood a fresh game opens with, straight from Config.
+##
+## Since v0.3 that is wood lying on the ground by the cabin rather than a number
+## in the wallet, so this is what the player has once they have picked it up --
+## "the wallet is untouched" is `banked_wood() == 0` at the start of a game, and
+## this figure is what the opening is balanced around.
 func opening_wood() -> int:
 	var cfg = null
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
-	if cfg == null or not ("INITIAL_RESOURCES" in cfg):
-		return 10
-	return int(cfg.INITIAL_RESOURCES.get("wood", 10))
+	if cfg == null:
+		return 0
+	var banked: int = 0
+	if "INITIAL_RESOURCES" in cfg:
+		banked = int(cfg.INITIAL_RESOURCES.get("wood", 0))
+	var on_ground: int = 0
+	if cfg.has_method("get_opening_stock"):
+		on_ground = int(cfg.get_opening_stock("wood"))
+	return banked + on_ground
 
 ## How much of `res_id` is lying on the ground as drops (v0.3). Production no
 ## longer banks anything directly -- a machine leaves a pile beside it and the
@@ -285,6 +295,18 @@ func clear_drops() -> void:
 				d.get_parent().remove_child(d)
 			if not d.is_queued_for_deletion():
 				d.free()
+
+## What the wallet actually holds when a game starts, which since v0.3 is nothing:
+## the opening stock is on the ground by the cabin. Tests asserting "a reset put
+## the wallet back where it began" want this; tests asking "what can the opening
+## buy" want opening_wood().
+func opening_banked_wood() -> int:
+	var cfg = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	if cfg == null or not ("INITIAL_RESOURCES" in cfg):
+		return 0
+	return int(cfg.INITIAL_RESOURCES.get("wood", 0))
 
 ## Total wood needed to place every type in `type_ids` once.
 func total_cost_of(type_ids: Array, res_id: String = "wood") -> int:

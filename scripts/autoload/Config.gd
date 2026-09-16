@@ -10,8 +10,12 @@ extends Node
 # ==============================================================================
 const BASE_AP: int = 3
 const RESOURCES: Array[String] = ["wood", "stone", "water", "food"]
+## The player starts with nothing banked. The opening stock is real wood lying by
+## the cabin (Config.DROPS.opening_stock) and has to be walked over like anything
+## else -- the first thing the game teaches is that resources are carried, not
+## granted. Keep these at zero: a number here is a second, silent way to get rich.
 const INITIAL_RESOURCES: Dictionary = {
-	"wood": 20,
+	"wood": 0,
 	"stone": 0,
 	"water": 0,
 	"food": 0
@@ -487,7 +491,16 @@ const DROPS: Dictionary = {
 	"fly_time": 0.18,         # 被捡起时飞向现代人的时长（秒）
 	"size": 0.3,              # 方块边长（米）
 	"label_min_amount": 2,    # 堆叠数达到这个值才显示数字
+	# 开局物资：撒在船舱周围，而不是直接进仓库
+	"opening_stock": {"wood": 20},
+	"opening_piles": 4,        # 分成几堆
+	"opening_ring_radius": 4.5, # 距船舱的距离（米）——必须大于现代人出生点的拾取半径
 }
+
+## What the player has to go and fetch before anything can be built, totalled by
+## resource. The same figure a wallet used to start with, just on the floor.
+static func get_opening_stock(res_id: String) -> int:
+	return int(DROPS.get("opening_stock", {}).get(res_id, 0))
 
 ## Colour for a resource that has no node on the map: meat only ever comes off a
 ## dinosaur, so RESOURCE_NODES has nothing to say about it.

@@ -210,7 +210,7 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	assert_eq(int(game_state_node.current_phase), 0, "GameState.current_phase reset to PLAN (0)")
 	assert_eq(int(game_state_node.current_ap), 3, "GameState.current_ap reset to BASE_AP (3)")
 	assert_eq(int(game_state_node.max_ap), 3, "GameState.max_ap reset to BASE_AP (3)")
-	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_wood(), "GameState wood reset to the Config opening balance")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "GameState wood reset to the Config opening balance")
 	assert_false(bool(game_state_node.get("is_game_over")), "GameState.is_game_over is false")
 
 	# 8. Verify GridManager occupancy accurately restored
@@ -292,7 +292,7 @@ func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -
 	# Verify wave progression was abruptly stopped without triggering end/produce
 	assert_eq(wave_end_watcher.emit_count, 0, "wave_ended was NOT emitted on restart")
 	assert_eq(produce_watcher.emit_count, 0, "produce_phase was NOT emitted on restart")
-	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_wood(), "Wood remains at the opening balance, no illegitimate payout")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "Wood remains at the opening balance, no illegitimate payout")
 
 # ==============================================================================
 # Category 2: 20 Consecutive Restarts (Zero Leaks, Zero Drift, Grid Restored)
@@ -355,7 +355,7 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Phase is PLAN (0)" % cycle)
 		assert_eq(int(game_state_node.current_ap), 3, "Cycle %d: AP is BASE_AP (3)" % cycle)
 		assert_eq(int(game_state_node.max_ap), 3, "Cycle %d: max_ap is BASE_AP (3)" % cycle)
-		assert_eq(int(game_state_node.resources.get("wood", 0)), opening_wood(), "Cycle %d: Wood is back to Config.INITIAL_RESOURCES" % cycle)
+		assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "Cycle %d: Wood is back to Config.INITIAL_RESOURCES" % cycle)
 		assert_eq(int(game_state_node.wave_number), 0, "Cycle %d: wave_number is 0" % cycle)
 		assert_false(bool(game_state_node.get("is_game_over")), "Cycle %d: is_game_over is false" % cycle)
 		assert_false(bool(game_state_node.get("is_game_won")), "Cycle %d: is_game_won is false" % cycle)

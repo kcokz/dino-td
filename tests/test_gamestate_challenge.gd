@@ -241,7 +241,7 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		assert_eq(game_state.active_buildings.size(), 0, "active_buildings must be empty after reset (cycle %d)" % cycle)
 
 		var res = game_state.resources
-		assert_eq(res.get("wood", 0), opening_wood(), "wood resets to the Config opening balance (cycle %d)" % cycle)
+		assert_eq(res.get("wood", 0), opening_banked_wood(), "wood resets to the opening wallet (cycle %d)" % cycle)
 		assert_eq(res.get("stone", 0), 0, "stone must be 0 (cycle %d)" % cycle)
 		assert_eq(res.get("food", 0), 0, "food must be 0 (cycle %d)" % cycle)
 		assert_false(res.has("corrupted_item"), "corrupted_item must be gone (cycle %d)" % cycle)

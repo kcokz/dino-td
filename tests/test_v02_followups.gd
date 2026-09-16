@@ -454,9 +454,11 @@ func test_20_reset_game_clears_continuous_mode() -> void:
 # ==============================================================================
 
 func test_21_opening_wallet_affords_a_first_economy_building() -> void:
-	# A wallet that cannot cover the cheapest producer leaves the player staring at
-	# a disabled build menu on turn one, with nothing to do but hand-harvest.
-	var wallet: int = int(config_node.INITIAL_RESOURCES.get("wood", 0))
+	# An opening that cannot cover the cheapest producer leaves the player staring
+	# at a disabled build menu on turn one, with nothing to do but hand-harvest.
+	# Since v0.3 the opening arrives as wood on the ground by the cabin, so this is
+	# what the player holds once it has been fetched.
+	var wallet: int = opening_wood()
 	var cheapest_producer: int = -1
 	var cheapest_name: String = ""
 	for b_type in config_node.BUILDABLE_TYPES:
@@ -475,7 +477,7 @@ func test_21_opening_wallet_affords_a_first_economy_building() -> void:
 func test_22_opening_wallet_does_not_trivially_buy_the_whole_defence() -> void:
 	# The flip side: the opening should not hand the player a tower plus an economy,
 	# or the first real decision never happens.
-	var wallet: int = int(config_node.INITIAL_RESOURCES.get("wood", 0))
+	var wallet: int = opening_wood()
 	var tower: int = cost_of("tower")
 	var hut: int = cost_of("lumber_hut")
 	assert_lt(wallet, tower + hut,
@@ -631,8 +633,8 @@ func test_30_stakes_are_cheap_enough_to_lay_a_row() -> void:
 	# The point of one-wood stakes is that a whole fence is affordable in one go.
 	var stake: int = cost_of("wall")
 	assert_eq(stake, 1, "A wooden stake costs one wood")
-	var wallet: int = int(config_node.INITIAL_RESOURCES.get("wood", 0))
-	assert_gte(wallet / stake, 10, "The opening wallet affords at least ten stakes")
+	var wallet: int = opening_wood()
+	assert_gte(wallet / stake, 10, "The opening affords at least ten stakes")
 
 func test_31_placement_mode_survives_until_the_next_one_is_unaffordable() -> void:
 	var main_packed: PackedScene = load("res://scenes/Main.tscn")

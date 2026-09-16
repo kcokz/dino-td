@@ -647,13 +647,16 @@ func test_challenge_tower_nest_5m_boundary_threshold() -> void:
 
 	# Test Out-Of-Range Nest at 6.0m.
 	#
-	# The in-range nest has to leave the scene, not merely be dropped from the
-	# tower's bookkeeping: it is sitting 5.0m away inside the detection sphere, so
-	# acquire_target() would keep finding it through the physics overlap and this
-	# assertion would depend on how many physics frames happened to have run --
-	# which is exactly how it once failed.
+	# The in-range nest has to be moved out of range, not merely dropped from the
+	# tower's bookkeeping: it sits 5.0m away inside the detection sphere, so
+	# acquire_target() keeps finding it through the physics overlap and this
+	# assertion would otherwise depend on how many physics frames happened to have
+	# run -- which is how it failed once on a busier suite. Detaching it is worse
+	# than useless: the overlap lingers a frame either way, and a detached node's
+	# global position collapses to the origin, which is *inside* the tower.
+	# Distance is the one filter that does not care about physics bookkeeping.
 	tower.on_target_exited(nest_in_range)
-	nest_in_range.get_parent().remove_child(nest_in_range)
+	nest_in_range.position = Vector3(0.0, 0.0, 100.0)
 	await wait_frames(1)
 
 	tower.on_target_entered(nest_out_of_range)
@@ -693,8 +696,12 @@ func test_challenge_tower_nest_boundary_distance_gradient() -> void:
 	tower.attack(nest_4_9)
 	assert_almost_eq(float(nest_4_9.current_hp), 29.0, 0.001, "4.9m nest damaged")
 
-	# 5.5m check
+	# 5.5m check. The 4.9m nest has to move out of range, not just out of the
+	# tower's list: it is still inside the detection sphere, and the physics
+	# overlap would hand it straight back (see the 5m boundary test above).
 	tower.on_target_exited(nest_4_9)
+	nest_4_9.position = Vector3(0.0, 0.0, 100.0)
+	await wait_frames(1)
 	tower.on_target_entered(nest_5_5)
 	assert_null(tower.acquire_target(), "5.5m is strictly out of range")
 	tower.attack(nest_5_5)
@@ -728,8 +735,12 @@ func test_challenge_tower_nest_diagonal_euclidean_boundary() -> void:
 	tower.attack(nest_diag_in)
 	assert_almost_eq(float(nest_diag_in.current_hp), 29.0, 0.001, "Diagonal nest at 5.0m takes 1.0 damage")
 
-	# Test out-of-range diagonal (5.657m)
+	# Test out-of-range diagonal (5.657m). The in-range nest moves away for the
+	# same reason as in the two boundary tests above: it is inside the detection
+	# sphere, and the physics overlap does not care about the tower's own list.
 	tower.on_target_exited(nest_diag_in)
+	nest_diag_in.position = Vector3(0.0, 0.0, 100.0)
+	await wait_frames(1)
 	tower.on_target_entered(nest_diag_out)
 	assert_null(tower.acquire_target(), "Diagonal at (4, 0, 4) distance 5.657m is rejected")
 	tower.attack(nest_diag_out)

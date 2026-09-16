@@ -100,6 +100,11 @@ func test_04_dino_detects_and_attacks_wooden_wall_on_path() -> void:
 	_cleanup_nodes.append(main_inst)
 	tree.root.add_child(main_inst)
 
+	# v0.3: a fresh game banks nothing -- the opening stock is lying by the cabin
+	# waiting to be fetched. This test is about a dinosaur meeting a wall, not
+	# about the walk, so it pays for the wall out of a seeded wallet.
+	game_state_node.resources["wood"] = cost_of("wall") * 4
+
 	# Place wall at cell (0, -4) -> world (1, 0, -7)
 	var wall_cell = Vector2i(0, -4)
 	var wall = main_inst.place_building_at_cell("wall", wall_cell)

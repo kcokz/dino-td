@@ -72,12 +72,12 @@ func _clear_ground() -> void:
 				d.get_parent().remove_child(d)
 			if not d.is_queued_for_deletion():
 				d.free()
+	# The ad-hoc container a bare tree gets goes too, so a test that expects the
+	# level to own the container is not shadowed by an earlier test's leftovers.
 	var holder = tree.root.get_node_or_null(DropItem.CONTAINER_NAME)
 	if holder != null and is_instance_valid(holder):
-		for child in holder.get_children():
-			holder.remove_child(child)
-			if not child.is_queued_for_deletion():
-				child.free()
+		tree.root.remove_child(holder)
+		holder.free()
 
 func _piles() -> Array:
 	var out: Array = []
@@ -501,3 +501,95 @@ func test_27_hand_harvesting_goes_through_the_ground_as_well() -> void:
 	hero._physics_process(0.016)   # the sweep at the top of his next step
 	assert_gt(_wallet("wood"), before, "And he picks up what he cut")
 	assert_eq(_ground_total("wood"), 0, "Leaving nothing behind")
+
+# ==============================================================================
+# 7. Stage B4: the opening stock lies by the cabin
+# ==============================================================================
+
+func _level() -> Node:
+	var main = load("res://scenes/Main.tscn").instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	return main
+
+func test_28_a_new_game_banks_nothing_at_all() -> void:
+	# The first thing the game teaches is that resources are carried. A number in
+	# the wallet at frame zero is a second, silent way to get rich.
+	for res_id in config_node.RESOURCES:
+		assert_eq(int(config_node.INITIAL_RESOURCES.get(res_id, 0)), 0,
+			"Nobody starts with %s in hand" % res_id)
+	assert_gt(config_node.get_opening_stock("wood"), 0,
+		"But there is real wood to go and fetch")
+
+func test_29_the_opening_stock_is_on_the_ground_by_the_cabin() -> void:
+	var main = _level()
+	await wait_frames(2)
+
+	var expected: int = config_node.get_opening_stock("wood")
+	assert_eq(_ground_total("wood"), expected,
+		"Exactly the configured opening stock is lying about")
+	assert_eq(_wallet("wood"), 0, "And none of it is in the warehouse yet")
+
+	var centre: Vector3 = main.current_core.global_position
+	var radius: float = _drop_cfg("opening_ring_radius", 4.5)
+	for pile in _piles():
+		assert_almost_eq(pile.global_position.distance_to(centre), radius, 0.5,
+			"Each pile is laid around the cabin, not dumped on it")
+
+func test_30_the_first_wood_has_to_be_walked_to() -> void:
+	# If a pile started inside the Hero's pickup radius he would sweep it up on
+	# frame one, and the lesson would be free.
+	var main = _level()
+	await wait_frames(2)
+
+	var hero = main.hero
+	assert_not_null(hero, "The level has a Hero")
+	var reach: float = _drop_cfg("pickup_radius", 1.6)
+	var piles: Array = _piles()
+	assert_gt(piles.size(), 1, "The stock is split into several piles")
+	for pile in piles:
+		assert_gt(pile.global_position.distance_to(hero.global_position), reach,
+			"Nothing is free: every pile needs a walk")
+
+func test_31_walking_the_ring_banks_the_whole_opening() -> void:
+	var main = _level()
+	await wait_frames(2)
+
+	var expected: int = config_node.get_opening_stock("wood")
+	var hero = main.hero
+	for pile in _piles():
+		hero.global_position = pile.global_position
+		hero.sweep_for_drops()
+	assert_eq(_wallet("wood"), expected, "Fetching it all is what the opening wallet used to be")
+	assert_eq(_piles().size(), 0, "And the ground is clear")
+
+func test_32_restarting_sweeps_the_ground_and_lays_it_out_again() -> void:
+	var main = _level()
+	await wait_frames(2)
+
+	# Litter the map, then restart.
+	DropItem.spawn(main, main.current_core.global_position + Vector3(9.0, 0.0, 9.0), "stone", 5)
+	var before: int = _piles().size()
+	assert_gt(before, 0, "There is something on the ground to clear")
+
+	main.restart_game()
+	await wait_frames(2)
+
+	assert_eq(_ground_total("stone"), 0, "Yesterday's stone is gone")
+	assert_eq(_ground_total("wood"), config_node.get_opening_stock("wood"),
+		"And a fresh opening stock is laid out")
+	assert_eq(_wallet("wood"), 0, "With an empty warehouse to start from again")
+
+func test_33_the_level_owns_the_drops_container() -> void:
+	# A drop spawned from a level's own _ready() runs before SceneTree.current_scene
+	# is assigned, so the container has to be found by group -- otherwise drops end
+	# up under the tree root where a restart would never sweep them.
+	var main = _level()
+	await wait_frames(2)
+
+	assert_not_null(main.drops_container, "The level keeps a container for drops")
+	assert_true(main.drops_container.is_in_group(DropItem.CONTAINER_GROUP),
+		"And declares it, so the spawner can find it")
+	for pile in _piles():
+		assert_eq(pile.get_parent(), main.drops_container,
+			"Every pile is parented under the level's container")

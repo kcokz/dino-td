@@ -128,6 +128,8 @@ func _ensure_scene_dependencies() -> void:
 		drops_container = Node3D.new()
 		drops_container.name = DropItem.CONTAINER_NAME
 		add_child(drops_container)
+	if not drops_container.is_in_group(DropItem.CONTAINER_GROUP):
+		drops_container.add_to_group(DropItem.CONTAINER_GROUP)
 
 	# 3. GridManager
 	if grid_manager == null:
@@ -219,6 +221,7 @@ func _on_phase_changed(phase: int) -> void:
 func setup_level() -> void:
 	setup_initial_entities()
 	spawn_resource_nodes()
+	scatter_opening_stock()
 	if hero and is_instance_valid(hero):
 		hero.continuous_mode = true
 	if wave_manager and is_instance_valid(wave_manager):
@@ -367,6 +370,38 @@ func spawn_resource_nodes() -> void:
 		resource_nodes_container.add_child(node)
 		if grid_manager and grid_manager.has_method("occupy_resource_cell"):
 			grid_manager.occupy_resource_cell(item["cell"], node)
+
+## Lays the opening stock on the ground around the cabin instead of handing it
+## over as a number. The first thing the game teaches is that resources are
+## carried, and that only works if the very first wood has to be walked to --
+## so every pile starts outside the Hero's pickup radius, and a ring keeps them
+## evenly spread rather than bunched on one side.
+func scatter_opening_stock() -> void:
+	if current_core == null or not is_instance_valid(current_core) or not is_inside_tree():
+		return
+	var cfg = _get_config()
+	if cfg == null or not ("DROPS" in cfg):
+		return
+	var stock: Dictionary = cfg.DROPS.get("opening_stock", {})
+	if stock.is_empty():
+		return
+	var piles: int = maxi(1, int(cfg.DROPS.get("opening_piles", 1)))
+	var radius: float = float(cfg.DROPS.get("opening_ring_radius", 4.5))
+	var centre: Vector3 = current_core.global_position
+
+	var slots: int = piles * stock.size()
+	var slot: int = 0
+	for res_id in stock:
+		var left: int = int(stock[res_id])
+		for i in range(piles):
+			var share: int = int(ceil(float(left) / float(piles - i)))
+			left -= share
+			var angle: float = TAU * (float(slot) / float(slots))
+			slot += 1
+			if share <= 0:
+				continue
+			DropItem.spawn(self, centre + Vector3(cos(angle), 0.0, sin(angle)) * radius,
+				String(res_id), share)
 
 # ==============================================================================
 # Interactive & Programmatic Building Placement
@@ -727,11 +762,15 @@ func restart_game() -> void:
 			resource_nodes_container.remove_child(r)
 			r.queue_free()
 
-	# 5e. Sweep the ground: anything still lying about belongs to the old game
-	if drops_container and is_instance_valid(drops_container):
-		for d in drops_container.get_children():
-			drops_container.remove_child(d)
-			d.queue_free()
+	# 5e. Sweep the ground: anything still lying about belongs to the old game.
+	# By group rather than by container, so a drop that ended up somewhere else
+	# still cannot survive into the new one.
+	if is_inside_tree():
+		for d in get_tree().get_nodes_in_group(DropItem.GROUP):
+			if is_instance_valid(d):
+				if d.is_inside_tree():
+					d.get_parent().remove_child(d)
+				d.queue_free()
 
 	# 6. Reset GridManager occupancy
 	if grid_manager and is_instance_valid(grid_manager):
