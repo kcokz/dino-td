@@ -24,6 +24,7 @@ var wood_label: Label = null
 var stone_label: Label = null
 var water_label: Label = null
 var food_label: Label = null
+var bone_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var hero_hp_label: Label = null
@@ -159,6 +160,10 @@ func _on_resources_changed(res: Dictionary) -> void:
 	# Meat exists as of v0.3 (dinosaurs drop it), so it has a readout like the rest.
 	if food_label:
 		food_label.text = tr("HUD_FOOD") % int(res.get("food", 0))
+	# Bone came with it in v0.4: a carcass gives both, and bone is what the
+	# workbench turns into tools.
+	if bone_label:
+		bone_label.text = tr("HUD_BONE") % int(res.get("bone", 0))
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
@@ -432,6 +437,7 @@ func _ensure_ui_components() -> void:
 	stone_label = find_child("StoneLabel", true, false) as Label
 	water_label = find_child("WaterLabel", true, false) as Label
 	food_label = find_child("FoodLabel", true, false) as Label
+	bone_label = find_child("BoneLabel", true, false) as Label
 	wave_label = find_child("WaveLabel", true, false) as Label
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
@@ -490,6 +496,11 @@ func _ensure_ui_components() -> void:
 		food_label = Label.new()
 		food_label.name = "FoodLabel"
 		root_control.add_child(food_label)
+
+	if bone_label == null:
+		bone_label = Label.new()
+		bone_label.name = "BoneLabel"
+		root_control.add_child(bone_label)
 
 	if wave_label == null:
 		wave_label = Label.new()
@@ -664,7 +675,7 @@ func _apply_ui_scale() -> void:
 	var button_size: int = int(cfg.UI.get("hud_button_font_size", 24))
 	var title_size: int = int(cfg.UI.get("gameover_title_font_size", 48))
 
-	for lbl in [ap_label, wood_label, stone_label, water_label, food_label, wave_label, core_hp_label, hero_hp_label,
+	for lbl in [ap_label, wood_label, stone_label, water_label, food_label, bone_label, wave_label, core_hp_label, hero_hp_label,
 			deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
 		if lbl and is_instance_valid(lbl):
 			lbl.add_theme_font_size_override("font_size", label_size)

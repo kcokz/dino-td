@@ -9,7 +9,13 @@ extends Node
 # 1. Economy & Action Points
 # ==============================================================================
 const BASE_AP: int = 3
-const RESOURCES: Array[String] = ["wood", "stone", "water", "food"]
+## Every resource in the game, and where each one comes from:
+##   wood  -- cut by hand from trees
+##   stone -- cut by hand from outcrops, but only once the Hero has a pick
+##   bone  -- off a dead dinosaur; the workbench turns it into tools
+##   food  -- off a dead dinosaur; the kitchen turns it into blueprints
+##   water -- no sink yet (see the open question in VERSION.md's v0.4 section)
+const RESOURCES: Array[String] = ["wood", "stone", "bone", "water", "food"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (Config.DROPS.opening_stock) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
@@ -17,6 +23,7 @@ const RESOURCES: Array[String] = ["wood", "stone", "water", "food"]
 const INITIAL_RESOURCES: Dictionary = {
 	"wood": 0,
 	"stone": 0,
+	"bone": 0,
 	"water": 0,
 	"food": 0
 }
@@ -179,9 +186,9 @@ const BUILDABLE_TYPES: Array[String] = ["wall", "tower"]
 # 3. Dinosaur Definitions (DINOS)
 # ==============================================================================
 ## `drops` is what is left on the ground when one dies, and it is the only source
-## of `food` in the game -- meat comes off dinosaurs or not at all. Nothing spends
-## food yet; the hero-upgrade branch recorded in VERSION.md's v0.x section is what
-## it is being collected for.
+## of `food` and `bone` in the game -- a carcass gives meat and bone, or you get
+## neither. That is the gate onto stone: the pick needs bone, so the first raid
+## stops being purely a threat and becomes something the player needs.
 const DINOS: Dictionary = {
 	"raptor": {
 		"name": "DINO_RAPTOR_NAME",
@@ -190,7 +197,7 @@ const DINOS: Dictionary = {
 		"damage": 1.0,
 		"attack_rate": 1.0,
 		"targeting": "blocker_then_core",
-		"drops": {"food": 1},
+		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.8, 0.8),
 	},
 	"big_theropod": {
@@ -200,7 +207,7 @@ const DINOS: Dictionary = {
 		"damage": 3.0,
 		"attack_rate": 0.8,
 		"targeting": "prefer_buildings",
-		"drops": {"food": 3},
+		"drops": {"food": 3, "bone": 3},
 		"size": Vector3(1.6, 1.6, 1.6),
 	},
 	"pterosaur": {
@@ -210,7 +217,7 @@ const DINOS: Dictionary = {
 		"damage": 1.0,
 		"attack_rate": 1.2,
 		"targeting": "ignore_walls",
-		"drops": {"food": 1},
+		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.5, 0.8),
 	}
 }
@@ -459,6 +466,7 @@ static func get_opening_stock(res_id: String) -> int:
 ## dinosaur, so RESOURCE_NODES has nothing to say about it.
 const RESOURCE_FALLBACK_COLORS: Dictionary = {
 	"food": Color(0.78, 0.32, 0.28),
+	"bone": Color(0.88, 0.85, 0.72),
 }
 
 ## The colour of a resource anywhere it has to be drawn -- a map node, a drop, a

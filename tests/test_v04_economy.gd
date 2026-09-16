@@ -137,3 +137,55 @@ func test_07_the_only_way_into_the_warehouse_is_the_hero() -> void:
 	hero.global_position = Vector3(10.0, 0.0, 10.0)
 	assert_eq(hero.sweep_for_drops(), 5, "Walking over it is what collects it")
 	assert_eq(int(game_state_node.resources.get("wood", 0)), before + 5, "And that is the only way in")
+
+# ==============================================================================
+# 4. A carcass is worth meat and bone
+# ==============================================================================
+
+func _ground(res_id: String) -> int:
+	return ground_total(res_id)
+
+func test_08_a_dead_dinosaur_leaves_bone_as_well_as_meat() -> void:
+	var dino = load("res://scripts/entities/Dino.gd").new()
+	_cleanup_nodes.append(dino)
+	tree.root.add_child(dino)
+	dino.position = Vector3(40.0, 0.0, 40.0)
+	dino.setup("raptor")
+	await wait_frames(1)
+
+	var want_bone: int = int(config_node.DINOS["raptor"].get("drops", {}).get("bone", 0))
+	var want_food: int = int(config_node.DINOS["raptor"].get("drops", {}).get("food", 0))
+	assert_gt(want_bone, 0, "A raptor is worth bone")
+
+	dino.take_damage(dino.max_hp)
+	assert_eq(_ground("bone"), want_bone, "It leaves exactly the configured bone")
+	assert_eq(_ground("food"), want_food, "And the meat alongside it")
+
+func test_09_bone_comes_off_dinosaurs_or_nowhere() -> void:
+	# The gate onto stone only works if bone cannot be farmed any other way.
+	assert_has(config_node.RESOURCES, "bone", "Bone is a real resource")
+	assert_eq(int(config_node.INITIAL_RESOURCES.get("bone", 0)), 0, "Nobody starts with bone")
+	assert_eq(int(config_node.get_opening_stock("bone")), 0, "And none is scattered at the cabin")
+	for b_type in config_node.BUILDINGS:
+		assert_false(config_node.BUILDINGS[b_type].has("produces"),
+			"%s produces nothing at all, bone included" % b_type)
+	var any: bool = false
+	for type_id in config_node.DINOS:
+		if int(config_node.DINOS[type_id].get("drops", {}).get("bone", 0)) > 0:
+			any = true
+	assert_true(any, "Every kind of dinosaur is worth bone")
+
+func test_10_bone_has_a_readout_like_every_other_resource() -> void:
+	var hud = load("res://scenes/ui/HUD.tscn").instantiate()
+	_cleanup_nodes.append(hud)
+	tree.root.add_child(hud)
+	await wait_frames(1)
+
+	hud._on_resources_changed({"wood": 1, "stone": 2, "bone": 7, "water": 3, "food": 4})
+	assert_eq(hud.bone_label.text, tr("HUD_BONE") % 7, "Bone has its own line in the top bar")
+	assert_true(hud.bone_label.visible, "And it is on screen")
+	for res_id in config_node.RESOURCES:
+		if res_id == "water":
+			continue   # no sink yet; see the open question in VERSION.md
+		assert_not_null(hud.find_child("%sLabel" % res_id.capitalize(), true, false),
+			"%s has a readout" % res_id)
