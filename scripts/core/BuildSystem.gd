@@ -65,6 +65,9 @@ func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = fa
 		return false
 	if grid_manager.is_cell_occupied(cell):
 		return false
+	# Hillside: not ground anyone builds on.
+	if grid_manager.has_method("is_cell_blocked") and grid_manager.is_cell_blocked(cell):
+		return false
 	if grid_manager.has_method("is_resource_at_cell") and grid_manager.is_resource_at_cell(cell):
 		return false
 	

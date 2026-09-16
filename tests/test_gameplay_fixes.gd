@@ -358,7 +358,7 @@ func test_11_dino_detects_and_attacks_tower_without_clipping() -> void:
 	dino.perform_attack()
 	assert_true(tower.current_hp < initial_hp, "Dino attack must inflict damage to the blocking tower")
 
-func test_12_dinos_disperse_in_lanes_across_path_corridor() -> void:
+func test_12_dinos_spread_into_lanes_and_still_advance() -> void:
 	var wave_manager_script = load("res://scripts/core/WaveManager.gd")
 	assert_not_null(wave_manager_script, "WaveManager script must exist")
 
@@ -382,7 +382,10 @@ func test_12_dinos_disperse_in_lanes_across_path_corridor() -> void:
 	assert_true(d0.lane_offset != d1.lane_offset, "Dino 0 and Dino 1 must have different lane offsets")
 	assert_true(absf(d0.global_position.x - d1.global_position.x) >= 0.5, "Dinos must spawn staggered across path lanes")
 
-	# Step forward and verify corridor adherence
+	# v0.4 retired the corridor clamp: dinosaurs used to be shoved back onto a
+	# narrow lane every frame, which is the opposite of routing around terrain.
+	# What has to remain true is that they stay a group and keep coming.
+	var z_before: float = d0.global_position.z
 	for step in range(20):
 		d0.advance_towards_waypoint(0.05)
 		d1.advance_towards_waypoint(0.05)
@@ -391,8 +394,22 @@ func test_12_dinos_disperse_in_lanes_across_path_corridor() -> void:
 		d1._apply_dino_separation(0.05)
 		d2._apply_dino_separation(0.05)
 
+	assert_gt(d0.global_position.z, z_before, "They are still making for the waypoint")
+
+	# They spread only as far as separation asks them to -- a loose group, not a
+	# scattering. The band is derived from the separation distance rather than
+	# restating a corridor that no longer exists.
+	var spread: float = float(config_node.DINO_SEPARATION_MIN_DIST) * 3.0
 	for d in [d0, d1, d2]:
-		assert_true(d.global_position.x >= 0.4 and d.global_position.x <= 1.6, "Dinos must stay inside road corridor [0.4, 1.6] (got x=%f)" % d.global_position.x)
+		assert_lte(absf(d.global_position.x - 1.0), spread,
+			"Dinos stay a group around the path (got x=%f)" % d.global_position.x)
+		assert_false(_is_in_a_hill(d.global_position), "And none of them is standing in a hill")
+
+func _is_in_a_hill(at: Vector3) -> bool:
+	var gm = tree.get_first_node_in_group("grid_manager")
+	if gm == null or not gm.has_method("is_cell_blocked"):
+		return false
+	return gm.is_cell_blocked(gm.world_to_cell(at))
 
 func test_13_version_metadata_and_hud_display() -> void:
 	var app_info_script = load("res://scripts/core/AppInfo.gd")

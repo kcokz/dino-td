@@ -41,6 +41,11 @@ var state: State:
 
 var waypoints: Array[Vector3] = []
 var current_waypoint_index: int = 0
+
+## Steps around the landscape, when the straight line is not available. Recomputed
+## only when the goal changes or the route runs out, so open ground costs nothing.
+var nav_path: Array[Vector3] = []
+var _nav_goal: Vector3 = Vector3.INF
 var current_target: Node = null
 var target_building: Node:
 	get: return current_target
@@ -190,6 +195,9 @@ static func release_all_building_slots(building: Node) -> void:
 static func clear_all_attack_slots() -> void:
 	_building_slots.clear()
 
+## Sixteen places a dinosaur can stand while chewing on a building. Any of them
+## that lands in a hill is dropped: a slot inside the scenery is a dinosaur
+## standing in the scenery.
 static func _init_building_slots(building: Node3D) -> void:
 	var b_id: int = building.get_instance_id()
 	var slots: Array = []
@@ -197,19 +205,33 @@ static func _init_building_slots(building: Node3D) -> void:
 	var r_inner: float = 1.6
 	var r_outer: float = 2.6
 
+	var gm_slots: Node = null
+	if building.is_inside_tree():
+		gm_slots = building.get_tree().get_first_node_in_group("grid_manager")
+
 	# 8 inner perimeter slots
 	for i in range(8):
 		var angle: float = float(i) * (PI / 4.0)
 		var offset = Vector3(sin(angle) * r_inner, 0.0, cos(angle) * r_inner)
-		slots.append({ "pos": center + offset, "dino_id": 0 })
+		if _slot_is_standable(gm_slots, center + offset):
+			slots.append({ "pos": center + offset, "dino_id": 0 })
 
 	# 8 outer secondary ring slots
 	for i in range(8):
 		var angle: float = (float(i) + 0.5) * (PI / 4.0)
 		var offset = Vector3(sin(angle) * r_outer, 0.0, cos(angle) * r_outer)
-		slots.append({ "pos": center + offset, "dino_id": 0 })
+		if _slot_is_standable(gm_slots, center + offset):
+			slots.append({ "pos": center + offset, "dino_id": 0 })
 
 	_building_slots[b_id] = slots
+
+## Whether something could actually stand at `at`. A building tucked against a
+## hill loses the slots behind it, which is exactly right: those are places no
+## dinosaur can reach, and offering them would park one inside the scenery.
+static func _slot_is_standable(gm: Node, at: Vector3) -> bool:
+	if gm == null or not is_instance_valid(gm) or not gm.has_method("is_cell_blocked"):
+		return true
+	return not gm.is_cell_blocked(gm.world_to_cell(at))
 
 static func _safe_float(val: Variant, default_val: float = 1.0) -> float:
 	if val == null:
@@ -411,7 +433,12 @@ func advance_towards_waypoint(delta: float) -> void:
 		diff.y = 0.0
 		dist = diff.length()
 
-	var dir: Vector3 = diff.normalized()
+	# Head for the next step of a route around the landscape -- on open ground that
+	# is the waypoint itself, so nothing changes.
+	var steer_pos: Vector3 = _steer_target(target_pos)
+	var steer_diff: Vector3 = steer_pos - global_position
+	steer_diff.y = 0.0
+	var dir: Vector3 = steer_diff.normalized() if steer_diff.length_squared() > 0.001 else diff.normalized()
 
 	# If an attacking ally is ahead, inject lateral steering bias so rear dinos flank
 	if attacking_ally != null:
@@ -443,9 +470,75 @@ func advance_towards_waypoint(delta: float) -> void:
 	if velocity.length_squared() > 0.001:
 		look_at(global_position + velocity.normalized(), Vector3.UP)
 
+	var was_at: Vector3 = global_position
 	global_position += velocity * delta
-	_clamp_to_corridor(delta)
+	_keep_off_the_hills(was_at)
 	_resolve_dino_overlaps()
+
+## Where to actually head, given that a hill may be in the way.
+##
+## On open ground this returns the goal itself and nothing changes -- the flocking,
+## flanking and tailgating behaviour all still apply to a straight run. Only when
+## the landscape blocks the line does it fall back to a route around it, which is
+## what makes terrain a tactical object: a hill decides where a raid can come
+## from, and that is what finally gives stake and turret placement an answer.
+func _steer_target(goal: Vector3) -> Vector3:
+	if _line_is_clear(global_position, goal):
+		nav_path.clear()
+		_nav_goal = Vector3.INF
+		return goal
+
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("find_path"):
+		return goal
+
+	if _nav_goal.distance_squared_to(goal) > 0.25 or nav_path.is_empty():
+		_nav_goal = goal
+		var pts: Array = gm.find_path(global_position, goal, null, true)
+		nav_path.clear()
+		for pt in pts:
+			nav_path.append(pt)
+
+	# Drop the steps already reached.
+	while not nav_path.is_empty() and global_position.distance_to(nav_path[0]) <= arrival_threshold:
+		nav_path.remove_at(0)
+	if nav_path.is_empty():
+		return goal
+	return nav_path[0]
+
+## Whether a dinosaur can walk straight from a to b without meeting hillside.
+## Samples the cells along the segment; only terrain counts, because a building in
+## the way is something to bite rather than something to walk around.
+func _line_is_clear(from_pos: Vector3, to_pos: Vector3) -> bool:
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("is_cell_blocked"):
+		return true
+	var span: float = from_pos.distance_to(to_pos)
+	if span <= 0.001:
+		return true
+	var step: float = maxf(0.5, float(gm.tile_size) * 0.5)
+	var steps: int = int(ceil(span / step))
+	for i in range(steps + 1):
+		var at: Vector3 = from_pos.lerp(to_pos, float(i) / float(steps))
+		if gm.is_cell_blocked(gm.world_to_cell(at)):
+			return false
+	return true
+
+## Undoes a step that would have ended inside a hill. Separation and flanking both
+## push sideways, and neither of them knows about the landscape -- this is the one
+## place that guarantees nothing ever ends up standing in the scenery.
+func _keep_off_the_hills(previous: Vector3) -> void:
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("is_cell_blocked"):
+		return
+	if gm.is_cell_blocked(gm.world_to_cell(global_position)):
+		global_position = previous
+		velocity = Vector3.ZERO
+
+func _get_grid_manager() -> Node:
+	if not is_inside_tree():
+		return null
+	return get_tree().get_first_node_in_group("grid_manager")
 
 func _find_immediate_front_dino(max_dist: float = 1.4) -> Node3D:
 	if not is_inside_tree():
@@ -588,28 +681,6 @@ func _apply_dino_separation(delta: float) -> void:
 	if steer.length_squared() > 0.001:
 		global_position += steer.limit_length(speed) * delta
 	_resolve_dino_overlaps()
-
-func _clamp_to_corridor(delta: float = 0.05) -> void:
-	# Encircled or attacking dinos are exempted from path corridor constraint
-	if current_target != null or assigned_slot != Vector3.ZERO:
-		return
-	if waypoints.is_empty():
-		return
-
-	var cfg = _get_config()
-	var max_lat: float = cfg.DINO_MAX_LATERAL_OFFSET if (cfg and "DINO_MAX_LATERAL_OFFSET" in cfg) else 0.6
-	var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
-	var centerline_pos: Vector3 = waypoints[wp_idx]
-	var perp: Vector3 = _get_path_normal(wp_idx)
-	if perp.length_squared() > 0.001:
-		var to_dino: Vector3 = global_position - centerline_pos
-		to_dino.y = 0.0
-		var lat_dist: float = to_dino.dot(perp)
-		if absf(lat_dist) > max_lat:
-			var excess: float = lat_dist - signf(lat_dist) * max_lat
-			var max_step: float = maxf(0.1, speed * delta * 1.5)
-			var return_step: float = minf(absf(excess), max_step)
-			global_position -= perp * signf(excess) * return_step
 
 func check_obstacle() -> Node:
 	if raycast == null or not is_instance_valid(raycast):

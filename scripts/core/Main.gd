@@ -32,6 +32,7 @@ var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 @export var hero: CharacterBody3D = null
 @export var resource_nodes_container: Node3D = null
 @export var drops_container: Node3D = null
+@export var terrain_container: Node3D = null
 @export var cabin_interior: Node3D = null
 
 var resource_node_script: GDScript = null
@@ -242,6 +243,7 @@ func _on_phase_changed(phase: int) -> void:
 
 ## Sets up initial level entities: CoreCampfire and Dinosaur Nest.
 func setup_level() -> void:
+	spawn_terrain()
 	setup_initial_entities()
 	spawn_resource_nodes()
 	scatter_opening_stock()
@@ -356,6 +358,63 @@ func get_resource_node_at_cell(cell: Vector2i) -> Node:
 		if is_instance_valid(child) and "cell_pos" in child and child.cell_pos == cell:
 			return child
 	return null
+
+## Lays the map's hills: cells nobody walks through and nothing is built on.
+##
+## Terrain goes down before anything else, because everything after it -- where the
+## cabin sits, where the trees are, where a raid can get through -- is placed on
+## the assumption that the ground is already what it is.
+##
+## The blocks are placeholders. v0.5 replaces them with real hills; what matters
+## here is that the rule and the shape are the same object, so the thing the player
+## sees is exactly the thing that stops them.
+func spawn_terrain() -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("MAP" in cfg) or grid_manager == null:
+		return
+	var cells: Array = cfg.MAP.get("default_blocked_cells", [])
+	if grid_manager.has_method("set_blocked_cells"):
+		grid_manager.set_blocked_cells(cells)
+
+	if terrain_container == null:
+		terrain_container = find_child("Terrain", true, false) as Node3D
+	if terrain_container == null:
+		terrain_container = Node3D.new()
+		terrain_container.name = "Terrain"
+		add_child(terrain_container)
+	for child in terrain_container.get_children():
+		terrain_container.remove_child(child)
+		child.queue_free()
+
+	var tile: float = float(cfg.TILE_SIZE) if "TILE_SIZE" in cfg else 2.0
+	var height: float = float(cfg.MAP.get("hill_height", 2.2))
+	for c in cells:
+		if not (c is Vector2i):
+			continue
+		var hill := StaticBody3D.new()
+		hill.name = "Hill_%d_%d" % [c.x, c.y]
+		hill.collision_layer = 1      # world/obstacle, the same layer the ground is on
+		hill.collision_mask = 0
+		hill.position = grid_manager.cell_to_world(c)
+
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(tile, height, tile)
+		shape.shape = box
+		shape.position = Vector3(0.0, height * 0.5, 0.0)
+		hill.add_child(shape)
+
+		var mi := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(tile, height, tile)
+		mi.mesh = mesh
+		mi.position = Vector3(0.0, height * 0.5, 0.0)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = cfg.COLORS.get("hill", Color(0.36, 0.33, 0.28))
+		mi.material_override = mat
+		hill.add_child(mi)
+
+		terrain_container.add_child(hill)
 
 func spawn_resource_nodes() -> void:
 	if resource_nodes_container == null:

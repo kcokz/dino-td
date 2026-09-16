@@ -255,7 +255,6 @@ const DINOS: Dictionary = {
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
 const DINO_SEPARATION_MIN_DIST: float = 1.15
-const DINO_MAX_LATERAL_OFFSET: float = 0.6
 
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)
@@ -285,6 +284,7 @@ const NEST: Dictionary = {
 # ==============================================================================
 const COLORS: Dictionary = {
 	"ground": Color(0.28, 0.32, 0.24),
+	"hill": Color(0.36, 0.33, 0.28),
 	"grid_hover": Color(1.0, 1.0, 0.2, 0.4),
 	"core": Color(0.9, 0.3, 0.1),
 	"tower": Color(0.2, 0.5, 0.9),
@@ -315,6 +315,23 @@ const MAP: Dictionary = {
 	"default_nest_cell": Vector2i(0, -9),
 	"path_column_x": 0,
 	"produce_duration": 1.0, # Duration (seconds) of PRODUCE phase before auto-advancing to PLAN
+	## Hills: ground nobody crosses and nothing is built on.
+	##
+	## They are a gameplay object rather than scenery. A hill narrows the approach,
+	## and a narrowed approach is what finally gives stake and turret placement an
+	## answer -- without them the map is an open field where every spot is as good
+	## as every other. The pair at z = -5 leaves a three-tile gate on the path
+	## column, which is the fight the level is built around.
+	##
+	## Two rules for anything added here: never seal the corridor completely (the
+	## raid has to be able to arrive, and the Hero has to be able to walk out), and
+	## never sit on a resource node.
+	"hill_height": 2.2,      # 丘陵高度（米）——比人高，看得出走不过去
+	"default_blocked_cells": [
+		Vector2i(-3, -5), Vector2i(-2, -5),
+		Vector2i(2, -5), Vector2i(3, -5),
+		Vector2i(-3, -8), Vector2i(3, -3),
+	],
 	"default_resource_nodes": [
 		{"type": "wood", "cell": Vector2i(-4, -2)},
 		{"type": "wood", "cell": Vector2i(4, -2)},
