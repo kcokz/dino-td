@@ -217,20 +217,31 @@ func heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
 	_update_info_label()
 
+## Takes the building down and leaves half its price in the rubble. Since v0.3 the
+## refund is dropped rather than banked -- it was the last way resources reached
+## the warehouse without passing through the Hero's hands, and he is standing right
+## there anyway, so in play it feels the same.
 func demolish() -> void:
 	if is_destroyed:
 		return
 	if is_constructed:
-		var cfg = _get_config()
-		if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
-			var cost: Dictionary = cfg.BUILDINGS[building_type].get("cost", {})
-			var refund: Dictionary = {}
-			for res_name in cost:
-				refund[res_name] = maxi(1, int(cost[res_name] / 2))
-			var gs = _get_game_state()
-			if gs and gs.has_method("add_resources"):
-				gs.add_resources(refund)
+		for res_name in demolition_refund():
+			var amount: int = int(demolition_refund()[res_name])
+			if amount > 0 and is_inside_tree():
+				DropItem.spawn_scattered(self, global_position, String(res_name), amount, amount)
 	destroy()
+
+## Half of what it cost, rounded so taking down even the cheapest thing gives
+## something back.
+func demolition_refund() -> Dictionary:
+	var refund: Dictionary = {}
+	var cfg = _get_config()
+	if cfg == null or not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(building_type):
+		return refund
+	var cost: Dictionary = cfg.BUILDINGS[building_type].get("cost", {})
+	for res_name in cost:
+		refund[res_name] = maxi(1, int(cost[res_name] / 2))
+	return refund
 
 func get_localized_name() -> String:
 	var cfg = _get_config()

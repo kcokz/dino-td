@@ -321,13 +321,23 @@ func test_14_hud_shows_every_live_resource() -> void:
 
 	assert_not_null(hud.stone_label, "HUD must have a Stone label")
 	assert_not_null(hud.water_label, "HUD must have a Water label")
+	# Meat became a real resource in v0.3 -- dinosaurs drop it -- so it needs a
+	# readout too, or the player collects it and sees nothing happen.
+	assert_not_null(hud.food_label, "HUD must have a Meat label")
 
-	hud._on_resources_changed({"wood": 7, "stone": 4, "water": 9})
+	hud._on_resources_changed({"wood": 7, "stone": 4, "water": 9, "food": 3})
 	assert_eq(hud.wood_label.text, tr("HUD_WOOD") % 7, "Wood readout updated")
 	assert_eq(hud.stone_label.text, tr("HUD_STONE") % 4, "Stone readout updated")
 	assert_eq(hud.water_label.text, tr("HUD_WATER") % 9, "Water readout updated")
+	assert_eq(hud.food_label.text, tr("HUD_FOOD") % 3, "Meat readout updated")
 	assert_true(hud.stone_label.visible, "Stone readout is visible to the player")
 	assert_true(hud.water_label.visible, "Water readout is visible to the player")
+	assert_true(hud.food_label.visible, "Meat readout is visible to the player")
+
+	# Every resource the game can actually produce has somewhere to be shown.
+	for res_id in config_node.RESOURCES:
+		assert_not_null(hud.find_child("%sLabel" % res_id.capitalize(), true, false),
+			"%s has a readout" % res_id)
 
 # ==============================================================================
 # 5. Build preview, coverage rings and the retired phase machine

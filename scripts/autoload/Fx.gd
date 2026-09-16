@@ -106,6 +106,50 @@ func debris(world_pos: Vector3, colour: Color = Color(0.8, 0.8, 0.8), count: int
 		)
 
 # ==============================================================================
+# Floating text
+# ==============================================================================
+
+## Floats a short string up out of `world_pos` and fades it. Used when something is
+## collected: the drop itself disappears and only a HUD number moves, which is easy
+## to miss -- a figure rising off the spot says "that went in" where the player is
+## already looking.
+func floating_text(world_pos: Vector3, text: String, colour: Color = Color.WHITE) -> void:
+	if text.is_empty():
+		return
+	var root := _get_debris_root()
+	if root == null:
+		return
+	var rise: float = _cfg("pickup_text_rise", 1.0)
+	var life: float = _cfg("pickup_text_duration", 0.7)
+	if life <= 0.0:
+		return
+
+	var lbl := Label3D.new()
+	lbl.text = text
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.modulate = colour
+	lbl.outline_modulate = Color(0, 0, 0, 0.9)
+	lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lbl.no_depth_test = true
+	var cfg = get_node_or_null("/root/Config")
+	if cfg and "UI" in cfg:
+		lbl.font_size = int(cfg.UI.get("world_label_font_size", 48))
+		lbl.pixel_size = float(cfg.UI.get("world_label_pixel_size", 0.005))
+		lbl.fixed_size = bool(cfg.UI.get("world_label_fixed_size", false))
+		lbl.outline_size = maxi(1, int(round(lbl.font_size / 6.0)))
+	lbl.position = world_pos + Vector3(0.0, 0.6, 0.0)
+	root.add_child(lbl)
+
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "position", lbl.position + Vector3(0.0, rise, 0.0), life)
+	tw.tween_property(lbl, "modulate:a", 0.0, life)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(lbl):
+			lbl.queue_free()
+	)
+
+# ==============================================================================
 # Sound
 # ==============================================================================
 
@@ -176,6 +220,8 @@ func _make_wav(seconds: float, shape: Callable) -> AudioStreamWAV:
 # Helpers
 # ==============================================================================
 
+## Parent for short-lived presentation nodes -- debris, floating text. One bucket
+## under the running scene, so restarting a level takes all of it along.
 func _get_debris_root() -> Node3D:
 	if _debris_root != null and is_instance_valid(_debris_root) and _debris_root.is_inside_tree():
 		return _debris_root

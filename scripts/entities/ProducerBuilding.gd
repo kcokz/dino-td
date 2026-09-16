@@ -98,6 +98,15 @@ func _disconnect_produce_signal() -> void:
 		if eb.produce_phase.is_connected(_on_produce_phase):
 			eb.produce_phase.disconnect(_on_produce_phase)
 
+## The legacy phase machine's one-shot payout, and the one place production still
+## banks a number directly.
+##
+## It is unreachable in the game as played: Main runs in continuous mode, which pins
+## the phase machine at DEPLOY so PRODUCE never arrives (see
+## test_19_continuous_mode_retires_the_phase_machine). It is left exactly as it was
+## so the v0.0-era suites keep covering the retired path; every path that can
+## actually run -- per-second production, hand-harvesting, dinosaur deaths,
+## demolition rubble, the opening stock -- goes through the ground.
 func _on_produce_phase() -> void:
 	if is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion():
 		return

@@ -389,6 +389,10 @@ const FEEDBACK: Dictionary = {
 	"health_bar_width": 1.1,          # 血条宽度（米）
 	"health_bar_height": 0.13,        # 血条高度（米）
 	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
+	# 捡起东西时在原地飘一个数字：掉落物消失了，只有 HUD 数字变化，
+	# 不给一个就地的反馈的话玩家看不出"进账了"。
+	"pickup_text_rise": 1.0,          # 飘起的高度（米）
+	"pickup_text_duration": 0.7,      # 飘起并淡出的时长（秒）
 	# 选中圈沿单位底座绘制，尺寸由该单位的实际占地推导，不是固定半径——
 	# 木栅栏宽 1.9m，固定 0.85m 的圈会整个埋进方块里看不见。
 	"selection_ring_margin": 0.18,    # 圈比底座向外扩出多少（米）

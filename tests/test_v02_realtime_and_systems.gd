@@ -282,13 +282,17 @@ func test_06_building_demolish_and_half_refund() -> void:
 	wall.setup("wall")
 	wall.complete_construction()
 
-	var init_wood = game_state_node.resources.get("wood", 10)
+	var init_wood: int = int(game_state_node.resources.get("wood", 0))
 
-	# Demolishing a completed wall refunds half its Config cost (min 1).
+	# Demolishing a completed wall gives back half its Config cost (min 1) -- as
+	# rubble on the ground since v0.3, not as a number. The refund was the last way
+	# resources reached the warehouse without passing through the Hero.
 	var refund: int = maxi(1, int(cost_of("wall") / 2))
+	assert_eq(int(wall.demolition_refund().get("wood", 0)), refund, "Half the build cost comes back")
 	wall.demolish()
 	assert_true(wall.is_destroyed, "Building is marked destroyed on demolish")
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + refund, "Half the build cost is refunded")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), init_wood, "But not straight into the warehouse")
+	assert_eq(ground_total("wood"), refund, "It is lying in the rubble, waiting to be picked up")
 
 # ==============================================================================
 # Feature 8: In-World 3D Labels

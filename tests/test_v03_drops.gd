@@ -593,3 +593,77 @@ func test_33_the_level_owns_the_drops_container() -> void:
 	for pile in _piles():
 		assert_eq(pile.get_parent(), main.drops_container,
 			"Every pile is parented under the level's container")
+
+# ==============================================================================
+# 8. Stage C: the player can see it happen
+# ==============================================================================
+
+func test_34_collecting_something_says_so_where_it_happened() -> void:
+	# The pile vanishes and a HUD number moves. Without a figure rising off the
+	# spot, the gain happens somewhere the player is not looking.
+	var main = _level()
+	tree.current_scene = main          # Fx parks transient nodes under the running scene
+	fx_node._debris_root = null
+	await wait_frames(2)
+
+	var hero = main.hero
+	var pile = _piles()[0]
+	var amount: int = int(pile.amount)
+	var at: Vector3 = pile.global_position
+	hero.global_position = at
+	hero.sweep_for_drops()
+	await wait_frames(1)
+
+	var fx_root = main.find_child("FxDebris", false, false)
+	assert_not_null(fx_root, "Fx has somewhere to put the figure")
+	var floated: Label3D = null
+	for child in fx_root.get_children():
+		if child is Label3D:
+			floated = child
+	assert_not_null(floated, "A figure is drawn where the pile was")
+	assert_eq(floated.text, "+%d" % amount, "Saying how much went in")
+	assert_lte(Vector2(floated.position.x - at.x, floated.position.z - at.z).length(), 0.5,
+		"Over the spot it was collected from, not over the HUD")
+	tree.current_scene = null
+
+func test_35_floating_text_is_safe_with_nothing_to_draw_on() -> void:
+	# Feedback must never be able to break the simulation, headless included.
+	fx_node.floating_text(Vector3.ZERO, "")
+	fx_node.floating_text(Vector3(1.0, 0.0, 1.0), "+1", Color.WHITE)
+	assert_true(true, "Floating text tolerates an empty string and a bare tree")
+
+func test_36_demolition_rubble_is_picked_up_like_anything_else() -> void:
+	# The refund was the last path that put resources in the warehouse without the
+	# Hero touching them.
+	var hero = _spawn_hero(Vector3(70.0, 0.0, 70.0))
+	var wall = load("res://scripts/entities/Wall.gd").new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	wall.setup("wall")
+	wall.position = Vector3(30.0, 0.0, 30.0)
+	wall.complete_construction()
+	await wait_frames(1)
+
+	var refund: int = int(wall.demolition_refund().get("wood", 0))
+	assert_gt(refund, 0, "Taking a stake down gives something back")
+	var before: int = _wallet("wood")
+	wall.demolish()
+
+	assert_eq(_wallet("wood"), before, "Not as a number")
+	assert_eq(_ground_total("wood"), refund, "As rubble on the ground")
+
+	hero.global_position = Vector3(30.0, 0.0, 30.0)
+	assert_eq(hero.sweep_for_drops(), refund, "Which the Hero then carries off")
+	assert_eq(_wallet("wood"), before + refund, "And only then is it his")
+
+func test_37_every_resource_the_game_makes_has_a_readout() -> void:
+	# Meat only became collectable in v0.3, and a resource with no readout is a
+	# resource the player cannot see themselves earning.
+	var hud = load("res://scenes/ui/HUD.tscn").instantiate()
+	_cleanup_nodes.append(hud)
+	tree.root.add_child(hud)
+	await wait_frames(1)
+
+	hud._on_resources_changed({"wood": 1, "stone": 2, "water": 3, "food": 4})
+	assert_eq(hud.food_label.text, tr("HUD_FOOD") % 4, "Meat has its own line in the top bar")
+	assert_true(hud.food_label.visible, "And it is on screen")

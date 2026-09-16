@@ -235,8 +235,11 @@ func collect(collector: Node = null) -> int:
 		eb.resource_picked_up.emit(resource_type, taken, collector)
 
 	var fx := _get_fx()
-	if fx and fx.has_method("play") and "Sound" in fx and fx.Sound.has("PICKUP"):
-		fx.play(fx.Sound.PICKUP)
+	if fx:
+		if fx.has_method("play") and "Sound" in fx and fx.Sound.has("PICKUP"):
+			fx.play(fx.Sound.PICKUP)
+		if fx.has_method("floating_text"):
+			fx.floating_text(global_position, "+%d" % taken, _colour())
 
 	_fly_to(collector)
 	return taken

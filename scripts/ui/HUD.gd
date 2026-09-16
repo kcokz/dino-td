@@ -23,6 +23,7 @@ var ap_label: Label = null
 var wood_label: Label = null
 var stone_label: Label = null
 var water_label: Label = null
+var food_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var hero_hp_label: Label = null
@@ -155,6 +156,9 @@ func _on_resources_changed(res: Dictionary) -> void:
 		stone_label.text = tr("HUD_STONE") % int(res.get("stone", 0))
 	if water_label:
 		water_label.text = tr("HUD_WATER") % int(res.get("water", 0))
+	# Meat exists as of v0.3 (dinosaurs drop it), so it has a readout like the rest.
+	if food_label:
+		food_label.text = tr("HUD_FOOD") % int(res.get("food", 0))
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
@@ -427,6 +431,7 @@ func _ensure_ui_components() -> void:
 	wood_label = find_child("WoodLabel", true, false) as Label
 	stone_label = find_child("StoneLabel", true, false) as Label
 	water_label = find_child("WaterLabel", true, false) as Label
+	food_label = find_child("FoodLabel", true, false) as Label
 	wave_label = find_child("WaveLabel", true, false) as Label
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
@@ -480,6 +485,11 @@ func _ensure_ui_components() -> void:
 		water_label = Label.new()
 		water_label.name = "WaterLabel"
 		root_control.add_child(water_label)
+
+	if food_label == null:
+		food_label = Label.new()
+		food_label.name = "FoodLabel"
+		root_control.add_child(food_label)
 
 	if wave_label == null:
 		wave_label = Label.new()
@@ -654,7 +664,7 @@ func _apply_ui_scale() -> void:
 	var button_size: int = int(cfg.UI.get("hud_button_font_size", 24))
 	var title_size: int = int(cfg.UI.get("gameover_title_font_size", 48))
 
-	for lbl in [ap_label, wood_label, stone_label, water_label, wave_label, core_hp_label, hero_hp_label,
+	for lbl in [ap_label, wood_label, stone_label, water_label, food_label, wave_label, core_hp_label, hero_hp_label,
 			deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
 		if lbl and is_instance_valid(lbl):
 			lbl.add_theme_font_size_override("font_size", label_size)
