@@ -96,7 +96,11 @@ const BUILDINGS: Dictionary = {
 		"contact_damage": 0.15,
 		"contact_tick": 0.5,
 		"contact_range": 2.0,
-		"cost": {"wood": 1},
+		# Two wood, not one. At one, mending a stake cost the same as replacing it
+		# (repair is the price scaled by the damage, rounded up, so the floor is one
+		# unit) -- which made repair meaningless on the cheapest thing in the game.
+		# At two, a stake worth saving can be saved.
+		"cost": {"wood": 2},
 		"ap_cost": 1,
 		"upgrades_to": "",
 	},
@@ -435,7 +439,7 @@ const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
 # 12. Continuous Real-Time Raids & Resource Nodes (v0.2)
 # ==============================================================================
 const RAIDS: Dictionary = {
-	"interval_min": 70.0,         # 两次来袭的最小间隔（秒）
+	"interval_min": 80.0,         # 两次来袭的最小间隔（秒）——v0.4 的开局链条多了几趟路
 	"interval_max": 120.0,        # 最大间隔——区间内随机，不是固定周期
 	"first_raid_delay": 90.0,     # 开局宽限期：够建一座伐木屋、照料一轮、再架一座哨位
 	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
@@ -588,7 +592,11 @@ const RECIPES: Dictionary = {
 	"roast_meat": {
 		"name": "RECIPE_ROAST_MEAT_NAME",
 		"station": "kitchen",
-		"inputs": {"food": 3, "wood": 2},
+		# Two meat, which is what the first raid leaves. The pick and the blueprint
+		# both have to be reachable on one raid's drops or the opening stalls: the
+		# player would be waiting on a second wave with no turret and no reason to
+		# have gone home.
+		"inputs": {"food": 2, "wood": 2},
 		"time": 6.0,
 		"unlocks": "blueprint_tower",
 	},

@@ -483,7 +483,8 @@ func test_29_a_building_takes_its_derived_build_time() -> void:
 func test_30_stakes_are_cheap_enough_to_lay_a_row() -> void:
 	# The point of one-wood stakes is that a whole fence is affordable in one go.
 	var stake: int = cost_of("wall")
-	assert_eq(stake, 1, "A wooden stake costs one wood")
+	assert_eq(stake, config_node.BUILDINGS["wall"]["cost"]["wood"], "A stake's price is whatever Config says")
+	assert_lt(stake, cost_of("tower"), "And it is the cheap thing on the menu")
 	var wallet: int = opening_wood()
 	assert_gte(wallet / stake, 10, "The opening affords at least ten stakes")
 

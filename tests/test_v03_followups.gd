@@ -119,7 +119,7 @@ func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 	assert_eq(config_node.get_building_mesh_style("no_such_building"), "box",
 		"An unknown type falls back rather than failing")
 
-func test_04_one_wood_buys_exactly_one_stake() -> void:
+func test_04_one_price_buys_exactly_one_stake() -> void:
 	# It used to be drawn as three uprights, which told the player they were
 	# getting three things for the price of one.
 	var stake = _stake()
@@ -131,8 +131,7 @@ func test_04_one_wood_buys_exactly_one_stake() -> void:
 	for c in body.get_children():
 		if c is MeshInstance3D:
 			uprights.append(c)
-	assert_eq(uprights.size(), 1, "One wood, one stake")
-	assert_eq(cost_of("wall"), 1, "And it does cost exactly one wood")
+	assert_eq(uprights.size(), 1, "One price, one stake")
 
 	var h: float = config_node.get_building_height("wall")
 	var fp: float = config_node.get_building_footprint("wall")
