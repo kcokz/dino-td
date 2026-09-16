@@ -13,6 +13,11 @@ signal action_triggered(action_name: String, target_node: Node)
 var selected_unit: Node = null
 var current_menu: String = "default" # "default" or "build"
 
+## Inside the cabin the panel stops resting on the Hero: there is nothing to order
+## him to do in there, and offering his build menu at the bench would be a second
+## way to do something the room is not for.
+var in_cabin: bool = false
+
 # UI Nodes
 var title_label: Label = null
 var status_label: Label = null
@@ -41,6 +46,8 @@ func _connect_event_bus() -> void:
 			eb.locale_changed.connect(_on_locale_changed)
 		if eb.has_signal("resources_changed") and not eb.resources_changed.is_connected(_on_resources_changed):
 			eb.resources_changed.connect(_on_resources_changed)
+		if eb.has_signal("cabin_view_changed") and not eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
+			eb.cabin_view_changed.connect(_on_cabin_view_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -53,6 +60,8 @@ func _disconnect_event_bus() -> void:
 			eb.locale_changed.disconnect(_on_locale_changed)
 		if eb.has_signal("resources_changed") and eb.resources_changed.is_connected(_on_resources_changed):
 			eb.resources_changed.disconnect(_on_resources_changed)
+		if eb.has_signal("cabin_view_changed") and eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
+			eb.cabin_view_changed.disconnect(_on_cabin_view_changed)
 
 ## Left-click is the only thing that changes what the panel shows. Right-click
 ## gives the Hero an order and deliberately leaves the panel alone, so inspecting
@@ -64,6 +73,12 @@ func _on_unit_deselected() -> void:
 	clear_selection()
 
 func _on_locale_changed(_locale: String) -> void:
+	_refresh_ui()
+
+func _on_cabin_view_changed(inside: bool) -> void:
+	in_cabin = inside
+	selected_unit = null
+	current_menu = "default"
 	_refresh_ui()
 
 ## The wallet changed, so what the player can afford changed with it. Only the
@@ -94,6 +109,11 @@ func select_target(target: Node) -> void:
 	set_selected_unit(target)
 
 func clear_selection() -> void:
+	if in_cabin:
+		selected_unit = null
+		current_menu = "default"
+		_refresh_ui()
+		return
 	# Fallback to hero if present
 	var hero = _get_hero()
 	if hero != null and is_instance_valid(hero) and not hero.is_queued_for_deletion():
@@ -130,6 +150,8 @@ func _process(delta: float) -> void:
 		clear_selection()
 		return
 	if selected_unit == null:
+		if in_cabin:
+			return
 		# The panel is built before Main spawns the Hero, so the first refresh finds
 		# nothing. Keep trying until he exists.
 		var hero = _get_hero()
@@ -236,6 +258,13 @@ func _update_status_display() -> void:
 func _refresh_ui() -> void:
 	_ensure_components()
 	if selected_unit == null or not is_instance_valid(selected_unit):
+		if in_cabin:
+			# Standing in the room with nothing picked: say where we are and how to
+			# get out, rather than falling back to the Hero's build menu.
+			if title_label: title_label.text = tr("CABIN_TITLE")
+			if status_label: status_label.text = tr("CABIN_HINT_LEAVE")
+			_clear_buttons()
+			return
 		var hero = _get_hero()
 		if hero != null and is_instance_valid(hero):
 			selected_unit = hero
@@ -272,6 +301,8 @@ func _refresh_ui() -> void:
 			_populate_building_buttons()
 		"resource_node":
 			_populate_resource_buttons()
+		"station":
+			_populate_station_buttons()
 		_:
 			# Default / generic
 			pass
@@ -391,6 +422,56 @@ func _populate_building_buttons() -> void:
 ## Resource nodes are scenery, not units: they take no orders. Right-clicking one
 ## while the Hero is selected already sends him to harvest it, so a button here
 ## would only be a second, slower way to do the same thing.
+## One button per recipe this bench still has to offer. A recipe already made is
+## not listed at all -- an unlock is permanent, so a finished one is not a choice.
+func _populate_station_buttons() -> void:
+	var station := selected_unit
+	if station == null or not is_instance_valid(station) or not station.has_method("recipes"):
+		return
+	_clear_craft_detail()
+	for recipe_id in station.recipes():
+		var rid: String = String(recipe_id)
+		if not station.can_offer(rid):
+			continue
+		var btn := _create_action_button(station.recipe_name(rid), func():
+			if is_instance_valid(station):
+				station.begin(rid)
+				_refresh_ui()
+		)
+		btn.disabled = not station.can_afford(rid)
+		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
+		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
+		btn.mouse_exited.connect(_clear_craft_detail)
+
+## What a recipe costs and how long it takes, for whichever entry the cursor is
+## over -- the same shape as the build menu's detail line, because it answers the
+## same question.
+func _show_craft_detail(station: Node, recipe_id: String) -> void:
+	if status_label == null or station == null or not is_instance_valid(station):
+		return
+	var costs: PackedStringArray = []
+	for res_id in station.inputs_of(recipe_id):
+		costs.append("%d %s" % [int(station.inputs_of(recipe_id)[res_id]), _resource_name(String(res_id))])
+	var cost_text: String = ", ".join(costs)
+	if station.can_afford(recipe_id):
+		status_label.text = tr("CRAFT_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text, station.time_of(recipe_id)]
+		status_label.modulate = Color(0.85, 0.85, 0.85)
+	else:
+		status_label.text = tr("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(recipe_id), cost_text]
+		status_label.modulate = Color(1.0, 0.45, 0.4)
+
+func _clear_craft_detail() -> void:
+	if status_label == null:
+		return
+	if selected_unit != null and is_instance_valid(selected_unit) and selected_unit.has_method("get_display_info"):
+		status_label.text = String(selected_unit.get_display_info().get("status", ""))
+	else:
+		status_label.text = tr("CABIN_HINT_PICK_STATION")
+	status_label.modulate = Color(0.85, 0.85, 0.85)
+
+func _resource_name(res_id: String) -> String:
+	return TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
+
 func _populate_resource_buttons() -> void:
 	pass
 

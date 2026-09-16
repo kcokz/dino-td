@@ -479,6 +479,62 @@ static func get_resource_color(res_id: String) -> Color:
 		return RESOURCE_FALLBACK_COLORS[res_id]
 	return Color(0.7, 0.7, 0.7)
 
+# ==============================================================================
+# 14. The cabin workshop (v0.4)
+# ==============================================================================
+## The cabin is the thing you defend and the thing you need, and everything the
+## Hero gains is made in it. Two stations, one rule: **materials make tools, food
+## gives ideas.** The workbench turns bone, wood and stone into abilities -- what
+## the Hero can *do*; the kitchen turns meat into blueprints -- what he can
+## *build*.
+##
+## Nothing here is an inventory item. A recipe grants a permanent flag and that is
+## the whole of it: unlocked means usable, so there is no bag, no slots, and no
+## stat sheet to maintain. That is the line that keeps this from becoming an RPG.
+##
+## The interior is a scene parked off the map rather than a scene swap, so the
+## world keeps running while the player is inside -- which is the point: crafting
+## costs real seconds, and while he is at the bench nobody is holding the line.
+const CABIN: Dictionary = {
+	"interior_origin": Vector3(0.0, -200.0, 0.0),  # far below the map; never seen from outside
+	"enter_range": 2.5,                            # how close the Hero must be to step inside
+}
+
+## Every recipe, whatever station it belongs to, has the same shape:
+##   station  -- which bench it is made at
+##   inputs   -- what it costs, spent when work begins
+##   time     -- seconds the Hero must stand there (progress is kept if he leaves)
+##   unlocks  -- the permanent flag it grants
+## Adding a third station later is an entry here plus a node in the scene, not a
+## new system.
+const RECIPES: Dictionary = {
+	"stone_pick": {
+		"name": "RECIPE_STONE_PICK_NAME",
+		"station": "workbench",
+		"inputs": {"bone": 1, "wood": 4},
+		"time": 8.0,
+		"unlocks": "harvest_stone",
+	},
+	"roast_meat": {
+		"name": "RECIPE_ROAST_MEAT_NAME",
+		"station": "kitchen",
+		"inputs": {"food": 3, "wood": 2},
+		"time": 6.0,
+		"unlocks": "blueprint_tower",
+	},
+}
+
+## Stations in the order they stand in the cabin.
+const STATIONS: Array[String] = ["workbench", "kitchen"]
+
+## Recipes belonging to one station, in declaration order.
+static func recipes_at(station_id: String) -> Array[String]:
+	var out: Array[String] = []
+	for recipe_id in RECIPES:
+		if String(RECIPES[recipe_id].get("station", "")) == station_id:
+			out.append(String(recipe_id))
+	return out
+
 ## Construction time is a function of price: the more a building costs, the longer
 ## the Hero stands there making it. Keeping it derived means a designer tunes one
 ## number (cost) instead of two that can drift apart.

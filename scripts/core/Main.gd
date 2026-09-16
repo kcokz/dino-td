@@ -32,11 +32,20 @@ var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 @export var hero: CharacterBody3D = null
 @export var resource_nodes_container: Node3D = null
 @export var drops_container: Node3D = null
+@export var cabin_interior: Node3D = null
 
 var resource_node_script: GDScript = null
 var current_core: Node = null
 var current_nest: Node = null
 var current_build_type: String = ""
+
+## Stepping into the cabin moves the camera; it never swaps the scene, so the
+## world outside keeps running the whole time the player is in there. That is the
+## cost that makes going home a decision.
+var in_cabin: bool = false
+## Set when the player right-clicks the cabin: the Hero walks over, and the moment
+## he arrives the view goes inside. Any other order on the way cancels it.
+var _pending_cabin_entry: bool = false
 
 # v0.2 build preview: a translucent ghost of the pending building that follows the
 # cursor, together with its coverage ring and a highlight on the resource nodes that
@@ -63,6 +72,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_handle_camera_pan(delta)
+	_check_pending_cabin_entry()
 
 func _init_level_coordinates() -> void:
 	var cfg = _get_config()
@@ -118,6 +128,20 @@ func _ensure_scene_dependencies() -> void:
 		add_child(resource_nodes_container)
 	if resource_node_script == null and ResourceLoader.exists("res://scripts/entities/ResourceNode.gd"):
 		resource_node_script = load("res://scripts/entities/ResourceNode.gd")
+
+	# The cabin's inside is a scene of its own, parked far below the map. Instanced
+	# rather than swapped to, so entering it never unloads the world.
+	if cabin_interior == null:
+		cabin_interior = find_child("CabinInterior", true, false) as Node3D
+	if cabin_interior == null and ResourceLoader.exists("res://scenes/CabinInterior.tscn"):
+		cabin_interior = load("res://scenes/CabinInterior.tscn").instantiate() as Node3D
+		if cabin_interior != null:
+			cabin_interior.name = "CabinInterior"
+			add_child(cabin_interior)
+	if cabin_interior != null:
+		var cfg_cabin = _get_config()
+		if cfg_cabin and "CABIN" in cfg_cabin:
+			cabin_interior.position = cfg_cabin.CABIN.get("interior_origin", Vector3(0.0, -200.0, 0.0))
 
 	# Drops are kept in their own container so a restart can sweep the ground with
 	# one loop, and so nothing on the floor is ever mistaken for a building.
@@ -403,6 +427,82 @@ func scatter_opening_stock() -> void:
 				String(res_id), share)
 
 # ==============================================================================
+# The cabin: stepping inside and back out
+# ==============================================================================
+
+## True while the given node is the cabin the player can walk into.
+func _is_cabin(node: Node) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if node.is_in_group("core"):
+		return true
+	return "building_type" in node and String(node.building_type) == "core"
+
+## Sends the Hero home and remembers why. Right-clicking the cabin is the only way
+## in: walk over, and the view goes inside the moment he arrives -- one click, and
+## the same "right-click a thing to act on it" rule as everything else.
+func order_enter_cabin() -> bool:
+	if hero == null or not is_instance_valid(hero) or current_core == null or not is_instance_valid(current_core):
+		return false
+	_pending_cabin_entry = true
+	if _hero_is_at_cabin():
+		return enter_cabin()
+	hero.move_to(current_core.global_position)
+	return true
+
+func _hero_is_at_cabin() -> bool:
+	if hero == null or not is_instance_valid(hero) or current_core == null or not is_instance_valid(current_core):
+		return false
+	var reach: float = 2.5
+	var cfg = _get_config()
+	if cfg and "CABIN" in cfg:
+		reach = float(cfg.CABIN.get("enter_range", reach))
+	return hero.global_position.distance_to(current_core.global_position) <= reach
+
+func _check_pending_cabin_entry() -> void:
+	if not _pending_cabin_entry or in_cabin:
+		return
+	if _hero_is_at_cabin():
+		enter_cabin()
+
+## Moves the camera inside. Deliberately not a scene change: the raid timer, the
+## dinosaurs already on the map and every half-built stake carry on exactly as
+## they were, which is what makes the trip home cost something.
+func enter_cabin() -> bool:
+	_pending_cabin_entry = false
+	if in_cabin or cabin_interior == null or not is_instance_valid(cabin_interior):
+		return false
+	cancel_building_selection()
+	in_cabin = true
+	if cabin_interior.has_method("set_open"):
+		cabin_interior.set_open(true)
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("unit_deselected"):
+		eb.unit_deselected.emit()
+	if eb and eb.has_signal("cabin_view_changed"):
+		eb.cabin_view_changed.emit(true)
+	return true
+
+## Steps back out. Instant on purpose -- the player has to be able to leave the
+## moment a raid warning sounds, or being inside stops being a risk and starts
+## being a trap.
+func leave_cabin() -> bool:
+	_pending_cabin_entry = false
+	if not in_cabin:
+		return false
+	in_cabin = false
+	if cabin_interior and is_instance_valid(cabin_interior) and cabin_interior.has_method("set_open"):
+		cabin_interior.set_open(false)
+	if camera and is_instance_valid(camera):
+		camera.current = true
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("unit_deselected"):
+		eb.unit_deselected.emit()
+	if eb and eb.has_signal("cabin_view_changed"):
+		eb.cabin_view_changed.emit(false)
+	return true
+
+# ==============================================================================
 # Interactive & Programmatic Building Placement
 # ==============================================================================
 
@@ -515,6 +615,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if hud and is_instance_valid(hud) and hud.has_method("is_pause_menu_open") and hud.is_pause_menu_open():
 			hud.toggle_pause_menu()
 			return
+		# Inside the cabin, Esc is the way out and nothing else. It has to be
+		# instant: the player must be able to leave the moment a raid warning
+		# sounds, or being inside stops being a risk and becomes a trap.
+		if in_cabin:
+			leave_cabin()
+			return
 		if current_build_type != "":
 			cancel_building_selection()
 			return
@@ -536,6 +642,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	#
 	# It still never changes what the panel shows; that is left-click's job alone.
 	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
+		# Inside there is nowhere to send anyone: the Hero is standing right here.
+		if in_cabin:
+			get_viewport().set_input_as_handled()
+			return
 		if current_build_type != "":
 			cancel_building_selection()
 			get_viewport().set_input_as_handled()
@@ -545,13 +655,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null and hero != null and is_instance_valid(hero):
+			_pending_cabin_entry = false   # a new order replaces the walk home
 			var cell = grid_manager.world_to_cell(hit_pos) if grid_manager else Vector2i.ZERO
 			var res_node = get_resource_node_at_cell(cell)
 			var b = grid_manager.get_building_at(cell) if grid_manager else null
 			if res_node != null and is_instance_valid(res_node):
 				hero.order_harvest(res_node)
 			elif b != null and is_instance_valid(b):
-				if "is_constructed" in b and not b.is_constructed:
+				if _is_cabin(b):
+					order_enter_cabin()
+				elif "is_constructed" in b and not b.is_constructed:
 					hero.order_build(b, true)
 				else:
 					hero.move_to(hit_pos)
@@ -562,8 +675,10 @@ func _unhandled_input(event: InputEvent) -> void:
 						hero.order_harvest(hit_obj)
 					elif hit_obj.is_in_group("dinos"):
 						hero.order_attack(hit_obj)
-					elif hit_obj.is_in_group("buildings"):
-						if "is_constructed" in hit_obj and not hit_obj.is_constructed:
+					elif hit_obj.is_in_group("buildings") or _is_cabin(hit_obj):
+						if _is_cabin(hit_obj):
+							order_enter_cabin()
+						elif "is_constructed" in hit_obj and not hit_obj.is_constructed:
 							hero.order_build(hit_obj, true)
 						else:
 							hero.move_to(hit_pos)
@@ -576,6 +691,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Left-click (Default build place button / Unit selection)
 	if event is InputEventMouseButton and event.pressed and event.button_index == place_btn:
+		# Inside, a click picks a bench and nothing else -- there is no ground to
+		# build on and no units to inspect.
+		if in_cabin:
+			var station = _raycast_object(event.position)
+			var eb_cabin = _get_event_bus()
+			if station != null and is_instance_valid(station) and station.is_in_group("stations"):
+				if eb_cabin and eb_cabin.has_signal("unit_selected"):
+					eb_cabin.unit_selected.emit(station)
+			elif eb_cabin and eb_cabin.has_signal("unit_deselected"):
+				eb_cabin.unit_deselected.emit()
+			get_viewport().set_input_as_handled()
+			return
 		if current_build_type == "":
 			var hit_obj = _raycast_object(event.position)
 			var eb = _get_event_bus()
@@ -647,12 +774,22 @@ func _get_option_panel() -> Node:
 		return hud.find_child("OptionPanel", true, false)
 	return null
 
+## Whichever camera the player is actually looking through -- the map's, or the
+## cabin's while they are inside. Clicks have to be cast from the same place.
+func _active_camera() -> Camera3D:
+	if in_cabin and cabin_interior and is_instance_valid(cabin_interior) and "camera" in cabin_interior:
+		var cam = cabin_interior.camera
+		if cam is Camera3D and is_instance_valid(cam):
+			return cam
+	return camera
+
 func _raycast_ground(screen_pos: Vector2) -> Variant:
-	if camera == null or not is_inside_tree():
+	var cam := _active_camera()
+	if cam == null or not is_inside_tree():
 		return null
 	var space_state = get_world_3d().direct_space_state
-	var from = camera.project_ray_origin(screen_pos)
-	var to = from + camera.project_ray_normal(screen_pos) * 1000.0
+	var from = cam.project_ray_origin(screen_pos)
+	var to = from + cam.project_ray_normal(screen_pos) * 1000.0
 
 	var query = PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 1 # Layer 1: Ground
@@ -662,11 +799,12 @@ func _raycast_ground(screen_pos: Vector2) -> Variant:
 	return null
 
 func _raycast_object(screen_pos: Vector2) -> Node:
-	if camera == null or not is_inside_tree() or get_world_3d() == null:
+	var cam := _active_camera()
+	if cam == null or not is_inside_tree() or get_world_3d() == null:
 		return null
 	var space_state = get_world_3d().direct_space_state
-	var from = camera.project_ray_origin(screen_pos)
-	var to = from + camera.project_ray_normal(screen_pos) * 1000.0
+	var from = cam.project_ray_origin(screen_pos)
+	var to = from + cam.project_ray_normal(screen_pos) * 1000.0
 
 	var query = PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 1 | 2 | 4 # Layer 1: Ground/Obstacles, Layer 2: Buildings, Layer 4: Units
@@ -695,6 +833,7 @@ func place_building_at_cell(type_id: String, cell: Vector2i) -> Node:
 ## Completely restores pristine starting game state without reloading scene.
 func restart_game() -> void:
 	cancel_building_selection()
+	leave_cabin()
 
 	# 1. Reset GameState (AP, resources, multipliers, wave, phase, game_over flag)
 	var gs = _get_game_state()

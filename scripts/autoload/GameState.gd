@@ -33,6 +33,12 @@ var is_game_over: bool = false
 var is_game_won: bool = false
 var nests_alive: int = 1
 var active_buildings: Array[Node] = []
+
+## Everything the Hero has made at the cabin, as a set of permanent flags. Not an
+## inventory: there is no count, no durability and nothing to carry -- a flag is
+## either set or it is not, and set means usable. That is what keeps the cabin
+## from turning into a bag.
+var unlocks: Dictionary = {}
 var _produce_timer: Timer = null
 
 # v0.1 Real-Time Deployment & Pause & Infinite AP
@@ -187,6 +193,7 @@ func reset_game() -> void:
 	current_ap = max_ap
 	wave_number = 0
 	active_buildings.clear()
+	unlocks.clear()
 	
 	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 	deploy_length = float(time_cfg.get("deploy_length", 90.0))
@@ -255,6 +262,26 @@ func add_resources(gains: Dictionary) -> void:
 func add_resource(res_id: String, amount: int) -> void:
 	add_resources({res_id: amount})
 
+
+# ==============================================================================
+# 7b. Unlocks (v0.4): what the Hero has made at the cabin
+# ==============================================================================
+
+## Whether `unlock_id` has been made. Everything asks this rather than keeping its
+## own copy, so an ability and the UI that offers it can never disagree.
+func has_unlock(unlock_id: String) -> bool:
+	return unlock_id != "" and bool(unlocks.get(unlock_id, false))
+
+## Records an unlock and announces it. Granting one twice is a no-op, so a recipe
+## finishing again cannot double-count.
+func grant_unlock(unlock_id: String) -> bool:
+	if unlock_id == "" or has_unlock(unlock_id):
+		return false
+	unlocks[unlock_id] = true
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("unlock_granted"):
+		eb.unlock_granted.emit(unlock_id)
+	return true
 
 # ==============================================================================
 # 8. Action Point (AP) Transactions & Capacity

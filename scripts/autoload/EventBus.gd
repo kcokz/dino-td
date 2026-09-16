@@ -114,3 +114,15 @@ signal resource_picked_up(res_id: String, amount: int, by: Node)
 ## Emitted when a drop is created, so anything watching the ground can react
 ## without having to poll the group.
 signal resource_dropped(res_id: String, amount: int, world_pos: Vector3)
+
+# ==============================================================================
+# 10. The cabin workshop (v0.4)
+# ==============================================================================
+## Emitted when a recipe finishes and its flag is granted. Carries the flag, not
+## the recipe: what the rest of the game cares about is the ability, not how it
+## was made.
+signal unlock_granted(unlock_id: String)
+
+## Emitted when the player steps into the cabin or back out of it. The world keeps
+## running either way -- this only says where the camera and the orders are going.
+signal cabin_view_changed(inside: bool)
