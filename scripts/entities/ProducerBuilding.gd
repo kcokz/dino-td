@@ -242,16 +242,26 @@ func _process(delta: float) -> void:
 		_last_label_second = cur_sec
 		_update_info_label()
 
-func _deposit(gs, res_id: String, amount: int) -> void:
-	if gs == null or amount <= 0:
+## What a machine cuts is left in a pile beside it, not banked. Nothing reaches
+## the warehouse until the Hero walks over and fetches it -- that is the whole
+## point of v0.3's drops, so there is deliberately no automatic collection here.
+func _deposit(_gs, res_id: String, amount: int) -> void:
+	if amount <= 0 or not is_inside_tree():
 		return
-	if gs.has_method("add_resource"):
-		gs.add_resource(res_id, amount)
-	elif "resources" in gs:
-		gs.resources[res_id] = gs.resources.get(res_id, 0) + amount
-		var eb = _get_event_bus()
-		if eb and eb.has_signal("resources_changed"):
-			eb.resources_changed.emit(gs.resources)
+	DropItem.spawn(self, output_position(), res_id, amount)
+
+## Where this machine puts what it makes: clear of its own footprint, so the pile
+## is visible rather than buried in the box, and always the same spot so a run's
+## output grows into one labelled heap instead of a scattering.
+func output_position() -> Vector3:
+	var offset: float = _footprint() * 0.5 + _drop_cfg("scatter_radius", 0.8)
+	return global_position + Vector3(offset, 0.0, 0.0)
+
+func _drop_cfg(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	if cfg and "DROPS" in cfg:
+		return float(cfg.DROPS.get(key, fallback))
+	return fallback
 
 # ==============================================================================
 # Coverage ring overrides (ring itself lives in Building)

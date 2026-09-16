@@ -224,6 +224,10 @@ const BUILDABLE_TYPES: Array[String] = ["wall", "tower", "lumber_hut", "quarry",
 # ==============================================================================
 # 3. Dinosaur Definitions (DINOS)
 # ==============================================================================
+## `drops` is what is left on the ground when one dies, and it is the only source
+## of `food` in the game -- meat comes off dinosaurs or not at all. Nothing spends
+## food yet; the hero-upgrade branch recorded in VERSION.md's v0.x section is what
+## it is being collected for.
 const DINOS: Dictionary = {
 	"raptor": {
 		"name": "DINO_RAPTOR_NAME",
@@ -232,6 +236,7 @@ const DINOS: Dictionary = {
 		"damage": 1.0,
 		"attack_rate": 1.0,
 		"targeting": "blocker_then_core",
+		"drops": {"food": 1},
 		"size": Vector3(0.8, 0.8, 0.8),
 	},
 	"big_theropod": {
@@ -241,6 +246,7 @@ const DINOS: Dictionary = {
 		"damage": 3.0,
 		"attack_rate": 0.8,
 		"targeting": "prefer_buildings",
+		"drops": {"food": 3},
 		"size": Vector3(1.6, 1.6, 1.6),
 	},
 	"pterosaur": {
@@ -250,6 +256,7 @@ const DINOS: Dictionary = {
 		"damage": 1.0,
 		"attack_rate": 1.2,
 		"targeting": "ignore_walls",
+		"drops": {"food": 1},
 		"size": Vector3(0.8, 0.5, 0.8),
 	}
 }

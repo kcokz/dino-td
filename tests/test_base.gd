@@ -247,6 +247,45 @@ func opening_wood() -> int:
 		return 10
 	return int(cfg.INITIAL_RESOURCES.get("wood", 10))
 
+## How much of `res_id` is lying on the ground as drops (v0.3). Production no
+## longer banks anything directly -- a machine leaves a pile beside it and the
+## warehouse only grows when the Hero fetches it -- so a test that means
+## "production happened" asks this, not the wallet.
+func ground_total(res_id: String) -> int:
+	var sum: int = 0
+	if not (Engine.get_main_loop() is SceneTree):
+		return 0
+	for d in Engine.get_main_loop().get_nodes_in_group("drops"):
+		if not is_instance_valid(d) or d.is_queued_for_deletion():
+			continue
+		if "resource_type" in d and String(d.resource_type) == res_id:
+			sum += int(d.amount)
+	return sum
+
+## Everything the player has earned of `res_id`, banked or still on the floor.
+## The right measure for "did this produce anything", since where it currently
+## sits is a matter of whether anyone has walked over it yet.
+func earned_total(res_id: String) -> int:
+	var gs = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		gs = Engine.get_main_loop().root.get_node_or_null("GameState")
+	var banked: int = 0
+	if gs and "resources" in gs:
+		banked = int(gs.resources.get(res_id, 0))
+	return banked + ground_total(res_id)
+
+## Clears every drop on the ground. Suites that produce resources should call this
+## between tests, or one test's piles turn up in the next one's totals.
+func clear_drops() -> void:
+	if not (Engine.get_main_loop() is SceneTree):
+		return
+	for d in Engine.get_main_loop().get_nodes_in_group("drops"):
+		if is_instance_valid(d):
+			if d.is_inside_tree():
+				d.get_parent().remove_child(d)
+			if not d.is_queued_for_deletion():
+				d.free()
+
 ## Total wood needed to place every type in `type_ids` once.
 func total_cost_of(type_ids: Array, res_id: String = "wood") -> int:
 	var sum: int = 0

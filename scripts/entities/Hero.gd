@@ -402,14 +402,12 @@ func _process_harvesting(delta: float) -> void:
 		var res_type: String = target_resource_node.resource_type if "resource_type" in target_resource_node else "wood"
 		var yielded: int = target_resource_node.harvest(1) if target_resource_node.has_method("harvest") else 0
 		if yielded > 0:
-			var gs = _get_game_state()
-			if gs and gs.has_method("add_resource"):
-				gs.add_resource(res_type, yielded)
-			elif gs and "resources" in gs:
-				gs.resources[res_type] = gs.resources.get(res_type, 0) + yielded
-				var eb = _get_event_bus()
-				if eb and eb.has_signal("resources_changed"):
-					eb.resources_changed.emit(gs.resources)
+			# Even what the Hero digs up himself lands on the ground first. He is
+			# standing on it, so his own sweep takes it a frame later and it feels
+			# the same as banking it -- but there is now exactly one way resources
+			# get into the warehouse, instead of one rule for hands and another
+			# for machines.
+			DropItem.spawn(self, global_position, res_type, yielded)
 
 		if "is_depleted" in target_resource_node and target_resource_node.is_depleted:
 			target_resource_node = null

@@ -66,6 +66,7 @@ func after_each() -> void:
 				node.get_parent().remove_child(node)
 			node.free()
 	_cleanup_nodes.clear()
+	clear_drops()   # v0.3: production leaves piles behind, and they are not the next test's
 	super.after_each()
 
 ## Seconds of operation needed for `type_id` to bank `units` of `res_id`,
@@ -165,19 +166,25 @@ func test_03_hero_harvest_order_and_deposit() -> void:
 	res_node.position = Vector3(1.0, 0.0, 0.0) # Within harvest range 1.8m
 	res_node.setup("stone", Vector2i(1, 0), 20)
 
-	var init_stone = game_state_node.resources.get("stone", 0)
+	var init_stone: int = int(game_state_node.resources.get("stone", 0))
+	var init_earned: int = earned_total("stone")
 
 	# Order harvest
 	hero.order_harvest(res_node)
 	assert_eq(int(hero.current_state), int(hero_script.State.HARVESTING), "Hero enters HARVESTING state")
 
-	# Harvest long enough to bank at least one unit at the configured rate.
+	# Harvest long enough to cut at least one unit at the configured rate.
 	var harvest_secs: float = _hand_secs_for("stone", 1) + 0.5
 	hero._physics_process(harvest_secs * 0.5)
 	hero._physics_process(harvest_secs * 0.5)
 
-	var current_stone = game_state_node.resources.get("stone", 0)
-	assert_gt(current_stone, init_stone, "Stone resources deposited into GameState from harvesting")
+	# v0.3: even what the Hero digs up himself lands on the ground first, so there
+	# is one rule for every resource instead of one for hands and one for machines.
+	# He is standing on it, so the sweep at the top of his next step banks it.
+	assert_gt(earned_total("stone"), init_earned, "Harvesting produced stone")
+	hero._physics_process(0.016)
+	assert_gt(int(game_state_node.resources.get("stone", 0)), init_stone,
+		"And carrying it is what puts it in the warehouse")
 
 # ==============================================================================
 # Feature 5: Machinery Tending (LumberHut)
@@ -192,20 +199,21 @@ func test_04_lumber_hut_machinery_tending_lifecycle() -> void:
 
 	assert_false(hut.is_operating, "LumberHut initially idle (not operating)")
 
-	var init_wood = game_state_node.resources.get("wood", 10)
+	var init_wood: int = earned_total("wood")
+	var init_banked: int = int(game_state_node.resources.get("wood", 0))
 
 	# 5 seconds pass without tending -> 0 wood produced
 	hut._process(5.0)
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood, "No wood produced while untended")
+	assert_eq(earned_total("wood"), init_wood, "No wood produced while untended")
 
-	# Tended but with no tree in range: machinery runs yet banks nothing.
+	# Tended but with no tree in range: machinery runs yet makes nothing.
 	hut.tend(40.0)
 	assert_true(hut.is_operating, "LumberHut is now operating after tending")
 	assert_almost_eq(hut.operation_timer, 40.0, 0.1, "Operation timer set to 40.0s")
 	hut._process(1.0)
 	hut._process(1.0)
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood,
-		"No wood banked while operating with no tree in harvest range")
+	assert_eq(earned_total("wood"), init_wood,
+		"Nothing produced while operating with no tree in harvest range")
 	assert_null(hut.target_source, "No source acquired when none is in range")
 
 	# Plant a tree inside harvest_range, then the same 2s at 0.5 wood/s yields 1 wood.
@@ -219,7 +227,10 @@ func test_04_lumber_hut_machinery_tending_lifecycle() -> void:
 	hut.tend(one_wood_secs + 5.0)
 	hut._process(one_wood_secs * 0.5)
 	hut._process(one_wood_secs * 0.5)
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 1, "Produced 1 wood at the configured rate")
+	assert_eq(earned_total("wood"), init_wood + 1, "Produced 1 wood at the configured rate")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), init_banked,
+		"Which is lying beside the hut, not in the warehouse -- nobody has fetched it")
+	assert_eq(ground_total("wood"), 1, "One pile, waiting to be carried")
 	assert_eq(tree_node.current_amount, tree_before - 1, "The wood came out of the tree's remaining amount")
 	assert_eq(hut.target_source, tree_node, "Hut locked onto the nearby tree as its source")
 
@@ -513,11 +524,14 @@ func test_13_quarry_tending_produces_stone_dynamically() -> void:
 	tree.root.add_child(rock)
 	rock.position = quarry.global_position + Vector3(3.0, 0.0, 0.0)
 
-	var init_stone = game_state_node.resources.get("stone", 0)
+	var init_stone: int = earned_total("stone")
 	var three_stone_secs: float = _secs_for("quarry", "stone", 3)
 	quarry.tend(three_stone_secs + 5.0)
 	quarry._process(three_stone_secs)
-	assert_eq(game_state_node.resources.get("stone", 0), init_stone + 3, "Quarry produces 3 stone at the configured rate")
+	assert_eq(earned_total("stone"), init_stone + 3, "Quarry produces 3 stone at the configured rate")
+	# The Hero is at the origin and the quarry 1m away, so the stone piles up at
+	# the quarry's side; it reaches the warehouse when somebody carries it.
+	assert_eq(ground_total("stone"), 3, "Cut and stacked, not banked")
 
 # ==============================================================================
 # Feature 15: GridManager Natural Resource Obstacle (Finding 3)
@@ -640,33 +654,33 @@ func test_17_lumber_hut_real_tree_harvesting_and_target_switching() -> void:
 	assert_eq(found_tree, tree_near, "Lumber Hut selects the closest tree within range")
 
 	# 2. Tend hut and harvest 2 wood (depleting tree_near)
-	var init_wood = game_state_node.resources.get("wood", 10)
+	var init_wood: int = earned_total("wood")
 	hut.tend(40.0)
 
 	var per_wood: float = _secs_for("lumber_hut", "wood", 1)
 	hut._process(per_wood)
 	assert_eq(tree_near.current_amount, 1, "First tree depleted by 1 wood")
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 1, "GameState wood increased by 1")
+	assert_eq(earned_total("wood"), init_wood + 1, "A first unit of wood exists")
 
 	hut._process(per_wood)
 	assert_eq(tree_near.current_amount, 0, "First tree fully depleted")
 	assert_true(tree_near.is_depleted, "First tree is marked depleted")
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 2, "GameState wood increased by 2")
+	assert_eq(earned_total("wood"), init_wood + 2, "A second unit of wood exists")
 
 	# 3. Next tick automatically switches to tree_far
 	hut._process(per_wood)
 	assert_eq(hut.target_tree, tree_far, "Lumber Hut switched to the next nearest tree")
 	assert_eq(tree_far.current_amount, 4, "Second tree was harvested")
-	assert_eq(game_state_node.resources.get("wood", 10), init_wood + 3, "GameState received 3rd wood")
+	assert_eq(earned_total("wood"), init_wood + 3, "And a third, from the second tree")
 
 	# 4. Exhaust second tree
 	tree_far.harvest(4)
 	assert_true(tree_far.is_depleted, "Second tree is now depleted")
 
 	# 5. When no trees remain in range, no wood is harvested even though out-of-range tree has 10 wood
-	var wood_before = game_state_node.resources.get("wood", 10)
+	var wood_before: int = earned_total("wood")
 	hut._process(10.0)
-	assert_eq(game_state_node.resources.get("wood", 10), wood_before, "No wood harvested when all trees in range are depleted")
+	assert_eq(earned_total("wood"), wood_before, "No wood harvested when all trees in range are depleted")
 	assert_eq(tree_out_of_range.current_amount, 10, "Out of range tree remains untouched")
 	assert_null(hut.find_nearest_tree(), "No tree found in range")
 	assert_true(hut.get_display_info()["status"].contains("No trees in range") or hut.get_display_info()["status"].contains("范围内无可用树木"), "Status indicates no trees in range")

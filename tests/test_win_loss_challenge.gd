@@ -645,8 +645,17 @@ func test_challenge_tower_nest_5m_boundary_threshold() -> void:
 	tower.attack(nest_in_range)
 	assert_almost_eq(float(nest_in_range.current_hp), hp_before - 1.0, 0.001, "Tower deals 1.0 damage at 5.0m boundary")
 
-	# Test Out-Of-Range Nest at 6.0m
+	# Test Out-Of-Range Nest at 6.0m.
+	#
+	# The in-range nest has to leave the scene, not merely be dropped from the
+	# tower's bookkeeping: it is sitting 5.0m away inside the detection sphere, so
+	# acquire_target() would keep finding it through the physics overlap and this
+	# assertion would depend on how many physics frames happened to have run --
+	# which is exactly how it once failed.
 	tower.on_target_exited(nest_in_range)
+	nest_in_range.get_parent().remove_child(nest_in_range)
+	await wait_frames(1)
+
 	tower.on_target_entered(nest_out_of_range)
 	var target_out = tower.acquire_target()
 	assert_null(target_out, "Tower must REJECT Nest positioned at 6.0m (beyond 5.0m range)")

@@ -48,6 +48,7 @@ func after_each() -> void:
 				node.get_parent().remove_child(node)
 			node.free()
 	_cleanup_nodes.clear()
+	clear_drops()   # machines leave piles behind; they must not count in the next test
 	super.after_each()
 
 func _load_script(path: String) -> GDScript:
@@ -198,7 +199,8 @@ func test_08_producer_draws_down_the_node_it_harvests() -> void:
 	var hut = _make_producer("lumber_hut")
 	var tree_node = _make_node("wood", 3.0)
 	var stock_before: int = tree_node.current_amount
-	var wood_before: int = int(game_state_node.resources.get("wood", 0))
+	var earned_before: int = earned_total("wood")
+	var wallet_before: int = int(game_state_node.resources.get("wood", 0))
 
 	var rate: float = float(config_node.BUILDINGS["lumber_hut"]["produces_per_sec"]["wood"])
 	var secs: float = 10.0
@@ -206,32 +208,37 @@ func test_08_producer_draws_down_the_node_it_harvests() -> void:
 	hut.tend(40.0)
 	hut._process(secs)
 
-	var gained: int = int(game_state_node.resources.get("wood", 0)) - wood_before
-	assert_eq(gained, expected, "%ds at %s wood/s banks %d wood" % [int(secs), str(rate), expected])
+	var gained: int = earned_total("wood") - earned_before
+	assert_eq(gained, expected, "%ds at %s wood/s makes %d wood" % [int(secs), str(rate), expected])
 	assert_eq(tree_node.current_amount, stock_before - gained,
-		"Every banked unit came out of the tree's remaining amount")
+		"Every unit came out of the tree's remaining amount")
+	# v0.3: the machine leaves it in a pile. Nobody has walked over it, so the
+	# warehouse is still exactly as empty as it was.
+	assert_eq(int(game_state_node.resources.get("wood", 0)), wallet_before,
+		"Production alone does not fill the warehouse")
+	assert_eq(ground_total("wood"), gained, "It is all lying beside the hut")
 	assert_eq(hut.target_source, tree_node, "Hut locked onto the in-range tree")
 
 func test_09_source_outside_range_is_ignored() -> void:
 	var hut = _make_producer("lumber_hut")
 	var far: float = hut.harvest_range + 5.0
 	var tree_node = _make_node("wood", far)
-	var before: int = int(game_state_node.resources.get("wood", 0))
+	var before: int = earned_total("wood")
 
 	hut.tend(40.0)
 	hut._process(10.0)
-	assert_eq(int(game_state_node.resources.get("wood", 0)), before,
+	assert_eq(earned_total("wood"), before,
 		"A tree beyond harvest_range must not be harvested")
 	assert_eq(tree_node.current_amount, tree_node.max_capacity, "Out-of-range tree untouched")
 
 func test_10_producer_only_harvests_its_own_resource_type() -> void:
 	var hut = _make_producer("lumber_hut")
 	var rock = _make_node("stone", 2.0)
-	var before: int = int(game_state_node.resources.get("wood", 0))
+	var before: int = earned_total("wood")
 
 	hut.tend(40.0)
 	hut._process(10.0)
-	assert_eq(int(game_state_node.resources.get("wood", 0)), before,
+	assert_eq(earned_total("wood"), before,
 		"A lumber hut must not harvest wood out of a stone outcrop")
 	assert_eq(rock.current_amount, rock.max_capacity, "Stone node untouched by a lumber hut")
 
@@ -247,13 +254,13 @@ func test_11_producer_moves_on_when_its_node_is_exhausted() -> void:
 	assert_gt(want, 2, "This test needs to out-draw the nearer tree")
 	# Leave only two units in the nearer tree so it runs dry mid-operation.
 	near.harvest(near.current_amount - 2)
-	var wood_before: int = int(game_state_node.resources.get("wood", 0))
+	var earned_before: int = earned_total("wood")
 
 	hut.tend(secs + 5.0)
 	hut._process(secs)
 
 	assert_true(near.is_depleted, "The nearer tree is exhausted")
-	assert_eq(int(game_state_node.resources.get("wood", 0)) - wood_before, want,
+	assert_eq(earned_total("wood") - earned_before, want,
 		"Production continues by switching to the next tree in range")
 	assert_eq(spare.current_amount, spare.max_capacity - (want - 2), "Remaining units came from the spare tree")
 
@@ -267,10 +274,10 @@ func test_12_quarry_and_hunting_hut_are_node_backed_producers() -> void:
 		assert_true(machine.requires_source(res_id), "%s must source %s from the map" % [type_id, res_id])
 
 		var src = _make_node(res_id, 2.0)
-		var before: int = int(game_state_node.resources.get(res_id, 0))
+		var before: int = earned_total(res_id)
 		machine.tend(40.0)
 		machine._process(20.0)
-		assert_gt(int(game_state_node.resources.get(res_id, 0)), before,
+		assert_gt(earned_total(res_id), before,
 			"%s produces %s when a node is in range" % [type_id, res_id])
 		assert_lt(src.current_amount, src.max_capacity, "%s drew down its %s node" % [type_id, res_id])
 

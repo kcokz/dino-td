@@ -841,12 +841,32 @@ func die() -> void:
 		attack_timer.stop()
 
 	_on_death_fx()
+	spawn_death_drops()
 
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("dino_died"):
 		eb.dino_died.emit(self)
 
 	queue_free()
+
+## Leaves meat where it fell. This is the only source of food in the game, and the
+## reason a raid is worth walking out to after it is over rather than just
+## surviving. What is left is declared in Config.DINOS[type].drops.
+func spawn_death_drops() -> Array:
+	var made: Array = []
+	if not is_inside_tree():
+		return made
+	var cfg = _get_config()
+	if cfg == null or not ("DINOS" in cfg) or not cfg.DINOS.has(dino_type):
+		return made
+	var drops: Dictionary = cfg.DINOS[dino_type].get("drops", {})
+	for res_id in drops:
+		var n: int = int(drops[res_id])
+		if n <= 0:
+			continue
+		for pile in DropItem.spawn_scattered(self, global_position, String(res_id), n, n):
+			made.append(pile)
+	return made
 
 # ==============================================================================
 # Procedural Component Fallbacks (Headless & Scene Support)

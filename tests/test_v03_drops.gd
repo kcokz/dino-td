@@ -18,6 +18,10 @@ var drop_script: GDScript = null
 var hero_script: GDScript = null
 var build_system_script: GDScript = null
 var grid_manager_script: GDScript = null
+var dino_script: GDScript = null
+var guard_script: GDScript = null
+var producer_script: GDScript = null
+var resource_node_script: GDScript = null
 
 var _cleanup_nodes: Array[Node] = []
 
@@ -31,6 +35,10 @@ func before_all() -> void:
 	hero_script = _load_script("res://scripts/entities/Hero.gd")
 	build_system_script = _load_script("res://scripts/core/BuildSystem.gd")
 	grid_manager_script = _load_script("res://scripts/core/GridManager.gd")
+	dino_script = _load_script("res://scripts/entities/Dino.gd")
+	guard_script = _load_script("res://scripts/entities/GuardDino.gd")
+	producer_script = _load_script("res://scripts/entities/ProducerBuilding.gd")
+	resource_node_script = _load_script("res://scripts/entities/ResourceNode.gd")
 
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
@@ -359,3 +367,137 @@ func test_20_a_single_unit_carries_no_label_but_a_pile_does() -> void:
 	single.add_amount(min_amount)
 	assert_true(single.label_3d.visible, "A pile says how big it is")
 	assert_eq(single.label_3d.text, str(single.amount), "And the number is the amount")
+
+# ==============================================================================
+# 6. Stage B: the three things that used to bank numbers
+# ==============================================================================
+
+func _spawn(script: GDScript, pos: Vector3 = Vector3.ZERO) -> Node:
+	var n = script.new()
+	_cleanup_nodes.append(n)
+	tree.root.add_child(n)
+	n.position = pos
+	return n
+
+func _dino_drops(type_id: String) -> Dictionary:
+	return config_node.DINOS[type_id].get("drops", {})
+
+func test_21_a_dead_dinosaur_leaves_meat() -> void:
+	var dino = _spawn(dino_script, Vector3(12.0, 0.0, 12.0))
+	dino.setup("raptor")
+	await wait_frames(1)
+
+	var expected: int = int(_dino_drops("raptor").get("food", 0))
+	assert_gt(expected, 0, "A raptor is worth something dead")
+
+	dino.take_damage(dino.max_hp)
+	assert_true(dino.is_dead, "The raptor is down")
+	assert_eq(_ground_total("food"), expected, "And left exactly what Config says it does")
+
+func test_22_meat_is_the_only_source_of_food() -> void:
+	# `food` was dead data before this: a column in the wallet with no way to fill
+	# it. Dinosaurs are now the one and only tap.
+	assert_has(config_node.RESOURCES, "food", "Food is a real resource")
+	assert_eq(int(config_node.INITIAL_RESOURCES.get("food", 0)), 0, "Nobody starts with meat")
+	var any_dino_drops_food: bool = false
+	for type_id in config_node.DINOS:
+		if int(config_node.DINOS[type_id].get("drops", {}).get("food", 0)) > 0:
+			any_dino_drops_food = true
+	assert_true(any_dino_drops_food, "Every kind of dinosaur is worth meat")
+	for b_type in config_node.BUILDINGS:
+		assert_eq(int(config_node.BUILDINGS[b_type].get("produces_per_sec", {}).get("food", 0)), 0,
+			"%s does not conjure meat -- it comes off dinosaurs or not at all" % b_type)
+
+func test_23_meat_has_to_be_fetched_like_everything_else() -> void:
+	var hero = _spawn_hero(Vector3.ZERO)
+	var dino = _spawn(dino_script, Vector3(30.0, 0.0, 30.0))
+	dino.setup("raptor")
+	await wait_frames(1)
+
+	var before: int = _wallet("food")
+	dino.take_damage(dino.max_hp)
+	assert_eq(_wallet("food"), before, "Killing it does not feed anyone by itself")
+	assert_gt(_ground_total("food"), 0, "The meat is out there where it fell")
+
+func test_24_a_nest_guard_is_worth_meat_too() -> void:
+	var guard = _spawn(guard_script, Vector3(25.0, 0.0, 25.0))
+	guard.setup("raptor")
+	await wait_frames(1)
+
+	guard.take_damage(guard.max_hp)
+	assert_gt(_ground_total("food"), 0, "A guard leaves a carcass like any other dinosaur")
+
+func test_25_a_machine_stacks_its_output_beside_itself() -> void:
+	# A producer takes its type at construction, so it is built directly rather
+	# than through the generic spawn helper.
+	var machine = producer_script.new("lumber_hut")
+	_cleanup_nodes.append(machine)
+	tree.root.add_child(machine)
+	machine.setup("lumber_hut", Vector2i(0, 0))
+	machine.position = Vector3(20.0, 0.0, 0.0)
+	machine.complete_construction()
+
+	var trees = resource_node_script.new("wood", Vector2i(1, 0))
+	_cleanup_nodes.append(trees)
+	tree.root.add_child(trees)
+	trees.position = machine.global_position + Vector3(2.0, 0.0, 0.0)
+	await wait_frames(1)
+
+	var wallet_before: int = _wallet("wood")
+	machine.tend(40.0)
+	machine._process(20.0)
+
+	assert_gt(_ground_total("wood"), 0, "The hut cut wood and left it on the ground")
+	assert_eq(_wallet("wood"), wallet_before, "Nothing walked itself into the warehouse")
+	for pile in _piles():
+		assert_lte(pile.global_position.distance_to(machine.global_position), machine._footprint() + 2.0,
+			"The pile is at the machine's side, where it can be seen and fetched")
+
+func test_26_the_hero_is_what_turns_a_pile_into_a_wallet() -> void:
+	var machine = producer_script.new("lumber_hut")
+	_cleanup_nodes.append(machine)
+	tree.root.add_child(machine)
+	machine.setup("lumber_hut", Vector2i(0, 0))
+	machine.position = Vector3(20.0, 0.0, 0.0)
+	machine.complete_construction()
+
+	var trees = resource_node_script.new("wood", Vector2i(1, 0))
+	_cleanup_nodes.append(trees)
+	tree.root.add_child(trees)
+	trees.position = machine.global_position + Vector3(2.0, 0.0, 0.0)
+
+	var hero = _spawn_hero(Vector3(60.0, 0.0, 60.0))
+	await wait_frames(1)
+
+	machine.tend(40.0)
+	machine._process(20.0)
+	var made: int = _ground_total("wood")
+	assert_gt(made, 0, "There is a pile to fetch")
+
+	var before: int = _wallet("wood")
+	hero.global_position = machine.output_position()
+	assert_eq(hero.sweep_for_drops(), made, "Walking over it collects the lot")
+	assert_eq(_wallet("wood"), before + made, "Which is how it reaches the warehouse")
+
+func test_27_hand_harvesting_goes_through_the_ground_as_well() -> void:
+	# It looks the same to the player -- the Hero is standing on what he cut, so
+	# his next sweep takes it -- but there is now one rule rather than two.
+	var hero = _spawn_hero(Vector3.ZERO)
+	var node = resource_node_script.new("wood", Vector2i(1, 0))
+	_cleanup_nodes.append(node)
+	tree.root.add_child(node)
+	node.position = Vector3(1.0, 0.0, 0.0)
+	node.setup("wood", Vector2i(1, 0), 20)
+	await wait_frames(1)
+
+	var before: int = _wallet("wood")
+	hero.order_harvest(node)
+	var secs: float = 1.0 / maxf(float(node.harvest_rate), 0.01)
+	hero._physics_process(secs + 0.05)
+
+	assert_eq(_wallet("wood"), before, "The cut wood is on the floor for a moment")
+	assert_gt(_ground_total("wood"), 0, "Lying at his feet")
+
+	hero._physics_process(0.016)   # the sweep at the top of his next step
+	assert_gt(_wallet("wood"), before, "And he picks up what he cut")
+	assert_eq(_ground_total("wood"), 0, "Leaving nothing behind")
