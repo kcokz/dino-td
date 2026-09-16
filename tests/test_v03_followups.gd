@@ -89,7 +89,7 @@ func test_01_a_turret_is_taller_than_a_stake_and_a_stake_is_wider() -> void:
 	assert_gt(tower_h, stake_h, "A turret stands taller than a stake")
 	assert_gt(tower_h, config_node.BUILDING_HEIGHT_DEFAULT,
 		"A turret is taller than an ordinary shed, not merely equal to one")
-	assert_lt(stake_h, config_node.get_building_height("lumber_hut"),
+	assert_lt(stake_h, config_node.BUILDING_HEIGHT_DEFAULT,
 		"A stake is something you look over, not a building")
 
 func test_02_the_turret_is_narrow_enough_to_walk_past() -> void:
@@ -115,22 +115,31 @@ func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 	assert_eq(config_node.get_building_mesh_style("no_such_building"), "box",
 		"An unknown type falls back rather than failing")
 
-func test_04_a_stake_is_built_as_several_uprights() -> void:
+func test_04_one_wood_buys_exactly_one_stake() -> void:
+	# It used to be drawn as three uprights, which told the player they were
+	# getting three things for the price of one.
 	var stake = _stake()
 	await wait_frames(1)
 
 	var body = stake.find_child("Body", false, false)
-	assert_not_null(body, "Stakes are drawn from a holder of uprights")
+	assert_not_null(body, "Stakes are drawn in their own holder")
 	var uprights: Array = []
 	for c in body.get_children():
 		if c is MeshInstance3D:
 			uprights.append(c)
-	assert_gt(uprights.size(), 1, "A fence is made of more than one stake")
+	assert_eq(uprights.size(), 1, "One wood, one stake")
+	assert_eq(cost_of("wall"), 1, "And it does cost exactly one wood")
 
 	var h: float = config_node.get_building_height("wall")
-	for u in uprights:
-		assert_almost_eq((u.mesh as BoxMesh).size.y, h, 0.001, "Each upright is the declared height")
-		assert_almost_eq(u.position.y, h * 0.5, 0.001, "And stands on the ground rather than in it")
+	var fp: float = config_node.get_building_footprint("wall")
+	var mesh: PrismMesh = uprights[0].mesh as PrismMesh
+	assert_not_null(mesh, "Drawn sharpened rather than as a plain block")
+	assert_almost_eq(mesh.size.y, h, 0.001, "As tall as the declared height")
+	assert_almost_eq(uprights[0].position.y, h * 0.5, 0.001, "Standing on the ground, not in it")
+
+	# The visible stake is as wide as the space it actually blocks. A thin post
+	# with a tile-wide collision box stops dinosaurs at a wall nobody can see.
+	assert_almost_eq(mesh.size.x, fp, 0.001, "As wide as the ground it occupies")
 
 func test_05_an_ordinary_building_is_still_one_block_of_the_declared_size() -> void:
 	var tower = _spawn(tower_script)

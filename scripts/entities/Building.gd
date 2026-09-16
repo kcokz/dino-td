@@ -381,22 +381,27 @@ func _build_body_mesh() -> void:
 	var colour: Color = _get_placeholder_color()
 
 	if _mesh_style() == "spikes":
+		# ONE stake, because it costs one wood. It used to be drawn as three
+		# uprights, which quietly told the player they were getting three things
+		# for the price of one.
+		#
+		# It is as wide as its own footprint on purpose. A thin post with a
+		# tile-wide collision box would stop dinosaurs at a wall nobody can see,
+		# which is the same lie as decorative terrain that blocks pathing -- so the
+		# stake is drawn at the size it actually occupies: a single sharpened log,
+		# pointed along its length so a row of them reads as a fence.
 		var holder := Node3D.new()
 		holder.name = "Body"
 		add_child(holder)
-		var count: int = 3
-		var thickness: float = fp / (count * 2.2)
-		for i in range(count):
-			var t: float = (float(i) / float(count - 1)) - 0.5   # -0.5 .. 0.5
-			var spike := MeshInstance3D.new()
-			var pm := BoxMesh.new()
-			pm.size = Vector3(thickness, h, thickness)
-			spike.mesh = pm
-			spike.position = Vector3(t * (fp - thickness), h * 0.5, 0.0)
-			var m := StandardMaterial3D.new()
-			m.albedo_color = colour
-			spike.material_override = m
-			holder.add_child(spike)
+		var stake := MeshInstance3D.new()
+		var prism := PrismMesh.new()
+		prism.size = Vector3(fp, h, fp * 0.42)
+		stake.mesh = prism
+		stake.position = Vector3(0.0, h * 0.5, 0.0)
+		var m := StandardMaterial3D.new()
+		m.albedo_color = colour
+		stake.material_override = m
+		holder.add_child(stake)
 		return
 
 	var mesh_inst = MeshInstance3D.new()
