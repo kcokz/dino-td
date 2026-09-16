@@ -447,12 +447,63 @@ const RESOURCE_NODES: Dictionary = {
 	}
 }
 
+# ==============================================================================
+# 13. Drops (v0.3) -- every resource enters the warehouse through the Hero
+# ==============================================================================
+## Nothing is banked as a number any more: dinosaurs leave meat, machines leave
+## what they cut at their feet, hand-harvesting leaves a pile, and the opening
+## stock is scattered by the cabin. "One body holds up a whole base" only means
+## something if the body has to carry the goods as well as build with them.
+##
+## Four decisions were open when this was designed; these are the answers, and each
+## is one number here rather than a shape in the code:
+##   * Do drops rot? No -- `lifetime` 0. A raid fought at the far end of the map
+##     would otherwise be work for nothing, and the ground is kept tidy by merging
+##     rather than by a timer. Set it above 0 to make collection urgent.
+##   * Do piles merge? Yes, within `merge_radius`, and a merged pile shows its
+##     count. It keeps a long fight from carpeting the field in single units.
+##   * Is there a cap? `max_on_ground` caps the number of *piles*, never the
+##     resources: at the cap a new drop merges into the nearest pile of its kind,
+##     so nothing the player earned is ever deleted.
+##   * Is fetching drops from a battlefield interesting or a chore? With no rot it
+##     is a choice rather than a deadline -- the mild answer, deliberately, until
+##     it has been played.
+const DROPS: Dictionary = {
+	"stack_amount": 1,        # 一个掉落物携带的资源量
+	"pickup_radius": 1.6,     # 现代人走到这个距离内就自动捡起（不需要点击）
+	"merge_radius": 1.1,      # 新掉落物并入附近同类堆的距离
+	"max_on_ground": 200,     # 场上"堆"数上限（性能护栏，不会丢资源）
+	"lifetime": 0.0,          # 0 = 永不消失
+	"scatter_radius": 0.8,    # 一次掉落多个时的散布半径（米）
+	"toss_height": 0.75,      # 抛出弧线的高度（米）
+	"toss_time": 0.35,        # 抛出到落地的时长（秒）
+	"fly_time": 0.18,         # 被捡起时飞向现代人的时长（秒）
+	"size": 0.3,              # 方块边长（米）
+	"label_min_amount": 2,    # 堆叠数达到这个值才显示数字
+}
+
+## Colour for a resource that has no node on the map: meat only ever comes off a
+## dinosaur, so RESOURCE_NODES has nothing to say about it.
+const RESOURCE_FALLBACK_COLORS: Dictionary = {
+	"food": Color(0.78, 0.32, 0.28),
+}
+
+## The colour of a resource anywhere it has to be drawn -- a map node, a drop, a
+## coverage ring. Map nodes are the primary source; RESOURCE_FALLBACK_COLORS
+## answers for the resources that have no node.
+static func get_resource_color(res_id: String) -> Color:
+	if RESOURCE_NODES.has(res_id) and RESOURCE_NODES[res_id].has("color"):
+		return RESOURCE_NODES[res_id]["color"]
+	if RESOURCE_FALLBACK_COLORS.has(res_id):
+		return RESOURCE_FALLBACK_COLORS[res_id]
+	return Color(0.7, 0.7, 0.7)
+
 ## Construction time is a function of price: the more a building costs, the longer
 ## the Hero stands there making it. Keeping it derived means a designer tunes one
 ## number (cost) instead of two that can drift apart.
-##   wooden stakes (1 wood)  -> 0.5s (the floor)
-##   lumber hut   (12 wood)  -> 4.8s
-##   auto turret  (20 wood)  -> 8.0s
+##   wooden stakes (1 wood)  -> 1.0s (the floor)
+##   lumber hut   (12 wood)  -> 12.3s
+##   quarry       (16 wood)  -> 17.6s
 ## Superlinear on purpose: at a flat rate per resource the gap between a cheap and
 ## an expensive building is barely noticeable, and raising a turret should feel
 ## like work next to hammering in a stake.

@@ -12,7 +12,7 @@ extends Node
 ## blips, and generating them keeps the repo free of binary assets and of Godot's
 ## import step (which does not run in a bare headless test).
 
-enum Sound { HIT, DEATH, BUILD_DONE, RAID_WARNING }
+enum Sound { HIT, DEATH, BUILD_DONE, RAID_WARNING, PICKUP }
 
 const AUDIO_RATE: int = 22050
 const VOICE_COUNT: int = 8
@@ -147,6 +147,10 @@ func _build_sounds() -> void:
 	_streams[Sound.RAID_WARNING] = _make_wav(0.6, func(t: float, n: float) -> float:
 		var env: float = minf(n * 6.0, 1.0) * (1.0 - n)
 		return (sin(t * TAU * 110.0) * 0.6 + sin(t * TAU * 165.0) * 0.4) * env * 0.8
+	)
+	# short blip, rising: something went into the bag
+	_streams[Sound.PICKUP] = _make_wav(0.11, func(t: float, n: float) -> float:
+		return sin(t * TAU * lerpf(620.0, 980.0, n)) * (1.0 - n) * 0.45
 	)
 
 ## Builds a mono 16-bit stream by sampling `shape(t_seconds, normalised_progress)`.

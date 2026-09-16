@@ -31,6 +31,7 @@ var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 @export var hud: CanvasLayer = null
 @export var hero: CharacterBody3D = null
 @export var resource_nodes_container: Node3D = null
+@export var drops_container: Node3D = null
 
 var resource_node_script: GDScript = null
 var current_core: Node = null
@@ -118,6 +119,15 @@ func _ensure_scene_dependencies() -> void:
 		add_child(resource_nodes_container)
 	if resource_node_script == null and ResourceLoader.exists("res://scripts/entities/ResourceNode.gd"):
 		resource_node_script = load("res://scripts/entities/ResourceNode.gd")
+
+	# Drops are kept in their own container so a restart can sweep the ground with
+	# one loop, and so nothing on the floor is ever mistaken for a building.
+	if drops_container == null:
+		drops_container = find_child(DropItem.CONTAINER_NAME, true, false) as Node3D
+	if drops_container == null:
+		drops_container = Node3D.new()
+		drops_container.name = DropItem.CONTAINER_NAME
+		add_child(drops_container)
 
 	# 3. GridManager
 	if grid_manager == null:
@@ -716,6 +726,12 @@ func restart_game() -> void:
 		for r in resource_nodes_container.get_children():
 			resource_nodes_container.remove_child(r)
 			r.queue_free()
+
+	# 5e. Sweep the ground: anything still lying about belongs to the old game
+	if drops_container and is_instance_valid(drops_container):
+		for d in drops_container.get_children():
+			drops_container.remove_child(d)
+			d.queue_free()
 
 	# 6. Reset GridManager occupancy
 	if grid_manager and is_instance_valid(grid_manager):

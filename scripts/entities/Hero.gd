@@ -117,6 +117,11 @@ func _physics_process(delta: float) -> void:
 		if provoke_timer <= 0.0:
 			has_provoked_dinos = false
 
+	# Sweeping the ground happens whatever the Hero is otherwise doing, and before
+	# the state machine: walking past a pile while on the way to a build site
+	# should still pick it up.
+	sweep_for_drops()
+
 	if not continuous_mode and _get_current_phase() != 0: # Only restricted during legacy DEPLOY phase
 		return
 
@@ -133,6 +138,40 @@ func _physics_process(delta: float) -> void:
 			_process_harvesting(delta)
 		State.TENDING:
 			_process_tending(delta)
+
+# ==============================================================================
+# Carrying things home
+# ==============================================================================
+
+## Picks up every drop within reach. Collection is automatic on purpose: making
+## the player click each pile would only move the clicking around, and the point
+## of routing resources through the Hero is that he has to *be there*, not that
+## he has to be told.
+##
+## Returns how many units were banked, which is what the tests measure.
+func sweep_for_drops() -> int:
+	if not is_inside_tree() or current_state == State.DEAD:
+		return 0
+	var radius: float = _pickup_radius()
+	if radius <= 0.0:
+		return 0
+	var banked: int = 0
+	for d in get_tree().get_nodes_in_group("drops"):
+		if not is_instance_valid(d) or d.is_queued_for_deletion() or not (d is Node3D):
+			continue
+		if "is_collected" in d and d.is_collected:
+			continue
+		if not d.has_method("collect"):
+			continue
+		if global_position.distance_to((d as Node3D).global_position) <= radius:
+			banked += int(d.collect(self))
+	return banked
+
+func _pickup_radius() -> float:
+	var cfg = _get_config()
+	if cfg and "DROPS" in cfg:
+		return float(cfg.DROPS.get("pickup_radius", 1.6))
+	return 1.6
 
 func _process_idle(_delta: float) -> void:
 	velocity = Vector3.ZERO

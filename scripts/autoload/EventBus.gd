@@ -106,3 +106,14 @@ signal building_tended(building: Node)
 
 ## Emitted when game speed multiplier changes (1x, 2x, 3x).
 signal game_speed_changed(multiplier: float)
+
+# ==============================================================================
+# 9. Drops (v0.3)
+# ==============================================================================
+## Emitted when a drop on the ground is collected and banked. `by` is whoever
+## walked over it (the Hero today), or null.
+signal resource_picked_up(res_id: String, amount: int, by: Node)
+
+## Emitted when a drop is created, so anything watching the ground can react
+## without having to poll the group.
+signal resource_dropped(res_id: String, amount: int, world_pos: Vector3)
