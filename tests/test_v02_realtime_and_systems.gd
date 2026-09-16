@@ -52,6 +52,10 @@ func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
 	Engine.time_scale = 1.0
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	Engine.time_scale = 1.0

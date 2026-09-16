@@ -168,7 +168,10 @@ func _get_phase() -> int:
 func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding() -> void:
 	# Track wood as a running total derived from Config, so the balance can change
 	# without invalidating what this test is really about: the place/destroy/rebuild loop.
-	var hut_cost: int = cost_of("tower")
+	# Stakes, not turrets: a turret is bought with wood and stone as of v0.4, and
+	# this test is about the place/destroy/rebuild loop rather than about paying
+	# two bills at once.
+	var hut_cost: int = cost_of("wall")
 	var hut_budget: int = hut_cost * 4 + 4
 	var wood: int = hut_budget
 	if game_state_node: game_state_node.resources["wood"] = hut_budget
@@ -188,8 +191,8 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	var cell2 = Vector2i(1, 3)
 
 	# Place 2 LumberHuts via BuildSystem (2 AP plus two hut costs)
-	var b0 = build_sys.place_building("tower", cell0)
-	var b1 = build_sys.place_building("tower", cell1)
+	var b0 = build_sys.place_building("wall", cell0)
+	var b1 = build_sys.place_building("wall", cell1)
 
 	assert_not_null(b0, "b0 placed")
 	assert_not_null(b1, "b1 placed")
@@ -229,8 +232,8 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	assert_eq(_get_ap(), 3, "AP reset to max_ap (3)")
 
 	# Player rebuilds on vacated cell0
-	assert_true(build_sys.can_place_building("tower", cell0), "Can build on vacated cell0")
-	var b_new = build_sys.place_building("tower", cell0)
+	assert_true(build_sys.can_place_building("wall", cell0), "Can build on vacated cell0")
+	var b_new = build_sys.place_building("wall", cell0)
 	assert_not_null(b_new, "New LumberHut built successfully on vacated cell0")
 	_cleanup_nodes.append(b_new)
 	assert_true(grid_mgr.is_cell_occupied(cell0), "cell0 occupied once again")
@@ -239,7 +242,7 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	assert_eq(_get_wood(), wood, "Wood deducted for the rebuilt hut")
 
 	# Player places another LumberHut on cell2
-	var b2 = build_sys.place_building("tower", cell2)
+	var b2 = build_sys.place_building("wall", cell2)
 	assert_not_null(b2, "b2 placed")
 	_cleanup_nodes.append(b2)
 	assert_eq(_get_ap(), 1, "AP deducted for 2nd build in Turn 2 (2 -> 1)")

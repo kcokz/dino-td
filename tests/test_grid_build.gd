@@ -82,6 +82,10 @@ func before_each() -> void:
 		# than whether the opening balance happens to cover a given building.
 		if "resources" in game_state_node: game_state_node.resources = {"wood": START_WOOD, "stone": START_WOOD, "water": START_WOOD, "food": 0}
 		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	# Clean up any instantiated nodes from the test to prevent ObjectDB leaks

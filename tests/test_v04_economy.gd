@@ -189,3 +189,77 @@ func test_10_bone_has_a_readout_like_every_other_resource() -> void:
 			continue   # no sink yet; see the open question in VERSION.md
 		assert_not_null(hud.find_child("%sLabel" % res_id.capitalize(), true, false),
 			"%s has a readout" % res_id)
+
+# ==============================================================================
+# 5. The two gates: a pick for stone, a blueprint for the turret
+# ==============================================================================
+
+func test_11_bare_hands_do_not_cut_rock() -> void:
+	var hero = hero_script.new()
+	_cleanup_nodes.append(hero)
+	tree.root.add_child(hero)
+	var rock = load("res://scripts/entities/ResourceNode.gd").new("stone", Vector2i(1, 0))
+	_cleanup_nodes.append(rock)
+	tree.root.add_child(rock)
+	rock.position = Vector3(1.0, 0.0, 0.0)
+	rock.setup("stone", Vector2i(1, 0), 20)
+	await wait_frames(1)
+
+	assert_false(hero.can_harvest(rock), "Without a pick there is nothing he can do with rock")
+	hero.order_harvest(rock)
+	assert_ne(int(hero.current_state), int(hero_script.State.HARVESTING), "So the order does nothing")
+
+	game_state_node.grant_unlock(String(config_node.harvest_requires_unlock("stone")))
+	assert_true(hero.can_harvest(rock), "With the pick made, rock is his")
+	hero.order_harvest(rock)
+	assert_eq(int(hero.current_state), int(hero_script.State.HARVESTING), "And he sets to work")
+
+func test_12_wood_is_never_gated() -> void:
+	# The opening has to be playable with nothing made yet, or there is no way to
+	# start the chain at all.
+	assert_eq(config_node.harvest_requires_unlock("wood"), "", "Trees need no tool")
+	assert_ne(config_node.harvest_requires_unlock("stone"), "", "Rock does")
+
+func test_13_a_turret_cannot_be_reached_on_materials_alone() -> void:
+	var grid = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(grid)
+	tree.root.add_child(grid)
+	var builder = build_system_script.new()
+	_cleanup_nodes.append(builder)
+	tree.root.add_child(builder)
+	builder.setup(grid, null)
+	await wait_frames(1)
+	pay_for(["tower"], 99)
+
+	assert_false(builder.can_place_building("tower", Vector2i(2, 2)),
+		"All the materials in the world do not make a turret you have not worked out")
+	game_state_node.grant_unlock(String(config_node.building_requires_unlock("tower")))
+	assert_true(builder.can_place_building("tower", Vector2i(2, 2)),
+		"The blueprint is what opens it")
+
+func test_14_stakes_are_never_gated() -> void:
+	assert_eq(config_node.building_requires_unlock("wall"), "",
+		"Stakes are what the player has on the first morning")
+	assert_ne(config_node.building_requires_unlock("tower"), "",
+		"A turret is not")
+
+func test_15_the_chain_closes() -> void:
+	# The whole point of v0.4, stated once: every link is reachable from the one
+	# before it, and the first raid is in the middle of it.
+	var pick: String = String(config_node.harvest_requires_unlock("stone"))
+	var blueprint: String = String(config_node.building_requires_unlock("tower"))
+
+	var pick_recipe: Dictionary = {}
+	var blueprint_recipe: Dictionary = {}
+	for recipe_id in config_node.RECIPES:
+		var data: Dictionary = config_node.RECIPES[recipe_id]
+		if String(data.get("unlocks", "")) == pick:
+			pick_recipe = data
+		if String(data.get("unlocks", "")) == blueprint:
+			blueprint_recipe = data
+
+	assert_false(pick_recipe.is_empty(), "The pick is something the cabin can make")
+	assert_false(blueprint_recipe.is_empty(), "So is the turret's blueprint")
+	assert_has(pick_recipe["inputs"], "bone", "And the pick is made of bone, which only a dinosaur has")
+	assert_has(config_node.BUILDINGS["tower"]["cost"], "stone",
+		"While the turret is built of the stone the pick cuts")

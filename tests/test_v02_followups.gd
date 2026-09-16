@@ -36,6 +36,10 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	for node in _cleanup_nodes:
@@ -324,12 +328,12 @@ func test_21_the_opening_can_buy_something() -> void:
 func test_22_the_opening_does_not_trivially_buy_the_whole_defence() -> void:
 	# The flip side: the opening must not hand over a turret and still leave enough
 	# for a fence, or the first real decision never happens.
+	# A turret is bought with wood and stone as of v0.4, so its price is the whole
+	# bill rather than its wood component.
 	var wallet: int = opening_wood()
-	var tower: int = cost_of("tower")
+	var tower: int = total_price_of("tower")
 	assert_lt(wallet, tower * 2,
-		"Opening wood (%d) must not buy two turrets (%d each) outright" % [wallet, tower])
-	assert_gte(wallet, tower,
-		"But it must buy one, or the opening has no defensive option at all")
+		"Opening wood (%d) must not cover two turrets (%d each) outright" % [wallet, tower])
 
 # ==============================================================================
 # 7. Left-click inspects, right-click acts -- and the two never interfere
@@ -459,7 +463,7 @@ func test_28_build_time_is_a_function_of_price() -> void:
 
 	# Doubling the price must more than double the wait, which is the whole point.
 	var cheap: float = config_node.get_build_time("tower")
-	var dear: float = maxf(floor_t, pow(cost_of("tower") * 2.0, expo) * per)
+	var dear: float = maxf(floor_t, pow(total_price_of("tower") * 2.0, expo) * per)
 	assert_gt(dear, cheap * 2.0, "Twice the price costs more than twice the time")
 
 	# No building may restate a build_time of its own, or the two can drift apart.
@@ -636,6 +640,8 @@ func _build_menu() -> Array:
 
 func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 	# Affordability should be visible without comparing numbers on every button.
+	for res_id in config_node.RESOURCES:
+		game_state_node.resources[res_id] = 0
 	game_state_node.resources["wood"] = cost_of("wall") # enough for a stake, nothing else
 	var pair = await _build_menu()
 	var panel = pair[0]
@@ -651,12 +657,12 @@ func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 	assert_true(seen["tower"].disabled, "A turret is out of reach, so its entry is greyed out")
 
 	# Paying for it lights the entry back up.
-	game_state_node.resources["wood"] = cost_of("tower")
+	pay_for(["tower"])
 	panel._refresh_ui()
 	assert_false(panel.button_container.get_child(1).disabled, "The turret entry lights up once affordable")
 
 func test_38_detail_line_reports_cost_and_build_time() -> void:
-	game_state_node.resources["wood"] = 999
+	pay_for(["tower"], 999)
 	var pair = await _build_menu()
 	var panel = pair[0]
 
@@ -665,21 +671,26 @@ func test_38_detail_line_reports_cost_and_build_time() -> void:
 
 	panel._show_build_detail("tower")
 	var detail: String = str(panel.status_label.text)
-	assert_true(detail.contains(str(cost_of("tower"))), "Detail names the cost (got '%s')" % detail)
+	for res_id in config_node.BUILDINGS["tower"]["cost"]:
+		assert_true(detail.contains(str(int(config_node.BUILDINGS["tower"]["cost"][res_id]))),
+			"Detail names what it costs in %s (got '%s')" % [res_id, detail])
 	var secs: String = "%.1f" % config_node.get_build_time("tower")
 	assert_true(detail.contains(secs) or detail.contains(secs.replace(".", ",")),
 		"Detail names the derived build time (got '%s')" % detail)
 
-func test_39_detail_line_says_what_is_missing_when_broke() -> void:
-	var short_by: int = maxi(0, cost_of("tower") - 1)
-	game_state_node.resources["wood"] = short_by
+func test_39_detail_line_says_what_is_actually_missing() -> void:
+	# It used to say "need N wood" whatever was short, which became a lie the moment
+	# a turret wanted stone as well.
+	pay_for(["tower"])
+	game_state_node.resources["stone"] = 0
+	var stone_cost: int = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
 	var pair = await _build_menu()
 	var panel = pair[0]
 
 	panel._show_build_detail("tower")
 	var detail: String = str(panel.status_label.text)
-	assert_true(detail.contains(str(cost_of("tower"))), "Says what the turret costs")
-	assert_true(detail.contains(str(short_by)), "Says what the player actually has")
+	assert_true(detail.contains(str(stone_cost)), "Names the stone that is short (got '%s')" % detail)
+	assert_false(detail.contains(tr("RESOURCE_WOOD")), "And says nothing about the wood already in hand")
 	assert_gt(panel.status_label.modulate.r, panel.status_label.modulate.g,
 		"The shortfall is tinted red rather than left for the player to notice")
 

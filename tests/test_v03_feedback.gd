@@ -35,6 +35,10 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -496,8 +500,9 @@ func test_26_build_entries_light_up_when_the_wood_arrives() -> void:
 	tree.root.add_child(panel)
 	await wait_frames(1)
 
-	var tower_cost: int = int(config_node.BUILDINGS["tower"]["cost"]["wood"])
-	game_state_node.resources["wood"] = maxi(0, tower_cost - 1)
+	# One wood short of the whole bill, whatever the bill is made of.
+	pay_for(["tower"])
+	game_state_node.resources["wood"] = maxi(0, int(game_state_node.resources.get("wood", 0)) - 1)
 	panel.select_target(hero)
 	panel._on_build_pressed()
 

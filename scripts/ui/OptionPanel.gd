@@ -87,6 +87,21 @@ func _on_cabin_view_changed(inside: bool) -> void:
 func _on_resources_changed(_res: Dictionary) -> void:
 	refresh_build_affordability()
 
+## Whether the flag a building waits on has been made yet. Anything with no gate
+## is always open.
+func _is_unlocked(b_type: String) -> bool:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("building_requires_unlock"):
+		return true
+	var needed: String = String(cfg.building_requires_unlock(b_type))
+	if needed == "":
+		return true
+	var gs = _get_game_state()
+	return gs != null and gs.has_method("has_unlock") and gs.has_unlock(needed)
+
+func _unlock_name(unlock_id: String) -> String:
+	return TranslationServer.translate("UNLOCK_%s" % unlock_id.to_upper())
+
 func refresh_build_affordability() -> void:
 	if current_menu != "build" or button_container == null:
 		return
@@ -98,7 +113,7 @@ func refresh_build_affordability() -> void:
 			break
 		var btn = children[i]
 		if btn is Button:
-			btn.disabled = not _can_afford(String(buildable[i]))
+			btn.disabled = not _can_afford(String(buildable[i])) or not _is_unlocked(String(buildable[i]))
 
 func set_selected_unit(unit: Node) -> void:
 	selected_unit = unit
@@ -350,7 +365,7 @@ func _populate_hero_buttons() -> void:
 			var btn := _create_action_button(b_name, func():
 				_trigger_build(b_type)
 			)
-			btn.disabled = not _can_afford(b_type)
+			btn.disabled = not _can_afford(b_type) or not _is_unlocked(b_type)
 			btn.mouse_entered.connect(func(): _show_build_detail(b_type))
 			btn.focus_entered.connect(func(): _show_build_detail(b_type))
 			btn.mouse_exited.connect(_clear_build_detail)
@@ -371,18 +386,54 @@ func _show_build_detail(b_type: String) -> void:
 	if cfg == null or not cfg.BUILDINGS.has(b_type):
 		return
 	var b_name: String = _building_name(b_type)
-	var cost: int = int(cfg.BUILDINGS[b_type].get("cost", {}).get("wood", 0))
+	# A locked entry is shown rather than hidden: the player should be able to see
+	# what is waiting for them, and what has to be made before it opens.
+	if not _is_unlocked(b_type):
+		var needed: String = String(cfg.building_requires_unlock(b_type))
+		status_label.text = tr("BUILD_DETAIL_LOCKED") % [b_name, _unlock_name(needed)]
+		status_label.modulate = Color(0.75, 0.7, 0.55)
+		return
 	if _can_afford(b_type):
 		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
 		var dps: float = float(cfg.get_contact_dps(b_type)) if cfg.has_method("get_contact_dps") else 0.0
 		if dps > 0.0:
-			status_label.text = tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, cost, secs, dps]
+			status_label.text = tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, dps]
 		else:
-			status_label.text = tr("BUILD_DETAIL_FORMAT") % [b_name, cost, secs]
+			status_label.text = tr("BUILD_DETAIL_FORMAT") % [b_name, _cost_text(b_type), secs]
 		status_label.modulate = Color(0.85, 0.85, 0.85)
 	else:
-		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, cost, _wood()]
+		# Name what is actually short. A turret is bought with wood and stone, so
+		# "need 8 wood" was a lie the moment the player had the wood and no rock.
+		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)]
 		status_label.modulate = Color(1.0, 0.45, 0.4)
+
+## A {resource: amount} bill, written out for a button or a status line.
+func _amounts_text(amounts: Dictionary) -> String:
+	var parts: PackedStringArray = []
+	for res_id in amounts:
+		parts.append("%d %s" % [int(amounts[res_id]), _resource_name(String(res_id))])
+	return ", ".join(parts)
+
+## What a building costs, in every resource it asks for.
+func _cost_text(b_type: String) -> String:
+	var cfg = _get_config()
+	if cfg == null or not cfg.BUILDINGS.has(b_type):
+		return ""
+	return _amounts_text(cfg.BUILDINGS[b_type].get("cost", {}))
+
+## How much of each resource is still missing, and nothing about the ones that are
+## already covered.
+func _missing_text(b_type: String) -> String:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or gs == null or not cfg.BUILDINGS.has(b_type):
+		return ""
+	var parts: PackedStringArray = []
+	for res_id in cfg.BUILDINGS[b_type].get("cost", {}):
+		var short: int = int(cfg.BUILDINGS[b_type]["cost"][res_id]) - int(gs.resources.get(res_id, 0))
+		if short > 0:
+			parts.append("%d %s" % [short, _resource_name(String(res_id))])
+	return ", ".join(parts)
 
 func _clear_build_detail() -> void:
 	if status_label == null:
@@ -417,9 +468,11 @@ func _can_afford(b_type: String) -> bool:
 ## button.
 func _populate_building_buttons() -> void:
 	if selected_unit.has_method("needs_repair") and selected_unit.needs_repair():
-		var cost: int = int(selected_unit.repair_cost()) if selected_unit.has_method("repair_cost") else 0
+		# The bill is listed in what it actually costs: a turret is mended with wood
+		# and stone, so "N wood" would be the same lie the build menu used to tell.
 		var raw: String = tr("CMD_REPAIR")
-		var btn := _create_action_button((raw % cost) if ("%" in raw) else raw, func():
+		var cost_text: String = _amounts_text(selected_unit.repair_cost()) if selected_unit.has_method("repair_cost") else ""
+		var btn := _create_action_button((raw % cost_text) if ("%" in raw) else raw, func():
 			var hero = _get_hero()
 			if hero and is_instance_valid(hero) and hero.has_method("order_repair") and is_instance_valid(selected_unit):
 				hero.order_repair(selected_unit)
@@ -484,10 +537,19 @@ func _clear_craft_detail() -> void:
 		status_label.text = tr("CABIN_HINT_PICK_STATION")
 	status_label.modulate = Color(0.85, 0.85, 0.85)
 
-## Repair is paid one wood at a time, so one wood is enough to start.
+## The whole bill has to be payable: repair is one transaction, so there is no
+## point starting a job the warehouse cannot finish.
 func _can_pay_a_repair_step() -> bool:
 	var gs = _get_game_state()
-	return gs != null and "resources" in gs and int(gs.resources.get("wood", 0)) >= 1
+	if gs == null or not ("resources" in gs) or selected_unit == null or not is_instance_valid(selected_unit):
+		return false
+	if not selected_unit.has_method("repair_cost"):
+		return false
+	var owed: Dictionary = selected_unit.repair_cost()
+	for res_id in owed:
+		if int(gs.resources.get(res_id, 0)) < int(owed[res_id]):
+			return false
+	return not owed.is_empty()
 
 func _resource_name(res_id: String) -> String:
 	return TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())

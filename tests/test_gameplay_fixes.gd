@@ -227,7 +227,8 @@ func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
 	panel._show_build_detail("wall")
 	var detail: String = str(panel.status_label.text)
 	assert_true(detail.contains(str(cost_of("wall"))), "Detail line states the wood cost (got '%s')" % detail)
-	assert_true(detail.contains("木") or detail.contains("wood"), "Detail line names the resource (got '%s')" % detail)
+	assert_true(detail.to_lower().contains(tr("RESOURCE_WOOD").to_lower()),
+		"Detail line names the resource (got '%s')" % detail)
 
 func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")

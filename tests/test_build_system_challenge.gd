@@ -67,6 +67,10 @@ func before_each() -> void:
 		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 		if "current_phase" in game_state_node: game_state_node.current_phase = 0
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	for n in _cleanup_nodes:

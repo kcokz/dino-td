@@ -77,55 +77,67 @@ func test_01_only_a_damaged_finished_building_wants_repair() -> void:
 	await wait_frames(1)
 	assert_false(blueprint.needs_repair(), "A blueprint is raised, not mended")
 
-func test_02_the_quoted_price_is_what_it_actually_costs() -> void:
+func test_02_the_bill_is_the_price_scaled_by_the_damage() -> void:
+	# Never more than building it again, and a scratch costs the minimum rather
+	# than a flat fee.
 	var turret = _turret()
 	await wait_frames(1)
-	turret.take_damage(turret.max_hp - 1.0)
-	var quoted: int = turret.repair_cost()
-	game_state_node.resources["wood"] = 999
+	var price: Dictionary = config_node.BUILDINGS["tower"]["cost"]
 
-	var before: int = int(game_state_node.resources["wood"])
-	var guard: int = 0
-	while turret.needs_repair() and guard < 200:
-		turret.repair_tick()
-		guard += 1
-	var spent: int = before - int(game_state_node.resources["wood"])
-	assert_eq(spent, quoted, "The menu's figure and the bill are the same number")
-	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "And it ends up full")
+	turret.take_damage(turret.max_hp * 0.5)
+	for res_id in price:
+		var want: int = int(ceil(int(price[res_id]) * turret.damage_fraction()))
+		assert_eq(int(turret.repair_cost().get(res_id, 0)), want,
+			"Half gone costs half the %s, rounded up" % res_id)
 
-func test_03_one_step_is_one_wood_so_stopping_half_way_is_clean() -> void:
-	# Whole-wood transactions: walk away mid-repair and you keep exactly what you
-	# paid for, with no fractional change owed either way.
+func test_03_mending_never_costs_more_than_building_it_again() -> void:
 	var turret = _turret()
 	await wait_frames(1)
-	turret.take_damage(turret.max_hp - 1.0)
-	game_state_node.resources["wood"] = 99
+	turret.take_damage(turret.max_hp - 0.001)   # all but destroyed
+	var price: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	for res_id in price:
+		assert_lte(int(turret.repair_cost().get(res_id, 0)), int(price[res_id]),
+			"Even gutted, the %s bill is capped at what it cost to build" % res_id)
+	assert_lte(turret.repair_price_total(), total_price_of("tower"),
+		"So repair is never the worse deal")
+
+func test_04_a_scratch_costs_the_minimum_not_a_flat_fee() -> void:
+	var turret = _turret()
+	await wait_frames(1)
+	turret.take_damage(0.5)
+	assert_eq(turret.repair_price_total(), turret.repair_cost().size(),
+		"One unit of each resource it is short of, and no more")
+	assert_lt(turret.repair_price_total(), total_price_of("tower"),
+		"Which is far less than rebuilding it")
+
+func test_05_the_bill_is_charged_once_at_the_end() -> void:
+	# One transaction: walking away costs the time spent and nothing else, so there
+	# is never a half-paid building to explain.
+	var turret = _turret()
+	await wait_frames(1)
+	turret.take_damage(turret.max_hp * 0.5)
+	pay_for(["tower"], 99)
+	var owed: Dictionary = turret.repair_cost()
+	var before: Dictionary = {}
+	for res_id in owed:
+		before[res_id] = int(game_state_node.resources.get(res_id, 0))
+
+	assert_true(turret.finish_repair(), "The job completes")
+	for res_id in owed:
+		assert_eq(int(game_state_node.resources.get(res_id, 0)), before[res_id] - int(owed[res_id]),
+			"Exactly the quoted %s left the warehouse" % res_id)
+	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "And it is whole again")
+
+func test_05b_an_unpayable_bill_mends_nothing() -> void:
+	var turret = _turret()
+	await wait_frames(1)
+	turret.take_damage(turret.max_hp * 0.5)
+	for res_id in config_node.RESOURCES:
+		game_state_node.resources[res_id] = 0
 
 	var hp_before: float = turret.current_hp
-	var wood_before: int = int(game_state_node.resources["wood"])
-	turret.repair_tick()
-	assert_eq(int(game_state_node.resources["wood"]), wood_before - 1, "One step costs one wood")
-	assert_almost_eq(turret.current_hp, hp_before + float(config_node.REPAIR["hp_per_wood"]), 0.001,
-		"And buys exactly what a wood buys")
-
-func test_04_an_empty_warehouse_stops_the_job_where_it_stands() -> void:
-	var turret = _turret()
-	await wait_frames(1)
-	turret.take_damage(turret.max_hp - 1.0)
-	game_state_node.resources["wood"] = 0
-
-	var hp_before: float = turret.current_hp
-	assert_true(turret.repair_tick(), "With nothing to spend, the job is over")
+	assert_false(turret.finish_repair(), "With nothing to spend there is no repair")
 	assert_almost_eq(turret.current_hp, hp_before, 0.001, "And nothing was mended for free")
-
-func test_05_repairing_is_cheaper_than_rebuilding_what_is_worth_repairing() -> void:
-	# Otherwise nobody would ever mend anything. It is deliberately the other way
-	# round for a one-wood stake: replacing that is correct.
-	var turret = _turret()
-	await wait_frames(1)
-	turret.take_damage(turret.max_hp - 0.01)
-	assert_lt(turret.repair_cost(), cost_of("tower"),
-		"A gutted turret costs less to mend than to build again")
 
 func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 	# One verb: he walks over and works on it. What the hammer is for is the
@@ -135,14 +147,17 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 	var turret = _turret(Vector3(1.0, 0.0, 0.0))
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp - 1.0)
-	game_state_node.resources["wood"] = 99
+	pay_for(["tower"], 99)   # a turret is mended with wood and stone
 
 	hero.order_repair(turret)
 	assert_eq(int(hero.current_state), int(hero_script.State.BUILDING), "He sets to work")
 
 	var hp_before: float = turret.current_hp
-	hero._physics_process(float(config_node.REPAIR["seconds_per_wood"]) + 0.01)
-	assert_gt(turret.current_hp, hp_before, "And the building comes back up")
+	var needed: float = turret.repair_seconds()
+	hero._physics_process(needed * 0.5)
+	assert_almost_eq(turret.current_hp, hp_before, 0.001, "Half the work mends nothing yet")
+	hero._physics_process(needed * 0.5 + 0.01)
+	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "Finishing it puts the building back up")
 
 # ==============================================================================
 # 2. Right-click acts; the panel is where costly things are chosen
@@ -205,8 +220,13 @@ func test_10_mending_is_offered_on_the_panel_when_there_is_damage() -> void:
 	turret.take_damage(turret.max_hp * 0.5)
 	panel.select_target(turret)
 	var labels: Array = _button_labels(panel)
-	assert_true(_any_contains(labels, str(turret.repair_cost())),
-		"Damaged, the panel offers it with the price on the button (got %s)" % str(labels))
+	# The bill is listed in what it actually costs -- a turret is mended with wood
+	# and stone -- so every line of it has to be on the button.
+	for res_id in turret.repair_cost():
+		assert_true(_any_contains(labels, str(int(turret.repair_cost()[res_id]))),
+			"The %s it costs is on the button (got %s)" % [res_id, str(labels)])
+		assert_true(_any_contains(labels, tr("RESOURCE_%s" % String(res_id).to_upper())),
+			"Named as %s rather than as a bare number" % res_id)
 	assert_true(_any_contains(labels, tr("CMD_DEMOLISH")), "Alongside demolish")
 
 func test_11_an_unaffordable_repair_is_offered_but_disabled() -> void:
@@ -221,10 +241,7 @@ func test_11_an_unaffordable_repair_is_offered_but_disabled() -> void:
 	game_state_node.resources["wood"] = 0
 
 	panel.select_target(turret)
-	var repair_btn: Button = null
-	for child in panel.button_container.get_children():
-		if child is Button and str(child.text).contains(str(turret.repair_cost())):
-			repair_btn = child
+	var repair_btn: Button = _find_repair_button(panel)
 	assert_not_null(repair_btn, "The option is shown")
 	assert_true(repair_btn.disabled, "But cannot be taken with an empty warehouse")
 
@@ -241,10 +258,19 @@ func test_12_choosing_it_sends_the_hero_to_work() -> void:
 	await wait_frames(1)
 
 	panel.select_target(turret)
-	for child in panel.button_container.get_children():
-		if child is Button and str(child.text).contains(str(turret.repair_cost())):
-			child.pressed.emit()
+	var btn: Button = _find_repair_button(panel)
+	assert_not_null(btn, "The option is there to pick")
+	btn.pressed.emit()
 	assert_eq(main.hero.target_building, turret, "Picking it is what starts the job")
+
+## The repair entry, found by its own wording rather than by whatever number
+## happens to be in it.
+func _find_repair_button(panel: Node) -> Button:
+	var prefix: String = tr("CMD_REPAIR").split("%")[0].strip_edges()
+	for child in panel.button_container.get_children():
+		if child is Button and str(child.text).begins_with(prefix):
+			return child
+	return null
 
 func _button_labels(panel: Node) -> Array:
 	var out: Array = []

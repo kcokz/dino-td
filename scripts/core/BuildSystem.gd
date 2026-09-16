@@ -48,7 +48,16 @@ func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = fa
 		return false
 	
 	var b_data: Dictionary = cfg.BUILDINGS[type_id]
-	
+
+	# Some buildings have to be worked out before they can be put up. The flag is
+	# made at the cabin, so a turret cannot be reached on materials alone.
+	if cfg.has_method("building_requires_unlock"):
+		var needed: String = String(cfg.building_requires_unlock(type_id))
+		if needed != "":
+			var gs_unlock = _get_game_state()
+			if gs_unlock == null or not gs_unlock.has_method("has_unlock") or not gs_unlock.has_unlock(needed):
+				return false
+
 	# Verify GridManager occupancy & Resource Node overlap
 	if grid_manager == null:
 		_auto_resolve_dependencies()

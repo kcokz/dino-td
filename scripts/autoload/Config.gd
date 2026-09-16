@@ -56,7 +56,11 @@ const BUILDINGS: Dictionary = {
 		"footprint": 1.1,
 		"height": 2.4,
 		"hp": 20.0,
-		"cost": {"wood": 12},
+		# Stone, so a turret cannot be reached on wood alone -- and a blueprint, so
+		# it cannot be reached on materials alone either. Both come out of the
+		# cabin, which is the point: the thing you defend is the thing you need.
+		"cost": {"wood": 8, "stone": 4},
+		"requires_unlock": "blueprint_tower",
 		"ap_cost": 1,
 		"range": 5.0,
 		"damage": 1.0,
@@ -74,11 +78,12 @@ const BUILDINGS: Dictionary = {
 		# staying below BUILDING_HEIGHT_DEFAULT keeps a row of stakes reading as a
 		# fence you see over rather than as a wall of buildings. A turret is the
 		# opposite -- narrow enough to walk past, tall enough to spot across the map.
-		# Slim enough to read as a stake rather than a wall, wide enough that a row
-		# of them still closes: the gap left beside one (TILE_SIZE - footprint) has
-		# to stay narrower than the Hero, or the fence is decoration. See
-		# is_barrier_building().
-		"footprint": 1.3,
+		# Fills its tile exactly, so neighbouring stakes touch and a fence line has
+		# no holes in it -- a visible gap between two stakes reads as a way through
+		# even when the collision says otherwise. Stakes stay unimposing by being
+		# LOW rather than by being narrow: height is the lever that costs nothing,
+		# while width is the thing that decides whether a fence is a fence.
+		"footprint": 2.0,
 		"height": 0.85,
 		"mesh_style": "spikes",
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
@@ -188,6 +193,21 @@ static func get_building_footprint(type_id: String = "") -> float:
 static func is_barrier_building(type_id: String) -> bool:
 	var fp: float = get_building_footprint(type_id)
 	return (TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
+
+## The flag a building needs before it can be placed, or "" for anything the Hero
+## can put up from the start. Declared as data so a new gate is a Config line
+## rather than a branch somewhere in the build path.
+static func building_requires_unlock(type_id: String) -> String:
+	if BUILDINGS.has(type_id):
+		return String(BUILDINGS[type_id].get("requires_unlock", ""))
+	return ""
+
+## The flag needed before `res_id` can be cut by hand, or "" for anything bare
+## hands can take.
+static func harvest_requires_unlock(res_id: String) -> String:
+	if RESOURCE_NODES.has(res_id):
+		return String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
+	return ""
 
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
@@ -418,6 +438,10 @@ const RESOURCE_NODES: Dictionary = {
 		"name": "RESOURCE_STONE",
 		"capacity": 100,
 		"harvest_rate": 0.35,     # 0.35 stone/s by hand
+		# Bare hands do not cut rock. The pick is made at the cabin out of bone, and
+		# bone comes off a dinosaur -- which is what turns the first raid from a
+		# threat into something the player needs.
+		"requires_unlock": "harvest_stone",
 		"color": Color(0.6, 0.6, 0.65),
 		"depleted_color": Color(0.3, 0.3, 0.3),
 	},
@@ -494,17 +518,18 @@ static func get_resource_color(res_id: String) -> Color:
 # ==============================================================================
 # 13b. Repair (v0.4)
 # ==============================================================================
-## Patching a building up rather than letting it fall. Paid in whole wood, one
-## transaction at a time, so there is no fractional book-keeping and the player can
-## stop half-way and keep what they paid for.
+## Patching a building up rather than letting it fall.
 ##
-## Repair is worth doing on something expensive and not worth it on something
-## cheap: five wood puts a gutted turret back to full, against twelve to rebuild it
-## -- and rebuilding also costs its build time and its position. A stake is cheaper
-## to replace than to mend, which is correct for a thing that costs one wood.
+## The bill is the building's own price scaled by how much of it is missing,
+## rounded up, in every resource it was built from. So mending can never cost more
+## than building the thing again, a scratch costs the minimum rather than a flat
+## fee, and a turret -- expensive, and worth keeping where it stands -- is the
+## thing repair is really for.
+##
+## It is one transaction, charged when the work finishes: walking away costs the
+## time spent and nothing else, and there is no half-paid state to reason about.
 const REPAIR: Dictionary = {
-	"hp_per_wood": 4.0,       # 一份木头修复多少血
-	"seconds_per_wood": 1.5,  # 一份木头要修多久（秒）
+	"seconds_per_unit": 1.2,  # 每一点修理费对应的施工秒数
 }
 
 # ==============================================================================

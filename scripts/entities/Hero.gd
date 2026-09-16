@@ -325,8 +325,9 @@ func _process_building(delta: float) -> void:
 	else:
 		_continue_to_next_pending_building_or_idle()
 
-## Mending runs in whole steps: a step of time buys a step of wood buys a step of
-## health. Running out of either just ends the job where it stands.
+## Mending: he stands there for as long as the job is worth, and the bill is paid
+## when the work is done. Walking away costs the time spent and nothing else --
+## there is never a half-paid building to explain.
 func _work_on_repair(delta: float) -> void:
 	if not target_building.has_method("needs_repair") or not target_building.needs_repair():
 		target_building = null
@@ -334,16 +335,14 @@ func _work_on_repair(delta: float) -> void:
 		_continue_to_next_pending_building_or_idle()
 		return
 	repair_timer += delta
-	var step: float = float(target_building.repair_seconds_per_step()) if target_building.has_method("repair_seconds_per_step") else 1.5
-	while repair_timer >= step:
-		repair_timer -= step
-		if not target_building.has_method("repair_tick"):
-			break
-		if target_building.repair_tick():
-			target_building = null
-			repair_timer = 0.0
-			_continue_to_next_pending_building_or_idle()
-			return
+	var needed: float = float(target_building.repair_seconds()) if target_building.has_method("repair_seconds") else 1.0
+	if repair_timer < needed:
+		return
+	repair_timer = 0.0
+	if target_building.has_method("finish_repair"):
+		target_building.finish_repair()
+	target_building = null
+	_continue_to_next_pending_building_or_idle()
 
 func _process_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -634,6 +633,21 @@ func order_attack(enemy: Node3D) -> void:
 		_plan_path(enemy.global_position)
 	current_state = State.MOVING
 
+## Whether the Hero has what it takes to work this node at all. Stone needs a
+## pick, and the pick is made at the cabin -- so "can I cut this" is a question
+## about what he has made, not about where he is standing.
+func can_harvest(node: Node) -> bool:
+	if node == null or not is_instance_valid(node) or not ("resource_type" in node):
+		return false
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("harvest_requires_unlock"):
+		return true
+	var needed: String = String(cfg.harvest_requires_unlock(String(node.resource_type)))
+	if needed == "":
+		return true
+	var gs = _get_game_state()
+	return gs != null and gs.has_method("has_unlock") and gs.has_unlock(needed)
+
 func order_harvest(node: Node) -> void:
 	if current_state == State.DEAD:
 		return
@@ -642,6 +656,8 @@ func order_harvest(node: Node) -> void:
 		return
 	if "is_depleted" in node and node.is_depleted:
 		current_state = State.IDLE
+		return
+	if not can_harvest(node):
 		return
 
 	_clear_orders()

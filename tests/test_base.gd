@@ -308,6 +308,57 @@ func opening_banked_wood() -> int:
 		return 0
 	return int(cfg.INITIAL_RESOURCES.get("wood", 0))
 
+## Grants every unlock the cabin can make. v0.4 gates stone-cutting behind a pick
+## and the turret behind a blueprint; a test about something *else* should not have
+## to walk that whole chain first, and naming the flags by hand would restate
+## Config in every suite.
+func unlock_all() -> void:
+	var cfg = null
+	var gs = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+		gs = Engine.get_main_loop().root.get_node_or_null("GameState")
+	if cfg == null or gs == null or not gs.has_method("grant_unlock"):
+		return
+	if "RECIPES" in cfg:
+		for recipe_id in cfg.RECIPES:
+			gs.grant_unlock(String(cfg.RECIPES[recipe_id].get("unlocks", "")))
+
+## Seeds the wallet with exactly what `type_ids` cost, in every resource they ask
+## for. Since v0.4 a turret is bought with wood *and* stone, so "give them enough
+## wood" is no longer the same as "they can afford it".
+func pay_for(type_ids: Array, spare: int = 0) -> void:
+	var cfg = null
+	var gs = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+		gs = Engine.get_main_loop().root.get_node_or_null("GameState")
+	if cfg == null or gs == null or not ("resources" in gs):
+		return
+	for t in type_ids:
+		var type_id: String = String(t)
+		if not cfg.BUILDINGS.has(type_id):
+			continue
+		for res_id in cfg.BUILDINGS[type_id].get("cost", {}):
+			var have: int = int(gs.resources.get(res_id, 0))
+			gs.resources[res_id] = have + int(cfg.BUILDINGS[type_id]["cost"][res_id])
+	if spare > 0:
+		for res_id in cfg.RESOURCES:
+			gs.resources[res_id] = int(gs.resources.get(res_id, 0)) + spare
+
+## Everything `type_id` costs, added up across resources. The figure the build-time
+## curve is derived from.
+func total_price_of(type_id: String) -> int:
+	var cfg = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	if cfg == null or not cfg.BUILDINGS.has(type_id):
+		return 0
+	var sum: int = 0
+	for res_id in cfg.BUILDINGS[type_id].get("cost", {}):
+		sum += int(cfg.BUILDINGS[type_id]["cost"][res_id])
+	return sum
+
 ## Total wood needed to place every type in `type_ids` once.
 func total_cost_of(type_ids: Array, res_id: String = "wood") -> int:
 	var sum: int = 0

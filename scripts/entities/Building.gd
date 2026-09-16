@@ -201,44 +201,75 @@ func _on_before_destroy() -> void:
 func needs_repair() -> bool:
 	return is_constructed and not is_destroyed and current_hp < max_hp
 
-## Whole wood needed to put it back to full, at the configured rate. The figure the
-## right-click menu quotes and the figure repair_tick() spends, so they cannot
-## disagree.
-func repair_cost() -> int:
-	if not needs_repair():
-		return 0
-	return int(ceil((max_hp - current_hp) / _repair_cfg("hp_per_wood", 4.0)))
+## How much of the building is missing, 0..1.
+func damage_fraction() -> float:
+	if max_hp <= 0.0 or not needs_repair():
+		return 0.0
+	return clampf((max_hp - current_hp) / max_hp, 0.0, 1.0)
 
-## One step of mending: spends a single wood and heals what that wood buys.
-## Returns true when there is nothing more to do -- either it is full, or the
-## warehouse cannot pay for the next step.
+## The bill: the building's own price scaled by how much of it is missing, rounded
+## up, in every resource it was built from.
 ##
-## Charging one wood at a time means walking away mid-repair keeps exactly what was
-## paid for, with no fractional change owed in either direction.
-func repair_tick() -> bool:
-	if not needs_repair():
-		return true
-	var gs = _get_game_state()
-	if gs == null:
-		return true
-	if gs.has_method("spend_resources"):
-		if not gs.spend_resources({"wood": 1}):
-			return true
-	elif "resources" in gs:
-		if int(gs.resources.get("wood", 0)) < 1:
-			return true
-		gs.resources["wood"] = int(gs.resources["wood"]) - 1
-	heal(_repair_cfg("hp_per_wood", 4.0))
-	return not needs_repair()
-
-func repair_seconds_per_step() -> float:
-	return maxf(0.05, _repair_cfg("seconds_per_wood", 1.5))
-
-func _repair_cfg(key: String, fallback: float) -> float:
+## Scaling the real price is what keeps this honest -- mending can never cost more
+## than building the thing again, and a scratch costs the minimum rather than a
+## flat fee. Rounding up means the cheapest possible repair is one unit, which is
+## also why a one-wood stake is not worth mending: replacing it is the same price
+## and it comes back at full health.
+func repair_cost() -> Dictionary:
+	var out: Dictionary = {}
+	var fraction: float = damage_fraction()
+	if fraction <= 0.0:
+		return out
 	var cfg = _get_config()
+	if cfg == null or not cfg.BUILDINGS.has(building_type):
+		return out
+	for res_id in cfg.BUILDINGS[building_type].get("cost", {}):
+		var price: int = int(cfg.BUILDINGS[building_type]["cost"][res_id])
+		var owed: int = int(ceil(price * fraction))
+		if owed > 0:
+			out[res_id] = mini(owed, price)   # never more than building it again
+	return out
+
+## The bill added up, for a menu that has one line to say it in.
+func repair_price_total() -> int:
+	var sum: int = 0
+	for res_id in repair_cost():
+		sum += int(repair_cost()[res_id])
+	return sum
+
+## How long the Hero has to stand there. Derived from the size of the bill, so
+## patching a scratch is quick and rebuilding most of a turret is not.
+func repair_seconds() -> float:
+	var cfg = _get_config()
+	var per: float = 1.2
 	if cfg and "REPAIR" in cfg:
-		return float(cfg.REPAIR.get(key, fallback))
-	return fallback
+		per = float(cfg.REPAIR.get("seconds_per_unit", per))
+	return maxf(0.1, per * float(repair_price_total()))
+
+## Pays the bill and puts the building back to full. One transaction at the end of
+## the work: walking away costs the time spent and nothing else, so there is never
+## a half-paid building to reason about.
+##
+## The bill is worked out again here rather than trusted from when the job started,
+## so damage taken during the repair is charged for rather than mended free.
+func finish_repair() -> bool:
+	if not needs_repair():
+		return false
+	var owed: Dictionary = repair_cost()
+	var gs = _get_game_state()
+	if gs == null or owed.is_empty():
+		return false
+	if gs.has_method("spend_resources"):
+		if not gs.spend_resources(owed):
+			return false
+	elif "resources" in gs:
+		for res_id in owed:
+			if int(gs.resources.get(res_id, 0)) < int(owed[res_id]):
+				return false
+		for res_id in owed:
+			gs.resources[res_id] = int(gs.resources[res_id]) - int(owed[res_id])
+	heal(max_hp - current_hp)
+	return true
 
 func heal(amount: float) -> void:
 	if is_destroyed or amount <= 0.0:

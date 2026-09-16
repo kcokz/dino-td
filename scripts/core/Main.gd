@@ -684,14 +684,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			var res_node = get_resource_node_at_cell(cell)
 			var b = grid_manager.get_building_at(cell) if grid_manager else null
 			if res_node != null and is_instance_valid(res_node):
-				hero.order_harvest(res_node)
+				if hero.has_method("can_harvest") and not hero.can_harvest(res_node):
+					_hint("HINT_NEED_TOOL")
+				else:
+					hero.order_harvest(res_node)
 			elif b != null and is_instance_valid(b):
 				right_click_building(b, hit_pos)
 			else:
 				var hit_obj = _raycast_object(event.position)
 				if hit_obj != null and is_instance_valid(hit_obj):
 					if hit_obj.is_in_group("resource_nodes") or ("resource_type" in hit_obj):
-						hero.order_harvest(hit_obj)
+						if hero.has_method("can_harvest") and not hero.can_harvest(hit_obj):
+							_hint("HINT_NEED_TOOL")
+						else:
+							hero.order_harvest(hit_obj)
 					elif hit_obj.is_in_group("dinos"):
 						hero.order_attack(hit_obj)
 					elif hit_obj.is_in_group("buildings") or _is_cabin(hit_obj):
@@ -755,7 +761,16 @@ func try_place_at_cell(cell: Vector2i) -> Node:
 			cancel_building_selection()
 		return placed
 
-	# Rejected: the only reason the player can act on is affordability.
+	# Rejected. Say which of the two reasons it was: not worked out yet, or not
+	# paid for.
+	var cfg_lock = _get_config()
+	if cfg_lock and cfg_lock.has_method("building_requires_unlock"):
+		var needed: String = String(cfg_lock.building_requires_unlock(current_build_type))
+		var gs_lock = _get_game_state()
+		if needed != "" and (gs_lock == null or not gs_lock.has_method("has_unlock") or not gs_lock.has_unlock(needed)):
+			_hint("HINT_NEED_BLUEPRINT")
+			return null
+
 	var gs = _get_game_state()
 	var cfg = _get_config()
 	if gs and cfg and cfg.BUILDINGS.has(current_build_type):

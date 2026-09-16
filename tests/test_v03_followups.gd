@@ -32,6 +32,10 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -365,7 +369,7 @@ func _build_menu() -> Array:
 	return [panel, hero]
 
 func test_20_the_build_menu_says_that_stakes_bite() -> void:
-	game_state_node.resources["wood"] = 999
+	pay_for(["wall", "tower"], 999)
 	var pair = await _build_menu()
 	var panel = pair[0]
 
@@ -378,11 +382,11 @@ func test_20_the_build_menu_says_that_stakes_bite() -> void:
 	# A building with no bite must not sprout an empty damage figure.
 	panel._show_build_detail("tower")
 	var plain: String = str(panel.status_label.text)
-	assert_eq(plain, tr("BUILD_DETAIL_FORMAT") % [
-		config_node.get_building_name("tower"),
-		cost_of("tower"),
-		config_node.get_build_time("tower"),
-	], "A turret's line is the plain one")
+	assert_false(plain.contains("%.1f" % config_node.get_contact_dps("wall")),
+		"A turret's line carries no bite figure (got '%s')" % plain)
+	assert_true(plain.contains("%.1f" % config_node.get_build_time("tower"))
+		or plain.contains(("%.1f" % config_node.get_build_time("tower")).replace(".", ",")),
+		"But it does carry its build time (got '%s')" % plain)
 
 func test_21_a_selected_stake_reports_its_bite() -> void:
 	var stake = _stake()

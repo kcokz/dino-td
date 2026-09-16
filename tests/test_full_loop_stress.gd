@@ -67,6 +67,10 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
+	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
+	# about something else, so it starts with the cabin's work already done rather
+	# than walking that chain in every test.
+	unlock_all()
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -164,9 +168,12 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# --------------------------------------------------------------------------
 	# Phase B: Plan Phase Building Placement (Wall, LumberHut, Tower)
 	# --------------------------------------------------------------------------
-	# Fund the placements from Config so this test measures the loop, not the balance.
-	var expected_wood: int = total_cost_of(["wall", "tower", "tower"]) + 1
+	# Fund the placements from Config so this test measures the loop, not the
+	# balance. A turret is bought with wood and stone as of v0.4, so the stone side
+	# of its bill is paid separately and the running total tracks wood only.
+	var expected_wood: int = total_cost_of(["wall", "tower", "wall"]) + 1
 	game_state_node.resources["wood"] = expected_wood
+	game_state_node.resources["stone"] = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
 	await wait_frames(1)
 
 	# 1. Place Wall at (1, 1): Cost = 1 AP + the wall's wood cost
@@ -178,11 +185,13 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(1, 1)), "Cell (1, 1) is occupied")
 
 	# 2. Place LumberHut at (2, 2)
-	var lumber_node = main.place_building_at_cell("tower", Vector2i(2, 2))
-	assert_not_null(lumber_node, "Second turret placed successfully at (2, 2)")
+	# A stake rather than a second turret: a turret is bought with wood and stone
+	# now, and this test tracks a wood budget through the whole loop.
+	var lumber_node = main.place_building_at_cell("wall", Vector2i(2, 2))
+	assert_not_null(lumber_node, "Stake placed successfully at (2, 2)")
 	assert_eq(int(game_state_node.current_ap), 1, "AP deducted by 1 (2 -> 1)")
-	expected_wood -= cost_of("tower")
-	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the turret cost")
+	expected_wood -= cost_of("wall")
+	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the stake cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(2, 2)), "Cell (2, 2) is occupied")
 
 	# 3. Place Tower at (1, -1)
@@ -323,6 +332,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Fund the assault tower from Config rather than from the old balance.
 	expected_wood = cost_of("tower") + 2
 	game_state_node.resources["wood"] = expected_wood
+	game_state_node.resources["stone"] = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
 	await wait_frames(1)
 	var assault_tower = main.place_building_at_cell("tower", Vector2i(0, -8))
 	assert_not_null(assault_tower, "Assault Tower successfully placed at (0, -8)")
