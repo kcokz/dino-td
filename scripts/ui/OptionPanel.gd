@@ -411,7 +411,22 @@ func _can_afford(b_type: String) -> bool:
 		return bool(gs.can_afford(cfg.BUILDINGS[b_type].get("cost", {})))
 	return true
 
+## A building's own menu: the things with a cost or a consequence. Right-click
+## deliberately does not offer these -- it is too easy to hit by accident -- so
+## mending and demolishing are chosen here, on purpose, with the price on the
+## button.
 func _populate_building_buttons() -> void:
+	if selected_unit.has_method("needs_repair") and selected_unit.needs_repair():
+		var cost: int = int(selected_unit.repair_cost()) if selected_unit.has_method("repair_cost") else 0
+		var raw: String = tr("CMD_REPAIR")
+		var btn := _create_action_button((raw % cost) if ("%" in raw) else raw, func():
+			var hero = _get_hero()
+			if hero and is_instance_valid(hero) and hero.has_method("order_repair") and is_instance_valid(selected_unit):
+				hero.order_repair(selected_unit)
+				action_triggered.emit("repair", selected_unit)
+		)
+		btn.disabled = not _can_pay_a_repair_step()
+
 	_create_action_button(TranslationServer.translate("CMD_DEMOLISH"), func():
 		if selected_unit and is_instance_valid(selected_unit) and selected_unit.has_method("demolish"):
 			var unit_to_demolish = selected_unit
@@ -468,6 +483,11 @@ func _clear_craft_detail() -> void:
 	else:
 		status_label.text = tr("CABIN_HINT_PICK_STATION")
 	status_label.modulate = Color(0.85, 0.85, 0.85)
+
+## Repair is paid one wood at a time, so one wood is enough to start.
+func _can_pay_a_repair_step() -> bool:
+	var gs = _get_game_state()
+	return gs != null and "resources" in gs and int(gs.resources.get("wood", 0)) >= 1
 
 func _resource_name(res_id: String) -> String:
 	return TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())

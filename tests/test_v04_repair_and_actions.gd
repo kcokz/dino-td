@@ -145,10 +145,31 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 	assert_gt(turret.current_hp, hp_before, "And the building comes back up")
 
 # ==============================================================================
-# 2. One action happens, several ask
+# 2. Right-click acts; the panel is where costly things are chosen
 # ==============================================================================
+#
+# Right-click was briefly a menu when a building had several sensible answers, and
+# that was worse: right-click is easy to hit by accident, and a box appearing under
+# the cursor on every misclick is a bad trade for the rare case where the second
+# option was wanted. So right-click stays immediate and free of consequences, and
+# anything that spends or destroys is chosen on the panel, on purpose.
 
-func test_07_a_blueprint_has_exactly_one_answer() -> void:
+func test_07_right_click_never_puts_anything_up_to_click_through() -> void:
+	var main = _level()
+	await wait_frames(2)
+	game_state_node.resources["wood"] = 99
+	var turret = main.place_building_at_cell("tower", Vector2i(4, 4))
+	turret.complete_construction()
+	turret.take_damage(turret.max_hp * 0.5)
+	await wait_frames(1)
+
+	# A damaged building is exactly the case that used to raise a menu.
+	main.right_click_building(turret, turret.global_position)
+	assert_eq(int(main.hero.current_state), int(main.hero.State.MOVING),
+		"It simply walks him over there")
+	assert_false("action_menu" in main, "There is no menu to pop any more")
+
+func test_08_right_clicking_a_blueprint_finishes_it() -> void:
 	var main = _level()
 	await wait_frames(2)
 	game_state_node.resources["wood"] = 99
@@ -157,100 +178,85 @@ func test_07_a_blueprint_has_exactly_one_answer() -> void:
 	blueprint.start_construction()
 	await wait_frames(1)
 
-	var actions: Array = main.available_actions_for(blueprint)
-	assert_eq(actions.size(), 1, "There is one thing to do with an unfinished building")
-	assert_eq(String(actions[0]), "build", "Namely finish it")
+	main.right_click_building(blueprint, blueprint.global_position)
+	assert_eq(main.hero.target_building, blueprint, "He goes to finish it")
 
-func test_08_the_cabin_has_exactly_one_answer_too() -> void:
+func test_09_right_clicking_the_cabin_still_walks_him_home() -> void:
 	var main = _level()
 	await wait_frames(2)
-	var actions: Array = main.available_actions_for(main.current_core)
-	assert_eq(actions.size(), 1, "The cabin is one thing you do with it")
-	assert_eq(String(actions[0]), "enter", "You go inside")
+	main.hero.global_position = main.current_core.global_position + Vector3(1.0, 0.0, 0.0)
 
-func test_09_a_healthy_building_offers_demolish_or_walking_over() -> void:
-	var main = _level()
-	await wait_frames(2)
-	game_state_node.resources["wood"] = 99
-	var turret = main.place_building_at_cell("tower", Vector2i(4, 4))
-	turret.complete_construction()
+	main.right_click_building(main.current_core, main.current_core.global_position)
+	assert_true(main.in_cabin, "Arriving at the cabin puts him inside")
+
+func test_10_mending_is_offered_on_the_panel_when_there_is_damage() -> void:
+	var panel = load("res://scripts/ui/OptionPanel.gd").new()
+	_cleanup_nodes.append(panel)
+	tree.root.add_child(panel)
+	var turret = _turret(Vector3(6.0, 0.0, 0.0))
 	await wait_frames(1)
-
-	var actions: Array = main.available_actions_for(turret)
-	assert_gt(actions.size(), 1, "More than one sensible answer, so it must ask")
-	assert_has(actions, "demolish", "Pulling it down is one")
-	assert_has(actions, "move", "Just walking over there is another")
-	assert_not_has(actions, "repair", "Nothing to mend on a building at full health")
-
-func test_10_a_damaged_building_adds_repair_to_the_list() -> void:
-	var main = _level()
-	await wait_frames(2)
 	game_state_node.resources["wood"] = 99
-	var turret = main.place_building_at_cell("tower", Vector2i(4, 5))
-	turret.complete_construction()
+
+	panel.select_target(turret)
+	var labels_healthy: Array = _button_labels(panel)
+	assert_false(_any_contains(labels_healthy, tr("CMD_REPAIR").split(" ")[0]),
+		"Nothing to mend at full health, so nothing is offered")
+
 	turret.take_damage(turret.max_hp * 0.5)
+	panel.select_target(turret)
+	var labels: Array = _button_labels(panel)
+	assert_true(_any_contains(labels, str(turret.repair_cost())),
+		"Damaged, the panel offers it with the price on the button (got %s)" % str(labels))
+	assert_true(_any_contains(labels, tr("CMD_DEMOLISH")), "Alongside demolish")
+
+func test_11_an_unaffordable_repair_is_offered_but_disabled() -> void:
+	# Greyed out rather than missing: the player should be able to see what it
+	# would cost them, and why they cannot do it yet.
+	var panel = load("res://scripts/ui/OptionPanel.gd").new()
+	_cleanup_nodes.append(panel)
+	tree.root.add_child(panel)
+	var turret = _turret(Vector3(6.0, 0.0, 0.0))
 	await wait_frames(1)
-
-	var actions: Array = main.available_actions_for(turret)
-	assert_has(actions, "repair", "Mending is on the menu")
-	assert_eq(String(actions[0]), "repair", "And it leads, being the most specific")
-
-func test_11_repair_is_not_offered_when_it_cannot_be_paid_for() -> void:
-	var main = _level()
-	await wait_frames(2)
-	game_state_node.resources["wood"] = 99
-	var turret = main.place_building_at_cell("tower", Vector2i(4, 6))
-	turret.complete_construction()
 	turret.take_damage(turret.max_hp * 0.5)
 	game_state_node.resources["wood"] = 0
-	await wait_frames(1)
 
-	assert_not_has(main.available_actions_for(turret), "repair",
-		"An option that cannot be taken is not an option")
+	panel.select_target(turret)
+	var repair_btn: Button = null
+	for child in panel.button_container.get_children():
+		if child is Button and str(child.text).contains(str(turret.repair_cost())):
+			repair_btn = child
+	assert_not_null(repair_btn, "The option is shown")
+	assert_true(repair_btn.disabled, "But cannot be taken with an empty warehouse")
 
-func test_12_a_single_action_happens_without_asking() -> void:
+func test_12_choosing_it_sends_the_hero_to_work() -> void:
 	var main = _level()
 	await wait_frames(2)
 	game_state_node.resources["wood"] = 99
-	var blueprint = main.place_building_at_cell("wall", Vector2i(5, 5))
-	assert_not_null(blueprint, "A blueprint is down")
-	blueprint.start_construction()
-	await wait_frames(1)
-
-	main.right_click_building(blueprint, blueprint.global_position, Vector2(10.0, 10.0))
-	assert_eq(main.hero.target_building, blueprint, "The one thing to do just happens")
-	assert_true(main.action_menu == null or not main.action_menu.visible,
-		"And nothing is put up to click through")
-
-func test_13_several_actions_put_up_a_menu_and_choosing_one_acts() -> void:
-	var main = _level()
-	await wait_frames(2)
-	game_state_node.resources["wood"] = 99
-	var turret = main.place_building_at_cell("tower", Vector2i(6, 6))
+	var turret = main.place_building_at_cell("tower", Vector2i(5, 5))
 	turret.complete_construction()
 	turret.take_damage(turret.max_hp * 0.5)
+	var panel = load("res://scripts/ui/OptionPanel.gd").new()
+	_cleanup_nodes.append(panel)
+	tree.root.add_child(panel)
 	await wait_frames(1)
 
-	main.right_click_building(turret, turret.global_position, Vector2(40.0, 40.0))
-	assert_not_null(main.action_menu, "A menu is offered")
-	assert_eq(main.action_menu.item_count, main.available_actions_for(turret).size(),
-		"With one entry per available action")
+	panel.select_target(turret)
+	for child in panel.button_container.get_children():
+		if child is Button and str(child.text).contains(str(turret.repair_cost())):
+			child.pressed.emit()
+	assert_eq(main.hero.target_building, turret, "Picking it is what starts the job")
 
-	# Choosing "repair" is what starts the work -- nothing happened before the click.
-	var idx: int = main.available_actions_for(turret).find("repair")
-	assert_gte(idx, 0, "Repair is in the list")
-	main._on_action_menu_id(idx)
-	assert_eq(main.hero.target_building, turret, "Picking it sends the Hero to work")
+func _button_labels(panel: Node) -> Array:
+	var out: Array = []
+	if panel.button_container == null:
+		return out
+	for child in panel.button_container.get_children():
+		if child is Button:
+			out.append(str(child.text))
+	return out
 
-func test_14_the_menu_quotes_what_the_repair_will_cost() -> void:
-	var main = _level()
-	await wait_frames(2)
-	game_state_node.resources["wood"] = 99
-	var turret = main.place_building_at_cell("tower", Vector2i(7, 7))
-	turret.complete_construction()
-	turret.take_damage(turret.max_hp * 0.75)
-	await wait_frames(1)
-
-	var label: String = main._action_label("repair", turret)
-	assert_true(label.contains(str(turret.repair_cost())),
-		"The player is told the price before choosing it (got '%s')" % label)
+func _any_contains(labels: Array, needle: String) -> bool:
+	for l in labels:
+		if str(l).contains(needle):
+			return true
+	return false

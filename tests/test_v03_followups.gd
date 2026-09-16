@@ -141,6 +141,28 @@ func test_04_one_wood_buys_exactly_one_stake() -> void:
 	# with a tile-wide collision box stops dinosaurs at a wall nobody can see.
 	assert_almost_eq(mesh.size.x, fp, 0.001, "As wide as the ground it occupies")
 
+func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
+	# A cube standing in for a stake told the player nothing about what was going
+	# down. The ghost and the building are drawn by the same code now.
+	for b_type in config_node.BUILDABLE_TYPES:
+		var body: Node3D = Building.make_body(String(b_type))
+		var meshes: Array = []
+		for c in body.get_children():
+			if c is MeshInstance3D:
+				meshes.append(c)
+		assert_eq(meshes.size(), 1, "%s is drawn from one mesh" % b_type)
+
+		var want_prism: bool = config_node.get_building_mesh_style(String(b_type)) == "spikes"
+		assert_eq(meshes[0].mesh is PrismMesh, want_prism,
+			"%s is drawn in the style Config declares" % b_type)
+
+		var size: Vector3 = meshes[0].mesh.size
+		assert_almost_eq(size.x, config_node.get_building_footprint(String(b_type)), 0.001,
+			"%s ghost is as wide as the real thing" % b_type)
+		assert_almost_eq(size.y, config_node.get_building_height(String(b_type)), 0.001,
+			"%s ghost is as tall as the real thing" % b_type)
+		body.free()
+
 func test_05_an_ordinary_building_is_still_one_block_of_the_declared_size() -> void:
 	var tower = _spawn(tower_script)
 	tower.complete_construction()

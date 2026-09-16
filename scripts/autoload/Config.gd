@@ -74,7 +74,11 @@ const BUILDINGS: Dictionary = {
 		# staying below BUILDING_HEIGHT_DEFAULT keeps a row of stakes reading as a
 		# fence you see over rather than as a wall of buildings. A turret is the
 		# opposite -- narrow enough to walk past, tall enough to spot across the map.
-		"footprint": 1.9,
+		# Slim enough to read as a stake rather than a wall, wide enough that a row
+		# of them still closes: the gap left beside one (TILE_SIZE - footprint) has
+		# to stay narrower than the Hero, or the fence is decoration. See
+		# is_barrier_building().
+		"footprint": 1.3,
 		"height": 0.85,
 		"mesh_style": "spikes",
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
@@ -140,7 +144,15 @@ static func get_building_height(type_id: String) -> float:
 		return maxf(0.2, float(BUILDINGS[type_id]["height"]))
 	return BUILDING_HEIGHT_DEFAULT
 
-## "box" (one solid block) or "spikes" (several thin uprights spanning the tile).
+## The colour a building is drawn in while the art is still placeholder boxes.
+## Asked by the building itself and by the build preview, so the ghost is always
+## the colour of the thing it is promising.
+static func get_building_color(type_id: String) -> Color:
+	if COLORS.has(type_id):
+		return COLORS[type_id]
+	return Color(0.6, 0.6, 0.6)
+
+## "box" (one solid block) or "spikes" (a single sharpened stake).
 static func get_building_mesh_style(type_id: String) -> String:
 	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("mesh_style"):
 		return String(BUILDINGS[type_id]["mesh_style"])

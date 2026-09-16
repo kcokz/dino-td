@@ -420,43 +420,55 @@ func _ensure_physics_and_visuals() -> void:
 ## "spikes" draws a row of thin uprights instead of a block, so stakes look like
 ## stakes driven into the ground while still occupying the whole tile.
 func _build_body_mesh() -> void:
-	var fp: float = _footprint()
-	var h: float = _building_height()
-	var colour: Color = _get_placeholder_color()
+	add_child(make_body(building_type))
 
-	if _mesh_style() == "spikes":
+## The visible body for `type_id`, as a node the caller parents wherever it likes.
+##
+## Static and type-keyed on purpose: the real building and the ghost that promises
+## it are drawn by the same code, so a preview can never show a shape the finished
+## thing does not have. It is also the seam v0.5 replaces -- when art arrives, this
+## returns a loaded scene instead of boxes, and nothing else changes.
+static func make_body(type_id: String) -> Node3D:
+	var fp: float = 1.0
+	var h: float = 1.0
+	var style: String = "box"
+	var colour := Color(0.6, 0.6, 0.6)
+	var cfg: Node = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	if cfg:
+		fp = float(cfg.get_building_footprint(type_id))
+		h = float(cfg.get_building_height(type_id))
+		style = String(cfg.get_building_mesh_style(type_id))
+		colour = cfg.get_building_color(type_id)
+
+	var holder := Node3D.new()
+	holder.name = "Body"
+	var mesh_inst := MeshInstance3D.new()
+
+	if style == "spikes":
 		# ONE stake, because it costs one wood. It used to be drawn as three
 		# uprights, which quietly told the player they were getting three things
 		# for the price of one.
 		#
-		# It is as wide as its own footprint on purpose. A thin post with a
-		# tile-wide collision box would stop dinosaurs at a wall nobody can see,
-		# which is the same lie as decorative terrain that blocks pathing -- so the
-		# stake is drawn at the size it actually occupies: a single sharpened log,
-		# pointed along its length so a row of them reads as a fence.
-		var holder := Node3D.new()
-		holder.name = "Body"
-		add_child(holder)
-		var stake := MeshInstance3D.new()
+		# Drawn at exactly the size it occupies. A slimmer post over a tile-wide
+		# collision box would stop dinosaurs at a wall nobody can see, which is the
+		# same lie as decorative terrain that blocks pathing -- so the stake is a
+		# sharpened ridge the width and depth of its own footprint.
 		var prism := PrismMesh.new()
-		prism.size = Vector3(fp, h, fp * 0.42)
-		stake.mesh = prism
-		stake.position = Vector3(0.0, h * 0.5, 0.0)
-		var m := StandardMaterial3D.new()
-		m.albedo_color = colour
-		stake.material_override = m
-		holder.add_child(stake)
-		return
+		prism.size = Vector3(fp, h, fp)
+		mesh_inst.mesh = prism
+	else:
+		var box_mesh := BoxMesh.new()
+		box_mesh.size = Vector3(fp, h, fp)
+		mesh_inst.mesh = box_mesh
 
-	var mesh_inst = MeshInstance3D.new()
-	var box_mesh = BoxMesh.new()
-	box_mesh.size = Vector3(fp, h, fp)
-	mesh_inst.mesh = box_mesh
 	mesh_inst.position = Vector3(0.0, h * 0.5, 0.0)
-	var mat = StandardMaterial3D.new()
+	var mat := StandardMaterial3D.new()
 	mat.albedo_color = colour
 	mesh_inst.material_override = mat
-	add_child(mesh_inst)
+	holder.add_child(mesh_inst)
+	return holder
 
 func _building_height() -> float:
 	var cfg = _get_config()
@@ -472,13 +484,9 @@ func _mesh_style() -> String:
 
 func _get_placeholder_color() -> Color:
 	var cfg = _get_config()
-	if cfg and "COLORS" in cfg and cfg.COLORS.has(building_type):
-		return cfg.COLORS[building_type]
-	match building_type:
-		"core": return Color(0.9, 0.3, 0.1)
-		"wall": return Color(0.5, 0.35, 0.2)
-		"tower": return Color(0.2, 0.5, 0.9)
-		_: return Color(0.6, 0.6, 0.6)
+	if cfg and cfg.has_method("get_building_color"):
+		return cfg.get_building_color(building_type)
+	return Color(0.6, 0.6, 0.6)
 
 # ==============================================================================
 # Resolvers

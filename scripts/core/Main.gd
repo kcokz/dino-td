@@ -47,13 +47,6 @@ var in_cabin: bool = false
 ## he arrives the view goes inside. Any other order on the way cancels it.
 var _pending_cabin_entry: bool = false
 
-## The little menu a right-click puts up when a building has more than one
-## sensible answer, and what it was asked about.
-var action_menu: PopupMenu = null
-var _menu_actions: Array = []
-var _menu_target: Node = null
-var _menu_point: Vector3 = Vector3.ZERO
-
 # v0.2 build preview: a translucent ghost of the pending building that follows the
 # cursor, together with its coverage ring and a highlight on the resource nodes that
 # ring would cover.
@@ -434,101 +427,28 @@ func scatter_opening_stock() -> void:
 				String(res_id), share)
 
 # ==============================================================================
-# Right-clicking a building: one action happens, several ask
+# Right-clicking a building
 # ==============================================================================
 
-## What the Hero could usefully do with `b` right now, most specific first.
+## Right-click always does one thing, immediately, and never puts anything up to
+## click through. It was briefly a menu when a building had several sensible
+## answers, and that was worse: right-click is easy to hit by accident, and a box
+## appearing under the cursor every time you misclick is a bad trade for the rare
+## case where you wanted the second option.
 ##
-## Right-click has always acted immediately, and that is worth keeping for the
-## common case. But a damaged building has more than one sensible answer -- mend
-## it, pull it down, or just walk over there -- and picking one of them silently
-## is guessing. So: exactly one action happens on the spot, several put up a small
-## menu, and nothing is ever chosen on the player's behalf.
-func available_actions_for(b: Node) -> Array:
-	var out: Array = []
+## So the fast, irreversible-free actions live here -- walk over, finish the
+## blueprint, go inside -- and everything with a cost or a consequence (repair,
+## demolish) lives behind left-click, on the panel, where it is chosen on purpose.
+func right_click_building(b: Node, at: Vector3) -> void:
 	if b == null or not is_instance_valid(b) or hero == null or not is_instance_valid(hero):
-		return out
+		return
 	if _is_cabin(b):
-		out.append("enter")
-		return out           # the cabin is one thing you do with it
+		order_enter_cabin()
+		return
 	if "is_constructed" in b and not b.is_constructed:
-		out.append("build")
-		return out           # a blueprint wants finishing; nothing else applies
-	if b.has_method("needs_repair") and b.needs_repair() and _can_pay_for_repair(b):
-		out.append("repair")
-	if b.has_method("demolish"):
-		out.append("demolish")
-	out.append("move")
-	return out
-
-func _can_pay_for_repair(b: Node) -> bool:
-	var gs = _get_game_state()
-	if gs == null or not ("resources" in gs):
-		return false
-	return int(gs.resources.get("wood", 0)) >= 1
-
-## Carries out one of the actions named by available_actions_for().
-func perform_action_on(action: String, b: Node, at: Vector3 = Vector3.ZERO) -> void:
-	if hero == null or not is_instance_valid(hero):
+		hero.order_build(b, true)
 		return
-	match action:
-		"enter":
-			order_enter_cabin()
-		"build":
-			hero.order_build(b, true)
-		"repair":
-			hero.order_repair(b)
-		"demolish":
-			if b != null and is_instance_valid(b) and b.has_method("demolish"):
-				b.demolish()
-		"move":
-			hero.move_to(at if at != Vector3.ZERO else b.global_position)
-
-## Right-click on a building: do the single obvious thing, or ask.
-func right_click_building(b: Node, at: Vector3, screen_pos: Vector2) -> void:
-	var actions: Array = available_actions_for(b)
-	if actions.is_empty():
-		return
-	if actions.size() == 1:
-		perform_action_on(String(actions[0]), b, at)
-		return
-	_show_action_menu(actions, b, at, screen_pos)
-
-func _show_action_menu(actions: Array, b: Node, at: Vector3, screen_pos: Vector2) -> void:
-	if action_menu == null or not is_instance_valid(action_menu):
-		action_menu = PopupMenu.new()
-		action_menu.name = "ActionMenu"
-		var host: Node = hud if (hud != null and is_instance_valid(hud)) else self
-		host.add_child(action_menu)
-		action_menu.id_pressed.connect(_on_action_menu_id)
-	action_menu.clear()
-	_menu_actions = actions.duplicate()
-	_menu_target = b
-	_menu_point = at
-	for i in range(actions.size()):
-		action_menu.add_item(_action_label(String(actions[i]), b), i)
-	action_menu.reset_size()
-	action_menu.position = Vector2i(screen_pos) + Vector2i(4, 4)
-	action_menu.popup()
-
-func _action_label(action: String, b: Node) -> String:
-	match action:
-		"repair":
-			var cost: int = int(b.repair_cost()) if b.has_method("repair_cost") else 0
-			var raw: String = tr("CMD_REPAIR")
-			return (raw % cost) if ("%" in raw) else raw
-		"demolish": return tr("CMD_DEMOLISH")
-		"move": return tr("CMD_MOVE_HERE")
-		"enter": return tr("CMD_ENTER_CABIN")
-		"build": return tr("CMD_FINISH_BUILDING")
-	return action
-
-func _on_action_menu_id(id: int) -> void:
-	if id < 0 or id >= _menu_actions.size():
-		return
-	perform_action_on(String(_menu_actions[id]), _menu_target, _menu_point)
-	_menu_actions.clear()
-	_menu_target = null
+	hero.move_to(at if at != Vector3.ZERO else b.global_position)
 
 # ==============================================================================
 # The cabin: stepping inside and back out
@@ -766,7 +686,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if res_node != null and is_instance_valid(res_node):
 				hero.order_harvest(res_node)
 			elif b != null and is_instance_valid(b):
-				right_click_building(b, hit_pos, event.position)
+				right_click_building(b, hit_pos)
 			else:
 				var hit_obj = _raycast_object(event.position)
 				if hit_obj != null and is_instance_valid(hit_obj):
@@ -775,7 +695,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					elif hit_obj.is_in_group("dinos"):
 						hero.order_attack(hit_obj)
 					elif hit_obj.is_in_group("buildings") or _is_cabin(hit_obj):
-						right_click_building(hit_obj, hit_pos, event.position)
+						right_click_building(hit_obj, hit_pos)
 					else:
 						hero.move_to(hit_pos)
 				else:
@@ -1102,15 +1022,15 @@ func _rebuild_build_preview(type_id: String) -> void:
 	build_preview.name = "BuildPreview"
 	add_child(build_preview)
 
-	var tile: float = float(cfg.TILE_SIZE) if "TILE_SIZE" in cfg else 2.0
-	build_preview_mesh = MeshInstance3D.new()
-	build_preview_mesh.name = "PreviewMesh"
-	var box := BoxMesh.new()
-	box.size = Vector3(tile * 0.8, tile * 0.8, tile * 0.8)
-	build_preview_mesh.mesh = box
-	build_preview_mesh.position = Vector3(0.0, tile * 0.4, 0.0)
-	build_preview_mesh.material_override = _make_preview_material(Color.WHITE)
-	build_preview.add_child(build_preview_mesh)
+	# The ghost is drawn by the same code as the real building, so it can never
+	# promise a shape the finished thing does not have -- a cube standing in for a
+	# stake told the player nothing about what was going down.
+	var body: Node3D = Building.make_body(type_id)
+	build_preview.add_child(body)
+	build_preview_mesh = _first_mesh_in(body)
+	for mi in _meshes_in(body):
+		mi.material_override = _make_preview_material(Color.WHITE)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	var r: float = _preview_range_for(type_id)
 	if r > 0.0:
@@ -1154,6 +1074,18 @@ func _preview_ring_color(type_id: String) -> Color:
 		return Color(0.35, 0.65, 1.0)
 	return Color(0.4, 0.8, 0.4)
 
+func _meshes_in(node: Node) -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	if node is MeshInstance3D:
+		out.append(node)
+	for child in node.get_children():
+		out.append_array(_meshes_in(child))
+	return out
+
+func _first_mesh_in(node: Node) -> MeshInstance3D:
+	var all := _meshes_in(node)
+	return all[0] if not all.is_empty() else null
+
 func _make_preview_material(col: Color, alpha: float = 0.38) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1187,9 +1119,12 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	elif ok and grid_manager and grid_manager.has_method("is_cell_occupied"):
 		ok = not grid_manager.is_cell_occupied(cell)
 
+	# Tint every piece of the ghost, not just the first: a body is whatever
+	# Building.make_body() returns, and that will be a loaded scene once there is art.
 	var tint: Color = Color(0.35, 1.0, 0.4) if ok else Color(1.0, 0.3, 0.25)
-	if build_preview_mesh:
-		build_preview_mesh.material_override = _make_preview_material(tint)
+	for mi in _meshes_in(build_preview):
+		if mi != build_preview_ring:
+			mi.material_override = _make_preview_material(tint)
 
 
 
