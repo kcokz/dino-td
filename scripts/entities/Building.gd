@@ -196,6 +196,50 @@ func _on_before_destroy() -> void:
 	pass
 
 ## Restores HP up to max_hp.
+## Whether this building is worth working on: finished, standing, and short of
+## full health.
+func needs_repair() -> bool:
+	return is_constructed and not is_destroyed and current_hp < max_hp
+
+## Whole wood needed to put it back to full, at the configured rate. The figure the
+## right-click menu quotes and the figure repair_tick() spends, so they cannot
+## disagree.
+func repair_cost() -> int:
+	if not needs_repair():
+		return 0
+	return int(ceil((max_hp - current_hp) / _repair_cfg("hp_per_wood", 4.0)))
+
+## One step of mending: spends a single wood and heals what that wood buys.
+## Returns true when there is nothing more to do -- either it is full, or the
+## warehouse cannot pay for the next step.
+##
+## Charging one wood at a time means walking away mid-repair keeps exactly what was
+## paid for, with no fractional change owed in either direction.
+func repair_tick() -> bool:
+	if not needs_repair():
+		return true
+	var gs = _get_game_state()
+	if gs == null:
+		return true
+	if gs.has_method("spend_resources"):
+		if not gs.spend_resources({"wood": 1}):
+			return true
+	elif "resources" in gs:
+		if int(gs.resources.get("wood", 0)) < 1:
+			return true
+		gs.resources["wood"] = int(gs.resources["wood"]) - 1
+	heal(_repair_cfg("hp_per_wood", 4.0))
+	return not needs_repair()
+
+func repair_seconds_per_step() -> float:
+	return maxf(0.05, _repair_cfg("seconds_per_wood", 1.5))
+
+func _repair_cfg(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	if cfg and "REPAIR" in cfg:
+		return float(cfg.REPAIR.get(key, fallback))
+	return fallback
+
 func heal(amount: float) -> void:
 	if is_destroyed or amount <= 0.0:
 		return

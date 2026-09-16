@@ -480,6 +480,22 @@ static func get_resource_color(res_id: String) -> Color:
 	return Color(0.7, 0.7, 0.7)
 
 # ==============================================================================
+# 13b. Repair (v0.4)
+# ==============================================================================
+## Patching a building up rather than letting it fall. Paid in whole wood, one
+## transaction at a time, so there is no fractional book-keeping and the player can
+## stop half-way and keep what they paid for.
+##
+## Repair is worth doing on something expensive and not worth it on something
+## cheap: five wood puts a gutted turret back to full, against twelve to rebuild it
+## -- and rebuilding also costs its build time and its position. A stake is cheaper
+## to replace than to mend, which is correct for a thing that costs one wood.
+const REPAIR: Dictionary = {
+	"hp_per_wood": 4.0,       # 一份木头修复多少血
+	"seconds_per_wood": 1.5,  # 一份木头要修多久（秒）
+}
+
+# ==============================================================================
 # 14. The cabin workshop (v0.4)
 # ==============================================================================
 ## The cabin is the thing you defend and the thing you need, and everything the

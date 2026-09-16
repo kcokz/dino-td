@@ -34,6 +34,7 @@ var target_enemy: Node3D = null
 var target_resource_node: Node = null
 var attack_cooldown: float = 0.0
 var harvest_timer: float = 0.0
+var repair_timer: float = 0.0
 
 var current_path: Array[Vector3] = []
 var current_path_index: int = 0
@@ -310,6 +311,12 @@ func _process_building(delta: float) -> void:
 	if diff.length_squared() > 0.001:
 		look_at(global_position + diff.normalized(), Vector3.UP)
 
+	# Building and mending are the same verb -- he walks over and works on it with
+	# a hammer. Which one happens is the building's business, not the order's: an
+	# unfinished thing gets raised, a damaged one gets patched.
+	if "is_constructed" in target_building and target_building.is_constructed:
+		_work_on_repair(delta)
+		return
 	if target_building.has_method("add_build_progress"):
 		var completed = target_building.add_build_progress(delta)
 		if completed:
@@ -317,6 +324,26 @@ func _process_building(delta: float) -> void:
 			_continue_to_next_pending_building_or_idle()
 	else:
 		_continue_to_next_pending_building_or_idle()
+
+## Mending runs in whole steps: a step of time buys a step of wood buys a step of
+## health. Running out of either just ends the job where it stands.
+func _work_on_repair(delta: float) -> void:
+	if not target_building.has_method("needs_repair") or not target_building.needs_repair():
+		target_building = null
+		repair_timer = 0.0
+		_continue_to_next_pending_building_or_idle()
+		return
+	repair_timer += delta
+	var step: float = float(target_building.repair_seconds_per_step()) if target_building.has_method("repair_seconds_per_step") else 1.5
+	while repair_timer >= step:
+		repair_timer -= step
+		if not target_building.has_method("repair_tick"):
+			break
+		if target_building.repair_tick():
+			target_building = null
+			repair_timer = 0.0
+			_continue_to_next_pending_building_or_idle()
+			return
 
 func _process_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -590,6 +617,13 @@ func order_build(building: Node, force: bool = false) -> void:
 
 	_plan_path_to_building(building)
 	current_state = State.MOVING
+
+## Sends the Hero to work on a damaged building. It is deliberately the same order
+## as raising a blueprint -- one verb, and the building decides what the hammer is
+## for.
+func order_repair(building: Node) -> void:
+	repair_timer = 0.0
+	order_build(building, true)
 
 func order_attack(enemy: Node3D) -> void:
 	if current_state == State.DEAD:
