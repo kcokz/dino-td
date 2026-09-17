@@ -140,39 +140,49 @@ func destroy() -> void:
 # Procedural Component Fallbacks (Headless & Programmatic Creation)
 # ==============================================================================
 
+## How big the nest is, as Config declares it -- bigger than anything the player builds,
+## because it is what the whole map is pointed at.
+func _declared_size() -> Vector3:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_visual_size"):
+		return cfg.get_visual_size("nest")
+	return Vector3(2.0, 1.2, 2.0)
+
+## (Re)builds the visible body and points `mesh_instance` at it. The entrance marker is
+## left alone on purpose: it is not part of the nest's body, it is the mouth the raid
+## comes out of, and the waves read its position.
+func _ensure_body() -> void:
+	var existing := find_child("Body", false, false)
+	if existing != null:
+		remove_child(existing)
+		existing.queue_free()
+	var body: Node3D = VisualLibrary.make("nest")
+	add_child(body)
+	mesh_instance = null
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		mesh_instance = node as MeshInstance3D
+		break
+
 func _ensure_components() -> void:
 	# 1. CollisionShape3D (BoxShape3D 2x1.2x2 at (0, 0.6, 0))
 	for child in get_children():
 		if child is CollisionShape3D:
 			collision_shape = child
 			break
+	var size: Vector3 = _declared_size()
 	if collision_shape == null:
 		collision_shape = CollisionShape3D.new()
 		collision_shape.name = "CollisionShape3D"
 		var box = BoxShape3D.new()
-		box.size = Vector3(2.0, 1.2, 2.0)
+		box.size = size
 		collision_shape.shape = box
-		collision_shape.position = Vector3(0.0, 0.6, 0.0)
+		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
 
-	# 2. MeshInstance3D (BoxMesh 2x1.2x2 at (0, 0.6, 0) with dark purple/blackbox material)
-	for child in get_children():
-		if child is MeshInstance3D and child.name != "EntranceMarker":
-			mesh_instance = child
-			break
-	if mesh_instance == null:
-		mesh_instance = MeshInstance3D.new()
-		mesh_instance.name = "MeshInstance3D"
-		var box_mesh = BoxMesh.new()
-		box_mesh.size = Vector3(2.0, 1.2, 2.0)
-		mesh_instance.mesh = box_mesh
-		mesh_instance.position = Vector3(0.0, 0.6, 0.0)
-
-		var mat = StandardMaterial3D.new()
-		var cfg = _get_config()
-		mat.albedo_color = cfg.COLORS.get("nest", Color(0.4, 0.1, 0.5)) if (cfg and "COLORS" in cfg) else Color(0.4, 0.1, 0.5)
-		mesh_instance.material_override = mat
-		add_child(mesh_instance)
+	# 2. The body, from the one place that knows what things look like. The collider is
+	# built from the SAME declared size rather than measured off the art, because a
+	# turret's reach is checked against the collider.
+	_ensure_body()
 
 	# 3. Entrance Marker (Blackbox cave mouth)
 	var has_entrance: bool = false

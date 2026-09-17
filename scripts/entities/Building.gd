@@ -464,99 +464,19 @@ func _build_body_mesh() -> void:
 
 ## The visible body for `type_id`, as a node the caller parents wherever it likes.
 ##
-## Static and type-keyed on purpose: the real building and the ghost that promises
-## it are drawn by the same code, so a preview can never show a shape the finished
-## thing does not have. It is also the seam v0.5 replaces -- when art arrives, this
-## returns a loaded scene instead of boxes, and nothing else changes.
+## Static and type-keyed on purpose: the real building and the ghost that promises it
+## are drawn by the same code, so a preview can never show a shape the finished thing
+## does not have.
 ##
-## `axis` is which way a fence through this cell runs: "x", "z", or "both" for a
-## corner, a cluster, or something standing on its own. Anything that is not a
-## fence ignores it and is drawn the full width of its tile, which is why "both"
-## is the default.
+## Since v0.5 it is one line, because the seam moved: VisualLibrary answers "what does
+## this look like" for everything in the game, and a model arriving is a line of
+## Config.VISUALS rather than an edit here. This stays as a named entry point because
+## callers ask the question about a BUILDING type, and the key is not their business.
+##
+## `axis` is which way a fence through this cell runs: "x", "z", or "both" for a corner,
+## a cluster, or something standing on its own. Anything that is not a fence ignores it.
 static func make_body(type_id: String, axis: String = "both") -> Node3D:
-	var fp: float = 1.0
-	var h: float = 1.0
-	var thin: float = 1.0
-	var style: String = "box"
-	var colour := Color(0.6, 0.6, 0.6)
-	var cfg: Node = _static_config()
-	if cfg:
-		fp = float(cfg.get_building_footprint(type_id))
-		h = float(cfg.get_building_height(type_id))
-		thin = float(cfg.get_building_thickness(type_id))
-		style = String(cfg.get_building_mesh_style(type_id))
-		colour = cfg.get_building_color(type_id)
-
-	var holder := Node3D.new()
-	holder.name = "Body"
-	# One material for every piece of the body, so a flash or a blueprint's
-	# transparency reaches the whole thing at once instead of one cone of three.
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = colour
-
-	if style == "spikes":
-		# A row of small sharpened cones, at the pitch Config derives from the
-		# footprint. There is no arrangement in which this becomes a big square: a
-		# run is a line of cones, a corner an L, a lone stake a little cross. Each
-		# cone is only pitch-wide, which is what the player asked to see -- and the
-		# collision boxes Wall.gd cuts sit exactly under these cones, so the fence
-		# stops things where it looks like it should.
-		var d: float = float(cfg.get_spike_diameter(type_id)) if cfg else thin
-		for offset in spike_offsets(type_id, axis):
-			var cone := MeshInstance3D.new()
-			var cone_mesh := CylinderMesh.new()
-			cone_mesh.top_radius = 0.0          # a cone: a stake sharpened to a point
-			cone_mesh.bottom_radius = d * 0.5
-			cone_mesh.height = h
-			cone_mesh.radial_segments = 8       # hewn, not lathe-turned -- and cheap
-			cone.mesh = cone_mesh
-			cone.position = Vector3(offset.x, h * 0.5, offset.z)
-			cone.material_override = mat
-			holder.add_child(cone)
-		return holder
-
-	var depth: float = fp if axis == "both" else thin
-	var size := Vector3(fp, h, depth)
-	if axis == "z":
-		size = Vector3(depth, h, fp)
-	var mesh_inst := MeshInstance3D.new()
-	var box_mesh := BoxMesh.new()
-	box_mesh.size = size
-	mesh_inst.mesh = box_mesh
-	mesh_inst.position = Vector3(0.0, h * 0.5, 0.0)
-	mesh_inst.material_override = mat
-	holder.add_child(mesh_inst)
-	return holder
-
-## Where the cones stand, in the building's own space, for a fence running `axis`.
-##
-## The single source of the arrangement: the body is drawn from this and Wall.gd's
-## collision boxes are cut along the same lines, so the shape you see and the shape
-## that stops a raptor are the same shape by construction rather than by agreement.
-static func spike_offsets(type_id: String, axis: String) -> Array[Vector3]:
-	var out: Array[Vector3] = []
-	var cfg: Node = _static_config()
-	if cfg == null:
-		return out
-	var count: int = int(cfg.get_spikes_per_tile(type_id))
-	var pitch: float = float(cfg.get_spike_pitch(type_id))
-	var span: float = float(cfg.get_building_footprint(type_id))
-	var along_x: bool = (axis != "z")
-	var along_z: bool = (axis != "x")
-	for i in count:
-		var t: float = (float(i) + 0.5) * pitch - span * 0.5
-		if along_x:
-			out.append(Vector3(t, 0.0, 0.0))
-		# The two arms of a cross share their middle cone rather than stacking two
-		# in the same hole.
-		if along_z and not (along_x and is_zero_approx(t)):
-			out.append(Vector3(0.0, 0.0, t))
-	return out
-
-static func _static_config() -> Node:
-	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
-		return Engine.get_main_loop().root.get_node_or_null("Config")
-	return null
+	return VisualLibrary.make("building/" + type_id, axis)
 
 func _building_height() -> float:
 	var cfg = _get_config()

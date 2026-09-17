@@ -832,6 +832,28 @@ func _on_phase_changed(phase: int) -> void:
 # Visual & Physics Setup
 # ==============================================================================
 
+## How big the Hero is, as Config declares it: one figure for the collider and the body
+## both, so a model dropped in later is exactly as wide as the thing a fence stops.
+func _declared_size() -> Vector3:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_visual_size"):
+		return cfg.get_visual_size("hero")
+	return Vector3(0.8, 1.6, 0.8)
+
+## (Re)builds the visible body and points `mesh_instance` at it, which the feedback
+## layer flashes and the HUD tints.
+func _ensure_body() -> void:
+	var existing := find_child("Body", false, false)
+	if existing != null:
+		remove_child(existing)
+		existing.queue_free()
+	var body: Node3D = VisualLibrary.make("hero")
+	add_child(body)
+	mesh_instance = null
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		mesh_instance = node as MeshInstance3D
+		break
+
 func _ensure_components() -> void:
 	collision_layer = 4 # Layer 3: Hero/Player
 	collision_mask = 3  # Layer 1 Ground + Layer 2 Buildings
@@ -841,40 +863,21 @@ func _ensure_components() -> void:
 			if child is CollisionShape3D:
 				collision_shape = child
 				break
+	var size: Vector3 = _declared_size()
 	if collision_shape == null:
 		collision_shape = CollisionShape3D.new()
 		collision_shape.name = "CollisionShape3D"
 		var box = BoxShape3D.new()
-		var w: float = 0.8
-		var cfg_h = _get_config()
-		if cfg_h and "HERO" in cfg_h:
-			w = float(cfg_h.HERO.get("width", 0.8))
-		box.size = Vector3(w, 1.6, w)
+		box.size = size
 		collision_shape.shape = box
-		collision_shape.position = Vector3(0.0, 0.8, 0.0)
+		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
 
-	if mesh_instance == null:
-		for child in get_children():
-			if child is MeshInstance3D:
-				mesh_instance = child
-				break
-	if mesh_instance == null:
-		mesh_instance = MeshInstance3D.new()
-		mesh_instance.name = "MeshInstance3D"
-		var box_mesh = BoxMesh.new()
-		box_mesh.size = Vector3(0.8, 1.6, 0.8)
-		mesh_instance.mesh = box_mesh
-		mesh_instance.position = Vector3(0.0, 0.8, 0.0)
-
-		var mat = StandardMaterial3D.new()
-		var cfg = _get_config()
-		if cfg and "COLORS" in cfg and cfg.COLORS.has("caveman"):
-			mat.albedo_color = cfg.COLORS["caveman"]
-		else:
-			mat.albedo_color = Color(0.1, 0.8, 0.8)
-		mesh_instance.material_override = mat
-		add_child(mesh_instance)
+	# The body comes from the one place that knows what things look like. The collider
+	# above is built from the SAME declared size rather than measured off the art,
+	# because the collider is gameplay -- it is what a fence stops -- and art that
+	# disagrees with its collider is the bug this project keeps having to fix.
+	_ensure_body()
 
 # ==============================================================================
 # Resolvers

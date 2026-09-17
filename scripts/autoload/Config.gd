@@ -97,7 +97,6 @@ const BUILDINGS: Dictionary = {
 		# a second number for it would be a number that can disagree with the art.
 		"footprint": 2.0,
 		"height": 0.95,        # taller than a cone is wide, so it reads as a stake
-		"mesh_style": "spikes",
 		"spikes_per_tile": 3,  # cones per tile of fence; pitch = footprint / this
 		"spike_fill": 0.85,    # cone diameter as a fraction of the pitch (<1 leaves a hair of daylight)
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
@@ -149,9 +148,17 @@ static func get_building_color(type_id: String) -> Color:
 	return Color(0.6, 0.6, 0.6)
 
 ## "box" (one solid block) or "spikes" (a row of small sharpened cones).
+##
+## Reads VISUALS rather than BUILDINGS: what a thing is drawn as is a fact about its
+## art, and since v0.5 all of those live in one table. The accessor stays because the
+## build menu and the preview ask the question about a building type, not about a
+## visual key.
 static func get_building_mesh_style(type_id: String) -> String:
-	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("mesh_style"):
-		return String(BUILDINGS[type_id]["mesh_style"])
+	return get_placeholder_style("building/" + type_id)
+
+static func get_placeholder_style(key: String) -> String:
+	if VISUALS.has(key):
+		return String(VISUALS[key].get("placeholder", "box"))
 	return "box"
 
 ## How many cones one tile of fence is drawn as.
@@ -320,7 +327,10 @@ const WAVES: Dictionary = {
 # 5. Nest Configuration (NEST)
 # ==============================================================================
 const NEST: Dictionary = {
-	"hp": 30.0
+	"hp": 30.0,
+	# Bigger than anything the player builds, because it is the thing the whole map is
+	# pointed at. Both its collider and its body come from this one figure.
+	"size": Vector3(2.0, 1.2, 2.0),
 }
 
 # ==============================================================================
@@ -402,6 +412,7 @@ const HERO: Dictionary = {
 	"provoke_duration": 5.0,      # 挑衅仇恨持续时长（秒）
 	"provoke_radius": 4.0,        # 挑衅仇恨生效半径（米）
 	"width": 0.8,                 # 碰撞体宽度（米）——建筑占地由它推导
+	"height": 1.6,                # 身高（米）——碰撞体与外形都用它，所以模型换上来也是这个高度
 }
 
 ## Presentation sizing. The project renders at a 1280x720 design viewport with
@@ -500,6 +511,10 @@ const RESOURCE_NODES: Dictionary = {
 		"harvest_rate": 0.5,      # 0.5 wood/s by hand
 		"color": Color(0.35, 0.55, 0.25),
 		"depleted_color": Color(0.3, 0.3, 0.3),
+		# A tree stands taller than the Hero, which is how it reads as a tree rather
+		# than a bush. Width stays inside the tile so it never overhangs a cell the
+		# grid says is free.
+		"size": Vector3(1.6, 3.0, 1.6),
 	},
 	"stone": {
 		"name": "RESOURCE_STONE",
@@ -511,6 +526,7 @@ const RESOURCE_NODES: Dictionary = {
 		"requires_unlock": "harvest_stone",
 		"color": Color(0.6, 0.6, 0.65),
 		"depleted_color": Color(0.3, 0.3, 0.3),
+		"size": Vector3(1.6, 1.2, 1.6),   # an outcrop: wide and low, unlike a tree
 	},
 	"water": {
 		"name": "RESOURCE_WATER",
@@ -518,8 +534,100 @@ const RESOURCE_NODES: Dictionary = {
 		"harvest_rate": 0.5,      # 0.5 water/s by hand
 		"color": Color(0.2, 0.5, 0.8),
 		"depleted_color": Color(0.25, 0.3, 0.35),
+		"size": Vector3(1.8, 0.3, 1.8),   # a pool, so almost flat
 	}
 }
+
+# ==============================================================================
+# 12b. Visuals (v0.5) -- where the art is, and how big the thing really is
+# ==============================================================================
+
+## What every visible thing in the game is drawn as.
+##
+## The whole of the v0.5 art migration goes through this table: a model arrives, its
+## `scene` stops being empty, and **no logic anywhere moves**. Before this, each entity
+## built its own body out of primitives inside `_ensure_components()`, so every model
+## would have meant opening and rewriting a different file -- and those files carried
+## naked sizes that silently contradicted what was declared here. The big theropod
+## declared 1.6 metres for versions and was drawn at 0.8, because nothing read it.
+##
+## Fields:
+##   scene       -- "" while there is no art. A path once there is.
+##   placeholder -- which primitive stands in meanwhile: box / cylinder / cone / spikes.
+##   anchor      -- "feet" puts the model's lowest point on the ground (characters,
+##                  buildings, trees); "center" puts its middle there (a half-buried
+##                  boulder). Getting this wrong is why bought models float or sink.
+##   color       -- a key into COLORS, for the placeholder only. Real art brings its own.
+##
+## SIZE IS NOT HERE, on purpose. It is read from wherever the thing already declares
+## its dimensions (see get_visual_size), because a second place to write a size is a
+## second place for it to be wrong -- and the size is load-bearing: the collider and
+## the art are both built from it, which is what stops art from quietly growing wider
+## than the thing that blocks a raptor.
+const VISUALS: Dictionary = {
+	"hero":                 {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "caveman"},
+	# Every dinosaur gets its own row even while they share a placeholder: the row is
+	# where its model will go, and they will not share that.
+	"dino/raptor":          {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "raptor"},
+	"dino/big_theropod":    {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "raptor"},
+	"dino/pterosaur":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "raptor"},
+	"nest":                 {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "nest"},
+	"building/core":        {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "core"},
+	"building/tower":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "tower"},
+	"building/wall":        {"scene": "", "placeholder": "spikes",   "anchor": "feet",   "color": "wall"},
+	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
+	# models land, and "center" is wrong for both of them, so both anchor at the feet.
+	"node/wood":            {"scene": "", "placeholder": "cylinder", "anchor": "feet",   "color": ""},
+	"node/stone":           {"scene": "", "placeholder": "cylinder", "anchor": "feet",   "color": ""},
+	"node/water":           {"scene": "", "placeholder": "cylinder", "anchor": "feet",   "color": ""},
+}
+
+## How many metres `key` occupies, resolved from wherever that thing declares its own
+## dimensions. One source per size, and the collider and the art both come from here.
+static func get_visual_size(key: String) -> Vector3:
+	var kind: String = key.get_slice("/", 0)
+	var id: String = key.substr(kind.length() + 1) if key.contains("/") else ""
+	match kind:
+		"hero":
+			var w: float = float(HERO.get("width", 0.8))
+			return Vector3(w, float(HERO.get("height", 1.6)), w)
+		"dino":
+			if DINOS.has(id) and DINOS[id].has("size"):
+				return DINOS[id]["size"]
+			return Vector3.ONE * 0.8
+		"nest":
+			return NEST.get("size", Vector3(2.0, 1.2, 2.0))
+		"building":
+			var fp: float = get_building_footprint(id)
+			return Vector3(fp, get_building_height(id), fp)
+		"node":
+			if RESOURCE_NODES.has(id) and RESOURCE_NODES[id].has("size"):
+				return RESOURCE_NODES[id]["size"]
+			return Vector3(1.6, 1.0, 1.6)
+	return Vector3.ONE
+
+## Where the cones of a fence stand, in the building's own space, for a run along
+## `axis` ("x", "z", or "both" for a corner, a cluster, or a stake on its own).
+##
+## The single source of that arrangement: the body is drawn from this and Wall.gd's
+## collision boxes are cut along the same lines, so the shape you see and the shape that
+## stops a raptor are the same shape by construction rather than by agreement.
+static func spike_offsets(type_id: String, axis: String) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var count: int = get_spikes_per_tile(type_id)
+	var pitch: float = get_spike_pitch(type_id)
+	var span: float = get_building_footprint(type_id)
+	var along_x: bool = (axis != "z")
+	var along_z: bool = (axis != "x")
+	for i in count:
+		var t: float = (float(i) + 0.5) * pitch - span * 0.5
+		if along_x:
+			out.append(Vector3(t, 0.0, 0.0))
+		# The two arms of a cross share their middle cone rather than stacking two in
+		# the same hole.
+		if along_z and not (along_x and is_zero_approx(t)):
+			out.append(Vector3(0.0, 0.0, t))
+	return out
 
 # ==============================================================================
 # 13. Drops (v0.3) -- every resource enters the warehouse through the Hero

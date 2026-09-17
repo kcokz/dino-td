@@ -80,35 +80,55 @@ func get_localized_name() -> String:
 		return TranslationServer.translate(raw_key)
 	return TranslationServer.translate("RESOURCE_" + resource_type.to_upper())
 
+## How big this kind of node is, as Config declares it. A tree is tall, an outcrop is
+## low and wide, a pool is almost flat -- and until v0.5 all three were the same
+## cylinder, because the size lived in this file instead of in Config.
+func _declared_size() -> Vector3:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_visual_size"):
+		return cfg.get_visual_size("node/" + (resource_type if resource_type != "" else "wood"))
+	return Vector3(1.6, 1.0, 1.6)
+
+## (Re)builds the visible body and points `mesh_instance` at it.
+##
+## `variant` carries whether it has been cut out, so that when the art arrives a
+## depleted tree can be a different model rather than the same tree in grey. Today both
+## variants resolve to the same placeholder and only the colour differs -- see
+## _update_visuals -- but the seam is here, which is what task 3 in AGENT-TASKS.md needs.
+func _ensure_body() -> void:
+	var existing := find_child("Body", false, false)
+	if existing != null:
+		remove_child(existing)
+		existing.queue_free()
+	var key: String = "node/" + (resource_type if resource_type != "" else "wood")
+	var body: Node3D = VisualLibrary.make(key, "depleted" if is_depleted else "full")
+	add_child(body)
+	mesh_instance = null
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		mesh_instance = node as MeshInstance3D
+		break
+
 func _ensure_components() -> void:
 	# 1. CollisionShape3D on layer 1 (World / Obstacles)
 	collision_layer = 1
 	collision_mask = 0
 	if collision_shape == null:
 		collision_shape = find_child("CollisionShape3D", true, false) as CollisionShape3D
+	var size: Vector3 = _declared_size()
 	if collision_shape == null:
 		collision_shape = CollisionShape3D.new()
 		collision_shape.name = "CollisionShape3D"
 		var shape = CylinderShape3D.new()
-		shape.radius = 0.8
-		shape.height = 1.0
+		shape.radius = size.x * 0.5
+		shape.height = size.y
 		collision_shape.shape = shape
-		collision_shape.position = Vector3(0.0, 0.5, 0.0)
+		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
 
-	# 2. MeshInstance3D
-	if mesh_instance == null:
-		mesh_instance = find_child("MeshInstance3D", true, false) as MeshInstance3D
-	if mesh_instance == null:
-		mesh_instance = MeshInstance3D.new()
-		mesh_instance.name = "MeshInstance3D"
-		var cyl = CylinderMesh.new()
-		cyl.top_radius = 0.7
-		cyl.bottom_radius = 0.85
-		cyl.height = 1.0
-		mesh_instance.mesh = cyl
-		mesh_instance.position = Vector3(0.0, 0.5, 0.0)
-		add_child(mesh_instance)
+	# 2. The body, from the one place that knows what things look like. The collider is
+	# built from the SAME declared size rather than measured off the art, because the
+	# collider is what the grid and the Hero's reach agree on.
+	_ensure_body()
 
 	# 3. Floating 3D Label (Billboard Mode)
 	if label_3d == null:
@@ -122,27 +142,35 @@ func _ensure_components() -> void:
 		_apply_label_sizing(label_3d)
 		add_child(label_3d)
 
+## Colour and stature say whether there is anything left here.
+##
+## Applied to the whole body rather than to one mesh: since v0.5 the body is whatever
+## VisualLibrary hands back, which may be several meshes sharing a material, and will be
+## a model soon. Scaling the holder rather than a mesh inside it is what keeps that true.
+##
+## Colour is still doing the work of saying "cut out", which is thin -- a depleted tree
+## should be a different shape, not a grey one. The seam for that is already here (the
+## body is built with a "full" / "depleted" variant); see task 3 in AGENT-TASKS.md.
 func _update_visuals() -> void:
-	if mesh_instance == null:
-		return
-	var mat = StandardMaterial3D.new()
 	var cfg = _get_config()
 	var col = Color(0.4, 0.4, 0.4)
 	if cfg and "RESOURCE_NODES" in cfg and cfg.RESOURCE_NODES.has(resource_type):
 		var data: Dictionary = cfg.RESOURCE_NODES[resource_type]
 		col = data.get("depleted_color", Color(0.3, 0.3, 0.3)) if is_depleted else data.get("color", Color(0.5, 0.5, 0.5))
-	
-	mat.albedo_color = col
-	mesh_instance.material_override = mat
 
-	if is_depleted:
-		mesh_instance.scale = Vector3(0.9, 0.35, 0.9)
-		if collision_shape:
-			collision_shape.scale = Vector3(0.9, 0.35, 0.9)
-	else:
-		mesh_instance.scale = Vector3.ONE
-		if collision_shape:
-			collision_shape.scale = Vector3.ONE
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = col
+	for node in find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi != null:
+			mi.material_override = mat
+
+	var squash: Vector3 = Vector3(0.9, 0.35, 0.9) if is_depleted else Vector3.ONE
+	var body := find_child("Body", false, false)
+	if body is Node3D:
+		(body as Node3D).scale = squash
+	if collision_shape:
+		collision_shape.scale = squash
 
 func _update_label() -> void:
 	if label_3d == null:

@@ -51,7 +51,7 @@ v0.5 是**视觉 MVP**：不扩玩法，只把现在全是方块的画面换成�
 
 **动手做美术之前有三件代码事要先做**，因为少了它们，换上模型只会得到一堆僵直的雕像：
 
-1. 让代码不关心美术（外形从 Config 读一个场景路径，而不是用代码堆几何体）——**正在由主 agent 做，不要碰**
+1. ~~让代码不关心美术~~ —— **已完成**（分支 `v0.5-art-as-data`）。现在 `Config.VISUALS` 声明每样东西的**美术在哪**，`scripts/fx/VisualLibrary.gd` 把它交出来并**按声明的尺寸装配好**。换模型 = 改 `Config.VISUALS` 里一行的 `scene`，**没有任何逻辑要动**。两条不变量由 `tests/test_v05_visual_library.gd` 盯着：**碰撞体和外形都从同一个声明尺寸来**（美术永远不许比拦得住恐龙的那个东西更宽），以及**买来的模型无论什么比例、什么原点都能装进去**。
 2. 动画状态机接口——**正在由主 agent 做，不要碰**
 3. `WorldEnvironment`（天空、环境光、雾、色彩分级）——**这就是下面的任务 1**
 
@@ -63,7 +63,7 @@ v0.5 是**视觉 MVP**：不扩玩法，只把现在全是方块的画面换成�
 |---|---|---|---|
 | 1 | 场景环境：`WorldEnvironment` —— **v0.5 里对"看起来写实"贡献最大的一步** | 待领取 | `v0.5-environment` |
 | 2 | 丘陵看起来像丘陵 | 待领取 | `v0.5-hill-mesh` |
-| 3 | 资源点的"采空"状态 | **被阻塞**，等任务「让代码不关心美术」进 main | `v0.5-resource-states` |
+| 3 | 资源点的"采空"状态 | **已解除阻塞**（`v0.5-art-as-data` 进 main 之后即可开） | `v0.5-resource-states` |
 
 ---
 
@@ -186,17 +186,51 @@ v0.5 是**视觉 MVP**：不扩玩法，只把现在全是方块的画面换成�
 
 ---
 
-## 任务 3：资源点的"采空"状态 —— **暂时被阻塞**
+## 任务 3：资源点的"采空"状态
 
 **分支**：`v0.5-resource-states`
+**前置**：等 `v0.5-art-as-data` 进 `main`（那条已做完，seam 已经在了）。
 
-### 为什么先别做
+### 目标
 
-它要改 `ResourceNode` 怎么产生自己的外形，而**「让代码不关心美术」正在改所有实体的这同一件事**。两边同时改必然冲突。**等那条进了 `main` 再开这一条**，届时这条任务的做法会简单得多（只是给同一个类型声明两个外形）。
+树和石头**会被采光**（`ResourceNode.is_depleted`），所以它们各需要**两个**外形：完整的、采空的。现在采空只是**改个颜色再压扁一点**——玩家要凑近看颜色才知道这棵树没了。v0.5 要让它一眼看得出来。
 
-### 目标（留着备查）
+### 为什么这条现在很小了
 
-树和石头**会被采光**（`ResourceNode.is_depleted`），所以它们各需要**两个**外形：完整的、采空的。现在采空只是改个颜色。v0.5 要让「这棵树没了」一眼看得出来，而不是要凑近看颜色。
+seam 已经做好了：`ResourceNode._ensure_body()` 已经在按状态取外形——
+
+```gdscript
+var body: Node3D = VisualLibrary.make(key, "depleted" if is_depleted else "full")
+```
+
+——只是 `VisualLibrary` 目前**把两个 variant 都解析成同一个占位几何体**。所以这条任务就是让 variant 真的分叉。
+
+### 要改的文件
+
+- `scripts/autoload/Config.gd`（`VISUALS` 的 `node/*` 三项）
+- `scripts/fx/VisualLibrary.gd`（让 `variant` 选到不同的 `scene` / `placeholder`）
+- `scripts/entities/ResourceNode.gd`（采空时要重建 body，现在只改了颜色——见 `_update_visuals`）
+- `tests/test_v05_resource_states.gd`（新建）
+
+### 要做的事
+
+1. 让 `VISUALS` 的一项能声明**按 variant 区分的外形**。形状由你定，但要满足：**不带 variant 的 key 写法不许改**（其他十几项都不需要 variant，不能被迫写样板）。一个够用的形状是让 `scene` / `placeholder` 既可以是字符串，也可以是 `{"full": ..., "depleted": ...}` 这样的字典；`VisualLibrary` 拿不到匹配的 variant 就退回默认那一个。**在 Config 的注释里写清你选了哪种写法、为什么。**
+2. 让采空真的换外形而不只是换颜色：`ResourceNode` 在 `is_depleted` 翻转时要**重建 body**（`_ensure_body()`），不能只走 `_update_visuals()`。
+3. 占位阶段也要**看得出区别**——不要等模型到了才有区别。树采空了应该明显变矮变秃（例如从 `cylinder` 变成矮一截的 `cone` 或更短的 `cylinder`），不是同一个圆柱换灰色。**采空后的尺寸也要从 Config 声明**，不许在代码里写死一个缩放系数。
+
+### 验收（新建 `tests/test_v05_resource_states.gd`）
+
+- 完整状态和采空状态的 body **几何上不同**：断言的是尺寸或网格类型不同，**不要只断言颜色不同**（颜色不同现在就成立，那样的测试证明不了这条任务做了事）。
+- 采空之后 `_ensure_body()` 真的跑过了：例如断言 body 下的 mesh 数量或 mesh 类型变了。
+- **没有 variant 的 key 一切照旧**：`VisualLibrary.make("hero")`、`make("building/tower")` 的结果和现在完全一样（`tests/test_v05_visual_library.gd` 整套必须继续全过，尤其 test_05「占位体正好是声明的尺寸」）。
+- 采空后的尺寸来自 Config，测试从 Config 推导它，不复述数字。
+- 三种资源点（wood / stone / water）都要覆盖——water 目前没有采集途径，但它在表里，不能因为没人采就崩。
+
+### 不在范围内
+
+- 不要接真模型、不要加美术文件（这条只做 seam 和占位体的分叉）。
+- 不要改采集速率、储量这些玩法数值。
+- 不要碰 `ResourceNode` 的碰撞体大小规则（碰撞从声明尺寸来，这是 v0.5 的不变量）。
 
 ---
 

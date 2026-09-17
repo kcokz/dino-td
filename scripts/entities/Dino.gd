@@ -278,6 +278,13 @@ func setup(type_id: String = "raptor", stat_multipliers: Dictionary = {}) -> voi
 		else:
 			attack_timer.wait_time = 1.0
 
+	# The species is only known here, and how big it is comes with it. _ensure_components
+	# ran in _ready() against whatever dino_type was then, so the body and the collider
+	# are refitted now -- otherwise every species keeps the default's size, which is
+	# exactly how the big theropod spent four versions being small.
+	if is_inside_tree():
+		_refit_to_size()
+
 func set_waypoints(wps: Array) -> void:
 	waypoints.clear()
 	for p in wps:
@@ -999,37 +1006,65 @@ func _load_config_stats() -> void:
 		var mults = gs.dino_stat_multipliers if (gs and "dino_stat_multipliers" in gs) else {}
 		setup(dino_type, mults)
 
+## How big this species is, as Config declares it. Read rather than assumed: the big
+## theropod has declared 1.6 metres since v0.2 and was drawn and collided at 0.8,
+## because nothing ever read the number.
+func _declared_size() -> Vector3:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_visual_size"):
+		return cfg.get_visual_size("dino/" + (dino_type if dino_type != "" else "raptor"))
+	return Vector3.ONE * 0.8
+
+## (Re)builds the visible body and points `mesh_instance` at it.
+##
+## `mesh_instance` stays a MeshInstance3D because the feedback layer flashes it and the
+## HUD tints it. With real art there may be several meshes; the first one is the handle,
+## and they share a material so a flash still reaches all of them.
+func _ensure_body() -> void:
+	var existing := find_child("Body", false, false)
+	if existing != null:
+		remove_child(existing)
+		existing.queue_free()
+	var body: Node3D = VisualLibrary.make("dino/" + (dino_type if dino_type != "" else "raptor"))
+	add_child(body)
+	mesh_instance = null
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		mesh_instance = node as MeshInstance3D
+		break
+
+## The collider follows the declared size too, so a species that is bigger really is
+## bigger to everything that touches it.
+func _refit_to_size() -> void:
+	var size: Vector3 = _declared_size()
+	if collision_shape != null and collision_shape.shape is BoxShape3D:
+		var box := BoxShape3D.new()
+		box.size = size
+		collision_shape.shape = box
+		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
+	if raycast != null:
+		raycast.position = Vector3(0.0, size.y * 0.5, 0.0)
+	_ensure_body()
+
 func _ensure_components() -> void:
 	# 1. CollisionShape3D
 	for child in get_children():
 		if child is CollisionShape3D:
 			collision_shape = child
 			break
+	var size: Vector3 = _declared_size()
 	if collision_shape == null:
 		collision_shape = CollisionShape3D.new()
 		var box = BoxShape3D.new()
-		box.size = Vector3(0.8, 0.8, 0.8)
+		box.size = size
 		collision_shape.shape = box
-		collision_shape.position = Vector3(0.0, 0.4, 0.0)
+		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
 
-	# 2. MeshInstance3D
-	for child in get_children():
-		if child is MeshInstance3D:
-			mesh_instance = child
-			break
-	if mesh_instance == null:
-		mesh_instance = MeshInstance3D.new()
-		var box_mesh = BoxMesh.new()
-		box_mesh.size = Vector3(0.8, 0.8, 0.8)
-		mesh_instance.mesh = box_mesh
-		mesh_instance.position = Vector3(0.0, 0.4, 0.0)
-
-		var mat = StandardMaterial3D.new()
-		var cfg = _get_config()
-		mat.albedo_color = cfg.COLORS.get("raptor", Color(0.9, 0.15, 0.15)) if (cfg and "COLORS" in cfg) else Color(0.9, 0.15, 0.15)
-		mesh_instance.material_override = mat
-		add_child(mesh_instance)
+	# 2. The body, from the one place that knows what things look like. Collision above
+	# is built from the SAME declared size rather than from the art, because collision
+	# is gameplay -- it decides what a bite can reach -- and art that disagrees with its
+	# collider is the bug this project keeps having to fix.
+	_ensure_body()
 
 	# 3. Obstacle RayCast3D (1.2m forward, Layer 2 "Buildings")
 	for child in get_children():
