@@ -459,7 +459,10 @@ func _build_body_mesh() -> void:
 ## it are drawn by the same code, so a preview can never show a shape the finished
 ## thing does not have. It is also the seam v0.5 replaces -- when art arrives, this
 ## returns a loaded scene instead of boxes, and nothing else changes.
-static func make_body(type_id: String) -> Node3D:
+##
+## `depth` overrides how deep the body is, for a fence panel that spans its tile
+## one way and is thin the other. Omitted, a building is as deep as it is wide.
+static func make_body(type_id: String, depth: float = -1.0) -> Node3D:
 	var fp: float = 1.0
 	var h: float = 1.0
 	var style: String = "box"
@@ -472,6 +475,9 @@ static func make_body(type_id: String) -> Node3D:
 		h = float(cfg.get_building_height(type_id))
 		style = String(cfg.get_building_mesh_style(type_id))
 		colour = cfg.get_building_color(type_id)
+
+	if depth <= 0.0:
+		depth = fp
 
 	var holder := Node3D.new()
 	holder.name = "Body"
@@ -487,11 +493,11 @@ static func make_body(type_id: String) -> Node3D:
 		# same lie as decorative terrain that blocks pathing -- so the stake is a
 		# sharpened ridge the width and depth of its own footprint.
 		var prism := PrismMesh.new()
-		prism.size = Vector3(fp, h, fp)
+		prism.size = Vector3(fp, h, depth)
 		mesh_inst.mesh = prism
 	else:
 		var box_mesh := BoxMesh.new()
-		box_mesh.size = Vector3(fp, h, fp)
+		box_mesh.size = Vector3(fp, h, depth)
 		mesh_inst.mesh = box_mesh
 
 	mesh_inst.position = Vector3(0.0, h * 0.5, 0.0)

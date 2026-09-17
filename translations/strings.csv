@@ -61,7 +61,7 @@ HINT_NOT_PLAN_PHASE,"Cannot build outside deployment phase!","非部署阶段，
 HINT_OUT_OF_BOUNDS,"Location is out of bounds!","超出地图边界！"
 HINT_NEED_TOOL,"You need a tool for that — make one at the cabin.","需要工具才行——回船舱做一个。"
 HINT_NEED_BLUEPRINT,"You have not worked out how to build that yet.","你还没琢磨出怎么造这个。"
-BUILD_DETAIL_LOCKED,"%s  —  locked: make %s at the cabin","%s  —  未解锁：先在船舱做出%s"
+BUILD_DETAIL_LOCKED,"%s  —  needs %s","%s  —  需要%s"
 OPTION_ACTIONS,"Actions","操作指令"
 OPTION_STATUS,"Status","单位状态"
 CMD_BUILD,"Build","建造"

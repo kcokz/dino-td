@@ -231,6 +231,8 @@ func _ensure_components() -> void:
 
 	if status_label == null:
 		status_label = find_child("StatusLabel", true, false) as Label
+	if status_label != null and status_label.autowrap_mode == TextServer.AUTOWRAP_OFF:
+		status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if status_label == null:
 		status_label = Label.new()
 		status_label.name = "StatusLabel"
@@ -238,6 +240,12 @@ func _ensure_components() -> void:
 		status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		status_label.add_theme_font_size_override("font_size", _ui_size("panel_status_font_size", 22))
 		status_label.modulate = Color(0.85, 0.85, 0.85)
+		# This line carries the longest text in the game -- a locked building says
+		# what it is waiting on -- and a Label with no wrapping simply runs off the
+		# panel and the player never reads the half that matters.
+		status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		status_label.custom_minimum_size = Vector2(0, _ui_size("panel_status_font_size", 18) * 3)
+		status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		main_vbox.add_child(status_label)
 
 	var sep = find_child("HSeparator", true, false)

@@ -78,13 +78,15 @@ const BUILDINGS: Dictionary = {
 		# staying below BUILDING_HEIGHT_DEFAULT keeps a row of stakes reading as a
 		# fence you see over rather than as a wall of buildings. A turret is the
 		# opposite -- narrow enough to walk past, tall enough to spot across the map.
-		# Fills its tile exactly, so neighbouring stakes touch and a fence line has
-		# no holes in it -- a visible gap between two stakes reads as a way through
-		# even when the collision says otherwise. Stakes stay unimposing by being
-		# LOW rather than by being narrow: height is the lever that costs nothing,
-		# while width is the thing that decides whether a fence is a fence.
+		# A fence panel rather than a block. It spans its whole tile ALONG the run,
+		# so neighbouring stakes touch and the line has no holes in it -- a visible
+		# gap reads as a way through even when the collision says otherwise -- and
+		# it is only `thickness` deep ACROSS the run, which is what stops it looking
+		# like a wall. Wall.gd works out which way the run goes from its neighbours;
+		# a corner, with a run in both directions, keeps the full tile both ways.
 		"footprint": 2.0,
-		"height": 0.85,
+		"thickness": 0.5,
+		"height": 0.7,
 		"mesh_style": "spikes",
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
 		# fence line wears a raid down instead of only delaying it. Deliberately a
@@ -374,7 +376,9 @@ const UI: Dictionary = {
 	"hud_font_size": 20,               # 顶栏资源/状态文字
 	"hud_button_font_size": 18,        # 顶栏按钮
 	"panel_title_font_size": 24,       # 右下角 Option 栏标题
-	"panel_status_font_size": 18,      # Option 栏状态文字
+	# 状态行要装下全游戏最长的一句话（未解锁的建筑要说明它在等什么），
+	# 所以它比按钮字号小一档，并且开了自动换行——放不下的字等于没有字。
+	"panel_status_font_size": 15,      # Option 栏状态文字
 	"panel_button_font_size": 18,      # Option 栏指令按钮
 	"gameover_title_font_size": 40,
 	# 世界空间文字的实际高度 = font_size * pixel_size（米）。

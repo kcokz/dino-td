@@ -34,6 +34,106 @@ func _ready() -> void:
 	super._ready()
 	_load_contact_config()
 	set_physics_process(contact_damage > 0.0 and contact_range > 0.0)
+	_connect_fence_events()
+	fit_to_fence()
+
+func _exit_tree() -> void:
+	super._exit_tree()
+	var eb = _get_event_bus()
+	if eb and is_instance_valid(eb):
+		if eb.has_signal("building_placed") and eb.building_placed.is_connected(_on_fence_changed):
+			eb.building_placed.disconnect(_on_fence_changed)
+		if eb.has_signal("building_destroyed") and eb.building_destroyed.is_connected(_on_fence_changed):
+			eb.building_destroyed.disconnect(_on_fence_changed)
+
+func _connect_fence_events() -> void:
+	var eb = _get_event_bus()
+	if eb == null:
+		return
+	if eb.has_signal("building_placed") and not eb.building_placed.is_connected(_on_fence_changed):
+		eb.building_placed.connect(_on_fence_changed)
+	if eb.has_signal("building_destroyed") and not eb.building_destroyed.is_connected(_on_fence_changed):
+		eb.building_destroyed.connect(_on_fence_changed)
+
+## A stake beside this one going up or coming down changes which way the run goes.
+func _on_fence_changed(_building: Node) -> void:
+	if is_inside_tree() and not is_destroyed:
+		fit_to_fence.call_deferred()
+
+# ==============================================================================
+# Shape: a fence panel, not a block
+# ==============================================================================
+
+## Which way the run goes, from the stakes next door: "x" for an east-west fence,
+## "z" for north-south, "both" for a corner or a stake standing on its own.
+##
+## A stake only slims down once it is part of a run, because only then do its
+## neighbours cover the rest of the tile. On its own it stays full width both ways
+## -- a single stake dropped in a doorway has to close that doorway, or the player
+## would plant one and watch a raptor walk past it.
+func fence_axis() -> String:
+	var along_x: bool = _stake_at(Vector2i(cell_pos.x - 1, cell_pos.y)) or _stake_at(Vector2i(cell_pos.x + 1, cell_pos.y))
+	var along_z: bool = _stake_at(Vector2i(cell_pos.x, cell_pos.y - 1)) or _stake_at(Vector2i(cell_pos.x, cell_pos.y + 1))
+	if along_x == along_z:
+		return "both"      # a corner, or standing alone
+	return "x" if along_x else "z"
+
+func _stake_at(cell: Vector2i) -> bool:
+	if not is_inside_tree():
+		return false
+	var gm = get_tree().get_first_node_in_group("grid_manager")
+	if gm == null or not gm.has_method("get_building_at"):
+		return false
+	var b = gm.get_building_at(cell)
+	return b != null and is_instance_valid(b) and "building_type" in b and String(b.building_type) == building_type
+
+## Re-cuts the collision box and the body to match the run.
+##
+## Panel and box are the same object: a stake spans its tile along the fence so
+## the line has no holes, and is only as deep as it looks across the fence. There
+## is never a gap to walk through, and never an edge that stops something without
+## being visible -- the two failure modes a fence can have.
+func fit_to_fence() -> void:
+	if not is_inside_tree() or is_destroyed:
+		return
+	_apply_shape(fence_axis())
+
+func _thickness() -> float:
+	var cfg = _get_config()
+	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
+		return float(cfg.BUILDINGS[building_type].get("thickness", _footprint()))
+	return _footprint()
+
+## Body and collision are cut from the same three numbers and rebuilt together, so
+## the two can never disagree about where the fence is.
+func _apply_shape(axis: String) -> void:
+	var span: float = _footprint()
+	var thin: float = _thickness()
+	var h: float = _building_height()
+
+	# Built wide along local X and `depth` deep along local Z, then turned a quarter
+	# if the run goes the other way. One shape, one rotation, no second case.
+	var depth: float = span if axis == "both" else thin
+	var turn: bool = (axis == "z")
+	var size := Vector3(span, h, depth)
+	if turn:
+		size = Vector3(depth, h, span)
+
+	for child in get_children():
+		if child is CollisionShape3D and child.shape is BoxShape3D:
+			var box := BoxShape3D.new()
+			box.size = size
+			child.shape = box
+			child.position = Vector3(0.0, h * 0.5, 0.0)
+
+	var body := find_child("Body", false, false)
+	if body != null:
+		remove_child(body)
+		body.queue_free()
+	var rebuilt: Node3D = Building.make_body(building_type, depth)
+	if turn:
+		rebuilt.rotation.y = PI * 0.5
+	add_child(rebuilt)
 
 func setup(type_id: String = "wall", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)

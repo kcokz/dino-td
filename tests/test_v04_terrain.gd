@@ -230,3 +230,113 @@ func test_10_a_dinosaur_walks_around_a_hill_but_bites_a_fence() -> void:
 		"But a dinosaur walks at it rather than around it")
 	assert_false(gm.is_cell_walkable(Vector2i(0, -1), null, true),
 		"While a hill stops it either way")
+
+# ==============================================================================
+# 3. A fence is a panel: thin across the run, gapless along it
+# ==============================================================================
+
+func _wall_at(gm: Node, cell: Vector2i) -> Node:
+	var w = load("res://scripts/entities/Wall.gd").new()
+	_cleanup_nodes.append(w)
+	tree.root.add_child(w)
+	w.setup("wall", cell)
+	w.position = gm.cell_to_world(cell)
+	w.complete_construction()
+	gm.occupy_cell(cell, w)
+	return w
+
+func _collision_size(b: Node) -> Vector3:
+	for child in b.get_children():
+		if child is CollisionShape3D and child.shape is BoxShape3D:
+			return child.shape.size
+	return Vector3.ZERO
+
+func test_11_a_stake_on_its_own_closes_its_whole_tile() -> void:
+	# Plant one in a doorway and it has to shut the doorway. It only slims down
+	# once it is part of a run, because only then do its neighbours cover the rest.
+	var gm = _grid([])
+	await wait_frames(1)
+	var lone = _wall_at(gm, Vector2i(0, 0))
+	lone.fit_to_fence()
+
+	assert_eq(lone.fence_axis(), "both", "Standing alone, it faces both ways")
+	var size: Vector3 = _collision_size(lone)
+	var tile: float = float(config_node.TILE_SIZE)
+	assert_almost_eq(size.x, tile, 0.01, "Full width east-west")
+	assert_almost_eq(size.z, tile, 0.01, "And full width north-south")
+
+func test_12_a_run_of_stakes_turns_into_a_thin_panel() -> void:
+	var gm = _grid([])
+	await wait_frames(1)
+	var a = _wall_at(gm, Vector2i(0, 0))
+	var b = _wall_at(gm, Vector2i(1, 0))
+	var c = _wall_at(gm, Vector2i(2, 0))
+	for w in [a, b, c]:
+		w.fit_to_fence()
+
+	assert_eq(b.fence_axis(), "x", "The middle of an east-west run knows which way it runs")
+	var size: Vector3 = _collision_size(b)
+	var tile: float = float(config_node.TILE_SIZE)
+	var thin: float = float(config_node.BUILDINGS["wall"]["thickness"])
+	assert_almost_eq(size.x, tile, 0.01, "It spans its tile along the fence, so the line has no holes")
+	assert_almost_eq(size.z, thin, 0.01, "And is only as deep as it looks across the fence")
+	assert_lt(thin, tile, "Which is what stops a fence looking like a wall")
+
+func test_13_a_north_south_run_turns_the_other_way() -> void:
+	var gm = _grid([])
+	await wait_frames(1)
+	var a = _wall_at(gm, Vector2i(0, 0))
+	var b = _wall_at(gm, Vector2i(0, 1))
+	var c = _wall_at(gm, Vector2i(0, 2))
+	for w in [a, b, c]:
+		w.fit_to_fence()
+
+	assert_eq(b.fence_axis(), "z", "A north-south run is recognised too")
+	var size: Vector3 = _collision_size(b)
+	assert_almost_eq(size.z, float(config_node.TILE_SIZE), 0.01, "Spanning its tile north-south")
+	assert_almost_eq(size.x, float(config_node.BUILDINGS["wall"]["thickness"]), 0.01, "Thin east-west")
+
+func test_14_the_panel_and_the_collision_are_the_same_shape() -> void:
+	# The two ways a fence can lie: a gap you cannot walk through, and an edge that
+	# stops you without being visible. Both come from the mesh and the box
+	# disagreeing, so they are cut from the same numbers.
+	var gm = _grid([])
+	await wait_frames(1)
+	var a = _wall_at(gm, Vector2i(0, 0))
+	var b = _wall_at(gm, Vector2i(1, 0))
+	for w in [a, b]:
+		w.fit_to_fence()
+
+	var box: Vector3 = _collision_size(b)
+	var body := b.find_child("Body", false, false)
+	assert_not_null(body, "It has a body")
+	var mesh: MeshInstance3D = null
+	for child in body.get_children():
+		if child is MeshInstance3D:
+			mesh = child
+	assert_not_null(mesh, "Drawn from one mesh")
+
+	# The body is turned a quarter for a north-south run, so compare the pair of
+	# horizontal extents rather than the axes by name.
+	var drawn: Vector3 = mesh.mesh.size
+	var drawn_pair := Vector2(minf(drawn.x, drawn.z), maxf(drawn.x, drawn.z))
+	var box_pair := Vector2(minf(box.x, box.z), maxf(box.x, box.z))
+	assert_almost_eq(drawn_pair.x, box_pair.x, 0.01, "Drawn as thin as it blocks")
+	assert_almost_eq(drawn_pair.y, box_pair.y, 0.01, "And as wide as it blocks")
+	assert_almost_eq(drawn.y, box.y, 0.01, "And as tall")
+
+func test_15_extending_a_fence_reshapes_the_stake_already_there() -> void:
+	# A neighbour going up changes which way the run goes, so the old stake has to
+	# hear about it -- otherwise the first stake of every fence stays a block.
+	var gm = _grid([])
+	await wait_frames(1)
+	var first = _wall_at(gm, Vector2i(0, 0))
+	first.fit_to_fence()
+	assert_eq(first.fence_axis(), "both", "Alone to begin with")
+
+	var second = _wall_at(gm, Vector2i(1, 0))
+	second.fit_to_fence()
+	first.fit_to_fence()
+	assert_eq(first.fence_axis(), "x", "Once it has a neighbour it is part of a run")
+	assert_almost_eq(_collision_size(first).z, float(config_node.BUILDINGS["wall"]["thickness"]), 0.01,
+		"And slims down to match")
