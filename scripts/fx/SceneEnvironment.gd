@@ -80,6 +80,7 @@ func apply_environment_config() -> void:
 	environment.fog_sky_affect = float(env_data.get("fog_sky_affect", 0.35))
 	environment.fog_depth_begin = float(env_data.get("fog_depth_begin", 26.0))
 	environment.fog_depth_end = float(env_data.get("fog_depth_end", 48.0))
+	environment.fog_depth_curve = float(env_data.get("fog_depth_curve", 1.0))
 
 ## Updates DirectionalLight3D on parent scene with shadow bias and energy from Config.ENVIRONMENT.
 func apply_sun_config() -> void:
@@ -106,15 +107,19 @@ func apply_sun_config() -> void:
 	if env_data.has("sun_shadow_max_distance"):
 		sun.directional_shadow_max_distance = float(env_data["sun_shadow_max_distance"])
 
+## The sun of THIS level: a sibling, and only a sibling.
+##
+## There used to be a fallback that searched the whole scene tree. It found a light
+## every time, which is the problem -- with two levels loaded at once (the test suite
+## does this routinely) one level's environment would configure the other level's sun.
+## Finding nothing is the correct answer for a WorldEnvironment that has no sun beside
+## it; reaching further to make sure it finds something is how a level ends up quietly
+## driving a light it does not own.
 func _find_sun() -> DirectionalLight3D:
 	var parent_node = get_parent()
-	if parent_node != null:
-		var sun = parent_node.find_child("DirectionalLight3D", false, false) as DirectionalLight3D
-		if sun != null:
-			return sun
-	if is_inside_tree():
-		return get_tree().root.find_child("DirectionalLight3D", true, false) as DirectionalLight3D
-	return null
+	if parent_node == null:
+		return null
+	return parent_node.find_child("DirectionalLight3D", false, false) as DirectionalLight3D
 
 func _get_config() -> Node:
 	if is_inside_tree():

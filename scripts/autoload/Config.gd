@@ -856,18 +856,36 @@ const ENVIRONMENT: Dictionary = {
 	"glow_bloom": 0.08,
 	"glow_blend_mode": Environment.GLOW_BLEND_MODE_SOFTLIGHT,
 
-	# Atmospheric Fog: Distance haze provides depth across the 40x40 map.
-	# Begins at 26m (just outside the primary combat zone) and deepens towards the map edge (48m),
-	# giving the illusion of a vast primordial landscape without obscuring active gameplay.
+	# Atmospheric Fog: distance haze gives depth across the 40x40 map -- clear where the
+	# fight is, thickening towards the border, so the map reads as an edge of somewhere
+	# vast rather than as a 40 metre square.
+	#
+	# FOG_MODE_DEPTH, not EXPONENTIAL, and that choice is load-bearing. Exponential fog
+	# has no start distance at all: it accumulates as 1 - exp(-distance * density) from
+	# the camera outward, so it would sit on the units being looked at. The depth_begin /
+	# depth_end ramp below only exists in FOG_MODE_DEPTH -- under EXPONENTIAL those three
+	# numbers are simply ignored, which is what they were doing when this landed.
+	#
+	# THE TRAP, if this mode is ever changed again: the two modes read `fog_density`
+	# completely differently. Here it is the MAXIMUM opacity the haze ever reaches (0.65
+	# = the far corner is roughly two thirds hazed). Under EXPONENTIAL the same field is
+	# a per-metre coefficient, where 0.65 would be an opaque white-out within a metre.
+	# Changing the mode without re-tuning this number breaks the fog in one direction or
+	# the other, silently.
+	#
+	# Distances are measured from the camera, which sits at (12, 18, 5): the middle of
+	# the map is ~22m away, the near corner ~25m, the nest ~30m, the far corner ~44m. So
+	# 26 -> 48 leaves the approach and the fight clear and hazes the far border.
 	"fog_enabled": true,
-	"fog_mode": Environment.FOG_MODE_EXPONENTIAL,
+	"fog_mode": Environment.FOG_MODE_DEPTH,
 	"fog_light_color": Color(0.68, 0.73, 0.78),
 	"fog_light_energy": 0.85,
-	"fog_density": 0.008,
+	"fog_density": 0.65,        # in DEPTH mode: the ceiling, not a per-metre rate
 	"fog_aerial_perspective": 0.4,
 	"fog_sky_affect": 0.35,
 	"fog_depth_begin": 26.0,
 	"fog_depth_end": 48.0,
+	"fog_depth_curve": 1.0,     # linear ramp between begin and end; >1 holds it back longer
 
 	# Directional Sun Light:
 	# Matches the ancient daylight angle. Shadow bias and normal bias are tuned to eliminate

@@ -182,6 +182,37 @@ func test_06_environment_atmospheric_fog_matches_config() -> void:
 		"Fog depth begin matches Config")
 	assert_almost_eq(env.fog_depth_end, float(env_cfg["fog_depth_end"]), 0.001,
 		"Fog depth end matches Config")
+	assert_almost_eq(env.fog_depth_curve, float(env_cfg["fog_depth_curve"]), 0.001,
+		"Fog depth curve matches Config")
+
+func test_06b_the_fog_numbers_are_ones_the_engine_will_actually_read() -> void:
+	# The bug this catches, which the suite above cannot: every assertion in test_06 is a
+	# mirror. It proves the value reached the Environment, not that the Environment does
+	# anything with it. When this landed the mode was FOG_MODE_EXPONENTIAL, under which
+	# depth_begin / depth_end / depth_curve are ignored outright -- so a carefully tuned
+	# 26m-to-48m ramp was described in three places and happening in none of them.
+	#
+	# Rendering cannot be asserted headless. What CAN be asserted is coherence: a number
+	# that only means something in one mode may only be declared in that mode.
+	var env_cfg: Dictionary = config_node.ENVIRONMENT
+	var declares_a_ramp: bool = env_cfg.has("fog_depth_begin") or env_cfg.has("fog_depth_end") or env_cfg.has("fog_depth_curve")
+	if declares_a_ramp:
+		assert_eq(env_cfg["fog_mode"], Environment.FOG_MODE_DEPTH,
+			"A depth ramp is declared, so the mode has to be the one that reads it")
+		assert_lt(float(env_cfg["fog_depth_begin"]), float(env_cfg["fog_depth_end"]),
+			"And the ramp has to run forwards")
+	else:
+		assert_eq(env_cfg["fog_mode"], Environment.FOG_MODE_EXPONENTIAL,
+			"No ramp declared, so density alone is doing the work")
+
+	# `fog_density` means different things in the two modes, which is the trap waiting
+	# for whoever changes the mode next. In DEPTH it is the maximum opacity the haze ever
+	# reaches; a value above 1 is meaningless, and anything near 1 is a white-out.
+	if int(env_cfg["fog_mode"]) == Environment.FOG_MODE_DEPTH:
+		assert_lte(float(env_cfg["fog_density"]), 1.0,
+			"In depth mode density is an opacity ceiling, so it cannot exceed 1")
+		assert_gt(float(env_cfg["fog_density"]), 0.05,
+			"And a ceiling this low would be fog nobody can see")
 
 # ==============================================================================
 # 7. Directional Sun Light Configuration
@@ -239,3 +270,41 @@ func test_08_cabin_interior_preserves_lighting_and_visibility() -> void:
 	assert_true(main.leave_cabin(), "Leaving cabin succeeds")
 	assert_false(main.in_cabin, "Main outside")
 	assert_true(main.camera.current, "Map camera is active again")
+
+# ==============================================================================
+# 9. A level configures its own sun and nobody else's
+# ==============================================================================
+
+func test_09_the_environment_never_reaches_past_its_own_level() -> void:
+	# _find_sun() used to fall back to searching the whole scene tree when it had no
+	# sibling light. That fallback found a light every time, which is the problem: with
+	# two levels in the tree at once -- routine in this suite -- one level's environment
+	# would configure the other level's sun. Finding nothing is the correct answer for a
+	# WorldEnvironment with no sun beside it.
+	var main = _instantiate_main()
+	await wait_frames(1)
+	var sun := main.find_child("DirectionalLight3D", false, false) as DirectionalLight3D
+	assert_not_null(sun, "The level has its own sun")
+
+	# A value nothing in Config would produce, so any write is visible.
+	var untouched: float = 0.137
+	sun.light_energy = untouched
+
+	var orphan_holder := Node3D.new()
+	_cleanup_nodes.append(orphan_holder)
+	tree.root.add_child(orphan_holder)
+	var stray := SceneEnvironment.new()
+	orphan_holder.add_child(stray)
+	await wait_frames(1)
+
+	assert_null(stray._find_sun(), "With no sun beside it, it finds none")
+	stray.apply_sun_config()
+	assert_almost_eq(sun.light_energy, untouched, 0.0001,
+		"And it leaves the other level's sun exactly as it was")
+
+	# The level's own environment still does its job, so the fix did not cost anything.
+	var own := main.find_child("WorldEnvironment", false, false) as SceneEnvironment
+	assert_not_null(own, "The level has its own environment")
+	own.apply_sun_config()
+	assert_almost_eq(sun.light_energy, float(config_node.ENVIRONMENT["sun_light_energy"]), 0.001,
+		"Its own sun is configured from Config as before")
