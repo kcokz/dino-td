@@ -9,6 +9,10 @@ extends StaticBody3D
 @export var max_hp: float = 10.0
 @export var current_hp: float = 10.0
 @export var cell_pos: Vector2i = Vector2i.ZERO
+## Where this sits on the finer grid, for types placed more precisely than one per tile
+## (stakes). Left at the tile for everything else, and only meaningful when
+## Config.get_cell_divisions() says the type uses it.
+@export var fine_pos: Vector2i = Vector2i.ZERO
 
 @export var build_time: float = 2.0
 @export var build_progress: float = 1.0
@@ -340,6 +344,17 @@ func _update_info_label() -> void:
 		else:
 			label_3d.modulate = Color(1.0, 1.0, 1.0)
 			label_3d.text = b_name
+
+	# Nothing to report, nothing on screen -- the same rule the health bar already
+	# follows. It became urgent the moment stakes could be built close together: a
+	# twenty-stake fence put twenty floating names across the middle of the screen, and
+	# each one said "Wooden Stakes" about a thing that is obviously a wooden stake.
+	var worth_saying: bool = (not is_constructed) or current_hp < max_hp or _get_extra_status_text() != ""
+	var hide_idle: bool = true
+	var cfg_label = _get_config()
+	if cfg_label and "FEEDBACK" in cfg_label:
+		hide_idle = bool(cfg_label.FEEDBACK.get("name_label_hide_when_idle", true))
+	label_3d.visible = worth_saying or not hide_idle
 
 ## Health once built, construction progress before that. Hidden at full health so
 ## an untouched base is not covered in bars.

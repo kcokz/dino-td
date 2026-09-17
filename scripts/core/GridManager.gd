@@ -14,6 +14,18 @@ var occupied_cells: Dictionary = {}
 ## Sparse lookup map: Vector2i -> Node (occupying natural resource node)
 var resource_cells: Dictionary = {}
 
+## Buildings placed on a finer grid than the tile, keyed by fine coordinate.
+##
+## Only stakes use this today. A stake is small and a tile is two metres, so one stake
+## per tile left a fence looking like a row of lonely spikes with holes between them --
+## the cone was never the problem, the GRID was.
+##
+## Deliberately a SECOND register rather than a replacement for occupied_cells. Every
+## tile-level question in the game -- can something walk here, what did I click, is this
+## a barrier -- still goes through occupied_cells and gets the same answer it always
+## did. This only decides where a stake may be PUT.
+var fine_cells: Dictionary = {}
+
 ## Terrain nobody crosses: hills. A set of cells rather than a map of nodes,
 ## because unlike a building this never comes and goes -- it is what the ground is.
 ## Kept apart from occupied_cells for exactly that reason: clearing the grid for a
@@ -132,6 +144,76 @@ func occupy_cell(cell: Vector2i, building: Node) -> bool:
 func set_cell_occupied(cell: Vector2i, building: Node) -> bool:
 	return occupy_cell(cell, building)
 
+# ==============================================================================
+# 2a. The finer grid, for things smaller than a tile
+# ==============================================================================
+
+## The fine coordinate a world point falls in, at `divisions` positions per tile edge.
+func world_to_fine_cell(pos: Vector3, divisions: int) -> Vector2i:
+	var step: float = _fine_step(divisions)
+	return Vector2i(int(floor(pos.x / step)), int(floor(pos.z / step)))
+
+## The centre of a fine cell, in world space.
+func fine_cell_to_world(cell: Vector2i, divisions: int, y: float = 0.0) -> Vector3:
+	var step: float = _fine_step(divisions)
+	return Vector3((float(cell.x) + 0.5) * step, y, (float(cell.y) + 0.5) * step)
+
+## Which tile a fine cell belongs to. Integer floor division, so it is correct on the
+## negative side of the origin too -- Godot's `/` truncates towards zero, which would
+## put fine cell -1 in tile 0.
+func fine_cell_to_cell(cell: Vector2i, divisions: int) -> Vector2i:
+	var d: int = maxi(1, divisions)
+	return Vector2i(int(floor(float(cell.x) / float(d))), int(floor(float(cell.y) / float(d))))
+
+func is_fine_cell_occupied(cell: Vector2i) -> bool:
+	if not fine_cells.has(cell):
+		return false
+	var b = fine_cells[cell]
+	if not is_instance_valid(b) or b.is_queued_for_deletion():
+		fine_cells.erase(cell)
+		return false
+	if "is_destroyed" in b and b.is_destroyed:
+		fine_cells.erase(cell)
+		return false
+	return true
+
+## Puts `building` in a fine cell, and makes it the tile's occupant if the tile has
+## none yet.
+##
+## Registering in BOTH is what keeps every tile-level rule working unchanged: the first
+## stake in a tile blocks that tile exactly as a stake always has, and the ones beside
+## it are extra art and extra damage rather than extra blocking.
+func occupy_fine_cell(cell: Vector2i, building: Node, divisions: int) -> bool:
+	if building == null or is_fine_cell_occupied(cell):
+		return false
+	fine_cells[cell] = building
+	if "fine_pos" in building:
+		building.fine_pos = cell
+	var tile: Vector2i = fine_cell_to_cell(cell, divisions)
+	if "cell_pos" in building:
+		building.cell_pos = tile
+	if not is_cell_occupied(tile):
+		occupied_cells[tile] = building
+	return true
+
+func vacate_fine_cell(cell: Vector2i) -> void:
+	if fine_cells.has(cell):
+		fine_cells.erase(cell)
+
+## Every fine building still standing inside `tile`.
+func fine_buildings_in_cell(tile: Vector2i, divisions: int) -> Array[Node]:
+	var out: Array[Node] = []
+	for fine in fine_cells.keys():
+		if fine_cell_to_cell(fine, divisions) != tile:
+			continue
+		if is_fine_cell_occupied(fine):
+			out.append(fine_cells[fine])
+	return out
+
+func _fine_step(divisions: int) -> float:
+	var s: float = tile_size if tile_size > 0.0 else 2.0
+	return s / float(maxi(1, divisions))
+
 ## Vacates the specified cell. Safe no-op if cell is already unoccupied.
 func vacate_cell(cell: Vector2i) -> void:
 	if occupied_cells.has(cell):
@@ -153,7 +235,16 @@ func get_building_at(cell: Vector2i) -> Node:
 ## player did to it.
 func clear_grid() -> void:
 	occupied_cells.clear()
+	fine_cells.clear()
 	resource_cells.clear()
+
+## How finely `building`'s type is placed. Asked of Config rather than stored, so the
+## answer cannot go stale when the number is tuned.
+func _divisions_of(building: Node) -> int:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_cell_divisions") and "building_type" in building:
+		return int(cfg.get_cell_divisions(String(building.building_type)))
+	return 1
 
 ## Returns an array of all living building nodes tracked by the grid.
 func get_all_buildings() -> Array[Node]:
@@ -220,6 +311,23 @@ func clear_resource_cells() -> void:
 func _on_building_destroyed(building: Node) -> void:
 	if building == null:
 		return
+
+	# Fine buildings first: several of them can share a tile, and only one of them is
+	# registered as the tile's occupant. Losing that one must hand the tile to another
+	# stake standing in it rather than opening the tile up while a fence is still there.
+	if "fine_pos" in building:
+		var fine: Vector2i = building.fine_pos
+		if fine_cells.get(fine) == building:
+			fine_cells.erase(fine)
+		var divisions: int = _divisions_of(building)
+		var tile_of_fine: Vector2i = fine_cell_to_cell(fine, divisions)
+		if occupied_cells.get(tile_of_fine) == building:
+			occupied_cells.erase(tile_of_fine)
+			var survivors := fine_buildings_in_cell(tile_of_fine, divisions)
+			if not survivors.is_empty():
+				occupied_cells[tile_of_fine] = survivors[0]
+		return
+
 	# Fast-path by cell_pos property
 	if "cell_pos" in building:
 		var c: Vector2i = building.cell_pos

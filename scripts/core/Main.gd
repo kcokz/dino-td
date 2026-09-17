@@ -958,7 +958,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null:
-			try_place_at_cell(grid_manager.world_to_cell(hit_pos))
+			# The exact point clicked, not just the tile: a stake snaps to the finer grid
+			# and needs to know where inside the tile the player actually pointed.
+			try_place_at_cell(grid_manager.world_to_cell(hit_pos), hit_pos)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -966,15 +968,27 @@ func _unhandled_input(event: InputEvent) -> void:
 ## alive so the player can lay down a whole row of blueprints in one go, dropping
 ## it only when the next one is no longer affordable. The Hero picks the blueprints
 ## up one at a time. Returns the blueprint, or null if the spot was rejected.
-func try_place_at_cell(cell: Vector2i) -> Node:
+func try_place_at_cell(cell: Vector2i, at_world: Variant = null) -> Node:
 	if current_build_type == "" or build_system == null:
 		return null
 
-	if (grid_manager and grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell)) or is_resource_at_cell(cell):
+	# Stakes go on a finer grid than the tile, so several share a tile and the
+	# tile-occupied shortcut below would reject the second one. BuildSystem asks the
+	# right question for the type; this early check is only here to give a nicer hint,
+	# so it steps aside for anything placed finely.
+	var fine_type: bool = false
+	var cfg_div = _get_config()
+	if cfg_div and cfg_div.has_method("get_cell_divisions"):
+		fine_type = int(cfg_div.get_cell_divisions(current_build_type)) > 1
+	if not fine_type:
+		if (grid_manager and grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell)) or is_resource_at_cell(cell):
+			_hint("HINT_CELL_OCCUPIED")
+			return null
+	elif is_resource_at_cell(cell):
 		_hint("HINT_CELL_OCCUPIED")
 		return null
 
-	var placed = build_system.place_building(current_build_type, cell, buildings_container, true)
+	var placed = build_system.place_building(current_build_type, cell, buildings_container, true, at_world)
 	if placed != null:
 		if hero != null and is_instance_valid(hero):
 			hero.order_build(placed, false)
@@ -1343,19 +1357,32 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 		return
 
 	var cell: Vector2i = grid_manager.world_to_cell(hit)
+	# Stakes snap to the finer grid, so the ghost has to as well -- and the cell it is
+	# compared against has to be the fine one, or the ghost would only move once per
+	# two metres while the stake it promises moves every sixty centimetres.
+	var divisions: int = 1
+	var cfg_div = _get_config()
+	if cfg_div and cfg_div.has_method("get_cell_divisions"):
+		divisions = int(cfg_div.get_cell_divisions(current_build_type))
+	var snap: Vector2i = cell
+	var at: Vector3 = grid_manager.cell_to_world(cell)
+	if divisions > 1:
+		snap = grid_manager.world_to_fine_cell(hit, divisions)
+		at = grid_manager.fine_cell_to_world(snap, divisions)
+
 	build_preview.visible = true
 	# Nothing about a building's shape depends on where it goes any more, so the cell
 	# moving is the only thing that can need a redraw. There used to be a second test
 	# here for the fence's arrangement changing under the cursor -- along with the
 	# arrangement itself, and the bug where the ghost and the placed stake disagreed.
-	if cell == _preview_cell:
+	if snap == _preview_cell:
 		return
-	_preview_cell = cell
-	build_preview.global_position = grid_manager.cell_to_world(cell)
+	_preview_cell = snap
+	build_preview.global_position = at
 
 	var ok: bool = _can_afford_building(current_build_type)
 	if ok and build_system and build_system.has_method("can_place_building"):
-		ok = bool(build_system.can_place_building(current_build_type, cell))
+		ok = bool(build_system.can_place_building(current_build_type, cell, false, hit))
 	elif ok and grid_manager and grid_manager.has_method("is_cell_occupied"):
 		ok = not grid_manager.is_cell_occupied(cell)
 

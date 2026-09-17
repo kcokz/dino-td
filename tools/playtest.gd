@@ -79,12 +79,30 @@ func _scenario_open() -> void:
 ## A fence going up, which is the one shape in the game that depends on its
 ## neighbours -- worth photographing rather than trusting.
 func _scenario_fence() -> void:
-	_grant({"wood": 40})
-	for x in range(-2, 3):
-		_build("wall", Vector2i(x, -3))
-	_build("wall", Vector2i(2, -2))        # a corner, so the L shows
+	_grant({"wood": 400})
+	var cfg := root.get_node_or_null("Config")
+	var gm = _main.grid_manager
+	var divisions: int = int(cfg.get_cell_divisions("wall")) if cfg else 1
+	var step: float = float(cfg.TILE_SIZE) / float(maxi(1, divisions))
+
+	# A run laid at the spacing stakes actually snap to, which is the whole point of the
+	# finer grid: one stake per click, close enough together to read as a fence.
+	var z: float = -6.0
+	var x: float = -5.0
+	while x < 5.0:
+		_build_at("wall", Vector3(x, 0.0, z))
+		x += step
+	# And a short arm, so a corner is in frame too.
+	var zz: float = z + step
+	while zz < z + step * 5.0:
+		_build_at("wall", Vector3(5.0 - step, 0.0, zz))
+		zz += step
+
 	await _wait(10)
 	await _shoot("fence_line")
+	# And from close enough to judge the spacing, which is the thing this scenario is
+	# really about -- from the play camera a gap and a join look the same.
+	await _portrait("fence_close", Vector3(0.0, 0.0, z), 6.0)
 
 ## Inside the cabin. The interior is the same world 200 metres down, so anything
 ## wrong with the environment shows here first.
@@ -155,6 +173,20 @@ func _grant(amounts: Dictionary) -> void:
 		return
 	for res_id in amounts:
 		gs.resources[res_id] = int(gs.resources.get(res_id, 0)) + int(amounts[res_id])
+
+## Places at an exact world point, which is what the player's click does. Stakes snap
+## to a finer grid than the tile, so placing them by tile would put one every two metres
+## and photograph the wrong thing entirely.
+func _build_at(type_id: String, at: Vector3) -> void:
+	if _main == null or _main.build_system == null:
+		return
+	var cell: Vector2i = _main.grid_manager.world_to_cell(at)
+	# Placed as a blueprint and then finished: that path is AP-free, and the harness is
+	# not trying to test the action-point budget -- it wants a fence to photograph. The
+	# first version paid AP and quietly stopped after three stakes.
+	var b = _main.build_system.place_building(type_id, cell, _main.buildings_container, true, at)
+	if b != null and b.has_method("complete_construction"):
+		b.complete_construction()
 
 func _build(type_id: String, cell: Vector2i) -> void:
 	if _main != null and _main.has_method("place_building_at_cell"):

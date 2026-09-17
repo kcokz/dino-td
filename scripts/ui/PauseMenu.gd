@@ -27,6 +27,9 @@ var quit_btn: Button = null
 var back_btn: Button = null
 var language_row: HBoxContainer = null
 var language_label: Label = null
+var window_row: HBoxContainer = null
+var window_label: Label = null
+var window_picker: OptionButton = null
 var language_picker: OptionButton = null
 
 var _was_paused_before_open: bool = false
@@ -223,8 +226,28 @@ func _ensure_components() -> void:
 		if not language_picker.item_selected.is_connected(_on_language_selected):
 			language_picker.item_selected.connect(_on_language_selected)
 
+	if window_row == null:
+		window_row = HBoxContainer.new()
+		window_row.name = "WindowRow"
+		window_row.add_theme_constant_override("separation", 10)
+		page_vbox.add_child(window_row)
+
+		window_label = Label.new()
+		window_label.name = "WindowLabel"
+		window_label.add_theme_font_size_override("font_size", _ui_size("hud_font_size", 20))
+		window_row.add_child(window_label)
+
+		window_picker = OptionButton.new()
+		window_picker.name = "WindowPicker"
+		window_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		window_picker.add_theme_font_size_override("font_size", _ui_size("hud_button_font_size", 18))
+		window_row.add_child(window_picker)
+		if not window_picker.item_selected.is_connected(_on_window_mode_selected):
+			window_picker.item_selected.connect(_on_window_mode_selected)
+
 	back_btn = _make_button(back_btn, "BackBtn", _on_back_pressed)
 	_populate_languages()
+	_populate_window_modes()
 
 func _make_button(existing: Button, node_name: String, cb: Callable) -> Button:
 	var btn: Button = existing
@@ -239,6 +262,23 @@ func _make_button(existing: Button, node_name: String, cb: Callable) -> Button:
 	if not btn.pressed.is_connected(cb):
 		btn.pressed.connect(cb)
 	return btn
+
+## Fullscreen or windowed. Index 0 is fullscreen, 1 is windowed -- the order is fixed
+## rather than derived, because there are exactly two and they are not going to grow.
+func _populate_window_modes() -> void:
+	if window_picker == null:
+		return
+	var wm := get_node_or_null("/root/WindowMode")
+	window_picker.clear()
+	window_picker.add_item(tr("MENU_WINDOW_FULLSCREEN"), 0)
+	window_picker.add_item(tr("MENU_WINDOW_WINDOWED"), 1)
+	if wm and wm.has_method("is_fullscreen"):
+		window_picker.select(0 if wm.is_fullscreen() else 1)
+
+func _on_window_mode_selected(index: int) -> void:
+	var wm := get_node_or_null("/root/WindowMode")
+	if wm and wm.has_method("set_fullscreen"):
+		wm.set_fullscreen(index == 0)
 
 func _populate_languages() -> void:
 	if language_picker == null:
@@ -268,6 +308,8 @@ func _refresh_texts() -> void:
 	if quit_btn: quit_btn.text = tr("MENU_QUIT")
 	if back_btn: back_btn.text = tr("MENU_BACK")
 	if language_label: language_label.text = tr("MENU_LANGUAGE")
+	if window_label: window_label.text = tr("MENU_WINDOW_MODE")
+	_populate_window_modes()
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if current_page == Page.ROOT else tr("MENU_SETTINGS_TITLE")
 	_populate_languages()

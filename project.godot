@@ -23,6 +23,7 @@ EventBus="*res://scripts/autoload/EventBus.gd"
 GameState="*res://scripts/autoload/GameState.gd"
 I18n="*res://scripts/autoload/I18n.gd"
 Fx="*res://scripts/autoload/Fx.gd"
+WindowMode="*res://scripts/autoload/WindowMode.gd"
 
 [internationalization]
 

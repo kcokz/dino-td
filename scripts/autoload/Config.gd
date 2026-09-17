@@ -103,6 +103,15 @@ const BUILDINGS: Dictionary = {
 		"footprint": 2.0,
 		"height": 0.95,          # taller than it is wide, so it reads as a stake
 		"spike_diameter": 0.62,  # ONE cone, this wide. Not derived from anything.
+		# Stakes are placed on a FINER grid than everything else: three positions per
+		# tile edge, so 0.67m apart instead of 2m. That is the whole answer to "one
+		# stake, but they sit miles apart" -- the cone was already small, the GRID was
+		# what was coarse. A row of them now closes up into a fence you can see is a
+		# fence, and how dense it is is the player's decision rather than a constant.
+		#
+		# It only changes where a stake may be PUT. The tile is still what gets blocked,
+		# so pathing, the barrier rule and everything built on them are untouched.
+		"cell_divisions": 3,
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
 		# fence line wears a raid down instead of only delaying it. Deliberately a
 		# chip rather than a kill -- a raptor (DINOS.raptor.hp) chewing through these
@@ -150,6 +159,15 @@ static func get_building_color(type_id: String) -> Color:
 	if COLORS.has(type_id):
 		return COLORS[type_id]
 	return Color(0.6, 0.6, 0.6)
+
+## How many places a building of this type may stand along one tile edge.
+##
+## 1 for almost everything: a turret goes in the middle of its tile and that is that.
+## Stakes use a finer grid so a fence can be built dense enough to read as a fence.
+static func get_cell_divisions(type_id: String) -> int:
+	if BUILDINGS.has(type_id):
+		return clampi(int(BUILDINGS[type_id].get("cell_divisions", 1)), 1, 8)
+	return 1
 
 ## "box" (one solid block) or "spikes" (a row of small sharpened cones).
 ##
@@ -443,6 +461,9 @@ const FEEDBACK: Dictionary = {
 	"debris_lifetime": 0.7,           # 碎块存在时长（秒）
 	"health_bar_width": 1.1,          # 血条宽度（米）
 	"health_bar_height": 0.13,        # 血条高度（米）
+	# A building with nothing to report shows no name. Without this a fence of twenty
+	# stakes writes "Wooden Stakes" twenty times across the middle of the screen.
+	"name_label_hide_when_idle": true,
 	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
 	# 捡起东西时在原地飘一个数字：掉落物消失了，只有 HUD 数字变化，
 	# 不给一个就地的反馈的话玩家看不出"进账了"。
@@ -467,6 +488,16 @@ const NEST_GUARDS: Dictionary = {
 # ==============================================================================
 # 10. Control Configuration (v0.1 SSoT, extensible for v0.x player customization)
 # ==============================================================================
+## Fullscreen or not, and how that choice is remembered.
+##
+## The game shipped locked to fullscreen (project.godot window/size/mode = 3), which is
+## fine for playing and useless for anything else -- you cannot put the window beside
+## something, and you cannot take a screenshot of it to point at.
+const WINDOW: Dictionary = {
+	"default_fullscreen": true,
+	"toggle_key": KEY_F11,      # the near-universal binding for this
+}
+
 const CONTROLS: Dictionary = {
 	"hero_move_button": MOUSE_BUTTON_RIGHT,       # Default: Right-click moves Hero
 	"build_place_button": MOUSE_BUTTON_LEFT,      # Default: Left-click places building / selects

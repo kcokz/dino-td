@@ -111,10 +111,24 @@ func load_saved_locale() -> String:
 
 ## Saves user preference to disk.
 func save_saved_locale(loc: String) -> void:
+	save_setting("localization", "locale", loc)
+
+## The settings file, for anything that is a preference rather than a game rule.
+##
+## It lives here because this is where the file already was. A second ConfigFile
+## elsewhere would be a second place for settings to live and a second place for them
+## to be forgotten.
+func save_setting(section: String, key: String, value: Variant) -> void:
 	var cfg = ConfigFile.new()
-	var _err = cfg.load(SETTINGS_PATH) # OK if doesn't exist yet
-	cfg.set_value("localization", "locale", loc)
+	var _err = cfg.load(SETTINGS_PATH) # OK if it does not exist yet
+	cfg.set_value(section, key, value)
 	cfg.save(SETTINGS_PATH)
+
+func load_setting(section: String, key: String, fallback: Variant) -> Variant:
+	var cfg = ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return fallback
+	return cfg.get_value(section, key, fallback)
 
 func _get_event_bus() -> Node:
 	if is_inside_tree():
