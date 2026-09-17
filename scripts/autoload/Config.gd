@@ -101,9 +101,8 @@ const BUILDINGS: Dictionary = {
 		# how deep the line is IS the cone's diameter (get_building_thickness), and
 		# a second number for it would be a number that can disagree with the art.
 		"footprint": 2.0,
-		"height": 0.95,        # taller than a cone is wide, so it reads as a stake
-		"spikes_per_tile": 3,  # cones per tile of fence; pitch = footprint / this
-		"spike_fill": 0.85,    # cone diameter as a fraction of the pitch (<1 leaves a hair of daylight)
+		"height": 0.95,          # taller than it is wide, so it reads as a stake
+		"spike_diameter": 0.62,  # ONE cone, this wide. Not derived from anything.
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
 		# fence line wears a raid down instead of only delaying it. Deliberately a
 		# chip rather than a kill -- a raptor (DINOS.raptor.hp) chewing through these
@@ -166,26 +165,16 @@ static func get_placeholder_style(key: String) -> String:
 		return String(VISUALS[key].get("placeholder", "box"))
 	return "box"
 
-## How many cones one tile of fence is drawn as.
-static func get_spikes_per_tile(type_id: String) -> int:
-	if BUILDINGS.has(type_id):
-		return maxi(1, int(BUILDINGS[type_id].get("spikes_per_tile", 1)))
-	return 1
-
-## Distance between neighbouring cones. Derived from the footprint rather than
-## declared, which is what makes the spacing identical across a tile boundary: a
-## stake's cones sit at (i + 0.5) * pitch, so the last cone of one tile and the
-## first of the next are exactly one pitch apart, like every other pair.
-static func get_spike_pitch(type_id: String) -> float:
-	return get_building_footprint(type_id) / float(get_spikes_per_tile(type_id))
-
-## Base diameter of one cone. Just under the pitch, so neighbours stand shoulder to
-## shoulder with a hair of daylight between them instead of fusing into a ridge.
+## How wide one stake is.
+##
+## DECLARED, not derived. It used to be worked out from a cone count and a tile
+## width, which is how a stake ended up being three cones, or five at a corner, and
+## why the number changed under the player as neighbours went up. There is one cone
+## and this is how wide it is.
 static func get_spike_diameter(type_id: String) -> float:
-	var fill: float = 0.85
 	if BUILDINGS.has(type_id):
-		fill = float(BUILDINGS[type_id].get("spike_fill", fill))
-	return maxf(0.05, get_spike_pitch(type_id) * clampf(fill, 0.1, 1.0))
+		return maxf(0.05, float(BUILDINGS[type_id].get("spike_diameter", 0.6)))
+	return 0.6
 
 ## How deep a fence line is across the run, in metres.
 ##
@@ -614,29 +603,6 @@ static func get_visual_size(key: String) -> Vector3:
 				return RESOURCE_NODES[id]["size"]
 			return Vector3(1.6, 1.0, 1.6)
 	return Vector3.ONE
-
-## Where the cones of a fence stand, in the building's own space, for a run along
-## `axis` ("x", "z", or "both" for a corner, a cluster, or a stake on its own).
-##
-## The single source of that arrangement: the body is drawn from this and Wall.gd's
-## collision boxes are cut along the same lines, so the shape you see and the shape that
-## stops a raptor are the same shape by construction rather than by agreement.
-static func spike_offsets(type_id: String, axis: String) -> Array[Vector3]:
-	var out: Array[Vector3] = []
-	var count: int = get_spikes_per_tile(type_id)
-	var pitch: float = get_spike_pitch(type_id)
-	var span: float = get_building_footprint(type_id)
-	var along_x: bool = (axis != "z")
-	var along_z: bool = (axis != "x")
-	for i in count:
-		var t: float = (float(i) + 0.5) * pitch - span * 0.5
-		if along_x:
-			out.append(Vector3(t, 0.0, 0.0))
-		# The two arms of a cross share their middle cone rather than stacking two in
-		# the same hole.
-		if along_z and not (along_x and is_zero_approx(t)):
-			out.append(Vector3(0.0, 0.0, t))
-	return out
 
 # ==============================================================================
 # 13. Drops (v0.3) -- every resource enters the warehouse through the Hero

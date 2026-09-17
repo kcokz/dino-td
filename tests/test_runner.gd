@@ -11,6 +11,10 @@ var target_test_filter: String = ""
 var list_only: bool = false
 
 var total_suites_run: int = 0
+## Files named test_* that turned out to contain no tests. Counted rather than ignored,
+## so the "every suite ran" check below can tell a deliberately empty file apart from a
+## suite that vanished -- two of these exist today and are not failures.
+var total_suites_without_tests: int = 0
 var total_tests_run: int = 0
 var total_tests_passed: int = 0
 var total_tests_failed: int = 0
@@ -76,6 +80,22 @@ func _run_all_tests() -> void:
 
 	var elapsed_all_ms = Time.get_ticks_msec() - start_all_ms
 
+	# Every suite that was discovered has to have run. Counting them is the one check
+	# that catches a whole file going missing however it happens -- a compile error, an
+	# exception during setup, anything. A green run over a shrinking number of suites is
+	# the most dangerous result this runner can produce, because nothing looks wrong.
+	if target_suite_filter == "":
+		var expected: int = suite_files.size()
+		var accounted: int = total_suites_run + total_suites_without_tests
+		if accounted != expected:
+			printerr("ERROR: %d suites were discovered but only %d are accounted for" % [expected, accounted])
+			total_tests_failed += 1
+			all_failure_records.append({
+				"suite": "test_runner",
+				"test": "every_suite_ran",
+				"message": "%d of %d suites did not run. A suite that vanishes takes its tests with it." % [expected - accounted, expected]
+			})
+
 	print("============================================================")
 	print("TEST EXECUTION SUMMARY")
 	print("Suites Executed:     %d" % total_suites_run)
@@ -139,6 +159,20 @@ func _execute_test_suite(suite_path: String) -> void:
 		})
 		return
 
+	# A script with a parse error still load()s to a GDScript object -- it is only
+	# calling new() on it that goes wrong, and that aborts this function outright, so
+	# the checks below never ran and the suite just vanished from the run. One syntax
+	# error used to take thirteen tests with it and still report ALL TESTS PASSED.
+	if script_res is GDScript and not (script_res as GDScript).can_instantiate():
+		printerr("ERROR: %s failed to compile -- look for a Parse Error above" % suite_file)
+		total_tests_failed += 1
+		all_failure_records.append({
+			"suite": suite_file,
+			"test": "suite_compiler",
+			"message": "The suite did not compile, so none of its tests ran."
+		})
+		return
+
 	var suite_instance = script_res.new()
 	if suite_instance == null:
 		printerr("ERROR: Could not instantiate script %s" % suite_path)
@@ -165,6 +199,7 @@ func _execute_test_suite(suite_path: String) -> void:
 
 	if test_methods.is_empty():
 		print("  [WARN] No test methods matching 'test_*' found in %s" % suite_file)
+		total_suites_without_tests += 1
 		return
 
 	total_suites_run += 1

@@ -55,10 +55,6 @@ var build_preview: Node3D = null
 var build_preview_mesh: MeshInstance3D = null
 var build_preview_ring: MeshInstance3D = null
 var _preview_cell: Vector2i = Vector2i(999999, 999999)
-## Which way a fence through the hovered cell would run. Tracked so the ghost can be
-## redrawn when the answer changes -- moving the cursor next to an existing stake
-## changes the shape that would be built there, and the ghost has to say so.
-var _preview_axis: String = ""
 
 
 # Canonical coordinates
@@ -1252,12 +1248,11 @@ func _handle_camera_pan(delta: float) -> void:
 
 ## (Re)creates the ghost for `type_id`: a translucent box the size of the building
 ## plus, when the type has an area of effect, a ring showing what it would cover.
-func _rebuild_build_preview(type_id: String, axis: String = "both") -> void:
+func _rebuild_build_preview(type_id: String) -> void:
 	_clear_build_preview()
 	var cfg = _get_config()
 	if cfg == null or not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(type_id):
 		return
-	_preview_axis = axis
 
 	build_preview = Node3D.new()
 	build_preview.name = "BuildPreview"
@@ -1266,7 +1261,7 @@ func _rebuild_build_preview(type_id: String, axis: String = "both") -> void:
 	# The ghost is drawn by the same code as the real building, so it can never
 	# promise a shape the finished thing does not have -- a cube standing in for a
 	# stake told the player nothing about what was going down.
-	var body: Node3D = Building.make_body(type_id, axis)
+	var body: Node3D = Building.make_body(type_id)
 	build_preview.add_child(body)
 	build_preview_mesh = _first_mesh_in(body)
 	for mi in _meshes_in(body):
@@ -1288,17 +1283,6 @@ func _rebuild_build_preview(type_id: String, axis: String = "both") -> void:
 
 	build_preview.visible = false
 	_preview_cell = Vector2i(999999, 999999)
-
-## The shape the pending building would take at `cell`. For a fence that is which
-## way the run goes, answered by the same function the placed stake will ask, so
-## hover and result are the same shape by construction.
-func _preview_axis_for(type_id: String, cell: Vector2i) -> String:
-	var cfg = _get_config()
-	if cfg == null or not cfg.has_method("get_building_mesh_style"):
-		return "both"
-	if String(cfg.get_building_mesh_style(type_id)) != "spikes":
-		return "both"
-	return Wall.axis_at(grid_manager, cell, type_id)
 
 ## Area of effect a pending building would have: attack range for towers,
 ## attack range for turrets, nothing for plain stakes.
@@ -1360,17 +1344,12 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 
 	var cell: Vector2i = grid_manager.world_to_cell(hit)
 	build_preview.visible = true
-	# Same cell AND same shape means there is nothing to redraw. The shape is part of
-	# that test because a stake's shape depends on its neighbours: one going up next
-	# to the cursor changes what would be built here without the cursor moving.
-	var axis: String = _preview_axis_for(current_build_type, cell)
-	if cell == _preview_cell and axis == _preview_axis:
+	# Nothing about a building's shape depends on where it goes any more, so the cell
+	# moving is the only thing that can need a redraw. There used to be a second test
+	# here for the fence's arrangement changing under the cursor -- along with the
+	# arrangement itself, and the bug where the ghost and the placed stake disagreed.
+	if cell == _preview_cell:
 		return
-	if axis != _preview_axis:
-		_rebuild_build_preview(current_build_type, axis)
-		if build_preview == null or not is_instance_valid(build_preview):
-			return
-		build_preview.visible = true
 	_preview_cell = cell
 	build_preview.global_position = grid_manager.cell_to_world(cell)
 
@@ -1397,4 +1376,3 @@ func _clear_build_preview() -> void:
 	build_preview_mesh = null
 	build_preview_ring = null
 	_preview_cell = Vector2i(999999, 999999)
-	_preview_axis = ""

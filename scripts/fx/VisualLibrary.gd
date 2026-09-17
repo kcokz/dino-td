@@ -187,7 +187,7 @@ static func _build_placeholder(holder: Node3D, key: String, variant: String) -> 
 
 	match declared_placeholder(key):
 		"spikes":
-			_build_spike_row(holder, key, variant, size, mat)
+			_build_one_spike(holder, key, size, mat)
 		"cylinder":
 			var cyl := CylinderMesh.new()
 			cyl.top_radius = size.x * 0.4
@@ -206,24 +206,23 @@ static func _build_placeholder(holder: Node3D, key: String, variant: String) -> 
 			box.size = size
 			_add_mesh(holder, box, Vector3(0.0, size.y * 0.5, 0.0), mat)
 
-## A fence's cones, at the pitch Config derives from the footprint. The arrangement
-## comes from `Config.spike_offsets`, which is also what the collision boxes are cut
-## along, so the shape you see and the shape that stops a raptor are the same shape by
-## construction rather than by agreement.
-static func _build_spike_row(holder: Node3D, key: String, variant: String, size: Vector3, mat: StandardMaterial3D) -> void:
+## One sharpened stake.
+##
+## There is no arrangement here on purpose. A fence used to work out its shape from its
+## neighbours -- a line, an L, a cross -- and the number of cones changed under the
+## player as the fence grew. One stake, one cone, always.
+static func _build_one_spike(holder: Node3D, key: String, size: Vector3, mat: StandardMaterial3D) -> void:
 	var cfg: Node = _config()
 	if cfg == null:
 		return
 	var type_id: String = key.get_slice("/", key.get_slice_count("/") - 1)
 	var diameter: float = float(cfg.get_spike_diameter(type_id))
-	var axis: String = variant if variant != "" else "both"
-	for offset in cfg.spike_offsets(type_id, axis):
-		var cone := CylinderMesh.new()
-		cone.top_radius = 0.0            # a stake sharpened to a point
-		cone.bottom_radius = diameter * 0.5
-		cone.height = size.y
-		cone.radial_segments = 8         # hewn, not lathe-turned -- and cheap
-		_add_mesh(holder, cone, Vector3(offset.x, size.y * 0.5, offset.z), mat)
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0            # sharpened to a point
+	cone.bottom_radius = diameter * 0.5
+	cone.height = size.y
+	cone.radial_segments = 8         # hewn, not lathe-turned -- and cheap
+	_add_mesh(holder, cone, Vector3(0.0, size.y * 0.5, 0.0), mat)
 
 static func _add_mesh(holder: Node3D, mesh: Mesh, at: Vector3, mat: StandardMaterial3D) -> void:
 	var mi := MeshInstance3D.new()

@@ -287,23 +287,22 @@ func test_12_a_visual_never_comes_back_empty() -> void:
 		"Falling back to the plain block rather than to nothing")
 	assert_false(VisualLibrary.has_art("no/such/thing"), "And it does not claim to have art")
 
-func test_13_the_fence_still_arranges_itself_through_the_library() -> void:
-	# Building.make_body is one line now; this is the check that the delegation kept the
-	# fence's arrangement, which is the only visual in the game whose shape depends on
-	# its neighbours.
-	var per_tile: int = int(config_node.get_spikes_per_tile("wall"))
-	var line: Node3D = VisualLibrary.make("building/wall", "x")
-	_keep(line)
-	assert_eq(_meshes(line).size(), per_tile, "A run is a line of cones")
+func test_13_a_stake_is_one_cone_through_every_route() -> void:
+	# No visual in this game depends on its neighbours any more. Whichever way the body
+	# is asked for, and whatever is passed as a variant, the answer is one cone.
+	var direct: Node3D = VisualLibrary.make("building/wall")
+	_keep(direct)
+	assert_eq(_meshes(direct).size(), 1, "One cone")
 
-	var cross: Node3D = VisualLibrary.make("building/wall", "both")
-	_keep(cross)
-	assert_eq(_meshes(cross).size(), per_tile * 2 - 1, "A lone stake is a cross of them")
+	# A variant is still meaningful for other things (a cut-out tree), so it has to be
+	# harmless here rather than absent -- passing one must not resurrect an arrangement.
+	var with_variant: Node3D = VisualLibrary.make("building/wall", "x")
+	_keep(with_variant)
+	assert_eq(_meshes(with_variant).size(), 1, "A variant does not bring back a second cone")
 
-	var through_building: Node3D = Building.make_body("wall", "x")
+	var through_building: Node3D = Building.make_body("wall")
 	_keep(through_building)
-	assert_eq(_meshes(through_building).size(), _meshes(line).size(),
-		"And asking through Building gives the same body")
+	assert_eq(_meshes(through_building).size(), 1, "And asking through Building gives the same body")
 
 func test_14_a_depleted_node_is_asked_for_as_a_variant() -> void:
 	# Today both variants resolve to the same placeholder and only the colour differs.

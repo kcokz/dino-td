@@ -34,122 +34,29 @@ func _ready() -> void:
 	super._ready()
 	_load_contact_config()
 	set_physics_process(contact_damage > 0.0 and contact_range > 0.0)
-	_connect_fence_events()
-	fit_to_fence()
-
-func _exit_tree() -> void:
-	super._exit_tree()
-	var eb = _get_event_bus()
-	if eb and is_instance_valid(eb):
-		if eb.has_signal("building_placed") and eb.building_placed.is_connected(_on_fence_changed):
-			eb.building_placed.disconnect(_on_fence_changed)
-		if eb.has_signal("building_destroyed") and eb.building_destroyed.is_connected(_on_fence_changed):
-			eb.building_destroyed.disconnect(_on_fence_changed)
-
-func _connect_fence_events() -> void:
-	var eb = _get_event_bus()
-	if eb == null:
-		return
-	if eb.has_signal("building_placed") and not eb.building_placed.is_connected(_on_fence_changed):
-		eb.building_placed.connect(_on_fence_changed)
-	if eb.has_signal("building_destroyed") and not eb.building_destroyed.is_connected(_on_fence_changed):
-		eb.building_destroyed.connect(_on_fence_changed)
-
-## A stake beside this one going up or coming down changes which way the run goes.
-func _on_fence_changed(_building: Node) -> void:
-	if is_inside_tree() and not is_destroyed:
-		fit_to_fence.call_deferred()
 
 # ==============================================================================
-# Shape: a fence panel, not a block
+# Shape: there isn't any
 # ==============================================================================
-
-## Which way the run goes, from the stakes next door: "x" for an east-west fence,
-## "z" for north-south, "both" for a corner or a stake standing on its own.
-##
-## A stake only lines up along one axis once it is part of a run, because only then
-## do its neighbours cover the rest of the tile. On its own it puts cones both ways
-## -- a single stake dropped in a doorway has to close that doorway, or the player
-## would plant one and watch a raptor walk past it. Since v0.4 that case is a small
-## cross of cones rather than a filled tile, so "alone" no longer means "big".
-func fence_axis() -> String:
-	if not is_inside_tree():
-		return "both"
-	return axis_at(get_tree().get_first_node_in_group("grid_manager"), cell_pos, building_type)
-
-## The same question asked about a cell that has nothing on it yet, so the build
-## preview can show the shape the stake would actually take there.
-##
-## Static and grid-driven on purpose: hover and result come out of one function, so
-## the ghost cannot promise a shape the placed stake does not have. That mismatch
-## was the bug -- the ghost was always drawn full-tile whatever it was about to
-## become.
-static func axis_at(gm: Node, cell: Vector2i, type_id: String = "wall") -> String:
-	var along_x: bool = _same_stake_at(gm, Vector2i(cell.x - 1, cell.y), type_id) or _same_stake_at(gm, Vector2i(cell.x + 1, cell.y), type_id)
-	var along_z: bool = _same_stake_at(gm, Vector2i(cell.x, cell.y - 1), type_id) or _same_stake_at(gm, Vector2i(cell.x, cell.y + 1), type_id)
-	if along_x == along_z:
-		return "both"      # a corner, a cluster, or standing alone
-	return "x" if along_x else "z"
-
-static func _same_stake_at(gm: Node, cell: Vector2i, type_id: String) -> bool:
-	if gm == null or not is_instance_valid(gm) or not gm.has_method("get_building_at"):
-		return false
-	var b = gm.get_building_at(cell)
-	return b != null and is_instance_valid(b) and "building_type" in b and String(b.building_type) == type_id
-
-## Re-cuts the collision and the cones to match the run.
-func fit_to_fence() -> void:
-	if not is_inside_tree() or is_destroyed:
-		return
-	_apply_shape(fence_axis())
-
-## How deep the fence line is across the run. Derived by Config from the cone
-## itself, so this and the art cannot drift apart.
-func _thickness() -> float:
-	var cfg = _get_config()
-	if cfg and cfg.has_method("get_building_thickness"):
-		return float(cfg.get_building_thickness(building_type))
-	return _footprint()
-
-## Cones and collision, rebuilt together from the same axis.
-##
-## A run gets one box along it, as deep as a cone is wide. A corner or a lone stake
-## gets two crossed boxes -- not a filled tile, which is what used to make a block
-## of stakes turn back into big squares. Either way the boxes sit exactly under the
-## cones: nothing is stopped by an edge it cannot see, and nothing walks through
-## something that looks solid.
-func _apply_shape(axis: String) -> void:
-	var span: float = _footprint()
-	var thin: float = _thickness()
-	var h: float = _building_height()
-
-	var sizes: Array[Vector3] = []
-	if axis != "z":
-		sizes.append(Vector3(span, h, thin))
-	if axis != "x":
-		sizes.append(Vector3(thin, h, span))
-
-	for child in get_children():
-		if child is CollisionShape3D:
-			remove_child(child)
-			child.queue_free()
-	for size in sizes:
-		var col := CollisionShape3D.new()
-		var box := BoxShape3D.new()
-		box.size = size
-		col.shape = box
-		col.position = Vector3(0.0, h * 0.5, 0.0)
-		add_child(col)
-
-	var body := find_child("Body", false, false)
-	if body != null:
-		remove_child(body)
-		body.queue_free()
-	add_child(Building.make_body(building_type, axis))
-
-	# Fresh shapes come in enabled and fresh meshes come in opaque, so a blueprint
-	# that re-fits mid-build would otherwise start blocking and look finished.
-	_update_construction_state()
+#
+# This file used to hold an auto-tiling system: a stake asked its neighbours which way
+# the fence ran and redrew itself as a line, an L or a cross, and the build preview
+# asked the same question so the ghost would match. It was rebuilt four times and
+# produced a new bug every time -- the last of them a blueprint showing five cones that
+# became three once a neighbour went up.
+#
+# It is gone, and with it every function in this file that used to shape anything. ONE
+# STAKE IS ONE CONE, whatever is beside it. The collider is the plain tile-sized box the
+# base class builds, so nothing here overrides anything.
+#
+# Worth being clear about what that leaves, because it is a real trade rather than a
+# tidy win: the stake BLOCKS its whole tile and is DRAWN as one stake in the middle of
+# it. That is what keeps a fence a fence -- test_43b in test_v02_followups holds the
+# rule that two neighbouring stakes leave no lane the Hero can walk through, and that
+# rule is computed from the footprint. Shrinking the footprint to match the cone would
+# make the art honest and would also mean a single stake stops nothing, which is a
+# gameplay change nobody asked for. If it is ever wanted, it is one number in Config
+# (BUILDINGS.wall.footprint) plus whatever that does to is_barrier_building.
 
 func setup(type_id: String = "wall", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)

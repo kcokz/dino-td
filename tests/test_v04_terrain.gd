@@ -232,8 +232,17 @@ func test_10_a_dinosaur_walks_around_a_hill_but_bites_a_fence() -> void:
 		"While a hill stops it either way")
 
 # ==============================================================================
-# 3. A fence is a row of small cones: thin across the run, gapless along it
+# 3. A stake is one stake
 # ==============================================================================
+#
+# What used to be here was eight tests about a fence working out its shape from its
+# neighbours: lines, corners, crosses, seam-to-seam cone spacing, and a ghost that had
+# to predict all of it. That system was rebuilt four times, produced a fresh bug every
+# time, and was never asked for -- the request, the first time and every time since,
+# was one stake.
+#
+# So it is deleted rather than repaired. These tests hold what replaced it, and the
+# point of every one of them is that NOTHING about a stake depends on its neighbours.
 
 func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	var w = load("res://scripts/entities/Wall.gd").new()
@@ -245,231 +254,124 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	gm.occupy_cell(cell, w)
 	return w
 
-func _collision_sizes(b: Node) -> Array[Vector3]:
-	var out: Array[Vector3] = []
+func _collision_size(b: Node) -> Vector3:
 	for child in b.get_children():
 		if child is CollisionShape3D and child.shape is BoxShape3D:
-			out.append(child.shape.size)
-	return out
+			return (child.shape as BoxShape3D).size
+	return Vector3.ZERO
 
-func _collision_size(b: Node) -> Vector3:
-	var all_sizes := _collision_sizes(b)
-	return all_sizes[0] if not all_sizes.is_empty() else Vector3.ZERO
-
-## Where the cones stand in the stake's own space, along one arm of the shape.
-func _cone_positions(b: Node, axis: String) -> Array[float]:
-	var out: Array[float] = []
+func _cones(b: Node) -> Array:
+	var out: Array = []
 	var body := b.find_child("Body", false, false)
 	if body == null:
 		return out
 	for child in body.get_children():
 		if child is MeshInstance3D:
-			var at: Vector3 = child.position
-			# A cross has an arm on each axis; keep only the arm being measured.
-			if axis == "x" and absf(at.z) > 0.001:
-				continue
-			if axis == "z" and absf(at.x) > 0.001:
-				continue
-			out.append(at.x if axis == "x" else at.z)
-	out.sort()
+			out.append(child)
 	return out
 
-func _thin() -> float:
-	return float(config_node.get_building_thickness("wall"))
-
-func _longest(sizes: Array[Vector3], axis: String) -> float:
-	var best: float = 0.0
-	for size in sizes:
-		best = maxf(best, size.x if axis == "x" else size.z)
-	return best
-
-func test_11_a_stake_on_its_own_closes_its_tile_without_becoming_a_block() -> void:
-	# Plant one in a doorway and it has to shut the doorway, so a lone stake still
-	# reaches across its tile both ways. What it must NOT be is a filled tile: a
-	# block of stakes is nothing but corners, and while a corner meant "full tile"
-	# every stake in a block turned back into the big square the player kept seeing.
+func test_11_a_stake_is_one_cone_no_matter_what_is_beside_it() -> void:
+	# The whole of the fix, stated once. A stake on its own, a stake in a row, a stake
+	# at a corner and a stake in the middle of a block are all the same one cone.
 	var gm = _grid([])
 	await wait_frames(1)
-	var lone = _wall_at(gm, Vector2i(0, 0))
-	lone.fit_to_fence()
 
-	assert_eq(lone.fence_axis(), "both", "Standing alone, it faces both ways")
-	var sizes := _collision_sizes(lone)
+	var lone = _wall_at(gm, Vector2i(9, 9))
+	assert_eq(_cones(lone).size(), 1, "On its own: one cone")
+
+	# A row.
+	var row: Array = []
+	for x in range(0, 3):
+		row.append(_wall_at(gm, Vector2i(x, 0)))
+	await wait_frames(1)
+	for w in row:
+		assert_eq(_cones(w).size(), 1, "In a row: still one cone")
+
+	# A corner, and then a solid block -- the arrangement that used to turn every
+	# stake in it back into the big shape.
+	_wall_at(gm, Vector2i(2, 1))
+	_wall_at(gm, Vector2i(1, 1))
+	_wall_at(gm, Vector2i(0, 1))
+	await wait_frames(1)
+	for w in row:
+		assert_eq(_cones(w).size(), 1, "In a block: still one cone")
+	assert_eq(_cones(lone).size(), 1, "And the lone one never changed either")
+
+func test_12_a_stake_is_drawn_as_a_cone_of_the_declared_width() -> void:
+	var gm = _grid([])
+	await wait_frames(1)
+	var stake = _wall_at(gm, Vector2i(0, 0))
+
+	var cones := _cones(stake)
+	assert_eq(cones.size(), 1, "One cone")
+	var mesh: CylinderMesh = cones[0].mesh as CylinderMesh
+	assert_not_null(mesh, "Drawn as a cone")
+	assert_almost_eq(mesh.top_radius, 0.0, 0.001, "Sharpened to a point")
+	assert_almost_eq(mesh.bottom_radius * 2.0, float(config_node.get_spike_diameter("wall")), 0.001,
+		"As wide as Config declares -- a plain number now, not derived from a cone count")
+	assert_almost_eq(mesh.height, float(config_node.get_building_height("wall")), 0.001,
+		"And as tall as Config declares")
+	assert_lt(float(config_node.get_spike_diameter("wall")), float(config_node.TILE_SIZE) * 0.5,
+		"Small: nowhere near the tile-wide slab it used to be")
+
+func test_13_a_stake_claims_its_tile_even_though_it_is_drawn_small() -> void:
+	# The trade this leaves, asserted rather than left to be discovered. A stake blocks
+	# its whole tile -- that is what keeps a fence a fence, see test_43b in
+	# test_v02_followups -- while being drawn as one stake in the middle of it.
+	#
+	# If that is ever to change it is one number (BUILDINGS.wall.footprint), and this
+	# test is where the change would announce itself.
+	var gm = _grid([])
+	await wait_frames(1)
+	var stake = _wall_at(gm, Vector2i(0, 0))
+
 	var tile: float = float(config_node.TILE_SIZE)
-	var thin: float = _thin()
-	assert_eq(sizes.size(), 2, "A cross: one arm each way, not one filled tile")
-	for size in sizes:
-		assert_almost_eq(maxf(size.x, size.z), tile, 0.01, "Each arm reaches across its tile")
-		assert_almost_eq(minf(size.x, size.z), thin, 0.01, "And each arm is only as deep as a spike")
-	assert_almost_eq(_longest(sizes, "x"), tile, 0.01, "So nothing crosses east-west")
-	assert_almost_eq(_longest(sizes, "z"), tile, 0.01, "And nothing crosses north-south")
+	var size: Vector3 = _collision_size(stake)
+	assert_almost_eq(size.x, float(config_node.get_building_footprint("wall")), 0.01,
+		"It blocks the footprint Config declares")
+	assert_almost_eq(size.z, float(config_node.get_building_footprint("wall")), 0.01, "On both axes")
+	assert_lt(tile - size.x, float(config_node.HERO.get("width", 0.8)),
+		"Which leaves no lane between two of them, so a fence closes")
+	assert_true(config_node.is_barrier_building("wall"), "And the rule still says so")
 
-func test_12_a_run_of_stakes_turns_into_one_thin_line() -> void:
+func test_14_the_ghost_cannot_disagree_with_the_stake_any_more() -> void:
+	# The reported bug, made impossible rather than fixed. The ghost and the stake are
+	# the same call with the same arguments: there is no arrangement left to get wrong,
+	# and no neighbour for either of them to ask about.
 	var gm = _grid([])
 	await wait_frames(1)
-	var a = _wall_at(gm, Vector2i(0, 0))
-	var b = _wall_at(gm, Vector2i(1, 0))
-	var c = _wall_at(gm, Vector2i(2, 0))
-	for w in [a, b, c]:
-		w.fit_to_fence()
-
-	assert_eq(b.fence_axis(), "x", "The middle of an east-west run knows which way it runs")
-	var sizes := _collision_sizes(b)
-	assert_eq(sizes.size(), 1, "One line, not a cross: it only runs one way")
-	var tile: float = float(config_node.TILE_SIZE)
-	var thin: float = _thin()
-	assert_almost_eq(sizes[0].x, tile, 0.01, "It spans its tile along the fence, so the line has no holes")
-	assert_almost_eq(sizes[0].z, thin, 0.01, "And is only as deep as a spike across the fence")
-	assert_lt(thin, tile, "Which is what stops a fence looking like a wall")
-
-func test_13_a_north_south_run_turns_the_other_way() -> void:
-	var gm = _grid([])
+	var neighbour = _wall_at(gm, Vector2i(0, 0))
 	await wait_frames(1)
-	var a = _wall_at(gm, Vector2i(0, 0))
-	var b = _wall_at(gm, Vector2i(0, 1))
-	var c = _wall_at(gm, Vector2i(0, 2))
-	for w in [a, b, c]:
-		w.fit_to_fence()
 
-	assert_eq(b.fence_axis(), "z", "A north-south run is recognised too")
-	var size: Vector3 = _collision_size(b)
-	assert_almost_eq(size.z, float(config_node.TILE_SIZE), 0.01, "Spanning its tile north-south")
-	assert_almost_eq(size.x, _thin(), 0.01, "Thin east-west")
+	var ghost: Node3D = Building.make_body("wall")
+	_cleanup_nodes.append(ghost)
+	var ghost_cones: int = 0
+	for child in ghost.get_children():
+		if child is MeshInstance3D:
+			ghost_cones += 1
+	assert_eq(ghost_cones, 1, "The ghost is one cone")
 
-func test_14_the_cones_and_the_collision_are_the_same_shape() -> void:
-	# The two ways a fence can lie: a gap you cannot walk through, and an edge that
-	# stops you without being visible. Both come from the art and the box
-	# disagreeing, so they are cut from the same numbers.
-	var gm = _grid([])
+	# Beside an existing stake -- the case that used to change the answer.
+	var placed = _wall_at(gm, Vector2i(1, 0))
 	await wait_frames(1)
-	var a = _wall_at(gm, Vector2i(0, 0))
-	var b = _wall_at(gm, Vector2i(1, 0))
-	for w in [a, b]:
-		w.fit_to_fence()
+	assert_eq(_cones(placed).size(), ghost_cones,
+		"And the stake that lands beside one is exactly what the ghost promised")
 
-	var box: Vector3 = _collision_size(b)
-	var diameter: float = float(config_node.get_spike_diameter("wall"))
-	assert_almost_eq(box.z, diameter, 0.01,
-		"Across the run the box is exactly one cone deep, so nothing is held off at a distance")
-	assert_almost_eq(box.y, float(config_node.get_building_height("wall")), 0.01, "And as tall as a cone")
-
-	# Along the run the box closes the daylight between cones. That is the one place
-	# box and art differ, and it is by one crack that nothing can fit through.
-	var cones := _cone_positions(b, "x")
-	var drawn: float = (cones[cones.size() - 1] - cones[0]) + diameter
-	var slack: float = box.x - drawn
-	assert_almost_eq(slack, float(config_node.get_spike_pitch("wall")) - diameter, 0.01,
-		"The box is longer than the cones by exactly the daylight between two of them")
-	assert_lt(slack, float(config_node.HERO.get("width", 0.8)),
-		"Which is far too narrow for anything to use")
-
-func test_15_extending_a_fence_reshapes_the_stake_already_there() -> void:
-	# A neighbour going up changes which way the run goes, so the old stake has to
-	# hear about it -- otherwise the first stake of every fence keeps its cross.
+func test_15_nothing_reshapes_a_stake_after_it_is_built() -> void:
+	# There is no longer any code path that redraws a standing stake, which is what the
+	# player was seeing when a blueprint of five cones became three. Putting a stake up
+	# next door must leave its neighbour's body untouched.
 	var gm = _grid([])
 	await wait_frames(1)
 	var first = _wall_at(gm, Vector2i(0, 0))
-	first.fit_to_fence()
-	assert_eq(first.fence_axis(), "both", "Alone to begin with")
-
-	var second = _wall_at(gm, Vector2i(1, 0))
-	second.fit_to_fence()
-	first.fit_to_fence()
-	assert_eq(first.fence_axis(), "x", "Once it has a neighbour it is part of a run")
-	assert_eq(_collision_sizes(first).size(), 1, "The cross collapses into a line")
-	assert_almost_eq(_collision_size(first).z, _thin(), 0.01, "And slims down to match")
-
-func test_16_the_spikes_are_small_and_evenly_spaced_across_a_tile_boundary() -> void:
-	# What the fence is for the player: small cones with no gap worth seeing between
-	# them, so a row reads as one picket line. The spacing has to come out identical
-	# inside a tile and across a tile boundary, or a long fence shows a visible clump
-	# at every tile edge.
-	var gm = _grid([])
 	await wait_frames(1)
-	var a = _wall_at(gm, Vector2i(0, 0))
-	var b = _wall_at(gm, Vector2i(1, 0))
-	var c = _wall_at(gm, Vector2i(2, 0))
-	for w in [a, b, c]:
-		w.fit_to_fence()
+	var before: Node = first.find_child("Body", false, false)
+	var before_cones: int = _cones(first).size()
 
-	var pitch: float = float(config_node.get_spike_pitch("wall"))
-	var diameter: float = float(config_node.get_spike_diameter("wall"))
-	var tile: float = float(config_node.TILE_SIZE)
-	var per_tile: int = int(config_node.get_spikes_per_tile("wall"))
-
-	assert_eq(_cone_positions(b, "x").size(), per_tile,
-		"A tile of fence is drawn as the declared number of cones")
-	assert_lt(diameter, pitch, "Each cone is narrower than the space it stands in")
-	assert_lt(diameter, tile * 0.5, "And small, nothing like the tile-wide slab it used to be")
-
-	# Every cone along three tiles of fence, measured in world space.
-	var centres: Array[float] = []
-	for w in [a, b, c]:
-		for local_x in _cone_positions(w, "x"):
-			centres.append(w.global_position.x + local_x)
-	centres.sort()
-	assert_eq(centres.size(), 3 * per_tile, "Three tiles of cones")
-	for i in range(1, centres.size()):
-		assert_almost_eq(centres[i] - centres[i - 1], pitch, 0.01,
-			"Cone %d stands one pitch from the last, tile boundary or not" % i)
-		assert_lt(centres[i] - centres[i - 1] - diameter, 0.2,
-			"So the daylight between any two cones is a crack, not a gap")
-
-func test_17_the_ghost_shows_the_shape_the_cell_would_actually_get() -> void:
-	# The reported bug: hover showed one shape and placing produced another. Both now
-	# come out of Wall.axis_at, so the question is only asked in one place.
-	var gm = _grid([])
-	await wait_frames(1)
-	var a = _wall_at(gm, Vector2i(0, 0))
-	a.fit_to_fence()
-
-	var wall_cls: GDScript = load("res://scripts/entities/Wall.gd")
-	assert_eq(wall_cls.axis_at(gm, Vector2i(5, 5)), "both",
-		"Out on its own, the ghost promises a cross")
-	var promised: String = wall_cls.axis_at(gm, Vector2i(1, 0))
-	assert_eq(promised, "x", "Beside an existing stake, the ghost promises a line")
-
-	var placed = _wall_at(gm, Vector2i(1, 0))
-	placed.fit_to_fence()
-	assert_eq(placed.fence_axis(), promised, "And that is the shape the placed stake has")
-	assert_eq(_collision_sizes(placed).size(), 1, "A line, exactly as promised")
-
-func test_18_the_ghost_in_the_real_level_is_redrawn_when_the_shape_changes() -> void:
-	# Closing the loop through Main, because the reported bug was in the ghost and not
-	# in the stake: hovering always drew the lone-stake shape, so the stake that
-	# appeared was a different shape from the one promised. The ghost now asks the
-	# grid the same question the stake will.
-	var main = _level()
+	_wall_at(gm, Vector2i(1, 0))
+	_wall_at(gm, Vector2i(0, 1))
 	await wait_frames(2)
-	var gm = main.grid_manager
-	var here := Vector2i(6, 6)
-	var beside := Vector2i(7, 6)
 
-	main._rebuild_build_preview("wall", main._preview_axis_for("wall", beside))
-	assert_eq(main._preview_axis, "both", "Nothing nearby, so the ghost is a cross")
-	var lone_cones: int = _preview_cone_count(main)
-
-	var neighbour = _wall_at(gm, here)
-	neighbour.fit_to_fence()
-
-	var axis: String = main._preview_axis_for("wall", beside)
-	assert_eq(axis, "x", "Next to that stake the ghost has to promise a line")
-	main._rebuild_build_preview("wall", axis)
-	assert_eq(main._preview_axis, "x", "And the ghost is rebuilt as one")
-
-	var line_cones: int = _preview_cone_count(main)
-	assert_eq(line_cones, int(config_node.get_spikes_per_tile("wall")), "A line of cones")
-	assert_lt(line_cones, lone_cones, "Fewer than the cross it would have been on its own")
-
-	main._clear_build_preview()
-	assert_eq(main._preview_axis, "", "Putting the ghost away forgets the shape with it")
-
-func _preview_cone_count(main: Node) -> int:
-	var count: int = 0
-	var ghost = main.build_preview
-	if ghost == null:
-		return 0
-	for node in ghost.find_children("*", "MeshInstance3D", true, false):
-		if node != main.build_preview_ring:
-			count += 1
-	return count
+	assert_eq(_cones(first).size(), before_cones, "Its cone count did not move")
+	assert_eq(first.find_child("Body", false, false), before,
+		"And its body was never torn down and rebuilt")

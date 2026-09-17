@@ -472,11 +472,10 @@ func _build_body_mesh() -> void:
 ## this look like" for everything in the game, and a model arriving is a line of
 ## Config.VISUALS rather than an edit here. This stays as a named entry point because
 ## callers ask the question about a BUILDING type, and the key is not their business.
-##
-## `axis` is which way a fence through this cell runs: "x", "z", or "both" for a corner,
-## a cluster, or something standing on its own. Anything that is not a fence ignores it.
-static func make_body(type_id: String, axis: String = "both") -> Node3D:
-	return VisualLibrary.make("building/" + type_id, axis)
+## No arrangement argument any more: a stake is one cone whatever is beside it, so
+## there is nothing about a building's body that depends on its neighbours.
+static func make_body(type_id: String) -> Node3D:
+	return VisualLibrary.make("building/" + type_id)
 
 func _building_height() -> float:
 	var cfg = _get_config()
