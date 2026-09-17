@@ -67,73 +67,89 @@ func _on_fence_changed(_building: Node) -> void:
 ## Which way the run goes, from the stakes next door: "x" for an east-west fence,
 ## "z" for north-south, "both" for a corner or a stake standing on its own.
 ##
-## A stake only slims down once it is part of a run, because only then do its
-## neighbours cover the rest of the tile. On its own it stays full width both ways
+## A stake only lines up along one axis once it is part of a run, because only then
+## do its neighbours cover the rest of the tile. On its own it puts cones both ways
 ## -- a single stake dropped in a doorway has to close that doorway, or the player
-## would plant one and watch a raptor walk past it.
+## would plant one and watch a raptor walk past it. Since v0.4 that case is a small
+## cross of cones rather than a filled tile, so "alone" no longer means "big".
 func fence_axis() -> String:
-	var along_x: bool = _stake_at(Vector2i(cell_pos.x - 1, cell_pos.y)) or _stake_at(Vector2i(cell_pos.x + 1, cell_pos.y))
-	var along_z: bool = _stake_at(Vector2i(cell_pos.x, cell_pos.y - 1)) or _stake_at(Vector2i(cell_pos.x, cell_pos.y + 1))
+	if not is_inside_tree():
+		return "both"
+	return axis_at(get_tree().get_first_node_in_group("grid_manager"), cell_pos, building_type)
+
+## The same question asked about a cell that has nothing on it yet, so the build
+## preview can show the shape the stake would actually take there.
+##
+## Static and grid-driven on purpose: hover and result come out of one function, so
+## the ghost cannot promise a shape the placed stake does not have. That mismatch
+## was the bug -- the ghost was always drawn full-tile whatever it was about to
+## become.
+static func axis_at(gm: Node, cell: Vector2i, type_id: String = "wall") -> String:
+	var along_x: bool = _same_stake_at(gm, Vector2i(cell.x - 1, cell.y), type_id) or _same_stake_at(gm, Vector2i(cell.x + 1, cell.y), type_id)
+	var along_z: bool = _same_stake_at(gm, Vector2i(cell.x, cell.y - 1), type_id) or _same_stake_at(gm, Vector2i(cell.x, cell.y + 1), type_id)
 	if along_x == along_z:
-		return "both"      # a corner, or standing alone
+		return "both"      # a corner, a cluster, or standing alone
 	return "x" if along_x else "z"
 
-func _stake_at(cell: Vector2i) -> bool:
-	if not is_inside_tree():
-		return false
-	var gm = get_tree().get_first_node_in_group("grid_manager")
-	if gm == null or not gm.has_method("get_building_at"):
+static func _same_stake_at(gm: Node, cell: Vector2i, type_id: String) -> bool:
+	if gm == null or not is_instance_valid(gm) or not gm.has_method("get_building_at"):
 		return false
 	var b = gm.get_building_at(cell)
-	return b != null and is_instance_valid(b) and "building_type" in b and String(b.building_type) == building_type
+	return b != null and is_instance_valid(b) and "building_type" in b and String(b.building_type) == type_id
 
-## Re-cuts the collision box and the body to match the run.
-##
-## Panel and box are the same object: a stake spans its tile along the fence so
-## the line has no holes, and is only as deep as it looks across the fence. There
-## is never a gap to walk through, and never an edge that stops something without
-## being visible -- the two failure modes a fence can have.
+## Re-cuts the collision and the cones to match the run.
 func fit_to_fence() -> void:
 	if not is_inside_tree() or is_destroyed:
 		return
 	_apply_shape(fence_axis())
 
+## How deep the fence line is across the run. Derived by Config from the cone
+## itself, so this and the art cannot drift apart.
 func _thickness() -> float:
 	var cfg = _get_config()
-	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
-		return float(cfg.BUILDINGS[building_type].get("thickness", _footprint()))
+	if cfg and cfg.has_method("get_building_thickness"):
+		return float(cfg.get_building_thickness(building_type))
 	return _footprint()
 
-## Body and collision are cut from the same three numbers and rebuilt together, so
-## the two can never disagree about where the fence is.
+## Cones and collision, rebuilt together from the same axis.
+##
+## A run gets one box along it, as deep as a cone is wide. A corner or a lone stake
+## gets two crossed boxes -- not a filled tile, which is what used to make a block
+## of stakes turn back into big squares. Either way the boxes sit exactly under the
+## cones: nothing is stopped by an edge it cannot see, and nothing walks through
+## something that looks solid.
 func _apply_shape(axis: String) -> void:
 	var span: float = _footprint()
 	var thin: float = _thickness()
 	var h: float = _building_height()
 
-	# Built wide along local X and `depth` deep along local Z, then turned a quarter
-	# if the run goes the other way. One shape, one rotation, no second case.
-	var depth: float = span if axis == "both" else thin
-	var turn: bool = (axis == "z")
-	var size := Vector3(span, h, depth)
-	if turn:
-		size = Vector3(depth, h, span)
+	var sizes: Array[Vector3] = []
+	if axis != "z":
+		sizes.append(Vector3(span, h, thin))
+	if axis != "x":
+		sizes.append(Vector3(thin, h, span))
 
 	for child in get_children():
-		if child is CollisionShape3D and child.shape is BoxShape3D:
-			var box := BoxShape3D.new()
-			box.size = size
-			child.shape = box
-			child.position = Vector3(0.0, h * 0.5, 0.0)
+		if child is CollisionShape3D:
+			remove_child(child)
+			child.queue_free()
+	for size in sizes:
+		var col := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = size
+		col.shape = box
+		col.position = Vector3(0.0, h * 0.5, 0.0)
+		add_child(col)
 
 	var body := find_child("Body", false, false)
 	if body != null:
 		remove_child(body)
 		body.queue_free()
-	var rebuilt: Node3D = Building.make_body(building_type, depth)
-	if turn:
-		rebuilt.rotation.y = PI * 0.5
-	add_child(rebuilt)
+	add_child(Building.make_body(building_type, axis))
+
+	# Fresh shapes come in enabled and fresh meshes come in opaque, so a blueprint
+	# that re-fits mid-build would otherwise start blocking and look finished.
+	_update_construction_state()
 
 func setup(type_id: String = "wall", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)

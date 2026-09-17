@@ -270,6 +270,46 @@ func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only
 		return true
 	return false
 
+## Whether a walker standing at `from_pos` can get to `to_pos` over walkable ground.
+##
+## Flooded from the TARGET end, which is the whole trick. The case worth detecting is
+## a blueprint sealed in by finished stakes, and a sealed pocket is small and finite:
+## the flood closes and the answer is definite. Flooding from the walker instead
+## would spread across open ground until it gave up -- the grid is unbounded -- and
+## so could never prove anything, which is exactly how the first version of this
+## failed.
+##
+## Neither end has to be walkable. The walker's own cell counts because he is plainly
+## standing in it, and a blueprint's cell counts because unfinished work blocks
+## nobody.
+##
+## `budget` caps the sweep. Running out means the target is in a region far too big
+## to be a pocket, and the answer is then "assume he can get there": guessing "no"
+## would stop the Hero working on an open map, while guessing "yes" costs a walk.
+func is_reachable(from_pos: Vector3, to_pos: Vector3, budget: int = 400) -> bool:
+	var goal: Vector2i = world_to_cell(from_pos)
+	var start: Vector2i = world_to_cell(to_pos)
+	if start == goal:
+		return true
+	var seen: Dictionary = {start: true}
+	var queue: Array[Vector2i] = [start]
+	var head: int = 0
+	var offsets: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	while head < queue.size():
+		if seen.size() >= budget:
+			return true
+		var current: Vector2i = queue[head]
+		head += 1
+		for off in offsets:
+			var neighbor: Vector2i = current + off
+			if neighbor == goal:
+				return true
+			if seen.has(neighbor) or not is_cell_walkable(neighbor):
+				continue
+			seen[neighbor] = true
+			queue.append(neighbor)
+	return false
+
 ## Finds an A* path of 3D world waypoints from from_pos to to_pos.
 ##
 ## `terrain_only` routes around the landscape and nothing else -- what a dinosaur

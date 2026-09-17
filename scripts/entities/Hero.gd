@@ -288,6 +288,8 @@ func _process_moving(delta: float) -> void:
 			_stuck_timer = 0.0
 			if _check_and_transition_interaction_target(0.2):
 				return
+			if _abandon_unreachable_building():
+				return
 			_replan_current_target_path()
 	else:
 		_stuck_timer = 0.0
@@ -538,6 +540,21 @@ func _find_nearest_unfinished_building() -> Node:
 	if unfinished.is_empty():
 		return null
 
+	# A blueprint he cannot walk to is not work he can do. Without this he takes the
+	# oldest one, fails to reach it, replans, and does it again forever -- which is
+	# exactly what happens when the player lays several rows at once and a finished
+	# stake ends up between him and the rest of the queue.
+	#
+	# Skipping it rather than dropping it: the rest of the row still goes up, and the
+	# unreachable one is picked up again the moment a way opens (demolish one stake
+	# and it is next in line). If NONE of them can be reached he keeps trying the
+	# oldest, which is the honest thing -- he is fenced in, and walking into the
+	# fence is at least visible. Going idle would hide it and leave him asleep after
+	# the player opened the fence again.
+	var reachable: Array[Node] = _reachable_among(unfinished)
+	if not reachable.is_empty():
+		unfinished = reachable
+
 	# Oldest blueprint first: when the player lays a row of stakes, they go up in
 	# the order they were clicked. Nearest-first looks arbitrary from the outside,
 	# because the Hero's position is not something the player was thinking about.
@@ -566,6 +583,41 @@ func _find_nearest_unfinished_building() -> Node:
 			best = b
 			best_dist_sq = d_sq
 	return best
+
+## Which of `candidates` he can actually walk to. Empty means there was no grid to
+## ask, and the caller then does not filter at all.
+##
+## The grid answers each one by flooding out from the blueprint, so "no" is only
+## returned when the blueprint really is sitting in a closed pocket.
+func _reachable_among(candidates: Array[Node]) -> Array[Node]:
+	var out: Array[Node] = []
+	var gm = _get_grid_manager()
+	if gm == null or not gm.has_method("is_reachable"):
+		return out
+	for b in candidates:
+		if b is Node3D and gm.is_reachable(global_position, (b as Node3D).global_position):
+			out.append(b)
+	return out
+
+## Being wedged against something is the one moment worth asking whether the
+## blueprint he is walking to can be reached at all. If it cannot and other work
+## can, he moves on instead of grinding against the stake in front of it.
+func _abandon_unreachable_building() -> bool:
+	if target_building == null or not is_instance_valid(target_building):
+		return false
+	if not ("is_constructed" in target_building) or bool(target_building.is_constructed):
+		return false
+	var gm = _get_grid_manager()
+	if gm == null or not gm.has_method("is_reachable"):
+		return false
+	if gm.is_reachable(global_position, target_building.global_position):
+		return false
+	var next_b = _find_nearest_unfinished_building()
+	if next_b == null or next_b == target_building:
+		return false
+	target_building = null
+	order_build(next_b, true)
+	return true
 
 func _continue_to_next_pending_building_or_idle() -> void:
 	target_building = null

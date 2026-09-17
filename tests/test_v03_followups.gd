@@ -119,52 +119,71 @@ func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 	assert_eq(config_node.get_building_mesh_style("no_such_building"), "box",
 		"An unknown type falls back rather than failing")
 
-func test_04_one_price_buys_exactly_one_stake() -> void:
-	# It used to be drawn as three uprights, which told the player they were
-	# getting three things for the price of one.
+func test_04_a_stake_is_small_sharpened_cones_and_never_a_slab() -> void:
+	# What one price buys is one tile of fence. What the player SEES in it is a row
+	# of small cones -- the tile-wide sharpened slab it used to be drawn as was the
+	# thing the player kept asking to be made smaller.
 	var stake = _stake()
 	await wait_frames(1)
 
 	var body = stake.find_child("Body", false, false)
 	assert_not_null(body, "Stakes are drawn in their own holder")
-	var uprights: Array = []
+	var cones: Array = []
 	for c in body.get_children():
 		if c is MeshInstance3D:
-			uprights.append(c)
-	assert_eq(uprights.size(), 1, "One price, one stake")
+			cones.append(c)
+
+	var per_tile: int = int(config_node.get_spikes_per_tile("wall"))
+	# Off the grid a stake has no neighbours, so it draws its lone-stake cross: an
+	# arm each way sharing the middle cone.
+	assert_eq(cones.size(), per_tile * 2 - 1, "A lone stake is a small cross of cones")
 
 	var h: float = config_node.get_building_height("wall")
+	var d: float = config_node.get_spike_diameter("wall")
 	var fp: float = config_node.get_building_footprint("wall")
-	var mesh: PrismMesh = uprights[0].mesh as PrismMesh
-	assert_not_null(mesh, "Drawn sharpened rather than as a plain block")
-	assert_almost_eq(mesh.size.y, h, 0.001, "As tall as the declared height")
-	assert_almost_eq(uprights[0].position.y, h * 0.5, 0.001, "Standing on the ground, not in it")
-
-	# The visible stake is as wide as the space it actually blocks. A thin post
-	# with a tile-wide collision box stops dinosaurs at a wall nobody can see.
-	assert_almost_eq(mesh.size.x, fp, 0.001, "As wide as the ground it occupies")
+	for cone in cones:
+		var mesh: CylinderMesh = cone.mesh as CylinderMesh
+		assert_not_null(mesh, "Drawn as a cone rather than a block")
+		assert_almost_eq(mesh.top_radius, 0.0, 0.001, "Sharpened to a point")
+		assert_almost_eq(mesh.bottom_radius * 2.0, d, 0.001, "As wide as Config declares")
+		assert_almost_eq(mesh.height, h, 0.001, "As tall as the declared height")
+		assert_almost_eq(cone.position.y, h * 0.5, 0.001, "Standing on the ground, not in it")
+		assert_lt(d, fp * 0.5, "And small: nowhere near the width of the tile it stands in")
 
 func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 	# A cube standing in for a stake told the player nothing about what was going
-	# down. The ghost and the building are drawn by the same code now.
+	# down, and a ghost drawn full-tile while the placed stake came out a thin line
+	# was worse: it promised the wrong shape rather than no shape. Both are drawn by
+	# the same code now, for every arrangement that code can produce.
 	for b_type in config_node.BUILDABLE_TYPES:
-		var body: Node3D = Building.make_body(String(b_type))
-		var meshes: Array = []
-		for c in body.get_children():
-			if c is MeshInstance3D:
-				meshes.append(c)
-		assert_eq(meshes.size(), 1, "%s is drawn from one mesh" % b_type)
+		var type_id := String(b_type)
+		var spiky: bool = config_node.get_building_mesh_style(type_id) == "spikes"
+		for axis in ["both", "x", "z"]:
+			var body: Node3D = Building.make_body(type_id, axis)
+			var meshes: Array = []
+			for c in body.get_children():
+				if c is MeshInstance3D:
+					meshes.append(c)
 
-		var want_prism: bool = config_node.get_building_mesh_style(String(b_type)) == "spikes"
-		assert_eq(meshes[0].mesh is PrismMesh, want_prism,
-			"%s is drawn in the style Config declares" % b_type)
-
-		var size: Vector3 = meshes[0].mesh.size
-		assert_almost_eq(size.x, config_node.get_building_footprint(String(b_type)), 0.001,
-			"%s ghost is as wide as the real thing" % b_type)
-		assert_almost_eq(size.y, config_node.get_building_height(String(b_type)), 0.001,
-			"%s ghost is as tall as the real thing" % b_type)
-		body.free()
+			if spiky:
+				var per_tile: int = int(config_node.get_spikes_per_tile(type_id))
+				var want: int = (per_tile * 2 - 1) if axis == "both" else per_tile
+				assert_eq(meshes.size(), want,
+					"%s promises %d cones running %s" % [type_id, want, axis])
+				for m in meshes:
+					assert_true(m.mesh is CylinderMesh, "%s ghost is drawn as cones" % type_id)
+					assert_almost_eq(m.mesh.bottom_radius * 2.0,
+						float(config_node.get_spike_diameter(type_id)), 0.001,
+						"%s ghost cones are the size of the real ones" % type_id)
+			else:
+				assert_eq(meshes.size(), 1, "%s is drawn from one mesh" % type_id)
+				assert_true(meshes[0].mesh is BoxMesh, "%s is the plain block" % type_id)
+				var size: Vector3 = meshes[0].mesh.size
+				assert_almost_eq(size.x, config_node.get_building_footprint(type_id), 0.001,
+					"%s ghost is as wide as the real thing" % type_id)
+				assert_almost_eq(size.y, config_node.get_building_height(type_id), 0.001,
+					"%s ghost is as tall as the real thing" % type_id)
+			body.free()
 
 func test_05_an_ordinary_building_is_still_one_block_of_the_declared_size() -> void:
 	var tower = _spawn(tower_script)

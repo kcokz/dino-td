@@ -74,20 +74,32 @@ const BUILDINGS: Dictionary = {
 		# A barrier: neighbouring stakes close up into a fence the Hero cannot slip
 		# through. Being fenced in is undone by demolishing one of them.
 		#
-		# Wide and low is the whole silhouette: the width is what closes the gap, and
-		# staying below BUILDING_HEIGHT_DEFAULT keeps a row of stakes reading as a
-		# fence you see over rather than as a wall of buildings. A turret is the
-		# opposite -- narrow enough to walk past, tall enough to spot across the map.
-		# A fence panel rather than a block. It spans its whole tile ALONG the run,
-		# so neighbouring stakes touch and the line has no holes in it -- a visible
-		# gap reads as a way through even when the collision says otherwise -- and
-		# it is only `thickness` deep ACROSS the run, which is what stops it looking
-		# like a wall. Wall.gd works out which way the run goes from its neighbours;
-		# a corner, with a run in both directions, keeps the full tile both ways.
+		# A row of small sharpened cones. Never a block, in any arrangement.
+		#
+		# Low and made of small pieces is the whole silhouette: staying below
+		# BUILDING_HEIGHT_DEFAULT keeps a fence something you see over rather than a
+		# wall of buildings. A turret is the opposite -- narrow enough to walk past,
+		# tall enough to spot across the map.
+		#
+		# `footprint` is how much fence ONE stake lays down -- a whole tile, so two
+		# stakes side by side join into a line with no hole in it. What the player
+		# sees in that length is `spikes_per_tile` cones, each one small: the pitch
+		# between cones is footprint / spikes_per_tile, which comes out identical
+		# inside a tile and across a tile boundary, so a long fence is an evenly
+		# spaced picket line rather than visible clumps.
+		#
+		# Wall.gd asks its neighbours which way the run goes: cones in a line along
+		# it, an L at a corner, a small cross for a stake standing on its own. The
+		# collision boxes are cut from the same numbers as the cones, so anything
+		# pressing on the fence is touching spikes rather than being held off at a
+		# distance by a box nobody can see. There is no `thickness` here on purpose:
+		# how deep the line is IS the cone's diameter (get_building_thickness), and
+		# a second number for it would be a number that can disagree with the art.
 		"footprint": 2.0,
-		"thickness": 0.5,
-		"height": 0.7,
+		"height": 0.95,        # taller than a cone is wide, so it reads as a stake
 		"mesh_style": "spikes",
+		"spikes_per_tile": 3,  # cones per tile of fence; pitch = footprint / this
+		"spike_fill": 0.85,    # cone diameter as a fraction of the pitch (<1 leaves a hair of daylight)
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
 		# fence line wears a raid down instead of only delaying it. Deliberately a
 		# chip rather than a kill -- a raptor (DINOS.raptor.hp) chewing through these
@@ -163,11 +175,45 @@ static func get_building_color(type_id: String) -> Color:
 		return COLORS[type_id]
 	return Color(0.6, 0.6, 0.6)
 
-## "box" (one solid block) or "spikes" (a single sharpened stake).
+## "box" (one solid block) or "spikes" (a row of small sharpened cones).
 static func get_building_mesh_style(type_id: String) -> String:
 	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("mesh_style"):
 		return String(BUILDINGS[type_id]["mesh_style"])
 	return "box"
+
+## How many cones one tile of fence is drawn as.
+static func get_spikes_per_tile(type_id: String) -> int:
+	if BUILDINGS.has(type_id):
+		return maxi(1, int(BUILDINGS[type_id].get("spikes_per_tile", 1)))
+	return 1
+
+## Distance between neighbouring cones. Derived from the footprint rather than
+## declared, which is what makes the spacing identical across a tile boundary: a
+## stake's cones sit at (i + 0.5) * pitch, so the last cone of one tile and the
+## first of the next are exactly one pitch apart, like every other pair.
+static func get_spike_pitch(type_id: String) -> float:
+	return get_building_footprint(type_id) / float(get_spikes_per_tile(type_id))
+
+## Base diameter of one cone. Just under the pitch, so neighbours stand shoulder to
+## shoulder with a hair of daylight between them instead of fusing into a ridge.
+static func get_spike_diameter(type_id: String) -> float:
+	var fill: float = 0.85
+	if BUILDINGS.has(type_id):
+		fill = float(BUILDINGS[type_id].get("spike_fill", fill))
+	return maxf(0.05, get_spike_pitch(type_id) * clampf(fill, 0.1, 1.0))
+
+## How deep a fence line is across the run, in metres.
+##
+## For spikes this IS the cone -- derived, not declared, so the collision box can
+## never be wider or narrower than the spikes the player is looking at. That
+## equality is the whole point: a box wider than its art stops things at nothing
+## visible, and one narrower lets them through something that looks solid.
+static func get_building_thickness(type_id: String) -> float:
+	if get_building_mesh_style(type_id) == "spikes":
+		return get_spike_diameter(type_id)
+	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("thickness"):
+		return maxf(0.05, float(BUILDINGS[type_id]["thickness"]))
+	return get_building_footprint(type_id)
 
 ## Damage per second a building deals to whatever is pressed against it. Zero for
 ## everything that is not sharpened. The one place damage-per-tick is turned into
