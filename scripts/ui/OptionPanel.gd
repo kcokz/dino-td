@@ -18,6 +18,12 @@ var current_menu: String = "default" # "default" or "build"
 ## way to do something the room is not for.
 var in_cabin: bool = false
 
+## True while the status line is showing the detail for whatever the cursor is
+## over. The per-unit status ticker runs every quarter second and would otherwise
+## wipe a hover message almost as soon as it appeared -- which read as the reason
+## flashing up and vanishing.
+var _hover_detail_shown: bool = false
+
 # UI Nodes
 var title_label: Label = null
 var status_label: Label = null
@@ -118,6 +124,7 @@ func refresh_build_affordability() -> void:
 func set_selected_unit(unit: Node) -> void:
 	selected_unit = unit
 	current_menu = "default"
+	_hover_detail_shown = false
 	_refresh_ui()
 
 func select_target(target: Node) -> void:
@@ -267,8 +274,8 @@ func _ensure_components() -> void:
 		button_container = grid
 
 func _update_status_display() -> void:
-	if current_menu == "build":
-		return # the build page uses this line for the hovered entry's detail
+	if current_menu == "build" or _hover_detail_shown:
+		return # this line is showing the hovered entry's detail, not a unit's status
 	if selected_unit == null or not is_instance_valid(selected_unit):
 		return
 	if selected_unit.has_method("get_display_info"):
@@ -390,6 +397,7 @@ func _populate_hero_buttons() -> void:
 func _show_build_detail(b_type: String) -> void:
 	if status_label == null:
 		return
+	_hover_detail_shown = true
 	var cfg = _get_config()
 	if cfg == null or not cfg.BUILDINGS.has(b_type):
 		return
@@ -444,6 +452,7 @@ func _missing_text(b_type: String) -> String:
 	return ", ".join(parts)
 
 func _clear_build_detail() -> void:
+	_hover_detail_shown = false
 	if status_label == null:
 		return
 	status_label.text = tr("BUILD_HINT_PICK")
@@ -525,6 +534,7 @@ func _populate_station_buttons() -> void:
 func _show_craft_detail(station: Node, recipe_id: String) -> void:
 	if status_label == null or station == null or not is_instance_valid(station):
 		return
+	_hover_detail_shown = true
 	var costs: PackedStringArray = []
 	for res_id in station.inputs_of(recipe_id):
 		costs.append("%d %s" % [int(station.inputs_of(recipe_id)[res_id]), _resource_name(String(res_id))])
@@ -537,6 +547,7 @@ func _show_craft_detail(station: Node, recipe_id: String) -> void:
 		status_label.modulate = Color(1.0, 0.45, 0.4)
 
 func _clear_craft_detail() -> void:
+	_hover_detail_shown = false
 	if status_label == null:
 		return
 	if selected_unit != null and is_instance_valid(selected_unit) and selected_unit.has_method("get_display_info"):

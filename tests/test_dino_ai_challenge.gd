@@ -309,9 +309,14 @@ func test_multiple_concurrent_dinos_attacking_same_wall() -> void:
 	await wait_frames(2)
 	var wall = _create_wall(Vector3(2.0, 0.0, 0.0))
 	var dinos: Array[Object] = []
+	# Ranged round the wall inside biting distance. An attack has a reach as of
+	# v0.4, so "all eight attacking the same wall" means all eight standing close
+	# enough to reach it -- the spread is derived from Config rather than guessed.
+	var reach: float = float(config_node.DINO_ATTACK_REACH) * 0.7
 	for i in range(8):
 		var d = _create_dino("raptor")
-		d.global_position = Vector3(0.0, 0.0, -1.0 + float(i) * 0.25)
+		var angle: float = TAU * float(i) / 8.0
+		d.global_position = wall.global_position + Vector3(cos(angle), 0.0, sin(angle)) * reach
 		d.set_waypoints([d.global_position, Vector3(5.0, 0.0, d.global_position.z)])
 		dinos.append(d)
 	await wait_frames(2)

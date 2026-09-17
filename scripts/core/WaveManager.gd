@@ -285,16 +285,31 @@ func _on_spawn_timer_timeout() -> void:
 		if spawn_timer:
 			spawn_timer.stop()
 
+## Which species this wave sends. Only raptors are in rotation for now, but the
+## choice lives here rather than being assumed three functions deeper.
+func _species_to_spawn() -> String:
+	return "raptor"
+
+## Builds a dinosaur from the class its habit calls for -- a pack raptor and a
+## siege theropod are different classes, and two species with the same habit share
+## one outright.
+func _instantiate_for_species(type_id: String) -> Node:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_dino_script_path"):
+		return null
+	var path: String = String(cfg.get_dino_script_path(type_id))
+	if not ResourceLoader.exists(path):
+		return null
+	var script = load(path)
+	return script.new() if script is GDScript else null
+
 ## Instantiates and provisions a single Dino entity.
 func spawn_dino() -> Node:
 	return _spawn_single_dino()
 
 func _spawn_single_dino() -> Node:
-	var dino: Node = null
-	if dino_script:
-		dino = dino_script.new()
-	elif ResourceLoader.exists("res://scripts/entities/Dino.gd"):
-		dino_script = load("res://scripts/entities/Dino.gd")
+	var dino: Node = _instantiate_for_species(_species_to_spawn())
+	if dino == null and dino_script:
 		dino = dino_script.new()
 
 	if dino == null:

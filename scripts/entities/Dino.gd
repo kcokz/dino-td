@@ -21,7 +21,6 @@ enum State {
 @export var speed: float = 4.0
 @export var damage: float = 1.0
 @export var attack_rate: float = 1.0
-@export var targeting: String = "blocker_then_core"
 @export var arrival_threshold: float = 0.3
 @export var lane_offset: float = 0.0
 
@@ -266,14 +265,12 @@ func setup(type_id: String = "raptor", stat_multipliers: Dictionary = {}) -> voi
 		damage = float(data.get("damage", 1.0)) * mult_dmg
 		speed = float(data.get("speed", 4.0)) * mult_spd
 		attack_rate = float(data.get("attack_rate", 1.0))
-		targeting = String(data.get("targeting", "blocker_then_core"))
 	else:
 		max_hp = 3.0 * mult_hp
 		current_hp = max_hp
 		damage = 1.0 * mult_dmg
 		speed = 4.0 * mult_spd
 		attack_rate = 1.0
-		targeting = "blocker_then_core"
 
 	if attack_timer and is_instance_valid(attack_timer):
 		if attack_rate > 0.0:
@@ -576,8 +573,11 @@ func _find_immediate_front_dino(max_dist: float = 1.4) -> Node3D:
 func _process_attacking(_delta: float) -> void:
 	velocity = Vector3.ZERO
 
-	# Verify target validity
-	if not _is_target_valid(current_target):
+	# A target that is gone, or one that has walked away. The second case used to be
+	# missing entirely: a dinosaur went on standing in front of something it could
+	# no longer touch, which is what "the raid goes stupid after the Hero pulls
+	# away" looked like from the outside.
+	if not _is_target_valid(current_target) or not _target_in_reach(current_target):
 		if current_target != null:
 			release_attack_slot(current_target, self)
 		current_target = null
@@ -589,6 +589,22 @@ func _process_attacking(_delta: float) -> void:
 		else:
 			on_obstacle_cleared()
 	# ATTACKING stance is exempt from separation forces (anti-jitter fix)
+
+## Whether `target` is close enough to bite. Everything that deals damage asks
+## this: an attack with no sense of distance is an attack that follows its victim
+## across the map.
+func _target_in_reach(target: Variant) -> bool:
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return false
+	return global_position.distance_to((target as Node3D).global_position) <= attack_reach()
+
+## How far this dinosaur can reach. Overridable, so a big one can bite from
+## further away than a small one.
+func attack_reach() -> float:
+	var cfg = _get_config()
+	if cfg and "DINO_ATTACK_REACH" in cfg:
+		return float(cfg.DINO_ATTACK_REACH)
+	return 2.2
 
 ## Calculates Reynolds-style steering separation force (steers velocity, no position teleporting).
 func _calculate_steering_separation() -> Vector3:
@@ -735,54 +751,74 @@ func check_obstacle() -> Node:
 	return null
 
 ## Threat-based Aggro (v0.2): Tower > Other Buildings > Hero (unless Hero provoked dinos).
+## What this dinosaur would rather be biting than walking past, or null for
+## "nothing in particular -- carry on to the cabin".
+##
+## This is the one piece of a dinosaur that differs by species, so it is the one
+## piece a subclass overrides. The base is the plain answer: whatever is close
+## enough to be in the way. PackDino and SiegeDino sharpen it in opposite
+## directions -- see those files.
 func _find_threat_priority_target() -> Node:
 	if not is_inside_tree():
 		return null
+	return _nearest_building_within(building_interest_range())
 
-	var hero = get_tree().get_first_node_in_group("hero")
-	var is_hero_provoked: bool = hero != null and is_instance_valid(hero) and "has_provoked_dinos" in hero and bool(hero.has_provoked_dinos)
-	var hero_dist: float = global_position.distance_to(hero.global_position) if (hero and is_instance_valid(hero)) else 999.0
+# ==============================================================================
+# What a species wants -- the surface a behaviour subclass overrides
+# ==============================================================================
 
-	var buildings = get_tree().get_nodes_in_group("buildings")
-	var nearest_tower: Node = null
-	var min_tower_dist: float = 4.5
+## How far off its path this kind of dinosaur will look for a building to bite.
+func building_interest_range() -> float:
+	return 2.0
 
-	var nearest_other_building: Node = null
-	var min_b_dist: float = 2.0
+## How far it will look for the Hero, and whether it cares at all. Zero means it
+## walks past him: something the size of a house has no reason to stop for one man.
+func hero_interest_range() -> float:
+	return 0.0
 
-	for b in buildings:
+## Whether a tower is worth a detour, and from how far. Zero means it is just
+## another building.
+func tower_interest_range() -> float:
+	return 0.0
+
+func _nearest_building_within(radius: float, only_type: String = "") -> Node:
+	if radius <= 0.0 or not is_inside_tree():
+		return null
+	var best: Node = null
+	var best_dist: float = radius
+	for b in get_tree().get_nodes_in_group("buildings"):
 		if not is_instance_valid(b) or not _is_target_valid(b):
 			continue
-		var dist = global_position.distance_to(b.global_position)
-		if "building_type" in b and b.building_type == "tower":
-			if dist <= min_tower_dist:
-				min_tower_dist = dist
-				nearest_tower = b
-		elif dist <= min_b_dist:
-			min_b_dist = dist
-			nearest_other_building = b
+		if only_type != "" and (not ("building_type" in b) or String(b.building_type) != only_type):
+			continue
+		var dist: float = global_position.distance_to(b.global_position)
+		if dist <= best_dist:
+			best_dist = dist
+			best = b
+	return best
 
-	# If Hero provoked dinos, Hero threat matches Tower!
-	var p_rad: float = 4.0
+func _hero_within(radius: float) -> Node:
+	if radius <= 0.0 or not is_inside_tree():
+		return null
+	var hero = get_tree().get_first_node_in_group("hero")
+	if hero == null or not is_instance_valid(hero) or not _is_target_valid(hero):
+		return null
+	return hero if global_position.distance_to(hero.global_position) <= radius else null
+
+## Whether the Hero has just made himself the loudest thing on the field.
+func _hero_is_provoking() -> bool:
+	if not is_inside_tree():
+		return false
+	var hero = get_tree().get_first_node_in_group("hero")
+	if hero == null or not is_instance_valid(hero):
+		return false
+	if not ("has_provoked_dinos" in hero) or not bool(hero.has_provoked_dinos):
+		return false
+	var radius: float = 4.0
 	var cfg = _get_config()
 	if cfg and "HERO" in cfg:
-		p_rad = float(cfg.HERO.get("provoke_radius", 4.0))
-	if is_hero_provoked and hero_dist <= p_rad:
-		if nearest_tower == null or hero_dist < min_tower_dist:
-			if _is_target_valid(hero):
-				return hero
-
-	if nearest_tower != null:
-		return nearest_tower
-
-	if nearest_other_building != null:
-		return nearest_other_building
-
-	# If no towers or buildings nearby, but Hero is close (<= 3.0m)
-	if hero != null and is_instance_valid(hero) and hero_dist <= 3.0 and _is_target_valid(hero):
-		return hero
-
-	return null
+		radius = float(cfg.HERO.get("provoke_radius", radius))
+	return global_position.distance_to(hero.global_position) <= radius
 
 func _find_front_attacking_ally() -> Node:
 	if not is_inside_tree():
@@ -872,16 +908,23 @@ func _on_attack_timer_timeout() -> void:
 	perform_attack()
 
 func perform_attack() -> void:
-	if _is_target_valid(current_target):
-		attack_target(current_target)
-		if not _is_target_valid(current_target):
-			current_target = null
-			_process_attacking(0.0)
-	else:
+	if not _is_target_valid(current_target):
 		on_obstacle_cleared()
+		return
+	if not _target_in_reach(current_target):
+		# It moved out of range. Let go and get back to what it was doing rather
+		# than hammering something it cannot touch.
+		_process_attacking(0.0)
+		return
+	attack_target(current_target)
+	if not _is_target_valid(current_target):
+		current_target = null
+		_process_attacking(0.0)
 
 func attack_target(target: Node) -> void:
-	if _is_target_valid(target):
+	# Reach is checked here as well as in the state machine, so nothing can deal
+	# damage at a distance by calling this directly.
+	if _is_target_valid(target) and _target_in_reach(target):
 		target.take_damage(damage)
 
 ## Deducts damage from current_hp. Emits dino_died and frees on fatal hit.

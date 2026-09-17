@@ -223,6 +223,10 @@ const BUILDABLE_TYPES: Array[String] = ["wall", "tower"]
 # ==============================================================================
 # 3. Dinosaur Definitions (DINOS)
 # ==============================================================================
+## `behaviour` picks the class that decides what this species *wants* -- see
+## DINO_BEHAVIOURS. Everything else about a dinosaur (moving, fighting, dying) is
+## shared, so adding a new small pack species is an entry here and nothing more.
+##
 ## `drops` is what is left on the ground when one dies, and it is the only source
 ## of `food` and `bone` in the game -- a carcass gives meat and bone, or you get
 ## neither. That is the gate onto stone: the pick needs bone, so the first raid
@@ -234,7 +238,7 @@ const DINOS: Dictionary = {
 		"speed": 4.0,
 		"damage": 1.0,
 		"attack_rate": 1.0,
-		"targeting": "blocker_then_core",
+		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.8, 0.8),
 	},
@@ -244,7 +248,7 @@ const DINOS: Dictionary = {
 		"speed": 2.0,
 		"damage": 3.0,
 		"attack_rate": 0.8,
-		"targeting": "prefer_buildings",
+		"behaviour": "siege",
 		"drops": {"food": 3, "bone": 3},
 		"size": Vector3(1.6, 1.6, 1.6),
 	},
@@ -254,12 +258,27 @@ const DINOS: Dictionary = {
 		"speed": 6.0,
 		"damage": 1.0,
 		"attack_rate": 1.2,
-		"targeting": "ignore_walls",
+		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.5, 0.8),
 	}
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
+## A habit, and the class that implements it. Species with the same habit share a
+## class outright: a second kind of raptor is "pack" and needs no new code.
+const DINO_BEHAVIOURS: Dictionary = {
+	"pack": "res://scripts/entities/PackDino.gd",
+	"siege": "res://scripts/entities/SiegeDino.gd",
+}
+
+## The script a species is built from. Anything without a declared habit gets the
+## plain base, which walks the path and bites what blocks it.
+static func get_dino_script_path(type_id: String) -> String:
+	if not DINOS.has(type_id):
+		return "res://scripts/entities/Dino.gd"
+	var habit: String = String(DINOS[type_id].get("behaviour", ""))
+	return String(DINO_BEHAVIOURS.get(habit, "res://scripts/entities/Dino.gd"))
+
 const DINO_SEPARATION_MIN_DIST: float = 1.15
 
 # ==============================================================================
@@ -436,6 +455,13 @@ const CONTROLS: Dictionary = {
 # ==============================================================================
 # 11. Dinosaur Flocking & Attack Slots (v0.1)
 # ==============================================================================
+## How far a dinosaur can reach whatever it is biting. Without this an attack had
+## no notion of distance at all: once one latched onto the Hero it went on hurting
+## him from across the map until he died, and stood frozen in front of a target it
+## could not touch. Comfortably past the inner attack ring, so a dinosaur standing
+## in its slot can always reach the thing it is standing at.
+const DINO_ATTACK_REACH: float = 2.2
+
 const DINO_ATTACK_SLOT_RADIUS_INNER: float = 1.6
 const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
 

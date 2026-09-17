@@ -306,12 +306,14 @@ func test_09_wave_manager_realtime_raid_and_warning() -> void:
 # ==============================================================================
 
 func test_10_dino_threat_priority_targeting() -> void:
-	assert_not_null(dino_script, "Dino.gd must exist")
 	assert_not_null(tower_script, "Tower.gd must exist")
 	assert_not_null(wall_script, "Wall.gd must exist")
 	assert_not_null(hero_script, "Hero.gd must exist")
 
-	var dino = dino_script.new()
+	# Reacting to turrets and to a provoking Hero is the *pack* habit, so this is a
+	# pack dinosaur. A siege one walks past both on purpose.
+	var pack_script: GDScript = load(config_node.get_dino_script_path("raptor"))
+	var dino = pack_script.new()
 	var tower = tower_script.new()
 	var wall = wall_script.new()
 	var hero = hero_script.new()

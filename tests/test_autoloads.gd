@@ -168,7 +168,10 @@ func test_config_dinos_and_waves() -> void:
 			assert_almost_eq(float(d["raptor"].get("hp", 0.0)), 3.0, 0.01, "raptor hp should be 3.0")
 			assert_almost_eq(float(d["raptor"].get("speed", 0.0)), 4.0, 0.01, "raptor speed should be 4.0")
 			assert_almost_eq(float(d["raptor"].get("damage", 0.0)), 1.0, 0.01, "raptor damage should be 1.0")
-			assert_eq(d["raptor"].get("targeting", ""), "blocker_then_core", "raptor targeting should be blocker_then_core")
+			# v0.4: a species declares a habit, and the habit names the class that
+			# implements it. The string used to be inert data nothing branched on.
+			assert_has(config_node.DINO_BEHAVIOURS, String(d["raptor"].get("behaviour", "")),
+				"raptor declares a habit that has a class")
 
 	assert_has(config_node, "WAVES", "Config must define WAVES")
 	if "WAVES" in config_node:
