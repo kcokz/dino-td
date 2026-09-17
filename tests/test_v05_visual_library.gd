@@ -79,7 +79,9 @@ func _collider_size(node: Node) -> Vector3:
 
 func test_01_every_visual_is_fully_declared() -> void:
 	assert_gt(config_node.VISUALS.size(), 0, "There is a visuals table")
-	var known_placeholders: Array = ["box", "cylinder", "cone", "spikes"]
+	# The primitives, plus every model ModelLibrary knows how to build.
+	var known_placeholders: Array = ["box", "cylinder", "cone", "spikes",
+		"ship_wreck", "cycad", "outcrop", "pool", "nest_mound", "raptor", "hero"]
 	for key in config_node.VISUALS:
 		var entry: Dictionary = config_node.VISUALS[key]
 		assert_true(entry.has("scene"), "%s says where its art is (or that there is none)" % key)
@@ -130,7 +132,9 @@ func test_04_every_visual_can_actually_be_built() -> void:
 
 func test_05_a_placeholder_is_exactly_the_declared_size() -> void:
 	# Built to measure rather than fitted, so this is an equality and not a bound.
-	for key in ["hero", "dino/raptor", "dino/big_theropod", "nest", "building/tower"]:
+	# Only the plain primitives: a real model is built to fit INSIDE its declared size,
+	# not to fill it exactly -- a raptor that stretched to fill its box would be wrong.
+	for key in ["building/tower"]:
 		var body: Node3D = VisualLibrary.make(key)
 		_keep(body)
 		tree.root.add_child(body)
@@ -310,15 +314,20 @@ func test_14_a_depleted_node_is_asked_for_as_a_variant() -> void:
 	tree.root.add_child(node)
 	await wait_frames(1)
 
-	var full_colour: Color = _meshes(node)[0].material_override.albedo_color
+	# What "cut out" looks like is now a DIFFERENT MODEL -- a stump with splinters where
+	# the tree was -- rather than the same cylinder painted grey and squashed. So the
+	# thing to assert is that the geometry changed, not that a colour did: a colour test
+	# would pass just as happily if the variant had never been asked for.
+	var standing: int = _meshes(node).size()
+	var standing_box: AABB = VisualLibrary.visual_bounds(node.find_child("Body", false, false))
+
 	node.harvest(node.max_capacity)
 	await wait_frames(1)
 
 	assert_true(node.is_depleted, "It has been cut out")
 	assert_gt(_meshes(node).size(), 0, "And is still drawn")
-	assert_ne(_meshes(node)[0].material_override.albedo_color, full_colour,
-		"Visibly different from a standing one")
-
-	var body: Node = node.find_child("Body", false, false)
-	assert_not_null(body, "The squash applies to the whole body")
-	assert_lt((body as Node3D).scale.y, 1.0, "A cut-out node is lower than a standing one")
+	var cut_box: AABB = VisualLibrary.visual_bounds(node.find_child("Body", false, false))
+	assert_lt(cut_box.size.y, standing_box.size.y,
+		"A stump is shorter than the tree it came from")
+	assert_ne(_meshes(node).size(), standing,
+		"And built from different pieces, so the variant really was asked for")

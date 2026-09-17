@@ -48,12 +48,19 @@ func flash(mesh: MeshInstance3D, strength: float = -1.0, duration: float = -1.0)
 	# Work on a copy so the flash can never leak into the shared material the
 	# building uses for its own colour or highlight state.
 	var flashing: StandardMaterial3D = mat.duplicate()
-	var base: Color = flashing.albedo_color
-	flashing.albedo_color = base.lerp(Color(1, 1, 1, base.a), clampf(strength, 0.0, 1.0))
+
+	# EMISSION, not albedo. Since v0.5 the models carry their colours per vertex and
+	# leave albedo at white, so lerping albedo towards white did precisely nothing --
+	# every hit flash in the game had silently stopped being visible. Emission works
+	# whatever the colour is coming from, and a struck thing glowing for a moment is
+	# closer to what this was always trying to say.
+	flashing.emission_enabled = true
+	flashing.emission = Color(1, 1, 1)
+	flashing.emission_energy_multiplier = clampf(strength, 0.0, 1.0)
 	mesh.material_override = flashing
 
 	var tw := create_tween()
-	tw.tween_property(flashing, "albedo_color", base, duration)
+	tw.tween_property(flashing, "emission_energy_multiplier", 0.0, duration)
 	tw.finished.connect(func():
 		if is_instance_valid(mesh) and mesh.material_override == flashing:
 			mesh.material_override = mat

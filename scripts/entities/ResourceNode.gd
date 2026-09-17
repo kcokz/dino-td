@@ -69,6 +69,9 @@ func harvest(amount: int = 1) -> int:
 	if current_amount <= 0:
 		current_amount = 0
 		is_depleted = true
+		# Rebuild, not just recolour: the cut-out state is a different model now.
+		if is_inside_tree():
+			_ensure_body()
 		_update_visuals()
 	_update_label()
 	return yield_amt
@@ -158,19 +161,37 @@ func _update_visuals() -> void:
 		var data: Dictionary = cfg.RESOURCE_NODES[resource_type]
 		col = data.get("depleted_color", Color(0.3, 0.3, 0.3)) if is_depleted else data.get("color", Color(0.5, 0.5, 0.5))
 
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = col
-	for node in find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		if mi != null:
-			mi.material_override = mat
+	# Only tint a body that has nothing to say for itself. A real model carries its own
+	# colours -- bark, fronds, stone -- and painting the whole thing one flat green was
+	# turning a cycad into a green cylinder and an outcrop into a grey lump, which is
+	# most of the reason they still looked like placeholders after they stopped being
+	# placeholders.
+	if not _has_model():
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = col
+		for node in find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			if mi != null:
+				mi.material_override = mat
 
-	var squash: Vector3 = Vector3(0.9, 0.35, 0.9) if is_depleted else Vector3.ONE
+	# Being cut out is said by the model itself now -- a stump with splinters, a quarry
+	# with rubble round it -- so squashing it is only for the plain placeholder.
+	var squash: Vector3 = Vector3.ONE
+	if is_depleted and not _has_model():
+		squash = Vector3(0.9, 0.35, 0.9)
 	var body := find_child("Body", false, false)
 	if body is Node3D:
 		(body as Node3D).scale = squash
 	if collision_shape:
 		collision_shape.scale = squash
+
+## Whether this node is drawn by a real model rather than by a primitive.
+func _has_model() -> bool:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_placeholder_style"):
+		return false
+	var style: String = String(cfg.get_placeholder_style("node/" + resource_type))
+	return not (style in ["box", "cylinder", "cone", "spikes"])
 
 func _update_label() -> void:
 	if label_3d == null:

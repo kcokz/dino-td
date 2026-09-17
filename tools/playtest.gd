@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin"]
+		names = ["open", "fence", "cabin", "closeup"]
 
 	for name in names:
 		await _run(String(name))
@@ -62,6 +62,8 @@ func _run(name: String) -> void:
 			await _scenario_fence()
 		"cabin":
 			await _scenario_cabin()
+		"closeup":
+			await _scenario_closeup()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -90,6 +92,41 @@ func _scenario_cabin() -> void:
 	if _main.has_method("enter_cabin"):
 		_main.enter_cabin()
 	await _shoot("inside")
+
+## Portraits of the models, from close enough to actually judge them.
+##
+## The game is played from eighteen metres up, where a two metre wreck is a smudge.
+## That is the right camera for playing and the wrong one for deciding whether a model
+## is any good -- reviewing art from the play camera is how you end up shipping a
+## dinosaur that turns out to have no head. These shots exist only to be looked at.
+func _scenario_closeup() -> void:
+	_grant({"wood": 40, "stone": 20})
+	var cfg := root.get_node_or_null("Config")
+	var tile: float = float(cfg.TILE_SIZE) if cfg else 2.0
+	var subjects: Array = [
+		["wreck", Vector3(tile * 0.5, 0.0, tile * 0.5), 5.0],
+		["nest", _main.grid_manager.cell_to_world(cfg.MAP["default_nest_cell"]), 7.0],
+		["trees", _main.grid_manager.cell_to_world(Vector2i(4, -2)), 6.0],
+		["stone", _main.grid_manager.cell_to_world(Vector2i(4, -6)), 5.0],
+	]
+	for s in subjects:
+		await _portrait(String(s[0]), s[1], float(s[2]))
+
+## Puts a camera at eye level a short way off `at`, looking at it, and takes one frame.
+## The camera is removed again afterwards, so the level is left exactly as it was.
+func _portrait(name: String, at: Vector3, distance: float) -> void:
+	var cam := Camera3D.new()
+	_main.add_child(cam)
+	cam.position = at + Vector3(distance * 0.72, distance * 0.42, distance * 0.72)
+	cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
+	var was: Camera3D = _main.camera
+	cam.current = true
+	await _shoot(name)
+	cam.current = false
+	if was != null and is_instance_valid(was):
+		was.current = true
+	_main.remove_child(cam)
+	cam.queue_free()
 
 # ==============================================================================
 # Driving the game

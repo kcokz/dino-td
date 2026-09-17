@@ -45,6 +45,11 @@ const BUILDINGS: Dictionary = {
 	"core": {
 		"name": "BUILDING_CORE_NAME",
 		"kind": "core",
+		# Taller than the Hero, because it is the landmark the whole map is arranged
+		# around and the thing that ends the game if it falls. Width deliberately left at
+		# the default: past about 1.2 the gap beside it drops under the Hero's width and
+		# is_barrier_building would quietly reclassify the base as a wall.
+		"height": 1.9,
 		"hp": 10.0,
 		"cost": {},
 		"ap_cost": 0,
@@ -343,7 +348,9 @@ const COLORS: Dictionary = {
 	"core": Color(0.9, 0.3, 0.1),
 	"tower": Color(0.2, 0.5, 0.9),
 	"wall": Color(0.5, 0.35, 0.2),
-	"raptor": Color(0.9, 0.15, 0.15),
+	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
+	"big_theropod": Color(0.35, 0.29, 0.24),    # darker and heavier than the pack
+	"pterosaur": Color(0.55, 0.50, 0.44),
 	"nest": Color(0.4, 0.1, 0.5),
 	"caveman": Color(0.1, 0.8, 0.8)
 }
@@ -565,21 +572,23 @@ const RESOURCE_NODES: Dictionary = {
 ## the art are both built from it, which is what stops art from quietly growing wider
 ## than the thing that blocks a raptor.
 const VISUALS: Dictionary = {
-	"hero":                 {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "caveman"},
+	"hero":                 {"scene": "", "placeholder": "hero",     "anchor": "feet",   "color": "caveman"},
 	# Every dinosaur gets its own row even while they share a placeholder: the row is
 	# where its model will go, and they will not share that.
-	"dino/raptor":          {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "raptor"},
-	"dino/big_theropod":    {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "raptor"},
-	"dino/pterosaur":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "raptor"},
-	"nest":                 {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "nest"},
-	"building/core":        {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "core"},
+	"dino/raptor":          {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
+	"dino/big_theropod":    {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "big_theropod"},
+	"dino/pterosaur":       {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
+	"nest":                 {"scene": "", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
+	# The wreck: the only evidence the Hero is from anywhere else, and the thing that
+	# ends the game if the raid reaches it. It gets the most geometry on the map.
+	"building/core":        {"scene": "", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
 	"building/tower":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "tower"},
 	"building/wall":        {"scene": "", "placeholder": "spikes",   "anchor": "feet",   "color": "wall"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
-	"node/wood":            {"scene": "", "placeholder": "cylinder", "anchor": "feet",   "color": ""},
-	"node/stone":           {"scene": "", "placeholder": "cylinder", "anchor": "feet",   "color": ""},
-	"node/water":           {"scene": "", "placeholder": "cylinder", "anchor": "feet",   "color": ""},
+	"node/wood":            {"scene": "", "placeholder": "cycad",    "anchor": "feet",   "color": ""},
+	"node/stone":           {"scene": "", "placeholder": "outcrop",  "anchor": "feet",   "color": ""},
+	"node/water":           {"scene": "", "placeholder": "pool",     "anchor": "feet",   "color": ""},
 }
 
 ## How many metres `key` occupies, resolved from wherever that thing declares its own

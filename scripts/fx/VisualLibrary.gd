@@ -176,6 +176,15 @@ static func _build_placeholder(holder: Node3D, key: String, variant: String) -> 
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = declared_color(key)
 
+	# A named model first. These are built to the declared size like the primitives are,
+	# so swapping one in changes nothing about what the thing occupies -- which is the
+	# whole reason this seam exists. An unknown name falls through to a primitive rather
+	# than to nothing, so a typo makes a box and not an invisible building.
+	var model: Node3D = ModelLibrary.build(declared_placeholder(key), size, declared_color(key), variant)
+	if model != null:
+		holder.add_child(model)
+		return
+
 	match declared_placeholder(key):
 		"spikes":
 			_build_spike_row(holder, key, variant, size, mat)

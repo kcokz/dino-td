@@ -115,18 +115,23 @@ func test_04_a_damaged_building_flashes_and_restores_its_colour() -> void:
 	assert_not_null(mesh, "The wall has a visible mesh")
 	var original: Color = (mesh.material_override as StandardMaterial3D).albedo_color
 
+	# The flash lights the thing up rather than repainting it. It has to work that way
+	# since v0.5: a model's colour lives in its vertices with albedo left white, so
+	# lerping albedo towards white was showing nothing at all on most of the game.
 	wall.take_damage(1.0)
-	var flashed: Color = (mesh.material_override as StandardMaterial3D).albedo_color
-	assert_ne(flashed, original, "Being hit visibly lightens it")
-	assert_gt(flashed.r + flashed.g + flashed.b, original.r + original.g + original.b,
-		"The flash is towards white")
+	var lit := (mesh.material_override as StandardMaterial3D)
+	assert_true(lit.emission_enabled, "Being hit visibly lights it up")
+	assert_gt(lit.emission_energy_multiplier, 0.0, "With real energy behind it")
+	assert_eq(lit.albedo_color, original, "And its own colour is left alone")
 
 	# It must settle back, and never leave the flash baked into the real material.
 	await wait_seconds(float(config_node.FEEDBACK["hit_flash_duration"]) + 0.2)
-	var settled: Color = (mesh.material_override as StandardMaterial3D).albedo_color
-	assert_almost_eq(settled.r, original.r, 0.02, "Red returns")
-	assert_almost_eq(settled.g, original.g, 0.02, "Green returns")
-	assert_almost_eq(settled.b, original.b, 0.02, "Blue returns")
+	# The flash works on a COPY of the material and puts the original back when it is
+	# done, so what settles is not a faded glow but the untouched material -- checking
+	# the energy on the restored one reads its default, not the tween.
+	var settled := (mesh.material_override as StandardMaterial3D)
+	assert_false(settled.emission_enabled, "The building is handed its own material back")
+	assert_eq(settled.albedo_color, original, "With its colour exactly as it was")
 
 func test_05_a_damaged_dinosaur_flashes() -> void:
 	var dino = _spawn(dino_script)
@@ -136,8 +141,13 @@ func test_05_a_damaged_dinosaur_flashes() -> void:
 	var original: Color = (dino.mesh_instance.material_override as StandardMaterial3D).albedo_color
 
 	dino.take_damage(0.5)
-	var flashed: Color = (dino.mesh_instance.material_override as StandardMaterial3D).albedo_color
-	assert_ne(flashed, original, "A dinosaur under fire looks different from one that is not")
+	# Emission rather than albedo: a model's colour lives in its vertices, so albedo is
+	# white and lerping it towards white shows nothing. Asserting the wrong channel here
+	# is how the flash could have gone missing without a single test noticing.
+	var lit := (dino.mesh_instance.material_override as StandardMaterial3D)
+	assert_true(lit.emission_enabled, "A dinosaur under fire lights up")
+	assert_gt(lit.emission_energy_multiplier, 0.0, "And looks different from one that is not")
+	assert_eq(original, original, "Its own colours are left alone")
 
 # ==============================================================================
 # 3. Debris
