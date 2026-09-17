@@ -864,6 +864,60 @@ const TERRAIN: Dictionary = {
 	# blend reaches full rock.
 	"rock_slope": 0.55,
 	"ground_mottle": 0.07,     # slow variation so the floor is not one flat wash
+	# Surface detail. The mottle above is a 50-metre wavelength -- it stops the ground
+	# being one flat colour from the air, and is far too broad to read as soil from the
+	# game's camera. `detail_scale` is the fine grain laid on top with a triplanar noise
+	# texture, in metres per repeat: this is what turns "a green surface" into "dirt".
+	"detail_scale": 2.4,
+	"detail_strength": 0.35,   # how far the grain pushes the colour
+	"detail_bumpiness": 0.85,  # normal map depth, so low sun rakes across it
+	# How far past the flat field the ground cover keeps going before it thins out. It
+	# has to reach well into the valley wall: cover that stopped at the field edge drew a
+	# hard green line across the ground, which is the very boundary the valley exists to
+	# get rid of.
+	"cover_reach": 34.0,
+}
+
+## What grows on the flat field.
+##
+## Fixing the landform -- no visible edge, hills with a shape -- still left the ground
+## reading as a painted surface, because it was one. Ground looks like ground when it is
+## COVERED IN THINGS. This is that, and it is the difference between a diorama base and
+## a place.
+##
+## None of it collides and none of it is on the grid: it is scenery the Hero walks
+## straight through, and no tuft ever decides whether a stake can be planted. Cover that
+## blocked something would be the same old lie wearing a new costume.
+##
+## Densities are counts over the whole flat field, tuned by looking at it. Grass is the
+## one that has to be generous -- sparse grass reads as bald ground with weeds on it.
+const GROUND_COVER: Dictionary = {
+	"seed": 7723,
+	# Nothing is scattered within this of a cell the level claimed, so the cabin, the
+	# nest and the resource nodes are not standing in a bush.
+	"clear_radius": 2.2,
+	"grass_count": 9000,
+	"grass_height": 0.34,
+	"grass_width": 0.05,
+	"grass_blades": 7,
+	"grass_base": Color(0.20, 0.26, 0.13),
+	"grass_tip": Color(0.47, 0.55, 0.26),
+	# Ferns: bigger, sparser, and the thing that makes the meadow read as prehistoric
+	# rather than as a lawn. Before flowering plants, this is what ground cover was.
+	"fern_count": 230,
+	"fern_height": 0.62,
+	"fern_fronds": 7,
+	"fern_stem": Color(0.18, 0.25, 0.12),
+	"fern_leaf": Color(0.33, 0.47, 0.20),
+	"pebble_count": 1300,
+	"pebble_radius": 0.16,
+	"pebble_color": Color(0.42, 0.40, 0.36),
+	# Thinly: one here and there reads as old forest, a field of them as a lumber yard.
+	"log_count": 22,
+	"log_length": 3.2,
+	"log_radius": 0.28,
+	"log_bark": Color(0.27, 0.21, 0.15),
+	"log_core": Color(0.47, 0.39, 0.28),
 }
 
 # ==============================================================================

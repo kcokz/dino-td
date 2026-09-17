@@ -403,6 +403,7 @@ func spawn_terrain() -> void:
 			blocked[c] = true
 
 	_rebuild_ground(cfg)
+	_scatter_ground_cover(cfg)
 
 	var hill_mat := StandardMaterial3D.new()
 	hill_mat.albedo_color = cfg.COLORS.get("hill", Color(0.36, 0.33, 0.28))
@@ -437,6 +438,67 @@ func spawn_terrain() -> void:
 
 		terrain_container.add_child(hill)
 
+## The ground's surface: vertex colour for the broad strokes, and a triplanar noise
+## texture over the top for the grain.
+##
+## The vertex colours alone left the field a painted surface -- correct hue, no soil.
+## Detail texture plus a normal map is what lets the low sun rake across it and makes it
+## read as dirt rather than as a colour. Generated rather than authored, so there is no
+## image file to keep in step with anything.
+func _ground_material(cfg) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE          # the mesh carries its own colour, per vertex
+	mat.vertex_color_use_as_albedo = true
+	# The colours baked into the mesh are written the way COLORS declares them, which is
+	# sRGB. Without this they are taken as linear and every one of them comes out pale --
+	# the whole valley washed to grey on the first attempt.
+	mat.vertex_color_is_srgb = true
+	mat.roughness = 1.0        # soil and grass have no gloss at all
+	mat.metallic = 0.0
+
+	var t: Dictionary = cfg.TERRAIN if "TERRAIN" in cfg else {}
+	var scale: float = float(t.get("detail_scale", 2.4))
+	var strength: float = float(t.get("detail_strength", 0.35))
+	var bumpiness: float = float(t.get("detail_bumpiness", 0.85))
+
+	mat.detail_enabled = true
+	mat.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+	mat.detail_albedo = _noise_texture(int(t.get("noise_seed", 1)) + 11, 1.0 / maxf(0.2, scale), false, strength)
+	mat.detail_uv_layer = BaseMaterial3D.DETAIL_UV_1
+
+	mat.normal_enabled = true
+	mat.normal_scale = bumpiness
+	mat.normal_texture = _noise_texture(int(t.get("noise_seed", 1)) + 29, 1.0 / maxf(0.2, scale), true, 1.0)
+
+	# Triplanar, because the ground mesh has no UVs of its own and the valley walls are
+	# steep enough that a flat projection would smear down them.
+	mat.uv1_triplanar = true
+	mat.uv1_scale = Vector3.ONE / maxf(0.2, scale)
+	return mat
+
+## A seeded noise texture. `as_normal` asks the engine for a normal map instead of a
+## greyscale one; `contrast` pulls a plain albedo texture back towards white so the
+## detail multiplies rather than darkens everything it touches.
+func _noise_texture(seed_value: int, frequency: float, as_normal: bool, contrast: float) -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_value
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = frequency * 0.04
+	noise.fractal_octaves = 4
+
+	var tex := NoiseTexture2D.new()
+	tex.noise = noise
+	tex.width = 512
+	tex.height = 512
+	tex.seamless = true
+	tex.as_normal_map = as_normal
+	if not as_normal:
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1.0, 1.0, 1.0).lerp(Color(0.45, 0.42, 0.36), contrast))
+		ramp.set_color(1, Color.WHITE)
+		tex.color_ramp = ramp
+	return tex
+
 ## Replaces the flat plane the level ships with by the valley floor and the land around
 ## it, and widens the ground collider to match the flat part.
 ##
@@ -447,16 +509,7 @@ func _rebuild_ground(cfg) -> void:
 	if ground == null:
 		return
 	ground.mesh = TerrainBuilder.build_ground(cfg)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color.WHITE          # the mesh carries its own colour, per vertex
-	mat.vertex_color_use_as_albedo = true
-	# The colours baked into the mesh are written the way COLORS declares them, which is
-	# sRGB. Without this they are taken as linear and every one of them comes out pale --
-	# the whole valley washed to grey on the first attempt.
-	mat.vertex_color_is_srgb = true
-	mat.roughness = 1.0        # soil and grass have no gloss at all
-	mat.metallic = 0.0
-	ground.material_override = mat
+	ground.material_override = _ground_material(cfg)
 
 	var field_half: float = 22.0
 	if "TERRAIN" in cfg:
@@ -467,6 +520,67 @@ func _rebuild_ground(cfg) -> void:
 			var ground_box := BoxShape3D.new()
 			ground_box.size = Vector3(field_half * 2.0, 0.2, field_half * 2.0)
 			col.shape = ground_box
+
+## Grass, ferns, pebbles and the odd fallen log over the flat field.
+##
+## All of it scenery: no collision, nothing on the grid, and every piece placed from a
+## fixed seed so the same meadow comes back every launch and two screenshots can be
+## compared. Cells the level has claimed are kept clear, so the cabin and the nest are
+## not standing in a bush.
+func _scatter_ground_cover(cfg) -> void:
+	if cfg == null or not ("GROUND_COVER" in cfg):
+		return
+	var cover: Dictionary = cfg.GROUND_COVER
+	var field_half: float = float(cfg.TERRAIN.get("field_half", 22.0)) if "TERRAIN" in cfg else 22.0
+
+	# Its own node, NOT inside terrain_container. The hills in there are gameplay -- the
+	# tests count them against the blocked cells -- and scenery filed among them made
+	# "one hill per blocked cell" come out one too many. Cover is not terrain, it is
+	# what is lying on it.
+	var holder := get_node_or_null("GroundCover")
+	if holder != null:
+		remove_child(holder)
+		holder.queue_free()
+	holder = Node3D.new()
+	holder.name = "GroundCover"
+	add_child(holder)
+
+	# Where not to put anything: the cells the level itself uses.
+	var claimed: Array = []
+	for c in cfg.MAP.get("default_blocked_cells", []):
+		claimed.append(grid_manager.cell_to_world(c))
+	for item in cfg.MAP.get("default_resource_nodes", []):
+		claimed.append(grid_manager.cell_to_world(item["cell"]))
+	claimed.append(grid_manager.cell_to_world(cfg.MAP["default_core_cell"]))
+	claimed.append(grid_manager.cell_to_world(cfg.MAP["default_nest_cell"]))
+
+	var mat := GroundCover.cover_material()
+	var seed_value: int = int(cover.get("seed", 7723))
+	var clear: float = float(cover.get("clear_radius", 2.2))
+
+	var grass := GroundCover.blade_clump(
+		float(cover.get("grass_height", 0.42)), float(cover.get("grass_width", 0.05)),
+		int(cover.get("grass_blades", 7)),
+		cover.get("grass_base", Color(0.2, 0.26, 0.13)), cover.get("grass_tip", Color(0.47, 0.55, 0.26)))
+	holder.add_child(GroundCover.scatter(cfg, grass, mat, int(cover.get("grass_count", 5200)),
+		field_half, claimed, clear * 0.5, seed_value, Vector2(0.7, 1.5), false))
+
+	var ferns := GroundCover.fern(
+		float(cover.get("fern_height", 0.95)), int(cover.get("fern_fronds", 7)),
+		cover.get("fern_stem", Color(0.18, 0.25, 0.12)), cover.get("fern_leaf", Color(0.33, 0.47, 0.2)))
+	holder.add_child(GroundCover.scatter(cfg, ferns, mat, int(cover.get("fern_count", 420)),
+		field_half, claimed, clear, seed_value + 1, Vector2(0.75, 1.35), true))
+
+	var pebbles := GroundCover.stone(float(cover.get("pebble_radius", 0.16)), seed_value + 2,
+		cover.get("pebble_color", Color(0.42, 0.40, 0.36)))
+	holder.add_child(GroundCover.scatter(cfg, pebbles, mat, int(cover.get("pebble_count", 900)),
+		field_half, claimed, clear * 0.4, seed_value + 3, Vector2(0.6, 1.8), false))
+
+	var logs := GroundCover.fallen_log(
+		float(cover.get("log_length", 3.2)), float(cover.get("log_radius", 0.28)),
+		cover.get("log_bark", Color(0.27, 0.21, 0.15)), cover.get("log_core", Color(0.47, 0.39, 0.28)))
+	holder.add_child(GroundCover.scatter(cfg, logs, mat, int(cover.get("log_count", 14)),
+		field_half, claimed, clear * 1.6, seed_value + 4, Vector2(0.8, 1.3), true))
 
 func spawn_resource_nodes() -> void:
 	if resource_nodes_container == null:
