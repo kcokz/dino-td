@@ -214,7 +214,20 @@ func _execute_test_suite(suite_path: String) -> void:
 		total_assertions_passed += delta_passes
 		total_assertions_failed += delta_fails
 
-		if delta_fails == 0:
+		if delta_fails == 0 and delta_passes == 0:
+			# A test that asserted nothing is not a passing test, it is a test that did
+			# not run. The usual cause is an error part-way through -- a script that no
+			# longer exists, a null where a node was expected -- which aborts the method
+			# silently and leaves a green [PASS] behind it. Eight tests sat like this for
+			# a whole version after v0.4 deleted the classes they instantiated.
+			total_tests_failed += 1
+			printerr("  [FAIL] %s (0 assertions -- the test aborted before asserting anything, %d ms)" % [method_name, elapsed_test_ms])
+			all_failure_records.append({
+				"suite": suite_file,
+				"test": method_name,
+				"message": "Reached the end with 0 assertions. Look for a SCRIPT ERROR above: the method died part-way through."
+			})
+		elif delta_fails == 0:
 			total_tests_passed += 1
 			print("  [PASS] %s (%d assertions, %d ms)" % [method_name, delta_passes, elapsed_test_ms])
 		else:

@@ -118,33 +118,6 @@ const BUILDINGS: Dictionary = {
 		"ap_cost": 1,
 		"upgrades_to": "",
 	},
-	"hut": {
-		"name": "BUILDING_HUT_NAME",
-		"kind": "ap",
-		"hp": 10.0,
-		"cost": {"wood": 3},
-		"ap_cost": 1,
-		"ap_bonus": 0,
-		"upgrades_to": "wood_house",
-	},
-	"wood_house": {
-		"name": "BUILDING_WOOD_HOUSE_NAME",
-		"kind": "ap",
-		"hp": 20.0,
-		"cost": {"wood": 6},
-		"ap_cost": 1,
-		"ap_bonus": 1,
-		"upgrades_to": "barracks",
-	},
-	"barracks": {
-		"name": "BUILDING_BARRACKS_NAME",
-		"kind": "ap",
-		"hp": 30.0,
-		"cost": {"wood": 10, "stone": 5},
-		"ap_cost": 1,
-		"ap_bonus": 2,
-		"upgrades_to": "",
-	},
 }
 
 ## How much of its tile a building's box takes up, in metres.
@@ -360,9 +333,6 @@ const COLORS: Dictionary = {
 	"core": Color(0.9, 0.3, 0.1),
 	"tower": Color(0.2, 0.5, 0.9),
 	"wall": Color(0.5, 0.35, 0.2),
-	"hut": Color(0.7, 0.6, 0.3),
-	"wood_house": Color(0.65, 0.55, 0.25),
-	"barracks": Color(0.6, 0.45, 0.2),
 	"raptor": Color(0.9, 0.15, 0.15),
 	"nest": Color(0.4, 0.1, 0.5),
 	"caveman": Color(0.1, 0.8, 0.8)

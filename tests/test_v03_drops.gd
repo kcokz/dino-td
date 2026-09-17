@@ -20,7 +20,6 @@ var build_system_script: GDScript = null
 var grid_manager_script: GDScript = null
 var dino_script: GDScript = null
 var guard_script: GDScript = null
-var producer_script: GDScript = null
 var resource_node_script: GDScript = null
 
 var _cleanup_nodes: Array[Node] = []
@@ -37,7 +36,6 @@ func before_all() -> void:
 	grid_manager_script = _load_script("res://scripts/core/GridManager.gd")
 	dino_script = _load_script("res://scripts/entities/Dino.gd")
 	guard_script = _load_script("res://scripts/entities/GuardDino.gd")
-	producer_script = _load_script("res://scripts/entities/ProducerBuilding.gd")
 	resource_node_script = _load_script("res://scripts/entities/ResourceNode.gd")
 
 func before_each() -> void:
@@ -427,57 +425,27 @@ func test_24_a_nest_guard_is_worth_meat_too() -> void:
 	guard.take_damage(guard.max_hp)
 	assert_gt(_ground_total("food"), 0, "A guard leaves a carcass like any other dinosaur")
 
-func test_25_a_machine_stacks_its_output_beside_itself() -> void:
-	# A producer takes its type at construction, so it is built directly rather
-	# than through the generic spawn helper.
-	var machine = producer_script.new("lumber_hut")
-	_cleanup_nodes.append(machine)
-	tree.root.add_child(machine)
-	machine.setup("lumber_hut", Vector2i(0, 0))
-	machine.position = Vector3(20.0, 0.0, 0.0)
-	machine.complete_construction()
-
-	var trees = resource_node_script.new("wood", Vector2i(1, 0))
-	_cleanup_nodes.append(trees)
-	tree.root.add_child(trees)
-	trees.position = machine.global_position + Vector3(2.0, 0.0, 0.0)
-	await wait_frames(1)
-
-	var wallet_before: int = _wallet("wood")
-	machine.tend(40.0)
-	machine._process(20.0)
-
-	assert_gt(_ground_total("wood"), 0, "The hut cut wood and left it on the ground")
-	assert_eq(_wallet("wood"), wallet_before, "Nothing walked itself into the warehouse")
-	for pile in _piles():
-		assert_lte(pile.global_position.distance_to(machine.global_position), machine._footprint() + 2.0,
-			"The pile is at the machine's side, where it can be seen and fetched")
-
 func test_26_the_hero_is_what_turns_a_pile_into_a_wallet() -> void:
-	var machine = producer_script.new("lumber_hut")
-	_cleanup_nodes.append(machine)
-	tree.root.add_child(machine)
-	machine.setup("lumber_hut", Vector2i(0, 0))
-	machine.position = Vector3(20.0, 0.0, 0.0)
-	machine.complete_construction()
-
-	var trees = resource_node_script.new("wood", Vector2i(1, 0))
-	_cleanup_nodes.append(trees)
-	tree.root.add_child(trees)
-	trees.position = machine.global_position + Vector3(2.0, 0.0, 0.0)
-
+	# The rule that survived v0.4 and is now the whole economy: a pile on the ground
+	# is not money. Nothing banks itself, however it got there.
+	#
+	# It used to be driven by a producer building. Those are gone, so the pile now
+	# comes off a dead dinosaur -- which is the source that matters today.
 	var hero = _spawn_hero(Vector3(60.0, 0.0, 60.0))
+	var dino = _spawn(dino_script, Vector3(20.0, 0.0, 0.0))
+	dino.setup("raptor")
 	await wait_frames(1)
 
-	machine.tend(40.0)
-	machine._process(20.0)
-	var made: int = _ground_total("wood")
-	assert_gt(made, 0, "There is a pile to fetch")
+	var before: int = _wallet("food")
+	dino.take_damage(dino.max_hp)
+	var meat: int = _ground_total("food")
+	var everything: int = _ground_total()      # a carcass is bone as well as meat
+	assert_gt(meat, 0, "There is a pile to fetch")
+	assert_eq(_wallet("food"), before, "And it has not banked itself")
 
-	var before: int = _wallet("wood")
-	hero.global_position = machine.output_position()
-	assert_eq(hero.sweep_for_drops(), made, "Walking over it collects the lot")
-	assert_eq(_wallet("wood"), before + made, "Which is how it reaches the warehouse")
+	hero.global_position = Vector3(20.0, 0.0, 0.0)
+	assert_eq(hero.sweep_for_drops(), everything, "Walking over it collects the lot")
+	assert_eq(_wallet("food"), before + meat, "Which is how it reaches the warehouse")
 
 func test_27_hand_harvesting_goes_through_the_ground_as_well() -> void:
 	# It looks the same to the player -- the Hero is standing on what he cut, so

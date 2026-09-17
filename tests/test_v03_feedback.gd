@@ -14,7 +14,6 @@ var fx_node: Object = null
 
 var wall_script: GDScript = null
 var tower_script: GDScript = null
-var lumber_hut_script: GDScript = null
 var dino_script: GDScript = null
 var hero_script: GDScript = null
 
@@ -28,7 +27,6 @@ func before_all() -> void:
 		fx_node = tree.root.get_node_or_null("Fx")
 	wall_script = _load("res://scripts/entities/Wall.gd")
 	tower_script = _load("res://scripts/entities/Tower.gd")
-	lumber_hut_script = _load("res://scripts/entities/LumberHut.gd")
 	dino_script = _load("res://scripts/entities/Dino.gd")
 	hero_script = _load("res://scripts/entities/Hero.gd")
 
@@ -179,20 +177,20 @@ func test_06_debris_is_thrown_and_then_cleaned_up() -> void:
 # ==============================================================================
 
 func test_07_a_building_shows_build_progress_then_health() -> void:
-	var hut = _spawn(lumber_hut_script)
+	var turret = _spawn(tower_script)
 	await wait_frames(1)
-	assert_not_null(hut.status_bar, "A building carries a status bar")
+	assert_not_null(turret.status_bar, "A building carries a status bar")
 
-	hut.start_construction(4.0)
-	hut._update_info_label()
-	assert_true(hut.status_bar.visible, "A blueprint shows how far along it is")
-	assert_almost_eq(hut.status_bar._last_ratio, 0.0, 0.01, "Starting from nothing")
+	turret.start_construction(4.0)
+	turret._update_info_label()
+	assert_true(turret.status_bar.visible, "A blueprint shows how far along it is")
+	assert_almost_eq(turret.status_bar._last_ratio, 0.0, 0.01, "Starting from nothing")
 
-	hut.add_build_progress(2.0)
-	assert_almost_eq(hut.status_bar._last_ratio, 0.5, 0.05, "Halfway up")
+	turret.add_build_progress(2.0)
+	assert_almost_eq(turret.status_bar._last_ratio, 0.5, 0.05, "Halfway up")
 
-	hut.complete_construction()
-	assert_false(hut.status_bar.visible, "A finished, undamaged building shows no bar")
+	turret.complete_construction()
+	assert_false(turret.status_bar.visible, "A finished, undamaged building shows no bar")
 
 func test_08_damage_reveals_the_health_bar_and_drains_it() -> void:
 	var wall = _spawn(wall_script)
@@ -219,33 +217,35 @@ func test_09_a_dinosaur_under_fire_shows_its_health() -> void:
 # ==============================================================================
 
 func test_10_selection_ring_is_separate_from_the_coverage_ring() -> void:
-	var hut = _spawn(lumber_hut_script)
-	hut.complete_construction()
+	# The turret, because since v0.4 it is the only building with an area of effect
+	# at all -- the producers that used to have a harvest range are gone.
+	var turret = _spawn(tower_script)
+	turret.complete_construction()
 	await wait_frames(1)
 
-	assert_not_null(hut.selection_ring, "A building has a selection ring")
-	assert_not_null(hut.range_indicator, "And, being a producer, a coverage ring")
-	assert_false(hut.selection_ring.visible, "Neither shows until it is selected")
+	assert_not_null(turret.selection_ring, "A building has a selection ring")
+	assert_not_null(turret.range_indicator, "And, having reach, a coverage ring")
+	assert_false(turret.selection_ring.visible, "Neither shows until it is selected")
 
 	# The two must not read as each other: the selection ring hugs the base and says
 	# "you clicked this", the coverage ring is sized by reach and says "this is what
 	# it affects".
 	var margin: float = float(config_node.FEEDBACK["selection_ring_margin"])
-	var ring_span: float = hut._footprint() + margin * 2.0
-	assert_lt(ring_span, hut.harvest_range, "The selection outline is far smaller than the reach")
-	assert_almost_eq(hut.selection_ring.base_size, hut._footprint(), 0.001,
+	var ring_span: float = turret._footprint() + margin * 2.0
+	assert_lt(ring_span, turret._get_display_range(), "The selection outline is far smaller than the reach")
+	assert_almost_eq(turret.selection_ring.base_size, turret._footprint(), 0.001,
 		"The outline traces this building's own footprint")
 
 func test_11_selecting_shows_the_ring_and_deselecting_hides_it() -> void:
-	var hut = _spawn(lumber_hut_script)
-	hut.complete_construction()
+	var stake = _spawn(wall_script)
+	stake.complete_construction()
 	await wait_frames(1)
 
-	event_bus_node.unit_selected.emit(hut)
-	assert_true(hut.selection_ring.visible, "Selecting draws the ring")
+	event_bus_node.unit_selected.emit(stake)
+	assert_true(stake.selection_ring.visible, "Selecting draws the ring")
 
 	event_bus_node.unit_deselected.emit()
-	assert_false(hut.selection_ring.visible, "Deselecting clears it")
+	assert_false(stake.selection_ring.visible, "Deselecting clears it")
 
 func test_12_selecting_one_building_clears_anothers_ring() -> void:
 	var a = _spawn(wall_script, Vector3(-4.0, 0.0, 0.0))
@@ -343,11 +343,11 @@ func test_18_nothing_in_the_feedback_layer_casts_a_shadow() -> void:
 	for part in hero.selection_ring._parts:
 		decorations.append(part)
 
-	var hut = _spawn(lumber_hut_script, Vector3(8.0, 0.0, 0.0))
-	hut.complete_construction()
+	var turret = _spawn(tower_script, Vector3(8.0, 0.0, 0.0))
+	turret.complete_construction()
 	await wait_frames(1)
-	decorations.append(hut.range_indicator)
-	decorations.append(hut.label_3d)
+	decorations.append(turret.range_indicator)
+	decorations.append(turret.label_3d)
 
 	for d in decorations:
 		assert_not_null(d, "Decoration exists")
@@ -464,25 +464,32 @@ func test_24_the_fill_quad_never_moves_as_the_value_changes() -> void:
 		"A full bar covers the plate exactly, so none of it shows through")
 
 func test_25_a_blueprint_shows_progress_and_no_health() -> void:
-	var hut = _spawn(lumber_hut_script)
+	var stake = _spawn(wall_script)
 	await wait_frames(1)
-	hut.start_construction(4.0)
-	hut._update_info_label()
+	stake.start_construction(4.0)
+	stake._update_info_label()
 
-	assert_false(hut.is_constructed, "Still a blueprint")
-	assert_true(hut.status_bar.visible, "It shows how far along it is")
-	assert_almost_eq(hut.status_bar._last_ratio, hut.build_progress, 0.01,
+	assert_false(stake.is_constructed, "Still a blueprint")
+	assert_true(stake.status_bar.visible, "It shows how far along it is")
+	assert_almost_eq(stake.status_bar._last_ratio, stake.build_progress, 0.01,
 		"The bar reads construction progress, not health")
 
 	# Half built but undamaged: a health reading would be a full bar, so the two
 	# are only distinguishable if the blueprint state wins outright.
-	hut.add_build_progress(2.0)
-	assert_almost_eq(hut.status_bar._last_ratio, 0.5, 0.05, "Progress, not the untouched health")
-	assert_false(str(hut.label_3d.text).contains("HP"), "And the label quotes percent, not hit points")
+	stake.add_build_progress(2.0)
+	assert_almost_eq(stake.status_bar._last_ratio, 0.5, 0.05, "Progress, not the untouched health")
+	assert_false(str(stake.label_3d.text).contains("HP"), "And the label quotes percent, not hit points")
 
-	hut.complete_construction()
-	hut._update_info_label()
-	assert_false(hut.status_bar.visible, "Finished and undamaged: nothing to report")
+	# And it is drawn see-through while it is pending, which is the other half of
+	# "this is not finished yet".
+	for mesh in stake._body_meshes():
+		var mat: StandardMaterial3D = mesh.material_override as StandardMaterial3D
+		assert_not_null(mat, "Each piece of the body carries a material")
+		assert_lt(mat.albedo_color.a, 1.0, "Pending work is translucent")
+
+	stake.complete_construction()
+	stake._update_info_label()
+	assert_false(stake.status_bar.visible, "Finished and undamaged: nothing to report")
 
 # ==============================================================================
 # 11. Build menu affordability, and who a right-click is addressed to
@@ -552,25 +559,3 @@ func test_27_a_right_click_is_addressed_to_the_selected_unit() -> void:
 	# Clicking empty ground hands the Hero back, which is the way out.
 	panel._on_unit_deselected()
 	assert_true(main._selected_unit_takes_orders(), "Deselecting returns command to the Hero")
-
-func test_28_the_opening_affords_a_hut_then_a_turret_one_tend_later() -> void:
-	# The shape of the opening, stated so a balance pass cannot quietly break it:
-	# buy a hut, tend it once, and the first turret is affordable -- comfortably
-	# inside the grace period before the first raid.
-	# v0.3: the opening arrives as wood on the ground by the cabin, so "what the
-	# player starts with" is what is there to be fetched, not what is banked.
-	var start: int = opening_wood()
-	var hut: int = int(config_node.BUILDINGS["lumber_hut"]["cost"]["wood"])
-	var turret: int = int(config_node.BUILDINGS["tower"]["cost"]["wood"])
-	var per_tend: float = float(config_node.BUILDINGS["lumber_hut"]["produces_per_sec"]["wood"]) 		* float(config_node.BUILDINGS["lumber_hut"]["tend_duration"])
-
-	assert_gte(start, hut, "The opening buys a lumber hut outright")
-	assert_gte(float(start - hut) + per_tend, float(turret),
-		"And one tend later the first turret is affordable")
-
-	var grace: float = float(config_node.RAIDS["first_raid_delay"])
-	var build_span: float = config_node.get_build_time("lumber_hut") 		+ float(config_node.BUILDINGS["lumber_hut"]["tend_duration"]) 		+ config_node.get_build_time("tower")
-	assert_gt(grace, build_span,
-		"The grace period covers hut -> tend -> turret (%.0fs of work in %.0fs)" % [build_span, grace])
-	assert_gte(float(config_node.RAIDS["interval_min"]), grace * 0.6,
-		"And raids do not then arrive faster than that rhythm")

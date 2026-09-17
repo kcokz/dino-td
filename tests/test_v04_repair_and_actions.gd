@@ -28,6 +28,12 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
+	# The turret needs a blueprint from the kitchen and stone needs a pick, and the
+	# tests here that go through the real build path were silently failing to place
+	# anything without them -- place_building_at_cell() returned null and the test
+	# died on the next line, still reporting PASS because it never reached an
+	# assertion. This suite is about repair and orders, not about the cabin chain.
+	unlock_all()
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -172,7 +178,7 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 func test_07_right_click_never_puts_anything_up_to_click_through() -> void:
 	var main = _level()
 	await wait_frames(2)
-	game_state_node.resources["wood"] = 99
+	pay_for(["tower"], 99)
 	var turret = main.place_building_at_cell("tower", Vector2i(4, 4))
 	turret.complete_construction()
 	turret.take_damage(turret.max_hp * 0.5)
@@ -248,7 +254,7 @@ func test_11_an_unaffordable_repair_is_offered_but_disabled() -> void:
 func test_12_choosing_it_sends_the_hero_to_work() -> void:
 	var main = _level()
 	await wait_frames(2)
-	game_state_node.resources["wood"] = 99
+	pay_for(["tower"], 99)
 	var turret = main.place_building_at_cell("tower", Vector2i(5, 5))
 	turret.complete_construction()
 	turret.take_damage(turret.max_hp * 0.5)

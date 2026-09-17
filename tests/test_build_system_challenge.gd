@@ -473,43 +473,54 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or game_state_node == null: return
 
-	# Barracks in Config costs: {"wood": 10, "stone": 5}, ap_cost: 1
-	# Case A: Sufficient wood (10), but insufficient stone (4 out of 5)
-	game_state_node.resources = {"wood": 10, "stone": 4, "food": 0}
+	# The turret is the game's one multi-resource building, so it is the honest
+	# fixture for this. Both prices come from Config: a test that restates them
+	# stops testing the transaction and starts testing a copy of the price list.
+	#
+	# It used to use "barracks", a building nobody could ever put up -- it was not in
+	# BUILDABLE_TYPES -- so this suite was exercising the transaction against a
+	# phantom. The barracks is gone; the turret actually costs wood and stone.
+	var wood_price: int = cost_of("tower", "wood")
+	var stone_price: int = cost_of("tower", "stone")
+	assert_gt(wood_price, 0, "The turret costs wood")
+	assert_gt(stone_price, 0, "And stone, which is what makes a multi-resource test possible")
 	game_state_node.current_ap = 3
+
+	# Case A: enough wood, one stone short.
+	game_state_node.resources = {"wood": wood_price, "stone": stone_price - 1, "food": 0}
 	var cell_a = Vector2i(60, 60)
 
-	assert_false(build_sys.can_place_building("barracks", cell_a), "Barracks requires 5 stone, 4 stone must fail")
-	var b_a = build_sys.place_building("barracks", cell_a)
+	assert_false(build_sys.can_place_building("tower", cell_a), "One stone short must fail")
+	var b_a = build_sys.place_building("tower", cell_a)
 	if b_a is Node: _cleanup_nodes.append(b_a)
 
-	assert_null(b_a, "Barracks placement must return null when stone is insufficient")
-	assert_eq(_get_wood(), SEED_WOOD, "Wood must NOT be partially deducted (must remain 10)")
-	assert_eq(_get_stone(), 4, "Stone must NOT be partially deducted (must remain 4)")
-	assert_eq(_get_ap(), 3, "AP must NOT be deducted (must remain 3)")
+	assert_null(b_a, "Placement returns null when stone is insufficient")
+	assert_eq(_get_wood(), wood_price, "Wood must NOT be partially deducted")
+	assert_eq(_get_stone(), stone_price - 1, "Nor stone")
+	assert_eq(_get_ap(), 3, "Nor AP")
 
-	# Case B: Sufficient stone (5), but insufficient wood (9 out of 10)
-	game_state_node.resources = {"wood": 9, "stone": 5, "food": 0}
+	# Case B: enough stone, one wood short.
+	game_state_node.resources = {"wood": wood_price - 1, "stone": stone_price, "food": 0}
 	var cell_b = Vector2i(60, 61)
 
-	assert_false(build_sys.can_place_building("barracks", cell_b), "Barracks requires 10 wood, 9 wood must fail")
-	var b_b = build_sys.place_building("barracks", cell_b)
+	assert_false(build_sys.can_place_building("tower", cell_b), "One wood short must fail too")
+	var b_b = build_sys.place_building("tower", cell_b)
 	if b_b is Node: _cleanup_nodes.append(b_b)
 
-	assert_null(b_b, "Barracks placement must return null when wood is insufficient")
-	assert_eq(_get_wood(), 9, "Wood must remain 9")
-	assert_eq(_get_stone(), 5, "Stone must remain 5")
-	assert_eq(_get_ap(), 3, "AP must remain 3")
+	assert_null(b_b, "Placement returns null when wood is insufficient")
+	assert_eq(_get_wood(), wood_price - 1, "Wood untouched")
+	assert_eq(_get_stone(), stone_price, "Stone untouched")
+	assert_eq(_get_ap(), 3, "AP untouched")
 
-	# Case C: Exact resources available (10 wood, 5 stone)
-	game_state_node.resources = {"wood": 10, "stone": 5, "food": 0}
-	assert_true(build_sys.can_place_building("barracks", cell_b), "Barracks with exact resources (10 wood, 5 stone) must pass")
-	var b_c = build_sys.place_building("barracks", cell_b)
+	# Case C: exactly enough of both, which must go through and take all of it.
+	game_state_node.resources = {"wood": wood_price, "stone": stone_price, "food": 0}
+	assert_true(build_sys.can_place_building("tower", cell_b), "Exactly the price must pass")
+	var b_c = build_sys.place_building("tower", cell_b)
 	if b_c is Node: _cleanup_nodes.append(b_c)
 
-	assert_not_null(b_c, "Barracks placement with exact resources succeeds")
-	assert_eq(_get_wood(), 0, "Wood exact deduction (10 -> 0)")
-	assert_eq(_get_stone(), 0, "Stone exact deduction (5 -> 0)")
+	assert_not_null(b_c, "Placement with exactly the price succeeds")
+	assert_eq(_get_wood(), 0, "Wood spent to the last unit")
+	assert_eq(_get_stone(), 0, "And stone with it")
 	assert_eq(_get_ap(), 2, "AP decremented (3 -> 2)")
 
 func test_challenge_missing_resource_keys_handled_safely() -> void:
@@ -522,9 +533,9 @@ func test_challenge_missing_resource_keys_handled_safely() -> void:
 	game_state_node.current_ap = 3
 	var cell = Vector2i(65, 65)
 
-	# Barracks requires stone. Must return false safely without crashing
-	assert_false(build_sys.can_place_building("barracks", cell), "Missing resource key in inventory safely rejected")
-	var b = build_sys.place_building("barracks", cell)
+	# The turret requires stone. Must return false safely without crashing.
+	assert_false(build_sys.can_place_building("tower", cell), "Missing resource key in inventory safely rejected")
+	var b = build_sys.place_building("tower", cell)
 	if b is Node: _cleanup_nodes.append(b)
 
 	assert_null(b, "Placement safely returns null when resource key is missing")
