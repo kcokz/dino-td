@@ -807,5 +807,81 @@ static func get_dino_name(type_id: String) -> String:
 		return TranslationServer.translate(raw_key)
 	return TranslationServer.translate(type_id)
 
+# ==============================================================================
+# 15. Scene Environment & Lighting (v0.5)
+# ==============================================================================
+
+## Realistic PBR presentation environment.
+##
+## In a game with a fixed high-angle isometric camera, visual coherence is driven by
+## light, shadow contact, atmospheric depth, and tonemapping rolloff rather than
+## micro-level polygon counts. Models arriving in varied polygon densities still read
+## as one cohesive world if the light and ground occlusion are right.
+const ENVIRONMENT: Dictionary = {
+	# Tonemapping: AgX provides photographic highlight compression, preventing hot
+	# specular spots on dinosaur scales or bright stones from blowing out to chalk.
+	"tonemap_mode": Environment.TONE_MAPPER_AGX,
+	"tonemap_exposure": 1.0,
+	"tonemap_white": 1.0,
+
+	# Procedural Sky: Prehistoric atmosphere with clear upper troposphere and dust-laden horizon.
+	"background_mode": Environment.BG_SKY,
+	"sky_top_color": Color(0.35, 0.45, 0.58),       # Subdued cool zenith
+	"sky_horizon_color": Color(0.72, 0.75, 0.77),   # Hazy horizon scattering
+	"ground_bottom_color": Color(0.18, 0.20, 0.16), # Dark terrain bounce
+	"ground_horizon_color": Color(0.55, 0.58, 0.54),
+	"sun_angle_max": 30.0,
+	"sun_curve": 0.15,
+
+	# Ambient Lighting: Uses the procedural sky as the source so shadow sides receive
+	# soft natural fill tinted by the sky, avoiding pitch-black cavities under trees and rocks.
+	"ambient_source": Environment.AMBIENT_SOURCE_SKY,
+	"ambient_color": Color(0.85, 0.90, 0.95),
+	"ambient_energy": 0.35,
+	"ambient_sky_contribution": 0.55,
+
+	# SSAO: Screen-space ambient occlusion is the single most cost-effective feature for
+	# top-down view. It plants trees, walls, and dinosaur feet firmly onto the ground
+	# plane without floating. Radius is 1.5m, scaled to the 2.0m tile size.
+	"ssao_enabled": true,
+	"ssao_radius": 1.5,
+	"ssao_intensity": 1.8,
+	"ssao_power": 1.5,
+	"ssao_detail": 0.5,
+
+	# Glow: Kept restrained (0.3 intensity, low bloom) to avoid the synthetic plastic
+	# look of over-bloomed indie titles. Softens hot highlights naturally.
+	"glow_enabled": true,
+	"glow_intensity": 0.3,
+	"glow_bloom": 0.08,
+	"glow_blend_mode": Environment.GLOW_BLEND_MODE_SOFTLIGHT,
+
+	# Atmospheric Fog: Distance haze provides depth across the 40x40 map.
+	# Begins at 26m (just outside the primary combat zone) and deepens towards the map edge (48m),
+	# giving the illusion of a vast primordial landscape without obscuring active gameplay.
+	"fog_enabled": true,
+	"fog_mode": Environment.FOG_MODE_EXPONENTIAL,
+	"fog_light_color": Color(0.68, 0.73, 0.78),
+	"fog_light_energy": 0.85,
+	"fog_density": 0.008,
+	"fog_aerial_perspective": 0.4,
+	"fog_sky_affect": 0.35,
+	"fog_depth_begin": 26.0,
+	"fog_depth_end": 48.0,
+
+	# Directional Sun Light:
+	# Matches the ancient daylight angle. Shadow bias and normal bias are tuned to eliminate
+	# shadow acne on low-poly bevels while keeping tight shadow contact at feet and bases.
+	# Max shadow distance is 48.0m to encompass the entire 40x40 ground plane from Camera3D.
+	"sun_light_color": Color(1.0, 0.96, 0.90),
+	"sun_light_energy": 1.15,
+	"sun_shadow_enabled": true,
+	"sun_shadow_bias": 0.03,
+	"sun_shadow_normal_bias": 1.2,
+	"sun_shadow_blur": 1.2,
+	"sun_shadow_max_distance": 48.0,
+}
+
+
 
 

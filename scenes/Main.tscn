@@ -1,10 +1,13 @@
-[gd_scene load_steps=9 format=3 uid="uid://c3mainscene0001"]
+[gd_scene load_steps=11 format=3 uid="uid://c3mainscene0001"]
 
 [ext_resource type="Script" path="res://scripts/core/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/core/GridManager.gd" id="2_grid"]
 [ext_resource type="Script" path="res://scripts/core/BuildSystem.gd" id="3_build"]
 [ext_resource type="Script" path="res://scripts/core/WaveManager.gd" id="4_wave"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="5_hud"]
+[ext_resource type="Script" path="res://scripts/fx/SceneEnvironment.gd" id="6_env"]
+
+[sub_resource type="Environment" id="Environment_main"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
 size = Vector2(40, 40)
@@ -17,6 +20,10 @@ size = Vector3(40, 0.2, 40)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+script = ExtResource("6_env")
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(0.819152, -0.40558, 0.40558, 0, 0.707107, 0.707107, -0.573576, -0.579228, 0.579228, 12, 18, 5)
