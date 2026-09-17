@@ -393,6 +393,22 @@ func spawn_terrain() -> void:
 
 	var tile: float = float(cfg.TILE_SIZE) if "TILE_SIZE" in cfg else 2.0
 	var height: float = float(cfg.MAP.get("hill_height", 2.2))
+
+	# The set, so each hill can ask who its neighbours are. Their shared corners are
+	# computed from the same four cells on both sides, which is what makes two hills
+	# meet without a crack between them.
+	var blocked: Dictionary = {}
+	for c in cells:
+		if c is Vector2i:
+			blocked[c] = true
+
+	_rebuild_ground(cfg)
+
+	var hill_mat := StandardMaterial3D.new()
+	hill_mat.albedo_color = cfg.COLORS.get("hill", Color(0.36, 0.33, 0.28))
+	hill_mat.roughness = 0.95          # rock: no specular sheen
+	hill_mat.metallic = 0.0
+
 	for c in cells:
 		if not (c is Vector2i):
 			continue
@@ -402,6 +418,11 @@ func spawn_terrain() -> void:
 		hill.collision_mask = 0
 		hill.position = grid_manager.cell_to_world(c)
 
+		# The collider stays the cell-sized box it always was, deliberately. The grid is
+		# the truth about who can walk where, so collision is built from the declared
+		# cell and never measured off the art. The mesh only ever sits INSIDE that box,
+		# never outside it -- art that overhung a free cell would stop things at nothing
+		# visible, which is the one direction this must not fail in.
 		var shape := CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = Vector3(tile, height, tile)
@@ -410,16 +431,42 @@ func spawn_terrain() -> void:
 		hill.add_child(shape)
 
 		var mi := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(tile, height, tile)
-		mi.mesh = mesh
-		mi.position = Vector3(0.0, height * 0.5, 0.0)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = cfg.COLORS.get("hill", Color(0.36, 0.33, 0.28))
-		mi.material_override = mat
+		mi.mesh = TerrainBuilder.build_hill_cell(c, blocked, tile, height, cfg)
+		mi.material_override = hill_mat
 		hill.add_child(mi)
 
 		terrain_container.add_child(hill)
+
+## Replaces the flat plane the level ships with by the valley floor and the land around
+## it, and widens the ground collider to match the flat part.
+##
+## The collider only needs to cover ground anything stands on, which is the flat field:
+## the rising outskirts are scenery nobody reaches.
+func _rebuild_ground(cfg) -> void:
+	var ground := find_child("Ground", true, false) as MeshInstance3D
+	if ground == null:
+		return
+	ground.mesh = TerrainBuilder.build_ground(cfg)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE          # the mesh carries its own colour, per vertex
+	mat.vertex_color_use_as_albedo = true
+	# The colours baked into the mesh are written the way COLORS declares them, which is
+	# sRGB. Without this they are taken as linear and every one of them comes out pale --
+	# the whole valley washed to grey on the first attempt.
+	mat.vertex_color_is_srgb = true
+	mat.roughness = 1.0        # soil and grass have no gloss at all
+	mat.metallic = 0.0
+	ground.material_override = mat
+
+	var field_half: float = 22.0
+	if "TERRAIN" in cfg:
+		field_half = float(cfg.TERRAIN.get("field_half", field_half))
+	for node in ground.find_children("*", "CollisionShape3D", true, false):
+		var col := node as CollisionShape3D
+		if col != null and col.shape is BoxShape3D:
+			var ground_box := BoxShape3D.new()
+			ground_box.size = Vector3(field_half * 2.0, 0.2, field_half * 2.0)
+			col.shape = ground_box
 
 func spawn_resource_nodes() -> void:
 	if resource_nodes_container == null:

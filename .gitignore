@@ -26,3 +26,7 @@ tmp/
 
 # Written by the build pipeline; the version lives in project.godot
 version.json
+
+# Playtest frames (tools/playtest.gd). Pictures of a game that changes daily do not
+# belong in history -- regenerate them instead.
+screenshots/

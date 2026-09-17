@@ -726,6 +726,17 @@ const REPAIR: Dictionary = {
 const CABIN: Dictionary = {
 	"interior_origin": Vector3(0.0, -200.0, 0.0),  # far below the map; never seen from outside
 	"enter_range": 2.5,                            # how close the Hero must be to step inside
+	# The interior is the same world 200 metres down, so it inherits the level's sky --
+	# and the room has no ceiling, so the camera looked straight over the wall into open
+	# daylight. Being "indoors" fell apart the moment you stepped in.
+	#
+	# Camera3D carries its own Environment, so the fix is per-camera rather than a second
+	# WorldEnvironment: entering the cabin swaps to it and leaving swaps back, with no
+	# extra machinery to keep in sync. Flat dark colour, no sky and no fog -- what is
+	# beyond the walls of a room you cannot see out of is nothing.
+	"interior_background": Color(0.05, 0.045, 0.055),
+	"interior_ambient": Color(0.30, 0.26, 0.24),   # a little bounce, so shadows are not pitch black
+	"interior_ambient_energy": 0.45,
 }
 
 ## Every recipe, whatever station it belongs to, has the same shape:
@@ -808,6 +819,54 @@ static func get_dino_name(type_id: String) -> String:
 	return TranslationServer.translate(type_id)
 
 # ==============================================================================
+# 14b. Terrain shape (v0.5)
+# ==============================================================================
+
+## The land the level sits in.
+##
+## The ground used to be a 40x40 plane, and the camera could see its edge -- past that
+## line was nothing at all. That one fact did more damage to "this is a place" than
+## every placeholder box put together, and no amount of fog fixes a world that visibly
+## stops.
+##
+## So the level is a valley floor. `field_half` is flat and exactly level, because
+## everything in this game lives on a grid at y = 0 and ground that undulated under the
+## buildings would stand them in the air or bury them. Past it the land climbs away and
+## keeps going well beyond anything the camera can frame, which gives the boundary a
+## reason to exist in the world rather than hiding it: you are at the bottom of a
+## valley, and the way out is up.
+const TERRAIN: Dictionary = {
+	# Flat ground reaches this far from the origin. It has to comfortably cover every
+	# cell the level uses -- the nest sits at z = -9 cells = -18m, so 22 leaves margin.
+	# Shrinking this without checking the map would put a slope under a building.
+	"field_half": 22.0,
+	# Total ground extent. Far past what the fixed camera can frame, which is the whole
+	# point: there is no edge to find.
+	"outskirts_half": 110.0,
+	# The climb happens over `rim_span` metres past the field, NOT over the whole extent.
+	# It has to finish inside what the camera can see or the valley wall never appears:
+	# at the first attempt the rise was spread over 88 metres, so by the time it was tall
+	# enough to notice it was behind the fog, and the horizon was just grey.
+	"rim_span": 38.0,
+	"rim_rise": 18.0,          # how high the surrounding land stands by the top of the climb
+	"rim_noise": 4.5,          # broken up, so the valley is not a perfect bowl
+	"quad_size": 4.0,          # ground mesh resolution in metres
+	"noise_seed": 20260917,    # fixed, so the same landscape comes back every launch
+	"noise_frequency": 0.018,
+	# Hills: how finely each cell is subdivided, and how much rubble is added on top.
+	# The rubble is scaled by height so it never lifts a hill off the ground or pokes
+	# through the edge it shares with the hill next door.
+	"hill_subdivisions": 6,
+	"hill_noise": 0.12,
+	# Ground colour is blended by slope: flat reads as grass, steep as rock. Without it
+	# the rising land is exactly the same green as the field and the whole view reads as
+	# an endless lawn instead of a valley. `rock_slope` is the gradient at which the
+	# blend reaches full rock.
+	"rock_slope": 0.55,
+	"ground_mottle": 0.07,     # slow variation so the floor is not one flat wash
+}
+
+# ==============================================================================
 # 15. Scene Environment & Lighting (v0.5)
 # ==============================================================================
 
@@ -873,18 +932,23 @@ const ENVIRONMENT: Dictionary = {
 	# Changing the mode without re-tuning this number breaks the fog in one direction or
 	# the other, silently.
 	#
-	# Distances are measured from the camera, which sits at (12, 18, 5): the middle of
-	# the map is ~22m away, the near corner ~25m, the nest ~30m, the far corner ~44m. So
-	# 26 -> 48 leaves the approach and the fight clear and hazes the far border.
+	# Distances are measured from the camera, which sits at (12, 18, 5). Measured rather
+	# than guessed: the middle of the field is 22m away, its near corner 27m, and its FAR
+	# CORNER 47m. Which is why the first numbers here were wrong -- a ramp starting at 26m
+	# put haze across the far half of the playfield itself, and that flat grey wash was
+	# most of why the whole scene read as low contrast.
+	#
+	# 45 -> 95 keeps every metre the game is played on clear, and spends the fog on the
+	# valley walls beyond it, which is the only place it was ever meant to be.
 	"fog_enabled": true,
 	"fog_mode": Environment.FOG_MODE_DEPTH,
 	"fog_light_color": Color(0.68, 0.73, 0.78),
 	"fog_light_energy": 0.85,
-	"fog_density": 0.65,        # in DEPTH mode: the ceiling, not a per-metre rate
+	"fog_density": 0.55,        # in DEPTH mode: the ceiling, not a per-metre rate
 	"fog_aerial_perspective": 0.4,
 	"fog_sky_affect": 0.35,
-	"fog_depth_begin": 26.0,
-	"fog_depth_end": 48.0,
+	"fog_depth_begin": 45.0,
+	"fog_depth_end": 95.0,
 	"fog_depth_curve": 1.0,     # linear ramp between begin and end; >1 holds it back longer
 
 	# Directional Sun Light:

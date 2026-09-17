@@ -92,6 +92,7 @@ func _ensure_room() -> void:
 		camera.rotation_degrees = Vector3(-22.0, 0.0, 0.0)
 		camera.current = false
 		add_child(camera)
+	camera.environment = _interior_environment()
 
 	if find_child("CabinLight", false, false) == null:
 		var lamp := OmniLight3D.new()
@@ -101,6 +102,33 @@ func _ensure_room() -> void:
 		lamp.light_energy = 1.4
 		lamp.light_color = Color(1.0, 0.92, 0.78)
 		add_child(lamp)
+
+## The room's own environment, used only while this camera is the one rendering.
+##
+## Without it the interior borrows the level's sky and fog, and since the room has no
+## ceiling the camera sees daylight over the top of the wall. A flat dark background
+## puts the room back indoors, and the lamp is left to do the lighting it was always
+## meant to do.
+func _interior_environment() -> Environment:
+	var cfg = _get_config()
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.05, 0.045, 0.055)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.30, 0.26, 0.24)
+	env.ambient_light_energy = 0.45
+	env.fog_enabled = false
+	if cfg and "CABIN" in cfg:
+		env.background_color = cfg.CABIN.get("interior_background", env.background_color)
+		env.ambient_light_color = cfg.CABIN.get("interior_ambient", env.ambient_light_color)
+		env.ambient_light_energy = float(cfg.CABIN.get("interior_ambient_energy", env.ambient_light_energy))
+	# The tonemapper has to match the one outside, or stepping in and out would change
+	# how every colour in the game is rendered.
+	if cfg and "ENVIRONMENT" in cfg:
+		env.tonemap_mode = int(cfg.ENVIRONMENT.get("tonemap_mode", Environment.TONE_MAPPER_AGX))
+		env.tonemap_exposure = float(cfg.ENVIRONMENT.get("tonemap_exposure", 1.0))
+		env.tonemap_white = float(cfg.ENVIRONMENT.get("tonemap_white", 1.0))
+	return env
 
 func _slab(size: Vector3, at: Vector3, colour: Color) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
