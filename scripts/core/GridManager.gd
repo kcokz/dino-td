@@ -351,9 +351,11 @@ func _on_building_destroyed(building: Node) -> void:
 func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only: bool = false) -> bool:
 	if is_cell_blocked(cell):
 		return false
-	# Dinosaurs route around hills but not around buildings: a building in the way
-	# is something they attack, and pathing politely around the fence the player
-	# just built would make the fence pointless.
+	# terrain_only asks the narrower question "is the LANDSCAPE in the way", ignoring
+	# anything built. It used to be what dinosaurs pathed with, on the theory that going
+	# politely round a fence made the fence pointless -- which had it backwards, and left
+	# raids walking into walls. Nothing routes with it now; it survives because "can this
+	# ground be stood on at all" is still a separate and useful question from "is it free".
 	if terrain_only:
 		return true
 	if is_resource_at_cell(cell):
