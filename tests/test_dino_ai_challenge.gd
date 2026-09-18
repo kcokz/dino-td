@@ -199,9 +199,16 @@ func test_redundant_consecutive_identical_waypoints() -> void:
 # ==============================================================================
 
 func test_dense_sequential_walls_along_route() -> void:
-	# 3 walls placed sequentially along a straight path at X=2.0, X=4.0, X=6.0
-	# Dino starts at X=0.0 with waypoint at (8.0, 0.0, 0.0)
-	# Dino must sequentially encounter Wall 1, attack it until destroyed, resume, encounter Wall 2, etc.
+	# Three lone walls strung along the route, in open ground.
+	#
+	# This used to assert that the dinosaur stopped and ate each one in turn. That is the
+	# behaviour the v0.4 rule removed: A WALL IS ONLY WORTH BITING WHEN IT IS ACTUALLY IN
+	# THE WAY, and three stakes in an open field are three things to walk round.
+	#
+	# It kept passing after the rule went in because one branch -- the attack-slot walk
+	# in advance_towards_waypoint -- committed to a target without consulting it. That
+	# was the real bug behind "the raid stops short of my fence and does nothing": claim
+	# a slot on a fence, walk to it, be released for having a way round, claim it again.
 	await wait_frames(2)
 	var dino = _create_dino("raptor")
 	var wall1 = _create_wall(Vector3(2.0, 0.0, 0.0))
@@ -212,64 +219,29 @@ func test_dense_sequential_walls_along_route() -> void:
 	dino.set_waypoints([Vector3(0.0, 0.0, 0.0), Vector3(8.0, 0.0, 0.0)])
 	dino.global_position = Vector3(0.0, 0.0, 0.0)
 
-	# Simulate movement until blocked by Wall 1
-	var blocked_wall1 = false
-	for step in range(30):
-		dino.advance_towards_waypoint(0.05)
-		if dino.current_state == 1: # State.ATTACKING
-			blocked_wall1 = true
-			break
-	assert_true(blocked_wall1, "Dino is blocked by first wall")
-	assert_eq(dino.current_target, wall1, "Dino current_target is wall1")
-
-	# Destroy wall1
-	wall1.take_damage(30.0)
-	assert_true(wall1.is_destroyed, "Wall 1 is destroyed")
-	dino._process_attacking(0.0)
-	assert_eq(int(dino.current_state), 0, "Dino resumes WALKING after Wall 1 destroyed")
-
-	# Simulate movement until blocked by Wall 2
-	var blocked_wall2 = false
-	for step in range(40):
-		dino.advance_towards_waypoint(0.05)
-		if dino.current_state == 1:
-			blocked_wall2 = true
-			break
-	assert_true(blocked_wall2, "Dino is blocked by second wall")
-	assert_eq(dino.current_target, wall2, "Dino current_target is wall2")
-
-	# Destroy wall2
-	wall2.take_damage(30.0)
-	assert_true(wall2.is_destroyed, "Wall 2 is destroyed")
-	dino._process_attacking(0.0)
-	assert_eq(int(dino.current_state), 0, "Dino resumes WALKING after Wall 2 destroyed")
-
-	# Simulate movement until blocked by Wall 3
-	var blocked_wall3 = false
-	for step in range(40):
-		dino.advance_towards_waypoint(0.05)
-		if dino.current_state == 1:
-			blocked_wall3 = true
-			break
-	assert_true(blocked_wall3, "Dino is blocked by third wall")
-	assert_eq(dino.current_target, wall3, "Dino current_target is wall3")
-
-	# Destroy wall3
-	wall3.take_damage(30.0)
-	assert_true(wall3.is_destroyed, "Wall 3 is destroyed")
-	dino._process_attacking(0.0)
-	assert_eq(int(dino.current_state), 0, "Dino resumes WALKING after Wall 3 destroyed")
-
-	# Continue to final destination
-	for step in range(40):
+	for step in range(200):
 		dino.advance_towards_waypoint(0.05)
 		if dino.current_waypoint_index >= dino.waypoints.size():
 			break
 
-	assert_gte(dino.current_waypoint_index, dino.waypoints.size(), "Dino successfully navigated all 3 sequential walls to destination")
+	assert_gte(dino.current_waypoint_index, dino.waypoints.size(),
+		"It gets to the far end, because there was always a way round")
+	assert_false(wall1.is_destroyed, "Without eating the first stake")
+	assert_false(wall2.is_destroyed, "Or the second")
+	assert_false(wall3.is_destroyed, "Or the third")
+	assert_eq(int(dino.current_state), 0, "And it is still walking, not chewing")
 
 func test_wall_placed_directly_at_waypoint_node() -> void:
-	# Wall placed directly on the exact waypoint coordinate (4.0, 0.0, 0.0)
+	# A wall on the exact spot the route said to walk to.
+	#
+	# The old expectation was that it stopped and ate the wall. What it has to do now is
+	# carry on: the waypoint is unusable, so it is skipped, and the wall is left alone
+	# because there is open ground either side of it.
+	#
+	# This is the case that used to pin an entire raid. The route runs down the path
+	# column, the player drops a stake on a waypoint, and every dinosaur walks to the near
+	# side of it and stops -- not attacking, because there is a way round, and not moving,
+	# because where it was told to go is inside a building.
 	await wait_frames(2)
 	var dino = _create_dino("raptor")
 	var wall = _create_wall(Vector3(4.0, 0.0, 0.0))
@@ -278,27 +250,14 @@ func test_wall_placed_directly_at_waypoint_node() -> void:
 	dino.set_waypoints([Vector3(0.0, 0.0, 0.0), Vector3(4.0, 0.0, 0.0), Vector3(8.0, 0.0, 0.0)])
 	dino.global_position = Vector3(0.0, 0.0, 0.0)
 
-	# Move towards waypoint 1 (which has the wall)
-	for step in range(30):
-		dino.advance_towards_waypoint(0.05)
-		if dino.current_state == 1:
-			break
-
-	assert_eq(int(dino.current_state), 1, "Dino enters ATTACKING when encountering wall at waypoint")
-	assert_eq(dino.current_target, wall, "Dino target is wall at waypoint")
-
-	# Destroy the wall
-	wall.take_damage(30.0)
-	dino._process_attacking(0.0)
-	assert_eq(int(dino.current_state), 0, "Dino returns to WALKING")
-
-	# Dino should now pass waypoint 1 and proceed to waypoint 2
-	for step in range(50):
+	for step in range(200):
 		dino.advance_towards_waypoint(0.05)
 		if dino.current_waypoint_index >= dino.waypoints.size():
 			break
 
-	assert_gte(dino.current_waypoint_index, dino.waypoints.size(), "Dino advanced past the waypoint that was blocked by wall")
+	assert_gte(dino.current_waypoint_index, dino.waypoints.size(),
+		"It gets past the waypoint that had a wall on it")
+	assert_false(wall.is_destroyed, "Without having to eat the wall to do it")
 
 # ==============================================================================
 # 3. Multiple Concurrent Dinos & Rapid Destruction Mid-Attack
@@ -428,24 +387,50 @@ func test_dino_spawned_inside_building_bounds_detection() -> void:
 		_record_pass("Dino successfully detected obstacle while inside building bounds.")
 
 func test_dino_extreme_speed_wall_tunneling() -> void:
-	# A wall is placed at X = 2.0 (width 1.8, extents [1.1, 2.9]).
-	# Dino starts at X = 0.0 with extreme speed multiplier (e.g. speed = 100.0 m/s).
-	# In one 0.1s tick, Dino moves 10.0m, jumping from X=0.0 to X=10.0, bypassing the wall!
+	# At 100 m/s a dinosaur covers ten metres in one tick, which is further than a wall
+	# is thick. Speed must not be a way through something there is no way through.
+	#
+	# The wall has to actually SEAL for this to mean anything -- a lone wall in an open
+	# field is something to run round, and running round it fast is not tunnelling. So
+	# the goal here is walled in, and then getting past is cheating.
 	await wait_frames(2)
-	var wall = _create_wall(Vector3(2.0, 0.0, 0.0))
+	var gm = _grid_manager()
+	var goal := Vector3(10.0, 0.0, 0.0)
+	var goal_cell: Vector2i = gm.world_to_cell(goal)
+	var ring: Array = []
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			if dx == 0 and dz == 0:
+				continue
+			var w = _create_wall(gm.cell_to_world(goal_cell + Vector2i(dx, dz)))
+			w.setup("wall", goal_cell + Vector2i(dx, dz))
+			w.complete_construction()
+			gm.occupy_cell(goal_cell + Vector2i(dx, dz), w)
+			ring.append(w)
 	var dino = _create_dino("raptor", {"speed": 25.0}) # 4.0 * 25.0 = 100.0 m/s
 	dino.global_position = Vector3(0.0, 0.0, 0.0)
-	dino.set_waypoints([Vector3(0.0, 0.0, 0.0), Vector3(10.0, 0.0, 0.0)])
+	dino.set_waypoints([goal])
 	await wait_frames(2)
 
-	# Advance 1 tick of 0.1s (leap distance = 10.0m)
-	dino.advance_towards_waypoint(0.1)
+	assert_true(dino._way_is_sealed(), "The goal really is walled in")
+	for step in range(20):
+		dino.advance_towards_waypoint(0.1)
+		if dino.global_position.distance_to(goal) <= 1.0:
+			break
 
-	# Did Dino tunnel through the wall?
-	if dino.global_position.x > 3.0:
-		_record_fail("VULNERABILITY: Dino with high speed tunneled through wall without collision. Pos X=%.2f" % dino.global_position.x)
-	else:
-		_record_pass("Dino did not tunnel through wall at high speed.")
+	assert_gt(dino.global_position.distance_to(goal), 1.0,
+		"Speed is not a way through a sealed ring: it never reaches the middle")
+	assert_not_null(dino.current_target, "It has the ring to deal with instead")
+
+## The level's grid, or one made for the occasion.
+func _grid_manager() -> Node:
+	var existing = tree.get_first_node_in_group("grid_manager")
+	if existing != null:
+		return existing
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	_allocated_nodes.append(gm)
+	tree.root.add_child(gm)
+	return gm
 
 # ==============================================================================
 # 5. Zero-Length Waypoints & Destination Reached Signal Behavior

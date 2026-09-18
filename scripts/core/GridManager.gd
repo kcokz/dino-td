@@ -228,10 +228,17 @@ func _fine_divisions_in(tile: Vector2i) -> int:
 ## this, the first stake in a tile claimed the whole tile, so a cone standing next to a
 ## hillside sealed a lane that was visibly two-thirds empty.
 ##
-## What closes a tile is a RUN: a complete row or column of fine cells, which is a line
-## of cones crossing the tile with nothing between them. That is the fence the player
-## drew, and it is the one that stops people -- so WHERE he draws it decides, instead of
-## the type of thing he drew it with.
+## What closes a tile is a RUN of them: cones side by side with nothing you could get
+## between. So the question asked here is the honest one -- CAN YOU STILL CROSS THIS TILE
+## -- answered by walking the free fine cells rather than by counting anything.
+##
+## A tile is open only if you could cross it both ways: north to south AND west to east.
+## Failing either means a fence runs through it, and a walker goes round the tile.
+##
+## The first version of this looked for a complete row or column, which only ever
+## recognised fences drawn along the axes. A CURVE -- which is what people actually draw
+## -- put two or three cones diagonally across a tile, filled no row and no column, and
+## sealed nothing, however solid it looked.
 ##
 ## Anything not placed finely fills its tile, as it always has. So does a tile whose
 ## occupant was registered at tile level only: with nothing finer on record there is
@@ -241,28 +248,47 @@ func occupant_leaves_a_way_through(tile: Vector2i) -> bool:
 	if divisions <= 1:
 		return false
 	var base := Vector2i(tile.x * divisions, tile.y * divisions)
-	var rows: Array[int] = []
-	var cols: Array[int] = []
-	rows.resize(divisions)
-	cols.resize(divisions)
-	rows.fill(0)
-	cols.fill(0)
-	var total: int = 0
+	var free: Array[bool] = []
+	free.resize(divisions * divisions)
+	var any_taken: bool = false
 	for dz in range(divisions):
 		for dx in range(divisions):
-			if is_fine_cell_occupied(base + Vector2i(dx, dz)):
-				rows[dz] += 1
-				cols[dx] += 1
-				total += 1
-	if total == 0:
+			var taken: bool = is_fine_cell_occupied(base + Vector2i(dx, dz))
+			free[dz * divisions + dx] = not taken
+			any_taken = any_taken or taken
+	if not any_taken:
 		return false
-	for n in rows:
-		if n >= divisions:
-			return false
-	for n in cols:
-		if n >= divisions:
-			return false
-	return true
+	return _crosses(free, divisions, true) and _crosses(free, divisions, false)
+
+## Whether free cells connect one side of the sub-grid to the other: top to bottom when
+## `vertical`, left to right otherwise.
+##
+## Four-connected on purpose. A stake very nearly fills its fine cell, so two of them
+## touching at the corners leave a slit a few centimetres wide -- which is a wall, not a
+## doorway, and letting anything squeeze through it diagonally would make every fence
+## drawn on a curve leak.
+func _crosses(free: Array[bool], divisions: int, vertical: bool) -> bool:
+	var queue: Array[Vector2i] = []
+	var seen: Dictionary = {}
+	for i in range(divisions):
+		var start := Vector2i(i, 0) if vertical else Vector2i(0, i)
+		if free[start.y * divisions + start.x]:
+			queue.append(start)
+			seen[start] = true
+	var far: int = divisions - 1
+	while not queue.is_empty():
+		var at: Vector2i = queue.pop_back()
+		if (vertical and at.y == far) or (not vertical and at.x == far):
+			return true
+		for off in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var next: Vector2i = at + off
+			if next.x < 0 or next.y < 0 or next.x >= divisions or next.y >= divisions:
+				continue
+			if seen.has(next) or not free[next.y * divisions + next.x]:
+				continue
+			seen[next] = true
+			queue.append(next)
+	return false
 
 ## The point inside `tile` a walker should actually aim at: its centre, unless something
 ## small is standing there, in which case the nearest fine cell that is free.
@@ -462,6 +488,86 @@ func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only
 		return true
 	# A building smaller than its tile does not fill its tile. Only a run of them does.
 	return occupant_leaves_a_way_through(cell)
+
+## Every cell the segment from `from_pos` to `to_pos` passes through, in order.
+##
+## A grid TRAVERSAL, not a set of point samples. The difference is the whole reason this
+## exists: sampling the line every half metre looks equivalent and is not, because a
+## segment can clip the corner of a cell over a shorter distance than the sample spacing
+## and be missed entirely.
+##
+## One missed cell is a dinosaur told the way ahead is clear, walking into a hillside at
+## four metres a second, being pushed back out, and doing it again the next frame for as
+## long as anyone cares to watch. That is what this fixes, and it is why the answer has
+## to be exact rather than nearly right.
+func cells_on_line(from_pos: Vector3, to_pos: Vector3) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var size: float = tile_size if tile_size > 0.0 else 2.0
+	var x0: float = from_pos.x / size
+	var z0: float = from_pos.z / size
+	var x1: float = to_pos.x / size
+	var z1: float = to_pos.z / size
+	var cx: int = int(floor(x0))
+	var cz: int = int(floor(z0))
+	out.append(Vector2i(cx, cz))
+	var end_x: int = int(floor(x1))
+	var end_z: int = int(floor(z1))
+	if cx == end_x and cz == end_z:
+		return out
+
+	var dx: float = x1 - x0
+	var dz: float = z1 - z0
+	var step_x: int = 0 if is_zero_approx(dx) else (1 if dx > 0.0 else -1)
+	var step_z: int = 0 if is_zero_approx(dz) else (1 if dz > 0.0 else -1)
+	# How much of the segment it takes to cross one whole cell on each axis...
+	var t_delta_x: float = INF if step_x == 0 else absf(1.0 / dx)
+	var t_delta_z: float = INF if step_z == 0 else absf(1.0 / dz)
+	# ...and how much to reach the first boundary, which is the part that gets a corner
+	# right: whichever boundary is nearer is the one crossed next.
+	var t_max_x: float = INF
+	if step_x > 0:
+		t_max_x = (float(cx + 1) - x0) / dx
+	elif step_x < 0:
+		t_max_x = (float(cx) - x0) / dx
+	var t_max_z: float = INF
+	if step_z > 0:
+		t_max_z = (float(cz + 1) - z0) / dz
+	elif step_z < 0:
+		t_max_z = (float(cz) - z0) / dz
+
+	var guard: int = 0
+	while (cx != end_x or cz != end_z) and guard < 4096:
+		guard += 1
+		if minf(t_max_x, t_max_z) > 1.0:
+			break
+		if t_max_x < t_max_z:
+			cx += step_x
+			t_max_x += t_delta_x
+		else:
+			cz += step_z
+			t_max_z += t_delta_z
+		out.append(Vector2i(cx, cz))
+	return out
+
+## Nothing, as a cell coordinate. Returned when a line meets nothing solid.
+const NO_CELL := Vector2i(2147483647, 2147483647)
+
+## The first cell on the segment that cannot be walked through, or NO_CELL.
+##
+## Asked with the same question the pathfinder uses, so that "the straight line is clear"
+## and "A* will route through here" can never disagree -- they did, and a walker caught
+## between them stands still.
+##
+## `skip` is a cell that never counts, for the one a walker is standing in: it is plainly
+## standable, whatever is registered there.
+func first_solid_on_line(from_pos: Vector3, to_pos: Vector3, terrain_only: bool = false,
+		ignore_building: Node = null, skip: Vector2i = NO_CELL) -> Vector2i:
+	for cell in cells_on_line(from_pos, to_pos):
+		if cell == skip:
+			continue
+		if not is_cell_walkable(cell, ignore_building, terrain_only):
+			return cell
+	return NO_CELL
 
 ## Whether a walker standing at `from_pos` can get to `to_pos` over walkable ground.
 ##
@@ -682,15 +788,10 @@ func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building:
 	return smoothed
 
 ## Line-of-sight ray tracing on grid cells. Returns true if straight path is unobstructed.
+## Used to sample every 0.4 of a tile, which could step over the corner of a hill and
+## smooth a route straight through the thing A* had just gone around.
 func _has_line_of_sight(from_pt: Vector3, to_pt: Vector3, ignore_building: Node = null, terrain_only: bool = false) -> bool:
-	var dist = from_pt.distance_to(to_pt)
-	if dist <= 0.1:
+	if from_pt.distance_to(to_pt) <= 0.1:
 		return true
-	var steps: int = int(ceil(dist / (tile_size * 0.4)))
-	for s in range(1, steps + 1):
-		var t = float(s) / float(steps)
-		var sample = from_pt.lerp(to_pt, t)
-		var c = world_to_cell(sample)
-		if not is_cell_walkable(c, ignore_building, terrain_only):
-			return false
-	return true
+	return first_solid_on_line(from_pt, to_pt, terrain_only, ignore_building,
+		world_to_cell(from_pt)) == NO_CELL

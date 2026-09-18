@@ -125,19 +125,25 @@ func test_04_dino_detects_and_attacks_wooden_wall_on_path() -> void:
 	# Advance dino towards the wall
 	dino.advance_towards_waypoint(0.1)
 
-	# Dino should detect obstacle
+	# It SEES the wall -- the raycast is not the thing that changed.
 	var detected_obstacle = dino.check_obstacle()
 	assert_not_null(detected_obstacle, "Dino must detect the wooden wall as an obstacle")
-	assert_true(dino.is_blocked, "Dino must be flagged as blocked")
-	assert_eq(dino.current_state, 1, "Dino state must be ATTACKING (1)")
-	assert_eq(dino.velocity, Vector3.ZERO, "Dino velocity must be zero when blocked")
 
-	# Test attack
+	# What changed is what it does about it. This used to assert that it stopped and ate
+	# the wall, which is exactly what the v0.4 rule removed: one stake in an open field
+	# is something to walk round. Biting it is only right when there is no way past.
+	assert_false(dino._way_is_sealed(), "There is open ground either side of one stake")
+	assert_false(dino._should_bite(wall), "So the wall is not worth stopping for")
+	assert_eq(dino.current_state, 0, "And the dinosaur keeps walking")
+
+	# Attacking still works when something IS worth attacking -- the change is about
+	# choosing a target, not about the bite.
 	var initial_wall_hp: float = wall.current_hp
+	dino.current_target = wall
 	dino.perform_attack()
 	assert_true(wall.current_hp < initial_wall_hp, "Wall HP must decrease after dino attack")
 
-	# If wall is destroyed, dino should unblock and resume WALKING
+	# And a destroyed target lets go cleanly.
 	wall.take_damage(wall.current_hp)
 	await wait_frames(2)
 	dino._process_attacking(0.0)

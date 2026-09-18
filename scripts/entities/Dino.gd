@@ -382,8 +382,18 @@ func advance_towards_waypoint(delta: float) -> void:
 	# fence was the second case whether the player wanted it or not.
 	var blocker := _building_in_the_way()
 	if blocker != null:
-		on_obstacle_detected(blocker)
-		return
+		if global_position.distance_to(blocker.global_position) <= 1.8:
+			on_obstacle_detected(blocker)
+			return
+		# Not there yet. Biting something fourteen metres away is the same standing-still
+		# the whole rule exists to remove, so what happens instead is that the thing in
+		# the way becomes the thing to WALK AT -- and it goes through the attack slots, so
+		# a raid arrives spread around the fence rather than queued behind one stake.
+		if current_target != blocker:
+			if current_target != null:
+				release_attack_slot(current_target, self)
+			current_target = blocker
+			assigned_slot = claim_attack_slot(blocker, self)
 
 	# 1. Something directly in front. Only worth stopping for if biting it is the right
 	# answer -- a fence with a gate in it is walked round, not eaten.
@@ -393,10 +403,17 @@ func advance_towards_waypoint(delta: float) -> void:
 		return
 
 	# 1a. Threat Priority Target Check (v0.2: Tower > Buildings > Hero)
+	#
+	# _find_threat_priority_target already drops a wall that is not in the way, so this
+	# cannot claim a slot on a fence it has no reason to touch. It used to: the bite was
+	# gated and the TARGETING was not, so a raid would claim slots on a fence it would
+	# never bite, walk to them, be released for having a way round, and claim them again
+	# -- hovering a slot-radius short of the stakes, neither attacking nor arriving. That
+	# is what "stops some way off and does nothing" was.
 	var threat_tgt = _find_threat_priority_target()
 	if threat_tgt != null:
 		var dist_to_threat = global_position.distance_to(threat_tgt.global_position)
-		if dist_to_threat <= 1.8 and _should_bite(threat_tgt):
+		if dist_to_threat <= 1.8:
 			on_obstacle_detected(threat_tgt)
 			return
 		if assigned_slot == Vector3.ZERO:
@@ -407,9 +424,11 @@ func advance_towards_waypoint(delta: float) -> void:
 	var attacking_ally = _find_front_attacking_ally()
 	if attacking_ally != null and "current_target" in attacking_ally and attacking_ally.current_target != null:
 		var ally_tgt = attacking_ally.current_target
-		if _is_target_valid(ally_tgt):
+		# Joining in only counts if the thing being eaten is worth eating. Following an
+		# ally onto a fence with a way round it is the same oscillation, one step removed.
+		if _is_target_valid(ally_tgt) and _should_bite(ally_tgt):
 			var dist_to_tgt = global_position.distance_to(ally_tgt.global_position)
-			if dist_to_tgt <= 1.8 and _should_bite(ally_tgt):
+			if dist_to_tgt <= 1.8:
 				on_obstacle_detected(ally_tgt)
 				return
 			# Claim a perimeter attack slot around ally's target
@@ -418,6 +437,14 @@ func advance_towards_waypoint(delta: float) -> void:
 				current_target = ally_tgt
 
 	# 1c. If navigating toward an assigned attack slot:
+	#
+	# A slot on a wall that is no longer in the way -- the player pulled a stake, or this
+	# one was claimed before a gap opened -- is let go here rather than walked all the
+	# way to and abandoned on arrival.
+	if assigned_slot != Vector3.ZERO and _is_wall(current_target) and not _should_bite(current_target):
+		release_attack_slot(current_target, self)
+		current_target = null
+		assigned_slot = Vector3.ZERO
 	if assigned_slot != Vector3.ZERO and current_target != null and _is_target_valid(current_target):
 		var diff_slot = assigned_slot - global_position
 		diff_slot.y = 0.0
@@ -563,29 +590,23 @@ func _line_is_clear(from_pos: Vector3, to_pos: Vector3) -> bool:
 ## The first cell along the segment that cannot be walked through, or a sentinel when
 ## the whole line is clear. `include_buildings` separates "is the way open" from "is the
 ## landscape in the way", which the attack-slot code still wants to ask on its own.
+##
+## Handed to the grid, which walks the CELLS the line crosses. This used to sample the
+## line every metre and decide for itself what counted as solid, and it was wrong twice
+## over: it could step clean over the corner of a hill, and it called a tile solid on the
+## strength of it being OCCUPIED -- so a tile holding one stake, which the pathfinder
+## routes straight through, read as a wall. A walker caught between a line check and a
+## pathfinder that disagree does not go round and does not stop: it walks into the thing,
+## gets pushed back, and repeats.
 func _first_solid_on_line(from_pos: Vector3, to_pos: Vector3, include_buildings: bool) -> Vector2i:
 	var none := Vector2i(2147483647, 2147483647)
 	var gm := _get_grid_manager()
-	if gm == null or not gm.has_method("is_cell_blocked"):
+	if gm == null or not gm.has_method("first_solid_on_line"):
 		return none
-	var span: float = from_pos.distance_to(to_pos)
-	if span <= 0.001:
+	if from_pos.distance_to(to_pos) <= 0.001:
 		return none
-	var step: float = maxf(0.5, float(gm.tile_size) * 0.5)
-	var steps: int = int(ceil(span / step))
-	for i in range(steps + 1):
-		var at: Vector3 = from_pos.lerp(to_pos, float(i) / float(steps))
-		var cell: Vector2i = gm.world_to_cell(at)
-		if gm.is_cell_blocked(cell):
-			return cell
-		if include_buildings and gm.has_method("is_cell_occupied") and gm.is_cell_occupied(cell):
-			var b = gm.get_building_at(cell)
-			# Blueprints block nobody, and neither does the cell this dinosaur is
-			# standing in.
-			if b != null and is_instance_valid(b) and ("is_constructed" in b) and b.is_constructed:
-				if cell != gm.world_to_cell(global_position):
-					return cell
-	return none
+	return gm.first_solid_on_line(from_pos, to_pos, not include_buildings, null,
+		gm.world_to_cell(global_position))
 
 ## The building this dinosaur has to go through, or null when there is a way round.
 ##
@@ -626,7 +647,11 @@ func _refresh_route() -> void:
 	var gm := _get_grid_manager()
 	if gm == null or not gm.has_method("is_reachable"):
 		return
-	var goal: Vector3 = _current_goal()
+	# The JOURNEY goal, never the thing currently targeted. Asking "can I reach my
+	# target" is self-referential -- a target is always reachable, because it is where
+	# you are standing by the time you bite it -- so a wall judged that way is never in
+	# the way, gets released, gets re-targeted, and the raid oscillates on the spot.
+	var goal: Vector3 = _journey_goal()
 	if goal == Vector3.INF:
 		return
 
@@ -637,9 +662,25 @@ func _refresh_route() -> void:
 		return                      # something is in the way, but there is a way round
 
 	_way_sealed = true
-	var b = gm.get_building_at(hit)
-	if b != null and is_instance_valid(b) and not ("is_destroyed" in b and b.is_destroyed):
-		_blocked_by = b
+	# The nearest BUILDING on the line, which is not always the nearest solid thing: a
+	# hillside can be what seals the way, and a hillside is not something to bite. Then
+	# _blocked_by stays null, nothing is attacked, and the partial path takes it as close
+	# as the map allows -- which is the right answer to "sealed by the landscape".
+	_blocked_by = _first_building_on_line(global_position, goal)
+
+## The nearest finished building standing on the line, or null.
+func _first_building_on_line(from_pos: Vector3, to_pos: Vector3) -> Node:
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("cells_on_line"):
+		return null
+	var here: Vector2i = gm.world_to_cell(global_position)
+	for cell in gm.cells_on_line(from_pos, to_pos):
+		if cell == here or gm.is_cell_walkable(cell):
+			continue
+		var b = gm.get_building_at(cell)
+		if b != null and is_instance_valid(b) and not ("is_destroyed" in b and b.is_destroyed):
+			return b
+	return null
 
 ## Whether stopping to bite this is the right thing to do.
 ##
@@ -685,10 +726,19 @@ func _skip_unwalkable_waypoints() -> void:
 			return
 		current_waypoint_index += 1
 
-## Where this dinosaur is trying to get to right now.
+## Where this dinosaur is trying to get to right now -- what it is steering at.
 func _current_goal() -> Vector3:
 	if current_target != null and is_instance_valid(current_target) and current_target is Node3D:
 		return (current_target as Node3D).global_position
+	return _journey_goal()
+
+## Where it is going, as opposed to what it has stopped for. The core, by way of its
+## waypoints, whatever it happens to be biting on the way.
+##
+## The two have to be different questions. "Is the way sealed" means "is the way to
+## where I am GOING sealed", and a raid that answers it against whatever it last
+## targeted can never see a wall as being in the way at all.
+func _journey_goal() -> Vector3:
 	if waypoints.is_empty():
 		return Vector3.INF
 	var idx: int = clampi(current_waypoint_index, 0, waypoints.size() - 1)
@@ -697,13 +747,32 @@ func _current_goal() -> Vector3:
 ## Undoes a step that would have ended inside a hill. Separation and flanking both
 ## push sideways, and neither of them knows about the landscape -- this is the one
 ## place that guarantees nothing ever ends up standing in the scenery.
+## Undoes a step that would have ended inside a hill -- but SLIDES along it first.
+##
+## Reverting outright and zeroing the velocity turns any disagreement between "where I
+## am steering" and "where I can stand" into a permanent freeze: the same step is tried,
+## refused and retried every frame for ever. That is not a theoretical worry, it is what
+## a raid did at the two hills either side of the approach, in full view, for as long as
+## the game was left running.
+##
+## Sliding means the worst case is a dinosaur that grazes a hillside and keeps going,
+## rather than one that stops being part of the game.
 func _keep_off_the_hills(previous: Vector3) -> void:
 	var gm := _get_grid_manager()
 	if gm == null or not gm.has_method("is_cell_blocked"):
 		return
-	if gm.is_cell_blocked(gm.world_to_cell(global_position)):
-		global_position = previous
-		velocity = Vector3.ZERO
+	if not gm.is_cell_blocked(gm.world_to_cell(global_position)):
+		return
+	var attempted: Vector3 = global_position
+	# Keep whichever single axis of the step was allowed. One of them usually is: what
+	# stops a walker is a wall face, and a wall face only blocks one direction.
+	for slide in [Vector3(attempted.x, previous.y, previous.z),
+			Vector3(previous.x, previous.y, attempted.z)]:
+		if not gm.is_cell_blocked(gm.world_to_cell(slide)):
+			global_position = slide
+			return
+	global_position = previous
+	velocity = Vector3.ZERO
 
 func _get_grid_manager() -> Node:
 	if not is_inside_tree():
@@ -941,10 +1010,18 @@ func check_obstacle() -> Node:
 ## piece a subclass overrides. The base is the plain answer: whatever is close
 ## enough to be in the way. PackDino and SiegeDino sharpen it in opposite
 ## directions -- see those files.
+## The nearest building worth stopping for, or null.
+##
+## "Worth stopping for" is _should_bite: a turret or the wreck always, a wall only when
+## it actually blocks the way. Filtering HERE rather than at the moment of biting is the
+## point -- a target is something you commit to, claim a slot on and walk towards, and
+## committing to something you will not bite is how a raid ends up milling about in
+## front of a fence it could simply have walked around.
 func _find_threat_priority_target() -> Node:
 	if not is_inside_tree():
 		return null
-	return _nearest_building_within(building_interest_range())
+	var nearest: Node = _nearest_building_within(building_interest_range())
+	return nearest if _should_bite(nearest) else null
 
 # ==============================================================================
 # What a species wants -- the surface a behaviour subclass overrides

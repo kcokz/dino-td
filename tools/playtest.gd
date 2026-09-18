@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup", "gap"]
+		names = ["open", "fence", "cabin", "closeup", "gap", "raid"]
 
 	for name in names:
 		await _run(String(name))
@@ -66,6 +66,8 @@ func _run(name: String) -> void:
 			await _scenario_closeup()
 		"gap":
 			await _scenario_gap()
+		"raid":
+			await _scenario_raid()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -169,6 +171,76 @@ func _scenario_gap() -> void:
 	var closed: float = span - hero.global_position.distance_to(goal)
 	print("[playtest] gap: hero closed %.1fm of %.1fm" % [closed, span])
 	await _portrait("gap_after", gm.cell_to_world(doorway), 9.0, true)
+
+## A raid meeting a fence, measured rather than watched.
+##
+## Reported as "恐龙来进攻的时候并不会绕过栅栏去进攻 cabin，并且会停在离栅栏比较远的地方".
+## The arc here is the one in that report: a curve of stakes in front of the wreck, open
+## at both ends, which a raid is supposed to walk around.
+##
+## What it prints is ground COVERED. That is the only honest measure, because a dinosaur
+## stalled against a fence and a dinosaur walking round it look identical in a still, and
+## the failure this exists to catch is a raid that stops moving without stopping to eat.
+##
+## `raidsealed` walls the wreck in completely instead, which has to come out the other
+## way: nobody gets through, and the fence is what gets chewed.
+func _scenario_raid() -> void:
+	_grant({"wood": 400})
+	var cfg := root.get_node_or_null("Config")
+	var gm = _main.grid_manager
+	var sealed_ring: bool = OS.get_cmdline_user_args().has("raidsealed")
+	var step: float = float(cfg.TILE_SIZE) / float(cfg.get_cell_divisions("wall"))
+	var core: Vector3 = gm.cell_to_world(cfg.MAP["default_core_cell"])
+
+	var placed: int = 0
+	if sealed_ring:
+		var seen: Dictionary = {}
+		var around: int = int(ceil(TAU * 4.0 / step)) * 4
+		for i in range(around):
+			var a: float = TAU * float(i) / float(around)
+			var at: Vector3 = core + Vector3(sin(a) * 4.0, 0.0, cos(a) * 4.0)
+			var fine: Vector2i = gm.world_to_fine_cell(at, cfg.get_cell_divisions("wall"))
+			if seen.has(fine):
+				continue
+			seen[fine] = true
+			_build_at("wall", gm.fine_cell_to_world(fine, cfg.get_cell_divisions("wall")))
+			placed += 1
+	else:
+		var n: int = 11
+		for i in range(n):
+			var ang: float = lerp(-0.9, 0.9, float(i) / float(n - 1))
+			_build_at("wall", core + Vector3(sin(ang) * 5.0, 0.0, -cos(ang) * 5.0))
+			placed += 1
+	await _wait(4)
+
+	var dino_script := load("res://scripts/entities/Dino.gd")
+	var raid: Array[Node] = []
+	var started: Array[float] = []
+	for i in range(5):
+		var d = dino_script.new()
+		_main.add_child(d)
+		d.setup("raptor")
+		d.global_position = core + Vector3(-4.0 + float(i) * 2.0, 0.0, -18.0)
+		d.set_waypoints([core])
+		raid.append(d)
+		started.append(d.global_position.distance_to(core))
+	await _wait(4)
+	await _portrait("raid_before", core + Vector3(0.0, 0.0, -7.0), 14.0, true)
+
+	await _wait(18 * 60)
+
+	var total: float = 0.0
+	var chewing: int = 0
+	for i in range(raid.size()):
+		var d = raid[i]
+		if not is_instance_valid(d):
+			continue
+		total += started[i] - d.global_position.distance_to(core)
+		if int(d.current_state) == int(d.State.ATTACKING):
+			chewing += 1
+	print("[playtest] raid(%s): %d stakes, average %.1fm closed of %.1fm in 18s, %d biting"
+		% ["sealed" if sealed_ring else "arc", placed, total / float(raid.size()), started[0], chewing])
+	await _portrait("raid_after", core + Vector3(0.0, 0.0, -7.0), 14.0, true)
 
 ## Puts a camera at eye level a short way off `at`, looking at it, and takes one frame.
 ## The camera is removed again afterwards, so the level is left exactly as it was.

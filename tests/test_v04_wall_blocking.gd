@@ -159,8 +159,12 @@ func test_05_a_sealed_way_makes_the_wall_the_target() -> void:
 	assert_true(d._should_bite(blocker), "Which is now worth biting")
 
 func test_06_a_dinosaur_that_is_blocked_never_just_stands_there() -> void:
-	# The symptom this began as: neither moving nor attacking. Whatever else happens,
-	# a dinosaur facing a sealed way must come out of the decision with a target.
+	# The symptom this began as: neither moving nor attacking. Whatever else happens, a
+	# dinosaur facing a sealed way has to come out of the decision DOING one of them.
+	#
+	# It used to have to be attacking on the spot, which was wrong in its own way: the
+	# fence here is sixteen metres off, and biting something you are nowhere near is the
+	# same standing still by another name.
 	var gm = _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
@@ -168,10 +172,29 @@ func test_06_a_dinosaur_that_is_blocked_never_just_stands_there() -> void:
 	var d = _dino_at(gm, Vector2i(0, 4), goal)
 	await wait_frames(1)
 
-	d.advance_towards_waypoint(0.016)
-	assert_eq(int(d.current_state), int(d.State.ATTACKING), "It commits to attacking")
-	assert_not_null(d.current_target, "With something to attack")
+	var was_at: Vector3 = d.global_position
+	d.advance_towards_waypoint(0.05)
+	assert_not_null(d.current_target, "It commits to something")
 	assert_true(d._is_target_valid(d.current_target), "And that something is real")
+	assert_true(d._is_wall(d.current_target), "Which is the fence in its way")
+	assert_gt(was_at.distance_to(d.global_position), 0.0, "And it is moving towards it")
+
+func test_06b_it_bites_once_it_gets_there() -> void:
+	# The other end of the same walk. Put it against the fence and it stops walking and
+	# starts eating, because now there is something in reach worth eating.
+	var gm = _grid([])
+	await wait_frames(1)
+	var goal := Vector2i(0, -4)
+	_enclose(gm, goal, 1)
+	# Right up against the northern face of the ring, where the next stake is in reach.
+	var d = _dino_at(gm, Vector2i(0, -7), goal)
+	d.global_position = gm.cell_to_world(Vector2i(0, -5)) + Vector3(0.0, 0.0, -1.5)
+	await wait_frames(1)
+	assert_true(d._way_is_sealed(), "The goal is walled in")
+
+	d.advance_towards_waypoint(0.05)
+	assert_eq(int(d.current_state), int(d.State.ATTACKING), "In reach, so it commits to biting")
+	assert_true(d._is_wall(d.current_target), "The stake in the way")
 
 func test_07_the_way_opening_lets_the_dinosaur_go() -> void:
 	# Chewing through one stake, or the player demolishing one, has to release it. The
