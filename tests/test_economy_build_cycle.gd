@@ -1,9 +1,10 @@
-# res://tests/test_economy_ap_challenge.gd
-# Empirical Challenger 2 Test Suite for Milestone 3:
-# Stress tests economy production and AP recovery:
-# 1. 10+ concurrent LumberHuts producing wood over multiple turns.
-# 2. Destroying LumberHuts during ATTACK phase and verifying 0 wood payout in PRODUCE phase.
-# 3. Dynamic AP recovery, capacity adjustments with building bonuses, and state boundary resilience.
+# res://tests/test_economy_build_cycle.gd
+# The place / destroy / rebuild loop, and what it costs.
+#
+# This was test_economy_ap_challenge.gd, and three of its four tests were about action
+# points. AP is gone, so they are too. What is left is the part that still decides
+# something: a building is paid for out of the wallet, and a cell freed by destruction
+# can be built on again.
 extends "res://tests/test_base.gd"
 
 ## Wood this suite seeds in before_each. It asserts exact balances, so it owns
@@ -64,8 +65,6 @@ func before_each() -> void:
 		# This suite asserts exact balances, so pin its own wallet and stay decoupled
 		# from whatever the opening balance happens to be.
 		if "current_phase" in game_state_node: game_state_node.current_phase = 0
-		if "current_ap" in game_state_node: game_state_node.current_ap = 3
-		if "max_ap" in game_state_node: game_state_node.max_ap = 3
 		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 		if "active_buildings" in game_state_node: game_state_node.active_buildings.clear()
@@ -134,11 +133,6 @@ func _get_wood() -> int:
 		return game_state_node.resources.get("wood", 0)
 	return -1
 
-func _get_ap() -> int:
-	if game_state_node != null and "current_ap" in game_state_node:
-		return game_state_node.current_ap
-	return -1
-
 func _get_phase() -> int:
 	if game_state_node != null and "current_phase" in game_state_node:
 		return int(game_state_node.current_phase)
@@ -149,16 +143,9 @@ func _get_phase() -> int:
 # ==============================================================================
 
 
-
-
 # ==============================================================================
 # Section 2: Destroying LumberHuts During ATTACK Phase & Verifying 0 Wood Payout
 # ==============================================================================
-
-
-
-
-
 
 
 # ==============================================================================
@@ -182,15 +169,12 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	assert_not_null(grid_mgr, "GridManager must exist")
 	assert_not_null(build_sys, "BuildSystem must exist")
 
-	# Seeded above; AP still starts at 3
-	assert_eq(_get_ap(), 3, "Initial AP is 3")
 	assert_eq(_get_wood(), wood, "Wood starts at the seeded budget")
 
 	var cell0 = Vector2i(1, 1)
 	var cell1 = Vector2i(1, 2)
 	var cell2 = Vector2i(1, 3)
 
-	# Place 2 LumberHuts via BuildSystem (2 AP plus two hut costs)
 	var b0 = build_sys.place_building("wall", cell0)
 	var b1 = build_sys.place_building("wall", cell1)
 
@@ -200,8 +184,6 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	_cleanup_nodes.append(b0)
 	_cleanup_nodes.append(b1)
 
-	# Remaining AP: 3 - 2 = 1. Wood: the seeded budget minus two hut costs.
-	assert_eq(_get_ap(), 1, "AP is 1 after placing 2 huts")
 	wood -= hut_cost * 2
 	assert_eq(_get_wood(), wood, "Wood reduced by two hut costs")
 	assert_true(grid_mgr.is_cell_occupied(cell0), "cell0 occupied")
@@ -229,7 +211,6 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	# Conclude turn -> return to PLAN phase (Turn 2)
 	game_state_node.advance_phase()
 	assert_eq(_get_phase(), 0, "Returned to PLAN phase")
-	assert_eq(_get_ap(), 3, "AP reset to max_ap (3)")
 
 	# Player rebuilds on vacated cell0
 	assert_true(build_sys.can_place_building("wall", cell0), "Can build on vacated cell0")
@@ -237,7 +218,6 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	assert_not_null(b_new, "New LumberHut built successfully on vacated cell0")
 	_cleanup_nodes.append(b_new)
 	assert_true(grid_mgr.is_cell_occupied(cell0), "cell0 occupied once again")
-	assert_eq(_get_ap(), 2, "AP deducted for new build (3 -> 2)")
 	wood -= hut_cost
 	assert_eq(_get_wood(), wood, "Wood deducted for the rebuilt hut")
 
@@ -245,7 +225,6 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 	var b2 = build_sys.place_building("wall", cell2)
 	assert_not_null(b2, "b2 placed")
 	_cleanup_nodes.append(b2)
-	assert_eq(_get_ap(), 1, "AP deducted for 2nd build in Turn 2 (2 -> 1)")
 	wood -= hut_cost
 	assert_eq(_get_wood(), wood, "Wood deducted for the 2nd build in Turn 2")
 
@@ -257,126 +236,7 @@ func test_challenge_grid_integrated_placement_attack_destruction_and_rebuilding(
 
 	game_state_node.advance_phase()
 	assert_eq(_get_phase(), 0, "Turn 3 back in PLAN")
-	assert_eq(_get_ap(), 3, "Turn 3 AP reset to 3")
 
 
 # ==============================================================================
-# Section 4: Action Point (AP) Recovery & Dynamic Capacity Stress Testing
 # ==============================================================================
-
-func test_challenge_ap_recovery_multi_turn_stress() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	assert_not_null(event_bus_node, "EventBus must exist")
-	if game_state_node == null or event_bus_node == null: return
-
-	# 10 turn loop stress-testing AP drain and recovery
-	for turn in range(1, 11):
-		assert_eq(_get_phase(), 0, "Turn %d in PLAN" % turn)
-		assert_eq(_get_ap(), 3, "Turn %d starts with full AP (3)" % turn)
-
-		var spend_amount = (turn % 3) + 1 # cycles 2, 3, 1, 2, 3...
-		assert_true(game_state_node.spend_ap(spend_amount), "Turn %d spend %d AP" % [turn, spend_amount])
-		assert_eq(_get_ap(), 3 - spend_amount, "Turn %d AP after spend" % turn)
-
-		# ATTACK phase: AP must not change
-		game_state_node.trigger_end_action()
-		assert_eq(_get_phase(), 1, "Turn %d ATTACK" % turn)
-		assert_eq(_get_ap(), 3 - spend_amount, "AP locked in ATTACK")
-
-		# PRODUCE phase: AP must not change
-		event_bus_node.wave_ended.emit(turn)
-		assert_eq(_get_phase(), 2, "Turn %d PRODUCE" % turn)
-		assert_eq(_get_ap(), 3 - spend_amount, "AP locked in PRODUCE")
-
-		# Watch ap_changed signal when transitioning back to PLAN
-		var ap_watcher = watch_signal(event_bus_node, "ap_changed")
-		game_state_node.advance_phase()
-		assert_eq(_get_phase(), 0, "Turn %d back to PLAN" % turn)
-		assert_eq(_get_ap(), 3, "Turn %d AP reset to 3 upon entering PLAN" % turn)
-		assert_true(ap_watcher.emitted, "ap_changed emitted on return to PLAN")
-		if not ap_watcher.last_args.is_empty():
-			assert_eq(int(ap_watcher.last_args[0]), 3, "ap_changed current arg is 3")
-			assert_eq(int(ap_watcher.last_args[1]), 3, "ap_changed max arg is 3")
-
-func test_challenge_ap_recovery_with_dynamic_building_bonuses() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	assert_not_null(event_bus_node, "EventBus must exist")
-	if game_state_node == null or event_bus_node == null: return
-
-	assert_eq(game_state_node.max_ap, 3, "Base max_ap is 3")
-
-	# Create 3 mock building nodes with ap_bonus = 1 extending Building.gd
-	var bonus_script = GDScript.new()
-	bonus_script.source_code = "extends 'res://scripts/entities/Building.gd'\nvar ap_bonus: int = 1\n"
-	bonus_script.reload()
-
-	var b_bonus1 = bonus_script.new()
-	var b_bonus2 = bonus_script.new()
-	var b_bonus3 = bonus_script.new()
-	_cleanup_nodes.append(b_bonus1)
-	_cleanup_nodes.append(b_bonus2)
-	_cleanup_nodes.append(b_bonus3)
-
-	# Register all 3 bonus buildings
-	game_state_node.register_building(b_bonus1)
-	game_state_node.register_building(b_bonus2)
-	game_state_node.register_building(b_bonus3)
-
-	assert_eq(game_state_node.max_ap, 6, "max_ap raised to 3 + 3 = 6")
-
-	# Enter PLAN phase: AP resets to new max_ap (6)
-	game_state_node.reset_ap()
-	assert_eq(_get_ap(), 6, "AP resets to 6 with 3 bonus buildings")
-
-	# Spend 6 AP in PLAN
-	assert_true(game_state_node.spend_ap(6), "Spend all 6 AP")
-	assert_eq(_get_ap(), 0, "AP is 0")
-
-	# Enter ATTACK
-	game_state_node.trigger_end_action()
-	assert_eq(_get_phase(), 1, "In ATTACK phase")
-
-	# Destroy 2 of the 3 bonus buildings during ATTACK
-	b_bonus1.destroy()
-	b_bonus2.destroy()
-
-	# max_ap dynamically updates to 3 + 1 = 4
-	assert_eq(game_state_node.max_ap, 4, "max_ap dropped to 4 after destroying 2 bonus buildings")
-
-	# Enter PRODUCE then back to PLAN
-	event_bus_node.wave_ended.emit(1)
-	game_state_node.advance_phase()
-	assert_eq(_get_phase(), 0, "Back in PLAN")
-	assert_eq(_get_ap(), 4, "AP resets to new max_ap (4)")
-
-	# Destroy the final bonus building during next ATTACK
-	game_state_node.trigger_end_action()
-	b_bonus3.destroy()
-	assert_eq(game_state_node.max_ap, 3, "max_ap reverted to Config.BASE_AP (3)")
-
-	# Return to PLAN -> AP resets to 3
-	event_bus_node.wave_ended.emit(2)
-	game_state_node.advance_phase()
-	assert_eq(_get_phase(), 0, "Back in PLAN")
-	assert_eq(_get_ap(), 3, "AP fully restored to base 3")
-
-func test_challenge_ap_boundary_resilience() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	if game_state_node == null: return
-
-	# Corrupt AP to negative
-	game_state_node.current_ap = -50
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap false when AP negative")
-	game_state_node.reset_ap()
-	assert_eq(_get_ap(), 3, "reset_ap() restores negative AP to max_ap (3)")
-
-	# Corrupt AP to overflow
-	game_state_node.current_ap = 999
-	game_state_node.recalculate_max_ap()
-	assert_eq(_get_ap(), 3, "recalculate_max_ap clamps overflow AP to max_ap (3)")
-
-	# Spend bounds
-	assert_false(game_state_node.spend_ap(4), "Cannot spend 4 AP when current is 3")
-	assert_false(game_state_node.spend_ap(-1), "Cannot spend negative AP")
-	assert_eq(_get_ap(), 3, "AP unchanged after invalid spend attempts")
-

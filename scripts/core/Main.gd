@@ -772,10 +772,7 @@ func _can_afford_building(type_id: String) -> bool:
 		return false
 	var b_data: Dictionary = cfg.BUILDINGS[type_id]
 	var cost: Dictionary = b_data.get("cost", {})
-	if "infinite_ap" in gs and gs.infinite_ap:
-		return gs.can_afford(cost)
-	var ap_cost: int = int(b_data.get("ap_cost", 1))
-	return gs.can_spend_ap(ap_cost) and gs.can_afford(cost)
+	return gs.can_afford(cost)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if camera == null or grid_manager == null or build_system == null:

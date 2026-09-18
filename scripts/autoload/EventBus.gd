@@ -23,8 +23,6 @@ signal game_lost()
 # ==============================================================================
 # 2. Economy & Action Point Signals
 # ==============================================================================
-## Emitted whenever current AP or max AP changes (spend, reset, building bonus).
-signal ap_changed(current: int, max: int)
 
 ## Emitted whenever player resource inventory is modified (spend, harvest).
 signal resources_changed(res: Dictionary)

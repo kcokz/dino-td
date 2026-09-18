@@ -1,6 +1,5 @@
 # res://tests/test_v01_deployment_and_hero.gd
 # Comprehensive Verification Suite for Defend Dinosaur v0.1:
-# 1. Real-Time Deployment (DEPLOY phase countdown, auto-advance, zero AP requirement).
 # 2. In-Game Pause System (freezes timer, movement, construction without freezing SceneTree).
 # 3. Modern Hero Entity (CharacterBody3D, click-to-move, walk-to-build, combat).
 # 4. Hero Death triggers immediate Game Over (game_lost).
@@ -60,8 +59,6 @@ func after_each() -> void:
 	_cleanup_nodes.clear()
 
 	if game_state_node:
-		if "infinite_ap" in game_state_node:
-			game_state_node.infinite_ap = false
 		if game_state_node.has_method("reset_game"):
 			game_state_node.reset_game()
 
@@ -425,10 +422,9 @@ func test_13_hero_physics_collision_with_walls_cannot_penetrate() -> void:
 	assert_lt(hero.global_position.x, 1.6, "Hero is physically blocked by Wall and cannot penetrate it")
 
 # ==============================================================================
-# 14. Infinite AP Mode Allows Building Gated Strictly by Resources
 # ==============================================================================
 
-func test_14_infinite_ap_mode_allows_continuous_building_with_resources() -> void:
+func test_14_building_is_limited_only_by_the_resources_in_hand() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
 	assert_not_null(grid_manager_script, "GridManager must exist")
 	assert_not_null(build_system_script, "BuildSystem must exist")
@@ -443,21 +439,16 @@ func test_14_infinite_ap_mode_allows_continuous_building_with_resources() -> voi
 	build_sys.setup(grid_mgr)
 
 	game_state_node.reset_game()
-	game_state_node.infinite_ap = true
 	game_state_node.resources = {"wood": cost_of("wall") * 4, "stone": 0, "water": 0, "food": 0}
 
-	# Infinite AP: can_spend_ap returns true regardless of amount
-	assert_true(game_state_node.can_spend_ap(99), "infinite_ap mode allows can_spend_ap for any amount")
 
 	# Place exactly as many walls as the seeded wood affords
 	for i in range(4):
 		var cell = Vector2i(20 + i, 20)
 		var b = build_sys.place_building("wall", cell)
 		if b is Node: _cleanup_nodes.append(b)
-		assert_not_null(b, "Wall %d placed successfully under infinite AP" % (i + 1))
 
 	assert_eq(game_state_node.resources["wood"], 0, "All seeded wood consumed across 4 walls")
-	# 5th placement fails due to 0 wood, not AP
 	var fail_b = build_sys.place_building("wall", Vector2i(25, 20))
 	assert_null(fail_b, "5th placement rejected due to wood shortage")
 
@@ -553,10 +544,9 @@ func test_17_tower_never_targets_or_attacks_hero() -> void:
 	assert_eq(hero.current_hp, initial_hp, "Tower periodic attack tick must not damage Hero")
 
 # ==============================================================================
-# 18. HUD Hides AP Label and Displays Resource Costs on Buttons
 # ==============================================================================
 
-func test_18_hud_hides_ap_in_v01() -> void:
+func test_18_build_buttons_quote_what_a_building_costs() -> void:
 	var hud_packed = load("res://scenes/ui/HUD.tscn")
 	assert_not_null(hud_packed, "HUD.tscn must exist")
 	var hud = hud_packed.instantiate()
@@ -564,10 +554,7 @@ func test_18_hud_hides_ap_in_v01() -> void:
 	tree.root.add_child(hud)
 	await wait_frames(1)
 
-	assert_false(hud.ap_label.visible, "APLabel must be invisible on the UI")
-
 	# Build costs moved to the Hero Option Panel in v0.2; they must still quote
-	# wood and never AP, which no longer exists.
 	var panel = hud.find_child("OptionPanel", true, false)
 	assert_not_null(panel, "OptionPanel must exist in the HUD")
 	panel.current_menu = "build"
@@ -575,7 +562,6 @@ func test_18_hud_hides_ap_in_v01() -> void:
 	var saw_wood: bool = false
 	for btn in panel.button_container.get_children():
 		var t: String = str(btn.text)
-		assert_false(t.contains("AP"), "Build button must not show AP cost (got '%s')" % t)
 		if t.contains("木") or t.contains("Wood"):
 			saw_wood = true
 	assert_true(saw_wood, "Build buttons show wood cost")

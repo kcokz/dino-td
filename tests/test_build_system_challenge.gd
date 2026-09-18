@@ -3,7 +3,6 @@
 # Rigorously stress-tests BuildSystem and Building Lifecycles against edge cases:
 # 1. Duplicate building placement & rapid duplicate attempts across all types and quadrants.
 # 2. Placement phase enforcement (blocked in ATTACK, blocked in PRODUCE, allowed only in PLAN).
-# 3. Placement AP constraints (blocked when AP=0, negative AP, boundary step-downs).
 # 4. Placement resource constraints (partial wood, multi-resource shortage, atomic rollback).
 # 5. Re-placement reclamation on cells after building destruction (lethal damage, direct destroy, stale free).
 # 6. CoreCampfire lifecycle, game_lost emission, and absolute halting of all future placements.
@@ -63,7 +62,6 @@ func before_each() -> void:
 		# reset_game() seeds Config.INITIAL_RESOURCES, which is production tuning.
 		# This suite asserts exact balances, so pin its own wallet and stay decoupled
 		# from whatever the opening balance happens to be.
-		if "current_ap" in game_state_node: game_state_node.current_ap = 3
 		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 		if "current_phase" in game_state_node: game_state_node.current_phase = 0
@@ -144,15 +142,6 @@ func _get_stone() -> int:
 		return game_state_node.resources.get("stone", 0)
 	return -1
 
-func _get_ap() -> int:
-	if game_state_node != null and "current_ap" in game_state_node:
-		return game_state_node.current_ap
-	return -1
-
-# ==============================================================================
-# Category 1: Duplicate Placement Adversarial Challenges
-# ==============================================================================
-
 func test_challenge_duplicate_placement_identical_type() -> void:
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
@@ -162,7 +151,6 @@ func test_challenge_duplicate_placement_identical_type() -> void:
 	var b1 = build_sys.place_building("wall", cell)
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "Initial wall placement must succeed")
-	assert_eq(_get_ap(), 2, "AP decremented to 2 after initial placement")
 	assert_eq(_get_wood(), SEED_WOOD - cost_of("wall"), "Wood decremented by the wall cost")
 
 	var watcher = watch_signal(event_bus_node, "building_placed")
@@ -171,7 +159,6 @@ func test_challenge_duplicate_placement_identical_type() -> void:
 	var b2 = build_sys.place_building("wall", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
 	assert_null(b2, "Duplicate placement of same type must return null")
-	assert_eq(_get_ap(), 2, "AP must NOT be deducted on duplicate placement attempt")
 	assert_eq(_get_wood(), SEED_WOOD - cost_of("wall"), "Wood must NOT be deducted again on duplicate placement")
 	assert_false(watcher.emitted, "building_placed signal must NOT be emitted for duplicate attempt")
 	assert_eq(grid_mgr.get_building_at(cell), b1, "Cell must retain original building instance")
@@ -186,7 +173,6 @@ func test_challenge_duplicate_placement_different_types() -> void:
 	if initial_wall is Node: _cleanup_nodes.append(initial_wall)
 	assert_not_null(initial_wall, "Initial wall placement succeeds")
 
-	var ap_before = _get_ap()
 	var wood_before = _get_wood()
 
 	var types_to_test = ["tower", "wall", "core"]
@@ -196,7 +182,6 @@ func test_challenge_duplicate_placement_different_types() -> void:
 		var rejected = build_sys.place_building(t, cell)
 		if rejected is Node: _cleanup_nodes.append(rejected)
 		assert_null(rejected, "place_building for type '%s' on occupied cell must return null" % t)
-		assert_eq(_get_ap(), ap_before, "AP unchanged after attempting type '%s'" % t)
 		assert_eq(_get_wood(), wood_before, "Wood unchanged after attempting type '%s'" % t)
 		assert_false(watcher.emitted, "No building_placed signal emitted for type '%s'" % t)
 		watcher.disconnect_watcher()
@@ -218,7 +203,6 @@ func test_challenge_duplicate_placement_preoccupied_grid() -> void:
 	var b = build_sys.place_building("wall", cell)
 	if b is Node: _cleanup_nodes.append(b)
 	assert_null(b, "place_building must return null when cell is preoccupied")
-	assert_eq(_get_ap(), 3, "AP remains unspent")
 	assert_eq(_get_wood(), SEED_WOOD, "Wood remains unspent")
 
 func test_challenge_duplicate_placement_extreme_quadrants() -> void:
@@ -234,7 +218,6 @@ func test_challenge_duplicate_placement_extreme_quadrants() -> void:
 	]
 
 	for c in test_coords:
-		game_state_node.current_ap = 3
 		game_state_node.resources["wood"] = 10
 
 		var b = build_sys.place_building("wall", c)
@@ -266,7 +249,6 @@ func test_challenge_rapid_duplicate_placement_loop() -> void:
 
 	assert_eq(successful_count, 1, "Exactly 1 placement must succeed in rapid loop on same cell")
 	assert_eq(rejected_count, 49, "Exactly 49 duplicate attempts must be rejected")
-	assert_eq(_get_ap(), 2, "AP decremented exactly once (3 -> 2)")
 	assert_eq(_get_wood(), SEED_WOOD - cost_of("wall"), "Wood decremented exactly once")
 
 # ==============================================================================
@@ -290,7 +272,6 @@ func test_challenge_placement_blocked_during_attack_phase() -> void:
 	if b is Node: _cleanup_nodes.append(b)
 
 	assert_null(b, "place_building must return null during ATTACK phase")
-	assert_eq(_get_ap(), 3, "AP must remain unchanged during ATTACK attempt")
 	assert_eq(_get_wood(), SEED_WOOD, "Wood must remain unchanged during ATTACK attempt")
 	assert_false(watcher.emitted, "No building_placed signal during ATTACK phase")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell must remain empty")
@@ -312,7 +293,6 @@ func test_challenge_placement_blocked_during_produce_phase() -> void:
 	if b is Node: _cleanup_nodes.append(b)
 
 	assert_null(b, "place_building must return null during PRODUCE phase")
-	assert_eq(_get_ap(), 3, "AP must remain unchanged during PRODUCE attempt")
 	assert_eq(_get_wood(), SEED_WOOD, "Wood must remain unchanged during PRODUCE attempt")
 	assert_false(watcher.emitted, "No building_placed signal during PRODUCE phase")
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell must remain empty")
@@ -328,7 +308,6 @@ func test_challenge_placement_lifecycle_across_turn_cycle() -> void:
 	var b1 = build_sys.place_building("wall", c1)
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "Placement in PLAN phase succeeds")
-	assert_eq(_get_ap(), 2, "AP is 2")
 
 	# 2. Advance to ATTACK: Building blocked
 	game_state_node.advance_phase()
@@ -347,15 +326,12 @@ func test_challenge_placement_lifecycle_across_turn_cycle() -> void:
 	if b3 is Node: _cleanup_nodes.append(b3)
 	assert_null(b3, "place_building returns null in PRODUCE phase")
 
-	# 4. Advance back to PLAN: AP resets to max (3), Building allowed again
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), 0, "Phase advanced back to PLAN")
-	assert_eq(_get_ap(), 3, "AP automatically resets to max (3) on returning to PLAN")
 	assert_true(build_sys.can_place_building("wall", c2), "Placement in new PLAN phase permitted")
 	var b4 = build_sys.place_building("wall", c2)
 	if b4 is Node: _cleanup_nodes.append(b4)
 	assert_not_null(b4, "Placement succeeds in new PLAN phase")
-	assert_eq(_get_ap(), 2, "AP decremented to 2")
 
 func test_challenge_placement_rejected_on_corrupted_phase() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -372,75 +348,6 @@ func test_challenge_placement_rejected_on_corrupted_phase() -> void:
 	assert_null(b, "place_building must return null on corrupted phase")
 
 # ==============================================================================
-# Category 3: Placement when AP = 0 and AP Boundaries
-# ==============================================================================
-
-func test_challenge_placement_rejected_when_ap_zero() -> void:
-	var grid_mgr = _create_grid_manager()
-	var build_sys = _create_build_system(grid_mgr)
-	if grid_mgr == null or build_sys == null or game_state_node == null: return
-
-	game_state_node.current_ap = 0
-	var test_types = ["wall", "tower"]
-
-	for i in range(test_types.size()):
-		var t = test_types[i]
-		var cell = Vector2i(20 + i, 20)
-		var watcher = watch_signal(event_bus_node, "building_placed")
-
-		assert_false(build_sys.can_place_building(t, cell), "can_place_building for '%s' when AP=0 must return false" % t)
-		var b = build_sys.place_building(t, cell)
-		if b is Node: _cleanup_nodes.append(b)
-
-		assert_null(b, "place_building for '%s' when AP=0 must return null" % t)
-		assert_eq(_get_ap(), 0, "AP must remain 0")
-		assert_eq(_get_wood(), SEED_WOOD, "Wood must remain 10")
-		assert_false(watcher.emitted, "building_placed must not emit when AP=0")
-		assert_false(grid_mgr.is_cell_occupied(cell), "Cell %s must remain unoccupied" % str(cell))
-		watcher.disconnect_watcher()
-
-func test_challenge_placement_negative_ap_rejection() -> void:
-	var grid_mgr = _create_grid_manager()
-	var build_sys = _create_build_system(grid_mgr)
-	if grid_mgr == null or build_sys == null or game_state_node == null: return
-
-	# Corrupted negative AP state
-	game_state_node.current_ap = -5
-	var cell = Vector2i(30, 30)
-
-	assert_false(build_sys.can_place_building("wall", cell), "Negative AP (-5) must be rejected")
-	var b = build_sys.place_building("wall", cell)
-	if b is Node: _cleanup_nodes.append(b)
-	assert_null(b, "place_building with negative AP must return null")
-	assert_eq(_get_ap(), -5, "AP remains untouched")
-	assert_eq(_get_wood(), SEED_WOOD, "Wood remains untouched")
-
-func test_challenge_ap_depletion_boundary_enforcement() -> void:
-	var grid_mgr = _create_grid_manager()
-	var build_sys = _create_build_system(grid_mgr)
-	if grid_mgr == null or build_sys == null or game_state_node == null: return
-
-	# Set AP to exactly 1, Wood to 10
-	game_state_node.current_ap = 1
-	var cell_success = Vector2i(40, 40)
-	var cell_fail = Vector2i(40, 41)
-
-	# 1. First placement consumes last AP
-	assert_true(build_sys.can_place_building("wall", cell_success), "Placement with AP=1 should be allowed")
-	var b1 = build_sys.place_building("wall", cell_success)
-	if b1 is Node: _cleanup_nodes.append(b1)
-	assert_not_null(b1, "Placement consumes final 1 AP")
-	assert_eq(_get_ap(), 0, "AP reaches 0")
-
-	# 2. Subsequent placements immediately blocked
-	assert_false(build_sys.can_place_building("wall", cell_fail), "Immediate subsequent placement blocked with AP=0")
-	var b2 = build_sys.place_building("wall", cell_fail)
-	if b2 is Node: _cleanup_nodes.append(b2)
-	assert_null(b2, "place_building returns null with AP=0")
-	assert_eq(_get_ap(), 0, "AP does not go below 0")
-
-# ==============================================================================
-# Category 4: Partial Resources & Transaction Atomicity Challenges
 # ==============================================================================
 
 func test_challenge_partial_wood_rejection_tower() -> void:
@@ -453,7 +360,6 @@ func test_challenge_partial_wood_rejection_tower() -> void:
 	for idx in range(wood_levels.size()):
 		var w = wood_levels[idx]
 		game_state_node.resources["wood"] = w
-		game_state_node.current_ap = 3
 		var cell = Vector2i(50, 50 + idx)
 
 		var watcher = watch_signal(event_bus_node, "building_placed")
@@ -463,7 +369,6 @@ func test_challenge_partial_wood_rejection_tower() -> void:
 
 		assert_null(b, "Tower placement with %d wood must return null" % w)
 		assert_eq(_get_wood(), w, "Wood remains %d (no partial deduction)" % w)
-		assert_eq(_get_ap(), 3, "AP remains 3 (no AP deduction or leak)")
 		assert_false(watcher.emitted, "No building_placed signal")
 		assert_false(grid_mgr.is_cell_occupied(cell), "Cell %s remains unoccupied" % str(cell))
 		watcher.disconnect_watcher()
@@ -484,7 +389,6 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	var stone_price: int = cost_of("tower", "stone")
 	assert_gt(wood_price, 0, "The turret costs wood")
 	assert_gt(stone_price, 0, "And stone, which is what makes a multi-resource test possible")
-	game_state_node.current_ap = 3
 
 	# Case A: enough wood, one stone short.
 	game_state_node.resources = {"wood": wood_price, "stone": stone_price - 1, "food": 0}
@@ -497,7 +401,6 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	assert_null(b_a, "Placement returns null when stone is insufficient")
 	assert_eq(_get_wood(), wood_price, "Wood must NOT be partially deducted")
 	assert_eq(_get_stone(), stone_price - 1, "Nor stone")
-	assert_eq(_get_ap(), 3, "Nor AP")
 
 	# Case B: enough stone, one wood short.
 	game_state_node.resources = {"wood": wood_price - 1, "stone": stone_price, "food": 0}
@@ -510,7 +413,6 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	assert_null(b_b, "Placement returns null when wood is insufficient")
 	assert_eq(_get_wood(), wood_price - 1, "Wood untouched")
 	assert_eq(_get_stone(), stone_price, "Stone untouched")
-	assert_eq(_get_ap(), 3, "AP untouched")
 
 	# Case C: exactly enough of both, which must go through and take all of it.
 	game_state_node.resources = {"wood": wood_price, "stone": stone_price, "food": 0}
@@ -521,7 +423,6 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	assert_not_null(b_c, "Placement with exactly the price succeeds")
 	assert_eq(_get_wood(), 0, "Wood spent to the last unit")
 	assert_eq(_get_stone(), 0, "And stone with it")
-	assert_eq(_get_ap(), 2, "AP decremented (3 -> 2)")
 
 func test_challenge_missing_resource_keys_handled_safely() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -530,7 +431,6 @@ func test_challenge_missing_resource_keys_handled_safely() -> void:
 
 	# GameState resources dictionary missing key "stone" completely
 	game_state_node.resources = {"wood": 20} # No stone key
-	game_state_node.current_ap = 3
 	var cell = Vector2i(65, 65)
 
 	# The turret requires stone. Must return false safely without crashing.
@@ -540,7 +440,6 @@ func test_challenge_missing_resource_keys_handled_safely() -> void:
 
 	assert_null(b, "Placement safely returns null when resource key is missing")
 	assert_eq(_get_wood(), 20, "Wood remains untouched")
-	assert_eq(_get_ap(), 3, "AP remains untouched")
 
 # ==============================================================================
 # Category 5: Re-placement on Vacated Cells (Lifecycle & Reclamation)
@@ -569,7 +468,6 @@ func test_challenge_replacement_after_lethal_damage() -> void:
 	assert_false(grid_mgr.is_cell_occupied(cell), "GridManager auto-vacated cell on building_destroyed")
 
 	# 3. Re-place a Tower on the same cell
-	game_state_node.current_ap = 3
 	game_state_node.resources["wood"] = 9999 # ample under any balance
 
 	assert_true(build_sys.can_place_building("tower", cell), "can_place_building returns true on vacated cell")
@@ -593,8 +491,6 @@ func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 
 	for idx in range(sequence.size()):
 		var b_type = sequence[idx]
-		# Ensure sufficient AP and wood for each cycle
-		game_state_node.current_ap = 3
 		game_state_node.resources["wood"] = 9999 # ample under any balance
 
 		assert_true(build_sys.can_place_building(b_type, cell), "Cycle %d: cell %s must be eligible for %s" % [idx, str(cell), b_type])
@@ -629,7 +525,6 @@ func test_challenge_replacement_after_direct_destroy_call() -> void:
 	assert_false(grid_mgr.is_cell_occupied(cell), "Direct destroy() vacates cell")
 
 	# Re-place Wall
-	game_state_node.current_ap = 3
 	game_state_node.resources["wood"] = 10
 	var b2 = build_sys.place_building("wall", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
@@ -732,8 +627,6 @@ func test_challenge_campfire_destruction_emits_game_lost_and_halts_all_placement
 		assert_false(grid_mgr.is_cell_occupied(c), "Cell %s must not be occupied" % str(c))
 		place_watcher.disconnect_watcher()
 
-	# Assert AP and resources remained untouched despite attempted placements
-	assert_eq(_get_ap(), 3, "AP remains unspent after game_lost")
 	assert_eq(_get_wood(), SEED_WOOD, "Wood remains unspent after game_lost")
 
 func test_challenge_game_over_state_blocks_placement_even_with_excess_resources() -> void:
@@ -743,7 +636,6 @@ func test_challenge_game_over_state_blocks_placement_even_with_excess_resources(
 
 	# Artificially set game over
 	game_state_node.is_game_over = true
-	game_state_node.current_ap = 99
 	game_state_node.resources = {"wood": 9999, "stone": 9999, "food": 9999}
 
 	var cell = Vector2i(88, 88)
@@ -752,7 +644,6 @@ func test_challenge_game_over_state_blocks_placement_even_with_excess_resources(
 	if b is Node: _cleanup_nodes.append(b)
 
 	assert_null(b, "Game over must unconditionally block place_building")
-	assert_eq(_get_ap(), 99, "AP invariant")
 	assert_eq(_get_wood(), 9999, "Wood invariant")
 
 func test_challenge_cannot_overwrite_living_core_campfire() -> void:
@@ -813,7 +704,6 @@ func test_challenge_replacement_immediately_after_queue_free_same_frame() -> voi
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell vacated immediately upon queue_free in same frame")
 	assert_true(build_sys.can_place_building("tower", cell), "Immediate re-placement permitted in same frame")
 
-	game_state_node.current_ap = 3
 	game_state_node.resources["wood"] = 9999 # ample under any balance
 	var b2 = build_sys.place_building("tower", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
@@ -828,7 +718,6 @@ func test_challenge_rapid_failed_placements_resource_non_leak() -> void:
 	# One wood short of a wall, so every placement below must be rejected.
 	var broke: int = maxi(0, cost_of("wall") - 1)
 	game_state_node.resources["wood"] = broke
-	game_state_node.current_ap = 3
 
 	for i in range(100):
 		var dummy_cell = Vector2i(100 + i, 100)
@@ -836,31 +725,6 @@ func test_challenge_rapid_failed_placements_resource_non_leak() -> void:
 		if b is Node: _cleanup_nodes.append(b)
 
 	assert_eq(_get_wood(), broke, "Wood must be untouched after 100 failed placements (no drift/leak)")
-	assert_eq(_get_ap(), 3, "AP must remain exactly 3 after 100 failed placements (no drift/leak)")
-
-func test_challenge_zero_ap_cost_core_placement_boundary() -> void:
-	var grid_mgr = _create_grid_manager()
-	var build_sys = _create_build_system(grid_mgr)
-	if grid_mgr == null or build_sys == null or game_state_node == null: return
-
-	# When AP = 0, core (ap_cost = 0, cost = {}) can be placed if cell empty
-	game_state_node.current_ap = 0
-	var core_cell = Vector2i(90, 90)
-
-	assert_true(build_sys.can_place_building("core", core_cell), "Core with 0 AP cost can be placed when AP=0")
-	var core = build_sys.place_building("core", core_cell)
-	if core is Node: _cleanup_nodes.append(core)
-
-	assert_not_null(core, "Core successfully placed with 0 AP")
-	assert_eq(_get_ap(), 0, "AP remains 0")
-	assert_true(grid_mgr.is_cell_occupied(core_cell), "Cell occupied by placed core")
-
-	# Normal buildings with ap_cost = 1 must still be blocked
-	var wall_cell = Vector2i(90, 91)
-	assert_false(build_sys.can_place_building("wall", wall_cell), "Wall with 1 AP cost blocked when AP=0")
-	var wall = build_sys.place_building("wall", wall_cell)
-	if wall is Node: _cleanup_nodes.append(wall)
-	assert_null(wall, "Wall placement fails with 0 AP")
 
 func test_challenge_failed_placement_signal_suppression() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -868,7 +732,6 @@ func test_challenge_failed_placement_signal_suppression() -> void:
 	if grid_mgr == null or build_sys == null or event_bus_node == null or game_state_node == null: return
 
 	var placed_watcher = watch_signal(event_bus_node, "building_placed")
-	var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 	var res_watcher = watch_signal(event_bus_node, "resources_changed")
 
 	# Drain wood to 0
@@ -879,6 +742,5 @@ func test_challenge_failed_placement_signal_suppression() -> void:
 
 	assert_null(rejected, "Placement rejected")
 	assert_false(placed_watcher.emitted, "building_placed MUST NOT emit on rejected placement")
-	assert_false(ap_watcher.emitted, "ap_changed MUST NOT emit on rejected placement")
 	assert_false(res_watcher.emitted, "resources_changed MUST NOT emit on rejected placement")
 

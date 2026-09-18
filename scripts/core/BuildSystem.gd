@@ -38,7 +38,7 @@ func _auto_resolve_dependencies() -> void:
 # ==============================================================================
 
 ## Validates whether a building of type_id can be placed at cell.
-## Checks config validity, occupancy, game-over state, AP, and resource affordability.
+## Checks config validity, occupancy, game-over state, and resource affordability.
 ## Which fine cell a placement lands in, for a type that is placed more finely than
 ## one per tile.
 ##
@@ -129,18 +129,6 @@ func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = fa
 	if "current_phase" in gs and int(gs.current_phase) != 0:
 		return false
 	
-	# Check AP
-	var ap_cost: int = int(b_data.get("ap_cost", 1))
-	if is_blueprint or (gs and "infinite_ap" in gs and gs.infinite_ap):
-		ap_cost = 0
-	if ap_cost > 0:
-		if gs.has_method("can_spend_ap"):
-			if not gs.can_spend_ap(ap_cost):
-				return false
-		elif "current_ap" in gs:
-			if gs.current_ap < ap_cost:
-				return false
-	
 	# Check Resources
 	var cost: Dictionary = b_data.get("cost", {})
 	if gs.has_method("can_afford"):
@@ -166,26 +154,9 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 	var cfg = _get_config()
 	var gs = _get_game_state()
 	var b_data: Dictionary = cfg.BUILDINGS[type_id]
-	var ap_cost: int = 0 if (start_as_blueprint or (gs and "infinite_ap" in gs and gs.infinite_ap)) else int(b_data.get("ap_cost", 1))
 	var cost: Dictionary = b_data.get("cost", {})
 	
-	# 1. Deduct AP
-	var ap_spent: bool = false
-	if ap_cost <= 0:
-		ap_spent = true
-	elif gs.has_method("spend_ap"):
-		ap_spent = gs.spend_ap(ap_cost)
-	elif "current_ap" in gs and gs.current_ap >= ap_cost:
-		gs.current_ap -= ap_cost
-		ap_spent = true
-		var eb = _get_event_bus()
-		if eb and eb.has_signal("ap_changed"):
-			eb.ap_changed.emit(gs.current_ap, gs.max_ap)
-	
-	if not ap_spent:
-		return null
-	
-	# 2. Deduct Resources
+	# 1. Deduct Resources
 	var res_spent: bool = false
 	if gs.has_method("spend_resources"):
 		res_spent = gs.spend_resources(cost)
@@ -198,22 +169,17 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 			eb.resources_changed.emit(gs.resources)
 	
 	if not res_spent:
-		# Rollback AP
-		if ap_cost > 0 and "current_ap" in gs:
-			gs.current_ap += ap_cost
 		return null
 	
-	# 3. Create Building Instance
+	# 2. Create Building Instance
 	var building: Node = _instantiate_building(type_id)
 	if building == null:
 		# Rollback costs
 		if gs.has_method("add_resources"):
 			gs.add_resources(cost)
-		if "current_ap" in gs:
-			gs.current_ap += ap_cost
 		return null
 	
-	# 4. Setup entity data & position
+	# 3. Setup entity data & position
 	if building.has_method("setup"):
 		building.setup(type_id, cell)
 	else:
@@ -236,7 +202,7 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 		if "position" in building:
 			building.position = world_pos
 	
-	# 5. Attach to scene tree if container available
+	# 4. Attach to scene tree if container available
 	var target_parent = parent_node
 	if target_parent == null:
 		target_parent = buildings_container
@@ -246,7 +212,7 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 	if target_parent and is_instance_valid(target_parent):
 		target_parent.add_child(building)
 	
-	# 6. Occupy grid cell
+	# 5. Occupy grid cell
 	if grid_manager and grid_manager.has_method("occupy_cell"):
 		var occupied: bool
 		if divisions_for_place > 1:
@@ -257,16 +223,14 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 			# Rollback if cell registration failed unexpectedly
 			if gs.has_method("add_resources"):
 				gs.add_resources(cost)
-			if "current_ap" in gs:
-				gs.current_ap += ap_cost
 			building.free()
 			return null
 	
-	# 7. Start construction if designated as blueprint
+	# 6. Start construction if designated as blueprint
 	if start_as_blueprint and building.has_method("start_construction"):
 		building.start_construction()
 
-	# 8. Broadcast placement event
+	# 7. Broadcast placement event
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_placed"):
 		eb.building_placed.emit(building)

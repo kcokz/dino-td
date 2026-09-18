@@ -48,7 +48,6 @@ func test_challenge_1_all_15_signals_present_and_signatures() -> void:
 		"produce_phase": 0,
 		"game_won": 0,
 		"game_lost": 0,
-		"ap_changed": 2,
 		"resources_changed": 1,
 		"building_placed": 1,
 		"building_destroyed": 1,
@@ -90,7 +89,6 @@ func test_challenge_2_multi_listener_fanout_all_15_signals() -> void:
 		"produce_phase": [],
 		"game_won": [],
 		"game_lost": [],
-		"ap_changed": [2, 3],
 		"resources_changed": [{"wood": 12, "stone": 4}],
 		"building_placed": [dummy_node],
 		"building_destroyed": [dummy_node],
@@ -179,19 +177,6 @@ func test_challenge_3_diverse_typed_arguments() -> void:
 	assert_eq(received_phases[3], -1, "Phase -1 (Boundary)")
 	assert_eq(received_phases[4], 999999, "Phase 999999 (Extreme)")
 	event_bus.disconnect("phase_changed", phase_cb)
-
-	# Test 3.2: ap_changed integers
-	var captured_ap: Array[Array] = []
-	var ap_cb = func(cur: int, max_val: int): captured_ap.append([cur, max_val])
-	event_bus.connect("ap_changed", ap_cb)
-	event_bus.emit_signal("ap_changed", 0, 3)
-	event_bus.emit_signal("ap_changed", 100, 100)
-	event_bus.emit_signal("ap_changed", -5, 10)
-	assert_eq(captured_ap.size(), 3, "3 ap_changed emissions expected")
-	assert_eq(captured_ap[0], [0, 3], "AP (0, 3) captured")
-	assert_eq(captured_ap[1], [100, 100], "AP (100, 100) captured")
-	assert_eq(captured_ap[2], [-5, 10], "AP (-5, 10) captured")
-	event_bus.disconnect("ap_changed", ap_cb)
 
 	# Test 3.3: resources_changed dictionary types and structures
 	var captured_res: Array[Dictionary] = []
@@ -392,22 +377,22 @@ func test_challenge_8_rapid_stress_throughput() -> void:
 		"last_val2": -1
 	}
 
-	var cb1 = func(cur: int, _max_val: int):
+	var cb1 = func(cur: float, _max_val: float):
 		tracker["count1"] += 1
-		tracker["last_val1"] = cur
+		tracker["last_val1"] = int(cur)
 
-	var cb2 = func(cur: int, _max_val: int):
+	var cb2 = func(cur: float, _max_val: float):
 		tracker["count2"] += 1
-		tracker["last_val2"] = cur
+		tracker["last_val2"] = int(cur)
 
-	event_bus.connect("ap_changed", cb1)
-	event_bus.connect("ap_changed", cb2)
+	event_bus.connect("core_hp_changed", cb1)
+	event_bus.connect("core_hp_changed", cb2)
 
 	var iterations = 2000
 	var start_ms = Time.get_ticks_msec()
 
 	for i in range(iterations):
-		event_bus.emit_signal("ap_changed", i, 3)
+		event_bus.emit_signal("core_hp_changed", float(i), 3.0)
 
 	var elapsed_ms = Time.get_ticks_msec() - start_ms
 
@@ -417,8 +402,8 @@ func test_challenge_8_rapid_stress_throughput() -> void:
 	assert_eq(tracker["last_val2"], iterations - 1, "Listener 2 final value is 1999")
 	assert_lt(elapsed_ms, 500, "2000 multi-listener emissions completed rapidly (<500ms, actual: %d ms)" % elapsed_ms)
 
-	event_bus.disconnect("ap_changed", cb1)
-	event_bus.disconnect("ap_changed", cb2)
+	event_bus.disconnect("core_hp_changed", cb1)
+	event_bus.disconnect("core_hp_changed", cb2)
 
 # ==============================================================================
 # Challenge 9: Freed Node Listener Resilience
@@ -811,6 +796,4 @@ func test_challenge_20_dictionary_payload_reference_semantics() -> void:
 	assert_has(tracker["l2_seen"], "wood", "Listener 2 captured dictionary with wood key")
 	assert_eq(tracker["l2_seen"].get("wood", 0), 9999, "Listener 2 observed the mutated dictionary (9999, by-reference propagation confirmed)")
 	assert_eq(original_dict.get("wood", 0), 9999, "Caller dictionary reflects mutation due to GDScript reference semantics")
-
-
 

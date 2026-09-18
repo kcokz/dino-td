@@ -70,7 +70,6 @@ func probe_r1_autoloads_and_config() -> void:
 		return
 
 	# Verify numerical constants centrally defined in Config
-	probe_assert(cfg.get("BASE_AP") == 3, "Config.BASE_AP must be 3")
 	probe_assert(cfg.get("TILE_SIZE") == 2.0, "Config.TILE_SIZE must be 2.0")
 	var res_array = cfg.get("RESOURCES")
 	probe_assert(res_array is Array and res_array.has("wood") and res_array.has("stone") and res_array.has("food"), "Config.RESOURCES must contain wood, stone, food")
@@ -96,7 +95,7 @@ func probe_r1_autoloads_and_config() -> void:
 
 	# Verify EventBus signals
 	var required_signals = [
-		"phase_changed", "ap_changed", "resources_changed",
+		"phase_changed", "resources_changed",
 		"building_placed", "building_destroyed", "core_hp_changed",
 		"wave_started", "wave_ended", "produce_phase",
 		"dino_spawned", "dino_died", "dino_reached_core",
@@ -134,23 +133,19 @@ func probe_r2_grid_and_placement() -> void:
 	# 2. Building placement validation
 	var gs = root.get_node("GameState")
 	gs.reset_game()
-	probe_assert(gs.current_ap == 3, "Starting AP is 3")
 	probe_assert(gs.resources["wood"] == 10, "Starting wood is 10")
 
-	# Place tower at (5, 5) costing 1 AP, 4 wood
 	var target_cell = Vector2i(5, 5)
 	probe_assert(bs.can_place_building("tower", target_cell), "Can place tower on empty cell (5,5)")
 	var tower_node = bs.place_building("tower", target_cell)
 	probe_assert(tower_node != null, "Tower placed successfully")
 	probe_assert(gm.is_cell_occupied(target_cell), "Cell (5,5) is now occupied")
-	probe_assert(gs.current_ap == 2, "AP deducted from 3 to 2")
 	probe_assert(gs.resources["wood"] == 6, "Wood deducted from 10 to 6")
 
 	# Duplicate placement check on same tile
 	probe_assert(not bs.can_place_building("tower", target_cell), "Cannot place tower on occupied cell (5,5)")
 	var dup_node = bs.place_building("tower", target_cell)
 	probe_assert(dup_node == null, "Duplicate placement returns null")
-	probe_assert(gs.current_ap == 2, "AP remains 2 on rejected placement")
 	probe_assert(gs.resources["wood"] == 6, "Wood remains 6 on rejected placement")
 
 	# Insufficient wood check: spend remaining wood
@@ -159,9 +154,7 @@ func probe_r2_grid_and_placement() -> void:
 	probe_assert(not bs.can_place_building("tower", cell_nowood), "Cannot place tower with only 1 wood")
 	probe_assert(bs.place_building("tower", cell_nowood) == null, "Placement rejected due to lack of wood")
 
-	# Insufficient AP check
 	gs.resources["wood"] = 10
-	gs.current_ap = 0
 	var cell_noap = Vector2i(7, 7)
 	probe_assert(not bs.can_place_building("tower", cell_noap), "Cannot place tower with 0 AP")
 	probe_assert(bs.place_building("tower", cell_noap) == null, "Placement rejected due to 0 AP")
@@ -193,9 +186,6 @@ func probe_r3_turn_loop_and_economy() -> void:
 
 	probe_assert(gs.current_phase == 0, "Phase begins in PLAN (0)")
 
-	# Spend 2 AP during PLAN
-	probe_assert(gs.spend_ap(2), "Spend 2 AP in PLAN phase")
-	probe_assert(gs.current_ap == 1, "Remaining AP is 1")
 
 	# Transition to ATTACK
 	gs.trigger_end_action()
@@ -219,30 +209,10 @@ func probe_r3_turn_loop_and_economy() -> void:
 	var wood_after = gs.resources.get("wood", 0)
 	probe_assert(wood_after == wood_before + 2, "Lumber hut added 2 wood during PRODUCE (before: %d, after: %d)" % [wood_before, wood_after])
 
-	# Advance back to PLAN phase and verify AP reset
 	gs.end_produce_phase()
 	probe_assert(gs.current_phase == 0, "Phase transitioned back to PLAN (0)")
-	probe_assert(gs.current_ap == gs.max_ap, "AP reset back to max_ap (%d)" % gs.max_ap)
-
-	# Test AP capacity boost with dynamic building script
-	var bonus_script = GDScript.new()
-	bonus_script.source_code = "extends 'res://scripts/entities/Building.gd'\nvar ap_bonus: int = 2\n"
-	bonus_script.reload()
-	var bonus_building = bonus_script.new()
-	root.add_child(bonus_building)
-	await process_frame
-
-	gs.register_building(bonus_building)
-	probe_assert(gs.max_ap == 5, "max_ap boosted from 3 to 5 with ap_bonus=2")
-	gs.reset_ap()
-	probe_assert(gs.current_ap == 5, "current_ap reset to boosted max_ap 5")
-
-	# Unregister building
-	gs.unregister_building(bonus_building)
-	probe_assert(gs.max_ap == 3, "max_ap returned to 3 after unregistering bonus building")
 
 	lumber.queue_free()
-	bonus_building.queue_free()
 	gm.queue_free()
 	bs.queue_free()
 	await process_frame
@@ -364,7 +334,6 @@ func probe_r5_win_loss_hud_restart() -> void:
 	probe_assert(loss_signal_box[0], "EventBus.game_lost emitted when Campfire destroyed")
 	probe_assert(gs.is_game_over == true, "GameState.is_game_over is true on defeat")
 	probe_assert(gs.is_game_won == false, "GameState.is_game_won is false on defeat")
-	probe_assert(not gs.spend_ap(1), "Action spending AP blocked when game over")
 	probe_assert(not gs.spend_resources({"wood": 1}), "Spending resources blocked when game over")
 	eb.game_lost.disconnect(on_loss)
 
@@ -394,8 +363,6 @@ func probe_r5_win_loss_hud_restart() -> void:
 	root.add_child(hud)
 	await process_frame
 
-	eb.ap_changed.emit(2, 4)
-	probe_assert(hud.get_ap_text().contains("2") and hud.get_ap_text().contains("4"), "HUD AP label reactively displays 2 / 4")
 
 	eb.resources_changed.emit({"wood": 7})
 	probe_assert(hud.get_wood_text().contains("7"), "HUD Wood label reactively displays Wood: 7")
@@ -418,13 +385,11 @@ func probe_r5_win_loss_hud_restart() -> void:
 	# Corrupt state to simulate played/lost game
 	gs.is_game_over = true
 	gs.is_game_won = false
-	gs.current_ap = 0
 	gs.wave_number = 5
 	main_scene.restart_game()
 	await process_frame
 
 	probe_assert(gs.is_game_over == false, "Restart resets is_game_over to false")
-	probe_assert(gs.current_ap == 3, "Restart resets AP to 3")
 	probe_assert(gs.wave_number == 0, "Restart resets wave to 0")
 	probe_assert(gs.resources["wood"] == 10, "Restart resets wood to 10")
 	probe_assert(main_scene.current_core != null and is_instance_valid(main_scene.current_core), "Restart reinstantiates valid CoreCampfire")

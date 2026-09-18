@@ -8,7 +8,6 @@ extends Node
 # ==============================================================================
 # 1. Economy & Action Points
 # ==============================================================================
-const BASE_AP: int = 3
 ## Every resource in the game, and where each one comes from:
 ##   wood  -- cut by hand from trees
 ##   stone -- cut by hand from outcrops, but only once the Hero has a pick
@@ -52,7 +51,6 @@ const BUILDINGS: Dictionary = {
 		"height": 1.9,
 		"hp": 10.0,
 		"cost": {},
-		"ap_cost": 0,
 		"upgrades_to": "",
 	},
 	"tower": {
@@ -66,7 +64,6 @@ const BUILDINGS: Dictionary = {
 		# cabin, which is the point: the thing you defend is the thing you need.
 		"cost": {"wood": 8, "stone": 4},
 		"requires_unlock": "blueprint_tower",
-		"ap_cost": 1,
 		"range": 5.0,
 		"damage": 1.0,
 		"fire_rate": 1.0,
@@ -127,7 +124,6 @@ const BUILDINGS: Dictionary = {
 		# unit) -- which made repair meaningless on the cheapest thing in the game.
 		# At two, a stake worth saving can be saved.
 		"cost": {"wood": 2},
-		"ap_cost": 1,
 		"upgrades_to": "",
 	},
 }
@@ -255,7 +251,7 @@ static func harvest_requires_unlock(res_id: String) -> String:
 
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
-## (e.g. "core" is spawned by the level; the "ap" kind is dormant since AP was removed).
+## (e.g. "core" is spawned by the level rather than bought).
 const BUILDABLE_TYPES: Array[String] = ["wall", "tower"]
 
 # ==============================================================================

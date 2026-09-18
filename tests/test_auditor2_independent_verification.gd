@@ -66,7 +66,6 @@ func probe_r1() -> void:
 	if cfg == null or eb == null or gs == null: return
 
 	# 1. Config Invariants
-	audit_assert(cfg.get('BASE_AP') == 3, 'Config.BASE_AP is 3')
 	audit_assert(cfg.get('TILE_SIZE') == 2.0, 'Config.TILE_SIZE is 2.0')
 	var b_dict = cfg.get('BUILDINGS')
 	audit_assert(b_dict is Dictionary, 'Config.BUILDINGS is Dictionary')
@@ -87,7 +86,7 @@ func probe_r1() -> void:
 	# 2. EventBus Signals
 	var expected_signals = [
 		'phase_changed', 'produce_phase', 'game_won', 'game_lost',
-		'ap_changed', 'resources_changed',
+		'resources_changed',
 		'building_placed', 'building_destroyed', 'core_hp_changed',
 		'wave_started', 'wave_ended',
 		'dino_spawned', 'dino_died', 'dino_reached_core',
@@ -107,8 +106,6 @@ func probe_r1() -> void:
 		await process_frame
 
 		gs.reset_game()
-		audit_assert(gs.max_ap == 5, 'GameState.max_ap dynamically bound to Mock Config.BASE_AP 5')
-		audit_assert(gs.current_ap == 5, 'GameState.current_ap dynamically bound to Mock Config.BASE_AP 5')
 		audit_assert(gs.resources.get('wood') == 50, 'GameState.resources.wood dynamically bound to Mock Config 50')
 
 		root.remove_child(mock_cfg)
@@ -116,7 +113,6 @@ func probe_r1() -> void:
 		root.add_child(cfg)
 		await process_frame
 		gs.reset_game()
-		audit_assert(gs.max_ap == 3, 'Restored original config yields max_ap=3')
 		audit_assert(gs.resources.get('wood') == 10, 'Restored original config yields wood=10')
 
 # Probe 2: R2 Grid Conversions and Placement Invariants
@@ -152,17 +148,13 @@ func probe_r2() -> void:
 	var tower = bs.place_building('tower', test_cell)
 	audit_assert(tower != null, 'Tower placed')
 	audit_assert(gm.is_cell_occupied(test_cell), 'Cell occupied')
-	audit_assert(gs.current_ap == 2, 'AP 3->2')
 	audit_assert(gs.resources['wood'] == 6, 'Wood 10->6')
 
 	audit_assert(not bs.can_place_building('wall', test_cell), 'Duplicate placement blocked')
 	audit_assert(bs.place_building('wall', test_cell) == null, 'Duplicate returns null')
-	audit_assert(gs.current_ap == 2 and gs.resources['wood'] == 6, 'State unchanged')
 
-	gs.current_ap = 0
 	audit_assert(not bs.can_place_building('wall', Vector2i(11, 10)), '0 AP blocked')
 
-	gs.current_ap = 3
 	gs.resources['wood'] = 1
 	audit_assert(not bs.can_place_building('wall', Vector2i(12, 10)), 'Insufficient wood blocked')
 
@@ -181,8 +173,6 @@ func probe_r3() -> void:
 	gs.reset_game()
 
 	audit_assert(gs.current_phase == 0, 'Phase 0 PLAN')
-	audit_assert(gs.spend_ap(2), 'Spend 2 AP')
-	audit_assert(gs.current_ap == 1, 'AP is 1')
 
 	gs.trigger_end_action()
 	audit_assert(gs.current_phase == 1, 'Phase 1 ATTACK')
@@ -204,7 +194,6 @@ func probe_r3() -> void:
 
 	gs.end_produce_phase()
 	audit_assert(gs.current_phase == 0, 'Phase 0 PLAN')
-	audit_assert(gs.current_ap == gs.max_ap, 'AP reset to max_ap')
 
 	lumber.queue_free()
 	await process_frame
@@ -321,7 +310,6 @@ func probe_r5() -> void:
 	await process_frame
 	audit_assert(gs.is_game_over == true, 'Game over on core death')
 	audit_assert(gs.is_game_won == false, 'Game lost on core death')
-	audit_assert(not gs.spend_ap(1), 'AP spend blocked')
 	audit_assert(not gs.spend_resources({'wood': 1}), 'Resource spend blocked')
 
 	eb.game_won.emit()
@@ -346,8 +334,6 @@ func probe_r5() -> void:
 	root.add_child(hud)
 	await process_frame
 
-	eb.ap_changed.emit(1, 4)
-	audit_assert(hud.get_ap_text().contains('1') and hud.get_ap_text().contains('4'), 'HUD ap_changed reactive')
 
 	eb.resources_changed.emit({'wood': 25})
 	audit_assert(hud.get_wood_text().contains('25'), 'HUD wood reactive')
@@ -368,7 +354,6 @@ func probe_r5() -> void:
 
 	gs.is_game_over = true
 	gs.is_game_won = false
-	gs.current_ap = 0
 	gs.wave_number = 7
 	gs.resources['wood'] = 1
 
@@ -376,7 +361,6 @@ func probe_r5() -> void:
 	await process_frame
 
 	audit_assert(gs.is_game_over == false, 'Restart resets is_game_over')
-	audit_assert(gs.current_ap == 3, 'Restart resets AP')
 	audit_assert(gs.resources['wood'] == 10, 'Restart resets wood')
 	audit_assert(gs.wave_number == 0, 'Restart resets wave')
 	audit_assert(main_node.current_core != null and is_instance_valid(main_node.current_core), 'Restart reinstantiates core')

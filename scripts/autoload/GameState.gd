@@ -24,8 +24,6 @@ var current_phase: Phase = Phase.DEPLOY
 ## legacy `current_phase` guard becomes a no-op. The legacy turn machine is kept intact
 ## behind this flag so the v0.0/v0.1 suites can still drive it explicitly.
 var continuous_mode: bool = false
-var current_ap: int = 3
-var max_ap: int = 3
 var resources: Dictionary = {}
 var wave_number: int = 0
 var dino_stat_multipliers: Dictionary = {}
@@ -41,22 +39,10 @@ var active_buildings: Array[Node] = []
 var unlocks: Dictionary = {}
 var _produce_timer: Timer = null
 
-# v0.1 Real-Time Deployment & Pause & Infinite AP
+# v0.1 Real-Time Deployment & Pause
 var deploy_length: float = 90.0
 var remaining_deploy_time: float = 90.0
 var is_paused: bool = false
-var infinite_ap: bool = false
-
-# ==============================================================================
-# 3. Compatibility Aliases (Ensures 100% interoperability with specs & tests)
-# ==============================================================================
-var ap: int:
-	get: return current_ap
-	set(v): current_ap = v
-
-var ap_max: int:
-	get: return max_ap
-	set(v): max_ap = v
 
 var wave_n: int:
 	get: return wave_number
@@ -72,8 +58,6 @@ var dino_multipliers: Dictionary:
 func _init() -> void:
 	resources = _default_resources()
 	dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
-	current_ap = 3
-	max_ap = 3
 	is_game_over = false
 	is_game_won = false
 	deploy_length = 90.0
@@ -84,8 +68,8 @@ func _ready() -> void:
 	set_process(true)
 	_connect_event_bus()
 	reset_game()
-	print("[GameState] Initialized. Phase: %s, AP: %d/%d, Deploy: %.1fs, Resources: %s" % [
-		Phase.keys()[current_phase], current_ap, max_ap, remaining_deploy_time, str(resources)
+	print("[GameState] Initialized. Phase: %s, Deploy: %.1fs, Resources: %s" % [
+		Phase.keys()[current_phase], remaining_deploy_time, str(resources)
 	])
 
 func _process(delta: float) -> void:
@@ -140,11 +124,6 @@ func _emit_phase_changed(phase_val: int) -> void:
 	if eb and eb.has_signal("phase_changed"):
 		eb.phase_changed.emit(phase_val)
 
-func _emit_ap_changed(cur: int, max_val: int) -> void:
-	var eb = _get_event_bus()
-	if eb and eb.has_signal("ap_changed"):
-		eb.ap_changed.emit(cur, max_val)
-
 func _emit_resources_changed(res_dict: Dictionary) -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("resources_changed"):
@@ -173,7 +152,6 @@ func reset_game() -> void:
 	_cancel_produce_timer()
 	is_game_over = false
 	is_game_won = false
-	infinite_ap = false
 	# GameState is an autoload, so this flag would otherwise leak from any test that
 	# instantiates Main into every test that runs after it. Main re-enables it in
 	# setup_level(), which runs after reset_game() on the restart path.
@@ -181,16 +159,13 @@ func reset_game() -> void:
 	current_phase = Phase.PLAN
 	var cfg = _get_config()
 	if cfg:
-		max_ap = cfg.get("BASE_AP") if "BASE_AP" in cfg else 3
 		resources = cfg.get("INITIAL_RESOURCES").duplicate(true) if "INITIAL_RESOURCES" in cfg else _default_resources()
 		dino_stat_multipliers = cfg.get("INITIAL_DINO_MULTIPLIERS").duplicate(true) if "INITIAL_DINO_MULTIPLIERS" in cfg else {"hp": 1.0, "damage": 1.0, "speed": 1.0}
 		nests_alive = cfg.get("INITIAL_NESTS_ALIVE") if "INITIAL_NESTS_ALIVE" in cfg else 1
 	else:
-		max_ap = 3
 		resources = _default_resources()
 		dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
 		nests_alive = 1
-	current_ap = max_ap
 	wave_number = 0
 	active_buildings.clear()
 	unlocks.clear()
@@ -201,7 +176,6 @@ func reset_game() -> void:
 	is_paused = false
 	
 	_emit_phase_changed(current_phase)
-	_emit_ap_changed(current_ap, max_ap)
 	_emit_resources_changed(resources)
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("deploy_time_changed"):
@@ -284,58 +258,29 @@ func grant_unlock(unlock_id: String) -> bool:
 	return true
 
 # ==============================================================================
-# 8. Action Point (AP) Transactions & Capacity
+# 8. The Standing Buildings
 # ==============================================================================
-## Checks whether player has at least amount AP available.
-func can_spend_ap(amount: int) -> bool:
-	if is_game_over:
-		return false
-	if infinite_ap:
-		return true
-	return amount >= 0 and current_ap >= amount
-
-## Deducts AP if sufficient. Returns true on success, false otherwise.
-func spend_ap(amount: int) -> bool:
-	if not can_spend_ap(amount):
-		return false
-	if infinite_ap:
-		return true
-	current_ap -= amount
-	_emit_ap_changed(current_ap, max_ap)
-	return true
-
-## Resets current AP to max_ap (typically called entering PLAN phase).
-func reset_ap() -> void:
-	current_ap = max_ap
-	_emit_ap_changed(current_ap, max_ap)
-
-## Recalculates max_ap by summing Config.BASE_AP and living building ap_bonuses.
-func recalculate_max_ap() -> void:
-	var bonus: int = 0
+## Drops anything that has been freed. Buildings unregister themselves as they die,
+## but a node freed some other way -- a test, a level teardown -- would otherwise sit
+## in this list for the rest of the run.
+func _prune_buildings() -> void:
 	var valid_buildings: Array[Node] = []
 	for b in active_buildings:
 		if is_instance_valid(b):
 			valid_buildings.append(b)
-			if "ap_bonus" in b:
-				bonus += int(b.ap_bonus)
 	active_buildings = valid_buildings
-	var cfg = _get_config()
-	var base_ap: int = cfg.get("BASE_AP") if (cfg and "BASE_AP" in cfg) else 3
-	max_ap = maxi(1, base_ap + bonus)
-	current_ap = mini(current_ap, max_ap)
-	_emit_ap_changed(current_ap, max_ap)
 
-## Tracks an instantiated building for capacity and lifecycle management.
+## Tracks an instantiated building for lifecycle management.
 func register_building(building: Node) -> void:
 	if building and not active_buildings.has(building):
 		active_buildings.append(building)
-		recalculate_max_ap()
+		_prune_buildings()
 
 ## Untracks a destroyed building.
 func unregister_building(building: Node) -> void:
 	if building and active_buildings.has(building):
 		active_buildings.erase(building)
-		recalculate_max_ap()
+		_prune_buildings()
 
 # ==============================================================================
 # 9. Turn State Machine & Phase Transitions
@@ -368,7 +313,6 @@ func set_phase(new_phase: Phase) -> void:
 	match current_phase:
 		Phase.PLAN:
 			_cancel_produce_timer()
-			reset_ap()
 			var cfg = _get_config()
 			var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 			deploy_length = float(time_cfg.get("deploy_length", 90.0))

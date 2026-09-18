@@ -38,8 +38,6 @@ func before_each() -> void:
 	if game_state_node and "resources" in game_state_node:
 		game_state_node.resources["wood"] = 500
 		game_state_node.resources["stone"] = 500
-	if game_state_node and "infinite_ap" in game_state_node:
-		game_state_node.infinite_ap = true
 
 func after_each() -> void:
 	for n in _cleanup_nodes:

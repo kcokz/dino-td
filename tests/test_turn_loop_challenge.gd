@@ -7,7 +7,6 @@
 # 4. Long-run economy compounding and destroyed-building handling over 50+ cycles
 # 5. Chaotic fuzzing and state invariant preservation
 # 6. Terminal game over phase locking over 50 iterations
-# 7. Dynamic AP capacity shifts and clamping across multi-turn loops
 extends "res://tests/test_base.gd"
 
 ## Wood this suite seeds in before_each. It asserts exact balances, so it owns
@@ -59,8 +58,6 @@ func before_each() -> void:
 		# This suite asserts exact balances, so pin its own wallet and stay decoupled
 		# from whatever the opening balance happens to be.
 		if "current_phase" in game_state_node: game_state_node.current_phase = 0
-		if "current_ap" in game_state_node: game_state_node.current_ap = 3
-		if "max_ap" in game_state_node: game_state_node.max_ap = 3
 		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 		if "wave_number" in game_state_node: game_state_node.wave_number = 0
@@ -106,15 +103,6 @@ func _get_wood() -> int:
 		return game_state_node.resources.get("wood", 0)
 	return -1
 
-func _get_ap() -> int:
-	if game_state_node != null and "current_ap" in game_state_node:
-		return game_state_node.current_ap
-	return -1
-
-# ==============================================================================
-# 3. Test Category 1: 50+ Continuous Cycles Challenge
-# ==============================================================================
-
 func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 	assert_not_null(game_state_node, "GameState autoload must exist")
 	assert_not_null(event_bus_node, "EventBus autoload must exist")
@@ -128,14 +116,8 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 	for cycle in range(1, total_cycles + 1):
 		# --- Phase 0: PLAN ---
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Must be in PLAN phase" % cycle)
-		assert_eq(_get_ap(), int(game_state_node.max_ap), "Cycle %d: AP must be fully replenished to max_ap at start of PLAN" % cycle)
 
-		# Spend variable AP during PLAN (e.g. cycle % 3 + 1, clamped to max_ap)
 		var ap_to_spend = (cycle % 3) + 1
-		var ap_before = _get_ap()
-		var spend_ok = game_state_node.spend_ap(ap_to_spend)
-		assert_true(spend_ok, "Cycle %d: spend_ap(%d) should succeed" % [cycle, ap_to_spend])
-		assert_eq(_get_ap(), ap_before - ap_to_spend, "Cycle %d: AP correctly deducted" % cycle)
 
 		# Transition PLAN -> ATTACK via trigger_end_action
 		var phase_watcher = watch_signal(event_bus_node, "phase_changed")
@@ -145,7 +127,6 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 		assert_eq(int(game_state_node.current_phase), 1, "Cycle %d: Must transition to ATTACK phase" % cycle)
 		assert_true(phase_watcher.emitted, "Cycle %d: phase_changed signal must be emitted" % cycle)
 		assert_eq(int(phase_watcher.last_args[0]), 1, "Cycle %d: phase_changed arg must be 1 (ATTACK)" % cycle)
-		assert_eq(_get_ap(), ap_before - ap_to_spend, "Cycle %d: AP must NOT reset during ATTACK" % cycle)
 
 		# Transition ATTACK -> PRODUCE via wave_ended
 		var produce_watcher = watch_signal(event_bus_node, "produce_phase")
@@ -154,7 +135,6 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 		# --- Phase 2: PRODUCE ---
 		assert_eq(int(game_state_node.current_phase), 2, "Cycle %d: Must transition to PRODUCE phase upon wave_ended" % cycle)
 		assert_true(produce_watcher.emitted, "Cycle %d: produce_phase signal must be emitted upon entering PRODUCE" % cycle)
-		assert_eq(_get_ap(), ap_before - ap_to_spend, "Cycle %d: AP must NOT reset during PRODUCE" % cycle)
 
 		# Dino multiplier check every 3 waves
 		if cycle % 3 == 0:
@@ -168,59 +148,14 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 
 		# Transition PRODUCE -> PLAN via end_produce_phase
 		var plan_watcher = watch_signal(event_bus_node, "phase_changed")
-		var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 		game_state_node.end_produce_phase()
 
 		# Back to PLAN
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: end_produce_phase() must return to PLAN" % cycle)
 		assert_true(plan_watcher.emitted, "Cycle %d: phase_changed signal emitted for PLAN" % cycle)
-		assert_true(ap_watcher.emitted, "Cycle %d: ap_changed signal emitted on AP reset" % cycle)
-		assert_eq(_get_ap(), int(game_state_node.max_ap), "Cycle %d: AP must be restored to max_ap (%d)" % [cycle, game_state_node.max_ap])
 
 	assert_eq(int(game_state_node.current_phase), 0, "Final state after 60 cycles must be PLAN")
 	assert_false(game_state_node.is_game_over, "Game must still be active after 60 cycles")
-
-
-func test_challenge_ap_drain_and_restoration_across_50_cycles() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	assert_not_null(event_bus_node, "EventBus must exist")
-	if game_state_node == null or event_bus_node == null:
-		return
-
-	var total_spent = 0
-
-	for cycle in range(1, 51):
-		assert_eq(_get_ap(), 3, "Cycle %d: AP starts at 3" % cycle)
-
-		# Spend all 3 AP
-		assert_true(game_state_node.spend_ap(3), "Cycle %d: Drain 3 AP" % cycle)
-		assert_eq(_get_ap(), 0, "Cycle %d: AP is 0" % cycle)
-		total_spent += 3
-
-		# Cannot spend any more AP
-		assert_false(game_state_node.spend_ap(1), "Cycle %d: Cannot spend when AP is 0" % cycle)
-		assert_false(game_state_node.can_spend_ap(1), "Cycle %d: can_spend_ap(1) is false" % cycle)
-
-		# Enter ATTACK
-		game_state_node.trigger_end_action()
-		assert_eq(int(game_state_node.current_phase), 1, "Cycle %d: In ATTACK" % cycle)
-		assert_eq(_get_ap(), 0, "Cycle %d: AP remains 0 in ATTACK" % cycle)
-
-		# Wave ends -> PRODUCE
-		event_bus_node.wave_ended.emit(cycle)
-		assert_eq(int(game_state_node.current_phase), 2, "Cycle %d: In PRODUCE" % cycle)
-		assert_eq(_get_ap(), 0, "Cycle %d: AP remains 0 in PRODUCE" % cycle)
-
-		# End produce -> return to PLAN
-		game_state_node.end_produce_phase()
-		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: In PLAN" % cycle)
-		assert_eq(_get_ap(), 3, "Cycle %d: AP restored to 3 in PLAN" % cycle)
-
-	assert_eq(total_spent, 150, "Total AP spent across 50 cycles must be exactly 150")
-
-# ==============================================================================
-# 4. Test Category 2: Out-Of-Order Calls Challenge
-# ==============================================================================
 
 func test_challenge_out_of_order_trigger_end_action_in_attack() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -233,14 +168,12 @@ func test_challenge_out_of_order_trigger_end_action_in_attack() -> void:
 	assert_eq(int(game_state_node.current_phase), 1, "Currently in ATTACK phase")
 
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
-	var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 
 	# Call trigger_end_action while in ATTACK
 	game_state_node.trigger_end_action()
 
 	assert_eq(int(game_state_node.current_phase), 1, "Phase must remain ATTACK (1)")
 	assert_false(phase_watcher.emitted, "phase_changed must NOT emit when trigger_end_action is called in ATTACK")
-	assert_false(ap_watcher.emitted, "ap_changed must NOT emit")
 
 func test_challenge_out_of_order_trigger_end_action_in_produce() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -254,14 +187,12 @@ func test_challenge_out_of_order_trigger_end_action_in_produce() -> void:
 	assert_eq(int(game_state_node.current_phase), 2, "Currently in PRODUCE phase")
 
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
-	var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 
 	# Call trigger_end_action while in PRODUCE
 	game_state_node.trigger_end_action()
 
 	assert_eq(int(game_state_node.current_phase), 2, "Phase must remain PRODUCE (2)")
 	assert_false(phase_watcher.emitted, "phase_changed must NOT emit when trigger_end_action is called in PRODUCE")
-	assert_false(ap_watcher.emitted, "ap_changed must NOT emit")
 
 func test_challenge_out_of_order_end_produce_phase_in_plan() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -272,14 +203,12 @@ func test_challenge_out_of_order_end_produce_phase_in_plan() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Currently in PLAN phase")
 
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
-	var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 
 	# Call end_produce_phase while in PLAN
 	game_state_node.end_produce_phase()
 
 	assert_eq(int(game_state_node.current_phase), 0, "Phase must remain PLAN (0)")
 	assert_false(phase_watcher.emitted, "phase_changed must NOT emit when end_produce_phase is called in PLAN")
-	assert_false(ap_watcher.emitted, "ap_changed must NOT emit")
 
 func test_challenge_out_of_order_end_produce_phase_in_attack() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -291,14 +220,12 @@ func test_challenge_out_of_order_end_produce_phase_in_attack() -> void:
 	assert_eq(int(game_state_node.current_phase), 1, "Currently in ATTACK phase")
 
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
-	var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 
 	# Call end_produce_phase while in ATTACK
 	game_state_node.end_produce_phase()
 
 	assert_eq(int(game_state_node.current_phase), 1, "Phase must remain ATTACK (1)")
 	assert_false(phase_watcher.emitted, "phase_changed must NOT emit when end_produce_phase is called in ATTACK")
-	assert_false(ap_watcher.emitted, "ap_changed must NOT emit")
 
 func test_challenge_end_plan_phase_alias_out_of_order() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -392,7 +319,6 @@ func test_challenge_reentrant_phase_changed_call_safety() -> void:
 	event_bus_node.phase_changed.disconnect(cb)
 
 # ==============================================================================
-# 6. Test Category 4: Dynamic AP & Building Capacity Fluctuation in Turn Loop
 # ==============================================================================
 
 func test_challenge_dynamic_ap_capacity_shifts_during_turn_loop() -> void:
@@ -401,51 +327,31 @@ func test_challenge_dynamic_ap_capacity_shifts_during_turn_loop() -> void:
 	if game_state_node == null or event_bus_node == null:
 		return
 
-	# Initial max_ap = 3
-	assert_eq(int(game_state_node.max_ap), 3, "Initial max_ap is 3")
 
-	# Turn 1: Add building with +2 AP bonus
-	var ap_b1 = Node.new()
+	var b1 = Node.new()
 	var scr1 = GDScript.new()
-	scr1.source_code = "extends Node\nvar ap_bonus: int = 2\n"
 	scr1.reload()
-	ap_b1.set_script(scr1)
-	_cleanup_nodes.append(ap_b1)
+	b1.set_script(scr1)
+	_cleanup_nodes.append(b1)
 
-	game_state_node.register_building(ap_b1)
-	assert_eq(int(game_state_node.max_ap), 5, "max_ap increases to 5")
-
-	# Reset AP during PLAN phase
-	game_state_node.reset_ap()
-	assert_eq(_get_ap(), 5, "AP replenished to new max_ap 5")
-
-	# Spend 4 AP
-	assert_true(game_state_node.spend_ap(4), "Spend 4 AP succeeds")
-	assert_eq(_get_ap(), 1, "AP is 1")
+	game_state_node.register_building(b1)
 
 	# Advance to ATTACK -> PRODUCE -> PLAN
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(1)
 	game_state_node.end_produce_phase()
 
-	# Turn 2: Starts in PLAN with 5 AP
 	assert_eq(int(game_state_node.current_phase), 0, "Turn 2: In PLAN")
-	assert_eq(_get_ap(), 5, "Turn 2: AP replenished to 5")
 
-	# Destroy / unregister ap_b1 during Turn 2 PLAN
-	game_state_node.unregister_building(ap_b1)
-	assert_eq(int(game_state_node.max_ap), 3, "max_ap reverts back to 3")
-	assert_eq(_get_ap(), 3, "Current AP clamped to new max_ap 3")
+	# Destroy / unregister b1 during Turn 2 PLAN
+	game_state_node.unregister_building(b1)
 
 	# Complete Turn 2
-	game_state_node.spend_ap(3)
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(2)
 	game_state_node.end_produce_phase()
 
-	# Turn 3: Starts in PLAN with 3 AP
 	assert_eq(int(game_state_node.current_phase), 0, "Turn 3: In PLAN")
-	assert_eq(_get_ap(), 3, "Turn 3: AP replenished to 3")
 
 # ==============================================================================
 # 7. Test Category 5: Terminal Game Over State Lockout Across Iterations
@@ -471,11 +377,9 @@ func test_challenge_terminal_game_over_state_locking_multi_iteration() -> void:
 		game_state_node.end_produce_phase()
 		game_state_node.set_phase(1)
 		game_state_node.set_phase(2)
-		game_state_node.spend_ap(1)
 		event_bus_node.wave_ended.emit(i)
 
 		assert_eq(int(game_state_node.current_phase), 0, "Iteration %d: Phase must remain locked at 0" % i)
-		assert_false(game_state_node.can_spend_ap(1), "Iteration %d: can_spend_ap blocked" % i)
 
 	assert_false(phase_watcher.emitted, "Zero phase_changed signals emitted while game is over")
 
@@ -495,7 +399,7 @@ func test_challenge_chaotic_state_machine_fuzz_oracle() -> void:
 	var actions_tested = 0
 
 	for step in range(250):
-		var action = rng.randi_range(0, 6)
+		var action = rng.randi_range(0, 4)
 		match action:
 			0:
 				game_state_node.trigger_end_action()
@@ -504,14 +408,9 @@ func test_challenge_chaotic_state_machine_fuzz_oracle() -> void:
 			2:
 				game_state_node.advance_phase()
 			3:
-				var amt = rng.randi_range(0, 4)
-				game_state_node.spend_ap(amt)
-			4:
-				game_state_node.reset_ap()
-			5:
 				var wave_idx = rng.randi_range(1, 20)
 				event_bus_node.wave_ended.emit(wave_idx)
-			6:
+			4:
 				var invalid_val = rng.randi_range(-5, 5)
 				if invalid_val < 0 or invalid_val > 2:
 					game_state_node.set_phase(invalid_val)
@@ -523,9 +422,6 @@ func test_challenge_chaotic_state_machine_fuzz_oracle() -> void:
 		assert_gte(cur_phase, 0, "Step %d: Phase must be >= 0" % step)
 		assert_lte(cur_phase, 2, "Step %d: Phase must be <= 2" % step)
 
-		var cur_ap = _get_ap()
-		assert_gte(cur_ap, 0, "Step %d: AP must never drop below 0" % step)
-		assert_lte(cur_ap, int(game_state_node.max_ap), "Step %d: AP must never exceed max_ap" % step)
 
 		var cur_wood = _get_wood()
 		assert_gte(cur_wood, 0, "Step %d: Wood must never drop below 0" % step)
@@ -548,16 +444,11 @@ func test_challenge_100_continuous_cycles_stress() -> void:
 	for t in range(1, turns + 1):
 		# PLAN
 		assert_eq(int(game_state_node.current_phase), 0, "Turn %d: PLAN phase" % t)
-		assert_eq(_get_ap(), 3, "Turn %d: AP starts at 3" % t)
 
-		# Spend all AP
-		assert_true(game_state_node.spend_ap(3), "Turn %d: Spend 3 AP" % t)
-		assert_eq(_get_ap(), 0, "Turn %d: AP is 0" % t)
 
 		# trigger_end_action -> ATTACK
 		game_state_node.trigger_end_action()
 		assert_eq(int(game_state_node.current_phase), 1, "Turn %d: ATTACK phase" % t)
-		assert_eq(_get_ap(), 0, "Turn %d: AP is 0 in ATTACK" % t)
 
 		# Wave started
 		event_bus_node.wave_started.emit(t, (t % 3 == 0))
@@ -571,7 +462,6 @@ func test_challenge_100_continuous_cycles_stress() -> void:
 		# wave_ended -> PRODUCE
 		event_bus_node.wave_ended.emit(t)
 		assert_eq(int(game_state_node.current_phase), 2, "Turn %d: PRODUCE phase" % t)
-		assert_eq(_get_ap(), 0, "Turn %d: AP is 0 in PRODUCE" % t)
 
 		# Out-of-order attempts in PRODUCE
 		game_state_node.trigger_end_action()
@@ -580,7 +470,6 @@ func test_challenge_100_continuous_cycles_stress() -> void:
 		# end_produce_phase -> PLAN
 		game_state_node.end_produce_phase()
 		assert_eq(int(game_state_node.current_phase), 0, "Turn %d: Back to PLAN phase" % t)
-		assert_eq(_get_ap(), 3, "Turn %d: AP restored to 3 in PLAN" % t)
 
 	assert_eq(_get_wood(), initial_wood, "Wood unchanged without producer buildings across 100 turns")
 	assert_eq(game_state_node.wave_number, 100, "Wave number reached 100")

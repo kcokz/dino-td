@@ -3,9 +3,7 @@
 # Milestone 6 Final Headless E2E Acceptance Challenge Test Suite:
 # Empirically stress-tests the complete integrated game loop:
 # 1. Start game in Main scene.
-# 2. Plan phase: place Wall, LumberHut, Tower (verify AP & Wood deduction).
 # 3. Trigger End Action -> transitions to ATTACK (WaveManager activates).
-# 4. Survive waves 1 and 2, verify produce phase collects wood, AP resets to 3.
 # 5. Reach wave 3 (horde wave, 8 dinos), verify horde multiplier and post-horde stat enhancement.
 # 6. Defeat all dinos, place Tower within 5.0m of Nest, destroy Nest -> triggers Victory.
 # 7. Verify action lockout on victory.
@@ -137,8 +135,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	# Verify Initial GameState
 	assert_eq(int(game_state_node.current_phase), 0, "Initial Phase must be PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "Initial AP must be 3")
-	assert_eq(int(game_state_node.max_ap), 3, "Initial max_ap must be 3")
 	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "Wood starts at the Config opening balance")
 	assert_eq(int(game_state_node.wave_number), 0, "Initial wave_number must be 0")
 	assert_false(bool(game_state_node.get("is_game_over")), "Initial is_game_over must be false")
@@ -158,7 +154,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify HUD Initial State
 	var hud = main.hud
 	assert_not_null(hud, "HUD exists in Main")
-	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
 	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_banked_wood(), "HUD displays the opening wood balance")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
@@ -176,10 +171,8 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	game_state_node.resources["stone"] = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
 	await wait_frames(1)
 
-	# 1. Place Wall at (1, 1): Cost = 1 AP + the wall's wood cost
 	var wall_node = main.place_building_at_cell("wall", Vector2i(1, 1))
 	assert_not_null(wall_node, "Wall placed successfully at (1, 1)")
-	assert_eq(int(game_state_node.current_ap), 2, "AP deducted by 1 (3 -> 2)")
 	expected_wood -= cost_of("wall")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the wall cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(1, 1)), "Cell (1, 1) is occupied")
@@ -189,7 +182,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# now, and this test tracks a wood budget through the whole loop.
 	var lumber_node = main.place_building_at_cell("wall", Vector2i(2, 2))
 	assert_not_null(lumber_node, "Stake placed successfully at (2, 2)")
-	assert_eq(int(game_state_node.current_ap), 1, "AP deducted by 1 (2 -> 1)")
 	expected_wood -= cost_of("wall")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the stake cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(2, 2)), "Cell (2, 2) is occupied")
@@ -197,20 +189,15 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# 3. Place Tower at (1, -1)
 	var tower_node = main.place_building_at_cell("tower", Vector2i(1, -1))
 	assert_not_null(tower_node, "Tower placed successfully at (1, -1)")
-	assert_eq(int(game_state_node.current_ap), 0, "AP deducted by 1 (1 -> 0)")
 	expected_wood -= cost_of("tower")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the tower cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(1, -1)), "Cell (1, -1) is occupied")
 
-	# 4. Attempt 4th building with 0 AP -> safely rejected
 	var rejected_building = main.place_building_at_cell("wall", Vector2i(-1, 1))
-	assert_null(rejected_building, "Building placement rejected when AP is 0")
-	assert_eq(int(game_state_node.current_ap), 0, "AP remains 0")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood unchanged by the rejected placement")
 
 	# Verify HUD reflections
 	await wait_frames(1)
-	assert_eq(hud.get_ap_text(), "AP: 0 / 3", "HUD reflects 0 / 3 AP")
 	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "HUD reflects the remaining wood")
 
 	# --------------------------------------------------------------------------
@@ -231,7 +218,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(wave_mgr.dinos_alive_count, 2, "Wave 1 spawns 2 dinos (base_count 2)")
 
 	# --------------------------------------------------------------------------
-	# Phase D: Survive Wave 1 & 2 -> Verify Produce phase collects wood, AP resets to 3
 	# --------------------------------------------------------------------------
 	# --- Wave 1 Combat & Resolution ---
 	# Eliminate the 2 dinos of wave 1
@@ -252,8 +238,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	await wait_frames(1)
 
 	assert_eq(int(game_state_node.current_phase), 0, "Transitioned to PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3 (max_ap)")
-	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
 	assert_false(hud.end_action_btn.disabled, "End Action button re-enabled for new turn")
 
 	# --- Wave 2 Execution ---
@@ -281,8 +265,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	await wait_frames(1)
 
 	assert_eq(int(game_state_node.current_phase), 0, "Transitioned to PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3")
-	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
 
 	# --------------------------------------------------------------------------
 	# Phase E: Reach Wave 3 (Horde Wave, 8 dinos), verify horde multiplier & buff
@@ -321,7 +303,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	await wait_frames(1)
 
 	assert_eq(int(game_state_node.current_phase), 0, "Transitioned to PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Player wood matches the running total")
 
 	# --------------------------------------------------------------------------
@@ -336,7 +317,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	await wait_frames(1)
 	var assault_tower = main.place_building_at_cell("tower", Vector2i(0, -8))
 	assert_not_null(assault_tower, "Assault Tower successfully placed at (0, -8)")
-	assert_eq(int(game_state_node.current_ap), 2, "AP drops from 3 to 2")
 	expected_wood -= cost_of("tower")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood drops by the tower cost")
 
@@ -380,8 +360,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), pre_phase, "advance_phase blocked under victory")
 
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap returns false under victory")
-	assert_false(game_state_node.spend_ap(1), "spend_ap returns false under victory")
 
 	assert_false(main.build_system.can_place_building("wall", Vector2i(-2, -2)), "can_place_building false under victory")
 	var illegal_b = main.place_building_at_cell("wall", Vector2i(-2, -2))
@@ -400,8 +378,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(bool(game_state_node.get("is_game_over")), "is_game_over reset to false")
 	assert_false(bool(game_state_node.get("is_game_won")), "is_game_won reset to false")
 	assert_eq(int(game_state_node.current_phase), 0, "Phase reset to PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3")
-	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to 3")
 	assert_eq(int(game_state_node.resources["wood"]), opening_banked_wood(), "Wood reset to the Config opening balance")
 	assert_eq(int(game_state_node.wave_number), 0, "wave_number reset to 0")
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.0, 0.001, "HP mult reset to 1.0")
@@ -425,7 +401,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify HUD re-initialization
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after restart")
-	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
 	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_banked_wood(), "HUD displays the opening wood balance")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
@@ -462,8 +437,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), loss_phase, "advance_phase blocked under defeat")
 
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap returns false under defeat")
-	assert_false(game_state_node.spend_ap(1), "spend_ap returns false under defeat")
 
 	var illegal_loss_b = main.place_building_at_cell("wall", Vector2i(2, 2))
 	assert_null(illegal_loss_b, "place_building returns null under defeat")
@@ -480,8 +453,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(bool(game_state_node.get("is_game_over")), "is_game_over reset to false after 2nd restart")
 	assert_false(bool(game_state_node.get("is_game_won")), "is_game_won reset to false after 2nd restart")
 	assert_eq(int(game_state_node.current_phase), 0, "Phase reset to PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "AP reset to 3")
-	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to 3")
 	assert_eq(int(game_state_node.resources["wood"]), opening_banked_wood(), "Wood reset to the Config opening balance")
 	assert_eq(int(game_state_node.wave_number), 0, "wave_number reset to 0")
 
@@ -492,7 +463,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after 2nd restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after 2nd restart")
-	assert_eq(hud.get_ap_text(), "AP: 3 / 3", "HUD displays AP: 3 / 3")
 	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_banked_wood(), "HUD displays the opening wood balance")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
 
@@ -552,7 +522,6 @@ func test_02_horde_progression_and_stat_compounding_stress() -> void:
 		# Advance PRODUCE -> PLAN
 		game_state_node.end_produce_phase()
 		assert_eq(int(game_state_node.current_phase), 0, "Turn %d returns to PLAN" % w)
-		assert_eq(int(game_state_node.current_ap), 3, "AP resets to 3 for turn %d" % (w + 1))
 
 # ==============================================================================
 # Test 3: Multiple Lumber Huts Economy Compounding & Clean Restart
@@ -590,7 +559,6 @@ func test_04_rapid_alternating_victory_defeat_restart_stress() -> void:
 		assert_false(bool(game_state_node.get("is_game_over")), "Cycle %d: is_game_over cleared" % cycle)
 		assert_false(bool(game_state_node.get("is_game_won")), "Cycle %d: is_game_won cleared" % cycle)
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Phase is PLAN" % cycle)
-		assert_eq(int(game_state_node.current_ap), 3, "Cycle %d: AP is 3" % cycle)
 		assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Cycle %d: Core HP is 10.0" % cycle)
 		assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Cycle %d: Nest HP is 30.0" % cycle)
 		assert_eq(main.grid_manager.occupied_cells.size(), 2, "Cycle %d: Grid size is 2" % cycle)
@@ -610,14 +578,10 @@ func test_05_strict_lockout_adversarial_hammering_oracle() -> void:
 	await wait_frames(1)
 	assert_true(bool(game_state_node.get("is_game_over")), "Defeat active")
 
-	# Bombard with 30 AP spends, 30 building placements, 30 end actions
 	for i in range(30):
-		assert_false(game_state_node.can_spend_ap(1), "Bombard %d: can_spend_ap false" % i)
-		assert_false(game_state_node.spend_ap(1), "Bombard %d: spend_ap false" % i)
 		var b = main.place_building_at_cell("wall", Vector2i(i + 1, 1))
 		assert_null(b, "Bombard %d: placement rejected" % i)
 		main.hud.simulate_end_action_click()
 
-	assert_eq(int(game_state_node.current_ap), 3, "AP untouched through bombardment")
 	assert_eq(int(game_state_node.resources["wood"]), opening_banked_wood(), "Wood untouched through bombardment")
 	assert_eq(main.buildings_container.get_child_count(), 0, "No buildings placed")

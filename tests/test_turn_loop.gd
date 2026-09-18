@@ -2,7 +2,6 @@
 # Requirement R3 Acceptance Test Suite:
 # Verifies Turn Phase State Machine Loop (PLAN -> ATTACK -> PRODUCE -> PLAN),
 # End Action Triggering, Wave Completion Transitions,
-# Action Point (AP) Consumption and Restoration, and Multi-Turn Simulation.
 extends "res://tests/test_base.gd"
 
 ## Wood every test in this suite starts with (see before_each).
@@ -62,8 +61,6 @@ func before_each() -> void:
 		if game_state_node.has_method("reset_game"):
 			game_state_node.call("reset_game")
 		if "current_phase" in game_state_node: game_state_node.current_phase = 0
-		if "current_ap" in game_state_node: game_state_node.current_ap = 3
-		if "max_ap" in game_state_node: game_state_node.max_ap = 3
 		# Top up past Config's lean opening balance so these tests exercise the turn
 		# loop rather than affordability.
 		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": SEED_WOOD, "water": SEED_WOOD, "food": 0}
@@ -135,22 +132,11 @@ func _get_wood() -> int:
 		return game_state_node.resources.get("wood", 0)
 	return -1
 
-func _get_ap() -> int:
-	if game_state_node != null and "current_ap" in game_state_node:
-		return game_state_node.current_ap
-	return -1
-
-# ==============================================================================
-# 3. Category 1: Turn Phase State Machine Loop Tests (R3.1)
-# ==============================================================================
-
 func test_initial_phase_is_plan() -> void:
 	assert_not_null(game_state_node, "GameState autoload must exist")
 	if game_state_node == null: return
 
 	assert_eq(int(game_state_node.current_phase), 0, "Game must start in PLAN phase (0)")
-	assert_eq(_get_ap(), 3, "Initial AP must equal Config.BASE_AP (3)")
-	assert_eq(int(game_state_node.max_ap), 3, "Initial max_ap must be 3")
 	assert_eq(_get_wood(), SEED_WOOD, "Wood starts at the seeded balance")
 	assert_false(game_state_node.is_game_over, "is_game_over must initially be false")
 
@@ -234,30 +220,19 @@ func test_transition_produce_to_plan_resets_ap() -> void:
 	assert_not_null(event_bus_node, "EventBus must exist")
 	if game_state_node == null or event_bus_node == null: return
 
-	# 1. Drain AP to 0 during PLAN
-	assert_true(game_state_node.spend_ap(3), "spend_ap(3) should drain AP")
-	assert_eq(_get_ap(), 0, "AP is now 0 in PLAN")
 
 	# 2. Cycle to ATTACK then PRODUCE
 	game_state_node.trigger_end_action()
-	assert_eq(_get_ap(), 0, "AP remains 0 during ATTACK")
 	event_bus_node.wave_ended.emit(1)
-	assert_eq(_get_ap(), 0, "AP remains 0 during PRODUCE")
 
 	# 3. Watch signals for PRODUCE -> PLAN transition
-	var ap_watcher = watch_signal(event_bus_node, "ap_changed")
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
 
 	# Advance from PRODUCE -> PLAN
 	game_state_node.advance_phase()
 
 	assert_eq(int(game_state_node.current_phase), 0, "advance_phase() must transition PRODUCE (2) -> PLAN (0)")
-	assert_eq(_get_ap(), 3, "AP must be fully reset to max_ap (3) upon entering PLAN")
 	assert_true(phase_watcher.emitted, "phase_changed emitted on return to PLAN")
-	assert_true(ap_watcher.emitted, "ap_changed signal must be emitted on AP reset")
-	if not ap_watcher.last_args.is_empty():
-		assert_eq(int(ap_watcher.last_args[0]), 3, "ap_changed arg 0 (current_ap) must be 3")
-		assert_eq(int(ap_watcher.last_args[1]), 3, "ap_changed arg 1 (max_ap) must be 3")
 
 func test_advance_phase_full_cycle() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -288,12 +263,9 @@ func test_end_produce_phase_alias() -> void:
 	game_state_node.set_phase(2)
 	assert_eq(int(game_state_node.current_phase), 2, "In PRODUCE")
 
-	# Drain AP to test reset
-	game_state_node.current_ap = 0
 	game_state_node.end_produce_phase()
 
 	assert_eq(int(game_state_node.current_phase), 0, "end_produce_phase() transitions PRODUCE -> PLAN")
-	assert_eq(_get_ap(), 3, "AP reset to max_ap")
 
 func test_game_over_blocks_phase_transitions() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -318,54 +290,26 @@ func test_game_over_blocks_phase_transitions() -> void:
 # ==============================================================================
 
 
-
-
-
-
 func test_ap_spent_during_plan_restored_upon_returning_to_plan() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
 	assert_not_null(event_bus_node, "EventBus must exist")
 	if game_state_node == null or event_bus_node == null: return
 
-	# Spend 1 AP, then 2 AP (total 3 AP spent, remaining = 0)
-	assert_true(game_state_node.spend_ap(1), "Spend 1 AP succeeds")
-	assert_eq(_get_ap(), 2, "AP is 2")
-	assert_true(game_state_node.spend_ap(2), "Spend 2 AP succeeds")
-	assert_eq(_get_ap(), 0, "AP is 0")
 
 	# Enter ATTACK
 	game_state_node.trigger_end_action()
-	assert_eq(_get_ap(), 0, "AP must remain 0 during ATTACK")
 
 	# Wave ends -> enters PRODUCE
 	event_bus_node.wave_ended.emit(1)
-	assert_eq(_get_ap(), 0, "AP must remain 0 during PRODUCE")
 
 	# End produce -> return to PLAN
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), 0, "Returned to PLAN")
-	assert_eq(_get_ap(), 3, "AP fully restored to max_ap (3) upon returning to PLAN")
 
 func test_ap_restoration_with_building_bonus() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
 	if game_state_node == null: return
 
-	# Create a dummy building node with ap_bonus property
-	var ap_building = Node.new()
-	var scr = GDScript.new()
-	scr.source_code = "extends Node\nvar ap_bonus: int = 1\n"
-	scr.reload()
-	ap_building.set_script(scr)
-	_cleanup_nodes.append(ap_building)
-
-	game_state_node.register_building(ap_building)
-	assert_eq(int(game_state_node.max_ap), 4, "max_ap should increase to 4 with +1 AP building bonus")
-	game_state_node.reset_ap()
-	assert_eq(_get_ap(), 4, "AP refilled to upgraded max_ap (4)")
-
-	# Spend all 4 AP
-	assert_true(game_state_node.spend_ap(4), "Spend 4 AP succeeds")
-	assert_eq(_get_ap(), 0, "AP is 0")
 
 	# Cycle through ATTACK and PRODUCE to PLAN
 	game_state_node.advance_phase() # ATTACK
@@ -373,7 +317,6 @@ func test_ap_restoration_with_building_bonus() -> void:
 	game_state_node.advance_phase() # PLAN
 
 	assert_eq(int(game_state_node.current_phase), 0, "Returned to PLAN")
-	assert_eq(_get_ap(), 4, "AP restored to upgraded max_ap (4)")
 
 func test_a_produce_phase_with_nothing_to_produce_pays_nothing() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -394,7 +337,6 @@ func test_a_produce_phase_with_nothing_to_produce_pays_nothing() -> void:
 # ==============================================================================
 # 5. Category 3: Multi-Turn Simulation & Progression Tests (R3.3)
 # ==============================================================================
-
 
 
 func test_wave_3_big_wave_stat_buff_on_wave_ended() -> void:
@@ -443,21 +385,6 @@ func test_rapid_trigger_end_action_debouncing() -> void:
 	assert_eq(int(game_state_node.current_phase), 1, "Phase must transition to ATTACK (1)")
 	assert_eq(phase_watcher.emit_count, 1, "phase_changed must be emitted exactly once despite 10 rapid calls")
 
-func test_ap_reset_does_not_exceed_max_ap() -> void:
-	assert_not_null(game_state_node, "GameState must exist")
-	if game_state_node == null: return
-
-	# Reset when AP is already full
-	game_state_node.reset_ap()
-	assert_eq(_get_ap(), 3, "AP remains max_ap (3)")
-
-	# Reset when AP is mutated to negative (invalid state recovery)
-	game_state_node.current_ap = -5
-	game_state_node.reset_ap()
-	assert_eq(_get_ap(), 3, "AP recovers to max_ap (3)")
-
-
-## Wood a single LumberHut pays out on the legacy produce_phase, from Config.
 func _hut_yield() -> int:
 	var cfg = Engine.get_main_loop().root.get_node_or_null("Config")
 	if cfg == null:

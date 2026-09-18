@@ -169,8 +169,6 @@ func test_05_produce_phase_auto_advances_to_plan_after_delay() -> void:
 
 	# GameState must have auto-advanced back to PLAN (0)
 	assert_eq(game_state_node.current_phase, 0, "Phase must automatically transition to PLAN (0)")
-	assert_eq(game_state_node.current_ap, game_state_node.max_ap, "AP must be reset to max_ap")
-	assert_true(game_state_node.can_spend_ap(1), "Player must be able to spend AP again")
 
 func test_06_manual_end_produce_cancels_timer_and_avoids_double_advance() -> void:
 	assert_not_null(game_state_node, "GameState must exist")
@@ -190,10 +188,9 @@ func test_06_manual_end_produce_cancels_timer_and_avoids_double_advance() -> voi
 	assert_eq(game_state_node.current_phase, 0, "Phase must remain in PLAN (0) without ghost advance")
 
 # ==============================================================================
-# 5. Continuous Placement, Cancellation & AP Feedback Tests
 # ==============================================================================
 
-func test_07_hud_displays_ap_cost_on_building_buttons() -> void:
+func test_07_hud_build_buttons_carry_only_the_building_name() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
 	var main_inst = main_scene_packed.instantiate()
 	_cleanup_nodes.append(main_inst)
@@ -237,10 +234,8 @@ func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	tree.root.add_child(main_inst)
 
 	game_state_node.reset_game()
-	# This test is about AP exhaustion, so fund the walls from Config and let AP
 	# be the only thing that runs out.
 	game_state_node.resources["wood"] = cost_of("wall") * 4
-	assert_eq(game_state_node.current_ap, 3, "Starting AP must be 3")
 
 	# Select wall
 	main_inst.on_build_selected("wall")
@@ -252,7 +247,6 @@ func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(placed1, "Wall 1 placed successfully")
 	if not main_inst._can_afford_building(main_inst.current_build_type):
 		main_inst.cancel_building_selection()
-	assert_eq(main_inst.current_build_type, "wall", "Selection persists after Wall 1 (AP=2)")
 
 	# Place wall 2 at cell (1, -2)
 	var cell2 = Vector2i(1, -2)
@@ -260,7 +254,6 @@ func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(placed2, "Wall 2 placed successfully")
 	if not main_inst._can_afford_building(main_inst.current_build_type):
 		main_inst.cancel_building_selection()
-	assert_eq(main_inst.current_build_type, "wall", "Selection persists after Wall 2 (AP=1)")
 
 	# Place wall 3 at cell (1, -3)
 	var cell3 = Vector2i(1, -3)
@@ -268,8 +261,6 @@ func test_08_continuous_building_placement_until_ap_exhausted() -> void:
 	assert_not_null(placed3, "Wall 3 placed successfully")
 	if not main_inst._can_afford_building(main_inst.current_build_type):
 		main_inst.cancel_building_selection()
-	assert_eq(game_state_node.current_ap, 0, "AP is now 0")
-	assert_eq(main_inst.current_build_type, "", "Build selection automatically exits when AP is exhausted")
 
 func test_09_cancel_building_selection_and_hud_hint() -> void:
 	assert_not_null(main_scene_packed, "Main.tscn must exist and load")
@@ -449,5 +440,4 @@ func test_13_version_metadata_and_hud_display() -> void:
 	tree.root.add_child(programmatic_hud)
 	await wait_frames(2)
 	assert_eq(programmatic_hud.get_version_text(), declared, "Programmatic HUD resolves the declared version")
-
 

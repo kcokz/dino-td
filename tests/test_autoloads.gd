@@ -58,20 +58,6 @@ func after_all() -> void:
 
 # --- Helper Accessors ---
 
-func _get_ap(state: Object) -> int:
-	if "current_ap" in state:
-		return state.current_ap
-	if "ap" in state:
-		return state.ap
-	return -1
-
-func _get_max_ap(state: Object) -> int:
-	if "max_ap" in state:
-		return state.max_ap
-	if "ap_max" in state:
-		return state.ap_max
-	return -1
-
 func _get_resources(state: Object) -> Dictionary:
 	if "resources" in state and state.resources is Dictionary:
 		return state.resources
@@ -98,10 +84,6 @@ func test_config_numerical_constants() -> void:
 	if config_node == null:
 		assert_true(false, "Config node missing; cannot verify constants")
 		return
-
-	assert_has(config_node, "BASE_AP", "Config must define BASE_AP")
-	if "BASE_AP" in config_node:
-		assert_eq(config_node.BASE_AP, 3, "Config.BASE_AP should equal 3")
 
 	assert_has(config_node, "TILE_SIZE", "Config must define TILE_SIZE")
 	if "TILE_SIZE" in config_node:
@@ -197,7 +179,6 @@ func test_eventbus_signals_catalog() -> void:
 
 	var required_signals = [
 		"phase_changed",
-		"ap_changed",
 		"resources_changed",
 		"building_placed",
 		"building_destroyed",
@@ -241,47 +222,11 @@ func test_gamestate_initial_values() -> void:
 		assert_true(false, "GameState node missing; cannot verify initial state")
 		return
 
-	var current_ap = _get_ap(game_state_node)
-	var max_ap = _get_max_ap(game_state_node)
 	var res = _get_resources(game_state_node)
 	var phase = _get_phase(game_state_node)
 
-	assert_eq(current_ap, 3, "Initial AP should equal 3 (Config.BASE_AP)")
-	assert_eq(max_ap, 3, "Initial Max AP should equal 3 (Config.BASE_AP)")
 	assert_eq(phase, 0, "Initial Phase should be PLAN (0)")
 	assert_has(res, "wood", "GameState resources should have wood")
-
-func test_gamestate_ap_spend_and_reset() -> void:
-	if game_state_node == null:
-		assert_true(false, "GameState node missing; cannot test AP mechanics")
-		return
-
-	if not game_state_node.has_method("spend_ap") or not game_state_node.has_method("reset_ap"):
-		assert_true(false, "GameState missing spend_ap or reset_ap method")
-		return
-
-	# Reset state first
-	if game_state_node.has_method("reset_game"):
-		game_state_node.call("reset_game")
-	else:
-		game_state_node.call("reset_ap")
-
-	var initial_ap = _get_ap(game_state_node)
-	assert_eq(initial_ap, 3, "AP should be 3 before spend")
-
-	# Spend 1 AP
-	var spend_success = game_state_node.call("spend_ap", 1)
-	assert_true(spend_success, "spend_ap(1) should succeed")
-	assert_eq(_get_ap(game_state_node), 2, "AP should be 2 after spending 1")
-
-	# Attempt spending more AP than available
-	var overspend_success = game_state_node.call("spend_ap", 999)
-	assert_false(overspend_success, "spend_ap(999) should return false")
-	assert_eq(_get_ap(game_state_node), 2, "AP should remain 2 after failed overspend")
-
-	# Reset AP
-	game_state_node.call("reset_ap")
-	assert_eq(_get_ap(game_state_node), 3, "reset_ap() should restore AP to max")
 
 func test_gamestate_resources_spend_and_add() -> void:
 	if game_state_node == null:
@@ -303,42 +248,6 @@ func test_gamestate_resources_spend_and_add() -> void:
 		game_state_node.call("add_resources", {"wood": 5})
 		var post_wood = _get_resources(game_state_node).get("wood", 0)
 		assert_eq(post_wood, pre_wood + 5, "add_resources should increase wood by 5")
-
-func test_gamestate_ap_boundary_conditions() -> void:
-	if game_state_node == null:
-		assert_true(false, "GameState node missing; cannot test AP boundary conditions")
-		return
-
-	if not game_state_node.has_method("spend_ap") or not game_state_node.has_method("reset_ap"):
-		assert_true(false, "GameState missing spend_ap or reset_ap method")
-		return
-
-	game_state_node.call("reset_ap")
-	var initial_ap = _get_ap(game_state_node)
-
-	# Spending 0 AP should succeed and not alter AP balance
-	var spend_zero = game_state_node.call("spend_ap", 0)
-	assert_true(spend_zero, "spend_ap(0) should return true")
-	assert_eq(_get_ap(game_state_node), initial_ap, "spend_ap(0) should not change AP")
-
-	# Spending negative AP should be rejected
-	var spend_negative = game_state_node.call("spend_ap", -1)
-	assert_false(spend_negative, "spend_ap(-1) should return false")
-	assert_eq(_get_ap(game_state_node), initial_ap, "spend_ap(-1) should not change AP")
-
-	# Drain all AP
-	var spend_all = game_state_node.call("spend_ap", initial_ap)
-	assert_true(spend_all, "spend_ap(initial_ap) should succeed")
-	assert_eq(_get_ap(game_state_node), 0, "AP should be exactly 0 after draining")
-
-	# Spending 1 AP when 0 AP left must fail
-	var spend_empty = game_state_node.call("spend_ap", 1)
-	assert_false(spend_empty, "spend_ap(1) with 0 AP must fail")
-	assert_eq(_get_ap(game_state_node), 0, "AP must remain 0")
-
-	# Reset restores full AP
-	game_state_node.call("reset_ap")
-	assert_eq(_get_ap(game_state_node), initial_ap, "reset_ap should restore to full max AP")
 
 func test_gamestate_resources_boundary_conditions() -> void:
 	if game_state_node == null:
@@ -379,9 +288,6 @@ func test_gamestate_turn_cycle_and_phase_transitions() -> void:
 	if not phase_watcher.last_args.is_empty():
 		assert_eq(phase_watcher.last_args[0], 1, "phase_changed should pass 1 for ATTACK")
 
-	game_state_node.call("spend_ap", 1)
-	assert_eq(_get_ap(game_state_node), 2, "AP should be 2 after spending 1 in ATTACK")
-
 	phase_watcher.emitted = false
 	game_state_node.call("advance_phase")
 	assert_eq(_get_phase(game_state_node), 2, "Phase should advance to PRODUCE (2)")
@@ -392,7 +298,6 @@ func test_gamestate_turn_cycle_and_phase_transitions() -> void:
 	game_state_node.call("advance_phase")
 	assert_eq(_get_phase(game_state_node), 0, "Phase should advance to PLAN (0)")
 	assert_true(phase_watcher.emitted, "phase_changed should emit on transition to PLAN")
-	assert_eq(_get_ap(game_state_node), _get_max_ap(game_state_node), "AP should reset to max on entering PLAN")
 
 func test_gamestate_wave_scaling_after_big_wave() -> void:
 	if game_state_node == null or event_bus_node == null:
@@ -411,30 +316,6 @@ func test_gamestate_wave_scaling_after_big_wave() -> void:
 	assert_almost_eq(float(mult_w3.get("hp", 0.0)), 1.3, 0.01, "Dino HP multiplier scaled by 1.3 after wave 3")
 	assert_almost_eq(float(mult_w3.get("damage", 0.0)), 1.2, 0.01, "Dino damage multiplier scaled by 1.2 after wave 3")
 	assert_almost_eq(float(mult_w3.get("speed", 0.0)), 1.0, 0.01, "Dino speed multiplier scaled by 1.0 after wave 3")
-
-func test_gamestate_building_ap_bonus_lifecycle() -> void:
-	if game_state_node == null or event_bus_node == null:
-		assert_true(false, "GameState or EventBus missing; cannot test building lifecycle")
-		return
-
-	if game_state_node.has_method("reset_game"):
-		game_state_node.call("reset_game")
-
-	var initial_max_ap = _get_max_ap(game_state_node)
-	assert_eq(initial_max_ap, 3, "Initial max AP should be 3")
-
-	var mock_building = Node.new()
-	var script = GDScript.new()
-	script.source_code = "extends Node\nvar ap_bonus: int = 1\n"
-	script.reload()
-	mock_building.set_script(script)
-	_cleanup_nodes.append(mock_building)
-
-	event_bus_node.emit_signal("building_placed", mock_building)
-	assert_eq(_get_max_ap(game_state_node), 4, "Max AP should increase to 4 when AP building is placed")
-
-	event_bus_node.emit_signal("building_destroyed", mock_building)
-	assert_eq(_get_max_ap(game_state_node), 3, "Max AP should return to 3 when AP building is destroyed")
 
 func test_gamestate_win_and_loss_terminal_states() -> void:
 	if game_state_node == null or event_bus_node == null:

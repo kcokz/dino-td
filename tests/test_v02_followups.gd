@@ -2,7 +2,6 @@
 # Test suite for the v0.2 follow-up changes:
 # 1. Legacy HUD build buttons removed; building lives only on the Hero Option Panel.
 # 2. Config.UI drives HUD / panel / world-label sizing (no hardcoded font sizes).
-# 3. Phase-era top-bar controls (AP, deploy countdown, phase, end-deployment) hidden.
 # 5. Stone and Water are visible in the HUD, not just Wood.
 extends "res://tests/test_base.gd"
 
@@ -86,7 +85,6 @@ func test_02_phase_era_controls_are_hidden() -> void:
 	await wait_frames(1)
 
 	# v0.2 removed deploy/attack/produce phases, so these describe nothing actionable.
-	assert_false(hud.ap_label.visible, "AP label hidden (AP was removed in v0.1)")
 	assert_false(hud.deploy_timer_label.visible, "Deploy countdown hidden (no phases in v0.2)")
 	assert_false(hud.phase_label.visible, "Phase label hidden (no phases in v0.2)")
 	assert_false(hud.end_action_btn.visible, "End-deployment button hidden (no phases in v0.2)")
@@ -175,12 +173,6 @@ func _make_node(res_type: String, dist: float) -> Node:
 	tree.root.add_child(n)
 	n.position = Vector3(dist, 0.0, 0.0)
 	return n
-
-
-
-
-
-
 
 
 # ==============================================================================
@@ -1003,13 +995,6 @@ func test_49_hero_level_1_menu_only_has_build_button() -> void:
 	assert_eq(panel.button_container.get_child_count(), 1, "Level 1 menu has exactly 1 button")
 	var btn = panel.button_container.get_child(0)
 	assert_eq(btn.text, tr("CMD_BUILD"), "The single button is Build")
-
-
-
-
-
-
-
 
 
 func test_58_depleted_nodes_report_themselves_unavailable() -> void:

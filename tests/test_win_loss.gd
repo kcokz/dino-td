@@ -3,7 +3,6 @@
 # Requirement R5 Acceptance Test Suite:
 # Verifies Win Condition (Nest 30 HP, nest_destroyed, game_won, GameState flags, action lockout),
 # Loss Condition (Core 10 HP, core_hp_changed, game_lost, GameState flags, action lockout),
-# HUD Display (AP, Wood, Wave, HP updates, Victory/Defeat overlays, End Action button),
 # and Game Restart (GameState reset, entity purging, Core/Nest re-instantiation, action re-enable).
 # ==============================================================================
 extends "res://tests/test_base.gd"
@@ -111,8 +110,6 @@ func before_each() -> void:
 			game_state_node.call("reset_game")
 		else:
 			if "current_phase" in game_state_node: game_state_node.current_phase = 0
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "max_ap" in game_state_node: game_state_node.max_ap = 3
 			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
 			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 			if "is_game_won" in game_state_node: game_state_node.is_game_won = false
@@ -322,9 +319,6 @@ func test_win_06_action_lockout_on_victory() -> void:
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), initial_phase, "advance_phase must be blocked when game is won")
 
-	# 3. AP spending blocked
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap must return false when game is won")
-	assert_false(game_state_node.spend_ap(1), "spend_ap must return false when game is won")
 
 	# 4. Building placement blocked
 	if build_system_script and grid_manager_script:
@@ -456,9 +450,6 @@ func test_loss_06_action_lockout_on_loss() -> void:
 	game_state_node.advance_phase()
 	assert_eq(int(game_state_node.current_phase), initial_phase, "advance_phase must be blocked when game is lost")
 
-	# 3. AP spending blocked
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap must return false when game is lost")
-	assert_false(game_state_node.spend_ap(1), "spend_ap must return false when game is lost")
 
 	# 4. Building placement blocked
 	if build_system_script and grid_manager_script:
@@ -494,38 +485,15 @@ func test_hud_01_component_hierarchy_and_initial_state() -> void:
 		assert_false(game_over_panel.visible, "GameOver panel must initially be hidden (visible = false)")
 
 	# Assert TopBar / HUD Labels exist
-	var ap_label = hud.find_child("*AP*", true, false)
 	var wood_label = hud.find_child("*Wood*", true, false)
 	if wood_label == null: wood_label = hud.find_child("*Resource*", true, false)
 	var wave_label = hud.find_child("*Wave*", true, false)
 	var hp_label = hud.find_child("*HP*", true, false)
 	if hp_label == null: hp_label = hud.find_child("*Core*", true, false)
 
-	assert_not_null(ap_label, "HUD must contain AP label")
 	assert_not_null(wood_label, "HUD must contain Wood/Resource label")
 	assert_not_null(wave_label, "HUD must contain Wave label")
 	assert_not_null(hp_label, "HUD must contain Core HP label")
-
-func test_hud_02_updates_on_ap_changed_signal() -> void:
-	var hud = _create_hud()
-	if hud == null: return
-	if tree and tree.root:
-		tree.root.add_child(hud)
-		await wait_frames(2)
-
-	var ap_label = hud.find_child("*AP*", true, false) as Label
-	assert_not_null(ap_label, "AP label must exist")
-	if ap_label == null: return
-
-	# Emit AP changed: 2 current, 3 max
-	event_bus_node.ap_changed.emit(2, 3)
-	await wait_frames(1)
-	assert_true("2" in ap_label.text and "3" in ap_label.text, "AP label text must reflect 2/3 (got '%s')" % ap_label.text)
-
-	# Emit AP changed: 0 current, 3 max
-	event_bus_node.ap_changed.emit(0, 3)
-	await wait_frames(1)
-	assert_true("0" in ap_label.text and "3" in ap_label.text, "AP label text must reflect 0/3 (got '%s')" % ap_label.text)
 
 func test_hud_03_updates_on_resources_changed_signal() -> void:
 	var hud = _create_hud()
@@ -649,7 +617,6 @@ func test_hud_08_end_action_button_triggers_plan_end() -> void:
 
 func test_restart_01_resets_gamestate_values() -> void:
 	# Dirty the state
-	game_state_node.current_ap = 0
 	game_state_node.resources["wood"] = 1
 	game_state_node.wave_number = 5
 	game_state_node.is_game_over = true
@@ -657,8 +624,6 @@ func test_restart_01_resets_gamestate_values() -> void:
 
 	game_state_node.reset_game()
 
-	assert_eq(int(game_state_node.current_ap), 3, "current_ap reset to BASE_AP (3)")
-	assert_eq(int(game_state_node.max_ap), 3, "max_ap reset to BASE_AP (3)")
 	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "wood reset to Config.INITIAL_RESOURCES")
 	assert_false(bool(game_state_node.get("is_game_over")), "is_game_over reset to false")
 	assert_false(bool(game_state_node.get("is_game_won")), "is_game_won reset to false")
@@ -771,10 +736,6 @@ func test_restart_05_reenables_gameplay_actions() -> void:
 	await wait_frames(1)
 	assert_false(bool(game_state_node.get("is_game_over")), "Game is no longer over")
 
-	# Verify AP spending re-enabled
-	assert_true(game_state_node.can_spend_ap(1), "can_spend_ap must return true after restart")
-	assert_true(game_state_node.spend_ap(1), "spend_ap must succeed after restart")
-	assert_eq(int(game_state_node.current_ap), 2, "AP drops from 3 to 2")
 
 	# Verify building placement re-enabled. A reset wallet holds nothing since
 	# v0.3 -- the opening stock is on the ground -- and this test is about the
@@ -803,7 +764,6 @@ func test_restart_06_consecutive_multi_restart_stability() -> void:
 
 		game_state_node.reset_game()
 		assert_false(bool(game_state_node.get("is_game_over")), "Cycle %d: Reset game over" % cycle)
-		assert_eq(int(game_state_node.current_ap), 3, "Cycle %d: AP restored" % cycle)
 
 		event_bus_node.game_lost.emit()
 		assert_true(bool(game_state_node.get("is_game_over")), "Cycle %d: Game lost" % cycle)
@@ -830,7 +790,6 @@ func test_flow_01_complete_win_and_restart_lifecycle() -> void:
 
 	# 1. Active planning phase
 	assert_eq(int(game_state_node.current_phase), 0, "Phase starts in PLAN")
-	assert_eq(int(game_state_node.current_ap), 3, "AP starts at 3")
 
 	# 2. Player ends action to begin attack
 	game_state_node.trigger_end_action()

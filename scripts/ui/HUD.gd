@@ -19,7 +19,6 @@ signal pause_clicked()
 # UI Node References
 # ==============================================================================
 var root_control: Control = null
-var ap_label: Label = null
 var wood_label: Label = null
 var stone_label: Label = null
 var water_label: Label = null
@@ -77,8 +76,6 @@ func _exit_tree() -> void:
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
 	if eb:
-		if eb.has_signal("ap_changed") and not eb.ap_changed.is_connected(_on_ap_changed):
-			eb.ap_changed.connect(_on_ap_changed)
 		if eb.has_signal("resources_changed") and not eb.resources_changed.is_connected(_on_resources_changed):
 			eb.resources_changed.connect(_on_resources_changed)
 		if eb.has_signal("wave_started") and not eb.wave_started.is_connected(_on_wave_started):
@@ -105,8 +102,6 @@ func _connect_event_bus() -> void:
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb):
-		if eb.has_signal("ap_changed") and eb.ap_changed.is_connected(_on_ap_changed):
-			eb.ap_changed.disconnect(_on_ap_changed)
 		if eb.has_signal("resources_changed") and eb.resources_changed.is_connected(_on_resources_changed):
 			eb.resources_changed.disconnect(_on_resources_changed)
 		if eb.has_signal("wave_started") and eb.wave_started.is_connected(_on_wave_started):
@@ -132,14 +127,6 @@ func _disconnect_event_bus() -> void:
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
-
-func _on_ap_changed(cur: int, max_val: int) -> void:
-	if ap_label:
-		ap_label.text = tr("HUD_AP") % [cur, max_val]
-		ap_label.visible = false
-	var vsep1 = find_child("VSeparator1", true, false)
-	if vsep1:
-		vsep1.visible = false
 
 func _on_deploy_time_changed(remaining: float, _total: float) -> void:
 	if deploy_timer_label:
@@ -272,13 +259,6 @@ func _on_pause_pressed() -> void:
 func _on_speed_button_pressed() -> void:
 	_on_speed_btn_pressed()
 
-func _check_ap_hint() -> void:
-	var gs = _get_game_state()
-	if gs and "infinite_ap" in gs and gs.infinite_ap:
-		return
-	if gs and "current_ap" in gs and gs.current_ap <= 0:
-		show_hint(tr("HINT_NO_AP"))
-
 func select_build_type(type_id: String) -> void:
 	selected_build_type = type_id
 	build_requested.emit(type_id)
@@ -318,17 +298,6 @@ func reset_hud() -> void:
 	var gs = _get_game_state()
 	var cfg = _get_config()
 
-
-	var default_ap: int = cfg.BASE_AP if (cfg and "BASE_AP" in cfg) else 3
-	var cur_ap: int = gs.current_ap if (gs and "current_ap" in gs) else default_ap
-	var max_ap: int = gs.max_ap if (gs and "max_ap" in gs) else default_ap
-	_on_ap_changed(cur_ap, max_ap)
-
-	if ap_label:
-		ap_label.visible = false
-	var vsep1 = find_child("VSeparator1", true, false)
-	if vsep1:
-		vsep1.visible = false
 
 	var default_res: Dictionary = cfg.INITIAL_RESOURCES if (cfg and "INITIAL_RESOURCES" in cfg) else {"wood": 10}
 	var res_dict: Dictionary = gs.resources if (gs and "resources" in gs) else default_res
@@ -383,9 +352,6 @@ func _set_action_buttons_enabled(enabled: bool) -> void:
 	if end_action_btn: end_action_btn.disabled = not enabled
 
 # Testing Query API
-func get_ap_text() -> String:
-	return ap_label.text if ap_label else ""
-
 func get_wood_text() -> String:
 	return wood_label.text if wood_label else ""
 
@@ -435,7 +401,6 @@ func get_version_text() -> String:
 
 func _ensure_ui_components() -> void:
 	# Search existing scene tree first
-	ap_label = find_child("APLabel", true, false) as Label
 	wood_label = find_child("WoodLabel", true, false) as Label
 	stone_label = find_child("StoneLabel", true, false) as Label
 	water_label = find_child("WaterLabel", true, false) as Label
@@ -474,11 +439,6 @@ func _ensure_ui_components() -> void:
 		root_control.set_anchors_preset(Control.PRESET_FULL_RECT)
 		root_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(root_control)
-
-	if ap_label == null:
-		ap_label = Label.new()
-		ap_label.name = "APLabel"
-		root_control.add_child(ap_label)
 
 	if wood_label == null:
 		wood_label = Label.new()
@@ -647,12 +607,6 @@ func _ensure_ui_components() -> void:
 			if option_panel.has_signal("build_option_selected"):
 				option_panel.build_option_selected.connect(select_build_type)
 
-	if ap_label:
-		ap_label.visible = false
-	var vsep1 = find_child("VSeparator1", true, false)
-	if vsep1:
-		vsep1.visible = false
-
 
 # ==============================================================================
 # Resolvers
@@ -694,7 +648,7 @@ func _apply_ui_scale() -> void:
 	var button_size: int = int(cfg.UI.get("hud_button_font_size", 24))
 	var title_size: int = int(cfg.UI.get("gameover_title_font_size", 48))
 
-	for lbl in [ap_label, wood_label, stone_label, water_label, food_label, bone_label, wave_label, core_hp_label, hero_hp_label,
+	for lbl in [wood_label, stone_label, water_label, food_label, bone_label, wave_label, core_hp_label, hero_hp_label,
 			deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
 		if lbl and is_instance_valid(lbl):
 			lbl.add_theme_font_size_override("font_size", label_size)
@@ -709,12 +663,12 @@ func _apply_ui_scale() -> void:
 		details_label.add_theme_font_size_override("font_size", label_size)
 
 ## v0.2 removed the deploy/attack/produce phases and made raids continuous/random,
-## so phase-era top-bar controls (AP, deploy countdown, phase name, "end deployment")
-## and the wave counter no longer describe anything the player acts on directly.
-## They stay instantiated for API compatibility until legacy systems are deleted,
-## but are hidden from the player.
+## so phase-era top-bar controls (deploy countdown, phase name, "end deployment") and
+## the wave counter no longer describe anything the player acts on directly. They stay
+## instantiated for API compatibility until legacy systems are deleted, but are hidden
+## from the player.
 func _hide_legacy_phase_controls() -> void:
-	for ctrl in [ap_label, deploy_timer_label, phase_label, end_action_btn, wave_label]:
+	for ctrl in [deploy_timer_label, phase_label, end_action_btn, wave_label]:
 		if ctrl and is_instance_valid(ctrl):
 			ctrl.visible = false
 	var vsep3 = find_child("VSeparator3", true, false)

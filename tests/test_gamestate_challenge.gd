@@ -1,6 +1,5 @@
 # res://tests/test_gamestate_challenge.gd
 # Empirical Challenger Test Suite for Milestone 1 GameState implementation.
-# Stress-tests state mutation, resource bounds, AP constraints, rapid phase cycling,
 # repeated resets, and adversarial edge cases.
 extends "res://tests/test_base.gd"
 
@@ -55,53 +54,14 @@ func after_all() -> void:
 	_allocated_nodes.clear()
 
 # ==============================================================================
-# Challenge 1: Negative AP Spend & Boundary Violations
 # ==============================================================================
 func test_challenge_negative_ap_spend() -> void:
 	assert_not_null(game_state, "GameState must exist")
-	var initial_ap: int = game_state.current_ap
-	assert_eq(initial_ap, 3, "Starting AP must be 3")
 
-	# can_spend_ap with negative inputs
-	assert_false(game_state.can_spend_ap(-1), "can_spend_ap(-1) must return false")
-	assert_false(game_state.can_spend_ap(-999), "can_spend_ap(-999) must return false")
-	assert_false(game_state.can_spend_ap(-2147483648), "can_spend_ap(INT_MIN) must return false")
-
-	# spend_ap with negative inputs
-	var ap_watcher = watch_signal(event_bus, "ap_changed")
-	assert_false(game_state.spend_ap(-1), "spend_ap(-1) must return false")
-	assert_false(game_state.spend_ap(-50), "spend_ap(-50) must return false")
-	assert_eq(game_state.current_ap, initial_ap, "current_ap must remain unchanged after negative spend attempts")
-	assert_false(ap_watcher.emitted, "ap_changed signal must not fire on rejected negative spend")
 
 # ==============================================================================
-# Challenge 2: AP Overdraft and Exact Depletion
 # ==============================================================================
-func test_challenge_ap_overdraft_and_exact_depletion() -> void:
-	assert_not_null(game_state, "GameState must exist")
-	assert_eq(game_state.current_ap, 3, "Starting AP must be 3")
 
-	# Exhaust AP to 0 exactly
-	assert_true(game_state.spend_ap(3), "spend_ap(3) should succeed when AP is 3")
-	assert_eq(game_state.current_ap, 0, "AP should be exactly 0")
-
-	# At 0 AP, spending 0 is valid and changes nothing
-	assert_true(game_state.spend_ap(0), "spend_ap(0) with 0 AP should succeed")
-	assert_eq(game_state.current_ap, 0, "AP must remain 0")
-
-	# At 0 AP, spending 1 must fail
-	assert_false(game_state.can_spend_ap(1), "can_spend_ap(1) must return false at 0 AP")
-	assert_false(game_state.spend_ap(1), "spend_ap(1) must return false at 0 AP")
-	assert_false(game_state.spend_ap(9999), "spend_ap(9999) must return false at 0 AP")
-	assert_eq(game_state.current_ap, 0, "AP must remain 0 after rejected overdraft")
-
-	# Reset AP restores to max
-	game_state.reset_ap()
-	assert_eq(game_state.current_ap, game_state.max_ap, "reset_ap() must restore AP to max_ap")
-
-# ==============================================================================
-# Challenge 3: Resource Negative Costs & Exploit Attempts
-# ==============================================================================
 func test_challenge_resource_negative_cost_exploits() -> void:
 	assert_not_null(game_state, "GameState must exist")
 	var initial_wood: int = game_state.resources.get("wood", 0)
@@ -186,10 +146,6 @@ func test_challenge_100_rapid_phase_transitions() -> void:
 	var expected_produce_emits = 0
 
 	for i in range(total_transitions):
-		# Spend 1 AP during PLAN to verify auto-reset on returning to PLAN
-		if game_state.current_phase == 0:
-			game_state.spend_ap(1)
-
 		expected_phase = (expected_phase + 1) % 3
 		if expected_phase == 2:
 			expected_produce_emits += 1
@@ -197,10 +153,6 @@ func test_challenge_100_rapid_phase_transitions() -> void:
 		game_state.advance_phase()
 
 		assert_eq(game_state.current_phase, expected_phase, "Phase at iteration %d must be %d" % [i, expected_phase])
-
-		# When entering PLAN phase, AP must be auto-reset to max_ap
-		if game_state.current_phase == 0:
-			assert_eq(game_state.current_ap, game_state.max_ap, "AP must be restored to max_ap upon returning to PLAN (iter %d)" % i)
 
 	assert_eq(phase_watcher.emit_count, total_transitions, "phase_changed should emit exactly %d times" % total_transitions)
 	assert_eq(produce_watcher.emit_count, expected_produce_emits, "produce_phase should emit exactly %d times" % expected_produce_emits)
@@ -216,8 +168,6 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		# Heavily pollute state
 		game_state.is_game_over = true
 		game_state.current_phase = 1 # ATTACK
-		game_state.current_ap = 0
-		game_state.max_ap = 99
 		game_state.wave_number = 88
 		game_state.nests_alive = 0
 		game_state.dino_stat_multipliers = {"hp": 99.0, "damage": 88.0, "speed": 77.0, "extra": 12.0}
@@ -234,8 +184,6 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		# Verify all invariants strictly hold
 		assert_false(game_state.is_game_over, "is_game_over must be false after reset (cycle %d)" % cycle)
 		assert_eq(game_state.current_phase, 0, "current_phase must be PLAN (0) after reset (cycle %d)" % cycle)
-		assert_eq(game_state.max_ap, 3, "max_ap must be 3 after reset (cycle %d)" % cycle)
-		assert_eq(game_state.current_ap, 3, "current_ap must be 3 after reset (cycle %d)" % cycle)
 		assert_eq(game_state.wave_number, 0, "wave_number must be 0 after reset (cycle %d)" % cycle)
 		assert_eq(game_state.nests_alive, 1, "nests_alive must be 1 after reset (cycle %d)" % cycle)
 		assert_eq(game_state.active_buildings.size(), 0, "active_buildings must be empty after reset (cycle %d)" % cycle)
@@ -253,7 +201,6 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		assert_false(mults.has("extra"), "extra multiplier key must be gone (cycle %d)" % cycle)
 
 # ==============================================================================
-# Challenge 8: Building AP Bonus & Registration Idempotency
 # ==============================================================================
 func test_challenge_building_registration_stress() -> void:
 	assert_not_null(game_state, "GameState must exist")
@@ -261,34 +208,28 @@ func test_challenge_building_registration_stress() -> void:
 
 	var b1 = Node.new()
 	var scr1 = GDScript.new()
-	scr1.source_code = "extends Node\nvar ap_bonus: int = 1\n"
 	scr1.reload()
 	b1.set_script(scr1)
 	_allocated_nodes.append(b1)
 
 	# Register b1 once
 	game_state.register_building(b1)
-	assert_eq(game_state.max_ap, 4, "max_ap should be 4 with 1 bonus building")
 	assert_eq(game_state.active_buildings.size(), 1, "active_buildings size should be 1")
 
 	# Register b1 a second time (idempotency check)
 	game_state.register_building(b1)
-	assert_eq(game_state.max_ap, 4, "max_ap should still be 4 (duplicate registration ignored)")
 	assert_eq(game_state.active_buildings.size(), 1, "active_buildings size should still be 1")
 
 	# Unregister b1
 	game_state.unregister_building(b1)
-	assert_eq(game_state.max_ap, 3, "max_ap should revert to 3")
 	assert_eq(game_state.active_buildings.size(), 0, "active_buildings should be empty")
 
 	# Unregister b1 again (spurious unregister check)
 	game_state.unregister_building(b1)
-	assert_eq(game_state.max_ap, 3, "max_ap remains 3")
 	assert_eq(game_state.active_buildings.size(), 0, "active_buildings remains empty")
 
 	# Register null node
 	game_state.register_building(null)
-	assert_eq(game_state.max_ap, 3, "registering null does not alter max_ap")
 	assert_eq(game_state.active_buildings.size(), 0, "active_buildings remains empty")
 
 # ==============================================================================

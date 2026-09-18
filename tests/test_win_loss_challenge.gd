@@ -4,7 +4,6 @@
 # Rigorously stress-tests:
 # 1. Race conditions: Rapid / simultaneous damage on Nest and Core.
 # 2. Idempotency: Repeated destruction calls on dead Nest and dead Core.
-# 3. Action locking: 100% rejection of AP spend, wood spend, building placement,
 #    end action click, and phase advance post-victory (game_won) and post-defeat (game_lost).
 # 4. Extreme combat: Tower attacking Nest under multiple towers and 5.0m threshold boundary conditions.
 # ==============================================================================
@@ -72,8 +71,6 @@ func before_each() -> void:
 			game_state_node.call("reset_game")
 		else:
 			if "current_phase" in game_state_node: game_state_node.current_phase = 0
-			if "current_ap" in game_state_node: game_state_node.current_ap = 3
-			if "max_ap" in game_state_node: game_state_node.max_ap = 3
 			if "resources" in game_state_node: game_state_node.resources = {"wood": 10, "stone": 0, "food": 0}
 			if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 			if "is_game_won" in game_state_node: game_state_node.is_game_won = false
@@ -407,16 +404,9 @@ func test_challenge_lockout_won_complete_action_rejection() -> void:
 	assert_true(game_state_node.is_game_over, "is_game_over must be true")
 	assert_true(game_state_node.is_game_won, "is_game_won must be true")
 
-	var initial_ap = game_state_node.current_ap
 	var initial_wood = game_state_node.resources.get("wood", 0)
 	var initial_phase = int(game_state_node.current_phase)
 
-	# 1. AP spend rejection
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap(1) rejected post-win")
-	assert_false(game_state_node.can_spend_ap(0), "can_spend_ap(0) rejected post-win")
-	assert_false(game_state_node.spend_ap(1), "spend_ap(1) rejected post-win")
-	assert_false(game_state_node.spend_ap(0), "spend_ap(0) rejected post-win")
-	assert_eq(game_state_node.current_ap, initial_ap, "current_ap unmodified")
 
 	# 2. Building placement & wood spend rejection for all building types
 	var place_watcher = watch_signal(event_bus_node, "building_placed")
@@ -431,7 +421,6 @@ func test_challenge_lockout_won_complete_action_rejection() -> void:
 
 	assert_false(place_watcher.emitted, "Zero building_placed signals post-win")
 	assert_eq(game_state_node.resources.get("wood", 0), initial_wood, "Wood remains untouched (zero wood spend post-win)")
-	assert_eq(game_state_node.current_ap, initial_ap, "AP remains untouched post-win")
 
 	# 3. End action click rejection
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
@@ -457,7 +446,6 @@ func test_challenge_lockout_won_hammering_loop() -> void:
 	var initial_wood = game_state_node.resources.get("wood", 0)
 
 	for i in range(50):
-		assert_false(game_state_node.spend_ap(1), "spend_ap rejected on iteration %d" % i)
 		assert_null(bs.place_building("tower", Vector2i(i + 1, 0)), "place_building rejected on iteration %d" % i)
 		game_state_node.trigger_end_action()
 		game_state_node.advance_phase()
@@ -490,16 +478,9 @@ func test_challenge_lockout_lost_complete_action_rejection() -> void:
 	assert_true(game_state_node.is_game_over, "is_game_over must be true")
 	assert_false(game_state_node.is_game_won, "is_game_won must be false")
 
-	var initial_ap = game_state_node.current_ap
 	var initial_wood = game_state_node.resources.get("wood", 0)
 	var initial_phase = int(game_state_node.current_phase)
 
-	# 1. AP spend rejection
-	assert_false(game_state_node.can_spend_ap(1), "can_spend_ap(1) rejected post-loss")
-	assert_false(game_state_node.can_spend_ap(0), "can_spend_ap(0) rejected post-loss")
-	assert_false(game_state_node.spend_ap(1), "spend_ap(1) rejected post-loss")
-	assert_false(game_state_node.spend_ap(0), "spend_ap(0) rejected post-loss")
-	assert_eq(game_state_node.current_ap, initial_ap, "current_ap unmodified")
 
 	# 2. Building placement & wood spend rejection for all building types
 	var place_watcher = watch_signal(event_bus_node, "building_placed")
@@ -514,7 +495,6 @@ func test_challenge_lockout_lost_complete_action_rejection() -> void:
 
 	assert_false(place_watcher.emitted, "Zero building_placed signals post-loss")
 	assert_eq(game_state_node.resources.get("wood", 0), initial_wood, "Wood remains untouched (zero wood spend post-loss)")
-	assert_eq(game_state_node.current_ap, initial_ap, "AP remains untouched post-loss")
 
 	# 3. End action click rejection
 	var phase_watcher = watch_signal(event_bus_node, "phase_changed")
@@ -540,7 +520,6 @@ func test_challenge_lockout_lost_hammering_loop() -> void:
 	var initial_wood = game_state_node.resources.get("wood", 0)
 
 	for i in range(50):
-		assert_false(game_state_node.spend_ap(1), "spend_ap rejected on iteration %d" % i)
 		assert_null(bs.place_building("wall", Vector2i(i + 1, 1)), "place_building rejected on iteration %d" % i)
 		game_state_node.trigger_end_action()
 		game_state_node.advance_phase()

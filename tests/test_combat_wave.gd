@@ -81,8 +81,6 @@ func before_each() -> void:
 		# This suite asserts exact balances, so pin its own wallet and stay decoupled
 		# from whatever the opening balance happens to be.
 		if "current_phase" in game_state_node: game_state_node.current_phase = 0
-		if "current_ap" in game_state_node: game_state_node.current_ap = 3
-		if "max_ap" in game_state_node: game_state_node.max_ap = 3
 		if "resources" in game_state_node: game_state_node.resources = {"wood": SEED_WOOD, "stone": 0, "water": 0, "food": 0}
 		if "dino_stat_multipliers" in game_state_node:
 			game_state_node.dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}

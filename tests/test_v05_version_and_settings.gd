@@ -120,6 +120,68 @@ func test_05_the_window_setting_is_on_the_settings_page_only() -> void:
 	assert_true(menu.window_row.visible, "Where the window setting does belong")
 	assert_true(menu.language_row.visible, "Alongside the language one")
 
+# ==============================================================================
+# 3. Things that were declared gone
+# ==============================================================================
+
+func test_07_action_points_are_gone_from_the_code() -> void:
+	# AP was "彻底取消" in v0.2. What actually happened is that it was hidden: the label
+	# was set invisible and the cost set to zero, and every function, signal, field and
+	# config entry stayed exactly where it was. Three versions later it was still there,
+	# still being spent, still rolled back on a failed placement.
+	#
+	# A thing is removed when nothing can call it. This is what says so.
+	var offenders: Array[String] = []
+	var symbols := [
+		"current_ap", "max_ap", "ap_max", "spend_ap", "can_spend_ap", "reset_ap",
+		"recalculate_max_ap", "infinite_ap", "ap_cost", "ap_bonus", "BASE_AP",
+		"ap_changed", "APLabel", "HUD_AP", "HINT_NO_AP",
+	]
+	for path in _source_files("res://scripts") + _source_files("res://scenes") + [
+			"res://translations/strings.csv", "res://project.godot"]:
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f == null:
+			continue
+		var text: String = f.get_as_text()
+		for sym in symbols:
+			if text.contains(sym):
+				offenders.append("%s: %s" % [path, sym])
+	assert_eq(offenders.size(), 0, "Nothing may mention action points: %s" % ", ".join(offenders))
+
+func test_08_the_build_cost_is_the_whole_price() -> void:
+	# The other half: with AP gone, a building's declared cost is the only thing between
+	# the player and placing it. If some second currency ever creeps back in, it will
+	# show up here as a building nobody can afford with a full wallet.
+	var gs = game_state_node
+	assert_not_null(gs, "GameState exists")
+	gs.reset_game()
+	for type_id in config_node.BUILDINGS.keys():
+		var data: Dictionary = config_node.BUILDINGS[type_id]
+		assert_false(data.has("ap_cost"), "%s declares no action-point price" % type_id)
+		var cost: Dictionary = data.get("cost", {})
+		for res_id in cost:
+			gs.resources[res_id] = int(cost[res_id]) * 2
+		assert_true(gs.can_afford(cost),
+			"%s is affordable once its own cost is in hand, and nothing else is asked for" % type_id)
+
+## Every .gd / .tscn under `dir`, recursively.
+func _source_files(dir_path: String) -> Array[String]:
+	var found: Array[String] = []
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return found
+	dir.list_dir_begin()
+	var name: String = dir.get_next()
+	while name != "":
+		var full: String = dir_path.path_join(name)
+		if dir.current_is_dir():
+			found.append_array(_source_files(full))
+		elif name.ends_with(".gd") or name.ends_with(".tscn"):
+			found.append(full)
+		name = dir.get_next()
+	dir.list_dir_end()
+	return found
+
 func test_06_the_window_mode_is_one_service_not_a_second_copy() -> void:
 	# The picker and the F11 key have to be two ways of asking the same thing, or they
 	# will disagree the first time somebody uses the key.

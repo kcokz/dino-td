@@ -60,19 +60,16 @@ func after_all() -> void:
 func test_stress_building_batch_lifecycle_and_freed_node_pruning() -> void:
 	assert_not_null(game_state, "GameState must exist")
 	game_state.reset_game()
-	assert_eq(game_state.max_ap, 3, "Initial max_ap is 3")
 
 	var buildings: Array[Node] = []
 	for i in range(30):
 		var b = Node.new()
 		var scr = GDScript.new()
-		scr.source_code = "extends Node\nvar ap_bonus: int = 1\n"
 		scr.reload()
 		b.set_script(scr)
 		buildings.append(b)
 		game_state.register_building(b)
 
-	assert_eq(game_state.max_ap, 33, "max_ap should be 3 + 30 = 33")
 	assert_eq(game_state.active_buildings.size(), 30, "active_buildings size must be 30")
 
 	# Destroy / free 15 buildings directly without notifying GameState
@@ -80,91 +77,26 @@ func test_stress_building_batch_lifecycle_and_freed_node_pruning() -> void:
 		var b = buildings[i]
 		b.free()
 
-	# Register 1 new building to trigger recalculate_max_ap and array pruning
 	var new_b = Node.new()
 	var new_scr = GDScript.new()
-	new_scr.source_code = "extends Node\nvar ap_bonus: int = 2\n"
 	new_scr.reload()
 	new_b.set_script(new_scr)
 	buildings.append(new_b)
 
 	game_state.register_building(new_b)
 
-	# 15 alive buildings with bonus 1 + 1 alive building with bonus 2 = +17 bonus
-	# Base AP 3 + 17 = 20
-	assert_eq(game_state.max_ap, 20, "max_ap must equal base 3 + 17 valid living bonuses = 20")
 	assert_eq(game_state.active_buildings.size(), 16, "Freed buildings must be pruned from active_buildings")
 
 	# Clean up remaining living buildings
 	for b in buildings:
 		if is_instance_valid(b):
 			b.free()
-	game_state.recalculate_max_ap()
-	assert_eq(game_state.max_ap, 3, "max_ap must return to base 3 after all freed buildings pruned")
+	game_state._prune_buildings()
 	assert_eq(game_state.active_buildings.size(), 0, "active_buildings must be empty")
 
 # ==============================================================================
-# Stress 2: Negative AP Bonus Floor Clamping
 # ==============================================================================
-func test_stress_building_negative_bonus_floor_clamping() -> void:
-	assert_not_null(game_state, "GameState must exist")
-	game_state.reset_game()
 
-	var debuff_b = Node.new()
-	var scr = GDScript.new()
-	scr.source_code = "extends Node\nvar ap_bonus: int = -50\n"
-	scr.reload()
-	debuff_b.set_script(scr)
-
-	game_state.register_building(debuff_b)
-
-	# Invariant: max_ap must NEVER drop below 1
-	assert_eq(game_state.max_ap, 1, "max_ap must be clamped to minimum 1 even under severe negative AP bonus")
-	assert_lte(game_state.current_ap, game_state.max_ap, "current_ap must be clamped to max_ap")
-	assert_eq(game_state.current_ap, 1, "current_ap must be clamped to 1")
-
-	game_state.unregister_building(debuff_b)
-	debuff_b.free()
-	assert_eq(game_state.max_ap, 3, "max_ap must return to 3 after unregistering debuff building")
-
-# ==============================================================================
-# Stress 3: AP Clamping When Max AP Shrinks Below Current AP
-# ==============================================================================
-func test_stress_building_current_ap_clamping_on_loss() -> void:
-	assert_not_null(game_state, "GameState must exist")
-	game_state.reset_game()
-
-	var b1 = Node.new()
-	var scr1 = GDScript.new()
-	scr1.source_code = "extends Node\nvar ap_bonus: int = 4\n"
-	scr1.reload()
-	b1.set_script(scr1)
-
-	game_state.register_building(b1)
-	assert_eq(game_state.max_ap, 7, "max_ap should be 7")
-
-	game_state.reset_ap()
-	assert_eq(game_state.current_ap, 7, "current_ap reset to 7")
-
-	# Spend 1 AP: current is 6
-	game_state.spend_ap(1)
-	assert_eq(game_state.current_ap, 6, "current_ap is 6")
-
-	# Unregister building: max_ap drops to 3. Current AP (6) must be clamped down to 3!
-	game_state.unregister_building(b1)
-	b1.free()
-	assert_eq(game_state.max_ap, 3, "max_ap dropped back to 3")
-	assert_eq(game_state.current_ap, 3, "current_ap must be clamped to new max_ap 3")
-
-	# When current AP is less than max AP (e.g. 1), recalculate should not alter it
-	game_state.spend_ap(2)
-	assert_eq(game_state.current_ap, 1, "current_ap is 1")
-	game_state.recalculate_max_ap()
-	assert_eq(game_state.current_ap, 1, "current_ap remains 1 when below max_ap")
-
-# ==============================================================================
-# Stress 4: Resource Non-Numeric and Complex Types Rejection
-# ==============================================================================
 func test_stress_resource_non_numeric_and_complex_types() -> void:
 	assert_not_null(game_state, "GameState must exist")
 	game_state.reset_game()
@@ -343,9 +275,6 @@ func test_stress_game_over_terminal_lockout_exhaustive() -> void:
 	assert_true(game_state.is_game_over, "is_game_over is true")
 
 	# Verify full mutation lockout
-	assert_false(game_state.can_spend_ap(0), "can_spend_ap(0) must return false when game_over")
-	assert_false(game_state.can_spend_ap(1), "can_spend_ap(1) must return false when game_over")
-	assert_false(game_state.spend_ap(1), "spend_ap(1) must return false when game_over")
 
 	game_state.set_phase(1)
 	assert_eq(game_state.current_phase, 0, "set_phase must be blocked when game_over")
@@ -367,12 +296,10 @@ func test_stress_game_over_terminal_lockout_exhaustive() -> void:
 	# Reset restores normal functionality
 	game_state.reset_game()
 	assert_false(game_state.is_game_over, "is_game_over reset to false")
-	assert_true(game_state.can_spend_ap(1), "can_spend_ap works after reset")
 
 	# Test same lockout under game_lost
 	event_bus.emit_signal("game_lost")
 	assert_true(game_state.is_game_over, "is_game_over is true under game_lost")
-	assert_false(game_state.can_spend_ap(1), "can_spend_ap blocked under game_lost")
 	game_state.advance_phase()
 	assert_eq(game_state.current_phase, 0, "advance_phase blocked under game_lost")
 
@@ -407,16 +334,6 @@ func test_stress_nest_destruction_edge_cases() -> void:
 func test_stress_compatibility_property_aliases() -> void:
 	assert_not_null(game_state, "GameState must exist")
 	game_state.reset_game()
-
-	# ap <-> current_ap
-	game_state.ap = 2
-	assert_eq(game_state.current_ap, 2, "setting ap must update current_ap")
-	assert_eq(game_state.ap, 2, "getting ap must reflect current_ap")
-
-	# ap_max <-> max_ap
-	game_state.ap_max = 8
-	assert_eq(game_state.max_ap, 8, "setting ap_max must update max_ap")
-	assert_eq(game_state.ap_max, 8, "getting ap_max must reflect max_ap")
 
 	# wave_n <-> wave_number
 	game_state.wave_n = 15

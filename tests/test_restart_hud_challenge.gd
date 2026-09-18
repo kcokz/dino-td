@@ -208,8 +208,6 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	# 7. Verify GameState reset
 	assert_eq(int(game_state_node.wave_number), 0, "GameState.wave_number reset to 0")
 	assert_eq(int(game_state_node.current_phase), 0, "GameState.current_phase reset to PLAN (0)")
-	assert_eq(int(game_state_node.current_ap), 3, "GameState.current_ap reset to BASE_AP (3)")
-	assert_eq(int(game_state_node.max_ap), 3, "GameState.max_ap reset to BASE_AP (3)")
 	assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "GameState wood reset to the Config opening balance")
 	assert_false(bool(game_state_node.get("is_game_over")), "GameState.is_game_over is false")
 
@@ -310,7 +308,6 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 	# Execute 20 consecutive dirty-and-restart cycles
 	for cycle in range(20):
 		# 1. Dirty GameState values
-		game_state_node.current_ap = 0
 		game_state_node.resources["wood"] = cycle * 10
 		game_state_node.wave_number = cycle + 1
 		game_state_node.current_phase = 1 if (cycle % 2 == 1) else 2
@@ -353,8 +350,6 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 
 		# 7. Verify zero state drift
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Phase is PLAN (0)" % cycle)
-		assert_eq(int(game_state_node.current_ap), 3, "Cycle %d: AP is BASE_AP (3)" % cycle)
-		assert_eq(int(game_state_node.max_ap), 3, "Cycle %d: max_ap is BASE_AP (3)" % cycle)
 		assert_eq(int(game_state_node.resources.get("wood", 0)), opening_banked_wood(), "Cycle %d: Wood is back to Config.INITIAL_RESOURCES" % cycle)
 		assert_eq(int(game_state_node.wave_number), 0, "Cycle %d: wave_number is 0" % cycle)
 		assert_false(bool(game_state_node.get("is_game_over")), "Cycle %d: is_game_over is false" % cycle)
@@ -394,21 +389,18 @@ func test_challenge_06_rapid_fire_hud_signal_bombardment() -> void:
 
 	# Fire 120 cycles of 5 signals (600 signal emissions in a single frame!)
 	for i in range(120):
-		event_bus_node.ap_changed.emit(i % 5, 5)
 		event_bus_node.resources_changed.emit({"wood": i * 10, "stone": i})
 		event_bus_node.wave_started.emit(i + 1, (i % 3 == 0))
 		event_bus_node.core_hp_changed.emit(float((i % 10) + 1), 10.0)
 		event_bus_node.phase_changed.emit(i % 3)
 
 	# Conclude with definitive target values in the exact same frame
-	event_bus_node.ap_changed.emit(2, 5)
 	event_bus_node.resources_changed.emit({"wood": 888, "stone": 10, "food": 5})
 	event_bus_node.wave_started.emit(9, true)
 	event_bus_node.core_hp_changed.emit(7.0, 10.0)
 	event_bus_node.phase_changed.emit(0)
 
 	# Verify immediate synchronization without crashing or desync
-	assert_eq(hud.get_ap_text(), "AP: 2 / 5", "APLabel matches final emitted value")
 	assert_eq(hud.get_wood_text(), "Wood: 888", "WoodLabel matches final emitted value")
 	assert_true("大波" in hud.get_wave_text() or "Horde" in hud.get_wave_text(), "WaveLabel matches final emitted value with big wave text")
 	assert_eq(hud.get_core_hp_text(), "Core HP: 7 / 10", "CoreHPLabel matches final emitted value")
@@ -420,7 +412,6 @@ func test_challenge_06_rapid_fire_hud_signal_bombardment() -> void:
 
 	# Tick a frame and confirm persistent sync
 	await wait_frames(1)
-	assert_eq(hud.get_ap_text(), "AP: 2 / 5", "AP text persistent after tick")
 	assert_eq(hud.get_wood_text(), "Wood: 888", "Wood text persistent after tick")
 
 func test_challenge_07_rapid_fire_hud_extreme_values_and_formatting() -> void:
@@ -432,22 +423,18 @@ func test_challenge_07_rapid_fire_hud_extreme_values_and_formatting() -> void:
 
 	# Rapidly emit boundary and extreme conditions
 	for i in range(50):
-		event_bus_node.ap_changed.emit(0, 0)
 		event_bus_node.resources_changed.emit({"wood": 0})
 		event_bus_node.core_hp_changed.emit(0.1, 10.0)
 
 	# 0.1 HP should ceil to 1
 	assert_eq(hud.get_core_hp_text(), "Core HP: 1 / 10", "Core HP 0.1 properly ceils to 1")
-	assert_eq(hud.get_ap_text(), "AP: 0 / 0", "Zero AP formatted correctly")
 	assert_eq(hud.get_wood_text(), "Wood: 0", "Zero Wood formatted correctly")
 
 	# Massive numbers
 	for i in range(50):
-		event_bus_node.ap_changed.emit(9999, 9999)
 		event_bus_node.resources_changed.emit({"wood": 1000000})
 		event_bus_node.wave_started.emit(999, false)
 
-	assert_eq(hud.get_ap_text(), "AP: 9999 / 9999", "Large AP formatted correctly")
 	assert_eq(hud.get_wood_text(), "Wood: 1000000", "Large wood formatted correctly")
 	assert_eq(hud.get_wave_text(), "Wave: 999", "Wave 999 formatted correctly")
 
@@ -607,6 +594,5 @@ func test_challenge_14_hud_restart_button_triggers_main_restart_lifecycle() -> v
 	assert_false(bool(game_state_node.get("is_game_over")), "Game over cleared")
 	assert_false(main.hud.is_game_over_visible(), "HUD GameOver panel hidden")
 	assert_eq(int(game_state_node.current_phase), 0, "Phase restored to PLAN")
-	assert_eq(int(game_state_node.current_ap), 3, "AP restored to 3")
 	assert_eq(main.grid_manager.occupied_cells.size(), 2, "Grid occupancy restored to 2")
 	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP restored to 10.0")
