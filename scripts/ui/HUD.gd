@@ -31,6 +31,9 @@ var hero_hp_label: Label = null
 var deploy_timer_label: Label = null
 var phase_label: Label = null
 var version_label: Label = null
+## The line on the game-over screen. Kept as a reference for the same reason as the
+## one in the top bar: it shows a version, so it has to be filled from AppInfo.
+var version_badge: Label = null
 
 var end_action_btn: Button = null
 var pause_btn: Button = null
@@ -522,11 +525,27 @@ func _ensure_ui_components() -> void:
 		version_label.name = "VersionLabel"
 		root_control.add_child(version_label)
 
+	# Both places the player can read a version, filled from the one source.
+	#
+	# The fallback is AppInfo.VERSION, which is the string "unknown" on purpose. It used
+	# to be the literal "v0.0" here, which is the whole problem in miniature: a
+	# plausible-looking version is indistinguishable from a real one, so nobody ever
+	# notices it is stale. "unknown" is impossible to mistake for the truth.
 	var app_info_script = load("res://scripts/core/AppInfo.gd")
-	var v_str: String = "v0.0"
+	var v_str: String = AppInfo.VERSION
+	var title_str: String = AppInfo.APP_NAME
 	if app_info_script and app_info_script.has_method("get_version"):
 		v_str = app_info_script.get_version()
+	if app_info_script and app_info_script.has_method("get_app_title"):
+		title_str = app_info_script.get_app_title()
 	version_label.text = v_str
+
+	# The badge on the game-over screen. Nothing had ever set it, so it showed whatever
+	# the scene file was saved with -- "Defend Dinosaur v0.2", for three versions.
+	if version_badge == null:
+		version_badge = find_child("VersionBadge", true, false) as Label
+	if version_badge != null:
+		version_badge.text = title_str
 
 	if hint_label == null:
 		hint_label = Label.new()

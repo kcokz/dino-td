@@ -1,0 +1,235 @@
+# res://tests/test_v04_wall_blocking.gd
+# A wall is a wall: dinosaurs go round it if they can, and bite it if they cannot.
+#
+# The rule, in the words it was asked for: "wall 类型需要能 block 通路的能力，恐龙进攻
+# 优先级低于建筑，高于人，所以一旦路 block 了，恐龙才会攻击 wall，不然就会绕过去."
+#
+# It overturns a v0.4 decision that had it backwards. Dinosaurs used to ignore buildings
+# when routing, on the theory that politely going round a fence made the fence
+# pointless. The opposite is true:
+#
+#   * a fence that can be walked round FUNNELS the raid, so where the player puts it
+#     finally decides something;
+#   * a fence that seals the way is the thing the raid has to chew through.
+#
+# Before this every fence was the second kind whether the player wanted it or not, and
+# a raid that met one with a gap in it would stand there eating the gatepost.
+extends "res://tests/test_base.gd"
+
+var config_node: Object = null
+var game_state_node: Object = null
+var _cleanup_nodes: Array[Node] = []
+
+func before_all() -> void:
+	if tree != null and tree.root != null:
+		config_node = tree.root.get_node_or_null("Config")
+		game_state_node = tree.root.get_node_or_null("GameState")
+
+func before_each() -> void:
+	if game_state_node != null and game_state_node.has_method("reset_game"):
+		game_state_node.reset_game()
+	unlock_all()
+
+func after_each() -> void:
+	for n in _cleanup_nodes:
+		if is_instance_valid(n):
+			if n.is_inside_tree():
+				n.get_parent().remove_child(n)
+			if not n.is_queued_for_deletion():
+				n.free()
+	_cleanup_nodes.clear()
+	super.after_each()
+
+func _grid(blocked: Array = []) -> Node:
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(gm)
+	tree.root.add_child(gm)
+	gm.set_blocked_cells(blocked)
+	return gm
+
+func _wall_at(gm: Node, cell: Vector2i) -> Node:
+	var w = load("res://scripts/entities/Wall.gd").new()
+	_cleanup_nodes.append(w)
+	tree.root.add_child(w)
+	w.setup("wall", cell)
+	w.position = gm.cell_to_world(cell)
+	w.complete_construction()
+	gm.occupy_cell(cell, w)
+	return w
+
+func _tower_at(gm: Node, cell: Vector2i) -> Node:
+	var t = load("res://scripts/entities/Tower.gd").new()
+	_cleanup_nodes.append(t)
+	tree.root.add_child(t)
+	t.setup("tower", cell)
+	t.position = gm.cell_to_world(cell)
+	t.complete_construction()
+	gm.occupy_cell(cell, t)
+	return t
+
+func _dino_at(gm: Node, cell: Vector2i, goal_cell: Vector2i) -> Node:
+	var d = load("res://scripts/entities/Dino.gd").new()
+	_cleanup_nodes.append(d)
+	tree.root.add_child(d)
+	d.setup("raptor")
+	d.global_position = gm.cell_to_world(cell)
+	d.set_waypoints([gm.cell_to_world(goal_cell)])
+	return d
+
+## Walls all the way round `centre`, so whatever is inside it is sealed off.
+func _enclose(gm: Node, centre: Vector2i, radius: int = 1) -> void:
+	for dx in range(-radius, radius + 1):
+		for dz in range(-radius, radius + 1):
+			if absi(dx) != radius and absi(dz) != radius:
+				continue
+			_wall_at(gm, centre + Vector2i(dx, dz))
+
+# ==============================================================================
+# 1. Which things are walls
+# ==============================================================================
+
+func test_01_wall_is_a_kind_not_a_single_building() -> void:
+	# The rule is written against a CATEGORY, so anything declared kind "wall" obeys it
+	# -- stakes today, whatever palisade or barricade comes later without a code change.
+	assert_eq(String(config_node.BUILDINGS["wall"]["kind"]), "wall", "Stakes are of kind wall")
+	assert_ne(String(config_node.BUILDINGS["tower"]["kind"]), "wall", "A turret is not")
+	assert_ne(String(config_node.BUILDINGS["core"]["kind"]), "wall", "Nor is the wreck")
+
+func test_02_a_dinosaur_can_tell_a_wall_from_anything_else() -> void:
+	var gm = _grid([])
+	await wait_frames(1)
+	var d = _dino_at(gm, Vector2i(0, 5), Vector2i(0, -5))
+	var stake = _wall_at(gm, Vector2i(0, 0))
+	var turret = _tower_at(gm, Vector2i(3, 0))
+	await wait_frames(1)
+
+	assert_true(d._is_wall(stake), "A stake is a wall")
+	assert_false(d._is_wall(turret), "A turret is not")
+	assert_false(d._is_wall(null), "And nothing is not")
+
+# ==============================================================================
+# 2. Round it if you can
+# ==============================================================================
+
+func test_03_a_fence_with_a_way_round_is_not_worth_biting() -> void:
+	# The reported bug, as a rule. A line of stakes with open ground past the end of it
+	# is something to walk round, and a dinosaur that stops to eat it is wrong.
+	var gm = _grid([])
+	await wait_frames(1)
+	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
+	for x in range(-3, 4):
+		_wall_at(gm, Vector2i(x, 0))
+	await wait_frames(1)
+
+	var stake = gm.get_building_at(Vector2i(0, 0))
+	assert_not_null(stake, "There is a fence in the way")
+	assert_false(d._way_is_sealed(), "But the ground past its end is open")
+	assert_false(d._should_bite(stake), "So the fence is walked round, not eaten")
+
+func test_04_a_turret_is_attacked_whether_or_not_it_blocks() -> void:
+	# The other half of the rule. Only WALLS are judged by whether they are in the way;
+	# a turret is a target on its own merits, because it is shooting back.
+	var gm = _grid([])
+	await wait_frames(1)
+	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
+	var turret = _tower_at(gm, Vector2i(0, 0))
+	await wait_frames(1)
+
+	assert_false(d._way_is_sealed(), "There is plenty of room round it")
+	assert_true(d._should_bite(turret), "A turret is still worth attacking")
+
+# ==============================================================================
+# 3. Bite it if you cannot
+# ==============================================================================
+
+func test_05_a_sealed_way_makes_the_wall_the_target() -> void:
+	# Wall the goal in completely and the fence stops being scenery: it becomes the
+	# thing standing between the raid and what it came for.
+	var gm = _grid([])
+	await wait_frames(1)
+	var goal := Vector2i(0, -4)
+	_enclose(gm, goal, 1)
+	var d = _dino_at(gm, Vector2i(0, 4), goal)
+	await wait_frames(1)
+
+	assert_true(d._way_is_sealed(), "There is no way in")
+	var blocker = d._building_in_the_way()
+	assert_not_null(blocker, "So something is named as the thing in the way")
+	assert_true(d._is_wall(blocker), "And it is one of the stakes")
+	assert_true(d._should_bite(blocker), "Which is now worth biting")
+
+func test_06_a_dinosaur_that_is_blocked_never_just_stands_there() -> void:
+	# The symptom this began as: neither moving nor attacking. Whatever else happens,
+	# a dinosaur facing a sealed way must come out of the decision with a target.
+	var gm = _grid([])
+	await wait_frames(1)
+	var goal := Vector2i(0, -4)
+	_enclose(gm, goal, 1)
+	var d = _dino_at(gm, Vector2i(0, 4), goal)
+	await wait_frames(1)
+
+	d.advance_towards_waypoint(0.016)
+	assert_eq(int(d.current_state), int(d.State.ATTACKING), "It commits to attacking")
+	assert_not_null(d.current_target, "With something to attack")
+	assert_true(d._is_target_valid(d.current_target), "And that something is real")
+
+func test_07_the_way_opening_lets_the_dinosaur_go() -> void:
+	# Chewing through one stake, or the player demolishing one, has to release it. The
+	# alternative is a dinosaur that eats an entire fence it no longer needs to.
+	var gm = _grid([])
+	await wait_frames(1)
+	var goal := Vector2i(0, -4)
+	_enclose(gm, goal, 1)
+	var d = _dino_at(gm, Vector2i(0, 4), goal)
+	await wait_frames(1)
+	assert_true(d._way_is_sealed(), "Sealed to begin with")
+
+	# Knock a hole in it, and give the cache its moment to notice.
+	var gate = gm.get_building_at(Vector2i(0, -3))
+	assert_not_null(gate, "There is a stake on the near side")
+	gate.destroy()
+	await wait_seconds(float(d.ROUTE_RECHECK_SECONDS) + 0.1)
+
+	assert_false(d._way_is_sealed(), "A hole in the fence is a way in")
+	assert_null(d._building_in_the_way(), "So nothing is in the way any more")
+
+# ==============================================================================
+# 4. The road being built on
+# ==============================================================================
+
+func test_08_a_waypoint_buried_in_a_building_is_skipped() -> void:
+	# What a wall across the road used to do: the route runs down the path column, a
+	# stake lands on a waypoint, and the whole raid walks to the near side of it and
+	# stops -- not attacking, because there was a way round, and not moving, because
+	# where it was told to go is inside a building.
+	var gm = _grid([])
+	await wait_frames(1)
+	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
+	d.set_waypoints([
+		gm.cell_to_world(Vector2i(0, 2)),
+		gm.cell_to_world(Vector2i(0, 0)),
+		gm.cell_to_world(Vector2i(0, -4)),
+	])
+	_wall_at(gm, Vector2i(0, 2))     # the first waypoint is now inside a stake
+	await wait_frames(1)
+
+	d.current_waypoint_index = 0
+	d._skip_unwalkable_waypoints()
+	assert_gt(d.current_waypoint_index, 0, "It does not aim at a spot inside a building")
+	assert_true(gm.is_cell_walkable(gm.world_to_cell(d.waypoints[d.current_waypoint_index])),
+		"The one it aims at instead can actually be stood on")
+
+func test_09_the_last_waypoint_is_never_skipped() -> void:
+	# The destination is the destination. If the player has walled the core in, that
+	# wall is exactly what the raid should be chewing -- and it will be, because the way
+	# really is sealed.
+	var gm = _grid([])
+	await wait_frames(1)
+	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
+	_wall_at(gm, Vector2i(0, -4))
+	await wait_frames(1)
+
+	d.current_waypoint_index = 0
+	d._skip_unwalkable_waypoints()
+	assert_eq(d.current_waypoint_index, 0, "It keeps heading for where it was going")
+	assert_eq(d.waypoints.size(), 1, "Which was the only waypoint it had")

@@ -429,25 +429,16 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 	if start_cell == goal_cell:
 		return [to_pos]
 
-	# If goal_cell is blocked by an obstacle, locate the closest walkable adjacent cell
+	# A goal standing on something -- a hill, a building, a tree -- is asked to move to
+	# the nearest square that is not. Searched in rings rather than over the eight
+	# neighbours, because the middle of a two-cell hill has no walkable neighbour at all
+	# and the old version gave up there and returned a straight line into the rock.
 	if not is_cell_walkable(goal_cell, ignore_building, terrain_only):
-		var best_adj: Vector2i = goal_cell
-		var best_dist: float = 999999.0
-		var offsets = [
-			Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
-			Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)
-		]
-		for off in offsets:
-			var adj = goal_cell + off
-			if is_cell_walkable(adj, ignore_building, terrain_only):
-				var d = cell_to_world(adj).distance_to(from_pos)
-				if d < best_dist:
-					best_dist = d
-					best_adj = adj
-		if best_adj != goal_cell:
-			goal_cell = best_adj
-		else:
+		var relocated: Vector2i = _nearest_walkable(goal_cell, from_pos, ignore_building, terrain_only)
+		if relocated == goal_cell:
 			return [to_pos]
+		goal_cell = relocated
+		to_pos = cell_to_world(goal_cell, to_pos.y)
 
 	# A* Graph Search
 	var open_set: Array[Vector2i] = [start_cell]
@@ -458,8 +449,16 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 	var cardinals = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	var diagonals = [Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]
 
+	# The closest A* has got to the goal so far. Without this there is nothing to return
+	# when the search fails, and the only option is a straight line into whatever is in
+	# the way.
+	var best_cell: Vector2i = start_cell
+	var best_h: float = float(start_cell.distance_to(goal_cell))
+
 	var iterations: int = 0
-	var max_iterations: int = 800
+	# Raised with the map: since v0.5 the ground the player can click runs well past the
+	# playfield, and eight hundred nodes gave out on the long diagonal.
+	var max_iterations: int = 4000
 
 	while not open_set.is_empty() and iterations < max_iterations:
 		iterations += 1
@@ -494,6 +493,10 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 			return _smooth_path(from_pos, raw_world_path, ignore_building, terrain_only)
 
 		open_set.remove_at(lowest_idx)
+		var cur_h: float = float(current.distance_to(goal_cell))
+		if cur_h < best_h:
+			best_h = cur_h
+			best_cell = current
 		var cur_g: float = g_score.get(current, 999999.0)
 
 		# 1. Cardinal neighbors
@@ -526,8 +529,51 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 				if not (neighbor in open_set):
 					open_set.append(neighbor)
 
-	# Fallback if unreached
+	# A* ran out of room or the goal cannot be reached at all. Rather than hand back a
+	# straight line -- which walks whoever asked into the nearest wall and leaves them
+	# grinding against it -- hand back the best path actually found, so they get as close
+	# as the map allows and stop somewhere sensible.
+	#
+	# This is what "it just stands there" usually was: a straight line into an obstacle,
+	# a stuck timer, a replan producing the same straight line, forever.
+	if came_from.has(best_cell) or best_cell != start_cell:
+		var partial: Array[Vector2i] = [best_cell]
+		var walk: Vector2i = best_cell
+		var guard: int = 0
+		while came_from.has(walk) and guard < 4096:
+			walk = came_from[walk]
+			partial.append(walk)
+			guard += 1
+		partial.reverse()
+		var partial_world: Array[Vector3] = []
+		for i in range(1, partial.size()):
+			partial_world.append(cell_to_world(partial[i]))
+		if not partial_world.is_empty():
+			return _smooth_path(from_pos, partial_world, ignore_building, terrain_only)
+
 	return [to_pos]
+
+## The nearest cell to `centre` that can actually be stood on, searched outward in
+## rings. Returns `centre` unchanged when there is nothing walkable within reach.
+func _nearest_walkable(centre: Vector2i, toward: Vector3, ignore_building: Node = null, terrain_only: bool = false, max_radius: int = 12) -> Vector2i:
+	var best: Vector2i = centre
+	var best_dist: float = 999999.0
+	for radius in range(1, max_radius + 1):
+		for dx in range(-radius, radius + 1):
+			for dz in range(-radius, radius + 1):
+				# Only the ring itself; the inside was covered by a smaller radius.
+				if absi(dx) != radius and absi(dz) != radius:
+					continue
+				var candidate := centre + Vector2i(dx, dz)
+				if not is_cell_walkable(candidate, ignore_building, terrain_only):
+					continue
+				var d: float = cell_to_world(candidate).distance_to(toward)
+				if d < best_dist:
+					best_dist = d
+					best = candidate
+		if best != centre:
+			return best      # nothing further out can be nearer than this ring
+	return centre
 
 ## Optimizes waypoint sequence by removing redundant intermediate nodes with unobstructed line-of-sight.
 func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building: Node = null, terrain_only: bool = false) -> Array[Vector3]:

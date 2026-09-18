@@ -323,3 +323,65 @@ func _body_meshes(b: Node) -> Array[MeshInstance3D]:
 		if child is MeshInstance3D:
 			out.append(child)
 	return out
+
+# ==============================================================================
+# 4. Getting there when the straight line is blocked
+# ==============================================================================
+#
+# "Click somewhere and if he cannot walk straight there, he does not move." Three
+# separate things caused that, and none of them was the pathfinder itself.
+
+func test_14_he_walks_round_what_is_in_the_way() -> void:
+	var gm = _grid([])
+	await wait_frames(1)
+	var from: Vector3 = gm.cell_to_world(Vector2i(0, 4))
+	var to: Vector3 = gm.cell_to_world(Vector2i(0, -4))
+	for x in range(-3, 3):
+		_stake_at(gm, Vector2i(x, 0))
+	await wait_frames(1)
+
+	var path: Array = gm.find_path(from, to)
+	assert_gt(path.size(), 1, "A detour is more than one step")
+	# Every step has to be somewhere he can actually stand.
+	for point in path:
+		assert_true(gm.is_cell_walkable(gm.world_to_cell(point)),
+			"Step at %s is on open ground" % str(gm.world_to_cell(point)))
+
+func test_15_a_goal_inside_something_solid_becomes_the_nearest_spot_outside_it() -> void:
+	# Clicking a hill, a tree or a building used to search the eight neighbours and give
+	# up if all of them were solid too -- which is exactly the case in the middle of a
+	# hill -- and hand back a straight line into the rock.
+	var ring: Array = []
+	for dx in [-1, 0, 1]:
+		for dz in [-1, 0, 1]:
+			ring.append(Vector2i(5 + dx, dz))
+	var gm = _grid(ring)
+	await wait_frames(1)
+
+	var from: Vector3 = gm.cell_to_world(Vector2i(0, 0))
+	var into_the_hill: Vector3 = gm.cell_to_world(Vector2i(5, 0))
+	var path: Array = gm.find_path(from, into_the_hill)
+	var last: Vector2i = gm.world_to_cell(path[path.size() - 1])
+	assert_true(gm.is_cell_walkable(last), "He is sent somewhere he can stand")
+	assert_lte(absi(last.x - 5) + absi(last.y), 3, "And it is close to where the player clicked")
+
+func test_16_an_unreachable_goal_still_gets_him_as_close_as_possible() -> void:
+	# The important half. A* failing used to return a straight line, which walks him
+	# into the nearest wall and leaves him grinding -- the stuck timer replans, gets the
+	# same straight line, forever. A partial path gets him as close as the map allows
+	# and then stops.
+	var gm = _grid([])
+	await wait_frames(1)
+	var goal := Vector2i(8, 0)
+	_fence_around(gm, goal)
+	await wait_frames(1)
+
+	var from: Vector3 = gm.cell_to_world(Vector2i(0, 0))
+	var path: Array = gm.find_path(from, gm.cell_to_world(goal))
+	assert_gt(path.size(), 0, "He is given somewhere to go")
+	var last: Vector2i = gm.world_to_cell(path[path.size() - 1])
+	assert_ne(last, goal, "Not into the sealed pocket, which he cannot enter")
+	assert_true(gm.is_cell_walkable(last), "But somewhere he can stand")
+	assert_lt(gm.cell_to_world(last).distance_to(gm.cell_to_world(goal)),
+		gm.cell_to_world(Vector2i(0, 0)).distance_to(gm.cell_to_world(goal)),
+		"And closer to it than he started")

@@ -1060,7 +1060,23 @@ func _raycast_ground(screen_pos: Vector2) -> Variant:
 	var result = space_state.intersect_ray(query)
 	if result and result.has("position"):
 		return result["position"]
-	return null
+
+	# Nothing was hit, which since v0.5 happens over most of the screen: the ground the
+	# player can SEE runs out to the valley walls, and the ground COLLIDER only covers
+	# the flat playfield. Clicking the visible land beyond it hit nothing at all, so no
+	# order was ever issued and the Hero simply stood there -- looking for all the world
+	# like broken pathfinding.
+	#
+	# Falling back to the ground plane means a click always produces a point. Whether
+	# the Hero can get to it is the pathfinder's business, and it now walks as far as it
+	# can rather than refusing.
+	var dir: Vector3 = cam.project_ray_normal(screen_pos)
+	if absf(dir.y) < 0.0001:
+		return null                      # looking along the horizon; no intersection
+	var t: float = -from.y / dir.y
+	if t <= 0.0:
+		return null                      # the plane is behind the camera
+	return from + dir * t
 
 func _raycast_object(screen_pos: Vector2) -> Node:
 	var cam := _active_camera()

@@ -107,6 +107,9 @@ func _show_page() -> void:
 	if quit_btn: quit_btn.visible = root_page
 	if back_btn: back_btn.visible = not root_page
 	if language_row: language_row.visible = not root_page
+	# Settings only. Leaving it off this list is why it appeared on the main menu too --
+	# every row added to page_vbox shows on every page unless it is told otherwise.
+	if window_row: window_row.visible = not root_page
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if root_page else tr("MENU_SETTINGS_TITLE")
 

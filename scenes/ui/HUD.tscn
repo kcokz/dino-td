@@ -142,7 +142,6 @@ text = "Pause (Space)"
 [node name="VersionLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 0.8)
-text = "v0.2"
 
 [node name="GameOverPanel" type="CenterContainer" parent="Root"]
 visible = false
@@ -189,5 +188,4 @@ text = "Restart"
 [node name="VersionBadge" type="Label" parent="Root/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 0.8)
-text = "Defend Dinosaur v0.2"
 horizontal_alignment = 1

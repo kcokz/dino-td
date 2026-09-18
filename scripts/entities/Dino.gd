@@ -44,6 +44,14 @@ var current_waypoint_index: int = 0
 ## Steps around the landscape, when the straight line is not available. Recomputed
 ## only when the goal changes or the route runs out, so open ground costs nothing.
 var nav_path: Array[Vector3] = []
+
+## How long between asking the grid whether there is a way round. Flooding the grid
+## every frame for every dinosaur in a raid would be the most expensive thing in the
+## game; a fraction of a second is imperceptible and costs nothing.
+const ROUTE_RECHECK_SECONDS: float = 0.4
+var _route_checked_at: float = -999.0
+var _blocked_by: Node = null
+var _way_sealed: bool = false
 var _nav_goal: Vector3 = Vector3.INF
 var current_target: Node = null
 var target_building: Node:
@@ -361,9 +369,26 @@ func advance_towards_waypoint(delta: float) -> void:
 	# Dynamically scale raycast reach to prevent tunneling under high speeds
 	_update_raycast_reach(delta)
 
-	# 1. Direct frontal RayCast3D for obstacle buildings
+	# 0. THE WAY THROUGH.
+	#
+	# A dinosaur walks round a building if it can, and bites it if it cannot. That is
+	# the whole rule, and it replaces the state this used to get into: pressed against a
+	# fence, target lost, neither moving nor attacking, for as long as you cared to
+	# watch. Measured at nine seconds of standing perfectly still in a sealed corridor.
+	#
+	# It also makes a fence mean something other than hit points. A wall that can be
+	# walked round funnels the raid, and where the player puts it finally matters; a wall
+	# that seals the way is the thing the raid has to chew through. Before this, every
+	# fence was the second case whether the player wanted it or not.
+	var blocker := _building_in_the_way()
+	if blocker != null:
+		on_obstacle_detected(blocker)
+		return
+
+	# 1. Something directly in front. Only worth stopping for if biting it is the right
+	# answer -- a fence with a gate in it is walked round, not eaten.
 	var obstacle = check_obstacle()
-	if obstacle != null:
+	if obstacle != null and _should_bite(obstacle):
 		on_obstacle_detected(obstacle)
 		return
 
@@ -371,7 +396,7 @@ func advance_towards_waypoint(delta: float) -> void:
 	var threat_tgt = _find_threat_priority_target()
 	if threat_tgt != null:
 		var dist_to_threat = global_position.distance_to(threat_tgt.global_position)
-		if dist_to_threat <= 1.8:
+		if dist_to_threat <= 1.8 and _should_bite(threat_tgt):
 			on_obstacle_detected(threat_tgt)
 			return
 		if assigned_slot == Vector3.ZERO:
@@ -384,7 +409,7 @@ func advance_towards_waypoint(delta: float) -> void:
 		var ally_tgt = attacking_ally.current_target
 		if _is_target_valid(ally_tgt):
 			var dist_to_tgt = global_position.distance_to(ally_tgt.global_position)
-			if dist_to_tgt <= 1.8:
+			if dist_to_tgt <= 1.8 and _should_bite(ally_tgt):
 				on_obstacle_detected(ally_tgt)
 				return
 			# Claim a perimeter attack slot around ally's target
@@ -418,6 +443,18 @@ func advance_towards_waypoint(delta: float) -> void:
 		return
 
 	# 2. Check waypoint navigation
+	if current_waypoint_index >= waypoints.size():
+		_reach_destination()
+		return
+
+	# A waypoint the player has built on top of is not a place to walk to. Skip to the
+	# next one rather than steering at a spot inside a fence forever.
+	#
+	# This is what a wall across the road used to do: the route runs down the path
+	# column, a stake lands on a waypoint, and every dinosaur in the raid walks up to
+	# the near side of it and stops -- not attacking, because there was a way round, and
+	# not moving, because the place it was told to go is inside a building.
+	_skip_unwalkable_waypoints()
 	if current_waypoint_index >= waypoints.size():
 		_reach_destination()
 		return
@@ -498,7 +535,12 @@ func _steer_target(goal: Vector3) -> Vector3:
 
 	if _nav_goal.distance_squared_to(goal) > 0.25 or nav_path.is_empty():
 		_nav_goal = goal
-		var pts: Array = gm.find_path(global_position, goal, null, true)
+		# terrain_only = false: route around BUILDINGS as well as hills. Dinosaurs used
+		# to ignore buildings entirely and walk into them, on the theory that politely
+		# going around a fence made the fence pointless. That had it backwards -- a fence
+		# you cannot walk round is what makes a fence worth placing, and one you can is a
+		# funnel. What stops a wall being ignored is _building_in_the_way, not blindness.
+		var pts: Array = gm.find_path(global_position, goal, null, false)
 		nav_path.clear()
 		for pt in pts:
 			nav_path.append(pt)
@@ -510,23 +552,147 @@ func _steer_target(goal: Vector3) -> Vector3:
 		return goal
 	return nav_path[0]
 
-## Whether a dinosaur can walk straight from a to b without meeting hillside.
-## Samples the cells along the segment; only terrain counts, because a building in
-## the way is something to bite rather than something to walk around.
+## Whether a dinosaur can walk straight from a to b without meeting anything solid.
+##
+## Buildings count now, not only hillside. They did not before, and the result was a
+## dinosaur that believed a straight line through a fence was clear, walked into it, and
+## stayed there.
 func _line_is_clear(from_pos: Vector3, to_pos: Vector3) -> bool:
+	return _first_solid_on_line(from_pos, to_pos, true) == Vector2i(2147483647, 2147483647)
+
+## The first cell along the segment that cannot be walked through, or a sentinel when
+## the whole line is clear. `include_buildings` separates "is the way open" from "is the
+## landscape in the way", which the attack-slot code still wants to ask on its own.
+func _first_solid_on_line(from_pos: Vector3, to_pos: Vector3, include_buildings: bool) -> Vector2i:
+	var none := Vector2i(2147483647, 2147483647)
 	var gm := _get_grid_manager()
 	if gm == null or not gm.has_method("is_cell_blocked"):
-		return true
+		return none
 	var span: float = from_pos.distance_to(to_pos)
 	if span <= 0.001:
-		return true
+		return none
 	var step: float = maxf(0.5, float(gm.tile_size) * 0.5)
 	var steps: int = int(ceil(span / step))
 	for i in range(steps + 1):
 		var at: Vector3 = from_pos.lerp(to_pos, float(i) / float(steps))
-		if gm.is_cell_blocked(gm.world_to_cell(at)):
-			return false
-	return true
+		var cell: Vector2i = gm.world_to_cell(at)
+		if gm.is_cell_blocked(cell):
+			return cell
+		if include_buildings and gm.has_method("is_cell_occupied") and gm.is_cell_occupied(cell):
+			var b = gm.get_building_at(cell)
+			# Blueprints block nobody, and neither does the cell this dinosaur is
+			# standing in.
+			if b != null and is_instance_valid(b) and ("is_constructed" in b) and b.is_constructed:
+				if cell != gm.world_to_cell(global_position):
+					return cell
+	return none
+
+## The building this dinosaur has to go through, or null when there is a way round.
+##
+## Two questions, in this order, because the second one is the expensive one:
+##   1. is anything solid on the straight line at all? (cheap, and usually no)
+##   2. if so, is there a route around it? (a flood, so it is throttled)
+##
+## Only when the answer is "something is in the way AND there is no way round" does the
+## thing in the way become a target. A fence with a gap in it is walked round.
+func _building_in_the_way() -> Node:
+	_refresh_route()
+	if _blocked_by != null and is_instance_valid(_blocked_by):
+		return _blocked_by
+	return null
+
+## Whether there is no way round at all. The question a wall is judged by.
+func _way_is_sealed() -> bool:
+	_refresh_route()
+	return _way_sealed
+
+## Works out, at most a few times a second, whether the way ahead is open and what is
+## standing in it.
+##
+## Throttled because the answer costs a flood of the grid. Doing it per dinosaur per
+## frame during a raid would be the most expensive thing in the game, and a fence coming
+## down half a second late is not something anyone can see.
+func _refresh_route() -> void:
+	var now: float = float(Time.get_ticks_msec()) / 1000.0
+	if now - _route_checked_at < ROUTE_RECHECK_SECONDS:
+		if _blocked_by != null and not is_instance_valid(_blocked_by):
+			_blocked_by = null
+			_way_sealed = false
+		return
+	_route_checked_at = now
+	_blocked_by = null
+	_way_sealed = false
+
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("is_reachable"):
+		return
+	var goal: Vector3 = _current_goal()
+	if goal == Vector3.INF:
+		return
+
+	var hit: Vector2i = _first_solid_on_line(global_position, goal, true)
+	if hit == Vector2i(2147483647, 2147483647):
+		return                      # clear line; nothing to decide
+	if gm.is_reachable(global_position, goal):
+		return                      # something is in the way, but there is a way round
+
+	_way_sealed = true
+	var b = gm.get_building_at(hit)
+	if b != null and is_instance_valid(b) and not ("is_destroyed" in b and b.is_destroyed):
+		_blocked_by = b
+
+## Whether stopping to bite this is the right thing to do.
+##
+## A WALL IS ONLY WORTH BITING WHEN IT IS ACTUALLY IN THE WAY. If there is a way round
+## it, go round -- that is what makes a fence a funnel that decides where the raid
+## arrives, rather than a sack of hit points that every raid chews through in the same
+## place. Anything else -- a turret, the wreck -- is attacked on its own merits, because
+## those are targets rather than obstacles.
+##
+## This is the rule that was missing. A dinosaur with a clear way round would still stop
+## at the first stake its raycast touched, so five of them met a fence with an open gate
+## and four stood there eating it.
+func _should_bite(node: Variant) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if not _is_wall(node):
+		return true
+	return _way_is_sealed()
+
+func _is_wall(node: Variant) -> bool:
+	if node == null or not is_instance_valid(node) or not ("building_type" in node):
+		return false
+	var cfg = _get_config()
+	if cfg == null or not ("BUILDINGS" in cfg):
+		return false
+	var type_id: String = String(node.building_type)
+	if not cfg.BUILDINGS.has(type_id):
+		return false
+	return String(cfg.BUILDINGS[type_id].get("kind", "")) == "wall"
+
+## Advances past any waypoint that now stands inside something solid.
+##
+## The last waypoint is never skipped: it is the destination, and if the player has
+## walled the core in then that wall is exactly what the raid should be chewing -- which
+## _building_in_the_way will then say, because the way really is sealed.
+func _skip_unwalkable_waypoints() -> void:
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("is_cell_walkable"):
+		return
+	while current_waypoint_index < waypoints.size() - 1:
+		var cell: Vector2i = gm.world_to_cell(waypoints[current_waypoint_index])
+		if gm.is_cell_walkable(cell):
+			return
+		current_waypoint_index += 1
+
+## Where this dinosaur is trying to get to right now.
+func _current_goal() -> Vector3:
+	if current_target != null and is_instance_valid(current_target) and current_target is Node3D:
+		return (current_target as Node3D).global_position
+	if waypoints.is_empty():
+		return Vector3.INF
+	var idx: int = clampi(current_waypoint_index, 0, waypoints.size() - 1)
+	return waypoints[idx]
 
 ## Undoes a step that would have ended inside a hill. Separation and flanking both
 ## push sideways, and neither of them knows about the landscape -- this is the one
@@ -584,6 +750,16 @@ func _process_attacking(_delta: float) -> void:
 	# missing entirely: a dinosaur went on standing in front of something it could
 	# no longer touch, which is what "the raid goes stupid after the Hero pulls
 	# away" looked like from the outside.
+	# A wall that has stopped being in the way -- somebody demolished a stake, or the
+	# dinosaur ate through one and a gap appeared -- stops being a target. Without this
+	# the first one to start chewing would chew to the end no matter what opened up.
+	if _is_target_valid(current_target) and _is_wall(current_target) and not _way_is_sealed():
+		release_attack_slot(current_target, self)
+		current_target = null
+		assigned_slot = Vector3.ZERO
+		on_obstacle_cleared()
+		return
+
 	if not _is_target_valid(current_target) or not _target_in_reach(current_target):
 		if current_target != null:
 			release_attack_slot(current_target, self)
