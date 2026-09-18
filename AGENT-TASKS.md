@@ -26,7 +26,13 @@
 "C:/Users/jobzk/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path . --script res://tests/test_runner.gd
 ```
 
-必须是 **584 项全过、0 失败**（加上你自己新增的）。另外跑一遍开图冒烟测试，不许有报错：
+**同时要看 stderr。** GDScript 的运行时错误**不会让测试失败**——它只中断那个测试函数，而 runner 只看断言，于是"已经断言过几条"的测试照样报 PASS。发现的时候有两个测试**沉默地半途而废**了好几个版本。所以这个数必须是 **0**，和 `ALL TESTS PASSED` 同等重要：
+
+```bash
+"C:/Users/jobzk/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path . --script res://tests/test_runner.gd 2>&1 | grep -c "SCRIPT ERROR"
+```
+
+必须是 **658 项全过、0 失败**（加上你自己新增的）。另外跑一遍开图冒烟测试，不许有报错：
 
 ```bash
 "C:/Users/jobzk/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path . --quit-after 400

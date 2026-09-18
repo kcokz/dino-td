@@ -134,6 +134,16 @@ const BUILDINGS: Dictionary = {
 ## building and demolish it.
 const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metres
 
+## Physics layers, as bit masks. 1 ground, 2 buildings, 4 hero, 8 nest (dinos carry
+## 4|8), and this one.
+##
+## A BLUEPRINT IS CLICKABLE BUT SOLID TO NOBODY. It used to be given layer 0 with its
+## collision shape disabled, which does stop it blocking anyone -- and also makes it
+## invisible to the click raycast, so unfinished work could not be clicked to carry on
+## with. Its own layer keeps both halves: the picking ray looks here, and nothing else
+## does.
+const LAYER_BLUEPRINT: int = 16
+
 ## How tall a building stands when it does not say otherwise. Height is the honest
 ## lever for "this thing is imposing": widening a building eats into the lane the
 ## Hero needs, while making it taller costs nothing.
@@ -476,6 +486,9 @@ const FEEDBACK: Dictionary = {
 	"selection_ring_margin": 0.18,    # 圈比底座向外扩出多少（米）
 	"selection_ring_thickness": 0.09, # 圈线粗细（米）
 	"selection_ring_color": Color(0.35, 1.0, 0.5, 0.9),
+	# 悬停圈：鼠标下面是什么。和选中圈刻意不同色，否则"我选中的"和"我指着的"分不清。
+	# 木尖刺只有 0.62m 宽，一排挨在一起时，没有这个圈根本看不出点的是哪一根。
+	"hover_ring_color": Color(1.0, 1.0, 1.0, 0.55),
 	"audio_volume_db": -8.0,
 	"audio_enabled": true,
 }

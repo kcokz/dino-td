@@ -198,7 +198,14 @@ func test_06_hero_walk_to_build_and_construction() -> void:
 
 	assert_false(wall.is_constructed, "Wall starts unconstructed")
 	assert_almost_eq(wall.build_progress, 0.0, 0.01, "Wall build_progress is 0.0")
-	assert_eq(wall.collision_layer, 0, "Unfinished building has collision_layer 0")
+	# Not layer 0 any more. A blueprint on layer 0 with its shape disabled is invisible
+	# to the CLICK raycast too, so half-built work could not be clicked to carry on with:
+	# walk away from a stake and it was stranded. It has a layer of its own now, which
+	# the picking ray looks at and nothing else does.
+	assert_eq(wall.collision_layer, int(config_node.LAYER_BLUEPRINT),
+		"A blueprint sits on the blueprint layer, so it can be pointed at")
+	assert_eq(wall.collision_layer & 2, 0, "Which is not the buildings layer")
+	assert_eq(wall.collision_layer & 3, 0, "Nor anything the Hero's mask covers")
 
 	# Order hero to build
 	hero.order_build(wall)
@@ -232,7 +239,8 @@ func test_07_semifinished_buildings_have_no_collision_or_production() -> void:
 	tree.root.add_child(tower)
 	tower.start_construction(6.0)
 	assert_false(tower.is_constructed, "Tower is unconstructed")
-	assert_eq(tower.collision_layer, 0, "Unfinished tower collision_layer is 0")
+	assert_eq(tower.collision_layer, int(config_node.LAYER_BLUEPRINT),
+		"An unfinished tower is clickable but on nobody's collision mask")
 	assert_null(tower.acquire_target(), "Unfinished tower cannot acquire targets")
 
 	# A blueprint is also invisible to the fence's contact damage and to anything
@@ -242,7 +250,8 @@ func test_07_semifinished_buildings_have_no_collision_or_production() -> void:
 	tree.root.add_child(stakes)
 	stakes.start_construction(4.0)
 	assert_false(stakes.is_constructed, "Stakes are unconstructed")
-	assert_eq(stakes.collision_layer, 0, "Unfinished stakes have no collision either")
+	assert_eq(stakes.collision_layer, int(config_node.LAYER_BLUEPRINT),
+		"And so are unfinished stakes")
 
 # ==============================================================================
 # 8. Hero Death Triggers Immediate Game Over (game_lost)

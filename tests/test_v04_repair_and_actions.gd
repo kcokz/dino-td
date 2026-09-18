@@ -72,11 +72,16 @@ func test_01_only_a_damaged_finished_building_wants_repair() -> void:
 	var turret = _turret()
 	await wait_frames(1)
 	assert_false(turret.needs_repair(), "At full health there is nothing to mend")
-	assert_eq(turret.repair_cost(), 0, "And nothing to pay")
+	assert_eq(turret.repair_cost(), {}, "And nothing to pay")
 
 	turret.take_damage(turret.max_hp * 0.5)
 	assert_true(turret.needs_repair(), "Damaged, it does")
-	assert_gt(turret.repair_cost(), 0, "And it quotes a price")
+	# repair_cost() is a bill per resource, not a number. Comparing it with 0 was a
+	# runtime error, which aborted this test silently and left it counted as a pass.
+	var bill: Dictionary = turret.repair_cost()
+	assert_gt(bill.size(), 0, "And it quotes a price")
+	for res_id in bill:
+		assert_gt(int(bill[res_id]), 0, "Which asks for some %s" % res_id)
 
 	var blueprint = _spawn(tower_script, Vector3(20.0, 0.0, 0.0))
 	blueprint.start_construction()

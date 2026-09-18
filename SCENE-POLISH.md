@@ -55,6 +55,14 @@
 "C:/Users/jobzk/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path . --quit-after 400
 ```
 
+> **跑测试要连 stderr 一起看。** GDScript 的**运行时错误不会让测试失败**——它只是把那个测试函数中断掉，而 runner 只看断言，于是"已经断言过几条"的测试照样报 PASS。发现的时候有两个测试**沉默地半途而废**了好几个版本。所以：
+>
+> ```
+> "C:/Users/jobzk/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path . --script res://tests/test_runner.gd 2>&1 | grep -c "SCRIPT ERROR"
+> ```
+>
+> **这个数必须是 0**，和 `ALL TESTS PASSED` 同等重要。
+
 新增 `class_name` 或改 `strings.csv` 之后**必须**先跑 `--headless --editor --quit`。
 
 **分支**从 `main` 开，名字见任务表。**不要 push，不要合并。**

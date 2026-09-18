@@ -806,6 +806,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and current_build_type != "" and not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 		_update_build_preview(event.position)
 
+	# Otherwise the cursor outlines whatever it is over, so the player can see what a
+	# click would act on before making it.
+	if event is InputEventMouseMotion and current_build_type == "" and not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
+		_update_hover(event.position)
+
 	# Middle mouse drag camera pan
 	if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 		if camera:
@@ -900,7 +905,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_pending_cabin_entry = false   # a new order replaces the walk home
 			var cell = grid_manager.world_to_cell(hit_pos) if grid_manager else Vector2i.ZERO
 			var res_node = get_resource_node_at_cell(cell)
-			var b = grid_manager.get_building_at(cell) if grid_manager else null
+			# By point, not by tile: several stakes share a tile, and the tile only
+			# remembers one of them.
+			var b = grid_manager.building_at_point(hit_pos) if grid_manager else null
 			if res_node != null and is_instance_valid(res_node):
 				if hero.has_method("can_harvest") and not hero.can_harvest(res_node):
 					_hint("HINT_NEED_TOOL")
@@ -1044,6 +1051,88 @@ func _active_camera() -> Camera3D:
 			return cam
 	return camera
 
+# ==============================================================================
+# What the cursor is over
+# ==============================================================================
+
+## One ring, moved to whatever the cursor is on. Deliberately not a second ring on
+## every entity: there is only ever one cursor.
+var _hover_ring: SelectionRing3D = null
+var _hovered: Node = null
+
+## Outlines the thing under the cursor, in a different colour from the selection ring.
+##
+## Asked for because of the stakes: one is 0.62m wide, a fence is a row of them, and at
+## eighteen metres up there was no way to tell which one a click would hit -- or whether
+## it would hit one at all rather than the ground behind it.
+##
+## Only while something is selected, because that is when a click does anything.
+func _update_hover(screen_pos: Vector2) -> void:
+	var want: Node = null
+	if _selected_unit_takes_orders() or _has_selection():
+		var hit = _raycast_object(screen_pos)
+		if hit != null and is_instance_valid(hit) and _is_hoverable(hit):
+			want = hit
+		elif grid_manager != null:
+			# The ray can slip past something as thin as a stake and land on the ground
+			# behind it, so the grid gets asked about the point as well.
+			var ground = _raycast_ground(screen_pos)
+			if ground != null:
+				var b = grid_manager.building_at_point(ground)
+				if b != null and is_instance_valid(b) and _is_hoverable(b):
+					want = b
+	_show_hover(want)
+
+func _has_selection() -> bool:
+	var panel = hud.find_child("OptionPanel", true, false) if (hud and is_instance_valid(hud)) else null
+	if panel == null or not is_instance_valid(panel) or not ("selected_unit" in panel):
+		return false
+	return panel.selected_unit != null and is_instance_valid(panel.selected_unit)
+
+func _is_hoverable(node: Node) -> bool:
+	if node == null or not is_instance_valid(node) or not (node is Node3D):
+		return false
+	if "is_destroyed" in node and node.is_destroyed:
+		return false
+	for group in ["buildings", "dinos", "hero", "selectable", "resource_nodes", "stations"]:
+		if node.is_in_group(group):
+			return true
+	return false
+
+func _show_hover(node: Node) -> void:
+	if node == _hovered:
+		if _hover_ring != null and node != null and is_instance_valid(node):
+			_hover_ring.global_position = (node as Node3D).global_position
+		return
+	_hovered = node
+	if node == null or not is_instance_valid(node):
+		if _hover_ring != null:
+			_hover_ring.set_shown(false)
+		return
+	if _hover_ring == null:
+		_hover_ring = SelectionRing3D.new()
+		_hover_ring.name = "HoverRing"
+		add_child(_hover_ring)
+		var cfg = _get_config()
+		var tint: Color = Color(1.0, 1.0, 1.0, 0.55)
+		if cfg and "FEEDBACK" in cfg:
+			tint = cfg.FEEDBACK.get("hover_ring_color", tint)
+		_hover_ring.override_color(tint)
+	# Matched to the thing's OWN selection ring where it has one, so hovering and
+	# selecting outline the same shape at the same size and only the colour differs.
+	var shape: int = SelectionRing3D.Shape.ROUND
+	var size: float = 1.0
+	if "selection_ring" in node and node.selection_ring != null and is_instance_valid(node.selection_ring):
+		shape = int(node.selection_ring.shape)
+		size = float(node.selection_ring.base_size)
+	elif "building_type" in node:
+		var cfg2 = _get_config()
+		shape = SelectionRing3D.Shape.BOX
+		size = float(cfg2.get_building_footprint(String(node.building_type))) if cfg2 else 1.0
+	_hover_ring.configure(shape, size)
+	_hover_ring.global_position = (node as Node3D).global_position
+	_hover_ring.set_shown(true)
+
 func _raycast_ground(screen_pos: Vector2) -> Variant:
 	var cam := _active_camera()
 	if cam == null or not is_inside_tree():
@@ -1084,7 +1173,14 @@ func _raycast_object(screen_pos: Vector2) -> Node:
 	var to = from + cam.project_ray_normal(screen_pos) * 1000.0
 
 	var query = PhysicsRayQueryParameters3D.create(from, to)
-	query.collision_mask = 1 | 2 | 4 # Layer 1: Ground/Obstacles, Layer 2: Buildings, Layer 4: Units
+	# Blueprints are on a layer of their own so that they can be pointed at without
+	# being in anyone's way. Leaving that layer out here is what stranded half-built
+	# work: walk away from a stake and there was nothing left to click.
+	var blueprint_layer: int = 16
+	var cfg_layers = _get_config()
+	if cfg_layers and "LAYER_BLUEPRINT" in cfg_layers:
+		blueprint_layer = int(cfg_layers.LAYER_BLUEPRINT)
+	query.collision_mask = 1 | 2 | 4 | blueprint_layer
 	var result = space_state.intersect_ray(query)
 	if result and result.has("collider"):
 		return result["collider"]

@@ -134,17 +134,21 @@ func complete_construction() -> void:
 	if eb and eb.has_signal("build_progress_updated"):
 		eb.build_progress_updated.emit(self, 1.0)
 
+## Finished work is solid. Unfinished work is CLICKABLE BUT SOLID TO NOBODY.
+##
+## A blueprint used to get layer 0 and a disabled shape, which does stop it blocking
+## anyone -- and also makes it invisible to the click raycast, so a half-built stake
+## could not be clicked to carry on with. Walk away from one and the work was stranded.
+##
+## Config.LAYER_BLUEPRINT is looked for by the picking ray and by nothing else, so a
+## blueprint can be pointed at without ever being in anybody's way.
 func _update_construction_state() -> void:
-	if is_constructed:
-		collision_layer = 2
-		for child in get_children():
-			if child is CollisionShape3D:
-				child.disabled = false
-	else:
-		collision_layer = 0
-		for child in get_children():
-			if child is CollisionShape3D:
-				child.disabled = true
+	var cfg = _get_config()
+	var blueprint_layer: int = int(cfg.LAYER_BLUEPRINT) if (cfg and "LAYER_BLUEPRINT" in cfg) else 16
+	collision_layer = 2 if is_constructed else blueprint_layer
+	for child in get_children():
+		if child is CollisionShape3D:
+			child.disabled = false
 	_update_visuals_progress()
 
 ## A blueprint is drawn translucent and fills in as it goes up.

@@ -21,9 +21,20 @@ var base_size: float = 1.0   # side length for BOX, diameter for ROUND
 var _parts: Array[MeshInstance3D] = []
 var _built_for: Vector2 = Vector2(-1.0, -1.0)  # (shape, size) the current mesh was built for
 
+## Set to draw this ring in something other than the selection colour. The hover ring
+## uses it: "what I am pointing at" and "what I have selected" have to be tellable apart
+## at a glance, or the outline says nothing.
+var _colour_override: Variant = null
+
 func _ready() -> void:
 	rebuild()
 	visible = false
+
+## Draws this ring in `tint` instead of the configured selection colour.
+func override_color(tint: Color) -> void:
+	_colour_override = tint
+	_built_for = Vector2(-1.0, -1.0)   # force a rebuild, the colour is baked into the mesh
+	rebuild()
 
 ## Tells the ring what it is outlining. Call before showing it; rebuilding is
 ## skipped when nothing changed.
@@ -44,7 +55,7 @@ func rebuild() -> void:
 
 	var margin: float = _cfg("selection_ring_margin", 0.18)
 	var thickness: float = _cfg("selection_ring_thickness", 0.09)
-	var colour: Color = _cfg("selection_ring_color", Color(0.35, 1.0, 0.5, 0.9))
+	var colour: Color = _colour_override if _colour_override is Color else _cfg("selection_ring_color", Color(0.35, 1.0, 0.5, 0.9))
 	var outer: float = base_size + margin * 2.0
 
 	if shape == Shape.ROUND:

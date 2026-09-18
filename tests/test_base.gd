@@ -120,7 +120,27 @@ func assert_almost_eq(actual: float, expected: float, tolerance: float = 0.0001,
 	])
 	return false
 
+## Ordering comparisons on values of different types are a RUNTIME ERROR in GDScript,
+## not a false. An error inside a test aborts that test -- and the runner, which only
+## sees assertions, reports whatever ran before it as a pass. So a test could compare a
+## Dictionary with an int, silently stop there, and be counted green.
+##
+## Checking the types first turns that into an ordinary failure with a readable message.
+func _comparable(actual: Variant, expected: Variant, op: String, message: String) -> bool:
+	if typeof(actual) == typeof(expected):
+		return true
+	var numeric := [TYPE_INT, TYPE_FLOAT]
+	if typeof(actual) in numeric and typeof(expected) in numeric:
+		return true
+	_record_fail("Cannot compare %s %s %s: '%s' is a %s, '%s' is a %s. %s" % [
+		str(actual), op, str(expected),
+		str(actual), type_string(typeof(actual)),
+		str(expected), type_string(typeof(expected)), message])
+	return false
+
 func assert_gt(actual: Variant, expected: Variant, message: String = "") -> bool:
+	if not _comparable(actual, expected, ">", message):
+		return false
 	if actual > expected:
 		_record_pass(message)
 		return true
@@ -128,6 +148,8 @@ func assert_gt(actual: Variant, expected: Variant, message: String = "") -> bool
 	return false
 
 func assert_gte(actual: Variant, expected: Variant, message: String = "") -> bool:
+	if not _comparable(actual, expected, ">=", message):
+		return false
 	if actual >= expected:
 		_record_pass(message)
 		return true
@@ -135,6 +157,8 @@ func assert_gte(actual: Variant, expected: Variant, message: String = "") -> boo
 	return false
 
 func assert_lt(actual: Variant, expected: Variant, message: String = "") -> bool:
+	if not _comparable(actual, expected, "<", message):
+		return false
 	if actual < expected:
 		_record_pass(message)
 		return true
@@ -142,6 +166,8 @@ func assert_lt(actual: Variant, expected: Variant, message: String = "") -> bool
 	return false
 
 func assert_lte(actual: Variant, expected: Variant, message: String = "") -> bool:
+	if not _comparable(actual, expected, "<=", message):
+		return false
 	if actual <= expected:
 		_record_pass(message)
 		return true

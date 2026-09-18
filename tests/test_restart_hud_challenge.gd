@@ -24,7 +24,6 @@ var hud_scene_packed: PackedScene = null
 var dino_script: GDScript = null
 var tower_script: GDScript = null
 var wall_script: GDScript = null
-var lumber_hut_script: GDScript = null
 var core_campfire_script: GDScript = null
 var nest_script: GDScript = null
 
@@ -49,7 +48,6 @@ func before_all() -> void:
 	dino_script = _load_script(["res://scripts/entities/Dino.gd"])
 	tower_script = _load_script(["res://scripts/entities/Tower.gd"])
 	wall_script = _load_script(["res://scripts/entities/Wall.gd"])
-	lumber_hut_script = _load_script(["res://scripts/entities/LumberHut.gd"])
 	core_campfire_script = _load_script(["res://scripts/entities/CoreCampfire.gd"])
 	nest_script = _load_script(["res://scripts/entities/Nest.gd"])
 
@@ -134,7 +132,7 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	# 1. Place 12 active player buildings across grid
 	var tracked_buildings: Array[Node] = []
 	var building_cells: Array[Vector2i] = []
-	var types = ["wall", "tower", "lumber_hut"]
+	var types = ["wall", "tower"]
 
 	for i in range(12):
 		var cell = Vector2i((i % 4) + 1, (i / 4) + 1)
@@ -144,7 +142,6 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 		match b_type:
 			"wall": b = wall_script.new()
 			"tower": b = tower_script.new()
-			"lumber_hut": b = lumber_hut_script.new()
 		b.setup(b_type, cell)
 		b.position = grid_mgr.cell_to_world(cell)
 		buildings_container.add_child(b)
@@ -268,13 +265,16 @@ func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -
 	if main == null: return
 	await wait_frames(2)
 
-	# Place 3 Lumber Huts
+	# Three buildings standing when the restart comes. Lumber huts, until the building
+	# was deleted from the game -- after which this loaded a script that was not there,
+	# called new() on null, and stopped the test dead. It went on being counted as a
+	# pass, because the runner only sees assertions and this one had made some already.
 	for i in range(3):
 		var cell = Vector2i(i + 1, 2)
-		var hut = lumber_hut_script.new()
-		hut.setup("lumber_hut", cell)
-		main.buildings_container.add_child(hut)
-		main.grid_manager.occupy_cell(cell, hut)
+		var b = tower_script.new()
+		b.setup("tower", cell)
+		main.buildings_container.add_child(b)
+		main.grid_manager.occupy_cell(cell, b)
 
 	# Start wave 3 (big horde wave)
 	main.wave_manager.start_wave(3)

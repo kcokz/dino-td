@@ -19,7 +19,6 @@ var nest_script: GDScript = null
 var core_campfire_script: GDScript = null
 var tower_script: GDScript = null
 var wall_script: GDScript = null
-var lumber_hut_script: GDScript = null
 var building_script: GDScript = null
 var grid_manager_script: GDScript = null
 var build_system_script: GDScript = null
@@ -56,7 +55,6 @@ func before_all() -> void:
 	core_campfire_script = _load_script(["res://scripts/entities/CoreCampfire.gd", "res://scripts/entities/core_campfire.gd"])
 	tower_script = _load_script(["res://scripts/entities/Tower.gd", "res://scripts/entities/tower.gd"])
 	wall_script = _load_script(["res://scripts/entities/Wall.gd", "res://scripts/entities/wall.gd"])
-	lumber_hut_script = _load_script(["res://scripts/entities/LumberHut.gd", "res://scripts/entities/lumber_hut.gd"])
 	building_script = _load_script(["res://scripts/entities/Building.gd", "res://scripts/entities/building.gd"])
 	grid_manager_script = _load_script(["res://scripts/core/GridManager.gd", "res://scripts/core/grid_manager.gd"])
 	build_system_script = _load_script(["res://scripts/core/BuildSystem.gd", "res://scripts/core/build_system.gd"])
@@ -410,7 +408,7 @@ func test_challenge_lockout_won_complete_action_rejection() -> void:
 
 	# 2. Building placement & wood spend rejection for all building types
 	var place_watcher = watch_signal(event_bus_node, "building_placed")
-	var types = ["tower", "wall", "lumber_hut"]
+	var types = ["tower", "wall"]
 	for i in range(types.size()):
 		var b_type = types[i]
 		var cell = Vector2i(i + 1, i + 1)
@@ -484,7 +482,7 @@ func test_challenge_lockout_lost_complete_action_rejection() -> void:
 
 	# 2. Building placement & wood spend rejection for all building types
 	var place_watcher = watch_signal(event_bus_node, "building_placed")
-	var types = ["tower", "wall", "lumber_hut"]
+	var types = ["tower", "wall"]
 	for i in range(types.size()):
 		var b_type = types[i]
 		var cell = Vector2i(i + 2, i + 2)

@@ -165,6 +165,18 @@ func fine_cell_to_cell(cell: Vector2i, divisions: int) -> Vector2i:
 	var d: int = maxi(1, divisions)
 	return Vector2i(int(floor(float(cell.x) / float(d))), int(floor(float(cell.y) / float(d))))
 
+## Whether something in this fine cell actually stands in the way.
+##
+## Not the same question as is_fine_cell_occupied, which is about whether the SPOT is
+## taken. A blueprint takes the spot -- you cannot put a second stake on it -- and
+## obstructs nobody, which is the same distinction the tile level has always made. Not
+## making it here meant a fence you had only ORDERED stopped a raid dead.
+func is_fine_cell_solid(cell: Vector2i) -> bool:
+	if not is_fine_cell_occupied(cell):
+		return false
+	var b = fine_cells[cell]
+	return not ("is_constructed" in b and not b.is_constructed)
+
 func is_fine_cell_occupied(cell: Vector2i) -> bool:
 	if not fine_cells.has(cell):
 		return false
@@ -250,13 +262,22 @@ func occupant_leaves_a_way_through(tile: Vector2i) -> bool:
 	var base := Vector2i(tile.x * divisions, tile.y * divisions)
 	var free: Array[bool] = []
 	free.resize(divisions * divisions)
-	var any_taken: bool = false
+	# Two different questions, and conflating them was a bug in its own right.
+	#
+	# ON RECORD: is anything registered in this tile's fine cells at all? If not, nothing
+	# finer is known about it and it fills its tile, as everything did before fine
+	# placement existed. Inventing a way through would open holes in the map.
+	#
+	# SOLID: is something actually standing there? A blueprint takes its spot -- nothing
+	# else can go on it -- and obstructs nobody, so it is on record without being solid.
+	# A fence you have only ORDERED used to stop a raid dead.
+	var on_record: bool = false
 	for dz in range(divisions):
 		for dx in range(divisions):
-			var taken: bool = is_fine_cell_occupied(base + Vector2i(dx, dz))
-			free[dz * divisions + dx] = not taken
-			any_taken = any_taken or taken
-	if not any_taken:
+			var at := base + Vector2i(dx, dz)
+			on_record = on_record or is_fine_cell_occupied(at)
+			free[dz * divisions + dx] = not is_fine_cell_solid(at)
+	if not on_record:
 		return false
 	return _crosses(free, divisions, true) and _crosses(free, divisions, false)
 
@@ -302,14 +323,14 @@ func walkable_point_in_cell(tile: Vector2i, y: float = 0.0) -> Vector3:
 		return centre
 	var base := Vector2i(tile.x * divisions, tile.y * divisions)
 	var half: int = divisions / 2
-	if not is_fine_cell_occupied(base + Vector2i(half, half)):
+	if not is_fine_cell_solid(base + Vector2i(half, half)):
 		return centre
 	var best: Vector3 = centre
 	var best_d: float = -1.0
 	for dz in range(divisions):
 		for dx in range(divisions):
 			var fine := base + Vector2i(dx, dz)
-			if is_fine_cell_occupied(fine):
+			if is_fine_cell_solid(fine):
 				continue
 			var p: Vector3 = fine_cell_to_world(fine, divisions, y)
 			var d: float = p.distance_squared_to(centre)
@@ -330,6 +351,21 @@ func vacate_cell(cell: Vector2i) -> void:
 ## Semantic alias for vacate_cell.
 func clear_cell(cell: Vector2i) -> void:
 	vacate_cell(cell)
+
+## The building at a world POINT rather than in a tile.
+##
+## With several stakes sharing a tile, asking the TILE gets you whichever of them
+## happens to be registered as its occupant -- not the one under the cursor. So
+## right-clicking one stake of a fence acted on a different stake, and when that other
+## one was already finished the click did nothing at all.
+func building_at_point(pos: Vector3) -> Node:
+	var tile: Vector2i = world_to_cell(pos)
+	var divisions: int = _fine_divisions_in(tile)
+	if divisions > 1:
+		var fine: Vector2i = world_to_fine_cell(pos, divisions)
+		if is_fine_cell_occupied(fine):
+			return fine_cells[fine]
+	return get_building_at(tile)
 
 ## Returns the building Node at cell, or null if unoccupied or invalid.
 func get_building_at(cell: Vector2i) -> Node:
