@@ -107,7 +107,15 @@ static func visual_bounds(node: Node3D) -> AABB:
 		var box: AABB = vis.get_aabb()
 		# Up to `node`'s space, but without `node`'s own transform: the caller is about
 		# to set that transform, so including it would measure the previous fit.
-		var t: Transform3D = node.global_transform.affine_inverse() * vis.global_transform
+		var t: Transform3D = Transform3D.IDENTITY
+		if node.is_inside_tree() and vis.is_inside_tree():
+			t = node.global_transform.affine_inverse() * vis.global_transform
+		else:
+			var curr: Node = vis
+			while curr != null and curr != node:
+				if curr is Node3D:
+					t = (curr as Node3D).transform * t
+				curr = curr.get_parent()
 		box = t * box
 		if first:
 			out = box

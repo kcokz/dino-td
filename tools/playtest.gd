@@ -134,6 +134,15 @@ func _scenario_closeup() -> void:
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
+	var dino_script := load("res://scripts/entities/Dino.gd")
+	var dino = dino_script.new()
+	_main.add_child(dino)
+	dino.setup("big_theropod")
+	dino.global_position = Vector3(2.0, 0.0, 0.0)
+	await _wait(4)
+	await _portrait("dino_t_rex", dino.global_position, 5.0)
+	dino.queue_free()
+
 ## The reported bug, walked rather than argued about: a stake beside a hillside with a
 ## plain gap between them, and the Hero told to go through it.
 ##

@@ -27,7 +27,14 @@ enum State {
 @export var attack_range: float = 2.0
 @export var build_range: float = 1.5
 
-var current_state: State = State.IDLE
+var current_state: State = State.IDLE:
+	set(v):
+		if current_state != v:
+			current_state = v
+			if animator != null and is_instance_valid(animator):
+				animator.play_state(current_state)
+
+var animator: ActorAnimator = null
 var target_destination: Vector3 = Vector3.ZERO
 var target_building: Node = null
 var target_enemy: Node3D = null
@@ -853,6 +860,9 @@ func _ensure_body() -> void:
 	for node in body.find_children("*", "MeshInstance3D", true, false):
 		mesh_instance = node as MeshInstance3D
 		break
+	if animator != null and is_instance_valid(animator):
+		animator.refresh_animation_player()
+		animator.play_state(current_state)
 
 func _ensure_components() -> void:
 	collision_layer = 4 # Layer 3: Hero/Player
@@ -872,6 +882,14 @@ func _ensure_components() -> void:
 		collision_shape.shape = box
 		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
+
+	if animator == null:
+		animator = ActorAnimator.new()
+		animator.name = "ActorAnimator"
+		add_child(animator)
+		animator.setup(self, "hero")
+	else:
+		animator.refresh_animation_player()
 
 	# The body comes from the one place that knows what things look like. The collider
 	# above is built from the SAME declared size rather than measured off the art,

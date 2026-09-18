@@ -33,7 +33,14 @@ var attack_damage: float:
 	get: return damage
 	set(v): damage = v
 
-var current_state: State = State.WALKING
+var current_state: State = State.WALKING:
+	set(v):
+		if current_state != v:
+			current_state = v
+			if animator != null and is_instance_valid(animator):
+				animator.play_state(current_state)
+
+var animator: ActorAnimator = null
 var state: State:
 	get: return current_state
 	set(v): current_state = v
@@ -1344,6 +1351,9 @@ func _ensure_body() -> void:
 	for node in body.find_children("*", "MeshInstance3D", true, false):
 		mesh_instance = node as MeshInstance3D
 		break
+	if animator != null and is_instance_valid(animator):
+		animator.refresh_animation_player()
+		animator.play_state(current_state)
 
 ## The collider follows the declared size too, so a species that is bigger really is
 ## bigger to everything that touches it.
@@ -1372,6 +1382,14 @@ func _ensure_components() -> void:
 		collision_shape.shape = box
 		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
+
+	if animator == null:
+		animator = ActorAnimator.new()
+		animator.name = "ActorAnimator"
+		add_child(animator)
+		animator.setup(self, "dino")
+	else:
+		animator.refresh_animation_player()
 
 	# 2. The body, from the one place that knows what things look like. Collision above
 	# is built from the SAME declared size rather than from the art, because collision

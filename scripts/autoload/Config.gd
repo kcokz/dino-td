@@ -624,7 +624,7 @@ const VISUALS: Dictionary = {
 	# Every dinosaur gets its own row even while they share a placeholder: the row is
 	# where its model will go, and they will not share that.
 	"dino/raptor":          {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
-	"dino/big_theropod":    {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "big_theropod"},
+	"dino/big_theropod":    {"scene": "res://assets/models/t_rex.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "big_theropod"},
 	"dino/pterosaur":       {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	"nest":                 {"scene": "", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
 	# The wreck: the only evidence the Hero is from anywhere else, and the thing that
@@ -1052,6 +1052,46 @@ const ENVIRONMENT: Dictionary = {
 	"sun_shadow_max_distance": 48.0,
 }
 
+# ==============================================================================
+# 16. Animation State Machine Mappings (v0.5 S2)
+# ==============================================================================
 
+## Decouples entity logic states from asset clip names.
+## Entities report their State enum to ActorAnimator, which reads this table to
+## determine which clip to play. Swapping model packs changes clip strings here,
+## never entity GDScript code.
+const ANIMATIONS: Dictionary = {
+	# Crossfade duration when transitioning between animation states.
+	# 0.2s prevents jerky mechanical snaps while remaining responsive.
+	"blend_time": 0.2,
 
+	# Hero states (corresponds to Hero.State enum keys)
+	"hero": {
+		"IDLE": "idle",
+		"MOVING": "walk",
+		"BUILDING": "build",
+		"ATTACKING": "attack",
+		"DEAD": "death",
+		"HARVESTING": "harvest",
+	},
 
+	# Dinosaur states (corresponds to Dino.State enum keys)
+	"dino": {
+		"WALKING": "run",     # bipedal locomotion gait
+		"ATTACKING": "attack", # bite / swipe
+		"DEAD": "death",
+	},
+
+	# Common clip aliases across diverse CC0 / commercial asset packs:
+	# E.g., if a pack names its walk cycle "run", or attack "bite", ActorAnimator
+	# resolves against this list before falling back to static pose.
+	"aliases": {
+		"walk": ["run", "walking", "Walk", "Run", "Armature|Walk", "Armature|Run"],
+		"run": ["walk", "Run", "Walk", "Armature|Run", "Armature|Walk"],
+		"attack": ["bite", "Attack", "Bite", "Armature|Attack", "Armature|Bite"],
+		"idle": ["Idle", "breathing", "Armature|Idle"],
+		"death": ["die", "dead", "Death", "Die", "Armature|Death"],
+		"build": ["craft", "hammer", "Build", "interact"],
+		"harvest": ["chop", "mine", "Harvest", "attack"],
+	},
+}
