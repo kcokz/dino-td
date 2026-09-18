@@ -89,24 +89,27 @@ func test_01_a_turret_is_taller_than_a_stake_and_a_stake_is_wider() -> void:
 	var stake_h: float = config_node.get_building_height("wall")
 	var tower_h: float = config_node.get_building_height("tower")
 
-	assert_gt(stake_w, tower_w, "A stake fence is wider than a turret")
+	assert_lt(stake_w, tower_w, "One stake is a small thing beside a turret")
 	assert_gt(tower_h, stake_h, "A turret stands taller than a stake")
 	assert_gt(tower_h, config_node.BUILDING_HEIGHT_DEFAULT,
 		"A turret is taller than an ordinary shed, not merely equal to one")
 	assert_lt(stake_h, config_node.BUILDING_HEIGHT_DEFAULT,
 		"A stake is something you look over, not a building")
 
-func test_02_the_turret_is_narrow_enough_to_walk_past() -> void:
+func test_02_nothing_seals_a_tile_on_its_own_any_more() -> void:
 	# Height is free; width is not. Making the turret tall must not have quietly
 	# turned it into a barrier able to seal the Hero in.
 	assert_false(config_node.is_barrier_building("tower"),
 		"A turret leaves a lane, so a ring of them is not a cage")
-	assert_true(config_node.is_barrier_building("wall"),
-		"A stake fence still closes up, which is the whole point of it")
+	# Stakes were the one exception, and are not any more: a stake is 0.62m wide, and
+	# what closes a way is a RUN of them rather than the first one placed.
+	assert_false(config_node.is_barrier_building("wall"),
+		"Nor does one stake, which is 0.62m of a 2m tile")
 
-	var lane: float = config_node.TILE_SIZE - config_node.get_building_footprint("tower")
-	assert_gt(lane, float(config_node.HERO.get("width", 0.8)),
-		"The gap beside a turret is wider than the Hero")
+	for b_type in config_node.BUILDABLE_TYPES:
+		var lane: float = config_node.TILE_SIZE - config_node.get_building_footprint(b_type)
+		assert_gt(lane, float(config_node.HERO.get("width", 0.8)),
+			"The gap beside a %s is wider than the Hero" % b_type)
 
 func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 	for b_type in config_node.BUILDABLE_TYPES:

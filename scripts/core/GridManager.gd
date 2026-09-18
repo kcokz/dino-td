@@ -180,9 +180,10 @@ func is_fine_cell_occupied(cell: Vector2i) -> bool:
 ## Puts `building` in a fine cell, and makes it the tile's occupant if the tile has
 ## none yet.
 ##
-## Registering in BOTH is what keeps every tile-level rule working unchanged: the first
-## stake in a tile blocks that tile exactly as a stake always has, and the ones beside
-## it are extra art and extra damage rather than extra blocking.
+## Registering in BOTH is what lets tile-level questions -- what did I click, what is
+## standing here -- keep working. What it does NOT decide any more is whether the tile
+## can be walked through: for that see `fine_occupants_seal_cell`, because one 0.62m
+## stake in a 2m tile is something to walk round rather than a wall.
 func occupy_fine_cell(cell: Vector2i, building: Node, divisions: int) -> bool:
 	if building == null or is_fine_cell_occupied(cell):
 		return false
@@ -209,6 +210,87 @@ func fine_buildings_in_cell(tile: Vector2i, divisions: int) -> Array[Node]:
 		if is_fine_cell_occupied(fine):
 			out.append(fine_cells[fine])
 	return out
+
+## How finely the building standing in `tile` is placed, or 1 when nothing there is
+## placed finely at all.
+func _fine_divisions_in(tile: Vector2i) -> int:
+	if not occupied_cells.has(tile):
+		return 1
+	var b = occupied_cells[tile]
+	if not is_instance_valid(b):
+		return 1
+	return _divisions_of(b)
+
+## Whether what stands in `tile` still leaves room to walk through it.
+##
+## THE POINT: a stake is 0.62m of a 2m tile. One of them leaves most of the tile open,
+## and a gap the player can plainly see beside it has to be a gap he can use. Before
+## this, the first stake in a tile claimed the whole tile, so a cone standing next to a
+## hillside sealed a lane that was visibly two-thirds empty.
+##
+## What closes a tile is a RUN: a complete row or column of fine cells, which is a line
+## of cones crossing the tile with nothing between them. That is the fence the player
+## drew, and it is the one that stops people -- so WHERE he draws it decides, instead of
+## the type of thing he drew it with.
+##
+## Anything not placed finely fills its tile, as it always has. So does a tile whose
+## occupant was registered at tile level only: with nothing finer on record there is
+## nothing to say a way exists, and inventing one would open holes in the map.
+func occupant_leaves_a_way_through(tile: Vector2i) -> bool:
+	var divisions: int = _fine_divisions_in(tile)
+	if divisions <= 1:
+		return false
+	var base := Vector2i(tile.x * divisions, tile.y * divisions)
+	var rows: Array[int] = []
+	var cols: Array[int] = []
+	rows.resize(divisions)
+	cols.resize(divisions)
+	rows.fill(0)
+	cols.fill(0)
+	var total: int = 0
+	for dz in range(divisions):
+		for dx in range(divisions):
+			if is_fine_cell_occupied(base + Vector2i(dx, dz)):
+				rows[dz] += 1
+				cols[dx] += 1
+				total += 1
+	if total == 0:
+		return false
+	for n in rows:
+		if n >= divisions:
+			return false
+	for n in cols:
+		if n >= divisions:
+			return false
+	return true
+
+## The point inside `tile` a walker should actually aim at: its centre, unless something
+## small is standing there, in which case the nearest fine cell that is free.
+##
+## Without this, a path through a tile that holds a stake aims straight at the stake,
+## and the walker grinds against a cone he had every room to step around.
+func walkable_point_in_cell(tile: Vector2i, y: float = 0.0) -> Vector3:
+	var centre: Vector3 = cell_to_world(tile, y)
+	var divisions: int = _fine_divisions_in(tile)
+	if divisions <= 1:
+		return centre
+	var base := Vector2i(tile.x * divisions, tile.y * divisions)
+	var half: int = divisions / 2
+	if not is_fine_cell_occupied(base + Vector2i(half, half)):
+		return centre
+	var best: Vector3 = centre
+	var best_d: float = -1.0
+	for dz in range(divisions):
+		for dx in range(divisions):
+			var fine := base + Vector2i(dx, dz)
+			if is_fine_cell_occupied(fine):
+				continue
+			var p: Vector3 = fine_cell_to_world(fine, divisions, y)
+			var d: float = p.distance_squared_to(centre)
+			if best_d < 0.0 or d < best_d:
+				best_d = d
+				best = p
+	return best
 
 func _fine_step(divisions: int) -> float:
 	var s: float = tile_size if tile_size > 0.0 else 2.0
@@ -378,7 +460,8 @@ func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only
 	# Caller-specified ignored building
 	if ignore_building != null and b == ignore_building:
 		return true
-	return false
+	# A building smaller than its tile does not fill its tile. Only a run of them does.
+	return occupant_leaves_a_way_through(cell)
 
 ## Whether a walker standing at `from_pos` can get to `to_pos` over walkable ground.
 ##
@@ -490,7 +573,7 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 				if i == cell_path.size() - 1:
 					raw_world_path.append(to_pos)
 				else:
-					raw_world_path.append(cell_to_world(cell_path[i]))
+					raw_world_path.append(walkable_point_in_cell(cell_path[i]))
 
 			return _smooth_path(from_pos, raw_world_path, ignore_building, terrain_only)
 
@@ -549,7 +632,7 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 		partial.reverse()
 		var partial_world: Array[Vector3] = []
 		for i in range(1, partial.size()):
-			partial_world.append(cell_to_world(partial[i]))
+			partial_world.append(walkable_point_in_cell(partial[i]))
 		if not partial_world.is_empty():
 			return _smooth_path(from_pos, partial_world, ignore_building, terrain_only)
 

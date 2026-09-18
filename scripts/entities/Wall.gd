@@ -46,17 +46,19 @@ func _ready() -> void:
 # became three once a neighbour went up.
 #
 # It is gone, and with it every function in this file that used to shape anything. ONE
-# STAKE IS ONE CONE, whatever is beside it. The collider is the plain tile-sized box the
-# base class builds, so nothing here overrides anything.
+# STAKE IS ONE CONE, whatever is beside it. The collider is the plain box the base class
+# builds, so nothing here overrides anything.
 #
-# Worth being clear about what that leaves, because it is a real trade rather than a
-# tidy win: the stake BLOCKS its whole tile and is DRAWN as one stake in the middle of
-# it. That is what keeps a fence a fence -- test_43b in test_v02_followups holds the
-# rule that two neighbouring stakes leave no lane the Hero can walk through, and that
-# rule is computed from the footprint. Shrinking the footprint to match the cone would
-# make the art honest and would also mean a single stake stops nothing, which is a
-# gameplay change nobody asked for. If it is ever wanted, it is one number in Config
-# (BUILDINGS.wall.footprint) plus whatever that does to is_barrier_building.
+# The trade that used to be recorded here is gone too. It read: the stake BLOCKS its
+# whole tile and is DRAWN as one cone in the middle of it, and shrinking the footprint
+# to match the cone "would mean a single stake stops nothing, which is a gameplay change
+# nobody asked for". It was asked for, in the only way that counts -- as a bug. A plain
+# gap between a stake and a hillside was solid, because the tile was claimed whether or
+# not anything stood in the part you were walking through.
+#
+# So the stake is the size of the stake, and what closes a way is a RUN of them wide
+# enough to cross a tile -- GridManager.occupant_leaves_a_way_through. That is the fence
+# the player drew, which is the one that ought to stop him.
 
 func setup(type_id: String = "wall", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)

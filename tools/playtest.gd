@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup"]
+		names = ["open", "fence", "cabin", "closeup", "gap"]
 
 	for name in names:
 		await _run(String(name))
@@ -64,6 +64,8 @@ func _run(name: String) -> void:
 			await _scenario_cabin()
 		"closeup":
 			await _scenario_closeup()
+		"gap":
+			await _scenario_gap()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -130,12 +132,55 @@ func _scenario_closeup() -> void:
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
+## The reported bug, walked rather than argued about: a stake beside a hillside with a
+## plain gap between them, and the Hero told to go through it.
+##
+## Reported as "圆锥和丘陵之间明显有缝隙的情况下，人就没法走过去了". The hillside is one of
+## the level's OWN outcrops rather than a synthetic blocked cell, so what the picture
+## shows and what the pathfinder believes are the same thing.
+##
+## It prints the distance he actually closed, because at eighteen metres up a screenshot
+## of a man standing still and a screenshot of a man who has arrived look far too alike.
+func _scenario_gap() -> void:
+	_grant({"wood": 400})
+	var cfg := root.get_node_or_null("Config")
+	var gm = _main.grid_manager
+	var tile: float = float(cfg.TILE_SIZE)
+	var step: float = tile / float(maxi(1, int(cfg.get_cell_divisions("wall"))))
+
+	# An outcrop the level put there itself, and ONE stake in the tile beside it, pushed
+	# towards the rock so that most of that tile is plainly still open ground.
+	var hill: Vector2i = Vector2i(3, -3)
+	var doorway: Vector2i = hill + Vector2i(-1, 0)
+	_build_at("wall", gm.cell_to_world(doorway) + Vector3(tile * 0.5 - step * 0.5, 0.0, 0.0))
+
+	var hero = _main.hero
+	var start: Vector3 = gm.cell_to_world(doorway + Vector2i(0, -4))
+	var goal: Vector3 = gm.cell_to_world(doorway + Vector2i(0, 4))
+	hero.global_position = start
+	await _wait(4)
+	await _portrait("gap_before", gm.cell_to_world(doorway), 9.0, true)
+
+	if hero.has_method("move_to"):
+		hero.move_to(goal)
+	await _wait(420)
+
+	var span: float = start.distance_to(goal)
+	var closed: float = span - hero.global_position.distance_to(goal)
+	print("[playtest] gap: hero closed %.1fm of %.1fm" % [closed, span])
+	await _portrait("gap_after", gm.cell_to_world(doorway), 9.0, true)
+
 ## Puts a camera at eye level a short way off `at`, looking at it, and takes one frame.
 ## The camera is removed again afterwards, so the level is left exactly as it was.
-func _portrait(name: String, at: Vector3, distance: float) -> void:
+## `overhead` looks almost straight down instead, which is the only angle a GAP reads
+## from: from eye level a stake in front of a rock and a stake beside one look the same.
+func _portrait(name: String, at: Vector3, distance: float, overhead: bool = false) -> void:
 	var cam := Camera3D.new()
 	_main.add_child(cam)
-	cam.position = at + Vector3(distance * 0.72, distance * 0.42, distance * 0.72)
+	if overhead:
+		cam.position = at + Vector3(0.0, distance, distance * 0.28)
+	else:
+		cam.position = at + Vector3(distance * 0.72, distance * 0.42, distance * 0.72)
 	cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
 	var was: Camera3D = _main.camera
 	cam.current = true

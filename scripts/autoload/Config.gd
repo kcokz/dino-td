@@ -83,21 +83,15 @@ const BUILDINGS: Dictionary = {
 		# wall of buildings. A turret is the opposite -- narrow enough to walk past,
 		# tall enough to spot across the map.
 		#
-		# `footprint` is how much fence ONE stake lays down -- a whole tile, so two
-		# stakes side by side join into a line with no hole in it. What the player
-		# sees in that length is `spikes_per_tile` cones, each one small: the pitch
-		# between cones is footprint / spikes_per_tile, which comes out identical
-		# inside a tile and across a tile boundary, so a long fence is an evenly
-		# spaced picket line rather than visible clumps.
+		# A STAKE IS AS BIG AS THE STAKE. `spike_diameter` is the whole of its size:
+		# the cone you see, the box that stops you, and the ground it claims are one
+		# number, so they cannot disagree.
 		#
-		# Wall.gd asks its neighbours which way the run goes: cones in a line along
-		# it, an L at a corner, a small cross for a stake standing on its own. The
-		# collision boxes are cut from the same numbers as the cones, so anything
-		# pressing on the fence is touching spikes rather than being held off at a
-		# distance by a box nobody can see. There is no `thickness` here on purpose:
-		# how deep the line is IS the cone's diameter (get_building_thickness), and
-		# a second number for it would be a number that can disagree with the art.
-		"footprint": 2.0,
+		# It used to declare a footprint of a whole tile -- 2m of claim for 0.62m of
+		# cone. The tile was blocked whether or not anything was standing in the part
+		# you were walking through, which is why a plain gap between a stake and a
+		# hillside was solid. What closes a way now is a RUN of stakes wide enough to
+		# cross a tile, which is the thing the player can actually see is a fence.
 		"height": 0.95,          # taller than it is wide, so it reads as a stake
 		"spike_diameter": 0.62,  # ONE cone, this wide. Not derived from anything.
 		# Stakes are placed on a FINER grid than everything else: three positions per
@@ -106,8 +100,10 @@ const BUILDINGS: Dictionary = {
 		# what was coarse. A row of them now closes up into a fence you can see is a
 		# fence, and how dense it is is the player's decision rather than a constant.
 		#
-		# It only changes where a stake may be PUT. The tile is still what gets blocked,
-		# so pathing, the barrier rule and everything built on them are untouched.
+		# Three per tile edge is also what decides when a fence SEALS: a full row or
+		# column of fine cells is a run of cones crossing the tile with nothing between
+		# them, and that is what nobody walks through. Fewer than that is a gap, and a
+		# gap you can see is a gap you can use.
 		"cell_divisions": 3,
 		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
 		# fence line wears a raid down instead of only delaying it. Deliberately a
@@ -223,13 +219,23 @@ static func get_default_building_footprint() -> float:
 	return maxf(0.5, TILE_SIZE - hero_w - BUILDING_CLEARANCE)
 
 ## Side length of `type_id`'s box, in metres. Declared per building, else derived.
+##
+## A building drawn out of small pieces is as wide as one piece. Anything else is a
+## box nobody can see holding the Hero off a stake he is plainly standing beside.
 static func get_building_footprint(type_id: String = "") -> float:
+	if type_id != "" and get_building_mesh_style(type_id) == "spikes":
+		return get_spike_diameter(type_id)
 	if type_id != "" and BUILDINGS.has(type_id) and BUILDINGS[type_id].has("footprint"):
 		return maxf(0.1, float(BUILDINGS[type_id]["footprint"]))
 	return get_default_building_footprint()
 
-## True when neighbouring copies of `type_id` close the gap between them rather
-## than leaving the Hero a lane.
+## True when ONE of these fills its tile, so that a line of them cannot be slipped
+## between.
+##
+## Nothing is any more. Stakes were the only barrier, and a stake is 0.62m wide: it is
+## something to walk round, and a fence is what a RUN of them makes. Which tiles a run
+## actually closes is GridManager's `fine_occupants_seal_cell`, because it depends on
+## where the player put them rather than on the type.
 static func is_barrier_building(type_id: String) -> bool:
 	var fp: float = get_building_footprint(type_id)
 	return (TILE_SIZE - fp) <= float(HERO.get("width", 0.8))

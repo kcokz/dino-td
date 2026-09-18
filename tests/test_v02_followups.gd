@@ -787,16 +787,22 @@ func test_43_ordinary_buildings_leave_a_lane_wider_than_the_hero() -> void:
 	assert_almost_eq(shape.shape.size.x, config_node.get_building_footprint("tower"), 0.001,
 		"Its footprint comes from its own Config entry")
 
-func test_43b_stakes_are_a_barrier_that_actually_closes() -> void:
-	# A fence only reads as a fence, and only stops anything, if neighbouring
-	# stakes close up instead of leaving a Hero-sized hole between them.
+func test_43b_a_stake_is_as_big_as_the_stake() -> void:
+	# This used to assert the opposite: that ONE stake filled a whole tile, so that a
+	# line of them closed up. It bought a fence by making a 0.62m cone stop the Hero
+	# 2m away from it -- and a plain gap between a stake and a hillside was solid.
+	#
+	# A fence is a RUN of stakes now, which is what it looks like. What closes a way is
+	# where the player put them (GridManager.occupant_leaves_a_way_through), not the
+	# type of thing he put there.
 	var tile: float = float(config_node.TILE_SIZE)
 	var hero_w: float = float(config_node.HERO.get("width", 0.8))
 	var fp: float = float(config_node.get_building_footprint("wall"))
 
-	assert_true(config_node.is_barrier_building("wall"), "Stakes are a barrier")
-	assert_lt(tile - fp, hero_w, "Two neighbouring stakes leave no lane for the Hero")
-	assert_lte(fp, tile, "A stake still fits inside its own tile")
+	assert_almost_eq(fp, float(config_node.get_spike_diameter("wall")), 0.001,
+		"A stake's footprint is the cone, one number for both")
+	assert_gt(tile - fp, hero_w, "So one on its own is something the Hero walks past")
+	assert_false(config_node.is_barrier_building("wall"), "Which is not a barrier by itself")
 
 	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
 	var wall = wall_script.new()
@@ -808,7 +814,8 @@ func test_43b_stakes_are_a_barrier_that_actually_closes() -> void:
 		if child is CollisionShape3D:
 			shape = child
 			break
-	assert_almost_eq(shape.shape.size.x, fp, 0.001, "The stake is built at its barrier footprint")
+	assert_almost_eq(shape.shape.size.x, fp, 0.001,
+		"And the box that stops you is the cone you can see, not a tile-wide one")
 
 func test_43c_being_fenced_in_is_undone_by_demolishing() -> void:
 	# Barriers can seal the Hero in, which is the point; the way out is to pull one

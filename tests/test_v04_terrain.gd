@@ -314,25 +314,25 @@ func test_12_a_stake_is_drawn_as_a_cone_of_the_declared_width() -> void:
 	assert_lt(float(config_node.get_spike_diameter("wall")), float(config_node.TILE_SIZE) * 0.5,
 		"Small: nowhere near the tile-wide slab it used to be")
 
-func test_13_a_stake_claims_its_tile_even_though_it_is_drawn_small() -> void:
-	# The trade this leaves, asserted rather than left to be discovered. A stake blocks
-	# its whole tile -- that is what keeps a fence a fence, see test_43b in
-	# test_v02_followups -- while being drawn as one stake in the middle of it.
+func test_13_a_stake_stops_you_where_the_stake_is() -> void:
+	# This test used to record the opposite as a deliberate trade: a stake blocked its
+	# whole tile while being drawn as one small cone in the middle of it. It said the
+	# change would be one number and would announce itself here. It did.
 	#
-	# If that is ever to change it is one number (BUILDINGS.wall.footprint), and this
-	# test is where the change would announce itself.
+	# The trade was not worth what it cost: a gap the player could plainly see between
+	# a stake and a hillside was solid, because the tile was claimed whether or not
+	# anything stood in the part he was walking through.
 	var gm = _grid([])
 	await wait_frames(1)
 	var stake = _wall_at(gm, Vector2i(0, 0))
 
 	var tile: float = float(config_node.TILE_SIZE)
 	var size: Vector3 = _collision_size(stake)
-	assert_almost_eq(size.x, float(config_node.get_building_footprint("wall")), 0.01,
-		"It blocks the footprint Config declares")
-	assert_almost_eq(size.z, float(config_node.get_building_footprint("wall")), 0.01, "On both axes")
-	assert_lt(tile - size.x, float(config_node.HERO.get("width", 0.8)),
-		"Which leaves no lane between two of them, so a fence closes")
-	assert_true(config_node.is_barrier_building("wall"), "And the rule still says so")
+	assert_almost_eq(size.x, float(config_node.get_spike_diameter("wall")), 0.01,
+		"The box that stops you is the cone you can see")
+	assert_almost_eq(size.z, float(config_node.get_spike_diameter("wall")), 0.01, "On both axes")
+	assert_gt(tile - size.x, float(config_node.HERO.get("width", 0.8)),
+		"So there is room beside it, which is what the player was looking at")
 
 func test_14_the_ghost_cannot_disagree_with_the_stake_any_more() -> void:
 	# The reported bug, made impossible rather than fixed. The ghost and the stake are

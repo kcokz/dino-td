@@ -198,25 +198,39 @@ func test_07_placing_by_tile_still_works_and_lands_in_the_middle() -> void:
 # 3. Everything the tile still decides
 # ==============================================================================
 
-func test_08_one_stake_blocks_its_tile_exactly_as_before() -> void:
-	# The finer grid decides where a stake may be PUT. What it blocks is unchanged, so
-	# pathing and the barrier rule keep the answers they had.
+func test_08_one_stake_is_walked_round_and_a_run_of_them_is_not() -> void:
+	# This said the opposite -- "what it blocks is unchanged" -- and that was the bug:
+	# one 0.62m cone shut a 2m tile, so a gap you could see was one you could not use.
+	#
+	# The tile is still CLAIMED by the first stake, because every other tile-level
+	# question still needs an answer. What changed is that claiming is not sealing.
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
 
-	var at := Vector3(_step() * 0.5, 0.0, _step() * 0.5)
+	var step: float = _step()
+	var d: int = _divisions()
+	var at := Vector3(step * 0.5, 0.0, step * 0.5)
 	var cell: Vector2i = gm.world_to_cell(at)
 	assert_true(gm.is_cell_walkable(cell), "Open ground to begin with")
 
-	var stake = bs.place_building("wall", cell, gm)
+	var stake = bs.place_building("wall", cell, gm, false, at)
 	_cleanup_nodes.append(stake)
 	await wait_frames(1)
 
-	assert_true(gm.is_cell_occupied(cell), "One stake claims the tile")
-	assert_false(gm.is_cell_walkable(cell), "And blocks it, the same as it always did")
+	assert_true(gm.is_cell_occupied(cell), "One stake still claims the tile")
 	assert_eq(gm.get_building_at(cell), stake, "And is what you get when you ask the tile")
+	assert_true(gm.is_cell_walkable(cell), "But one stake is something to walk round")
+
+	# Fill the rest of that row, and the run crosses the tile with nothing between.
+	for i in range(1, d):
+		var next_at := Vector3(step * (float(i) + 0.5), 0.0, step * 0.5)
+		var s = bs.place_building("wall", gm.world_to_cell(next_at), gm, false, next_at)
+		_cleanup_nodes.append(s)
+	await wait_frames(1)
+
+	assert_false(gm.is_cell_walkable(cell), "A run of them is a fence, and a fence closes")
 
 func test_09_losing_one_stake_hands_the_tile_to_another() -> void:
 	# Several stakes share a tile but only one of them is registered as its occupant.
@@ -243,7 +257,7 @@ func test_09_losing_one_stake_hands_the_tile_to_another() -> void:
 
 	assert_true(gm.is_cell_occupied(cell), "The tile is still held")
 	assert_eq(gm.get_building_at(cell), second, "By the stake that is still standing in it")
-	assert_false(gm.is_cell_walkable(cell), "So the fence has not quietly opened up")
+	assert_true(gm.is_fine_cell_occupied(second.fine_pos), "Which still stands where it stood")
 
 func test_10_the_last_stake_leaving_frees_the_tile() -> void:
 	var rig := _rig()
