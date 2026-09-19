@@ -623,9 +623,9 @@ const VISUALS: Dictionary = {
 	"hero":                 {"scene": "", "placeholder": "hero",     "anchor": "feet",   "color": "caveman"},
 	# Every dinosaur gets its own row even while they share a placeholder: the row is
 	# where its model will go, and they will not share that.
-	"dino/raptor":          {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
+	"dino/raptor":          {"scene": "res://assets/models/raptor.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
 	"dino/big_theropod":    {"scene": "res://assets/models/t_rex.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "big_theropod"},
-	"dino/pterosaur":       {"scene": "", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
+	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	"nest":                 {"scene": "", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
 	# The wreck: the only evidence the Hero is from anywhere else, and the thing that
 	# ends the game if the raid reaches it. It gets the most geometry on the map.

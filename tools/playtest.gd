@@ -135,13 +135,19 @@ func _scenario_closeup() -> void:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
 	var dino_script := load("res://scripts/entities/Dino.gd")
-	var dino = dino_script.new()
-	_main.add_child(dino)
-	dino.setup("big_theropod")
-	dino.global_position = Vector3(2.0, 0.0, 0.0)
-	await _wait(4)
-	await _portrait("dino_t_rex", dino.global_position, 5.0)
-	dino.queue_free()
+	var dinos_to_shoot: Array = [
+		["dino_t_rex", "big_theropod", 5.0],
+		["dino_raptor", "raptor", 3.5],
+		["dino_pterosaur", "pterosaur", 4.0],
+	]
+	for d_info in dinos_to_shoot:
+		var d = dino_script.new()
+		_main.add_child(d)
+		d.setup(String(d_info[1]))
+		d.global_position = Vector3(2.0, 0.0, 0.0)
+		await _wait(4)
+		await _portrait(String(d_info[0]), d.global_position, float(d_info[2]))
+		d.queue_free()
 
 ## The reported bug, walked rather than argued about: a stake beside a hillside with a
 ## plain gap between them, and the Hero told to go through it.

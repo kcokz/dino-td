@@ -35,14 +35,23 @@ func _ready() -> void:
 func flash(mesh: MeshInstance3D, strength: float = -1.0, duration: float = -1.0) -> void:
 	if mesh == null or not is_instance_valid(mesh) or not mesh.is_inside_tree():
 		return
-	var mat := mesh.material_override as StandardMaterial3D
-	if mat == null:
-		return
 	if duration < 0.0:
 		duration = _cfg("hit_flash_duration", 0.12)
 	if strength < 0.0:
 		strength = _cfg("hit_flash_strength", 0.85)
 	if duration <= 0.0:
+		return
+
+	# An IMPORTED MODEL has no material_override: its materials live on the mesh's own
+	# surfaces, eight of them on a raptor. This used to give up here and return, so the
+	# moment real models arrived every hit flash in the game silently stopped again --
+	# the second time that has happened, and the second time nothing failed to say so.
+	#
+	# Overlay rather than override, because an override would replace all eight surfaces
+	# with one material and repaint the whole animal for the duration of the flash.
+	var mat := mesh.material_override as StandardMaterial3D
+	if mat == null:
+		_flash_overlay(mesh, strength, duration)
 		return
 
 	# Work on a copy so the flash can never leak into the shared material the
@@ -64,6 +73,28 @@ func flash(mesh: MeshInstance3D, strength: float = -1.0, duration: float = -1.0)
 	tw.finished.connect(func():
 		if is_instance_valid(mesh) and mesh.material_override == flashing:
 			mesh.material_override = mat
+	)
+
+## The same flash for a mesh that carries its own materials: a white wash drawn OVER
+## whatever the model already looks like, fading out and then removed.
+##
+## material_overlay is an extra pass, so the model keeps every one of its surfaces and
+## its colours while it is lit. Restoring means putting the overlay back to null, not
+## putting a material back -- there was never one here to begin with.
+func _flash_overlay(mesh: MeshInstance3D, strength: float, duration: float) -> void:
+	if mesh.material_overlay != null:
+		return                      # already flashing; let the one in flight finish
+	var wash := StandardMaterial3D.new()
+	wash.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wash.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wash.albedo_color = Color(1.0, 1.0, 1.0, clampf(strength, 0.0, 1.0))
+	mesh.material_overlay = wash
+
+	var tw := create_tween()
+	tw.tween_property(wash, "albedo_color:a", 0.0, duration)
+	tw.finished.connect(func():
+		if is_instance_valid(mesh) and mesh.material_overlay == wash:
+			mesh.material_overlay = null
 	)
 
 # ==============================================================================

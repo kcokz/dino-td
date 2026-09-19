@@ -133,21 +133,72 @@ func test_04_a_damaged_building_flashes_and_restores_its_colour() -> void:
 	assert_false(settled.emission_enabled, "The building is handed its own material back")
 	assert_eq(settled.albedo_color, original, "With its colour exactly as it was")
 
+## Everything about how `mesh` is currently painted, as one comparable value.
+##
+## The point of not naming a channel: this test has to keep meaning something after the
+## next change of mechanism, and it has already survived two.
+func _paint_signature(mesh: MeshInstance3D) -> String:
+	if mesh == null or not is_instance_valid(mesh):
+		return "<none>"
+	var over: String = "none"
+	var mat := mesh.material_override as StandardMaterial3D
+	if mat != null:
+		over = "%s|%s|%.3f" % [str(mat.albedo_color), str(mat.emission_enabled), mat.emission_energy_multiplier]
+	var overlay: String = "none"
+	var ov := mesh.material_overlay as StandardMaterial3D
+	if ov != null:
+		overlay = "%s|%.3f" % [str(ov.albedo_color), ov.albedo_color.a]
+	return "override=%s overlay=%s" % [over, overlay]
+
 func test_05_a_damaged_dinosaur_flashes() -> void:
+	# THIS HAS NOW DIED TWICE, the same way both times: the mechanism changed underneath
+	# it and nothing failed to say so.
+	#
+	#   * first when models moved their colour into vertices, leaving albedo white, so
+	#     lerping albedo towards white showed nothing;
+	#   * then when real .glb models arrived with NO material_override at all -- their
+	#     materials are on the mesh's own surfaces, eight of them on a raptor -- and
+	#     Fx.flash returned early without doing anything.
+	#
+	# The second time, this very test was what should have caught it, and instead it
+	# read albedo_color off a null and ABORTED -- which the runner counts as a pass,
+	# because it only sees assertions.
+	#
+	# So it asserts no channel. It asserts that A STRUCK DINOSAUR LOOKS DIFFERENT FROM
+	# AN UNSTRUCK ONE, and settles back afterwards. Whatever the mechanism becomes next,
+	# that still has to hold.
 	var dino = _spawn(dino_script)
 	dino.setup("raptor", {"hp": 1.0, "damage": 1.0, "speed": 1.0})
 	await wait_frames(1)
 	assert_not_null(dino.mesh_instance, "The dinosaur has a mesh")
-	var original: Color = (dino.mesh_instance.material_override as StandardMaterial3D).albedo_color
+
+	var before: String = _paint_signature(dino.mesh_instance)
+	dino.take_damage(0.5)
+	await wait_frames(1)
+	var lit: String = _paint_signature(dino.mesh_instance)
+	assert_ne(lit, before, "A dinosaur under fire looks different from one that is not")
+
+	await wait_seconds(float(config_node.FEEDBACK["hit_flash_duration"]) + 0.3)
+	assert_eq(_paint_signature(dino.mesh_instance), before,
+		"And is handed its own appearance back when the flash is over")
+
+func test_05b_a_model_with_its_own_materials_still_flashes() -> void:
+	# The specific shape of the second death, nailed down. A mesh whose materials live
+	# on its surfaces has no material_override, and the flash used to give up on exactly
+	# that -- which is every dinosaur, the Hero and the wreck since v0.5.
+	var dino = _spawn(dino_script)
+	dino.setup("raptor", {"hp": 1.0, "damage": 1.0, "speed": 1.0})
+	await wait_frames(1)
+	var mesh: MeshInstance3D = dino.mesh_instance
+	assert_not_null(mesh, "The dinosaur has a mesh")
+	assert_null(mesh.material_override, "Which carries its materials on its own surfaces")
+	assert_gt(mesh.mesh.get_surface_count(), 1, "Several of them, in fact")
 
 	dino.take_damage(0.5)
-	# Emission rather than albedo: a model's colour lives in its vertices, so albedo is
-	# white and lerping it towards white shows nothing. Asserting the wrong channel here
-	# is how the flash could have gone missing without a single test noticing.
-	var lit := (dino.mesh_instance.material_override as StandardMaterial3D)
-	assert_true(lit.emission_enabled, "A dinosaur under fire lights up")
-	assert_gt(lit.emission_energy_multiplier, 0.0, "And looks different from one that is not")
-	assert_eq(original, original, "Its own colours are left alone")
+	await wait_frames(1)
+	assert_not_null(mesh.material_overlay,
+		"So the flash is drawn OVER it rather than replacing all its surfaces with one")
+	assert_null(mesh.material_override, "And its own materials are left exactly alone")
 
 # ==============================================================================
 # 3. Debris

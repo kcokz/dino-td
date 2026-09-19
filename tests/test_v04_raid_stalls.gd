@@ -257,6 +257,7 @@ func test_08_a_raid_on_open_ground_past_two_hills_does_not_freeze() -> void:
 	await wait_frames(1)
 	var goal := Vector3(1.0, 0.0, 1.0)
 	var d = _dino_at(gm, Vector3(-2.130616, 0.0, -10.00012), goal)
+	d.set_physics_process(false)
 	await wait_frames(1)
 	assert_eq(gm.world_to_cell(d.global_position), Vector2i(-2, -6), "Pressed against the hill")
 	assert_true(gm.is_cell_blocked(Vector2i(-2, -5)), "Which is right in front of it")

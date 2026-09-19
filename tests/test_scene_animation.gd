@@ -117,11 +117,16 @@ func test_03_dino_state_change_updates_requested_clip_from_config() -> void:
 # ==============================================================================
 
 func test_04_entities_without_animation_player_operate_without_errors() -> void:
-	# Standard procedural raptor has no AnimationPlayer -- must degrade silently
+	# Entity without AnimationPlayer must degrade silently
 	var dino = _spawn_dino("raptor")
 	await wait_frames(1)
 
-	assert_null(dino.animator.animation_player, "Procedural raptor has no AnimationPlayer")
+	if dino.animator.animation_player != null:
+		dino.animator.stop()
+		dino.animator.animation_player.free()
+		dino.animator.refresh_animation_player()
+
+	assert_null(dino.animator.animation_player, "Entity has no AnimationPlayer")
 
 	# Cycling through states should not throw errors or fail
 	dino.current_state = Dino.State.WALKING
