@@ -41,13 +41,15 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Animations Included**: `idle`, `run` (wing-assisted lope), `attack` (beak spear peck), `death`, `alert`
 - **Usage**: Primary model for `dino/pterosaur` (1.0m size).
 
-### Humanoid Characters Pack (Selected Candidate for S4)
-- **Asset Name**: Quaternius Modular Men / Characters & Kenney Animated Characters
-- **Source URL**: https://quaternius.com / https://kenney.nl/assets/animated-characters-1
-- **Author**: Quaternius / Kenney
-- **License**: CC0 1.0 Universal (Public Domain)
-- **Format**: glTF / .glb (Rigged, bipedal humanoid)
-- **Intended Usage**: Hero and survivor base models with walking, building, harvesting, and death animations.
+### Hero / Explorer (`assets/models/hero.glb`)
+- **Asset Name**: Low-Poly Rigged Humanoid Hero / Explorer with Survival Pack & Multitool
+- **Source**: `tools/generate_hero.py` (Scripted Blender Procedural Low-Poly Biped Mesh & Armature Rig)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5 & Antigravity)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-18
+- **Files**: `assets/models/hero.glb`, `assets/models/hero.blend`
+- **Animations Included**: `idle`, `walk`, `run`, `build` (overhead rhythmic hammer strike), `harvest` (two-handed downward cleave/chop), `attack` (defensive thrust), `death` (stumble and collapse)
+- **Usage**: Primary model for `hero` (0.8m width, 1.6m height). Full 1:1 coverage of all 6 `Hero.State` enum states.
 
 ### Nature & Foliage Pack (Selected Candidate for S6)
 - **Asset Name**: Quaternius Nature Pack

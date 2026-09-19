@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup", "gap", "raid"]
+		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero"]
 
 	for name in names:
 		await _run(String(name))
@@ -68,6 +68,8 @@ func _run(name: String) -> void:
 			await _scenario_gap()
 		"raid":
 			await _scenario_raid()
+		"hero":
+			await _scenario_hero()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -148,6 +150,34 @@ func _scenario_closeup() -> void:
 		await _wait(4)
 		await _portrait(String(d_info[0]), d.global_position, float(d_info[2]))
 		d.queue_free()
+
+## Portraits of the Hero model in core gameplay action poses.
+func _scenario_hero() -> void:
+	var hero = _main.hero
+	if hero == null:
+		return
+	hero.set_physics_process(false)
+	hero.global_position = Vector3(2.0, 0.0, 0.0)
+
+	# 1. Idle pose
+	hero.current_state = Hero.State.IDLE
+	await _wait(16)
+	await _portrait("hero_idle", hero.global_position, 2.5, false, true)
+
+	# 2. Walk / locomotion pose
+	hero.current_state = Hero.State.MOVING
+	await _wait(10)
+	await _portrait("hero_walk", hero.global_position, 2.5, false, true)
+
+	# 3. Build / construction hammer pose
+	hero.current_state = Hero.State.BUILDING
+	await _wait(12)
+	await _portrait("hero_build", hero.global_position, 2.5, false, true)
+
+	# 4. Harvest / chopping cleave pose
+	hero.current_state = Hero.State.HARVESTING
+	await _wait(14)
+	await _portrait("hero_harvest", hero.global_position, 2.5, false, true)
 
 ## The reported bug, walked rather than argued about: a stake beside a hillside with a
 ## plain gap between them, and the Hero told to go through it.
@@ -297,14 +327,18 @@ func _scenario_raid() -> void:
 ## The camera is removed again afterwards, so the level is left exactly as it was.
 ## `overhead` looks almost straight down instead, which is the only angle a GAP reads
 ## from: from eye level a stake in front of a rock and a stake beside one look the same.
-func _portrait(name: String, at: Vector3, distance: float, overhead: bool = false) -> void:
+func _portrait(name: String, at: Vector3, distance: float, overhead: bool = false, front_view: bool = false) -> void:
 	var cam := Camera3D.new()
 	_main.add_child(cam)
 	if overhead:
 		cam.position = at + Vector3(0.0, distance, distance * 0.28)
+		cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
+	elif front_view:
+		cam.position = at + Vector3(distance * 0.65, distance * 0.35, -distance * 0.75)
+		cam.look_at(at + Vector3(0.0, 0.8, 0.0), Vector3.UP)
 	else:
 		cam.position = at + Vector3(distance * 0.72, distance * 0.42, distance * 0.72)
-	cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
+		cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
 	var was: Camera3D = _main.camera
 	cam.current = true
 	await _shoot(name)

@@ -620,7 +620,7 @@ const RESOURCE_NODES: Dictionary = {
 ## the art are both built from it, which is what stops art from quietly growing wider
 ## than the thing that blocks a raptor.
 const VISUALS: Dictionary = {
-	"hero":                 {"scene": "", "placeholder": "hero",     "anchor": "feet",   "color": "caveman"},
+	"hero":                 {"scene": "res://assets/models/hero.glb", "placeholder": "hero",     "anchor": "feet",   "color": "caveman"},
 	# Every dinosaur gets its own row even while they share a placeholder: the row is
 	# where its model will go, and they will not share that.
 	"dino/raptor":          {"scene": "res://assets/models/raptor.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
