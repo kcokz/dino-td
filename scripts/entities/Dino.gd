@@ -316,6 +316,40 @@ func _get_path_normal(target_index: int) -> Vector3:
 	var fwd: Vector3 = seg.normalized()
 	return fwd.cross(Vector3.UP).normalized()
 
+## A unit vector square across `heading`, pointing away from `other`.
+##
+## Which way "aside" is depends on where you are GOING. This used to be hard-coded to
+## world X -- step aside by moving east or west, whatever direction the raid was
+## travelling. For a raid coming down the Z axis that happens to be right; for one coming
+## along X it means stepping forwards or backwards into the very dinosaur being avoided,
+## and for a fence on the diagonal it is wrong by degrees the whole way.
+func _step_around(other: Node3D, heading: Vector3) -> Vector3:
+	var fwd: Vector3 = heading
+	fwd.y = 0.0
+	if fwd.length_squared() < 0.001:
+		fwd = _get_path_normal(mini(current_waypoint_index, maxi(0, waypoints.size() - 1))).cross(Vector3.DOWN)
+		if fwd.length_squared() < 0.001:
+			fwd = Vector3.FORWARD
+	var perp: Vector3 = fwd.normalized().cross(Vector3.UP).normalized()
+	if other == null or not is_instance_valid(other):
+		return perp
+	var to_other: Vector3 = other.global_position - global_position
+	to_other.y = 0.0
+	var lean: float = perp.dot(to_other)
+	if absf(lean) < 0.05:
+		# Dead ahead: the two of them must not both pick the same way or they stay nose
+		# to nose. The instance id is arbitrary and, being fixed, is also stable -- they
+		# will not swap sides next frame and start again.
+		return perp * (1.0 if (get_instance_id() % 2 == 0) else -1.0)
+	return perp * (-1.0 if lean > 0.0 else 1.0)
+
+## How slowly a dinosaur may be made to walk by the one in front. Never zero.
+func _crowd_floor() -> float:
+	var cfg = _get_config()
+	if cfg and "DINO_CROWD_MIN_THROTTLE" in cfg:
+		return float(cfg.DINO_CROWD_MIN_THROTTLE)
+	return 0.4
+
 func _get_lane_target_pos(target_index: int) -> Vector3:
 	if target_index >= waypoints.size():
 		return global_position
@@ -508,28 +542,26 @@ func advance_towards_waypoint(delta: float) -> void:
 	steer_diff.y = 0.0
 	var dir: Vector3 = steer_diff.normalized() if steer_diff.length_squared() > 0.001 else diff.normalized()
 
-	# If an attacking ally is ahead, inject lateral steering bias so rear dinos flank
+	# If an attacking ally is ahead, lean around it rather than queueing behind it.
 	if attacking_ally != null:
-		var wp_idx: int = mini(current_waypoint_index, waypoints.size() - 1)
-		var perp = _get_path_normal(wp_idx)
-		var side: float = 1.0 if (global_position.x >= attacking_ally.global_position.x) else -1.0
-		if absf(global_position.x - attacking_ally.global_position.x) < 0.05:
-			side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
-		dir = (dir + perp * (side * 0.75)).normalized()
+		dir = (dir + _step_around(attacking_ally, dir) * 0.75).normalized()
 
-	# Anti-tailgating: check if another ally is directly in front
+	# Anti-tailgating: yield to whoever is directly in front, and go round them.
+	#
+	# THE YIELD MUST NEVER REACH ZERO. It used to, and in a pack that is a deadlock: each
+	# dinosaur is stopped by the one ahead, so nobody has the speed left to get out of
+	# anyone's way, and the jam has no reason to ever clear. Twenty of them measured nine
+	# standing still, one for ten unbroken seconds. At five it hardly showed, which is why
+	# it survived three rounds of looking at this -- A CROWD IS A DIFFERENT PROBLEM FROM A
+	# QUEUE, and a raid is a crowd.
 	var speed_throttle: float = 1.0
 	var front_dino = _find_immediate_front_dino(1.4)
 	if front_dino != null:
-		var to_front = front_dino.global_position - global_position
+		var to_front: Vector3 = front_dino.global_position - global_position
 		to_front.y = 0.0
-		var d_front = to_front.length()
-		var side: float = 1.0 if (global_position.x >= front_dino.global_position.x) else -1.0
-		if absf(global_position.x - front_dino.global_position.x) < 0.05:
-			side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
-		dir = (dir + Vector3(side * 0.8, 0.0, 0.0)).normalized()
-		if d_front < 1.15:
-			speed_throttle = clampf((d_front - 0.88) / 0.27, 0.0, 1.0)
+		dir = (dir + _step_around(front_dino, dir) * 0.8).normalized()
+		if to_front.length() < 1.15:
+			speed_throttle = clampf((to_front.length() - 0.88) / 0.27, _crowd_floor(), 1.0)
 
 	# Pure steering separation velocity (no hard teleportation)
 	var sep_force: Vector3 = _calculate_steering_separation()
@@ -698,7 +730,21 @@ func _should_bite(node: Variant) -> bool:
 		return false
 	if not _is_wall(node):
 		return true
+	if not walks_round_walls():
+		return true
 	return _way_is_sealed()
+
+## Whether this species goes round a wall when it could.
+##
+## True for anything that reacts to what the player has built -- which is what the rule
+## about fences is for, and what a raid of raptors is.
+##
+## A siege dinosaur says no, and that is not an exception bolted on: walking THROUGH the
+## defence instead of around it is the whole of its design, and the contrast with a pack
+## is what makes defending against the two different problems. Making the rule universal
+## would have left "siege" as a word in a comment.
+func walks_round_walls() -> bool:
+	return true
 
 func _is_wall(node: Variant) -> bool:
 	if node == null or not is_instance_valid(node) or not ("building_type" in node):
@@ -1010,18 +1056,32 @@ func check_obstacle() -> Node:
 ## piece a subclass overrides. The base is the plain answer: whatever is close
 ## enough to be in the way. PackDino and SiegeDino sharpen it in opposite
 ## directions -- see those files.
-## The nearest building worth stopping for, or null.
+## What this dinosaur will actually stop for, or null.
+##
+## DO NOT OVERRIDE THIS. Override _preferred_target instead -- this method exists to put
+## the rule somewhere a species cannot get past.
 ##
 ## "Worth stopping for" is _should_bite: a turret or the wreck always, a wall only when
 ## it actually blocks the way. Filtering HERE rather than at the moment of biting is the
 ## point -- a target is something you commit to, claim a slot on and walk towards, and
 ## committing to something you will not bite is how a raid ends up milling about in
 ## front of a fence it could simply have walked around.
+##
+## The rule used to live in the body of this method, and PackDino and SiegeDino both
+## REPLACED that body. Every raptor in the game is a PackDino, so the rule applied to
+## nothing that ever attacked anybody, and the fence-milling went on being reported
+## through three rounds of fixes -- each of which was measured against the base class and
+## each of which worked, on the base class.
 func _find_threat_priority_target() -> Node:
 	if not is_inside_tree():
 		return null
-	var nearest: Node = _nearest_building_within(building_interest_range())
-	return nearest if _should_bite(nearest) else null
+	var want: Node = _preferred_target()
+	return want if _should_bite(want) else null
+
+## What this species WANTS to stop for, before the rule is applied. The surface a
+## behaviour subclass overrides.
+func _preferred_target() -> Node:
+	return _nearest_building_within(building_interest_range())
 
 # ==============================================================================
 # What a species wants -- the surface a behaviour subclass overrides

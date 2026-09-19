@@ -20,6 +20,12 @@ extends "res://scripts/entities/Dino.gd"
 func building_interest_range() -> float:
 	return 3.5
 
+## And it does not go round them. A pack funnels through the gap in a fence; a theropod
+## eats the fence. That difference is the reason this species exists, so the rule about
+## walls that are not in the way -- which is right for a raid -- does not apply here.
+func walks_round_walls() -> bool:
+	return false
+
 ## And it walks straight past the Hero. Provocation does not move it.
 func hero_interest_range() -> float:
 	return 0.0
@@ -29,9 +35,9 @@ func tower_interest_range() -> float:
 	return 0.0
 
 ## Whatever building is nearest, and nothing else.
-func _find_threat_priority_target() -> Node:
-	if not is_inside_tree():
-		return null
+## Whatever building is nearest. Whether it is worth stopping for is decided by
+## Dino._find_threat_priority_target, which this used to override and step past.
+func _preferred_target() -> Node:
 	return _nearest_building_within(building_interest_range())
 
 ## Longer reach to match the size.

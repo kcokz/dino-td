@@ -174,22 +174,35 @@ func _scenario_gap() -> void:
 
 ## A raid meeting a fence, measured rather than watched.
 ##
-## Reported as "恐龙来进攻的时候并不会绕过栅栏去进攻 cabin，并且会停在离栅栏比较远的地方".
-## The arc here is the one in that report: a curve of stakes in front of the wreck, open
-## at both ends, which a raid is supposed to walk around.
+## Reported as "恐龙站在木尖刺前（有一段距离）就不进攻了，然后就卡着不动". This scenario
+## existed for that report already and did not catch it, twice over, and both reasons are
+## worth keeping in mind for anything else built to watch a raid:
 ##
-## What it prints is ground COVERED. That is the only honest measure, because a dinosaur
-## stalled against a fence and a dinosaur walking round it look identical in a still, and
-## the failure this exists to catch is a raid that stops moving without stopping to eat.
+##   * IT USED FIVE DINOSAURS. A raid is twenty. The jam that was being reported is a
+##     crowd problem and barely exists in a queue of five.
+##   * IT USED Dino.gd DIRECTLY. Every raptor in the game is a PackDino, which overrode
+##     the targeting outright -- so this was measuring code no wave has ever run.
+##
+## It now spawns whatever Config says a raptor is, twenty of them by default, and reports
+## the thing the report was about: HOW LONG ANYONE STANDS STILL with somewhere left to go
+## and nothing being bitten. Averages hide exactly the case that gets reported -- most of
+## a raid arriving while three park in front of the fence still averages well, and the
+## three are what the player is looking at.
 ##
 ## `raidsealed` walls the wreck in completely instead, which has to come out the other
 ## way: nobody gets through, and the fence is what gets chewed.
 func _scenario_raid() -> void:
-	_grant({"wood": 400})
+	_grant({"wood": 2000})
 	var cfg := root.get_node_or_null("Config")
 	var gm = _main.grid_manager
-	var sealed_ring: bool = OS.get_cmdline_user_args().has("raidsealed")
-	var step: float = float(cfg.TILE_SIZE) / float(cfg.get_cell_divisions("wall"))
+	var args: PackedStringArray = OS.get_cmdline_user_args()
+	var sealed_ring: bool = args.has("raidsealed")
+	var count: int = 20
+	for a in args:
+		if String(a).is_valid_int():
+			count = int(String(a))
+	var divisions: int = int(cfg.get_cell_divisions("wall"))
+	var step: float = float(cfg.TILE_SIZE) / float(divisions)
 	var core: Vector3 = gm.cell_to_world(cfg.MAP["default_core_cell"])
 
 	var placed: int = 0
@@ -199,48 +212,71 @@ func _scenario_raid() -> void:
 		for i in range(around):
 			var a: float = TAU * float(i) / float(around)
 			var at: Vector3 = core + Vector3(sin(a) * 4.0, 0.0, cos(a) * 4.0)
-			var fine: Vector2i = gm.world_to_fine_cell(at, cfg.get_cell_divisions("wall"))
+			var fine: Vector2i = gm.world_to_fine_cell(at, divisions)
 			if seen.has(fine):
 				continue
 			seen[fine] = true
-			_build_at("wall", gm.fine_cell_to_world(fine, cfg.get_cell_divisions("wall")))
+			_build_at("wall", gm.fine_cell_to_world(fine, divisions))
 			placed += 1
 	else:
-		var n: int = 11
-		for i in range(n):
-			var ang: float = lerp(-0.9, 0.9, float(i) / float(n - 1))
-			_build_at("wall", core + Vector3(sin(ang) * 5.0, 0.0, -cos(ang) * 5.0))
+		# The diagonal run from the report, shoulder to shoulder, open at both ends.
+		for i in range(9):
+			_build_at("wall", core + Vector3(-5.0 + float(i) * step, 0.0, -7.0 + float(i) * step))
 			placed += 1
 	await _wait(4)
 
-	var dino_script := load("res://scripts/entities/Dino.gd")
+	# WHAT THE GAME ACTUALLY SPAWNS, not the base class.
+	var dino_script := load(String(cfg.get_dino_script_path("raptor")))
+	var goal: Vector3 = core if sealed_ring else core + Vector3(0.0, 0.0, 4.0)
 	var raid: Array[Node] = []
-	var started: Array[float] = []
-	for i in range(5):
+	var stall_now: Array[float] = []
+	var stall_max: Array[float] = []
+	for i in range(count):
 		var d = dino_script.new()
 		_main.add_child(d)
 		d.setup("raptor")
-		d.global_position = core + Vector3(-4.0 + float(i) * 2.0, 0.0, -18.0)
-		d.set_waypoints([core])
+		# Not a combat test: nobody is to die of contact damage part way through.
+		d.max_hp = 9999.0
+		d.current_hp = 9999.0
+		d.global_position = core + Vector3(-4.0 + float(i % 5) * 1.2, 0.0, -18.0 + float(i / 5) * 1.2)
+		d.set_waypoints([goal])
 		raid.append(d)
-		started.append(d.global_position.distance_to(core))
+		stall_now.append(0.0)
+		stall_max.append(0.0)
 	await _wait(4)
-	await _portrait("raid_before", core + Vector3(0.0, 0.0, -7.0), 14.0, true)
+	await _portrait("raid_before", core + Vector3(0.0, 0.0, -5.0), 16.0, true)
 
-	await _wait(18 * 60)
+	var dt: float = 1.0 / 60.0
+	for frame in range(22 * 60):
+		await process_frame
+		for i in range(raid.size()):
+			var d = raid[i]
+			if not is_instance_valid(d):
+				continue
+			var idle: bool = d.velocity.length() < 0.2 				and int(d.current_state) != int(d.State.ATTACKING) 				and d.global_position.distance_to(goal) > 3.0
+			stall_now[i] = (stall_now[i] + dt) if idle else 0.0
+			stall_max[i] = maxf(stall_max[i], stall_now[i])
 
-	var total: float = 0.0
+	var worst: float = 0.0
+	var stalled: int = 0
+	var arrived: int = 0
 	var chewing: int = 0
 	for i in range(raid.size()):
+		worst = maxf(worst, stall_max[i])
+		if stall_max[i] >= 2.0:
+			stalled += 1
 		var d = raid[i]
 		if not is_instance_valid(d):
 			continue
-		total += started[i] - d.global_position.distance_to(core)
+		if d.global_position.distance_to(goal) < 3.0:
+			arrived += 1
 		if int(d.current_state) == int(d.State.ATTACKING):
 			chewing += 1
-	print("[playtest] raid(%s): %d stakes, average %.1fm closed of %.1fm in 18s, %d biting"
-		% ["sealed" if sealed_ring else "arc", placed, total / float(raid.size()), started[0], chewing])
-	await _portrait("raid_after", core + Vector3(0.0, 0.0, -7.0), 14.0, true)
+	print("[playtest] raid(%s, %s x%d): %d stakes | longest stall %.1fs | stalled>=2s %d | arrived %d | biting %d"
+		% ["sealed" if sealed_ring else "arc",
+			String(cfg.get_dino_script_path("raptor")).get_file(), raid.size(),
+			placed, worst, stalled, arrived, chewing])
+	await _portrait("raid_after", core + Vector3(0.0, 0.0, -5.0), 16.0, true)
 
 ## Puts a camera at eye level a short way off `at`, looking at it, and takes one frame.
 ## The camera is removed again afterwards, so the level is left exactly as it was.

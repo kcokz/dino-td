@@ -331,6 +331,19 @@ static func get_dino_script_path(type_id: String) -> String:
 
 const DINO_SEPARATION_MIN_DIST: float = 1.15
 
+## The slowest a dinosaur may be made to go by the one in front of it, as a fraction of
+## its own speed.
+##
+## NOT ZERO, and that is the whole point. Yielding to the dinosaur ahead used to scale
+## all the way down to a dead stop, and in a pack that deadlocks: A is stopped by B, B by
+## C, and nothing has any speed left to get out of anyone's way with. Measured at twenty
+## dinosaurs: nine of them standing still, the worst for ten unbroken seconds. At five it
+## barely showed, which is why it went unnoticed -- a crowd is a different problem from a
+## queue, and only the crowd is what a raid actually is.
+##
+## A floor means the worst case is a slow shuffle that resolves itself.
+const DINO_CROWD_MIN_THROTTLE: float = 0.4
+
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)
 # ==============================================================================

@@ -33,10 +33,10 @@ func hero_interest_range() -> float:
 ##
 ## Provocation outranks a turret only when the Hero is actually the nearer of the
 ## two; a raptor being shot in the back does not turn around for somebody shouting.
-func _find_threat_priority_target() -> Node:
-	if not is_inside_tree():
-		return null
-
+## What a pack wants. Whether it may have it is decided by Dino._find_threat_priority_target,
+## which applies the rule about walls that are not in the way -- this used to override
+## THAT method and so skipped the rule entirely.
+func _preferred_target() -> Node:
 	var tower := _nearest_building_within(tower_interest_range(), "tower")
 	var hero := _hero_within(hero_interest_range())
 
