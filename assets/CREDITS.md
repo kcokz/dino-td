@@ -51,6 +51,16 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Animations Included**: `idle`, `walk`, `run`, `build` (overhead rhythmic hammer strike), `harvest` (two-handed downward cleave/chop), `attack` (defensive thrust), `death` (stumble and collapse)
 - **Usage**: Primary model for `hero` (0.8m width, 1.6m height). Full 1:1 coverage of all 6 `Hero.State` enum states.
 
+### Spaceship Wreck / Core Base (`assets/models/wreck.glb`)
+- **Asset Name**: Low-Poly Crashed Spaceship Command Pod Wreck with Scorched Hull & Debris
+- **Source**: `tools/generate_wreck.py` (Scripted Blender Procedural Low-Poly Mesh & Materials)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5 & Antigravity)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-18
+- **Files**: `assets/models/wreck.glb`, `assets/models/wreck.blend`
+- **Materials Included**: Composite hull plating, dark carbon thermal tiles, polarized canopy visor, hazard orange markings, charred re-entry burn, sheared titanium frame spars
+- **Usage**: Primary model for `building/core` (default 1.0m footprint, 1.9m height).
+
 ### Nature & Foliage Pack (Selected Candidate for S6)
 - **Asset Name**: Quaternius Nature Pack
 - **Source URL**: https://quaternius.com/packs/naturepack.html

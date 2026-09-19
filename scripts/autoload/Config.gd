@@ -629,7 +629,7 @@ const VISUALS: Dictionary = {
 	"nest":                 {"scene": "", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
 	# The wreck: the only evidence the Hero is from anywhere else, and the thing that
 	# ends the game if the raid reaches it. It gets the most geometry on the map.
-	"building/core":        {"scene": "", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
+	"building/core":        {"scene": "res://assets/models/wreck.glb", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
 	"building/tower":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "tower"},
 	"building/wall":        {"scene": "", "placeholder": "spikes",   "anchor": "feet",   "color": "wall"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the

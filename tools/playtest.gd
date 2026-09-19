@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero"]
+		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck"]
 
 	for name in names:
 		await _run(String(name))
@@ -70,6 +70,8 @@ func _run(name: String) -> void:
 			await _scenario_raid()
 		"hero":
 			await _scenario_hero()
+		"wreck":
+			await _scenario_wreck()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -178,6 +180,18 @@ func _scenario_hero() -> void:
 	hero.current_state = Hero.State.HARVESTING
 	await _wait(14)
 	await _portrait("hero_harvest", hero.global_position, 2.5, false, true)
+
+## Dedicated close-up and gameplay framing of the Spaceship Wreck (Core Base).
+func _scenario_wreck() -> void:
+	var cfg := root.get_node_or_null("Config")
+	var tile: float = float(cfg.TILE_SIZE) if cfg else 2.0
+	var core_pos := Vector3(tile * 0.5, 0.0, tile * 0.5)
+
+	# 1. Close-up portrait of the crashed command pod (3.6m distance, 40-degree angle)
+	await _portrait("wreck_closeup", core_pos, 3.6)
+
+	# 2. Tactical gameplay view from standard play camera (18.0m)
+	await _shoot("wreck_gameplay")
 
 ## The reported bug, walked rather than argued about: a stake beside a hillside with a
 ## plain gap between them, and the Hero told to go through it.
