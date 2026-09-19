@@ -70,6 +70,64 @@ func _divisions(type_id: String) -> int:
 		return int(cfg.get_cell_divisions(type_id))
 	return 1
 
+## Whether a unit is standing where this building would go.
+##
+## WITHOUT THIS THE PLAYER CAN BUILD A STAKE ON TOP OF HIS OWN HERO, and the result is
+## a man who is never getting out. A finished building is a static body; a unit already
+## inside one cannot be pushed out by move_and_collide, so he walks on the spot at full
+## speed for ever -- state MOVING, velocity 4, ground covered 0.13m in eight seconds.
+## Measured, because it looks exactly like broken pathfinding and is not.
+##
+## It got easy to do by accident in v0.5: a stake is 0.62m and snaps to a third of a
+## tile, so "just beside me" and "on me" are about half a metre apart.
+##
+## The clearance is the two bodies' half-widths added, which is the least that can be
+## asked for: touching is allowed, overlapping is not.
+func _someone_is_standing_there(type_id: String, cell: Vector2i, at_world: Variant) -> bool:
+	if not is_inside_tree():
+		return false
+	var cfg = _get_config()
+	if cfg == null:
+		return false
+	# WHERE IT WILL ACTUALLY STAND, not where the cursor was. A stake snaps to a fine
+	# cell, so the two are up to half a cell apart -- checking the click let a stake land
+	# on the Hero anyway, which is how this was found the second time.
+	var spot: Vector3 = _final_spot(type_id, cell, at_world)
+	var half_building: float = float(cfg.get_building_footprint(type_id)) * 0.5
+
+	for group_name in ["hero", "dinos"]:
+		for unit in get_tree().get_nodes_in_group(group_name):
+			if unit == null or not is_instance_valid(unit) or not (unit is Node3D):
+				continue
+			if "is_dead" in unit and unit.is_dead:
+				continue
+			var flat: Vector3 = (unit as Node3D).global_position - spot
+			flat.y = 0.0
+			if flat.length() < half_building + _unit_half_width(unit):
+				return true
+	return false
+
+## The world point a building of this type would end up at -- snapped, exactly as
+## place_building will snap it.
+func _final_spot(type_id: String, cell: Vector2i, at_world: Variant) -> Vector3:
+	var divisions: int = _divisions(type_id)
+	if divisions > 1 and grid_manager != null and grid_manager.has_method("fine_cell_to_world"):
+		return grid_manager.fine_cell_to_world(fine_cell_for(type_id, cell, at_world), divisions, 0.0)
+	if grid_manager != null and grid_manager.has_method("cell_to_world"):
+		return grid_manager.cell_to_world(cell)
+	return at_world if at_world is Vector3 else Vector3.ZERO
+
+## Half the width of whatever is standing there, from its own declaration.
+func _unit_half_width(unit: Node) -> float:
+	var cfg = _get_config()
+	if cfg == null:
+		return 0.4
+	if unit.is_in_group("hero"):
+		return float(cfg.HERO.get("width", 0.8)) * 0.5
+	if "dino_type" in unit and cfg.has_method("get_visual_size"):
+		return float(cfg.get_visual_size("dino/" + String(unit.dino_type)).x) * 0.5
+	return 0.4
+
 func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = false, at_world: Variant = null) -> bool:
 	if type_id.is_empty():
 		return false
@@ -107,6 +165,9 @@ func can_place_building(type_id: String, cell: Vector2i, is_blueprint: bool = fa
 		if grid_manager.is_cell_occupied(cell) and not _tile_holder_is_fine(cell):
 			return false
 	elif grid_manager.is_cell_occupied(cell):
+		return false
+	# Nobody may be built on top of.
+	if _someone_is_standing_there(type_id, cell, at_world):
 		return false
 	# Hillside: not ground anyone builds on.
 	if grid_manager.has_method("is_cell_blocked") and grid_manager.is_cell_blocked(cell):

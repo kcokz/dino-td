@@ -295,12 +295,61 @@ func _process_moving(delta: float) -> void:
 			_stuck_timer = 0.0
 			if _check_and_transition_interaction_target(0.2):
 				return
+			# Replanning cannot help a man standing INSIDE something solid: the route is
+			# fine, the physics is what is refusing. Push him out first.
+			if _push_out_of_anything_solid():
+				return
 			if _abandon_unreachable_building():
 				return
 			_replan_current_target_path()
 	else:
 		_stuck_timer = 0.0
 	_last_pos = global_position
+
+## Shoves the Hero clear of any finished building he is standing inside, and reports
+## whether he had to be.
+##
+## THE LAST LINE OF DEFENCE, and it exists because the first line failed in the field: a
+## stake built on top of him left him walking on the spot at full speed, for ever, with
+## a perfectly good path in hand. move_and_collide cannot resolve a body that is already
+## overlapping, and no amount of replanning is going to change that.
+##
+## Placement now refuses to put a building on somebody, so this should never fire. It
+## stays because "should never" is what the last one was too, and being nudged a few
+## centimetres is a great deal better than being retired from the game.
+func _push_out_of_anything_solid() -> bool:
+	var gm = _get_grid_manager()
+	if gm == null or not gm.has_method("get_all_buildings"):
+		return false
+	var cfg = _get_config()
+	var half_me: float = float(cfg.HERO.get("width", 0.8)) * 0.5 if cfg else 0.4
+
+	for b in gm.get_all_buildings():
+		if b == null or not is_instance_valid(b) or not (b is Node3D):
+			continue
+		if "is_constructed" in b and not b.is_constructed:
+			continue          # a blueprint is not solid and never traps anyone
+		if "is_destroyed" in b and b.is_destroyed:
+			continue
+		var half_it: float = 0.5
+		if cfg and "building_type" in b:
+			half_it = float(cfg.get_building_footprint(String(b.building_type))) * 0.5
+		var away: Vector3 = global_position - (b as Node3D).global_position
+		away.y = 0.0
+		var gap: float = away.length()
+		var clearance: float = half_me + half_it
+		if gap >= clearance:
+			continue
+		# Straight out along the shortest way, plus a hair so it does not re-trigger.
+		# The gap is measured BEFORE picking a fallback direction: reading it afterwards
+		# gave the length of the fallback instead, which made the push negative and shoved
+		# him further in.
+		if gap < 0.01:
+			away = Vector3(1.0, 0.0, 0.0)
+			gap = 0.0
+		global_position += away.normalized() * (clearance - gap + 0.05)
+		return true
+	return false
 
 func _process_building(delta: float) -> void:
 	velocity = Vector3.ZERO

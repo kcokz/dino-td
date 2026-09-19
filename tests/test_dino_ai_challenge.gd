@@ -277,6 +277,12 @@ func test_multiple_concurrent_dinos_attacking_same_wall() -> void:
 		var angle: float = TAU * float(i) / 8.0
 		d.global_position = wall.global_position + Vector3(cos(angle), 0.0, sin(angle)) * reach
 		d.set_waypoints([d.global_position, Vector3(5.0, 0.0, d.global_position.z)])
+		# Held still where they are put. The subject here is damage accumulating from
+		# many attackers, not movement -- and since dinosaurs stopped deadlocking in a
+		# crowd they drift during the frames below, which occasionally carried one of
+		# the eight out of reach and lost a single hit. That read as a flake and was
+		# really this test measuring two things at once.
+		d.set_physics_process(false)
 		dinos.append(d)
 	await wait_frames(2)
 

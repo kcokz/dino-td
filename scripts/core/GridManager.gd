@@ -391,6 +391,12 @@ func _divisions_of(building: Node) -> int:
 	return 1
 
 ## Returns an array of all living building nodes tracked by the grid.
+## ALL of them, which since fine placement means both registers.
+##
+## occupied_cells holds ONE building per tile, so a fence of nine stakes standing in
+## three tiles reported as three. Anything that asks "what is on the map" got a third of
+## the answer: the Hero's build queue could not see the blueprints sharing a tile with
+## something already up, and left them at 0% until every tile occupant was finished.
 func get_all_buildings() -> Array[Node]:
 	var result: Array[Node] = []
 	var cells_to_clean: Array[Vector2i] = []
@@ -402,6 +408,17 @@ func get_all_buildings() -> Array[Node]:
 			cells_to_clean.append(cell)
 	for c in cells_to_clean:
 		occupied_cells.erase(c)
+
+	var fine_to_clean: Array[Vector2i] = []
+	for fine in fine_cells:
+		var b = fine_cells[fine]
+		if is_instance_valid(b) and not b.is_queued_for_deletion():
+			if not result.has(b):
+				result.append(b)
+		else:
+			fine_to_clean.append(fine)
+	for f in fine_to_clean:
+		fine_cells.erase(f)
 	return result
 
 # ==============================================================================
