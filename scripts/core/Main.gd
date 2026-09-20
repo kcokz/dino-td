@@ -1177,10 +1177,15 @@ func _raycast_object(screen_pos: Vector2) -> Node:
 	# being in anyone's way. Leaving that layer out here is what stranded half-built
 	# work: walk away from a stake and there was nothing left to click.
 	var blueprint_layer: int = 16
+	var wall_layer: int = 32
 	var cfg_layers = _get_config()
 	if cfg_layers and "LAYER_BLUEPRINT" in cfg_layers:
 		blueprint_layer = int(cfg_layers.LAYER_BLUEPRINT)
-	query.collision_mask = 1 | 2 | 4 | blueprint_layer
+	if cfg_layers and "LAYER_WALL" in cfg_layers:
+		wall_layer = int(cfg_layers.LAYER_WALL)
+	# Walls are on their own layer so the Hero can walk through them; the cursor still
+	# has to find them, or a fence becomes unclickable.
+	query.collision_mask = 1 | 2 | 4 | blueprint_layer | wall_layer
 	var result = space_state.intersect_ray(query)
 	if result and result.has("collider"):
 		return result["collider"]

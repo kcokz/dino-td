@@ -145,7 +145,13 @@ func complete_construction() -> void:
 func _update_construction_state() -> void:
 	var cfg = _get_config()
 	var blueprint_layer: int = int(cfg.LAYER_BLUEPRINT) if (cfg and "LAYER_BLUEPRINT" in cfg) else 16
-	collision_layer = 2 if is_constructed else blueprint_layer
+	var solid_layer: int = 2
+	# A wall goes on its own layer so the Hero walks through his own fence and nothing
+	# else. See Config.LAYER_WALL.
+	if cfg and "LAYER_WALL" in cfg and cfg.has_method("get_building_kind"):
+		if String(cfg.get_building_kind(building_type)) == "wall":
+			solid_layer = int(cfg.LAYER_WALL)
+	collision_layer = solid_layer if is_constructed else blueprint_layer
 	for child in get_children():
 		if child is CollisionShape3D:
 			child.disabled = false

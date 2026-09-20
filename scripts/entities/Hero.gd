@@ -521,7 +521,11 @@ func _plan_path(dest: Vector3, ignore_b: Node = null) -> void:
 
 	var gm = _get_grid_manager()
 	if gm and gm.has_method("find_path"):
-		var pts = gm.find_path(global_position, target_destination, ignore_b)
+		# walls_are_open: his own fence is not a thing to route around. See
+		# Config.LAYER_WALL -- the physics agrees, and this keeps the route agreeing with
+		# it. A route that goes the long way round something he can walk straight through
+		# looks exactly like broken pathfinding.
+		var pts = gm.find_path(global_position, target_destination, ignore_b, false, true)
 		if pts.size() > 0:
 			current_path = pts
 			current_path_index = 0
@@ -547,11 +551,11 @@ func _plan_path_to_building(b: Node) -> void:
 		var offsets = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 		for off in offsets:
 			var adj_cell = cell + off
-			if gm.is_cell_walkable(adj_cell, b):
+			if gm.is_cell_walkable(adj_cell, b, false, true):
 				var edge_pt = b_pos + Vector3(float(off.x) * stand_dist, 0.0, float(off.y) * stand_dist)
 				candidates.append(edge_pt)
 
-		if gm.is_cell_walkable(cell, b):
+		if gm.is_cell_walkable(cell, b, false, true):
 			candidates.append(b_pos)
 
 		candidates.sort_custom(func(a: Vector3, b_pt: Vector3) -> bool:
@@ -559,7 +563,7 @@ func _plan_path_to_building(b: Node) -> void:
 		)
 
 		for cand in candidates:
-			var path = gm.find_path(global_position, cand, b)
+			var path = gm.find_path(global_position, cand, b, false, true)
 			if path.size() > 0:
 				current_path = path
 				current_path_index = 0
@@ -651,7 +655,7 @@ func _reachable_among(candidates: Array[Node]) -> Array[Node]:
 	if gm == null or not gm.has_method("is_reachable"):
 		return out
 	for b in candidates:
-		if b is Node3D and gm.is_reachable(global_position, (b as Node3D).global_position):
+		if b is Node3D and gm.is_reachable(global_position, (b as Node3D).global_position, 400, true):
 			out.append(b)
 	return out
 
@@ -666,7 +670,7 @@ func _abandon_unreachable_building() -> bool:
 	var gm = _get_grid_manager()
 	if gm == null or not gm.has_method("is_reachable"):
 		return false
-	if gm.is_reachable(global_position, target_building.global_position):
+	if gm.is_reachable(global_position, target_building.global_position, 400, true):
 		return false
 	var next_b = _find_nearest_unfinished_building()
 	if next_b == null or next_b == target_building:

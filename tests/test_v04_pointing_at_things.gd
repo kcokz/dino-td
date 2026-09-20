@@ -114,7 +114,9 @@ func test_03_finishing_it_makes_it_solid_again() -> void:
 
 	w.complete_construction()
 	await wait_frames(1)
-	assert_eq(w.collision_layer, 2, "Finished work is")
+	assert_eq(w.collision_layer, int(config_node.LAYER_WALL),
+		"Finished work is solid -- on the wall layer, which the Hero passes and a dinosaur does not")
+	assert_ne(w.collision_layer, int(config_node.LAYER_BLUEPRINT), "And no longer a blueprint")
 
 # ==============================================================================
 # 2. A fence you have only ordered stops nobody

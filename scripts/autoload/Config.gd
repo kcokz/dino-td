@@ -148,6 +148,14 @@ const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metr
 ## does.
 const LAYER_BLUEPRINT: int = 16
 
+## Walls sit apart from other buildings so that THE MAN WHO BUILT THEM CAN GET PAST.
+##
+## A fence is his, and being shut out of his own camp by it -- with no gate in the game
+## -- is a worse problem than the one a fence solves. Dinosaurs ray against this layer as
+## well as the buildings layer; the Hero's collision mask leaves it out, and only it, so
+## the wreck and the turrets still stop him exactly as they did.
+const LAYER_WALL: int = 32
+
 ## How tall a building stands when it does not say otherwise. Height is the honest
 ## lever for "this thing is imposing": widening a building eats into the lane the
 ## Hero needs, while making it taller costs nothing.
@@ -231,6 +239,13 @@ static func get_contact_dps(type_id: String) -> float:
 static func get_default_building_footprint() -> float:
 	var hero_w: float = float(HERO.get("width", 0.8))
 	return maxf(0.5, TILE_SIZE - hero_w - BUILDING_CLEARANCE)
+
+## What sort of thing this is: "wall" for anything a fence is made of, whatever else a
+## building declares, or "" for a type that says nothing.
+static func get_building_kind(type_id: String) -> String:
+	if not BUILDINGS.has(type_id):
+		return ""
+	return String(BUILDINGS[type_id].get("kind", ""))
 
 ## Side length of `type_id`'s box, in metres. Declared per building, else derived.
 ##

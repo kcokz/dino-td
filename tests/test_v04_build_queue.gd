@@ -92,6 +92,23 @@ func _fence_around(gm: Node, cell: Vector2i) -> void:
 				continue
 			_stake_at(gm, Vector2i(cell.x + dx, cell.y + dz))
 
+## Hillside all the way round `cell`, which is what can actually shut the Hero out now.
+##
+## These tests used to seal him in with STAKES. He walks through his own fence since
+## v0.5 -- being locked out of his own camp by it, with no gate in the game, was worse
+## than the problem a fence solves -- so a fence seals nothing as far as he is concerned
+## and there would be no unreachable work left to test with. The landscape still does.
+func _hills_around(gm: Node, cell: Vector2i) -> void:
+	var hills: Array = []
+	for c in gm.blocked_cells.keys():
+		hills.append(c)
+	for dx in [-1, 0, 1]:
+		for dz in [-1, 0, 1]:
+			if dx == 0 and dz == 0:
+				continue
+			hills.append(Vector2i(cell.x + dx, cell.y + dz))
+	gm.set_blocked_cells(hills)
+
 # ==============================================================================
 # 1. The flood
 # ==============================================================================
@@ -170,12 +187,13 @@ func test_05_running_out_of_budget_assumes_he_can_get_there() -> void:
 # ==============================================================================
 
 func test_06_he_skips_the_blueprint_he_cannot_reach_and_builds_the_rest() -> void:
-	# The reported worry, made concrete: an older blueprint sealed behind finished
-	# stakes must not hold up the newer ones out in the open.
+	# The reported worry, made concrete: an older blueprint he cannot get to must not
+	# hold up the newer ones out in the open. Walled in by HILLSIDE, because his own
+	# fence no longer stops him -- see _hills_around.
 	var gm = _grid([])
 	await wait_frames(1)
 	var sealed_in = _blueprint_at(gm, Vector2i(8, 0))
-	_fence_around(gm, Vector2i(8, 0))
+	_hills_around(gm, Vector2i(8, 0))
 	var out_in_the_open = _blueprint_at(gm, Vector2i(2, 0))
 
 	assert_lt(int(sealed_in.build_order), int(out_in_the_open.build_order),
@@ -194,7 +212,7 @@ func test_07_with_nothing_reachable_he_still_takes_the_oldest() -> void:
 	await wait_frames(1)
 	var outside = _blueprint_at(gm, Vector2i(8, 0))
 	var hero = _hero_at(gm, Vector2i(0, 0))
-	_fence_around(gm, Vector2i(0, 0))
+	_hills_around(gm, Vector2i(0, 0))
 	await wait_frames(1)
 
 	assert_eq(hero._find_nearest_unfinished_building(), outside,
@@ -227,7 +245,7 @@ func test_09_a_blueprint_walled_off_mid_approach_is_handed_back() -> void:
 	hero.order_build(sealed_in, true)
 	assert_eq(hero.target_building, sealed_in, "That is the job he set off for")
 
-	_fence_around(gm, Vector2i(8, 0))
+	_hills_around(gm, Vector2i(8, 0))
 	assert_true(hero._abandon_unreachable_building(), "Being stuck makes him re-ask the question")
 	assert_eq(hero.target_building, reachable, "And he moves on to work he can do")
 

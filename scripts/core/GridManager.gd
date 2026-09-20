@@ -509,7 +509,13 @@ func _on_building_destroyed(building: Node) -> void:
 ## Resource nodes block navigation (unless ignored).
 ## Unfinished blueprints (is_constructed == false) are walkable.
 ## If ignore_building is specified, its cell is treated as walkable.
-func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only: bool = false) -> bool:
+## `walls_are_open` is the Hero asking. A fence is HIS, and being shut out of his own
+## camp by it -- with no gate anywhere in the game -- is a worse problem than the one a
+## fence solves. It opens WALLS and nothing else: the wreck and the turrets still stop
+## him, and it changes nothing at all for a dinosaur, which is the whole point of a
+## fence.
+func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only: bool = false,
+		walls_are_open: bool = false) -> bool:
 	if is_cell_blocked(cell):
 		return false
 	# terrain_only asks the narrower question "is the LANDSCAPE in the way", ignoring
@@ -539,8 +545,41 @@ func is_cell_walkable(cell: Vector2i, ignore_building: Node = null, terrain_only
 	# Caller-specified ignored building
 	if ignore_building != null and b == ignore_building:
 		return true
+	if walls_are_open and _only_walls_here(cell):
+		return true
 	# A building smaller than its tile does not fill its tile. Only a run of them does.
 	return occupant_leaves_a_way_through(cell)
+
+## Whether everything standing in `cell` is a wall.
+##
+## Everything, not just the tile's registered occupant: a stake sharing a tile with the
+## wreck must not make the wreck walk-through-able.
+func _only_walls_here(cell: Vector2i) -> bool:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_building_kind"):
+		return false
+	var found: bool = false
+	for b in _things_standing_in(cell):
+		found = true
+		if not ("building_type" in b) or String(cfg.get_building_kind(String(b.building_type))) != "wall":
+			return false
+	return found
+
+## Every living building registered in `cell`, at either resolution.
+func _things_standing_in(cell: Vector2i) -> Array[Node]:
+	var out: Array[Node] = []
+	var holder = get_building_at(cell)
+	if holder != null:
+		out.append(holder)
+	var divisions: int = _fine_divisions_in(cell)
+	if divisions > 1:
+		var base := Vector2i(cell.x * divisions, cell.y * divisions)
+		for dz in range(divisions):
+			for dx in range(divisions):
+				var at := base + Vector2i(dx, dz)
+				if is_fine_cell_solid(at) and not out.has(fine_cells[at]):
+					out.append(fine_cells[at])
+	return out
 
 ## Every cell the segment from `from_pos` to `to_pos` passes through, in order.
 ##
@@ -614,11 +653,11 @@ const NO_CELL := Vector2i(2147483647, 2147483647)
 ## `skip` is a cell that never counts, for the one a walker is standing in: it is plainly
 ## standable, whatever is registered there.
 func first_solid_on_line(from_pos: Vector3, to_pos: Vector3, terrain_only: bool = false,
-		ignore_building: Node = null, skip: Vector2i = NO_CELL) -> Vector2i:
+		ignore_building: Node = null, skip: Vector2i = NO_CELL, walls_are_open: bool = false) -> Vector2i:
 	for cell in cells_on_line(from_pos, to_pos):
 		if cell == skip:
 			continue
-		if not is_cell_walkable(cell, ignore_building, terrain_only):
+		if not is_cell_walkable(cell, ignore_building, terrain_only, walls_are_open):
 			return cell
 	return NO_CELL
 
@@ -638,7 +677,8 @@ func first_solid_on_line(from_pos: Vector3, to_pos: Vector3, terrain_only: bool 
 ## `budget` caps the sweep. Running out means the target is in a region far too big
 ## to be a pocket, and the answer is then "assume he can get there": guessing "no"
 ## would stop the Hero working on an open map, while guessing "yes" costs a walk.
-func is_reachable(from_pos: Vector3, to_pos: Vector3, budget: int = 400) -> bool:
+func is_reachable(from_pos: Vector3, to_pos: Vector3, budget: int = 400,
+		walls_are_open: bool = false) -> bool:
 	var goal: Vector2i = world_to_cell(from_pos)
 	var start: Vector2i = world_to_cell(to_pos)
 	if start == goal:
@@ -656,7 +696,7 @@ func is_reachable(from_pos: Vector3, to_pos: Vector3, budget: int = 400) -> bool
 			var neighbor: Vector2i = current + off
 			if neighbor == goal:
 				return true
-			if seen.has(neighbor) or not is_cell_walkable(neighbor):
+			if seen.has(neighbor) or not is_cell_walkable(neighbor, null, false, walls_are_open):
 				continue
 			seen[neighbor] = true
 			queue.append(neighbor)
@@ -666,7 +706,8 @@ func is_reachable(from_pos: Vector3, to_pos: Vector3, budget: int = 400) -> bool
 ##
 ## `terrain_only` routes around the landscape and nothing else -- what a dinosaur
 ## wants, since a building in its way is a thing to bite rather than walk around.
-func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null, terrain_only: bool = false) -> Array[Vector3]:
+func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
+		terrain_only: bool = false, walls_are_open: bool = false) -> Array[Vector3]:
 	var start_cell: Vector2i = world_to_cell(from_pos)
 	var goal_cell: Vector2i = world_to_cell(to_pos)
 
@@ -677,8 +718,8 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 	# the nearest square that is not. Searched in rings rather than over the eight
 	# neighbours, because the middle of a two-cell hill has no walkable neighbour at all
 	# and the old version gave up there and returned a straight line into the rock.
-	if not is_cell_walkable(goal_cell, ignore_building, terrain_only):
-		var relocated: Vector2i = _nearest_walkable(goal_cell, from_pos, ignore_building, terrain_only)
+	if not is_cell_walkable(goal_cell, ignore_building, terrain_only, walls_are_open):
+		var relocated: Vector2i = _nearest_walkable(goal_cell, from_pos, ignore_building, terrain_only, 12, walls_are_open)
 		if relocated == goal_cell:
 			return [to_pos]
 		goal_cell = relocated
@@ -734,7 +775,7 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 				else:
 					raw_world_path.append(walkable_point_in_cell(cell_path[i]))
 
-			return _smooth_path(from_pos, raw_world_path, ignore_building, terrain_only)
+			return _smooth_path(from_pos, raw_world_path, ignore_building, terrain_only, walls_are_open)
 
 		open_set.remove_at(lowest_idx)
 		var cur_h: float = float(current.distance_to(goal_cell))
@@ -746,7 +787,7 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 		# 1. Cardinal neighbors
 		for off in cardinals:
 			var neighbor = current + off
-			if not is_cell_walkable(neighbor, ignore_building, terrain_only):
+			if not is_cell_walkable(neighbor, ignore_building, terrain_only, walls_are_open):
 				continue
 			var tent_g = cur_g + 1.0
 			if tent_g < g_score.get(neighbor, 999999.0):
@@ -759,11 +800,11 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 		# 2. Diagonal neighbors (cutting corner prevention)
 		for off in diagonals:
 			var neighbor = current + off
-			if not is_cell_walkable(neighbor, ignore_building, terrain_only):
+			if not is_cell_walkable(neighbor, ignore_building, terrain_only, walls_are_open):
 				continue
 			var side1 = current + Vector2i(off.x, 0)
 			var side2 = current + Vector2i(0, off.y)
-			if not is_cell_walkable(side1, ignore_building, terrain_only) or not is_cell_walkable(side2, ignore_building, terrain_only):
+			if not is_cell_walkable(side1, ignore_building, terrain_only, walls_are_open) or not is_cell_walkable(side2, ignore_building, terrain_only, walls_are_open):
 				continue
 			var tent_g = cur_g + 1.414
 			if tent_g < g_score.get(neighbor, 999999.0):
@@ -793,13 +834,13 @@ func find_path(from_pos: Vector3, to_pos: Vector3, ignore_building: Node = null,
 		for i in range(1, partial.size()):
 			partial_world.append(walkable_point_in_cell(partial[i]))
 		if not partial_world.is_empty():
-			return _smooth_path(from_pos, partial_world, ignore_building, terrain_only)
+			return _smooth_path(from_pos, partial_world, ignore_building, terrain_only, walls_are_open)
 
 	return [to_pos]
 
 ## The nearest cell to `centre` that can actually be stood on, searched outward in
 ## rings. Returns `centre` unchanged when there is nothing walkable within reach.
-func _nearest_walkable(centre: Vector2i, toward: Vector3, ignore_building: Node = null, terrain_only: bool = false, max_radius: int = 12) -> Vector2i:
+func _nearest_walkable(centre: Vector2i, toward: Vector3, ignore_building: Node = null, terrain_only: bool = false, max_radius: int = 12, walls_are_open: bool = false) -> Vector2i:
 	var best: Vector2i = centre
 	var best_dist: float = 999999.0
 	for radius in range(1, max_radius + 1):
@@ -809,7 +850,7 @@ func _nearest_walkable(centre: Vector2i, toward: Vector3, ignore_building: Node 
 				if absi(dx) != radius and absi(dz) != radius:
 					continue
 				var candidate := centre + Vector2i(dx, dz)
-				if not is_cell_walkable(candidate, ignore_building, terrain_only):
+				if not is_cell_walkable(candidate, ignore_building, terrain_only, walls_are_open):
 					continue
 				var d: float = cell_to_world(candidate).distance_to(toward)
 				if d < best_dist:
@@ -820,7 +861,7 @@ func _nearest_walkable(centre: Vector2i, toward: Vector3, ignore_building: Node 
 	return centre
 
 ## Optimizes waypoint sequence by removing redundant intermediate nodes with unobstructed line-of-sight.
-func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building: Node = null, terrain_only: bool = false) -> Array[Vector3]:
+func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building: Node = null, terrain_only: bool = false, walls_are_open: bool = false) -> Array[Vector3]:
 	if raw_path.size() <= 1:
 		return raw_path
 
@@ -831,7 +872,7 @@ func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building:
 	while i < raw_path.size():
 		var furthest: int = i
 		for j in range(raw_path.size() - 1, i, -1):
-			if _has_line_of_sight(curr, raw_path[j], ignore_building, terrain_only):
+			if _has_line_of_sight(curr, raw_path[j], ignore_building, terrain_only, walls_are_open):
 				furthest = j
 				break
 		smoothed.append(raw_path[furthest])
@@ -843,8 +884,8 @@ func _smooth_path(start_pos: Vector3, raw_path: Array[Vector3], ignore_building:
 ## Line-of-sight ray tracing on grid cells. Returns true if straight path is unobstructed.
 ## Used to sample every 0.4 of a tile, which could step over the corner of a hill and
 ## smooth a route straight through the thing A* had just gone around.
-func _has_line_of_sight(from_pt: Vector3, to_pt: Vector3, ignore_building: Node = null, terrain_only: bool = false) -> bool:
+func _has_line_of_sight(from_pt: Vector3, to_pt: Vector3, ignore_building: Node = null, terrain_only: bool = false, walls_are_open: bool = false) -> bool:
 	if from_pt.distance_to(to_pt) <= 0.1:
 		return true
 	return first_solid_on_line(from_pt, to_pt, terrain_only, ignore_building,
-		world_to_cell(from_pt)) == NO_CELL
+		world_to_cell(from_pt), walls_are_open) == NO_CELL

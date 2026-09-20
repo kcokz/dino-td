@@ -225,7 +225,8 @@ func test_06_hero_walk_to_build_and_construction() -> void:
 	hero._physics_process(1.0)
 	assert_almost_eq(wall.build_progress, 1.0, 0.01, "Wall build_progress reached 100%")
 	assert_true(wall.is_constructed, "Wall is now fully constructed")
-	assert_eq(wall.collision_layer, 2, "Wall collision_layer restored to 2 (Buildings)")
+	assert_eq(wall.collision_layer, int(config_node.LAYER_WALL),
+		"Finished, and on the wall layer -- which the Hero walks through and a dinosaur does not")
 	assert_eq(int(hero.current_state), 0, "Hero returns to IDLE after completing construction")
 
 # ==============================================================================
@@ -412,23 +413,23 @@ func test_13_hero_physics_collision_with_walls_cannot_penetrate() -> void:
 	tree.root.add_child(hero)
 	hero.position = Vector3(0.0, 0.0, 0.0)
 
-	# Verify hero collision mask includes Layer 2 (Buildings)
-	assert_true((hero.collision_mask & 2) != 0, "Hero collision_mask must include Layer 2 (Buildings)")
+	# THIS USED TO ASSERT THE OPPOSITE, and the opposite was the problem. A fence stopped
+	# the man who built it, and there is no gate anywhere in the game -- so laying stakes
+	# around your own camp shut you out of it. A wall is on a layer of its own now: the
+	# Hero's mask leaves out that one and nothing else.
+	assert_true((hero.collision_mask & 2) != 0, "Buildings still stop him")
+	assert_eq(hero.collision_mask & int(config_node.LAYER_WALL), 0, "His own fence does not")
 
-	# Wait for physics engine broadphase synchronization
 	await wait_frames(2)
 
-	# Command hero to move past the wall to X=5.0
 	hero.move_to(Vector3(5.0, 0.0, 0.0))
 	assert_eq(int(hero.current_state), 1, "Hero is MOVING towards destination")
 
-	# Simulate multiple physics frames
 	for _frame in range(30):
 		await wait_frames(1)
 		hero._physics_process(0.05)
 
-	# Hero must be stopped by the wall and cannot penetrate through it (X must remain < 1.6)
-	assert_lt(hero.global_position.x, 1.6, "Hero is physically blocked by Wall and cannot penetrate it")
+	assert_gt(hero.global_position.x, 2.5, "And he walks through it to where he was sent")
 
 # ==============================================================================
 # ==============================================================================
@@ -588,28 +589,38 @@ func test_19_hero_pathfinding_around_wall_obstacle() -> void:
 	_cleanup_nodes.append(grid_mgr)
 	tree.root.add_child(grid_mgr)
 
-	# Place an intervening wall blocking direct movement at cell (1, 0)
-	var wall = wall_script.new()
-	_cleanup_nodes.append(wall)
-	tree.root.add_child(wall)
-	wall.position = grid_mgr.cell_to_world(Vector2i(1, 0))
-	wall.complete_construction()
-	grid_mgr.occupy_cell(Vector2i(1, 0), wall)
+	# A HILLSIDE in the way, not a wall. His own fence is something he walks through
+	# since v0.5, and a route that went the long way round something he can walk straight
+	# through would look exactly like broken pathfinding.
+	grid_mgr.set_blocked_cells([Vector2i(1, 0)])
 
 	var hero = hero_script.new()
 	_cleanup_nodes.append(hero)
 	tree.root.add_child(hero)
 	hero.position = grid_mgr.cell_to_world(Vector2i(0, 0))
 
-	# Move to cell (2, 0) on the other side of the wall
+	# Move to cell (2, 0) on the other side of it
 	var dest = grid_mgr.cell_to_world(Vector2i(2, 0))
 	hero.move_to(dest)
 
 	# Pathfinding must route around cell (1, 0)
-	assert_gt(hero.current_path.size(), 1, "Hero path must contain intermediate waypoints around the wall")
+	assert_gt(hero.current_path.size(), 1, "Hero path must contain intermediate waypoints around the hill")
 	for pt in hero.current_path:
 		var c = grid_mgr.world_to_cell(pt)
-		assert_ne(c, Vector2i(1, 0), "Waypoint must not route directly through occupied cell (1, 0)")
+		assert_ne(c, Vector2i(1, 0), "Waypoint must not route directly through the hillside at (1, 0)")
+
+	# And the contrast that makes the rule visible: a WALL in the same place is simply
+	# walked through, so the route is the straight one.
+	var wall = wall_script.new()
+	_cleanup_nodes.append(wall)
+	tree.root.add_child(wall)
+	wall.position = grid_mgr.cell_to_world(Vector2i(0, 2))
+	wall.complete_construction()
+	grid_mgr.occupy_cell(Vector2i(0, 2), wall)
+	assert_true(grid_mgr.is_cell_walkable(Vector2i(0, 2), null, false, true),
+		"A wall is open ground as far as the Hero is concerned")
+	assert_false(grid_mgr.is_cell_walkable(Vector2i(0, 2)),
+		"And still solid for everyone else")
 
 	# Simulate movement over time
 	for _i in range(50):

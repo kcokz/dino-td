@@ -379,6 +379,13 @@ func _step_around(other: Node3D, heading: Vector3) -> Vector3:
 			_dodge_side = -1.0 if lean > 0.0 else 1.0
 	return perp * _dodge_side
 
+## The layer walls live on, which dinosaurs must still collide with.
+func _wall_layer() -> int:
+	var cfg = _get_config()
+	if cfg and "LAYER_WALL" in cfg:
+		return int(cfg.LAYER_WALL)
+	return 32
+
 ## How fast this dinosaur's heading follows the one it wants.
 func _turn_response() -> float:
 	var cfg = _get_config()
@@ -1450,7 +1457,9 @@ func _ensure_components() -> void:
 		raycast.position = Vector3(0.0, 0.4, 0.0)
 		add_child(raycast)
 
-	raycast.collision_mask = 2 # Layer 2: Buildings
+	# Buildings AND walls. A wall is on a layer of its own so the Hero can pass his own
+	# fence; a dinosaur must not be able to.
+	raycast.collision_mask = 2 | _wall_layer()
 	raycast.collide_with_bodies = true
 	raycast.collide_with_areas = true
 	raycast.hit_from_inside = true
@@ -1476,7 +1485,7 @@ func _ensure_components() -> void:
 		var box = BoxShape3D.new()
 		box.size = Vector3(0.8, 0.8, 0.8)
 		_shape_query.shape = box
-		_shape_query.collision_mask = 2 # Layer 2: Buildings
+		_shape_query.collision_mask = 2 | _wall_layer()
 		_shape_query.collide_with_bodies = true
 		_shape_query.collide_with_areas = true
 
