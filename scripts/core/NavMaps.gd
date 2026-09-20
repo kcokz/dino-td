@@ -27,11 +27,15 @@ enum For { RAID = 0, HERO = 1 }
 ## The group the level puts its geometry in, so a bake knows where to look.
 const SOURCE_GROUP: String = "navmesh_source"
 
+## How anything that walks finds these maps without being handed a reference.
+const GROUP: String = "nav_maps"
+
 var _regions: Dictionary = {}     # For -> NavigationRegion3D
 var _dirty: bool = true
 var _baked_once: bool = false
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	for which in [For.RAID, For.HERO]:
 		var region := NavigationRegion3D.new()
 		region.name = "Nav_%s" % ("Raid" if which == For.RAID else "Hero")
@@ -167,6 +171,14 @@ func is_reachable(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = fal
 ## that is not a failure to reach.
 func _arrival_slack() -> float:
 	return _agent_radius() * 2.0 + _cell_size() * 2.0
+
+## The nearest point on the mesh to `pos` -- where a walker that tried to go somewhere
+## impossible would actually end up.
+func closest_point(pos: Vector3, walls_are_open: bool = false) -> Vector3:
+	var map: RID = map_for(walls_are_open)
+	if not map.is_valid():
+		return pos
+	return NavigationServer3D.map_get_closest_point(map, pos)
 
 ## Whether the meshes have been built at least once -- false in a fixture with no level.
 func is_ready() -> bool:

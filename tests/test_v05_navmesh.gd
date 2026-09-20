@@ -197,3 +197,152 @@ func test_07_a_blueprint_ring_seals_nothing() -> void:
 
 	assert_true(main.nav_maps.is_reachable(far, core),
 		"And a raid walks straight through it, because none of it is built")
+
+# ==============================================================================
+# 3. Being put back on the mesh is a correction, not a teleport
+# ==============================================================================
+
+func test_08_a_walker_is_not_flung_across_the_map_while_the_map_warms_up() -> void:
+	# NavigationServer3D answers map_get_closest_point with (0, 0, 0) for the first two
+	# or three syncs after a level loads, and NOTHING IN THE ANSWER SAYS IT IS NOT READY
+	# -- not is_ready, not the region's polygon count (188 vertices, all correct), not
+	# map_get_iteration_id, which reaches 1 while the answer is still the origin.
+	#
+	# A wave spawns inside exactly that window. Measured without the cap: a raptor put
+	# down at the nest end of the path, (1, -8.5), was standing on the cabin at
+	# (-0.11, 0.45) two frames later, had picked the cabin as its target, and could no
+	# longer reach the stake it had been walking at.
+	var main = _level()
+	var dino = load("res://scripts/entities/Dino.gd").new("raptor")
+	_cleanup_nodes.append(dino)
+	main.dinos_container.add_child(dino)
+	var spawned_at := Vector3(1.0, 0.0, -8.5)
+	dino.global_position = spawned_at
+	dino.set_waypoints([Vector3(1.0, 0.0, -7.0), Vector3(1.0, 0.0, 1.0)])
+	await wait_frames(2)               # the window, exactly
+
+	var cap: float = float(config_node.NAV["max_correction"])
+	var thrown: float = absf(dino.global_position.z - spawned_at.z) - float(dino.speed) * 0.1
+	assert_lt(thrown, cap,
+		"It is where it was put, give or take a step -- not wherever an unready map said")
+	assert_lt(absf(dino.global_position.x - spawned_at.x), cap, "And has not been moved sideways")
+
+func test_09_and_the_mesh_still_moves_one_that_is_off_it() -> void:
+	# The cap must not cost the clamp its job, which is that NOTHING PHYSICALLY STOPS A
+	# DINOSAUR: movement is a position added to, with no body sweep, so the mesh is the
+	# only thing keeping a raid out of a walled camp.
+	var main = _level()
+	await wait_frames(8)               # long enough for the map to be warm
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	assert_gt(_ring_around(main, core, 4.0), 12, "A ring of stakes went up round the cabin")
+	await wait_frames(8)
+
+	var dino = load("res://scripts/entities/Dino.gd").new("raptor")
+	_cleanup_nodes.append(dino)
+	main.dinos_container.add_child(dino)
+	# Half a step inside the fence line, which is as far in as one can ever get.
+	var into_the_stakes: Vector3 = core + Vector3(0.0, 0.0, -4.0 + 0.3)
+	dino.global_position = into_the_stakes
+	dino._stay_on_the_navmesh()
+
+	assert_gt(dino.global_position.distance_to(into_the_stakes), 0.05,
+		"Standing in the fence line is not somewhere it may stand, so it is moved")
+	assert_lt(dino.global_position.distance_to(into_the_stakes),
+		float(config_node.NAV["max_correction"]), "By a correction, and no more")
+
+# ==============================================================================
+# 4. And it is the mesh that answers "is there a way round", not the grid
+# ==============================================================================
+
+func _raptor_outside(main: Node, core: Vector3) -> Node:
+	var dino = load(String(config_node.get_dino_script_path("raptor"))).new()
+	_cleanup_nodes.append(dino)
+	main.dinos_container.add_child(dino)
+	dino.setup("raptor")
+	dino.global_position = core + Vector3(0.0, 0.0, -9.0)
+	dino.set_waypoints([core])
+	return dino
+
+func test_10_a_sealed_ring_is_still_sealed_when_you_are_standing_against_it() -> void:
+	# THE ANSWER MUST NOT CHANGE AS YOU WALK UP TO IT. The grid and the mesh are two
+	# implementations of one question, and they disagreed -- not everywhere, which is why
+	# this took so long to see, but in a band about a metre wide RIGHT AT THE FENCE, which
+	# is the only place the answer is ever acted on. Mapped at sixteen bearings and nine
+	# distances round a ring of forty-eight stakes: identical from 5.6m out, and the grid
+	# claiming a way in at every bearing from 4.8m in.
+	#
+	# So a raid walked up knowing it was sealed, and forgot at the moment it arrived. With
+	# twenty raptors: all twenty knew at spawn, seventeen of seventeen survivors were told
+	# there was a way round five seconds later, and they spent the rest of the raid pacing
+	# the fence looking for it, taking a chip from every stake they brushed, dead in
+	# fifteen seconds with the fence down seventeen points of three hundred and sixty-eight.
+	# The player reported it as "恐龙会在圈出来的地方来回穿梭，进攻不了还掉血".
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	assert_gt(_ring_around(main, core, 4.0), 12, "A ring of stakes went up round the cabin")
+	await wait_frames(8)
+
+	var dino = _raptor_outside(main, core)
+	await wait_frames(2)
+	assert_true(dino._way_is_sealed(), "It knows there is no way in from out in the open")
+
+	# Where one ends up when it gets there: pressed against the stakes, which stand at 4m.
+	# Past the recheck throttle, or the cached answer from out in the open is what comes
+	# back and the question is not being asked at all.
+	dino.global_position = core + Vector3(0.0, 0.0, -4.4)
+	await wait_seconds(dino.ROUTE_RECHECK_SECONDS + 0.1)
+	assert_true(dino._way_is_sealed(), "And still knows it with its nose against them")
+
+func test_11_so_it_commits_to_chewing_instead_of_looking_for_a_gap() -> void:
+	# What the answer is for. A fence with no way round is the thing the raid has to eat.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	_ring_around(main, core, 4.0)
+	await wait_frames(8)
+
+	var dino = _raptor_outside(main, core)
+	dino.global_position = core + Vector3(0.0, 0.0, -4.4)
+	await wait_frames(2)
+	var attacked: bool = false
+	for step in range(360):
+		dino.advance_towards_waypoint(1.0 / 60.0)
+		if int(dino.current_state) == int(dino.State.ATTACKING):
+			attacked = true
+			break
+		await wait_frames(1)
+	assert_true(attacked, "It settles on a stake and starts biting rather than pacing")
+	assert_true(_is_wall(dino.current_target), "And what it bites is the fence in its way")
+
+func _is_wall(node: Variant) -> bool:
+	return node != null and is_instance_valid(node) and ("building_type" in node) \
+		and String(node.building_type) == "wall"
+
+func test_12_the_dinosaur_and_the_mesh_give_the_same_answer() -> void:
+	# The fixture trap, named: many suites build a bare GridManager with no geometry in
+	# it, so there is no mesh to bake and the grid is all there is. That fallback must
+	# stay a fallback -- "the game runs the mesh, the tests run the grid" is how the
+	# PackDino override hid for a whole version.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	var dino = _raptor_outside(main, core)
+	await wait_frames(2)
+
+	assert_eq(dino._there_is_a_way_round(core), main.nav_maps.is_reachable(dino.global_position, core),
+		"Open ground: the dinosaur is asking the mesh")
+	_ring_around(main, core, 4.0)
+	dino.global_position = core + Vector3(0.0, 0.0, -4.4)
+	await wait_frames(8)
+	assert_eq(dino._there_is_a_way_round(core), main.nav_maps.is_reachable(dino.global_position, core),
+		"Standing at the fence: still the mesh, and not the grid that disagreed with it here")
+	assert_false(dino._there_is_a_way_round(core), "Which says there is no way in")

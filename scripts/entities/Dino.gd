@@ -52,9 +52,9 @@ var current_waypoint_index: int = 0
 ## only when the goal changes or the route runs out, so open ground costs nothing.
 var nav_path: Array[Vector3] = []
 
-## How long between asking the grid whether there is a way round. Flooding the grid
-## every frame for every dinosaur in a raid would be the most expensive thing in the
-## game; a fraction of a second is imperceptible and costs nothing.
+## How long between asking whether there is a way round. A route query per dinosaur per
+## frame during a raid would be the most expensive thing in the game; a fraction of a
+## second is imperceptible and costs nothing.
 const ROUTE_RECHECK_SECONDS: float = 0.4
 var _route_checked_at: float = -999.0
 var _blocked_by: Node = null
@@ -401,6 +401,47 @@ func _ensure_avoidance() -> void:
 		float(cfg.DINO_AVOID_TIME_HORIZON) if (cfg and "DINO_AVOID_TIME_HORIZON" in cfg) else 1.2)
 	_refresh_avoidance_size()
 
+## Keeps a dinosaur on ground it is allowed to be on.
+##
+## NOTHING PHYSICALLY STOPS A DINOSAUR. Movement is a position added to every frame, with
+## no body sweep and no collision -- the stakes have colliders but dinosaurs are not on a
+## mask that sees them. What kept a raid out of a walled camp was only the pathfinder, so
+## the moment it could not find a route it handed back its best effort and the whole raid
+## walked straight THROUGH the fence. Measured: a ring of forty-eight stakes round the
+## cabin, seventeen of twenty inside it, nothing chewed.
+##
+## The navmesh is the fix rather than another rule, because a sealed pocket is simply not
+## part of the mesh: there is no "inside the fence" to be clamped to. Baked with the
+## raid's mask, so the Hero's exemption is not accidentally granted to a raptor.
+func _stay_on_the_navmesh() -> void:
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready():
+		return
+	var on_mesh: Vector3 = maps.closest_point(global_position, false)
+	var flat := Vector3(on_mesh.x, global_position.y, on_mesh.z)
+	# A CORRECTION, NOT A TELEPORT. See Config.NAV.max_correction: the navigation map
+	# answers (0, 0, 0) for the first frames after a level loads, with nothing in the
+	# answer to say it is not ready -- and a raid spawns inside exactly that window. A
+	# raptor at the nest was moved to the cabin by it. Anything past the cap is either an
+	# answer from a map that cannot yet be asked, or an animal shut in a pocket the mesh
+	# does not reach: in both cases staying put is right, and in the second it is what
+	# makes it turn round and chew.
+	if global_position.distance_to(flat) > _max_correction():
+		return
+	# Leave y alone: the mesh is flat and the animal sits on the ground it is drawn on.
+	global_position = flat
+
+func _max_correction() -> float:
+	var cfg = _get_config()
+	if cfg and "NAV" in cfg:
+		return float(cfg.NAV.get("max_correction", 1.0))
+	return 1.0
+
+func _nav_maps() -> Node:
+	if not is_inside_tree():
+		return null
+	return get_tree().get_first_node_in_group(NavMaps.GROUP)
+
 ## The layer walls live on, which dinosaurs must still collide with.
 func _wall_layer() -> int:
 	var cfg = _get_config()
@@ -611,6 +652,7 @@ func advance_towards_waypoint(delta: float) -> void:
 	var was_at: Vector3 = global_position
 	global_position += velocity * delta
 	_keep_off_the_hills(was_at)
+	_stay_on_the_navmesh()
 	_resolve_dino_overlaps()
 
 ## Where to actually head, given that a hill may be in the way.
@@ -700,9 +742,9 @@ func _way_is_sealed() -> bool:
 ## Works out, at most a few times a second, whether the way ahead is open and what is
 ## standing in it.
 ##
-## Throttled because the answer costs a flood of the grid. Doing it per dinosaur per
-## frame during a raid would be the most expensive thing in the game, and a fence coming
-## down half a second late is not something anyone can see.
+## Throttled because the answer costs a route query. Doing it per dinosaur per frame
+## during a raid would be the most expensive thing in the game, and a fence coming down
+## half a second late is not something anyone can see.
 func _refresh_route() -> void:
 	var now: float = float(Time.get_ticks_msec()) / 1000.0
 	if now - _route_checked_at < ROUTE_RECHECK_SECONDS:
@@ -714,9 +756,6 @@ func _refresh_route() -> void:
 	_blocked_by = null
 	_way_sealed = false
 
-	var gm := _get_grid_manager()
-	if gm == null or not gm.has_method("is_reachable"):
-		return
 	# The JOURNEY goal, never the thing currently targeted. Asking "can I reach my
 	# target" is self-referential -- a target is always reachable, because it is where
 	# you are standing by the time you bite it -- so a wall judged that way is never in
@@ -728,7 +767,7 @@ func _refresh_route() -> void:
 	var hit: Vector2i = _first_solid_on_line(global_position, goal, true)
 	if hit == Vector2i(2147483647, 2147483647):
 		return                      # clear line; nothing to decide
-	if gm.is_reachable(global_position, goal):
+	if _there_is_a_way_round(goal):
 		return                      # something is in the way, but there is a way round
 
 	_way_sealed = true
@@ -737,6 +776,29 @@ func _refresh_route() -> void:
 	# _blocked_by stays null, nothing is attacked, and the partial path takes it as close
 	# as the map allows -- which is the right answer to "sealed by the landscape".
 	_blocked_by = _first_building_on_line(global_position, goal)
+
+## Whether there is any route to `goal` at all.
+##
+## ASKED OF THE SAME MESH THE ANIMAL IS HELD ON, which is the whole point. This used to
+## be a flood of the grid, and the grid and the mesh are two implementations of one
+## question: whichever a given line of code happened to ask decided what happened, and
+## they disagreed. Measured with twenty raptors and a sealed ring of forty-eight stakes:
+## the mesh held all twenty outside, correctly, and the grid told every one of them
+## within five seconds that there was a way round. So they never committed to chewing,
+## ground along the fence looking for the way the grid promised, and bled to death on
+## the spikes -- 20 of 20 dead in fifteen seconds, the fence down seventeen points out of
+## three hundred and sixty-eight. That is exactly what the player reported as "恐龙会在圈
+## 出来的地方来回穿梭，进攻不了还掉血".
+##
+## The grid remains the fallback for a fixture with no level in it, and only that.
+func _there_is_a_way_round(goal: Vector3) -> bool:
+	var maps := _nav_maps()
+	if maps != null and maps.is_ready():
+		return maps.is_reachable(global_position, goal, not walks_round_walls())
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("is_reachable"):
+		return true
+	return gm.is_reachable(global_position, goal)
 
 ## The nearest finished building standing on the line, or null.
 func _first_building_on_line(from_pos: Vector3, to_pos: Vector3) -> Node:

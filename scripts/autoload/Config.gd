@@ -169,6 +169,21 @@ const NAV: Dictionary = {
 	# wider and can be routed through a gap it does not fit, which only the avoidance
 	# solver notices. A third mesh is the fix if that ever shows on screen.
 	"agent_radius": 0.4,
+	# The furthest a walker may be MOVED by being put back on the mesh, in metres.
+	#
+	# A correction is a correction, not a teleport. Measured without this: a raptor
+	# standing at (1, -8.5) was moved to (-0.11, 0.45) -- eight and a half metres, on top
+	# of the cabin -- because the navigation map had not finished its first sync and
+	# map_get_closest_point answers (0, 0, 0) until it has. Nothing about the answer says
+	# it is not ready; it is simply wrong for two or three frames, which is exactly the
+	# window a wave spawns in.
+	#
+	# 1.0 is above every honest correction and far below an accident. The largest real one
+	# is a fence going up around someone already standing there, which is the agent radius
+	# plus half a stake, 0.71m. Anything bigger means either the mesh is not ready or the
+	# animal is somewhere the mesh does not reach at all -- sealed inside a ring it should
+	# be chewing its way out of, not flung out of.
+	"max_correction": 1.0,
 }
 
 ## How tall a building stands when it does not say otherwise. Height is the honest
