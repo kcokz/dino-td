@@ -474,7 +474,7 @@ func advance_towards_waypoint(delta: float) -> void:
 	# fence was the second case whether the player wanted it or not.
 	var blocker := _building_in_the_way()
 	if blocker != null:
-		if global_position.distance_to(blocker.global_position) <= 1.8:
+		if _target_in_reach(blocker):
 			on_obstacle_detected(blocker)
 			return
 		# Not there yet. Biting something fourteen metres away is the same standing-still
@@ -489,8 +489,12 @@ func advance_towards_waypoint(delta: float) -> void:
 
 	# 1. Something directly in front. Only worth stopping for if biting it is the right
 	# answer -- a fence with a gate in it is walked round, not eaten.
+	# ...and in reach of it. The forward ray is deliberately long -- it scales with speed
+	# so a fast animal cannot step over something -- so seeing a thing and being able to
+	# bite it are different distances. Stopping at the first is how a dinosaur ends up
+	# standing in front of a turret doing nothing; it keeps walking until the second.
 	var obstacle = check_obstacle()
-	if obstacle != null and _should_bite(obstacle):
+	if obstacle != null and _should_bite(obstacle) and _target_in_reach(obstacle):
 		on_obstacle_detected(obstacle)
 		return
 
@@ -505,7 +509,7 @@ func advance_towards_waypoint(delta: float) -> void:
 	var threat_tgt = _find_threat_priority_target()
 	if threat_tgt != null:
 		var dist_to_threat = global_position.distance_to(threat_tgt.global_position)
-		if dist_to_threat <= 1.8:
+		if _target_in_reach(threat_tgt):
 			on_obstacle_detected(threat_tgt)
 			return
 		if assigned_slot == Vector3.ZERO:
@@ -520,7 +524,7 @@ func advance_towards_waypoint(delta: float) -> void:
 		# ally onto a fence with a way round it is the same oscillation, one step removed.
 		if _is_target_valid(ally_tgt) and _should_bite(ally_tgt):
 			var dist_to_tgt = global_position.distance_to(ally_tgt.global_position)
-			if dist_to_tgt <= 1.8:
+			if _target_in_reach(ally_tgt):
 				on_obstacle_detected(ally_tgt)
 				return
 			# Claim a perimeter attack slot around ally's target
@@ -542,9 +546,17 @@ func advance_towards_waypoint(delta: float) -> void:
 		diff_slot.y = 0.0
 		var dist_slot = diff_slot.length()
 		var dist_to_tgt = global_position.distance_to(current_target.global_position)
-		if dist_slot <= 0.45 or dist_to_tgt <= 1.8:
+		if _target_in_reach(current_target):
 			on_obstacle_detected(current_target)
 			return
+		if dist_slot <= 0.45:
+			# Standing on its slot and still short of biting distance. The slot is a place
+			# to stand so that eight animals ring a building instead of piling onto one
+			# face; it is not a promise that you can reach from it, and committing to an
+			# attack there is how one ends up in ATTACKING state doing no damage. Close
+			# the last of it on the target itself.
+			diff_slot = (current_target as Node3D).global_position - global_position
+			diff_slot.y = 0.0
 
 		velocity = _avoid(diff_slot.normalized() * speed)
 		if velocity.length_squared() > 0.001:
@@ -884,18 +896,67 @@ func _process_attacking(_delta: float) -> void:
 ## Whether `target` is close enough to bite. Everything that deals damage asks
 ## this: an attack with no sense of distance is an attack that follows its victim
 ## across the map.
+## Half the width of whatever is being bitten, so that reach is measured body to body.
+func _half_width_of(target: Node) -> float:
+	var cfg = _get_config()
+	if cfg == null:
+		return 0.5
+	if "building_type" in target and cfg.has_method("get_building_footprint"):
+		return float(cfg.get_building_footprint(String(target.building_type))) * 0.5
+	if target.is_in_group("hero"):
+		return float(cfg.HERO.get("width", 0.8)) * 0.5
+	if "dino_type" in target and cfg.has_method("get_visual_size"):
+		return float(cfg.get_visual_size("dino/" + String(target.dino_type)).x) * 0.5
+	return 0.5
+
+## Whether something solid that is NOT the target stands between the two of them.
+##
+## The other half of biting the cabin through a fence, and the half that holds however
+## the numbers are tuned: a bite does not pass through solid matter. Without this, any
+## reach long enough to be useful is also long enough to reach over something.
+func _solid_between(target: Node) -> bool:
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("cells_on_line") or not (target is Node3D):
+		return false
+	var here: Vector2i = gm.world_to_cell(global_position)
+	var there: Vector2i = gm.world_to_cell((target as Node3D).global_position)
+	for cell in gm.cells_on_line(global_position, (target as Node3D).global_position):
+		if cell == here or cell == there:
+			continue
+		if gm.is_cell_walkable(cell):
+			continue
+		# Hillside is not something anyone bites through either, but a building in the
+		# way is the case this exists for.
+		var between = gm.get_building_at(cell)
+		if between != null and is_instance_valid(between) and between != target:
+			return true
+		if gm.is_cell_blocked(cell):
+			return true
+	return false
+
 func _target_in_reach(target: Variant) -> bool:
 	if target == null or not is_instance_valid(target) or not (target is Node3D):
 		return false
-	return global_position.distance_to((target as Node3D).global_position) <= attack_reach()
+	if _solid_between(target as Node):
+		return false
+	var gap: float = global_position.distance_to((target as Node3D).global_position)
+	return gap <= attack_reach() + _half_width_of(target as Node)
 
 ## How far this dinosaur can reach. Overridable, so a big one can bite from
 ## further away than a small one.
+## STOPPING TO BITE AND BEING ABLE TO BITE ARE ONE QUESTION, which is why every place
+## that decides "close enough now" calls _target_in_reach rather than comparing against a
+## number. They used to be two: the stop happened at a hardcoded 1.8m and the bite at
+## whatever attack_reach said, so a dinosaur could halt at a distance it could not reach
+## from -- standing in front of something, not attacking it, which is precisely the
+## symptom that was reported over and over.
+##
+## How far this dinosaur can strike past its OWN body. The target's half-width is added
+## by _target_in_reach, because how close you have to get depends on what you are biting.
 func attack_reach() -> float:
 	var cfg = _get_config()
-	if cfg and "DINO_ATTACK_REACH" in cfg:
-		return float(cfg.DINO_ATTACK_REACH)
-	return 2.2
+	var strike: float = float(cfg.DINO_STRIKE) if (cfg and "DINO_STRIKE" in cfg) else 0.35
+	return _avoid_radius + strike
 
 ## Keeping dinosaurs off each other was three separate mechanisms: a steering force, a
 ## hard positional un-overlap, and this, which applied both again from outside the

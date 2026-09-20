@@ -187,8 +187,22 @@ func test_06b_it_bites_once_it_gets_there() -> void:
 	var goal := Vector2i(0, -4)
 	_enclose(gm, goal, 1)
 	# Right up against the northern face of the ring, where the next stake is in reach.
+	#
+	# Placed from the dinosaur's OWN reach rather than a guessed 1.5m. Reach is the
+	# attacker's body plus its strike plus the target's since v0.5, and for a raptor
+	# against a 0.62m stake that is about a metre -- 1.5m used to be "against it" and is
+	# now well clear.
+	#
+	# Placed off the STAKE rather than off a cell, because the two are barely compatible
+	# now: a stake sits at its cell's centre, the next cell starts 1.0m away, and a
+	# raptor's reach against it is 1.06m. Standing in the next cell and being able to bite
+	# is a six-centimetre window.
 	var d = _dino_at(gm, Vector2i(0, -7), goal)
-	d.global_position = gm.cell_to_world(Vector2i(0, -5)) + Vector3(0.0, 0.0, -1.5)
+	var near = gm.get_building_at(Vector2i(0, -5))
+	assert_not_null(near, "There is a stake on the northern face")
+	var bite: float = d.attack_reach() + float(config_node.get_building_footprint("wall")) * 0.5
+	d.global_position = near.global_position + Vector3(0.0, 0.0, -bite * 0.95)
+	d._route_checked_at = -999.0
 	await wait_frames(1)
 	assert_true(d._way_is_sealed(), "The goal is walled in")
 

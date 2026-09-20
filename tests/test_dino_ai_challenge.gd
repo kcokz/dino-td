@@ -271,7 +271,11 @@ func test_multiple_concurrent_dinos_attacking_same_wall() -> void:
 	# Ranged round the wall inside biting distance. An attack has a reach as of
 	# v0.4, so "all eight attacking the same wall" means all eight standing close
 	# enough to reach it -- the spread is derived from Config rather than guessed.
-	var reach: float = float(config_node.DINO_ATTACK_REACH) * 0.7
+	# From the dinosaur's OWN reach against THIS wall, not the old flat constant: reach is
+	# the attacker's body plus its strike plus the target's body since v0.5, and a spread
+	# derived from 2.2m put all eight out of range of a 0.62m stake.
+	var probe = _create_dino("raptor")
+	var reach: float = (probe.attack_reach() + float(config_node.get_building_footprint("wall")) * 0.5) * 0.7
 	for i in range(8):
 		var d = _create_dino("raptor")
 		var angle: float = TAU * float(i) / 8.0

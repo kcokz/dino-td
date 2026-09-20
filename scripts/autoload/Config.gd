@@ -591,6 +591,23 @@ const CONTROLS: Dictionary = {
 ## him from across the map until he died, and stood frozen in front of a target it
 ## could not touch. Comfortably past the inner attack ring, so a dinosaur standing
 ## in its slot can always reach the thing it is standing at.
+## How far past its own body a dinosaur can strike, in metres.
+##
+## NOT the whole reach. The reach is this plus the attacker's own half-width plus the
+## target's, so a small animal biting a small thing has to get close and a big one biting
+## the cabin does not -- which is what "reach" means and what a single flat number cannot
+## express.
+##
+## DINO_ATTACK_REACH was that flat number: 2.2m, centre to centre, for every species and
+## every target. A raptor is 0.8m across, so it struck 1.8m clear of its own nose, and a
+## player who put one stake in front of the cabin watched raptors bite the cabin THROUGH
+## it. Measured: 2.03m from the cabin centre, reach 2.20m, ten hit points to nine.
+##
+## 0.35 keeps every species able to reach from the slot it is sent to (which is
+## DINO_STANDOFF_INNER from the target's face) with a little to spare.
+const DINO_STRIKE: float = 0.35
+
+## Kept for anything still asking the old question. What decides now is Dino.attack_reach.
 const DINO_ATTACK_REACH: float = 2.2
 
 ## Where a dinosaur stands to bite something, as a distance from the building's FACE.
