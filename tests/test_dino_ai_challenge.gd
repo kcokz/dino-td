@@ -405,18 +405,22 @@ func test_dino_extreme_speed_wall_tunneling() -> void:
 	# the goal here is walled in, and then getting past is cheating.
 	await wait_frames(2)
 	var gm = _grid_manager()
+	var world: Node3D = await nav_fixture()
+	_allocated_nodes.append(world)
 	var goal := Vector3(10.0, 0.0, 0.0)
 	var goal_cell: Vector2i = gm.world_to_cell(goal)
-	var ring: Array = []
-	for dx in range(-1, 2):
-		for dz in range(-1, 2):
-			if dx == 0 and dz == 0:
-				continue
-			var w = _create_wall(gm.cell_to_world(goal_cell + Vector2i(dx, dz)))
-			w.setup("wall", goal_cell + Vector2i(dx, dz))
-			w.complete_construction()
-			gm.occupy_cell(goal_cell + Vector2i(dx, dz), w)
-			ring.append(w)
+	# A REAL fence: four runs of stakes on their own finer grid. One stake per tile is
+	# 0.62m of cone every 2m, which is a row of bollards rather than a wall, and nothing
+	# is sealed in by it -- see test_base.run_of_stakes.
+	var half: float = float(gm.tile_size) * 1.5
+	var mid: Vector3 = gm.cell_to_world(goal_cell)
+	var corners: Array[Vector3] = [
+		mid + Vector3(-half, 0.0, -half), mid + Vector3(half, 0.0, -half),
+		mid + Vector3(half, 0.0, half), mid + Vector3(-half, 0.0, half)]
+	for i in range(4):
+		for w in run_of_stakes(world, gm, corners[i], corners[(i + 1) % 4]):
+			_allocated_nodes.append(w)
+	await rebake_fixture()
 	var dino = _create_dino("raptor", {"speed": 25.0}) # 4.0 * 25.0 = 100.0 m/s
 	dino.global_position = Vector3(0.0, 0.0, 0.0)
 	dino.set_waypoints([goal])

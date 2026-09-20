@@ -600,7 +600,15 @@ func test_19_hero_pathfinding_around_wall_obstacle() -> void:
 	# A HILLSIDE in the way, not a wall. His own fence is something he walks through
 	# since v0.5, and a route that went the long way round something he can walk straight
 	# through would look exactly like broken pathfinding.
+	#
+	# The rule and the shape go down together: the grid is told, and a box of hillside is
+	# put there for the bake to find, exactly as Main.spawn_terrain does it. Since v0.5 a
+	# route comes from the mesh, and a hill nothing can collide with is not in the mesh.
 	grid_mgr.set_blocked_cells([Vector2i(1, 0)])
+	var world: Node3D = await nav_fixture()
+	_cleanup_nodes.append(world)
+	block_out_a_hill(world, grid_mgr, Vector2i(1, 0))
+	await rebake_fixture()
 
 	var hero = hero_script.new()
 	_cleanup_nodes.append(hero)

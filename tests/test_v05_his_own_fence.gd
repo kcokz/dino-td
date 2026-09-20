@@ -39,17 +39,27 @@ func after_each() -> void:
 	_cleanup_nodes.clear()
 	super.after_each()
 
+var _world: Node3D = null
+
+## The fixture, which since v0.5 has a NAVIGATION MESH over it. Where anybody can walk is
+## answered by a bake, and a bake is made of colliders, so a grid holding nothing but
+## cell data answers "anywhere" to everything that is asked of it.
 func _grid(blocked: Array = []) -> Node:
 	var gm = load("res://scripts/core/GridManager.gd").new()
 	_cleanup_nodes.append(gm)
 	tree.root.add_child(gm)
 	gm.set_blocked_cells(blocked)
+	_world = await nav_fixture()
+	_cleanup_nodes.append(_world)
+	for c in blocked:
+		if c is Vector2i:
+			block_out_a_hill(_world, gm, c)
+	await rebake_fixture()
 	return gm
 
 func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	var w = load("res://scripts/entities/Wall.gd").new()
-	_cleanup_nodes.append(w)
-	tree.root.add_child(w)
+	_world.add_child(w)
 	w.setup("wall", cell)
 	w.global_position = gm.cell_to_world(cell)
 	w.complete_construction()
@@ -58,28 +68,36 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 
 func _tower_at(gm: Node, cell: Vector2i) -> Node:
 	var t = load("res://scripts/entities/Tower.gd").new()
-	_cleanup_nodes.append(t)
-	tree.root.add_child(t)
+	_world.add_child(t)
 	t.setup("tower", cell)
 	t.global_position = gm.cell_to_world(cell)
 	t.complete_construction()
 	gm.occupy_cell(cell, t)
 	return t
 
-## Stakes all the way round `centre`, which is the only shape that actually seals: the
-## grid is unbounded, so a fence in a line always has ends to walk round.
+## A fence all the way round `centre`, which is the only shape that actually seals: the
+## map is unbounded, so a fence in a line always has ends to walk round.
+##
+## Laid as four RUNS of stakes on the fine grid. One stake per tile is not a fence --
+## 0.62m of cone every 2m leaves 1.38m of open ground between them -- see
+## test_base.run_of_stakes.
 func _fence_around(gm: Node, centre: Vector2i) -> void:
-	for dx in range(-1, 2):
-		for dz in range(-1, 2):
-			if dx != 0 or dz != 0:
-				_wall_at(gm, centre + Vector2i(dx, dz))
+	var half: float = float(gm.tile_size) * 1.5
+	var mid: Vector3 = gm.cell_to_world(centre)
+	var corners: Array[Vector3] = [
+		mid + Vector3(-half, 0.0, -half), mid + Vector3(half, 0.0, -half),
+		mid + Vector3(half, 0.0, half), mid + Vector3(-half, 0.0, half)]
+	for i in range(4):
+		for w in run_of_stakes(_world, gm, corners[i], corners[(i + 1) % 4]):
+			_cleanup_nodes.append(w)
+	await rebake_fixture()
 
 # ==============================================================================
 # 1. A wall is not an ordinary building
 # ==============================================================================
 
 func test_01_a_finished_wall_sits_on_its_own_layer() -> void:
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var wall = _wall_at(gm, Vector2i(0, 0))
 	var tower = _tower_at(gm, Vector2i(4, 0))
@@ -101,7 +119,7 @@ func test_02_the_heros_mask_leaves_out_that_layer_and_only_that_one() -> void:
 
 func test_03_a_dinosaur_still_rays_against_walls() -> void:
 	# The half that must not be lost. A fence a raid can ignore is not a fence.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var dino = load(String(config_node.get_dino_script_path("raptor"))).new()
 	_cleanup_nodes.append(dino)
@@ -119,7 +137,7 @@ func test_03_a_dinosaur_still_rays_against_walls() -> void:
 # ==============================================================================
 
 func test_04_a_walled_tile_is_open_ground_to_him_and_solid_to_everyone_else() -> void:
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	_wall_at(gm, Vector2i(0, 0))
 	await wait_frames(1)
@@ -132,7 +150,7 @@ func test_04_a_walled_tile_is_open_ground_to_him_and_solid_to_everyone_else() ->
 func test_05_a_turret_is_solid_to_him_too() -> void:
 	# `walls_are_open` opens WALLS. Opening every building would let him walk through
 	# the wreck, which is a different game.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	_tower_at(gm, Vector2i(0, 0))
 	await wait_frames(1)
@@ -143,7 +161,7 @@ func test_05_a_turret_is_solid_to_him_too() -> void:
 func test_06_a_stake_sharing_a_tile_with_something_else_opens_nothing() -> void:
 	# The trap in "is everything here a wall": a stake standing in the wreck's tile must
 	# not make the wreck walk-through-able.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var tower = _tower_at(gm, Vector2i(0, 0))
 	# A stake registered in the same tile, finely.
@@ -162,18 +180,19 @@ func test_06_a_stake_sharing_a_tile_with_something_else_opens_nothing() -> void:
 func test_07_he_routes_straight_through_a_fence_across_his_way() -> void:
 	# Both halves together. A fence right across the map, no way round it at all, and he
 	# is told to go to the other side.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var inside := Vector2i(0, -4)
-	_fence_around(gm, inside)
+	await _fence_around(gm, inside)
 	await wait_frames(1)
 
 	var from_pos: Vector3 = gm.cell_to_world(Vector2i(0, 4))
 	var to_pos: Vector3 = gm.cell_to_world(inside)
-	assert_false(gm.is_reachable(from_pos, to_pos), "Nobody else is getting through that")
-	assert_true(gm.is_reachable(from_pos, to_pos, 400, true), "He is")
+	# The two bakes, which is all the exemption is: layer 32 is in one and not the other.
+	assert_false(maps_of().is_reachable(from_pos, to_pos), "Nobody else is getting through that")
+	assert_true(maps_of().is_reachable(from_pos, to_pos, true), "He is")
 
-	var path: Array = gm.find_path(from_pos, to_pos, null, false, true)
+	var path: PackedVector3Array = maps_of().path(from_pos, to_pos, true)
 	assert_gt(path.size(), 0, "And he is given a route")
 	assert_lt(path[path.size() - 1].distance_to(to_pos), float(config_node.TILE_SIZE),
 		"That ends where he was sent rather than short of the fence")
@@ -181,10 +200,10 @@ func test_07_he_routes_straight_through_a_fence_across_his_way() -> void:
 func test_08_a_raid_is_still_stopped_by_the_same_fence() -> void:
 	# The whole point, asserted against the same wall in the same place: what the Hero
 	# walks through, a raid has to chew.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var inside := Vector2i(0, -4)
-	_fence_around(gm, inside)
+	await _fence_around(gm, inside)
 	await wait_frames(1)
 
 	var dino = load(String(config_node.get_dino_script_path("raptor"))).new()

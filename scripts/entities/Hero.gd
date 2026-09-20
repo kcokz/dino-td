@@ -535,20 +535,13 @@ func _plan_path(dest: Vector3, ignore_b: Node = null) -> void:
 ## collision mask leaves walls out too, so the route and the physics cannot disagree --
 ## and a route that goes the long way round something he can walk straight through looks
 ## exactly like broken pathfinding.
-##
-## The grid remains the fallback for a fixture with no level in it, and only that.
-func _route_to(dest: Vector3, ignore_b: Node = null) -> Array[Vector3]:
+func _route_to(dest: Vector3, _ignore_b: Node = null) -> Array[Vector3]:
 	var pts: Array[Vector3] = []
 	var maps := _nav_maps()
-	if maps != null and maps.is_ready():
-		for pt in maps.path(global_position, dest, true):
-			pts.append(pt)
-		if not pts.is_empty():
-			return pts
-	var gm = _get_grid_manager()
-	if gm and gm.has_method("find_path"):
-		for pt in gm.find_path(global_position, dest, ignore_b, false, true):
-			pts.append(pt)
+	if maps == null or not maps.is_ready():
+		return pts     # no mesh: _plan_path falls back to walking straight at it
+	for pt in maps.path(global_position, dest, true):
+		pts.append(pt)
 	return pts
 
 func _nav_maps() -> Node:
@@ -677,7 +670,7 @@ func _can_work_on(b: Node) -> bool:
 ## and the caller then does not filter at all.
 func _reachable_among(candidates: Array[Node]) -> Array[Node]:
 	var out: Array[Node] = []
-	if _nav_maps() == null and _get_grid_manager() == null:
+	if _nav_maps() == null:
 		return out
 	for b in candidates:
 		if _can_work_on(b):

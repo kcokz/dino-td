@@ -143,27 +143,12 @@ func test_05_a_sealed_ring_stops_a_raid_and_not_the_hero() -> void:
 	assert_true(main.nav_maps.is_reachable(far, core, true),
 		"The man who built it does")
 
-func test_06_the_navmesh_and_the_grid_give_the_same_answer() -> void:
-	# They are two independent implementations of one question. While both exist they
-	# have to agree, or whichever one a given bit of code happens to ask will decide the
-	# behaviour -- and that is how a walker ends up neither going round nor stopping.
-	var main = _level()
-	await wait_frames(6)
-	if game_state_node and "resources" in game_state_node:
-		game_state_node.resources["wood"] = 4000
-	var core: Vector3 = _core_of(main)
-	var far: Vector3 = core + Vector3(0.0, 0.0, -16.0)
-	var gm = main.grid_manager
-
-	assert_eq(main.nav_maps.is_reachable(far, core), gm.is_reachable(far, core),
-		"Open ground: same answer")
-
-	_ring_around(main, core, 4.0)
-	await wait_frames(6)
-	assert_eq(main.nav_maps.is_reachable(far, core), gm.is_reachable(far, core),
-		"Sealed, for a raid: same answer")
-	assert_eq(main.nav_maps.is_reachable(far, core, true), gm.is_reachable(far, core, 400, true),
-		"Sealed, for the Hero: same answer")
+# test_06 is gone with its subject. It held the navmesh and the grid flood side by side
+# and required them to agree, on the grounds that while both existed whichever one a
+# given line of code happened to ask would decide the behaviour. They did not agree, the
+# test did not catch it -- it compared them out in the open, and they only parted company
+# within about a metre of a fence -- and the grid flood has since been deleted. There is
+# one answer now, which is what this test was asking for.
 
 func test_07_a_blueprint_ring_seals_nothing() -> void:
 	# Blueprints are in neither mask. Ordering a fence is not having one, and a raid that

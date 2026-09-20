@@ -46,22 +46,46 @@ func after_each() -> void:
 	_cleanup_nodes.clear()
 	super.after_each()
 
+var _world: Node3D = null
+
+## The fixture, which since v0.5 has a NAVIGATION MESH over it. Where anybody can walk is
+## answered by a bake, and a bake is made of colliders, so a grid holding nothing but
+## cell data answers "anywhere" to everything that is asked of it.
 func _grid(blocked: Array = []) -> Node:
 	var gm = load("res://scripts/core/GridManager.gd").new()
 	_cleanup_nodes.append(gm)
 	tree.root.add_child(gm)
 	gm.set_blocked_cells(blocked)
+	_world = await nav_fixture()
+	_cleanup_nodes.append(_world)
+	for c in blocked:
+		if c is Vector2i:
+			block_out_a_hill(_world, gm, c)
+	await rebake_fixture()
 	return gm
 
 func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	var w = load("res://scripts/entities/Wall.gd").new()
-	_cleanup_nodes.append(w)
-	tree.root.add_child(w)
+	_world.add_child(w)
 	w.setup("wall", cell)
 	w.position = gm.cell_to_world(cell)
 	w.complete_construction()
 	gm.occupy_cell(cell, w)
 	return w
+
+## A fence all the way round `centre`, laid as four RUNS of stakes on the fine grid.
+## One stake per tile is not a fence: 0.62m of cone every 2m leaves 1.38m of open ground
+## between them, and nothing is sealed in by that -- see test_base.run_of_stakes.
+func _fence_around(gm: Node, centre: Vector2i) -> void:
+	var half: float = float(gm.tile_size) * 1.5
+	var mid: Vector3 = gm.cell_to_world(centre)
+	var corners: Array[Vector3] = [
+		mid + Vector3(-half, 0.0, -half), mid + Vector3(half, 0.0, -half),
+		mid + Vector3(half, 0.0, half), mid + Vector3(-half, 0.0, half)]
+	for i in range(4):
+		for w in run_of_stakes(_world, gm, corners[i], corners[(i + 1) % 4]):
+			_cleanup_nodes.append(w)
+	await rebake_fixture()
 
 ## A dinosaur of the kind the game really spawns for `type_id`, not the base class.
 func _real_dino(type_id: String, at: Vector3, goal: Vector3) -> Node:
@@ -115,7 +139,7 @@ func test_02_every_declared_behaviour_routes_through_the_rule() -> void:
 func test_03_a_raptor_does_not_stop_for_a_fence_it_can_walk_round() -> void:
 	# The report itself, using the script a wave really spawns. A raptor is a PackDino,
 	# and a PackDino used to target the nearest stake within two metres regardless.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	for x in range(-3, 4):
 		_wall_at(gm, Vector2i(x, 0))
@@ -131,13 +155,10 @@ func test_03_a_raptor_does_not_stop_for_a_fence_it_can_walk_round() -> void:
 	assert_null(d._find_threat_priority_target(), "So the fence is not worth stopping for")
 
 func test_04_and_still_bites_one_that_seals_the_way() -> void:
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	for dx in range(-1, 2):
-		for dz in range(-1, 2):
-			if dx != 0 or dz != 0:
-				_wall_at(gm, goal + Vector2i(dx, dz))
+	await _fence_around(gm, goal)
 	var d = _real_dino("raptor", gm.cell_to_world(Vector2i(0, -6)), gm.cell_to_world(goal))
 	await wait_frames(1)
 
@@ -149,7 +170,7 @@ func test_04b_a_siege_dinosaur_eats_the_fence_instead_of_going_round() -> void:
 	# through the defence rather than fighting the defenders" and bites "whatever is
 	# standing in front of it" -- making the rule universal would have left that a
 	# sentence in a comment. A pack funnels through the gap; a theropod eats the fence.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	for x in range(-3, 4):
 		_wall_at(gm, Vector2i(x, 0))
@@ -173,7 +194,7 @@ func test_04b_a_siege_dinosaur_eats_the_fence_instead_of_going_round() -> void:
 func test_06_a_packed_raid_gets_past_a_fence_with_open_ends() -> void:
 	# The measurement that matters, at the size the report was made at. Twenty of them,
 	# shoulder to shoulder, and a fence they can walk round.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	for x in range(-2, 3):
 		_wall_at(gm, Vector2i(x, 0))

@@ -700,16 +700,9 @@ func _steer_target(goal: Vector3) -> Vector3:
 func _route_to(goal: Vector3) -> Array[Vector3]:
 	var pts: Array[Vector3] = []
 	var maps := _nav_maps()
-	if maps != null and maps.is_ready():
-		for pt in maps.path(global_position, goal, not walks_round_walls()):
-			pts.append(pt)
-		if not pts.is_empty():
-			return pts
-	# No level, so no mesh: the grid is what a bare fixture has.
-	var gm := _get_grid_manager()
-	if gm == null or not gm.has_method("find_path"):
-		return pts
-	for pt in gm.find_path(global_position, goal, null, false):
+	if maps == null or not maps.is_ready():
+		return pts     # no mesh: _steer_target falls back to the straight line
+	for pt in maps.path(global_position, goal, not walks_round_walls()):
 		pts.append(pt)
 	return pts
 
@@ -811,16 +804,11 @@ func _refresh_route() -> void:
 ## the spikes -- 20 of 20 dead in fifteen seconds, the fence down seventeen points out of
 ## three hundred and sixty-eight. That is exactly what the player reported as "恐龙会在圈
 ## 出来的地方来回穿梭，进攻不了还掉血".
-##
-## The grid remains the fallback for a fixture with no level in it, and only that.
 func _there_is_a_way_round(goal: Vector3) -> bool:
 	var maps := _nav_maps()
-	if maps != null and maps.is_ready():
-		return maps.is_reachable(global_position, goal, not walks_round_walls())
-	var gm := _get_grid_manager()
-	if gm == null or not gm.has_method("is_reachable"):
-		return true
-	return gm.is_reachable(global_position, goal)
+	if maps == null or not maps.is_ready():
+		return true    # nothing to ask, so nothing is sealed
+	return maps.is_reachable(global_position, goal, not walks_round_walls())
 
 ## The nearest finished building standing on the line, or null.
 func _first_building_on_line(from_pos: Vector3, to_pos: Vector3) -> Node:

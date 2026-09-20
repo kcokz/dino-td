@@ -40,17 +40,27 @@ func after_each() -> void:
 	_cleanup_nodes.clear()
 	super.after_each()
 
+var _world: Node3D = null
+
+## The fixture, which since v0.5 has a NAVIGATION MESH over it. "Is the way sealed" is
+## answered by a bake now, and a bake is made of colliders, so a grid holding nothing but
+## cell data answers "the way is open" to everything.
 func _grid(blocked: Array = []) -> Node:
 	var gm = load("res://scripts/core/GridManager.gd").new()
 	_cleanup_nodes.append(gm)
 	tree.root.add_child(gm)
 	gm.set_blocked_cells(blocked)
+	_world = await nav_fixture()
+	_cleanup_nodes.append(_world)
+	for c in blocked:
+		if c is Vector2i:
+			block_out_a_hill(_world, gm, c)
+	await rebake_fixture()
 	return gm
 
 func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	var w = load("res://scripts/entities/Wall.gd").new()
-	_cleanup_nodes.append(w)
-	tree.root.add_child(w)
+	_world.add_child(w)
 	w.setup("wall", cell)
 	w.position = gm.cell_to_world(cell)
 	w.complete_construction()
@@ -59,8 +69,7 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 
 func _tower_at(gm: Node, cell: Vector2i) -> Node:
 	var t = load("res://scripts/entities/Tower.gd").new()
-	_cleanup_nodes.append(t)
-	tree.root.add_child(t)
+	_world.add_child(t)
 	t.setup("tower", cell)
 	t.position = gm.cell_to_world(cell)
 	t.complete_construction()
@@ -76,13 +85,21 @@ func _dino_at(gm: Node, cell: Vector2i, goal_cell: Vector2i) -> Node:
 	d.set_waypoints([gm.cell_to_world(goal_cell)])
 	return d
 
-## Walls all the way round `centre`, so whatever is inside it is sealed off.
+## A fence all the way round `centre`, so whatever is inside it really is sealed off.
+##
+## Laid as four RUNS of stakes on the fine grid rather than one stake per tile. Eight
+## cones at tile spacing leave 1.38m of open ground between them, which seals nothing and
+## which the mesh says so about -- see test_base.run_of_stakes.
 func _enclose(gm: Node, centre: Vector2i, radius: int = 1) -> void:
-	for dx in range(-radius, radius + 1):
-		for dz in range(-radius, radius + 1):
-			if absi(dx) != radius and absi(dz) != radius:
-				continue
-			_wall_at(gm, centre + Vector2i(dx, dz))
+	var half: float = float(gm.tile_size) * (float(radius) + 0.5)
+	var mid: Vector3 = gm.cell_to_world(centre)
+	var corners: Array[Vector3] = [
+		mid + Vector3(-half, 0.0, -half), mid + Vector3(half, 0.0, -half),
+		mid + Vector3(half, 0.0, half), mid + Vector3(-half, 0.0, half)]
+	for i in range(4):
+		for w in run_of_stakes(_world, gm, corners[i], corners[(i + 1) % 4]):
+			_cleanup_nodes.append(w)
+	await rebake_fixture()
 
 # ==============================================================================
 # 1. Which things are walls
@@ -96,7 +113,7 @@ func test_01_wall_is_a_kind_not_a_single_building() -> void:
 	assert_ne(String(config_node.BUILDINGS["core"]["kind"]), "wall", "Nor is the wreck")
 
 func test_02_a_dinosaur_can_tell_a_wall_from_anything_else() -> void:
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var d = _dino_at(gm, Vector2i(0, 5), Vector2i(0, -5))
 	var stake = _wall_at(gm, Vector2i(0, 0))
@@ -114,7 +131,7 @@ func test_02_a_dinosaur_can_tell_a_wall_from_anything_else() -> void:
 func test_03_a_fence_with_a_way_round_is_not_worth_biting() -> void:
 	# The reported bug, as a rule. A line of stakes with open ground past the end of it
 	# is something to walk round, and a dinosaur that stops to eat it is wrong.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
 	for x in range(-3, 4):
@@ -129,7 +146,7 @@ func test_03_a_fence_with_a_way_round_is_not_worth_biting() -> void:
 func test_04_a_turret_is_attacked_whether_or_not_it_blocks() -> void:
 	# The other half of the rule. Only WALLS are judged by whether they are in the way;
 	# a turret is a target on its own merits, because it is shooting back.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
 	var turret = _tower_at(gm, Vector2i(0, 0))
@@ -145,10 +162,10 @@ func test_04_a_turret_is_attacked_whether_or_not_it_blocks() -> void:
 func test_05_a_sealed_way_makes_the_wall_the_target() -> void:
 	# Wall the goal in completely and the fence stops being scenery: it becomes the
 	# thing standing between the raid and what it came for.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	_enclose(gm, goal, 1)
+	await _enclose(gm, goal, 1)
 	var d = _dino_at(gm, Vector2i(0, 4), goal)
 	await wait_frames(1)
 
@@ -165,10 +182,10 @@ func test_06_a_dinosaur_that_is_blocked_never_just_stands_there() -> void:
 	# It used to have to be attacking on the spot, which was wrong in its own way: the
 	# fence here is sixteen metres off, and biting something you are nowhere near is the
 	# same standing still by another name.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	_enclose(gm, goal, 1)
+	await _enclose(gm, goal, 1)
 	var d = _dino_at(gm, Vector2i(0, 4), goal)
 	await wait_frames(1)
 
@@ -182,10 +199,10 @@ func test_06_a_dinosaur_that_is_blocked_never_just_stands_there() -> void:
 func test_06b_it_bites_once_it_gets_there() -> void:
 	# The other end of the same walk. Put it against the fence and it stops walking and
 	# starts eating, because now there is something in reach worth eating.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	_enclose(gm, goal, 1)
+	await _enclose(gm, goal, 1)
 	# Right up against the northern face of the ring, where the next stake is in reach.
 	#
 	# Placed from the dinosaur's OWN reach rather than a guessed 1.5m. Reach is the
@@ -213,19 +230,34 @@ func test_06b_it_bites_once_it_gets_there() -> void:
 func test_07_the_way_opening_lets_the_dinosaur_go() -> void:
 	# Chewing through one stake, or the player demolishing one, has to release it. The
 	# alternative is a dinosaur that eats an entire fence it no longer needs to.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	_enclose(gm, goal, 1)
+	await _enclose(gm, goal, 1)
 	var d = _dino_at(gm, Vector2i(0, 4), goal)
 	await wait_frames(1)
 	assert_true(d._way_is_sealed(), "Sealed to begin with")
 
 	# Knock a hole in it, and give the cache its moment to notice.
-	var gate = gm.get_building_at(Vector2i(0, -3))
-	assert_not_null(gate, "There is a stake on the near side")
-	gate.destroy()
+	#
+	# A HOLE HAS TO BE WIDER THAN WHAT GOES THROUGH IT, which is a consequence of the
+	# finer grid worth stating: stakes stand 0.67m apart, so taking one out leaves a gap
+	# narrower than a raptor and the fence still holds. It takes a few. That is also why
+	# a fence is worth repairing -- one chewed stake does not open it.
+	var near_side: float = gm.cell_to_world(goal).z + float(gm.tile_size) * 1.5
+	var holed: int = 0
+	for w in _world.get_children():
+		if not ("building_type" in w) or String(w.building_type) != "wall":
+			continue
+		if absf((w as Node3D).global_position.z - near_side) > 0.4:
+			continue
+		if absf((w as Node3D).global_position.x - gm.cell_to_world(goal).x) > 1.2:
+			continue
+		w.destroy()
+		holed += 1
+	assert_gt(holed, 1, "A gap was opened in the near side, wide enough to walk through")
 	await wait_seconds(float(d.ROUTE_RECHECK_SECONDS) + 0.1)
+	await rebake_fixture()
 
 	assert_false(d._way_is_sealed(), "A hole in the fence is a way in")
 	assert_null(d._building_in_the_way(), "So nothing is in the way any more")
@@ -239,7 +271,7 @@ func test_08_a_waypoint_buried_in_a_building_is_skipped() -> void:
 	# stake lands on a waypoint, and the whole raid walks to the near side of it and
 	# stops -- not attacking, because there was a way round, and not moving, because
 	# where it was told to go is inside a building.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
 	d.set_waypoints([
@@ -260,7 +292,7 @@ func test_09_the_last_waypoint_is_never_skipped() -> void:
 	# The destination is the destination. If the player has walled the core in, that
 	# wall is exactly what the raid should be chewing -- and it will be, because the way
 	# really is sealed.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var d = _dino_at(gm, Vector2i(0, 4), Vector2i(0, -4))
 	_wall_at(gm, Vector2i(0, -4))

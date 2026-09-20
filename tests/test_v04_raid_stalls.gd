@@ -48,11 +48,22 @@ func after_each() -> void:
 	_cleanup_nodes.clear()
 	super.after_each()
 
+var _world: Node3D = null
+
+## The fixture, which since v0.5 has a NAVIGATION MESH over it. Where anybody can walk is
+## answered by a bake, and a bake is made of colliders, so a grid holding nothing but
+## cell data answers "anywhere" to everything that is asked of it.
 func _grid(blocked: Array = []) -> Node:
 	var gm = load("res://scripts/core/GridManager.gd").new()
 	_cleanup_nodes.append(gm)
 	tree.root.add_child(gm)
 	gm.set_blocked_cells(blocked)
+	_world = await nav_fixture()
+	_cleanup_nodes.append(_world)
+	for c in blocked:
+		if c is Vector2i:
+			block_out_a_hill(_world, gm, c)
+	await rebake_fixture()
 	return gm
 
 func _build_system(gm: Node) -> Node:
@@ -64,13 +75,26 @@ func _build_system(gm: Node) -> Node:
 
 func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	var w = load("res://scripts/entities/Wall.gd").new()
-	_cleanup_nodes.append(w)
-	tree.root.add_child(w)
+	_world.add_child(w)
 	w.setup("wall", cell)
 	w.position = gm.cell_to_world(cell)
 	w.complete_construction()
 	gm.occupy_cell(cell, w)
 	return w
+
+## A fence all the way round `centre`, laid as four RUNS of stakes on the fine grid.
+## One stake per tile is not a fence: 0.62m of cone every 2m leaves 1.38m of open ground
+## between them, and nothing is sealed in by that -- see test_base.run_of_stakes.
+func _fence_around(gm: Node, centre: Vector2i) -> void:
+	var half: float = float(gm.tile_size) * 1.5
+	var mid: Vector3 = gm.cell_to_world(centre)
+	var corners: Array[Vector3] = [
+		mid + Vector3(-half, 0.0, -half), mid + Vector3(half, 0.0, -half),
+		mid + Vector3(half, 0.0, half), mid + Vector3(-half, 0.0, half)]
+	for i in range(4):
+		for w in run_of_stakes(_world, gm, corners[i], corners[(i + 1) % 4]):
+			_cleanup_nodes.append(w)
+	await rebake_fixture()
 
 func _dino_at(gm: Node, at: Vector3, goal: Vector3) -> Node:
 	var d = load("res://scripts/entities/Dino.gd").new()
@@ -90,9 +114,8 @@ func _fine_step() -> float:
 ## A stake at a fine cell, placed the way a click places one.
 func _stake(gm: Node, bs: Node, fine: Vector2i) -> Node:
 	var at: Vector3 = gm.fine_cell_to_world(fine, _divisions())
-	var s = bs.place_building("wall", gm.world_to_cell(at), gm, false, at)
-	if s != null:
-		_cleanup_nodes.append(s)
+	# Into the fixture world, so the stake is in the next bake as well as on the grid.
+	var s = bs.place_building("wall", gm.world_to_cell(at), _world, false, at)
 	return s
 
 # ==============================================================================
@@ -102,7 +125,7 @@ func _stake(gm: Node, bs: Node, fine: Vector2i) -> Node:
 func test_01_no_slot_is_claimed_on_a_fence_with_a_way_round() -> void:
 	# The reported stall, as a rule. Claiming a slot means walking to it, and walking to
 	# a fence you are then released from is how a raid spends its afternoon going nowhere.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	for x in range(-3, 4):
 		_wall_at(gm, Vector2i(x, 0))
@@ -128,7 +151,7 @@ func test_02_it_keeps_closing_on_the_core_instead() -> void:
 	# The other half of the same report: it was supposed to go round and attack the
 	# cabin. Measured as ground covered, because "it moved" is not the same as "it got on
 	# with it".
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	for x in range(-3, 4):
 		_wall_at(gm, Vector2i(x, 0))
@@ -145,13 +168,10 @@ func test_02_it_keeps_closing_on_the_core_instead() -> void:
 
 func test_03_a_sealed_way_is_still_worth_biting() -> void:
 	# And the rule has not been bought by making fences pointless.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	for dx in range(-1, 2):
-		for dz in range(-1, 2):
-			if dx != 0 or dz != 0:
-				_wall_at(gm, goal + Vector2i(dx, dz))
+	await _fence_around(gm, goal)
 	var d = _dino_at(gm, gm.cell_to_world(Vector2i(0, 4)), gm.cell_to_world(goal))
 	await wait_frames(1)
 
@@ -171,19 +191,17 @@ func test_04_sealed_is_judged_against_where_it_is_going() -> void:
 	# Not against whatever it last targeted. A target is always reachable -- it is where
 	# you are standing by the time you bite it -- so judging a wall that way makes every
 	# wall walkable-round, for ever, including the one sealing the core.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var goal := Vector2i(0, -4)
-	for dx in range(-1, 2):
-		for dz in range(-1, 2):
-			if dx != 0 or dz != 0:
-				_wall_at(gm, goal + Vector2i(dx, dz))
+	await _fence_around(gm, goal)
 	var d = _dino_at(gm, gm.cell_to_world(Vector2i(0, 4)), gm.cell_to_world(goal))
 	await wait_frames(1)
 
 	assert_true(d._way_is_sealed(), "Sealed, judged against the waypoint")
 	# Now hand it the wall as a target, which is what happens a moment later anyway.
-	d.current_target = gm.get_building_at(Vector2i(0, -3))
+	d.current_target = d._building_in_the_way()
+	assert_not_null(d.current_target, "There is a stake it would pick")
 	d._route_checked_at = -999.0
 	assert_true(d._way_is_sealed(), "And still sealed once it has picked something to bite")
 
@@ -194,7 +212,7 @@ func test_04_sealed_is_judged_against_where_it_is_going() -> void:
 func test_05_a_line_never_steps_over_a_cell() -> void:
 	# The exact shape of the freeze, in one assertion. A shallow line clips the corner of
 	# the next cell over a distance far shorter than any sample spacing.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var from_pos := Vector3(-2.13, 0.0, -10.0)
 	var to_pos := Vector3(1.0, 0.0, 1.0)
@@ -214,7 +232,7 @@ func test_06_the_line_agrees_with_the_pathfinder() -> void:
 	# They disagreed: the line check called a tile solid for being OCCUPIED, while A*
 	# routed straight through it. A walker caught between the two does not go round and
 	# does not stop -- it walks into the thing, gets pushed out, and repeats.
-	var gm = _grid([])
+	var gm = await _grid([])
 	var bs = _build_system(gm)
 	await wait_frames(1)
 	_stake(gm, bs, Vector2i(0, 0))
@@ -230,7 +248,7 @@ func test_06_the_line_agrees_with_the_pathfinder() -> void:
 func test_07_a_walker_slides_along_a_hill_instead_of_stopping_dead() -> void:
 	# The last line of defence. Whatever any check gets wrong in future, pressing into
 	# the scenery must not be able to park a dinosaur for the rest of the game.
-	var gm = _grid([Vector2i(0, 0)])
+	var gm = await _grid([Vector2i(0, 0)])
 	await wait_frames(1)
 	var d = _dino_at(gm, gm.cell_to_world(Vector2i(0, -1)), gm.cell_to_world(Vector2i(0, 3)))
 	await wait_frames(1)
@@ -253,7 +271,7 @@ func test_08_a_raid_on_open_ground_past_two_hills_does_not_freeze() -> void:
 	# hills the level actually has, was frozen for thirteen seconds of an eighteen second
 	# run. The line from here to the goal clips the corner of the hill it is standing
 	# against over a few centimetres -- less than the old sampler's stride.
-	var gm = _grid([Vector2i(-3, -5), Vector2i(-2, -5), Vector2i(2, -5), Vector2i(3, -5)])
+	var gm = await _grid([Vector2i(-3, -5), Vector2i(-2, -5), Vector2i(2, -5), Vector2i(3, -5)])
 	await wait_frames(1)
 	var goal := Vector3(1.0, 0.0, 1.0)
 	var d = _dino_at(gm, Vector3(-2.130616, 0.0, -10.00012), goal)

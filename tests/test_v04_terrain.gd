@@ -43,11 +43,22 @@ func after_each() -> void:
 	clear_drops()
 	super.after_each()
 
+var _world: Node3D = null
+
+## The fixture, which since v0.5 has a NAVIGATION MESH over it -- with the hillside as
+## real boxes, the same shape and layer Main.spawn_terrain lays down. The grid rule and
+## the collider go down together there, and they go down together here.
 func _grid(blocked: Array = []) -> Node:
 	var gm = grid_script.new()
 	_cleanup_nodes.append(gm)
 	tree.root.add_child(gm)
 	gm.set_blocked_cells(blocked)
+	_world = await nav_fixture()
+	_cleanup_nodes.append(_world)
+	for c in blocked:
+		if c is Vector2i:
+			block_out_a_hill(_world, gm, c)
+	await rebake_fixture()
 	return gm
 
 func _level() -> Node:
@@ -61,7 +72,7 @@ func _level() -> Node:
 # ==============================================================================
 
 func test_01_a_hill_is_neither_walkable_nor_buildable() -> void:
-	var gm = _grid([Vector2i(2, 2)])
+	var gm = await _grid([Vector2i(2, 2)])
 	var builder = build_system_script.new()
 	_cleanup_nodes.append(builder)
 	tree.root.add_child(builder)
@@ -78,7 +89,7 @@ func test_01_a_hill_is_neither_walkable_nor_buildable() -> void:
 
 func test_02_terrain_is_not_something_a_restart_clears() -> void:
 	# Hills are the map, not anything the player did to it.
-	var gm = _grid([Vector2i(1, 1)])
+	var gm = await _grid([Vector2i(1, 1)])
 	await wait_frames(1)
 	gm.occupy_cell(Vector2i(3, 3), Node3D.new())
 
@@ -87,10 +98,11 @@ func test_02_terrain_is_not_something_a_restart_clears() -> void:
 	assert_true(gm.is_cell_blocked(Vector2i(1, 1)), "And leaves the landscape where it was")
 
 func test_03_the_hero_walks_around_a_hill_rather_than_through_it() -> void:
-	var gm = _grid([Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])
+	var gm = await _grid([Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])
 	await wait_frames(1)
 
-	var path: Array = gm.find_path(gm.cell_to_world(Vector2i(1, 0)), gm.cell_to_world(Vector2i(1, 2)))
+	var path: PackedVector3Array = maps_of().path(
+		gm.cell_to_world(Vector2i(1, 0)), gm.cell_to_world(Vector2i(1, 2)), true)
 	assert_gt(path.size(), 0, "There is a way round")
 	for pt in path:
 		assert_false(gm.is_cell_blocked(gm.world_to_cell(pt)), "And no step of it is hillside")
@@ -120,15 +132,15 @@ func test_05_no_hill_sits_on_a_resource_node_or_seals_the_path() -> void:
 	# The nest has to be able to reach the cabin.
 	var from_pos: Vector3 = main.grid_manager.cell_to_world(config_node.MAP["default_nest_cell"])
 	var to_pos: Vector3 = main.grid_manager.cell_to_world(config_node.MAP["default_core_cell"])
-	var path: Array = main.grid_manager.find_path(from_pos, to_pos, null, true)
-	assert_gt(path.size(), 0, "A raid can still get from the nest to the cabin")
+	assert_true(main.nav_maps.is_reachable(from_pos, to_pos),
+		"A raid can still get from the nest to the cabin")
 
 # ==============================================================================
 # 2. Dinosaurs respect it, which is the whole point
 # ==============================================================================
 
 func test_06_a_dinosaur_routes_around_a_hill_in_its_way() -> void:
-	var gm = _grid([Vector2i(0, -1), Vector2i(0, -2)])
+	var gm = await _grid([Vector2i(0, -1), Vector2i(0, -2)])
 	await wait_frames(1)
 
 	var dino = dino_script.new()
@@ -151,7 +163,7 @@ func test_06_a_dinosaur_routes_around_a_hill_in_its_way() -> void:
 func test_07_open_ground_is_unchanged() -> void:
 	# The route only comes out when the landscape is in the way; a straight run
 	# still steers straight at the waypoint, so flocking and flanking are untouched.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var dino = dino_script.new()
 	_cleanup_nodes.append(dino)
@@ -168,7 +180,7 @@ func test_07_open_ground_is_unchanged() -> void:
 func test_08_nothing_ends_up_standing_in_a_hill() -> void:
 	# Separation and flanking both shove sideways and neither knows about the
 	# landscape, so the last word belongs to the terrain.
-	var gm = _grid([Vector2i(0, 0)])
+	var gm = await _grid([Vector2i(0, 0)])
 	await wait_frames(1)
 	var dino = dino_script.new()
 	_cleanup_nodes.append(dino)
@@ -186,7 +198,7 @@ func test_08_nothing_ends_up_standing_in_a_hill() -> void:
 func test_09_a_building_against_a_hill_loses_the_slots_behind_it() -> void:
 	# Sixteen places to stand and chew, minus the ones inside the hillside -- a slot
 	# nothing can reach would park a dinosaur in the scenery.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var open_building := StaticBody3D.new()
 	_cleanup_nodes.append(open_building)
@@ -213,14 +225,12 @@ func test_10_a_dinosaur_walks_around_a_hill_but_bites_a_fence() -> void:
 	# The distinction that keeps the fence meaningful: terrain is routed around,
 	# buildings are not. Pathing politely around the stakes the player just planted
 	# would make planting them pointless.
-	var gm = _grid([Vector2i(0, -1)])
+	var gm = await _grid([Vector2i(0, -1)])
 	await wait_frames(1)
 
-	var through_building: Array = gm.find_path(
-		gm.cell_to_world(Vector2i(2, -1)), gm.cell_to_world(Vector2i(2, 1)), null, true)
-	assert_gt(through_building.size(), 0, "A route exists")
+	assert_true(maps_of().is_reachable(
+		gm.cell_to_world(Vector2i(2, -1)), gm.cell_to_world(Vector2i(2, 1))), "A route exists")
 
-	# With terrain_only the search ignores buildings entirely...
 	var wall := StaticBody3D.new()
 	_cleanup_nodes.append(wall)
 	tree.root.add_child(wall)
@@ -273,7 +283,7 @@ func _cones(b: Node) -> Array:
 func test_11_a_stake_is_one_cone_no_matter_what_is_beside_it() -> void:
 	# The whole of the fix, stated once. A stake on its own, a stake in a row, a stake
 	# at a corner and a stake in the middle of a block are all the same one cone.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 
 	var lone = _wall_at(gm, Vector2i(9, 9))
@@ -298,7 +308,7 @@ func test_11_a_stake_is_one_cone_no_matter_what_is_beside_it() -> void:
 	assert_eq(_cones(lone).size(), 1, "And the lone one never changed either")
 
 func test_12_a_stake_is_drawn_as_a_cone_of_the_declared_width() -> void:
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var stake = _wall_at(gm, Vector2i(0, 0))
 
@@ -322,7 +332,7 @@ func test_13_a_stake_stops_you_where_the_stake_is() -> void:
 	# The trade was not worth what it cost: a gap the player could plainly see between
 	# a stake and a hillside was solid, because the tile was claimed whether or not
 	# anything stood in the part he was walking through.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var stake = _wall_at(gm, Vector2i(0, 0))
 
@@ -338,7 +348,7 @@ func test_14_the_ghost_cannot_disagree_with_the_stake_any_more() -> void:
 	# The reported bug, made impossible rather than fixed. The ghost and the stake are
 	# the same call with the same arguments: there is no arrangement left to get wrong,
 	# and no neighbour for either of them to ask about.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var neighbour = _wall_at(gm, Vector2i(0, 0))
 	await wait_frames(1)
@@ -361,7 +371,7 @@ func test_15_nothing_reshapes_a_stake_after_it_is_built() -> void:
 	# There is no longer any code path that redraws a standing stake, which is what the
 	# player was seeing when a blueprint of five cones became three. Putting a stake up
 	# next door must leave its neighbour's body untouched.
-	var gm = _grid([])
+	var gm = await _grid([])
 	await wait_frames(1)
 	var first = _wall_at(gm, Vector2i(0, 0))
 	await wait_frames(1)

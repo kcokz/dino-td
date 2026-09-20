@@ -218,6 +218,118 @@ func assert_has_signal(target: Object, signal_name: String, message: String = ""
 
 # --- Async Utilities ---
 
+## A REAL LEVEL, which since v0.5 is what anything about walking has to be tested on.
+##
+## A bare GridManager has no colliders in it, and a bake is made of colliders -- so a
+## fixture built that way has no navigation mesh, and every question about where somebody
+## can walk comes back "anywhere". Before the grid A* was deleted those fixtures quietly
+## answered from the grid instead, which is how "the game runs the mesh and the tests run
+## the grid" nearly became true: the PackDino targeting override hid behind exactly that
+## gap for a whole version.
+##
+## Caller owns the node and frees it, the same as anything else it instantiates.
+func fresh_level() -> Node:
+	var main = load("res://scenes/Main.tscn").instantiate()
+	tree.root.add_child(main)
+	# Long enough for the navigation server to sync its maps twice. Before the second
+	# sync map_get_closest_point answers (0, 0, 0) and every route is empty, with nothing
+	# in the answer to say so.
+	await wait_frames(8)
+	return main
+
+## A bare fixture with a NAVIGATION MESH over it, for suites that do not want a whole
+## level but do ask where somebody can walk.
+##
+## Returns a Node3D holding a ground plane and a NavMaps, already in the bake's source
+## group. Anything the test adds as a CHILD of it -- a stake, a turret, a hill from
+## `block_out_a_hill` -- is in the next bake. Call `rebake_fixture` after adding
+## geometry, because a bake is only redone on a building_placed signal a bare fixture
+## never sends.
+##
+## Caller owns the node and frees it.
+func nav_fixture(extent: float = 60.0) -> Node3D:
+	var world := Node3D.new()
+	world.name = "NavFixture"
+	world.add_to_group(NavMaps.SOURCE_GROUP)
+	var ground := StaticBody3D.new()
+	ground.name = "Ground"
+	ground.collision_layer = 1        # the layer the real level's ground is on
+	ground.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(extent, 0.4, extent)
+	shape.shape = box
+	shape.position = Vector3(0.0, -0.2, 0.0)
+	ground.add_child(shape)
+	world.add_child(ground)
+	var maps := NavMaps.new()
+	maps.name = "NavMaps"
+	world.add_child(maps)
+	tree.root.add_child(world)
+	await wait_frames(8)
+	return world
+
+## A cell of hillside in a nav fixture: the same box the level builds, on the same layer.
+## The grid has to be told separately -- gm.set_blocked_cells -- exactly as in the level,
+## where the rule and the shape are laid down together by Main.spawn_terrain.
+func block_out_a_hill(world: Node3D, gm: Node, cell: Vector2i, height: float = 2.2) -> Node3D:
+	var hill := StaticBody3D.new()
+	hill.name = "Hill_%d_%d" % [cell.x, cell.y]
+	hill.collision_layer = 1
+	hill.collision_mask = 0
+	hill.position = gm.cell_to_world(cell)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(float(gm.tile_size), height, float(gm.tile_size))
+	shape.shape = box
+	shape.position = Vector3(0.0, height * 0.5, 0.0)
+	hill.add_child(shape)
+	world.add_child(hill)
+	return hill
+
+## A REAL run of stakes from `from_world` to `to_world`, laid the way the game lays one.
+##
+## One stake per TILE is not a fence. A stake is 0.62m and tiles are 2m apart, so eight
+## of them round a cell is eight cones with 1.38m of open ground between them -- which is
+## the v0.4 finding that a stake is as big as the stake, and it means a fixture that
+## "encloses" something that way encloses nothing. Stakes seal on their own finer grid
+## (Config.BUILDINGS.wall.cell_divisions), 0.67m apart, and that is what this lays.
+##
+## Registers each one the way BuildSystem does, so the grid knows about them too.
+func run_of_stakes(world: Node3D, gm: Node, from_world: Vector3, to_world: Vector3) -> Array[Node]:
+	var cfg = tree.root.get_node_or_null("Config")
+	var divisions: int = int(cfg.get_cell_divisions("wall")) if cfg else 3
+	var step: float = float(gm.tile_size) / float(maxi(1, divisions))
+	var span: float = from_world.distance_to(to_world)
+	var out: Array[Node] = []
+	var seen: Dictionary = {}
+	var steps: int = maxi(1, int(ceil(span / (step * 0.5))))
+	for i in range(steps + 1):
+		var at: Vector3 = from_world.lerp(to_world, float(i) / float(steps))
+		var fine: Vector2i = gm.world_to_fine_cell(at, divisions)
+		if seen.has(fine):
+			continue
+		seen[fine] = true
+		var w = load("res://scripts/entities/Wall.gd").new()
+		world.add_child(w)
+		w.setup("wall", gm.fine_cell_to_cell(fine, divisions))
+		w.position = gm.fine_cell_to_world(fine, divisions)
+		w.complete_construction()
+		gm.occupy_fine_cell(fine, w, divisions)
+		out.append(w)
+	return out
+
+## The maps of a nav fixture (or of a level -- there is only ever one set in the tree).
+func maps_of(_world: Node = null) -> Node:
+	return tree.root.get_tree().get_first_node_in_group(NavMaps.GROUP)
+
+## Rebuilds a fixture's meshes and waits for the server to take them.
+func rebake_fixture() -> void:
+	var maps := maps_of()
+	if maps != null:
+		maps.rebake()
+	await wait_frames(8)
+
 func wait_frames(frame_count: int = 1) -> void:
 	if tree != null:
 		for i in range(frame_count):

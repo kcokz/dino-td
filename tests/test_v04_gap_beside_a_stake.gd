@@ -47,6 +47,12 @@ func after_each() -> void:
 	_cleanup_nodes.clear()
 	super.after_each()
 
+var _world: Node3D = null
+
+## The rig, which since v0.5 has a NAVIGATION MESH over it. Whether a gap can be walked
+## through is answered by a bake -- which is the honest form of this whole suite's
+## question, since a bake works out where somebody of a given WIDTH can stand and that is
+## exactly what "is that gap big enough" means.
 func _rig(blocked: Array = []) -> Array:
 	var gm = grid_script.new()
 	_cleanup_nodes.append(gm)
@@ -56,6 +62,12 @@ func _rig(blocked: Array = []) -> Array:
 	_cleanup_nodes.append(bs)
 	tree.root.add_child(bs)
 	bs.setup(gm, gm)
+	_world = await nav_fixture()
+	_cleanup_nodes.append(_world)
+	for c in blocked:
+		if c is Vector2i:
+			block_out_a_hill(_world, gm, c)
+	await rebake_fixture()
 	return [gm, bs]
 
 func _divisions() -> int:
@@ -68,9 +80,8 @@ func _step() -> float:
 func _stake(gm: Node, bs: Node, fx: int, fz: int) -> Node:
 	var step: float = _step()
 	var at := Vector3((float(fx) + 0.5) * step, 0.0, (float(fz) + 0.5) * step)
-	var s = bs.place_building("wall", gm.world_to_cell(at), gm, false, at)
-	if s != null:
-		_cleanup_nodes.append(s)
+	# Into the rig's world, so the stake is in the next bake as well as on the grid.
+	var s = bs.place_building("wall", gm.world_to_cell(at), _world, false, at)
 	return s
 
 # ==============================================================================
@@ -117,7 +128,7 @@ func test_02_one_number_decides_how_big_a_stake_is() -> void:
 func test_03_a_stake_beside_a_hill_leaves_the_way_open() -> void:
 	# Exactly what was reported. Tile (0,0) holds ONE stake, tile (1,0) is hillside,
 	# and the ground between them is clear -- so it has to be walkable.
-	var rig := _rig([Vector2i(1, 0)])
+	var rig := await _rig([Vector2i(1, 0)])
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
@@ -133,17 +144,18 @@ func test_03_a_stake_beside_a_hill_leaves_the_way_open() -> void:
 
 func test_04_he_is_sent_through_the_gap_rather_than_refused() -> void:
 	# The symptom, rather than the rule: click past the stake and a route comes back.
-	var rig := _rig([Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2)])
+	var rig := await _rig([Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2)])
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
 	_stake(gm, bs, 0, 3)
 	await wait_frames(1)
 
+	await rebake_fixture()
 	var from_pos: Vector3 = gm.cell_to_world(Vector2i(0, 0))
 	var to_pos: Vector3 = gm.cell_to_world(Vector2i(0, 3))
-	assert_true(gm.is_reachable(from_pos, to_pos), "There is a way past the stake")
-	var path: Array = gm.find_path(from_pos, to_pos)
+	assert_true(maps_of().is_reachable(from_pos, to_pos, true), "There is a way past the stake")
+	var path: PackedVector3Array = maps_of().path(from_pos, to_pos, true)
 	assert_gt(path.size(), 0, "And a route is handed back")
 	assert_lt(path[path.size() - 1].distance_to(to_pos), float(config_node.TILE_SIZE),
 		"That ends where he was sent, not short of it")
@@ -152,7 +164,7 @@ func test_05_the_waypoint_is_not_the_stake_itself() -> void:
 	# A tile that is walkable-with-something-in-it must not be aimed at dead centre when
 	# that is where the something is standing, or he grinds against a cone he had room
 	# to step around.
-	var rig := _rig()
+	var rig := await _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
@@ -175,7 +187,7 @@ func test_05_the_waypoint_is_not_the_stake_itself() -> void:
 func test_06_a_run_of_stakes_across_the_tile_closes_it() -> void:
 	# The other half. Giving the player his gap back must not cost him the fence: a run
 	# of cones with nothing between them is what stops people, and it still does.
-	var rig := _rig()
+	var rig := await _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
@@ -192,7 +204,7 @@ func test_06_a_run_of_stakes_across_the_tile_closes_it() -> void:
 func test_07_a_run_one_short_is_a_gap() -> void:
 	# The line the rule draws, from the other side. Leave one out and it is a gate --
 	# which is the player's decision to make, and now it is one he can make.
-	var rig := _rig()
+	var rig := await _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
@@ -208,7 +220,7 @@ func test_07_a_run_one_short_is_a_gap() -> void:
 func test_08_a_column_of_stakes_closes_it_too() -> void:
 	# A fence running the other way is still a fence. Rows and columns both, or a fence
 	# drawn north-south would be scenery.
-	var rig := _rig()
+	var rig := await _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
@@ -224,7 +236,7 @@ func test_09_a_building_registered_at_tile_level_still_fills_its_tile() -> void:
 	# The trap in the new rule, nailed down. "No fine cells occupied" must mean "nothing
 	# finer is on record", never "there must be a way through" -- otherwise every turret,
 	# every piece of the wreck, and every wall put down by a test opens a hole in the map.
-	var rig := _rig()
+	var rig := await _rig()
 	var gm = rig[0]
 	await wait_frames(1)
 
@@ -254,7 +266,7 @@ func test_09_a_building_registered_at_tile_level_still_fills_its_tile() -> void:
 func test_10_a_raid_walks_through_a_gate_and_chews_a_sealed_fence() -> void:
 	# The rule from test_v04_wall_blocking, now that "sealed" means what it looks like.
 	# A fence with a stake missing is walked through; the same fence completed is bitten.
-	var rig := _rig()
+	var rig := await _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
@@ -269,9 +281,10 @@ func test_10_a_raid_walks_through_a_gate_and_chews_a_sealed_fence() -> void:
 			_stake(gm, bs, tile_x * d + i, 0)
 	await wait_frames(1)
 
+	await rebake_fixture()
 	var from_pos := Vector3(tile_size * 0.5, 0.0, tile_size * 2.5)
 	var to_pos := Vector3(tile_size * 0.5, 0.0, -tile_size * 2.5)
-	assert_true(gm.is_reachable(from_pos, to_pos), "The gate is a way through")
+	assert_true(maps_of().is_reachable(from_pos, to_pos), "The gate is a way through")
 
 	_stake(gm, bs, d - 1, 0)
 	await wait_frames(1)
