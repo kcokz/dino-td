@@ -519,20 +519,42 @@ func _plan_path(dest: Vector3, ignore_b: Node = null) -> void:
 	_stuck_timer = 0.0
 	_last_pos = global_position
 
-	var gm = _get_grid_manager()
-	if gm and gm.has_method("find_path"):
-		# walls_are_open: his own fence is not a thing to route around. See
-		# Config.LAYER_WALL -- the physics agrees, and this keeps the route agreeing with
-		# it. A route that goes the long way round something he can walk straight through
-		# looks exactly like broken pathfinding.
-		var pts = gm.find_path(global_position, target_destination, ignore_b, false, true)
-		if pts.size() > 0:
-			current_path = pts
-			current_path_index = 0
-			return
+	var pts: Array[Vector3] = _route_to(target_destination, ignore_b)
+	if pts.size() > 0:
+		current_path = pts
+		current_path_index = 0
+		return
 
 	current_path = [target_destination]
 	current_path_index = 0
+
+## His way to a point, from the mesh baked WITHOUT HIS OWN FENCE IN IT.
+##
+## walls_are_open, which for the mesh is not a flag threaded through a pathfinder but the
+## other of the two bakes: layer 32 is simply absent from it. See Config.LAYER_WALL. His
+## collision mask leaves walls out too, so the route and the physics cannot disagree --
+## and a route that goes the long way round something he can walk straight through looks
+## exactly like broken pathfinding.
+##
+## The grid remains the fallback for a fixture with no level in it, and only that.
+func _route_to(dest: Vector3, ignore_b: Node = null) -> Array[Vector3]:
+	var pts: Array[Vector3] = []
+	var maps := _nav_maps()
+	if maps != null and maps.is_ready():
+		for pt in maps.path(global_position, dest, true):
+			pts.append(pt)
+		if not pts.is_empty():
+			return pts
+	var gm = _get_grid_manager()
+	if gm and gm.has_method("find_path"):
+		for pt in gm.find_path(global_position, dest, ignore_b, false, true):
+			pts.append(pt)
+	return pts
+
+func _nav_maps() -> Node:
+	if not is_inside_tree():
+		return null
+	return get_tree().get_first_node_in_group(NavMaps.GROUP)
 
 func _plan_path_to_building(b: Node) -> void:
 	if b == null or not is_instance_valid(b):
@@ -540,39 +562,30 @@ func _plan_path_to_building(b: Node) -> void:
 	var b_pos = b.global_position
 	b_pos.y = global_position.y
 
-	var gm = _get_grid_manager()
-	if gm and gm.has_method("find_path") and gm.has_method("world_to_cell") and gm.has_method("is_cell_walkable"):
-		var cell = gm.world_to_cell(b_pos)
-		var stand_dist: float = minf(build_range * 0.7, 1.0)
-		# Candidate approach points:
-		# 1. 4 cardinal edge stand-points within build range facing open adjacent cells
-		# 2. Target building center itself
-		var candidates: Array[Vector3] = []
-		var offsets = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-		for off in offsets:
-			var adj_cell = cell + off
-			if gm.is_cell_walkable(adj_cell, b, false, true):
-				var edge_pt = b_pos + Vector3(float(off.x) * stand_dist, 0.0, float(off.y) * stand_dist)
-				candidates.append(edge_pt)
+	# WHERE THE ROUTE ENDS IS WHERE HE CAN WORK FROM. A building is carved out of the
+	# mesh, so a route to its centre stops at the edge of the carve -- which is a
+	# stand-point beside it, arrived at from whichever side he is coming from.
+	#
+	# This replaces a scan of four cardinal offsets, each tested for a walkable
+	# neighbour, each pathed to, sorted by distance, first success taken. That scan was
+	# answering "where can somebody of my size stand next to this" with a hand-written
+	# rule, and a bake answers it by construction. Measured: the route ends 0.92m from
+	# the cabin's centre and 0.20m from a stake's, both inside build range, where the
+	# grid handed back a single waypoint at the building's own centre and let him walk
+	# into it.
+	var maps := _nav_maps()
+	if maps != null and maps.is_ready():
+		var route: PackedVector3Array = maps.path(global_position, b_pos, true)
+		if not route.is_empty() and _is_in_build_range(route[route.size() - 1], b):
+			current_path.clear()
+			for pt in route:
+				current_path.append(pt)
+			current_path_index = 0
+			target_destination = current_path[current_path.size() - 1]
+			_stuck_timer = 0.0
+			_last_pos = global_position
+			return
 
-		if gm.is_cell_walkable(cell, b, false, true):
-			candidates.append(b_pos)
-
-		candidates.sort_custom(func(a: Vector3, b_pt: Vector3) -> bool:
-			return global_position.distance_squared_to(a) < global_position.distance_squared_to(b_pt)
-		)
-
-		for cand in candidates:
-			var path = gm.find_path(global_position, cand, b, false, true)
-			if path.size() > 0:
-				current_path = path
-				current_path_index = 0
-				target_destination = path[path.size() - 1]
-				_stuck_timer = 0.0
-				_last_pos = global_position
-				return
-
-	# Fallback
 	_plan_path(b_pos, b)
 
 ## Next blueprint the Hero should work on: the one queued earliest.

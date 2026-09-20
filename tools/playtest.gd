@@ -224,7 +224,7 @@ func _scenario_gap() -> void:
 
 	if hero.has_method("move_to"):
 		hero.move_to(goal)
-	await _wait(420)
+	await _advance(10.0)
 
 	var span: float = start.distance_to(goal)
 	var closed: float = span - hero.global_position.distance_to(goal)
@@ -316,7 +316,7 @@ func _scenario_raid() -> void:
 
 	var dt: float = 1.0 / 60.0
 	for frame in range(22 * 60):
-		await process_frame
+		await physics_frame
 		for i in range(raid.size()):
 			var d = raid[i]
 			if not is_instance_valid(d):
@@ -451,6 +451,19 @@ func _build(type_id: String, cell: Vector2i) -> void:
 func _wait(frames: int) -> void:
 	for i in range(frames):
 		await process_frame
+
+## Lets the GAME run for `seconds`, which is not the same as waiting for frames.
+##
+## Everything that moves moves in _physics_process, and physics is a fixed sixty ticks a
+## second while process frames in a headless run are uncapped -- so a loop of 420 process
+## frames is 420 frames of nothing in particular and about a second and a half of game.
+## The gap scenario read "hero closed 12.7m of 16.0m" for a walk he finishes, with 0.12m
+## to spare, in five seconds: the harness was stopping the clock early and reporting it as
+## a Hero who could not get through. Same error in the raid loop, where twenty-two seconds
+## of raid was a fraction of that, and the number moved every run.
+func _advance(seconds: float) -> void:
+	for i in range(int(round(seconds * 60.0))):
+		await physics_frame
 
 # ==============================================================================
 # The camera

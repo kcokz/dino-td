@@ -346,3 +346,52 @@ func test_12_the_dinosaur_and_the_mesh_give_the_same_answer() -> void:
 	assert_eq(dino._there_is_a_way_round(core), main.nav_maps.is_reachable(dino.global_position, core),
 		"Standing at the fence: still the mesh, and not the grid that disagreed with it here")
 	assert_false(dino._there_is_a_way_round(core), "Which says there is no way in")
+
+# ==============================================================================
+# 5. The Hero walks the same mesh, with his own fence left out of it
+# ==============================================================================
+
+func test_13_his_route_to_a_building_ends_where_he_can_work_from() -> void:
+	# WHERE THE ROUTE ENDS IS WHERE HE CAN WORK FROM. A building is carved out of the
+	# mesh, so a route to its centre stops at the edge of the carve -- a stand-point
+	# beside it, from whichever side he is coming.
+	#
+	# This replaced a scan of four cardinal offsets, each tested for a walkable neighbour,
+	# each pathed to, sorted by distance, first success taken: a hand-written answer to
+	# "where can somebody of my size stand next to this", which is what a bake answers by
+	# construction. Measured: 0.92m from the cabin's centre and 0.20m from a stake's, both
+	# inside build range, where the grid handed back a single waypoint at the building's
+	# own centre and let him walk into it.
+	var main = _level()
+	await wait_frames(8)
+	var core_cell: Vector2i = config_node.MAP["default_core_cell"]
+	var cabin = main.grid_manager.get_building_at(core_cell)
+	assert_not_null(cabin, "The cabin is standing")
+	var hero = main.hero
+	hero.global_position = main.grid_manager.cell_to_world(core_cell) + Vector3(0.0, 0.0, -12.0)
+	await wait_frames(2)
+
+	var route: PackedVector3Array = main.nav_maps.path(hero.global_position, cabin.global_position, true)
+	assert_gt(route.size(), 1, "There is a way to the cabin")
+	var stand: Vector3 = route[route.size() - 1]
+	assert_true(hero._is_in_build_range(stand, cabin),
+		"And the end of it is somewhere he can build from")
+	assert_gt(stand.distance_to(cabin.global_position), 0.0,
+		"Beside the cabin rather than inside it")
+
+func test_14_his_own_fence_is_not_something_to_walk_round() -> void:
+	# The exemption, as the two bakes rather than a flag: a route for him goes THROUGH a
+	# line of his own stakes, and the same route for a raid does not exist at all.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	_ring_around(main, core, 4.0)
+	await wait_frames(8)
+	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
+
+	var his: PackedVector3Array = main.nav_maps.path(outside, core, true)
+	assert_gt(his.size(), 1, "He has a way in")
+	assert_lt(his[his.size() - 1].distance_to(core), 1.0, "That actually gets there")
+	assert_false(main.nav_maps.is_reachable(outside, core), "And a raid has none")

@@ -697,20 +697,21 @@ func _steer_target(goal: Vector3) -> Vector3:
 ## theory that politely going around a fence made the fence pointless. That had it
 ## backwards: a fence you cannot walk round is what makes a fence worth placing, and one
 ## you can is a funnel. What stops a wall being ignored is _building_in_the_way.
-func _route_to(goal: Vector3) -> Array:
+func _route_to(goal: Vector3) -> Array[Vector3]:
+	var pts: Array[Vector3] = []
 	var maps := _nav_maps()
 	if maps != null and maps.is_ready():
-		var route: PackedVector3Array = maps.path(global_position, goal, not walks_round_walls())
-		var pts: Array = []
-		for pt in route:
+		for pt in maps.path(global_position, goal, not walks_round_walls()):
 			pts.append(pt)
 		if not pts.is_empty():
 			return pts
 	# No level, so no mesh: the grid is what a bare fixture has.
 	var gm := _get_grid_manager()
 	if gm == null or not gm.has_method("find_path"):
-		return []
-	return gm.find_path(global_position, goal, null, false)
+		return pts
+	for pt in gm.find_path(global_position, goal, null, false):
+		pts.append(pt)
+	return pts
 
 ## Whether a dinosaur can walk straight from a to b without meeting anything solid.
 ##
