@@ -71,6 +71,23 @@ func _ready() -> void:
 	_ensure_scene_dependencies()
 	_wire_signals()
 	setup_level()
+	_ensure_nav_maps()
+
+## The navigation meshes, baked from this level's own colliders. See NavMaps.gd.
+##
+## Main joins the source group rather than the meshes being told about individual nodes:
+## a bake then picks up the ground, the hills, the wreck, the turrets and every stake as
+## they are, with no list to keep in step.
+var nav_maps: NavMaps = null
+
+func _ensure_nav_maps() -> void:
+	if not is_in_group(NavMaps.SOURCE_GROUP):
+		add_to_group(NavMaps.SOURCE_GROUP)
+	if nav_maps != null and is_instance_valid(nav_maps):
+		return
+	nav_maps = NavMaps.new()
+	nav_maps.name = "NavMaps"
+	add_child(nav_maps)
 
 func _process(delta: float) -> void:
 	_handle_camera_pan(delta)

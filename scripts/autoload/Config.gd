@@ -156,6 +156,21 @@ const LAYER_BLUEPRINT: int = 16
 ## the wreck and the turrets still stop him exactly as they did.
 const LAYER_WALL: int = 32
 
+## How the navigation meshes are baked. See scripts/core/NavMaps.gd.
+const NAV: Dictionary = {
+	# Fine enough to see the gap between two stakes. A stake is 0.62m and they snap 0.67m
+	# apart, so a coarse bake would smear a fence into a solid line and the gaps the
+	# player deliberately left would stop existing.
+	# 0.1, so that agent_radius is a WHOLE number of voxels (0.4 = 4 of them). The bake
+	# quantises the radius to voxels and warns when it has to round, and a radius that is
+	# silently bigger than declared is a fence that seals gaps the player left open.
+	"cell_size": 0.1,
+	# What the mesh is carved for. One radius for everything that walks: a theropod is
+	# wider and can be routed through a gap it does not fit, which only the avoidance
+	# solver notices. A third mesh is the fix if that ever shows on screen.
+	"agent_radius": 0.4,
+}
+
 ## How tall a building stands when it does not say otherwise. Height is the honest
 ## lever for "this thing is imposing": widening a building eats into the lane the
 ## Hero needs, while making it taller costs nothing.
