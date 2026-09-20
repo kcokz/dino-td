@@ -365,6 +365,10 @@ func test_11_hero_can_attack_guard_and_nest() -> void:
 # 12. 10+ Dinosaur Flock Dynamic Flanking & Surround
 # ==============================================================================
 
+## The lateral flanking bias this used to look for is gone -- going around the one in
+## front is the avoidance solver's job now, and it does not do it by adding a fixed sideways
+## nudge. What still has to be true is the thing the bias existed for: the dinosaur behind
+## must not sit there doing nothing.
 func test_12_dino_flock_flanking_and_surround() -> void:
 	assert_not_null(dino_script, "Dino.gd must exist")
 	assert_not_null(wall_script, "Wall.gd must exist")
@@ -389,10 +393,14 @@ func test_12_dino_flock_flanking_and_surround() -> void:
 	dino_back.set_waypoints(wps)
 	dino_back.current_waypoint_index = 1
 
-	# Back dino advances: detects front attacking ally and initiates flanking steer
-	dino_back.advance_towards_waypoint(0.1)
-	assert_true(absf(dino_back.velocity.x) > 0.001 or dino_back.current_state == 1,
-		"Back dino performs lateral flanking steer or attacks target directly instead of stalling")
+	# It either joins the attack or keeps moving. What it must not do is stand still
+	# behind the one in front, which is what the flanking bias was there to prevent.
+	var was_at: Vector3 = dino_back.global_position
+	for step in range(30):
+		dino_back.advance_towards_waypoint(1.0 / 60.0)
+	var moved: float = was_at.distance_to(dino_back.global_position)
+	assert_true(moved > 0.05 or int(dino_back.current_state) == 1,
+		"The one behind gets on with it rather than stalling (moved %.2fm)" % moved)
 
 # ==============================================================================
 # 13. Hero Physics Collision with Buildings (Cannot Penetrate Walls)

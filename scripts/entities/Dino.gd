@@ -60,10 +60,6 @@ var _route_checked_at: float = -999.0
 var _blocked_by: Node = null
 var _way_sealed: bool = false
 
-## Who is currently being gone around, and which way. Held rather than recomputed so a
-## dodge is a decision instead of a dither -- see _step_around.
-var _dodging: int = 0
-var _dodge_side: float = 0.0
 var _nav_goal: Vector3 = Vector3.INF
 var current_target: Node = null
 var target_building: Node:
@@ -95,6 +91,23 @@ var _applied_multipliers: Dictionary:
 
 # Internal child nodes
 var raycast: RayCast3D = null
+
+## The engine's avoidance. It replaces a separation force, an anti-tailgating throttle,
+## a committed side to pass on, and a damping term to keep those three from flip-flopping
+## -- four hand-written pieces that between them deadlocked a crowd at zero speed and
+## shuffled a pair seventy times in twenty-five seconds. See rule 8 in AGENT-TASKS.md.
+var _agent: RID = RID()
+var _avoided_velocity: Vector3 = Vector3.ZERO
+var _avoid_radius: float = 0.4
+## Requests made and answers received. The solver answers on the server own sync, so an
+## answer always trails its request by a frame -- but ONLY by a frame. Anything driving
+## movement without letting physics run (every test that steps advance_towards_waypoint
+## in a loop) would otherwise be handed an answer from minutes ago and stand still.
+##
+## _answered starts BEFORE the first request so that the very first frame, when there is
+## no answer at all, falls back to the wanted velocity rather than to the initial zero.
+var _requests: int = 0
+var _answered: int = -1
 var attack_timer: Timer = null
 var collision_shape: CollisionShape3D = null
 var mesh_instance: MeshInstance3D = null
@@ -129,6 +142,9 @@ func _connect_event_bus() -> void:
 			eb.building_destroyed.connect(_on_building_destroyed)
 
 func _exit_tree() -> void:
+	if _agent.is_valid():
+		NavigationServer3D.free_rid(_agent)
+		_agent = RID()
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb) and eb.has_signal("building_destroyed"):
 		if eb.building_destroyed.is_connected(_on_building_destroyed):
@@ -279,6 +295,8 @@ static func _safe_float(val: Variant, default_val: float = 1.0) -> float:
 func setup(type_id: String = "raptor", stat_multipliers: Dictionary = {}) -> void:
 	dino_type = type_id
 	is_initialized = true
+	# The avoidance radius is the species own size, and the species is only known here.
+	_refresh_avoidance_size()
 	current_multipliers = stat_multipliers.duplicate()
 
 	var mult_hp: float = _safe_float(stat_multipliers.get("hp"), 1.0)
@@ -336,48 +354,52 @@ func _get_path_normal(target_index: int) -> Vector3:
 	var fwd: Vector3 = seg.normalized()
 	return fwd.cross(Vector3.UP).normalized()
 
-## A unit vector square across `heading`, pointing away from `other`.
-##
-## Which way "aside" is depends on where you are GOING. This used to be hard-coded to
-## world X -- step aside by moving east or west, whatever direction the raid was
-## travelling. For a raid coming down the Z axis that happens to be right; for one coming
-## along X it means stepping forwards or backwards into the very dinosaur being avoided,
-## and for a fence on the diagonal it is wrong by degrees the whole way.
-func _step_around(other: Node3D, heading: Vector3) -> Vector3:
-	var fwd: Vector3 = heading
-	fwd.y = 0.0
-	if fwd.length_squared() < 0.001:
-		fwd = _get_path_normal(mini(current_waypoint_index, maxi(0, waypoints.size() - 1))).cross(Vector3.DOWN)
-		if fwd.length_squared() < 0.001:
-			fwd = Vector3.FORWARD
-	var perp: Vector3 = fwd.normalized().cross(Vector3.UP).normalized()
-	if other == null or not is_instance_valid(other):
-		_dodging = 0
-		return perp
+func _avoid(wanted: Vector3) -> Vector3:
+	if not _agent.is_valid():
+		return wanted
+	NavigationServer3D.agent_set_position(_agent, global_position)
+	NavigationServer3D.agent_set_velocity(_agent, wanted)
+	_requests += 1
+	if _requests - _answered > 1:
+		return wanted          # no fresh answer: the first frame, or nothing is ticking
+	return _avoided_velocity
 
-	# ONCE A SIDE IS PICKED IT IS KEPT until this one is no longer the thing in the way.
-	#
-	# Deciding afresh every frame is what "来回穿梭" was: two dinosaurs jostling swap
-	# which side of each other they are on several times a second, and each swap turns
-	# the dodge through a right angle. Measured at seventy-two direction reversals in
-	# twenty-five seconds -- a pair shuffling side to side in front of a fence, getting
-	# nowhere and being bled by the spikes while they did it.
-	#
-	# A committed dodge is also simply what going around something IS. Reconsidering
-	# halfway is how you walk into it.
-	var id: int = other.get_instance_id()
-	if id != _dodging or is_zero_approx(_dodge_side):
-		_dodging = id
-		var to_other: Vector3 = other.global_position - global_position
-		to_other.y = 0.0
-		var lean: float = perp.dot(to_other)
-		if absf(lean) < 0.05:
-			# Dead ahead: the two of them must not both pick the same way or they stay
-			# nose to nose. The instance id is arbitrary and, being fixed, is stable.
-			_dodge_side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
-		else:
-			_dodge_side = -1.0 if lean > 0.0 else 1.0
-	return perp * _dodge_side
+## Re-reads the size and speed the solver should use. Called once the species is known,
+## because a theropod must not shoulder through a gap only a raptor fits in.
+func _refresh_avoidance_size() -> void:
+	if not _agent.is_valid():
+		return
+	_avoid_radius = 0.4
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_visual_size"):
+		_avoid_radius = maxf(0.2, float(cfg.get_visual_size("dino/" + dino_type).x) * 0.5)
+	NavigationServer3D.agent_set_radius(_agent, _avoid_radius)
+	NavigationServer3D.agent_set_max_speed(_agent, maxf(0.1, speed))
+
+func _on_velocity_computed(safe_velocity: Vector3) -> void:
+	_avoided_velocity = Vector3(safe_velocity.x, 0.0, safe_velocity.z)
+	_answered = _requests
+
+## Sets up the avoidance agent. Everything it needs is declared in Config, and its radius
+## is the dinosaur's own declared size -- a theropod must not shoulder its way through a
+## gap a raptor fits in.
+func _ensure_avoidance() -> void:
+	if _agent.is_valid() or not is_inside_tree():
+		return
+	_agent = NavigationServer3D.agent_create()
+	NavigationServer3D.agent_set_map(_agent, get_world_3d().get_navigation_map())
+	NavigationServer3D.agent_set_avoidance_enabled(_agent, true)
+	NavigationServer3D.agent_set_height(_agent, 1.0)
+	NavigationServer3D.agent_set_position(_agent, global_position)
+	NavigationServer3D.agent_set_avoidance_callback(_agent, Callable(self, "_on_velocity_computed"))
+	var cfg = _get_config()
+	NavigationServer3D.agent_set_max_neighbors(_agent,
+		int(cfg.DINO_AVOID_MAX_NEIGHBOURS) if (cfg and "DINO_AVOID_MAX_NEIGHBOURS" in cfg) else 10)
+	NavigationServer3D.agent_set_neighbor_distance(_agent,
+		float(cfg.DINO_AVOID_NEIGHBOURS) if (cfg and "DINO_AVOID_NEIGHBOURS" in cfg) else 4.0)
+	NavigationServer3D.agent_set_time_horizon_agents(_agent,
+		float(cfg.DINO_AVOID_TIME_HORIZON) if (cfg and "DINO_AVOID_TIME_HORIZON" in cfg) else 1.2)
+	_refresh_avoidance_size()
 
 ## The layer walls live on, which dinosaurs must still collide with.
 func _wall_layer() -> int:
@@ -385,20 +407,6 @@ func _wall_layer() -> int:
 	if cfg and "LAYER_WALL" in cfg:
 		return int(cfg.LAYER_WALL)
 	return 32
-
-## How fast this dinosaur's heading follows the one it wants.
-func _turn_response() -> float:
-	var cfg = _get_config()
-	if cfg and "DINO_TURN_RESPONSE" in cfg:
-		return float(cfg.DINO_TURN_RESPONSE)
-	return 6.0
-
-## How slowly a dinosaur may be made to walk by the one in front. Never zero.
-func _crowd_floor() -> float:
-	var cfg = _get_config()
-	if cfg and "DINO_CROWD_MIN_THROTTLE" in cfg:
-		return float(cfg.DINO_CROWD_MIN_THROTTLE)
-	return 0.4
 
 func _get_lane_target_pos(target_index: int) -> Vector3:
 	if target_index >= waypoints.size():
@@ -538,19 +546,10 @@ func advance_towards_waypoint(delta: float) -> void:
 			on_obstacle_detected(current_target)
 			return
 
-		var slot_dir = diff_slot.normalized()
-		if attacking_ally != null:
-			var side: float = 1.0 if (global_position.x >= attacking_ally.global_position.x) else -1.0
-			if absf(global_position.x - attacking_ally.global_position.x) < 0.05:
-				side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
-			slot_dir = (slot_dir + Vector3(side * 0.75, 0.0, 0.0)).normalized()
-
-		var sep_steer = _calculate_steering_separation()
-		velocity = (slot_dir * speed + sep_steer).limit_length(speed)
+		velocity = _avoid(diff_slot.normalized() * speed)
 		if velocity.length_squared() > 0.001:
 			look_at(global_position + velocity.normalized(), Vector3.UP)
 		global_position += velocity * delta
-		_resolve_dino_overlaps()
 		return
 
 	# 2. Check waypoint navigation
@@ -592,35 +591,7 @@ func advance_towards_waypoint(delta: float) -> void:
 	steer_diff.y = 0.0
 	var dir: Vector3 = steer_diff.normalized() if steer_diff.length_squared() > 0.001 else diff.normalized()
 
-	# If an attacking ally is ahead, lean around it rather than queueing behind it.
-	if attacking_ally != null:
-		dir = (dir + _step_around(attacking_ally, dir) * 0.75).normalized()
-
-	# Anti-tailgating: yield to whoever is directly in front, and go round them.
-	#
-	# THE YIELD MUST NEVER REACH ZERO. It used to, and in a pack that is a deadlock: each
-	# dinosaur is stopped by the one ahead, so nobody has the speed left to get out of
-	# anyone's way, and the jam has no reason to ever clear. Twenty of them measured nine
-	# standing still, one for ten unbroken seconds. At five it hardly showed, which is why
-	# it survived three rounds of looking at this -- A CROWD IS A DIFFERENT PROBLEM FROM A
-	# QUEUE, and a raid is a crowd.
-	var speed_throttle: float = 1.0
-	var front_dino = _find_immediate_front_dino(1.4)
-	if front_dino == null:
-		_dodging = 0
-		_dodge_side = 0.0
-	else:
-		var to_front: Vector3 = front_dino.global_position - global_position
-		to_front.y = 0.0
-		dir = (dir + _step_around(front_dino, dir) * 0.8).normalized()
-		if to_front.length() < 1.15:
-			speed_throttle = clampf((to_front.length() - 0.88) / 0.27, _crowd_floor(), 1.0)
-
-	# Pure steering separation velocity (no hard teleportation)
-	var sep_force: Vector3 = _calculate_steering_separation()
-	var desired: Vector3 = (dir * (speed * speed_throttle) + sep_force).limit_length(speed)
-	# Turned into, not snapped to. See Config.DINO_TURN_RESPONSE.
-	velocity = velocity.lerp(desired, clampf(delta * _turn_response(), 0.0, 1.0))
+	velocity = _avoid(dir * speed)
 
 	if velocity.length_squared() > 0.001:
 		look_at(global_position + velocity.normalized(), Vector3.UP)
@@ -880,39 +851,6 @@ func _get_grid_manager() -> Node:
 		return null
 	return get_tree().get_first_node_in_group("grid_manager")
 
-func _find_immediate_front_dino(max_dist: float = 1.4) -> Node3D:
-	if not is_inside_tree():
-		return null
-	var dinos = get_tree().get_nodes_in_group("dinos")
-	var fwd = -global_transform.basis.z.normalized()
-	fwd.y = 0.0
-	if fwd.length_squared() < 0.001:
-		fwd = Vector3.FORWARD
-
-	var best_dino: Node3D = null
-	var min_d: float = max_dist
-
-	for other in dinos:
-		if other == self or not is_instance_valid(other) or not (other is Node3D):
-			continue
-		if not other.is_inside_tree():
-			continue
-		if "is_dead" in other and other.is_dead:
-			continue
-		if "current_state" in other and other.current_state == State.DEAD:
-			continue
-
-		var to_other = other.global_position - global_position
-		to_other.y = 0.0
-		var dist = to_other.length()
-		if dist > 0.01 and dist < min_d:
-			var dir_to = to_other / dist
-			if fwd.dot(dir_to) > 0.35:
-				min_d = dist
-				best_dino = other
-
-	return best_dino
-
 func _process_attacking(_delta: float) -> void:
 	velocity = Vector3.ZERO
 
@@ -959,97 +897,49 @@ func attack_reach() -> float:
 		return float(cfg.DINO_ATTACK_REACH)
 	return 2.2
 
-## Calculates Reynolds-style steering separation force (steers velocity, no position teleporting).
-func _calculate_steering_separation() -> Vector3:
-	if not is_inside_tree() or is_dead or current_state == State.DEAD:
-		return Vector3.ZERO
-	var dinos = get_tree().get_nodes_in_group("dinos")
-	if dinos.size() <= 1:
-		return Vector3.ZERO
+## Keeping dinosaurs off each other was three separate mechanisms: a steering force, a
+## hard positional un-overlap, and this, which applied both again from outside the
+## movement step. The solver does the first two, so only the third is left.
+func _apply_dino_separation(_delta: float) -> void:
+	_resolve_dino_overlaps()
 
-	var cfg = _get_config()
-	var min_dist: float = cfg.DINO_SEPARATION_MIN_DIST if (cfg and "DINO_SEPARATION_MIN_DIST" in cfg) else 1.15
-	var steer: Vector3 = Vector3.ZERO
-
-	for other in dinos:
+## Pushes apart two dinosaurs that are ALREADY inside each other.
+##
+## The one thing the avoidance solver does not do, and cannot: RVO works by adjusting
+## VELOCITIES so a collision never happens, and two bodies that already overlap have no
+## collision left to predict. A wave that spawns them on the same spot leaves them stacked
+## for ever with nothing for the solver to steer out of -- measured at a separation of
+## exactly 0.000000. So this is a deliberate exception to rule 8: the engine has avoidance
+## for navigation agents but no depenetration.
+##
+## IT USES THE AGENTS OWN RADII, not the old DINO_SEPARATION_MIN_DIST of 1.15m. Asking for
+## more room than the solver is trying to hold them at makes the two fight, and the first
+## version did exactly that: it pinned one dinosaur of twenty in place for a whole
+## twenty-second run, every run. This fires only on real overlap, and only nudges.
+func _resolve_dino_overlaps() -> void:
+	if not is_inside_tree() or is_dead:
+		return
+	for other in get_tree().get_nodes_in_group("dinos"):
 		if other == self or not is_instance_valid(other) or not (other is Node3D):
-			continue
-		if not other.is_inside_tree():
 			continue
 		if "is_dead" in other and other.is_dead:
 			continue
-		if "current_state" in other and other.current_state == State.DEAD:
+		var touching: float = _avoid_radius + (float(other._avoid_radius) if ("_avoid_radius" in other) else 0.4)
+		var away: Vector3 = global_position - (other as Node3D).global_position
+		away.y = 0.0
+		var gap: float = away.length()
+		if gap >= touching:
 			continue
-
-		var diff: Vector3 = global_position - other.global_position
-		diff.y = 0.0
-		var dist_sq: float = diff.length_squared()
-		if dist_sq < min_dist * min_dist:
-			var dist: float = sqrt(dist_sq)
-			if dist > 0.001:
-				var push_mag: float = (min_dist - dist) / min_dist
-				var push_dir: Vector3 = diff / dist
-				if absf(diff.x) < 0.35:
-					var side: float = 1.0 if (global_position.x >= other.global_position.x) else -1.0
-					if absf(diff.x) < 0.01:
-						side = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
-					push_dir.x += side * 0.5
-					push_dir = push_dir.normalized()
-				steer += push_dir * push_mag * speed * 0.75
-			else:
-				var side: float = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
-				steer += Vector3(side * speed * 0.75, 0.0, 0.0)
-
-	return steer
-
-## Strict anti-penetration relaxation preventing dino 3D models from overlapping.
-func _resolve_dino_overlaps() -> void:
-	if not is_inside_tree() or is_dead or current_state == State.DEAD:
-		return
-	var dinos = get_tree().get_nodes_in_group("dinos")
-	if dinos.size() <= 1:
-		return
-
-	var min_dist: float = 0.88
-	for _pass in range(2):
-		for other in dinos:
-			if other == self or not is_instance_valid(other) or not (other is Node3D):
-				continue
-			if not other.is_inside_tree():
-				continue
-			if "is_dead" in other and other.is_dead:
-				continue
-			if "current_state" in other and other.current_state == State.DEAD:
-				continue
-
-			var diff: Vector3 = global_position - other.global_position
-			diff.y = 0.0
-			var dist: float = diff.length()
-			if dist < min_dist:
-				var overlap: float = min_dist - dist
-				var push_dir: Vector3
-				if dist > 0.001:
-					push_dir = diff / dist
-				else:
-					var side: float = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
-					push_dir = Vector3(side, 0.0, 0.0)
-
-				if "current_state" in other and other.current_state == State.ATTACKING:
-					if current_state != State.ATTACKING:
-						global_position += push_dir * overlap
-				elif current_state == State.ATTACKING:
-					pass
-				else:
-					global_position += push_dir * (overlap * 0.5)
-
-## Soft flocking separation fallback for compatibility.
-func _apply_dino_separation(delta: float) -> void:
-	if current_state == State.ATTACKING or delta <= 0.0:
-		return
-	var steer = _calculate_steering_separation()
-	if steer.length_squared() > 0.001:
-		global_position += steer.limit_length(speed) * delta
-	_resolve_dino_overlaps()
+		if gap < 0.01:
+			# Exactly stacked: a fixed direction per dinosaur, so a pair cannot both pick
+			# the same way and stay stacked.
+			away = Vector3(cos(float(get_instance_id())), 0.0, sin(float(get_instance_id())))
+			gap = 0.0
+		# The WHOLE overlap, and a hair past it. Half each works only while both are
+		# stepping and neither is closing fast: two driven at each other cover more ground
+		# per frame than half a push undoes, and the gap shrinks anyway. Landing exactly
+		# on the boundary is no good either -- that is 0.799999 of the 0.8 they need.
+		global_position += away.normalized() * (touching - gap + 0.02)
 
 func check_obstacle() -> Node:
 	if raycast == null or not is_instance_valid(raycast):
@@ -1236,7 +1126,6 @@ func on_obstacle_cleared() -> void:
 	assigned_slot = Vector3.ZERO
 	if attack_timer and is_instance_valid(attack_timer) and not attack_timer.is_stopped():
 		attack_timer.stop()
-	_resolve_dino_overlaps()
 
 func _is_target_valid(target: Variant) -> bool:
 	if target == null or typeof(target) != TYPE_OBJECT or not is_instance_valid(target):
@@ -1417,6 +1306,7 @@ func _refit_to_size() -> void:
 	_ensure_body()
 
 func _ensure_components() -> void:
+	_ensure_avoidance()
 	# 1. CollisionShape3D
 	for child in get_children():
 		if child is CollisionShape3D:

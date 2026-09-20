@@ -170,14 +170,6 @@ func test_04b_a_siege_dinosaur_eats_the_fence_instead_of_going_round() -> void:
 # 2. A crowd never talks itself to a standstill
 # ==============================================================================
 
-func test_05_yielding_to_the_dinosaur_in_front_never_reaches_zero() -> void:
-	# The deadlock, as a number. Zero here means each dinosaur is stopped by the one
-	# ahead and none of them has the speed left to get out of anyone's way.
-	assert_true("DINO_CROWD_MIN_THROTTLE" in config_node, "There is a floor")
-	var floor_value: float = float(config_node.DINO_CROWD_MIN_THROTTLE)
-	assert_gt(floor_value, 0.0, "And it is not zero, which is the whole point")
-	assert_lte(floor_value, 1.0, "And it is a fraction of speed")
-
 func test_06_a_packed_raid_gets_past_a_fence_with_open_ends() -> void:
 	# The measurement that matters, at the size the report was made at. Twenty of them,
 	# shoulder to shoulder, and a fence they can walk round.
@@ -213,41 +205,3 @@ func test_06_a_packed_raid_gets_past_a_fence_with_open_ends() -> void:
 # ==============================================================================
 # 3. Aside means aside
 # ==============================================================================
-
-func test_07_stepping_aside_is_square_to_where_it_is_going() -> void:
-	# Hard-coded to world X before, so a raid travelling along X stepped "aside" into
-	# the dinosaur it was avoiding.
-	var gm = _grid([])
-	await wait_frames(1)
-	var a = _real_dino("raptor", Vector3.ZERO, Vector3(20.0, 0.0, 0.0))
-	var b = _real_dino("raptor", Vector3(1.0, 0.0, 0.0), Vector3(20.0, 0.0, 0.0))
-	await wait_frames(1)
-
-	# Travelling along +X, with b directly ahead.
-	var heading := Vector3(1.0, 0.0, 0.0)
-	var aside: Vector3 = a._step_around(b, heading)
-	assert_almost_eq(aside.length(), 1.0, 0.01, "It is a direction")
-	assert_almost_eq(aside.dot(heading), 0.0, 0.01,
-		"Square to travel, so it actually gets past rather than shoving forwards")
-
-	# And travelling along +Z, the case that happened to work before.
-	var heading_z := Vector3(0.0, 0.0, 1.0)
-	var aside_z: Vector3 = a._step_around(b, heading_z)
-	assert_almost_eq(aside_z.dot(heading_z), 0.0, 0.01, "Square to travel here too")
-
-func test_08_two_dinosaurs_nose_to_nose_pick_opposite_sides() -> void:
-	# Otherwise they both lean the same way and stay nose to nose for ever.
-	var gm = _grid([])
-	await wait_frames(1)
-	var a = _real_dino("raptor", Vector3.ZERO, Vector3(0.0, 0.0, 20.0))
-	var b = _real_dino("raptor", Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, -20.0))
-	await wait_frames(1)
-
-	var heading := Vector3(0.0, 0.0, 1.0)
-	var a_side: Vector3 = a._step_around(b, heading)
-	var b_side: Vector3 = b._step_around(a, -heading)
-	assert_almost_eq(a_side.length(), 1.0, 0.01, "Both pick a direction")
-	assert_almost_eq(b_side.length(), 1.0, 0.01, "Both pick a direction")
-	# Leaning away from each other is what matters: neither may lean towards the other.
-	var to_b: Vector3 = b.global_position - a.global_position
-	assert_lte(a_side.dot(to_b.normalized()), 0.05, "It does not lean into the one it is avoiding")

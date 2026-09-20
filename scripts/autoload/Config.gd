@@ -350,19 +350,6 @@ static func get_dino_script_path(type_id: String) -> String:
 
 const DINO_SEPARATION_MIN_DIST: float = 1.15
 
-## The slowest a dinosaur may be made to go by the one in front of it, as a fraction of
-## its own speed.
-##
-## NOT ZERO, and that is the whole point. Yielding to the dinosaur ahead used to scale
-## all the way down to a dead stop, and in a pack that deadlocks: A is stopped by B, B by
-## C, and nothing has any speed left to get out of anyone's way with. Measured at twenty
-## dinosaurs: nine of them standing still, the worst for ten unbroken seconds. At five it
-## barely showed, which is why it went unnoticed -- a crowd is a different problem from a
-## queue, and only the crowd is what a raid actually is.
-##
-## A floor means the worst case is a slow shuffle that resolves itself.
-const DINO_CROWD_MIN_THROTTLE: float = 0.4
-
 ## How quickly a dinosaur's velocity follows the one it wants, per second.
 ##
 ## A HEADING IS A PHYSICAL THING THAT TURNS. Steering used to be recomputed from nothing
@@ -379,7 +366,17 @@ const DINO_CROWD_MIN_THROTTLE: float = 0.4
 ## brushing the hills, whose speed is reset as they are pushed clear, never get back up
 ## to it -- two of twenty reached the cabin instead of thirteen. At 20.0 the reversals
 ## stay where 6.0 put them and the raid is exactly as quick as with no damping at all.
-const DINO_TURN_RESPONSE: float = 20.0
+## How wide a dinosaur is to the avoidance solver, and how far it looks for neighbours.
+##
+## NavigationAgent3D does the avoiding now. The hand-written version it replaces -- a
+## separation force, an anti-tailgating throttle, a side to pass on, and a damping term
+## to stop all three flip-flopping -- took four attempts and still deadlocked a crowd at
+## zero speed and shuffled a pair seventy times in twenty-five seconds. See rule 8 in
+## AGENT-TASKS.md: those were not interesting bugs, they were the price of writing local
+## avoidance by hand.
+const DINO_AVOID_NEIGHBOURS: float = 4.0     # how far it looks for others, in metres
+const DINO_AVOID_TIME_HORIZON: float = 1.2   # how far ahead it plans to miss them, in seconds
+const DINO_AVOID_MAX_NEIGHBOURS: int = 10
 
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)

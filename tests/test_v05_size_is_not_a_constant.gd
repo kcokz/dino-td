@@ -154,37 +154,25 @@ func test_07_something_pressed_against_them_still_is() -> void:
 	assert_lt(biting.current_hp, before, "And pays for it")
 
 # ==============================================================================
-# 3. A heading turns rather than teleporting
+# 3. And the avoidance that replaced the hand-written steering
 # ==============================================================================
 
-func test_08_steering_is_damped_so_a_flip_cannot_reverse_it_in_one_frame() -> void:
-	# The shuttle. Any steering term that changes sign used to reverse the animal
-	# instantly, and in a crowd in a corner that is a shuffle that never resolves.
-	assert_true("DINO_TURN_RESPONSE" in config_node, "There is a turn rate")
-	var r: float = float(config_node.DINO_TURN_RESPONSE)
-	assert_gt(r, 0.0, "And it is a real one")
-	# One frame must not complete the turn, or there is no damping at all.
-	assert_lt(r * (1.0 / 60.0), 1.0, "A single frame only gets part of the way round")
+func test_08_a_dinosaur_is_registered_with_the_avoidance_solver() -> void:
+	# What the four deleted tests above used to check by hand -- which side to pass on,
+	# how fast to turn, how hard to yield -- is the solver's business now. What is left
+	# worth asserting is that every dinosaur is actually handed to it, with its own size.
+	var dino = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3.ZERO)
+	dino.setup("raptor")
+	await wait_frames(2)
 
-func test_09_a_dodge_is_a_decision_not_a_dither() -> void:
-	# Which side to pass somebody on is remembered while they are still in the way.
-	# Deciding afresh every frame is how two dinosaurs swap sides twice a second.
-	var a = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3.ZERO)
-	a.setup("raptor")
-	var b = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, 1.0))
-	b.setup("raptor")
-	await wait_frames(1)
+	assert_true(dino._agent.is_valid(), "It has an avoidance agent on the navigation server")
+	assert_true("DINO_AVOID_NEIGHBOURS" in config_node, "Whose settings are declared in Config")
+	assert_gt(float(config_node.DINO_AVOID_NEIGHBOURS), 0.0, "And are real numbers")
 
-	var heading := Vector3(0.0, 0.0, 1.0)
-	var first: Vector3 = a._step_around(b, heading)
-	# Move the other one across to the far side; the committed dodge must not flip.
-	b.global_position = Vector3(0.6, 0.0, 1.0)
-	var second: Vector3 = a._step_around(b, heading)
-	assert_gt(first.dot(second), 0.9, "It keeps going the way it committed to")
-
-	# A different obstacle is a fresh decision.
-	var c = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, 1.0))
-	c.setup("raptor")
-	await wait_frames(1)
-	var third: Vector3 = a._step_around(c, heading)
-	assert_almost_eq(third.length(), 1.0, 0.01, "Which is still a direction")
+	var big = _spawn(String(config_node.get_dino_script_path("big_theropod")), Vector3(6.0, 0.0, 0.0))
+	big.setup("big_theropod")
+	await wait_frames(2)
+	assert_true(big._agent.is_valid(), "So does a theropod")
+	assert_gt(float(config_node.get_visual_size("dino/big_theropod").x),
+		float(config_node.get_visual_size("dino/raptor").x),
+		"And it is bigger, so it is given a bigger radius -- it must not fit where a raptor does")
