@@ -336,6 +336,7 @@ func _scenario_raid() -> void:
 	var stalled: int = 0
 	var arrived: int = 0
 	var chewing: int = 0
+	var gnawing_stakes: int = 0
 	for i in range(raid.size()):
 		worst = maxf(worst, stall_max[i])
 		if stall_max[i] >= 2.0:
@@ -343,17 +344,35 @@ func _scenario_raid() -> void:
 		var d = raid[i]
 		if not is_instance_valid(d):
 			continue
-		if d.global_position.distance_to(goal) < 3.0:
+		# REACHING THE CABIN, not reaching the goal marker. The arc run's goal sits four
+		# metres behind the cabin, so a raid that does the right thing -- walks round the
+		# fence, arrives at the cabin and eats it -- never gets within three metres of the
+		# marker, and the old count read that as nineteen failures. Every one of them had
+		# walked the fence perfectly and was biting the thing it came for.
+		if d.global_position.distance_to(core) < 4.0:
 			arrived += 1
+		# And what it is biting is the whole question this scenario asks. Chewing a STAKE
+		# with open ground either side of it is the bug; chewing the cabin is the point.
 		if int(d.current_state) == int(d.State.ATTACKING):
 			chewing += 1
+			var t = d.current_target
+			if t != null and is_instance_valid(t) and ("building_type" in t) and String(t.building_type) == "wall":
+				gnawing_stakes += 1
+	# HOW MUCH FENCE IS LEFT. Without it "they are at the cabin" cannot tell a raid that
+	# ATE its way in from one that walked through a fence that is still standing -- and
+	# walking through is exactly the bug this scenario was built to catch.
+	var standing: int = 0
+	for b in gm.get_all_buildings():
+		if is_instance_valid(b) and ("building_type" in b) and String(b.building_type) == "wall":
+			standing += 1
 	var worst_reversals: int = 0
 	for n in reversals:
 		worst_reversals = maxi(worst_reversals, n)
-	print("[playtest] raid(%s, %s x%d): %d stakes | longest stall %.1fs | stalled>=2s %d | worst reversals %d | arrived %d | biting %d"
+	print("[playtest] raid(%s, %s x%d): %d stakes | longest stall %.1fs | stalled>=2s %d | worst reversals %d | at the cabin %d | biting %d (stakes %d) | fence %d of %d left"
 		% ["sealed" if sealed_ring else "arc",
 			String(cfg.get_dino_script_path("raptor")).get_file(), raid.size(),
-			placed, worst, stalled, worst_reversals, arrived, chewing])
+			placed, worst, stalled, worst_reversals, arrived, chewing, gnawing_stakes,
+			standing, placed])
 	await _portrait("raid_after", core + Vector3(0.0, 0.0, -5.0), 16.0, true)
 
 ## Puts a camera at eye level a short way off `at`, looking at it, and takes one frame.

@@ -668,20 +668,10 @@ func _steer_target(goal: Vector3) -> Vector3:
 		_nav_goal = Vector3.INF
 		return goal
 
-	var gm := _get_grid_manager()
-	if gm == null or not gm.has_method("find_path"):
-		return goal
-
 	if _nav_goal.distance_squared_to(goal) > 0.25 or nav_path.is_empty():
 		_nav_goal = goal
-		# terrain_only = false: route around BUILDINGS as well as hills. Dinosaurs used
-		# to ignore buildings entirely and walk into them, on the theory that politely
-		# going around a fence made the fence pointless. That had it backwards -- a fence
-		# you cannot walk round is what makes a fence worth placing, and one you can is a
-		# funnel. What stops a wall being ignored is _building_in_the_way, not blindness.
-		var pts: Array = gm.find_path(global_position, goal, null, false)
 		nav_path.clear()
-		for pt in pts:
+		for pt in _route_to(goal):
 			nav_path.append(pt)
 
 	# Drop the steps already reached.
@@ -690,6 +680,37 @@ func _steer_target(goal: Vector3) -> Vector3:
 	if nav_path.is_empty():
 		return goal
 	return nav_path[0]
+
+## The way to `goal`, from the same mesh that decides where this animal may stand.
+##
+## The mesh is funnelled -- the corners actually needed rather than the middle of every
+## tile crossed -- so a raid coming round a fence follows the line a person would draw
+## instead of a staircase. And it cannot disagree with _there_is_a_way_round or with
+## _stay_on_the_navmesh, which is the failure this whole migration is about: while a
+## route came from one place and the constraint from another, a dinosaur could be sent
+## somewhere it was then dragged back out of, every frame, for ever.
+##
+## Walls are solid here for anything that walks round them, and not for a siege animal
+## that goes through -- the same one bit of collision mask that the two bakes differ by.
+##
+## Buildings are routed around, not ignored. Dinosaurs used to walk into them, on the
+## theory that politely going around a fence made the fence pointless. That had it
+## backwards: a fence you cannot walk round is what makes a fence worth placing, and one
+## you can is a funnel. What stops a wall being ignored is _building_in_the_way.
+func _route_to(goal: Vector3) -> Array:
+	var maps := _nav_maps()
+	if maps != null and maps.is_ready():
+		var route: PackedVector3Array = maps.path(global_position, goal, not walks_round_walls())
+		var pts: Array = []
+		for pt in route:
+			pts.append(pt)
+		if not pts.is_empty():
+			return pts
+	# No level, so no mesh: the grid is what a bare fixture has.
+	var gm := _get_grid_manager()
+	if gm == null or not gm.has_method("find_path"):
+		return []
+	return gm.find_path(global_position, goal, null, false)
 
 ## Whether a dinosaur can walk straight from a to b without meeting anything solid.
 ##
