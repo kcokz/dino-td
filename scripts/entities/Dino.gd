@@ -59,6 +59,11 @@ const ROUTE_RECHECK_SECONDS: float = 0.4
 var _route_checked_at: float = -999.0
 var _blocked_by: Node = null
 var _way_sealed: bool = false
+
+## Who is currently being gone around, and which way. Held rather than recomputed so a
+## dodge is a decision instead of a dither -- see _step_around.
+var _dodging: int = 0
+var _dodge_side: float = 0.0
 var _nav_goal: Vector3 = Vector3.INF
 var current_target: Node = null
 var target_building: Node:
@@ -216,8 +221,16 @@ static func _init_building_slots(building: Node3D) -> void:
 	var b_id: int = building.get_instance_id()
 	var slots: Array = []
 	var center: Vector3 = building.global_position
+	# From the building's own size: standing 1.6m off the centre of a 0.62m stake is
+	# standing 1.3m clear of it, which is what "stops some way short and does nothing"
+	# looked like from above.
+	var cfg_slots = building.get_node_or_null("/root/Config")
+	var b_type: String = String(building.building_type) if ("building_type" in building) else ""
 	var r_inner: float = 1.6
 	var r_outer: float = 2.6
+	if cfg_slots != null and cfg_slots.has_method("get_attack_slot_radius") and b_type != "":
+		r_inner = float(cfg_slots.get_attack_slot_radius(b_type, false))
+		r_outer = float(cfg_slots.get_attack_slot_radius(b_type, true))
 
 	var gm_slots: Node = null
 	if building.is_inside_tree():
@@ -339,16 +352,39 @@ func _step_around(other: Node3D, heading: Vector3) -> Vector3:
 			fwd = Vector3.FORWARD
 	var perp: Vector3 = fwd.normalized().cross(Vector3.UP).normalized()
 	if other == null or not is_instance_valid(other):
+		_dodging = 0
 		return perp
-	var to_other: Vector3 = other.global_position - global_position
-	to_other.y = 0.0
-	var lean: float = perp.dot(to_other)
-	if absf(lean) < 0.05:
-		# Dead ahead: the two of them must not both pick the same way or they stay nose
-		# to nose. The instance id is arbitrary and, being fixed, is also stable -- they
-		# will not swap sides next frame and start again.
-		return perp * (1.0 if (get_instance_id() % 2 == 0) else -1.0)
-	return perp * (-1.0 if lean > 0.0 else 1.0)
+
+	# ONCE A SIDE IS PICKED IT IS KEPT until this one is no longer the thing in the way.
+	#
+	# Deciding afresh every frame is what "来回穿梭" was: two dinosaurs jostling swap
+	# which side of each other they are on several times a second, and each swap turns
+	# the dodge through a right angle. Measured at seventy-two direction reversals in
+	# twenty-five seconds -- a pair shuffling side to side in front of a fence, getting
+	# nowhere and being bled by the spikes while they did it.
+	#
+	# A committed dodge is also simply what going around something IS. Reconsidering
+	# halfway is how you walk into it.
+	var id: int = other.get_instance_id()
+	if id != _dodging or is_zero_approx(_dodge_side):
+		_dodging = id
+		var to_other: Vector3 = other.global_position - global_position
+		to_other.y = 0.0
+		var lean: float = perp.dot(to_other)
+		if absf(lean) < 0.05:
+			# Dead ahead: the two of them must not both pick the same way or they stay
+			# nose to nose. The instance id is arbitrary and, being fixed, is stable.
+			_dodge_side = 1.0 if (get_instance_id() % 2 == 0) else -1.0
+		else:
+			_dodge_side = -1.0 if lean > 0.0 else 1.0
+	return perp * _dodge_side
+
+## How fast this dinosaur's heading follows the one it wants.
+func _turn_response() -> float:
+	var cfg = _get_config()
+	if cfg and "DINO_TURN_RESPONSE" in cfg:
+		return float(cfg.DINO_TURN_RESPONSE)
+	return 6.0
 
 ## How slowly a dinosaur may be made to walk by the one in front. Never zero.
 func _crowd_floor() -> float:
@@ -563,7 +599,10 @@ func advance_towards_waypoint(delta: float) -> void:
 	# QUEUE, and a raid is a crowd.
 	var speed_throttle: float = 1.0
 	var front_dino = _find_immediate_front_dino(1.4)
-	if front_dino != null:
+	if front_dino == null:
+		_dodging = 0
+		_dodge_side = 0.0
+	else:
 		var to_front: Vector3 = front_dino.global_position - global_position
 		to_front.y = 0.0
 		dir = (dir + _step_around(front_dino, dir) * 0.8).normalized()
@@ -572,7 +611,9 @@ func advance_towards_waypoint(delta: float) -> void:
 
 	# Pure steering separation velocity (no hard teleportation)
 	var sep_force: Vector3 = _calculate_steering_separation()
-	velocity = (dir * (speed * speed_throttle) + sep_force).limit_length(speed)
+	var desired: Vector3 = (dir * (speed * speed_throttle) + sep_force).limit_length(speed)
+	# Turned into, not snapped to. See Config.DINO_TURN_RESPONSE.
+	velocity = velocity.lerp(desired, clampf(delta * _turn_response(), 0.0, 1.0))
 
 	if velocity.length_squared() > 0.001:
 		look_at(global_position + velocity.normalized(), Vector3.UP)

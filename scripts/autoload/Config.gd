@@ -109,12 +109,16 @@ const BUILDINGS: Dictionary = {
 		# fence line wears a raid down instead of only delaying it. Deliberately a
 		# chip rather than a kill -- a raptor (DINOS.raptor.hp) chewing through these
 		# 8 HP comes out alive but nearly dead, leaving the finishing to a tower or
-		# the Hero. contact_range must reach DINO_ATTACK_SLOT_RADIUS_INNER, which is
-		# where a dino stands while attacking; a range tied to the footprint alone
-		# would leave the attacker just out of reach and the stakes harmless.
+		# the Hero.
+		#
+		# NO `contact_range` HERE ANY MORE. It was a flat 2.0, chosen when a stake
+		# filled its 2m tile, and left behind when the stake shrank to 0.62m -- a
+		# four-metre-wide damage field around each cone. A raid walking PAST a fence
+		# through a perfectly good gap was bled out by stakes it never touched. It is
+		# derived from the stake's own size now (Config.get_contact_range), so it
+		# reaches whoever is standing against the spikes and nobody else.
 		"contact_damage": 0.15,
 		"contact_tick": 0.5,
-		"contact_range": 2.0,
 		# Two wood, not one. At one, mending a stake cost the same as replacing it
 		# (repair is the price scaled by the damage, rounded up, so the floor is one
 		# unit) -- which made repair meaningless on the cheapest thing in the game.
@@ -344,6 +348,24 @@ const DINO_SEPARATION_MIN_DIST: float = 1.15
 ## A floor means the worst case is a slow shuffle that resolves itself.
 const DINO_CROWD_MIN_THROTTLE: float = 0.4
 
+## How quickly a dinosaur's velocity follows the one it wants, per second.
+##
+## A HEADING IS A PHYSICAL THING THAT TURNS. Steering used to be recomputed from nothing
+## every frame and applied whole, so any term that changed sign -- which side to pass
+## somebody on, which way a neighbour was pushing -- reversed the animal instantly. In a
+## crowd pressed into a corner that is a shuffle: measured at over a hundred direction
+## reversals in twenty-five seconds, going nowhere and being bled by the spikes the whole
+## time. That is the "来回穿梭" that was reported.
+##
+## Damping it fixes the whole class rather than whichever term was flipping this week.
+##
+## TUNED AGAINST BOTH THINGS IT TRADES OFF, because it does trade. At 6.0 the shuffle is
+## gone and so is most of the raid: a turn takes a sixth of a second and dinosaurs
+## brushing the hills, whose speed is reset as they are pushed clear, never get back up
+## to it -- two of twenty reached the cabin instead of thirteen. At 20.0 the reversals
+## stay where 6.0 put them and the raid is exactly as quick as with no damping at all.
+const DINO_TURN_RESPONSE: float = 20.0
+
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)
 # ==============================================================================
@@ -544,8 +566,39 @@ const CONTROLS: Dictionary = {
 ## in its slot can always reach the thing it is standing at.
 const DINO_ATTACK_REACH: float = 2.2
 
+## Where a dinosaur stands to bite something, as a distance from the building's FACE.
+##
+## These used to be radii from the building's CENTRE, fixed at 1.6 and 2.6. That was the
+## same number for everything because everything filled a 2m tile. A stake is 0.62m wide
+## now, and the fixed radius put its attackers 1.3 to 2.3 METRES from a cone you could
+## step over -- which is exactly the "恐龙站在木尖刺前（有一段距离）" that kept being
+## reported, and which no amount of work on the targeting rules was ever going to fix.
+##
+## Measured from the face, a species stands the same way against a stake as against the
+## wreck. The old numbers fall out unchanged for a 2m building (1.0 + 0.6 = 1.6).
+const DINO_STANDOFF_INNER: float = 0.6
+const DINO_STANDOFF_OUTER: float = 1.6
+
+## Kept for anything still asking the old question. A 2m building is the case they
+## describe, and get_attack_slot_radius is what decides now.
 const DINO_ATTACK_SLOT_RADIUS_INNER: float = 1.6
 const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
+
+## How far from `type_id`'s centre a dinosaur stands while biting it.
+static func get_attack_slot_radius(type_id: String, outer: bool = false) -> float:
+	var half: float = get_building_footprint(type_id) * 0.5
+	return half + (DINO_STANDOFF_OUTER if outer else DINO_STANDOFF_INNER)
+
+## How far from a sharpened building's centre its spikes still hurt.
+##
+## Derived, for the same reason as the standoff: a flat 2.0 was a fence that damaged
+## everything within two metres of each cone -- a four-metre-wide field around a 0.62m
+## stake, which chewed through raids that were only walking PAST it through a gap. It has
+## to reach whatever is standing in the inner slot and stop soon after.
+static func get_contact_range(type_id: String) -> float:
+	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("contact_range"):
+		return maxf(0.0, float(BUILDINGS[type_id]["contact_range"]))
+	return get_attack_slot_radius(type_id, false) + 0.4
 
 # ==============================================================================
 # 12. Continuous Real-Time Raids & Resource Nodes (v0.2)

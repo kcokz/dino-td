@@ -305,6 +305,15 @@ func _scenario_raid() -> void:
 	await _wait(4)
 	await _portrait("raid_before", core + Vector3(0.0, 0.0, -5.0), 16.0, true)
 
+	# Reversals as well as stalls. A raid that shuttles back and forth is never still, so
+	# a stall counter says it is fine -- and it is going nowhere while the spikes bleed
+	# it, which is what "来回穿梭，进攻不了还掉血" was.
+	var last_dir: Array[Vector3] = []
+	var reversals: Array[int] = []
+	for i in range(raid.size()):
+		last_dir.append(Vector3.ZERO)
+		reversals.append(0)
+
 	var dt: float = 1.0 / 60.0
 	for frame in range(22 * 60):
 		await process_frame
@@ -315,6 +324,13 @@ func _scenario_raid() -> void:
 			var idle: bool = d.velocity.length() < 0.2 				and int(d.current_state) != int(d.State.ATTACKING) 				and d.global_position.distance_to(goal) > 3.0
 			stall_now[i] = (stall_now[i] + dt) if idle else 0.0
 			stall_max[i] = maxf(stall_max[i], stall_now[i])
+			var v: Vector3 = d.velocity
+			v.y = 0.0
+			if v.length() >= 0.5:
+				var dir: Vector3 = v.normalized()
+				if last_dir[i] != Vector3.ZERO and dir.dot(last_dir[i]) < -0.5:
+					reversals[i] += 1
+				last_dir[i] = dir
 
 	var worst: float = 0.0
 	var stalled: int = 0
@@ -331,10 +347,13 @@ func _scenario_raid() -> void:
 			arrived += 1
 		if int(d.current_state) == int(d.State.ATTACKING):
 			chewing += 1
-	print("[playtest] raid(%s, %s x%d): %d stakes | longest stall %.1fs | stalled>=2s %d | arrived %d | biting %d"
+	var worst_reversals: int = 0
+	for n in reversals:
+		worst_reversals = maxi(worst_reversals, n)
+	print("[playtest] raid(%s, %s x%d): %d stakes | longest stall %.1fs | stalled>=2s %d | worst reversals %d | arrived %d | biting %d"
 		% ["sealed" if sealed_ring else "arc",
 			String(cfg.get_dino_script_path("raptor")).get_file(), raid.size(),
-			placed, worst, stalled, arrived, chewing])
+			placed, worst, stalled, worst_reversals, arrived, chewing])
 	await _portrait("raid_after", core + Vector3(0.0, 0.0, -5.0), 16.0, true)
 
 ## Puts a camera at eye level a short way off `at`, looking at it, and takes one frame.

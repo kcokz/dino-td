@@ -219,12 +219,19 @@ func test_07_stakes_declare_a_bite_and_agree_with_config_about_it() -> void:
 		"An unknown type is answered rather than crashed on")
 
 func test_08_the_bite_reaches_where_a_dinosaur_actually_stands() -> void:
-	# A dinosaur attacking a building stops at the inner attack ring. A reach
-	# derived from the stake's own width alone would leave it just out of range,
-	# and the fence would be decorative.
+	# A dinosaur attacking a building stops at the inner attack ring, so the spikes have
+	# to reach that ring or the fence is decorative.
+	#
+	# Against THE STAKE'S OWN ring, not the global constant. That constant is 1.6m, which
+	# is where an attacker stood back when every building filled a 2m tile -- 1.3m clear
+	# of a 0.62m cone, and the reason a raid appeared to stop short of the fence and do
+	# nothing. Both numbers come from the building's own size now.
 	var stake = _stake()
 	await wait_frames(1)
-	assert_gte(stake.contact_range, config_node.DINO_ATTACK_SLOT_RADIUS_INNER,
+	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
+	assert_lt(ring, float(config_node.DINO_ATTACK_SLOT_RADIUS_INNER),
+		"A stake is small, so its attackers stand closer than the old fixed ring")
+	assert_gte(stake.contact_range, ring,
 		"Whatever is chewing on the stakes is within reach of them")
 	assert_lt(stake.contact_range, float(config_node.BUILDINGS["tower"].get("range", 5.0)),
 		"But it is contact, not a turret's field of fire")

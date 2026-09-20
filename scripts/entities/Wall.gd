@@ -71,7 +71,11 @@ func _load_contact_config() -> void:
 	var data: Dictionary = cfg.BUILDINGS[building_type]
 	contact_damage = maxf(0.0, float(data.get("contact_damage", 0.0)))
 	contact_tick = maxf(0.05, float(data.get("contact_tick", 0.5)))
-	contact_range = maxf(0.0, float(data.get("contact_range", 0.0)))
+	# Derived from the stake's own size unless Config names a number outright.
+	if cfg.has_method("get_contact_range"):
+		contact_range = float(cfg.get_contact_range(building_type))
+	else:
+		contact_range = maxf(0.0, float(data.get("contact_range", 0.0)))
 
 # ==============================================================================
 # Contact damage
