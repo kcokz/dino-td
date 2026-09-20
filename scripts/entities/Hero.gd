@@ -657,18 +657,30 @@ func _find_nearest_unfinished_building() -> Node:
 			best_dist_sq = d_sq
 	return best
 
-## Which of `candidates` he can actually walk to. Empty means there was no grid to
-## ask, and the caller then does not filter at all.
+## Whether he can get near enough to `b` to work on it.
 ##
-## The grid answers each one by flooding out from the blueprint, so "no" is only
-## returned when the blueprint really is sitting in a closed pocket.
+## THE ROUTE IS THE ANSWER, and "near enough" is build range rather than the building's
+## centre -- which is the honest form of the question, because he never stands on a
+## building. Asking whether its centre is reachable means asking whether he can stand
+## inside a thing that is solid: the mesh stops him a body's width short of every
+## building, and a wide enough one would then read as unreachable while he was standing
+## against it with his hammer out.
+func _can_work_on(b: Node) -> bool:
+	if b == null or not is_instance_valid(b) or not (b is Node3D):
+		return false
+	var route: Array[Vector3] = _route_to((b as Node3D).global_position, b)
+	if route.is_empty():
+		return false
+	return _is_in_build_range(route[route.size() - 1], b)
+
+## Which of `candidates` he can actually walk to. Empty means nothing could be asked,
+## and the caller then does not filter at all.
 func _reachable_among(candidates: Array[Node]) -> Array[Node]:
 	var out: Array[Node] = []
-	var gm = _get_grid_manager()
-	if gm == null or not gm.has_method("is_reachable"):
+	if _nav_maps() == null and _get_grid_manager() == null:
 		return out
 	for b in candidates:
-		if b is Node3D and gm.is_reachable(global_position, (b as Node3D).global_position, 400, true):
+		if _can_work_on(b):
 			out.append(b)
 	return out
 
@@ -680,10 +692,7 @@ func _abandon_unreachable_building() -> bool:
 		return false
 	if not ("is_constructed" in target_building) or bool(target_building.is_constructed):
 		return false
-	var gm = _get_grid_manager()
-	if gm == null or not gm.has_method("is_reachable"):
-		return false
-	if gm.is_reachable(global_position, target_building.global_position, 400, true):
+	if _can_work_on(target_building):
 		return false
 	var next_b = _find_nearest_unfinished_building()
 	if next_b == null or next_b == target_building:
