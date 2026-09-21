@@ -1325,6 +1325,65 @@ func attack_target(target: Node) -> void:
 		target.take_damage(damage)
 
 ## Deducts damage from current_hp. Emits dino_died and frees on fatal hit.
+## How long this animal has spent against spikes; which physics frame it last heard
+## from one; and the longest stretch reported in that frame.
+var _spike_accum: float = 0.0
+var _spike_frame: int = -1
+var _spike_frame_delta: float = 0.0
+
+## Spikes have been against this animal for `delta` of simulated time.
+##
+## A FENCE IS ONE SITUATION, NOT THREE, AND IT KEEPS ONE CLOCK. Every stake used to
+## count its own tick and damage everything in its own reach -- and the reach a stake
+## needs is wider than the gap between two of them, because it has to cover whatever is
+## standing in the attack slot, 0.91m out, while stakes stand 0.67m apart. So three of
+## them reached the same animal and it bled at three times the declared rate. Measured:
+## 0.90 dps against the 0.30 the build menu tells the player, which killed a 3 hp raptor
+## in three and a half seconds with the 8 hp stake it was biting three quarters standing.
+##
+## That is the same mistake as the attack slots, the contact range and the attack reach
+## before it -- A NUMBER TUNED FOR ONE LAYOUT APPLIED TO ANOTHER -- and the layout that
+## changed was the stakes' own finer grid. So the fix is the rule rather than the number:
+## what a fence does must not depend on how densely it happens to be built. A denser
+## fence is harder to get THROUGH; it is not a bigger multiplier.
+##
+## The clock is here rather than in the stake because THE SITUATION IS HERE. Stakes are
+## built at different moments, so their ticks are out of phase with each other; a rule
+## that only refused a second stake in the same frame would let a hand-laid fence stack
+## again, and one that refused by elapsed time beat against the stakes' own timers and
+## lost a third of the hits it should have landed (0.19 dps measured, against 0.30).
+## One accumulator, fed simulated delta, has neither problem -- and it scales with
+## Engine.time_scale exactly like everything else, which is what the HUD speed control
+## needs.
+##
+## Time against the spikes is not forgotten between touches: an animal that keeps
+## brushing a fence is still being worn down by it, which is what a fence is for.
+func spikes_touch(amount: float, tick: float, delta: float) -> bool:
+	if is_dead or current_state == State.DEAD:
+		return false
+	var frame: int = Engine.get_physics_frames()
+	var reported: float = maxf(0.0, delta)
+	if frame == _spike_frame:
+		# Several stakes of one fence, one moment: the LONGEST of them counts, and the
+		# rest count for nothing. Taking the longest rather than the first is what keeps
+		# "deliver a whole tick's worth now" working when the fence has already reported
+		# this frame's sliver -- see Wall.damage_touching_dinos.
+		if reported <= _spike_frame_delta:
+			return false
+		_spike_accum += reported - _spike_frame_delta
+		_spike_frame_delta = reported
+	else:
+		_spike_frame = frame
+		_spike_frame_delta = reported
+		_spike_accum += reported
+	if _spike_accum < maxf(0.01, tick):
+		return false
+	# Zeroed rather than decremented: one chip per tick, never a burst saved up from a
+	# frame that ran long.
+	_spike_accum = 0.0
+	take_damage(amount)
+	return true
+
 func take_damage(amount: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return

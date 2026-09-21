@@ -12,7 +12,9 @@ extends "res://scripts/entities/Building.gd"
 ## Three things this deliberately is not:
 ##   * not a turret -- the reach only covers what is standing against the stake,
 ##     and it cannot pick a target or lead one;
-##   * not a kill -- see the balance note in Config.BUILDINGS.wall;
+##   * not a kill -- see the balance note in Config.BUILDINGS.wall, and note that a
+##     FENCE does this damage, not each stake: the animal takes one tick's worth
+##     however many stakes are reaching it (Dino.take_spike_damage);
 ##   * not frame-rate-dependent -- damage lands on a fixed tick, so the rate is
 ##     the same however fast the machine runs, and Engine.time_scale (the HUD's
 ##     speed control) scales it exactly like every other simulated thing.
@@ -22,8 +24,6 @@ extends "res://scripts/entities/Building.gd"
 var contact_damage: float = 0.0
 var contact_tick: float = 0.5
 var contact_range: float = 0.0
-
-var _tick_accum: float = 0.0
 
 func _init() -> void:
 	super("wall")
@@ -84,11 +84,10 @@ func _load_contact_config() -> void:
 func _physics_process(delta: float) -> void:
 	if not _stakes_are_live():
 		return
-	_tick_accum += delta
-	if _tick_accum < contact_tick:
-		return
-	_tick_accum -= contact_tick
-	damage_touching_dinos()
+	# Reported every frame rather than ticked here. The stake says "I am against you,
+	# for this long"; how long it takes to draw blood is counted by the animal, once,
+	# however many stakes are saying it. See Dino.spikes_touch.
+	report_contact(delta)
 
 ## A blueprint has no points on it yet, and a paused game must not grind anyone
 ## down while the player is reading the map.
@@ -106,17 +105,28 @@ func _stakes_are_live() -> bool:
 ## range. That is not the same as handling flyers properly: when the pterosaur
 ## finally flies (see the v0.x roadmap -- it is meant to ignore ground walls
 ## entirely), it needs a flag of its own here, not an altitude coincidence.
-func damage_touching_dinos() -> int:
+func report_contact(delta: float) -> int:
 	if not is_inside_tree():
 		return 0
 	var hit_count: int = 0
 	for d in get_tree().get_nodes_in_group("dinos"):
 		if not _is_contact_target(d):
 			continue
-		if global_position.distance_to((d as Node3D).global_position) <= contact_range:
+		if global_position.distance_to((d as Node3D).global_position) > contact_range:
+			continue
+		if d.has_method("spikes_touch"):
+			if d.spikes_touch(contact_damage, contact_tick, delta):
+				hit_count += 1
+		else:
 			d.take_damage(contact_damage)
 			hit_count += 1
 	return hit_count
+
+## One whole tick's worth of contact, delivered now. What a test means by "drive a tick
+## without waiting on the clock", and the number it returns is how many animals it
+## actually drew blood from.
+func damage_touching_dinos() -> int:
+	return report_contact(contact_tick)
 
 func _is_contact_target(target: Variant) -> bool:
 	if target == null or typeof(target) != TYPE_OBJECT or not is_instance_valid(target):

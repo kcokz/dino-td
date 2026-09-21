@@ -154,6 +154,102 @@ func test_07_something_pressed_against_them_still_is() -> void:
 	assert_lt(biting.current_hp, before, "And pays for it")
 
 # ==============================================================================
+# 2b. A fence hurts once, however many stakes are reaching you
+# ==============================================================================
+#
+# The fourth time the same mistake turned up in this system, and the same shape as the
+# three above: A NUMBER TUNED FOR ONE LAYOUT APPLIED TO ANOTHER. The layout that changed
+# is the stakes' own finer grid -- they stand 0.67m apart now -- while contact_range has
+# to be wide enough to cover whatever is standing in the attack slot, 0.91m out. So
+# three stakes reach the same animal and each one used to damage it separately.
+
+func _fence_run(from_x: float, to_x: float) -> Array[Node]:
+	var out: Array[Node] = []
+	var step: float = float(config_node.TILE_SIZE) / float(config_node.get_cell_divisions("wall"))
+	var x: float = from_x
+	while x <= to_x + 0.001:
+		out.append(_stake(Vector3(x, 0.0, 0.0)))
+		x += step
+	return out
+
+func test_07b_three_stakes_reach_one_animal_standing_where_it_bites() -> void:
+	# The measurement the rest of this section rests on, so that it fails loudly if the
+	# spacing or the range ever move apart again.
+	var run: Array[Node] = _fence_run(-2.0, 2.0)
+	await wait_frames(1)
+	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
+	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, ring))
+	biting.setup("raptor")
+	await wait_frames(1)
+
+	var reaching: int = 0
+	for stake in run:
+		if (stake as Node3D).global_position.distance_to(biting.global_position) <= stake.contact_range:
+			reaching += 1
+	assert_gt(reaching, 1, "More than one stake of a fence reaches what is biting it")
+
+func test_07c_the_fence_does_what_the_build_menu_says_it_does() -> void:
+	# Measured before the fix: 0.90 dps against the 0.30 the menu promises -- exactly
+	# three times, for the three stakes in reach. The build menu is not wrong; the fence
+	# was.
+	var run: Array[Node] = _fence_run(-2.0, 2.0)
+	await wait_frames(1)
+	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
+	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, ring))
+	biting.setup("raptor")
+	biting.max_hp = 9999.0
+	biting.current_hp = 9999.0
+	await wait_frames(1)
+
+	var before: float = biting.current_hp
+	var ticks: int = 4
+	for i in range(ticks):
+		for stake in run:
+			stake.damage_touching_dinos()
+		await wait_physics_frames(1)
+	var declared: float = float(config_node.get_contact_dps("wall"))
+	var per_tick: float = declared * float(config_node.BUILDINGS["wall"]["contact_tick"])
+	assert_almost_eq(before - biting.current_hp, per_tick * float(ticks), 0.001,
+		"Four ticks of a whole fence is four chips, not four times however many stakes")
+
+func test_07d_so_a_raptor_gets_through_one_stake_alive() -> void:
+	# The balance Config.BUILDINGS.wall states in so many words: "a raptor chewing through
+	# these 8 HP comes out alive but nearly dead, leaving the finishing to a tower or the
+	# Hero". It did not. Chewing one stake takes 8 seconds and it was losing 7.2 of its 3
+	# health doing it -- dead in three and a half, with the stake three quarters standing.
+	var damage: float = float(config_node.DINOS["raptor"]["damage"])
+	var rate: float = float(config_node.DINOS["raptor"]["attack_rate"])
+	var stake_hp: float = float(config_node.BUILDINGS["wall"]["hp"])
+	var tick: float = float(config_node.BUILDINGS["wall"]["contact_tick"])
+	var seconds_to_chew: float = stake_hp / (damage * rate)
+
+	var run: Array[Node] = _fence_run(-2.0, 2.0)
+	await wait_frames(1)
+	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
+	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, ring))
+	biting.setup("raptor")
+	await wait_frames(1)
+	var hp: float = biting.current_hp
+
+	# Its whole meal, driven a tick at a time rather than waited out. Checked for being
+	# alive each time round, because a dead one frees itself and the interesting failure
+	# is "it died", not a null dereference three lines later.
+	var survived: bool = true
+	var left: float = hp
+	for i in range(int(ceil(seconds_to_chew / tick))):
+		for stake in run:
+			stake.damage_touching_dinos()
+		await wait_physics_frames(1)
+		if not is_instance_valid(biting) or biting.is_dead:
+			survived = false
+			left = 0.0
+			break
+		left = biting.current_hp
+
+	assert_true(survived, "It survives the stake it is eating")
+	assert_lt(left, hp * 0.5, "But only just -- a fence is still worth building")
+
+# ==============================================================================
 # 3. And the avoidance that replaced the hand-written steering
 # ==============================================================================
 

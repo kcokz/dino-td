@@ -262,12 +262,18 @@ func test_11_damage_lands_on_a_tick_not_every_frame() -> void:
 	var dino = _raptor(Vector3(stake.contact_range * 0.5, 0.0, 0.0))
 	await wait_frames(1)
 
+	# THREE FRAMES, not three calls in one. What the stake reports is how long it has
+	# been against the animal, and the animal counts that once per frame however many
+	# stakes are saying it -- so simulating the passage of time now means letting time
+	# pass. See Dino.spikes_touch.
 	var before: float = dino.current_hp
 	var step: float = stake.contact_tick * 0.4
 	stake._physics_process(step)
+	await wait_physics_frames(1)
 	stake._physics_process(step)
 	assert_eq(dino.current_hp, before, "Part of a tick draws no blood")
 
+	await wait_physics_frames(1)
 	stake._physics_process(step)
 	assert_almost_eq(dino.current_hp, before - stake.contact_damage, 0.0001,
 		"A full tick's worth does")

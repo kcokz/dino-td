@@ -335,6 +335,15 @@ func wait_frames(frame_count: int = 1) -> void:
 		for i in range(frame_count):
 			await tree.process_frame
 
+## Waits for PHYSICS frames, which is a different clock from process frames: physics is
+## a fixed sixty ticks a second and process frames in a headless run are uncapped. Use it
+## when the code under test counts frames or moves -- everything that moves moves in
+## _physics_process.
+func wait_physics_frames(frame_count: int = 1) -> void:
+	if tree != null:
+		for i in range(frame_count):
+			await tree.physics_frame
+
 func wait_seconds(sec: float) -> void:
 	if tree != null:
 		var start_time: int = Time.get_ticks_msec()
