@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck"]
+		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug"]
 
 	for name in names:
 		await _run(String(name))
@@ -72,6 +72,8 @@ func _run(name: String) -> void:
 			await _scenario_hero()
 		"wreck":
 			await _scenario_wreck()
+		"snug":
+			await _scenario_snug()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -230,6 +232,82 @@ func _scenario_gap() -> void:
 	var closed: float = span - hero.global_position.distance_to(goal)
 	print("[playtest] gap: hero closed %.1fm of %.1fm" % [closed, span])
 	await _portrait("gap_after", gm.cell_to_world(doorway), 9.0, true)
+
+## The tightest ring of stakes the game will let the player put round the cabin.
+##
+## Reported as "cabin 的范围在右边大一点，左边小" and then, more precisely, as one stake's
+## worth of ground on some sides that cannot be filled. Measured, the gap is 0.523m from
+## every one of the cabin's four faces -- but stakes OFFSET along the other axis tuck in
+## beside it, so the ring is not a uniform distance away and from a rotated camera some
+## of it reads as flush and some does not. This is the shot to look at rather than argue
+## about.
+func _scenario_snug() -> void:
+	_grant({"wood": 400})
+	var cfg := root.get_node_or_null("Config")
+	var gm = _main.grid_manager
+	var core_cell: Vector2i = cfg.MAP["default_core_cell"]
+	var core: Vector3 = gm.cell_to_world(core_cell)
+	var d: int = int(cfg.get_cell_divisions("wall"))
+	var centre: Vector2i = gm.world_to_fine_cell(core, d)
+	# The Hero standing there is not the cabin's business.
+	if _main.hero:
+		_main.hero.global_position = core + Vector3(0.0, 0.0, 14.0)
+	await _wait(2)
+	var placed: int = 0
+	for dx in range(-2, 3):
+		for dz in range(-2, 3):
+			if absi(dx) != 2 and absi(dz) != 2:
+				continue
+			var at: Vector3 = gm.fine_cell_to_world(centre + Vector2i(dx, dz), d)
+			var b = _main.build_system.place_building("wall", gm.world_to_cell(at), _main.buildings_container, true, at)
+			if b != null:
+				b.complete_construction()
+				placed += 1
+	# The cabin's TRUE footprint, painted flat on the ground. The cabin is 1.9m tall and
+	# a stake is 0.95m, so under any tilted camera their tops lean by different amounts
+	# and the gap looks bigger on one side than the other. This is the thing the stakes
+	# are actually measured from.
+	var mark := MeshInstance3D.new()
+	var quad := PlaneMesh.new()
+	var w: float = float(cfg.get_building_footprint("core"))
+	quad.size = Vector2(w, w)
+	mark.mesh = quad
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.1, 0.1, 0.85)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	mark.material_override = mat
+	_main.add_child(mark)
+	mark.global_position = core + Vector3(0.0, 0.05, 0.0)
+	await _wait(8)
+	print("[playtest] snug: %d stakes on the tightest ring the game allows" % placed)
+	print("[playtest] snug: the red square is the cabin's real 1.0m footprint on the ground")
+	# STRAIGHT DOWN, with no tilt at all, which is the only view with no parallax in it.
+	# Everything else leans: the cabin is 1.9m tall and a stake 0.95m, so under any tilted
+	# camera their tops shift by different amounts and the gap reads differently on each
+	# side. Here the red square and the cones are all at ground level and nothing leans.
+	var top := Camera3D.new()
+	_main.add_child(top)
+	top.projection = Camera3D.PROJECTION_ORTHOGONAL
+	top.size = 5.0
+	top.global_position = core + Vector3(0.0, 20.0, 0.0)
+	top.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+	top.current = true
+	await _wait(6)
+	await _shoot("tightest_ring_plan")
+	top.queue_free()
+	await _wait(2)
+	# From the angle the game is actually played at, close enough to judge the gaps.
+	var cam := Camera3D.new()
+	_main.add_child(cam)
+	cam.global_position = core + Vector3(3.6, 6.2, 5.1)
+	cam.look_at(core + Vector3(0.0, 0.5, 0.0), Vector3.UP)
+	cam.current = true
+	await _wait(6)
+	await _shoot("tightest_ring_play_angle")
+	cam.queue_free()
+	await _wait(2)
 
 ## A raid meeting a fence, measured rather than watched.
 ##
