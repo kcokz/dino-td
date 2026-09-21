@@ -595,7 +595,52 @@ const CONTROLS: Dictionary = {
 	"build_place_button": MOUSE_BUTTON_LEFT,      # Default: Left-click places building / selects
 	"build_cancel_button": MOUSE_BUTTON_RIGHT,    # Right-click cancels build preview
 	"cancel_key": KEY_ESCAPE,                     # ESC cancels build preview
-	"pause_key": KEY_SPACE                        # Space toggles pause
+	"pause_key": KEY_SPACE,                       # Space toggles pause
+	# The camera. Middle-drag pans, and HOLDING SHIFT while dragging orbits instead --
+	# which is the one control the game was missing, and the reason a fence looked
+	# lopsided when it was not: from one fixed bearing you see a tall building's near
+	# side and the ground behind it is hidden.
+	"camera_pan_button": MOUSE_BUTTON_MIDDLE,
+	"camera_rotate_left_key": KEY_Q,
+	"camera_rotate_right_key": KEY_E,
+	"camera_tilt_up_key": KEY_F,                  # towards looking straight down
+	"camera_tilt_down_key": KEY_V,                # towards looking along the ground
+	"camera_reset_key": KEY_R,                    # back to the opening view
+}
+
+# ==============================================================================
+# 10b. The camera
+# ==============================================================================
+## How the view moves. Every number the camera obeys is here; there were nine of them
+## buried in Main as literals before, including two different pan speeds that did not
+## match and a zoom clamp written in metres of HEIGHT, which stops meaning anything the
+## moment the player can tilt.
+##
+## The opening framing is NOT here on purpose: the rig reads it off whatever the scene's
+## Camera3D is set to (CameraRig.adopt), so scenes/Main.tscn stays the one place that
+## decides where the game opens, and "reset the view" means "back to what the scene said".
+const CAMERA: Dictionary = {
+	# How far the camera sits from the point it is looking at, in metres. Replaces a
+	# clamp on the camera's HEIGHT: height is distance times the sine of the tilt, so a
+	# height clamp silently becomes a different zoom range at every angle.
+	"min_distance": 8.0,
+	"max_distance": 45.0,
+	# How far it may be tilted, in degrees below the horizon. Not all the way to 90:
+	# straight down loses every silhouette, and the ground plane vanishes at 0.
+	"min_tilt_degrees": 15.0,
+	"max_tilt_degrees": 85.0,
+	# Metres per second on a held pan key, and metres per pixel dragged, both at the
+	# DEFAULT distance -- they scale with how far out the camera is, or panning while
+	# zoomed out crawls and panning while zoomed in flings.
+	"pan_speed": 18.0,
+	"drag_pan": 0.015,
+	# Degrees per second on a held key, and degrees per pixel dragged.
+	"rotate_speed": 110.0,
+	"tilt_speed": 55.0,
+	"drag_rotate": 0.35,
+	"drag_tilt": 0.25,
+	# Metres of distance per wheel notch or zoom key press.
+	"zoom_step": 2.2,
 }
 
 # ==============================================================================

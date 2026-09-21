@@ -517,19 +517,28 @@ func test_18_camera_zoom_and_clamping() -> void:
 	var init_y = cam.global_position.y
 	assert_almost_eq(init_y, 18.0, 0.1, "Initial camera height is ~18.0m")
 
-	# Zoom in (moves camera forward and downward)
 	main.zoom_camera(4.0)
 	assert_lt(cam.global_position.y, init_y, "Camera zoomed in closer to the ground")
 
-	# Extreme zoom in clamped at 6.0m
-	for i in range(20):
+	# CLAMPED BY DISTANCE, NOT BY HEIGHT, since v0.5 gave the player a tilt.
+	#
+	# This asserted a height of 6m to 32m, which was the right shape of rule while the
+	# camera could only ever look down at one fixed angle. Height is distance times the
+	# sine of the tilt, so the moment the tilt can change, a clamp in metres of height is
+	# silently a different zoom range at every angle -- looking along the ground it would
+	# refuse almost every distance, and looking straight down it would allow anything.
+	# See Config.CAMERA and scripts/core/CameraRig.gd.
+	var cfg = tree.root.get_node_or_null("Config")
+	var near: float = float(cfg.CAMERA["min_distance"])
+	var far: float = float(cfg.CAMERA["max_distance"])
+	for i in range(40):
 		main.zoom_camera(5.0)
-	assert_gte(cam.global_position.y, 6.0, "Camera zoom in clamped at min height >= 6.0m")
+	assert_almost_eq(main.camera_rig.distance, near, 0.001, "Zooming in stops at Config's nearest")
+	assert_gt(cam.global_position.y, 0.0, "And the camera is still above the ground")
 
-	# Extreme zoom out clamped at 32.0m
-	for i in range(30):
+	for i in range(60):
 		main.zoom_camera(-5.0)
-	assert_lte(cam.global_position.y, 32.0, "Camera zoom out clamped at max height <= 32.0m")
+	assert_almost_eq(main.camera_rig.distance, far, 0.001, "And out at Config's furthest")
 
 # ==============================================================================
 # Feature 20: HUD Cleanliness & In-World Label Sizes (v0.2 Follow-up Items 1 & 2)

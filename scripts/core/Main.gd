@@ -89,8 +89,22 @@ func _ensure_nav_maps() -> void:
 	nav_maps.name = "NavMaps"
 	add_child(nav_maps)
 
+## Where the view is standing. See scripts/core/CameraRig.gd -- four numbers rather than
+## a transform, so that "not closer than 8 metres", "not tilted past 85 degrees" and
+## "back to the opening shot" are all things that can actually be said.
+var camera_rig: CameraRig = null
+
+func _ensure_camera_rig() -> void:
+	if camera_rig != null or camera == null or not is_instance_valid(camera):
+		return
+	camera_rig = CameraRig.new(_get_config())
+	# Adopted, not configured: the scene's Camera3D is still what decides where the game
+	# opens, and it is what R goes back to.
+	camera_rig.adopt(camera)
+
 func _process(delta: float) -> void:
-	_handle_camera_pan(delta)
+	_ensure_camera_rig()
+	_handle_camera_keys(delta)
 	_check_pending_cabin_entry()
 
 func _init_level_coordinates() -> void:
@@ -811,11 +825,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Mouse Wheel Zoom
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			zoom_camera(1.8)
+			zoom_camera(_zoom_step())
 			get_viewport().set_input_as_handled()
 			return
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom_camera(-1.8)
+			zoom_camera(-_zoom_step())
 			get_viewport().set_input_as_handled()
 			return
 
@@ -828,13 +842,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and current_build_type == "" and not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 		_update_hover(event.position)
 
-	# Middle mouse drag camera pan
+	# Middle-drag moves the view: sliding it across the ground, or -- with Shift held --
+	# swinging it round whatever is in the middle of the screen.
 	if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
-		if camera:
-			var right = camera.global_transform.basis.x
-			var cam_fwd = Vector3(camera.global_transform.basis.z.x, 0.0, camera.global_transform.basis.z.z).normalized()
-			var speed = 0.015 * (camera.global_position.y / 18.0)
-			camera.global_position -= (right * event.relative.x - cam_fwd * event.relative.y) * speed
+		_ensure_camera_rig()
+		if camera_rig != null and camera != null:
+			if event.shift_pressed:
+				camera_rig.orbit_drag(event.relative)
+			else:
+				camera_rig.pan_drag(event.relative)
+			camera_rig.apply_to(camera)
 			get_viewport().set_input_as_handled()
 			return
 
@@ -855,13 +872,19 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 		else:
 			if event.keycode == KEY_PAGEUP or event.keycode == KEY_EQUAL:
-				zoom_camera(1.8)
+				zoom_camera(_zoom_step())
 				get_viewport().set_input_as_handled()
 				return
 			elif event.keycode == KEY_PAGEDOWN or event.keycode == KEY_MINUS:
-				zoom_camera(-1.8)
+				zoom_camera(-_zoom_step())
 				get_viewport().set_input_as_handled()
 				return
+
+	# Back to the opening view, for when the player has turned themselves round.
+	if event is InputEventKey and event.pressed and not event.echo 			and event.keycode == int(controls.get("camera_reset_key", KEY_R)) 			and not (event.ctrl_pressed or event.meta_pressed):
+		reset_camera()
+		get_viewport().set_input_as_handled()
+		return
 
 	# Space key to toggle pause
 	if event is InputEventKey and event.pressed and event.keycode == pause_key:
@@ -1342,14 +1365,33 @@ func _get_config() -> Node:
 # Camera & View Controls (Zoom, Pan, Fullscreen, UI Scale)
 # ==============================================================================
 
+## Closer to or further from the point being looked at. Positive is closer.
+##
+## It used to slide the camera along its own forward vector and clamp the HEIGHT it ended
+## up at, which quietly does two wrong things: the point being looked at drifts with
+## every notch, so zooming in walks the view off whatever you were studying, and a clamp
+## in metres of height becomes a different zoom range at every tilt -- which matters now
+## that the tilt can change.
 func zoom_camera(amount: float) -> void:
-	if camera == null or not is_instance_valid(camera):
+	_ensure_camera_rig()
+	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
-	var forward = -camera.global_transform.basis.z
-	var new_pos = camera.global_position + forward * amount
-	# Clamped camera height between 6.0m (close zoom) and 32.0m (tactical overview)
-	if new_pos.y >= 6.0 and new_pos.y <= 32.0:
-		camera.global_position = new_pos
+	camera_rig.zoom_by(amount)
+	camera_rig.apply_to(camera)
+
+## Puts the view back where the scene opened it.
+func reset_camera() -> void:
+	_ensure_camera_rig()
+	if camera_rig == null or camera == null or not is_instance_valid(camera):
+		return
+	camera_rig.reset()
+	camera_rig.apply_to(camera)
+
+func _zoom_step() -> float:
+	var cfg = _get_config()
+	if cfg and "CAMERA" in cfg and cfg.CAMERA is Dictionary:
+		return float(cfg.CAMERA.get("zoom_step", 2.2))
+	return 2.2
 
 func toggle_fullscreen() -> void:
 	var cur_mode = DisplayServer.window_get_mode()
@@ -1367,25 +1409,42 @@ func set_ui_scale(p_scale: float) -> void:
 	if win:
 		win.content_scale_factor = clampf(p_scale, 0.75, 2.0)
 
-func _handle_camera_pan(delta: float) -> void:
-	if camera == null or not is_instance_valid(camera):
+## The keys that can be HELD: panning, turning and tilting all want to be smooth, so
+## they are read every frame rather than waiting for a key event to repeat.
+func _handle_camera_keys(delta: float) -> void:
+	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
-	var pan_vec = Vector2.ZERO
+	if in_cabin:
+		return                      # the interior has its own camera
+	var cfg = _get_config()
+	var controls: Dictionary = cfg.CONTROLS if (cfg and "CONTROLS" in cfg and cfg.CONTROLS is Dictionary) else {}
+
+	var pan_vec := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 		pan_vec.x -= 1.0
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		pan_vec.x += 1.0
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
-		pan_vec.y -= 1.0
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
 		pan_vec.y += 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		pan_vec.y -= 1.0
+	camera_rig.pan_keys(pan_vec, delta)
 
-	if pan_vec != Vector2.ZERO:
-		pan_vec = pan_vec.normalized()
-		var right = camera.global_transform.basis.x
-		var cam_fwd = Vector3(camera.global_transform.basis.z.x, 0.0, camera.global_transform.basis.z.z).normalized()
-		var pan_speed = 18.0 * (camera.global_position.y / 18.0) * delta
-		camera.global_position += (right * pan_vec.x + cam_fwd * pan_vec.y) * pan_speed
+	var turn: float = 0.0
+	if Input.is_key_pressed(int(controls.get("camera_rotate_left_key", KEY_Q))):
+		turn -= 1.0
+	if Input.is_key_pressed(int(controls.get("camera_rotate_right_key", KEY_E))):
+		turn += 1.0
+	camera_rig.rotate_keys(turn, delta)
+
+	var lean: float = 0.0
+	if Input.is_key_pressed(int(controls.get("camera_tilt_up_key", KEY_F))):
+		lean += 1.0
+	if Input.is_key_pressed(int(controls.get("camera_tilt_down_key", KEY_V))):
+		lean -= 1.0
+	camera_rig.tilt_keys(lean, delta)
+
+	camera_rig.apply_to(camera)
 
 # ==============================================================================
 # Build Preview Ghost (v0.2 follow-up)

@@ -28,6 +28,9 @@ var back_btn: Button = null
 var language_row: HBoxContainer = null
 var language_label: Label = null
 var window_row: HBoxContainer = null
+var camera_row: VBoxContainer = null
+var camera_label: Label = null
+var camera_keys_label: Label = null
 var window_label: Label = null
 var window_picker: OptionButton = null
 var language_picker: OptionButton = null
@@ -110,6 +113,7 @@ func _show_page() -> void:
 	# Settings only. Leaving it off this list is why it appeared on the main menu too --
 	# every row added to page_vbox shows on every page unless it is told otherwise.
 	if window_row: window_row.visible = not root_page
+	if camera_row: camera_row.visible = not root_page
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if root_page else tr("MENU_SETTINGS_TITLE")
 
@@ -248,6 +252,24 @@ func _ensure_components() -> void:
 		if not window_picker.item_selected.is_connected(_on_window_mode_selected):
 			window_picker.item_selected.connect(_on_window_mode_selected)
 
+	if camera_row == null:
+		camera_row = VBoxContainer.new()
+		camera_row.name = "CameraRow"
+		page_vbox.add_child(camera_row)
+
+		camera_label = Label.new()
+		camera_label.name = "CameraLabel"
+		camera_label.add_theme_font_size_override("font_size", _ui_size("hud_font_size", 20))
+		camera_row.add_child(camera_label)
+
+		# The keys themselves, which is the only place the game tells anyone the view can
+		# be turned at all. A control nobody can find is a control nobody has.
+		camera_keys_label = Label.new()
+		camera_keys_label.name = "CameraKeysLabel"
+		camera_keys_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		camera_keys_label.add_theme_font_size_override("font_size", _ui_size("hud_button_font_size", 18))
+		camera_row.add_child(camera_keys_label)
+
 	back_btn = _make_button(back_btn, "BackBtn", _on_back_pressed)
 	_populate_languages()
 	_populate_window_modes()
@@ -312,6 +334,8 @@ func _refresh_texts() -> void:
 	if back_btn: back_btn.text = tr("MENU_BACK")
 	if language_label: language_label.text = tr("MENU_LANGUAGE")
 	if window_label: window_label.text = tr("MENU_WINDOW_MODE")
+	if camera_label: camera_label.text = tr("MENU_CAMERA")
+	if camera_keys_label: camera_keys_label.text = tr("MENU_CAMERA_KEYS")
 	_populate_window_modes()
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if current_page == Page.ROOT else tr("MENU_SETTINGS_TITLE")

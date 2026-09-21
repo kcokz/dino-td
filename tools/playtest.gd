@@ -298,16 +298,26 @@ func _scenario_snug() -> void:
 	await _shoot("tightest_ring_plan")
 	top.queue_free()
 	await _wait(2)
-	# From the angle the game is actually played at, close enough to judge the gaps.
-	var cam := Camera3D.new()
-	_main.add_child(cam)
-	cam.global_position = core + Vector3(3.6, 6.2, 5.1)
-	cam.look_at(core + Vector3(0.0, 0.5, 0.0), Vector3.UP)
-	cam.current = true
-	await _wait(6)
-	await _shoot("tightest_ring_play_angle")
-	cam.queue_free()
-	await _wait(2)
+	# THE SAME RING FROM TWO OPPOSITE BEARINGS, using the player's own camera controls.
+	# This is what the view turning is for: from one fixed angle the near side of a 1.9m
+	# cabin covers the ground behind it, so a gap that is the same all the way round
+	# reads as flush on one side and open on the other. Turn half a circle and the two
+	# sides swap over -- which is the proof that the ground is symmetric and the picture
+	# was not.
+	var rig = _main.camera_rig
+	if rig != null:
+		rig.look_at_point(core)
+		rig.distance = 9.0
+		rig.tilt = 38.0
+		for shot in [["near_side", 35.0], ["far_side", 215.0]]:
+			rig.yaw = float(shot[1])
+			rig.apply_to(_main.camera)
+			_main.camera.current = true
+			await _wait(6)
+			await _shoot("tightest_ring_%s" % String(shot[0]))
+		rig.reset()
+		rig.apply_to(_main.camera)
+		await _wait(2)
 
 ## A raid meeting a fence, measured rather than watched.
 ##
