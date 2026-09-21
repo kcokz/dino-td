@@ -160,17 +160,37 @@ func path(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> P
 ## the best route it has, so one that stops short of where it was asked for means there
 ## is no way there. The hand-written version flooded the grid from the target end with a
 ## budget, and had to guess when the budget ran out.
+##
+## "SHORT OF WHERE IT WAS ASKED FOR" IS MEASURED AGAINST THE NEAREST PLACE THE MESH HAS,
+## not against the goal itself, and that difference is a whole bug. Almost every goal
+## worth asking about is a BUILDING, and buildings are carved out of the mesh -- so a
+## route to one always stops short by roughly the agent's radius plus the building's half
+## width, plus whatever else is carved nearby. This used to allow a fixed metre of slack
+## for that, and a metre is a guess: the bare cabin left a route ending 0.922m from its
+## centre, which fits with 0.078m to spare, and putting FIVE STAKES beside it pushed the
+## end to 1.020m. Two sides of the cabin were wide open and every dinosaur in the game
+## was told the way was sealed, walked up to the fence and started eating it -- reported
+## as "恐龙又直接进攻还没围住 cabin 的木栅栏了". Seven centimetres of an arbitrary
+## tolerance, with nothing about the actual question in it.
+##
+## Asking whether the route reaches the nearest standable point to the goal has no such
+## number in it: it is true whenever the goal is as close as the ground allows, whatever
+## is standing there and however big it is.
 func is_reachable(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> bool:
+	var map: RID = map_for(walls_are_open)
+	if not map.is_valid():
+		return false
 	var pts := path(from_pos, to_pos, walls_are_open)
 	if pts.is_empty():
 		return false
-	return pts[pts.size() - 1].distance_to(to_pos) <= _arrival_slack()
+	var nearest: Vector3 = NavigationServer3D.map_get_closest_point(map, to_pos)
+	return pts[pts.size() - 1].distance_to(nearest) <= _same_place()
 
-## How close the end of a route has to be to count as arriving. The mesh is carved back
-## by the agent's radius, so a route to something solid stops a radius short of it and
-## that is not a failure to reach.
-func _arrival_slack() -> float:
-	return _agent_radius() * 2.0 + _cell_size() * 2.0
+## How far apart two points may be and still be the same place. About the mesh's own
+## resolution and nothing else -- which is the only kind of tolerance this question
+## should contain.
+func _same_place() -> float:
+	return maxf(0.2, _cell_size() * 3.0)
 
 ## The nearest point on the mesh to `pos` -- where a walker that tried to go somewhere
 ## impossible would actually end up.

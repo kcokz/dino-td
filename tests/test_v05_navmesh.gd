@@ -431,3 +431,100 @@ func test_15_a_raid_walks_past_a_turret_nobody_has_built() -> void:
 	assert_lt(dino.global_position.distance_to(core), 2.0,
 		"It walks past the order and reaches the cabin, %.2fm from where it started" % started)
 	assert_eq(ordered.current_hp, blueprint_hp, "Without taking a bite out of a plan")
+
+# ==============================================================================
+# 7. "Can I get there" is not a number of metres
+# ==============================================================================
+
+func test_16_a_fence_that_does_not_enclose_anything_seals_nothing() -> void:
+	# Reported as "恐龙又直接进攻还没围住 cabin 的木栅栏了" -- the raid eating a fence with
+	# two sides of the cabin wide open -- and the cause had nothing to do with fences.
+	#
+	# Almost every goal worth asking about is a BUILDING, and buildings are carved out of
+	# the mesh, so a route to one always stops short by roughly the agent's radius plus
+	# the building's half width plus whatever else is carved nearby. Reachability used to
+	# allow a fixed metre of slack for that. A metre is a guess: the bare cabin left a
+	# route ending 0.922m from its centre, which fits with SEVEN CENTIMETRES to spare,
+	# and five stakes beside it pushed the end to 1.020m. Every dinosaur in the game was
+	# then told the way was sealed.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var gm = main.grid_manager
+	var core: Vector3 = _core_of(main)
+	if main.hero:
+		main.hero.global_position = core + Vector3(0.0, 0.0, 16.0)
+	var d: int = int(config_node.get_cell_divisions("wall"))
+	var centre: Vector2i = gm.world_to_fine_cell(core, d)
+
+	# Pressed against the cabin on two sides, and nothing at all on the other two.
+	var placed: int = 0
+	for dx in range(-2, 3):
+		for dz in range(-2, 3):
+			if absi(dx) != 2 and absi(dz) != 2:
+				continue
+			if dx > 0 or dz > 0:
+				continue
+			var snap: Vector3 = gm.fine_cell_to_world(centre + Vector2i(dx, dz), d)
+			var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
+			if b != null:
+				b.complete_construction()
+				placed += 1
+	assert_gt(placed, 2, "Some stakes went up beside the cabin")
+	await wait_frames(8)
+
+	var outside: Vector3 = core + Vector3(0.0, 0.0, -12.0)
+	assert_true(main.nav_maps.is_reachable(outside, core),
+		"Two sides are wide open, so of course the cabin can be reached")
+
+	var dino = load(String(config_node.get_dino_script_path("raptor"))).new()
+	_cleanup_nodes.append(dino)
+	main.dinos_container.add_child(dino)
+	dino.setup("raptor")
+	dino.max_hp = 9999.0
+	dino.current_hp = 9999.0
+	dino.global_position = outside
+	dino.set_waypoints([core])
+	await wait_frames(2)
+	assert_false(dino._way_is_sealed(), "And the raid knows it")
+
+	for step in range(600):
+		dino.advance_towards_waypoint(1.0 / 60.0)
+		if dino.global_position.distance_to(core) < 1.5:
+			break
+		await wait_physics_frames(1)
+	assert_lt(dino.global_position.distance_to(core), 1.5, "It walks round to the cabin")
+	assert_false(_is_wall(dino.current_target), "Rather than stopping to eat the fence")
+
+func test_17_and_a_route_that_stops_somewhere_else_still_means_no() -> void:
+	# The half that must not be given away by loosening the first. A sealed ring is not
+	# "a route that ends a bit further out" -- it is a route that ends somewhere else
+	# entirely, outside the ring, while the nearest standable point to the cabin is
+	# inside it.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	assert_gt(_ring_around(main, core, 4.0), 12, "A ring went up")
+	await wait_frames(8)
+	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
+
+	assert_false(main.nav_maps.is_reachable(outside, core), "A raid still has no way in")
+	assert_true(main.nav_maps.is_reachable(outside, core, true), "And the Hero still has one")
+
+func test_18_the_tolerance_is_about_the_mesh_and_not_about_buildings() -> void:
+	# What makes the rule hold whatever is standing in the way: the only number left in
+	# it is the mesh's own resolution. A tolerance that has to cover "the agent's radius
+	# plus the building's half width" is a tolerance that has to be re-guessed for every
+	# building ever added.
+	var main = _level()
+	await wait_frames(8)
+	var cell: float = float(config_node.NAV["cell_size"])
+	var radius: float = float(config_node.NAV["agent_radius"])
+
+	assert_lt(main.nav_maps._same_place(), radius,
+		"It is smaller than an agent, so it cannot be hiding a body's width of slack")
+	assert_gte(main.nav_maps._same_place(), cell,
+		"And no smaller than the mesh can resolve")
