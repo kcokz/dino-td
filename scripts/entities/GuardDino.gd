@@ -189,7 +189,7 @@ func _detect_threat() -> Node3D:
 	# Primary threat: Hero
 	var heroes = get_tree().get_nodes_in_group("hero")
 	for h in heroes:
-		if h is Node3D and _is_threat_valid(h):
+		if h is Node3D and _is_threat_valid(h) and _worth_chasing(h):
 			var dist = global_position.distance_to(h.global_position)
 			if dist <= aggro_radius:
 				return h
@@ -197,12 +197,28 @@ func _detect_threat() -> Node3D:
 	# Secondary threat: Buildings close to nest
 	var buildings = get_tree().get_nodes_in_group("buildings")
 	for b in buildings:
-		if b is Node3D and _is_threat_valid(b) and ("is_constructed" in b and b.is_constructed):
+		if b is Node3D and _is_threat_valid(b) and _worth_chasing(b) 				and ("is_constructed" in b and b.is_constructed):
 			var dist = global_position.distance_to(b.global_position)
 			if dist <= (aggro_radius * 0.7):
 				return b
 
 	return null
+
+## A GUARD DOES NOT TAKE UP A CHASE IT MUST IMMEDIATELY ABANDON.
+##
+## Aggro is measured from the guard and the leash from its post, and without this those
+## two disagree at the edge and the guard stops dead. Reported as "守卫恐龙追着人跑了一段
+## 之后停下不回去了": pulled past its leash with the player standing a few metres away, it
+## alternated RETURNING and AGGRO_CHASE on consecutive frames -- returning saw a threat
+## inside its aggro radius and gave chase, chasing saw itself past the leash and turned
+## back -- and BOTH of those branches return before moving. Measured: six seconds of that,
+## 180 frames in each state, 0.000m travelled. Neither going home nor attacking, which is
+## the worst of the three things it could be doing.
+##
+## Being out of reach is a property of the THREAT, not of which state the guard happens
+## to be in, so it belongs here rather than as a special case in _process_returning.
+func _worth_chasing(threat: Node3D) -> bool:
+	return threat.global_position.distance_to(post_position) <= leash_radius
 
 func _is_threat_valid(threat: Variant) -> bool:
 	if threat == null or typeof(threat) != TYPE_OBJECT or not is_instance_valid(threat):
