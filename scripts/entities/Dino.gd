@@ -1269,6 +1269,18 @@ func _is_target_valid(target: Variant) -> bool:
 		return false
 	if "is_destroyed" in target and target.is_destroyed:
 		return false
+	# ORDERING A FENCE IS NOT HAVING ONE. The same rule as Config.LAYER_BLUEPRINT, which
+	# keeps unbuilt work out of both navigation bakes and out of everyone's collision
+	# mask -- but a mask only covers what is found by a RAY, and a dinosaur finds
+	# buildings by looking through the "buildings" group for the nearest one. So a turret
+	# that had only been ordered was a perfectly good thing to walk at and bite.
+	#
+	# Measured: a raptor sent at the cabin stopped 5.27m short of it, at a turret nobody
+	# had built, and stood there chewing the blueprint from 20 hit points down to 6. That
+	# is the reported "pending 建筑还是能 block 恐龙行走路径", and it is the same bug the
+	# blueprint layer was added for, in the one place a layer cannot reach.
+	if "is_constructed" in target and not target.is_constructed:
+		return false
 	if "current_hp" in target and target.current_hp <= 0.0:
 		return false
 	if not target.has_method("take_damage"):

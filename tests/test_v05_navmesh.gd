@@ -380,3 +380,54 @@ func test_14_his_own_fence_is_not_something_to_walk_round() -> void:
 	assert_gt(his.size(), 1, "He has a way in")
 	assert_lt(his[his.size() - 1].distance_to(core), 1.0, "That actually gets there")
 	assert_false(main.nav_maps.is_reachable(outside, core), "And a raid has none")
+
+# ==============================================================================
+# 6. And nobody stops to eat work that has only been ordered
+# ==============================================================================
+
+func test_15_a_raid_walks_past_a_turret_nobody_has_built() -> void:
+	# The blueprint rule has two halves and only one of them is a collision layer.
+	# Config.LAYER_BLUEPRINT keeps unbuilt work out of both bakes and out of everyone's
+	# mask -- but a mask only covers what is found by a RAY, and a dinosaur finds
+	# buildings by looking through the "buildings" group for the nearest one. So a turret
+	# that had only been ordered was a perfectly good thing to walk at and bite.
+	#
+	# Measured: a raptor sent at the cabin stopped 5.27m short of it, at a turret nobody
+	# had built, and stood there chewing the blueprint from 20 hit points down to 6.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+		game_state_node.resources["stone"] = 4000
+	var gm = main.grid_manager
+	var core: Vector3 = _core_of(main)
+
+	# Ordered, never built, standing beside the road the raid walks down.
+	var cell: Vector2i = gm.world_to_cell(core + Vector3(0.0, 0.0, -5.0))
+	var ordered = main.build_system.place_building("tower", cell, main.buildings_container, true)
+	assert_not_null(ordered, "A turret was ordered")
+	assert_false(ordered.is_constructed, "And never built")
+	await wait_frames(4)
+
+	var dino = load(String(config_node.get_dino_script_path("raptor"))).new()
+	_cleanup_nodes.append(dino)
+	main.dinos_container.add_child(dino)
+	dino.setup("raptor")
+	dino.max_hp = 9999.0
+	dino.current_hp = 9999.0
+	dino.global_position = core + Vector3(0.0, 0.0, -10.0)
+	dino.set_waypoints([core])
+	await wait_frames(2)
+
+	assert_false(dino._is_target_valid(ordered), "It is not something to commit to")
+	var blueprint_hp: float = ordered.current_hp
+	var started: float = dino.global_position.distance_to(core)
+	for step in range(600):
+		dino.advance_towards_waypoint(1.0 / 60.0)
+		if dino.global_position.distance_to(core) < 2.0:
+			break
+		await wait_physics_frames(1)
+
+	assert_lt(dino.global_position.distance_to(core), 2.0,
+		"It walks past the order and reaches the cabin, %.2fm from where it started" % started)
+	assert_eq(ordered.current_hp, blueprint_hp, "Without taking a bite out of a plan")
