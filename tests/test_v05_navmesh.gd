@@ -528,3 +528,67 @@ func test_18_the_tolerance_is_about_the_mesh_and_not_about_buildings() -> void:
 		"It is smaller than an agent, so it cannot be hiding a body's width of slack")
 	assert_gte(main.nav_maps._same_place(), cell,
 		"And no smaller than the mesh can resolve")
+
+# ==============================================================================
+# 8. Finishing a building is when the world changes shape
+# ==============================================================================
+
+func test_19_a_fence_the_hero_has_just_finished_actually_blocks() -> void:
+	# ORDERING a fence and HAVING one are separate moments, and only the second one
+	# changes what anyone can walk through. The meshes were only ever told about the
+	# first: EventBus.building_placed fires when a blueprint goes down, and nothing at
+	# all fired when it became a wall.
+	#
+	# It looked like it worked because of how the tests and the level happened to place
+	# things -- in a tight loop, where putting the NEXT blueprint down marked the meshes
+	# stale before the bake ever ran, so the bake saw the finished ones. Let a moment
+	# pass between ordering a fence and finishing it, which is exactly what the Hero
+	# walking over to build it does, and the fence stops nobody.
+	var main = _level()
+	await wait_frames(8)
+	if game_state_node and "resources" in game_state_node:
+		game_state_node.resources["wood"] = 4000
+	var core: Vector3 = _core_of(main)
+	if main.hero:
+		main.hero.global_position = core + Vector3(0.0, 0.0, 20.0)
+	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
+
+	# Ordered, and then LEFT for a while, which is the part that matters.
+	var ordered: Array[Node] = []
+	for b in _ring_around_as_blueprints(main, core, 4.0):
+		ordered.append(b)
+	assert_gt(ordered.size(), 12, "A ring was ordered")
+	await wait_frames(8)
+	assert_true(main.nav_maps.is_reachable(outside, core),
+		"Ordered and not built, it stops nobody -- which is the blueprint rule")
+
+	# Now the Hero finishes them, and nothing else in the world happens.
+	for b in ordered:
+		if is_instance_valid(b):
+			b.complete_construction()
+	await wait_frames(8)
+
+	assert_false(main.nav_maps.is_reachable(outside, core),
+		"Finished, it stops a raid -- without anything else being built to jog the meshes")
+	assert_true(main.nav_maps.is_reachable(outside, core, true), "And the Hero still gets in")
+
+## A ring ORDERED and left unbuilt, handed back so a test can finish it later.
+func _ring_around_as_blueprints(main: Node, centre: Vector3, radius: float) -> Array[Node]:
+	var gm = main.grid_manager
+	var d: int = int(config_node.get_cell_divisions("wall"))
+	var step: float = float(config_node.TILE_SIZE) / float(d)
+	var seen: Dictionary = {}
+	var out: Array[Node] = []
+	var around: int = int(ceil(TAU * radius / step)) * 4
+	for i in range(around):
+		var a: float = TAU * float(i) / float(around)
+		var at: Vector3 = centre + Vector3(sin(a) * radius, 0.0, cos(a) * radius)
+		var fine: Vector2i = gm.world_to_fine_cell(at, d)
+		if seen.has(fine):
+			continue
+		seen[fine] = true
+		var snap: Vector3 = gm.fine_cell_to_world(fine, d)
+		var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
+		if b != null:
+			out.append(b)
+	return out

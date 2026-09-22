@@ -66,7 +66,9 @@ func _connect_event_bus() -> void:
 	# Anything that changes what is solid makes both meshes stale. Marked rather than
 	# rebaked on the spot: laying a row of stakes fires this once per stake, and a row
 	# should cost one bake.
-	for sig in ["building_placed", "building_destroyed"]:
+	# building_completed as well as building_placed: a blueprint is in neither mesh, so
+	# the moment that changes what anyone can walk through is the moment it is FINISHED.
+	for sig in ["building_placed", "building_completed", "building_destroyed"]:
 		if eb.has_signal(sig) and not eb.is_connected(sig, _on_world_changed):
 			eb.connect(sig, _on_world_changed)
 

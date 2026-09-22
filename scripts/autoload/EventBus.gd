@@ -33,6 +33,18 @@ signal resources_changed(res: Dictionary)
 ## Emitted when a building is successfully validated and placed on the grid.
 signal building_placed(building: Node)
 
+## Emitted when a blueprint becomes a finished building.
+##
+## SEPARATE FROM building_placed BECAUSE THEY ARE SEPARATE MOMENTS, and the difference is
+## the whole of the blueprint rule: ordering a fence puts something on the grid that is
+## solid to nobody, and finishing it is when the thing actually starts blocking the way.
+## Anything that cares what the world is SHAPED like -- the navigation meshes above all
+## -- has to hear the second one, and for a version it did not: the Hero finished a fence
+## and the meshes were never rebuilt, so a raid walked through a wall that was standing
+## right there. It only ever looked like it worked because placing the NEXT building
+## happened to mark them stale.
+signal building_completed(building: Node)
+
 ## Emitted when a building's HP reaches 0, prior to deletion.
 signal building_destroyed(building: Node)
 

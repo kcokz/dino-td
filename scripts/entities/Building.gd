@@ -133,6 +133,10 @@ func complete_construction() -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("build_progress_updated"):
 		eb.build_progress_updated.emit(self, 1.0)
+	# The world just changed shape. See EventBus.building_completed -- without this the
+	# navigation meshes never learn that a blueprint has become a wall.
+	if was_under_construction and eb and eb.has_signal("building_completed"):
+		eb.building_completed.emit(self)
 
 ## Finished work is solid. Unfinished work is CLICKABLE BUT SOLID TO NOBODY.
 ##
