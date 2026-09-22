@@ -788,6 +788,7 @@ func on_build_selected(type_id: String) -> void:
 
 func cancel_building_selection() -> void:
 	current_build_type = ""
+	_end_drag()
 	_clear_build_preview()
 	if hud and is_instance_valid(hud) and hud.has_method("deselect_build"):
 		hud.deselect_build()
@@ -833,8 +834,26 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
+	# Letting go lays the fence. One that was never dragged anywhere lays a single
+	# stake, so the old click-one-at-a-time still works exactly as it did.
+	if event is InputEventMouseButton and not event.pressed and event.button_index == place_btn 			and _drag_from != NOT_DRAGGING:
+		var cells: Array[Vector2i] = _run_to(event.position) if _dragging else [_drag_from]
+		_end_drag()
+		_commit_run(cells)
+		get_viewport().set_input_as_handled()
+		return
+
+	# Dragging: the ghosts follow the run rather than the cursor.
+	if event is InputEventMouseMotion and _drag_from != NOT_DRAGGING:
+		if not _dragging and event.position.distance_to(_drag_from_px) >= _drag_number("drag_threshold_px", 6.0):
+			_dragging = true
+		if _dragging:
+			_show_run_preview(_run_to(event.position))
+			get_viewport().set_input_as_handled()
+			return
+
 	# Build preview follows the cursor while a building type is selected
-	if event is InputEventMouseMotion and current_build_type != "" and not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
+	if event is InputEventMouseMotion and current_build_type != "" and not _dragging 			and not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 		_update_build_preview(event.position)
 
 	# Otherwise the cursor outlines whatever it is over, so the player can see what a
@@ -1002,11 +1021,162 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null:
-			# The exact point clicked, not just the tile: a stake snaps to the finer grid
-			# and needs to know where inside the tile the player actually pointed.
-			try_place_at_cell(grid_manager.world_to_cell(hit_pos), hit_pos)
+			if _is_dragged_out(current_build_type):
+				# A fence is DRAGGED. Nothing is laid on the press: the player may be
+				# about to pull out a run, and a stake dropped under the finger before
+				# they have moved is one they did not ask for. A press that never moves
+				# far enough lays exactly one on release, so a click still works.
+				_drag_from = grid_manager.world_to_fine_cell(hit_pos, _divisions_of(current_build_type))
+				_drag_from_px = event.position
+				_dragging = false
+				if build_preview != null and is_instance_valid(build_preview):
+					build_preview.visible = false
+			else:
+				# The exact point clicked, not just the tile: a stake snaps to the finer
+				# grid and needs to know where inside the tile the player actually pointed.
+				try_place_at_cell(grid_manager.world_to_cell(hit_pos), hit_pos)
 		get_viewport().set_input_as_handled()
 		return
+
+# ==============================================================================
+# Dragging out a wall
+# ==============================================================================
+#
+# Press where the fence starts, drag to where it ends, let go. Clicking a hundred stakes
+# one at a time is not a decision a hundred times over; it is the same decision a hundred
+# times, and every building game solved it the same way.
+#
+# NOTHING NEW UNDERNEATH IT. The run is GridManager's own line traversal asked at the
+# fine grid's scale instead of the tile's, every stake goes down through the same
+# BuildSystem.place_building as a single click, and the ghosts are the same
+# Building.make_body the single ghost already used. What is actually new is three pieces
+# of state and the rule about when a press becomes a drag.
+
+## Where the finger went down, in fine cells, or NOT_DRAGGING.
+var _drag_from: Vector2i = Vector2i(2147483647, 2147483647)
+var _drag_from_px: Vector2 = Vector2.ZERO
+## True once the cursor has moved far enough that this is a drag and not a click.
+var _dragging: bool = false
+## The ghosts of the run, rebuilt whenever the cursor moves to a different fine cell.
+var _run_preview: Node3D = null
+var _run_cells: Array[Vector2i] = []
+
+const NOT_DRAGGING := Vector2i(2147483647, 2147483647)
+
+## Whether this kind of building is laid in runs. Derived from the KIND rather than
+## declared, because "wall" is already the category the rest of the rules are written
+## against -- so a new sort of barrier gets this for free.
+func _is_dragged_out(type_id: String) -> bool:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_building_kind"):
+		return false
+	return String(cfg.get_building_kind(type_id)) == "wall"
+
+func _divisions_of(type_id: String) -> int:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_cell_divisions"):
+		return int(cfg.get_cell_divisions(type_id))
+	return 1
+
+func _drag_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	if cfg and "BUILD_DRAG" in cfg and cfg.BUILD_DRAG is Dictionary:
+		return float(cfg.BUILD_DRAG.get(key, fallback))
+	return fallback
+
+## The fine cells a run from `_drag_from` to the cursor would cover, already filtered to
+## the ones a stake can actually go in.
+##
+## Blocked cells are SKIPPED rather than cutting the run short: dragging a fence past a
+## rock should give a fence either side of the rock, which is what the player meant, and
+## it means the ghosts are exactly what will be built -- what you see is what you get.
+func _run_to(screen_pos: Vector2) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if _drag_from == NOT_DRAGGING or current_build_type == "" or grid_manager == null:
+		return out
+	var hit = _raycast_ground(screen_pos)
+	if hit == null:
+		return out
+	var d: int = _divisions_of(current_build_type)
+	# CENTRE TO CENTRE, not centre to wherever the cursor happens to be. A line that runs
+	# exactly along a cell boundary is ambiguous -- the traversal may take either side of
+	# it -- and two runs drawn to the same corner then land in different rows and the
+	# corner is left open. Measured: a box dragged round the cabin in four gestures, 60
+	# stakes, and a raid walked in through a corner. Snapping both ends puts the line
+	# through the middle of cells, where there is nothing to be ambiguous about.
+	var from_world: Vector3 = grid_manager.fine_cell_to_world(_drag_from, d)
+	var to_world: Vector3 = grid_manager.fine_cell_to_world(grid_manager.world_to_fine_cell(hit, d), d)
+	var line: Array[Vector2i] = grid_manager.fine_cells_on_line(from_world, to_world, d)
+	var cap: int = int(_drag_number("max_run", 120.0))
+	for fine in line:
+		if out.size() >= cap:
+			break
+		var at: Vector3 = grid_manager.fine_cell_to_world(fine, d)
+		if build_system != null and build_system.can_place_building(current_build_type, grid_manager.world_to_cell(at), false, at):
+			out.append(fine)
+	return out
+
+func _show_run_preview(cells: Array[Vector2i]) -> void:
+	if cells == _run_cells and _run_preview != null and is_instance_valid(_run_preview):
+		return
+	_run_cells = cells.duplicate()
+	_clear_run_preview()
+	if cells.is_empty():
+		return
+	_run_preview = Node3D.new()
+	_run_preview.name = "RunPreview"
+	add_child(_run_preview)
+	var d: int = _divisions_of(current_build_type)
+	for fine in cells:
+		var body: Node3D = Building.make_body(current_build_type)
+		body.position = grid_manager.fine_cell_to_world(fine, d)
+		for mi in _meshes_in(body):
+			mi.material_override = _make_preview_material(Color.WHITE)
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_run_preview.add_child(body)
+	# What it will cost, before the wood is spent rather than after.
+	_hint_run(cells.size())
+
+func _clear_run_preview() -> void:
+	if _run_preview != null and is_instance_valid(_run_preview):
+		_run_preview.queue_free()
+	_run_preview = null
+
+func _hint_run(count: int) -> void:
+	var cfg = _get_config()
+	if cfg == null or not cfg.BUILDINGS.has(current_build_type):
+		return
+	var cost: Dictionary = cfg.BUILDINGS[current_build_type].get("cost", {})
+	var parts: PackedStringArray = []
+	for res_id in cost:
+		parts.append("%d %s" % [int(cost[res_id]) * count, tr("RESOURCE_" + String(res_id).to_upper())])
+	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+		hud.show_hint(tr("HINT_DRAG_RUN") % [count, ", ".join(parts)])
+
+## Lays the whole run, in the order it was dragged.
+##
+## Each stake goes down through the same call a single click makes, so paying for it,
+## registering it on the grid, telling the Hero and rebaking the navigation mesh all
+## happen exactly as they always did -- and the run simply stops when one of them says no,
+## which is how it stops when the wood runs out.
+func _commit_run(cells: Array[Vector2i]) -> int:
+	if cells.is_empty():
+		return 0
+	var d: int = _divisions_of(current_build_type)
+	var laid: int = 0
+	for fine in cells:
+		if current_build_type == "":
+			break                          # the wallet emptied and build mode dropped
+		var at: Vector3 = grid_manager.fine_cell_to_world(fine, d)
+		if try_place_at_cell(grid_manager.world_to_cell(at), at) != null:
+			laid += 1
+	return laid
+
+func _end_drag() -> void:
+	_drag_from = NOT_DRAGGING
+	_dragging = false
+	_run_cells.clear()
+	_clear_run_preview()
 
 ## Places the currently selected building type at `cell` and keeps the build mode
 ## alive so the player can lay down a whole row of blueprints in one go, dropping

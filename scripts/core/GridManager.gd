@@ -165,6 +165,15 @@ func fine_cell_to_cell(cell: Vector2i, divisions: int) -> Vector2i:
 	var d: int = maxi(1, divisions)
 	return Vector2i(int(floor(float(cell.x) / float(d))), int(floor(float(cell.y) / float(d))))
 
+## Every fine cell the straight line from `from_pos` to `to_pos` passes through.
+##
+## A CONNECTED run: the traversal steps one cell at a time and never cuts a corner, so a
+## fence dragged diagonally has no diagonal gaps in it. That matters for more than looks
+## -- a run with gaps in it does not seal, and "I dragged a fence across and things still
+## walked through" would be a bug the player could not see the cause of.
+func fine_cells_on_line(from_pos: Vector3, to_pos: Vector3, divisions: int) -> Array[Vector2i]:
+	return cells_on_line(from_pos, to_pos, _fine_step(divisions))
+
 ## Whether something in this fine cell actually stands in the way.
 ##
 ## Not the same question as is_fine_cell_occupied, which is about whether the SPOT is
@@ -592,9 +601,14 @@ func _things_standing_in(cell: Vector2i) -> Array[Node]:
 ## four metres a second, being pushed back out, and doing it again the next frame for as
 ## long as anyone cares to watch. That is what this fixes, and it is why the answer has
 ## to be exact rather than nearly right.
-func cells_on_line(from_pos: Vector3, to_pos: Vector3) -> Array[Vector2i]:
+## `size` is the width of one cell, and defaults to a whole tile. Passing the fine step
+## instead walks the same line over the finer grid, which is what laying a run of stakes
+## needs -- see fine_cells_on_line. One traversal, asked at two scales, rather than two
+## traversals to keep in step with each other.
+func cells_on_line(from_pos: Vector3, to_pos: Vector3, size: float = 0.0) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	var size: float = tile_size if tile_size > 0.0 else 2.0
+	if size <= 0.0:
+		size = tile_size if tile_size > 0.0 else 2.0
 	var x0: float = from_pos.x / size
 	var z0: float = from_pos.z / size
 	var x1: float = to_pos.x / size

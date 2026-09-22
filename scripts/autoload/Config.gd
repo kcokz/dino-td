@@ -609,6 +609,27 @@ const CONTROLS: Dictionary = {
 }
 
 # ==============================================================================
+# 10a. Dragging out a wall
+# ==============================================================================
+## A fence is laid by DRAGGING, the way every building game lays one: press on where it
+## starts, drag to where it ends, let go. Clicking a hundred stakes one at a time is not
+## a decision a hundred times over, it is the same decision a hundred times.
+##
+## Only things of kind "wall" do this, and that is derived rather than declared: it is
+## already the category the rest of the rules are written against (Dino._is_wall,
+## _should_bite), so a new kind of barrier gets the drag for free and nothing has to be
+## kept in step.
+const BUILD_DRAG: Dictionary = {
+	# The longest run one drag may lay, in stakes. A cap rather than a budget: the run
+	# already stops when the wood does, and this only stops a wild drag across the whole
+	# map from building a preview of four hundred ghosts before it finds that out.
+	"max_run": 120,
+	# How far the cursor must travel before a press counts as a DRAG rather than a CLICK,
+	# in pixels. Without it, the hand-shake in an ordinary click lays two stakes.
+	"drag_threshold_px": 6.0,
+}
+
+# ==============================================================================
 # 10b. The camera
 # ==============================================================================
 ## How the view moves. Every number the camera obeys is here; there were nine of them
