@@ -30,3 +30,7 @@ version.json
 # Playtest frames (tools/playtest.gd). Pictures of a game that changes daily do not
 # belong in history -- regenerate them instead.
 screenshots/
+
+# Python bytecode from running the tools/ generators
+__pycache__/
+*.pyc

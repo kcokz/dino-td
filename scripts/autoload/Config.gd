@@ -829,11 +829,26 @@ const RESOURCE_NODES: Dictionary = {
 ## the art are both built from it, which is what stops art from quietly growing wider
 ## than the thing that blocks a raptor.
 const VISUALS: Dictionary = {
-	"hero":                 {"scene": "res://assets/models/hero.glb", "placeholder": "hero",     "anchor": "feet",   "color": "caveman"},
+	# Quaternius' worker (CC0, tools/convert_quaternius.py): a modern man in a hard hat,
+	# which is what the Hero is. Fitted by HEIGHT, because he is rigged in a T-pose -- his
+	# rest shape is as wide as he is tall, arms straight out -- and a box fit sized him by
+	# that span, to half his height. In play he is always in a clip, arms down.
+	"hero":                 {"scene": "res://assets/models/quaternius/worker.glb", "fit": "height",
+		"placeholder": "hero", "anchor": "feet", "color": "caveman"},
 	# Every dinosaur gets its own row even while they share a placeholder: the row is
 	# where its model will go, and they will not share that.
-	"dino/raptor":          {"scene": "res://assets/models/raptor.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
-	"dino/big_theropod":    {"scene": "res://assets/models/t_rex.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "big_theropod"},
+	# Quaternius' animated dinosaurs (CC0, tools/convert_quaternius.py), one author for the
+	# whole cast. The pterosaur has none there and stays the generated one.
+	#
+	# Fitted by HEIGHT. A dinosaur's collider is a box -- a gameplay shape: reach, blocking
+	# and paths are all worked out from it -- and a long-tailed animal fitted INSIDE that
+	# box by its length stood a third of its declared height: the raptor came in 33 cm tall
+	# and was lost in the ferns. By height it is as tall as Config says, and its tail
+	# reaches past the box, as a tail does.
+	"dino/raptor":          {"scene": "res://assets/models/quaternius/velociraptor.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor"},
+	"dino/big_theropod":    {"scene": "res://assets/models/quaternius/trex.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours
@@ -1468,6 +1483,13 @@ const ANIMATIONS: Dictionary = {
 	# Crossfade duration when transitioning between animation states.
 	# 0.2s prevents jerky mechanical snaps while remaining responsive.
 	"blend_time": 0.2,
+
+	# The clips that go round and round for as long as the state lasts: walking, standing,
+	# and the work and the fighting, which are done over and over. Everything else --
+	# dying, a jump -- plays once and holds its last frame. Decided here, for every model,
+	# rather than in each file's import settings: it is the game's rule, not the asset's,
+	# and a clip that played once and froze mid-stride was what every model did before.
+	"looping": ["idle", "walk", "run", "attack", "build", "harvest"],
 
 	# Hero states (corresponds to Hero.State enum keys)
 	"hero": {

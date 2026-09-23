@@ -54,7 +54,7 @@ static func make(key: String, variant: String = "") -> Node3D:
 		var var_packed = load(variant_path)
 		if full_packed is PackedScene and var_packed is PackedScene:
 			var full: Node = (full_packed as PackedScene).instantiate()
-			var factor: float = fit_factor(full as Node3D, declared_size(key)) if full is Node3D else 1.0
+			var factor: float = fit_factor(full as Node3D, declared_size(key), declared_fit(key)) if full is Node3D else 1.0
 			full.free()
 			var piece: Node = (var_packed as PackedScene).instantiate()
 			if piece is Node3D:
@@ -70,7 +70,7 @@ static func make(key: String, variant: String = "") -> Node3D:
 			var art: Node = packed.instantiate()
 			if art is Node3D:
 				holder.add_child(art)
-				fit(art as Node3D, declared_size(key), declared_anchor(key))
+				fit(art as Node3D, declared_size(key), declared_anchor(key), declared_fit(key))
 				_dress(art, key)
 				return holder
 			# A scene that is not 3D is a mistake worth seeing rather than hiding, but
@@ -93,18 +93,25 @@ static func has_art(key: String) -> bool:
 ## model to fit a box it was not drawn for, which looks worse than a model that is
 ## slightly the wrong size. The factor is chosen so the model fits INSIDE the declared
 ## box on every axis -- so a declared size is a bound rather than a stretch target.
-static func fit(art: Node3D, size: Vector3, anchor: String = "feet") -> void:
-	var factor: float = fit_factor(art, size)
+static func fit(art: Node3D, size: Vector3, anchor: String = "feet", mode: String = "box") -> void:
+	var factor: float = fit_factor(art, size, mode)
 	if factor <= 0.0:
 		return    # nothing measurable; leave the author's own transform alone
 	place(art, factor, anchor)
 
 ## The uniform scale that fits `art` inside `size`, or 0 when it has nothing to measure.
-static func fit_factor(art: Node3D, size: Vector3) -> float:
+##
+## `mode` "height" matches the height alone. For a rigged character whose rest pose is
+## not how it stands -- a T-pose, arms straight out, as wide as it is tall -- the box is
+## the wrong thing to fit, and fitting it shrank the Hero to half his height. The height
+## of a T-pose is the height of the person standing in it.
+static func fit_factor(art: Node3D, size: Vector3, mode: String = "box") -> float:
 	var bounds: AABB = visual_bounds(art)
 	if bounds.size.x <= 0.0001 or bounds.size.y <= 0.0001 or bounds.size.z <= 0.0001:
 		return 0.0
 	var factor: float = minf(size.x / bounds.size.x, minf(size.y / bounds.size.y, size.z / bounds.size.z))
+	if mode == "height":
+		factor = size.y / bounds.size.y
 	if factor <= 0.0 or is_inf(factor) or is_nan(factor):
 		return 0.0
 	return factor
@@ -201,6 +208,11 @@ static func declared_variant_scene(key: String, variant: String) -> String:
 		return ""
 	var entry: Dictionary = _entry(key)
 	return String(entry.get("scene_" + variant, ""))
+
+## How the art is fitted to its declared size: "box" (inside it on every axis, the
+## default) or "height" (see fit_factor).
+static func declared_fit(key: String) -> String:
+	return String(_entry(key).get("fit", "box"))
 
 ## "feet" puts the model's lowest point on the ground -- almost every character and
 ## building asset. "center" puts its middle there, which is what a half-buried boulder

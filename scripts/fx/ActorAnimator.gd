@@ -70,6 +70,7 @@ func play_state(state_value: Variant) -> void:
 
 	var blend: float = _get_blend_time()
 	current_clip = clip_to_play
+	_loop_if_it_should(clip_to_play, target_clip)
 	animation_player.play(clip_to_play, blend)
 
 ## Directly plays a clip by name with alias resolution and graceful degradation.
@@ -83,6 +84,7 @@ func play_clip(clip_name: String) -> void:
 	var best = _find_best_clip(clip_name)
 	if best != "":
 		current_clip = best
+		_loop_if_it_should(best, clip_name)
 		animation_player.play(best, _get_blend_time())
 
 func stop() -> void:
@@ -130,6 +132,20 @@ func _lookup_clip_for_state(state_name: String) -> String:
 	if type_map.has(state_name):
 		return String(type_map[state_name])
 	return ""
+
+## Sets `clip` to loop when the game's name for it -- `wanted`, before any alias was
+## resolved -- is one Config.ANIMATIONS.looping says goes round. The engine's own setting,
+## Animation.loop_mode, on the imported clip.
+func _loop_if_it_should(clip: String, wanted: String) -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("ANIMATIONS" in cfg):
+		return
+	var looping: Array = cfg.ANIMATIONS.get("looping", [])
+	if not (wanted.to_lower() in looping or clip.to_lower() in looping):
+		return
+	var anim: Animation = animation_player.get_animation(clip)
+	if anim != null and anim.loop_mode == Animation.LOOP_NONE:
+		anim.loop_mode = Animation.LOOP_LINEAR
 
 ## Resolves the best available clip in the AnimationPlayer using exact match,
 ## lowercase, uppercase, and alias fallback list from Config.ANIMATIONS.

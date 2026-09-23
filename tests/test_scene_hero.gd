@@ -2,7 +2,8 @@
 # SCENE-POLISH S4: Humanoid Hero Model & Gameplay Animation Rigging Verification Suite.
 #
 # Acceptance criteria from SCENE-POLISH.md:
-# 1. Config.VISUALS["hero"]["scene"] is non-empty and points to "res://assets/models/hero.glb".
+# 1. Config.VISUALS["hero"]["scene"] is non-empty and points to a model that exists -- since
+#    v0.5 Quaternius' worker, assets/models/quaternius/worker.glb (tools/convert_quaternius.py).
 # 2. Hero model exists on disk, imports cleanly, and instantiates an AnimationPlayer.
 # 3. Full animation coverage for all 6 Hero.State enum states:
 #    - IDLE -> idle
@@ -56,7 +57,7 @@ func test_01_hero_has_declared_scene_and_file_exists() -> void:
 	var entry: Dictionary = visuals["hero"]
 	var scene_path: String = String(entry.get("scene", ""))
 	assert_false(scene_path.is_empty(), "Hero scene path must not be empty")
-	assert_eq(scene_path, "res://assets/models/hero.glb", "Hero scene path points to hero.glb")
+	assert_eq(scene_path, "res://assets/models/quaternius/worker.glb", "Hero scene path points to the worker")
 	assert_true(FileAccess.file_exists(scene_path), "File exists on disk: %s" % scene_path)
 	assert_true(VisualLibrary.has_art("hero"), "VisualLibrary recognizes hero has real art")
 
@@ -160,14 +161,32 @@ func test_04_hero_dimensions_fit_and_collider_unchanged() -> void:
 	assert_almost_eq(box.size.z, expected_width, 0.01, "Collider depth Z == 0.8m")
 	assert_almost_eq(col_shape.position.y, expected_height * 0.5, 0.01, "Collider centered vertically")
 
-	# 2. Visual mesh fitted inside declared boundary
+	# 2. Visual mesh fitted inside declared boundary -- measured STANDING. The worker is
+	# rigged in a T-pose, arms straight out, which is his rest shape and never on screen:
+	# in play he is always in a clip. So he is put in his idle and the mesh measured as
+	# posed (_posed_bounds).
 	var body = hero.find_child("Body", false, false)
 	assert_not_null(body, "Hero has Body node")
-	var bounds: AABB = VisualLibrary.visual_bounds(body)
+	if body == null:
+		return
+	var player: AnimationPlayer = hero.animator.animation_player if hero.animator else null
+	assert_not_null(player, "He has clips to stand in")
+	if player != null:
+		player.play("idle")
+		player.seek(0.0, true)
+	await wait_frames(2)
+	var into_body: Transform3D = (body as Node3D).global_transform.affine_inverse()
+	var bounds := AABB()
+	var first: bool = true
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		var part: AABB = _posed_bounds(mi, into_body)
+		bounds = part if first else bounds.merge(part)
+		first = false
 
-	var fitted_width: float = bounds.size.x * body.scale.x
-	var fitted_height: float = bounds.size.y * body.scale.y
-	var fitted_depth: float = bounds.size.z * body.scale.z
+	var fitted_width: float = bounds.size.x
+	var fitted_height: float = bounds.size.y
+	var fitted_depth: float = bounds.size.z
 
 	assert_lte(fitted_width, expected_width + 0.05, "Fitted visual width <= declared width (0.8m)")
 	assert_lte(fitted_height, expected_height + 0.05, "Fitted visual height <= declared height (1.6m)")
@@ -190,3 +209,44 @@ func test_05_credits_ledger_covers_hero_model() -> void:
 	assert_true(text.contains("hero.blend"), "CREDITS.md records hero.blend")
 	assert_true(text.contains("Hero / Explorer"), "CREDITS.md records Hero / Explorer")
 	assert_true(text.contains("CC0"), "CREDITS.md documents CC0 licensing")
+
+## The bounds of `mi` as the skeleton poses it RIGHT NOW, in the space `into` maps to:
+## every vertex moved by its bones -- current global pose times bind pose, weighted --
+## which is the sum the renderer does. By hand, because the engine's own
+## bake_mesh_from_current_skeleton_pose needs a skin registered with a real renderer, and
+## these tests run headless. An unskinned mesh is just its box.
+func _posed_bounds(mi: MeshInstance3D, into: Transform3D) -> AABB:
+	var skel := mi.get_node_or_null(mi.skeleton) as Skeleton3D
+	if mi.skin == null or skel == null:
+		return (into * mi.global_transform) * mi.get_aabb()
+	var skin: Skin = mi.skin
+	var bone_of: Array[Transform3D] = []
+	for b in range(skin.get_bind_count()):
+		var bone: int = skin.get_bind_bone(b)
+		if bone < 0:
+			bone = skel.find_bone(skin.get_bind_name(b))
+		bone_of.append(skel.get_bone_global_pose(bone) * skin.get_bind_pose(b))
+	var to_space: Transform3D = into * skel.global_transform
+	var out := AABB()
+	var first: bool = true
+	for s in range(mi.mesh.get_surface_count()):
+		var arrays: Array = mi.mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		if verts.is_empty() or bones.is_empty():
+			continue
+		var per: int = bones.size() / verts.size()
+		for i in range(verts.size()):
+			var p := Vector3.ZERO
+			for k in range(per):
+				var w: float = weights[i * per + k]
+				if w > 0.0:
+					p += (bone_of[bones[i * per + k]] * verts[i]) * w
+			var at: Vector3 = to_space * p
+			if first:
+				out = AABB(at, Vector3.ZERO)
+				first = false
+			else:
+				out = out.expand(at)
+	return out

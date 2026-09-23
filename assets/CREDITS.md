@@ -18,6 +18,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-15 (Updated 2026-09-18 with Death clip)
 - **Files**: `assets/models/t_rex.glb`, `assets/models/t_rex.blend`
+- **Superseded**: 2026-09-23 by the Quaternius model (below) for `dino/big_theropod`. The file and its generator stay; nothing loads it.
 - **Animations Included**: `idle`, `run` (walk), `attack`, `death`, `alert`, `jump`
 - **Usage**: Primary model for `dino/big_theropod` (1.6m size).
 
@@ -28,6 +29,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-18
 - **Files**: `assets/models/raptor.glb`
+- **Superseded**: 2026-09-23 by the Quaternius model (below) for `dino/raptor`. The file and its generator stay; nothing loads it.
 - **Animations Included**: `idle`, `run` (walk), `attack` (sickle claw leap & bite), `death`, `alert`
 - **Usage**: Primary model for `dino/raptor` (0.8m size).
 
@@ -48,6 +50,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-18
 - **Files**: `assets/models/hero.glb`, `assets/models/hero.blend`
+- **Superseded**: 2026-09-23 by the Quaternius model (below) for `hero`. The file and its generator stay; nothing loads it.
 - **Animations Included**: `idle`, `walk`, `run`, `build` (overhead rhythmic hammer strike), `harvest` (two-handed downward cleave/chop), `attack` (defensive thrust), `death` (stumble and collapse)
 - **Usage**: Primary model for `hero` (0.8m width, 1.6m height). Full 1:1 coverage of all 6 `Hero.State` enum states.
 
@@ -60,6 +63,26 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Files**: `assets/models/wreck.glb`, `assets/models/wreck.blend`
 - **Materials Included**: Composite hull plating, dark carbon thermal tiles, polarized canopy visor, hazard orange markings, charred re-entry burn, sheared titanium frame spars
 - **Usage**: Primary model for `building/core` (default 1.0m footprint, 1.9m height).
+
+### Quaternius Animated Dinosaur Pack (`assets/models/quaternius/{trex,velociraptor,apatosaurus,parasaurolophus,stegosaurus,triceratops}.glb`)
+- **Asset Name**: Animated Dinosaur Pack (December 2018) -- six rigged, animated dinosaurs
+- **Source URL**: https://quaternius.com/packs/animateddinosaurs.html (the Google Drive folder that page links to, FBX folder)
+- **Author**: Quaternius
+- **License**: CC0 1.0 Universal (Public Domain Dedication); the pack's own `License.txt` is kept at `assets/source/quaternius/License.txt`
+- **Date Added**: 2026-09-23, downloaded with the user's permission
+- **Source Files (unchanged)**: `assets/source/quaternius/{Trex,Velociraptor,Apatosaurus,Parasaurolophus,Stegosaurus,Triceratops}.fbx`
+- **Converted By**: `tools/convert_quaternius.py` -- turned to face the game's -Z; the rig object's own keyed transform taken out of every clip; each mesh's transform baked into its vertices; clips renamed to the names `Config.ANIMATIONS` uses; matte; and made OPAQUE (the FBX materials import with an alpha of 0, which drew every dinosaur invisible)
+- **Usage**: `dino/big_theropod` (trex), `dino/raptor` (velociraptor). The four plant-eaters are converted for background herds.
+
+### Quaternius Ultimate Animated Character Pack -- Worker (`assets/models/quaternius/worker.glb`)
+- **Asset Name**: Ultimate Animated Character Pack (November 2019), `Worker_Male`
+- **Source URL**: https://quaternius.com/packs/ultimatedanimatedcharacter.html (the Google Drive folder that page links to, glTF folder)
+- **Author**: Quaternius
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-23, downloaded with the user's permission
+- **Source File (unchanged)**: `assets/source/quaternius/Worker_Male.gltf`
+- **Converted By**: `tools/convert_quaternius.py` -- as above, plus: a stray unparented icosphere removed; clips mapped onto the Hero's work (Punch -> attack, SwordSlash -> harvest, PickUp -> build); and the skin recoloured from the authored near-black (0.013 linear), which read in the game as a featureless black head with white eyes, to a warm mid tone
+- **Usage**: `hero`, fitted by height (he is rigged in a T-pose)
 
 ### Jurassic Flora (`assets/models/flora/*.glb`)
 - **Asset Name**: Low-Poly Mesozoic Plants -- tree ferns, cycads, horsetails, ground ferns, monkey-puzzle araucaria, a felled tree-fern stump
