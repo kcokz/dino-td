@@ -438,8 +438,12 @@ const NEST: Dictionary = {
 # 6. Placeholder Visual Colors (COLORS)
 # ==============================================================================
 const COLORS: Dictionary = {
-	"ground": Color(0.28, 0.32, 0.24),
-	"hill": Color(0.36, 0.33, 0.28),
+	# A wet, mossy valley floor and dark volcanic rock. The floor was a pale olive, and
+	# under a warm sun an olive floor goes BROWN -- the first attempt at a Mesozoic
+	# palette turned the whole valley into a dusty savanna at sunset. Lushness has to be
+	# in the ground itself; light can only warm what is there.
+	"ground": Color(0.15, 0.25, 0.11),
+	"hill": Color(0.27, 0.26, 0.22),
 	"grid_hover": Color(1.0, 1.0, 0.2, 0.4),
 	"core": Color(0.9, 0.3, 0.1),
 	"tower": Color(0.2, 0.5, 0.9),
@@ -1112,8 +1116,8 @@ const GROUND_COVER: Dictionary = {
 	"grass_height": 0.34,
 	"grass_width": 0.05,
 	"grass_blades": 7,
-	"grass_base": Color(0.20, 0.26, 0.13),
-	"grass_tip": Color(0.47, 0.55, 0.26),
+	"grass_base": Color(0.12, 0.22, 0.08),
+	"grass_tip": Color(0.36, 0.52, 0.18),
 	# Ferns: bigger, sparser, and the thing that makes the meadow read as prehistoric
 	# rather than as a lawn. Before flowering plants, this is what ground cover was.
 	"fern_count": 230,
@@ -1149,12 +1153,18 @@ const ENVIRONMENT: Dictionary = {
 	"tonemap_exposure": 1.0,
 	"tonemap_white": 1.0,
 
-	# Procedural Sky: Prehistoric atmosphere with clear upper troposphere and dust-laden horizon.
+	# Procedural Sky: a WARM, HUMID Mesozoic sky, not a cool modern noon.
+	#
+	# It was a subdued grey-blue zenith over a pale grey horizon, which is a perfectly good
+	# overcast afternoon anywhere on Earth today -- and that was the problem. Nothing about
+	# it said "a hundred million years ago". The Mesozoic was a greenhouse world: warmer,
+	# wetter, with more water in the air, and the horizon of a humid valley glows gold
+	# rather than going grey. The zenith stays blue so the sky still reads as a sky.
 	"background_mode": Environment.BG_SKY,
-	"sky_top_color": Color(0.35, 0.45, 0.58),       # Subdued cool zenith
-	"sky_horizon_color": Color(0.72, 0.75, 0.77),   # Hazy horizon scattering
-	"ground_bottom_color": Color(0.18, 0.20, 0.16), # Dark terrain bounce
-	"ground_horizon_color": Color(0.55, 0.58, 0.54),
+	"sky_top_color": Color(0.28, 0.46, 0.62),       # deep, slightly teal zenith
+	"sky_horizon_color": Color(0.84, 0.82, 0.70),   # humid, warm-white at the horizon
+	"ground_bottom_color": Color(0.14, 0.15, 0.10), # dark, wet undergrowth bounce
+	"ground_horizon_color": Color(0.52, 0.56, 0.44),
 	"sun_angle_max": 30.0,
 	"sun_curve": 0.15,
 
@@ -1208,7 +1218,10 @@ const ENVIRONMENT: Dictionary = {
 	# valley walls beyond it, which is the only place it was ever meant to be.
 	"fog_enabled": true,
 	"fog_mode": Environment.FOG_MODE_DEPTH,
-	"fog_light_color": Color(0.68, 0.73, 0.78),
+	# Humid haze is PALE: water in the air scatters nearly white, with a trace of the
+	# green below it. Amber haze is dust, and dust is a desert -- measured, an amber fog
+	# over this valley read as a savanna at sunset rather than a Jurassic forest.
+	"fog_light_color": Color(0.76, 0.80, 0.74),
 	"fog_light_energy": 0.85,
 	"fog_density": 0.55,        # in DEPTH mode: the ceiling, not a per-metre rate
 	"fog_aerial_perspective": 0.4,
@@ -1221,13 +1234,39 @@ const ENVIRONMENT: Dictionary = {
 	# Matches the ancient daylight angle. Shadow bias and normal bias are tuned to eliminate
 	# shadow acne on low-poly bevels while keeping tight shadow contact at feet and bases.
 	# Max shadow distance is 48.0m to encompass the entire 40x40 ground plane from Camera3D.
-	"sun_light_color": Color(1.0, 0.96, 0.90),
-	"sun_light_energy": 1.15,
+	# Warm and a little low: late morning in a greenhouse world. A lower sun rakes across
+	# the ground and throws the long shadows that give a tree fern or a dinosaur its SCALE
+	# -- from a steep top-down camera, shadow length is most of how height is read at all.
+	"sun_light_color": Color(1.0, 0.93, 0.80),
+	"sun_light_energy": 1.4,
+	"sun_elevation_degrees": 34.0,   # was 41: lower, longer shadows
+	"sun_azimuth_degrees": 40.0,     # the same bearing, so nothing on the map flips sides
+	"sun_volumetric_fog_energy": 1.6,
 	"sun_shadow_enabled": true,
 	"sun_shadow_bias": 0.03,
 	"sun_shadow_normal_bias": 1.2,
 	"sun_shadow_blur": 1.2,
 	"sun_shadow_max_distance": 48.0,
+
+	# Volumetric fog: the humid AIR, which distance fog cannot do. See SceneEnvironment.
+	# Low density on purpose -- the playfield has to stay legible, and a little of this
+	# goes a long way from a camera 25m off the ground. Forward-scattering (anisotropy) is
+	# what makes the sun glow through it and draws shafts past the tree ferns.
+	"volumetric_fog_enabled": true,
+	"volumetric_fog_density": 0.009,
+	"volumetric_fog_albedo": Color(0.90, 0.94, 0.90),
+	"volumetric_fog_anisotropy": 0.6,
+	"volumetric_fog_length": 80.0,
+	"volumetric_fog_detail_spread": 2.0,
+	"volumetric_fog_ambient_inject": 0.25,
+	"volumetric_fog_sky_affect": 0.5,
+
+	# Grading: a touch more contrast and noticeably more saturation, so the greens read
+	# as LUSH rather than as a lawn. The engine's own adjustment, not a post shader.
+	"adjustment_enabled": true,
+	"adjustment_brightness": 1.0,
+	"adjustment_contrast": 1.07,
+	"adjustment_saturation": 1.2,
 }
 
 # ==============================================================================

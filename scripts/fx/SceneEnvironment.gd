@@ -82,6 +82,34 @@ func apply_environment_config() -> void:
 	environment.fog_depth_end = float(env_data.get("fog_depth_end", 48.0))
 	environment.fog_depth_curve = float(env_data.get("fog_depth_curve", 1.0))
 
+	# 7. Volumetric fog -- the humid air of a warm Mesozoic valley, with the sun in it.
+	#
+	# The distance fog above is a flat wash that only ever thickens with range, so it can
+	# make a place look FAR but never make it look WET. Volumetric fog is actual haze in
+	# the volume: it lies in the low ground, catches the sun (anisotropy -- forward
+	# scattering is what makes light shafts), and gives even a steep top-down view a sense
+	# of air between the camera and the ground. The engine's own, not a shader: rule 8.
+	environment.volumetric_fog_enabled = bool(env_data.get("volumetric_fog_enabled", false))
+	if environment.volumetric_fog_enabled:
+		environment.volumetric_fog_density = float(env_data.get("volumetric_fog_density", 0.01))
+		if env_data.has("volumetric_fog_albedo"):
+			environment.volumetric_fog_albedo = env_data["volumetric_fog_albedo"]
+		if env_data.has("volumetric_fog_emission"):
+			environment.volumetric_fog_emission = env_data["volumetric_fog_emission"]
+		environment.volumetric_fog_emission_energy = float(env_data.get("volumetric_fog_emission_energy", 0.0))
+		environment.volumetric_fog_anisotropy = float(env_data.get("volumetric_fog_anisotropy", 0.3))
+		environment.volumetric_fog_length = float(env_data.get("volumetric_fog_length", 64.0))
+		environment.volumetric_fog_detail_spread = float(env_data.get("volumetric_fog_detail_spread", 2.0))
+		environment.volumetric_fog_ambient_inject = float(env_data.get("volumetric_fog_ambient_inject", 0.0))
+		environment.volumetric_fog_sky_affect = float(env_data.get("volumetric_fog_sky_affect", 1.0))
+
+	# 8. Grading -- warmth and saturation, the engine's own colour adjustment.
+	environment.adjustment_enabled = bool(env_data.get("adjustment_enabled", false))
+	if environment.adjustment_enabled:
+		environment.adjustment_brightness = float(env_data.get("adjustment_brightness", 1.0))
+		environment.adjustment_contrast = float(env_data.get("adjustment_contrast", 1.0))
+		environment.adjustment_saturation = float(env_data.get("adjustment_saturation", 1.0))
+
 ## Updates DirectionalLight3D on parent scene with shadow bias and energy from Config.ENVIRONMENT.
 func apply_sun_config() -> void:
 	var cfg = _get_config()
@@ -106,6 +134,14 @@ func apply_sun_config() -> void:
 		sun.shadow_blur = float(env_data["sun_shadow_blur"])
 	if env_data.has("sun_shadow_max_distance"):
 		sun.directional_shadow_max_distance = float(env_data["sun_shadow_max_distance"])
+	# How strongly the sun lights the volumetric haze -- which is what draws the shafts.
+	if env_data.has("sun_volumetric_fog_energy"):
+		sun.light_volumetric_fog_energy = float(env_data["sun_volumetric_fog_energy"])
+	# Where the sun stands. A lower, warmer sun than a flat noon rakes across the ground
+	# and throws the long shadows that give tree ferns and dinosaurs their scale.
+	if env_data.has("sun_elevation_degrees") and env_data.has("sun_azimuth_degrees"):
+		sun.rotation_degrees = Vector3(-float(env_data["sun_elevation_degrees"]),
+			float(env_data["sun_azimuth_degrees"]), 0.0)
 
 ## The sun of THIS level: a sibling, and only a sibling.
 ##
