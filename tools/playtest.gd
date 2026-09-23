@@ -142,6 +142,25 @@ func _scenario_closeup() -> void:
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
+	# The turret, with something to point at: a raptor off to one side, so the head is
+	# seen swung round towards it rather than sitting at rest.
+	var gs := root.get_node_or_null("GameState")
+	if gs != null and gs.has_method("grant_unlock"):
+		gs.grant_unlock("blueprint_tower")
+	var tower_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 2))
+	_build_at("tower", tower_at)
+	var prey = load("res://scripts/entities/Dino.gd").new()
+	_main.add_child(prey)
+	prey.setup("raptor")
+	prey.set_physics_process(false)
+	prey.global_position = tower_at + Vector3(-2.5, 0.0, 2.0)
+	for b in _main.buildings_container.get_children():
+		if b.has_method("aim_at") and b.global_position.distance_to(tower_at) < 0.5:
+			b.aim_at(prey.global_position)
+	await _wait(4)
+	await _portrait("tower", tower_at, 5.5)
+	prey.queue_free()
+
 	var dino_script := load("res://scripts/entities/Dino.gd")
 	var dinos_to_shoot: Array = [
 		["dino_t_rex", "big_theropod", 5.0],

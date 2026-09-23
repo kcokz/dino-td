@@ -184,7 +184,11 @@ func _ensure_components() -> void:
 	# turret's reach is checked against the collider.
 	_ensure_body()
 
-	# 3. Entrance Marker (Blackbox cave mouth)
+	# 3. Entrance Marker (Blackbox cave mouth) -- only on the placeholder. The modelled
+	# nest has its own burrow, and a black box stuck on the front of it was a second,
+	# square mouth beside the real one.
+	if VisualLibrary.has_art("nest"):
+		return
 	var has_entrance: bool = false
 	for child in get_children():
 		if child.name == "EntranceMarker":

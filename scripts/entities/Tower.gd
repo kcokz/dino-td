@@ -12,6 +12,8 @@ extends "res://scripts/entities/Building.gd"
 @export var attack_range: float = 5.0
 @export var damage: float = 1.0
 @export var fire_rate: float = 1.0
+## Degrees a second the head turns to follow its target (Config BUILDINGS.tower).
+@export var turn_speed: float = 300.0
 
 # Compatibility aliases
 var range: float:
@@ -24,6 +26,10 @@ var attack_damage: float:
 
 var current_target: Node3D = null
 var targets_in_range: Array = []
+
+# The part of the model that turns, found on the art rather than built here: see
+# _turret_head.
+var _head: Node3D = null
 var tracked_enemies: Array[Node3D] = []
 
 # Child components
@@ -65,6 +71,7 @@ func _load_tower_config() -> void:
 		attack_range = float(data.get("range", 5.0))
 		damage = float(data.get("damage", 1.0))
 		fire_rate = float(data.get("fire_rate", 1.0))
+		turn_speed = float(data.get("turn_speed", 300.0))
 
 	if fire_timer:
 		fire_timer.wait_time = maxf(0.1, 1.0 / fire_rate)
@@ -192,6 +199,9 @@ func fire_at(target: Node3D) -> void:
 			current_target = null
 		return
 
+	# Facing it before the shot, not after: the tracer comes out of the barrels, and the
+	# barrels are pointing at what was hit.
+	aim_at(target.global_position)
 	target.take_damage(damage)
 	_spawn_visual_bullet_effect(target.global_position)
 
@@ -216,7 +226,7 @@ func _spawn_visual_bullet_effect(target_pos: Vector3) -> void:
 	if not is_inside_tree() or DisplayServer.get_name() == "headless":
 		return
 
-	var origin: Vector3 = global_position + Vector3(0.0, 1.0, 0.0)
+	var origin: Vector3 = shot_origin()
 	var tracer = ImmediateMesh.new()
 	var mesh_inst = MeshInstance3D.new()
 	mesh_inst.mesh = tracer
@@ -242,6 +252,59 @@ func _spawn_visual_bullet_effect(target_pos: Vector3) -> void:
 		)
 	else:
 		mesh_inst.queue_free()
+
+# ==============================================================================
+# The head: turning to face what it shoots
+# ==============================================================================
+
+func _process(delta: float) -> void:
+	_track_target(delta)
+
+## The part of the turret that turns -- a node called Head on its art
+## (tools/generate_props.py sentry), with a Muzzle at the end of its barrels -- or null
+## when the art has none, the placeholder box for one. Found on the art rather than
+## built here, so a bought model only has to name its parts to turn the same way.
+func _turret_head() -> Node3D:
+	if _head == null or not is_instance_valid(_head) or not is_ancestor_of(_head):
+		_head = find_child("Head", true, false) as Node3D
+	return _head
+
+## The angle that points the head's barrels (-Z, the way a node faces) at `world_point`,
+## worked out in the head's parent's space so the art's own scale and placing cancel out.
+func _heading_to(head: Node3D, world_point: Vector3) -> float:
+	var parent := head.get_parent() as Node3D
+	var local: Vector3 = parent.to_local(world_point) if parent != null else world_point
+	var d: Vector3 = local - head.position
+	return atan2(-d.x, -d.z)
+
+## Swings the head round towards the current target, at `turn_speed`. Seen turning, a
+## turret tells the player which dinosaur it has picked.
+func _track_target(delta: float) -> void:
+	if not is_constructed or is_destroyed:
+		return
+	if current_target == null or not _is_target_valid(current_target):
+		return
+	var head := _turret_head()
+	if head == null:
+		return
+	head.rotation.y = rotate_toward(head.rotation.y, _heading_to(head, current_target.global_position),
+		deg_to_rad(turn_speed) * delta)
+
+## Points the head straight at `world_point`, now.
+func aim_at(world_point: Vector3) -> void:
+	var head := _turret_head()
+	if head != null:
+		head.rotation.y = _heading_to(head, world_point)
+
+## Where a shot leaves from: the end of the barrels when the art has them, and a point
+## over the middle of the turret when it does not.
+func shot_origin() -> Vector3:
+	var head := _turret_head()
+	if head != null:
+		var muzzle := head.find_child("Muzzle", true, false) as Node3D
+		if muzzle != null:
+			return muzzle.global_position
+	return global_position + Vector3(0.0, 1.0, 0.0)
 
 # ==============================================================================
 # Signal Callbacks

@@ -134,8 +134,13 @@ func test_05_a_placeholder_is_exactly_the_declared_size() -> void:
 	# Built to measure rather than fitted, so this is an equality and not a bound.
 	# Only the plain primitives: a real model is built to fit INSIDE its declared size,
 	# not to fill it exactly -- a raptor that stretched to fill its box would be wrong.
+	#
+	# Asked of the fallback directly. Every key has art now, and the placeholder is what a
+	# key falls back to when its art is missing; the tower's box is the last plain
+	# primitive any key declares.
 	for key in ["building/tower"]:
-		var body: Node3D = VisualLibrary.make(key)
+		var body := Node3D.new()
+		VisualLibrary._build_placeholder(body, key, "")
 		_keep(body)
 		tree.root.add_child(body)
 		var want: Vector3 = config_node.get_visual_size(key)

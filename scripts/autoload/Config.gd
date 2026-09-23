@@ -67,6 +67,10 @@ const BUILDINGS: Dictionary = {
 		"range": 5.0,
 		"damage": 1.0,
 		"fire_rate": 1.0,
+		# How fast the head swings round to follow its target, in degrees a second. Fast
+		# enough to be on target by the next shot from anywhere; slow enough to be seen
+		# turning, which is how the player can tell which dinosaur it has picked.
+		"turn_speed": 300.0,
 		"upgrades_to": "",
 	},
 	"wall": {
@@ -827,11 +831,19 @@ const VISUALS: Dictionary = {
 	"dino/raptor":          {"scene": "res://assets/models/raptor.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "raptor"},
 	"dino/big_theropod":    {"scene": "res://assets/models/t_rex.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "big_theropod"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
-	"nest":                 {"scene": "", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
+	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
+	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours
+	# out of, with bones by the door (tools/generate_props.py).
+	"nest":                 {"scene": "res://assets/models/props/nest_a.glb",
+		"material": "vertex", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
 	# The wreck: the only evidence the Hero is from anywhere else, and the thing that
 	# ends the game if the raid reaches it. It gets the most geometry on the map.
 	"building/core":        {"scene": "res://assets/models/wreck.glb", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
-	"building/tower":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "tower"},
+	# A machine off the wreck -- white plating, the orange band, twin barrels and a red
+	# eye -- on a stand the Hero lashed together from timber over a drystone plinth. The
+	# head is its own node and turns to face what it shoots (Tower.gd). It was a box.
+	"building/tower":       {"scene": "res://assets/models/props/sentry_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	# A sharpened log driven into a mound of turned earth: axe-cut facets, a fire-hardened
 	# charred tip, a band of vine lashing. It was an orange traffic cone.
 	"building/wall":        {"scene": "res://assets/models/props/stake_a.glb",

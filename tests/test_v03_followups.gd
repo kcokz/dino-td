@@ -152,44 +152,57 @@ func test_04_a_stake_is_one_small_sharpened_cone() -> void:
 func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 	# A cube standing in for a stake told the player nothing about what was going down,
 	# and a ghost that drew a different number of cones from the placed stake was worse:
-	# it promised the wrong shape rather than no shape. Both are one call now.
+	# it promised the wrong shape rather than no shape. Both are one call now -- for every
+	# buildable, whether it is one piece like a stake or two like the turret, whose head
+	# turns on its stand.
 	for b_type in config_node.BUILDABLE_TYPES:
 		var type_id := String(b_type)
-		var spiky: bool = config_node.get_building_mesh_style(type_id) == "spikes"
 		var body: Node3D = Building.make_body(type_id)
 		var meshes: Array[MeshInstance3D] = body_meshes(body)
+		assert_gt(meshes.size(), 0, "%s ghost is drawn as something" % type_id)
 
-		assert_eq(meshes.size(), 1, "%s is drawn from one mesh" % type_id)
-		if meshes.is_empty():
+		# The same model the placed building is drawn with -- the very same Mesh, piece
+		# for piece.
+		var placed: Node = null
+		match type_id:
+			"wall":
+				placed = _stake(Vector3(30.0, 0.0, 0.0))
+			"tower":
+				placed = _spawn(tower_script, Vector3(34.0, 0.0, 0.0))
+				placed.complete_construction()
+		assert_not_null(placed, "This test knows how to place a %s" % type_id)
+		if placed == null:
 			body.free()
 			continue
-		if spiky:
-			# The same model the placed stake is drawn with -- the very same Mesh.
-			var placed = _stake()
-			var real: Array[MeshInstance3D] = body_meshes(placed)
-			assert_eq(meshes[0].mesh, real[0].mesh if not real.is_empty() else null,
-				"%s ghost is the same model as the real one" % type_id)
-			assert_lt(top_to_base_width(meshes[0]), 0.35, "%s ghost is sharpened too" % type_id)
-		else:
-			assert_true(meshes[0].mesh is BoxMesh, "%s is the plain block" % type_id)
-			var size: Vector3 = meshes[0].mesh.size
-			assert_almost_eq(size.x, config_node.get_building_footprint(type_id), 0.001,
-				"%s ghost is as wide as the real thing" % type_id)
-			assert_almost_eq(size.y, config_node.get_building_height(type_id), 0.001,
-				"%s ghost is as tall as the real thing" % type_id)
+		var real: Array[MeshInstance3D] = body_meshes(placed)
+		assert_eq(meshes.size(), real.size(), "%s ghost has as many pieces as the real one" % type_id)
+		for i in range(mini(meshes.size(), real.size())):
+			assert_eq(meshes[i].mesh, real[i].mesh, "%s ghost piece %d is the real one's" % [type_id, i])
+
+		if config_node.get_building_mesh_style(type_id) == "spikes":
+			assert_eq(meshes.size(), 1, "One stake, one piece")
+			if not meshes.is_empty():
+				assert_lt(top_to_base_width(meshes[0]), 0.35, "%s ghost is sharpened too" % type_id)
 		body.free()
 
-func test_05_an_ordinary_building_is_still_one_block_of_the_declared_size() -> void:
+func test_05_a_turret_is_drawn_inside_its_declared_size() -> void:
+	# It was one block of exactly the declared size. It is a model now
+	# (tools/generate_props.py, sentry), fitted INTO that size: no wider than the ground it
+	# occupies, as tall as declared, standing on the ground.
 	var tower = _spawn(tower_script)
 	tower.complete_construction()
 	await wait_frames(1)
 
-	var mesh: MeshInstance3D = tower._visual_mesh()
-	assert_not_null(mesh, "The turret has a visible mesh")
-	var box := mesh.mesh as BoxMesh
-	assert_not_null(box, "Drawn as a single block")
-	assert_almost_eq(box.size.x, config_node.get_building_footprint("tower"), 0.001, "As wide as declared")
-	assert_almost_eq(box.size.y, config_node.get_building_height("tower"), 0.001, "As tall as declared")
+	var body = tower.find_child("Body", false, false)
+	assert_not_null(body, "The turret has a body")
+	if body == null:
+		return
+	var bounds: AABB = VisualLibrary.visual_bounds(body)
+	var footprint: float = config_node.get_building_footprint("tower")
+	assert_lte(bounds.size.x, footprint + 0.01, "No wider than its footprint")
+	assert_lte(bounds.size.z, footprint + 0.01, "In either direction")
+	assert_almost_eq(bounds.size.y, config_node.get_building_height("tower"), 0.05, "As tall as declared")
+	assert_almost_eq(bounds.position.y, 0.0, 0.01, "Standing on the ground, not in it")
 
 func test_06_labels_and_bars_sit_above_the_building_they_belong_to() -> void:
 	# A fixed label height reads as floating over a low building and buried in a
@@ -264,6 +277,12 @@ func test_10_a_dinosaur_clear_of_the_stakes_takes_none() -> void:
 func test_11_damage_lands_on_a_tick_not_every_frame() -> void:
 	# Per-frame damage would make the fence as strong as the machine is fast.
 	var stake = _stake()
+	# Only the reports this test makes. Left running, the stake also reports on every
+	# physics step the engine takes, and after a slow frame -- a model loading in the test
+	# before this one -- the engine takes several at once to catch up: enough contact on
+	# top of the test's own to tip "part of a tick" over into a whole one, some runs and
+	# not others.
+	stake.set_physics_process(false)
 	var dino = _raptor(Vector3(stake.contact_range * 0.5, 0.0, 0.0))
 	await wait_frames(1)
 

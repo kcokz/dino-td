@@ -318,12 +318,311 @@ def fallen_log(seed):
     return b
 
 
+# ==============================================================================
+# The nest, where the raid comes from
+# ==============================================================================
+
+EGG = (0.80, 0.76, 0.63)
+EGG_SPECK = (0.30, 0.22, 0.14)
+BONE = (0.74, 0.71, 0.61)
+SOIL_DAMP = (0.08, 0.06, 0.045)
+BURROW = (0.02, 0.018, 0.015)
+DEAD_FERN = (0.30, 0.20, 0.09)
+DEAD_FERN_TIP = (0.46, 0.33, 0.14)
+
+
+def _rings(b, rings, cols, centre=None, centre_col=None):
+    """Quads between consecutive rings, outer (or lower) ring first, and a fan from the
+    last ring to `centre` when there is one."""
+    seg = len(rings[0])
+    for i in range(len(rings) - 1):
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            b.quad(rings[i][k], rings[i][k2], rings[i + 1][k2], rings[i + 1][k],
+                   cols[i][k], cols[i][k2], cols[i + 1][k2], cols[i + 1][k])
+    if centre is not None:
+        last = rings[-1]
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            b.tri(last[k], last[k2], centre, cols[-1][k], cols[-1][k2], centre_col)
+
+
+def _egg(b, centre, axis, rng):
+    """An egg: a sphere drawn out along `axis`, blunter at the top, speckled."""
+    pts, faces = _icosphere(1.0, rng, 0.02)
+    turn = axis.to_track_quat('Z', 'Y').to_matrix()
+    out = []
+    for q in pts:
+        fat = 1.0 + 0.12 * q.z
+        out.append(centre + turn @ Vector((q.x * 0.085 * fat, q.y * 0.085 * fat, q.z * 0.16)))
+    for (i, j, k) in faces:
+        c = mix(EGG, EGG_SPECK, rng.uniform(0.4, 0.7)) if rng.random() < 0.3 else jitter(EGG, rng, 0.02)
+        b.tri(out[i], out[j], out[k], c, c, c)
+
+
+def _bone(b, p0, p1, rng):
+    """A long bone: a shaft with a knuckle at each end."""
+    b.tube([p0, p0.lerp(p1, 0.5), p1], [0.022, 0.018, 0.022], [BONE, jitter(BONE, rng, 0.03), BONE], 6)
+    for end in (p0, p1):
+        pts, faces = _icosphere(0.038, rng, 0.1)
+        for (i, j, k) in faces:
+            b.tri(end + pts[i], end + pts[j], end + pts[k], BONE, BONE, BONE)
+
+
+def nest(seed):
+    """Where the raid comes from: a mound of scraped-up earth and rotting fern with a
+    clutch of eggs in the hollow on top, a rim of broken branches, and a burrow at its
+    foot facing the field -- the mouth the raid pours out of. Blender -Y is the game's
+    +Z, which is the way the nest faces the map.
+
+    Everything a player would recognise from above: the eggs say NEST, the burrow says
+    this is where they come OUT, and the bones by the mouth say what they eat. Authored
+    to 2 x 2 m across, inside the nest's declared 2.0 x 1.2 x 2.0."""
+    rng = random.Random(seed)
+    b = Builder()
+
+    # The mound: earth heaped into a ring, with the hollow on top where the eggs lie.
+    seg = 36
+    # Low and broad: a heap scraped together, not a pot. The first profile rose to 0.84 m
+    # with steep sides and read as an upturned bowl.
+    profile = [(1.0, 0.0), (0.95, 0.13), (0.85, 0.32), (0.72, 0.50), (0.60, 0.58),
+               (0.50, 0.53), (0.38, 0.43), (0.22, 0.38), (0.10, 0.37)]
+    rings, cols = [], []
+    for i, (r, z) in enumerate(profile):
+        ring, col = [], []
+        for k in range(seg):
+            a = math.tau * k / seg
+            if i == 0:
+                rr = r * rng.uniform(0.97, 0.99)       # the foot stays inside the footprint
+            else:
+                rr = r * (1.0 + 0.05 * math.sin(a * 3.0 + seed) + rng.uniform(-0.03, 0.03))
+            zz = z * (1.0 + rng.uniform(-0.06, 0.06))
+            ring.append(Vector((math.cos(a) * rr, math.sin(a) * rr, zz)))
+            if i <= 1:
+                c = mix(SOIL, SOIL_LIGHT, 0.25)
+            elif i <= 4:
+                # the crest: turned earth and the fern it was scraped up with
+                c = mix(SOIL_LIGHT, DEAD_FERN, rng.uniform(0.2, 0.7)) if rng.random() < 0.45 else mix(SOIL, SOIL_LIGHT, 0.75)
+            else:
+                c = mix(SOIL_DAMP, SOIL, (len(profile) - 1 - i) / 4.0)   # damp and shaded in the hollow
+            col.append(jitter(c, rng, 0.03))
+        rings.append(ring)
+        cols.append(col)
+    _rings(b, rings, cols, Vector((0.0, 0.0, 0.36)), SOIL_DAMP)
+
+    # Stones turned up with the earth, bedded round the foot.
+    for i in range(9):
+        a = math.tau * i / 9 + rng.uniform(-0.2, 0.2)
+        if abs(math.atan2(math.sin(a), math.cos(a)) + math.pi / 2) < 0.45:
+            continue                                  # not across the mouth
+        rr = rng.uniform(0.84, 0.9)
+        _boulder(b, Vector((math.cos(a) * rr, math.sin(a) * rr, 0.0)), rng.uniform(0.06, 0.1), rng)
+
+    # The burrow: an earthen hood over a black hole at the foot, facing the field.
+    arch = 10
+    r_out, r_in = 0.38, 0.29
+    y_back, y_front = -0.50, -0.96
+
+    def arc(radius, y):
+        return [Vector((math.cos(math.pi * j / arch) * radius, y, math.sin(math.pi * j / arch) * radius))
+                for j in range(arch + 1)]
+    out_back, out_front = arc(r_out, y_back), arc(r_out, y_front)
+    in_back, in_front = arc(r_in, y_back), arc(r_in, y_front)
+    for j in range(arch):
+        b.quad(out_back[j], out_back[j + 1], out_front[j + 1], out_front[j], SOIL_LIGHT, SOIL_LIGHT, SOIL, SOIL)
+        b.quad(out_front[j], out_front[j + 1], in_front[j + 1], in_front[j], SOIL, SOIL, SOIL_DAMP, SOIL_DAMP)
+        b.quad(in_front[j], in_front[j + 1], in_back[j + 1], in_back[j], SOIL_DAMP, SOIL_DAMP, BURROW, BURROW)
+        b.tri(in_back[j], in_back[j + 1], Vector((0.0, y_back, 0.0)), BURROW, BURROW, BURROW)
+    b.quad(Vector((r_in, y_front, 0.005)), Vector((-r_in, y_front, 0.005)),
+           Vector((-r_in, y_back, 0.005)), Vector((r_in, y_back, 0.005)), SOIL_DAMP, SOIL_DAMP, BURROW, BURROW)
+
+    # The clutch: one in the middle, six round it, half sunk and leaning out.
+    for i in range(7):
+        if i == 0:
+            _egg(b, Vector((rng.uniform(-0.03, 0.03), rng.uniform(-0.03, 0.03), 0.39)), UP, rng)
+            continue
+        a = math.tau * (i - 1) / 6 + rng.uniform(-0.2, 0.2)
+        rr = rng.uniform(0.19, 0.24)
+        lean = Vector((math.cos(a) * 0.35, math.sin(a) * 0.35, 1.0)).normalized()
+        _egg(b, Vector((math.cos(a) * rr, math.sin(a) * rr, 0.42)), lean, rng)
+
+    # Broken branches laid round the rim.
+    for i in range(20):
+        a = math.tau * i / 20 + rng.uniform(-0.12, 0.12)
+        rr = rng.uniform(0.52, 0.68)
+        mid = Vector((math.cos(a) * rr, math.sin(a) * rr, 0.55 + rng.uniform(-0.04, 0.05)))
+        along = Vector((-math.sin(a), math.cos(a), 0.0)) + Vector((rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5),
+                                                                  rng.uniform(-0.25, 0.25)))
+        along.normalize()
+        half = rng.uniform(0.2, 0.34)
+        p0, p1 = mid - along * half, mid + along * half
+        r = rng.uniform(0.016, 0.028)
+        c0 = mix(BARK, BARK_LIGHT, rng.uniform(0.0, 0.6))
+        b.tube([p0.lerp(p1, t / 3) for t in range(4)], [r, r * 0.95, r * 0.9, r * 0.8], [c0] * 4, 5)
+
+    # Dead fronds dragged in with the earth, lying over the rim.
+    for i in range(5):
+        a = math.tau * i / 5 + rng.uniform(-0.3, 0.3)
+        heading = Vector((math.cos(a), math.sin(a), 0.0))
+        frond(b, Vector((math.cos(a) * 0.52, math.sin(a) * 0.52, 0.56)), heading, rng.uniform(0.3, 0.38), rng,
+              25.0, -35.0, 1, 0.08, 0.22, DEAD_FERN, DEAD_FERN_TIP, 0, rachis_r=0.006, withered=0.6, segs=7)
+
+    # Live ferns at its foot, so it sits in the valley rather than on it.
+    # Kept short and rooted a little up the slope: anything reaching past the foot would
+    # widen what gets fitted into the nest's box, and shrink the nest to make room.
+    for i in range(5):
+        a = math.tau * i / 5 + 0.4 + rng.uniform(-0.2, 0.2)
+        if abs(math.atan2(math.sin(a), math.cos(a)) + math.pi / 2) < 0.5:
+            continue                                  # not across the mouth
+        for f in range(2):
+            h = Vector((math.cos(a + (f - 0.5) * 0.6), math.sin(a + (f - 0.5) * 0.6), 0.0))
+            frond(b, Vector((math.cos(a) * 0.80, math.sin(a) * 0.80, 0.16)), h, rng.uniform(0.2, 0.24), rng,
+                  60.0, 10.0, 1, 0.07, 0.24, jitter(FROND_BASE, rng, 0.1), jitter(FROND_TIP, rng, 0.1), 0,
+                  rachis_r=0.005, segs=6)
+
+    # What they eat, left by the door.
+    _bone(b, Vector((0.48, -0.80, 0.03)), Vector((0.80, -0.52, 0.03)), rng)
+    _bone(b, Vector((-0.62, -0.70, 0.03)), Vector((-0.44, -0.86, 0.05)), rng)
+    return b
+
+
+# ==============================================================================
+# The sentry: salvage from the wreck on a stone-age stand
+# ==============================================================================
+
+METAL = (0.80, 0.82, 0.85)          # the wreck's hull plating
+METAL_DARK = (0.24, 0.24, 0.27)     # its thruster alloy
+GUNMETAL = (0.10, 0.10, 0.11)
+HAZARD = (0.94, 0.40, 0.06)         # its emergency markings
+LENS = (0.05, 0.09, 0.16)
+LENS_DOT = (0.95, 0.22, 0.10)
+
+
+def _slab(b, lo, hi, bands, bevel):
+    """A box from `lo` to `hi` with its top edges chamfered and its sides coloured in
+    horizontal bands, [(up_to_fraction, colour), ...] from the bottom. Straight lines and
+    flat panels: manufactured, which is the whole read against everything else on the map
+    being lumpy and alive."""
+    def rect(z, inset):
+        return [Vector((lo.x + inset, lo.y + inset, z)), Vector((hi.x - inset, lo.y + inset, z)),
+                Vector((hi.x - inset, hi.y - inset, z)), Vector((lo.x + inset, hi.y - inset, z))]
+    side_top = hi.z - bevel
+    levels = [(lo.z, bands[0][1])]
+    for (frac, col) in bands:
+        levels.append((min(side_top, lo.z + (hi.z - lo.z) * frac), col))
+    for (z0, _), (z1, col) in zip(levels, levels[1:]):
+        if z1 <= z0:
+            continue
+        r0, r1 = rect(z0, 0.0), rect(z1, 0.0)
+        for k in range(4):
+            k2 = (k + 1) % 4
+            b.quad(r0[k], r0[k2], r1[k2], r1[k], col, col, col, col)
+    top_col = mix(bands[-1][1], (1.0, 1.0, 1.0), 0.08)
+    r0, r1 = rect(side_top, 0.0), rect(hi.z, bevel)
+    for k in range(4):
+        k2 = (k + 1) % 4
+        b.quad(r0[k], r0[k2], r1[k2], r1[k], bands[-1][1], bands[-1][1], top_col, top_col)
+    b.quad(r1[0], r1[1], r1[2], r1[3], top_col, top_col, top_col, top_col)
+    base = rect(lo.z, 0.0)
+    b.quad(base[3], base[2], base[1], base[0], GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
+
+
+def sentry(seed):
+    """The auto turret: a machine off the wreck -- white plating, the orange hazard band,
+    twin barrels and a red eye -- on a stand the Hero put up out of what the valley had:
+    four lashed timber legs on a drystone plinth, and a deck of split planks.
+
+    Two pieces, because the head turns and the stand does not. The head is built round
+    its own pivot, the middle of the turntable, with its barrels along +Y -- the game's
+    -Z, the way a node faces -- so turning it in the game is setting one angle. Returned
+    as (stand, head, where the pivot is, where the muzzle is relative to it)."""
+    rng = random.Random(seed)
+    stand = Builder()
+
+    # A drystone plinth, two courses round a packed-earth core.
+    for course, (n, radius, z, size) in enumerate([(10, 0.36, 0.0, 0.13), (8, 0.30, 0.15, 0.11)]):
+        for k in range(n):
+            a = math.tau * k / n + course * 0.35 + rng.uniform(-0.08, 0.08)
+            _boulder(stand, Vector((math.cos(a) * radius, math.sin(a) * radius, z)), size * rng.uniform(0.9, 1.1), rng)
+    core = [Vector((math.cos(math.tau * k / 12) * 0.28, math.sin(math.tau * k / 12) * 0.28, 0.27)) for k in range(12)]
+    for k in range(12):
+        stand.tri(core[k], core[(k + 1) % 12], Vector((0.0, 0.0, 0.30)), SOIL, SOIL, SOIL_LIGHT)
+
+    # Four timber legs, leaning in a little, braced and lashed.
+    corners = [(1, 1), (1, -1), (-1, -1), (-1, 1)]
+    foot_z, top_z = 0.22, 1.50
+
+    def leg_at(sx, sy, z):
+        t = (z - foot_z) / (top_z - foot_z)
+        w = 0.28 - 0.08 * t
+        return Vector((sx * w, sy * w, z))
+    for (sx, sy) in corners:
+        spine = [leg_at(sx, sy, foot_z + (top_z - foot_z) * i / 6) for i in range(7)]
+        cols = [mix(BARK, BARK_LIGHT, 0.45 if i % 2 else 0.1) for i in range(7)]
+        stand.tube(spine, [0.05 - 0.01 * i / 6 for i in range(7)], cols, 7)
+        for z in (0.55, 1.25):
+            c = leg_at(sx, sy, z)
+            stand.tube([c - UP * 0.035, c + UP * 0.035], [0.058, 0.058], [VINE, VINE_DARK], 7)
+    for i in range(4):
+        (ax, ay), (bx, by) = corners[i], corners[(i + 1) % 4]
+        for (z0, z1) in ((0.55, 1.25), (1.25, 0.55)):
+            p0, p1 = leg_at(ax, ay, z0), leg_at(bx, by, z1)
+            stand.tube([p0, p0.lerp(p1, 0.5), p1], [0.024, 0.022, 0.02], [BARK_LIGHT, BARK, BARK_LIGHT], 5)
+
+    # A deck of split planks across the tops of the legs.
+    for i in range(5):
+        x0 = -0.29 + i * 0.116
+        _slab(stand, Vector((x0 + 0.004, -0.29, top_z)), Vector((x0 + 0.112, 0.29, top_z + 0.045)),
+              [(1.0, mix(BARK_LIGHT, FRESH_WOOD, rng.uniform(0.05, 0.3)))], 0.01)
+
+    # And the turntable the head sits on, off the wreck like the head.
+    deck = top_z + 0.045
+    pivot_z = deck + 0.055
+    stand.tube([Vector((0.0, 0.0, deck)), Vector((0.0, 0.0, pivot_z))], [0.17, 0.16], [METAL_DARK, METAL_DARK], 12)
+    rim = [Vector((math.cos(math.tau * k / 12) * 0.16, math.sin(math.tau * k / 12) * 0.16, pivot_z)) for k in range(12)]
+    for k in range(12):
+        stand.tri(rim[k], rim[(k + 1) % 12], Vector((0.0, 0.0, pivot_z)), METAL_DARK, METAL_DARK, METAL_DARK)
+
+    head = Builder()
+    # The housing: plating off the wreck, with the orange band round it. Big enough to
+    # be the first thing seen on the stand -- at the first size it was a white box on a
+    # tall set of stilts, and the stilts were what read.
+    _slab(head, Vector((-0.21, -0.21, 0.0)), Vector((0.21, 0.19, 0.28)),
+          [(0.40, METAL), (0.58, HAZARD), (1.0, METAL)], 0.05)
+    # Armour plates on the flanks, so the silhouette is not a plain box.
+    for sx in (-1.0, 1.0):
+        lo = Vector((0.21 if sx > 0 else -0.24, -0.15, 0.03))
+        hi = Vector((0.24 if sx > 0 else -0.21, 0.13, 0.22))
+        _slab(head, lo, hi, [(1.0, METAL_DARK)], 0.01)
+    # Twin barrels, with a brake on each muzzle. Their tips stay within half a metre of
+    # the pivot, so however the head turns it never reaches past the stand's footprint.
+    for x in (-0.08, 0.08):
+        head.tube([Vector((x, 0.19, 0.12)), Vector((x, 0.32, 0.12)), Vector((x, 0.43, 0.12))],
+                  [0.034, 0.03, 0.03], [METAL_DARK] * 3, 8)
+        head.tube([Vector((x, 0.42, 0.12)), Vector((x, 0.47, 0.12))], [0.042, 0.042], [METAL_DARK, GUNMETAL], 8)
+    # The eye: a dark lens with a red light in it.
+    _slab(head, Vector((-0.06, 0.18, 0.18)), Vector((0.06, 0.215, 0.25)), [(1.0, LENS)], 0.006)
+    head.quad(Vector((-0.014, 0.2155, 0.204)), Vector((0.014, 0.2155, 0.204)),
+              Vector((0.014, 0.2155, 0.228)), Vector((-0.014, 0.2155, 0.228)), LENS_DOT, LENS_DOT, LENS_DOT, LENS_DOT)
+    # A whip antenna off the back, tipped orange.
+    head.tube([Vector((-0.14, -0.16, 0.28)), Vector((-0.14, -0.16, 0.56))], [0.009, 0.006], [METAL_DARK, METAL_DARK], 5)
+    _slab(head, Vector((-0.155, -0.175, 0.56)), Vector((-0.125, -0.145, 0.59)), [(1.0, HAZARD)], 0.004)
+
+    return stand, head, Vector((0.0, 0.0, pivot_z)), Vector((0.0, 0.47, 0.12))
+
+
 PROPS = {
     "stake": (lambda s: stake(s), [3]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
     "outcrop_quarried": (lambda s: outcrop(s, broken=True), [5]),
     "fallen_log": (lambda s: fallen_log(s), [8, 27]),
     "rock_formation": (lambda s: rock_formation(s), [4, 17, 33]),
+    "nest": (lambda s: nest(s), [9]),
+}
+
+# Props with a part that moves: exported as a small hierarchy rather than one mesh.
+RIGS = {
+    "sentry": (lambda s: sentry(s), [2]),
 }
 
 
@@ -342,8 +641,40 @@ def main():
             print("[OK] %-20s %6d triangles  %.2f x %.2f x %.2f m" % (
                 label, tris, obj.dimensions.x, obj.dimensions.y, obj.dimensions.z))
             made.append(obj)
+    for name, (fn, seeds) in RIGS.items():
+        for v, seed in enumerate(seeds):
+            label = "%s_%s" % (name, "abc"[v])
+            stand_b, head_b, pivot, muzzle = fn(seed)
+            # Named for the game: Tower.gd turns the node called Head and fires from
+            # the one called Muzzle.
+            stand = stand_b.to_object("Stand", [mat])
+            head = head_b.to_object("Head", [mat])
+            head.parent = stand
+            head.location = pivot
+            tip = bpy.data.objects.new("Muzzle", None)
+            bpy.context.scene.collection.objects.link(tip)
+            tip.parent = head
+            tip.location = muzzle
+            export_objects([stand, head, tip], os.path.join(OUT_DIR, label + ".glb"))
+            print("[OK] %-20s %6d triangles  stand %.2f x %.2f x %.2f m, head at %.2f m" % (
+                label, len(stand.data.polygons) + len(head.data.polygons),
+                stand.dimensions.x, stand.dimensions.y, stand.dimensions.z, pivot.z))
+            made.append(stand)
     if "--preview" in args:
         preview_props(made)
+
+
+def export_objects(objs, path):
+    """Several objects into one file, parents and all."""
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    kwargs = dict(filepath=path, export_format='GLB', use_selection=True, export_apply=True)
+    try:
+        bpy.ops.export_scene.gltf(export_vertex_color='ACTIVE', **kwargs)
+    except TypeError:
+        bpy.ops.export_scene.gltf(**kwargs)
 
 
 def preview_props(objs):
