@@ -123,22 +123,41 @@ static func _ground_point(x: float, z: float, field_half: float, outer_half: flo
 # The hills
 # ==============================================================================
 
+## How far in from open ground a hill takes to reach its full height, in cells.
+##
+## Not a tuning number: it is what keeps neighbouring hills flush. Every open cell within
+## half a cell of a point is a neighbour of every hill cell touching that point, so all of
+## them see the same open cells and work out the same height there. Any further and two
+## hills could disagree along the edge they share, and a crack would open between them.
+const HILL_REACH := 0.5
+
 ## One hill cell's visible body, in the cell's own space (origin at the cell centre).
 ##
 ## `blocked` is the whole set of hill cells, because a hill's shape depends on its
-## neighbours: the corner heights come from how many hill cells touch that corner, and
-## two neighbouring cells share those corners exactly. That is what makes them meet
-## without a seam, rather than each being domed on its own and leaving a crack.
+## neighbours -- see hill_height_at.
 ##
-## The mesh never leaves its own cell. Where a neighbour is open ground, the surface
-## drops to the cell edge and a vertical skirt closes it off -- vertical because a
-## sloped apron would hang over a cell the grid says is free, and something you can see
-## a slope on but cannot walk on is the exact lie this project keeps having to undo.
-static func build_hill_cell(cell: Vector2i, blocked: Dictionary, tile: float, height: float, cfg: Node) -> Mesh:
+## The mesh never leaves its own cell. Where a neighbour is open ground the surface comes
+## down to ground level exactly at the cell edge, so nothing overhangs a cell the grid
+## says is free: something you can see a slope on but cannot walk on is the exact lie
+## this project keeps having to undo.
+##
+## `origin` is where the cell's centre is in the world. The mound is the valley floor
+## rising, so every vertex is coloured by the valley floor's own function at the same
+## world position: where the two meet they agree to the last digit, and there is no
+## outline to see. A flat albedo, however carefully matched, drew a square round every
+## hill, because the ground beside it is mottled and this was not.
+static func build_hill_cell(cell: Vector2i, blocked: Dictionary, tile: float, height: float, cfg: Node, origin: Vector3 = Vector3.ZERO) -> Mesh:
 	var t: Dictionary = _terrain(cfg)
 	var subdivisions: int = maxi(2, int(t.get("hill_subdivisions", 6)))
 	var noise := _noise(cfg)
 	var bump: float = float(t.get("hill_noise", 0.12))
+
+	var field_half: float = float(t.get("field_half", 22.0))
+	var outer_half: float = float(t.get("outskirts_half", 110.0))
+	var grass: Color = _colour(cfg, "ground", Color(0.28, 0.32, 0.24))
+	var rock: Color = _colour(cfg, "hill", Color(0.36, 0.33, 0.28))
+	var tint := func(p: Vector3) -> Color:
+		return _ground_colour(origin + p, field_half, outer_half, t, noise, grass, rock)
 
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -157,50 +176,38 @@ static func build_hill_cell(cell: Vector2i, blocked: Dictionary, tile: float, he
 				_hill_point(cell, blocked, u0, v0, half, step, ix, iz, height, noise, bump, tile),
 				_hill_point(cell, blocked, u1, v0, half, step, ix + 1, iz, height, noise, bump, tile),
 				_hill_point(cell, blocked, u1, v1, half, step, ix + 1, iz + 1, height, noise, bump, tile),
-				_hill_point(cell, blocked, u0, v1, half, step, ix, iz + 1, height, noise, bump, tile))
-
-	# Skirts, on the sides that face open ground.
-	_skirt(st, cell, blocked, Vector2i(0, -1), half, subdivisions, height, noise, bump, tile)
-	_skirt(st, cell, blocked, Vector2i(0, 1), half, subdivisions, height, noise, bump, tile)
-	_skirt(st, cell, blocked, Vector2i(-1, 0), half, subdivisions, height, noise, bump, tile)
-	_skirt(st, cell, blocked, Vector2i(1, 0), half, subdivisions, height, noise, bump, tile)
+				_hill_point(cell, blocked, u0, v1, half, step, ix, iz + 1, height, noise, bump, tile),
+				tint)
 
 	st.generate_normals()
 	return st.commit()
 
 ## Surface height inside a hill cell, at local (u, v) in 0..1.
 ##
-## The larger of two shapes: the bilinear blend of the four corner heights, which is
-## what keeps neighbours flush, and a cosine dome, which is what stops a hill standing
-## on its own from being a low flat lid.
+## The mound is the ground rising: nothing where the hill meets open ground, `height`
+## once it is HILL_REACH in from it. It is a product of falloffs, one for each open cell
+## near the point, each a smoothstep of the distance to that cell. Two things follow from
+## that, and nothing else is needed to keep them true:
 ##
-## A corner is as high as the share of hill cells touching it, so a cell with hills all
-## round it comes out flat on top at full height, and a cell on its own domes up from
-## corners at a quarter height. Note that a lone hill's edge therefore sits ABOVE the
-## ground, on a low plinth -- the skirt is what closes that gap, and a small rock face
-## at the base of a hill is the shape this is after rather than a compromise.
+## - Where a hill meets open ground it is at ground level, and level, so there is no step
+##   and no crease to draw an outline. The old shape stood a lone hill on a plinth a
+##   quarter of its height, with a vertical skirt to close the gap; once crags stood on
+##   the mounds, that square rim was what showed round every rock on the field.
+## - The height at a point depends only on the point and on which cells near it are
+##   open -- not on which cell is asking. Two hills sharing an edge work out the same
+##   height all along it, so they meet without a crack, and a ridge of hills is one
+##   continuous rise rather than a row of bumps.
 static func hill_height_at(cell: Vector2i, blocked: Dictionary, u: float, v: float, height: float) -> float:
-	var c00: float = _corner_height(cell + Vector2i(-1, -1), cell + Vector2i(0, -1), cell + Vector2i(-1, 0), cell, blocked, height)
-	var c10: float = _corner_height(cell + Vector2i(0, -1), cell + Vector2i(1, -1), cell, cell + Vector2i(1, 0), blocked, height)
-	var c01: float = _corner_height(cell + Vector2i(-1, 0), cell, cell + Vector2i(-1, 1), cell + Vector2i(0, 1), blocked, height)
-	var c11: float = _corner_height(cell, cell + Vector2i(1, 0), cell + Vector2i(0, 1), cell + Vector2i(1, 1), blocked, height)
-
-	var top: float = lerp(c00, c10, u)
-	var bottom: float = lerp(c01, c11, u)
-	var flat: float = lerp(top, bottom, v)
-
-	var dome: float = height * cos(PI * (u - 0.5)) * cos(PI * (v - 0.5))
-	return maxf(flat, dome)
-
-## A corner is as high as the share of hill cells touching it. Both cells on either
-## side of an edge compute their shared corners from the same four cells, so they agree
-## exactly and no crack can open between them.
-static func _corner_height(a: Vector2i, b: Vector2i, c: Vector2i, d: Vector2i, blocked: Dictionary, height: float) -> float:
-	var count: int = 0
-	for cell in [a, b, c, d]:
-		if blocked.has(cell):
-			count += 1
-	return height * (float(count) / 4.0)
+	var p := Vector2(u, v)
+	var rise: float = 1.0
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			if blocked.has(cell + Vector2i(dx, dz)):
+				continue
+			# The nearest point of that open cell, in this cell's (u, v).
+			var nearest := Vector2(clampf(p.x, float(dx), float(dx) + 1.0), clampf(p.y, float(dz), float(dz) + 1.0))
+			rise *= smoothstep(0.0, HILL_REACH, p.distance_to(nearest))
+	return height * rise
 
 static func _hill_point(cell: Vector2i, blocked: Dictionary, u: float, v: float, half: float, _step: float, _ix: int, _iz: int, height: float, noise: FastNoiseLite, bump: float, tile: float) -> Vector3:
 	var x: float = -half + u * tile
@@ -212,43 +219,14 @@ static func _hill_point(cell: Vector2i, blocked: Dictionary, u: float, v: float,
 		y += noise.get_noise_2d((float(cell.x) + u) * tile, (float(cell.y) + v) * tile) * bump * (y / height)
 	return Vector3(x, y, z)
 
-static func _skirt(st: SurfaceTool, cell: Vector2i, blocked: Dictionary, dir: Vector2i, half: float, subdivisions: int, height: float, noise: FastNoiseLite, bump: float, tile: float) -> void:
-	if blocked.has(cell + dir):
-		return    # the neighbour carries on; there is nothing to close off
-	for i in range(subdivisions):
-		var a: float = float(i) / float(subdivisions)
-		var b: float = float(i + 1) / float(subdivisions)
-		var p0: Vector3
-		var p1: Vector3
-		if dir.y != 0:
-			var v: float = 0.0 if dir.y < 0 else 1.0
-			p0 = _hill_point(cell, blocked, a, v, half, 0.0, 0, 0, height, noise, bump, tile)
-			p1 = _hill_point(cell, blocked, b, v, half, 0.0, 0, 0, height, noise, bump, tile)
-			if dir.y > 0:
-				var swap := p0
-				p0 = p1
-				p1 = swap
-		else:
-			var u: float = 0.0 if dir.x < 0 else 1.0
-			p0 = _hill_point(cell, blocked, u, a, half, 0.0, 0, 0, height, noise, bump, tile)
-			p1 = _hill_point(cell, blocked, u, b, half, 0.0, 0, 0, height, noise, bump, tile)
-			if dir.x < 0:
-				var swap2 := p0
-				p0 = p1
-				p1 = swap2
-		_quad(st, p0, p1, Vector3(p1.x, 0.0, p1.z), Vector3(p0.x, 0.0, p0.z))
-
 # ==============================================================================
 # Plumbing
 # ==============================================================================
 
-static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
-	st.add_vertex(a)
-	st.add_vertex(b)
-	st.add_vertex(c)
-	st.add_vertex(a)
-	st.add_vertex(c)
-	st.add_vertex(d)
+static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, tint: Callable) -> void:
+	for p in [a, b, c, a, c, d]:
+		st.set_color(tint.call(p))
+		st.add_vertex(p)
 
 static func _terrain(cfg: Node) -> Dictionary:
 	if cfg and "TERRAIN" in cfg:

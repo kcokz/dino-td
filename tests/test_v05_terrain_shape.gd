@@ -133,23 +133,57 @@ func test_04_the_climb_finishes_where_the_camera_can_still_see_it() -> void:
 # ==============================================================================
 
 func test_05_a_hill_never_leaves_its_own_cell() -> void:
-	# Art that overhangs a free cell would stop things at nothing visible. The collider
-	# is the cell; the mesh has to stay inside it.
+	# Art that overhangs a free cell would be rock that things walk straight through. The
+	# collider is the cell; everything drawn for the hill has to stay inside it.
+	#
+	# Measured vertex by vertex, where each one actually ends up in the hill's space. The
+	# first version of this read every mesh's box in the mesh's own space, which was fine
+	# while hills were meshes built in place -- and then the crags arrived, scaled to fit
+	# and turned when they are put down, and the check never saw either.
 	var main = _level()
 	await wait_frames(2)
-	var tile: float = float(config_node.TILE_SIZE)
-	var half: float = tile * 0.5
+	var half: float = float(config_node.TILE_SIZE) * 0.5
 
 	var checked: int = 0
 	for hill in main.terrain_container.get_children():
+		var into_hill: Transform3D = (hill as Node3D).global_transform.affine_inverse()
+		var widest: float = 0.0
 		for node in hill.find_children("*", "MeshInstance3D", true, false):
-			var aabb: AABB = (node as MeshInstance3D).mesh.get_aabb()
-			assert_gte(aabb.position.x, -half - 0.001, "%s does not overhang to the west" % hill.name)
-			assert_gte(aabb.position.z, -half - 0.001, "%s does not overhang to the north" % hill.name)
-			assert_lte(aabb.position.x + aabb.size.x, half + 0.001, "%s does not overhang to the east" % hill.name)
-			assert_lte(aabb.position.z + aabb.size.z, half + 0.001, "%s does not overhang to the south" % hill.name)
+			var mi := node as MeshInstance3D
+			var t: Transform3D = into_hill * mi.global_transform
+			for surface in range(mi.mesh.get_surface_count()):
+				for v in mi.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+					var p: Vector3 = t * v
+					widest = maxf(widest, maxf(absf(p.x), absf(p.z)))
 			checked += 1
+		assert_lte(widest, half + 0.001, "Nothing drawn for %s reaches past its cell (%.3f m out)" % [hill.name, widest])
 	assert_gt(checked, 0, "There are hills to check")
+
+func test_05b_every_hill_is_a_knot_of_crags_on_a_low_mound() -> void:
+	# The hills used to be bare cosine domes cut from a height field, and every lone one
+	# stood on the field like a grey tent. Each now wears one of the crag formations
+	# tools/generate_props.py makes, and what is left of the dome is a low swell of the
+	# valley floor under them.
+	var main = _level()
+	await wait_frames(2)
+	var height: float = float(config_node.MAP["hill_height"])
+	var base: float = height * float(config_node.MAP["hill_base_fraction"])
+	var bump: float = float(config_node.TERRAIN.get("hill_noise", 0.12))
+	var hills: Array = main.terrain_container.get_children()
+	assert_gt(hills.size(), 0, "There are hills")
+	for hill in hills:
+		var rocks := hill.get_node_or_null("Rocks") as Node3D
+		assert_not_null(rocks, "%s wears crags" % hill.name)
+		if rocks == null:
+			continue
+		var stone: AABB = VisualLibrary.visual_bounds(hill as Node3D)
+		assert_gt(stone.end.y, height * 0.8, "Standing most of the hill's height -- %s" % hill.name)
+		assert_lte(stone.end.y, height + 0.001, "And no taller than the collider -- %s" % hill.name)
+		var mound := hill.get_node_or_null("Mound") as MeshInstance3D
+		assert_not_null(mound, "On a mound -- %s" % hill.name)
+		if mound != null:
+			assert_lte(mound.mesh.get_aabb().end.y, base + bump + 0.001,
+				"A low one: the stone is the hill, the mound only joins it to the ground -- %s" % hill.name)
 
 func test_06_a_hill_reaches_the_declared_height_and_no_higher() -> void:
 	var blocked := _blocked_set()
@@ -164,18 +198,42 @@ func test_06_a_hill_reaches_the_declared_height_and_no_higher() -> void:
 	assert_almost_eq(TerrainBuilder.hill_height_at(lone_cell, lone, 0.5, 0.5, height), height, 0.001,
 		"A lone hill domes up to full height")
 
-	# Its edge sits on a low plinth rather than at ground level -- a corner is as high as
-	# the share of hill cells touching it, and only one touches here. What must hold is
-	# that the SKIRT closes that gap, so the hill is joined to the ground rather than
-	# hovering over it.
-	var edge: float = TerrainBuilder.hill_height_at(lone_cell, lone, 0.0, 0.5, height)
-	assert_gt(edge, 0.0, "The edge stands on a plinth")
-	assert_lt(edge, height * 0.5, "A low one -- it is a rock face, not a second hill")
-
 	var mesh: Mesh = TerrainBuilder.build_hill_cell(lone_cell, lone, float(config_node.TILE_SIZE), height, config_node)
 	var aabb: AABB = mesh.get_aabb()
 	assert_almost_eq(aabb.position.y, 0.0, 0.001, "And the mesh reaches the ground, so nothing floats")
 	assert_almost_eq(aabb.position.y + aabb.size.y, height, 0.05, "Topping out at the declared height")
+
+func test_06b_a_hill_rises_out_of_the_ground_with_no_rim() -> void:
+	# Once crags stood on the hills, what showed round every one of them was a square: a
+	# lone hill used to stand on a plinth a quarter of its height, closed off by a vertical
+	# skirt, and that step caught the light on one side and a shadow on the other. The
+	# mound is the ground rising now, so wherever it meets open ground it is AT ground
+	# level -- all the way round, corners included -- and level there, so there is not
+	# even a crease for the light to find.
+	var height: float = float(config_node.MAP["hill_height"])
+	var tile: float = float(config_node.TILE_SIZE)
+	var ridge: Dictionary = {Vector2i(40, 40): true, Vector2i(41, 40): true}
+	for cell in [Vector2i(40, 40), Vector2i(41, 40)]:
+		var mesh: Mesh = TerrainBuilder.build_hill_cell(cell, ridge, tile, height, config_node)
+		var verts: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var rim: int = 0
+		for p in verts:
+			# The rim is every edge that faces open ground: all of them, except the one the
+			# two cells share.
+			var shared_x: float = tile * 0.5 if cell.x == 40 else -tile * 0.5
+			var on_open_edge: bool = absf(absf(p.z) - tile * 0.5) < 0.001 				or (absf(absf(p.x) - tile * 0.5) < 0.001 and absf(p.x - shared_x) > 0.001)
+			if on_open_edge:
+				rim += 1
+				assert_almost_eq(p.y, 0.0, 0.001, "%s meets open ground at ground level, at %s" % [str(cell), str(p)])
+		assert_gt(rim, 0, "There is a rim to check on %s" % str(cell))
+
+	# And level where it gets there: a step's worth in from the edge it has barely risen.
+	var just_in: float = TerrainBuilder.hill_height_at(Vector2i(40, 40), {Vector2i(40, 40): true}, 0.05, 0.5, height)
+	assert_lt(just_in, height * 0.05, "It leaves the ground level, not at an angle")
+
+	# While along the ridge it does not dip where the two cells meet: one rise, not two.
+	var joint: float = TerrainBuilder.hill_height_at(Vector2i(40, 40), ridge, 1.0, 0.5, height)
+	assert_almost_eq(joint, height, 0.001, "The ridge runs on at full height across the joint")
 
 func test_07_neighbouring_hills_meet_without_a_crack() -> void:
 	# Both cells work their shared corners out from the same four cells, so they agree

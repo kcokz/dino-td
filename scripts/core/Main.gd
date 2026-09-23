@@ -442,10 +442,10 @@ func spawn_terrain() -> void:
 	_rebuild_ground(cfg)
 	_scatter_ground_cover(cfg)
 
-	var hill_mat := StandardMaterial3D.new()
-	hill_mat.albedo_color = cfg.COLORS.get("hill", Color(0.36, 0.33, 0.28))
-	hill_mat.roughness = 0.95          # rock: no specular sheen
-	hill_mat.metallic = 0.0
+	# The mound under the crags is the valley floor rising, so it wears the valley floor:
+	# the same material, one instance for every hill, over vertex colours worked out by
+	# the ground's own function (TerrainBuilder.build_hill_cell).
+	var hill_mat := _ground_material(cfg)
 
 	for c in cells:
 		if not (c is Vector2i):
@@ -468,12 +468,52 @@ func spawn_terrain() -> void:
 		shape.position = Vector3(0.0, height * 0.5, 0.0)
 		hill.add_child(shape)
 
+		# A LOW SHARED MOUND, with crags standing on it. The mound is the old height
+		# field kept at a fraction of its height: neighbouring cells still meet without a
+		# crack, so a ridge of blocked cells reads as one continuous rise -- the thing the
+		# player sees is still exactly the thing that stops them. On its own, at full
+		# height, a single cell came out as a cosine dome peaked in the middle, and every
+		# lone hill on the map stood there like a grey tent.
+		var rocks: Array = _rock_formations(cfg)
+		var base_height: float = height * float(cfg.MAP.get("hill_base_fraction", 0.12)) if not rocks.is_empty() else height
 		var mi := MeshInstance3D.new()
-		mi.mesh = TerrainBuilder.build_hill_cell(c, blocked, tile, height, cfg)
+		mi.name = "Mound"
+		mi.mesh = TerrainBuilder.build_hill_cell(c, blocked, tile, base_height, cfg, hill.position)
 		mi.material_override = hill_mat
 		hill.add_child(mi)
+		if not rocks.is_empty():
+			# Which formation and which way round, from the cell itself: the same hill
+			# every launch, and no two neighbours obviously the same stone.
+			#
+			# Turned a quarter at a time, INSIDE a holder, and then the holder is fitted:
+			# the fit measures the stone as turned, so whichever way it faces it stands
+			# centred in its cell and inside it. Turned after fitting -- and by any angle --
+			# it swung round its own origin rather than its middle, and its corners reached
+			# past the cell: rock drawn over ground the grid says is open.
+			var pick: int = absi(c.x * 73856093 ^ c.y * 19349663) % rocks.size()
+			var holder := Node3D.new()
+			holder.name = "Rocks"
+			hill.add_child(holder)
+			var art: Node3D = (rocks[pick] as PackedScene).instantiate()
+			holder.add_child(art)
+			art.rotation.y = float(absi(c.x * 31 + c.y * 17) % 4) * PI * 0.5
+			VisualLibrary.fit(holder, Vector3(tile * 0.96, height * 0.96, tile * 0.96), "feet")
+			var rock_mat := GroundCover.cover_material()
+			for m in holder.find_children("*", "MeshInstance3D", true, false):
+				(m as MeshInstance3D).material_override = rock_mat
 
 		terrain_container.add_child(hill)
+
+## The crags a hillside cell wears (tools/generate_props.py), or none when the art is
+## missing -- in which case the cell keeps the full-height mound it always had.
+func _rock_formations(cfg) -> Array:
+	var out: Array = []
+	for pth in cfg.MAP.get("hill_rocks", []):
+		if ResourceLoader.exists(String(pth)):
+			var packed = load(String(pth))
+			if packed is PackedScene:
+				out.append(packed)
+	return out
 
 ## The ground's surface: vertex colour for the broad strokes, and a triplanar noise
 ## texture over the top for the grain.
@@ -508,8 +548,11 @@ func _ground_material(cfg) -> StandardMaterial3D:
 	mat.normal_texture = _noise_texture(int(t.get("noise_seed", 1)) + 29, 1.0 / maxf(0.2, scale), true, 1.0)
 
 	# Triplanar, because the ground mesh has no UVs of its own and the valley walls are
-	# steep enough that a flat projection would smear down them.
+	# steep enough that a flat projection would smear down them. In WORLD space, so a hill
+	# wearing this material carries the same grain on across the line where it meets the
+	# ground -- in its own space, each hill's grain started over at its centre.
 	mat.uv1_triplanar = true
+	mat.uv1_world_triplanar = true
 	mat.uv1_scale = Vector3.ONE / maxf(0.2, scale)
 	return mat
 

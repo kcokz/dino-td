@@ -485,6 +485,14 @@ const MAP: Dictionary = {
 	## raid has to be able to arrive, and the Hero has to be able to walk out), and
 	## never sit on a resource node.
 	"hill_height": 2.2,      # 丘陵高度（米）——比人高，看得出走不过去
+	# 火山岩：每个丘陵格上立一组嶙峋的岩柱（tools/generate_props.py），脚下是一层低矮的
+	# 共享土丘，让相邻格连成一片。缺美术时退回原来的满高土丘。
+	"hill_rocks": ["res://assets/models/props/rock_formation_a.glb",
+		"res://assets/models/props/rock_formation_b.glb",
+		"res://assets/models/props/rock_formation_c.glb"],
+	# 岩石脚下那层土丘的高度，占丘陵高度的比例。它只是地面在岩石下微微隆起——边缘与
+	# 地面齐平、相邻格无缝连成一片（TerrainBuilder.hill_height_at）；"是山"的是岩石本身。
+	"hill_base_fraction": 0.12,
 	"default_blocked_cells": [
 		Vector2i(-3, -5), Vector2i(-2, -5),
 		Vector2i(2, -5), Vector2i(3, -5),
@@ -1234,7 +1242,9 @@ const ENVIRONMENT: Dictionary = {
 	# soft natural fill tinted by the sky, avoiding pitch-black cavities under trees and rocks.
 	"ambient_source": Environment.AMBIENT_SOURCE_SKY,
 	"ambient_color": Color(0.85, 0.90, 0.95),
-	"ambient_energy": 0.35,
+	# 0.35 was a clear day's fill. This valley is humid and hazy, and a hazy sky throws a
+	# lot of light into shadow: at 0.35 every crag seen against the sun was a black shape.
+	"ambient_energy": 0.5,
 	"ambient_sky_contribution": 0.55,
 
 	# SSAO: Screen-space ambient occlusion is the single most cost-effective feature for

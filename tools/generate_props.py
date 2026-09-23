@@ -30,9 +30,13 @@ FRESH_WOOD = (0.74, 0.58, 0.36)
 CHAR = (0.06, 0.045, 0.035)
 VINE = (0.30, 0.30, 0.13)
 VINE_DARK = (0.17, 0.18, 0.07)
-ROCK_DARK = (0.14, 0.13, 0.12)
-ROCK = (0.30, 0.29, 0.26)
-ROCK_LIGHT = (0.46, 0.44, 0.40)
+# Weathered volcanic stone. Authored in sRGB, so these are brighter than they look as
+# numbers: the first palette started at 0.14, which is 0.018 once linear -- darker than
+# coal -- and every crag seen with the sun behind it was a black shape, whatever the
+# ambient light was turned up to.
+ROCK_DARK = (0.26, 0.24, 0.22)
+ROCK = (0.44, 0.42, 0.38)
+ROCK_LIGHT = (0.60, 0.58, 0.53)
 MOSS = (0.16, 0.26, 0.07)
 LICHEN = (0.55, 0.52, 0.30)
 
@@ -181,6 +185,90 @@ def _boulder(b, centre, size, rng, fresh=False):
 
 
 # ==============================================================================
+# A rock formation, for a hillside cell
+# ==============================================================================
+
+def _icosphere(radius, rng, jitter_amount):
+    """An icosahedron subdivided once -- 80 faces, enough for a crag to have a craggy
+    outline -- with every corner pushed in or out."""
+    t = (1.0 + 5.0 ** 0.5) / 2.0
+    verts = [Vector(v).normalized() for v in [(-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0),
+             (0, -1, t), (0, 1, t), (0, -1, -t), (0, 1, -t), (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]]
+    faces = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4),
+             (11, 10, 2), (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8),
+             (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
+    cache = {}
+
+    def mid(a, b):
+        key = (min(a, b), max(a, b))
+        if key not in cache:
+            verts.append(((verts[a] + verts[b]) * 0.5).normalized())
+            cache[key] = len(verts) - 1
+        return cache[key]
+    sub = []
+    for (a, b, c) in faces:
+        ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
+        sub += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
+    pts = [v * radius * rng.uniform(1.0 - jitter_amount, 1.0 + jitter_amount) for v in verts]
+    return pts, sub
+
+
+def _crag(b, base, width, height, tilt, rng):
+    """A standing crag: a rough icosphere stretched up, leaned over, flattened where it
+    meets the ground, with moss on whatever faces the sky."""
+    pts, faces = _icosphere(1.0, rng, 0.16)
+    lean = Vector((math.cos(tilt[0]), math.sin(tilt[0]), 0.0)) * tilt[1]
+    out = []
+    for p in pts:
+        v = Vector((p.x * width, p.y * width * rng.uniform(0.85, 1.0), p.z * height * 0.5))
+        v += UP * (height * 0.5)
+        v += lean * (v.z / max(0.01, height))          # lean more towards the top
+        if v.z < 0.0:
+            v.z *= 0.2                                  # sunk flat into the ground
+        out.append(base + v)
+    for (i, j, k) in faces:
+        n = (out[j] - out[i]).cross(out[k] - out[i])
+        up = n.normalized().z if n.length > 1e-9 else 0.0
+        cs = []
+        for m in (i, j, k):
+            h = (out[m].z - base.z) / max(0.01, height)
+            c = mix(ROCK_DARK, ROCK, max(0.0, min(1.0, 0.25 + h * 0.9)))
+            if up > 0.55 and h > 0.35:
+                c = mix(c, MOSS, 0.65)                   # moss where it faces the sky
+            elif up > 0.2 and h > 0.6 and (m * 7) % 5 == 0:
+                c = mix(c, LICHEN, 0.45)                 # a fleck of lichen high up
+            cs.append(c)
+        b.tri(out[i], out[j], out[k], cs[0], cs[1], cs[2])
+
+
+def rock_formation(seed):
+    """Hillside for one blocked cell: a knot of volcanic crags -- two or three standing
+    tall, broken boulders round their feet -- that stays INSIDE the cell's own box
+    (Main.spawn_terrain: art may never overhang a free cell, or it would stop things at
+    nothing visible). Authored to 1.9 x 1.9 x 2.1 m inside the 2 x 2 x 2.2 m cell."""
+    rng = random.Random(seed)
+    b = Builder()
+    big = rng.randint(2, 3)
+    for i in range(big):
+        a = math.tau * i / big + rng.uniform(-0.5, 0.5)
+        r = rng.uniform(0.1, 0.38)
+        base = Vector((math.cos(a) * r, math.sin(a) * r, 0.0))
+        _crag(b, base, rng.uniform(0.42, 0.55), rng.uniform(1.5, 2.05),
+              (rng.uniform(0.0, math.tau), rng.uniform(0.05, 0.22)), rng)
+    for i in range(rng.randint(4, 6)):
+        a = rng.uniform(0.0, math.tau)
+        r = rng.uniform(0.45, 0.72)
+        base = Vector((math.cos(a) * r, math.sin(a) * r, 0.0))
+        _crag(b, base, rng.uniform(0.18, 0.3), rng.uniform(0.35, 0.8),
+              (rng.uniform(0.0, math.tau), rng.uniform(0.0, 0.3)), rng)
+    for i in range(rng.randint(5, 8)):
+        a = rng.uniform(0.0, math.tau)
+        r = rng.uniform(0.6, 0.85)
+        _boulder(b, Vector((math.cos(a) * r, math.sin(a) * r, 0.0)), rng.uniform(0.06, 0.13), rng)
+    return b
+
+
+# ==============================================================================
 # A fallen trunk
 # ==============================================================================
 
@@ -235,6 +323,7 @@ PROPS = {
     "outcrop": (lambda s: outcrop(s), [5, 21]),
     "outcrop_quarried": (lambda s: outcrop(s, broken=True), [5]),
     "fallen_log": (lambda s: fallen_log(s), [8, 27]),
+    "rock_formation": (lambda s: rock_formation(s), [4, 17, 33]),
 }
 
 
