@@ -222,6 +222,111 @@ static func scatter(cfg: Node, mesh: Mesh, material: Material, count: int, field
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return node
 
+## A ring of scenery BEYOND the playfield: the forest edge and the valley walls.
+##
+## Measured as distance outside the field's SQUARE, not from its centre -- the field is
+## square and a ring measured from the middle would put tall trees in its corners, which
+## is ground the game is played on. `from_edge` / `to_edge` are metres past that square.
+## Stands at the terrain's real height, so a tree on the valley wall grows out of it.
+static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, field_half: float,
+		from_edge: float, to_edge: float, seed_value: int, scale_range: Vector2,
+		shadows: bool, bias_outward: float = 1.0) -> MultiMeshInstance3D:
+	var placements: Array[Transform3D] = band_placements(cfg, count, field_half, from_edge,
+		to_edge, seed_value, scale_range, bias_outward)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = placements.size()
+	for i in range(placements.size()):
+		mm.set_instance_transform(i, placements[i])
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = mm
+	node.material_override = material
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return node
+
+## Where a band's plants go, worked out apart from the MultiMesh they end up in.
+##
+## Separate because a MultiMesh cannot be read back without a GPU behind it: under the
+## headless test runner get_instance_transform answers (0, 0, 0) for every instance,
+## whatever was set. Measured -- set (30, 0, 40), read back the origin -- and a test that
+## trusted it concluded every tree in the valley was standing in the middle of the field.
+static func band_placements(cfg: Node, count: int, field_half: float, from_edge: float,
+		to_edge: float, seed_value: int, scale_range: Vector2,
+		bias_outward: float = 1.0) -> Array[Transform3D]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
+	var outer_half: float = float(t.get("outskirts_half", 110.0))
+	var reach: float = field_half + to_edge
+	var placements: Array[Transform3D] = []
+	var attempts: int = 0
+	while placements.size() < count and attempts < count * 20:
+		attempts += 1
+		var x: float = rng.randf_range(-reach, reach)
+		var z: float = rng.randf_range(-reach, reach)
+		var past: float = maxf(absf(x), absf(z)) - field_half
+		if past < from_edge or past > to_edge:
+			continue
+		# Denser further out when asked, so the forest thickens up the valley wall
+		# rather than standing in a line along the field's edge.
+		var u: float = (past - from_edge) / maxf(0.01, to_edge - from_edge)
+		if rng.randf() > lerpf(1.0, u, clampf(bias_outward - 1.0, 0.0, 1.0)) + 0.15:
+			continue
+		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, null)
+		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU))
+		basis = basis.scaled(Vector3.ONE * rng.randf_range(scale_range.x, scale_range.y))
+		placements.append(Transform3D(basis, Vector3(x, y - 0.05, z)))
+	return placements
+
+## The mesh inside one of tools/generate_flora.py's plants, for scattering by the thousand.
+##
+## Loaded from the GLB rather than rebuilt here: the plant is authored ONCE, in Blender,
+## and the same file is what a resource node shows up close and what the meadow is made
+## of from far away. Null if the file is missing, so a fixture without the art still runs.
+static func flora_mesh(path: String) -> Mesh:
+	if not ResourceLoader.exists(path):
+		return null
+	var scene = load(path)
+	if not (scene is PackedScene):
+		return null
+	var inst: Node = (scene as PackedScene).instantiate()
+	var found: Mesh = null
+	var stack: Array = [inst]
+	while not stack.is_empty() and found == null:
+		var n: Node = stack.pop_back()
+		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+			found = (n as MeshInstance3D).mesh
+		for c in n.get_children():
+			stack.append(c)
+	inst.free()
+	return found
+
+## The material a plant is drawn with: its own vertex colours, both faces of every frond,
+## and BACKLIGHT -- light coming through a leaf from behind, which is what makes a fern
+## glow when the sun is on the far side of it instead of going flat and dark. The
+## engine's own translucency term, not a shader.
+##
+## `fade_near` > 0 dissolves the plant as the camera comes close. A tree fern at the
+## edge of the field would otherwise stand between the camera and the fight the moment
+## the player turned the view, and there is nothing to be done about a tree trunk that
+## fills the screen except not draw it.
+static func flora_material(fade_near: float = 0.0) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE
+	mat.vertex_color_use_as_albedo = true
+	mat.vertex_color_is_srgb = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.roughness = 0.85
+	mat.metallic = 0.0
+	mat.backlight_enabled = true
+	mat.backlight = Color(0.22, 0.30, 0.10)
+	if fade_near > 0.0:
+		mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+		mat.distance_fade_min_distance = fade_near * 0.5
+		mat.distance_fade_max_distance = fade_near
+	return mat
+
 static func _too_close(at: Vector3, keep_clear: Array, radius: float) -> bool:
 	for p in keep_clear:
 		if p is Vector3 and at.distance_to(p) < radius:

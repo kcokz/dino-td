@@ -1120,8 +1120,12 @@ const GROUND_COVER: Dictionary = {
 	# Nothing is scattered within this of a cell the level claimed, so the cabin, the
 	# nest and the resource nodes are not standing in a bush.
 	"clear_radius": 2.2,
-	"grass_count": 9000,
-	"grass_height": 0.34,
+	# Grass is thinned to a low sedge between the ferns rather than removed. Grasses were
+	# barely a thing before the very end of the Cretaceous, so a meadow of them is the one
+	# unmistakably MODERN element a dinosaur valley can have -- but bare soil between the
+	# ferns reads as unfinished, and a short sparse sedge is what fills the gaps.
+	"grass_count": 2600,
+	"grass_height": 0.22,
 	"grass_width": 0.05,
 	"grass_blades": 7,
 	"grass_base": Color(0.12, 0.22, 0.08),
@@ -1133,7 +1137,8 @@ const GROUND_COVER: Dictionary = {
 	"fern_fronds": 7,
 	"fern_stem": Color(0.18, 0.25, 0.12),
 	"fern_leaf": Color(0.33, 0.47, 0.20),
-	"pebble_count": 1300,
+	# Far fewer: 1300 pale pebbles drew the eye everywhere and read as a gravel lot.
+	"pebble_count": 260,
 	"pebble_radius": 0.16,
 	"pebble_color": Color(0.42, 0.40, 0.36),
 	# Thinly: one here and there reads as old forest, a field of them as a lumber yard.
@@ -1142,6 +1147,36 @@ const GROUND_COVER: Dictionary = {
 	"log_radius": 0.28,
 	"log_bark": Color(0.27, 0.21, 0.15),
 	"log_core": Color(0.47, 0.39, 0.28),
+
+	# THE JURASSIC FLORA, from tools/generate_flora.py.
+	#
+	# Inside the field only LOW cover -- ground ferns and horsetails, knee height at most.
+	# Anything taller inside it would stand over the fight, would be walked through (none
+	# of this collides), and would read as a tree to be chopped when it is not one.
+	"flora_ground_ferns": ["res://assets/models/flora/ground_fern_a.glb",
+		"res://assets/models/flora/ground_fern_b.glb", "res://assets/models/flora/ground_fern_c.glb"],
+	"flora_ground_fern_count": 220,            # per variant
+	"flora_horsetails": ["res://assets/models/flora/horsetail_a.glb",
+		"res://assets/models/flora/horsetail_b.glb"],
+	"flora_horsetail_count": 110,              # per variant
+
+	# BEYOND the field: the forest edge and the valley walls, measured in metres past the
+	# square the game is played on. Tree ferns and cycads crowd the edge; monkey-puzzles
+	# stand further up the slopes, where their umbrellas make the skyline.
+	"flora_edge_trees": ["res://assets/models/flora/tree_fern_a.glb",
+		"res://assets/models/flora/tree_fern_b.glb", "res://assets/models/flora/tree_fern_c.glb",
+		"res://assets/models/flora/cycad_a.glb", "res://assets/models/flora/cycad_b.glb"],
+	"flora_edge_count": 26,                    # per variant
+	"flora_edge_from": 3.0,
+	"flora_edge_to": 22.0,
+	"flora_skyline_trees": ["res://assets/models/flora/araucaria_a.glb",
+		"res://assets/models/flora/araucaria_b.glb"],
+	"flora_skyline_count": 22,                 # per variant
+	"flora_skyline_from": 12.0,
+	"flora_skyline_to": 46.0,
+	# Tall plants dissolve inside this many metres of the camera, so a turned view is
+	# never a screenful of trunk.
+	"flora_fade_near": 11.0,
 }
 
 # ==============================================================================
