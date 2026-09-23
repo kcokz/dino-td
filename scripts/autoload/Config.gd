@@ -863,6 +863,19 @@ const VISUALS: Dictionary = {
 		"scene_depleted": "res://assets/models/props/outcrop_quarried_a.glb",
 		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	"node/water":           {"scene": "", "placeholder": "pool",     "anchor": "feet",   "color": ""},
+	# What a drop of each resource looks like lying on the ground: split logs, a heap of
+	# quarried stone, bones, a haunch of meat, a clay pot of water (tools/generate_props.py
+	# drop_*). They were cubes in the resource's colour, and a green cube was wood.
+	"drop/wood":            {"scene": "res://assets/models/props/drop_wood_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/stone":           {"scene": "res://assets/models/props/drop_stone_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/bone":            {"scene": "res://assets/models/props/drop_bone_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/food":            {"scene": "res://assets/models/props/drop_food_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/water":           {"scene": "res://assets/models/props/drop_water_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 }
 
 ## How many metres `key` occupies, resolved from wherever that thing declares its own
@@ -887,6 +900,11 @@ static func get_visual_size(key: String) -> Vector3:
 			if RESOURCE_NODES.has(id) and RESOURCE_NODES[id].has("size"):
 				return RESOURCE_NODES[id]["size"]
 			return Vector3(1.6, 1.0, 1.6)
+		"drop":
+			# A pile is wider than it is tall: half as wide again as DROPS.size, which is
+			# as tall as one gets.
+			var s: float = float(DROPS.get("size", 0.3))
+			return Vector3(s * 1.5, s, s * 1.5)
 	return Vector3.ONE
 
 # ==============================================================================
@@ -920,7 +938,7 @@ const DROPS: Dictionary = {
 	"toss_height": 0.75,      # 抛出弧线的高度（米）
 	"toss_time": 0.35,        # 抛出到落地的时长（秒）
 	"fly_time": 0.18,         # 被捡起时飞向现代人的时长（秒）
-	"size": 0.3,              # 方块边长（米）
+	"size": 0.3,              # 一堆的高度（米）；宽是它的 1.5 倍，见 get_visual_size
 	"label_min_amount": 2,    # 堆叠数达到这个值才显示数字
 	# 开局物资：撒在船舱周围，而不是直接进仓库
 	"opening_stock": {"wood": 20},

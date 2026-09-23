@@ -611,6 +611,108 @@ def sentry(seed):
     return stand, head, Vector((0.0, 0.0, pivot_z)), Vector((0.0, 0.47, 0.12))
 
 
+# ==============================================================================
+# Piles on the ground: what a drop of each resource looks like
+# ==============================================================================
+
+MEAT = (0.60, 0.17, 0.13)
+MEAT_DARK = (0.36, 0.09, 0.07)
+FAT = (0.86, 0.74, 0.62)
+CLAY = (0.55, 0.30, 0.17)
+CLAY_DARK = (0.36, 0.19, 0.11)
+WATER = (0.16, 0.42, 0.62)
+
+
+def _log(b, p0, p1, radius, rng):
+    """A short split log: bark round the sides, pale cut faces at both ends."""
+    sides = 7
+    rings = b.tube([p0, p0.lerp(p1, 0.5), p1], [radius, radius * rng.uniform(0.95, 1.05), radius],
+                   [mix(BARK, BARK_LIGHT, 0.3), mix(BARK, BARK_LIGHT, 0.6), mix(BARK, BARK_LIGHT, 0.3)], sides)
+    for ring, centre, flip in ((rings[0], p0, True), (rings[-1], p1, False)):
+        for k in range(sides):
+            k2 = (k + 1) % sides
+            a, c = (ring[k2], ring[k]) if flip else (ring[k], ring[k2])
+            b.tri(a, c, centre, FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, BARK_LIGHT, 0.35))
+
+
+def drop_wood(seed):
+    """Split logs stacked three and two, cut ends out."""
+    rng = random.Random(seed)
+    b = Builder()
+    r = 0.045
+    for x in (-0.095, 0.0, 0.095):
+        _log(b, Vector((x, -0.18, r)), Vector((x + rng.uniform(-0.02, 0.02), 0.18, r)), r * rng.uniform(0.9, 1.1), rng)
+    for x in (-0.048, 0.048):
+        _log(b, Vector((x, -0.17, r * 2.7)), Vector((x + rng.uniform(-0.02, 0.02), 0.17, r * 2.7)),
+             r * rng.uniform(0.9, 1.05), rng)
+    return b
+
+
+def drop_stone(seed):
+    """A few quarried stones heaped together, pale where they were split."""
+    rng = random.Random(seed)
+    b = Builder()
+    for (x, y, z, size) in ((0.0, 0.0, 0.0, 0.11), (0.12, 0.05, 0.0, 0.08), (-0.11, 0.06, 0.0, 0.085),
+                            (0.03, -0.12, 0.0, 0.08), (0.02, 0.02, 0.07, 0.07)):
+        _boulder(b, Vector((x, y, z)), size, rng, fresh=rng.random() < 0.6)
+    return b
+
+
+def drop_bone(seed):
+    """Long bones in a heap."""
+    rng = random.Random(seed)
+    b = Builder()
+    _bone(b, Vector((-0.16, -0.06, 0.03)), Vector((0.15, 0.08, 0.03)), rng)
+    _bone(b, Vector((-0.10, 0.13, 0.05)), Vector((0.10, -0.12, 0.08)), rng)
+    _bone(b, Vector((0.03, -0.16, 0.03)), Vector((0.07, 0.15, 0.06)), rng)
+    return b
+
+
+def drop_meat(seed):
+    """A haunch -- the drumstick everyone reads as MEAT -- with the bone end out."""
+    rng = random.Random(seed)
+    b = Builder()
+    pts, faces = _icosphere(1.0, rng, 0.05)
+    centre = Vector((0.03, 0.0, 0.085))
+    out = []
+    for q in pts:
+        taper = 1.0 - 0.25 * max(0.0, -q.x)      # the thigh narrows towards the bone
+        out.append(centre + Vector((q.x * 0.15, q.y * 0.10 * taper, q.z * 0.085 * taper)))
+    for (i, j, k) in faces:
+        n = (out[j] - out[i]).cross(out[k] - out[i])
+        up = n.normalized().z if n.length > 1e-9 else 0.0
+        c = mix(MEAT, MEAT_DARK, rng.uniform(0.0, 0.45)) if up > 0.3 else mix(MEAT_DARK, MEAT, 0.3)
+        if rng.random() < 0.12:
+            c = mix(c, FAT, 0.6)                   # marbling
+        b.tri(out[i], out[j], out[k], c, c, c)
+    _bone(b, Vector((-0.09, 0.0, 0.075)), Vector((-0.21, 0.0, 0.085)), rng)
+    return b
+
+
+def drop_water(seed):
+    """Water carried in a clay pot, showing at the mouth."""
+    rng = random.Random(seed)
+    b = Builder()
+    seg = 14
+    profile = [(0.07, 0.0), (0.12, 0.05), (0.135, 0.10), (0.11, 0.165), (0.08, 0.195), (0.09, 0.215)]
+    rings, cols = [], []
+    for (r, z) in profile:
+        rings.append([Vector((math.cos(math.tau * k / seg) * r, math.sin(math.tau * k / seg) * r, z))
+                      for k in range(seg)])
+        cols.append([jitter(mix(CLAY_DARK, CLAY, min(1.0, z / 0.12)), rng, 0.02) for _ in range(seg)])
+    _rings(b, rings, cols)
+    for k in range(seg):
+        b.tri(rings[0][(k + 1) % seg], rings[0][k], Vector((0.0, 0.0, 0.0)), CLAY_DARK, CLAY_DARK, CLAY_DARK)
+    # The inside of the lip, down to the water.
+    lip, wet = rings[-1], [Vector((math.cos(math.tau * k / seg) * 0.078, math.sin(math.tau * k / seg) * 0.078, 0.2))
+                           for k in range(seg)]
+    for k in range(seg):
+        k2 = (k + 1) % seg
+        b.quad(lip[k2], lip[k], wet[k], wet[k2], CLAY, CLAY, CLAY_DARK, CLAY_DARK)
+        b.tri(wet[k], wet[k2], Vector((0.0, 0.0, 0.2)), WATER, WATER, mix(WATER, (1.0, 1.0, 1.0), 0.15))
+    return b
+
+
 PROPS = {
     "stake": (lambda s: stake(s), [3]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
@@ -618,6 +720,12 @@ PROPS = {
     "fallen_log": (lambda s: fallen_log(s), [8, 27]),
     "rock_formation": (lambda s: rock_formation(s), [4, 17, 33]),
     "nest": (lambda s: nest(s), [9]),
+    # What a drop of each resource is drawn as, named by the resource id the game uses.
+    "drop_wood": (lambda s: drop_wood(s), [3]),
+    "drop_stone": (lambda s: drop_stone(s), [5]),
+    "drop_bone": (lambda s: drop_bone(s), [7]),
+    "drop_food": (lambda s: drop_meat(s), [11]),
+    "drop_water": (lambda s: drop_water(s), [13]),
 }
 
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.

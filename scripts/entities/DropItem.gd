@@ -37,6 +37,13 @@ var is_collected: bool = false
 
 var mesh_instance: MeshInstance3D = null
 var label_3d: Label3D = null
+## What gets tossed when it lands: the pile's model, or the cube when there is none.
+var visual: Node3D = null
+
+# Each new pile is turned a golden angle further than the last, so a field of them is
+# not a parade -- and the same piles come out the same way every run, so two screenshots
+# can still be compared.
+static var _turns: int = 0
 
 var _base_y: float = 0.0
 
@@ -259,6 +266,21 @@ func add_amount(extra: int) -> void:
 
 func _ensure_visuals() -> void:
 	var size: float = _cfg(self, "size", 0.3)
+	var key: String = "drop/" + resource_type
+	if mesh_instance == null and VisualLibrary.has_art(key):
+		# The pile's own model (Config.VISUALS drop/*), fitted to the declared pile size.
+		var body: Node3D = VisualLibrary.make(key)
+		body.name = "Pile"
+		_turns += 1
+		body.rotation.y = fmod(float(_turns) * 2.39996, TAU)
+		add_child(body)
+		for node in body.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			# A pile of wood must not darken the ground it is lying on.
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			if mesh_instance == null:
+				mesh_instance = mi
+		visual = body
 	if mesh_instance == null:
 		mesh_instance = MeshInstance3D.new()
 		mesh_instance.name = "Mesh"
@@ -272,6 +294,7 @@ func _ensure_visuals() -> void:
 		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mesh_instance.position = Vector3(0.0, size * 0.5, 0.0)
 		add_child(mesh_instance)
+		visual = mesh_instance
 
 	if label_3d == null:
 		label_3d = Label3D.new()
@@ -315,17 +338,17 @@ func _colour() -> Color:
 ## A short hop as it lands, so a drop reads as having been thrown out of something
 ## rather than having always been there.
 func _toss() -> void:
-	if not is_inside_tree() or mesh_instance == null:
+	if not is_inside_tree() or visual == null:
 		return
 	var height: float = _cfg(self, "toss_height", 0.0)
 	var time: float = _cfg(self, "toss_time", 0.0)
 	if height <= 0.0 or time <= 0.0:
 		return
-	var up: Vector3 = mesh_instance.position + Vector3(0.0, height, 0.0)
-	var down: Vector3 = mesh_instance.position
+	var up: Vector3 = visual.position + Vector3(0.0, height, 0.0)
+	var down: Vector3 = visual.position
 	var tw := create_tween()
-	tw.tween_property(mesh_instance, "position", up, time * 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(mesh_instance, "position", down, time * 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(visual, "position", up, time * 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(visual, "position", down, time * 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 ## The pile is already banked by the time this runs; this only stops it vanishing
 ## on the spot, which reads as the drop never having been collected at all.
