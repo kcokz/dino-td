@@ -233,6 +233,14 @@ static func _terrain(cfg: Node) -> Dictionary:
 		return cfg.TERRAIN
 	return {}
 
+## The noise the ground mesh is built with, for anything that has to stand ON that
+## ground: pass it to ground_height. Without it, ground_height is the valley's smooth
+## shape, and the wall the player sees wobbles up to two metres either side of that --
+## measured, 2.18 m at worst and 0.39 m on average 30-50 m out. The forest and the cliffs
+## were placed on the smooth shape and floated or sank by exactly that much.
+static func ground_noise(cfg: Node) -> FastNoiseLite:
+	return _noise(cfg)
+
 ## Seeded from Config so two runs produce the same landscape. A world that reshuffles
 ## itself every launch cannot be photographed, compared, or balanced against.
 static func _noise(cfg: Node) -> FastNoiseLite:

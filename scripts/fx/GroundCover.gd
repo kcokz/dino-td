@@ -267,6 +267,7 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
 	var outer_half: float = float(t.get("outskirts_half", 110.0))
 	var reach: float = field_half + to_edge
+	var ground := TerrainBuilder.ground_noise(cfg)     # the wall as drawn, not its smooth shape
 	var placements: Array[Transform3D] = []
 	var attempts: int = 0
 	while placements.size() < count and attempts < count * 20:
@@ -281,7 +282,7 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 		var u: float = (past - from_edge) / maxf(0.01, to_edge - from_edge)
 		if rng.randf() > lerpf(1.0, u, clampf(bias_outward - 1.0, 0.0, 1.0)) + 0.15:
 			continue
-		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, null)
+		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, ground)
 		# Drawn either way, so asking for the face to turn in never reshuffles what comes
 		# after it: the same seed still grows the same forest.
 		var spin: float = rng.randf_range(0.0, TAU)

@@ -1175,6 +1175,29 @@ const TERRAIN: Dictionary = {
 	"cover_reach": 34.0,
 }
 
+## Plant-eaters grazing on the lower valley walls (scripts/fx/Herds.gd; Quaternius, CC0).
+##
+## Scenery: no collider, no group, not on the grid, and out past the field where nobody
+## walks, so no raid, turret or order ever sees them. `length` puts every species on one
+## scale, with the in-game T-Rex (3.3 m nose to tail) as the ruler: a sauropod is about
+## twice a tyrannosaur's length, the rest a little under one. `bearing` is on the camera
+## rig's compass, like the volcanoes'.
+const HERDS: Dictionary = {
+	"seed": 4417,
+	"herds": [
+		{"species": "apatosaurus", "scene": "res://assets/models/quaternius/apatosaurus.glb",
+			"count": 3, "length": 6.0, "bearing": 140.0, "distance": 40.0, "spread": 7.0, "speed": 0.45},
+		{"species": "parasaurolophus", "scene": "res://assets/models/quaternius/parasaurolophus.glb",
+			"count": 5, "length": 2.6, "bearing": 80.0, "distance": 35.0, "spread": 5.0, "speed": 0.7},
+		{"species": "triceratops", "scene": "res://assets/models/quaternius/triceratops.glb",
+			"count": 4, "length": 2.3, "bearing": 290.0, "distance": 36.0, "spread": 4.5, "speed": 0.5},
+		{"species": "stegosaurus", "scene": "res://assets/models/quaternius/stegosaurus.glb",
+			"count": 3, "length": 2.4, "bearing": 20.0, "distance": 38.0, "spread": 4.0, "speed": 0.45},
+	],
+	"wander_radius": 3.0,            # how far an animal ambles from where it grazes (m)
+	"graze_time": Vector2(5.0, 12.0),  # seconds between ambles
+}
+
 ## The volcanoes on the skyline, and their smoke.
 ##
 ## The one silhouette that says "the age of dinosaurs" before anything moves, and the

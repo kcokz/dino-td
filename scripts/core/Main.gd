@@ -109,8 +109,11 @@ func _ensure_camera_rig() -> void:
 		var outer_half: float = float(t.get("outskirts_half", 110.0))
 		var margin: float = float(cfg.CAMERA.get("focus_margin", 8.0)) if "CAMERA" in cfg else 8.0
 		camera_rig.bounds_half = field_half + margin
+		# The ground as drawn, wobble and all: the smooth shape let the camera dip up to two
+		# metres into a rise of the valley wall.
+		var ground := TerrainBuilder.ground_noise(cfg)
 		camera_rig.ground_height = func(x: float, z: float) -> float:
-			return TerrainBuilder.ground_height(x, z, field_half, outer_half, t, null)
+			return TerrainBuilder.ground_height(x, z, field_half, outer_half, t, ground)
 
 func _process(delta: float) -> void:
 	_ensure_camera_rig()
@@ -442,6 +445,7 @@ func spawn_terrain() -> void:
 	_rebuild_ground(cfg)
 	_scatter_ground_cover(cfg)
 	_raise_volcanoes(cfg)
+	_bring_in_the_herds(cfg)
 
 	# The mound under the crags is the valley floor rising, so it wears the valley floor:
 	# the same material, one instance for every hill, over vertex colours worked out by
@@ -521,6 +525,17 @@ func _raise_volcanoes(cfg) -> void:
 	add_child(holder)
 	for spec in cfg.VOLCANOES.get("cones", []):
 		holder.add_child(Volcano.build(spec, cfg))
+
+## The plant-eaters on the valley walls (Config.HERDS, scripts/fx/Herds.gd), in their own
+## node like the volcanoes and the ground cover: nothing the level counts as its own.
+func _bring_in_the_herds(cfg) -> void:
+	var old := get_node_or_null("Herds")
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	if cfg == null or not ("HERDS" in cfg):
+		return
+	add_child(Herds.build(cfg))
 
 ## The crags a hillside cell wears (tools/generate_props.py), or none when the art is
 ## missing -- in which case the cell keeps the full-height mound it always had.

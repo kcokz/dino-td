@@ -195,7 +195,8 @@ func test_09_the_valley_walls_have_cliffs() -> void:
 		var front: Vector3 = pl.basis.z.normalized()
 		var inward: Vector3 = Vector3(-o.x, 0.0, -o.z).normalized()
 		assert_gt(front.dot(inward), 0.9, "Facing into the valley")
-		var ground: float = TerrainBuilder.ground_height(o.x, o.z, field_half, float(t["outskirts_half"]), t, null)
+		var ground: float = TerrainBuilder.ground_height(o.x, o.z, field_half, float(t["outskirts_half"]), t,
+			TerrainBuilder.ground_noise(config_node))
 		assert_lt(o.y, ground - 0.5, "Set into the slope, not stood on it")
 
 func test_10_facing_the_cliffs_in_did_not_move_a_single_tree() -> void:
@@ -212,3 +213,21 @@ func test_10_facing_the_cliffs_in_did_not_move_a_single_tree() -> void:
 	for i in range(mini(plain.size(), turned.size())):
 		assert_almost_eq(plain[i].origin.distance_to(turned[i].origin), 0.0, 0.0001,
 			"Tree %d stands in the same place" % i)
+
+func test_11_what_grows_on_the_valley_wall_stands_on_the_wall_as_drawn() -> void:
+	# The wall the player sees has a wobble in it -- up to two metres either side of the
+	# valley's smooth shape -- and the forest was placed on the smooth shape: trees stood
+	# in the air over every hollow and were buried to the knees in every rise.
+	var gc: Dictionary = config_node.GROUND_COVER
+	var t: Dictionary = config_node.TERRAIN
+	var field_half: float = float(t["field_half"])
+	var noise := TerrainBuilder.ground_noise(config_node)
+	var placements: Array[Transform3D] = GroundCover.band_placements(config_node, 40, field_half,
+		float(gc["flora_skyline_from"]), float(gc["flora_skyline_to"]), 91, Vector2(1.0, 1.0), 1.8)
+	assert_gt(placements.size(), 10, "Trees were placed up the wall")
+	var worst: float = 0.0
+	for pl in placements:
+		var o: Vector3 = pl.origin
+		var drawn: float = TerrainBuilder.ground_height(o.x, o.z, field_half, float(t["outskirts_half"]), t, noise)
+		worst = maxf(worst, absf(o.y - (drawn - 0.05)))
+	assert_lt(worst, 0.001, "Every one of them stands on the ground as drawn (worst %.3f m off)" % worst)

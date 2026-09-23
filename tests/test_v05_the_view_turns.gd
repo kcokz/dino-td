@@ -293,6 +293,6 @@ func test_14_the_camera_never_ends_up_inside_the_valley_wall() -> void:
 		rig.apply_to(main.camera)
 		var c: Vector3 = main.camera.global_position
 		var ground: float = TerrainBuilder.ground_height(c.x, c.z, float(t["field_half"]),
-			float(t["outskirts_half"]), t, null)
+			float(t["outskirts_half"]), t, TerrainBuilder.ground_noise(config_node))
 		assert_gte(c.y - ground, clearance - 0.001,
 			"Facing %d degrees, the camera is above the ground rather than in it" % int(yaw))
