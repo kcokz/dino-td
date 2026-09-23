@@ -338,6 +338,8 @@ func _scenario_showcase() -> void:
 		["across_the_field", Vector3(-2.0, 0.0, -8.0), 215.0, 20.0, 22.0],
 		["to_the_skyline", Vector3(4.0, 0.0, 6.0), 20.0, 24.0, 16.0],
 		["over_the_forest_edge", Vector3(16.0, 0.0, -14.0), 300.0, 18.0, 30.0],
+		# The opening view's own bearing, tilted as far up as the player can tilt it.
+		["to_the_volcano", Vector3(6.0, 0.0, 2.0), 62.0, 24.0, 15.0],
 	]
 	for s in shots:
 		rig.look_at_point(s[1])

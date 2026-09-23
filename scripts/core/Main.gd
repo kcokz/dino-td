@@ -441,6 +441,7 @@ func spawn_terrain() -> void:
 
 	_rebuild_ground(cfg)
 	_scatter_ground_cover(cfg)
+	_raise_volcanoes(cfg)
 
 	# The mound under the crags is the valley floor rising, so it wears the valley floor:
 	# the same material, one instance for every hill, over vertex colours worked out by
@@ -503,6 +504,23 @@ func spawn_terrain() -> void:
 				(m as MeshInstance3D).material_override = rock_mat
 
 		terrain_container.add_child(hill)
+
+## The volcanoes on the skyline (Config.VOLCANOES, scripts/fx/Volcano.gd).
+##
+## In their own node for the same reason the ground cover is: terrain_container is the
+## hills, which are gameplay, and the tests count them against the blocked cells.
+func _raise_volcanoes(cfg) -> void:
+	var holder := get_node_or_null("Volcanoes")
+	if holder != null:
+		remove_child(holder)
+		holder.queue_free()
+	if cfg == null or not ("VOLCANOES" in cfg):
+		return
+	holder = Node3D.new()
+	holder.name = "Volcanoes"
+	add_child(holder)
+	for spec in cfg.VOLCANOES.get("cones", []):
+		holder.add_child(Volcano.build(spec, cfg))
 
 ## The crags a hillside cell wears (tools/generate_props.py), or none when the art is
 ## missing -- in which case the cell keeps the full-height mound it always had.

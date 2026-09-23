@@ -1126,6 +1126,69 @@ const TERRAIN: Dictionary = {
 	"cover_reach": 34.0,
 }
 
+## The volcanoes on the skyline, and their smoke.
+##
+## The one silhouette that says "the age of dinosaurs" before anything moves, and the
+## first thing the brief listed under landform (VERSION.md: 火山、河流、峭壁). Scenery at the
+## far end of what the camera can see -- nothing here collides, is on the grid, or is
+## anywhere a raid or the Hero could reach (scripts/fx/Volcano.gd).
+##
+## `bearing` is on the camera rig's own compass: the yaw at which the view looks straight
+## at it, so every number here can be checked by turning the camera. 0 looks north (-z);
+## the opening camera looks along about 68.
+const VOLCANOES: Dictionary = {
+	"cones": [
+		# The big one, near where the opening camera looks: tilt the view up and it is there.
+		{"bearing": 58.0, "distance": 270.0, "height": 92.0, "radius": 185.0, "crater": 15.0, "seed": 11, "breach": 130.0},
+		# A smaller, further one to the north, so the skyline has depth rather than one landmark.
+		{"bearing": 12.0, "distance": 360.0, "height": 70.0, "radius": 150.0, "crater": 11.0, "seed": 23, "breach": 250.0},
+	],
+	# Where the foot stands. Below the valley floor, so the foot is always behind the rim
+	# and the cone rises out of the land beyond it rather than sitting on a plate.
+	"base_y": -14.0,
+	"rings": 26,               # from the crater lip to the foot
+	"segments": 72,
+	# > 1: flanks that steepen towards the top, the way a stratovolcano's do. A straight
+	# cone reads as a traffic cone at any distance -- and only the top half ever shows
+	# over the valley rim, so at 1.8 what showed was near enough a pyramid.
+	"profile_power": 2.4,
+	"crater_depth": 0.09,      # as a share of the height
+	# Where one side of the crater has fallen away (each cone's `breach` is the direction,
+	# in degrees round its own centre). What turns a symmetrical cone into a volcano.
+	"breach_depth": 0.07,      # as a share of the height
+	"breach_width": 55.0,      # degrees
+	"gullies": 13,             # radial gullies down the flanks, where the ash runs off
+	"gully_depth": 0.05,       # as a share of the height
+	"roughness": 0.05,         # low, broad unevenness, as a share of the height
+	# Colours, sRGB, by height: forest on the lower flanks, ash above, dark rock at the top,
+	# scorched inside the crater. Darker than they would be close to: at this distance the
+	# haze adds more than half its own colour, and at the first try the cone was a pale
+	# ghost of the sky behind it.
+	"forest": Color(0.09, 0.14, 0.06),
+	"ash": Color(0.24, 0.22, 0.20),
+	"summit": Color(0.14, 0.13, 0.12),
+	"scorched": Color(0.24, 0.12, 0.07),
+	"treeline": 0.42,          # share of the flank, from the foot, that is still green
+	"smoke": {
+		"amount": 90,
+		"lifetime": 50.0,
+		"speed": 2.6,             # m/s out of the crater
+		"slowing": 0.02,          # m/s² -- the plume slows as it rises and spreads
+		"spread": 7.0,            # degrees either side of straight up
+		# The wind, as a steady push sideways (m/s²): the plume rises straight out of the
+		# crater and then bends over as it climbs. A fixed lean drew a straight stick.
+		"wind": Vector3(0.055, 0.0, 0.02),
+		"size_min": 26.0,         # metres, fully grown
+		"size_max": 52.0,
+		"start_scale": 0.45,      # how small a puff is when it leaves the crater
+		# Dark ash at the vent, paler and thinner as it rises. Darker than the sky by a
+		# long way on purpose: the haze lifts it most of the way to the sky's own colour,
+		# and a plume the brightness of the sky behind it is not there at all.
+		"colour": Color(0.17, 0.16, 0.15, 0.9),
+		"colour_high": Color(0.40, 0.39, 0.37, 0.55),
+	},
+}
+
 ## What grows on the flat field.
 ##
 ## Fixing the landform -- no visible edge, hills with a shape -- still left the ground
