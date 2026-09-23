@@ -330,6 +330,43 @@ func rebake_fixture() -> void:
 		maps.rebake()
 	await wait_frames(8)
 
+## Every mesh inside a building's "Body" holder, at ANY depth.
+##
+## One level used to be enough, because every building was built from primitives
+## directly under Body. A model is not: its meshes sit inside the imported scene's own
+## nodes, a level or more further down, and a one-level search finds nothing at all.
+func body_meshes(node: Node) -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	var body: Node = node if String(node.name) == "Body" else node.find_child("Body", false, false)
+	if body == null:
+		return out
+	for m in body.find_children("*", "MeshInstance3D", true, false):
+		out.append(m as MeshInstance3D)
+	if body is MeshInstance3D:
+		out.append(body as MeshInstance3D)
+	return out
+
+## How wide the top of a mesh is against its base, from its own vertices: a sharpened
+## thing is narrow at the top. Works the same on a primitive cone and on a model, which is
+## the point -- "is it pointed" is a question about shape, not about which Mesh class drew it.
+func top_to_base_width(mi: MeshInstance3D, slice: float = 0.12) -> float:
+	if mi == null or mi.mesh == null:
+		return 1.0
+	var aabb: AABB = mi.mesh.get_aabb()
+	var top_y: float = aabb.end.y - aabb.size.y * slice
+	var tlo := Vector2(INF, INF)
+	var thi := Vector2(-INF, -INF)
+	for si in range(mi.mesh.get_surface_count()):
+		var verts: PackedVector3Array = mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			if v.y >= top_y:
+				tlo = Vector2(minf(tlo.x, v.x), minf(tlo.y, v.z))
+				thi = Vector2(maxf(thi.x, v.x), maxf(thi.y, v.z))
+	if is_inf(tlo.x):
+		return 1.0
+	var top_w: float = maxf(thi.x - tlo.x, thi.y - tlo.y)
+	return top_w / maxf(0.0001, maxf(aabb.size.x, aabb.size.z))
+
 func wait_frames(frame_count: int = 1) -> void:
 	if tree != null:
 		for i in range(frame_count):

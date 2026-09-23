@@ -125,25 +125,28 @@ func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 func test_04_a_stake_is_one_small_sharpened_cone() -> void:
 	# What one price buys is one stake, and what the player sees is one stake. It has
 	# been three cones, five at a corner, and a tile-wide sharpened slab before now.
+	#
+	# Asked in terms of SHAPE rather than of which Mesh class drew it, since the stake
+	# became a model (tools/generate_props.py): one mesh, as wide and as tall as Config
+	# declares, standing on the ground, and narrow at the top -- sharpened.
 	var stake = _stake()
 	await wait_frames(1)
 
 	var body = stake.find_child("Body", false, false)
 	assert_not_null(body, "Stakes are drawn in their own holder")
-	var cones: Array = []
-	for c in body.get_children():
-		if c is MeshInstance3D:
-			cones.append(c)
-	assert_eq(cones.size(), 1, "One stake, one cone")
+	var meshes: Array[MeshInstance3D] = body_meshes(stake)
+	assert_eq(meshes.size(), 1, "One stake, one piece")
+	if meshes.is_empty():
+		return
 
 	var h: float = config_node.get_building_height("wall")
 	var d: float = config_node.get_spike_diameter("wall")
-	var mesh: CylinderMesh = cones[0].mesh as CylinderMesh
-	assert_not_null(mesh, "Drawn as a cone rather than a block")
-	assert_almost_eq(mesh.top_radius, 0.0, 0.001, "Sharpened to a point")
-	assert_almost_eq(mesh.bottom_radius * 2.0, d, 0.001, "As wide as Config declares")
-	assert_almost_eq(mesh.height, h, 0.001, "As tall as the declared height")
-	assert_almost_eq(cones[0].position.y, h * 0.5, 0.001, "Standing on the ground, not in it")
+	var bounds: AABB = VisualLibrary.visual_bounds(body)
+	assert_lte(bounds.size.x, d + 0.01, "No wider than Config declares")
+	assert_lte(bounds.size.z, d + 0.01, "In either direction")
+	assert_almost_eq(bounds.size.y, h, 0.02, "As tall as the declared height")
+	assert_almost_eq(bounds.position.y, 0.0, 0.01, "Standing on the ground, not in it")
+	assert_lt(top_to_base_width(meshes[0]), 0.35, "Sharpened: its top is a fraction of its width")
 	assert_lt(d, float(config_node.TILE_SIZE) * 0.5, "And small")
 
 func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
@@ -154,17 +157,19 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 		var type_id := String(b_type)
 		var spiky: bool = config_node.get_building_mesh_style(type_id) == "spikes"
 		var body: Node3D = Building.make_body(type_id)
-		var meshes: Array = []
-		for c in body.get_children():
-			if c is MeshInstance3D:
-				meshes.append(c)
+		var meshes: Array[MeshInstance3D] = body_meshes(body)
 
 		assert_eq(meshes.size(), 1, "%s is drawn from one mesh" % type_id)
+		if meshes.is_empty():
+			body.free()
+			continue
 		if spiky:
-			assert_true(meshes[0].mesh is CylinderMesh, "%s ghost is a cone" % type_id)
-			assert_almost_eq(meshes[0].mesh.bottom_radius * 2.0,
-				float(config_node.get_spike_diameter(type_id)), 0.001,
-				"%s ghost is the size of the real one" % type_id)
+			# The same model the placed stake is drawn with -- the very same Mesh.
+			var placed = _stake()
+			var real: Array[MeshInstance3D] = body_meshes(placed)
+			assert_eq(meshes[0].mesh, real[0].mesh if not real.is_empty() else null,
+				"%s ghost is the same model as the real one" % type_id)
+			assert_lt(top_to_base_width(meshes[0]), 0.35, "%s ghost is sharpened too" % type_id)
 		else:
 			assert_true(meshes[0].mesh is BoxMesh, "%s is the plain block" % type_id)
 			var size: Vector3 = meshes[0].mesh.size

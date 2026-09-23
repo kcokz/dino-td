@@ -270,14 +270,12 @@ func _collision_size(b: Node) -> Vector3:
 			return (child.shape as BoxShape3D).size
 	return Vector3.ZERO
 
+## The pieces a stake is drawn with, at any depth inside its Body -- a model's mesh sits
+## inside the imported scene's own nodes, where a one-level search finds nothing.
 func _cones(b: Node) -> Array:
 	var out: Array = []
-	var body := b.find_child("Body", false, false)
-	if body == null:
-		return out
-	for child in body.get_children():
-		if child is MeshInstance3D:
-			out.append(child)
+	for m in body_meshes(b):
+		out.append(m)
 	return out
 
 func test_11_a_stake_is_one_cone_no_matter_what_is_beside_it() -> void:
@@ -312,15 +310,18 @@ func test_12_a_stake_is_drawn_as_a_cone_of_the_declared_width() -> void:
 	await wait_frames(1)
 	var stake = _wall_at(gm, Vector2i(0, 0))
 
+	# In terms of SHAPE since the stake became a model: as wide and as tall as Config
+	# declares, and narrow at the top.
 	var cones := _cones(stake)
-	assert_eq(cones.size(), 1, "One cone")
-	var mesh: CylinderMesh = cones[0].mesh as CylinderMesh
-	assert_not_null(mesh, "Drawn as a cone")
-	assert_almost_eq(mesh.top_radius, 0.0, 0.001, "Sharpened to a point")
-	assert_almost_eq(mesh.bottom_radius * 2.0, float(config_node.get_spike_diameter("wall")), 0.001,
-		"As wide as Config declares -- a plain number now, not derived from a cone count")
-	assert_almost_eq(mesh.height, float(config_node.get_building_height("wall")), 0.001,
+	assert_eq(cones.size(), 1, "One piece")
+	if cones.is_empty():
+		return
+	var bounds: AABB = VisualLibrary.visual_bounds(stake.find_child("Body", false, false))
+	assert_lte(maxf(bounds.size.x, bounds.size.z), float(config_node.get_spike_diameter("wall")) + 0.01,
+		"No wider than Config declares -- a plain number now, not derived from a cone count")
+	assert_almost_eq(bounds.size.y, float(config_node.get_building_height("wall")), 0.02,
 		"And as tall as Config declares")
+	assert_lt(top_to_base_width(cones[0]), 0.35, "Sharpened to a point")
 	assert_lt(float(config_node.get_spike_diameter("wall")), float(config_node.TILE_SIZE) * 0.5,
 		"Small: nowhere near the tile-wide slab it used to be")
 
@@ -355,11 +356,8 @@ func test_14_the_ghost_cannot_disagree_with_the_stake_any_more() -> void:
 
 	var ghost: Node3D = Building.make_body("wall")
 	_cleanup_nodes.append(ghost)
-	var ghost_cones: int = 0
-	for child in ghost.get_children():
-		if child is MeshInstance3D:
-			ghost_cones += 1
-	assert_eq(ghost_cones, 1, "The ghost is one cone")
+	var ghost_cones: int = body_meshes(ghost).size()    # at any depth: the stake is a model
+	assert_eq(ghost_cones, 1, "The ghost is one piece")
 
 	# Beside an existing stake -- the case that used to change the answer.
 	var placed = _wall_at(gm, Vector2i(1, 0))

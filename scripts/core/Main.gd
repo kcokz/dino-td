@@ -613,11 +613,24 @@ func _scatter_ground_cover(cfg) -> void:
 	holder.add_child(GroundCover.scatter(cfg, pebbles, mat, int(cover.get("pebble_count", 900)),
 		field_half, claimed, clear * 0.4, seed_value + 3, Vector2(0.6, 1.8), false))
 
-	var logs := GroundCover.fallen_log(
-		float(cover.get("log_length", 3.2)), float(cover.get("log_radius", 0.28)),
-		cover.get("log_bark", Color(0.27, 0.21, 0.15)), cover.get("log_core", Color(0.47, 0.39, 0.28)))
-	holder.add_child(GroundCover.scatter(cfg, logs, mat, int(cover.get("log_count", 14)),
-		field_half, claimed, clear * 1.6, seed_value + 4, Vector2(0.8, 1.3), true))
+	# Fallen trunks: the modelled ones when they are there, the procedural log when not.
+	var log_paths: Array = cover.get("log_meshes", [])
+	var modelled: Array = []
+	for pth in log_paths:
+		var lm: Mesh = GroundCover.flora_mesh(String(pth))
+		if lm != null:
+			modelled.append(lm)
+	if modelled.is_empty():
+		var logs := GroundCover.fallen_log(
+			float(cover.get("log_length", 3.2)), float(cover.get("log_radius", 0.28)),
+			cover.get("log_bark", Color(0.27, 0.21, 0.15)), cover.get("log_core", Color(0.47, 0.39, 0.28)))
+		holder.add_child(GroundCover.scatter(cfg, logs, mat, int(cover.get("log_count", 14)),
+			field_half, claimed, clear * 1.6, seed_value + 4, Vector2(0.8, 1.3), true))
+	else:
+		var each: int = maxi(1, int(cover.get("log_count", 14)) / modelled.size())
+		for i in range(modelled.size()):
+			holder.add_child(GroundCover.scatter(cfg, modelled[i], GroundCover.cover_material(), each,
+				field_half, claimed, clear * 1.6, seed_value + 4 + i * 7, Vector2(0.85, 1.15), true))
 
 	_scatter_flora(cfg, cover, holder, field_half, claimed, clear, seed_value)
 

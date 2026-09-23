@@ -366,8 +366,11 @@ func test_13_the_feedback_layer_is_not_part_of_the_building() -> void:
 
 	var body: Array = pending._body_meshes()
 	assert_gt(body.size(), 0, "The stake has a body")
+	var holder: Node = pending.find_child("Body", false, false)
 	for mesh in body:
-		assert_eq(mesh.get_parent().name, StringName("Body"),
+		# INSIDE the Body holder, at whatever depth -- a model's mesh sits in its own
+		# nodes a level or two down, which is still the building and nothing else.
+		assert_true(holder != null and holder.is_ancestor_of(mesh),
 			"Only the body counts as the building")
 
 	assert_not_null(pending.status_bar, "It has a status bar")
@@ -378,14 +381,7 @@ func test_13_the_feedback_layer_is_not_part_of_the_building() -> void:
 		assert_false(body.has(node), "Nor is the selection ring")
 
 func _body_meshes(b: Node) -> Array[MeshInstance3D]:
-	var out: Array[MeshInstance3D] = []
-	var body := b.find_child("Body", false, false)
-	if body == null:
-		return out
-	for child in body.get_children():
-		if child is MeshInstance3D:
-			out.append(child)
-	return out
+	return body_meshes(b)      # any depth: a model's meshes sit inside its own nodes
 
 # ==============================================================================
 # 4. Getting there when the straight line is blocked

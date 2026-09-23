@@ -177,9 +177,18 @@ static func declared_scene(key: String) -> String:
 ## their own that must be left alone.
 static func _dress(art: Node, key: String) -> void:
 	var which: String = String(_entry(key).get("material", ""))
-	if which != "flora":
-		return
-	var mat := GroundCover.flora_material()
+	var mat: StandardMaterial3D = null
+	match which:
+		"flora":
+			mat = GroundCover.flora_material()      # plants: backlit, two-sided
+		"vertex":
+			mat = GroundCover.cover_material()      # props: vertex-coloured, matte
+		_:
+			return
+	# ONE MATERIAL PER PIECE OF ART, never shared: a blueprint fades by changing its own
+	# material's alpha (Building._update_visuals_progress), and a shared one would fade
+	# every stake on the map at once. That fade also only works on material_override at
+	# all -- an imported model without one never went translucent as a blueprint.
 	for mi in art.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).material_override = mat
 	if art is MeshInstance3D:

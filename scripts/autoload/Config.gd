@@ -824,7 +824,10 @@ const VISUALS: Dictionary = {
 	# ends the game if the raid reaches it. It gets the most geometry on the map.
 	"building/core":        {"scene": "res://assets/models/wreck.glb", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
 	"building/tower":       {"scene": "", "placeholder": "box",      "anchor": "feet",   "color": "tower"},
-	"building/wall":        {"scene": "", "placeholder": "spikes",   "anchor": "feet",   "color": "wall"},
+	# A sharpened log driven into a mound of turned earth: axe-cut facets, a fire-hardened
+	# charred tip, a band of vine lashing. It was an orange traffic cone.
+	"building/wall":        {"scene": "res://assets/models/props/stake_a.glb",
+		"material": "vertex", "placeholder": "spikes", "anchor": "feet", "color": "wall"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
 	# A tree fern, like the forest round it -- the choppable tree was a striped barrel
@@ -834,7 +837,11 @@ const VISUALS: Dictionary = {
 		"scene_depleted": "res://assets/models/flora/tree_fern_stump_a.glb",
 		"material": "flora",    # coloured by its vertices, like the forest it stands in
 		"placeholder": "cycad", "anchor": "feet", "color": ""},
-	"node/stone":           {"scene": "", "placeholder": "outcrop",  "anchor": "feet",   "color": ""},
+	# Mossy boulders half sunk in the ground; quarried, a split low stump of rock with
+	# pale fresh faces and rubble round it (tools/generate_props.py).
+	"node/stone":           {"scene": "res://assets/models/props/outcrop_a.glb",
+		"scene_depleted": "res://assets/models/props/outcrop_quarried_a.glb",
+		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	"node/water":           {"scene": "", "placeholder": "pool",     "anchor": "feet",   "color": ""},
 }
 
@@ -1156,6 +1163,9 @@ const GROUND_COVER: Dictionary = {
 	"log_radius": 0.28,
 	"log_bark": Color(0.27, 0.21, 0.15),
 	"log_core": Color(0.47, 0.39, 0.28),
+	# Real fallen trunks: bark, moss along the top, a fern growing out, one end splintered
+	# and the other rotted hollow. The procedural log above is what stands in without them.
+	"log_meshes": ["res://assets/models/props/fallen_log_a.glb", "res://assets/models/props/fallen_log_b.glb"],
 
 	# THE JURASSIC FLORA, from tools/generate_flora.py.
 	#

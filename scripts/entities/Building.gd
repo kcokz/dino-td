@@ -677,15 +677,13 @@ func _footprint() -> float:
 # Feedback hooks
 # ==============================================================================
 
+## The first mesh that IS the building. The same answer _body_meshes gives, because it
+## asks it: this used to look one level into Body and no deeper, which was right while
+## every building was primitives -- and found nothing the moment the stake became a model,
+## whose mesh sits a level further down inside the imported scene.
 func _visual_mesh() -> MeshInstance3D:
-	for child in get_children():
-		if child is MeshInstance3D and child != range_indicator:
-			return child
-		if child is Node3D and child.name == "Body":
-			for g in child.get_children():
-				if g is MeshInstance3D:
-					return g
-	return null
+	var meshes := _body_meshes()
+	return meshes[0] if not meshes.is_empty() else null
 
 ## Throws debris in this building's own colour as it comes down.
 func _spawn_destruction_fx() -> void:
