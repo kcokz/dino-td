@@ -97,10 +97,20 @@ var camera_rig: CameraRig = null
 func _ensure_camera_rig() -> void:
 	if camera_rig != null or camera == null or not is_instance_valid(camera):
 		return
-	camera_rig = CameraRig.new(_get_config())
+	var cfg = _get_config()
+	camera_rig = CameraRig.new(cfg)
 	# Adopted, not configured: the scene's Camera3D is still what decides where the game
 	# opens, and it is what R goes back to.
 	camera_rig.adopt(camera)
+	# Where the world ends, and how high the ground is -- the valley's own numbers.
+	if cfg and "TERRAIN" in cfg:
+		var t: Dictionary = cfg.TERRAIN
+		var field_half: float = float(t.get("field_half", 22.0))
+		var outer_half: float = float(t.get("outskirts_half", 110.0))
+		var margin: float = float(cfg.CAMERA.get("focus_margin", 8.0)) if "CAMERA" in cfg else 8.0
+		camera_rig.bounds_half = field_half + margin
+		camera_rig.ground_height = func(x: float, z: float) -> float:
+			return TerrainBuilder.ground_height(x, z, field_half, outer_half, t, null)
 
 func _process(delta: float) -> void:
 	_ensure_camera_rig()

@@ -666,6 +666,14 @@ const CAMERA: Dictionary = {
 	"drag_tilt": 0.25,
 	# Metres of distance per wheel notch or zoom key press.
 	"zoom_step": 2.2,
+	# How far past the edge of the playfield the point being looked at may go, in metres.
+	# Enough to look at the forest edge and up the valley wall; not enough to leave the
+	# valley. There was no limit at all, and holding an arrow key panned the view off the
+	# end of the world -- reported as "一直往下没有尽头的而且会出bug，就是直接移出去了".
+	"focus_margin": 8.0,
+	# How far above the ground the camera itself must stay, in metres. Turning a zoomed-out,
+	# low-tilted view towards the valley wall would otherwise put the camera INSIDE it.
+	"ground_clearance": 2.5,
 }
 
 # ==============================================================================

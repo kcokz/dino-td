@@ -242,3 +242,57 @@ func test_11_the_keys_are_declared_and_the_player_is_told_them() -> void:
 	assert_ne(tr("MENU_CAMERA_KEYS"), "MENU_CAMERA_KEYS",
 		"The controls are written down somewhere the player can read them")
 	assert_ne(tr("MENU_CAMERA"), "MENU_CAMERA", "Under a heading")
+
+# ==============================================================================
+# 6. The view has an edge
+# ==============================================================================
+
+func test_12_holding_a_pan_key_stops_at_the_edge_of_the_valley() -> void:
+	# Reported as "一直往下没有尽头的而且会出bug，就是直接移出去了": hold an arrow key
+	# and the view panned off the end of the world, for as long as the key was held.
+	var main = _level()
+	await wait_frames(4)
+	var rig = main.camera_rig
+	var field_half: float = float(config_node.TERRAIN["field_half"])
+	var margin: float = float(config_node.CAMERA["focus_margin"])
+
+	for direction in [Vector2(0.0, -1.0), Vector2(0.0, 1.0), Vector2(1.0, 0.0), Vector2(-1.0, 0.0)]:
+		rig.reset()
+		for step in range(60 * 60):        # a minute of holding the key
+			rig.pan_keys(direction, 1.0 / 60.0)
+		assert_lte(absf(rig.focus.x), field_half + margin + 0.001,
+			"Holding %s stops at the edge, not somewhere past it" % str(direction))
+		assert_lte(absf(rig.focus.z), field_half + margin + 0.001, "On both axes")
+
+	assert_gt(margin, 0.0, "Far enough to look at the forest edge")
+	assert_lt(field_half + margin, float(config_node.TERRAIN["outskirts_half"]),
+		"And not so far the valley runs out under it")
+
+func test_13_a_rig_on_its_own_is_unbounded() -> void:
+	# The limit comes from the LEVEL, so a rig built in a test with no world around it
+	# keeps doing plain arithmetic -- the pan tests above rely on that.
+	var rig := _rig()
+	rig.focus = Vector3.ZERO
+	rig.pan(Vector2(0.0, 1.0), 500.0)
+	assert_almost_eq(rig.focus.length(), 500.0, 0.01, "Nothing stops it")
+
+func test_14_the_camera_never_ends_up_inside_the_valley_wall() -> void:
+	# The other way off the edge of the world. Zoomed right out and tilted low, turning to
+	# face the wall put the camera in the hillside.
+	var main = _level()
+	await wait_frames(4)
+	var rig = main.camera_rig
+	var t: Dictionary = config_node.TERRAIN
+	var clearance: float = float(config_node.CAMERA["ground_clearance"])
+	rig.look_at_point(Vector3(1000.0, 0.0, 1000.0))      # as far out as it may go
+	rig.distance = float(config_node.CAMERA["max_distance"])
+	rig.tilt = float(config_node.CAMERA["min_tilt_degrees"])
+
+	for yaw in [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]:
+		rig.yaw = yaw
+		rig.apply_to(main.camera)
+		var c: Vector3 = main.camera.global_position
+		var ground: float = TerrainBuilder.ground_height(c.x, c.z, float(t["field_half"]),
+			float(t["outskirts_half"]), t, null)
+		assert_gte(c.y - ground, clearance - 0.001,
+			"Facing %d degrees, the camera is above the ground rather than in it" % int(yaw))

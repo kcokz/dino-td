@@ -39,6 +39,20 @@ var distance: float = 25.0
 ## What `reset` goes back to, taken from the scene when the rig adopted the camera.
 var _home: Dictionary = {}
 
+## How far from the centre of the world the focus may go on either axis, in metres.
+## INF until the level says otherwise, so a rig built on its own (a test) is unbounded.
+##
+## THE VIEW HAD NO EDGE. Holding an arrow key panned the focus off the end of the valley
+## and into nothing, and it kept going for as long as the key was held. Bounded in the
+## four numbers rather than on the camera's position, because the focus is the thing
+## the player is moving -- clamping the camera would let the view slide while the camera
+## stuck, which feels like the controls breaking.
+var bounds_half: float = INF
+
+## How high the ground is at a point, for keeping the camera out of the valley wall.
+## Empty until the level provides one.
+var ground_height: Callable = Callable()
+
 func _init(cfg: Object = null) -> void:
 	_cfg = cfg
 
@@ -79,7 +93,14 @@ func adopt(cam: Camera3D) -> void:
 func apply_to(cam: Camera3D) -> void:
 	if cam == null or not is_instance_valid(cam):
 		return
-	cam.global_position = focus + offset()
+	var at: Vector3 = focus + offset()
+	# Never inside the ground. Turning a zoomed-out, low view towards the valley wall
+	# would otherwise put the camera in the hillside, looking at the inside of it.
+	if ground_height.is_valid():
+		var floor_y: float = float(ground_height.call(at.x, at.z)) + _num("ground_clearance", 2.5)
+		if at.y < floor_y:
+			at.y = floor_y
+	cam.global_position = at
 	# look_at rather than a hand-built basis: the one piece of this the engine does have.
 	cam.look_at(focus, Vector3.UP)
 
@@ -124,6 +145,14 @@ func pan(amount: Vector2, metres: float) -> void:
 	var right := Vector3(cos(a), 0.0, -sin(a))
 	var away := Vector3(-sin(a), 0.0, -cos(a))
 	focus += (right * amount.x + away * amount.y) * metres
+	_keep_in_bounds()
+
+## Holds the focus inside the world. A square, because the playfield is one.
+func _keep_in_bounds() -> void:
+	if is_inf(bounds_half):
+		return
+	focus.x = clampf(focus.x, -bounds_half, bounds_half)
+	focus.z = clampf(focus.z, -bounds_half, bounds_half)
 
 ## Held-key panning, in metres per second at the opening distance.
 func pan_keys(direction: Vector2, delta: float) -> void:
@@ -172,3 +201,4 @@ func orbit_drag(pixels: Vector2) -> void:
 ## Moves the view onto something without changing how it is being looked at.
 func look_at_point(where: Vector3) -> void:
 	focus = Vector3(where.x, 0.0, where.z)
+	_keep_in_bounds()
