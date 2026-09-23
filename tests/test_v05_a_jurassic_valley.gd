@@ -167,3 +167,48 @@ func test_08_tall_plants_dissolve_when_the_camera_comes_close() -> void:
 	assert_almost_eq(mat.distance_fade_max_distance, near, 0.001, "At the distance Config says")
 	assert_lt(near, float(config_node.CAMERA["min_distance"]) * 2.0,
 		"Close enough that only a plant in the way ever fades")
+
+# ==============================================================================
+# 4. The land the plants grow on
+# ==============================================================================
+
+func test_09_the_valley_walls_have_cliffs() -> void:
+	# The brief named them (VERSION.md: 火山、河流、峭壁). Stretches of columnar basalt in a
+	# broken band up the valley wall, each facing into the valley and set into the slope
+	# rather than stood on it.
+	var gc: Dictionary = config_node.GROUND_COVER
+	var paths: Array = gc.get("cliff_rocks", [])
+	assert_gt(paths.size(), 0, "The valley declares its cliffs")
+	for p in paths:
+		assert_not_null(GroundCover.flora_mesh(String(p)), "%s is there" % p)
+
+	var t: Dictionary = config_node.TERRAIN
+	var field_half: float = float(t["field_half"])
+	var placements: Array[Transform3D] = GroundCover.band_placements(config_node, int(gc["cliff_count"]),
+		field_half, float(gc["cliff_from"]), float(gc["cliff_to"]), 501, gc["cliff_scale"], 1.0,
+		float(gc["cliff_sink"]), true)
+	assert_gt(placements.size(), 0, "Some stretches of cliff are placed")
+	for pl in placements:
+		var o: Vector3 = pl.origin
+		assert_gte(maxf(absf(o.x), absf(o.z)), field_half + float(gc["cliff_from"]) - 0.001,
+			"On the valley wall, not the field")
+		var front: Vector3 = pl.basis.z.normalized()
+		var inward: Vector3 = Vector3(-o.x, 0.0, -o.z).normalized()
+		assert_gt(front.dot(inward), 0.9, "Facing into the valley")
+		var ground: float = TerrainBuilder.ground_height(o.x, o.z, field_half, float(t["outskirts_half"]), t, null)
+		assert_lt(o.y, ground - 0.5, "Set into the slope, not stood on it")
+
+func test_10_facing_the_cliffs_in_did_not_move_a_single_tree() -> void:
+	# The same seed has to grow the same forest whether or not a band asks to face in:
+	# screenshots are compared across runs, and a forest that reshuffled because a cliff
+	# was added would make every one of them a false difference.
+	var gc: Dictionary = config_node.GROUND_COVER
+	var field_half: float = float(config_node.TERRAIN["field_half"])
+	var plain: Array[Transform3D] = GroundCover.band_placements(config_node, 12, field_half, 3.0, 22.0, 77,
+		Vector2(0.8, 1.2), 1.6)
+	var turned: Array[Transform3D] = GroundCover.band_placements(config_node, 12, field_half, 3.0, 22.0, 77,
+		Vector2(0.8, 1.2), 1.6, 0.0, true)
+	assert_eq(plain.size(), turned.size(), "The same number of trees")
+	for i in range(mini(plain.size(), turned.size())):
+		assert_almost_eq(plain[i].origin.distance_to(turned[i].origin), 0.0, 0.0001,
+			"Tree %d stands in the same place" % i)

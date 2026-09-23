@@ -713,6 +713,75 @@ def drop_water(seed):
     return b
 
 
+# ==============================================================================
+# Cliffs: columnar basalt, for the valley walls
+# ==============================================================================
+
+# Basalt is DARK. The crag palette above is weathered and lichened, pale enough to read
+# against the sun; columns cut from it came out as a cluster of white pencils.
+BASALT = (0.17, 0.17, 0.18)
+BASALT_MID = (0.25, 0.25, 0.26)
+BASALT_TOP = (0.33, 0.33, 0.34)
+
+def _hex_column(b, centre, radius, height, tilt, top_col, rng):
+    """One basalt column: a hexagonal prism, dark at the foot, a slightly tilted top."""
+    lean = Vector((tilt[0], tilt[1], 0.0))
+    base = [centre + Vector((math.cos(math.tau * k / 6 + 0.5236) * radius,
+                             math.sin(math.tau * k / 6 + 0.5236) * radius, -0.3)) for k in range(6)]
+    slope = Vector((rng.uniform(-0.06, 0.06), rng.uniform(-0.06, 0.06), 0.0))
+    top = []
+    for k in range(6):
+        off = base[k] - centre
+        top.append(Vector((base[k].x, base[k].y, 0.0)) + lean * height + UP * (height + off.dot(slope) * 2.0))
+    # Flat on top, which is what makes a column read as basalt rather than a crystal:
+    # the middle of the top sits at the height of its rim.
+    top_mid = centre + lean * height + UP * height
+    foot = BASALT
+    upper = mix(BASALT, BASALT_MID, rng.uniform(0.55, 1.0))
+    for k in range(6):
+        k2 = (k + 1) % 6
+        b.quad(base[k], base[k2], top[k2], top[k], foot, foot, upper, upper)
+    for k in range(6):
+        b.tri(top[k], top[(k + 1) % 6], top_mid, top_col, top_col, jitter(top_col, rng, 0.03))
+
+
+def basalt_cliff(seed):
+    """A stretch of escarpment: basalt columns packed in a honeycomb strip, tallest along
+    the back and in the middle, stepping down to the front and the ends, moss and ferns
+    on the tops. The volcanic cliff everyone recognises, and it says VOLCANIC VALLEY
+    where a smooth green bowl said nothing.
+
+    The front -- the side that steps down -- faces Blender -Y, the game's +Z; the game
+    turns each one to face into the valley. About 7 m along and 4 m tall."""
+    rng = random.Random(seed)
+    b = Builder()
+    r = 0.36
+    dx = r * math.sqrt(3.0)
+    dy = r * 1.5
+    across = 12
+    rows = 4
+    for row in range(rows):
+        back = row / (rows - 1)                        # 0 at the front, 1 at the back
+        for i in range(across):
+            x = (i - (across - 1) / 2.0) * dx + (dx * 0.5 if row % 2 else 0.0)
+            y = (row - (rows - 1) / 2.0) * dy
+            along = abs(x) / (across * dx * 0.5)       # 0 in the middle, 1 at the ends
+            h = 4.0 * (0.45 + 0.55 * back) * (1.0 - 0.55 * along * along) * rng.uniform(0.8, 1.1)
+            if row == 0 and rng.random() < 0.25:
+                h *= 0.45                              # the odd broken stump at the front
+            # In steps, the way the columns break: a stair of flat tops, not a slope.
+            h = max(0.35, round(h / 0.35) * 0.35)
+            top = mix(MOSS, VINE, rng.uniform(0.0, 0.5)) if rng.random() < 0.55 else mix(BASALT_MID, BASALT_TOP, rng.uniform(0.3, 1.0))
+            _hex_column(b, Vector((x, y, 0.0)), r * rng.uniform(0.94, 1.0), h,
+                        (rng.uniform(-0.03, 0.03), rng.uniform(-0.05, 0.0)), top, rng)
+    # Scree at the foot of the front: fallen pieces of column.
+    for _ in range(9):
+        x = rng.uniform(-across * dx * 0.45, across * dx * 0.45)
+        y = -(rows / 2.0) * dy - rng.uniform(0.2, 0.9)
+        _boulder(b, Vector((x, y, 0.0)), rng.uniform(0.18, 0.32), rng)
+    return b
+
+
 PROPS = {
     "stake": (lambda s: stake(s), [3]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
@@ -720,6 +789,7 @@ PROPS = {
     "fallen_log": (lambda s: fallen_log(s), [8, 27]),
     "rock_formation": (lambda s: rock_formation(s), [4, 17, 33]),
     "nest": (lambda s: nest(s), [9]),
+    "basalt_cliff": (lambda s: basalt_cliff(s), [41, 59, 77]),
     # What a drop of each resource is drawn as, named by the resource id the game uses.
     "drop_wood": (lambda s: drop_wood(s), [3]),
     "drop_stone": (lambda s: drop_stone(s), [5]),

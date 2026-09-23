@@ -731,6 +731,16 @@ func _scatter_flora(cfg: Node, cover: Dictionary, holder: Node3D, field_half: fl
 				field_half, float(cover.get("flora_skyline_from", 12.0)), float(cover.get("flora_skyline_to", 46.0)),
 				seed_value + 80 + n, Vector2(0.85, 1.2), true, 1.8))
 		n += 1
+	# The cliffs: columnar basalt up the valley wall, facing in.
+	var rock := GroundCover.cover_material()
+	for path in cover.get("cliff_rocks", []):
+		var m: Mesh = GroundCover.flora_mesh(String(path))
+		if m != null:
+			holder.add_child(GroundCover.scatter_band(cfg, m, rock, int(cover.get("cliff_count", 12)),
+				field_half, float(cover.get("cliff_from", 14.0)), float(cover.get("cliff_to", 32.0)),
+				seed_value + 100 + n, cover.get("cliff_scale", Vector2(0.9, 1.4)), true, 1.0,
+				float(cover.get("cliff_sink", 0.9)), true))
+		n += 1
 
 func spawn_resource_nodes() -> void:
 	if resource_nodes_container == null:

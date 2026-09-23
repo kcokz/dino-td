@@ -1297,6 +1297,22 @@ const GROUND_COVER: Dictionary = {
 	# Tall plants dissolve inside this many metres of the camera, so a turned view is
 	# never a screenful of trunk.
 	"flora_fade_near": 11.0,
+	# Cliffs: stretches of columnar basalt (tools/generate_props.py basalt_cliff) in a
+	# broken band up the valley wall, among the trees, each turned to face into the
+	# valley. Without them the wall was a smooth green bowl, and the brief asked for cliffs
+	# by name (VERSION.md: 火山、河流、峭壁). The first try scaled the hills' crags up
+	# instead, and a giant rounded crag reads as a boulder, not a cliff.
+	# Scenery like everything here: no collision, not on the grid, nowhere anyone walks.
+	"cliff_rocks": ["res://assets/models/props/basalt_cliff_a.glb",
+		"res://assets/models/props/basalt_cliff_b.glb",
+		"res://assets/models/props/basalt_cliff_c.glb"],
+	"cliff_count": 8,                          # per variant; each is about 8 m along
+	"cliff_from": 14.0,                        # metres past the field's edge
+	"cliff_to": 30.0,
+	"cliff_scale": Vector2(0.9, 1.4),
+	# How deep each is set into the slope, in metres per unit of its scale: its front row
+	# stands downhill of its middle, and without this it stood on stilts of daylight.
+	"cliff_sink": 0.9,
 }
 
 # ==============================================================================

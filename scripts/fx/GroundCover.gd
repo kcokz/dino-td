@@ -230,9 +230,10 @@ static func scatter(cfg: Node, mesh: Mesh, material: Material, count: int, field
 ## Stands at the terrain's real height, so a tree on the valley wall grows out of it.
 static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, field_half: float,
 		from_edge: float, to_edge: float, seed_value: int, scale_range: Vector2,
-		shadows: bool, bias_outward: float = 1.0) -> MultiMeshInstance3D:
+		shadows: bool, bias_outward: float = 1.0, sink: float = 0.0,
+		face_in: bool = false) -> MultiMeshInstance3D:
 	var placements: Array[Transform3D] = band_placements(cfg, count, field_half, from_edge,
-		to_edge, seed_value, scale_range, bias_outward)
+		to_edge, seed_value, scale_range, bias_outward, sink, face_in)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -251,9 +252,16 @@ static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, 
 ## headless test runner get_instance_transform answers (0, 0, 0) for every instance,
 ## whatever was set. Measured -- set (30, 0, 40), read back the origin -- and a test that
 ## trusted it concluded every tree in the valley was standing in the middle of the field.
+##
+## `sink` buries each one by that many metres per unit of its scale. A tree needs none;
+## a crag several metres across, stood on a slope, floats on its downhill side unless a
+## good part of it is under the ground.
+##
+## `face_in` turns each one so its +Z -- the front of a stretch of cliff -- faces the
+## middle of the valley, give or take a few degrees, rather than any old way.
 static func band_placements(cfg: Node, count: int, field_half: float, from_edge: float,
 		to_edge: float, seed_value: int, scale_range: Vector2,
-		bias_outward: float = 1.0) -> Array[Transform3D]:
+		bias_outward: float = 1.0, sink: float = 0.0, face_in: bool = false) -> Array[Transform3D]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
@@ -274,9 +282,14 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 		if rng.randf() > lerpf(1.0, u, clampf(bias_outward - 1.0, 0.0, 1.0)) + 0.15:
 			continue
 		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, null)
-		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU))
-		basis = basis.scaled(Vector3.ONE * rng.randf_range(scale_range.x, scale_range.y))
-		placements.append(Transform3D(basis, Vector3(x, y - 0.05, z)))
+		# Drawn either way, so asking for the face to turn in never reshuffles what comes
+		# after it: the same seed still grows the same forest.
+		var spin: float = rng.randf_range(0.0, TAU)
+		var yaw: float = atan2(-x, -z) + (spin - PI) * 0.08 if face_in else spin
+		var basis := Basis(Vector3.UP, yaw)
+		var s: float = rng.randf_range(scale_range.x, scale_range.y)
+		basis = basis.scaled(Vector3.ONE * s)
+		placements.append(Transform3D(basis, Vector3(x, y - 0.05 - sink * s, z)))
 	return placements
 
 ## The mesh inside one of tools/generate_flora.py's plants, for scattering by the thousand.
