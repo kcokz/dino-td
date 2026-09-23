@@ -169,6 +169,10 @@ const NAV: Dictionary = {
 	# quantises the radius to voxels and warns when it has to round, and a radius that is
 	# silently bigger than declared is a fence that seals gaps the player left open.
 	"cell_size": 0.1,
+	# The same for height, and it has to be set on the MAP as well as on the mesh. Only
+	# the size used to be, so every bake landed on a map still at the engine's default
+	# 0.25 and warned that the two disagreed -- twelve hundred times over one test run.
+	"cell_height": 0.1,
 	# What the mesh is carved for. One radius for everything that walks: a theropod is
 	# wider and can be routed through a gap it does not fit, which only the avoidance
 	# solver notices. A third mesh is the fix if that ever shows on screen.

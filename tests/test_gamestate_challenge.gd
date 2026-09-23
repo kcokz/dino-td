@@ -208,6 +208,7 @@ func test_challenge_building_registration_stress() -> void:
 
 	var b1 = Node.new()
 	var scr1 = GDScript.new()
+	scr1.source_code = "extends Node\n"   # an empty script extends RefCounted, which a Node refuses
 	scr1.reload()
 	b1.set_script(scr1)
 	_allocated_nodes.append(b1)

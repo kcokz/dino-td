@@ -244,12 +244,12 @@ func _spawn_visual_bullet_effect(target_pos: Vector3) -> void:
 
 	add_child(mesh_inst)
 
+	# Connected to the tracer's own queue_free rather than to a closure holding it: if the
+	# turret goes first, taking the tracer with it, the engine drops the connection, where
+	# the closure used to be called with a freed capture.
 	var tree_ref = get_tree()
 	if tree_ref:
-		tree_ref.create_timer(0.1).timeout.connect(func():
-			if is_instance_valid(mesh_inst):
-				mesh_inst.queue_free()
-		)
+		tree_ref.create_timer(0.1).timeout.connect(mesh_inst.queue_free)
 	else:
 		mesh_inst.queue_free()
 

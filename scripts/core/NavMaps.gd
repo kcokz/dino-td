@@ -44,6 +44,7 @@ func _ready() -> void:
 		region.set_navigation_map(NavigationServer3D.map_create())
 		NavigationServer3D.map_set_up(region.get_navigation_map(), Vector3.UP)
 		NavigationServer3D.map_set_cell_size(region.get_navigation_map(), _cell_size())
+		NavigationServer3D.map_set_cell_height(region.get_navigation_map(), _cell_height())
 		NavigationServer3D.map_set_active(region.get_navigation_map(), true)
 		add_child(region)
 		_regions[which] = region
@@ -108,7 +109,7 @@ func _mesh_for(which: int) -> NavigationMesh:
 	# neither, because ordering a fence is not having one.
 	mesh.geometry_collision_mask = _mask_for(which)
 	mesh.cell_size = _cell_size()
-	mesh.cell_height = 0.1
+	mesh.cell_height = _cell_height()
 	mesh.agent_radius = _agent_radius()
 	mesh.agent_height = 1.0
 	mesh.agent_max_climb = 0.3
@@ -127,6 +128,14 @@ func _cell_size() -> float:
 	if cfg and "NAV" in cfg:
 		return float(cfg.NAV.get("cell_size", 0.15))
 	return 0.15
+
+## The bake's vertical resolution, which the map has to be told as well: a map whose
+## cell height differs from its meshes' warns on every bake (Config.NAV.cell_height).
+func _cell_height() -> float:
+	var cfg = get_node_or_null("/root/Config")
+	if cfg and "NAV" in cfg:
+		return float(cfg.NAV.get("cell_height", 0.1))
+	return 0.1
 
 ## What the mesh is carved for. ONE radius for everything that walks, which is a
 ## simplification worth naming: a theropod is wider than a raptor, so it can be routed

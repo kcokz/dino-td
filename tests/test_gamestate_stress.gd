@@ -65,6 +65,7 @@ func test_stress_building_batch_lifecycle_and_freed_node_pruning() -> void:
 	for i in range(30):
 		var b = Node.new()
 		var scr = GDScript.new()
+		scr.source_code = "extends Node\n"   # an empty script extends RefCounted, which a Node refuses
 		scr.reload()
 		b.set_script(scr)
 		buildings.append(b)
@@ -79,6 +80,7 @@ func test_stress_building_batch_lifecycle_and_freed_node_pruning() -> void:
 
 	var new_b = Node.new()
 	var new_scr = GDScript.new()
+	new_scr.source_code = "extends Node\n"   # an empty script extends RefCounted, which a Node refuses
 	new_scr.reload()
 	new_b.set_script(new_scr)
 	buildings.append(new_b)

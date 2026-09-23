@@ -68,7 +68,11 @@ func flash(mesh: MeshInstance3D, strength: float = -1.0, duration: float = -1.0)
 	flashing.emission_energy_multiplier = clampf(strength, 0.0, 1.0)
 	mesh.material_override = flashing
 
-	var tw := create_tween()
+	# Bound to the MESH, not to this autoload: a tween owned by the autoload outlived the
+	# thing it was flashing, and when that died mid-flash -- a stake bitten to pieces --
+	# the tween still finished and ran its callback on a freed mesh. A tween bound to the
+	# node it animates is killed with it, by the engine.
+	var tw := mesh.create_tween()
 	tw.tween_property(flashing, "emission_energy_multiplier", 0.0, duration)
 	tw.finished.connect(func():
 		if is_instance_valid(mesh) and mesh.material_override == flashing:
@@ -90,7 +94,7 @@ func _flash_overlay(mesh: MeshInstance3D, strength: float, duration: float) -> v
 	wash.albedo_color = Color(1.0, 1.0, 1.0, clampf(strength, 0.0, 1.0))
 	mesh.material_overlay = wash
 
-	var tw := create_tween()
+	var tw := mesh.create_tween()      # dies with the mesh -- see _flash
 	tw.tween_property(wash, "albedo_color:a", 0.0, duration)
 	tw.finished.connect(func():
 		if is_instance_valid(mesh) and mesh.material_overlay == wash:
@@ -133,15 +137,14 @@ func debris(world_pos: Vector3, colour: Color = Color(0.8, 0.8, 0.8), count: int
 		var target: Vector3 = piece.position + dir * speed * life * 0.5
 		target.y = maxf(0.05, target.y - speed * life * 0.35) # let gravity win
 
-		var tw := create_tween()
+		# The piece's own tween, which the engine kills if the piece goes first (the level
+		# being torn down under it), rather than one that then calls back into nothing.
+		var tw := piece.create_tween()
 		tw.set_parallel(true)
 		tw.tween_property(piece, "position", target, life)
 		tw.tween_property(piece, "rotation", piece.rotation + Vector3(randf(), randf(), randf()) * TAU, life)
 		tw.tween_property(mat, "albedo_color:a", 0.0, life)
-		tw.chain().tween_callback(func():
-			if is_instance_valid(piece):
-				piece.queue_free()
-		)
+		tw.chain().tween_callback(piece.queue_free)
 
 # ==============================================================================
 # Floating text
@@ -178,14 +181,11 @@ func floating_text(world_pos: Vector3, text: String, colour: Color = Color.WHITE
 	lbl.position = world_pos + Vector3(0.0, 0.6, 0.0)
 	root.add_child(lbl)
 
-	var tw := create_tween()
+	var tw := lbl.create_tween()       # dies with the label -- see debris
 	tw.set_parallel(true)
 	tw.tween_property(lbl, "position", lbl.position + Vector3(0.0, rise, 0.0), life)
 	tw.tween_property(lbl, "modulate:a", 0.0, life)
-	tw.chain().tween_callback(func():
-		if is_instance_valid(lbl):
-			lbl.queue_free()
-	)
+	tw.chain().tween_callback(lbl.queue_free)
 
 # ==============================================================================
 # Sound
