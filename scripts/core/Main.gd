@@ -916,6 +916,9 @@ func leave_cabin() -> bool:
 # ==============================================================================
 
 func on_build_selected(type_id: String) -> void:
+	# A different tool drops whatever the last one was in the middle of: a drag started
+	# with the fence must never be let go of as a run of turrets.
+	_end_drag()
 	current_build_type = type_id
 	_rebuild_build_preview(type_id)
 
@@ -970,7 +973,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Letting go lays the fence. One that was never dragged anywhere lays a single
 	# stake, so the old click-one-at-a-time still works exactly as it did.
 	if event is InputEventMouseButton and not event.pressed and event.button_index == place_btn 			and _drag_from != NOT_DRAGGING:
-		var cells: Array[Vector2i] = _run_to(event.position) if _dragging else [_drag_from]
+		# Not `_run_to(...) if _dragging else [_drag_from]`: an array literal inside a
+		# ternary is NOT typed from the variable it lands in, so a plain click assigned an
+		# untyped Array to an Array[Vector2i] -- a runtime error on every single-stake
+		# placement, which crashed the game.
+		var cells: Array[Vector2i] = [_drag_from]
+		if _dragging:
+			cells = _run_to(event.position)
 		_end_drag()
 		_commit_run(cells)
 		get_viewport().set_input_as_handled()

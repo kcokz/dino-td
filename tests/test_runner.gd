@@ -21,10 +21,46 @@ var total_tests_failed: int = 0
 var total_assertions_passed: int = 0
 var total_assertions_failed: int = 0
 var all_failure_records: Array[Dictionary] = []
+## Every SCRIPT ERROR the engine reports during the run (tests/script_error_watch.gd).
+## A script error is a crash in the game, so a test during which one happens fails,
+## whatever its assertions said.
+var _script_errors = null
+var total_script_errors: int = 0
 
 func _init() -> void:
 	_parse_arguments()
+	_script_errors = load("res://tests/script_error_watch.gd").new()
+	OS.add_logger(_script_errors)
 	_run_all_tests()
+
+## Quits with `code`, taking the error watch back out of the engine first.
+func _finish(code: int) -> void:
+	if _script_errors != null:
+		OS.remove_logger(_script_errors)
+	quit(code)
+
+## The script errors reported since there were `start`, or none when nothing is watching.
+func _script_errors_since(start: int) -> PackedStringArray:
+	return _script_errors.since(start) if _script_errors != null else PackedStringArray()
+
+func _script_error_count() -> int:
+	return _script_errors.count() if _script_errors != null else 0
+
+## Records script errors that happened outside any one test -- in a suite's before_all or
+## after_all -- against the suite.
+func _fail_on_script_errors(suite_file: String, where: String, errors: PackedStringArray) -> void:
+	if errors.is_empty():
+		return
+	total_script_errors += errors.size()
+	total_tests_failed += 1
+	printerr("  [FAIL] %s (%d SCRIPT ERROR(S) -- in the game this is a crash)" % [where, errors.size()])
+	for e in errors.slice(0, 3):
+		printerr("         %s" % e)
+	all_failure_records.append({
+		"suite": suite_file,
+		"test": where,
+		"message": "SCRIPT ERROR: %s" % errors[0]
+	})
 
 func _parse_arguments() -> void:
 	var user_args = OS.get_cmdline_user_args()
@@ -59,14 +95,14 @@ func _run_all_tests() -> void:
 	var suite_files = _discover_test_suites()
 	if suite_files.is_empty():
 		printerr("ERROR: No test suites found in %s" % TESTS_DIR)
-		quit(1)
+		_finish(1)
 		return
 
 	if list_only:
 		print("Discovered test suites:")
 		for path in suite_files:
 			print("  - %s" % path)
-		quit(0)
+		_finish(0)
 		return
 
 	var start_all_ms = Time.get_ticks_msec()
@@ -104,6 +140,7 @@ func _run_all_tests() -> void:
 	print("Tests Failed:        %d" % total_tests_failed)
 	print("Assertions Passed:   %d" % total_assertions_passed)
 	print("Assertions Failed:   %d" % total_assertions_failed)
+	print("Script Errors:       %d" % total_script_errors)
 	print("Total Elapsed Time:  %d ms" % elapsed_all_ms)
 	print("============================================================")
 
@@ -121,10 +158,10 @@ func _run_all_tests() -> void:
 
 	if total_tests_failed > 0 or total_tests_run == 0:
 		print("RESULT: FAILED (exit code 1)")
-		quit(1)
+		_finish(1)
 	else:
 		print("RESULT: ALL TESTS PASSED (exit code 0)")
-		quit(0)
+		_finish(0)
 
 func _discover_test_suites() -> Array[String]:
 	var suites: Array[String] = []
@@ -205,8 +242,10 @@ func _execute_test_suite(suite_path: String) -> void:
 	total_suites_run += 1
 
 	# Suite lifecycle: before_all
+	var setup_errors_from: int = _script_error_count()
 	if suite_instance.has_method("before_all"):
 		await suite_instance.call("before_all")
+	_fail_on_script_errors(suite_file, "before_all", _script_errors_since(setup_errors_from))
 
 	# Run each test
 	for method_name in test_methods:
@@ -220,6 +259,10 @@ func _execute_test_suite(suite_path: String) -> void:
 			pre_fail_count = suite_instance.assertions_failed
 		if "assertions_passed" in suite_instance:
 			pre_pass_count = suite_instance.assertions_passed
+
+		# Everything from here to the end of after_each is this test's: a script error
+		# anywhere in it is this test's crash.
+		var errors_from: int = _script_error_count()
 
 		# Test lifecycle: before_each
 		if suite_instance.has_method("before_each"):
@@ -249,7 +292,22 @@ func _execute_test_suite(suite_path: String) -> void:
 		total_assertions_passed += delta_passes
 		total_assertions_failed += delta_fails
 
-		if delta_fails == 0 and delta_passes == 0:
+		var script_errors: PackedStringArray = _script_errors_since(errors_from)
+		if not script_errors.is_empty():
+			# First, and whatever the assertions said: a SCRIPT ERROR is a crash in the
+			# game. The one that started this -- placing a single stake -- crashed on
+			# every click while every drag test around it stayed green.
+			total_script_errors += script_errors.size()
+			total_tests_failed += 1
+			printerr("  [FAIL] %s (%d SCRIPT ERROR(S) -- in the game this is a crash, %d ms)" % [method_name, script_errors.size(), elapsed_test_ms])
+			for e in script_errors.slice(0, 3):
+				printerr("         %s" % e)
+			all_failure_records.append({
+				"suite": suite_file,
+				"test": method_name,
+				"message": "SCRIPT ERROR: %s" % script_errors[0]
+			})
+		elif delta_fails == 0 and delta_passes == 0:
 			# A test that asserted nothing is not a passing test, it is a test that did
 			# not run. The usual cause is an error part-way through -- a script that no
 			# longer exists, a null where a node was expected -- which aborts the method
@@ -270,8 +328,10 @@ func _execute_test_suite(suite_path: String) -> void:
 			printerr("  [FAIL] %s (%d failed assertions, %d ms)" % [method_name, delta_fails, elapsed_test_ms])
 
 	# Suite lifecycle: after_all
+	var teardown_errors_from: int = _script_error_count()
 	if suite_instance.has_method("after_all"):
 		await suite_instance.call("after_all")
+	_fail_on_script_errors(suite_file, "after_all", _script_errors_since(teardown_errors_from))
 
 	# Collect failures
 	if "failure_records" in suite_instance:
