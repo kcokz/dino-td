@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug"]
+		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug", "showcase"]
 
 	for name in names:
 		await _run(String(name))
@@ -74,6 +74,8 @@ func _run(name: String) -> void:
 			await _scenario_wreck()
 		"snug":
 			await _scenario_snug()
+		"showcase":
+			await _scenario_showcase()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -318,6 +320,37 @@ func _scenario_snug() -> void:
 		rig.reset()
 		rig.apply_to(_main.camera)
 		await _wait(2)
+
+## The valley as somebody standing in it would see it: low, looking across the field to
+## the forest edge and the monkey-puzzles on the skyline.
+##
+## The opening camera looks steeply down and barely sees a horizon, so it can never show
+## whether the place FEELS like the Jurassic -- which was the whole brief ("远古恐龙时代的
+## 风貌，让人身临其境之感"). These are the angles the player gets to by turning and tilting
+## the view, taken through the player's own camera rig, with the HUD hidden.
+func _scenario_showcase() -> void:
+	var rig = _main.camera_rig
+	if rig == null:
+		return
+	if _main.hud:
+		_main.hud.visible = false
+	var shots := [
+		["across_the_field", Vector3(-2.0, 0.0, -8.0), 215.0, 20.0, 22.0],
+		["to_the_skyline", Vector3(4.0, 0.0, 6.0), 20.0, 24.0, 16.0],
+		["over_the_forest_edge", Vector3(16.0, 0.0, -14.0), 300.0, 18.0, 30.0],
+	]
+	for s in shots:
+		rig.look_at_point(s[1])
+		rig.yaw = float(s[2])
+		rig.distance = float(s[3])
+		rig.tilt = float(s[4])
+		rig.apply_to(_main.camera)
+		_main.camera.current = true
+		await _shoot(String(s[0]))
+	rig.reset()
+	rig.apply_to(_main.camera)
+	if _main.hud:
+		_main.hud.visible = true
 
 ## A raid meeting a fence, measured rather than watched.
 ##

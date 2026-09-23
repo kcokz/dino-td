@@ -759,7 +759,10 @@ const RESOURCE_NODES: Dictionary = {
 		# A tree stands taller than the Hero, which is how it reads as a tree rather
 		# than a bush. Width stays inside the tile so it never overhangs a cell the
 		# grid says is free.
-		"size": Vector3(1.6, 3.0, 1.6),
+		# A tree's CROWN may spread past its cell: it is up in the air, and who can walk
+		# where is decided by the cell, never by the art. Fitted into the old 1.6m box the
+		# tree fern's four-metre crown shrank the whole tree to a 1.7m shrub.
+		"size": Vector3(3.2, 3.6, 3.2),
 	},
 	"stone": {
 		"name": "RESOURCE_STONE",
@@ -824,7 +827,13 @@ const VISUALS: Dictionary = {
 	"building/wall":        {"scene": "", "placeholder": "spikes",   "anchor": "feet",   "color": "wall"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
-	"node/wood":            {"scene": "", "placeholder": "cycad",    "anchor": "feet",   "color": ""},
+	# A tree fern, like the forest round it -- the choppable tree was a striped barrel
+	# with a tuft on top, standing among the real ones. Cut down, it is a stump with its
+	# crown lying beside it (tools/generate_flora.py).
+	"node/wood":            {"scene": "res://assets/models/flora/tree_fern_a.glb",
+		"scene_depleted": "res://assets/models/flora/tree_fern_stump_a.glb",
+		"material": "flora",    # coloured by its vertices, like the forest it stands in
+		"placeholder": "cycad", "anchor": "feet", "color": ""},
 	"node/stone":           {"scene": "", "placeholder": "outcrop",  "anchor": "feet",   "color": ""},
 	"node/water":           {"scene": "", "placeholder": "pool",     "anchor": "feet",   "color": ""},
 }
@@ -1296,7 +1305,9 @@ const ENVIRONMENT: Dictionary = {
 	# goes a long way from a camera 25m off the ground. Forward-scattering (anisotropy) is
 	# what makes the sun glow through it and draws shafts past the tree ferns.
 	"volumetric_fog_enabled": true,
-	"volumetric_fog_density": 0.009,
+	# 0.009 washed the far side of the valley to a flat milky white from any low angle --
+	# the forest thirty metres away lost its colour entirely. Haze, not a wall.
+	"volumetric_fog_density": 0.0055,
 	"volumetric_fog_albedo": Color(0.90, 0.94, 0.90),
 	"volumetric_fog_anisotropy": 0.6,
 	"volumetric_fog_length": 80.0,

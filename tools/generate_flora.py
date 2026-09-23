@@ -512,12 +512,17 @@ def araucaria(seed):
     colours = [mix(ARAUCARIA_BARK, ARAUCARIA_RING, 0.7 if i % 3 == 0 else 0.0) for i in range(17)]
     trunk_b.tube(spine, radii, colours, 10, radial=lambda i, k: 1.07 if k % 2 == 0 else 0.95)
 
-    whorls = rng.randint(7, 9)
+    # THE CROWN IS AN UMBRELLA, NOT A CONE. Branches only in the top third, and nearly
+    # as long at the top of that band as at the bottom, so the crown is a flat dome held
+    # up on a long bare trunk. The first version started its whorls halfway up and
+    # shortened them steadily towards the top -- which is a cone, and from across the
+    # valley every monkey-puzzle on the skyline read as a Christmas tree.
+    whorls = rng.randint(6, 8)
     for w in range(whorls):
         frac = w / (whorls - 1)
-        t = 0.52 + 0.44 * frac
+        t = 0.66 + 0.31 * frac
         at = Vector((0.0, 0.0, h * t))
-        reach = (3.1 - 2.3 * (frac ** 1.25)) * rng.uniform(0.88, 1.1)
+        reach = (3.3 - 1.5 * (frac ** 2.2)) * rng.uniform(0.88, 1.1)
         n = rng.randint(5, 7)
         for k in range(n):
             a = math.tau * k / n + w * 0.55 + rng.uniform(-0.18, 0.18)
@@ -548,12 +553,52 @@ def araucaria(seed):
     return trunk_b, leaf_b
 
 
+def tree_fern_stump(seed):
+    """What is left of a tree fern the Hero has cut down: a short fibrous stump with a
+    pale cut face, and its crown lying on the ground beside it where it fell.
+
+    Built at the SAME scale as the tree, because it is the stump of that tree -- see
+    VisualLibrary, which fits it with the full tree's factor rather than stretching a
+    sixty-centimetre stump up to fill a tree-sized box."""
+    rng = random.Random(seed)
+    trunk_b = Builder()
+    leaf_b = Builder()
+    h = 0.55
+    spine = [Vector((0.0, 0.0, h * i / 4)) for i in range(5)]
+    radii = [0.21, 0.2, 0.2, 0.19, 0.19]
+    fibres = [rng.uniform(0.86, 1.14) for _ in range(9)]
+    trunk_b.tube(spine, radii, [mix(TREEFERN_TRUNK, TREEFERN_FIBRE, 0.5 if i % 2 else 0.0) for i in range(5)],
+                 9, radial=lambda i, k: fibres[k])
+    # The cut face: pale, fibrous, slightly ragged -- the one thing that says CUT.
+    top = spine[-1]
+    cut = (0.62, 0.50, 0.33)
+    ring = [top + Vector((math.cos(math.tau * k / 9), math.sin(math.tau * k / 9), 0.0)) * (0.19 * fibres[k])
+            for k in range(9)]
+    for k in range(9):
+        trunk_b.tri(top + UP * 0.02, ring[k], ring[(k + 1) % 9], (0.70, 0.58, 0.40), cut, cut)
+    # The fallen crown: fronds lying flat on the ground where the top came down.
+    fall = Vector((1.0, 0.3, 0.0)).normalized()
+    fallen_at = fall * 2.1
+    for k in range(7):
+        a = math.tau * k / 7
+        heading = Vector((math.cos(a), math.sin(a), 0.0))
+        frond(leaf_b, fallen_at + heading * 0.1 + UP * 0.05, heading, rng.uniform(1.2, 1.7), rng,
+              4.0, -6.0, 1, 0.34, 0.22, mix(FROND_BASE, DEAD_FROND, 0.45), mix(FROND_TIP, DEAD_TIP, 0.45),
+              1, rachis_r=0.012, segs=9)
+    # and the felled trunk between them
+    log_spine = [Vector((0.0, 0.0, 0.2)) + fall * (0.35 + 1.6 * i / 6) + UP * 0.0 for i in range(7)]
+    trunk_b.tube(log_spine, [0.17 - 0.02 * i / 6 for i in range(7)],
+                 [mix(TREEFERN_TRUNK, TREEFERN_FIBRE, 0.5 if i % 2 else 0.0) for i in range(7)], 8)
+    return trunk_b, leaf_b
+
+
 PLANTS = {
     "tree_fern": (tree_fern, [11, 23, 37]),
     "cycad": (cycad, [5, 17, 29]),
     "horsetail": (horsetail, [3, 41]),
     "ground_fern": (ground_fern, [7, 19, 31]),
     "araucaria": (araucaria, [13, 47]),
+    "tree_fern_stump": (tree_fern_stump, [11]),
 }
 
 

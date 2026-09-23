@@ -45,6 +45,25 @@ static func make(key: String, variant: String = "") -> Node3D:
 	holder.name = "Body"
 
 	var scene_path: String = declared_scene(key)
+	# A variant with art of its own -- a felled tree's stump. Fitted with the FULL art's
+	# factor rather than to the box on its own: it is the stump of that tree, and a
+	# sixty-centimetre stump fitted to a tree-sized box would be stretched to a tree.
+	var variant_path: String = declared_variant_scene(key, variant)
+	if variant_path != "" and ResourceLoader.exists(variant_path) and scene_path != "" 			and ResourceLoader.exists(scene_path):
+		var full_packed = load(scene_path)
+		var var_packed = load(variant_path)
+		if full_packed is PackedScene and var_packed is PackedScene:
+			var full: Node = (full_packed as PackedScene).instantiate()
+			var factor: float = fit_factor(full as Node3D, declared_size(key)) if full is Node3D else 1.0
+			full.free()
+			var piece: Node = (var_packed as PackedScene).instantiate()
+			if piece is Node3D:
+				holder.add_child(piece)
+				place(piece as Node3D, factor, declared_anchor(key))
+				_dress(piece, key)
+				return holder
+			piece.free()
+
 	if scene_path != "" and ResourceLoader.exists(scene_path):
 		var packed = load(scene_path)
 		if packed is PackedScene:
@@ -52,6 +71,7 @@ static func make(key: String, variant: String = "") -> Node3D:
 			if art is Node3D:
 				holder.add_child(art)
 				fit(art as Node3D, declared_size(key), declared_anchor(key))
+				_dress(art, key)
 				return holder
 			# A scene that is not 3D is a mistake worth seeing rather than hiding, but
 			# not worth crashing the game over: fall through to the placeholder.
@@ -74,12 +94,25 @@ static func has_art(key: String) -> bool:
 ## slightly the wrong size. The factor is chosen so the model fits INSIDE the declared
 ## box on every axis -- so a declared size is a bound rather than a stretch target.
 static func fit(art: Node3D, size: Vector3, anchor: String = "feet") -> void:
+	var factor: float = fit_factor(art, size)
+	if factor <= 0.0:
+		return    # nothing measurable; leave the author's own transform alone
+	place(art, factor, anchor)
+
+## The uniform scale that fits `art` inside `size`, or 0 when it has nothing to measure.
+static func fit_factor(art: Node3D, size: Vector3) -> float:
 	var bounds: AABB = visual_bounds(art)
 	if bounds.size.x <= 0.0001 or bounds.size.y <= 0.0001 or bounds.size.z <= 0.0001:
-		return    # nothing measurable; leave the author's own transform alone
-
+		return 0.0
 	var factor: float = minf(size.x / bounds.size.x, minf(size.y / bounds.size.y, size.z / bounds.size.z))
 	if factor <= 0.0 or is_inf(factor) or is_nan(factor):
+		return 0.0
+	return factor
+
+## Scales `art` by `factor` and stands it on the origin by `anchor`.
+static func place(art: Node3D, factor: float, anchor: String = "feet") -> void:
+	var bounds: AABB = visual_bounds(art)
+	if factor <= 0.0:
 		return
 	art.scale = Vector3.ONE * factor
 
@@ -132,6 +165,33 @@ static func visual_bounds(node: Node3D) -> AABB:
 static func declared_scene(key: String) -> String:
 	var entry: Dictionary = _entry(key)
 	return String(entry.get("scene", ""))
+
+## Puts the material Config names for `key` on every mesh of its art.
+##
+## THE FLORA IS COLOURED BY ITS VERTICES, and a GLB brought in as a scene keeps the
+## material the importer gave it -- which does not use vertex colour as albedo. So the
+## tree fern that is the choppable wood node stood white in the middle of a green forest
+## of the very same model, because the forest is drawn through MultiMesh with
+## GroundCover.flora_material and the node was not. Declared per key rather than applied
+## to everything: the hero, the wreck and the dinosaurs bring textured materials of
+## their own that must be left alone.
+static func _dress(art: Node, key: String) -> void:
+	var which: String = String(_entry(key).get("material", ""))
+	if which != "flora":
+		return
+	var mat := GroundCover.flora_material()
+	for mi in art.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).material_override = mat
+	if art is MeshInstance3D:
+		(art as MeshInstance3D).material_override = mat
+
+## Path to the art `key` wears in `variant` -- "depleted", say -- or "" when that variant
+## has none of its own and simply wears the main art.
+static func declared_variant_scene(key: String, variant: String) -> String:
+	if variant == "":
+		return ""
+	var entry: Dictionary = _entry(key)
+	return String(entry.get("scene_" + variant, ""))
 
 ## "feet" puts the model's lowest point on the ground -- almost every character and
 ## building asset. "center" puts its middle there, which is what a half-buried boulder

@@ -317,7 +317,11 @@ func test_14_a_depleted_node_is_asked_for_as_a_variant() -> void:
 	# the tree was -- rather than the same cylinder painted grey and squashed. So the
 	# thing to assert is that the geometry changed, not that a colour did: a colour test
 	# would pass just as happily if the variant had never been asked for.
-	var standing: int = _meshes(node).size()
+	var standing_mesh: Mesh = null
+	for mi in _meshes(node):
+		if (mi as MeshInstance3D).mesh != null:
+			standing_mesh = (mi as MeshInstance3D).mesh
+			break
 	var standing_box: AABB = VisualLibrary.visual_bounds(node.find_child("Body", false, false))
 
 	node.harvest(node.max_capacity)
@@ -328,5 +332,15 @@ func test_14_a_depleted_node_is_asked_for_as_a_variant() -> void:
 	var cut_box: AABB = VisualLibrary.visual_bounds(node.find_child("Body", false, false))
 	assert_lt(cut_box.size.y, standing_box.size.y,
 		"A stump is shorter than the tree it came from")
-	assert_ne(_meshes(node).size(), standing,
-		"And built from different pieces, so the variant really was asked for")
+	# A DIFFERENT MESH, not a different number of them. While the art was built from
+	# primitives the stump happened to have fewer pieces than the tree, and counting them
+	# stood in for "a different model". With real art each is one mesh -- the tree fern and
+	# its stump from tools/generate_flora.py -- so what has to differ is the mesh itself.
+	var cut_mesh: Mesh = null
+	for mi in _meshes(node):
+		if (mi as MeshInstance3D).mesh != null:
+			cut_mesh = (mi as MeshInstance3D).mesh
+			break
+	assert_not_null(cut_mesh, "The stump has a mesh")
+	assert_ne(cut_mesh, standing_mesh,
+		"And it is a different one, so the variant really was asked for")
