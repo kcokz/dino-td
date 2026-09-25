@@ -156,9 +156,9 @@ func test_04_hero_dimensions_fit_and_collider_unchanged() -> void:
 
 	var expected_width: float = float(config_node.HERO.get("width", 0.8))
 	var expected_height: float = float(config_node.HERO.get("height", 1.6))
-	assert_almost_eq(box.size.x, expected_width, 0.01, "Collider width X == 0.8m")
-	assert_almost_eq(box.size.y, expected_height, 0.01, "Collider height Y == 1.6m")
-	assert_almost_eq(box.size.z, expected_width, 0.01, "Collider depth Z == 0.8m")
+	assert_almost_eq(box.size.x, expected_width, 0.01, "Collider width X == %.1fm" % expected_width)
+	assert_almost_eq(box.size.y, expected_height, 0.01, "Collider height Y == %.1fm" % expected_height)
+	assert_almost_eq(box.size.z, expected_width, 0.01, "Collider depth Z == %.1fm" % expected_width)
 	assert_almost_eq(col_shape.position.y, expected_height * 0.5, 0.01, "Collider centered vertically")
 
 	# 2. Visual mesh fitted inside declared boundary -- measured STANDING. The worker is
@@ -188,10 +188,13 @@ func test_04_hero_dimensions_fit_and_collider_unchanged() -> void:
 	var fitted_height: float = bounds.size.y
 	var fitted_depth: float = bounds.size.z
 
-	assert_lte(fitted_width, expected_width + 0.05, "Fitted visual width <= declared width (0.8m)")
-	assert_lte(fitted_height, expected_height + 0.05, "Fitted visual height <= declared height (1.6m)")
-	assert_lte(fitted_depth, expected_width + 0.05, "Fitted visual depth <= declared width (0.8m)")
-	assert_gt(fitted_height, 1.2, "Fitted visual height > 1.2m (humanoid proportions)")
+	assert_lte(fitted_width, expected_width + 0.05, "Fitted visual width <= declared width (%.1fm)" % expected_width)
+	assert_lte(fitted_height, expected_height + 0.05, "Fitted visual height <= declared height (%.1fm)" % expected_height)
+	assert_lte(fitted_depth, expected_width + 0.05, "Fitted visual depth <= declared width (%.1fm)" % expected_width)
+	# Standing in his idle he is a little shorter than his rest pose, and no more: a fit
+	# that went wrong would show here as a man half his height.
+	assert_gt(fitted_height, expected_height * 0.9,
+		"Posed, he stands nearly all of his declared height (%.2f of %.2f m)" % [fitted_height, expected_height])
 
 # ==============================================================================
 # 5. Credits Ledger Completeness

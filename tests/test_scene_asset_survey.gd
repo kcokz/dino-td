@@ -85,8 +85,11 @@ func test_04_t_rex_trial_model_assembles_and_fits_within_declared_bounds() -> vo
 	# Fitted by HEIGHT since v0.5 (Config.VISUALS "fit": "height"): a long-tailed animal
 	# fitted inside its box by its length stood a third of its declared height. So it is
 	# exactly as tall as declared and no wider, and longer than its box -- a tail reaches
-	# past a collider, as a tail does -- but not absurdly.
+	# past a collider, as a tail does -- but not absurdly: a theropod is about twice as
+	# long as it stands tall. Measured against its HEIGHT, not the collider's depth, which
+	# is the width of the body the game touches and says nothing about a tail.
 	assert_lte(bounds.size.x, want_size.x + 0.05, "Fitted model width does not exceed declared width")
 	assert_almost_eq(bounds.size.y, want_size.y, 0.05, "Fitted model is exactly the declared height")
-	assert_lt(bounds.size.z, want_size.z * 3.0, "Longer than its box, as a tailed animal is, but not absurdly")
+	assert_lt(bounds.size.z, want_size.y * 2.5,
+		"Longer than it is tall, as a tailed animal is, but not absurdly (%.1f m long, %.1f m tall)" % [bounds.size.z, want_size.y])
 	assert_almost_eq(bounds.position.y, 0.0, 0.05, "Trial dinosaur stands planted on ground plane")

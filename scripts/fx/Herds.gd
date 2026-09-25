@@ -15,9 +15,11 @@ extends Node3D
 ## steering here at all, and when an animal goes its tween goes with it (a tween owned by
 ## anything else calls back into a freed node; see Fx.gd).
 ##
-## Never into the river (Config.TERRAIN.river): every spot an animal grazes or walks to is
-## clear of the channel by half its own length, so a hadrosaur on the far bank drinks at
-## the river rather than standing in it.
+## Never into the river (Config.TERRAIN.river), and never over the field: every spot an
+## animal grazes or walks to is clear of the channel and of the square the game is played
+## on by half its own length, so a hadrosaur on the far bank drinks at the river rather
+## than standing in it, and an eleven-metre sauropod's tail is never over a cell somebody
+## could build on.
 
 var _cfg: Node = null
 var _rng := RandomNumberGenerator.new()
@@ -91,6 +93,9 @@ static func _clearance(spec: Dictionary) -> float:
 	return float(spec.get("length", 2.5)) * 0.5 + 0.5
 
 func _is_clear(at: Vector3, clear: float) -> bool:
+	var half: float = float(_cfg.TERRAIN.get("field_half", 22.0)) if "TERRAIN" in _cfg else 22.0
+	if maxf(absf(at.x), absf(at.z)) < half + clear:
+		return false
 	return _river == null or _river.bank_clearance(at.x, at.z) >= clear
 
 ## One graze and one short walk, then the next -- chained through the tween's own

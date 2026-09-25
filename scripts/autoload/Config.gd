@@ -338,6 +338,19 @@ const BUILDABLE_TYPES: Array[String] = ["wall", "tower"]
 ## of `food` and `bone` in the game -- a carcass gives meat and bone, or you get
 ## neither. That is the gate onto stone: the pick needs bone, so the first raid
 ## stops being purely a threat and becomes something the player needs.
+##
+## SCALE. Everything in the valley is sized against the Hero, and he is 1.2 m: the size a
+## person is next to everything else here -- a stake at his chest, a tree fern three
+## times his height, the cabin twice it. Real proportions from there: a raptor is
+## Deinonychus-sized, its head at his chest; the big theropod stands two and a half times
+## his height. They were drawn the other way up: the Hero as tall as the tyrannosaur and
+## twice the height of a raptor.
+##
+## So the HEIGHT of `size` is how tall the animal stands. Its WIDTH is the body the game
+## touches -- the fence gaps it fits through, how far it reaches, how close a pack packs
+## -- and that did not move when the stature did. Nothing but the art and the height of
+## the collider reads the height; what a dinosaur sees in its way is looked for at
+## DINO_PROBE_HEIGHT, whatever its size.
 const DINOS: Dictionary = {
 	"raptor": {
 		"name": "DINO_RAPTOR_NAME",
@@ -347,7 +360,7 @@ const DINOS: Dictionary = {
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
-		"size": Vector3(0.8, 0.8, 0.8),
+		"size": Vector3(0.8, 0.9, 0.8),   # head at the Hero's chest, three times his length
 	},
 	"big_theropod": {
 		"name": "DINO_BIG_THEROPOD_NAME",
@@ -357,7 +370,7 @@ const DINOS: Dictionary = {
 		"attack_rate": 0.8,
 		"behaviour": "siege",
 		"drops": {"food": 3, "bone": 3},
-		"size": Vector3(1.6, 1.6, 1.6),
+		"size": Vector3(1.6, 3.0, 1.6),   # two and a half times the Hero's height
 	},
 	"pterosaur": {
 		"name": "DINO_PTEROSAUR_NAME",
@@ -537,7 +550,10 @@ const HERO: Dictionary = {
 	"provoke_duration": 5.0,      # 挑衅仇恨持续时长（秒）
 	"provoke_radius": 4.0,        # 挑衅仇恨生效半径（米）
 	"width": 0.8,                 # 碰撞体宽度（米）——建筑占地由它推导
-	"height": 1.6,                # 身高（米）——碰撞体与外形都用它，所以模型换上来也是这个高度
+	# 身高（米）——碰撞体与外形都用它。和这个世界相称：木桩到他胸口、树蕨是他三倍高、
+	# 船舱是他两倍多高。1.6 米时他和霸王龙一样高、是迅猛龙的两倍。占地和通道只由
+	# width 决定，与身高无关，所以改身高不改玩法。
+	"height": 1.2,
 }
 
 ## Presentation sizing. The project renders at a 1280x720 design viewport with
@@ -720,6 +736,11 @@ const DINO_STRIKE: float = 0.35
 
 ## Kept for anything still asking the old question. What decides now is Dino.attack_reach.
 const DINO_ATTACK_REACH: float = 2.2
+
+## How high a dinosaur looks for what is in its way, at most: below the top of a stake
+## (BUILDINGS.wall.height), the lowest thing that stops one. It looked at half its own
+## height, and a tyrannosaur three metres tall looked clean over a stake and walked into it.
+const DINO_PROBE_HEIGHT: float = 0.4
 
 ## Where a dinosaur stands to bite something, as a distance from the building's FACE.
 ##
@@ -1274,24 +1295,26 @@ const TERRAIN: Dictionary = {
 ##
 ## Scenery: no collider, no group, not on the grid, and out past the field where nobody
 ## walks, so no raid, turret or order ever sees them. `length` puts every species on one
-## scale, with the in-game T-Rex (3.3 m nose to tail) as the ruler: a sauropod is about
-## twice a tyrannosaur's length, the rest a little under one. `bearing` is on the camera
-## rig's compass, like the volcanoes'.
+## scale, with the in-game T-Rex as the ruler (about 6 m nose to tail, standing 3 m --
+## DINOS.big_theropod): a sauropod nearly twice a tyrannosaur's length, the rest about
+## three quarters of one, as they were. Every animal keeps its whole body off the field
+## and the flat apron round it. `bearing` is on the camera rig's compass, like the
+## volcanoes'.
 const HERDS: Dictionary = {
 	"seed": 4417,
 	"herds": [
 		# Clear of the canyon's mouth.
 		{"species": "apatosaurus", "scene": "res://assets/models/quaternius/apatosaurus.glb",
-			"count": 3, "length": 6.0, "bearing": 158.0, "distance": 40.0, "spread": 7.0, "speed": 0.45},
+			"count": 3, "length": 11.0, "bearing": 158.0, "distance": 50.0, "spread": 8.0, "speed": 0.7},
 		# On the far bank of the river, across from the water spot.
 		{"species": "parasaurolophus", "scene": "res://assets/models/quaternius/parasaurolophus.glb",
-			"count": 5, "length": 2.6, "bearing": 84.0, "distance": 40.0, "spread": 4.5, "speed": 0.7},
+			"count": 5, "length": 4.8, "bearing": 84.0, "distance": 42.0, "spread": 5.5, "speed": 1.0},
 		{"species": "triceratops", "scene": "res://assets/models/quaternius/triceratops.glb",
-			"count": 4, "length": 2.3, "bearing": 290.0, "distance": 36.0, "spread": 4.5, "speed": 0.5},
+			"count": 4, "length": 4.4, "bearing": 290.0, "distance": 42.0, "spread": 5.5, "speed": 0.7},
 		{"species": "stegosaurus", "scene": "res://assets/models/quaternius/stegosaurus.glb",
-			"count": 3, "length": 2.4, "bearing": 20.0, "distance": 38.0, "spread": 4.0, "speed": 0.45},
+			"count": 3, "length": 4.6, "bearing": 20.0, "distance": 42.0, "spread": 5.0, "speed": 0.65},
 	],
-	"wander_radius": 3.0,            # how far an animal ambles from where it grazes (m)
+	"wander_radius": 4.0,            # how far an animal ambles from where it grazes (m)
 	"graze_time": Vector2(5.0, 12.0),  # seconds between ambles
 }
 

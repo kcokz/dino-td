@@ -1506,8 +1506,15 @@ func _refit_to_size() -> void:
 		collision_shape.shape = box
 		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 	if raycast != null:
-		raycast.position = Vector3(0.0, size.y * 0.5, 0.0)
+		raycast.position = Vector3(0.0, _probe_height(size), 0.0)
 	_ensure_body()
+
+## How high this dinosaur looks for what is in its way: half its height, never above
+## Config.DINO_PROBE_HEIGHT -- below the top of the lowest thing that stops it.
+func _probe_height(size: Vector3) -> float:
+	var cfg = _get_config()
+	var cap: float = float(cfg.DINO_PROBE_HEIGHT) if (cfg and "DINO_PROBE_HEIGHT" in cfg) else 0.4
+	return minf(size.y * 0.5, cap)
 
 func _ensure_components() -> void:
 	_ensure_avoidance()
@@ -1548,7 +1555,7 @@ func _ensure_components() -> void:
 		raycast = RayCast3D.new()
 		raycast.name = "ObstacleRayCast"
 		raycast.target_position = Vector3(0.0, 0.0, -1.2) # Facing forward in local space
-		raycast.position = Vector3(0.0, 0.4, 0.0)
+		raycast.position = Vector3(0.0, _probe_height(size), 0.0)
 		add_child(raycast)
 
 	# Buildings AND walls. A wall is on a layer of its own so the Hero can pass his own

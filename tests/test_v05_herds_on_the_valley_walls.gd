@@ -49,9 +49,14 @@ func test_02_they_graze_off_the_field_on_the_ground_as_drawn() -> void:
 	var t: Dictionary = config_node.TERRAIN
 	var field_half: float = float(t["field_half"])
 	var noise := TerrainBuilder.ground_noise(config_node)
+	var lengths: Dictionary = {}
+	for spec in config_node.HERDS["herds"]:
+		lengths[String(spec["species"])] = float(spec["length"])
 	for a in _animals(main):
 		var p: Vector3 = a.global_position
-		assert_gt(maxf(absf(p.x), absf(p.z)), field_half, "%s is off the field" % a.name)
+		# All of it, nose to tail: a sauropod is eleven metres long.
+		var half_length: float = float(lengths.get(String(a.name).rsplit("_", true, 1)[0], 2.5)) * 0.5
+		assert_gt(maxf(absf(p.x), absf(p.z)), field_half + half_length, "%s is off the field, all of it" % a.name)
 		var ground: float = TerrainBuilder.ground_height(p.x, p.z, field_half, float(t["outskirts_half"]), t, noise)
 		assert_almost_eq(p.y, ground, 0.05, "%s stands on the ground" % a.name)
 

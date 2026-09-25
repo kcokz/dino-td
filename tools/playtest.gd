@@ -386,6 +386,8 @@ func _scenario_showcase() -> void:
 ## which is how the Hero came to stand as tall as the tyrannosaur and twice the height of
 ## the raptors without any single shot looking wrong.
 func _scenario_scale() -> void:
+	if _main.hud:
+		_main.hud.visible = false
 	_grant({"wood": 40, "stone": 20})
 	var gs := root.get_node_or_null("GameState")
 	if gs != null and gs.has_method("grant_unlock"):
@@ -427,6 +429,8 @@ func _scenario_scale() -> void:
 	await _shoot("from_the_game_camera")
 	for d in dinos:
 		d.queue_free()
+	if _main.hud:
+		_main.hud.visible = true
 
 ## A raid meeting a fence, measured rather than watched.
 ##
