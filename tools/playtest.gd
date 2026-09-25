@@ -44,7 +44,7 @@ func _init() -> void:
 	for w in wanted:
 		names.append(String(w))
 	if names.is_empty():
-		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug", "showcase"]
+		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug", "showcase", "scale"]
 
 	for name in names:
 		await _run(String(name))
@@ -76,6 +76,8 @@ func _run(name: String) -> void:
 			await _scenario_snug()
 		"showcase":
 			await _scenario_showcase()
+		"scale":
+			await _scenario_scale()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -139,6 +141,9 @@ func _scenario_closeup() -> void:
 		["trees", _main.grid_manager.cell_to_world(Vector2i(4, -2)), 6.0],
 		["stone", _main.grid_manager.cell_to_world(Vector2i(4, -6)), 5.0],
 	]
+	for item in cfg.MAP.get("default_resource_nodes", []):
+		if String(item["type"]) == "water":
+			subjects.append(["water", _main.grid_manager.cell_to_world(item["cell"]), 7.0])
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
@@ -372,6 +377,56 @@ func _scenario_showcase() -> void:
 	rig.apply_to(_main.camera)
 	if _main.hud:
 		_main.hud.visible = true
+
+## Everything that has a size, side by side: the Hero, a raptor and the big theropod
+## lined up beside the wreck, with a stake and a turret, seen side-on from a person's eye
+## height and then from the game's own camera.
+##
+## Portraits one at a time cannot show proportion -- each is framed to fill the picture --
+## which is how the Hero came to stand as tall as the tyrannosaur and twice the height of
+## the raptors without any single shot looking wrong.
+func _scenario_scale() -> void:
+	_grant({"wood": 40, "stone": 20})
+	var gs := root.get_node_or_null("GameState")
+	if gs != null and gs.has_method("grant_unlock"):
+		gs.grant_unlock("blueprint_tower")
+	var core_at: Vector3 = _main.current_core.global_position
+	var row_z: float = core_at.z + 2.4
+	_build_at("wall", Vector3(core_at.x - 2.2, 0.0, row_z))
+	_build_at("tower", _main.grid_manager.cell_to_world(Vector2i(-2, 0)))
+	var hero = _main.hero
+	if hero != null:
+		hero.set_physics_process(false)
+		hero.global_position = Vector3(core_at.x + 1.4, 0.0, row_z)
+		hero.rotation.y = PI * 0.5
+	var dino_script := load("res://scripts/entities/Dino.gd")
+	var lineup: Array = [["raptor", 3.2], ["big_theropod", 7.4]]
+	var dinos: Array = []
+	for item in lineup:
+		var d = dino_script.new()
+		_main.add_child(d)
+		d.setup(String(item[0]))
+		d.set_physics_process(false)
+		d.global_position = Vector3(core_at.x + float(item[1]), 0.0, row_z)
+		d.rotation.y = PI * 0.5
+		dinos.append(d)
+	await _wait(6)
+	var mid := Vector3(core_at.x + 2.6, 0.0, row_z)
+	var cam := Camera3D.new()
+	_main.add_child(cam)
+	cam.position = mid + Vector3(0.0, 1.7, 13.0)
+	cam.look_at(mid + Vector3(0.0, 1.5, 0.0), Vector3.UP)
+	var was: Camera3D = _main.camera
+	cam.current = true
+	await _shoot("side_on")
+	cam.current = false
+	if was != null and is_instance_valid(was):
+		was.current = true
+	_main.remove_child(cam)
+	cam.queue_free()
+	await _shoot("from_the_game_camera")
+	for d in dinos:
+		d.queue_free()
 
 ## A raid meeting a fence, measured rather than watched.
 ##

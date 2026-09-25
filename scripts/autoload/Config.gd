@@ -511,7 +511,9 @@ const MAP: Dictionary = {
 		{"type": "wood", "cell": Vector2i(4, -2)},
 		{"type": "stone", "cell": Vector2i(-4, -6)},
 		{"type": "stone", "cell": Vector2i(4, -6)},
-		{"type": "water", "cell": Vector2i(-4, -4)}
+		# At the field's west edge, where the river runs closest (TERRAIN.river): the
+		# spot the Hero draws water from. It was a pool in the middle of the field.
+		{"type": "water", "cell": Vector2i(-11, -4)}
 	],
 }
 const PRODUCE_DELAY: float = 1.0
@@ -798,7 +800,7 @@ const RESOURCE_NODES: Dictionary = {
 		"harvest_rate": 0.5,      # 0.5 water/s by hand
 		"color": Color(0.2, 0.5, 0.8),
 		"depleted_color": Color(0.25, 0.3, 0.35),
-		"size": Vector3(1.8, 0.3, 1.8),   # a pool, so almost flat
+		"size": Vector3(1.8, 0.5, 1.8),   # a patch of bank, as tall as the biggest jar on it
 	}
 }
 
@@ -881,7 +883,11 @@ const VISUALS: Dictionary = {
 	"node/stone":           {"scene": "res://assets/models/props/outcrop_a.glb",
 		"scene_depleted": "res://assets/models/props/outcrop_quarried_a.glb",
 		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
-	"node/water":           {"scene": "", "placeholder": "pool",     "anchor": "feet",   "color": ""},
+	# Where the Hero draws water, on the river bank at the field's edge: trodden wet mud, a
+	# flat stone at the water's edge, clay jars (tools/generate_props.py water_landing). The
+	# level turns it to face the river. It was a blue puddle in the middle of the field.
+	"node/water":           {"scene": "res://assets/models/props/water_landing_a.glb",
+		"material": "vertex", "placeholder": "pool", "anchor": "feet", "color": ""},
 	# What a drop of each resource looks like lying on the ground: split logs, a heap of
 	# quarried stone, bones, a haunch of meat, a clay pot of water (tools/generate_props.py
 	# drop_*). They were cubes in the resource's colour, and a green cube was wood.
@@ -1133,10 +1139,16 @@ static func get_dino_name(type_id: String) -> String:
 ## reason to exist in the world rather than hiding it: you are at the bottom of a
 ## valley, and the way out is up.
 const TERRAIN: Dictionary = {
-	# Flat ground reaches this far from the origin. It has to comfortably cover every
-	# cell the level uses -- the nest sits at z = -9 cells = -18m, so 22 leaves margin.
-	# Shrinking this without checking the map would put a slope under a building.
+	# Half the square the game is played on: the ground collider, and what the camera and
+	# the scenery are measured from. The nest sits at z = -9 cells = -18m, so 22 leaves
+	# margin. Shrinking this without checking the map would put a slope under a building.
 	"field_half": 22.0,
+	# The valley floor is flat that much further out all round, with its corners rounded
+	# off (TerrainBuilder.past_the_flat). It was a circle as wide as the square, so the
+	# wall started climbing inside the square's corners, and the edge of the field curled
+	# up under anything built there.
+	"flat_apron": 3.0,
+	"flat_corner": 5.0,
 	# Total ground extent. Far past what the fixed camera can frame, which is the whole
 	# point: there is no edge to find.
 	"outskirts_half": 110.0,
@@ -1173,6 +1185,89 @@ const TERRAIN: Dictionary = {
 	# hard green line across the ground, which is the very boundary the valley exists to
 	# get rid of.
 	"cover_reach": 34.0,
+	# The river (scripts/fx/River.gd). It comes over the north-west rim and down the wall as
+	# white water, winds along the valley floor just outside the field -- closest at the
+	# water spot, where the Hero draws water -- and leaves through a canyon in the
+	# south-west wall that bends away behind the rim, so the end of the world is never at
+	# the end of it. Both ends run off the ground where nobody can see them.
+	#
+	# Scenery: the channel is cut into the ground outside the square the game is played on
+	# and never reaches it, and nothing of it collides.
+	#
+	# `course` is (x, z) in metres, upstream first. `half_width` is half the width of the
+	# water; `bank` how steeply the banks rise, metres up per metre across -- gentle on the
+	# valley floor, steep where it cuts down the wall, near sheer in the canyon. The water
+	# level is not given anywhere: it is worked out from the ground (River.gd).
+	"river": {
+		"course": [
+			# On the plateau behind the rim, out of sight.
+			{"at": Vector2(-112.0, -78.0), "half_width": 1.1, "bank": 1.2},
+			{"at": Vector2(-88.0, -74.0), "half_width": 1.1, "bank": 1.2},
+			{"at": Vector2(-66.0, -68.0), "half_width": 1.1, "bank": 1.2},
+			{"at": Vector2(-50.0, -60.0), "half_width": 1.1, "bank": 1.3},
+			# Over the rim and down the wall: narrower where it falls, as a stream does.
+			{"at": Vector2(-40.0, -50.0), "half_width": 1.0, "bank": 1.4},
+			{"at": Vector2(-34.0, -40.0), "half_width": 1.1, "bank": 1.3},
+			{"at": Vector2(-30.0, -31.0), "half_width": 1.5, "bank": 1.1},
+			# Along the valley floor, past the field's west edge.
+			{"at": Vector2(-27.5, -22.0), "half_width": 2.0, "bank": 0.9},
+			{"at": Vector2(-25.8, -12.0), "half_width": 2.1, "bank": 1.0},
+			{"at": Vector2(-25.3, -6.0), "half_width": 2.1, "bank": 1.1},
+			{"at": Vector2(-26.0, 1.0), "half_width": 2.2, "bank": 0.9},
+			{"at": Vector2(-28.0, 8.0), "half_width": 2.3, "bank": 0.8},
+			# Into the canyon, and round behind the rim.
+			{"at": Vector2(-31.0, 14.0), "half_width": 2.3, "bank": 1.0},
+			{"at": Vector2(-36.0, 19.0), "half_width": 2.2, "bank": 1.6},
+			{"at": Vector2(-43.0, 23.0), "half_width": 2.1, "bank": 2.4},
+			{"at": Vector2(-52.0, 26.0), "half_width": 2.0, "bank": 2.8},
+			{"at": Vector2(-60.0, 30.0), "half_width": 2.0, "bank": 2.8},
+			{"at": Vector2(-65.0, 38.0), "half_width": 2.0, "bank": 2.6},
+			{"at": Vector2(-67.0, 50.0), "half_width": 2.0, "bank": 2.4},
+			{"at": Vector2(-68.0, 70.0), "half_width": 2.0, "bank": 2.0},
+			{"at": Vector2(-70.0, 95.0), "half_width": 2.0, "bank": 1.8},
+			{"at": Vector2(-71.0, 114.0), "half_width": 2.0, "bank": 1.8},
+		],
+		"seed": 5,
+		"margin": 0.35,          # the surface lies this far below the lower of its two banks
+		"fall": 0.002,           # and drops at least this much a metre, so there is a current
+		"roughness": 0.3,        # how broken up the banks are: the canyon's buttresses and bays
+		"roughness_scale": 0.12,
+		"overhang": 0.8,         # how far the water runs in under each bank
+		# The ground under the water, and the wet band up the bank (sRGB, like COLORS).
+		"silt": Color(0.16, 0.14, 0.10),
+		"mud": Color(0.26, 0.22, 0.15),
+		"wet_band": 0.6,
+		"water": {
+			# Jungle river green, not swimming-pool blue: the bed shows through where it is
+			# shallow. Alpha is how much of the bed it hides.
+			"colour": Color(0.10, 0.20, 0.18, 0.86),
+			# Churned water, not snow: pale green-grey, and never all of it -- it comes in
+			# streaks down the middle, with dark water showing at the edges and between.
+			# Solid white read as a road down the valley wall.
+			"foam": Color(0.60, 0.68, 0.64, 0.92),
+			"foam_from": 0.05,       # fall (m per m) where white water starts...
+			"foam_full": 0.35,       # ...and where it is as white as it gets
+			"hurry": 10.0,           # how much faster it runs per unit of fall
+			"roughness": 0.07,
+			"specular": 0.6,
+			"ripple_size": 5.0,      # metres per repeat of the ripple texture
+			"ripple_depth": 0.55,
+			"ripple_bump": 6.0,
+			"speed": 0.6,            # m/s where it is calm
+			"shore_fade": 0.5,       # metres over which it fades out against the bank
+		},
+		# Horsetails along both banks, some standing in the shallows, and boulders in the
+		# white water (tools/generate_flora.py, tools/generate_props.py).
+		"reeds": ["res://assets/models/flora/horsetail_a.glb", "res://assets/models/flora/horsetail_b.glb"],
+		"reed_count": 180,       # per variant
+		"reed_from": -0.35,      # metres from the water's edge: a little way into the water...
+		"reed_to": 1.8,          # ...to a little way up the bank
+		"boulders": "res://assets/models/props/outcrop_a.glb",
+		"boulder_count": 40,
+		"boulder_scale": Vector2(0.45, 0.95),
+		# The stepping stones from the water spot down the bank to the water.
+		"landing_stones": 3,
+	},
 }
 
 ## Plant-eaters grazing on the lower valley walls (scripts/fx/Herds.gd; Quaternius, CC0).
@@ -1185,10 +1280,12 @@ const TERRAIN: Dictionary = {
 const HERDS: Dictionary = {
 	"seed": 4417,
 	"herds": [
+		# Clear of the canyon's mouth.
 		{"species": "apatosaurus", "scene": "res://assets/models/quaternius/apatosaurus.glb",
-			"count": 3, "length": 6.0, "bearing": 140.0, "distance": 40.0, "spread": 7.0, "speed": 0.45},
+			"count": 3, "length": 6.0, "bearing": 158.0, "distance": 40.0, "spread": 7.0, "speed": 0.45},
+		# On the far bank of the river, across from the water spot.
 		{"species": "parasaurolophus", "scene": "res://assets/models/quaternius/parasaurolophus.glb",
-			"count": 5, "length": 2.6, "bearing": 80.0, "distance": 35.0, "spread": 5.0, "speed": 0.7},
+			"count": 5, "length": 2.6, "bearing": 84.0, "distance": 40.0, "spread": 4.5, "speed": 0.7},
 		{"species": "triceratops", "scene": "res://assets/models/quaternius/triceratops.glb",
 			"count": 4, "length": 2.3, "bearing": 290.0, "distance": 36.0, "spread": 4.5, "speed": 0.5},
 		{"species": "stegosaurus", "scene": "res://assets/models/quaternius/stegosaurus.glb",
@@ -1355,6 +1452,9 @@ const GROUND_COVER: Dictionary = {
 	# How deep each is set into the slope, in metres per unit of its scale: its front row
 	# stands downhill of its middle, and without this it stood on stilts of daylight.
 	"cliff_sink": 0.9,
+	# How far a cliff keeps back from the top of the river's bank: a stretch is eight
+	# metres long, and one stood on the bank hung its end out over the water.
+	"cliff_river_clear": 4.0,
 }
 
 # ==============================================================================

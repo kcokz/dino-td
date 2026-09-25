@@ -618,8 +618,10 @@ def sentry(seed):
 MEAT = (0.60, 0.17, 0.13)
 MEAT_DARK = (0.36, 0.09, 0.07)
 FAT = (0.86, 0.74, 0.62)
-CLAY = (0.55, 0.30, 0.17)
-CLAY_DARK = (0.36, 0.19, 0.11)
+# Fired earth, weathered: at (0.55, 0.30, 0.17) the jars at the water spot were the most
+# saturated thing on the map, orange as traffic cones.
+CLAY = (0.46, 0.29, 0.19)
+CLAY_DARK = (0.29, 0.18, 0.12)
 WATER = (0.16, 0.42, 0.62)
 
 
@@ -714,6 +716,124 @@ def drop_water(seed):
 
 
 # ==============================================================================
+# The water spot: where the Hero draws water from the river
+# ==============================================================================
+
+WET_SOIL = (0.11, 0.085, 0.06)
+TRODDEN = (0.19, 0.15, 0.10)
+VINE_ROPE = (0.36, 0.30, 0.16)
+
+
+def _pot(b, base, height, rng, lying=False, water=True):
+    """A clay water jar, `height` metres tall: the drop's pot, bigger. `lying` tips it
+    on its side with its mouth towards -Y, the way a jar left to drain lies."""
+    seg = 14
+    k = height / 0.215
+    profile = [(0.07, 0.0), (0.12, 0.05), (0.135, 0.10), (0.11, 0.165), (0.08, 0.195), (0.09, 0.215)]
+    radius = 0.135 * k
+
+    def place(v):
+        if not lying:
+            return base + v
+        # Axis from +Z to -Y, resting on its widest point.
+        return base + Vector((v.x, -v.z, v.y + radius))
+    rings, cols = [], []
+    for (r, z) in profile:
+        rings.append([place(Vector((math.cos(math.tau * i / seg) * r * k, math.sin(math.tau * i / seg) * r * k, z * k)))
+                      for i in range(seg)])
+        cols.append([jitter(mix(CLAY_DARK, CLAY, min(1.0, z / 0.12)), rng, 0.025) for _ in range(seg)])
+    _rings(b, rings, cols)
+    bottom = place(Vector((0.0, 0.0, 0.0)))
+    for i in range(seg):
+        b.tri(rings[0][(i + 1) % seg], rings[0][i], bottom, CLAY_DARK, CLAY_DARK, CLAY_DARK)
+    lip = rings[-1]
+    inner = [place(Vector((math.cos(math.tau * i / seg) * 0.078 * k, math.sin(math.tau * i / seg) * 0.078 * k, 0.2 * k)))
+             for i in range(seg)]
+    mouth = place(Vector((0.0, 0.0, 0.2 * k)))
+    for i in range(seg):
+        i2 = (i + 1) % seg
+        b.quad(lip[i2], lip[i], inner[i], inner[i2], CLAY, CLAY, CLAY_DARK, CLAY_DARK)
+        c = WATER if water else CHAR
+        b.tri(inner[i], inner[i2], mouth, c, c, mix(c, (1.0, 1.0, 1.0), 0.12 if water else 0.0))
+
+
+def _flat_stone(b, centre, sx, sy, height, rng, wet_side=None):
+    """A flat stone laid on the ground to kneel or step on: an irregular octagon with a
+    chamfered, slightly domed top. `wet_side` darkens the edge facing that way -- the edge
+    the river laps."""
+    n = 9
+    base, top = [], []
+    for i in range(n):
+        a = math.tau * i / n + rng.uniform(-0.12, 0.12)
+        r = rng.uniform(0.86, 1.08)
+        d = Vector((math.cos(a) * sx * r, math.sin(a) * sy * r, 0.0))
+        base.append(centre + d + Vector((0.0, 0.0, -0.03)))
+        top.append(centre + d * 0.86 + Vector((0.0, 0.0, height * rng.uniform(0.85, 1.0))))
+    crown = centre + Vector((0.0, 0.0, height * 1.12))
+
+    def shade(p, lift):
+        c = mix(ROCK_DARK, ROCK, lift)
+        if wet_side is not None and (p - centre).normalized().dot(wet_side) > 0.35:
+            c = mix(c, (0.12, 0.12, 0.11), 0.55)
+        return jitter(c, rng, 0.02)
+    for i in range(n):
+        i2 = (i + 1) % n
+        b.quad(base[i], base[i2], top[i2], top[i], shade(base[i], 0.1), shade(base[i2], 0.1),
+               shade(top[i2], 0.7), shade(top[i], 0.7))
+        b.tri(top[i], top[i2], crown, shade(top[i], 0.75), shade(top[i2], 0.75), mix(ROCK, ROCK_LIGHT, 0.4))
+
+
+def _rope_coil(b, centre, radius, thickness, turns_col, rng):
+    """A coil of vine rope lying flat: a fat ring."""
+    around, tube = 14, 5
+    rings = []
+    for i in range(around):
+        a = math.tau * i / around
+        c = centre + Vector((math.cos(a) * radius, math.sin(a) * radius, thickness))
+        out = Vector((math.cos(a), math.sin(a), 0.0))
+        rings.append([c + (out * math.cos(math.tau * j / tube) + UP * math.sin(math.tau * j / tube)) * thickness
+                      for j in range(tube)])
+    for i in range(around):
+        i2 = (i + 1) % around
+        for j in range(tube):
+            j2 = (j + 1) % tube
+            col = jitter(turns_col, rng, 0.03)
+            b.quad(rings[i][j], rings[i2][j], rings[i2][j2], rings[i][j2], col, col, col, col)
+
+
+def water_landing(seed):
+    """The spot on the bank where the Hero draws water: a patch of trodden wet mud, a flat
+    stone at the water's edge to kneel on, clay jars set down behind it, one tipped over to
+    drain, and a coil of vine rope. The river side is -Y: the game turns it to face the
+    water. It was a blue puddle in the middle of the field."""
+    rng = random.Random(seed)
+    b = Builder()
+    # The trodden mud, darkest and wettest towards the water.
+    n = 20
+    centre = Vector((0.0, 0.05, 0.012))
+    rim = []
+    for i in range(n):
+        a = math.tau * i / n
+        r = rng.uniform(0.72, 0.86)
+        rim.append(centre + Vector((math.cos(a) * r, math.sin(a) * r * 0.95, 0.0)))
+    mid = centre + Vector((0.0, 0.0, 0.012))
+    for i in range(n):
+        i2 = (i + 1) % n
+        ca = mix(TRODDEN, WET_SOIL, max(0.0, -rim[i].y) * 1.2)
+        cb = mix(TRODDEN, WET_SOIL, max(0.0, -rim[i2].y) * 1.2)
+        b.tri(rim[i], rim[i2], mid, ca, cb, mix(TRODDEN, SOIL_LIGHT, 0.25))
+    # The kneeling stone at the water's edge, and a smaller one beside it.
+    _flat_stone(b, Vector((0.0, -0.5, 0.0)), 0.46, 0.28, 0.11, rng, wet_side=Vector((0.0, -1.0, 0.0)))
+    _flat_stone(b, Vector((0.5, -0.12, 0.0)), 0.22, 0.2, 0.08, rng)
+    # The jars.
+    _pot(b, Vector((-0.38, 0.38, 0.0)), 0.46, rng)
+    _pot(b, Vector((-0.02, 0.5, 0.0)), 0.3, rng)
+    _pot(b, Vector((0.42, 0.42, 0.0)), 0.28, rng, lying=True, water=False)
+    _rope_coil(b, Vector((0.36, -0.52, 0.0)), 0.13, 0.028, VINE_ROPE, rng)
+    return b
+
+
+# ==============================================================================
 # Cliffs: columnar basalt, for the valley walls
 # ==============================================================================
 
@@ -796,6 +916,7 @@ PROPS = {
     "drop_bone": (lambda s: drop_bone(s), [7]),
     "drop_food": (lambda s: drop_meat(s), [11]),
     "drop_water": (lambda s: drop_water(s), [13]),
+    "water_landing": (lambda s: water_landing(s), [17]),
 }
 
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.

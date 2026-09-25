@@ -446,6 +446,7 @@ func spawn_terrain() -> void:
 	_scatter_ground_cover(cfg)
 	_raise_volcanoes(cfg)
 	_bring_in_the_herds(cfg)
+	_lay_the_river(cfg)
 
 	# The mound under the crags is the valley floor rising, so it wears the valley floor:
 	# the same material, one instance for every hill, over vertex colours worked out by
@@ -537,6 +538,92 @@ func _bring_in_the_herds(cfg) -> void:
 		return
 	add_child(Herds.build(cfg))
 
+## The river past the field's west edge (Config.TERRAIN.river, scripts/fx/River.gd): the
+## water lying in its channel, horsetails along its banks, boulders in its white water,
+## and stepping stones down the bank from the water spot. The channel itself is part of
+## the ground (TerrainBuilder.ground_height). None of this collides or is on the grid, and
+## all of it is in its own node like the herds: nothing the level counts as its own.
+func _lay_the_river(cfg) -> void:
+	var old := get_node_or_null("River")
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	if cfg == null or not ("TERRAIN" in cfg):
+		return
+	var river: River = TerrainBuilder.river_of(cfg.TERRAIN)
+	if river == null:
+		return
+	var spec: Dictionary = cfg.TERRAIN["river"]
+	var field_half: float = float(cfg.TERRAIN.get("field_half", 22.0))
+	var holder := Node3D.new()
+	holder.name = "River"
+	add_child(holder)
+
+	var water_spec: Dictionary = spec.get("water", {})
+	var water := MeshInstance3D.new()
+	water.name = "Water"
+	water.mesh = river.water_mesh(water_spec, float(cfg.TERRAIN.get("outskirts_half", 110.0)))
+	var mat := River.water_material(water_spec)
+	water.material_override = mat
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	holder.add_child(water)
+	if water.is_inside_tree():
+		River.flow_tween(water, mat, water_spec)
+	else:
+		water.ready.connect(func() -> void: River.flow_tween(water, mat, water_spec), CONNECT_ONE_SHOT)
+
+	var seed_value: int = int(spec.get("seed", 1))
+	var n: int = 0
+	for path in spec.get("reeds", []):
+		var m: Mesh = GroundCover.flora_mesh(String(path))
+		if m != null:
+			holder.add_child(_multimesh("Reeds_%d" % n, m, GroundCover.flora_material(),
+				river.bank_placements(seed_value + 11 + n, int(spec.get("reed_count", 150)),
+					float(spec.get("reed_from", -0.35)), float(spec.get("reed_to", 1.8)),
+					field_half, Vector2(0.8, 1.3)), true))
+		n += 1
+	var rock := GroundCover.flora_mesh(String(spec.get("boulders", "")))
+	if rock != null:
+		holder.add_child(_multimesh("Boulders", rock, GroundCover.cover_material(),
+			river.boulder_placements(seed_value + 31, int(spec.get("boulder_count", 30)),
+				spec.get("boulder_scale", Vector2(0.35, 0.8))), true))
+	# The stepping stones, from each water spot down to the water.
+	var stones: Array[Transform3D] = []
+	for item in cfg.MAP.get("default_resource_nodes", []):
+		if String(item.get("type", "")) == "water" and grid_manager != null:
+			stones.append_array(river.landing_placements(grid_manager.cell_to_world(item["cell"]),
+				int(spec.get("landing_stones", 3)), field_half))
+	if not stones.is_empty():
+		var slab := GroundCover.stone(0.42, seed_value + 51, Color(0.44, 0.42, 0.38))
+		holder.add_child(_multimesh("Landing", slab, GroundCover.cover_material(), stones, true))
+
+## One MultiMeshInstance3D of `mesh` at every transform given.
+func _multimesh(node_name: String, mesh: Mesh, material: Material, placements: Array[Transform3D], shadows: bool) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = placements.size()
+	for i in range(placements.size()):
+		mm.set_instance_transform(i, placements[i])
+	var node := MultiMeshInstance3D.new()
+	node.name = node_name
+	node.multimesh = mm
+	node.material_override = material
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return node
+
+## Turns a water spot to face the river, so its stepping-off stone is on the water side.
+func _face_the_river(node: Node3D, at: Vector3) -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("TERRAIN" in cfg):
+		return
+	var river: River = TerrainBuilder.river_of(cfg.TERRAIN)
+	if river == null:
+		return
+	var to: Vector2 = river.curve.get_closest_point(Vector2(at.x, at.z)) - Vector2(at.x, at.z)
+	if to.length() > 0.01:
+		node.rotation.y = atan2(to.x, to.y)
+
 ## The crags a hillside cell wears (tools/generate_props.py), or none when the art is
 ## missing -- in which case the cell keeps the full-height mound it always had.
 func _rock_formations(cfg) -> Array:
@@ -623,6 +710,13 @@ func _rebuild_ground(cfg) -> void:
 		return
 	ground.mesh = TerrainBuilder.build_ground(cfg)
 	ground.material_override = _ground_material(cfg)
+	# The scene still gives the flat plane it ships with a material of its own. The override
+	# above is what draws the ground, and the leftover did worse than nothing: the valley's
+	# mesh is kept for the next level (TerrainBuilder.build_ground), so it outlives this node,
+	# and a node freed while its mesh lives on leaves the renderer holding that material after
+	# it has gone -- an engine error every time a level is freed.
+	for i in range(ground.get_surface_override_material_count()):
+		ground.set_surface_override_material(i, null)
 
 	var field_half: float = 22.0
 	if "TERRAIN" in cfg:
@@ -754,7 +848,7 @@ func _scatter_flora(cfg: Node, cover: Dictionary, holder: Node3D, field_half: fl
 			holder.add_child(GroundCover.scatter_band(cfg, m, rock, int(cover.get("cliff_count", 12)),
 				field_half, float(cover.get("cliff_from", 14.0)), float(cover.get("cliff_to", 32.0)),
 				seed_value + 100 + n, cover.get("cliff_scale", Vector2(0.9, 1.4)), true, 1.0,
-				float(cover.get("cliff_sink", 0.9)), true))
+				float(cover.get("cliff_sink", 0.9)), true, float(cover.get("cliff_river_clear", 4.0))))
 		n += 1
 
 func spawn_resource_nodes() -> void:
@@ -778,7 +872,7 @@ func spawn_resource_nodes() -> void:
 			{"type": "wood", "cell": Vector2i(4, -2)},
 			{"type": "stone", "cell": Vector2i(-4, -6)},
 			{"type": "stone", "cell": Vector2i(4, -6)},
-			{"type": "water", "cell": Vector2i(-4, -4)}
+			{"type": "water", "cell": Vector2i(-11, -4)}
 		]
 
 	var t_size: float = 2.0
@@ -790,6 +884,8 @@ func spawn_resource_nodes() -> void:
 		node.name = "ResourceNode_%s_%d_%d" % [item["type"], item["cell"].x, item["cell"].y]
 		var world_pos = grid_manager.cell_to_world(item["cell"]) if grid_manager else Vector3(float(item["cell"].x) * t_size, 0.0, float(item["cell"].y) * t_size)
 		node.position = world_pos
+		if String(item["type"]) == "water":
+			_face_the_river(node, world_pos)
 		resource_nodes_container.add_child(node)
 		if grid_manager and grid_manager.has_method("occupy_resource_cell"):
 			grid_manager.occupy_resource_cell(item["cell"], node)

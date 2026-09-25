@@ -25,43 +25,174 @@ class_name TerrainBuilder
 # The ground
 # ==============================================================================
 
+## Grounds already built, newest last: [the terrain, its grass, its rock, the mesh]. The
+## ground is the same every time for the same numbers, and building it -- the river's
+## cells especially -- is the slowest thing the level does, so a restart or a second level
+## hands back the one already made. Only for read-only terrain (Config's own); anything
+## else could be edited between two calls and is built fresh.
+static var _built: Array = []
+
 ## The valley floor and the land around it, as one mesh centred on the origin.
+##
+## Quads `quad_size` metres across -- except where the river's channel runs, where each is
+## cut into an 8 x 8 grid. A channel a few metres wide cannot be drawn on four-metre quads:
+## it came out as a zigzag trench. A quad beside a cut one is drawn as a fan from its middle
+## through every point along the shared edge, so the two sides of that edge are the same
+## points and there is no crack between them (tests/test_v05_the_river.gd).
+##
+## Each point is worked out once and shared by every triangle that meets there; the normals
+## are the height field's own slope, measured over the same three metres as the colour.
 static func build_ground(cfg: Node) -> Mesh:
 	var t: Dictionary = _terrain(cfg)
-	var field_half: float = float(t.get("field_half", 22.0))
-	var outer_half: float = float(t.get("outskirts_half", 110.0))
-	var quad: float = maxf(1.0, float(t.get("quad_size", 4.0)))
-	var steps: int = int(ceil((outer_half * 2.0) / quad))
-	var noise := _noise(cfg)
-
 	var grass: Color = _colour(cfg, "ground", Color(0.28, 0.32, 0.24))
 	var rock: Color = _colour(cfg, "hill", Color(0.36, 0.33, 0.28))
+	if t.is_read_only():
+		for entry in _built:
+			if is_same(entry[0], t) and entry[1] == grass and entry[2] == rock:
+				return entry[3]
+	var mesh: Mesh = _Ground.new(t, _noise(cfg), river_of(t), grass, rock).build()
+	if t.is_read_only():
+		_built.append([t, grass, rock, mesh])
+		if _built.size() > 3:
+			_built.pop_front()
+	return mesh
 
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for iz in range(steps):
-		for ix in range(steps):
-			var x0: float = -outer_half + float(ix) * quad
-			var z0: float = -outer_half + float(iz) * quad
-			var x1: float = x0 + quad
-			var z1: float = z0 + quad
-			_ground_quad(st, x0, z0, x1, z1, field_half, outer_half, t, noise, grass, rock)
-	st.generate_normals()
-	return st.commit()
+## One ground mesh being put together: the grid of points it is made of, each worked out
+## once, and the triangles between them.
+class _Ground:
+	const FINE := 8          # a cut quad is FINE x FINE small ones
 
-static func _ground_quad(st: SurfaceTool, x0: float, z0: float, x1: float, z1: float, field_half: float, outer_half: float, t: Dictionary, noise: FastNoiseLite, grass: Color, rock: Color) -> void:
-	var corners: Array[Vector3] = [
-		_ground_point(x0, z0, field_half, outer_half, t, noise),
-		_ground_point(x1, z0, field_half, outer_half, t, noise),
-		_ground_point(x1, z1, field_half, outer_half, t, noise),
-		_ground_point(x0, z1, field_half, outer_half, t, noise),
-	]
-	var tint: Array[Color] = []
-	for p in corners:
-		tint.append(_ground_colour(p, field_half, outer_half, t, noise, grass, rock))
-	for i in [0, 1, 2, 0, 2, 3]:
-		st.set_color(tint[i])
-		st.add_vertex(corners[i])
+	var t: Dictionary
+	var noise: FastNoiseLite
+	var river: River
+	var grass: Color
+	var rock: Color
+	var field_half: float
+	var outer_half: float
+	var quad: float
+	var steps: int
+	var step: float          # the small grid's spacing: every point is on it
+	var slope_steps: int     # the colour's and the normal's half-span, in small steps
+	var heights: Dictionary = {}    # small-grid point -> height
+	var wet: Dictionary = {}        # small-grid point -> the river's surface beside it
+	var index_of: Dictionary = {}   # small-grid point -> vertex
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var cols := PackedColorArray()
+	var tris := PackedInt32Array()
+
+	func _init(p_t: Dictionary, p_noise: FastNoiseLite, p_river: River, p_grass: Color, p_rock: Color) -> void:
+		t = p_t
+		noise = p_noise
+		river = p_river
+		grass = p_grass
+		rock = p_rock
+		field_half = float(t.get("field_half", 22.0))
+		outer_half = float(t.get("outskirts_half", 110.0))
+		quad = maxf(1.0, float(t.get("quad_size", 4.0)))
+		steps = int(ceil((outer_half * 2.0) / quad))
+		step = quad / float(FINE)
+		slope_steps = maxi(1, int(round(1.5 / step)))
+
+	func build() -> ArrayMesh:
+		var cut: Dictionary = {}
+		if river != null:
+			for iz in range(steps):
+				for ix in range(steps):
+					if river.is_carve_cell(Vector2i(ix, iz)):
+						cut[Vector2i(ix, iz)] = true
+		for iz in range(steps):
+			for ix in range(steps):
+				var g0 := Vector2i(ix * FINE, iz * FINE)
+				if cut.has(Vector2i(ix, iz)):
+					for sz in range(FINE):
+						for sx in range(FINE):
+							var a := g0 + Vector2i(sx, sz)
+							_quad(a, a + Vector2i(1, 0), a + Vector2i(1, 1), a + Vector2i(0, 1))
+					continue
+				var north: bool = cut.has(Vector2i(ix, iz - 1))
+				var east: bool = cut.has(Vector2i(ix + 1, iz))
+				var south: bool = cut.has(Vector2i(ix, iz + 1))
+				var west: bool = cut.has(Vector2i(ix - 1, iz))
+				if not (north or east or south or west):
+					_quad(g0, g0 + Vector2i(FINE, 0), g0 + Vector2i(FINE, FINE), g0 + Vector2i(0, FINE))
+					continue
+				# Beside a cut quad: a fan from the middle, round every point on the edges it
+				# shares with one, in the same turning order as a plain quad's corners.
+				var ring: Array[Vector2i] = []
+				_edge(ring, g0, Vector2i(1, 0), north)
+				_edge(ring, g0 + Vector2i(FINE, 0), Vector2i(0, 1), east)
+				_edge(ring, g0 + Vector2i(FINE, FINE), Vector2i(-1, 0), south)
+				_edge(ring, g0 + Vector2i(0, FINE), Vector2i(0, -1), west)
+				var middle: int = vertex(g0 + Vector2i(FINE / 2, FINE / 2))
+				for k in range(ring.size()):
+					_tri(middle, vertex(ring[k]), vertex(ring[(k + 1) % ring.size()]))
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_NORMAL] = norms
+		arrays[Mesh.ARRAY_COLOR] = cols
+		arrays[Mesh.ARRAY_INDEX] = tris
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		return mesh
+
+	func _edge(ring: Array[Vector2i], from: Vector2i, dir: Vector2i, split: bool) -> void:
+		ring.append(from)
+		if split:
+			for j in range(1, FINE):
+				ring.append(from + dir * j)
+
+	func _quad(a: Vector2i, b: Vector2i, c: Vector2i, d: Vector2i) -> void:
+		var ia: int = vertex(a)
+		var ic: int = vertex(c)
+		_tri(ia, vertex(b), ic)
+		_tri(ia, ic, vertex(d))
+
+	func _tri(a: int, b: int, c: int) -> void:
+		tris.append(a)
+		tris.append(b)
+		tris.append(c)
+
+	func _x(g: Vector2i) -> float:
+		return -outer_half + float(g.x) * step
+
+	func _z(g: Vector2i) -> float:
+		return -outer_half + float(g.y) * step
+
+	## The ground at a point of the small grid, with the river's channel in it.
+	func height(g: Vector2i) -> float:
+		if heights.has(g):
+			return heights[g]
+		var x: float = _x(g)
+		var z: float = _z(g)
+		var y: float = TerrainBuilder.natural_height(x, z, field_half, outer_half, t, noise)
+		if river != null:
+			var loc: Vector3 = river.locate(x, z)
+			if loc.z != 0.0:
+				y = river.carve_at(loc, x, z, y)
+				wet[g] = river.level_at(loc)
+		heights[g] = y
+		return y
+
+	func vertex(g: Vector2i) -> int:
+		if index_of.has(g):
+			return index_of[g]
+		var y: float = height(g)
+		var span: float = 2.0 * float(slope_steps) * step
+		var hx: float = height(g + Vector2i(slope_steps, 0)) - height(g - Vector2i(slope_steps, 0))
+		var hz: float = height(g + Vector2i(0, slope_steps)) - height(g - Vector2i(0, slope_steps))
+		var slope: float = Vector2(hx, hz).length() / span
+		var x: float = _x(g)
+		var z: float = _z(g)
+		var col: Color = TerrainBuilder._tint(Vector3(x, y, z), slope, t, noise, grass, rock)
+		if wet.has(g):
+			col = TerrainBuilder.river_tint(col, y - float(wet[g]), t)
+		verts.append(Vector3(x, y, z))
+		norms.append(Vector3(-hx / span, 1.0, -hz / span).normalized())
+		cols.append(col)
+		index_of[g] = verts.size() - 1
+		return verts.size() - 1
 
 ## Grass where the ground is flat, rock where it is steep, with the valley floor broken
 ## up a little so it is not one flat wash of green.
@@ -71,7 +202,10 @@ static func _ground_quad(st: SurfaceTool, x0: float, z0: float, x1: float, z1: f
 ## valley. It costs one extra float per vertex and no textures at all, which is the best
 ## trade available before real materials arrive.
 static func _ground_colour(p: Vector3, field_half: float, outer_half: float, t: Dictionary, noise: FastNoiseLite, grass: Color, rock: Color) -> Color:
-	var slope: float = _slope_at(p.x, p.z, field_half, outer_half, t, noise)
+	return _tint(p, _slope_at(p.x, p.z, field_half, outer_half, t, noise), t, noise, grass, rock)
+
+## The colour for a point whose slope is already known.
+static func _tint(p: Vector3, slope: float, t: Dictionary, noise: FastNoiseLite, grass: Color, rock: Color) -> Color:
 	var rockiness: float = clampf(slope / maxf(0.05, float(t.get("rock_slope", 0.55))), 0.0, 1.0)
 	var col: Color = grass.lerp(rock, rockiness)
 	# A slow mottle so the flat field is not a single colour. Kept small: this is
@@ -93,21 +227,33 @@ static func _colour(cfg: Node, key: String, fallback: Color) -> Color:
 		return cfg.COLORS[key]
 	return fallback
 
-## Height of the ground at a world point.
+## Height of the ground at a world point: the valley, with the river's channel cut into it.
 ##
-## Flat and exactly zero anywhere the game is played, then climbing. The transition
-## uses smoothstep so there is no crease where the field ends -- a hard ring would read
-## as a wall around an arena, which is the opposite of what this is for.
+## What everything that stands on the ground asks -- trees, herds, the camera -- so all of
+## them find the river bank without knowing there is a river. The channel never reaches
+## the square the game is played on, so inside it this is natural_height exactly.
 static func ground_height(x: float, z: float, field_half: float, outer_half: float, t: Dictionary, noise: FastNoiseLite) -> float:
-	var d: float = sqrt(x * x + z * z)
-	if d <= field_half:
+	var y: float = natural_height(x, z, field_half, outer_half, t, noise)
+	var river: River = river_of(t)
+	if river != null:
+		y = river.carve(x, z, y)
+	return y
+
+## Height of the land as it would be without the river.
+##
+## Flat and exactly zero everywhere the game is played and a little way past it, then
+## climbing. The transition uses smoothstep so there is no crease where the flat ends -- a
+## hard ring would read as a wall around an arena, which is the opposite of what this is for.
+static func natural_height(x: float, z: float, field_half: float, outer_half: float, t: Dictionary, noise: FastNoiseLite) -> float:
+	var past: float = past_the_flat(x, z, field_half, t)
+	if past <= 0.0:
 		return 0.0
 	# The climb is measured over `rim_span`, not over the whole ground. Tying it to the
 	# outer extent made the valley wall rise so gently that the fog swallowed it before
 	# it was tall enough to see -- the ground just faded to grey and the valley was a
 	# claim rather than a thing on screen.
 	var span: float = maxf(1.0, float(t.get("rim_span", 38.0)))
-	var climb: float = smoothstep(field_half, field_half + span, d)
+	var climb: float = smoothstep(0.0, span, past)
 	var rise: float = float(t.get("rim_rise", 18.0)) * climb * climb
 	var wobble: float = 0.0
 	if noise != null:
@@ -116,8 +262,67 @@ static func ground_height(x: float, z: float, field_half: float, outer_half: flo
 		wobble = noise.get_noise_2d(x, z) * float(t.get("rim_noise", 4.0)) * climb
 	return rise + wobble
 
-static func _ground_point(x: float, z: float, field_half: float, outer_half: float, t: Dictionary, noise: FastNoiseLite) -> Vector3:
-	return Vector3(x, ground_height(x, z, field_half, outer_half, t, noise), z)
+## How far (x, z) is past the flat valley floor, in metres: 0 anywhere on it.
+##
+## The floor is the square the game is played on, `flat_apron` metres wider all round, with
+## its corners rounded off `flat_corner` metres. It was a circle as wide as the square, so
+## the wall began climbing inside the square's corners and along its edges -- on ground a
+## building could stand on -- and the edge of the field curled up. The rounded corners
+## are what keep the valley a valley rather than a box: every step further out, the
+## contour it climbs along is rounder.
+static func past_the_flat(x: float, z: float, field_half: float, t: Dictionary) -> float:
+	var half: float = field_half + maxf(0.0, float(t.get("flat_apron", 3.0)))
+	var r: float = clampf(float(t.get("flat_corner", 5.0)), 0.0, half)
+	var qx: float = absf(x) - (half - r)
+	var qz: float = absf(z) - (half - r)
+	return maxf(0.0, Vector2(maxf(qx, 0.0), maxf(qz, 0.0)).length() + minf(maxf(qx, qz), 0.0) - r)
+
+# ==============================================================================
+# The river
+# ==============================================================================
+
+## Rivers already worked out, newest last: [the terrain, its river spec, its shape, river].
+static var _rivers: Array = []
+
+## The river `t` declares (Config.TERRAIN.river), cut to the land `t` describes, or null.
+##
+## Worked out once per terrain and kept: ground_height asks this for every point anyone
+## asks about. Terrain that is not read-only is checked against its numbers each time,
+## because a test's copy can be changed between two calls.
+static func river_of(t: Dictionary) -> River:
+	var spec = t.get("river")
+	if not (spec is Dictionary):
+		return null
+	for entry in _rivers:
+		if is_same(entry[0], t) and is_same(entry[1], spec) and (t.is_read_only() or entry[2] == _shape_of(t)):
+			return entry[3]
+	var field_half: float = float(t.get("field_half", 22.0))
+	var outer_half: float = float(t.get("outskirts_half", 110.0))
+	var noise := _noise_from(t)
+	var natural := func(x: float, z: float) -> float:
+		return natural_height(x, z, field_half, outer_half, t, noise)
+	var river: River = River.build(spec, natural, -outer_half, maxf(1.0, float(t.get("quad_size", 4.0))))
+	_rivers.append([t, spec, _shape_of(t), river])
+	if _rivers.size() > 4:
+		_rivers.pop_front()
+	return river
+
+## The numbers the river's course is cut from.
+static func _shape_of(t: Dictionary) -> Array:
+	return [t.get("field_half"), t.get("flat_apron"), t.get("flat_corner"), t.get("outskirts_half"),
+		t.get("rim_span"), t.get("rim_rise"), t.get("rim_noise"), t.get("noise_seed"),
+		t.get("noise_frequency"), t.get("quad_size")]
+
+## The ground's colour near the river, `above` metres over the water's surface: dark silt
+## under the water, where the see-through water shows its bed, and wet mud up the bank a
+## little way, fading into whatever the bank would otherwise be.
+static func river_tint(col: Color, above: float, t: Dictionary) -> Color:
+	var spec: Dictionary = t.get("river", {})
+	if above < 0.0:
+		var silt: Color = spec.get("silt", Color(0.16, 0.14, 0.10))
+		return silt.darkened(clampf(-above * 0.35, 0.0, 0.4))
+	var mud: Color = spec.get("mud", Color(0.26, 0.22, 0.15))
+	return col.lerp(mud, 1.0 - smoothstep(0.0, maxf(0.05, float(spec.get("wet_band", 0.6))), above))
 
 # ==============================================================================
 # The hills
@@ -244,7 +449,9 @@ static func ground_noise(cfg: Node) -> FastNoiseLite:
 ## Seeded from Config so two runs produce the same landscape. A world that reshuffles
 ## itself every launch cannot be photographed, compared, or balanced against.
 static func _noise(cfg: Node) -> FastNoiseLite:
-	var t: Dictionary = _terrain(cfg)
+	return _noise_from(_terrain(cfg))
+
+static func _noise_from(t: Dictionary) -> FastNoiseLite:
 	var n := FastNoiseLite.new()
 	n.seed = int(t.get("noise_seed", 20260917))
 	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH

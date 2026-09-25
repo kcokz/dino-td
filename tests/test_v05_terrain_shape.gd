@@ -63,20 +63,57 @@ func _blocked_set() -> Dictionary:
 
 func test_01_the_playable_field_is_exactly_flat() -> void:
 	# Not "nearly" flat. Everything in this game lives on a grid at y = 0, so any slope
-	# inside the field would put a building in the air or in the dirt.
+	# inside the field would put a building in the air or in the dirt. ALL of the square,
+	# corners and edges included: only a circle as wide as it was flat once, and the wall
+	# began climbing inside the corners, under cells anyone could build on.
 	var field_half: float = float(_terrain()["field_half"])
-	for x in range(int(-field_half), int(field_half) + 1, 2):
-		for z in range(int(-field_half), int(field_half) + 1, 2):
-			if Vector2(float(x), float(z)).length() > field_half:
-				continue
-			assert_eq(_height(float(x), float(z)), 0.0,
-				"Ground at (%d, %d) is dead level" % [x, z])
+	var noise := TerrainBuilder.ground_noise(config_node)
+	var t: Dictionary = _terrain()
+	var worst: float = 0.0
+	var at := Vector2.ZERO
+	var x: float = -field_half
+	while x <= field_half + 0.001:
+		var z: float = -field_half
+		while z <= field_half + 0.001:
+			for n in [null, noise]:
+				var h: float = absf(TerrainBuilder.ground_height(x, z, field_half, float(t["outskirts_half"]), t, n))
+				if h > worst:
+					worst = h
+					at = Vector2(x, z)
+			z += 0.5
+		x += 0.5
+	assert_eq(worst, 0.0, "The whole square is dead level (worst %.4f m at %s)" % [worst, str(at)])
+
+func test_01b_the_floor_runs_on_past_the_edge_before_the_wall_starts() -> void:
+	# The edge of the field is not where the valley wall starts: it curled up right there,
+	# so anything built along the edge stood on the start of the slope. The floor runs on
+	# flat for `flat_apron` metres all round -- out to the corners too -- before climbing.
+	var t: Dictionary = _terrain()
+	var field_half: float = float(t["field_half"])
+	var apron: float = float(t["flat_apron"])
+	assert_gt(apron, 1.0, "There is an apron of flat ground past the field's edge")
+	var worst: float = 0.0
+	for k in range(0, 360, 3):
+		var a: float = deg_to_rad(float(k))
+		var dir := Vector2(cos(a), sin(a))
+		# The field's edge in this direction, then a metre and a half on.
+		var edge: float = field_half / maxf(absf(dir.x), absf(dir.y))
+		var p: Vector2 = dir * (edge + 1.5)
+		worst = maxf(worst, absf(TerrainBuilder.natural_height(p.x, p.y, field_half,
+			float(t["outskirts_half"]), t, TerrainBuilder.ground_noise(config_node))))
+	assert_eq(worst, 0.0, "A step and a half past the edge, all the way round, it is still level")
+	# And past the apron the wall does climb.
+	assert_gt(_height(field_half + apron + 20.0, 0.0), 2.0, "Further out, the valley wall")
 
 func test_02_the_flat_field_covers_every_cell_the_level_uses() -> void:
-	# The guard that matters when somebody tunes field_half down, or moves the nest
-	# further out: every cell the level puts something on has to be on flat ground.
-	var field_half: float = float(_terrain()["field_half"])
+	# The guard that matters when somebody tunes the field down, or moves the nest further
+	# out: every cell the level puts something on stands on level ground -- measured under
+	# the whole of its tile, with the ground as drawn, rather than by a rule of thumb about
+	# how far out its corner is.
+	var t: Dictionary = _terrain()
+	var field_half: float = float(t["field_half"])
 	var tile: float = float(config_node.TILE_SIZE)
+	var noise := TerrainBuilder.ground_noise(config_node)
 
 	var used: Array[Vector2i] = []
 	used.append(config_node.MAP["default_core_cell"])
@@ -87,12 +124,14 @@ func test_02_the_flat_field_covers_every_cell_the_level_uses() -> void:
 		used.append(item["cell"])
 
 	for cell in used:
-		# The far corner of the cell, not its centre: a building fills its tile.
-		var corner := Vector2(
-			(absf(float(cell.x)) + 1.0) * tile,
-			(absf(float(cell.y)) + 1.0) * tile)
-		assert_lt(corner.length(), field_half,
-			"Cell %s sits comfortably inside the flat field" % str(cell))
+		var worst: float = 0.0
+		for i in range(5):
+			for j in range(5):
+				var x: float = (float(cell.x) + float(i) * 0.25) * tile
+				var z: float = (float(cell.y) + float(j) * 0.25) * tile
+				worst = maxf(worst, absf(TerrainBuilder.ground_height(x, z, field_half,
+					float(t["outskirts_half"]), t, noise)))
+		assert_eq(worst, 0.0, "Cell %s stands on dead level ground" % str(cell))
 
 func test_03_the_land_climbs_away_and_never_stops() -> void:
 	# The reason any of this exists: the old plane ended, and the camera could see it.
@@ -121,7 +160,7 @@ func test_04_the_climb_finishes_where_the_camera_can_still_see_it() -> void:
 	var span: float = float(t["rim_span"])
 	var field_half: float = float(t["field_half"])
 	var fog_end: float = float(config_node.ENVIRONMENT["fog_depth_end"])
-	assert_lt(field_half + span, fog_end,
+	assert_lt(field_half + float(t.get("flat_apron", 0.0)) + span, fog_end,
 		"The valley wall reaches its height before the fog swallows it")
 
 	var fog_begin: float = float(config_node.ENVIRONMENT["fog_depth_begin"])

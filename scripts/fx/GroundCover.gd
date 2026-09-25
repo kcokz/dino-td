@@ -177,38 +177,8 @@ static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ca: Color,
 static func scatter(cfg: Node, mesh: Mesh, material: Material, count: int, field_half: float,
 		keep_clear: Array, clear_radius: float, seed_value: int,
 		scale_range: Vector2, shadows: bool) -> MultiMeshInstance3D:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value
-	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
-	var outer: float = field_half + float(t.get("cover_reach", 34.0))
-	var outer_half: float = float(t.get("outskirts_half", 110.0))
-	# No noise on the cover's ground sample: the wobble is scenery-scale and sampling it
-	# here would only make pieces hover or sink relative to the mesh they stand on.
-	var noise: FastNoiseLite = null
-
-	var placements: Array[Transform3D] = []
-	var attempts: int = 0
-	while placements.size() < count and attempts < count * 8:
-		attempts += 1
-		var x: float = rng.randf_range(-outer, outer)
-		var z: float = rng.randf_range(-outer, outer)
-		var d: float = Vector2(x, z).length()
-		if d > outer:
-			continue
-		# Thinning, not stopping: past the field the odds of keeping a piece fall away,
-		# so the meadow runs out gradually instead of along an edge.
-		if d > field_half:
-			var keep: float = 1.0 - smoothstep(field_half, outer, d)
-			if rng.randf() > keep * keep:
-				continue
-		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, noise)
-		var at := Vector3(x, y, z)
-		if _too_close(at, keep_clear, clear_radius):
-			continue
-		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU))
-		basis = basis.scaled(Vector3.ONE * rng.randf_range(scale_range.x, scale_range.y))
-		placements.append(Transform3D(basis, at))
-
+	var placements: Array[Transform3D] = scatter_placements(cfg, count, field_half, keep_clear,
+		clear_radius, seed_value, scale_range)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -222,6 +192,52 @@ static func scatter(cfg: Node, mesh: Mesh, material: Material, count: int, field
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return node
 
+## Where scatter's pieces go, worked out apart from the MultiMesh they end up in, for the
+## same reason as band_placements: headless, a MultiMesh reads back every instance at the
+## origin, and a test has to be able to see where the meadow really is.
+static func scatter_placements(cfg: Node, count: int, field_half: float, keep_clear: Array,
+		clear_radius: float, seed_value: int, scale_range: Vector2) -> Array[Transform3D]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
+	var cover_reach: float = float(t.get("cover_reach", 34.0))
+	var outer: float = field_half + float(t.get("flat_apron", 3.0)) + cover_reach
+	var outer_half: float = float(t.get("outskirts_half", 110.0))
+	# The ground as drawn: its wobble, and the river's channel. On the valley's smooth shape
+	# instead, the meadow hung over the channel and stood in the air over every hollow of
+	# the wall -- the same fault band_placements had for the trees.
+	var ground := TerrainBuilder.ground_noise(cfg)
+	var river: River = TerrainBuilder.river_of(t)
+
+	var placements: Array[Transform3D] = []
+	var attempts: int = 0
+	while placements.size() < count and attempts < count * 8:
+		attempts += 1
+		var x: float = rng.randf_range(-outer, outer)
+		var z: float = rng.randf_range(-outer, outer)
+		# Thinning, not stopping: past the flat valley floor the odds of keeping a piece
+		# fall away, so the meadow runs out gradually instead of along an edge. Measured
+		# from the floor's own edge (TerrainBuilder.past_the_flat): measured from a circle
+		# as wide as the field, the corners of the square it is played on came out bald.
+		var past: float = TerrainBuilder.past_the_flat(x, z, field_half, t)
+		if past > cover_reach:
+			continue
+		if past > 0.0:
+			var keep: float = 1.0 - smoothstep(0.0, cover_reach, past)
+			if rng.randf() > keep * keep:
+				continue
+		# Nothing growing in the river; right down to its edge is fine.
+		if river != null and river.water_clearance(x, z) < 0.15:
+			continue
+		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, ground)
+		var at := Vector3(x, y, z)
+		if _too_close(at, keep_clear, clear_radius):
+			continue
+		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU))
+		basis = basis.scaled(Vector3.ONE * rng.randf_range(scale_range.x, scale_range.y))
+		placements.append(Transform3D(basis, at))
+	return placements
+
 ## A ring of scenery BEYOND the playfield: the forest edge and the valley walls.
 ##
 ## Measured as distance outside the field's SQUARE, not from its centre -- the field is
@@ -231,9 +247,9 @@ static func scatter(cfg: Node, mesh: Mesh, material: Material, count: int, field
 static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, field_half: float,
 		from_edge: float, to_edge: float, seed_value: int, scale_range: Vector2,
 		shadows: bool, bias_outward: float = 1.0, sink: float = 0.0,
-		face_in: bool = false) -> MultiMeshInstance3D:
+		face_in: bool = false, river_clear: float = 0.5) -> MultiMeshInstance3D:
 	var placements: Array[Transform3D] = band_placements(cfg, count, field_half, from_edge,
-		to_edge, seed_value, scale_range, bias_outward, sink, face_in)
+		to_edge, seed_value, scale_range, bias_outward, sink, face_in, river_clear)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -259,15 +275,22 @@ static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, 
 ##
 ## `face_in` turns each one so its +Z -- the front of a stretch of cliff -- faces the
 ## middle of the valley, give or take a few degrees, rather than any old way.
+##
+## `river_clear` keeps each one that many metres back from the top of the river's bank:
+## a tree fern can lean over the water from the rim of the channel, but nothing stands on
+## the bank's slope or in the water, and a cliff eight metres long needs more room than a
+## tree.
 static func band_placements(cfg: Node, count: int, field_half: float, from_edge: float,
 		to_edge: float, seed_value: int, scale_range: Vector2,
-		bias_outward: float = 1.0, sink: float = 0.0, face_in: bool = false) -> Array[Transform3D]:
+		bias_outward: float = 1.0, sink: float = 0.0, face_in: bool = false,
+		river_clear: float = 0.5) -> Array[Transform3D]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
 	var outer_half: float = float(t.get("outskirts_half", 110.0))
 	var reach: float = field_half + to_edge
 	var ground := TerrainBuilder.ground_noise(cfg)     # the wall as drawn, not its smooth shape
+	var river: River = TerrainBuilder.river_of(t)
 	var placements: Array[Transform3D] = []
 	var attempts: int = 0
 	while placements.size() < count and attempts < count * 20:
@@ -281,6 +304,8 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 		# rather than standing in a line along the field's edge.
 		var u: float = (past - from_edge) / maxf(0.01, to_edge - from_edge)
 		if rng.randf() > lerpf(1.0, u, clampf(bias_outward - 1.0, 0.0, 1.0)) + 0.15:
+			continue
+		if river != null and river.bank_clearance(x, z) < river_clear:
 			continue
 		var y: float = TerrainBuilder.ground_height(x, z, field_half, outer_half, t, ground)
 		# Drawn either way, so asking for the face to turn in never reshuffles what comes

@@ -14,10 +14,15 @@ extends Node3D
 ## clip, and grazes again -- all done with Tweens bound to the animal, so there is no
 ## steering here at all, and when an animal goes its tween goes with it (a tween owned by
 ## anything else calls back into a freed node; see Fx.gd).
+##
+## Never into the river (Config.TERRAIN.river): every spot an animal grazes or walks to is
+## clear of the channel by half its own length, so a hadrosaur on the far bank drinks at
+## the river rather than standing in it.
 
 var _cfg: Node = null
 var _rng := RandomNumberGenerator.new()
 var _ground_noise: FastNoiseLite = null
+var _river: River = null
 
 static func build(cfg: Node) -> Herds:
 	var herds := Herds.new()
@@ -29,6 +34,7 @@ func _ready() -> void:
 	if _cfg == null or not ("HERDS" in _cfg):
 		return
 	_rng.seed = int(_cfg.HERDS.get("seed", 1))
+	_river = TerrainBuilder.river_of(_cfg.TERRAIN) if "TERRAIN" in _cfg else null
 	for spec in _cfg.HERDS.get("herds", []):
 		_place_herd(spec)
 
@@ -47,6 +53,7 @@ func _place_herd(spec: Dictionary) -> void:
 		return
 	var centre: Vector3 = centre_of(spec)
 	var spread: float = float(spec.get("spread", 5.0))
+	var clear: float = _clearance(spec)
 	for i in range(int(spec.get("count", 1))):
 		var animal := Node3D.new()
 		animal.name = "%s_%d" % [String(spec.get("species", "animal")), i]
@@ -58,7 +65,12 @@ func _place_herd(spec: Dictionary) -> void:
 		var bounds: AABB = VisualLibrary.visual_bounds(art)
 		if bounds.size.z > 0.001:
 			VisualLibrary.place(art, float(spec.get("length", 2.5)) / bounds.size.z, "feet")
-		var home := centre + Vector3(_rng.randf_range(-1.0, 1.0), 0.0, _rng.randf_range(-1.0, 1.0)) * spread
+		var home := centre
+		for attempt in range(12):
+			var spot := centre + Vector3(_rng.randf_range(-1.0, 1.0), 0.0, _rng.randf_range(-1.0, 1.0)) * spread
+			if _is_clear(spot, clear):
+				home = spot
+				break
 		home.y = _ground(home)
 		animal.position = home
 		animal.rotation.y = _rng.randf_range(0.0, TAU)
@@ -71,17 +83,31 @@ func _place_herd(spec: Dictionary) -> void:
 		player.play("idle")
 		# Not all in step: a herd that breathes in unison reads as one animal copied.
 		player.seek(_rng.randf_range(0.0, player.get_animation("idle").length), true)
-		_amble(animal, player, home, float(spec.get("speed", 0.5)))
+		_amble(animal, player, home, float(spec.get("speed", 0.5)), clear)
+
+## How far an animal keeps from the top of the river's bank: half its length, and a
+## little more, so no end of it is over the channel.
+static func _clearance(spec: Dictionary) -> float:
+	return float(spec.get("length", 2.5)) * 0.5 + 0.5
+
+func _is_clear(at: Vector3, clear: float) -> bool:
+	return _river == null or _river.bank_clearance(at.x, at.z) >= clear
 
 ## One graze and one short walk, then the next -- chained through the tween's own
 ## callback, on a tween bound to the animal.
-func _amble(animal: Node3D, player: AnimationPlayer, home: Vector3, speed: float) -> void:
+func _amble(animal: Node3D, player: AnimationPlayer, home: Vector3, speed: float, clear: float) -> void:
 	if not is_instance_valid(animal) or not is_instance_valid(player):
 		return
 	var graze: Vector2 = _cfg.HERDS.get("graze_time", Vector2(5.0, 12.0))
 	var radius: float = float(_cfg.HERDS.get("wander_radius", 3.0))
-	var angle: float = _rng.randf_range(0.0, TAU)
-	var target: Vector3 = home + Vector3(cos(angle), 0.0, sin(angle)) * _rng.randf_range(0.35, 1.0) * radius
+	# Home again if every way it thought of going was into the river.
+	var target: Vector3 = home
+	for attempt in range(8):
+		var angle: float = _rng.randf_range(0.0, TAU)
+		var spot: Vector3 = home + Vector3(cos(angle), 0.0, sin(angle)) * _rng.randf_range(0.35, 1.0) * radius
+		if _is_clear(spot, clear):
+			target = spot
+			break
 	target.y = _ground(target)
 	var walk_time: float = animal.position.distance_to(target) / maxf(0.05, speed)
 	var tw := animal.create_tween()
@@ -94,7 +120,7 @@ func _amble(animal: Node3D, player: AnimationPlayer, home: Vector3, speed: float
 	tw.tween_property(animal, "position", target, walk_time)
 	tw.tween_callback(func():
 		player.play("idle", 0.3)
-		_amble(animal, player, home, speed))
+		_amble(animal, player, home, speed, clear))
 
 func _player_of(art: Node) -> AnimationPlayer:
 	var found: Array = art.find_children("*", "AnimationPlayer", true, false)
