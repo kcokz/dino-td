@@ -338,7 +338,14 @@ func _push_out_of_anything_solid() -> bool:
 		away.y = 0.0
 		var gap: float = away.length()
 		var clearance: float = half_me + half_it
-		if gap >= clearance:
+		# Clear of its walls is clear of it: out along a diagonal a square reaches further
+		# than half its width, and inside the cabin's corners the circle said "clear".
+		if cfg and cfg.has_method("gap_to_building") and "building_type" in b:
+			if float(cfg.gap_to_building(global_position, String(b.building_type), (b as Node3D).global_position)) >= half_me:
+				continue
+			if gap > 0.0001:
+				clearance = float(cfg.building_extent_along(String(b.building_type), away / gap)) + half_me
+		elif gap >= clearance:
 			continue
 		# Straight out along the shortest way, plus a hair so it does not re-trigger.
 		# The gap is measured BEFORE picking a fallback direction: reading it afterwards
@@ -489,11 +496,15 @@ func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> boo
 	if dist_center <= (build_range + extra_buffer):
 		return true
 
-	# Check 2: 2D bounding box distance to building cell perimeter
+	# Check 2: 2D bounding box distance to building cell perimeter -- all of its cells:
+	# the cabin stands in a block of them (Config.get_building_span).
 	var half_size: float = 1.0
 	var gm = _get_grid_manager()
 	if gm and "tile_size" in gm:
 		half_size = float(gm.tile_size) * 0.5
+	var cfg_span = _get_config()
+	if cfg_span and cfg_span.has_method("get_building_span") and "building_type" in b:
+		half_size *= float(cfg_span.get_building_span(String(b.building_type)))
 	var dx = maxf(0.0, absf(pos.x - b_pos.x) - half_size)
 	var dz = maxf(0.0, absf(pos.z - b_pos.z) - half_size)
 	var dist_box = sqrt(dx * dx + dz * dz)
@@ -554,6 +565,15 @@ func _plan_path_to_building(b: Node) -> void:
 		return
 	var b_pos = b.global_position
 	b_pos.y = global_position.y
+	# To the side of it he is on. The middle of a building is equally far from all of its
+	# walls, and the mesh settles that tie the same way whichever side he comes from: sent
+	# to mend the cabin from its door, he walked round to its back wall to do it. Aiming at
+	# the point of its box nearest him keeps him on his own side.
+	var cfg_side = _get_config()
+	if cfg_side and cfg_side.has_method("get_building_footprint") and "building_type" in b:
+		var half: float = float(cfg_side.get_building_footprint(String(b.building_type))) * 0.5
+		var from_it: Vector3 = global_position - b_pos
+		b_pos += Vector3(clampf(from_it.x, -half, half), 0.0, clampf(from_it.z, -half, half))
 
 	# WHERE THE ROUTE ENDS IS WHERE HE CAN WORK FROM. A building is carved out of the
 	# mesh, so a route to its centre stops at the edge of the carve -- which is a

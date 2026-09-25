@@ -438,6 +438,9 @@ func _ensure_physics_and_visuals() -> void:
 		col.position = Vector3(0.0, h * 0.5, 0.0)
 		add_child(col)
 	
+	# 2b. Marked out of the navigation bake, if it is wide enough to have room inside.
+	_ensure_bake_obstacle()
+
 	# 3. Add the body if missing. A "spikes" body is a holder of uprights rather
 	# than a MeshInstance3D of its own, so it has to be recognised by name or a
 	# second call here would quietly draw a second fence on top of the first.
@@ -664,6 +667,33 @@ func _resolve_build_time() -> float:
 	if cfg and cfg.has_method("get_build_time"):
 		return float(cfg.get_build_time(building_type))
 	return 2.0
+
+## Marks this building's box out of the navigation bake, when it is wider than a tile.
+##
+## The bake reads a collider as SURFACES, not as a solid: under the roof of a box three
+## metres across it found a floor with headroom and made a walkable island of it, walled
+## off from everything. The nearest walkable point to the cabin was then always inside it,
+## where no route can go, and every "can the raid reach the cabin" came back no. A building
+## a tile or less across has no such room: once the walker's radius comes off its walls,
+## nothing inside is left. The engine's own obstacle does the marking; avoidance is off,
+## because steering round the building is the baked mesh's job, not the obstacle's.
+func _ensure_bake_obstacle() -> void:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_building_span"):
+		return
+	if int(cfg.get_building_span(building_type)) <= 1:
+		return
+	if find_child("BakeObstacle", false, false) != null:
+		return
+	var half: float = _footprint() * 0.5
+	var obstacle := NavigationObstacle3D.new()
+	obstacle.name = "BakeObstacle"
+	obstacle.avoidance_enabled = false
+	obstacle.affect_navigation_mesh = true
+	obstacle.height = _building_height() + 0.5     # its roof as well as the floor under it
+	obstacle.vertices = PackedVector3Array([Vector3(-half, 0.0, -half), Vector3(half, 0.0, -half),
+		Vector3(half, 0.0, half), Vector3(-half, 0.0, half)])
+	add_child(obstacle)
 
 ## Side length of this building's box. Derived from Config so the gap between two
 ## neighbouring buildings always stays wider than the Hero (see BUILDING_CLEARANCE).

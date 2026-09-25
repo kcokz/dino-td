@@ -228,6 +228,23 @@ func assert_has_signal(target: Object, signal_name: String, message: String = ""
 ## gap for a whole version.
 ##
 ## Caller owns the node and frees it, the same as anything else it instantiates.
+## How many tiles a freshly laid level holds on the grid: the cabin's whole block and
+## the nest. The cabin used to be one tile, and "exactly 2" was written into test after
+## test.
+func level_tiles_at_start() -> int:
+	var cfg = tree.root.get_node_or_null("Config")
+	var span: int = int(cfg.get_building_span("core")) if cfg and cfg.has_method("get_building_span") else 1
+	return span * span + 1
+
+## Where the cabin is: the middle of its block of tiles, not the middle of the tile it
+## was placed at -- which is now inside its walls.
+func cabin_at(main: Node) -> Vector3:
+	return (main.current_core as Node3D).global_position
+
+## A tile near the cabin that nothing in the level uses, for a test to build on. It was
+## (1, 1), which is inside the cabin now.
+const FREE_TILE := Vector2i(3, 3)
+
 func fresh_level() -> Node:
 	var main = load("res://scenes/Main.tscn").instantiate()
 	tree.root.add_child(main)

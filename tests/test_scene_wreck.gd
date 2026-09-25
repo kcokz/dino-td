@@ -2,7 +2,8 @@
 # SCENE-POLISH S5: Spaceship Wreck Verification Suite.
 #
 # Acceptance criteria from SCENE-POLISH.md:
-# 1. Config.VISUALS["building/core"]["scene"] is non-empty and points to "res://assets/models/wreck.glb".
+# 1. Config.VISUALS["building/core"]["scene"] is non-empty and points to the cabin
+#    (props/cabin_a.glb, since the core became a 2 x 2 crew module; wreck.glb was the pod).
 # 2. Spaceship wreck model exists on disk, imports cleanly, and has real art loaded by VisualLibrary.
 # 3. Invariant: is_barrier_building("core") remains strictly FALSE (Hero must have a lane past it).
 # 4. Invariant: Art's horizontal projection strictly fits inside the declared collision box.
@@ -43,7 +44,7 @@ func test_01_core_scene_declared_and_file_exists() -> void:
 	var entry: Dictionary = visuals["building/core"]
 	var scene_path: String = String(entry.get("scene", ""))
 	assert_false(scene_path.is_empty(), "building/core scene path must not be empty")
-	assert_eq(scene_path, "res://assets/models/wreck.glb", "Scene path points to wreck.glb")
+	assert_eq(scene_path, "res://assets/models/props/cabin_a.glb", "Scene path points to the cabin")
 	assert_true(FileAccess.file_exists(scene_path), "File exists on disk: %s" % scene_path)
 	assert_true(VisualLibrary.has_art("building/core"), "VisualLibrary recognizes building/core has real art")
 
@@ -59,10 +60,12 @@ func test_02_is_barrier_building_core_remains_strictly_false() -> void:
 
 	var fp: float = config_node.get_building_footprint("core")
 	var hero_w: float = float(config_node.HERO.get("width", 0.8))
-	var lane: float = config_node.TILE_SIZE - fp
+	# Its lane is what is left of its BLOCK of tiles, not of one tile.
+	var lane: float = float(config_node.get_building_span("core")) * config_node.TILE_SIZE - fp
 
 	assert_gt(lane, hero_w, "Gap beside core (%.2fm) is wider than Hero width (%.2fm)" % [lane, hero_w])
-	assert_almost_eq(fp, 1.0, 0.01, "Core footprint is exactly 1.0m")
+	assert_almost_eq(fp, float(config_node.get_building_span("core")) * config_node.TILE_SIZE - hero_w
+		- float(config_node.BUILDING_CLEARANCE), 0.01, "Core footprint is its block less the Hero's way past")
 
 # ==============================================================================
 # 3. Scale & Projection Invariant: Visual Projection Fits Inside Collision Box
@@ -112,15 +115,17 @@ func test_04_core_campfire_instantiates_with_art_and_valid_collision() -> void:
 	assert_not_null(col, "CoreCampfire has CollisionShape3D")
 	assert_true(col.shape is BoxShape3D, "Collision shape is BoxShape3D")
 	var box: BoxShape3D = col.shape as BoxShape3D
-	assert_almost_eq(box.size.x, 1.0, 0.01, "Collider width X == 1.0m")
-	assert_almost_eq(box.size.y, 1.9, 0.01, "Collider height Y == 1.9m")
-	assert_almost_eq(box.size.z, 1.0, 0.01, "Collider depth Z == 1.0m")
+	var fp: float = float(config_node.get_building_footprint("core"))
+	var h: float = float(config_node.get_building_height("core"))
+	assert_almost_eq(box.size.x, fp, 0.01, "Collider width X is its footprint")
+	assert_almost_eq(box.size.y, h, 0.01, "Collider height Y is its height")
+	assert_almost_eq(box.size.z, fp, 0.01, "Collider depth Z is its footprint")
 
 	# 2. Visual body
 	var body: Node3D = core.find_child("Body", false, false) as Node3D
 	assert_not_null(body, "CoreCampfire has Body node")
 	var meshes = body.find_children("*", "MeshInstance3D", true, false)
-	assert_gt(meshes.size(), 0, "Body has MeshInstance3D nodes from wreck.glb")
+	assert_gt(meshes.size(), 0, "Body has MeshInstance3D nodes from the cabin model")
 
 	# 3. HP and signals
 	assert_eq(core.current_hp, 10.0, "Initial Core HP is 10.0")

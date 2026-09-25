@@ -499,7 +499,8 @@ func test_29_the_opening_stock_is_on_the_ground_by_the_cabin() -> void:
 	assert_eq(_wallet("wood"), 0, "And none of it is in the warehouse yet")
 
 	var centre: Vector3 = main.current_core.global_position
-	var radius: float = _drop_cfg("opening_ring_radius", 4.5)
+	# From the cabin's walls: it is a block of tiles across.
+	var radius: float = float(config_node.get_building_footprint("core")) * 0.5 + _drop_cfg("opening_ring_gap", 4.0)
 	for pile in _piles():
 		assert_almost_eq(pile.global_position.distance_to(centre), radius, 0.5,
 			"Each pile is laid around the cabin, not dumped on it")

@@ -89,7 +89,7 @@ func _drag(main: Node, from_world: Vector3, to_world: Vector3) -> int:
 
 func test_01_one_drag_lays_a_whole_run() -> void:
 	var main = await _level()
-	var core: Vector3 = main.grid_manager.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	var before: int = _stakes_standing(main)
 
 	var laid: int = _drag(main, core + Vector3(-5.0, 0.0, -8.0), core + Vector3(5.0, 0.0, -8.0))
@@ -104,7 +104,7 @@ func test_02_the_run_has_no_gaps_in_it_even_drawn_diagonally() -> void:
 	# steps one cell at a time and never cuts a corner.
 	var main = await _level()
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	var line: Array[Vector2i] = gm.fine_cells_on_line(
 		core + Vector3(-5.0, 0.0, -6.0), core + Vector3(5.0, 0.0, -10.0), _divisions())
 
@@ -119,7 +119,7 @@ func test_03_a_dragged_fence_actually_seals() -> void:
 	# gets through them.
 	var main = await _level()
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	# Four drags, corner to corner, round the cabin.
 	var half: float = 5.0
 	var corners: Array[Vector3] = [
@@ -156,7 +156,7 @@ func test_04_a_press_that_never_moves_still_lays_exactly_one() -> void:
 	# as they have until now, must get one stake per click and not two and not none.
 	var main = await _level()
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	main.current_build_type = "wall"
 	var spot: Vector3 = core + Vector3(0.0, 0.0, -9.0)
 	var before: int = _stakes_standing(main)
@@ -191,7 +191,7 @@ func test_06_the_run_steps_over_what_it_cannot_build_on() -> void:
 	# what the player meant. It also means the ghosts are exactly what gets built.
 	var main = await _level()
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	# Straight through the cabin, which nothing can be built on.
 	var laid: int = _drag(main, core + Vector3(-6.0, 0.0, 0.0), core + Vector3(6.0, 0.0, 0.0))
 	await wait_frames(4)
@@ -212,7 +212,7 @@ func test_07_the_run_stops_when_the_wood_does() -> void:
 	# It is not a way to build for free, and it must not half-charge either.
 	var main = await _level(0)
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	var each: int = cost_of("wall")
 	game_state_node.resources["wood"] = each * 3
 
@@ -233,7 +233,7 @@ func test_09_cancelling_mid_drag_lays_nothing() -> void:
 	# Escape during a drag has to leave the map as it was, not half a fence.
 	var main = await _level()
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = cabin_at(main)
 	main.current_build_type = "wall"
 	main._drag_from = gm.world_to_fine_cell(core + Vector3(-5.0, 0.0, -8.0), _divisions())
 	main._dragging = true

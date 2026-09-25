@@ -136,7 +136,7 @@ func _scenario_closeup() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var tile: float = float(cfg.TILE_SIZE) if cfg else 2.0
 	var subjects: Array = [
-		["wreck", Vector3(tile * 0.5, 0.0, tile * 0.5), 5.0],
+		["wreck", _main.current_core.global_position, 8.0],
 		["nest", _main.grid_manager.cell_to_world(cfg.MAP["default_nest_cell"]), 7.0],
 		["trees", _main.grid_manager.cell_to_world(Vector2i(4, -2)), 6.0],
 		["stone", _main.grid_manager.cell_to_world(Vector2i(4, -6)), 5.0],
@@ -385,6 +385,11 @@ func _scenario_showcase() -> void:
 ## Portraits one at a time cannot show proportion -- each is framed to fill the picture --
 ## which is how the Hero came to stand as tall as the tyrannosaur and twice the height of
 ## the raptors without any single shot looking wrong.
+## Half the width of the cabin's box, for lining things up beside it.
+func cfg_row_half() -> float:
+	var cfg := root.get_node_or_null("Config")
+	return float(cfg.get_building_footprint("core")) * 0.5 if cfg else 0.5
+
 func _scenario_scale() -> void:
 	if _main.hud:
 		_main.hud.visible = false
@@ -393,7 +398,8 @@ func _scenario_scale() -> void:
 	if gs != null and gs.has_method("grant_unlock"):
 		gs.grant_unlock("blueprint_tower")
 	var core_at: Vector3 = _main.current_core.global_position
-	var row_z: float = core_at.z + 2.4
+	# A row in front of the cabin's south wall, the cabin at its left end.
+	var row_z: float = core_at.z + float(cfg_row_half()) + 1.4
 	_build_at("wall", Vector3(core_at.x - 2.2, 0.0, row_z))
 	_build_at("tower", _main.grid_manager.cell_to_world(Vector2i(-2, 0)))
 	var hero = _main.hero

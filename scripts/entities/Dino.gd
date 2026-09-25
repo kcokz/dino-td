@@ -247,6 +247,14 @@ static func _init_building_slots(building: Node3D) -> void:
 	if cfg_slots != null and cfg_slots.has_method("get_attack_slot_radius") and b_type != "":
 		r_inner = float(cfg_slots.get_attack_slot_radius(b_type, false))
 		r_outer = float(cfg_slots.get_attack_slot_radius(b_type, true))
+	# The standoff is from the building's WALLS in every direction, not from a circle round
+	# its middle: out along a diagonal a square reaches further than half its width, and
+	# the cabin's corner slots stood inside it.
+	var half: float = 0.5
+	if cfg_slots != null and cfg_slots.has_method("get_building_footprint") and b_type != "":
+		half = float(cfg_slots.get_building_footprint(b_type)) * 0.5
+	var standoff_inner: float = r_inner - half
+	var standoff_outer: float = r_outer - half
 
 	var gm_slots: Node = null
 	if building.is_inside_tree():
@@ -255,18 +263,26 @@ static func _init_building_slots(building: Node3D) -> void:
 	# 8 inner perimeter slots
 	for i in range(8):
 		var angle: float = float(i) * (PI / 4.0)
-		var offset = Vector3(sin(angle) * r_inner, 0.0, cos(angle) * r_inner)
+		var dir := Vector3(sin(angle), 0.0, cos(angle))
+		var offset: Vector3 = dir * (_extent_along(cfg_slots, b_type, dir, half) + standoff_inner)
 		if _slot_is_standable(gm_slots, center + offset):
 			slots.append({ "pos": center + offset, "dino_id": 0 })
 
 	# 8 outer secondary ring slots
 	for i in range(8):
 		var angle: float = (float(i) + 0.5) * (PI / 4.0)
-		var offset = Vector3(sin(angle) * r_outer, 0.0, cos(angle) * r_outer)
+		var dir := Vector3(sin(angle), 0.0, cos(angle))
+		var offset: Vector3 = dir * (_extent_along(cfg_slots, b_type, dir, half) + standoff_outer)
 		if _slot_is_standable(gm_slots, center + offset):
 			slots.append({ "pos": center + offset, "dino_id": 0 })
 
 	_building_slots[b_id] = slots
+
+## How far a building's outside is from its middle, heading along `dir`.
+static func _extent_along(cfg: Node, b_type: String, dir: Vector3, half: float) -> float:
+	if cfg != null and cfg.has_method("building_extent_along") and b_type != "":
+		return float(cfg.building_extent_along(b_type, dir))
+	return half
 
 ## Whether something could actually stand at `at`. A building tucked against a
 ## hill loses the slots behind it, which is exactly right: those are places no
@@ -1011,6 +1027,13 @@ func _target_in_reach(target: Variant) -> bool:
 		return false
 	if _solid_between(target as Node):
 		return false
+	# A building is measured to its own walls (Config.gap_to_building): a circle of half
+	# its footprint sits inside a square's corners, and against the cabin -- three metres
+	# across -- a raptor at a corner could not bite what it was standing against.
+	var cfg = _get_config()
+	if "building_type" in target and cfg != null and cfg.has_method("gap_to_building"):
+		return float(cfg.gap_to_building(global_position, String(target.building_type),
+			(target as Node3D).global_position)) <= attack_reach()
 	var gap: float = global_position.distance_to((target as Node3D).global_position)
 	return gap <= attack_reach() + _half_width_of(target as Node)
 

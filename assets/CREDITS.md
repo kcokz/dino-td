@@ -94,13 +94,13 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Usage**: The choppable tree (`node/wood`) and its stump; the ground cover, the forest at the field's edge and the monkey-puzzles on the skyline (`Config.GROUND_COVER`).
 
 ### Props, Landforms & Landmarks (`assets/models/props/*.glb`)
-- **Asset Name**: Low-Poly Props -- sharpened stake, stone outcrops (whole and quarried), fallen logs, volcanic crag formations, columnar basalt cliffs, the dinosaur nest, the sentry turret, resource piles, the water spot on the river bank
+- **Asset Name**: Low-Poly Props -- sharpened stake, stone outcrops (whole and quarried), fallen logs, volcanic crag formations, columnar basalt cliffs, the dinosaur nest, the sentry turret, resource piles, the water spot on the river bank, the cabin (the crashed crew module the Hero lives in)
 - **Source**: `tools/generate_props.py` (Scripted Blender procedural low-poly meshes, vertex-coloured; the sentry exports a Stand / Head / Muzzle hierarchy so its head can turn)
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
-- **Date Added**: 2026-09-22 (stake, outcrops, logs, crags); 2026-09-23 (basalt cliffs, nest, sentry, piles); 2026-09-25 (water spot)
-- **Files**: `stake_a.glb`, `outcrop_a/b.glb`, `outcrop_quarried_a.glb`, `fallen_log_a/b.glb`, `rock_formation_a/b/c.glb`, `basalt_cliff_a/b/c.glb`, `nest_a.glb`, `sentry_a.glb`, `drop_wood_a.glb`, `drop_stone_a.glb`, `drop_bone_a.glb`, `drop_food_a.glb`, `drop_water_a.glb`, `water_landing_a.glb`
-- **Usage**: `building/wall`, `node/stone`, `node/water`, `nest`, `building/tower`, `drop/*` (`Config.VISUALS`); the hills (`Config.MAP.hill_rocks`); the cliffs and fallen logs (`Config.GROUND_COVER`); the boulders in the river's white water (`Config.TERRAIN.river`).
+- **Date Added**: 2026-09-22 (stake, outcrops, logs, crags); 2026-09-23 (basalt cliffs, nest, sentry, piles); 2026-09-25 (water spot, cabin)
+- **Files**: `stake_a.glb`, `outcrop_a/b.glb`, `outcrop_quarried_a.glb`, `fallen_log_a/b.glb`, `rock_formation_a/b/c.glb`, `basalt_cliff_a/b/c.glb`, `nest_a.glb`, `sentry_a.glb`, `drop_wood_a.glb`, `drop_stone_a.glb`, `drop_bone_a.glb`, `drop_food_a.glb`, `drop_water_a.glb`, `water_landing_a.glb`, `cabin_a.glb`
+- **Usage**: `building/core`, `building/wall`, `node/stone`, `node/water`, `nest`, `building/tower`, `drop/*` (`Config.VISUALS`); the hills (`Config.MAP.hill_rocks`); the cliffs and fallen logs (`Config.GROUND_COVER`); the boulders in the river's white water (`Config.TERRAIN.river`).
 
 ### Volcanoes, Valley Floor, River & Hills (built at runtime, no asset files)
 - **Source**: `scripts/fx/Volcano.gd`, `scripts/fx/TerrainBuilder.gd` and `scripts/fx/River.gd` -- meshes and particles built in code from `Config.VOLCANOES` and `Config.TERRAIN`; the smoke puff texture and the water's ripple normal map are generated from noise at load.

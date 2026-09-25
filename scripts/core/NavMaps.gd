@@ -184,9 +184,14 @@ func path(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> P
 ## as "恐龙又直接进攻还没围住 cabin 的木栅栏了". Seven centimetres of an arbitrary
 ## tolerance, with nothing about the actual question in it.
 ##
-## Asking whether the route reaches the nearest standable point to the goal has no such
-## number in it: it is true whenever the goal is as close as the ground allows, whatever
-## is standing there and however big it is.
+## Asking whether the route gets as close to the goal as the nearest standable point does
+## has no such number in it: it is true whenever the goal is as close as the ground allows,
+## whatever is standing there and however big it is.
+##
+## As close AS, not TO the same point. The cabin is square and its middle is equally far
+## from all four of its walls, so "the nearest standable point" is a four-way tie, and the
+## server can settle it one way for the route and another for the nearest point: a route
+## that reached the north wall was judged against the south one and called sealed.
 func is_reachable(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> bool:
 	var map: RID = map_for(walls_are_open)
 	if not map.is_valid():
@@ -195,7 +200,11 @@ func is_reachable(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = fal
 	if pts.is_empty():
 		return false
 	var nearest: Vector3 = NavigationServer3D.map_get_closest_point(map, to_pos)
-	return pts[pts.size() - 1].distance_to(nearest) <= _same_place()
+	return _flat(pts[pts.size() - 1]).distance_to(_flat(to_pos)) <= _flat(nearest).distance_to(_flat(to_pos)) + _same_place()
+
+## On the ground: how high a route runs over the carve is not how far it is from the goal.
+static func _flat(p: Vector3) -> Vector2:
+	return Vector2(p.x, p.z)
 
 ## How far apart two points may be and still be the same place. About the mesh's own
 ## resolution and nothing else -- which is the only kind of tolerance this question

@@ -44,11 +44,18 @@ const BUILDINGS: Dictionary = {
 	"core": {
 		"name": "BUILDING_CORE_NAME",
 		"kind": "core",
-		# Taller than the Hero, because it is the landmark the whole map is arranged
-		# around and the thing that ends the game if it falls. Width deliberately left at
-		# the default: past about 1.2 the gap beside it drops under the Hero's width and
-		# is_barrier_building would quietly reclassify the base as a wall.
-		"height": 1.9,
+		# The crew module of the ship that brought the Hero here, and his home: a room,
+		# not a pod. It takes a 2 x 2 block of tiles (`span`), its box as wide as a block
+		# allows while still leaving the Hero a way past on every side -- two tiles less
+		# his width and the clearance, 3 m -- and a little over twice his height. It was a
+		# 1 m pod in one tile, no taller than the man who lives in it, because one tile
+		# cannot hold a room and keep a lane beside it.
+		#
+		# The block runs south and east from the core's cell, so the north and west walls
+		# stand exactly where the pod's did: a raid coming down from the nest meets the
+		# same line it always met.
+		"span": 2,
+		"height": 2.6,
 		"hp": 10.0,
 		"cost": {},
 		"upgrades_to": "",
@@ -278,6 +285,38 @@ static func get_default_building_footprint() -> float:
 	var hero_w: float = float(HERO.get("width", 0.8))
 	return maxf(0.5, TILE_SIZE - hero_w - BUILDING_CLEARANCE)
 
+## How many tiles a side `type_id` takes: 1 for everything but the cabin, which is a
+## 2 x 2 block. The building stands in the middle of its block, which runs south and
+## east from the cell it is placed at.
+static func get_building_span(type_id: String = "") -> int:
+	if type_id != "" and BUILDINGS.has(type_id):
+		return maxi(1, int(BUILDINGS[type_id].get("span", 1)))
+	return 1
+
+## How far `point` is from the outside of a `type_id` standing at `centre`, in metres, on
+## the ground: 0 when touching or inside. To its box -- buildings are square and are never
+## turned -- or, for one drawn as a spike, to its circle.
+##
+## Reach, where a dinosaur stands to bite, and how close the Hero has to be were all
+## measured as a circle of half the footprint round the centre. For a one-metre box the
+## difference at its corners is a fifth of a metre, which the reach absorbed. For the
+## cabin it is more than half a metre: the corner slots stood INSIDE its walls and a
+## raptor at its corner could not bite it.
+static func gap_to_building(point: Vector3, type_id: String, centre: Vector3) -> float:
+	var half: float = get_building_footprint(type_id) * 0.5
+	var dx: float = absf(point.x - centre.x)
+	var dz: float = absf(point.z - centre.z)
+	if get_building_mesh_style(type_id) == "spikes":
+		return maxf(0.0, Vector2(dx, dz).length() - half)
+	return Vector2(maxf(dx - half, 0.0), maxf(dz - half, 0.0)).length()
+
+## How far from `type_id`'s centre its outside is, heading along `dir` (flat, unit).
+static func building_extent_along(type_id: String, dir: Vector3) -> float:
+	var half: float = get_building_footprint(type_id) * 0.5
+	if get_building_mesh_style(type_id) == "spikes":
+		return half
+	return half / maxf(0.0001, maxf(absf(dir.x), absf(dir.z)))
+
 ## What sort of thing this is: "wall" for anything a fence is made of, whatever else a
 ## building declares, or "" for a type that says nothing.
 static func get_building_kind(type_id: String) -> String:
@@ -294,6 +333,11 @@ static func get_building_footprint(type_id: String = "") -> float:
 		return get_spike_diameter(type_id)
 	if type_id != "" and BUILDINGS.has(type_id) and BUILDINGS[type_id].has("footprint"):
 		return maxf(0.1, float(BUILDINGS[type_id]["footprint"]))
+	var span: int = get_building_span(type_id)
+	if span > 1:
+		# As wide as its block allows while leaving the Hero a way past.
+		var hero_w: float = float(HERO.get("width", 0.8))
+		return maxf(0.5, float(span) * TILE_SIZE - hero_w - BUILDING_CLEARANCE)
 	return get_default_building_footprint()
 
 ## True when ONE of these fills its tile, so that a line of them cannot be slipped
@@ -305,7 +349,7 @@ static func get_building_footprint(type_id: String = "") -> float:
 ## where the player put them rather than on the type.
 static func is_barrier_building(type_id: String) -> bool:
 	var fp: float = get_building_footprint(type_id)
-	return (TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
+	return (float(get_building_span(type_id)) * TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
 
 ## The flag a building needs before it can be placed, or "" for anything the Hero
 ## can put up from the start. Declared as data so a new gate is a Config line
@@ -878,9 +922,13 @@ const VISUALS: Dictionary = {
 	# out of, with bones by the door (tools/generate_props.py).
 	"nest":                 {"scene": "res://assets/models/props/nest_a.glb",
 		"material": "vertex", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
-	# The wreck: the only evidence the Hero is from anywhere else, and the thing that
-	# ends the game if the raid reaches it. It gets the most geometry on the map.
-	"building/core":        {"scene": "res://assets/models/wreck.glb", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
+	# The cabin: the crew module of the ship that brought the Hero here, lying where it came
+	# down -- heat shield ploughed into a mound of earth, portholes, a torn solar panel, the
+	# hatch open with its door down as a ramp on the south side, his fire by the door
+	# (tools/generate_props.py cabin). The only evidence he is from anywhere else, and the
+	# thing that ends the game if the raid reaches it. It was a 1 m pod his own height.
+	"building/core":        {"scene": "res://assets/models/props/cabin_a.glb",
+		"material": "vertex", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
 	# A machine off the wreck -- white plating, the orange band, twin barrels and a red
 	# eye -- on a stand the Hero lashed together from timber over a drystone plinth. The
 	# head is its own node and turns to face what it shoots (Tower.gd). It was a box.
@@ -989,7 +1037,10 @@ const DROPS: Dictionary = {
 	# 开局物资：撒在船舱周围，而不是直接进仓库
 	"opening_stock": {"wood": 20},
 	"opening_piles": 4,        # 分成几堆
-	"opening_ring_radius": 4.5, # 距船舱的距离（米）——必须大于现代人出生点的拾取半径
+	# 离船舱墙壁的距离（米）——从墙壁量，不是从中心量：船舱现在三米宽，从中心量 4.5 米，
+	# 南边那一堆离出生点只有一米半，现代人第一帧就捡走了，"开局物资要走过去拿"这一课就白教了。
+	# 对原来那个一米的舱体，这正好就是原来的 4.5 米。必须让每一堆都在出生点的拾取半径之外。
+	"opening_ring_gap": 4.0,
 }
 
 ## What the player has to go and fetch before anything can be built, totalled by
@@ -1049,7 +1100,10 @@ const REPAIR: Dictionary = {
 ## costs real seconds, and while he is at the bench nobody is holding the line.
 const CABIN: Dictionary = {
 	"interior_origin": Vector3(0.0, -200.0, 0.0),  # far below the map; never seen from outside
-	"enter_range": 2.5,                            # how close the Hero must be to step inside
+	# How close to its WALLS the Hero must be to step inside. It was 2.5 m from its middle,
+	# which for the old pod was 2 m from its walls -- and for a cabin three metres across
+	# would have been barely past its corners.
+	"enter_range": 2.0,
 	# The interior is the same world 200 metres down, so it inherits the level's sky --
 	# and the room has no ceiling, so the camera looked straight over the wall into open
 	# daylight. Being "indoors" fell apart the moment you stepped in.

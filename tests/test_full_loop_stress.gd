@@ -149,7 +149,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify GridManager Occupancy
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(0, 0)), "Core cell (0, 0) is occupied")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(0, -9)), "Nest cell (0, -9) is occupied")
-	assert_eq(main.grid_manager.occupied_cells.size(), 2, "Grid tracks exactly 2 occupied cells")
+	assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Grid tracks the cabin's tiles and the nest's")
 
 	# Verify HUD Initial State
 	var hud = main.hud
@@ -171,11 +171,11 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	game_state_node.resources["stone"] = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
 	await wait_frames(1)
 
-	var wall_node = main.place_building_at_cell("wall", Vector2i(1, 1))
-	assert_not_null(wall_node, "Wall placed successfully at (1, 1)")
+	var wall_node = main.place_building_at_cell("wall", FREE_TILE)
+	assert_not_null(wall_node, "Wall placed successfully at %s" % str(FREE_TILE))
 	expected_wood -= cost_of("wall")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the wall cost")
-	assert_true(main.grid_manager.is_cell_occupied(Vector2i(1, 1)), "Cell (1, 1) is occupied")
+	assert_true(main.grid_manager.is_cell_occupied(FREE_TILE), "Cell %s is occupied" % str(FREE_TILE))
 
 	# 2. Place LumberHut at (2, 2)
 	# A stake rather than a second turret: a turret is bought with wood and stone
@@ -392,8 +392,8 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify grid and container purging
 	assert_eq(main.buildings_container.get_child_count(), 1, "Buildings container contains only 1 building (Core)")
 	assert_eq(main.dinos_container.get_child_count(), 0, "Dinos container has 0 dinos")
-	assert_eq(main.grid_manager.occupied_cells.size(), 2, "Grid occupancy restored to 2")
-	assert_false(main.grid_manager.is_cell_occupied(Vector2i(1, 1)), "Old Wall cell vacated")
+	assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Grid occupancy restored to the level's own")
+	assert_false(main.grid_manager.is_cell_occupied(FREE_TILE), "Old Wall cell vacated")
 	assert_false(main.grid_manager.is_cell_occupied(Vector2i(2, 2)), "Old Lumber cell vacated")
 	assert_false(main.grid_manager.is_cell_occupied(Vector2i(1, -1)), "Old Tower cell vacated")
 	assert_false(main.grid_manager.is_cell_occupied(Vector2i(0, -8)), "Old Assault Tower cell vacated")
@@ -561,7 +561,7 @@ func test_04_rapid_alternating_victory_defeat_restart_stress() -> void:
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Phase is PLAN" % cycle)
 		assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Cycle %d: Core HP is 10.0" % cycle)
 		assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Cycle %d: Nest HP is 30.0" % cycle)
-		assert_eq(main.grid_manager.occupied_cells.size(), 2, "Cycle %d: Grid size is 2" % cycle)
+		assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Cycle %d: Grid holds only the level's own" % cycle)
 		assert_false(main.hud.is_game_over_visible(), "Cycle %d: HUD modal hidden" % cycle)
 
 # ==============================================================================

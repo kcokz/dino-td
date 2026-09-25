@@ -498,17 +498,11 @@ func _on_building_destroyed(building: Node) -> void:
 				occupied_cells[tile_of_fine] = survivors[0]
 		return
 
-	# Fast-path by cell_pos property
-	if "cell_pos" in building:
-		var c: Vector2i = building.cell_pos
-		if occupied_cells.get(c) == building:
-			vacate_cell(c)
-			return
-	# Fallback linear search
+	# Every tile it held: the cabin holds a block of them (Config.get_building_span), and
+	# freeing only the one on record left the rest claimed by a building that was gone.
 	for c in occupied_cells.keys():
 		if occupied_cells[c] == building:
 			vacate_cell(c)
-			break
 
 # ==============================================================================
 # 4. Grid Pathfinding & Navigation API (v0.1)

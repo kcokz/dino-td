@@ -131,7 +131,7 @@ func test_05_no_hill_sits_on_a_resource_node_or_seals_the_path() -> void:
 
 	# The nest has to be able to reach the cabin.
 	var from_pos: Vector3 = main.grid_manager.cell_to_world(config_node.MAP["default_nest_cell"])
-	var to_pos: Vector3 = main.grid_manager.cell_to_world(config_node.MAP["default_core_cell"])
+	var to_pos: Vector3 = cabin_at(main)
 	assert_true(main.nav_maps.is_reachable(from_pos, to_pos),
 		"A raid can still get from the nest to the cabin")
 

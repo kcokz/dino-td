@@ -307,14 +307,19 @@ func setup_initial_entities() -> void:
 	_init_level_coordinates()
 
 	# 1. Place CoreCampfire (Scene Marker -> Config Fallback -> Grid Snapping)
+	#
+	# The cabin takes a block of tiles (Config.get_building_span), running south and east
+	# from its cell, and stands in the middle of the block.
+	var cfg_core = _get_config()
+	var core_span: int = int(cfg_core.get_building_span("core")) if cfg_core and cfg_core.has_method("get_building_span") else 1
 	if current_core == null or not is_instance_valid(current_core):
 		var core_pos: Vector3
 		var core_marker = find_child("CoreSpawn", true, false)
 		if core_marker is Node3D and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
 			core_cell = grid_manager.world_to_cell(core_marker.global_position)
-			core_pos = grid_manager.cell_to_world(core_cell)
+			core_pos = _block_centre(core_cell, core_span)
 		elif grid_manager and grid_manager.has_method("cell_to_world"):
-			core_pos = grid_manager.cell_to_world(core_cell)
+			core_pos = _block_centre(core_cell, core_span)
 		else:
 			core_pos = Vector3(1.0, 0.0, 1.0)
 
@@ -326,7 +331,11 @@ func setup_initial_entities() -> void:
 		buildings_container.add_child(core)
 
 		if grid_manager and grid_manager.has_method("occupy_cell"):
-			grid_manager.occupy_cell(core_cell, core)
+			for dz in range(core_span):
+				for dx in range(core_span):
+					grid_manager.occupy_cell(core_cell + Vector2i(dx, dz), core)
+			# Its own cell is the one it was placed at, whichever it was registered in last.
+			core.cell_pos = core_cell
 		current_core = core
 
 	# 2. Place Nest (Scene Marker -> Config Fallback -> Grid Snapping)
@@ -357,11 +366,12 @@ func setup_initial_entities() -> void:
 		if current_nest.has_method("spawn_guards"):
 			current_nest.spawn_guards(guards_container if is_instance_valid(guards_container) else self)
 
-	# 3. Place Hero (Modern Person)
+	# 3. Place Hero (Modern Person), a step south of the cabin, by its door.
 	if hero == null or not is_instance_valid(hero):
 		var hero_pos = Vector3(1.0, 0.0, 3.0)
 		if current_core != null and is_instance_valid(current_core):
-			hero_pos = current_core.global_position + Vector3(0.0, 0.0, 2.0)
+			var tile_size: float = float(grid_manager.tile_size) if grid_manager and "tile_size" in grid_manager else 2.0
+			hero_pos = current_core.global_position + Vector3(0.0, 0.0, float(core_span) * tile_size * 0.5 + 1.0)
 		var hero_inst = hero_script.new()
 		hero_inst.name = "Hero"
 		hero_inst.position = hero_pos
@@ -380,6 +390,12 @@ func setup_initial_entities() -> void:
 				core_max_hp = float(cfg.BUILDINGS["core"].get("hp", 10.0))
 		var core_cur_hp: float = float(current_core.current_hp) if (current_core != null and is_instance_valid(current_core) and "current_hp" in current_core) else core_max_hp
 		eb.core_hp_changed.emit(core_cur_hp, core_max_hp)
+
+## The middle of the block of `span` x `span` tiles that runs south and east from `cell`.
+## For a one-tile building, the middle of its tile.
+func _block_centre(cell: Vector2i, span: int) -> Vector3:
+	var s: float = float(grid_manager.tile_size) if grid_manager and "tile_size" in grid_manager else 2.0
+	return grid_manager.cell_to_world_origin(cell) + Vector3(float(span) * s * 0.5, 0.0, float(span) * s * 0.5)
 
 func is_resource_at_cell(cell: Vector2i) -> bool:
 	if grid_manager and is_instance_valid(grid_manager) and grid_manager.has_method("is_resource_at_cell"):
@@ -905,7 +921,8 @@ func scatter_opening_stock() -> void:
 	if stock.is_empty():
 		return
 	var piles: int = maxi(1, int(cfg.DROPS.get("opening_piles", 1)))
-	var radius: float = float(cfg.DROPS.get("opening_ring_radius", 4.5))
+	# Measured from the cabin's walls: it is three metres across.
+	var radius: float = float(cfg.get_building_footprint("core")) * 0.5 + float(cfg.DROPS.get("opening_ring_gap", 4.0))
 	var centre: Vector3 = current_core.global_position
 
 	var slots: int = piles * stock.size()
@@ -973,11 +990,14 @@ func order_enter_cabin() -> bool:
 func _hero_is_at_cabin() -> bool:
 	if hero == null or not is_instance_valid(hero) or current_core == null or not is_instance_valid(current_core):
 		return false
-	var reach: float = 2.5
+	var reach: float = 2.0
 	var cfg = _get_config()
 	if cfg and "CABIN" in cfg:
 		reach = float(cfg.CABIN.get("enter_range", reach))
-	return hero.global_position.distance_to(current_core.global_position) <= reach
+	# From its walls, not its middle: it is three metres across.
+	if cfg and cfg.has_method("gap_to_building"):
+		return float(cfg.gap_to_building(hero.global_position, "core", current_core.global_position)) <= reach
+	return hero.global_position.distance_to(current_core.global_position) <= reach + 0.5
 
 func _check_pending_cabin_entry() -> void:
 	if not _pending_cabin_entry or in_cabin:

@@ -834,6 +834,185 @@ def water_landing(seed):
 
 
 # ==============================================================================
+# The cabin: the crew module of the ship that brought the Hero here
+# ==============================================================================
+
+HEAT_TILE = (0.12, 0.12, 0.13)
+HEAT_TILE_LIGHT = (0.20, 0.20, 0.21)
+SCORCH = (0.05, 0.05, 0.055)
+SOLAR = (0.07, 0.11, 0.24)
+SOLAR_LINE = (0.30, 0.34, 0.42)
+ASH = (0.30, 0.29, 0.27)
+
+
+def _module_ring(x, ry, rz, n, seg):
+    """One ring of the hull: a superellipse across (y, z), rounder than a box and
+    squarer than a tube -- the cross-section of a pressure module."""
+    pts = []
+    for k in range(seg):
+        t = math.tau * k / seg
+        c, s = math.cos(t), math.sin(t)
+        y = ry * math.copysign(abs(c) ** (2.0 / n), c)
+        z = rz * math.copysign(abs(s) ** (2.0 / n), s)
+        pts.append(Vector((x, y, z)))
+    return pts
+
+
+def cabin(seed):
+    """The crew module of the ship that crashed here, and the Hero's home: a pressure
+    hull lying on its side with its heat shield ploughed into a mound of earth, an orange
+    hazard band, portholes, a torn solar panel and a bent antenna on top, its hatch open
+    with the door dropped as a ramp -- towards -Y, the south side in the game -- and the
+    Hero's campfire ring by the door. It was a 1 m pod, the Hero's own height."""
+    rng = random.Random(seed)
+    b = Builder()
+    tilt = math.radians(7.0)       # the shield end dug in
+    roll = math.radians(4.0)
+    ry, rz, n, seg = 1.02, 1.02, 3.2, 28
+    lift = Vector((0.0, 0.0, 1.0))
+
+    def place(v):
+        # Pitch about Y (shield end down), roll about X, then up onto the ground.
+        x1 = v.x * math.cos(tilt) - v.z * math.sin(tilt)
+        z1 = v.x * math.sin(tilt) + v.z * math.cos(tilt)
+        y2 = v.y * math.cos(roll) - z1 * math.sin(roll)
+        z2 = v.y * math.sin(roll) + z1 * math.cos(roll)
+        return Vector((x1, y2, z2)) + lift
+
+    def scorch(base, amount):
+        return jitter(mix(base, SCORCH, amount), rng, 0.015)
+
+    # The hull, shield end (-X) to engine end (+X). The band nearest the engine is the
+    # orange one; the shield end is scorched from re-entry.
+    xs = [-1.02, -0.85, -0.45, 0.0, 0.45, 0.72, 0.84, 0.96, 1.16]
+    rings = [[place(p) for p in _module_ring(x, ry, rz, n, seg)] for x in xs]
+    for i in range(len(rings) - 1):
+        band = HAZARD if xs[i] >= 0.72 and xs[i + 1] <= 0.84 else METAL
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            cols = []
+            for xx in (xs[i], xs[i], xs[i + 1], xs[i + 1]):
+                burn = max(0.0, (-0.2 - xx)) * 0.9 + (0.25 if rng.random() < 0.06 else 0.0)
+                cols.append(scorch(band, min(0.8, burn)))
+            b.quad(rings[i][k], rings[i][k2], rings[i + 1][k2], rings[i + 1][k], *cols)
+    # The heat shield: a shallow dome of dark tiles over the -X end.
+    dome = []
+    for (x, s) in ((-1.02, 1.0), (-1.18, 0.86), (-1.28, 0.6), (-1.33, 0.3)):
+        dome.append([place(p) for p in _module_ring(x, ry * s, rz * s, n, seg)])
+    tip = place(Vector((-1.35, 0.0, 0.0)))
+    for j in range(len(dome) - 1):
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            c = HEAT_TILE_LIGHT if (k + j) % 2 == 0 else HEAT_TILE
+            b.quad(dome[j][k2], dome[j][k], dome[j + 1][k], dome[j + 1][k2], c, c, c, c)
+    for k in range(seg):
+        b.tri(dome[-1][(k + 1) % seg], dome[-1][k], tip, HEAT_TILE, HEAT_TILE, SCORCH)
+    # The engine end: a bulkhead and a stubby nozzle.
+    last = rings[-1]
+    hub = place(Vector((1.16, 0.0, 0.0)))
+    for k in range(seg):
+        b.tri(last[k], last[(k + 1) % seg], hub, METAL_DARK, METAL_DARK, GUNMETAL)
+    b.tube([place(Vector((1.16, 0.0, 0.05))), place(Vector((1.34, 0.0, 0.05))), place(Vector((1.42, 0.0, 0.05)))],
+           [0.36, 0.3, 0.42], [GUNMETAL, METAL_DARK, SCORCH], 12)
+
+    # The hatch, open, on the -Y side: a dark doorway, and the door dropped as a ramp.
+    door_x0, door_x1 = -0.35, 0.3
+    door_z0, door_z1 = -0.62, 0.62
+    face_y = -ry * 0.985
+    frame = [place(Vector((door_x0 - 0.07, face_y - 0.02, door_z0 - 0.07))),
+             place(Vector((door_x1 + 0.07, face_y - 0.02, door_z0 - 0.07))),
+             place(Vector((door_x1 + 0.07, face_y - 0.02, door_z1 + 0.07))),
+             place(Vector((door_x0 - 0.07, face_y - 0.02, door_z1 + 0.07)))]
+    b.quad(frame[0], frame[1], frame[2], frame[3], HAZARD, HAZARD, HAZARD, HAZARD)
+    hole = [place(Vector((door_x0, face_y - 0.04, door_z0))), place(Vector((door_x1, face_y - 0.04, door_z0))),
+            place(Vector((door_x1, face_y - 0.04, door_z1))), place(Vector((door_x0, face_y - 0.04, door_z1)))]
+    dark, dim = (0.02, 0.02, 0.025), (0.05, 0.05, 0.06)
+    b.quad(hole[0], hole[1], hole[2], hole[3], dark, dark, dim, dim)
+    # The door, hinged at the sill and lying down to the ground as a ramp.
+    sill_l, sill_r = hole[0], hole[1]
+    foot_l = Vector((sill_l.x - 0.05, sill_l.y - 0.78, 0.02))
+    foot_r = Vector((sill_r.x + 0.05, sill_r.y - 0.78, 0.02))
+    earthy = mix(METAL, SOIL_LIGHT, 0.3)
+    b.quad(sill_r, sill_l, foot_l, foot_r, METAL, METAL, earthy, earthy)
+    under = Vector((0.0, 0.0, -0.05))
+    b.quad(sill_l + under, sill_r + under, foot_r + under, foot_l + under,
+           METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
+    for t in (0.3, 0.55, 0.8):
+        a = sill_l.lerp(foot_l, t) + Vector((0.0, 0.0, 0.012))
+        c = sill_r.lerp(foot_r, t) + Vector((0.0, 0.0, 0.012))
+        b.quad(a, c, c + Vector((0.0, -0.05, 0.0)), a + Vector((0.0, -0.05, 0.0)), HAZARD, HAZARD, HAZARD, HAZARD)
+
+    # Portholes along both sides and one on the shoulder.
+    def porthole(x, angle):
+        c = Vector((x, math.cos(angle) * ry * 1.005, math.sin(angle) * rz * 1.005))
+        out = Vector((0.0, math.cos(angle), math.sin(angle)))
+        up = Vector((1.0, 0.0, 0.0))
+        side = out.cross(up)
+        glass = [place(c + (up * math.cos(math.tau * i / 8) + side * math.sin(math.tau * i / 8)) * 0.12 + out * 0.012)
+                 for i in range(8)]
+        rim = [place(c + (up * math.cos(math.tau * i / 8) + side * math.sin(math.tau * i / 8)) * 0.16)
+               for i in range(8)]
+        centre = place(c + out * 0.015)
+        for i in range(8):
+            i2 = (i + 1) % 8
+            b.quad(rim[i], rim[i2], glass[i2], glass[i], GUNMETAL, GUNMETAL, METAL_DARK, METAL_DARK)
+            b.tri(glass[i], glass[i2], centre, LENS, LENS, mix(LENS, (0.5, 0.6, 0.7), 0.35))
+    for x in (0.55, -0.72):
+        porthole(x, math.radians(-90))       # the door side
+    for x in (-0.5, 0.1, 0.55):
+        porthole(x, math.radians(90))        # the far side
+    porthole(-0.2, math.radians(35))
+
+    # A torn solar panel standing up off the top, and a bent antenna.
+    root = place(Vector((0.15, 0.25, rz * 0.97)))
+    b.tube([root, root + Vector((0.0, 0.1, 0.2))], [0.05, 0.04], [METAL_DARK, METAL_DARK], 6)
+    pa = root + Vector((-0.55, 0.05, 0.18))
+    pb = root + Vector((0.5, 0.2, 0.24))
+    pc = root + Vector((0.42, 0.7, 0.52))
+    pd = root + Vector((-0.2, 0.58, 0.55))      # a corner torn off: four sides, not a square
+    b.quad(pa, pb, pc, pd, SOLAR, SOLAR, SOLAR, SOLAR)
+    # Its back a hair behind the cells: the same plane twice fights itself for every pixel.
+    back = (pb - pa).cross(pd - pa).normalized() * -0.025
+    b.quad(pd + back, pc + back, pb + back, pa + back, METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
+    for t in (0.33, 0.66):
+        l0, l1 = pa.lerp(pd, t), pb.lerp(pc, t)
+        b.quad(l0, l1, l1 + Vector((0.0, 0.0, 0.015)), l0 + Vector((0.0, 0.0, 0.015)),
+               SOLAR_LINE, SOLAR_LINE, SOLAR_LINE, SOLAR_LINE)
+    mast = place(Vector((0.7, -0.2, rz * 0.95)))
+    b.tube([mast, mast + Vector((0.02, 0.0, 0.24)), mast + Vector((0.18, -0.05, 0.36))],
+           [0.035, 0.025, 0.018], [METAL_DARK, METAL, HAZARD], 6)
+
+    # Earth thrown up round the shield end where it ploughed in.
+    mound_c = Vector((-1.05, 0.0, 0.0))
+    ring_n = 16
+    outer = [mound_c + Vector((math.cos(math.tau * i / ring_n) * rng.uniform(0.85, 1.05) * 0.62,
+                               math.sin(math.tau * i / ring_n) * rng.uniform(0.9, 1.05) * 1.12, 0.0))
+             for i in range(ring_n)]
+    inner = [mound_c + Vector((math.cos(math.tau * i / ring_n) * 0.38, math.sin(math.tau * i / ring_n) * 0.72,
+                               rng.uniform(0.3, 0.46))) for i in range(ring_n)]
+    peak = mound_c + Vector((0.05, 0.0, 0.58))
+    for i in range(ring_n):
+        i2 = (i + 1) % ring_n
+        b.quad(outer[i], outer[i2], inner[i2], inner[i], SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
+        b.tri(inner[i], inner[i2], peak, SOIL_LIGHT, SOIL_LIGHT, mix(SOIL_LIGHT, MOSS, 0.3))
+
+    # The Hero's fire by the door: a ring of stones, charred logs, ash.
+    fire = Vector((0.95, -1.22, 0.0))
+    for i in range(7):
+        a = math.tau * i / 7 + rng.uniform(-0.15, 0.15)
+        _boulder(b, fire + Vector((math.cos(a) * 0.3, math.sin(a) * 0.3, -0.02)), 0.075, rng)
+    ash = [fire + Vector((math.cos(math.tau * i / 10) * 0.24, math.sin(math.tau * i / 10) * 0.24, 0.015))
+           for i in range(10)]
+    for i in range(10):
+        b.tri(ash[i], ash[(i + 1) % 10], fire + Vector((0.0, 0.0, 0.03)), ASH, ASH, mix(ASH, CHAR, 0.5))
+    for a in (0.2, 2.3, 4.2):
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        b.tube([fire - d * 0.2 + Vector((0.0, 0.0, 0.05)), fire + d * 0.22 + Vector((0.0, 0.0, 0.1))],
+               [0.035, 0.03], [CHAR, mix(CHAR, BARK, 0.4)], 6)
+    return b
+
+
+# ==============================================================================
 # Cliffs: columnar basalt, for the valley walls
 # ==============================================================================
 
@@ -917,6 +1096,7 @@ PROPS = {
     "drop_food": (lambda s: drop_meat(s), [11]),
     "drop_water": (lambda s: drop_water(s), [13]),
     "water_landing": (lambda s: water_landing(s), [17]),
+    "cabin": (lambda s: cabin(s), [19]),
 }
 
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.

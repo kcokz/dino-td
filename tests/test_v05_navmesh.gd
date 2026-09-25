@@ -45,7 +45,12 @@ func _level() -> Node:
 	return main
 
 func _core_of(main: Node) -> Vector3:
-	return main.grid_manager.cell_to_world(config_node.MAP["default_core_cell"])
+	return cabin_at(main)
+
+## How far from the cabin's middle a route to it can end: its walls, the walker's width,
+## and a little. The old 1.0 and 1.5 were this for a 1 m pod.
+func _at_the_cabin(slack: float) -> float:
+	return float(config_node.get_building_footprint("core")) * 0.5 + slack
 
 ## Stakes all the way round `centre`, placed the way a click places them.
 func _ring_around(main: Node, centre: Vector3, radius: float) -> int:
@@ -378,7 +383,7 @@ func test_14_his_own_fence_is_not_something_to_walk_round() -> void:
 
 	var his: PackedVector3Array = main.nav_maps.path(outside, core, true)
 	assert_gt(his.size(), 1, "He has a way in")
-	assert_lt(his[his.size() - 1].distance_to(core), 1.0, "That actually gets there")
+	assert_lt(his[his.size() - 1].distance_to(core), _at_the_cabin(0.5) * 1.42, "That actually gets there")
 	assert_false(main.nav_maps.is_reachable(outside, core), "And a raid has none")
 
 # ==============================================================================
@@ -424,11 +429,11 @@ func test_15_a_raid_walks_past_a_turret_nobody_has_built() -> void:
 	var started: float = dino.global_position.distance_to(core)
 	for step in range(600):
 		dino.advance_towards_waypoint(1.0 / 60.0)
-		if dino.global_position.distance_to(core) < 2.0:
+		if dino.global_position.distance_to(core) < _at_the_cabin(1.5):
 			break
 		await wait_physics_frames(1)
 
-	assert_lt(dino.global_position.distance_to(core), 2.0,
+	assert_lt(dino.global_position.distance_to(core), _at_the_cabin(1.5),
 		"It walks past the order and reaches the cabin, %.2fm from where it started" % started)
 	assert_eq(ordered.current_hp, blueprint_hp, "Without taking a bite out of a plan")
 
@@ -456,21 +461,24 @@ func test_16_a_fence_that_does_not_enclose_anything_seals_nothing() -> void:
 	if main.hero:
 		main.hero.global_position = core + Vector3(0.0, 0.0, 16.0)
 	var d: int = int(config_node.get_cell_divisions("wall"))
-	var centre: Vector2i = gm.world_to_fine_cell(core, d)
 
-	# Pressed against the cabin on two sides, and nothing at all on the other two.
+	# Pressed against the cabin on two sides, and nothing at all on the other two: a row of
+	# stakes along the tiles just outside its block on the west, and along the north.
+	var fine_step: float = float(config_node.TILE_SIZE) / float(d)
+	var lo: Vector2i = gm.world_to_fine_cell(gm.cell_to_world_origin(config_node.MAP["default_core_cell"])
+		+ Vector3(fine_step * 0.5, 0.0, fine_step * 0.5), d)
+	var along: int = int(round(float(config_node.get_building_span("core")) * float(config_node.TILE_SIZE) / fine_step))
+	var fine_cells: Array[Vector2i] = [lo + Vector2i(-1, -1)]
+	for i in range(along):
+		fine_cells.append(lo + Vector2i(-1, i))
+		fine_cells.append(lo + Vector2i(i, -1))
 	var placed: int = 0
-	for dx in range(-2, 3):
-		for dz in range(-2, 3):
-			if absi(dx) != 2 and absi(dz) != 2:
-				continue
-			if dx > 0 or dz > 0:
-				continue
-			var snap: Vector3 = gm.fine_cell_to_world(centre + Vector2i(dx, dz), d)
-			var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
-			if b != null:
-				b.complete_construction()
-				placed += 1
+	for fine in fine_cells:
+		var snap: Vector3 = gm.fine_cell_to_world(fine, d)
+		var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
+		if b != null:
+			b.complete_construction()
+			placed += 1
 	assert_gt(placed, 2, "Some stakes went up beside the cabin")
 	await wait_frames(8)
 
@@ -491,10 +499,10 @@ func test_16_a_fence_that_does_not_enclose_anything_seals_nothing() -> void:
 
 	for step in range(600):
 		dino.advance_towards_waypoint(1.0 / 60.0)
-		if dino.global_position.distance_to(core) < 1.5:
+		if dino.global_position.distance_to(core) < _at_the_cabin(1.0) * 1.42:
 			break
 		await wait_physics_frames(1)
-	assert_lt(dino.global_position.distance_to(core), 1.5, "It walks round to the cabin")
+	assert_lt(dino.global_position.distance_to(core), _at_the_cabin(1.0) * 1.42, "It walks round to the cabin")
 	assert_false(_is_wall(dino.current_target), "Rather than stopping to eat the fence")
 
 func test_17_and_a_route_that_stops_somewhere_else_still_means_no() -> void:

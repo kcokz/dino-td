@@ -135,7 +135,8 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	var types = ["wall", "tower"]
 
 	for i in range(12):
-		var cell = Vector2i((i % 4) + 1, (i / 4) + 1)
+		# East of the cabin's block, which is (0, 0) to (1, 1).
+		var cell = Vector2i((i % 4) + 3, (i / 4) + 1)
 		building_cells.append(cell)
 		var b_type = types[i % types.size()]
 		var b: Node = null
@@ -150,7 +151,7 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 
 	# Total buildings: 12 player + 1 Core = 13
 	assert_eq(buildings_container.get_child_count(), 13, "Buildings container has 13 nodes (12 player + 1 Core)")
-	assert_eq(grid_mgr.occupied_cells.size(), 14, "Grid tracks 14 occupied cells (12 player + Core + Nest)")
+	assert_eq(grid_mgr.occupied_cells.size(), 12 + level_tiles_at_start(), "Grid tracks 12 player tiles, the cabin's and the nest's")
 
 	# 2. Spawn 12 active dinos in Dinos container
 	var tracked_dinos: Array[Node] = []
@@ -209,7 +210,7 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	assert_false(bool(game_state_node.get("is_game_over")), "GameState.is_game_over is false")
 
 	# 8. Verify GridManager occupancy accurately restored
-	assert_eq(grid_mgr.occupied_cells.size(), 2, "Grid occupancy restored to exactly 2 cells")
+	assert_eq(grid_mgr.occupied_cells.size(), level_tiles_at_start(), "Grid occupancy restored to the level's own tiles")
 	assert_true(grid_mgr.is_cell_occupied(Vector2i(0, 0)), "Core cell (0, 0) is occupied")
 	assert_true(grid_mgr.is_cell_occupied(Vector2i(0, -9)), "Nest cell (0, -9) is occupied")
 	for cell in building_cells:
@@ -315,9 +316,9 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 
 		# 2. Place dirty buildings on grid
 		var wall = wall_script.new()
-		wall.setup("wall", Vector2i(1, 1))
+		wall.setup("wall", FREE_TILE)
 		buildings_container.add_child(wall)
-		grid_mgr.occupy_cell(Vector2i(1, 1), wall)
+		grid_mgr.occupy_cell(FREE_TILE, wall)
 
 		var tower = tower_script.new()
 		tower.setup("tower", Vector2i(-1, 2))
@@ -340,12 +341,12 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 		await wait_frames(1)
 
 		# 6. Verify Grid restoration at every cycle
-		assert_eq(grid_mgr.occupied_cells.size(), 2, "Cycle %d: Grid must have exactly 2 occupied cells" % cycle)
+		assert_eq(grid_mgr.occupied_cells.size(), level_tiles_at_start(), "Cycle %d: Grid holds only the level's own tiles" % cycle)
 		assert_true(grid_mgr.is_cell_occupied(Vector2i(0, 0)), "Cycle %d: Core cell (0, 0) occupied" % cycle)
 		assert_true(grid_mgr.is_cell_occupied(Vector2i(0, -9)), "Cycle %d: Nest cell (0, -9) occupied" % cycle)
 		assert_eq(grid_mgr.get_building_at(Vector2i(0, 0)), main.current_core, "Cycle %d: Core is registered at (0, 0)" % cycle)
 		assert_eq(grid_mgr.get_building_at(Vector2i(0, -9)), main.current_nest, "Cycle %d: Nest is registered at (0, -9)" % cycle)
-		assert_false(grid_mgr.is_cell_occupied(Vector2i(1, 1)), "Cycle %d: Dirty cell (1, 1) vacated" % cycle)
+		assert_false(grid_mgr.is_cell_occupied(FREE_TILE), "Cycle %d: Dirty cell vacated" % cycle)
 		assert_false(grid_mgr.is_cell_occupied(Vector2i(-1, 2)), "Cycle %d: Dirty cell (-1, 2) vacated" % cycle)
 
 		# 7. Verify zero state drift
@@ -594,5 +595,5 @@ func test_challenge_14_hud_restart_button_triggers_main_restart_lifecycle() -> v
 	assert_false(bool(game_state_node.get("is_game_over")), "Game over cleared")
 	assert_false(main.hud.is_game_over_visible(), "HUD GameOver panel hidden")
 	assert_eq(int(game_state_node.current_phase), 0, "Phase restored to PLAN")
-	assert_eq(main.grid_manager.occupied_cells.size(), 2, "Grid occupancy restored to 2")
+	assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Grid occupancy restored to the level's own tiles")
 	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP restored to 10.0")
