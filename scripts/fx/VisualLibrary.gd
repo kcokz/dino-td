@@ -44,38 +44,33 @@ static func make(key: String, variant: String = "") -> Node3D:
 	var holder := Node3D.new()
 	holder.name = "Body"
 
-	var scene_path: String = declared_scene(key)
+	var packed: PackedScene = scene_at(declared_scene(key))
 	# A variant with art of its own -- a felled tree's stump. Fitted with the FULL art's
 	# factor rather than to the box on its own: it is the stump of that tree, and a
 	# sixty-centimetre stump fitted to a tree-sized box would be stretched to a tree.
-	var variant_path: String = declared_variant_scene(key, variant)
-	if variant_path != "" and ResourceLoader.exists(variant_path) and scene_path != "" 			and ResourceLoader.exists(scene_path):
-		var full_packed = load(scene_path)
-		var var_packed = load(variant_path)
-		if full_packed is PackedScene and var_packed is PackedScene:
-			var full: Node = (full_packed as PackedScene).instantiate()
-			var factor: float = fit_factor(full as Node3D, declared_size(key), declared_fit(key)) if full is Node3D else 1.0
-			full.free()
-			var piece: Node = (var_packed as PackedScene).instantiate()
-			if piece is Node3D:
-				holder.add_child(piece)
-				place(piece as Node3D, factor, declared_anchor(key))
-				_dress(piece, key)
-				return holder
-			piece.free()
+	var var_packed: PackedScene = scene_at(declared_variant_scene(key, variant))
+	if packed != null and var_packed != null:
+		var full: Node = packed.instantiate()
+		var factor: float = fit_factor(full as Node3D, declared_size(key), declared_fit(key)) if full is Node3D else 1.0
+		full.free()
+		var piece: Node = var_packed.instantiate()
+		if piece is Node3D:
+			holder.add_child(piece)
+			place(piece as Node3D, factor, declared_anchor(key))
+			_dress(piece, key)
+			return holder
+		piece.free()
 
-	if scene_path != "" and ResourceLoader.exists(scene_path):
-		var packed = load(scene_path)
-		if packed is PackedScene:
-			var art: Node = packed.instantiate()
-			if art is Node3D:
-				holder.add_child(art)
-				fit(art as Node3D, declared_size(key), declared_anchor(key), declared_fit(key))
-				_dress(art, key)
-				return holder
-			# A scene that is not 3D is a mistake worth seeing rather than hiding, but
-			# not worth crashing the game over: fall through to the placeholder.
-			art.free()
+	if packed != null:
+		var art: Node = packed.instantiate()
+		if art is Node3D:
+			holder.add_child(art)
+			fit(art as Node3D, declared_size(key), declared_anchor(key), declared_fit(key))
+			_dress(art, key)
+			return holder
+		# A scene that is not 3D is a mistake worth seeing rather than hiding, but
+		# not worth crashing the game over: fall through to the placeholder.
+		art.free()
 
 	_build_placeholder(holder, key, variant)
 	return holder
@@ -83,8 +78,33 @@ static func make(key: String, variant: String = "") -> Node3D:
 ## Whether `key` is being drawn by real art rather than by a placeholder. The build
 ## preview and the tests ask this so neither has to guess.
 static func has_art(key: String) -> bool:
-	var path: String = declared_scene(key)
-	return path != "" and ResourceLoader.exists(path)
+	return scene_at(declared_scene(key)) != null
+
+## The scene at `path`, loaded once and kept for the life of the game -- or null when
+## there is no scene there.
+##
+## The engine keeps a loaded resource only while something holds it, and nothing held a
+## model's scene once its instance was made: every dinosaur spawned in a wave, and every
+## level built, read its model from disk again. On the drive this project lives on -- a
+## WSL share, where opening a file costs some 20 ms however small it is -- the Hero, one
+## scene and thirteen textures, was a third of a second per level, and every dinosaur
+## spawned was 20 ms -- more than a frame -- spent reading a file already in memory. The
+## models are few and a game draws every one of them sooner or later, so keeping them
+## costs nothing worth counting.
+static var _scenes: Dictionary = {}
+
+static func scene_at(path: String) -> PackedScene:
+	if path == "":
+		return null
+	var kept: PackedScene = _scenes.get(path)
+	if kept != null:
+		return kept
+	if not ResourceLoader.exists(path):
+		return null
+	var packed := load(path) as PackedScene
+	if packed != null:
+		_scenes[path] = packed
+	return packed
 
 ## Scales and shifts `art` so that it occupies exactly `size` metres and sits on the
 ## ground the way `anchor` says.

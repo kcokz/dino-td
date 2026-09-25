@@ -47,11 +47,8 @@ static func centre_of(spec: Dictionary) -> Vector3:
 	return Vector3(-sin(bearing), 0.0, -cos(bearing)) * float(spec.get("distance", 36.0))
 
 func _place_herd(spec: Dictionary) -> void:
-	var path: String = String(spec.get("scene", ""))
-	if path.is_empty() or not ResourceLoader.exists(path):
-		return
-	var packed = load(path)
-	if not (packed is PackedScene):
+	var packed: PackedScene = VisualLibrary.scene_at(String(spec.get("scene", "")))
+	if packed == null:
 		return
 	var centre: Vector3 = centre_of(spec)
 	var spread: float = float(spec.get("spread", 5.0))
@@ -60,7 +57,7 @@ func _place_herd(spec: Dictionary) -> void:
 		var animal := Node3D.new()
 		animal.name = "%s_%d" % [String(spec.get("species", "animal")), i]
 		add_child(animal)
-		var art: Node3D = (packed as PackedScene).instantiate()
+		var art: Node3D = packed.instantiate()
 		animal.add_child(art)
 		# Sized by LENGTH, on one scale for the whole valley: the in-game T-Rex is the ruler,
 		# and a sauropod is twice its length whatever its pose makes its height.

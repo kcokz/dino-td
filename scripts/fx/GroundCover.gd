@@ -324,12 +324,10 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 ## and the same file is what a resource node shows up close and what the meadow is made
 ## of from far away. Null if the file is missing, so a fixture without the art still runs.
 static func flora_mesh(path: String) -> Mesh:
-	if not ResourceLoader.exists(path):
+	var packed: PackedScene = VisualLibrary.scene_at(path)
+	if packed == null:
 		return null
-	var scene = load(path)
-	if not (scene is PackedScene):
-		return null
-	var inst: Node = (scene as PackedScene).instantiate()
+	var inst: Node = packed.instantiate()
 	var found: Mesh = null
 	var stack: Array = [inst]
 	while not stack.is_empty() and found == null:

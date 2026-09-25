@@ -645,10 +645,9 @@ func _face_the_river(node: Node3D, at: Vector3) -> void:
 func _rock_formations(cfg) -> Array:
 	var out: Array = []
 	for pth in cfg.MAP.get("hill_rocks", []):
-		if ResourceLoader.exists(String(pth)):
-			var packed = load(String(pth))
-			if packed is PackedScene:
-				out.append(packed)
+		var packed: PackedScene = VisualLibrary.scene_at(String(pth))
+		if packed != null:
+			out.append(packed)
 	return out
 
 ## The ground's surface: vertex colour for the broad strokes, and a triplanar noise

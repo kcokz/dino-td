@@ -349,3 +349,20 @@ func test_14_a_depleted_node_is_asked_for_as_a_variant() -> void:
 	assert_not_null(cut_mesh, "The stump has a mesh")
 	assert_ne(cut_mesh, standing_mesh,
 		"And it is a different one, so the variant really was asked for")
+
+# ==============================================================================
+# 5. Read from disk once
+# ==============================================================================
+
+func test_15_a_model_is_read_from_disk_once() -> void:
+	# The engine keeps a loaded resource only while something holds it, and nothing held a
+	# model's scene once its instance was made: every dinosaur spawned read its model from
+	# disk again -- 20 ms on the drive this project lives on, more than a frame, for a file
+	# already in memory -- and every level built read them all.
+	var path: String = VisualLibrary.declared_scene("dino/raptor")
+	assert_true(ResourceLoader.exists(path), "The raptor has a model to read")
+	var body: Node3D = VisualLibrary.make("dino/raptor")
+	assert_true(VisualLibrary.has_art("dino/raptor"), "And is drawn with it")
+	body.free()
+	# No raptor anywhere now.
+	assert_true(ResourceLoader.has_cached(path), "Its model is still in memory for the next one")
