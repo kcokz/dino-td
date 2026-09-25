@@ -57,7 +57,7 @@ func test_01_hero_has_declared_scene_and_file_exists() -> void:
 	var entry: Dictionary = visuals["hero"]
 	var scene_path: String = String(entry.get("scene", ""))
 	assert_false(scene_path.is_empty(), "Hero scene path must not be empty")
-	assert_eq(scene_path, "res://assets/models/quaternius/worker.glb", "Hero scene path points to the worker")
+	assert_eq(scene_path, "res://assets/models/quaternius/hero.glb", "Hero scene path points to the Hero (tools/build_hero.py)")
 	assert_true(FileAccess.file_exists(scene_path), "File exists on disk: %s" % scene_path)
 	assert_true(VisualLibrary.has_art("hero"), "VisualLibrary recognizes hero has real art")
 

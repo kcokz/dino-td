@@ -96,6 +96,30 @@ func test_05_the_herds_are_on_the_tyrannosaurs_scale() -> void:
 		assert_between(lengths[species] / ruler, 0.6, 0.95,
 			"A %s is most of a tyrannosaur's length (%.2f)" % [species, lengths[species] / ruler])
 
+func test_06_the_hero_is_built_like_a_person_not_a_cartoon() -> void:
+	# Reported as "人不应该带个安全帽，显得太卡通了，应该就是写实风格的人物形象": the worker
+	# was a big head on a short body -- its head joint two thirds of the way up it, the head
+	# a third of the whole figure. A person's head is about an eighth of their height, the
+	# joint nine tenths of the way up.
+	var body: Node3D = VisualLibrary.make("hero")
+	_cleanup_nodes.append(body)
+	tree.root.add_child(body)
+	await wait_frames(1)
+	var drawn: AABB = VisualLibrary.visual_bounds(body)
+	var head_y: float = -INF
+	for sk in body.find_children("*", "Skeleton3D", true, false):
+		var s := sk as Skeleton3D
+		var i: int = s.find_bone("Head")
+		if i >= 0:
+			head_y = (s.global_transform * s.get_bone_global_rest(i)).origin.y
+	assert_gt(head_y, -INF, "He has a head bone called Head")
+	var up: float = (head_y - drawn.position.y) / maxf(0.001, drawn.size.y)
+	assert_gte(up, 0.82, "His head is a person's size for his height (joint %.2f of the way up)" % up)
+	# And bare-headed.
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		var n: String = String(mi.name).to_lower()
+		assert_false(n.contains("hat") or n.contains("helmet") or n.contains("cap"), "%s is not headgear" % mi.name)
+
 func assert_between(value: float, lo: float, hi: float, message: String) -> void:
 	assert_gte(value, lo, message)
 	assert_lte(value, hi, message)

@@ -896,11 +896,13 @@ const RESOURCE_NODES: Dictionary = {
 ## the art are both built from it, which is what stops art from quietly growing wider
 ## than the thing that blocks a raptor.
 const VISUALS: Dictionary = {
-	# Quaternius' worker (CC0, tools/convert_quaternius.py): a modern man in a hard hat,
-	# which is what the Hero is. Fitted by HEIGHT, because he is rigged in a T-pose -- his
-	# rest shape is as wide as he is tall, arms straight out -- and a box fit sized him by
-	# that span, to half his height. In play he is always in a clip, arms down.
-	"hero":                 {"scene": "res://assets/models/quaternius/worker.glb", "fit": "height",
+	# A man of ordinary build in a plain shirt, trousers and shoes, bare-headed
+	# (tools/build_hero.py, from Quaternius's CC0 character kits). He was the kits' cartoon
+	# worker in a yellow hard hat -- a big head on a short body, reported as "太卡通了".
+	# Fitted by HEIGHT, because he is rigged in a T-pose -- his rest shape is as wide as he
+	# is tall, arms straight out -- and a box fit sized him by that span. In play he is
+	# always in a clip, arms down.
+	"hero":                 {"scene": "res://assets/models/quaternius/hero.glb", "fit": "height",
 		"placeholder": "hero", "anchor": "feet", "color": "caveman"},
 	# Every dinosaur gets its own row even while they share a placeholder: the row is
 	# where its model will go, and they will not share that.

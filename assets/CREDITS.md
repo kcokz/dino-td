@@ -83,6 +83,17 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Source File (unchanged)**: `assets/source/quaternius/Worker_Male.gltf`
 - **Converted By**: `tools/convert_quaternius.py` -- as above, plus: a stray unparented icosphere removed; clips mapped onto the Hero's work (Punch -> attack, SwordSlash -> harvest, PickUp -> build); and the skin recoloured from the authored near-black (0.013 linear), which read in the game as a featureless black head with white eyes, to a warm mid tone
 - **Usage**: `hero`, fitted by height (he is rigged in a T-pose)
+- **Superseded**: 2026-09-25 by the Hero below: the pack is built to cartoon proportions (a big head on a short body) and he wore a hard hat -- reported as too cartoonish. The file and its conversion stay; nothing loads it.
+
+### Quaternius Universal Base Characters, Modular Character Outfits -- Fantasy, Universal Animation Library -- the Hero (`assets/models/quaternius/hero.glb`)
+- **Asset Names**: Universal Base Characters (Standard), Modular Character Outfits -- Fantasy (Standard, v2.0), Universal Animation Library (Standard) -- characters, outfits and animations built to real human proportions on one humanoid rig
+- **Source URLs**: https://quaternius.itch.io/universal-base-characters , https://quaternius.itch.io/modular-character-outfits-fantasy , https://quaternius.itch.io/universal-animation-library (the free Standard downloads)
+- **Author**: Quaternius
+- **License**: CC0 1.0 Universal (Public Domain Dedication); each kit's own licence file is kept in `assets/source/quaternius/ubc/`
+- **Date Added**: 2026-09-25, downloaded with the user's permission (`Universal Base Characters[Standard].zip` 122 MB, `Modular Character Outfits - Fantasy[Standard].zip` 280 MB, `Universal Animation Library[Standard].zip` 15 MB)
+- **Source Files**: `assets/source/quaternius/ubc/` -- `Male_Peasant.gltf` (the Regular male body in a plain shirt, trousers and shoes), `Superhero_Male_FullBody.gltf` (for its head, eyes and brows: the only head in the free kit), `Hair_SimpleParted.gltf`, `UAL1_Standard.glb`; the models unchanged, their textures reduced from 4096 to 1024 pixels
+- **Built By**: `tools/build_hero.py` -- the head cut from the Superhero body at the neck and put on the Regular body (the kits' spine, neck and head bones stand in exactly the same places), hair added, eight clips taken from the animation library under the names the game plays (Idle_Loop, Walk_Loop, Jog_Fwd_Loop, Punch_Jab -> attack, Interact -> harvest, Fixing_Kneeling -> build, Death01, Hit_Chest), the clothes toned to outdoor colours and the grey hair dyed dark brown
+- **Usage**: `hero`, fitted by height (he is rigged in a T-pose)
 
 ### Jurassic Flora (`assets/models/flora/*.glb`)
 - **Asset Name**: Low-Poly Mesozoic Plants -- tree ferns, cycads, horsetails, ground ferns, monkey-puzzle araucaria, a felled tree-fern stump
