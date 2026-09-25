@@ -52,7 +52,7 @@ func test_01_no_volcano_shows_through_the_valley() -> void:
 	var t: Dictionary = config_node.TERRAIN
 	var field_half: float = float(t["field_half"])
 	var outer: float = float(t["outskirts_half"])
-	var wobble: float = float(t["rim_noise"])    # how much lower the ground can be than its smooth shape
+	var ground := TerrainBuilder.ground_noise(config_node)    # the ground as drawn
 	var sampled: int = 0
 	for spec in _cones():
 		var poked: int = 0
@@ -63,20 +63,35 @@ func test_01_no_volcano_shows_through_the_valley() -> void:
 				var cone: float = Volcano.world_height_at(spec, config_node, x, z)
 				if cone > -INF:
 					sampled += 1
-					if cone > TerrainBuilder.ground_height(x, z, field_half, outer, t, null) - wobble:
+					if cone > TerrainBuilder.ground_height(x, z, field_half, outer, t, ground):
 						poked += 1
 				z += 4.0
 			x += 4.0
 		assert_eq(poked, 0, "Volcano %d stays under the valley's ground wherever the valley has ground" % int(spec["seed"]))
 	assert_gt(sampled, 0, "And at least one foot does reach in under the valley wall, so this checked something")
 
-func test_02_every_volcano_stands_well_above_the_rim() -> void:
-	# On the skyline, not behind it: the rim of the valley is what the view looks over.
+func test_02_every_volcano_stands_clear_above_the_mountains() -> void:
+	# On the skyline, not behind it: seen from over the field at the height the camera
+	# looks from, each summit stands clear above the highest ground on the way to it.
 	var t: Dictionary = config_node.TERRAIN
-	var rim_top: float = float(t["rim_rise"]) + float(t["rim_noise"])
+	var field_half: float = float(t["field_half"])
+	var outer: float = float(t["outskirts_half"])
+	var ground := TerrainBuilder.ground_noise(config_node)
+	var eye_height: float = 18.0
 	for spec in _cones():
-		var lip: float = Volcano.centre_of(spec, config_node).y + _mean_height(spec, float(spec["crater"]))
-		assert_gt(lip, rim_top * 2.0, "Volcano %d stands well clear of the valley rim" % int(spec["seed"]))
+		var c: Vector3 = Volcano.centre_of(spec, config_node)
+		var flat := Vector2(c.x, c.z)
+		var dist: float = flat.length()
+		var lip: float = c.y + _mean_height(spec, float(spec["crater"]))
+		var summit: float = rad_to_deg(atan2(lip - eye_height, dist))
+		var skyline: float = -90.0
+		var r: float = field_half
+		while r < dist:
+			var p: Vector2 = flat / dist * r
+			if absf(p.x) <= outer and absf(p.y) <= outer:
+				skyline = maxf(skyline, rad_to_deg(atan2(TerrainBuilder.ground_height(p.x, p.y, field_half, outer, t, ground) - eye_height, r)))
+			r += 1.0
+		assert_gt(summit - skyline, 3.0, "Volcano %d stands clear above the mountains (by %.1f degrees)" % [int(spec["seed"]), summit - skyline])
 
 func test_03_the_camera_can_see_as_far_as_the_volcanoes() -> void:
 	var main = _level()

@@ -1207,12 +1207,16 @@ static func get_dino_name(type_id: String) -> String:
 ## every placeholder box put together, and no amount of fog fixes a world that visibly
 ## stops.
 ##
-## So the level is a valley floor. `field_half` is flat and exactly level, because
+## So the level stands in open country. `field_half` is flat and exactly level, because
 ## everything in this game lives on a grid at y = 0 and ground that undulated under the
-## buildings would stand them in the air or bury them. Past it the land climbs away and
-## keeps going well beyond anything the camera can frame, which gives the boundary a
-## reason to exist in the world rather than hiding it: you are at the bottom of a
-## valley, and the way out is up.
+## buildings would stand them in the air or bury them. Past it a plain runs on towards the
+## horizon, and far out a ring of mountains -- softened by the haze -- stands in front of
+## the end of the ground. The edge of what can be played on is marked the way land marks
+## it: the river, the forest, the rocks.
+##
+## It was a bowl, the ground climbing a few metres past the field and curling up all round
+## it -- reported as "地图到边界还是卷曲上翘的". Level ground and separate mountains on the
+## skyline is what strategy games do.
 const TERRAIN: Dictionary = {
 	# Half the square the game is played on: the ground collider, and what the camera and
 	# the scenery are measured from. The nest sits at z = -9 cells = -18m, so 22 leaves
@@ -1224,16 +1228,23 @@ const TERRAIN: Dictionary = {
 	# up under anything built there.
 	"flat_apron": 3.0,
 	"flat_corner": 5.0,
-	# Total ground extent. Far past what the fixed camera can frame, which is the whole
-	# point: there is no edge to find.
+	# Total ground extent. Far past what the fixed camera can frame, and behind the
+	# mountains, which stand in front of it: there is no edge to find.
 	"outskirts_half": 110.0,
-	# The climb happens over `rim_span` metres past the field, NOT over the whole extent.
-	# It has to finish inside what the camera can see or the valley wall never appears:
-	# at the first attempt the rise was spread over 88 metres, so by the time it was tall
-	# enough to notice it was behind the fog, and the horizon was just grey.
-	"rim_span": 38.0,
-	"rim_rise": 18.0,          # how high the surrounding land stands by the top of the climb
-	"rim_noise": 4.5,          # broken up, so the valley is not a perfect bowl
+	# The plain: level, with a slow swell in it (metres either way) so it is land rather
+	# than a floor, eased in over `plain_blend` metres past the flat.
+	"plain_swell": 0.8,
+	"plain_blend": 12.0,
+	# The mountains: a ring round the whole valley, from `mountains_from` metres out (a
+	# long way past the field; the haze starts at 45) climbing `mountains_rise` metres
+	# over `mountains_span`, the crest broken into peaks and saddles (`mountains_ridge`,
+	# as a share of the height either way) and the faces roughened (`mountains_rock`).
+	# Kept low enough that the volcanoes stand clear above them from the field.
+	"mountains_from": 72.0,
+	"mountains_span": 26.0,
+	"mountains_rise": 18.0,
+	"mountains_ridge": 0.35,
+	"mountains_rock": 2.0,
 	"quad_size": 4.0,          # ground mesh resolution in metres
 	"noise_seed": 20260917,    # fixed, so the same landscape comes back every launch
 	"noise_frequency": 0.018,
@@ -1243,9 +1254,8 @@ const TERRAIN: Dictionary = {
 	"hill_subdivisions": 6,
 	"hill_noise": 0.12,
 	# Ground colour is blended by slope: flat reads as grass, steep as rock. Without it
-	# the rising land is exactly the same green as the field and the whole view reads as
-	# an endless lawn instead of a valley. `rock_slope` is the gradient at which the
-	# blend reaches full rock.
+	# the mountains are exactly the same green as the field and the whole view reads as
+	# an endless lawn. `rock_slope` is the gradient at which the blend reaches full rock.
 	"rock_slope": 0.55,
 	"ground_mottle": 0.07,     # slow variation so the floor is not one flat wash
 	# Surface detail. The mottle above is a 50-metre wavelength -- it stops the ground
@@ -1502,12 +1512,12 @@ const GROUND_COVER: Dictionary = {
 	"flora_edge_trees": ["res://assets/models/flora/tree_fern_a.glb",
 		"res://assets/models/flora/tree_fern_b.glb", "res://assets/models/flora/tree_fern_c.glb",
 		"res://assets/models/flora/cycad_a.glb", "res://assets/models/flora/cycad_b.glb"],
-	"flora_edge_count": 26,                    # per variant
+	"flora_edge_count": 40,                    # per variant
 	"flora_edge_from": 3.0,
 	"flora_edge_to": 22.0,
 	"flora_skyline_trees": ["res://assets/models/flora/araucaria_a.glb",
 		"res://assets/models/flora/araucaria_b.glb"],
-	"flora_skyline_count": 22,                 # per variant
+	"flora_skyline_count": 34,                 # per variant
 	"flora_skyline_from": 12.0,
 	"flora_skyline_to": 46.0,
 	# Tall plants dissolve inside this many metres of the camera, so a turned view is
@@ -1522,9 +1532,11 @@ const GROUND_COVER: Dictionary = {
 	"cliff_rocks": ["res://assets/models/props/basalt_cliff_a.glb",
 		"res://assets/models/props/basalt_cliff_b.glb",
 		"res://assets/models/props/basalt_cliff_c.glb"],
-	"cliff_count": 8,                          # per variant; each is about 8 m along
-	"cliff_from": 14.0,                        # metres past the field's edge
-	"cliff_to": 30.0,
+	"cliff_count": 14,                         # per variant; each is about 8 m along
+	# Metres past the field's edge: at the foot of the mountains, where there is a slope to
+	# set them into. Out on the level plain they stood like walls.
+	"cliff_from": 48.0,
+	"cliff_to": 72.0,
 	"cliff_scale": Vector2(0.9, 1.4),
 	# How deep each is set into the slope, in metres per unit of its scale: its front row
 	# stands downhill of its middle, and without this it stood on stilts of daylight.

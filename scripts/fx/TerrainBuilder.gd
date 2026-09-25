@@ -241,26 +241,40 @@ static func ground_height(x: float, z: float, field_half: float, outer_half: flo
 
 ## Height of the land as it would be without the river.
 ##
-## Flat and exactly zero everywhere the game is played and a little way past it, then
-## climbing. The transition uses smoothstep so there is no crease where the flat ends -- a
-## hard ring would read as a wall around an arena, which is the opposite of what this is for.
+## Flat and exactly zero everywhere the game is played and a little way past it. Past that,
+## a plain -- level ground running on towards the horizon, with only a slow swell in it --
+## and far out, where the haze takes the edge off them, a ring of mountains.
+##
+## It was a bowl: the ground began climbing a few metres past the field and curled up all
+## round it, and from the game's camera that read as the map itself curling up at its edge
+## -- which no strategy game does. Ground that stays level and a skyline of separate
+## mountains is the usual way; the edge of the playable ground is left to the river, the
+## forest and the rocks, as it would be anywhere real.
 static func natural_height(x: float, z: float, field_half: float, outer_half: float, t: Dictionary, noise: FastNoiseLite) -> float:
 	var past: float = past_the_flat(x, z, field_half, t)
 	if past <= 0.0:
 		return 0.0
-	# The climb is measured over `rim_span`, not over the whole ground. Tying it to the
-	# outer extent made the valley wall rise so gently that the fog swallowed it before
-	# it was tall enough to see -- the ground just faded to grey and the valley was a
-	# claim rather than a thing on screen.
-	var span: float = maxf(1.0, float(t.get("rim_span", 38.0)))
-	var climb: float = smoothstep(0.0, span, past)
-	var rise: float = float(t.get("rim_rise", 18.0)) * climb * climb
-	var wobble: float = 0.0
+	var y: float = 0.0
 	if noise != null:
-		# Scaled by the climb as well, so the wobble fades out to nothing rather than
-		# rippling the last metre of flat ground the player builds on.
-		wobble = noise.get_noise_2d(x, z) * float(t.get("rim_noise", 4.0)) * climb
-	return rise + wobble
+		# The plain's swell, eased in from the flat so the last of the field is not rippled.
+		# Upward only: a hollow below the field's own level drew the river down into it, and
+		# a river lower than the field cuts wider banks -- into the square it must stay out of.
+		var swell_in: float = smoothstep(0.0, maxf(0.1, float(t.get("plain_blend", 12.0))), past)
+		y += (noise.get_noise_2d(x, z) * 0.5 + 0.5) * float(t.get("plain_swell", 0.8)) * swell_in
+	# The mountains: a ring round the whole valley, far enough out to be a skyline rather
+	# than a wall, near enough to stand in front of the end of the ground. Their crest is
+	# broken into peaks and saddles, and their faces are rough.
+	var d: float = sqrt(x * x + z * z)
+	var from_d: float = float(t.get("mountains_from", 72.0))
+	var rise: float = smoothstep(from_d, from_d + maxf(1.0, float(t.get("mountains_span", 26.0))), d)
+	if rise > 0.0:
+		var ridge: float = 1.0
+		var rock: float = 0.0
+		if noise != null:
+			ridge += float(t.get("mountains_ridge", 0.35)) * noise.get_noise_2d(x * 0.6 + 311.0, z * 0.6 - 173.0)
+			rock = noise.get_noise_2d(x * 3.1 - 77.0, z * 3.1 + 29.0) * float(t.get("mountains_rock", 2.0)) * rise
+		y += float(t.get("mountains_rise", 18.0)) * pow(rise, 1.35) * ridge + rock
+	return y
 
 ## How far (x, z) is past the flat valley floor, in metres: 0 anywhere on it.
 ##
@@ -310,7 +324,8 @@ static func river_of(t: Dictionary) -> River:
 ## The numbers the river's course is cut from.
 static func _shape_of(t: Dictionary) -> Array:
 	return [t.get("field_half"), t.get("flat_apron"), t.get("flat_corner"), t.get("outskirts_half"),
-		t.get("rim_span"), t.get("rim_rise"), t.get("rim_noise"), t.get("noise_seed"),
+		t.get("plain_blend"), t.get("plain_swell"), t.get("mountains_from"), t.get("mountains_span"),
+		t.get("mountains_rise"), t.get("mountains_ridge"), t.get("mountains_rock"), t.get("noise_seed"),
 		t.get("noise_frequency"), t.get("quad_size")]
 
 ## The ground's colour near the river, `above` metres over the water's surface: dark silt

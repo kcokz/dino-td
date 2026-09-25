@@ -102,8 +102,8 @@ func test_01b_the_floor_runs_on_past_the_edge_before_the_wall_starts() -> void:
 		worst = maxf(worst, absf(TerrainBuilder.natural_height(p.x, p.y, field_half,
 			float(t["outskirts_half"]), t, TerrainBuilder.ground_noise(config_node))))
 	assert_eq(worst, 0.0, "A step and a half past the edge, all the way round, it is still level")
-	# And past the apron the wall does climb.
-	assert_gt(_height(field_half + apron + 20.0, 0.0), 2.0, "Further out, the valley wall")
+	# And past the apron there is no wall: the plain runs on level (test_03b has all of it).
+	assert_eq(_height(field_half + apron + 20.0, 0.0), 0.0, "Further out, still the level plain")
 
 func test_02_the_flat_field_covers_every_cell_the_level_uses() -> void:
 	# The guard that matters when somebody tunes the field down, or moves the nest further
@@ -133,35 +133,65 @@ func test_02_the_flat_field_covers_every_cell_the_level_uses() -> void:
 					float(t["outskirts_half"]), t, noise)))
 		assert_eq(worst, 0.0, "Cell %s stands on dead level ground" % str(cell))
 
-func test_03_the_land_climbs_away_and_never_stops() -> void:
-	# The reason any of this exists: the old plane ended, and the camera could see it.
+func test_03_the_land_runs_on_to_mountains_that_hide_its_end() -> void:
+	# The reason any of this exists: the old plane ended, and the camera could see it. The
+	# ground runs far past the field, and before its end there are mountains to stand in
+	# front of it.
 	var t: Dictionary = _terrain()
 	var field_half: float = float(t["field_half"])
 	var outer_half: float = float(t["outskirts_half"])
-	var rise: float = float(t["rim_rise"])
+	var rise: float = float(t["mountains_rise"])
 
 	assert_gt(outer_half, field_half * 3.0,
 		"The ground runs far past the field, so no edge is ever in frame")
 	assert_almost_eq(_height(field_half, 0.0), 0.0, 0.001, "Still level at the field edge")
 	assert_gt(_height(outer_half * 0.9, 0.0), rise * 0.5,
-		"And well up the valley wall by the far edge")
+		"And there are mountains by the far edge")
+	assert_lt(float(t["mountains_from"]) + float(t["mountains_span"]), outer_half,
+		"Their crest stands inside the ground, in front of where it ends")
 
-	# Climbing, not wandering: sampled outwards, the land keeps going up.
+	# Level, then climbing: sampled outwards, the land never dips back down.
 	var last: float = 0.0
 	for d in range(int(field_half), int(outer_half), 8):
 		var h: float = _height(float(d), 0.0)
-		assert_gte(h, last - 0.001, "The valley wall does not dip back down at %dm" % d)
+		assert_gte(h, last - 0.001, "The land does not dip back down at %dm" % d)
 		last = h
 
-func test_04_the_climb_finishes_where_the_camera_can_still_see_it() -> void:
-	# A wall that only gets tall past the fog is a wall nobody ever sees -- which is
-	# exactly what the first attempt built, and why the horizon was flat grey.
+func test_03b_past_the_field_the_ground_stays_level_until_the_mountains() -> void:
+	# Reported as "地图到边界还是卷曲上翘的": the ground was a bowl, climbing a few metres
+	# past the field, and from the game's camera the map curled up at its edge. Now it is a
+	# plain -- as drawn, swell and all, never more than `plain_swell` off level -- out to
+	# where the mountains begin, all the way round.
 	var t: Dictionary = _terrain()
-	var span: float = float(t["rim_span"])
+	var field_half: float = float(t["field_half"])
+	var outer_half: float = float(t["outskirts_half"])
+	var noise := TerrainBuilder.ground_noise(config_node)
+	var swell: float = float(t["plain_swell"])
+	var worst: float = 0.0
+	var at := Vector2.ZERO
+	for k in range(0, 360, 3):
+		var a: float = deg_to_rad(float(k))
+		var dir := Vector2(cos(a), sin(a))
+		var r: float = field_half
+		while r < float(t["mountains_from"]):
+			var p: Vector2 = dir * r
+			var h: float = absf(TerrainBuilder.natural_height(p.x, p.y, field_half, outer_half, t, noise))
+			if h > worst:
+				worst = h
+				at = p
+			r += 2.0
+	assert_lte(worst, swell + 0.001, "Level to within its swell right out to the mountains (worst %.2f m at %s)" % [worst, str(at)])
+
+func test_04_the_mountains_stand_in_the_haze_not_behind_it() -> void:
+	# A skyline that only gets tall past the fog is a skyline nobody ever sees -- which is
+	# exactly what the first attempt at a valley built, and why the horizon was flat grey.
+	var t: Dictionary = _terrain()
 	var field_half: float = float(t["field_half"])
 	var fog_end: float = float(config_node.ENVIRONMENT["fog_depth_end"])
-	assert_lt(field_half + float(t.get("flat_apron", 0.0)) + span, fog_end,
-		"The valley wall reaches its height before the fog swallows it")
+	assert_gt(float(t["mountains_from"]), field_half * 2.5, "A long way past the field")
+	assert_lt(float(t["mountains_from"]) + float(t["mountains_span"]), fog_end * 1.1,
+		"Their crest is where the haze softens it, not past where it would swallow it")
+	assert_lt(float(config_node.ENVIRONMENT["fog_density"]), 1.0, "And the haze never quite closes")
 
 	var fog_begin: float = float(config_node.ENVIRONMENT["fog_depth_begin"])
 	assert_gt(fog_begin, field_half * 2.0,
