@@ -200,9 +200,9 @@ func test_06_trees_and_cliffs_keep_back_from_the_bank() -> void:
 	var half: float = _half()
 	var trees: Array[Transform3D] = GroundCover.band_placements(config_node, 60, half,
 		float(gc["flora_edge_from"]), float(gc["flora_edge_to"]), 61, Vector2(1.0, 1.0), 1.6)
-	var cliffs: Array[Transform3D] = GroundCover.band_placements(config_node, 30, half,
-		float(gc["cliff_from"]), float(gc["cliff_to"]), 101, gc["cliff_scale"], 1.0,
-		float(gc["cliff_sink"]), true, float(gc["cliff_river_clear"]))
+	var cliffs: Array[Transform3D] = []
+	for seed_value in [101, 102, 103]:
+		cliffs.append_array(GroundCover.cliff_placements(config_node, half, seed_value, AABB()))
 	var on_bank: int = 0
 	for pl in trees:
 		if river.bank_clearance(pl.origin.x, pl.origin.z) < 0.5:

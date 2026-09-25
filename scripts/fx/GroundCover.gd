@@ -248,8 +248,22 @@ static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, 
 		from_edge: float, to_edge: float, seed_value: int, scale_range: Vector2,
 		shadows: bool, bias_outward: float = 1.0, sink: float = 0.0,
 		face_in: bool = false, river_clear: float = 0.5) -> MultiMeshInstance3D:
-	var placements: Array[Transform3D] = band_placements(cfg, count, field_half, from_edge,
-		to_edge, seed_value, scale_range, bias_outward, sink, face_in, river_clear)
+	return multimesh_of(mesh, material, band_placements(cfg, count, field_half, from_edge,
+		to_edge, seed_value, scale_range, bias_outward, sink, face_in, river_clear), shadows)
+
+## Where the cliffs go (Config.GROUND_COVER cliff_*): up the mountainside, facing into the
+## valley, each set down on the lowest ground under `bounds` -- its mesh's own. The one
+## place that says so, so the tests measure the cliffs Main draws and not a copy of them.
+static func cliff_placements(cfg: Node, field_half: float, seed_value: int, bounds: AABB) -> Array[Transform3D]:
+	var gc: Dictionary = cfg.GROUND_COVER if (cfg and "GROUND_COVER" in cfg) else {}
+	return band_placements(cfg, int(gc.get("cliff_count", 12)), field_half,
+		float(gc.get("cliff_from", 7.0)), float(gc.get("cliff_to", 16.0)), seed_value,
+		gc.get("cliff_scale", Vector2(0.9, 1.4)), 1.0, float(gc.get("cliff_sink", 0.5)), true,
+		float(gc.get("cliff_river_clear", 4.0)), true, bounds)
+
+## One MultiMesh drawing `mesh` at every one of `placements`.
+static func multimesh_of(mesh: Mesh, material: Material, placements: Array[Transform3D],
+		shadows: bool) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -280,15 +294,30 @@ static func scatter_band(cfg: Node, mesh: Mesh, material: Material, count: int, 
 ## a tree fern can lean over the water from the rim of the channel, but nothing stands on
 ## the bank's slope or in the water, and a cliff eight metres long needs more room than a
 ## tree.
+##
+## `on_mountains` measures the band up the mountains instead: `from_edge` and `to_edge`
+## are then metres in from their foot, round the valley's middle as the mountains are.
+## The cliffs were laid out in the field's square band, and a square does not follow a
+## ring: along its sides it stood them on the level ground short of the slope, a row of
+## columns reading as a wall round the map, and at its corners, past the crest, it stood
+## them on the skyline.
+##
+## `footprint`: the thing's own bounds, when it has a size worth minding. It is set down on
+## the lowest ground anywhere under them, when that is lower than `sink` puts it. Down a
+## slope the front of a stretch of cliff is lower than its middle, and a fixed sink that
+## set it into one slope left it on stilts of daylight on a steeper one -- or at one
+## corner, where the ground fell away sideways.
 static func band_placements(cfg: Node, count: int, field_half: float, from_edge: float,
 		to_edge: float, seed_value: int, scale_range: Vector2,
 		bias_outward: float = 1.0, sink: float = 0.0, face_in: bool = false,
-		river_clear: float = 0.5) -> Array[Transform3D]:
+		river_clear: float = 0.5, on_mountains: bool = false,
+		footprint: AABB = AABB()) -> Array[Transform3D]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
 	var outer_half: float = float(t.get("outskirts_half", 110.0))
-	var reach: float = field_half + to_edge
+	var foot: float = float(t.get("mountains_from", 72.0))
+	var reach: float = (foot if on_mountains else field_half) + to_edge
 	var ground := TerrainBuilder.ground_noise(cfg)     # the wall as drawn, not its smooth shape
 	var river: River = TerrainBuilder.river_of(t)
 	var placements: Array[Transform3D] = []
@@ -297,7 +326,7 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 		attempts += 1
 		var x: float = rng.randf_range(-reach, reach)
 		var z: float = rng.randf_range(-reach, reach)
-		var past: float = maxf(absf(x), absf(z)) - field_half
+		var past: float = (sqrt(x * x + z * z) - foot) if on_mountains else (maxf(absf(x), absf(z)) - field_half)
 		if past < from_edge or past > to_edge:
 			continue
 		# Denser further out when asked, so the forest thickens up the valley wall
@@ -315,7 +344,17 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 		var basis := Basis(Vector3.UP, yaw)
 		var s: float = rng.randf_range(scale_range.x, scale_range.y)
 		basis = basis.scaled(Vector3.ONE * s)
-		placements.append(Transform3D(basis, Vector3(x, y - 0.05 - sink * s, z)))
+		var base: float = y - sink * s
+		if footprint.has_volume():
+			# Five by five: three by three missed the ground's finest ripple running between
+			# its samples, and left a corner ten centimetres in the air.
+			for i in range(5):
+				for k in range(5):
+					var local := Vector3(lerpf(footprint.position.x, footprint.end.x, i / 4.0), 0.0,
+						lerpf(footprint.position.z, footprint.end.z, k / 4.0))
+					var under: Vector3 = Vector3(x, 0.0, z) + basis * local
+					base = minf(base, TerrainBuilder.ground_height(under.x, under.z, field_half, outer_half, t, ground))
+		placements.append(Transform3D(basis, Vector3(x, base - 0.05, z)))
 	return placements
 
 ## The mesh inside one of tools/generate_flora.py's plants, for scattering by the thousand.

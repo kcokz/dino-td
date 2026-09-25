@@ -172,32 +172,96 @@ func test_08_tall_plants_dissolve_when_the_camera_comes_close() -> void:
 # 4. The land the plants grow on
 # ==============================================================================
 
-func test_09_the_valley_walls_have_cliffs() -> void:
+## The cliffs as Main draws them: every variant, each placed by its own mesh's bounds.
+## Pairs of [placement, the bounds of the mesh drawn there].
+func _cliffs(seed_value: int) -> Array:
+	var out: Array = []
+	var n: int = 0
+	for p in config_node.GROUND_COVER.get("cliff_rocks", []):
+		var m: Mesh = GroundCover.flora_mesh(String(p))
+		if m != null:
+			for pl in GroundCover.cliff_placements(config_node, float(config_node.TERRAIN["field_half"]),
+					seed_value + n, m.get_aabb()):
+				out.append([pl, m.get_aabb()])
+		n += 1
+	return out
+
+var _ground_noise: FastNoiseLite = null
+
+func _drawn_ground(x: float, z: float) -> float:
+	var t: Dictionary = config_node.TERRAIN
+	if _ground_noise == null:
+		_ground_noise = TerrainBuilder.ground_noise(config_node)
+	return TerrainBuilder.ground_height(x, z, float(t["field_half"]), float(t["outskirts_half"]), t, _ground_noise)
+
+func test_09_the_mountains_have_cliffs() -> void:
 	# The brief named them (VERSION.md: 火山、河流、峭壁). Stretches of columnar basalt in a
-	# broken band up the valley wall, each facing into the valley and set into the slope
-	# rather than stood on it.
+	# broken band up the mountainside, each facing into the valley and set into the slope
+	# rather than stood on it -- nowhere under one open to the daylight.
 	var gc: Dictionary = config_node.GROUND_COVER
 	var paths: Array = gc.get("cliff_rocks", [])
 	assert_gt(paths.size(), 0, "The valley declares its cliffs")
 	for p in paths:
 		assert_not_null(GroundCover.flora_mesh(String(p)), "%s is there" % p)
 
-	var t: Dictionary = config_node.TERRAIN
-	var field_half: float = float(t["field_half"])
-	var placements: Array[Transform3D] = GroundCover.band_placements(config_node, int(gc["cliff_count"]),
-		field_half, float(gc["cliff_from"]), float(gc["cliff_to"]), 501, gc["cliff_scale"], 1.0,
-		float(gc["cliff_sink"]), true)
-	assert_gt(placements.size(), 0, "Some stretches of cliff are placed")
-	for pl in placements:
+	var foot: float = float(config_node.TERRAIN["mountains_from"])
+	var cliffs: Array = _cliffs(501)
+	assert_gt(cliffs.size(), 0, "Some stretches of cliff are placed")
+	var aired: int = 0
+	for c in cliffs:
+		var pl: Transform3D = c[0]
+		var bounds: AABB = c[1]
 		var o: Vector3 = pl.origin
-		assert_gte(maxf(absf(o.x), absf(o.z)), field_half + float(gc["cliff_from"]) - 0.001,
-			"On the valley wall, not the field")
+		var r: float = Vector2(o.x, o.z).length()
+		assert_gte(r, foot + float(gc["cliff_from"]) - 0.001, "Up on the mountains, not out on the plain")
+		assert_lte(r, foot + float(gc["cliff_to"]) + 0.001, "And no higher up them than the band says")
 		var front: Vector3 = pl.basis.z.normalized()
 		var inward: Vector3 = Vector3(-o.x, 0.0, -o.z).normalized()
 		assert_gt(front.dot(inward), 0.9, "Facing into the valley")
-		var ground: float = TerrainBuilder.ground_height(o.x, o.z, field_half, float(t["outskirts_half"]), t,
-			TerrainBuilder.ground_noise(config_node))
-		assert_lt(o.y, ground - 0.5, "Set into the slope, not stood on it")
+		assert_lt(o.y, _drawn_ground(o.x, o.z) - 0.4, "Set into the slope, not stood on it")
+		# Finer than the grid the placement itself looks at: a front corner over a dip in the
+		# ground, where the slope fell away sideways, stood in the air.
+		for i in range(9):
+			for k in range(9):
+				var local := Vector3(lerpf(bounds.position.x, bounds.end.x, i / 8.0), 0.0,
+					lerpf(bounds.position.z, bounds.end.z, k / 8.0))
+				var p: Vector3 = o + pl.basis * local
+				if o.y > _drawn_ground(p.x, p.z) + 0.02:
+					aired += 1
+	assert_eq(aired, 0, "No part of any stretch of cliff stands in the air")
+
+func test_09b_the_cliffs_are_seen_against_the_mountain_never_the_sky() -> void:
+	# Laid out in the field's square they stood, at its corners, up on the crest: seen from
+	# the field their flat-topped columns made battlements of the skyline. And along its
+	# sides they stood on the level, a wall round the map. On the mountainside the slope
+	# climbs up each one's back, and the crest behind stands clear above its top.
+	var t: Dictionary = config_node.TERRAIN
+	var outer: float = float(t["outskirts_half"])
+	var checked: int = 0
+	for seed_value in [101, 102, 103, 501]:
+		for c in _cliffs(seed_value):
+			var pl: Transform3D = c[0]
+			var bounds: AABB = c[1]
+			checked += 1
+			var o: Vector3 = pl.origin
+			var s: float = pl.basis.x.length()
+			var front: Vector3 = pl.basis.z.normalized()
+			var ahead: Vector3 = o + front * bounds.end.z * s
+			var behind: Vector3 = o + front * bounds.position.z * s
+			assert_gt(_drawn_ground(behind.x, behind.z) - _drawn_ground(ahead.x, ahead.z), 1.0,
+				"The mountainside climbs up the back of the cliff at (%.0f, %.0f)" % [o.x, o.z])
+			var top: float = o.y + bounds.end.y * s
+			var out := Vector2(o.x, o.z).normalized()
+			var crest: float = -INF
+			var r: float = Vector2(o.x, o.z).length()
+			while r < outer * 1.5:
+				var q: Vector2 = out * r
+				if absf(q.x) <= outer and absf(q.y) <= outer:
+					crest = maxf(crest, _drawn_ground(q.x, q.y))
+				r += 1.0
+			assert_gt(crest - top, 2.0,
+				"The crest behind the cliff at (%.0f, %.0f) stands clear above its top (by %.1f m)" % [o.x, o.z, crest - top])
+	assert_gt(checked, 20, "Enough stretches of cliff to say so")
 
 func test_10_facing_the_cliffs_in_did_not_move_a_single_tree() -> void:
 	# The same seed has to grow the same forest whether or not a band asks to face in:

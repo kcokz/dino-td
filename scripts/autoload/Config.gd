@@ -1535,14 +1535,22 @@ const GROUND_COVER: Dictionary = {
 		"res://assets/models/props/basalt_cliff_b.glb",
 		"res://assets/models/props/basalt_cliff_c.glb"],
 	"cliff_count": 14,                         # per variant; each is about 8 m along
-	# Metres past the field's edge: at the foot of the mountains, where there is a slope to
-	# set them into. Out on the level plain they stood like walls.
-	"cliff_from": 48.0,
-	"cliff_to": 72.0,
+	# Metres UP THE MOUNTAINS from their foot (TERRAIN.mountains_from), round the valley as
+	# the mountains are: on the steep middle of the slope, where the mountainside climbs
+	# well up each one's back and its face looks into the valley -- a band of rock in the
+	# slope, its top always under the crest. Laid out in the field's square
+	# band they stood on the level ground short of the slope, a row of columns reading as
+	# a wall round the map, and at the square's corners up on the crest, against the sky.
+	# On the gentle lower slopes they stood clear of the ground behind them, and through
+	# the haze a cluster of flat-topped columns read as buildings.
+	"cliff_from": 7.0,
+	"cliff_to": 16.0,
 	"cliff_scale": Vector2(0.9, 1.4),
-	# How deep each is set into the slope, in metres per unit of its scale: its front row
-	# stands downhill of its middle, and without this it stood on stilts of daylight.
-	"cliff_sink": 0.9,
+	# How deep each is set in at its middle, in metres per unit of its scale -- and deeper
+	# wherever the ground anywhere under it is lower (Main passes the mesh's bounds): its
+	# front row stands downhill of its middle, and a fixed sink that set it into one slope
+	# left it on stilts of daylight on a steeper one.
+	"cliff_sink": 0.5,
 	# How far a cliff keeps back from the top of the river's bank: a stretch is eight
 	# metres long, and one stood on the bank hung its end out over the water.
 	"cliff_river_clear": 4.0,
