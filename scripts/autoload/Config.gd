@@ -625,14 +625,25 @@ const DINO_AVOID_MAX_NEIGHBOURS: int = 10
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)
 # ==============================================================================
+## A raid grows three ways at once -- one more raider a wave (count_per_wave), a little more
+## a minute (RAIDS.intensity_per_minute) and tougher after each big wave (enhance_after_big)
+## -- and the three MULTIPLY, so each has to be small. At v0.5's figures (+15% a minute, x1.3
+## hit points a big wave) the raid at minute 25 was about a hundred raptors at 2.2 times
+## their hit points, and the beacon's final wave three times that: no base holds that.
+## Measured with `tools/playtest.gd siege` (v0.6): six crossbow towers facing the nest
+## hold thirty raptors at x1.3 and fall to fifty at x1.5; ten round the cabin hold ninety
+## at x1.5 streamed from every side, and fall to a big wave of fifty-three at x1.33. These
+## figures put the raid at minute 25 near thirty at under x1.5, and a big wave half as
+## big again rather than twice as big -- a base that kept building holds it, one that
+## stopped at the fourth tower does not.
 const WAVES: Dictionary = {
 	"base_count": 2,
 	"count_per_wave": 1,
 	"big_every": 3,
-	"big_multiplier": 2.0,
+	"big_multiplier": 1.5,
 	"enhance_after_big": {
-		"hp": 1.3,
-		"damage": 1.2,
+		"hp": 1.1,
+		"damage": 1.1,
 		"speed": 1.0
 	},
 	"spawn_interval": 0.8,
@@ -1060,7 +1071,7 @@ const RAIDS: Dictionary = {
 	"interval_min": 80.0,         # 两次来袭的最小间隔（秒）——v0.4 的开局链条多了几趟路
 	"interval_max": 120.0,        # 最大间隔——区间内随机，不是固定周期
 	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
-	"intensity_per_minute": 0.15, # Raid intensity escalation slope per minute
+	"intensity_per_minute": 0.05, # Raid intensity escalation slope per minute (see WAVES: it multiplies)
 	"intensity_jitter": 0.3,      # Random intensity fluctuation (+/- 30%)
 }
 

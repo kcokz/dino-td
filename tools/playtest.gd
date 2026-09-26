@@ -55,6 +55,10 @@ func _init() -> void:
 func _run(name: String) -> void:
 	_scenario = name
 	await _fresh_level()
+	if name.begins_with("siege"):
+		await _scenario_siege(name)
+		_tear_down()
+		return
 	match name:
 		"open":
 			await _scenario_open()
@@ -170,6 +174,99 @@ func _scenario_beacon() -> void:
 	await _shoot("charging")
 	gs.charge_beacon(10000.0)
 	await _shoot("jumped")
+
+## How much a base holds (v0.6 balance): `siege:<towers>:<raiders>:<hp_mult>[:all]`.
+##
+## N crossbow towers round the cabin inside a sealed ring of stakes, against one raid of
+## that many raptors at that hit-point multiplier (what GameState compounds after each big
+## wave), sent the way the game sends it: down the path from the nest, or -- with `all` --
+## streamed from every way in, as the beacon's final wave is. It prints what got through
+## and what it cost, so the raid curve in Config is tuned against a base rather than a
+## guess. Real game, real speed: a long raid is a long run.
+func _scenario_siege(spec: String) -> void:
+	var parts: PackedStringArray = spec.split(":")
+	var towers: int = int(parts[1]) if parts.size() > 1 else 4
+	var raiders: int = int(parts[2]) if parts.size() > 2 else 10
+	var hp_mult: float = float(parts[3]) if parts.size() > 3 else 1.0
+	var every_side: bool = parts.size() > 4 and parts[4] == "all"
+	var cfg := root.get_node_or_null("Config")
+	var gs := root.get_node_or_null("GameState")
+	var eb := root.get_node_or_null("EventBus")
+	var gm = _main.grid_manager
+	var wm = _main.wave_manager
+	_grant({"wood": 4000, "stone": 4000, "bone": 4000})
+	var centre: Vector3 = _main.current_core.global_position
+
+	var placed_towers: Array[Node] = []
+	# Where a player would put them: facing the nest for a raid from the nest, all round for
+	# the final wave.
+	for i in range(towers):
+		var a: float = TAU * float(i) / float(maxi(1, towers))
+		if not every_side:
+			a = deg_to_rad(-80.0 + 160.0 * (float(i) + 0.5) / float(maxi(1, towers)))
+		var at: Vector3 = centre + Vector3(sin(a) * 4.5, 0.0, -cos(a) * 4.5)
+		var cell: Vector2i = gm.world_to_cell(at)
+		var b = _main.build_system.place_building("tower", cell, _main.buildings_container, true, gm.cell_to_world(cell))
+		if b != null:
+			b.complete_construction()
+			placed_towers.append(b)
+	var step: float = float(cfg.TILE_SIZE) / float(maxi(1, int(cfg.get_cell_divisions("wall"))))
+	var divisions: int = int(cfg.get_cell_divisions("wall"))
+	var seen: Dictionary = {}
+	var stakes: Array[Node] = []
+	# 6.5 m: clear of the trees and the hills, which a ring cannot be built through -- and a
+	# tree is not solid to a raid, so a ring across one has a door in it.
+	var around: int = int(ceil(TAU * 6.5 / step)) * 4
+	for i in range(around):
+		var a: float = TAU * float(i) / float(around)
+		var fine: Vector2i = gm.world_to_fine_cell(centre + Vector3(sin(a) * 6.5, 0.0, cos(a) * 6.5), divisions)
+		if seen.has(fine):
+			continue
+		seen[fine] = true
+		var at: Vector3 = gm.fine_cell_to_world(fine, divisions)
+		var b = _main.build_system.place_building("wall", gm.world_to_cell(at), _main.buildings_container, true, at)
+		if b != null:
+			b.complete_construction()
+			stakes.append(b)
+	await _wait(10)
+	_main.nav_maps.rebake()
+	await _wait(10)
+	var sealed: bool = not _main.nav_maps.is_reachable(wm.nest_spawn_position, centre, false)
+	print("[siege] the ring %s" % ("is sealed" if sealed else "HAS A WAY IN"))
+
+	var killed: Array[int] = [0]
+	var on_death := func(_d): killed[0] += 1
+	eb.dino_died.connect(on_death)
+	gs.dino_stat_multipliers["hp"] = hp_mult
+	wm.auto_raid_enabled = false
+	if every_side:
+		wm.final_wave = true
+		wm._entry_turn = 0
+	wm.start_wave(1, raiders)
+	if every_side:
+		var beacon: Dictionary = gs.map_data()["beacon"]
+		wm.spawn_timer.start(float(beacon["charge_seconds"]) * float(beacon["stream_share"]) / float(raiders))
+	var seconds: int = 0
+	while wm.is_wave_active and not gs.is_game_over and seconds < 400:
+		await _advance(1.0)
+		seconds += 1
+	eb.dino_died.disconnect(on_death)
+
+	var towers_left: int = 0
+	for t in placed_towers:
+		if is_instance_valid(t) and not t.is_destroyed:
+			towers_left += 1
+	var stakes_left: int = 0
+	for w in stakes:
+		if is_instance_valid(w) and not w.is_destroyed:
+			stakes_left += 1
+	var core = _main.current_core
+	print("[siege] towers %d, %d raptors at hp x%.2f from %s: %s after %ds -- killed %d, cabin %d/%d, stakes %d/%d, towers %d/%d" % [
+		placed_towers.size(), raiders, hp_mult, "every side" if every_side else "the nest",
+		"LOST" if gs.is_game_over else ("held" if not wm.is_wave_active else "still going"), seconds,
+		killed[0], int(ceil(core.current_hp)) if is_instance_valid(core) else 0, int(core.max_hp) if is_instance_valid(core) else 0,
+		stakes_left, stakes.size(), towers_left, placed_towers.size()])
+	await _shoot("end")
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

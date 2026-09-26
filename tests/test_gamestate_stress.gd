@@ -198,8 +198,8 @@ func test_stress_multi_wave_compounding_to_wave_30() -> void:
 		assert_eq(game_state.current_phase, 2, "Phase must advance to PRODUCE (2) after wave %d" % wave)
 
 		if wave % 3 == 0:
-			expected_hp *= 1.3
-			expected_dmg *= 1.2
+			expected_hp *= float(config_node.WAVES["enhance_after_big"]["hp"])
+			expected_dmg *= float(config_node.WAVES["enhance_after_big"]["damage"])
 
 		var mults = game_state.dino_stat_multipliers
 		assert_almost_eq(float(mults.get("hp", 0.0)), expected_hp, 0.005, "HP multiplier at wave %d must be ~%f" % [wave, expected_hp])

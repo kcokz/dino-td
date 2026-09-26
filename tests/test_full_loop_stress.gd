@@ -277,10 +277,11 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(wave_mgr.current_wave, 3, "WaveManager current_wave is 3")
 	assert_true(wave_mgr.is_big_wave(3), "Wave 3 is flagged as big horde wave")
 
-	# Verify horde count: (base_count 2 + 2) * 2.0 = 8 dinos -- and since v0.6 the map's
-	# lesser boss at their head, on top of them.
+	# Verify horde count: (base_count + 2 per wave) x big_multiplier, from Config -- and since
+	# v0.6 the map's lesser boss at their head, on top of them.
+	var horde: int = int(floor(float(int(config_node.WAVES["base_count"]) + 2 * int(config_node.WAVES["count_per_wave"])) * float(config_node.WAVES["big_multiplier"])))
 	var leader: int = 1 if String(game_state_node.map_data().get("minor_boss", "")) != "" else 0
-	assert_eq(wave_mgr.dinos_alive_count, 8 + leader, "Wave 3 horde spawns exactly 8 dinos and its leader")
+	assert_eq(wave_mgr.dinos_alive_count, horde + leader, "Wave 3 horde spawns exactly %d dinos and its leader" % horde)
 	assert_true("大波" in hud.get_wave_text() or "Horde" in hud.get_wave_text(), "HUD wave label announces horde wave: '%s'" % hud.get_wave_text())
 
 	# Initial multipliers before wave 3 ends
@@ -288,15 +289,16 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.0, 0.001, "Pre-horde damage multiplier is 1.0")
 
 	# Eliminate all of wave 3's horde, leader and all
-	for i in range(8 + leader):
+	for i in range(horde + leader):
 		event_bus_node.dino_died.emit(null)
 	await wait_frames(1)
 
 	assert_false(wave_mgr.is_wave_active, "Wave 3 horde ended")
 
-	# Verify post-horde stat enhancement applied: Config.WAVES.enhance_after_big (hp 1.3, damage 1.2)
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.3, 0.001, "Post-horde HP mult scaled to 1.3")
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.2, 0.001, "Post-horde damage mult scaled to 1.2")
+	# Verify post-horde stat enhancement applied: Config.WAVES.enhance_after_big
+	var step: Dictionary = config_node.WAVES["enhance_after_big"]
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), float(step["hp"]), 0.001, "Post-horde HP mult scaled once")
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), float(step["damage"]), 0.001, "Post-horde damage mult scaled once")
 
 	assert_eq(int(game_state_node.current_phase), 2, "Transitioned to PRODUCE (2)")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Nothing produced on turn 3 either")
@@ -462,9 +464,9 @@ func test_02_horde_progression_and_stat_compounding_stress() -> void:
 		assert_eq(wm.is_big_wave(w), is_horde, "Wave %d horde flag check" % w)
 
 		var rank_and_file: int = 0
-		var base = 2 + (w - 1) * 1
+		var base = int(config_node.WAVES["base_count"]) + (w - 1) * int(config_node.WAVES["count_per_wave"])
 		if is_horde:
-			rank_and_file = int(base * 2.0)
+			rank_and_file = int(floor(float(base) * float(config_node.WAVES["big_multiplier"])))
 		else:
 			rank_and_file = base
 		# Since v0.6 a big wave is led by the map's lesser boss, on top of its own.
@@ -473,11 +475,9 @@ func test_02_horde_progression_and_stat_compounding_stress() -> void:
 
 		assert_eq(wm.dinos_alive_count, expected_count, "Wave %d dinos count is %d" % [w, expected_count])
 
-		# Specific horde wave checks
-		if w == 3:
-			assert_eq(rank_and_file, 8, "Wave 3 horde has exactly 8 dinos besides its leader")
-		elif w == 6:
-			assert_eq(rank_and_file, 14, "Wave 6 horde has exactly 14 dinos ((2+5)*2) besides its leader")
+		# Specific horde wave checks: a horde is more than the wave would otherwise send
+		if is_horde:
+			assert_gt(rank_and_file, base, "Wave %d horde is bigger than an ordinary wave %d" % [w, w])
 
 		# Eliminate all dinos
 		for d in range(expected_count):
@@ -485,15 +485,14 @@ func test_02_horde_progression_and_stat_compounding_stress() -> void:
 
 		assert_eq(int(game_state_node.current_phase), 2, "Turn %d enters PRODUCE" % w)
 
-		# Check stat enhancement compounding after horde waves
-		if w == 3:
-			# Post-wave 3: 1.0 * 1.3 = 1.3 HP, 1.0 * 1.2 = 1.2 Damage
-			assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), 1.3, 0.001, "Post-wave 3 HP mult is 1.3")
-			assert_almost_eq(float(game_state_node.dino_stat_multipliers["damage"]), 1.2, 0.001, "Post-wave 3 damage mult is 1.2")
-		elif w == 6:
-			# Post-wave 6: 1.3 * 1.3 = 1.69 HP, 1.2 * 1.2 = 1.44 Damage
-			assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), 1.69, 0.001, "Post-wave 6 HP mult is 1.69")
-			assert_almost_eq(float(game_state_node.dino_stat_multipliers["damage"]), 1.44, 0.001, "Post-wave 6 damage mult is 1.44")
+		# Check stat enhancement compounding after horde waves: once per big wave so far
+		var step: Dictionary = config_node.WAVES["enhance_after_big"]
+		if w == 3 or w == 6:
+			var times: int = w / 3
+			assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), pow(float(step["hp"]), times), 0.001,
+				"Post-wave %d HP mult compounded %d times" % [w, times])
+			assert_almost_eq(float(game_state_node.dino_stat_multipliers["damage"]), pow(float(step["damage"]), times), 0.001,
+				"Post-wave %d damage mult compounded %d times" % [w, times])
 
 		# Advance PRODUCE -> PLAN
 		game_state_node.end_produce_phase()

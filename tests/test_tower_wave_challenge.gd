@@ -393,32 +393,20 @@ func test_challenge_wavemanager_progression_math_15_waves() -> void:
 	var wm = _create_wave_manager()
 	if wm == null: return
 
-	# Exact mathematical specification:
-	# base_count = 2, count_per_wave = 1, big_every = 3, big_multiplier = 2.0
-	var expected_counts = [
-		0,   # index 0 unused
-		2,   # 1
-		3,   # 2
-		8,   # 3 (Horde)
-		5,   # 4
-		6,   # 5
-		14,  # 6 (Horde)
-		8,   # 7
-		9,   # 8
-		20,  # 9 (Horde)
-		11,  # 10
-		12,  # 11
-		26,  # 12 (Horde)
-		14,  # 13
-		15,  # 14
-		32   # 15 (Horde)
-	]
+	# Exact mathematical specification, from Config.WAVES: base_count, plus count_per_wave a
+	# wave, times big_multiplier (rounded down) on every big_every-th.
+	var w_cfg: Dictionary = config_node.WAVES
+	var expected_counts: Array[int] = [0]   # index 0 unused
+	for w in range(1, 16):
+		var base: int = int(w_cfg["base_count"]) + (w - 1) * int(w_cfg["count_per_wave"])
+		var big: bool = w % int(w_cfg["big_every"]) == 0
+		expected_counts.append(int(floor(float(base) * float(w_cfg["big_multiplier"]))) if big else base)
 
 	for w in range(1, 16):
 		var count = wm.get_wave_dino_count(w)
 		var is_big = wm.is_big_wave(w)
 		var expected_count = expected_counts[w]
-		var expected_is_big = (w % 3 == 0)
+		var expected_is_big = (w % int(w_cfg["big_every"]) == 0)
 
 		assert_eq(is_big, expected_is_big, "Wave %d is_big_wave flag" % w)
 		assert_eq(count, expected_count, "Wave %d dino count: expected %d, got %d" % [w, expected_count, count])
@@ -435,35 +423,14 @@ func test_challenge_wavemanager_12_waves_compounding_stat_verification() -> void
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.0, 0.001)
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.0, 0.001)
 
-	# Compounding rule: enhance_after_big: hp=1.3, damage=1.2, speed=1.0 at waves 3, 6, 9, 12
-	var expected_hp_mults = {
-		1: 1.0,
-		2: 1.0,
-		3: 1.0,
-		4: 1.3,
-		5: 1.3,
-		6: 1.3,
-		7: 1.69,
-		8: 1.69,
-		9: 1.69,
-		10: 2.197,
-		11: 2.197,
-		12: 2.197
-	}
-	var expected_dmg_mults = {
-		1: 1.0,
-		2: 1.0,
-		3: 1.0,
-		4: 1.2,
-		5: 1.2,
-		6: 1.2,
-		7: 1.44,
-		8: 1.44,
-		9: 1.44,
-		10: 1.728,
-		11: 1.728,
-		12: 1.728
-	}
+	# Compounding rule: Config.WAVES.enhance_after_big, once after each big wave (3, 6, 9, 12)
+	var step: Dictionary = config_node.WAVES["enhance_after_big"]
+	var expected_hp_mults: Dictionary = {}
+	var expected_dmg_mults: Dictionary = {}
+	for w in range(1, 13):
+		var done: int = (w - 1) / 3    # big waves already over when wave w starts
+		expected_hp_mults[w] = pow(float(step["hp"]), done)
+		expected_dmg_mults[w] = pow(float(step["damage"]), done)
 
 	for w in range(1, 13):
 		# Start wave
@@ -495,11 +462,11 @@ func test_challenge_wavemanager_12_waves_compounding_stat_verification() -> void
 		# End the wave via EventBus (triggers GameState._on_wave_ended)
 		event_bus_node.wave_ended.emit(w)
 
-	# After wave 12 ended, multipliers compounded 4 times (1.3^4 = 2.8561, 1.2^4 = 2.0736)
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), 2.8561, 0.01,
-		"Post-Wave 12 HP mult compounded 4x to 2.8561")
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers["damage"]), 2.0736, 0.01,
-		"Post-Wave 12 Damage mult compounded 4x to 2.0736")
+	# After wave 12 ended, multipliers compounded 4 times
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), pow(float(step["hp"]), 4), 0.01,
+		"Post-Wave 12 HP mult compounded 4x")
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers["damage"]), pow(float(step["damage"]), 4), 0.01,
+		"Post-Wave 12 Damage mult compounded 4x")
 
 func test_challenge_wavemanager_10_waves_turn_loop_lifecycle() -> void:
 	assert_not_null(game_state_node, "GameState must exist")

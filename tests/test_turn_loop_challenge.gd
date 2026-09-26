@@ -138,8 +138,8 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 
 		# Dino multiplier check every 3 waves
 		if cycle % 3 == 0:
-			expected_hp_mult *= 1.3
-			expected_dmg_mult *= 1.2
+			expected_hp_mult *= float(config_node.WAVES["enhance_after_big"]["hp"])
+			expected_dmg_mult *= float(config_node.WAVES["enhance_after_big"]["damage"])
 
 		var current_hp_mult = float(game_state_node.dino_stat_multipliers.get("hp", 1.0))
 		var current_dmg_mult = float(game_state_node.dino_stat_multipliers.get("damage", 1.0))

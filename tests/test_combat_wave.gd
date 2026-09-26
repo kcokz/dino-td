@@ -580,11 +580,7 @@ func test_wave_3_horde_spawns_8_dinos() -> void:
 	elif wm.has_method("calculate_wave_dinos"):
 		count = wm.call("calculate_wave_dinos", 3)
 	else:
-		var base_count = 2
-		var count_per_wave = 1
-		var big_multiplier = 2.0
-		var raw = base_count + (3 - 1) * count_per_wave
-		count = int(raw * big_multiplier)
+		count = -1
 
 	if wm.has_method("is_big_wave"):
 		is_big = wm.call("is_big_wave", 3)
@@ -592,7 +588,10 @@ func test_wave_3_horde_spawns_8_dinos() -> void:
 		is_big = (3 % 3 == 0)
 
 	assert_true(is_big, "Wave 3 must be flagged as big horde wave")
-	assert_eq(count, 8, "Wave 3 must spawn (2 + 2) * 2 = 8 dinos")
+	var w_cfg: Dictionary = config_node.WAVES
+	var expected: int = int(floor(float(int(w_cfg["base_count"]) + 2 * int(w_cfg["count_per_wave"])) * float(w_cfg["big_multiplier"])))
+	assert_gt(expected, int(w_cfg["base_count"]) + 2 * int(w_cfg["count_per_wave"]), "A big wave sends more than an ordinary one would")
+	assert_eq(count, expected, "Wave 3 must spawn (base + 2 per wave) x big_multiplier = %d dinos" % expected)
 
 func test_wave_manager_emits_wave_started_lifecycle() -> void:
 	var wm = _create_wave_manager()
@@ -658,9 +657,10 @@ func test_post_horde_stat_enhancement_applied() -> void:
 	# Conclude Wave 3
 	event_bus_node.wave_ended.emit(3)
 
-	# Multipliers should be enhanced by Config.WAVES.enhance_after_big (1.3 HP, 1.2 Damage)
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.3, 0.01, "Post-wave 3 HP mult scaled to 1.3")
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.2, 0.01, "Post-wave 3 Damage mult scaled to 1.2")
+	# Multipliers should be enhanced by Config.WAVES.enhance_after_big
+	var step: Dictionary = config_node.WAVES["enhance_after_big"]
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), float(step["hp"]), 0.01, "Post-wave 3 HP mult scaled once")
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), float(step["damage"]), 0.01, "Post-wave 3 Damage mult scaled once")
 
 func test_wave_4_spawns_with_enhanced_stats() -> void:
 	assert_not_null(game_state_node, "GameState must exist")

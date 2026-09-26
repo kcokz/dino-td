@@ -362,9 +362,10 @@ func test_wave_3_big_wave_stat_buff_on_wave_ended() -> void:
 	game_state_node.trigger_end_action()
 	event_bus_node.wave_ended.emit(3)
 
-	# Multipliers should be enhanced by Config.WAVES.enhance_after_big (1.3 HP, 1.2 Damage)
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.3, 0.01, "Wave 3: HP mult scaled to 1.3")
-	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.2, 0.01, "Wave 3: Damage mult scaled to 1.2")
+	# Multipliers should be enhanced by Config.WAVES.enhance_after_big
+	var step: Dictionary = config_node.WAVES["enhance_after_big"]
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), float(step["hp"]), 0.01, "Wave 3: HP mult scaled once")
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), float(step["damage"]), 0.01, "Wave 3: Damage mult scaled once")
 	assert_eq(int(game_state_node.current_phase), 2, "Transitioned to PRODUCE after big wave")
 
 

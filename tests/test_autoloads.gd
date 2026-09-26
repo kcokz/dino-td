@@ -162,7 +162,7 @@ func test_config_dinos_and_waves() -> void:
 		assert_eq(w.get("base_count", 0), 2, "wave base_count should be 2")
 		assert_eq(w.get("count_per_wave", 0), 1, "wave count_per_wave should be 1")
 		assert_eq(w.get("big_every", 0), 3, "wave big_every should be 3")
-		assert_almost_eq(float(w.get("big_multiplier", 0.0)), 2.0, 0.01, "big_multiplier should be 2.0")
+		assert_gt(float(w.get("big_multiplier", 0.0)), 1.0, "A big wave is bigger than an ordinary one")
 		assert_has(w, "enhance_after_big", "WAVES must define enhance_after_big")
 		assert_almost_eq(float(w.get("spawn_interval", 0.0)), 0.8, 0.01, "spawn_interval should be 0.8")
 
@@ -315,8 +315,9 @@ func test_gamestate_wave_scaling_after_big_wave() -> void:
 
 	event_bus_node.emit_signal("wave_ended", 3)
 	var mult_w3: Dictionary = game_state_node.get("dino_stat_multipliers")
-	assert_almost_eq(float(mult_w3.get("hp", 0.0)), 1.3, 0.01, "Dino HP multiplier scaled by 1.3 after wave 3")
-	assert_almost_eq(float(mult_w3.get("damage", 0.0)), 1.2, 0.01, "Dino damage multiplier scaled by 1.2 after wave 3")
+	var step: Dictionary = config_node.WAVES["enhance_after_big"]
+	assert_almost_eq(float(mult_w3.get("hp", 0.0)), float(step["hp"]), 0.01, "Dino HP multiplier scaled by Config's step after wave 3")
+	assert_almost_eq(float(mult_w3.get("damage", 0.0)), float(step["damage"]), 0.01, "Dino damage multiplier scaled by Config's step after wave 3")
 	assert_almost_eq(float(mult_w3.get("speed", 0.0)), 1.0, 0.01, "Dino speed multiplier scaled by 1.0 after wave 3")
 
 func test_gamestate_win_and_loss_terminal_states() -> void:
