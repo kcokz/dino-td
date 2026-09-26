@@ -544,9 +544,11 @@ func test_32_restarting_sweeps_the_ground_and_lays_it_out_again() -> void:
 	main.restart_game()
 	await wait_frames(2)
 
-	assert_eq(_ground_total("stone"), 0, "Yesterday's stone is gone")
-	assert_eq(_ground_total("wood"), config_node.get_opening_stock("wood"),
-		"And a fresh opening stock is laid out")
+	# Yesterday's five stone are gone: what lies there is a fresh opening stock, which
+	# has a few stones of its own since v0.6 (an axe's worth).
+	for res_id in config_node.RESOURCES:
+		assert_eq(_ground_total(String(res_id)), config_node.get_opening_stock(String(res_id)),
+			"Only a fresh opening stock of %s is on the ground" % res_id)
 	assert_eq(_wallet("wood"), 0, "With an empty warehouse to start from again")
 
 func test_33_the_level_owns_the_drops_container() -> void:

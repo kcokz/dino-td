@@ -124,9 +124,10 @@ func test_06_a_bench_makes_one_thing_at_a_time() -> void:
 	for res_id in config_node.RESOURCES:
 		game_state_node.resources[res_id] = 99
 
-	assert_true(bench.begin("roast_meat"), "It takes the job")
-	assert_true(bench.begin("roast_meat"), "Asking for the same job again is harmless")
-	assert_eq(bench.active_recipe, "roast_meat", "Still the one job")
+	var job: String = String(config_node.recipes_at("kitchen")[0])
+	assert_true(bench.begin(job), "It takes the job")
+	assert_true(bench.begin(job), "Asking for the same job again is harmless")
+	assert_eq(bench.active_recipe, job, "Still the one job")
 
 func test_07_a_finished_unlock_is_not_offered_again() -> void:
 	var bench = _spawn(station_script.new("workbench"))

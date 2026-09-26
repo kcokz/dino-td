@@ -1480,16 +1480,7 @@ func try_place_at_cell(cell: Vector2i, at_world: Variant = null) -> Node:
 			cancel_building_selection()
 		return placed
 
-	# Rejected. Say which of the two reasons it was: not worked out yet, or not
-	# paid for.
-	var cfg_lock = _get_config()
-	if cfg_lock and cfg_lock.has_method("building_requires_unlock"):
-		var needed: String = String(cfg_lock.building_requires_unlock(current_build_type))
-		var gs_lock = _get_game_state()
-		if needed != "" and (gs_lock == null or not gs_lock.has_method("has_unlock") or not gs_lock.has_unlock(needed)):
-			_hint("HINT_NEED_BLUEPRINT")
-			return null
-
+	# Rejected. Say why when it was the price.
 	var gs = _get_game_state()
 	var cfg = _get_config()
 	if gs and cfg and cfg.BUILDINGS.has(current_build_type):

@@ -401,9 +401,7 @@ func test_15_a_raid_walks_past_a_turret_nobody_has_built() -> void:
 	# had built, and stood there chewing the blueprint from 20 hit points down to 6.
 	var main = _level()
 	await wait_frames(8)
-	if game_state_node and "resources" in game_state_node:
-		game_state_node.resources["wood"] = 4000
-		game_state_node.resources["stone"] = 4000
+	stock_everything(4000)
 	var gm = main.grid_manager
 	var core: Vector3 = _core_of(main)
 

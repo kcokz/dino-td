@@ -71,7 +71,7 @@ func test_03_default_english_translations() -> void:
 		i18n_node.set_locale("en")
 
 	var tower_name = tr("BUILDING_TOWER_NAME")
-	assert_eq(tower_name, "Auto Turret", "In 'en' locale, BUILDING_TOWER_NAME must be 'Auto Turret'")
+	assert_eq(tower_name, "Crossbow Tower", "In 'en' locale, BUILDING_TOWER_NAME must be 'Crossbow Tower'")
 
 	var core_name = tr("BUILDING_CORE_NAME")
 	assert_eq(core_name, "Abandoned Cabin", "In 'en' locale, BUILDING_CORE_NAME must be 'Abandoned Cabin'")
@@ -96,7 +96,7 @@ func test_04_dynamic_locale_switching_to_chinese() -> void:
 		assert_true(locale_watcher.emitted, "EventBus.locale_changed must be emitted on switch")
 
 	# Verify instant reactive translations in zh_CN
-	assert_eq(tr("BUILDING_TOWER_NAME"), "自动哨位", "In 'zh_CN', BUILDING_TOWER_NAME must be '自动哨位'")
+	assert_eq(tr("BUILDING_TOWER_NAME"), "弩塔", "In 'zh_CN', BUILDING_TOWER_NAME must be '弩塔'")
 	assert_eq(tr("BUILDING_CORE_NAME"), "废弃船舱", "In 'zh_CN', BUILDING_CORE_NAME must be '废弃船舱'")
 	assert_eq(tr("BUILDING_WALL_NAME"), "木栅栏", "In 'zh_CN', BUILDING_WALL_NAME must be '木栅栏'")
 	assert_eq(tr("DINO_RAPTOR_NAME"), "迅猛龙", "In 'zh_CN', DINO_RAPTOR_NAME must be '迅猛龙'")
@@ -105,7 +105,7 @@ func test_04_dynamic_locale_switching_to_chinese() -> void:
 	# Switch back to en
 	i18n_node.set_locale("en")
 	assert_eq(i18n_node.get_locale(), "en", "I18n.get_locale() must return 'en'")
-	assert_eq(tr("BUILDING_TOWER_NAME"), "Auto Turret", "Switched back to 'en': Auto Turret")
+	assert_eq(tr("BUILDING_TOWER_NAME"), "Crossbow Tower", "Switched back to 'en': Crossbow Tower")
 
 func test_05_locale_persistence() -> void:
 	assert_not_null(i18n_node, "I18n autoload must exist")

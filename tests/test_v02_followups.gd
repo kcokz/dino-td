@@ -304,28 +304,32 @@ func test_21_the_opening_can_buy_something() -> void:
 	# a wholly disabled build page with nothing to do but chop. Since v0.3 the
 	# opening arrives as wood on the ground by the cabin, so this is what the player
 	# holds once it has been fetched.
-	var wallet: int = opening_wood()
+	# Prices are whole bills: a crossbow tower costs no wood at all, so comparing the
+	# wood alone made it the cheapest thing on the menu.
 	var cheapest: int = -1
 	var cheapest_name: String = ""
 	for b_type in config_node.BUILDABLE_TYPES:
-		var c: int = cost_of(String(b_type))
+		var c: int = total_price_of(String(b_type))
 		if cheapest < 0 or c < cheapest:
 			cheapest = c
 			cheapest_name = String(b_type)
 
 	assert_gt(cheapest, 0, "Something on the menu has a price")
-	assert_gte(wallet, cheapest,
-		"Opening wood (%d) must cover the cheapest building '%s' (%d)" % [wallet, cheapest_name, cheapest])
+	var price: Dictionary = config_node.BUILDINGS[cheapest_name].get("cost", {})
+	for res_id in price:
+		assert_gte(int(config_node.get_opening_stock(String(res_id))), int(price[res_id]),
+			"The opening stock covers the %s the cheapest building '%s' needs" % [res_id, cheapest_name])
 
 func test_22_the_opening_does_not_trivially_buy_the_whole_defence() -> void:
-	# The flip side: the opening must not hand over a turret and still leave enough
-	# for a fence, or the first real decision never happens.
-	# A turret is bought with wood and stone as of v0.4, so its price is the whole
-	# bill rather than its wood component.
-	var wallet: int = opening_wood()
-	var tower: int = total_price_of("tower")
-	assert_lt(wallet, tower * 2,
-		"Opening wood (%d) must not cover two turrets (%d each) outright" % [wallet, tower])
+	# The flip side: the opening must not hand over a tower, or the first real decision
+	# never happens. Since v0.6 a tower is tipped with bone, which lies nowhere but under
+	# a dead dinosaur -- so the opening cannot pay for one however it is tuned.
+	var price: Dictionary = config_node.BUILDINGS["tower"].get("cost", {})
+	var short: Array = []
+	for res_id in price:
+		if int(config_node.get_opening_stock(String(res_id))) < int(price[res_id]):
+			short.append(String(res_id))
+	assert_gt(short.size(), 0, "The opening stock cannot pay for a tower (it has no %s)" % ", ".join(short))
 
 # ==============================================================================
 # 7. Left-click inspects, right-click acts -- and the two never interfere
@@ -435,7 +439,7 @@ func test_28_build_time_is_a_function_of_price() -> void:
 		"Cheap stakes go up faster than a turret")
 	for a in config_node.BUILDABLE_TYPES:
 		for b in config_node.BUILDABLE_TYPES:
-			if cost_of(String(a)) < cost_of(String(b)):
+			if total_price_of(String(a)) < total_price_of(String(b)):
 				assert_lte(config_node.get_build_time(String(a)), config_node.get_build_time(String(b)),
 					"%s is cheaper than %s, so it may not take longer" % [a, b])
 
@@ -476,7 +480,7 @@ func test_30_stakes_are_cheap_enough_to_lay_a_row() -> void:
 	# The point of one-wood stakes is that a whole fence is affordable in one go.
 	var stake: int = cost_of("wall")
 	assert_eq(stake, config_node.BUILDINGS["wall"]["cost"]["wood"], "A stake's price is whatever Config says")
-	assert_lt(stake, cost_of("tower"), "And it is the cheap thing on the menu")
+	assert_lt(total_price_of("wall"), total_price_of("tower"), "And it is the cheap thing on the menu")
 	var wallet: int = opening_wood()
 	assert_gte(wallet / stake, 10, "The opening affords at least ten stakes")
 

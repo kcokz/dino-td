@@ -168,7 +168,9 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# of its bill is paid separately and the running total tracks wood only.
 	var expected_wood: int = total_cost_of(["wall", "tower", "wall"]) + 1
 	game_state_node.resources["wood"] = expected_wood
-	game_state_node.resources["stone"] = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
+	for res_id in config_node.BUILDINGS["tower"]["cost"]:
+		if res_id != "wood":   # the wood is counted into the running total above
+			game_state_node.resources[res_id] = int(config_node.BUILDINGS["tower"]["cost"][res_id])
 	await wait_frames(1)
 
 	var wall_node = main.place_building_at_cell("wall", FREE_TILE)
@@ -313,7 +315,9 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Fund the assault tower from Config rather than from the old balance.
 	expected_wood = cost_of("tower") + 2
 	game_state_node.resources["wood"] = expected_wood
-	game_state_node.resources["stone"] = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
+	for res_id in config_node.BUILDINGS["tower"]["cost"]:
+		if res_id != "wood":   # the wood is counted into the running total above
+			game_state_node.resources[res_id] = int(config_node.BUILDINGS["tower"]["cost"][res_id])
 	await wait_frames(1)
 	var assault_tower = main.place_building_at_cell("tower", Vector2i(0, -8))
 	assert_not_null(assault_tower, "Assault Tower successfully placed at (0, -8)")

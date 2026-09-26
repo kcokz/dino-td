@@ -78,7 +78,7 @@ func before_each() -> void:
 		# reset_game() seeds Config.INITIAL_RESOURCES, which is deliberately lean.
 		# Top the wallet up so these tests measure the placement transaction rather
 		# than whether the opening balance happens to cover a given building.
-		if "resources" in game_state_node: game_state_node.resources = {"wood": START_WOOD, "stone": START_WOOD, "water": START_WOOD, "food": 0}
+		stock_everything(START_WOOD)
 		if "is_game_over" in game_state_node: game_state_node.is_game_over = false
 	# v0.4 gates the turret behind a blueprint and stone behind a pick. This suite is
 	# about something else, so it starts with the cabin's work already done rather
@@ -456,7 +456,9 @@ func test_place_turret_success_transactions() -> void:
 	if building is Node: _cleanup_nodes.append(building)
 
 	assert_not_null(building, "place_building tower should succeed")
-	assert_eq(_get_wood(), START_WOOD - cost_of("tower"), "Placement consumes its wood cost")
+	for res_id in config_node.BUILDINGS["tower"]["cost"]:
+		assert_eq(int(game_state_node.resources.get(res_id, 0)), START_WOOD - cost_of("tower", String(res_id)),
+			"Placement consumes its %s cost" % res_id)
 	assert_true(watcher.emitted, "building_placed emitted")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (2,1) occupied in GridManager")
 
@@ -472,7 +474,9 @@ func test_place_tower_success_transactions() -> void:
 	if building is Node: _cleanup_nodes.append(building)
 
 	assert_not_null(building, "place_building tower should succeed")
-	assert_eq(_get_wood(), START_WOOD - cost_of("tower"), "Tower placement consumes its wood cost")
+	for res_id in config_node.BUILDINGS["tower"]["cost"]:
+		assert_eq(int(game_state_node.resources.get(res_id, 0)), START_WOOD - cost_of("tower", String(res_id)),
+			"Placement consumes its %s cost" % res_id)
 	assert_true(watcher.emitted, "building_placed emitted for Tower")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (3,1) occupied in GridManager")
 

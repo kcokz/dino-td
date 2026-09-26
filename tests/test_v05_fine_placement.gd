@@ -35,9 +35,7 @@ func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
 	unlock_all()
-	if game_state_node and "resources" in game_state_node:
-		game_state_node.resources["wood"] = 500
-		game_state_node.resources["stone"] = 500
+	stock_everything(500)
 
 func after_each() -> void:
 	for n in _cleanup_nodes:

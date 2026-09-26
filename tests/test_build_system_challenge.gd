@@ -137,11 +137,6 @@ func _get_wood() -> int:
 		return game_state_node.resources.get("wood", 0)
 	return -1
 
-func _get_stone() -> int:
-	if game_state_node != null and "resources" in game_state_node:
-		return game_state_node.resources.get("stone", 0)
-	return -1
-
 func test_challenge_duplicate_placement_identical_type() -> void:
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
@@ -378,51 +373,52 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or game_state_node == null: return
 
-	# The turret is the game's one multi-resource building, so it is the honest
-	# fixture for this. Both prices come from Config: a test that restates them
-	# stops testing the transaction and starts testing a copy of the price list.
+	# The tower is bought with two materials, so it is the honest fixture for this. Both
+	# prices come from Config: a test that restates them stops testing the transaction
+	# and starts testing a copy of the price list -- and it did, when the tower stopped
+	# costing wood and stone and started costing stone and bone.
 	#
 	# It used to use "barracks", a building nobody could ever put up -- it was not in
-	# BUILDABLE_TYPES -- so this suite was exercising the transaction against a
-	# phantom. The barracks is gone; the turret actually costs wood and stone.
-	var wood_price: int = cost_of("tower", "wood")
-	var stone_price: int = cost_of("tower", "stone")
-	assert_gt(wood_price, 0, "The turret costs wood")
-	assert_gt(stone_price, 0, "And stone, which is what makes a multi-resource test possible")
+	# BUILDABLE_TYPES -- so this suite was exercising the transaction against a phantom.
+	var price: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	assert_eq(price.size(), 2, "The tower is bought with two materials, which is what makes this test possible")
+	var a: String = String(price.keys()[0])
+	var b: String = String(price.keys()[1])
+	var have := func(res_id: String) -> int: return int(game_state_node.resources.get(res_id, 0))
 
-	# Case A: enough wood, one stone short.
-	game_state_node.resources = {"wood": wood_price, "stone": stone_price - 1, "food": 0}
+	# Case A: enough of the first, one of the second short.
+	game_state_node.resources = {a: int(price[a]), b: int(price[b]) - 1}
 	var cell_a = Vector2i(60, 60)
 
-	assert_false(build_sys.can_place_building("tower", cell_a), "One stone short must fail")
+	assert_false(build_sys.can_place_building("tower", cell_a), "One %s short must fail" % b)
 	var b_a = build_sys.place_building("tower", cell_a)
 	if b_a is Node: _cleanup_nodes.append(b_a)
 
-	assert_null(b_a, "Placement returns null when stone is insufficient")
-	assert_eq(_get_wood(), wood_price, "Wood must NOT be partially deducted")
-	assert_eq(_get_stone(), stone_price - 1, "Nor stone")
+	assert_null(b_a, "Placement returns null when %s is insufficient" % b)
+	assert_eq(have.call(a), int(price[a]), "%s must NOT be partially deducted" % a)
+	assert_eq(have.call(b), int(price[b]) - 1, "Nor %s" % b)
 
-	# Case B: enough stone, one wood short.
-	game_state_node.resources = {"wood": wood_price - 1, "stone": stone_price, "food": 0}
+	# Case B: enough of the second, one of the first short.
+	game_state_node.resources = {a: int(price[a]) - 1, b: int(price[b])}
 	var cell_b = Vector2i(60, 61)
 
-	assert_false(build_sys.can_place_building("tower", cell_b), "One wood short must fail too")
+	assert_false(build_sys.can_place_building("tower", cell_b), "One %s short must fail too" % a)
 	var b_b = build_sys.place_building("tower", cell_b)
 	if b_b is Node: _cleanup_nodes.append(b_b)
 
-	assert_null(b_b, "Placement returns null when wood is insufficient")
-	assert_eq(_get_wood(), wood_price - 1, "Wood untouched")
-	assert_eq(_get_stone(), stone_price, "Stone untouched")
+	assert_null(b_b, "Placement returns null when %s is insufficient" % a)
+	assert_eq(have.call(a), int(price[a]) - 1, "%s untouched" % a)
+	assert_eq(have.call(b), int(price[b]), "%s untouched" % b)
 
 	# Case C: exactly enough of both, which must go through and take all of it.
-	game_state_node.resources = {"wood": wood_price, "stone": stone_price, "food": 0}
+	game_state_node.resources = {a: int(price[a]), b: int(price[b])}
 	assert_true(build_sys.can_place_building("tower", cell_b), "Exactly the price must pass")
 	var b_c = build_sys.place_building("tower", cell_b)
 	if b_c is Node: _cleanup_nodes.append(b_c)
 
 	assert_not_null(b_c, "Placement with exactly the price succeeds")
-	assert_eq(_get_wood(), 0, "Wood spent to the last unit")
-	assert_eq(_get_stone(), 0, "And stone with it")
+	assert_eq(have.call(a), 0, "%s spent to the last unit" % a)
+	assert_eq(have.call(b), 0, "And %s with it" % b)
 
 func test_challenge_missing_resource_keys_handled_safely() -> void:
 	var grid_mgr = _create_grid_manager()
@@ -447,7 +443,7 @@ func test_challenge_missing_resource_keys_handled_safely() -> void:
 
 func test_challenge_replacement_after_lethal_damage() -> void:
 	# Budget generously so this test exercises placement, not affordability.
-	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
+	stock_everything()
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null or event_bus_node == null: return
@@ -481,7 +477,7 @@ func test_challenge_replacement_after_lethal_damage() -> void:
 
 func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 	# Budget generously so this test exercises placement, not affordability.
-	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
+	stock_everything()
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return
@@ -510,7 +506,7 @@ func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 
 func test_challenge_replacement_after_direct_destroy_call() -> void:
 	# Budget generously so this test exercises placement, not affordability.
-	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
+	stock_everything()
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return
@@ -636,7 +632,7 @@ func test_challenge_game_over_state_blocks_placement_even_with_excess_resources(
 
 	# Artificially set game over
 	game_state_node.is_game_over = true
-	game_state_node.resources = {"wood": 9999, "stone": 9999, "food": 9999}
+	stock_everything()
 
 	var cell = Vector2i(88, 88)
 	assert_false(build_sys.can_place_building("wall", cell), "Game over must unconditionally block can_place_building")
@@ -687,7 +683,7 @@ func test_challenge_core_campfire_double_destroy_idempotency() -> void:
 
 func test_challenge_replacement_immediately_after_queue_free_same_frame() -> void:
 	# Budget generously so this test exercises placement, not affordability.
-	if game_state_node: game_state_node.resources = {"wood": 9999, "stone": 9999, "water": 9999, "food": 0}
+	stock_everything()
 	var grid_mgr = _create_grid_manager()
 	var build_sys = _create_build_system(grid_mgr)
 	if grid_mgr == null or build_sys == null: return

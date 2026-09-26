@@ -384,7 +384,7 @@ func test_18_a_stake_is_not_a_cheaper_turret() -> void:
 	var tower_dps: float = float(tower.get("damage", 0.0)) * float(tower.get("fire_rate", 0.0))
 	assert_gt(tower_dps, config_node.get_contact_dps("wall"),
 		"A turret out-damages a stake, or nobody would ever pay for one")
-	assert_lt(cost_of("wall"), cost_of("tower"),
+	assert_lt(total_price_of("wall"), total_price_of("tower"),
 		"And the stake stays the cheap thing you lay out by the row")
 
 func test_19_a_big_dinosaur_shrugs_the_fence_off() -> void:

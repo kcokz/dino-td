@@ -93,21 +93,6 @@ func _on_cabin_view_changed(inside: bool) -> void:
 func _on_resources_changed(_res: Dictionary) -> void:
 	refresh_build_affordability()
 
-## Whether the flag a building waits on has been made yet. Anything with no gate
-## is always open.
-func _is_unlocked(b_type: String) -> bool:
-	var cfg = _get_config()
-	if cfg == null or not cfg.has_method("building_requires_unlock"):
-		return true
-	var needed: String = String(cfg.building_requires_unlock(b_type))
-	if needed == "":
-		return true
-	var gs = _get_game_state()
-	return gs != null and gs.has_method("has_unlock") and gs.has_unlock(needed)
-
-func _unlock_name(unlock_id: String) -> String:
-	return TranslationServer.translate("UNLOCK_%s" % unlock_id.to_upper())
-
 func refresh_build_affordability() -> void:
 	if current_menu != "build" or button_container == null:
 		return
@@ -119,7 +104,7 @@ func refresh_build_affordability() -> void:
 			break
 		var btn = children[i]
 		if btn is Button:
-			btn.disabled = not _can_afford(String(buildable[i])) or not _is_unlocked(String(buildable[i]))
+			btn.disabled = not _can_afford(String(buildable[i]))
 
 func set_selected_unit(unit: Node) -> void:
 	selected_unit = unit
@@ -380,7 +365,7 @@ func _populate_hero_buttons() -> void:
 			var btn := _create_action_button(b_name, func():
 				_trigger_build(b_type)
 			)
-			btn.disabled = not _can_afford(b_type) or not _is_unlocked(b_type)
+			btn.disabled = not _can_afford(b_type)
 			btn.mouse_entered.connect(func(): _show_build_detail(b_type))
 			btn.focus_entered.connect(func(): _show_build_detail(b_type))
 			btn.mouse_exited.connect(_clear_build_detail)
@@ -402,13 +387,6 @@ func _show_build_detail(b_type: String) -> void:
 	if cfg == null or not cfg.BUILDINGS.has(b_type):
 		return
 	var b_name: String = _building_name(b_type)
-	# A locked entry is shown rather than hidden: the player should be able to see
-	# what is waiting for them, and what has to be made before it opens.
-	if not _is_unlocked(b_type):
-		var needed: String = String(cfg.building_requires_unlock(b_type))
-		status_label.text = tr("BUILD_DETAIL_LOCKED") % [b_name, _unlock_name(needed)]
-		status_label.modulate = Color(0.75, 0.7, 0.55)
-		return
 	if _can_afford(b_type):
 		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
 		var dps: float = float(cfg.get_contact_dps(b_type)) if cfg.has_method("get_contact_dps") else 0.0

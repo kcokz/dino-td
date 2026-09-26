@@ -568,24 +568,26 @@ func test_26_build_entries_light_up_when_the_wood_arrives() -> void:
 	tree.root.add_child(panel)
 	await wait_frames(1)
 
-	# One wood short of the whole bill, whatever the bill is made of.
+	# One unit short of the whole bill, in whichever material it names first: a tower
+	# was wood and stone, and is stone and bone.
 	pay_for(["tower"])
-	game_state_node.resources["wood"] = maxi(0, int(game_state_node.resources.get("wood", 0)) - 1)
+	var short: String = String(config_node.BUILDINGS["tower"]["cost"].keys()[0])
+	game_state_node.resources[short] = maxi(0, int(game_state_node.resources.get(short, 0)) - 1)
 	panel.select_target(hero)
 	panel._on_build_pressed()
 
 	var idx: int = config_node.BUILDABLE_TYPES.find("tower")
-	assert_gte(idx, 0, "The turret is in the build menu")
+	assert_gte(idx, 0, "The tower is in the build menu")
 	var btn = panel.button_container.get_child(idx)
-	assert_true(btn.disabled, "One wood short, so the entry is greyed out")
+	assert_true(btn.disabled, "One %s short, so the entry is greyed out" % short)
 
 	# Earning the last of it must light the entry without reopening the menu.
-	game_state_node.add_resource("wood", 1)
+	game_state_node.add_resource(short, 1)
 	await wait_frames(1)
-	assert_false(btn.disabled, "It lights up as soon as the wood arrives")
+	assert_false(btn.disabled, "It lights up as soon as the %s arrives" % short)
 
 	# And the same in reverse.
-	game_state_node.resources["wood"] = 0
+	game_state_node.resources[short] = 0
 	event_bus_node.resources_changed.emit(game_state_node.resources)
 	assert_true(btn.disabled, "And greys out again when it is spent")
 

@@ -1,0 +1,82 @@
+# res://tests/test_v06_material_route.gd
+# v0.6: tools decide what the Hero can gather, materials decide what he can build.
+#
+# There were blueprints: the kitchen turned two meat into the knowledge of how to put a
+# turret together, and a building could be locked behind a flag. The design book took
+# that out (GAME-DESIGN 4.1 rule 1) -- he is a master builder, and what he lacks is never
+# how, only what with. The only unlocks left are tools, made at the cabin. These are the
+# invariants that keep it that way, stated so that bringing a blueprint back is a
+# decision somebody has to make.
+extends "res://tests/test_base.gd"
+
+var config_node: Object = null
+var game_state_node: Object = null
+
+var _cleanup_nodes: Array[Node] = []
+
+func before_all() -> void:
+	if tree != null and tree.root != null:
+		config_node = tree.root.get_node_or_null("Config")
+		game_state_node = tree.root.get_node_or_null("GameState")
+
+func before_each() -> void:
+	if game_state_node != null and game_state_node.has_method("reset_game"):
+		game_state_node.reset_game()
+
+func after_each() -> void:
+	for n in _cleanup_nodes:
+		if is_instance_valid(n):
+			if n.is_inside_tree():
+				n.get_parent().remove_child(n)
+			if not n.is_queued_for_deletion():
+				n.free()
+	_cleanup_nodes.clear()
+	super.after_each()
+
+func test_01_no_building_waits_on_anything_but_its_materials() -> void:
+	for b_type in config_node.BUILDINGS:
+		assert_false(config_node.BUILDINGS[b_type].has("requires_unlock"),
+			"%s is locked by its materials alone, never by a flag" % b_type)
+
+	# And in play: with a tower's materials in the warehouse and nothing made at the
+	# cabin, a tower goes up.
+	var grid = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(grid)
+	tree.root.add_child(grid)
+	var builder = load("res://scripts/core/BuildSystem.gd").new()
+	_cleanup_nodes.append(builder)
+	tree.root.add_child(builder)
+	builder.setup(grid, null)
+	await wait_frames(1)
+	pay_for(["tower"], 1)
+	assert_true(game_state_node.unlocks.is_empty(), "Nothing has been made at the cabin")
+	assert_true(builder.can_place_building("tower", Vector2i(2, 2)),
+		"The materials are all a tower asks for")
+
+func test_02_a_building_is_two_materials_at_most() -> void:
+	# One material says which tier it is, and at most one more is a working part: a
+	# stone plinth with bone bolt heads is stone and bone (GAME-DESIGN 4.1 rule 2).
+	for b_type in config_node.BUILDINGS:
+		var cost: Dictionary = config_node.BUILDINGS[b_type].get("cost", {})
+		assert_lte(cost.size(), 2, "%s is built of two materials at most" % b_type)
+
+func test_03_a_recipe_is_two_materials_at_most() -> void:
+	# GAME-DESIGN 5.4 rule 5: a recipe has at most two ingredients.
+	for recipe_id in config_node.RECIPES:
+		assert_lte(config_node.RECIPES[recipe_id]["inputs"].size(), 2,
+			"%s is made of two materials at most" % recipe_id)
+
+func test_04_every_unlock_the_cabin_makes_is_a_tool_or_a_vessel() -> void:
+	# The workbench makes tools and the kitchen makes the vessels he cooks in: nothing
+	# the cabin makes is the right to build something.
+	var stations: Array = config_node.STATIONS
+	assert_has(stations, "workbench", "There is a workbench")
+	assert_has(stations, "kitchen", "And a kitchen")
+	for recipe_id in config_node.RECIPES:
+		var unlock: String = String(config_node.RECIPES[recipe_id]["unlocks"])
+		for b_type in config_node.BUILDINGS:
+			for key in config_node.BUILDINGS[b_type]:
+				var value = config_node.BUILDINGS[b_type][key]
+				if value is String:
+					assert_ne(String(value), unlock,
+						"%s: no building is gated by what %s makes" % [b_type, recipe_id])

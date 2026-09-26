@@ -547,6 +547,20 @@ func pay_for(type_ids: Array, spare: int = 0) -> void:
 		for res_id in cfg.RESOURCES:
 			gs.resources[res_id] = int(gs.resources.get(res_id, 0)) + spare
 
+## Fills the warehouse with `amount` of EVERY resource Config declares, for a test about
+## placement rather than price. Suites used to write the budget out -- wood, stone, water
+## and food, 9999 each -- and when the tower came to be bought with bone, every one of
+## them was a budget that could not buy it.
+func stock_everything(amount: int = 9999) -> void:
+	if not (Engine.get_main_loop() is SceneTree) or Engine.get_main_loop().root == null:
+		return
+	var cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	var gs = Engine.get_main_loop().root.get_node_or_null("GameState")
+	if cfg == null or gs == null or not ("resources" in gs):
+		return
+	for res_id in cfg.RESOURCES:
+		gs.resources[String(res_id)] = amount
+
 ## Everything `type_id` costs, added up across resources. The figure the build-time
 ## curve is derived from.
 func total_price_of(type_id: String) -> int:

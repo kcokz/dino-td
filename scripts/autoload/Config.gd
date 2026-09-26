@@ -11,9 +11,9 @@ extends Node
 ## Every resource in the game, and where each one comes from:
 ##   wood  -- cut by hand from trees
 ##   stone -- cut by hand from outcrops, but only once the Hero has a pick
-##   bone  -- off a dead dinosaur; the workbench turns it into tools
-##   food  -- off a dead dinosaur; the kitchen turns it into blueprints
-##   water -- no sink yet (see the open question in VERSION.md's v0.4 section)
+##   bone  -- off a dead dinosaur; the workbench turns it into tools, and it tips the bolts
+##   food  -- meat, off a dead dinosaur; cooked and eaten at the kitchen
+##   water -- no use yet (GAME-DESIGN 4.4), so the game does not offer it
 const RESOURCES: Array[String] = ["wood", "stone", "bone", "water", "food"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (Config.DROPS.opening_stock) and has to be walked over like anything
@@ -66,11 +66,16 @@ const BUILDINGS: Dictionary = {
 		"footprint": 1.1,
 		"height": 2.4,
 		"hp": 20.0,
-		# Stone, so a turret cannot be reached on wood alone -- and a blueprint, so
-		# it cannot be reached on materials alone either. Both come out of the
-		# cabin, which is the point: the thing you defend is the thing you need.
-		"cost": {"wood": 8, "stone": 4},
-		"requires_unlock": "blueprint_tower",
+		# A crossbow he builds himself: a drystone plinth, a timber bow arm, bone bolt heads.
+		# Stone and bone and nothing else -- one building, two materials at most, and the
+		# price should read off the model (GAME-DESIGN 4.1 rule 2). Those two are its whole
+		# lock: stone wants the pick, and the pick and the bolts want bone, which only a
+		# dinosaur has. There is no blueprint any more (4.1 rule 1): he is a master builder,
+		# and what he lacks is never how, only what with.
+		#
+		# One bone: the first raid leaves two (WAVES.base_count raptors), and the pick takes
+		# the other -- one raid pays for the pick and the first tower (GAME-DESIGN 9.2).
+		"cost": {"stone": 5, "bone": 1},
 		"range": 5.0,
 		"damage": 1.0,
 		"fire_rate": 1.0,
@@ -350,14 +355,6 @@ static func get_building_footprint(type_id: String = "") -> float:
 static func is_barrier_building(type_id: String) -> bool:
 	var fp: float = get_building_footprint(type_id)
 	return (float(get_building_span(type_id)) * TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
-
-## The flag a building needs before it can be placed, or "" for anything the Hero
-## can put up from the start. Declared as data so a new gate is a Config line
-## rather than a branch somewhere in the build path.
-static func building_requires_unlock(type_id: String) -> String:
-	if BUILDINGS.has(type_id):
-		return String(BUILDINGS[type_id].get("requires_unlock", ""))
-	return ""
 
 ## The flag needed before `res_id` can be cut by hand, or "" for anything bare
 ## hands can take.
@@ -1036,8 +1033,10 @@ const DROPS: Dictionary = {
 	"fly_time": 0.18,         # 被捡起时飞向现代人的时长（秒）
 	"size": 0.3,              # 一堆的高度（米）；宽是它的 1.5 倍，见 get_visual_size
 	"label_min_amount": 2,    # 堆叠数达到这个值才显示数字
-	# 开局物资：撒在船舱周围，而不是直接进仓库
-	"opening_stock": {"wood": 20},
+	# 开局物资：撒在船舱周围，而不是直接进仓库。几块石头正好是一把石斧的价钱
+	# （RECIPES.stone_axe）：第一个早上能做斧头，但成片采石要等石镐，也就是等第一波来袭
+	# 掉的骨头——"第一波来袭是补给"不变（GAME-DESIGN 5.2）。
+	"opening_stock": {"wood": 20, "stone": 2},
 	"opening_piles": 4,        # 分成几堆
 	# 离船舱墙壁的距离（米）——从墙壁量，不是从中心量：船舱现在三米宽，从中心量 4.5 米，
 	# 南边那一堆离出生点只有一米半，现代人第一帧就捡走了，"开局物资要走过去拿"这一课就白教了。
@@ -1088,10 +1087,11 @@ const REPAIR: Dictionary = {
 # 14. The cabin workshop (v0.4)
 # ==============================================================================
 ## The cabin is the thing you defend and the thing you need, and everything the
-## Hero gains is made in it. Two stations, one rule: **materials make tools, food
-## gives ideas.** The workbench turns bone, wood and stone into abilities -- what
-## the Hero can *do*; the kitchen turns meat into blueprints -- what he can
-## *build*.
+## Hero gains is made in it. **Tools decide what he can gather, materials decide what
+## he can build** (GAME-DESIGN 4.1 rule 1): the workbench turns wood, stone and bone
+## into tools -- what the Hero can *do* -- and the kitchen makes the vessels he cooks
+## in. There are no blueprints: the kitchen used to turn meat into one, and a master
+## builder was made to work out how to build a crossbow.
 ##
 ## Nothing here is an inventory item. A recipe grants a permanent flag and that is
 ## the whole of it: unlocked means usable, so there is no bag, no slots, and no
@@ -1127,6 +1127,17 @@ const CABIN: Dictionary = {
 ## Adding a third station later is an entry here plus a node in the scene, not a
 ## new system.
 const RECIPES: Dictionary = {
+	# The first thing the morning makes: the stones scattered by the cabin
+	# (DROPS.opening_stock) are exactly its price. A ground stone head lashed to a haft.
+	"stone_axe": {
+		"name": "RECIPE_STONE_AXE_NAME",
+		"station": "workbench",
+		"inputs": {"wood": 3, "stone": 2},
+		"time": 6.0,
+		"unlocks": "stone_axe",
+	},
+	# Neolithic flint miners dug with antler picks: this one is bone, and bone only comes
+	# off a dinosaur -- which is what turns the first raid into something the player needs.
 	"stone_pick": {
 		"name": "RECIPE_STONE_PICK_NAME",
 		"station": "workbench",
@@ -1134,16 +1145,15 @@ const RECIPES: Dictionary = {
 		"time": 8.0,
 		"unlocks": "harvest_stone",
 	},
-	"roast_meat": {
-		"name": "RECIPE_ROAST_MEAT_NAME",
+	# A flat stone set over the fire, to sear meat on (GAME-DESIGN 4.5). Made in the
+	# kitchen, like every vessel, and kept for good like a tool. Quarried stone, so it
+	# comes after the pick.
+	"stone_pot": {
+		"name": "RECIPE_STONE_POT_NAME",
 		"station": "kitchen",
-		# Two meat, which is what the first raid leaves. The pick and the blueprint
-		# both have to be reachable on one raid's drops or the opening stalls: the
-		# player would be waiting on a second wave with no turret and no reason to
-		# have gone home.
-		"inputs": {"food": 2, "wood": 2},
+		"inputs": {"stone": 3},
 		"time": 6.0,
-		"unlocks": "blueprint_tower",
+		"unlocks": "stone_pot",
 	},
 }
 

@@ -220,58 +220,25 @@ func test_12_wood_is_never_gated() -> void:
 	assert_eq(config_node.harvest_requires_unlock("wood"), "", "Trees need no tool")
 	assert_ne(config_node.harvest_requires_unlock("stone"), "", "Rock does")
 
-func test_13_a_turret_cannot_be_reached_on_materials_alone() -> void:
-	var grid = load("res://scripts/core/GridManager.gd").new()
-	_cleanup_nodes.append(grid)
-	tree.root.add_child(grid)
-	var builder = build_system_script.new()
-	_cleanup_nodes.append(builder)
-	tree.root.add_child(builder)
-	builder.setup(grid, null)
-	await wait_frames(1)
-	pay_for(["tower"], 99)
-
-	assert_false(builder.can_place_building("tower", Vector2i(2, 2)),
-		"All the materials in the world do not make a turret you have not worked out")
-	game_state_node.grant_unlock(String(config_node.building_requires_unlock("tower")))
-	assert_true(builder.can_place_building("tower", Vector2i(2, 2)),
-		"The blueprint is what opens it")
-
-func test_14_stakes_are_never_gated() -> void:
-	assert_eq(config_node.building_requires_unlock("wall"), "",
-		"Stakes are what the player has on the first morning")
-	assert_ne(config_node.building_requires_unlock("tower"), "",
-		"A turret is not")
-
 func test_15_the_chain_closes() -> void:
 	# The whole point of v0.4, stated once: every link is reachable from the one
-	# before it, and the first raid is in the middle of it.
-	var pick: String = String(config_node.harvest_requires_unlock("stone"))
-	var blueprint: String = String(config_node.building_requires_unlock("tower"))
-
-	var pick_recipe: Dictionary = {}
-	var blueprint_recipe: Dictionary = {}
-	for recipe_id in config_node.RECIPES:
-		var data: Dictionary = config_node.RECIPES[recipe_id]
-		if String(data.get("unlocks", "")) == pick:
-			pick_recipe = data
-		if String(data.get("unlocks", "")) == blueprint:
-			blueprint_recipe = data
-
+	# before it, and the first raid is in the middle of it. v0.6 took the blueprint out
+	# (GAME-DESIGN 4.1 rule 1): the tower is gated by its materials and nothing else.
+	var pick_recipe: Dictionary = _recipe(String(config_node.harvest_requires_unlock("stone")))
 	assert_false(pick_recipe.is_empty(), "The pick is something the cabin can make")
-	assert_false(blueprint_recipe.is_empty(), "So is the turret's blueprint")
 	assert_has(pick_recipe["inputs"], "bone", "And the pick is made of bone, which only a dinosaur has")
-	assert_has(config_node.BUILDINGS["tower"]["cost"], "stone",
-		"While the turret is built of the stone the pick cuts")
+	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	assert_has(tower_cost, "stone", "While the tower is built of the stone the pick cuts")
+	assert_has(tower_cost, "bone", "And tipped with bone off the same raid")
 
 # ==============================================================================
 # 6. The opening, stated once so a balance pass cannot quietly break it
 # ==============================================================================
 #
-# v0.4's opening is a chain, not a purchase:
+# v0.4's opening is a chain, not a purchase. As v0.6 has it:
 #
-#   fetch the stock -> stakes -> survive the first raid and kill something
-#     -> bone + meat -> pick and blueprint at the cabin -> stone -> turret
+#   fetch the stock -> stakes and a stone axe -> survive the first raid and kill
+#     something -> bone + meat -> the pick at the cabin -> stone -> a crossbow tower
 #
 # Every link below is asserted against Config rather than against a number typed
 # here, so tuning stays a matter of editing Config and re-reading these.
@@ -290,37 +257,45 @@ func _first_raid_drops() -> Dictionary:
 		out[res_id] = int(config_node.DINOS["raptor"]["drops"][res_id]) * count
 	return out
 
-func test_16_the_opening_stock_buys_a_fence_and_nothing_more() -> void:
+func test_16_the_opening_stock_buys_a_fence_and_an_axe_and_nothing_more() -> void:
 	var wallet: int = opening_wood()
 	var stake: int = cost_of("wall")
 	assert_gte(wallet / stake, 6, "Enough stakes to make a fence worth standing behind")
 
-	# What keeps the turret out of reach on the first morning is the chain, not the
-	# wood: it wants stone the Hero cannot cut yet, and a blueprint he has not
-	# worked out. Gating it on the opening wallet as well would be a second lock on
-	# the same door, and the wallet is the one that would have to be re-tuned every
-	# time anything else moved.
-	assert_gt(int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0)), 0,
-		"A turret wants stone")
-	assert_ne(config_node.building_requires_unlock("tower"), "", "And a blueprint")
-	assert_eq(int(config_node.get_opening_stock("stone")), 0, "Neither of which the opening hands over")
+	# A few stones lie by the cabin: exactly a stone axe's worth (GAME-DESIGN 5.2), so
+	# the first morning makes one, and quarrying still waits on the pick.
+	var axe: Dictionary = _recipe("stone_axe")
+	assert_false(axe.is_empty(), "The axe is a recipe")
+	assert_eq(int(config_node.get_opening_stock("stone")), int(axe["inputs"].get("stone", 0)),
+		"The stones by the cabin are exactly an axe's worth")
+	assert_gte(wallet, stake * 6 + int(axe["inputs"].get("wood", 0)),
+		"And the wood there buys the fence and the axe's haft")
 
-func test_17_one_raid_pays_for_both_of_the_cabin_s_first_jobs() -> void:
-	# If either job needed a second wave, the player would be sent home with
-	# nothing to do there -- and the first raid would stop being the pivot the
-	# whole design turns on.
+	# What keeps the tower out of reach on the first morning is the chain, not the
+	# wood: it wants more stone than lies by the cabin, and bone, which none does.
+	# Gating it on the opening wallet as well would be a second lock on the same door.
+	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	assert_lt(int(config_node.get_opening_stock("stone")), int(tower_cost.get("stone", 0)),
+		"Not a tower's worth of stone")
+	assert_gt(int(tower_cost.get("bone", 0)), 0, "And a tower wants bone")
+	assert_eq(int(config_node.get_opening_stock("bone")), 0, "Which the opening does not hand over")
+
+func test_17_one_raid_pays_for_the_pick_and_the_first_tower() -> void:
+	# If the pick or the first tower needed a second wave, the player would be sent home
+	# with nothing to do there -- and the first raid would stop being the pivot the whole
+	# design turns on (GAME-DESIGN 9.2: the first wave pays for the pick and the first tower).
 	var drops: Dictionary = _first_raid_drops()
 	var pick: Dictionary = _recipe("harvest_stone")
-	var blueprint: Dictionary = _recipe("blueprint_tower")
 	assert_false(pick.is_empty(), "The pick is a recipe")
-	assert_false(blueprint.is_empty(), "So is the blueprint")
-
-	for recipe in [pick, blueprint]:
-		for res_id in recipe["inputs"]:
-			if res_id == "wood":
-				continue   # wood is cut, not dropped
-			assert_gte(int(drops.get(res_id, 0)), int(recipe["inputs"][res_id]),
-				"One raid leaves enough %s for %s" % [res_id, recipe["name"]])
+	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var bone_needed: int = int(pick["inputs"].get("bone", 0)) + int(tower_cost.get("bone", 0))
+	assert_gte(int(drops.get("bone", 0)), bone_needed,
+		"One raid leaves the bone for the pick and the first tower's bolts")
+	for res_id in pick["inputs"]:
+		if res_id == "wood" or res_id == "bone":
+			continue   # wood is cut, not dropped; bone is counted above
+		assert_gte(int(drops.get(res_id, 0)), int(pick["inputs"][res_id]),
+			"One raid leaves enough %s for the pick" % res_id)
 
 func test_18_the_first_raid_is_winnable_behind_a_fence() -> void:
 	# The chain makes the first fight compulsory, so the hard constraint is that it
@@ -337,21 +312,20 @@ func test_18_the_first_raid_is_winnable_behind_a_fence() -> void:
 	assert_lte(count, 3, "And the first wave stays small enough for that to hold")
 
 func test_19_the_whole_chain_fits_between_the_first_two_raids() -> void:
-	# After the first raid the player has to go home, make two things, cut stone
-	# and raise a turret. If that does not fit before the next wave arrives, the
-	# turret can never be up in time and the chain is decoration.
+	# After the first raid the player has to go home, make the pick, cut stone and
+	# raise a tower. If that does not fit before the next wave arrives, the tower can
+	# never be up in time and the chain is decoration.
 	var pick: Dictionary = _recipe("harvest_stone")
-	var blueprint: Dictionary = _recipe("blueprint_tower")
 	var stone_needed: int = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
 	var stone_rate: float = float(config_node.RESOURCE_NODES["stone"]["harvest_rate"])
 
-	var work: float = float(pick["time"]) + float(blueprint["time"])
+	var work: float = float(pick["time"])
 	work += float(stone_needed) / maxf(stone_rate, 0.01)
 	work += config_node.get_build_time("tower")
 
 	var gap: float = float(config_node.RAIDS["interval_min"])
 	assert_lt(work, gap,
-		"Pick + blueprint + stone + turret (%.0fs) fits inside the shortest gap between raids (%.0fs)" % [work, gap])
+		"Pick + stone + tower (%.0fs) fits inside the shortest gap between raids (%.0fs)" % [work, gap])
 	# And leave room for the walking, which is most of what the player is doing.
 	assert_lt(work, gap * 0.8, "With room left over for the walking between them")
 

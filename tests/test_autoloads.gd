@@ -125,7 +125,8 @@ func test_config_buildings_catalog() -> void:
 		assert_almost_eq(float(b["tower"].get("hp", 0.0)), 20.0, 0.01, "tower hp should be 20.0")
 		assert_almost_eq(float(b["tower"].get("range", 0.0)), 5.0, 0.01, "tower range should be 5.0")
 		assert_almost_eq(float(b["tower"].get("damage", 0.0)), 1.0, 0.01, "tower damage should be 1.0")
-		assert_gt(b["tower"].get("cost", {}).get("wood", 0), 0, "tower must cost wood")
+		assert_gt(b["tower"].get("cost", {}).get("stone", 0), 0, "a tower is built of stone")
+		assert_gt(b["tower"].get("cost", {}).get("bone", 0), 0, "and tipped with bone")
 
 	if "wall" in b:
 		assert_eq(b["wall"].get("kind", ""), "wall", "wall kind should be 'wall'")
