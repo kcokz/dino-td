@@ -419,10 +419,11 @@ static func harvest_requires_unlock(res_id: String) -> String:
 
 ## What `res_id` is for, worked out from the data rather than written down (GAME-DESIGN
 ## 4.3 rule 5): every building the player can put up, every recipe and every dish that
-## asks for it, as {"kind": "building" | "recipe" | "dish", "id": ...}. A new building that
-## costs stone makes itself part of what stone is for by existing -- nothing to update.
-## Empty means it is for nothing yet, and the game does not offer it (4.3 rule 1).
-static func uses_of(res_id: String) -> Array:
+## asks for it, and every stage of `map`'s beacon, as {"kind": "building" | "recipe" |
+## "dish" | "beacon", "id": ...}. A new building that costs stone makes itself part of what
+## stone is for by existing -- nothing to update. Empty means it is for nothing yet, and
+## the game does not offer it (4.3 rule 1).
+static func uses_of(res_id: String, map: Dictionary = {}) -> Array:
 	var out: Array = []
 	for b_type in BUILDABLE_TYPES:
 		if BUILDINGS.has(b_type) and BUILDINGS[b_type].get("cost", {}).has(res_id):
@@ -433,6 +434,9 @@ static func uses_of(res_id: String) -> Array:
 	for dish_id in DISHES:
 		if DISHES[dish_id].get("inputs", {}).has(res_id):
 			out.append({"kind": "dish", "id": dish_id})
+	for job_id in beacon_jobs(map):
+		if beacon_job(map, job_id).get("inputs", {}).has(res_id):
+			out.append({"kind": "beacon", "id": job_id})
 	return out
 
 ## Types offered in the Hero's build menu, in display order.
@@ -614,8 +618,11 @@ const WAVES: Dictionary = {
 # ==============================================================================
 # 5. Nest Configuration (NEST)
 # ==============================================================================
+## The nest has no hit points (v0.6, decided): it cannot be destroyed, and a run is won by
+## the beacon (MAPS.beacon), not by knocking it down. Walking a turret up to its face was
+## how v0.0-v0.5 were won; what the nest might become later -- a mid-game objective that
+## quiets the raids from its side -- is GAME-DESIGN 10, open question 6.
 const NEST: Dictionary = {
-	"hp": 30.0,
 	# Bigger than anything the player builds, because it is the thing the whole map is
 	# pointed at. Both its collider and its body come from this one figure.
 	"size": Vector3(2.0, 1.2, 2.0),
@@ -652,7 +659,6 @@ const INITIAL_DINO_MULTIPLIERS: Dictionary = {
 	"damage": 1.0,
 	"speed": 1.0
 }
-const INITIAL_NESTS_ALIVE: int = 1
 
 # ==============================================================================
 # 8. Maps (v0.6) -- a map is data
@@ -702,6 +708,39 @@ const MAPS: Dictionary = {
 	"minor_boss": "raptor_alpha",
 	# The map's boss: on the "boss_raid" beat, and again last in the beacon's final wave.
 	"boss": "big_theropod",
+	# Where else raids come from, besides the nest: cells at the edge of the field, west,
+	# east and south. Only the beacon's final wave uses them -- "from every direction at
+	# once" (GAME-DESIGN 8.3) -- so the base the player built facing the nest has to have
+	# a back as well. Every one is walkable and reaches the cabin (test_v06_beacon).
+	"entries": [Vector2i(-10, 0), Vector2i(9, 0), Vector2i(0, 9)],
+	# The beacon (GAME-DESIGN 8.3): the run's main line, and its only way to be won.
+	"beacon": {
+		# Repaired at the cabin a stage at a time, in order, each stage from a higher tier
+		# of this map's materials: wood, then stone, then stone and bone (8.3: station 1).
+		# Single figures (4.6), each "just within reach" (9.2) of the stretch of the run
+		# it belongs to: the first beside the opening's stakes and axe -- 8 of the 20
+		# wood leaves room for a few stakes, not a full fence -- the second once the pick
+		# has come, the third on the bone that only fighting brings in. `time` is seconds
+		# at the bench, which, like every job there, are seconds nobody holds the line.
+		"stages": [
+			{"inputs": {"wood": 8}, "time": 10.0},
+			{"inputs": {"stone": 8}, "time": 15.0},
+			{"inputs": {"stone": 6, "bone": 6}, "time": 20.0},
+		],
+		# Repaired, it waits until the player launches it -- there is no hurry but the
+		# raids, which keep growing (RAIDS.intensity_per_minute) -- and then charges for
+		# this long. Full charge is the jump. Three minutes: long enough to be the fight
+		# of the run, short enough that the stream below is the whole of it.
+		"charge_seconds": 180.0,
+		# The final wave: this many ordinary raids' worth, sized as a raid would be at the
+		# moment of launch -- so the longer the launch is put off, the harder the end --
+		# streamed out of the nest and every entry in turn with no gaps, over the first
+		# `stream_share` of the charge. The map's boss comes last of all, and that share
+		# is what leaves it time to reach the cabin before the jump: the finale is a
+		# fight, not a boss stepping out as the capsule leaves.
+		"final_raids": 3.0,
+		"stream_share": 0.7,
+	},
 	## Hills: ground nobody crosses and nothing is built on.
 	##
 	## They are a gameplay object rather than scenery. A hill narrows the approach,
@@ -1350,7 +1389,66 @@ const RECIPES: Dictionary = {
 }
 
 ## Stations in the order they stand in the cabin.
-const STATIONS: Array[String] = ["workbench", "kitchen"]
+const STATIONS: Array[String] = ["workbench", "kitchen", "beacon"]
+
+## The bench the beacon is repaired and launched at. A bench of its own, rather than a few
+## more recipes on the workbench, because it is the run's main line (GAME-DESIGN 8.3) and
+## not one more tool: its steps come from the run's map, one at a time and in order, and
+## what finishing them does is bring the end of the run -- not set a flag.
+const BEACON_STATION: String = "beacon"
+## The beacon's last step, after every repair stage: switching it on.
+const BEACON_LAUNCH: String = "beacon_launch"
+
+## The beacon's steps on `map`, in order: one per repair stage ("beacon_1", "beacon_2",
+## ...), then the launch. Empty for a map without a beacon.
+static func beacon_jobs(map: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var stages: Array = map.get("beacon", {}).get("stages", [])
+	if stages.is_empty():
+		return out
+	for i in range(stages.size()):
+		out.append("beacon_%d" % (i + 1))
+	out.append(BEACON_LAUNCH)
+	return out
+
+## One of the beacon's steps as a bench job, in a recipe's shape -- station, inputs, time,
+## name -- which is what lets the cabin's one kind of bench work it; `name_args` fill the
+## name in ("Repair the beacon (2/3)"). Empty for anything that is not a step on `map`.
+## The launch costs nothing and takes no time: the price was the stages, and the decision
+## is the player's.
+static func beacon_job(map: Dictionary, job_id: String) -> Dictionary:
+	var jobs: Array[String] = beacon_jobs(map)
+	var i: int = jobs.find(job_id)
+	if i < 0:
+		return {}
+	if job_id == BEACON_LAUNCH:
+		return {"station": BEACON_STATION, "inputs": {}, "time": 0.0, "name": "BEACON_LAUNCH_NAME", "name_args": []}
+	var stage: Dictionary = map["beacon"]["stages"][i]
+	return {
+		"station": BEACON_STATION,
+		"inputs": stage.get("inputs", {}),
+		"time": float(stage.get("time", 0.0)),
+		"name": "BEACON_STAGE_NAME",
+		"name_args": [i + 1, jobs.size() - 1],
+	}
+
+## Where the beacon on `map` has got to, in words: how many stages stand repaired, that it
+## is ready to launch, or how far it has charged and how long is left. The top of the
+## screen and the beacon's bench both say this, and say it the same way. "" for a map
+## without a beacon.
+static func beacon_status(map: Dictionary, steps_done: int, charged: float) -> String:
+	var jobs: Array[String] = beacon_jobs(map)
+	if jobs.is_empty():
+		return ""
+	var stages: int = jobs.size() - 1
+	if steps_done < stages:
+		return TranslationServer.translate("BEACON_STATUS_REPAIRING") % [steps_done, stages]
+	if steps_done == stages:
+		return TranslationServer.translate("BEACON_STATUS_READY")
+	var total: float = float(map["beacon"].get("charge_seconds", 0.0))
+	var left: int = int(ceil(maxf(0.0, total - charged)))
+	var percent: int = int(floor(clampf(charged / total, 0.0, 1.0) * 100.0)) if total > 0.0 else 100
+	return TranslationServer.translate("BEACON_STATUS_CHARGING") % [percent, left / 60, left % 60]
 
 ## Recipes belonging to one station, in declaration order.
 static func recipes_at(station_id: String) -> Array[String]:

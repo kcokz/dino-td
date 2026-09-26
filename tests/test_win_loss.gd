@@ -1,7 +1,8 @@
 # res://tests/test_win_loss.gd
 # ==============================================================================
 # Requirement R5 Acceptance Test Suite:
-# Verifies Win Condition (Nest 30 HP, nest_destroyed, game_won, GameState flags, action lockout),
+# Verifies Win Condition (the beacon charged -- since v0.6; the nest cannot be destroyed --
+# game_won, GameState flags, action lockout),
 # Loss Condition (Core 10 HP, core_hp_changed, game_lost, GameState flags, action lockout),
 # and Game Restart (GameState reset, entity purging, Core/Nest re-instantiation, action re-enable).
 # ==============================================================================
@@ -13,7 +14,6 @@ var event_bus_node: Object = null
 var game_state_node: Object = null
 
 # Entity & Core Scripts
-var nest_script: GDScript = null
 var core_campfire_script: GDScript = null
 var tower_script: GDScript = null
 var dino_script: GDScript = null
@@ -54,10 +54,6 @@ func before_all() -> void:
 		_cleanup_objects.append(game_state_node)
 
 	# 2. Load Entity Scripts
-	nest_script = _load_script([
-		"res://scripts/entities/Nest.gd",
-		"res://scripts/entities/nest.gd"
-	])
 	core_campfire_script = _load_script([
 		"res://scripts/entities/CoreCampfire.gd",
 		"res://scripts/entities/core_campfire.gd"
@@ -150,15 +146,6 @@ func _load_script(paths: Array[String]) -> GDScript:
 				return res
 	return null
 
-func _create_nest() -> Node:
-	assert_not_null(nest_script, "Nest.gd script must exist")
-	if nest_script == null:
-		return null
-	var nest = nest_script.new()
-	if nest is Node:
-		_cleanup_nodes.append(nest)
-	return nest
-
 func _create_core_campfire() -> Node:
 	assert_not_null(core_campfire_script, "CoreCampfire.gd script must exist")
 	if core_campfire_script == null:
@@ -180,127 +167,18 @@ func _create_hud() -> CanvasLayer:
 	return hud_inst
 
 # ==============================================================================
-# Category 1: Win Condition & Nest Lifecycle Tests (test_win_*)
+# Category 1: Win Condition Tests (test_win_*) -- the beacon, charged (v0.6)
 # ==============================================================================
-
-func test_win_01_nest_config_and_initial_stats() -> void:
-	assert_not_null(config_node, "Config singleton must be available")
-	assert_true("NEST" in config_node, "Config must contain NEST dictionary")
-	var nest_cfg: Dictionary = config_node.NEST
-	assert_almost_eq(float(nest_cfg.get("hp", 0.0)), 30.0, 0.001, "Config.NEST.hp must be 30.0")
-
-	var nest = _create_nest()
-	if nest == null:
-		return
-
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		await wait_frames(2)
-
-	assert_true(nest.has_method("take_damage"), "Nest must implement take_damage(amount)")
-	assert_almost_eq(float(nest.get("max_hp")), 30.0, 0.001, "Nest.max_hp must initialize to 30.0")
-	assert_almost_eq(float(nest.get("current_hp")), 30.0, 0.001, "Nest.current_hp must initialize to 30.0")
-
-func test_win_02_nest_partial_damage_does_not_trigger_victory() -> void:
-	var nest = _create_nest()
-	if nest == null:
-		return
-
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		await wait_frames(1)
-
-	var nest_destroyed_watcher = watch_signal(event_bus_node, "nest_destroyed")
-	var game_won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Inflict partial damage: 10.0 damage -> 20.0 HP remaining
-	nest.take_damage(10.0)
-	assert_almost_eq(float(nest.get("current_hp")), 20.0, 0.001, "Nest HP drops from 30 to 20")
-	assert_false(nest_destroyed_watcher.emitted, "nest_destroyed must NOT emit on partial damage")
-	assert_false(game_won_watcher.emitted, "game_won must NOT emit on partial damage")
-	assert_false(bool(game_state_node.get("is_game_over")), "GameState.is_game_over must remain false")
-
-	# Inflict further partial damage: 15.0 damage -> 5.0 HP remaining
-	nest.take_damage(15.0)
-	assert_almost_eq(float(nest.get("current_hp")), 5.0, 0.001, "Nest HP drops from 20 to 5")
-	assert_false(nest_destroyed_watcher.emitted, "nest_destroyed must NOT emit on partial damage")
-	assert_false(game_won_watcher.emitted, "game_won must NOT emit on partial damage")
-
-func test_win_03_nest_fatal_damage_emits_nest_destroyed_and_game_won() -> void:
-	var nest = _create_nest()
-	if nest == null:
-		return
-
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		await wait_frames(1)
-
-	var nest_destroyed_watcher = watch_signal(event_bus_node, "nest_destroyed")
-	var game_won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Inflict lethal damage: 30.0 damage -> 0.0 HP
-	nest.take_damage(30.0)
-	assert_lte(float(nest.get("current_hp")), 0.0, "Nest HP must reach <= 0.0")
-	assert_true(nest_destroyed_watcher.emitted, "EventBus.nest_destroyed must be emitted on fatal damage")
-	assert_eq(nest_destroyed_watcher.last_args[0], nest, "nest_destroyed must pass destroyed Nest instance")
-	assert_true(game_won_watcher.emitted, "EventBus.game_won must be emitted on Nest destruction")
 
 func test_win_04_gamestate_is_game_won_and_is_game_over_flags() -> void:
 	assert_false(bool(game_state_node.get("is_game_over")), "is_game_over initially false")
 	assert_false(bool(game_state_node.get("is_game_won")), "is_game_won initially false")
 
-	var nest = _create_nest()
-	if nest == null:
-		return
-
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		await wait_frames(1)
-
-	nest.take_damage(30.0)
+	win_the_run()
 	await wait_frames(1)
 
 	assert_true(bool(game_state_node.get("is_game_won")), "GameState.is_game_won must transition to true on win")
 	assert_true(bool(game_state_node.get("is_game_over")), "GameState.is_game_over must transition to true on win")
-
-func test_win_05_tower_can_target_and_eliminate_nest() -> void:
-	assert_not_null(tower_script, "Tower.gd script must exist")
-	if tower_script == null or nest_script == null:
-		return
-
-	var tower = tower_script.new()
-	var nest = nest_script.new()
-	_cleanup_nodes.append(tower)
-	_cleanup_nodes.append(nest)
-
-	# Place Tower at (0, 0, 0) and Nest at (0, 0, 3) -> within 5.0m attack range
-	tower.position = Vector3(0.0, 0.0, 0.0)
-	nest.position = Vector3(0.0, 0.0, 3.0)
-
-	if tree and tree.root:
-		tree.root.add_child(tower)
-		tree.root.add_child(nest)
-		await wait_frames(2)
-
-	# Target acquisition
-	var target = tower.acquire_target() if tower.has_method("acquire_target") else null
-	if target == null and tower.has_method("on_target_entered"):
-		tower.on_target_entered(nest)
-		target = tower.acquire_target()
-
-	assert_not_null(target, "Tower must acquire Nest within range as a valid target")
-	assert_eq(target, nest, "Target must be the Nest entity")
-
-	var game_won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Repeatedly trigger Tower attack until Nest is eliminated (30 attacks @ 1.0 dmg)
-	for i in range(30):
-		if nest.get("current_hp") <= 0.0:
-			break
-		tower.attack(nest)
-
-	assert_lte(float(nest.get("current_hp")), 0.0, "Nest HP must reach <= 0.0 after tower attacks")
-	assert_true(game_won_watcher.emitted, "game_won emitted via Tower combat elimination of Nest")
 
 func test_win_06_action_lockout_on_victory() -> void:
 	# Transition game to Victory state
@@ -563,8 +441,7 @@ func test_hud_06_victory_overlay_displayed_on_game_won() -> void:
 	if title_label == null: title_label = game_over_panel.find_child("*Label*", true, false) as Label
 	assert_not_null(title_label, "Result title label must exist in GameOver panel")
 	if title_label != null:
-		var text_lower = title_label.text.to_lower()
-		assert_true("vic" in text_lower or "胜" in title_label.text or "win" in text_lower,
+		assert_eq(title_label.text, tr("GAME_VICTORY_TITLE"),
 			"Title label must display Victory on game_won (got '%s')" % title_label.text)
 
 func test_hud_07_defeat_overlay_displayed_on_game_lost() -> void:
@@ -667,7 +544,7 @@ func test_restart_02_clears_active_dinos_and_buildings() -> void:
 				assert_true((core_campfire_script and b.get_script() == core_campfire_script) or b.get("building_type") == "core",
 					"Only Core may remain in Buildings container after restart")
 
-func test_restart_03_reinstantiates_core_and_nest_with_full_hp() -> void:
+func test_restart_03_reinstantiates_core_and_nest() -> void:
 	assert_not_null(main_script, "Main.gd script must exist")
 	if main_script == null: return
 
@@ -685,19 +562,12 @@ func test_restart_03_reinstantiates_core_and_nest_with_full_hp() -> void:
 		var core = main_inst.find_child("CoreCampfire", true, false)
 		if core == null: core = main_inst.find_child("*Core*", true, false)
 		var nest = main_inst.find_child("Nest", true, false)
-		if nest == null or not nest.has_method("take_damage"):
-			for child in main_inst.find_children("*", "StaticBody3D", true, false):
-				if child.has_method("take_damage") and "current_hp" in child:
-					nest = child
-					break
 
 		assert_not_null(core, "Main must contain CoreCampfire after restart")
 		assert_not_null(nest, "Main must contain Nest after restart")
 
 		if core != null and core.get("current_hp") != null:
 			assert_almost_eq(float(core.get("current_hp")), 10.0, 0.001, "CoreCampfire HP reset to full 10.0")
-		if nest != null and nest.get("current_hp") != null:
-			assert_almost_eq(float(nest.get("current_hp")), 30.0, 0.001, "Nest HP reset to full 30.0")
 
 func test_restart_04_hides_hud_game_over_overlay() -> void:
 	var hud = _create_hud()
@@ -776,14 +646,12 @@ func test_restart_06_consecutive_multi_restart_stability() -> void:
 # ==============================================================================
 
 func test_flow_01_complete_win_and_restart_lifecycle() -> void:
-	var nest = _create_nest()
 	var core = _create_core_campfire()
 	var hud = _create_hud()
-	if nest == null or core == null or hud == null:
+	if core == null or hud == null:
 		return
 
 	if tree and tree.root:
-		tree.root.add_child(nest)
 		tree.root.add_child(core)
 		tree.root.add_child(hud)
 		await wait_frames(2)
@@ -795,8 +663,8 @@ func test_flow_01_complete_win_and_restart_lifecycle() -> void:
 	game_state_node.trigger_end_action()
 	assert_eq(int(game_state_node.current_phase), 1, "Phase enters ATTACK")
 
-	# 3. Destroy Nest -> triggers victory
-	nest.take_damage(30.0)
+	# 3. The beacon, charged -> triggers victory
+	win_the_run()
 	await wait_frames(2)
 
 	assert_true(bool(game_state_node.get("is_game_won")), "Game won")

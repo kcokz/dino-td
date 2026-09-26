@@ -308,26 +308,22 @@ func test_stress_game_over_terminal_lockout_exhaustive() -> void:
 # ==============================================================================
 # Stress 11: Nest Destruction Counter and Clamping
 # ==============================================================================
-func test_stress_nest_destruction_edge_cases() -> void:
+func test_stress_the_jump_edge_cases() -> void:
 	assert_not_null(game_state, "GameState must exist")
 	assert_not_null(event_bus, "EventBus must exist")
 	game_state.reset_game()
-	assert_eq(game_state.nests_alive, 1, "Initial nests_alive is 1")
+	assert_eq(int(game_state.beacon_steps), 0, "A run starts with the beacon broken")
 
 	var won_watcher = watch_signal(event_bus, "game_won")
 
-	# Destroy nest
-	var dummy_nest = Node.new()
-	event_bus.emit_signal("nest_destroyed", dummy_nest)
-	dummy_nest.free()
+	# The beacon, charged: the only way a run is won since v0.6 (the nest had hit points)
+	win_the_run()
 
-	assert_eq(game_state.nests_alive, 0, "nests_alive should be 0")
 	assert_true(game_state.is_game_over, "is_game_over must be true")
 	assert_eq(won_watcher.emit_count, 1, "game_won signal emitted once")
 
-	# Spurious second nest destruction
-	event_bus.emit_signal("nest_destroyed", null)
-	assert_eq(game_state.nests_alive, 0, "nests_alive clamped to 0, not negative")
+	# Spurious charging after the jump
+	game_state.charge_beacon(10000.0)
 	assert_eq(won_watcher.emit_count, 1, "game_won must NOT emit again")
 
 # ==============================================================================

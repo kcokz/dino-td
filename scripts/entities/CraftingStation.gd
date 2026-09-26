@@ -3,15 +3,16 @@ class_name CraftingStation
 extends StaticBody3D
 
 ## A bench in the cabin. The workbench turns materials into tools, the kitchen makes
-## the pots he cooks in and cooks his meals, and both are this same class with a
-## different id -- adding a third station is a Config entry plus a node in the cabin
-## scene, not a new system.
+## the pots he cooks in and cooks his meals, the beacon's bench repairs and launches the
+## beacon, and all three are this same class with a different id -- adding a station is a
+## Config entry plus a node in the cabin scene, not a new system.
 ##
 ## What a station makes is a **permanent flag**, never an object: unlocked means
 ## usable, so there is no bag to open, nothing to carry and nothing to lose. That
 ## is the line that stops the cabin becoming an inventory screen. A meal (Config.
-## DISHES) is the one job that is not a flag, and it is not an object either: it is
-## eaten the moment it is done (GAME-DESIGN 4.5: no bag, no stored food).
+## DISHES) is not a flag, and it is not an object either: it is eaten the moment it is
+## done (GAME-DESIGN 4.5: no bag, no stored food). A step of the beacon (Config.
+## beacon_job) is neither: finishing it moves the run towards its end (GameState).
 ##
 ## Work costs real seconds and the world does not stop while they pass -- while
 ## the Hero is at the bench, nobody is holding the line. Leaving keeps the
@@ -60,6 +61,22 @@ func is_dish(job_id: String) -> bool:
 	var cfg = _get_config()
 	return cfg != null and "DISHES" in cfg and cfg.DISHES.has(job_id)
 
+## Whether `job_id` is one of the beacon's steps on the run's map.
+func is_beacon_job(job_id: String) -> bool:
+	return not _beacon_row(job_id).is_empty()
+
+## Everything this bench does, in the order the cabin panel lists it: its recipes, its
+## meals, and -- at the beacon's bench -- the beacon's next step. One step at a time and
+## in order, so the panel always says what the beacon needs next (GAME-DESIGN 14.3).
+func jobs() -> Array[String]:
+	var out: Array[String] = recipes()
+	out.append_array(dishes())
+	var gs = _get_game_state()
+	var step: String = String(gs.beacon_next_job()) if (gs and gs.has_method("beacon_next_job")) else ""
+	if step != "" and String(_beacon_row(step).get("station", "")) == station_id:
+		out.append(step)
+	return out
+
 ## Whether `recipe_id` is worth offering: it belongs here, and it has not already
 ## been made. A recipe whose flag is already set is finished forever; a meal is
 ## cooked as often as there is meat for it.
@@ -70,6 +87,8 @@ func can_offer(recipe_id: String) -> bool:
 	if is_dish(recipe_id):
 		return true
 	var gs = _get_game_state()
+	if is_beacon_job(recipe_id):
+		return gs != null and gs.has_method("beacon_next_job") and String(gs.beacon_next_job()) == recipe_id
 	if gs and gs.has_method("has_unlock") and gs.has_unlock(String(data.get("unlocks", ""))):
 		return false
 	return true
@@ -129,6 +148,9 @@ func work(delta: float) -> String:
 	if is_dish(done):
 		if gs and gs.has_method("eat"):
 			gs.eat(done)
+	elif is_beacon_job(done):
+		if gs and gs.has_method("finish_beacon_job"):
+			gs.finish_beacon_job(done)
 	else:
 		unlock = String(recipe_data(done).get("unlocks", ""))
 		if gs and gs.has_method("grant_unlock"):
@@ -149,15 +171,23 @@ func ratio() -> float:
 # Recipe lookups -- every one of them goes through Config
 # ==============================================================================
 
-## A job's row -- a recipe's or a meal's; they have the same shape (station, inputs,
-## time, name), which is what lets one bench take either.
+## A job's row -- a recipe's, a meal's or a beacon step's; they have the same shape
+## (station, inputs, time, name), which is what lets one bench take any of them.
 func recipe_data(recipe_id: String) -> Dictionary:
 	var cfg = _get_config()
 	if cfg and "RECIPES" in cfg and cfg.RECIPES.has(recipe_id):
 		return cfg.RECIPES[recipe_id]
 	if cfg and "DISHES" in cfg and cfg.DISHES.has(recipe_id):
 		return cfg.DISHES[recipe_id]
-	return {}
+	return _beacon_row(recipe_id)
+
+## A beacon step's row, from the map this run is played on.
+func _beacon_row(job_id: String) -> Dictionary:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or not cfg.has_method("beacon_job") or gs == null or not gs.has_method("map_data"):
+		return {}
+	return cfg.beacon_job(gs.map_data(), job_id)
 
 func inputs_of(recipe_id: String) -> Dictionary:
 	return recipe_data(recipe_id).get("inputs", {})
@@ -170,6 +200,9 @@ func time_of(recipe_id: String) -> float:
 func recipe_name(recipe_id: String) -> String:
 	var key: String = String(recipe_data(recipe_id).get("name", recipe_id))
 	var title: String = TranslationServer.translate(key)
+	var args: Array = recipe_data(recipe_id).get("name_args", [])
+	if not args.is_empty() and "%" in title:
+		return title % args
 	if not is_dish(recipe_id):
 		return title
 	var fmt: String = TranslationServer.translate(String(meal_preview(recipe_id).get("method_name", "")))
@@ -195,6 +228,11 @@ func get_localized_name() -> String:
 
 func get_display_info() -> Dictionary:
 	var status: String = tr("CABIN_HINT_PICK_STATION")
+	# The beacon's bench says where the beacon has got to, whenever it is not busy: that is
+	# the run's main line (GAME-DESIGN 14.3), so it is the first thing this panel says.
+	var beacon: String = _beacon_status()
+	if beacon != "":
+		status = beacon
 	if active_recipe != "":
 		var raw: String = tr("CRAFT_IN_PROGRESS")
 		status = (raw % [recipe_name(active_recipe), int(ratio() * 100.0)]) if ("%" in raw) else raw
@@ -288,7 +326,18 @@ func _colour() -> Color:
 	match station_id:
 		"kitchen": return Color(0.72, 0.36, 0.26)
 		"workbench": return Color(0.55, 0.45, 0.32)
+		"beacon": return Color(0.25, 0.52, 0.66)   # the ship's own kit, not something he made
 		_: return Color(0.6, 0.6, 0.6)
+
+## Where the beacon has got to, in words, when this is the bench it is worked at -- or "".
+func _beacon_status() -> String:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or gs == null or not cfg.has_method("beacon_status") or not ("BEACON_STATION" in cfg):
+		return ""
+	if String(cfg.BEACON_STATION) != station_id:
+		return ""
+	return String(cfg.beacon_status(gs.map_data(), int(gs.beacon_steps), float(gs.beacon_charge)))
 
 # ==============================================================================
 # Resolvers

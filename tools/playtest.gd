@@ -82,6 +82,8 @@ func _run(name: String) -> void:
 			await _scenario_kitchen()
 		"buildings":
 			await _scenario_buildings()
+		"beacon":
+			await _scenario_beacon()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -145,6 +147,30 @@ func _scenario_buildings() -> void:
 		eb.unit_selected.emit(plain)
 	await _shoot("upgrade_offered")
 
+## The run's end (v0.6 T7), beat by beat: the beacon's line on a fresh landing, its bench in
+## the cabin, repaired and waiting for the launch, charging while the final wave comes in from
+## every side, and the jump.
+func _scenario_beacon() -> void:
+	var gs := root.get_node_or_null("GameState")
+	var eb := root.get_node_or_null("EventBus")
+	await _shoot("broken")
+	_main.enter_cabin()
+	var bench: Node = _main.cabin_interior.station("beacon") if _main.cabin_interior else null
+	if bench and eb:
+		eb.unit_selected.emit(bench)
+	await _shoot("bench")
+	for i in range(int(gs.beacon_stage_count())):
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
+	if bench and eb:
+		eb.unit_selected.emit(bench)
+	await _shoot("ready_to_launch")
+	gs.finish_beacon_job(String(gs.beacon_next_job()))
+	_main.leave_cabin()
+	await _advance(20.0)
+	await _shoot("charging")
+	gs.charge_beacon(10000.0)
+	await _shoot("jumped")
+
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:
 	await _shoot("start")
@@ -196,11 +222,11 @@ func _scenario_closeup() -> void:
 	var tile: float = float(cfg.TILE_SIZE) if cfg else 2.0
 	var subjects: Array = [
 		["wreck", _main.current_core.global_position, 8.0],
-		["nest", _main.grid_manager.cell_to_world(cfg.MAP["default_nest_cell"]), 7.0],
+		["nest", _main.grid_manager.cell_to_world(cfg.map_data()["default_nest_cell"]), 7.0],
 		["trees", _main.grid_manager.cell_to_world(Vector2i(4, -2)), 6.0],
 		["stone", _main.grid_manager.cell_to_world(Vector2i(4, -6)), 5.0],
 	]
-	for item in cfg.MAP.get("default_resource_nodes", []):
+	for item in cfg.map_data().get("default_resource_nodes", []):
 		if String(item["type"]) == "water":
 			subjects.append(["water", _main.grid_manager.cell_to_world(item["cell"]), 7.0])
 	for s in subjects:
@@ -330,7 +356,7 @@ func _scenario_snug() -> void:
 	_grant({"wood": 400})
 	var cfg := root.get_node_or_null("Config")
 	var gm = _main.grid_manager
-	var core_cell: Vector2i = cfg.MAP["default_core_cell"]
+	var core_cell: Vector2i = cfg.map_data()["default_core_cell"]
 	var core: Vector3 = gm.cell_to_world(core_cell)
 	var d: int = int(cfg.get_cell_divisions("wall"))
 	var centre: Vector2i = gm.world_to_fine_cell(core, d)
@@ -528,7 +554,7 @@ func _scenario_raid() -> void:
 			count = int(String(a))
 	var divisions: int = int(cfg.get_cell_divisions("wall"))
 	var step: float = float(cfg.TILE_SIZE) / float(divisions)
-	var core: Vector3 = gm.cell_to_world(cfg.MAP["default_core_cell"])
+	var core: Vector3 = gm.cell_to_world(cfg.map_data()["default_core_cell"])
 
 	var placed: int = 0
 	if sealed_ring:

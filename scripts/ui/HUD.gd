@@ -32,6 +32,9 @@ var food_label: Label = null
 var bone_label: Label = null
 ## What he last ate and how long it has left (v0.6 T3); hidden while he is not fed.
 var fed_label: Label = null
+## Where the beacon has got to (v0.6 T7): stages repaired, ready, or charging. Always on
+## screen -- it is the run's main line (GAME-DESIGN 14.3, 6: how far is the goal).
+var beacon_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var hero_hp_label: Label = null
@@ -112,6 +115,10 @@ func _connect_event_bus() -> void:
 			eb.boss_warning.connect(_on_boss_warning)
 		if eb.has_signal("boss_arrived") and not eb.boss_arrived.is_connected(_on_boss_arrived):
 			eb.boss_arrived.connect(_on_boss_arrived)
+		if eb.has_signal("beacon_changed") and not eb.beacon_changed.is_connected(_on_beacon_changed):
+			eb.beacon_changed.connect(_on_beacon_changed)
+		if eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(_on_beacon_launched):
+			eb.beacon_launched.connect(_on_beacon_launched)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -144,6 +151,10 @@ func _disconnect_event_bus() -> void:
 			eb.boss_warning.disconnect(_on_boss_warning)
 		if eb.has_signal("boss_arrived") and eb.boss_arrived.is_connected(_on_boss_arrived):
 			eb.boss_arrived.disconnect(_on_boss_arrived)
+		if eb.has_signal("beacon_changed") and eb.beacon_changed.is_connected(_on_beacon_changed):
+			eb.beacon_changed.disconnect(_on_beacon_changed)
+		if eb.has_signal("beacon_launched") and eb.beacon_launched.is_connected(_on_beacon_launched):
+			eb.beacon_launched.disconnect(_on_beacon_launched)
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
@@ -173,6 +184,31 @@ func _on_fed_changed(_fed: Dictionary) -> void:
 func _process(_delta: float) -> void:
 	if fed_label and fed_label.visible:
 		_refresh_fed_label()
+	var gs = _get_game_state()
+	if gs and gs.has_method("is_beacon_launched") and gs.is_beacon_launched():
+		_refresh_beacon_label()
+
+## A stage repaired, or the launch. The charge's countdown is _process's.
+func _on_beacon_changed(_steps_done: int) -> void:
+	_refresh_beacon_label()
+
+## Launched: everything in the valley is on its way, from every side (GAME-DESIGN 8.3).
+func _on_beacon_launched() -> void:
+	_refresh_beacon_label()
+	show_hint(tr("HUD_BEACON_LAUNCHED"), 6.0)
+
+## "Beacon: 1/3 stages repaired", "... ready to launch", "Beacon charging 45% · 1:39" --
+## Config.beacon_status, which the beacon's bench says too. Hidden on a map without one.
+func _refresh_beacon_label() -> void:
+	if beacon_label == null or not is_instance_valid(beacon_label):
+		return
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	var text: String = ""
+	if gs and cfg and cfg.has_method("beacon_status") and gs.has_method("map_data"):
+		text = String(cfg.beacon_status(gs.map_data(), int(gs.beacon_steps), float(gs.beacon_charge)))
+	beacon_label.text = text
+	beacon_label.visible = text != ""
 
 ## "Fed: builds x1.3 · 1:25" while a meal's speeds last -- how much faster, and for how
 ## long (GAME-DESIGN 4.6: make the gain visible). Nothing at all when he is not fed.
@@ -299,6 +335,12 @@ func _show_game_over(title: String, details: String) -> void:
 		details_label.text = details
 	if game_over_panel:
 		game_over_panel.visible = true
+		# On top of everything else on the screen -- and the selection panel out of the way:
+		# it was added after the result, drew over it and hid half of the restart button,
+		# and once the run is over there is nothing left to select.
+		game_over_panel.move_to_front()
+	if option_panel and is_instance_valid(option_panel):
+		option_panel.visible = false
 	_set_action_buttons_enabled(false)
 
 # ==============================================================================
@@ -355,6 +397,7 @@ func reset_hud() -> void:
 		raid_warning_banner.visible = false
 	_update_speed_btn_label()
 	if option_panel and is_instance_valid(option_panel) and option_panel.has_method("clear_selection"):
+		option_panel.visible = true
 		option_panel.clear_selection()
 
 	# Synchronize baseline values from GameState & Config
@@ -366,6 +409,7 @@ func reset_hud() -> void:
 	var res_dict: Dictionary = gs.resources if (gs and "resources" in gs) else default_res
 	_on_resources_changed(res_dict)
 	_refresh_fed_label()
+	_refresh_beacon_label()
 
 	var w_num: int = gs.wave_number if (gs and "wave_number" in gs) else 0
 	_on_wave_started(w_num, false)
@@ -469,6 +513,11 @@ func get_version_text() -> String:
 ## A resource that is for nothing in this game is not shown at all (GAME-DESIGN 4.3
 ## rule 1) -- in v0.6 that is water: the river is scenery until it has a use. Showing a
 ## counter the player can do nothing with is a question the game cannot answer.
+## The map this run is played on (GameState.map_data), or {} before there is one.
+func _run_map() -> Dictionary:
+	var gs = _get_game_state()
+	return gs.map_data() if (gs and gs.has_method("map_data")) else {}
+
 func _ensure_resource_labels() -> void:
 	resource_labels.clear()
 	var cfg = _get_config()
@@ -480,7 +529,7 @@ func _ensure_resource_labels() -> void:
 			lbl = Label.new()
 			lbl.name = node_name
 			resource_bar.add_child(lbl)
-		lbl.visible = not cfg.has_method("uses_of") or not cfg.uses_of(String(res_id)).is_empty()
+		lbl.visible = not cfg.has_method("uses_of") or not cfg.uses_of(String(res_id), _run_map()).is_empty()
 		resource_labels[String(res_id)] = lbl
 	wood_label = resource_labels.get("wood")
 	stone_label = resource_labels.get("stone")
@@ -492,6 +541,7 @@ func _ensure_ui_components() -> void:
 	# Search existing scene tree first
 	resource_bar = find_child("ResourceBar", true, false) as Container
 	fed_label = find_child("FedLabel", true, false) as Label
+	beacon_label = find_child("BeaconLabel", true, false) as Label
 	wave_label = find_child("WaveLabel", true, false) as Label
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
@@ -537,6 +587,12 @@ func _ensure_ui_components() -> void:
 		fed_label.name = "FedLabel"
 		fed_label.visible = false
 		root_control.add_child(fed_label)
+
+	if beacon_label == null:
+		beacon_label = Label.new()
+		beacon_label.name = "BeaconLabel"
+		beacon_label.visible = false
+		root_control.add_child(beacon_label)
 
 	if wave_label == null:
 		wave_label = Label.new()
@@ -722,7 +778,7 @@ func _apply_ui_scale() -> void:
 	var title_size: int = int(cfg.UI.get("gameover_title_font_size", 48))
 
 	for lbl in resource_labels.values() + [wave_label, core_hp_label, hero_hp_label, fed_label,
-			deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
+			beacon_label, deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
 		if lbl and is_instance_valid(lbl):
 			lbl.add_theme_font_size_override("font_size", label_size)
 

@@ -16,7 +16,6 @@ var game_state_node: Node = null
 var hero_script: GDScript = null
 var guard_dino_script: GDScript = null
 var dino_script: GDScript = null
-var nest_script: GDScript = null
 var building_script: GDScript = null
 var wall_script: GDScript = null
 var tower_script: GDScript = null
@@ -37,8 +36,6 @@ func before_all() -> void:
 		guard_dino_script = load("res://scripts/entities/GuardDino.gd")
 	if ResourceLoader.exists("res://scripts/entities/Dino.gd"):
 		dino_script = load("res://scripts/entities/Dino.gd")
-	if ResourceLoader.exists("res://scripts/entities/Nest.gd"):
-		nest_script = load("res://scripts/entities/Nest.gd")
 	if ResourceLoader.exists("res://scripts/entities/Building.gd"):
 		building_script = load("res://scripts/entities/Building.gd")
 	if ResourceLoader.exists("res://scripts/entities/Wall.gd"):
@@ -336,30 +333,32 @@ func test_10_guard_dino_roam_aggro_and_leash() -> void:
 	assert_null(guard.chase_target, "Guard clears chase_target when leashing")
 
 # ==============================================================================
-# 11. Hero Can Attack Nest & Guard Dinos in DEPLOY Phase
+# 11. Hero Can Attack Guard Dinos in DEPLOY Phase
 # ==============================================================================
 
-func test_11_hero_can_attack_guard_and_nest() -> void:
+## The nest was the other half of this; it cannot be hurt since v0.6 (test_v06_beacon).
+## Its guards still can.
+func test_11_hero_can_attack_a_guard() -> void:
 	assert_not_null(hero_script, "Hero.gd must exist")
-	assert_not_null(nest_script, "Nest.gd must exist")
+	assert_not_null(guard_dino_script, "GuardDino.gd must exist")
 
 	var hero = hero_script.new()
 	_cleanup_nodes.append(hero)
 	tree.root.add_child(hero)
 	hero.position = Vector3(0.0, 0.0, 0.0)
 
-	var nest = nest_script.new()
-	_cleanup_nodes.append(nest)
-	tree.root.add_child(nest)
-	nest.position = Vector3(1.0, 0.0, 0.0) # 1.0m away (within attack_range 2.0m)
+	var guard = guard_dino_script.new()
+	_cleanup_nodes.append(guard)
+	tree.root.add_child(guard)
+	guard.setup_post(Vector3(1.0, 0.0, 0.0)) # 1.0m away (within attack_range 2.0m)
 
-	var init_hp = nest.current_hp
-	hero.order_attack(nest)
+	var init_hp = guard.current_hp
+	hero.order_attack(guard)
 	hero._physics_process(0.05)
 	assert_eq(int(hero.current_state), 3, "Hero enters ATTACKING state")
 
 	hero._physics_process(0.05) # Deals damage
-	assert_lt(nest.current_hp, init_hp, "Nest took damage from Hero attack")
+	assert_lt(guard.current_hp, init_hp, "The guard took damage from the Hero's attack")
 
 # ==============================================================================
 # 12. 10+ Dinosaur Flock Dynamic Flanking & Surround

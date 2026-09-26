@@ -169,7 +169,8 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		game_state.is_game_over = true
 		game_state.current_phase = 1 # ATTACK
 		game_state.wave_number = 88
-		game_state.nests_alive = 0
+		game_state.beacon_steps = 3
+		game_state.beacon_charge = 99.0
 		game_state.dino_stat_multipliers = {"hp": 99.0, "damage": 88.0, "speed": 77.0, "extra": 12.0}
 		game_state.resources = {"wood": 9999, "stone": 8888, "food": 7777, "corrupted_item": 666}
 
@@ -185,7 +186,8 @@ func test_challenge_repeated_reset_game_under_stress() -> void:
 		assert_false(game_state.is_game_over, "is_game_over must be false after reset (cycle %d)" % cycle)
 		assert_eq(game_state.current_phase, 0, "current_phase must be PLAN (0) after reset (cycle %d)" % cycle)
 		assert_eq(game_state.wave_number, 0, "wave_number must be 0 after reset (cycle %d)" % cycle)
-		assert_eq(game_state.nests_alive, 1, "nests_alive must be 1 after reset (cycle %d)" % cycle)
+		assert_eq(game_state.beacon_steps, 0, "The beacon is broken again after reset (cycle %d)" % cycle)
+		assert_almost_eq(float(game_state.beacon_charge), 0.0, 0.0001, "And uncharged (cycle %d)" % cycle)
 		assert_eq(game_state.active_buildings.size(), 0, "active_buildings must be empty after reset (cycle %d)" % cycle)
 
 		var res = game_state.resources

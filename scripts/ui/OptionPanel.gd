@@ -542,9 +542,7 @@ func _populate_station_buttons() -> void:
 	if station == null or not is_instance_valid(station) or not station.has_method("recipes"):
 		return
 	_clear_craft_detail()
-	var jobs: Array = station.recipes()
-	if station.has_method("dishes"):
-		jobs.append_array(station.dishes())
+	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
 	for recipe_id in jobs:
 		var rid: String = String(recipe_id)
 		if not station.can_offer(rid):
@@ -574,7 +572,11 @@ func _show_craft_detail(station: Node, recipe_id: String) -> void:
 	# because that is the whole of the choice between one meat and another.
 	var cfg = _get_config()
 	var is_meal: bool = station.has_method("is_dish") and station.is_dish(recipe_id)
-	if is_meal and station.can_afford(recipe_id) and cfg and cfg.has_method("describe_meal"):
+	if cfg and "BEACON_LAUNCH" in cfg and recipe_id == String(cfg.BEACON_LAUNCH):
+		# The launch costs nothing; what it asks for is nerve, so it says what is coming.
+		status_label.text = _launch_detail()
+		status_label.modulate = Color(1.0, 0.85, 0.3)
+	elif is_meal and station.can_afford(recipe_id) and cfg and cfg.has_method("describe_meal"):
 		status_label.text = tr("MEAL_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text,
 			station.time_of(recipe_id), cfg.describe_meal(station.meal_preview(recipe_id))]
 		status_label.modulate = Color(0.85, 0.85, 0.85)
@@ -584,6 +586,17 @@ func _show_craft_detail(station: Node, recipe_id: String) -> void:
 	else:
 		status_label.text = tr("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(recipe_id), cost_text]
 		status_label.modulate = Color(1.0, 0.45, 0.4)
+
+## What launching the beacon brings: how long it charges, that the whole valley comes from
+## every side, and who comes last (GAME-DESIGN 8.3).
+func _launch_detail() -> String:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	var map: Dictionary = gs.map_data() if (gs and gs.has_method("map_data")) else {}
+	var seconds: int = int(round(float(map.get("beacon", {}).get("charge_seconds", 0.0))))
+	var boss: String = String(map.get("boss", ""))
+	var boss_name: String = String(cfg.get_dino_name(boss)) if (cfg and boss != "") else ""
+	return tr("BEACON_LAUNCH_DETAIL") % [seconds / 60, seconds % 60, boss_name]
 
 func _clear_craft_detail() -> void:
 	_hover_detail_shown = false

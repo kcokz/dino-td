@@ -962,7 +962,9 @@ func _find_nearest_enemy(max_dist: float) -> Node3D:
 	if not is_inside_tree():
 		return null
 	var candidates: Array[Node3D] = []
-	for group_name in ["guard_dinos", "nest", "dinos"]:
+	# Not the nest: it cannot be hurt (v0.6), and a man swinging at it would stand there
+	# for the rest of the run.
+	for group_name in ["guard_dinos", "dinos"]:
 		for node in get_tree().get_nodes_in_group(group_name):
 			if node is Node3D and _is_enemy_valid(node):
 				if not candidates.has(node):

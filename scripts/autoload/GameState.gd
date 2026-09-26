@@ -29,7 +29,6 @@ var wave_number: int = 0
 var dino_stat_multipliers: Dictionary = {}
 var is_game_over: bool = false
 var is_game_won: bool = false
-var nests_alive: int = 1
 var active_buildings: Array[Node] = []
 
 ## Everything the Hero has made at the cabin, as a set of permanent flags. Not an
@@ -50,6 +49,12 @@ var fed: Dictionary = {}
 var map_id: String = ""
 var run_seed: int = 0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
+## How far along the beacon is (v0.6, GAME-DESIGN 8.3): how many of its steps are done --
+## the run's map's repair stages, then the launch (Config.beacon_jobs) -- and, once it is
+## launched, how many seconds it has charged. That is all there is to remember about it.
+var beacon_steps: int = 0
+var beacon_charge: float = 0.0
 
 ## The map this run is played on (Config.MAPS).
 func map_data() -> Dictionary:
@@ -95,6 +100,7 @@ func _process(delta: float) -> void:
 		return
 	if not is_paused:
 		wear_off(delta)
+		charge_beacon(delta)
 	if continuous_mode:
 		return
 	if current_phase == Phase.DEPLOY:
@@ -126,8 +132,6 @@ func _connect_event_bus() -> void:
 			eb.wave_started.connect(_on_wave_started)
 		if eb.has_signal("wave_ended") and not eb.wave_ended.is_connected(_on_wave_ended):
 			eb.wave_ended.connect(_on_wave_ended)
-		if eb.has_signal("nest_destroyed") and not eb.nest_destroyed.is_connected(_on_nest_destroyed):
-			eb.nest_destroyed.connect(_on_nest_destroyed)
 		if eb.has_signal("game_won") and not eb.game_won.is_connected(_on_game_won):
 			eb.game_won.connect(_on_game_won)
 		if eb.has_signal("game_lost") and not eb.game_lost.is_connected(_on_game_lost):
@@ -189,15 +193,15 @@ func reset_game(p_seed: int = -1) -> void:
 	if cfg:
 		resources = cfg.get("INITIAL_RESOURCES").duplicate(true) if "INITIAL_RESOURCES" in cfg else _default_resources()
 		dino_stat_multipliers = cfg.get("INITIAL_DINO_MULTIPLIERS").duplicate(true) if "INITIAL_DINO_MULTIPLIERS" in cfg else {"hp": 1.0, "damage": 1.0, "speed": 1.0}
-		nests_alive = cfg.get("INITIAL_NESTS_ALIVE") if "INITIAL_NESTS_ALIVE" in cfg else 1
 	else:
 		resources = _default_resources()
 		dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
-		nests_alive = 1
 	wave_number = 0
 	active_buildings.clear()
 	unlocks.clear()
 	_set_fed({})
+	beacon_steps = 0
+	beacon_charge = 0.0
 
 	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 	deploy_length = float(time_cfg.get("deploy_length", 90.0))
@@ -348,6 +352,74 @@ func _set_fed(value: Dictionary) -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("fed_changed"):
 		eb.fed_changed.emit(fed)
+
+# ==============================================================================
+# 7d. The beacon (v0.6): the run's main line, and the only way to win it
+# ==============================================================================
+## GAME-DESIGN 8.3: repaired at the cabin a stage at a time, launched when the player
+## chooses, and then it charges while the whole valley comes for the cabin. Full charge is
+## the jump, and the run is won -- nothing else wins it now; the nest cannot be destroyed.
+
+## The step the cabin can work on next -- the next stage, then the launch -- or "" once it
+## is launched (and on a map without a beacon).
+func beacon_next_job() -> String:
+	var jobs: Array[String] = _beacon_jobs()
+	return jobs[beacon_steps] if beacon_steps < jobs.size() else ""
+
+## How many repair stages the beacon has, and how many of them stand repaired.
+func beacon_stage_count() -> int:
+	return maxi(0, _beacon_jobs().size() - 1)
+
+func beacon_stages_done() -> int:
+	return mini(beacon_steps, beacon_stage_count())
+
+func is_beacon_launched() -> bool:
+	var jobs: Array[String] = _beacon_jobs()
+	return not jobs.is_empty() and beacon_steps >= jobs.size()
+
+## A step finished at the cabin: a stage stands repaired, or -- the last step -- the beacon
+## is switched on and starts to charge. Only the next step counts: one already done, or a
+## stage out of turn, changes nothing and returns false.
+func finish_beacon_job(job_id: String) -> bool:
+	if is_game_over or job_id == "" or job_id != beacon_next_job():
+		return false
+	beacon_steps += 1
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("beacon_changed"):
+		eb.beacon_changed.emit(beacon_steps)
+	if is_beacon_launched() and eb and eb.has_signal("beacon_launched"):
+		eb.beacon_launched.emit()
+	return true
+
+## How much of the charge is done, 0..1.
+func beacon_charge_ratio() -> float:
+	var total: float = _charge_seconds()
+	return clampf(beacon_charge / total, 0.0, 1.0) if total > 0.0 else 0.0
+
+## Seconds of charging left until the jump.
+func beacon_seconds_left() -> float:
+	return maxf(0.0, _charge_seconds() - beacon_charge)
+
+## Charges the launched beacon by `delta` seconds of game time. At full charge the capsule
+## jumps and the run is won. Called every frame the game runs; public so a test can pass
+## time without waiting.
+func charge_beacon(delta: float) -> void:
+	# `not (delta > 0.0)` rather than `delta <= 0.0`: NaN fails every comparison, and a NaN
+	# let in here would leave the charge NaN -- a run that could never be won.
+	if beacon_steps <= 0 or not (delta > 0.0) or is_game_over or not is_beacon_launched():
+		return
+	beacon_charge = minf(_charge_seconds(), beacon_charge + delta)
+	if beacon_charge >= _charge_seconds():
+		_emit_game_won()
+
+func _beacon_jobs() -> Array[String]:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("beacon_jobs"):
+		return cfg.beacon_jobs(map_data())
+	return []
+
+func _charge_seconds() -> float:
+	return float(map_data().get("beacon", {}).get("charge_seconds", 0.0))
 
 # ==============================================================================
 # 8. The Standing Buildings
@@ -528,11 +600,6 @@ func _on_wave_ended(n: int) -> void:
 			if dino_stat_multipliers.has(stat):
 				dino_stat_multipliers[stat] *= float(enhance[stat])
 	set_phase(Phase.PRODUCE)
-
-func _on_nest_destroyed(_nest: Node) -> void:
-	nests_alive = maxi(0, nests_alive - 1)
-	if nests_alive <= 0 and not is_game_over:
-		_emit_game_won()
 
 func _on_game_won() -> void:
 	if is_game_over:

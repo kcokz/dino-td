@@ -1,11 +1,11 @@
 # res://tests/test_win_loss_challenge.gd
 # ==============================================================================
-# Empirical Challenger Test Suite for Milestone 5: Win/Loss, Nest & Core Lifecycle
+# Empirical Challenger Test Suite for Milestone 5: Win/Loss & Core Lifecycle
 # Rigorously stress-tests:
-# 1. Race conditions: Rapid / simultaneous damage on Nest and Core.
-# 2. Idempotency: Repeated destruction calls on dead Nest and dead Core.
+# 1. Race conditions: the beacon charging while the Core takes damage. (It was the nest
+#    taking damage until v0.6; the nest cannot be destroyed now, and the beacon wins.)
+# 2. Idempotency: Repeated destruction calls on a dead Core.
 #    end action click, and phase advance post-victory (game_won) and post-defeat (game_lost).
-# 4. Extreme combat: Tower attacking Nest under multiple towers and 5.0m threshold boundary conditions.
 # ==============================================================================
 extends "res://tests/test_base.gd"
 
@@ -15,7 +15,6 @@ var event_bus_node: Object = null
 var game_state_node: Object = null
 
 # Entity & Core Scripts
-var nest_script: GDScript = null
 var core_campfire_script: GDScript = null
 var tower_script: GDScript = null
 var wall_script: GDScript = null
@@ -51,7 +50,6 @@ func before_all() -> void:
 		game_state_node = load("res://scripts/autoload/GameState.gd").new()
 		_cleanup_objects.append(game_state_node)
 
-	nest_script = _load_script(["res://scripts/entities/Nest.gd", "res://scripts/entities/nest.gd"])
 	core_campfire_script = _load_script(["res://scripts/entities/CoreCampfire.gd", "res://scripts/entities/core_campfire.gd"])
 	tower_script = _load_script(["res://scripts/entities/Tower.gd", "res://scripts/entities/tower.gd"])
 	wall_script = _load_script(["res://scripts/entities/Wall.gd", "res://scripts/entities/wall.gd"])
@@ -107,14 +105,6 @@ func _load_script(paths: Array[String]) -> GDScript:
 				return res
 	return null
 
-func _create_nest() -> Node:
-	if nest_script == null:
-		return null
-	var nest = nest_script.new()
-	if nest is Node:
-		_cleanup_nodes.append(nest)
-	return nest
-
 func _create_core() -> Node:
 	if core_campfire_script == null:
 		return null
@@ -148,17 +138,14 @@ func _create_hud() -> CanvasLayer:
 # Category 1: Race Condition & Simultaneous Damage Tests (test_challenge_race_*)
 # ==============================================================================
 
-## Stress-tests lethal damage to Core followed immediately by lethal damage to Nest.
-## Core death must trigger game_lost, and subsequent Nest death must NOT grant victory.
-func test_challenge_race_core_destruction_locks_out_subsequent_nest_victory() -> void:
+## Stress-tests lethal damage to Core followed immediately by the beacon charging.
+## Core death must trigger game_lost, and the beacon charged after it must NOT grant victory.
+func test_challenge_race_core_destruction_locks_out_a_later_jump() -> void:
 	var core = _create_core()
-	var nest = _create_nest()
 	assert_not_null(core, "CoreCampfire must exist")
-	assert_not_null(nest, "Nest must exist")
 
 	if tree and tree.root:
 		tree.root.add_child(core)
-		tree.root.add_child(nest)
 		await wait_frames(1)
 
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
@@ -170,36 +157,32 @@ func test_challenge_race_core_destruction_locks_out_subsequent_nest_victory() ->
 	assert_true(bool(game_state_node.is_game_over), "is_game_over must be true after Core loss")
 	assert_false(bool(game_state_node.is_game_won), "is_game_won must be false after Core loss")
 
-	# Now destroy Nest in the same frame/turn
-	nest.take_damage(30.0)
+	# Now the beacon, in the same frame/turn
+	win_the_run()
 	await wait_frames(1)
 
-	# Nest should NOT emit game_won because game was already lost
-	assert_false(won_watcher.emitted, "game_won must NOT be emitted when Nest is destroyed after Core was already lost")
+	# No jump: the game was already lost
+	assert_false(won_watcher.emitted, "game_won must NOT be emitted when the beacon charges after Core was already lost")
 	assert_true(bool(game_state_node.is_game_over), "is_game_over remains true")
 	assert_false(bool(game_state_node.is_game_won), "is_game_won must remain false (cannot win after loss)")
 
-## Stress-tests lethal damage to Nest followed immediately by lethal damage to Core.
+## Stress-tests the jump followed immediately by lethal damage to Core.
 ## Victory achieved first must not be overwritten by subsequent Core destruction.
-func test_challenge_race_nest_destruction_locks_out_subsequent_core_defeat() -> void:
+func test_challenge_race_the_jump_locks_out_a_later_core_defeat() -> void:
 	var core = _create_core()
-	var nest = _create_nest()
 	assert_not_null(core, "CoreCampfire must exist")
-	assert_not_null(nest, "Nest must exist")
 
 	if tree and tree.root:
 		tree.root.add_child(core)
-		tree.root.add_child(nest)
 		await wait_frames(1)
 
 	var won_watcher = watch_signal(event_bus_node, "game_won")
-	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Destroy Nest first
-	nest.take_damage(30.0)
-	assert_true(won_watcher.emitted, "game_won emitted when Nest destroyed")
-	assert_true(bool(game_state_node.is_game_over), "is_game_over must be true after Nest win")
-	assert_true(bool(game_state_node.is_game_won), "is_game_won must be true after Nest win")
+	# The jump first
+	win_the_run()
+	assert_true(won_watcher.emitted, "game_won emitted when the beacon has charged")
+	assert_true(bool(game_state_node.is_game_over), "is_game_over must be true after the jump")
+	assert_true(bool(game_state_node.is_game_won), "is_game_won must be true after the jump")
 
 	# Now destroy Core in the same or subsequent tick
 	core.take_damage(10.0)
@@ -223,81 +206,65 @@ func test_challenge_race_loss_cannot_be_overwritten_by_late_victory() -> void:
 	assert_true(game_state_node.is_game_over, "Game remains over")
 	assert_false(game_state_node.is_game_won, "Game must remain lost (victory cannot overwrite loss)")
 
-## Stress-tests rapid interleaved damage to both Nest and Core until resolution.
-## Tests that the first objective to hit 0 cleanly terminates the game without state tearing.
+## Stress-tests the beacon charging while the Core is being chewed, until one of them ends
+## the run. Tests that the first to finish cleanly terminates the game without state tearing.
 func test_challenge_race_rapid_interleaved_damage_resolution() -> void:
 	var core = _create_core()
-	var nest = _create_nest()
 	if tree and tree.root:
 		tree.root.add_child(core)
-		tree.root.add_child(nest)
 		await wait_frames(1)
+
+	var gs = game_state_node
+	for i in range(int(gs.beacon_stage_count()) + 1):
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
+	assert_true(gs.is_beacon_launched(), "The beacon is charging")
+	var total: float = float(gs.map_data()["beacon"]["charge_seconds"])
 
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 	var won_watcher = watch_signal(event_bus_node, "game_won")
 
-	# Nest has 30 HP, Core has 10 HP.
-	# Inflict 2 HP damage to Core, then 2 HP to Nest, alternating.
-	# Core will die first at iteration 5 (10 dmg vs 10 dmg).
+	# Core has 10 HP: 2 damage a round kills it in the fifth, when the beacon has had four
+	# tenths of its charge -- and the fifth tenth comes after the core is gone.
 	for i in range(10):
-		if game_state_node.is_game_over:
+		if gs.is_game_over:
 			break
 		core.take_damage(2.0)
-		nest.take_damage(2.0)
+		gs.charge_beacon(total * 0.1)
 
-	assert_true(game_state_node.is_game_over, "Game must reach game_over terminal state")
+	assert_true(gs.is_game_over, "Game must reach game_over terminal state")
 	assert_true(lost_watcher.emitted, "Core destroyed first, game_lost emitted")
-	assert_false(won_watcher.emitted, "Nest was at 20 HP, game_won must NOT emit")
-	assert_almost_eq(float(nest.current_hp), 20.0, 0.001, "Nest HP must remain at 20.0")
+	assert_false(won_watcher.emitted, "The beacon was not charged, game_won must NOT emit")
+	assert_almost_eq(gs.beacon_charge_ratio(), 0.4, 0.0001, "The charge stopped where the run ended")
 
-## Stress-tests sub-frame damage convergence where both entities receive fatal damage.
+## Stress-tests the last second of the charge landing while the Core is one bite from gone.
 func test_challenge_race_simultaneous_same_frame_fatal_damage() -> void:
 	var core = _create_core()
-	var nest = _create_nest()
 	if tree and tree.root:
 		tree.root.add_child(core)
-		tree.root.add_child(nest)
 		await wait_frames(1)
 
-	# Reduce both to 1.0 HP
+	var gs = game_state_node
+	for i in range(int(gs.beacon_stage_count()) + 1):
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
+	var total: float = float(gs.map_data()["beacon"]["charge_seconds"])
+
+	# Both a hair from the end
 	core.take_damage(9.0)
-	nest.take_damage(29.0)
+	gs.charge_beacon(total - 1.0)
 	assert_almost_eq(float(core.current_hp), 1.0, 0.001, "Core HP primed at 1.0")
-	assert_almost_eq(float(nest.current_hp), 1.0, 0.001, "Nest HP primed at 1.0")
-	assert_false(game_state_node.is_game_over, "Game not yet over")
+	assert_false(gs.is_game_over, "Game not yet over")
 
 	var won_watcher = watch_signal(event_bus_node, "game_won")
 
-	# Deliver fatal blow to Nest
-	nest.take_damage(1.0)
-	assert_true(won_watcher.emitted, "game_won emitted on lethal Nest damage")
-	assert_true(game_state_node.is_game_over, "is_game_over is true")
-	assert_true(game_state_node.is_game_won, "is_game_won is true")
+	# The last second of the charge
+	gs.charge_beacon(1.0)
+	assert_true(won_watcher.emitted, "game_won emitted at full charge")
+	assert_true(gs.is_game_over, "is_game_over is true")
+	assert_true(gs.is_game_won, "is_game_won is true")
 
 # ==============================================================================
 # Category 2: Idempotency & Repeated Destruction Calls (test_challenge_idempotency_*)
 # ==============================================================================
-
-## Stress-tests calling destroy() 10 consecutive times on the same Nest.
-## Verifies that EventBus.nest_destroyed and EventBus.game_won fire EXACTLY ONCE.
-func test_challenge_idempotency_nest_repeated_destroy_calls() -> void:
-	var nest = _create_nest()
-	assert_not_null(nest, "Nest must exist")
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		await wait_frames(1)
-
-	var nest_destroyed_watcher = watch_signal(event_bus_node, "nest_destroyed")
-	var game_won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Trigger destroy() 10 times in a row
-	for i in range(10):
-		nest.destroy()
-
-	assert_true(nest_destroyed_watcher.emitted, "nest_destroyed must be emitted")
-	assert_eq(nest_destroyed_watcher.emit_count, 1, "nest_destroyed must be emitted EXACTLY ONCE (idempotent)")
-	assert_true(game_won_watcher.emitted, "game_won must be emitted")
-	assert_eq(game_won_watcher.emit_count, 1, "game_won must be emitted EXACTLY ONCE (idempotent)")
 
 ## Stress-tests calling destroy() 10 consecutive times on the same CoreCampfire.
 ## Verifies that EventBus.game_lost and EventBus.building_destroyed fire EXACTLY ONCE.
@@ -320,28 +287,6 @@ func test_challenge_idempotency_core_repeated_destroy_calls() -> void:
 	assert_true(building_destroyed_watcher.emitted, "building_destroyed must be emitted")
 	assert_eq(building_destroyed_watcher.emit_count, 1, "building_destroyed must be emitted EXACTLY ONCE (idempotent)")
 
-## Stress-tests overkill and repeated post-death damage calls on dead Nest.
-func test_challenge_idempotency_nest_overkill_and_post_death_damage() -> void:
-	var nest = _create_nest()
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		await wait_frames(1)
-
-	var won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Overkill: 999.0 damage to a 30.0 HP nest
-	nest.take_damage(999.0)
-	assert_lte(float(nest.current_hp), 0.0, "Nest HP drops to 0 or below")
-	assert_almost_eq(float(nest.current_hp), 0.0, 0.001, "Nest HP clamped cleanly to 0.0")
-	assert_eq(won_watcher.emit_count, 1, "game_won fired exactly once on overkill")
-
-	# 10 subsequent damage calls on the dead nest
-	for i in range(10):
-		nest.take_damage(50.0)
-
-	assert_almost_eq(float(nest.current_hp), 0.0, 0.001, "Nest HP remains 0.0")
-	assert_eq(won_watcher.emit_count, 1, "game_won NEVER fired again on dead nest")
-
 ## Stress-tests overkill and repeated post-death damage calls on dead CoreCampfire.
 func test_challenge_idempotency_core_overkill_and_post_death_damage() -> void:
 	var core = _create_core()
@@ -363,26 +308,29 @@ func test_challenge_idempotency_core_overkill_and_post_death_damage() -> void:
 	assert_almost_eq(float(core.current_hp), 0.0, 0.001, "Core HP remains 0.0")
 	assert_eq(lost_watcher.emit_count, 1, "game_lost NEVER fired again on dead core")
 
-## Stress-tests invalid damage inputs (negative, zero, NaN, INF) on Nest and Core.
+## Stress-tests invalid inputs (negative, zero, NaN) on the Core's damage and the beacon's charge.
 func test_challenge_idempotency_invalid_damage_inputs_ignored() -> void:
-	var nest = _create_nest()
 	var core = _create_core()
 	if tree and tree.root:
-		tree.root.add_child(nest)
 		tree.root.add_child(core)
 		await wait_frames(1)
+
+	var gs = game_state_node
+	for i in range(int(gs.beacon_stage_count()) + 1):
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
 
 	var won_watcher = watch_signal(event_bus_node, "game_won")
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Negative and zero damage
-	nest.take_damage(-50.0)
-	nest.take_damage(0.0)
+	# Negative and zero damage; negative, zero and not-a-number charging
 	core.take_damage(-20.0)
 	core.take_damage(0.0)
+	gs.charge_beacon(-50.0)
+	gs.charge_beacon(0.0)
+	gs.charge_beacon(NAN)
 
-	assert_almost_eq(float(nest.current_hp), 30.0, 0.001, "Nest HP unharmed by negative/zero damage")
 	assert_almost_eq(float(core.current_hp), 10.0, 0.001, "Core HP unharmed by negative/zero damage")
+	assert_almost_eq(float(gs.beacon_charge), 0.0, 0.0001, "The charge untouched by nonsense")
 	assert_false(won_watcher.emitted, "No game_won emitted")
 	assert_false(lost_watcher.emitted, "No game_lost emitted")
 
@@ -524,201 +472,3 @@ func test_challenge_lockout_lost_hammering_loop() -> void:
 		assert_eq(int(game_state_node.current_phase), 0, "Phase locked at 0 on iteration %d" % i)
 
 	assert_eq(game_state_node.resources.get("wood", 0), initial_wood, "Wood strictly preserved after 50 hammer iterations")
-
-# ==============================================================================
-# Category 5: Tower Attacking Nest Under Extreme Conditions (test_challenge_tower_nest_*)
-# ==============================================================================
-
-## Stress-tests 4 defense towers concurrently assaulting a single Nest until destruction.
-func test_challenge_tower_nest_multi_tower_focused_assault() -> void:
-	assert_not_null(tower_script, "Tower script must exist")
-	assert_not_null(nest_script, "Nest script must exist")
-
-	var nest = nest_script.new()
-	nest.position = Vector3(0.0, 0.0, 0.0)
-	_cleanup_nodes.append(nest)
-
-	# Surround Nest with 4 towers positioned at cardinal points (distance = 3.0m <= 5.0m)
-	var tower_positions = [
-		Vector3(0.0, 0.0, -3.0),
-		Vector3(0.0, 0.0, 3.0),
-		Vector3(-3.0, 0.0, 0.0),
-		Vector3(3.0, 0.0, 0.0)
-	]
-
-	var towers: Array[Node] = []
-	for pos in tower_positions:
-		var t = tower_script.new()
-		t.position = pos
-		_cleanup_nodes.append(t)
-		towers.append(t)
-
-	if tree and tree.root:
-		tree.root.add_child(nest)
-		for t in towers:
-			tree.root.add_child(t)
-		await wait_frames(2)
-
-	# Register target acquisition for each tower
-	for t in towers:
-		if t.has_method("on_target_entered"):
-			t.on_target_entered(nest)
-		var target = t.acquire_target()
-		assert_eq(target, nest, "Each surrounding tower must target the Nest")
-
-	var won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Volley 8 rounds of simultaneous attacks (4 towers * 8 rounds = 32 attacks >= 30 HP)
-	for round_num in range(8):
-		for t in towers:
-			if not nest.is_destroyed:
-				t.attack(nest)
-
-	assert_true(nest.is_destroyed, "Nest must be destroyed by multi-tower barrage")
-	assert_almost_eq(float(nest.current_hp), 0.0, 0.001, "Nest HP drops to 0")
-	assert_true(won_watcher.emitted, "game_won emitted via multi-tower barrage")
-	assert_eq(won_watcher.emit_count, 1, "game_won emitted EXACTLY once despite 4 concurrent towers")
-
-	# Post-destruction safety: All towers must drop invalid target without crashing
-	for t in towers:
-		var post_target = t.acquire_target()
-		assert_null(post_target, "Tower must clear dead Nest target")
-		# Attempting to attack after nest dead must be a safe no-op
-		t.attack(nest)
-
-## Stress-tests Tower target range at the exact 5.0m threshold boundary and outside.
-func test_challenge_tower_nest_5m_boundary_threshold() -> void:
-	assert_not_null(tower_script, "Tower script must exist")
-	assert_not_null(nest_script, "Nest script must exist")
-
-	var tower = tower_script.new()
-	tower.position = Vector3(0.0, 0.0, 0.0)
-	_cleanup_nodes.append(tower)
-
-	var nest_in_range = nest_script.new()
-	# Distance = exactly 5.0m (on threshold boundary)
-	nest_in_range.position = Vector3(5.0, 0.0, 0.0)
-	_cleanup_nodes.append(nest_in_range)
-
-	var nest_out_of_range = nest_script.new()
-	# Distance = 6.0m (well outside 5.0m threshold boundary)
-	nest_out_of_range.position = Vector3(0.0, 0.0, 6.0)
-	_cleanup_nodes.append(nest_out_of_range)
-
-	if tree and tree.root:
-		tree.root.add_child(tower)
-		tree.root.add_child(nest_in_range)
-		tree.root.add_child(nest_out_of_range)
-		await wait_frames(2)
-
-	# Test In-Range Nest at 5.0m
-	tower.on_target_entered(nest_in_range)
-	var target_at_boundary = tower.acquire_target()
-	assert_not_null(target_at_boundary, "Tower must acquire Nest positioned exactly at 5.0m boundary")
-	assert_eq(target_at_boundary, nest_in_range, "Target must be nest_in_range")
-
-	# Attack at 5.0m succeeds
-	var hp_before = nest_in_range.current_hp
-	tower.attack(nest_in_range)
-	assert_almost_eq(float(nest_in_range.current_hp), hp_before - 1.0, 0.001, "Tower deals 1.0 damage at 5.0m boundary")
-
-	# Test Out-Of-Range Nest at 6.0m.
-	#
-	# The in-range nest has to be moved out of range, not merely dropped from the
-	# tower's bookkeeping: it sits 5.0m away inside the detection sphere, so
-	# acquire_target() keeps finding it through the physics overlap and this
-	# assertion would otherwise depend on how many physics frames happened to have
-	# run -- which is how it failed once on a busier suite. Detaching it is worse
-	# than useless: the overlap lingers a frame either way, and a detached node's
-	# global position collapses to the origin, which is *inside* the tower.
-	# Distance is the one filter that does not care about physics bookkeeping.
-	tower.on_target_exited(nest_in_range)
-	nest_in_range.position = Vector3(0.0, 0.0, 100.0)
-	await wait_frames(1)
-
-	tower.on_target_entered(nest_out_of_range)
-	var target_out = tower.acquire_target()
-	assert_null(target_out, "Tower must REJECT Nest positioned at 6.0m (beyond 5.0m range)")
-
-	# Attempted attack on out-of-range Nest must deal 0 damage
-	var hp_out_before = nest_out_of_range.current_hp
-	tower.attack(nest_out_of_range)
-	assert_almost_eq(float(nest_out_of_range.current_hp), hp_out_before, 0.001, "Out-of-range Nest takes 0 damage")
-
-## Stress-tests sub-millimeter precision at boundary (4.9m in, 5.0m in, 5.5m out).
-func test_challenge_tower_nest_boundary_distance_gradient() -> void:
-	var tower = tower_script.new()
-	tower.position = Vector3.ZERO
-	_cleanup_nodes.append(tower)
-
-	# 1. Nest at 4.9m: MUST be in range
-	var nest_4_9 = nest_script.new()
-	nest_4_9.position = Vector3(0.0, 0.0, 4.9)
-	_cleanup_nodes.append(nest_4_9)
-
-	# 2. Nest at 5.5m: MUST be out of range
-	var nest_5_5 = nest_script.new()
-	nest_5_5.position = Vector3(0.0, 0.0, 5.5)
-	_cleanup_nodes.append(nest_5_5)
-
-	if tree and tree.root:
-		tree.root.add_child(tower)
-		tree.root.add_child(nest_4_9)
-		tree.root.add_child(nest_5_5)
-		await wait_frames(2)
-
-	# 4.9m check
-	tower.on_target_entered(nest_4_9)
-	assert_eq(tower.acquire_target(), nest_4_9, "4.9m is within range")
-	tower.attack(nest_4_9)
-	assert_almost_eq(float(nest_4_9.current_hp), 29.0, 0.001, "4.9m nest damaged")
-
-	# 5.5m check. The 4.9m nest has to move out of range, not just out of the
-	# tower's list: it is still inside the detection sphere, and the physics
-	# overlap would hand it straight back (see the 5m boundary test above).
-	tower.on_target_exited(nest_4_9)
-	nest_4_9.position = Vector3(0.0, 0.0, 100.0)
-	await wait_frames(1)
-	tower.on_target_entered(nest_5_5)
-	assert_null(tower.acquire_target(), "5.5m is strictly out of range")
-	tower.attack(nest_5_5)
-	assert_almost_eq(float(nest_5_5.current_hp), 30.0, 0.001, "5.5m nest untouched")
-
-## Stress-tests 3D diagonal Euclidean distance boundary (3-4-5 triangle = 5.0m in; 4-4-0 = 5.65m out).
-func test_challenge_tower_nest_diagonal_euclidean_boundary() -> void:
-	var tower = tower_script.new()
-	tower.position = Vector3.ZERO
-	_cleanup_nodes.append(tower)
-
-	# 3D diagonal at (3, 0, 4): distance = sqrt(9 + 16) = 5.0m (in range)
-	var nest_diag_in = nest_script.new()
-	nest_diag_in.position = Vector3(3.0, 0.0, 4.0)
-	_cleanup_nodes.append(nest_diag_in)
-
-	# 3D diagonal at (4, 0, 4): distance = sqrt(16 + 16) = 5.657m (out of range)
-	var nest_diag_out = nest_script.new()
-	nest_diag_out.position = Vector3(4.0, 0.0, 4.0)
-	_cleanup_nodes.append(nest_diag_out)
-
-	if tree and tree.root:
-		tree.root.add_child(tower)
-		tree.root.add_child(nest_diag_in)
-		tree.root.add_child(nest_diag_out)
-		await wait_frames(2)
-
-	# Test in-range diagonal (5.0m)
-	tower.on_target_entered(nest_diag_in)
-	assert_eq(tower.acquire_target(), nest_diag_in, "Diagonal at (3, 0, 4) distance 5.0m is valid target")
-	tower.attack(nest_diag_in)
-	assert_almost_eq(float(nest_diag_in.current_hp), 29.0, 0.001, "Diagonal nest at 5.0m takes 1.0 damage")
-
-	# Test out-of-range diagonal (5.657m). The in-range nest moves away for the
-	# same reason as in the two boundary tests above: it is inside the detection
-	# sphere, and the physics overlap does not care about the tower's own list.
-	tower.on_target_exited(nest_diag_in)
-	nest_diag_in.position = Vector3(0.0, 0.0, 100.0)
-	await wait_frames(1)
-	tower.on_target_entered(nest_diag_out)
-	assert_null(tower.acquire_target(), "Diagonal at (4, 0, 4) distance 5.657m is rejected")
-	tower.attack(nest_diag_out)
-	assert_almost_eq(float(nest_diag_out.current_hp), 30.0, 0.001, "Out-of-range diagonal nest takes 0 damage")

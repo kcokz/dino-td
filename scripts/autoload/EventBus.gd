@@ -14,7 +14,8 @@ signal phase_changed(phase: int)
 ## Legacy phase-machine broadcast. Continuous mode never emits it.
 signal produce_phase()
 
-## Broadcast when all nests are destroyed, transitioning game to Victory state.
+## Broadcast when the run is won: the beacon has charged and the capsule jumps (v0.6,
+## GAME-DESIGN 8.3). It used to be the nest going down; the nest cannot be destroyed now.
 signal game_won()
 
 ## Broadcast when Campfire Core HP drops to <= 0, transitioning game to Defeat state.
@@ -77,10 +78,14 @@ signal dino_died(dino: Node)
 signal dino_reached_core(dino: Node)
 
 # ==============================================================================
-# 6. Objective & Nest Signals
+# 6. The beacon (v0.6): the run's main line
 # ==============================================================================
-## Emitted when the Dinosaur Nest HP reaches 0, prior to deletion.
-signal nest_destroyed(nest: Node)
+## A step of the beacon is done at the cabin -- a stage repaired, or the launch -- and
+## `steps_done` of them are done now (GameState.beacon_steps).
+signal beacon_changed(steps_done: int)
+
+## The beacon is switched on: it starts to charge, and the final wave sets out.
+signal beacon_launched()
 
 # ==============================================================================
 # 7. Real-Time Deployment & Modern Hero Signals (v0.1)

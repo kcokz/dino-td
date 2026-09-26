@@ -83,7 +83,12 @@ func test_02_a_recipe_grants_a_flag_and_nothing_else() -> void:
 func test_03_stations_only_offer_their_own_recipes() -> void:
 	for station_id in config_node.STATIONS:
 		var here: Array = config_node.recipes_at(String(station_id))
-		assert_gt(here.size(), 0, "%s has something to make" % station_id)
+		# The beacon's bench makes nothing to keep: its work is the beacon's steps, which come
+		# from the run's map (test_v06_beacon).
+		var steps: Array = config_node.beacon_jobs(game_state_node.map_data()) \
+			if String(station_id) == String(config_node.BEACON_STATION) else []
+		assert_gt(here.size() + config_node.dishes_at(String(station_id)).size() + steps.size(), 0,
+			"%s has something to do" % station_id)
 		for recipe_id in here:
 			assert_eq(String(config_node.RECIPES[recipe_id]["station"]), String(station_id),
 				"%s belongs to %s" % [recipe_id, station_id])

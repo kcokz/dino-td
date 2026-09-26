@@ -5,7 +5,7 @@
 # 1. Start game in Main scene.
 # 3. Trigger End Action -> transitions to ATTACK (WaveManager activates).
 # 5. Reach wave 3 (horde wave, 8 dinos), verify horde multiplier and post-horde stat enhancement.
-# 6. Defeat all dinos, place Tower within 5.0m of Nest, destroy Nest -> triggers Victory.
+# 6. Defeat all dinos, repair and launch the beacon, charge it -> the jump: Victory.
 # 7. Verify action lockout on victory.
 # 8. Trigger restart_game(), verify pristine state.
 # 9. Allow dinos to destroy Core Campfire -> triggers Defeat.
@@ -144,7 +144,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_not_null(main.current_core, "CoreCampfire must exist in Main")
 	assert_not_null(main.current_nest, "Nest must exist in Main")
 	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP initialized to 10.0")
-	assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Nest HP initialized to 30.0")
 
 	# Verify GridManager Occupancy
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(0, 0)), "Core cell (0, 0) is occupied")
@@ -310,50 +309,20 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Player wood matches the running total")
 
 	# --------------------------------------------------------------------------
-	# Phase F: Place Tower within 5.0m of Nest, destroy Nest -> triggers Victory
+	# Phase F: Repair and launch the beacon, charge it -> the jump, Victory
 	# --------------------------------------------------------------------------
-	# Nest is at cell (0, -9) / world (0, 0, -18).
-	# Placing Tower at cell (0, -8) / world (0, 0, -16) gives distance 2.0m <= 5.0m attack range!
-	# Fund the assault tower from Config rather than from the old balance.
-	expected_wood = cost_of("tower") + 2
-	game_state_node.resources["wood"] = expected_wood
-	for res_id in config_node.BUILDINGS["tower"]["cost"]:
-		if res_id != "wood":   # the wood is counted into the running total above
-			game_state_node.resources[res_id] = int(config_node.BUILDINGS["tower"]["cost"][res_id])
-	await wait_frames(1)
-	var assault_tower = main.place_building_at_cell("tower", Vector2i(0, -8))
-	assert_not_null(assault_tower, "Assault Tower successfully placed at (0, -8)")
-	expected_wood -= cost_of("tower")
-	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood drops by the tower cost")
-
-	var nest = main.current_nest
-	assert_not_null(nest, "Nest is present")
-	var dist_to_nest = assault_tower.global_position.distance_to(nest.global_position)
-	assert_lte(dist_to_nest, 5.0, "Assault Tower is within 5.0m range of Nest (actual: %.2f m)" % dist_to_nest)
-
-	# Register Nest in tower detection and engage assault
-	if assault_tower.has_method("on_target_entered"):
-		assault_tower.on_target_entered(nest)
-
-	var target = assault_tower.acquire_target() if assault_tower.has_method("acquire_target") else null
-	assert_eq(target, nest, "Assault Tower successfully acquires Nest as target")
-
+	# It used to be a tower walked up to the nest and thirty bolts; the nest cannot be
+	# destroyed since v0.6 (test_v06_beacon), and the beacon is the only way to win.
 	var game_won_watcher = watch_signal(event_bus_node, "game_won")
-
-	# Tower inflicts 30 attacks @ 1.0 dmg to destroy 30 HP Nest
-	for i in range(30):
-		if not is_instance_valid(nest) or nest.current_hp <= 0.0:
-			break
-		assault_tower.fire_at(nest)
-
+	win_the_run()
 	await wait_frames(2)
 
 	# Verify Victory
-	assert_true(game_won_watcher.emitted, "EventBus.game_won emitted upon Nest destruction")
+	assert_true(game_won_watcher.emitted, "EventBus.game_won emitted when the beacon has charged")
 	assert_true(bool(game_state_node.get("is_game_won")), "GameState.is_game_won is true")
 	assert_true(bool(game_state_node.get("is_game_over")), "GameState.is_game_over is true")
 	assert_true(hud.is_game_over_visible(), "HUD GameOver panel visible on victory")
-	assert_true("VICTORY" in hud.get_game_over_title() or "胜" in hud.get_game_over_title(),
+	assert_eq(hud.get_game_over_title(), tr("GAME_VICTORY_TITLE"),
 		"HUD GameOver title indicates Victory (got '%s')" % hud.get_game_over_title())
 
 	# --------------------------------------------------------------------------
@@ -393,7 +362,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_not_null(main.current_core, "Pristine Core exists after restart")
 	assert_not_null(main.current_nest, "Pristine Nest exists after restart")
 	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP restored to full 10.0")
-	assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Nest HP restored to full 30.0")
 
 	# Verify grid and container purging
 	assert_eq(main.buildings_container.get_child_count(), 1, "Buildings container contains only 1 building (Core)")
@@ -465,7 +433,6 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_not_null(main.current_core, "Pristine Core exists after 2nd restart")
 	assert_not_null(main.current_nest, "Pristine Nest exists after 2nd restart")
 	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP is 10.0")
-	assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Nest HP is 30.0")
 
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after 2nd restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after 2nd restart")
@@ -548,8 +515,8 @@ func test_04_rapid_alternating_victory_defeat_restart_stress() -> void:
 
 	for cycle in range(6):
 		if cycle % 2 == 0:
-			# Trigger Victory via Nest destruction
-			main.current_nest.take_damage(30.0)
+			# Trigger Victory: the beacon, charged
+			win_the_run()
 			await wait_frames(1)
 			assert_true(bool(game_state_node.get("is_game_won")), "Cycle %d: Game won" % cycle)
 			assert_true(main.hud.is_game_over_visible(), "Cycle %d: Modal visible" % cycle)
@@ -569,7 +536,7 @@ func test_04_rapid_alternating_victory_defeat_restart_stress() -> void:
 		assert_false(bool(game_state_node.get("is_game_won")), "Cycle %d: is_game_won cleared" % cycle)
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Phase is PLAN" % cycle)
 		assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Cycle %d: Core HP is 10.0" % cycle)
-		assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Cycle %d: Nest HP is 30.0" % cycle)
+		assert_eq(int(game_state_node.beacon_steps), 0, "Cycle %d: The beacon is broken again" % cycle)
 		assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Cycle %d: Grid holds only the level's own" % cycle)
 		assert_false(main.hud.is_game_over_visible(), "Cycle %d: HUD modal hidden" % cycle)
 

@@ -561,6 +561,22 @@ func stock_everything(amount: int = 9999) -> void:
 	for res_id in cfg.RESOURCES:
 		gs.resources[String(res_id)] = amount
 
+## Wins the run the only way there is since v0.6 (GAME-DESIGN 8.3): every step of the
+## beacon, then a full charge. For tests about what winning DOES -- the flags, the overlay,
+## the lockout, a restart after it -- rather than about the beacon (test_v06_beacon). Those
+## tests used to knock the nest down; the nest cannot be destroyed now.
+##
+## A run already lost stays lost: its steps are refused and its charge does not run.
+func win_the_run() -> void:
+	if not (Engine.get_main_loop() is SceneTree) or Engine.get_main_loop().root == null:
+		return
+	var gs = Engine.get_main_loop().root.get_node_or_null("GameState")
+	if gs == null or not gs.has_method("finish_beacon_job"):
+		return
+	for i in range(int(gs.beacon_stage_count()) + 1):
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
+	gs.charge_beacon(float(gs.map_data().get("beacon", {}).get("charge_seconds", 0.0)))
+
 ## Everything `type_id` costs, added up across resources. The figure the build-time
 ## curve is derived from.
 func total_price_of(type_id: String) -> int:

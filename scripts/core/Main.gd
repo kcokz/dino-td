@@ -267,6 +267,12 @@ func _discover_waypoints() -> void:
 		wave_manager.waypoints = waypoints.duplicate()
 		if not waypoints.is_empty():
 			wave_manager.nest_spawn_position = waypoints[0]
+		# The map's other ways in, for the beacon's final wave.
+		var entries: Array[Vector3] = []
+		if grid_manager and grid_manager.has_method("cell_to_world"):
+			for cell in _map().get("entries", []):
+				entries.append(grid_manager.cell_to_world(cell))
+		wave_manager.entry_positions = entries
 
 func _wire_signals() -> void:
 	if hud:

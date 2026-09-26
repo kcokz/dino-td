@@ -229,11 +229,9 @@ func test_challenge_02_mid_wave_restart_with_damaged_entities_and_active_physics
 	if main == null: return
 	await wait_frames(2)
 
-	# Damage Core and Nest heavily
+	# Damage the Core heavily (the nest cannot be hurt since v0.6)
 	main.current_core.take_damage(8.0)
-	main.current_nest.take_damage(25.0)
 	assert_almost_eq(float(main.current_core.current_hp), 2.0, 0.001, "Core HP reduced to 2.0")
-	assert_almost_eq(float(main.current_nest.current_hp), 5.0, 0.001, "Nest HP reduced to 5.0")
 
 	# Spawn 10 dinos marching towards Core
 	for i in range(10):
@@ -250,11 +248,10 @@ func test_challenge_02_mid_wave_restart_with_damaged_entities_and_active_physics
 	main.restart_game()
 	await wait_frames(2)
 
-	# Verify fresh pristine Core and Nest with full HP
+	# Verify a fresh Core with full HP, and a fresh Nest
 	assert_not_null(main.current_core, "Pristine Core exists")
 	assert_not_null(main.current_nest, "Pristine Nest exists")
 	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core restored to full 10.0 HP")
-	assert_almost_eq(float(main.current_nest.current_hp), 30.0, 0.001, "Nest restored to full 30.0 HP")
 
 	# Verify HUD shows full HP
 	var hud = main.hud

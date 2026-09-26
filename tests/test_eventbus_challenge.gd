@@ -57,7 +57,8 @@ func test_challenge_1_all_15_signals_present_and_signatures() -> void:
 		"dino_spawned": 1,
 		"dino_died": 1,
 		"dino_reached_core": 1,
-		"nest_destroyed": 1
+		"beacon_changed": 1,
+		"beacon_launched": 0
 	}
 
 	var sig_list = event_bus.get_signal_list()
@@ -98,7 +99,8 @@ func test_challenge_2_multi_listener_fanout_all_15_signals() -> void:
 		"dino_spawned": [dummy_node],
 		"dino_died": [dummy_node],
 		"dino_reached_core": [dummy_node],
-		"nest_destroyed": [dummy_node]
+		"beacon_changed": [1],
+		"beacon_launched": []
 	}
 
 	for sig_name in signal_payloads.keys():

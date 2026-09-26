@@ -16,6 +16,9 @@ extends Node3D
 @export var big_multiplier: float = 2.0
 @export var nest_spawn_position: Vector3 = Vector3.ZERO
 @export var waypoints: Array[Vector3] = []
+## Where else raiders step out, besides the nest: the map's `entries`, in the world (Main
+## places them). Only the beacon's final wave uses them.
+@export var entry_positions: Array[Vector3] = []
 
 var current_wave: int = 0
 var dinos_to_spawn: int = 0
@@ -27,6 +30,11 @@ var wave_roster: Array[String] = []
 ## How many times the map's boss has come on its beat (GAME-DESIGN 7.5: once, mid-game).
 var boss_raids_sent: int = 0
 var is_wave_active: bool = false
+## The beacon's final wave is under way (GAME-DESIGN 8.3): from its launch to the jump there
+## are no more ordinary raids, only the one stream -- see start_final_wave.
+var final_wave: bool = false
+## Which way out the final wave's next raider takes: the nest, then each entry, in turn.
+var _entry_turn: int = 0
 
 # v0.2 Continuous Random Raids
 var raid_timer: float = 60.0
@@ -70,7 +78,7 @@ func _notification(what: int) -> void:
 			spawn_timer.stop()
 
 func _process(delta: float) -> void:
-	if not auto_raid_enabled or is_wave_active:
+	if not auto_raid_enabled or is_wave_active or final_wave:
 		return
 	var gs = _get_game_state()
 	if gs and ("is_paused" in gs and gs.is_paused or "is_game_over" in gs and gs.is_game_over):
@@ -166,6 +174,8 @@ func _connect_event_bus() -> void:
 			eb.phase_changed.connect(_on_phase_changed)
 		if eb.has_signal("dino_died") and not eb.dino_died.is_connected(_on_dino_died):
 			eb.dino_died.connect(_on_dino_died)
+		if eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(start_final_wave):
+			eb.beacon_launched.connect(start_final_wave)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -174,6 +184,8 @@ func _disconnect_event_bus() -> void:
 			eb.phase_changed.disconnect(_on_phase_changed)
 		if eb.has_signal("dino_died") and eb.dino_died.is_connected(_on_dino_died):
 			eb.dino_died.disconnect(_on_dino_died)
+		if eb.has_signal("beacon_launched") and eb.beacon_launched.is_connected(start_final_wave):
+			eb.beacon_launched.disconnect(start_final_wave)
 
 func _on_phase_changed(phase: int) -> void:
 	# Phase 1 == ATTACK
@@ -214,9 +226,16 @@ func start_next_wave() -> void:
 
 ## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter.
 func start_next_raid() -> void:
-	var gs = _get_game_state()
-	var next_n: int = (gs.wave_number + 1) if gs else (current_wave + 1)
+	var next_n: int = _next_wave_number()
+	var final_count: int = raid_size(next_n)
+	var with_boss: bool = boss_is_due()
+	if with_boss:
+		boss_raids_sent += 1
+	start_wave(next_n, final_count, with_boss)
 
+## How many raiders wave `wave_num` sends if it sets out now: its count, scaled by how far
+## into the run it is (RAIDS.intensity_per_minute) and by the run's dice either way.
+func raid_size(wave_num: int) -> int:
 	var cfg = _get_config()
 	var per_min: float = 0.15
 	var jitter_range: float = 0.3
@@ -228,18 +247,52 @@ func start_next_raid() -> void:
 	var intensity_baseline: float = 1.0 + minutes * per_min
 	var jitter: float = _rng().randf_range(-jitter_range, jitter_range)
 	var multiplier: float = maxf(0.5, intensity_baseline * (1.0 + jitter))
+	return maxi(1, int(round(float(get_wave_dino_count(wave_num)) * multiplier)))
 
-	var base_cnt: int = get_wave_dino_count(next_n)
-	var final_count: int = maxi(1, int(round(float(base_cnt) * multiplier)))
+## The beacon's final wave (GAME-DESIGN 8.3), set out when it is launched: the whole valley
+## comes for the cabin, and keeps coming until the jump.
+##
+## ONE wave for the whole charge, streamed rather than sent: `final_raids` ordinary raids'
+## worth, sized as a raid would be now -- so putting the launch off makes the end harder --
+## stepping out one after another, with no gaps, over the first `stream_share` of the
+## charge. Each takes the next way out in turn, the nest and then every entry of the map,
+## so the base the player built facing the nest needs a back as well. The map's boss is
+## last of all, and the share left over is its time to arrive: the finale is a fight.
+##
+## A raid still under way is folded in rather than dropped -- whoever is already out keeps
+## counting towards the wave; whoever had not stepped out yet is part of the stream now.
+func start_final_wave() -> void:
+	if final_wave:
+		return
+	var beacon: Dictionary = _map().get("beacon", {})
+	var still_out: int = 0
+	if is_wave_active:
+		still_out = maxi(0, dinos_alive_count - (dinos_to_spawn - dinos_spawned_count))
+	var next_n: int = _next_wave_number()
+	var count: int = maxi(1, int(round(float(raid_size(next_n)) * float(beacon.get("final_raids", 1.0)))))
+	final_wave = true
+	_entry_turn = 0
+	start_wave(next_n, count, true)
+	dinos_alive_count += still_out
+	var stream: float = float(beacon.get("charge_seconds", 0.0)) * float(beacon.get("stream_share", 1.0))
+	if spawn_timer and stream > 0.0:
+		spawn_timer.start(maxf(0.05, stream / float(maxi(1, dinos_to_spawn))))
 
-	var with_boss: bool = boss_is_due()
-	if with_boss:
-		boss_raids_sent += 1
-	start_wave(next_n, final_count, with_boss)
+## Every way out a raider can take in the final wave, in turn: the nest first.
+func final_wave_origins() -> Array[Vector3]:
+	var out: Array[Vector3] = [nest_spawn_position]
+	out.append_array(entry_positions)
+	return out
+
+func _next_wave_number() -> int:
+	var gs = _get_game_state()
+	return (gs.wave_number + 1) if gs else (current_wave + 1)
 
 ## Resets raid timers and state for continuous real-time mode (v0.2).
 func reset_raid_state() -> void:
 	elapsed_time = 0.0
+	final_wave = false
+	_entry_turn = 0
 	var cfg = _get_config()
 	var lead_time: float = 15.0
 	if cfg and "RAIDS" in cfg:
@@ -285,7 +338,10 @@ func start_wave(wave_num: int, override_count: int = -1, with_boss: bool = false
 		spawn_timer.start(spawn_interval)
 
 func _on_spawn_timer_timeout() -> void:
-	if not is_wave_active:
+	# Nobody steps out once the run is over. The beacon's final wave is still streaming out
+	# at the jump by design, and would have gone on filling the valley behind the result.
+	var gs = _get_game_state()
+	if not is_wave_active or (gs and "is_game_over" in gs and gs.is_game_over):
 		if spawn_timer:
 			spawn_timer.stop()
 		return
@@ -355,19 +411,30 @@ func _spawn_single_dino() -> Node:
 		offset = float(lane_offsets[dinos_spawned_count % lane_offsets.size()])
 	dinos_spawned_count += 1
 
+	# Out of the nest and down the path -- or, in the beacon's final wave, out of whichever
+	# way is next, straight for the cabin at the path's end (hills are steered round:
+	# Dino._steer_target).
+	var origin: Vector3 = nest_spawn_position
+	var route: Array[Vector3] = waypoints.duplicate()
+	if final_wave:
+		var origins: Array[Vector3] = final_wave_origins()
+		origin = origins[_entry_turn % origins.size()]
+		_entry_turn += 1
+		if origin != nest_spawn_position and not waypoints.is_empty():
+			route = [origin, waypoints.back()]
 	if "lane_offset" in dino:
 		dino.lane_offset = offset
 	if "waypoints" in dino:
-		dino.waypoints = waypoints.duplicate()
+		dino.waypoints = route
 	if "position" in dino:
 		var spawn_offset = Vector3(offset, 0.0, 0.0)
-		if waypoints.size() >= 2:
-			var seg: Vector3 = waypoints[1] - waypoints[0]
+		if route.size() >= 2:
+			var seg: Vector3 = route[1] - route[0]
 			seg.y = 0.0
 			if seg.length_squared() > 0.001:
 				var perp: Vector3 = seg.normalized().cross(Vector3.UP).normalized()
 				spawn_offset = perp * offset
-		dino.position = nest_spawn_position + spawn_offset
+		dino.position = origin + spawn_offset
 
 	# Add to container
 	var target_parent = dinos_container if is_instance_valid(dinos_container) else self

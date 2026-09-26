@@ -168,7 +168,7 @@ func test_config_dinos_and_waves() -> void:
 
 	assert_has(config_node, "NEST", "Config must define NEST")
 	if "NEST" in config_node:
-		assert_almost_eq(float(config_node.NEST.get("hp", 0.0)), 30.0, 0.01, "NEST hp should be 30.0")
+		assert_false(config_node.NEST.has("hp"), "The nest has no hit points: it cannot be destroyed (v0.6)")
 
 func test_autoload_eventbus_exists() -> void:
 	assert_not_null(event_bus_node, "Autoload EventBus should be registered in /root/EventBus or exist in res://scripts/autoload/EventBus.gd")
@@ -189,7 +189,8 @@ func test_eventbus_signals_catalog() -> void:
 		"dino_spawned",
 		"dino_died",
 		"dino_reached_core",
-		"nest_destroyed",
+		"beacon_changed",
+		"beacon_launched",
 		"game_won",
 		"game_lost",
 		"core_hp_changed"
@@ -328,12 +329,10 @@ func test_gamestate_win_and_loss_terminal_states() -> void:
 
 	assert_eq(game_state_node.get("is_game_over"), false, "is_game_over should initially be false")
 
-	var dummy_nest = Node.new()
-	_cleanup_nodes.append(dummy_nest)
 	var win_watcher = watch_signal(event_bus_node, "game_won")
-	event_bus_node.emit_signal("nest_destroyed", dummy_nest)
+	win_the_run()
 
-	assert_true(win_watcher.emitted, "game_won should be emitted when last nest is destroyed")
+	assert_true(win_watcher.emitted, "game_won should be emitted when the beacon has charged")
 	assert_eq(game_state_node.get("is_game_over"), true, "is_game_over should be true after game won")
 
 	game_state_node.call("reset_game")
