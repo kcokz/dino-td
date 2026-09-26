@@ -106,7 +106,12 @@ func test_02_nothing_seals_a_tile_on_its_own_any_more() -> void:
 	assert_false(config_node.is_barrier_building("wall"),
 		"Nor does one stake, which is 0.62m of a 2m tile")
 
+	# What must never happen is the Hero sealed in by his own buildings -- and he walks
+	# through anything of the wall kind (Config.LAYER_WALL), so only the rest must leave
+	# him a lane. The stone wall (v0.6) fills its tile on purpose: against dinosaurs.
 	for b_type in config_node.BUILDABLE_TYPES:
+		if config_node.get_building_kind(b_type) == "wall":
+			continue
 		var lane: float = config_node.TILE_SIZE - config_node.get_building_footprint(b_type)
 		assert_gt(lane, float(config_node.HERO.get("width", 0.8)),
 			"The gap beside a %s is wider than the Hero" % b_type)
@@ -169,6 +174,15 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 				placed = _stake(Vector3(30.0, 0.0, 0.0))
 			"tower":
 				placed = _spawn(tower_script, Vector3(34.0, 0.0, 0.0))
+				placed.complete_construction()
+			"bone_stake", "stone_wall":
+				# Given its type before it enters the tree -- as BuildSystem does -- because
+				# the body is drawn for whatever type it has when it arrives.
+				placed = wall_script.new()
+				placed.setup(type_id)
+				_cleanup_nodes.append(placed)
+				tree.root.add_child(placed)
+				placed.position = Vector3(38.0 if type_id == "bone_stake" else 42.0, 0.0, 0.0)
 				placed.complete_construction()
 		assert_not_null(placed, "This test knows how to place a %s" % type_id)
 		if placed == null:

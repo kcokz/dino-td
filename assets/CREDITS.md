@@ -110,7 +110,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-22 (stake, outcrops, logs, crags); 2026-09-23 (basalt cliffs, nest, sentry, piles); 2026-09-25 (water spot, cabin)
-- **Files**: `stake_a.glb`, `outcrop_a/b.glb`, `outcrop_quarried_a.glb`, `fallen_log_a/b.glb`, `rock_formation_a/b/c.glb`, `basalt_cliff_a/b/c.glb`, `nest_a.glb`, `sentry_a.glb`, `drop_wood_a.glb`, `drop_stone_a.glb`, `drop_bone_a.glb`, `drop_food_a.glb`, `drop_water_a.glb`, `water_landing_a.glb`, `cabin_a.glb`
+- **Files**: `stake_a.glb`, `bone_stake_a.glb`, `stone_wall_a.glb`, `outcrop_a/b.glb`, `outcrop_quarried_a.glb`, `fallen_log_a/b.glb`, `rock_formation_a/b/c.glb`, `basalt_cliff_a/b/c.glb`, `nest_a.glb`, `sentry_a.glb`, `drop_wood_a.glb`, `drop_stone_a.glb`, `drop_bone_a.glb`, `drop_food_a.glb`, `drop_water_a.glb`, `water_landing_a.glb`, `cabin_a.glb`
 - **Usage**: `building/core`, `building/wall`, `node/stone`, `node/water`, `nest`, `building/tower`, `drop/*` (`Config.VISUALS`); the hills (`Config.MAP.hill_rocks`); the cliffs and fallen logs (`Config.GROUND_COVER`); the boulders in the river's white water (`Config.TERRAIN.river`).
 
 ### Volcanoes, Valley Floor, River & Hills (built at runtime, no asset files)

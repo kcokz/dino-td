@@ -304,6 +304,97 @@ func heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
 	_update_info_label()
 
+# ==============================================================================
+# Upgrading where it stands (v0.6)
+# ==============================================================================
+## The building this one is being turned into, and how far the work has got (0..1).
+##
+## An upgrade is paid for when it is ordered -- the deal a blueprint gets -- and the old
+## building keeps working the whole time the Hero builds the new one onto it: upgrading
+## costs him time and materials, never a hole in the defence (GAME-DESIGN 6.1: a line of
+## buildings upgrades in place).
+var upgrading_to: String = ""
+var upgrade_progress: float = 0.0
+
+## What this building becomes when upgraded, or "" at the end of its line.
+func upgrade_target() -> String:
+	var cfg = _get_config()
+	return String(cfg.upgrade_target(building_type)) if (cfg and cfg.has_method("upgrade_target")) else ""
+
+## Finished, standing, with somewhere further up its line to go, and not already on its way.
+func can_upgrade() -> bool:
+	return is_constructed and not is_destroyed and upgrading_to == "" and upgrade_target() != ""
+
+func is_upgrading() -> bool:
+	return upgrading_to != ""
+
+## What the upgrade costs: the difference between this building's price and the next one's.
+func upgrade_cost() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.upgrade_cost(building_type) if (cfg and cfg.has_method("upgrade_cost")) else {}
+
+## Pays for the upgrade and marks the work as there to be done. False, with nothing spent,
+## when it cannot be upgraded or the warehouse cannot pay for it.
+func begin_upgrade() -> bool:
+	if not can_upgrade():
+		return false
+	var gs = _get_game_state()
+	if gs == null or not gs.has_method("spend_resources") or not gs.spend_resources(upgrade_cost()):
+		return false
+	upgrading_to = upgrade_target()
+	upgrade_progress = 0.0
+	_update_info_label()
+	return true
+
+## Advances the upgrade by `delta` seconds of the Hero's work. True once it is done -- or
+## when there was nothing to do.
+func add_upgrade_progress(delta: float) -> bool:
+	if not is_upgrading():
+		return true
+	var cfg = _get_config()
+	var total: float = float(cfg.get_upgrade_time(building_type)) if (cfg and cfg.has_method("get_upgrade_time")) else 0.0
+	upgrade_progress = 1.0 if total <= 0.0 else minf(1.0, upgrade_progress + maxf(0.0, delta) / total)
+	if upgrade_progress >= 1.0:
+		_finish_upgrade()
+		return true
+	_update_info_label()
+	return false
+
+## Becomes the new building: its numbers (a tower's rate and range come with setup), as
+## much of its health as the old one had, and its own body if it is drawn differently.
+func _finish_upgrade() -> void:
+	var was: String = building_type
+	var health: float = (current_hp / max_hp) if max_hp > 0.0 else 1.0
+	var to: String = upgrading_to
+	upgrading_to = ""
+	upgrade_progress = 0.0
+	setup(to, cell_pos)
+	current_hp = max_hp * health
+	_rebuild_body(was)
+	var fx = _get_fx()
+	if fx:
+		fx.play(fx.Sound.BUILD_DONE)
+	_update_info_label()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("building_upgraded"):
+		eb.building_upgraded.emit(self)
+
+## Swaps the body for the one this type declares -- only when it is a different thing to
+## draw, so a tower II still in the tower's model keeps its head turned at its target.
+func _rebuild_body(old_type: String) -> void:
+	var cfg = _get_config()
+	if cfg and "VISUALS" in cfg:
+		var before: Dictionary = cfg.VISUALS.get("building/" + old_type, {})
+		var after: Dictionary = cfg.VISUALS.get("building/" + building_type, {})
+		if String(before.get("scene", "")) == String(after.get("scene", "")) \
+				and String(before.get("placeholder", "")) == String(after.get("placeholder", "")):
+			return
+	var old: Node = get_node_or_null("Body")
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	_build_body_mesh()
+
 ## Takes the building down and leaves half its price in the rubble. Since v0.3 the
 ## refund is dropped rather than banked -- it was the last way resources reached
 ## the warehouse without passing through the Hero's hands, and he is standing right
@@ -347,6 +438,11 @@ func _update_info_label() -> void:
 	if not is_constructed:
 		label_3d.modulate = Color(1.0, 0.85, 0.3)
 		label_3d.text = "%s\n[ %d%% ]" % [b_name, int(build_progress * 100.0)]
+	elif is_upgrading():
+		var cfg_up = _get_config()
+		var to_name: String = String(cfg_up.get_building_name(upgrading_to)) if cfg_up else upgrading_to
+		label_3d.modulate = Color(1.0, 0.85, 0.3)
+		label_3d.text = "%s\n[ %d%% ]" % [to_name, int(upgrade_progress * 100.0)]
 	else:
 		var extra = _get_extra_status_text()
 		if extra != "":
@@ -363,7 +459,7 @@ func _update_info_label() -> void:
 	# follows. It became urgent the moment stakes could be built close together: a
 	# twenty-stake fence put twenty floating names across the middle of the screen, and
 	# each one said "Wooden Stakes" about a thing that is obviously a wooden stake.
-	var worth_saying: bool = (not is_constructed) or current_hp < max_hp or _get_extra_status_text() != ""
+	var worth_saying: bool = (not is_constructed) or is_upgrading() or current_hp < max_hp or _get_extra_status_text() != ""
 	var hide_idle: bool = true
 	var cfg_label = _get_config()
 	if cfg_label and "FEEDBACK" in cfg_label:
@@ -378,6 +474,11 @@ func _update_status_bar() -> void:
 	if not is_constructed:
 		status_bar.visible = true
 		status_bar.set_ratio(build_progress, Color(1.0, 0.82, 0.25, 0.95))
+		return
+	# An upgrade under way shows its progress the way construction does: it is building.
+	if is_upgrading():
+		status_bar.visible = true
+		status_bar.set_ratio(upgrade_progress, Color(1.0, 0.82, 0.25, 0.95))
 		return
 	var ratio: float = (current_hp / max_hp) if max_hp > 0.0 else 0.0
 	var hide_full: bool = true
@@ -398,6 +499,9 @@ func get_display_info() -> Dictionary:
 	if not is_constructed:
 		var raw = tr("STATUS_CONSTRUCTING")
 		status_str = (raw % int(build_progress * 100.0)) if ("%" in raw) else raw
+	elif is_upgrading():
+		var raw_up = tr("STATUS_UPGRADING")
+		status_str = (raw_up % int(upgrade_progress * 100.0)) if ("%" in raw_up) else raw_up
 	else:
 		var raw = tr("STATUS_HP")
 		status_str = (raw % [int(ceil(current_hp)), int(ceil(max_hp))]) if ("%" in raw) else raw

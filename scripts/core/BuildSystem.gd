@@ -294,7 +294,11 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 # ==============================================================================
 
 func _instantiate_building(type_id: String) -> Node:
-	var path: String = SCRIPT_PATHS.get(type_id, SCRIPT_PATHS["base"])
+	# By KIND, not by name: a bone stake is a stake and a tower II is a tower, and each
+	# new building of a kind should need a Config row and nothing here.
+	var cfg_kind = _get_config()
+	var kind: String = String(cfg_kind.get_building_kind(type_id)) if (cfg_kind and cfg_kind.has_method("get_building_kind")) else ""
+	var path: String = SCRIPT_PATHS.get(kind, SCRIPT_PATHS.get(type_id, SCRIPT_PATHS["base"]))
 	if ResourceLoader.exists(path):
 		var res = load(path)
 		if res is GDScript:

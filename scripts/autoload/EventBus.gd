@@ -45,6 +45,10 @@ signal building_placed(building: Node)
 ## happened to mark them stale.
 signal building_completed(building: Node)
 
+## Emitted when a building finishes being upgraded where it stands (v0.6): it is now the
+## next building up its line -- its type, its numbers and perhaps its body have changed.
+signal building_upgraded(building: Node)
+
 ## Emitted when a building's HP reaches 0, prior to deletion.
 signal building_destroyed(building: Node)
 

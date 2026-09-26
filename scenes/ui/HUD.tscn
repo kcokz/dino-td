@@ -58,7 +58,7 @@ theme_override_constants/margin_bottom = 5
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/TopBar/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 12
 
 [node name="DeployTimerLabel" type="Label" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 visible = false
@@ -72,7 +72,7 @@ layout_mode = 2
 
 [node name="ResourceBar" type="HBoxContainer" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 14
 
 [node name="VSeparator2" type="VSeparator" parent="Root/TopBar/MarginContainer/HBoxContainer"]
 layout_mode = 2

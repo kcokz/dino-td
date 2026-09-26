@@ -115,7 +115,9 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 	assert_has(config_node.BUILDABLE_TYPES, "wall", "Stakes are offered in the build menu")
 	assert_has(config_node.BUILDABLE_TYPES, "tower", "So is the turret")
 	for b_type in config_node.BUILDABLE_TYPES:
-		assert_has(build_system_script.SCRIPT_PATHS, b_type,
+		# By kind first, as BuildSystem looks it up: a bone stake is a stake.
+		var scripts: Dictionary = build_system_script.SCRIPT_PATHS
+		assert_true(scripts.has(String(config_node.get_building_kind(b_type))) or scripts.has(b_type),
 			"Buildable type '%s' must have an entity script registered" % b_type)
 
 # ==============================================================================

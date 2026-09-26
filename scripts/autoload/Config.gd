@@ -87,6 +87,24 @@ const BUILDINGS: Dictionary = {
 		# enough to be on target by the next shot from anywhere; slow enough to be seen
 		# turning, which is how the player can tell which dinosaur it has picked.
 		"turn_speed": 300.0,
+		# Improved where it stands (GAME-DESIGN 6.1: a line of buildings upgrades in place).
+		"upgrades_to": "tower_2",
+	},
+	# The crossbow tower, improved where it stands: a second bow arm and a rack of bone bolts,
+	# so it looses faster. Never placed from the menu -- only reached by upgrading a tower.
+	# What the upgrade costs is the difference between the two prices (Config.upgrade_cost),
+	# so what a tower II is made of is still its price: stone and bone, and more bone.
+	"tower_2": {
+		"name": "BUILDING_TOWER_2_NAME",
+		"kind": "tower",
+		"footprint": 1.1,
+		"height": 2.4,
+		"hp": 26.0,
+		"cost": {"stone": 5, "bone": 3},
+		"range": 5.0,
+		"damage": 1.0,
+		"fire_rate": 1.6,
+		"turn_speed": 300.0,
 		"upgrades_to": "",
 	},
 	"wall": {
@@ -144,6 +162,37 @@ const BUILDINGS: Dictionary = {
 		# unit) -- which made repair meaningless on the cheapest thing in the game.
 		# At two, a stake worth saving can be saved.
 		"cost": {"wood": 2},
+		"upgrades_to": "",
+	},
+	# The fence line's second step (GAME-DESIGN 6.2: wood -> bone -> iron): the same stake --
+	# the same size, laid the same way on the same fine grid -- with a bone point lashed on,
+	# so it bites more than twice as hard and lasts a little longer. One bone a stake, which
+	# is the raids' bone spent where it does the most harm: a few of these at the mouth of
+	# a funnel, not a whole fence of them.
+	"bone_stake": {
+		"name": "BUILDING_BONE_STAKE_NAME",
+		"kind": "wall",
+		"hp": 10.0,
+		"height": 0.95,
+		"spike_diameter": 0.62,
+		"cell_divisions": 3,
+		"contact_damage": 0.35,
+		"contact_tick": 0.5,
+		"cost": {"wood": 2, "bone": 1},
+		"upgrades_to": "",
+	},
+	# A drystone wall filling its whole tile (GAME-DESIGN 6.2: only blocks, whole tile, many
+	# hit points): it bites nothing, but a big predator that walks through a fence of stakes
+	# is held here a long time (6.3). In nobody's way but a dinosaur's -- the Hero climbs it
+	# like a fence (a v0.6 decision; whether a brick wall later needs a gate is open, 13.3).
+	# A row of them is a wall rather than a row of blocks because each fills its tile.
+	"stone_wall": {
+		"name": "BUILDING_STONE_WALL_NAME",
+		"kind": "wall",
+		"hp": 40.0,
+		"height": 1.1,
+		"footprint": 2.0,         # the whole tile (TILE_SIZE)
+		"cost": {"stone": 3},
 		"upgrades_to": "",
 	},
 }
@@ -352,10 +401,11 @@ static func get_building_footprint(type_id: String = "") -> float:
 ## True when ONE of these fills its tile, so that a line of them cannot be slipped
 ## between.
 ##
-## Nothing is any more. Stakes were the only barrier, and a stake is 0.62m wide: it is
-## something to walk round, and a fence is what a RUN of them makes. Which tiles a run
-## actually closes is GridManager's `fine_occupants_seal_cell`, because it depends on
-## where the player put them rather than on the type.
+## Not a stake: a stake is 0.62m wide, something to walk round, and a fence is what a RUN
+## of them makes -- which tiles a run closes is GridManager's `fine_occupants_seal_cell`,
+## because it depends on where the player put them rather than on the type. The stone
+## wall (v0.6) is: it fills its tile on purpose, against dinosaurs. It cannot shut the
+## Hero in, because he climbs anything of the wall kind (LAYER_WALL).
 static func is_barrier_building(type_id: String) -> bool:
 	var fp: float = get_building_footprint(type_id)
 	return (float(get_building_span(type_id)) * TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
@@ -388,7 +438,41 @@ static func uses_of(res_id: String) -> Array:
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level rather than bought).
-const BUILDABLE_TYPES: Array[String] = ["wall", "tower"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "bone_stake", "stone_wall", "tower"]
+
+## The building `type_id` turns into when it is upgraded where it stands, or "".
+static func upgrade_target(type_id: String) -> String:
+	if not BUILDINGS.has(type_id):
+		return ""
+	var target: String = String(BUILDINGS[type_id].get("upgrades_to", ""))
+	return target if BUILDINGS.has(target) else ""
+
+## What it costs to upgrade a `type_id`: the difference between its price and the price of
+## what it becomes, never less than nothing. A tower II costs a tower and two more bone, so
+## the upgrade is two bone -- and a building's price stays exactly what it is made of.
+static func upgrade_cost(type_id: String) -> Dictionary:
+	var target: String = upgrade_target(type_id)
+	if target == "":
+		return {}
+	var have: Dictionary = BUILDINGS[type_id].get("cost", {})
+	var out: Dictionary = {}
+	var want: Dictionary = BUILDINGS[target].get("cost", {})
+	for res_id in want:
+		var more: int = int(want[res_id]) - int(have.get(res_id, 0))
+		if more > 0:
+			out[res_id] = more
+	return out
+
+## Seconds the Hero works to upgrade a `type_id`: the build-time curve on the upgrade's own
+## price, so an upgrade takes what building that much would.
+static func get_upgrade_time(type_id: String) -> float:
+	var total: float = 0.0
+	var cost: Dictionary = upgrade_cost(type_id)
+	for res_id in cost:
+		total += float(cost[res_id])
+	if total <= 0.0:
+		return 0.0
+	return maxf(BUILD_TIME_MIN, pow(total, BUILD_TIME_EXPONENT) * BUILD_SECONDS_PER_RESOURCE)
 
 # ==============================================================================
 # 3. Dinosaur Definitions (DINOS)
@@ -532,6 +616,7 @@ const COLORS: Dictionary = {
 	"core": Color(0.9, 0.3, 0.1),
 	"tower": Color(0.2, 0.5, 0.9),
 	"wall": Color(0.5, 0.35, 0.2),
+	"stone_wall": Color(0.55, 0.53, 0.49),
 	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
 	"big_theropod": Color(0.35, 0.29, 0.24),    # darker and heavier than the pack
 	"pterosaur": Color(0.55, 0.50, 0.44),
@@ -959,6 +1044,17 @@ const VISUALS: Dictionary = {
 	# charred tip, a band of vine lashing. It was an orange traffic cone.
 	"building/wall":        {"scene": "res://assets/models/props/stake_a.glb",
 		"material": "vertex", "placeholder": "spikes", "anchor": "feet", "color": "wall"},
+	# The same stake with a bone point lashed to its top in place of the charred one
+	# (tools/generate_props.py bone_stake): what it is made of, readable from the camera.
+	"building/bone_stake":  {"scene": "res://assets/models/props/bone_stake_a.glb",
+		"material": "vertex", "placeholder": "spikes", "anchor": "feet", "color": "wall"},
+	# Courses of unmortared stone filling the tile, capstones on top (tools/generate_props.py
+	# stone_wall).
+	"building/stone_wall":  {"scene": "res://assets/models/props/stone_wall_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "stone_wall"},
+	# Tower II wears the tower's model until the crossbow gets one of its own (v0.6 T11).
+	"building/tower_2":     {"scene": "res://assets/models/props/sentry_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
 	# A tree fern, like the forest round it -- the choppable tree was a striped barrel

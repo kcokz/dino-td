@@ -388,6 +388,12 @@ func _process_building(delta: float) -> void:
 	# both, because they are the same work.
 	var work: float = delta * work_rate()
 	if "is_constructed" in target_building and target_building.is_constructed:
+		# An upgrade under way comes before any patching: it is new work, and paid for.
+		if target_building.has_method("is_upgrading") and target_building.is_upgrading():
+			if target_building.add_upgrade_progress(work):
+				target_building = null
+				_continue_to_next_pending_building_or_idle()
+			return
 		_work_on_repair(work)
 		return
 	if target_building.has_method("add_build_progress"):
@@ -636,6 +642,12 @@ func _plan_path_to_building(b: Node) -> void:
 	_plan_path(b_pos, b)
 
 ## Next blueprint the Hero should work on: the one queued earliest.
+## Work that is paid for and waiting on him: a blueprint, or an upgrade under way.
+func _is_unfinished_work(b: Node) -> bool:
+	if "is_constructed" in b and not b.is_constructed:
+		return true
+	return b.has_method("is_upgrading") and b.is_upgrading()
+
 func _find_nearest_unfinished_building() -> Node:
 	if not is_inside_tree():
 		return null
@@ -644,7 +656,7 @@ func _find_nearest_unfinished_building() -> Node:
 	if gm and gm.has_method("get_all_buildings"):
 		for b in gm.get_all_buildings():
 			if is_instance_valid(b) and not b.is_queued_for_deletion():
-				if "is_constructed" in b and not b.is_constructed:
+				if _is_unfinished_work(b):
 					if not ("is_destroyed" in b and b.is_destroyed):
 						unfinished.append(b)
 
@@ -652,7 +664,7 @@ func _find_nearest_unfinished_building() -> Node:
 		for group_name in ["buildings", "blueprints"]:
 			for node in get_tree().get_nodes_in_group(group_name):
 				if is_instance_valid(node) and not node.is_queued_for_deletion():
-					if "is_constructed" in node and not node.is_constructed:
+					if _is_unfinished_work(node):
 						if not ("is_destroyed" in node and node.is_destroyed):
 							if not unfinished.has(node):
 								unfinished.append(node)
@@ -803,6 +815,11 @@ func order_build(building: Node, force: bool = false) -> void:
 ## for.
 func order_repair(building: Node) -> void:
 	repair_timer = 0.0
+	order_build(building, true)
+
+## Sends the Hero to build an upgrade onto a building: the same order again, because
+## it is the same work -- the building says what the hammer is for.
+func order_upgrade(building: Node) -> void:
 	order_build(building, true)
 
 func order_attack(enemy: Node3D) -> void:

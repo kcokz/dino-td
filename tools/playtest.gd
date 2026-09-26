@@ -80,6 +80,8 @@ func _run(name: String) -> void:
 			await _scenario_scale()
 		"kitchen":
 			await _scenario_kitchen()
+		"buildings":
+			await _scenario_buildings()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -110,6 +112,38 @@ func _scenario_kitchen() -> void:
 		gs.eat("meat")
 	_main.leave_cabin()
 	await _shoot("fed")
+
+## The v0.6 buildings side by side, south of the cabin where nothing else stands: a run of
+## wooden stakes, a run of bone stakes, a stone wall three tiles long, a crossbow tower and one
+## upgraded where it stands -- and then a tower's panel, offering the upgrade and what it changes.
+func _scenario_buildings() -> void:
+	var cfg := root.get_node_or_null("Config")
+	var eb := root.get_node_or_null("EventBus")
+	_grant({"wood": 400, "stone": 400, "bone": 400})
+	var step: float = float(cfg.TILE_SIZE) / float(maxi(1, int(cfg.get_cell_divisions("wall"))))
+	var z: float = 6.0
+	var x: float = -7.0
+	while x < -3.4:
+		_build_at("wall", Vector3(x, 0.0, z))
+		x += step
+	x = -2.5
+	while x < 1.6:
+		_build_at("bone_stake", Vector3(x, 0.0, z))
+		x += step
+	for i in range(3):
+		_build_at("stone_wall", Vector3(3.0 + 2.0 * float(i), 0.0, z))
+	_build_at("tower", Vector3(-3.0, 0.0, z + 3.0))
+	_build_at("tower", Vector3(1.0, 0.0, z + 3.0))
+	var gm = _main.grid_manager
+	var upgraded = gm.get_building_at(gm.world_to_cell(Vector3(1.0, 0.0, z + 3.0)))
+	if upgraded and upgraded.has_method("begin_upgrade") and upgraded.begin_upgrade():
+		upgraded.add_upgrade_progress(1000.0)
+	await _wait(10)
+	await _portrait("the_line", Vector3(0.0, 0.0, z + 1.0), 12.0)
+	var plain = gm.get_building_at(gm.world_to_cell(Vector3(-3.0, 0.0, z + 3.0)))
+	if plain and eb:
+		eb.unit_selected.emit(plain)
+	await _shoot("upgrade_offered")
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

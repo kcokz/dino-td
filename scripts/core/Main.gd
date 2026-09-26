@@ -955,7 +955,9 @@ func right_click_building(b: Node, at: Vector3) -> void:
 	if _is_cabin(b):
 		order_enter_cabin()
 		return
-	if "is_constructed" in b and not b.is_constructed:
+	# Work waiting on him -- a blueprint, or an upgrade already paid for -- is what a
+	# right-click on it means.
+	if ("is_constructed" in b and not b.is_constructed) or (b.has_method("is_upgrading") and b.is_upgrading()):
 		hero.order_build(b, true)
 		return
 	hero.move_to(at if at != Vector3.ZERO else b.global_position)

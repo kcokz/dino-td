@@ -45,7 +45,7 @@ LICHEN = (0.55, 0.52, 0.30)
 # The stake
 # ==============================================================================
 
-def stake(seed):
+def stake(seed, bone=False):
     """One sharpened log driven into the ground, authored to its exact envelope:
     Config.BUILDINGS.wall.spike_diameter wide (0.62m) and its height (0.95m) tall.
 
@@ -99,8 +99,12 @@ def stake(seed):
         k2 = (k + 1) % sides
         b.quad(rings[-1][k], rings[-1][k2], lip[k2], lip[k], BARK, BARK, BARK_LIGHT, BARK_LIGHT)
 
-    # The point: flat cut facets, off-centre, pale wood darkening to a charred tip.
-    tip = spine[-1] + UP * 0.29 + Vector((rng.uniform(-0.025, 0.025), rng.uniform(-0.025, 0.025), 0.0))
+    # The point: flat cut facets, off-centre, pale wood darkening to a charred tip. With a
+    # bone point to carry, the log is only cut down to a short blunt wedge it is lashed to.
+    if bone:
+        _bone_point(b, spine[-1], lean, rng)
+    tip = spine[-1] + UP * (0.07 if bone else 0.29) + Vector((rng.uniform(-0.025, 0.025), rng.uniform(-0.025, 0.025), 0.0))
+    tip_col = FRESH_WOOD if bone else CHAR
     facets = 6
     for f in range(facets):
         # each facet takes a run of the lip's vertices down to the tip
@@ -109,13 +113,14 @@ def stake(seed):
         mid = tip * 0.45 + lip[k0] * 0.55
         for k in range(k0, k1):
             k2 = (k + 1) % sides
-            b.tri(lip[k], lip[k2], mid, FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, CHAR, 0.35))
-        b.tri(lip[k0], mid, tip, FRESH_WOOD, mix(FRESH_WOOD, CHAR, 0.35), CHAR)
-        b.tri(mid, lip[k1 % sides], tip, mix(FRESH_WOOD, CHAR, 0.35), FRESH_WOOD, CHAR)
+            b.tri(lip[k], lip[k2], mid, FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, tip_col, 0.35))
+        b.tri(lip[k0], mid, tip, FRESH_WOOD, mix(FRESH_WOOD, tip_col, 0.35), tip_col)
+        b.tri(mid, lip[k1 % sides], tip, mix(FRESH_WOOD, tip_col, 0.35), FRESH_WOOD, tip_col)
 
-    # The lashing: two wraps of vine round the upper shaft, and a hanging end.
-    for w in range(2):
-        z = 0.46 + w * 0.045
+    # The lashing: two wraps of vine round the upper shaft, and a hanging end -- and with a
+    # bone point, two more high up, binding it to the wedge.
+    for w in range(4 if bone else 2):
+        z = (0.46 + w * 0.045) if w < 2 else (0.60 + (w - 2) * 0.05)
         c = UP * z + lean * (z / shaft_top)
         pts = []
         for k in range(13):
@@ -125,6 +130,103 @@ def stake(seed):
     end = [UP * 0.47 + Vector((0.14, 0.0, 0.0)), UP * 0.40 + Vector((0.17, 0.02, 0.0)),
            UP * 0.33 + Vector((0.165, 0.035, 0.0))]
     b.tube(end, [0.011, 0.009, 0.006], [VINE, VINE, VINE_DARK], 4)
+    return b
+
+
+def _bone_point(b, top, lean, rng):
+    """A long bone ground to a point and set upright in the split top of a stake, up to the
+    stake's full 0.95 m: pale, yellowing where it is bound, with a slight curve the way a bone
+    has one. From twenty metres up it is the one pale thing on a dark log."""
+    base = top - UP * 0.04
+    length = 0.95 - base.z
+    bend = Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)).normalized() * 0.035
+    ts = [0.0, 0.25, 0.5, 0.75, 1.0]
+    pts = [base + UP * (length * t) + bend * (t * t) + lean * 0.3 * t for t in ts]
+    stained = mix(BONE, (0.45, 0.36, 0.20), 0.35)
+    bleached = mix(BONE, (0.95, 0.93, 0.86), 0.45)
+    b.tube(pts, [0.050, 0.044, 0.034, 0.019, 0.003], [stained, BONE, BONE, bleached, bleached], 7)
+
+
+def _dry_stone(b, lo, hi, rng, col):
+    """One roughly squared stone from `lo` to `hi`: its corners pushed about a little, the
+    top a shade lighter where the light falls and the sides darkening into the joints.
+    No bottom face -- it sits on the course below."""
+    def corner(x, y, z):
+        return Vector((x + rng.uniform(-0.02, 0.02), y + rng.uniform(-0.02, 0.02), z + rng.uniform(-0.015, 0.015)))
+    low = [corner(lo.x, lo.y, lo.z), corner(hi.x, lo.y, lo.z), corner(hi.x, hi.y, lo.z), corner(lo.x, hi.y, lo.z)]
+    for v in low:
+        v.z = lo.z          # flat underneath: it rests on the course below, or on the ground
+    high = [corner(lo.x, lo.y, hi.z), corner(hi.x, lo.y, hi.z), corner(hi.x, hi.y, hi.z), corner(lo.x, hi.y, hi.z)]
+    top_col = mix(col, ROCK_LIGHT, 0.45)
+    low_col = mix(col, ROCK_DARK, 0.4)
+    for k in range(4):
+        k2 = (k + 1) % 4
+        b.quad(low[k], low[k2], high[k2], high[k], low_col, low_col, col, col)
+    b.quad(high[0], high[1], high[2], high[3], top_col, top_col, top_col, top_col)
+
+
+def stone_wall(seed):
+    """A drystone wall filling its tile, to Config.BUILDINGS.stone_wall's envelope: 2 m square
+    (a hair inside, so a row of them does not flicker where they meet) and 1.1 m tall.
+
+    Courses of roughly squared, unmortared stone, the joints staggered from one course to the
+    next the way a waller lays them, so no crack runs straight up; each course set in a little
+    from the one below -- the batter that lets a drystone wall lean on itself; flat capstones
+    laid across the top; rubble and moss at the foot. From twenty metres up it has to read as
+    stone heaped ON PURPOSE -- courses, not one more boulder."""
+    rng = random.Random(seed)
+    b = Builder()
+    half = 0.97
+    height = 1.1
+    cap = 0.13
+    courses = 4
+    body = height - cap
+    rows = 4
+    for c in range(courses):
+        z0 = body * c / courses
+        z1 = body * (c + 1) / courses
+        inset = 0.07 * c / courses
+        lo_edge, hi_edge = -half + inset, half - inset
+        row_w = (hi_edge - lo_edge) / rows
+        for r in range(rows):
+            y0 = lo_edge + r * row_w
+            x = lo_edge - (0.22 if (c + r) % 2 else 0.0)
+            while x < hi_edge - 0.06:
+                length = rng.uniform(0.34, 0.62)
+                x0, x1 = max(lo_edge, x), min(hi_edge, x + length)
+                if x1 - x0 > 0.1:
+                    col = mix(ROCK_DARK, ROCK, rng.uniform(0.25, 0.95))
+                    if rng.random() < 0.12:
+                        col = mix(col, MOSS, 0.35)
+                    _dry_stone(b, Vector((x0 + 0.012, y0 + 0.012, z0)),
+                               Vector((x1 - 0.012, y0 + row_w - 0.012, z1 - 0.006)), rng, col)
+                x += length
+    # The capstones: slabs laid ACROSS the courses, which is what holds a drystone wall's top
+    # together -- and, from above, what says "built".
+    inset = 0.07
+    lo_edge, hi_edge = -half + inset, half - inset
+    x = lo_edge
+    while x < hi_edge - 0.06:
+        width = rng.uniform(0.28, 0.42)
+        x0, x1 = x, min(hi_edge, x + width)
+        col = mix(ROCK, ROCK_LIGHT, rng.uniform(0.0, 0.5))
+        if rng.random() < 0.3:
+            col = mix(col, LICHEN if rng.random() < 0.5 else MOSS, 0.4)
+        lift = rng.uniform(0.0, 0.03)
+        _dry_stone(b, Vector((x0 + 0.01, lo_edge + 0.02, body)),
+                   Vector((x1 - 0.01, hi_edge - 0.02, height - 0.05 + lift)), rng, col)
+        x += width
+    # Rubble fallen at the foot, and a little moss where it lies.
+    for _ in range(7):
+        side = rng.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
+        along = rng.uniform(-half * 0.9, half * 0.9)
+        # inside the tile: a wall whose rubble spilled past it would be fitted smaller than its tile
+        size = rng.uniform(0.05, 0.09)
+        # _boulder hangs two thirds of a stone's squashed height below its centre; lifted by
+        # that, nothing is under the ground -- the wall is stood on its LOWEST point, and a
+        # buried pebble would have held the whole wall up off the grass.
+        p = Vector((side[0] * (half - 0.08) + side[1] * along, side[1] * (half - 0.08) + side[0] * along, size * 0.53))
+        _boulder(b, p, size, rng)
     return b
 
 
@@ -1083,6 +1185,8 @@ def basalt_cliff(seed):
 
 PROPS = {
     "stake": (lambda s: stake(s), [3]),
+    "bone_stake": (lambda s: stake(s, bone=True), [3]),
+    "stone_wall": (lambda s: stone_wall(s), [23]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
     "outcrop_quarried": (lambda s: outcrop(s, broken=True), [5]),
     "fallen_log": (lambda s: fallen_log(s), [8, 27]),
@@ -1111,7 +1215,11 @@ def main():
     mat = vertex_colour_material("PropVertex", 0.85, True)
     os.makedirs(OUT_DIR, exist_ok=True)
     made = []
+    # Names after the "--" make only those props, so adding one does not re-export the rest.
+    only = [a for a in args if not a.startswith("--")]
     for name, (fn, seeds) in PROPS.items():
+        if only and name not in only:
+            continue
         for v, seed in enumerate(seeds):
             label = "%s_%s" % (name, "abc"[v])
             obj = fn(seed).to_object(label, [mat])
@@ -1121,6 +1229,8 @@ def main():
                 label, tris, obj.dimensions.x, obj.dimensions.y, obj.dimensions.z))
             made.append(obj)
     for name, (fn, seeds) in RIGS.items():
+        if only and name not in only:
+            continue
         for v, seed in enumerate(seeds):
             label = "%s_%s" % (name, "abc"[v])
             stand_b, head_b, pivot, muzzle = fn(seed)

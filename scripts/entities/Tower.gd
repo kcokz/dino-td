@@ -62,10 +62,13 @@ func setup(type_id: String = "tower", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)
 	_load_tower_config()
 
+## Its own type's numbers. It always read the "tower" row, which was harmless while there
+## was one kind of tower and would have left an upgraded tower shooting like the old one.
 func _load_tower_config() -> void:
 	var cfg = _get_config()
-	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has("tower"):
-		var data: Dictionary = cfg.BUILDINGS["tower"]
+	var row: String = building_type if (cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type)) else "tower"
+	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(row):
+		var data: Dictionary = cfg.BUILDINGS[row]
 		max_hp = float(data.get("hp", 20.0))
 		current_hp = max_hp
 		attack_range = float(data.get("range", 5.0))

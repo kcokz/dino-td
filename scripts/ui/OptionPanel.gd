@@ -408,6 +408,31 @@ func _amounts_text(amounts: Dictionary) -> String:
 		parts.append("%d %s" % [int(amounts[res_id]), _resource_name(String(res_id))])
 	return ", ".join(parts)
 
+## What an upgrade changes, number by number -- "fires 1/s -> 1.6/s · HP 20 -> 26" --
+## with its price and how long the work is. Only what actually changes is listed.
+const _UPGRADE_STATS: Array[String] = ["fire_rate", "range", "damage", "hp"]
+
+func upgrade_detail_text(unit: Node) -> String:
+	var cfg = _get_config()
+	if cfg == null or unit == null or not is_instance_valid(unit) or not unit.has_method("upgrade_target"):
+		return ""
+	var from: Dictionary = cfg.BUILDINGS.get(String(unit.building_type), {})
+	var to_type: String = unit.upgrade_target()
+	var to: Dictionary = cfg.BUILDINGS.get(to_type, {})
+	var parts: PackedStringArray = []
+	for stat in _UPGRADE_STATS:
+		if from.has(stat) and to.has(stat) and float(from[stat]) != float(to[stat]):
+			parts.append(tr("STAT_%s" % stat.to_upper()) % [cfg.factor_text(float(from[stat])), cfg.factor_text(float(to[stat]))])
+	return tr("UPGRADE_DETAIL_FORMAT") % [_building_name(to_type), _amounts_text(unit.upgrade_cost()),
+		float(cfg.get_upgrade_time(String(unit.building_type))), " · ".join(parts)]
+
+func _show_upgrade_detail(unit: Node) -> void:
+	if status_label == null:
+		return
+	_hover_detail_shown = true
+	status_label.text = upgrade_detail_text(unit)
+	status_label.modulate = Color(0.85, 0.85, 0.85)
+
 ## What a building costs, in every resource it asks for.
 func _cost_text(b_type: String) -> String:
 	var cfg = _get_config()
@@ -462,6 +487,29 @@ func _can_afford(b_type: String) -> bool:
 ## mending and demolishing are chosen here, on purpose, with the price on the
 ## button.
 func _populate_building_buttons() -> void:
+	# Upgrading where it stands (v0.6): the price on the button, and on hover the numbers
+	# that change -- before and after is the whole of the choice. Paid when chosen, like a
+	# blueprint, and the Hero goes straight over to build it.
+	if selected_unit.has_method("can_upgrade") and selected_unit.can_upgrade():
+		var unit: Node = selected_unit
+		# The price on the button; what it becomes, and what changes, on hover. The name on
+		# the button too made it wide enough to push the panel's other buttons off its edge.
+		var up_text: String = tr("CMD_UPGRADE") % _amounts_text(unit.upgrade_cost())
+		var up_btn := _create_action_button(up_text, func():
+			if not is_instance_valid(unit) or not unit.begin_upgrade():
+				return
+			var hero = _get_hero()
+			if hero and is_instance_valid(hero) and hero.has_method("order_upgrade"):
+				hero.order_upgrade(unit)
+			action_triggered.emit("upgrade", unit)
+			_refresh_ui()
+		)
+		var gs_up = _get_game_state()
+		up_btn.disabled = gs_up == null or not gs_up.has_method("can_afford") or not gs_up.can_afford(unit.upgrade_cost())
+		up_btn.mouse_entered.connect(func(): _show_upgrade_detail(unit))
+		up_btn.focus_entered.connect(func(): _show_upgrade_detail(unit))
+		up_btn.mouse_exited.connect(_clear_craft_detail)
+
 	if selected_unit.has_method("needs_repair") and selected_unit.needs_repair():
 		# The bill is listed in what it actually costs: a turret is mended with wood
 		# and stone, so "N wood" would be the same lie the build menu used to tell.

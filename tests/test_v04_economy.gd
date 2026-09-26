@@ -63,7 +63,9 @@ func test_02_the_build_menu_is_defence_only() -> void:
 	for b_type in config_node.BUILDABLE_TYPES:
 		var kind: String = String(config_node.BUILDINGS[b_type].get("kind", ""))
 		assert_ne(kind, "producer", "%s is not a production building" % b_type)
-		assert_has(build_system_script.SCRIPT_PATHS, b_type,
+		# By kind first, as BuildSystem looks it up: a bone stake is a stake.
+		var scripts: Dictionary = build_system_script.SCRIPT_PATHS
+		assert_true(scripts.has(String(config_node.get_building_kind(b_type))) or scripts.has(b_type),
 			"Buildable type '%s' must have an entity script registered" % b_type)
 
 func test_03_no_producer_scripts_are_left_in_the_project() -> void:
