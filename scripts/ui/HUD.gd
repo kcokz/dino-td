@@ -119,6 +119,8 @@ func _connect_event_bus() -> void:
 			eb.beacon_changed.connect(_on_beacon_changed)
 		if eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(_on_beacon_launched):
 			eb.beacon_launched.connect(_on_beacon_launched)
+		if eb.has_signal("raid_summary") and not eb.raid_summary.is_connected(_on_raid_summary):
+			eb.raid_summary.connect(_on_raid_summary)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -155,6 +157,8 @@ func _disconnect_event_bus() -> void:
 			eb.beacon_changed.disconnect(_on_beacon_changed)
 		if eb.has_signal("beacon_launched") and eb.beacon_launched.is_connected(_on_beacon_launched):
 			eb.beacon_launched.disconnect(_on_beacon_launched)
+		if eb.has_signal("raid_summary") and eb.raid_summary.is_connected(_on_raid_summary):
+			eb.raid_summary.disconnect(_on_raid_summary)
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
@@ -196,6 +200,39 @@ func _on_beacon_changed(_steps_done: int) -> void:
 func _on_beacon_launched() -> void:
 	_refresh_beacon_label()
 	show_hint(tr("HUD_BEACON_LAUNCHED"), 6.0)
+
+## A raid held: what it cost, said as it ends (v0.6 T8).
+func _on_raid_summary(summary: Dictionary) -> void:
+	show_hint(raid_summary_text(summary), 6.0)
+
+## "Raid 4 over -- 7 killed · left 7 Bone, 7 Meat · lost 2 Wooden Stake".
+func raid_summary_text(summary: Dictionary) -> String:
+	var cfg = _get_config()
+	var drops: PackedStringArray = []
+	for res_id in summary.get("drops", {}):
+		drops.append("%d %s" % [int(summary["drops"][res_id]), tr("RESOURCE_%s" % String(res_id).to_upper())])
+	var lost: PackedStringArray = []
+	for type_id in summary.get("lost", {}):
+		var type_name: String = String(cfg.get_building_name(String(type_id))) if cfg else String(type_id)
+		lost.append("%d %s" % [int(summary["lost"][type_id]), type_name])
+	return tr("HUD_RAID_SUMMARY") % [int(summary.get("wave", 0)), int(summary.get("killed", 0)),
+		", ".join(drops) if not drops.is_empty() else tr("HUD_NOTHING"),
+		", ".join(lost) if not lost.is_empty() else tr("HUD_NOTHING")]
+
+## The run in two lines, for the result screen: how long, how many raids held and killed,
+## and where his time went (v0.6 T9).
+func run_summary_text(stats: Node) -> String:
+	var secs: int = int(stats.run_seconds)
+	var text: String = tr("RUN_SUMMARY") % [secs / 60, secs % 60, int(stats.raids_held), int(stats.killed)]
+	var shares: Dictionary = stats.time_shares()
+	var parts: PackedStringArray = []
+	for activity in stats.ACTIVITIES:
+		var percent: int = int(round(float(shares.get(activity, 0.0)) * 100.0))
+		if percent > 0:
+			parts.append(tr("ACTIVITY_%s" % String(activity).to_upper()) % percent)
+	if not parts.is_empty():
+		text += "\n" + tr("RUN_TIME_SHARE") % " · ".join(parts)
+	return text
 
 ## "Beacon: 1/3 stages repaired", "... ready to launch", "Beacon charging 45% · 1:39" --
 ## Config.beacon_status, which the beacon's bench says too. Hidden on a map without one.
@@ -331,6 +368,10 @@ func _on_game_lost() -> void:
 func _show_game_over(title: String, details: String) -> void:
 	if result_label:
 		result_label.text = title
+	# The run's account under the verdict, when there is one to give.
+	var stats = get_tree().get_first_node_in_group(RunStats.GROUP) if is_inside_tree() else null
+	if stats != null:
+		details += "\n\n" + run_summary_text(stats)
 	if details_label:
 		details_label.text = details
 	if game_over_panel:

@@ -79,6 +79,8 @@ func _ready() -> void:
 ## a bake then picks up the ground, the hills, the wreck, the turrets and every stake as
 ## they are, with no list to keep in step.
 var nav_maps: NavMaps = null
+## What the run has been -- each raid's account, and where his time went (v0.6 T8, T9).
+var run_stats: RunStats = null
 
 func _ensure_nav_maps() -> void:
 	if not is_in_group(NavMaps.SOURCE_GROUP):
@@ -226,6 +228,11 @@ func _ensure_scene_dependencies() -> void:
 		wave_manager.name = "WaveManager"
 		add_child(wave_manager)
 	wave_manager.dinos_container = dinos_container
+
+	if run_stats == null:
+		run_stats = RunStats.new()
+		run_stats.name = "RunStats"
+		add_child(run_stats)
 
 	# 6. Discover Path Waypoints
 	_discover_waypoints()
@@ -1711,6 +1718,8 @@ func place_building_at_cell(type_id: String, cell: Vector2i) -> Node:
 func restart_game() -> void:
 	cancel_building_selection()
 	leave_cabin()
+	if run_stats and is_instance_valid(run_stats):
+		run_stats.reset()
 
 	# 1. Reset GameState (AP, resources, multipliers, wave, phase, game_over flag)
 	var gs = _get_game_state()

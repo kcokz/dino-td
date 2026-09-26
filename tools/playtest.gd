@@ -88,6 +88,8 @@ func _run(name: String) -> void:
 			await _scenario_buildings()
 		"beacon":
 			await _scenario_beacon()
+		"summary":
+			await _scenario_summary()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -267,6 +269,14 @@ func _scenario_siege(spec: String) -> void:
 		killed[0], int(ceil(core.current_hp)) if is_instance_valid(core) else 0, int(core.max_hp) if is_instance_valid(core) else 0,
 		stakes_left, stakes.size(), towers_left, placed_towers.size()])
 	await _shoot("end")
+
+## A raid's account as it ends (v0.6 T8): the longest line the HUD says in the middle of
+## the screen, so it is worth seeing that it fits.
+func _scenario_summary() -> void:
+	var eb := root.get_node_or_null("EventBus")
+	eb.raid_summary.emit({"wave": 12, "killed": 39, "drops": {"food": 38, "bone": 40, "prime_meat": 1},
+		"lost": {"wall": 6, "tower": 1, "stone_wall": 2}})
+	await _shoot("raid_over")
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

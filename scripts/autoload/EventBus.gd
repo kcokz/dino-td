@@ -87,6 +87,9 @@ signal beacon_changed(steps_done: int)
 ## The beacon is switched on: it starts to charge, and the final wave sets out.
 signal beacon_launched()
 
+## A raid is over and held: what it cost -- {"wave", "killed", "drops", "lost"} (RunStats).
+signal raid_summary(summary: Dictionary)
+
 # ==============================================================================
 # 7. Real-Time Deployment & Modern Hero Signals (v0.1)
 # ==============================================================================
