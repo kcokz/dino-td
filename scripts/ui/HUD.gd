@@ -108,6 +108,10 @@ func _connect_event_bus() -> void:
 			eb.raid_warning.connect(_on_raid_warning)
 		if eb.has_signal("fed_changed") and not eb.fed_changed.is_connected(_on_fed_changed):
 			eb.fed_changed.connect(_on_fed_changed)
+		if eb.has_signal("boss_warning") and not eb.boss_warning.is_connected(_on_boss_warning):
+			eb.boss_warning.connect(_on_boss_warning)
+		if eb.has_signal("boss_arrived") and not eb.boss_arrived.is_connected(_on_boss_arrived):
+			eb.boss_arrived.connect(_on_boss_arrived)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -136,6 +140,10 @@ func _disconnect_event_bus() -> void:
 			eb.raid_warning.disconnect(_on_raid_warning)
 		if eb.has_signal("fed_changed") and eb.fed_changed.is_connected(_on_fed_changed):
 			eb.fed_changed.disconnect(_on_fed_changed)
+		if eb.has_signal("boss_warning") and eb.boss_warning.is_connected(_on_boss_warning):
+			eb.boss_warning.disconnect(_on_boss_warning)
+		if eb.has_signal("boss_arrived") and eb.boss_arrived.is_connected(_on_boss_arrived):
+			eb.boss_arrived.disconnect(_on_boss_arrived)
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
@@ -186,6 +194,34 @@ func _on_wave_started(n: int, is_big: bool) -> void:
 		wave_label.text = tr("HUD_BIG_WAVE") % n if is_big else tr("HUD_WAVE") % n
 	if raid_warning_banner:
 		raid_warning_banner.visible = false
+	_bosses_coming.clear()
+
+## The bosses the coming raid brings, by name, said with its warning (v0.6, GAME-DESIGN
+## 7.5: a boss coming is announced) -- and the seconds the warning gave.
+var _bosses_coming: PackedStringArray = []
+var _raid_seconds: int = 0
+
+func _render_raid_banner() -> void:
+	if raid_warning_banner == null:
+		return
+	var text: String = tr("HUD_RAID_WARNING") % _raid_seconds
+	if not _bosses_coming.is_empty():
+		text += "  " + tr("HUD_RAID_BOSS") % ", ".join(_bosses_coming)
+	raid_warning_banner.text = text
+
+func _on_boss_warning(species_id: String) -> void:
+	var cfg = _get_config()
+	var boss_name: String = String(cfg.get_dino_name(species_id)) if (cfg and cfg.has_method("get_dino_name")) else species_id
+	if not _bosses_coming.has(boss_name):
+		_bosses_coming.append(boss_name)
+	if raid_warning_banner and raid_warning_banner.visible:
+		_render_raid_banner()
+
+func _on_boss_arrived(dino: Node) -> void:
+	var cfg = _get_config()
+	var species: String = String(dino.dino_type) if (dino and "dino_type" in dino) else ""
+	var boss_name: String = String(cfg.get_dino_name(species)) if (cfg and cfg.has_method("get_dino_name")) else species
+	show_hint(tr("HUD_BOSS_ARRIVED") % boss_name)
 
 func _on_raid_warning(time_left: float) -> void:
 	if raid_warning_banner == null:
@@ -201,7 +237,8 @@ func _on_raid_warning(time_left: float) -> void:
 		if fx:
 			fx.play(fx.Sound.RAID_WARNING)
 	raid_warning_banner.visible = true
-	raid_warning_banner.text = tr("HUD_RAID_WARNING") % int(ceil(time_left))
+	_raid_seconds = int(ceil(time_left))
+	_render_raid_banner()
 
 func _on_speed_btn_pressed() -> void:
 	var cur_idx = SPEEDS.find(current_speed)

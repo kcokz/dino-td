@@ -21,6 +21,11 @@ var current_wave: int = 0
 var dinos_to_spawn: int = 0
 var dinos_spawned_count: int = 0
 var dinos_alive_count: int = 0
+## Who the wave in progress sends, in order, popped as each one steps out (v0.6): a big
+## wave is led by the map's lesser boss, and the raid on the boss's beat is followed by it.
+var wave_roster: Array[String] = []
+## How many times the map's boss has come on its beat (GAME-DESIGN 7.5: once, mid-game).
+var boss_raids_sent: int = 0
 var is_wave_active: bool = false
 
 # v0.2 Continuous Random Raids
@@ -79,6 +84,9 @@ func _process(delta: float) -> void:
 		warning_emitted = true
 		if eb and eb.has_signal("raid_warning"):
 			eb.raid_warning.emit(maxf(0.0, raid_timer))
+		if eb and eb.has_signal("boss_warning"):
+			for boss in upcoming_bosses():
+				eb.boss_warning.emit(boss)
 
 	if raid_timer <= 0.0:
 		warning_emitted = false
@@ -224,7 +232,10 @@ func start_next_raid() -> void:
 	var base_cnt: int = get_wave_dino_count(next_n)
 	var final_count: int = maxi(1, int(round(float(base_cnt) * multiplier)))
 
-	start_wave(next_n, final_count)
+	var with_boss: bool = boss_is_due()
+	if with_boss:
+		boss_raids_sent += 1
+	start_wave(next_n, final_count, with_boss)
 
 ## Resets raid timers and state for continuous real-time mode (v0.2).
 func reset_raid_state() -> void:
@@ -236,6 +247,8 @@ func reset_raid_state() -> void:
 	raid_timer = _first_raid()
 	warning_lead_time = lead_time
 	warning_emitted = false
+	boss_raids_sent = 0
+	wave_roster.clear()
 
 func _reset_raid_timer() -> void:
 	var cfg = _get_config()
@@ -248,14 +261,16 @@ func _reset_raid_timer() -> void:
 	raid_timer = _rng().randf_range(min_i, max_i)
 	warning_emitted = false
 
-## Starts a specific wave number. Optionally accepts override_count.
-func start_wave(wave_num: int, override_count: int = -1) -> void:
+## Starts a specific wave number. Optionally accepts override_count -- the rank and
+## file; a big wave's leader and the map's boss (`with_boss`) come on top of them.
+func start_wave(wave_num: int, override_count: int = -1, with_boss: bool = false) -> void:
 	if is_wave_active:
 		if spawn_timer and is_instance_valid(spawn_timer):
 			spawn_timer.stop()
 
 	current_wave = wave_num
-	dinos_to_spawn = override_count if override_count > 0 else get_wave_dino_count(current_wave)
+	wave_roster = roster_for(wave_num, override_count if override_count > 0 else get_wave_dino_count(wave_num), with_boss)
+	dinos_to_spawn = wave_roster.size()
 	dinos_spawned_count = 0
 	dinos_alive_count = dinos_to_spawn
 	is_wave_active = true
@@ -316,7 +331,8 @@ func spawn_dino() -> Node:
 	return _spawn_single_dino()
 
 func _spawn_single_dino() -> Node:
-	var dino: Node = _instantiate_for_species(_species_to_spawn())
+	var species: String = String(wave_roster.pop_front()) if not wave_roster.is_empty() else _species_to_spawn()
+	var dino: Node = _instantiate_for_species(species)
 	if dino == null and dino_script:
 		dino = dino_script.new()
 
@@ -327,8 +343,10 @@ func _spawn_single_dino() -> Node:
 	var gs = _get_game_state()
 	var multipliers: Dictionary = gs.dino_stat_multipliers if gs else {}
 
+	# As the species it is. This said "raptor" whatever came out of the nest -- invisible
+	# while only raptors raided, and a raptor's hit points on a tyrannosaur once others did.
 	if dino.has_method("setup"):
-		dino.setup("raptor", multipliers)
+		dino.setup(species, multipliers)
 
 	var cfg = _get_config()
 	var lane_offsets: Array = cfg.DINO_LANE_OFFSETS if (cfg and "DINO_LANE_OFFSETS" in cfg) else [-0.35, 0.35, 0.0]
@@ -357,11 +375,13 @@ func _spawn_single_dino() -> Node:
 
 	# Belt-and-suspenders: re-affirm multipliers after entering scene tree
 	if dino.has_method("setup"):
-		dino.setup("raptor", multipliers)
+		dino.setup(species, multipliers)
 
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("dino_spawned"):
 		eb.dino_spawned.emit(dino)
+	if eb and eb.has_signal("boss_arrived") and _is_boss(species):
+		eb.boss_arrived.emit(dino)
 
 	return dino
 
@@ -398,6 +418,47 @@ func _end_wave() -> void:
 # ==============================================================================
 # Resolvers
 # ==============================================================================
+
+## Who a wave sends, in order: the lesser boss at the head of a big wave, `count` raiders
+## drawn from the map, and -- when it is the boss's turn -- the map's boss behind them all.
+func roster_for(wave_num: int, count: int, with_boss: bool = false) -> Array[String]:
+	var roster: Array[String] = []
+	var minor: String = String(_map().get("minor_boss", ""))
+	if is_big_wave(wave_num) and _is_species(minor):
+		roster.append(minor)
+	for i in range(maxi(0, count)):
+		roster.append(_species_to_spawn())
+	var boss: String = String(_map().get("boss", ""))
+	if with_boss and _is_species(boss):
+		roster.append(boss)
+	return roster
+
+## Whether the next raid is the one the map's boss comes with: its beat has passed and it
+## has not come yet.
+func boss_is_due() -> bool:
+	var beat: float = float(_map().get("beats", {}).get("boss_raid", -1.0))
+	return beat >= 0.0 and elapsed_time >= beat and boss_raids_sent == 0 and _is_species(String(_map().get("boss", "")))
+
+## The bosses the coming raid brings -- what the warning names.
+func upcoming_bosses() -> Array[String]:
+	var out: Array[String] = []
+	var gs = _get_game_state()
+	var next_n: int = (gs.wave_number + 1) if gs else (current_wave + 1)
+	var minor: String = String(_map().get("minor_boss", ""))
+	if is_big_wave(next_n) and _is_species(minor):
+		out.append(minor)
+	var boss: String = String(_map().get("boss", ""))
+	if boss_is_due():
+		out.append(boss)
+	return out
+
+func _is_species(species: String) -> bool:
+	var cfg = _get_config()
+	return species != "" and cfg != null and "DINOS" in cfg and cfg.DINOS.has(species)
+
+func _is_boss(species: String) -> bool:
+	var cfg = _get_config()
+	return _is_species(species) and String(cfg.DINOS[species].get("boss", "")) != ""
 
 ## The run's map (GameState.map_data): who raids here, and when the first of them comes.
 func _map() -> Dictionary:

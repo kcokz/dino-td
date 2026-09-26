@@ -509,14 +509,33 @@ const DINOS: Dictionary = {
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.9, 0.8),   # head at the Hero's chest, three times his length
 	},
+	# The head of the pack (GAME-DESIGN 7.5): a bigger, harder raptor at the front of every
+	# big wave -- the same habit and the same body width as the rest (it has to fit the
+	# same gaps), a head taller, and three times as hard to kill. What it leaves is the
+	# reward for having killed it: a boss's cut of meat.
+	"raptor_alpha": {
+		"name": "DINO_RAPTOR_ALPHA_NAME",
+		"hp": 10.0,
+		"speed": 4.4,
+		"damage": 1.5,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"boss": "minor",
+		"drops": {"prime_meat": 1, "bone": 2},
+		"size": Vector3(0.8, 1.15, 0.8),
+	},
+	# The map's boss (GAME-DESIGN 7.5: comes once in the middle of the game, on the map's
+	# beat, and last of all in the beacon's final wave). Hard enough that a tower or two is
+	# not an answer on their own -- it is what the stone wall is for (6.3).
 	"big_theropod": {
 		"name": "DINO_BIG_THEROPOD_NAME",
-		"hp": 15.0,
+		"hp": 45.0,
 		"speed": 2.0,
 		"damage": 3.0,
 		"attack_rate": 0.8,
 		"behaviour": "siege",
-		"drops": {"food": 3, "bone": 3},
+		"boss": "major",
+		"drops": {"prime_meat": 3, "bone": 4},
 		"size": Vector3(1.6, 3.0, 1.6),   # two and a half times the Hero's height
 	},
 	"pterosaur": {
@@ -619,6 +638,7 @@ const COLORS: Dictionary = {
 	"stone_wall": Color(0.55, 0.53, 0.49),
 	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
 	"big_theropod": Color(0.35, 0.29, 0.24),    # darker and heavier than the pack
+	"raptor_alpha": Color(0.40, 0.30, 0.20),
 	"pterosaur": Color(0.55, 0.50, 0.44),
 	"nest": Color(0.4, 0.1, 0.5),
 	"caveman": Color(0.1, 0.8, 0.8)
@@ -670,10 +690,18 @@ const MAPS: Dictionary = {
 	"beats": {
 		# Time to fetch the stock, put a fence up and make an axe before anything arrives.
 		"first_raid": 90.0,
+		# The boss comes with the first raid after this (GAME-DESIGN 9.2: about ten minutes
+		# in) -- late enough that towers and a meal are within reach, early enough to leave
+		# the stone wall something to be learned for.
+		"boss_raid": 600.0,
 	},
 	# Who raids here, and how often each, by weight. Raptors, until the first map's own
 	# Triassic cast arrives (GAME-DESIGN 13.8: mechanisms first, on this map).
 	"raiders": {"raptor": 1.0},
+	# At the head of every big wave (WAVES.big_every): the lesser boss (GAME-DESIGN 7.5).
+	"minor_boss": "raptor_alpha",
+	# The map's boss: on the "boss_raid" beat, and again last in the beacon's final wave.
+	"boss": "big_theropod",
 	## Hills: ground nobody crosses and nothing is built on.
 	##
 	## They are a gameplay object rather than scenery. A hill narrows the approach,
@@ -1057,6 +1085,10 @@ const VISUALS: Dictionary = {
 		"placeholder": "raptor", "anchor": "feet", "color": "raptor"},
 	"dino/big_theropod":    {"scene": "res://assets/models/quaternius/trex.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod"},
+	# The raptor, grown: fitted by height to its own taller size (GAME-DESIGN v0.6: a scaled
+	# raptor until it has a model of its own).
+	"dino/raptor_alpha":    {"scene": "res://assets/models/quaternius/velociraptor.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours

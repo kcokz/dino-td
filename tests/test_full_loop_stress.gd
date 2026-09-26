@@ -278,16 +278,18 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(wave_mgr.current_wave, 3, "WaveManager current_wave is 3")
 	assert_true(wave_mgr.is_big_wave(3), "Wave 3 is flagged as big horde wave")
 
-	# Verify horde count: (base_count 2 + 2) * 2.0 = 8 dinos
-	assert_eq(wave_mgr.dinos_alive_count, 8, "Wave 3 horde spawns exactly 8 dinos")
+	# Verify horde count: (base_count 2 + 2) * 2.0 = 8 dinos -- and since v0.6 the map's
+	# lesser boss at their head, on top of them.
+	var leader: int = 1 if String(game_state_node.map_data().get("minor_boss", "")) != "" else 0
+	assert_eq(wave_mgr.dinos_alive_count, 8 + leader, "Wave 3 horde spawns exactly 8 dinos and its leader")
 	assert_true("大波" in hud.get_wave_text() or "Horde" in hud.get_wave_text(), "HUD wave label announces horde wave: '%s'" % hud.get_wave_text())
 
 	# Initial multipliers before wave 3 ends
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("hp", 1.0)), 1.0, 0.001, "Pre-horde HP multiplier is 1.0")
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers.get("damage", 1.0)), 1.0, 0.001, "Pre-horde damage multiplier is 1.0")
 
-	# Eliminate all 8 dinos of wave 3 horde
-	for i in range(8):
+	# Eliminate all of wave 3's horde, leader and all
+	for i in range(8 + leader):
 		event_bus_node.dino_died.emit(null)
 	await wait_frames(1)
 
@@ -492,20 +494,23 @@ func test_02_horde_progression_and_stat_compounding_stress() -> void:
 		var is_horde: bool = (w % 3 == 0)
 		assert_eq(wm.is_big_wave(w), is_horde, "Wave %d horde flag check" % w)
 
-		var expected_count: int = 0
+		var rank_and_file: int = 0
 		var base = 2 + (w - 1) * 1
 		if is_horde:
-			expected_count = int(base * 2.0)
+			rank_and_file = int(base * 2.0)
 		else:
-			expected_count = base
+			rank_and_file = base
+		# Since v0.6 a big wave is led by the map's lesser boss, on top of its own.
+		var leader: int = 1 if (is_horde and String(game_state_node.map_data().get("minor_boss", "")) != "") else 0
+		var expected_count: int = rank_and_file + leader
 
 		assert_eq(wm.dinos_alive_count, expected_count, "Wave %d dinos count is %d" % [w, expected_count])
 
 		# Specific horde wave checks
 		if w == 3:
-			assert_eq(expected_count, 8, "Wave 3 horde has exactly 8 dinos")
+			assert_eq(rank_and_file, 8, "Wave 3 horde has exactly 8 dinos besides its leader")
 		elif w == 6:
-			assert_eq(expected_count, 14, "Wave 6 horde has exactly 14 dinos ((2+5)*2)")
+			assert_eq(rank_and_file, 14, "Wave 6 horde has exactly 14 dinos ((2+5)*2) besides its leader")
 
 		# Eliminate all dinos
 		for d in range(expected_count):

@@ -1,0 +1,170 @@
+# res://tests/test_v06_bosses.gd
+# v0.6 T10: bosses -- a raptor alpha at the head of every big wave, the map's boss on its
+# beat, both announced, and both paying in prime meat.
+#
+# GAME-DESIGN 7.5: every map has a boss, and a lesser one comes with the big waves the game
+# already had (WAVES.big_every) rather than on a rhythm of its own. A boss is the only thing
+# that leaves prime meat, and prime meat is the best meal there is (test_v06_kitchen) -- so
+# killing one is worth the risk. Everything here is read from Config and the run's map.
+extends "res://tests/test_base.gd"
+
+var config_node: Object = null
+var game_state_node: Object = null
+var event_bus_node: Object = null
+
+var _cleanup_nodes: Array[Node] = []
+
+func before_all() -> void:
+	if tree != null and tree.root != null:
+		config_node = tree.root.get_node_or_null("Config")
+		game_state_node = tree.root.get_node_or_null("GameState")
+		event_bus_node = tree.root.get_node_or_null("EventBus")
+
+func before_each() -> void:
+	if game_state_node != null and game_state_node.has_method("reset_game"):
+		game_state_node.reset_game()
+
+func after_each() -> void:
+	for n in _cleanup_nodes:
+		if is_instance_valid(n):
+			if n.is_inside_tree():
+				n.get_parent().remove_child(n)
+			if not n.is_queued_for_deletion():
+				n.free()
+	_cleanup_nodes.clear()
+	clear_drops()
+	super.after_each()
+
+func _map() -> Dictionary:
+	return game_state_node.map_data()
+
+func _level() -> Node:
+	var main = load("res://scenes/Main.tscn").instantiate()
+	_cleanup_nodes.append(main)
+	tree.root.add_child(main)
+	return main
+
+func _row(species: String) -> Dictionary:
+	return config_node.DINOS[species]
+
+## The first wave number that is a big one.
+func _big_wave(wm: Node) -> int:
+	for n in range(1, 50):
+		if wm.is_big_wave(n):
+			return n
+	return -1
+
+# ==============================================================================
+# 1. Who they are
+# ==============================================================================
+
+func test_01_the_alpha_is_a_bigger_harder_raptor() -> void:
+	var alpha_id: String = String(_map()["minor_boss"])
+	var alpha: Dictionary = _row(alpha_id)
+	var raptor: Dictionary = _row("raptor")
+	assert_eq(String(alpha["behaviour"]), String(raptor["behaviour"]), "It hunts the way the pack does")
+	assert_almost_eq(alpha["size"].x, raptor["size"].x, 0.0001, "As wide: it has to fit the same gaps")
+	assert_gt(alpha["size"].y, raptor["size"].y, "But it stands taller")
+	assert_gte(float(alpha["hp"]), float(raptor["hp"]) * 3.0, "And takes a good deal more killing")
+	assert_eq(String(alpha.get("boss", "")), "minor", "It is the lesser boss")
+
+func test_02_only_a_boss_leaves_prime_meat_and_every_boss_does() -> void:
+	var boss_id: String = String(_map()["boss"])
+	assert_eq(String(_row(boss_id).get("boss", "")), "major", "The map's boss is the major one")
+	for species in config_node.DINOS:
+		var row: Dictionary = config_node.DINOS[species]
+		var is_boss: bool = String(row.get("boss", "")) != ""
+		var prime: int = int(row.get("drops", {}).get("prime_meat", 0))
+		if is_boss:
+			assert_gt(prime, 0, "%s is a boss, and pays in prime meat" % species)
+			assert_gt(int(row["drops"].get("bone", 0)), 0, "%s leaves bone too" % species)
+		else:
+			assert_eq(prime, 0, "%s is not a boss, and leaves none" % species)
+
+# ==============================================================================
+# 2. When they come
+# ==============================================================================
+
+func test_03_every_big_wave_is_led_by_the_alpha() -> void:
+	var main = _level()
+	await wait_frames(2)
+	var wm = main.wave_manager
+	var big: int = _big_wave(wm)
+	assert_gt(big, 0, "There are big waves")
+	var alpha_id: String = String(_map()["minor_boss"])
+	var roster: Array = wm.roster_for(big, 4)
+	assert_eq(String(roster[0]), alpha_id, "A big wave has the alpha at its head")
+	assert_eq(roster.size(), 5, "On top of the wave's own")
+	assert_false(wm.roster_for(big - 1, 4).has(alpha_id), "An ordinary wave has none")
+
+func test_04_the_boss_comes_with_the_first_raid_after_its_beat_and_only_then() -> void:
+	var main = _level()
+	await wait_frames(2)
+	var wm = main.wave_manager
+	var beat: float = float(_map()["beats"]["boss_raid"])
+	var boss_id: String = String(_map()["boss"])
+	wm.elapsed_time = beat - 1.0
+	assert_false(wm.boss_is_due(), "Before its beat, no boss")
+	wm.elapsed_time = beat + 1.0
+	assert_true(wm.boss_is_due(), "After it, the next raid brings it")
+	wm.start_next_raid()
+	assert_eq(String(wm.wave_roster.back()), boss_id, "Last of all, behind the pack")
+	assert_false(wm.boss_is_due(), "And once it has come, it is not due again")
+
+func test_05_the_warning_names_the_boss() -> void:
+	var main = _level()
+	await wait_frames(2)
+	var wm = main.wave_manager
+	var boss_id: String = String(_map()["boss"])
+	var watcher = watch_signal(event_bus_node, "boss_warning")
+	wm.elapsed_time = float(_map()["beats"]["boss_raid"]) + 1.0
+	wm.auto_raid_enabled = true
+	wm.raid_timer = wm.warning_lead_time - 0.01
+	wm.warning_emitted = false
+	await wait_frames(2)
+	assert_true(watcher.emitted, "The warning says a boss is coming")
+	var named: bool = false
+	for args in watcher.emission_args:
+		if not args.is_empty() and String(args[0]) == boss_id:
+			named = true
+	assert_true(named, "And which one")
+	var hud = main.hud
+	if hud and hud.raid_warning_banner:
+		assert_true(hud.raid_warning_banner.text.contains(String(config_node.get_dino_name(boss_id))),
+			"On the banner, by name: %s" % hud.raid_warning_banner.text)
+
+func test_06_a_raider_is_the_species_it_was_drawn_as() -> void:
+	# It was always set up as a raptor, whatever came out of the nest.
+	var main = _level()
+	await wait_frames(2)
+	var wm = main.wave_manager
+	var boss_id: String = String(_map()["boss"])
+	var watcher = watch_signal(event_bus_node, "boss_arrived")
+	var roster: Array[String] = [boss_id]
+	wm.wave_roster = roster
+	var dino = wm._spawn_single_dino()
+	assert_not_null(dino, "It stepped out")
+	if dino == null:
+		return
+	_cleanup_nodes.append(dino)
+	assert_eq(String(dino.dino_type), boss_id, "As the species it was drawn as")
+	var mult: float = float(game_state_node.dino_stat_multipliers.get("hp", 1.0))
+	assert_almost_eq(float(dino.max_hp), float(_row(boss_id)["hp"]) * mult, 0.01, "With that species' hit points")
+	assert_true(watcher.emitted, "And a boss stepping out is announced")
+
+# ==============================================================================
+# 3. What they leave
+# ==============================================================================
+
+func test_07_a_dead_alpha_leaves_prime_meat_on_the_ground() -> void:
+	var alpha_id: String = String(_map()["minor_boss"])
+	var dino = load(String(config_node.get_dino_script_path(alpha_id))).new()
+	_cleanup_nodes.append(dino)
+	tree.root.add_child(dino)
+	dino.setup(alpha_id)
+	dino.set_physics_process(false)
+	await wait_frames(1)
+	dino.spawn_death_drops()
+	await wait_frames(1)
+	assert_eq(ground_total("prime_meat"), int(_row(alpha_id)["drops"]["prime_meat"]),
+		"The meal that makes killing it worth it, where it fell")

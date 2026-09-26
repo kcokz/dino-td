@@ -109,6 +109,13 @@ signal locale_changed(locale: String)
 ## Emitted prior to a dinosaur raid (e.g. 15s warning) with remaining countdown.
 signal raid_warning(time_left: float)
 
+## Emitted with the raid warning when the coming raid brings a boss (v0.6, GAME-DESIGN
+## 7.5): which species, so the player knows what to get ready for.
+signal boss_warning(species_id: String)
+
+## Emitted when a boss steps out of the nest.
+signal boss_arrived(dino: Node)
+
 ## Emitted when player selects an interactive unit (Hero, Building, Dino, Resource).
 signal unit_selected(unit: Node)
 

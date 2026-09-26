@@ -482,8 +482,11 @@ func test_challenge_wavemanager_12_waves_compounding_stat_verification() -> void
 		var dino = wm.spawn_dino()
 		if dino != null:
 			_cleanup_nodes.append(dino)
-			var exp_dino_hp = 3.0 * exp_hp
-			var exp_dino_dmg = 1.0 * exp_dmg
+			# From the species that actually stepped out: since v0.6 a big wave is led by
+			# the map's lesser boss, whose base numbers are its own.
+			var base: Dictionary = config_node.DINOS[String(dino.dino_type)]
+			var exp_dino_hp = float(base["hp"]) * exp_hp
+			var exp_dino_dmg = float(base["damage"]) * exp_dmg
 			assert_almost_eq(float(dino.max_hp), exp_dino_hp, 0.01,
 				"Wave %d spawned Dino max_hp expected %.3f, got %.3f" % [w, exp_dino_hp, dino.max_hp])
 			assert_almost_eq(float(dino.damage), exp_dino_dmg, 0.01,
