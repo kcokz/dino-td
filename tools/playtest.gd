@@ -90,6 +90,8 @@ func _run(name: String) -> void:
 			await _scenario_beacon()
 		"summary":
 			await _scenario_summary()
+		"legible":
+			await _scenario_legible()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -277,6 +279,17 @@ func _scenario_summary() -> void:
 	eb.raid_summary.emit({"wave": 12, "killed": 39, "drops": {"food": 38, "bone": 40, "prime_meat": 1},
 		"lost": {"wall": 6, "tower": 1, "stone_wall": 2}})
 	await _shoot("raid_over")
+
+## What a material is for and where it comes from (v0.6 T2): the line the first bone
+## brings, and the build menu's reason for a crossbow tower before the pick has been made.
+func _scenario_legible() -> void:
+	var eb := root.get_node_or_null("EventBus")
+	eb.resource_picked_up.emit("bone", 1, null)
+	await _shoot("first_bone")
+	var panel = _main.hud.option_panel
+	if panel and panel.has_method("_show_build_detail"):
+		panel._show_build_detail("tower")
+	await _shoot("why_no_tower")
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

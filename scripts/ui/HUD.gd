@@ -121,6 +121,8 @@ func _connect_event_bus() -> void:
 			eb.beacon_launched.connect(_on_beacon_launched)
 		if eb.has_signal("raid_summary") and not eb.raid_summary.is_connected(_on_raid_summary):
 			eb.raid_summary.connect(_on_raid_summary)
+		if eb.has_signal("resource_picked_up") and not eb.resource_picked_up.is_connected(_on_resource_picked_up):
+			eb.resource_picked_up.connect(_on_resource_picked_up)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -159,6 +161,8 @@ func _disconnect_event_bus() -> void:
 			eb.beacon_launched.disconnect(_on_beacon_launched)
 		if eb.has_signal("raid_summary") and eb.raid_summary.is_connected(_on_raid_summary):
 			eb.raid_summary.disconnect(_on_raid_summary)
+		if eb.has_signal("resource_picked_up") and eb.resource_picked_up.is_connected(_on_resource_picked_up):
+			eb.resource_picked_up.disconnect(_on_resource_picked_up)
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
@@ -200,6 +204,39 @@ func _on_beacon_changed(_steps_done: int) -> void:
 func _on_beacon_launched() -> void:
 	_refresh_beacon_label()
 	show_hint(tr("HUD_BEACON_LAUNCHED"), 6.0)
+
+## The materials he has picked up at least once this run, and which run that is: the first
+## of each is when the game says what it is for (GAME-DESIGN 4.3 rule 2). Kept by seed, so
+## a new run starts over and a change of language does not.
+var _materials_seen: Dictionary = {}
+var _materials_seen_run: int = -1
+
+func _on_resource_picked_up(res_id: String, _amount: int, _by: Node) -> void:
+	var gs = _get_game_state()
+	var run: int = int(gs.run_seed) if (gs and "run_seed" in gs) else 0
+	if run != _materials_seen_run:
+		_materials_seen.clear()
+		_materials_seen_run = run
+	if _materials_seen.has(res_id):
+		return
+	_materials_seen[res_id] = true
+	var uses: String = _uses_text(res_id)
+	if uses != "":
+		show_hint(tr("HINT_NEW_MATERIAL") % [tr("RESOURCE_%s" % res_id.to_upper()), uses], 6.0)
+
+func _uses_text(res_id: String) -> String:
+	var cfg = _get_config()
+	return String(cfg.uses_text(res_id, _run_map())) if (cfg and cfg.has_method("uses_text")) else ""
+
+## Hovering a material on the bar says what it is for (GAME-DESIGN 4.3 rule 3).
+func _refresh_resource_tooltips() -> void:
+	for res_id in resource_labels:
+		var lbl: Label = resource_labels[res_id]
+		if lbl == null or not is_instance_valid(lbl):
+			continue
+		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+		var uses: String = _uses_text(String(res_id))
+		lbl.tooltip_text = (tr("USES_OF") % [tr("RESOURCE_%s" % String(res_id).to_upper()), uses]) if uses != "" else ""
 
 ## A raid held: what it cost, said as it ends (v0.6 T8).
 func _on_raid_summary(summary: Dictionary) -> void:
@@ -451,6 +488,7 @@ func reset_hud() -> void:
 	_on_resources_changed(res_dict)
 	_refresh_fed_label()
 	_refresh_beacon_label()
+	_refresh_resource_tooltips()
 
 	var w_num: int = gs.wave_number if (gs and "wave_number" in gs) else 0
 	_on_wave_started(w_num, false)

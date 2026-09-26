@@ -77,6 +77,59 @@ func test_02b_a_rock_he_cannot_cut_says_what_it_takes() -> void:
 				"And what it costs in %s" % res_id)
 	assert_eq(String(config_node.missing_tool_hint("wood")), "", "Bare hands cut wood: nothing to say")
 
+func test_02c_every_material_on_the_bar_is_for_one_or_two_things() -> void:
+	# GAME-DESIGN 4.3 rule 6: a material shown is for at least one thing and at most two
+	# -- making, building, cooking -- as Config works it out. The beacon is on top of that
+	# for every tier by design (8.3: each stage is the next tier's material), so it is not
+	# counted against the limit.
+	var map: Dictionary = game_state_node.map_data()
+	for res_id in config_node.RESOURCES:
+		var kinds: Dictionary = {}
+		for use in config_node.uses_of(String(res_id), map):
+			if String(use["kind"]) != "beacon":
+				kinds[String(use["kind"])] = true
+		if config_node.uses_of(String(res_id), map).is_empty():
+			continue   # not shown at all (rule 1; test_v02_followups)
+		assert_gte(kinds.size(), 1, "%s is for something besides the beacon" % res_id)
+		assert_lte(kinds.size(), 2, "%s is for at most two things: %s" % [res_id, kinds.keys()])
+
+func test_02d_what_a_material_is_for_and_where_it_comes_from_are_said_in_words() -> void:
+	var map: Dictionary = game_state_node.map_data()
+	var bone_uses: String = String(config_node.uses_text("bone", map))
+	for use in config_node.uses_of("bone", map):
+		if String(use["kind"]) == "building":
+			assert_true(bone_uses.contains(String(config_node.get_building_name(String(use["id"])))),
+				"What bone builds is named: %s" % bone_uses)
+		elif String(use["kind"]) == "recipe":
+			assert_true(bone_uses.contains(tr(String(config_node.RECIPES[use["id"]]["name"]))),
+				"What bone makes is named: %s" % bone_uses)
+	# Where it comes from: the tool, until he has it; then nothing stands in the way.
+	var flag: String = String(config_node.harvest_requires_unlock("stone"))
+	assert_eq(String(config_node.source_hint("stone", {})), String(config_node.missing_tool_hint("stone")),
+		"Short of stone and without the pick: the pick is the answer")
+	assert_eq(String(config_node.source_hint("stone", {flag: true})), "", "With it, stone is just work")
+	# Bone: every raider leaves it. Prime meat: only a boss does (test_v06_bosses).
+	assert_eq(String(config_node.source_hint("bone", {})), tr("SOURCE_DINOSAURS") % tr("RESOURCE_BONE"), "Bone: the dead leave it")
+	assert_eq(String(config_node.source_hint("prime_meat", {})), tr("SOURCE_BOSSES") % tr("RESOURCE_PRIME_MEAT"),
+		"Prime meat: only a boss does")
+
+func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
+	var hud = load("res://scenes/ui/HUD.tscn").instantiate()
+	_cleanup_nodes.append(hud)
+	tree.root.add_child(hud)
+	await wait_frames(1)
+	var bus = tree.root.get_node("EventBus")
+	bus.resource_picked_up.emit("bone", 1, null)
+	assert_true(hud.hint_label.visible, "The first bone says something")
+	assert_true(hud.hint_label.text.contains(String(config_node.uses_text("bone", game_state_node.map_data()))),
+		"What bone is for: %s" % hud.hint_label.text)
+	hud.hint_label.visible = false
+	bus.resource_picked_up.emit("bone", 1, null)
+	assert_false(hud.hint_label.visible, "The second says nothing")
+	var label: Label = hud.resource_labels.get("bone")
+	assert_true(label != null and label.tooltip_text.contains(String(config_node.uses_text("bone", game_state_node.map_data()))),
+		"And the bar says it on hover")
+
 func test_03_a_recipe_is_two_materials_at_most() -> void:
 	# GAME-DESIGN 5.4 rule 5: a recipe has at most two ingredients.
 	for recipe_id in config_node.RECIPES:

@@ -398,7 +398,9 @@ func _show_build_detail(b_type: String) -> void:
 	else:
 		# Name what is actually short. A turret is bought with wood and stone, so
 		# "need 8 wood" was a lie the moment the player had the wood and no rock.
-		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)]
+		# And where the short things come from, when that is the real obstacle.
+		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)] \
+			+ _sources_text(cfg.BUILDINGS[b_type].get("cost", {}))
 		status_label.modulate = Color(1.0, 0.45, 0.4)
 
 ## A {resource: amount} bill, written out for a button or a status line.
@@ -453,6 +455,23 @@ func _missing_text(b_type: String) -> String:
 		if short > 0:
 			parts.append("%d %s" % [short, _resource_name(String(res_id))])
 	return ", ".join(parts)
+
+## One line per material in `price` he is short of and cannot simply go and pick up:
+## which tool it takes, or that only the dead leave it (Config.source_hint) -- the reason
+## chain, "stone <- bone pick <- 1 bone", said where the price is (GAME-DESIGN 9.2).
+func _sources_text(price: Dictionary) -> String:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or gs == null or not cfg.has_method("source_hint"):
+		return ""
+	var lines: String = ""
+	for res_id in price:
+		if int(gs.resources.get(res_id, 0)) >= int(price[res_id]):
+			continue
+		var hint: String = String(cfg.source_hint(String(res_id), gs.unlocks))
+		if hint != "":
+			lines += "\n" + hint
+	return lines
 
 func _clear_build_detail() -> void:
 	_hover_detail_shown = false
@@ -584,7 +603,8 @@ func _show_craft_detail(station: Node, recipe_id: String) -> void:
 		status_label.text = tr("CRAFT_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text, station.time_of(recipe_id)]
 		status_label.modulate = Color(0.85, 0.85, 0.85)
 	else:
-		status_label.text = tr("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(recipe_id), cost_text]
+		status_label.text = tr("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(recipe_id), cost_text] \
+			+ _sources_text(station.inputs_of(recipe_id))
 		status_label.modulate = Color(1.0, 0.45, 0.4)
 
 ## What launching the beacon brings: how long it charges, that the whole valley comes from

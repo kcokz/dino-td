@@ -462,6 +462,59 @@ static func uses_of(res_id: String, map: Dictionary = {}) -> Array:
 			out.append({"kind": "beacon", "id": job_id})
 	return out
 
+## What `res_id` is for, in words, grouped by what is done with it -- "make Bone Pick ·
+## build Crossbow Tower, Bone Stake · repair the beacon" -- worked out from uses_of, so a new
+## building or recipe says itself here and nobody writes it down (GAME-DESIGN 4.3 rule 5).
+static func uses_text(res_id: String, map: Dictionary = {}) -> String:
+	var made: PackedStringArray = []
+	var built: PackedStringArray = []
+	var cooked: bool = false
+	var beacon: bool = false
+	for use in uses_of(res_id, map):
+		var id: String = String(use["id"])
+		match String(use["kind"]):
+			"recipe":
+				made.append(TranslationServer.translate(String(RECIPES[id].get("name", id))))
+			"building":
+				built.append(get_building_name(id))
+			"dish":
+				cooked = true
+			"beacon":
+				beacon = true
+	var sep: String = TranslationServer.translate("LIST_SEPARATOR")
+	var parts: PackedStringArray = []
+	if not made.is_empty():
+		parts.append(TranslationServer.translate("USE_MAKE") % sep.join(made))
+	if not built.is_empty():
+		parts.append(TranslationServer.translate("USE_BUILD") % sep.join(built))
+	if cooked:
+		parts.append(TranslationServer.translate("USE_COOK"))
+	if beacon:
+		parts.append(TranslationServer.translate("USE_BEACON"))
+	return " · ".join(parts)
+
+## Where `res_id` comes from, for someone short of it: the tool it takes when he has not
+## made it (missing_tool_hint), or -- for what nothing on the map gives -- that the dead
+## leave it, and which of the dead. "" when nothing stands in the way but going to get it.
+## Rule 4 of GAME-DESIGN 4.3, said where the price is.
+static func source_hint(res_id: String, owned: Dictionary) -> String:
+	var flag: String = harvest_requires_unlock(res_id)
+	if flag != "" and not owned.has(flag):
+		return missing_tool_hint(res_id)
+	if RESOURCE_NODES.has(res_id):
+		return ""
+	var dropped: bool = false
+	var bosses_only: bool = true
+	for species in DINOS:
+		if int(DINOS[species].get("drops", {}).get(res_id, 0)) > 0:
+			dropped = true
+			if String(DINOS[species].get("boss", "")) == "":
+				bosses_only = false
+	if not dropped:
+		return ""
+	return TranslationServer.translate("SOURCE_BOSSES" if bosses_only else "SOURCE_DINOSAURS") % \
+		TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
+
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level rather than bought).
