@@ -123,6 +123,8 @@ func _connect_event_bus() -> void:
 			eb.raid_summary.connect(_on_raid_summary)
 		if eb.has_signal("resource_picked_up") and not eb.resource_picked_up.is_connected(_on_resource_picked_up):
 			eb.resource_picked_up.connect(_on_resource_picked_up)
+		if eb.has_signal("unlock_granted") and not eb.unlock_granted.is_connected(_on_unlock_granted):
+			eb.unlock_granted.connect(_on_unlock_granted)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -163,6 +165,8 @@ func _disconnect_event_bus() -> void:
 			eb.raid_summary.disconnect(_on_raid_summary)
 		if eb.has_signal("resource_picked_up") and eb.resource_picked_up.is_connected(_on_resource_picked_up):
 			eb.resource_picked_up.disconnect(_on_resource_picked_up)
+		if eb.has_signal("unlock_granted") and eb.unlock_granted.is_connected(_on_unlock_granted):
+			eb.unlock_granted.disconnect(_on_unlock_granted)
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
@@ -223,6 +227,20 @@ func _on_resource_picked_up(res_id: String, _amount: int, _by: Node) -> void:
 	var uses: String = _uses_text(res_id)
 	if uses != "":
 		show_hint(tr("HINT_NEW_MATERIAL") % [tr("RESOURCE_%s" % res_id.to_upper()), uses], 6.0)
+
+## Something made at the cabin: what it does, said as it is done -- "Made: Stone Axe --
+## Wood x2" (GAME-DESIGN 14.2, path 4: did I get stronger).
+func _on_unlock_granted(unlock_id: String) -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("RECIPES" in cfg) or not cfg.has_method("recipe_effect_text"):
+		return
+	for recipe_id in cfg.RECIPES:
+		if String(cfg.RECIPES[recipe_id].get("unlocks", "")) != unlock_id:
+			continue
+		var effect: String = String(cfg.recipe_effect_text(String(recipe_id)))
+		if effect != "":
+			show_hint(tr("HINT_MADE") % [tr(String(cfg.RECIPES[recipe_id].get("name", recipe_id))), effect], 5.0)
+		return
 
 func _uses_text(res_id: String) -> String:
 	var cfg = _get_config()

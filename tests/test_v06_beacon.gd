@@ -339,6 +339,9 @@ func test_18_where_the_beacon_has_got_to_is_always_on_screen() -> void:
 		return
 	assert_true(label.visible, "From the first moment of the run")
 	assert_eq(label.text, String(config_node.beacon_status(_map(), 0, 0.0)), "Saying none of it is repaired")
+	for res_id in config_node.beacon_job(_map(), _jobs()[0])["inputs"]:
+		assert_true(label.text.contains(tr("RESOURCE_%s" % String(res_id).to_upper())),
+			"And what the next stage takes: %s" % label.text)
 	var first: String = label.text
 	game_state_node.finish_beacon_job(_jobs()[0])
 	await wait_frames(1)

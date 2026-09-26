@@ -417,6 +417,27 @@ static func harvest_requires_unlock(res_id: String) -> String:
 		return String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
 	return ""
 
+## What making `recipe_id` did, in words, for the moment it is done: the resources it
+## brings in faster ("Wood x2"), the one it lets him gather at all, or -- a vessel -- that
+## meals cooked on it do more. "" for anything else. From the recipe's own data, so a new
+## tool says itself (GAME-DESIGN 14.2, path 4).
+static func recipe_effect_text(recipe_id: String) -> String:
+	if not RECIPES.has(recipe_id):
+		return ""
+	var row: Dictionary = RECIPES[recipe_id]
+	var flag: String = String(row.get("unlocks", ""))
+	var parts: PackedStringArray = []
+	var speeds: Dictionary = row.get("harvest_speed", {})
+	for res_id in speeds:
+		parts.append("%s x%s" % [TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper()), factor_text(float(speeds[res_id]))])
+	for res_id in RESOURCE_NODES:
+		if flag != "" and String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
+			parts.append(TranslationServer.translate("TOOL_OPENS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
+	for method in COOKING_METHODS:
+		if flag != "" and String(method.get("vessel", "")) == flag:
+			parts.append(TranslationServer.translate("TOOL_VESSEL"))
+	return " · ".join(parts)
+
 ## Why `res_id` cannot be cut yet, in words: the tool it takes, where that is made and what
 ## it costs -- "Stone takes a Bone Pick: make one at the Workbench (1 Bone, 4 Wood)". Said
 ## where the player meets the wall, right-clicking the rock, so the chain is never a
@@ -1524,17 +1545,22 @@ static func beacon_job(map: Dictionary, job_id: String) -> Dictionary:
 		"name_args": [i + 1, jobs.size() - 1],
 	}
 
-## Where the beacon on `map` has got to, in words: how many stages stand repaired, that it
-## is ready to launch, or how far it has charged and how long is left. The top of the
-## screen and the beacon's bench both say this, and say it the same way. "" for a map
-## without a beacon.
+## Where the beacon on `map` has got to, in words: how many stages stand repaired and what
+## the next one takes, that it is ready to launch, or how far it has charged and how long is
+## left. The top of the screen and the beacon's bench both say this, and say it the same
+## way -- the run's goal and the next step towards it (GAME-DESIGN 14.2, paths 3 and 6).
+## "" for a map without a beacon.
 static func beacon_status(map: Dictionary, steps_done: int, charged: float) -> String:
 	var jobs: Array[String] = beacon_jobs(map)
 	if jobs.is_empty():
 		return ""
 	var stages: int = jobs.size() - 1
 	if steps_done < stages:
-		return TranslationServer.translate("BEACON_STATUS_REPAIRING") % [steps_done, stages]
+		var price: PackedStringArray = []
+		var inputs: Dictionary = beacon_job(map, jobs[steps_done]).get("inputs", {})
+		for res_id in inputs:
+			price.append("%d %s" % [int(inputs[res_id]), TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper())])
+		return TranslationServer.translate("BEACON_STATUS_REPAIRING") % [steps_done, stages, ", ".join(price)]
 	if steps_done == stages:
 		return TranslationServer.translate("BEACON_STATUS_READY")
 	var total: float = float(map["beacon"].get("charge_seconds", 0.0))
