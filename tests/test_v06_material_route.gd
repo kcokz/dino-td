@@ -60,6 +60,23 @@ func test_02_a_building_is_two_materials_at_most() -> void:
 		var cost: Dictionary = config_node.BUILDINGS[b_type].get("cost", {})
 		assert_lte(cost.size(), 2, "%s is built of two materials at most" % b_type)
 
+func test_02b_a_rock_he_cannot_cut_says_what_it_takes() -> void:
+	# Right-clicking stone before the pick: the tool, the bench it is made at and its price,
+	# every word of it from Config -- the chain, where the player meets the wall.
+	var flag: String = String(config_node.harvest_requires_unlock("stone"))
+	assert_ne(flag, "", "Stone needs a tool")
+	var hint: String = String(config_node.missing_tool_hint("stone"))
+	for recipe_id in config_node.RECIPES:
+		var row: Dictionary = config_node.RECIPES[recipe_id]
+		if String(row["unlocks"]) != flag:
+			continue
+		assert_true(hint.contains(tr(String(row["name"]))), "It names the tool: %s" % hint)
+		assert_true(hint.contains(tr("STATION_%s_NAME" % String(row["station"]).to_upper())), "And where it is made")
+		for res_id in row["inputs"]:
+			assert_true(hint.contains("%d %s" % [int(row["inputs"][res_id]), tr("RESOURCE_%s" % String(res_id).to_upper())]),
+				"And what it costs in %s" % res_id)
+	assert_eq(String(config_node.missing_tool_hint("wood")), "", "Bare hands cut wood: nothing to say")
+
 func test_03_a_recipe_is_two_materials_at_most() -> void:
 	# GAME-DESIGN 5.4 rule 5: a recipe has at most two ingredients.
 	for recipe_id in config_node.RECIPES:

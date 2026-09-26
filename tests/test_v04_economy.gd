@@ -259,28 +259,29 @@ func _first_raid_drops() -> Dictionary:
 		out[res_id] = int(config_node.DINOS["raptor"]["drops"][res_id]) * count
 	return out
 
-func test_16_the_opening_stock_buys_a_fence_and_an_axe_and_nothing_more() -> void:
+func test_16_the_opening_is_wood_a_fence_and_nothing_more() -> void:
 	var wallet: int = opening_wood()
 	var stake: int = cost_of("wall")
 	assert_gte(wallet / stake, 6, "Enough stakes to make a fence worth standing behind")
 
-	# A few stones lie by the cabin: exactly a stone axe's worth (GAME-DESIGN 5.2), so
-	# the first morning makes one, and quarrying still waits on the pick.
+	# Wood and nothing else (v0.6). Stone only ever comes out of the ground, and only to the
+	# pick, which is bone -- so there is no stone to hold that cannot be cut: a couple used
+	# to lie by the cabin, exactly an axe's worth, and nobody could explain them.
+	for res_id in config_node.RESOURCES:
+		if String(res_id) != "wood":
+			assert_eq(int(config_node.get_opening_stock(String(res_id))), 0, "The opening holds no %s" % res_id)
+	var pick: Dictionary = _recipe("harvest_stone")
+	assert_eq(int(pick["inputs"].get("stone", 0)), 0, "The pick asks for no stone: it is what brings stone in")
 	var axe: Dictionary = _recipe("stone_axe")
 	assert_false(axe.is_empty(), "The axe is a recipe")
-	assert_eq(int(config_node.get_opening_stock("stone")), int(axe["inputs"].get("stone", 0)),
-		"The stones by the cabin are exactly an axe's worth")
-	assert_gte(wallet, stake * 6 + int(axe["inputs"].get("wood", 0)),
-		"And the wood there buys the fence and the axe's haft")
+	assert_gt(int(axe["inputs"].get("stone", 0)), 0, "The stone axe is stone, so it comes after the pick")
 
 	# What keeps the tower out of reach on the first morning is the chain, not the
-	# wood: it wants more stone than lies by the cabin, and bone, which none does.
+	# wood: it wants stone, and bone, which the opening does not hold.
 	# Gating it on the opening wallet as well would be a second lock on the same door.
 	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
-	assert_lt(int(config_node.get_opening_stock("stone")), int(tower_cost.get("stone", 0)),
-		"Not a tower's worth of stone")
-	assert_gt(int(tower_cost.get("bone", 0)), 0, "And a tower wants bone")
-	assert_eq(int(config_node.get_opening_stock("bone")), 0, "Which the opening does not hand over")
+	assert_gt(int(tower_cost.get("stone", 0)), 0, "A tower wants stone")
+	assert_gt(int(tower_cost.get("bone", 0)), 0, "And bone")
 
 func test_17_one_raid_pays_for_the_pick_and_the_first_tower() -> void:
 	# If the pick or the first tower needed a second wave, the player would be sent home

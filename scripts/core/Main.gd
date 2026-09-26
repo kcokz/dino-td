@@ -1248,7 +1248,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var b = grid_manager.building_at_point(hit_pos) if grid_manager else null
 			if res_node != null and is_instance_valid(res_node):
 				if hero.has_method("can_harvest") and not hero.can_harvest(res_node):
-					_hint("HINT_NEED_TOOL")
+					_hint_need_tool(res_node)
 				else:
 					hero.order_harvest(res_node)
 			elif b != null and is_instance_valid(b):
@@ -1258,7 +1258,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				if hit_obj != null and is_instance_valid(hit_obj):
 					if hit_obj.is_in_group("resource_nodes") or ("resource_type" in hit_obj):
 						if hero.has_method("can_harvest") and not hero.can_harvest(hit_obj):
-							_hint("HINT_NEED_TOOL")
+							_hint_need_tool(hit_obj)
 						else:
 							hero.order_harvest(hit_obj)
 					elif hit_obj.is_in_group("dinos"):
@@ -1511,6 +1511,14 @@ func _map() -> Dictionary:
 func _hint(key: String) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 		hud.show_hint(tr(key))
+
+## Why he cannot cut `node` yet: which tool, where it is made, what it costs.
+func _hint_need_tool(node: Node) -> void:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("missing_tool_hint") or not ("resource_type" in node):
+		return
+	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
+		hud.show_hint(String(cfg.missing_tool_hint(String(node.resource_type))), 4.0)
 
 ## Whether the currently selected unit is one that can be given an order. Only the
 ## Hero can; everything else is inspected, not commanded. With nothing selected the

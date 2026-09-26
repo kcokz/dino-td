@@ -417,6 +417,29 @@ static func harvest_requires_unlock(res_id: String) -> String:
 		return String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
 	return ""
 
+## Why `res_id` cannot be cut yet, in words: the tool it takes, where that is made and what
+## it costs -- "Stone takes a Bone Pick: make one at the Workbench (1 Bone, 4 Wood)". Said
+## where the player meets the wall, right-clicking the rock, so the chain is never a
+## riddle (GAME-DESIGN 9.2: the next step is always visible). "" for what bare hands take.
+static func missing_tool_hint(res_id: String) -> String:
+	var flag: String = harvest_requires_unlock(res_id)
+	if flag == "":
+		return ""
+	for recipe_id in RECIPES:
+		var row: Dictionary = RECIPES[recipe_id]
+		if String(row.get("unlocks", "")) != flag:
+			continue
+		var costs: PackedStringArray = []
+		for input_id in row.get("inputs", {}):
+			costs.append("%d %s" % [int(row["inputs"][input_id]),
+				TranslationServer.translate("RESOURCE_%s" % String(input_id).to_upper())])
+		return TranslationServer.translate("HINT_NEED_TOOL") % [
+			TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))),
+			TranslationServer.translate(String(row.get("name", recipe_id))),
+			TranslationServer.translate("STATION_%s_NAME" % String(row.get("station", "")).to_upper()),
+			", ".join(costs)]
+	return ""
+
 ## What `res_id` is for, worked out from the data rather than written down (GAME-DESIGN
 ## 4.3 rule 5): every building the player can put up, every recipe and every dish that
 ## asks for it, and every stage of `map`'s beacon, as {"kind": "building" | "recipe" |
@@ -687,10 +710,13 @@ const MAPS: Dictionary = {
 	"default_nest_cell": Vector2i(0, -9),
 	"path_column_x": 0,
 	# What the player starts with, lying by the cabin rather than in the warehouse (DROPS
-	# says how it is laid out). The few stones are exactly a stone axe's price
-	# (RECIPES.stone_axe): the first morning makes an axe, but quarrying waits on the pick,
-	# and the pick on the first raid's bone -- "the first raid is supply" (GAME-DESIGN 5.2).
-	"opening_stock": {"wood": 20, "stone": 2},
+	# says how it is laid out): wood, and nothing else. Stone only ever comes out of the
+	# ground, the ground only gives it to the pick, and the pick is bone -- so everything
+	# made of stone, the axe included, comes after the first raid: "the first raid is
+	# supply" (GAME-DESIGN 5.2). A couple of stones used to lie here too, exactly an axe's
+	# price, and a stone the player could hold but not cut was the one thing about the
+	# opening nobody could explain.
+	"opening_stock": {"wood": 20},
 	# The beat table (GAME-DESIGN 9.2): when this map's big moments come, in seconds from
 	# landing.
 	"beats": {
@@ -1354,8 +1380,19 @@ const CABIN: Dictionary = {
 ## Adding a third station later is an entry here plus a node in the scene, not a
 ## new system.
 const RECIPES: Dictionary = {
-	# The first thing the morning makes: the stones scattered by the cabin
-	# (the map's opening_stock) are exactly its price. A ground stone head lashed to a haft.
+	# Neolithic flint miners dug with antler picks: this one is bone, and bone only comes
+	# off a dinosaur -- which is what turns the first raid into something the player needs.
+	# Named for what it is made of, like everything else (the bone stake, the stone axe): it
+	# was the "stone pick", which read as a pick made of stone that stone was needed for.
+	# The id stays -- ids never change (GAME-DESIGN 12.6).
+	"stone_pick": {
+		"name": "RECIPE_STONE_PICK_NAME",
+		"station": "workbench",
+		"inputs": {"bone": 1, "wood": 4},
+		"time": 8.0,
+		"unlocks": "harvest_stone",
+	},
+	# A ground stone head lashed to a haft: the first thing the quarry gives, after the pick.
 	"stone_axe": {
 		"name": "RECIPE_STONE_AXE_NAME",
 		"station": "workbench",
@@ -1366,15 +1403,6 @@ const RECIPES: Dictionary = {
 		# (GAME-DESIGN 14.1): every stroke on a tree brings down twice as much. Tools that
 		# work the same resource multiply -- an iron axe later is another x2 on top.
 		"harvest_speed": {"wood": 2.0},
-	},
-	# Neolithic flint miners dug with antler picks: this one is bone, and bone only comes
-	# off a dinosaur -- which is what turns the first raid into something the player needs.
-	"stone_pick": {
-		"name": "RECIPE_STONE_PICK_NAME",
-		"station": "workbench",
-		"inputs": {"bone": 1, "wood": 4},
-		"time": 8.0,
-		"unlocks": "harvest_stone",
 	},
 	# A flat stone set over the fire, to sear meat on (GAME-DESIGN 4.5). Made in the
 	# kitchen, like every vessel, and kept for good like a tool. Quarried stone, so it
