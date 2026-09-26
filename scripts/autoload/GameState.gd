@@ -37,6 +37,11 @@ var active_buildings: Array[Node] = []
 ## either set or it is not, and set means usable. That is what keeps the cabin
 ## from turning into a bag.
 var unlocks: Dictionary = {}
+
+## The meal he is living on (v0.6, GAME-DESIGN 4.5): its speeds and how long they have
+## left -- {"dish", "method", "build_speed", "move_speed", "seconds_left", "seconds_total"}
+## -- or empty when he is not fed. One meal at a time: eating again replaces it.
+var fed: Dictionary = {}
 var _produce_timer: Timer = null
 
 # v0.1 Real-Time Deployment & Pause
@@ -75,6 +80,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_game_over:
 		return
+	if not is_paused:
+		wear_off(delta)
 	if continuous_mode:
 		return
 	if current_phase == Phase.DEPLOY:
@@ -169,7 +176,8 @@ func reset_game() -> void:
 	wave_number = 0
 	active_buildings.clear()
 	unlocks.clear()
-	
+	_set_fed({})
+
 	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 	deploy_length = float(time_cfg.get("deploy_length", 90.0))
 	remaining_deploy_time = deploy_length
@@ -256,6 +264,69 @@ func grant_unlock(unlock_id: String) -> bool:
 	if eb and eb.has_signal("unlock_granted"):
 		eb.unlock_granted.emit(unlock_id)
 	return true
+
+# ==============================================================================
+# 7c. Tools and meals (v0.6): how fast the one body works
+# ==============================================================================
+## Every rate that matters is the Hero's own -- one body holds up the whole base -- so
+## "getting better" means him working faster: tools for good, meals for a while
+## (GAME-DESIGN 4.6). These are the only places the factors are worked out; the Hero
+## multiplies by them and the UI names them.
+
+## How much each stroke on a `res_id` node brings in, from the tools he has made.
+func harvest_multiplier(res_id: String) -> float:
+	var cfg = _get_config()
+	return float(cfg.harvest_speed(res_id, unlocks)) if cfg and cfg.has_method("harvest_speed") else 1.0
+
+## How fast he raises and mends, from what he last ate.
+func build_multiplier() -> float:
+	return float(fed.get("build_speed", 1.0))
+
+## How fast he walks, from what he last ate.
+func move_multiplier() -> float:
+	return float(fed.get("move_speed", 1.0))
+
+## He eats `dish_id`, cooked the best way his vessels allow (Config.meal_of). Heals are
+## the Hero's business and go out on the bus; a meal with a speed effect makes him fed,
+## replacing whatever he was fed on before. Returns the meal, or {} for an unknown dish.
+func eat(dish_id: String) -> Dictionary:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("meal_of"):
+		return {}
+	var meal: Dictionary = cfg.meal_of(dish_id, unlocks)
+	if meal.is_empty():
+		return {}
+	var seconds: float = float(meal.get("fed_seconds", 0.0))
+	if seconds > 0.0:
+		_set_fed({
+			"dish": dish_id,
+			"method": String(meal.get("method", "")),
+			"build_speed": float(meal.get("build_speed", 1.0)),
+			"move_speed": float(meal.get("move_speed", 1.0)),
+			"seconds_left": seconds,
+			"seconds_total": seconds,
+		})
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("meal_eaten"):
+		eb.meal_eaten.emit(meal)
+	return meal
+
+## Counts the meal down by `delta` seconds of game time, and lets it go when it is done.
+## Called every frame the game runs; public so a test can pass time without waiting.
+func wear_off(delta: float) -> void:
+	if fed.is_empty() or delta <= 0.0:
+		return
+	fed["seconds_left"] = float(fed.get("seconds_left", 0.0)) - delta
+	if float(fed["seconds_left"]) <= 0.0:
+		_set_fed({})
+
+func _set_fed(value: Dictionary) -> void:
+	if value.is_empty() and fed.is_empty():
+		return
+	fed = value
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("fed_changed"):
+		eb.fed_changed.emit(fed)
 
 # ==============================================================================
 # 8. The Standing Buildings

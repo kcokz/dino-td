@@ -19,11 +19,19 @@ signal pause_clicked()
 # UI Node References
 # ==============================================================================
 var root_control: Control = null
+## One readout per resource, built from Config.RESOURCES rather than written into the
+## scene: there were five labels there, one per resource, and a sixth resource would
+## have been a sixth node, a sixth variable and a sixth line in every handler (v0.6 T2).
+var resource_bar: Container = null
+var resource_labels: Dictionary = {}     # res_id -> Label
+# The readouts every older caller asks for by name. They are entries of resource_labels.
 var wood_label: Label = null
 var stone_label: Label = null
 var water_label: Label = null
 var food_label: Label = null
 var bone_label: Label = null
+## What he last ate and how long it has left (v0.6 T3); hidden while he is not fed.
+var fed_label: Label = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var hero_hp_label: Label = null
@@ -98,6 +106,8 @@ func _connect_event_bus() -> void:
 			eb.locale_changed.connect(_on_locale_changed)
 		if eb.has_signal("raid_warning") and not eb.raid_warning.is_connected(_on_raid_warning):
 			eb.raid_warning.connect(_on_raid_warning)
+		if eb.has_signal("fed_changed") and not eb.fed_changed.is_connected(_on_fed_changed):
+			eb.fed_changed.connect(_on_fed_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -124,6 +134,8 @@ func _disconnect_event_bus() -> void:
 			eb.locale_changed.disconnect(_on_locale_changed)
 		if eb.has_signal("raid_warning") and eb.raid_warning.is_connected(_on_raid_warning):
 			eb.raid_warning.disconnect(_on_raid_warning)
+		if eb.has_signal("fed_changed") and eb.fed_changed.is_connected(_on_fed_changed):
+			eb.fed_changed.disconnect(_on_fed_changed)
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
@@ -141,19 +153,33 @@ func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 		hero_hp_label.text = tr("HUD_HERO_HP") % [int(ceil(cur)), int(ceil(max_val))]
 
 func _on_resources_changed(res: Dictionary) -> void:
-	if wood_label:
-		wood_label.text = tr("HUD_WOOD") % int(res.get("wood", 0))
-	if stone_label:
-		stone_label.text = tr("HUD_STONE") % int(res.get("stone", 0))
-	if water_label:
-		water_label.text = tr("HUD_WATER") % int(res.get("water", 0))
-	# Meat exists as of v0.3 (dinosaurs drop it), so it has a readout like the rest.
-	if food_label:
-		food_label.text = tr("HUD_FOOD") % int(res.get("food", 0))
-	# Bone came with it in v0.4: a carcass gives both, and bone is what the
-	# workbench turns into tools.
-	if bone_label:
-		bone_label.text = tr("HUD_BONE") % int(res.get("bone", 0))
+	for res_id in resource_labels:
+		var lbl: Label = resource_labels[res_id]
+		if lbl and is_instance_valid(lbl):
+			lbl.text = tr("HUD_%s" % String(res_id).to_upper()) % int(res.get(res_id, 0))
+
+## He ate, or the meal wore off. The countdown itself is _process's.
+func _on_fed_changed(_fed: Dictionary) -> void:
+	_refresh_fed_label()
+
+func _process(_delta: float) -> void:
+	if fed_label and fed_label.visible:
+		_refresh_fed_label()
+
+## "Fed: builds x1.3 · 1:25" while a meal's speeds last -- how much faster, and for how
+## long (GAME-DESIGN 4.6: make the gain visible). Nothing at all when he is not fed.
+func _refresh_fed_label() -> void:
+	if fed_label == null or not is_instance_valid(fed_label):
+		return
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	var fed: Dictionary = gs.fed if (gs and "fed" in gs) else {}
+	if fed.is_empty() or cfg == null or not cfg.has_method("describe_meal"):
+		fed_label.visible = false
+		return
+	var left: int = int(ceil(maxf(0.0, float(fed.get("seconds_left", 0.0)))))
+	fed_label.text = tr("HUD_FED") % [cfg.describe_meal(fed, false), left / 60, left % 60]
+	fed_label.visible = true
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
@@ -302,6 +328,7 @@ func reset_hud() -> void:
 	var default_res: Dictionary = cfg.INITIAL_RESOURCES if (cfg and "INITIAL_RESOURCES" in cfg) else {"wood": 10}
 	var res_dict: Dictionary = gs.resources if (gs and "resources" in gs) else default_res
 	_on_resources_changed(res_dict)
+	_refresh_fed_label()
 
 	var w_num: int = gs.wave_number if (gs and "wave_number" in gs) else 0
 	_on_wave_started(w_num, false)
@@ -399,13 +426,35 @@ func get_version_text() -> String:
 # Procedural Component Fallbacks (Headless & Scene Support)
 # ==============================================================================
 
+## A readout per resource in Config.RESOURCES, in that order, named "<Resource>Label"
+## (WoodLabel, PrimeMeatLabel). The labels callers already know by name stay as fields.
+##
+## A resource that is for nothing in this game is not shown at all (GAME-DESIGN 4.3
+## rule 1) -- in v0.6 that is water: the river is scenery until it has a use. Showing a
+## counter the player can do nothing with is a question the game cannot answer.
+func _ensure_resource_labels() -> void:
+	resource_labels.clear()
+	var cfg = _get_config()
+	var ids: Array = cfg.RESOURCES if (cfg and "RESOURCES" in cfg) else []
+	for res_id in ids:
+		var node_name: String = "%sLabel" % String(res_id).to_pascal_case()
+		var lbl: Label = resource_bar.get_node_or_null(node_name) as Label
+		if lbl == null:
+			lbl = Label.new()
+			lbl.name = node_name
+			resource_bar.add_child(lbl)
+		lbl.visible = not cfg.has_method("uses_of") or not cfg.uses_of(String(res_id)).is_empty()
+		resource_labels[String(res_id)] = lbl
+	wood_label = resource_labels.get("wood")
+	stone_label = resource_labels.get("stone")
+	water_label = resource_labels.get("water")
+	food_label = resource_labels.get("food")
+	bone_label = resource_labels.get("bone")
+
 func _ensure_ui_components() -> void:
 	# Search existing scene tree first
-	wood_label = find_child("WoodLabel", true, false) as Label
-	stone_label = find_child("StoneLabel", true, false) as Label
-	water_label = find_child("WaterLabel", true, false) as Label
-	food_label = find_child("FoodLabel", true, false) as Label
-	bone_label = find_child("BoneLabel", true, false) as Label
+	resource_bar = find_child("ResourceBar", true, false) as Container
+	fed_label = find_child("FedLabel", true, false) as Label
 	wave_label = find_child("WaveLabel", true, false) as Label
 	core_hp_label = find_child("CoreHPLabel", true, false) as Label
 	phase_label = find_child("PhaseLabel", true, false) as Label
@@ -440,30 +489,17 @@ func _ensure_ui_components() -> void:
 		root_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(root_control)
 
-	if wood_label == null:
-		wood_label = Label.new()
-		wood_label.name = "WoodLabel"
-		root_control.add_child(wood_label)
+	if resource_bar == null:
+		resource_bar = HBoxContainer.new()
+		resource_bar.name = "ResourceBar"
+		root_control.add_child(resource_bar)
+	_ensure_resource_labels()
 
-	if stone_label == null:
-		stone_label = Label.new()
-		stone_label.name = "StoneLabel"
-		root_control.add_child(stone_label)
-
-	if water_label == null:
-		water_label = Label.new()
-		water_label.name = "WaterLabel"
-		root_control.add_child(water_label)
-
-	if food_label == null:
-		food_label = Label.new()
-		food_label.name = "FoodLabel"
-		root_control.add_child(food_label)
-
-	if bone_label == null:
-		bone_label = Label.new()
-		bone_label.name = "BoneLabel"
-		root_control.add_child(bone_label)
+	if fed_label == null:
+		fed_label = Label.new()
+		fed_label.name = "FedLabel"
+		fed_label.visible = false
+		root_control.add_child(fed_label)
 
 	if wave_label == null:
 		wave_label = Label.new()
@@ -648,7 +684,7 @@ func _apply_ui_scale() -> void:
 	var button_size: int = int(cfg.UI.get("hud_button_font_size", 24))
 	var title_size: int = int(cfg.UI.get("gameover_title_font_size", 48))
 
-	for lbl in [wood_label, stone_label, water_label, food_label, bone_label, wave_label, core_hp_label, hero_hp_label,
+	for lbl in resource_labels.values() + [wave_label, core_hp_label, hero_hp_label, fed_label,
 			deploy_timer_label, phase_label, version_label, hint_label, raid_warning_banner]:
 		if lbl and is_instance_valid(lbl):
 			lbl.add_theme_font_size_override("font_size", label_size)

@@ -136,3 +136,14 @@ signal unlock_granted(unlock_id: String)
 ## Emitted when the player steps into the cabin or back out of it. The world keeps
 ## running either way -- this only says where the camera and the orders are going.
 signal cabin_view_changed(inside: bool)
+
+# ==============================================================================
+# 11. Eating (v0.6)
+# ==============================================================================
+## Emitted when the Hero eats a meal from the kitchen: what it was and what it does,
+## as Config.meal_of describes it. The Hero heals from it; GameState keeps the rest.
+signal meal_eaten(meal: Dictionary)
+
+## Emitted when the Hero becomes fed, or stops being: GameState.fed, empty when the
+## last meal has worn off.
+signal fed_changed(fed: Dictionary)

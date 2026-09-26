@@ -100,12 +100,18 @@ func _connect_event_bus() -> void:
 	if eb and eb.has_signal("phase_changed"):
 		if not eb.phase_changed.is_connected(_on_phase_changed):
 			eb.phase_changed.connect(_on_phase_changed)
+	if eb and eb.has_signal("meal_eaten"):
+		if not eb.meal_eaten.is_connected(_on_meal_eaten):
+			eb.meal_eaten.connect(_on_meal_eaten)
 
 func _exit_tree() -> void:
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb) and eb.has_signal("phase_changed"):
 		if eb.phase_changed.is_connected(_on_phase_changed):
 			eb.phase_changed.disconnect(_on_phase_changed)
+	if eb and is_instance_valid(eb) and eb.has_signal("meal_eaten"):
+		if eb.meal_eaten.is_connected(_on_meal_eaten):
+			eb.meal_eaten.disconnect(_on_meal_eaten)
 
 # ==============================================================================
 # State Machine & Movement
@@ -266,7 +272,7 @@ func _process_moving(delta: float) -> void:
 	diff.y = 0.0
 
 	var dir = diff.normalized()
-	velocity = dir * speed
+	velocity = dir * walk_speed()
 	if dir.length_squared() > 0.001:
 		look_at(global_position + dir, Vector3.UP)
 
@@ -289,7 +295,7 @@ func _process_moving(delta: float) -> void:
 
 	# 4. Stuck detection & auto-recovery
 	var moved_dist = global_position.distance_to(_last_pos)
-	if moved_dist < (speed * delta * 0.2):
+	if moved_dist < (walk_speed() * delta * 0.2):
 		_stuck_timer += delta
 		if _stuck_timer >= 0.4:
 			_stuck_timer = 0.0
@@ -378,12 +384,14 @@ func _process_building(delta: float) -> void:
 
 	# Building and mending are the same verb -- he walks over and works on it with
 	# a hammer. Which one happens is the building's business, not the order's: an
-	# unfinished thing gets raised, a damaged one gets patched.
+	# unfinished thing gets raised, a damaged one gets patched. A good meal speeds
+	# both, because they are the same work.
+	var work: float = delta * work_rate()
 	if "is_constructed" in target_building and target_building.is_constructed:
-		_work_on_repair(delta)
+		_work_on_repair(work)
 		return
 	if target_building.has_method("add_build_progress"):
-		var completed = target_building.add_build_progress(delta)
+		var completed = target_building.add_build_progress(work)
 		if completed:
 			target_building = null
 			_continue_to_next_pending_building_or_idle()
@@ -473,19 +481,45 @@ func _process_harvesting(delta: float) -> void:
 		if target_resource_node == null or not is_instance_valid(target_resource_node):
 			break
 		var res_type: String = target_resource_node.resource_type if "resource_type" in target_resource_node else "wood"
-		var yielded: int = target_resource_node.harvest(1) if target_resource_node.has_method("harvest") else 0
+		# His tools make every stroke count for more, and the pile says so when he picks
+		# it up: the axe he made is felt, and seen, each time he uses it (GAME-DESIGN 4.6).
+		var stroke: int = _stroke_yield(res_type)
+		var yielded: int = target_resource_node.harvest(stroke) if (stroke > 0 and target_resource_node.has_method("harvest")) else 0
 		if yielded > 0:
 			# Even what the Hero digs up himself lands on the ground first. He is
 			# standing on it, so his own sweep takes it a frame later and it feels
 			# the same as banking it -- but there is now exactly one way resources
 			# get into the warehouse, instead of one rule for hands and another
 			# for machines.
-			DropItem.spawn(self, global_position, res_type, yielded)
+			var pile: DropItem = DropItem.spawn(self, global_position, res_type, yielded)
+			if pile != null:
+				pile.note = _stroke_note(res_type)
 
 		if "is_depleted" in target_resource_node and target_resource_node.is_depleted:
 			target_resource_node = null
 			current_state = State.IDLE
 			break
+
+## What one stroke brings in: one unit, times his tools (GameState.harvest_multiplier).
+## A factor that is not whole carries over from stroke to stroke, so x1.5 comes in as
+## 1, 2, 1, 2 -- the rhythm of the work stays the same and the piles get bigger.
+var _stroke_carry: float = 0.0
+
+func _stroke_yield(res_id: String) -> int:
+	var gs = _get_game_state()
+	var factor: float = float(gs.harvest_multiplier(res_id)) if gs and gs.has_method("harvest_multiplier") else 1.0
+	_stroke_carry += maxf(factor, 0.0)
+	var whole: int = int(floor(_stroke_carry + 0.0001))
+	_stroke_carry -= float(whole)
+	return whole
+
+## Which of his tools made a stroke on `res_id` count for more, in words; "" by hand.
+func _stroke_note(res_id: String) -> String:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or not cfg.has_method("harvest_note") or gs == null or not ("unlocks" in gs):
+		return ""
+	return String(cfg.harvest_note(res_id, gs.unlocks))
 
 func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> bool:
 	if b == null or not is_instance_valid(b):
@@ -840,6 +874,30 @@ func get_display_info() -> Dictionary:
 # ==============================================================================
 # Combat & Damage
 # ==============================================================================
+
+## Back up by `amount`, never past his full health. A meal is the only thing that
+## does this (GAME-DESIGN 4.5).
+func heal(amount: float) -> void:
+	if current_state == State.DEAD or amount <= 0.0:
+		return
+	current_hp = minf(max_hp, current_hp + amount)
+	_refresh_health_bar()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("hero_hp_changed"):
+		eb.hero_hp_changed.emit(current_hp, max_hp)
+
+func _on_meal_eaten(meal: Dictionary) -> void:
+	heal(float(meal.get("heal", 0.0)))
+
+## How fast he raises and mends: 1.0, or more on a good meal (GameState.build_multiplier).
+func work_rate() -> float:
+	var gs = _get_game_state()
+	return float(gs.build_multiplier()) if gs and gs.has_method("build_multiplier") else 1.0
+
+## Metres a second he walks: his own pace, or more on a good meal.
+func walk_speed() -> float:
+	var gs = _get_game_state()
+	return speed * (float(gs.move_multiplier()) if gs and gs.has_method("move_multiplier") else 1.0)
 
 func take_damage(amount: float) -> void:
 	if current_state == State.DEAD or amount <= 0.0:

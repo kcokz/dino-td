@@ -13,8 +13,11 @@ extends Node
 ##   stone -- cut by hand from outcrops, but only once the Hero has a pick
 ##   bone  -- off a dead dinosaur; the workbench turns it into tools, and it tips the bolts
 ##   food  -- meat, off a dead dinosaur; cooked and eaten at the kitchen
+##   prime_meat -- off a boss, and nowhere else; cooked like meat, and far better eating
 ##   water -- no use yet (GAME-DESIGN 4.4), so the game does not offer it
-const RESOURCES: Array[String] = ["wood", "stone", "bone", "water", "food"]
+## Raw materials first, then what the raids leave (GAME-DESIGN 4.2): the order the top
+## bar shows them in.
+const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (Config.DROPS.opening_stock) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
@@ -24,7 +27,8 @@ const INITIAL_RESOURCES: Dictionary = {
 	"stone": 0,
 	"bone": 0,
 	"water": 0,
-	"food": 0
+	"food": 0,
+	"prime_meat": 0,
 }
 const TILE_SIZE: float = 2.0
 
@@ -362,6 +366,24 @@ static func harvest_requires_unlock(res_id: String) -> String:
 	if RESOURCE_NODES.has(res_id):
 		return String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
 	return ""
+
+## What `res_id` is for, worked out from the data rather than written down (GAME-DESIGN
+## 4.3 rule 5): every building the player can put up, every recipe and every dish that
+## asks for it, as {"kind": "building" | "recipe" | "dish", "id": ...}. A new building that
+## costs stone makes itself part of what stone is for by existing -- nothing to update.
+## Empty means it is for nothing yet, and the game does not offer it (4.3 rule 1).
+static func uses_of(res_id: String) -> Array:
+	var out: Array = []
+	for b_type in BUILDABLE_TYPES:
+		if BUILDINGS.has(b_type) and BUILDINGS[b_type].get("cost", {}).has(res_id):
+			out.append({"kind": "building", "id": b_type})
+	for recipe_id in RECIPES:
+		if RECIPES[recipe_id].get("inputs", {}).has(res_id):
+			out.append({"kind": "recipe", "id": recipe_id})
+	for dish_id in DISHES:
+		if DISHES[dish_id].get("inputs", {}).has(res_id):
+			out.append({"kind": "dish", "id": dish_id})
+	return out
 
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
@@ -967,6 +989,10 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/food":            {"scene": "res://assets/models/props/drop_food_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	# A boss's cut. The haunch for now: what sets it apart on the ground is its colour on
+	# the pickup and the top bar, until it has a model of its own.
+	"drop/prime_meat":      {"scene": "res://assets/models/props/drop_food_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/water":           {"scene": "res://assets/models/props/drop_water_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 }
@@ -1053,6 +1079,7 @@ static func get_opening_stock(res_id: String) -> int:
 ## dinosaur, so RESOURCE_NODES has nothing to say about it.
 const RESOURCE_FALLBACK_COLORS: Dictionary = {
 	"food": Color(0.78, 0.32, 0.28),
+	"prime_meat": Color(0.62, 0.12, 0.16),   # darker and richer than meat: a boss's cut
 	"bone": Color(0.88, 0.85, 0.72),
 }
 
@@ -1135,6 +1162,10 @@ const RECIPES: Dictionary = {
 		"inputs": {"wood": 3, "stone": 2},
 		"time": 6.0,
 		"unlocks": "stone_axe",
+		# What a tool does is part of its recipe, so a new tool is a line here and no code
+		# (GAME-DESIGN 14.1): every stroke on a tree brings down twice as much. Tools that
+		# work the same resource multiply -- an iron axe later is another x2 on top.
+		"harvest_speed": {"wood": 2.0},
 	},
 	# Neolithic flint miners dug with antler picks: this one is bone, and bone only comes
 	# off a dinosaur -- which is what turns the first raid into something the player needs.
@@ -1167,6 +1198,147 @@ static func recipes_at(station_id: String) -> Array[String]:
 		if String(RECIPES[recipe_id].get("station", "")) == station_id:
 			out.append(String(recipe_id))
 	return out
+
+## How much faster the tools in `owned` (unlock flags, as GameState.unlocks holds them)
+## bring `res_id` in: the product of every held tool's `harvest_speed` for it.
+static func harvest_speed(res_id: String, owned: Dictionary) -> float:
+	var factor: float = 1.0
+	for recipe_id in RECIPES:
+		var data: Dictionary = RECIPES[recipe_id]
+		if owned.has(String(data.get("unlocks", ""))):
+			factor *= float(data.get("harvest_speed", {}).get(res_id, 1.0))
+	return factor
+
+## The held tools that speed up `res_id`, by recipe: what to name when saying why a
+## stroke brought in more than one.
+static func harvest_tools(res_id: String, owned: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for recipe_id in RECIPES:
+		var data: Dictionary = RECIPES[recipe_id]
+		if owned.has(String(data.get("unlocks", ""))) and float(data.get("harvest_speed", {}).get(res_id, 1.0)) != 1.0:
+			out.append(String(recipe_id))
+	return out
+
+## Why a stroke on `res_id` brings in more than one, in words -- the tools doing it and
+## the factor they make together, "Stone Axe x2" -- or "" when it is bare hands.
+static func harvest_note(res_id: String, owned: Dictionary) -> String:
+	var tools: Array[String] = harvest_tools(res_id, owned)
+	if tools.is_empty():
+		return ""
+	var names: PackedStringArray = []
+	for recipe_id in tools:
+		names.append(TranslationServer.translate(String(RECIPES[recipe_id].get("name", recipe_id))))
+	return TranslationServer.translate("HARVEST_NOTE") % [" + ".join(names), factor_text(harvest_speed(res_id, owned))]
+
+# ==============================================================================
+# 14a. Cooking (v0.6) -- the kitchen feeds him, and a fed man works faster
+# ==============================================================================
+## A meal is a piece of meat, cooked at the kitchen and eaten there and then: no bag, no
+## stored food (GAME-DESIGN 4.5). Two tables, one rule -- THE VESSEL DECIDES WHAT A MEAL
+## DOES, THE MEAT DECIDES HOW MUCH:
+##   DISHES          -- one per kind of meat: its price, its cooking time, and how big each
+##                      effect it CAN have is.
+##   COOKING_METHODS -- one per vessel, best first: which of those effects a meal HAS.
+## So a better pot is a new kind of meal -- roasted, meat only heals; seared on a stone pot,
+## he also builds faster for a while -- and a better cut is a bigger one of the same kind.
+## The player only chooses which meat; the method is whatever his best pot allows.
+##
+## Eating heals him at once. A meal with a speed effect also leaves him FED for a while
+## (GameState.fed): one meal at a time, the new one replacing the last.
+##
+## Meat cannot be only healing (GAME-DESIGN 4.5): once every building is up, a raid's meat
+## still has somewhere to go -- a fed man builds and mends faster.
+const DISHES: Dictionary = {
+	# What a raptor leaves. A little of everything.
+	"meat": {
+		"name": "DISH_MEAT_NAME",
+		"station": "kitchen",
+		"inputs": {"food": 1},
+		"time": 5.0,
+		"heal": 4.0,               # of the Hero's 10
+		"build_speed": 1.3,
+		"move_speed": 1.2,
+		"fed_seconds": 90.0,       # about a raid's gap: fed on the way out, hungry by the next
+	},
+	# What a boss leaves (GAME-DESIGN 7.5), and the reward for having killed it: every effect
+	# clearly bigger, and for longer. A full heal.
+	"prime_meat": {
+		"name": "DISH_PRIME_MEAT_NAME",
+		"station": "kitchen",
+		"inputs": {"prime_meat": 1},
+		"time": 5.0,
+		"heal": 10.0,
+		"build_speed": 1.8,
+		"move_speed": 1.5,
+		"fed_seconds": 150.0,
+	},
+}
+
+## Best first: a meal is cooked by the first method whose vessel he owns, and the last one
+## needs none, so there is always a way to eat. Each better vessel ADDS an effect to the
+## method below it -- that is the "qualitative" step a pot is (GAME-DESIGN 4.5).
+const COOKING_METHODS: Array = [
+	# Seared on a flat stone heated in the fire: meat that heals, and a man who works faster.
+	{"id": "sear", "name": "COOK_SEAR", "vessel": "stone_pot", "effects": ["heal", "build_speed"]},
+	# Over the fire on a stick, the way he ate the first night. It heals, and that is all.
+	{"id": "roast", "name": "COOK_ROAST", "vessel": "", "effects": ["heal"]},
+]
+
+## Dishes cooked at one station, in declaration order.
+static func dishes_at(station_id: String) -> Array[String]:
+	var out: Array[String] = []
+	for dish_id in DISHES:
+		if String(DISHES[dish_id].get("station", "")) == station_id:
+			out.append(String(dish_id))
+	return out
+
+## The method a meal is cooked by: the best one whose vessel is among `owned`.
+static func cooking_method(owned: Dictionary) -> Dictionary:
+	for method in COOKING_METHODS:
+		var vessel: String = String(method.get("vessel", ""))
+		if vessel == "" or owned.has(vessel):
+			return method
+	return {}
+
+## What eating `dish_id` does when cooked the best way `owned` allows:
+##   {"dish", "method", "heal", "build_speed", "move_speed", "fed_seconds"}
+## An effect the method does not have is left at nothing -- no heal, a speed of 1.0 -- and a
+## meal with neither speed leaves nobody fed (fed_seconds 0). Empty for an unknown dish.
+static func meal_of(dish_id: String, owned: Dictionary) -> Dictionary:
+	if not DISHES.has(dish_id):
+		return {}
+	var dish: Dictionary = DISHES[dish_id]
+	var method: Dictionary = cooking_method(owned)
+	var effects: Array = method.get("effects", [])
+	var meal: Dictionary = {
+		"dish": dish_id,
+		"method": String(method.get("id", "")),
+		"heal": float(dish.get("heal", 0.0)) if effects.has("heal") else 0.0,
+		"build_speed": float(dish.get("build_speed", 1.0)) if effects.has("build_speed") else 1.0,
+		"move_speed": float(dish.get("move_speed", 1.0)) if effects.has("move_speed") else 1.0,
+	}
+	var speeds: bool = meal["build_speed"] != 1.0 or meal["move_speed"] != 1.0
+	meal["fed_seconds"] = float(dish.get("fed_seconds", 0.0)) if speeds else 0.0
+	return meal
+
+## A meal's effects in words -- "heals 4 · builds x1.3 · for 90s" -- for the kitchen's
+## menu, and (with_heal false) for the top bar, which only says what he is still living on:
+## the heal was spent when he ate. Takes a meal (meal_of) or GameState.fed.
+static func describe_meal(meal: Dictionary, with_heal: bool = true) -> String:
+	var parts: PackedStringArray = []
+	if with_heal and float(meal.get("heal", 0.0)) > 0.0:
+		parts.append(TranslationServer.translate("EFFECT_HEAL") % int(round(float(meal["heal"]))))
+	if float(meal.get("build_speed", 1.0)) != 1.0:
+		parts.append(TranslationServer.translate("EFFECT_BUILD_SPEED") % factor_text(float(meal["build_speed"])))
+	if float(meal.get("move_speed", 1.0)) != 1.0:
+		parts.append(TranslationServer.translate("EFFECT_MOVE_SPEED") % factor_text(float(meal["move_speed"])))
+	if with_heal and float(meal.get("fed_seconds", 0.0)) > 0.0:
+		parts.append(TranslationServer.translate("EFFECT_FED_FOR") % int(round(float(meal["fed_seconds"]))))
+	return " · ".join(parts)
+
+## A speed factor as the player reads it: "2" for a whole one, "1.3" otherwise.
+static func factor_text(f: float) -> String:
+	return ("%d" % int(round(f))) if is_equal_approx(f, round(f)) else ("%.1f" % f)
 
 ## Construction time is a function of price: the more a building costs, the longer
 ## the Hero stands there making it. Keeping it derived means a designer tunes one

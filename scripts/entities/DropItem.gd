@@ -31,6 +31,9 @@ const CONTAINER_GROUP: String = "drops_container"
 
 var resource_type: String = "wood"
 var amount: int = 1
+## Why this pile is bigger than bare hands would have made it -- "Stone Axe x2" -- said
+## with the number when it is picked up (v0.6, GAME-DESIGN 4.6: let the gain be seen).
+var note: String = ""
 var age: float = 0.0
 var lifetime: float = 0.0          # 0 = never rots
 var is_collected: bool = false
@@ -249,10 +252,16 @@ func collect(collector: Node = null) -> int:
 		if fx.has_method("play") and "Sound" in fx and fx.Sound.has("PICKUP"):
 			fx.play(fx.Sound.PICKUP)
 		if fx.has_method("floating_text"):
-			fx.floating_text(global_position, "+%d" % taken, _colour())
+			fx.floating_text(global_position, pickup_text(), _colour())
 
 	_fly_to(collector)
 	return taken
+
+## What floats up when this pile is picked up: the amount, and what made it that big.
+func pickup_text() -> String:
+	if note == "":
+		return "+%d" % amount
+	return TranslationServer.translate("PICKUP_WITH_NOTE") % [amount, note]
 
 func add_amount(extra: int) -> void:
 	if extra <= 0 or is_collected:

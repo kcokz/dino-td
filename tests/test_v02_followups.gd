@@ -195,12 +195,19 @@ func test_14_hud_shows_every_live_resource() -> void:
 	assert_eq(hud.water_label.text, tr("HUD_WATER") % 9, "Water readout updated")
 	assert_eq(hud.food_label.text, tr("HUD_FOOD") % 3, "Meat readout updated")
 	assert_true(hud.stone_label.visible, "Stone readout is visible to the player")
-	assert_true(hud.water_label.visible, "Water readout is visible to the player")
 	assert_true(hud.food_label.visible, "Meat readout is visible to the player")
+	# Since v0.6 a resource the game has no use for is not shown at all (GAME-DESIGN 4.3
+	# rule 1) -- a counter the player can do nothing with is a question with no answer.
+	for res_id in config_node.RESOURCES:
+		var lbl = hud.resource_labels.get(String(res_id))
+		assert_not_null(lbl, "%s has a readout" % res_id)
+		if lbl:
+			assert_eq(lbl.visible, not config_node.uses_of(String(res_id)).is_empty(),
+				"%s is on screen exactly when it is for something" % res_id)
 
 	# Every resource the game can actually produce has somewhere to be shown.
 	for res_id in config_node.RESOURCES:
-		assert_not_null(hud.find_child("%sLabel" % res_id.capitalize(), true, false),
+		assert_not_null(hud.find_child("%sLabel" % String(res_id).to_pascal_case(), true, false),
 			"%s has a readout" % res_id)
 
 # ==============================================================================

@@ -2,14 +2,16 @@
 class_name CraftingStation
 extends StaticBody3D
 
-## A bench in the cabin. The workbench turns materials into abilities, the kitchen
-## turns meat into blueprints, and both are this same class with a different id --
-## adding a third station is a Config entry plus a node in the cabin scene, not a
-## new system.
+## A bench in the cabin. The workbench turns materials into tools, the kitchen makes
+## the pots he cooks in and cooks his meals, and both are this same class with a
+## different id -- adding a third station is a Config entry plus a node in the cabin
+## scene, not a new system.
 ##
 ## What a station makes is a **permanent flag**, never an object: unlocked means
 ## usable, so there is no bag to open, nothing to carry and nothing to lose. That
-## is the line that stops the cabin becoming an inventory screen.
+## is the line that stops the cabin becoming an inventory screen. A meal (Config.
+## DISHES) is the one job that is not a flag, and it is not an object either: it is
+## eaten the moment it is done (GAME-DESIGN 4.5: no bag, no stored food).
 ##
 ## Work costs real seconds and the world does not stop while they pass -- while
 ## the Hero is at the bench, nobody is holding the line. Leaving keeps the
@@ -46,12 +48,27 @@ func recipes() -> Array[String]:
 		return cfg.recipes_at(station_id)
 	return []
 
+## The meals this bench cooks -- the kitchen's, and nobody else's.
+func dishes() -> Array[String]:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("dishes_at"):
+		return cfg.dishes_at(station_id)
+	return []
+
+## Whether `job_id` is a meal rather than a recipe.
+func is_dish(job_id: String) -> bool:
+	var cfg = _get_config()
+	return cfg != null and "DISHES" in cfg and cfg.DISHES.has(job_id)
+
 ## Whether `recipe_id` is worth offering: it belongs here, and it has not already
-## been made. A recipe whose flag is already set is finished forever.
+## been made. A recipe whose flag is already set is finished forever; a meal is
+## cooked as often as there is meat for it.
 func can_offer(recipe_id: String) -> bool:
 	var data: Dictionary = recipe_data(recipe_id)
 	if data.is_empty() or String(data.get("station", "")) != station_id:
 		return false
+	if is_dish(recipe_id):
+		return true
 	var gs = _get_game_state()
 	if gs and gs.has_method("has_unlock") and gs.has_unlock(String(data.get("unlocks", ""))):
 		return false
@@ -94,7 +111,8 @@ func begin(recipe_id: String) -> bool:
 
 ## Advances the current job by `delta` seconds. Public so the cabin drives it only
 ## while the Hero is actually standing there, and so a test can drive it without
-## waiting on the clock. Returns the unlock granted this tick, or "".
+## waiting on the clock. Returns the unlock granted this tick, or "" -- including
+## when what finished was a meal, which he eats rather than keeps.
 func work(delta: float) -> String:
 	if active_recipe == "" or delta <= 0.0:
 		return ""
@@ -104,12 +122,17 @@ func work(delta: float) -> String:
 		return ""
 
 	var done: String = active_recipe
-	var unlock: String = String(recipe_data(done).get("unlocks", ""))
+	var unlock: String = ""
 	active_recipe = ""
 	progress = 0.0
 	var gs = _get_game_state()
-	if gs and gs.has_method("grant_unlock"):
-		gs.grant_unlock(unlock)
+	if is_dish(done):
+		if gs and gs.has_method("eat"):
+			gs.eat(done)
+	else:
+		unlock = String(recipe_data(done).get("unlocks", ""))
+		if gs and gs.has_method("grant_unlock"):
+			gs.grant_unlock(unlock)
 	var fx = _get_fx()
 	if fx and fx.has_method("play") and "Sound" in fx and fx.Sound.has("BUILD_DONE"):
 		fx.play(fx.Sound.BUILD_DONE)
@@ -126,10 +149,14 @@ func ratio() -> float:
 # Recipe lookups -- every one of them goes through Config
 # ==============================================================================
 
+## A job's row -- a recipe's or a meal's; they have the same shape (station, inputs,
+## time, name), which is what lets one bench take either.
 func recipe_data(recipe_id: String) -> Dictionary:
 	var cfg = _get_config()
 	if cfg and "RECIPES" in cfg and cfg.RECIPES.has(recipe_id):
 		return cfg.RECIPES[recipe_id]
+	if cfg and "DISHES" in cfg and cfg.DISHES.has(recipe_id):
+		return cfg.DISHES[recipe_id]
 	return {}
 
 func inputs_of(recipe_id: String) -> Dictionary:
@@ -138,9 +165,26 @@ func inputs_of(recipe_id: String) -> Dictionary:
 func time_of(recipe_id: String) -> float:
 	return float(recipe_data(recipe_id).get("time", 0.0))
 
+## A meal is named for how it will be cooked -- roast meat, seared meat -- which is his
+## best pot's doing, not the dish's (Config.COOKING_METHODS).
 func recipe_name(recipe_id: String) -> String:
 	var key: String = String(recipe_data(recipe_id).get("name", recipe_id))
-	return TranslationServer.translate(key)
+	var title: String = TranslationServer.translate(key)
+	if not is_dish(recipe_id):
+		return title
+	var fmt: String = TranslationServer.translate(String(meal_preview(recipe_id).get("method_name", "")))
+	return (fmt % title) if "%s" in fmt else title
+
+## What eating `dish_id` would do, cooked the way his pots allow right now.
+func meal_preview(dish_id: String) -> Dictionary:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or not cfg.has_method("meal_of"):
+		return {}
+	var owned: Dictionary = gs.unlocks if (gs and "unlocks" in gs) else {}
+	var meal: Dictionary = cfg.meal_of(dish_id, owned)
+	meal["method_name"] = String(cfg.cooking_method(owned).get("name", ""))
+	return meal
 
 func get_localized_name() -> String:
 	return TranslationServer.translate("STATION_%s_NAME" % station_id.to_upper())

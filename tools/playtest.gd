@@ -78,6 +78,8 @@ func _run(name: String) -> void:
 			await _scenario_showcase()
 		"scale":
 			await _scenario_scale()
+		"kitchen":
+			await _scenario_kitchen()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -85,6 +87,29 @@ func _run(name: String) -> void:
 # ==============================================================================
 # Scenarios
 # ==============================================================================
+
+## The kitchen and what eating does (v0.6): its menu before the stone pot is made and
+## after -- the same meat cooked a new way -- and then, fed, the line under the top bar that
+## says how much faster he is and for how long.
+func _scenario_kitchen() -> void:
+	var gs := root.get_node_or_null("GameState")
+	var cfg := root.get_node_or_null("Config")
+	var eb := root.get_node_or_null("EventBus")
+	_grant({"food": 2, "prime_meat": 1})
+	_main.enter_cabin()
+	var kitchen: Node = _main.cabin_interior.station("kitchen") if _main.cabin_interior else null
+	if kitchen and eb:
+		eb.unit_selected.emit(kitchen)
+	await _shoot("menu_before_the_pot")
+	if gs and cfg:
+		gs.grant_unlock(String(cfg.COOKING_METHODS[0]["vessel"]))
+	if kitchen and eb:
+		eb.unit_selected.emit(kitchen)
+	await _shoot("menu_with_the_pot")
+	if gs:
+		gs.eat("meat")
+	_main.leave_cabin()
+	await _shoot("fed")
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

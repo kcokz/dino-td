@@ -487,12 +487,17 @@ func _populate_building_buttons() -> void:
 ## would only be a second, slower way to do the same thing.
 ## One button per recipe this bench still has to offer. A recipe already made is
 ## not listed at all -- an unlock is permanent, so a finished one is not a choice.
+## The kitchen's meals come after its recipes: one per kind of meat, always on offer,
+## named for however his best pot will cook it.
 func _populate_station_buttons() -> void:
 	var station := selected_unit
 	if station == null or not is_instance_valid(station) or not station.has_method("recipes"):
 		return
 	_clear_craft_detail()
-	for recipe_id in station.recipes():
+	var jobs: Array = station.recipes()
+	if station.has_method("dishes"):
+		jobs.append_array(station.dishes())
+	for recipe_id in jobs:
 		var rid: String = String(recipe_id)
 		if not station.can_offer(rid):
 			continue
@@ -517,7 +522,15 @@ func _show_craft_detail(station: Node, recipe_id: String) -> void:
 	for res_id in station.inputs_of(recipe_id):
 		costs.append("%d %s" % [int(station.inputs_of(recipe_id)[res_id]), _resource_name(String(res_id))])
 	var cost_text: String = ", ".join(costs)
-	if station.can_afford(recipe_id):
+	# A meal says what it will do -- heal how much, how much faster and for how long --
+	# because that is the whole of the choice between one meat and another.
+	var cfg = _get_config()
+	var is_meal: bool = station.has_method("is_dish") and station.is_dish(recipe_id)
+	if is_meal and station.can_afford(recipe_id) and cfg and cfg.has_method("describe_meal"):
+		status_label.text = tr("MEAL_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text,
+			station.time_of(recipe_id), cfg.describe_meal(station.meal_preview(recipe_id))]
+		status_label.modulate = Color(0.85, 0.85, 0.85)
+	elif station.can_afford(recipe_id):
 		status_label.text = tr("CRAFT_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text, station.time_of(recipe_id)]
 		status_label.modulate = Color(0.85, 0.85, 0.85)
 	else:

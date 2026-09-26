@@ -187,7 +187,7 @@ func test_10_bone_has_a_readout_like_every_other_resource() -> void:
 	for res_id in config_node.RESOURCES:
 		if res_id == "water":
 			continue   # no sink yet; see the open question in VERSION.md
-		assert_not_null(hud.find_child("%sLabel" % res_id.capitalize(), true, false),
+		assert_not_null(hud.find_child("%sLabel" % String(res_id).to_pascal_case(), true, false),
 			"%s has a readout" % res_id)
 
 # ==============================================================================
