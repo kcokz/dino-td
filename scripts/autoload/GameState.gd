@@ -42,6 +42,19 @@ var unlocks: Dictionary = {}
 ## left -- {"dish", "method", "build_speed", "move_speed", "seconds_left", "seconds_total"}
 ## -- or empty when he is not fed. One meal at a time: eating again replaces it.
 var fed: Dictionary = {}
+
+## The run (v0.6, GAME-DESIGN 12): which map it is played on, and the seed every chance in
+## it is drawn from. Everything in play that is left to chance draws from `rng` -- never
+## from the engine's global randf -- so one seed replays one run: a seed can be shared,
+## and a bug can be replayed. Decoration keeps generators of its own.
+var map_id: String = ""
+var run_seed: int = 0
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
+## The map this run is played on (Config.MAPS).
+func map_data() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.map_data(map_id) if (cfg and cfg.has_method("map_data")) else {}
 var _produce_timer: Timer = null
 
 # v0.1 Real-Time Deployment & Pause
@@ -155,10 +168,18 @@ func _emit_game_lost() -> void:
 # 6. Game Lifecycle & Full Reset
 # ==============================================================================
 ## Fully restores pristine starting game state from Config constants.
-func reset_game() -> void:
+## A new run. `p_seed` replays a run exactly; left out, every run is a fresh one.
+func reset_game(p_seed: int = -1) -> void:
 	_cancel_produce_timer()
 	is_game_over = false
 	is_game_won = false
+	var cfg_run = _get_config()
+	map_id = String(cfg_run.DEFAULT_MAP_ID) if (cfg_run and "DEFAULT_MAP_ID" in cfg_run) else ""
+	if p_seed >= 0:
+		rng.seed = p_seed
+	else:
+		rng.randomize()
+	run_seed = int(rng.seed)
 	# GameState is an autoload, so this flag would otherwise leak from any test that
 	# instantiates Main into every test that runs after it. Main re-enables it in
 	# setup_level(), which runs after reset_game() on the restart path.
@@ -465,9 +486,7 @@ func _schedule_auto_end_produce() -> void:
 		return
 	var cfg = _get_config()
 	var duration: float = 1.0
-	if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
-		duration = float(cfg.MAP.get("produce_duration", 1.0))
-	elif cfg and "PRODUCE_DELAY" in cfg:
+	if cfg and "PRODUCE_DELAY" in cfg:
 		duration = float(cfg.PRODUCE_DELAY)
 	
 	if duration <= 0.0:

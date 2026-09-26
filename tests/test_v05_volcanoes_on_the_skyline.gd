@@ -155,7 +155,7 @@ func test_07_none_of_it_is_solid() -> void:
 		if n is CollisionObject3D or n is CollisionShape3D:
 			bodies += 1
 	assert_eq(bodies, 0, "Not one collider in any of them")
-	assert_eq(main.terrain_container.get_child_count(), config_node.MAP["default_blocked_cells"].size(),
+	assert_eq(main.terrain_container.get_child_count(), config_node.map_data()["default_blocked_cells"].size(),
 		"And the hills are still exactly the blocked cells -- the volcanoes are not filed among them")
 
 # ==============================================================================

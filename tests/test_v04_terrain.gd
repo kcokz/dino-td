@@ -111,7 +111,7 @@ func test_04_the_level_lays_its_hills_before_anything_else() -> void:
 	var main = _level()
 	await wait_frames(2)
 
-	var declared: Array = config_node.MAP.get("default_blocked_cells", [])
+	var declared: Array = config_node.map_data().get("default_blocked_cells", [])
 	assert_gt(declared.size(), 0, "The map declares terrain")
 	for c in declared:
 		assert_true(main.grid_manager.is_cell_blocked(c), "%s is hillside in play" % str(c))
@@ -124,13 +124,13 @@ func test_05_no_hill_sits_on_a_resource_node_or_seals_the_path() -> void:
 	# never bury something the Hero needs to harvest.
 	var main = _level()
 	await wait_frames(2)
-	var blocked: Array = config_node.MAP.get("default_blocked_cells", [])
+	var blocked: Array = config_node.map_data().get("default_blocked_cells", [])
 
-	for item in config_node.MAP.get("default_resource_nodes", []):
+	for item in config_node.map_data().get("default_resource_nodes", []):
 		assert_false(blocked.has(item["cell"]), "No hill is sitting on the %s at %s" % [item["type"], str(item["cell"])])
 
 	# The nest has to be able to reach the cabin.
-	var from_pos: Vector3 = main.grid_manager.cell_to_world(config_node.MAP["default_nest_cell"])
+	var from_pos: Vector3 = main.grid_manager.cell_to_world(config_node.map_data()["default_nest_cell"])
 	var to_pos: Vector3 = cabin_at(main)
 	assert_true(main.nav_maps.is_reachable(from_pos, to_pos),
 		"A raid can still get from the nest to the cabin")

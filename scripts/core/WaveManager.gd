@@ -94,10 +94,9 @@ func _load_waves_config() -> void:
 		big_multiplier = float(w_cfg.get("big_multiplier", 2.0))
 		spawn_interval = float(w_cfg.get("spawn_interval", 0.8))
 
+	raid_timer = _first_raid()
 	if cfg and "RAIDS" in cfg:
-		var r_cfg: Dictionary = cfg.RAIDS
-		raid_timer = float(r_cfg.get("first_raid_delay", 60.0))
-		warning_lead_time = float(r_cfg.get("warning_lead_time", 15.0))
+		warning_lead_time = float(cfg.RAIDS.get("warning_lead_time", 15.0))
 
 	if spawn_timer:
 		spawn_timer.wait_time = spawn_interval
@@ -219,7 +218,7 @@ func start_next_raid() -> void:
 
 	var minutes: float = elapsed_time / 60.0
 	var intensity_baseline: float = 1.0 + minutes * per_min
-	var jitter: float = randf_range(-jitter_range, jitter_range)
+	var jitter: float = _rng().randf_range(-jitter_range, jitter_range)
 	var multiplier: float = maxf(0.5, intensity_baseline * (1.0 + jitter))
 
 	var base_cnt: int = get_wave_dino_count(next_n)
@@ -231,12 +230,10 @@ func start_next_raid() -> void:
 func reset_raid_state() -> void:
 	elapsed_time = 0.0
 	var cfg = _get_config()
-	var first_delay: float = 60.0
 	var lead_time: float = 15.0
 	if cfg and "RAIDS" in cfg:
-		first_delay = float(cfg.RAIDS.get("first_raid_delay", 60.0))
 		lead_time = float(cfg.RAIDS.get("warning_lead_time", 15.0))
-	raid_timer = first_delay
+	raid_timer = _first_raid()
 	warning_lead_time = lead_time
 	warning_emitted = false
 
@@ -248,7 +245,7 @@ func _reset_raid_timer() -> void:
 		var r_cfg: Dictionary = cfg.RAIDS
 		min_i = float(r_cfg.get("interval_min", 45.0))
 		max_i = float(r_cfg.get("interval_max", 90.0))
-	raid_timer = randf_range(min_i, max_i)
+	raid_timer = _rng().randf_range(min_i, max_i)
 	warning_emitted = false
 
 ## Starts a specific wave number. Optionally accepts override_count.
@@ -285,10 +282,21 @@ func _on_spawn_timer_timeout() -> void:
 		if spawn_timer:
 			spawn_timer.stop()
 
-## Which species this wave sends. Only raptors are in rotation for now, but the
-## choice lives here rather than being assumed three functions deeper.
+## Which species this one is: drawn from the run's map (its "raiders", by weight), with
+## the run's own dice, so the same seed sends the same animals.
 func _species_to_spawn() -> String:
-	return "raptor"
+	var raiders: Dictionary = _map().get("raiders", {})
+	var total: float = 0.0
+	for species in raiders:
+		total += maxf(0.0, float(raiders[species]))
+	if total <= 0.0:
+		return "raptor"
+	var roll: float = _rng().randf() * total
+	for species in raiders:
+		roll -= maxf(0.0, float(raiders[species]))
+		if roll < 0.0:
+			return String(species)
+	return String(raiders.keys().back())
 
 ## Builds a dinosaur from the class its habit calls for -- a pack raptor and a
 ## siege theropod are different classes, and two species with the same habit share
@@ -390,6 +398,30 @@ func _end_wave() -> void:
 # ==============================================================================
 # Resolvers
 # ==============================================================================
+
+## The run's map (GameState.map_data): who raids here, and when the first of them comes.
+func _map() -> Dictionary:
+	var gs = _get_game_state()
+	if gs and gs.has_method("map_data"):
+		return gs.map_data()
+	var cfg = _get_config()
+	return cfg.map_data() if (cfg and cfg.has_method("map_data")) else {}
+
+## Seconds from landing to the first raid: the map's beat table (GAME-DESIGN 9.2).
+func _first_raid() -> float:
+	return float(_map().get("beats", {}).get("first_raid", 60.0))
+
+## The run's dice (GameState.rng). Every chance in a raid is drawn from them, so a seed
+## replays a run; the engine's global randf would have made every run unrepeatable.
+var _own_rng: RandomNumberGenerator = null
+
+func _rng() -> RandomNumberGenerator:
+	var gs = _get_game_state()
+	if gs and "rng" in gs and gs.rng is RandomNumberGenerator:
+		return gs.rng
+	if _own_rng == null:
+		_own_rng = RandomNumberGenerator.new()
+	return _own_rng
 
 var config_override: Object = null
 

@@ -45,15 +45,16 @@ func after_each() -> void:
 
 func test_01_config_centralized_map_and_produce_parameters() -> void:
 	assert_not_null(config_node, "Config singleton must exist")
-	assert_true("MAP" in config_node, "Config must define MAP dictionary")
-	var map_cfg: Dictionary = config_node.get("MAP")
-	assert_true(map_cfg.has("default_core_cell"), "Config.MAP must specify default_core_cell")
-	assert_true(map_cfg.has("default_nest_cell"), "Config.MAP must specify default_nest_cell")
-	assert_true(map_cfg.has("path_column_x"), "Config.MAP must specify path_column_x")
-	assert_true(map_cfg.has("produce_duration"), "Config.MAP must specify produce_duration")
+	# Since v0.6 the map is data (Config.MAPS) and the run's map is GameState.map_data();
+	# the produce phase's length is a rule, not content, and stayed a constant.
+	assert_true("MAPS" in config_node, "Config must define its maps")
+	var map_cfg: Dictionary = config_node.map_data()
+	assert_true(map_cfg.has("default_core_cell"), "The map must specify default_core_cell")
+	assert_true(map_cfg.has("default_nest_cell"), "The map must specify default_nest_cell")
+	assert_true(map_cfg.has("path_column_x"), "The map must specify path_column_x")
 	assert_eq(map_cfg.get("path_column_x"), 0, "path_column_x should be 0")
-	assert_true(float(map_cfg.get("produce_duration")) > 0.0, "produce_duration must be positive")
 	assert_true("PRODUCE_DELAY" in config_node, "Config must define PRODUCE_DELAY constant")
+	assert_true(float(config_node.PRODUCE_DELAY) > 0.0, "The produce phase lasts some time")
 
 func test_02_wall_hp_driven_by_config_without_hardcoding() -> void:
 	assert_not_null(wall_script, "Wall script must exist")

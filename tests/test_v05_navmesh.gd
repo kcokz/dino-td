@@ -354,7 +354,7 @@ func test_13_his_route_to_a_building_ends_where_he_can_work_from() -> void:
 	# own centre and let him walk into it.
 	var main = _level()
 	await wait_frames(8)
-	var core_cell: Vector2i = config_node.MAP["default_core_cell"]
+	var core_cell: Vector2i = config_node.map_data()["default_core_cell"]
 	var cabin = main.grid_manager.get_building_at(core_cell)
 	assert_not_null(cabin, "The cabin is standing")
 	var hero = main.hero
@@ -463,7 +463,7 @@ func test_16_a_fence_that_does_not_enclose_anything_seals_nothing() -> void:
 	# Pressed against the cabin on two sides, and nothing at all on the other two: a row of
 	# stakes along the tiles just outside its block on the west, and along the north.
 	var fine_step: float = float(config_node.TILE_SIZE) / float(d)
-	var lo: Vector2i = gm.world_to_fine_cell(gm.cell_to_world_origin(config_node.MAP["default_core_cell"])
+	var lo: Vector2i = gm.world_to_fine_cell(gm.cell_to_world_origin(config_node.map_data()["default_core_cell"])
 		+ Vector3(fine_step * 0.5, 0.0, fine_step * 0.5), d)
 	var along: int = int(round(float(config_node.get_building_span("core")) * float(config_node.TILE_SIZE) / fine_step))
 	var fine_cells: Array[Vector2i] = [lo + Vector2i(-1, -1)]

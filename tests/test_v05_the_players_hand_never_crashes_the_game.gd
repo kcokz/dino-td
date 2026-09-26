@@ -77,7 +77,7 @@ func _select(main: Node, type_id: String) -> void:
 ## A spot of open field near the middle of the view that `type_id` can be built on.
 func _open_spot(main: Node, type_id: String) -> Vector3:
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = gm.cell_to_world(config_node.map_data()["default_core_cell"])
 	for offset in [Vector3(-5.0, 0.0, 5.0), Vector3(5.0, 0.0, 5.0), Vector3(-6.0, 0.0, -2.0), Vector3(6.0, 0.0, -3.0),
 			Vector3(0.0, 0.0, 8.0), Vector3(-8.0, 0.0, 8.0)]:
 		var at: Vector3 = core + offset
@@ -201,11 +201,11 @@ func test_05_a_click_on_ground_that_cannot_be_built_on_places_nothing() -> void:
 	# where the ghost shows the stake would go.
 	var main = await _level()
 	var gm = main.grid_manager
-	var hill_top := Vector3.UP * float(config_node.MAP["hill_height"])
+	var hill_top := Vector3.UP * float(config_node.map_data()["hill_height"])
 	for type_id in ["wall", "tower"]:
 		_select(main, type_id)
-		var hill: Vector3 = gm.cell_to_world(config_node.MAP["default_blocked_cells"][0]) + hill_top
-		var cabin: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+		var hill: Vector3 = gm.cell_to_world(config_node.map_data()["default_blocked_cells"][0]) + hill_top
+		var cabin: Vector3 = gm.cell_to_world(config_node.map_data()["default_core_cell"])
 		_click(main, _px(main, hill))
 		_click(main, _px(main, cabin))
 		await wait_frames(1)
@@ -306,7 +306,7 @@ func test_09_the_camera_keys_held_down() -> void:
 
 func test_10_the_mouse_wheel_and_middle_drag() -> void:
 	var main = await _level()
-	var centre: Vector2 = _px(main, main.grid_manager.cell_to_world(config_node.MAP["default_core_cell"]))
+	var centre: Vector2 = _px(main, main.grid_manager.cell_to_world(config_node.map_data()["default_core_cell"]))
 	for index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 		_click(main, centre, index)
 	_button(main, centre, MOUSE_BUTTON_MIDDLE, true)

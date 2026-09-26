@@ -52,7 +52,7 @@ func _height(x: float, z: float) -> float:
 
 func _blocked_set() -> Dictionary:
 	var out: Dictionary = {}
-	for c in config_node.MAP.get("default_blocked_cells", []):
+	for c in config_node.map_data().get("default_blocked_cells", []):
 		if c is Vector2i:
 			out[c] = true
 	return out
@@ -116,11 +116,11 @@ func test_02_the_flat_field_covers_every_cell_the_level_uses() -> void:
 	var noise := TerrainBuilder.ground_noise(config_node)
 
 	var used: Array[Vector2i] = []
-	used.append(config_node.MAP["default_core_cell"])
-	used.append(config_node.MAP["default_nest_cell"])
-	for c in config_node.MAP.get("default_blocked_cells", []):
+	used.append(config_node.map_data()["default_core_cell"])
+	used.append(config_node.map_data()["default_nest_cell"])
+	for c in config_node.map_data().get("default_blocked_cells", []):
 		used.append(c)
-	for item in config_node.MAP.get("default_resource_nodes", []):
+	for item in config_node.map_data().get("default_resource_nodes", []):
 		used.append(item["cell"])
 
 	for cell in used:
@@ -235,8 +235,8 @@ func test_05b_every_hill_is_a_knot_of_crags_on_a_low_mound() -> void:
 	# valley floor under them.
 	var main = _level()
 	await wait_frames(2)
-	var height: float = float(config_node.MAP["hill_height"])
-	var base: float = height * float(config_node.MAP["hill_base_fraction"])
+	var height: float = float(config_node.map_data()["hill_height"])
+	var base: float = height * float(config_node.map_data()["hill_base_fraction"])
 	var bump: float = float(config_node.TERRAIN.get("hill_noise", 0.12))
 	var hills: Array = main.terrain_container.get_children()
 	assert_gt(hills.size(), 0, "There are hills")
@@ -256,7 +256,7 @@ func test_05b_every_hill_is_a_knot_of_crags_on_a_low_mound() -> void:
 
 func test_06_a_hill_reaches_the_declared_height_and_no_higher() -> void:
 	var blocked := _blocked_set()
-	var height: float = float(config_node.MAP["hill_height"])
+	var height: float = float(config_node.map_data()["hill_height"])
 	for cell in blocked:
 		var peak: float = TerrainBuilder.hill_height_at(cell, blocked, 0.5, 0.5, height)
 		assert_almost_eq(peak, height, 0.001, "%s stands exactly as tall as declared" % str(cell))
@@ -279,7 +279,7 @@ func test_06b_a_hill_rises_out_of_the_ground_with_no_rim() -> void:
 	# mound is the ground rising now, so wherever it meets open ground it is AT ground
 	# level -- all the way round, corners included -- and level there, so there is not
 	# even a crease for the light to find.
-	var height: float = float(config_node.MAP["hill_height"])
+	var height: float = float(config_node.map_data()["hill_height"])
 	var tile: float = float(config_node.TILE_SIZE)
 	var ridge: Dictionary = {Vector2i(40, 40): true, Vector2i(41, 40): true}
 	for cell in [Vector2i(40, 40), Vector2i(41, 40)]:
@@ -308,7 +308,7 @@ func test_07_neighbouring_hills_meet_without_a_crack() -> void:
 	# Both cells work their shared corners out from the same four cells, so they agree
 	# by construction. This is the assertion that keeps it that way.
 	var blocked: Dictionary = {Vector2i(0, 0): true, Vector2i(1, 0): true}
-	var height: float = float(config_node.MAP["hill_height"])
+	var height: float = float(config_node.map_data()["hill_height"])
 
 	for i in range(5):
 		var v: float = float(i) / 4.0
@@ -322,11 +322,11 @@ func test_08_the_grid_still_decides_who_can_walk_where() -> void:
 	# have moved a single rule.
 	var main = _level()
 	await wait_frames(2)
-	for c in config_node.MAP.get("default_blocked_cells", []):
+	for c in config_node.map_data().get("default_blocked_cells", []):
 		assert_true(main.grid_manager.is_cell_blocked(c), "%s is still hillside" % str(c))
 		assert_false(main.grid_manager.is_cell_walkable(c), "And still unwalkable")
 	assert_eq(main.terrain_container.get_child_count(),
-		config_node.MAP.get("default_blocked_cells", []).size(),
+		config_node.map_data().get("default_blocked_cells", []).size(),
 		"One hill per blocked cell, no more and no fewer")
 
 func test_09_the_ground_collider_covers_the_flat_field() -> void:

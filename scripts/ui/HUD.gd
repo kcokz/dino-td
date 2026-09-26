@@ -564,8 +564,8 @@ func _ensure_ui_components() -> void:
 		root_control.add_child(deploy_timer_label)
 	var init_dep: float = 90.0
 	var cfg = _get_config()
-	if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
-		init_dep = float(cfg.MAP.get("deploy_length", 90.0))
+	if cfg and "TIME" in cfg and cfg.TIME is Dictionary:
+		init_dep = float(cfg.TIME.get("deploy_length", 90.0))
 	deploy_timer_label.text = tr("HUD_DEPLOY_TIMER") % init_dep
 
 	if hero_hp_label == null:

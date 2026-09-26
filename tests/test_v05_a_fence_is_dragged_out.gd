@@ -55,7 +55,7 @@ func _level(wood: int = 4000) -> Node:
 	# Where the Hero happens to be standing is not what this suite is about.
 	if main.hero:
 		main.hero.global_position = main.grid_manager.cell_to_world(
-			config_node.MAP["default_core_cell"]) + Vector3(0.0, 0.0, 20.0)
+			config_node.map_data()["default_core_cell"]) + Vector3(0.0, 0.0, 20.0)
 	await wait_frames(2)
 	return main
 

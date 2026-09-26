@@ -122,9 +122,10 @@ func _process(delta: float) -> void:
 
 func _init_level_coordinates() -> void:
 	var cfg = _get_config()
-	if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
-		core_cell = cfg.MAP.get("default_core_cell", Vector2i(0, 0))
-		nest_cell = cfg.MAP.get("default_nest_cell", Vector2i(0, -9))
+	var map_layout: Dictionary = _map()
+	if not map_layout.is_empty():
+		core_cell = map_layout.get("default_core_cell", Vector2i(0, 0))
+		nest_cell = map_layout.get("default_nest_cell", Vector2i(0, -9))
 
 func _ensure_scene_dependencies() -> void:
 	# 1. Camera3D (fixed 45-degree isometric projection looking at grid center (0, 0, -9))
@@ -245,8 +246,8 @@ func _discover_waypoints() -> void:
 		_init_level_coordinates()
 		var col_x: int = 0
 		var cfg = _get_config()
-		if cfg and "MAP" in cfg and cfg.MAP is Dictionary:
-			col_x = int(cfg.MAP.get("path_column_x", 0))
+		if not _map().is_empty():
+			col_x = int(_map().get("path_column_x", 0))
 		if grid_manager and grid_manager.has_method("cell_to_world"):
 			var step: int = 2 if nest_cell.y < core_cell.y else -2
 			for cz in range(nest_cell.y, core_cell.y, step):
@@ -431,9 +432,9 @@ func get_resource_node_at_cell(cell: Vector2i) -> Node:
 ## sees is exactly the thing that stops them.
 func spawn_terrain() -> void:
 	var cfg = _get_config()
-	if cfg == null or not ("MAP" in cfg) or grid_manager == null:
+	if cfg == null or _map().is_empty() or grid_manager == null:
 		return
-	var cells: Array = cfg.MAP.get("default_blocked_cells", [])
+	var cells: Array = _map().get("default_blocked_cells", [])
 	if grid_manager.has_method("set_blocked_cells"):
 		grid_manager.set_blocked_cells(cells)
 
@@ -448,7 +449,7 @@ func spawn_terrain() -> void:
 		child.queue_free()
 
 	var tile: float = float(cfg.TILE_SIZE) if "TILE_SIZE" in cfg else 2.0
-	var height: float = float(cfg.MAP.get("hill_height", 2.2))
+	var height: float = float(_map().get("hill_height", 2.2))
 
 	# The set, so each hill can ask who its neighbours are. Their shared corners are
 	# computed from the same four cells on both sides, which is what makes two hills
@@ -497,7 +498,7 @@ func spawn_terrain() -> void:
 		# height, a single cell came out as a cosine dome peaked in the middle, and every
 		# lone hill on the map stood there like a grey tent.
 		var rocks: Array = _rock_formations(cfg)
-		var base_height: float = height * float(cfg.MAP.get("hill_base_fraction", 0.12)) if not rocks.is_empty() else height
+		var base_height: float = height * float(_map().get("hill_base_fraction", 0.12)) if not rocks.is_empty() else height
 		var mi := MeshInstance3D.new()
 		mi.name = "Mound"
 		mi.mesh = TerrainBuilder.build_hill_cell(c, blocked, tile, base_height, cfg, hill.position)
@@ -605,7 +606,7 @@ func _lay_the_river(cfg) -> void:
 				spec.get("boulder_scale", Vector2(0.35, 0.8))), true))
 	# The stepping stones, from each water spot down to the water.
 	var stones: Array[Transform3D] = []
-	for item in cfg.MAP.get("default_resource_nodes", []):
+	for item in _map().get("default_resource_nodes", []):
 		if String(item.get("type", "")) == "water" and grid_manager != null:
 			stones.append_array(river.landing_placements(grid_manager.cell_to_world(item["cell"]),
 				int(spec.get("landing_stones", 3)), field_half))
@@ -644,7 +645,7 @@ func _face_the_river(node: Node3D, at: Vector3) -> void:
 ## missing -- in which case the cell keeps the full-height mound it always had.
 func _rock_formations(cfg) -> Array:
 	var out: Array = []
-	for pth in cfg.MAP.get("hill_rocks", []):
+	for pth in _map().get("hill_rocks", []):
 		var packed: PackedScene = VisualLibrary.scene_at(String(pth))
 		if packed != null:
 			out.append(packed)
@@ -769,12 +770,12 @@ func _scatter_ground_cover(cfg) -> void:
 
 	# Where not to put anything: the cells the level itself uses.
 	var claimed: Array = []
-	for c in cfg.MAP.get("default_blocked_cells", []):
+	for c in _map().get("default_blocked_cells", []):
 		claimed.append(grid_manager.cell_to_world(c))
-	for item in cfg.MAP.get("default_resource_nodes", []):
+	for item in _map().get("default_resource_nodes", []):
 		claimed.append(grid_manager.cell_to_world(item["cell"]))
-	claimed.append(grid_manager.cell_to_world(cfg.MAP["default_core_cell"]))
-	claimed.append(grid_manager.cell_to_world(cfg.MAP["default_nest_cell"]))
+	claimed.append(grid_manager.cell_to_world(_map()["default_core_cell"]))
+	claimed.append(grid_manager.cell_to_world(_map()["default_nest_cell"]))
 
 	var mat := GroundCover.cover_material()
 	var seed_value: int = int(cover.get("seed", 7723))
@@ -877,8 +878,8 @@ func spawn_resource_nodes() -> void:
 
 	var nodes_def: Array = []
 	var cfg = _get_config()
-	if cfg and "MAP" in cfg and cfg.MAP is Dictionary and cfg.MAP.has("default_resource_nodes"):
-		nodes_def = cfg.MAP["default_resource_nodes"]
+	if _map().has("default_resource_nodes"):
+		nodes_def = _map()["default_resource_nodes"]
 	else:
 		nodes_def = [
 			{"type": "wood", "cell": Vector2i(-4, -2)},
@@ -914,7 +915,7 @@ func scatter_opening_stock() -> void:
 	var cfg = _get_config()
 	if cfg == null or not ("DROPS" in cfg):
 		return
-	var stock: Dictionary = cfg.DROPS.get("opening_stock", {})
+	var stock: Dictionary = _map().get("opening_stock", {})
 	if stock.is_empty():
 		return
 	var piles: int = maxi(1, int(cfg.DROPS.get("opening_piles", 1)))
@@ -1489,6 +1490,17 @@ func try_place_at_cell(cell: Vector2i, at_world: Variant = null) -> Node:
 		if not gs.can_afford(cfg.BUILDINGS[current_build_type].get("cost", {})):
 			_hint("HINT_NO_RESOURCES")
 	return null
+
+## The map this run is played on (GameState.map_data): where everything stands and what
+## lies by the cabin at the start. Config.MAPS holds every map; which one is the run's.
+func _map() -> Dictionary:
+	var gs = _get_game_state()
+	if gs and gs.has_method("map_data"):
+		var m: Dictionary = gs.map_data()
+		if not m.is_empty():
+			return m
+	var cfg = _get_config()
+	return cfg.map_data() if (cfg and cfg.has_method("map_data")) else {}
 
 func _hint(key: String) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):

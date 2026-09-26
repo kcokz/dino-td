@@ -89,9 +89,15 @@ func _process_post_roam(delta: float) -> void:
 	# 2. Roam around post_position
 	roam_timer -= delta
 	if roam_timer <= 0.0:
-		roam_timer = randf_range(2.0, 4.0)
-		var angle = randf() * TAU
-		var dist = randf_range(0.5, post_radius)
+		# The run's dice: where a guard wanders is where a fight happens, so a seed
+		# has to replay it (GameState.rng).
+		var dice: RandomNumberGenerator = _guard_dice()
+		var cfg_roam = _get_config()
+		var roam: Dictionary = cfg_roam.NEST_GUARDS if (cfg_roam and "NEST_GUARDS" in cfg_roam) else {}
+		var every: Vector2 = roam.get("roam_seconds", Vector2(2.0, 4.0))
+		roam_timer = dice.randf_range(every.x, every.y)
+		var angle = dice.randf() * TAU
+		var dist = dice.randf_range(float(roam.get("roam_min_distance", 0.5)), post_radius)
 		roam_target = post_position + Vector3(cos(angle) * dist, 0.0, sin(angle) * dist)
 
 	var diff = roam_target - global_position
@@ -240,3 +246,10 @@ func _is_threat_valid(threat: Variant) -> bool:
 func _is_paused() -> bool:
 	var gs = _get_game_state()
 	return gs != null and "is_paused" in gs and bool(gs.is_paused)
+
+## The run's dice (GameState.rng), or a throwaway set outside a run.
+func _guard_dice() -> RandomNumberGenerator:
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
+	if gs != null and "rng" in gs and gs.rng is RandomNumberGenerator:
+		return gs.rng
+	return RandomNumberGenerator.new()

@@ -19,7 +19,7 @@ extends Node
 ## bar shows them in.
 const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
-## the cabin (Config.DROPS.opening_stock) and has to be walked over like anything
+## the cabin (the map's opening_stock, Config.MAPS) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
 ## granted. Keep these at zero: a number here is a second, silent way to get rich.
 const INITIAL_RESOURCES: Dictionary = {
@@ -635,13 +635,45 @@ const INITIAL_DINO_MULTIPLIERS: Dictionary = {
 const INITIAL_NESTS_ALIVE: int = 1
 
 # ==============================================================================
-# 8. Level & Map Layout Configuration
+# 8. Maps (v0.6) -- a map is data
 # ==============================================================================
-const MAP: Dictionary = {
+## Every map, by id. A map is the CONTENT of a run -- where everything stands, what the
+## player starts with, who raids and when the big moments come -- and the rules it runs
+## under are the rest of this file (GAME-DESIGN 12.1: a rule's numbers live in Config, a
+## map's content in its map, and neither in the logic). Nothing reads a map from here
+## directly: the run's map is GameState.map_data(), so choosing a different one later is
+## a matter of which id a run starts with.
+##
+## There is one map: the valley v0.1-v0.5 were played on. It was Config.MAP, and its keys
+## already said "default_" -- it was always the first map's data. Later maps move to data
+## files (res://data/maps/, GAME-DESIGN 12.2) in the same shape, and ids, once used, never
+## change (12.6).
+const DEFAULT_MAP_ID: String = "valley"
+
+## The map `map_id` names -- or, with no id, the one a run starts on.
+static func map_data(map_id: String = "") -> Dictionary:
+	return MAPS.get(map_id if map_id != "" else DEFAULT_MAP_ID, {})
+
+const MAPS: Dictionary = {
+	"valley": {
+	"name": "MAP_VALLEY_NAME",
 	"default_core_cell": Vector2i(0, 0),
 	"default_nest_cell": Vector2i(0, -9),
 	"path_column_x": 0,
-	"produce_duration": 1.0, # Duration (seconds) of PRODUCE phase before auto-advancing to PLAN
+	# What the player starts with, lying by the cabin rather than in the warehouse (DROPS
+	# says how it is laid out). The few stones are exactly a stone axe's price
+	# (RECIPES.stone_axe): the first morning makes an axe, but quarrying waits on the pick,
+	# and the pick on the first raid's bone -- "the first raid is supply" (GAME-DESIGN 5.2).
+	"opening_stock": {"wood": 20, "stone": 2},
+	# The beat table (GAME-DESIGN 9.2): when this map's big moments come, in seconds from
+	# landing.
+	"beats": {
+		# Time to fetch the stock, put a fence up and make an axe before anything arrives.
+		"first_raid": 90.0,
+	},
+	# Who raids here, and how often each, by weight. Raptors, until the first map's own
+	# Triassic cast arrives (GAME-DESIGN 13.8: mechanisms first, on this map).
+	"raiders": {"raptor": 1.0},
 	## Hills: ground nobody crosses and nothing is built on.
 	##
 	## They are a gameplay object rather than scenery. A hill narrows the approach,
@@ -676,7 +708,9 @@ const MAP: Dictionary = {
 		# spot the Hero draws water from. It was a pool in the middle of the field.
 		{"type": "water", "cell": Vector2i(-11, -4)}
 	],
+	},
 }
+## How long the retired phase machine's produce phase showed before moving on.
 const PRODUCE_DELAY: float = 1.0
 
 # ==============================================================================
@@ -761,6 +795,8 @@ const NEST_GUARDS: Dictionary = {
 	"post_radius": 3.0,           # 岗位游荡半径（米）
 	"aggro_radius": 6.0,          # 警戒半径：目标进入即脱离岗位追击
 	"leash_radius": 12.0,         # 追出此距离放弃并返回岗位
+	"roam_seconds": Vector2(2.0, 4.0),   # 岗位上多久换一个溜达的点（秒，区间内随机）
+	"roam_min_distance": 0.5,            # 溜达点离岗位至少多远（米）
 }
 
 # ==============================================================================
@@ -930,7 +966,6 @@ static func get_contact_range(type_id: String) -> float:
 const RAIDS: Dictionary = {
 	"interval_min": 80.0,         # 两次来袭的最小间隔（秒）——v0.4 的开局链条多了几趟路
 	"interval_max": 120.0,        # 最大间隔——区间内随机，不是固定周期
-	"first_raid_delay": 90.0,     # 开局宽限期：够建一座伐木屋、照料一轮、再架一座哨位
 	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
 	"intensity_per_minute": 0.15, # Raid intensity escalation slope per minute
 	"intensity_jitter": 0.3,      # Random intensity fluctuation (+/- 30%)
@@ -1155,10 +1190,8 @@ const DROPS: Dictionary = {
 	"fly_time": 0.18,         # 被捡起时飞向现代人的时长（秒）
 	"size": 0.3,              # 一堆的高度（米）；宽是它的 1.5 倍，见 get_visual_size
 	"label_min_amount": 2,    # 堆叠数达到这个值才显示数字
-	# 开局物资：撒在船舱周围，而不是直接进仓库。几块石头正好是一把石斧的价钱
-	# （RECIPES.stone_axe）：第一个早上能做斧头，但成片采石要等石镐，也就是等第一波来袭
-	# 掉的骨头——"第一波来袭是补给"不变（GAME-DESIGN 5.2）。
-	"opening_stock": {"wood": 20, "stone": 2},
+	# 开局物资撒在船舱周围，而不是直接进仓库。撒多少是地图的内容（MAPS 里的
+	# opening_stock），怎么撒是这里的规则。
 	"opening_piles": 4,        # 分成几堆
 	# 离船舱墙壁的距离（米）——从墙壁量，不是从中心量：船舱现在三米宽，从中心量 4.5 米，
 	# 南边那一堆离出生点只有一米半，现代人第一帧就捡走了，"开局物资要走过去拿"这一课就白教了。
@@ -1168,8 +1201,8 @@ const DROPS: Dictionary = {
 
 ## What the player has to go and fetch before anything can be built, totalled by
 ## resource. The same figure a wallet used to start with, just on the floor.
-static func get_opening_stock(res_id: String) -> int:
-	return int(DROPS.get("opening_stock", {}).get(res_id, 0))
+static func get_opening_stock(res_id: String, map_id: String = "") -> int:
+	return int(map_data(map_id).get("opening_stock", {}).get(res_id, 0))
 
 ## Colour for a resource that has no node on the map: meat only ever comes off a
 ## dinosaur, so RESOURCE_NODES has nothing to say about it.
@@ -1251,7 +1284,7 @@ const CABIN: Dictionary = {
 ## new system.
 const RECIPES: Dictionary = {
 	# The first thing the morning makes: the stones scattered by the cabin
-	# (DROPS.opening_stock) are exactly its price. A ground stone head lashed to a haft.
+	# (the map's opening_stock) are exactly its price. A ground stone head lashed to a haft.
 	"stone_axe": {
 		"name": "RECIPE_STONE_AXE_NAME",
 		"station": "workbench",

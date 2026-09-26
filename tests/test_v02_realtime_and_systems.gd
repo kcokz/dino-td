@@ -458,8 +458,8 @@ func test_15_restart_game_resets_raid_timer_and_warning() -> void:
 
 	# Reset raid state
 	wm.reset_raid_state()
-	var expected_delay: float = float(config_node.RAIDS.get("first_raid_delay", 60.0))
-	assert_eq(wm.raid_timer, expected_delay, "Raid timer reset to first_raid_delay")
+	var expected_delay: float = float(config_node.map_data()["beats"]["first_raid"])
+	assert_eq(wm.raid_timer, expected_delay, "Raid timer reset to the map's first-raid beat")
 	assert_false(wm.warning_emitted, "warning_emitted reset to false")
 	assert_eq(wm.elapsed_time, 0.0, "elapsed_time reset to 0.0")
 

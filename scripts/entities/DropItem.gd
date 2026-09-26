@@ -101,8 +101,11 @@ static func spawn_scattered(context: Node, world_pos: Vector3, res_id: String, p
 		var share: int = per + (1 if i < extra else 0)
 		if share <= 0:
 			continue
-		var angle: float = randf() * TAU
-		var dist: float = sqrt(randf()) * radius
+		# Where the piles land is part of the run -- it is where he has to walk -- so the
+		# run's dice decide it, and a seed replays it.
+		var dice: RandomNumberGenerator = _dice(context)
+		var angle: float = dice.randf() * TAU
+		var dist: float = sqrt(dice.randf()) * radius
 		var at: Vector3 = world_pos + Vector3(cos(angle) * dist, 0.0, sin(angle) * dist)
 		var pile := spawn(context, at, res_id, share)
 		if pile != null and not piles.has(pile):
@@ -179,6 +182,15 @@ static func _announce(context: Node, res_id: String, p_amount: int, world_pos: V
 	var eb: Node = context.get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("resource_dropped"):
 		eb.resource_dropped.emit(res_id, p_amount, world_pos)
+
+## The run's dice (GameState.rng), or a throwaway set when there is no run.
+static func _dice(context: Node) -> RandomNumberGenerator:
+	var gs: Node = null
+	if context != null and context.is_inside_tree():
+		gs = context.get_node_or_null("/root/GameState")
+	if gs != null and "rng" in gs and gs.rng is RandomNumberGenerator:
+		return gs.rng
+	return RandomNumberGenerator.new()
 
 static func _cfg(context: Node, key: String, fallback: float) -> float:
 	var cfg: Node = null

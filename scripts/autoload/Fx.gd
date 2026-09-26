@@ -22,6 +22,11 @@ var _voices: Array[AudioStreamPlayer] = []
 var _next_voice: int = 0
 var _debris_root: Node3D = null
 
+## Dice of its own: where debris flies and how a thud crackles are decoration, and
+## drawing them from the run's dice (GameState.rng) would make a replayed seed diverge
+## the moment the screen shook differently.
+var _dice: RandomNumberGenerator = RandomNumberGenerator.new()
+
 func _ready() -> void:
 	_build_sounds()
 	_build_voices()
@@ -133,7 +138,7 @@ func debris(world_pos: Vector3, colour: Color = Color(0.8, 0.8, 0.8), count: int
 		piece.position = world_pos + Vector3(0.0, size, 0.0)
 		root.add_child(piece)
 
-		var dir := Vector3(randf_range(-1.0, 1.0), randf_range(0.6, 1.4), randf_range(-1.0, 1.0)).normalized()
+		var dir := Vector3(_dice.randf_range(-1.0, 1.0), _dice.randf_range(0.6, 1.4), _dice.randf_range(-1.0, 1.0)).normalized()
 		var target: Vector3 = piece.position + dir * speed * life * 0.5
 		target.y = maxf(0.05, target.y - speed * life * 0.35) # let gravity win
 
@@ -142,7 +147,7 @@ func debris(world_pos: Vector3, colour: Color = Color(0.8, 0.8, 0.8), count: int
 		var tw := piece.create_tween()
 		tw.set_parallel(true)
 		tw.tween_property(piece, "position", target, life)
-		tw.tween_property(piece, "rotation", piece.rotation + Vector3(randf(), randf(), randf()) * TAU, life)
+		tw.tween_property(piece, "rotation", piece.rotation + Vector3(_dice.randf(), _dice.randf(), _dice.randf()) * TAU, life)
 		tw.tween_property(mat, "albedo_color:a", 0.0, life)
 		tw.chain().tween_callback(piece.queue_free)
 
@@ -214,7 +219,7 @@ func _build_voices() -> void:
 func _build_sounds() -> void:
 	# short, dry thud
 	_streams[Sound.HIT] = _make_wav(0.07, func(t: float, n: float) -> float:
-		return (randf() * 2.0 - 1.0) * (1.0 - n) * 0.6 + sin(t * TAU * 180.0) * (1.0 - n) * 0.4
+		return (_dice.randf() * 2.0 - 1.0) * (1.0 - n) * 0.6 + sin(t * TAU * 180.0) * (1.0 - n) * 0.4
 	)
 	# falling tone
 	_streams[Sound.DEATH] = _make_wav(0.32, func(t: float, n: float) -> float:

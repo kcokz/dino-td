@@ -129,7 +129,7 @@ func _place_finished(main: Node, type_id: String, at: Vector3) -> Node:
 
 func _open_ground(main: Node, type_id: String, offset: Vector3) -> Vector3:
 	var gm = main.grid_manager
-	var core: Vector3 = gm.cell_to_world(config_node.MAP["default_core_cell"])
+	var core: Vector3 = gm.cell_to_world(config_node.map_data()["default_core_cell"])
 	for extra in [Vector3.ZERO, Vector3(2.0, 0.0, 0.0), Vector3(0.0, 0.0, 2.0), Vector3(-2.0, 0.0, 2.0)]:
 		var at: Vector3 = core + offset + extra
 		if main.build_system.can_place_building(type_id, gm.world_to_cell(at), false, at):

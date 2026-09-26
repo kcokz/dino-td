@@ -335,6 +335,6 @@ func test_20_the_grace_period_covers_fetching_and_fencing() -> void:
 	var stake: int = cost_of("wall")
 	var fence: int = 6
 	var work: float = config_node.get_build_time("wall") * fence
-	var grace: float = float(config_node.RAIDS["first_raid_delay"])
+	var grace: float = float(config_node.map_data()["beats"]["first_raid"])
 	assert_lt(work, grace, "There is time to put a fence up before anything arrives")
 	assert_gte(opening_wood(), stake * fence, "And the wood to build it with")
