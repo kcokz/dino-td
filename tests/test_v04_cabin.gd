@@ -137,6 +137,7 @@ func test_06_a_bench_makes_one_thing_at_a_time() -> void:
 func test_07_a_finished_unlock_is_not_offered_again() -> void:
 	var bench = _spawn(station_script.new("workbench"))
 	await wait_frames(1)
+	know_everything()      # its materials have turned up
 	assert_true(bench.can_offer("stone_pick"), "Before it is made, it is on the menu")
 
 	game_state_node.grant_unlock("harvest_stone")

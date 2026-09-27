@@ -58,7 +58,7 @@ func _handlers(eb: Node) -> Array:
 	var out: Array = []
 	for pair in [["cabin_view_changed", set_open], ["resources_changed", _on_resources_changed],
 			["unlock_granted", _on_changed], ["beacon_changed", _on_changed], ["locale_changed", _on_locale_changed],
-			["unit_selected", _on_unit_selected]]:
+			["unit_selected", _on_unit_selected], ["material_discovered", _on_changed]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
 	return out
@@ -328,9 +328,11 @@ func _refresh_card(station: Node, rebuild: bool) -> void:
 		for job_id in offered:
 			_add_job(station, job_id, jobs, busy)
 		if offered.is_empty():
+			# Nothing yet -- the bench waits on a material to turn up -- or nothing left.
 			var none := Label.new()
 			none.theme_type_variation = &"CaptionLabel"
-			none.text = tr("STATION_NOTHING")
+			var waiting: bool = station.has_method("waiting_on_materials") and station.waiting_on_materials()
+			none.text = tr("STATION_NOTHING_YET" if waiting else "STATION_NOTHING")
 			jobs.add_child(none)
 	else:
 		var i: int = 0

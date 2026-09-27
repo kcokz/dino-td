@@ -37,6 +37,13 @@ var active_buildings: Array[Node] = []
 ## from turning into a bag.
 var unlocks: Dictionary = {}
 
+## The materials this run has turned up (v0.6 feedback: "需要有隐藏，层层打开机制"): what the
+## map hands out at the start, and each one the first time it comes into the stock. What
+## can be built and made, what the resource bar shows and what a material is said to be for
+## all wait on these -- the run unfolds a material at a time rather than laying everything
+## out at once, missing pieces and all.
+var known: Dictionary = {}
+
 ## The meal he is living on (v0.6, GAME-DESIGN 4.5): its speeds and how long they have
 ## left -- {"dish", "method", "build_speed", "move_speed", "seconds_left", "seconds_total"}
 ## -- or empty when he is not fed. One meal at a time: eating again replaces it.
@@ -199,6 +206,9 @@ func reset_game(p_seed: int = -1) -> void:
 	wave_number = 0
 	active_buildings.clear()
 	unlocks.clear()
+	known.clear()
+	for res_id in map_data().get("opening_stock", {}):
+		known[String(res_id)] = true
 	_set_fed({})
 	beacon_steps = 0
 	beacon_charge = 0.0
@@ -252,8 +262,10 @@ func spend_resources(cost: Dictionary) -> bool:
 	_emit_resources_changed(resources)
 	return true
 
-## Deposits earned resources into player inventory and broadcasts update.
+## Deposits earned resources into player inventory and broadcasts update. A material the
+## run had not turned up before is announced (material_discovered) once the stock shows it.
 func add_resources(gains: Dictionary) -> void:
+	var newly: Array[String] = []
 	for res_id in gains:
 		if not resources.has(res_id):
 			continue
@@ -262,13 +274,33 @@ func add_resources(gains: Dictionary) -> void:
 			continue
 		var amount: int = int(val)
 		if amount > 0:
+			if not knows(String(res_id)):
+				newly.append(String(res_id))
 			resources[res_id] = resources[res_id] + amount
+			known[String(res_id)] = true
 	_emit_resources_changed(resources)
+	var eb = _get_event_bus()
+	for res_id in newly:
+		if eb and eb.has_signal("material_discovered"):
+			eb.material_discovered.emit(res_id)
 
 ## Adds a single resource by name.
 func add_resource(res_id: String, amount: int) -> void:
 	add_resources({res_id: amount})
 
+
+## Whether this run has turned `res_id` up -- or has it in the stock now, which is the same
+## thing however it got there.
+func knows(res_id: String) -> bool:
+	return bool(known.get(res_id, false)) or int(resources.get(res_id, 0)) > 0
+
+## Whether every material `cost` takes has turned up: what shows a building, a recipe or a
+## meal on offer.
+func knows_all(cost: Dictionary) -> bool:
+	for res_id in cost:
+		if not knows(String(res_id)):
+			return false
+	return true
 
 # ==============================================================================
 # 7b. Unlocks (v0.4): what the Hero has made at the cabin

@@ -213,6 +213,7 @@ func test_07_hud_build_buttons_carry_only_the_building_name() -> void:
 	assert_not_null(panel, "OptionPanel must exist in the HUD")
 	var hero = main_inst.find_child("Hero", true, false)
 	assert_not_null(hero, "Hero must exist in Main")
+	know_everything()      # every buildable on show, whatever it is made of
 	panel.select_target(hero)
 	panel._on_build_pressed()
 	assert_eq(panel.current_menu_level, 2, "Option Panel is in the build menu")

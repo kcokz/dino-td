@@ -689,6 +689,80 @@ def sentry(seed):
     return stand, head, Vector((0.0, 0.0, pivot_z)), muzzle
 
 
+def bow_tower(seed):
+    """The opening's tower, wood and nothing else: four poles lashed into a stand and braced
+    crosswise, a deck of split planks, and on it a great bow bent from a sapling and strung
+    with vine, an arrow nocked -- on a log turntable, so it turns to what it shoots. Lower
+    and plainer than the crossbow tower he builds once he has stone and bone, and the first
+    thing in the valley that shoots back.
+
+    Two pieces, like the sentry: the stand, and the bow on its stock, built round its pivot
+    with the arrow along +Y (the game's -Z). Returned as (stand, head, pivot, muzzle)."""
+    rng = random.Random(seed)
+    stand = Builder()
+    top_z = 1.30
+    corners = [(1, 1), (1, -1), (-1, -1), (-1, 1)]
+
+    def leg_at(sx, sy, z):
+        w = 0.36 - 0.12 * (z / top_z)
+        return Vector((sx * w, sy * w, z))
+    for (sx, sy) in corners:
+        spine = [leg_at(sx, sy, top_z * i / 6) for i in range(7)]
+        cols = [mix(BARK, BARK_LIGHT, 0.45 if i % 2 else 0.1) for i in range(7)]
+        stand.tube(spine, [0.055 - 0.012 * i / 6 for i in range(7)], cols, 7)
+        for z in (0.45, 1.05):
+            c = leg_at(sx, sy, z)
+            stand.tube([c - UP * 0.035, c + UP * 0.035], [0.064, 0.064], [VINE, VINE_DARK], 7)
+        # Driven into a little mound of turned earth, the way the stakes are.
+        f = leg_at(sx, sy, 0.0)
+        stand.tube([f - UP * 0.02, f + UP * 0.06], [0.11, 0.07], [SOIL, SOIL_LIGHT], 7)
+    for i in range(4):
+        (ax, ay), (bx, by) = corners[i], corners[(i + 1) % 4]
+        for (z0, z1) in ((0.45, 1.05), (1.05, 0.45)):
+            p0, p1 = leg_at(ax, ay, z0), leg_at(bx, by, z1)
+            stand.tube([p0, p0.lerp(p1, 0.5), p1], [0.026, 0.024, 0.022], [BARK_LIGHT, BARK, BARK_LIGHT], 5)
+    for i in range(5):
+        x0 = -0.30 + i * 0.12
+        _slab(stand, Vector((x0 + 0.004, -0.30, top_z)), Vector((x0 + 0.116, 0.30, top_z + 0.045)),
+              [(1.0, mix(BARK_LIGHT, FRESH_WOOD, rng.uniform(0.05, 0.35)))], 0.01)
+    deck = top_z + 0.045
+    # A section of log for a turntable, its cut face up.
+    pivot_z = deck + 0.07
+    stand.tube([Vector((0.0, 0.0, deck)), Vector((0.0, 0.0, pivot_z))], [0.16, 0.15], [BARK, BARK_LIGHT], 10)
+    rim = [Vector((math.cos(math.tau * k / 10) * 0.15, math.sin(math.tau * k / 10) * 0.15, pivot_z)) for k in range(10)]
+    for k in range(10):
+        stand.tri(rim[k], rim[(k + 1) % 10], Vector((0.0, 0.0, pivot_z)), FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, BARK_LIGHT, 0.4))
+
+    head = Builder()
+    # The stock: a squared timber along the line of the shot, on a peg in the turntable.
+    head.tube([Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.08))], [0.04, 0.04], [BARK, BARK], 7)
+    _slab(head, Vector((-0.045, -0.30, 0.08)), Vector((0.045, 0.36, 0.15)), [(1.0, BARK_LIGHT)], 0.012)
+    # The bow: a sapling bent across the front of the stock, thick in the middle, fine at
+    # the tips, drawn back towards the shooter.
+    limb = []
+    radii = []
+    for k in range(9):
+        t = -1.0 + 2.0 * k / 8
+        limb.append(Vector((t * 0.60, 0.30 - 0.20 * t * t, 0.13)))
+        radii.append(0.034 - 0.018 * abs(t))
+    head.tube(limb, radii, [mix(BARK_LIGHT, FRESH_WOOD, 0.5 - 0.4 * abs(-1.0 + 2.0 * k / 8)) for k in range(9)], 6)
+    lashing_at = limb[4]
+    head.tube([lashing_at + Vector((-0.05, 0.0, 0.0)), lashing_at + Vector((0.05, 0.0, 0.0))], [0.042, 0.042],
+              [VINE, VINE_DARK], 7)
+    # The string, drawn back to the arrow's nock.
+    nock = Vector((0.0, -0.18, 0.13))
+    for tip in (limb[0], limb[-1]):
+        head.tube([tip, nock], [0.006, 0.006], [VINE_ROPE, VINE_ROPE], 4)
+    # The arrow: a straight shoot, a fire-hardened point, leaves for fletching.
+    point = Vector((0.0, 0.62, 0.13))
+    head.tube([nock, point - Vector((0.0, 0.07, 0.0)), point], [0.011, 0.011, 0.0015], [FRESH_WOOD, FRESH_WOOD, CHAR], 5)
+    for side in (-1.0, 1.0):
+        root = nock + Vector((0.0, 0.03, 0.0))
+        head.tri(root, root + Vector((0.0, 0.12, 0.0)), root + Vector((side * 0.035, 0.02, 0.012)),
+                 FROND_BASE, FROND_TIP, FROND_TIP)
+    return stand, head, Vector((0.0, 0.0, pivot_z)), point
+
+
 def _turret_head(k=1.0):
     """The turret's head: a machine off the wreck -- white plating, the orange band, twin
     barrels and a red eye -- built round its own pivot, the middle of its turntable, with
@@ -999,7 +1073,7 @@ def cabin_rig(seed):
            for k in range(12)]
     for k in range(12):
         body.tri(rim[k], rim[(k + 1) % 12], top + UP * 0.05, METAL_DARK, METAL_DARK, METAL_DARK)
-    head, muzzle = _turret_head(0.72)
+    head, muzzle = _turret_head(1.0)
     return body, head, top + UP * 0.05, muzzle
 
 
@@ -1238,6 +1312,7 @@ PROPS = {
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.
 RIGS = {
     "sentry": (lambda s: sentry(s), [2]),
+    "bow_tower": (lambda s: bow_tower(s), [6]),
     "cabin": (lambda s: cabin_rig(s), [19]),
 }
 
@@ -1278,6 +1353,11 @@ def main():
             tip.parent = head
             tip.location = muzzle
             export_objects([stand, head, tip], os.path.join(OUT_DIR, label + ".glb"))
+            # Every rig's parts are called Stand, Head and Muzzle -- the game finds them by those
+            # names -- and Blender makes a taken name unique ("Head.001"), so the names are
+            # freed for the next rig once this one is written.
+            for o in (stand, head, tip):
+                o.name = "%s.%s" % (label, o.name)
             print("[OK] %-20s %6d triangles  stand %.2f x %.2f x %.2f m, head at %.2f m" % (
                 label, len(stand.data.polygons) + len(head.data.polygons),
                 stand.dimensions.x, stand.dimensions.y, stand.dimensions.z, pivot.z))

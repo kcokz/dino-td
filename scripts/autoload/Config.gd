@@ -102,6 +102,26 @@ const BUILDINGS: Dictionary = {
 		# Improved where it stands (GAME-DESIGN 6.1: a line of buildings upgrades in place).
 		"upgrades_to": "tower_2",
 	},
+	# The opening's own tower (v0.6 feedback: "除了木栅栏需要再想一个初始的防御建筑，不然木头只能做
+	# 木栅栏有点无聊"): wood and nothing else -- a great bow bent from a sapling and strung with
+	# vine, on a stand of lashed poles (tools/generate_props.py bow_tower). It shoots, which a
+	# stake does not, but slowly and not far: half the crossbow tower's rate, a metre less
+	# reach, and a stake's wood four times over -- so the run's first choice is a real one, a
+	# line that holds or a bow that picks them off, and the crossbow tower (stone and bone) is
+	# what it gives way to.
+	"bow_tower": {
+		"name": "BUILDING_BOW_TOWER_NAME",
+		"kind": "tower",
+		"footprint": 1.1,
+		"height": 2.0,
+		"hp": 12.0,
+		"cost": {"wood": 8},
+		"range": 4.0,
+		"damage": 1.0,
+		"fire_rate": 0.5,
+		"turn_speed": 200.0,
+		"upgrades_to": "",
+	},
 	# The crossbow tower, improved where it stands: a second bow arm and a rack of bone bolts,
 	# so it looses faster. Never placed from the menu -- only reached by upgrading a tower.
 	# What the upgrade costs is the difference between the two prices (Config.upgrade_cost),
@@ -462,7 +482,11 @@ static func recipe_effect_text(recipe_id: String) -> String:
 ## it costs -- "Stone takes a Bone Pick: make one at the Workbench (1 Bone, 4 Wood)". Said
 ## where the player meets the wall, right-clicking the rock, so the chain is never a
 ## riddle (GAME-DESIGN 9.2: the next step is always visible). "" for what bare hands take.
-static func missing_tool_hint(res_id: String) -> String:
+##
+## `known` (GameState.knows) keeps the chain to what the run has turned up: until the tool's
+## materials have, it only says that bare hands will not do -- the pick is not named before
+## the bone it is made of has been seen.
+static func missing_tool_hint(res_id: String, known: Callable = Callable()) -> String:
 	var flag: String = harvest_requires_unlock(res_id)
 	if flag == "":
 		return ""
@@ -470,6 +494,9 @@ static func missing_tool_hint(res_id: String) -> String:
 		var row: Dictionary = RECIPES[recipe_id]
 		if String(row.get("unlocks", "")) != flag:
 			continue
+		if not _all_known(row.get("inputs", {}), known):
+			return TranslationServer.translate("HINT_NEED_TOOL_VAGUE") % \
+				TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id)))
 		var costs: PackedStringArray = []
 		for input_id in row.get("inputs", {}):
 			costs.append("%d %s" % [int(row["inputs"][input_id]),
@@ -487,31 +514,47 @@ static func missing_tool_hint(res_id: String) -> String:
 ## "dish" | "beacon", "id": ...}. A new building that costs stone makes itself part of what
 ## stone is for by existing -- nothing to update. Empty means it is for nothing yet, and
 ## the game does not offer it (4.3 rule 1).
-static func uses_of(res_id: String, map: Dictionary = {}) -> Array:
+##
+## With `known` (GameState.knows), only the uses whose every material has turned up: what
+## the bar and the first-pickup line say, so neither gives away what is still to come.
+static func uses_of(res_id: String, map: Dictionary = {}, known: Callable = Callable()) -> Array:
 	var out: Array = []
 	for b_type in BUILDABLE_TYPES:
-		if BUILDINGS.has(b_type) and BUILDINGS[b_type].get("cost", {}).has(res_id):
+		var cost: Dictionary = BUILDINGS[b_type].get("cost", {}) if BUILDINGS.has(b_type) else {}
+		if cost.has(res_id) and _all_known(cost, known):
 			out.append({"kind": "building", "id": b_type})
 	for recipe_id in RECIPES:
-		if RECIPES[recipe_id].get("inputs", {}).has(res_id):
+		var inputs: Dictionary = RECIPES[recipe_id].get("inputs", {})
+		if inputs.has(res_id) and _all_known(inputs, known):
 			out.append({"kind": "recipe", "id": recipe_id})
 	for dish_id in DISHES:
-		if DISHES[dish_id].get("inputs", {}).has(res_id):
+		var eats: Dictionary = DISHES[dish_id].get("inputs", {})
+		if eats.has(res_id) and _all_known(eats, known):
 			out.append({"kind": "dish", "id": dish_id})
 	for job_id in beacon_jobs(map):
-		if beacon_job(map, job_id).get("inputs", {}).has(res_id):
+		var takes: Dictionary = beacon_job(map, job_id).get("inputs", {})
+		if takes.has(res_id) and _all_known(takes, known):
 			out.append({"kind": "beacon", "id": job_id})
 	return out
+
+## Whether `known` (a GameState.knows) holds every material in `cost`; true with no `known`.
+static func _all_known(cost: Dictionary, known: Callable) -> bool:
+	if not known.is_valid():
+		return true
+	for res_id in cost:
+		if not bool(known.call(String(res_id))):
+			return false
+	return true
 
 ## What `res_id` is for, in words, grouped by what is done with it -- "make Bone Pick ·
 ## build Crossbow Tower, Bone Stake · repair the beacon" -- worked out from uses_of, so a new
 ## building or recipe says itself here and nobody writes it down (GAME-DESIGN 4.3 rule 5).
-static func uses_text(res_id: String, map: Dictionary = {}) -> String:
+static func uses_text(res_id: String, map: Dictionary = {}, known: Callable = Callable()) -> String:
 	var made: PackedStringArray = []
 	var built: PackedStringArray = []
 	var cooked: bool = false
 	var beacon: bool = false
-	for use in uses_of(res_id, map):
+	for use in uses_of(res_id, map, known):
 		var id: String = String(use["id"])
 		match String(use["kind"]):
 			"recipe":
@@ -538,10 +581,10 @@ static func uses_text(res_id: String, map: Dictionary = {}) -> String:
 ## made it (missing_tool_hint), or -- for what nothing on the map gives -- that the dead
 ## leave it, and which of the dead. "" when nothing stands in the way but going to get it.
 ## Rule 4 of GAME-DESIGN 4.3, said where the price is.
-static func source_hint(res_id: String, owned: Dictionary) -> String:
+static func source_hint(res_id: String, owned: Dictionary, known: Callable = Callable()) -> String:
 	var flag: String = harvest_requires_unlock(res_id)
 	if flag != "" and not owned.has(flag):
-		return missing_tool_hint(res_id)
+		return missing_tool_hint(res_id, known)
 	if RESOURCE_NODES.has(res_id):
 		return ""
 	var dropped: bool = false
@@ -559,7 +602,7 @@ static func source_hint(res_id: String, owned: Dictionary) -> String:
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level rather than bought).
-const BUILDABLE_TYPES: Array[String] = ["wall", "bone_stake", "stone_wall", "tower"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "bow_tower", "bone_stake", "stone_wall", "tower"]
 
 ## The building `type_id` turns into when it is upgraded where it stands, or "".
 static func upgrade_target(type_id: String) -> String:
@@ -1433,6 +1476,10 @@ const VISUALS: Dictionary = {
 	# stone_wall).
 	"building/stone_wall":  {"scene": "res://assets/models/props/stone_wall_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "stone_wall"},
+	# A great bow on a stand of lashed poles, the bow on a log turntable so it turns to what
+	# it shoots (tools/generate_props.py bow_tower). Wood and vine: what it is made of.
+	"building/bow_tower":   {"scene": "res://assets/models/props/bow_tower_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	# Tower II wears the tower's model until the crossbow gets one of its own (v0.6 T11).
 	"building/tower_2":     {"scene": "res://assets/models/props/sentry_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},

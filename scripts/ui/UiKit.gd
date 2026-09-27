@@ -201,7 +201,7 @@ static func sources_text(price: Dictionary) -> String:
 	for res_id in price:
 		if int(gs.resources.get(res_id, 0)) >= int(price[res_id]):
 			continue
-		var hint: String = String(cfg.source_hint(String(res_id), gs.unlocks))
+		var hint: String = String(cfg.source_hint(String(res_id), gs.unlocks, gs.knows if gs.has_method("knows") else Callable()))
 		if hint != "":
 			lines += "\n" + hint
 	return lines

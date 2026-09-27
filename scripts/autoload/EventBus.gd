@@ -152,6 +152,10 @@ signal resource_dropped(res_id: String, amount: int, world_pos: Vector3)
 ## was made.
 signal unlock_granted(unlock_id: String)
 
+## Emitted the first time in a run a material comes into the stock (GameState.known): what
+## is built and made of it shows from then on (v0.6: the run unfolds a material at a time).
+signal material_discovered(res_id: String)
+
 ## Emitted when the player steps into the cabin or back out of it. The world keeps
 ## running either way -- this only says where the camera and the orders are going.
 signal cabin_view_changed(inside: bool)

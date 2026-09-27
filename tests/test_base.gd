@@ -580,6 +580,16 @@ func assert_readout(hud: Node, res_id: String, amount: int, message: String = ""
 		"And the %s chip names it: '%s'" % [res_id, chip.tooltip_text])
 	return counted and named
 
+## Every material taken as turned up in this run (GameState.known): for tests about what the
+## menus and the bar do with them, not about when they appear (test_v06_layer_by_layer).
+func know_everything() -> void:
+	var cfg = _config()
+	var gs = Engine.get_main_loop().root.get_node_or_null("GameState") if Engine.get_main_loop() is SceneTree else null
+	if cfg == null or gs == null or not ("known" in gs):
+		return
+	for res_id in cfg.RESOURCES:
+		gs.known[String(res_id)] = true
+
 ## The cabin's hit points (Config.BUILDINGS.core.hp) -- written down as 10 by the older
 ## suites, until the cabin stood a hundred (v0.6).
 func core_hp() -> float:

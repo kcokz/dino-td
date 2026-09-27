@@ -103,6 +103,11 @@ func jobs() -> Array[String]:
 ## been made. A recipe whose flag is already set is finished forever; a meal is
 ## cooked as often as there is meat for it.
 func can_offer(recipe_id: String) -> bool:
+	return _still_to_do(recipe_id) and (is_beacon_job(recipe_id) or _materials_known(recipe_id))
+
+## Whether `recipe_id` belongs here and is still to be done, whatever the run has turned up:
+## a meal always, the beacon's next step, a tool or pot not yet made.
+func _still_to_do(recipe_id: String) -> bool:
 	var data: Dictionary = recipe_data(recipe_id)
 	if data.is_empty() or String(data.get("station", "")) != station_id:
 		return false
@@ -114,6 +119,20 @@ func can_offer(recipe_id: String) -> bool:
 	if gs and gs.has_method("has_unlock") and gs.has_unlock(String(data.get("unlocks", ""))):
 		return false
 	return true
+
+## Whether every material `recipe_id` takes has turned up in this run (GameState.knows):
+## until then it is not on offer -- the pick is not shown before the bone (v0.6). The
+## beacon's steps are exempt: they are the run's goal, and always say what they need.
+func _materials_known(recipe_id: String) -> bool:
+	var gs = _get_game_state()
+	return gs == null or not gs.has_method("knows_all") or gs.knows_all(inputs_of(recipe_id))
+
+## Whether this bench has work still to come, waiting only on a material to turn up.
+func waiting_on_materials() -> bool:
+	for job in jobs():
+		if _still_to_do(String(job)) and not is_beacon_job(String(job)) and not _materials_known(String(job)):
+			return true
+	return false
 
 ## Whether the warehouse currently holds what `recipe_id` costs.
 func can_afford(recipe_id: String) -> bool:

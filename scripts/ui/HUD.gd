@@ -149,7 +149,8 @@ func _bus_handlers(eb: Node) -> Array:
 			["boss_warning", _on_boss_warning], ["boss_arrived", _on_boss_arrived],
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
-			["unlock_granted", _on_unlock_granted], ["cabin_view_changed", _on_cabin_view_changed]]:
+			["unlock_granted", _on_unlock_granted], ["cabin_view_changed", _on_cabin_view_changed],
+			["material_discovered", _on_material_discovered]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
 	return out
@@ -212,6 +213,7 @@ func _on_resources_changed(res: Dictionary) -> void:
 		if lbl == null or not is_instance_valid(lbl):
 			continue
 		var n: int = int(res.get(res_id, 0))
+		_show_chip(String(res_id), n > 0)
 		var before: int = int(lbl.text) if lbl.text.is_valid_int() else n
 		lbl.text = str(n)
 		var chip: Control = resource_chips.get(res_id)
@@ -284,9 +286,35 @@ func _on_unlock_granted(unlock_id: String) -> void:
 			show_hint(tr("HINT_MADE") % [tr(String(cfg.RECIPES[recipe_id].get("name", recipe_id))), effect], UiTheme.toast_seconds("read"), "check")
 		return
 
+## What `res_id` is for, as far as the run has turned things up (GameState.knows): the bar
+## and the first-pickup line never name what is still to come.
 func _uses_text(res_id: String) -> String:
 	var cfg = _get_config()
-	return String(cfg.uses_text(res_id, _run_map())) if (cfg and cfg.has_method("uses_text")) else ""
+	var gs = _get_game_state()
+	var known: Callable = gs.knows if (gs and gs.has_method("knows")) else Callable()
+	return String(cfg.uses_text(res_id, _run_map(), known)) if (cfg and cfg.has_method("uses_text")) else ""
+
+## A material has turned up: its chip comes onto the bar, and what the others are for may
+## have grown.
+func _on_material_discovered(res_id: String) -> void:
+	_show_chip(res_id, true)
+	_refresh_resource_tooltips()
+
+## A material's chip is on the bar when the material is for something in this game (GAME-
+## DESIGN 4.3 rule 1) and the run has turned it up -- or `holding` says it is in the stock
+## now, which is the same thing (v0.6: the bar grows as the run does, from wood alone).
+func _show_chip(res_id: String, holding: bool = false) -> void:
+	var chip: Control = resource_chips.get(res_id)
+	var count: Control = resource_labels.get(res_id)
+	if chip == null or not is_instance_valid(chip):
+		return
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	var useful: bool = not (cfg and cfg.has_method("uses_of")) or not cfg.uses_of(res_id, _run_map()).is_empty()
+	var known: bool = holding or gs == null or not gs.has_method("knows") or gs.knows(res_id)
+	chip.visible = useful and known
+	if count and is_instance_valid(count):
+		count.visible = chip.visible
 
 ## Hovering a material on the bar says what it is for (GAME-DESIGN 4.3 rule 3).
 func _refresh_resource_tooltips() -> void:
@@ -840,11 +868,10 @@ func _ensure_resource_labels() -> void:
 			lbl.text = "0"
 			lbl.custom_minimum_size = Vector2(_ui("resource_count_width", 30), 0)
 			chip.add_child(lbl)
-		chip.visible = not cfg.has_method("uses_of") or not cfg.uses_of(String(res_id), _run_map()).is_empty()
 		var count: Label = chip.get_node("%sLabel" % key) as Label
-		count.visible = chip.visible
 		resource_labels[String(res_id)] = count
 		resource_chips[String(res_id)] = chip
+		_show_chip(String(res_id))
 	wood_label = resource_labels.get("wood")
 	stone_label = resource_labels.get("stone")
 	water_label = resource_labels.get("water")

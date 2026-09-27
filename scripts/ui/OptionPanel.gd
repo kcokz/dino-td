@@ -74,6 +74,8 @@ func _connect_event_bus() -> void:
 			eb.resources_changed.connect(_on_resources_changed)
 		if eb.has_signal("cabin_view_changed") and not eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
 			eb.cabin_view_changed.connect(_on_cabin_view_changed)
+		if eb.has_signal("material_discovered") and not eb.material_discovered.is_connected(_on_material_discovered):
+			eb.material_discovered.connect(_on_material_discovered)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -88,6 +90,8 @@ func _disconnect_event_bus() -> void:
 			eb.resources_changed.disconnect(_on_resources_changed)
 		if eb.has_signal("cabin_view_changed") and eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
 			eb.cabin_view_changed.disconnect(_on_cabin_view_changed)
+		if eb.has_signal("material_discovered") and eb.material_discovered.is_connected(_on_material_discovered):
+			eb.material_discovered.disconnect(_on_material_discovered)
 
 ## Left-click is the only thing that changes what the panel shows. Right-click
 ## gives the Hero an order and deliberately leaves the panel alone, so inspecting
@@ -113,11 +117,33 @@ func _on_cabin_view_changed(inside: bool) -> void:
 func _on_resources_changed(_res: Dictionary) -> void:
 	refresh_build_affordability()
 
+## A material has turned up: what is built of it joins the menu, if the menu is open and
+## now shows more -- rebuilt only then, so an entry the cursor is on is not thrown away.
+func _on_material_discovered(_res_id: String) -> void:
+	if current_menu == "build" and _shown_buildables() != _menu_types:
+		_refresh_ui()
+
+## What the build menu shows now, in order.
+var _menu_types: Array = []
+
+## What the build menu offers: every buildable whose materials the run has turned up
+## (GameState.knows_all) -- stakes and the bow tower from the first minute, bone stakes
+## once there is bone, and so on. What is still to come is not shown (v0.6).
+func _shown_buildables() -> Array:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	var out: Array = []
+	for b_type in (cfg.BUILDABLE_TYPES if (cfg and "BUILDABLE_TYPES" in cfg) else ["wall", "tower"]):
+		var cost: Dictionary = cfg.BUILDINGS[b_type].get("cost", {}) if cfg else {}
+		if gs == null or not gs.has_method("knows_all") or gs.knows_all(cost):
+			out.append(b_type)
+	return out
+
 func refresh_build_affordability() -> void:
 	if current_menu != "build" or button_container == null:
 		return
 	var cfg = _get_config()
-	var buildable: Array = cfg.BUILDABLE_TYPES if (cfg and "BUILDABLE_TYPES" in cfg) else []
+	var buildable: Array = _shown_buildables()
 	var children: Array = button_container.get_children()
 	for i in range(buildable.size()):
 		if i >= children.size():
@@ -469,14 +495,11 @@ func _populate_hero_buttons() -> void:
 			_refresh_ui()
 		, "build")
 	elif current_menu == "build":
-		# Level 2: one card per Config.BUILDABLE_TYPES, then [ Back ]
+		# Level 2: one card per buildable the run has turned up the materials for, then [ Back ]
 		button_container.columns = 2
 		var cfg = _get_config()
-		var buildable: Array = []
-		if cfg and "BUILDABLE_TYPES" in cfg:
-			buildable = cfg.BUILDABLE_TYPES
-		else:
-			buildable = ["wall", "tower"]
+		var buildable: Array = _shown_buildables()
+		_menu_types = buildable
 		_clear_build_detail()
 		# The card carries the name and the price; the cost in words and the build time go
 		# in the detail line, shown for whichever card the cursor is over.

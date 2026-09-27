@@ -119,16 +119,21 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	tree.root.add_child(hud)
 	await wait_frames(1)
 	var bus = tree.root.get_node("EventBus")
+	# As a pickup does it: into the stock, then the word that it was picked up.
+	game_state_node.add_resource("bone", 1)
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_true(hud.hint_label.visible, "The first bone says something")
-	assert_true(hud.hint_label.text.contains(String(config_node.uses_text("bone", game_state_node.map_data()))),
-		"What bone is for: %s" % hud.hint_label.text)
+	# What it is for as far as the run has turned things up (v0.6): the Bone Pick and the
+	# bone stakes, not yet the crossbow tower -- that takes stone, which has not turned up.
+	var so_far: String = String(config_node.uses_text("bone", game_state_node.map_data(), game_state_node.knows))
+	assert_true(hud.hint_label.text.contains(so_far), "What bone is for: %s" % hud.hint_label.text)
+	assert_false(hud.hint_label.text.contains(config_node.get_building_name("tower")),
+		"Not what is still to come: %s" % hud.hint_label.text)
 	hud.hint_label.visible = false
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_false(hud.hint_label.visible, "The second says nothing")
 	var chip: Control = hud.resource_chips.get("bone")
-	assert_true(chip != null and chip.tooltip_text.contains(String(config_node.uses_text("bone", game_state_node.map_data()))),
-		"And the bar says it on hover")
+	assert_true(chip != null and chip.tooltip_text.contains(so_far), "And the bar says it on hover")
 
 func test_03_a_recipe_is_two_materials_at_most() -> void:
 	# GAME-DESIGN 5.4 rule 5: a recipe has at most two ingredients.

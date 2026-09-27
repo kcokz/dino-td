@@ -102,6 +102,7 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 	tree.root.add_child(panel)
 	tree.root.add_child(hero)
 
+	know_everything()      # every buildable on show, whatever it is made of
 	panel.select_target(hero)
 	panel._on_build_pressed()
 
@@ -208,12 +209,15 @@ func test_14_hud_shows_every_live_resource() -> void:
 	assert_true(hud.food_label.visible, "Meat readout is visible to the player")
 	# Since v0.6 a resource the game has no use for is not shown at all (GAME-DESIGN 4.3
 	# rule 1) -- a counter the player can do nothing with is a question with no answer.
+	# And since v0.6 only once the run has turned it up (GameState.knows): the bar grows as
+	# the run does.
 	for res_id in config_node.RESOURCES:
 		var lbl = hud.resource_labels.get(String(res_id))
 		assert_not_null(lbl, "%s has a readout" % res_id)
 		if lbl:
-			assert_eq(lbl.visible, not config_node.uses_of(String(res_id)).is_empty(),
-				"%s is on screen exactly when it is for something" % res_id)
+			var turned_up: bool = game_state_node.knows(String(res_id)) or int({"wood": 7, "stone": 4, "water": 9, "food": 3}.get(String(res_id), 0)) > 0
+			assert_eq(lbl.visible, turned_up and not config_node.uses_of(String(res_id)).is_empty(),
+				"%s is on screen exactly when it is for something and has turned up" % res_id)
 
 	# Every resource the game can actually produce has somewhere to be shown.
 	for res_id in config_node.RESOURCES:
@@ -648,6 +652,7 @@ func _build_menu() -> Array:
 	tree.root.add_child(hero)
 	tree.root.add_child(panel)
 	await wait_frames(1)
+	know_everything()      # every buildable on show, affordable or not
 	panel.select_target(hero)
 	panel._on_build_pressed()
 	return [panel, hero]
@@ -673,7 +678,8 @@ func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 	# Paying for it lights the entry back up.
 	pay_for(["tower"])
 	panel._refresh_ui()
-	assert_false(panel.button_container.get_child(1).disabled, "The turret entry lights up once affordable")
+	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("tower")).disabled,
+		"The turret entry lights up once affordable")
 
 func test_38_detail_line_reports_cost_and_build_time() -> void:
 	pay_for(["tower"], 999)

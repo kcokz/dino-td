@@ -190,6 +190,19 @@ def _tower(extra_body=(), extra_detail=()):
 
 
 ICONS["tower"] = _tower()
+# The opening's tower: all wood -- a wide pale sapling bow, a vine string drawn back, an arrow
+# with a charred point and leaves for fletching, on a stand of poles.
+ICONS["bow_tower"] = item_svg(
+    [shape("polygon", C["post"], points="15,58 21,58 27,36 23,36"),
+     shape("polygon", C["post"], points="43,58 49,58 41,36 37,36"),
+     shape("rect", C["post"], x=18, y=31, width=28, height=6, rx=2),
+     shape("path", None, C["grain"], 5.5, d="M 6 26 Q 32 2 58 26")],
+    [shape("path", None, C["post_dark"], 3.0, d="M 21 48 L 43 48"),
+     shape("path", None, C["rope"], 1.6, d="M 7 27 L 32 31 L 57 27"),
+     shape("path", None, C["grain"], 2.4, d="M 32 31 L 32 9"),
+     shape("polygon", C["char"], points="32,4 35,10 29,10"),
+     shape("polygon", C["leaf"], points="32,30 27,35 32,33"),
+     shape("polygon", C["leaf"], points="32,30 37,35 32,33")])
 ICONS["tower_2"] = _tower(
     [shape("path", None, C["gold"], 4.0, d="M 45 50 L 51 44 L 57 50"),
      shape("path", None, C["gold"], 4.0, d="M 45 58 L 51 52 L 57 58")])

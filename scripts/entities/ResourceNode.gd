@@ -262,7 +262,8 @@ func _panel_status() -> String:
 	if cfg and cfg.has_method("harvest_requires_unlock"):
 		var flag: String = String(cfg.harvest_requires_unlock(resource_type))
 		if flag != "" and not (gs and gs.has_method("has_unlock") and gs.has_unlock(flag)):
-			return String(cfg.missing_tool_hint(resource_type))
+			var known: Callable = gs.knows if (gs and gs.has_method("knows")) else Callable()
+			return String(cfg.missing_tool_hint(resource_type, known))
 	return TranslationServer.translate("NODE_HINT")
 
 func _get_config() -> Node:

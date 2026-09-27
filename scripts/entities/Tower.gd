@@ -100,7 +100,9 @@ func acquire_nearest_target() -> Node3D:
 
 ## Scans, filters, and returns the nearest valid enemy in range.
 func acquire_target() -> Node3D:
-	if not is_constructed:
+	# Out of the tree (the level being torn down, its bodies leaving the area as it goes)
+	# there is nowhere to measure from, and nothing to aim at.
+	if not is_constructed or not is_inside_tree():
 		current_target = null
 		return null
 
@@ -180,6 +182,8 @@ func _is_target_valid(target: Variant) -> bool:
 	if not target.has_method("take_damage"):
 		return false
 	if not (target is Node3D):
+		return false
+	if not (target.is_inside_tree() and is_inside_tree()):
 		return false
 
 	# Range distance check

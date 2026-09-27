@@ -1533,7 +1533,9 @@ func _hint_need_tool(node: Node) -> void:
 	if cfg == null or not cfg.has_method("missing_tool_hint") or not ("resource_type" in node):
 		return
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-		hud.show_hint(String(cfg.missing_tool_hint(String(node.resource_type))), UiTheme.toast_seconds("read"))
+		var gs_known = _get_game_state()
+		var known: Callable = gs_known.knows if (gs_known and gs_known.has_method("knows")) else Callable()
+		hud.show_hint(String(cfg.missing_tool_hint(String(node.resource_type), known)), UiTheme.toast_seconds("read"))
 
 ## Whether the currently selected unit is one that can be given an order. Only the
 ## Hero can; everything else is inspected, not commanded. With nothing selected the

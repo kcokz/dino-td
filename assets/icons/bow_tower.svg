@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <polygon points="15,58 21,58 27,36 23,36" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="43,58 49,58 41,36 37,36" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="18" y="31" width="28" height="6" rx="2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 6 26 Q 32 2 58 26" fill="none" stroke="#16110c" stroke-width="15.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="15,58 21,58 27,36 23,36" fill="#a0703f"/>
+  <polygon points="43,58 49,58 41,36 37,36" fill="#a0703f"/>
+  <rect x="18" y="31" width="28" height="6" rx="2" fill="#a0703f"/>
+  <path d="M 6 26 Q 32 2 58 26" fill="none" stroke="#dca466" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21 48 L 43 48" fill="none" stroke="#6f4523" stroke-width="3.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 7 27 L 32 31 L 57 27" fill="none" stroke="#dcbb7c" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 32 31 L 32 9" fill="none" stroke="#dca466" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="32,4 35,10 29,10" fill="#2e2019"/>
+  <polygon points="32,30 27,35 32,33" fill="#64a24c"/>
+  <polygon points="32,30 37,35 32,33" fill="#64a24c"/>
+</svg>

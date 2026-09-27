@@ -196,6 +196,7 @@ func test_10_the_kitchen_cooks_a_meal_and_he_eats_it_there_and_then() -> void:
 	await wait_frames(1)
 	hero.current_hp = 1.0
 	game_state_node.resources["food"] = 1
+	game_state_node.known["food"] = true      # meat has turned up in this run
 	var watcher = watch_signal(event_bus_node, "meal_eaten")
 
 	assert_has(kitchen.dishes(), "meat", "Meat is on the kitchen's menu")
