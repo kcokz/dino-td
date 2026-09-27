@@ -231,14 +231,14 @@ func test_dino_stat_scaling_multipliers() -> void:
 	var dino = _create_dino("raptor", mult)
 	if dino == null: return
 
-	var expected_hp = 3.0 * 1.3
-	var expected_damage = 1.0 * 1.2
-	var expected_speed = 4.0 * 1.0
+	var expected_hp = raptor_stat("hp") * 1.3
+	var expected_damage = raptor_stat("damage") * 1.2
+	var expected_speed = raptor_stat("speed") * 1.0
 
-	assert_almost_eq(float(dino.max_hp), expected_hp, 0.01, "Scaled max_hp should be 3.0 * 1.3 = 3.9")
-	assert_almost_eq(float(dino.current_hp), expected_hp, 0.01, "Scaled current_hp should be 3.9")
-	assert_almost_eq(float(dino.damage), expected_damage, 0.01, "Scaled damage should be 1.0 * 1.2 = 1.2")
-	assert_almost_eq(float(dino.speed), expected_speed, 0.01, "Speed should remain 4.0")
+	assert_almost_eq(float(dino.max_hp), expected_hp, 0.01, "Scaled max_hp is its hp x 1.3")
+	assert_almost_eq(float(dino.current_hp), expected_hp, 0.01, "Scaled current_hp too")
+	assert_almost_eq(float(dino.damage), expected_damage, 0.01, "Scaled damage is its bite x 1.2")
+	assert_almost_eq(float(dino.speed), expected_speed, 0.01, "Speed unchanged")
 
 func test_dino_waypoint_pathing_advancement() -> void:
 	var dino = _create_dino("raptor", {})
@@ -344,11 +344,12 @@ func test_dino_attacks_core_campfire_emits_hp_changed() -> void:
 	else:
 		core.take_damage(float(dino.damage))
 
-	assert_almost_eq(float(core.current_hp), 9.0, 0.01, "Core HP reduced from 10.0 to 9.0")
+	var bitten: float = core_hp() - raptor_stat("damage")
+	assert_almost_eq(float(core.current_hp), bitten, 0.01, "Core HP reduced by one bite")
 	assert_true(hp_watcher.emitted, "core_hp_changed signal must be emitted upon attack")
 	if not hp_watcher.last_args.is_empty():
-		assert_almost_eq(float(hp_watcher.last_args[0]), 9.0, 0.01, "core_hp_changed current HP is 9.0")
-		assert_almost_eq(float(hp_watcher.last_args[1]), 10.0, 0.01, "core_hp_changed max HP is 10.0")
+		assert_almost_eq(float(hp_watcher.last_args[0]), bitten, 0.01, "core_hp_changed carries the HP left")
+		assert_almost_eq(float(hp_watcher.last_args[1]), core_hp(), 0.01, "core_hp_changed carries the max HP")
 
 func test_dino_fatal_damage_emits_dino_died_and_frees() -> void:
 	var dino = _create_dino("raptor", {})
@@ -373,7 +374,7 @@ func test_dino_non_fatal_damage_does_not_die() -> void:
 
 	dino.take_damage(1.0)
 
-	assert_almost_eq(float(dino.current_hp), 2.0, 0.01, "Dino current_hp should be 2.0")
+	assert_almost_eq(float(dino.current_hp), raptor_stat("hp") - 1.0, 0.01, "Dino current_hp is one less")
 	assert_false(death_watcher.emitted, "EventBus.dino_died must NOT be emitted for non-fatal damage")
 	assert_false(dino.is_queued_for_deletion(), "Dino must not be queued for deletion")
 
@@ -468,7 +469,7 @@ func test_tower_deals_config_damage_at_fire_rate() -> void:
 	if tower == null or dino == null: return
 
 	var initial_hp = float(dino.current_hp)
-	assert_almost_eq(initial_hp, 3.0, 0.01, "Initial dino HP is 3.0")
+	assert_almost_eq(initial_hp, raptor_stat("hp"), 0.01, "Initial dino HP is Config's")
 
 	# Tower fires 1 attack
 	if tower.has_method("fire_at_target"):
@@ -479,7 +480,8 @@ func test_tower_deals_config_damage_at_fire_rate() -> void:
 		var dmg = tower.get("damage") if "damage" in tower else 1.0
 		dino.take_damage(dmg)
 
-	assert_almost_eq(float(dino.current_hp), 2.0, 0.01, "Dino HP should decrease by 1.0 (3.0 -> 2.0)")
+	assert_almost_eq(float(dino.current_hp), initial_hp - float(config_node.BUILDINGS["tower"]["damage"]), 0.01,
+		"Dino HP drops by one shot of the tower's damage")
 
 func test_tower_retargets_when_primary_target_dies() -> void:
 	var tower = _create_tower()
@@ -679,8 +681,8 @@ func test_wave_4_spawns_with_enhanced_stats() -> void:
 	if dino == null: return
 	_cleanup_nodes.append(dino)
 
-	assert_almost_eq(float(dino.max_hp), 3.9, 0.01, "Wave 4 Dino HP should be 3.0 * 1.3 = 3.9")
-	assert_almost_eq(float(dino.damage), 1.2, 0.01, "Wave 4 Dino Damage should be 1.0 * 1.2 = 1.2")
+	assert_almost_eq(float(dino.max_hp), raptor_stat("hp") * 1.3, 0.01, "Wave 4 Dino HP is its hp x 1.3")
+	assert_almost_eq(float(dino.damage), raptor_stat("damage") * 1.2, 0.01, "Wave 4 Dino Damage is its bite x 1.2")
 
 # ==============================================================================
 # 6. Category 4: Integration & Hardening Edge Cases (R4.4)

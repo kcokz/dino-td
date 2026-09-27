@@ -565,8 +565,8 @@ func test_challenge_campfire_partial_damage_allows_placements() -> void:
 	var hp_watcher = watch_signal(event_bus_node, "core_hp_changed")
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Take 9.0 damage (out of 10.0 max_hp) -> 1.0 HP remaining
-	core.take_damage(9.0)
+	# All but one hit point -> 1.0 HP remaining
+	core.take_damage(core_hp() - 1.0)
 	assert_almost_eq(float(core.current_hp), 1.0, 0.01, "Core HP reduced to 1.0")
 	assert_true(hp_watcher.emitted, "core_hp_changed emitted on partial damage")
 	assert_false(lost_watcher.emitted, "game_lost must NOT be emitted on non-lethal damage")
@@ -594,7 +594,7 @@ func test_challenge_campfire_destruction_emits_game_lost_and_halts_all_placement
 	var destroyed_watcher = watch_signal(event_bus_node, "building_destroyed")
 
 	# 1. Deal lethal damage to CoreCampfire
-	core.take_damage(10.0)
+	core.take_damage(core_hp())
 	assert_lte(float(core.current_hp), 0.0, "Core HP reduced to 0")
 	assert_true(destroyed_watcher.emitted, "building_destroyed emitted for Core")
 	assert_true(lost_watcher.emitted, "game_lost emitted on CoreCampfire destruction")
@@ -659,7 +659,7 @@ func test_challenge_cannot_overwrite_living_core_campfire() -> void:
 		if b is Node: _cleanup_nodes.append(b)
 		assert_null(b, "place_building for '%s' over living core returns null" % t)
 
-	assert_almost_eq(float(core.current_hp), 10.0, 0.01, "CoreCampfire suffered no damage from overwrite attempts")
+	assert_almost_eq(float(core.current_hp), core_hp(), 0.01, "CoreCampfire suffered no damage from overwrite attempts")
 	assert_eq(grid_mgr.get_building_at(origin), core, "CoreCampfire remains safely at (0,0)")
 
 func test_challenge_core_campfire_double_destroy_idempotency() -> void:
@@ -672,12 +672,12 @@ func test_challenge_core_campfire_double_destroy_idempotency() -> void:
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 
 	# First lethal damage
-	core.take_damage(10.0)
+	core.take_damage(core_hp())
 	assert_true(lost_watcher.emitted, "game_lost emitted on first fatal damage")
 	assert_eq(lost_watcher.emit_count, 1, "game_lost emitted exactly once")
 
 	# Attempt second damage / destroy call
-	core.take_damage(10.0)
+	core.take_damage(core_hp())
 	core.destroy()
 	assert_eq(lost_watcher.emit_count, 1, "game_lost MUST NOT be emitted a second time (idempotent)")
 

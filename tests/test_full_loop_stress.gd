@@ -143,7 +143,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify Level Entities
 	assert_not_null(main.current_core, "CoreCampfire must exist in Main")
 	assert_not_null(main.current_nest, "Nest must exist in Main")
-	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP initialized to 10.0")
+	assert_almost_eq(float(main.current_core.current_hp), core_hp(), 0.001, "Core HP initialized to full")
 
 	# Verify GridManager Occupancy
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(0, 0)), "Core cell (0, 0) is occupied")
@@ -155,7 +155,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_not_null(hud, "HUD exists in Main")
 	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
 	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays the cabin's health: 10 / 10")
+	assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays the cabin's full health")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 	assert_false(hud.is_game_over_visible(), "GameOver modal is hidden initially")
 	assert_false(hud.end_action_btn.disabled, "End Action button enabled in PLAN")
@@ -364,7 +364,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify pristine entities
 	assert_not_null(main.current_core, "Pristine Core exists after restart")
 	assert_not_null(main.current_nest, "Pristine Nest exists after restart")
-	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP restored to full 10.0")
+	assert_almost_eq(float(main.current_core.current_hp), core_hp(), 0.001, "Core HP restored to full")
 
 	# Verify grid and container purging
 	assert_eq(main.buildings_container.get_child_count(), 1, "Buildings container contains only 1 building (Core)")
@@ -380,7 +380,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after restart")
 	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
 	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays the cabin's health: 10 / 10")
+	assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays the cabin's full health")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 
 	# --------------------------------------------------------------------------
@@ -393,8 +393,8 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 1, "Phase is ATTACK (1)")
 	var game_lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Dinosaurs breach defenses and inflict lethal 10.0 damage on Core
-	main.current_core.take_damage(10.0)
+	# Dinosaurs breach defenses and inflict lethal damage on Core
+	main.current_core.take_damage(core_hp())
 	await wait_frames(2)
 
 	# Verify Defeat
@@ -436,13 +436,13 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	assert_not_null(main.current_core, "Pristine Core exists after 2nd restart")
 	assert_not_null(main.current_nest, "Pristine Nest exists after 2nd restart")
-	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP is 10.0")
+	assert_almost_eq(float(main.current_core.current_hp), core_hp(), 0.001, "Core HP is full")
 
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after 2nd restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after 2nd restart")
 	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
 	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays the cabin's health: 10 / 10")
+	assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays the cabin's full health")
 
 # ==============================================================================
 # Test 2: Consecutive Horde Progression & Multiplier Compounding Stress
@@ -524,7 +524,7 @@ func test_04_rapid_alternating_victory_defeat_restart_stress() -> void:
 			assert_true(main.hud.is_game_over_visible(), "Cycle %d: Modal visible" % cycle)
 		else:
 			# Trigger Defeat via Core destruction
-			main.current_core.take_damage(10.0)
+			main.current_core.take_damage(core_hp())
 			await wait_frames(1)
 			assert_true(bool(game_state_node.get("is_game_over")), "Cycle %d: Game over" % cycle)
 			assert_false(bool(game_state_node.get("is_game_won")), "Cycle %d: Not won" % cycle)
@@ -537,7 +537,7 @@ func test_04_rapid_alternating_victory_defeat_restart_stress() -> void:
 		assert_false(bool(game_state_node.get("is_game_over")), "Cycle %d: is_game_over cleared" % cycle)
 		assert_false(bool(game_state_node.get("is_game_won")), "Cycle %d: is_game_won cleared" % cycle)
 		assert_eq(int(game_state_node.current_phase), 0, "Cycle %d: Phase is PLAN" % cycle)
-		assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Cycle %d: Core HP is 10.0" % cycle)
+		assert_almost_eq(float(main.current_core.current_hp), core_hp(), 0.001, "Cycle %d: Core HP is full" % cycle)
 		assert_eq(int(game_state_node.beacon_steps), 0, "Cycle %d: The beacon is broken again" % cycle)
 		assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Cycle %d: Grid holds only the level's own" % cycle)
 		assert_false(main.hud.is_game_over_visible(), "Cycle %d: HUD modal hidden" % cycle)
@@ -552,7 +552,7 @@ func test_05_strict_lockout_adversarial_hammering_oracle() -> void:
 	await wait_frames(2)
 
 	# Trigger Defeat
-	main.current_core.take_damage(10.0)
+	main.current_core.take_damage(core_hp())
 	await wait_frames(1)
 	assert_true(bool(game_state_node.get("is_game_over")), "Defeat active")
 

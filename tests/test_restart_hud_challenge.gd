@@ -231,7 +231,7 @@ func test_challenge_02_mid_wave_restart_with_damaged_entities_and_active_physics
 
 	# Damage the Core heavily (the nest cannot be hurt since v0.6)
 	main.current_core.take_damage(8.0)
-	assert_almost_eq(float(main.current_core.current_hp), 2.0, 0.001, "Core HP reduced to 2.0")
+	assert_almost_eq(float(main.current_core.current_hp), core_hp() - 8.0, 0.001, "Core HP reduced by 8")
 
 	# Spawn 10 dinos marching towards Core
 	for i in range(10):
@@ -251,12 +251,12 @@ func test_challenge_02_mid_wave_restart_with_damaged_entities_and_active_physics
 	# Verify a fresh Core with full HP, and a fresh Nest
 	assert_not_null(main.current_core, "Pristine Core exists")
 	assert_not_null(main.current_nest, "Pristine Nest exists")
-	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core restored to full 10.0 HP")
+	assert_almost_eq(float(main.current_core.current_hp), core_hp(), 0.001, "Core restored to full HP")
 
 	# Verify HUD shows full HP
 	var hud = main.hud
 	if hud and hud.has_method("get_core_hp_text"):
-		assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays full Core HP")
+		assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays full Core HP")
 
 func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -> void:
 	var main = _create_main()
@@ -578,7 +578,7 @@ func test_challenge_14_hud_restart_button_triggers_main_restart_lifecycle() -> v
 	await wait_frames(2)
 
 	# Dirty level and trigger Defeat
-	main.current_core.take_damage(10.0)
+	main.current_core.take_damage(core_hp())
 	await wait_frames(2)
 
 	assert_true(bool(game_state_node.get("is_game_over")), "Game is over")
@@ -593,4 +593,4 @@ func test_challenge_14_hud_restart_button_triggers_main_restart_lifecycle() -> v
 	assert_false(main.hud.is_game_over_visible(), "HUD GameOver panel hidden")
 	assert_eq(int(game_state_node.current_phase), 0, "Phase restored to PLAN")
 	assert_eq(main.grid_manager.occupied_cells.size(), level_tiles_at_start(), "Grid occupancy restored to the level's own tiles")
-	assert_almost_eq(float(main.current_core.current_hp), 10.0, 0.001, "Core HP restored to 10.0")
+	assert_almost_eq(float(main.current_core.current_hp), core_hp(), 0.001, "Core HP restored to full")

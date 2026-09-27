@@ -301,15 +301,16 @@ func test_multiple_concurrent_dinos_attacking_same_wall() -> void:
 	wall.max_hp = 30.0
 	wall.current_hp = 30.0
 
-	# Each dino performs 2 attacks (8 * 2 = 16 damage total)
+	# Each dino performs 2 attacks (8 * 2 = 16 bites)
 	for d in dinos:
 		d.perform_attack()
 		d.perform_attack()
 
-	assert_almost_eq(float(wall.current_hp), 30.0 - 16.0, 0.01, "Wall took combined damage from all 8 dinos (30 - 16 = 14)")
+	assert_almost_eq(float(wall.current_hp), 30.0 - 16.0 * raptor_stat("damage"), 0.01,
+		"Wall took combined damage from all 8 dinos (16 bites)")
 
 	# Dino 0 delivers fatal strike
-	wall.take_damage(14.0)
+	wall.take_damage(wall.current_hp)
 	assert_true(wall.is_destroyed, "Shared wall is destroyed")
 
 	# Now process attacking on all dinos - all should safely transition back to WALKING
@@ -507,7 +508,7 @@ func test_destination_reached_signal_spam_after_core_destroyed() -> void:
 	var initial_emits = watcher.emit_count
 
 	# Core takes fatal damage
-	core.take_damage(10.0)
+	core.take_damage(core_hp())
 	assert_true(core.is_destroyed, "Core is destroyed")
 
 	# Dino processes obstacle cleared
@@ -556,8 +557,8 @@ func test_negative_stat_multipliers() -> void:
 func test_huge_stat_multipliers() -> void:
 	# Huge multipliers: 1,000,000 HP and Damage
 	var dino = _create_dino("raptor", {"hp": 1000000.0, "damage": 1000000.0, "speed": 1.0})
-	assert_almost_eq(float(dino.max_hp), 3000000.0, 1.0, "Scaled max_hp is 3,000,000")
-	assert_almost_eq(float(dino.damage), 1000000.0, 1.0, "Scaled damage is 1,000,000")
+	assert_almost_eq(float(dino.max_hp), raptor_stat("hp") * 1000000.0, 1.0, "Scaled max_hp is its hp x 1,000,000")
+	assert_almost_eq(float(dino.damage), raptor_stat("damage") * 1000000.0, 1.0, "Scaled damage is its bite x 1,000,000")
 
 	var wall = _create_wall(Vector3(1.0, 0.0, 0.0))
 	dino.attack_target(wall)
@@ -574,8 +575,8 @@ func test_null_stat_multiplier_crash_vulnerability() -> void:
 	var crashed = false
 	# We test calling setup with null speed and hp: 2.0
 	dino.setup("raptor", {"hp": 2.0, "speed": null})
-	# If Dino.gd line 82 crashed, max_hp (lines 84-85) was aborted and remains 3.0 instead of 6.0
-	if dino.max_hp != 6.0:
+	# If Dino.gd line 82 crashed, max_hp (lines 84-85) was aborted and was not doubled
+	if not is_equal_approx(float(dino.max_hp), raptor_stat("hp") * 2.0):
 		_record_fail("VULNERABILITY: Dino.setup aborted execution on float(null) crash at line 82; max_hp was not updated.")
 	else:
 		_record_pass("Dino safely handled null multiplier.")

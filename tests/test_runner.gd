@@ -27,17 +27,39 @@ var all_failure_records: Array[Dictionary] = []
 var _script_errors = null
 var total_script_errors: int = 0
 
+## THE PLAYER'S SETTINGS ARE THEIRS. Suites switch the language and the window mode, and
+## the game saves each switch -- so the file is read before the first suite and put back
+## byte for byte after the last, whatever was saved in between. And the run is in English,
+## whatever language the player plays in: every string a suite expects is the English one.
+const SETTINGS_PATH: String = "user://settings.cfg"
+var _had_settings: bool = false
+var _settings_backup: PackedByteArray = PackedByteArray()
+
 func _init() -> void:
 	_parse_arguments()
+	_had_settings = FileAccess.file_exists(SETTINGS_PATH)
+	if _had_settings:
+		_settings_backup = FileAccess.get_file_as_bytes(SETTINGS_PATH)
 	_script_errors = load("res://tests/script_error_watch.gd").new()
 	OS.add_logger(_script_errors)
 	_run_all_tests()
 
-## Quits with `code`, taking the error watch back out of the engine first.
+## Quits with `code`, taking the error watch back out of the engine first and the player's
+## settings back to what they were.
 func _finish(code: int) -> void:
 	if _script_errors != null:
 		OS.remove_logger(_script_errors)
+	_restore_settings()
 	quit(code)
+
+func _restore_settings() -> void:
+	if _had_settings:
+		var f := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+		if f != null:
+			f.store_buffer(_settings_backup)
+			f.close()
+	elif FileAccess.file_exists(SETTINGS_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
 
 ## The script errors reported since there were `start`, or none when nothing is watching.
 func _script_errors_since(start: int) -> PackedStringArray:
@@ -86,6 +108,12 @@ func _parse_arguments() -> void:
 func _run_all_tests() -> void:
 	# Defer execution by 1 frame to ensure root nodes and any autoloads are fully ready
 	await process_frame
+	# In English, without saving it (see SETTINGS_PATH).
+	var i18n := root.get_node_or_null("I18n")
+	if i18n != null and i18n.has_method("set_locale"):
+		i18n.set_locale("en", false)
+	else:
+		TranslationServer.set_locale("en")
 
 	print("============================================================")
 	print("DEFEND DINOSAUR v0.0 — HEADLESS TEST RUNNER")

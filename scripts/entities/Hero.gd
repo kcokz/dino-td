@@ -206,7 +206,10 @@ func _check_and_transition_interaction_target(extra_buffer: float, collider: Nod
 			target_resource_node = null
 			current_state = State.IDLE
 			return true
-		if (collider != null and collider == target_resource_node) or _is_in_node_range(global_position, target_resource_node, extra_buffer):
+		# At his arm's length exactly: the slack is for staying at the work once he has
+		# started (_process_harvesting), not for starting it -- with it he began chopping
+		# a stride short of the tree.
+		if (collider != null and collider == target_resource_node) or _is_in_node_range(global_position, target_resource_node):
 			velocity = Vector3.ZERO
 			current_state = State.HARVESTING
 			harvest_timer = 0.0
@@ -551,11 +554,20 @@ func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> boo
 	var max_box_dist = maxf(0.6, build_range - half_size + 0.2) + extra_buffer
 	return dist_box <= max_box_dist
 
+## Close enough to work `node`: body to body, his arm's length from what blocks -- a
+## tree's trunk, a rock's side (ResourceNode.block_radius). It was two metres and a
+## bit from the middle, whatever the thing was, and he chopped trees from out under the
+## crown.
 func _is_in_node_range(pos: Vector3, node: Node, extra_buffer: float = 0.0) -> bool:
 	if node == null or not is_instance_valid(node):
 		return false
-	var dist = pos.distance_to(node.global_position)
-	return dist <= (build_range + 0.8 + extra_buffer)
+	var flat: Vector3 = pos - node.global_position
+	flat.y = 0.0
+	var blocks: float = float(node.block_radius()) if node.has_method("block_radius") else 0.8
+	var cfg = _get_config()
+	var me: float = float(cfg.HERO.get("width", 0.8)) * 0.5 if (cfg and "HERO" in cfg) else 0.4
+	var reach: float = float(cfg.HERO.get("harvest_reach", 0.45)) if (cfg and "HERO" in cfg) else 0.45
+	return flat.length() <= blocks + me + reach + extra_buffer
 
 func _plan_path_to_node(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
@@ -1181,6 +1193,7 @@ func _get_fx() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("Fx")
 	return null
+## A thin circle at its feet: a unit, not a building (Config.FEEDBACK.unit_ring_*).
 func _configure_selection_ring(base_size: float) -> void:
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
-		selection_ring.configure(SelectionRing3D.Shape.BOX, base_size)
+		selection_ring.configure(SelectionRing3D.Shape.ROUND, base_size)

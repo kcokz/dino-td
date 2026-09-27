@@ -202,6 +202,8 @@ func _scenario_siege(spec: String) -> void:
 	var raiders: int = int(parts[2]) if parts.size() > 2 else 10
 	var hp_mult: float = float(parts[3]) if parts.size() > 3 else 1.0
 	var every_side: bool = parts.size() > 4 and parts[4] == "all"
+	# "bare": no ring of stakes -- the cabin and its own gun against the raid (v0.6).
+	var bare: bool = parts.size() > 4 and parts[4] == "bare"
 	var cfg := root.get_node_or_null("Config")
 	var gs := root.get_node_or_null("GameState")
 	var eb := root.get_node_or_null("EventBus")
@@ -229,7 +231,7 @@ func _scenario_siege(spec: String) -> void:
 	var stakes: Array[Node] = []
 	# 6.5 m: clear of the trees and the hills, which a ring cannot be built through -- and a
 	# tree is not solid to a raid, so a ring across one has a door in it.
-	var around: int = int(ceil(TAU * 6.5 / step)) * 4
+	var around: int = 0 if bare else int(ceil(TAU * 6.5 / step)) * 4
 	for i in range(around):
 		var a: float = TAU * float(i) / float(around)
 		var fine: Vector2i = gm.world_to_fine_cell(centre + Vector3(sin(a) * 6.5, 0.0, cos(a) * 6.5), divisions)

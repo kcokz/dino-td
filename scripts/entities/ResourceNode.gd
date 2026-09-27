@@ -86,6 +86,26 @@ func get_localized_name() -> String:
 ## How big this kind of node is, as Config declares it. A tree is tall, an outcrop is
 ## low and wide, a pool is almost flat -- and until v0.5 all three were the same
 ## cylinder, because the size lived in this file instead of in Config.
+## Whether this node blocks by a trunk narrower than what it is clicked by.
+func has_trunk() -> bool:
+	return float(_node_row().get("trunk_radius", 0.0)) > 0.0
+
+## How far out from its middle this node is in anybody's way: its trunk, or its whole
+## declared width. What the Hero stands against to work it.
+func block_radius() -> float:
+	var trunk: float = float(_node_row().get("trunk_radius", 0.0))
+	return trunk if trunk > 0.0 else _declared_size().x * 0.5
+
+func _node_row() -> Dictionary:
+	var cfg = _get_config()
+	if cfg and "RESOURCE_NODES" in cfg and cfg.RESOURCE_NODES.has(resource_type):
+		return cfg.RESOURCE_NODES[resource_type]
+	return {}
+
+func _pick_layer() -> int:
+	var cfg = _get_config()
+	return int(cfg.LAYER_PICK) if (cfg and "LAYER_PICK" in cfg) else 64
+
 func _declared_size() -> Vector3:
 	var cfg = _get_config()
 	if cfg and cfg.has_method("get_visual_size"):
@@ -112,11 +132,14 @@ func _ensure_body() -> void:
 		break
 
 func _ensure_components() -> void:
-	# 1. CollisionShape3D on layer 1 (World / Obstacles)
-	collision_layer = 1
+	# 1. CollisionShape3D on layer 1 (World / Obstacles) -- or, for a thing whose trunk is
+	# narrower than its crown, the crown-sized shape on the picking layer and a trunk that
+	# blocks (Config.LAYER_PICK).
+	var trunk: float = block_radius() if has_trunk() else 0.0
+	collision_layer = _pick_layer() if trunk > 0.0 else 1
 	collision_mask = 0
 	if collision_shape == null:
-		collision_shape = find_child("CollisionShape3D", true, false) as CollisionShape3D
+		collision_shape = find_child("CollisionShape3D", false, false) as CollisionShape3D
 	var size: Vector3 = _declared_size()
 	if collision_shape == null:
 		collision_shape = CollisionShape3D.new()
@@ -127,6 +150,19 @@ func _ensure_components() -> void:
 		collision_shape.shape = shape
 		collision_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(collision_shape)
+	if trunk > 0.0 and find_child("Trunk", false, false) == null:
+		var stem := StaticBody3D.new()
+		stem.name = "Trunk"
+		stem.collision_layer = 1
+		stem.collision_mask = 0
+		var stem_shape := CollisionShape3D.new()
+		var cyl := CylinderShape3D.new()
+		cyl.radius = trunk
+		cyl.height = size.y
+		stem_shape.shape = cyl
+		stem_shape.position = Vector3(0.0, size.y * 0.5, 0.0)
+		stem.add_child(stem_shape)
+		add_child(stem)
 
 	# 2. The body, from the one place that knows what things look like. The collider is
 	# built from the SAME declared size rather than measured off the art, because the

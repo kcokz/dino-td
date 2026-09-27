@@ -685,6 +685,15 @@ def sentry(seed):
     for k in range(12):
         stand.tri(rim[k], rim[(k + 1) % 12], Vector((0.0, 0.0, pivot_z)), METAL_DARK, METAL_DARK, METAL_DARK)
 
+    head, muzzle = _turret_head()
+    return stand, head, Vector((0.0, 0.0, pivot_z)), muzzle
+
+
+def _turret_head(k=1.0):
+    """The turret's head: a machine off the wreck -- white plating, the orange band, twin
+    barrels and a red eye -- built round its own pivot, the middle of its turntable, with
+    its barrels along +Y (the game's -Z, the way a node faces), at `k` times the sentry's
+    size. Returns (head, where the muzzle is relative to the pivot)."""
     head = Builder()
     # The housing: plating off the wreck, with the orange band round it. Big enough to
     # be the first thing seen on the stand -- at the first size it was a white box on a
@@ -710,7 +719,9 @@ def sentry(seed):
     head.tube([Vector((-0.14, -0.16, 0.28)), Vector((-0.14, -0.16, 0.56))], [0.009, 0.006], [METAL_DARK, METAL_DARK], 5)
     _slab(head, Vector((-0.155, -0.175, 0.56)), Vector((-0.125, -0.145, 0.59)), [(1.0, HAZARD)], 0.004)
 
-    return stand, head, Vector((0.0, 0.0, pivot_z)), Vector((0.0, 0.47, 0.12))
+    if k != 1.0:
+        head.verts = [v * k for v in head.verts]
+    return head, Vector((0.0, 0.47, 0.12)) * k
 
 
 # ==============================================================================
@@ -960,6 +971,38 @@ def _module_ring(x, ry, rz, n, seg):
     return pts
 
 
+CABIN_R = 1.02                     # the hull's half-width and half-height
+CABIN_TILT = math.radians(7.0)     # the shield end dug in
+CABIN_ROLL = math.radians(4.0)
+CABIN_LIFT = 1.0                   # its axis this high: it lies on its side on the ground
+
+
+def _cabin_place(v):
+    """A point on the module, lying as it came down: pitched about Y (shield end down),
+    rolled about X, then up onto the ground."""
+    x1 = v.x * math.cos(CABIN_TILT) - v.z * math.sin(CABIN_TILT)
+    z1 = v.x * math.sin(CABIN_TILT) + v.z * math.cos(CABIN_TILT)
+    y2 = v.y * math.cos(CABIN_ROLL) - z1 * math.sin(CABIN_ROLL)
+    z2 = v.y * math.sin(CABIN_ROLL) + z1 * math.cos(CABIN_ROLL)
+    return Vector((x1, y2, z2)) + Vector((0.0, 0.0, CABIN_LIFT))
+
+
+def cabin_rig(seed):
+    """The cabin with a gun of its own: the wreck's second turret head, bolted to the roof
+    on a turntable towards the shield end, clear of the solar panel and the antenna. It
+    covers the ground round the cabin (Config BUILDINGS.core.range) -- enough for the first
+    raptors, not for a raid. Returned like the sentry: (body, head, pivot, muzzle)."""
+    body = cabin(seed)
+    top = _cabin_place(Vector((-0.42, 0.0, CABIN_R * 0.99)))
+    body.tube([top - UP * 0.06, top + UP * 0.05], [0.13, 0.12], [METAL_DARK, METAL_DARK], 12)
+    rim = [top + UP * 0.05 + Vector((math.cos(math.tau * k / 12) * 0.12, math.sin(math.tau * k / 12) * 0.12, 0.0))
+           for k in range(12)]
+    for k in range(12):
+        body.tri(rim[k], rim[(k + 1) % 12], top + UP * 0.05, METAL_DARK, METAL_DARK, METAL_DARK)
+    head, muzzle = _turret_head(0.72)
+    return body, head, top + UP * 0.05, muzzle
+
+
 def cabin(seed):
     """The crew module of the ship that crashed here, and the Hero's home: a pressure
     hull lying on its side with its heat shield ploughed into a mound of earth, an orange
@@ -968,18 +1011,8 @@ def cabin(seed):
     Hero's campfire ring by the door. It was a 1 m pod, the Hero's own height."""
     rng = random.Random(seed)
     b = Builder()
-    tilt = math.radians(7.0)       # the shield end dug in
-    roll = math.radians(4.0)
-    ry, rz, n, seg = 1.02, 1.02, 3.2, 28
-    lift = Vector((0.0, 0.0, 1.0))
-
-    def place(v):
-        # Pitch about Y (shield end down), roll about X, then up onto the ground.
-        x1 = v.x * math.cos(tilt) - v.z * math.sin(tilt)
-        z1 = v.x * math.sin(tilt) + v.z * math.cos(tilt)
-        y2 = v.y * math.cos(roll) - z1 * math.sin(roll)
-        z2 = v.y * math.sin(roll) + z1 * math.cos(roll)
-        return Vector((x1, y2, z2)) + lift
+    ry, rz, n, seg = CABIN_R, CABIN_R, 3.2, 28
+    place = _cabin_place
 
     def scorch(base, amount):
         return jitter(mix(base, SCORCH, amount), rng, 0.015)
@@ -1200,12 +1233,12 @@ PROPS = {
     "drop_food": (lambda s: drop_meat(s), [11]),
     "drop_water": (lambda s: drop_water(s), [13]),
     "water_landing": (lambda s: water_landing(s), [17]),
-    "cabin": (lambda s: cabin(s), [19]),
 }
 
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.
 RIGS = {
     "sentry": (lambda s: sentry(s), [2]),
+    "cabin": (lambda s: cabin_rig(s), [19]),
 }
 
 

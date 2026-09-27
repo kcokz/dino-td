@@ -60,7 +60,19 @@ const BUILDINGS: Dictionary = {
 		# same line it always met.
 		"span": 2,
 		"height": 2.6,
-		"hp": 10.0,
+		# v0.6 feedback: "船舱血量提升到100，这样船舱的攻击能打败初始迅猛龙". A hundred: the
+		# opening's stakes are thin, and the cabin has to be able to take the first raid's
+		# bites while its gun and the Hero deal with them -- and still be worth defending
+		# when a raid of thirty reaches it.
+		"hp": 100.0,
+		# Its own gun: the wreck's second turret head, on the roof (tools/generate_props.py
+		# cabin). It covers the ground round the cabin and no further -- the first raptors
+		# die at the walls, a raid does not -- and fires a little slower than a crossbow
+		# tower, which is what the player builds when this is not enough.
+		"range": 4.5,
+		"damage": 1.0,
+		"fire_rate": 0.8,
+		"turn_speed": 240.0,
 		"cost": {},
 		"upgrades_to": "",
 	},
@@ -224,6 +236,14 @@ const LAYER_BLUEPRINT: int = 16
 ## well as the buildings layer; the Hero's collision mask leaves it out, and only it, so
 ## the wreck and the turrets still stop him exactly as they did.
 const LAYER_WALL: int = 32
+
+## WHAT IS CLICKED BY MORE THAN WHAT BLOCKS. A tree is clicked anywhere on its crown, seen
+## from above, but only its trunk is in anybody's way: its crown-sized shape is on this
+## layer, which the picking ray looks at and nothing else does (not the walking mesh, not
+## anyone's movement), and a trunk-sized one blocks (RESOURCE_NODES.trunk_radius). With the
+## crown blocking, the walking mesh was carved 1.6 m round every trunk and the Hero chopped
+## from two metres off, swinging at the air.
+const LAYER_PICK: int = 64
 
 ## How the navigation meshes are baked. See scripts/core/NavMaps.gd.
 const NAV: Dictionary = {
@@ -602,9 +622,13 @@ static func get_upgrade_time(type_id: String) -> float:
 const DINOS: Dictionary = {
 	"raptor": {
 		"name": "DINO_RAPTOR_NAME",
-		"hp": 3.0,
+		# A little softer (v0.6 feedback: "初始木栅栏强度很低，需要把迅猛龙强度稍微调低"): a
+		# stake stands nine bites instead of eight, and the raptor that chews through one
+		# still comes out alive and nearly dead (BUILDINGS.wall) -- softer than that and a
+		# single stake would kill raptors forever without falling.
+		"hp": 2.8,
 		"speed": 4.0,
-		"damage": 1.0,
+		"damage": 0.9,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
@@ -910,6 +934,9 @@ const HERO: Dictionary = {
 	"provoke_duration": 5.0,      # 挑衅仇恨持续时长（秒）
 	"provoke_radius": 4.0,        # 挑衅仇恨生效半径（米）
 	"width": 0.8,                 # 碰撞体宽度（米）——建筑占地由它推导
+	# How far past his own body he works a tree or a rock from (metres, body to body): an
+	# arm and a swing. He walks up to it and stops there -- not a couple of metres off.
+	"harvest_reach": 0.45,
 	# 身高（米）——碰撞体与外形都用它。和这个世界相称：木桩到他胸口、树蕨是他三倍高、
 	# 船舱是他两倍多高。1.6 米时他和霸王龙一样高、是迅猛龙的两倍。占地和通道只由
 	# width 决定，与身高无关，所以改身高不改玩法。
@@ -1076,6 +1103,22 @@ const FEEDBACK: Dictionary = {
 	"selection_ring_margin": 0.18,    # 圈比底座向外扩出多少（米）
 	"selection_ring_thickness": 0.09, # 圈线粗细（米）
 	"selection_ring_color": Color(0.35, 1.0, 0.5, 0.9),
+	# 单位（现代人、恐龙）脚下的选中圈：一圈细圆环，贴着脚——细，才不像地上多出了一样东西。
+	# 建筑仍然是沿底座的方框。
+	"unit_ring_margin": 0.06,
+	"unit_ring_thickness": 0.03,
+	# 下命令时在目标处画两圈细环，收拢、淡出（即时战略的做法）：点到了，他往这儿去。
+	# 颜色按命令：走过去（绿）、去干活——砍树、采石、施工（橙）、去打（红）。
+	"order_marker_radius": 0.6,       # 外圈半径（米）
+	"order_marker_inner": 0.4,        # 内圈比外圈小多少（比例）
+	"order_marker_lift": 0.06,        # 离地高度（米），免得和地面打架
+	"order_marker_seconds": 0.45,     # 收拢并淡出的时长（秒）
+	"order_marker_end_scale": 0.3,    # 收到多小时消失
+	"order_marker_colors": {
+		"move": Color(0.35, 1.0, 0.5, 0.95),
+		"work": Color(1.0, 0.72, 0.25, 0.95),
+		"attack": Color(1.0, 0.32, 0.25, 0.95),
+	},
 	# 悬停圈：鼠标下面是什么。和选中圈刻意不同色，否则"我选中的"和"我指着的"分不清。
 	# 木尖刺只有 0.62m 宽，一排挨在一起时，没有这个圈根本看不出点的是哪一根。
 	"hover_ring_color": Color(1.0, 1.0, 1.0, 0.55),
@@ -1279,6 +1322,9 @@ const RESOURCE_NODES: Dictionary = {
 		# where is decided by the cell, never by the art. Fitted into the old 1.6m box the
 		# tree fern's four-metre crown shrank the whole tree to a 1.7m shrub.
 		"size": Vector3(3.2, 3.6, 3.2),
+		# What stands in the way, and what he stands at to chop: the trunk. The crown is
+		# only clicked (LAYER_PICK).
+		"trunk_radius": 0.3,
 	},
 	"stone": {
 		"name": "RESOURCE_STONE",

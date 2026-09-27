@@ -323,18 +323,19 @@ func test_challenge_tower_retargeting_jitter_prevention() -> void:
 
 	# Trigger periodic fire timeout: Tower must NOT drop Dino A mid-burst (jitter safety)
 	tower._on_fire_timer_timeout()
-	assert_almost_eq(float(dino_a.current_hp), 2.0, 0.01, "Dino A shot, HP: 3.0 -> 2.0")
-	assert_almost_eq(float(dino_b.current_hp), 3.0, 0.01, "Dino B untouched (no jitter switch)")
+	var shot: float = float(tower.damage)
+	assert_almost_eq(float(dino_a.current_hp), raptor_stat("hp") - shot, 0.01, "Dino A shot once")
+	assert_almost_eq(float(dino_b.current_hp), raptor_stat("hp"), 0.01, "Dino B untouched (no jitter switch)")
 	assert_eq(tower.current_target, dino_a, "Tower current_target remains Dino A")
 
 	# Finish killing Dino A
-	dino_a.take_damage(2.0)
+	dino_a.take_damage(dino_a.current_hp)
 	tower.on_target_died(dino_a)
 
 	# Once Dino A dies, Tower immediately acquires Dino B
 	tower._on_fire_timer_timeout()
 	assert_eq(tower.current_target, dino_b, "Tower smoothly retargeted to Dino B after Dino A died")
-	assert_almost_eq(float(dino_b.current_hp), 2.0, 0.01, "Dino B shot by tower")
+	assert_almost_eq(float(dino_b.current_hp), raptor_stat("hp") - shot, 0.01, "Dino B shot by tower")
 
 func test_challenge_tower_despawn_freed_mid_stream_safety() -> void:
 	var tower = _create_tower(Vector3.ZERO)
@@ -366,7 +367,7 @@ func test_challenge_tower_despawn_freed_mid_stream_safety() -> void:
 
 	# Fire must safely hit new target
 	tower.fire()
-	assert_almost_eq(float(dinos[1].current_hp), 2.0, 0.01, "dinos[1] successfully damaged")
+	assert_almost_eq(float(dinos[1].current_hp), raptor_stat("hp") - float(tower.damage), 0.01, "dinos[1] successfully damaged")
 
 func test_challenge_tower_destroyed_stops_firing() -> void:
 	var tower = _create_tower(Vector3.ZERO)
@@ -527,21 +528,21 @@ func test_challenge_dino_ready_lifecycle_wipes_stat_multipliers() -> void:
 	assert_not_null(dino_script, "Dino script must exist")
 	if dino_script == null: return
 
-	# 1. Instantiate Dino and configure with 2.0x HP multiplier (expected 6.0 HP)
+	# 1. Instantiate Dino and configure with 2.0x HP and damage multipliers
 	var dino = dino_script.new()
 	_cleanup_nodes.append(dino)
 	dino.setup("raptor", {"hp": 2.0, "damage": 2.0})
 
-	assert_almost_eq(float(dino.max_hp), 6.0, 0.01, "Pre-tree: Dino max_hp correctly set to 6.0")
-	assert_almost_eq(float(dino.damage), 2.0, 0.01, "Pre-tree: Dino damage correctly set to 2.0")
+	assert_almost_eq(float(dino.max_hp), raptor_stat("hp") * 2.0, 0.01, "Pre-tree: Dino max_hp doubled")
+	assert_almost_eq(float(dino.damage), raptor_stat("damage") * 2.0, 0.01, "Pre-tree: Dino damage doubled")
 
 	# 2. Add dino to scene tree (triggers Godot _ready() lifecycle)
 	tree.root.add_child(dino)
 
 	# 3. Assert stats survive _ready() lifecycle
-	assert_almost_eq(float(dino.max_hp), 6.0, 0.01,
+	assert_almost_eq(float(dino.max_hp), raptor_stat("hp") * 2.0, 0.01,
 		"VULNERABILITY DETECTED: Dino max_hp was wiped out by _ready() -> _load_config_stats()")
-	assert_almost_eq(float(dino.damage), 2.0, 0.01,
+	assert_almost_eq(float(dino.damage), raptor_stat("damage") * 2.0, 0.01,
 		"VULNERABILITY DETECTED: Dino damage was wiped out by _ready() -> _load_config_stats()")
 
 func test_challenge_wavemanager_anomalous_signals_handling() -> void:

@@ -1253,13 +1253,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			# By point, not by tile: several stakes share a tile, and the tile only
 			# remembers one of them.
 			var b = grid_manager.building_at_point(hit_pos) if grid_manager else null
+			# Every order leaves a ring where it was given (OrderMarker): walk, work, fight.
 			if res_node != null and is_instance_valid(res_node):
 				if hero.has_method("can_harvest") and not hero.can_harvest(res_node):
 					_hint_need_tool(res_node)
 				else:
 					hero.order_harvest(res_node)
+					OrderMarker.spawn(self, res_node.global_position, "work")
 			elif b != null and is_instance_valid(b):
 				right_click_building(b, hit_pos)
+				OrderMarker.spawn(self, hit_pos, "work")
 			else:
 				var hit_obj = _raycast_object(event.position)
 				if hit_obj != null and is_instance_valid(hit_obj):
@@ -1268,14 +1271,19 @@ func _unhandled_input(event: InputEvent) -> void:
 							_hint_need_tool(hit_obj)
 						else:
 							hero.order_harvest(hit_obj)
+							OrderMarker.spawn(self, hit_obj.global_position, "work")
 					elif hit_obj.is_in_group("dinos"):
 						hero.order_attack(hit_obj)
+						OrderMarker.spawn(self, hit_obj.global_position, "attack")
 					elif hit_obj.is_in_group("buildings") or _is_cabin(hit_obj):
 						right_click_building(hit_obj, hit_pos)
+						OrderMarker.spawn(self, hit_pos, "work")
 					else:
 						hero.move_to(hit_pos)
+						OrderMarker.spawn(self, hit_pos, "move")
 				else:
 					hero.move_to(hit_pos)
+					OrderMarker.spawn(self, hit_pos, "move")
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1692,8 +1700,10 @@ func _raycast_object(screen_pos: Vector2) -> Node:
 	if cfg_layers and "LAYER_WALL" in cfg_layers:
 		wall_layer = int(cfg_layers.LAYER_WALL)
 	# Walls are on their own layer so the Hero can walk through them; the cursor still
-	# has to find them, or a fence becomes unclickable.
-	query.collision_mask = 1 | 2 | 4 | blueprint_layer | wall_layer
+	# has to find them, or a fence becomes unclickable. And a tree is clicked by its crown,
+	# which is on a layer of its own (Config.LAYER_PICK).
+	var pick_layer: int = int(cfg_layers.LAYER_PICK) if (cfg_layers and "LAYER_PICK" in cfg_layers) else 64
+	query.collision_mask = 1 | 2 | 4 | blueprint_layer | wall_layer | pick_layer
 	var result = space_state.intersect_ray(query)
 	if result and result.has("collider"):
 		return result["collider"]

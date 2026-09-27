@@ -128,13 +128,13 @@ func test_04_core_campfire_instantiates_with_art_and_valid_collision() -> void:
 	assert_gt(meshes.size(), 0, "Body has MeshInstance3D nodes from the cabin model")
 
 	# 3. HP and signals
-	assert_eq(core.current_hp, 10.0, "Initial Core HP is 10.0")
+	assert_eq(core.current_hp, core_hp(), "Initial Core HP is Config's")
 	var hp_signal_fired: Array = []
 	var eb = tree.root.get_node_or_null("EventBus")
 	if eb:
 		eb.core_hp_changed.connect(func(cur, max_hp): hp_signal_fired.append([cur, max_hp]))
 	core.take_damage(2.0)
-	assert_eq(core.current_hp, 8.0, "Core takes damage properly")
+	assert_eq(core.current_hp, core_hp() - 2.0, "Core takes damage properly")
 	assert_gt(hp_signal_fired.size(), 0, "core_hp_changed signal was emitted")
 
 # ==============================================================================

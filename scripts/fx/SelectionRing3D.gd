@@ -55,8 +55,10 @@ func rebuild() -> void:
 	_parts.clear()
 	_built_for = want
 
-	var margin: float = _cfg("selection_ring_margin", 0.18)
-	var thickness: float = _cfg("selection_ring_thickness", 0.09)
+	# A unit's ring is a thin circle hugging its feet; a building's a frame round its base.
+	var round: bool = shape == Shape.ROUND
+	var margin: float = _cfg("unit_ring_margin", 0.06) if round else _cfg("selection_ring_margin", 0.18)
+	var thickness: float = _cfg("unit_ring_thickness", 0.03) if round else _cfg("selection_ring_thickness", 0.09)
 	var colour: Color = _colour_override if _colour_override is Color else _cfg("selection_ring_color", Color(0.35, 1.0, 0.5, 0.9))
 	var outer: float = base_size + margin * 2.0
 	var outer_z: float = base_depth + margin * 2.0

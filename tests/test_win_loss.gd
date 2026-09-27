@@ -216,7 +216,7 @@ func test_win_06_action_lockout_on_victory() -> void:
 func test_loss_01_core_config_and_initial_stats() -> void:
 	assert_not_null(config_node, "Config singleton must exist")
 	var core_cfg: Dictionary = config_node.BUILDINGS.get("core", {})
-	assert_almost_eq(float(core_cfg.get("hp", 0.0)), 10.0, 0.001, "Config.BUILDINGS.core.hp must be 10.0")
+	assert_gt(float(core_cfg.get("hp", 0.0)), 0.0, "Config.BUILDINGS.core.hp is set")
 
 	var core = _create_core_campfire()
 	if core == null:
@@ -226,8 +226,8 @@ func test_loss_01_core_config_and_initial_stats() -> void:
 		tree.root.add_child(core)
 		await wait_frames(1)
 
-	assert_almost_eq(float(core.get("max_hp")), 10.0, 0.001, "CoreCampfire.max_hp must be 10.0")
-	assert_almost_eq(float(core.get("current_hp")), 10.0, 0.001, "CoreCampfire.current_hp must be 10.0")
+	assert_almost_eq(float(core.get("max_hp")), float(core_cfg.get("hp", 0.0)), 0.001, "CoreCampfire.max_hp is Config's")
+	assert_almost_eq(float(core.get("current_hp")), float(core_cfg.get("hp", 0.0)), 0.001, "And it starts full")
 
 func test_loss_02_core_partial_damage_emits_hp_changed_without_loss() -> void:
 	var core = _create_core_campfire()
@@ -241,12 +241,12 @@ func test_loss_02_core_partial_damage_emits_hp_changed_without_loss() -> void:
 	var hp_watcher = watch_signal(event_bus_node, "core_hp_changed")
 	var game_lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Inflict 4.0 damage -> 6.0 HP remaining
+	# Inflict 4.0 damage
 	core.take_damage(4.0)
-	assert_almost_eq(float(core.get("current_hp")), 6.0, 0.001, "Core HP drops to 6.0")
+	assert_almost_eq(float(core.get("current_hp")), core_hp() - 4.0, 0.001, "Core HP drops by 4")
 	assert_true(hp_watcher.emitted, "core_hp_changed must emit on partial damage")
-	assert_almost_eq(float(hp_watcher.last_args[0]), 6.0, 0.001, "core_hp_changed current HP is 6.0")
-	assert_almost_eq(float(hp_watcher.last_args[1]), 10.0, 0.001, "core_hp_changed max HP is 10.0")
+	assert_almost_eq(float(hp_watcher.last_args[0]), core_hp() - 4.0, 0.001, "core_hp_changed carries the HP left")
+	assert_almost_eq(float(hp_watcher.last_args[1]), core_hp(), 0.001, "core_hp_changed carries the max HP")
 	assert_false(game_lost_watcher.emitted, "game_lost must NOT emit on partial damage")
 	assert_false(bool(game_state_node.get("is_game_over")), "GameState.is_game_over must remain false")
 
@@ -262,8 +262,8 @@ func test_loss_03_core_fatal_damage_emits_game_lost() -> void:
 	var hp_watcher = watch_signal(event_bus_node, "core_hp_changed")
 	var game_lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Inflict lethal damage: 10.0 damage -> 0.0 HP
-	core.take_damage(10.0)
+	# Inflict lethal damage -> 0.0 HP
+	core.take_damage(core_hp())
 	assert_lte(float(core.get("current_hp")), 0.0, "Core HP drops to <= 0.0")
 	assert_true(hp_watcher.emitted, "core_hp_changed must emit on fatal damage")
 	assert_almost_eq(float(hp_watcher.last_args[0]), 0.0, 0.001, "core_hp_changed current HP is 0.0 on destruction")
@@ -280,7 +280,7 @@ func test_loss_04_gamestate_is_game_over_flag_on_loss() -> void:
 		tree.root.add_child(core)
 		await wait_frames(1)
 
-	core.take_damage(10.0)
+	core.take_damage(core_hp())
 	await wait_frames(1)
 
 	assert_true(bool(game_state_node.get("is_game_over")), "GameState.is_game_over must become true on game_lost")
@@ -303,11 +303,11 @@ func test_loss_05_dino_attack_destroys_core() -> void:
 
 	var game_lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	# Simulate dinosaur attacking Core Campfire until destruction
-	for i in range(10):
+	# Simulate dinosaur attacking Core Campfire until destruction, a raptor's bite at a time
+	for i in range(int(ceil(core_hp() / raptor_stat("damage"))) + 1):
 		if core.get("current_hp") <= 0.0:
 			break
-		core.take_damage(1.0)
+		core.take_damage(raptor_stat("damage"))
 
 	assert_lte(float(core.get("current_hp")), 0.0, "Core HP must reach 0")
 	assert_true(game_lost_watcher.emitted, "game_lost emitted following dinosaur assault on Core")
@@ -567,7 +567,7 @@ func test_restart_03_reinstantiates_core_and_nest() -> void:
 		assert_not_null(nest, "Main must contain Nest after restart")
 
 		if core != null and core.get("current_hp") != null:
-			assert_almost_eq(float(core.get("current_hp")), 10.0, 0.001, "CoreCampfire HP reset to full 10.0")
+			assert_almost_eq(float(core.get("current_hp")), core_hp(), 0.001, "CoreCampfire HP reset to full")
 
 func test_restart_04_hides_hud_game_over_overlay() -> void:
 	var hud = _create_hud()

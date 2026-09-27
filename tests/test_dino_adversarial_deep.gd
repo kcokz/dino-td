@@ -93,12 +93,12 @@ func test_adversarial_malformed_stat_multipliers() -> void:
 	}
 	var dino = _create_dino("raptor", malformed)
 	assert_not_null(dino, "Dino created successfully with malformed multiplier dictionary")
-	# "3.5" string should parse to 3.5 -> hp = 3.0 * 3.5 = 10.5
-	assert_almost_eq(float(dino.max_hp), 10.5, 0.01, "String float parsed safely")
-	# damage [] should fallback to default 1.0 -> 1.0 * 1.0 = 1.0
-	assert_almost_eq(float(dino.damage), 1.0, 0.01, "Array fallback to default multiplier")
-	# speed {} should fallback to default 1.0 -> 4.0 * 1.0 = 4.0
-	assert_almost_eq(float(dino.speed), 4.0, 0.01, "Dictionary fallback to default multiplier")
+	# "3.5" string should parse to 3.5 -> hp x 3.5
+	assert_almost_eq(float(dino.max_hp), raptor_stat("hp") * 3.5, 0.01, "String float parsed safely")
+	# damage [] should fall back to the default multiplier, 1.0
+	assert_almost_eq(float(dino.damage), raptor_stat("damage"), 0.01, "Array fallback to default multiplier")
+	# speed {} should fall back to the default multiplier, 1.0
+	assert_almost_eq(float(dino.speed), raptor_stat("speed"), 0.01, "Dictionary fallback to default multiplier")
 
 # 2. Rapid Re-entrant Take Damage & Lethal Free
 func test_adversarial_rapid_reentrant_take_damage() -> void:

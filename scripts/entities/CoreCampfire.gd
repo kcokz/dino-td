@@ -1,22 +1,19 @@
 # res://scripts/entities/CoreCampfire.gd
 class_name CoreCampfire
-extends "res://scripts/entities/Building.gd"
+extends "res://scripts/entities/Tower.gd"
 
-## Campfire base objective. Loss of this structure triggers game_lost.
-## Emits core_hp_changed on initialization and whenever damaged.
+## The cabin: the run's objective -- its loss is the game lost -- and, since v0.6, a turret
+## of its own. The wreck's second turret head is on its roof (tools/generate_props.py cabin)
+## and it shoots like any tower, by its own numbers (Config BUILDINGS.core: range, damage,
+## fire rate), covering the ground round the cabin: enough for the first raptors, not for
+## a raid. Emits core_hp_changed on initialization and whenever damaged.
 
 var _last_emitted_hp: float = -1.0
 
 func _init() -> void:
-	super("core")
-	building_type = "core"
-	var cfg = _get_config()
-	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has("core"):
-		var data: Dictionary = cfg.BUILDINGS["core"]
-		max_hp = float(data.get("hp", 10.0))
-	else:
-		max_hp = 10.0
-	current_hp = max_hp
+	super()             # a turret's machinery -- the range, the fire timer, the head to turn
+	setup("core")       # and the cabin's own numbers
+	_load_tower_config()
 
 func _ready() -> void:
 	super._ready()
@@ -34,6 +31,7 @@ func _on_damaged(_amount: float) -> void:
 	_emit_core_hp_changed()
 
 func _on_before_destroy() -> void:
+	super._on_before_destroy()      # its gun stops
 	_emit_core_hp_changed()
 	var gs = _get_game_state()
 	if gs != null and gs.is_game_over:

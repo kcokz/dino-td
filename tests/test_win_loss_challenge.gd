@@ -152,7 +152,7 @@ func test_challenge_race_core_destruction_locks_out_a_later_jump() -> void:
 	var won_watcher = watch_signal(event_bus_node, "game_won")
 
 	# Destroy Core first
-	core.take_damage(10.0)
+	core.take_damage(core_hp())
 	assert_true(lost_watcher.emitted, "game_lost emitted when Core destroyed")
 	assert_true(bool(game_state_node.is_game_over), "is_game_over must be true after Core loss")
 	assert_false(bool(game_state_node.is_game_won), "is_game_won must be false after Core loss")
@@ -223,12 +223,12 @@ func test_challenge_race_rapid_interleaved_damage_resolution() -> void:
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 	var won_watcher = watch_signal(event_bus_node, "game_won")
 
-	# Core has 10 HP: 2 damage a round kills it in the fifth, when the beacon has had four
+	# A fifth of the core's HP a round kills it in the fifth, when the beacon has had four
 	# tenths of its charge -- and the fifth tenth comes after the core is gone.
 	for i in range(10):
 		if gs.is_game_over:
 			break
-		core.take_damage(2.0)
+		core.take_damage(core_hp() / 5.0)
 		gs.charge_beacon(total * 0.1)
 
 	assert_true(gs.is_game_over, "Game must reach game_over terminal state")
@@ -249,7 +249,7 @@ func test_challenge_race_simultaneous_same_frame_fatal_damage() -> void:
 	var total: float = float(gs.map_data()["beacon"]["charge_seconds"])
 
 	# Both a hair from the end
-	core.take_damage(9.0)
+	core.take_damage(core_hp() - 1.0)
 	gs.charge_beacon(total - 1.0)
 	assert_almost_eq(float(core.current_hp), 1.0, 0.001, "Core HP primed at 1.0")
 	assert_false(gs.is_game_over, "Game not yet over")
@@ -329,7 +329,7 @@ func test_challenge_idempotency_invalid_damage_inputs_ignored() -> void:
 	gs.charge_beacon(0.0)
 	gs.charge_beacon(NAN)
 
-	assert_almost_eq(float(core.current_hp), 10.0, 0.001, "Core HP unharmed by negative/zero damage")
+	assert_almost_eq(float(core.current_hp), core_hp(), 0.001, "Core HP unharmed by negative/zero damage")
 	assert_almost_eq(float(gs.beacon_charge), 0.0, 0.0001, "The charge untouched by nonsense")
 	assert_false(won_watcher.emitted, "No game_won emitted")
 	assert_false(lost_watcher.emitted, "No game_lost emitted")

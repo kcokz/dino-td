@@ -32,6 +32,7 @@
 
 import bpy
 import hashlib
+import math
 import os
 
 REPO = r"z:\home\zkl-unix\repo\game\dino"
@@ -141,6 +142,16 @@ def dedupe_images():
                 bpy.data.images.remove(img)
 
 
+def channel_sets(action):
+    """Where an action keeps its F-curves: the layered API Blender 4.4+ gives actions,
+    or the action itself before that."""
+    bags = []
+    for layer in getattr(action, "layers", []):
+        for strip in layer.strips:
+            bags.extend(strip.channelbags)
+    return bags if bags else [action]
+
+
 def main():
     reset()
     body = import_gltf(BODY)
@@ -183,6 +194,20 @@ def main():
     # the idle, so he stood in his T-pose.
     arm.animation_data_create()
     arm.animation_data.action = None
+
+    # TURNED to face the game's -Z (Blender +Y), as the dinosaurs are
+    # (tools/convert_quaternius.py): everything in the game turns with look_at, which points
+    # -Z at the target, and the kits' figures face the other way -- he walked backwards and
+    # chopped with his back to the tree. A key on the rig OBJECT in any clip would turn him
+    # straight back the moment it played, so the clips keep their bones' keys and nothing else.
+    for act in bpy.data.actions:
+        for bag in channel_sets(act):
+            for fc in list(bag.fcurves):
+                if not fc.data_path.startswith("pose.bones"):
+                    bag.fcurves.remove(fc)
+    arm.rotation_mode = "XYZ"
+    arm.rotation_euler = (0.0, 0.0, math.pi)
+    bpy.context.view_layer.update()
 
     for mat in bpy.data.materials:
         # By the name before any ".001": the brows and the hair each bring a MI_Hair_1, and

@@ -575,8 +575,8 @@ func test_core_initial_placement_and_hp() -> void:
 	_cleanup_nodes.append(core)
 
 	assert_eq(core.building_type, "core", "Core building_type should be 'core'")
-	assert_almost_eq(float(core.max_hp), 10.0, 0.01, "Core max_hp should match Config (10.0)")
-	assert_almost_eq(float(core.current_hp), 10.0, 0.01, "Core initial current_hp should be 10.0")
+	assert_almost_eq(float(core.max_hp), core_hp(), 0.01, "Core max_hp should match Config")
+	assert_almost_eq(float(core.current_hp), core_hp(), 0.01, "Core starts at full health")
 
 func test_core_take_damage_emits_core_hp_changed() -> void:
 	assert_not_null(core_campfire_script, "CoreCampfire.gd script must exist")
@@ -588,11 +588,11 @@ func test_core_take_damage_emits_core_hp_changed() -> void:
 	var watcher = watch_signal(event_bus_node, "core_hp_changed")
 
 	core.take_damage(3.0)
-	assert_almost_eq(float(core.current_hp), 7.0, 0.01, "Core HP should be 7.0 after 3.0 damage")
+	assert_almost_eq(float(core.current_hp), core_hp() - 3.0, 0.01, "Core HP is three less after 3.0 damage")
 	assert_true(watcher.emitted, "core_hp_changed signal must be emitted on damage")
 	if not watcher.last_args.is_empty():
-		assert_almost_eq(float(watcher.last_args[0]), 7.0, 0.01, "Arg 0 should be current_hp (7.0)")
-		assert_almost_eq(float(watcher.last_args[1]), 10.0, 0.01, "Arg 1 should be max_hp (10.0)")
+		assert_almost_eq(float(watcher.last_args[0]), core_hp() - 3.0, 0.01, "Arg 0 is current_hp")
+		assert_almost_eq(float(watcher.last_args[1]), core_hp(), 0.01, "Arg 1 is max_hp")
 
 func test_core_partial_damage_does_not_emit_game_lost() -> void:
 	assert_not_null(core_campfire_script, "CoreCampfire.gd script must exist")
@@ -604,7 +604,7 @@ func test_core_partial_damage_does_not_emit_game_lost() -> void:
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 
 	core.take_damage(5.0)
-	assert_almost_eq(float(core.current_hp), 5.0, 0.01, "Core HP should be 5.0")
+	assert_almost_eq(float(core.current_hp), core_hp() - 5.0, 0.01, "Core HP is five less")
 	assert_false(lost_watcher.emitted, "game_lost must NOT be emitted on partial damage")
 	assert_false(game_state_node.is_game_over, "GameState.is_game_over must remain false")
 
@@ -618,8 +618,8 @@ func test_core_destruction_emits_game_lost() -> void:
 	var lost_watcher = watch_signal(event_bus_node, "game_lost")
 	var destroyed_watcher = watch_signal(event_bus_node, "building_destroyed")
 
-	# Deal lethal damage (10.0)
-	core.take_damage(10.0)
+	# Deal lethal damage
+	core.take_damage(core_hp())
 	assert_lte(float(core.current_hp), 0.0, "Core HP should be <= 0")
 	assert_true(destroyed_watcher.emitted, "building_destroyed must be emitted for Core")
 	assert_true(lost_watcher.emitted, "game_lost must be emitted on Core destruction")

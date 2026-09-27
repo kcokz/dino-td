@@ -580,6 +580,18 @@ func assert_readout(hud: Node, res_id: String, amount: int, message: String = ""
 		"And the %s chip names it: '%s'" % [res_id, chip.tooltip_text])
 	return counted and named
 
+## The cabin's hit points (Config.BUILDINGS.core.hp) -- written down as 10 by the older
+## suites, until the cabin stood a hundred (v0.6).
+func core_hp() -> float:
+	return float(_config().BUILDINGS["core"]["hp"])
+
+## One of a raptor's own numbers (Config.DINOS.raptor): "hp", "damage", "speed".
+func raptor_stat(key: String) -> float:
+	return float(_config().DINOS["raptor"][key])
+
+func _config() -> Node:
+	return Engine.get_main_loop().root.get_node_or_null("Config") if Engine.get_main_loop() is SceneTree else null
+
 func win_the_run() -> void:
 	if not (Engine.get_main_loop() is SceneTree) or Engine.get_main_loop().root == null:
 		return
