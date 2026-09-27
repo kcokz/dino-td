@@ -2,8 +2,11 @@
 class_name CabinInterior
 extends Node3D
 
-## The inside of the cabin: a small room with a bench in it, and the one place the
-## Hero gains anything.
+## The inside of the cabin: the crew module the Hero lives in, cut away along the front so
+## the camera looks in, with his three benches along the back wall -- and the one place he
+## gains anything. The room and the benches are models (tools/generate_cabin.py) whose
+## parts show how far the run has got: the tools on the board, the pot on the fire, the
+## beacon's mast (CabinArt).
 ##
 ## It is a scene of its own so the art for it can be made without touching game
 ## code, but it is **not a scene swap**. It is instanced into the level and parked
@@ -24,6 +27,8 @@ const CAMERA_NAME: String = "CabinCamera"
 var camera: Camera3D = null
 var stations: Array[Node] = []
 var is_open: bool = false
+var _light_time: float = 0.0
+var _lights: Array[OmniLight3D] = []
 
 func _ready() -> void:
 	add_to_group("cabin_interior")
@@ -37,6 +42,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not is_open:
 		return
+	# The fire flickers whatever the clock is doing: it is the room, not the game.
+	_light_time += delta
+	CabinArt.animate(_lights, _light_time)
 	var gs := _get_game_state()
 	if gs and ("is_paused" in gs and gs.is_paused or "is_game_over" in gs and gs.is_game_over):
 		return
@@ -48,6 +56,14 @@ func set_open(open: bool) -> void:
 	is_open = open
 	if camera and is_instance_valid(camera):
 		camera.current = open
+	# What the benches show is caught up on the way in: a new run clears the flags they
+	# read without a word on the bus. And the lights that flicker are gathered once here,
+	# not searched for every frame.
+	if open:
+		for st in stations:
+			if is_instance_valid(st) and st.has_method("refresh_parts"):
+				st.refresh_parts()
+		_lights = CabinArt.lights_under(self)
 
 func station(station_id: String) -> Node:
 	for st in stations:
@@ -69,9 +85,15 @@ func busy_stations() -> Array[Node]:
 # ==============================================================================
 
 func _ensure_room() -> void:
-	# Placeholder geometry: a floor and three walls, so the camera has something to
-	# look at and the benches read as being *inside* something. v0.5 replaces this
-	# wholesale with the real cabin -- the code never names a shape, only the scene.
+	# The module's cabin (Config.VISUALS "cabin/room"), with its glowing parts -- daylight
+	# through the portholes and the open hatch, the ceiling lamp -- drawn lit.
+	if find_child("Room", false, false) == null and VisualLibrary.has_art("cabin/room"):
+		var art: Node3D = VisualLibrary.make("cabin/room")
+		art.name = "Room"
+		add_child(art)
+		CabinArt.light_glows(art, _glow_lights())
+	# Without the model: a floor and three walls, so the camera has something to look at
+	# and the benches read as being *inside* something.
 	if find_child("Room", false, false) == null:
 		var room := Node3D.new()
 		room.name = "Room"
@@ -87,9 +109,10 @@ func _ensure_room() -> void:
 		camera = Camera3D.new()
 		camera.name = CAMERA_NAME
 		# Close and low: this is the one place in the game that is not seen from
-		# halfway up the sky.
-		camera.position = Vector3(0.0, 3.2, 6.2)
-		camera.rotation_degrees = Vector3(-22.0, 0.0, 0.0)
+		# halfway up the sky (Config.CABIN).
+		camera.position = _cabin("camera_position", Vector3(0.0, 1.55, 2.65))
+		camera.rotation_degrees = _cabin("camera_rotation_degrees", Vector3(-16.0, 0.0, 0.0))
+		camera.fov = float(_cabin("camera_fov", camera.fov))
 		camera.current = false
 		add_child(camera)
 	camera.environment = _interior_environment()
@@ -97,9 +120,9 @@ func _ensure_room() -> void:
 	if find_child("CabinLight", false, false) == null:
 		var lamp := OmniLight3D.new()
 		lamp.name = "CabinLight"
-		lamp.position = Vector3(0.0, 2.6, 0.5)
-		lamp.omni_range = 14.0
-		lamp.light_energy = 1.4
+		lamp.position = _cabin("lamp_position", Vector3(0.0, 2.3, 0.2))
+		lamp.omni_range = float(_cabin("lamp_range", 7.0))
+		lamp.light_energy = float(_cabin("lamp_energy", 1.1))
 		lamp.light_color = Color(1.0, 0.92, 0.78)
 		add_child(lamp)
 
@@ -141,8 +164,9 @@ func _slab(size: Vector3, at: Vector3, colour: Color) -> MeshInstance3D:
 	mi.material_override = mat
 	return mi
 
-## One node per station in Config.STATIONS, laid out along the back wall. Adding a
-## station is an entry in Config and nothing else.
+## One node per station in Config.STATIONS, each standing where the room's model marks its
+## spot ("spot_<id>"), or along the back wall in a row when the room has no mark for it.
+## Adding a station is an entry in Config and a spot in the room.
 func _ensure_stations() -> void:
 	stations.clear()
 	var ids: Array = _station_ids()
@@ -156,9 +180,25 @@ func _ensure_stations() -> void:
 			existing = script.new(id)
 			existing.name = "Station_%s" % id
 			existing.position = Vector3(start_x + spacing * i, 0.0, -1.6)
+			var spot: Node3D = spot_of(id)
+			if spot != null:
+				existing.position = to_local(spot.global_position)
 			add_child(existing)
 		if existing != null:
 			stations.append(existing)
+
+## Where the room's model says the bench `station_id` stands, or null.
+func spot_of(station_id: String) -> Node3D:
+	var room: Node = find_child("Room", false, false)
+	return room.find_child("spot_%s" % station_id, true, false) as Node3D if room else null
+
+func _cabin(key: String, fallback: Variant) -> Variant:
+	var cfg := _get_config()
+	return cfg.CABIN.get(key, fallback) if (cfg and "CABIN" in cfg) else fallback
+
+## The lights the glowing parts of the room carry (Config.CABIN.glow_lights).
+func _glow_lights() -> Dictionary:
+	return _cabin("glow_lights", {})
 
 func _station_ids() -> Array:
 	var cfg := _get_config()

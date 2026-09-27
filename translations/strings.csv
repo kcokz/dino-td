@@ -52,7 +52,6 @@ HERO_HINT,"Right‐click the ground to walk there, a tree or rock to gather, a d
 WORK_CONSTRUCTING,"Building","建造中"
 WORK_UPGRADING,"Upgrading","升级中"
 NODE_HINT,"Right‐click it with the Hero selected to gather.","选中现代人后右键点它，就去采集。"
-CRAFT_STAY,"Work only goes on while he is in here.","人在船舱里，活才会继续。"
 STATUS_TOWER_STATS,"Fires %s/s · range %s m · %s damage","射速 %s/秒 · 射程 %s 米 · 伤害 %s"
 CABIN_SUBTITLE,"Work only goes on while he is in here. Outside, the raids keep coming.","人在船舱里，活才会继续。外面的来袭照样会来。"
 CABIN_LEAVE,"Step outside (Esc)","走出船舱（Esc）"

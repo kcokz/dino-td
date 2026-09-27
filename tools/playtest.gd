@@ -42,6 +42,11 @@ func _init() -> void:
 	var wanted: PackedStringArray = OS.get_cmdline_user_args()
 	var names: Array = []
 	for w in wanted:
+		# "lang:zh_CN" shoots in that language (the engine's locale only -- the player's saved
+		# settings are not touched).
+		if String(w).begins_with("lang:"):
+			TranslationServer.set_locale(String(w).substr(5))
+			continue
 		names.append(String(w))
 	if names.is_empty():
 		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug", "showcase", "scale"]
@@ -345,10 +350,38 @@ func _scenario_fence() -> void:
 
 ## Inside the cabin. The interior is the same world 200 metres down, so anything
 ## wrong with the environment shows here first.
+##
+## The room as a new run finds it -- the beacon's mast down, the spit over the fire, an
+## empty tool board -- then fitted out: every tool on the board, the pot on the fire, the
+## beacon repaired and waiting; and a meal under way at the kitchen.
 func _scenario_cabin() -> void:
-	if _main.has_method("enter_cabin"):
-		_main.enter_cabin()
+	if not _main.has_method("enter_cabin"):
+		return
+	_main.enter_cabin()
+	await _wait(6)
 	await _shoot("inside")
+	var gs := root.get_node_or_null("GameState")
+	var cfg := root.get_node_or_null("Config")
+	var eb := root.get_node_or_null("EventBus")
+	if gs and cfg:
+		for recipe_id in cfg.RECIPES:
+			gs.grant_unlock(String(cfg.RECIPES[recipe_id].get("unlocks", "")))
+		for job_id in cfg.beacon_jobs(gs.map_data()).slice(0, gs.beacon_stage_count()):
+			gs.finish_beacon_job(job_id)
+	_grant({"food": 3, "prime_meat": 1})
+	var kitchen: Node = _main.cabin_interior.station("kitchen") if _main.cabin_interior else null
+	if kitchen and eb:
+		eb.unit_selected.emit(kitchen)
+	await _wait(4)
+	await _shoot("inside_fitted_out")
+	if kitchen:
+		for job in kitchen.jobs():
+			if kitchen.can_afford(job) and kitchen.begin(job):
+				break
+		if kitchen.active_recipe != "":
+			kitchen.work(kitchen.time_of(kitchen.active_recipe) * 0.4)
+	await _wait(4)
+	await _shoot("inside_cooking")
 
 ## Portraits of the models, from close enough to actually judge them.
 ##
@@ -843,6 +876,11 @@ func _portrait(name: String, at: Vector3, distance: float, overhead: bool = fals
 ## picture reproducible. Clicking real pixels is the right tool for checking a UI flow,
 ## and belongs in a scenario of its own when that is what is being asked.
 func _fresh_level() -> void:
+	# Each scenario is a run of its own: what one granted, made or repaired is not the next
+	# one's starting point (the cabin's shots repair the beacon the beacon's shots start from).
+	var gs := root.get_node_or_null("GameState")
+	if gs and gs.has_method("reset_game"):
+		gs.reset_game()
 	_main = load("res://scenes/Main.tscn").instantiate()
 	root.add_child(_main)
 	await _wait(SETTLE_FRAMES)

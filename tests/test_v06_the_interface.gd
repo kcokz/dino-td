@@ -240,18 +240,19 @@ func test_10_a_big_stock_pushes_the_vitals_over_rather_than_under() -> void:
 	assert_lte(stock.end.x, vitals.position.x, "The stock ends before the vitals begin")
 	assert_lte(vitals.end.x, controls.position.x, "And the vitals before the controls")
 
-func test_11_inside_the_toasts_stand_above_the_way_out() -> void:
-	# Under the top row, where they stand outside, they covered the cabin's header.
+func test_11_a_toast_stands_under_the_top_row_and_clear_of_the_cabin_dock() -> void:
+	# Inside, the room fills the screen and the dock keeps to the bottom: a toast stands
+	# where it does outside -- under the top row, in the middle -- over the room.
 	var main = await _level()
 	main.enter_cabin()
 	main.hud.show_hint(tr("CABIN_SUBTITLE"))
 	await wait_frames(2)
 	var toast: Rect2 = main.hud.hint_toast.get_global_rect()
-	var leave: Rect2 = main.hud.cabin_screen.find_child("LeaveBtn", true, false).get_global_rect()
-	var header: Rect2 = main.hud.cabin_screen.find_child("Header", true, false).get_global_rect()
+	var dock: Rect2 = main.hud.cabin_screen.find_child("Dock", true, false).get_global_rect()
+	var top_row: Rect2 = main.hud.root_control.find_child("VitalsPanel", true, false).get_global_rect()
 	var middle: float = main.hud.root_control.get_global_rect().get_center().x
-	assert_lte(toast.end.y, leave.position.y, "Inside, a toast's bottom is above the way out")
-	assert_gte(toast.position.y, header.end.y, "And clear of the cabin's header")
+	assert_lte(toast.end.y, dock.position.y, "Inside, a toast is clear of the dock")
+	assert_gte(toast.position.y, top_row.end.y, "And under the top row")
 	assert_almost_eq(toast.get_center().x, middle, 1.0, "In the middle of the screen")
 	main.leave_cabin()
 	await wait_frames(2)

@@ -980,9 +980,6 @@ const THEME: Dictionary = {
 	# soft (the mip level read), and how dark the edges go. The tint is "scrim".
 	"frost_blur": 3.0,
 	"frost_vignette": 0.35,
-	# Inside the cabin the room shows through more than the valley does behind a menu: the
-	# benches are in it, and it is where he is.
-	"cabin_frost_tint": 0.45,
 
 	# The sizes of the interface's pieces, each on a ladder like the type's, so one kind of
 	# thing is one size wherever it appears.
@@ -1049,8 +1046,10 @@ const UI: Dictionary = {
 	"result_card_width": 560,
 	"menu_width": 400,
 	"menu_picker_width": 190,
-	"cabin_screen_top": 76,            # the cabin's cards start under the top row
-	"cabin_card_width": 372,           # three benches side by side, with room between
+	# The cabin's dock (CabinScreen): the room above it is the screen, so it is kept low.
+	"cabin_shade_height": 260,         # the shade rising behind it from the bottom edge
+	"cabin_info_width": 300,           # the chosen bench's name, purpose and line
+	"cabin_job_width": 230,            # a job's card, side by side with the others
 }
 
 ## Presentation feedback (v0.3). None of this changes what happens in the game;
@@ -1427,6 +1426,21 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/water":           {"scene": "res://assets/models/props/drop_water_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	# Inside the cabin (tools/generate_cabin.py): the crew module's cabin, cut away along the
+	# front so the camera looks in -- white plating, the orange band, ribs, portholes, the
+	# hatch at one end -- and the three benches the Hero fitted it out with. Each bench is one
+	# file of named parts that show as the run goes on (scripts/fx/CabinArt.gd): the tools
+	# hang on the workbench's board once made, the stone pot replaces the spit over the
+	# fire, the beacon's broken mast goes back up a stage at a time. They were boxes.
+	# The room is fitted by height, so its floor stays the floor.
+	"cabin/room":           {"scene": "res://assets/models/cabin/room_a.glb", "fit": "height",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"station/workbench":    {"scene": "res://assets/models/cabin/workbench_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"station/kitchen":      {"scene": "res://assets/models/cabin/kitchen_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"station/beacon":       {"scene": "res://assets/models/cabin/beacon_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 }
 
 ## How many metres `key` occupies, resolved from wherever that thing declares its own
@@ -1456,6 +1470,10 @@ static func get_visual_size(key: String) -> Vector3:
 			# as tall as one gets.
 			var s: float = float(DROPS.get("size", 0.3))
 			return Vector3(s * 1.5, s, s * 1.5)
+		"cabin":
+			return CABIN.get("room_size", Vector3.ONE)
+		"station":
+			return CABIN.get("station_sizes", {}).get(id, Vector3.ONE)
 	return Vector3.ONE
 
 # ==============================================================================
@@ -1574,6 +1592,37 @@ const CABIN: Dictionary = {
 	"interior_background": Color(0.05, 0.045, 0.055),
 	"interior_ambient": Color(0.30, 0.26, 0.24),   # a little bounce, so shadows are not pitch black
 	"interior_ambient_energy": 0.45,
+
+	# The room and its benches, in metres and true to scale -- the Hero is 1.2 m: the
+	# workbench's top at his waist, the hood over the fire at his head, the beacon's dish
+	# over it. A bench is clicked by its declared size, like everything else (the art is
+	# fitted to it and the collider is built from it).
+	"room_size": Vector3(5.6, 2.6, 2.8),
+	"station_sizes": {
+		"workbench": Vector3(1.24, 1.52, 0.68),
+		"kitchen": Vector3(1.29, 2.56, 0.82),
+		"beacon": Vector3(1.32, 1.89, 0.76),
+	},
+	# The camera: in front of the room's open side, at head height, looking down a little at
+	# the benches -- they stand in the upper three quarters of the screen, above the dock
+	# along the bottom, and the whole room is in frame from bulkhead to bulkhead.
+	"camera_position": Vector3(0.0, 1.55, 3.35),
+	"camera_rotation_degrees": Vector3(-14.0, 0.0, 0.0),
+	"camera_fov": 58.0,
+	# The ceiling lamp's light (CabinLight): where it hangs, how bright, how far it reaches.
+	"lamp_position": Vector3(0.0, 2.3, 0.2),
+	"lamp_energy": 1.1,
+	"lamp_range": 7.0,
+	# Parts that glow (tools/generate_cabin.py names them "..._glow") and also light the room
+	# round them: colour, energy, range, and how much and how fast they flicker. The fire
+	# wavers; a working screen barely does; the fault light while the radio is dead pulses
+	# slowly; the lamp in the dish once the beacon is launched throbs.
+	"glow_lights": {
+		"fire_glow": {"color": Color(1.0, 0.6, 0.28), "energy": 1.6, "range": 3.0, "flicker": 0.25, "speed": 9.0},
+		"beacon_3_glow": {"color": Color(0.4, 0.85, 0.95), "energy": 0.6, "range": 1.8, "flicker": 0.05, "speed": 3.0},
+		"before_beacon_3_glow": {"color": Color(1.0, 0.22, 0.12), "energy": 0.35, "range": 1.2, "flicker": 0.6, "speed": 1.5},
+		"beacon_launch_glow": {"color": Color(0.5, 0.9, 1.0), "energy": 2.2, "range": 4.0, "flicker": 0.4, "speed": 2.0},
+	},
 }
 
 ## Every recipe, whatever station it belongs to, has the same shape:

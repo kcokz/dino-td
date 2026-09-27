@@ -17,9 +17,10 @@ enum Shape { BOX = 0, ROUND = 1 }
 
 var shape: int = Shape.BOX
 var base_size: float = 1.0   # side length for BOX, diameter for ROUND
+var base_depth: float = 1.0  # a BOX's other side, along Z: a bench is longer than it is deep
 
 var _parts: Array[MeshInstance3D] = []
-var _built_for: Vector2 = Vector2(-1.0, -1.0)  # (shape, size) the current mesh was built for
+var _built_for: Vector3 = Vector3(-1.0, -1.0, -1.0)  # (shape, size, depth) the current mesh was built for
 
 ## Set to draw this ring in something other than the selection colour. The hover ring
 ## uses it: "what I am pointing at" and "what I have selected" have to be tellable apart
@@ -33,18 +34,19 @@ func _ready() -> void:
 ## Draws this ring in `tint` instead of the configured selection colour.
 func override_color(tint: Color) -> void:
 	_colour_override = tint
-	_built_for = Vector2(-1.0, -1.0)   # force a rebuild, the colour is baked into the mesh
+	_built_for = Vector3(-1.0, -1.0, -1.0)   # force a rebuild, the colour is baked into the mesh
 	rebuild()
 
 ## Tells the ring what it is outlining. Call before showing it; rebuilding is
-## skipped when nothing changed.
-func configure(p_shape: int, p_base_size: float) -> void:
+## skipped when nothing changed. A BOX is square unless given a `p_depth` of its own.
+func configure(p_shape: int, p_base_size: float, p_depth: float = -1.0) -> void:
 	shape = p_shape
 	base_size = maxf(0.1, p_base_size)
+	base_depth = maxf(0.1, p_depth) if p_depth > 0.0 else base_size
 	rebuild()
 
 func rebuild() -> void:
-	var want := Vector2(float(shape), base_size)
+	var want := Vector3(float(shape), base_size, base_depth)
 	if want.is_equal_approx(_built_for) and not _parts.is_empty():
 		return
 	for m in _parts:
@@ -57,6 +59,7 @@ func rebuild() -> void:
 	var thickness: float = _cfg("selection_ring_thickness", 0.09)
 	var colour: Color = _colour_override if _colour_override is Color else _cfg("selection_ring_color", Color(0.35, 1.0, 0.5, 0.9))
 	var outer: float = base_size + margin * 2.0
+	var outer_z: float = base_depth + margin * 2.0
 
 	if shape == Shape.ROUND:
 		_parts.append(_add_torus(outer * 0.5, thickness, colour))
@@ -64,11 +67,12 @@ func rebuild() -> void:
 		# Four thin bars laid out as a frame: reads as an outline at any size, and
 		# needs no mesh generation beyond boxes.
 		var half: float = outer * 0.5
+		var half_z: float = outer_z * 0.5
 		for spec in [
-			[Vector3(0.0, 0.0, -half), Vector3(outer, thickness, thickness)],
-			[Vector3(0.0, 0.0,  half), Vector3(outer, thickness, thickness)],
-			[Vector3(-half, 0.0, 0.0), Vector3(thickness, thickness, outer)],
-			[Vector3( half, 0.0, 0.0), Vector3(thickness, thickness, outer)],
+			[Vector3(0.0, 0.0, -half_z), Vector3(outer, thickness, thickness)],
+			[Vector3(0.0, 0.0,  half_z), Vector3(outer, thickness, thickness)],
+			[Vector3(-half, 0.0, 0.0), Vector3(thickness, thickness, outer_z)],
+			[Vector3( half, 0.0, 0.0), Vector3(thickness, thickness, outer_z)],
 		]:
 			_parts.append(_add_bar(spec[0], spec[1], colour))
 

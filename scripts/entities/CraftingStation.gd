@@ -25,6 +25,9 @@ const GROUP: String = "stations"
 var active_recipe: String = ""
 var progress: float = 0.0          # seconds of work done on active_recipe
 var mesh_instance: MeshInstance3D = null
+## The bench's model (Config.VISUALS "station/<id>", tools/generate_cabin.py), or null while
+## it has none and is drawn as a box.
+var body: Node3D = null
 var label_3d: Label3D = null
 var selection_ring: Node3D = null
 
@@ -37,6 +40,25 @@ func _ready() -> void:
 	add_to_group("selectable")
 	_ensure_components()
 	_refresh_label()
+	var eb = _get_event_bus()
+	if eb:
+		for sig in _PART_SIGNALS:
+			if eb.has_signal(sig) and not eb.is_connected(sig, _on_run_changed):
+				eb.connect(sig, _on_run_changed)
+
+func _exit_tree() -> void:
+	var eb = _get_event_bus()
+	if eb:
+		for sig in _PART_SIGNALS:
+			if eb.has_signal(sig) and eb.is_connected(sig, _on_run_changed):
+				eb.disconnect(sig, _on_run_changed)
+
+## What moves the run on in a way a bench shows: a tool or a pot made, a stage of the
+## beacon repaired, the beacon launched.
+const _PART_SIGNALS: Array[String] = ["unlock_granted", "beacon_changed", "beacon_launched"]
+
+func _on_run_changed(_arg = null) -> void:
+	refresh_parts()
 
 # ==============================================================================
 # Making things
@@ -242,12 +264,37 @@ func get_display_info() -> Dictionary:
 		"active_recipe": active_recipe,
 		"progress": ratio(),
 	}
-	# A job under way is the card's work bar; the line says what keeps it going.
+	# A job under way is the work bar, and what it is; the cabin's own line says that it only
+	# goes on while he is in there, so the bench has nothing to add.
 	if active_recipe != "":
 		info["work"] = ratio()
 		info["work_label"] = recipe_name(active_recipe)
-		info["status"] = tr("CRAFT_STAY")
+		info["status"] = ""
 	return info
+
+## Which parts of the bench's model show: the tools made hang on the board, the pot stands
+## on the fire once it is made, the beacon's mast is as far up as its stages (CabinArt).
+func refresh_parts() -> void:
+	if body != null and is_instance_valid(body):
+		CabinArt.show_parts(body, _is_job, job_done)
+
+## Whether `job_id` is done for good in this run: a tool's or a pot's flag is held, a stage
+## of the beacon stands repaired, the beacon is launched. A meal never is -- it is cooked
+## again -- and neither is anything that is not a job.
+func job_done(job_id: String) -> bool:
+	var gs = _get_game_state()
+	if gs == null:
+		return false
+	if is_beacon_job(job_id):
+		var cfg = _get_config()
+		var steps: Array = cfg.beacon_jobs(gs.map_data()) if (cfg and cfg.has_method("beacon_jobs")) else []
+		var at: int = steps.find(job_id)
+		return at >= 0 and at < int(gs.beacon_steps)
+	var flag: String = String(recipe_data(job_id).get("unlocks", ""))
+	return flag != "" and gs.has_method("has_unlock") and gs.has_unlock(flag)
+
+func _is_job(job_id: String) -> bool:
+	return not recipe_data(job_id).is_empty()
 
 func set_selected_visual(on: bool) -> void:
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
@@ -261,7 +308,11 @@ func _ensure_components() -> void:
 	collision_layer = 2      # same layer as buildings, so the same click raycast finds it
 	collision_mask = 0
 
-	var size := Vector3(1.4, 1.0, 0.9)
+	# Clicked by its declared size, and drawn as the model Config names fitted to that same
+	# size -- or a box of it while there is no model.
+	var key: String = "station/%s" % station_id
+	var cfg_size = _get_config()
+	var size: Vector3 = cfg_size.get_visual_size(key) if (cfg_size and cfg_size.has_method("get_visual_size")) else Vector3.ONE
 	var has_shape := false
 	for child in get_children():
 		if child is CollisionShape3D:
@@ -274,9 +325,14 @@ func _ensure_components() -> void:
 		col.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(col)
 
-	if mesh_instance == null:
+	if body == null and mesh_instance == null and VisualLibrary.has_art(key):
+		body = VisualLibrary.make(key)
+		add_child(body)
+		CabinArt.light_glows(body, _glow_lights())
+		refresh_parts()
+	if body == null and mesh_instance == null:
 		mesh_instance = find_child("MeshInstance3D", false, false) as MeshInstance3D
-	if mesh_instance == null:
+	if body == null and mesh_instance == null:
 		mesh_instance = MeshInstance3D.new()
 		mesh_instance.name = "MeshInstance3D"
 		var box := BoxMesh.new()
@@ -288,9 +344,11 @@ func _ensure_components() -> void:
 		mesh_instance.position = Vector3(0.0, size.y * 0.5, 0.0)
 		add_child(mesh_instance)
 
+	# A name floating over a box says which box is which. A bench that looks like itself needs
+	# none -- and the cabin's dock names it anyway.
 	if label_3d == null:
 		label_3d = find_child("Label3D", false, false) as Label3D
-	if label_3d == null:
+	if label_3d == null and body == null:
 		label_3d = Label3D.new()
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -314,7 +372,7 @@ func _ensure_components() -> void:
 			selection_ring.name = "SelectionRing"
 			add_child(selection_ring)
 	if selection_ring and selection_ring.has_method("configure"):
-		selection_ring.configure(SelectionRing3D.Shape.BOX, maxf(size.x, size.z))
+		selection_ring.configure(SelectionRing3D.Shape.BOX, size.x, size.z)
 
 func _refresh_label() -> void:
 	if label_3d == null or not is_instance_valid(label_3d):
@@ -360,6 +418,16 @@ func _get_game_state() -> Node:
 	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
 		return Engine.get_main_loop().root.get_node_or_null("GameState")
 	return null
+
+func _get_event_bus() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/EventBus")
+	return null
+
+## The lights the glowing parts of the benches carry (Config.CABIN.glow_lights).
+func _glow_lights() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.CABIN.get("glow_lights", {}) if (cfg and "CABIN" in cfg) else {}
 
 func _get_fx() -> Node:
 	if is_inside_tree():

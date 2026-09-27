@@ -77,8 +77,6 @@ var option_panel: Node = null
 var pause_menu: Node = null
 ## Inside the cabin: every bench at once (CabinScreen).
 var cabin_screen: Control = null
-## The toasts' column: under the top row, or above the cabin's way out (_place_toasts).
-var toast_column: VBoxContainer = null
 var paused_overlay: Control = null
 var _raid_horn_sounded: bool = false
 
@@ -159,39 +157,17 @@ func _bus_handlers(eb: Node) -> Array:
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
 
-## Inside, the benches take the screen: the command card and the beacon card step aside --
-## the beacon's own bench says the same, larger -- and the top row stays, raid warnings and
+## Inside, the room and its dock take the screen: the command card and the beacon card step
+## aside -- the beacon's own bench says the same -- and the top row stays, raid warnings and
 ## all, because the world does not stop while he is in there.
 func _on_cabin_view_changed(inside: bool) -> void:
-	_place_toasts(inside)
 	if option_panel and is_instance_valid(option_panel):
 		option_panel.visible = not inside and not is_game_over_visible()
 	if objective_panel:
 		objective_panel.visible = not inside and beacon_label != null and beacon_label.text != ""
-
-## Where the toasts stand: under the top row; inside the cabin, just above its way out --
-## the top of the screen is the cabin's header there, and a raid's warning reads best
-## beside the button that answers it.
-func _place_toasts(inside: bool) -> void:
-	if toast_column == null:
-		return
-	# The anchors move and the offsets are set outright: re-anchoring while keeping the rect
-	# where it was would pin the column's middle to wherever it happened to be standing.
-	if inside and cabin_screen and cabin_screen.has_method("toast_bottom"):
-		toast_column.set_anchors_preset(Control.PRESET_CENTER_BOTTOM, true)
-		toast_column.grow_vertical = Control.GROW_DIRECTION_BEGIN
-		toast_column.alignment = BoxContainer.ALIGNMENT_END
-		toast_column.offset_bottom = -float(cabin_screen.toast_bottom())
-	else:
-		toast_column.set_anchors_preset(Control.PRESET_CENTER_TOP, true)
-		toast_column.grow_vertical = Control.GROW_DIRECTION_END
-		toast_column.alignment = BoxContainer.ALIGNMENT_BEGIN
-		toast_column.offset_bottom = float(_ui("toast_top", 66))
-	# No size of its own: the column is as wide and as tall as what it holds, growing out
-	# from the middle of the screen and away from its edge.
-	toast_column.offset_top = toast_column.offset_bottom
-	toast_column.offset_left = 0.0
-	toast_column.offset_right = 0.0
+	# The dock runs along the bottom inside, where the version sits.
+	if version_label:
+		version_label.visible = not inside
 
 func _on_leave_cabin() -> void:
 	var main = get_parent()
@@ -662,7 +638,6 @@ func _on_restart_pressed() -> void:
 
 func reset_hud() -> void:
 	selected_build_type = ""
-	_place_toasts(cabin_screen != null and cabin_screen.is_open)
 	if game_over_panel:
 		game_over_panel.visible = false
 	if raid_warning_banner:
@@ -1048,11 +1023,19 @@ func _ensure_ui_components() -> void:
 	objective.add_child(beacon_bar)
 
 	# --- Centre: what just happened, what is coming ------------------------------------
+	# No size of its own: as wide and as tall as what it holds, growing out from the middle
+	# of the screen, down from under the top row. The anchors are set keeping the offsets
+	# and the offsets outright -- re-anchoring a control already in the tree otherwise keeps
+	# it where it stood, and it stood at the left edge.
 	var toasts := _vbox("Toasts")
-	toast_column = toasts
-	toasts.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	root_control.add_child(toasts)
-	_place_toasts(false)
+	toasts.set_anchors_preset(Control.PRESET_CENTER_TOP, true)
+	toasts.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	toasts.alignment = BoxContainer.ALIGNMENT_BEGIN
+	toasts.offset_left = 0.0
+	toasts.offset_right = 0.0
+	toasts.offset_top = float(_ui("toast_top", 66))
+	toasts.offset_bottom = toasts.offset_top
 	raid_warning_panel = _panel("RaidWarning", &"BannerPanel")
 	raid_warning_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	raid_warning_panel.visible = false

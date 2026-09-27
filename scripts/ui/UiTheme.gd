@@ -227,7 +227,7 @@ static func build() -> Theme:
 	t.set_font("font", "Button", font("semibold"))
 	t.set_font_size("font_size", "Button", font_size("label"))
 	t.set_constant("h_separation", "Button", space("s"))
-	t.set_constant("icon_max_width", "Button", 22)
+	t.set_constant("icon_max_width", "Button", icon_size("m"))
 	var focus := _box(clear, Color(color("accent"), 0.7), bw, r_m, 0, 0)
 	focus.draw_center = false
 	t.set_stylebox("focus", "Button", focus)

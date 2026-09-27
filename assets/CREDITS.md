@@ -180,6 +180,14 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Date Added**: 2026-09-26
 - **Usage**: Every icon the HUD, command card, cabin screen and menus draw, imported as DPITexture so they stay sharp at any scale.
 
+### The Cabin's Interior (`assets/models/cabin/{room,workbench,kitchen,beacon}_a.glb`)
+- **Asset Name**: The crew module's cabin, cut away along the front, and its three benches -- a workbench on log legs under a tool board, a stone hearth under a hood, the module's radio and its antenna mast -- each with the parts that appear as the run goes on (the tools, the stone pot, the mast's three repaired stages)
+- **Source**: `tools/generate_cabin.py` (Scripted Blender low-poly geometry, coloured by its vertices, in the props' palette)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-26
+- **Usage**: `cabin/room` and `station/<id>` in `Config.VISUALS`; parts shown by `scripts/fx/CabinArt.gd`.
+
 ### Frosted Backdrop Shader (`assets/shaders/ui_frost.gdshader`)
 - **Asset Name**: Frosted-glass backdrop for full-screen menus
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)

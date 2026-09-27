@@ -1628,14 +1628,16 @@ func _show_hover(node: Node) -> void:
 	# selecting outline the same shape at the same size and only the colour differs.
 	var shape: int = SelectionRing3D.Shape.ROUND
 	var size: float = 1.0
+	var depth: float = -1.0
 	if "selection_ring" in node and node.selection_ring != null and is_instance_valid(node.selection_ring):
 		shape = int(node.selection_ring.shape)
 		size = float(node.selection_ring.base_size)
+		depth = float(node.selection_ring.base_depth)
 	elif "building_type" in node:
 		var cfg2 = _get_config()
 		shape = SelectionRing3D.Shape.BOX
 		size = float(cfg2.get_building_footprint(String(node.building_type))) if cfg2 else 1.0
-	_hover_ring.configure(shape, size)
+	_hover_ring.configure(shape, size, depth)
 	_hover_ring.global_position = (node as Node3D).global_position
 	_hover_ring.set_shown(true)
 
