@@ -199,6 +199,21 @@ static func node_icon(res_type: String) -> Texture2D:
 		return icon(String(cfg.RESOURCE_NODES[res_type].get("icon", res_type)))
 	return icon(res_type)
 
+## Text standing in the world over a thing -- a rock's name and what is left in it, a
+## building's state, a count picked up: sized by Config.UI so it reads at any zoom, and set in
+## the interface's own running face with a dark edge, as HudLabel is on the screen, so the
+## world's words and the panels' are one lettering.
+static func style_world_label(lbl: Label3D) -> void:
+	var cfg = _config()
+	var ui: Dictionary = cfg.UI if (cfg and "UI" in cfg) else {}
+	lbl.font = font("bold")
+	lbl.font_size = int(ui.get("world_label_font_size", 48))
+	lbl.pixel_size = float(ui.get("world_label_pixel_size", 0.005))
+	lbl.fixed_size = bool(ui.get("world_label_fixed_size", false))
+	lbl.outline_size = maxi(1, int(round(lbl.font_size / 6.0)))
+	lbl.outline_modulate = Color(color("bg"), 0.9)
+	lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
 ## The frosted backdrop for a full-screen menu: the world behind it blurred and tinted to
 ## the interface's dark (assets/shaders/ui_frost.gdshader). `tint_alpha` is how far.
 static func frost_material(tint_alpha: float = -1.0) -> ShaderMaterial:

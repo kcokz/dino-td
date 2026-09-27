@@ -371,15 +371,8 @@ func _ensure_components() -> void:
 		label_3d = Label3D.new()
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label_3d.outline_modulate = Color(0, 0, 0, 0.9)
 		label_3d.position = Vector3(0.0, size.y + 0.5, 0.0)
-		label_3d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var cfg = _get_config()
-		if cfg and "UI" in cfg:
-			label_3d.font_size = int(cfg.UI.get("world_label_font_size", 48))
-			label_3d.pixel_size = float(cfg.UI.get("world_label_pixel_size", 0.005))
-			label_3d.fixed_size = bool(cfg.UI.get("world_label_fixed_size", false))
-			label_3d.outline_size = maxi(1, int(round(label_3d.font_size / 6.0)))
+		UiTheme.style_world_label(label_3d)
 		add_child(label_3d)
 
 	if selection_ring == null:

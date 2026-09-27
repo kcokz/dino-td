@@ -139,3 +139,18 @@ func test_07_each_face_ships_with_its_licence() -> void:
 		var family: String = String(path).get_file().get_basename().get_slice("-", 0)
 		var licence: String = String(path).get_base_dir().path_join(family + "-OFL.txt")
 		assert_true(FileAccess.file_exists(licence), "%s ships with its licence (%s)" % [String(path).get_file(), licence])
+
+func test_08_words_in_the_world_are_in_the_same_lettering() -> void:
+	# A rock's name over it, a building's state, a count picked up: one lettering with the
+	# panels, not the engine's own face.
+	var rock = load("res://scripts/entities/ResourceNode.gd").new("wood")
+	tree.root.add_child(rock)
+	await wait_frames(1)
+	var label: Label3D = rock.label_3d
+	assert_not_null(label, "A rock has its words")
+	if label:
+		assert_eq(label.font, UiTheme.font("bold"), "set in the interface's running face")
+		assert_eq(label.outline_modulate, Color(Color(config_node.THEME["colors"]["bg"]), 0.9), "with its dark edge")
+		assert_eq(label.font_size, int(config_node.UI["world_label_font_size"]), "at the size Config gives words in the world")
+	tree.root.remove_child(rock)
+	rock.free()

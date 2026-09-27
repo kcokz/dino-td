@@ -321,10 +321,8 @@ func _ensure_visuals() -> void:
 		label_3d = Label3D.new()
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label_3d.outline_modulate = Color(0, 0, 0, 0.9)
 		label_3d.position = Vector3(0.0, size * 1.6, 0.0)
-		label_3d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_apply_label_sizing(label_3d)
+		UiTheme.style_world_label(label_3d)
 		add_child(label_3d)
 
 ## Single units carry no label: a field of "1"s is noise, a pile of "12" is
@@ -339,16 +337,6 @@ func _refresh_label() -> void:
 	else:
 		label_3d.text = ""
 		label_3d.visible = false
-
-func _apply_label_sizing(lbl: Label3D) -> void:
-	var cfg := _get_config()
-	if cfg == null or not ("UI" in cfg):
-		return
-	var fs: int = int(cfg.UI.get("world_label_font_size", 48))
-	lbl.font_size = fs
-	lbl.pixel_size = float(cfg.UI.get("world_label_pixel_size", 0.005))
-	lbl.fixed_size = bool(cfg.UI.get("world_label_fixed_size", false))
-	lbl.outline_size = maxi(1, int(round(fs / 6.0)))
 
 func _colour() -> Color:
 	var cfg := _get_config()

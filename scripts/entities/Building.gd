@@ -566,9 +566,8 @@ func _ensure_physics_and_visuals() -> void:
 		label_3d = Label3D.new()
 		label_3d.name = "Label3D"
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label_3d.outline_modulate = Color(0, 0, 0, 0.9)
 		label_3d.position = Vector3(0.0, _building_height() + 0.8, 0.0)
-		_apply_label_sizing(label_3d)
+		UiTheme.style_world_label(label_3d)
 		add_child(label_3d)
 
 	# 5. Status bar and selection ring (v0.3 feedback layer)
@@ -677,21 +676,6 @@ func _get_game_state() -> Node:
 		return Engine.get_main_loop().root.get_node_or_null("GameState")
 	return null
 
-## Applies Config.UI sizing so world-space text stays readable at any zoom.
-func _apply_label_sizing(lbl: Label3D) -> void:
-	var fs: int = 64
-	var px: float = 0.0045
-	var fixed: bool = true
-	var cfg = _get_config()
-	if cfg and "UI" in cfg:
-		fs = int(cfg.UI.get("world_label_font_size", fs))
-		px = float(cfg.UI.get("world_label_pixel_size", px))
-		fixed = bool(cfg.UI.get("world_label_fixed_size", fixed))
-	lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	lbl.font_size = fs
-	lbl.pixel_size = px
-	lbl.fixed_size = fixed
-	lbl.outline_size = maxi(1, int(round(fs / 6.0)))
 
 
 # ==============================================================================

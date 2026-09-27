@@ -174,15 +174,8 @@ func floating_text(world_pos: Vector3, text: String, colour: Color = Color.WHITE
 	lbl.text = text
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.modulate = colour
-	lbl.outline_modulate = Color(0, 0, 0, 0.9)
-	lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	lbl.no_depth_test = true
-	var cfg = get_node_or_null("/root/Config")
-	if cfg and "UI" in cfg:
-		lbl.font_size = int(cfg.UI.get("world_label_font_size", 48))
-		lbl.pixel_size = float(cfg.UI.get("world_label_pixel_size", 0.005))
-		lbl.fixed_size = bool(cfg.UI.get("world_label_fixed_size", false))
-		lbl.outline_size = maxi(1, int(round(lbl.font_size / 6.0)))
+	UiTheme.style_world_label(lbl)
 	lbl.position = world_pos + Vector3(0.0, 0.6, 0.0)
 	root.add_child(lbl)
 
