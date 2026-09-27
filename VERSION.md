@@ -22,7 +22,7 @@
 ---
 
 ## 当前版本
-- **版本号**：`v0.5.0`（唯一来源：`project.godot` 的 `application/config/version`，**现在由测试盯着**：见 `tests/test_v05_version_and_settings.gd`）
+- **版本号**：`v0.6.0`（唯一来源：`project.godot` 的 `application/config/version`，**现在由测试盯着**：见 `tests/test_v05_version_and_settings.gd`）
 - **构建阶段**：Alpha / Feature Delivery (Real-Time Deployment & Modern Hero)
 - **目标引擎**：Godot 4.7 (Forward+ / Jolt Physics)
 - **交付时间**：2026-09-16
