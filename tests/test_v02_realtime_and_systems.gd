@@ -483,14 +483,15 @@ func test_16_ui_locale_english_no_chinese_and_chinese_no_english_leak() -> void:
 	i18n_node.set_locale("en")
 	hud.reset_hud()
 	assert_false(hud.end_action_btn.text.contains("提前结束"), "English HUD does not contain Chinese characters")
-	assert_false(hud.pause_btn.text.contains("暂停"), "English Pause button does not contain Chinese characters")
+	# The pause button is a round glyph; what it does is its tooltip.
+	assert_false(hud.pause_btn.tooltip_text.contains("暂停"), "English Pause button does not contain Chinese characters")
 	assert_eq(hud.end_action_btn.text, "Early End Deploy", "English End Deploy button text is correct")
 
 	# 2. Test in Chinese
 	i18n_node.set_locale("zh_CN")
 	hud.reset_hud()
 	assert_true(hud.end_action_btn.text.contains("提前结束"), "Chinese HUD displays translated button text")
-	assert_true(hud.pause_btn.text.contains("暂停"), "Chinese HUD displays translated Pause text")
+	assert_true(hud.pause_btn.tooltip_text.contains("暂停"), "Chinese HUD displays translated Pause text")
 
 	# Restore English
 	i18n_node.set_locale("en")

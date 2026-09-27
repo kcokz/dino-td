@@ -193,8 +193,9 @@ func test_09_inside_the_stock_stays_readable() -> void:
 		if node:
 			assert_lt(cabin_at, node.get_index(), "%s is drawn over the cabin's screen" % name)
 
-func test_10_a_big_stock_pushes_the_vitals_over_rather_than_under() -> void:
-	# The top row is one container: however wide the stock gets, nothing in it overlaps.
+func test_10_a_big_stock_stays_clear_of_the_cabins_medallion() -> void:
+	# The strip's left holds the stock, its right the controls, and the cabin's medallion
+	# hangs from its middle: however big the counts get, none of the three runs into another.
 	var hud = await _hud()
 	var huge: Dictionary = {}
 	for res_id in config_node.RESOURCES:
@@ -202,10 +203,10 @@ func test_10_a_big_stock_pushes_the_vitals_over_rather_than_under() -> void:
 	hud._on_resources_changed(huge)
 	await wait_frames(2)
 	var stock: Rect2 = hud.root_control.find_child("ResourcePanel", true, false).get_global_rect()
-	var vitals: Rect2 = hud.root_control.find_child("VitalsPanel", true, false).get_global_rect()
+	var cabin: Rect2 = hud.root_control.find_child("CabinEmblem", true, false).get_global_rect()
 	var controls: Rect2 = hud.root_control.find_child("ControlsPanel", true, false).get_global_rect()
-	assert_lte(stock.end.x, vitals.position.x, "The stock ends before the vitals begin")
-	assert_lte(vitals.end.x, controls.position.x, "And the vitals before the controls")
+	assert_lte(stock.end.x, cabin.position.x, "The stock ends before the cabin's medallion begins")
+	assert_lte(cabin.end.x, controls.position.x, "And the medallion before the controls")
 
 func test_11_a_toast_stands_under_the_top_row_and_clear_of_the_cabin_dock() -> void:
 	# Inside, the room fills the screen and the dock keeps to the bottom: a toast stands
@@ -216,7 +217,7 @@ func test_11_a_toast_stands_under_the_top_row_and_clear_of_the_cabin_dock() -> v
 	await wait_frames(2)
 	var toast: Rect2 = main.hud.hint_toast.get_global_rect()
 	var dock: Rect2 = main.hud.cabin_screen.find_child("Dock", true, false).get_global_rect()
-	var top_row: Rect2 = main.hud.root_control.find_child("VitalsPanel", true, false).get_global_rect()
+	var top_row: Rect2 = main.hud.root_control.find_child("CabinEmblem", true, false).get_global_rect()
 	var middle: float = main.hud.root_control.get_global_rect().get_center().x
 	assert_lte(toast.end.y, dock.position.y, "Inside, a toast is clear of the dock")
 	assert_gte(toast.position.y, top_row.end.y, "And under the top row")
@@ -224,6 +225,6 @@ func test_11_a_toast_stands_under_the_top_row_and_clear_of_the_cabin_dock() -> v
 	main.leave_cabin()
 	await wait_frames(2)
 	var outside: Rect2 = main.hud.hint_toast.get_global_rect()
-	var vitals: Rect2 = main.hud.root_control.find_child("VitalsPanel", true, false).get_global_rect()
-	assert_gte(outside.position.y, vitals.end.y, "Outside, it is back under the top row")
+	var cabin: Rect2 = main.hud.root_control.find_child("CabinEmblem", true, false).get_global_rect()
+	assert_gte(outside.position.y, cabin.end.y, "Outside, it is back under the cabin's medallion")
 	assert_almost_eq(outside.get_center().x, middle, 1.0, "And in the middle of the screen")

@@ -56,16 +56,32 @@ CLIPS = {
     "Hit_Chest": "hit",
 }
 
-# The shirt and trousers came dyed for a fantasy village. Outdoor colours instead, laid over
-# the texture as a multiply on each named material (linear RGB): a man a long way from home,
-# not a peasant. None of it is the Hero's own design -- change the numbers to taste.
+# Colours laid over a material's texture as a multiply (linear RGB). The kit's hair is grey,
+# meant to be dyed by a shader only its paid version has. (The clothes are the suit's now: see
+# THE SUIT below.)
 TINT = {
-    "MI_Peasant": (0.78, 0.80, 0.70),
-    # The kit's hair is grey, meant to be dyed by a shader only its paid version has.
     "MI_Hair_1": (0.16, 0.11, 0.07),
 }
 
 TEXTURE_SIZE = 1024
+
+# THE SUIT (v0.6: "人物要有未来感，不能是现代人……带个宇航服之类的防护服"). The crew module he lives in
+# is the ship that brought him, so he wears its crew's suit, in its colours -- the white and the
+# orange of the cabin's hull: his clothes re-dyed as a white suit (their folds kept), his boots
+# and gloves dark, his bare forearms sleeved; and on him the suit's hard parts, each riding one
+# bone as a rigid piece does -- a ring at his neck where a helmet locks on, a life-support pack
+# on his back, a unit on his chest with its screen lit the ship's cyan, bands of the ship's
+# orange round his arms, cuffs at his wrists and ankles. His face stays bare: a portrait of a
+# helmet is a portrait of nobody. Colours linear RGB, lengths metres on the kit's 1.8 m figure.
+SUIT_LIGHT = (0.84, 0.85, 0.87)   # the suit's white, where its cloth faces the light
+SUIT_DARK = (0.36, 0.38, 0.42)    # and deep in its folds
+DARKEN = (0.2, 0.21, 0.23)        # boots and gloves: the suit dyed this dark
+ORANGE = (0.9, 0.3, 0.05)         # the ship's orange, the cabin's stripe
+METAL = (0.5, 0.53, 0.57)         # the neck ring, the cuffs
+PACK = (0.72, 0.73, 0.75)         # the life-support pack's shell
+GREY = (0.16, 0.17, 0.19)         # the chest unit, the pack's panel
+SCREEN = (0.25, 0.85, 1.0)        # the chest unit's lit screen: the ship's cyan
+HANDS = ("hand_", "index_", "middle_", "ring_", "pinky_", "thumb_")
 
 
 def reset():
@@ -142,6 +158,186 @@ def dedupe_images():
                 bpy.data.images.remove(img)
 
 
+def recolor(image, name, light, dark):
+    """`image` as the suit's cloth: its colour taken away and its light and shade kept, laid
+    between `dark` (its deepest folds) and `light` (where it faces the light)."""
+    import numpy as np
+    w, h = image.size
+    px = np.array(image.pixels[:], dtype=np.float32).reshape(-1, 4)
+    lum = px[:, :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    lo, hi = np.percentile(lum, 4), np.percentile(lum, 96)
+    t = np.clip((lum - lo) / max(hi - lo, 1e-4), 0.0, 1.0)[:, None]
+    rgb = np.array(dark, dtype=np.float32) + (np.array(light, dtype=np.float32) - np.array(dark, dtype=np.float32)) * t
+    out = bpy.data.images.new(name, w, h, alpha=True)
+    out.colorspace_settings.name = image.colorspace_settings.name
+    out.pixels.foreach_set(np.concatenate([rgb, px[:, 3:4]], axis=1).ravel())
+    out.pack()
+    return out
+
+
+def base_image(mat):
+    """The picture a material's Base Color is read from."""
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    link = bsdf.inputs["Base Color"].links[0]
+    node = link.from_node
+    while node.type != "TEX_IMAGE":
+        node = next(i.links[0].from_node for i in node.inputs if i.links)
+    return node
+
+
+def dyed(mat, name, image, darken=None):
+    """A copy of `mat` reading its colour from `image` instead -- its normal and roughness
+    kept -- darkened by `darken` (a multiply) if given."""
+    out = mat.copy()
+    out.name = name
+    node = base_image(out)
+    node.image = image
+    if darken is not None:
+        bsdf = next(n for n in out.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        link = bsdf.inputs["Base Color"].links[0]
+        mul = out.node_tree.nodes.new("ShaderNodeMix")
+        mul.data_type = "RGBA"
+        mul.blend_type = "MULTIPLY"
+        mul.inputs["Factor"].default_value = 1.0
+        out.node_tree.links.new(link.from_socket, mul.inputs["A"])
+        mul.inputs["B"].default_value = (darken[0], darken[1], darken[2], 1.0)
+        out.node_tree.links.new(mul.outputs["Result"], bsdf.inputs["Base Color"])
+    return out
+
+
+def plain(name, colour, metallic=0.0, roughness=0.6, glow=None):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Base Color"].default_value = (colour[0], colour[1], colour[2], 1.0)
+    bsdf.inputs["Metallic"].default_value = metallic
+    bsdf.inputs["Roughness"].default_value = roughness
+    if glow is not None:
+        bsdf.inputs["Emission Color"].default_value = (glow[0], glow[1], glow[2], 1.0)
+        bsdf.inputs["Emission Strength"].default_value = 2.0
+    return mat
+
+
+def dominant_bone(mesh, poly):
+    groups = {g.index: g.name for g in mesh.vertex_groups}
+    totals = {}
+    for vi in poly.vertices:
+        for g in mesh.data.vertices[vi].groups:
+            name = groups.get(g.group)
+            totals[name] = totals.get(name, 0.0) + g.weight
+    return max(totals, key=totals.get) if totals else ""
+
+
+def rigid(obj, arm, bone, mat):
+    """A hard part riding `bone` whole: every vertex weighted to it, and to nothing else."""
+    obj.data.materials.clear()
+    obj.data.materials.append(mat)
+    group = obj.vertex_groups.new(name=bone)
+    group.add([v.index for v in obj.data.vertices], 1.0, "REPLACE")
+    world = obj.matrix_world.copy()
+    obj.parent = arm
+    obj.matrix_world = world
+    mod = obj.modifiers.new("Armature", "ARMATURE")
+    mod.object = arm
+
+
+def bevelled(obj, width, segments=2):
+    mod = obj.modifiers.new("Bevel", "BEVEL")
+    mod.width = width
+    mod.segments = segments
+    mod.limit_method = "ANGLE"
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+
+
+def box(name, size, at):
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=at)
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.scale = size
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    return obj
+
+
+def ring(name, major, minor, at, axis="Z", tilt=0.0):
+    rot = {"Z": (math.radians(tilt), 0.0, 0.0), "X": (0.0, math.radians(90.0), 0.0)}[axis]
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=32,
+                                     minor_segments=10, location=at, rotation=rot)
+    obj = bpy.context.active_object
+    obj.name = name
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    return obj
+
+
+def cylinder(name, radius, depth, at):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=radius, depth=depth, location=at)
+    obj = bpy.context.active_object
+    obj.name = name
+    return obj
+
+
+def suit(arm):
+    """The crew's suit (see THE SUIT above): the clothes and bare arms dyed, the hard parts on."""
+    meshes = {o.name: o for o in bpy.data.objects if o.type == "MESH"}
+    cloth = bpy.data.materials["MI_Peasant"]
+    skin = bpy.data.materials["MI_Regular_Male"]
+    cloth_img = recolor(base_image(cloth).image, "T_Suit", SUIT_LIGHT, SUIT_DARK)
+    sleeve_img = recolor(base_image(skin).image, "T_Suit_Sleeve", SUIT_LIGHT, SUIT_DARK)
+    suit_mat = dyed(cloth, "MI_Suit", cloth_img)
+    boots_mat = dyed(cloth, "MI_Suit_Boots", cloth_img, DARKEN)
+    sleeve_mat = dyed(skin, "MI_Suit_Sleeve", sleeve_img)
+    glove_mat = dyed(skin, "MI_Suit_Gloves", sleeve_img, DARKEN)
+    for name, obj in meshes.items():
+        if not name.startswith("Male_Peasant"):
+            continue
+        slots = obj.data.materials
+        for i, m in enumerate(slots):
+            if m is None:
+                continue
+            base = m.name.split(".")[0]
+            if base == "MI_Peasant":
+                slots[i] = boots_mat if name.endswith("_Feet") else suit_mat
+            elif base == "MI_Regular_Male":
+                slots[i] = sleeve_mat
+        if name.endswith("_Arms"):
+            # The bare forearms become the suit's sleeves; the hands, its gloves.
+            slots.append(glove_mat)
+            glove_at = len(slots) - 1
+            for poly in obj.data.polygons:
+                if slots[poly.material_index] is sleeve_mat and dominant_bone(obj, poly).startswith(HANDS):
+                    poly.material_index = glove_at
+
+    orange = plain("MI_Suit_Orange", ORANGE, roughness=0.5)
+    metal = plain("MI_Suit_Metal", METAL, metallic=0.7, roughness=0.35)
+    shell = plain("MI_Suit_Pack", PACK, roughness=0.45)
+    grey = plain("MI_Suit_Grey", GREY, metallic=0.3, roughness=0.5)
+    screen = plain("MI_Suit_Screen", (0.05, 0.2, 0.25), roughness=0.3, glow=SCREEN)
+
+    # The neck ring a helmet locks onto, the ship's orange along its top: on the chest bone, so
+    # it stays with his shoulders when he turns his head.
+    rigid(ring("Suit_NeckRing", 0.105, 0.022, (0.0, 0.02, 1.49), "Z", -8.0), arm, "spine_03", metal)
+    rigid(ring("Suit_NeckBand", 0.1, 0.009, (0.0, 0.022, 1.512), "Z", -8.0), arm, "spine_03", orange)
+    # The life-support pack on his back: a shell, a dark panel on it, two orange valves on top.
+    pack = box("Suit_Pack", (0.3, 0.12, 0.4), (0.0, 0.225, 1.31))
+    bevelled(pack, 0.025)
+    rigid(pack, arm, "spine_03", shell)
+    panel = box("Suit_PackPanel", (0.22, 0.02, 0.28), (0.0, 0.29, 1.3))
+    bevelled(panel, 0.006)
+    rigid(panel, arm, "spine_03", grey)
+    for x in (-0.085, 0.085):
+        rigid(cylinder("Suit_Valve", 0.022, 0.05, (x, 0.225, 1.525)), arm, "spine_03", orange)
+    # The chest unit, its screen lit.
+    unit = box("Suit_ChestUnit", (0.14, 0.045, 0.09), (0.0, -0.17, 1.36))
+    bevelled(unit, 0.01)
+    rigid(unit, arm, "spine_03", grey)
+    rigid(box("Suit_Screen", (0.085, 0.006, 0.045), (0.0, -0.194, 1.365)), arm, "spine_03", screen)
+    # The ship's orange round each upper arm; cuffs at the wrists and the ankles.
+    for side, sign in (("l", 1.0), ("r", -1.0)):
+        rigid(ring("Suit_ArmBand_" + side, 0.066, 0.013, (0.3 * sign, 0.07, 1.456), "X"), arm, "upperarm_" + side, orange)
+        rigid(ring("Suit_Cuff_" + side, 0.049, 0.014, (0.655 * sign, 0.066, 1.456), "X"), arm, "lowerarm_" + side, metal)
+        rigid(ring("Suit_Ankle_" + side, 0.072, 0.017, (0.091 * sign, 0.078, 0.17), "Z"), arm, "calf_" + side, metal)
+
+
 def channel_sets(action):
     """Where an action keeps its F-curves: the layered API Blender 4.4+ gives actions,
     or the action itself before that."""
@@ -176,6 +372,8 @@ def main():
         if o.type == "MESH" and o.parent is not None:
             rehome(o, arm)
     drop([o for o in hair_objs if o.type == "ARMATURE" or (o.type == "MESH" and o.parent is None)])
+
+    suit(arm)
 
     # The clips: the library's armature brings every one of them in; the ones the game uses
     # are renamed, the rest discarded, and the library's own mannequin goes.

@@ -391,6 +391,32 @@ func _draw_button_accent(spec: Dictionary) -> Image:
 	return _framed(spec, {"fill": OCHRE, "rim": 1.6, "edge": 0.9, "radius": 3.5, "vignette": 0.25,
 		"falloff": 6.0, "top_light": 0.16, "tooling": 2.6, "studs": 1.8, "seed": 75, "shadow": Vector4(0.0, 1.5, 3.5, 0.5)})
 
+## The status bar's strip: leather along the top edge of the screen, a rim of bone along its
+## bottom, its shadow thrown on the world below.
+func _draw_strip(spec: Dictionary) -> Image:
+	return _framed(spec, {"fill": LEATHER, "rim": 3.0, "edge": 1.0, "vignette": 0.35, "falloff": 3.5,
+		"top_light": 0.0, "tooling": 2.2, "bottom_only": true, "seed": 91, "shadow": Vector4(0.0, 2.0, 7.0, 0.6)})
+
+## A round button: a disc of leather in a rim of bone, domed to the light.
+func _draw_round_button(spec: Dictionary) -> Image:
+	return _framed(spec, {"fill": TOOLED, "rim": 1.6, "edge": 0.9, "radius": _round(spec), "vignette": 0.3,
+		"falloff": 6.0, "top_light": 0.16, "seed": 92, "shadow": Vector4(0.0, 1.5, 2.5, 0.55)})
+
+## The one lit in a set -- the speed the game runs at: painted ochre.
+func _draw_round_button_lit(spec: Dictionary) -> Image:
+	return _framed(spec, {"fill": OCHRE, "rim": 1.6, "edge": 0.9, "radius": _round(spec), "vignette": 0.3,
+		"falloff": 6.0, "top_light": 0.18, "seed": 93, "shadow": Vector4(0.0, 1.5, 2.5, 0.55)})
+
+## A round socket sunk in the leather, for a material's icon on the strip.
+func _draw_socket_round(spec: Dictionary) -> Image:
+	return _framed(spec, {"fill": HOLLOW, "rim": 1.5, "edge": 0.8, "radius": _round(spec), "sunk": true,
+		"vignette": 0.5, "falloff": 7.0, "top_light": 0.0, "seed": 94, "shadow": Vector4(0.0, 1.0, 1.5, 0.4)})
+
+## The corner radius that makes a surface's outline a circle (design pixels).
+func _round(spec: Dictionary) -> float:
+	var size: Vector2i = spec["size"]
+	return float(mini(size.x, size.y)) * 0.5 - float(int(spec.get("pad", 0)))
+
 func _draw_socket(spec: Dictionary) -> Image:
 	return _framed(spec, {"fill": HOLLOW, "rim": 2.0, "edge": 0.9, "radius": 5.0, "sunk": true, "vignette": 0.5,
 		"falloff": 10.0, "top_light": 0.0, "seed": 76, "shadow": Vector4(0.0, 1.0, 2.0, 0.4)})
@@ -428,6 +454,15 @@ func _framed(spec: Dictionary, look: Dictionary) -> Image:
 	assert(rim_in + falloff <= room, "%s: rim and falloff (%.1f px) run past the margin (%.1f px)" % [spec["image"], rim_in + falloff, room])
 	var mid := Vector2i(w - 2 * m.x, h - 2 * m.y)
 	var o := _outline(w, h, m, pad, float(look.get("radius", 4.0)), 0.12, 0.12, 0, seed)
+	if bool(look.get("bottom_only", false)):
+		# A strip along the top of the screen: its top and ends run off it, so the only edge it
+		# has -- and the only rim -- is along its bottom.
+		o.radius = 0.0
+		for i in o.top.size():
+			o.top[i] = -100000.0
+		for i in o.left.size():
+			o.left[i] = -100000.0
+			o.right[i] = -100000.0
 	var mottle := _field(_noise(mid, seed, 0.025, 3), m)
 	var grain := _field(_noise(mid, seed + 1, 0.55, 1), m)
 	var streak := _field(_noise(mid, seed + 2, 0.15, 2), m)
@@ -552,6 +587,104 @@ func _knuckle(under: Color, p: Vector2, centre: Vector2, radius: float, body: Co
 				face = face.lerp(wall, clampf(hole + 0.5 - r, 0.0, 1.0))
 		top = EDGE.lerp(face, clampf(radius + 0.5 - r, 0.0, 1.0))
 	return col.lerp(top, clampf(ring + 0.5 - r, 0.0, 1.0))
+
+# ==============================================================================
+# The medallion: the cabin's, and the Hero's
+# ==============================================================================
+
+## The light on a half-round laid round a centre between radii `a` and `b` (pixels), at `u` (the
+## way out from the centre): lit where it turns to the top left. `hollow` is a channel cut
+## into the surface rather than a rim standing on it.
+func _round_light(u: Vector2, r: float, a: float, b: float, hollow: bool) -> float:
+	var t: float = clampf((r - a) / maxf(b - a, 0.001), 0.0, 1.0)
+	var side: float = cos(PI * t) * (1.0 if hollow else -1.0)
+	var n := Vector3(u.x * side, u.y * side, sin(PI * t) + 0.35).normalized()
+	var l: Vector3 = LIGHT.normalized()
+	return n.dot(l) - l.z
+
+## A medallion: a disc of leather in a rim of bone, pegged at its four diagonals; inside the rim
+## a channel cut round it, where a ring of pigment shows what is left (ring_fill lies in it);
+## and at its middle a socket, sunk, where its portrait stands. Radii are Config's ("ring": the
+## channel's inner and outer; "socket"; "rim").
+func _draw_medallion(spec: Dictionary) -> Image:
+	var g: Array = _geo(spec)
+	var w: int = g[0]
+	var h: int = g[1]
+	var pad: float = g[3]
+	var k: float = float(_k)
+	var c := Vector2(float(w), float(h)) * 0.5
+	var outer: float = float(mini(w, h)) * 0.5 - pad
+	var rim_w: float = float(spec.get("rim", 4.0)) * k
+	var ring: Vector2 = Vector2(spec.get("ring", Vector2(31.0, 38.0))) * float(k)
+	var socket: float = float(spec.get("socket", 30.0)) * k
+	var mottle := _field(_noise(Vector2i(w, h), 95, 0.03, 3), Vector2i.ZERO)
+	var grain := _field(_noise(Vector2i(w, h), 96, 0.55, 1), Vector2i.ZERO)
+	var pegs: Array[Vector2] = []
+	for i in 4:
+		var ang: float = PI * 0.25 + PI * 0.5 * float(i)
+		pegs.append(c + Vector2(cos(ang), sin(ang)) * (outer - rim_w * 0.5 - 0.3 * k))
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var p := Vector2(float(x) + 0.5, float(y) + 0.5)
+			var off: Vector2 = p - c
+			var r: float = off.length()
+			var u: Vector2 = off / maxf(r, 0.001)
+			var d: float = outer - r
+			var a: float = clampf(d + 0.5, 0.0, 1.0)
+			var col := Color(0, 0, 0, 0)
+			if a > 0.0:
+				if d < 1.0 * k:
+					col = EDGE
+				elif d < rim_w:
+					col = _lit(BONE.darkened(0.04 * grain.at(x, y)), _round_light(u, r, outer - rim_w, outer - 1.0 * k, false), 1.0)
+				elif r > ring.y + 0.8 * k:
+					col = LEATHER.darkened(0.3 * (mottle.at(x, y) - 0.5))
+					col = col.darkened(0.35 * (1.0 - smoothstep(0.0, 2.0 * k, d - rim_w)))
+				elif r > ring.x - 0.8 * k:
+					# The channel the ring of pigment lies in: dark, shadowed on the side the
+					# light comes over.
+					col = HOLLOW.darkened(0.2)
+					col = _lit(col, _round_light(u, r, ring.x - 0.8 * k, ring.y + 0.8 * k, true), 1.4)
+				elif r > socket:
+					col = LEATHER.darkened(0.3 * (mottle.at(x, y) - 0.5))
+				else:
+					# The socket: sunk, darker towards its rim, its far wall catching the light.
+					col = HOLLOW.darkened(0.3 * (1.0 - smoothstep(0.0, 6.0 * k, socket - r)))
+					col = col.lightened(0.12 * clampf(u.dot(Vector2(0.6, 0.8)), 0.0, 1.0) * (1.0 - smoothstep(0.0, 2.5 * k, socket - r)))
+				for pc in pegs:
+					col = _knuckle(col, p, pc, 2.4 * k, BONE, false, grain.at(x, y))
+			var sa: float = 0.0
+			if a < 1.0:
+				var out_d: float = (p - c - Vector2(0.0, 2.5) * k).length() - outer
+				sa = 0.6 * pow(clampf(1.0 - out_d / (6.0 * k), 0.0, 1.0), 2.0) if out_d > 0.0 else 0.6
+			var total: float = a + sa * (1.0 - a)
+			if total > 0.0:
+				img.set_pixel(x, y, Color(col.r * a / total, col.g * a / total, col.b * a / total, total))
+	return img
+
+## The ring of pigment that lies in a medallion's channel: pale, to be tinted the colour of what
+## is left; rounded in section like a wet stroke.
+func _draw_ring_fill(spec: Dictionary) -> Image:
+	var g: Array = _geo(spec)
+	var w: int = g[0]
+	var h: int = g[1]
+	var k: float = float(_k)
+	var c := Vector2(float(w), float(h)) * 0.5
+	var ring: Vector2 = Vector2(spec.get("ring", Vector2(31.0, 38.0))) * float(k)
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var off: Vector2 = Vector2(float(x) + 0.5, float(y) + 0.5) - c
+			var r: float = off.length()
+			var a: float = clampf(r - ring.x + 0.5, 0.0, 1.0) * clampf(ring.y - r + 0.5, 0.0, 1.0)
+			if a <= 0.0:
+				continue
+			var t: float = clampf((r - ring.x) / (ring.y - ring.x), 0.0, 1.0)
+			var u: Vector2 = off / maxf(r, 0.001)
+			var v: float = 0.82 + 0.16 * sin(PI * t) - 0.1 * u.y
+			img.set_pixel(x, y, Color(v, v, v, a))
+	return img
 
 # ==============================================================================
 # Brush strokes: toasts and a raid's warning

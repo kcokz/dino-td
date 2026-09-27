@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://cdwrgvoihce80"
+path="res://.godot/imported/socket_round.png-b94d5b076328339797254cc7e416e8ea.image"
+
+[deps]
+
+source_file="res://assets/ui/socket_round.png"
+dest_files=["res://.godot/imported/socket_round.png-b94d5b076328339797254cc7e416e8ea.image"]
+
+[params]
+

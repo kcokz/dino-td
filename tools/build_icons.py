@@ -216,12 +216,17 @@ ICONS["core"] = item_svg(
      shape("circle", "#ffffff", cx=42, cy=28, r=1.8)])
 
 # ------------------------------------------------------------------------------ units, nodes, benches
+# The engineer in the crew's suit (tools/build_hero.py): the hull's white at his shoulders, the
+# ring a helmet locks onto with the ship's orange along it, the chest unit's lit screen.
 ICONS["hero"] = item_svg(
-    [shape("path", C["shirt"], d="M 11 59 C 11 45 19 38 32 38 C 45 38 53 45 53 59 Z"),
+    [shape("path", C["hull"], d="M 11 59 C 11 45 19 38 32 38 C 45 38 53 45 53 59 Z"),
      shape("circle", C["skin"], cx=32, cy=24, r=11.5),
      shape("path", C["hair"], d="M 20.5 23 C 20 12 26 8 33 8 C 40 8 45 13 44 22 C 39 17 29 17 20.5 23 Z")],
-    [shape("path", C["shirt_dark"], d="M 26 38 L 32 46 L 38 38 Z"),
-     shape("path", C["shirt_dark"], d="M 11 59 C 11 51 13 46 17 43 L 20 59 Z")])
+    [shape("path", C["hull_shade"], d="M 11 59 C 11 51 13 46 17 43 L 20 59 Z"),
+     shape("rect", C["metal"], x=20.5, y=35, width=23, height=5.5, rx=2.75),
+     shape("rect", C["hazard"], x=20.5, y=35, width=23, height=1.8, rx=0.9),
+     shape("rect", C["iron_dark"], x=26.5, y=46, width=11, height=7.5, rx=1.6),
+     shape("rect", C["window"], x=28.4, y=47.7, width=7.2, height=4, rx=0.8)])
 
 _TOE = "M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z"
 ICONS["dino"] = item_svg(

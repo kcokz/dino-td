@@ -178,17 +178,25 @@ static func _system_face(weight: String) -> SystemFont:
 	_fonts[key] = cjk
 	return cjk
 
-## An icon by name (Config.ICON_DIR/<name>.svg), or null when there is none. They are
-## DPITextures, drawn from the vector at whatever scale the screen needs.
+## An icon by name: the one rendered from the thing itself where there is one
+## (Config.RENDERED_ICONS: a material, from its pile), else the drawn one (Config.ICON_DIR
+## /<name>.svg, a DPITexture drawn from the vector at whatever scale the screen needs) -- or
+## null when there is neither.
 static func icon(name: String) -> Texture2D:
 	if name == "":
 		return null
 	if _icons.has(name):
 		return _icons[name]
 	var cfg = _config()
+	var tex: Texture2D = null
+	if cfg and "RENDERED_ICONS" in cfg:
+		var shot: String = String(cfg.RENDERED_ICONS.get("dir", "")) + name + ".png"
+		if ResourceLoader.exists(shot):
+			tex = load(shot) as Texture2D
 	var dir: String = String(cfg.ICON_DIR) if (cfg and "ICON_DIR" in cfg) else "res://assets/icons/"
 	var path: String = dir + name + ".svg"
-	var tex: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	if tex == null and ResourceLoader.exists(path):
+		tex = load(path) as Texture2D
 	_icons[name] = tex
 	return tex
 
@@ -264,11 +272,14 @@ static func surface(name: String, tinted: Variant, margin_h: int, margin_v: int)
 	b.texture_margin_right = m.x
 	b.texture_margin_top = m.y
 	b.texture_margin_bottom = m.y
+	# Its shadow reaches past the rect all round -- or, for one that runs off the screen, only
+	# where it does not ("expand": left, top, right, bottom).
 	var pad: float = float(spec.get("pad", 0))
-	b.expand_margin_left = pad
-	b.expand_margin_right = pad
-	b.expand_margin_top = pad
-	b.expand_margin_bottom = pad
+	var reach: Vector4i = spec.get("expand", Vector4i(int(pad), int(pad), int(pad), int(pad)))
+	b.expand_margin_left = reach.x
+	b.expand_margin_top = reach.y
+	b.expand_margin_right = reach.z
+	b.expand_margin_bottom = reach.w
 	# Tiled, each run fitted to a whole number of repeats, so a rim meets the corner piece
 	# where it left it. What is stretched top to bottom instead says so ("tile_v").
 	b.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
@@ -346,6 +357,12 @@ static func build() -> Theme:
 	_panel(t, "HudPanel", frame)
 	# The top row's slim plates: they sit over the world.
 	_panel(t, "PillPanel", surface("plate", "plain", space("m") + space("xs"), space("xs") + space("hair")))
+	# The status bar: one strip along the top edge; what it holds sits clear of its rim.
+	var strip := surface("strip", "plain", space("l"), space("xs"))
+	strip.content_margin_bottom = space("s") + space("hair")
+	_panel(t, "StripPanel", strip)
+	# A round socket for a material's icon on the strip.
+	_panel(t, "SocketPanel", surface("socket_round", "plain", space("xs"), space("xs")))
 	_panel(t, "CardPanel", surface("hide", "hide", inset.x, inset.y))
 	# Round a portrait or a bench's icon: a socket sunk in the leather.
 	_panel(t, "InsetPanel", surface("socket", "plain", space("s"), space("s")))
@@ -426,6 +443,19 @@ static func build() -> Theme:
 		surface("socket", "plain", space("xs"), space("xs")), bare,
 		color("text_muted"), color("text"), color("accent"), color("text_faint"))
 	t.set_color("font_hover_pressed_color", "SegmentButton", color("accent"))
+
+	# The status bar's buttons: round, their glyph or figure in the middle; the one of a set
+	# that is chosen -- the speed the game runs at -- painted ochre.
+	t.set_type_variation("RoundButton", "Button")
+	_buttons(t, "RoundButton",
+		surface("round_button", "plain", 0, 0), surface("round_button", "hover", 0, 0),
+		surface("round_button_lit", "plain", 0, 0), surface("round_button", "off", 0, 0),
+		color("text"), color("text"), color("accent_text"), color("text_faint"))
+	t.set_color("font_hover_pressed_color", "RoundButton", color("accent_text"))
+	t.set_color("icon_hover_pressed_color", "RoundButton", color("accent_text"))
+	t.set_font("font", "RoundButton", display_font("black"))
+	t.set_font_size("font_size", "RoundButton", font_size("small"))
+	t.set_constant("icon_max_width", "RoundButton", icon_size("s"))
 
 	# A command card entry: a hide tag, its name up top and its price along the bottom
 	# (the extra bottom margin is where the price row sits), in ink.

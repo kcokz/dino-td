@@ -1181,6 +1181,24 @@ const THEME: Dictionary = {
 			"tile_v": false},
 		# Drawn whole, at a rule's middle -- not cut into nine.
 		"ornament": {"image": "res://assets/ui/ornament.png", "size": Vector2i(24, 12), "margin": Vector2i(0, 0), "pad": 0},
+		# The status bar (v0.6: "状态栏的那个版面还是显得像网页游戏"): one strip of leather along
+		# the top edge of the screen, its rim along its bottom and its shadow on the world
+		# ("expand": its shadow reaches out below it only, the rest runs off the screen); round
+		# buttons for the speeds, pause and menu, the speed it runs at lit; a round socket for
+		# each material's icon.
+		"strip": {"image": "res://assets/ui/strip.png", "size": Vector2i(256, 48), "margin": Vector2i(16, 16), "pad": 8,
+			"tile_v": false, "expand": Vector4i(0, 0, 0, 8)},
+		"round_button": {"image": "res://assets/ui/round_button.png", "size": Vector2i(34, 34), "margin": Vector2i(16, 16), "pad": 2},
+		"round_button_lit": {"image": "res://assets/ui/round_button_lit.png", "size": Vector2i(34, 34), "margin": Vector2i(16, 16), "pad": 2},
+		"socket_round": {"image": "res://assets/ui/socket_round.png", "size": Vector2i(32, 32), "margin": Vector2i(15, 15), "pad": 1},
+		# A medallion -- the cabin's, hung from the strip, and the Hero's -- drawn whole: its rim,
+		# the channel its ring of health lies in ("ring": the channel's inner and outer radius),
+		# the socket its portrait stands in ("socket": its radius), in design pixels at "size".
+		# "ring_fill" is the pigment in the channel, tinted the colour of what is left.
+		"medallion": {"image": "res://assets/ui/medallion.png", "size": Vector2i(104, 104), "margin": Vector2i(0, 0), "pad": 6,
+			"rim": 4.5, "ring": Vector2(33.0, 40.0), "socket": 31.0},
+		"ring_fill": {"image": "res://assets/ui/ring_fill.png", "size": Vector2i(104, 104), "margin": Vector2i(0, 0), "pad": 6,
+			"ring": Vector2(33.0, 40.0)},
 	},
 }
 
@@ -1194,6 +1212,19 @@ const PORTRAITS: Dictionary = {
 	"size": 64,
 	"scale": 2,
 	"kinds": ["hero", "building", "node", "station"],
+}
+
+## Each material's icon, rendered by tools/render_portraits.gd from the pile the game drops of
+## it (Config.VISUALS "drop/<id>"): the thing itself, as the portraits are, where the drawn
+## icon was a flat sign. At <dir><id>.png; "size" the size it is drawn for, rendered at
+## "scale" times it; "edge" the dark ring round its silhouette (design pixels) that lets it
+## read small, on a pale card and a dark strip alike. UiTheme.icon takes it over the drawn one.
+const RENDERED_ICONS: Dictionary = {
+	"dir": "res://assets/icons/rendered/",
+	"size": 32,
+	"scale": 2,
+	"edge": 1.4,
+	"kinds": ["drop"],
 }
 
 ## Where the interface's icons are (tools/build_icons.py draws them): `<name>.svg`. Resources,
@@ -1219,12 +1250,14 @@ const UI: Dictionary = {
 	# The speeds the top bar offers, one segment each (UI-POLISH T9).
 	"game_speeds": [1.0, 2.0, 3.0],
 	"resource_count_width": 30,        # a count's box: four figures without the chip jumping
-	"cabin_bar_width": 150,            # the cabin's health bar -- the widest: losing it loses the run
-	"hero_bar_width": 90,
-	"vital_value_width": 52,
 	"objective_width": 290,            # the beacon card, top right
-	"top_bar_top": 14,                 # the top row's distance from the screen's top edge
-	"toast_top": 66,                   # where the centre toasts start, under the top row
+	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
+	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
+	# starts under the cabin's medallion and the figures under it.
+	"strip_height": 48,                # a round button (34) with room above it and above the rim
+	"emblem_top": 2,
+	"hero_emblem_scale": 0.8,
+	"toast_top": 132,                  # where the centre toasts start, under the cabin's medallion
 	"toast_max_width": 560,            # a longer toast wraps inside this
 	"paused_word_bottom": 150,         # "PAUSED" sits this far above the bottom edge
 	"result_card_width": 560,

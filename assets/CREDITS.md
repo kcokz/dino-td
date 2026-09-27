@@ -92,7 +92,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **License**: CC0 1.0 Universal (Public Domain Dedication); each kit's own licence file is kept in `assets/source/quaternius/ubc/`
 - **Date Added**: 2026-09-25, downloaded with the user's permission (`Universal Base Characters[Standard].zip` 122 MB, `Modular Character Outfits - Fantasy[Standard].zip` 280 MB, `Universal Animation Library[Standard].zip` 15 MB)
 - **Source Files**: `assets/source/quaternius/ubc/` -- `Male_Peasant.gltf` (the Regular male body in a plain shirt, trousers and shoes), `Superhero_Male_FullBody.gltf` (for its head, eyes and brows: the only head in the free kit), `Hair_SimpleParted.gltf`, `UAL1_Standard.glb`; the models unchanged, their textures reduced from 4096 to 1024 pixels
-- **Built By**: `tools/build_hero.py` -- the head cut from the Superhero body at the neck and put on the Regular body (the kits' spine, neck and head bones stand in exactly the same places), hair added, eight clips taken from the animation library under the names the game plays (Idle_Loop, Walk_Loop, Jog_Fwd_Loop, Punch_Jab -> attack, Interact -> harvest, Fixing_Kneeling -> build, Death01, Hit_Chest), the clothes toned to outdoor colours and the grey hair dyed dark brown
+- **Built By**: `tools/build_hero.py` -- the head cut from the Superhero body at the neck and put on the Regular body (the kits' spine, neck and head bones stand in exactly the same places), hair added, eight clips taken from the animation library under the names the game plays (Idle_Loop, Walk_Loop, Jog_Fwd_Loop, Punch_Jab -> attack, Interact -> harvest, Fixing_Kneeling -> build, Death01, Hit_Chest), the grey hair dyed dark brown; and since 2026-09-27 dressed as the ship's crew: the clothes and bare forearms re-dyed as a white suit (their shading kept), boots and gloves darkened, and the suit's hard parts modelled on the rig by the same script (a neck ring, a life-support pack, a chest unit with a lit screen, arm bands, wrist and ankle cuffs), each weighted wholly to one bone
 - **Usage**: `hero`, fitted by height (he is rigged in a T-pose)
 
 ### Jurassic Flora (`assets/models/flora/*.glb`)
@@ -204,12 +204,20 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Usage**: `cabin/room` and `station/<id>` in `Config.VISUALS`; parts shown by `scripts/fx/CabinArt.gd`.
 
 ### Interface Materials (`assets/ui/*.png`)
-- **Asset Name**: The interface's surfaces -- leather framed in bone with knuckles at its corners, the ship's slate framed in steel, a plate, a studded button and a painted one, sunk sockets, brush strokes in ink and red ochre, a trough capped with bone, pigment and hatched pigment, a groove, a rule and its ornament, a stitched hide
+- **Asset Name**: The interface's surfaces -- leather framed in bone with knuckles at its corners, the ship's slate framed in steel, a plate, a studded button and a painted one, sunk sockets (square and round), round buttons, the status bar's strip, a medallion and the ring of pigment in it, brush strokes in ink and red ochre, a trough capped with bone, pigment and hatched pigment, a groove, a rule and its ornament, a stitched hide
 - **Source**: `tools/build_ui_textures.gd` (drawn by rule: tiling gradient noise, a crack field measured round a torus, and light worked out from each pixel's distance to the outline; every surface drawn to tile)
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-27
 - **Usage**: `Config.THEME.surfaces`, imported as Images; `UiTheme.surface` cuts each into nine, tiles it and tints it (`Config.THEME.tints`).
+
+### Rendered Material Icons (`assets/icons/rendered/*.png`)
+- **Asset Name**: Each material's icon -- logs, rocks, bones, meat, a boss's cut, a pot of water -- rendered from the pile the game drops of it, ringed with a dark edge
+- **Source**: `tools/render_portraits.gd` (`Config.RENDERED_ICONS`), from this project's own drop models (`assets/models/props/drop_*_a.glb`)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-27
+- **Usage**: `UiTheme.icon` takes one over the drawn icon of the same name: the status bar, prices, toasts.
 
 ### Portraits (`assets/portraits/*.png`)
 - **Asset Name**: A portrait of each thing the command card and a bench can show -- the Hero's head and shoulders, each building, bench, tree and rock in three-quarter view -- on a clear ground

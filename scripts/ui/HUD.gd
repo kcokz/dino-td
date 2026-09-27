@@ -53,10 +53,10 @@ var beacon_pips: HBoxContainer = null
 var beacon_bar: ProgressBar = null
 var wave_label: Label = null
 var core_hp_label: Label = null
-var core_hp_bar: ProgressBar = null
+var core_hp_bar: TextureProgressBar = null
 var core_vital: Control = null
 var hero_hp_label: Label = null
-var hero_hp_bar: ProgressBar = null
+var hero_hp_bar: TextureProgressBar = null
 var deploy_timer_label: Label = null
 var phase_label: Label = null
 var version_label: Label = null
@@ -183,7 +183,7 @@ func _on_deploy_time_changed(remaining: float, _total: float) -> void:
 ## stopped -- a frame and a word, not just a changed button (UI-POLISH T9).
 func _on_pause_toggled(is_paused: bool) -> void:
 	if pause_btn:
-		pause_btn.text = tr("HUD_RESUME") if is_paused else tr("HUD_PAUSE")
+		# A round button says it with its glyph; the words are its tooltip.
 		pause_btn.icon = UiTheme.icon("play" if is_paused else "pause")
 		pause_btn.tooltip_text = tr("HUD_RESUME_BTN") if is_paused else tr("HUD_PAUSE_BTN")
 	_refresh_paused_overlay()
@@ -203,7 +203,7 @@ func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 	if hero_hp_bar:
 		var ratio: float = clampf(cur / max_val, 0.0, 1.0) if max_val > 0.0 else 0.0
 		hero_hp_bar.value = ratio
-		hero_hp_bar.theme_type_variation = UiTheme.health_bar(ratio)
+		hero_hp_bar.tint_progress = UiTheme.health_color(ratio)
 
 ## The counts, and income made visible: a count that went up flashes the accent colour and
 ## fades back, so a pickup is seen rather than searched for; an empty one is dimmed.
@@ -499,7 +499,7 @@ func _on_core_hp_changed(cur: float, max_val: float) -> void:
 	if core_hp_bar:
 		var dropped: bool = _core_ratio < core_hp_bar.value - 0.0001
 		core_hp_bar.value = _core_ratio
-		core_hp_bar.theme_type_variation = UiTheme.health_bar(_core_ratio)
+		core_hp_bar.tint_progress = UiTheme.health_color(_core_ratio)
 		# A hit is felt: the readout jolts sideways and settles (UI-POLISH T8).
 		if dropped and core_vital and core_vital.is_inside_tree():
 			var tw := core_vital.create_tween()
@@ -726,9 +726,9 @@ func _refresh_texts() -> void:
 		menu_btn.tooltip_text = tr("HUD_MENU_TIP")
 	if core_vital:
 		core_vital.tooltip_text = tr("HUD_CABIN_TIP")
-	var hero_vital = find_child("HeroVital", true, false)
-	if hero_vital:
-		hero_vital.tooltip_text = tr("HUD_HERO_TIP")
+	var hero_emblem = find_child("HeroEmblem", true, false)
+	if hero_emblem:
+		hero_emblem.tooltip_text = tr("HUD_HERO_TIP")
 	var title = find_child("ObjectiveTitle", true, false) as Label
 	if title:
 		title.text = tr("HUD_OBJECTIVE_BEACON")
@@ -860,9 +860,14 @@ func _ensure_resource_labels() -> void:
 			chip = HBoxContainer.new()
 			chip.name = "%sChip" % key
 			chip.mouse_filter = Control.MOUSE_FILTER_PASS
-			chip.add_theme_constant_override("separation", UiTheme.space("xs") + UiTheme.space("hair"))
+			chip.add_theme_constant_override("separation", UiTheme.space("s"))
 			resource_bar.add_child(chip)
-			chip.add_child(_icon("%sIcon" % key, String(res_id), UiTheme.icon_size("m")))
+			# Its icon sits in a socket sunk in the strip.
+			var socket := _panel("%sSocket" % key, &"SocketPanel")
+			socket.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			socket.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			chip.add_child(socket)
+			socket.add_child(_icon("%sIcon" % key, String(res_id), UiTheme.icon_size("m")))
 			var lbl := Label.new()
 			lbl.name = "%sLabel" % key
 			lbl.theme_type_variation = &"NumberLabel"
@@ -901,126 +906,115 @@ func _ensure_ui_components() -> void:
 	root_control.add_child(cabin_screen)
 	cabin_screen.leave_requested.connect(_on_leave_cabin)
 
-	# --- The top row: three columns in one container ------------------------------------
-	# The two sides share what the middle leaves equally, so the vitals sit in the middle of
-	# the screen -- and when the stock grows wider than its half, the row pushes them over
-	# rather than letting the two run into each other.
-	var top_bar := HBoxContainer.new()
+	# --- The status bar -------------------------------------------------------------------
+	# v0.6: "状态栏的那个版面还是显得像网页游戏". Three plates floating along the top were a web
+	# page's navigation, whatever they were made of. A game hangs its status off one strip along
+	# the top edge: the materials in round sockets at its left, the speeds, pause and menu as
+	# round buttons at its right, and from its middle -- over everything -- the medallion of
+	# what the run is lost with: the cabin, its health a ring round its portrait. The Hero's
+	# own medallion stands at the bottom left, where a party's portraits stand.
+	var top_bar := PanelContainer.new()
 	top_bar.name = "TopBar"
-	top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_bar.theme_type_variation = &"StripPanel"
+	top_bar.mouse_filter = Control.MOUSE_FILTER_PASS
 	top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_bar.offset_left = edge
-	top_bar.offset_right = -edge
-	top_bar.offset_top = float(_ui("top_bar_top", 14))
-	top_bar.offset_bottom = top_bar.offset_top
-	top_bar.add_theme_constant_override("separation", UiTheme.space("s"))
+	top_bar.offset_top = 0.0
+	top_bar.offset_bottom = float(_ui("strip_height", 44))
 	root_control.add_child(top_bar)
+	var top_row := HBoxContainer.new()
+	top_row.name = "TopRow"
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_theme_constant_override("separation", UiTheme.space("l"))
+	top_bar.add_child(top_row)
 
-	# --- Top left: materials, and the meal he is living on ---------------------------
-	var top_left := _vbox("TopLeft")
-	top_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_bar.add_child(top_left)
-	var res_panel := _panel("ResourcePanel", &"PillPanel")
-	res_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	top_left.add_child(res_panel)
+	# Its left: the materials, each in its socket, its count beside it.
+	var res_panel := HBoxContainer.new()
+	res_panel.name = "ResourcePanel"
+	res_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_child(res_panel)
 	resource_bar = HBoxContainer.new()
 	resource_bar.name = "ResourceBar"
 	resource_bar.add_theme_constant_override("separation", UiTheme.space("l"))
 	res_panel.add_child(resource_bar)
 	_ensure_resource_labels()
-	fed_chip = _panel("FedChip", &"PillPanel")
-	fed_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	fed_chip.visible = false
-	top_left.add_child(fed_chip)
-	var fed_row := HBoxContainer.new()
-	fed_row.name = "FedRow"
-	fed_chip.add_child(fed_row)
-	var fed_icon := _icon("FedIcon", "fed", UiTheme.icon_size("s"))
-	fed_icon.modulate = UiTheme.color("accent")
-	fed_row.add_child(fed_icon)
-	fed_label = _label("FedLabel", &"SmallNumberLabel", "")
-	fed_row.add_child(fed_label)
+	var middle := Control.new()
+	middle.name = "Middle"
+	middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_child(middle)
 
-	# --- Top centre: the cabin and the Hero -------------------------------------------
-	var top_center := HBoxContainer.new()
-	top_center.name = "TopCenter"
-	top_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_center.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	top_bar.add_child(top_center)
-	var vitals_panel := _panel("VitalsPanel", &"PillPanel")
-	top_center.add_child(vitals_panel)
-	var vitals := HBoxContainer.new()
-	vitals.name = "Vitals"
-	vitals.add_theme_constant_override("separation", UiTheme.space("m"))
-	vitals_panel.add_child(vitals)
-	var core := _vital("CoreVital", "core", float(_ui("cabin_bar_width", 150)))
-	vitals.add_child(core[0])
-	core_vital = core[0]
-	core_hp_bar = core[1]
-	core_hp_label = core[2]
-	core_hp_label.name = "CoreHPLabel"
-	core_hp_bar.name = "CoreHPBar"
-	vitals.add_child(VSeparator.new())
-	var hero := _vital("HeroVital", "hero", float(_ui("hero_bar_width", 90)))
-	vitals.add_child(hero[0])
-	hero_hp_bar = hero[1]
-	hero_hp_label = hero[2]
-	hero_hp_label.name = "HeroHPLabel"
-	hero_hp_bar.name = "HeroHPBar"
-
-	# --- Top right: speed, pause, menu; and the goal under them ------------------------
-	var top_right := VBoxContainer.new()
-	top_right.name = "TopRight"
-	top_right.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_right.alignment = BoxContainer.ALIGNMENT_BEGIN
-	top_right.add_theme_constant_override("separation", UiTheme.space("s") + UiTheme.space("hair"))
-	top_bar.add_child(top_right)
-	var controls_panel := _panel("ControlsPanel", &"PillPanel")
-	controls_panel.size_flags_horizontal = Control.SIZE_SHRINK_END
-	top_right.add_child(controls_panel)
+	# Its right: the speeds, the one it runs at lit; pause; the menu.
 	var controls := HBoxContainer.new()
-	controls.name = "Controls"
+	controls.name = "ControlsPanel"
+	controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	controls.add_theme_constant_override("separation", UiTheme.space("xs"))
-	controls_panel.add_child(controls)
+	top_row.add_child(controls)
+	var round_px: Vector2 = Vector2(UiTheme.tokens().get("surfaces", {}).get("round_button", {}).get("size", Vector2i(34, 34)))
 	var speed_group := HBoxContainer.new()
 	speed_group.name = "SpeedGroup"
-	speed_group.add_theme_constant_override("separation", UiTheme.space("hair"))
+	speed_group.add_theme_constant_override("separation", UiTheme.space("xs"))
 	controls.add_child(speed_group)
 	var group := ButtonGroup.new()
 	speed_buttons.clear()
 	for s in _speeds():
 		var seg := Button.new()
 		seg.name = "Speed%dBtn" % int(s)
-		seg.theme_type_variation = &"SegmentButton"
+		seg.theme_type_variation = &"RoundButton"
 		seg.toggle_mode = true
 		seg.button_group = group
 		seg.text = "%s×" % (("%d" % int(s)) if is_equal_approx(float(s), round(float(s))) else ("%.1f" % float(s)))
-		seg.custom_minimum_size = Vector2(UiTheme.width("segment"), UiTheme.height("bar"))
+		seg.custom_minimum_size = round_px
+		seg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var speed: float = float(s)
 		seg.pressed.connect(func(): set_game_speed(speed))
 		speed_group.add_child(seg)
 		speed_buttons.append(seg)
 	speed_btn = speed_buttons[0] if not speed_buttons.is_empty() else null
-	controls.add_child(VSeparator.new())
+	var apart := Control.new()
+	apart.custom_minimum_size = Vector2(UiTheme.space("s"), 0)
+	apart.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	controls.add_child(apart)
 	pause_btn = Button.new()
 	pause_btn.name = "PauseBtn"
-	pause_btn.theme_type_variation = &"GhostButton"
+	pause_btn.theme_type_variation = &"RoundButton"
 	pause_btn.icon = UiTheme.icon("pause")
-	pause_btn.custom_minimum_size = Vector2(0, UiTheme.height("bar"))
+	pause_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pause_btn.custom_minimum_size = round_px
+	pause_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	controls.add_child(pause_btn)
 	menu_btn = Button.new()
 	menu_btn.name = "MenuBtn"
-	menu_btn.theme_type_variation = &"GhostButton"
+	menu_btn.theme_type_variation = &"RoundButton"
 	menu_btn.icon = UiTheme.icon("menu")
-	menu_btn.custom_minimum_size = Vector2(UiTheme.width("segment"), UiTheme.height("bar"))
+	menu_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	menu_btn.custom_minimum_size = round_px
+	menu_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	controls.add_child(menu_btn)
 
+	# From its middle, over everything: the cabin's medallion, its figures on a plate under it.
+	var cabin := _medallion("CabinEmblem", "building/core", "core")
+	core_vital = cabin[0]
+	core_hp_bar = cabin[1]
+	core_hp_label = cabin[2]
+	core_hp_bar.name = "CoreHPBar"
+	core_hp_label.name = "CoreHPLabel"
+	root_control.add_child(core_vital)
+	core_vital.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_SIZE)
+	core_vital.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	core_vital.offset_top = float(_ui("emblem_top", 2))
+	core_vital.offset_bottom = core_vital.offset_top
+
+	# Under the strip at its right: the goal.
 	objective_panel = _panel("ObjectivePanel", &"TechPanel")
-	objective_panel.size_flags_horizontal = Control.SIZE_SHRINK_END
 	objective_panel.custom_minimum_size = Vector2(_ui("objective_width", 280), 0)
 	objective_panel.visible = false
-	top_right.add_child(objective_panel)
+	root_control.add_child(objective_panel)
+	objective_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	objective_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	objective_panel.offset_right = -edge
+	objective_panel.offset_left = -edge - float(_ui("objective_width", 280))
+	objective_panel.offset_top = float(_ui("strip_height", 44)) + UiTheme.space("m")
+	objective_panel.offset_bottom = objective_panel.offset_top
 	var objective := _vbox("Objective")
 	objective.add_theme_constant_override("separation", UiTheme.space("xs") + UiTheme.space("hair"))
 	objective_panel.add_child(objective)
@@ -1049,6 +1043,41 @@ func _ensure_ui_components() -> void:
 	beacon_bar.custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
 	beacon_bar.visible = false
 	objective.add_child(beacon_bar)
+
+	# Bottom left: the Hero's medallion -- click it to pick him -- his figures and the meal he
+	# is living on beside it.
+	var hero_side := HBoxContainer.new()
+	hero_side.name = "HeroSide"
+	hero_side.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hero_side.alignment = BoxContainer.ALIGNMENT_END
+	hero_side.add_theme_constant_override("separation", UiTheme.space("s"))
+	root_control.add_child(hero_side)
+	var hero := _medallion("HeroEmblem", "hero", "hero", float(_ui("hero_emblem_scale", 0.8)))
+	hero_hp_bar = hero[1]
+	hero_hp_label = hero[2]
+	hero_hp_bar.name = "HeroHPBar"
+	hero_hp_label.name = "HeroHPLabel"
+	hero[0].mouse_filter = Control.MOUSE_FILTER_STOP
+	hero[0].mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	hero[0].gui_input.connect(_on_hero_emblem_input)
+	hero_side.add_child(hero[0])
+	fed_chip = _panel("FedChip", &"PillPanel")
+	fed_chip.size_flags_vertical = Control.SIZE_SHRINK_END
+	fed_chip.visible = false
+	hero_side.add_child(fed_chip)
+	var fed_row := HBoxContainer.new()
+	fed_row.name = "FedRow"
+	fed_chip.add_child(fed_row)
+	var fed_icon := _icon("FedIcon", "fed", UiTheme.icon_size("s"))
+	fed_icon.modulate = UiTheme.color("accent")
+	fed_row.add_child(fed_icon)
+	fed_label = _label("FedLabel", &"SmallNumberLabel", "")
+	fed_row.add_child(fed_label)
+	hero_side.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_KEEP_SIZE)
+	hero_side.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	hero_side.offset_left = edge
+	hero_side.offset_bottom = -(edge + UiTheme.font_size("caption") + UiTheme.space("xs"))
+	hero_side.offset_top = hero_side.offset_bottom
 
 	# --- Centre: what just happened, what is coming ------------------------------------
 	# No size of its own: as wide and as tall as what it holds, growing out from the middle
@@ -1117,7 +1146,7 @@ func _ensure_ui_components() -> void:
 	version_label = _label("VersionLabel", &"CaptionLabel", "")
 	version_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	version_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	version_label.position = Vector2(edge, -(edge + UiTheme.font_size("caption")))
+	version_label.position = Vector2(edge, -(UiTheme.space("xs") + UiTheme.font_size("caption") + UiTheme.space("xs")))
 	root_control.add_child(version_label)
 
 	# --- Retired controls: kept for the older API, never shown ---------------------------
@@ -1258,26 +1287,81 @@ func _build_game_over() -> void:
 	version_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(version_badge)
 
-## One vital: its icon, its bar, its figures.
-func _vital(node_name: String, icon_name: String, bar_width: float) -> Array:
-	var box := HBoxContainer.new()
+## A medallion (Config.THEME.surfaces "medallion"): `key`'s portrait -- or `icon_name`'s icon
+## where it has none -- in a socket, its health a ring of pigment round it ("ring_fill", a
+## TextureProgressBar filling clockwise from the top, tinted as health is), and its figures on
+## a plate under it; drawn at `grow` times its size. [medallion, ring, figures]
+func _medallion(node_name: String, key: String, icon_name: String, grow: float = 1.0) -> Array:
+	var spec: Dictionary = UiTheme.tokens().get("surfaces", {}).get("medallion", {})
+	var px: Vector2 = Vector2(spec.get("size", Vector2i(104, 104)))
+	var box := VBoxContainer.new()
 	box.name = node_name
 	box.mouse_filter = Control.MOUSE_FILTER_PASS
-	box.add_child(_icon(node_name.replace("Vital", "Icon"), icon_name, UiTheme.icon_size("m")))
-	var bar := ProgressBar.new()
-	bar.theme_type_variation = &"HealthBar"
-	bar.show_percentage = false
-	bar.max_value = 1.0
-	bar.step = 0.0
-	bar.value = 1.0
-	bar.custom_minimum_size = Vector2(bar_width, UiTheme.thickness("bar"))
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(bar)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", -UiTheme.space("s"))
+	# The disc is drawn at its own size and scaled; a holder the scaled size keeps the layout
+	# honest about how much room it takes.
+	var holder := Control.new()
+	holder.name = "Disc"
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.custom_minimum_size = px * grow
+	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(holder)
+	var disc := Control.new()
+	disc.name = "Face"
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	disc.size = px
+	disc.scale = Vector2.ONE * grow
+	holder.add_child(disc)
+	var base := TextureRect.new()
+	base.name = "Base"
+	base.texture = UiTheme.surface_texture("medallion")
+	base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	base.size = px
+	disc.add_child(base)
+	var socket: float = float(spec.get("socket", 31.0)) * 2.0
+	var face := TextureRect.new()
+	face.name = "Portrait"
+	var art: Texture2D = UiTheme.portrait(key)
+	face.texture = art if art else UiTheme.icon(icon_name)
+	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.position = (px - Vector2.ONE * socket) * 0.5
+	face.size = Vector2.ONE * socket
+	disc.add_child(face)
+	var ring := TextureProgressBar.new()
+	ring.name = "Ring"
+	ring.texture_progress = UiTheme.surface_texture("ring_fill")
+	ring.fill_mode = TextureProgressBar.FILL_CLOCKWISE
+	ring.min_value = 0.0
+	ring.max_value = 1.0
+	ring.step = 0.0
+	ring.value = 1.0
+	ring.tint_progress = UiTheme.health_color(1.0)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.size = px
+	disc.add_child(ring)
+	var plate := _panel(node_name + "Plate", &"PillPanel")
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(plate)
 	var value := _label("Value", &"SmallNumberLabel", "")
-	value.custom_minimum_size = Vector2(_ui("vital_value_width", 52), 0)
-	box.add_child(value)
-	return [box, bar, value]
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	plate.add_child(value)
+	return [box, ring, value]
+
+## The Hero's medallion clicked: he is picked, as a click on him in the world picks him.
+func _on_hero_emblem_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_select_hero()
+		get_viewport().set_input_as_handled()
+
+func _select_hero() -> void:
+	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
+	var eb = _get_event_bus()
+	if hero and eb and eb.has_signal("unit_selected"):
+		eb.unit_selected.emit(hero)
 
 func _panel(node_name: String, variation: StringName) -> PanelContainer:
 	var p := PanelContainer.new()

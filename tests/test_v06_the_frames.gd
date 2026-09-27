@@ -132,9 +132,12 @@ func test_04_a_material_is_cut_where_config_says_and_its_shadow_reaches_past_it(
 		var m: Vector2i = spec["margin"]
 		assert_eq(Vector2i(int(b.texture_margin_left), int(b.texture_margin_top)), m, "%s is cut at its margin" % name)
 		assert_eq(Vector2i(int(b.texture_margin_right), int(b.texture_margin_bottom)), m, "on all four sides")
-		var pad: float = float(spec.get("pad", 0))
-		assert_eq(b.expand_margin_left, pad, "%s's shadow reaches past what it is drawn behind" % name)
-		assert_eq(b.expand_margin_bottom, pad, "all round")
+		# All round, unless Config says where (the strip lies against the screen's edges, so
+		# its shadow falls below it only).
+		var pad: int = int(spec.get("pad", 0))
+		var reach: Vector4i = spec.get("expand", Vector4i(pad, pad, pad, pad))
+		assert_eq(Vector4i(int(b.expand_margin_left), int(b.expand_margin_top), int(b.expand_margin_right),
+			int(b.expand_margin_bottom)), reach, "%s's shadow reaches past what it is drawn behind" % name)
 		assert_eq(b.axis_stretch_horizontal, StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT,
 			"%s is tiled along, a whole number of times" % name)
 		var down: int = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT if bool(spec.get("tile_v", true)) \
