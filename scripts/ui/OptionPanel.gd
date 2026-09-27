@@ -249,7 +249,7 @@ func _ensure_components() -> void:
 		header.add_child(frame)
 		portrait = TextureRect.new()
 		portrait.name = "Portrait"
-		portrait.custom_minimum_size = Vector2.ONE * UiTheme.icon_size("xl")
+		portrait.custom_minimum_size = Vector2.ONE * UiTheme.portrait_size()
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		frame.add_child(portrait)
@@ -384,7 +384,7 @@ func _refresh_ui() -> void:
 		info = {"title": selected_unit.name, "type": "generic", "status": ""}
 
 	var unit_type: String = String(info.get("type", ""))
-	_set_header(String(info.get("title", selected_unit.name)), _kind_text(info), _portrait_icon(info))
+	_set_header(String(info.get("title", selected_unit.name)), _kind_text(info), _portrait(info))
 	_show_vitals(info)
 	_set_status(String(info.get("status", "")))
 
@@ -427,7 +427,12 @@ func _kind_text(info: Dictionary) -> String:
 			return tr("PANEL_KIND_STATION")
 	return ""
 
-func _portrait_icon(info: Dictionary) -> Texture2D:
+## Who it is: its portrait, rendered from its model (Config.PORTRAITS) -- or, for a thing
+## with none, its icon.
+func _portrait(info: Dictionary) -> Texture2D:
+	var shot: Texture2D = UiTheme.portrait(_visual_key(info))
+	if shot:
+		return shot
 	match String(info.get("type", "")):
 		"hero":
 			return UiTheme.icon("hero")
@@ -438,6 +443,19 @@ func _portrait_icon(info: Dictionary) -> Texture2D:
 		"station":
 			return UiTheme.icon(String(info.get("station_id", "")))
 	return null
+
+## The Config.VISUALS key of what `info` describes: what it looks like, and so its portrait.
+func _visual_key(info: Dictionary) -> String:
+	match String(info.get("type", "")):
+		"hero":
+			return "hero"
+		"building":
+			return "building/%s" % String(info.get("building_type", ""))
+		"resource_node":
+			return "node/%s" % String(info.get("resource_type", ""))
+		"station":
+			return "station/%s" % String(info.get("station_id", ""))
+	return ""
 
 ## The box's own rect is a line along the corner's bottom edge -- no height of its own --
 ## so the engine makes it exactly as tall as what it holds, growing upward, and shrinking

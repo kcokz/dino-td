@@ -250,7 +250,7 @@ func _card_for(station: Node) -> Dictionary:
 	var frame := PanelContainer.new()
 	frame.theme_type_variation = &"InsetTechPanel" if station_id == _beacon_station() else &"InsetPanel"
 	head.add_child(frame)
-	frame.add_child(UiKit.icon_rect(station_id, UiTheme.icon_size("l")))
+	frame.add_child(UiKit.portrait_rect("station/%s" % station_id, station_id, "Portrait"))
 	var names := VBoxContainer.new()
 	names.alignment = BoxContainer.ALIGNMENT_CENTER
 	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL

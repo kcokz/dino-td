@@ -1,0 +1,164 @@
+extends SceneTree
+## tools/render_portraits.gd -- a portrait of everything the command card and a bench can show,
+## rendered from its own model.
+##
+##   godot --path . --script res://tools/render_portraits.gd [-- hero building/wall ...]
+##
+## (Not --headless: it needs the renderer, as tools/playtest.gd does.)
+##
+## v0.6: "还是没到优秀游戏的质感". A good RTS puts the unit itself in its panel -- turned a
+## little towards you, lit like a studio shot, standing out of the dark of its frame -- where
+## this one had a flat icon. So each model Config.VISUALS declares for Config.PORTRAITS'
+## kinds is made the way the game makes it (VisualLibrary.make: its model, fitted to its
+## size), posed (the Hero in his idle clip, not his rig's T), and photographed on a stage of
+## its own: a warm key from the upper left -- where the interface's own light comes from --
+## a cool fill, and a rim of light from behind that lifts its silhouette off the dark socket
+## it is shown in. The background is left clear; the socket is the backdrop.
+##
+## How big a portrait is and where it goes are Config's (PORTRAITS); how each subject is
+## framed is here, as a model's look is in tools/generate_props.py.
+
+## How much bigger a portrait is rendered than it is saved: edges smoothed by shrinking.
+const SUPERSAMPLE := 2
+## A long lens, as for a portrait: little distortion, the subject filling the frame.
+const FOV := 26.0
+## Frames it waits for a stage to draw -- shaders compile on the first.
+const SETTLE := 8
+
+## How each kind of subject is framed: the view's turn about it (yaw, degrees, from the front
+## the game's own camera looks at), how far above it looks down (pitch), and how much room is
+## left round it. "bust" frames the top of a figure -- head and shoulders -- between "from"
+## and "to" (shares of its height) rather than all of it.
+const FRAMING := {
+	"hero": {"mode": "bust", "from": 0.7, "to": 1.03, "yaw": 200.0, "pitch": -4.0, "room": 1.0},
+	"building": {"mode": "whole", "yaw": 32.0, "pitch": -24.0, "room": 0.94},
+	"node": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 1.04},
+	"station": {"mode": "whole", "yaw": 20.0, "pitch": -16.0, "room": 0.92},
+}
+## A subject framed otherwise than its kind.
+const FRAMING_FOR := {
+	"node/wood": {"mode": "bust", "from": 0.35, "to": 1.02, "yaw": 32.0, "pitch": -14.0, "room": 1.0},
+	# A rock is wide and low: framed round it, not round the sphere that holds it.
+	"node/stone": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 0.82},
+}
+
+func _init() -> void:
+	await process_frame      # the autoloads, Config among them, join the tree first
+	var cfg: Node = root.get_node("Config")
+	var spec: Dictionary = cfg.PORTRAITS
+	var px: int = int(spec["size"]) * int(spec["scale"])
+	var dir: String = String(spec["dir"])
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var wanted: PackedStringArray = OS.get_cmdline_user_args()
+	for key in cfg.VISUALS:
+		var k: String = String(key)
+		if not Array(spec["kinds"]).has(k.get_slice("/", 0)):
+			continue
+		if not wanted.is_empty() and not wanted.has(k):
+			continue
+		var img: Image = await _render(k, px)
+		var path: String = dir + k.replace("/", "_") + ".png"
+		img.save_png(path)
+		print("[portrait] ", path, " ", img.get_size())
+	quit()
+
+func _framing(key: String) -> Dictionary:
+	return FRAMING_FOR.get(key, FRAMING.get(key.get_slice("/", 0), FRAMING["building"]))
+
+func _render(key: String, px: int) -> Image:
+	var view := SubViewport.new()
+	view.size = Vector2i(px, px) * SUPERSAMPLE
+	view.transparent_bg = true
+	view.own_world_3d = true
+	view.msaa_3d = Viewport.MSAA_4X
+	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(view)
+
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CLEAR_COLOR
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.42, 0.4, 0.37)
+	env.ambient_light_energy = 0.75
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ssao_enabled = true
+	env.ssao_radius = 0.6
+	env.ssao_intensity = 1.6
+	var world := WorldEnvironment.new()
+	world.environment = env
+	view.add_child(world)
+
+	var subject: Node3D = VisualLibrary.make(key)
+	view.add_child(subject)
+	_pose(subject)
+	await process_frame
+	var box: AABB = VisualLibrary.visual_bounds(subject)
+	var frame: Dictionary = _framing(key)
+	var height: float = maxf(box.size.y, 0.01)
+	var region := box
+	if String(frame["mode"]) == "bust":
+		# A figure's rest shape can be as wide as it is tall (the Hero's rig stands in a T), so
+		# a bust is framed by height alone, over his middle.
+		var low: float = box.position.y + height * float(frame["from"])
+		var high: float = box.position.y + height * float(frame["to"])
+		var side: float = high - low
+		var mid := box.get_center()
+		region = AABB(Vector3(mid.x - side * 0.5, low, mid.z - side * 0.5), Vector3(side, side, side))
+	var target: Vector3 = region.get_center()
+	var radius: float = region.size.length() * 0.5
+	if String(frame["mode"]) == "bust":
+		radius = region.size.y * 0.5 * 1.15
+	var distance: float = radius / sin(deg_to_rad(FOV * 0.5)) * float(frame["room"])
+
+	# The stage turns with the view, so every subject is lit alike whichever way it is seen.
+	var rig := Node3D.new()
+	rig.position = target
+	rig.rotation_degrees.y = float(frame["yaw"])
+	view.add_child(rig)
+	var pitch: float = deg_to_rad(float(frame["pitch"]))
+	var cam := Camera3D.new()
+	cam.fov = FOV
+	cam.near = maxf(0.01, distance * 0.05)
+	cam.far = distance * 10.0
+	rig.add_child(cam)
+	cam.position = Vector3(0.0, -sin(pitch) * distance, cos(pitch) * distance)
+	cam.look_at(target)
+	cam.current = true
+	_light(rig, target, Vector3(-1.1, 1.3, 1.0), Color(1.0, 0.92, 0.8), 1.35, true)    # key, upper left
+	_light(rig, target, Vector3(1.3, 0.35, 0.7), Color(0.62, 0.72, 0.88), 0.4, false)  # fill, cool
+	_light(rig, target, Vector3(0.5, 1.1, -1.4), Color(1.0, 0.95, 0.85), 1.7, false)   # rim, behind
+
+	for i in SETTLE:
+		await process_frame
+	var img: Image = view.get_texture().get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	img.resize(px, px, Image.INTERPOLATE_LANCZOS)
+	view.queue_free()
+	await process_frame
+	return img
+
+## A directional light shining from `from` (in the stage's own turn) onto the subject.
+func _light(rig: Node3D, target: Vector3, from: Vector3, colour: Color, energy: float, shadow: bool) -> void:
+	var light := DirectionalLight3D.new()
+	light.light_color = colour
+	light.light_energy = energy
+	light.shadow_enabled = shadow
+	rig.add_child(light)
+	light.position = from.normalized()
+	light.look_at(target)
+
+## Posed as the game shows it: the first clip that is an idle, a little way in. A rig's rest
+## pose is a T nobody sees in play.
+func _pose(subject: Node) -> void:
+	for node in subject.find_children("*", "AnimationPlayer", true, false):
+		var player := node as AnimationPlayer
+		var clip: String = ""
+		for name in player.get_animation_list():
+			if String(name).to_lower().contains("idle"):
+				clip = String(name)
+				break
+		if clip == "" and not player.get_animation_list().is_empty():
+			clip = String(player.get_animation_list()[0])
+		if clip != "":
+			player.play(clip)
+			player.seek(0.6, true)
+			player.pause()

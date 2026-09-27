@@ -1184,6 +1184,18 @@ const THEME: Dictionary = {
 	},
 }
 
+## Portraits (tools/render_portraits.gd): each thing the command card and a bench can show,
+## rendered from its own model under a studio light -- what a good RTS puts in its unit panel
+## (v0.6: "还是没到优秀游戏的质感"), where a flat icon was. One per Config.VISUALS key of these
+## kinds, at <dir><the key, "/" as "_">.png; "size" is how big one is shown (design pixels),
+## rendered at "scale" times it, for 1440p. A thing with no portrait shows its icon.
+const PORTRAITS: Dictionary = {
+	"dir": "res://assets/portraits/",
+	"size": 64,
+	"scale": 2,
+	"kinds": ["hero", "building", "node", "station"],
+}
+
 ## Where the interface's icons are (tools/build_icons.py draws them): `<name>.svg`. Resources,
 ## buildings and benches are named by their own ids; a resource node and a dinosaur say
 ## which icon is theirs in their own rows ("icon"), because a tree is not called "wood".

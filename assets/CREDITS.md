@@ -211,6 +211,14 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Date Added**: 2026-09-27
 - **Usage**: `Config.THEME.surfaces`, imported as Images; `UiTheme.surface` cuts each into nine, tiles it and tints it (`Config.THEME.tints`).
 
+### Portraits (`assets/portraits/*.png`)
+- **Asset Name**: A portrait of each thing the command card and a bench can show -- the Hero's head and shoulders, each building, bench, tree and rock in three-quarter view -- on a clear ground
+- **Source**: `tools/render_portraits.gd`: rendered in the engine from the game's own models (the entries above: the Hero from Quaternius' kits, CC0; the buildings, benches and rocks from this project's generators), fitted and posed as the game shows them, under a studio light
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication); the models rendered keep their own licences above
+- **Date Added**: 2026-09-27
+- **Usage**: `UiTheme.portrait` (`Config.PORTRAITS`), in the command card and on each bench's card in the cabin.
+
 ### Frosted Backdrop Shader (`assets/shaders/ui_frost.gdshader`)
 - **Asset Name**: Frosted-glass backdrop for full-screen menus
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)

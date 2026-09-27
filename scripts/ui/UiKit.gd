@@ -22,6 +22,15 @@ static func icon_rect(icon_name: String, px: int, node_name: String = "") -> Tex
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return r
 
+## A thing's portrait at the portrait size (UiTheme.portrait, by its Config.VISUALS key), or
+## its icon where it has none.
+static func portrait_rect(key: String, icon_name: String, node_name: String = "") -> TextureRect:
+	var r := icon_rect(icon_name, UiTheme.portrait_size(), node_name)
+	var shot: Texture2D = UiTheme.portrait(key)
+	if shot:
+		r.texture = shot
+	return r
+
 ## A bar with its figure at the right end: [row, bar, figure].
 static func bar_row(prefix: String, variation: StringName = &"HealthBar") -> Array:
 	var row := HBoxContainer.new()

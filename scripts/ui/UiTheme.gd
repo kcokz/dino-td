@@ -192,6 +192,24 @@ static func icon(name: String) -> Texture2D:
 	_icons[name] = tex
 	return tex
 
+## The portrait of `key` -- a Config.VISUALS key: "hero", "building/wall", "station/kitchen"
+## -- rendered from its model by tools/render_portraits.gd, or null where there is none.
+static func portrait(key: String) -> Texture2D:
+	var slot: String = "portrait:" + key
+	if _icons.has(slot):
+		return _icons[slot]
+	var cfg = _config()
+	var dir: String = String(cfg.PORTRAITS.get("dir", "")) if (cfg and "PORTRAITS" in cfg) else ""
+	var path: String = dir + key.replace("/", "_") + ".png"
+	var tex: Texture2D = load(path) as Texture2D if (dir != "" and key != "" and ResourceLoader.exists(path)) else null
+	_icons[slot] = tex
+	return tex
+
+## How big a portrait is shown (Config.PORTRAITS.size, design pixels).
+static func portrait_size() -> int:
+	var cfg = _config()
+	return int(cfg.PORTRAITS.get("size", 64)) if (cfg and "PORTRAITS" in cfg) else 64
+
 ## What a resource node is drawn as in the panel: its row says (a tree is not "wood").
 static func node_icon(res_type: String) -> Texture2D:
 	var cfg = _config()
