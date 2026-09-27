@@ -39,6 +39,12 @@ func _init() -> void:
 	await process_frame
 
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
+	# The frames are for looking at, not for the game: the editor is kept from importing each
+	# one (a .import beside every frame, and a scan of them all on a slow share).
+	if not FileAccess.file_exists(OUT_DIR + "/.gdignore"):
+		var ignore := FileAccess.open(OUT_DIR + "/.gdignore", FileAccess.WRITE)
+		if ignore:
+			ignore.close()
 	var wanted: PackedStringArray = OS.get_cmdline_user_args()
 	var names: Array = []
 	for w in wanted:
@@ -97,6 +103,8 @@ func _run(name: String) -> void:
 			await _scenario_summary()
 		"legible":
 			await _scenario_legible()
+		"buildmenu":
+			await _scenario_buildmenu()
 		"menu":
 			await _scenario_menu()
 		"paused":
@@ -301,6 +309,21 @@ func _scenario_legible() -> void:
 	if panel and panel.has_method("_show_build_detail"):
 		panel._show_build_detail("tower")
 	await _shoot("why_no_tower")
+
+## The build menu (v0.6): a hide card for each thing the known materials build -- wood's, and
+## bone's once the first bone is in -- priced, the bow tower beyond the stock and locked; then,
+## stone in too, the whole menu, its longest names and all.
+func _scenario_buildmenu() -> void:
+	var gs := root.get_node("GameState")
+	# As a pickup brings them, so the bar and the menu hear of each new material.
+	gs.add_resources({"wood": 6, "bone": 1})
+	var panel = _main.hud.option_panel
+	if panel:
+		panel.select_target(_main.hero)
+		panel._on_build_pressed()
+	await _shoot("cards")
+	gs.add_resources({"stone": 3})
+	await _shoot("all_known")
 
 ## The pause menu and its settings page (UI-POLISH T16).
 func _scenario_menu() -> void:

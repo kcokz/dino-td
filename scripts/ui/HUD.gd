@@ -537,7 +537,8 @@ func _on_game_lost() -> void:
 	_show_game_over(tr("GAME_DEFEAT_TITLE"), tr("GAME_DEFEAT_DESC"), false)
 
 ## The end of the run: the verdict, told apart by more than colour -- a different icon, a
-## different band across the card -- and the run's account under it (UI-POLISH T15).
+## different word, a different stone under them -- and the run's account under it (UI-POLISH
+## T15).
 func _show_game_over(title: String, details: String, won: bool = true) -> void:
 	if result_label:
 		result_label.text = title

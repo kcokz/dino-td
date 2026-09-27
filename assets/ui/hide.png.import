@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://v1cavx7alhkh"
+path="res://.godot/imported/hide.png-66848e0f8da8f6b37b22f39b46fbc599.image"
+
+[deps]
+
+source_file="res://assets/ui/hide.png"
+dest_files=["res://.godot/imported/hide.png-66848e0f8da8f6b37b22f39b46fbc599.image"]
+
+[params]
+

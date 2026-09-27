@@ -62,19 +62,20 @@ static func card_button(text: String, icon: Texture2D, callback: Callable) -> Bu
 	row.name = "PriceRow"
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	var inset: float = float(UiTheme.space("m"))
-	row.offset_left = inset
-	row.offset_right = -inset
-	# One line of small figures above the card's bottom inset (a line is its size plus a
-	# little leading).
-	row.offset_top = -(float(UiTheme.space("s")) + float(UiTheme.font_size("small")) + float(UiTheme.space("xs") + UiTheme.space("hair")))
-	row.offset_bottom = -float(UiTheme.space("s"))
+	# One line of small figures inside the card's stitches (UiTheme.card_inset; a line is its
+	# size plus a little leading).
+	var inset: Vector2i = UiTheme.card_inset()
+	row.offset_left = inset.x
+	row.offset_right = -inset.x
+	row.offset_bottom = -float(inset.y)
+	row.offset_top = row.offset_bottom - float(UiTheme.font_size("small") + UiTheme.space("xs") + UiTheme.space("hair"))
 	btn.add_child(row)
 	return btn
 
 ## The price chips on a card, the count red where the warehouse is short -- and, when the card
 ## cannot be pressed, a lock at the end of the row, so "can't" is a shape and not just a colour.
-## `extra` is any word to add at the end (a job's time).
+## `extra` is any word to add at the end (a job's time). A card is a pale hide: its figures
+## are in ink (the Card* labels).
 static func fill_price_row(btn: Button, price: Dictionary, extra: String = "") -> void:
 	var row: HBoxContainer = btn.get_node_or_null("PriceRow")
 	if row == null:
@@ -87,16 +88,16 @@ static func fill_price_row(btn: Button, price: Dictionary, extra: String = "") -
 		row.add_child(icon_rect(String(res_id), UiTheme.icon_size("s")))
 		var n := Label.new()
 		var short: bool = gs != null and int(gs.resources.get(res_id, 0)) < int(price[res_id])
-		n.theme_type_variation = &"ShortNumberLabel" if short else &"SmallNumberLabel"
+		n.theme_type_variation = &"CardShortLabel" if short else &"CardNumberLabel"
 		n.text = str(int(price[res_id]))
 		n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(n)
 	if extra != "":
 		var clock := icon_rect("clock", UiTheme.icon_size("xs"))
-		clock.modulate = UiTheme.color("text_faint")
+		clock.modulate = UiTheme.color("ink_faint")
 		row.add_child(clock)
 		var t := Label.new()
-		t.theme_type_variation = &"CaptionLabel"
+		t.theme_type_variation = &"CardCaptionLabel"
 		t.text = extra
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(t)
@@ -106,7 +107,7 @@ static func fill_price_row(btn: Button, price: Dictionary, extra: String = "") -
 		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(spacer)
 		var lock := icon_rect("lock", UiTheme.icon_size("xs"), "Lock")
-		lock.modulate = UiTheme.color("text_faint")
+		lock.modulate = UiTheme.color("ink_faint")
 		row.add_child(lock)
 
 ## A plain command: its icon before its word, full width, one height.

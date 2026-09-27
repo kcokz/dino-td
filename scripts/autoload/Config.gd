@@ -1013,30 +1013,72 @@ const THEME: Dictionary = {
 	"font_sizes": {"caption": 13, "small": 15, "body": 17, "label": 19, "heading": 23, "title": 32, "display": 52},
 	# "hair" is the gap inside one thing -- between a speed's segments, a stage's pips.
 	"spacing": {"hair": 2, "xs": 4, "s": 8, "m": 12, "l": 16, "xl": 24},
-	"radius": {"s": 5, "m": 8, "l": 12, "pill": 99},
+	# The corner of what is still a flat box: a focus ring, a box standing in for a material
+	# whose image is not imported yet.
+	"radius": {"s": 5},
 	"border": 1,
+	# The valley's own colours (v0.6: "远古时代质感"): bone for text, umber and ash for what it
+	# stands on, fire-ochre for the one thing to press, red ochre for danger, moss for health.
+	# The ship's things -- the beacon, what it knows -- keep their cold blue: they are the
+	# one thing here from another age.
 	"colors": {
-		"bg": Color(0.043, 0.063, 0.075),
-		"panel": Color(0.066, 0.094, 0.11, 0.9),
-		"panel_raised": Color(0.105, 0.141, 0.16, 0.97),
-		"panel_border": Color(0.2, 0.259, 0.28),
-		"panel_border_hover": Color(0.345, 0.431, 0.459),
-		"text": Color(0.945, 0.929, 0.894),
-		"text_muted": Color(0.667, 0.71, 0.718),
-		"text_faint": Color(0.435, 0.486, 0.502),
-		"accent": Color(0.949, 0.549, 0.157),
-		"accent_text": Color(0.086, 0.063, 0.035),
-		"tech": Color(0.345, 0.78, 0.91),
-		"danger": Color(0.898, 0.325, 0.294),
+		"bg": Color(0.07, 0.058, 0.047),
+		# The stone's own colour, where a flat box stands in for it.
+		"panel": Color(0.2, 0.185, 0.165, 0.95),
+		"panel_border": Color(0.36, 0.32, 0.27),
+		"text": Color(0.94, 0.9, 0.8),
+		"text_muted": Color(0.77, 0.71, 0.61),
+		"text_faint": Color(0.6, 0.55, 0.46),
+		"accent": Color(0.93, 0.62, 0.26),
+		"accent_text": Color(0.13, 0.08, 0.035),
+		"tech": Color(0.42, 0.78, 0.88),
+		"danger": Color(0.8, 0.29, 0.21),
 		# Danger as text on a dark panel -- a count he is short of, a demolish -- a step
 		# lighter than the fill, or the red sinks into the panel.
-		"danger_text": Color(0.918, 0.46, 0.435),
-		"warning": Color(0.949, 0.757, 0.306),
-		"success": Color(0.424, 0.773, 0.435),
-		"shadow": Color(0.0, 0.0, 0.0, 0.4),
-		"scrim": Color(0.02, 0.03, 0.035, 0.62),
+		"danger_text": Color(0.95, 0.53, 0.42),
+		"warning": Color(0.91, 0.7, 0.29),
+		"success": Color(0.52, 0.74, 0.35),
+		# Ink: text on a pale hide -- a card's name and price, a tooltip. Dark, or it does not
+		# read on the pale; "ink_short" is a count he is short of, as danger_text is on stone.
+		"ink": Color(0.2, 0.13, 0.07),
+		"ink_muted": Color(0.36, 0.26, 0.16),
+		"ink_faint": Color(0.46, 0.36, 0.25),
+		"ink_short": Color(0.62, 0.15, 0.08),
+		"ink_accent": Color(0.56, 0.26, 0.04),
+		"shadow": Color(0.0, 0.0, 0.0, 0.45),
+		"scrim": Color(0.035, 0.028, 0.02, 0.62),
 	},
-	"shadow_size": 10,
+	# How each material is tinted where it is used (UiTheme.surface). The textures are drawn
+	# light and near their natural colour, so a tint darkens them to what they are here; a
+	# channel above 1 lightens it.
+	"tints": {
+		"stone": Color(0.3, 0.28, 0.25),        # every panel: dark enough for bone text
+		"slate": Color(0.24, 0.29, 0.32),       # the beacon's card: the ship's things are cold
+		"plank": Color(0.45, 0.385, 0.33),
+		"plank_hover": Color(0.54, 0.46, 0.39),
+		"plank_down": Color(0.36, 0.3, 0.26),
+		"plank_off": Color(0.36, 0.33, 0.3, 0.6),
+		"ochre": Color(1.0, 0.77, 0.42),        # the one thing to press: a plank painted
+		"ochre_hover": Color(1.1, 0.86, 0.5),
+		"ochre_down": Color(0.85, 0.64, 0.34),
+		"ochre_off": Color(0.7, 0.58, 0.44, 0.5),
+		"rust": Color(0.62, 0.31, 0.27),        # a thing that cannot be undone, under the cursor
+		"rust_down": Color(0.5, 0.24, 0.2),
+		"hide": Color(0.98, 0.96, 0.92),        # a card, a tooltip: pale, for ink
+		"hide_hover": Color(1.06, 1.04, 1.0),
+		"hide_down": Color(0.9, 0.85, 0.78),
+		"hide_off": Color(0.8, 0.76, 0.72),     # one that cannot be taken yet: duller, still read
+		"leather": Color(0.34, 0.29, 0.25),     # a toast: dark, for bone text, and quiet
+		"blood": Color(0.58, 0.25, 0.2),        # a raid coming
+		"groove": Color(0.15, 0.13, 0.115),     # a bar's trough, a portrait's frame, a chosen tab
+		"groove_faint": Color(0.15, 0.13, 0.115, 0.55),   # the same, under the cursor only
+		"groove_tech": Color(0.12, 0.17, 0.2),
+		"won": Color(0.24, 0.29, 0.32),         # the verdict on the ship's own slate
+		"lost": Color(0.38, 0.22, 0.19),        # or on stone gone red
+	},
+	# Titles stand proud of the stone: set wider than running text, with a shadow under them.
+	"title_spacing": {"title": 1, "display": 3},
+	"title_shadow": Vector2i(0, 2),
 	# A health bar says how bad it is by length, colour and -- below the low mark -- by
 	# pulsing, so a player who cannot tell amber from green still sees the cabin is dying
 	# (UI-POLISH rule 3: never colour alone).
@@ -1057,13 +1099,17 @@ const THEME: Dictionary = {
 	# banner; a portrait or a bench; the verdict.
 	"icon_sizes": {"xs": 14, "s": 18, "m": 22, "l": 30, "xl": 44, "xxl": 56},
 	# Control heights: the top bar's (slim -- it sits over the world); a command, big enough
-	# to hit without aiming; a card -- a name line with a price row under it.
-	"control_heights": {"bar": 30, "command": 44, "card": 64},
+	# to hit without aiming; a card -- a name line with a price row under it, both inside the
+	# hide's stitches.
+	"control_heights": {"bar": 30, "command": 44, "card": 68},
 	# Widths: a speed segment; the figure at a bar's end ("10 / 10" at its widest); a
 	# stage's pip; the results card's buttons, which sit side by side and match.
 	"widths": {"segment": 38, "figure": 64, "pip": 14, "button": 180},
-	# How thick a bar is drawn, and a pip -- a short dash, so the stages read as one row.
-	"thickness": {"bar": 9, "pip": 6},
+	# How thick a bar is drawn, and a pip -- a short dash, so the stages read as one row. A
+	# bar is a groove with pigment in it: "fill_inset" is the groove's wall showing above and
+	# below the pigment.
+	"thickness": {"bar": 11, "pip": 6},
+	"fill_inset": 2,
 	# Motion. A card pops in over this long, from this much of its size -- a nudge, not a
 	# zoom; the command card fades in from this much when it changes to another unit.
 	"pop_seconds": 0.18,
@@ -1081,6 +1127,32 @@ const THEME: Dictionary = {
 	# rock will not break); one worth reading twice (what a material is for, a raid's
 	# account, the launch).
 	"toast_seconds": {"glance": 2.5, "read": 4.0, "long": 6.0},
+
+	# The interface's materials (v0.6 feedback: "远古时代质感的菜单界面，状态栏"): a slab of stone
+	# for every panel, a plank lashed with rawhide for every button, a stitched hide for every
+	# card, toast and tooltip, a groove cut in the stone under a bar or a chosen tab, pigment to
+	# fill a bar and hatching for work under way. tools/build_ui_textures.gd draws them to
+	# these numbers and UiTheme cuts each into nine and tiles it. Sizes are design pixels:
+	# "margin" is where it is cut (the chipped edge, the lashing, the stitches live there and
+	# are never stretched), "pad" how far its shadow reaches past what it is drawn behind.
+	# Drawn at "surface_scale" times their size: crisp at 1440p, where the stretch is 2x.
+	"surface_scale": 2,
+	"surfaces": {
+		"stone": {"image": "res://assets/ui/stone.png", "size": Vector2i(256, 256), "margin": Vector2i(24, 24), "pad": 6},
+		# A plank's grain runs its length and is stretched, not repeated, top to bottom
+		# ("tile_v"); "lash" is where its rawhide band sits in from each end and how far
+		# either side -- a button's word starts past it.
+		"plank": {"image": "res://assets/ui/plank.png", "size": Vector2i(208, 48), "margin": Vector2i(34, 12), "pad": 4,
+			"tile_v": false, "lash": Vector2(16.0, 4.5)},
+		# "stitch": how far in from its edge a hide is sewn -- what it holds sits inside that.
+		"hide": {"image": "res://assets/ui/hide.png", "size": Vector2i(192, 192), "margin": Vector2i(24, 24), "pad": 6,
+			"stitch": 7},
+		"groove": {"image": "res://assets/ui/groove.png", "size": Vector2i(48, 48), "margin": Vector2i(10, 10), "pad": 0},
+		"paint": {"image": "res://assets/ui/paint.png", "size": Vector2i(60, 12), "margin": Vector2i(6, 0), "pad": 0,
+			"tile_v": false},
+		"hatch": {"image": "res://assets/ui/hatch.png", "size": Vector2i(60, 12), "margin": Vector2i(6, 0), "pad": 0,
+			"tile_v": false},
+	},
 }
 
 ## Where the interface's icons are (tools/build_icons.py draws them): `<name>.svg`. Resources,
@@ -1100,7 +1172,8 @@ const UI: Dictionary = {
 	"world_label_pixel_size": 0.005,   # 3D 文字的世界尺寸（每像素米数）
 	"world_label_fixed_size": false,   # true 会让文字屏幕尺寸恒定并无视 pixel_size 缩放，导致巨大
 	# 右下角命令卡：宽度固定，高度随内容（UI-POLISH T10：原来固定 300 高，下半截是空的）。
-	"option_panel_size": Vector2(410, 0),
+	# 440：两列建造卡片（兽皮，字在针脚里面）要放得下最长的名字 "Crossbow Tower"，410 时会被截断。
+	"option_panel_size": Vector2(440, 0),
 	"option_panel_margin": 16.0,       # 命令卡距屏幕边缘的留白
 	# The speeds the top bar offers, one segment each (UI-POLISH T9).
 	"game_speeds": [1.0, 2.0, 3.0],

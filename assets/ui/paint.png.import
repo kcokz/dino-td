@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://bh46bo3hb4ecn"
+path="res://.godot/imported/paint.png-df33ba87b36ae0524e63e2fd1715b116.image"
+
+[deps]
+
+source_file="res://assets/ui/paint.png"
+dest_files=["res://.godot/imported/paint.png-df33ba87b36ae0524e63e2fd1715b116.image"]
+
+[params]
+

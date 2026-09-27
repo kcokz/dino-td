@@ -248,7 +248,7 @@ func _card_for(station: Node) -> Dictionary:
 	head.add_theme_constant_override("separation", UiTheme.space("m"))
 	info.add_child(head)
 	var frame := PanelContainer.new()
-	frame.theme_type_variation = &"SolidTechPanel" if station_id == _beacon_station() else &"InsetPanel"
+	frame.theme_type_variation = &"InsetTechPanel" if station_id == _beacon_station() else &"InsetPanel"
 	head.add_child(frame)
 	frame.add_child(UiKit.icon_rect(station_id, UiTheme.icon_size("l")))
 	var names := VBoxContainer.new()

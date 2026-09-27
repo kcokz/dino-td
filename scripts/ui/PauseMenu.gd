@@ -194,6 +194,7 @@ func _ensure_components() -> void:
 		title_label = Label.new()
 		title_label.name = "MenuTitle"
 		title_label.theme_type_variation = &"TitleLabel"
+		title_label.uppercase = true     # cut in capitals, like the other titles
 		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		page_vbox.add_child(title_label)
 		var rule := HSeparator.new()

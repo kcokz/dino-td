@@ -188,6 +188,14 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Date Added**: 2026-09-26
 - **Usage**: `cabin/room` and `station/<id>` in `Config.VISUALS`; parts shown by `scripts/fx/CabinArt.gd`.
 
+### Interface Materials (`assets/ui/{stone,plank,hide,groove,paint,hatch}.png`)
+- **Asset Name**: The interface's surfaces -- a chipped stone slab, a plank lashed with rawhide, a stitched hide, a groove cut in stone, a stroke of pigment and the same stroke hatched
+- **Source**: `tools/build_ui_textures.gd` (drawn by rule: tiling gradient noise, a crack field measured round a torus, and light worked out from each pixel's distance to the outline; every surface drawn to tile)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-27
+- **Usage**: `Config.THEME.surfaces`, imported as Images; `UiTheme.surface` cuts each into nine, tiles it and tints it (`Config.THEME.tints`).
+
 ### Frosted Backdrop Shader (`assets/shaders/ui_frost.gdshader`)
 - **Asset Name**: Frosted-glass backdrop for full-screen menus
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
