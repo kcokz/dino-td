@@ -158,3 +158,31 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **License**: CC0 1.0 Universal (Public Domain)
 - **Format**: .exr / .hdr (Equirectangular panorama)
 - **Intended Usage**: Realistic environment lighting, ambient sky contribution, and background panorama.
+
+---
+
+## 4. Interface: Type, Icons & Shaders
+
+### Inter (`assets/fonts/Inter.woff2`)
+- **Asset Name**: Inter, variable (weights 100-900), in Blender's build
+- **Source**: copied from a Blender installation (`datafiles/fonts/Inter.woff2`); upstream https://github.com/rsms/inter
+- **Author**: The Inter Project Authors (Rasmus Andersson et al.)
+- **License**: SIL Open Font License 1.1 -- full text in `assets/fonts/Inter-OFL.txt`, which ships beside the font. No Reserved Font Name is declared. OFL fonts may be bundled with commercial software; the font may not be sold on its own.
+- **Date Added**: 2026-09-26
+- **Note**: Blender's build draws U+002D (hyphen-minus) a digit wide, so that negative numbers line up; word-joining hyphens in `translations/strings.csv` are U+2010 (see `Config.THEME`).
+- **Usage**: The interface's face (`Config.THEME.font`). Chinese falls back to the player's installed system UI face (`Config.THEME.fallback_fonts`); no CJK font is bundled.
+
+### Interface Icons (`assets/icons/*.svg`)
+- **Asset Name**: Resource, building, unit, bench and command icons
+- **Source**: `tools/build_icons.py` (hand-written SVG geometry, generated)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-26
+- **Usage**: Every icon the HUD, command card, cabin screen and menus draw, imported as DPITexture so they stay sharp at any scale.
+
+### Frosted Backdrop Shader (`assets/shaders/ui_frost.gdshader`)
+- **Asset Name**: Frosted-glass backdrop for full-screen menus
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-26
+- **Usage**: Behind the pause menu, the results card and the cabin screen.

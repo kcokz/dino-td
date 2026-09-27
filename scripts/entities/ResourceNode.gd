@@ -213,8 +213,21 @@ func get_display_info() -> Dictionary:
 		"current_amount": current_amount,
 		"max_capacity": max_capacity,
 		"is_depleted": is_depleted,
-		"status": TranslationServer.translate("STATUS_DEPLETED") if is_depleted else "%d / %d" % [current_amount, max_capacity]
+		"status": _panel_status(),
 	}
+
+## The line under a node's reserve bar: that it is spent, what it takes before bare hands
+## can work it (Config.missing_tool_hint), or how to set him to it.
+func _panel_status() -> String:
+	if is_depleted:
+		return TranslationServer.translate("STATUS_DEPLETED")
+	var cfg = _get_config()
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
+	if cfg and cfg.has_method("harvest_requires_unlock"):
+		var flag: String = String(cfg.harvest_requires_unlock(resource_type))
+		if flag != "" and not (gs and gs.has_method("has_unlock") and gs.has_unlock(flag)):
+			return String(cfg.missing_tool_hint(resource_type))
+	return TranslationServer.translate("NODE_HINT")
 
 func _get_config() -> Node:
 	if is_inside_tree():

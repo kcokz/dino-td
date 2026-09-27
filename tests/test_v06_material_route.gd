@@ -126,8 +126,8 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	hud.hint_label.visible = false
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_false(hud.hint_label.visible, "The second says nothing")
-	var label: Label = hud.resource_labels.get("bone")
-	assert_true(label != null and label.tooltip_text.contains(String(config_node.uses_text("bone", game_state_node.map_data()))),
+	var chip: Control = hud.resource_chips.get("bone")
+	assert_true(chip != null and chip.tooltip_text.contains(String(config_node.uses_text("bone", game_state_node.map_data()))),
 		"And the bar says it on hover")
 
 func test_03_a_recipe_is_two_materials_at_most() -> void:

@@ -885,7 +885,8 @@ func get_display_info() -> Dictionary:
 		"type": "hero",
 		"hp": current_hp,
 		"max_hp": max_hp,
-		"status": TranslationServer.translate("STATUS_HP") % [int(ceil(current_hp)), int(ceil(max_hp))]
+		# His health is the card's bar; the line under it says what he can be told to do.
+		"status": TranslationServer.translate("HERO_HINT"),
 	}
 
 # ==============================================================================

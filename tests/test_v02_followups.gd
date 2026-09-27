@@ -125,17 +125,22 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 # ==============================================================================
 
 func test_04_config_ui_drives_hud_font_sizes() -> void:
-	assert_true("UI" in config_node, "Config must declare a UI section")
-	var expected: int = int(config_node.UI.get("hud_font_size", 0))
-	assert_gt(expected, 0, "Config.UI.hud_font_size must be set")
+	# Since the interface pass the HUD's type is one theme built from Config.THEME: every
+	# label takes its size from the theme, and every size in the theme is a step on the one
+	# ladder Config.THEME.font_sizes declares -- never a size of its own.
+	var ladder: Array = config_node.THEME["font_sizes"].values()
+	assert_gt(ladder.size(), 0, "Config.THEME declares a ladder of type sizes")
 
 	var hud = _spawn_hud()
 	await wait_frames(1)
 
 	for lbl in [hud.wood_label, hud.wave_label, hud.core_hp_label, hud.hero_hp_label]:
 		assert_not_null(lbl, "HUD label must exist")
-		assert_eq(lbl.get_theme_font_size("font_size"), expected,
-			"HUD label font size comes from Config.UI.hud_font_size")
+		assert_has(ladder, lbl.get_theme_font_size("font_size"),
+			"HUD label font size is a step on Config.THEME.font_sizes")
+	for lbl in hud.find_children("*", "Label", true, false):
+		assert_has(ladder, (lbl as Label).get_theme_font_size("font_size"),
+			"%s: its size is a step on the ladder" % lbl.name)
 
 func test_05_config_ui_drives_world_label_sizing() -> void:
 	assert_not_null(tower_script, "Tower.gd must exist")
@@ -160,9 +165,12 @@ func test_06_option_panel_sizing_from_config() -> void:
 
 	var expected_size: Vector2 = config_node.UI.get("option_panel_size", Vector2.ZERO)
 	assert_eq(panel.custom_minimum_size, expected_size, "Option Panel size comes from Config.UI")
-	assert_eq(panel.title_label.get_theme_font_size("font_size"),
-		int(config_node.UI.get("panel_title_font_size", 0)),
-		"Option Panel title font size comes from Config.UI")
+	# Its title is a heading, sized by the HUD's theme from Config.THEME.
+	var hud = _spawn_hud()
+	await wait_frames(1)
+	assert_eq(hud.option_panel.title_label.get_theme_font_size("font_size"),
+		int(config_node.THEME["font_sizes"]["heading"]),
+		"Option Panel title font size comes from Config.THEME")
 
 # ==============================================================================
 # 3. Machinery harvests real resource nodes
@@ -192,10 +200,10 @@ func test_14_hud_shows_every_live_resource() -> void:
 	assert_not_null(hud.food_label, "HUD must have a Meat label")
 
 	hud._on_resources_changed({"wood": 7, "stone": 4, "water": 9, "food": 3})
-	assert_eq(hud.wood_label.text, tr("HUD_WOOD") % 7, "Wood readout updated")
-	assert_eq(hud.stone_label.text, tr("HUD_STONE") % 4, "Stone readout updated")
-	assert_eq(hud.water_label.text, tr("HUD_WATER") % 9, "Water readout updated")
-	assert_eq(hud.food_label.text, tr("HUD_FOOD") % 3, "Meat readout updated")
+	assert_readout(hud, "wood", 7, "Wood readout updated")
+	assert_readout(hud, "stone", 4, "Stone readout updated")
+	assert_readout(hud, "water", 9, "Water readout updated")
+	assert_readout(hud, "food", 3, "Meat readout updated")
 	assert_true(hud.stone_label.visible, "Stone readout is visible to the player")
 	assert_true(hud.food_label.visible, "Meat readout is visible to the player")
 	# Since v0.6 a resource the game has no use for is not shown at all (GAME-DESIGN 4.3

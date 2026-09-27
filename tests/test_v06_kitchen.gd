@@ -251,7 +251,4 @@ func test_13_the_top_bar_has_a_readout_for_every_resource() -> void:
 		res[String(config_node.RESOURCES[i])] = i + 3
 	hud._on_resources_changed(res)
 	for res_id in config_node.RESOURCES:
-		var lbl: Label = hud.find_child("%sLabel" % String(res_id).to_pascal_case(), true, false) as Label
-		assert_not_null(lbl, "%s has a readout" % res_id)
-		if lbl:
-			assert_eq(lbl.text, tr("HUD_%s" % String(res_id).to_upper()) % int(res[res_id]), "Showing what %s there is" % res_id)
+		assert_readout(hud, String(res_id), int(res[res_id]), "Showing what %s there is" % res_id)

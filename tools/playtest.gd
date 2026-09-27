@@ -92,6 +92,10 @@ func _run(name: String) -> void:
 			await _scenario_summary()
 		"legible":
 			await _scenario_legible()
+		"menu":
+			await _scenario_menu()
+		"paused":
+			await _scenario_paused()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -290,6 +294,22 @@ func _scenario_legible() -> void:
 	if panel and panel.has_method("_show_build_detail"):
 		panel._show_build_detail("tower")
 	await _shoot("why_no_tower")
+
+## The pause menu and its settings page (UI-POLISH T16).
+func _scenario_menu() -> void:
+	_main.hud.toggle_pause_menu()
+	await _shoot("root")
+	var menu = _main.hud.pause_menu
+	if menu and menu.has_method("open_settings"):
+		menu.open_settings()
+	await _shoot("settings")
+
+## Paused with the menu shut: the frame and the word (UI-POLISH T9).
+func _scenario_paused() -> void:
+	var gs := root.get_node_or_null("GameState")
+	_grant({"wood": 12, "stone": 3, "bone": 1})
+	gs.set_paused(true)
+	await _shoot("paused")
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

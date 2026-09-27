@@ -256,7 +256,7 @@ func test_challenge_02_mid_wave_restart_with_damaged_entities_and_active_physics
 	# Verify HUD shows full HP
 	var hud = main.hud
 	if hud and hud.has_method("get_core_hp_text"):
-		assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays full Core HP")
+		assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays full Core HP")
 
 func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -> void:
 	var main = _create_main()
@@ -399,9 +399,9 @@ func test_challenge_06_rapid_fire_hud_signal_bombardment() -> void:
 	event_bus_node.phase_changed.emit(0)
 
 	# Verify immediate synchronization without crashing or desync
-	assert_eq(hud.get_wood_text(), "Wood: 888", "WoodLabel matches final emitted value")
+	assert_eq(hud.get_wood_text(), "888", "WoodLabel matches final emitted value")
 	assert_true("大波" in hud.get_wave_text() or "Horde" in hud.get_wave_text(), "WaveLabel matches final emitted value with big wave text")
-	assert_eq(hud.get_core_hp_text(), "Core HP: 7 / 10", "CoreHPLabel matches final emitted value")
+	assert_eq(hud.get_core_hp_text(), "7 / 10", "CoreHPLabel matches final emitted value")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "PhaseLabel matches final emitted phase")
 
 	# Verify action buttons enabled in PLAN
@@ -410,7 +410,7 @@ func test_challenge_06_rapid_fire_hud_signal_bombardment() -> void:
 
 	# Tick a frame and confirm persistent sync
 	await wait_frames(1)
-	assert_eq(hud.get_wood_text(), "Wood: 888", "Wood text persistent after tick")
+	assert_eq(hud.get_wood_text(), "888", "Wood text persistent after tick")
 
 func test_challenge_07_rapid_fire_hud_extreme_values_and_formatting() -> void:
 	var hud = _create_hud()
@@ -425,15 +425,15 @@ func test_challenge_07_rapid_fire_hud_extreme_values_and_formatting() -> void:
 		event_bus_node.core_hp_changed.emit(0.1, 10.0)
 
 	# 0.1 HP should ceil to 1
-	assert_eq(hud.get_core_hp_text(), "Core HP: 1 / 10", "Core HP 0.1 properly ceils to 1")
-	assert_eq(hud.get_wood_text(), "Wood: 0", "Zero Wood formatted correctly")
+	assert_eq(hud.get_core_hp_text(), "1 / 10", "Core HP 0.1 properly ceils to 1")
+	assert_eq(hud.get_wood_text(), "0", "Zero Wood formatted correctly")
 
 	# Massive numbers
 	for i in range(50):
 		event_bus_node.resources_changed.emit({"wood": 1000000})
 		event_bus_node.wave_started.emit(999, false)
 
-	assert_eq(hud.get_wood_text(), "Wood: 1000000", "Large wood formatted correctly")
+	assert_eq(hud.get_wood_text(), "1000000", "Large wood formatted correctly")
 	assert_eq(hud.get_wave_text(), "Wave: 999", "Wave 999 formatted correctly")
 
 func test_challenge_08_rapid_fire_hud_interleaved_game_over_and_reset() -> void:

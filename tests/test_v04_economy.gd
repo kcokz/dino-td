@@ -184,7 +184,7 @@ func test_10_bone_has_a_readout_like_every_other_resource() -> void:
 	await wait_frames(1)
 
 	hud._on_resources_changed({"wood": 1, "stone": 2, "bone": 7, "water": 3, "food": 4})
-	assert_eq(hud.bone_label.text, tr("HUD_BONE") % 7, "Bone has its own line in the top bar")
+	assert_readout(hud, "bone", 7, "Bone has its own chip in the top bar")
 	assert_true(hud.bone_label.visible, "And it is on screen")
 	for res_id in config_node.RESOURCES:
 		if res_id == "water":

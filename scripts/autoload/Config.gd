@@ -916,25 +916,141 @@ const HERO: Dictionary = {
 	"height": 1.2,
 }
 
+## The interface's design tokens (UI-POLISH T1): every colour, type size, gap, corner and
+## timing the HUD, the panels and the menus are drawn with. UiTheme builds the one Theme
+## from these; nothing in the interface picks a colour or a size of its own.
+##
+## The look is the Hero's own kit. The capsule he came down in is white with orange hazard
+## striping and its instruments glow cyan, so the interface reads as his gear rather than as
+## a web page laid over the Jurassic: dark weathered panels, warm off-white text, hazard
+## orange for what to press, cyan for the beacon and the ship's systems.
+##
+## Sizes are design pixels (the 1280x720 canvas; the engine scales it up on bigger screens).
+## Type and spacing each come in a fixed ladder -- one step apart, never a size between --
+## which is most of what makes a set of panels look like they belong together.
+const THEME: Dictionary = {
+	# Inter (SIL OFL, assets/fonts): a face drawn for screens, with digits that can all be
+	# made one width. Chinese -- and anything else Inter has no glyph for -- falls back to
+	# the player's own system UI face, first in this list that is installed. The Noto Sans SC
+	# variable font is 18 MB; bundling a subset of it waits on a subsetting tool.
+	# This is Blender's build of Inter, which draws "-" (U+002D) a digit wide -- a minus that
+	# lines up in a column of numbers. A hyphen joining two words is written U+2010 instead
+	# (test_v06_the_interface checks the strings), or "Right-click" opens into "Right - click".
+	"font": "res://assets/fonts/Inter.woff2",
+	"fallback_fonts": ["Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+		"Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei"],
+	"weights": {"regular": 430, "medium": 530, "semibold": 620, "bold": 720, "black": 860},
+	"font_sizes": {"caption": 13, "small": 15, "body": 17, "label": 19, "heading": 23, "title": 32, "display": 52},
+	# "hair" is the gap inside one thing -- between a speed's segments, a stage's pips.
+	"spacing": {"hair": 2, "xs": 4, "s": 8, "m": 12, "l": 16, "xl": 24},
+	"radius": {"s": 5, "m": 8, "l": 12, "pill": 99},
+	"border": 1,
+	"colors": {
+		"bg": Color(0.043, 0.063, 0.075),
+		"panel": Color(0.066, 0.094, 0.11, 0.9),
+		"panel_raised": Color(0.105, 0.141, 0.16, 0.97),
+		"panel_border": Color(0.2, 0.259, 0.28),
+		"panel_border_hover": Color(0.345, 0.431, 0.459),
+		"text": Color(0.945, 0.929, 0.894),
+		"text_muted": Color(0.667, 0.71, 0.718),
+		"text_faint": Color(0.435, 0.486, 0.502),
+		"accent": Color(0.949, 0.549, 0.157),
+		"accent_text": Color(0.086, 0.063, 0.035),
+		"tech": Color(0.345, 0.78, 0.91),
+		"danger": Color(0.898, 0.325, 0.294),
+		# Danger as text on a dark panel -- a count he is short of, a demolish -- a step
+		# lighter than the fill, or the red sinks into the panel.
+		"danger_text": Color(0.918, 0.46, 0.435),
+		"warning": Color(0.949, 0.757, 0.306),
+		"success": Color(0.424, 0.773, 0.435),
+		"shadow": Color(0.0, 0.0, 0.0, 0.4),
+		"scrim": Color(0.02, 0.03, 0.035, 0.62),
+	},
+	"shadow_size": 10,
+	# A health bar says how bad it is by length, colour and -- below the low mark -- by
+	# pulsing, so a player who cannot tell amber from green still sees the cabin is dying
+	# (UI-POLISH rule 3: never colour alone).
+	"hp_warn_ratio": 0.6,
+	"hp_low_ratio": 0.3,
+	# Panels and toasts come and go this fast: a transition, never a wait (UI-POLISH T10).
+	"fade_seconds": 0.12,
+	# A count that changes flashes for this long, so income is seen, not searched for.
+	"flash_seconds": 0.45,
+	# Behind a full-screen menu the world is frosted (assets/shaders/ui_frost.gdshader): how
+	# soft (the mip level read), and how dark the edges go. The tint is "scrim".
+	"frost_blur": 3.0,
+	"frost_vignette": 0.35,
+	# Inside the cabin the room shows through more than the valley does behind a menu: the
+	# benches are in it, and it is where he is.
+	"cabin_frost_tint": 0.45,
+
+	# The sizes of the interface's pieces, each on a ladder like the type's, so one kind of
+	# thing is one size wherever it appears.
+	# Icons: in a price chip; beside a count; beside a heading or a toast; on the raid
+	# banner; a portrait or a bench; the verdict.
+	"icon_sizes": {"xs": 14, "s": 18, "m": 22, "l": 30, "xl": 44, "xxl": 56},
+	# Control heights: the top bar's (slim -- it sits over the world); a command, big enough
+	# to hit without aiming; a card -- a name line with a price row under it.
+	"control_heights": {"bar": 30, "command": 44, "card": 64},
+	# Widths: a speed segment; the figure at a bar's end ("10 / 10" at its widest); a
+	# stage's pip; the results card's buttons, which sit side by side and match.
+	"widths": {"segment": 38, "figure": 64, "pip": 14, "button": 180},
+	# How thick a bar is drawn, and a pip -- a short dash, so the stages read as one row.
+	"thickness": {"bar": 9, "pip": 6},
+	# Motion. A card pops in over this long, from this much of its size -- a nudge, not a
+	# zoom; the command card fades in from this much when it changes to another unit.
+	"pop_seconds": 0.18,
+	# A card showing something that changes by itself -- a bar filling, a countdown -- reads
+	# it again this often: smooth enough to watch, and not every frame.
+	"refresh_seconds": 0.2,
+	"pop_scale": 0.96,
+	"settle_alpha": 0.35,
+	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.
+	"pulse_speed": 7.0,
+	"pulse_floor": 0.55,
+	# The PAUSED word stands a little back from the frame round it.
+	"paused_alpha": 0.85,
+	# How long a toast stays: a line to glance at; one to read (a tool made, the boss, why a
+	# rock will not break); one worth reading twice (what a material is for, a raid's
+	# account, the launch).
+	"toast_seconds": {"glance": 2.5, "read": 4.0, "long": 6.0},
+}
+
+## Where the interface's icons are (tools/build_icons.py draws them): `<name>.svg`. Resources,
+## buildings and benches are named by their own ids; a resource node and a dinosaur say
+## which icon is theirs in their own rows ("icon"), because a tree is not called "wood".
+const ICON_DIR: String = "res://assets/icons/"
+
 ## Presentation sizing. The project renders at a 1280x720 design viewport with
 ## `canvas_items` stretch, so every value here is in design pixels and the engine
 ## scales the whole UI up on larger displays (1.5x at 1080p, 3x at 4K).
+## Type sizes are not here: they are the theme's ladder (THEME.font_sizes), and a widget
+## asks for a kind of text rather than a number of pixels.
 const UI: Dictionary = {
-	"hud_font_size": 20,               # 顶栏资源/状态文字
-	"hud_button_font_size": 18,        # 顶栏按钮
-	"panel_title_font_size": 24,       # 右下角 Option 栏标题
-	# 状态行要装下全游戏最长的一句话（未解锁的建筑要说明它在等什么），
-	# 所以它比按钮字号小一档，并且开了自动换行——放不下的字等于没有字。
-	"panel_status_font_size": 15,      # Option 栏状态文字
-	"panel_button_font_size": 18,      # Option 栏指令按钮
-	"gameover_title_font_size": 40,
 	# 世界空间文字的实际高度 = font_size * pixel_size（米）。
 	# TILE_SIZE 是 2.0m，所以 48 * 0.005 = 0.24m 约为格子的 1/8，一个建筑名大致一格宽。
 	"world_label_font_size": 48,       # 建筑/资源点头顶的 3D 文字
 	"world_label_pixel_size": 0.005,   # 3D 文字的世界尺寸（每像素米数）
 	"world_label_fixed_size": false,   # true 会让文字屏幕尺寸恒定并无视 pixel_size 缩放，导致巨大
-	"option_panel_size": Vector2(430, 300),  # 右下角 Option 栏尺寸（设计像素）
-	"option_panel_margin": 16.0,       # Option 栏距屏幕边缘的留白
+	# 右下角命令卡：宽度固定，高度随内容（UI-POLISH T10：原来固定 300 高，下半截是空的）。
+	"option_panel_size": Vector2(410, 0),
+	"option_panel_margin": 16.0,       # 命令卡距屏幕边缘的留白
+	# The speeds the top bar offers, one segment each (UI-POLISH T9).
+	"game_speeds": [1.0, 2.0, 3.0],
+	"resource_count_width": 30,        # a count's box: four figures without the chip jumping
+	"cabin_bar_width": 150,            # the cabin's health bar -- the widest: losing it loses the run
+	"hero_bar_width": 90,
+	"vital_value_width": 52,
+	"objective_width": 290,            # the beacon card, top right
+	"top_bar_top": 14,                 # the top row's distance from the screen's top edge
+	"toast_top": 66,                   # where the centre toasts start, under the top row
+	"toast_max_width": 560,            # a longer toast wraps inside this
+	"paused_word_bottom": 150,         # "PAUSED" sits this far above the bottom edge
+	"result_card_width": 560,
+	"menu_width": 400,
+	"menu_picker_width": 190,
+	"cabin_screen_top": 76,            # the cabin's cards start under the top row
+	"cabin_card_width": 372,           # three benches side by side, with room between
 }
 
 ## Presentation feedback (v0.3). None of this changes what happens in the game;
@@ -1152,6 +1268,7 @@ const RAIDS: Dictionary = {
 const RESOURCE_NODES: Dictionary = {
 	"wood": {
 		"name": "RESOURCE_WOOD",
+		"icon": "tree",           # what the panel shows when one is picked (Config.ICON_DIR)
 		"capacity": 150,
 		"harvest_rate": 0.5,      # 0.5 wood/s by hand
 		"color": Color(0.35, 0.55, 0.25),
@@ -1166,6 +1283,7 @@ const RESOURCE_NODES: Dictionary = {
 	},
 	"stone": {
 		"name": "RESOURCE_STONE",
+		"icon": "stone",
 		"capacity": 100,
 		"harvest_rate": 0.35,     # 0.35 stone/s by hand
 		# Bare hands do not cut rock. The pick is made at the cabin out of bone, and
@@ -1178,6 +1296,7 @@ const RESOURCE_NODES: Dictionary = {
 	},
 	"water": {
 		"name": "RESOURCE_WATER",
+		"icon": "water",
 		"capacity": 120,
 		"harvest_rate": 0.5,      # 0.5 water/s by hand
 		"color": Color(0.2, 0.5, 0.8),

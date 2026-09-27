@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <ellipse cx="32" cy="45" rx="10" ry="12" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-32 32 44)"/>
+  <path d="M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(32 32 44)"/>
+  <ellipse cx="32" cy="45" rx="10" ry="12" fill="#94512f"/>
+  <path d="M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z" fill="#94512f"/>
+  <path d="M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z" fill="#94512f" transform="rotate(-32 32 44)"/>
+  <path d="M 29.5 37 L 30.3 12 C 30.5 8 33.5 8 33.7 12 L 34.5 37 Z" fill="#94512f" transform="rotate(32 32 44)"/>
+  <ellipse cx="31" cy="43" rx="5.5" ry="6.5" fill="#a8603c"/>
+</svg>

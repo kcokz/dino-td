@@ -567,6 +567,19 @@ func stock_everything(amount: int = 9999) -> void:
 ## tests used to knock the nest down; the nest cannot be destroyed now.
 ##
 ## A run already lost stays lost: its steps are refused and its charge does not run.
+## The top bar's readout for a material is a chip: its icon and its count. The count is the
+## label, in figures; which material it is, the icon says at a glance and the chip's tooltip
+## says in words. Asserts that the chip for `res_id` shows `amount` and is named for it.
+func assert_readout(hud: Node, res_id: String, amount: int, message: String = "") -> bool:
+	var label: Label = hud.resource_labels.get(res_id)
+	var chip: Control = hud.resource_chips.get(res_id)
+	if not assert_not_null(label, "%s has a readout" % res_id) or not assert_not_null(chip, "%s has a chip" % res_id):
+		return false
+	var counted: bool = assert_eq(label.text, str(amount), message if message != "" else "The %s count" % res_id)
+	var named: bool = assert_true(chip.tooltip_text.contains(TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())),
+		"And the %s chip names it: '%s'" % [res_id, chip.tooltip_text])
+	return counted and named
+
 func win_the_run() -> void:
 	if not (Engine.get_main_loop() is SceneTree) or Engine.get_main_loop().root == null:
 		return

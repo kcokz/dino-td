@@ -494,19 +494,11 @@ func set_selected_visual(on: bool) -> void:
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
 		selection_ring.set_shown(on)
 
+## What the command card shows: its health as a bar, work under way -- going up, or being
+## upgraded -- as a second bar ("work", 0..1, with what the work is), and under them the one
+## line only this building has to say (_panel_status: a tower's fire, a stake's bite).
 func get_display_info() -> Dictionary:
-	var status_str = ""
-	if not is_constructed:
-		var raw = tr("STATUS_CONSTRUCTING")
-		status_str = (raw % int(build_progress * 100.0)) if ("%" in raw) else raw
-	elif is_upgrading():
-		var raw_up = tr("STATUS_UPGRADING")
-		status_str = (raw_up % int(upgrade_progress * 100.0)) if ("%" in raw_up) else raw_up
-	else:
-		var raw = tr("STATUS_HP")
-		status_str = (raw % [int(ceil(current_hp)), int(ceil(max_hp))]) if ("%" in raw) else raw
-
-	return {
+	var info: Dictionary = {
 		"title": get_localized_name(),
 		"type": "building",
 		"building_type": building_type,
@@ -514,8 +506,19 @@ func get_display_info() -> Dictionary:
 		"max_hp": max_hp,
 		"is_constructed": is_constructed,
 		"build_progress": build_progress,
-		"status": status_str
+		"status": _panel_status() if is_constructed else "",
 	}
+	if not is_constructed:
+		info["work"] = build_progress
+		info["work_label"] = tr("WORK_CONSTRUCTING")
+	elif is_upgrading():
+		info["work"] = upgrade_progress
+		info["work_label"] = tr("WORK_UPGRADING")
+	return info
+
+## The line under a building's bars: nothing, unless it has something of its own to say.
+func _panel_status() -> String:
+	return ""
 
 # ==============================================================================
 # Procedural Mesh & Collision Generation (Placeholder Fallback)

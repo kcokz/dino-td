@@ -153,8 +153,9 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify HUD Initial State
 	var hud = main.hud
 	assert_not_null(hud, "HUD exists in Main")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_banked_wood(), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
+	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
+	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
+	assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays the cabin's health: 10 / 10")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 	assert_false(hud.is_game_over_visible(), "GameOver modal is hidden initially")
 	assert_false(hud.end_action_btn.disabled, "End Action button enabled in PLAN")
@@ -199,7 +200,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	# Verify HUD reflections
 	await wait_frames(1)
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "HUD reflects the remaining wood")
+	assert_eq(hud.get_wood_text(), str(expected_wood), "HUD reflects the remaining wood")
 
 	# --------------------------------------------------------------------------
 	# Phase C: Trigger End Action -> transitions to ATTACK
@@ -232,7 +233,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	# v0.4: buildings produce nothing, so a produce phase moves no numbers at all.
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "A produce phase pays out nothing")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "And the HUD agrees")
+	assert_eq(hud.get_wood_text(), str(expected_wood), "And the HUD agrees")
 
 	# Advance PRODUCE -> PLAN
 	game_state_node.end_produce_phase()
@@ -259,7 +260,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 2, "Transitioned to PRODUCE (2)")
 
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Still nothing produced")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % expected_wood, "And the HUD still agrees")
+	assert_eq(hud.get_wood_text(), str(expected_wood), "And the HUD still agrees")
 
 	# Advance PRODUCE -> PLAN
 	game_state_node.end_produce_phase()
@@ -377,8 +378,9 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# Verify HUD re-initialization
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after restart")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_banked_wood(), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
+	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
+	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
+	assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays the cabin's health: 10 / 10")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 
 	# --------------------------------------------------------------------------
@@ -438,8 +440,9 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	assert_false(hud.is_game_over_visible(), "GameOver modal hidden after 2nd restart")
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after 2nd restart")
-	assert_eq(hud.get_wood_text(), tr("HUD_WOOD") % opening_banked_wood(), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "Core HP: 10 / 10", "HUD displays Core HP: 10 / 10")
+	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
+	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
+	assert_eq(hud.get_core_hp_text(), "10 / 10", "HUD displays the cabin's health: 10 / 10")
 
 # ==============================================================================
 # Test 2: Consecutive Horde Progression & Multiplier Compounding Stress

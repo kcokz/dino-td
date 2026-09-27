@@ -2,10 +2,20 @@
 class_name OptionPanel
 extends PanelContainer
 
-## RTS-style Command Card & Unit Option Panel (v0.2).
-## Docked at the bottom-right corner of the HUD.
-## Displays selected unit information (Name, HP/Reserves, Operating status)
-## and dynamic action buttons (Hero 2-level build menu, Building demolish, Resource harvest).
+## The command card: bottom right, whatever is selected -- the Hero when nothing else is.
+##
+## Top to bottom (UI-POLISH T10, T11):
+##   * who it is: a portrait (its icon), its name, and what kind of thing it is;
+##   * how it is: a health bar, and a second, slanted bar for work under way -- building,
+##     upgrading, a job at a bench -- told apart by shape as well as colour;
+##   * what it says: the one line only it can add (a stake's bite, what a rock needs);
+##   * what it can do: its commands, and on the build page one card per building with
+##     its price as icons along the bottom, red where the warehouse falls short and a lock
+##     on the card when it cannot be paid -- never colour alone.
+##
+## The panel is as tall as what it holds and grows upward from the corner; it used to be a
+## fixed box with its lower half empty. Everything is styled by UiTheme through type
+## variations; nothing here picks a colour or a size.
 
 signal build_option_selected(building_type: String)
 signal action_triggered(action_name: String, target_node: Node)
@@ -25,10 +35,20 @@ var in_cabin: bool = false
 var _hover_detail_shown: bool = false
 
 # UI Nodes
+var portrait: TextureRect = null
 var title_label: Label = null
+var subtitle_label: Label = null
+var hp_row: Control = null
+var hp_bar: ProgressBar = null
+var hp_text: Label = null
+var work_row: Control = null
+var work_bar: ProgressBar = null
+var work_text: Label = null
 var status_label: Label = null
-var button_container: Container = null
+var separator: HSeparator = null
+var button_container: GridContainer = null
 var _last_refresh_time: float = 0.0
+var _shown_unit: Node = null
 
 func _init() -> void:
 	custom_minimum_size = _panel_size()
@@ -88,8 +108,8 @@ func _on_cabin_view_changed(inside: bool) -> void:
 	_refresh_ui()
 
 ## The wallet changed, so what the player can afford changed with it. Only the
-## enabled state is touched -- rebuilding the menu here would throw away whichever
-## entry the cursor is currently over, and with it the detail line.
+## enabled state and the prices are touched -- rebuilding the menu here would throw away
+## whichever entry the cursor is currently over, and with it the detail line.
 func _on_resources_changed(_res: Dictionary) -> void:
 	refresh_build_affordability()
 
@@ -104,7 +124,9 @@ func refresh_build_affordability() -> void:
 			break
 		var btn = children[i]
 		if btn is Button:
-			btn.disabled = not _can_afford(String(buildable[i]))
+			var b_type: String = String(buildable[i])
+			btn.disabled = not _can_afford(b_type)
+			_fill_price_row(btn, cfg.BUILDINGS[b_type].get("cost", {}))
 
 func set_selected_unit(unit: Node) -> void:
 	selected_unit = unit
@@ -166,109 +188,144 @@ func _process(delta: float) -> void:
 			set_selected_unit(hero)
 		return
 	_last_refresh_time += delta
-	if _last_refresh_time >= 0.25:
+	if _last_refresh_time >= UiTheme.number("refresh_seconds"):
 		_last_refresh_time = 0.0
 		_update_status_display()
 
-func _is_hero(unit: Node) -> bool:
-	if unit == null or not is_instance_valid(unit):
-		return false
-	return unit.is_in_group("hero") or unit == _get_hero()
+# ==============================================================================
+# Construction
+# ==============================================================================
 
 func _ensure_components() -> void:
 	name = "OptionPanel"
+	theme_type_variation = &"HudPanel"
+	# Pinned to the bottom-right corner by that corner: the box is as wide as Config says
+	# and exactly as tall as what is in it, growing upward as it fills.
 	set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	anchor_left = 1.0
-	anchor_top = 1.0
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-	var p_size: Vector2 = _panel_size()
-	var margin: float = _panel_margin()
-	offset_left = -(p_size.x + margin)
-	offset_top = -(p_size.y + margin)
-	offset_right = -margin
-	offset_bottom = -margin
-	custom_minimum_size = p_size
-
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.12, 0.15, 0.9)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.3, 0.4, 0.5, 0.8)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	add_theme_stylebox_override("panel", style)
+	grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
+	custom_minimum_size = _panel_size()
+	_pin()
 
 	var main_vbox = find_child("MainVBox", true, false) as VBoxContainer
 	if main_vbox == null:
 		main_vbox = VBoxContainer.new()
 		main_vbox.name = "MainVBox"
-		main_vbox.add_theme_constant_override("separation", 6)
 		add_child(main_vbox)
 
-	# Title & Status
 	if title_label == null:
-		title_label = find_child("TitleLabel", true, false) as Label
-	if title_label == null:
+		var header := HBoxContainer.new()
+		header.name = "Header"
+		main_vbox.add_child(header)
+		var frame := PanelContainer.new()
+		frame.name = "PortraitFrame"
+		frame.theme_type_variation = &"InsetPanel"
+		header.add_child(frame)
+		portrait = TextureRect.new()
+		portrait.name = "Portrait"
+		portrait.custom_minimum_size = Vector2.ONE * UiTheme.icon_size("xl")
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		frame.add_child(portrait)
+		var names := VBoxContainer.new()
+		names.name = "Names"
+		names.alignment = BoxContainer.ALIGNMENT_CENTER
+		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		names.add_theme_constant_override("separation", 0)   # a name and its kind read as one block
+		header.add_child(names)
 		title_label = Label.new()
 		title_label.name = "TitleLabel"
+		title_label.theme_type_variation = &"HeadingLabel"
+		title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title_label.text = tr("OPTION_UNIT_INFO")
-		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title_label.add_theme_font_size_override("font_size", _ui_size("panel_title_font_size", 30))
-		main_vbox.add_child(title_label)
+		names.add_child(title_label)
+		subtitle_label = Label.new()
+		subtitle_label.name = "SubtitleLabel"
+		subtitle_label.theme_type_variation = &"CaptionLabel"
+		names.add_child(subtitle_label)
 
-	if status_label == null:
-		status_label = find_child("StatusLabel", true, false) as Label
-	if status_label != null and status_label.autowrap_mode == TextServer.AUTOWRAP_OFF:
-		status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if hp_row == null:
+		var bars := UiKit.bar_row("Hp")
+		bars[0].visible = false
+		main_vbox.add_child(bars[0])
+		hp_row = bars[0]
+		hp_bar = bars[1]
+		hp_text = bars[2]
+		var work := UiKit.bar_row("Work", &"BuildBar")
+		work[0].visible = false
+		main_vbox.add_child(work[0])
+		work_row = work[0]
+		work_bar = work[1]
+		work_text = work[2]
+		work_text.theme_type_variation = &"CaptionLabel"
+
 	if status_label == null:
 		status_label = Label.new()
 		status_label.name = "StatusLabel"
+		status_label.theme_type_variation = &"MutedLabel"
 		status_label.text = tr("OPTION_DEFAULT_STATUS")
-		status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		status_label.add_theme_font_size_override("font_size", _ui_size("panel_status_font_size", 22))
-		status_label.modulate = Color(0.85, 0.85, 0.85)
 		# This line carries the longest text in the game -- a locked building says
 		# what it is waiting on -- and a Label with no wrapping simply runs off the
 		# panel and the player never reads the half that matters.
 		status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		status_label.custom_minimum_size = Vector2(0, _ui_size("panel_status_font_size", 18) * 3)
 		status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		main_vbox.add_child(status_label)
 
-	var sep = find_child("HSeparator", true, false)
-	if sep == null:
-		sep = HSeparator.new()
-		sep.name = "HSeparator"
-		main_vbox.add_child(sep)
+	if separator == null:
+		separator = HSeparator.new()
+		separator.name = "HSeparator"
+		main_vbox.add_child(separator)
 
-	# Action Buttons Container
 	if button_container == null:
-		button_container = find_child("ButtonContainer", true, false) as GridContainer
-	if button_container == null:
-		var grid = GridContainer.new()
-		grid.name = "ButtonContainer"
-		grid.columns = 2
-		grid.add_theme_constant_override("h_separation", 6)
-		grid.add_theme_constant_override("v_separation", 6)
-		main_vbox.add_child(grid)
-		button_container = grid
+		button_container = GridContainer.new()
+		button_container.name = "ButtonContainer"
+		button_container.columns = 1
+		main_vbox.add_child(button_container)
+
+# ==============================================================================
+# What is shown
+# ==============================================================================
 
 func _update_status_display() -> void:
-	if current_menu == "build" or _hover_detail_shown:
-		return # this line is showing the hovered entry's detail, not a unit's status
 	if selected_unit == null or not is_instance_valid(selected_unit):
 		return
-	if selected_unit.has_method("get_display_info"):
-		var info: Dictionary = selected_unit.get_display_info()
-		if title_label:
-			title_label.text = info.get("title", "")
-		if status_label:
-			status_label.text = info.get("status", "")
+	var info: Dictionary = selected_unit.get_display_info() if selected_unit.has_method("get_display_info") else {}
+	_show_vitals(info)
+	if current_menu == "build" or _hover_detail_shown:
+		return # this line is showing the hovered entry's detail, not a unit's status
+	if title_label:
+		title_label.text = info.get("title", "")
+	_set_status(String(info.get("status", "")))
+
+## The two bars, from what the selected thing reports about itself.
+func _show_vitals(info: Dictionary) -> void:
+	if hp_row == null:
+		return
+	# Health, or what is left in a resource node -- the same bar, read the same way.
+	var has_hp: bool = info.has("max_hp") and float(info.get("max_hp", 0.0)) > 0.0 and bool(info.get("is_constructed", true))
+	var has_reserve: bool = info.has("max_capacity") and float(info.get("max_capacity", 0.0)) > 0.0
+	hp_row.visible = has_hp or has_reserve
+	if has_hp:
+		var ratio: float = clampf(float(info["hp"]) / float(info["max_hp"]), 0.0, 1.0)
+		hp_bar.value = ratio
+		hp_bar.theme_type_variation = UiTheme.health_bar(ratio)
+		hp_text.text = UiKit.fraction_text(float(info["hp"]), float(info["max_hp"]))
+	elif has_reserve:
+		hp_bar.value = clampf(float(info.get("current_amount", 0)) / float(info["max_capacity"]), 0.0, 1.0)
+		hp_bar.theme_type_variation = &"BeaconBar"
+		hp_text.text = UiKit.fraction_text(float(info.get("current_amount", 0)), float(info["max_capacity"]))
+	# Work under way: a building going up or being upgraded, a job at a bench.
+	var work: float = float(info.get("work", -1.0))
+	work_row.visible = work >= 0.0
+	if work >= 0.0:
+		work_bar.value = clampf(work, 0.0, 1.0)
+		work_text.text = UiKit.work_text(String(info.get("work_label", "")), work)
+
+func _set_status(text: String) -> void:
+	if status_label == null:
+		return
+	status_label.text = text
+	status_label.visible = text != ""
 
 func _refresh_ui() -> void:
 	_ensure_components()
@@ -276,39 +333,36 @@ func _refresh_ui() -> void:
 		if in_cabin:
 			# Standing in the room with nothing picked: say where we are and how to
 			# get out, rather than falling back to the Hero's build menu.
-			if title_label: title_label.text = tr("CABIN_TITLE")
-			if status_label: status_label.text = tr("CABIN_HINT_LEAVE")
+			_set_header(tr("CABIN_TITLE"), tr("PANEL_KIND_CABIN"), UiTheme.icon("core"))
+			_show_vitals({})
+			_set_status(tr("CABIN_HINT_LEAVE"))
 			_clear_buttons()
+			_settle()
 			return
 		var hero = _get_hero()
 		if hero != null and is_instance_valid(hero):
 			selected_unit = hero
 
 	if selected_unit == null or not is_instance_valid(selected_unit):
-		if title_label: title_label.text = TranslationServer.translate("OPTION_STATUS")
-		if status_label: status_label.text = ""
+		_set_header(TranslationServer.translate("OPTION_STATUS"), "", null)
+		_show_vitals({})
+		_set_status("")
 		_clear_buttons()
+		_settle()
 		return
 
-	# Query display info
 	var info: Dictionary = {}
 	if selected_unit.has_method("get_display_info"):
 		info = selected_unit.get_display_info()
 	else:
-		info = {
-			"title": selected_unit.name,
-			"type": "generic",
-			"status": ""
-		}
+		info = {"title": selected_unit.name, "type": "generic", "status": ""}
 
-	if title_label:
-		title_label.text = info.get("title", selected_unit.name)
-	if status_label:
-		status_label.text = info.get("status", "")
+	var unit_type: String = String(info.get("type", ""))
+	_set_header(String(info.get("title", selected_unit.name)), _kind_text(info), _portrait_icon(info))
+	_show_vitals(info)
+	_set_status(String(info.get("status", "")))
 
 	_clear_buttons()
-
-	var unit_type = info.get("type", "")
 	match unit_type:
 		"hero":
 			_populate_hero_buttons()
@@ -319,8 +373,69 @@ func _refresh_ui() -> void:
 		"station":
 			_populate_station_buttons()
 		_:
-			# Default / generic
 			pass
+	_settle()
+
+func _set_header(title: String, kind: String, tex: Texture2D) -> void:
+	if title_label:
+		title_label.text = title
+	if subtitle_label:
+		subtitle_label.text = kind
+		subtitle_label.visible = kind != ""
+	if portrait:
+		portrait.texture = tex
+		portrait.get_parent().visible = tex != null
+
+## What kind of thing it is, under its name.
+func _kind_text(info: Dictionary) -> String:
+	match String(info.get("type", "")):
+		"hero":
+			return tr("PANEL_KIND_HERO")
+		"building":
+			if String(info.get("building_type", "")) == "core":
+				return tr("PANEL_KIND_CABIN")
+			return tr("PANEL_KIND_BUILDING") if bool(info.get("is_constructed", true)) else tr("PANEL_KIND_BLUEPRINT")
+		"resource_node":
+			return tr("PANEL_KIND_NODE")
+		"station":
+			return tr("PANEL_KIND_STATION")
+	return ""
+
+func _portrait_icon(info: Dictionary) -> Texture2D:
+	match String(info.get("type", "")):
+		"hero":
+			return UiTheme.icon("hero")
+		"building":
+			return UiTheme.icon(String(info.get("building_type", "")))
+		"resource_node":
+			return UiTheme.node_icon(String(info.get("resource_type", "")))
+		"station":
+			return UiTheme.icon(String(info.get("station_id", "")))
+	return null
+
+## The box's own rect is a line along the corner's bottom edge -- no height of its own --
+## so the engine makes it exactly as tall as what it holds, growing upward, and shrinking
+## again when it holds less. (Resizing it by hand instead kept its top edge where it was
+## and pushed its bottom off the screen.)
+func _pin() -> void:
+	var margin: float = _panel_margin()
+	offset_left = -(_panel_size().x + margin)
+	offset_right = -margin
+	offset_top = -margin
+	offset_bottom = -margin
+
+## After the content changes: drop the separator when there is nothing under it, and fade
+## the new content in -- a transition, not a hard cut (UI-POLISH T10).
+func _settle() -> void:
+	if separator and button_container:
+		separator.visible = button_container.get_child_count() > 0
+	_pin()
+	if _shown_unit != selected_unit:
+		_shown_unit = selected_unit
+		if is_inside_tree():
+			modulate.a = UiTheme.number("settle_alpha")
+			var tw := create_tween()
+			tw.tween_property(self, "modulate:a", 1.0, UiTheme.number("fade_seconds"))
 
 func _clear_buttons() -> void:
 	if button_container == null:
@@ -329,26 +444,33 @@ func _clear_buttons() -> void:
 		button_container.remove_child(child)
 		child.queue_free()
 
-func _create_action_button(text: String, callback: Callable) -> Button:
-	var btn = Button.new()
-	btn.text = text
-	var btn_font: int = _ui_size("panel_button_font_size", 24)
-	btn.custom_minimum_size = Vector2(150, btn_font * 2)
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.add_theme_font_size_override("font_size", btn_font)
-	btn.pressed.connect(callback)
+## A plain command: full width, an icon in front of its word.
+func _create_action_button(text: String, callback: Callable, icon_name: String = "", variation: StringName = &"") -> Button:
+	var btn := UiKit.action_button(text, UiTheme.icon(icon_name), callback, variation)
 	button_container.add_child(btn)
 	return btn
 
+## An entry with a price (UiKit.card_button), added to the card's commands.
+func _create_card_button(text: String, icon: Texture2D, price: Dictionary, callback: Callable) -> Button:
+	var btn := UiKit.card_button(text, icon, callback)
+	button_container.add_child(btn)
+	_fill_price_row(btn, price)
+	return btn
+
+func _fill_price_row(btn: Button, price: Dictionary, extra: String = "") -> void:
+	UiKit.fill_price_row(btn, price, extra)
+
 func _populate_hero_buttons() -> void:
 	if current_menu == "default":
+		button_container.columns = 1
 		# Level 1: [ Build ]
 		_create_action_button(TranslationServer.translate("CMD_BUILD"), func():
 			current_menu = "build"
 			_refresh_ui()
-		)
+		, "build")
 	elif current_menu == "build":
-		# Level 2: one button per Config.BUILDABLE_TYPES, then [ Back ]
+		# Level 2: one card per Config.BUILDABLE_TYPES, then [ Back ]
+		button_container.columns = 2
 		var cfg = _get_config()
 		var buildable: Array = []
 		if cfg and "BUILDABLE_TYPES" in cfg:
@@ -356,25 +478,24 @@ func _populate_hero_buttons() -> void:
 		else:
 			buildable = ["wall", "tower"]
 		_clear_build_detail()
-		# Buttons carry only the name. The cost and build time go in the detail line
-		# below, shown for whichever button the cursor is over, and a button the
-		# player cannot afford is disabled -- so affordability is read at a glance
-		# instead of by comparing numbers on every button against the wallet.
+		# The card carries the name and the price; the cost in words and the build time go
+		# in the detail line, shown for whichever card the cursor is over.
 		for b_type in buildable:
-			var b_name: String = _building_name(b_type)
-			var btn := _create_action_button(b_name, func():
+			var price: Dictionary = cfg.BUILDINGS[b_type].get("cost", {}) if cfg else {}
+			var btn := _create_card_button(_building_name(b_type), UiTheme.icon(String(b_type)), {}, func():
 				_trigger_build(b_type)
 			)
 			btn.disabled = not _can_afford(b_type)
+			_fill_price_row(btn, price)
 			btn.mouse_entered.connect(func(): _show_build_detail(b_type))
 			btn.focus_entered.connect(func(): _show_build_detail(b_type))
 			btn.mouse_exited.connect(_clear_build_detail)
 
-		
-		_create_action_button(TranslationServer.translate("CMD_BACK"), func():
+		var back := _create_action_button(TranslationServer.translate("CMD_BACK"), func():
 			current_menu = "default"
 			_refresh_ui()
-		)
+		, "back", &"GhostButton")
+		back.custom_minimum_size = Vector2(0, UiTheme.height("card"))
 
 ## Cost and build time for the hovered entry, or a prompt when nothing is hovered.
 ## Anything that bites what touches it says so here: a stake fence only reads as a
@@ -391,17 +512,17 @@ func _show_build_detail(b_type: String) -> void:
 		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
 		var dps: float = float(cfg.get_contact_dps(b_type)) if cfg.has_method("get_contact_dps") else 0.0
 		if dps > 0.0:
-			status_label.text = tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, dps]
+			_set_status(tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, dps])
 		else:
-			status_label.text = tr("BUILD_DETAIL_FORMAT") % [b_name, _cost_text(b_type), secs]
-		status_label.modulate = Color(0.85, 0.85, 0.85)
+			_set_status(tr("BUILD_DETAIL_FORMAT") % [b_name, _cost_text(b_type), secs])
+		status_label.modulate = Color.WHITE
 	else:
 		# Name what is actually short. A turret is bought with wood and stone, so
 		# "need 8 wood" was a lie the moment the player had the wood and no rock.
 		# And where the short things come from, when that is the real obstacle.
-		status_label.text = tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)] \
-			+ _sources_text(cfg.BUILDINGS[b_type].get("cost", {}))
-		status_label.modulate = Color(1.0, 0.45, 0.4)
+		_set_status(tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)] \
+			+ _sources_text(cfg.BUILDINGS[b_type].get("cost", {})))
+		status_label.modulate = UiKit.tone_color("short")
 
 ## A {resource: amount} bill, written out for a button or a status line.
 func _amounts_text(amounts: Dictionary) -> String:
@@ -432,8 +553,8 @@ func _show_upgrade_detail(unit: Node) -> void:
 	if status_label == null:
 		return
 	_hover_detail_shown = true
-	status_label.text = upgrade_detail_text(unit)
-	status_label.modulate = Color(0.85, 0.85, 0.85)
+	_set_status(upgrade_detail_text(unit))
+	status_label.modulate = Color.WHITE
 
 ## What a building costs, in every resource it asks for.
 func _cost_text(b_type: String) -> String:
@@ -456,41 +577,22 @@ func _missing_text(b_type: String) -> String:
 			parts.append("%d %s" % [short, _resource_name(String(res_id))])
 	return ", ".join(parts)
 
-## One line per material in `price` he is short of and cannot simply go and pick up:
-## which tool it takes, or that only the dead leave it (Config.source_hint) -- the reason
-## chain, "stone <- bone pick <- 1 bone", said where the price is (GAME-DESIGN 9.2).
+## Where the short materials come from (UiKit.sources_text): the reason chain at the price.
 func _sources_text(price: Dictionary) -> String:
-	var cfg = _get_config()
-	var gs = _get_game_state()
-	if cfg == null or gs == null or not cfg.has_method("source_hint"):
-		return ""
-	var lines: String = ""
-	for res_id in price:
-		if int(gs.resources.get(res_id, 0)) >= int(price[res_id]):
-			continue
-		var hint: String = String(cfg.source_hint(String(res_id), gs.unlocks))
-		if hint != "":
-			lines += "\n" + hint
-	return lines
+	return UiKit.sources_text(price)
 
 func _clear_build_detail() -> void:
 	_hover_detail_shown = false
 	if status_label == null:
 		return
-	status_label.text = tr("BUILD_HINT_PICK")
-	status_label.modulate = Color(0.85, 0.85, 0.85)
+	_set_status(tr("BUILD_HINT_PICK"))
+	status_label.modulate = Color.WHITE
 
 func _building_name(b_type: String) -> String:
 	var cfg = _get_config()
 	if cfg and cfg.has_method("get_building_name"):
 		return String(cfg.get_building_name(b_type))
 	return b_type
-
-func _wood() -> int:
-	var gs = _get_game_state()
-	if gs and "resources" in gs:
-		return int(gs.resources.get("wood", 0))
-	return 0
 
 func _can_afford(b_type: String) -> bool:
 	var gs = _get_game_state()
@@ -506,13 +608,12 @@ func _can_afford(b_type: String) -> bool:
 ## mending and demolishing are chosen here, on purpose, with the price on the
 ## button.
 func _populate_building_buttons() -> void:
+	button_container.columns = 1
 	# Upgrading where it stands (v0.6): the price on the button, and on hover the numbers
 	# that change -- before and after is the whole of the choice. Paid when chosen, like a
 	# blueprint, and the Hero goes straight over to build it.
 	if selected_unit.has_method("can_upgrade") and selected_unit.can_upgrade():
 		var unit: Node = selected_unit
-		# The price on the button; what it becomes, and what changes, on hover. The name on
-		# the button too made it wide enough to push the panel's other buttons off its edge.
 		var up_text: String = tr("CMD_UPGRADE") % _amounts_text(unit.upgrade_cost())
 		var up_btn := _create_action_button(up_text, func():
 			if not is_instance_valid(unit) or not unit.begin_upgrade():
@@ -522,7 +623,7 @@ func _populate_building_buttons() -> void:
 				hero.order_upgrade(unit)
 			action_triggered.emit("upgrade", unit)
 			_refresh_ui()
-		)
+		, "upgrade")
 		var gs_up = _get_game_state()
 		up_btn.disabled = gs_up == null or not gs_up.has_method("can_afford") or not gs_up.can_afford(unit.upgrade_cost())
 		up_btn.mouse_entered.connect(func(): _show_upgrade_detail(unit))
@@ -539,94 +640,72 @@ func _populate_building_buttons() -> void:
 			if hero and is_instance_valid(hero) and hero.has_method("order_repair") and is_instance_valid(selected_unit):
 				hero.order_repair(selected_unit)
 				action_triggered.emit("repair", selected_unit)
-		)
+		, "repair")
 		btn.disabled = not _can_pay_a_repair_step()
 
-	_create_action_button(TranslationServer.translate("CMD_DEMOLISH"), func():
-		if selected_unit and is_instance_valid(selected_unit) and selected_unit.has_method("demolish"):
-			var unit_to_demolish = selected_unit
-			clear_selection()
-			unit_to_demolish.demolish()
-	)
+	# The cabin itself cannot be pulled down: it is the game.
+	if selected_unit.has_method("demolish") and not ("building_type" in selected_unit and String(selected_unit.building_type) == "core"):
+		_create_action_button(TranslationServer.translate("CMD_DEMOLISH"), func():
+			if selected_unit and is_instance_valid(selected_unit) and selected_unit.has_method("demolish"):
+				var unit_to_demolish = selected_unit
+				clear_selection()
+				unit_to_demolish.demolish()
+		, "demolish", &"DangerButton")
 
 ## Resource nodes are scenery, not units: they take no orders. Right-clicking one
 ## while the Hero is selected already sends him to harvest it, so a button here
 ## would only be a second, slower way to do the same thing.
-## One button per recipe this bench still has to offer. A recipe already made is
-## not listed at all -- an unlock is permanent, so a finished one is not a choice.
-## The kitchen's meals come after its recipes: one per kind of meat, always on offer,
-## named for however his best pot will cook it.
+func _populate_resource_buttons() -> void:
+	pass
+
+## One card per job this bench still has to offer. A recipe already made is not listed
+## at all -- an unlock is permanent, so a finished one is not a choice. The kitchen's meals
+## come after its recipes: one per kind of meat, always on offer, named for however his
+## best pot will cook it.
 func _populate_station_buttons() -> void:
 	var station := selected_unit
 	if station == null or not is_instance_valid(station) or not station.has_method("recipes"):
 		return
+	button_container.columns = 1
 	_clear_craft_detail()
 	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
 	for recipe_id in jobs:
 		var rid: String = String(recipe_id)
 		if not station.can_offer(rid):
 			continue
-		var btn := _create_action_button(station.recipe_name(rid), func():
+		var btn := _create_card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), {}, func():
 			if is_instance_valid(station):
 				station.begin(rid)
 				_refresh_ui()
 		)
 		btn.disabled = not station.can_afford(rid)
+		_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.mouse_exited.connect(_clear_craft_detail)
 
-## What a recipe costs and how long it takes, for whichever entry the cursor is
-## over -- the same shape as the build menu's detail line, because it answers the
-## same question.
+## What a job costs, takes and does, for whichever entry the cursor is over (UiKit.job_detail).
 func _show_craft_detail(station: Node, recipe_id: String) -> void:
 	if status_label == null or station == null or not is_instance_valid(station):
 		return
 	_hover_detail_shown = true
-	var costs: PackedStringArray = []
-	for res_id in station.inputs_of(recipe_id):
-		costs.append("%d %s" % [int(station.inputs_of(recipe_id)[res_id]), _resource_name(String(res_id))])
-	var cost_text: String = ", ".join(costs)
-	# A meal says what it will do -- heal how much, how much faster and for how long --
-	# because that is the whole of the choice between one meat and another.
-	var cfg = _get_config()
-	var is_meal: bool = station.has_method("is_dish") and station.is_dish(recipe_id)
-	if cfg and "BEACON_LAUNCH" in cfg and recipe_id == String(cfg.BEACON_LAUNCH):
-		# The launch costs nothing; what it asks for is nerve, so it says what is coming.
-		status_label.text = _launch_detail()
-		status_label.modulate = Color(1.0, 0.85, 0.3)
-	elif is_meal and station.can_afford(recipe_id) and cfg and cfg.has_method("describe_meal"):
-		status_label.text = tr("MEAL_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text,
-			station.time_of(recipe_id), cfg.describe_meal(station.meal_preview(recipe_id))]
-		status_label.modulate = Color(0.85, 0.85, 0.85)
-	elif station.can_afford(recipe_id):
-		status_label.text = tr("CRAFT_DETAIL_FORMAT") % [station.recipe_name(recipe_id), cost_text, station.time_of(recipe_id)]
-		status_label.modulate = Color(0.85, 0.85, 0.85)
-	else:
-		status_label.text = tr("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(recipe_id), cost_text] \
-			+ _sources_text(station.inputs_of(recipe_id))
-		status_label.modulate = Color(1.0, 0.45, 0.4)
+	var detail: Array = UiKit.job_detail(station, recipe_id)
+	_set_status(String(detail[0]))
+	status_label.modulate = UiKit.tone_color(String(detail[1]))
 
-## What launching the beacon brings: how long it charges, that the whole valley comes from
-## every side, and who comes last (GAME-DESIGN 8.3).
+## What launching the beacon brings (UiKit.launch_detail).
 func _launch_detail() -> String:
-	var cfg = _get_config()
-	var gs = _get_game_state()
-	var map: Dictionary = gs.map_data() if (gs and gs.has_method("map_data")) else {}
-	var seconds: int = int(round(float(map.get("beacon", {}).get("charge_seconds", 0.0))))
-	var boss: String = String(map.get("boss", ""))
-	var boss_name: String = String(cfg.get_dino_name(boss)) if (cfg and boss != "") else ""
-	return tr("BEACON_LAUNCH_DETAIL") % [seconds / 60, seconds % 60, boss_name]
+	return UiKit.launch_detail()
 
 func _clear_craft_detail() -> void:
 	_hover_detail_shown = false
 	if status_label == null:
 		return
 	if selected_unit != null and is_instance_valid(selected_unit) and selected_unit.has_method("get_display_info"):
-		status_label.text = String(selected_unit.get_display_info().get("status", ""))
+		_set_status(String(selected_unit.get_display_info().get("status", "")))
 	else:
-		status_label.text = tr("CABIN_HINT_PICK_STATION")
-	status_label.modulate = Color(0.85, 0.85, 0.85)
+		_set_status(tr("CABIN_HINT_PICK_STATION"))
+	status_label.modulate = Color.WHITE
 
 ## The whole bill has to be payable: repair is one transaction, so there is no
 ## point starting a job the warehouse cannot finish.
@@ -644,9 +723,6 @@ func _can_pay_a_repair_step() -> bool:
 
 func _resource_name(res_id: String) -> String:
 	return TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
-
-func _populate_resource_buttons() -> void:
-	pass
 
 func _trigger_build(type_id: String) -> void:
 	build_option_selected.emit(type_id)
@@ -678,18 +754,12 @@ func _get_event_bus() -> Node:
 		return Engine.get_main_loop().root.get_node_or_null("EventBus")
 	return null
 
-## Reads a font size out of Config.UI so panel sizing lives with the rest of the data.
-func _ui_size(key: String, fallback: int) -> int:
-	var cfg = _get_config()
-	if cfg and "UI" in cfg:
-		return int(cfg.UI.get(key, fallback))
-	return fallback
-
+## The panel's width (Config.UI); its height is whatever it holds.
 func _panel_size() -> Vector2:
 	var cfg = _get_config()
 	if cfg and "UI" in cfg:
-		return cfg.UI.get("option_panel_size", Vector2(430, 300))
-	return Vector2(430, 300)
+		return cfg.UI.get("option_panel_size", Vector2(400, 0))
+	return Vector2(400, 0)
 
 func _panel_margin() -> float:
 	var cfg = _get_config()

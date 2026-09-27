@@ -636,5 +636,5 @@ func test_37_every_resource_the_game_makes_has_a_readout() -> void:
 	await wait_frames(1)
 
 	hud._on_resources_changed({"wood": 1, "stone": 2, "water": 3, "food": 4})
-	assert_eq(hud.food_label.text, tr("HUD_FOOD") % 4, "Meat has its own line in the top bar")
+	assert_readout(hud, "food", 4, "Meat has its own chip in the top bar")
 	assert_true(hud.food_label.visible, "And it is on screen")

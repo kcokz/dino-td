@@ -34,6 +34,7 @@ var camera_keys_label: Label = null
 var window_label: Label = null
 var window_picker: OptionButton = null
 var language_picker: OptionButton = null
+var version_caption: Label = null
 
 var _was_paused_before_open: bool = false
 
@@ -152,9 +153,10 @@ func _ensure_components() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	if find_child("Dimmer", true, false) == null:
+		# The world behind the menu, frosted: stopped, still there, not competing.
 		var dimmer := ColorRect.new()
 		dimmer.name = "Dimmer"
-		dimmer.color = Color(0.0, 0.0, 0.0, 0.55)
+		dimmer.material = UiTheme.frost_material()
 		dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(dimmer)
@@ -176,23 +178,8 @@ func _ensure_components() -> void:
 	if panel == null:
 		panel = PanelContainer.new()
 		panel.name = "MenuPanel"
-		panel.custom_minimum_size = Vector2(360, 260)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.08, 0.1, 0.13, 0.96)
-		style.border_width_left = 2
-		style.border_width_top = 2
-		style.border_width_right = 2
-		style.border_width_bottom = 2
-		style.border_color = Color(0.35, 0.45, 0.55, 0.9)
-		style.corner_radius_top_left = 10
-		style.corner_radius_top_right = 10
-		style.corner_radius_bottom_left = 10
-		style.corner_radius_bottom_right = 10
-		style.content_margin_left = 24
-		style.content_margin_right = 24
-		style.content_margin_top = 20
-		style.content_margin_bottom = 20
-		panel.add_theme_stylebox_override("panel", style)
+		panel.theme_type_variation = &"ModalPanel"
+		panel.custom_minimum_size = Vector2(_menu_width(), 0)
 		centerer.add_child(panel)
 
 	if page_vbox == null:
@@ -200,35 +187,36 @@ func _ensure_components() -> void:
 	if page_vbox == null:
 		page_vbox = VBoxContainer.new()
 		page_vbox.name = "PageVBox"
-		page_vbox.add_theme_constant_override("separation", 12)
+		page_vbox.add_theme_constant_override("separation", UiTheme.space("m"))
 		panel.add_child(page_vbox)
 
 	if title_label == null:
 		title_label = Label.new()
 		title_label.name = "MenuTitle"
+		title_label.theme_type_variation = &"TitleLabel"
 		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title_label.add_theme_font_size_override("font_size", _ui_size("gameover_title_font_size", 40))
 		page_vbox.add_child(title_label)
+		var rule := HSeparator.new()
+		rule.name = "TitleRule"
+		page_vbox.add_child(rule)
 
-	resume_btn = _make_button(resume_btn, "ResumeBtn", _on_resume_pressed)
+	resume_btn = _make_button(resume_btn, "ResumeBtn", _on_resume_pressed, &"AccentButton", "play")
 	settings_btn = _make_button(settings_btn, "SettingsBtn", _on_settings_pressed)
-	quit_btn = _make_button(quit_btn, "QuitBtn", _on_quit_pressed)
+	quit_btn = _make_button(quit_btn, "QuitBtn", _on_quit_pressed, &"DangerButton")
 
 	if language_row == null:
 		language_row = HBoxContainer.new()
 		language_row.name = "LanguageRow"
-		language_row.add_theme_constant_override("separation", 10)
 		page_vbox.add_child(language_row)
 
 		language_label = Label.new()
 		language_label.name = "LanguageLabel"
-		language_label.add_theme_font_size_override("font_size", _ui_size("hud_font_size", 20))
+		language_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		language_row.add_child(language_label)
 
 		language_picker = OptionButton.new()
 		language_picker.name = "LanguagePicker"
-		language_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		language_picker.add_theme_font_size_override("font_size", _ui_size("hud_button_font_size", 18))
+		language_picker.custom_minimum_size = Vector2(_picker_width(), UiTheme.height("command"))
 		language_row.add_child(language_picker)
 		if not language_picker.item_selected.is_connected(_on_language_selected):
 			language_picker.item_selected.connect(_on_language_selected)
@@ -236,18 +224,16 @@ func _ensure_components() -> void:
 	if window_row == null:
 		window_row = HBoxContainer.new()
 		window_row.name = "WindowRow"
-		window_row.add_theme_constant_override("separation", 10)
 		page_vbox.add_child(window_row)
 
 		window_label = Label.new()
 		window_label.name = "WindowLabel"
-		window_label.add_theme_font_size_override("font_size", _ui_size("hud_font_size", 20))
+		window_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		window_row.add_child(window_label)
 
 		window_picker = OptionButton.new()
 		window_picker.name = "WindowPicker"
-		window_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		window_picker.add_theme_font_size_override("font_size", _ui_size("hud_button_font_size", 18))
+		window_picker.custom_minimum_size = Vector2(_picker_width(), UiTheme.height("command"))
 		window_row.add_child(window_picker)
 		if not window_picker.item_selected.is_connected(_on_window_mode_selected):
 			window_picker.item_selected.connect(_on_window_mode_selected)
@@ -255,38 +241,57 @@ func _ensure_components() -> void:
 	if camera_row == null:
 		camera_row = VBoxContainer.new()
 		camera_row.name = "CameraRow"
+		camera_row.add_theme_constant_override("separation", UiTheme.space("xs"))
 		page_vbox.add_child(camera_row)
 
 		camera_label = Label.new()
 		camera_label.name = "CameraLabel"
-		camera_label.add_theme_font_size_override("font_size", _ui_size("hud_font_size", 20))
 		camera_row.add_child(camera_label)
 
 		# The keys themselves, which is the only place the game tells anyone the view can
 		# be turned at all. A control nobody can find is a control nobody has.
 		camera_keys_label = Label.new()
 		camera_keys_label.name = "CameraKeysLabel"
+		camera_keys_label.theme_type_variation = &"MutedLabel"
 		camera_keys_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		camera_keys_label.add_theme_font_size_override("font_size", _ui_size("hud_button_font_size", 18))
 		camera_row.add_child(camera_keys_label)
 
-	back_btn = _make_button(back_btn, "BackBtn", _on_back_pressed)
+	back_btn = _make_button(back_btn, "BackBtn", _on_back_pressed, &"GhostButton", "back")
+
+	if version_caption == null:
+		version_caption = Label.new()
+		version_caption.name = "VersionCaption"
+		version_caption.theme_type_variation = &"CaptionLabel"
+		version_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		page_vbox.add_child(version_caption)
+		version_caption.text = "%s  %s" % [AppInfo.APP_NAME, AppInfo.get_version()]
 	_populate_languages()
 	_populate_window_modes()
 
-func _make_button(existing: Button, node_name: String, cb: Callable) -> Button:
+## A menu entry: full width, one height, styled by what it does -- the way back to the
+## game lit in the accent, the way out of it in red.
+func _make_button(existing: Button, node_name: String, cb: Callable, variation: StringName = &"", icon_name: String = "") -> Button:
 	var btn: Button = existing
 	if btn == null:
 		btn = find_child(node_name, true, false) as Button
 	if btn == null:
 		btn = Button.new()
 		btn.name = node_name
-		btn.custom_minimum_size = Vector2(0, _ui_size("hud_button_font_size", 18) * 2.2)
-		btn.add_theme_font_size_override("font_size", _ui_size("hud_button_font_size", 18))
+		btn.theme_type_variation = variation
+		btn.icon = UiTheme.icon(icon_name)
+		btn.custom_minimum_size = Vector2(0, UiTheme.height("command"))
 		page_vbox.add_child(btn)
 	if not btn.pressed.is_connected(cb):
 		btn.pressed.connect(cb)
 	return btn
+
+func _menu_width() -> float:
+	var cfg = _get_config()
+	return float(cfg.UI.get("menu_width", 400)) if (cfg and "UI" in cfg) else 400.0
+
+func _picker_width() -> float:
+	var cfg = _get_config()
+	return float(cfg.UI.get("menu_picker_width", 190)) if (cfg and "UI" in cfg) else 190.0
 
 ## Fullscreen or windowed. Index 0 is fullscreen, 1 is windowed -- the order is fixed
 ## rather than derived, because there are exactly two and they are not going to grow.
@@ -344,12 +349,6 @@ func _refresh_texts() -> void:
 # ==============================================================================
 # Resolvers
 # ==============================================================================
-
-func _ui_size(key: String, fallback: int) -> int:
-	var cfg = _get_config()
-	if cfg and "UI" in cfg:
-		return int(cfg.UI.get(key, fallback))
-	return fallback
 
 func _get_config() -> Node:
 	return _autoload("Config")

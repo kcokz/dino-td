@@ -380,8 +380,8 @@ func test_hud_03_updates_on_resources_changed_signal() -> void:
 		tree.root.add_child(hud)
 		await wait_frames(2)
 
-	var wood_label = hud.find_child("*Wood*", true, false) as Label
-	if wood_label == null: wood_label = hud.find_child("*Resource*", true, false) as Label
+	# The wood chip's count (the chip itself -- icon and count -- is "WoodChip").
+	var wood_label: Label = hud.wood_label
 	assert_not_null(wood_label, "Wood/Resource label must exist")
 	if wood_label == null: return
 
@@ -411,8 +411,8 @@ func test_hud_05_updates_on_core_hp_changed_signal() -> void:
 		tree.root.add_child(hud)
 		await wait_frames(2)
 
-	var hp_label = hud.find_child("*HP*", true, false) as Label
-	if hp_label == null: hp_label = hud.find_child("*Core*", true, false) as Label
+	# The figure at the end of the cabin's health bar (the bar itself is "CoreHPBar").
+	var hp_label: Label = hud.core_hp_label
 	assert_not_null(hp_label, "Core HP label must exist")
 	if hp_label == null: return
 

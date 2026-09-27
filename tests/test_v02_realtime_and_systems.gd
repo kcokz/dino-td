@@ -554,12 +554,13 @@ func test_19_hud_no_legacy_buttons_and_larger_option_panel() -> void:
 	# Verify BottomBar is gone from the scene
 	assert_null(hud_inst.find_child("BottomBar", true, false), "BottomBar was removed from HUD scene")
 
-	# OptionPanel has larger minimum dimensions
+	# OptionPanel is wide enough to read; its height is whatever it holds -- no fixed box
+	# with empty space in it (test_v06_the_interface: it grows upward from its corner).
 	var panel = option_panel_script.new()
 	_cleanup_nodes.append(panel)
 	tree.root.add_child(panel)
 	assert_gte(panel.custom_minimum_size.x, 300.0, "OptionPanel width >= 300")
-	assert_gte(panel.custom_minimum_size.y, 200.0, "OptionPanel height >= 200")
+	assert_eq(panel.custom_minimum_size.y, 0.0, "OptionPanel height is its content's")
 
 func test_20_in_world_label3d_enlarged_fonts() -> void:
 	var wall = wall_script.new()

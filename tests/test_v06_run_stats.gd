@@ -141,10 +141,18 @@ func test_05_the_result_screen_carries_the_run() -> void:
 	tree.root.add_child(main)
 	await wait_frames(6)
 	assert_not_null(main.run_stats, "The level keeps the run's account")
+	main.run_stats.raids_held = 3
+	main.run_stats.killed = 7
 	win_the_run()
-	await wait_frames(1)
-	var details: String = main.hud.details_label.text
-	assert_true(details.contains(main.hud.run_summary_text(main.run_stats)), "Under the verdict: %s" % details)
+	# Under the verdict, the account as three figures: how long, raids held, killed.
+	var secs: int = int(main.run_stats.run_seconds)
+	var row: Node = main.hud.stats_row
+	assert_true(row != null and row.visible, "The results card carries the run's account")
+	if row == null:
+		return
+	assert_eq((row.get_node("StatTime/Value") as Label).text, "%d:%02d" % [secs / 60, secs % 60], "How long it lasted")
+	assert_eq((row.get_node("StatRaids/Value") as Label).text, "3", "How many raids were held")
+	assert_eq((row.get_node("StatKilled/Value") as Label).text, "7", "How many were killed")
 
 func test_06_a_new_run_starts_a_new_account() -> void:
 	var main = _keep(load("res://scenes/Main.tscn").instantiate())

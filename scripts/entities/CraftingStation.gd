@@ -227,16 +227,14 @@ func get_localized_name() -> String:
 # ==============================================================================
 
 func get_display_info() -> Dictionary:
-	var status: String = tr("CABIN_HINT_PICK_STATION")
-	# The beacon's bench says where the beacon has got to, whenever it is not busy: that is
-	# the run's main line (GAME-DESIGN 14.3), so it is the first thing this panel says.
+	# Nothing to say while idle -- the cabin's own header says how the benches work -- except
+	# at the beacon's bench, which says where the beacon has got to whenever it is not busy:
+	# that is the run's main line (GAME-DESIGN 14.3), so it is the first thing it says.
+	var status: String = ""
 	var beacon: String = _beacon_status()
 	if beacon != "":
 		status = beacon
-	if active_recipe != "":
-		var raw: String = tr("CRAFT_IN_PROGRESS")
-		status = (raw % [recipe_name(active_recipe), int(ratio() * 100.0)]) if ("%" in raw) else raw
-	return {
+	var info: Dictionary = {
 		"title": get_localized_name(),
 		"type": "station",
 		"station_id": station_id,
@@ -244,6 +242,12 @@ func get_display_info() -> Dictionary:
 		"active_recipe": active_recipe,
 		"progress": ratio(),
 	}
+	# A job under way is the card's work bar; the line says what keeps it going.
+	if active_recipe != "":
+		info["work"] = ratio()
+		info["work_label"] = recipe_name(active_recipe)
+		info["status"] = tr("CRAFT_STAY")
+	return info
 
 func set_selected_visual(on: bool) -> void:
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):

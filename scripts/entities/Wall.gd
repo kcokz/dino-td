@@ -159,8 +159,11 @@ func _is_paused() -> bool:
 func get_display_info() -> Dictionary:
 	var info: Dictionary = super.get_display_info()
 	info["contact_dps"] = contact_dps()
-	if is_constructed and contact_dps() > 0.0:
-		var suffix: String = tr("STATUS_CONTACT_DAMAGE")
-		if "%" in suffix:
-			info["status"] = "%s  ·  %s" % [info.get("status", ""), suffix % contact_dps()]
 	return info
+
+## A stake's line: what it does to what touches it.
+func _panel_status() -> String:
+	if contact_dps() <= 0.0:
+		return ""
+	var raw: String = tr("STATUS_CONTACT_DAMAGE")
+	return (raw % contact_dps()) if "%" in raw else raw

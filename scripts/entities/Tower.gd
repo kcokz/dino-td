@@ -62,6 +62,13 @@ func setup(type_id: String = "tower", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)
 	_load_tower_config()
 
+## A tower's line: how fast it shoots, how far, how hard.
+func _panel_status() -> String:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("factor_text"):
+		return ""
+	return tr("STATUS_TOWER_STATS") % [cfg.factor_text(fire_rate), cfg.factor_text(attack_range), cfg.factor_text(damage)]
+
 ## Its own type's numbers. It always read the "tower" row, which was harmless while there
 ## was one kind of tower and would have left an upgraded tower shooting like the old one.
 func _load_tower_config() -> void:
