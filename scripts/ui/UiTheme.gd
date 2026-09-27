@@ -14,11 +14,15 @@ extends RefCounted
 ## for a KIND of thing -- a type variation: "HudLabel" for text standing on the world,
 ## "AccentButton" for the one thing to press, "HealthBar" -- and the theme answers.
 ##
-## And it answers in the valley's own materials (v0.6: "远古时代质感的菜单界面，状态栏" -- it
-## read as a web page): a panel is a slab of stone, a button a plank lashed with rawhide, a
-## card a stitched hide, a bar a groove with pigment in it. Each is an image cut into nine
-## (Config.THEME.surfaces, drawn by tools/build_ui_textures.gd) and tinted where it is used
-## (Config.THEME.tints), so the whole interface is a handful of materials, not a box per panel.
+## And it answers as the good ones do (v0.6: "还是没到优秀游戏的质感" -- Northgard, Age of Empires
+## IV, Horizon's tribes): FRAMED. A panel is dark tanned leather in a rim of bone, pegged at its
+## corners; the ship's own things are slate in steel with a line of cyan light; a button is
+## leather in a thinner rim, the one thing to press painted ochre; a portrait sits in a sunk
+## socket; a toast is a stroke of ink; a bar is a trough capped with bone with pigment in it;
+## a title stands over a rule with a tooth at its middle. Each material is an image cut into
+## nine (Config.THEME.surfaces, drawn by tools/build_ui_textures.gd), tinted only for a state.
+## And the lettering is cut too: titles, names and buttons in Cinzel's inscriptional capitals
+## (Chinese in Noto Serif SC), running text in Alegreya Sans.
 
 static var _theme: Theme = null
 static var _fonts: Dictionary = {}
@@ -42,7 +46,7 @@ static func tokens() -> Dictionary:
 static func color(key: String) -> Color:
 	return tokens().get("colors", {}).get(key, Color.MAGENTA)
 
-## How a material is tinted where it is used (Config.THEME.tints).
+## How a material is tinted for a state (Config.THEME.tints).
 static func tint(key: String) -> Color:
 	return tokens().get("tints", {}).get(key, Color.WHITE)
 
@@ -67,6 +71,10 @@ static func width(key: String) -> int:
 static func thickness(key: String) -> int:
 	return int(tokens().get("thickness", {}).get(key, 8))
 
+## Extra pixels between letters for a kind of capitals (Config.THEME.letter_spacing).
+static func letter_spacing(key: String) -> int:
+	return int(tokens().get("letter_spacing", {}).get(key, 0))
+
 ## A token that is one number: a duration, an alpha, a scale.
 static func number(key: String) -> float:
 	return float(tokens().get(key, 0.0))
@@ -74,16 +82,15 @@ static func number(key: String) -> float:
 static func toast_seconds(key: String) -> float:
 	return float(tokens().get("toast_seconds", {}).get(key, 3.0))
 
-## How far in from a hide's edge what it holds begins -- a card's name, its price row, a
-## toast's line: inside its stitches, and clear of them.
+## How far in from a hide's edge what it holds begins -- a card's name, its price row: inside
+## its stitches, and clear of them.
 static func card_inset() -> Vector2i:
 	var stitch: int = int(tokens().get("surfaces", {}).get("hide", {}).get("stitch", 0))
 	return Vector2i(stitch + space("s"), stitch + space("xs"))
 
-## How far in from a plank's end a button's word begins: past the rawhide lashed round it.
-static func plank_clear() -> int:
-	var lash: Vector2 = tokens().get("surfaces", {}).get("plank", {}).get("lash", Vector2.ZERO)
-	return int(ceil(lash.x + lash.y)) + space("xs")
+## How wide a trough's bone cap is at each end: a bar's pigment runs between them.
+static func bar_cap() -> int:
+	return int(tokens().get("surfaces", {}).get("trough", {}).get("cap", 0))
 
 ## Green, amber or red for a share of hit points left -- one reading of the thresholds for
 ## every bar in the game, so the cabin and a stake mean the same thing by amber.
@@ -106,39 +113,70 @@ static func health_bar(ratio: float) -> StringName:
 # Fonts and icons
 # ==============================================================================
 
-## A weight of the interface face -- "regular", "medium", "semibold", "bold", "black" --
-## with Chinese falling back to the player's own system UI face at the same weight.
-## `tabular` gives every digit one width, so a count going 9 -> 10 -> 11 does not shuffle
-## everything beside it sideways (UI-POLISH T7). `spacing` sets the letters that many pixels
-## further apart: a title's.
+## A weight of the running-text face (Config.THEME.text_fonts: Alegreya Sans) -- "regular",
+## "medium", "semibold", "bold", "black" -- with Chinese falling back to the player's own system
+## UI face at the same weight. Its figures are lining, and `tabular` gives every digit one
+## width, so a count going 9 -> 10 -> 11 does not shuffle everything beside it sideways
+## (UI-POLISH T7). `spacing` sets the letters that many pixels further apart.
 static func font(weight: String = "regular", tabular: bool = false, spacing: int = 0) -> Font:
-	var key: String = "%s/%s/%d" % [weight, tabular, spacing]
+	var key: String = "text/%s/%s/%d" % [weight, tabular, spacing]
 	if _fonts.has(key):
 		return _fonts[key]
-	var wght: int = int(tokens().get("weights", {}).get(weight, 400))
 	var f := FontVariation.new()
-	var base: Font = _base_font()
-	f.base_font = base
-	if base is FontFile:
-		f.variation_opentype = {"wght": wght}
+	f.base_font = _face(String(tokens().get("text_fonts", {}).get(weight, "")))
+	var features: Dictionary = {"lnum": 1}
 	if tabular:
-		f.opentype_features = {"tnum": 1}
+		features["tnum"] = 1
+	f.opentype_features = features
 	if spacing != 0:
 		f.spacing_glyph = spacing
-	var cjk := SystemFont.new()
-	cjk.font_names = PackedStringArray(tokens().get("fallback_fonts", []))
-	cjk.font_weight = wght
-	f.fallbacks = [cjk]
+	f.fallbacks = [_system_face(weight)]
 	_fonts[key] = f
 	return f
 
-static func _base_font() -> Font:
-	if _fonts.has("_base"):
-		return _fonts["_base"]
-	var path: String = String(tokens().get("font", ""))
-	var base: Font = load(path) as Font if (path != "" and ResourceLoader.exists(path)) else ThemeDB.fallback_font
-	_fonts["_base"] = base
-	return base
+## The face titles, names and buttons are cut in (Config.THEME.display_font: Cinzel, whose
+## lowercase is small capitals), at a weight and set `spacing` pixels wider. Chinese falls back
+## to the cut Noto Serif SC at the same weight, then -- for a character the cut lacks -- to the
+## player's own system face.
+static func display_font(weight: String = "semibold", spacing: int = 0) -> Font:
+	var key: String = "display/%s/%d" % [weight, spacing]
+	if _fonts.has(key):
+		return _fonts[key]
+	var wght: int = _weight(weight)
+	var f := FontVariation.new()
+	f.base_font = _face(String(tokens().get("display_font", "")))
+	f.variation_opentype = {"wght": wght}
+	if spacing != 0:
+		f.spacing_glyph = spacing
+	var cjk := FontVariation.new()
+	cjk.base_font = _face(String(tokens().get("display_cjk_font", "")))
+	cjk.variation_opentype = {"wght": wght}
+	f.fallbacks = [cjk, _system_face(weight)]
+	_fonts[key] = f
+	return f
+
+static func _weight(weight: String) -> int:
+	return int(tokens().get("weights", {}).get(weight, 400))
+
+## A bundled face by path, loaded once; the engine's own where it is missing.
+static func _face(path: String) -> Font:
+	var key: String = "face:" + path
+	if _fonts.has(key):
+		return _fonts[key]
+	var face: Font = load(path) as Font if (path != "" and ResourceLoader.exists(path)) else ThemeDB.fallback_font
+	_fonts[key] = face
+	return face
+
+## The player's own system UI face for Chinese, at a weight (Config.THEME.fallback_fonts).
+static func _system_face(weight: String) -> SystemFont:
+	var key: String = "system/" + weight
+	if _fonts.has(key):
+		return _fonts[key]
+	var cjk := SystemFont.new()
+	cjk.font_names = PackedStringArray(tokens().get("fallback_fonts", []))
+	cjk.font_weight = _weight(weight)
+	_fonts[key] = cjk
+	return cjk
 
 ## An icon by name (Config.ICON_DIR/<name>.svg), or null when there is none. They are
 ## DPITextures, drawn from the vector at whatever scale the screen needs.
@@ -178,7 +216,7 @@ static func frost_material(tint_alpha: float = -1.0) -> ShaderMaterial:
 
 ## A material (Config.THEME.surfaces) cut into nine and tiled to fit, tinted `tinted` -- a
 ## key of Config.THEME.tints, or a colour -- with `margin_h`, `margin_v` of room inside it for
-## what it holds. Its shadow reaches past the rect it is drawn behind ("pad"), so the slab's
+## what it holds. Its shadow reaches past the rect it is drawn behind ("pad"), so the frame's
 ## own edge is the control's edge. Until its image has been imported, a flat box stands in.
 static func surface(name: String, tinted: Variant, margin_h: int, margin_v: int) -> StyleBox:
 	var spec: Dictionary = tokens().get("surfaces", {}).get(name, {})
@@ -198,8 +236,8 @@ static func surface(name: String, tinted: Variant, margin_h: int, margin_v: int)
 	b.expand_margin_right = pad
 	b.expand_margin_top = pad
 	b.expand_margin_bottom = pad
-	# Tiled, each run fitted to a whole number of repeats, so a side's wander and stitches
-	# meet the corner piece where they left it. A plank's grain is stretched top to bottom.
+	# Tiled, each run fitted to a whole number of repeats, so a rim meets the corner piece
+	# where it left it. What is stretched top to bottom instead says so ("tile_v").
 	b.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
 	b.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT if bool(spec.get("tile_v", true)) \
 		else StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
@@ -248,64 +286,68 @@ static func build() -> Theme:
 	t.set_constant("outline_size", "Label", 0)
 	# Text standing on the world rather than on a panel needs an edge, or it vanishes on
 	# the pale bits of the valley floor.
-	_label(t, "HudLabel", "semibold", "label", color("text"), 6)
-	_label(t, "MutedLabel", "regular", "small", color("text_muted"))
-	_label(t, "CaptionLabel", "medium", "caption", color("text_faint"))
-	_label(t, "HeadingLabel", "semibold", "heading", color("text"))
-	_title(t, "TitleLabel", "black", "title", "title")
-	_title(t, "DisplayLabel", "black", "display", "display", false, 8)
-	_title(t, "StatLabel", "black", "title", "", true)
-	_label(t, "NumberLabel", "semibold", "label", color("text"), 0, true)
-	_label(t, "SmallNumberLabel", "semibold", "small", color("text"), 0, true)
-	_label(t, "AccentLabel", "bold", "small", color("accent"))
-	_label(t, "TechLabel", "semibold", "small", color("tech"))
-	_label(t, "LeadLabel", "regular", "body", color("text_muted"))
-	_label(t, "ShortNumberLabel", "semibold", "small", color("danger_text"), 0, true)
+	_label(t, "HudLabel", font("bold"), "label", color("text"), 6)
+	_label(t, "MutedLabel", font("regular"), "small", color("text_muted"))
+	_label(t, "CaptionLabel", font("medium"), "caption", color("text_faint"))
+	_label(t, "LeadLabel", font("regular"), "body", color("text_muted"))
+	_label(t, "NumberLabel", font("bold", true), "label", color("text"))
+	_label(t, "SmallNumberLabel", font("bold", true), "small", color("text"))
+	_label(t, "ShortNumberLabel", font("bold", true), "small", color("danger_text"))
+	_label(t, "AccentLabel", font("bold"), "small", color("accent"))
+	# Cut in capitals: a heading, a small capital label naming a card (the beacon's), a title,
+	# the verdict, a figure on the results.
+	_label(t, "HeadingLabel", display_font("bold", letter_spacing("heading")), "heading", color("text"))
+	_label(t, "TechLabel", display_font("bold", letter_spacing("button")), "small", color("tech"))
+	_title(t, "TitleLabel", display_font("black", letter_spacing("title")), "title")
+	_title(t, "DisplayLabel", display_font("black", letter_spacing("display")), "display", 8)
+	_title(t, "StatLabel", display_font("black"), "title")
 	# The same figures on a pale hide -- a card's price and time -- in ink.
-	_label(t, "CardNumberLabel", "semibold", "small", color("ink"), 0, true)
-	_label(t, "CardShortLabel", "bold", "small", color("ink_short"), 0, true)
-	_label(t, "CardCaptionLabel", "medium", "caption", color("ink_faint"))
+	_label(t, "CardNumberLabel", font("bold", true), "small", color("ink"))
+	_label(t, "CardShortLabel", font("black", true), "small", color("ink_short"))
+	_label(t, "CardCaptionLabel", font("medium"), "caption", color("ink_faint"))
 
-	# --- Panels: stone, and a hollow cut in it ----------------------------------------
-	var stone := surface("stone", "stone", space("l"), space("m"))
-	t.set_stylebox("panel", "PanelContainer", stone)
-	t.set_stylebox("panel", "Panel", stone)
-	_panel(t, "HudPanel", stone)
-	# The top row's slabs: slim, they sit over the world.
-	_panel(t, "PillPanel", surface("stone", "stone", space("m") + space("xs"), space("xs") + space("hair")))
+	# --- Panels: leather framed in bone, and the ship's slate in steel -------------------
+	var frame := surface("frame", "plain", space("l") + space("xs"), space("l"))
+	t.set_stylebox("panel", "PanelContainer", frame)
+	t.set_stylebox("panel", "Panel", frame)
+	_panel(t, "HudPanel", frame)
+	# The top row's slim plates: they sit over the world.
+	_panel(t, "PillPanel", surface("plate", "plain", space("m") + space("xs"), space("xs") + space("hair")))
 	_panel(t, "CardPanel", surface("hide", "hide", inset.x, inset.y))
-	# Round a portrait or a bench's icon: a hollow in the stone it sits in.
-	_panel(t, "InsetPanel", surface("groove", "groove", space("s"), space("xs")))
-	_panel(t, "InsetTechPanel", surface("groove", "groove_tech", space("s"), space("xs")))
-	# A toast is dark leather, and quiet: news, not an alarm. A raid is the same hide bloodied.
-	_panel(t, "ToastPanel", surface("hide", "leather", inset.x + space("xs"), inset.y))
-	_panel(t, "BannerPanel", surface("hide", "blood", space("xl"), inset.y))
-	_panel(t, "TechPanel", surface("stone", "slate", space("l"), space("m")))
-	_panel(t, "ModalPanel", surface("stone", "stone", space("xl"), space("xl")))
-	_panel(t, "SolidPanel", surface("stone", "stone", space("l"), space("m")))
-	# The verdict: the ship's slate for a jump home, stone gone red for a fall -- and its icon
-	# and its word differ too, so it is never told by colour alone.
-	_panel(t, "VictoryPanel", surface("stone", "won", space("xl"), space("xl")))
-	_panel(t, "DefeatPanel", surface("stone", "lost", space("xl"), space("xl")))
+	# Round a portrait or a bench's icon: a socket sunk in the leather.
+	_panel(t, "InsetPanel", surface("socket", "plain", space("s"), space("s")))
+	_panel(t, "InsetTechPanel", surface("socket_tech", "plain", space("s"), space("s")))
+	# A toast is a stroke of ink -- news, not an alarm; a raid is the same in red ochre. Their
+	# words sit inside the stroke's ragged ends.
+	var brush_h: int = int(tokens().get("surfaces", {}).get("brush", {}).get("margin", Vector2i.ZERO).x)
+	_panel(t, "ToastPanel", surface("brush", "plain", brush_h, space("s") + space("xs")))
+	_panel(t, "BannerPanel", surface("brush_blood", "plain", brush_h, space("s") + space("xs")))
+	_panel(t, "TechPanel", surface("frame_tech", "plain", space("l") + space("xs"), space("l")))
+	_panel(t, "ModalPanel", surface("frame", "plain", space("xl") + space("s"), space("xl")))
+	_panel(t, "SolidPanel", frame)
+	# The verdict: the ship's slate for a jump home, the leather gone red for a fall -- and its
+	# icon and its word differ too, so it is never told by colour alone.
+	_panel(t, "VictoryPanel", surface("frame_tech", "plain", space("xl") + space("s"), space("xl")))
+	_panel(t, "DefeatPanel", surface("frame", "lost", space("xl") + space("s"), space("xl")))
 	# The beacon's stages, one pip each: lit when it stands repaired.
 	for pair in [["PipOn", color("tech")], ["PipOff", Color(color("text_faint"), 0.45)]]:
 		t.set_type_variation(pair[0], "Panel")
 		t.set_stylebox("panel", pair[0], _box(pair[1], clear, 0, 3, 0, 0))
 	# Paused with the menu shut: a frame round the whole screen.
-	var frame := _box(clear, Color(color("accent"), 0.55), 4, 0, 0, 0)
-	frame.draw_center = false
+	var screen := _box(clear, Color(color("accent"), 0.55), 4, 0, 0, 0)
+	screen.draw_center = false
 	t.set_type_variation("ScreenFrame", "Panel")
-	t.set_stylebox("panel", "ScreenFrame", frame)
+	t.set_stylebox("panel", "ScreenFrame", screen)
 
-	# --- Buttons: planks, lashed at each end --------------------------------------------
-	# A button's word starts past the lashing; pressed, it sinks a pixel.
-	var lash: int = plank_clear()
-	var v: int = space("s")
+	# --- Buttons: leather in a rim of bone, studded at each end ------------------------
+	# Its word is cut in capitals and sits clear of the studs; pressed, it sinks a pixel.
+	var bh: int = space("l") + space("xs")
+	var bv: int = space("s")
 	_buttons(t, "Button",
-		surface("plank", "plank", lash, v), surface("plank", "plank_hover", lash, v),
-		_sunk(surface("plank", "plank_down", lash, v)), surface("plank", "plank_off", lash, v),
+		surface("button", "plain", bh, bv), surface("button", "hover", bh, bv),
+		_sunk(surface("button", "down", bh, bv)), surface("button", "off", bh, bv),
 		color("text"), color("text"), color("accent"), color("text_faint"))
-	t.set_font("font", "Button", font("semibold"))
+	t.set_font("font", "Button", display_font("bold", letter_spacing("button")))
 	t.set_font_size("font_size", "Button", font_size("label"))
 	t.set_constant("h_separation", "Button", space("s"))
 	t.set_constant("icon_max_width", "Button", icon_size("m"))
@@ -314,23 +356,24 @@ static func build() -> Theme:
 	focus.set_expand_margin_all(float(space("hair")))
 	t.set_stylebox("focus", "Button", focus)
 
-	# The one thing to press: resume, restart, launch -- a plank painted ochre.
+	# The one thing to press: resume, restart, launch -- painted ochre.
 	t.set_type_variation("AccentButton", "Button")
 	_buttons(t, "AccentButton",
-		surface("plank", "ochre", lash, v), surface("plank", "ochre_hover", lash, v),
-		_sunk(surface("plank", "ochre_down", lash, v)), surface("plank", "ochre_off", lash, v),
+		surface("button_accent", "plain", bh, bv), surface("button_accent", "hover", bh, bv),
+		_sunk(surface("button_accent", "down", bh, bv)), surface("button_accent", "off", bh, bv),
 		color("accent_text"), color("accent_text"), color("accent_text"), Color(color("accent_text"), 0.6))
-	t.set_font("font", "AccentButton", font("bold"))
+	t.set_font("font", "AccentButton", display_font("black", letter_spacing("button")))
 
-	# Something that cannot be undone: red words on a plain plank, reddening under the
-	# cursor -- not a red slab.
+	# Something that cannot be undone: red words on plain leather, reddening under the cursor
+	# -- not a red slab.
 	t.set_type_variation("DangerButton", "Button")
 	_buttons(t, "DangerButton",
-		surface("plank", "plank", lash, v), surface("plank", "rust", lash, v),
-		_sunk(surface("plank", "rust_down", lash, v)), surface("plank", "plank_off", lash, v),
+		surface("button", "plain", bh, bv), surface("button", "rust", bh, bv),
+		_sunk(surface("button", "rust_down", bh, bv)), surface("button", "off", bh, bv),
 		color("danger_text"), color("text"), color("text"), color("text_faint"))
 
-	# Chrome on the HUD itself -- pause, menu -- is cut into the stone only under the cursor.
+	# Chrome on the HUD itself -- pause, menu -- is pressed into the leather only under the
+	# cursor.
 	var bare := StyleBoxEmpty.new()
 	bare.content_margin_left = space("s")
 	bare.content_margin_right = space("s")
@@ -342,14 +385,14 @@ static func build() -> Theme:
 		_sunk(surface("groove", "groove", space("s"), space("xs"))), bare,
 		color("text"), color("text"), color("accent"), color("text_faint"))
 
-	# One of a set, where the chosen one stays cut in and lit: the game speed, the benches.
+	# One of a set, where the chosen one sits sunk in its socket and lit: the game speed, the
+	# benches.
 	t.set_type_variation("SegmentButton", "Button")
 	_buttons(t, "SegmentButton",
 		bare, surface("groove", "groove_faint", space("s"), space("xs")),
-		surface("groove", "groove", space("s"), space("xs")), bare,
+		surface("socket", "plain", space("xs"), space("xs")), bare,
 		color("text_muted"), color("text"), color("accent"), color("text_faint"))
 	t.set_color("font_hover_pressed_color", "SegmentButton", color("accent"))
-	t.set_font("font", "SegmentButton", font("bold", true))
 
 	# A command card entry: a hide tag, its name up top and its price along the bottom
 	# (the extra bottom margin is where the price row sits), in ink.
@@ -362,7 +405,9 @@ static func build() -> Theme:
 		cards.append(b)
 	_buttons(t, "CardButton", cards[0], cards[1], _sunk(cards[2]), cards[3],
 		color("ink"), color("ink"), color("ink_accent"), color("ink_muted"))
-	# A tag is narrow: its name is set at the body size, where a command's is a label.
+	# A tag is narrow, and Cinzel's capitals are wide: its name is written in the running face,
+	# bold, at the body size -- a name inked on a tag, where a command's is cut.
+	t.set_font("font", "CardButton", font("bold"))
 	t.set_font_size("font_size", "CardButton", font_size("body"))
 	# Its icon is the thing itself, in its own colours: not inked.
 	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
@@ -375,14 +420,14 @@ static func build() -> Theme:
 		t.set_stylebox(state, "OptionButton", b)
 		t.set_stylebox(state + "_mirrored", "OptionButton", b)
 	t.set_stylebox("focus", "OptionButton", focus)
-	# Its arrow sits inside the lashing, like its word.
-	t.set_constant("arrow_margin", "OptionButton", lash)
+	# Its arrow sits clear of the stud at its end, like its word.
+	t.set_constant("arrow_margin", "OptionButton", bh)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color", "font_focus_color"]:
 		t.set_color(c, "OptionButton", t.get_color(c, "Button"))
 	t.set_font("font", "OptionButton", font("medium"))
 	t.set_font_size("font_size", "OptionButton", font_size("body"))
-	# A dropdown's list is a slab too; its entries sit clear of its chipped edge.
-	t.set_stylebox("panel", "PopupMenu", surface("stone", "stone", space("s"), space("s")))
+	# A dropdown's list is a plate of leather; its entries sit clear of the rim.
+	t.set_stylebox("panel", "PopupMenu", surface("plate", "plain", space("s"), space("s")))
 	t.set_stylebox("hover", "PopupMenu", surface("groove", "groove", space("s"), space("xs")))
 	t.set_color("font_color", "PopupMenu", color("text"))
 	t.set_color("font_hover_color", "PopupMenu", color("accent"))
@@ -390,11 +435,11 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "PopupMenu", font_size("body"))
 	t.set_constant("v_separation", "PopupMenu", space("s"))
 
-	# --- Bars: a groove, and pigment in it -----------------------------------------
-	var trough := surface("groove", "groove", 0, 0)
+	# --- Bars: a trough capped with bone, and pigment between the caps -----------------
+	var trough := surface("trough", "plain", 0, 0)
 	t.set_stylebox("background", "ProgressBar", trough)
 	t.set_stylebox("fill", "ProgressBar", _pigment("paint", color("success")))
-	t.set_font("font", "ProgressBar", font("semibold", true))
+	t.set_font("font", "ProgressBar", font("bold", true))
 	t.set_font_size("font_size", "ProgressBar", font_size("caption"))
 	t.set_color("font_color", "ProgressBar", color("text"))
 	for pair in [["HealthBar", color("success")], ["WarnBar", color("warning")], ["DangerBar", color("danger")],
@@ -407,16 +452,13 @@ static func build() -> Theme:
 	t.set_stylebox("background", "BuildBar", trough)
 	t.set_stylebox("fill", "BuildBar", _pigment("hatch", color("warning")))
 
-	# --- Lines and tooltips ------------------------------------------------------
-	# A line cut in the stone: its shadowed side, then its lit lip.
-	var line := StyleBoxFlat.new()
-	line.bg_color = Color(color("bg"), 0.85)
-	line.border_color = Color(color("text"), 0.14)
-	line.border_width_bottom = bw
-	line.content_margin_top = bw
-	line.content_margin_bottom = bw
-	t.set_stylebox("separator", "HSeparator", line)
+	# --- Rules and tooltips --------------------------------------------------------
+	# A rule of bone across a panel; under a title, with the tooth at its middle.
+	t.set_stylebox("separator", "HSeparator", _rule(false))
 	t.set_constant("separation", "HSeparator", space("s"))
+	t.set_type_variation("TitleRule", "HSeparator")
+	t.set_stylebox("separator", "TitleRule", _rule(true))
+	t.set_constant("separation", "TitleRule", space("m"))
 	var vline := StyleBoxFlat.new()
 	vline.bg_color = Color(color("bg"), 0.85)
 	vline.border_color = Color(color("text"), 0.14)
@@ -461,40 +503,50 @@ static func _sunk(box: StyleBox) -> StyleBox:
 	box.content_margin_bottom -= 1
 	return box
 
-## A bar's fill: pigment of `col`, sitting inside the groove's walls (Config.THEME.fill_inset)
-## rather than over them.
+## A bar's fill: pigment of `col`, laid in the trough between its bone caps and inside its
+## walls (Config.THEME.fill_inset). The caps are the fill's own margins, taken back in by its
+## expand margins, so an empty bar draws nothing and a full one runs cap to cap.
 static func _pigment(name: String, col: Color) -> StyleBox:
-	var b: StyleBox = surface(name, col, 0, 0)
+	var b: StyleBox = surface(name, col, bar_cap(), 0)
 	var sink: float = float(tokens().get("fill_inset", 0))
 	if b is StyleBoxTexture:
+		(b as StyleBoxTexture).expand_margin_left = -float(bar_cap())
+		(b as StyleBoxTexture).expand_margin_right = -float(bar_cap())
 		(b as StyleBoxTexture).expand_margin_top = -sink
 		(b as StyleBoxTexture).expand_margin_bottom = -sink
 	return b
 
-static func _label(t: Theme, name: String, weight: String, size_key: String, col: Color, outline: int = 0, tabular: bool = false) -> void:
+## A rule across a panel, with the tooth at its middle if `ornamented`.
+static func _rule(ornamented: bool) -> StyleBox:
+	var r := UiRule.new()
+	var spec: Dictionary = tokens().get("surfaces", {}).get("rule", {})
+	r.line = surface("rule", "plain", 0, 0)
+	r.line_height = float(Vector2i(spec.get("size", Vector2i.ZERO)).y)
+	var tall: float = r.line_height
+	if ornamented:
+		r.ornament = surface_texture("ornament")
+		if r.ornament:
+			tall = maxf(tall, r.ornament.get_size().y)
+	r.content_margin_top = ceilf(tall * 0.5)
+	r.content_margin_bottom = ceilf(tall * 0.5)
+	return r
+
+static func _label(t: Theme, name: String, face: Font, size_key: String, col: Color, outline: int = 0) -> void:
 	t.set_type_variation(name, "Label")
-	t.set_font("font", name, font(weight, tabular))
+	t.set_font("font", name, face)
 	t.set_font_size("font_size", name, font_size(size_key))
 	t.set_color("font_color", name, col)
 	if outline > 0:
 		t.set_constant("outline_size", name, outline)
 		t.set_color("font_outline_color", name, Color(color("bg"), 0.85))
 
-## A title: set wide (Config.THEME.title_spacing[`spacing_key`]) and standing proud of the
-## stone on a shadow (title_shadow).
-static func _title(t: Theme, name: String, weight: String, size_key: String, spacing_key: String, tabular: bool = false, outline: int = 0) -> void:
-	var spacing: int = int(tokens().get("title_spacing", {}).get(spacing_key, 0))
-	t.set_type_variation(name, "Label")
-	t.set_font("font", name, font(weight, tabular, spacing))
-	t.set_font_size("font_size", name, font_size(size_key))
-	t.set_color("font_color", name, color("text"))
+## A title: cut in capitals and standing proud of the leather on a shadow (title_shadow).
+static func _title(t: Theme, name: String, face: Font, size_key: String, outline: int = 0) -> void:
+	_label(t, name, face, size_key, color("text"), outline)
 	var drop: Vector2i = tokens().get("title_shadow", Vector2i.ZERO)
 	t.set_color("font_shadow_color", name, color("shadow"))
 	t.set_constant("shadow_offset_x", name, drop.x)
 	t.set_constant("shadow_offset_y", name, drop.y)
-	if outline > 0:
-		t.set_constant("outline_size", name, outline)
-		t.set_color("font_outline_color", name, Color(color("bg"), 0.85))
 
 static func _panel(t: Theme, name: String, box: StyleBox) -> void:
 	t.set_type_variation(name, "PanelContainer")

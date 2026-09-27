@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://4s3g40fjfwtj"
+path="res://.godot/imported/button_accent.png-923c79a455d3126aa7e8416637bd1f32.image"
+
+[deps]
+
+source_file="res://assets/ui/button_accent.png"
+dest_files=["res://.godot/imported/button_accent.png-923c79a455d3126aa7e8416637bd1f32.image"]
+
+[params]
+

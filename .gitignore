@@ -31,6 +31,11 @@ version.json
 # belong in history -- regenerate them instead.
 screenshots/
 
+# Whole faces the shipped ones are cut from (tools/subset_fonts.py): 25 MB of Chinese for
+# the few hundred characters the game says. The cut is in assets/fonts; the source says
+# where to get it again.
+tools/font_sources/
+
 # Python bytecode from running the tools/ generators
 __pycache__/
 *.pyc

@@ -999,18 +999,34 @@ const HERO: Dictionary = {
 ## Type and spacing each come in a fixed ladder -- one step apart, never a size between --
 ## which is most of what makes a set of panels look like they belong together.
 const THEME: Dictionary = {
-	# Inter (SIL OFL, assets/fonts): a face drawn for screens, with digits that can all be
-	# made one width. Chinese -- and anything else Inter has no glyph for -- falls back to
-	# the player's own system UI face, first in this list that is installed. The Noto Sans SC
-	# variable font is 18 MB; bundling a subset of it waits on a subsetting tool.
-	# This is Blender's build of Inter, which draws "-" (U+002D) a digit wide -- a minus that
-	# lines up in a column of numbers. A hyphen joining two words is written U+2010 instead
-	# (test_v06_the_interface checks the strings), or "Right-click" opens into "Right - click".
-	"font": "res://assets/fonts/Inter.woff2",
+	# The interface's faces (v0.6 feedback: "字体也需要改，需要有优秀游戏的质感"; all three SIL OFL,
+	# their licences beside them in assets/fonts).
+	# Titles, names and every button are cut in Cinzel: Roman inscriptional capitals, the
+	# lettering of monuments -- carved, as the rest of this interface is made by hand. Its
+	# lowercase is small capitals, so a name reads as an inscription whatever its case. Chinese
+	# in the same places is Noto Serif SC (思源宋体), the serif that stands beside it, cut down to
+	# the characters the game says (tools/subset_fonts.py; test_v06_the_faces checks every
+	# string is covered).
+	"display_font": "res://assets/fonts/Cinzel.ttf",
+	"display_cjk_font": "res://assets/fonts/NotoSerifSC-Title.ttf",
+	# Running text is Alegreya Sans: drawn with a pen's warmth where Inter was a screen's, with
+	# lining figures that can all be set one width. It comes a file per weight; the semibold
+	# step is its bold.
+	"text_fonts": {"regular": "res://assets/fonts/AlegreyaSans-Regular.ttf",
+		"medium": "res://assets/fonts/AlegreyaSans-Medium.ttf",
+		"semibold": "res://assets/fonts/AlegreyaSans-Bold.ttf",
+		"bold": "res://assets/fonts/AlegreyaSans-Bold.ttf",
+		"black": "res://assets/fonts/AlegreyaSans-ExtraBold.ttf"},
+	# Chinese running text -- and anything no face above has -- falls back to the player's own
+	# system UI face, first in this list that is installed.
 	"fallback_fonts": ["Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
 		"Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei"],
+	# The weight steps, for the faces that vary along an axis (Cinzel 400-900, the cut Noto
+	# Serif SC 600-900) and for the system face.
 	"weights": {"regular": 430, "medium": 530, "semibold": 620, "bold": 720, "black": 860},
-	"font_sizes": {"caption": 13, "small": 15, "body": 17, "label": 19, "heading": 23, "title": 32, "display": 52},
+	# Alegreya's letters are smaller for their size than Inter's were, and Cinzel's capitals
+	# larger: running text a step up, titles a step down.
+	"font_sizes": {"caption": 14, "small": 16, "body": 18, "label": 19, "heading": 22, "title": 30, "display": 48},
 	# "hair" is the gap inside one thing -- between a speed's segments, a stage's pips.
 	"spacing": {"hair": 2, "xs": 4, "s": 8, "m": 12, "l": 16, "xl": 24},
 	# The corner of what is still a flat box: a focus ring, a box standing in for a material
@@ -1048,36 +1064,27 @@ const THEME: Dictionary = {
 		"shadow": Color(0.0, 0.0, 0.0, 0.45),
 		"scrim": Color(0.035, 0.028, 0.02, 0.62),
 	},
-	# How each material is tinted where it is used (UiTheme.surface). The textures are drawn
-	# light and near their natural colour, so a tint darkens them to what they are here; a
-	# channel above 1 lightens it.
+	# How a material is tinted for a state (UiTheme.surface). The materials are drawn in their
+	# own colours; a tint lights them under the cursor, presses them, dims what cannot be
+	# pressed -- a channel above 1 lightens.
 	"tints": {
-		"stone": Color(0.3, 0.28, 0.25),        # every panel: dark enough for bone text
-		"slate": Color(0.24, 0.29, 0.32),       # the beacon's card: the ship's things are cold
-		"plank": Color(0.45, 0.385, 0.33),
-		"plank_hover": Color(0.54, 0.46, 0.39),
-		"plank_down": Color(0.36, 0.3, 0.26),
-		"plank_off": Color(0.36, 0.33, 0.3, 0.6),
-		"ochre": Color(1.0, 0.77, 0.42),        # the one thing to press: a plank painted
-		"ochre_hover": Color(1.1, 0.86, 0.5),
-		"ochre_down": Color(0.85, 0.64, 0.34),
-		"ochre_off": Color(0.7, 0.58, 0.44, 0.5),
-		"rust": Color(0.62, 0.31, 0.27),        # a thing that cannot be undone, under the cursor
-		"rust_down": Color(0.5, 0.24, 0.2),
-		"hide": Color(0.98, 0.96, 0.92),        # a card, a tooltip: pale, for ink
+		"plain": Color(1.0, 1.0, 1.0),
+		"hover": Color(1.16, 1.12, 1.08),        # under the cursor: the rim and the leather catch more light
+		"down": Color(0.84, 0.82, 0.8),          # pressed in
+		"off": Color(0.78, 0.76, 0.74, 0.6),     # cannot be pressed: dimmed, the world showing through
+		"rust": Color(1.3, 0.78, 0.72),          # a thing that cannot be undone, under the cursor
+		"rust_down": Color(1.05, 0.62, 0.58),
+		"lost": Color(1.15, 0.72, 0.66),         # the verdict on a fall: the leather gone red
+		"hide": Color(0.98, 0.96, 0.92),         # a card, a tooltip: pale, for ink
 		"hide_hover": Color(1.06, 1.04, 1.0),
 		"hide_down": Color(0.9, 0.85, 0.78),
-		"hide_off": Color(0.8, 0.76, 0.72),     # one that cannot be taken yet: duller, still read
-		"leather": Color(0.34, 0.29, 0.25),     # a toast: dark, for bone text, and quiet
-		"blood": Color(0.58, 0.25, 0.2),        # a raid coming
-		"groove": Color(0.15, 0.13, 0.115),     # a bar's trough, a portrait's frame, a chosen tab
-		"groove_faint": Color(0.15, 0.13, 0.115, 0.55),   # the same, under the cursor only
-		"groove_tech": Color(0.12, 0.17, 0.2),
-		"won": Color(0.24, 0.29, 0.32),         # the verdict on the ship's own slate
-		"lost": Color(0.38, 0.22, 0.19),        # or on stone gone red
+		"hide_off": Color(0.8, 0.76, 0.72),      # one that cannot be taken yet: duller, still read
+		"groove": Color(0.15, 0.13, 0.115),      # bare chrome, pressed
+		"groove_faint": Color(0.15, 0.13, 0.115, 0.55),   # and under the cursor
 	},
-	# Titles stand proud of the stone: set wider than running text, with a shadow under them.
-	"title_spacing": {"title": 1, "display": 3},
+	# Capitals are set wider than running text -- an inscription is spaced -- and titles stand
+	# proud of the leather on a shadow. Extra pixels between letters, by kind.
+	"letter_spacing": {"button": 1, "heading": 1, "title": 2, "display": 4},
 	"title_shadow": Vector2i(0, 2),
 	# A health bar says how bad it is by length, colour and -- below the low mark -- by
 	# pulsing, so a player who cannot tell amber from green still sees the cabin is dying
@@ -1108,7 +1115,7 @@ const THEME: Dictionary = {
 	# How thick a bar is drawn, and a pip -- a short dash, so the stages read as one row. A
 	# bar is a groove with pigment in it: "fill_inset" is the groove's wall showing above and
 	# below the pigment.
-	"thickness": {"bar": 11, "pip": 6},
+	"thickness": {"bar": 12, "pip": 6},
 	"fill_inset": 2,
 	# Motion. A card pops in over this long, from this much of its size -- a nudge, not a
 	# zoom; the command card fades in from this much when it changes to another unit.
@@ -1128,30 +1135,52 @@ const THEME: Dictionary = {
 	# account, the launch).
 	"toast_seconds": {"glance": 2.5, "read": 4.0, "long": 6.0},
 
-	# The interface's materials (v0.6 feedback: "远古时代质感的菜单界面，状态栏"): a slab of stone
-	# for every panel, a plank lashed with rawhide for every button, a stitched hide for every
-	# card, toast and tooltip, a groove cut in the stone under a bar or a chosen tab, pigment to
-	# fill a bar and hatching for work under way. tools/build_ui_textures.gd draws them to
-	# these numbers and UiTheme cuts each into nine and tiles it. Sizes are design pixels:
-	# "margin" is where it is cut (the chipped edge, the lashing, the stitches live there and
-	# are never stretched), "pad" how far its shadow reaches past what it is drawn behind.
-	# Drawn at "surface_scale" times their size: crisp at 1440p, where the stretch is 2x.
+	# The interface's materials (v0.6 feedback: "远古时代质感的菜单界面，状态栏", then "还是没到优
+	# 秀游戏的质感"): framed, as the good ones are -- dark tanned leather in a rim of bone, a
+	# knuckle of it pegged at each corner, for every panel; the ship's own things slate in steel
+	# with a line of cyan light; a button leather in a thinner rim, the one thing to press
+	# painted ochre; a socket sunk in the leather for a portrait and the chosen tab; a stroke of
+	# ink for a toast, of red ochre for a raid; a trough capped with bone with pigment in it for
+	# a bar; a rule with a tooth of bone under a title; a stitched hide for a card and a tooltip.
+	# tools/build_ui_textures.gd draws them to these numbers and UiTheme cuts each into nine and
+	# tiles it. Sizes are design pixels: "margin" is where it is cut (the rim, the knuckles, a
+	# brush's ragged ends live there and are never stretched), "pad" how far its shadow reaches
+	# past what it is drawn behind. Drawn at "surface_scale" times their size: crisp at 1440p,
+	# where the stretch is 2x.
 	"surface_scale": 2,
 	"surfaces": {
-		"stone": {"image": "res://assets/ui/stone.png", "size": Vector2i(256, 256), "margin": Vector2i(24, 24), "pad": 6},
-		# A plank's grain runs its length and is stretched, not repeated, top to bottom
-		# ("tile_v"); "lash" is where its rawhide band sits in from each end and how far
-		# either side -- a button's word starts past it.
-		"plank": {"image": "res://assets/ui/plank.png", "size": Vector2i(208, 48), "margin": Vector2i(34, 12), "pad": 4,
-			"tile_v": false, "lash": Vector2(16.0, 4.5)},
+		"frame": {"image": "res://assets/ui/frame.png", "size": Vector2i(256, 256), "margin": Vector2i(28, 28), "pad": 8},
+		"frame_tech": {"image": "res://assets/ui/frame_tech.png", "size": Vector2i(256, 256), "margin": Vector2i(28, 28), "pad": 8},
+		# The top row's slim frames, over the world.
+		"plate": {"image": "res://assets/ui/plate.png", "size": Vector2i(96, 48), "margin": Vector2i(16, 16), "pad": 6},
+		# A button is stretched top to bottom, not tiled ("tile_v"): the stud at each end stays one.
+		"button": {"image": "res://assets/ui/button.png", "size": Vector2i(160, 44), "margin": Vector2i(14, 14), "pad": 4,
+			"tile_v": false},
+		"button_accent": {"image": "res://assets/ui/button_accent.png", "size": Vector2i(160, 44), "margin": Vector2i(14, 14), "pad": 4,
+			"tile_v": false},
+		"socket": {"image": "res://assets/ui/socket.png", "size": Vector2i(56, 56), "margin": Vector2i(16, 16), "pad": 2},
+		"socket_tech": {"image": "res://assets/ui/socket_tech.png", "size": Vector2i(56, 56), "margin": Vector2i(16, 16), "pad": 2},
 		# "stitch": how far in from its edge a hide is sewn -- what it holds sits inside that.
 		"hide": {"image": "res://assets/ui/hide.png", "size": Vector2i(192, 192), "margin": Vector2i(24, 24), "pad": 6,
 			"stitch": 7},
+		# A brush stroke's grain runs its length and is stretched, not repeated, top to bottom
+		# ("tile_v"), to the height of the lines on it.
+		"brush": {"image": "res://assets/ui/brush.png", "size": Vector2i(256, 40), "margin": Vector2i(40, 0), "pad": 0,
+			"tile_v": false},
+		"brush_blood": {"image": "res://assets/ui/brush_blood.png", "size": Vector2i(256, 40), "margin": Vector2i(40, 0), "pad": 0,
+			"tile_v": false},
+		# "cap": how wide each bone cap on a trough's ends is -- the pigment runs between them.
+		"trough": {"image": "res://assets/ui/trough.png", "size": Vector2i(48, 12), "margin": Vector2i(6, 0), "pad": 0,
+			"tile_v": false, "cap": 4},
+		"paint": {"image": "res://assets/ui/paint.png", "size": Vector2i(48, 12), "margin": Vector2i(4, 0), "pad": 0,
+			"tile_v": false},
+		"hatch": {"image": "res://assets/ui/hatch.png", "size": Vector2i(48, 12), "margin": Vector2i(4, 0), "pad": 0,
+			"tile_v": false},
 		"groove": {"image": "res://assets/ui/groove.png", "size": Vector2i(48, 48), "margin": Vector2i(10, 10), "pad": 0},
-		"paint": {"image": "res://assets/ui/paint.png", "size": Vector2i(60, 12), "margin": Vector2i(6, 0), "pad": 0,
+		"rule": {"image": "res://assets/ui/rule.png", "size": Vector2i(160, 6), "margin": Vector2i(56, 0), "pad": 0,
 			"tile_v": false},
-		"hatch": {"image": "res://assets/ui/hatch.png", "size": Vector2i(60, 12), "margin": Vector2i(6, 0), "pad": 0,
-			"tile_v": false},
+		# Drawn whole, at a rule's middle -- not cut into nine.
+		"ornament": {"image": "res://assets/ui/ornament.png", "size": Vector2i(24, 12), "margin": Vector2i(0, 0), "pad": 0},
 	},
 }
 

@@ -1,6 +1,6 @@
 # res://tests/test_v06_the_interface.gd
-# UI-POLISH: the interface drawn as one thing -- one theme from Config.THEME's tokens, our own
-# face with Chinese falling back to the system's, an icon for everything the player meets --
+# UI-POLISH: the interface drawn as one thing -- one theme from Config.THEME's tokens (its faces
+# are test_v06_the_faces', its materials test_v06_the_frames'), an icon for everything the player meets --
 # and the two screens it is read on most: the command card in the corner, and the cabin.
 #
 # Everything expected is read from Config or from the theme built from it.
@@ -81,21 +81,6 @@ func test_01_the_interface_is_one_theme_built_from_the_tokens() -> void:
 	assert_eq(theme.get_font_size("font_size", "HeadingLabel"), int(tokens["font_sizes"]["heading"]),
 		"A heading is the ladder's heading step")
 
-func test_02_the_face_is_ours_and_chinese_falls_back_to_the_system() -> void:
-	var font: Font = UiTheme.font("regular")
-	assert_true(font is FontVariation, "Each weight is a variation of the one face")
-	if not (font is FontVariation):
-		return
-	var base: Font = (font as FontVariation).base_font
-	assert_eq(base.resource_path, String(config_node.THEME["font"]), "The face is the bundled one, not the engine's")
-	assert_ne(base, ThemeDB.fallback_font, "Not the engine's default face")
-	assert_true(base.has_char("W".unicode_at(0)), "It has the Latin letters")
-	var fallbacks: Array = (font as FontVariation).fallbacks
-	assert_gt(fallbacks.size(), 0, "Chinese has somewhere to fall back to")
-	if fallbacks.size() > 0 and fallbacks[0] is SystemFont:
-		assert_eq(Array((fallbacks[0] as SystemFont).font_names), Array(config_node.THEME["fallback_fonts"]),
-			"The system faces named in Config, in its order")
-
 func test_03_everything_the_player_meets_has_an_icon() -> void:
 	var names: Array[String] = []
 	for res_id in config_node.RESOURCES:
@@ -119,24 +104,6 @@ func test_04_no_text_is_sized_by_hand() -> void:
 		assert_gt(src.length(), 0, "%s is there to read" % path)
 		assert_false(src.contains("add_theme_font_size_override"), "%s sizes no text by hand" % path)
 		assert_false(src.contains("StyleBoxFlat.new()"), "%s styles no panel by hand" % path)
-
-func test_05_a_hyphen_between_two_words_is_u2010() -> void:
-	# The bundled face draws U+002D a digit wide -- a minus for columns of numbers (Config.THEME
-	# "font"). Between two letters it opens a gap, so a word-joining hyphen is U+2010.
-	var file := FileAccess.open("res://translations/strings.csv", FileAccess.READ)
-	assert_not_null(file, "The strings are there to read")
-	if file == null:
-		return
-	var joined := RegEx.create_from_string("\\p{L}-\\p{L}")
-	var rows: int = 0
-	while not file.eof_reached():
-		var row: PackedStringArray = file.get_csv_line()
-		if row.size() < 2:
-			continue
-		rows += 1
-		for i in range(1, row.size()):
-			assert_null(joined.search(row[i]), "%s: no ASCII hyphen between two letters ('%s')" % [row[0], row[i]])
-	assert_gt(rows, 1, "Every string was read")
 
 # ==============================================================================
 # 2. The command card

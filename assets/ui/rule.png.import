@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://lhl1vy72de8u"
+path="res://.godot/imported/rule.png-18e71009a094d5f3629eee138d0669b7.image"
+
+[deps]
+
+source_file="res://assets/ui/rule.png"
+dest_files=["res://.godot/imported/rule.png-18e71009a094d5f3629eee138d0669b7.image"]
+
+[params]
+

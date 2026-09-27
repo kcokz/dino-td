@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://5y1rq31a082q"
+path="res://.godot/imported/ornament.png-7f5479fda41155dedf9cb2be6d2775b0.image"
+
+[deps]
+
+source_file="res://assets/ui/ornament.png"
+dest_files=["res://.godot/imported/ornament.png-7f5479fda41155dedf9cb2be6d2775b0.image"]
+
+[params]
+

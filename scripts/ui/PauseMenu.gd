@@ -199,6 +199,7 @@ func _ensure_components() -> void:
 		page_vbox.add_child(title_label)
 		var rule := HSeparator.new()
 		rule.name = "TitleRule"
+		rule.theme_type_variation = &"TitleRule"   # the rule under a title carries the tooth
 		page_vbox.add_child(rule)
 
 	resume_btn = _make_button(resume_btn, "ResumeBtn", _on_resume_pressed, &"AccentButton", "play")

@@ -163,14 +163,29 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 
 ## 4. Interface: Type, Icons & Shaders
 
-### Inter (`assets/fonts/Inter.woff2`)
-- **Asset Name**: Inter, variable (weights 100-900), in Blender's build
-- **Source**: copied from a Blender installation (`datafiles/fonts/Inter.woff2`); upstream https://github.com/rsms/inter
-- **Author**: The Inter Project Authors (Rasmus Andersson et al.)
-- **License**: SIL Open Font License 1.1 -- full text in `assets/fonts/Inter-OFL.txt`, which ships beside the font. No Reserved Font Name is declared. OFL fonts may be bundled with commercial software; the font may not be sold on its own.
-- **Date Added**: 2026-09-26
-- **Note**: Blender's build draws U+002D (hyphen-minus) a digit wide, so that negative numbers line up; word-joining hyphens in `translations/strings.csv` are U+2010 (see `Config.THEME`).
-- **Usage**: The interface's face (`Config.THEME.font`). Chinese falls back to the player's installed system UI face (`Config.THEME.fallback_fonts`); no CJK font is bundled.
+### Cinzel (`assets/fonts/Cinzel.ttf`)
+- **Asset Name**: Cinzel, variable (weights 400-900) -- Roman inscriptional capitals, its lowercase small capitals
+- **Source**: https://github.com/google/fonts/tree/main/ofl/cinzel (`Cinzel[wght].ttf`, 125,468 bytes), downloaded with the user's approval
+- **Author**: The Cinzel Project Authors (Natanael Gama); https://github.com/NDISCOVER/Cinzel
+- **License**: SIL Open Font License 1.1 -- full text in `assets/fonts/Cinzel-OFL.txt`, beside the font. No Reserved Font Name is declared. OFL fonts may be bundled with commercial software; the font may not be sold on its own.
+- **Date Added**: 2026-09-27
+- **Usage**: Titles, names, headings and every button (`Config.THEME.display_font`, `UiTheme.display_font`).
+
+### Alegreya Sans (`assets/fonts/AlegreyaSans-{Regular,Medium,Bold,ExtraBold}.ttf`)
+- **Asset Name**: Alegreya Sans, four weights -- a humanist sans with lining and tabular figures
+- **Source**: https://github.com/google/fonts/tree/main/ofl/alegreyasans, downloaded with the user's approval
+- **Author**: The Alegreya Sans Project Authors (Huerta Tipográfica); https://github.com/huertatipografica/Alegreya-Sans
+- **License**: SIL Open Font License 1.1 -- full text in `assets/fonts/AlegreyaSans-OFL.txt`, beside the fonts.
+- **Date Added**: 2026-09-27
+- **Usage**: Running text, counts and card names (`Config.THEME.text_fonts`, `UiTheme.font`). Chinese running text falls back to the player's installed system UI face (`Config.THEME.fallback_fonts`).
+
+### Noto Serif SC, cut down (`assets/fonts/NotoSerifSC-Title.ttf`)
+- **Asset Name**: Noto Serif SC (思源宋体), its weight axis narrowed to 600-900 and its characters cut down to those the game's strings use (about four hundred), 339 KB
+- **Source**: https://github.com/google/fonts/tree/main/ofl/notoserifsc (`NotoSerifSC[wght].ttf`, 25 MB), downloaded with the user's approval; cut by `tools/subset_fonts.py` (fontTools). The whole face stays out of the repository (`tools/font_sources/`, git-ignored).
+- **Author**: Google Inc. (the Noto CJK / Source Han project, with Adobe)
+- **License**: SIL Open Font License 1.1 -- full text in `assets/fonts/NotoSerifSC-OFL.txt`, beside the font. A cut of an OFL font is a Modified Version under the licence; it keeps the licence and makes no use of a Reserved Font Name.
+- **Date Added**: 2026-09-27
+- **Usage**: Chinese in titles, names and buttons, behind Cinzel (`Config.THEME.display_cjk_font`).
 
 ### Interface Icons (`assets/icons/*.svg`)
 - **Asset Name**: Resource, building, unit, bench and command icons
@@ -188,8 +203,8 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Date Added**: 2026-09-26
 - **Usage**: `cabin/room` and `station/<id>` in `Config.VISUALS`; parts shown by `scripts/fx/CabinArt.gd`.
 
-### Interface Materials (`assets/ui/{stone,plank,hide,groove,paint,hatch}.png`)
-- **Asset Name**: The interface's surfaces -- a chipped stone slab, a plank lashed with rawhide, a stitched hide, a groove cut in stone, a stroke of pigment and the same stroke hatched
+### Interface Materials (`assets/ui/*.png`)
+- **Asset Name**: The interface's surfaces -- leather framed in bone with knuckles at its corners, the ship's slate framed in steel, a plate, a studded button and a painted one, sunk sockets, brush strokes in ink and red ochre, a trough capped with bone, pigment and hatched pigment, a groove, a rule and its ornament, a stitched hide
 - **Source**: `tools/build_ui_textures.gd` (drawn by rule: tiling gradient noise, a crack field measured round a torus, and light worked out from each pixel's distance to the outline; every surface drawn to tile)
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
