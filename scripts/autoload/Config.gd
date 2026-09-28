@@ -1788,6 +1788,10 @@ const CAMERA: Dictionary = {
 	# zoomed out crawls and panning while zoomed in flings.
 	"pan_speed": 18.0,
 	"drag_pan": 0.015,
+	# The cursor at the window's edge pans the view that way, at the pan keys' speed (v0.6 round
+	# three: "鼠标放到边界应该可以移动视角类似方向arrow"): within this many pixels of an edge. A
+	# sliver, so the buttons along the top strip are clicked without the view drifting.
+	"edge_pan_margin": 6.0,
 	# Degrees per second on a held key, and degrees per pixel dragged.
 	"rotate_speed": 110.0,
 	"tilt_speed": 55.0,

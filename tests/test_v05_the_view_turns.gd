@@ -296,3 +296,34 @@ func test_14_the_camera_never_ends_up_inside_the_valley_wall() -> void:
 			float(t["outskirts_half"]), t, TerrainBuilder.ground_noise(config_node))
 		assert_gte(c.y - ground, clearance - 0.001,
 			"Facing %d degrees, the camera is above the ground rather than in it" % int(yaw))
+
+# ==============================================================================
+# 8. The edge of the window moves it (v0.6 round three)
+# ==============================================================================
+
+func test_15_the_cursor_at_the_edge_of_the_window_pans_the_view() -> void:
+	# "鼠标放到边界应该可以移动视角类似方向arrow". Within a sliver of an edge (CAMERA.edge_pan_margin)
+	# the view pans that way, as the keys pan it; anywhere else, or off the window, it does not.
+	var rig := _rig()
+	var size := Vector2(1280.0, 720.0)
+	var m: float = float(config_node.CAMERA["edge_pan_margin"])
+	assert_gt(m, 0.0, "There is an edge to push against")
+	assert_eq(rig.edge_direction(Vector2(m * 0.5, 360.0), size), Vector2(-1.0, 0.0), "At the left edge: left")
+	assert_eq(rig.edge_direction(Vector2(size.x - m * 0.5, 360.0), size), Vector2(1.0, 0.0), "At the right: right")
+	assert_eq(rig.edge_direction(Vector2(640.0, m * 0.5), size), Vector2(0.0, 1.0), "At the top: up the screen")
+	assert_eq(rig.edge_direction(Vector2(640.0, size.y - m * 0.5), size), Vector2(0.0, -1.0), "At the bottom: down it")
+	assert_eq(rig.edge_direction(Vector2(m * 0.5, m * 0.5), size), Vector2(-1.0, 1.0), "In a corner: both ways")
+	assert_eq(rig.edge_direction(Vector2(640.0, 360.0), size), Vector2.ZERO, "In the middle: still")
+	assert_eq(rig.edge_direction(Vector2(m * 2.0, 360.0), size), Vector2.ZERO, "Clear of the edge: still")
+	assert_eq(rig.edge_direction(Vector2(-5.0, 360.0), size), Vector2.ZERO, "Off the window: still")
+	# Pushed at an edge, it moves as far as the key for that way would.
+	var by_edge := _rig()
+	by_edge.pan_keys(by_edge.edge_direction(Vector2(m * 0.5, 360.0), size), 0.5)
+	var by_key := _rig()
+	by_key.pan_keys(Vector2(-1.0, 0.0), 0.5)
+	assert_true(by_edge.focus.is_equal_approx(by_key.focus), "At the keys' speed")
+	# A level the cursor has not come over -- a headless run, a window opened under another --
+	# waits for it before any edge counts.
+	var main = _level()
+	await wait_frames(2)
+	assert_false(main._mouse_in_window, "Until the cursor comes over the window, no edge counts")

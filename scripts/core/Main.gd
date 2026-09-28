@@ -2090,6 +2090,17 @@ func set_ui_scale(p_scale: float) -> void:
 
 ## The keys that can be HELD: panning, turning and tilting all want to be smooth, so
 ## they are read every frame rather than waiting for a key event to repeat.
+## Whether the cursor is over the window (the engine's mouse-enter and -exit): edge panning waits
+## for it, so a cursor that left by an edge -- or never came, as in a headless run -- does not
+## drift the view.
+var _mouse_in_window: bool = false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_MOUSE_ENTER:
+		_mouse_in_window = true
+	elif what == NOTIFICATION_WM_MOUSE_EXIT:
+		_mouse_in_window = false
+
 func _handle_camera_keys(delta: float) -> void:
 	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
@@ -2105,6 +2116,11 @@ func _handle_camera_keys(delta: float) -> void:
 		pan_vec.y += 1.0
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
 		pan_vec.y -= 1.0
+	# The cursor at the window's edge, as the arrow keys (CameraRig.edge_direction) -- only while
+	# it is over the window and the window has the focus.
+	if _mouse_in_window and DisplayServer.window_is_focused():
+		var vp := get_viewport()
+		pan_vec += camera_rig.edge_direction(vp.get_mouse_position(), vp.get_visible_rect().size)
 	camera_rig.pan_keys(pan_vec, delta)
 
 	var turn: float = 0.0

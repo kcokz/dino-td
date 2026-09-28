@@ -160,6 +160,24 @@ func pan_keys(direction: Vector2, delta: float) -> void:
 		return
 	pan(direction.normalized(), _num("pan_speed", 18.0) * _zoom_scale() * delta)
 
+## Which way the cursor at `at`, in a view `size` big, pans the view: towards any edge it is
+## within CAMERA.edge_pan_margin pixels of -- x to the right, y up the screen, as pan_keys takes
+## it -- or not at all, off the view or clear of its edges.
+func edge_direction(at: Vector2, size: Vector2) -> Vector2:
+	var margin: float = _num("edge_pan_margin", 6.0)
+	if margin <= 0.0 or not Rect2(Vector2.ZERO, size).has_point(at):
+		return Vector2.ZERO
+	var dir := Vector2.ZERO
+	if at.x < margin:
+		dir.x -= 1.0
+	elif at.x >= size.x - margin:
+		dir.x += 1.0
+	if at.y < margin:
+		dir.y += 1.0
+	elif at.y >= size.y - margin:
+		dir.y -= 1.0
+	return dir
+
 ## Dragging the view under the cursor, in metres per pixel at the opening distance.
 func pan_drag(pixels: Vector2) -> void:
 	pan(Vector2(-pixels.x, pixels.y), _num("drag_pan", 0.015) * _zoom_scale())
