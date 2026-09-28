@@ -73,6 +73,8 @@ signal day_part_changed(part: String, day: int)
 signal nest_found(nest: Node)
 ## A raider whose hours are over is back at its nest and gone (Dino.go_home): not killed.
 signal dino_went_home(dino: Node)
+## An animal twitched, and this is the report on it (TwitchWatch): for whatever keeps reports.
+signal twitch_detected(record: Dictionary)
 
 # ==============================================================================
 # 5. Dinosaur Combat Signals

@@ -112,6 +112,14 @@ var run_stats: RunStats = null
 
 ## The fog of war over the field (FogOfWar, GAME-DESIGN 9.3), laid afresh for each run.
 var fog: FogOfWar = null
+## Watching every animal for a twitch, and writing each one up (TwitchWatch).
+var twitch_watch: TwitchWatch = null
+
+func _ensure_twitch_watch() -> void:
+	if twitch_watch == null or not is_instance_valid(twitch_watch):
+		twitch_watch = TwitchWatch.new()
+		twitch_watch.name = "TwitchWatch"
+		add_child(twitch_watch)
 
 func _ensure_fog() -> void:
 	if fog == null or not is_instance_valid(fog):
@@ -334,6 +342,7 @@ func setup_level() -> void:
 	spawn_resource_nodes()
 	scatter_opening_stock()
 	_ensure_fog()
+	_ensure_twitch_watch()
 	if hero and is_instance_valid(hero):
 		hero.continuous_mode = true
 	if wave_manager and is_instance_valid(wave_manager):

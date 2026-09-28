@@ -777,11 +777,16 @@ func _move_body(motion: Vector3) -> void:
 		left = hit.get_remainder().slide(normal.normalized())
 		left.y = 0.0
 
-## The solver's safe version of `wanted`: steered round the others (the engine's RVO).
+## The solver's safe version of `wanted`: steered round the others (the engine's RVO) -- and no
+## faster than `wanted`. At the agent's full speed the solver shoved an ambling guard past its spot
+## at twice its pace, and it turned about to come back, its head swinging five times in a second
+## and a half (found by the twitch watch, v0.6 round four). Now it steers round the others at the
+## pace it asked for; standing, it is not shoved at all, and they go round it.
 func _avoid(wanted: Vector3) -> Vector3:
 	if not _agent.is_valid():
 		return wanted
 	NavigationServer3D.agent_set_position(_agent, global_position)
+	NavigationServer3D.agent_set_max_speed(_agent, maxf(0.01, wanted.length()))
 	NavigationServer3D.agent_set_velocity(_agent, wanted)
 	_requests += 1
 	if _requests - _answered > 1:
@@ -818,6 +823,9 @@ func _face_now(point: Vector3) -> void:
 ## and take hold on alternate frames.
 func _hold_and_bite(delta: float) -> void:
 	velocity = Vector3.ZERO
+	# Standing, and the solver told so: it went on steering the others round the way it was walking
+	# when it stopped, for as long as it bit.
+	_avoid(Vector3.ZERO)
 	if not _is_target_valid(current_target):
 		_let_go()
 		return
@@ -1650,6 +1658,69 @@ func _nav_maps() -> Node:
 	if not is_inside_tree():
 		return null
 	return get_tree().get_first_node_in_group(NavMaps.GROUP)
+
+# ==============================================================================
+# What it is doing and why, for a report (TwitchWatch)
+# ==============================================================================
+
+## Its mind, what it is going for and where it means to stand, its route and how far along it is,
+## and what is holding it -- what a report on it says (TwitchWatch), in plain values for JSON.
+func debug_state() -> Dictionary:
+	var target: Node = current_target if is_instance_valid(current_target) else null
+	var route: Array = []
+	for i in range(mini(_route.size(), 12)):
+		route.append(_xz(_route[i]))
+	return {
+		"id": get_instance_id(),
+		"name": String(name),
+		"species": dino_type,
+		"pos": [snappedf(global_position.x, 0.01), snappedf(global_position.y, 0.01), snappedf(global_position.z, 0.01)],
+		"heading": snappedf(rad_to_deg(rotation.y), 0.1),
+		"velocity": _xz(velocity),
+		"safe_velocity": _xz(_safe_velocity),
+		"speed": snappedf(speed, 0.01),
+		"mode": String(Mode.keys()[mode]),
+		"state": String(State.keys()[current_state]),
+		"target": _describe(target),
+		"in_reach": target != null and _target_in_reach(target),
+		"slot": _xz(assigned_slot) if assigned_slot != Vector3.ZERO else null,
+		"waypoint": [current_waypoint_index, waypoints.size()],
+		"route": route,
+		"route_index": _route_index,
+		"nav_goal": _xz(_nav_goal) if _nav_goal != Vector3.INF else null,
+		"way_sealed": _way_sealed,
+		"blocked_by": _describe(_blocked_by),
+		"stubborn": _describe(_stubborn),
+		"stuck": _stuck_count,
+		"patience": snappedf(_patience, 0.01),
+		"going_home": going_home,
+		"pressed": {"building": _describe(_building_pressed_against()), "bodies": _bodies_pressed_against(),
+			"hero": _hero_pressed_against() != null},
+		"in_sight": visible,
+		"clip": String(animator.current_clip) if (animator != null and is_instance_valid(animator)) else "",
+		"pace": snappedf(float(animator.pace), 0.01) if (animator != null and is_instance_valid(animator)) else 0.0,
+	}
+
+## A thing as a report names it: what it is, where, and how far from this animal -- or null.
+func _describe(node: Variant) -> Variant:
+	if node == null or not is_instance_valid(node) or not (node is Node3D):
+		return null
+	var n := node as Node3D
+	var kind: String = n.get_class()
+	for group in ["hero", "core", "dinos", "buildings"]:
+		if n.is_in_group(group):
+			kind = group
+			break
+	var out: Dictionary = {"kind": kind, "id": n.get_instance_id(), "pos": _xz(n.global_position),
+		"dist": snappedf(_flat(n.global_position).distance_to(_flat(global_position)), 0.01)}
+	if "building_type" in n:
+		out["type"] = String(n.building_type)
+	elif "dino_type" in n:
+		out["type"] = String(n.dino_type)
+	return out
+
+static func _xz(v: Vector3) -> Array:
+	return [snappedf(v.x, 0.01), snappedf(v.z, 0.01)]
 
 # ==============================================================================
 # Resolvers

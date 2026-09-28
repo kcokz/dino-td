@@ -1714,6 +1714,9 @@ const NEST_GUARDS: Dictionary = {
 	"roam_seconds": Vector2(2.0, 4.0),   # 岗位上多久换一个溜达的点（秒，区间内随机）
 	"roam_min_distance": 0.5,            # 溜达点离岗位至少多远（米）
 	"roam_pace": 0.4,                    # 溜达时的速度（占全速的比例）
+	# 溜达到离那个点这么近就算到了（米）：溜达的点是随便挑的，被路过的同伴挤过头一点，不必掉头回去走最后
+	# 半米——抽搐监测抓到过一只守卫这样掉头 167°（v0.6 第四轮）。
+	"roam_reach": 0.8,
 	# 回到岗位后安静多久才会再去追人（秒）：刚被甩掉就马上又追，就是在警戒圈边上来回拉扯。
 	"reaggro_seconds": 1.5,
 	# 一只守卫去追人时叫一声，岗位离它的岗位这么近以内的守卫一起来（米）——就是同一个巢的：岗位在巢
@@ -1893,6 +1896,69 @@ const DAY: Dictionary = {
 ## The fog of war (FogOfWar, GAME-DESIGN 9.3; v0.6 round three: "游戏要加上战争迷雾，人不能一开始就知道
 ## 恐龙巢穴"; "先在现在这张图上做迷雾和找巢"): never seen is dark, seen but out of sight is the land
 ## dimmed with no animals on it, in sight is everything.
+## THE TWITCH WATCH (TwitchWatch; v0.6 round four: "我觉得你需要做一个恐龙抽搐detector，如果恐龙抽搐，它就
+## 立刻report一些debug 信息，这个在release的时候甚至可以作为telemetry"): what counts as a twitch, and
+## where a report goes. Every count is over game seconds, so it holds at any of the HUD's speeds.
+const TWITCH: Dictionary = {
+	# An animal's record is kept in buckets this long and judged as each closes: often enough to
+	# report a twitch while it is still on the screen, and no oftener than it thinks (DINO_AI).
+	"bucket": 0.25,
+	# The seconds a twitch is counted over: long enough to see it done again and again.
+	"window": 2.0,
+	# A leg or a swing is over once it has been still this long (seconds): turning one way,
+	# standing, and turning the other way seconds later is not a shake.
+	"settle": 0.3,
+	# JITTER: stepping back the way it came -- counted only after a leg long enough to see from the
+	# game camera, about two pixels -- this many times, and ending up no further than jitter_net
+	# from where the window began.
+	"leg_min": 0.03,
+	"jitter_flips": 4,
+	"jitter_net": 0.5,
+	# SHAKE: turning back against its own turning -- counted only after a swing of swing_min_deg --
+	# this many times, on the spot: walking no more than shake_path and getting no further than
+	# shake_net. The debug-agent's BUG-005 was swings of 48° to 135°, a few a second, in half a
+	# metre. One walking a route round a rock turns this way and that as well, and is not twitching.
+	"swing_min_deg": 15.0,
+	"shake_flips": 3,
+	"shake_path": 1.5,
+	"shake_net": 1.0,
+	# FLICKER: drawn walking, standing, walking -- this many changes back, not while it bites.
+	"flicker_flips": 4,
+	# DITHER: going for a thing, letting it go, going for it -- this many changes of mind back.
+	"dither_flips": 3,
+	# PUSH: asking to walk at push_speed or more, on average, for push_window seconds, walking no
+	# more than push_share of what it asked, and getting no further than push_net -- held, not
+	# pacing back and forth. Its own rules give up sooner: at a wall it has bitten it by
+	# DINO_AI.stuck_window x wall_patience, 3.6 s.
+	"push_window": 4.0,
+	"push_speed": 1.0,
+	"push_share": 0.25,
+	"push_net": 0.3,
+	# MILL: a raider walking mill_path metres in mill_window seconds, biting nothing and not after
+	# the Hero, and ending no further than mill_net from where it began: "转来转去" -- round and
+	# round, or pacing up and down, its legs mill_leg metres or more on average. One that walks as
+	# far in steps of a few centimetres back and forth is shaking on the spot, and that is JITTER.
+	"mill_window": 6.0,
+	"mill_path": 6.0,
+	"mill_net": 1.5,
+	"mill_leg": 1.0,
+	# Once reported, an animal is not reported for the same thing for this long; and a launch makes
+	# no more than max_reports, so a bad raid cannot fill a disk.
+	"cooldown": 8.0,
+	"max_reports": 200,
+	# Where reports go: a file of JSON lines for each launch, the newest keep_files kept.
+	"dir": "user://telemetry",
+	"keep_files": 20,
+	# What a report says of what was round it (metres), how many of its last frames, and how many
+	# of its last changes of clip and of mind.
+	"near": 3.0,
+	"frames": 30,
+	"changes": 8,
+	# A debug build marks the animal for mark_seconds, mark_above metres over its head.
+	"mark_seconds": 4.0,
+	"mark_above": 0.6,
+}
+
 const FOG: Dictionary = {
 	# Metres to a cell of it; metres of it round the field, over the foot of the valley's walls; the
 	# outer this-many metres of that fade out into the walls, which are scenery, not the field.
@@ -3429,6 +3495,14 @@ const ANIMATIONS: Dictionary = {
 	"still_speed": 0.15,
 	"moving_speed": 0.35,
 	"pace_smoothing": 10.0,       # how quickly the measured pace follows the feet, per second
+	# A new gait only when it fits the pace better than the one it is in by this much (as the log of
+	# the speeds' ratio: 0.2 is about a fifth): a pace just where a walk and a run meet, going up and
+	# down in a crowd, was drawn walk, run, walk, a few frames each.
+	"gait_hysteresis": 0.2,
+	# And once taken, a gait is kept at least this long (seconds) -- about what an animal takes to
+	# go from a walk to a run: two raiders going round the cabin's corner together, slowed and let
+	# go by turns, still went walk, run, walk, run twice a second.
+	"gait_hold": 1.0,
 	"pace_scale_range": Vector2(0.6, 1.8),
 	# Each walker's gaits: the clip, and the speed it is drawn at in metres a second at the
 	# size it is shown. The Hero is 1.2 m: his walk covers about a metre a second and his jog

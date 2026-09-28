@@ -198,7 +198,13 @@ func _process_post_roam(delta: float) -> void:
 		var angle: float = dice.randf() * TAU
 		var dist: float = dice.randf_range(float(roam.get("roam_min_distance", 0.5)), post_radius)
 		roam_target = post_position + Vector3(cos(angle) * dist, 0.0, sin(angle) * dist)
-	if _flat(global_position).distance_to(_flat(roam_target)) > _ai("target_desired_distance", 0.3):
+		# Somewhere it can stand: a spot picked inside a rock was walked to the rock's edge and
+		# stood at, turning this way and that (found by the twitch watch, v0.6 round four).
+		var maps := _nav_maps()
+		if maps != null and maps.is_ready():
+			var on_mesh: Vector3 = maps.closest_point(roam_target, _map_kind())
+			roam_target = Vector3(on_mesh.x, roam_target.y, on_mesh.z)
+	if _flat(global_position).distance_to(_flat(roam_target)) > float(_guards().get("roam_reach", 0.8)):
 		_travel(roam_target, delta, float(_guards().get("roam_pace", 0.4)))
 	else:
 		_drive(Vector3.ZERO, delta, Vector3.INF)
@@ -224,6 +230,7 @@ func _process_aggro_chase(delta: float) -> void:
 ## let go on alternate frames.
 func _process_guard_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
+	_avoid(Vector3.ZERO)
 	if not _is_threat_valid(chase_target):
 		_go_home()
 		return
@@ -344,6 +351,13 @@ func _is_threat_valid(threat: Variant) -> bool:
 func _guards() -> Dictionary:
 	var cfg = _get_config()
 	return cfg.NEST_GUARDS if (cfg and "NEST_GUARDS" in cfg) else {}
+
+## A guard's report says what a guard has in mind as well (TwitchWatch).
+func debug_state() -> Dictionary:
+	var s: Dictionary = super.debug_state()
+	s["guard"] = {"state": String(GuardState.keys()[guard_state]), "post": _xz(post_position),
+		"roam_target": _xz(roam_target), "chase": _describe(chase_target), "calm": snappedf(_calm, 0.01)}
+	return s
 
 ## The run's dice (GameState.rng), or a throwaway set outside a run.
 func _guard_dice() -> RandomNumberGenerator:

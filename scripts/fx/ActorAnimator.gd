@@ -26,6 +26,8 @@ var current_state_name: String = ""
 ## flicker between standing and walking on the line between them.
 var pace: float = 0.0
 var is_moving: bool = false
+## Seconds since the clip last changed: a gait is kept at least Config.ANIMATIONS.gait_hold.
+var _clip_since: float = 0.0
 
 func _ready() -> void:
 	if actor == null and get_parent() is Node3D:
@@ -96,6 +98,7 @@ func update_motion(speed: float, delta: float) -> void:
 	var anim := _animations()
 	var follow: float = clampf(float(anim.get("pace_smoothing", 10.0)) * maxf(0.0, delta), 0.0, 1.0)
 	pace = lerpf(pace, maxf(0.0, speed), follow)
+	_clip_since += maxf(0.0, delta)
 	var was_moving: bool = is_moving
 	if is_moving and pace < float(anim.get("still_speed", 0.15)):
 		is_moving = false
@@ -119,8 +122,12 @@ func _play_gait() -> void:
 	var best: String = _lookup_clip_for_state(current_state_name)
 	var drawn_at: float = 0.0
 	var best_miss: float = INF
+	var kept: String = ""
+	var kept_at: float = 0.0
+	var kept_miss: float = INF
 	for clip in gaits:
-		if _find_best_clip(String(clip)) == "":
+		var resolved: String = _find_best_clip(String(clip))
+		if resolved == "":
 			continue
 		var at: float = maxf(0.01, float(gaits[clip]))
 		var miss: float = absf(log(maxf(0.01, pace) / at))
@@ -128,6 +135,17 @@ func _play_gait() -> void:
 			best_miss = miss
 			best = String(clip)
 			drawn_at = at
+		if resolved == current_clip:
+			kept = String(clip)
+			kept_at = at
+			kept_miss = miss
+	# It keeps the gait it is in until another fits the pace better by a margin
+	# (Config.ANIMATIONS.gait_hysteresis): a raider slowed in a crowd to about where a walk and a run
+	# meet was drawn walking, running, walking, a few frames each (found by the twitch watch).
+	if kept != "" and kept != best and (best_miss > kept_miss - float(_animations().get("gait_hysteresis", 0.2))
+			or _clip_since < float(_animations().get("gait_hold", 0.5))):
+		best = kept
+		drawn_at = kept_at
 	if drawn_at > 0.0:
 		var span: Vector2 = _animations().get("pace_scale_range", Vector2(0.6, 1.8))
 		_set_pace_scale(clampf(pace / drawn_at, span.x, span.y))
@@ -148,6 +166,7 @@ func _play_resolved(wanted: String) -> void:
 	if current_clip == clip_to_play and animation_player.is_playing():
 		return
 	current_clip = clip_to_play
+	_clip_since = 0.0
 	_loop_if_it_should(clip_to_play, wanted)
 	animation_player.play(clip_to_play, _get_blend_time())
 

@@ -37,6 +37,8 @@ var _settings_backup: PackedByteArray = PackedByteArray()
 
 func _init() -> void:
 	_parse_arguments()
+	# A test's twitches go to its log ([TWITCH]), not into the player's telemetry (TwitchWatch).
+	TwitchWatch.to_file = false
 	_had_settings = FileAccess.file_exists(SETTINGS_PATH)
 	if _had_settings:
 		_settings_backup = FileAccess.get_file_as_bytes(SETTINGS_PATH)
@@ -173,6 +175,7 @@ func _run_all_tests() -> void:
 	print("Assertions Passed:   %d" % total_assertions_passed)
 	print("Assertions Failed:   %d" % total_assertions_failed)
 	print("Script Errors:       %d" % total_script_errors)
+	print("Twitches Reported:   %d" % TwitchWatch.reports_made)
 	print("Total Elapsed Time:  %d ms" % elapsed_all_ms)
 	print("============================================================")
 
