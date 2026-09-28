@@ -238,7 +238,9 @@ func _scenario_play(spec: String) -> void:
 		if _play_clock - last_status >= 20.0:
 			last_status = _play_clock
 			note.call(_play_status(hero, cabin, gs, wm))
-		if wm.is_wave_active or wm.final_wave or gs.is_beacon_launched():
+		# Launched, the valley answers after a grace (MAPS.beacon.launch_grace): he works through
+		# it like any quiet spell -- mending, building -- and shelters only once they are out.
+		if wm.is_wave_active or wm.final_wave:
 			if wm.final_wave and not shots_taken.has("final"):
 				shots_taken["final"] = true
 				await _shoot("final_wave")

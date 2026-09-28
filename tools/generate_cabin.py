@@ -59,6 +59,8 @@ SCREEN = (0.34, 0.84, 0.96)
 SCREEN_LINE = (0.70, 0.97, 1.00)
 OK_LIGHT = (0.40, 0.95, 0.45)
 ERROR_LIGHT = (0.98, 0.16, 0.10)
+AMBER_LIGHT = (1.00, 0.62, 0.14)
+ROPE = (0.36, 0.30, 0.16)
 
 
 # ==============================================================================
@@ -816,9 +818,66 @@ def module(seed):
         l0, l1 = pa.lerp(pd, t), pb.lerp(pc, t)
         fade.quad(l0, l1, l1 + Vector((0.0, 0.0, 0.015)), l0 + Vector((0.0, 0.0, 0.015)),
                   SOLAR_LINE, SOLAR_LINE, SOLAR_LINE, SOLAR_LINE)
+    # --- The beacon's mast on the roof, back up a stage at a time --------------------------------
+    # v0.6 round three: "每次信标修复一格，船舱的样式要看得出信标做出来了的部分，也有小的灯". The bench
+    # inside is where the work is done; this is what the valley sees of it. Named by the jobs, as
+    # the bench's parts are (CabinArt): before the first stage the antenna the crash bent over;
+    # then each stage is what it cost -- a pole lashed up (wood), a cairn and stays to hold it
+    # (stone), the dish on bone ribs with hide over them (stone and bone) -- each with a lamp of
+    # its own ("lamp_"), and at the launch the dish's throat alight. The mast fades with the roof
+    # while he is inside ("fade_"); the lamps, small, do not.
     mast = Vector((1.4, -0.3, roof_z - 0.02))
-    fade.tube([mast, mast + Vector((0.02, 0.0, 0.3)), mast + Vector((0.2, -0.06, 0.45))],
-              [0.035, 0.025, 0.018], [METAL_DARK, METAL, HAZARD], 6)
+    wreck, s1, s2, s3 = Builder(), Builder(), Builder(), Builder()
+    g1, g2, g3, g_launch = Builder(), Builder(), Builder(), Builder()
+    wreck.tube([mast, mast + Vector((0.02, 0.0, 0.3)), mast + Vector((0.2, -0.06, 0.45))],
+               [0.035, 0.025, 0.018], [METAL_DARK, METAL, HAZARD], 6)
+
+    def bulb(b, c, r, col):
+        b.tube([c - UP * r, c - UP * (r * 0.4), c + UP * (r * 0.4), c + UP * r], [0.002, r, r, 0.002],
+               [col, col, col, (1.0, 1.0, 1.0)], 8)
+
+    pole_top = mast + UP * 2.0
+    rod(s1, mast, pole_top, 0.045, BARK, col1=BARK_LIGHT)
+    # The bent antenna straightened and lashed along the pole.
+    s1.tube([mast + Vector((0.07, 0.0, 0.04)), mast + Vector((0.07, 0.0, 0.9))], [0.022, 0.016], [METAL_DARK, METAL], 6)
+    for z in (0.25, 0.7, 1.3, 1.8):
+        lashing(s1, mast + UP * z, UP, 0.052, rng)
+    # A lamp housing salvaged from the hull, at the top.
+    box(s1, pole_top + Vector((-0.055, -0.055, -0.03)), pole_top + Vector((0.055, 0.055, 0.035)), METAL_DARK)
+    bulb(g1, pole_top + UP * 0.09, 0.05, ERROR_LIGHT)
+
+    # Stage 2: stones round its foot on the roof, and two stays out to stones along the ridge.
+    for k in range(9):
+        a = math.tau * k / 9
+        _boulder(s2, mast + Vector((math.cos(a) * 0.24, math.sin(a) * 0.17, 0.04)), 0.07, rng, fresh=True)
+    for sx in (0.95, -0.95):
+        anchor = mast + Vector((sx, 0.05, 0.04))
+        _boulder(s2, anchor, 0.085, rng, fresh=True)
+        s2.tube([mast + UP * 1.55, anchor + UP * 0.07], [0.008, 0.008], [ROPE, ROPE], 4)
+    bulb(g2, mast + UP * 1.15 + Vector((-0.08, 0.0, 0.0)), 0.045, AMBER_LIGHT)
+
+    # Stage 3: the dish on bone ribs at the top, facing out over the valley.
+    hub = pole_top + UP * 0.12
+    face_dir = Vector((0.35, -0.55, 0.76)).normalized()
+    u = face_dir.cross(UP).normalized()
+    v = face_dir.cross(u).normalized()
+    ribs = 9
+    rim_pts = []
+    for k in range(ribs):
+        a = math.tau * k / ribs
+        d = u * math.cos(a) + v * math.sin(a)
+        mid = hub + d * 0.2 + face_dir * 0.07
+        tip = hub + d * 0.42 + face_dir * 0.24
+        s3.tube([hub, mid, tip], [0.016, 0.014, 0.011], [BONE, BONE, mix(BONE, (1.0, 1.0, 1.0), 0.2)], 5)
+        rim_pts.append(tip)
+    for k in range(ribs):
+        s3.tri(rim_pts[k], rim_pts[(k + 1) % ribs], hub + face_dir * 0.05, (0.55, 0.42, 0.28), (0.55, 0.42, 0.28), HIDE)
+    s3.tube([hub, hub + face_dir * 0.36], [0.013, 0.008], [BONE, BONE], 5)
+    bulb(g3, hub + face_dir * 0.4, 0.045, SCREEN)
+    # The launch: the dish's throat alight.
+    throat = hub + face_dir * 0.16
+    for k in range(3):
+        disc(g_launch, throat + face_dir * (0.012 * k), face_dir, 0.14 - 0.035 * k, SCREEN_LINE, 12, (1.0, 1.0, 1.0))
 
     # --- Inside: the deck, ribs, the lamp, what lies about -----------------------------------
     y_back, y_front = _wall_y(MOD_IN, 0.0, False), _wall_y(MOD_IN, 0.0, True)
@@ -871,7 +930,10 @@ def module(seed):
     ports = {"west": Vector((-3.5, 0.0, 1.0)), "east": Vector((3.5, 0.0, 1.0))}
     head, muzzle = _turret_head(1.0)
     parts = [("hull", hull), ("fade_shell", fade), ("fade_glass", fade_glass), ("glass", glass),
-             ("fade_lamp_glow", lamp), ("door", door)]
+             ("fade_lamp_glow", lamp), ("door", door),
+             ("fade_before_beacon_1", wreck), ("fade_beacon_1", s1), ("fade_beacon_2", s2), ("fade_beacon_3", s3),
+             ("lamp_beacon_1_glow", g1), ("lamp_beacon_2_glow", g2), ("lamp_beacon_3_glow", g3),
+             ("lamp_beacon_launch_glow", g_launch)]
     return parts, spots, {"ports": ports, "head": (head, pivot, muzzle)}
 
 

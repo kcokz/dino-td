@@ -738,6 +738,9 @@ const DINOS: Dictionary = {
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
+		# Not every one leaves both (v0.6 round three: "肉骨太多可以让死了的恐龙随机掉落解决" -- a
+		# run left twenty and thirty of each unused): each has this chance, under DROPS.pity_after.
+		"drop_chance": {"food": 0.5, "bone": 0.5},
 		"size": Vector3(0.8, 0.95, 0.8),
 	},
 	# The head of the pack (GAME-DESIGN 7.5): a bigger, older Coelophysis at the front of every
@@ -1051,7 +1054,13 @@ const MAPS: Dictionary = {
 		# raids, which keep growing (RAIDS.intensity_per_minute) -- and then charges for
 		# this long. Full charge is the jump. Three minutes: long enough to be the fight
 		# of the run, short enough that the stream below is the whole of it.
-		"charge_seconds": 180.0,
+		#
+		# v0.6 round three: "发送之后应该等等恐龙出现，人可以走出去继续建造，但要有明显的". The valley does not
+		# come at once: for `launch_grace` seconds after the launch the signal is out and nothing has
+		# answered it yet -- a countdown on the screen, no raids -- and he can go out and build. The
+		# charge runs from the launch, so it is the grace longer than the fight it holds.
+		"launch_grace": 40.0,
+		"charge_seconds": 210.0,
 		# The final wave: this many ordinary raids' worth, sized as a raid would be at the
 		# moment of launch -- so the longer the launch is put off, the harder the end --
 		# streamed out of the nest and every entry in turn with no gaps, over the first
@@ -1062,8 +1071,19 @@ const MAPS: Dictionary = {
 		# Two and a half since the towers became traps (v0.6 round two): ten improved set
 		# crossbows set into a ring hold seventy-five raptors at x1.5 streamed from every side,
 		# and fall to ninety -- where ten towers held ninety (tools/playtest.gd siege, WAVES).
-		"final_raids": 2.5,
+		#
+		# One and a half since v0.6 round three: three full games of this map by the playtest bot
+		# (tools/playtest.gd play:) -- a ring of fence and four set crossbows, as a first run builds --
+		# lost the final wave at 2.5 both hiding in the cabin and fighting; at 1.25 it jumped home
+		# with the cabin at 1 of 100. The first map is the first; the later ones can ask more.
+		"final_raids": 1.5,
 		"stream_share": 0.7,
+		# Each stage repaired is heard (v0.6 round three: "每次信标造成都会有一小波"): its hum carries down
+		# the valley, and a small raid comes of it -- this many, the first stage's first -- with its
+		# warning, `stage_wave_delay` seconds after the stage stands. It stands in for the next
+		# ordinary raid, which comes after it as after any.
+		"stage_waves": [2, 3, 4],
+		"stage_wave_delay": 22.0,
 	},
 	## Hills: ground nobody crosses and nothing is built on.
 	##
@@ -1095,6 +1115,11 @@ const MAPS: Dictionary = {
 		{"type": "wood", "cell": Vector2i(4, -2)},
 		{"type": "stone", "cell": Vector2i(-4, -6)},
 		{"type": "stone", "cell": Vector2i(4, -6)},
+		# The cabin's far side, away from the nest (v0.6 round three): stone that does not mean a
+		# fight with the guards every time, and a third tree. The two by the nest stay, nearer the
+		# stone's other uses and the danger.
+		{"type": "stone", "cell": Vector2i(-6, 3)},
+		{"type": "wood", "cell": Vector2i(6, 3)},
 		# At the field's west edge, where the river runs closest (TERRAIN.river): the
 		# spot the Hero draws water from. It was a pool in the middle of the field.
 		{"type": "water", "cell": Vector2i(-11, -4)}
@@ -1843,7 +1868,9 @@ const RESOURCE_NODES: Dictionary = {
 		"name": "RESOURCE_WOOD",
 		"icon": "tree",           # what the panel shows when one is picked (Config.ICON_DIR)
 		"capacity": 150,
-		"harvest_rate": 0.5,      # 0.5 wood/s by hand
+		# 0.75 wood/s by hand (v0.6 round three: "木头和石头太紧就影响建造的乐趣" -- it was 0.5, and
+		# a run spent its middle short of both, the ring falling for want of a stake).
+		"harvest_rate": 0.75,
 		"color": Color(0.35, 0.55, 0.25),
 		"depleted_color": Color(0.3, 0.3, 0.3),
 		# A tree stands taller than the Hero, which is how it reads as a tree rather
@@ -1861,7 +1888,7 @@ const RESOURCE_NODES: Dictionary = {
 		"name": "RESOURCE_STONE",
 		"icon": "stone",
 		"capacity": 100,
-		"harvest_rate": 0.35,     # 0.35 stone/s by hand
+		"harvest_rate": 0.5,      # 0.5 stone/s by hand (was 0.35; see wood)
 		# Bare hands do not cut rock. The pick is made at the cabin out of bone, and
 		# bone comes off a dinosaur -- which is what turns the first raid from a
 		# threat into something the player needs.
@@ -2101,6 +2128,10 @@ const DROPS: Dictionary = {
 	# 开局物资撒在船舱周围，而不是直接进仓库。撒多少是地图的内容（MAPS 里的
 	# opening_stock），怎么撒是这里的规则。
 	"opening_piles": 4,        # 分成几堆
+	# A chance drop (DINOS[..].drop_chance) is never missed more than this many times running, and
+	# the first of a run is never missed: chance may leave him more, never stuck (GAME-DESIGN 9.2,
+	# "随机只会带来富余，不会卡住人") -- the first raid's bone is the bone pick.
+	"pity_after": 1,
 	# 离船舱墙壁的距离（米）——从墙壁量，不是从中心量：船舱现在三米宽，从中心量 4.5 米，
 	# 南边那一堆离出生点只有一米半，现代人第一帧就捡走了，"开局物资要走过去拿"这一课就白教了。
 	# 对原来那个一米的舱体，这正好就是原来的 4.5 米。必须让每一堆都在出生点的拾取半径之外。
@@ -2218,6 +2249,13 @@ const CABIN: Dictionary = {
 		"beacon_3_glow": {"color": Color(0.4, 0.85, 0.95), "energy": 0.6, "range": 1.8, "flicker": 0.05, "speed": 3.0},
 		"before_beacon_3_glow": {"color": Color(1.0, 0.22, 0.12), "energy": 0.35, "range": 1.2, "flicker": 0.6, "speed": 1.5},
 		"beacon_launch_glow": {"color": Color(0.5, 0.9, 1.0), "energy": 2.2, "range": 4.0, "flicker": 0.4, "speed": 2.0},
+		# The roof mast's lamps (v0.6 round three: "也有小的灯"), one a stage: red, amber, the ship's
+		# cyan, blinking like a mast's warning lamps, each on its own beat ("blink" flashes a second,
+		# lit for "duty" of each); at the launch the dish's throat, bright and restless.
+		"lamp_beacon_1_glow": {"color": Color(1.0, 0.22, 0.12), "energy": 1.6, "range": 3.0, "blink": 0.75, "duty": 0.35},
+		"lamp_beacon_2_glow": {"color": Color(1.0, 0.62, 0.15), "energy": 1.4, "range": 3.0, "blink": 0.6, "duty": 0.35},
+		"lamp_beacon_3_glow": {"color": Color(0.4, 0.9, 1.0), "energy": 1.6, "range": 3.5, "blink": 0.5, "duty": 0.5},
+		"lamp_beacon_launch_glow": {"color": Color(0.6, 0.95, 1.0), "energy": 3.0, "range": 7.0, "flicker": 0.5, "speed": 3.0},
 	},
 }
 

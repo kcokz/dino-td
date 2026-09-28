@@ -235,10 +235,16 @@ func test_12_launching_sets_out_one_wave_streamed_over_the_charge_with_the_boss_
 		return
 	var started = watch_signal(event_bus_node, "wave_started")
 	_launch(bench)
+	# Not at once (v0.6 round three): the valley answers after the grace, counted down.
+	var grace: float = float(_beacon()["launch_grace"])
+	assert_false(wm.final_wave, "Launched, the valley has not answered yet")
+	assert_almost_eq(float(game_state_node.final_wave_in), grace, 0.001, "and the time till it does is counted")
+	wm._process(grace + 0.1)
 	assert_true(wm.final_wave, "The final wave is under way")
+	assert_eq(float(game_state_node.final_wave_in), -1.0, "and nothing is counted down any more")
 	assert_eq(started.emit_count, 1, "As one wave")
 	assert_eq(String(wm.wave_roster.back()), String(_map()["boss"]), "The map's boss last of all")
-	var stream: float = float(_beacon()["charge_seconds"]) * float(_beacon()["stream_share"])
+	var stream: float = (float(_beacon()["charge_seconds"]) - grace) * float(_beacon()["stream_share"])
 	assert_almost_eq(wm.spawn_timer.wait_time * float(wm.dinos_to_spawn), stream, stream * 0.01,
 		"Stepping out one after another over the stream's share of the charge")
 
@@ -376,9 +382,11 @@ func test_20_a_new_run_starts_with_the_beacon_broken() -> void:
 	for i in range(_jobs().size()):
 		game_state_node.finish_beacon_job(String(game_state_node.beacon_next_job()))
 	game_state_node.charge_beacon(10.0)
+	main.wave_manager._process(float(_beacon()["launch_grace"]) + 0.1)
 	assert_true(main.wave_manager.final_wave, "Mid-charge")
 	main.restart_game()
 	await wait_frames(2)
 	assert_eq(int(game_state_node.beacon_steps), 0, "A new run: nothing repaired")
+	assert_eq(float(game_state_node.final_wave_in), -1.0, "Nothing counting down")
 	assert_almost_eq(float(game_state_node.beacon_charge), 0.0, 0.0001, "Nothing charged")
 	assert_false(main.wave_manager.final_wave, "And no final wave")

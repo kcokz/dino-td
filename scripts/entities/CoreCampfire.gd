@@ -58,6 +58,34 @@ func _ready() -> void:
 	_dress_the_art()
 	_ensure_stations()
 	_ensure_sensors()
+	# The mast on its roof is as far up as the beacon (CabinArt): now, and whenever a step is done.
+	show_the_beacon()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("beacon_changed") and not eb.beacon_changed.is_connected(_on_beacon_changed):
+		eb.beacon_changed.connect(_on_beacon_changed)
+
+func _exit_tree() -> void:
+	super._exit_tree()
+	var eb = _get_event_bus()
+	if eb and is_instance_valid(eb) and eb.has_signal("beacon_changed") and eb.beacon_changed.is_connected(_on_beacon_changed):
+		eb.beacon_changed.disconnect(_on_beacon_changed)
+
+func _on_beacon_changed(_steps_done: int) -> void:
+	show_the_beacon()
+
+## Shows the parts of its model named for the beacon's steps as far as they are done -- the bent
+## antenna until the first stage, a pole, then its stays, then the dish, each with its lamp, and
+## the dish's throat alight once it is launched (Config.beacon_jobs, GameState.beacon_steps).
+func show_the_beacon() -> void:
+	var body: Node = _body()
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if body == null or gs == null or cfg == null or not cfg.has_method("beacon_jobs"):
+		return
+	var steps: Array = cfg.beacon_jobs(gs.map_data())
+	var done: int = int(gs.beacon_steps)
+	CabinArt.show_parts(body, func(job: String) -> bool: return steps.has(job),
+		func(job: String) -> bool: return steps.find(job) < done)
 
 func _emit_core_hp_changed() -> void:
 	if _last_emitted_hp == current_hp:

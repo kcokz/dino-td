@@ -181,3 +181,7 @@ signal fed_changed(fed: Dictionary)
 ## Emitted when the Hero says something (HeroVoice): the strings.csv key of the line, and how long
 ## it stays up. The HUD puts it over his head.
 signal hero_spoke(line_key: String, seconds: float)
+
+## Emitted at the launch when the valley will answer after a while (MAPS.beacon.launch_grace): the
+## seconds until the final wave sets out. GameState.final_wave_in counts them down.
+signal final_wave_warning(seconds: float)

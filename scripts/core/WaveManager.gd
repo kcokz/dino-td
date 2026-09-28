@@ -76,10 +76,21 @@ func _notification(what: int) -> void:
 			spawn_timer.stop()
 
 func _process(delta: float) -> void:
-	if not auto_raid_enabled or is_wave_active or final_wave:
-		return
 	var gs = _get_game_state()
 	if gs and ("is_paused" in gs and gs.is_paused or "is_game_over" in gs and gs.is_game_over):
+		return
+	# Launched, and the valley not answered yet: the grace counts down, and no raid sets out in it.
+	if _final_countdown > 0.0:
+		_final_countdown -= delta
+		if gs:
+			gs.final_wave_in = maxf(0.0, _final_countdown)
+		if _final_countdown <= 0.0:
+			_final_countdown = 0.0
+			if gs:
+				gs.final_wave_in = -1.0
+			start_final_wave()
+		return
+	if not auto_raid_enabled or is_wave_active or final_wave:
 		return
 
 	elapsed_time += delta
@@ -172,8 +183,10 @@ func _connect_event_bus() -> void:
 			eb.phase_changed.connect(_on_phase_changed)
 		if eb.has_signal("dino_died") and not eb.dino_died.is_connected(_on_dino_died):
 			eb.dino_died.connect(_on_dino_died)
-		if eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(start_final_wave):
-			eb.beacon_launched.connect(start_final_wave)
+		if eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(_on_beacon_launched):
+			eb.beacon_launched.connect(_on_beacon_launched)
+		if eb.has_signal("beacon_changed") and not eb.beacon_changed.is_connected(_on_beacon_changed):
+			eb.beacon_changed.connect(_on_beacon_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -182,8 +195,10 @@ func _disconnect_event_bus() -> void:
 			eb.phase_changed.disconnect(_on_phase_changed)
 		if eb.has_signal("dino_died") and eb.dino_died.is_connected(_on_dino_died):
 			eb.dino_died.disconnect(_on_dino_died)
-		if eb.has_signal("beacon_launched") and eb.beacon_launched.is_connected(start_final_wave):
-			eb.beacon_launched.disconnect(start_final_wave)
+		if eb.has_signal("beacon_launched") and eb.beacon_launched.is_connected(_on_beacon_launched):
+			eb.beacon_launched.disconnect(_on_beacon_launched)
+		if eb.has_signal("beacon_changed") and eb.beacon_changed.is_connected(_on_beacon_changed):
+			eb.beacon_changed.disconnect(_on_beacon_changed)
 
 func _on_phase_changed(phase: int) -> void:
 	# Phase 1 == ATTACK
@@ -225,7 +240,52 @@ func start_next_wave() -> void:
 ## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter.
 func start_next_raid() -> void:
 	var next_n: int = _next_wave_number()
-	start_wave(next_n, raid_size(next_n))
+	# A raid a beacon stage stirred up is its own size (MAPS.beacon.stage_waves), not the clock's.
+	var size: int = _stirred if _stirred > 0 else raid_size(next_n)
+	_stirred = 0
+	start_wave(next_n, size)
+
+## The small raid a repaired stage has stirred up, still to come (its size), or 0.
+var _stirred: int = 0
+## Seconds of the launch's grace left before the final wave sets out; 0 when none is counting.
+var _final_countdown: float = 0.0
+
+## A stage of the beacon repaired: its hum carries down the valley, and a small raid comes of it
+## (MAPS.beacon.stage_waves) -- the next raid, brought in to `stage_wave_delay` seconds and made
+## that size. A raid out already is fought first; this one follows it.
+func _on_beacon_changed(steps_done: int) -> void:
+	var gs = _get_game_state()
+	var stages: int = int(gs.beacon_stage_count()) if (gs and gs.has_method("beacon_stage_count")) else 0
+	if steps_done < 1 or steps_done > stages or final_wave:
+		return
+	var sizes: Array = _map().get("beacon", {}).get("stage_waves", [])
+	if steps_done - 1 >= sizes.size():
+		return
+	_stirred = int(sizes[steps_done - 1])
+	if not is_wave_active:
+		_bring_in_the_stirred()
+
+func _bring_in_the_stirred() -> void:
+	var delay: float = float(_map().get("beacon", {}).get("stage_wave_delay", 20.0))
+	if raid_timer > delay:
+		raid_timer = delay
+		warning_emitted = raid_timer <= warning_lead_time and warning_emitted
+
+## Launched: the final wave comes after the map's grace (MAPS.beacon.launch_grace), said on the
+## bus and counted down in GameState.final_wave_in -- at once if there is none.
+func _on_beacon_launched() -> void:
+	var grace: float = float(_map().get("beacon", {}).get("launch_grace", 0.0))
+	_stirred = 0
+	if grace <= 0.0:
+		start_final_wave()
+		return
+	_final_countdown = grace
+	var gs = _get_game_state()
+	if gs:
+		gs.final_wave_in = grace
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("final_wave_warning"):
+		eb.final_wave_warning.emit(grace)
 
 ## How many raiders wave `wave_num` sends if it sets out now: its count, scaled by how far
 ## into the run it is (RAIDS.intensity_per_minute) and by the run's dice either way.
@@ -268,7 +328,10 @@ func start_final_wave() -> void:
 	_entry_turn = 0
 	start_wave(next_n, count, true)
 	dinos_alive_count += still_out
-	var stream: float = float(beacon.get("charge_seconds", 0.0)) * float(beacon.get("stream_share", 1.0))
+	# Over the charge that is left once the grace is out (launch_grace), so the boss, last, still
+	# has its time to reach the cabin before the jump.
+	var fight: float = maxf(0.0, float(beacon.get("charge_seconds", 0.0)) - float(beacon.get("launch_grace", 0.0)))
+	var stream: float = fight * float(beacon.get("stream_share", 1.0))
 	if spawn_timer and stream > 0.0:
 		spawn_timer.start(maxf(0.05, stream / float(maxi(1, dinos_to_spawn))))
 
@@ -286,6 +349,8 @@ func _next_wave_number() -> int:
 func reset_raid_state() -> void:
 	elapsed_time = 0.0
 	final_wave = false
+	_stirred = 0
+	_final_countdown = 0.0
 	_entry_turn = 0
 	var cfg = _get_config()
 	var lead_time: float = 15.0
@@ -474,6 +539,8 @@ func _end_wave() -> void:
 
 	if auto_raid_enabled:
 		_reset_raid_timer()
+		if _stirred > 0:
+			_bring_in_the_stirred()
 
 # ==============================================================================
 # Resolvers

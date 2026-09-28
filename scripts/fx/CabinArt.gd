@@ -11,6 +11,11 @@ extends RefCounted
 ##   before_<job id>   until it is done (the roasting spit is "before_stone_pot")
 ##   anything else     always
 ##
+## ahead of either, a tag for how it is drawn that says nothing about when: "fade_" (faded with
+## the cabin's roof while he is inside) and "lamp_" (a light of its own, apart from the bench's
+## lights of the same job) -- the cabin's roof mast is "fade_beacon_2", its lamp
+## "lamp_beacon_2_glow".
+##
 ## A name ending "_glow" is drawn lit by itself -- fire, a screen, daylight through a
 ## porthole -- and lights the room round it when Config.CABIN.glow_lights names it.
 ##
@@ -20,12 +25,16 @@ extends RefCounted
 
 const GLOW_SUFFIX: String = "_glow"
 const BEFORE_PREFIX: String = "before_"
+## How a part is drawn, ahead of its job in its name; nothing to do with when it shows.
+const TAGS: Array[String] = ["fade_", "lamp_"]
 ## Every light a glowing part carries is named this, so they can be found again to animate.
 const LIGHT_NAME: String = "GlowLight"
 ## The meta a material this makes carries (owns).
 const OWNED: StringName = &"cabin_art"
 ## How far apart two lights read the flicker noise: far enough that no two waver together.
 const NOISE_LANE: float = 50.0
+## A blinking lamp between its flashes: all but gone, a dull glass.
+const BLINK_DARK: float = 0.8
 
 static var _glow_material: StandardMaterial3D = null
 static var _noise: FastNoiseLite = null
@@ -43,6 +52,9 @@ static func parts(body: Node) -> Array[MeshInstance3D]:
 ## "before_stone_pot" -> ["stone_pot", true]; "beacon_3_glow" -> ["beacon_3", false].
 static func condition(part_name: String) -> Array:
 	var n: String = part_name
+	for tag in TAGS:
+		if n.begins_with(tag):
+			n = n.substr(tag.length())
 	if n.ends_with(GLOW_SUFFIX):
 		n = n.substr(0, n.length() - GLOW_SUFFIX.length())
 	if n.begins_with(BEFORE_PREFIX):
@@ -84,6 +96,8 @@ static func light_glows(body: Node, lights: Dictionary) -> void:
 		light.set_meta("energy", light.light_energy)
 		light.set_meta("flicker", float(spec.get("flicker", 0.0)))
 		light.set_meta("speed", float(spec.get("speed", 1.0)))
+		light.set_meta("blink", float(spec.get("blink", 0.0)))
+		light.set_meta("duty", float(spec.get("duty", 0.5)))
 		mi.add_child(light)
 
 ## Every light the glowing parts under `root` carry: gathered once, then animated each frame.
@@ -107,6 +121,16 @@ static func animate(lights: Array[OmniLight3D], time: float) -> void:
 	for light in lights:
 		k += 1
 		if not is_instance_valid(light):
+			continue
+		# A warning lamp on a mast blinks rather than wavers: on for `duty` of each of `blink`
+		# flashes a second, the lamp itself dark between -- each on a beat of its own.
+		var blink: float = float(light.get_meta("blink", 0.0))
+		if blink > 0.0:
+			var on: bool = fposmod(time * blink + float(k) * 0.37, 1.0) < float(light.get_meta("duty", 0.5))
+			light.light_energy = float(light.get_meta("energy", 1.0)) if on else 0.0
+			var lamp := light.get_parent() as GeometryInstance3D
+			if lamp != null:
+				lamp.transparency = 0.0 if on else BLINK_DARK
 			continue
 		var amount: float = float(light.get_meta("flicker", 0.0))
 		if amount <= 0.0:

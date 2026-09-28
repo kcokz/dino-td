@@ -68,6 +68,9 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 ## launched, how many seconds it has charged. That is all there is to remember about it.
 var beacon_steps: int = 0
 var beacon_charge: float = 0.0
+## Seconds until the final wave sets out, counting down from the launch (MAPS.beacon.launch_grace;
+## WaveManager counts it); -1 when none is coming, or it has come.
+var final_wave_in: float = -1.0
 
 ## The map this run is played on (Config.MAPS).
 func map_data() -> Dictionary:
@@ -219,6 +222,8 @@ func reset_game(p_seed: int = -1) -> void:
 	_set_meals({})
 	beacon_steps = 0
 	beacon_charge = 0.0
+	final_wave_in = -1.0
+	drop_misses.clear()
 
 	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 	deploy_length = float(time_cfg.get("deploy_length", 90.0))
@@ -230,6 +235,20 @@ func reset_game(p_seed: int = -1) -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("deploy_time_changed"):
 		eb.deploy_time_changed.emit(remaining_deploy_time, deploy_length)
+
+## How many chance drops of each resource have missed running (Config.DROPS.pity_after).
+var drop_misses: Dictionary = {}
+
+## Whether one chance drop of `res_id` (Config.DINOS[..].drop_chance) falls: at `chance`, on the
+## run's dice -- but never after `pity_after` misses running, and never missing the first of the
+## run, so chance leaves him more but never stuck.
+func roll_drop(res_id: String, chance: float) -> bool:
+	var cfg = _get_config()
+	var pity: int = int(cfg.DROPS.get("pity_after", 1)) if (cfg and "DROPS" in cfg) else 1
+	var missed: int = int(drop_misses.get(res_id, pity))
+	var falls: bool = missed >= pity or rng.randf() < chance
+	drop_misses[res_id] = 0 if falls else missed + 1
+	return falls
 
 ## Alias for reset_game to initialize play.
 func start_game() -> void:

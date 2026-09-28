@@ -169,7 +169,13 @@ func _on_hero_spoke(line_key: String, seconds: float) -> void:
 	var font: Font = speech_label.get_theme_font("font")
 	var size_px: int = speech_label.get_theme_font_size("font_size")
 	var wide: float = font.get_string_size(speech_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x if font else 200.0
-	speech_label.custom_minimum_size.x = minf(ceilf(wide) + 1.0, float(_ui("speech_max_width", 300)))
+	var most: float = float(_ui("speech_max_width", 300))
+	# One line when it fits -- no wrapping, so nothing about its height waits on a layout -- and
+	# wrapped at the most when it does not (its height settles a frame later: _place_speech).
+	speech_label.autowrap_mode = TextServer.AUTOWRAP_OFF if wide <= most else TextServer.AUTOWRAP_WORD_SMART
+	speech_label.custom_minimum_size.x = minf(ceilf(wide) + 1.0, most)
+	speech_label.size = Vector2.ZERO
+	speech_bubble.size = Vector2.ZERO
 	speech_bubble.reset_size()
 	_speech_until_ms = Time.get_ticks_msec() + int(seconds * 1000.0)
 	if not speech_bubble.visible:
@@ -197,6 +203,9 @@ func _place_speech() -> void:
 		speech_bubble.visible = false
 		return
 	var at: Vector2 = cam.unproject_position(head)
+	# As small as its words, every frame: a wrapped line's height is only known after a layout at
+	# its width, and a bubble sized before that stood as tall as the screen.
+	speech_bubble.reset_size()
 	var box: Vector2 = speech_bubble.size
 	var pos: Vector2 = at - Vector2(box.x * 0.5, box.y + float(UiTheme.space("xs")))
 	var screen: Vector2 = get_viewport().get_visible_rect().size
@@ -218,6 +227,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
 			["unlock_granted", _on_unlock_granted], ["hero_spoke", _on_hero_spoke],
+			["final_wave_warning", _on_final_wave_warning],
 			["material_discovered", _on_material_discovered]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
@@ -298,6 +308,14 @@ func _on_fed_changed(_fed: Dictionary) -> void:
 
 func _process(delta: float) -> void:
 	_place_speech()
+	# The final wave's countdown, second by second; the banner goes as it sets out.
+	var gs_final = _get_game_state()
+	if gs_final and raid_warning_banner and raid_warning_banner.visible and "final_wave_in" in gs_final:
+		if float(gs_final.final_wave_in) >= 0.0:
+			_render_final_banner()
+		elif _final_banner_up:
+			_on_raid_warning(0.0)
+	_final_banner_up = gs_final != null and "final_wave_in" in gs_final and float(gs_final.final_wave_in) >= 0.0
 	if fed_label and fed_chip and fed_chip.visible:
 		_refresh_fed_label()
 	var gs = _get_game_state()
@@ -314,12 +332,35 @@ func _process(delta: float) -> void:
 			core_vital.modulate.a = 1.0
 
 ## A stage repaired, or the launch. The charge's countdown is _process's.
-func _on_beacon_changed(_steps_done: int) -> void:
+func _on_beacon_changed(steps_done: int) -> void:
 	_refresh_beacon_label()
+	# A stage stands: its hum is heard down the valley, and something comes of it (WaveManager).
+	var gs = _get_game_state()
+	if gs and gs.has_method("beacon_stage_count") and steps_done >= 1 and steps_done <= int(gs.beacon_stage_count()) \
+			and not gs.map_data().get("beacon", {}).get("stage_waves", []).is_empty():
+		show_hint(tr("HINT_BEACON_STIRS"), UiTheme.toast_seconds("long"), "warning")
+
+## The signal is out and the valley will answer: the raid banner counts down to the final wave
+## (GameState.final_wave_in, _render_final_banner) and says to build what he can meanwhile.
+func _on_final_wave_warning(seconds: float) -> void:
+	show_hint(tr("HINT_FINAL_WAVE_SOON") % int(ceil(seconds)), UiTheme.toast_seconds("long"), "warning")
+	_raid_horn_sounded = false
+	_on_raid_warning(seconds)
+	_render_final_banner()
+
+func _render_final_banner() -> void:
+	var gs = _get_game_state()
+	if raid_warning_banner == null or gs == null or float(gs.final_wave_in) < 0.0:
+		return
+	raid_warning_banner.text = tr("HUD_FINAL_WAVE") % int(ceil(float(gs.final_wave_in)))
 
 ## Launched: everything in the valley is on its way, from every side (GAME-DESIGN 8.3).
 func _on_beacon_launched() -> void:
 	_refresh_beacon_label()
+	# With a grace before the valley answers, the countdown says it (_on_final_wave_warning).
+	var gs = _get_game_state()
+	if gs and float(gs.map_data().get("beacon", {}).get("launch_grace", 0.0)) > 0.0:
+		return
 	show_hint(tr("HUD_BEACON_LAUNCHED"), UiTheme.toast_seconds("long"), "warning")
 
 ## The materials he has picked up at least once this run, and which run that is: the first
@@ -485,6 +526,7 @@ func _on_wave_started(n: int, is_big: bool) -> void:
 ## 7.5: a boss coming is announced) -- and the seconds the warning gave.
 var _bosses_coming: PackedStringArray = []
 var _raid_seconds: int = 0
+var _final_banner_up: bool = false
 
 func _render_raid_banner() -> void:
 	if raid_warning_banner == null:

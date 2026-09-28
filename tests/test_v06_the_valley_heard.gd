@@ -314,3 +314,21 @@ func test_14_what_he_was_after_freed_under_him_is_no_crash() -> void:
 	main.hero.current_state = main.hero.State.MOVING
 	voice._process(0.1)
 	assert_true(true, "He goes on, and so does the game")
+
+func test_15_the_bubble_is_as_small_as_its_words() -> void:
+	# Found in a screenshot: after a long line, a short one stood in a bubble as tall as the screen.
+	var main = await _level()
+	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
+	var hud = main.hud
+	var eb = tree.root.get_node("EventBus")
+	eb.hero_spoke.emit("BARK_IDLE_1", 3.0)
+	await wait_frames(3)
+	eb.hero_spoke.emit("BARK_MOVE_2", 3.0)
+	await wait_frames(3)
+	var line: float = float(hud.speech_label.get_line_height())
+	assert_lt(hud.speech_bubble.size.y, line * 3.0, "A short line in a bubble one line high (%.0f px, a line is %.0f)" % [hud.speech_bubble.size.y, line])
+	eb.hero_spoke.emit("BARK_IDLE_1", 3.0)
+	await wait_frames(3)
+	assert_lte(hud.speech_bubble.size.x, float(config_node.UI["speech_max_width"]) + 80.0, "A long one wraps at the most")
+	assert_lt(hud.speech_bubble.size.y, line * 6.0, "into a few lines, not a column")
+	assert_true(voice != null, "his voice")

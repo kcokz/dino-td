@@ -1358,8 +1358,17 @@ func spawn_death_drops() -> Array:
 	if cfg == null or not ("DINOS" in cfg) or not cfg.DINOS.has(dino_type):
 		return made
 	var drops: Dictionary = cfg.DINOS[dino_type].get("drops", {})
+	var chances: Dictionary = cfg.DINOS[dino_type].get("drop_chance", {})
+	var gs = _get_game_state()
 	for res_id in drops:
 		var n: int = int(drops[res_id])
+		# The rank and file leave each thing only by chance (drop_chance, GameState.roll_drop).
+		if chances.has(res_id) and gs and gs.has_method("roll_drop"):
+			var fell: int = 0
+			for i in n:
+				if gs.roll_drop(String(res_id), float(chances[res_id])):
+					fell += 1
+			n = fell
 		if n <= 0:
 			continue
 		for pile in DropItem.spawn_scattered(self, global_position, String(res_id), n, n):
