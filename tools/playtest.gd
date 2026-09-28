@@ -143,11 +143,12 @@ func _scenario_play(spec: String) -> void:
 	var gm = _main.grid_manager
 	var wm = _main.wave_manager
 	Engine.time_scale = 3.0
+	_play_clock = 0.0
 	_play_log = []
 	_play_t0 = Time.get_ticks_msec()
 	var clock := {"t": 0.0}
 	var note := func(text: String) -> void:
-		var line: String = "[play %5.1fs] %s" % [wm.elapsed_time, text]
+		var line: String = "[play %5.1fs] %s" % [_play_clock, text]
 		print(line)
 		_play_log.append(line)
 	eb.raid_warning.connect(func(left): note.call("RAID WARNING, %.0fs" % left))
@@ -167,8 +168,9 @@ func _scenario_play(spec: String) -> void:
 	for pile in piles:
 		if not is_instance_valid(pile):
 			continue
+		var pile_id: int = pile.get_instance_id()
 		hero.move_to((pile as Node3D).global_position)
-		await _play_until(func(): return not is_instance_valid(pile) or pile.is_queued_for_deletion(), 25.0, "picking up a pile")
+		await _play_until(func(): return not is_instance_id_valid(pile_id), 25.0, "picking up a pile")
 	note.call("stock: %s" % str(gs.resources))
 	await _shoot("stock_picked_up")
 
@@ -206,45 +208,46 @@ func _scenario_play(spec: String) -> void:
 	await _portrait("ring", cabin.global_position, 13.0, true)
 
 	# --- 3. Wood until the raid ------------------------------------------------------------
-	while wm.current_wave == 0 and wm.elapsed_time < minutes * 60.0:
+	while wm.current_wave == 0 and _play_clock < minutes * 60.0:
 		await _chop_a_while(hero, "wood", 8.0)
 		if wm.raid_timer < 8.0:
 			break
 	note.call("wood: %d; raid in %.0fs" % [int(gs.resources.get("wood", 0)), wm.raid_timer])
 
 	# --- 4 onwards: raids come and go; between them, the next thing on the list ---------------
-	var plan: Array[String] = ["shelter", "gather", "pick", "cook", "eat", "stone", "axe", "crossbow", "stone", "beacon"]
+	var plan: Array[String] = ["beacon", "pick", "cook", "eat", "stone", "axe", "stone", "crossbow", "beacon"]
 	var step: int = 0
 	var last_status: float = -100.0
-	while wm.elapsed_time < minutes * 60.0 and not gs.is_game_over:
-		if wm.elapsed_time - last_status >= 10.0:
-			last_status = wm.elapsed_time
+	var raids_seen: int = 0
+	while _play_clock < minutes * 60.0 and not gs.is_game_over:
+		if _play_clock - last_status >= 15.0:
+			last_status = _play_clock
 			note.call(_play_status(hero, cabin, gs, wm))
 		if wm.is_wave_active:
 			# In the ring, by the gate, and fight what gets close.
-			var home: Vector3 = gm.build_cell_to_world(gate_cell) + Vector3(0.0, 0.0, -1.2)
+			var home: Vector3 = cabin.door_inside()
 			var near: Node3D = hero._find_nearest_enemy(3.0)
 			if near != null:
 				hero.order_attack(near)
 			elif hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
 				hero.move_to(home)
 			await _advance(1.0)
+			_play_clock += Engine.time_scale
+			continue
+		if wm.current_wave > raids_seen:
+			raids_seen = wm.current_wave
+			await _gather_drops(hero, note)
 			continue
 		if step >= plan.size():
 			await _chop_a_while(hero, "wood", 6.0)
 			continue
 		var what: String = plan[step]
+		# A step that cannot be done yet waits: wood meanwhile.
+		if not _can_do(what, cabin, gs):
+			await _chop_a_while(hero, "wood", 6.0)
+			continue
 		step += 1
 		match what:
-			"shelter":
-				pass
-			"gather":
-				for d in get_nodes_in_group(DropItem.GROUP):
-					if is_instance_valid(d):
-						hero.move_to((d as Node3D).global_position)
-						await _play_until(func(): return not is_instance_valid(d), 20.0, "gathering a drop")
-				note.call("after gathering: %s" % str(gs.resources))
-				await _shoot("after_the_raid")
 			"pick", "axe", "stone_pot":
 				await _bench_job(hero, cabin, "workbench", "stone_pick" if what == "pick" else "stone_axe", note)
 			"cook":
@@ -282,10 +285,52 @@ func _scenario_play(spec: String) -> void:
 	await _shoot("end")
 	await _portrait("end_above", cabin.global_position, 16.0, true)
 	Engine.time_scale = 1.0
-	note.call("played %.1f game minutes in %.0f s" % [wm.elapsed_time / 60.0, (Time.get_ticks_msec() - _play_t0) / 1000.0])
+	note.call("played %.1f game minutes in %.0f s" % [_play_clock / 60.0, (Time.get_ticks_msec() - _play_t0) / 1000.0])
 
 var _play_log: Array = []
 var _play_t0: int = 0
+## Game seconds played, raids included (WaveManager.elapsed_time stands still during a raid).
+var _play_clock: float = 0.0
+
+## Whether plan step `what` can be done now.
+func _can_do(what: String, cabin: Node, gs: Node) -> bool:
+	match what:
+		"pick":
+			return cabin.station("workbench").can_afford("stone_pick")
+		"axe":
+			return cabin.station("workbench").can_afford("stone_axe")
+		"cook":
+			var k = cabin.station("kitchen")
+			for job in k.jobs():
+				if k.is_dish(job) and k.can_afford(job):
+					return true
+			return false
+		"eat":
+			return not gs.meals.is_empty()
+		"stone":
+			return gs.has_unlock(String(root.get_node("Config").RECIPES["stone_pick"]["unlocks"]))
+		"crossbow":
+			return gs.can_afford(root.get_node("Config").BUILDINGS["set_crossbow"]["cost"])
+		"beacon":
+			var job: String = String(gs.beacon_next_job())
+			return job != "" and cabin.station(String(root.get_node("Config").BEACON_STATION)).can_afford(job)
+	return true
+
+## Out through the gate for what the raid left, and back.
+func _gather_drops(hero: Node, note: Callable) -> void:
+	var gs := root.get_node("GameState")
+	var before: Dictionary = gs.resources.duplicate()
+	for d in get_nodes_in_group(DropItem.GROUP):
+		if not is_instance_valid(d):
+			continue
+		var id: int = d.get_instance_id()
+		hero.move_to((d as Node3D).global_position)
+		await _play_until(func(): return not is_instance_id_valid(id), 20.0, "gathering a drop")
+	var got: Dictionary = {}
+	for k in gs.resources:
+		if int(gs.resources[k]) != int(before.get(k, 0)):
+			got[k] = int(gs.resources[k]) - int(before.get(k, 0))
+	note.call("gathered after the raid: %s" % str(got))
 
 ## Lets the game run until `done` says so or `seconds` of game time pass; says so if it gave up,
 ## and if the Hero stood still the whole while with an order in hand.
@@ -296,22 +341,25 @@ func _play_until(done: Callable, seconds: float, what: String) -> bool:
 	var was: Vector3 = hero.global_position
 	var still: float = 0.0
 	var warned: bool = false
-	while wm.elapsed_time - start < seconds:
+	var start_clock: float = _play_clock
+	while _play_clock - start_clock < seconds:
 		if done.call():
 			return true
 		await _advance(0.25)
+		_play_clock += 0.25 * Engine.time_scale
 		var moved: float = hero.global_position.distance_to(was)
 		was = hero.global_position
 		if int(hero.current_state) == 1 and moved < 0.02:
 			still += 0.25 * Engine.time_scale
 			if still > 4.0 and not warned:
 				warned = true
-				print("[play %5.1fs] STUCK? he has been walking on the spot for 4s while %s, at %s" % [wm.elapsed_time, what, str(hero.global_position)])
+				print("[play %5.1fs] STUCK? he has been walking on the spot for 4s while %s, at %s" % [_play_clock, what, str(hero.global_position)])
 		else:
 			still = 0.0
 		if root.get_node("GameState").is_game_over:
 			return false
-	print("[play %5.1fs] gave up %s after %.0fs" % [wm.elapsed_time, what, seconds])
+	if not what.begins_with("working"):
+		print("[play %5.1fs] gave up %s after %.0fs" % [_play_clock, what, seconds])
 	return false
 
 ## The nearest node of `res_id` he can work, worked for `seconds` of game time.
@@ -329,7 +377,8 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 			best = n
 	if best == null:
 		print("[play] nothing of %s he can work" % res_id)
-		await _advance(seconds)
+		await _advance(seconds / Engine.time_scale)
+		_play_clock += seconds
 		return
 	hero.order_harvest(best)
 	var wm = _main.wave_manager

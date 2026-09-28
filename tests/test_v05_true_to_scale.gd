@@ -85,17 +85,18 @@ func test_04_stature_changes_nothing_the_game_touches() -> void:
 	assert_gte(float(config_node.BUILD_CELL), float(config_node.HERO["width"]),
 		"A cell of the building grid is wider than he is")
 
-func test_05_the_herds_are_on_the_tyrannosaurs_scale() -> void:
-	var rex = _dino("big_theropod")
+func test_05_the_herds_are_on_the_bosss_scale() -> void:
+	# The map's boss is the ruler: Postosuchus, four or five metres long; a Placerias is about
+	# three quarters of one.
+	var boss_id: String = String(config_node.map_data()["boss"])
+	var boss = _dino(boss_id)
 	await wait_frames(1)
-	var ruler: float = _drawn(rex).size.z
-	var lengths: Dictionary = {}
+	var ruler: float = _drawn(boss).size.z
+	assert_between(ruler, 4.0, 5.5, "The %s is four or five metres long (%.2f)" % [boss_id, ruler])
 	for spec in config_node.HERDS["herds"]:
-		lengths[String(spec["species"])] = float(spec["length"])
-	assert_gte(lengths["apatosaurus"] / ruler, 1.5, "A sauropod is well over a tyrannosaur's length")
-	for species in ["parasaurolophus", "triceratops", "stegosaurus"]:
-		assert_between(lengths[species] / ruler, 0.6, 0.95,
-			"A %s is most of a tyrannosaur's length (%.2f)" % [species, lengths[species] / ruler])
+		var species: String = String(spec["species"])
+		assert_between(float(spec["length"]) / ruler, 0.6, 0.9,
+			"A %s is most of the boss's length (%.2f)" % [species, float(spec["length"]) / ruler])
 
 func test_06_the_hero_is_built_like_a_person_not_a_cartoon() -> void:
 	# Reported as "人不应该带个安全帽，显得太卡通了，应该就是写实风格的人物形象": the worker

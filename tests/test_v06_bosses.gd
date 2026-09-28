@@ -1,6 +1,7 @@
 # res://tests/test_v06_bosses.gd
-# v0.6 T10: bosses -- a raptor alpha at the head of every big wave, the map's boss on its
-# beat, both announced, and both paying in prime meat.
+# v0.6 T10: bosses -- an alpha at the head of every big wave, the map's boss last of all in the
+# beacon's final wave (and in no raid before it: v0.6 round three, "中段的小boss不应该把最后的大boss
+# 形象暴露"), both announced, and both paying in prime meat.
 #
 # GAME-DESIGN 7.5: every map has a boss, and a lesser one comes with the big waves the game
 # already had (WAVES.big_every) rather than on a rhythm of its own. A boss is the only thing
@@ -47,6 +48,10 @@ func _level() -> Node:
 func _row(species: String) -> Dictionary:
 	return config_node.DINOS[species]
 
+## The animal the map raids with: the pack its alpha leads.
+func _pack() -> String:
+	return String(_map()["raiders"].keys()[0])
+
 ## The first wave number that is a big one.
 func _big_wave(wm: Node) -> int:
 	for n in range(1, 50):
@@ -58,10 +63,21 @@ func _big_wave(wm: Node) -> int:
 # 1. Who they are
 # ==============================================================================
 
-func test_01_the_alpha_is_a_bigger_harder_raptor() -> void:
+func test_00_the_first_map_is_the_late_triassic() -> void:
+	# "第一关还应该是三叠纪" (GAME-DESIGN 7.2, station 1): Coelophysis raid, their alpha leads the
+	# big waves, and the boss is Postosuchus -- not a dinosaur, and not a tyrannosaur.
+	assert_eq(_pack(), "coelophysis", "Coelophysis raid the valley")
+	assert_eq(String(_map()["minor_boss"]), "coelophysis_alpha", "their alpha leads the big waves")
+	assert_eq(String(_map()["boss"]), "postosuchus", "and the boss is Postosuchus")
+	assert_eq(String(_map().get("guards", "")), "coelophysis", "Coelophysis guard the nest")
+	for species in [_pack(), String(_map()["minor_boss"]), String(_map()["boss"])]:
+		assert_true(VisualLibrary.has_art("dino/" + species), "%s is a model of its own" % species)
+		assert_ne(tr(String(_row(species)["name"])), String(_row(species)["name"]), "%s is named" % species)
+
+func test_01_the_alpha_is_a_bigger_harder_one_of_its_pack() -> void:
 	var alpha_id: String = String(_map()["minor_boss"])
 	var alpha: Dictionary = _row(alpha_id)
-	var raptor: Dictionary = _row("raptor")
+	var raptor: Dictionary = _row(_pack())
 	assert_eq(String(alpha["behaviour"]), String(raptor["behaviour"]), "It hunts the way the pack does")
 	assert_almost_eq(alpha["size"].x, raptor["size"].x, 0.0001, "As wide: it has to fit the same gaps")
 	assert_gt(alpha["size"].y, raptor["size"].y, "But it stands taller")
@@ -97,27 +113,29 @@ func test_03_every_big_wave_is_led_by_the_alpha() -> void:
 	assert_eq(roster.size(), 5, "On top of the wave's own")
 	assert_false(wm.roster_for(big - 1, 4).has(alpha_id), "An ordinary wave has none")
 
-func test_04_the_boss_comes_with_the_first_raid_after_its_beat_and_only_then() -> void:
+func test_04_the_boss_comes_in_no_raid_only_last_in_the_final_wave() -> void:
 	var main = _level()
 	await wait_frames(2)
 	var wm = main.wave_manager
-	var beat: float = float(_map()["beats"]["boss_raid"])
 	var boss_id: String = String(_map()["boss"])
-	wm.elapsed_time = beat - 1.0
-	assert_false(wm.boss_is_due(), "Before its beat, no boss")
-	wm.elapsed_time = beat + 1.0
-	assert_true(wm.boss_is_due(), "After it, the next raid brings it")
-	wm.start_next_raid()
-	assert_eq(String(wm.wave_roster.back()), boss_id, "Last of all, behind the pack")
-	assert_false(wm.boss_is_due(), "And once it has come, it is not due again")
+	# Raid after raid, well into the run: never the boss.
+	wm.auto_raid_enabled = false
+	for i in range(8):
+		wm.elapsed_time = 120.0 * float(i + 1)
+		wm.start_next_raid()
+		assert_false(wm.wave_roster.has(boss_id), "Raid %d at %.0fs brings no boss" % [i + 1, wm.elapsed_time])
+		wm.is_wave_active = false
+		game_state_node.wave_number += 1
+	wm.start_final_wave()
+	assert_eq(String(wm.wave_roster.back()), boss_id, "The final wave brings it, last of all")
 
-func test_05_the_warning_names_the_boss() -> void:
+func test_05_the_warning_names_the_alpha() -> void:
 	var main = _level()
 	await wait_frames(2)
 	var wm = main.wave_manager
-	var boss_id: String = String(_map()["boss"])
+	var boss_id: String = String(_map()["minor_boss"])
 	var watcher = watch_signal(event_bus_node, "boss_warning")
-	wm.elapsed_time = float(_map()["beats"]["boss_raid"]) + 1.0
+	game_state_node.wave_number = _big_wave(wm) - 1
 	wm.auto_raid_enabled = true
 	wm.raid_timer = wm.warning_lead_time - 0.01
 	wm.warning_emitted = false

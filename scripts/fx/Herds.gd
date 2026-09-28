@@ -2,8 +2,8 @@
 class_name Herds
 extends Node3D
 
-## Plant-eaters grazing on the lower valley walls: sauropods, hadrosaurs, a few
-## triceratops and stegosaurs (Quaternius, CC0; tools/convert_quaternius.py).
+## Plant-eaters grazing on the lower valley walls: the map's own (Config.HERDS) -- on the
+## first map, the Late Triassic's Placerias (tools/generate_triassic.py, from a Quaternius rig).
 ##
 ## The raid is what the player fights; these are what makes the valley a place where
 ## dinosaurs LIVE rather than a stage they walk onto. So they are scenery and nothing

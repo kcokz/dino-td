@@ -56,9 +56,15 @@ func spawn_guards(target_parent: Node = null) -> void:
 	var guard_script = load("res://scripts/entities/GuardDino.gd")
 	if guard_script == null:
 		return
+	# The map's own animal (its "guards"): the Triassic valley's are Coelophysis.
+	var species: String = "raptor"
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
+	var map: Dictionary = gs.map_data() if (gs and gs.has_method("map_data")) else (cfg.map_data() if cfg else {})
+	if cfg and cfg.DINOS.has(String(map.get("guards", ""))):
+		species = String(map["guards"])
 
 	for i in range(count):
-		var guard = guard_script.new()
+		var guard = guard_script.new(species)
 		guard.name = "GuardDino_%d" % i
 		var angle = (float(i) / float(maxi(1, count))) * TAU
 		var offset = Vector3(cos(angle) * post_radius, 0.0, sin(angle) * post_radius)

@@ -722,6 +722,54 @@ const DINOS: Dictionary = {
 		"drops": {"prime_meat": 3, "bone": 4},
 		"size": Vector3(1.6, 3.0, 1.6),   # two and a half times the Hero's height
 	},
+	# THE FIRST MAP'S CAST (GAME-DESIGN 7.2, station 1: the Late Triassic, the Chinle Formation,
+	# v0.6 round three: "第一关还应该是三叠纪"). The raptor, its alpha and the big theropod stay for
+	# the maps they belong to; the valley is raided by these (MAPS.valley).
+	#
+	# Coelophysis: a light theropod three metres long, found by the hundred together at Ghost
+	# Ranch -- the pack that raids. The raptor's numbers, which the opening was balanced on: the
+	# same body width (the same gaps), the same bite, the same softness against a stake. A long
+	# neck carries its head a little higher.
+	"coelophysis": {
+		"name": "DINO_COELOPHYSIS_NAME",
+		"hp": 2.8,
+		"speed": 4.0,
+		"damage": 0.9,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"drops": {"food": 1, "bone": 1},
+		"size": Vector3(0.8, 0.95, 0.8),
+	},
+	# The head of the pack (GAME-DESIGN 7.5): a bigger, older Coelophysis at the front of every
+	# big wave -- the alpha's numbers, and the middle of the run's high point: it is who comes, not
+	# the map's boss (v0.6 round three: "中段的小boss不应该把最后的大boss形象暴露").
+	"coelophysis_alpha": {
+		"name": "DINO_COELOPHYSIS_ALPHA_NAME",
+		"hp": 10.0,
+		"speed": 4.4,
+		"damage": 1.5,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"boss": "minor",
+		"drops": {"prime_meat": 1, "bone": 2},
+		"size": Vector3(0.8, 1.25, 0.8),
+	},
+	# Postosuchus: not a dinosaur -- a rauisuchian, a land-going relative of the crocodiles four
+	# or five metres long, and the biggest predator of its world (7.2: "恐龙还不是霸主"). The map's
+	# boss, seen once: last of all in the beacon's final wave. Built low and long rather than
+	# tall -- twice the Hero's height at the head -- and as hard as the big theropod it stands in
+	# for, so the stone wall is still what it is for (6.3).
+	"postosuchus": {
+		"name": "DINO_POSTOSUCHUS_NAME",
+		"hp": 45.0,
+		"speed": 2.0,
+		"damage": 3.0,
+		"attack_rate": 0.8,
+		"behaviour": "siege",
+		"boss": "major",
+		"drops": {"prime_meat": 3, "bone": 4},
+		"size": Vector3(1.5, 2.0, 1.5),
+	},
 	"pterosaur": {
 		"name": "DINO_PTEROSAUR_NAME",
 		"hp": 2.0,
@@ -911,6 +959,9 @@ const COLORS: Dictionary = {
 	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
 	"big_theropod": Color(0.35, 0.29, 0.24),    # darker and heavier than the pack
 	"raptor_alpha": Color(0.40, 0.30, 0.20),
+	"coelophysis": Color(0.55, 0.40, 0.18),     # sand-ochre
+	"coelophysis_alpha": Color(0.45, 0.31, 0.14),
+	"postosuchus": Color(0.30, 0.23, 0.15),     # umber, armoured
 	"pterosaur": Color(0.55, 0.50, 0.44),
 	"nest": Color(0.4, 0.1, 0.5),
 	"caveman": Color(0.1, 0.8, 0.8)
@@ -966,18 +1017,17 @@ const MAPS: Dictionary = {
 	"beats": {
 		# Time to fetch the stock, put a fence up and make an axe before anything arrives.
 		"first_raid": 90.0,
-		# The boss comes with the first raid after this (GAME-DESIGN 9.2: about ten minutes
-		# in) -- late enough that traps and a meal are within reach, early enough to leave
-		# the stone wall something to be learned for.
-		"boss_raid": 600.0,
 	},
-	# Who raids here, and how often each, by weight. Raptors, until the first map's own
-	# Triassic cast arrives (GAME-DESIGN 13.8: mechanisms first, on this map).
-	"raiders": {"raptor": 1.0},
-	# At the head of every big wave (WAVES.big_every): the lesser boss (GAME-DESIGN 7.5).
-	"minor_boss": "raptor_alpha",
-	# The map's boss: on the "boss_raid" beat, and again last in the beacon's final wave.
-	"boss": "big_theropod",
+	# Who raids here, and how often each, by weight: the Late Triassic's (GAME-DESIGN 7.2).
+	"raiders": {"coelophysis": 1.0},
+	# Who guards the nest (NEST_GUARDS): the same animal.
+	"guards": "coelophysis",
+	# At the head of every big wave (WAVES.big_every): the lesser boss (GAME-DESIGN 7.5) -- the
+	# middle of the run's high point.
+	"minor_boss": "coelophysis_alpha",
+	# The map's boss: seen once, last of all in the beacon's final wave (7.5, v0.6 round three:
+	# the middle of the run must not give away what comes at the end).
+	"boss": "postosuchus",
 	# Where else raids come from, besides the nest: cells at the edge of the field, west,
 	# east and south. Only the beacon's final wave uses them -- "from every direction at
 	# once" (GAME-DESIGN 8.3) -- so the base the player built facing the nest has to have
@@ -1707,6 +1757,14 @@ const VISUALS: Dictionary = {
 	# raptor until it has a model of its own).
 	"dino/raptor_alpha":    {"scene": "res://assets/models/quaternius/velociraptor.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha"},
+	# The first map's cast (tools/generate_triassic.py): reshaped from the Quaternius rigs, so they
+	# play the same clips. The alpha is the same animal, fitted to its own taller size.
+	"dino/coelophysis":     {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis"},
+	"dino/coelophysis_alpha": {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis_alpha"},
+	"dino/postosuchus":     {"scene": "res://assets/models/triassic/postosuchus.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours
@@ -2493,28 +2551,28 @@ const TERRAIN: Dictionary = {
 	},
 }
 
-## Plant-eaters grazing on the lower valley walls (scripts/fx/Herds.gd; Quaternius, CC0).
+## Plant-eaters grazing on the lower valley walls (scripts/fx/Herds.gd).
 ##
 ## Scenery: no collider, no group, not on the grid, and out past the field where nobody
 ## walks, so no raid, turret or order ever sees them. `length` puts every species on one
-## scale, with the in-game T-Rex as the ruler (about 6 m nose to tail, standing 3 m --
-## DINOS.big_theropod): a sauropod nearly twice a tyrannosaur's length, the rest about
-## three quarters of one, as they were. Every animal keeps its whole body off the field
-## and the flat apron round it. `bearing` is on the camera rig's compass, like the
-## volcanoes'.
+## scale, with the map's boss as the ruler (Postosuchus, about 4.7 m nose to tail --
+## DINOS.postosuchus): a Placerias about three quarters of one, as it was. Every animal keeps
+## its whole body off the field and the flat apron round it. `bearing` is on the camera rig's
+## compass, like the volcanoes'.
 const HERDS: Dictionary = {
 	"seed": 4417,
 	"herds": [
-		# Clear of the canyon's mouth.
-		{"species": "apatosaurus", "scene": "res://assets/models/quaternius/apatosaurus.glb",
-			"count": 3, "length": 11.0, "bearing": 158.0, "distance": 50.0, "spread": 8.0, "speed": 0.7},
-		# On the far bank of the river, across from the water spot.
-		{"species": "parasaurolophus", "scene": "res://assets/models/quaternius/parasaurolophus.glb",
-			"count": 5, "length": 4.8, "bearing": 84.0, "distance": 42.0, "spread": 5.5, "speed": 1.0},
-		{"species": "triceratops", "scene": "res://assets/models/quaternius/triceratops.glb",
-			"count": 4, "length": 4.4, "bearing": 290.0, "distance": 42.0, "spread": 5.5, "speed": 0.7},
-		{"species": "stegosaurus", "scene": "res://assets/models/quaternius/stegosaurus.glb",
-			"count": 3, "length": 4.6, "bearing": 20.0, "distance": 42.0, "spread": 5.0, "speed": 0.65},
+		# The Late Triassic's grazers (GAME-DESIGN 7.2, station 1; v0.6 round three): Placerias,
+		# a tusked, beaked dicynodont about three and a half metres long, in herds
+		# (tools/generate_triassic.py). The sauropods, hadrosaurs, ceratopsians and stegosaurs that
+		# grazed here belong to later maps. On the far bank of the river, across from the water
+		# spot; and up the valley's two sides.
+		{"species": "placerias", "scene": "res://assets/models/triassic/placerias.glb",
+			"count": 6, "length": 3.5, "bearing": 84.0, "distance": 42.0, "spread": 6.0, "speed": 0.6},
+		{"species": "placerias", "scene": "res://assets/models/triassic/placerias.glb",
+			"count": 4, "length": 3.5, "bearing": 290.0, "distance": 42.0, "spread": 5.0, "speed": 0.6},
+		{"species": "placerias", "scene": "res://assets/models/triassic/placerias.glb",
+			"count": 4, "length": 3.5, "bearing": 20.0, "distance": 42.0, "spread": 5.0, "speed": 0.6},
 	],
 	"wander_radius": 4.0,            # how far an animal ambles from where it grazes (m)
 	"graze_time": Vector2(5.0, 12.0),  # seconds between ambles

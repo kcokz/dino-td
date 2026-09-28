@@ -25,10 +25,8 @@ var dinos_to_spawn: int = 0
 var dinos_spawned_count: int = 0
 var dinos_alive_count: int = 0
 ## Who the wave in progress sends, in order, popped as each one steps out (v0.6): a big
-## wave is led by the map's lesser boss, and the raid on the boss's beat is followed by it.
+## wave is led by the map's lesser boss; the beacon's final wave ends with the map's boss.
 var wave_roster: Array[String] = []
-## How many times the map's boss has come on its beat (GAME-DESIGN 7.5: once, mid-game).
-var boss_raids_sent: int = 0
 var is_wave_active: bool = false
 ## The beacon's final wave is under way (GAME-DESIGN 8.3): from its launch to the jump there
 ## are no more ordinary raids, only the one stream -- see start_final_wave.
@@ -227,11 +225,7 @@ func start_next_wave() -> void:
 ## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter.
 func start_next_raid() -> void:
 	var next_n: int = _next_wave_number()
-	var final_count: int = raid_size(next_n)
-	var with_boss: bool = boss_is_due()
-	if with_boss:
-		boss_raids_sent += 1
-	start_wave(next_n, final_count, with_boss)
+	start_wave(next_n, raid_size(next_n))
 
 ## How many raiders wave `wave_num` sends if it sets out now: its count, scaled by how far
 ## into the run it is (RAIDS.intensity_per_minute) and by the run's dice either way.
@@ -300,7 +294,6 @@ func reset_raid_state() -> void:
 	raid_timer = _first_raid()
 	warning_lead_time = lead_time
 	warning_emitted = false
-	boss_raids_sent = 0
 	wave_roster.clear()
 
 func _reset_raid_timer() -> void:
@@ -500,13 +493,9 @@ func roster_for(wave_num: int, count: int, with_boss: bool = false) -> Array[Str
 		roster.append(boss)
 	return roster
 
-## Whether the next raid is the one the map's boss comes with: its beat has passed and it
-## has not come yet.
-func boss_is_due() -> bool:
-	var beat: float = float(_map().get("beats", {}).get("boss_raid", -1.0))
-	return beat >= 0.0 and elapsed_time >= beat and boss_raids_sent == 0 and _is_species(String(_map().get("boss", "")))
-
-## The bosses the coming raid brings -- what the warning names.
+## The bosses the coming raid brings -- what the warning names: the lesser one, at the head of
+## a big wave. The map's boss comes with no raid: it is seen once, last of all in the beacon's
+## final wave (GAME-DESIGN 7.5; v0.6 round three: "中段的小boss不应该把最后的大boss形象暴露").
 func upcoming_bosses() -> Array[String]:
 	var out: Array[String] = []
 	var gs = _get_game_state()
@@ -514,9 +503,6 @@ func upcoming_bosses() -> Array[String]:
 	var minor: String = String(_map().get("minor_boss", ""))
 	if is_big_wave(next_n) and _is_species(minor):
 		out.append(minor)
-	var boss: String = String(_map().get("boss", ""))
-	if boss_is_due():
-		out.append(boss)
 	return out
 
 func _is_species(species: String) -> bool:
