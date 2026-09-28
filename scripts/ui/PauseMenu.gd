@@ -96,6 +96,17 @@ func close() -> void:
 		gs.set_paused(false)
 	resumed.emit()
 
+## Open, the menu is what the keys speak to: the number keys that press the card's commands
+## (Config.CONTROLS.command_keys, BaseButton.shortcut) stop here, in front of the card -- the
+## menu is later in the tree, so it hears them first. The cancel key goes on to close it.
+func _shortcut_input(event: InputEvent) -> void:
+	if not is_open or not (event is InputEventKey):
+		return
+	var cfg = _get_config()
+	var keys: Array = cfg.CONTROLS.get("command_keys", []) if cfg else []
+	if keys.has(int((event as InputEventKey).keycode)):
+		get_viewport().set_input_as_handled()
+
 func open_settings() -> void:
 	current_page = Page.SETTINGS
 	_show_page()

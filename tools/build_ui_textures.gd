@@ -1006,12 +1006,20 @@ func _pigment(spec: Dictionary, stripes: float, seed: int) -> Image:
 		var th: float = TAU * float(x - m.x) / cw
 		var radius: float = cw / TAU / 12.0
 		var s: float = streak.get_noise_3d(radius * cos(th), radius * sin(th), float(y))
-		var v: float = 0.9 + 0.08 * s
-		# Round like a wet stroke: lit along the top, shaded along the bottom.
+		var v: float = 0.84 + 0.07 * s
+		# Round like liquid in a tube (v0.6 round three, the D4 / Elden Ring bars): a thin bright
+		# line where the light catches the top of it, the body under that, shaded towards the
+		# bottom. The tint can only darken, so the body sits below white and the line is white.
 		var t: float = (float(y) + 0.5) / float(h)
-		v += 0.07 * (1.0 - smoothstep(0.0, 0.3, t)) - 0.16 * smoothstep(0.6, 1.0, t)
+		var band: float = smoothstep(0.1, 0.2, t) * (1.0 - smoothstep(0.26, 0.4, t))
+		v += 0.16 * band - 0.24 * smoothstep(0.55, 1.0, t)
+		# Its leading edge -- inside the fill's right end piece, drawn wherever the bar stops, so
+		# the middle still tiles -- is lit: how far it has come reads as a meniscus, not a cut.
+		var lead: float = smoothstep(float(w - m.x), float(w - m.x) + 1.5 * k, float(x)) * (1.0 - smoothstep(float(w) - 1.5 * k, float(w), float(x)))
+		v += 0.12 * lead * (1.0 - smoothstep(0.5, 1.0, t))
 		if stripes > 0.0 and fposmod(float(x) - float(m.x) + float(y), period) < period * 0.5:
 			v *= 0.7
+		v = minf(v, 1.0)
 		v *= 1.0 - 0.2 * (1.0 - smoothstep(0.0, 1.5 * k, d))
 		return Color(v, v, v)
 	return _compose(o, Vector4.ZERO, 1.0, 0.0, paint)

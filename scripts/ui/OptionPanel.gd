@@ -228,6 +228,10 @@ func _on_back_pressed() -> void:
 	current_menu = "default"
 	_refresh_ui()
 
+## Whether the card is in one of his submenus (build, eat), which the cancel key backs out of.
+func in_submenu() -> bool:
+	return current_menu != "default"
+
 func _process(delta: float) -> void:
 	# Whatever the panel was showing has gone (destroyed, depleted): fall back to
 	# the Hero, who is the resting subject.
@@ -445,8 +449,14 @@ func _show_abilities(force: bool = false) -> void:
 			slot.tooltip_text = (tr("ABILITY_TIP") % [name_text, effect]) if effect != "" else name_text
 		else:
 			slot.name = "EmptySlot%d" % i
-			var blank := Control.new()
+			# Not a black hole: the gilt lozenge of the rules, faint at its middle, as an empty
+			# slot on the D4 / Elden Ring bars keeps a mark of what goes there.
+			var blank := TextureRect.new()
+			blank.name = "Mark"
+			blank.texture = UiTheme.surface_texture("ornament")
+			blank.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 			blank.custom_minimum_size = Vector2.ONE * UiTheme.icon_size("l")
+			blank.modulate = Color(1.0, 1.0, 1.0, UiTheme.number("empty_mark_alpha"))
 			blank.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(blank)
 			slot.modulate = Color(1.0, 1.0, 1.0, 0.55)
@@ -658,6 +668,7 @@ func _pin() -> void:
 func _settle() -> void:
 	if separator and button_container:
 		separator.visible = button_container.get_child_count() > 0
+	_mark_keys()
 	_pin()
 	if _shown_unit != selected_unit:
 		_shown_unit = selected_unit
@@ -665,6 +676,34 @@ func _settle() -> void:
 			modulate.a = UiTheme.number("settle_alpha")
 			var tw := create_tween()
 			tw.tween_property(self, "modulate:a", 1.0, UiTheme.number("fade_seconds"))
+
+## The number keys press the card's commands in the order they stand (Config.CONTROLS.command_keys),
+## each marked with its key in a corner (UiKit.keycap). What cannot be taken back -- a demolish,
+## the beacon's launch -- is left off the keys, and skipped in the count, so a key always means
+## the same kind of thing; Back is the cancel key's (Main._unhandled_input peels a submenu off).
+func _mark_keys() -> void:
+	if button_container == null:
+		return
+	var cfg = _get_config()
+	var controls: Dictionary = cfg.CONTROLS if cfg else {}
+	var keys: Array = controls.get("command_keys", [])
+	var n: int = 0
+	for child in button_container.get_children():
+		var btn := child as Button
+		if btn == null:
+			continue
+		if btn.name == BACK_NAME:
+			UiKit.keycap(btn, tr("KEY_CANCEL"))
+			continue
+		if btn.theme_type_variation in [&"DangerButton", &"AccentButton"]:
+			continue
+		if n < keys.size():
+			UiKit.key_shortcut(btn, int(keys[n]))
+			UiKit.keycap(btn, OS.get_keycode_string(int(keys[n])))
+		n += 1
+
+## What the Back command is called on the card, so the cancel key can find it and keys skip it.
+const BACK_NAME := &"BackCommand"
 
 func _clear_buttons() -> void:
 	if button_container == null:
@@ -719,6 +758,7 @@ func _populate_hero_buttons() -> void:
 				icon, {}, func(): _trigger_eat(key))
 			UiKit.fill_caption_row(btn, cfg.describe_meal(cfg.meal_cooked(dish, String(entry["method"]))) if cfg else "")
 		var back := _create_action_button(TranslationServer.translate("CMD_BACK"), _on_back_pressed, "back", &"GhostButton")
+		back.name = BACK_NAME
 		back.custom_minimum_size = Vector2(0, UiTheme.height("card"))
 	elif current_menu == "build":
 		# Level 2: one card per buildable the run has turned up the materials for, then [ Back ]
@@ -744,6 +784,7 @@ func _populate_hero_buttons() -> void:
 			current_menu = "default"
 			_refresh_ui()
 		, "back", &"GhostButton")
+		back.name = BACK_NAME
 		back.custom_minimum_size = Vector2(0, UiTheme.height("card"))
 
 ## Cost and build time for the hovered entry, or a prompt when nothing is hovered.

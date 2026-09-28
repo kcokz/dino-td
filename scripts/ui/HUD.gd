@@ -49,6 +49,8 @@ var fed_chip: Control = null
 ## screen -- it is the run's main line (GAME-DESIGN 14.3, 6: how far is the goal).
 var beacon_label: Label = null
 var objective_panel: Control = null
+## A boss's name and bar, low across the field while one is out (BossBar).
+var boss_bar: Control = null
 var beacon_pips: HBoxContainer = null
 var beacon_bar: ProgressBar = null
 var wave_label: Label = null
@@ -1069,6 +1071,21 @@ func _ensure_ui_components() -> void:
 	hero_side.offset_left = edge
 	hero_side.offset_bottom = -(edge + UiTheme.font_size("caption") + UiTheme.space("xs"))
 	hero_side.offset_top = hero_side.offset_bottom
+
+	# Low across the field, between his medallion and the card: a boss's name and its bar while
+	# one is out (BossBar) -- level with his medallion's foot.
+	var boss_script = load("res://scripts/ui/BossBar.gd")
+	if boss_script:
+		boss_bar = boss_script.new()
+		root_control.add_child(boss_bar)
+		boss_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		boss_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		var card_width: float = float(Vector2(_ui("option_panel_size", Vector2(440, 0))).x)
+		var card_margin: float = float(_ui("option_panel_margin", 16.0))
+		boss_bar.offset_left = float(_ui("boss_bar_left", 260))
+		boss_bar.offset_right = -(card_width + 2.0 * card_margin)
+		boss_bar.offset_bottom = hero_side.offset_bottom
+		boss_bar.offset_top = hero_side.offset_bottom
 
 	# --- Centre: what just happened, what is coming ------------------------------------
 	# No size of its own: as wide and as tall as what it holds, growing out from the middle

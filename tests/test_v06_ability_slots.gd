@@ -81,6 +81,10 @@ func test_02_his_card_has_a_row_of_empty_slots_to_begin_with() -> void:
 	assert_eq(slots.size(), int(config_node.THEME["ability_slots"]), "A row of slots")
 	for slot in slots:
 		assert_eq((slot as Control).tooltip_text, tr("ABILITY_EMPTY"), "each empty one saying what goes there")
+		var mark: TextureRect = slot.get_node_or_null("Mark") as TextureRect
+		assert_true(mark != null and mark.texture != null, "and keeping a faint mark at its middle, not a black hole")
+		if mark:
+			assert_almost_eq(mark.modulate.a, float(config_node.THEME["empty_mark_alpha"]), 0.001, "this faint")
 
 func test_03_a_tool_made_is_a_square_with_its_icon_and_what_it_does() -> void:
 	var panel = _card()

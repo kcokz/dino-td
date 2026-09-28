@@ -149,6 +149,64 @@ static func command_button(text: String, icon: Texture2D, callback: Callable, to
 		btn.add_child(count)
 	return btn
 
+## A key as the engine's shortcut for a button (BaseButton.shortcut): the key presses it, and
+## it flashes as though clicked -- and does nothing while it cannot be pressed or is hidden. The
+## key is on the button already (keycap), so it is not added to the tooltip as well.
+static func key_shortcut(btn: Button, keycode: int) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = keycode as Key
+	var s := Shortcut.new()
+	s.events = [ev]
+	btn.shortcut = s
+	btn.shortcut_in_tooltip = false
+
+## The key that presses a command, on a chip in its corner (KeycapLabel): top left on a tile,
+## whose badge is top right; on a card, at the end of its price row -- the row gives way to it,
+## so a long name keeps the width it had and the lock of a card not yet affordable stands just
+## before it; at the right end of a plain command. Sized by what it says: its offsets meet,
+## and it grows away from the corner to fit.
+static func keycap(btn: Button, key_text: String) -> Label:
+	var cap: Label = btn.get_node_or_null("Keycap") as Label
+	if cap == null:
+		cap = Label.new()
+		cap.name = "Keycap"
+		cap.theme_type_variation = &"KeycapLabel"
+		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(cap)
+	cap.text = key_text
+	var inset: Vector2i = UiTheme.card_inset()
+	var row: Control = btn.get_node_or_null("PriceRow") as Control
+	match btn.theme_type_variation:
+		&"TileButton":
+			cap.set_anchors_preset(Control.PRESET_TOP_LEFT)
+			cap.grow_horizontal = Control.GROW_DIRECTION_END
+			cap.grow_vertical = Control.GROW_DIRECTION_END
+			cap.offset_left = inset.x
+			cap.offset_right = inset.x
+			cap.offset_top = inset.y
+			cap.offset_bottom = inset.y
+		&"CardButton":
+			cap.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+			cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+			cap.offset_right = -inset.x
+			cap.offset_left = -inset.x
+			cap.offset_top = row.offset_top if row else -float(inset.y)
+			cap.offset_bottom = row.offset_bottom if row else -float(inset.y)
+			if row:
+				row.offset_right = -inset.x - cap.get_combined_minimum_size().x - UiTheme.space("xs")
+		_:
+			cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+			cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+			cap.offset_right = -inset.x
+			cap.offset_left = -inset.x
+			cap.offset_top = 0.0
+			cap.offset_bottom = 0.0
+	return cap
+
 ## The row along a card's foot (card_button) as one line of words instead of prices: what a
 ## meal does, where a building says what it costs.
 static func fill_caption_row(btn: Button, text: String) -> void:

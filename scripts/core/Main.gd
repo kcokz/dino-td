@@ -1241,8 +1241,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 
 	# ESC key to cancel current building selection or deselect unit
-	# ESC peels off one layer at a time: the build ghost first, then a pinned
-	# selection, and only when there is nothing left to cancel does it open the menu.
+	# ESC peels off one layer at a time: the build ghost first, then a submenu of his card,
+	# then a pinned selection, and only when there is nothing left to cancel does it open the menu.
 	if event is InputEventKey and event.pressed and event.keycode == cancel_key:
 		get_viewport().set_input_as_handled()
 		if hud and is_instance_valid(hud) and hud.has_method("is_pause_menu_open") and hud.is_pause_menu_open():
@@ -1253,6 +1253,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var eb = _get_event_bus()
 		var panel = _get_option_panel()
+		# Then a submenu of his card (build, eat): back to his commands, as its Back button does.
+		if panel != null and is_instance_valid(panel) and panel.has_method("in_submenu") and panel.in_submenu():
+			panel._on_back_pressed()
+			return
 		var showing_other: bool = panel != null and is_instance_valid(panel) 			and "selected_unit" in panel and panel.selected_unit != null and panel.selected_unit != hero
 		if showing_other and eb and eb.has_signal("unit_deselected"):
 			eb.unit_deselected.emit()

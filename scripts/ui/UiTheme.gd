@@ -347,10 +347,17 @@ static func build() -> Theme:
 	_title(t, "TitleLabel", display_font("black", letter_spacing("title")), "title")
 	_title(t, "DisplayLabel", display_font("black", letter_spacing("display")), "display", 8)
 	_title(t, "StatLabel", display_font("black"), "title")
+	# A boss's name over its bar (BossBar): cut in capitals like a heading, and edged, because
+	# it stands on the world rather than on a panel.
+	_title(t, "BossNameLabel", display_font("bold", letter_spacing("heading")), "heading", 6)
 	# The same figures on a pale hide -- a card's price and time -- in ink.
 	_label(t, "CardNumberLabel", font("bold", true), "small", color("ink"))
 	_label(t, "CardShortLabel", font("black", true), "small", color("ink_short"))
 	_label(t, "CardCaptionLabel", font("medium"), "caption", color("ink_faint"))
+	# The key that presses a command, on a chip of the dark in its corner (UiKit.keycap): a
+	# figure in gilt, rimmed in bronze -- small, as the bars in D4 and Elden Ring mark theirs.
+	_label(t, "KeycapLabel", font("bold", true), "caption", color("title"))
+	t.set_stylebox("normal", "KeycapLabel", _box(Color(color("bg"), 0.88), Color(color("accent"), 0.45), bw, radius("xs"), space("xs"), 0))
 
 	# --- Panels: leather framed in bone, and the ship's slate in steel -------------------
 	var frame := surface("frame", "plain", space("l") + space("xs"), space("l"))
@@ -522,7 +529,7 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "ProgressBar", font_size("caption"))
 	t.set_color("font_color", "ProgressBar", color("text"))
 	for pair in [["HealthBar", color("success")], ["WarnBar", color("warning")], ["DangerBar", color("danger")],
-			["BeaconBar", color("tech")], ["BoostBar", color("boost")]]:
+			["BeaconBar", color("tech")], ["BoostBar", color("boost")], ["BossLifeBar", color("boss")]]:
 		t.set_type_variation(pair[0], "ProgressBar")
 		t.set_stylebox("background", pair[0], trough)
 		t.set_stylebox("fill", pair[0], _pigment("paint", pair[1]))

@@ -223,7 +223,7 @@ func test_08_a_bar_is_pigment_in_a_trough_between_its_caps() -> void:
 	var theme: Theme = UiTheme.get_theme()
 	var inset: float = float(config_node.THEME["fill_inset"])
 	var cap: float = float(_surfaces()["trough"]["cap"])
-	for type in ["HealthBar", "WarnBar", "DangerBar", "BeaconBar", "BuildBar"]:
+	for type in ["HealthBar", "WarnBar", "DangerBar", "BeaconBar", "BuildBar", "BossLifeBar"]:
 		var fill: StyleBox = theme.get_stylebox("fill", type)
 		assert_true(fill is StyleBoxTexture, "%s's fill is pigment" % type)
 		if not (fill is StyleBoxTexture):

@@ -1180,7 +1180,7 @@ const THEME: Dictionary = {
 	"spacing": {"hair": 2, "xs": 4, "s": 8, "m": 12, "l": 16, "xl": 24},
 	# The corner of what is still a flat box: a focus ring, a box standing in for a material
 	# whose image is not imported yet.
-	"radius": {"s": 5},
+	"radius": {"s": 5, "xs": 2},
 	"border": 1,
 	# The valley's own colours (v0.6: "远古时代质感"): bone for text, umber and ash for what it
 	# stands on, fire-ochre for the one thing to press, red ochre for danger, moss for health.
@@ -1209,6 +1209,9 @@ const THEME: Dictionary = {
 		# A meal's boost (v0.6 round two: "boost 要比较清楚地显示在移动速度、血量上面"): gold, on
 		# his bars over what he has of his own, at his feet, and in the words that rise off him.
 		"boost": Color(0.97, 0.77, 0.3),
+		# A boss's life (BossBar): a deeper crimson than danger's red, which is any bar running low
+		# -- a boss's is its own thing, full or not.
+		"boss": Color(0.62, 0.11, 0.08),
 		# Ink: text on a card's hide -- a card's name and price, a tooltip. Since v0.6 round three
 		# the hide is dark vellum, so the ink is pale; "ink_short" is a count he is short of, as
 		# danger_text is on stone.
@@ -1271,7 +1274,7 @@ const THEME: Dictionary = {
 	# How thick a bar is drawn, and a pip -- a short dash, so the stages read as one row. A
 	# bar is a groove with pigment in it: "fill_inset" is the groove's wall showing above and
 	# below the pigment.
-	"thickness": {"bar": 12, "pip": 6},
+	"thickness": {"bar": 12, "pip": 6, "boss_bar": 14},
 	"fill_inset": 2,
 	# Motion. A card pops in over this long, from this much of its size -- a nudge, not a
 	# zoom; the command card fades in from this much when it changes to another unit.
@@ -1286,6 +1289,16 @@ const THEME: Dictionary = {
 	# ones saying what goes there -- a row of slots reads as room to fill, one lone square as a
 	# stray icon. More abilities than this, and the row grows.
 	"ability_slots": 4,
+	# An empty one keeps the rules' gilt lozenge at its middle, this faint (over the slot's own
+	# dimming): there to be seen, not read as something he has.
+	"empty_mark_alpha": 0.6,
+	# A boss's bar (BossBar, v0.6 round three -- the D4 / Elden Ring way): a hit leaves the part it
+	# took lit this long -- held while the blows keep coming -- then drains it at this share of the
+	# bar a second, so a big blow reads as big and a flurry as one; when the boss falls its empty
+	# bar stays this long, so the kill is seen, and fades.
+	"boss_trail_hold": 0.6,
+	"boss_trail_drain": 0.9,
+	"boss_bar_linger": 1.5,
 	"pop_scale": 0.96,
 	"settle_alpha": 0.35,
 	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.
@@ -1414,6 +1427,9 @@ const UI: Dictionary = {
 	"game_speeds": [1.0, 2.0, 3.0],
 	"resource_count_width": 30,        # a count's box: four figures without the chip jumping
 	"objective_width": 290,            # the beacon card, top right
+	# A boss's bar (BossBar) runs low across the field from here to the command card: clear of the
+	# Hero's medallion and the meal chip beside it.
+	"boss_bar_left": 260,
 	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
 	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
 	# starts under the cabin's medallion and the figures under it.
@@ -1526,6 +1542,13 @@ const CONTROLS: Dictionary = {
 	# key as the camera's reset, which it takes over only while a trap is in hand: R is where
 	# every building game puts "rotate", and the view is not what the hand is on then.
 	"trap_turn_key": KEY_R,
+	# The commands on a card answer to the number keys, in the order they stand -- 1 the first,
+	# 2 the next -- each marked with its key in a corner (v0.6 round three: the D4 / Elden Ring
+	# bars mark every slot so, and a key is quicker than the mouse's trip across the screen).
+	# The row above the letters is the one the camera's WASD / QE / FV / R leaves free. What
+	# cannot be taken back -- a demolish, the beacon's launch -- is not on a key: it is pressed by
+	# hand. Back is the cancel key's, which peels a submenu off as it does a ghost in hand.
+	"command_keys": [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9],
 	# Pointing at things (Main._raycast_object). How far wide of a unit's body the cursor may
 	# be and still take it, in pixels: a raptor is a small thing to hit from eighteen metres
 	# up, and a unit is what a click most often means.
