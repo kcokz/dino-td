@@ -1112,6 +1112,9 @@ const THEME: Dictionary = {
 		"danger_text": Color(0.95, 0.53, 0.42),
 		"warning": Color(0.91, 0.7, 0.29),
 		"success": Color(0.52, 0.74, 0.35),
+		# A meal's boost (v0.6 round two: "boost 要比较清楚地显示在移动速度、血量上面"): gold, on
+		# his bars over what he has of his own, at his feet, and in the words that rise off him.
+		"boost": Color(0.97, 0.77, 0.3),
 		# Ink: text on a pale hide -- a card's name and price, a tooltip. Dark, or it does not
 		# read on the pale; "ink_short" is a count he is short of, as danger_text is on stone.
 		"ink": Color(0.2, 0.13, 0.07),
@@ -1165,8 +1168,8 @@ const THEME: Dictionary = {
 	"icon_sizes": {"xs": 14, "s": 18, "m": 22, "l": 30, "xl": 44, "xxl": 56},
 	# Control heights: the top bar's (slim -- it sits over the world); a command, big enough
 	# to hit without aiming; a card -- a name line with a price row under it, both inside the
-	# hide's stitches.
-	"control_heights": {"bar": 30, "command": 44, "card": 68},
+	# hide's stitches; a tile -- a command on a unit's card, its icon over its word (UiKit.command_button).
+	"control_heights": {"bar": 30, "command": 44, "card": 68, "tile": 88},
 	# Widths: a speed segment; the figure at a bar's end ("10 / 10" at its widest); a
 	# stage's pip; the results card's buttons, which sit side by side and match.
 	"widths": {"segment": 38, "figure": 64, "pip": 14, "button": 180},
@@ -1181,6 +1184,9 @@ const THEME: Dictionary = {
 	# A card showing something that changes by itself -- a bar filling, a countdown -- reads
 	# it again this often: smooth enough to watch, and not every frame.
 	"refresh_seconds": 0.2,
+	# A command on a unit's card (UiKit.command_button) is a tile ("control_heights") tall and
+	# this many times as wide: room for its icon big over its word, and four to a row.
+	"command_aspect": 1.05,
 	"pop_scale": 0.96,
 	"settle_alpha": 0.35,
 	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.
@@ -2115,6 +2121,7 @@ const DISHES: Dictionary = {
 		"inputs": {"food": 1},
 		"time": 5.0,
 		"heal": 4.0,               # of the Hero's 10
+		"max_hp": 2.0,             # hit points over his own while he is fed, full when he eats
 		"build_speed": 1.3,
 		"move_speed": 1.2,
 		"fed_seconds": 90.0,       # about a raid's gap: fed on the way out, hungry by the next
@@ -2127,6 +2134,7 @@ const DISHES: Dictionary = {
 		"inputs": {"prime_meat": 1},
 		"time": 5.0,
 		"heal": 10.0,
+		"max_hp": 4.0,
 		"build_speed": 1.8,
 		"move_speed": 1.5,
 		"fed_seconds": 150.0,
@@ -2136,12 +2144,34 @@ const DISHES: Dictionary = {
 ## Best first: a meal is cooked by the first method whose vessel he owns, and the last one
 ## needs none, so there is always a way to eat. Each better vessel ADDS an effect to the
 ## method below it -- that is the "qualitative" step a pot is (GAME-DESIGN 4.5).
+##
+## v0.6 round two ("肉的作用非常不明显……吃了饭之后会有一个 boost"): even a roast is a boost now, not
+## only a heal -- hit points over his own and a quicker stride for a while -- so that the first
+## meal of a run is felt, and seen, before there is a pot.
 const COOKING_METHODS: Array = [
-	# Seared on a flat stone heated in the fire: meat that heals, and a man who works faster.
-	{"id": "sear", "name": "COOK_SEAR", "vessel": "stone_pot", "effects": ["heal", "build_speed"]},
-	# Over the fire on a stick, the way he ate the first night. It heals, and that is all.
-	{"id": "roast", "name": "COOK_ROAST", "vessel": "", "effects": ["heal"]},
+	# Seared on a flat stone heated in the fire: all a roast does, and a man who works faster.
+	{"id": "sear", "name": "COOK_SEAR", "vessel": "stone_pot", "effects": ["heal", "max_hp", "move_speed", "build_speed"]},
+	# Over the fire on a stick, the way he ate the first night: it heals, it holds him up, and
+	# he walks the quicker for it.
+	{"id": "roast", "name": "COOK_ROAST", "vessel": "", "effects": ["heal", "max_hp", "move_speed"]},
 ]
+
+## EATING (v0.6 round two: "吃饭的逻辑要彻底改一下……吃饭也是一个图标，点进去呢就有吃的东西"). The kitchen
+## cooks a meal into his stock (GameState.meals); he eats it from his panel whenever the player
+## says, wherever he is (Hero.order_eat) -- standing, the meat in his hand, for `eat_seconds`.
+const EATING: Dictionary = {
+	# How long a meal takes, in seconds: long enough to be seen and to cost something with a
+	# raid on the way, short enough to fit between two jobs.
+	"eat_seconds": 2.5,
+	# The meat in his hand while he eats, in metres across: a leg, not a pile.
+	"prop_size": 0.24,
+	# The bone of his rig the meat is held in (tools/build_hero.py: the right hand goes to his
+	# mouth in the "eat" clip).
+	"prop_bone": "hand_r",
+	# How far out from his middle the ring at his feet is while he is fed, in metres: something
+	# to see him by that says "fed" without a word. In the boost's colour (THEME.colors.boost).
+	"aura_radius": 0.55,
+}
 
 ## Dishes cooked at one station, in declaration order.
 static func dishes_at(station_id: String) -> Array[String]:
@@ -2169,16 +2199,38 @@ static func meal_of(dish_id: String, owned: Dictionary) -> Dictionary:
 	var dish: Dictionary = DISHES[dish_id]
 	var method: Dictionary = cooking_method(owned)
 	var effects: Array = method.get("effects", [])
+	return meal_cooked(dish_id, String(method.get("id", "")))
+
+## What eating `dish_id` cooked by `method_id` does (COOKING_METHODS), whatever pots he owns
+## now: a meal in his stock was cooked the way it was cooked. The same shape as meal_of.
+static func meal_cooked(dish_id: String, method_id: String) -> Dictionary:
+	if not DISHES.has(dish_id):
+		return {}
+	var dish: Dictionary = DISHES[dish_id]
+	var method: Dictionary = {}
+	for m in COOKING_METHODS:
+		if String(m.get("id", "")) == method_id:
+			method = m
+	var effects: Array = method.get("effects", [])
 	var meal: Dictionary = {
 		"dish": dish_id,
-		"method": String(method.get("id", "")),
+		"method": method_id,
 		"heal": float(dish.get("heal", 0.0)) if effects.has("heal") else 0.0,
+		"max_hp": float(dish.get("max_hp", 0.0)) if effects.has("max_hp") else 0.0,
 		"build_speed": float(dish.get("build_speed", 1.0)) if effects.has("build_speed") else 1.0,
 		"move_speed": float(dish.get("move_speed", 1.0)) if effects.has("move_speed") else 1.0,
 	}
-	var speeds: bool = meal["build_speed"] != 1.0 or meal["move_speed"] != 1.0
-	meal["fed_seconds"] = float(dish.get("fed_seconds", 0.0)) if speeds else 0.0
+	var lasting: bool = meal["build_speed"] != 1.0 or meal["move_speed"] != 1.0 or meal["max_hp"] > 0.0
+	meal["fed_seconds"] = float(dish.get("fed_seconds", 0.0)) if lasting else 0.0
 	return meal
+
+## The most any meal does to `effect` ("build_speed", "move_speed", "max_hp"): where the panel's
+## bars end, so the best meal in the game fills one and an ordinary one visibly does not.
+static func best_meal(effect: String) -> float:
+	var best: float = 1.0 if effect.ends_with("_speed") else 0.0
+	for dish_id in DISHES:
+		best = maxf(best, float(DISHES[dish_id].get(effect, best)))
+	return best
 
 ## A meal's effects in words -- "heals 4 · builds x1.3 · for 90s" -- for the kitchen's
 ## menu, and (with_heal false) for the top bar, which only says what he is still living on:
@@ -2187,6 +2239,8 @@ static func describe_meal(meal: Dictionary, with_heal: bool = true) -> String:
 	var parts: PackedStringArray = []
 	if with_heal and float(meal.get("heal", 0.0)) > 0.0:
 		parts.append(TranslationServer.translate("EFFECT_HEAL") % int(round(float(meal["heal"]))))
+	if float(meal.get("max_hp", 0.0)) > 0.0:
+		parts.append(TranslationServer.translate("EFFECT_MAX_HP") % int(round(float(meal["max_hp"]))))
 	if float(meal.get("build_speed", 1.0)) != 1.0:
 		parts.append(TranslationServer.translate("EFFECT_BUILD_SPEED") % factor_text(float(meal["build_speed"])))
 	if float(meal.get("move_speed", 1.0)) != 1.0:
@@ -2752,7 +2806,7 @@ const ANIMATIONS: Dictionary = {
 	# dying, a jump -- plays once and holds its last frame. Decided here, for every model,
 	# rather than in each file's import settings: it is the game's rule, not the asset's,
 	# and a clip that played once and froze mid-stride was what every model did before.
-	"looping": ["idle", "walk", "run", "attack", "build", "harvest"],
+	"looping": ["idle", "walk", "run", "attack", "build", "harvest", "eat"],
 
 	# Hero states (corresponds to Hero.State enum keys)
 	"hero": {
@@ -2762,6 +2816,8 @@ const ANIMATIONS: Dictionary = {
 		"ATTACKING": "attack",
 		"DEAD": "death",
 		"HARVESTING": "harvest",
+		# His hand to his mouth and down again (tools/build_hero.py author_eat).
+		"EATING": "eat",
 	},
 
 	# Dinosaur states (corresponds to Dino.State enum keys)
@@ -2803,5 +2859,6 @@ const ANIMATIONS: Dictionary = {
 		"death": ["die", "dead", "Death", "Die", "Armature|Death"],
 		"build": ["craft", "hammer", "Build", "interact"],
 		"harvest": ["chop", "mine", "Harvest", "attack"],
+		"eat": ["Eat", "idle"],
 	},
 }

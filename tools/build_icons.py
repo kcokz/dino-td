@@ -146,6 +146,16 @@ ICONS["water"] = item_svg(
     [shape("path", C["water"], d="M 32 6 C 32 6 13 28 13 40 C 13 51 21 58 32 58 C 43 58 51 51 51 40 C 51 28 32 6 32 6 Z")],
     [shape("path", None, C["water_hi"], 3.8, d="M 22 40 C 22 46 26 50 30 51")])
 
+# ------------------------------------------------------------------------------ commands
+# Build, as a card on his panel (UiKit.command_button): a stone head lashed to a wooden haft.
+ICONS["hammer"] = item_svg(
+    [shape("polygon", C["post"], points="30,20 36,20 38,58 28,58"),
+     shape("rect", C["s2"], x=14, y=8, width=34, height=16, rx=3)],
+    [shape("polygon", C["post_dark"], points="30,20 32,20 31,58 28,58"),
+     shape("rect", C["s1"], x=14, y=8, width=34, height=6, rx=3),
+     shape("rect", C["s3"], x=14, y=19, width=34, height=5, rx=2),
+     shape("rect", C["rope"], x=27, y=22, width=12, height=6, rx=2)])
+
 # ------------------------------------------------------------------------------ buildings
 def _post(x0, top=22, tip=10, w=12):
     return "%d,58 %d,%d %d,%d %d,%d %d,58" % (x0, x0, top, x0 + w // 2, tip, x0 + w, top, x0 + w)
@@ -339,6 +349,8 @@ GLYPHS["fed"] = glyph_svg([shape("ellipse", transform="rotate(-45 26 26)", cx=26
                            shape("rect", transform="rotate(45 44 44)", x=36, y=41, width=18, height=6, rx=3),
                            shape("circle", transform="rotate(45 44 44)", cx=54, cy=40.5, r=4.8),
                            shape("circle", transform="rotate(45 44 44)", cx=54, cy=47.5, r=4.8)])
+# His stride, for the walking speed on his panel: a boot.
+GLYPHS["walk"] = glyph_svg([shape("path", d="M 22 8 L 38 8 L 38 36 L 54 44 Q 58 48 54 54 L 16 54 Q 12 54 12 50 L 12 44 Q 22 40 22 30 Z")])
 GLYPHS["close"] = glyph_svg([shape("path", None, "#ffffff", 8, d="M 17 17 L 47 47"), shape("path", None, "#ffffff", 8, d="M 47 17 L 17 47")])
 # The launch: a mast calling out, two rings each side. (The beacon's item icon, tinted flat to
 # sit on an accent button, ran its rings and mast together into one blot.)

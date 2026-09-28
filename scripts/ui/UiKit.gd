@@ -119,6 +119,53 @@ static func fill_price_row(btn: Button, price: Dictionary, extra: String = "") -
 		lock.modulate = UiTheme.color("ink_faint")
 		row.add_child(lock)
 
+## A command on a unit's card, as the games do it: a square of hide with the command's icon
+## filling it and its word under the icon, what it does in a tooltip, and -- for a command that
+## spends something counted -- the count on a badge in its corner (v0.6 round two: "Build 可以作为
+## 一个图标……吃饭也是一个图标").
+static func command_button(text: String, icon: Texture2D, callback: Callable, tooltip: String = "", badge: int = -1) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.icon = icon
+	btn.theme_type_variation = &"TileButton"
+	btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	btn.expand_icon = true
+	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.custom_minimum_size = Vector2(UiTheme.height("tile") * UiTheme.number("command_aspect"), UiTheme.height("tile"))
+	btn.tooltip_text = tooltip
+	btn.pressed.connect(callback)
+	if badge >= 0:
+		var count := Label.new()
+		count.name = "Badge"
+		count.theme_type_variation = &"CardNumberLabel"
+		count.text = str(badge)
+		count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		count.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		var inset: Vector2i = UiTheme.card_inset()
+		count.offset_right = -inset.x
+		count.offset_top = inset.y
+		count.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		btn.add_child(count)
+	return btn
+
+## The row along a card's foot (card_button) as one line of words instead of prices: what a
+## meal does, where a building says what it costs.
+static func fill_caption_row(btn: Button, text: String) -> void:
+	var row: HBoxContainer = btn.get_node_or_null("PriceRow")
+	if row == null:
+		return
+	for child in row.get_children():
+		row.remove_child(child)
+		child.queue_free()
+	var t := Label.new()
+	t.theme_type_variation = &"CardCaptionLabel"
+	t.text = text
+	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(t)
+
 ## A plain command: its icon before its word, full width, one height.
 static func action_button(text: String, icon: Texture2D, callback: Callable, variation: StringName = &"") -> Button:
 	var btn := Button.new()

@@ -95,6 +95,8 @@ func _run(name: String) -> void:
 			await _scenario_scale()
 		"kitchen":
 			await _scenario_kitchen()
+		"eating":
+			await _scenario_eating()
 		"buildings":
 			await _scenario_buildings()
 		"beacon":
@@ -116,6 +118,35 @@ func _run(name: String) -> void:
 # ==============================================================================
 # Scenarios
 # ==============================================================================
+
+## Eating (v0.6 round two: "吃饭也是一个图标……吃了饭之后会有一个 boost"): his card -- his three bars,
+## his commands as icons, a count of meals on the eat command -- and the eat page with meals
+## cooked; then him eating, the meat in his hand at his mouth; then fed -- the boost gold on the
+## end of his bars, the meal and its time under them, and the ring at his feet.
+func _scenario_eating() -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var panel = _main.hud.option_panel
+	if hero == null or panel == null:
+		return
+	hero.set_physics_process(true)
+	panel.select_target(hero)
+	gs.stock_meal("meat")
+	gs.stock_meal("meat")
+	gs.stock_meal("prime_meat")
+	hero.current_hp = hero.max_hp * 0.6      # hurt, so the heal is seen
+	await _wait(6)
+	await _shoot("card")
+	panel._on_eat_pressed()
+	await _wait(4)
+	await _shoot("eat_page")
+	panel._trigger_eat(gs.meal_key("meat", String(root.get_node("Config").cooking_method(gs.unlocks).get("id", ""))))
+	await _advance(0.6)
+	await _portrait("eating", hero.global_position, 2.6, false, true)
+	await _advance(float(root.get_node("Config").EATING["eat_seconds"]))
+	await _wait(6)
+	await _shoot("fed")
+	await _portrait("fed", hero.global_position, 3.5)
 
 ## The kitchen and what eating does (v0.6): its menu before the stone pot is made and
 ## after -- the same meat cooked a new way -- and then, fed, the line under the top bar that

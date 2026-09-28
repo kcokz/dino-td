@@ -348,6 +348,79 @@ def channel_sets(action):
     return bags if bags else [action]
 
 
+# EATING (v0.6 round two: "做完之后也没有吃的动作"). The library has no clip for it, so it is made
+# here: his idle, with his right hand brought up to his mouth and down again -- two bites a loop
+# -- by an IK chain on the arm reaching for a target that moves between his chest and his
+# mouth, baked to keys. Where those are is in the rig's own space before he is turned round
+# (he faces -Y here, his right hand is at -X), at the kit's own size.
+EAT_MOUTH = (-0.03, -0.25, 1.51)
+EAT_CHEST = (-0.12, -0.32, 1.27)
+EAT_POLE = (-0.5, 0.15, 0.95)          # the elbow goes down and out, as an arm does
+EAT_BITES = 2                          # bites a loop of the idle
+
+
+def play(obj, action):
+    """Puts `action` on `obj` so that it actually drives it: since Blender 4.4 an action animates
+    through a slot, and one that came in on another armature (the library's) is not bound to
+    this one until its slot is named."""
+    obj.animation_data.action = action
+    slots = getattr(action, "slots", None)
+    if slots is not None and len(slots) > 0 and hasattr(obj.animation_data, "action_slot"):
+        obj.animation_data.action_slot = slots[0]
+
+
+def author_eat(arm):
+    """Makes the "eat" clip: the idle, over its own length so it loops as the idle does, with
+    the right arm bringing a mouthful up EAT_BITES times."""
+    idle = bpy.data.actions.get("idle")
+    if idle is None:
+        print("[WARN] no idle clip to eat over")
+        return
+    scene = bpy.context.scene
+    start, end = int(idle.frame_range[0]), int(idle.frame_range[1])
+    scene.frame_start, scene.frame_end = start, end
+    play(arm, idle)
+
+    target = bpy.data.objects.new("EatTarget", None)
+    pole = bpy.data.objects.new("EatPole", None)
+    for o in (target, pole):
+        scene.collection.objects.link(o)
+    pole.location = EAT_POLE
+    cycle = float(end - start) / float(EAT_BITES)
+    for k in range(EAT_BITES):
+        f0 = start + cycle * k
+        # Up to the mouth, a moment there, and down again.
+        for (t, where) in ((0.0, EAT_CHEST), (0.38, EAT_MOUTH), (0.62, EAT_MOUTH), (1.0, EAT_CHEST)):
+            target.location = where
+            target.keyframe_insert("location", frame=f0 + cycle * t)
+
+    bone = arm.pose.bones["lowerarm_r"]
+    ik = bone.constraints.new("IK")
+    ik.target = target
+    ik.pole_target = pole
+    ik.pole_angle = -math.pi * 0.5
+    ik.chain_count = 2
+
+    bpy.ops.object.select_all(action="DESELECT")
+    arm.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="POSE")
+    bpy.ops.pose.select_all(action="SELECT")
+    bpy.ops.nla.bake(frame_start=start, frame_end=end, only_selected=False, visual_keying=True,
+                     clear_constraints=True, use_current_action=False, bake_types={"POSE"})
+    bpy.ops.object.mode_set(mode="OBJECT")
+    eat = arm.animation_data.action
+    eat.name = "eat"
+    eat.use_fake_user = True
+    arm.animation_data.action = None
+    # The target's own keys go with it: an action left behind would be exported as a clip.
+    moved = target.animation_data.action if target.animation_data else None
+    for o in (target, pole):
+        bpy.data.objects.remove(o, do_unlink=True)
+    if moved is not None:
+        bpy.data.actions.remove(moved)
+
+
 def main():
     reset()
     body = import_gltf(BODY)
@@ -392,6 +465,7 @@ def main():
     # the idle, so he stood in his T-pose.
     arm.animation_data_create()
     arm.animation_data.action = None
+    author_eat(arm)
 
     # TURNED to face the game's -Z (Blender +Y), as the dinosaurs are
     # (tools/convert_quaternius.py): everything in the game turns with look_at, which points

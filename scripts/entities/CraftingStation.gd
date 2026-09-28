@@ -172,7 +172,8 @@ func begin(recipe_id: String) -> bool:
 ## Advances the current job by `delta` seconds. Public so the cabin drives it only
 ## while the Hero is actually standing there, and so a test can drive it without
 ## waiting on the clock. Returns the unlock granted this tick, or "" -- including
-## when what finished was a meal, which he eats rather than keeps.
+## when what finished was a meal, which goes into his stock to be eaten when the player
+## says (GameState.stock_meal; v0.6 round two -- it used to be eaten on the spot).
 func work(delta: float) -> String:
 	if active_recipe == "" or delta <= 0.0:
 		return ""
@@ -187,8 +188,8 @@ func work(delta: float) -> String:
 	progress = 0.0
 	var gs = _get_game_state()
 	if is_dish(done):
-		if gs and gs.has_method("eat"):
-			gs.eat(done)
+		if gs and gs.has_method("stock_meal"):
+			gs.stock_meal(done)
 	elif is_beacon_job(done):
 		if gs and gs.has_method("finish_beacon_job"):
 			gs.finish_beacon_job(done)

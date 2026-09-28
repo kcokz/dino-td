@@ -14,12 +14,16 @@ enum State {
 	ATTACKING = 3,
 	DEAD = 4,
 	HARVESTING = 5,
+	EATING = 6,
 }
 
 # ==============================================================================
 # Configuration & Properties
 # ==============================================================================
 @export var max_hp: float = 10.0
+## His own hit points, without a meal's boost (Config.HERO.hp): max_hp is this and whatever
+## the meal he is living on adds (GameState.max_hp_bonus).
+var base_max_hp: float = 10.0
 @export var current_hp: float = 10.0
 @export var speed: float = 4.0
 @export var damage: float = 1.0
@@ -30,6 +34,9 @@ enum State {
 var current_state: State = State.IDLE:
 	set(v):
 		if current_state != v:
+			# Anything else he is told to do puts the meal down, uneaten (order_eat).
+			if current_state == State.EATING:
+				_put_the_meal_down()
 			current_state = v
 			if animator != null and is_instance_valid(animator):
 				animator.play_state(current_state)
@@ -91,7 +98,8 @@ func _load_config() -> void:
 	var cfg = _get_config()
 	if cfg:
 		if "HERO" in cfg and cfg.HERO is Dictionary:
-			max_hp = float(cfg.HERO.get("hp", 10.0))
+			base_max_hp = float(cfg.HERO.get("hp", 10.0))
+			max_hp = base_max_hp
 			current_hp = max_hp
 			speed = float(cfg.HERO.get("move_speed", 4.0))
 			damage = float(cfg.HERO.get("damage", 1.0))
@@ -108,6 +116,9 @@ func _connect_event_bus() -> void:
 	if eb and eb.has_signal("meal_eaten"):
 		if not eb.meal_eaten.is_connected(_on_meal_eaten):
 			eb.meal_eaten.connect(_on_meal_eaten)
+	if eb and eb.has_signal("fed_changed"):
+		if not eb.fed_changed.is_connected(_on_fed_changed):
+			eb.fed_changed.connect(_on_fed_changed)
 
 func _exit_tree() -> void:
 	if _agent.is_valid():
@@ -120,6 +131,9 @@ func _exit_tree() -> void:
 	if eb and is_instance_valid(eb) and eb.has_signal("meal_eaten"):
 		if eb.meal_eaten.is_connected(_on_meal_eaten):
 			eb.meal_eaten.disconnect(_on_meal_eaten)
+	if eb and is_instance_valid(eb) and eb.has_signal("fed_changed"):
+		if eb.fed_changed.is_connected(_on_fed_changed):
+			eb.fed_changed.disconnect(_on_fed_changed)
 
 # ==============================================================================
 # State Machine & Movement
@@ -156,6 +170,8 @@ func _physics_process(delta: float) -> void:
 			_process_attacking(delta)
 		State.HARVESTING:
 			_process_harvesting(delta)
+		State.EATING:
+			_process_eating(delta)
 	_report_pace(was_at, delta)
 
 ## Tells the animator how far he really went this frame, so a walk is shown only while he
@@ -927,13 +943,24 @@ func order_stop() -> void:
 
 func get_display_info() -> Dictionary:
 	var name_str = TranslationServer.translate("HERO_NAME")
+	var gs = _get_game_state()
 	return {
 		"title": name_str,
 		"type": "hero",
 		"hp": current_hp,
 		"max_hp": max_hp,
-		# His health is the card's bar; the line under it says what he can be told to do.
-		"status": TranslationServer.translate("HERO_HINT"),
+		# The meal's part of it, drawn in the boost's colour on his panel.
+		"base_max_hp": base_max_hp,
+		# How fast he walks and works, and how much of it is the meal's (his panel's bars).
+		"move_speed": walk_speed(),
+		"base_move_speed": speed,
+		"build_speed": work_rate(),
+		"eating": eating_left(),
+		"fed": gs.fed.duplicate() if (gs and "fed" in gs) else {},
+		# His health is the card's bar; the line under it says what he can be told to do -- or,
+		# while he eats, how long he has still to go.
+		"status": (TranslationServer.translate("HERO_EATING") % eating_left()) if is_eating() \
+			else TranslationServer.translate("HERO_HINT"),
 	}
 
 # ==============================================================================
@@ -953,6 +980,157 @@ func heal(amount: float) -> void:
 
 func _on_meal_eaten(meal: Dictionary) -> void:
 	heal(float(meal.get("heal", 0.0)))
+
+# ==============================================================================
+# Eating (v0.6 round two: "做完之后也没有吃的动作……人也没有明显吃了肉之后的状态转化效果")
+# ==============================================================================
+
+## The meal in his hand while he eats it: its key in the stock (GameState.meals), and how long
+## he has still to go.
+var _meal_in_hand: String = ""
+var _eat_left: float = 0.0
+var _meat: Node3D = null
+var _aura: MeshInstance3D = null
+
+## He eats one of the meal `key` from the stock: stops where he is, takes it in his hand and eats
+## for Config.EATING.eat_seconds -- his hand to his mouth, the meat in it -- and the meal, and its
+## boost, are his when he has finished. Any other order before then puts it down uneaten. Returns
+## whether he began; he cannot eat what has not been cooked.
+func order_eat(key: String) -> bool:
+	if current_state == State.DEAD:
+		return false
+	var gs = _get_game_state()
+	if gs == null or not gs.has_method("meal_count") or int(gs.meal_count(key)) <= 0:
+		return false
+	_clear_orders()
+	current_path.clear()
+	current_path_index = 0
+	velocity = Vector3.ZERO
+	current_state = State.IDLE      # whatever he was eating before is put down first
+	_meal_in_hand = key
+	_eat_left = _eating_number("eat_seconds", 2.5)
+	current_state = State.EATING
+	_take_the_meal(key)
+	return true
+
+## Whether he is eating right now.
+func is_eating() -> bool:
+	return current_state == State.EATING
+
+## Seconds of eating left, or 0 when he is not eating.
+func eating_left() -> float:
+	return _eat_left if current_state == State.EATING else 0.0
+
+func _process_eating(delta: float) -> void:
+	_eat_left -= delta
+	if _eat_left > 0.0:
+		return
+	var key: String = _meal_in_hand
+	current_state = State.IDLE
+	var gs = _get_game_state()
+	var meal: Dictionary = gs.eat_meal(key) if (gs and gs.has_method("eat_meal")) else {}
+	if not meal.is_empty():
+		_show_the_boost(meal)
+
+## The meat in his hand: the pile the game drops of it, small, held in the hand his clip brings
+## to his mouth (Config.EATING.prop_bone).
+func _take_the_meal(key: String) -> void:
+	_put_the_meal_away()
+	var cfg = _get_config()
+	var body: Node = find_child("Body", false, false)
+	if cfg == null or body == null:
+		return
+	var skeletons: Array = body.find_children("*", "Skeleton3D", true, false)
+	var dish: String = key.get_slice("/", 0)
+	var eats: Dictionary = cfg.DISHES.get(dish, {}).get("inputs", {})
+	if skeletons.is_empty() or eats.is_empty():
+		return
+	var skeleton := skeletons[0] as Skeleton3D
+	var bone: String = String(cfg.EATING.get("prop_bone", "hand_r")) if "EATING" in cfg else "hand_r"
+	if skeleton.find_bone(bone) < 0:
+		return
+	var hold := BoneAttachment3D.new()
+	hold.name = "MealInHand"
+	hold.bone_name = bone
+	skeleton.add_child(hold)
+	var meat: Node3D = VisualLibrary.make("drop/" + String(eats.keys()[0]))
+	hold.add_child(meat)
+	# As big across as Config says, whatever the rig's own scale: the hand carries the fit the
+	# model was given to stand 1.2 m tall.
+	var across: float = maxf(0.001, VisualLibrary.visual_bounds(meat).get_longest_axis_size())
+	var inherited: float = maxf(0.001, hold.global_transform.basis.get_scale().x)
+	meat.scale = Vector3.ONE * (_eating_number("prop_size", 0.24) / (across * inherited))
+	_meat = hold
+
+func _put_the_meal_away() -> void:
+	if _meat != null and is_instance_valid(_meat):
+		_meat.queue_free()
+	_meat = null
+
+## Stopped before the end: nothing is eaten, and the meal stays in the stock.
+func _put_the_meal_down() -> void:
+	_meal_in_hand = ""
+	_eat_left = 0.0
+	_put_the_meal_away()
+
+## What the meal did, where the player is looking: a burst in the boost's colour and its effects
+## in words rising off him (Config.describe_meal), and the sound of it going in.
+func _show_the_boost(meal: Dictionary) -> void:
+	var fx = _get_fx()
+	var cfg = _get_config()
+	if fx == null:
+		return
+	var colour: Color = UiTheme.color("boost")
+	fx.debris(global_position + Vector3(0.0, 0.8, 0.0), colour)
+	if cfg and cfg.has_method("describe_meal"):
+		fx.floating_text(global_position + Vector3(0.0, 1.2, 0.0), cfg.describe_meal(meal), colour)
+	fx.play(fx.Sound.PICKUP)
+
+## The boost's hit points: over his own while he is fed, full when he eats -- and gone again,
+## with any of them he was living on, when it wears off. And the ring at his feet that says he
+## is fed.
+func _on_fed_changed(fed: Dictionary) -> void:
+	var was: float = max_hp
+	max_hp = base_max_hp + float(fed.get("max_hp", 0.0))
+	if max_hp > was and current_state != State.DEAD:
+		current_hp += max_hp - was
+	current_hp = minf(current_hp, max_hp)
+	_refresh_health_bar()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("hero_hp_changed"):
+		eb.hero_hp_changed.emit(current_hp, max_hp)
+	_show_aura(not fed.is_empty())
+
+## A ring of the boost's colour at his feet, while he is fed (Config.EATING.aura_radius).
+func _show_aura(on: bool) -> void:
+	if on and (_aura == null or not is_instance_valid(_aura)):
+		var r: float = _eating_number("aura_radius", 0.55)
+		var ring := TorusMesh.new()
+		ring.inner_radius = r * 0.88
+		ring.outer_radius = r
+		ring.rings = 32
+		ring.ring_segments = 6
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		var colour: Color = UiTheme.color("boost")
+		mat.albedo_color = Color(colour.r, colour.g, colour.b, 0.75)
+		_aura = MeshInstance3D.new()
+		_aura.name = "FedAura"
+		_aura.mesh = ring
+		_aura.material_override = mat
+		_aura.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_aura.scale = Vector3(1.0, 0.15, 1.0)          # flat on the ground
+		_aura.position = Vector3(0.0, 0.03, 0.0)
+		add_child(_aura)
+	if _aura != null and is_instance_valid(_aura):
+		_aura.visible = on
+
+func _eating_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	if cfg and "EATING" in cfg:
+		return float(cfg.EATING.get(key, fallback))
+	return fallback
 
 ## How fast he raises and mends: 1.0, or more on a good meal (GameState.build_multiplier).
 func work_rate() -> float:

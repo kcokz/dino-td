@@ -167,6 +167,10 @@ signal cabin_view_changed(inside: bool)
 ## as Config.meal_of describes it. The Hero heals from it; GameState keeps the rest.
 signal meal_eaten(meal: Dictionary)
 
+## Emitted when the stock of cooked meals changes -- one cooked, one eaten, a new run:
+## GameState.meals, "dish/method" -> how many (v0.6 round two).
+signal meals_changed(meals: Dictionary)
+
 ## Emitted when the Hero becomes fed, or stops being: GameState.fed, empty when the
 ## last meal has worn off.
 signal fed_changed(fed: Dictionary)

@@ -1,5 +1,5 @@
 # res://tests/test_v06_kitchen.gd
-# v0.6 T3: the kitchen feeds him, and a fed man works faster.
+# v0.6 T3: the kitchen cooks for him, and a fed man works faster.
 #
 # GAME-DESIGN 4.5: meat cannot only heal. Once every building is up the raids still leave
 # meat, and it has to be worth fetching -- so a meal heals, and a good one leaves him faster
@@ -100,16 +100,23 @@ func test_03_there_is_always_a_way_to_eat_and_every_pot_adds_something() -> void
 # 2. Eating
 # ==============================================================================
 
-func test_04_roast_meat_heals_and_that_is_all() -> void:
+func test_04_roast_meat_heals_holds_him_up_and_quickens_him() -> void:
+	# It healed and did nothing else until v0.6 round two ("肉的作用非常不明显……吃了饭之后会有一个
+	# boost"): even the first meal of a run is a boost now -- hit points over his own and a quicker
+	# stride for a while -- and the pot is what makes him build faster too.
 	var hero = _hero()
 	await wait_frames(1)
 	hero.current_hp = 1.0
 	var meal: Dictionary = game_state_node.eat("meat")
+	var dish: Dictionary = config_node.DISHES["meat"]
 	assert_eq(String(meal["method"]), String(_bare()["id"]), "With no pot, meat is roasted")
-	assert_almost_eq(hero.current_hp, minf(hero.max_hp, 1.0 + float(config_node.DISHES["meat"]["heal"])), 0.001,
-		"It heals him")
-	assert_true(game_state_node.fed.is_empty(), "And leaves him no faster")
-	assert_almost_eq(hero.work_rate(), 1.0, 0.0001, "He builds at his own pace")
+	assert_almost_eq(hero.max_hp, float(config_node.HERO["hp"]) + float(dish["max_hp"]), 0.001,
+		"It holds him up: hit points over his own while he is fed")
+	assert_almost_eq(hero.current_hp, 1.0 + float(dish["max_hp"]) + float(dish["heal"]), 0.001,
+		"And heals him -- the meal's own hit points full, and the heal on top")
+	assert_almost_eq(game_state_node.move_multiplier(), float(dish["move_speed"]), 0.0001, "He walks the quicker for it")
+	assert_almost_eq(hero.work_rate(), 1.0, 0.0001, "But builds at his own pace: that is the pot's")
+	assert_almost_eq(float(game_state_node.fed["seconds_left"]), float(dish["fed_seconds"]), 0.0001, "For a while")
 
 func test_05_seared_on_a_stone_pot_he_also_builds_faster_for_a_while() -> void:
 	var hero = _hero()
@@ -190,24 +197,29 @@ func test_09_a_fed_man_walks_faster_when_the_meal_says_so() -> void:
 # 3. The kitchen
 # ==============================================================================
 
-func test_10_the_kitchen_cooks_a_meal_and_he_eats_it_there_and_then() -> void:
+func test_10_the_kitchen_cooks_a_meal_into_his_stock() -> void:
+	# It used to be eaten there and then. Since v0.6 round two a meal is cooked and kept, and he
+	# eats it when the player says, wherever he is (test_v06_eating).
 	var hero = _hero()
 	var kitchen = _spawn(load("res://scripts/entities/CraftingStation.gd").new("kitchen"))
 	await wait_frames(1)
 	hero.current_hp = 1.0
 	game_state_node.resources["food"] = 1
 	game_state_node.known["food"] = true      # meat has turned up in this run
-	var watcher = watch_signal(event_bus_node, "meal_eaten")
+	var eaten = watch_signal(event_bus_node, "meal_eaten")
+	var stocked = watch_signal(event_bus_node, "meals_changed")
 
 	assert_has(kitchen.dishes(), "meat", "Meat is on the kitchen's menu")
 	assert_true(kitchen.begin("meat"), "It takes the job")
 	assert_eq(int(game_state_node.resources["food"]), 0, "The meat goes on the fire when the work starts")
 	var needed: float = float(config_node.DISHES["meat"]["time"])
 	kitchen.work(needed * 0.5)
-	assert_false(watcher.emitted, "Half cooked is not a meal")
+	assert_false(stocked.emitted, "Half cooked is not a meal")
 	kitchen.work(needed * 0.5 + 0.01)
-	assert_true(watcher.emitted, "Cooked, he eats it")
-	assert_gt(hero.current_hp, 1.0, "And it does him good")
+	var key: String = game_state_node.meal_key("meat", String(_bare()["id"]))
+	assert_eq(game_state_node.meal_count(key), 1, "Cooked, it is put by: roast meat, one")
+	assert_false(eaten.emitted, "Not eaten")
+	assert_almost_eq(hero.current_hp, 1.0, 0.001, "And he is none the better for it yet")
 	assert_eq(kitchen.active_recipe, "", "The kitchen is free again")
 	assert_true(kitchen.can_offer("meat"), "And meat is still on the menu: a meal is not a one-off")
 

@@ -958,7 +958,7 @@ func test_48_a_move_order_mid_harvest_is_actually_obeyed() -> void:
 # 14. Standardized Interaction-Aware Highlight & Stop Button Removal
 # ==============================================================================
 
-func test_49_hero_level_1_menu_only_has_build_button() -> void:
+func test_49_hero_level_1_menu_is_build_and_eat() -> void:
 	var panel = option_panel_script.new()
 	var hero = hero_script.new()
 	_cleanup_nodes.append(panel)
@@ -969,10 +969,11 @@ func test_49_hero_level_1_menu_only_has_build_button() -> void:
 
 	panel.select_target(hero)
 	assert_eq(panel.current_menu, "default", "Starts at default level-1 menu")
-	# Level 1 menu now offers only [ Build ], Stop button is removed as redundant
-	assert_eq(panel.button_container.get_child_count(), 1, "Level 1 menu has exactly 1 button")
-	var btn = panel.button_container.get_child(0)
-	assert_eq(btn.text, tr("CMD_BUILD"), "The single button is Build")
+	# Stop was removed as redundant long ago. Since v0.6 round two eating is a command of his
+	# own ("吃饭也是一个图标"): [ Build ] [ Eat ], and nothing else.
+	assert_eq(panel.button_container.get_child_count(), 2, "Level 1 menu has exactly 2 commands")
+	assert_eq(panel.button_container.get_child(0).text, tr("CMD_BUILD"), "Build first")
+	assert_eq(panel.button_container.get_child(1).text, tr("CMD_EAT"), "Then Eat")
 
 
 func test_58_depleted_nodes_report_themselves_unavailable() -> void:

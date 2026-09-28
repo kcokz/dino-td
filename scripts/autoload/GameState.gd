@@ -44,10 +44,16 @@ var unlocks: Dictionary = {}
 ## out at once, missing pieces and all.
 var known: Dictionary = {}
 
-## The meal he is living on (v0.6, GAME-DESIGN 4.5): its speeds and how long they have
-## left -- {"dish", "method", "build_speed", "move_speed", "seconds_left", "seconds_total"}
+## The meal he is living on (v0.6, GAME-DESIGN 4.5): its boost and how long it has left --
+## {"dish", "method", "build_speed", "move_speed", "max_hp", "seconds_left", "seconds_total"}
 ## -- or empty when he is not fed. One meal at a time: eating again replaces it.
 var fed: Dictionary = {}
+
+## Meals cooked and not yet eaten (v0.6 round two: "吃饭也是一个图标，点进去呢就有吃的东西"):
+## "dish/method" -> how many. The kitchen cooks into this; he eats from it, wherever he is,
+## when the player says (Hero.order_eat). A meal keeps the way it was cooked: roast meat
+## does not become seared because a pot has been made since.
+var meals: Dictionary = {}
 
 ## The run (v0.6, GAME-DESIGN 12): which map it is played on, and the seed every chance in
 ## it is drawn from. Everything in play that is left to chance draws from `rng` -- never
@@ -210,6 +216,7 @@ func reset_game(p_seed: int = -1) -> void:
 	for res_id in map_data().get("opening_stock", {}):
 		known[String(res_id)] = true
 	_set_fed({})
+	_set_meals({})
 	beacon_steps = 0
 	beacon_charge = 0.0
 
@@ -343,14 +350,77 @@ func build_multiplier() -> float:
 func move_multiplier() -> float:
 	return float(fed.get("move_speed", 1.0))
 
-## He eats `dish_id`, cooked the best way his vessels allow (Config.meal_of). Heals are
-## the Hero's business and go out on the bus; a meal with a speed effect makes him fed,
-## replacing whatever he was fed on before. Returns the meal, or {} for an unknown dish.
-func eat(dish_id: String) -> Dictionary:
+## Hit points he has over his own while he is fed.
+func max_hp_bonus() -> float:
+	return float(fed.get("max_hp", 0.0))
+
+## The stock's key for `dish_id` cooked by `method`.
+static func meal_key(dish_id: String, method: String) -> String:
+	return "%s/%s" % [dish_id, method]
+
+## A meal put by, cooked the best way his vessels allow now (Config.cooking_method). Returns
+## its key.
+func stock_meal(dish_id: String) -> String:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("cooking_method") or not cfg.DISHES.has(dish_id):
+		return ""
+	var key: String = meal_key(dish_id, String(cfg.cooking_method(unlocks).get("id", "")))
+	var now: Dictionary = meals.duplicate()
+	now[key] = int(now.get(key, 0)) + 1
+	_set_meals(now)
+	return key
+
+## How many of the meal `key` are cooked and waiting.
+func meal_count(key: String) -> int:
+	return int(meals.get(key, 0))
+
+## What is in the stock, in the order Config lists dishes and cooking methods: one
+## {"key", "dish", "method", "count"} for each meal there is at least one of.
+func meals_in_stock() -> Array:
+	var out: Array = []
+	var cfg = _get_config()
+	if cfg == null:
+		return out
+	for dish_id in cfg.DISHES:
+		for method in cfg.COOKING_METHODS:
+			var key: String = meal_key(String(dish_id), String(method.get("id", "")))
+			if meal_count(key) > 0:
+				out.append({"key": key, "dish": String(dish_id), "method": String(method.get("id", "")),
+					"count": meal_count(key)})
+	return out
+
+## He eats one of the meal `key` from the stock. Returns what it did (as eat), or {} when there
+## is none of it.
+func eat_meal(key: String) -> Dictionary:
+	if meal_count(key) <= 0:
+		return {}
+	var parts: PackedStringArray = key.split("/")
+	if parts.size() != 2:
+		return {}
+	var now: Dictionary = meals.duplicate()
+	now[key] = meal_count(key) - 1
+	if int(now[key]) <= 0:
+		now.erase(key)
+	_set_meals(now)
+	return eat(parts[0], parts[1])
+
+func _set_meals(value: Dictionary) -> void:
+	if value == meals:
+		return
+	meals = value
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("meals_changed"):
+		eb.meals_changed.emit(meals)
+
+## He eats `dish_id` -- cooked by `method`, or the best way his vessels allow when none is
+## named (Config.meal_of). Heals are the Hero's business and go out on the bus; a meal with a
+## lasting boost makes him fed, replacing whatever he was fed on before. Returns the meal, or
+## {} for an unknown dish.
+func eat(dish_id: String, method: String = "") -> Dictionary:
 	var cfg = _get_config()
 	if cfg == null or not cfg.has_method("meal_of"):
 		return {}
-	var meal: Dictionary = cfg.meal_of(dish_id, unlocks)
+	var meal: Dictionary = cfg.meal_cooked(dish_id, method) if method != "" else cfg.meal_of(dish_id, unlocks)
 	if meal.is_empty():
 		return {}
 	var seconds: float = float(meal.get("fed_seconds", 0.0))
@@ -360,6 +430,7 @@ func eat(dish_id: String) -> Dictionary:
 			"method": String(meal.get("method", "")),
 			"build_speed": float(meal.get("build_speed", 1.0)),
 			"move_speed": float(meal.get("move_speed", 1.0)),
+			"max_hp": float(meal.get("max_hp", 0.0)),
 			"seconds_left": seconds,
 			"seconds_total": seconds,
 		})

@@ -7,11 +7,15 @@ extends PanelContainer
 ## Top to bottom (UI-POLISH T10, T11):
 ##   * who it is: a portrait (its icon), its name, and what kind of thing it is;
 ##   * how it is: a health bar, and a second, slanted bar for work under way -- building,
-##     upgrading, a job at a bench -- told apart by shape as well as colour;
+##     upgrading, a job at a bench -- told apart by shape as well as colour. The Hero has three
+##     bars of his own instead -- health, build speed, walk speed -- with a meal's boost gold on
+##     the end of each, and what he is living on and for how long (v0.6 round two: "人的界面面板上
+##     还要有显示血量、建造速度、移动速度，分别都有一个血条……boost 要比较清楚地显示");
 ##   * what it says: the one line only it can add (a stake's bite, what a rock needs);
-##   * what it can do: its commands, and on the build page one card per building with
-##     its price as icons along the bottom, red where the warehouse falls short and a lock
-##     on the card when it cannot be paid -- never colour alone.
+##   * what it can do: its commands -- his as icons, Build and Eat -- and on the build page one
+##     card per building with its price as icons along the bottom, red where the warehouse falls
+##     short and a lock on the card when it cannot be paid -- never colour alone; on the eat page
+##     one card per meal cooked, what it does along the bottom.
 ##
 ## The panel is as tall as what it holds and grows upward from the corner; it used to be a
 ## fixed box with its lower half empty. Everything is styled by UiTheme through type
@@ -21,7 +25,7 @@ signal build_option_selected(building_type: String)
 signal action_triggered(action_name: String, target_node: Node)
 
 var selected_unit: Node = null
-var current_menu: String = "default" # "default" or "build"
+var current_menu: String = "default" # "default", "build" or "eat"
 
 ## Inside the cabin the panel stops resting on the Hero: there is nothing to order
 ## him to do in there, and offering his build menu at the bench would be a second
@@ -47,6 +51,13 @@ var work_text: Label = null
 var status_label: Label = null
 var separator: HSeparator = null
 var button_container: GridContainer = null
+## The Hero's own block: a StatBar and its figure for each of "hp", "build" and "move", and the
+## row that says what meal he is living on.
+var hero_stats: VBoxContainer = null
+var _stat_rows: Dictionary = {}
+var boost_row: HBoxContainer = null
+var boost_text: Label = null
+var boost_bar: ProgressBar = null
 var _last_refresh_time: float = 0.0
 var _shown_unit: Node = null
 
@@ -76,6 +87,8 @@ func _connect_event_bus() -> void:
 			eb.cabin_view_changed.connect(_on_cabin_view_changed)
 		if eb.has_signal("material_discovered") and not eb.material_discovered.is_connected(_on_material_discovered):
 			eb.material_discovered.connect(_on_material_discovered)
+		if eb.has_signal("meals_changed") and not eb.meals_changed.is_connected(_on_meals_changed):
+			eb.meals_changed.connect(_on_meals_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -92,6 +105,8 @@ func _disconnect_event_bus() -> void:
 			eb.cabin_view_changed.disconnect(_on_cabin_view_changed)
 		if eb.has_signal("material_discovered") and eb.material_discovered.is_connected(_on_material_discovered):
 			eb.material_discovered.disconnect(_on_material_discovered)
+		if eb.has_signal("meals_changed") and eb.meals_changed.is_connected(_on_meals_changed):
+			eb.meals_changed.disconnect(_on_meals_changed)
 
 ## Left-click is the only thing that changes what the panel shows. Right-click
 ## gives the Hero an order and deliberately leaves the panel alone, so inspecting
@@ -101,6 +116,12 @@ func _on_unit_selected(unit: Node) -> void:
 
 func _on_unit_deselected() -> void:
 	clear_selection()
+
+## A meal cooked or eaten: his commands' count, and the eat page, are made again -- only while
+## they are what is shown.
+func _on_meals_changed(_meals: Dictionary) -> void:
+	if selected_unit != null and selected_unit == _get_hero() and current_menu != "build":
+		_refresh_ui()
 
 func _on_locale_changed(_locale: String) -> void:
 	_refresh_ui()
@@ -194,6 +215,31 @@ func _on_build_pressed() -> void:
 	current_menu = "build"
 	_refresh_ui()
 
+func _on_eat_pressed() -> void:
+	current_menu = "eat"
+	_refresh_ui()
+
+## He eats the meal `key` (Hero.order_eat), and the card goes back to his commands.
+func _trigger_eat(key: String) -> void:
+	var hero = _get_hero()
+	if hero != null and is_instance_valid(hero) and hero.has_method("order_eat"):
+		hero.order_eat(key)
+	current_menu = "default"
+	_refresh_ui()
+
+## How many meals are cooked and waiting, all told.
+func _meals_cooked() -> int:
+	var gs = _get_game_state()
+	var n: int = 0
+	if gs and "meals" in gs:
+		for key in gs.meals:
+			n += int(gs.meals[key])
+	return n
+
+func _hero_is_eating() -> bool:
+	var hero = _get_hero()
+	return hero != null and is_instance_valid(hero) and hero.has_method("is_eating") and hero.is_eating()
+
 func _on_back_pressed() -> void:
 	current_menu = "default"
 	_refresh_ui()
@@ -285,6 +331,9 @@ func _ensure_components() -> void:
 		work_text = work[2]
 		work_text.theme_type_variation = &"CaptionLabel"
 
+	if hero_stats == null:
+		_build_hero_stats(main_vbox)
+
 	if status_label == null:
 		status_label = Label.new()
 		status_label.name = "StatusLabel"
@@ -323,9 +372,124 @@ func _update_status_display() -> void:
 		title_label.text = info.get("title", "")
 	_set_status(String(info.get("status", "")))
 
-## The two bars, from what the selected thing reports about itself.
+## His block: a row for each of his three stats -- its icon, named in its tooltip; its bar; its
+## figure -- and the row for the meal he is living on: its name, how long it has left, and a thin
+## bar running down with it.
+func _build_hero_stats(into: VBoxContainer) -> void:
+	hero_stats = VBoxContainer.new()
+	hero_stats.name = "HeroStats"
+	hero_stats.visible = false
+	hero_stats.add_theme_constant_override("separation", UiTheme.space("xs"))
+	into.add_child(hero_stats)
+	for spec in [["hp", "heart", "STAT_HP_NAME"], ["build", "build", "STAT_BUILD_NAME"], ["move", "walk", "STAT_MOVE_NAME"]]:
+		var row := HBoxContainer.new()
+		row.name = String(spec[0]).capitalize() + "Stat"
+		var icon := UiKit.icon_rect(String(spec[1]), UiTheme.icon_size("s"), "Icon")
+		icon.modulate = UiTheme.color("text_muted")
+		icon.tooltip_text = tr(String(spec[2]))
+		icon.mouse_filter = Control.MOUSE_FILTER_PASS
+		row.add_child(icon)
+		var bar := StatBar.new()
+		bar.name = "Bar"
+		row.add_child(bar)
+		var figure := Label.new()
+		figure.name = "Figure"
+		figure.theme_type_variation = &"SmallNumberLabel"
+		figure.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		figure.custom_minimum_size = Vector2(UiTheme.width("figure"), 0)
+		row.add_child(figure)
+		hero_stats.add_child(row)
+		_stat_rows[String(spec[0])] = row
+	boost_row = HBoxContainer.new()
+	boost_row.name = "BoostRow"
+	boost_row.visible = false
+	var fed := UiKit.icon_rect("fed", UiTheme.icon_size("s"), "Icon")
+	fed.modulate = UiTheme.color("boost")
+	boost_row.add_child(fed)
+	boost_text = Label.new()
+	boost_text.name = "Text"
+	boost_text.theme_type_variation = &"CaptionLabel"
+	boost_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boost_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	boost_row.add_child(boost_text)
+	boost_bar = ProgressBar.new()
+	boost_bar.name = "Left"
+	boost_bar.theme_type_variation = &"BoostBar"
+	boost_bar.show_percentage = false
+	boost_bar.min_value = 0.0
+	boost_bar.max_value = 1.0
+	boost_bar.step = 0.0
+	boost_bar.custom_minimum_size = Vector2(UiTheme.width("figure"), UiTheme.thickness("bar"))
+	boost_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	boost_row.add_child(boost_bar)
+	hero_stats.add_child(boost_row)
+
+## One of his stats: his own part and the whole, as shares of its bar; its figure, gold while a
+## meal is raising it.
+func _set_stat(key: String, own: float, whole: float, variation: StringName, figure: String, boosted: bool) -> void:
+	var row: Node = _stat_rows.get(key)
+	if row == null:
+		return
+	(row.get_node("Bar") as StatBar).set_values(own, whole, variation)
+	var label := row.get_node("Figure") as Label
+	label.text = figure
+	label.theme_type_variation = &"BoostNumberLabel" if boosted else &"SmallNumberLabel"
+
+## His three bars and his meal, from what he reports (Hero.get_display_info). Each bar ends at
+## the most the best meal in the game would make of it (Config.best_meal), so his own part is
+## a length to be raised and the gold is how much this meal raises it.
+func _show_hero_stats(info: Dictionary) -> void:
+	var cfg = _get_config()
+	# Health: his own hit points in the health colour, and those the meal adds, gold.
+	var max_hp: float = maxf(0.001, float(info.get("max_hp", 1.0)))
+	var own_max: float = float(info.get("base_max_hp", max_hp))
+	var hp: float = float(info.get("hp", 0.0))
+	_set_stat("hp", minf(hp, own_max) / max_hp, hp / max_hp, UiTheme.health_bar(hp / max_hp),
+		UiKit.fraction_text(hp, max_hp), max_hp > own_max + 0.001)
+	# Building: his own pace is x1.
+	var best_build: float = maxf(1.0, float(cfg.best_meal("build_speed")) if cfg else 1.0)
+	var build: float = float(info.get("build_speed", 1.0))
+	_set_stat("build", 1.0 / best_build, build / best_build, &"BeaconBar",
+		tr("STAT_BUILD_VALUE") % (cfg.factor_text(build) if cfg else str(build)), build > 1.0001)
+	# Walking: his own stride, in metres a second.
+	var own_walk: float = maxf(0.001, float(info.get("base_move_speed", 1.0)))
+	var walk: float = float(info.get("move_speed", own_walk))
+	var best_walk: float = own_walk * maxf(1.0, float(cfg.best_meal("move_speed")) if cfg else 1.0)
+	_set_stat("move", own_walk / best_walk, walk / best_walk, &"BeaconBar",
+		tr("STAT_MOVE_VALUE") % walk, walk > own_walk + 0.001)
+	# The meal he is living on, and how long it has left.
+	var fed: Dictionary = info.get("fed", {})
+	boost_row.visible = not fed.is_empty()
+	if not fed.is_empty():
+		var left: float = maxf(0.0, float(fed.get("seconds_left", 0.0)))
+		var secs: int = int(ceil(left))
+		boost_text.text = tr("FED_LINE") % [_meal_name(String(fed.get("dish", "")), String(fed.get("method", ""))),
+			secs / 60, secs % 60]
+		boost_bar.value = clampf(left / maxf(0.001, float(fed.get("seconds_total", 1.0))), 0.0, 1.0)
+
+## "Roast meat", "Seared prime meat": a meal named for how it was cooked (Config.COOKING_METHODS).
+func _meal_name(dish_id: String, method_id: String) -> String:
+	var cfg = _get_config()
+	if cfg == null or not cfg.DISHES.has(dish_id):
+		return ""
+	var title: String = tr(String(cfg.DISHES[dish_id].get("name", dish_id)))
+	for method in cfg.COOKING_METHODS:
+		if String(method.get("id", "")) == method_id:
+			var fmt: String = tr(String(method.get("name", "")))
+			return (fmt % title) if "%s" in fmt else title
+	return title
+
+## The two bars, from what the selected thing reports about itself -- or, for the Hero, his block.
 func _show_vitals(info: Dictionary) -> void:
 	if hp_row == null:
+		return
+	var is_hero: bool = String(info.get("type", "")) == "hero"
+	if hero_stats != null:
+		hero_stats.visible = is_hero
+	if is_hero:
+		hp_row.visible = false
+		work_row.visible = false
+		_show_hero_stats(info)
 		return
 	# Health, or what is left in a resource node -- the same bar, read the same way.
 	var has_hp: bool = info.has("max_hp") and float(info.get("max_hp", 0.0)) > 0.0 and bool(info.get("is_constructed", true))
@@ -506,12 +670,35 @@ func _fill_price_row(btn: Button, price: Dictionary, extra: String = "") -> void
 
 func _populate_hero_buttons() -> void:
 	if current_menu == "default":
+		# His commands as icons, the games' way (v0.6 round two): build, and eat -- the meals
+		# cooked on a badge, and nothing to press when there are none.
+		button_container.columns = 4
+		var build := UiKit.command_button(tr("CMD_BUILD"), UiTheme.icon("hammer"), _on_build_pressed, tr("TIP_CMD_BUILD"))
+		build.name = "BuildCommand"
+		button_container.add_child(build)
+		var meals: int = _meals_cooked()
+		var eat := UiKit.command_button(tr("CMD_EAT"), UiTheme.icon("food"), _on_eat_pressed, tr("TIP_CMD_EAT"), meals)
+		eat.name = "EatCommand"
+		eat.disabled = meals <= 0 or _hero_is_eating()
+		button_container.add_child(eat)
+	elif current_menu == "eat":
+		# One card per meal cooked: named for how it was cooked, how many, and what it does.
 		button_container.columns = 1
-		# Level 1: [ Build ]
-		_create_action_button(TranslationServer.translate("CMD_BUILD"), func():
-			current_menu = "build"
-			_refresh_ui()
-		, "build")
+		var cfg = _get_config()
+		var gs = _get_game_state()
+		var stock: Array = gs.meals_in_stock() if (gs and gs.has_method("meals_in_stock")) else []
+		if stock.is_empty():
+			_set_status(tr("EAT_NOTHING"))
+		for entry in stock:
+			var key: String = String(entry["key"])
+			var dish: String = String(entry["dish"])
+			var eats: Dictionary = cfg.DISHES[dish].get("inputs", {}) if cfg else {}
+			var icon: Texture2D = UiTheme.icon(String(eats.keys()[0])) if not eats.is_empty() else null
+			var btn := _create_card_button("%s ×%d" % [_meal_name(dish, String(entry["method"])), int(entry["count"])],
+				icon, {}, func(): _trigger_eat(key))
+			UiKit.fill_caption_row(btn, cfg.describe_meal(cfg.meal_cooked(dish, String(entry["method"]))) if cfg else "")
+		var back := _create_action_button(TranslationServer.translate("CMD_BACK"), _on_back_pressed, "back", &"GhostButton")
+		back.custom_minimum_size = Vector2(0, UiTheme.height("card"))
 	elif current_menu == "build":
 		# Level 2: one card per buildable the run has turned up the materials for, then [ Back ]
 		button_container.columns = 2

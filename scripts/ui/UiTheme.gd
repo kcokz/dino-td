@@ -336,6 +336,8 @@ static func build() -> Theme:
 	_label(t, "LeadLabel", font("regular"), "body", color("text_muted"))
 	_label(t, "NumberLabel", font("bold", true), "label", color("text"))
 	_label(t, "SmallNumberLabel", font("bold", true), "small", color("text"))
+	# A figure a meal has raised, in the boost's gold (the Hero's panel).
+	_label(t, "BoostNumberLabel", font("bold", true), "small", color("boost"))
 	_label(t, "ShortNumberLabel", font("bold", true), "small", color("danger_text"))
 	_label(t, "AccentLabel", font("bold"), "small", color("accent"))
 	# Cut in capitals: a heading, a small capital label naming a card (the beacon's), a title,
@@ -476,6 +478,20 @@ static func build() -> Theme:
 	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
 		t.set_color(c, "CardButton", Color.WHITE)
 	t.set_color("icon_disabled_color", "CardButton", Color(1, 1, 1, 0.55))
+	# A command on a unit's card as a tile (UiKit.command_button): the same hide, its icon the
+	# size of the tile's face over its word -- not held to a text button's small icon.
+	t.set_type_variation("TileButton", "CardButton")
+	t.set_constant("icon_max_width", "TileButton", icon_size("xxl"))
+	# No price row along its foot, so none of the card's room for one.
+	var tiles: Array[StyleBox] = []
+	for key in ["hide", "hide_hover", "hide_down", "hide_off"]:
+		tiles.append(surface("hide", key, inset.x, inset.y))
+	_buttons(t, "TileButton", tiles[0], tiles[1], _sunk(tiles[2]), tiles[3],
+		color("ink"), color("ink"), color("ink_accent"), color("ink_muted"))
+	# Its icon in its own colours, as a card's is.
+	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
+		t.set_color(c, "TileButton", Color.WHITE)
+	t.set_color("icon_disabled_color", "TileButton", Color(1, 1, 1, 0.55))
 
 	# --- Dropdowns --------------------------------------------------------------
 	for state in ["normal", "hover", "pressed", "disabled"]:
@@ -506,7 +522,7 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "ProgressBar", font_size("caption"))
 	t.set_color("font_color", "ProgressBar", color("text"))
 	for pair in [["HealthBar", color("success")], ["WarnBar", color("warning")], ["DangerBar", color("danger")],
-			["BeaconBar", color("tech")]]:
+			["BeaconBar", color("tech")], ["BoostBar", color("boost")]]:
 		t.set_type_variation(pair[0], "ProgressBar")
 		t.set_stylebox("background", pair[0], trough)
 		t.set_stylebox("fill", pair[0], _pigment("paint", pair[1]))
