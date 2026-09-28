@@ -31,6 +31,8 @@ var window_row: HBoxContainer = null
 var camera_row: VBoxContainer = null
 var camera_label: Label = null
 var camera_keys_label: Label = null
+var commands_label: Label = null
+var command_keys_label: Label = null
 var window_label: Label = null
 var window_picker: OptionButton = null
 var language_picker: OptionButton = null
@@ -269,6 +271,17 @@ func _ensure_components() -> void:
 		camera_keys_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		camera_row.add_child(camera_keys_label)
 
+		# And the card's: the number keys each command wears in its corner, and what Esc steps
+		# back out of (Config.CONTROLS.command_keys, OptionPanel._mark_keys).
+		commands_label = Label.new()
+		commands_label.name = "CommandsLabel"
+		camera_row.add_child(commands_label)
+		command_keys_label = Label.new()
+		command_keys_label.name = "CommandKeysLabel"
+		command_keys_label.theme_type_variation = &"MutedLabel"
+		command_keys_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		camera_row.add_child(command_keys_label)
+
 	back_btn = _make_button(back_btn, "BackBtn", _on_back_pressed, &"GhostButton", "back")
 
 	if version_caption == null:
@@ -354,6 +367,8 @@ func _refresh_texts() -> void:
 	if window_label: window_label.text = tr("MENU_WINDOW_MODE")
 	if camera_label: camera_label.text = tr("MENU_CAMERA")
 	if camera_keys_label: camera_keys_label.text = tr("MENU_CAMERA_KEYS")
+	if commands_label: commands_label.text = tr("MENU_COMMANDS")
+	if command_keys_label: command_keys_label.text = tr("MENU_COMMAND_KEYS")
 	_populate_window_modes()
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if current_page == Page.ROOT else tr("MENU_SETTINGS_TITLE")

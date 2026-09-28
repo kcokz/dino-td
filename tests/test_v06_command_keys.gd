@@ -162,3 +162,20 @@ func test_06_what_cannot_be_taken_back_is_on_no_key() -> void:
 		return
 	assert_null(demolish.shortcut, "but not with a key")
 	assert_null(demolish.get_node_or_null("Keycap"), "and it wears none")
+
+func test_07_the_settings_page_says_so() -> void:
+	# A control nobody can find is a control nobody has: the page that lists the camera's keys
+	# lists the card's as well.
+	var main = await _level()
+	var menu = main.hud.pause_menu
+	main.hud.toggle_pause_menu()
+	menu.open_settings()
+	await wait_frames(1)
+	var line: Label = menu.find_child("CommandKeysLabel", true, false) as Label
+	assert_not_null(line, "The settings page has a line for the card's keys")
+	if line == null:
+		return
+	assert_ne(tr("MENU_COMMAND_KEYS"), "MENU_COMMAND_KEYS", "written down")
+	assert_eq(line.text, tr("MENU_COMMAND_KEYS"), "and shown")
+	assert_true(line.is_visible_in_tree(), "on the settings page")
+	main.hud.toggle_pause_menu()

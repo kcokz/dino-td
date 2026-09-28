@@ -252,9 +252,16 @@ func _scenario_play(spec: String) -> void:
 					note.call("the alpha is on the field")
 					await _portrait("alpha", (d as Node3D).global_position, 4.0)
 			var home: Vector3 = cabin.door_inside()
-			var near: Node3D = hero._find_nearest_enemy(3.0)
-			if near != null:
-				hero.order_attack(near)
+			# In the final wave it is the cabin that is bitten: he goes out to what is at it, as a
+			# player would, while he has the health for it -- and eats when he has not.
+			var launched: bool = wm.final_wave or gs.is_beacon_launched()
+			var near: Node3D = hero._find_nearest_enemy(9.0 if launched else 3.0)
+			var hurt: bool = hero.current_hp < hero.max_hp * 0.35
+			if hurt and not gs.meals.is_empty() and int(hero.current_state) != 6:
+				hero.order_eat(String(gs.meals.keys()[0]))
+			elif near != null and not (hurt and launched):
+				if hero.target_enemy != near:
+					hero.order_attack(near)
 			elif hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
 				hero.move_to(home)
 			await _advance(1.0)
@@ -275,7 +282,11 @@ func _scenario_play(spec: String) -> void:
 		for job in kitchen.jobs():
 			if kitchen.is_dish(job) and kitchen.can_afford(job):
 				dish = job
-		if dish != "" and gs.meals.is_empty():
+		# A meal put by, and more once the beacon is next: the last fight is fought on them.
+		var put_by: int = 0
+		for key in gs.meals:
+			put_by += int(gs.meals[key])
+		if dish != "" and (put_by == 0 or (put_by < 3 and beacon_job != "" and not beacon_job.begins_with("beacon_1"))):
 			await _bench_job(hero, cabin, "kitchen", dish, note)
 			continue
 		if not gs.meals.is_empty() and (gs.fed.is_empty() or hero.current_hp < hero.max_hp * 0.6):
@@ -314,7 +325,11 @@ func _scenario_play(spec: String) -> void:
 			note.call("mending the ring: %d sections" % holes)
 			await _play_until(func(): return _unfinished() == 0, 40.0, "mending the ring")
 			continue
-		if gs.has_unlock(pick_flag) and int(gs.resources.get("stone", 0)) < 8:
+		# Wood first while there is not enough put by to mend the ring: crossbows eat the stone as
+		# fast as it comes, and a bot that only quarried let the ring fall for want of a stake.
+		if int(gs.resources.get("wood", 0)) < 8:
+			await _chop_a_while(hero, "wood", 8.0)
+		elif gs.has_unlock(pick_flag) and int(gs.resources.get("stone", 0)) < 8:
 			await _chop_a_while(hero, "stone", 12.0)
 		else:
 			await _chop_a_while(hero, "wood", 8.0)
@@ -791,6 +806,26 @@ func _scenario_ui() -> void:
 		"lost": {"wall": 2}})
 	await _wait(8)
 	await _shoot("raid_over")
+	# A building's card: a bitten section of fence, to mend or pull down.
+	_grant({"wood": 20})
+	var wall = _build_at("wall", _main.hero.global_position + Vector3(3.0, 0.0, 4.0))
+	if wall:
+		wall.take_damage(wall.max_hp * 0.5)
+		eb.unit_selected.emit(wall)
+		await _wait(8)
+		await _shoot("bitten_fence")
+	# The map's boss out, hit hard a moment ago: its bar low across the field, the blow still lit.
+	var species: String = String(gs.map_data()["boss"])
+	var boss = load(String(cfg.get_dino_script_path(species))).new()
+	_main.add_child(boss)
+	boss.setup(species)
+	boss.set_physics_process(false)
+	boss.global_position = _main.hero.global_position + Vector3(-4.0, 0.0, 3.0)
+	eb.boss_arrived.emit(boss)
+	await _wait(10)
+	boss.take_damage(boss.max_hp * 0.35)
+	await _wait(4)
+	await _shoot("boss_bar")
 
 ## The build menu (v0.6): a hide card for each thing the known materials build -- wood's, and
 ## bone's once the first bone is in -- priced, the trip bow within the stock; then,
