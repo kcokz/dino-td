@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"build_under_dino": await _p_build_under_dino()
+			"guards": await _p_guards()
 			"fog": await _p_fog()
 			"dusk_raid": await _p_dusk_raid()
 			"edge_pan": await _p_edge_pan()
@@ -1168,6 +1170,198 @@ func _visible_labels(fragment: String) -> Array:
 		if (n is Label or n is RichTextLabel) and (n as CanvasItem).is_visible_in_tree() and String(n.text).contains(fragment):
 			out.append(n)
 	return out
+
+## GAME-DESIGN 3 守卫恐龙 + 0c1f442 (a nest is defended by all its guards at once). Three cases:
+##   A. a building put up near a guard's post (NEST_GUARDS.building_aggro_share): does a guard go and
+##      bite it, or turn back and forth between chasing it and going home?
+##   B. he comes near the nest: all its guards come; he goes back into his fenced ring by the gate:
+##      they give up and go home, and do not chew his ring.
+##   C. a guard's post is fenced in while it is out after him: it settles at the nearest place it can
+##      stand, and does not push at the fence.
+func _p_guards() -> void:
+	var gs := root.get_node("GameState")
+	var gm = _main.grid_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	gs.day_clock = 60.0
+	var guards: Array = get_nodes_in_group("guard_dinos")
+	var nest: Node3D = get_first_node_in_group("nest") as Node3D
+	var posts: Array = []
+	for g in guards:
+		posts.append(str(gm.world_to_build_cell(g.post_position)))
+	_say("INFO", "%d guards, posts %s; nest at %s" % [guards.size(), ", ".join(posts), str(gm.world_to_build_cell(nest.global_position))])
+	# --- A. A stake 3 m from the first guard's post, on the side away from the nest.
+	var g0 = guards[0]
+	var away: Vector3 = (g0.post_position - nest.global_position)
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.1 else Vector3(1, 0, 0)
+	var stake_cell: Vector2i = gm.world_to_build_cell(g0.post_position + away * 3.0)
+	var stake = _build_at("set_crossbow", stake_cell)
+	_main.nav_maps.rebake()
+	await _advance(1.0)
+	if stake == null:
+		_say("INFO", "A: could not put a set crossbow at %s; trying a palisade" % str(stake_cell))
+		stake = _build_at("wall", stake_cell)
+		_main.nav_maps.rebake()
+		await _advance(1.0)
+	var flips := {}
+	var last := {}
+	var hp0: float = stake.current_hp if stake != null else -1.0
+	var t := 0.0
+	while t < 30.0 and stake != null and is_instance_valid(stake) and not stake.is_destroyed:
+		await _advance(0.25)
+		t += 0.25
+		for g in guards:
+			if not is_instance_valid(g):
+				continue
+			var st: int = int(g.guard_state)
+			var id: int = g.get_instance_id()
+			if last.has(id) and int(last[id]) != st:
+				flips[id] = int(flips.get(id, 0)) + 1
+			last[id] = st
+	var most := 0
+	for id in flips:
+		most = maxi(most, int(flips[id]))
+	var hp1: float = stake.current_hp if (stake != null and is_instance_valid(stake)) else 0.0
+	await _portrait("A_stake_by_the_post", g0.post_position, 9.0)
+	_say("INFO", "A: %s at %s, 3 m from a post: hp %.1f -> %.1f in %.1f s; most state changes by one guard: %d" % [String(stake.building_type) if stake != null and is_instance_valid(stake) else "(gone)", str(stake_cell), hp0, hp1, t, most])
+	_say("PASS" if (hp1 < hp0 or most <= 4) else "FAIL", "A: guards against a building by their post: %s" % ("bitten" if hp1 < hp0 else ("left alone, quietly" if most <= 4 else "NOT bitten, and %d changes of mind in 30 s (chase <-> home)" % most)))
+	if stake != null and is_instance_valid(stake) and not stake.is_destroyed:
+		stake.queue_free()
+		_main.nav_maps.rebake()
+	var alive: Array = []
+	for g in guards:
+		if is_instance_valid(g) and not ("is_dead" in g and g.is_dead):
+			g.max_hp = 9999.0
+			g.current_hp = 9999.0
+			alive.append(g)
+	_say("INFO", "after A: %d of %d guards alive (the crossbow shoots them too)" % [alive.size(), guards.size()])
+	guards = alive
+	await _advance(8.0)
+	# --- B. A ring round the cabin with a gate; he walks at the nest, then home through the gate.
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	_ring_round_the_cabin()
+	_main.nav_maps.rebake()
+	await _advance(0.5)
+	var ring: Array = []
+	for b in gm.get_all_buildings():
+		if is_instance_valid(b) and "building_type" in b and String(b.building_type) in ["wall", "gate"]:
+			ring.append(b)
+	var ring_hp0 := 0.0
+	for b in ring:
+		ring_hp0 += b.current_hp
+	hero.move_to(nest.global_position + (core - nest.global_position).normalized() * 5.0)
+	var chasing := 0
+	t = 0.0
+	while t < 15.0 and chasing < guards.size():
+		await _advance(0.25)
+		t += 0.25
+		chasing = 0
+		for g in guards:
+			if is_instance_valid(g) and int(g.guard_state) in [1, 2]:
+				chasing += 1
+	_say("INFO", "B: he is %.1f m from the nest; guards after him: %d of %d after %.1f s" % [hero.global_position.distance_to(nest.global_position), chasing, guards.size(), t])
+	_main._walk_to_bench(cabin.station("workbench"))
+	t = 0.0
+	while not cabin.hero_inside and t < 30.0:
+		await _advance(0.25)
+		t += 0.25
+	var at_ring := 0.0
+	for i in range(80):
+		await _advance(0.25)
+		for g in guards:
+			if is_instance_valid(g) and (g as Node3D).global_position.distance_to(core) < 6.0 and int(g.guard_state) != 3:
+				at_ring += 0.25
+	var ring_hp1 := 0.0
+	for b in ring:
+		ring_hp1 += b.current_hp if is_instance_valid(b) else 0.0
+	var states: Array = []
+	for g in guards:
+		if not is_instance_valid(g):
+			continue
+		states.append("%d@%.1fm" % [int(g.guard_state), (g as Node3D).global_position.distance_to(g.post_position)])
+	await _portrait("B_after_he_went_in", core, 14.0)
+	_say("INFO", "B: 20 s after he got in: guards (state@m from post) %s; guard-seconds spent at his ring not going home: %.1f; ring hp %.1f -> %.1f" % [", ".join(states), at_ring, ring_hp0, ring_hp1])
+	_say("PASS" if ring_hp1 >= ring_hp0 - 0.01 and at_ring < 6.0 else "FAIL", "B: guards give him up at his fence and do not chew it")
+	# --- C. Out after him, a guard's post fenced in; he goes home; it settles near its post.
+	var g1 = guards[guards.size() - 1]
+	var post: Vector3 = g1.post_position
+	var pc: Vector2i = gm.world_to_build_cell(post)
+	hero.move_to(core + Vector3(0.0, 0.0, 6.0))
+	await _advance(1.0)
+	g1._begin_chase(hero, false)
+	await _advance(3.0)
+	for dx in range(-2, 3):
+		for dz in range(-2, 3):
+			if absi(dx) == 2 or absi(dz) == 2:
+				_build_at("wall", pc + Vector2i(dx, dz))
+	_main.nav_maps.rebake()
+	await _advance(0.5)
+	_main._walk_to_bench(cabin.station("workbench"))
+	var pos_log: Array = []
+	var bite := 0.0
+	for i in range(120):
+		await _advance(0.25)
+		pos_log.append((g1 as Node3D).global_position)
+		if int(g1.current_state) == int(g1.State.ATTACKING) and g1.current_target != null and is_instance_valid(g1.current_target) and "building_type" in g1.current_target:
+			bite += 0.25
+	var wander := 0.0
+	for i in range(pos_log.size() - 40, pos_log.size() - 1):
+		wander += (pos_log[i] as Vector3).distance_to(pos_log[i + 1])
+	var settled_at: float = (g1 as Node3D).global_position.distance_to(post)
+	await _portrait("C_post_fenced_in", post, 8.0)
+	_say("INFO", "C: post %s fenced in; 30 s later the guard is %.1f m from it, state %d, new post %s m off the old; walked %.1f m in the last 10 s; seconds biting a building %.1f" % [str(pc), settled_at, int(g1.guard_state), "%.1f" % g1.post_position.distance_to(post), wander, bite])
+	_say("PASS" if bite < 1.0 and int(g1.guard_state) == 0 else "FAIL", "C: a guard walled off from its post makes a new one and does not push at the fence")
+
+## GAME-DESIGN 3 放置不看人, the animal's half: a palisade ordered on the cell a dinosaur stands in goes
+## down as an order; he builds it to just short of done and it waits there, its card saying something
+## is standing where it goes; the animal gone, it closes.
+func _p_build_under_dino() -> void:
+	var gs := root.get_node("GameState")
+	var gm = _main.grid_manager
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	gs.resources["wood"] = 20
+	gs.day_clock = 60.0
+	var cell: Vector2i = gm.world_to_build_cell(core + Vector3(0.0, 0.0, 6.0))
+	var at: Vector3 = gm.build_cell_to_world(cell)
+	var species: String = String(gs.map_data()["raiders"].keys()[0])
+	var d = load(String(root.get_node("Config").get_dino_script_path(species))).new()
+	_main.add_child(d)
+	d.setup(species)
+	d.global_position = at
+	d.max_hp = 9999.0
+	d.current_hp = 9999.0
+	await _advance(0.2)
+	# Held where it stands: it neither walks off nor bites -- the cell stays taken.
+	d.set_physics_process(false)
+	d.set_process(false)
+	_main.on_build_selected("wall")
+	var b = _main.try_place_at_cell(gm.world_to_cell(at), at)
+	_main.cancel_building_selection()
+	if b == null:
+		_say("FAIL", "the order on the dinosaur's cell %s was refused (3 章: 人或恐龙站着的格子照样能下单)" % str(cell))
+		d.queue_free()
+		return
+	var t := 0.0
+	while t < 20.0 and not b.is_constructed:
+		await _advance(0.25)
+		t += 0.25
+	var status: String = String(b._waiting_status()) if b.has_method("_waiting_status") else "?"
+	var prog: String = ("%.2f" % float(b.build_progress)) if "build_progress" in b else "?"
+	_say("INFO", "with the dinosaur on it, after %.1f s: built %s, progress %s, card status '%s', hero state %d" % [t, b.is_constructed, prog, status, int(hero.current_state)])
+	root.get_node("EventBus").unit_selected.emit(b)
+	await _advance(0.5)
+	await _shoot("waiting_for_the_animal")
+	var waited_ok: bool = not b.is_constructed and status == tr("STATUS_WAITING_CLEAR")
+	d.queue_free()
+	t = 0.0
+	while t < 10.0 and not b.is_constructed:
+		await _advance(0.25)
+		t += 0.25
+	_say("PASS" if waited_ok and b.is_constructed else "FAIL", "palisade on a standing dinosaur's cell: waited %s with the right words, then closed %s (%.1f s after it went)" % [waited_ok, b.is_constructed, t])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
