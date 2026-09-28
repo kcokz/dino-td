@@ -1,6 +1,6 @@
 # BUG-004 信标小波的预警被别的来袭盖住，到的时候没有再预警
 
-- 状态: open
+- 状态: fixed（ea36313，2026-09-28 复测通过，见 TASK-007）
 - 严重度: 低（只是提示问题，不影响数量）
 - 发现: 2026-09-28 · 提交 ba2ca49（复测 BUG-001 时看到）
 - 复现: `bash debug-agent/tools/run_check.sh probe:stage_wave_size`，看 INFO 里的时间线
@@ -27,3 +27,7 @@
 ## 代码位置（供参考，没改）
 
 `scripts/core/WaveManager.gd` `_process`：`_stirred_warned` 在 `_stirred_in <= warning_lead_time` 时置真，之后就不会再发；来袭进行中 `_process` 提前 return，`_stirred_in` 停着。
+
+## 复测（2026-09-28，ea36313）
+
+通过。大波在前、小波在前两种顺序都是：每一波正好一条预警，倒数的秒数和实际出发时间差不超过 1 秒。时间线见 [TASK-007](../dev-assigned-task/TASK-007-verify-bug-004.md)。

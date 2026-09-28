@@ -1,5 +1,5 @@
 # TASK-001 暂停就是定格
-- 状态: open
+- 状态: done
 - 提交: 44644d1
 
 ## 要测什么
@@ -12,3 +12,17 @@
 - `bash debug-agent/tools/run_check.sh paused` 的 bot.log 里：`[paused] a second apart, paused: 0 pixels differ; running: <大于 1000>`。
 - 手动或脚本：来袭中暂停 10 秒，前后船舱的血、每只恐龙的血和位置完全一样；恢复 3 秒内有变化。
 - 没有 SCRIPT ERROR。
+
+## 结果（debug-agent, 2026-09-28，在 ba2ca49 上测）
+
+**通过。**
+
+- `run_check.sh paused`：`[paused] a second apart, paused: 0 pixels differ; running: 20507`。
+- 新探针 `probe:pause_raid`，就是玩家报的那个局面：人在工作台前，6 只腔骨龙在咬船舱（暂停前船舱 94.6/100，4 只正在咬），船舱的枪在打，饭还剩 82 秒。暂停 10 秒：
+  - 关卡里 **519 个值 0 个变了**：所有节点的位置和朝向（恐龙、人、枪头、掉落物、飘字），所有骨骼姿势（抽搐会让它变），动画进度，计时器，世界里在响的声音的播放位置，每个单位的血，饭的倒计时，来袭倒计时。
+  - 暂停中镜头照常：按住 A 平移了 8.5 米，按住 Q 转了。
+  - 暂停中点人的卡片，"建造"能打开子菜单；暂停菜单能打开。截图：[../bug/img/TASK-001-paused-menu-mid-raid.png](../bug/img/TASK-001-paused-menu-mid-raid.png)
+  - 恢复 3 秒后，159 个值接着变了。
+- 两次运行都没有 SCRIPT ERROR。
+
+**没测到的**：按钮的点击声；停在半截的声音恢复后是不是从原处接着响（这次只确认了暂停时播放位置不动）。这两个需要听，留给人手测。

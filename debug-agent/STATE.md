@@ -9,7 +9,8 @@
 | [BUG-001](bug/BUG-001-stage-wave-shrinks-next-raid.md) | 修好一段信标，反而让下一波（包括大波）变小 | 中 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-002](bug/BUG-002-launch-button-stays-after-launch.md) | 启动以后"启动信标"按钮还在卡片上 | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | **fixed** ba2ca49 | 2026-09-28 |
-| [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | open | 2026-09-28 |
+| [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
+| [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open | 2026-09-28 |
 | [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-003](design-doc/DOC-003-small-stale-facts.md) | 栅栏段数、待定 2 的指向、9.3 的机器人数据 | — | **applied** ba2ca49 | 2026-09-28 |
@@ -18,18 +19,27 @@
 
 | 任务 | 内容 | 状态 |
 |---|---|---|
-| TASK-001 | 暂停就是定格 | open |
-| TASK-002 | 船舱背后半圈栅栏，来袭要绕过去咬 | open |
-| TASK-003 | 人身上那一行；人在舱里不自己出去 | open |
+| TASK-001 | 暂停就是定格 | **done** 通过 |
+| TASK-002 | 船舱背后半圈栅栏，来袭要绕过去咬 | **done**，没完全通过 → BUG-005 |
+| TASK-003 | 人身上那一行；人在舱里不自己出去 | **done** 通过（play:30 那一条补跑） |
 | TASK-004 | 鼠标碰边缘平移；院子里的机关 | open |
 | TASK-005 | 复测 BUG-001～003 | **done**（三个都过；另开 BUG-004） |
+| TASK-006 | 白天、黄昏、夜晚 | open |
+| TASK-007 | 复测 BUG-004 | **done** 通过 |
 
 ## 检查记录
+
+### 2026-09-28 第 3 次（监控循环，dev 派了 7 个任务）
+
+- 做了 TASK-001、002、003、005、007，见上表。
+- **工作区有时候跑不起来**：dev 在改 `FogOfWar`（新文件、有 class_name、没提交），游戏一加载 `Main.gd` 就报 Parse Error。新工具 `tools/snapshot.sh <提交>` 把指定提交导出到本地（带导入缓存和当前的工具），`GODOT_PROJECT=<目录> run_check.sh ...` 在那上面测。任务写了"提交: X"的，就在 X 的快照上测。快照第一次要 `godot --headless --editor --quit --path <目录>` 重建类缓存。
+- **我自己的错，已改**：探针的 `_build_at` 没付钱，`place_at` 扣不了钱，就什么也没造。第 2 次的 `gate_traffic` "PASS"其实没有栅栏圈，现在重跑过（24 段、门在），仍然 PASS。以后探针造东西，先数一下造出来几段再下结论。
+- 新探针：`pause_raid`、`kit_row`、`boss_drops`、`half_fence`（+ `half_fence_bare`）、`stage_first`；`stage_wave_size` 改成跟完整条时间线，并且核对每条预警。
 
 ### 2026-09-28 第 2 次（监控循环）· 提交 71646a4 + 未提交改动
 
 - dev-assigned-task：没有任务。
-- 探针 `gate_traffic` PASS：进出门 10 趟，最慢 1.5 秒；一只腔骨龙在门外 20 秒，没进到门线里（它把门咬掉了，符合"恐龙把门当成一段墙来咬"）。
+- 探针 `gate_traffic` ~~PASS~~ **无效**（栅栏圈没造出来，见第 3 次；重跑后 PASS）：进出门 10 趟，最慢 1.5 秒；一只腔骨龙在门外 20 秒，没进到门线里（它把门咬掉了，符合"恐龙把门当成一段墙来咬"）。
 - 探针 `build_under_him` PASS：在人站的格子上下单栅栏，他先走出来，1.3 秒造完。
 - 探针 `after_the_jump` INFO：跳走以后恐龙不再动，资源不再变；只有人还会听命令走动（结算画面挡着，看不到，不算 bug）。
 - 中文界面（`lang:zh_CN` 跑 ui kit buildmenu menu beacon eating legible summary，25 张）：没有漏翻的键，没有文字溢出。
