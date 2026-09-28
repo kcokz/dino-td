@@ -1,6 +1,6 @@
 # DOC-001 饭已经不管走路了，但设计书好几处还写着"走路变快"
 
-- 状态: open
+- 状态: applied（ba2ca49 改进了 GAME-DESIGN.md，2026-09-28 抽查确认）
 - 对照: GAME-DESIGN.md（2026-09-26 版）× `Config.COOKING_METHODS` / `DISHES` / `RECIPES.hide_boots`，以及游戏画面
 - 发现: 2026-09-28
 

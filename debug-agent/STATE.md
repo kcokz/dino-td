@@ -6,16 +6,23 @@
 
 | id | 标题 | 严重度 | 状态 | 首次发现 |
 |---|---|---|---|---|
-| [BUG-001](bug/BUG-001-stage-wave-shrinks-next-raid.md) | 修好一段信标，反而让下一波（包括大波）变小 | 中 | open，需要设计拍板 | 2026-09-28 |
-| [BUG-002](bug/BUG-002-launch-button-stays-after-launch.md) | 启动以后"启动信标"按钮还在卡片上 | 低 | open | 2026-09-28 |
-| [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | open | 2026-09-28 |
-| [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | open | 2026-09-28 |
-| [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | open | 2026-09-28 |
-| [DOC-003](design-doc/DOC-003-small-stale-facts.md) | 栅栏段数、待定 2 的指向、9.3 的机器人数据 | — | open | 2026-09-28 |
+| [BUG-001](bug/BUG-001-stage-wave-shrinks-next-raid.md) | 修好一段信标，反而让下一波（包括大波）变小 | 中 | **fixed** ba2ca49 | 2026-09-28 |
+| [BUG-002](bug/BUG-002-launch-button-stays-after-launch.md) | 启动以后"启动信标"按钮还在卡片上 | 低 | **fixed** ba2ca49 | 2026-09-28 |
+| [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | **fixed** ba2ca49 | 2026-09-28 |
+| [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | open | 2026-09-28 |
+| [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
+| [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
+| [DOC-003](design-doc/DOC-003-small-stale-facts.md) | 栅栏段数、待定 2 的指向、9.3 的机器人数据 | — | **applied** ba2ca49 | 2026-09-28 |
 
 ## dev-assigned-task
 
-（还没有任务。）
+| 任务 | 内容 | 状态 |
+|---|---|---|
+| TASK-001 | 暂停就是定格 | open |
+| TASK-002 | 船舱背后半圈栅栏，来袭要绕过去咬 | open |
+| TASK-003 | 人身上那一行；人在舱里不自己出去 | open |
+| TASK-004 | 鼠标碰边缘平移；院子里的机关 | open |
+| TASK-005 | 复测 BUG-001～003 | **done**（三个都过；另开 BUG-004） |
 
 ## 检查记录
 
@@ -61,4 +68,5 @@
 - [ ] 最后一波从三个入口（西、东、南）来：入口附近有没有卡住、被地形堵住的恐龙。
 - [ ] 围栏里摆绊索弓（3 章"想打的东西被墙整个围住"）：恐龙会不会站在外面挨打不咬墙。`siege:...:inside` 场景。
 - [ ] 能力槽悬停文字、空格子的提示（3 章）。
-- [ ] 鼠标碰窗口边缘平移视角（3 章，最新提交 71646a4）。
+- [ ] 鼠标碰窗口边缘平移视角（3 章，最新提交 71646a4）。→ 就是 TASK-004
+- [ ] 测试套件退出时的 RID/ObjectDB 泄漏（dev 说有 51 个对象、7 个资源，是测试卫生问题，可以另开 BUG）。

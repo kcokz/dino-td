@@ -43,36 +43,81 @@ func _init() -> void:
 # Probes
 # ------------------------------------------------------------------------------
 
-## A beacon stage repaired while the next raid's warning is already running: GAME-DESIGN 8.3 says
-## the stage's small raid "顶替下一次普通来袭" ~20 s later. Measures how big the next raid then is,
-## against the same raid with no stage repaired. Run with the next raid a BIG one (wave 3).
+## A beacon stage repaired while a BIG raid's warning is running (GAME-DESIGN 8.3, as decided after
+## BUG-001: the stage's small raid comes ON TOP -- its own clock and warning, stage_waves' count, no
+## leader; the clock's raids, their count and the big raid's turn unchanged; a raid out is fought
+## first). Follows the whole sequence: raid 3, then the stage's raid, then the clock's raid 4.
 func _p_stage_wave_size() -> void:
-	var sizes := {}
-	for with_stage in [false, true]:
-		await _fresh_level()
-		var gs := root.get_node("GameState")
-		var wm = _main.wave_manager
-		# Five minutes in, raid 2 held, raid 3 (big, alpha at its head) 12 s away and announced.
-		wm.elapsed_time = 300.0
-		wm.current_wave = 2
-		gs.wave_number = 2
-		wm.raid_timer = 12.0
-		wm.warning_emitted = true
-		var ordinary: int = wm.raid_size(3)
-		if with_stage:
-			gs.finish_beacon_job(String(gs.beacon_next_job()))
-		var started := {"n": -1}
-		root.get_node("EventBus").wave_started.connect(func(n, _big): started["n"] = n)
-		var t := 0.0
-		while started["n"] < 0 and t < 40.0:
-			await _advance(0.25)
-			t += 0.25
-		sizes[with_stage] = {"roster": wm.wave_roster.duplicate(), "after": t, "ordinary_estimate": ordinary}
-	var a: Array = sizes[false]["roster"]
-	var b: Array = sizes[true]["roster"]
-	_say("INFO", "no stage: raid 3 = %d %s after %.1fs" % [a.size(), str(a), sizes[false]["after"]])
-	_say("INFO", "stage 1 repaired during the warning: raid 3 = %d %s after %.1fs" % [b.size(), str(b), sizes[true]["after"]])
-	_say("FAIL" if b.size() < a.size() else "PASS", "repairing a stage %s the imminent big raid (%d -> %d)" % ["SHRANK" if b.size() < a.size() else "did not shrink", a.size(), b.size()])
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var log: Array = []
+	var clock := {"t": 0.0}
+	var on_warn := func(left): log.append("%5.1fs warning (%.0fs)" % [clock["t"], left])
+	# The roster is read as the raid sets out: it empties as they step out.
+	var rosters: Array = []
+	var on_start := func(n, big):
+		log.append("%5.1fs wave_started n=%d big=%s roster=%s stage=%s" % [clock["t"], n, big, str(wm.wave_roster), wm.stage_wave])
+		rosters.append({"stage": wm.stage_wave, "roster": wm.wave_roster.duplicate(), "big": big})
+	var on_stage := func(size): log.append("%5.1fs stage_wave_started(%d)" % [clock["t"], size])
+	var on_end := func(n): log.append("%5.1fs wave_ended n=%d (gs.wave_number %d)" % [clock["t"], n, gs.wave_number])
+	eb.raid_warning.connect(on_warn)
+	eb.wave_started.connect(on_start)
+	eb.stage_wave_started.connect(on_stage)
+	eb.wave_ended.connect(on_end)
+	# Control: the same moment with no stage repaired, for raid 3's roster.
+	wm.elapsed_time = 300.0
+	wm.current_wave = 2
+	gs.wave_number = 2
+	var control: Array = wm.roster_for(3, wm.get_wave_dino_count(3))
+	# Five minutes in, raid 2 held, raid 3 (big) 12 s away and announced; stage 1 repaired now.
+	wm.raid_timer = 12.0
+	wm.warning_emitted = true
+	gs.finish_beacon_job(String(gs.beacon_next_job()))
+	log.append("  0.0s stage 1 repaired (raid 3 due in 12 s)")
+	var raid3: Array = []
+	var stage: Array = []
+	var raid4: Array = []
+	var hud_said: String = ""
+	while clock["t"] < 240.0 and raid4.is_empty():
+		await _advance(0.5)
+		clock["t"] += 0.5
+		if wm.is_wave_active and wm.dinos_spawned_count >= wm.dinos_to_spawn:
+			# The line holds: everything the raid sent dies once it is all out.
+			var last: Dictionary = rosters[rosters.size() - 1]
+			if last["stage"] and stage.is_empty():
+				stage = last["roster"]
+				hud_said = _hud_wave_text()
+			elif not last["stage"] and raid3.is_empty():
+				raid3 = last["roster"]
+			elif not last["stage"] and not raid3.is_empty() and not stage.is_empty():
+				raid4 = last["roster"]
+				break
+			await _advance(1.0)
+			clock["t"] += 1.0
+			for d in get_nodes_in_group("dinos"):
+				if is_instance_valid(d) and not (d is GuardDino):
+					d.take_damage(99999.0)
+	for c in [[eb.raid_warning, on_warn], [eb.wave_started, on_start], [eb.stage_wave_started, on_stage], [eb.wave_ended, on_end]]:
+		(c[0] as Signal).disconnect(c[1])
+	for line in log:
+		_say("INFO", line)
+	_say("INFO", "HUD wave line during the stage raid: '%s' (expected '%s')" % [hud_said, tr("HUD_STAGE_WAVE")])
+	var alpha: String = String(gs.map_data()["minor_boss"])
+	# Raid 3's rank and file are drawn with the run's dice (RAIDS.intensity_*): the control is its
+	# count before them, so "the same" is: the alpha at its head and no fewer than the dice allow.
+	var ok3: bool = raid3.has(alpha) and raid3.size() - 1 >= int(round((control.size() - 1) * 0.5))
+	var ok_stage: bool = stage.size() == int(gs.map_data()["beacon"]["stage_waves"][0]) and not stage.has(alpha)
+	_say("PASS" if ok3 else "FAIL", "raid 3 in the stage's shadow: %d %s, control %d" % [raid3.size(), "with the alpha" if raid3.has(alpha) else "NO alpha", control.size()])
+	_say("PASS" if ok_stage else "FAIL", "the stage's own raid after it: %s" % str(stage))
+	_say("PASS" if hud_said == tr("HUD_STAGE_WAVE") else "FAIL", "HUD names the stage raid")
+	_say("PASS" if not raid4.is_empty() else "FAIL", "the clock's raid 4 still comes after: %s" % str(raid4))
+
+func _hud_wave_text() -> String:
+	for n in _all(_main):
+		if "wave_label" in n and n.wave_label is Label:
+			return (n.wave_label as Label).text
+	return "(no HUD wave_label found)"
 
 ## GAME-DESIGN 3: 暂停就是定格 -- units, raids, timers, animations, world sounds all hold still.
 func _p_pause_snapshot() -> void:

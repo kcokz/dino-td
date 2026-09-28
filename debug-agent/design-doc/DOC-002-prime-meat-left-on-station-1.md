@@ -1,6 +1,6 @@
 # DOC-002 第 1 站已经没有珍贵肉了，但节拍表和版本顺序还写着
 
-- 状态: open
+- 状态: applied（ba2ca49 改进了 GAME-DESIGN.md，2026-09-28 抽查确认）
 - 对照: GAME-DESIGN.md × `Config.DINOS`（coelophysis_alpha 掉皮 2、骨 2；postosuchus 掉皮 2、骨 4）× 机器人整局
 - 发现: 2026-09-28
 
