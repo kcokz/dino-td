@@ -857,8 +857,16 @@ func _p_edge_pan() -> void:
 	var size: Vector2 = vp.get_visible_rect().size
 	var results := {}
 	DisplayServer.window_move_to_foreground()
+	var entered := {"n": 0}
+	root.mouse_entered.connect(func(): entered["n"] += 1)
+	vp.warp_mouse(Vector2(-40.0, size.y / 2.0))
+	await _advance(0.3)
+	vp.warp_mouse(size / 2.0)
 	await _advance(0.5)
-	_say("INFO", "window focused: %s; viewport %s" % [DisplayServer.window_is_focused(), str(size)])
+	_say("INFO", "window focused: %s; viewport %s; root saw mouse_entered %d time(s); Main._mouse_in_window = %s" % [DisplayServer.window_is_focused(), str(size), entered["n"], str(_main.get("_mouse_in_window"))])
+	if OS.get_environment("DA_FORCE_IN") != "":
+		_main.set("_mouse_in_window", true)
+		_say("INFO", "FORCED Main._mouse_in_window = true for this run")
 	# The keys, for the speed to match: A held one second.
 	vp.warp_mouse(size / 2.0)
 	await _advance(0.5)

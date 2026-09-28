@@ -23,7 +23,7 @@
 | TASK-001 | 暂停就是定格 | **done** 通过 |
 | TASK-002 | 船舱背后半圈栅栏，来袭要绕过去咬 | **done**，没完全通过 → BUG-005 |
 | TASK-003 | 人身上那一行；人在舱里不自己出去 | **done** 通过 |
-| TASK-004 | 鼠标碰边缘平移；院子里的机关 | open（第 2 条 siege inside 已过；边缘平移待测，会动真鼠标） |
+| TASK-004 | 鼠标碰边缘平移；院子里的机关 | **done**：第 2 条过；第 1 条逻辑过，"开局光标已在窗口里"要人手测 |
 | TASK-005 | 复测 BUG-001～003 | **done**（三个都过；另开 BUG-004） |
 | TASK-006 | 白天、黄昏、夜晚 | **done**，没完全通过 → BUG-006 |
 | TASK-007 | 复测 BUG-004 | **done** 通过 |
@@ -53,6 +53,11 @@
 - 场景截图 14 个（open cabin ui kit paused beacon buildmenu menu summary legible eating kitchen ghost buildings）：43 张，0 报错。看过：厨房、工作台、建造菜单、设置页、信标充能。
 - 探针：`stage_wave_size` FAIL → BUG-001；`pause_snapshot` PASS（暂停 3 秒，33 个值都没变）；`cabin_sortie` PASS（恐龙咬后墙，人 20 秒没出舱）；`launch_button` FAIL → BUG-002。
 
+## 工具的已知限制
+
+- `warp_mouse` 不会让 Windows 发"鼠标进入窗口"，所以凡是依赖 `NOTIFICATION_WM_MOUSE_ENTER` 的行为，探针都测不出来，要真鼠标（人手，或者 computer-use，但那会在用户桌面上弹权限框，用户不在时别用）。
+- 同时开两个游戏窗口时，焦点会被抢；要焦点、要光标的探针单独跑。
+
 ## 已经确认不是 bug 的（别再查）
 
 - 厨房的"珍贵肉"菜：第 1 站拿不到这种材料，所以按 4.3 规则不会显示（`CraftingStation._materials_known`）。只有设计书过时（DOC-002）。
@@ -79,5 +84,5 @@
 - [ ] 最后一波从三个入口（西、东、南）来：入口附近有没有卡住、被地形堵住的恐龙。
 - [ ] 围栏里摆绊索弓（3 章"想打的东西被墙整个围住"）：恐龙会不会站在外面挨打不咬墙。`siege:...:inside` 场景。
 - [ ] 能力槽悬停文字、空格子的提示（3 章）。
-- [ ] 鼠标碰窗口边缘平移视角（3 章，最新提交 71646a4）。→ 就是 TASK-004
+- [x] 鼠标碰窗口边缘平移视角 → TASK-004（真鼠标那一半留给人）
 - [ ] 测试套件退出时的 RID/ObjectDB 泄漏（dev 说有 51 个对象、7 个资源，是测试卫生问题，可以另开 BUG）。
