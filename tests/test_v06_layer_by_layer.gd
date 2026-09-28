@@ -121,8 +121,8 @@ func test_04_the_bar_grows_as_the_run_does() -> void:
 func test_05_a_bench_waits_on_its_materials_and_the_beacon_does_not() -> void:
 	var main = await fresh_level()
 	_cleanup_nodes.append(main)
-	var bench: Node = main.cabin_interior.station("workbench")
-	var beacon: Node = main.cabin_interior.station(String(config_node.BEACON_STATION))
+	var bench: Node = main.current_core.station("workbench")
+	var beacon: Node = main.current_core.station(String(config_node.BEACON_STATION))
 	var needs_bone: String = ""
 	for recipe_id in bench.recipes():
 		if bench.inputs_of(recipe_id).has("bone"):
@@ -133,11 +133,14 @@ func test_05_a_bench_waits_on_its_materials_and_the_beacon_does_not() -> void:
 	assert_true(beacon.can_offer(String(game_state_node.beacon_next_job())), "The beacon always says what it needs next")
 	game_state_node.add_resource("bone", 1)
 	assert_true(bench.can_offer(needs_bone), "The first bone brings it")
-	main.enter_cabin()
+	var panel = main.hud.option_panel
+	panel.select_target(bench)
 	await wait_frames(1)
-	var screen = main.hud.cabin_screen
-	screen.select("workbench")
-	assert_not_null(screen.find_child("Job_%s" % needs_bone, true, false), "And the dock offers it")
+	var offered: bool = false
+	for btn in panel.button_container.get_children():
+		if btn is Button and (btn as Button).text == bench.recipe_name(needs_bone):
+			offered = true
+	assert_true(offered, "And the bench's menu offers it")
 
 func test_06_what_a_material_is_for_names_only_what_has_turned_up() -> void:
 	var map: Dictionary = game_state_node.map_data()

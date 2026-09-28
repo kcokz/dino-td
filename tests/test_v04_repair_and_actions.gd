@@ -215,11 +215,15 @@ func test_08_right_clicking_a_blueprint_finishes_it() -> void:
 
 func test_09_right_clicking_the_cabin_still_walks_him_home() -> void:
 	var main = _level()
-	await wait_frames(2)
-	main.hero.global_position = main.current_core.global_position + Vector3(1.0, 0.0, 0.0)
+	await wait_frames(8)
+	main.hero.global_position = main.cabin_door() + Vector3(2.0, 0.0, 1.0)
+	await wait_physics_frames(2)
 
 	main.right_click_building(main.current_core, main.current_core.global_position)
-	assert_true(main.in_cabin, "Arriving at the cabin puts him inside")
+	var inside: Vector3 = main.current_core.door_inside()
+	var end: Vector3 = main.hero.target_destination
+	assert_almost_eq(Vector2(end.x, end.z).distance_to(Vector2(inside.x, inside.z)), 0.0, 0.3,
+		"Right-clicking the cabin sends him in, just inside its door")
 
 func test_10_mending_is_offered_on_the_panel_when_there_is_damage() -> void:
 	var panel = load("res://scripts/ui/OptionPanel.gd").new()

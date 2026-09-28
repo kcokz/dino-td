@@ -269,13 +269,12 @@ func get_localized_name() -> String:
 # ==============================================================================
 
 func get_display_info() -> Dictionary:
-	# Nothing to say while idle -- the cabin's own header says how the benches work -- except
-	# at the beacon's bench, which says where the beacon has got to whenever it is not busy:
-	# that is the run's main line (GAME-DESIGN 14.3), so it is the first thing it says.
-	var status: String = ""
-	var beacon: String = _beacon_status()
-	if beacon != "":
-		status = beacon
+	# Idle, a bench says what it is for -- or that it has nothing to make -- except the beacon's,
+	# which says where the beacon has got to: that is the run's main line (GAME-DESIGN 14.3),
+	# so it is the first thing it says.
+	var status: String = _beacon_status()
+	if status == "":
+		status = _purpose()
 	var info: Dictionary = {
 		"title": get_localized_name(),
 		"type": "station",
@@ -284,13 +283,26 @@ func get_display_info() -> Dictionary:
 		"active_recipe": active_recipe,
 		"progress": ratio(),
 	}
-	# A job under way is the work bar, and what it is; the cabin's own line says that it only
-	# goes on while he is in there, so the bench has nothing to add.
+	# A job under way is the work bar, and what it is -- and, while he is out of the cabin, that
+	# it waits for him to come back (CoreCampfire works the benches only while he is inside).
 	if active_recipe != "":
 		info["work"] = ratio()
 		info["work_label"] = recipe_name(active_recipe)
-		info["status"] = ""
+		info["status"] = "" if _he_is_here() else TranslationServer.translate("STATION_ONLY_WITH_HIM")
 	return info
+
+## What the bench is for, or that it has nothing to make -- yet, when new materials would bring
+## new work.
+func _purpose() -> String:
+	for job_id in jobs():
+		if can_offer(job_id):
+			return TranslationServer.translate("STATION_%s_DESC" % station_id.to_upper())
+	return TranslationServer.translate("STATION_NOTHING_YET" if waiting_on_materials() else "STATION_NOTHING")
+
+## Whether the Hero is in the cabin this bench stands in.
+func _he_is_here() -> bool:
+	var cabin: Node = get_parent()
+	return cabin != null and "hero_inside" in cabin and bool(cabin.hero_inside)
 
 ## Which parts of the bench's model show: the tools made hang on the board, the pot stands
 ## on the fire once it is made, the beacon's mast is as far up as its stages (CabinArt).

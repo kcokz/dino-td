@@ -70,6 +70,10 @@ func _run(name: String) -> void:
 		await _scenario_siege(name)
 		_tear_down()
 		return
+	if name.begins_with("play"):
+		await _scenario_play(name)
+		_tear_down()
+		return
 	match name:
 		"open":
 			await _scenario_open()
@@ -120,6 +124,257 @@ func _run(name: String) -> void:
 # ==============================================================================
 # Scenarios
 # ==============================================================================
+
+## A run played the way a player plays it, through the same orders a click gives -- nothing
+## granted, nothing placed by hand: pick up the opening wood, ring the cabin with palisade and a
+## gate at its door, chop trees until the raid, stand inside the ring while it comes, gather what
+## it leaves, go in and make the pick, cook and eat, then quarry stone and set a crossbow. A line
+## of what is happening every ten seconds of game time, and a frame at each beat.
+##
+## `play:<minutes>` plays that long (default 8), at the game's own 3x.
+func _scenario_play(spec: String) -> void:
+	var parts: PackedStringArray = spec.split(":")
+	var minutes: float = float(parts[1]) if parts.size() > 1 else 8.0
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var gm = _main.grid_manager
+	var wm = _main.wave_manager
+	Engine.time_scale = 3.0
+	_play_log = []
+	_play_t0 = Time.get_ticks_msec()
+	var clock := {"t": 0.0}
+	var note := func(text: String) -> void:
+		var line: String = "[play %5.1fs] %s" % [wm.elapsed_time, text]
+		print(line)
+		_play_log.append(line)
+	eb.raid_warning.connect(func(left): note.call("RAID WARNING, %.0fs" % left))
+	eb.wave_started.connect(func(n, big): note.call("raid %d sets out%s" % [n, " (big)" if big else ""]))
+	eb.wave_ended.connect(func(n): note.call("raid %d over" % n))
+	eb.dino_died.connect(func(d): note.call("a %s died" % d.dino_type))
+	eb.building_destroyed.connect(func(b): note.call("LOST a %s" % b.building_type))
+	eb.unlock_granted.connect(func(u): note.call("made: %s" % u))
+	eb.meal_eaten.connect(func(m): note.call("ate %s" % str(m.get("dish", ""))))
+	eb.hero_died.connect(func(): note.call("THE HERO DIED"))
+	eb.game_lost.connect(func(): note.call("GAME LOST"))
+	eb.cabin_view_changed.connect(func(inside): note.call("he is %s the cabin" % ("in" if inside else "out of")))
+
+	# --- 1. The opening wood --------------------------------------------------------------
+	var piles: Array = get_nodes_in_group(DropItem.GROUP)
+	note.call("%d piles of opening stock on the ground" % piles.size())
+	for pile in piles:
+		if not is_instance_valid(pile):
+			continue
+		hero.move_to((pile as Node3D).global_position)
+		await _play_until(func(): return not is_instance_valid(pile) or pile.is_queued_for_deletion(), 25.0, "picking up a pile")
+	note.call("stock: %s" % str(gs.resources))
+	await _shoot("stock_picked_up")
+
+	# --- 2. A ring of palisade round the cabin, a cell out, a gate at the door -----------
+	var centre: Vector2i = gm.world_to_build_cell(cabin.global_position)
+	var half := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
+	var gate_cell: Vector2i = centre + Vector2i(0, half.y + 1)
+	_main.on_build_selected("gate")
+	var gate = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(gate_cell)), gm.build_cell_to_world(gate_cell))
+	note.call("gate ordered: %s" % ("yes" if gate else "NO"))
+	_main.on_build_selected("wall")
+	var ring: Array[Vector2i] = []
+	for x in range(-half.x - 1, half.x + 2):
+		ring.append(centre + Vector2i(x, -half.y - 1))
+	for z in range(-half.y, half.y + 2):
+		ring.append(centre + Vector2i(half.x + 1, z))
+	for x in range(half.x, -half.x - 2, -1):
+		ring.append(centre + Vector2i(x, half.y + 1))
+	for z in range(half.y, -half.y - 1, -1):
+		ring.append(centre + Vector2i(-half.x - 1, z))
+	var ordered: int = 0
+	var refused: int = 0
+	for cell in ring:
+		if cell == gate_cell or _main.current_build_type == "":
+			continue
+		var at: Vector3 = gm.build_cell_to_world(cell)
+		if _main.try_place_at_cell(gm.world_to_cell(at), at) != null:
+			ordered += 1
+		else:
+			refused += 1
+	_main.cancel_building_selection()
+	note.call("palisade ordered: %d sections, %d refused" % [ordered, refused])
+	await _play_until(func(): return _unfinished() == 0, 90.0, "building the ring")
+	note.call("ring up: %d unfinished left; hero at %s" % [_unfinished(), _cellstr(hero.global_position, gm)])
+	await _portrait("ring", cabin.global_position, 13.0, true)
+
+	# --- 3. Wood until the raid ------------------------------------------------------------
+	while wm.current_wave == 0 and wm.elapsed_time < minutes * 60.0:
+		await _chop_a_while(hero, "wood", 8.0)
+		if wm.raid_timer < 8.0:
+			break
+	note.call("wood: %d; raid in %.0fs" % [int(gs.resources.get("wood", 0)), wm.raid_timer])
+
+	# --- 4 onwards: raids come and go; between them, the next thing on the list ---------------
+	var plan: Array[String] = ["shelter", "gather", "pick", "cook", "eat", "stone", "axe", "crossbow", "stone", "beacon"]
+	var step: int = 0
+	var last_status: float = -100.0
+	while wm.elapsed_time < minutes * 60.0 and not gs.is_game_over:
+		if wm.elapsed_time - last_status >= 10.0:
+			last_status = wm.elapsed_time
+			note.call(_play_status(hero, cabin, gs, wm))
+		if wm.is_wave_active:
+			# In the ring, by the gate, and fight what gets close.
+			var home: Vector3 = gm.build_cell_to_world(gate_cell) + Vector3(0.0, 0.0, -1.2)
+			var near: Node3D = hero._find_nearest_enemy(3.0)
+			if near != null:
+				hero.order_attack(near)
+			elif hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
+				hero.move_to(home)
+			await _advance(1.0)
+			continue
+		if step >= plan.size():
+			await _chop_a_while(hero, "wood", 6.0)
+			continue
+		var what: String = plan[step]
+		step += 1
+		match what:
+			"shelter":
+				pass
+			"gather":
+				for d in get_nodes_in_group(DropItem.GROUP):
+					if is_instance_valid(d):
+						hero.move_to((d as Node3D).global_position)
+						await _play_until(func(): return not is_instance_valid(d), 20.0, "gathering a drop")
+				note.call("after gathering: %s" % str(gs.resources))
+				await _shoot("after_the_raid")
+			"pick", "axe", "stone_pot":
+				await _bench_job(hero, cabin, "workbench", "stone_pick" if what == "pick" else "stone_axe", note)
+			"cook":
+				var kitchen = cabin.station("kitchen")
+				var dish: String = ""
+				for job in kitchen.jobs():
+					if kitchen.is_dish(job) and kitchen.can_afford(job):
+						dish = job
+				if dish != "":
+					await _bench_job(hero, cabin, "kitchen", dish, note)
+				else:
+					note.call("nothing to cook (%s)" % str(gs.resources))
+			"eat":
+				var keys: Array = gs.meals.keys()
+				if keys.is_empty():
+					note.call("no meal to eat")
+				else:
+					hero.order_eat(String(keys[0]))
+					await _play_until(func(): return int(hero.current_state) != 6, 10.0, "eating")
+			"stone":
+				await _chop_a_while(hero, "stone", 25.0)
+				note.call("stone: %d" % int(gs.resources.get("stone", 0)))
+			"crossbow":
+				var at_cell: Vector2i = centre + Vector2i(-3, -half.y - 2)
+				_main.on_build_selected("set_crossbow")
+				_main._placement_facing = 0
+				var b = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(at_cell)), gm.build_cell_to_world(at_cell))
+				_main.cancel_building_selection()
+				note.call("set crossbow ordered: %s" % ("yes" if b else "NO"))
+				await _play_until(func(): return _unfinished() == 0, 40.0, "building the crossbow")
+			"beacon":
+				var job: String = String(gs.beacon_next_job())
+				await _bench_job(hero, cabin, String(cfg.BEACON_STATION), job, note)
+	note.call(_play_status(hero, cabin, gs, wm))
+	await _shoot("end")
+	await _portrait("end_above", cabin.global_position, 16.0, true)
+	Engine.time_scale = 1.0
+	note.call("played %.1f game minutes in %.0f s" % [wm.elapsed_time / 60.0, (Time.get_ticks_msec() - _play_t0) / 1000.0])
+
+var _play_log: Array = []
+var _play_t0: int = 0
+
+## Lets the game run until `done` says so or `seconds` of game time pass; says so if it gave up,
+## and if the Hero stood still the whole while with an order in hand.
+func _play_until(done: Callable, seconds: float, what: String) -> bool:
+	var wm = _main.wave_manager
+	var start: float = wm.elapsed_time
+	var hero = _main.hero
+	var was: Vector3 = hero.global_position
+	var still: float = 0.0
+	var warned: bool = false
+	while wm.elapsed_time - start < seconds:
+		if done.call():
+			return true
+		await _advance(0.25)
+		var moved: float = hero.global_position.distance_to(was)
+		was = hero.global_position
+		if int(hero.current_state) == 1 and moved < 0.02:
+			still += 0.25 * Engine.time_scale
+			if still > 4.0 and not warned:
+				warned = true
+				print("[play %5.1fs] STUCK? he has been walking on the spot for 4s while %s, at %s" % [wm.elapsed_time, what, str(hero.global_position)])
+		else:
+			still = 0.0
+		if root.get_node("GameState").is_game_over:
+			return false
+	print("[play %5.1fs] gave up %s after %.0fs" % [wm.elapsed_time, what, seconds])
+	return false
+
+## The nearest node of `res_id` he can work, worked for `seconds` of game time.
+func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
+	var best: Node = null
+	var best_d: float = INF
+	for n in get_nodes_in_group("resource_nodes"):
+		if not is_instance_valid(n) or String(n.resource_type) != res_id or int(n.current_amount) <= 0:
+			continue
+		if not hero.can_harvest(n):
+			continue
+		var d: float = (n as Node3D).global_position.distance_to(hero.global_position)
+		if d < best_d:
+			best_d = d
+			best = n
+	if best == null:
+		print("[play] nothing of %s he can work" % res_id)
+		await _advance(seconds)
+		return
+	hero.order_harvest(best)
+	var wm = _main.wave_manager
+	await _play_until(func(): return wm.is_wave_active or wm.raid_timer < 6.0, seconds, "working %s" % res_id)
+
+## Walks in, to the bench, starts `job` and stays till it is done.
+func _bench_job(hero: Node, cabin: Node, bench_id: String, job: String, note: Callable) -> void:
+	var bench = cabin.station(bench_id)
+	if bench == null or job == "":
+		note.call("no %s job %s" % [bench_id, job])
+		return
+	if not bench.can_afford(job):
+		note.call("cannot afford %s at the %s (%s)" % [job, bench_id, str(root.get_node("GameState").resources)])
+		return
+	_main._walk_to_bench(bench)
+	await _play_until(func(): return cabin.hero_inside and int(hero.current_state) == 0, 40.0, "walking to the %s" % bench_id)
+	if not cabin.hero_inside:
+		note.call("did not get into the cabin for the %s" % bench_id)
+		return
+	var began: bool = bench.begin(job)
+	note.call("%s at the %s: %s" % [job, bench_id, "begun" if began else "REFUSED"])
+	if bench_id == "kitchen" and began:
+		await _shoot("cooking")
+	await _play_until(func(): return String(bench.active_recipe) == "", float(bench.time_of(job)) + 5.0, "working at the %s" % bench_id)
+
+func _unfinished() -> int:
+	var n: int = 0
+	for b in _main.grid_manager.get_all_buildings():
+		if is_instance_valid(b) and "is_constructed" in b and not b.is_constructed:
+			n += 1
+	return n
+
+func _cellstr(p: Vector3, gm: Node) -> String:
+	return str(gm.world_to_build_cell(p))
+
+func _play_status(hero: Node, cabin: Node, gs: Node, wm: Node) -> String:
+	var dinos: int = get_nodes_in_group("dinos").size()
+	var walls: int = 0
+	for b in _main.grid_manager.get_all_buildings():
+		if is_instance_valid(b) and "building_type" in b and String(b.building_type) != "core":
+			walls += 1
+	return "hero %s hp %.1f/%.0f at %s | cabin %.0f/%.0f | %d buildings | %d dinos | %s | next raid %.0fs" % [
+		["idle", "moving", "building", "attacking", "DEAD", "harvesting", "eating"][int(hero.current_state)],
+		hero.current_hp, hero.max_hp, _cellstr(hero.global_position, _main.grid_manager),
+		cabin.current_hp, cabin.max_hp, walls, dinos, str(gs.resources), wm.raid_timer]
 
 ## The ghost is what goes up (v0.6 round three: "pending的样子就是造下去的样子"): a line of palisade
 ## with a ghost at its end, turning the corner -- the end section shown already turned to meet it;
@@ -204,8 +459,8 @@ func _scenario_kitchen() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var eb := root.get_node_or_null("EventBus")
 	_grant({"food": 2, "prime_meat": 1})
-	_main.enter_cabin()
-	var kitchen: Node = _main.cabin_interior.station("kitchen") if _main.cabin_interior else null
+	await _walk_in()
+	var kitchen: Node = _main.current_core.station("kitchen")
 	if kitchen and eb:
 		eb.unit_selected.emit(kitchen)
 	await _shoot("menu_before_the_pot")
@@ -216,7 +471,7 @@ func _scenario_kitchen() -> void:
 	await _shoot("menu_with_the_pot")
 	if gs:
 		gs.eat("meat")
-	_main.leave_cabin()
+	await _walk_out()
 	await _shoot("fed")
 
 ## The v0.6 buildings side by side, south of the cabin where nothing else stands: a run of
@@ -264,8 +519,8 @@ func _scenario_beacon() -> void:
 	var gs := root.get_node_or_null("GameState")
 	var eb := root.get_node_or_null("EventBus")
 	await _shoot("broken")
-	_main.enter_cabin()
-	var bench: Node = _main.cabin_interior.station("beacon") if _main.cabin_interior else null
+	await _walk_in()
+	var bench: Node = _main.current_core.station("beacon")
 	if bench and eb:
 		eb.unit_selected.emit(bench)
 	await _shoot("bench")
@@ -275,7 +530,7 @@ func _scenario_beacon() -> void:
 		eb.unit_selected.emit(bench)
 	await _shoot("ready_to_launch")
 	gs.finish_beacon_job(String(gs.beacon_next_job()))
-	_main.leave_cabin()
+	await _walk_out()
 	await _advance(20.0)
 	await _shoot("charging")
 	gs.charge_beacon(10000.0)
@@ -472,17 +727,28 @@ func _scenario_fence() -> void:
 	# really about -- from the play camera a gap and a join look the same.
 	await _portrait("fence_close", Vector3(0.0, 0.0, z), 6.0)
 
-## Inside the cabin. The interior is the same world 200 metres down, so anything
-## wrong with the environment shows here first.
-##
-## The room as a new run finds it -- the beacon's mast down, the spit over the fire, an
-## empty tool board -- then fitted out: every tool on the board, the pot on the fire, the
-## beacon repaired and waiting; and a meal under way at the kitchen.
+## The cabin (v0.6 round three: "可进入，镂空，有透明部分（窗）里面的设施也在"): the module from outside,
+## the benches showing through its windows; him at its door, the door sliding open; inside, the
+## roof faded and the camera in over the room -- as a new run finds it, then fitted out with every
+## tool and the pot, him at the kitchen with a meal under way.
 func _scenario_cabin() -> void:
-	if not _main.has_method("enter_cabin"):
+	var core: Node3D = _main.current_core
+	if core == null:
 		return
-	_main.enter_cabin()
+	var hero = _main.hero
+	hero.set_physics_process(true)
 	await _wait(6)
+	await _portrait("outside", core.global_position + Vector3(0.0, 0.0, 0.5), 10.0, false, false)
+	await _portrait("outside_front", core.global_position, 9.5, false, true)
+	_main.order_enter_cabin()
+	for i in range(240):
+		await physics_frame
+		if core.is_door_open():
+			break
+	await _advance(0.3)
+	await _shoot("at_the_door")
+	await _walk_in()
+	await _advance(0.8)
 	await _shoot("inside")
 	var gs := root.get_node_or_null("GameState")
 	var cfg := root.get_node_or_null("Config")
@@ -493,19 +759,41 @@ func _scenario_cabin() -> void:
 		for job_id in cfg.beacon_jobs(gs.map_data()).slice(0, gs.beacon_stage_count()):
 			gs.finish_beacon_job(job_id)
 	_grant({"food": 3, "prime_meat": 1})
-	var kitchen: Node = _main.cabin_interior.station("kitchen") if _main.cabin_interior else null
+	var kitchen: Node = core.station("kitchen")
 	if kitchen and eb:
 		eb.unit_selected.emit(kitchen)
-	await _wait(4)
-	await _shoot("inside_fitted_out")
+		_main._walk_to_bench(kitchen)
+	await _advance(3.0)
 	if kitchen:
 		for job in kitchen.jobs():
 			if kitchen.can_afford(job) and kitchen.begin(job):
 				break
-		if kitchen.active_recipe != "":
-			kitchen.work(kitchen.time_of(kitchen.active_recipe) * 0.4)
-	await _wait(4)
+	await _advance(2.0)
 	await _shoot("inside_cooking")
+	await _portrait("inside_close", core.global_position, 7.0, true)
+	await _walk_out()
+	await _advance(0.8)
+	await _shoot("back_out")
+
+## Sends him in through the door and waits until he is in (Main.order_enter_cabin): walked, not
+## put there.
+func _walk_in() -> void:
+	_main.hero.set_physics_process(true)
+	_main.order_enter_cabin()
+	for i in range(900):
+		await physics_frame
+		if _main.in_cabin:
+			return
+	print("[playtest] he did not get into the cabin")
+
+## And out, to the front of the door.
+func _walk_out() -> void:
+	_main.order_leave_cabin()
+	for i in range(900):
+		await physics_frame
+		if not _main.in_cabin:
+			return
+	print("[playtest] he did not get out of the cabin")
 
 ## Portraits of the models, from close enough to actually judge them.
 ##

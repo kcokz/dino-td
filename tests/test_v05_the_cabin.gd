@@ -2,11 +2,12 @@
 # The cabin: the crew module the Hero lives in, and the thing the raid is trying to reach.
 #
 # Reported as "船舱模型太小" -- it was a 1 m pod in one tile, no taller than the man who
-# lives in it. It is three metres a side now, three cells of the building grid by three
-# (Config.BUILDINGS.core.cells). A building bigger than a tile broke every place that measured
-# a building as a circle of half its width or as one tile: its corner attack slots stood
-# inside its walls, a raptor at its corner could not bite it, and the Hero could not get close
-# enough to its walls to repair it. These hold all of that.
+# lives in it. It is a module seven cells of the building grid long and three deep now
+# (Config.BUILDINGS.core.size), with a room inside it he walks into (v0.6 round three). A
+# building bigger than a tile broke every place that measured a building as a circle of half its
+# width or as one tile: its corner attack slots stood inside its walls, a raptor at its corner
+# could not bite it, and the Hero could not get close enough to its walls to repair it. These
+# hold all of that.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -33,12 +34,13 @@ func _level() -> Node:
 	_cleanup_nodes.append(main)
 	return main
 
-## Cells of the building grid a side.
-func _span() -> int:
-	return int(config_node.get_building_cells("core"))
+## Cells of the building grid it takes, east-west and north-south.
+func _span() -> Vector2i:
+	return config_node.get_building_size("core")
 
-func _half() -> float:
-	return float(config_node.get_building_footprint("core")) * 0.5
+## Half its box on the ground, in metres: x east-west, y north-south.
+func _half() -> Vector2:
+	return config_node.get_building_half("core")
 
 ## The cells of the building grid it holds.
 func _block(main: Node) -> Array[Vector2i]:
@@ -49,29 +51,29 @@ func test_01_it_is_a_room_not_a_pod() -> void:
 	var main = await _level()
 	var core: Node3D = main.current_core
 	var body: Node3D = core.find_child("Body", false, false)
-	var drawn: AABB = VisualLibrary.visual_bounds(body)
+	var drawn: AABB = VisualLibrary.visual_bounds(body)     # its geometry: not the reach of its lamp
 	var hero_h: float = float(config_node.HERO["height"])
-	assert_gt(_span(), 1, "It takes more than one cell")
+	assert_gt(_span().x * _span().y, 1, "It takes more than one cell")
 	assert_gte(drawn.size.y / hero_h, 2.0, "It stands twice the Hero's height (%.2fx)" % (drawn.size.y / hero_h))
 	assert_gte(minf(drawn.size.x, drawn.size.z), 2.0 * hero_h, "And is wider than two of him")
 	# Drawn inside its own box, nothing hanging over the ground round it.
-	var fp: float = float(config_node.get_building_footprint("core"))
-	assert_lte(drawn.size.x, fp + 0.05, "No wider than its box east-west")
-	assert_lte(drawn.size.z, fp + 0.05, "Nor north-south")
+	assert_lte(drawn.size.x, _half().x * 2.0 + 0.05, "No wider than its box east-west")
+	assert_lte(drawn.size.z, _half().y * 2.0 + 0.05, "Nor north-south")
 
 func test_02_it_holds_its_block_and_nothing_more() -> void:
 	var main = await _level()
 	var gm = main.grid_manager
 	var core: Node = main.current_core
 	var block: Array[Vector2i] = _block(main)
-	assert_eq(block.size(), _span() * _span(), "A square of cells")
+	assert_eq(block.size(), _span().x * _span().y, "A block of cells")
 	for c in block:
 		assert_true(gm.building_in_build_cell(c) == core, "Cell %s is the cabin's" % str(c))
 		assert_false(main.build_system.can_place_at("wall", c), "Nor is anything built on it")
+	# Its room is ground only he walks on: a raid's nearest ground to its middle is outside it.
 	var middle: Vector3 = (core as Node3D).global_position
-	var nearest: Vector3 = main.nav_maps.closest_point(middle, true)
+	var nearest: Vector3 = main.nav_maps.closest_point(middle, NavMaps.For.RAID)
 	assert_gt(float(config_node.gap_to_building(nearest, "core", middle)), 0.0,
-		"And nobody stands in it: the nearest ground is outside its walls")
+		"And no raid stands in it: its nearest ground is outside the walls")
 	var around: int = 0
 	for c in block:
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
@@ -80,17 +82,18 @@ func test_02_it_holds_its_block_and_nothing_more() -> void:
 				continue
 			around += 1
 			assert_false(gm.building_in_build_cell(n) == core, "Cell %s beside it is not" % str(n))
-	assert_eq(around, 4 * _span(), "It is ringed by cells that are not its")
+	assert_eq(around, 2 * (_span().x + _span().y), "It is ringed by cells that are not its")
 	assert_eq(core.cell_pos, main.core_cell, "It is registered at the tile it was placed at")
 
-func test_03_its_north_and_west_walls_stand_where_the_pods_did() -> void:
-	# The block runs south and east, so a raid coming down from the nest meets the same
-	# line it always met: the pod's walls were half a metre into its tile.
+func test_03_its_north_wall_stands_where_the_pods_did() -> void:
+	# The block runs south, so a raid coming down from the nest meets the same line it always
+	# met: the pod's wall was half a metre into its tile. Its middle is where the three-metre
+	# cabin's was, the module running out either side.
 	var main = await _level()
 	var core: Node3D = main.current_core
 	var origin: Vector3 = main.grid_manager.cell_to_world_origin(main.core_cell)
-	assert_almost_eq(core.global_position.x - _half(), origin.x + 0.5, 0.001, "The west wall")
-	assert_almost_eq(core.global_position.z - _half(), origin.z + 0.5, 0.001, "The north wall")
+	assert_almost_eq(core.global_position.z - _half().y, origin.z + 0.5, 0.001, "The north wall")
+	assert_almost_eq(core.global_position.x, origin.x + 0.5 + _half().y, 0.001, "Its middle")
 
 func test_04_there_is_a_way_past_it_on_every_side() -> void:
 	# Nothing is built into the cabin's walls by the level; a way past it is a free cell beside
@@ -102,9 +105,9 @@ func test_04_there_is_a_way_past_it_on_every_side() -> void:
 	# And the mesh agrees: he can walk from one side of it to the other.
 	var main = await _level()
 	var c: Vector3 = main.current_core.global_position
-	var south := c + Vector3(0.0, 0.0, _half() + 2.0)
-	var north := c + Vector3(0.0, 0.0, -_half() - 2.0)
-	assert_true(main.nav_maps.is_reachable(south, north, true), "Round it from the door to the back")
+	var south := c + Vector3(0.0, 0.0, _half().y + 2.0)
+	var north := c + Vector3(0.0, 0.0, -_half().y - 2.0)
+	assert_true(main.nav_maps.is_reachable(south, north, NavMaps.For.RAID), "Round it from the door to the back")
 
 func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 	# Every attack slot is out in the open, and from every one of them the cabin is in
@@ -139,19 +142,19 @@ func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 	assert_eq(inner, 8, "Eight of them close enough to bite from")
 	assert_eq(out_of_reach, 0, "And from every one of those, it can")
 	# And the corner: touching it there is touching it.
-	raptor.global_position = core.global_position + Vector3(_half() + 0.3, 0.0, _half() + 0.3)
+	raptor.global_position = core.global_position + Vector3(_half().x + 0.3, 0.0, _half().y + 0.3)
 	assert_true(raptor._target_in_reach(core), "Standing at its corner, it can bite")
 
-func test_06_the_hero_steps_inside_from_any_side() -> void:
+func test_06_he_gets_in_from_any_side_by_the_door() -> void:
+	# From every side of it there is a way in -- round to the door, the only way in.
 	var main = await _level()
-	var c: Vector3 = main.current_core.global_position
-	var out: float = _half() + 1.0
-	for spot in [Vector3(0, 0, out), Vector3(0, 0, -out), Vector3(out, 0, 0), Vector3(-out, 0, 0),
-			Vector3(out, 0, out) * 0.85]:
-		main.hero.global_position = c + spot
-		assert_true(main._hero_is_at_cabin(), "Close to its wall at %s, he can go in" % str(spot))
-	main.hero.global_position = c + Vector3(0.0, 0.0, _half() + 3.0)
-	assert_false(main._hero_is_at_cabin(), "Three metres off, he cannot")
+	var cabin = main.current_core
+	var c: Vector3 = cabin.global_position
+	var inside: Vector3 = cabin.door_inside()
+	for spot in [Vector3(0, 0, _half().y + 1.0), Vector3(0, 0, -_half().y - 1.0),
+			Vector3(_half().x + 1.0, 0, 0), Vector3(-_half().x - 1.0, 0, 0)]:
+		assert_true(main.nav_maps.is_reachable(c + spot, inside, NavMaps.For.HERO),
+			"From %s he can get inside" % str(spot))
 
 func test_07_he_can_reach_its_walls_to_repair_it() -> void:
 	var main = await _level()

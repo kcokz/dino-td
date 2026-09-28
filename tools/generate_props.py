@@ -1170,7 +1170,7 @@ def water_landing(seed):
 
 
 # ==============================================================================
-# The cabin: the crew module of the ship that brought the Hero here
+# The cabin's palette: the crew module itself is tools/generate_cabin.py module
 # ==============================================================================
 
 HEAT_TILE = (0.12, 0.12, 0.13)
@@ -1179,195 +1179,6 @@ SCORCH = (0.05, 0.05, 0.055)
 SOLAR = (0.07, 0.11, 0.24)
 SOLAR_LINE = (0.30, 0.34, 0.42)
 ASH = (0.30, 0.29, 0.27)
-
-
-def _module_ring(x, ry, rz, n, seg):
-    """One ring of the hull: a superellipse across (y, z), rounder than a box and
-    squarer than a tube -- the cross-section of a pressure module."""
-    pts = []
-    for k in range(seg):
-        t = math.tau * k / seg
-        c, s = math.cos(t), math.sin(t)
-        y = ry * math.copysign(abs(c) ** (2.0 / n), c)
-        z = rz * math.copysign(abs(s) ** (2.0 / n), s)
-        pts.append(Vector((x, y, z)))
-    return pts
-
-
-CABIN_R = 1.02                     # the hull's half-width and half-height
-CABIN_TILT = math.radians(7.0)     # the shield end dug in
-CABIN_ROLL = math.radians(4.0)
-CABIN_LIFT = 1.0                   # its axis this high: it lies on its side on the ground
-
-
-def _cabin_place(v):
-    """A point on the module, lying as it came down: pitched about Y (shield end down),
-    rolled about X, then up onto the ground."""
-    x1 = v.x * math.cos(CABIN_TILT) - v.z * math.sin(CABIN_TILT)
-    z1 = v.x * math.sin(CABIN_TILT) + v.z * math.cos(CABIN_TILT)
-    y2 = v.y * math.cos(CABIN_ROLL) - z1 * math.sin(CABIN_ROLL)
-    z2 = v.y * math.sin(CABIN_ROLL) + z1 * math.cos(CABIN_ROLL)
-    return Vector((x1, y2, z2)) + Vector((0.0, 0.0, CABIN_LIFT))
-
-
-def cabin_rig(seed):
-    """The cabin with a gun of its own: the wreck's second turret head, bolted to the roof
-    on a turntable towards the shield end, clear of the solar panel and the antenna. It
-    covers the ground round the cabin (Config BUILDINGS.core.range) -- enough for the first
-    raptors, not for a raid. Returned like the sentry: (body, head, pivot, muzzle)."""
-    body = cabin(seed)
-    top = _cabin_place(Vector((-0.42, 0.0, CABIN_R * 0.99)))
-    body.tube([top - UP * 0.06, top + UP * 0.05], [0.13, 0.12], [METAL_DARK, METAL_DARK], 12)
-    rim = [top + UP * 0.05 + Vector((math.cos(math.tau * k / 12) * 0.12, math.sin(math.tau * k / 12) * 0.12, 0.0))
-           for k in range(12)]
-    for k in range(12):
-        body.tri(rim[k], rim[(k + 1) % 12], top + UP * 0.05, METAL_DARK, METAL_DARK, METAL_DARK)
-    head, muzzle = _turret_head(1.0)
-    return body, head, top + UP * 0.05, muzzle
-
-
-def cabin(seed):
-    """The crew module of the ship that crashed here, and the Hero's home: a pressure
-    hull lying on its side with its heat shield ploughed into a mound of earth, an orange
-    hazard band, portholes, a torn solar panel and a bent antenna on top, its hatch open
-    with the door dropped as a ramp -- towards -Y, the south side in the game -- and the
-    Hero's campfire ring by the door. It was a 1 m pod, the Hero's own height."""
-    rng = random.Random(seed)
-    b = Builder()
-    ry, rz, n, seg = CABIN_R, CABIN_R, 3.2, 28
-    place = _cabin_place
-
-    def scorch(base, amount):
-        return jitter(mix(base, SCORCH, amount), rng, 0.015)
-
-    # The hull, shield end (-X) to engine end (+X). The band nearest the engine is the
-    # orange one; the shield end is scorched from re-entry.
-    xs = [-1.02, -0.85, -0.45, 0.0, 0.45, 0.72, 0.84, 0.96, 1.16]
-    rings = [[place(p) for p in _module_ring(x, ry, rz, n, seg)] for x in xs]
-    for i in range(len(rings) - 1):
-        band = HAZARD if xs[i] >= 0.72 and xs[i + 1] <= 0.84 else METAL
-        for k in range(seg):
-            k2 = (k + 1) % seg
-            cols = []
-            for xx in (xs[i], xs[i], xs[i + 1], xs[i + 1]):
-                burn = max(0.0, (-0.2 - xx)) * 0.9 + (0.25 if rng.random() < 0.06 else 0.0)
-                cols.append(scorch(band, min(0.8, burn)))
-            b.quad(rings[i][k], rings[i][k2], rings[i + 1][k2], rings[i + 1][k], *cols)
-    # The heat shield: a shallow dome of dark tiles over the -X end.
-    dome = []
-    for (x, s) in ((-1.02, 1.0), (-1.18, 0.86), (-1.28, 0.6), (-1.33, 0.3)):
-        dome.append([place(p) for p in _module_ring(x, ry * s, rz * s, n, seg)])
-    tip = place(Vector((-1.35, 0.0, 0.0)))
-    for j in range(len(dome) - 1):
-        for k in range(seg):
-            k2 = (k + 1) % seg
-            c = HEAT_TILE_LIGHT if (k + j) % 2 == 0 else HEAT_TILE
-            b.quad(dome[j][k2], dome[j][k], dome[j + 1][k], dome[j + 1][k2], c, c, c, c)
-    for k in range(seg):
-        b.tri(dome[-1][(k + 1) % seg], dome[-1][k], tip, HEAT_TILE, HEAT_TILE, SCORCH)
-    # The engine end: a bulkhead and a stubby nozzle.
-    last = rings[-1]
-    hub = place(Vector((1.16, 0.0, 0.0)))
-    for k in range(seg):
-        b.tri(last[k], last[(k + 1) % seg], hub, METAL_DARK, METAL_DARK, GUNMETAL)
-    b.tube([place(Vector((1.16, 0.0, 0.05))), place(Vector((1.34, 0.0, 0.05))), place(Vector((1.42, 0.0, 0.05)))],
-           [0.36, 0.3, 0.42], [GUNMETAL, METAL_DARK, SCORCH], 12)
-
-    # The hatch, open, on the -Y side: a dark doorway, and the door dropped as a ramp.
-    door_x0, door_x1 = -0.35, 0.3
-    door_z0, door_z1 = -0.62, 0.62
-    face_y = -ry * 0.985
-    frame = [place(Vector((door_x0 - 0.07, face_y - 0.02, door_z0 - 0.07))),
-             place(Vector((door_x1 + 0.07, face_y - 0.02, door_z0 - 0.07))),
-             place(Vector((door_x1 + 0.07, face_y - 0.02, door_z1 + 0.07))),
-             place(Vector((door_x0 - 0.07, face_y - 0.02, door_z1 + 0.07)))]
-    b.quad(frame[0], frame[1], frame[2], frame[3], HAZARD, HAZARD, HAZARD, HAZARD)
-    hole = [place(Vector((door_x0, face_y - 0.04, door_z0))), place(Vector((door_x1, face_y - 0.04, door_z0))),
-            place(Vector((door_x1, face_y - 0.04, door_z1))), place(Vector((door_x0, face_y - 0.04, door_z1)))]
-    dark, dim = (0.02, 0.02, 0.025), (0.05, 0.05, 0.06)
-    b.quad(hole[0], hole[1], hole[2], hole[3], dark, dark, dim, dim)
-    # The door, hinged at the sill and lying down to the ground as a ramp.
-    sill_l, sill_r = hole[0], hole[1]
-    foot_l = Vector((sill_l.x - 0.05, sill_l.y - 0.78, 0.02))
-    foot_r = Vector((sill_r.x + 0.05, sill_r.y - 0.78, 0.02))
-    earthy = mix(METAL, SOIL_LIGHT, 0.3)
-    b.quad(sill_r, sill_l, foot_l, foot_r, METAL, METAL, earthy, earthy)
-    under = Vector((0.0, 0.0, -0.05))
-    b.quad(sill_l + under, sill_r + under, foot_r + under, foot_l + under,
-           METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
-    for t in (0.3, 0.55, 0.8):
-        a = sill_l.lerp(foot_l, t) + Vector((0.0, 0.0, 0.012))
-        c = sill_r.lerp(foot_r, t) + Vector((0.0, 0.0, 0.012))
-        b.quad(a, c, c + Vector((0.0, -0.05, 0.0)), a + Vector((0.0, -0.05, 0.0)), HAZARD, HAZARD, HAZARD, HAZARD)
-
-    # Portholes along both sides and one on the shoulder.
-    def porthole(x, angle):
-        c = Vector((x, math.cos(angle) * ry * 1.005, math.sin(angle) * rz * 1.005))
-        out = Vector((0.0, math.cos(angle), math.sin(angle)))
-        up = Vector((1.0, 0.0, 0.0))
-        side = out.cross(up)
-        glass = [place(c + (up * math.cos(math.tau * i / 8) + side * math.sin(math.tau * i / 8)) * 0.12 + out * 0.012)
-                 for i in range(8)]
-        rim = [place(c + (up * math.cos(math.tau * i / 8) + side * math.sin(math.tau * i / 8)) * 0.16)
-               for i in range(8)]
-        centre = place(c + out * 0.015)
-        for i in range(8):
-            i2 = (i + 1) % 8
-            b.quad(rim[i], rim[i2], glass[i2], glass[i], GUNMETAL, GUNMETAL, METAL_DARK, METAL_DARK)
-            b.tri(glass[i], glass[i2], centre, LENS, LENS, mix(LENS, (0.5, 0.6, 0.7), 0.35))
-    for x in (0.55, -0.72):
-        porthole(x, math.radians(-90))       # the door side
-    for x in (-0.5, 0.1, 0.55):
-        porthole(x, math.radians(90))        # the far side
-    porthole(-0.2, math.radians(35))
-
-    # A torn solar panel standing up off the top, and a bent antenna.
-    root = place(Vector((0.15, 0.25, rz * 0.97)))
-    b.tube([root, root + Vector((0.0, 0.1, 0.2))], [0.05, 0.04], [METAL_DARK, METAL_DARK], 6)
-    pa = root + Vector((-0.55, 0.05, 0.18))
-    pb = root + Vector((0.5, 0.2, 0.24))
-    pc = root + Vector((0.42, 0.7, 0.52))
-    pd = root + Vector((-0.2, 0.58, 0.55))      # a corner torn off: four sides, not a square
-    b.quad(pa, pb, pc, pd, SOLAR, SOLAR, SOLAR, SOLAR)
-    # Its back a hair behind the cells: the same plane twice fights itself for every pixel.
-    back = (pb - pa).cross(pd - pa).normalized() * -0.025
-    b.quad(pd + back, pc + back, pb + back, pa + back, METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
-    for t in (0.33, 0.66):
-        l0, l1 = pa.lerp(pd, t), pb.lerp(pc, t)
-        b.quad(l0, l1, l1 + Vector((0.0, 0.0, 0.015)), l0 + Vector((0.0, 0.0, 0.015)),
-               SOLAR_LINE, SOLAR_LINE, SOLAR_LINE, SOLAR_LINE)
-    mast = place(Vector((0.7, -0.2, rz * 0.95)))
-    b.tube([mast, mast + Vector((0.02, 0.0, 0.24)), mast + Vector((0.18, -0.05, 0.36))],
-           [0.035, 0.025, 0.018], [METAL_DARK, METAL, HAZARD], 6)
-
-    # Earth thrown up round the shield end where it ploughed in.
-    mound_c = Vector((-1.05, 0.0, 0.0))
-    ring_n = 16
-    outer = [mound_c + Vector((math.cos(math.tau * i / ring_n) * rng.uniform(0.85, 1.05) * 0.62,
-                               math.sin(math.tau * i / ring_n) * rng.uniform(0.9, 1.05) * 1.12, 0.0))
-             for i in range(ring_n)]
-    inner = [mound_c + Vector((math.cos(math.tau * i / ring_n) * 0.38, math.sin(math.tau * i / ring_n) * 0.72,
-                               rng.uniform(0.3, 0.46))) for i in range(ring_n)]
-    peak = mound_c + Vector((0.05, 0.0, 0.58))
-    for i in range(ring_n):
-        i2 = (i + 1) % ring_n
-        b.quad(outer[i], outer[i2], inner[i2], inner[i], SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
-        b.tri(inner[i], inner[i2], peak, SOIL_LIGHT, SOIL_LIGHT, mix(SOIL_LIGHT, MOSS, 0.3))
-
-    # The Hero's fire by the door: a ring of stones, charred logs, ash.
-    fire = Vector((0.95, -1.22, 0.0))
-    for i in range(7):
-        a = math.tau * i / 7 + rng.uniform(-0.15, 0.15)
-        _boulder(b, fire + Vector((math.cos(a) * 0.3, math.sin(a) * 0.3, -0.02)), 0.075, rng)
-    ash = [fire + Vector((math.cos(math.tau * i / 10) * 0.24, math.sin(math.tau * i / 10) * 0.24, 0.015))
-           for i in range(10)]
-    for i in range(10):
-        b.tri(ash[i], ash[(i + 1) % 10], fire + Vector((0.0, 0.0, 0.03)), ASH, ASH, mix(ASH, CHAR, 0.5))
-    for a in (0.2, 2.3, 4.2):
-        d = Vector((math.cos(a), math.sin(a), 0.0))
-        b.tube([fire - d * 0.2 + Vector((0.0, 0.0, 0.05)), fire + d * 0.22 + Vector((0.0, 0.0, 0.1))],
-               [0.035, 0.03], [CHAR, mix(CHAR, BARK, 0.4)], 6)
-    return b
 
 
 # ==============================================================================
@@ -1467,12 +1278,6 @@ KITS = {
     "set_crossbow_2": (lambda s: set_crossbow(s, twin=True), [11]),
 }
 
-# Props with a part that moves: exported as a small hierarchy rather than one mesh.
-RIGS = {
-    "cabin": (lambda s: cabin_rig(s), [19]),
-}
-
-
 def main():
     args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     reset()
@@ -1510,32 +1315,6 @@ def main():
             for o in objs:
                 o.name = "%s.%s" % (label, o.name)
             made.extend(objs)
-    for name, (fn, seeds) in RIGS.items():
-        if only and name not in only:
-            continue
-        for v, seed in enumerate(seeds):
-            label = "%s_%s" % (name, "abc"[v])
-            stand_b, head_b, pivot, muzzle = fn(seed)
-            # Named for the game: Tower.gd turns the node called Head and fires from
-            # the one called Muzzle.
-            stand = stand_b.to_object("Stand", [mat])
-            head = head_b.to_object("Head", [mat])
-            head.parent = stand
-            head.location = pivot
-            tip = bpy.data.objects.new("Muzzle", None)
-            bpy.context.scene.collection.objects.link(tip)
-            tip.parent = head
-            tip.location = muzzle
-            export_objects([stand, head, tip], os.path.join(OUT_DIR, label + ".glb"))
-            # Every rig's parts are called Stand, Head and Muzzle -- the game finds them by those
-            # names -- and Blender makes a taken name unique ("Head.001"), so the names are
-            # freed for the next rig once this one is written.
-            for o in (stand, head, tip):
-                o.name = "%s.%s" % (label, o.name)
-            print("[OK] %-20s %6d triangles  stand %.2f x %.2f x %.2f m, head at %.2f m" % (
-                label, len(stand.data.polygons) + len(head.data.polygons),
-                stand.dimensions.x, stand.dimensions.y, stand.dimensions.z, pivot.z))
-            made.append(stand)
     if "--preview" in args:
         preview_props(made)
 

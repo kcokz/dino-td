@@ -33,20 +33,16 @@ var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 @export var resource_nodes_container: Node3D = null
 @export var drops_container: Node3D = null
 @export var terrain_container: Node3D = null
-@export var cabin_interior: Node3D = null
 
 var resource_node_script: GDScript = null
 var current_core: Node = null
 var current_nest: Node = null
 var current_build_type: String = ""
 
-## Stepping into the cabin moves the camera; it never swaps the scene, so the
-## world outside keeps running the whole time the player is in there. That is the
-## cost that makes going home a decision.
+## Whether the Hero is in the cabin (CoreCampfire says, over the bus). It never swaps the scene:
+## the world outside keeps running the whole time he is in there, which is the cost that makes
+## going home a decision.
 var in_cabin: bool = false
-## Set when the player right-clicks the cabin: the Hero walks over, and the moment
-## he arrives the view goes inside. Any other order on the way cancels it.
-var _pending_cabin_entry: bool = false
 
 # v0.2 build preview: a translucent ghost of the pending building that follows the
 # cursor, together with its coverage ring and a highlight on the resource nodes that
@@ -130,7 +126,6 @@ func _ensure_camera_rig() -> void:
 func _process(delta: float) -> void:
 	_ensure_camera_rig()
 	_handle_camera_keys(delta)
-	_check_pending_cabin_entry()
 
 func _init_level_coordinates() -> void:
 	var cfg = _get_config()
@@ -187,20 +182,6 @@ func _ensure_scene_dependencies() -> void:
 		add_child(resource_nodes_container)
 	if resource_node_script == null and ResourceLoader.exists("res://scripts/entities/ResourceNode.gd"):
 		resource_node_script = load("res://scripts/entities/ResourceNode.gd")
-
-	# The cabin's inside is a scene of its own, parked far below the map. Instanced
-	# rather than swapped to, so entering it never unloads the world.
-	if cabin_interior == null:
-		cabin_interior = find_child("CabinInterior", true, false) as Node3D
-	if cabin_interior == null and ResourceLoader.exists("res://scenes/CabinInterior.tscn"):
-		cabin_interior = load("res://scenes/CabinInterior.tscn").instantiate() as Node3D
-		if cabin_interior != null:
-			cabin_interior.name = "CabinInterior"
-			add_child(cabin_interior)
-	if cabin_interior != null:
-		var cfg_cabin = _get_config()
-		if cfg_cabin and "CABIN" in cfg_cabin:
-			cabin_interior.position = cfg_cabin.CABIN.get("interior_origin", Vector3(0.0, -200.0, 0.0))
 
 	# Drops are kept in their own container so a restart can sweep the ground with
 	# one loop, and so nothing on the floor is ever mistaken for a building.
@@ -301,6 +282,8 @@ func _wire_signals() -> void:
 	if eb and eb.has_signal("phase_changed"):
 		if not eb.phase_changed.is_connected(_on_phase_changed):
 			eb.phase_changed.connect(_on_phase_changed)
+	if eb and eb.has_signal("cabin_view_changed") and not eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
+		eb.cabin_view_changed.connect(_on_cabin_view_changed)
 
 func _on_phase_changed(phase: int) -> void:
 	if phase != 0:
@@ -391,9 +374,8 @@ func setup_initial_entities() -> void:
 	# 3. Place Hero (Modern Person), a step south of the cabin, by its door.
 	if hero == null or not is_instance_valid(hero):
 		var hero_pos = Vector3(1.0, 0.0, 3.0)
-		if current_core != null and is_instance_valid(current_core):
-			var half: float = float(cfg_core.get_building_footprint("core")) * 0.5 if cfg_core else 1.5
-			hero_pos = current_core.global_position + Vector3(0.0, 0.0, half + 1.0)
+		if current_core != null and is_instance_valid(current_core) and current_core.has_method("door_outside"):
+			hero_pos = current_core.door_outside()
 		var hero_inst = hero_script.new()
 		hero_inst.name = "Hero"
 		hero_inst.position = hero_pos
@@ -415,14 +397,14 @@ func setup_initial_entities() -> void:
 
 ## The middle of the block of `span` x `span` tiles that runs south and east from `cell`.
 ## For a one-tile building, the middle of its tile.
-## Where the cabin's middle stands for its tile `cell`: its north and west walls half a cell into
-## the tile -- where the pod's always were, so a raid coming down from the nest meets the line it
-## always met -- and its box running south and east from there, on whole cells of the building
-## grid.
+## Where the cabin's middle stands for its tile `cell`: its north wall half a cell into the tile --
+## where the pod's always was, so a raid coming down from the nest meets the line it always met --
+## and its box running south from there, on whole cells of the building grid; its middle as far
+## east as the three-metre cabin's was, the module running out either side of it.
 func _cabin_centre(cell: Vector2i) -> Vector3:
 	var cfg = _get_config()
 	var s: float = float(cfg.BUILD_CELL) if cfg and "BUILD_CELL" in cfg else 1.0
-	var half: float = float(cfg.get_building_footprint("core")) * 0.5 if cfg else 1.5
+	var half: float = float(cfg.get_building_half("core").y) if cfg else 1.5
 	var inset: float = s * 0.5 + half
 	return grid_manager.cell_to_world_origin(cell) + Vector3(inset, 0.0, inset)
 
@@ -950,7 +932,7 @@ func scatter_opening_stock() -> void:
 	if stock.is_empty():
 		return
 	var piles: int = maxi(1, int(cfg.DROPS.get("opening_piles", 1)))
-	# Measured from the cabin's walls: it is three metres across.
+	# Measured from the cabin's ends: it is seven metres long.
 	var radius: float = float(cfg.get_building_footprint("core")) * 0.5 + float(cfg.DROPS.get("opening_ring_gap", 4.0))
 	var centre: Vector3 = current_core.global_position
 
@@ -995,8 +977,14 @@ func right_click_building(b: Node, at: Vector3) -> void:
 	hero.move_to(at if at != Vector3.ZERO else b.global_position)
 
 # ==============================================================================
-# The cabin: stepping inside and back out
+# The cabin: walking in and out of it
 # ==============================================================================
+#
+# v0.6 round three: "人进入船舱应该只能从船舱入口处进去……进入船舱之后，应该也是同样的人在船舱里面，而不是只是
+# 一个贴图". The cabin is a room on the map (CoreCampfire): he walks in through its door and is
+# inside it, the same man in the same world, and the view follows him in -- the roof fading
+# (the cabin's doing) and the camera easing in over the room (this). It was a room parked two
+# hundred metres under the map, and going in moved the camera there.
 
 ## True while the given node is the cabin the player can walk into.
 func _is_cabin(node: Node) -> bool:
@@ -1006,106 +994,91 @@ func _is_cabin(node: Node) -> bool:
 		return true
 	return "building_type" in node and String(node.building_type) == "core"
 
-## Sends the Hero home and remembers why. Right-clicking the cabin is the only way
-## in: walk over, and the view goes inside the moment he arrives -- one click, and
-## the same "right-click a thing to act on it" rule as everything else.
+## Sends the Hero in: through the door, just inside it (CoreCampfire.door_inside). Right-
+## clicking the cabin means this -- the same "right-click a thing to act on it" as everything
+## else. A cabin fenced off from him says so rather than sending him to press against the fence.
 func order_enter_cabin() -> bool:
 	if hero == null or not is_instance_valid(hero) or current_core == null or not is_instance_valid(current_core):
 		return false
-	_pending_cabin_entry = true
-	if _hero_is_at_cabin():
-		return enter_cabin()
-	# To the door, not to the middle of the cabin. Aimed at the middle he walked into its
-	# wall and kept walking, on the spot, until the view came back out -- pressed against a
-	# wall that hid him from the camera, so he could not be clicked either.
-	hero.move_to(cabin_door())
+	if not current_core.has_method("door_inside"):
+		return false
+	var inside: Vector3 = current_core.door_inside()
+	if nav_maps != null and is_instance_valid(nav_maps) and nav_maps.is_ready() \
+			and not nav_maps.is_reachable(hero.global_position, inside, NavMaps.For.HERO):
+		_hint("HINT_CABIN_SHUT")
+		return false
+	hero.move_to(inside)
 	return true
 
-## Where the Hero stands to go in and where he steps out: in front of the hatch, which is
-## on the south side (the ramp, tools/generate_props.py cabin) -- the side the camera looks
-## from, so he comes out in plain view. Put on his walking mesh, so a fence built across
-## the door leaves him beside it rather than inside it.
-func cabin_door() -> Vector3:
-	if current_core == null or not is_instance_valid(current_core):
-		return Vector3.ZERO
-	var cfg = _get_config()
-	var half: float = float(cfg.get_building_footprint("core")) * 0.5 if cfg else 1.5
-	var standoff: float = float(cfg.CABIN.get("door_standoff", 0.8)) if (cfg and "CABIN" in cfg) else 0.8
-	var door: Vector3 = current_core.global_position + Vector3(0.0, 0.0, half + standoff)
-	if nav_maps != null and is_instance_valid(nav_maps) and nav_maps.is_ready():
-		var on_mesh: Vector3 = nav_maps.closest_point(door, true)
-		door = Vector3(on_mesh.x, current_core.global_position.y, on_mesh.z)
-	return door
-
-func _hero_is_at_cabin() -> bool:
+## Sends him out, to stand in front of the door.
+func order_leave_cabin() -> bool:
 	if hero == null or not is_instance_valid(hero) or current_core == null or not is_instance_valid(current_core):
 		return false
-	var reach: float = 2.0
-	var cfg = _get_config()
-	if cfg and "CABIN" in cfg:
-		reach = float(cfg.CABIN.get("enter_range", reach))
-	# From its walls, not its middle: it is three metres across.
-	if cfg and cfg.has_method("gap_to_building"):
-		return float(cfg.gap_to_building(hero.global_position, "core", current_core.global_position)) <= reach
-	return hero.global_position.distance_to(current_core.global_position) <= reach + 0.5
+	if not current_core.has_method("door_outside"):
+		return false
+	hero.move_to(current_core.door_outside())
+	return true
 
-func _check_pending_cabin_entry() -> void:
-	if not _pending_cabin_entry or in_cabin:
+## In front of the door, outside: where he stands to go in and comes out to.
+func cabin_door() -> Vector3:
+	if current_core == null or not is_instance_valid(current_core) or not current_core.has_method("door_outside"):
+		return Vector3.ZERO
+	return current_core.door_outside()
+
+## He has gone in or come out (the cabin says, CoreCampfire._set_hero_inside): the camera eases
+## in over the room, or back out to where it was (Config.CABIN inside_camera_distance,
+## camera_ease_seconds). The world goes on either way.
+func _on_cabin_view_changed(inside: bool) -> void:
+	in_cabin = inside
+	_ensure_camera_rig()
+	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
-	if _hero_is_at_cabin():
-		enter_cabin()
+	var cfg = _get_config()
+	var from := {"focus": camera_rig.focus, "distance": camera_rig.distance}
+	var to: Dictionary = {}
+	if inside:
+		_view_before_cabin = from
+		var at: Vector3 = current_core.global_position if (current_core and is_instance_valid(current_core)) else camera_rig.focus
+		to = {"focus": at, "distance": float(cfg.CABIN.get("inside_camera_distance", 11.0)) if cfg else 11.0}
+	elif not _view_before_cabin.is_empty():
+		to = _view_before_cabin
+		_view_before_cabin = {}
+	if to.is_empty():
+		return
+	if _camera_ease != null and _camera_ease.is_valid():
+		_camera_ease.kill()
+	var seconds: float = float(cfg.CABIN.get("camera_ease_seconds", 0.6)) if cfg else 0.6
+	if not is_inside_tree() or seconds <= 0.0:
+		_ease_view(1.0, from, to)
+		return
+	_camera_ease = create_tween()
+	_camera_ease.tween_method(func(t: float): _ease_view(t, from, to), 0.0, 1.0, seconds) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
-## Moves the camera inside. Deliberately not a scene change: the raid timer, the
-## dinosaurs already on the map and every half-built stake carry on exactly as
-## they were, which is what makes the trip home cost something.
-func enter_cabin() -> bool:
-	_pending_cabin_entry = false
-	if in_cabin or cabin_interior == null or not is_instance_valid(cabin_interior):
-		return false
-	cancel_building_selection()
-	in_cabin = true
-	# He is inside now: whatever he was walking to is done with, and he is at the door he
-	# will come out of.
-	if hero != null and is_instance_valid(hero):
-		if hero.has_method("order_stop"):
-			hero.order_stop()
-		hero.global_position = cabin_door()
-	if cabin_interior.has_method("set_open"):
-		cabin_interior.set_open(true)
-	var eb = _get_event_bus()
-	if eb and eb.has_signal("unit_deselected"):
-		eb.unit_deselected.emit()
-	if eb and eb.has_signal("cabin_view_changed"):
-		eb.cabin_view_changed.emit(true)
-	return true
+## Where the view was before he went in, to go back to when he comes out.
+var _view_before_cabin: Dictionary = {}
+var _camera_ease: Tween = null
 
-## Steps back out. Instant on purpose -- the player has to be able to leave the
-## moment a raid warning sounds, or being inside stops being a risk and starts
-## being a trap.
-func leave_cabin() -> bool:
-	_pending_cabin_entry = false
-	if not in_cabin:
-		return false
-	in_cabin = false
-	if cabin_interior and is_instance_valid(cabin_interior) and cabin_interior.has_method("set_open"):
-		cabin_interior.set_open(false)
-	if camera and is_instance_valid(camera):
-		camera.current = true
-	var eb = _get_event_bus()
-	# He steps out of the hatch, facing out, and is the one picked: whoever just came out
-	# of the cabin is who the player means to send somewhere next (v0.6 feedback: "从船舱
-	# 出来也是选不了人").
-	if hero != null and is_instance_valid(hero) and not ("current_state" in hero and int(hero.current_state) == 4):
-		hero.global_position = cabin_door()
-		var out: Vector3 = hero.global_position + Vector3(0.0, 0.0, 1.0)
-		hero.look_at(out, Vector3.UP)
-		if eb and eb.has_signal("unit_selected"):
-			eb.unit_selected.emit(hero)
-	elif eb and eb.has_signal("unit_deselected"):
-		eb.unit_deselected.emit()
-	if eb and eb.has_signal("cabin_view_changed"):
-		eb.cabin_view_changed.emit(false)
-	return true
+func _ease_view(t: float, from: Dictionary, to: Dictionary) -> void:
+	if camera_rig == null or camera == null or not is_instance_valid(camera):
+		return
+	camera_rig.focus = (from["focus"] as Vector3).lerp(to["focus"], t)
+	camera_rig.distance = lerpf(float(from["distance"]), float(to["distance"]), t)
+	camera_rig.apply_to(camera)
+
+## A bench clicked: the Hero goes to stand at it, in front of it, facing it -- in through the
+## door if he is outside ("点一个工作台 → 人走过去 → 面板出现它的菜单"). The panel shows its menu (the
+## click's selection does that).
+func _walk_to_bench(bench: Node) -> void:
+	if hero == null or not is_instance_valid(hero) or not (bench is Node3D):
+		return
+	if "current_state" in hero and int(hero.current_state) == 4:
+		return          # DEAD
+	var cfg = _get_config()
+	var size: Vector3 = cfg.get_visual_size("station/" + String(bench.station_id)) if (cfg and "station_id" in bench) else Vector3.ONE
+	var front: Vector3 = (bench as Node3D).global_position + Vector3(0.0, 0.0, size.z * 0.5 + float(cfg.HERO.get("width", 0.8)) * 0.5 + 0.1)
+	hero.move_to(front)
+	OrderMarker.spawn(self, front, "move")
 
 # ==============================================================================
 # Interactive & Programmatic Building Placement
@@ -1275,12 +1248,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		if hud and is_instance_valid(hud) and hud.has_method("is_pause_menu_open") and hud.is_pause_menu_open():
 			hud.toggle_pause_menu()
 			return
-		# Inside the cabin, Esc is the way out and nothing else. It has to be
-		# instant: the player must be able to leave the moment a raid warning
-		# sounds, or being inside stops being a risk and becomes a trap.
-		if in_cabin:
-			leave_cabin()
-			return
 		if current_build_type != "":
 			cancel_building_selection()
 			return
@@ -1302,10 +1269,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	#
 	# It still never changes what the panel shows; that is left-click's job alone.
 	if event is InputEventMouseButton and event.pressed and event.button_index == move_btn:
-		# Inside there is nowhere to send anyone: the Hero is standing right here.
-		if in_cabin:
-			get_viewport().set_input_as_handled()
-			return
 		if current_build_type != "":
 			cancel_building_selection()
 			get_viewport().set_input_as_handled()
@@ -1315,7 +1278,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var hit_pos = _raycast_ground(event.position)
 		if hit_pos != null and hero != null and is_instance_valid(hero):
-			_pending_cabin_entry = false   # a new order replaces the walk home
 			var cell = grid_manager.world_to_cell(hit_pos) if grid_manager else Vector2i.ZERO
 			var res_node = get_resource_node_at_cell(cell)
 			# By point, not by tile: several stakes share a tile, and the tile only
@@ -1357,24 +1319,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Left-click (Default build place button / Unit selection)
 	if event is InputEventMouseButton and event.pressed and event.button_index == place_btn:
-		# Inside, a click picks a bench and nothing else -- there is no ground to
-		# build on and no units to inspect.
-		if in_cabin:
-			var station = _raycast_object(event.position)
-			var eb_cabin = _get_event_bus()
-			if station != null and is_instance_valid(station) and station.is_in_group("stations"):
-				if eb_cabin and eb_cabin.has_signal("unit_selected"):
-					eb_cabin.unit_selected.emit(station)
-			elif eb_cabin and eb_cabin.has_signal("unit_deselected"):
-				eb_cabin.unit_deselected.emit()
-			get_viewport().set_input_as_handled()
-			return
 		if current_build_type == "":
 			var hit_obj = _raycast_object(event.position)
 			var eb = _get_event_bus()
 			if hit_obj != null and is_instance_valid(hit_obj) and (hit_obj.is_in_group("selectable") or hit_obj.is_in_group("hero") or hit_obj.is_in_group("buildings")):
 				if eb and eb.has_signal("unit_selected"):
 					eb.unit_selected.emit(hit_obj)
+				# A bench is worked where it stands: he goes to it.
+				if hit_obj.is_in_group("stations"):
+					_walk_to_bench(hit_obj)
 			else:
 				if eb and eb.has_signal("unit_deselected"):
 					eb.unit_deselected.emit()
@@ -1688,13 +1641,8 @@ func _get_option_panel() -> Node:
 		return hud.find_child("OptionPanel", true, false)
 	return null
 
-## Whichever camera the player is actually looking through -- the map's, or the
-## cabin's while they are inside. Clicks have to be cast from the same place.
+## The camera the player is looking through: the map's, inside the cabin as out of it.
 func _active_camera() -> Camera3D:
-	if in_cabin and cabin_interior and is_instance_valid(cabin_interior) and "camera" in cabin_interior:
-		var cam = cabin_interior.camera
-		if cam is Camera3D and is_instance_valid(cam):
-			return cam
 	return camera
 
 # ==============================================================================
@@ -1776,7 +1724,9 @@ func _show_hover(node: Node) -> void:
 	elif "building_type" in node:
 		var cfg2 = _get_config()
 		shape = SelectionRing3D.Shape.BOX
-		size = float(cfg2.get_building_footprint(String(node.building_type))) if cfg2 else 1.0
+		var half: Vector2 = cfg2.get_building_half(String(node.building_type)) if cfg2 else Vector2.ONE * 0.5
+		size = half.x * 2.0
+		depth = half.y * 2.0
 	_hover_ring.configure(shape, size, depth)
 	_hover_ring.global_position = (node as Node3D).global_position
 	_hover_ring.set_shown(true)
@@ -1901,7 +1851,7 @@ func _pick_rank(node: Node) -> int:
 ## thing that has to be hit exactly from eighteen metres up (Config.CONTROLS.pick_slop_px).
 func _unit_near_cursor(screen_pos: Vector2) -> Node:
 	var cam := _active_camera()
-	if cam == null or in_cabin or not is_inside_tree():
+	if cam == null or not is_inside_tree():
 		return null
 	var cfg = _get_config()
 	var slop: float = float(_controls().get("pick_slop_px", 8.0))
@@ -1964,7 +1914,8 @@ func place_building_at_cell(type_id: String, cell: Vector2i) -> Node:
 ## Completely restores pristine starting game state without reloading scene.
 func restart_game() -> void:
 	cancel_building_selection()
-	leave_cabin()
+	if in_cabin:
+		_on_cabin_view_changed(false)
 	if run_stats and is_instance_valid(run_stats):
 		run_stats.reset()
 
@@ -2129,8 +2080,6 @@ func set_ui_scale(p_scale: float) -> void:
 func _handle_camera_keys(delta: float) -> void:
 	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
-	if in_cabin:
-		return                      # the interior has its own camera
 	var cfg = _get_config()
 	var controls: Dictionary = cfg.CONTROLS if (cfg and "CONTROLS" in cfg and cfg.CONTROLS is Dictionary) else {}
 

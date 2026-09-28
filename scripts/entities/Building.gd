@@ -205,7 +205,7 @@ func _update_construction_state() -> void:
 func _update_visuals_progress() -> void:
 	for child in _body_meshes():
 		var mat = child.material_override
-		if mat is StandardMaterial3D:
+		if mat is StandardMaterial3D and not CabinArt.owns(mat):
 			if is_constructed:
 				mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 				mat.albedo_color.a = 1.0
@@ -637,9 +637,10 @@ func _ensure_physics_and_visuals() -> void:
 			selection_ring = ring_script.new()
 			selection_ring.name = "SelectionRing"
 			add_child(selection_ring)
-	# Buildings are square, so the outline traces their own footprint.
+	# The outline traces the building's own box -- seven by three for the cabin.
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
-		selection_ring.configure(SelectionRing3D.Shape.BOX, _footprint())
+		var half: Vector2 = _get_config().get_building_half(building_type) if _get_config() else Vector2.ONE * 0.5
+		selection_ring.configure(SelectionRing3D.Shape.BOX, half.x * 2.0, half.y * 2.0)
 
 ## The visible body. Height is what makes a building read as imposing -- widening
 ## one eats into the lane the Hero needs to get past, while height costs nothing.
@@ -820,6 +821,9 @@ func _ensure_bake_obstacle() -> void:
 	if cfg == null or not cfg.has_method("get_building_cells"):
 		return
 	if int(cfg.get_building_cells(building_type)) <= 1:
+		return
+	# A building with an inside -- the cabin -- is walls and a room, not a block (CoreCampfire).
+	if cfg.has_method("is_hollow") and cfg.is_hollow(building_type):
 		return
 	NavMaps.mark_solid(self, _footprint() * 0.5, _building_height())
 

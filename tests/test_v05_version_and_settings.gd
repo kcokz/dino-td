@@ -60,7 +60,7 @@ func test_03_no_scene_file_has_a_version_baked_into_it() -> void:
 	# in it looks right in the editor and goes stale in silence, because nothing ever
 	# reads it back.
 	var offenders: Array[String] = []
-	for path in ["res://scenes/ui/HUD.tscn", "res://scenes/Main.tscn", "res://scenes/CabinInterior.tscn"]:
+	for path in ["res://scenes/ui/HUD.tscn", "res://scenes/Main.tscn"]:
 		if not FileAccess.file_exists(path):
 			continue
 		var f := FileAccess.open(path, FileAccess.READ)

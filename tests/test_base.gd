@@ -228,16 +228,16 @@ func assert_has_signal(target: Object, signal_name: String, message: String = ""
 ## gap for a whole version.
 ##
 ## Caller owns the node and frees it, the same as anything else it instantiates.
-## How many cells of the building grid a freshly laid level holds: the cabin's square
-## (Config.BUILDINGS.core.cells) and the nest's tile (GridManager.build_cells_in_tile). The
+## How many cells of the building grid a freshly laid level holds: the cabin's block
+## (Config.get_building_size) and the nest's tile (GridManager.build_cells_in_tile). The
 ## cabin used to be one tile, and "exactly 2" was written into test after test.
 func level_cells_at_start() -> int:
 	var cfg = tree.root.get_node_or_null("Config")
-	var side: int = int(cfg.get_building_cells("core"))
+	var size: Vector2i = cfg.get_building_size("core")
 	var gm = load("res://scripts/core/GridManager.gd").new()
 	var nest: int = gm.build_cells_in_tile(Vector2i.ZERO).size()
 	gm.free()
-	return side * side + nest
+	return size.x * size.y + nest
 
 ## Where the cabin is: the middle of its block of tiles, not the middle of the tile it
 ## was placed at -- which is now inside its walls.

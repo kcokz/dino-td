@@ -75,8 +75,6 @@ var raid_warning_banner: Label = null
 var raid_warning_panel: Control = null
 var option_panel: Node = null
 var pause_menu: Node = null
-## Inside the cabin: every bench at once (CabinScreen).
-var cabin_screen: Control = null
 var paused_overlay: Control = null
 var _raid_horn_sounded: bool = false
 
@@ -149,7 +147,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["boss_warning", _on_boss_warning], ["boss_arrived", _on_boss_arrived],
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
-			["unlock_granted", _on_unlock_granted], ["cabin_view_changed", _on_cabin_view_changed],
+			["unlock_granted", _on_unlock_granted],
 			["material_discovered", _on_material_discovered]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
@@ -157,23 +155,6 @@ func _bus_handlers(eb: Node) -> Array:
 
 func _on_locale_changed(_new_locale: String) -> void:
 	reset_hud()
-
-## Inside, the room and its dock take the screen: the command card and the beacon card step
-## aside -- the beacon's own bench says the same -- and the top row stays, raid warnings and
-## all, because the world does not stop while he is in there.
-func _on_cabin_view_changed(inside: bool) -> void:
-	if option_panel and is_instance_valid(option_panel):
-		option_panel.visible = not inside and not is_game_over_visible()
-	if objective_panel:
-		objective_panel.visible = not inside and beacon_label != null and beacon_label.text != ""
-	# The dock runs along the bottom inside, where the version sits.
-	if version_label:
-		version_label.visible = not inside
-
-func _on_leave_cabin() -> void:
-	var main = get_parent()
-	if main and main.has_method("leave_cabin"):
-		main.leave_cabin()
 
 func _on_deploy_time_changed(remaining: float, _total: float) -> void:
 	if deploy_timer_label:
@@ -358,7 +339,7 @@ func _refresh_beacon_label() -> void:
 	beacon_label.text = text
 	beacon_label.visible = text != ""
 	if objective_panel:
-		objective_panel.visible = text != "" and not (cabin_screen and cabin_screen.is_open)
+		objective_panel.visible = text != ""
 	if text == "" or gs == null:
 		return
 	var stages: int = int(gs.beacon_stage_count()) if gs.has_method("beacon_stage_count") else 0
@@ -898,13 +879,6 @@ func _ensure_ui_components() -> void:
 	# and the menus included.
 	root_control.theme = UiTheme.get_theme()
 	var edge: float = float(UiTheme.space("l"))
-
-	# --- The cabin: first, so it is drawn under the rest. Its frosted backdrop blurs what is
-	# behind it, and what is behind it should be the room -- not the stock, the vitals or a
-	# raid's warning, which he needs to read while he chooses what to make.
-	cabin_screen = CabinScreen.new()
-	root_control.add_child(cabin_screen)
-	cabin_screen.leave_requested.connect(_on_leave_cabin)
 
 	# --- The status bar -------------------------------------------------------------------
 	# v0.6: "状态栏的那个版面还是显得像网页游戏". Three plates floating along the top were a web

@@ -243,33 +243,30 @@ func test_07_sun_directional_light_matches_config() -> void:
 # 8. Cabin Interior Compatibility & Fog Legibility
 # ==============================================================================
 
-func test_08_cabin_interior_preserves_lighting_and_visibility() -> void:
+func test_08_the_cabin_room_is_lit_and_in_clear_view() -> void:
 	var main = _instantiate_main()
-	await wait_frames(2)
+	await wait_frames(8)
+	var cabin = main.current_core
+	# The room is lit by its own lamp (Config.CABIN.glow_lights): a light in it, not a second
+	# world's.
+	var lamp: OmniLight3D = null
+	for light in CabinArt.lights_under(cabin):
+		if cabin.is_inside(light.global_position):
+			lamp = light
+	assert_not_null(lamp, "A lamp lights the room")
+	if lamp:
+		assert_gt(lamp.light_energy, 0.0, "and it is on")
 
-	assert_not_null(main.cabin_interior, "Cabin interior is instanced")
-	var cabin_light := main.cabin_interior.find_child("CabinLight", false, false) as Light3D
-	assert_not_null(cabin_light, "Cabin has dedicated CabinLight")
-	assert_true(cabin_light.visible, "CabinLight is visible")
-	assert_gt(cabin_light.light_energy, 0.0, "CabinLight is lit with positive energy")
-
-	# Enter cabin: camera switches to cabin camera
-	assert_true(main.enter_cabin(), "Stepping into cabin succeeds")
-	assert_true(main.in_cabin, "Main registers in_cabin state")
-	assert_true(main.cabin_interior.camera.current, "Cabin camera becomes current")
-	assert_false(main.camera.current, "Map camera is not current while inside cabin")
-
-	# Visibility assertion: fog begin distance must exceed cabin room dimensions so
-	# the indoor scene is not obscured by outdoor prehistoric distance fog.
-	var cam_distance_to_origin = main.cabin_interior.camera.position.length()
+	# Inside, the same camera eases in over the room -- nearer than the distance fog begins, so
+	# the room is never clouded by the valley's haze.
+	main.hero.global_position = cabin.door_inside()
+	cabin.recheck_hero()
+	assert_true(main.in_cabin, "Main registers him inside")
+	await wait_seconds(float(config_node.CABIN["camera_ease_seconds"]) + 0.2)
+	assert_true(main.camera.current, "The map's camera, inside as out")
 	var fog_begin: float = float(config_node.ENVIRONMENT["fog_depth_begin"])
-	assert_lt(cam_distance_to_origin, fog_begin,
-		"Cabin interior is within fog_depth_begin, preserving unclouded indoor visibility")
-
-	# Exit cabin: restores map camera
-	assert_true(main.leave_cabin(), "Leaving cabin succeeds")
-	assert_false(main.in_cabin, "Main outside")
-	assert_true(main.camera.current, "Map camera is active again")
+	assert_lt(main.camera.global_position.distance_to(cabin.global_position), fog_begin,
+		"The room is nearer than the fog begins")
 
 # ==============================================================================
 # 9. A level configures its own sun and nobody else's

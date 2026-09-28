@@ -182,10 +182,12 @@ func test_04_every_bench_in_the_cabin() -> void:
 	# Inside, each bench's recipes -- with everything in the warehouse, so every one of
 	# them can actually be made.
 	var main = await _level()
-	assert_true(main.has_method("enter_cabin"), "The cabin can be entered")
-	main.enter_cabin()
+	var cabin = main.current_core
+	main.hero.global_position = cabin.door_inside()
+	cabin.recheck_hero()
+	assert_true(main.in_cabin, "He is inside")
 	await wait_frames(2)
-	var stations: Array = main.cabin_interior.stations if main.cabin_interior != null and "stations" in main.cabin_interior else []
+	var stations: Array = cabin.stations
 	assert_gt(stations.size(), 0, "There are benches inside")
 	var recipes: int = 0
 	for station in stations:
@@ -194,7 +196,8 @@ func test_04_every_bench_in_the_cabin() -> void:
 		await wait_frames(1)
 		recipes += await _press_everything(main.hud, "station:%s" % station.name)
 	assert_gt(recipes, 0, "Their recipes were there to press (%d)" % recipes)
-	main.leave_cabin()
+	main.hero.global_position = cabin.door_outside()
+	cabin.recheck_hero()
 	await wait_frames(2)
 	assert_false(main.in_cabin, "And back out again")
 

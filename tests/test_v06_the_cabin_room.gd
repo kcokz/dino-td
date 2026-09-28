@@ -1,9 +1,10 @@
 # res://tests/test_v06_the_cabin_room.gd
-# The cabin is a room, not a menu: the crew module cut away along the front, with the Hero's
-# benches in it as models whose parts show how far the run has got -- the tools on the
-# workbench's board, the pot on the fire, the beacon's mast going back up a stage at a time
-# (tools/generate_cabin.py, scripts/fx/CabinArt.gd) -- and a dock along the bottom that works
-# the chosen bench.
+# The cabin is a room, not a menu: the crew module, outside and in (tools/generate_cabin.py
+# module), with the Hero's benches in it as models whose parts show how far the run has got --
+# the tools on the workbench's board, the pot on the fire, the beacon's mast going back up a
+# stage at a time (scripts/fx/CabinArt.gd). A bench clicked is worked where it stands: its menu
+# on the panel, and him sent to it (v0.6 round three; it was a dock along the bottom of a room
+# parked under the map).
 #
 # Everything expected is read from Config and from the models themselves.
 extends "res://tests/test_base.gd"
@@ -73,8 +74,11 @@ func _is_job(station: Node, part_name: String) -> bool:
 # 1. Models
 # ==============================================================================
 
-func test_01_the_room_and_every_bench_have_a_model() -> void:
-	assert_true(VisualLibrary.has_art("cabin/room"), "The cabin's room is a model")
+func test_01_the_module_and_every_bench_have_a_model() -> void:
+	assert_true(VisualLibrary.has_art("building/core"), "The cabin, outside and in, is a model")
+	var parts: Dictionary = _parts(_keep(VisualLibrary.make("building/core")))
+	for part in ["hull", "fade_shell", "glass", "door"]:
+		assert_true(parts.has(part), "It has its %s" % part)
 	for station_id in config_node.STATIONS:
 		assert_true(VisualLibrary.has_art("station/%s" % station_id), "The %s is a model" % station_id)
 
@@ -95,9 +99,7 @@ func test_02_everything_a_bench_makes_for_good_has_a_part_that_shows_it() -> voi
 
 func test_03_the_benches_show_how_far_the_run_has_got() -> void:
 	var main = await _level()
-	main.enter_cabin()
-	await wait_frames(1)
-	var stations: Array = main.cabin_interior.stations
+	var stations: Array = main.current_core.stations
 	var parts_seen: int = 0
 	# A new run: nothing made -- what shows "before" a job shows, what shows once it is done
 	# does not, and a part that belongs to no job always shows.
@@ -126,7 +128,7 @@ func test_04_the_kitchen_swaps_its_spit_for_the_pot() -> void:
 	var main = await _level()
 	var kitchen: Node = null
 	var vessel: String = ""
-	for st in main.cabin_interior.stations:
+	for st in main.current_core.stations:
 		for recipe_id in st.recipes():
 			if _parts(st.body).has(CabinArt.BEFORE_PREFIX + recipe_id):
 				kitchen = st
@@ -143,7 +145,7 @@ func test_04_the_kitchen_swaps_its_spit_for_the_pot() -> void:
 
 func test_05_a_bench_is_clicked_by_its_declared_size_and_drawn_inside_it() -> void:
 	var main = await _level()
-	for st in main.cabin_interior.stations:
+	for st in main.current_core.stations:
 		var size: Vector3 = config_node.get_visual_size("station/%s" % st.station_id)
 		var shape: BoxShape3D = null
 		for child in st.get_children():
@@ -156,61 +158,63 @@ func test_05_a_bench_is_clicked_by_its_declared_size_and_drawn_inside_it() -> vo
 		for axis in 3:
 			assert_lte(art.size[axis], size[axis] + 0.01, "%s's model fits its size on axis %d" % [st.station_id, axis])
 
-func test_06_the_benches_stand_where_the_room_marks_them() -> void:
+func test_06_the_benches_stand_where_the_module_marks_them() -> void:
 	var main = await _level()
-	for st in main.cabin_interior.stations:
-		var spot: Node3D = main.cabin_interior.spot_of(String(st.station_id))
-		assert_not_null(spot, "The room marks where the %s stands" % st.station_id)
+	var cabin = main.current_core
+	for st in cabin.stations:
+		var spot: Node3D = cabin.spot_of(String(st.station_id))
+		assert_not_null(spot, "The module marks where the %s stands" % st.station_id)
 		if spot:
 			assert_almost_eq(st.global_position.distance_to(spot.global_position), 0.0, 0.01,
 				"The %s stands on its mark" % st.station_id)
-
-func test_07_the_benches_are_in_view_above_the_dock() -> void:
-	var main = await _level()
-	main.enter_cabin()
-	await wait_frames(3)
-	var cam: Camera3D = main.cabin_interior.camera
-	var view: Rect2 = cam.get_viewport().get_visible_rect()
-	var dock: Rect2 = main.hud.cabin_screen.find_child("Dock", true, false).get_global_rect()
-	assert_lt(dock.size.y, view.size.y * 0.5, "The dock keeps to the bottom of the screen")
-	for st in main.cabin_interior.stations:
+		assert_true(cabin.is_inside(st.global_position), "inside the room")
 		var size: Vector3 = config_node.get_visual_size("station/%s" % st.station_id)
-		# Its working height: the top of a workbench, the fire, the console.
-		var at: Vector3 = st.global_position + Vector3.UP * minf(size.y, config_node.HERO["height"]) * 0.5
-		assert_false(cam.is_position_behind(at), "The %s is in front of the camera" % st.station_id)
-		var p: Vector2 = cam.unproject_position(at)
-		assert_true(view.has_point(p), "The %s is on screen (%s)" % [st.station_id, p])
-		assert_lt(p.y, dock.position.y, "And above the dock, not under it")
+		var back: float = (st.global_position.z - size.z * 0.5) - cabin.global_position.z
+		assert_gte(back, -cabin.room_half().y - 0.01, "its back not through the back wall")
 
-func test_08_the_dock_works_the_chosen_bench_and_the_room_rings_it() -> void:
+func test_07_a_bench_clicked_shows_its_menu_and_sends_him_to_it() -> void:
 	var main = await _level()
-	main.enter_cabin()
-	await wait_frames(1)
-	var screen = main.hud.cabin_screen
-	var stations: Array = main.cabin_interior.stations
-	for st in stations:
-		(screen.find_child("Tab_%s" % st.station_id, true, false) as Button).pressed.emit()
-		assert_eq(screen.selected, String(st.station_id), "Its tab chooses the %s" % st.station_id)
-		for other in stations:
-			var shown: bool = other == st
-			assert_eq((screen.find_child("Bench_%s" % other.station_id, true, false) as Control).visible, shown,
-				"Only the chosen bench's panel shows (%s)" % other.station_id)
-			assert_eq(other.selection_ring.visible, shown, "And only it is ringed in the room (%s)" % other.station_id)
-	# A click on a bench in the room chooses it as well.
-	event_bus_node.unit_selected.emit(stations[0])
-	assert_eq(screen.selected, String(stations[0].station_id), "Clicking a bench chooses it")
-	main.leave_cabin()
-	await wait_frames(1)
-	for st in stations:
-		assert_false(st.selection_ring.visible, "Outside, no bench is ringed")
+	var kitchen: Node = main.current_core.station("kitchen")
+	assert_not_null(kitchen, "The kitchen is in the cabin")
+	main.hero.global_position = main.cabin_door()
+	await wait_physics_frames(2)
+	event_bus_node.unit_selected.emit(kitchen)
+	main._walk_to_bench(kitchen)
+	assert_eq(main.hud.option_panel.selected_unit, kitchen, "Its menu is on the panel")
+	var seconds: float = 12.0
+	for i in range(int(seconds * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		if main.current_core.is_inside(main.hero.global_position) 				and main.hero.global_position.distance_to(kitchen.global_position) < 1.2:
+			break
+	assert_true(main.current_core.is_inside(main.hero.global_position), "He went in, through the door")
+	assert_lt(main.hero.global_position.distance_to(kitchen.global_position), 1.2, "and stands at the kitchen")
+
+func test_08_inside_the_roof_fades_and_outside_it_comes_back() -> void:
+	var main = await _level()
+	var cabin = main.current_core
+	assert_almost_eq(cabin.roof_transparency(), 0.0, 0.001, "From outside, the roof is on")
+	main.hero.global_position = cabin.door_inside()
+	cabin.recheck_hero()
+	assert_true(cabin.hero_inside, "Him inside is noticed")
+	assert_true(main.in_cabin, "and the level is told")
+	await wait_seconds(float(config_node.CABIN["fade_seconds"]) + 0.2)
+	assert_almost_eq(cabin.roof_transparency(), float(config_node.CABIN["fade_transparency"]), 0.01,
+		"Inside, the roof fades so he can be seen at work")
+	assert_almost_eq(main.camera_rig.distance, float(config_node.CABIN["inside_camera_distance"]), 0.5,
+		"and the camera eases in over the room")
+	main.hero.global_position = cabin.door_outside()
+	cabin.recheck_hero()
+	await wait_seconds(float(config_node.CABIN["fade_seconds"]) + 0.2)
+	assert_almost_eq(cabin.roof_transparency(), 0.0, 0.01, "Out again, it is back")
+	assert_false(main.in_cabin, "and the level knows he is out")
 
 func test_09_what_glows_is_drawn_lit_and_lights_the_room() -> void:
 	var main = await _level()
 	var glowing: int = 0
 	var lit: int = 0
 	var lights: Dictionary = config_node.CABIN.get("glow_lights", {})
-	var bodies: Array = [main.cabin_interior.find_child("Room", false, false)]
-	for st in main.cabin_interior.stations:
+	var bodies: Array = [main.current_core.find_child("Body", false, false)]
+	for st in main.current_core.stations:
 		bodies.append(st.body)
 	for body in bodies:
 		for mi in CabinArt.parts(body):
@@ -228,7 +232,7 @@ func test_10_the_fire_wavers() -> void:
 	# The light that flickers hardest is not a lamp: over one second it brightens and dims by
 	# a good part of what Config says it may (a fire at the noise's default scale barely moved).
 	var main = await _level()
-	var lights: Array[OmniLight3D] = CabinArt.lights_under(main.cabin_interior)
+	var lights: Array[OmniLight3D] = CabinArt.lights_under(main.current_core)
 	var hardest: OmniLight3D = null
 	for light in lights:
 		if hardest == null or float(light.get_meta("flicker", 0.0)) > float(hardest.get_meta("flicker", 0.0)):

@@ -341,18 +341,33 @@ static func _init_building_slots(building: Node3D) -> void:
 	for i in range(8):
 		var angle: float = float(i) * (PI / 4.0)
 		var dir := Vector3(sin(angle), 0.0, cos(angle))
-		var offset: Vector3 = dir * (_extent_along(cfg_slots, b_type, dir, half) + standoff_inner)
+		var offset: Vector3 = _slot_offset(cfg_slots, b_type, dir, half, standoff_inner)
 		if _slot_is_standable(gm_slots, center + offset):
 			slots.append({ "pos": center + offset, "dino_id": 0 })
 
 	for i in range(8):
 		var angle: float = (float(i) + 0.5) * (PI / 4.0)
 		var dir := Vector3(sin(angle), 0.0, cos(angle))
-		var offset: Vector3 = dir * (_extent_along(cfg_slots, b_type, dir, half) + standoff_outer)
+		var offset: Vector3 = _slot_offset(cfg_slots, b_type, dir, half, standoff_outer)
 		if _slot_is_standable(gm_slots, center + offset):
 			slots.append({ "pos": center + offset, "dino_id": 0 })
 
 	_building_slots[b_id] = slots
+
+## A place to stand `standoff` out from a building's face, heading out from its middle along
+## `dir`: where the ray leaves its box, then straight out from the face it leaves by -- or from
+## the corner, out along the corner. Along the ray alone, a slot off the long side of the cabin
+## stood closer to it than its standoff.
+static func _slot_offset(cfg: Node, b_type: String, dir: Vector3, half: float, standoff: float) -> Vector3:
+	var exit: Vector3 = dir * _extent_along(cfg, b_type, dir, half)
+	var box := Vector2(half, half)
+	if cfg != null and cfg.has_method("get_building_half") and b_type != "":
+		box = cfg.get_building_half(b_type)
+	var out := Vector3(signf(dir.x) if absf(exit.x) >= box.x - 0.001 else 0.0, 0.0,
+		signf(dir.z) if absf(exit.z) >= box.y - 0.001 else 0.0)
+	if out.length_squared() < 0.0001:
+		out = dir
+	return exit + out.normalized() * standoff
 
 ## How far a building's outside is from its middle, heading along `dir`.
 static func _extent_along(cfg: Node, b_type: String, dir: Vector3, half: float) -> float:

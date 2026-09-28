@@ -2,8 +2,9 @@
 # v0.4: the cabin is a workshop, and it is the only place the Hero gains anything.
 #
 # Two claims are load-bearing and both are tested here:
-#   * stepping inside moves the camera, it does NOT swap the scene -- the world
-#     outside keeps running, which is the cost that makes going home a decision;
+#   * going inside is walking in -- through the door, into a room on the map -- and it does
+#     NOT swap the scene: the world outside keeps running, which is the cost that makes going
+#     home a decision (v0.6 round three: it was a camera moved to a room under the map);
 #   * what a bench makes is a permanent flag, never an object, so there is no bag,
 #     no durability and nothing to carry.
 extends "res://tests/test_base.gd"
@@ -48,6 +49,13 @@ func _level() -> Node:
 	_cleanup_nodes.append(main)
 	tree.root.add_child(main)
 	return main
+
+## Lets the physics run until `done` says so, or `seconds` pass.
+func _until(done: Callable, seconds: float) -> void:
+	for i in range(int(seconds * float(Engine.physics_ticks_per_second))):
+		if done.call():
+			return
+		await wait_physics_frames(1)
 
 func _pay(recipe_id: String) -> void:
 	for res_id in config_node.RECIPES[recipe_id]["inputs"]:
@@ -156,94 +164,122 @@ func test_09_a_reset_takes_the_unlocks_with_it() -> void:
 	assert_false(game_state_node.has_unlock("harvest_stone"), "A new game starts with empty hands")
 
 # ==============================================================================
-# 3. The room: a camera move, not a scene swap
+# 3. The room: walked into, not a scene swap
 # ==============================================================================
 
-func test_10_the_level_carries_an_interior_parked_off_the_map() -> void:
+func test_10_the_benches_stand_in_the_cabin() -> void:
 	var main = _level()
-	await wait_frames(2)
+	await wait_frames(8)
+	var cabin = main.current_core
+	assert_eq(cabin.stations.size(), config_node.STATIONS.size(), "One bench per station in Config")
+	for st in cabin.stations:
+		assert_true(cabin.is_ancestor_of(st), "The %s is part of the cabin" % st.station_id)
+		assert_true(cabin.is_inside(st.global_position), "and stands in its room")
 
-	assert_not_null(main.cabin_interior, "The level instances the cabin's inside")
-	assert_lt(main.cabin_interior.global_position.y, -50.0,
-		"Parked well below the map, where it cannot be seen from outside")
-	assert_eq(main.cabin_interior.stations.size(), config_node.STATIONS.size(),
-		"With one bench per station in Config")
-
-func test_11_stepping_inside_moves_the_camera_and_leaves_the_world_running() -> void:
+func test_11_he_walks_in_through_the_door_and_the_world_runs_on() -> void:
 	var main = _level()
-	await wait_frames(2)
+	await wait_frames(8)
 	var watcher = watch_signal(event_bus_node, "cabin_view_changed")
-
 	var dinos_before: int = tree.get_nodes_in_group("dinos").size()
-	assert_true(main.enter_cabin(), "The player steps inside")
-	assert_true(main.in_cabin, "And is inside")
+	main.hero.global_position = main.cabin_door() + Vector3(4.0, 0.0, 3.0)
+	await wait_physics_frames(2)
+
+	assert_true(main.order_enter_cabin(), "Right-clicking the cabin sends him in")
+	assert_false(main.in_cabin, "He is not in yet: he walks there")
+	await _until(func(): return main.in_cabin, 10.0)
+	assert_true(main.in_cabin, "Walking in is what gets him in")
 	assert_true(watcher.emitted, "Which is announced")
-	assert_true(main.cabin_interior.camera.current, "The cabin's camera is the one in use")
-
-	# The world is not a scene that got swapped out: everything is still here.
-	assert_true(is_instance_valid(main.hero), "The Hero still exists")
-	assert_true(is_instance_valid(main.current_nest), "So does the nest")
+	assert_true(main.current_core.is_inside(main.hero.global_position), "He is in the room, on the map")
+	assert_true(main.camera.current, "The same camera, looking at the same world")
+	assert_true(is_instance_valid(main.current_nest), "The nest is still there")
 	assert_eq(tree.get_nodes_in_group("dinos").size(), dinos_before, "And whatever was on the map")
-	assert_true(main.is_inside_tree(), "The level was never unloaded")
 
-func test_12_leaving_is_instant_and_hands_the_map_back() -> void:
+func test_12_he_walks_back_out() -> void:
 	var main = _level()
-	await wait_frames(2)
-	main.enter_cabin()
+	await wait_frames(8)
+	main.hero.global_position = main.current_core.door_inside()
+	main.current_core.recheck_hero()
+	assert_true(main.in_cabin, "Inside")
+	assert_true(main.order_leave_cabin(), "Sent out")
+	await _until(func(): return not main.in_cabin, 10.0)
+	assert_false(main.in_cabin, "He walks out of the door")
+	assert_false(main.current_core.is_inside(main.hero.global_position), "and is outside")
 
-	assert_true(main.leave_cabin(), "Esc steps back out")
-	assert_false(main.in_cabin, "And we are outside")
-	assert_true(main.camera.current, "The map camera has it back")
-	assert_false(main.cabin_interior.camera.current, "And the cabin's does not")
-
-func test_13_right_clicking_the_cabin_walks_there_and_steps_in_on_arrival() -> void:
+func test_13_the_door_is_the_only_way_in_and_only_for_him() -> void:
 	var main = _level()
-	await wait_frames(2)
-	main.hero.global_position = main.current_core.global_position + Vector3(14.0, 0.0, 0.0)
+	await wait_frames(8)
+	var maps = main.nav_maps
+	var cabin = main.current_core
+	var inside: Vector3 = cabin.door_inside()
+	var behind: Vector3 = cabin.global_position + Vector3(0.0, 0.0, -(cabin.room_half().y + 2.5))
+	var route: PackedVector3Array = maps.path(behind, inside, NavMaps.For.HERO)
+	assert_true(maps.is_reachable(behind, inside, NavMaps.For.HERO), "From behind it he can get in")
+	var length: float = 0.0
+	for i in range(route.size() - 1):
+		length += route[i].distance_to(route[i + 1])
+	assert_gt(length, behind.distance_to(inside) + cabin.room_half().x, "the long way round, to the door -- not through the wall")
+	var door_z: float = cabin.global_position.z + cabin.room_half().y
+	var through_the_door: bool = false
+	for p in route:
+		if absf(p.z - door_z) < 0.6 and absf(p.x - cabin.door_inside().x) < 0.8:
+			through_the_door = true
+	assert_true(through_the_door, "and in by the door")
+	assert_true(cabin.is_inside(maps.closest_point(inside, NavMaps.For.HERO)), "His map has floor in the room")
+	assert_false(cabin.is_inside(maps.closest_point(inside, NavMaps.For.RAID)),
+		"a raid's has none: the nearest it can stand is outside the walls")
 
-	assert_true(main.order_enter_cabin(), "The order is taken")
-	assert_false(main.in_cabin, "He is not there yet, so nothing happens")
-
-	# Walking home is what gets him in -- no second click.
-	main.hero.global_position = main.current_core.global_position + Vector3(1.0, 0.0, 0.0)
-	main._check_pending_cabin_entry()
-	assert_true(main.in_cabin, "Arriving is what opens the door")
-
-func test_14_another_order_on_the_way_cancels_the_trip_home() -> void:
+func test_14_a_fence_round_the_cabin_shuts_him_out() -> void:
+	# "栅栏围了一圈船舱之后，人在船舱外面还是能直接进到船舱，这个不合理".
 	var main = _level()
-	await wait_frames(2)
-	main.hero.global_position = main.current_core.global_position + Vector3(14.0, 0.0, 0.0)
-	main.order_enter_cabin()
+	await wait_frames(8)
+	unlock_all()
+	stock_everything()
+	var gm = main.grid_manager
+	var centre: Vector2i = gm.world_to_build_cell(main.current_core.global_position)
+	var half: Vector2i = Vector2i((config_node.get_building_size("core") - Vector2i.ONE) / 2)
+	for x in range(-half.x - 1, half.x + 2):
+		for z in range(-half.y - 1, half.y + 2):
+			if absi(x) == half.x + 1 or absi(z) == half.y + 1:
+				var w = main.build_system.place_at("wall", centre + Vector2i(x, z), main.buildings_container, false)
+				if w != null and not w.is_constructed:
+					w.complete_construction()
+	main.nav_maps.rebake()
+	await wait_frames(8)
+	main.hero.global_position = main.cabin_door() + Vector3(0.0, 0.0, 4.0)
+	await wait_physics_frames(2)
+	assert_false(main.order_enter_cabin(), "Fenced off, he is not sent in")
+	assert_false(main.nav_maps.is_reachable(main.hero.global_position, main.current_core.door_inside(), NavMaps.For.HERO),
+		"because there is no way to the door")
 
-	main._pending_cabin_entry = false   # what a fresh right-click does
-	main.hero.global_position = main.current_core.global_position + Vector3(1.0, 0.0, 0.0)
-	main._check_pending_cabin_entry()
-	assert_false(main.in_cabin, "Changing his orders changes where he ends up")
-
-func test_15_work_only_advances_while_somebody_is_in_the_room() -> void:
+func test_15_work_only_advances_while_he_is_in_the_room() -> void:
 	# The whole reason the trip home costs something: standing at the bench is time
 	# spent not holding the line.
 	var main = _level()
-	await wait_frames(2)
+	await wait_frames(8)
 	for res_id in config_node.RESOURCES:
 		game_state_node.resources[res_id] = 99
-	var bench = main.cabin_interior.station("workbench")
-	assert_not_null(bench, "The workbench is in the room")
+	var cabin = main.current_core
+	var bench = cabin.station("workbench")
+	assert_not_null(bench, "The workbench is in the cabin")
 	bench.begin("stone_pick")
-
-	main.cabin_interior._process(2.0)
+	main.hero.global_position = cabin.door_outside() + Vector3(0.0, 0.0, 2.0)
+	cabin.recheck_hero()
+	cabin._process(2.0)
 	assert_eq(bench.progress, 0.0, "An empty room makes nothing")
+	assert_eq(String(bench.get_display_info()["status"]), tr("STATION_ONLY_WITH_HIM"), "and its bench says why")
 
-	main.enter_cabin()
-	main.cabin_interior._process(2.0)
-	assert_gt(bench.progress, 0.0, "Being there is what moves it along")
+	main.hero.global_position = cabin.door_inside()
+	cabin.recheck_hero()
+	cabin._process(2.0)
+	assert_gt(bench.progress, 0.0, "Him being there is what moves it along")
 
-func test_16_a_restart_puts_the_player_back_outside() -> void:
+func test_16_a_restart_puts_him_back_outside() -> void:
 	var main = _level()
-	await wait_frames(2)
-	main.enter_cabin()
+	await wait_frames(8)
+	main.hero.global_position = main.current_core.door_inside()
+	main.current_core.recheck_hero()
 	main.restart_game()
-	await wait_frames(2)
-
+	await wait_frames(4)
 	assert_false(main.in_cabin, "A new game starts outdoors")
+	assert_false(main.current_core.is_inside(main.hero.global_position), "him at the door, outside")
 	assert_true(main.camera.current, "Looking at the map")

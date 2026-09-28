@@ -77,19 +77,15 @@ func test_02_the_command_card_shows_the_hero_and_a_building_themselves() -> void
 func test_03_a_bench_in_the_cabin_shows_itself() -> void:
 	var main = await fresh_level()
 	_cleanup_nodes.append(main)
-	main.enter_cabin()
-	await wait_frames(1)
-	var screen = main.hud.cabin_screen
+	var panel = main.hud.option_panel
 	for station_id in config_node.STATIONS:
-		screen.select(String(station_id))
-		var card: Node = screen.find_child("Bench_%s" % station_id, true, false)
-		assert_not_null(card, "%s has its card" % station_id)
-		if card == null:
+		var bench: Node = main.current_core.station(String(station_id))
+		assert_not_null(bench, "%s stands in the cabin" % station_id)
+		if bench == null:
 			continue
-		var shot: TextureRect = card.find_child("Portrait", true, false) as TextureRect
-		assert_not_null(shot, "%s's card shows its portrait" % station_id)
-		if shot:
-			assert_eq(shot.texture, UiTheme.portrait("station/%s" % station_id), "%s is shown as itself" % station_id)
+		panel.select_target(bench)
+		await wait_frames(1)
+		assert_eq(panel.portrait.texture, UiTheme.portrait("station/%s" % station_id), "%s is shown as itself" % station_id)
 
 func test_04_a_thing_with_no_portrait_keeps_its_icon() -> void:
 	assert_null(UiTheme.portrait("building/no_such_thing"), "Nothing to show for a thing never rendered")

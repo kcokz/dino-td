@@ -27,11 +27,6 @@ signal action_triggered(action_name: String, target_node: Node)
 var selected_unit: Node = null
 var current_menu: String = "default" # "default", "build" or "eat"
 
-## Inside the cabin the panel stops resting on the Hero: there is nothing to order
-## him to do in there, and offering his build menu at the bench would be a second
-## way to do something the room is not for.
-var in_cabin: bool = false
-
 ## True while the status line is showing the detail for whatever the cursor is
 ## over. The per-unit status ticker runs every quarter second and would otherwise
 ## wipe a hover message almost as soon as it appeared -- which read as the reason
@@ -86,8 +81,6 @@ func _connect_event_bus() -> void:
 			eb.locale_changed.connect(_on_locale_changed)
 		if eb.has_signal("resources_changed") and not eb.resources_changed.is_connected(_on_resources_changed):
 			eb.resources_changed.connect(_on_resources_changed)
-		if eb.has_signal("cabin_view_changed") and not eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
-			eb.cabin_view_changed.connect(_on_cabin_view_changed)
 		if eb.has_signal("material_discovered") and not eb.material_discovered.is_connected(_on_material_discovered):
 			eb.material_discovered.connect(_on_material_discovered)
 		if eb.has_signal("meals_changed") and not eb.meals_changed.is_connected(_on_meals_changed):
@@ -104,8 +97,6 @@ func _disconnect_event_bus() -> void:
 			eb.locale_changed.disconnect(_on_locale_changed)
 		if eb.has_signal("resources_changed") and eb.resources_changed.is_connected(_on_resources_changed):
 			eb.resources_changed.disconnect(_on_resources_changed)
-		if eb.has_signal("cabin_view_changed") and eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
-			eb.cabin_view_changed.disconnect(_on_cabin_view_changed)
 		if eb.has_signal("material_discovered") and eb.material_discovered.is_connected(_on_material_discovered):
 			eb.material_discovered.disconnect(_on_material_discovered)
 		if eb.has_signal("meals_changed") and eb.meals_changed.is_connected(_on_meals_changed):
@@ -128,12 +119,6 @@ func _on_meals_changed(_meals: Dictionary) -> void:
 
 func _on_locale_changed(_locale: String) -> void:
 	_show_abilities(true)
-	_refresh_ui()
-
-func _on_cabin_view_changed(inside: bool) -> void:
-	in_cabin = inside
-	selected_unit = null
-	current_menu = "default"
 	_refresh_ui()
 
 ## The wallet changed, so what the player can afford changed with it. Only the
@@ -189,11 +174,6 @@ func select_target(target: Node) -> void:
 	set_selected_unit(target)
 
 func clear_selection() -> void:
-	if in_cabin:
-		selected_unit = null
-		current_menu = "default"
-		_refresh_ui()
-		return
 	# Fallback to hero if present
 	var hero = _get_hero()
 	if hero != null and is_instance_valid(hero) and not hero.is_queued_for_deletion():
@@ -255,8 +235,6 @@ func _process(delta: float) -> void:
 		clear_selection()
 		return
 	if selected_unit == null:
-		if in_cabin:
-			return
 		# The panel is built before Main spawns the Hero, so the first refresh finds
 		# nothing. Keep trying until he exists.
 		var hero = _get_hero()
@@ -572,15 +550,6 @@ func _set_status(text: String) -> void:
 func _refresh_ui() -> void:
 	_ensure_components()
 	if selected_unit == null or not is_instance_valid(selected_unit):
-		if in_cabin:
-			# Standing in the room with nothing picked: say where we are and how to
-			# get out, rather than falling back to the Hero's build menu.
-			_set_header(tr("CABIN_TITLE"), tr("PANEL_KIND_CABIN"), UiTheme.icon("core"))
-			_show_vitals({})
-			_set_status(tr("CABIN_HINT_LEAVE"))
-			_clear_buttons()
-			_settle()
-			return
 		var hero = _get_hero()
 		if hero != null and is_instance_valid(hero):
 			selected_unit = hero
@@ -955,17 +924,28 @@ func _populate_station_buttons() -> void:
 	button_container.columns = 1
 	_clear_craft_detail()
 	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
+	var busy: bool = "active_recipe" in station and String(station.active_recipe) != ""
 	for recipe_id in jobs:
 		var rid: String = String(recipe_id)
 		if not station.can_offer(rid):
 			continue
-		var btn := _create_card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), {}, func():
+		var start := func():
 			if is_instance_valid(station):
 				station.begin(rid)
 				_refresh_ui()
-		)
-		btn.disabled = not station.can_afford(rid)
-		_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
+		# A job that costs nothing and takes no time is not a purchase but a decision -- the
+		# beacon's launch -- and is drawn as the one thing to press.
+		var decision: bool = station.inputs_of(rid).is_empty() and float(station.time_of(rid)) <= 0.0
+		var btn: Button
+		if decision:
+			btn = UiKit.action_button(station.recipe_name(rid), UiTheme.icon("signal"), start, &"AccentButton")
+			btn.custom_minimum_size.y = UiTheme.height("card")
+			button_container.add_child(btn)
+		else:
+			btn = _create_card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), {}, start)
+			_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
+		btn.name = "Job_%s" % rid
+		btn.disabled = busy or not station.can_afford(rid)
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.mouse_exited.connect(_clear_craft_detail)

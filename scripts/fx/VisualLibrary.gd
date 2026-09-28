@@ -114,6 +114,13 @@ static func scene_at(path: String) -> PackedScene:
 ## slightly the wrong size. The factor is chosen so the model fits INSIDE the declared
 ## box on every axis -- so a declared size is a bound rather than a stretch target.
 static func fit(art: Node3D, size: Vector3, anchor: String = "feet", mode: String = "box") -> void:
+	# "none": built to scale about its own origin, and left there -- the cabin, whose walls are
+	# colliders at the measures it was modelled to (Config.CABIN.module), and whose solar panel
+	# and gun stand above its declared height. Centring it by its bounds moved it off them.
+	if mode == "none":
+		art.scale = Vector3.ONE
+		art.position = Vector3.ZERO
+		return
 	var factor: float = fit_factor(art, size, mode)
 	if factor <= 0.0:
 		return    # nothing measurable; leave the author's own transform alone
@@ -130,6 +137,8 @@ static func fit_factor(art: Node3D, size: Vector3, mode: String = "box") -> floa
 	if bounds.size.x <= 0.0001 or bounds.size.y <= 0.0001 or bounds.size.z <= 0.0001:
 		return 0.0
 	var factor: float = minf(size.x / bounds.size.x, minf(size.y / bounds.size.y, size.z / bounds.size.z))
+	if mode == "none":
+		factor = 1.0
 	if mode == "height":
 		factor = size.y / bounds.size.y
 	if factor <= 0.0 or is_inf(factor) or is_nan(factor):
@@ -160,7 +169,8 @@ static func place(art: Node3D, factor: float, anchor: String = "feet") -> void:
 static func visual_bounds(node: Node3D) -> AABB:
 	var out := AABB()
 	var first: bool = true
-	for child in node.find_children("*", "VisualInstance3D", true, false):
+	# Geometry only: a light's box is its reach -- the cabin's lamp measured it ten metres across.
+	for child in node.find_children("*", "GeometryInstance3D", true, false):
 		var vis := child as VisualInstance3D
 		if vis == null:
 			continue

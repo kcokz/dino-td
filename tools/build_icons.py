@@ -291,13 +291,18 @@ def _set_crossbow(twin=False):
 ICONS["set_crossbow"] = _set_crossbow()
 ICONS["set_crossbow_2"] = _set_crossbow(twin=True)
 
+# The crew module (tools/generate_cabin.py module) from the front: a long hull with a rounded roof,
+# the orange band towards its engine end, its door and two windows in its side.
 ICONS["core"] = item_svg(
-    [shape("rect", C["hull"], x=5, y=17, width=54, height=31, rx=15.5)],
-    [shape("rect", C["hull_shade"], x=10, y=37, width=44, height=8, rx=4),
-     shape("rect", C["hazard"], x=19, y=17.6, width=7, height=29.8),
-     shape("circle", C["iron_dark"], cx=44, cy=30, r=7.5),
-     shape("circle", C["window"], cx=44, cy=30, r=5.6),
-     shape("circle", "#ffffff", cx=42, cy=28, r=1.8)])
+    [shape("path", C["hull"], d="M 4 52 L 4 26 C 4 17 9 13 18 13 L 46 13 C 55 13 60 17 60 26 L 60 52 Z")],
+    [shape("rect", C["hull_shade"], x=4, y=44, width=56, height=8),
+     shape("rect", C["hazard"], x=47, y=13.6, width=5, height=38.4),
+     shape("rect", C["iron_dark"], x=27, y=26, width=10, height=26),
+     shape("rect", C["hazard"], x=27, y=26, width=10, height=3),
+     shape("rect", C["iron_dark"], x=10, y=25, width=11, height=8, rx=1.5),
+     shape("rect", C["window"], x=11.5, y=26.5, width=8, height=5, rx=1),
+     shape("rect", C["iron_dark"], x=40, y=25, width=5, height=8, rx=1.5),
+     shape("rect", C["window"], x=41, y=26.5, width=3, height=5, rx=0.8)])
 
 # ------------------------------------------------------------------------------ units, nodes, benches
 # The engineer in the crew's suit (tools/build_hero.py): the hull's white at his shoulders, the

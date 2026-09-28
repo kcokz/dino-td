@@ -229,7 +229,7 @@ func test_11_the_nest_cannot_be_destroyed_and_nothing_aims_at_it() -> void:
 func test_12_launching_sets_out_one_wave_streamed_over_the_charge_with_the_boss_last() -> void:
 	var main = await _level()
 	var wm = main.wave_manager
-	var bench = main.cabin_interior.station(String(config_node.BEACON_STATION))
+	var bench = main.current_core.station(String(config_node.BEACON_STATION))
 	assert_not_null(bench, "The cabin has the beacon's bench")
 	if bench == null:
 		return

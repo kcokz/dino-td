@@ -318,6 +318,13 @@ func _process_moving(delta: float) -> void:
 		velocity = Vector3.ZERO
 		if _check_and_transition_interaction_target(0.4):
 			return
+		# A plain walk ends where it was going -- there is nothing to get in range of. It used to
+		# be planned again from where he stood, a route a hand long whose ends were both already
+		# reached, every frame: he stood "walking" for ever, and the idle watch that has him hit
+		# back at whatever bites him never came round (found playing, v0.6 round three).
+		if target_building == null and target_resource_node == null and target_enemy == null:
+			current_state = State.IDLE
+			return
 		_replan_current_target_path()
 		if current_path_index >= current_path.size():
 			current_state = State.IDLE
@@ -394,6 +401,8 @@ func _push_out_of_anything_solid() -> bool:
 			continue          # a blueprint is not solid and never traps anyone
 		if "is_destroyed" in b and b.is_destroyed:
 			continue
+		if cfg and "building_type" in b and cfg.has_method("is_hollow") and cfg.is_hollow(String(b.building_type)):
+			continue          # the cabin: its inside is his, and its walls are bodies of their own
 		var half_it: float = 0.5
 		if cfg and "building_type" in b:
 			half_it = float(cfg.get_building_footprint(String(b.building_type))) * 0.5
@@ -481,12 +490,13 @@ func _inside_of(b: Node) -> bool:
 ## the row is into one of them.
 func _step_out_of(b: Node, delta: float) -> void:
 	var cfg = _get_config()
-	var half_it: float = float(cfg.get_building_footprint(String(b.building_type))) * 0.5
+	var half_it: Vector2 = cfg.get_building_half(String(b.building_type))
 	var half_me: float = float(cfg.HERO.get("width", 0.8)) * 0.5
 	var off: Vector3 = global_position - (b as Node3D).global_position
 	var ways: Array = []
 	for dir in [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]:
-		ways.append([half_it + half_me - off.dot(dir), dir])
+		var half_along: float = half_it.x if absf(dir.x) > 0.5 else half_it.y
+		ways.append([half_along + half_me - off.dot(dir), dir])
 	ways.sort_custom(func(a, c): return a[0] < c[0])
 	var out: Vector3 = ways[0][1]
 	for way in ways:
@@ -634,15 +644,15 @@ func _in_build_range_of(pos: Vector3, b_pos: Vector3, type_id: String, extra_buf
 		return true
 
 	# Check 2: 2D bounding box distance to the building's own box -- all of its cells: the cabin
-	# stands in a block of them (Config.get_building_footprint).
-	var half_size: float = 0.5
+	# stands in a block of them (Config.get_building_half).
+	var half_box := Vector2(0.5, 0.5)
 	var cfg_fp = _get_config()
-	if cfg_fp and cfg_fp.has_method("get_building_footprint") and type_id != "":
-		half_size = float(cfg_fp.get_building_footprint(type_id)) * 0.5
-	var dx = maxf(0.0, absf(pos.x - b_pos.x) - half_size)
-	var dz = maxf(0.0, absf(pos.z - b_pos.z) - half_size)
+	if cfg_fp and cfg_fp.has_method("get_building_half") and type_id != "":
+		half_box = cfg_fp.get_building_half(type_id)
+	var dx = maxf(0.0, absf(pos.x - b_pos.x) - half_box.x)
+	var dz = maxf(0.0, absf(pos.z - b_pos.z) - half_box.y)
 	var dist_box = sqrt(dx * dx + dz * dz)
-	var max_box_dist = maxf(0.6, build_range - half_size + 0.2) + extra_buffer
+	var max_box_dist = maxf(0.6, build_range - minf(half_box.x, half_box.y) + 0.2) + extra_buffer
 	return dist_box <= max_box_dist
 
 ## Close enough to work `node`: body to body, his arm's length from what blocks -- a
@@ -713,10 +723,10 @@ func _plan_path_to_building(b: Node) -> void:
 	# to mend the cabin from its door, he walked round to its back wall to do it. Aiming at
 	# the point of its box nearest him keeps him on his own side.
 	var cfg_side = _get_config()
-	if cfg_side and cfg_side.has_method("get_building_footprint") and "building_type" in b:
-		var half: float = float(cfg_side.get_building_footprint(String(b.building_type))) * 0.5
+	if cfg_side and cfg_side.has_method("get_building_half") and "building_type" in b:
+		var half: Vector2 = cfg_side.get_building_half(String(b.building_type))
 		var from_it: Vector3 = global_position - b_pos
-		b_pos += Vector3(clampf(from_it.x, -half, half), 0.0, clampf(from_it.z, -half, half))
+		b_pos += Vector3(clampf(from_it.x, -half.x, half.x), 0.0, clampf(from_it.z, -half.y, half.y))
 
 	# WHERE THE ROUTE ENDS IS WHERE HE CAN WORK FROM. A building is carved out of the
 	# mesh, so a route to its centre stops at the edge of the carve -- which is a

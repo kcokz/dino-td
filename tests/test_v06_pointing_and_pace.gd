@@ -99,37 +99,61 @@ func test_02_a_unit_is_taken_a_little_wide_of_its_body() -> void:
 	var far: Vector2 = at + Vector2(half_px + slop * 4.0, 0.0)
 	assert_ne(main._raycast_object(far), hero, "and a real miss does not")
 
-func test_03_walking_home_goes_to_the_door() -> void:
+func test_03_walking_home_goes_in_by_the_door() -> void:
 	var main = await _level()
 	var hero = main.hero
-	hero.global_position = main.current_core.global_position + Vector3(-12.0, 0.0, -10.0)
+	var cabin = main.current_core
+	hero.global_position = cabin.global_position + Vector3(-12.0, 0.0, -10.0)
 	assert_true(main.order_enter_cabin(), "The order is taken")
 	var door: Vector3 = main.cabin_door()
-	var half: float = float(config_node.get_building_footprint("core")) * 0.5
-	assert_gt(door.z, main.current_core.global_position.z + half, "The door is past the cabin's south wall")
+	var half: float = float(config_node.get_building_half("core").y)
+	assert_gt(door.z, cabin.global_position.z + half, "The door is past the cabin's south wall")
 	var path: Array = hero.current_path
 	assert_false(path.is_empty(), "He has a way there")
 	if not path.is_empty():
 		var end: Vector3 = path[path.size() - 1]
-		assert_almost_eq(Vector2(end.x, end.z).distance_to(Vector2(door.x, door.z)), 0.0, 0.3,
-			"and it ends at the door, not against a wall")
+		assert_true(cabin.is_inside(end), "and it ends inside, not against a wall")
+		var by_the_door: bool = false
+		for p in path:
+			if absf((p as Vector3).z - (cabin.global_position.z + cabin.room_half().y)) < 0.6:
+				by_the_door = true
+		assert_true(by_the_door, "having come through the door")
 
-func test_04_he_comes_out_of_the_door_picked() -> void:
+func test_04_inside_he_is_still_where_a_click_finds_him() -> void:
+	# "进入船舱之后，应该也是同样的人在船舱里面": the same man, in the same world -- and still picked by a
+	# click on him, the roof over him faded.
 	var main = await _level()
 	var hero: Node3D = main.hero
-	hero.global_position = main.current_core.global_position + Vector3(0.0, 0.0, -2.6)   # the north side
-	main.enter_cabin()
-	await wait_frames(1)
-	var told = watch_signal(tree.root.get_node("EventBus"), "unit_selected")
-	assert_true(main.leave_cabin(), "Out he comes")
-	assert_eq(told.emit_count, 1, "and he is the one picked")
-	if told.emit_count > 0:
-		assert_eq(told.last_args[0], hero, "him")
-	var door: Vector3 = main.cabin_door()
-	assert_almost_eq(Vector2(hero.global_position.x, hero.global_position.z).distance_to(Vector2(door.x, door.z)), 0.0, 0.05,
-		"standing at the door, on the camera's side")
+	var cabin = main.current_core
+	hero.global_position = cabin.door_inside()
+	cabin.recheck_hero()
+	await wait_seconds(float(config_node.CABIN["fade_seconds"]) + 0.2)
 	await wait_physics_frames(2)
-	assert_eq(main._raycast_object(_on_screen(main, hero)), hero, "where a click finds him")
+	assert_true(main.in_cabin, "He is inside")
+	assert_eq(main._raycast_object(_on_screen(main, hero)), hero, "and a click on him finds him")
+
+func test_04b_a_walk_ends_and_he_is_ready_for_what_comes() -> void:
+	# Found playing (v0.6 round three): a walk never ended. At the end of his route he was planned
+	# a route from where he stood, both of its ends already reached, every frame -- "walking" for
+	# ever, so the idle watch that has him hit back at whatever comes up never came round.
+	var main = await _level()
+	var hero = main.hero
+	var goal: Vector3 = hero.global_position + Vector3(3.0, 0.0, 2.0)
+	hero.move_to(goal)
+	for i in range(int(3.0 * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		if int(hero.current_state) == hero.State.IDLE:
+			break
+	assert_eq(int(hero.current_state), int(hero.State.IDLE), "Arrived, he stands: the walk is over")
+	assert_lt(Vector2(hero.global_position.x - goal.x, hero.global_position.z - goal.z).length(), 0.3, "where he was sent")
+	var raptor = load(String(config_node.get_dino_script_path("raptor"))).new()
+	_cleanup_nodes.append(raptor)
+	main.add_child(raptor)
+	raptor.setup("raptor")
+	raptor.set_physics_process(false)
+	raptor.global_position = hero.global_position + Vector3(hero.attack_range * 0.5, 0.0, 0.0)
+	await wait_physics_frames(3)
+	assert_eq(int(hero.current_state), int(hero.State.ATTACKING), "and one coming up to him is fought")
 
 func test_05_a_man_going_nowhere_stands() -> void:
 	var main = await _level()

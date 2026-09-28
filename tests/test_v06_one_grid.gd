@@ -302,7 +302,8 @@ func test_12_a_sharpened_wall_reaches_only_what_is_against_it() -> void:
 
 func test_13_a_metre_of_wall_is_cheaper_than_the_stakes_it_replaced() -> void:
 	# "木栅栏成本太高": a ring round the cabin, a cell of wall out from it all round, priced.
-	var cells: int = (int(config_node.get_building_cells("core")) + 2) * 4 - 4
+	var size: Vector2i = config_node.get_building_size("core")
+	var cells: int = (size.x + 2 + size.y + 2) * 2 - 4
 	var per: int = int(config_node.BUILDINGS["wall"]["cost"].get("wood", 0))
 	assert_gt(per, 0, "A section costs wood")
 	assert_lte(cells * per, opening_wood(),

@@ -123,12 +123,20 @@ func test_04_it_cannot_bite_the_cabin_through_a_stake() -> void:
 		core.setup("core", Vector2i(0, 0))
 	core.global_position = gm.cell_to_world(Vector2i(0, 0))
 	gm.occupy_cell(Vector2i(0, 0), core)
-	var stake = _building("wall", gm, Vector2i(1, 0))
-	var raptor = _dino("raptor", gm.cell_to_world(Vector2i(2, 0)))
+	# A stake against its east end, and the raptor a stride past the stake.
+	var east: float = float(config_node.get_building_half("core").x)
+	var stake = _spawn("res://scripts/entities/Wall.gd", core.global_position + Vector3(east + 0.5, 0.0, 0.0))
+	stake.setup("wall", Vector2i.ZERO)
+	stake.global_position = core.global_position + Vector3(east + 0.5, 0.0, 0.0)
+	stake.complete_construction()
+	var raptor = _dino("raptor", core.global_position + Vector3(east + 1.0 + raptor_half() + 0.3, 0.0, 0.0))
 	await wait_frames(2)
 
 	assert_eq(_first_building_from(raptor, core), stake, "The stake stands between them")
 	assert_false(raptor._target_in_reach(core), "So the cabin is not something it can bite")
+
+func raptor_half() -> float:
+	return float(config_node.get_visual_size("dino/raptor").x) * 0.5
 
 func test_05_and_still_bites_the_stake_that_is_in_the_way() -> void:
 	var gm = _grid()

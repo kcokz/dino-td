@@ -22,6 +22,8 @@ const GLOW_SUFFIX: String = "_glow"
 const BEFORE_PREFIX: String = "before_"
 ## Every light a glowing part carries is named this, so they can be found again to animate.
 const LIGHT_NAME: String = "GlowLight"
+## The meta a material this makes carries (owns).
+const OWNED: StringName = &"cabin_art"
 ## How far apart two lights read the flicker noise: far enough that no two waver together.
 const NOISE_LANE: float = 50.0
 
@@ -122,4 +124,22 @@ static func glow_material() -> StandardMaterial3D:
 		_glow_material.vertex_color_use_as_albedo = true
 		_glow_material.vertex_color_is_srgb = true
 		_glow_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_glow_material.set_meta(OWNED, true)
 	return _glow_material
+
+## A window's glass (v0.6 round three: "有透明部分（窗）"): `col`, its alpha how much shows, glossy,
+## seen from both sides -- the benches through it from outside, a raid through it from inside.
+static func glass_material(col: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.08
+	mat.metallic_specular = 0.9
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.set_meta(OWNED, true)
+	return mat
+
+## Whether `mat` is one of these -- a glow, a glass -- and so not a building's own to tint as it
+## goes up (Building._update_visuals_progress made the glass solid).
+static func owns(mat: Material) -> bool:
+	return mat != null and mat.has_meta(OWNED)

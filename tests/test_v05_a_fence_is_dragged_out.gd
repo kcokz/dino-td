@@ -194,8 +194,9 @@ func test_06_the_run_steps_over_what_it_cannot_build_on() -> void:
 	var main = await _level()
 	var gm = main.grid_manager
 	var core: Vector3 = cabin_at(main)
-	# Straight through the cabin, which nothing can be built on.
-	var laid: int = _drag(main, core + Vector3(-6.0, 0.0, 0.0), core + Vector3(6.0, 0.0, 0.0))
+	# Straight through the cabin, which nothing can be built on, and five cells past each end.
+	var reach: float = float(config_node.get_building_half("core").x) + 5.0
+	var laid: int = _drag(main, core + Vector3(-reach, 0.0, 0.0), core + Vector3(reach, 0.0, 0.0))
 	await wait_frames(4)
 
 	assert_gt(laid, 8, "It laid what it could")

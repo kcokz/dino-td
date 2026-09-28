@@ -16,7 +16,6 @@ const UI_SCRIPTS: Array[String] = [
 	"res://scripts/ui/HUD.gd",
 	"res://scripts/ui/OptionPanel.gd",
 	"res://scripts/ui/PauseMenu.gd",
-	"res://scripts/ui/CabinScreen.gd",
 	"res://scripts/ui/UiKit.gd",
 ]
 
@@ -138,60 +137,41 @@ func test_06_the_command_card_grows_upward_from_its_corner() -> void:
 # 3. The cabin
 # ==============================================================================
 
-func test_07_inside_every_bench_is_a_card_offering_its_jobs() -> void:
+func test_07_every_bench_chosen_offers_its_jobs_on_the_card() -> void:
+	# The benches stand in the cabin; one clicked is shown on the command card like anything else
+	# (v0.6 round three: it was a dock of its own along the bottom of a room under the map).
 	var main = await _level()
 	stock_everything()
-	main.enter_cabin()
-	await wait_frames(2)
-	var screen: Control = main.hud.cabin_screen
-	assert_true(screen.visible and screen.is_open, "Inside, the cabin's screen is up")
-	var stations: Array = main.cabin_interior.stations
-	assert_eq(stations.size(), config_node.STATIONS.size(), "Every bench is in the room")
+	var panel = main.hud.option_panel
+	var stations: Array = main.current_core.stations
+	assert_eq(stations.size(), config_node.STATIONS.size(), "Every bench is in the cabin")
 	for station in stations:
 		var station_id: String = String(station.station_id)
-		var card: Node = screen.find_child("Bench_%s" % station_id, true, false)
-		assert_not_null(card, "%s has a card" % station_id)
-		if card == null:
-			continue
+		panel.select_target(station)
+		await wait_frames(1)
 		for job_id in station.jobs():
 			if not station.can_offer(String(job_id)):
 				continue
-			var btn: Button = card.find_child("Job_%s" % job_id, true, false) as Button
+			var btn: Button = panel.button_container.find_child("Job_%s" % job_id, true, false) as Button
 			assert_not_null(btn, "%s offers %s" % [station_id, job_id])
 			if btn:
 				assert_false(btn.disabled, "With everything in stock, %s can be started" % job_id)
-	main.leave_cabin()
-	await wait_frames(1)
-	assert_false(screen.visible, "Outside, it is gone")
 
 func test_08_repaired_the_launch_is_the_one_thing_to_press() -> void:
 	var main = await _level()
 	for i in range(int(game_state_node.beacon_stage_count())):
 		game_state_node.finish_beacon_job(String(game_state_node.beacon_next_job()))
-	main.enter_cabin()
+	var panel = main.hud.option_panel
+	var bench: Node = main.current_core.station(String(config_node.BEACON_STATION))
+	panel.select_target(bench)
 	await wait_frames(2)
-	var card: Node = main.hud.cabin_screen.find_child("Bench_%s" % String(config_node.BEACON_STATION), true, false)
-	assert_not_null(card, "The beacon has a card")
-	if card == null:
-		return
-	var launch: Button = card.find_child("Job_%s" % String(config_node.BEACON_LAUNCH), true, false) as Button
+	var launch: Button = panel.button_container.find_child("Job_%s" % String(config_node.BEACON_LAUNCH), true, false) as Button
 	assert_not_null(launch, "Repaired, the launch is on offer")
 	if launch == null:
 		return
 	assert_eq(launch.theme_type_variation, &"AccentButton", "Drawn as the call to action, not as a purchase")
 	assert_false(launch.disabled, "And it can be pressed")
-	assert_ne((card.find_child("Status", true, false) as Label).text, "", "The bench says where the beacon has got to")
-
-func test_09_inside_the_stock_stays_readable() -> void:
-	# The cabin's backdrop frosts whatever is drawn before it. It is drawn first, so what it
-	# frosts is the room -- the stock, the vitals and a raid's warning stay sharp on top.
-	var hud = await _hud()
-	var cabin_at: int = hud.cabin_screen.get_index()
-	for name in ["TopBar", "Toasts"]:
-		var node: Node = hud.root_control.get_node_or_null(name)
-		assert_not_null(node, "The HUD has its %s" % name)
-		if node:
-			assert_lt(cabin_at, node.get_index(), "%s is drawn over the cabin's screen" % name)
+	assert_ne(String(bench.get_display_info()["status"]), "", "The bench says where the beacon has got to")
 
 func test_10_a_big_stock_stays_clear_of_the_cabins_medallion() -> void:
 	# The strip's left holds the stock, its right the controls, and the cabin's medallion
@@ -207,24 +187,3 @@ func test_10_a_big_stock_stays_clear_of_the_cabins_medallion() -> void:
 	var controls: Rect2 = hud.root_control.find_child("ControlsPanel", true, false).get_global_rect()
 	assert_lte(stock.end.x, cabin.position.x, "The stock ends before the cabin's medallion begins")
 	assert_lte(cabin.end.x, controls.position.x, "And the medallion before the controls")
-
-func test_11_a_toast_stands_under_the_top_row_and_clear_of_the_cabin_dock() -> void:
-	# Inside, the room fills the screen and the dock keeps to the bottom: a toast stands
-	# where it does outside -- under the top row, in the middle -- over the room.
-	var main = await _level()
-	main.enter_cabin()
-	main.hud.show_hint(tr("CABIN_SUBTITLE"))
-	await wait_frames(2)
-	var toast: Rect2 = main.hud.hint_toast.get_global_rect()
-	var dock: Rect2 = main.hud.cabin_screen.find_child("Dock", true, false).get_global_rect()
-	var top_row: Rect2 = main.hud.root_control.find_child("CabinEmblem", true, false).get_global_rect()
-	var middle: float = main.hud.root_control.get_global_rect().get_center().x
-	assert_lte(toast.end.y, dock.position.y, "Inside, a toast is clear of the dock")
-	assert_gte(toast.position.y, top_row.end.y, "And under the top row")
-	assert_almost_eq(toast.get_center().x, middle, 1.0, "In the middle of the screen")
-	main.leave_cabin()
-	await wait_frames(2)
-	var outside: Rect2 = main.hud.hint_toast.get_global_rect()
-	var cabin: Rect2 = main.hud.root_control.find_child("CabinEmblem", true, false).get_global_rect()
-	assert_gte(outside.position.y, cabin.end.y, "Outside, it is back under the cabin's medallion")
-	assert_almost_eq(outside.get_center().x, middle, 1.0, "And in the middle of the screen")

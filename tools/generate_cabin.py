@@ -1,9 +1,9 @@
 # tools/generate_cabin.py
-# Inside the cabin: the crew module the Hero lives in, and the three benches he works at --
-# each with the pieces that appear on it as the run goes on.
+# The cabin: the crew module the Hero lives in, outside and in, and the three benches he works
+# at inside it -- each with the pieces that appear on it as the run goes on.
 #
 #   "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python tools/generate_cabin.py
-#   ... -- room workbench     makes only those
+#   ... -- module workbench   makes only those
 #   ... -- --preview          also renders each to the scratch directory
 #
 # Built with the same coloured-triangle Builder as the props (tools/generate_props.py) and
@@ -22,7 +22,7 @@
 # porthole -- and lights the room round it. So a bench's upgrades are named after the jobs
 # that make them, and a new tool is a recipe in Config and a part here with its id.
 #
-# The room also carries empties named "spot_<station id>": where each bench stands.
+# The module also carries empties named "spot_<station id>": where each bench stands.
 
 import bpy
 import math
@@ -51,7 +51,6 @@ DECK_ALT = (0.225, 0.23, 0.245)
 HIDE = (0.50, 0.36, 0.22)
 HIDE_EDGE = (0.34, 0.23, 0.13)
 # Lit by themselves (the "_glow" parts): these are the colours they are drawn at.
-DAYLIGHT = (0.80, 0.90, 1.00)
 LAMP = (1.00, 0.90, 0.72)
 FLAME = (1.00, 0.52, 0.10)
 FLAME_TIP = (1.00, 0.86, 0.36)
@@ -159,172 +158,6 @@ def flame(b, base, height, width, rng):
         k2 = (k + 1) % 4
         b.tri(base, ring[k2], ring[k], EMBER, FLAME, FLAME)
         b.tri(ring[k], ring[k2], tip, FLAME, FLAME, FLAME_TIP)
-
-
-# ==============================================================================
-# The room: the crew module's cabin, cut away at the front
-# ==============================================================================
-
-# The hull's cross-section: a superellipse across (y, z) -- the same squared-off round the
-# outside of the module has (generate_props._module_ring) -- lying along X. The deck is laid
-# across it at z = 0, and the front third is cut away so the camera looks in.
-RY, RZ, ZC, N = 1.55, 1.35, 1.25, 4.5
-X0, X1 = -2.8, 2.8
-T_CUT = math.radians(128.0)
-
-
-def hull_at(t):
-    c, s = math.cos(t), math.sin(t)
-    return (RY * math.copysign(abs(c) ** (2.0 / N), c), ZC + RZ * math.copysign(abs(s) ** (2.0 / N), s))
-
-
-def t_at_height(z):
-    """The angle on the BACK wall (y > 0) where the hull is `z` high."""
-    d = (z - ZC) / RZ
-    return math.copysign(math.asin(min(1.0, abs(d) ** (N / 2.0))), d)
-
-
-def hull_inward(t):
-    """The unit normal into the room at angle `t`, in (y, z)."""
-    e = 1e-3
-    y0, z0 = hull_at(t - e)
-    y1, z1 = hull_at(t + e)
-    tangent = Vector((0.0, y1 - y0, z1 - z0)).normalized()
-    n = Vector((1.0, 0.0, 0.0)).cross(tangent).normalized()
-    y, z = hull_at(t)
-    return n if n.dot(Vector((0.0, -y, ZC - z))) > 0 else -n
-
-
-def room(seed):
-    rng = random.Random(seed)
-    shell = Builder()
-    glow_day = Builder()
-    glow_lamp = Builder()
-
-    # The angles the wall is cut at: the bands' edges exactly, so each band is one colour,
-    # then even steps over the ceiling to the cut.
-    t_floor = t_at_height(0.0)
-    heights = [0.0, 0.42, 0.84, 0.90, 1.00, 1.35, 1.72, 2.05, 2.30]
-    ts = [t_at_height(z) for z in heights]
-    ts += [math.radians(a) for a in (55.0, 68.0, 80.0, 90.0, 100.0, 112.0)]
-    ts.append(T_CUT)
-    ts = sorted(set(ts))
-    xs = [X0 + (X1 - X0) * i / 16 for i in range(17)]
-    for i in range(len(xs) - 1):
-        panel = PANEL if (i // 2) % 2 == 0 else PANEL_ALT
-        for j in range(len(ts) - 1):
-            ya, za = hull_at(ts[j])
-            yb, zb = hull_at(ts[j + 1])
-            zm = (za + zb) * 0.5
-            if zm < 0.84:
-                col = jitter(WAINSCOT, rng, 0.01)
-            elif zm < 0.90:
-                col = GUNMETAL
-            elif zm < 1.00 and ya > 0.0:
-                col = HAZARD
-            else:
-                col = jitter(panel, rng, 0.008)
-            p = [Vector((xs[i], ya, za)), Vector((xs[i + 1], ya, za)),
-                 Vector((xs[i + 1], yb, zb)), Vector((xs[i], yb, zb))]
-            shell.quad(p[0], p[1], p[2], p[3], col, col, col, col)
-
-    # Ribs: the frames the plating hangs on, standing proud of it.
-    fine = [t_floor + (T_CUT - t_floor) * k / 28 for k in range(29)]
-    for xr in (-2.62, -0.52, 0.52, 2.62):
-        for k in range(len(fine) - 1):
-            pa = Vector((0.0, *hull_at(fine[k])))
-            pb = Vector((0.0, *hull_at(fine[k + 1])))
-            qa = pa + hull_inward(fine[k]) * 0.06
-            qb = pb + hull_inward(fine[k + 1]) * 0.06
-            ox0, ox1 = Vector((xr - 0.055, 0.0, 0.0)), Vector((xr + 0.055, 0.0, 0.0))
-            shell.quad(qa + ox0, qa + ox1, qb + ox1, qb + ox0, METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
-            shell.quad(pa + ox0, qa + ox0, qb + ox0, pb + ox0, GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
-            shell.quad(qa + ox1, pa + ox1, pb + ox1, qb + ox1, GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
-
-    # The deck: plates in two tones. Nothing goes below it -- the game stands a model on its
-    # lowest point, so a lip hanging under the deck would lift the floor off the ground.
-    y_front = hull_at(T_CUT)[0]
-    y_back = hull_at(t_floor)[0]
-    for i in range(8):
-        x0, x1 = X0 + (X1 - X0) * i / 8, X0 + (X1 - X0) * (i + 1) / 8
-        for j in range(4):
-            y0, y1 = y_front + (y_back - y_front) * j / 4, y_front + (y_back - y_front) * (j + 1) / 4
-            col = jitter(DECK if (i + j) % 2 == 0 else DECK_ALT, rng, 0.006)
-            shell.quad(Vector((x0, y0, 0.0)), Vector((x1, y0, 0.0)), Vector((x1, y1, 0.0)), Vector((x0, y1, 0.0)),
-                       col, col, col, col)
-    # A kick plate along the cut edge of the deck, so the floor reads as having a thickness.
-    beam(shell, Vector((X0, y_front + 0.03, 0.03)), Vector((X1, y_front + 0.03, 0.03)), 0.06, 0.06, HAZARD)
-
-    # The bulkheads at either end: flat, filling the section behind the cut.
-    outline = [Vector((0.0, *hull_at(t))) for t in fine]
-    outline.append(Vector((0.0, y_front, 0.0)))
-    centre = Vector((0.0, 0.1, 1.15))
-    for xe in (X0, X1):
-        ox = Vector((xe, 0.0, 0.0))
-        for k in range(len(outline)):
-            a, c = outline[k] + ox, outline[(k + 1) % len(outline)] + ox
-            col = WAINSCOT if min(a.z, c.z) < 0.5 else PANEL_ALT
-            shell.tri(a, c, centre + ox, col, col, mix(col, PANEL, 0.4))
-
-    # The left bulkhead's window, and the hatch in the right one -- daylight both.
-    win_c = Vector((X0 + 0.012, 0.05, 1.45))
-    annulus(shell, win_c + Vector((0.004, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 0.30, 0.40, GUNMETAL, 18, METAL_DARK)
-    disc(glow_day, win_c, Vector((1.0, 0.0, 0.0)), 0.30, DAYLIGHT, 18, mix(DAYLIGHT, (1.0, 1.0, 1.0), 0.4))
-    hx = X1 - 0.012
-    hy0, hy1, hz0, hz1 = -0.78, 0.12, 0.04, 1.70
-    glow_day.quad(Vector((hx, hy1, hz0)), Vector((hx, hy0, hz0)), Vector((hx, hy0, hz1)), Vector((hx, hy1, hz1)),
-                  mix(DAYLIGHT, (0.55, 0.62, 0.40), 0.5), mix(DAYLIGHT, (0.55, 0.62, 0.40), 0.5), DAYLIGHT, DAYLIGHT)
-    # Its frame, striped the way the outside of the hatch is.
-    for (p0, p1) in ((Vector((hx - 0.01, hy0 - 0.06, hz0)), Vector((hx - 0.01, hy0 - 0.06, hz1 + 0.06))),
-                     (Vector((hx - 0.01, hy1 + 0.06, hz0)), Vector((hx - 0.01, hy1 + 0.06, hz1 + 0.06))),
-                     (Vector((hx - 0.01, hy0 - 0.06, hz1 + 0.06)), Vector((hx - 0.01, hy1 + 0.06, hz1 + 0.06)))):
-        n_seg = 7
-        for s in range(n_seg):
-            a, c = p0.lerp(p1, s / n_seg), p0.lerp(p1, (s + 1) / n_seg)
-            beam(shell, a, c, 0.12, 0.04, HAZARD if s % 2 == 0 else GUNMETAL, up=Vector((1.0, 0.0, 0.0)))
-
-    # Portholes in the back wall, between the benches.
-    for xp in (-0.87, 0.87):
-        tp = t_at_height(1.68)
-        yp, zp = hull_at(tp)
-        nrm = hull_inward(tp)
-        c = Vector((xp, yp, zp)) + nrm * 0.012
-        annulus(shell, c + nrm * 0.004, nrm, 0.17, 0.25, GUNMETAL, 16, METAL_DARK)
-        disc(glow_day, c, nrm, 0.17, DAYLIGHT, 16, mix(DAYLIGHT, (1.0, 1.0, 1.0), 0.4))
-
-    # The ceiling: a lamp strip down the middle, and cables.
-    lamp_z = ZC + RZ - 0.05
-    box(shell, (-2.25, -0.11, lamp_z - 0.03), (2.25, 0.11, lamp_z + 0.04), METAL_DARK)
-    glow_lamp.quad(Vector((-2.15, 0.07, lamp_z - 0.032)), Vector((-2.15, -0.07, lamp_z - 0.032)),
-                   Vector((2.15, -0.07, lamp_z - 0.032)), Vector((2.15, 0.07, lamp_z - 0.032)),
-                   LAMP, LAMP, LAMP, LAMP)
-    for (cy, col) in ((0.52, GUNMETAL), (0.60, HAZARD), (0.68, METAL_DARK)):
-        cz = hull_at(math.acos(min(1.0, (cy / RY) ** (N / 2.0))))[1] - 0.09
-        spine = [Vector((X0 + (X1 - X0) * k / 12, cy, cz - 0.05 * math.sin(math.pi * ((k % 3) / 3.0)))) for k in range(13)]
-        shell.tube(spine, [0.022] * 13, [col] * 13, 5)
-
-    # What lies about: a hide by the stove, firewood between the stove and the beacon, a
-    # rolled bedding in the corner, the ship's water tank.
-    rug_c = Vector((0.0, -0.45, 0.004))
-    rim = [rug_c + Vector((math.cos(math.tau * k / 11) * 0.72 * rng.uniform(0.85, 1.1),
-                           math.sin(math.tau * k / 11) * 0.42 * rng.uniform(0.85, 1.1), 0.0)) for k in range(11)]
-    for k in range(11):
-        shell.tri(rim[k], rim[(k + 1) % 11], rug_c, HIDE_EDGE, HIDE_EDGE, HIDE)
-    for (p0, p1) in ((Vector((0.80, 0.20, 0.07)), Vector((0.80, 0.85, 0.07))),
-                     (Vector((0.96, 0.18, 0.07)), Vector((0.96, 0.83, 0.07))),
-                     (Vector((0.88, 0.22, 0.20)), Vector((0.88, 0.86, 0.20)))):
-        _log(shell, p0, p1, 0.07, rng)
-    bed = Vector((-2.58, 0.78, 0.0))
-    shell.tube([bed, bed + UP * 0.62], [0.13, 0.13], [HIDE_EDGE, HIDE], 9)
-    lashing(shell, bed + UP * 0.2, UP, 0.135, rng)
-    lashing(shell, bed + UP * 0.45, UP, 0.135, rng)
-    tank = Vector((2.55, 0.80, 0.0))
-    shell.tube([tank, tank + UP * 0.30, tank + UP * 0.36, tank + UP * 0.72], [0.19, 0.19, 0.19, 0.17],
-               [METAL, METAL, HAZARD, METAL], 12)
-
-    spots = {"workbench": Vector((-1.75, 0.52, 0.0)), "kitchen": Vector((0.0, 0.48, 0.0)),
-             "beacon": Vector((1.75, 0.52, 0.0))}
-    return [("room", shell), ("daylight_glow", glow_day), ("lamp_glow", glow_lamp)], spots
 
 
 # ==============================================================================
@@ -649,11 +482,364 @@ def beacon(seed):
 
 
 # ==============================================================================
+# The crew module: the whole cabin, outside and in (v0.6 round three)
+# ==============================================================================
+#
+# "船舱应该做成一个完整的模型，可进入，镂空，有透明部分（窗）里面的设施也在". One model, the
+# size of the room: the hull with a door in its south side and windows, the room inside it with
+# the benches' spots along the back wall, and the ends where the next module docks. The Hero
+# walks in through the door; while he is inside, the roof and the front wall above the sill fade
+# so the camera sees him at work (Cabin.gd).
+#
+# Blender axes: X along the module (east), +Y the back wall (north), -Y the front (south, the
+# door, the camera's side), Z up; the deck is the ground, z = 0.
+#
+# PARTS, by name (the game reads them):
+#   hull          always drawn: the deck, the back wall to the eaves, the front wall to the sill,
+#                 the bulkheads and the ends, and what lies about inside
+#   fade_*        faded while he is inside: the roof and the front above the sill ("fade_shell"),
+#                 the front windows' glass ("fade_glass"), the ceiling lamp ("fade_lamp_glow")
+#   glass         the back windows' panes (see-through, Cabin.gd gives it glass)
+#   door          the hatch's door, which slides east into the wall as he comes up to it
+#   Head, Muzzle  the ship's turret on the engine end (Tower.gd turns Head, fires from Muzzle)
+#   spot_<bench>  where each bench stands; spot_door, in front of the door; port_west and
+#                 port_east, where the next modules dock (GAME-DESIGN 8.2)
+
+from generate_props import _turret_head, SOIL, SOIL_LIGHT, MOSS, SCORCH, SOLAR, SOLAR_LINE  # noqa: E402
+
+# The hull's section, inside and out: superellipses across (y, z) about a centre 1 m up, squarer
+# than the old pod's -- near-vertical walls to head height, a rounded roof. Inside is 2.6 m
+# across the floor and 2.5 m high; outside 2.84 across and 2.62 high: three cells of the
+# building grid deep with a hand's breadth to spare.
+MOD_IN = (1.30, 1.50, 1.00)       # half-depth, half-height, centre height
+MOD_OUT = (1.42, 1.62, 1.00)
+MOD_N = 6.0
+MOD_X_IN = 2.8                    # the bulkheads' inner faces
+MOD_X_OUT = 2.92                  # and outer
+SILL = 1.0                        # the front wall above this fades
+EAVES = 2.0                       # the roof: everything above this fades
+DOOR = (-0.6, 0.6, 1.8)           # x from, x to, height
+FRONT_WINDOWS = [(-2.05, -1.35), (1.35, 2.05)]
+FRONT_WINDOW_Z = (1.05, 1.6)
+BACK_WINDOWS = [(-1.05, -0.65), (0.65, 1.05)]
+BACK_WINDOW_Z = (1.45, 1.85)
+BAND_X = (2.1, 2.4)               # the orange band round the hull, towards the engine end
+GLASS = (0.55, 0.72, 0.80)
+
+
+def _se(shape, t):
+    ry, rz, zc = shape
+    c, s = math.cos(t), math.sin(t)
+    return (ry * math.copysign(abs(c) ** (2.0 / MOD_N), c), zc + rz * math.copysign(abs(s) ** (2.0 / MOD_N), s))
+
+
+def _t_back(shape, z):
+    """The angle on the back wall where the section is `z` high; the front's is pi minus it."""
+    ry, rz, zc = shape
+    d = max(-1.0, min(1.0, (z - zc) / rz))
+    return math.copysign(math.asin(min(1.0, abs(d) ** (MOD_N / 2.0))), d)
+
+
+def _wall_y(shape, z, front):
+    y = _se(shape, _t_back(shape, z))[0]
+    return -y if front else y
+
+
+def _in_hole(side_front, x0, x1, z0, z1):
+    holes = []
+    if side_front:
+        holes.append((DOOR[0], DOOR[1], 0.0, DOOR[2]))
+        holes += [(a, b, FRONT_WINDOW_Z[0], FRONT_WINDOW_Z[1]) for (a, b) in FRONT_WINDOWS]
+    else:
+        holes += [(a, b, BACK_WINDOW_Z[0], BACK_WINDOW_Z[1]) for (a, b) in BACK_WINDOWS]
+    for (a, b, c, d) in holes:
+        if x0 >= a - 1e-6 and x1 <= b + 1e-6 and z0 >= c - 1e-6 and z1 <= d + 1e-6:
+            return True
+    return False
+
+
+def module(seed):
+    rng = random.Random(seed)
+    hull, fade, fade_glass, glass, lamp, door = Builder(), Builder(), Builder(), Builder(), Builder(), Builder()
+
+    xs = sorted(set([-MOD_X_IN, MOD_X_IN, DOOR[0], DOOR[1], BAND_X[0], BAND_X[1], -BAND_X[1], -BAND_X[0]]
+                    + [x for w in FRONT_WINDOWS + BACK_WINDOWS for x in w]
+                    + [-2.8 + 0.35 * i for i in range(17)]))
+    xs = [x for x in xs if -MOD_X_IN - 1e-6 <= x <= MOD_X_IN + 1e-6]
+
+    def out_x(x):
+        return math.copysign(MOD_X_OUT, x) if abs(abs(x) - MOD_X_IN) < 1e-6 else x
+
+    def inner_col(z, x, front):
+        if z < 0.84:
+            return jitter(WAINSCOT, rng, 0.01)
+        if z < 0.90:
+            return GUNMETAL
+        if z < 1.00:
+            return HAZARD
+        return jitter(PANEL if int((x + 2.8) / 0.7) % 2 == 0 else PANEL_ALT, rng, 0.008)
+
+    def outer_col(z, x):
+        if BAND_X[0] <= x <= BAND_X[1]:
+            base = HAZARD
+        else:
+            base = METAL
+        burn = max(0.0, (-1.2 - x)) * 0.35 + (0.2 if rng.random() < 0.05 else 0.0)
+        c = mix(base, SCORCH, min(0.75, burn))
+        if z < 0.3:
+            c = mix(c, SOIL_LIGHT, 0.45 * (1.0 - z / 0.3))
+        return jitter(c, rng, 0.012)
+
+    # --- The walls, row by row, both faces --------------------------------------------------
+    for front in (False, True):
+        rows = [0.0, 0.42, 0.84, 0.90, 1.0, EAVES]
+        rows += list(BACK_WINDOW_Z) if not front else [FRONT_WINDOW_Z[0], FRONT_WINDOW_Z[1], DOOR[2]]
+        rows = sorted(set(rows))
+        for i in range(len(xs) - 1):
+            x0, x1 = xs[i], xs[i + 1]
+            for j in range(len(rows) - 1):
+                z0, z1 = rows[j], rows[j + 1]
+                if _in_hole(front, x0, x1, z0, z1):
+                    continue
+                part = fade if (front and z0 >= SILL - 1e-6) else hull
+                zm = (z0 + z1) * 0.5
+                yi0, yi1 = _wall_y(MOD_IN, z0, front), _wall_y(MOD_IN, z1, front)
+                yo0, yo1 = _wall_y(MOD_OUT, z0, front), _wall_y(MOD_OUT, z1, front)
+                ci = inner_col(zm, (x0 + x1) * 0.5, front)
+                a, b, c, d = (Vector((x0, yi0, z0)), Vector((x1, yi0, z0)), Vector((x1, yi1, z1)), Vector((x0, yi1, z1)))
+                if front:
+                    part.quad(b, a, d, c, ci, ci, ci, ci)
+                else:
+                    part.quad(a, b, c, d, ci, ci, ci, ci)
+                co = outer_col(zm, (x0 + x1) * 0.5)
+                ox0, ox1 = out_x(x0), out_x(x1)
+                a, b, c, d = (Vector((ox0, yo0, z0)), Vector((ox1, yo0, z0)), Vector((ox1, yo1, z1)), Vector((ox0, yo1, z1)))
+                if front:
+                    part.quad(a, b, c, d, co, co, co, co)
+                else:
+                    part.quad(b, a, d, c, co, co, co, co)
+        # Where the fading stops, the wall's thickness shows: a cap along the cut.
+        cut = SILL if front else EAVES
+        yi, yo = _wall_y(MOD_IN, cut, front), _wall_y(MOD_OUT, cut, front)
+        for i in range(len(xs) - 1):
+            x0, x1 = xs[i], xs[i + 1]
+            if front and x0 >= DOOR[0] - 1e-6 and x1 <= DOOR[1] + 1e-6:
+                continue
+            hull.quad(Vector((x0, yi, cut)), Vector((x1, yi, cut)), Vector((out_x(x1), yo, cut)), Vector((out_x(x0), yo, cut)),
+                      GUNMETAL, GUNMETAL, METAL_DARK, METAL_DARK)
+
+    # --- The roof: over the eaves from the back to the front, faded ---------------------------
+    tb_in, tb_out = _t_back(MOD_IN, EAVES), _t_back(MOD_OUT, EAVES)
+    steps = 12
+    for i in range(len(xs) - 1):
+        x0, x1 = xs[i], xs[i + 1]
+        for k in range(steps):
+            f0, f1 = k / steps, (k + 1) / steps
+            ti0, ti1 = tb_in + (math.pi - 2 * tb_in) * f0, tb_in + (math.pi - 2 * tb_in) * f1
+            to0, to1 = tb_out + (math.pi - 2 * tb_out) * f0, tb_out + (math.pi - 2 * tb_out) * f1
+            (ya, za), (yb, zb) = _se(MOD_IN, ti0), _se(MOD_IN, ti1)
+            ci = jitter(PANEL if int((x0 + 2.8) / 0.7) % 2 == 0 else PANEL_ALT, rng, 0.008)
+            fade.quad(Vector((x0, ya, za)), Vector((x1, ya, za)), Vector((x1, yb, zb)), Vector((x0, yb, zb)), ci, ci, ci, ci)
+            (ya, za), (yb, zb) = _se(MOD_OUT, to0), _se(MOD_OUT, to1)
+            co = outer_col(2.2, (x0 + x1) * 0.5)
+            fade.quad(Vector((out_x(x1), ya, za)), Vector((out_x(x0), ya, za)), Vector((out_x(x0), yb, zb)), Vector((out_x(x1), yb, zb)),
+                      co, co, co, co)
+
+    # --- The openings: jambs through the wall, glass in the windows ---------------------------
+    def jamb(front, x0, x1, z0, z1, col, part, sill=True):
+        rows = [z0 + (z1 - z0) * k / 6 for k in range(7)]
+        for x in (x0, x1):
+            for k in range(6):
+                za, zb = rows[k], rows[k + 1]
+                p = [Vector((x, _wall_y(MOD_IN, za, front), za)), Vector((x, _wall_y(MOD_OUT, za, front), za)),
+                     Vector((x, _wall_y(MOD_OUT, zb, front), zb)), Vector((x, _wall_y(MOD_IN, zb, front), zb))]
+                part.quad(p[0], p[1], p[2], p[3], col, col, col, col)
+        for z in ((z0, z1) if sill else (z1,)):
+            yi, yo = _wall_y(MOD_IN, z, front), _wall_y(MOD_OUT, z, front)
+            part.quad(Vector((x0, yi, z)), Vector((x1, yi, z)), Vector((x1, yo, z)), Vector((x0, yo, z)), col, col, col, col)
+
+    def pane(front, x0, x1, z0, z1, part):
+        yi0, yo0 = _wall_y(MOD_IN, z0, front), _wall_y(MOD_OUT, z0, front)
+        yi1, yo1 = _wall_y(MOD_IN, z1, front), _wall_y(MOD_OUT, z1, front)
+        y0, y1 = (yi0 + yo0) * 0.5, (yi1 + yo1) * 0.5
+        part.quad(Vector((x0, y0, z0)), Vector((x1, y0, z0)), Vector((x1, y1, z1)), Vector((x0, y1, z1)),
+                  GLASS, GLASS, mix(GLASS, (1.0, 1.0, 1.0), 0.3), mix(GLASS, (1.0, 1.0, 1.0), 0.3))
+
+    jamb(True, DOOR[0], DOOR[1], 0.0, DOOR[2], HAZARD, hull, sill=False)
+    for (a, b) in FRONT_WINDOWS:
+        jamb(True, a, b, FRONT_WINDOW_Z[0], FRONT_WINDOW_Z[1], GUNMETAL, fade)
+        pane(True, a, b, FRONT_WINDOW_Z[0], FRONT_WINDOW_Z[1], fade_glass)
+    for (a, b) in BACK_WINDOWS:
+        jamb(False, a, b, BACK_WINDOW_Z[0], BACK_WINDOW_Z[1], GUNMETAL, hull)
+        pane(False, a, b, BACK_WINDOW_Z[0], BACK_WINDOW_Z[1], glass)
+    # The door's threshold, striped, and a frame proud of the hull outside.
+    y_sill = _wall_y(MOD_OUT, 0.0, True)
+    for s in range(6):
+        xa, xb = DOOR[0] + (DOOR[1] - DOOR[0]) * s / 6, DOOR[0] + (DOOR[1] - DOOR[0]) * (s + 1) / 6
+        col = HAZARD if s % 2 == 0 else GUNMETAL
+        hull.quad(Vector((xa, y_sill - 0.06, 0.012)), Vector((xb, y_sill - 0.06, 0.012)),
+                  Vector((xb, _wall_y(MOD_IN, 0.0, True) + 0.05, 0.012)), Vector((xa, _wall_y(MOD_IN, 0.0, True) + 0.05, 0.012)),
+                  col, col, col, col)
+
+    # The door: a slab in the wall's thickness, striped outside, with a slit of glass. Cabin.gd
+    # slides it east, into the wall beside the opening.
+    y_door = (_wall_y(MOD_IN, 0.9, True) + _wall_y(MOD_OUT, 0.9, True)) * 0.5
+    box(door, (DOOR[0] - 0.04, y_door - 0.025, 0.0), (DOOR[1] + 0.04, y_door + 0.025, DOOR[2] + 0.02), METAL)
+    for s in range(5):
+        za = 0.15 + s * 0.3
+        beam(door, Vector((DOOR[0] + 0.08, y_door - 0.03, za)), Vector((DOOR[1] - 0.08, y_door - 0.03, za + 0.18)),
+             0.07, 0.01, HAZARD, up=Vector((0.0, -1.0, 0.0)))
+    door.quad(Vector((-0.12, y_door - 0.031, 1.3)), Vector((0.12, y_door - 0.031, 1.3)),
+              Vector((0.12, y_door - 0.031, 1.62)), Vector((-0.12, y_door - 0.031, 1.62)), LENS, LENS, LENS, LENS)
+
+    # --- The bulkheads: flat ends, inside and out ---------------------------------------------
+    def outline(shape):
+        t0 = _t_back(shape, 0.0)
+        pts = [Vector((0.0, *_se(shape, t0 + (math.pi - 2 * t0) * k / 30))) for k in range(31)]
+        return pts
+
+    for sign in (-1.0, 1.0):
+        for (shape, xe, inward) in ((MOD_IN, MOD_X_IN, True), (MOD_OUT, MOD_X_OUT, False)):
+            ring = outline(shape)
+            centre = Vector((sign * xe, 0.0, 1.1))
+            for k in range(len(ring)):
+                a = ring[k] + Vector((sign * xe, 0.0, 0.0))
+                c = ring[(k + 1) % len(ring)] + Vector((sign * xe, 0.0, 0.0))
+                if inward:
+                    col = WAINSCOT if min(a.z, c.z) < 0.84 else PANEL_ALT
+                else:
+                    col = outer_col(min(a.z, c.z), sign * 2.9)
+                if (sign > 0) == inward:
+                    hull.tri(c, a, centre, col, col, mix(col, PANEL, 0.3))
+                else:
+                    hull.tri(a, c, centre, col, col, mix(col, PANEL, 0.3))
+
+    # --- The ends: the heat shield ploughed into the earth (west), the engine and the gun (east)
+    dome = []
+    for (x, sc) in ((-2.92, 1.0), (-3.08, 0.93), (-3.22, 0.76), (-3.32, 0.5), (-3.37, 0.22)):
+        dome.append([Vector((x, y * sc, 1.0 + (z - 1.0) * sc)) for (y, z) in
+                     (_se(MOD_OUT, math.tau * k / 28) for k in range(28))])
+    for j in range(len(dome) - 1):
+        for k in range(28):
+            k2 = (k + 1) % 28
+            col = HEAT_TILE_LIGHT if (k + j) % 2 == 0 else HEAT_TILE
+            pts = [dome[j][k], dome[j][k2], dome[j + 1][k2], dome[j + 1][k]]
+            pts = [Vector((p.x, p.y, max(0.0, p.z))) for p in pts]
+            hull.quad(pts[1], pts[0], pts[3], pts[2], col, col, col, col)
+    tip = Vector((-3.40, 0.0, 1.0))
+    for k in range(28):
+        a, c = dome[-1][k], dome[-1][(k + 1) % 28]
+        hull.tri(c, a, tip, HEAT_TILE, HEAT_TILE, SCORCH)
+    # Earth thrown up round the shield where it dug in.
+    mound_c = Vector((-3.1, 0.0, 0.0))
+    ring_n = 18
+    outer_r = [mound_c + Vector((math.cos(math.tau * i / ring_n) * rng.uniform(0.3, 0.42),
+                                 math.sin(math.tau * i / ring_n) * rng.uniform(1.35, 1.5), 0.0)) for i in range(ring_n)]
+    inner_r = [mound_c + Vector((math.cos(math.tau * i / ring_n) * 0.22, math.sin(math.tau * i / ring_n) * 1.2,
+                                 rng.uniform(0.28, 0.4))) for i in range(ring_n)]
+    for i in range(ring_n):
+        i2 = (i + 1) % ring_n
+        hull.quad(outer_r[i], outer_r[i2], inner_r[i2], inner_r[i], SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
+
+    # The engine end: a service ring, a bulkhead, a stubby nozzle.
+    svc = [[Vector((x, y * sc, 1.0 + (z - 1.0) * sc)) for (y, z) in (_se(MOD_OUT, math.tau * k / 28) for k in range(28))]
+           for (x, sc) in ((2.92, 1.0), (3.02, 0.97), (3.18, 0.94))]
+    for j in range(len(svc) - 1):
+        for k in range(28):
+            k2 = (k + 1) % 28
+            col = GUNMETAL if j == 0 else METAL_DARK
+            pts = [Vector((p.x, p.y, max(0.0, p.z))) for p in (svc[j][k], svc[j][k2], svc[j + 1][k2], svc[j + 1][k])]
+            hull.quad(pts[0], pts[1], pts[2], pts[3], col, col, col, col)
+    hub = Vector((3.18, 0.0, 1.0))
+    for k in range(28):
+        a, c = svc[-1][k], svc[-1][(k + 1) % 28]
+        hull.tri(Vector((a.x, a.y, max(0.0, a.z))), Vector((c.x, c.y, max(0.0, c.z))), hub, METAL_DARK, METAL_DARK, GUNMETAL)
+    hull.tube([Vector((3.18, 0.0, 1.0)), Vector((3.32, 0.0, 1.0)), Vector((3.45, 0.0, 1.0))],
+              [0.36, 0.42, 0.5], [GUNMETAL, METAL_DARK, SCORCH], 14)
+    # The gun's pylon on the service ring's top.
+    top_z = _se(MOD_OUT, math.pi / 2)[1] * 0.94 + 1.0 * 0.06
+    pylon = Vector((3.08, 0.0, top_z - 0.1))
+    hull.tube([pylon, pylon + UP * 0.2], [0.16, 0.13], [METAL_DARK, METAL_DARK], 12)
+    pivot = pylon + UP * 0.2
+
+    # --- The roof's wreckage: a torn solar panel and a bent antenna (faded with the roof) ------
+    roof_z = _se(MOD_OUT, math.pi / 2)[1]
+    root = Vector((-1.2, 0.35, roof_z - 0.02))
+    fade.tube([root, root + Vector((0.0, 0.1, 0.22))], [0.05, 0.04], [METAL_DARK, METAL_DARK], 6)
+    pa, pb = root + Vector((-0.7, 0.05, 0.2)), root + Vector((0.6, 0.2, 0.26))
+    pc, pd = root + Vector((0.5, 0.8, 0.56)), root + Vector((-0.3, 0.68, 0.6))
+    fade.quad(pa, pb, pc, pd, SOLAR, SOLAR, SOLAR, SOLAR)
+    back = (pb - pa).cross(pd - pa).normalized() * -0.025
+    fade.quad(pd + back, pc + back, pb + back, pa + back, METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
+    for t in (0.33, 0.66):
+        l0, l1 = pa.lerp(pd, t), pb.lerp(pc, t)
+        fade.quad(l0, l1, l1 + Vector((0.0, 0.0, 0.015)), l0 + Vector((0.0, 0.0, 0.015)),
+                  SOLAR_LINE, SOLAR_LINE, SOLAR_LINE, SOLAR_LINE)
+    mast = Vector((1.4, -0.3, roof_z - 0.02))
+    fade.tube([mast, mast + Vector((0.02, 0.0, 0.3)), mast + Vector((0.2, -0.06, 0.45))],
+              [0.035, 0.025, 0.018], [METAL_DARK, METAL, HAZARD], 6)
+
+    # --- Inside: the deck, ribs, the lamp, what lies about -----------------------------------
+    y_back, y_front = _wall_y(MOD_IN, 0.0, False), _wall_y(MOD_IN, 0.0, True)
+    for i in range(8):
+        xa, xb = -MOD_X_IN + 2 * MOD_X_IN * i / 8, -MOD_X_IN + 2 * MOD_X_IN * (i + 1) / 8
+        for j in range(4):
+            ya, yb = y_front + (y_back - y_front) * j / 4, y_front + (y_back - y_front) * (j + 1) / 4
+            col = jitter(DECK if (i + j) % 2 == 0 else DECK_ALT, rng, 0.006)
+            hull.quad(Vector((xa, ya, 0.005)), Vector((xb, ya, 0.005)), Vector((xb, yb, 0.005)), Vector((xa, yb, 0.005)),
+                      col, col, col, col)
+    fine_t = [_t_back(MOD_IN, 0.0) + (math.pi - 2 * _t_back(MOD_IN, 0.0)) * k / 32 for k in range(33)]
+    for xr in (-2.45, -0.3, 0.3, 2.45):
+        for k in range(len(fine_t) - 1):
+            (ya, za), (yb, zb) = _se(MOD_IN, fine_t[k]), _se(MOD_IN, fine_t[k + 1])
+            pa, pb = Vector((0.0, ya, za)), Vector((0.0, yb, zb))
+            n_a = Vector((0.0, -ya, 1.0 - za)).normalized() * 0.06
+            n_b = Vector((0.0, -yb, 1.0 - zb)).normalized() * 0.06
+            ox0, ox1 = Vector((xr - 0.05, 0.0, 0.0)), Vector((xr + 0.05, 0.0, 0.0))
+            front_side = ya < 0 and yb < 0
+            part = fade if (min(za, zb) >= EAVES - 1e-6 or (front_side and min(za, zb) >= SILL - 1e-6)) else hull
+            part.quad(pa + n_a + ox0, pa + n_a + ox1, pb + n_b + ox1, pb + n_b + ox0, METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
+            part.quad(pa + ox0, pa + n_a + ox0, pb + n_b + ox0, pb + ox0, GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
+            part.quad(pa + n_a + ox1, pa + ox1, pb + ox1, pb + n_b + ox1, GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
+    lamp_z = _se(MOD_IN, math.pi / 2)[1] - 0.05
+    box(fade, (-2.25, -0.11, lamp_z - 0.03), (2.25, 0.11, lamp_z + 0.04), METAL_DARK)
+    lamp.quad(Vector((-2.15, 0.07, lamp_z - 0.032)), Vector((-2.15, -0.07, lamp_z - 0.032)),
+              Vector((2.15, -0.07, lamp_z - 0.032)), Vector((2.15, 0.07, lamp_z - 0.032)), LAMP, LAMP, LAMP, LAMP)
+    rug_c = Vector((0.0, -0.25, 0.012))
+    rim = [rug_c + Vector((math.cos(math.tau * k / 11) * 0.72 * rng.uniform(0.85, 1.1),
+                           math.sin(math.tau * k / 11) * 0.4 * rng.uniform(0.85, 1.1), 0.0)) for k in range(11)]
+    for k in range(11):
+        hull.tri(rim[k], rim[(k + 1) % 11], rug_c, HIDE_EDGE, HIDE_EDGE, HIDE)
+    bed = Vector((-2.55, 0.75, 0.0))
+    hull.tube([bed, bed + UP * 0.62], [0.13, 0.13], [HIDE_EDGE, HIDE], 9)
+    lashing(hull, bed + UP * 0.2, UP, 0.135, rng)
+    lashing(hull, bed + UP * 0.45, UP, 0.135, rng)
+    tank = Vector((2.55, 0.78, 0.0))
+    hull.tube([tank, tank + UP * 0.30, tank + UP * 0.36, tank + UP * 0.72], [0.19, 0.19, 0.19, 0.17],
+              [METAL, METAL, HAZARD, METAL], 12)
+    for (p0, p1) in ((Vector((-2.55, -0.55, 0.07)), Vector((-2.55, 0.1, 0.07))),
+                     (Vector((-2.4, -0.55, 0.07)), Vector((-2.4, 0.1, 0.07))),
+                     (Vector((-2.47, -0.5, 0.2)), Vector((-2.47, 0.12, 0.2)))):
+        _log(hull, p0, p1, 0.07, rng)
+
+    # --- Where things stand -------------------------------------------------------------------
+    # Each bench with its back to the back wall (Config.CABIN.station_sizes: their depths).
+    spots = {"workbench": Vector((-1.75, y_back - 0.37, 0.0)), "kitchen": Vector((0.0, y_back - 0.44, 0.0)),
+             "beacon": Vector((1.75, y_back - 0.41, 0.0)),
+             "door": Vector((0.0, _wall_y(MOD_OUT, 0.0, True) - 0.6, 0.0))}
+    ports = {"west": Vector((-3.5, 0.0, 1.0)), "east": Vector((3.5, 0.0, 1.0))}
+    head, muzzle = _turret_head(1.0)
+    parts = [("hull", hull), ("fade_shell", fade), ("fade_glass", fade_glass), ("glass", glass),
+             ("fade_lamp_glow", lamp), ("door", door)]
+    return parts, spots, {"ports": ports, "head": (head, pivot, muzzle)}
+
+
+# ==============================================================================
 # Export
 # ==============================================================================
 
 MODELS = {
-    "room": (room, 7),
+    "module": (module, 23),
     "workbench": (workbench, 11),
     "kitchen": (kitchen, 13),
     "beacon": (beacon, 17),
@@ -663,8 +849,12 @@ MODELS = {
 def build_model(name, fn, seed, mat):
     made = fn(seed)
     spots = {}
+    extra = {}
     if isinstance(made, tuple):
-        made, spots = made
+        if len(made) == 3:
+            made, spots, extra = made
+        else:
+            made, spots = made
     objs = []
     for part, builder in made:
         if not builder.verts:
@@ -675,6 +865,21 @@ def build_model(name, fn, seed, mat):
         bpy.context.scene.collection.objects.link(e)
         e.location = at
         objs.append(e)
+    for port_id, at in extra.get("ports", {}).items():
+        e = bpy.data.objects.new("port_" + port_id, None)
+        bpy.context.scene.collection.objects.link(e)
+        e.location = at
+        objs.append(e)
+    if "head" in extra:
+        # Named for the game: Tower.gd turns the node called Head and fires from Muzzle.
+        head_b, pivot, muzzle = extra["head"]
+        head = head_b.to_object("Head", [mat])
+        head.location = pivot
+        tip = bpy.data.objects.new("Muzzle", None)
+        bpy.context.scene.collection.objects.link(tip)
+        tip.parent = head
+        tip.location = muzzle
+        objs += [head, tip]
     return objs
 
 

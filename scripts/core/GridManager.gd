@@ -186,15 +186,15 @@ func build_cell_to_world(cell: Vector2i, y: float = 0.0) -> Vector3:
 func tile_centre_build_cell(tile: Vector2i) -> Vector2i:
 	return world_to_build_cell(cell_to_world(tile))
 
-## The cells a `type_id` standing with its middle in `centre` takes: a square of
-## Config.get_building_cells a side round it.
+## The cells a `type_id` standing with its middle in `centre` takes: a block of
+## Config.get_building_size round it.
 func footprint_cells(type_id: String, centre: Vector2i) -> Array[Vector2i]:
 	var cfg = _get_config()
-	var n: int = int(cfg.get_building_cells(type_id)) if (cfg and cfg.has_method("get_building_cells")) else 1
-	var half: int = (n - 1) / 2
+	var size: Vector2i = cfg.get_building_size(type_id) if (cfg and cfg.has_method("get_building_size")) else Vector2i.ONE
+	var half := Vector2i((size.x - 1) / 2, (size.y - 1) / 2)
 	var out: Array[Vector2i] = []
-	for dz in range(-half, n - half):
-		for dx in range(-half, n - half):
+	for dz in range(-half.y, size.y - half.y):
+		for dx in range(-half.x, size.x - half.x):
 			out.append(centre + Vector2i(dx, dz))
 	return out
 

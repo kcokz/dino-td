@@ -48,15 +48,17 @@ const BUILDINGS: Dictionary = {
 	"core": {
 		"name": "BUILDING_CORE_NAME",
 		"kind": "core",
-		# The crew module of the ship that brought the Hero here, and his home: a room,
-		# not a pod. Three cells of the building grid a side (BUILD_CELL) -- three metres,
-		# filled, like everything since v0.6 round two -- and a little over twice his height.
-		# It was a 1 m pod, no taller than the man who lives in it.
+		# The crew module of the ship that brought the Hero here, and his home: a room he
+		# walks into (v0.6 round three: "船舱应该外形和内置一致……可进入，镂空，有透明部分（窗）
+		# 里面的设施也在"). Seven cells of the building grid long and three deep -- the room
+		# inside it, 5.6 m by 2.6, with his benches along the back wall -- and a little over
+		# twice his height. It was a 3 m box with the room parked under the map.
 		#
-		# It runs south and east from the core's tile (Main._cabin_centre), so the north and
-		# west walls stand exactly where the pod's did: a raid coming down from the nest meets
-		# the same line it always met.
-		"cells": 3,
+		# HOLLOW: its walls are solid and its inside is not; the door is the way in, for him
+		# alone (CABIN.module, CoreCampfire.gd). Its north wall stands where the old cabin's
+		# did (Main._cabin_centre): a raid coming down from the nest meets the line it met.
+		"size": Vector2i(7, 3),
+		"hollow": true,
 		"height": 2.6,
 		# v0.6 feedback: "船舱血量提升到100，这样船舱的攻击能打败初始迅猛龙". A hundred: the
 		# opening's stakes are thin, and the cabin has to be able to take the first raid's
@@ -366,30 +368,52 @@ static func get_contact_dps(type_id: String) -> float:
 		return 0.0
 	return dmg / tick
 
-## How many cells of the building grid a side `type_id` takes (BUILD_CELL): 3 for the cabin, 1 for
-## everything the player builds. Odd, so a building has a middle cell to stand on.
-static func get_building_cells(type_id: String = "") -> int:
+## How many cells of the building grid `type_id` takes (BUILD_CELL), east-west and north-south:
+## its "size" where it is not square -- the cabin, a module seven cells long -- else "cells" a
+## side; 1 for everything the player builds. Odd both ways, so a building has a middle cell to
+## stand on.
+static func get_building_size(type_id: String = "") -> Vector2i:
 	if type_id != "" and BUILDINGS.has(type_id):
-		return maxi(1, int(BUILDINGS[type_id].get("cells", 1)))
-	return 1
+		var row: Dictionary = BUILDINGS[type_id]
+		if row.has("size"):
+			var v: Vector2i = row["size"]
+			return Vector2i(maxi(1, v.x), maxi(1, v.y))
+		var n: int = maxi(1, int(row.get("cells", 1)))
+		return Vector2i(n, n)
+	return Vector2i.ONE
+
+## The longer side of `type_id`, in cells.
+static func get_building_cells(type_id: String = "") -> int:
+	var size: Vector2i = get_building_size(type_id)
+	return maxi(size.x, size.y)
+
+## Half of `type_id`'s box on the ground, in metres: x east-west, y north-south.
+static func get_building_half(type_id: String = "") -> Vector2:
+	return Vector2(get_building_size(type_id)) * BUILD_CELL * 0.5
+
+## Whether `type_id` has an inside to walk about in -- its walls solid, the rest of its box not
+## (the cabin): what stands in its cells is not therefore inside a wall.
+static func is_hollow(type_id: String) -> bool:
+	return BUILDINGS.has(type_id) and bool(BUILDINGS[type_id].get("hollow", false))
 
 ## How far `point` is from the outside of a `type_id` standing at `centre`, in metres, on the
-## ground: 0 when touching or inside. To its box -- buildings are square, fill their cells, and
-## are never turned.
+## ground: 0 when touching or inside. To its box -- buildings fill their cells and are never
+## turned.
 ##
 ## Reach, where a dinosaur stands to bite, and how close the Hero has to be are all measured to
 ## the box: a circle of half the footprint sits inside a square's corners, and a raptor at the
 ## cabin's corner could not bite what it stood against.
 static func gap_to_building(point: Vector3, type_id: String, centre: Vector3) -> float:
-	var half: float = get_building_footprint(type_id) * 0.5
+	var half: Vector2 = get_building_half(type_id)
 	var dx: float = absf(point.x - centre.x)
 	var dz: float = absf(point.z - centre.z)
-	return Vector2(maxf(dx - half, 0.0), maxf(dz - half, 0.0)).length()
+	return Vector2(maxf(dx - half.x, 0.0), maxf(dz - half.y, 0.0)).length()
 
-## How far from `type_id`'s centre its outside is, heading along `dir` (flat, unit).
+## How far from `type_id`'s centre its outside is, heading along `dir` (flat, unit): where the
+## ray leaves its box.
 static func building_extent_along(type_id: String, dir: Vector3) -> float:
-	var half: float = get_building_footprint(type_id) * 0.5
-	return half / maxf(0.0001, maxf(absf(dir.x), absf(dir.z)))
+	var half: Vector2 = get_building_half(type_id)
+	return minf(half.x / maxf(0.0001, absf(dir.x)), half.y / maxf(0.0001, absf(dir.z)))
 
 ## What sort of thing this is: "wall" for anything a wall is made of, whatever else a building
 ## declares, or "" for a type that says nothing.
@@ -398,7 +422,8 @@ static func get_building_kind(type_id: String) -> String:
 		return ""
 	return String(BUILDINGS[type_id].get("kind", ""))
 
-## Side length of `type_id`'s box, in metres: its cells. Everything fills its cells.
+## The longer side of `type_id`'s box, in metres: its cells. Everything fills its cells; where
+## the two sides differ (get_building_size), what asks for a single figure gets the longer.
 static func get_building_footprint(type_id: String = "") -> float:
 	return float(get_building_cells(type_id)) * BUILD_CELL
 
@@ -932,8 +957,10 @@ const MAPS: Dictionary = {
 	# made of stone, the axe included, comes after the first raid: "the first raid is
 	# supply" (GAME-DESIGN 5.2). A couple of stones used to lie here too, exactly an axe's
 	# price, and a stone the player could hold but not cut was the one thing about the
-	# opening nobody could explain.
-	"opening_stock": {"wood": 20},
+	# opening nobody could explain. How much: a ring of palisade round the cabin a cell out
+	# (24 sections round the seven-by-three module, v0.6 round three; it was 16 round the
+	# three-metre cabin) and a trip bow's worth over -- the same margin as before.
+	"opening_stock": {"wood": 28},
 	# The beat table (GAME-DESIGN 9.2): when this map's big moments come, in seconds from
 	# landing.
 	"beats": {
@@ -961,8 +988,8 @@ const MAPS: Dictionary = {
 		# Repaired at the cabin a stage at a time, in order, each stage from a higher tier
 		# of this map's materials: wood, then stone, then stone and bone (8.3: station 1).
 		# Single figures (4.6), each "just within reach" (9.2) of the stretch of the run
-		# it belongs to: the first beside the opening's stakes and axe -- 8 of the 20
-		# wood leaves room for a few stakes, not a full fence -- the second once the pick
+		# it belongs to: the first beside the opening's stakes and axe -- 8 of the 28
+		# wood leaves room for part of a fence, not a full ring -- the second once the pick
 		# has come, the third on the bone that only fighting brings in. `time` is seconds
 		# at the bench, which, like every job there, are seconds nobody holds the line.
 		"stages": [
@@ -1345,10 +1372,6 @@ const UI: Dictionary = {
 	"result_card_width": 560,
 	"menu_width": 400,
 	"menu_picker_width": 190,
-	# The cabin's dock (CabinScreen): the room above it is the screen, so it is kept low.
-	"cabin_shade_height": 260,         # the shade rising behind it from the bottom edge
-	"cabin_info_width": 300,           # the chosen bench's name, purpose and line
-	"cabin_job_width": 230,            # a job's card, side by side with the others
 }
 
 ## Presentation feedback (v0.3). None of this changes what happens in the game;
@@ -1690,12 +1713,14 @@ const VISUALS: Dictionary = {
 	# out of, with bones by the door (tools/generate_props.py).
 	"nest":                 {"scene": "res://assets/models/props/nest_a.glb",
 		"material": "vertex", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
-	# The cabin: the crew module of the ship that brought the Hero here, lying where it came
-	# down -- heat shield ploughed into a mound of earth, portholes, a torn solar panel, the
-	# hatch open with its door down as a ramp on the south side, his fire by the door
-	# (tools/generate_props.py cabin). The only evidence he is from anywhere else, and the
-	# thing that ends the game if the raid reaches it. It was a 1 m pod his own height.
-	"building/core":        {"scene": "res://assets/models/props/cabin_a.glb",
+	# The cabin: the crew module of the ship that brought the Hero here, where it came down --
+	# its heat shield ploughed into the earth at the west end, the engine and the ship's gun at
+	# the east, a door and windows in its south side, a torn solar panel on the roof -- and the
+	# room inside it, his benches along the back wall (tools/generate_cabin.py module). Built
+	# to scale about its own middle, so it is not fitted: the hull is where CABIN.module says.
+	# The only evidence he is from anywhere else, and the thing that ends the game if the raid
+	# reaches it.
+	"building/core":        {"scene": "res://assets/models/cabin/module_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
 	# The traps (tools/generate_props.py trip_bow, set_crossbow): kits whose String is drawn
 	# back and let go, and whose Arrow or Bolt is gone while it is re-armed (Trap.gd). Built
@@ -1761,15 +1786,11 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/water":           {"scene": "res://assets/models/props/drop_water_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
-	# Inside the cabin (tools/generate_cabin.py): the crew module's cabin, cut away along the
-	# front so the camera looks in -- white plating, the orange band, ribs, portholes, the
-	# hatch at one end -- and the three benches the Hero fitted it out with. Each bench is one
-	# file of named parts that show as the run goes on (scripts/fx/CabinArt.gd): the tools
-	# hang on the workbench's board once made, the stone pot replaces the spit over the
-	# fire, the beacon's broken mast goes back up a stage at a time. They were boxes.
-	# The room is fitted by height, so its floor stays the floor.
-	"cabin/room":           {"scene": "res://assets/models/cabin/room_a.glb", "fit": "height",
-		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	# Inside the cabin (tools/generate_cabin.py): the three benches the Hero fitted the module
+	# out with, along its back wall. Each is one file of named parts that show as the run goes
+	# on (scripts/fx/CabinArt.gd): the tools hang on the workbench's board once made, the stone
+	# pot replaces the spit over the fire, the beacon's broken mast goes back up a stage at a
+	# time. They were boxes.
 	"station/workbench":    {"scene": "res://assets/models/cabin/workbench_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"station/kitchen":      {"scene": "res://assets/models/cabin/kitchen_a.glb",
@@ -1794,8 +1815,8 @@ static func get_visual_size(key: String) -> Vector3:
 		"nest":
 			return NEST.get("size", Vector3(2.0, 1.2, 2.0))
 		"building":
-			var fp: float = get_building_footprint(id)
-			return Vector3(fp, get_building_height(id), fp)
+			var half: Vector2 = get_building_half(id)
+			return Vector3(half.x * 2.0, get_building_height(id), half.y * 2.0)
 		"node":
 			if RESOURCE_NODES.has(id) and RESOURCE_NODES[id].has("size"):
 				return RESOURCE_NODES[id]["size"]
@@ -1805,8 +1826,6 @@ static func get_visual_size(key: String) -> Vector3:
 			# as tall as one gets.
 			var s: float = float(DROPS.get("size", 0.3))
 			return Vector3(s * 1.5, s, s * 1.5)
-		"cabin":
-			return CABIN.get("room_size", Vector3.ONE)
 		"station":
 			return CABIN.get("station_sizes", {}).get(id, Vector3.ONE)
 	return Vector3.ONE
@@ -1911,51 +1930,55 @@ const REPAIR: Dictionary = {
 ## world keeps running while the player is inside -- which is the point: crafting
 ## costs real seconds, and while he is at the bench nobody is holding the line.
 const CABIN: Dictionary = {
-	"interior_origin": Vector3(0.0, -200.0, 0.0),  # far below the map; never seen from outside
-	# How close to its WALLS the Hero must be to step inside. It was 2.5 m from its middle,
-	# which for the old pod was 2 m from its walls -- and for a cabin three metres across
-	# would have been barely past its corners.
-	"enter_range": 2.0,
-	# Where he stands to go in and steps out: this far in front of the hatch (the south
-	# wall, the ramp), in metres -- clear of the ramp and in the camera's sight.
+	# THE CREW MODULE (v0.6 round three), in metres about its middle, x east and z south -- the
+	# model's measures (tools/generate_cabin.py module), so what stops a body is where the hull
+	# is drawn. Its box is BUILDINGS.core.size; inside it:
+	#   room       the half-extents of the floor he walks on: bulkhead to bulkhead, wall to wall
+	#   wall       how thick the long walls are, north and south, out to the box's edge; the
+	#              ends past the room, the heat shield's and the engine's, are solid
+	#   door       the hatch in the south wall: its middle (x), how wide and high it is -- a hand
+	#              wider than him either side, and the navigation mesh's own margin
+	#              (NAV.agent_radius) leaves him a way through
+	"module": {
+		"room": Vector2(2.8, 1.3),
+		"wall": 0.2,
+		"door": {"x": 0.0, "width": 1.2, "height": 1.8},
+	},
+	# Where he stands to go in and where he is left when he steps out: this far in front of the
+	# door, and this far inside it -- clear of the frame, in the camera's sight.
 	"door_standoff": 0.8,
-	# The interior is the same world 200 metres down, so it inherits the level's sky --
-	# and the room has no ceiling, so the camera looked straight over the wall into open
-	# daylight. Being "indoors" fell apart the moment you stepped in.
-	#
-	# Camera3D carries its own Environment, so the fix is per-camera rather than a second
-	# WorldEnvironment: entering the cabin swaps to it and leaving swaps back, with no
-	# extra machinery to keep in sync. Flat dark colour, no sky and no fog -- what is
-	# beyond the walls of a room you cannot see out of is nothing.
-	"interior_background": Color(0.05, 0.045, 0.055),
-	"interior_ambient": Color(0.30, 0.26, 0.24),   # a little bounce, so shadows are not pitch black
-	"interior_ambient_energy": 0.45,
+	"inside_step": 0.8,
+	# The door slides open as he comes within this many metres of it, over this long, and
+	# shuts behind him; a raid it keeps out (CoreCampfire.gd).
+	"door_open_radius": 1.6,
+	"door_slide_seconds": 0.35,
+	# INSIDE ("人进入船舱之后，应该也是同样的人在船舱里面"): the same camera and the same world,
+	# the roof and the front wall above the sill faded to this much see-through -- enough left
+	# to see where they were -- over this long; and the camera eased in over the room, this far
+	# from it, and back out to where it was when he leaves.
+	"fade_transparency": 0.88,
+	"fade_seconds": 0.4,
+	"inside_camera_distance": 11.0,
+	"camera_ease_seconds": 0.6,
+	# The windows' glass: tinted, mostly clear, so the benches show through from outside and a
+	# raid through them from inside.
+	"glass_color": Color(0.62, 0.8, 0.9, 0.22),
 
-	# The room and its benches, in metres and true to scale -- the Hero is 1.2 m: the
-	# workbench's top at his waist, the hood over the fire at his head, the beacon's dish
-	# over it. A bench is clicked by its declared size, like everything else (the art is
-	# fitted to it and the collider is built from it).
-	"room_size": Vector3(5.6, 2.6, 2.8),
+	# The benches, in metres and true to scale -- the Hero is 1.2 m: the workbench's top at his
+	# waist, the hood over the fire at his head, the beacon's dish over it. A bench is clicked
+	# by its declared size, like everything else (the art is fitted to it and the collider is
+	# built from it), and stands where the module's model marks it ("spot_<id>").
 	"station_sizes": {
 		"workbench": Vector3(1.24, 1.52, 0.68),
 		"kitchen": Vector3(1.29, 2.56, 0.82),
 		"beacon": Vector3(1.32, 1.89, 0.76),
 	},
-	# The camera: in front of the room's open side, at head height, looking down a little at
-	# the benches -- they stand in the upper three quarters of the screen, above the dock
-	# along the bottom, and the whole room is in frame from bulkhead to bulkhead.
-	"camera_position": Vector3(0.0, 1.55, 3.35),
-	"camera_rotation_degrees": Vector3(-14.0, 0.0, 0.0),
-	"camera_fov": 58.0,
-	# The ceiling lamp's light (CabinLight): where it hangs, how bright, how far it reaches.
-	"lamp_position": Vector3(0.0, 2.3, 0.2),
-	"lamp_energy": 1.1,
-	"lamp_range": 7.0,
 	# Parts that glow (tools/generate_cabin.py names them "..._glow") and also light the room
-	# round them: colour, energy, range, and how much and how fast they flicker. The fire
-	# wavers; a working screen barely does; the fault light while the radio is dead pulses
-	# slowly; the lamp in the dish once the beacon is launched throbs.
+	# round them: colour, energy, range, and how much and how fast they flicker. The ceiling
+	# lamp is steady; the fire wavers; a working screen barely does; the fault light while the
+	# radio is dead pulses slowly; the lamp in the dish once the beacon is launched throbs.
 	"glow_lights": {
+		"fade_lamp_glow": {"color": Color(1.0, 0.92, 0.78), "energy": 1.0, "range": 5.0, "flicker": 0.0, "speed": 1.0},
 		"fire_glow": {"color": Color(1.0, 0.6, 0.28), "energy": 1.6, "range": 3.0, "flicker": 0.25, "speed": 9.0},
 		"beacon_3_glow": {"color": Color(0.4, 0.85, 0.95), "energy": 0.6, "range": 1.8, "flicker": 0.05, "speed": 3.0},
 		"before_beacon_3_glow": {"color": Color(1.0, 0.22, 0.12), "energy": 0.35, "range": 1.2, "flicker": 0.6, "speed": 1.5},

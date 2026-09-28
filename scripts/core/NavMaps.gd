@@ -34,6 +34,13 @@ const SOURCE_GROUP: String = "navmesh_source"
 ## How anything that walks finds these maps without being handed a reference.
 const GROUP: String = "nav_maps"
 
+## What is open to the Hero and solid to everybody else: the cabin's inside (v0.6 round three),
+## whose door is a gate to a raid. Without it a raid's map had a floor in there, cut off, and the
+## nearest walkable point to the cabin's middle was on it -- so the cabin always looked shut
+## away, and every raid set about the walls. Each member answers hero_only_box():
+## [its middle, its half-extents on the ground (x, z), its height].
+const HERO_ONLY_GROUP: String = "nav_hero_only"
+
 var _regions: Dictionary = {}     # For -> NavigationRegion3D
 var _dirty: bool = true
 var _baked_once: bool = false
@@ -99,9 +106,34 @@ func rebake() -> void:
 		var region: NavigationRegion3D = _regions[which]
 		if not is_instance_valid(region):
 			continue
-		region.navigation_mesh = _mesh_for(which)
-		region.bake_navigation_mesh(false)
+		# Parsed and baked in two steps -- what bake_navigation_mesh does in one -- so the
+		# hero-only spaces can go into every map but his, between them.
+		var mesh: NavigationMesh = _mesh_for(which)
+		var source := NavigationMeshSourceGeometryData3D.new()
+		NavigationServer3D.parse_source_geometry_data(mesh, source, region)
+		if which != For.HERO:
+			_add_hero_only_spaces(source)
+		NavigationServer3D.bake_from_source_geometry_data(mesh, source)
+		region.navigation_mesh = mesh
 	_baked_once = true
+
+## Every hero-only space (HERO_ONLY_GROUP) into `source` as a solid block, exactly its box: the
+## walls round it are in the bake already.
+func _add_hero_only_spaces(source: NavigationMeshSourceGeometryData3D) -> void:
+	if not is_inside_tree():
+		return
+	for node in get_tree().get_nodes_in_group(HERO_ONLY_GROUP):
+		if not is_instance_valid(node) or not node.has_method("hero_only_box"):
+			continue
+		var box: Array = node.hero_only_box()
+		if box.size() < 3:
+			continue
+		var c: Vector3 = box[0]
+		var half: Vector2 = box[1]
+		source.add_projected_obstruction(PackedVector3Array([
+			Vector3(c.x - half.x, c.y, c.z - half.y), Vector3(c.x + half.x, c.y, c.z - half.y),
+			Vector3(c.x + half.x, c.y, c.z + half.y), Vector3(c.x - half.x, c.y, c.z + half.y)]),
+			c.y - 1.0, float(box[2]) + 1.0, true)
 
 func _mesh_for(which: int) -> NavigationMesh:
 	var mesh := NavigationMesh.new()

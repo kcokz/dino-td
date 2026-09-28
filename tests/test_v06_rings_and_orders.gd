@@ -67,7 +67,7 @@ func test_01_a_unit_is_ringed_by_a_thin_circle_and_a_building_by_its_frame() -> 
 		assert_almost_eq(torus.outer_radius * 2.0,
 			float(config_node.HERO["width"]) + float(config_node.FEEDBACK["unit_ring_margin"]) * 2.0, 0.01,
 			"And just round his feet")
-	var bench = main.cabin_interior.stations[0]
+	var bench = main.current_core.stations[0]
 	assert_eq(int(bench.selection_ring.shape), int(SelectionRing3D.Shape.BOX), "A bench keeps the frame round its base")
 
 func test_02_a_move_order_leaves_closing_rings_where_it_was_given() -> void:

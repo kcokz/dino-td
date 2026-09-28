@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bkvmkj2xb5s1b"
-path="res://.godot/imported/cabin_a.glb-81df94d7ab8c82f437acf8b34a7e5008.scn"
+uid="uid://bxl46kcq3valv"
+path="res://.godot/imported/module_a.glb-e070b8cfc507bffae51d471fad91447a.scn"
 
 [deps]
 
-source_file="res://assets/models/props/cabin_a.glb"
-dest_files=["res://.godot/imported/cabin_a.glb-81df94d7ab8c82f437acf8b34a7e5008.scn"]
+source_file="res://assets/models/cabin/module_a.glb"
+dest_files=["res://.godot/imported/module_a.glb-e070b8cfc507bffae51d471fad91447a.scn"]
 
 [params]
 

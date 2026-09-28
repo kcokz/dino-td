@@ -89,7 +89,8 @@ func test_02_it_turns_to_face_what_it_shoots() -> void:
 		return
 	head.rotation.y = PI      # looking the wrong way to start with
 	tower.fire_at(dino)
-	var want: Vector3 = (dino.global_position - tower.global_position)
+	# From the head, not the building's middle: on the cabin the gun stands on its engine end.
+	var want: Vector3 = (dino.global_position - head.global_position)
 	want.y = 0.0
 	assert_gt(_facing(head).dot(want.normalized()), 0.999,
 		"The barrels point at the dinosaur it has just shot")
