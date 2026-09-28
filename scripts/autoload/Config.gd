@@ -2689,6 +2689,10 @@ const DISHES: Dictionary = {
 	# What a raptor leaves. A little of everything.
 	"meat": {
 		"name": "DISH_MEAT_NAME",
+		# Drawn cooked -- browned, barred, steaming -- and never as what goes in: with the raw
+		# meat's own icon on the meals, what he carries and what he eats looked the same (v0.6 round
+		# four: "掉落的raw meat和roast meat图标要区分开现在有点confusing").
+		"icon": "roast",
 		"station": "kitchen",
 		"inputs": {"food": 1},
 		"time": 5.0,
@@ -2701,6 +2705,7 @@ const DISHES: Dictionary = {
 	# clearly bigger, and for longer. A full heal.
 	"prime_meat": {
 		"name": "DISH_PRIME_MEAT_NAME",
+		"icon": "roast_prime",
 		"station": "kitchen",
 		"inputs": {"prime_meat": 1},
 		"time": 5.0,
@@ -2796,6 +2801,15 @@ static func meal_cooked(dish_id: String, method_id: String) -> Dictionary:
 	var lasting: bool = meal["build_speed"] != 1.0 or meal["move_speed"] != 1.0 or meal["max_hp"] > 0.0
 	meal["fed_seconds"] = float(dish.get("fed_seconds", 0.0)) if lasting else 0.0
 	return meal
+
+## The icon a dish is drawn with, cooked (DISHES.<id>.icon) -- or, for one with none, what it is
+## cooked from.
+static func dish_icon(dish_id: String) -> String:
+	var dish: Dictionary = DISHES.get(dish_id, {})
+	if dish.has("icon"):
+		return String(dish["icon"])
+	var inputs: Dictionary = dish.get("inputs", {})
+	return String(inputs.keys()[0]) if not inputs.is_empty() else dish_id
 
 ## The most any meal does to `effect` ("build_speed", "move_speed", "max_hp"): where the panel's
 ## bars end, so the best meal in the game fills one and an ordinary one visibly does not.

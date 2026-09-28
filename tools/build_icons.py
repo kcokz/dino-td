@@ -33,6 +33,8 @@ C = {
     "bone": "#efe6cf", "bone_shade": "#cdbf9b",
     "meat": "#c9533b", "meat_hi": "#ea8a6c", "meat_dark": "#983926",
     "prime": "#a62e28", "marble": "#eba594", "fat": "#f2dcc6", "gold": "#f2c14e",
+    "roast": "#a65b27", "roast_hi": "#e0a25a", "roast_dark": "#6c3616", "grill": "#3e1d0b",
+    "crackling": "#e9b765", "steam": "#f4eee4",
     "water": "#4aa6e2", "water_hi": "#b1e0f8",
     "post": "#a0703f", "post_dark": "#6f4523", "char": "#2e2019", "rope": "#dcbb7c",
     "hull": "#ebe8e1", "hull_shade": "#c4c0b6", "hazard": "#f28c28", "window": "#58c7e8",
@@ -142,6 +144,32 @@ ICONS["prime_meat"] = item_svg(
      shape("path", None, C["marble"], 1.8, d="M 20 39 C 27 34 33 43 42 36"),
      shape("path", None, C["marble"], 1.8, d="M 28 18 C 32 21 36 16 41 20"),
      shape("polygon", C["gold"], points=star(49, 14, 10, 4.3))])
+
+# A meal (Config.DISHES.<id>.icon): what comes off the fire -- browned, barred where it lay on the
+# stick, still steaming -- so what he eats is never taken for the raw meat he carries in (v0.6 round
+# four: "掉落的raw meat和roast meat图标要区分开现在有点confusing"). The leg is the raw one's shape.
+_STEAM = shape("path", None, C["steam"], 2.8, d="M 50 33 C 45 28 54 24 50 17 M 58 29 C 53 24 62 20 58 12")
+ICONS["roast"] = item_svg(
+    [shape("rect", C["bone"], transform=_HANDLE, x=36, y=40.5, width=20, height=7, rx=3.5),
+     shape("circle", C["bone"], transform=_HANDLE, cx=56, cy=40, r=5.4),
+     shape("circle", C["bone"], transform=_HANDLE, cx=56, cy=48, r=5.4),
+     shape("ellipse", C["roast"], transform="rotate(-45 27 27)", cx=27, cy=27, rx=21, ry=16)],
+    [shape("ellipse", C["roast_dark"], transform="rotate(-45 30 30)", cx=30, cy=31, rx=16, ry=9),
+     shape("ellipse", C["roast"], transform="rotate(-45 27 27)", cx=26, cy=25, rx=17, ry=11),
+     shape("ellipse", C["roast_hi"], transform="rotate(-45 21 21)", cx=20, cy=20, rx=8, ry=4),
+     shape("path", None, C["grill"], 2.6, d="M 16 30 L 23 37 M 22 22 L 30 30 M 29 16 L 36 23"),
+     _STEAM])
+
+# The prime cut, cooked: the raw one's shape and star, browned, its fat crackled gold.
+ICONS["roast_prime"] = item_svg(
+    [shape("path", C["roast"], d="M 11 32 C 9 20 21 11 33 12 C 47 13 55 23 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 Z"),
+     shape("polygon", C["gold"], points=star(49, 14, 10, 4.3))],
+    [shape("path", C["roast_dark"], d="M 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 C 18 44 38 49 53 35 Z"),
+     shape("path", None, C["crackling"], 4.2, d="M 51 31 C 51 43 41 51 29 51"),
+     shape("path", None, C["grill"], 2.6, d="M 17 24 L 27 34 M 24 17 L 37 30 M 33 16 L 42 25"),
+     shape("ellipse", C["roast_hi"], cx=22, cy=20, rx=5, ry=2.6, transform="rotate(-35 22 20)"),
+     shape("polygon", C["gold"], points=star(49, 14, 10, 4.3)),
+     shape("path", None, C["steam"], 2.8, d="M 9 22 C 5 17 13 14 9 7")])
 
 # A hide off an elite (v0.6 round three): a pelt stretched out to dry, its legs out at the corners.
 ICONS["hide"] = item_svg(

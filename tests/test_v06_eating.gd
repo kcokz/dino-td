@@ -266,3 +266,39 @@ func test_11_the_eat_page_lists_the_meals_and_one_is_eaten_from_it() -> void:
 	assert_eq(String(panel.current_menu), "default", "His card goes back to his commands")
 	hero._process_eating(_eat_seconds() + 0.01)
 	assert_eq(game_state_node.meal_count(key), 0, "The roast is eaten")
+
+func test_12_a_meal_is_drawn_cooked_never_as_the_raw_meat_it_came_from() -> void:
+	# v0.6 round four: "掉落的raw meat和roast meat图标要区分开现在有点confusing" -- the Eat command and every
+	# meal were drawn with the raw meat's own icon.
+	var raw: Array = []
+	for dish in config_node.DISHES:
+		var drawn: String = String(config_node.dish_icon(dish))
+		for res_id in config_node.DISHES[dish].get("inputs", {}):
+			raw.append(UiTheme.icon(String(res_id)))
+			assert_ne(drawn, String(res_id), "%s is drawn cooked, not as the %s it is cooked from" % [dish, res_id])
+		assert_true(ResourceLoader.exists(String(config_node.ICON_DIR) + drawn + ".svg"), "%s has its icon drawn" % dish)
+	var hero = _hero()
+	game_state_node.stock_meal("meat")
+	game_state_node.stock_meal("prime_meat")
+	await wait_frames(1)
+	var panel = _card(hero)
+	await wait_frames(1)
+	var eat: Button = panel.find_child("EatCommand", true, false) as Button
+	assert_not_null(eat, "Eat is on his card")
+	if eat == null:
+		return
+	assert_false(raw.has(eat.icon), "Eat is not drawn as raw meat")
+	panel._on_eat_pressed()
+	var cards: int = 0
+	for child in panel.button_container.get_children():
+		if child is Button and String(child.theme_type_variation) == "CardButton":
+			cards += 1
+			assert_false(raw.has((child as Button).icon), "The meal %s is drawn cooked" % (child as Button).text)
+	assert_eq(cards, 2, "(both meals looked at)")
+	var kitchen = load("res://scripts/entities/CraftingStation.gd").new("kitchen")
+	_cleanup_nodes.append(kitchen)
+	tree.root.add_child(kitchen)
+	await wait_frames(1)
+	for dish in config_node.DISHES:
+		assert_eq(UiKit.job_icon(kitchen, String(dish)), UiTheme.icon(String(config_node.dish_icon(dish))),
+			"The kitchen's card for %s shows it as it comes out; what goes in is its price" % dish)

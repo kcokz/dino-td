@@ -752,7 +752,7 @@ func _populate_hero_buttons() -> void:
 		build.name = "BuildCommand"
 		button_container.add_child(build)
 		var meals: int = _meals_cooked()
-		var eat := UiKit.command_button(tr("CMD_EAT"), UiTheme.icon("food"), _on_eat_pressed, tr("TIP_CMD_EAT"), meals)
+		var eat := UiKit.command_button(tr("CMD_EAT"), UiTheme.icon("roast"), _on_eat_pressed, tr("TIP_CMD_EAT"), meals)
 		eat.name = "EatCommand"
 		eat.disabled = meals <= 0 or _hero_is_eating()
 		button_container.add_child(eat)
@@ -767,8 +767,7 @@ func _populate_hero_buttons() -> void:
 		for entry in stock:
 			var key: String = String(entry["key"])
 			var dish: String = String(entry["dish"])
-			var eats: Dictionary = cfg.DISHES[dish].get("inputs", {}) if cfg else {}
-			var icon: Texture2D = UiTheme.icon(String(eats.keys()[0])) if not eats.is_empty() else null
+			var icon: Texture2D = UiTheme.icon(String(cfg.dish_icon(dish))) if cfg else null
 			var btn := _create_card_button("%s ×%d" % [_meal_name(dish, String(entry["method"])), int(entry["count"])],
 				icon, {}, func(): _trigger_eat(key))
 			UiKit.fill_caption_row(btn, cfg.describe_meal(cfg.meal_cooked(dish, String(entry["method"]))) if cfg else "")

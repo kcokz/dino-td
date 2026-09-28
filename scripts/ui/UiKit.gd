@@ -253,7 +253,11 @@ static func seconds_text(seconds: float) -> String:
 ## A job's icon: a meal is its meat, a beacon step is the beacon, a tool is what it works on,
 ## anything else is the bench's own.
 static func job_icon(station: Node, job_id: String) -> Texture2D:
+	# A dish is drawn as it comes out, cooked (Config.dish_icon): what goes in is its price row.
 	if station.has_method("is_dish") and station.is_dish(job_id):
+		var cfg_dish = _config()
+		if cfg_dish and cfg_dish.has_method("dish_icon"):
+			return UiTheme.icon(String(cfg_dish.dish_icon(job_id)))
 		for res_id in station.inputs_of(job_id):
 			return UiTheme.icon(String(res_id))
 	if station.has_method("is_beacon_job") and station.is_beacon_job(job_id):

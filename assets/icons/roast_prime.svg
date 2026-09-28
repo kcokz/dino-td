@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M 11 32 C 9 20 21 11 33 12 C 47 13 55 23 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 Z" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="49.00,4.00 51.53,10.52 58.51,10.91 53.09,15.33 54.88,22.09 49.00,18.30 43.12,22.09 44.91,15.33 39.49,10.91 46.47,10.52" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 11 32 C 9 20 21 11 33 12 C 47 13 55 23 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 Z" fill="#a65b27"/>
+  <polygon points="49.00,4.00 51.53,10.52 58.51,10.91 53.09,15.33 54.88,22.09 49.00,18.30 43.12,22.09 44.91,15.33 39.49,10.91 46.47,10.52" fill="#f2c14e"/>
+  <path d="M 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 C 18 44 38 49 53 35 Z" fill="#6c3616"/>
+  <path d="M 51 31 C 51 43 41 51 29 51" fill="none" stroke="#e9b765" stroke-width="4.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 17 24 L 27 34 M 24 17 L 37 30 M 33 16 L 42 25" fill="none" stroke="#3e1d0b" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="22" cy="20" rx="5" ry="2.6" fill="#e0a25a" transform="rotate(-35 22 20)"/>
+  <polygon points="49.00,4.00 51.53,10.52 58.51,10.91 53.09,15.33 54.88,22.09 49.00,18.30 43.12,22.09 44.91,15.33 39.49,10.91 46.47,10.52" fill="#f2c14e"/>
+  <path d="M 9 22 C 5 17 13 14 9 7" fill="none" stroke="#f4eee4" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
