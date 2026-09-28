@@ -1572,7 +1572,7 @@ func _get_grid_manager() -> Node:
 
 ## A dinosaur taking fire used to look identical to one that was not.
 func _on_hit_fx() -> void:
-	_ensure_feedback_nodes(1.1, false)
+	_ensure_feedback_nodes(_declared_size().y + _feedback_number("health_bar_lift", 0.2), false)
 	_refresh_health_bar()
 	var fx = _get_fx()
 	if fx:
@@ -1606,6 +1606,7 @@ func _ensure_feedback_nodes(bar_height: float, want_ring: bool) -> void:
 			status_bar = bar_script.new()
 			status_bar.name = "StatusBar"
 			status_bar.position = Vector3(0.0, bar_height, 0.0)
+			status_bar.size_scale = boss_bar_scale()
 			add_child(status_bar)
 	if want_ring and (selection_ring == null or not is_instance_valid(selection_ring)):
 		selection_ring = find_child("SelectionRing", true, false)
@@ -1615,6 +1616,20 @@ func _ensure_feedback_nodes(bar_height: float, want_ring: bool) -> void:
 				selection_ring = ring_script.new()
 				selection_ring.name = "SelectionRing"
 				add_child(selection_ring)
+
+## How much longer than an ordinary animal's its bar is drawn: a boss's stands out over it
+## (Config.FEEDBACK.boss_bar_scale, by DINOS[..].boss), where a bar across the screen would not
+## belong in a game that looks like the world.
+func boss_bar_scale() -> float:
+	var cfg = _get_config()
+	if cfg == null or not cfg.DINOS.has(dino_type):
+		return 1.0
+	var rank: String = String(cfg.DINOS[dino_type].get("boss", ""))
+	return float(cfg.FEEDBACK.get("boss_bar_scale", {}).get(rank, 1.0)) if rank != "" else 1.0
+
+func _feedback_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.FEEDBACK.get(key, fallback)) if (cfg and "FEEDBACK" in cfg) else fallback
 
 func _refresh_health_bar() -> void:
 	if status_bar == null or not is_instance_valid(status_bar):

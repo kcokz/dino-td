@@ -31,6 +31,9 @@ var _fill_mat: StandardMaterial3D = null
 var _width: float = 1.1
 var _height: float = 0.13
 var _last_ratio: float = -1.0
+## How many times its usual length it is drawn: set before it enters the tree (a boss's is longer,
+## Config.FEEDBACK.boss_bar_scale). Its thickness grows by the square root.
+var size_scale: float = 1.0
 var _last_colour: Color = Color.BLACK
 
 func _ready() -> void:
@@ -47,6 +50,8 @@ func _build() -> void:
 	if cfg and "FEEDBACK" in cfg:
 		_width = float(cfg.FEEDBACK.get("health_bar_width", _width))
 		_height = float(cfg.FEEDBACK.get("health_bar_height", _height))
+	_width *= size_scale
+	_height *= sqrt(size_scale)
 
 	_back = _make_quad(Color(0.05, 0.05, 0.06, 0.8), _width, _height, 0.0, 0)
 	_back.position = Vector3.ZERO

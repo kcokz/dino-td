@@ -1209,9 +1209,6 @@ const THEME: Dictionary = {
 		# A meal's boost (v0.6 round two: "boost 要比较清楚地显示在移动速度、血量上面"): gold, on
 		# his bars over what he has of his own, at his feet, and in the words that rise off him.
 		"boost": Color(0.97, 0.77, 0.3),
-		# A boss's life (BossBar): a deeper crimson than danger's red, which is any bar running low
-		# -- a boss's is its own thing, full or not.
-		"boss": Color(0.62, 0.11, 0.08),
 		# Ink: text on a card's hide -- a card's name and price, a tooltip. Since v0.6 round three
 		# the hide is dark vellum, so the ink is pale; "ink_short" is a count he is short of, as
 		# danger_text is on stone.
@@ -1274,7 +1271,7 @@ const THEME: Dictionary = {
 	# How thick a bar is drawn, and a pip -- a short dash, so the stages read as one row. A
 	# bar is a groove with pigment in it: "fill_inset" is the groove's wall showing above and
 	# below the pigment.
-	"thickness": {"bar": 12, "pip": 6, "boss_bar": 14},
+	"thickness": {"bar": 12, "pip": 6},
 	"fill_inset": 2,
 	# Motion. A card pops in over this long, from this much of its size -- a nudge, not a
 	# zoom; the command card fades in from this much when it changes to another unit.
@@ -1292,13 +1289,6 @@ const THEME: Dictionary = {
 	# An empty one keeps the rules' gilt lozenge at its middle, this faint (over the slot's own
 	# dimming): there to be seen, not read as something he has.
 	"empty_mark_alpha": 0.6,
-	# A boss's bar (BossBar, v0.6 round three -- the D4 / Elden Ring way): a hit leaves the part it
-	# took lit this long -- held while the blows keep coming -- then drains it at this share of the
-	# bar a second, so a big blow reads as big and a flurry as one; when the boss falls its empty
-	# bar stays this long, so the kill is seen, and fades.
-	"boss_trail_hold": 0.6,
-	"boss_trail_drain": 0.9,
-	"boss_bar_linger": 1.5,
 	"pop_scale": 0.96,
 	"settle_alpha": 0.35,
 	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.
@@ -1452,6 +1442,14 @@ const FEEDBACK: Dictionary = {
 	"debris_lifetime": 0.7,           # 碎块存在时长（秒）
 	"health_bar_width": 1.1,          # 血条宽度（米）
 	"health_bar_height": 0.13,        # 血条高度（米）
+	# A bar stands this far over the top of what it belongs to (Dino: its declared height), so a
+	# big animal's is not buried in its back.
+	"health_bar_lift": 0.2,
+	# A boss is told apart in the world, not by a bar across the screen (v0.6 round three: "血槽不要
+	# 画大……真实感的游戏，你可以把boss恐龙通过一些方法突出出来，比如掉血的时候血量大点"): the bar over it,
+	# shown once it is hurt, is this many times as long -- and as thick by the square root, so it is
+	# a longer bar and not a slab. By Config.DINOS[..].boss.
+	"boss_bar_scale": {"minor": 1.6, "major": 2.4},
 	# A building with nothing to report shows no name. Without this a fence of twenty
 	# stakes writes "Wooden Stakes" twenty times across the middle of the screen.
 	"name_label_hide_when_idle": true,

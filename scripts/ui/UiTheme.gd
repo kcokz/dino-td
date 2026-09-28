@@ -347,9 +347,6 @@ static func build() -> Theme:
 	_title(t, "TitleLabel", display_font("black", letter_spacing("title")), "title")
 	_title(t, "DisplayLabel", display_font("black", letter_spacing("display")), "display", 8)
 	_title(t, "StatLabel", display_font("black"), "title")
-	# A boss's name over its bar (BossBar): cut in capitals like a heading, and edged, because
-	# it stands on the world rather than on a panel.
-	_title(t, "BossNameLabel", display_font("bold", letter_spacing("heading")), "heading", 6)
 	# The same figures on a pale hide -- a card's price and time -- in ink.
 	_label(t, "CardNumberLabel", font("bold", true), "small", color("ink"))
 	_label(t, "CardShortLabel", font("black", true), "small", color("ink_short"))
@@ -529,7 +526,7 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "ProgressBar", font_size("caption"))
 	t.set_color("font_color", "ProgressBar", color("text"))
 	for pair in [["HealthBar", color("success")], ["WarnBar", color("warning")], ["DangerBar", color("danger")],
-			["BeaconBar", color("tech")], ["BoostBar", color("boost")], ["BossLifeBar", color("boss")]]:
+			["BeaconBar", color("tech")], ["BoostBar", color("boost")]]:
 		t.set_type_variation(pair[0], "ProgressBar")
 		t.set_stylebox("background", pair[0], trough)
 		t.set_stylebox("fill", pair[0], _pigment("paint", pair[1]))

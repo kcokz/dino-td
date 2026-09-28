@@ -814,9 +814,7 @@ func _scenario_ui() -> void:
 		eb.unit_selected.emit(wall)
 		await _wait(8)
 		await _shoot("bitten_fence")
-	# The map's boss out, hit hard a moment ago: its bar low across the field, the blow still lit
-	# -- and him fed, so the meal's chip is beside his medallion, as long as it gets.
-	gs.eat("prime_meat")
+	# The map's boss out and hurt: the longer bar over it that tells it from the rank and file.
 	var species: String = String(gs.map_data()["boss"])
 	var boss = load(String(cfg.get_dino_script_path(species))).new()
 	_main.add_child(boss)
@@ -827,7 +825,7 @@ func _scenario_ui() -> void:
 	await _wait(10)
 	boss.take_damage(boss.max_hp * 0.35)
 	await _wait(4)
-	await _shoot("boss_bar")
+	await _shoot("boss_hurt")
 
 ## The build menu (v0.6): a hide card for each thing the known materials build -- wood's, and
 ## bone's once the first bone is in -- priced, the trip bow within the stock; then,
