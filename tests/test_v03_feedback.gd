@@ -71,28 +71,40 @@ func test_01_fx_autoload_is_registered_and_has_its_sounds() -> void:
 	for key in ["HIT", "DEATH", "BUILD_DONE", "RAID_WARNING"]:
 		assert_true(fx_node.Sound.has(key), "Fx knows the %s sound" % key)
 
-	# Sounds are synthesised rather than shipped, so there is no import step to fail
-	# and no binary asset in the repo.
-	for id in [fx_node.Sound.HIT, fx_node.Sound.DEATH, fx_node.Sound.BUILD_DONE, fx_node.Sound.RAID_WARNING]:
-		var stream = fx_node._streams.get(id, null)
-		assert_not_null(stream, "Sound %d was built at startup" % id)
-		assert_true(stream is AudioStreamWAV, "It is a real stream")
-		assert_gt(stream.data.size(), 0, "With actual samples in it")
+	# Since v0.6 round three the sounds are files (tools/build_sounds.gd, Config.SOUNDS): each old
+	# name is one of them, and every file of every sound is there and loads with something in it.
+	var table: Dictionary = config_node.SOUNDS
+	for which in fx_node.SOUND_IDS:
+		assert_true(table["sounds"].has(fx_node.SOUND_IDS[which]), "The old name %d is a sound of Config.SOUNDS" % which)
+	for id in table["sounds"]:
+		for f in table["sounds"][id]["files"]:
+			var path: String = String(table["dir"]) + String(f) + ".wav"
+			assert_true(ResourceLoader.exists(path), "%s's file %s is there" % [id, path])
+			var stream = load(path)
+			assert_true(stream is AudioStream, "It is a real stream")
+			if stream is AudioStream:
+				assert_gt(stream.get_length(), 0.0, "With something in it")
 
 func test_02_playing_a_sound_is_safe_and_cycles_voices() -> void:
 	# Feedback must never be able to break the simulation, so every entry point has
 	# to survive being called in a headless run with no audio device.
-	var before: int = fx_node._next_voice
+	fx_node._last_in_class.clear()
+	var heard: Array = []
+	var ear := func(id: String, _at: Vector3) -> void: heard.append(id)
+	fx_node.played.connect(ear)
 	fx_node.play(fx_node.Sound.HIT)
-	assert_ne(fx_node._next_voice, before, "Playing advances to the next voice")
+	assert_true(heard.has(String(fx_node.SOUND_IDS[fx_node.Sound.HIT])), "An old name plays its sound")
 
 	# Several in a row must not pile up on one player or run off the end.
 	for i in range(fx_node.VOICE_COUNT * 2):
-		fx_node.play(fx_node.Sound.HIT)
+		fx_node.play_ui("ui_click")
+		fx_node.play_at("chop", Vector3(float(i), 0.0, 0.0))
 	assert_lt(fx_node._next_voice, fx_node._voices.size(), "Voice index stays in range")
+	assert_lt(fx_node._next_player, fx_node._players.size(), "and so does the world's")
 
 	fx_node.play(-999) # unknown sound
-	assert_true(true, "An unknown sound id is ignored rather than crashing")
+	assert_false(fx_node.play_at("no_such_sound", Vector3.ZERO), "An unknown sound id is ignored rather than crashing")
+	fx_node.played.disconnect(ear)
 
 func test_03_flash_and_debris_tolerate_junk_input() -> void:
 	fx_node.flash(null)
@@ -347,9 +359,9 @@ func test_14_feedback_numbers_all_live_in_config() -> void:
 
 func test_15_audio_can_be_switched_off_wholesale() -> void:
 	# A single switch for anyone who needs the game silent, including test runs.
-	var before: int = fx_node._next_voice
-	fx_node.play(fx_node.Sound.HIT)
-	assert_ne(fx_node._next_voice, before, "Sound plays while enabled")
+	fx_node._last_in_class.clear()
+	assert_true(bool(config_node.FEEDBACK["audio_enabled"]), "Sound is on")
+	assert_true(fx_node.play_at("strike", Vector3.ZERO), "and plays while enabled")
 
 # ==============================================================================
 # 7. The ring traces the base; nothing decorative casts a shadow

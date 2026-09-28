@@ -56,6 +56,7 @@ func _place_herd(spec: Dictionary) -> void:
 	for i in range(int(spec.get("count", 1))):
 		var animal := Node3D.new()
 		animal.name = "%s_%d" % [String(spec.get("species", "animal")), i]
+		animal.set_meta(&"species", String(spec.get("species", "")))
 		add_child(animal)
 		var art: Node3D = packed.instantiate()
 		animal.add_child(art)
@@ -118,11 +119,29 @@ func _amble(animal: Node3D, player: AnimationPlayer, home: Vector3, speed: float
 		var ahead := Vector3(target.x, animal.position.y, target.z)
 		if animal.position.distance_to(ahead) > 0.05:
 			animal.look_at(ahead, Vector3.UP)
-		player.play("walk", 0.3))
+		player.play("walk", 0.3)
+		_maybe_call(animal))
 	tw.tween_property(animal, "position", target, walk_time)
 	tw.tween_callback(func():
 		player.play("idle", 0.3)
 		_amble(animal, player, home, speed, clear))
+
+## Now and then an animal calls as it sets off (Config.SOUNDS.herd_call_chance): "<species>_call",
+## heard from up on the valley wall. Its own dice -- the herds' are for where they graze.
+var _voice_dice: RandomNumberGenerator = null
+
+func _maybe_call(animal: Node3D) -> void:
+	if not is_instance_valid(animal) or not animal.is_inside_tree():
+		return
+	if _voice_dice == null:
+		_voice_dice = RandomNumberGenerator.new()
+		_voice_dice.randomize()
+	var chance: float = float(_cfg.SOUNDS.get("herd_call_chance", 0.3)) if "SOUNDS" in _cfg else 0.0
+	if _voice_dice.randf() >= chance:
+		return
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("play_at"):
+		fx.play_at(String(animal.get_meta(&"species", "")) + "_call", animal.global_position + Vector3(0.0, 1.0, 0.0))
 
 func _player_of(art: Node) -> AnimationPlayer:
 	var found: Array = art.find_children("*", "AnimationPlayer", true, false)

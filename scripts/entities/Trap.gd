@@ -320,8 +320,8 @@ func loose(on_wire: Array) -> int:
 	_show_draw(0.0)
 	_fly_shot(end_point)
 	var fx = _get_fx()
-	if fx:
-		fx.play(fx.Sound.TWANG)
+	if fx and fx.has_method("play_at"):
+		fx.play_at("trap_twang", global_position + Vector3(0.0, 0.5, 0.0))
 	_update_info_label()
 	return hit
 

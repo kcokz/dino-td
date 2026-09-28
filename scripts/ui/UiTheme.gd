@@ -351,6 +351,8 @@ static func build() -> Theme:
 	_label(t, "CardNumberLabel", font("bold", true), "small", color("ink"))
 	_label(t, "CardShortLabel", font("black", true), "small", color("ink_short"))
 	_label(t, "CardCaptionLabel", font("medium"), "caption", color("ink_faint"))
+	# What he says, on its small card over his head (HUD speech bubble): his words in the pale ink.
+	_label(t, "SpeechLabel", font("medium"), "small", color("ink"))
 	# The key that presses a command, on a chip of the dark in its corner (UiKit.keycap): a
 	# figure in gilt, rimmed in bronze -- small, as the bars in D4 and Elden Ring mark theirs.
 	_label(t, "KeycapLabel", font("bold", true), "caption", color("title"))

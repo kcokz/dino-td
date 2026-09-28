@@ -241,3 +241,13 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-26
 - **Usage**: Behind the pause menu, the results card and the cabin screen.
+
+## 5. Sound
+
+### The Game's Sounds (`assets/audio/*.wav`)
+- **Asset Name**: Every sound the game plays -- each animal's calls, alert, bite, hurt and death (Coelophysis, its alpha, Postosuchus, Placerias), the Postosuchus's roar, his work (axe in wood, pick on stone, mallet on a stake, a blow landing, being bitten, eating), buildings bitten (timber, stone, the cabin's plate), completed and broken, a bowstring, a tool finished, a meal cooked, the beacon's tones, the pack calling from the nest as the raid's warning, a button's click, and ten looping seconds of the valley (wind, insects, the river)
+- **Source**: `tools/build_sounds.gd` (synthesised by rule, nothing recorded or downloaded: animals as a pulsed source through the formants of their tract, their voices chosen from what is known of their living kin; struck things as damped modes and a burst of noise; the valley's space as a small reverb and echoes)
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+- **License**: CC0 1.0 Universal (Public Domain Dedication)
+- **Date Added**: 2026-09-28
+- **Usage**: `Config.SOUNDS`; played in the world by `Fx.play_at` (positional), the interface by `Fx.play_ui`, the valley by `Fx.start_ambience`.

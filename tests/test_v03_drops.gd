@@ -350,9 +350,11 @@ func test_18_a_paused_game_does_not_age_the_ground() -> void:
 
 func test_19_there_is_a_sound_for_picking_something_up() -> void:
 	assert_true(fx_node.Sound.has("PICKUP"), "Collection has a voice of its own")
-	var stream = fx_node._streams.get(fx_node.Sound.PICKUP, null)
-	assert_not_null(stream, "Synthesised at startup like the rest")
-	assert_gt(stream.data.size(), 0, "With actual samples in it")
+	var id: String = String(fx_node.SOUND_IDS[fx_node.Sound.PICKUP])
+	var table: Dictionary = tree.root.get_node("Config").SOUNDS
+	assert_true(table["sounds"].has(id), "a sound of Config.SOUNDS")
+	var stream = load(String(table["dir"]) + String(table["sounds"][id]["files"][0]) + ".wav")
+	assert_true(stream is AudioStream and stream.get_length() > 0.0, "With something in it")
 
 func test_20_a_single_unit_carries_no_label_but_a_pile_does() -> void:
 	# A field of "1"s is noise; "12" is information.

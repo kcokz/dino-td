@@ -91,6 +91,12 @@ func _ready() -> void:
 	# health, which is exactly what it is supposed to stay out of the way for.
 	_refresh_health_bar()
 	_connect_feedback_events()
+	# What he says as he goes (HeroVoice).
+	if find_child("Voice", false, false) == null:
+		var voice := HeroVoice.new()
+		voice.name = "Voice"
+		voice.hero = self
+		add_child(voice)
 	_load_config()
 	_connect_event_bus()
 
@@ -460,6 +466,12 @@ func _process_building(delta: float) -> void:
 	# unfinished thing gets raised, a damaged one gets patched. A good meal speeds
 	# both, because they are the same work.
 	var work: float = delta * work_rate()
+	# And it is heard: a knock every so often while he is at it (Config.SOUNDS.hammer_every).
+	_hammer_clock += delta
+	var every: float = _sound_number("hammer_every", 0.55)
+	if _hammer_clock >= every:
+		_hammer_clock -= every
+		_sound_at("hammer", (target_building as Node3D).global_position)
 	if "is_constructed" in target_building and target_building.is_constructed:
 		# An upgrade under way comes before any patching: it is new work, and paid for.
 		if target_building.has_method("is_upgrading") and target_building.is_upgrading():
@@ -562,6 +574,7 @@ func _process_attacking(delta: float) -> void:
 			p_dur = float(cfg.HERO.get("provoke_duration", 5.0))
 		provoke_timer = p_dur
 		if target_enemy.has_method("take_damage"):
+			_sound_at("strike", target_enemy.global_position + Vector3(0.0, 0.6, 0.0))
 			target_enemy.take_damage(damage)
 
 func _process_harvesting(delta: float) -> void:
@@ -601,6 +614,10 @@ func _process_harvesting(delta: float) -> void:
 		# His tools make every stroke count for more, and the pile says so when he picks
 		# it up: the axe he made is felt, and seen, each time he uses it (GAME-DESIGN 4.6).
 		var stroke: int = _stroke_yield(res_type)
+		# Each stroke is heard as what it strikes: an axe in wood, a pick on stone (SOUNDS.harvest).
+		var cfg_s = _get_config()
+		if cfg_s and "SOUNDS" in cfg_s and cfg_s.SOUNDS.get("harvest", {}).has(res_type):
+			_sound_at(String(cfg_s.SOUNDS["harvest"][res_type]), (target_resource_node as Node3D).global_position)
 		var yielded: int = target_resource_node.harvest(stroke) if (stroke > 0 and target_resource_node.has_method("harvest")) else 0
 		if yielded > 0:
 			# Even what the Hero digs up himself lands on the ground first. He is
@@ -1082,6 +1099,7 @@ func order_eat(key: String) -> bool:
 	_meal_in_hand = key
 	_eat_left = _eating_number("eat_seconds", 2.5)
 	current_state = State.EATING
+	_sound_at("eat", global_position + Vector3(0.0, 1.0, 0.0))
 	_take_the_meal(key)
 	return true
 
@@ -1214,6 +1232,19 @@ func walk_speed() -> float:
 	var gs = _get_game_state()
 	return speed * (float(gs.move_multiplier()) if gs and gs.has_method("move_multiplier") else 1.0)
 
+## Sound `id` in the world at `where` (Fx.play_at).
+func _sound_at(id: String, where: Vector3) -> void:
+	var fx = _get_fx()
+	if fx and fx.has_method("play_at"):
+		fx.play_at(id, where)
+
+func _sound_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.SOUNDS.get(key, fallback)) if (cfg and "SOUNDS" in cfg) else fallback
+
+## How far into the next knock of his hammer he is (Config.SOUNDS.hammer_every).
+var _hammer_clock: float = 0.0
+
 func take_damage(amount: float) -> void:
 	if current_state == State.DEAD or amount <= 0.0:
 		return
@@ -1223,7 +1254,7 @@ func take_damage(amount: float) -> void:
 	var fx = _get_fx()
 	if fx:
 		fx.flash(mesh_instance)
-		fx.play(fx.Sound.HIT)
+	_sound_at("hero_hurt", global_position + Vector3(0.0, 1.0, 0.0))
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("hero_hp_changed"):
 		eb.hero_hp_changed.emit(current_hp, max_hp)

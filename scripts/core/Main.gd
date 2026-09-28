@@ -78,6 +78,15 @@ func _ready() -> void:
 	_wire_signals()
 	setup_level()
 	_ensure_nav_maps()
+	# The valley under everything: wind, insects, the river (Config.SOUNDS.ambience).
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("start_ambience"):
+		fx.start_ambience()
+
+func _exit_tree() -> void:
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("stop_ambience"):
+		fx.stop_ambience()
 
 ## The navigation meshes, baked from this level's own colliders. See NavMaps.gd.
 ##

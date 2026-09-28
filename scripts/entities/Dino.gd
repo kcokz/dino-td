@@ -190,6 +190,8 @@ func _ready() -> void:
 	# it lands -- and after that each thinks at its own moments (_next_think).
 	_think_clock = 0.0
 	_route_clock = 0.0
+	# Not all on the same beat: the first call anywhere in its first stretch (SOUNDS.call_every).
+	_call_clock = _next_call() * _voice_dice.randf()
 
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -201,6 +203,9 @@ func _connect_event_bus() -> void:
 	if eb and eb.has_signal("building_completed"):
 		if not eb.building_completed.is_connected(_on_world_changed):
 			eb.building_completed.connect(_on_world_changed)
+	if eb and eb.has_signal("boss_arrived"):
+		if not eb.boss_arrived.is_connected(_on_boss_arrived):
+			eb.boss_arrived.connect(_on_boss_arrived)
 
 func _exit_tree() -> void:
 	if _agent.is_valid():
@@ -213,6 +218,9 @@ func _exit_tree() -> void:
 	if eb and is_instance_valid(eb) and eb.has_signal("building_completed"):
 		if eb.building_completed.is_connected(_on_world_changed):
 			eb.building_completed.disconnect(_on_world_changed)
+	if eb and is_instance_valid(eb) and eb.has_signal("boss_arrived"):
+		if eb.boss_arrived.is_connected(_on_boss_arrived):
+			eb.boss_arrived.disconnect(_on_boss_arrived)
 	if current_target != null:
 		release_attack_slot(current_target, self)
 	assigned_slot = Vector3.ZERO
@@ -451,6 +459,10 @@ func _physics_process(delta: float) -> void:
 	var was_at: Vector3 = global_position
 	advance_towards_waypoint(delta)
 	_report_pace(was_at, delta)
+	_call_clock -= delta
+	if _call_clock <= 0.0:
+		_call_clock = _next_call()
+		say("call")
 
 ## Tells the animator how far it really went this frame: a raptor held up at a gap stands
 ## rather than running on the spot (ActorAnimator.update_motion).
@@ -579,6 +591,8 @@ func _unstack() -> void:
 func _take(target: Node, new_mode: Mode) -> void:
 	if current_target != null and current_target != target:
 		release_attack_slot(current_target, self)
+	if target != current_target and target != null:
+		_alert()
 	current_target = target
 	assigned_slot = claim_attack_slot(target, self) if _is_building(target) else Vector3.ZERO
 	_set_mode(new_mode)
@@ -1256,6 +1270,7 @@ func attack_target(target: Node) -> void:
 	# calling this directly.
 	if _is_target_valid(target) and _target_in_reach(target, _ai("reach_release", 0.35)):
 		target.take_damage(damage)
+		say("bite")
 
 ## How long this animal has spent against spikes; which physics frame it last heard from one; and
 ## the longest stretch reported in that frame.
@@ -1300,6 +1315,11 @@ func take_damage(amount: float) -> void:
 	_on_hit_fx()
 	if is_nan(current_hp) or is_inf(current_hp) or current_hp <= 0.0:
 		die()
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _hurt_said_at >= int(_sound_number("hurt_every", 0.7) * 1000.0):
+		_hurt_said_at = now
+		say("hurt")
 
 ## Executes fatal death sequence.
 func die() -> void:
@@ -1567,6 +1587,63 @@ func _get_grid_manager() -> Node:
 	return get_tree().get_first_node_in_group("grid_manager")
 
 # ==============================================================================
+# Its voice (v0.6 round three: "恐龙音效不同恐龙尽量不同，这样有区分度")
+# ==============================================================================
+
+## Seconds to its next call on the march or at its post (Config.SOUNDS.call_every), counted in
+## the game's own time, so a paused raid is a quiet one.
+var _call_clock: float = -1.0
+var _alert_said_at: int = -100000
+var _hurt_said_at: int = -100000
+## Its own dice for when it calls: decoration, never the run's (GameState.rng).
+var _voice_dice: RandomNumberGenerator = null
+
+## What its sounds are called: Config.DINOS[..].voice, or its own name -- the voice's sounds are
+## "<voice>_call", "_alert", "_bite", "_hurt", "_death" and, for a boss, "_roar" (Config.SOUNDS).
+func voice() -> String:
+	var cfg = _get_config()
+	if cfg and "DINOS" in cfg and cfg.DINOS.has(dino_type):
+		return String(cfg.DINOS[dino_type].get("voice", dino_type))
+	return dino_type
+
+## Says `kind` from where its head is: heard from its side of the screen, fainter the further off
+## (Fx.play_at). False if not -- no such sound for it, or its kind are all talking already.
+func say(kind: String) -> bool:
+	var fx = _get_fx()
+	if fx == null or not fx.has_method("play_at") or not is_inside_tree():
+		return false
+	return fx.play_at(voice() + "_" + kind, global_position + Vector3(0.0, _declared_size().y * 0.7, 0.0))
+
+## Calls out as it goes for something new -- not again for a while (SOUNDS.alert_every).
+func _alert() -> void:
+	var now: int = Time.get_ticks_msec()
+	if now - _alert_said_at < int(_sound_number("alert_every", 8.0) * 1000.0):
+		return
+	_alert_said_at = now
+	say("alert")
+
+func _next_call() -> float:
+	if _voice_dice == null:
+		_voice_dice = RandomNumberGenerator.new()
+		_voice_dice.randomize()
+	var every: Vector2 = Vector2(6.0, 15.0)
+	var cfg = _get_config()
+	if cfg and "SOUNDS" in cfg:
+		every = cfg.SOUNDS.get("call_every", every)
+	return _voice_dice.randf_range(every.x, every.y)
+
+## A boss taking the field is heard across the valley: its roar, or its alert if it has none.
+func _on_boss_arrived(dino: Node) -> void:
+	if dino != self or is_dead:
+		return
+	if not say("roar"):
+		say("alert")
+
+func _sound_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.SOUNDS.get(key, fallback)) if (cfg and "SOUNDS" in cfg) else fallback
+
+# ==============================================================================
 # Feedback hooks (v0.3)
 # ==============================================================================
 
@@ -1588,7 +1665,7 @@ func _on_death_fx() -> void:
 	if cfg and "COLORS" in cfg and cfg.COLORS.has(dino_type):
 		colour = cfg.COLORS[dino_type]
 	fx.debris(global_position, colour)
-	fx.play(fx.Sound.DEATH)
+	say("death")
 
 func _get_fx() -> Node:
 	if is_inside_tree():

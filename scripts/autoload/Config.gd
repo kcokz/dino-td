@@ -1425,6 +1425,10 @@ const UI: Dictionary = {
 	"hero_emblem_scale": 0.8,
 	"toast_top": 132,                  # where the centre toasts start, under the cabin's medallion
 	"toast_max_width": 560,            # a longer toast wraps inside this
+	# What he says (HUD speech bubble): no wider than this before it wraps, and standing this high
+	# over his feet (metres) -- clear of his head, he is 1.2 m.
+	"speech_max_width": 300,
+	"speech_above": 1.8,
 	"paused_word_bottom": 150,         # "PAUSED" sits this far above the bottom edge
 	"result_card_width": 560,
 	"menu_width": 400,
@@ -1488,6 +1492,153 @@ const FEEDBACK: Dictionary = {
 	"hover_ring_color": Color(1.0, 1.0, 1.0, 0.55),
 	"audio_volume_db": -8.0,
 	"audio_enabled": true,
+}
+
+## What he says, and when (HeroVoice; v0.6 round three: "人自己也需要有些滚动的话在移动的时候idle的时候
+## 说，做事情说做的事情等"). The words are strings.csv's BARK_<SITUATION>_<n>, one to "count"; this is
+## how often. A line stays over his head a time by its length, between the least and the most.
+const BARKS: Dictionary = {
+	"seconds_per_char": 0.07,
+	"min_seconds": 2.2,
+	"max_seconds": 5.0,
+	# No sooner than this after his last line, unless the new one is urgent: a man who talks all
+	# the time is noise, and the lines that matter would be lost in it.
+	"gap": 7.0,
+	# Left standing this long, he talks to himself -- and then again every so often.
+	"idle_after": 14.0,
+	"idle_every": Vector2(28.0, 55.0),
+	# At work on a node: which situation it is, by what the node gives.
+	"harvest": {"wood": "chop", "stone": "quarry"},
+	# A recording of a line, if one is ever made: <key in lower case>.ogg or .wav here.
+	"voice_dir": "res://assets/audio/voice/",
+	# Each situation: how many lines it has; how likely he says one when it happens; how long
+	# before he says one about it again; and whether it cuts in whenever (urgent).
+	"lines": {
+		"move": {"count": 6, "chance": 0.3, "again": 12.0},
+		"idle": {"count": 10, "chance": 1.0, "again": 0.0},
+		"chop": {"count": 5, "chance": 0.5, "again": 45.0},
+		"quarry": {"count": 4, "chance": 0.5, "again": 45.0},
+		"build": {"count": 5, "chance": 0.5, "again": 30.0},
+		"repair": {"count": 3, "chance": 0.6, "again": 30.0},
+		"eat": {"count": 4, "chance": 0.8, "again": 20.0},
+		"fight": {"count": 5, "chance": 0.5, "again": 15.0},
+		"hurt": {"count": 4, "chance": 1.0, "again": 12.0, "urgent": true},
+		"kill": {"count": 4, "chance": 0.4, "again": 12.0},
+		"raid": {"count": 4, "chance": 1.0, "again": 30.0, "urgent": true},
+		"raid_over": {"count": 4, "chance": 0.8, "again": 30.0},
+		"leader": {"count": 3, "chance": 1.0, "again": 60.0, "urgent": true},
+		"boss": {"count": 3, "chance": 1.0, "again": 60.0, "urgent": true},
+		"tool": {"count": 3, "chance": 1.0, "again": 5.0},
+		"beacon_stage": {"count": 3, "chance": 1.0, "again": 5.0},
+		"launched": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
+		"enter": {"count": 3, "chance": 0.5, "again": 30.0},
+		"leave": {"count": 2, "chance": 0.4, "again": 30.0},
+	},
+}
+
+# ==============================================================================
+# Sound (v0.6 round three: "你就做音效吧，恐龙音效不同恐龙尽量不同，这样有区分度")
+# ==============================================================================
+## Every sound the game plays, by what it is. The files are made by tools/build_sounds.gd -- how
+## each SOUNDS is written there, with the palaeontology it follows -- and this is how they are
+## played: which files are one sound (a variant picked at random each time, the engine's
+## AudioStreamRandomizer, so a pack is not one animal copied), how loud, how far the pitch wanders
+## between plays, and how far it carries.
+##
+## Almost everything is played IN the world (Fx.play_at): a raptor off the left of the screen is
+## heard on the left, and one at the far end of the valley is faint. The listener stands between
+## the ground the camera looks at and the camera ("listener_lift"), so zooming out does not turn
+## the world down, and turning the view turns the sound with it.
+const SOUNDS: Dictionary = {
+	"dir": "res://assets/audio/",
+	# Players in the world at once. More than the limiter below ever lets through, with room.
+	"world_players": 16,
+	"listener_lift": 0.3,
+	# How near a sound is heard at its own loudness, and how far it is heard at all (metres):
+	# Godot's inverse-distance falloff. A sound's own "unit" and "reach" override them.
+	"unit": 7.0,
+	"reach": 70.0,
+	# No more than this many of a class at once, and no sooner than this after the last: a pack
+	# of twelve biting a gate is a clatter, not a wall of noise; a herd calls one at a time.
+	"classes": {
+		"call":   {"max": 2, "gap": 0.45},
+		"alert":  {"max": 2, "gap": 0.5},
+		"bite":   {"max": 4, "gap": 0.07},
+		"hurt":   {"max": 3, "gap": 0.12},
+		"death":  {"max": 3, "gap": 0.05},
+		"boss":   {"max": 1, "gap": 2.0},
+		"work":   {"max": 2, "gap": 0.1},
+		"impact": {"max": 4, "gap": 0.08},
+		"event":  {"max": 3, "gap": 0.05},
+		"ui":     {"max": 3, "gap": 0.03},
+	},
+	# An animal speaks now and then while it lives -- a raider on the march, a guard at the nest
+	# -- at a random moment in this range of seconds after the last; it calls out when it first
+	# goes for something (alert), and not again for "alert_every".
+	"call_every": Vector2(6.0, 15.0),
+	"alert_every": 8.0,
+	"hurt_every": 0.7,
+	# A herd animal calls when it sets off to amble, this often: now and then, from far off.
+	"herd_call_chance": 0.3,
+	# His work: a stroke on a node is the sound of what it is; building and mending, a knock
+	# this often.
+	"harvest": {"wood": "chop", "stone": "quarry"},
+	"hammer_every": 0.55,
+	# A building bitten sounds of what it is made of; the cabin is plate metal.
+	"hit_by_building": {"stone_wall": "stone_hit", "core": "hull_hit"},
+	"hit_default": "wood_hit",
+	# The valley under everything, not placed: wind, insects, the river.
+	"ambience": "ambience_valley",
+	"ambience_db": -21.0,
+	"sounds": {
+		# Coelophysis: a small, quick theropod -- high chitters and trills, hisses.
+		"coelophysis_call":  {"files": ["coelophysis_call_1", "coelophysis_call_2", "coelophysis_call_3"], "db": -5.0, "pitch": 1.1, "class": "call"},
+		"coelophysis_alert": {"files": ["coelophysis_alert"], "db": -3.0, "pitch": 1.08, "class": "alert"},
+		"coelophysis_bite":  {"files": ["coelophysis_bite_1", "coelophysis_bite_2"], "db": -4.0, "pitch": 1.1, "class": "bite"},
+		"coelophysis_hurt":  {"files": ["coelophysis_hurt_1", "coelophysis_hurt_2"], "db": -4.0, "pitch": 1.08, "class": "hurt"},
+		"coelophysis_death": {"files": ["coelophysis_death"], "db": -2.0, "pitch": 1.06, "class": "death"},
+		# Its alpha: the same throat, bigger -- lower, rougher, a honk; heard further.
+		"coelophysis_alpha_call":  {"files": ["coelophysis_alpha_call_1", "coelophysis_alpha_call_2"], "db": -3.0, "pitch": 1.05, "class": "call", "unit": 10.0},
+		"coelophysis_alpha_alert": {"files": ["coelophysis_alpha_alert"], "db": 0.0, "pitch": 1.03, "class": "boss", "unit": 22.0, "reach": 140.0},
+		"coelophysis_alpha_bite":  {"files": ["coelophysis_alpha_bite"], "db": -3.0, "pitch": 1.06, "class": "bite"},
+		"coelophysis_alpha_hurt":  {"files": ["coelophysis_alpha_hurt"], "db": -3.0, "pitch": 1.05, "class": "hurt"},
+		"coelophysis_alpha_death": {"files": ["coelophysis_alpha_death"], "db": 0.0, "pitch": 1.03, "class": "death", "unit": 12.0},
+		# Postosuchus: the crocodiles' side -- a bellow felt more than heard, a hiss, a jaw that claps.
+		# Its arrival is heard across the whole valley.
+		"postosuchus_call":  {"files": ["postosuchus_call_1", "postosuchus_call_2"], "db": 0.0, "pitch": 1.04, "class": "call", "unit": 16.0, "reach": 120.0},
+		"postosuchus_alert": {"files": ["postosuchus_hiss"], "db": -1.0, "pitch": 1.04, "class": "alert", "unit": 12.0},
+		"postosuchus_roar":  {"files": ["postosuchus_roar"], "db": 3.0, "pitch": 1.0, "class": "boss", "unit": 45.0, "reach": 220.0},
+		"postosuchus_bite":  {"files": ["postosuchus_bite"], "db": 0.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
+		"postosuchus_hurt":  {"files": ["postosuchus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
+		"postosuchus_death": {"files": ["postosuchus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
+		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
+		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
+		# His work.
+		"chop":     {"files": ["chop_1", "chop_2", "chop_3"], "db": -7.0, "pitch": 1.06, "class": "work"},
+		"quarry":   {"files": ["quarry_1", "quarry_2", "quarry_3"], "db": -9.0, "pitch": 1.06, "class": "work"},
+		"hammer":   {"files": ["hammer_1", "hammer_2", "hammer_3"], "db": -9.0, "pitch": 1.06, "class": "work"},
+		"strike":   {"files": ["strike"], "db": -5.0, "pitch": 1.1, "class": "work"},
+		"swing":    {"files": ["swing"], "db": -12.0, "pitch": 1.12, "class": "work"},
+		"hero_hurt": {"files": ["hero_hurt"], "db": -3.0, "pitch": 1.08, "class": "hurt"},
+		"eat":      {"files": ["eat"], "db": -8.0, "pitch": 1.05, "class": "work"},
+		"pickup":   {"files": ["pickup"], "db": -12.0, "pitch": 1.1, "class": "ui"},
+		# What is built, and what becomes of it.
+		"build_done": {"files": ["build_done"], "db": -5.0, "pitch": 1.04, "class": "event"},
+		"wood_hit":   {"files": ["wood_hit_1", "wood_hit_2"], "db": -10.0, "pitch": 1.1, "class": "impact"},
+		"stone_hit":  {"files": ["stone_hit"], "db": -10.0, "pitch": 1.1, "class": "impact"},
+		"hull_hit":   {"files": ["hull_hit"], "db": -9.0, "pitch": 1.08, "class": "impact"},
+		"wood_break": {"files": ["wood_break"], "db": -3.0, "pitch": 1.06, "class": "event"},
+		"trap_twang": {"files": ["trap_twang"], "db": -6.0, "pitch": 1.06, "class": "impact"},
+		"craft_done": {"files": ["craft_done"], "db": -5.0, "pitch": 1.0, "class": "event"},
+		"cook_done":  {"files": ["cook_done"], "db": -7.0, "pitch": 1.05, "class": "event"},
+		# The raid is heard before it is seen: the pack calling from the nest, far off.
+		"raid_warning": {"files": ["raid_warning"], "db": 2.0, "pitch": 1.0, "class": "boss", "unit": 40.0, "reach": 220.0},
+		# The ship's own voice.
+		"beacon_stage":  {"files": ["beacon_stage"], "db": -4.0, "pitch": 1.0, "class": "event", "unit": 14.0},
+		"beacon_launch": {"files": ["beacon_launch"], "db": -1.0, "pitch": 1.0, "class": "event", "unit": 30.0, "reach": 200.0},
+		"ui_click": {"files": ["ui_click"], "db": -16.0, "pitch": 1.05, "class": "ui"},
+		"ambience_valley": {"files": ["ambience_valley"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+	},
 }
 
 const NEST_GUARDS: Dictionary = {

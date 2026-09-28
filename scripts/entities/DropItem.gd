@@ -277,8 +277,8 @@ func collect(collector: Node = null) -> int:
 
 	var fx := _get_fx()
 	if fx:
-		if fx.has_method("play") and "Sound" in fx and fx.Sound.has("PICKUP"):
-			fx.play(fx.Sound.PICKUP)
+		if fx.has_method("play_at"):
+			fx.play_at("pickup", global_position)
 		if fx.has_method("floating_text"):
 			fx.floating_text(global_position, pickup_text(), _colour())
 

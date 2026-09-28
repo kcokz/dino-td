@@ -49,6 +49,10 @@ var fed_chip: Control = null
 ## screen -- it is the run's main line (GAME-DESIGN 14.3, 6: how far is the goal).
 var beacon_label: Label = null
 var objective_panel: Control = null
+## What he says, over his head (HeroVoice, EventBus.hero_spoke).
+var speech_bubble: PanelContainer = null
+var speech_label: Label = null
+var _speech_until_ms: int = 0
 var beacon_pips: HBoxContainer = null
 var beacon_bar: ProgressBar = null
 var wave_label: Label = null
@@ -111,9 +115,30 @@ func _ready() -> void:
 	_connect_event_bus()
 	_connect_buttons()
 	reset_hud()
+	# Every button of the interface, now and to come, clicks when pressed (Fx "ui_click"): the
+	# card's commands are made and unmade as it changes, so they are caught as they arrive.
+	for b in find_children("*", "BaseButton", true, false):
+		_click_when_pressed(b)
+	if not get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.connect(_on_node_added)
 
 func _exit_tree() -> void:
 	_disconnect_event_bus()
+	if get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.disconnect(_on_node_added)
+
+func _on_node_added(node: Node) -> void:
+	if node is BaseButton and is_ancestor_of(node):
+		_click_when_pressed(node)
+
+func _click_when_pressed(button: Node) -> void:
+	if not button.pressed.is_connected(_click):
+		button.pressed.connect(_click)
+
+func _click() -> void:
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("play_ui"):
+		fx.play_ui("ui_click")
 
 # ==============================================================================
 # EventBus Listeners
@@ -135,6 +160,51 @@ func _disconnect_event_bus() -> void:
 		if (pair[0] as Signal).is_connected(pair[1]):
 			(pair[0] as Signal).disconnect(pair[1])
 
+## He said something: the words over his head for as long as the voice says, as wide as they
+## are up to UI.speech_max_width.
+func _on_hero_spoke(line_key: String, seconds: float) -> void:
+	if speech_bubble == null or speech_label == null:
+		return
+	speech_label.text = tr(line_key)
+	var font: Font = speech_label.get_theme_font("font")
+	var size_px: int = speech_label.get_theme_font_size("font_size")
+	var wide: float = font.get_string_size(speech_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x if font else 200.0
+	speech_label.custom_minimum_size.x = minf(ceilf(wide) + 1.0, float(_ui("speech_max_width", 300)))
+	speech_bubble.reset_size()
+	_speech_until_ms = Time.get_ticks_msec() + int(seconds * 1000.0)
+	if not speech_bubble.visible:
+		speech_bubble.modulate.a = 0.0
+		speech_bubble.visible = true
+		var tw := speech_bubble.create_tween()
+		tw.tween_property(speech_bubble, "modulate:a", 1.0, UiTheme.number("fade_seconds"))
+	_place_speech()
+
+## Over his head, wherever he is on the screen; kept on the screen; faded out when its time is
+## up. Hidden while his head is behind the camera or he is gone.
+func _place_speech() -> void:
+	if speech_bubble == null or not speech_bubble.visible:
+		return
+	if Time.get_ticks_msec() >= _speech_until_ms:
+		speech_bubble.visible = false
+		return
+	var hero: Node3D = get_tree().get_first_node_in_group("hero") as Node3D if is_inside_tree() else null
+	var cam: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
+	if hero == null or cam == null:
+		speech_bubble.visible = false
+		return
+	var head: Vector3 = hero.global_position + Vector3(0.0, float(_ui("speech_above", 1.8)), 0.0)
+	if cam.is_position_behind(head):
+		speech_bubble.visible = false
+		return
+	var at: Vector2 = cam.unproject_position(head)
+	var box: Vector2 = speech_bubble.size
+	var pos: Vector2 = at - Vector2(box.x * 0.5, box.y + float(UiTheme.space("xs")))
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	var edge: float = float(UiTheme.space("s"))
+	pos.x = clampf(pos.x, edge, maxf(edge, screen.x - box.x - edge))
+	pos.y = clampf(pos.y, edge, maxf(edge, screen.y - box.y - edge))
+	speech_bubble.position = pos
+
 ## Every signal the HUD listens to, and who answers it.
 func _bus_handlers(eb: Node) -> Array:
 	var out: Array = []
@@ -147,7 +217,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["boss_warning", _on_boss_warning], ["boss_arrived", _on_boss_arrived],
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
-			["unlock_granted", _on_unlock_granted],
+			["unlock_granted", _on_unlock_granted], ["hero_spoke", _on_hero_spoke],
 			["material_discovered", _on_material_discovered]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
@@ -227,6 +297,7 @@ func _on_fed_changed(_fed: Dictionary) -> void:
 	_refresh_fed_label()
 
 func _process(delta: float) -> void:
+	_place_speech()
 	if fed_label and fed_chip and fed_chip.visible:
 		_refresh_fed_label()
 	var gs = _get_game_state()
@@ -450,9 +521,14 @@ func _on_raid_warning(time_left: float) -> void:
 	var appearing: bool = not _raid_horn_sounded
 	if not _raid_horn_sounded:
 		_raid_horn_sounded = true
+		# The pack itself, calling from the nest: heard from that side, far off (Fx.play_at).
 		var fx = get_node_or_null("/root/Fx")
 		if fx:
-			fx.play(fx.Sound.RAID_WARNING)
+			var nest: Node3D = get_tree().get_first_node_in_group("nest") as Node3D
+			if nest != null:
+				fx.play_at("raid_warning", nest.global_position + Vector3(0.0, 2.0, 0.0))
+			else:
+				fx.play(fx.Sound.RAID_WARNING)
 	raid_warning_banner.visible = true
 	if raid_warning_panel:
 		raid_warning_panel.visible = true
@@ -1070,6 +1146,17 @@ func _ensure_ui_components() -> void:
 	hero_side.offset_bottom = -(edge + UiTheme.font_size("caption") + UiTheme.space("xs"))
 	hero_side.offset_top = hero_side.offset_bottom
 
+
+	# --- Over his head: what he says (HeroVoice) --------------------------------------------
+	# A small card of the dark vellum, as wide as its words up to a limit, placed each frame over
+	# where his head is on the screen (_place_speech).
+	speech_bubble = _panel("SpeechBubble", &"CardPanel")
+	speech_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	speech_bubble.visible = false
+	speech_label = _label("SpeechText", &"SpeechLabel", "")
+	speech_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	speech_bubble.add_child(speech_label)
+	root_control.add_child(speech_bubble)
 
 	# --- Centre: what just happened, what is coming ------------------------------------
 	# No size of its own: as wide and as tall as what it holds, growing out from the middle

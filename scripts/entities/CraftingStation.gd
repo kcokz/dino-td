@@ -197,9 +197,16 @@ func work(delta: float) -> String:
 		unlock = String(recipe_data(done).get("unlocks", ""))
 		if gs and gs.has_method("grant_unlock"):
 			gs.grant_unlock(unlock)
+	# Heard as what it was: a meal off the fire, a tool off the bench, the beacon's tone.
 	var fx = _get_fx()
-	if fx and fx.has_method("play") and "Sound" in fx and fx.Sound.has("BUILD_DONE"):
-		fx.play(fx.Sound.BUILD_DONE)
+	if fx and fx.has_method("play_at") and is_inside_tree():
+		var id: String = "craft_done"
+		if is_dish(done):
+			id = "cook_done"
+		elif is_beacon_job(done):
+			var cfg = _get_config()
+			id = "beacon_launch" if (cfg and done == String(cfg.BEACON_LAUNCH)) else "beacon_stage"
+		fx.play_at(id, global_position + Vector3(0.0, 0.8, 0.0))
 	_refresh_label()
 	return unlock
 

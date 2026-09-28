@@ -69,6 +69,8 @@ func _emit_core_hp_changed() -> void:
 
 func _on_damaged(_amount: float) -> void:
 	_emit_core_hp_changed()
+	# Heard, not flashed: the whole hull going white at every bite would be all the finale is.
+	_sound_hit()
 
 func _on_before_destroy() -> void:
 	super._on_before_destroy()      # its gun stops

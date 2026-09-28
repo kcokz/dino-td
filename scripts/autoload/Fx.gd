@@ -8,18 +8,46 @@ extends Node
 ## any of it failing must never break the simulation -- every entry point is safe to
 ## call from a headless run, where there is no renderer and no audio device.
 ##
-## Sounds are synthesised at startup rather than shipped as files: they are simple
-## blips, and generating them keeps the repo free of binary assets and of Godot's
-## import step (which does not run in a bare headless test).
+## Sounds are files, made by tools/build_sounds.gd and listed in Config.SOUNDS (v0.6 round
+## three: "你就做音效吧"). They started as six blips synthesised here at startup; an animal's
+## voice is too much work to make on every launch, so it is made once, offline, and imported
+## like any other asset. They are loaded on the engine's own threads as the game starts
+## (ResourceLoader.load_threaded_request) and a sound asked for before its files are in is
+## simply not heard -- never waited for.
+##
+## Almost everything is played in the world (play_at): positional, falling off with distance,
+## heard from the side it is on. A limiter per class (Config.SOUNDS.classes) keeps a pack from
+## becoming a wall of noise. `played` says what was decided on, heard or not -- what the tests
+## listen for, since a headless run has no audio device to hear with.
+
+signal played(id: String, at: Vector3)
 
 enum Sound { HIT, DEATH, BUILD_DONE, RAID_WARNING, PICKUP, TWANG }
 
-const AUDIO_RATE: int = 22050
+## The old names, for a caller with no place in the world to play one: which sound of
+## Config.SOUNDS each is.
+const SOUND_IDS: Dictionary = {
+	Sound.HIT: "wood_hit", Sound.DEATH: "wood_break", Sound.BUILD_DONE: "build_done",
+	Sound.RAID_WARNING: "raid_warning", Sound.PICKUP: "pickup", Sound.TWANG: "trap_twang",
+}
+
+## Players heard everywhere at once: the interface, and what has no place.
 const VOICE_COUNT: int = 8
 
-var _streams: Dictionary = {}          # Sound -> AudioStreamWAV
+var _streams: Dictionary = {}          # sound id -> AudioStreamRandomizer over its files, once they are in
+var _files: Dictionary = {}            # sound id -> its file paths
+var _loaded: Dictionary = {}           # file path -> AudioStream
+var _pending: Array[String] = []       # asked for on the loader threads, not yet taken
 var _voices: Array[AudioStreamPlayer] = []
 var _next_voice: int = 0
+var _world: Node3D = null
+var _players: Array[AudioStreamPlayer3D] = []
+var _next_player: int = 0
+var _class_of: Dictionary = {}         # player -> the class of what it is playing
+var _last_in_class: Dictionary = {}    # class -> Time.get_ticks_msec() it last played
+var _listener: AudioListener3D = null
+var _ambience: AudioStreamPlayer = null
+var _want_ambience: bool = false
 var _debris_root: Node3D = null
 
 ## Dice of its own: where debris flies and how a thud crackles are decoration, and
@@ -28,8 +56,35 @@ var _debris_root: Node3D = null
 var _dice: RandomNumberGenerator = RandomNumberGenerator.new()
 
 func _ready() -> void:
-	_build_sounds()
+	_request_sounds()
 	_build_voices()
+	_build_world_players()
+
+## Quitting: whatever is still on the loader threads is waited for and let go, and nothing is
+## held -- a file half-loaded when the game closes is otherwise still in use at exit.
+func _exit_tree() -> void:
+	for path in _pending:
+		ResourceLoader.load_threaded_get(path)
+	_pending.clear()
+	for p in _players:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+	for v in _voices:
+		if is_instance_valid(v):
+			v.stop()
+			v.stream = null
+	if _ambience != null:
+		_ambience.stop()
+		_ambience.stream = null
+	_streams.clear()
+	_loaded.clear()
+
+func _process(_delta: float) -> void:
+	_place_listener()
+	_take_what_is_in()
+	if _want_ambience and _ambience != null and not _ambience.playing:
+		_start_ambience_now()
 
 # ==============================================================================
 # Hit flash
@@ -189,18 +244,181 @@ func floating_text(world_pos: Vector3, text: String, colour: Color = Color.WHITE
 # Sound
 # ==============================================================================
 
+## One of the old names (Sound), heard everywhere: for a caller with no place for it.
 func play(which: int) -> void:
-	if not bool(_cfg("audio_enabled", true)):
-		return
-	if not _streams.has(which) or _voices.is_empty():
-		return
+	if SOUND_IDS.has(which):
+		play_ui(String(SOUND_IDS[which]))
+
+## Sound `id` (Config.SOUNDS.sounds), in the world at `where`: heard from its side, fainter with
+## distance. False if it was not played -- sound off, no such sound, or its class is full or
+## too soon after the last (Config.SOUNDS.classes).
+func play_at(id: String, where: Vector3) -> bool:
+	var spec: Dictionary = _spec(id)
+	if spec.is_empty() or not _admit(spec):
+		return false
+	played.emit(id, where)
+	var stream: AudioStream = _stream_for(id)
+	if stream == null or _players.is_empty():
+		return true
+	var p: AudioStreamPlayer3D = _free_player()
+	if p == null:
+		return true
+	var table: Dictionary = _sounds_table()
+	p.stream = stream
+	p.global_position = where
+	p.unit_size = float(spec.get("unit", table.get("unit", 7.0)))
+	p.max_distance = float(spec.get("reach", table.get("reach", 70.0)))
+	p.volume_db = _master_db() + float(spec.get("db", 0.0))
+	_class_of[p] = String(spec.get("class", ""))
+	p.play()
+	return true
+
+## Sound `id` heard everywhere, at no place: the interface.
+func play_ui(id: String) -> bool:
+	var spec: Dictionary = _spec(id)
+	if spec.is_empty() or not _admit(spec):
+		return false
+	played.emit(id, Vector3.INF)
+	var stream: AudioStream = _stream_for(id)
+	if stream == null or _voices.is_empty():
+		return true
 	var voice: AudioStreamPlayer = _voices[_next_voice]
 	_next_voice = (_next_voice + 1) % _voices.size()
 	if not is_instance_valid(voice):
-		return
-	voice.stream = _streams[which]
-	voice.volume_db = float(_cfg("audio_volume_db", -8.0))
+		return true
+	voice.stream = stream
+	voice.volume_db = _master_db() + float(spec.get("db", 0.0))
 	voice.play()
+	return true
+
+## The valley under everything (Config.SOUNDS.ambience), looping, from now on -- as soon as its
+## file is in, if it is not yet.
+func start_ambience() -> void:
+	_want_ambience = true
+	_start_ambience_now()
+
+func stop_ambience() -> void:
+	_want_ambience = false
+	if _ambience != null and _ambience.playing:
+		_ambience.stop()
+
+func _start_ambience_now() -> void:
+	if _ambience == null or not bool(_cfg("audio_enabled", true)):
+		return
+	var id: String = String(_sounds_table().get("ambience", ""))
+	var files: Array = _files.get(id, [])
+	if files.is_empty():
+		return
+	var wav := _file_stream(String(files[0])) as AudioStreamWAV
+	if wav == null:
+		return
+	# Looped here rather than in its import: the file is one ten-second take that joins itself
+	# (tools/build_sounds.gd _seamless).
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = int(wav.get_length() * float(wav.mix_rate))
+	_ambience.stream = wav
+	_ambience.volume_db = _master_db() + float(_sounds_table().get("ambience_db", -21.0))
+	_ambience.play()
+
+func is_ambience_playing() -> bool:
+	return _want_ambience
+
+# ------------------------------------------------------------------------------
+
+func _sounds_table() -> Dictionary:
+	var cfg = get_node_or_null("/root/Config")
+	return cfg.SOUNDS if (cfg and "SOUNDS" in cfg) else {}
+
+func _spec(id: String) -> Dictionary:
+	if not bool(_cfg("audio_enabled", true)):
+		return {}
+	return _sounds_table().get("sounds", {}).get(id, {})
+
+func _master_db() -> float:
+	return float(_cfg("audio_volume_db", -8.0))
+
+## Whether its class has room for one more now: fewer than its most playing, and long enough
+## since the last. Letting it in marks the time.
+func _admit(spec: Dictionary) -> bool:
+	var klass: String = String(spec.get("class", ""))
+	var rule: Dictionary = _sounds_table().get("classes", {}).get(klass, {})
+	if rule.is_empty():
+		return true
+	var now: int = Time.get_ticks_msec()
+	if now - int(_last_in_class.get(klass, -100000)) < int(float(rule.get("gap", 0.0)) * 1000.0):
+		return false
+	var playing: int = 0
+	for p in _class_of:
+		if is_instance_valid(p) and _class_of[p] == klass and (p as AudioStreamPlayer3D).playing:
+			playing += 1
+	if playing >= int(rule.get("max", 99)):
+		return false
+	_last_in_class[klass] = now
+	return true
+
+## Every file of every sound, asked for on the engine's loader threads.
+func _request_sounds() -> void:
+	var table: Dictionary = _sounds_table()
+	var dir: String = String(table.get("dir", "res://assets/audio/"))
+	for id in table.get("sounds", {}):
+		var paths: Array = []
+		for f in table["sounds"][id].get("files", []):
+			var path: String = dir + String(f) + ".wav"
+			paths.append(path)
+			if ResourceLoader.load_threaded_request(path, "AudioStream") == OK:
+				_pending.append(path)
+		_files[id] = paths
+
+## Every file the loader threads have finished, taken off them: what is asked for and never
+## taken stays the loader's, and is still there -- leaked -- when the game quits.
+func _take_what_is_in() -> void:
+	for i in range(_pending.size() - 1, -1, -1):
+		var path: String = _pending[i]
+		var status: int = ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			_loaded[path] = ResourceLoader.load_threaded_get(path) as AudioStream
+			_pending.remove_at(i)
+		elif status != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			_pending.remove_at(i)
+
+## A file's stream, if it is in; null while it is still loading or if it could not be.
+func _file_stream(path: String) -> AudioStream:
+	if _loaded.has(path):
+		return _loaded[path]
+	var status: int = ResourceLoader.load_threaded_get_status(path)
+	if status == ResourceLoader.THREAD_LOAD_LOADED:
+		_loaded[path] = ResourceLoader.load_threaded_get(path) as AudioStream
+		_pending.erase(path)
+		return _loaded[path]
+	if status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+		# Not asked for (a file added to Config after the start) or already taken: load it now.
+		if ResourceLoader.exists(path):
+			_loaded[path] = load(path) as AudioStream
+			return _loaded[path]
+	return null
+
+## Its files, as one stream that picks among them and wanders the pitch (the engine's
+## AudioStreamRandomizer): null until every file is in.
+func _stream_for(id: String) -> AudioStream:
+	if _streams.has(id):
+		return _streams[id]
+	var paths: Array = _files.get(id, [])
+	if paths.is_empty():
+		return null
+	var parts: Array[AudioStream] = []
+	for path in paths:
+		var one: AudioStream = _file_stream(String(path))
+		if one == null:
+			return null
+		parts.append(one)
+	var mix := AudioStreamRandomizer.new()
+	for i in parts.size():
+		mix.add_stream(i, parts[i], 1.0)
+	mix.random_pitch = maxf(1.0, float(_spec(id).get("pitch", 1.0)))
+	mix.random_volume_offset_db = 1.5
+	_streams[id] = mix
+	return mix
 
 func _build_voices() -> void:
 	for i in range(VOICE_COUNT):
@@ -208,54 +426,55 @@ func _build_voices() -> void:
 		p.name = "Voice%d" % i
 		add_child(p)
 		_voices.append(p)
+	_ambience = AudioStreamPlayer.new()
+	_ambience.name = "Ambience"
+	add_child(_ambience)
 
-func _build_sounds() -> void:
-	# short, dry thud
-	_streams[Sound.HIT] = _make_wav(0.07, func(t: float, n: float) -> float:
-		return (_dice.randf() * 2.0 - 1.0) * (1.0 - n) * 0.6 + sin(t * TAU * 180.0) * (1.0 - n) * 0.4
-	)
-	# falling tone
-	_streams[Sound.DEATH] = _make_wav(0.32, func(t: float, n: float) -> float:
-		return sin(t * TAU * lerpf(420.0, 90.0, n)) * (1.0 - n) * 0.7
-	)
-	# two rising notes
-	_streams[Sound.BUILD_DONE] = _make_wav(0.26, func(t: float, n: float) -> float:
-		var freq: float = 520.0 if n < 0.5 else 780.0
-		return sin(t * TAU * freq) * (1.0 - n * 0.7) * 0.5
-	)
-	# low horn
-	_streams[Sound.RAID_WARNING] = _make_wav(0.6, func(t: float, n: float) -> float:
-		var env: float = minf(n * 6.0, 1.0) * (1.0 - n)
-		return (sin(t * TAU * 110.0) * 0.6 + sin(t * TAU * 165.0) * 0.4) * env * 0.8
-	)
-	# short blip, rising: something went into the bag
-	_streams[Sound.PICKUP] = _make_wav(0.11, func(t: float, n: float) -> float:
-		return sin(t * TAU * lerpf(620.0, 980.0, n)) * (1.0 - n) * 0.45
-	)
-	# a bowstring let go (a trap loosing, Trap.gd): a snap, and a low note that dies away
-	_streams[Sound.TWANG] = _make_wav(0.22, func(t: float, n: float) -> float:
-		var snap: float = (_dice.randf() * 2.0 - 1.0) * maxf(0.0, 1.0 - n * 12.0) * 0.5
-		return snap + sin(t * TAU * lerpf(210.0, 150.0, n)) * pow(1.0 - n, 2.0) * 0.6
-	)
+func _build_world_players() -> void:
+	_world = Node3D.new()
+	_world.name = "WorldSound"
+	add_child(_world)
+	for i in range(int(_sounds_table().get("world_players", 16))):
+		var p := AudioStreamPlayer3D.new()
+		p.name = "Sound%d" % i
+		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		_world.add_child(p)
+		_players.append(p)
+	_listener = AudioListener3D.new()
+	_listener.name = "Listener"
+	_world.add_child(_listener)
 
-## Builds a mono 16-bit stream by sampling `shape(t_seconds, normalised_progress)`.
-func _make_wav(seconds: float, shape: Callable) -> AudioStreamWAV:
-	var frames: int = maxi(1, int(AUDIO_RATE * seconds))
-	var bytes := PackedByteArray()
-	bytes.resize(frames * 2)
-	for i in range(frames):
-		var t: float = float(i) / float(AUDIO_RATE)
-		var n: float = float(i) / float(frames)
-		var v: float = clampf(float(shape.call(t, n)), -1.0, 1.0)
-		var sample: int = int(v * 32767.0)
-		bytes.encode_s16(i * 2, sample)
+## The next player not busy, or -- all of them busy -- the one after the last used.
+func _free_player() -> AudioStreamPlayer3D:
+	for k in _players.size():
+		var i: int = (_next_player + k) % _players.size()
+		if not _players[i].playing:
+			_next_player = (i + 1) % _players.size()
+			return _players[i]
+	var p: AudioStreamPlayer3D = _players[_next_player]
+	_next_player = (_next_player + 1) % _players.size()
+	return p
 
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = AUDIO_RATE
-	wav.stereo = false
-	wav.data = bytes
-	return wav
+## The listener stands between the ground the camera is looking at and the camera
+## (Config.SOUNDS.listener_lift), facing as the camera does: what is in the middle of the
+## screen is near, what is off its left is heard on the left, and zooming out does not turn the
+## world down.
+func _place_listener() -> void:
+	if _listener == null or not is_inside_tree():
+		return
+	var vp := get_viewport()
+	var cam: Camera3D = vp.get_camera_3d() if vp else null
+	if cam == null or not is_instance_valid(cam):
+		return
+	if not _listener.is_current():
+		_listener.make_current()
+	var eye: Vector3 = cam.global_position
+	var ahead: Vector3 = -cam.global_transform.basis.z
+	var ground: Vector3 = eye
+	if ahead.y < -0.05:
+		ground = eye + ahead * (eye.y / -ahead.y)
+	var lift: float = float(_sounds_table().get("listener_lift", 0.3))
+	_listener.global_transform = Transform3D(cam.global_transform.basis, ground.lerp(eye, lift))
 
 # ==============================================================================
 # Helpers

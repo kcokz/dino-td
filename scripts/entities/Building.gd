@@ -158,9 +158,7 @@ func complete_construction() -> void:
 	is_constructed = true
 	build_progress = 1.0
 	if was_under_construction:
-		var fx = _get_fx()
-		if fx:
-			fx.play(fx.Sound.BUILD_DONE)
+		_sound("build_done")
 	_update_construction_state()
 	_update_info_label()
 	var eb = _get_event_bus()
@@ -237,7 +235,15 @@ func _on_damaged(_amount: float) -> void:
 		return
 	for mesh in _body_meshes():
 		fx.flash(mesh)
-	fx.play(fx.Sound.HIT)
+	_sound_hit()
+
+## Bitten, it sounds of what it is made of: timber, stone, the cabin's plate (SOUNDS.hit_by_building).
+func _sound_hit() -> void:
+	var cfg = _get_config()
+	var id: String = "wood_hit"
+	if cfg and "SOUNDS" in cfg:
+		id = String(cfg.SOUNDS.get("hit_by_building", {}).get(String(building_type), cfg.SOUNDS.get("hit_default", id)))
+	_sound(id)
 
 ## Executes destruction sequence: signals EventBus, marks is_destroyed, queues free.
 func destroy() -> void:
@@ -413,9 +419,7 @@ func _finish_upgrade() -> void:
 	setup(to, cell_pos)
 	current_hp = max_hp * health
 	_rebuild_body(was)
-	var fx = _get_fx()
-	if fx:
-		fx.play(fx.Sound.BUILD_DONE)
+	_sound("build_done")
 	_update_info_label()
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_upgraded"):
@@ -863,7 +867,13 @@ func _spawn_destruction_fx() -> void:
 	if fx == null or not is_inside_tree():
 		return
 	fx.debris(global_position, _get_placeholder_color())
-	fx.play(fx.Sound.DEATH)
+	_sound("wood_break")
+
+## Sound `id` where it stands (Fx.play_at).
+func _sound(id: String) -> void:
+	var fx = _get_fx()
+	if fx and fx.has_method("play_at") and is_inside_tree():
+		fx.play_at(id, global_position + Vector3(0.0, 0.5, 0.0))
 
 func _get_fx() -> Node:
 	if is_inside_tree():
