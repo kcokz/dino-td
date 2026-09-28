@@ -2,11 +2,11 @@
 # The cabin: the crew module the Hero lives in, and the thing the raid is trying to reach.
 #
 # Reported as "船舱模型太小" -- it was a 1 m pod in one tile, no taller than the man who
-# lives in it. One tile cannot hold a room and still leave a way past it, so it now takes
-# a 2 x 2 block (Config.BUILDINGS.core.span). A building bigger than a tile broke every
-# place that measured a building as a circle of half its width or as one tile: its corner
-# attack slots stood inside its walls, a raptor at its corner could not bite it, and the
-# Hero could not get close enough to its walls to repair it. These hold all of that.
+# lives in it. It is three metres a side now, three cells of the building grid by three
+# (Config.BUILDINGS.core.cells). A building bigger than a tile broke every place that measured
+# a building as a circle of half its width or as one tile: its corner attack slots stood
+# inside its walls, a raptor at its corner could not bite it, and the Hero could not get close
+# enough to its walls to repair it. These hold all of that.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -33,18 +33,17 @@ func _level() -> Node:
 	_cleanup_nodes.append(main)
 	return main
 
+## Cells of the building grid a side.
 func _span() -> int:
-	return int(config_node.get_building_span("core"))
+	return int(config_node.get_building_cells("core"))
 
 func _half() -> float:
 	return float(config_node.get_building_footprint("core")) * 0.5
 
+## The cells of the building grid it holds.
 func _block(main: Node) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	for dz in range(_span()):
-		for dx in range(_span()):
-			out.append(main.core_cell + Vector2i(dx, dz))
-	return out
+	var gm = main.grid_manager
+	return gm.footprint_cells("core", gm.world_to_build_cell(main.current_core.global_position))
 
 func test_01_it_is_a_room_not_a_pod() -> void:
 	var main = await _level()
@@ -52,7 +51,7 @@ func test_01_it_is_a_room_not_a_pod() -> void:
 	var body: Node3D = core.find_child("Body", false, false)
 	var drawn: AABB = VisualLibrary.visual_bounds(body)
 	var hero_h: float = float(config_node.HERO["height"])
-	assert_gt(_span(), 1, "It takes more than one tile")
+	assert_gt(_span(), 1, "It takes more than one cell")
 	assert_gte(drawn.size.y / hero_h, 2.0, "It stands twice the Hero's height (%.2fx)" % (drawn.size.y / hero_h))
 	assert_gte(minf(drawn.size.x, drawn.size.z), 2.0 * hero_h, "And is wider than two of him")
 	# Drawn inside its own box, nothing hanging over the ground round it.
@@ -65,10 +64,14 @@ func test_02_it_holds_its_block_and_nothing_more() -> void:
 	var gm = main.grid_manager
 	var core: Node = main.current_core
 	var block: Array[Vector2i] = _block(main)
+	assert_eq(block.size(), _span() * _span(), "A square of cells")
 	for c in block:
-		assert_true(gm.get_building_at(c) == core, "Tile %s is the cabin's" % str(c))
-		assert_false(gm.is_cell_walkable(c), "And nobody walks through it")
-		assert_false(main.build_system.can_place_building("wall", c), "Nor builds on it")
+		assert_true(gm.building_in_build_cell(c) == core, "Cell %s is the cabin's" % str(c))
+		assert_false(main.build_system.can_place_at("wall", c), "Nor is anything built on it")
+	var middle: Vector3 = (core as Node3D).global_position
+	var nearest: Vector3 = main.nav_maps.closest_point(middle, true)
+	assert_gt(float(config_node.gap_to_building(nearest, "core", middle)), 0.0,
+		"And nobody stands in it: the nearest ground is outside its walls")
 	var around: int = 0
 	for c in block:
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
@@ -76,8 +79,8 @@ func test_02_it_holds_its_block_and_nothing_more() -> void:
 			if block.has(n):
 				continue
 			around += 1
-			assert_false(gm.get_building_at(n) == core, "Tile %s beside it is not" % str(n))
-	assert_eq(around, 4 * _span(), "It is ringed by free tiles")
+			assert_false(gm.building_in_build_cell(n) == core, "Cell %s beside it is not" % str(n))
+	assert_eq(around, 4 * _span(), "It is ringed by cells that are not its")
 	assert_eq(core.cell_pos, main.core_cell, "It is registered at the tile it was placed at")
 
 func test_03_its_north_and_west_walls_stand_where_the_pods_did() -> void:
@@ -90,18 +93,17 @@ func test_03_its_north_and_west_walls_stand_where_the_pods_did() -> void:
 	assert_almost_eq(core.global_position.z - _half(), origin.z + 0.5, 0.001, "The north wall")
 
 func test_04_there_is_a_way_past_it_on_every_side() -> void:
-	# As wide as its block allows while leaving the Hero a way past: whatever is built on
-	# the tiles beside it, the gap is wider than he is.
-	var block_edge: float = float(_span()) * float(config_node.TILE_SIZE) * 0.5
-	var slack: float = block_edge - _half()
-	var tower_slack: float = (float(config_node.TILE_SIZE) - float(config_node.get_building_footprint("tower"))) * 0.5
-	assert_gte(slack + tower_slack, float(config_node.HERO["width"]), "A turret beside it leaves him a way through")
-	assert_false(config_node.is_barrier_building("core"), "It is not a wall")
+	# Nothing is built into the cabin's walls by the level; a way past it is a free cell beside
+	# it, which is wider than he is -- whatever the player later builds flush against it is his
+	# own choice (v0.6 round two: everything stands flush, on one grid).
+	assert_gte(float(config_node.BUILD_CELL), float(config_node.HERO["width"]),
+		"One free cell beside it is a way past it")
+	assert_ne(String(config_node.get_building_kind("core")), "wall", "It is not a wall")
 	# And the mesh agrees: he can walk from one side of it to the other.
 	var main = await _level()
 	var c: Vector3 = main.current_core.global_position
-	var south := c + Vector3(0.0, 0.0, block_edge + 1.0)
-	var north := c + Vector3(0.0, 0.0, -block_edge - 1.0)
+	var south := c + Vector3(0.0, 0.0, _half() + 2.0)
+	var north := c + Vector3(0.0, 0.0, -_half() - 2.0)
 	assert_true(main.nav_maps.is_reachable(south, north, true), "Round it from the door to the back")
 
 func test_05_a_raptor_can_bite_it_from_every_side() -> void:
@@ -160,7 +162,7 @@ func test_07_he_can_reach_its_walls_to_repair_it() -> void:
 		assert_true(main.hero._is_in_build_range(route[route.size() - 1], core),
 			"Where his way to it ends, he can work on it")
 
-func test_08_when_it_falls_every_tile_it_held_comes_free() -> void:
+func test_08_when_it_falls_every_cell_it_held_comes_free() -> void:
 	var main = await _level()
 	var gm = main.grid_manager
 	var core = main.current_core
@@ -168,8 +170,11 @@ func test_08_when_it_falls_every_tile_it_held_comes_free() -> void:
 	core.take_damage(core.max_hp * 2.0)
 	await wait_frames(2)
 	for c in block:
-		assert_false(gm.get_building_at(c) != null and gm.get_building_at(c) == core,
-			"Tile %s is not held by a cabin that is gone" % str(c))
+		# Not `== core` alone: a freed object compares equal to null, so an empty cell would
+		# pass for one the fallen cabin still held.
+		var holder: Node = gm.building_in_build_cell(c)
+		assert_false(holder != null and holder == core,
+			"Cell %s is not held by a cabin that is gone" % str(c))
 
 func test_09_the_hero_and_the_opening_stock_start_outside_it() -> void:
 	var main = await _level()

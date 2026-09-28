@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <polygon points="5,58 5,16 10,6 15,16 15,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="49,58 49,16 54,6 59,16 59,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="16" y="20" width="32" height="37" rx="2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="5,58 5,16 10,6 15,16 15,58" fill="#a0703f"/>
+  <polygon points="49,58 49,16 54,6 59,16 59,58" fill="#a0703f"/>
+  <rect x="16" y="20" width="32" height="37" rx="2" fill="#dca466"/>
+  <rect x="16" y="20" width="10" height="37" rx="1.5" fill="#b87b42"/>
+  <rect x="27" y="20" width="10" height="37" rx="1.5" fill="#dca466"/>
+  <rect x="38" y="20" width="10" height="37" rx="1.5" fill="#b87b42"/>
+  <rect x="16" y="25" width="32" height="5" rx="1.5" fill="#6f4523"/>
+  <rect x="16" y="47" width="32" height="5" rx="1.5" fill="#6f4523"/>
+  <path d="M 20 47 L 44 30" fill="none" stroke="#6f4523" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="5,58 5,16 8,9 8,58" fill="#6f4523"/>
+  <polygon points="49,58 49,16 52,9 52,58" fill="#6f4523"/>
+  <rect x="3" y="26" width="16" height="4.5" rx="2" fill="#dcbb7c"/>
+  <rect x="3" y="47" width="16" height="4.5" rx="2" fill="#dcbb7c"/>
+</svg>

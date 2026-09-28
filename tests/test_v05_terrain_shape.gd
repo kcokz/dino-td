@@ -317,14 +317,18 @@ func test_07_neighbouring_hills_meet_without_a_crack() -> void:
 		assert_almost_eq(left, right, 0.001,
 			"The two cells agree on their shared edge at v=%.2f" % v)
 
-func test_08_the_grid_still_decides_who_can_walk_where() -> void:
+func test_08_the_hills_still_decide_who_can_walk_where() -> void:
 	# The whole point of keeping collision off the art. Reshaping the hills must not
-	# have moved a single rule.
+	# have moved a single rule: each is its cell, and nobody stands anywhere in it.
 	var main = _level()
-	await wait_frames(2)
+	await wait_frames(8)
+	var half: float = float(config_node.TILE_SIZE) * 0.5
 	for c in config_node.map_data().get("default_blocked_cells", []):
 		assert_true(main.grid_manager.is_cell_blocked(c), "%s is still hillside" % str(c))
-		assert_false(main.grid_manager.is_cell_walkable(c), "And still unwalkable")
+		var middle: Vector3 = main.grid_manager.cell_to_world(c)
+		var nearest: Vector3 = main.nav_maps.closest_point(middle, true)
+		assert_gt(Vector2(nearest.x - middle.x, nearest.z - middle.z).length(), half,
+			"And the nearest ground anybody can stand on is outside it")
 	assert_eq(main.terrain_container.get_child_count(),
 		config_node.map_data().get("default_blocked_cells", []).size(),
 		"One hill per blocked cell, no more and no fewer")

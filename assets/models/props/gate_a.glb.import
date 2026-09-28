@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b4bidvenarf3l"
-path="res://.godot/imported/bone_stake_a.glb-16c65074c0229b4e0c0b032de741ae54.scn"
+uid="uid://ctskx6lmhbgm0"
+path="res://.godot/imported/gate_a.glb-3db088de015c10457d09bbabeb172bb1.scn"
 
 [deps]
 
-source_file="res://assets/models/props/bone_stake_a.glb"
-dest_files=["res://.godot/imported/bone_stake_a.glb-16c65074c0229b4e0c0b032de741ae54.scn"]
+source_file="res://assets/models/props/gate_a.glb"
+dest_files=["res://.godot/imported/gate_a.glb-3db088de015c10457d09bbabeb172bb1.scn"]
 
 [params]
 

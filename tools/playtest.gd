@@ -147,27 +147,30 @@ func _scenario_buildings() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var eb := root.get_node_or_null("EventBus")
 	_grant({"wood": 400, "stone": 400, "bone": 400})
-	var step: float = float(cfg.TILE_SIZE) / float(maxi(1, int(cfg.get_cell_divisions("wall"))))
+	var step: float = float(cfg.BUILD_CELL)
 	var z: float = 6.0
-	var x: float = -7.0
-	while x < -3.4:
-		_build_at("wall", Vector3(x, 0.0, z))
-		x += step
-	x = -2.5
-	while x < 1.6:
-		_build_at("bone_stake", Vector3(x, 0.0, z))
-		x += step
+	# A palisade with a corner and a gate in it, flush against the next thing along: bone
+	# stakes, then a stone wall -- and a turret right up against the line (v0.6 round two: the
+	# walls fill their cells and join whatever is beside them).
+	for i in range(6):
+		_build_at("wall", Vector3(-7.0 + float(i) * step, 0.0, z))
+	for i in range(1, 3):
+		_build_at("wall", Vector3(-7.0, 0.0, z - float(i) * step))
+	_build_at("gate", Vector3(-1.0, 0.0, z))
 	for i in range(3):
-		_build_at("stone_wall", Vector3(3.0 + 2.0 * float(i), 0.0, z))
-	_build_at("tower", Vector3(-3.0, 0.0, z + 3.0))
-	_build_at("tower", Vector3(1.0, 0.0, z + 3.0))
+		_build_at("bone_stake", Vector3(0.0 + float(i) * step, 0.0, z))
+	for i in range(3):
+		_build_at("stone_wall", Vector3(3.0 + float(i) * step, 0.0, z))
+	_build_at("tower", Vector3(-3.0, 0.0, z + step))
+	_build_at("tower", Vector3(1.0, 0.0, z + step))
 	var gm = _main.grid_manager
-	var upgraded = gm.get_building_at(gm.world_to_cell(Vector3(1.0, 0.0, z + 3.0)))
+	var upgraded = gm.building_at_point(Vector3(1.0, 0.0, z + step))
 	if upgraded and upgraded.has_method("begin_upgrade") and upgraded.begin_upgrade():
 		upgraded.add_upgrade_progress(1000.0)
 	await _wait(10)
-	await _portrait("the_line", Vector3(0.0, 0.0, z + 1.0), 12.0)
-	var plain = gm.get_building_at(gm.world_to_cell(Vector3(-3.0, 0.0, z + 3.0)))
+	await _portrait("the_line", Vector3(-1.0, 0.0, z + 1.0), 11.0)
+	await _portrait("the_line_from_above", Vector3(-1.0, 0.0, z), 11.0, true)
+	var plain = gm.building_at_point(Vector3(-3.0, 0.0, z + step))
 	if plain and eb:
 		eb.unit_selected.emit(plain)
 	await _shoot("upgrade_offered")
@@ -233,8 +236,7 @@ func _scenario_siege(spec: String) -> void:
 		if b != null:
 			b.complete_construction()
 			placed_towers.append(b)
-	var step: float = float(cfg.TILE_SIZE) / float(maxi(1, int(cfg.get_cell_divisions("wall"))))
-	var divisions: int = int(cfg.get_cell_divisions("wall"))
+	var step: float = float(cfg.BUILD_CELL)
 	var seen: Dictionary = {}
 	var stakes: Array[Node] = []
 	# 6.5 m: clear of the trees and the hills, which a ring cannot be built through -- and a
@@ -242,12 +244,11 @@ func _scenario_siege(spec: String) -> void:
 	var around: int = 0 if bare else int(ceil(TAU * 6.5 / step)) * 4
 	for i in range(around):
 		var a: float = TAU * float(i) / float(around)
-		var fine: Vector2i = gm.world_to_fine_cell(centre + Vector3(sin(a) * 6.5, 0.0, cos(a) * 6.5), divisions)
-		if seen.has(fine):
+		var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(sin(a) * 6.5, 0.0, cos(a) * 6.5))
+		if seen.has(cell):
 			continue
-		seen[fine] = true
-		var at: Vector3 = gm.fine_cell_to_world(fine, divisions)
-		var b = _main.build_system.place_building("wall", gm.world_to_cell(at), _main.buildings_container, true, at)
+		seen[cell] = true
+		var b = _main.build_system.place_at("wall", cell, _main.buildings_container, true)
 		if b != null:
 			b.complete_construction()
 			stakes.append(b)
@@ -351,11 +352,10 @@ func _scenario_fence() -> void:
 	_grant({"wood": 400})
 	var cfg := root.get_node_or_null("Config")
 	var gm = _main.grid_manager
-	var divisions: int = int(cfg.get_cell_divisions("wall")) if cfg else 1
-	var step: float = float(cfg.TILE_SIZE) / float(maxi(1, divisions))
+	var step: float = float(cfg.BUILD_CELL)
 
-	# A run laid at the spacing stakes actually snap to, which is the whole point of the
-	# finer grid: one stake per click, close enough together to read as a fence.
+	# A run laid a cell at a time, which is how a wall is laid: one section per cell, each
+	# joining the next.
 	var z: float = -6.0
 	var x: float = -5.0
 	while x < 5.0:
@@ -518,10 +518,10 @@ func _scenario_gap() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var gm = _main.grid_manager
 	var tile: float = float(cfg.TILE_SIZE)
-	var step: float = tile / float(maxi(1, int(cfg.get_cell_divisions("wall"))))
+	var step: float = float(cfg.BUILD_CELL)
 
-	# An outcrop the level put there itself, and ONE stake in the tile beside it, pushed
-	# towards the rock so that most of that tile is plainly still open ground.
+	# An outcrop the level put there itself, and ONE section of wall in the tile beside it,
+	# pushed towards the rock so that a cell of that tile is plainly still open ground.
 	var hill: Vector2i = Vector2i(3, -3)
 	var doorway: Vector2i = hill + Vector2i(-1, 0)
 	_build_at("wall", gm.cell_to_world(doorway) + Vector3(tile * 0.5 - step * 0.5, 0.0, 0.0))
@@ -556,19 +556,19 @@ func _scenario_snug() -> void:
 	var gm = _main.grid_manager
 	var core_cell: Vector2i = cfg.map_data()["default_core_cell"]
 	var core: Vector3 = gm.cell_to_world(core_cell)
-	var d: int = int(cfg.get_cell_divisions("wall"))
-	var centre: Vector2i = gm.world_to_fine_cell(core, d)
+	var centre: Vector2i = gm.world_to_build_cell(_main.current_core.global_position)
+	var ring: int = (int(cfg.get_building_cells("core")) - 1) / 2 + 1
 	# The Hero standing there is not the cabin's business.
 	if _main.hero:
 		_main.hero.global_position = core + Vector3(0.0, 0.0, 14.0)
 	await _wait(2)
 	var placed: int = 0
-	for dx in range(-2, 3):
-		for dz in range(-2, 3):
-			if absi(dx) != 2 and absi(dz) != 2:
+	# The cells right round the cabin's own: flush against its walls, on every side.
+	for dx in range(-ring, ring + 1):
+		for dz in range(-ring, ring + 1):
+			if absi(dx) != ring and absi(dz) != ring:
 				continue
-			var at: Vector3 = gm.fine_cell_to_world(centre + Vector2i(dx, dz), d)
-			var b = _main.build_system.place_building("wall", gm.world_to_cell(at), _main.buildings_container, true, at)
+			var b = _main.build_system.place_at("wall", centre + Vector2i(dx, dz), _main.buildings_container, true)
 			if b != null:
 				b.complete_construction()
 				placed += 1
@@ -588,10 +588,11 @@ func _scenario_snug() -> void:
 	mat.no_depth_test = true
 	mark.material_override = mat
 	_main.add_child(mark)
-	mark.global_position = core + Vector3(0.0, 0.05, 0.0)
+	# On the cabin's own middle: it runs south and east from its tile, so its middle is not the tile's.
+	mark.global_position = (_main.current_core as Node3D).global_position + Vector3(0.0, 0.05, 0.0)
 	await _wait(8)
-	print("[playtest] snug: %d stakes on the tightest ring the game allows" % placed)
-	print("[playtest] snug: the red square is the cabin's real 1.0m footprint on the ground")
+	print("[playtest] snug: %d sections on the tightest ring the game allows" % placed)
+	print("[playtest] snug: the red square is the cabin's real %.1fm footprint on the ground" % w)
 	# STRAIGHT DOWN, with no tilt at all, which is the only view with no parallax in it.
 	# Everything else leans: the cabin is 1.9m tall and a stake 0.95m, so under any tilted
 	# camera their tops shift by different amounts and the gap reads differently on each
@@ -750,9 +751,8 @@ func _scenario_raid() -> void:
 	for a in args:
 		if String(a).is_valid_int():
 			count = int(String(a))
-	var divisions: int = int(cfg.get_cell_divisions("wall"))
-	var step: float = float(cfg.TILE_SIZE) / float(divisions)
-	var core: Vector3 = gm.cell_to_world(cfg.map_data()["default_core_cell"])
+	var step: float = float(cfg.BUILD_CELL)
+	var core: Vector3 = _main.current_core.global_position
 
 	var placed: int = 0
 	if sealed_ring:
@@ -761,11 +761,11 @@ func _scenario_raid() -> void:
 		for i in range(around):
 			var a: float = TAU * float(i) / float(around)
 			var at: Vector3 = core + Vector3(sin(a) * 4.0, 0.0, cos(a) * 4.0)
-			var fine: Vector2i = gm.world_to_fine_cell(at, divisions)
-			if seen.has(fine):
+			var cell: Vector2i = gm.world_to_build_cell(at)
+			if seen.has(cell):
 				continue
-			seen[fine] = true
-			_build_at("wall", gm.fine_cell_to_world(fine, divisions))
+			seen[cell] = true
+			_build_at("wall", gm.build_cell_to_world(cell))
 			placed += 1
 	else:
 		# The diagonal run from the report, shoulder to shoulder, open at both ends.

@@ -5,7 +5,7 @@
 # 1. Config.VISUALS["building/core"]["scene"] is non-empty and points to the cabin
 #    (props/cabin_a.glb, since the core became a 2 x 2 crew module; wreck.glb was the pod).
 # 2. Spaceship wreck model exists on disk, imports cleanly, and has real art loaded by VisualLibrary.
-# 3. Invariant: is_barrier_building("core") remains strictly FALSE (Hero must have a lane past it).
+# 3. Invariant: the core is not a wall, and never seals the Hero in (a free cell beside it is a way past).
 # 4. Invariant: Art's horizontal projection strictly fits inside the declared collision box.
 # 5. Core building instantiates cleanly, displays real mesh body, and manages HP / damage signals.
 # 6. assets/CREDITS.md contains Spaceship Wreck entry with CC0 dedication.
@@ -49,23 +49,20 @@ func test_01_core_scene_declared_and_file_exists() -> void:
 	assert_true(VisualLibrary.has_art("building/core"), "VisualLibrary recognizes building/core has real art")
 
 # ==============================================================================
-# 2. Barrier Invariant: is_barrier_building("core") Remains FALSE
+# 2. Barrier Invariant: the core is not a wall
 # ==============================================================================
 
-func test_02_is_barrier_building_core_remains_strictly_false() -> void:
-	# Crucial gameplay invariant: footprint past ~1.2 would turn the base into a wall.
-	# A ring of buildings or the base itself must NEVER seal the Hero in.
-	assert_false(config_node.is_barrier_building("core"),
-		"is_barrier_building('core') must remain FALSE -- base is not a wall")
-
-	var fp: float = config_node.get_building_footprint("core")
-	var hero_w: float = float(config_node.HERO.get("width", 0.8))
-	# Its lane is what is left of its BLOCK of tiles, not of one tile.
-	var lane: float = float(config_node.get_building_span("core")) * config_node.TILE_SIZE - fp
-
-	assert_gt(lane, hero_w, "Gap beside core (%.2fm) is wider than Hero width (%.2fm)" % [lane, hero_w])
-	assert_almost_eq(fp, float(config_node.get_building_span("core")) * config_node.TILE_SIZE - hero_w
-		- float(config_node.BUILDING_CLEARANCE), 0.01, "Core footprint is its block less the Hero's way past")
+func test_02_the_core_is_not_a_wall_and_never_seals_the_hero_in() -> void:
+	# Crucial gameplay invariant: the base must NEVER seal the Hero in. It used to be kept by
+	# sizing the cabin to leave a lane inside its block of tiles; since v0.6 round two it fills
+	# whole cells of the building grid like everything else, and a way past it is a free cell
+	# beside it -- which is wider than he is.
+	assert_ne(String(config_node.get_building_kind("core")), "wall", "The base is not a wall")
+	assert_almost_eq(float(config_node.get_building_footprint("core")),
+		float(config_node.get_building_cells("core")) * float(config_node.BUILD_CELL), 0.001,
+		"It fills whole cells")
+	assert_gte(float(config_node.BUILD_CELL), float(config_node.HERO.get("width", 0.8)),
+		"And one free cell beside it is a way past it for the Hero")
 
 # ==============================================================================
 # 3. Scale & Projection Invariant: Visual Projection Fits Inside Collision Box

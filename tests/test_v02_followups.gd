@@ -782,67 +782,11 @@ func test_42_pause_menu_is_centred_not_cornered() -> void:
 # 12. Trapping, scenery selection, and the walking-Hero retarget bug
 # ==============================================================================
 
-func test_43_ordinary_buildings_leave_a_lane_wider_than_the_hero() -> void:
-	# Workshops must never be able to box the Hero in by accident, so two of them
-	# on neighbouring tiles always leave a gap he fits through.
-	var tile: float = float(config_node.TILE_SIZE)
-	var hero_w: float = float(config_node.HERO.get("width", 0.8))
-	var default_fp: float = float(config_node.get_default_building_footprint())
-
-	assert_gt(tile - default_fp, hero_w, "The default footprint leaves the Hero a lane")
-	assert_almost_eq((tile - default_fp) - hero_w, float(config_node.BUILDING_CLEARANCE), 0.001,
-		"The slack is exactly the configured clearance")
-
-	for b_type in ["tower"]:
-		assert_false(config_node.is_barrier_building(b_type),
-			"%s leaves a lane, it is not a barrier" % b_type)
-		assert_gt(tile - config_node.get_building_footprint(b_type), hero_w,
-			"Two %s side by side still leave a lane" % b_type)
-
-	# And the entity uses its own type's number rather than restating a size.
-	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
-	var tower = tower_script.new()
-	_cleanup_nodes.append(tower)
-	tree.root.add_child(tower)
-	await wait_frames(1)
-	var shape: CollisionShape3D = null
-	for child in tower.get_children():
-		if child is CollisionShape3D:
-			shape = child
-			break
-	assert_not_null(shape, "A building has a collision shape")
-	assert_almost_eq(shape.shape.size.x, config_node.get_building_footprint("tower"), 0.001,
-		"Its footprint comes from its own Config entry")
-
-func test_43b_a_stake_is_as_big_as_the_stake() -> void:
-	# This used to assert the opposite: that ONE stake filled a whole tile, so that a
-	# line of them closed up. It bought a fence by making a 0.62m cone stop the Hero
-	# 2m away from it -- and a plain gap between a stake and a hillside was solid.
-	#
-	# A fence is a RUN of stakes now, which is what it looks like. What closes a way is
-	# where the player put them (GridManager.occupant_leaves_a_way_through), not the
-	# type of thing he put there.
-	var tile: float = float(config_node.TILE_SIZE)
-	var hero_w: float = float(config_node.HERO.get("width", 0.8))
-	var fp: float = float(config_node.get_building_footprint("wall"))
-
-	assert_almost_eq(fp, float(config_node.get_spike_diameter("wall")), 0.001,
-		"A stake's footprint is the cone, one number for both")
-	assert_gt(tile - fp, hero_w, "So one on its own is something the Hero walks past")
-	assert_false(config_node.is_barrier_building("wall"), "Which is not a barrier by itself")
-
-	var wall_script: GDScript = load("res://scripts/entities/Wall.gd")
-	var wall = wall_script.new()
-	_cleanup_nodes.append(wall)
-	tree.root.add_child(wall)
-	await wait_frames(1)
-	var shape: CollisionShape3D = null
-	for child in wall.get_children():
-		if child is CollisionShape3D:
-			shape = child
-			break
-	assert_almost_eq(shape.shape.size.x, fp, 0.001,
-		"And the box that stops you is the cone you can see, not a tile-wide one")
+# test_43 and test_43b are gone with their subject: a building sized to leave the Hero a lane to
+# the edge of its tile, and a stake sized to the cone drawn for it, neither of them a barrier on
+# its own. Since v0.6 round two everything fills whole cells of one building grid and stands
+# flush against what is beside it -- "墙必须让它们和别的建筑能更贴合" -- so a way through is a free
+# cell, and a line of anything is a wall. test_v06_one_grid holds that, collider and all.
 
 func test_43c_being_fenced_in_is_undone_by_demolishing() -> void:
 	# Barriers can seal the Hero in, which is the point; the way out is to pull one

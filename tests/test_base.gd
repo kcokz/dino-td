@@ -228,13 +228,16 @@ func assert_has_signal(target: Object, signal_name: String, message: String = ""
 ## gap for a whole version.
 ##
 ## Caller owns the node and frees it, the same as anything else it instantiates.
-## How many tiles a freshly laid level holds on the grid: the cabin's whole block and
-## the nest. The cabin used to be one tile, and "exactly 2" was written into test after
-## test.
-func level_tiles_at_start() -> int:
+## How many cells of the building grid a freshly laid level holds: the cabin's square
+## (Config.BUILDINGS.core.cells) and the nest's tile (GridManager.build_cells_in_tile). The
+## cabin used to be one tile, and "exactly 2" was written into test after test.
+func level_cells_at_start() -> int:
 	var cfg = tree.root.get_node_or_null("Config")
-	var span: int = int(cfg.get_building_span("core")) if cfg and cfg.has_method("get_building_span") else 1
-	return span * span + 1
+	var side: int = int(cfg.get_building_cells("core"))
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	var nest: int = gm.build_cells_in_tile(Vector2i.ZERO).size()
+	gm.free()
+	return side * side + nest
 
 ## Where the cabin is: the middle of its block of tiles, not the middle of the tile it
 ## was placed at -- which is now inside its walls.
@@ -301,39 +304,57 @@ func block_out_a_hill(world: Node3D, gm: Node, cell: Vector2i, height: float = 2
 	shape.shape = box
 	shape.position = Vector3(0.0, height * 0.5, 0.0)
 	hill.add_child(shape)
+	NavMaps.mark_solid(hill, float(gm.tile_size) * 0.5, height)
 	world.add_child(hill)
 	return hill
 
-## A REAL run of stakes from `from_world` to `to_world`, laid the way the game lays one.
+## A REAL run of wall from `from_world` to `to_world`, laid the way the game lays one: a section
+## in every cell of the building grid the line crosses (Config.BUILD_CELL), connected, so a run
+## drawn on a slant has no gap a corner could be slipped through.
 ##
-## One stake per TILE is not a fence. A stake is 0.62m and tiles are 2m apart, so eight
-## of them round a cell is eight cones with 1.38m of open ground between them -- which is
-## the v0.4 finding that a stake is as big as the stake, and it means a fixture that
-## "encloses" something that way encloses nothing. Stakes seal on their own finer grid
-## (Config.BUILDINGS.wall.cell_divisions), 0.67m apart, and that is what this lays.
-##
-## Registers each one the way BuildSystem does, so the grid knows about them too.
+## Registers each one the way BuildSystem does, so the grid knows about them too, and bakes the
+## meshes again -- put up whole, a section was never a blueprint and never said so on the bus.
 func run_of_stakes(world: Node3D, gm: Node, from_world: Vector3, to_world: Vector3) -> Array[Node]:
-	var cfg = tree.root.get_node_or_null("Config")
-	var divisions: int = int(cfg.get_cell_divisions("wall")) if cfg else 3
-	var step: float = float(gm.tile_size) / float(maxi(1, divisions))
-	var span: float = from_world.distance_to(to_world)
 	var out: Array[Node] = []
-	var seen: Dictionary = {}
-	var steps: int = maxi(1, int(ceil(span / (step * 0.5))))
-	for i in range(steps + 1):
-		var at: Vector3 = from_world.lerp(to_world, float(i) / float(steps))
-		var fine: Vector2i = gm.world_to_fine_cell(at, divisions)
-		if seen.has(fine):
+	for cell in gm.build_cells_on_line(from_world, to_world):
+		if gm.is_build_cell_taken(cell):
 			continue
-		seen[fine] = true
 		var w = load("res://scripts/entities/Wall.gd").new()
 		world.add_child(w)
-		w.setup("wall", gm.fine_cell_to_cell(fine, divisions))
-		w.position = gm.fine_cell_to_world(fine, divisions)
+		w.setup("wall", gm.world_to_cell(gm.build_cell_to_world(cell)))
+		w.position = gm.build_cell_to_world(cell)
 		w.complete_construction()
-		gm.occupy_fine_cell(fine, w, divisions)
+		gm.occupy_building(w, [cell])
 		out.append(w)
+	if maps_of() != null:
+		maps_of().rebake()
+	return out
+
+## A ring of wall all the way round `centre` in a real level, placed the way a click places it:
+## one section in every build cell the circle passes through. `gate_bearing` (radians, 0 = +z,
+## the south) puts a gate in the ring there instead of a section -- on a bearing along an axis,
+## where the ring runs straight, so the gate has a section on each side. `built` false leaves
+## the lot as orders. Hands back everything that went down.
+func ring_in_level(main: Node, centre: Vector3, radius: float, built: bool = true, gate_bearing: float = NAN) -> Array[Node]:
+	var gm = main.grid_manager
+	var out: Array[Node] = []
+	var gate_cell := Vector2i(1 << 30, 1 << 30)
+	if not is_nan(gate_bearing):
+		gate_cell = gm.world_to_build_cell(centre + Vector3(sin(gate_bearing), 0.0, cos(gate_bearing)) * radius)
+	var seen: Dictionary = {}
+	var around: int = int(ceil(TAU * radius / float(_config().BUILD_CELL))) * 8
+	for i in range(around):
+		var a: float = TAU * float(i) / float(around)
+		var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(sin(a), 0.0, cos(a)) * radius)
+		if seen.has(cell):
+			continue
+		seen[cell] = true
+		var b = main.build_system.place_at("gate" if cell == gate_cell else "wall", cell, main.buildings_container, true)
+		if b == null:
+			continue
+		if built:
+			b.complete_construction()
+		out.append(b)
 	return out
 
 ## The maps of a nav fixture (or of a level -- there is only ever one set in the tree).

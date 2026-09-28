@@ -63,6 +63,8 @@ func _create_grid() -> Node:
 	_allocated_nodes.append(grid)
 	return grid
 
+## A bare node, which takes one cell of the building grid -- the one in the middle of the tile it
+## is stood in (GridManager.occupy_cell) -- so there is one entry in building_cells per node.
 func _create_node() -> Node3D:
 	var n = Node3D.new()
 	_allocated_nodes.append(n)
@@ -328,7 +330,7 @@ func test_challenge_rapid_cell_occupancy_burst() -> void:
 		assert_true(grid.is_cell_occupied(cell), "Cell %s must report occupied" % str(cell))
 		assert_eq(grid.get_building_at(cell), nodes[i], "Cell %s must hold placed node" % str(cell))
 
-	assert_eq(grid.occupied_cells.size(), count, "occupied_cells dictionary size must equal burst count")
+	assert_eq(grid.building_cells.size(), count, "building_cells size must equal burst count")
 	assert_eq(grid.get_all_buildings().size(), count, "get_all_buildings() must return all %d buildings" % count)
 
 	# Burst attempt duplicate placement on all 200 occupied cells
@@ -338,7 +340,7 @@ func test_challenge_rapid_cell_occupancy_burst() -> void:
 		assert_false(dup_success, "Duplicate occupy on cell %s must be rejected" % str(cell))
 		assert_eq(grid.get_building_at(cell), nodes[i], "Original node in cell %s preserved" % str(cell))
 
-	assert_eq(grid.occupied_cells.size(), count, "Dictionary size remains unchanged after duplicate attempts")
+	assert_eq(grid.building_cells.size(), count, "Dictionary size remains unchanged after duplicate attempts")
 
 # ==============================================================================
 # Challenge 9: Rapid Burst Vacate and Re-occupy
@@ -361,7 +363,7 @@ func test_challenge_rapid_burst_vacate_and_reoccupy() -> void:
 		var cell = Vector2i(i, -i)
 		grid.occupy_cell(cell, initial_nodes[i])
 
-	assert_eq(grid.occupied_cells.size(), count, "Grid fully occupied")
+	assert_eq(grid.building_cells.size(), count, "Grid fully occupied")
 
 	# Burst vacate all 150 cells
 	for i in range(count):
@@ -370,7 +372,7 @@ func test_challenge_rapid_burst_vacate_and_reoccupy() -> void:
 		assert_false(grid.is_cell_occupied(cell), "Cell %s must be unoccupied after vacate" % str(cell))
 		assert_null(grid.get_building_at(cell), "Cell %s building must be null after vacate" % str(cell))
 
-	assert_eq(grid.occupied_cells.size(), 0, "occupied_cells dictionary must be completely empty")
+	assert_eq(grid.building_cells.size(), 0, "building_cells must be completely empty")
 	assert_eq(grid.get_all_buildings().size(), 0, "get_all_buildings() returns empty list")
 
 	# Repeated vacate on empty cells (must be safe no-op)
@@ -387,7 +389,7 @@ func test_challenge_rapid_burst_vacate_and_reoccupy() -> void:
 		assert_true(grid.is_cell_occupied(cell), "Cell %s is now re-occupied" % str(cell))
 		assert_eq(grid.get_building_at(cell), replacement_nodes[i], "Cell %s holds replacement node" % str(cell))
 
-	assert_eq(grid.occupied_cells.size(), count, "Grid fully re-occupied")
+	assert_eq(grid.building_cells.size(), count, "Grid fully re-occupied")
 
 # ==============================================================================
 # Challenge 10: High-Frequency Single-Cell Ping-Pong (Chicane)
@@ -415,7 +417,7 @@ func test_challenge_high_frequency_single_cell_pingpong() -> void:
 		grid.vacate_cell(target_cell)
 		assert_false(grid.is_cell_occupied(target_cell), "Cycle %d: is_cell_occupied false" % cycle)
 		assert_null(grid.get_building_at(target_cell), "Cycle %d: building is null" % cycle)
-		assert_false(grid.occupied_cells.has(target_cell), "Cycle %d: cell key removed from map" % cycle)
+		assert_false(grid.building_cells.has(grid.tile_centre_build_cell(target_cell)), "Cycle %d: cell key removed from map" % cycle)
 
 # ==============================================================================
 # Challenge 11: Stale Node Pruning & Self-Healing Stress
@@ -431,7 +433,7 @@ func test_challenge_stale_node_pruning_and_self_healing() -> void:
 		nodes.append(_create_node())
 		grid.occupy_cell(Vector2i(i, 0), nodes[i])
 
-	assert_eq(grid.occupied_cells.size(), total, "Initial 60 cells occupied")
+	assert_eq(grid.building_cells.size(), total, "Initial 60 cells occupied")
 
 	# External state mutations without notifying GridManager:
 	# - Free 20 nodes immediately via .free()
@@ -542,12 +544,12 @@ func test_challenge_null_and_semantic_alias_invariants() -> void:
 	# 3. Double clear_grid safety
 	grid.occupy_cell(Vector2i(1, 1), _create_node())
 	grid.occupy_cell(Vector2i(2, 2), _create_node())
-	assert_eq(grid.occupied_cells.size(), 2, "2 occupied cells")
+	assert_eq(grid.building_cells.size(), 2, "2 occupied cells")
 
 	grid.clear_grid()
-	assert_eq(grid.occupied_cells.size(), 0, "clear_grid empties map")
+	assert_eq(grid.building_cells.size(), 0, "clear_grid empties map")
 	grid.clear_grid()
-	assert_eq(grid.occupied_cells.size(), 0, "Repeated clear_grid is safe idempotent no-op")
+	assert_eq(grid.building_cells.size(), 0, "Repeated clear_grid is safe idempotent no-op")
 
 # ==============================================================================
 # Challenge 14: Pseudo-Random State Machine Fuzz Harness (Oracle Simulation)
@@ -599,10 +601,10 @@ func test_challenge_state_machine_fuzz_harness() -> void:
 					assert_null(grid.get_building_at(cell), "Fuzz step %d: node is null for unoccupied" % step)
 
 			3: # Random Batch Verification
-				assert_eq(grid.occupied_cells.size(), oracle_map.size(), "Fuzz step %d: dictionary size matches oracle size" % step)
+				assert_eq(grid.building_cells.size(), oracle_map.size(), "Fuzz step %d: dictionary size matches oracle size" % step)
 
 	# Final clear verification
 	grid.clear_grid()
 	oracle_map.clear()
-	assert_eq(grid.occupied_cells.size(), 0, "Fuzz final clear: grid is empty")
+	assert_eq(grid.building_cells.size(), 0, "Fuzz final clear: grid is empty")
 	assert_eq(grid.get_all_buildings().size(), 0, "Fuzz final clear: get_all_buildings empty")

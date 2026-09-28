@@ -9,9 +9,9 @@
 # between them for a building game is the game's own. So the test of "use what is already
 # there" is not whether something was imported, it is how little is new underneath:
 #
-#   * the run is GridManager's OWN line traversal, asked at the fine grid's scale
+#   * the run is GridManager's OWN line traversal, asked at the building grid's scale
 #     instead of the tile's (one traversal, two scales, nothing to keep in step);
-#   * every stake goes down through the same BuildSystem.place_building a single click
+#   * every section goes down through the same Main.try_place_at_cell a single click
 #     uses, so paying, registering, telling the Hero and rebaking the navigation mesh all
 #     happen exactly as they always did;
 #   * the ghosts are the same Building.make_body the single ghost already used.
@@ -59,9 +59,6 @@ func _level(wood: int = 4000) -> Node:
 	await wait_frames(2)
 	return main
 
-func _divisions() -> int:
-	return int(config_node.get_cell_divisions("wall"))
-
 func _stakes_standing(main: Node) -> int:
 	var n: int = 0
 	for b in main.grid_manager.get_all_buildings():
@@ -73,13 +70,14 @@ func _stakes_standing(main: Node) -> int:
 func _drag(main: Node, from_world: Vector3, to_world: Vector3) -> int:
 	var gm = main.grid_manager
 	main.current_build_type = "wall"
-	main._drag_from = gm.world_to_fine_cell(from_world, _divisions())
+	main._drag_from = gm.world_to_build_cell(from_world)
 	main._dragging = true
+	# Centre to centre, as Main._run_to draws it.
 	var cells: Array[Vector2i] = []
-	for fine in gm.fine_cells_on_line(from_world, to_world, _divisions()):
-		var at: Vector3 = gm.fine_cell_to_world(fine, _divisions())
-		if main.build_system.can_place_building("wall", gm.world_to_cell(at), false, at):
-			cells.append(fine)
+	for cell in gm.build_cells_on_line(gm.build_cell_to_world(main._drag_from),
+			gm.build_cell_to_world(gm.world_to_build_cell(to_world))):
+		if main.build_system.can_place_at("wall", cell):
+			cells.append(cell)
 	main._end_drag()
 	return main._commit_run(cells)
 
@@ -105,8 +103,8 @@ func test_02_the_run_has_no_gaps_in_it_even_drawn_diagonally() -> void:
 	var main = await _level()
 	var gm = main.grid_manager
 	var core: Vector3 = cabin_at(main)
-	var line: Array[Vector2i] = gm.fine_cells_on_line(
-		core + Vector3(-5.0, 0.0, -6.0), core + Vector3(5.0, 0.0, -10.0), _divisions())
+	var line: Array[Vector2i] = gm.build_cells_on_line(
+		core + Vector3(-5.0, 0.0, -6.0), core + Vector3(5.0, 0.0, -10.0))
 
 	assert_gt(line.size(), 10, "The diagonal crosses plenty of cells")
 	for i in range(1, line.size()):
@@ -128,7 +126,8 @@ func test_03_a_dragged_fence_actually_seals() -> void:
 	var laid: int = 0
 	for i in range(4):
 		laid += _drag(main, corners[i], corners[(i + 1) % 4])
-	assert_gt(laid, 40, "A box of fence was ORDERED in four gestures")
+	var per_side: int = int(round(2.0 * half / float(config_node.BUILD_CELL)))
+	assert_eq(laid, per_side * 4, "A box of fence was ORDERED in four gestures, a section a cell")
 	await wait_frames(8)
 
 	# A drag orders work; it does not do it. Until the Hero has been round them the
@@ -145,7 +144,8 @@ func test_03_a_dragged_fence_actually_seals() -> void:
 	await wait_frames(8)
 
 	assert_false(main.nav_maps.is_reachable(outside, core), "Built, a raid has no way in")
-	assert_true(main.nav_maps.is_reachable(outside, core, true), "While the man who drew it does")
+	assert_false(main.nav_maps.is_reachable(outside, core, true),
+		"Nor has the man who drew it: a wall stops him too, and his way in is a gate")
 
 # ==============================================================================
 # 2. Without taking the old way away
@@ -162,7 +162,7 @@ func test_04_a_press_that_never_moves_still_lays_exactly_one() -> void:
 	var before: int = _stakes_standing(main)
 
 	# Pressed and released in the same place: no drag ever started.
-	main._drag_from = gm.world_to_fine_cell(spot, _divisions())
+	main._drag_from = gm.world_to_build_cell(spot)
 	main._dragging = false
 	var cells: Array[Vector2i] = [main._drag_from]
 	main._end_drag()
@@ -177,6 +177,8 @@ func test_05_only_walls_are_dragged_out() -> void:
 	# sort of barrier gets the drag for free and nothing has to be kept in step.
 	var main = await _level()
 	assert_true(main._is_dragged_out("wall"), "A fence is dragged")
+	assert_true(main._is_dragged_out("stone_wall"), "And so is a stone wall")
+	assert_false(main._is_dragged_out("gate"), "A gate is placed: it is one way through, not a run of them")
 	assert_false(main._is_dragged_out("tower"), "A turret is placed")
 	assert_false(main._is_dragged_out("core"), "And so is the cabin")
 	assert_eq(String(config_node.get_building_kind("wall")), "wall",
@@ -235,7 +237,7 @@ func test_09_cancelling_mid_drag_lays_nothing() -> void:
 	var gm = main.grid_manager
 	var core: Vector3 = cabin_at(main)
 	main.current_build_type = "wall"
-	main._drag_from = gm.world_to_fine_cell(core + Vector3(-5.0, 0.0, -8.0), _divisions())
+	main._drag_from = gm.world_to_build_cell(core + Vector3(-5.0, 0.0, -8.0))
 	main._dragging = true
 	var before: int = _stakes_standing(main)
 

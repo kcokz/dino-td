@@ -8,9 +8,11 @@
 # fences drawn along the axes, so a CURVE, which is what people actually draw, sealed
 # nothing however solid it looked. The engine has never needed telling about diagonals.
 #
-# The two maps differ by ONE BIT of a collision mask. "The Hero walks through his own
-# fence" stops being a flag threaded through the pathfinder, the line checks and the
-# reachability flood, and becomes layer 32 being absent from one bake.
+# The Hero's map and a raid's differ by ONE BIT of a collision mask. "The Hero walks through
+# his gate" is not a flag threaded through the pathfinder, the line checks and the
+# reachability flood: it is the gate layer being absent from one bake. (Until v0.6 round two
+# he walked through every fence of his own; now a wall stops everybody, and a gate is his way
+# through -- "而且人不能再穿过墙了".)
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -52,27 +54,9 @@ func _core_of(main: Node) -> Vector3:
 func _at_the_cabin(slack: float) -> float:
 	return float(config_node.get_building_footprint("core")) * 0.5 + slack
 
-## Stakes all the way round `centre`, placed the way a click places them.
+## A built ring of wall all the way round `centre` (test_base.ring_in_level); how many sections.
 func _ring_around(main: Node, centre: Vector3, radius: float) -> int:
-	var gm = main.grid_manager
-	var d: int = int(config_node.get_cell_divisions("wall"))
-	var step: float = float(config_node.TILE_SIZE) / float(d)
-	var seen: Dictionary = {}
-	var placed: int = 0
-	var around: int = int(ceil(TAU * radius / step)) * 4
-	for i in range(around):
-		var a: float = TAU * float(i) / float(around)
-		var at: Vector3 = centre + Vector3(sin(a) * radius, 0.0, cos(a) * radius)
-		var fine: Vector2i = gm.world_to_fine_cell(at, d)
-		if seen.has(fine):
-			continue
-		seen[fine] = true
-		var snap: Vector3 = gm.fine_cell_to_world(fine, d)
-		var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
-		if b != null:
-			b.complete_construction()
-			placed += 1
-	return placed
+	return ring_in_level(main, centre, radius).size()
 
 # ==============================================================================
 # 1. There is a mesh, and it is carved for a real walker
@@ -90,17 +74,18 @@ func test_01_the_level_bakes_two_maps() -> void:
 		"Which are different maps, or the exemption would leak both ways")
 
 func test_02_the_maps_differ_by_exactly_what_keeps_a_raid_out() -> void:
-	# The whole of "the Hero walks through his own fence", as bits rather than a flag
-	# threaded through the pathfinder -- and the siege map, which a siege animal walks and a
-	# raid asks for the wall in its way (v0.6 round two), sees no walls either.
+	# The whole of "the Hero walks through his gate", as a bit rather than a flag threaded
+	# through the pathfinder -- a wall is in both, since v0.6 round two -- and the siege map,
+	# which a siege animal walks and a raid asks for the wall in its way, sees no walls at all.
 	var main = _level()
 	await wait_frames(6)
 	var raid_mask: int = main.nav_maps._mask_for(NavMaps.For.RAID)
 	var hero_mask: int = main.nav_maps._mask_for(NavMaps.For.HERO)
 	var siege_mask: int = main.nav_maps._mask_for(NavMaps.For.SIEGE)
 
-	assert_eq(raid_mask ^ hero_mask, int(config_node.LAYER_WALL) | int(config_node.LAYER_GATE),
-		"The only difference between them is the walls and gates")
+	assert_eq(raid_mask ^ hero_mask, int(config_node.LAYER_GATE),
+		"The only difference between them is the gates")
+	assert_ne(hero_mask & int(config_node.LAYER_WALL), 0, "A wall is in the way of the Hero too")
 	assert_eq(siege_mask & (int(config_node.LAYER_WALL) | int(config_node.LAYER_GATE)), 0,
 		"The siege map sees no walls")
 	assert_ne(raid_mask & 2, 0, "Both still see the wreck and the turrets")
@@ -134,8 +119,10 @@ func test_04_open_ground_is_a_route() -> void:
 	assert_gt(route.size(), 1, "There is a way across open ground")
 	assert_true(main.nav_maps.is_reachable(far, core), "And it counts as reaching")
 
-func test_05_a_sealed_ring_stops_a_raid_and_not_the_hero() -> void:
-	# The case the hand-written rule was written for, twice, asked of the engine instead.
+func test_05_a_sealed_ring_stops_everybody_and_a_gate_lets_him_in() -> void:
+	# The case the hand-written rule was written for, twice, asked of the engine instead. A ring
+	# of wall shuts out a raid and the Hero alike (v0.6 round two: "人不能再穿过墙了"); a gate in
+	# it is his way in, and still none for a raid.
 	var main = _level()
 	await wait_frames(6)
 	if game_state_node and "resources" in game_state_node:
@@ -143,14 +130,26 @@ func test_05_a_sealed_ring_stops_a_raid_and_not_the_hero() -> void:
 	var core: Vector3 = _core_of(main)
 	var far: Vector3 = core + Vector3(0.0, 0.0, -16.0)
 
-	var placed: int = _ring_around(main, core, 4.0)
-	assert_gt(placed, 12, "A ring of stakes went up round the cabin")
+	var ring: Array[Node] = ring_in_level(main, core, 4.0)
+	assert_gt(ring.size(), 12, "A ring of wall went up round the cabin")
 	await wait_frames(6)
-
 	assert_false(main.nav_maps.is_reachable(far, core),
 		"A raid has no way in -- and it is a CURVE, which the first hand-written rule missed")
-	assert_true(main.nav_maps.is_reachable(far, core, true),
-		"The man who built it does")
+	assert_false(main.nav_maps.is_reachable(far, core, true),
+		"Nor has the man who built it: a wall stops him too")
+
+	# One section to the south taken down, a gate hung in its place.
+	var south: Vector2i = main.grid_manager.world_to_build_cell(core + Vector3(0.0, 0.0, 4.0))
+	var section = main.grid_manager.building_in_build_cell(south)
+	assert_not_null(section, "There is a section due south")
+	section.destroy()
+	await wait_frames(2)
+	var gate = main.build_system.place_at("gate", south, main.buildings_container, true)
+	assert_not_null(gate, "A gate goes in where it stood")
+	gate.complete_construction()
+	await wait_frames(8)
+	assert_true(main.nav_maps.is_reachable(far, core, true), "Now he has a way in: the gate")
+	assert_false(main.nav_maps.is_reachable(far, core), "And a raid still has none")
 
 # test_06 is gone with its subject. It held the navmesh and the grid flood side by side
 # and required them to agree, on the grounds that while both existed whichever one a
@@ -168,29 +167,15 @@ func test_07_a_blueprint_ring_seals_nothing() -> void:
 		game_state_node.resources["wood"] = 4000
 	var core: Vector3 = _core_of(main)
 	var far: Vector3 = core + Vector3(0.0, 0.0, -16.0)
-	var gm = main.grid_manager
-	var d: int = int(config_node.get_cell_divisions("wall"))
-	var step: float = float(config_node.TILE_SIZE) / float(d)
 
-	var seen: Dictionary = {}
-	var ordered: int = 0
-	var around: int = int(ceil(TAU * 4.0 / step)) * 4
-	for i in range(around):
-		var a: float = TAU * float(i) / float(around)
-		var at: Vector3 = core + Vector3(sin(a) * 4.0, 0.0, cos(a) * 4.0)
-		var fine: Vector2i = gm.world_to_fine_cell(at, d)
-		if seen.has(fine):
-			continue
-		seen[fine] = true
-		var snap: Vector3 = gm.fine_cell_to_world(fine, d)
-		# start_as_blueprint, and never completed.
-		if main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap) != null:
-			ordered += 1
-	assert_gt(ordered, 12, "A whole ring was ORDERED")
+	# Ordered, and never built.
+	var ordered: Array[Node] = ring_in_level(main, core, 4.0, false)
+	assert_gt(ordered.size(), 12, "A whole ring was ORDERED")
 	await wait_frames(6)
 
 	assert_true(main.nav_maps.is_reachable(far, core),
 		"And a raid walks straight through it, because none of it is built")
+	assert_true(main.nav_maps.is_reachable(far, core, true), "And so does the Hero")
 
 # ==============================================================================
 # 3. Being put back on the mesh is a correction, not a teleport
@@ -344,7 +329,7 @@ func test_12_the_dinosaur_and_the_mesh_give_the_same_answer() -> void:
 	assert_false(dino._there_is_a_way_round(core), "Which says there is no way in")
 
 # ==============================================================================
-# 5. The Hero walks the same mesh, with his own fence left out of it
+# 5. The Hero walks the same mesh, with his gates left out of it
 # ==============================================================================
 
 func test_13_his_route_to_a_building_ends_where_he_can_work_from() -> void:
@@ -375,21 +360,36 @@ func test_13_his_route_to_a_building_ends_where_he_can_work_from() -> void:
 	assert_gt(stand.distance_to(cabin.global_position), 0.0,
 		"Beside the cabin rather than inside it")
 
-func test_14_his_own_fence_is_not_something_to_walk_round() -> void:
-	# The exemption, as the two bakes rather than a flag: a route for him goes THROUGH a
-	# line of his own stakes, and the same route for a raid does not exist at all.
+func test_14_his_way_through_a_fence_is_its_gate() -> void:
+	# His exemption, as the two bakes rather than a flag: a route for him goes THROUGH the gate
+	# in a ring, and the same route for a raid does not exist at all. Through the gate, not the
+	# wall: the end of his route is at the cabin, and its way in crosses the ring where the gate
+	# stands.
 	var main = _level()
 	await wait_frames(8)
 	if game_state_node and "resources" in game_state_node:
 		game_state_node.resources["wood"] = 4000
 	var core: Vector3 = _core_of(main)
-	_ring_around(main, core, 4.0)
+	var ring: Array[Node] = ring_in_level(main, core, 4.0, true, 0.0)
+	var gates: int = 0
+	for b in ring:
+		if String(b.building_type) == "gate":
+			gates += 1
+	assert_eq(gates, 1, "The ring has one gate in it, due south")
 	await wait_frames(8)
 	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
 
 	var his: PackedVector3Array = main.nav_maps.path(outside, core, true)
 	assert_gt(his.size(), 1, "He has a way in")
 	assert_lt(his[his.size() - 1].distance_to(core), _at_the_cabin(0.5) * 1.42, "That actually gets there")
+	var gate_at: Vector3 = main.grid_manager.build_cell_to_world(
+		main.grid_manager.world_to_build_cell(core + Vector3(0.0, 0.0, 4.0)))
+	var through_the_gate: bool = false
+	for i in range(his.size() - 1):
+		var mid: Vector3 = Geometry3D.get_closest_point_to_segment(gate_at, his[i], his[i + 1])
+		if Vector2(mid.x - gate_at.x, mid.z - gate_at.z).length() < float(config_node.BUILD_CELL) * 0.75:
+			through_the_gate = true
+	assert_true(through_the_gate, "Through the gate")
 	assert_false(main.nav_maps.is_reachable(outside, core), "And a raid has none")
 
 # ==============================================================================
@@ -464,22 +464,18 @@ func test_16_a_fence_that_does_not_enclose_anything_seals_nothing() -> void:
 	var core: Vector3 = _core_of(main)
 	if main.hero:
 		main.hero.global_position = core + Vector3(0.0, 0.0, 16.0)
-	var d: int = int(config_node.get_cell_divisions("wall"))
 
-	# Pressed against the cabin on two sides, and nothing at all on the other two: a row of
-	# stakes along the tiles just outside its block on the west, and along the north.
-	var fine_step: float = float(config_node.TILE_SIZE) / float(d)
-	var lo: Vector2i = gm.world_to_fine_cell(gm.cell_to_world_origin(config_node.map_data()["default_core_cell"])
-		+ Vector3(fine_step * 0.5, 0.0, fine_step * 0.5), d)
-	var along: int = int(round(float(config_node.get_building_span("core")) * float(config_node.TILE_SIZE) / fine_step))
-	var fine_cells: Array[Vector2i] = [lo + Vector2i(-1, -1)]
-	for i in range(along):
-		fine_cells.append(lo + Vector2i(-1, i))
-		fine_cells.append(lo + Vector2i(i, -1))
+	# Pressed against the cabin on two sides, and nothing at all on the other two: a line of wall
+	# along the cells just outside its block on the west, and along the north.
+	var middle: Vector2i = gm.world_to_build_cell(core)
+	var half: int = (int(config_node.get_building_cells("core")) - 1) / 2
+	var cells: Array[Vector2i] = [middle + Vector2i(-half - 1, -half - 1)]
+	for i in range(-half, half + 1):
+		cells.append(middle + Vector2i(-half - 1, i))
+		cells.append(middle + Vector2i(i, -half - 1))
 	var placed: int = 0
-	for fine in fine_cells:
-		var snap: Vector3 = gm.fine_cell_to_world(fine, d)
-		var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
+	for cell in cells:
+		var b = main.build_system.place_at("wall", cell, main.buildings_container, true)
 		if b != null:
 			b.complete_construction()
 			placed += 1
@@ -524,7 +520,7 @@ func test_17_and_a_route_that_stops_somewhere_else_still_means_no() -> void:
 	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
 
 	assert_false(main.nav_maps.is_reachable(outside, core), "A raid still has no way in")
-	assert_true(main.nav_maps.is_reachable(outside, core, true), "And the Hero still has one")
+	assert_false(main.nav_maps.is_reachable(outside, core, true), "Nor the Hero, with no gate in it")
 
 func test_18_the_tolerance_is_about_the_mesh_and_not_about_buildings() -> void:
 	# What makes the rule hold whatever is standing in the way: the only number left in
@@ -565,10 +561,8 @@ func test_19_a_fence_the_hero_has_just_finished_actually_blocks() -> void:
 		main.hero.global_position = core + Vector3(0.0, 0.0, 20.0)
 	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
 
-	# Ordered, and then LEFT for a while, which is the part that matters.
-	var ordered: Array[Node] = []
-	for b in _ring_around_as_blueprints(main, core, 4.0):
-		ordered.append(b)
+	# Ordered, with a gate in it, and then LEFT for a while, which is the part that matters.
+	var ordered: Array[Node] = ring_in_level(main, core, 4.0, false, 0.0)
 	assert_gt(ordered.size(), 12, "A ring was ordered")
 	await wait_frames(8)
 	assert_true(main.nav_maps.is_reachable(outside, core),
@@ -582,25 +576,4 @@ func test_19_a_fence_the_hero_has_just_finished_actually_blocks() -> void:
 
 	assert_false(main.nav_maps.is_reachable(outside, core),
 		"Finished, it stops a raid -- without anything else being built to jog the meshes")
-	assert_true(main.nav_maps.is_reachable(outside, core, true), "And the Hero still gets in")
-
-## A ring ORDERED and left unbuilt, handed back so a test can finish it later.
-func _ring_around_as_blueprints(main: Node, centre: Vector3, radius: float) -> Array[Node]:
-	var gm = main.grid_manager
-	var d: int = int(config_node.get_cell_divisions("wall"))
-	var step: float = float(config_node.TILE_SIZE) / float(d)
-	var seen: Dictionary = {}
-	var out: Array[Node] = []
-	var around: int = int(ceil(TAU * radius / step)) * 4
-	for i in range(around):
-		var a: float = TAU * float(i) / float(around)
-		var at: Vector3 = centre + Vector3(sin(a) * radius, 0.0, cos(a) * radius)
-		var fine: Vector2i = gm.world_to_fine_cell(at, d)
-		if seen.has(fine):
-			continue
-		seen[fine] = true
-		var snap: Vector3 = gm.fine_cell_to_world(fine, d)
-		var b = main.build_system.place_building("wall", gm.world_to_cell(snap), main.buildings_container, true, snap)
-		if b != null:
-			out.append(b)
-	return out
+	assert_true(main.nav_maps.is_reachable(outside, core, true), "And the Hero gets in by its gate")

@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from generate_flora import (Builder, mix, jitter, vertex_colour_material, reset, export,  # noqa: E402
                             UP, PREVIEW_DIR, foliage_clump, frond, FROND_BASE, FROND_TIP)
-from mathutils import Vector  # noqa: E402
+from mathutils import Matrix, Vector  # noqa: E402
 
 REPO = r"z:\home\zkl-unix\repo\game\dino"
 OUT_DIR = os.path.join(REPO, "assets", "models", "props")
@@ -41,112 +41,6 @@ MOSS = (0.16, 0.26, 0.07)
 LICHEN = (0.55, 0.52, 0.30)
 
 
-# ==============================================================================
-# The stake
-# ==============================================================================
-
-def stake(seed, bone=False):
-    """One sharpened log driven into the ground, authored to its exact envelope:
-    Config.BUILDINGS.wall.spike_diameter wide (0.62m) and its height (0.95m) tall.
-
-    What makes it read as a stake someone MADE, from a camera twenty metres up:
-
-      * the point is CUT -- flat facets of pale fresh wood where the axe went, not a
-        smooth cone -- and cut a little off-centre, the way a hand cuts;
-      * the very tip is CHARRED black: points were fire-hardened, and a dark tip is
-        what says "weapon" rather than "post";
-      * a band of VINE lashing round it, with a loose end hanging;
-      * the bark is ridged, and a lip of it stands proud where the cut begins;
-      * it stands in a MOUND of disturbed earth, because it was driven in.
-    """
-    rng = random.Random(seed)
-    b = Builder()
-
-    # The mound: turned earth round the foot, lumpy at the rim.
-    rim = []
-    n = 14
-    for k in range(n):
-        a = math.tau * k / n
-        r = 0.30 * rng.uniform(0.86, 1.03)
-        rim.append(Vector((math.cos(a) * r, math.sin(a) * r, 0.0)))
-    crown = [p * 0.55 + UP * rng.uniform(0.05, 0.08) for p in rim]
-    centre = UP * 0.08
-    for k in range(n):
-        k2 = (k + 1) % n
-        b.quad(rim[k], rim[k2], crown[k2], crown[k], SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
-        b.tri(crown[k], crown[k2], centre, SOIL_LIGHT, SOIL_LIGHT, SOIL)
-    # a few stones kicked up in it
-    for _ in range(4):
-        a = rng.uniform(0.0, math.tau)
-        r = rng.uniform(0.18, 0.27)
-        foliage_clump(b, Vector((math.cos(a) * r, math.sin(a) * r, 0.04)), rng.uniform(0.025, 0.04),
-                      0.7, rng, ROCK_DARK, ROCK)
-
-    # The shaft: ridged bark, a slight lean, tapering a little.
-    lean = Vector((rng.uniform(-0.02, 0.02), rng.uniform(-0.02, 0.02), 0.0))
-    sides = 10
-    ridges = [rng.uniform(0.9, 1.1) for _ in range(sides)]
-    shaft_top = 0.66
-    spine = [UP * (0.02 + (shaft_top - 0.02) * i / 6) + lean * (i / 6) for i in range(7)]
-    radii = [0.135 - 0.012 * i / 6 for i in range(7)]
-    cols = [mix(BARK, BARK_LIGHT, 0.45 if i % 2 else 0.1) for i in range(7)]
-    rings = b.tube(spine, radii, cols, sides, radial=lambda i, k: ridges[k] * (1.0 + 0.03 * math.sin(i * 1.7 + k)))
-
-    # The bark lip where the cut begins, a hair proud of the shaft.
-    lip_lo = spine[-1]
-    lip = [lip_lo + (p - lip_lo) * 1.06 for p in rings[-1]]
-    for k in range(sides):
-        k2 = (k + 1) % sides
-        b.quad(rings[-1][k], rings[-1][k2], lip[k2], lip[k], BARK, BARK, BARK_LIGHT, BARK_LIGHT)
-
-    # The point: flat cut facets, off-centre, pale wood darkening to a charred tip. With a
-    # bone point to carry, the log is only cut down to a short blunt wedge it is lashed to.
-    if bone:
-        _bone_point(b, spine[-1], lean, rng)
-    tip = spine[-1] + UP * (0.07 if bone else 0.29) + Vector((rng.uniform(-0.025, 0.025), rng.uniform(-0.025, 0.025), 0.0))
-    tip_col = FRESH_WOOD if bone else CHAR
-    facets = 6
-    for f in range(facets):
-        # each facet takes a run of the lip's vertices down to the tip
-        k0 = int(f * sides / facets)
-        k1 = int((f + 1) * sides / facets)
-        mid = tip * 0.45 + lip[k0] * 0.55
-        for k in range(k0, k1):
-            k2 = (k + 1) % sides
-            b.tri(lip[k], lip[k2], mid, FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, tip_col, 0.35))
-        b.tri(lip[k0], mid, tip, FRESH_WOOD, mix(FRESH_WOOD, tip_col, 0.35), tip_col)
-        b.tri(mid, lip[k1 % sides], tip, mix(FRESH_WOOD, tip_col, 0.35), FRESH_WOOD, tip_col)
-
-    # The lashing: two wraps of vine round the upper shaft, and a hanging end -- and with a
-    # bone point, two more high up, binding it to the wedge.
-    for w in range(4 if bone else 2):
-        z = (0.46 + w * 0.045) if w < 2 else (0.60 + (w - 2) * 0.05)
-        c = UP * z + lean * (z / shaft_top)
-        pts = []
-        for k in range(13):
-            a = math.tau * k / 12 + w * 0.4
-            pts.append(c + Vector((math.cos(a), math.sin(a), 0.0)) * (0.138 + 0.004 * w) + UP * (0.01 * math.sin(a * 2)))
-        b.tube(pts, [0.013] * 13, [mix(VINE, VINE_DARK, 0.5 if k % 3 == 0 else 0.0) for k in range(13)], 5)
-    end = [UP * 0.47 + Vector((0.14, 0.0, 0.0)), UP * 0.40 + Vector((0.17, 0.02, 0.0)),
-           UP * 0.33 + Vector((0.165, 0.035, 0.0))]
-    b.tube(end, [0.011, 0.009, 0.006], [VINE, VINE, VINE_DARK], 4)
-    return b
-
-
-def _bone_point(b, top, lean, rng):
-    """A long bone ground to a point and set upright in the split top of a stake, up to the
-    stake's full 0.95 m: pale, yellowing where it is bound, with a slight curve the way a bone
-    has one. From twenty metres up it is the one pale thing on a dark log."""
-    base = top - UP * 0.04
-    length = 0.95 - base.z
-    bend = Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)).normalized() * 0.035
-    ts = [0.0, 0.25, 0.5, 0.75, 1.0]
-    pts = [base + UP * (length * t) + bend * (t * t) + lean * 0.3 * t for t in ts]
-    stained = mix(BONE, (0.45, 0.36, 0.20), 0.35)
-    bleached = mix(BONE, (0.95, 0.93, 0.86), 0.45)
-    b.tube(pts, [0.050, 0.044, 0.034, 0.019, 0.003], [stained, BONE, BONE, bleached, bleached], 7)
-
-
 def _dry_stone(b, lo, hi, rng, col):
     """One roughly squared stone from `lo` to `hi`: its corners pushed about a little, the
     top a shade lighter where the light falls and the sides darkening into the joints.
@@ -166,8 +60,10 @@ def _dry_stone(b, lo, hi, rng, col):
 
 
 def stone_wall(seed):
-    """A drystone wall filling its tile, to Config.BUILDINGS.stone_wall's envelope: 2 m square
-    (a hair inside, so a row of them does not flicker where they meet) and 1.1 m tall.
+    """A drystone wall filling its cell, to Config.BUILDINGS.stone_wall's envelope: a metre square
+    (a hair inside, so a row of them does not flicker where they meet) and 1.2 m tall -- one cell
+    of the building grid since v0.6 round two, so a line of them is a wall and one stands flush
+    against whatever is in the next cell.
 
     Courses of roughly squared, unmortared stone, the joints staggered from one course to the
     next the way a waller lays them, so no crack runs straight up; each course set in a little
@@ -176,12 +72,12 @@ def stone_wall(seed):
     stone heaped ON PURPOSE -- courses, not one more boulder."""
     rng = random.Random(seed)
     b = Builder()
-    half = 0.97
-    height = 1.1
+    half = 0.485
+    height = 1.2
     cap = 0.13
     courses = 4
     body = height - cap
-    rows = 4
+    rows = 2
     for c in range(courses):
         z0 = body * c / courses
         z1 = body * (c + 1) / courses
@@ -192,7 +88,7 @@ def stone_wall(seed):
             y0 = lo_edge + r * row_w
             x = lo_edge - (0.22 if (c + r) % 2 else 0.0)
             while x < hi_edge - 0.06:
-                length = rng.uniform(0.34, 0.62)
+                length = rng.uniform(0.24, 0.42)
                 x0, x1 = max(lo_edge, x), min(hi_edge, x + length)
                 if x1 - x0 > 0.1:
                     col = mix(ROCK_DARK, ROCK, rng.uniform(0.25, 0.95))
@@ -207,7 +103,7 @@ def stone_wall(seed):
     lo_edge, hi_edge = -half + inset, half - inset
     x = lo_edge
     while x < hi_edge - 0.06:
-        width = rng.uniform(0.28, 0.42)
+        width = rng.uniform(0.22, 0.32)
         x0, x1 = x, min(hi_edge, x + width)
         col = mix(ROCK, ROCK_LIGHT, rng.uniform(0.0, 0.5))
         if rng.random() < 0.3:
@@ -217,7 +113,7 @@ def stone_wall(seed):
                    Vector((x1 - 0.01, hi_edge - 0.02, height - 0.05 + lift)), rng, col)
         x += width
     # Rubble fallen at the foot, and a little moss where it lies.
-    for _ in range(7):
+    for _ in range(4):
         side = rng.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
         along = rng.uniform(-half * 0.9, half * 0.9)
         # inside the tile: a wall whose rubble spilled past it would be fitted smaller than its tile
@@ -228,6 +124,217 @@ def stone_wall(seed):
         p = Vector((side[0] * (half - 0.08) + side[1] * along, side[1] * (half - 0.08) + side[0] * along, size * 0.53))
         _boulder(b, p, size, rng)
     return b
+
+
+# ==============================================================================
+# The palisade and the gate (v0.6 round two): a metre of wall that joins what is beside it
+# ==============================================================================
+# The walls are one cell of the building grid each (Config.BUILD_CELL, a metre), and a
+# palisade section's art is a KIT of parts the game shows or hides by what stands in the
+# cells beside it (Wall.gd): a post in the middle, and a run of logs out to each side. The
+# runs reach the cell's edge, where the next section's run meets them, so a line of sections
+# is one palisade. In Blender +Y is north (the glTF export turns it into the game's -Z).
+
+PALISADE_HEIGHT = 1.25
+RAIL = (0.36, 0.26, 0.16)
+
+
+def _palisade_log(b, base, height, radius, rng, bone=False):
+    """One sharpened log of a palisade: ridged bark, a lip where the cut begins, and axe-cut
+    facets of pale fresh wood darkening to a charred point -- or, with a bone to carry, cut
+    down to a short wedge with a bone point lashed upright on it, up to the same height."""
+    lean = Vector((rng.uniform(-0.015, 0.015), rng.uniform(-0.015, 0.015), 0.0))
+    sides = 7
+    shaft_top = height - (0.16 if bone else 0.26)
+    n = 4
+    spine = [base + UP * (shaft_top * i / n) + lean * (i / n) for i in range(n + 1)]
+    radii = [radius * (1.0 - 0.1 * i / n) for i in range(n + 1)]
+    cols = [mix(BARK, BARK_LIGHT, 0.45 if i % 2 else 0.12) for i in range(n + 1)]
+    ridges = [rng.uniform(0.88, 1.08) for _ in range(sides)]
+    rings = b.tube(spine, radii, cols, sides, radial=lambda i, k: ridges[k])
+    top = spine[-1]
+    tip_col = FRESH_WOOD if bone else CHAR
+    tip = top + UP * (0.06 if bone else 0.26) + Vector((rng.uniform(-0.02, 0.02), rng.uniform(-0.02, 0.02), 0.0))
+    for k in range(sides):
+        k2 = (k + 1) % sides
+        b.tri(rings[-1][k], rings[-1][k2], tip, FRESH_WOOD, FRESH_WOOD, tip_col)
+    if bone:
+        length = height - top.z + 0.02
+        bend = Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)).normalized() * 0.02
+        foot = top - UP * 0.03
+        ts = [0.0, 0.35, 0.7, 1.0]
+        pts = [foot + UP * (length * t) + bend * (t * t) for t in ts]
+        stained = mix(BONE, (0.45, 0.36, 0.20), 0.35)
+        bleached = mix(BONE, (0.95, 0.93, 0.86), 0.45)
+        b.tube(pts, [radius * 0.45, radius * 0.38, radius * 0.2, 0.004], [stained, BONE, bleached, bleached], 6)
+    return spine
+
+
+def _spike(b, base, tip, radius, rng, bone=False):
+    """A sharpened stake set slanting out of the earth towards whatever comes: bark up to where
+    the cut begins, then facets of fresh wood to a charred point -- or, on a bone palisade, a
+    bone point lashed on where the cut would be."""
+    axis = tip - base
+    cut = 0.6 if not bone else 0.72
+    sides = 5
+    spine = [base + axis * (cut * i / 3) for i in range(4)]
+    radii = [radius * (1.0 - 0.12 * i / 3) for i in range(4)]
+    cols = [mix(BARK, BARK_LIGHT, 0.4 if i % 2 else 0.1) for i in range(4)]
+    rings = b.tube(spine, radii, cols, sides)
+    point = tip if not bone else base + axis * (cut + 0.06)
+    tip_col = CHAR if not bone else FRESH_WOOD
+    for k in range(sides):
+        k2 = (k + 1) % sides
+        b.tri(rings[-1][k], rings[-1][k2], point, FRESH_WOOD, FRESH_WOOD, tip_col)
+    if bone:
+        foot = base + axis * (cut - 0.04)
+        ts = [0.0, 0.5, 1.0]
+        stained = mix(BONE, (0.45, 0.36, 0.20), 0.35)
+        bleached = mix(BONE, (0.95, 0.93, 0.86), 0.45)
+        b.tube([foot + (tip - foot) * t for t in ts], [radius * 0.5, radius * 0.3, 0.004], [stained, BONE, bleached], 5)
+
+
+## Where the slanting stakes of a section reach to: a hair inside its cell (Config.BUILD_CELL, a
+## metre), so the section is as big as the cell it fills -- and waist-high on a raptor, where it
+## presses against them.
+SPIKE_REACH = 0.46
+SPIKE_TIP_HEIGHT = 0.5
+
+
+def _lashing(b, centre, radius, rng):
+    """A wrap of vine round a log where the rail crosses it."""
+    pts = []
+    for k in range(10):
+        a = math.tau * k / 9 + rng.uniform(0.0, 0.3)
+        pts.append(centre + Vector((math.cos(a), math.sin(a), 0.0)) * (radius + 0.012) + UP * (0.012 * math.sin(a * 2)))
+    b.tube(pts, [0.011] * 10, [mix(VINE, VINE_DARK, 0.5 if k % 3 == 0 else 0.0) for k in range(10)], 4)
+
+
+def _earth_strip(b, x0, x1, width, rng):
+    """Turned earth along a run, a low ridge from x0 to x1 (the run's own frame)."""
+    steps = 3
+    for i in range(steps):
+        a = x0 + (x1 - x0) * i / steps
+        c = x0 + (x1 - x0) * (i + 1) / steps
+        h = rng.uniform(0.035, 0.06)
+        w = width * rng.uniform(0.85, 1.05)
+        pa, pb = Vector((a, -w * 0.5, 0.0)), Vector((c, -w * 0.5, 0.0))
+        pc, pd = Vector((c, w * 0.5, 0.0)), Vector((a, w * 0.5, 0.0))
+        ridge_a, ridge_c = Vector((a, 0.0, h)), Vector((c, 0.0, h))
+        b.quad(pa, pb, ridge_c, ridge_a, SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
+        b.quad(ridge_a, ridge_c, pc, pd, SOIL_LIGHT, SOIL_LIGHT, SOIL, SOIL)
+
+
+def _palisade_run(seed, bone, turn):
+    """The run of a palisade section from its post out to the edge of its cell, eastward, then
+    turned `turn` radians about the vertical: two logs, the rail they are lashed to, turned
+    earth under the whole width of the cell, and sharpened stakes slanting out of it to both
+    sides -- out to the cell's edge, so what a raptor walks into is what it sees, and what it
+    presses against is the points (Wall.touches)."""
+    rng = random.Random(seed)
+    b = Builder()
+    _earth_strip(b, 0.08, 0.5, SPIKE_REACH * 2.0, rng)
+    for x in (0.2, 0.4):
+        for side in (-1.0, 1.0):
+            along = x + rng.uniform(-0.03, 0.03)
+            base = Vector((along, side * 0.1, 0.03))
+            tip = Vector((along + rng.uniform(-0.04, 0.04), side * SPIKE_REACH * rng.uniform(0.96, 1.0),
+                          SPIKE_TIP_HEIGHT * rng.uniform(0.9, 1.05)))
+            _spike(b, base, tip, rng.uniform(0.036, 0.044), rng, bone)
+    rail_z = 0.62
+    for x in (0.25, 0.42):
+        base = Vector((x, rng.uniform(-0.02, 0.02), 0.0))
+        radius = rng.uniform(0.08, 0.092)
+        height = PALISADE_HEIGHT * rng.uniform(0.92, 1.0)
+        _palisade_log(b, base, height, radius, rng, bone)
+        _lashing(b, base + UP * rail_z, radius, rng)
+    b.tube([Vector((0.06, 0.0, rail_z)), Vector((0.5, 0.0, rail_z + rng.uniform(-0.02, 0.02)))],
+           [0.028, 0.026], [RAIL, mix(RAIL, BARK_LIGHT, 0.4)], 5)
+    spin = Matrix.Rotation(turn, 3, 'Z')
+    b.verts = [spin @ v for v in b.verts]
+    return b
+
+
+def palisade(seed, bone=False):
+    """A metre of palisade (Config.BUILDINGS.wall / bone_stake) as a kit the game dresses by what
+    is beside it (Wall.dress): Post, the stout log in the middle of the cell on its mound, and
+    Run_E / Run_W / Run_N / Run_S, the logs from the post out to each side. With every part
+    shown it is a block of stakes as big as the cell, which is how a section stands alone."""
+    rng = random.Random(seed)
+    post = Builder()
+    rim = []
+    for k in range(10):
+        a = math.tau * k / 10
+        rim.append(Vector((math.cos(a), math.sin(a), 0.0)) * 0.2 * rng.uniform(0.9, 1.05))
+    crown = [q * 0.5 + UP * rng.uniform(0.05, 0.07) for q in rim]
+    for k in range(10):
+        k2 = (k + 1) % 10
+        post.quad(rim[k], rim[k2], crown[k2], crown[k], SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
+        post.tri(crown[k], crown[k2], UP * 0.07, SOIL_LIGHT, SOIL_LIGHT, SOIL)
+    _palisade_log(post, Vector((0.0, 0.0, 0.0)), PALISADE_HEIGHT * 1.04, 0.105, rng, bone)
+    _lashing(post, UP * 0.62, 0.105, rng)
+    # Out to the corners of the cell, which no run reaches: a section at a corner or alone is
+    # points all round.
+    for k in range(4):
+        a = math.pi * 0.25 + math.pi * 0.5 * k + rng.uniform(-0.08, 0.08)
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        corner = SPIKE_REACH * math.sqrt(2.0) * 0.92
+        _spike(post, d * 0.14 + UP * 0.03, d * corner + UP * SPIKE_TIP_HEIGHT * rng.uniform(0.9, 1.05),
+               rng.uniform(0.036, 0.044), rng, bone)
+    parts = [("Post", post, Vector((0.0, 0.0, 0.0)))]
+    for name, turn, s2 in (("Run_E", 0.0, 1), ("Run_N", math.pi * 0.5, 2), ("Run_W", math.pi, 3), ("Run_S", -math.pi * 0.5, 4)):
+        parts.append((name, _palisade_run(seed * 10 + s2, bone, turn), Vector((0.0, 0.0, 0.0))))
+    return parts
+
+
+PLANK = (0.46, 0.33, 0.19)
+PLANK_LIGHT = (0.60, 0.46, 0.29)
+
+
+def _plank(b, x0, x1, z0, z1, depth, rng, col):
+    """A split plank from x0 to x1 and z0 to z1, `depth` thick, its top cut a little ragged."""
+    y = depth * 0.5
+    top0, top1 = z1 + rng.uniform(-0.03, 0.02), z1 + rng.uniform(-0.03, 0.02)
+    front = [Vector((x0, -y, z0)), Vector((x1, -y, z0)), Vector((x1, -y, top1)), Vector((x0, -y, top0))]
+    back = [Vector((x0, y, z0)), Vector((x1, y, z0)), Vector((x1, y, top1)), Vector((x0, y, top0))]
+    light = mix(col, PLANK_LIGHT, 0.5)
+    b.quad(front[0], front[1], front[2], front[3], col, col, light, light)
+    b.quad(back[1], back[0], back[3], back[2], col, col, light, light)
+    b.quad(front[3], front[2], back[2], back[3], light, light, light, light)
+    b.quad(front[0], front[3], back[3], back[0], col, light, light, col)
+    b.quad(front[2], front[1], back[1], back[2], light, col, col, light)
+
+
+def gate(seed):
+    """A gate in a wall (Config.BUILDINGS.gate): Frame -- two gateposts on mounds, a lintel lashed
+    across their tops -- and Door, planks lashed to two battens and a brace, hung on vine loops
+    from the western post. The Door's origin is its hinge, so turning it about the vertical
+    swings it open (Gate.gd). It spans the cell along X, the way the wall it stands in runs."""
+    rng = random.Random(seed)
+    frame = Builder()
+    post_x = 0.43
+    for sx in (-1.0, 1.0):
+        base = Vector((sx * post_x, 0.0, 0.0))
+        _palisade_log(frame, base, 1.45, 0.07, rng)
+        _lashing(frame, base + UP * 1.3, 0.07, rng)
+        _lashing(frame, base + UP * 0.28, 0.07, rng)
+    frame.tube([Vector((-post_x - 0.05, 0.0, 1.3)), Vector((post_x + 0.05, 0.0, 1.32))],
+               [0.04, 0.038], [RAIL, mix(RAIL, BARK_LIGHT, 0.4)], 6)
+    _earth_strip(frame, -0.5, 0.5, 0.22, rng)
+    door = Builder()
+    width = 0.78
+    count = 5
+    for i in range(count):
+        x0 = width * i / count + 0.005
+        x1 = width * (i + 1) / count - 0.005
+        _plank(door, x0, x1, 0.08, 1.12 + rng.uniform(-0.04, 0.02), 0.05, rng, jitter(PLANK, rng, 0.03))
+    for z in (0.3, 0.88):
+        door.tube([Vector((0.0, -0.045, z)), Vector((width, -0.045, z + rng.uniform(-0.01, 0.01)))],
+                  [0.025, 0.025], [RAIL, RAIL], 5)
+    door.tube([Vector((0.05, -0.05, 0.32)), Vector((width - 0.05, -0.05, 0.86))], [0.02, 0.02], [RAIL, RAIL], 5)
+    for z in (0.3, 0.88):
+        _lashing(door, Vector((0.02, 0.0, z)), 0.03, rng)
+    return [("Frame", frame, Vector((0.0, 0.0, 0.0))), ("Door", door, Vector((-post_x + 0.04, 0.0, 0.0)))]
 
 
 # ==============================================================================
@@ -1291,8 +1398,6 @@ def basalt_cliff(seed):
 
 
 PROPS = {
-    "stake": (lambda s: stake(s), [3]),
-    "bone_stake": (lambda s: stake(s, bone=True), [3]),
     "stone_wall": (lambda s: stone_wall(s), [23]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
     "outcrop_quarried": (lambda s: outcrop(s, broken=True), [5]),
@@ -1307,6 +1412,14 @@ PROPS = {
     "drop_food": (lambda s: drop_meat(s), [11]),
     "drop_water": (lambda s: drop_water(s), [13]),
     "water_landing": (lambda s: water_landing(s), [17]),
+}
+
+# Props made of named parts the game shows, hides or moves (Wall.dress, Gate): each part an
+# object of its own, exported side by side into one file.
+KITS = {
+    "palisade": (lambda s: palisade(s), [3]),
+    "bone_palisade": (lambda s: palisade(s, bone=True), [3]),
+    "gate": (lambda s: gate(s), [5]),
 }
 
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.
@@ -1336,6 +1449,24 @@ def main():
             print("[OK] %-20s %6d triangles  %.2f x %.2f x %.2f m" % (
                 label, tris, obj.dimensions.x, obj.dimensions.y, obj.dimensions.z))
             made.append(obj)
+    for name, (fn, seeds) in KITS.items():
+        if only and name not in only:
+            continue
+        for v, seed in enumerate(seeds):
+            label = "%s_%s" % (name, "abc"[v])
+            objs = []
+            for part, builder, where in fn(seed):
+                obj = builder.to_object(part, [mat])
+                obj.location = where
+                objs.append(obj)
+            export_objects(objs, os.path.join(OUT_DIR, label + ".glb"))
+            print("[OK] %-20s %6d triangles  parts %s" % (
+                label, sum(len(o.data.polygons) for o in objs), ", ".join(o.name for o in objs)))
+            # The game finds the parts by name, and Blender makes a taken name unique, so the
+            # names are freed for the next kit once this one is written.
+            for o in objs:
+                o.name = "%s.%s" % (label, o.name)
+            made.extend(objs)
     for name, (fn, seeds) in RIGS.items():
         if only and name not in only:
             continue

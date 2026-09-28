@@ -76,7 +76,7 @@ func test_02_a_bone_stake_is_a_stake_that_bites_harder() -> void:
 	var wood: Dictionary = _row("wall")
 	var bone: Dictionary = _row("bone_stake")
 	assert_eq(String(bone["kind"]), String(wood["kind"]), "It is the same kind of thing")
-	for key in ["spike_diameter", "height", "cell_divisions"]:
+	for key in ["cells", "height"]:
 		assert_eq(bone[key], wood[key], "The same %s: laid the same way, the same size" % key)
 	assert_gt(config_node.get_contact_dps("bone_stake"), config_node.get_contact_dps("wall"),
 		"And it bites harder")
@@ -91,19 +91,22 @@ func test_02_a_bone_stake_is_a_stake_that_bites_harder() -> void:
 		"And standing, it bites by its own row -- it is a stake, with a stake's script")
 
 # ==============================================================================
-# 3. A stone wall fills its tile and takes a long time to break
+# 3. A stone wall fills its cell and takes a long time to break
 # ==============================================================================
 
-func test_03_a_stone_wall_fills_its_tile_and_outlasts_a_stake_many_times() -> void:
+func test_03_a_stone_wall_fills_its_cell_and_outlasts_a_palisade() -> void:
+	# A metre of each since v0.6 round two, so they compare metre for metre.
 	var row: Dictionary = _row("stone_wall")
-	assert_true(config_node.is_barrier_building("stone_wall"), "It fills its tile: a row of them is a wall")
-	assert_almost_eq(config_node.get_building_footprint("stone_wall"), float(config_node.TILE_SIZE), 0.001,
-		"The whole tile")
+	assert_eq(String(config_node.get_building_kind("stone_wall")), "wall", "It is a wall: a row of them is a wall")
+	assert_almost_eq(config_node.get_building_footprint("stone_wall"), float(config_node.BUILD_CELL), 0.001,
+		"The whole cell")
 	assert_almost_eq(config_node.get_contact_dps("stone_wall"), 0.0, 0.0001, "It bites nothing")
-	assert_gte(float(row["hp"]), float(_row("wall")["hp"]) * 3.0, "It outlasts a stake several times over")
+	assert_gte(float(row["hp"]), float(_row("wall")["hp"]) * 2.0, "It outlasts a palisade more than twice over")
 	assert_eq(row["cost"].keys(), ["stone"], "It is stone and nothing else")
 
-func test_04_the_hero_climbs_a_stone_wall_and_a_dinosaur_does_not() -> void:
+func test_04_a_stone_wall_stops_the_hero_and_a_dinosaur_alike() -> void:
+	# "石墙恐龙能穿过，不合理……而且人不能再穿过墙了" (v0.6 round two): it stood in nobody's way but a
+	# dinosaur's, and the player saw the animals walk through it. Every body stops at it now.
 	var w = _built(_rig(), "stone_wall", Vector2i(3, 3))
 	assert_not_null(w, "It can be put up")
 	if w == null:
@@ -116,8 +119,8 @@ func test_04_the_hero_climbs_a_stone_wall_and_a_dinosaur_does_not() -> void:
 	dino.setup("big_theropod")
 	dino.set_physics_process(false)
 	await wait_frames(1)
-	assert_eq(int(hero.collision_mask) & wall_layer, 0, "The Hero is not stopped by it (a v0.6 decision)")
-	assert_ne(int(dino.collision_mask) & wall_layer, 0, "A dinosaur's body is stopped by it")
+	assert_ne(int(hero.collision_mask) & wall_layer, 0, "The Hero is stopped by it")
+	assert_ne(int(dino.collision_mask) & wall_layer, 0, "And so is a dinosaur's body")
 
 # ==============================================================================
 # 4. Upgrading a tower where it stands

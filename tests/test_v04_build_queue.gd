@@ -114,7 +114,8 @@ func _hill_at(gm: Node, cell: Vector2i) -> void:
 	gm.set_blocked_cells(cells)
 	block_out_a_hill(_world, gm, cell)
 
-## Walls all the way round `cell`, so whatever is in it is sealed in.
+## A section of wall in the middle of each tile round `cell` -- a ring as the tile grid would
+## lay one, a section two metres from the next.
 func _fence_around(gm: Node, cell: Vector2i) -> void:
 	for dx in [-1, 0, 1]:
 		for dz in [-1, 0, 1]:
@@ -123,12 +124,12 @@ func _fence_around(gm: Node, cell: Vector2i) -> void:
 			_stake_at(gm, Vector2i(cell.x + dx, cell.y + dz))
 	await rebake_fixture()
 
-## Hillside all the way round `cell`, which is what can actually shut the Hero out now.
+## Hillside all the way round `cell`: a pocket shut to everybody, whatever the rules for walls.
 ##
-## These tests used to seal him in with STAKES. He walks through his own fence since
-## v0.5 -- being locked out of his own camp by it, with no gate in the game, was worse
-## than the problem a fence solves -- so a fence seals nothing as far as he is concerned
-## and there would be no unreachable work left to test with. The landscape still does.
+## These tests used to seal him in with STAKES, until he walked through his own fence (v0.5 to
+## v0.6 round two, when there was no gate in the game) and a fence sealed nothing as far as he
+## was concerned. A wall stops him again now, with a gate as his way through; the landscape
+## stopped him all along, and is what these tests seal with.
 func _hills_around(gm: Node, cell: Vector2i) -> void:
 	for dx in [-1, 0, 1]:
 		for dz in [-1, 0, 1]:
@@ -142,8 +143,7 @@ func _hills_around(gm: Node, cell: Vector2i) -> void:
 # ==============================================================================
 
 func test_01_open_ground_is_reachable_and_a_sealed_pocket_is_not() -> void:
-	# SEALED WITH HILLSIDE, because since v0.5 a fence does not seal HIM -- see
-	# Config.LAYER_WALL, and test_01b below, which checks the fence still seals a raid.
+	# Sealed with hillside -- see _hills_around.
 	var gm = await _grid([])
 	var here: Vector3 = gm.cell_to_world(Vector2i(0, 0))
 	await _hills_around(gm, Vector2i(6, 0))
@@ -157,14 +157,10 @@ func test_01_open_ground_is_reachable_and_a_sealed_pocket_is_not() -> void:
 	assert_true(_can_get_there(here, here), "And where he stands is trivially where he stands")
 
 func test_01b_a_ring_of_stakes_is_not_what_shuts_him_out() -> void:
-	# Why this suite seals its pockets with HILLSIDE. Two reasons, and both are real:
-	#
-	#   * he walks through his own fence (Config.LAYER_WALL), so a fence could not shut
-	#     him out however it was built; and
-	#   * one stake per tile is not a fence anyway. A stake is 0.62m and tiles are 2m
-	#     apart, so a "ring" laid that way is eight cones with 1.38m of open ground
-	#     between them -- which nothing is stopped by, and which is the v0.4 finding
-	#     that stakes only seal when they are laid on their own finer grid.
+	# Why a fence in this suite is not laid by the tile: one section per tile is not a fence.
+	# A section is a metre and tiles are two apart, so a "ring" laid that way is eight sections
+	# with a metre of open ground between them -- which nothing is stopped by. A wall seals
+	# when it is laid cell against cell (test_v05_navmesh), which is how the game lays one.
 	var gm = await _grid([])
 	var here: Vector3 = gm.cell_to_world(Vector2i(0, 0))
 	await _fence_around(gm, Vector2i(6, 0))
@@ -185,7 +181,9 @@ func test_02_a_finished_building_is_somewhere_he_can_still_be_sent() -> void:
 	var hero = _hero_at(gm, Vector2i(0, 0))
 	await wait_frames(1)
 
-	assert_false(gm.is_cell_walkable(Vector2i(3, 0)), "Finished work blocks its own cell")
+	var at: Vector3 = (mend_me as Node3D).global_position
+	assert_gt(float(config_node.gap_to_building(maps_of().closest_point(at, true), "wall", at)), 0.0,
+		"Finished work blocks its own cell: the nearest he can stand is outside it")
 	assert_true(hero._can_work_on(mend_me), "Yet he can still be sent to it")
 
 func test_03_a_hill_seals_a_pocket_the_same_way_a_fence_does() -> void:
@@ -216,7 +214,10 @@ func test_04_an_unfinished_blueprint_does_not_block_the_route() -> void:
 				_blueprint_at(gm, Vector2i(3 + dx, dz))
 	await rebake_fixture()
 
-	assert_true(gm.is_cell_walkable(Vector2i(3, 1)), "Pending work is walkable")
+	var pending: Vector3 = gm.cell_to_world(Vector2i(3, 1))
+	var stand: Vector3 = maps_of().closest_point(pending, true)
+	assert_lt(Vector2(stand.x - pending.x, stand.z - pending.z).length(), maps_of()._same_place(),
+		"Pending work is ground he can stand on")
 	assert_true(_can_get_there(gm.cell_to_world(Vector2i(0, 0)), gm.cell_to_world(Vector2i(3, 0))),
 		"So a ring of blueprints is not a wall")
 
@@ -233,8 +234,7 @@ func test_04_an_unfinished_blueprint_does_not_block_the_route() -> void:
 
 func test_06_he_skips_the_blueprint_he_cannot_reach_and_builds_the_rest() -> void:
 	# The reported worry, made concrete: an older blueprint he cannot get to must not
-	# hold up the newer ones out in the open. Walled in by HILLSIDE, because his own
-	# fence no longer stops him -- see _hills_around.
+	# hold up the newer ones out in the open. Walled in by hillside -- see _hills_around.
 	var gm = await _grid([])
 	await wait_frames(1)
 	var sealed_in = _blueprint_at(gm, Vector2i(8, 0))
@@ -317,7 +317,7 @@ func test_11_a_finished_building_is_never_abandoned_as_unreachable() -> void:
 	await wait_frames(1)
 	var mend_me = _stake_at(gm, Vector2i(8, 0))
 	mend_me.take_damage(mend_me.max_hp * 0.5)
-	await _fence_around(gm, Vector2i(8, 0))
+	await _hills_around(gm, Vector2i(8, 0))
 	var hero = _hero_at(gm, Vector2i(0, 0))
 	await wait_frames(1)
 
@@ -425,7 +425,7 @@ func test_15_a_goal_inside_something_solid_becomes_the_nearest_spot_outside_it()
 	var path: PackedVector3Array = maps_of().path(from, into_the_hill, true)
 	assert_gt(path.size(), 0, "He is given somewhere to go")
 	var last: Vector2i = gm.world_to_cell(path[path.size() - 1])
-	assert_true(gm.is_cell_walkable(last), "He is sent somewhere he can stand")
+	assert_false(gm.is_cell_blocked(last), "He is sent somewhere he can stand, out of the rock")
 	assert_lte(absi(last.x - 5) + absi(last.y), 3, "And it is close to where the player clicked")
 
 func test_16_an_unreachable_goal_still_gets_him_as_close_as_possible() -> void:
@@ -444,7 +444,7 @@ func test_16_an_unreachable_goal_still_gets_him_as_close_as_possible() -> void:
 	assert_gt(path.size(), 0, "He is given somewhere to go")
 	var last: Vector2i = gm.world_to_cell(path[path.size() - 1])
 	assert_ne(last, goal, "Not into the sealed pocket, which he cannot enter")
-	assert_true(gm.is_cell_walkable(last), "But somewhere he can stand")
+	assert_false(gm.is_cell_blocked(last), "But somewhere he can stand")
 	assert_lt(gm.cell_to_world(last).distance_to(gm.cell_to_world(goal)),
 		gm.cell_to_world(Vector2i(0, 0)).distance_to(gm.cell_to_world(goal)),
 		"And closer to it than he started")

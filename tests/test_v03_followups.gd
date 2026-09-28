@@ -81,78 +81,56 @@ func _wall_cfg(key: String, fallback: float) -> float:
 # 1. Size: stakes wide and low, turret narrow and tall
 # ==============================================================================
 
-func test_01_a_turret_is_taller_than_a_stake_and_a_stake_is_wider() -> void:
-	# The pair was the wrong way round: stakes towered over a squat turret, so the
-	# thing that matters least on the field looked like the thing that matters most.
-	var stake_w: float = config_node.get_building_footprint("wall")
+func test_01_a_turret_stands_taller_than_a_wall_and_both_fill_a_cell() -> void:
+	# The pair was the wrong way round once: stakes towered over a squat turret, so the thing
+	# that matters least on the field looked like the thing that matters most. Since v0.6 round
+	# two both fill one cell of the building grid -- how tall a thing stands is what says what it
+	# is -- and a palisade is "a little bigger": over the head of the man who builds it.
+	var wall_w: float = config_node.get_building_footprint("wall")
 	var tower_w: float = config_node.get_building_footprint("tower")
-	var stake_h: float = config_node.get_building_height("wall")
+	var wall_h: float = config_node.get_building_height("wall")
 	var tower_h: float = config_node.get_building_height("tower")
 
-	assert_lt(stake_w, tower_w, "One stake is a small thing beside a turret")
-	assert_gt(tower_h, stake_h, "A turret stands taller than a stake")
+	assert_almost_eq(wall_w, float(config_node.BUILD_CELL), 0.0001, "A section of wall is one cell")
+	assert_almost_eq(tower_w, float(config_node.BUILD_CELL), 0.0001, "And so is a turret")
+	assert_gt(tower_h, wall_h, "A turret stands taller than a wall")
 	assert_gt(tower_h, config_node.BUILDING_HEIGHT_DEFAULT,
 		"A turret is taller than an ordinary shed, not merely equal to one")
-	assert_lt(stake_h, config_node.BUILDING_HEIGHT_DEFAULT,
-		"A stake is something you look over, not a building")
-
-func test_02_nothing_seals_a_tile_on_its_own_any_more() -> void:
-	# Height is free; width is not. Making the turret tall must not have quietly
-	# turned it into a barrier able to seal the Hero in.
-	assert_false(config_node.is_barrier_building("tower"),
-		"A turret leaves a lane, so a ring of them is not a cage")
-	# Stakes were the one exception, and are not any more: a stake is 0.62m wide, and
-	# what closes a way is a RUN of them rather than the first one placed.
-	assert_false(config_node.is_barrier_building("wall"),
-		"Nor does one stake, which is 0.62m of a 2m tile")
-
-	# What must never happen is the Hero sealed in by his own buildings -- and he walks
-	# through anything of the wall kind (Config.LAYER_WALL), so only the rest must leave
-	# him a lane. The stone wall (v0.6) fills its tile on purpose: against dinosaurs.
-	for b_type in config_node.BUILDABLE_TYPES:
-		if config_node.get_building_kind(b_type) == "wall":
-			continue
-		var lane: float = config_node.TILE_SIZE - config_node.get_building_footprint(b_type)
-		assert_gt(lane, float(config_node.HERO.get("width", 0.8)),
-			"The gap beside a %s is wider than the Hero" % b_type)
+	assert_gt(wall_h, float(config_node.HERO["height"]), "A palisade stands over the Hero's head")
 
 func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 	for b_type in config_node.BUILDABLE_TYPES:
 		assert_gt(config_node.get_building_height(b_type), 0.0,
 			"%s resolves to a real height" % b_type)
-	assert_eq(config_node.get_building_mesh_style("wall"), "spikes",
-		"Stakes are drawn as stakes")
 	assert_eq(config_node.get_building_mesh_style("tower"), "box",
 		"Anything that does not ask for a style gets the plain block")
 	assert_eq(config_node.get_building_mesh_style("no_such_building"), "box",
 		"An unknown type falls back rather than failing")
 
-func test_04_a_stake_is_one_small_sharpened_cone() -> void:
-	# What one price buys is one stake, and what the player sees is one stake. It has
-	# been three cones, five at a corner, and a tile-wide sharpened slab before now.
-	#
-	# Asked in terms of SHAPE rather than of which Mesh class drew it, since the stake
-	# became a model (tools/generate_props.py): one mesh, as wide and as tall as Config
-	# declares, standing on the ground, and narrow at the top -- sharpened.
+func test_04_a_palisade_is_a_post_and_four_runs_as_big_as_its_cell() -> void:
+	# What one price buys is a metre of palisade (v0.6 round two), drawn as a kit: a post in the
+	# middle of its cell and a run of logs out to each side, the runs towards its neighbours shown
+	# (Wall.dress). Whatever is shown, it is no bigger than the cell it fills, as tall as Config
+	# declares, standing on the ground -- and sharpened.
 	var stake = _stake()
 	await wait_frames(1)
 
 	var body = stake.find_child("Body", false, false)
-	assert_not_null(body, "Stakes are drawn in their own holder")
-	var meshes: Array[MeshInstance3D] = body_meshes(stake)
-	assert_eq(meshes.size(), 1, "One stake, one piece")
-	if meshes.is_empty():
+	assert_not_null(body, "A section is drawn in its own holder")
+	if body == null:
 		return
+	for part in ["Post", "Run_E", "Run_W", "Run_N", "Run_S"]:
+		assert_not_null(body.find_child(part, true, false), "It has its %s" % part)
 
-	var h: float = config_node.get_building_height("wall")
-	var d: float = config_node.get_spike_diameter("wall")
+	var cell: float = config_node.get_building_footprint("wall")
 	var bounds: AABB = VisualLibrary.visual_bounds(body)
-	assert_lte(bounds.size.x, d + 0.01, "No wider than Config declares")
-	assert_lte(bounds.size.z, d + 0.01, "In either direction")
-	assert_almost_eq(bounds.size.y, h, 0.02, "As tall as the declared height")
+	assert_lte(bounds.size.x, cell + 0.01, "No wider than its cell")
+	assert_lte(bounds.size.z, cell + 0.01, "In either direction")
+	assert_almost_eq(bounds.size.y, config_node.get_building_height("wall"), 0.05, "As tall as the declared height")
 	assert_almost_eq(bounds.position.y, 0.0, 0.01, "Standing on the ground, not in it")
-	assert_lt(top_to_base_width(meshes[0]), 0.35, "Sharpened: its top is a fraction of its width")
-	assert_lt(d, float(config_node.TILE_SIZE) * 0.5, "And small")
+	var post: MeshInstance3D = body.find_child("Post", true, false) as MeshInstance3D
+	if post != null:
+		assert_lt(top_to_base_width(post), 0.35, "Sharpened: the post's top is a fraction of its width")
 
 func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 	# A cube standing in for a stake told the player nothing about what was going down,
@@ -179,14 +157,14 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 				tree.root.add_child(placed)
 				placed.position = Vector3(34.0 if type_id == "tower" else 46.0, 0.0, 0.0)
 				placed.complete_construction()
-			"bone_stake", "stone_wall":
+			"bone_stake", "stone_wall", "gate":
 				# Given its type before it enters the tree -- as BuildSystem does -- because
 				# the body is drawn for whatever type it has when it arrives.
-				placed = wall_script.new()
+				placed = (load("res://scripts/entities/Gate.gd") if type_id == "gate" else wall_script).new()
 				placed.setup(type_id)
 				_cleanup_nodes.append(placed)
 				tree.root.add_child(placed)
-				placed.position = Vector3(38.0 if type_id == "bone_stake" else 42.0, 0.0, 0.0)
+				placed.position = Vector3({"bone_stake": 38.0, "stone_wall": 42.0, "gate": 50.0}[type_id], 0.0, 0.0)
 				placed.complete_construction()
 		assert_not_null(placed, "This test knows how to place a %s" % type_id)
 		if placed == null:
@@ -197,10 +175,6 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 		for i in range(mini(meshes.size(), real.size())):
 			assert_eq(meshes[i].mesh, real[i].mesh, "%s ghost piece %d is the real one's" % [type_id, i])
 
-		if config_node.get_building_mesh_style(type_id) == "spikes":
-			assert_eq(meshes.size(), 1, "One stake, one piece")
-			if not meshes.is_empty():
-				assert_lt(top_to_base_width(meshes[0]), 0.35, "%s ghost is sharpened too" % type_id)
 		body.free()
 
 func test_05_a_turret_is_drawn_inside_its_declared_size() -> void:

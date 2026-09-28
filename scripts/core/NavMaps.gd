@@ -15,11 +15,11 @@ extends Node3D
 ##   layer 1   ground, hillside, resource nodes   -- the surface, and what interrupts it
 ##   layer 2   the wreck and the turrets          -- solid to everybody
 ##   layer 16  blueprints                         -- ordered, not built; solid to nobody
-##   layer 32  walls                              -- solid to a raid, open to the Hero
+##   layer 32  walls                              -- solid to everybody (since v0.6 round two)
+##   layer 128 gates                              -- solid to a raid, open to the Hero
 ##
-## So the maps are one bake each with a different mask, and "the Hero walks through his
-## own fence" stops being a special case threaded through the pathfinder and becomes a bit
-## that is not set.
+## So the maps are one bake each with a different mask, and "the Hero walks through his own
+## gate" is not a special case threaded through the pathfinder but a bit that is not set.
 ##
 ## A third, SIEGE, leaves walls out too (v0.6 round two): what a siege animal walks, since
 ## going THROUGH the defence is its design -- and what a raid asks when the way is shut, for
@@ -108,9 +108,9 @@ func _mesh_for(which: int) -> NavigationMesh:
 	mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	mesh.geometry_source_geometry_mode = NavigationMesh.SOURCE_GEOMETRY_GROUPS_WITH_CHILDREN
 	mesh.geometry_source_group_name = SOURCE_GROUP
-	# Ground and hillside (1) and the solid buildings (2) always. Walls (32) only for the
-	# raid -- that one bit is the whole of the Hero's exemption. Blueprints (16) are in
-	# neither, because ordering a fence is not having one.
+	# Ground and hillside (1) and the solid buildings (2) always; walls (32) for everybody but a
+	# siege; gates (128) only for a raid -- that one bit is the whole of the Hero's way through.
+	# Blueprints (16) are in none, because ordering a fence is not having one.
 	mesh.geometry_collision_mask = _mask_for(which)
 	mesh.cell_size = _cell_size()
 	mesh.cell_height = _cell_height()
@@ -118,7 +118,36 @@ func _mesh_for(which: int) -> NavigationMesh:
 	mesh.agent_height = 1.0
 	mesh.agent_max_climb = 0.3
 	mesh.agent_max_slope = 30.0
+	# Islands too small to stand a body on are dropped: the top of a metre of wall is walkable
+	# to the bake, cut off from everything, and "the nearest point to that wall" landed on it.
+	mesh.region_min_size = _region_min_size()
 	return mesh
+
+## The smallest island the bake keeps, in voxels a side (Config.NAV.region_min_size).
+func _region_min_size() -> float:
+	var cfg = get_node_or_null("/root/Config")
+	if cfg and "NAV" in cfg:
+		return float(cfg.NAV.get("region_min_size", 8.0))
+	return 8.0
+
+## Marks a box `half` metres either side of `owner`'s middle and `height` tall out of every bake,
+## as a SOLID. The bake reads a collider as surfaces, not as a solid: under the roof of a box it
+## finds a floor with headroom and makes a walkable island of it, walled off from everything --
+## under the cabin's roof, and inside every hill -- and "the nearest walkable point" to it is in
+## there, where no route goes. The engine's own obstacle does the marking; avoidance is off,
+## because steering round it is the baked mesh's job, not the obstacle's. It is carved out of
+## EVERY map, so it is only for what stops everybody. Once per owner.
+static func mark_solid(owner: Node3D, half: float, height: float) -> void:
+	if owner.find_child("BakeObstacle", false, false) != null:
+		return
+	var obstacle := NavigationObstacle3D.new()
+	obstacle.name = "BakeObstacle"
+	obstacle.avoidance_enabled = false
+	obstacle.affect_navigation_mesh = true
+	obstacle.height = height + 0.5     # its top as well as the floor under it
+	obstacle.vertices = PackedVector3Array([Vector3(-half, 0.0, -half), Vector3(half, 0.0, -half),
+		Vector3(half, 0.0, half), Vector3(-half, 0.0, half)])
+	owner.add_child(obstacle)
 
 func _mask_for(which: int) -> int:
 	var cfg = get_node_or_null("/root/Config")
@@ -128,8 +157,11 @@ func _mask_for(which: int) -> int:
 		For.RAID:
 			return 1 | 2 | wall_layer | gate_layer
 		For.SIEGE:
+			# No walls: a siege animal goes through them, and a raid asks this map for the wall
+			# its way in crosses.
 			return 1 | 2
-	return 1 | 2
+	# The Hero's: his walls stop him since v0.6 round two ("人不能再穿过墙了"); his gates do not.
+	return 1 | 2 | wall_layer
 
 ## How fine the bake is. Small enough to see the gap between two stakes, which is the
 ## whole reason the mesh exists; a coarse bake would smear a fence into a solid line.

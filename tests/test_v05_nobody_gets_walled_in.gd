@@ -61,9 +61,6 @@ func _hero_at(at: Vector3) -> Node:
 	h.global_position = at
 	return h
 
-func _divisions() -> int:
-	return int(config_node.get_cell_divisions("wall"))
-
 # ==============================================================================
 # 1. Nobody is built on top of
 # ==============================================================================
@@ -83,22 +80,21 @@ func test_01_a_stake_cannot_be_placed_on_the_hero() -> void:
 		"And asking anyway gets nothing")
 
 func test_02_the_check_is_about_where_it_would_LAND() -> void:
-	# A stake snaps to a fine cell, so the click and the stake are up to half a cell
-	# apart. Checking the click let one land on the Hero anyway -- which is how this bug
+	# A wall snaps to a cell of the building grid, so the click and the wall are up to half a
+	# cell apart. Checking the click let one land on the Hero anyway -- which is how this bug
 	# survived its first fix.
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
-	var d: int = _divisions()
-	var fine := Vector2i(9, 9)
-	var lands_at: Vector3 = gm.fine_cell_to_world(fine, d)
-	# Stand him ON the fine cell's centre, then click slightly off it.
+	var cell := Vector2i(9, 9)
+	var lands_at: Vector3 = gm.build_cell_to_world(cell)
+	# Stand him ON the cell's centre, then click slightly off it.
 	var hero = _hero_at(lands_at)
 	await wait_frames(1)
 	var clicked: Vector3 = lands_at + Vector3(0.3, 0.0, 0.0)
 
-	assert_eq(gm.world_to_fine_cell(clicked, d), fine, "The click still snaps to that cell")
+	assert_eq(gm.world_to_build_cell(clicked), cell, "The click still snaps to that cell")
 	assert_false(bs.can_place_building("wall", gm.world_to_cell(clicked), false, clicked),
 		"So it is refused, because of where it would END UP rather than where the cursor was")
 
@@ -191,26 +187,27 @@ func test_06_and_a_blueprint_never_traps_anyone() -> void:
 # ==============================================================================
 
 func test_07_the_grid_reports_every_stake_not_one_per_tile() -> void:
-	# occupied_cells holds ONE building per tile. Everything that asks the grid "what is
-	# on the map" was getting a fraction of a fence -- including the Hero's build queue,
-	# which is why blueprints sharing a tile with something already up sat at 0%.
+	# The grid once held ONE building per tile. Everything that asks it "what is on the map"
+	# was getting a fraction of a fence -- including the Hero's build queue, which is why
+	# blueprints sharing a tile with something already up sat at 0%. A tile is two cells of
+	# the building grid across, so two sections still share one.
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
 
-	var d: int = _divisions()
+	var per_tile: int = int(round(float(config_node.TILE_SIZE) / float(config_node.BUILD_CELL)))
+	var middle: Vector2i = gm.tile_centre_build_cell(Vector2i(0, 0))
 	var made: Array[Node] = []
-	for i in range(d):
-		var at: Vector3 = gm.fine_cell_to_world(Vector2i(i, 0), d)
-		var b = bs.place_building("wall", gm.world_to_cell(at), gm, false, at)
+	for i in range(per_tile):
+		var b = bs.place_at("wall", middle + Vector2i(i, 0), gm, false)
 		if b != null:
 			_cleanup_nodes.append(b)
 			made.append(b)
 	await wait_frames(1)
 
-	assert_eq(made.size(), d, "A full row of stakes went up in one tile")
+	assert_eq(made.size(), per_tile, "A row of sections went up across one tile")
 	var listed: Array = gm.get_all_buildings()
 	for b in made:
 		assert_true(listed.has(b), "Every one of them is on the map as far as the grid is concerned")
-	assert_gte(listed.size(), d, "All %d, not the one that happens to hold the tile" % d)
+	assert_gte(listed.size(), per_tile, "All %d, not the one that happens to hold the tile" % per_tile)

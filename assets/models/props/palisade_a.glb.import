@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cxoagfy0o78ts"
-path="res://.godot/imported/stake_a.glb-b0adb8a6603b085146473c37dc31777b.scn"
+uid="uid://cndn1ipuf63a2"
+path="res://.godot/imported/palisade_a.glb-ae616803174ee77e055de2e02c17d178.scn"
 
 [deps]
 
-source_file="res://assets/models/props/stake_a.glb"
-dest_files=["res://.godot/imported/stake_a.glb-b0adb8a6603b085146473c37dc31777b.scn"]
+source_file="res://assets/models/props/palisade_a.glb"
+dest_files=["res://.godot/imported/palisade_a.glb-ae616803174ee77e055de2e02c17d178.scn"]
 
 [params]
 

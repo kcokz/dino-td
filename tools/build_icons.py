@@ -159,13 +159,16 @@ ICONS["wall"] = item_svg(
         shape("polygon", C["char"], points="%.1f,18.5 %d,10 %.1f,18.5" % (x + 2.2, x + 6, x + 9.8)))]
     + [shape("rect", C["rope"], x=7, y=36, width=50, height=5.5, rx=2)])
 
+# The palisade with bone points lashed to its logs (tools/generate_props.py bone_palisade): the
+# same three posts, each tipped with a pale point.
 ICONS["bone_stake"] = item_svg(
-    [shape("rect", C["post"], x=24, y=30, width=16, height=28, rx=1),
-     shape("polygon", C["bone"], points="32,4 42,31 22,31"),
-     shape("rect", C["rope"], x=20.5, y=27, width=23, height=6.5, rx=2)],
-    [shape("rect", C["post_dark"], x=24, y=34, width=5, height=24),
-     shape("polygon", C["bone_shade"], points="32,4 32,31 22,31"),
-     shape("rect", C["rope"], x=20.5, y=27, width=23, height=6.5, rx=2)])
+    [shape("rect", C["post"], x=x, y=24, width=12, height=34) for x in (10, 26, 42)]
+    + [shape("polygon", C["bone"], points="%d,25 %d,6 %d,25" % (x - 1, x + 6, x + 13)) for x in (10, 26, 42)]
+    + [shape("rect", C["rope"], x=7, y=36, width=50, height=5.5, rx=2)],
+    [s for x in (10, 26, 42) for s in (
+        shape("rect", C["post_dark"], x=x, y=24, width=4, height=34),
+        shape("polygon", C["bone_shade"], points="%d,25 %d,6 %d,25" % (x - 1, x + 6, x + 6)))]
+    + [shape("rect", C["rope"], x=7, y=36, width=50, height=5.5, rx=2)])
 
 _STONES = [(6, 44, 18, 13, "s2"), (25, 44, 16, 13, "s3"), (42, 44, 16, 13, "s1"),
            (9, 31, 15, 12, "s1"), (25, 31, 19, 12, "s2"), (45, 31, 12, 12, "s3"),
@@ -174,6 +177,24 @@ ICONS["stone_wall"] = item_svg(
     [shape("rect", C[c], x=x, y=y, width=w, height=h, rx=3) for (x, y, w, h, c) in _STONES],
     [shape("rect", C[c], x=x, y=y, width=w, height=h, rx=3) for (x, y, w, h, c) in _STONES]
     + [shape("ellipse", C["moss"], cx=20, cy=19.5, rx=7, ry=2.4), shape("ellipse", C["moss"], cx=38, cy=19.5, rx=5, ry=2)])
+
+
+# A gate: two sharpened posts with a door of planks hung between them on rope, braced with a Z --
+# a door that swings, not more fence (tools/generate_props.py gate).
+ICONS["gate"] = item_svg(
+    [shape("polygon", C["post"], points=_post(5, top=16, tip=6, w=10)),
+     shape("polygon", C["post"], points=_post(49, top=16, tip=6, w=10)),
+     shape("rect", C["grain"], x=16, y=20, width=32, height=37, rx=2)],
+    [shape("rect", C["ring"], x=16, y=20, width=10, height=37, rx=1.5),
+     shape("rect", C["grain"], x=27, y=20, width=10, height=37, rx=1.5),
+     shape("rect", C["ring"], x=38, y=20, width=10, height=37, rx=1.5),
+     shape("rect", C["post_dark"], x=16, y=25, width=32, height=5, rx=1.5),
+     shape("rect", C["post_dark"], x=16, y=47, width=32, height=5, rx=1.5),
+     shape("path", None, C["post_dark"], 4.5, d="M 20 47 L 44 30"),
+     shape("polygon", C["post_dark"], points="5,58 5,16 8,9 8,58"),
+     shape("polygon", C["post_dark"], points="49,58 49,16 52,9 52,58"),
+     shape("rect", C["rope"], x=3, y=26, width=16, height=4.5, rx=2),
+     shape("rect", C["rope"], x=3, y=47, width=16, height=4.5, rx=2)])
 
 
 def _tower(extra_body=(), extra_detail=()):

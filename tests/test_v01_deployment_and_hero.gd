@@ -424,12 +424,13 @@ func test_13_hero_physics_collision_with_walls_cannot_penetrate() -> void:
 	tree.root.add_child(hero)
 	hero.position = Vector3(0.0, 0.0, 0.0)
 
-	# THIS USED TO ASSERT THE OPPOSITE, and the opposite was the problem. A fence stopped
-	# the man who built it, and there is no gate anywhere in the game -- so laying stakes
-	# around your own camp shut you out of it. A wall is on a layer of its own now: the
-	# Hero's mask leaves out that one and nothing else.
-	assert_true((hero.collision_mask & 2) != 0, "Buildings still stop him")
-	assert_eq(hero.collision_mask & int(config_node.LAYER_WALL), 0, "His own fence does not")
+	# What the name says, which is true again since v0.6 round two: a wall stops the man who
+	# built it ("人不能再穿过墙了"). From v0.5 he walked through his own fence, because there was
+	# no gate in the game and a ring of stakes shut him out of his own camp. There is a gate now
+	# (Gate.gd), on a layer of its own, and it is his way through.
+	assert_true((hero.collision_mask & 2) != 0, "Buildings stop him")
+	assert_ne(hero.collision_mask & int(config_node.LAYER_WALL), 0, "And so does a wall")
+	assert_eq(hero.collision_mask & int(config_node.LAYER_GATE), 0, "Only a gate lets him through")
 
 	await wait_frames(2)
 
@@ -440,7 +441,8 @@ func test_13_hero_physics_collision_with_walls_cannot_penetrate() -> void:
 		await wait_frames(1)
 		hero._physics_process(0.05)
 
-	assert_gt(hero.global_position.x, 2.5, "And he walks through it to where he was sent")
+	var face: float = wall.position.x - float(config_node.get_building_footprint("wall")) * 0.5
+	assert_lt(hero.global_position.x, face, "He is stopped at its face, not walked through it")
 
 # ==============================================================================
 # ==============================================================================
@@ -575,17 +577,28 @@ func test_18_build_buttons_quote_what_a_building_costs() -> void:
 	tree.root.add_child(hud)
 	await wait_frames(1)
 
-	# Build costs moved to the Hero Option Panel in v0.2; they must still quote
+	# Build costs moved to the Hero Option Panel in v0.2; they must still quote. A card quotes
+	# its price as a row of material icons and numbers (UiKit.fill_price_row) -- this used to
+	# look for "Wood" in the button's text, and passed on the NAME "Wooden Stakes" for as long
+	# as the palisade was called that, whatever the price row said.
 	var panel = hud.find_child("OptionPanel", true, false)
 	assert_not_null(panel, "OptionPanel must exist in the HUD")
 	panel.current_menu = "build"
 	panel._populate_hero_buttons()
-	var saw_wood: bool = false
+	var wood_icon: Texture2D = UiTheme.icon("wood")
+	var quoted: bool = false
 	for btn in panel.button_container.get_children():
-		var t: String = str(btn.text)
-		if t.contains("木") or t.contains("Wood"):
-			saw_wood = true
-	assert_true(saw_wood, "Build buttons show wood cost")
+		if not (btn is Button) or str(btn.text) != tr("BUILDING_WALL_NAME"):
+			continue
+		var row: Node = btn.get_node_or_null("PriceRow")
+		assert_not_null(row, "The palisade's card has a price row")
+		if row == null:
+			continue
+		var parts: Array = row.get_children()
+		for i in range(parts.size() - 1):
+			if parts[i] is TextureRect and (parts[i] as TextureRect).texture == wood_icon 					and parts[i + 1] is Label and (parts[i + 1] as Label).text == str(cost_of("wall")):
+				quoted = true
+	assert_true(quoted, "Build buttons show wood cost: the wood icon, and what a palisade costs")
 
 # ==============================================================================
 # 19. Hero A* Pathfinding Navigates Around Wall Obstacles
@@ -600,9 +613,7 @@ func test_19_hero_pathfinding_around_wall_obstacle() -> void:
 	_cleanup_nodes.append(grid_mgr)
 	tree.root.add_child(grid_mgr)
 
-	# A HILLSIDE in the way, not a wall. His own fence is something he walks through
-	# since v0.5, and a route that went the long way round something he can walk straight
-	# through would look exactly like broken pathfinding.
+	# A hillside in the way -- and a wall, below, is in his way just the same.
 	#
 	# The rule and the shape go down together: the grid is told, and a box of hillside is
 	# put there for the bake to find, exactly as Main.spawn_terrain does it. Since v0.5 a
@@ -628,18 +639,19 @@ func test_19_hero_pathfinding_around_wall_obstacle() -> void:
 		var c = grid_mgr.world_to_cell(pt)
 		assert_ne(c, Vector2i(1, 0), "Waypoint must not route directly through the hillside at (1, 0)")
 
-	# And the contrast that makes the rule visible: a WALL in the same place is simply
-	# walked through, so the route is the straight one.
+	# And a WALL is carved out of the mesh he walks, like the hillside, since v0.6 round two
+	# ("人不能再穿过墙了"). From v0.5 it was open ground to him, and only a raid went round it.
 	var wall = wall_script.new()
-	_cleanup_nodes.append(wall)
-	tree.root.add_child(wall)
+	world.add_child(wall)
 	wall.position = grid_mgr.cell_to_world(Vector2i(0, 2))
 	wall.complete_construction()
 	grid_mgr.occupy_cell(Vector2i(0, 2), wall)
-	assert_true(grid_mgr.is_cell_walkable(Vector2i(0, 2), null, false, true),
-		"A wall is open ground as far as the Hero is concerned")
-	assert_false(grid_mgr.is_cell_walkable(Vector2i(0, 2)),
-		"And still solid for everyone else")
+	await rebake_fixture()
+	var at: Vector3 = wall.position
+	assert_gt(float(config_node.gap_to_building(maps_of().closest_point(at, true), "wall", at)), 0.0,
+		"A wall is not ground he can stand on")
+	assert_gt(float(config_node.gap_to_building(maps_of().closest_point(at, false), "wall", at)), 0.0,
+		"Any more than it is for a raid")
 
 	# Simulate movement over time
 	for _i in range(50):

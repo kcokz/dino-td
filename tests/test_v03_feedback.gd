@@ -356,10 +356,11 @@ func test_15_audio_can_be_switched_off_wholesale() -> void:
 # ==============================================================================
 
 func test_16_the_ring_traces_each_units_own_base() -> void:
-	# A fixed radius does not work. Wooden stakes are 1.9m across, and the old
-	# 0.85m ring sat entirely inside the box, invisible.
+	# A fixed radius does not work. Wooden stakes were 1.9m across once, and the old
+	# 0.85m ring sat entirely inside the box, invisible. Everything the player builds is a
+	# cell since v0.6 round two; the cabin is three, and is the case that tells them apart.
 	var stake = _spawn(wall_script, Vector3(-6.0, 0.0, 0.0))
-	var turret = _spawn(tower_script, Vector3(6.0, 0.0, 0.0))
+	var turret = _spawn(load("res://scripts/entities/CoreCampfire.gd"), Vector3(6.0, 0.0, 0.0))
 	stake.complete_construction()
 	turret.complete_construction()
 	await wait_frames(1)

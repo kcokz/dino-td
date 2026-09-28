@@ -48,7 +48,8 @@ func test_01_the_hero_is_the_size_a_person_is_here() -> void:
 	var h: float = _hero_height()
 	var stake: float = float(config_node.get_building_height("wall"))
 	var fern: float = (config_node.RESOURCE_NODES["wood"]["size"] as Vector3).y
-	assert_between(stake / h, 0.6, 0.9, "A stake comes to his chest (%.2f of his height)" % (stake / h))
+	# "木栅栏可以稍微大一点" (v0.6 round two): the palisade is over his head now -- a little.
+	assert_between(stake / h, 1.0, 1.2, "A palisade stands a little over his head (%.2f of his height)" % (stake / h))
 	assert_gte(fern / h, 2.5, "A tree fern is well over twice his height (%.1fx)" % (fern / h))
 
 func test_02_the_tyrannosaur_towers_over_him() -> void:
@@ -80,10 +81,9 @@ func test_04_stature_changes_nothing_the_game_touches() -> void:
 		var feels_at: float = float(d._probe_height())
 		assert_gt(feels_at, 0.0, "The %s feels for what is in its way" % kind)
 		assert_lt(feels_at, stake, "The %s feels below the top of a stake (%.2f m)" % [kind, feels_at])
-	# The Hero's width, not his height, decides how much of a tile a building may fill.
-	var default_fp: float = float(config_node.get_default_building_footprint())
-	assert_almost_eq(default_fp, float(config_node.TILE_SIZE) - float(config_node.HERO["width"])
-		- float(config_node.BUILDING_CLEARANCE), 0.0001, "A building's footprint still comes from his width")
+	# The Hero's width, not his height, decides the building grid: one free cell is a way through.
+	assert_gte(float(config_node.BUILD_CELL), float(config_node.HERO["width"]),
+		"A cell of the building grid is wider than he is")
 
 func test_05_the_herds_are_on_the_tyrannosaurs_scale() -> void:
 	var rex = _dino("big_theropod")

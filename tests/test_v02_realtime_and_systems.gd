@@ -94,7 +94,7 @@ func test_01_i18n_runtime_switching_and_translation() -> void:
 	# Test switching to English
 	i18n_node.set_locale("en")
 	assert_eq(i18n_node.get_current_locale(), "en", "Current locale switched to en")
-	assert_eq(tr("BUILDING_WALL_NAME"), "Wooden Stakes", "Wall translated in English")
+	assert_eq(tr("BUILDING_WALL_NAME"), "Palisade", "Wall translated in English")
 	assert_eq(tr("CMD_BUILD"), "Build", "Build command translated in English")
 
 	# Test switching to Chinese
@@ -425,20 +425,27 @@ func test_14_grid_manager_resource_obstacle_blocks_building_and_pathfinding() ->
 
 	var gm = grid_mgr_script.new()
 	var bs = build_system_script.new()
-	var res = resource_node_script.new("wood", Vector2i(3, 3))
 	_cleanup_nodes.append(gm)
 	_cleanup_nodes.append(bs)
-	_cleanup_nodes.append(res)
 	tree.root.add_child(gm)
 	tree.root.add_child(bs)
-	tree.root.add_child(res)
-
 	bs.setup(gm, null)
+	# On a fixture with a navigation mesh, because who can walk where is the mesh's to say
+	# since v0.5, and a tree is in it by its own collider.
+	var world: Node3D = await nav_fixture()
+	_cleanup_nodes.append(world)
+	var res = resource_node_script.new("wood", Vector2i(3, 3))
+	world.add_child(res)
+	res.global_position = gm.cell_to_world(Vector2i(3, 3))
 
 	# Register resource node in GridManager
 	gm.occupy_resource_cell(Vector2i(3, 3), res)
+	await rebake_fixture()
 	assert_true(gm.is_resource_at_cell(Vector2i(3, 3)), "GridManager tracks resource at (3, 3)")
-	assert_false(gm.is_cell_walkable(Vector2i(3, 3)), "Cell (3, 3) is NOT walkable due to resource node")
+	var at: Vector3 = (res as Node3D).global_position
+	var nearest: Vector3 = maps_of().closest_point(at, true)
+	assert_gte(Vector2(nearest.x - at.x, nearest.z - at.z).length(), float(res.block_radius()),
+		"Nobody walks through the tree: the nearest ground is outside its trunk")
 	assert_false(bs.can_place_building("wall", Vector2i(3, 3)), "BuildSystem prevents placing building on resource cell")
 
 # ==============================================================================

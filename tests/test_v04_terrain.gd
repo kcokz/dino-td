@@ -81,7 +81,10 @@ func test_01_a_hill_is_neither_walkable_nor_buildable() -> void:
 	pay_for(["wall"], 99)
 
 	assert_true(gm.is_cell_blocked(Vector2i(2, 2)), "The cell is hillside")
-	assert_false(gm.is_cell_walkable(Vector2i(2, 2)), "Nobody walks through it")
+	var hill: Vector3 = gm.cell_to_world(Vector2i(2, 2))
+	var nearest: Vector3 = maps_of().closest_point(hill, true)
+	assert_gt(Vector2(nearest.x - hill.x, nearest.z - hill.z).length(), float(gm.tile_size) * 0.5,
+		"Nobody stands in it: the nearest ground is outside it")
 	assert_false(builder.can_place_building("wall", Vector2i(2, 2)), "And nothing is built on it")
 
 	assert_false(gm.is_cell_blocked(Vector2i(2, 3)), "Its neighbour is ordinary ground")
@@ -240,28 +243,34 @@ func test_10_a_dinosaur_walks_around_a_hill_but_bites_a_fence() -> void:
 	assert_true(maps_of().is_reachable(
 		gm.cell_to_world(Vector2i(2, -1)), gm.cell_to_world(Vector2i(2, 1))), "A route exists")
 
-	var wall := StaticBody3D.new()
-	_cleanup_nodes.append(wall)
-	tree.root.add_child(wall)
-	gm.occupy_cell(Vector2i(2, 0), wall)
-	assert_false(gm.is_cell_walkable(Vector2i(2, 0)), "A building blocks ordinary pathing")
-	assert_true(gm.is_cell_walkable(Vector2i(2, 0), null, true),
+	# A line of wall right across the fixture. The raid's map has no way through it; the siege map, which is what a raid asks for the wall
+	# in its way, walks straight at it -- and a hill is in that one too.
+	var z: float = gm.cell_to_world(Vector2i(0, 0)).z
+	run_of_stakes(_world, gm, Vector3(-31.0, 0.0, z), Vector3(31.0, 0.0, z))
+	await rebake_fixture()
+	var a: Vector3 = gm.cell_to_world(Vector2i(2, -1))
+	var b: Vector3 = gm.cell_to_world(Vector2i(2, 1))
+	assert_false(maps_of().is_reachable(a, b, NavMaps.For.RAID), "A wall blocks ordinary pathing")
+	assert_true(maps_of().is_reachable(a, b, NavMaps.For.SIEGE),
 		"But a dinosaur walks at it rather than around it")
-	assert_false(gm.is_cell_walkable(Vector2i(0, -1), null, true),
-		"While a hill stops it either way")
+	var hill: Vector3 = gm.cell_to_world(Vector2i(0, -1))
+	var nearest: Vector3 = maps_of().closest_point(hill, NavMaps.For.SIEGE)
+	assert_gt(Vector2(nearest.x - hill.x, nearest.z - hill.z).length(), float(gm.tile_size) * 0.5,
+		"While a hill stops it either way: there is no ground inside it on that map either")
 
 # ==============================================================================
-# 3. A stake is one stake
+# 3. A section of wall is its cell
 # ==============================================================================
 #
-# What used to be here was eight tests about a fence working out its shape from its
-# neighbours: lines, corners, crosses, seam-to-seam cone spacing, and a ghost that had
-# to predict all of it. That system was rebuilt four times, produced a fresh bug every
-# time, and was never asked for -- the request, the first time and every time since,
-# was one stake.
+# This was "a stake is one stake": eight tests about a fence working out its SHAPE from its
+# neighbours were deleted after it was rebuilt four times, and what replaced them held a stake
+# to one small cone with a collider its own size, whatever stood beside it.
 #
-# So it is deleted rather than repaired. These tests hold what replaced it, and the
-# point of every one of them is that NOTHING about a stake depends on its neighbours.
+# v0.6 round two asked for the opposite of the cone -- "墙体逻辑简单清晰……木栅栏可以稍微大一点"
+# -- and a section of wall is a whole cell of the building grid now. Its art DOES reach towards
+# its neighbours (Wall.dress, in test_v06_one_grid), but only the art: what stops you is the
+# cell, the same whatever is beside it, and the body is never torn down to show it. Tests 11 to
+# 14 were about the cone and went with it; what is left is the lesson that outlived it.
 
 func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	var w = load("res://scripts/entities/Wall.gd").new()
@@ -273,106 +282,13 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	gm.occupy_cell(cell, w)
 	return w
 
-func _collision_size(b: Node) -> Vector3:
-	for child in b.get_children():
-		if child is CollisionShape3D and child.shape is BoxShape3D:
-			return (child.shape as BoxShape3D).size
-	return Vector3.ZERO
-
-## The pieces a stake is drawn with, at any depth inside its Body -- a model's mesh sits
+## The pieces a section is drawn with, at any depth inside its Body -- a model's meshes sit
 ## inside the imported scene's own nodes, where a one-level search finds nothing.
 func _cones(b: Node) -> Array:
 	var out: Array = []
 	for m in body_meshes(b):
 		out.append(m)
 	return out
-
-func test_11_a_stake_is_one_cone_no_matter_what_is_beside_it() -> void:
-	# The whole of the fix, stated once. A stake on its own, a stake in a row, a stake
-	# at a corner and a stake in the middle of a block are all the same one cone.
-	var gm = await _grid([])
-	await wait_frames(1)
-
-	var lone = _wall_at(gm, Vector2i(9, 9))
-	assert_eq(_cones(lone).size(), 1, "On its own: one cone")
-
-	# A row.
-	var row: Array = []
-	for x in range(0, 3):
-		row.append(_wall_at(gm, Vector2i(x, 0)))
-	await wait_frames(1)
-	for w in row:
-		assert_eq(_cones(w).size(), 1, "In a row: still one cone")
-
-	# A corner, and then a solid block -- the arrangement that used to turn every
-	# stake in it back into the big shape.
-	_wall_at(gm, Vector2i(2, 1))
-	_wall_at(gm, Vector2i(1, 1))
-	_wall_at(gm, Vector2i(0, 1))
-	await wait_frames(1)
-	for w in row:
-		assert_eq(_cones(w).size(), 1, "In a block: still one cone")
-	assert_eq(_cones(lone).size(), 1, "And the lone one never changed either")
-
-func test_12_a_stake_is_drawn_as_a_cone_of_the_declared_width() -> void:
-	var gm = await _grid([])
-	await wait_frames(1)
-	var stake = _wall_at(gm, Vector2i(0, 0))
-
-	# In terms of SHAPE since the stake became a model: as wide and as tall as Config
-	# declares, and narrow at the top.
-	var cones := _cones(stake)
-	assert_eq(cones.size(), 1, "One piece")
-	if cones.is_empty():
-		return
-	var bounds: AABB = VisualLibrary.visual_bounds(stake.find_child("Body", false, false))
-	assert_lte(maxf(bounds.size.x, bounds.size.z), float(config_node.get_spike_diameter("wall")) + 0.01,
-		"No wider than Config declares -- a plain number now, not derived from a cone count")
-	assert_almost_eq(bounds.size.y, float(config_node.get_building_height("wall")), 0.02,
-		"And as tall as Config declares")
-	assert_lt(top_to_base_width(cones[0]), 0.35, "Sharpened to a point")
-	assert_lt(float(config_node.get_spike_diameter("wall")), float(config_node.TILE_SIZE) * 0.5,
-		"Small: nowhere near the tile-wide slab it used to be")
-
-func test_13_a_stake_stops_you_where_the_stake_is() -> void:
-	# This test used to record the opposite as a deliberate trade: a stake blocked its
-	# whole tile while being drawn as one small cone in the middle of it. It said the
-	# change would be one number and would announce itself here. It did.
-	#
-	# The trade was not worth what it cost: a gap the player could plainly see between
-	# a stake and a hillside was solid, because the tile was claimed whether or not
-	# anything stood in the part he was walking through.
-	var gm = await _grid([])
-	await wait_frames(1)
-	var stake = _wall_at(gm, Vector2i(0, 0))
-
-	var tile: float = float(config_node.TILE_SIZE)
-	var size: Vector3 = _collision_size(stake)
-	assert_almost_eq(size.x, float(config_node.get_spike_diameter("wall")), 0.01,
-		"The box that stops you is the cone you can see")
-	assert_almost_eq(size.z, float(config_node.get_spike_diameter("wall")), 0.01, "On both axes")
-	assert_gt(tile - size.x, float(config_node.HERO.get("width", 0.8)),
-		"So there is room beside it, which is what the player was looking at")
-
-func test_14_the_ghost_cannot_disagree_with_the_stake_any_more() -> void:
-	# The reported bug, made impossible rather than fixed. The ghost and the stake are
-	# the same call with the same arguments: there is no arrangement left to get wrong,
-	# and no neighbour for either of them to ask about.
-	var gm = await _grid([])
-	await wait_frames(1)
-	var neighbour = _wall_at(gm, Vector2i(0, 0))
-	await wait_frames(1)
-
-	var ghost: Node3D = Building.make_body("wall")
-	_cleanup_nodes.append(ghost)
-	var ghost_cones: int = body_meshes(ghost).size()    # at any depth: the stake is a model
-	assert_eq(ghost_cones, 1, "The ghost is one piece")
-
-	# Beside an existing stake -- the case that used to change the answer.
-	var placed = _wall_at(gm, Vector2i(1, 0))
-	await wait_frames(1)
-	assert_eq(_cones(placed).size(), ghost_cones,
-		"And the stake that lands beside one is exactly what the ghost promised")
 
 func test_15_nothing_reshapes_a_stake_after_it_is_built() -> void:
 	# There is no longer any code path that redraws a standing stake, which is what the

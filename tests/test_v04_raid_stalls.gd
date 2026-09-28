@@ -86,9 +86,9 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 		maps_of().rebake()
 	return w
 
-## A fence all the way round `centre`, laid as four RUNS of stakes on the fine grid.
-## One stake per tile is not a fence: 0.62m of cone every 2m leaves 1.38m of open ground
-## between them, and nothing is sealed in by that -- see test_base.run_of_stakes.
+## A fence all the way round `centre`, laid as four RUNS of wall: a section in every cell of the
+## building grid the line crosses (test_base.run_of_stakes). One section per tile is not a fence:
+## a metre of wall every two leaves a metre of open ground between them.
 func _fence_around(gm: Node, centre: Vector2i) -> void:
 	var half: float = float(gm.tile_size) * 1.5
 	var mid: Vector3 = gm.cell_to_world(centre)
@@ -108,19 +108,6 @@ func _dino_at(gm: Node, at: Vector3, goal: Vector3) -> Node:
 	d.global_position = at
 	d.set_waypoints([goal])
 	return d
-
-func _divisions() -> int:
-	return int(config_node.get_cell_divisions("wall"))
-
-func _fine_step() -> float:
-	return float(config_node.TILE_SIZE) / float(_divisions())
-
-## A stake at a fine cell, placed the way a click places one.
-func _stake(gm: Node, bs: Node, fine: Vector2i) -> Node:
-	var at: Vector3 = gm.fine_cell_to_world(fine, _divisions())
-	# Into the fixture world, so the stake is in the next bake as well as on the grid.
-	var s = bs.place_building("wall", gm.world_to_cell(at), _world, false, at)
-	return s
 
 # ==============================================================================
 # 1. It never commits to something it will not bite
@@ -232,22 +219,9 @@ func test_05_a_line_never_steps_over_a_cell() -> void:
 		assert_eq(absi(step.x) + absi(step.y), 1,
 			"Step %d moves one cell, never diagonally and never further" % i)
 
-func test_06_the_line_agrees_with_the_pathfinder() -> void:
-	# They disagreed: the line check called a tile solid for being OCCUPIED, while A*
-	# routed straight through it. A walker caught between the two does not go round and
-	# does not stop -- it walks into the thing, gets pushed out, and repeats.
-	var gm = await _grid([])
-	var bs = _build_system(gm)
-	await wait_frames(1)
-	_stake(gm, bs, Vector2i(0, 0))
-	await wait_frames(1)
-
-	var tile: Vector2i = Vector2i(0, 0)
-	assert_true(gm.is_cell_walkable(tile), "One stake leaves the tile crossable")
-	var from_pos: Vector3 = gm.cell_to_world(Vector2i(0, -3))
-	var to_pos: Vector3 = gm.cell_to_world(Vector2i(0, 3))
-	assert_eq(gm.first_solid_on_line(from_pos, to_pos), gm.NO_CELL,
-		"So the straight line through it is clear, exactly as A* believes")
+# test_06 is gone with its subject: the grid's line check and its pathfinder disagreeing about
+# whether a tile holding one stake was solid. Neither is left since v0.6 round two -- a cell is
+# taken or free, and what is in the way is asked of the navigation mesh and of the body.
 
 func test_07_a_walker_slides_along_a_hill_instead_of_stopping_dead() -> void:
 	# The last line of defence. Whatever any check gets wrong in future, pressing into

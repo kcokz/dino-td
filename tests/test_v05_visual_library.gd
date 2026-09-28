@@ -292,22 +292,27 @@ func test_12_a_visual_never_comes_back_empty() -> void:
 		"Falling back to the plain block rather than to nothing")
 	assert_false(VisualLibrary.has_art("no/such/thing"), "And it does not claim to have art")
 
-func test_13_a_stake_is_one_cone_through_every_route() -> void:
-	# No visual in this game depends on its neighbours any more. Whichever way the body
-	# is asked for, and whatever is passed as a variant, the answer is one cone.
+func test_13_a_wall_is_the_same_kit_through_every_route() -> void:
+	# A palisade is a kit of parts since v0.6 round two -- a post and a run out to each side,
+	# shown towards its neighbours (Wall.dress) -- but which parts it HAS depends on nothing.
+	# Whichever way the body is asked for, and whatever is passed as a variant, it is the
+	# whole kit, every part there to be shown or hidden.
 	var direct: Node3D = VisualLibrary.make("building/wall")
 	_keep(direct)
-	assert_eq(_meshes(direct).size(), 1, "One cone")
+	var parts: int = _meshes(direct).size()
+	assert_gt(parts, 1, "A post and its runs")
+	for part in ["Post", "Run_E", "Run_W", "Run_N", "Run_S"]:
+		assert_not_null(direct.find_child(part, true, false), "With its %s" % part)
 
 	# A variant is still meaningful for other things (a cut-out tree), so it has to be
-	# harmless here rather than absent -- passing one must not resurrect an arrangement.
+	# harmless here rather than absent -- passing one must not change what is built.
 	var with_variant: Node3D = VisualLibrary.make("building/wall", "x")
 	_keep(with_variant)
-	assert_eq(_meshes(with_variant).size(), 1, "A variant does not bring back a second cone")
+	assert_eq(_meshes(with_variant).size(), parts, "A variant does not change the kit")
 
 	var through_building: Node3D = Building.make_body("wall")
 	_keep(through_building)
-	assert_eq(_meshes(through_building).size(), 1, "And asking through Building gives the same body")
+	assert_eq(_meshes(through_building).size(), parts, "And asking through Building gives the same body")
 
 func test_14_a_depleted_node_is_asked_for_as_a_variant() -> void:
 	# Today both variants resolve to the same placeholder and only the colour differs.

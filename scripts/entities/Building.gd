@@ -9,10 +9,6 @@ extends StaticBody3D
 @export var max_hp: float = 10.0
 @export var current_hp: float = 10.0
 @export var cell_pos: Vector2i = Vector2i.ZERO
-## Where this sits on the finer grid, for types placed more precisely than one per tile
-## (stakes). Left at the tile for everything else, and only meaningful when
-## Config.get_cell_divisions() says the type uses it.
-@export var fine_pos: Vector2i = Vector2i.ZERO
 
 @export var build_time: float = 2.0
 @export var build_progress: float = 1.0
@@ -150,10 +146,12 @@ func _update_construction_state() -> void:
 	var cfg = _get_config()
 	var blueprint_layer: int = int(cfg.LAYER_BLUEPRINT) if (cfg and "LAYER_BLUEPRINT" in cfg) else 16
 	var solid_layer: int = 2
-	# A wall goes on its own layer so the Hero walks through his own fence and nothing
-	# else. See Config.LAYER_WALL.
+	# A wall is on a layer of its own (Config.LAYER_WALL), and a gate -- the wall the Hero walks
+	# through -- on another (LAYER_GATE), which his body and his mesh leave out.
 	if cfg and "LAYER_WALL" in cfg and cfg.has_method("get_building_kind"):
-		if String(cfg.get_building_kind(building_type)) == "wall":
+		if cfg.has_method("hero_passes") and cfg.hero_passes(building_type):
+			solid_layer = int(cfg.LAYER_GATE)
+		elif String(cfg.get_building_kind(building_type)) == "wall":
 			solid_layer = int(cfg.LAYER_WALL)
 	collision_layer = solid_layer if is_constructed else blueprint_layer
 	for child in get_children():
@@ -211,7 +209,14 @@ func destroy() -> void:
 	is_destroyed = true
 	_spawn_destruction_fx()
 	_on_before_destroy()
-	
+	# Out of the world at once. The meshes are baked again this very frame, on the signal below
+	# (NavMaps), and a building still standing in the physics while it waited to be freed was baked
+	# in as solid -- the gap a fallen wall left did not open until something else was built.
+	collision_layer = 0
+	var obstacle: Node = find_child("BakeObstacle", false, false)
+	if obstacle is NavigationObstacle3D:
+		(obstacle as NavigationObstacle3D).affect_navigation_mesh = false
+
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_destroyed"):
 		eb.building_destroyed.emit(self)
@@ -759,35 +764,23 @@ func _resolve_build_time() -> float:
 		return float(cfg.get_build_time(building_type))
 	return 2.0
 
-## Marks this building's box out of the navigation bake, when it is wider than a tile.
+## Marks this building's box out of the navigation bake as a solid (NavMaps.mark_solid), when it
+## is more than a cell across: under the cabin's roof the bake found a floor with headroom, and
+## the nearest walkable point to the cabin was always in there, where no route can go.
 ##
-## The bake reads a collider as SURFACES, not as a solid: under the roof of a box three
-## metres across it found a floor with headroom and made a walkable island of it, walled
-## off from everything. The nearest walkable point to the cabin was then always inside it,
-## where no route can go, and every "can the raid reach the cabin" came back no. A building
-## a tile or less across has no such room: once the walker's radius comes off its walls,
-## nothing inside is left. The engine's own obstacle does the marking; avoidance is off,
-## because steering round the building is the baked mesh's job, not the obstacle's.
+## ONLY FOR WHAT IS WIDER THAN A CELL. An obstacle is carved out of EVERY mesh, whatever it was
+## baked for -- so on a gate it shut the Hero's own way through it, and on a wall it put walls
+## into the siege mesh, which is baked to have none. The sliver of island a metre of wall leaves
+## on its top is thrown away by the bake itself (Config.NAV.region_min_size).
 func _ensure_bake_obstacle() -> void:
 	var cfg = _get_config()
-	if cfg == null or not cfg.has_method("get_building_span"):
+	if cfg == null or not cfg.has_method("get_building_cells"):
 		return
-	if int(cfg.get_building_span(building_type)) <= 1:
+	if int(cfg.get_building_cells(building_type)) <= 1:
 		return
-	if find_child("BakeObstacle", false, false) != null:
-		return
-	var half: float = _footprint() * 0.5
-	var obstacle := NavigationObstacle3D.new()
-	obstacle.name = "BakeObstacle"
-	obstacle.avoidance_enabled = false
-	obstacle.affect_navigation_mesh = true
-	obstacle.height = _building_height() + 0.5     # its roof as well as the floor under it
-	obstacle.vertices = PackedVector3Array([Vector3(-half, 0.0, -half), Vector3(half, 0.0, -half),
-		Vector3(half, 0.0, half), Vector3(-half, 0.0, half)])
-	add_child(obstacle)
+	NavMaps.mark_solid(self, _footprint() * 0.5, _building_height())
 
-## Side length of this building's box. Derived from Config so the gap between two
-## neighbouring buildings always stays wider than the Hero (see BUILDING_CLEARANCE).
+## Side length of this building's box: its cells of the building grid (Config.BUILD_CELL).
 func _footprint() -> float:
 	var cfg = _get_config()
 	if cfg and cfg.has_method("get_building_footprint"):

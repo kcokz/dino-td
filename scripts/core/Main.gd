@@ -322,18 +322,17 @@ func setup_initial_entities() -> void:
 
 	# 1. Place CoreCampfire (Scene Marker -> Config Fallback -> Grid Snapping)
 	#
-	# The cabin takes a block of tiles (Config.get_building_span), running south and east
-	# from its cell, and stands in the middle of the block.
+	# The cabin runs south and east from its tile (_cabin_centre), and takes the cells of the
+	# building grid round its middle (Config.BUILDINGS.core.cells).
 	var cfg_core = _get_config()
-	var core_span: int = int(cfg_core.get_building_span("core")) if cfg_core and cfg_core.has_method("get_building_span") else 1
 	if current_core == null or not is_instance_valid(current_core):
 		var core_pos: Vector3
 		var core_marker = find_child("CoreSpawn", true, false)
 		if core_marker is Node3D and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
 			core_cell = grid_manager.world_to_cell(core_marker.global_position)
-			core_pos = _block_centre(core_cell, core_span)
+			core_pos = _cabin_centre(core_cell)
 		elif grid_manager and grid_manager.has_method("cell_to_world"):
-			core_pos = _block_centre(core_cell, core_span)
+			core_pos = _cabin_centre(core_cell)
 		else:
 			core_pos = Vector3(1.0, 0.0, 1.0)
 
@@ -344,11 +343,9 @@ func setup_initial_entities() -> void:
 		core.position = core_pos
 		buildings_container.add_child(core)
 
-		if grid_manager and grid_manager.has_method("occupy_cell"):
-			for dz in range(core_span):
-				for dx in range(core_span):
-					grid_manager.occupy_cell(core_cell + Vector2i(dx, dz), core)
-			# Its own cell is the one it was placed at, whichever it was registered in last.
+		if grid_manager and grid_manager.has_method("occupy_building"):
+			grid_manager.occupy_building(core, grid_manager.footprint_cells("core", grid_manager.world_to_build_cell(core_pos)))
+			# Its own cell is the one it was placed at.
 			core.cell_pos = core_cell
 		current_core = core
 
@@ -373,8 +370,9 @@ func setup_initial_entities() -> void:
 		var target_nest_parent = nest_holder if is_instance_valid(nest_holder) else self
 		target_nest_parent.add_child(nest)
 
-		if grid_manager and grid_manager.has_method("occupy_cell"):
-			grid_manager.occupy_cell(nest_cell, nest)
+		# Nothing is built on the nest, nor at its mouth: the cells of its tile are its.
+		if grid_manager and grid_manager.has_method("occupy_building"):
+			grid_manager.occupy_building(nest, grid_manager.build_cells_in_tile(nest_cell))
 		current_nest = nest
 
 		if current_nest.has_method("spawn_guards"):
@@ -384,8 +382,8 @@ func setup_initial_entities() -> void:
 	if hero == null or not is_instance_valid(hero):
 		var hero_pos = Vector3(1.0, 0.0, 3.0)
 		if current_core != null and is_instance_valid(current_core):
-			var tile_size: float = float(grid_manager.tile_size) if grid_manager and "tile_size" in grid_manager else 2.0
-			hero_pos = current_core.global_position + Vector3(0.0, 0.0, float(core_span) * tile_size * 0.5 + 1.0)
+			var half: float = float(cfg_core.get_building_footprint("core")) * 0.5 if cfg_core else 1.5
+			hero_pos = current_core.global_position + Vector3(0.0, 0.0, half + 1.0)
 		var hero_inst = hero_script.new()
 		hero_inst.name = "Hero"
 		hero_inst.position = hero_pos
@@ -407,9 +405,16 @@ func setup_initial_entities() -> void:
 
 ## The middle of the block of `span` x `span` tiles that runs south and east from `cell`.
 ## For a one-tile building, the middle of its tile.
-func _block_centre(cell: Vector2i, span: int) -> Vector3:
-	var s: float = float(grid_manager.tile_size) if grid_manager and "tile_size" in grid_manager else 2.0
-	return grid_manager.cell_to_world_origin(cell) + Vector3(float(span) * s * 0.5, 0.0, float(span) * s * 0.5)
+## Where the cabin's middle stands for its tile `cell`: its north and west walls half a cell into
+## the tile -- where the pod's always were, so a raid coming down from the nest meets the line it
+## always met -- and its box running south and east from there, on whole cells of the building
+## grid.
+func _cabin_centre(cell: Vector2i) -> Vector3:
+	var cfg = _get_config()
+	var s: float = float(cfg.BUILD_CELL) if cfg and "BUILD_CELL" in cfg else 1.0
+	var half: float = float(cfg.get_building_footprint("core")) * 0.5 if cfg else 1.5
+	var inset: float = s * 0.5 + half
+	return grid_manager.cell_to_world_origin(cell) + Vector3(inset, 0.0, inset)
 
 func is_resource_at_cell(cell: Vector2i) -> bool:
 	if grid_manager and is_instance_valid(grid_manager) and grid_manager.has_method("is_resource_at_cell"):
@@ -503,6 +508,9 @@ func spawn_terrain() -> void:
 		shape.shape = box
 		shape.position = Vector3(0.0, height * 0.5, 0.0)
 		hill.add_child(shape)
+		# Solid to the bake too, or the floor inside the box is an island the nearest walkable
+		# point to the hill lands on.
+		NavMaps.mark_solid(hill, tile * 0.5, height)
 
 		# A LOW SHARED MOUND, with crags standing on it. The mound is the old height
 		# field kept at a fraction of its height: neighbouring cells still meet without a
@@ -1354,7 +1362,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				# about to pull out a run, and a stake dropped under the finger before
 				# they have moved is one they did not ask for. A press that never moves
 				# far enough lays exactly one on release, so a click still works.
-				_drag_from = grid_manager.world_to_fine_cell(hit_pos, _divisions_of(current_build_type))
+				_drag_from = grid_manager.world_to_build_cell(hit_pos)
 				_drag_from_px = event.position
 				_dragging = false
 				if build_preview != null and is_instance_valid(build_preview):
@@ -1375,17 +1383,17 @@ func _unhandled_input(event: InputEvent) -> void:
 # times, and every building game solved it the same way.
 #
 # NOTHING NEW UNDERNEATH IT. The run is GridManager's own line traversal asked at the
-# fine grid's scale instead of the tile's, every stake goes down through the same
-# BuildSystem.place_building as a single click, and the ghosts are the same
-# Building.make_body the single ghost already used. What is actually new is three pieces
+# building grid's scale instead of the tile's, every section goes down through the same
+# try_place_at_cell as a single click, and the ghosts are the same Building.make_body the
+# single ghost already used. What is actually new is three pieces
 # of state and the rule about when a press becomes a drag.
 
-## Where the finger went down, in fine cells, or NOT_DRAGGING.
+## Where the finger went down, in cells of the building grid, or NOT_DRAGGING.
 var _drag_from: Vector2i = Vector2i(2147483647, 2147483647)
 var _drag_from_px: Vector2 = Vector2.ZERO
 ## True once the cursor has moved far enough that this is a drag and not a click.
 var _dragging: bool = false
-## The ghosts of the run, rebuilt whenever the cursor moves to a different fine cell.
+## The ghosts of the run, rebuilt whenever the cursor moves to a different cell.
 var _run_preview: Node3D = null
 var _run_cells: Array[Vector2i] = []
 
@@ -1393,18 +1401,15 @@ const NOT_DRAGGING := Vector2i(2147483647, 2147483647)
 
 ## Whether this kind of building is laid in runs. Derived from the KIND rather than
 ## declared, because "wall" is already the category the rest of the rules are written
-## against -- so a new sort of barrier gets this for free.
+## against -- so a new sort of barrier gets this for free. Not a gate: it is a wall, but
+## where it goes is a decision about one spot, and a run of gates is a hole.
 func _is_dragged_out(type_id: String) -> bool:
 	var cfg = _get_config()
 	if cfg == null or not cfg.has_method("get_building_kind"):
 		return false
+	if cfg.has_method("hero_passes") and cfg.hero_passes(type_id):
+		return false
 	return String(cfg.get_building_kind(type_id)) == "wall"
-
-func _divisions_of(type_id: String) -> int:
-	var cfg = _get_config()
-	if cfg and cfg.has_method("get_cell_divisions"):
-		return int(cfg.get_cell_divisions(type_id))
-	return 1
 
 func _drag_number(key: String, fallback: float) -> float:
 	var cfg = _get_config()
@@ -1412,8 +1417,8 @@ func _drag_number(key: String, fallback: float) -> float:
 		return float(cfg.BUILD_DRAG.get(key, fallback))
 	return fallback
 
-## The fine cells a run from `_drag_from` to the cursor would cover, already filtered to
-## the ones a stake can actually go in.
+## The build cells a run from `_drag_from` to the cursor would cover, already filtered to the
+## ones a section of wall can actually go in.
 ##
 ## Blocked cells are SKIPPED rather than cutting the run short: dragging a fence past a
 ## rock should give a fence either side of the rock, which is what the player meant, and
@@ -1425,23 +1430,19 @@ func _run_to(screen_pos: Vector2) -> Array[Vector2i]:
 	var hit = _raycast_ground(screen_pos)
 	if hit == null:
 		return out
-	var d: int = _divisions_of(current_build_type)
 	# CENTRE TO CENTRE, not centre to wherever the cursor happens to be. A line that runs
-	# exactly along a cell boundary is ambiguous -- the traversal may take either side of
-	# it -- and two runs drawn to the same corner then land in different rows and the
-	# corner is left open. Measured: a box dragged round the cabin in four gestures, 60
-	# stakes, and a raid walked in through a corner. Snapping both ends puts the line
-	# through the middle of cells, where there is nothing to be ambiguous about.
-	var from_world: Vector3 = grid_manager.fine_cell_to_world(_drag_from, d)
-	var to_world: Vector3 = grid_manager.fine_cell_to_world(grid_manager.world_to_fine_cell(hit, d), d)
-	var line: Array[Vector2i] = grid_manager.fine_cells_on_line(from_world, to_world, d)
+	# exactly along a cell boundary is ambiguous -- the traversal may take either side of it --
+	# and two runs drawn to the same corner then land in different rows and the corner is left
+	# open. Snapping both ends puts the line through the middle of cells.
+	var from_world: Vector3 = grid_manager.build_cell_to_world(_drag_from)
+	var to_world: Vector3 = grid_manager.build_cell_to_world(grid_manager.world_to_build_cell(hit))
+	var line: Array[Vector2i] = grid_manager.build_cells_on_line(from_world, to_world)
 	var cap: int = int(_drag_number("max_run", 120.0))
-	for fine in line:
+	for cell in line:
 		if out.size() >= cap:
 			break
-		var at: Vector3 = grid_manager.fine_cell_to_world(fine, d)
-		if build_system != null and build_system.can_place_building(current_build_type, grid_manager.world_to_cell(at), false, at):
-			out.append(fine)
+		if build_system != null and build_system.can_place_at(current_build_type, cell):
+			out.append(cell)
 	return out
 
 func _show_run_preview(cells: Array[Vector2i]) -> void:
@@ -1454,10 +1455,11 @@ func _show_run_preview(cells: Array[Vector2i]) -> void:
 	_run_preview = Node3D.new()
 	_run_preview.name = "RunPreview"
 	add_child(_run_preview)
-	var d: int = _divisions_of(current_build_type)
-	for fine in cells:
+	for cell in cells:
 		var body: Node3D = Building.make_body(current_build_type)
-		body.position = grid_manager.fine_cell_to_world(fine, d)
+		body.position = grid_manager.build_cell_to_world(cell)
+		# Dressed as it will stand: joined to the rest of the run and to what is already built.
+		_dress_ghost(body, cell, cells)
 		for mi in _meshes_in(body):
 			mi.material_override = _make_preview_material(Color.WHITE)
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -1490,15 +1492,23 @@ func _hint_run(count: int) -> void:
 func _commit_run(cells: Array[Vector2i]) -> int:
 	if cells.is_empty():
 		return 0
-	var d: int = _divisions_of(current_build_type)
 	var laid: int = 0
-	for fine in cells:
+	for cell in cells:
 		if current_build_type == "":
 			break                          # the wallet emptied and build mode dropped
-		var at: Vector3 = grid_manager.fine_cell_to_world(fine, d)
+		var at: Vector3 = grid_manager.build_cell_to_world(cell)
 		if try_place_at_cell(grid_manager.world_to_cell(at), at) != null:
 			laid += 1
 	return laid
+
+## Dresses a ghost as the building will stand: a palisade's runs towards what is beside `cell`
+## (built, or in `planned`), a gate turned across the line of the wall it is in.
+func _dress_ghost(body: Node3D, cell: Vector2i, planned: Array = []) -> void:
+	var near: Dictionary = Wall.neighbours_of(grid_manager, cell, null, planned)
+	Wall.dress(body, near)
+	var cfg = _get_config()
+	if cfg and cfg.has_method("hero_passes") and cfg.hero_passes(current_build_type):
+		body.rotation.y = Gate.across(near)
 
 func _end_drag() -> void:
 	_drag_from = NOT_DRAGGING
@@ -1514,23 +1524,14 @@ func try_place_at_cell(cell: Vector2i, at_world: Variant = null) -> Node:
 	if current_build_type == "" or build_system == null:
 		return null
 
-	# Stakes go on a finer grid than the tile, so several share a tile and the
-	# tile-occupied shortcut below would reject the second one. BuildSystem asks the
-	# right question for the type; this early check is only here to give a nicer hint,
-	# so it steps aside for anything placed finely.
-	var fine_type: bool = false
-	var cfg_div = _get_config()
-	if cfg_div and cfg_div.has_method("get_cell_divisions"):
-		fine_type = int(cfg_div.get_cell_divisions(current_build_type)) > 1
-	if not fine_type:
-		if (grid_manager and grid_manager.has_method("is_cell_occupied") and grid_manager.is_cell_occupied(cell)) or is_resource_at_cell(cell):
-			_hint("HINT_CELL_OCCUPIED")
-			return null
-	elif is_resource_at_cell(cell):
+	# The spot taken -- by a building, a tree, a rock, a hillside -- is said as such, before the
+	# price is looked at: it is the nearer reason.
+	var spot: Vector2i = build_system.build_cell_for(cell, at_world)
+	if grid_manager and not grid_manager.can_build_on(grid_manager.footprint_cells(current_build_type, spot)):
 		_hint("HINT_CELL_OCCUPIED")
 		return null
 
-	var placed = build_system.place_building(current_build_type, cell, buildings_container, true, at_world)
+	var placed = build_system.place_at(current_build_type, spot, buildings_container, true)
 	if placed != null:
 		if hero != null and is_instance_valid(hero):
 			hero.order_build(placed, false)
@@ -2165,35 +2166,21 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 		build_preview.visible = false
 		return
 
-	var cell: Vector2i = grid_manager.world_to_cell(hit)
-	# Stakes snap to the finer grid, so the ghost has to as well -- and the cell it is
-	# compared against has to be the fine one, or the ghost would only move once per
-	# two metres while the stake it promises moves every sixty centimetres.
-	var divisions: int = 1
-	var cfg_div = _get_config()
-	if cfg_div and cfg_div.has_method("get_cell_divisions"):
-		divisions = int(cfg_div.get_cell_divisions(current_build_type))
-	var snap: Vector2i = cell
-	var at: Vector3 = grid_manager.cell_to_world(cell)
-	if divisions > 1:
-		snap = grid_manager.world_to_fine_cell(hit, divisions)
-		at = grid_manager.fine_cell_to_world(snap, divisions)
-
+	# Everything snaps to the building grid (Config.BUILD_CELL): the ghost stands in the cell the
+	# building would, dressed as it would stand there.
+	var snap: Vector2i = grid_manager.world_to_build_cell(hit)
 	build_preview.visible = true
-	# Nothing about a building's shape depends on where it goes any more, so the cell
-	# moving is the only thing that can need a redraw. There used to be a second test
-	# here for the fence's arrangement changing under the cursor -- along with the
-	# arrangement itself, and the bug where the ghost and the placed stake disagreed.
 	if snap == _preview_cell:
 		return
 	_preview_cell = snap
-	build_preview.global_position = at
+	build_preview.global_position = grid_manager.build_cell_to_world(snap)
+	var ghost: Node = build_preview.find_child("Body", false, false)
+	if ghost is Node3D:
+		_dress_ghost(ghost as Node3D, snap)
 
 	var ok: bool = _can_afford_building(current_build_type)
-	if ok and build_system and build_system.has_method("can_place_building"):
-		ok = bool(build_system.can_place_building(current_build_type, cell, false, hit))
-	elif ok and grid_manager and grid_manager.has_method("is_cell_occupied"):
-		ok = not grid_manager.is_cell_occupied(cell)
+	if ok and build_system and build_system.has_method("can_place_at"):
+		ok = bool(build_system.can_place_at(current_build_type, snap))
 
 	# Tint every piece of the ghost, not just the first: a body is whatever
 	# Building.make_body() returns, and that will be a loaded scene once there is art.

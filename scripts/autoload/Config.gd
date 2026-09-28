@@ -49,16 +49,14 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_CORE_NAME",
 		"kind": "core",
 		# The crew module of the ship that brought the Hero here, and his home: a room,
-		# not a pod. It takes a 2 x 2 block of tiles (`span`), its box as wide as a block
-		# allows while still leaving the Hero a way past on every side -- two tiles less
-		# his width and the clearance, 3 m -- and a little over twice his height. It was a
-		# 1 m pod in one tile, no taller than the man who lives in it, because one tile
-		# cannot hold a room and keep a lane beside it.
+		# not a pod. Three cells of the building grid a side (BUILD_CELL) -- three metres,
+		# filled, like everything since v0.6 round two -- and a little over twice his height.
+		# It was a 1 m pod, no taller than the man who lives in it.
 		#
-		# The block runs south and east from the core's cell, so the north and west walls
-		# stand exactly where the pod's did: a raid coming down from the nest meets the
-		# same line it always met.
-		"span": 2,
+		# It runs south and east from the core's tile (Main._cabin_centre), so the north and
+		# west walls stand exactly where the pod's did: a raid coming down from the nest meets
+		# the same line it always met.
+		"cells": 3,
 		"height": 2.6,
 		# v0.6 feedback: "船舱血量提升到100，这样船舱的攻击能打败初始迅猛龙". A hundred: the
 		# opening's stakes are thin, and the cabin has to be able to take the first raid's
@@ -79,7 +77,7 @@ const BUILDINGS: Dictionary = {
 	"tower": {
 		"name": "BUILDING_TOWER_NAME",
 		"kind": "tower",
-		"footprint": 1.1,
+		"cells": 1,
 		"height": 2.4,
 		"hp": 20.0,
 		# A crossbow he builds himself: a drystone plinth, a timber bow arm, bone bolt heads.
@@ -112,7 +110,7 @@ const BUILDINGS: Dictionary = {
 	"bow_tower": {
 		"name": "BUILDING_BOW_TOWER_NAME",
 		"kind": "tower",
-		"footprint": 1.1,
+		"cells": 1,
 		"height": 2.0,
 		"hp": 12.0,
 		"cost": {"wood": 8},
@@ -129,7 +127,7 @@ const BUILDINGS: Dictionary = {
 	"tower_2": {
 		"name": "BUILDING_TOWER_2_NAME",
 		"kind": "tower",
-		"footprint": 1.1,
+		"cells": 1,
 		"height": 2.4,
 		"hp": 26.0,
 		"cost": {"stone": 5, "bone": 3},
@@ -139,105 +137,102 @@ const BUILDINGS: Dictionary = {
 		"turn_speed": 300.0,
 		"upgrades_to": "",
 	},
+	# THE WALLS, v0.6 round two: "重新设计墙，让墙体逻辑简单清晰，墙必须让它们和别的建筑能更贴合……木栅栏成本
+	# 太高，用处太小……石墙恐龙能穿过，不合理，木栅栏可以稍微大一点，而且人不能再穿过墙了".
+	#
+	# One cell of the building grid each (BUILD_CELL, a metre), filled: a run of them is a wall
+	# with nothing to slip between, it stands flush against whatever is in the next cell, and
+	# whether a way is shut is only whether the cells across it are taken. Nothing gets through
+	# a wall -- not a raid, not the Hero; his way through his own wall is a gate.
+	#
+	# A palisade: sharpened logs a little taller than the Hero, lashed to a rail, that join the
+	# next section of wall beside them (Wall.gd; tools/generate_props.py palisade). A metre of it
+	# is one wood -- a ring round the cabin was forty wood of stakes, and is a dozen now.
 	"wall": {
 		"name": "BUILDING_WALL_NAME",
 		"kind": "wall",
+		"cells": 1,
 		"hp": 8.0,
-		# A barrier: neighbouring stakes close up into a fence the Hero cannot slip
-		# through. Being fenced in is undone by demolishing one of them.
-		#
-		# A row of small sharpened cones. Never a block, in any arrangement.
-		#
-		# Low and made of small pieces is the whole silhouette: staying below
-		# BUILDING_HEIGHT_DEFAULT keeps a fence something you see over rather than a
-		# wall of buildings. A turret is the opposite -- narrow enough to walk past,
-		# tall enough to spot across the map.
-		#
-		# A STAKE IS AS BIG AS THE STAKE. `spike_diameter` is the whole of its size:
-		# the cone you see, the box that stops you, and the ground it claims are one
-		# number, so they cannot disagree.
-		#
-		# It used to declare a footprint of a whole tile -- 2m of claim for 0.62m of
-		# cone. The tile was blocked whether or not anything was standing in the part
-		# you were walking through, which is why a plain gap between a stake and a
-		# hillside was solid. What closes a way now is a RUN of stakes wide enough to
-		# cross a tile, which is the thing the player can actually see is a fence.
-		"height": 0.95,          # taller than it is wide, so it reads as a stake
-		"spike_diameter": 0.62,  # ONE cone, this wide. Not derived from anything.
-		# Stakes are placed on a FINER grid than everything else: three positions per
-		# tile edge, so 0.67m apart instead of 2m. That is the whole answer to "one
-		# stake, but they sit miles apart" -- the cone was already small, the GRID was
-		# what was coarse. A row of them now closes up into a fence you can see is a
-		# fence, and how dense it is is the player's decision rather than a constant.
-		#
-		# Three per tile edge is also what decides when a fence SEALS: a full row or
-		# column of fine cells is a run of cones crossing the tile with nothing between
-		# them, and that is what nobody walks through. Fewer than that is a gap, and a
-		# gap you can see is a gap you can use.
-		"cell_divisions": 3,
-		# Sharpened stakes: anything forcing its way past takes damage per tick, so a
-		# fence line wears a raid down instead of only delaying it. Deliberately a
-		# chip rather than a kill -- a raptor (DINOS.raptor.hp) chewing through these
-		# 8 HP comes out alive but nearly dead, leaving the finishing to a tower or
-		# the Hero.
-		#
-		# NO `contact_range` HERE ANY MORE. It was a flat 2.0, chosen when a stake
-		# filled its 2m tile, and left behind when the stake shrank to 0.62m -- a
-		# four-metre-wide damage field around each cone. A raid walking PAST a fence
-		# through a perfectly good gap was bled out by stakes it never touched. It is
-		# derived from the stake's own size now (Config.get_contact_range), so it
-		# reaches whoever is standing against the spikes and nobody else.
+		"height": 1.25,
+		# Sharpened: whatever presses against it is hurt, per tick, so a line wears a raid
+		# down instead of only holding it -- a chip, not a kill: a raptor (DINOS.raptor.hp)
+		# chewing through the 8 hit points comes out alive but nearly dead, leaving the
+		# finishing to a trap, the cabin or the Hero. It reaches whoever is against it, body
+		# to body (CONTACT_REACH), and nobody walking past.
 		"contact_damage": 0.15,
 		"contact_tick": 0.5,
-		# Two wood, not one. At one, mending a stake cost the same as replacing it
-		# (repair is the price scaled by the damage, rounded up, so the floor is one
-		# unit) -- which made repair meaningless on the cheapest thing in the game.
-		# At two, a stake worth saving can be saved.
-		"cost": {"wood": 2},
+		"cost": {"wood": 1},
 		"upgrades_to": "",
 	},
-	# The fence line's second step (GAME-DESIGN 6.2: wood -> bone -> iron): the same stake --
-	# the same size, laid the same way on the same fine grid -- with a bone point lashed on,
-	# so it bites more than twice as hard and lasts a little longer. One bone a stake, which
-	# is the raids' bone spent where it does the most harm: a few of these at the mouth of
-	# a funnel, not a whole fence of them.
+	# The palisade's second step (GAME-DESIGN 6.2: wood -> bone -> iron): the same section with
+	# bone points lashed to its logs, biting more than twice as hard and lasting a little longer.
+	# One bone a metre: the raids' bone spent where it does the most harm -- the mouth of a
+	# funnel, not a whole ring.
 	"bone_stake": {
 		"name": "BUILDING_BONE_STAKE_NAME",
 		"kind": "wall",
+		"cells": 1,
 		"hp": 10.0,
-		"height": 0.95,
-		"spike_diameter": 0.62,
-		"cell_divisions": 3,
+		"height": 1.25,
 		"contact_damage": 0.35,
 		"contact_tick": 0.5,
-		"cost": {"wood": 2, "bone": 1},
+		"cost": {"wood": 1, "bone": 1},
 		"upgrades_to": "",
 	},
-	# A drystone wall filling its whole tile (GAME-DESIGN 6.2: only blocks, whole tile, many
-	# hit points): it bites nothing, but a big predator that walks through a fence of stakes
-	# is held here a long time (6.3). In nobody's way but a dinosaur's -- the Hero climbs it
-	# like a fence (a v0.6 decision; whether a brick wall later needs a gate is open, 13.3).
-	# A row of them is a wall rather than a row of blocks because each fills its tile.
+	# Courses of unmortared stone, capstones on top (GAME-DESIGN 6.2: only blocks, many hit
+	# points): it bites nothing, but a big predator that would eat through a palisade is held
+	# here a long time (6.3). A metre of it is a stone.
 	"stone_wall": {
 		"name": "BUILDING_STONE_WALL_NAME",
 		"kind": "wall",
-		"hp": 40.0,
-		"height": 1.1,
-		"footprint": 2.0,         # the whole tile (TILE_SIZE)
-		"cost": {"stone": 3},
+		"cells": 1,
+		"hp": 20.0,
+		"height": 1.2,
+		"cost": {"stone": 1},
+		"upgrades_to": "",
+	},
+	# A gate: a section of wall the Hero walks through and nothing else does. Now that a wall
+	# stops him, it is how he gets in and out of his own camp; a raid treats it as the wall it
+	# is. It stands on its own layer (LAYER_GATE), which his body and his mesh leave out, and
+	# swings open as he comes up to it (Gate.gd; tools/generate_props.py gate).
+	"gate": {
+		"name": "BUILDING_GATE_NAME",
+		"kind": "wall",
+		"cells": 1,
+		"hp": 12.0,
+		"height": 1.45,
+		"hero_passes": true,
+		"cost": {"wood": 2},
 		"upgrades_to": "",
 	},
 }
 
-## How much of its tile a building's box takes up, in metres.
+## THE BUILDING GRID (v0.6 round two). Every building stands on whole cells of this size and
+## fills them: its collider is its cells, and its art is fitted to them. A cell is taken or it
+## is free, and that is the whole of what decides where anything can go and where anybody can
+## walk -- the tile a tower needed and the finer grid stakes were laid on are gone, and with
+## them the tower that could only go up a tile away from a fence, and the gap between them a
+## raptor fitted through.
 ##
-## Most buildings leave a strip free, so two neighbours always have a lane between
-## them the Hero fits through and a ring of workshops can never seal him in. A
-## barrier -- stakes, and later any wall -- declares a `footprint` of its own that
-## fills the tile instead, so a row of them reads as a continuous fence and really
-## does shut a gap. Getting boxed in on purpose is recoverable: select any adjacent
-## building and demolish it.
-const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metres
+## A metre: the Hero is 0.8 m across and a raptor as wide, so one free cell is a way through
+## and one taken cell is a wall -- and a fence section is "a little bigger" than the 0.62 m
+## stake it replaces. The cells are CENTRED on whole metres, so the middle of every tile
+## (TILE_SIZE, the map's grid: hills, trees, rocks) is the middle of a cell.
+const BUILD_CELL: float = 1.0
+
+## How far past its own body something pressed against a sharpened wall is still hurt by it, in
+## metres: body to body, so it reaches whoever is against it and nobody walking past.
+const CONTACT_REACH: float = 0.15
+
+## A gate's door (Gate.gd): it swings open when the Hero comes within `open_radius` metres of the
+## gate's middle -- a stride before he reaches it, so he never walks into a shut door -- by
+## `open_degrees`, over `swing_seconds`, and shut behind him. Only art: the gate lets him through
+## whatever the door is doing.
+const GATE: Dictionary = {
+	"open_radius": 1.4,
+	"open_degrees": 100.0,
+	"swing_seconds": 0.35,
+}
 
 ## Physics layers, as bit masks. 1 ground, 2 buildings, 4 hero, 8 nest (dinos carry
 ## 4|8), and this one.
@@ -249,12 +244,10 @@ const BUILDING_CLEARANCE: float = 0.2   # slack beyond the Hero's width, in metr
 ## does.
 const LAYER_BLUEPRINT: int = 16
 
-## Walls sit apart from other buildings so that THE MAN WHO BUILT THEM CAN GET PAST.
-##
-## A fence is his, and being shut out of his own camp by it -- with no gate in the game
-## -- is a worse problem than the one a fence solves. Dinosaurs ray against this layer as
-## well as the buildings layer; the Hero's collision mask leaves it out, and only it, so
-## the wreck and the turrets still stop him exactly as they did.
+## Walls. They stood apart from other buildings so the Hero could walk through his own fence;
+## since v0.6 round two ("人不能再穿过墙了") a wall stops him like anything else, and his way
+## through is a gate (LAYER_GATE). The layer stays its own because what a wall is -- something a
+## raid only bites when it shuts the way -- is worth being able to ask of a collider.
 const LAYER_WALL: int = 32
 
 ## WHAT IS CLICKED BY MORE THAN WHAT BLOCKS. A tree is clicked anywhere on its crown, seen
@@ -273,7 +266,8 @@ const LAYER_GROUND: int = 1
 const LAYER_BUILDING: int = 2
 const LAYER_HERO: int = 4
 const LAYER_DINO: int = 8
-## A gate: a wall the Hero passes and nothing else does (reserved for the wall rework).
+## A gate: a wall the Hero passes and nothing else does. His body and his mesh leave this layer
+## out; a raid's do not.
 const LAYER_GATE: int = 128
 const LAYER_NEST: int = 256
 
@@ -291,9 +285,16 @@ const NAV: Dictionary = {
 	# 0.25 and warned that the two disagreed -- twelve hundred times over one test run.
 	"cell_height": 0.1,
 	# What the mesh is carved for. One radius for everything that walks: a theropod is
-	# wider and can be routed through a gap it does not fit, which only the avoidance
-	# solver notices. A third mesh is the fix if that ever shows on screen.
+	# wider and can be routed through a gap it does not fit -- its body stops it there, and
+	# being stopped by a wall is a wall to bite (Dino._unstick). A cell of the building grid
+	# left open in a wall keeps a strip of mesh at this radius, so a raptor is routed through
+	# the funnel the player left (test_v06_one_grid).
 	"agent_radius": 0.4,
+	# The smallest island of walkable ground the bake keeps, in voxels a side (squared, so 8 is
+	# 0.64 m square at cell_size 0.1). The roof of every building is floor to the bake; on a metre
+	# of wall that is a sliver cut off from everything, and "the nearest walkable point to that
+	# wall" landed on it -- up on the wall, where no route goes.
+	"region_min_size": 8.0,
 	# The furthest a walker may be MOVED by being put back on the mesh, in metres.
 	#
 	# A correction is a correction, not a teleport. Measured without this: a raptor
@@ -329,15 +330,6 @@ static func get_building_color(type_id: String) -> Color:
 		return COLORS[type_id]
 	return Color(0.6, 0.6, 0.6)
 
-## How many places a building of this type may stand along one tile edge.
-##
-## 1 for almost everything: a turret goes in the middle of its tile and that is that.
-## Stakes use a finer grid so a fence can be built dense enough to read as a fence.
-static func get_cell_divisions(type_id: String) -> int:
-	if BUILDINGS.has(type_id):
-		return clampi(int(BUILDINGS[type_id].get("cell_divisions", 1)), 1, 8)
-	return 1
-
 ## "box" (one solid block) or "spikes" (a row of small sharpened cones).
 ##
 ## Reads VISUALS rather than BUILDINGS: what a thing is drawn as is a fact about its
@@ -352,30 +344,6 @@ static func get_placeholder_style(key: String) -> String:
 		return String(VISUALS[key].get("placeholder", "box"))
 	return "box"
 
-## How wide one stake is.
-##
-## DECLARED, not derived. It used to be worked out from a cone count and a tile
-## width, which is how a stake ended up being three cones, or five at a corner, and
-## why the number changed under the player as neighbours went up. There is one cone
-## and this is how wide it is.
-static func get_spike_diameter(type_id: String) -> float:
-	if BUILDINGS.has(type_id):
-		return maxf(0.05, float(BUILDINGS[type_id].get("spike_diameter", 0.6)))
-	return 0.6
-
-## How deep a fence line is across the run, in metres.
-##
-## For spikes this IS the cone -- derived, not declared, so the collision box can
-## never be wider or narrower than the spikes the player is looking at. That
-## equality is the whole point: a box wider than its art stops things at nothing
-## visible, and one narrower lets them through something that looks solid.
-static func get_building_thickness(type_id: String) -> float:
-	if get_building_mesh_style(type_id) == "spikes":
-		return get_spike_diameter(type_id)
-	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("thickness"):
-		return maxf(0.05, float(BUILDINGS[type_id]["thickness"]))
-	return get_building_footprint(type_id)
-
 ## Damage per second a building deals to whatever is pressed against it. Zero for
 ## everything that is not sharpened. The one place damage-per-tick is turned into
 ## damage-per-second, so the build menu and Wall itself cannot disagree.
@@ -389,78 +357,45 @@ static func get_contact_dps(type_id: String) -> float:
 		return 0.0
 	return dmg / tick
 
-## Footprint for a building that has not declared one: wide as the tile allows
-## while still leaving the Hero a way past.
-static func get_default_building_footprint() -> float:
-	var hero_w: float = float(HERO.get("width", 0.8))
-	return maxf(0.5, TILE_SIZE - hero_w - BUILDING_CLEARANCE)
-
-## How many tiles a side `type_id` takes: 1 for everything but the cabin, which is a
-## 2 x 2 block. The building stands in the middle of its block, which runs south and
-## east from the cell it is placed at.
-static func get_building_span(type_id: String = "") -> int:
+## How many cells of the building grid a side `type_id` takes (BUILD_CELL): 3 for the cabin, 1 for
+## everything the player builds. Odd, so a building has a middle cell to stand on.
+static func get_building_cells(type_id: String = "") -> int:
 	if type_id != "" and BUILDINGS.has(type_id):
-		return maxi(1, int(BUILDINGS[type_id].get("span", 1)))
+		return maxi(1, int(BUILDINGS[type_id].get("cells", 1)))
 	return 1
 
-## How far `point` is from the outside of a `type_id` standing at `centre`, in metres, on
-## the ground: 0 when touching or inside. To its box -- buildings are square and are never
-## turned -- or, for one drawn as a spike, to its circle.
+## How far `point` is from the outside of a `type_id` standing at `centre`, in metres, on the
+## ground: 0 when touching or inside. To its box -- buildings are square, fill their cells, and
+## are never turned.
 ##
-## Reach, where a dinosaur stands to bite, and how close the Hero has to be were all
-## measured as a circle of half the footprint round the centre. For a one-metre box the
-## difference at its corners is a fifth of a metre, which the reach absorbed. For the
-## cabin it is more than half a metre: the corner slots stood INSIDE its walls and a
-## raptor at its corner could not bite it.
+## Reach, where a dinosaur stands to bite, and how close the Hero has to be are all measured to
+## the box: a circle of half the footprint sits inside a square's corners, and a raptor at the
+## cabin's corner could not bite what it stood against.
 static func gap_to_building(point: Vector3, type_id: String, centre: Vector3) -> float:
 	var half: float = get_building_footprint(type_id) * 0.5
 	var dx: float = absf(point.x - centre.x)
 	var dz: float = absf(point.z - centre.z)
-	if get_building_mesh_style(type_id) == "spikes":
-		return maxf(0.0, Vector2(dx, dz).length() - half)
 	return Vector2(maxf(dx - half, 0.0), maxf(dz - half, 0.0)).length()
 
 ## How far from `type_id`'s centre its outside is, heading along `dir` (flat, unit).
 static func building_extent_along(type_id: String, dir: Vector3) -> float:
 	var half: float = get_building_footprint(type_id) * 0.5
-	if get_building_mesh_style(type_id) == "spikes":
-		return half
 	return half / maxf(0.0001, maxf(absf(dir.x), absf(dir.z)))
 
-## What sort of thing this is: "wall" for anything a fence is made of, whatever else a
-## building declares, or "" for a type that says nothing.
+## What sort of thing this is: "wall" for anything a wall is made of, whatever else a building
+## declares, or "" for a type that says nothing.
 static func get_building_kind(type_id: String) -> String:
 	if not BUILDINGS.has(type_id):
 		return ""
 	return String(BUILDINGS[type_id].get("kind", ""))
 
-## Side length of `type_id`'s box, in metres. Declared per building, else derived.
-##
-## A building drawn out of small pieces is as wide as one piece. Anything else is a
-## box nobody can see holding the Hero off a stake he is plainly standing beside.
+## Side length of `type_id`'s box, in metres: its cells. Everything fills its cells.
 static func get_building_footprint(type_id: String = "") -> float:
-	if type_id != "" and get_building_mesh_style(type_id) == "spikes":
-		return get_spike_diameter(type_id)
-	if type_id != "" and BUILDINGS.has(type_id) and BUILDINGS[type_id].has("footprint"):
-		return maxf(0.1, float(BUILDINGS[type_id]["footprint"]))
-	var span: int = get_building_span(type_id)
-	if span > 1:
-		# As wide as its block allows while leaving the Hero a way past.
-		var hero_w: float = float(HERO.get("width", 0.8))
-		return maxf(0.5, float(span) * TILE_SIZE - hero_w - BUILDING_CLEARANCE)
-	return get_default_building_footprint()
+	return float(get_building_cells(type_id)) * BUILD_CELL
 
-## True when ONE of these fills its tile, so that a line of them cannot be slipped
-## between.
-##
-## Not a stake: a stake is 0.62m wide, something to walk round, and a fence is what a RUN
-## of them makes -- which tiles a run closes is GridManager's `fine_occupants_seal_cell`,
-## because it depends on where the player put them rather than on the type. The stone
-## wall (v0.6) is: it fills its tile on purpose, against dinosaurs. It cannot shut the
-## Hero in, because he climbs anything of the wall kind (LAYER_WALL).
-static func is_barrier_building(type_id: String) -> bool:
-	var fp: float = get_building_footprint(type_id)
-	return (float(get_building_span(type_id)) * TILE_SIZE - fp) <= float(HERO.get("width", 0.8))
+## Whether the Hero walks through `type_id` -- a gate -- where everything else stops him.
+static func hero_passes(type_id: String) -> bool:
+	return BUILDINGS.has(type_id) and bool(BUILDINGS[type_id].get("hero_passes", false))
 
 ## The flag needed before `res_id` can be cut by hand, or "" for anything bare
 ## hands can take.
@@ -614,7 +549,7 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level rather than bought).
-const BUILDABLE_TYPES: Array[String] = ["wall", "bow_tower", "bone_stake", "stone_wall", "tower"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "bow_tower", "bone_stake", "stone_wall", "tower"]
 
 ## The building `type_id` turns into when it is upgraded where it stands, or "".
 static func upgrade_target(type_id: String) -> String:
@@ -1560,8 +1495,12 @@ const DINO_PROBE_HEIGHT: float = 0.4
 ## reported, and which no amount of work on the targeting rules was ever going to fix.
 ##
 ## Measured from the face, a species stands the same way against a stake as against the
-## wreck. The old numbers fall out unchanged for a 2m building (1.0 + 0.6 = 1.6).
-const DINO_STANDOFF_INNER: float = 0.6
+## wreck.
+##
+## Half a metre since v0.6 round two: a raptor's middle half a metre off a wall's face is its body
+## a hand's breadth off it -- against it, where the spikes reach it (Config.CONTACT_REACH). At 0.6 a
+## raid chewing a palisade stood just out of reach of the points it was chewing.
+const DINO_STANDOFF_INNER: float = 0.5
 const DINO_STANDOFF_OUTER: float = 1.6
 
 ## Kept for anything still asking the old question. A 2m building is the case they
@@ -1573,17 +1512,6 @@ const DINO_ATTACK_SLOT_RADIUS_OUTER: float = 2.6
 static func get_attack_slot_radius(type_id: String, outer: bool = false) -> float:
 	var half: float = get_building_footprint(type_id) * 0.5
 	return half + (DINO_STANDOFF_OUTER if outer else DINO_STANDOFF_INNER)
-
-## How far from a sharpened building's centre its spikes still hurt.
-##
-## Derived, for the same reason as the standoff: a flat 2.0 was a fence that damaged
-## everything within two metres of each cone -- a four-metre-wide field around a 0.62m
-## stake, which chewed through raids that were only walking PAST it through a gap. It has
-## to reach whatever is standing in the inner slot and stop soon after.
-static func get_contact_range(type_id: String) -> float:
-	if BUILDINGS.has(type_id) and BUILDINGS[type_id].has("contact_range"):
-		return maxf(0.0, float(BUILDINGS[type_id]["contact_range"]))
-	return get_attack_slot_radius(type_id, false) + 0.4
 
 # ==============================================================================
 # 12. Continuous Real-Time Raids & Resource Nodes (v0.2)
@@ -1710,18 +1638,24 @@ const VISUALS: Dictionary = {
 	# head is its own node and turns to face what it shoots (Tower.gd). It was a box.
 	"building/tower":       {"scene": "res://assets/models/props/sentry_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
-	# A sharpened log driven into a mound of turned earth: axe-cut facets, a fire-hardened
-	# charred tip, a band of vine lashing. It was an orange traffic cone.
-	"building/wall":        {"scene": "res://assets/models/props/stake_a.glb",
-		"material": "vertex", "placeholder": "spikes", "anchor": "feet", "color": "wall"},
-	# The same stake with a bone point lashed to its top in place of the charred one
-	# (tools/generate_props.py bone_stake): what it is made of, readable from the camera.
-	"building/bone_stake":  {"scene": "res://assets/models/props/bone_stake_a.glb",
-		"material": "vertex", "placeholder": "spikes", "anchor": "feet", "color": "wall"},
-	# Courses of unmortared stone filling the tile, capstones on top (tools/generate_props.py
+	# A metre of palisade (tools/generate_props.py palisade): a post of sharpened logs in the
+	# middle, and a run of them out to each side of the cell, lashed to a rail -- the runs
+	# towards whatever stands in the cells beside it are shown, so a line of them is one
+	# palisade (Wall.gd). Axe-cut points, fire-hardened tips, vine lashing, turned earth.
+	"building/wall":        {"scene": "res://assets/models/props/palisade_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
+	# The same palisade with bone points lashed to its logs (palisade bone=True): what it is
+	# made of, readable from the camera.
+	"building/bone_stake":  {"scene": "res://assets/models/props/bone_palisade_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
+	# Courses of unmortared stone filling the cell, capstones on top (tools/generate_props.py
 	# stone_wall).
 	"building/stone_wall":  {"scene": "res://assets/models/props/stone_wall_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "stone_wall"},
+	# Two gateposts and a door of lashed planks on a vine hinge (tools/generate_props.py gate),
+	# the door its own node, which swings open for the Hero (Gate.gd).
+	"building/gate":        {"scene": "res://assets/models/props/gate_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
 	# A great bow on a stand of lashed poles, the bow on a log turntable so it turns to what
 	# it shoots (tools/generate_props.py bow_tower). Wood and vine: what it is made of.
 	"building/bow_tower":   {"scene": "res://assets/models/props/bow_tower_a.glb",

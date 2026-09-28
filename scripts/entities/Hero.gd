@@ -577,15 +577,12 @@ func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> boo
 	if dist_center <= (build_range + extra_buffer):
 		return true
 
-	# Check 2: 2D bounding box distance to building cell perimeter -- all of its cells:
-	# the cabin stands in a block of them (Config.get_building_span).
-	var half_size: float = 1.0
-	var gm = _get_grid_manager()
-	if gm and "tile_size" in gm:
-		half_size = float(gm.tile_size) * 0.5
-	var cfg_span = _get_config()
-	if cfg_span and cfg_span.has_method("get_building_span") and "building_type" in b:
-		half_size *= float(cfg_span.get_building_span(String(b.building_type)))
+	# Check 2: 2D bounding box distance to the building's own box -- all of its cells: the cabin
+	# stands in a block of them (Config.get_building_footprint).
+	var half_size: float = 0.5
+	var cfg_fp = _get_config()
+	if cfg_fp and cfg_fp.has_method("get_building_footprint") and "building_type" in b:
+		half_size = float(cfg_fp.get_building_footprint(String(b.building_type))) * 0.5
 	var dx = maxf(0.0, absf(pos.x - b_pos.x) - half_size)
 	var dz = maxf(0.0, absf(pos.z - b_pos.z) - half_size)
 	var dist_box = sqrt(dx * dx + dz * dz)
@@ -1048,7 +1045,7 @@ func _on_phase_changed(phase: int) -> void:
 		if current_state != State.DEAD:
 			visible = true
 			collision_layer = _layer("LAYER_HERO", 4)
-			collision_mask = _layer("LAYER_GROUND", 1) | _layer("LAYER_BUILDING", 2) | _layer("LAYER_DINO", 8)
+			collision_mask = _his_mask()
 			current_state = State.IDLE
 
 # ==============================================================================
@@ -1081,10 +1078,11 @@ func _ensure_body() -> void:
 		animator.play_state(current_state)
 
 func _ensure_components() -> void:
-	# His own layer, and what he bumps into: the ground's obstacles, buildings -- and, since v0.6
-	# round two ("所有单位都不能重叠"), the dinosaurs, which bump into him back (Dino).
+	# His own layer, and what he bumps into: the ground's obstacles, buildings, and -- since v0.6
+	# round two -- his own walls ("人不能再穿过墙了"; his way through is a gate, whose layer this
+	# leaves out) and the dinosaurs, which bump into him back ("所有单位都不能重叠").
 	collision_layer = _layer("LAYER_HERO", 4)
-	collision_mask = _layer("LAYER_GROUND", 1) | _layer("LAYER_BUILDING", 2) | _layer("LAYER_DINO", 8)
+	collision_mask = _his_mask()
 
 	if collision_shape == null:
 		for child in get_children():
@@ -1118,6 +1116,10 @@ func _ensure_components() -> void:
 # ==============================================================================
 # Resolvers
 # ==============================================================================
+
+## What his body bumps into: everything solid but a gate.
+func _his_mask() -> int:
+	return _layer("LAYER_GROUND", 1) | _layer("LAYER_BUILDING", 2) | _layer("LAYER_WALL", 32) | _layer("LAYER_DINO", 8)
 
 ## A collision layer by its Config name.
 func _layer(key: String, fallback: int) -> int:

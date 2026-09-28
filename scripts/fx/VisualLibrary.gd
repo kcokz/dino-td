@@ -295,8 +295,6 @@ static func _build_placeholder(holder: Node3D, key: String, variant: String) -> 
 		return
 
 	match declared_placeholder(key):
-		"spikes":
-			_build_one_spike(holder, key, size, mat)
 		"cylinder":
 			var cyl := CylinderMesh.new()
 			cyl.top_radius = size.x * 0.4
@@ -314,24 +312,6 @@ static func _build_placeholder(holder: Node3D, key: String, variant: String) -> 
 			var box := BoxMesh.new()
 			box.size = size
 			_add_mesh(holder, box, Vector3(0.0, size.y * 0.5, 0.0), mat)
-
-## One sharpened stake.
-##
-## There is no arrangement here on purpose. A fence used to work out its shape from its
-## neighbours -- a line, an L, a cross -- and the number of cones changed under the
-## player as the fence grew. One stake, one cone, always.
-static func _build_one_spike(holder: Node3D, key: String, size: Vector3, mat: StandardMaterial3D) -> void:
-	var cfg: Node = _config()
-	if cfg == null:
-		return
-	var type_id: String = key.get_slice("/", key.get_slice_count("/") - 1)
-	var diameter: float = float(cfg.get_spike_diameter(type_id))
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.0            # sharpened to a point
-	cone.bottom_radius = diameter * 0.5
-	cone.height = size.y
-	cone.radial_segments = 8         # hewn, not lathe-turned -- and cheap
-	_add_mesh(holder, cone, Vector3(0.0, size.y * 0.5, 0.0), mat)
 
 static func _add_mesh(holder: Node3D, mesh: Mesh, at: Vector3, mat: StandardMaterial3D) -> void:
 	var mi := MeshInstance3D.new()

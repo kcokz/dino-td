@@ -54,16 +54,10 @@ func _rig() -> Array:
 	bs.setup(gm, gm)
 	return [gm, bs]
 
-func _divisions() -> int:
-	return int(config_node.get_cell_divisions("wall"))
-
-func _step() -> float:
-	return float(config_node.TILE_SIZE) / float(_divisions())
-
-## A stake at a fine cell. `pending` leaves it as a blueprint, the way an order does.
-func _stake(gm: Node, bs: Node, fine: Vector2i, pending: bool = false) -> Node:
-	var at: Vector3 = gm.fine_cell_to_world(fine, _divisions())
-	var s = bs.place_building("wall", gm.world_to_cell(at), gm, pending, at)
+## A section of wall in a cell of the building grid. `pending` leaves it as a blueprint, the way
+## an order does; `parent` is where it stands -- a nav fixture, for a section the bake should see.
+func _stake(gm: Node, bs: Node, cell: Vector2i, pending: bool = false, parent: Node = null) -> Node:
+	var s = bs.place_at("wall", cell, parent if parent != null else gm, pending)
 	if s != null:
 		_cleanup_nodes.append(s)
 	return s
@@ -115,84 +109,40 @@ func test_03_finishing_it_makes_it_solid_again() -> void:
 	w.complete_construction()
 	await wait_frames(1)
 	assert_eq(w.collision_layer, int(config_node.LAYER_WALL),
-		"Finished work is solid -- on the wall layer, which the Hero passes and a dinosaur does not")
+		"Finished work is solid -- on the wall layer, which stops everybody (his way through is a gate)")
 	assert_ne(w.collision_layer, int(config_node.LAYER_BLUEPRINT), "And no longer a blueprint")
 
 # ==============================================================================
 # 2. A fence you have only ordered stops nobody
 # ==============================================================================
 
-func test_04_a_row_of_pending_stakes_does_not_seal_a_tile() -> void:
-	# The second report. Ordering a fence is not the same as having one, and the raid was
-	# being stopped by stakes that did not exist yet.
-	#
-	# One BUILT and the rest pending, which is what a fence actually looks like while it
-	# goes up -- and the only arrangement that tests anything. All-pending is caught by
-	# the tile-level blueprint check before the fine grid is ever consulted.
-	var rig := _rig()
-	var gm = rig[0]
-	var bs = rig[1]
-	await wait_frames(1)
-
-	var d: int = _divisions()
-	var built = _stake(gm, bs, Vector2i(0, 0))
-	assert_not_null(built, "One stake is up")
-	for i in range(1, d):
-		assert_not_null(_stake(gm, bs, Vector2i(i, 0), true), "Stake %d only ordered" % i)
-	await wait_frames(1)
-
-	assert_true(gm.is_cell_walkable(Vector2i(0, 0)),
-		"One stake and two orders is not a wall, whatever the row looks like")
-
-	for i in range(1, d):
-		assert_true(gm.is_fine_cell_occupied(Vector2i(i, 0)), "The spot is taken, so nothing else goes there")
-		assert_false(gm.is_fine_cell_solid(Vector2i(i, 0)), "But there is nothing standing in it yet")
-
-func test_05_and_seals_it_the_moment_it_is_built() -> void:
-	# The same fence, finished. This is the test that keeps the fix above from being a
-	# hole: pending must not block, and built must.
-	var rig := _rig()
-	var gm = rig[0]
-	var bs = rig[1]
-	await wait_frames(1)
-
-	var d: int = _divisions()
-	var stakes: Array[Node] = []
-	for i in range(d):
-		stakes.append(_stake(gm, bs, Vector2i(i, 0), true))
-	await wait_frames(1)
-	assert_true(gm.is_cell_walkable(Vector2i(0, 0)), "Open while it is only ordered")
-
-	for s in stakes:
-		s.complete_construction()
-	await wait_frames(1)
-	assert_false(gm.is_cell_walkable(Vector2i(0, 0)), "Closed once it is actually there")
+# test_04 and test_05 are gone with their subject: a tile of the fine grid, sealed or not by the
+# stakes in it, pending ones counted or not. There is no fine grid and no seal worked out by hand
+# since v0.6 round two; a blueprint is in no navigation bake, and "ordered is open, built is shut"
+# is asked of the meshes themselves (test_v05_navmesh, test_07 and test_19).
 
 func test_06_a_dinosaur_walks_through_a_fence_that_is_only_ordered() -> void:
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
-	await wait_frames(1)
+	var world: Node3D = await nav_fixture()
+	_cleanup_nodes.append(world)
 
-	# A fence across the route with one stake up in each tile and the rest merely
-	# ordered. Mixed, because that is what a fence being built looks like.
-	var d: int = _divisions()
-	for tile_x in range(-1, 2):
-		for i in range(d):
-			_stake(gm, bs, Vector2i(tile_x * d + i, 0), i != 0)
-	await wait_frames(1)
-
-	for tile_x in range(-1, 2):
-		assert_true(gm.is_cell_walkable(Vector2i(tile_x, 0)),
-			"Tile %d is still open, because most of that fence is not there yet" % tile_x)
+	# A fence right across the field, one section in three up and the rest merely ordered --
+	# mixed, because that is what a fence being built looks like.
+	var z: int = 0
+	for x in range(-31, 32):
+		var s = _stake(gm, bs, Vector2i(x, z), posmod(x, 3) != 0, world)
+		assert_not_null(s, "Section %d went down" % x)
+	await rebake_fixture()
 
 	var dino = load("res://scripts/entities/Dino.gd").new()
 	_cleanup_nodes.append(dino)
 	tree.root.add_child(dino)
 	dino.setup("raptor")
-	dino.global_position = gm.cell_to_world(Vector2i(0, 3))
-	dino.set_waypoints([gm.cell_to_world(Vector2i(0, -3))])
-	await wait_frames(1)
+	dino.global_position = gm.build_cell_to_world(Vector2i(0, 6))
+	dino.set_waypoints([gm.build_cell_to_world(Vector2i(0, -6))])
+	await wait_frames(2)
 
 	assert_false(dino._way_is_sealed(), "An ordered fence seals nothing")
 	assert_null(dino._find_threat_priority_target(), "So there is nothing there worth stopping for")
@@ -202,19 +152,22 @@ func test_06_a_dinosaur_walks_through_a_fence_that_is_only_ordered() -> void:
 # ==============================================================================
 
 func test_07_the_building_at_a_point_is_the_one_you_pointed_at() -> void:
-	# Asking the TILE gets you whichever stake happens to be registered as its occupant.
+	# Asking the TILE gets you whichever section happens to be registered as its occupant.
 	# With a fence, that is almost never the one under the cursor -- so right-clicking a
-	# half-built stake acted on a finished one beside it, and did nothing.
+	# half-built stake acted on a finished one beside it, and did nothing. Two sections share
+	# a tile still: a tile is two metres, a cell one.
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
 
-	var first = _stake(gm, bs, Vector2i(0, 0))
-	var second = _stake(gm, bs, Vector2i(2, 0), true)
+	var tile := Vector2i(0, 0)
+	var middle: Vector2i = gm.tile_centre_build_cell(tile)
+	var first = _stake(gm, bs, middle)
+	var second = _stake(gm, bs, middle + Vector2i(1, 0), true)
 	await wait_frames(1)
 
-	assert_eq(gm.get_building_at(Vector2i(0, 0)), first, "The tile is held by the first one")
+	assert_eq(gm.get_building_at(tile), first, "The tile is held by the first one")
 	assert_eq(gm.building_at_point(first.global_position), first, "Point at the first, get the first")
 	assert_eq(gm.building_at_point(second.global_position), second,
 		"Point at the second, get the SECOND -- which the tile lookup never would")
@@ -227,8 +180,9 @@ func test_08_which_is_what_makes_resuming_the_right_stake_possible() -> void:
 	var bs = rig[1]
 	await wait_frames(1)
 
-	_stake(gm, bs, Vector2i(0, 0))
-	var pending = _stake(gm, bs, Vector2i(2, 0), true)
+	var middle: Vector2i = gm.tile_centre_build_cell(Vector2i(0, 0))
+	_stake(gm, bs, middle)
+	var pending = _stake(gm, bs, middle + Vector2i(1, 0), true)
 	await wait_frames(1)
 
 	var found = gm.building_at_point(pending.global_position)

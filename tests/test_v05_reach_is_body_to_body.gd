@@ -95,20 +95,20 @@ func test_02_a_bigger_dinosaur_reaches_further_because_it_is_bigger() -> void:
 	assert_gt(big.attack_reach(), raptor.attack_reach(), "Size tells in what it can touch")
 
 func test_03_how_close_it_must_get_depends_on_what_it_is_biting() -> void:
-	# The half a flat number cannot express: a stake is 0.62m and the wreck is wider, so
-	# reaching the wreck starts further out from its centre than reaching a stake does.
+	# The half a flat number cannot express: a wall is one cell and the cabin three, so
+	# reaching the cabin starts further out from its centre than reaching a wall does.
 	var gm = _grid()
 	await wait_frames(1)
 	var raptor = _dino("raptor", Vector3.ZERO)
 	var stake = _building("wall", gm, Vector2i(8, 8))
-	var tower = _building("tower", gm, Vector2i(12, 12))
+	var cabin = _spawn("res://scripts/entities/CoreCampfire.gd", gm.cell_to_world(Vector2i(14, 14)))
 	await wait_frames(2)
 
-	assert_lt(raptor._half_width_of(stake), raptor._half_width_of(tower),
-		"A stake is the narrower thing")
+	assert_lt(raptor._half_width_of(stake), raptor._half_width_of(cabin),
+		"A wall is the narrower thing")
 	var to_stake: float = raptor.attack_reach() + raptor._half_width_of(stake)
-	var to_tower: float = raptor.attack_reach() + raptor._half_width_of(tower)
-	assert_lt(to_stake, to_tower, "So it has to get closer to a stake than to a turret")
+	var to_cabin: float = raptor.attack_reach() + raptor._half_width_of(cabin)
+	assert_lt(to_stake, to_cabin, "So it has to get closer to a wall than to the cabin")
 
 # ==============================================================================
 # 2. And a bite does not pass through things

@@ -65,14 +65,16 @@ func _stake(at: Vector3 = Vector3.ZERO) -> Node:
 # ==============================================================================
 
 func test_01_where_a_dinosaur_stands_comes_from_the_buildings_own_size() -> void:
+	# Everything the player builds fills one cell since v0.6 round two; the cabin fills three a
+	# side, and is still the case this is about.
 	var stake_ring: float = float(config_node.get_attack_slot_radius("wall", false))
-	var tower_ring: float = float(config_node.get_attack_slot_radius("tower", false))
-	assert_lt(stake_ring, tower_ring, "A stake is approached more closely than a turret")
+	var cabin_ring: float = float(config_node.get_attack_slot_radius("core", false))
+	assert_lt(stake_ring, cabin_ring, "A wall is approached more closely than the cabin")
 
 	# Measured from the FACE, so the standoff is the same for both.
 	var stake_gap: float = stake_ring - float(config_node.get_building_footprint("wall")) * 0.5
-	var tower_gap: float = tower_ring - float(config_node.get_building_footprint("tower")) * 0.5
-	assert_almost_eq(stake_gap, tower_gap, 0.001,
+	var cabin_gap: float = cabin_ring - float(config_node.get_building_footprint("core")) * 0.5
+	assert_almost_eq(stake_gap, cabin_gap, 0.001,
 		"Because it is the same standoff from the face in both cases")
 	assert_almost_eq(stake_gap, float(config_node.DINO_STANDOFF_INNER), 0.001,
 		"Which is what Config declares it to be")
@@ -86,16 +88,10 @@ func test_02_the_old_fixed_ring_was_far_too_far_for_a_stake() -> void:
 	assert_lt(ring, old_fixed, "A stake's attackers stand closer than the old fixed ring")
 	assert_gt(old_fixed - ring, 0.5, "By over half a metre, which is plainly visible from above")
 
-func test_03_a_two_metre_building_keeps_the_numbers_it_always_had() -> void:
-	# The derivation has to reproduce the old constants for the case they were chosen
-	# for, or this is a rebalance wearing a bug fix's clothes.
-	var two_metre: float = float(config_node.TILE_SIZE)
-	var inner: float = two_metre * 0.5 + float(config_node.DINO_STANDOFF_INNER)
-	var outer: float = two_metre * 0.5 + float(config_node.DINO_STANDOFF_OUTER)
-	assert_almost_eq(inner, float(config_node.DINO_ATTACK_SLOT_RADIUS_INNER), 0.001,
-		"1.0 + 0.6 is the 1.6 that was there before")
-	assert_almost_eq(outer, float(config_node.DINO_ATTACK_SLOT_RADIUS_OUTER), 0.001,
-		"And 1.0 + 1.6 is the 2.6")
+# test_03 is gone with its subject. It held the derivation to the old fixed radii for a 2 m
+# building, so that the fix could not be a rebalance in disguise. Nothing is 2 m across since
+# v0.6 round two, and the inner standoff WAS rebalanced, in the open: half a metre, so a raid
+# chewing a wall stands where its spikes reach it (Config.DINO_STANDOFF_INNER).
 
 func test_04_the_slots_a_dinosaur_can_claim_are_close_to_a_stake() -> void:
 	var stake = _stake(Vector3.ZERO)
@@ -119,7 +115,10 @@ func test_04_the_slots_a_dinosaur_can_claim_are_close_to_a_stake() -> void:
 func test_05_contact_range_is_derived_not_declared() -> void:
 	assert_false(config_node.BUILDINGS["wall"].has("contact_range"),
 		"No flat number left to go stale when the stake is resized again")
-	var reach: float = float(config_node.get_contact_range("wall"))
+	var stake = _stake(Vector3.ZERO)
+	await wait_frames(1)
+	# Body to body: half the section, half the animal, a hand's breadth (Wall.touches).
+	var reach: float = stake.contact_range
 	assert_gte(reach, float(config_node.get_attack_slot_radius("wall", false)),
 		"It reaches whatever is standing against the spikes")
 	assert_lt(reach, float(config_node.DINO_ATTACK_SLOT_RADIUS_INNER) + 0.5,
@@ -159,34 +158,39 @@ func test_07_something_pressed_against_them_still_is() -> void:
 #
 # The fourth time the same mistake turned up in this system, and the same shape as the
 # three above: A NUMBER TUNED FOR ONE LAYOUT APPLIED TO ANOTHER. The layout that changed
-# is the stakes' own finer grid -- they stand 0.67m apart now -- while contact_range has
-# to be wide enough to cover whatever is standing in the attack slot, 0.91m out. So
-# three stakes reach the same animal and each one used to damage it separately.
+# was the stakes' own finer grid, 0.67m apart, with a reach wide enough to cover the attack
+# slot, 0.91m out: three stakes reached the same animal and each one damaged it separately.
+# Sections are a metre apart since v0.6 round two and reach body to body, and an animal biting
+# where two meet is still against both.
 
+## A line of sections along x, a cell apart, from `from_x` to `to_x`.
 func _fence_run(from_x: float, to_x: float) -> Array[Node]:
 	var out: Array[Node] = []
-	var step: float = float(config_node.TILE_SIZE) / float(config_node.get_cell_divisions("wall"))
+	var step: float = float(config_node.BUILD_CELL)
 	var x: float = from_x
 	while x <= to_x + 0.001:
 		out.append(_stake(Vector3(x, 0.0, 0.0)))
 		x += step
 	return out
 
-func test_07b_three_stakes_reach_one_animal_standing_where_it_bites() -> void:
+## Where an animal biting the line stands, against the join between two sections.
+func _at_the_join() -> Vector3:
+	return Vector3(float(config_node.BUILD_CELL) * 0.5, 0.0, float(config_node.get_attack_slot_radius("wall", false)))
+
+func test_07b_two_sections_reach_one_animal_standing_where_it_bites() -> void:
 	# The measurement the rest of this section rests on, so that it fails loudly if the
-	# spacing or the range ever move apart again.
+	# spacing or the reach ever move apart again.
 	var run: Array[Node] = _fence_run(-2.0, 2.0)
 	await wait_frames(1)
-	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
-	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, ring))
+	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), _at_the_join())
 	biting.setup("raptor")
 	await wait_frames(1)
 
 	var reaching: int = 0
 	for stake in run:
-		if (stake as Node3D).global_position.distance_to(biting.global_position) <= stake.contact_range:
+		if stake.touches(biting):
 			reaching += 1
-	assert_gt(reaching, 1, "More than one stake of a fence reaches what is biting it")
+	assert_gt(reaching, 1, "More than one section of a fence reaches what is biting it")
 
 func test_07c_the_fence_does_what_the_build_menu_says_it_does() -> void:
 	# Measured before the fix: 0.90 dps against the 0.30 the menu promises -- exactly
@@ -194,8 +198,7 @@ func test_07c_the_fence_does_what_the_build_menu_says_it_does() -> void:
 	# was.
 	var run: Array[Node] = _fence_run(-2.0, 2.0)
 	await wait_frames(1)
-	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
-	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, ring))
+	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), _at_the_join())
 	biting.setup("raptor")
 	biting.max_hp = 9999.0
 	biting.current_hp = 9999.0
@@ -225,8 +228,7 @@ func test_07d_so_a_raptor_gets_through_one_stake_alive() -> void:
 
 	var run: Array[Node] = _fence_run(-2.0, 2.0)
 	await wait_frames(1)
-	var ring: float = float(config_node.get_attack_slot_radius("wall", false))
-	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), Vector3(0.0, 0.0, ring))
+	var biting = _spawn(String(config_node.get_dino_script_path("raptor")), _at_the_join())
 	biting.setup("raptor")
 	await wait_frames(1)
 	var hp: float = biting.current_hp
