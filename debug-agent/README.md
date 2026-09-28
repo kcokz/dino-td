@@ -41,4 +41,6 @@
 
 - `tools/run_check.sh`：上面那条命令。Godot 路径可以用环境变量 `GODOT` 换掉。
 - `tools/sync_harness.sh`：把 `tools/playtest.gd` 复制成 `tools/agent_play.gd`，只改一处：截图写到 `debug-agent/runs/`。`run_check.sh` 每次都会自动同步一遍。
+- `tools/contact_sheet.gd`：把一次运行的截图拼成几张 2×3 的总览图（放 scratchpad），一次看完一整轮。
+  `godot --headless --path . --script res://debug-agent/tools/contact_sheet.gd -- <截图目录> <输出前缀>`
 - `tools/probe.gd`：自己写的探针。加一个新的：写一个 `_p_<名字>()` 函数，把它加进 `_init` 里的 `match`，再加进 `all` 列表。

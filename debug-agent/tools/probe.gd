@@ -23,7 +23,7 @@ func _init() -> void:
 	if names.is_empty():
 		names = ["all"]
 	if names == ["all"]:
-		names = ["stage_wave_size", "pause_snapshot", "cabin_sortie", "launch_button"]
+		names = ["stage_wave_size", "pause_snapshot", "cabin_sortie", "launch_button", "gate_traffic", "build_under_him", "after_the_jump"]
 	for n in names:
 		_probe = n
 		await _fresh_level()
@@ -32,6 +32,9 @@ func _init() -> void:
 			"pause_snapshot": await _p_pause_snapshot()
 			"cabin_sortie": await _p_cabin_sortie()
 			"launch_button": await _p_launch_button()
+			"gate_traffic": await _p_gate_traffic()
+			"build_under_him": await _p_build_under_him()
+			"after_the_jump": await _p_after_the_jump()
 			_: _say("INFO", "unknown probe")
 		_tear_down()
 	quit(0)
@@ -205,6 +208,143 @@ func _visible_buttons(text: String) -> Array:
 			if s.to_lower().contains(text.to_lower()):
 				out.append(n)
 	return out
+
+## GAME-DESIGN 3 墙挡所有人: a ring of palisade round the cabin, a gate at its door. He goes in and
+## out through the gate ten times without sticking; a raider sent at the cabin never gets through it.
+func _p_gate_traffic() -> void:
+	var cabin = _main.current_core
+	var hero = _main.hero
+	var gm = _main.grid_manager
+	var gate_cell: Vector2i = _ring_round_the_cabin()
+	var gate_at: Vector3 = gm.build_cell_to_world(gate_cell)
+	await _advance(1.0)
+	var outside: Vector3 = gate_at + Vector3(0.0, 0.0, 5.0)
+	var worst := 0.0
+	var stuck: Array = []
+	for trip in range(10):
+		var goal: Vector3 = cabin.door_inside() if trip % 2 == 0 else outside
+		hero.move_to(goal)
+		var t := 0.0
+		var still := 0.0
+		var was: Vector3 = hero.global_position
+		var arrived := false
+		while t < 25.0:
+			await _advance(0.25)
+			t += 0.25
+			var moved: float = hero.global_position.distance_to(was)
+			was = hero.global_position
+			still = (still + 0.25) if (moved < 0.02 and int(hero.current_state) == 1) else 0.0
+			if still >= 2.0 and stuck.size() < 5:
+				stuck.append("trip %d stood still 2 s at %s" % [trip, str(gm.world_to_build_cell(hero.global_position))])
+				still = -999.0
+			var there: bool = cabin.hero_inside if trip % 2 == 0 else hero.global_position.distance_to(goal) < 0.8
+			if there:
+				arrived = true
+				break
+		worst = maxf(worst, t)
+		if not arrived:
+			stuck.append("trip %d (%s) never arrived in 25 s, at %s" % [trip, "in" if trip % 2 == 0 else "out", str(gm.world_to_build_cell(hero.global_position))])
+			await _shoot("stuck_trip_%d" % trip)
+	_say("FAIL" if not stuck.is_empty() else "PASS", "10 trips through the gate, slowest %.1f s%s" % [worst, ("; " + "; ".join(stuck)) if not stuck.is_empty() else ""])
+	# The gate is a wall to a raider.
+	hero.move_to(cabin.door_inside())
+	await _advance(6.0)
+	var species: String = String(root.get_node("GameState").map_data()["raiders"].keys()[0])
+	var d = load(String(root.get_node("Config").get_dino_script_path(species))).new()
+	_main.add_child(d)
+	d.setup(species)
+	d.max_hp = 9999.0
+	d.current_hp = 9999.0
+	d.global_position = outside
+	d.set_waypoints([(cabin as Node3D).global_position])
+	var closest := 99.0
+	var gate = gm.building_in_build_cell(gate_cell)
+	for i in range(80):
+		await _advance(0.25)
+		if not is_instance_valid(d):
+			break
+		var f: Vector3 = (d as Node3D).global_position - gate_at
+		# How far inside the ring line it got (the gate's north edge is +0.5 m in).
+		closest = minf(closest, f.z)
+	await _portrait("raider_at_gate", gate_at, 9.0)
+	var gate_hp: String = ("%.1f/%.1f" % [gate.current_hp, gate.max_hp]) if is_instance_valid(gate) else "gone"
+	_say("FAIL" if closest < -0.6 else "PASS", "a raider at the gate for 20 s got to %.2f m from the gate line (negative = inside); gate hp %s" % [closest, gate_hp])
+
+## Puts up a ring of palisade one cell out round the cabin, a gate at the door; returns the gate's cell.
+func _ring_round_the_cabin() -> Vector2i:
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var centre: Vector2i = gm.world_to_build_cell(_main.current_core.global_position)
+	var half := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
+	var gate_cell: Vector2i = centre + Vector2i(0, half.y + 1)
+	_build_at("gate", gate_cell)
+	for x in range(-half.x - 1, half.x + 2):
+		for z in [-half.y - 1, half.y + 1]:
+			var c: Vector2i = centre + Vector2i(x, z)
+			if c != gate_cell:
+				_build_at("wall", c)
+	for z in range(-half.y, half.y + 1):
+		for x in [-half.x - 1, half.x + 1]:
+			_build_at("wall", centre + Vector2i(x, z))
+	return gate_cell
+
+func _build_at(type_id: String, cell: Vector2i) -> Node:
+	var b = _main.build_system.place_at(type_id, cell, _main.buildings_container, true, 0)
+	if b != null and b.has_method("complete_construction"):
+		b.complete_construction()
+	return b
+
+## GAME-DESIGN 3 放置不看人: a palisade ordered on the cell he is standing in goes down; he steps out
+## of it first, and it closes once he is clear. Ordered the way a click orders it.
+func _p_build_under_him() -> void:
+	var gs := root.get_node("GameState")
+	var gm = _main.grid_manager
+	var hero = _main.hero
+	gs.resources["wood"] = 20
+	var spot: Vector3 = _main.current_core.global_position + Vector3(4.0, 0.0, 5.0)
+	hero.move_to(spot)
+	await _advance(6.0)
+	var cell: Vector2i = gm.world_to_build_cell(hero.global_position)
+	_main.on_build_selected("wall")
+	var at: Vector3 = gm.build_cell_to_world(cell)
+	var b = _main.try_place_at_cell(gm.world_to_cell(at), at)
+	_main.cancel_building_selection()
+	if b == null:
+		_say("FAIL", "the order on his own cell %s was refused" % str(cell))
+		return
+	var t := 0.0
+	while t < 20.0 and not b.is_constructed:
+		await _advance(0.25)
+		t += 0.25
+	var his: Vector2i = gm.world_to_build_cell(hero.global_position)
+	if not b.is_constructed:
+		await _shoot("not_closed")
+	_say("PASS" if b.is_constructed and his != cell else "FAIL", "palisade on his cell %s: %s after %.1f s; he now stands in %s" % [str(cell), "built" if b.is_constructed else "NOT built", t, str(his)])
+
+## After the jump (game won): what still moves. Informational -- the design says nothing, but a
+## run whose stock or kill count still changes under the summary screen reads as a bug.
+func _p_after_the_jump() -> void:
+	var gs := root.get_node("GameState")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	wm.start_wave(1, 4)
+	await _advance(6.0)
+	for i in range(int(gs.beacon_stage_count()) + 1):
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
+	gs.charge_beacon(100000.0)
+	await _advance(0.5)
+	var before := _snapshot()
+	var res_before: Dictionary = gs.resources.duplicate()
+	hero.move_to(hero.global_position + Vector3(5.0, 0.0, 0.0))
+	await _advance(5.0)
+	var after := _snapshot()
+	var moved: Array = []
+	for k in before:
+		if String(k).begins_with("dino") or k == "hero":
+			if after.has(k) and (before[k] as Vector3).distance_to(after[k]) > 0.05:
+				moved.append(String(k).split("@")[0])
+	await _shoot("after_the_jump")
+	_say("INFO", "game over: %s; paused tree: %s; 5 s after the jump these still moved: %s; stock changed: %s" % [gs.is_game_over, paused, str(moved), str(res_before != gs.resources)])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
