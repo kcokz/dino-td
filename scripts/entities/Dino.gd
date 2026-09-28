@@ -278,31 +278,33 @@ static func claim_attack_slot(building: Node, dino: Node) -> Vector3:
 			return s["pos"]
 
 	var dino_pos: Vector3 = (dino as Node3D).global_position
-	var best_idx: int = -1
-	var min_dist_sq: float = 1e9
-
-	# 1. Inner Ring Priority (0..7)
-	for i in range(mini(8, slots.size())):
-		if slots[i].get("dino_id", 0) == 0:
-			var d_sq = dino_pos.distance_squared_to(slots[i]["pos"])
-			if d_sq < min_dist_sq:
-				min_dist_sq = d_sq
-				best_idx = i
-
-	# 2. Outer Ring Priority (8..15)
-	if best_idx == -1:
-		for i in range(8, slots.size()):
-			if slots[i].get("dino_id", 0) == 0:
-				var d_sq = dino_pos.distance_squared_to(slots[i]["pos"])
-				if d_sq < min_dist_sq:
-					min_dist_sq = d_sq
-					best_idx = i
-
-	if best_idx != -1:
-		slots[best_idx]["dino_id"] = dino_id
-		return slots[best_idx]["pos"]
-
-	# Every place is taken: the building itself, and the crowd sorts out the rest.
+	var near_first := func(a: int, b: int) -> bool:
+		return dino_pos.distance_squared_to(slots[a]["pos"]) < dino_pos.distance_squared_to(slots[b]["pos"])
+	# The free places, the inner ring before the outer, the nearest first in each; then the taken.
+	var inner: Array = []
+	var outer: Array = []
+	var taken: Array = []
+	for i in range(slots.size()):
+		if slots[i].get("dino_id", 0) != 0:
+			taken.append(i)
+		elif i < 8:
+			inner.append(i)
+		else:
+			outer.append(i)
+	inner.sort_custom(near_first)
+	outer.sort_custom(near_first)
+	taken.sort_custom(near_first)
+	# Only a place it can get to (can_stand_at): the nearest as the crow flies may be behind a fence
+	# from it -- the back of a cabin walled behind -- where it would stand out of reach for ever.
+	for i in inner + outer:
+		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(slots[i]["pos"])):
+			slots[i]["dino_id"] = dino_id
+			return slots[i]["pos"]
+	# Every place it can get to is taken: the nearest of those, shared, and the crowd sorts it out;
+	# with none it can get to, the building itself.
+	for i in taken:
+		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(slots[i]["pos"])):
+			return slots[i]["pos"]
 	return (building as Node3D).global_position
 
 static func release_attack_slot(building: Node, dino: Node) -> void:
@@ -531,7 +533,11 @@ func _act(delta: float) -> void:
 				_let_go()
 				_march(delta)
 			elif _target_in_reach(current_target):
-				_begin_attack()
+				# At the cabin, it says so once (dino_reached_core).
+				if current_target == _cabin():
+					_reach_destination()
+				else:
+					_begin_attack()
 			else:
 				_travel(_engage_spot(), delta)
 		_:
@@ -647,6 +653,13 @@ func _march(delta: float) -> void:
 		_reach_destination()
 		return
 	_skip_reached_waypoints()
+	# The last leg is the cabin: gone for as the thing to bite, from a place round it there is a way
+	# to (claim_attack_slot) -- not as the end of the road, which the mesh brought it as near to as
+	# it could get: behind a fence at the cabin's back, out of reach, where a raid milled for the
+	# whole of it (v0.6 round three: "大多数都在后面转来转去，而且还是有抽搐的情况，判断路径不聪明").
+	if cabin != null and current_waypoint_index >= waypoints.size() - 1:
+		_take(cabin, Mode.ENGAGE)
+		return
 	# No cabin to bite (a bare fixture): the end of the road is the destination, reached when it is
 	# stood on (arrival_threshold) -- and passed, as far as the count of waypoints goes.
 	if cabin == null and not waypoints.is_empty() and current_waypoint_index >= waypoints.size() - 1:
@@ -876,6 +889,14 @@ func _unstick() -> void:
 		# side. The face it is at is as good as any.
 		release_attack_slot(holder, self)
 		assigned_slot = Vector3.ZERO
+	elif current_target != null and _is_building(current_target) and not _target_in_reach(current_target):
+		# Going for a building, out of its reach and getting nowhere: waiting in the outer ring, or
+		# at a place it could not get to after all. It chooses again -- the inner ring first, and
+		# only a place it can get to (claim_attack_slot) -- so it moves in as the raid thins. It stood
+		# in the outer ring, out of reach, to the end of the raid before (found playing, v0.6 round
+		# three), two of those places behind the fence at the cabin's back.
+		release_attack_slot(current_target, self)
+		assigned_slot = claim_attack_slot(current_target, self)
 	# Held up by the Hero himself, standing in its way, time and again: he is what is in the way,
 	# and what is in the way is bitten -- whether or not this species came for him.
 	var man: Node = _hero_pressed_against()
@@ -986,6 +1007,18 @@ func _building_in_the_way() -> Node:
 		return _blocked_by
 	_blocked_by = _first_wall_on_the_way(_cabin_goal())
 	return _blocked_by
+
+## Whether sent to `spot` it would get there: the end of its route to it is the spot itself, near
+## enough (Config.DINO_AI.slot_stand_slack) -- not the nearest it could get, the far side of a
+## fence from it. With no mesh to ask, it can.
+func can_stand_at(spot: Vector3) -> bool:
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready() or not is_inside_tree():
+		return true
+	var route: PackedVector3Array = maps.path(global_position, spot, _map_kind())
+	if route.is_empty():
+		return false
+	return _flat(route[route.size() - 1]).distance_to(_flat(spot)) <= _ai("slot_stand_slack", 0.5)
 
 ## Whether there is any route to `goal` on this animal's own mesh.
 func _there_is_a_way_round(goal: Vector3) -> bool:

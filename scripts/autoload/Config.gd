@@ -880,6 +880,11 @@ const DINO_AI: Dictionary = {
 	# one point, and the ones that could not would otherwise mill round it. (The last is stood on:
 	# it is the cabin, or the end of the road.)
 	"waypoint_reach": 1.0,
+	# A place round a building to bite it from counts as one it can get to when its route there ends
+	# this near it, in metres. A place behind a fence from it has a route too -- to the near side of
+	# the fence, out of reach of the building -- and a raid stood there, milling, for the whole of
+	# it (v0.6 round three: "大多数都在后面转来转去"). About the mesh's own margin round a building.
+	"slot_stand_slack": 0.5,
 	# Its route (NavMaps.path): how close to a corner counts as there, how close to a spot it is
 	# ambling to, how far it may be pushed off the route before it asks again, and how far a goal
 	# must move before it asks again -- asking costs a route.

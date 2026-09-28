@@ -693,6 +693,10 @@ func _scenario_siege(spec: String) -> void:
 	# "twin" anywhere after: the traps improved where they stand, as a late base has them.
 	var trap_type: String = "set_crossbow_2" if parts.slice(4).has("twin") else "set_crossbow"
 	var inside: bool = parts.slice(4).has("inside")
+	# "back": no ring -- a fence hugging the cabin's back (the nest side) and its east end, open to
+	# the west and the door, as a player half-way round has it (v0.6 round three: "即使没有完全包裹住
+	# cabin，恐龙实际攻击效果很差，因为大多数都在后面转来转去"). Printed: how many bite the cabin.
+	var back: bool = parts.slice(4).has("back")
 	var cfg := root.get_node_or_null("Config")
 	var gs := root.get_node_or_null("GameState")
 	var eb := root.get_node_or_null("EventBus")
@@ -706,7 +710,7 @@ func _scenario_siege(spec: String) -> void:
 	# door in it.
 	var ring: Array[Vector2i] = []
 	var seen: Dictionary = {}
-	var around: int = 0 if bare else int(ceil(TAU * 6.5 / float(cfg.BUILD_CELL))) * 4
+	var around: int = 0 if (bare or back) else int(ceil(TAU * 6.5 / float(cfg.BUILD_CELL))) * 4
 	for i in range(around):
 		var a: float = TAU * float(i) / float(around)
 		var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(sin(a) * 6.5, 0.0, -cos(a) * 6.5))
@@ -730,6 +734,15 @@ func _scenario_siege(spec: String) -> void:
 				nearest = c
 		var facing: int = (1 if out.x > 0.0 else 3) if absf(out.x) > absf(out.y) else (2 if out.y > 0.0 else 0)
 		trap_cells[nearest] = facing
+	if back:
+		var c: Vector2i = gm.world_to_build_cell(centre)
+		var h := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
+		for x in range(-h.x - 1, h.x + 2):
+			ring.append(c + Vector2i(x, -h.y - 1))
+		for z in range(-h.y, h.y + 2):
+			ring.append(c + Vector2i(h.x + 1, z))
+		for cell in ring:
+			seen[cell] = true
 	# Inside: in two rows across the yard between the cabin and the ring's nest side, facing out.
 	if inside:
 		for i in range(towers):
@@ -777,6 +790,22 @@ func _scenario_siege(spec: String) -> void:
 		seconds += 1
 		if seconds % 5 == 0:
 			print("[siege] %3ds %s" % [seconds, _raid_minds(stakes)])
+		if (seconds == 15 or seconds == 60) and OS.has_environment("SIEGE_DEBUG"):
+			var cpos: Vector3 = _main.current_core.global_position
+			for d in get_nodes_in_group("dinos"):
+				if not is_instance_valid(d) or d.is_in_group("guard_dinos") or d.is_dead:
+					continue
+				var rel := func(p: Vector3) -> String: return "(%.1f,%.1f)" % [p.x - cpos.x, p.z - cpos.z]
+				var wps: Array = []
+				for w in d.waypoints:
+					wps.append(rel.call(w))
+				var route_end: String = rel.call(d._route[d._route.size() - 1]) if not d._route.is_empty() else "-"
+				print("[debug] at %s mode %d target %s slot %s can stand %s wp %d/%d goal %s route end %s (%d corners) patience %.2f stuck %d v %.2f | wps %s" % [
+					rel.call(d.global_position), int(d.mode), str(d.current_target.name) if is_instance_valid(d.current_target) else "-",
+					rel.call(d.assigned_slot) if d.assigned_slot != Vector3.ZERO else "-",
+					str(d.can_stand_at(d.assigned_slot)) if d.assigned_slot != Vector3.ZERO else "-",
+					d.current_waypoint_index, d.waypoints.size(), rel.call(d._journey_goal()),
+					route_end, d._route.size(), d._patience, d._stuck_count, d.velocity.length(), " ".join(wps)])
 	eb.dino_died.disconnect(on_death)
 
 	var towers_left: int = 0
@@ -817,8 +846,21 @@ func _raid_minds(stakes: Array) -> String:
 	for w in stakes:
 		if is_instance_valid(w) and not w.is_destroyed:
 			standing += 1
-	return "modes %s | going for %s | standing still, not biting: %d | stakes %d/%d" % [
-		str(modes), str(going_for), still, standing, stakes.size()]
+	var core = _main.current_core
+	if core == null or not is_instance_valid(core):
+		return "modes %s | going for %s | the cabin is gone | stakes %d/%d" % [str(modes), str(going_for), standing, stakes.size()]
+	var at_cabin: int = 0
+	var far: float = 0.0
+	var n: int = 0
+	for d in get_nodes_in_group("dinos"):
+		if not is_instance_valid(d) or ("is_dead" in d and d.is_dead) or d.is_in_group("guard_dinos"):
+			continue
+		n += 1
+		far += (d as Node3D).global_position.distance_to((core as Node3D).global_position)
+		if int(d.mode) == 2 and d.current_target == core:
+			at_cabin += 1
+	return "modes %s | going for %s | standing still, not biting: %d | biting the cabin %d of %d, %.1f m off on average | stakes %d/%d" % [
+		str(modes), str(going_for), still, at_cabin, n, far / maxf(1.0, float(n)), standing, stakes.size()]
 
 ## A raid's account as it ends (v0.6 T8): the longest line the HUD says in the middle of
 ## the screen, so it is worth seeing that it fits.

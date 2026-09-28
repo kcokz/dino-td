@@ -343,3 +343,84 @@ func test_10_a_trap_it_cannot_get_round_to_is_got_at_through_the_wall() -> void:
 			break
 	assert_false(waited_on_it, "None of them goes for the trap it cannot get round to")
 	assert_true(bitten, "Within six seconds one of them is biting the ring between it and the trap")
+
+func test_11_a_fence_at_the_cabins_back_is_gone_round() -> void:
+	# v0.6 round three, "即使没有完全包裹住cabin，恐龙实际攻击效果很差，因为大多数都在后面转来转去，而且还是
+	# 有抽搐的情况，判断路径不聪明": a fence hugging the cabin's back -- the side the raid comes from -- and
+	# its east end. The road ends in the cabin, and the mesh brought the raid as near to that as it
+	# could get: behind the fence, out of reach, where it milled until the cabin's gun had killed
+	# it all. It goes round to a place it can bite from.
+	var main = await fresh_level()
+	_cleanup_nodes.append(main)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	var gm = main.grid_manager
+	var core: Node3D = main.current_core
+	var c: Vector2i = gm.world_to_build_cell(core.global_position)
+	var h := Vector2i((config_node.get_building_size("core") - Vector2i.ONE) / 2)
+	var cells: Array[Vector2i] = []
+	for x in range(-h.x - 1, h.x + 2):
+		cells.append(c + Vector2i(x, -h.y - 1))
+	for z in range(-h.y, h.y + 2):
+		cells.append(c + Vector2i(h.x + 1, z))
+	stock_everything()
+	var standing: int = 0
+	for cell in cells:
+		var w = main.build_system.place_at("wall", cell, main.buildings_container, true)
+		if w != null:
+			w.complete_construction()
+			standing += 1
+	assert_eq(standing, cells.size(), "The fence stands, every section of it")
+	main.nav_maps.rebake()
+	await wait_frames(8)
+	assert_true(main.nav_maps.is_reachable(main.wave_manager.nest_spawn_position, core.global_position, false),
+		"There is a way round to the cabin")
+	# Hard to kill, so the cabin's own gun does not end the raid before it is seen what it does.
+	game_state_node.dino_stat_multipliers["hp"] = 50.0
+	main.wave_manager.auto_raid_enabled = false
+	# A big raid: it is the crowd that milled -- a crowd never bites a fence it might go round.
+	main.wave_manager.start_wave(1, 12)
+	var most: int = 0
+	for frame in range(int(20.0 * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		var biting: int = 0
+		for d in tree.get_nodes_in_group("dinos"):
+			if is_instance_valid(d) and not d.is_in_group("guard_dinos") and int(d.current_state) == int(d.State.ATTACKING) 					and d.current_target == core:
+				biting += 1
+		most = maxi(most, biting)
+		if most >= 3:
+			break
+	assert_gte(most, 3, "Within twenty seconds the raid is biting the cabin -- three at once -- not milling behind the fence")
+
+func test_12_waiting_in_the_outer_ring_it_moves_in_when_a_place_frees() -> void:
+	# The outer ring round a building is where a raider waits while the places to bite from are
+	# taken. It stood there, out of reach, to the end of a raid -- nothing moved it in.
+	var world := await _field()
+	var trap = load("res://scripts/entities/Tower.gd").new()
+	world.add_child(trap)
+	trap.setup("set_crossbow")
+	trap.position = Vector3.ZERO
+	trap.complete_construction()
+	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	await rebake_fixture()
+	var dino_script = load("res://scripts/entities/Dino.gd")
+	# The eight places to bite from, taken.
+	var others: Array[Node3D] = []
+	for i in 8:
+		var o := Node3D.new()
+		world.add_child(o)
+		others.append(o)
+		dino_script.claim_attack_slot(trap, o)
+	var d = _raptor(Vector3(0.0, 0.0, 3.0), world)
+	await wait_physics_frames(int(3.0 * float(Engine.physics_ticks_per_second)))
+	assert_eq(d.current_target, trap, "It goes for the trap")
+	assert_false(int(d.current_state) == int(d.State.ATTACKING), "and waits, out of reach, every place taken")
+	for o in others:
+		dino_script.release_attack_slot(trap, o)
+	var bit: bool = false
+	for frame in range(int(5.0 * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		if int(d.current_state) == int(d.State.ATTACKING) and d.current_target == trap:
+			bit = true
+			break
+	assert_true(bit, "A place freed, it moves in and bites within five seconds")
+	dino_script.clear_all_attack_slots()
