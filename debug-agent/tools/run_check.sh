@@ -21,6 +21,10 @@ if [ "$PROJ" = "$ROOT" ]; then git rev-parse --short HEAD > "$OUT/commit.txt"; g
 # Frames by absolute path, so a snapshot's run still writes here.
 ABS_OUT="$(cygpath -m "$ROOT/$OUT" 2>/dev/null || echo "$ROOT/$OUT")"
 
+# The game's own telemetry (TwitchWatch, since 7c86862) lands in Godot's user dir: every report
+# file written during this run is copied into the run's folder at the end.
+TELEMETRY="${APPDATA:-$HOME/AppData/Roaming}/Godot/app_userdata/dino/telemetry"
+touch "$OUT/.started"
 args=("$@"); [ ${#args[@]} -eq 0 ] && args=(tests smoke play:20 probe:all)
 scen=()
 for a in "${args[@]}"; do
@@ -46,5 +50,13 @@ if [ ${#scen[@]} -gt 0 ]; then
   DA_OUT="$ABS_OUT/shots" timeout 3600 "$GODOT" --path "$PROJ_W" --resolution 1600x900 --script res://debug-agent/tools/agent_play.gd -- "${scen[@]}" > "$OUT/bot.log" 2>&1
   echo "exit $?" >> "$OUT/bot.log"
   echo "frames: $(ls "$OUT/shots" 2>/dev/null | grep -c png)  errors: $(grep -cE 'SCRIPT ERROR|^ERROR' "$OUT/bot.log")  stuck/gave-up: $(grep -cE 'STUCK|gave up' "$OUT/bot.log")"
+fi
+if [ -d "$TELEMETRY" ]; then
+  mkdir -p "$OUT/telemetry"
+  # Only this agent's launches: the dev's own playtest runs write to the same folder.
+  for f in $(find "$TELEMETRY" -name '*.jsonl' -newer "$OUT/.started" 2>/dev/null); do
+    head -c 400 "$f" | grep -q 'debug-agent' && cp "$f" "$OUT/telemetry/"
+  done
+  python "$ROOT/debug-agent/tools/twitch_summary.py" "$OUT/telemetry" > "$OUT/twitch.txt" 2>&1 && head -1 "$OUT/twitch.txt"
 fi
 echo "run dir: $OUT"

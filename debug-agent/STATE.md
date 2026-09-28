@@ -11,6 +11,7 @@
 | [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
 | [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open | 2026-09-28 |
+| [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | open | 2026-09-28 |
 | [BUG-006](bug/BUG-006-raid-stepping-out-at-dusk-never-goes-home.md) | 天快黑时出发的来袭，黄昏后才出巢的那些不回巢，照咬船舱 | **高** | **fixed** d2c30d5 | 2026-09-28 |
 | [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
@@ -29,6 +30,7 @@
 | TASK-007 | 复测 BUG-004 | **done** 通过 |
 | TASK-008 | 战争迷雾和找巢 | **done** 通过 |
 | TASK-009 | 复测 BUG-006 | **done** 通过 |
+| TASK-010 | 抽搐监测：找漏报和误报 | **done**（BUG-007；建议加 stall） |
 
 ## 检查记录
 
@@ -64,7 +66,14 @@
 - 场景截图 14 个（open cabin ui kit paused beacon buildmenu menu summary legible eating kitchen ghost buildings）：43 张，0 报错。看过：厨房、工作台、建造菜单、设置页、信标充能。
 - 探针：`stage_wave_size` FAIL → BUG-001；`pause_snapshot` PASS（暂停 3 秒，33 个值都没变）；`cabin_sortie` PASS（恐龙咬后墙，人 20 秒没出舱）；`launch_button` FAIL → BUG-002。
 
+## 每次跑局都要看的
+
+- `runs/<时间>/twitch.txt`：抽搐监测的报告（TASK-010）。报告多的地方用 `probe:twitch_cam` 拍下来判断真假。
+- 基准（7c86862）：半圈栅栏大波 6～7 份；一点不围的大波 4～6 份（BUG-007）；平静白天 0 份。
+
 ## 工具的已知限制
+
+- **不要在 `run_check.sh` 跑着的时候改它**：bash 是边跑边读脚本的，改了会让正在跑的那次出语法错或者直接不跑（第 4 次那局 25 分钟的机器人就是这样白跑的）。
 
 - `warp_mouse` 不会让 Windows 发"鼠标进入窗口"，所以凡是依赖 `NOTIFICATION_WM_MOUSE_ENTER` 的行为，探针都测不出来，要真鼠标（人手，或者 computer-use，但那会在用户桌面上弹权限框，用户不在时别用）。
 - 同时开两个游戏窗口时，焦点会被抢；要焦点、要光标的探针单独跑。

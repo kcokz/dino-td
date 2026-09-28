@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"twitch_cam": await _p_twitch_cam()
+			"quiet": await _p_quiet()
 			"build_under_dino": await _p_build_under_dino()
 			"guards": await _p_guards()
 			"fog": await _p_fog()
@@ -1362,6 +1364,89 @@ func _p_build_under_dino() -> void:
 		await _advance(0.25)
 		t += 0.25
 	_say("PASS" if waited_ok and b.is_constructed else "FAIL", "palisade on a standing dinosaur's cell: waited %s with the right words, then closed %s (%.1f s after it went)" % [waited_ok, b.is_constructed, t])
+
+## TASK-010, looking for false alarms: what should never be called a twitch. 90 s of a quiet day --
+## the nest's guards wandering their posts, the Hero chopping -- then an ordinary raid chewing a
+## sealed ring round the cabin (biting a wall it cannot go round is the rule, GAME-DESIGN 3). Every
+## TwitchWatch report is printed with what the animal was doing, to be judged true or false.
+func _p_quiet() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	var reports: Array = []
+	var phase := {"now": "quiet"}
+	var on_twitch := func(rec):
+		var d: Dictionary = rec.get("dino", {})
+		reports.append("%s: #%s %s %s %s at %s -> %s" % [phase["now"], rec.get("n"), rec.get("kind"), d.get("species"), d.get("mode"), str(d.get("pos")), str((d.get("target") if d.get("target") != null else {}).get("type", "-"))])
+	if eb.has_signal("twitch_detected"):
+		eb.twitch_detected.connect(on_twitch)
+	else:
+		_say("INFO", "no EventBus.twitch_detected on this commit")
+	gs.day_clock = 60.0
+	wm.auto_raid_enabled = false
+	var tree: Node = null
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) == "wood" and (tree == null or (n as Node3D).global_position.distance_to(hero.global_position) < (tree as Node3D).global_position.distance_to(hero.global_position)):
+			tree = n
+	if tree != null:
+		hero.order_harvest(tree)
+	await _advance(90.0)
+	var quiet_n: int = reports.size()
+	phase["now"] = "raid at a sealed ring"
+	_ring_round_the_cabin()
+	_main.nav_maps.rebake()
+	_main._walk_to_bench(_main.current_core.station("workbench"))
+	await _advance(8.0)
+	wm.start_wave(2, 6)
+	await _advance(45.0)
+	await _shoot("quiet_raid")
+	if eb.has_signal("twitch_detected"):
+		eb.twitch_detected.disconnect(on_twitch)
+	for r in reports:
+		_say("INFO", r)
+	_say("PASS" if quiet_n == 0 else "FAIL", "90 s of a quiet day (guards wandering, him chopping): %d twitch reports" % quiet_n)
+	_say("INFO", "an ordinary raid at a sealed ring: %d twitch reports (each above to be judged)" % (reports.size() - quiet_n))
+
+## TASK-010, judging reports by eye: an ordinary big raid on the bare cabin, and the first few
+## TwitchWatch reports each filmed -- four close-ups of that animal a third of a second apart,
+## from above -- so a report can be called true or false from the pictures (contact_sheet.gd).
+func _p_twitch_cam() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var cabin = _main.current_core
+	var queue: Array = []
+	var on_twitch := func(rec):
+		if queue.size() < 4:
+			queue.append(rec)
+	eb.twitch_detected.connect(on_twitch)
+	gs.day_clock = 110.0
+	wm.auto_raid_enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(6.0)
+	wm.start_wave(3, 10)
+	var t := 0.0
+	var filmed := 0
+	while t < 60.0 and filmed < 4:
+		await _advance(0.25)
+		t += 0.25
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		if queue.size() > filmed:
+			var rec: Dictionary = queue[filmed]
+			var id: int = int(rec.get("dino", {}).get("id", 0))
+			var d: Node3D = instance_from_id(id) as Node3D if id != 0 else null
+			_say("INFO", "report #%s %s %s at %s, filming" % [rec.get("n"), rec.get("kind"), rec.get("dino", {}).get("mode"), str(rec.get("dino", {}).get("pos"))])
+			for k in range(4):
+				if d == null or not is_instance_valid(d):
+					break
+				await _portrait("r%s_%s_%d" % [rec.get("n"), rec.get("kind"), k], d.global_position, 3.5)
+				await _advance(0.3)
+			filmed += 1
+	eb.twitch_detected.disconnect(on_twitch)
+	_say("INFO", "%d reports filmed in %.1f s of raid" % [filmed, t])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
