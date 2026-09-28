@@ -278,7 +278,7 @@ func _scenario_play(spec: String) -> void:
 		if dish != "" and gs.meals.is_empty():
 			await _bench_job(hero, cabin, "kitchen", dish, note)
 			continue
-		if not gs.meals.is_empty() and gs.fed.is_empty():
+		if not gs.meals.is_empty() and (gs.fed.is_empty() or hero.current_hp < hero.max_hp * 0.6):
 			hero.order_eat(String(gs.meals.keys()[0]))
 			await _play_until(func(): return int(hero.current_state) != 6, 10.0, "eating")
 			continue
@@ -322,7 +322,8 @@ func _scenario_play(spec: String) -> void:
 		note.call("GAME OVER (cabin %.0f, hero %.1f)" % [cabin.current_hp if is_instance_valid(cabin) else 0.0, hero.current_hp])
 	note.call(_play_status(hero, cabin, gs, wm))
 	await _shoot("end")
-	await _portrait("end_above", cabin.global_position, 16.0, true)
+	if is_instance_valid(cabin):
+		await _portrait("end_above", cabin.global_position, 16.0, true)
 	Engine.time_scale = 1.0
 	note.call("played %.1f game minutes in %.0f s" % [_play_clock / 60.0, (Time.get_ticks_msec() - _play_t0) / 1000.0])
 
@@ -453,7 +454,9 @@ func _unfinished() -> int:
 func _cellstr(p: Vector3, gm: Node) -> String:
 	return str(gm.world_to_build_cell(p))
 
-func _play_status(hero: Node, cabin: Node, gs: Node, wm: Node) -> String:
+func _play_status(hero: Node, cabin: Variant, gs: Node, wm: Node) -> String:
+	if cabin == null or not is_instance_valid(cabin):
+		return "the cabin is gone"
 	var dinos: int = get_nodes_in_group("dinos").size()
 	var walls: int = 0
 	for b in _main.grid_manager.get_all_buildings():

@@ -501,7 +501,12 @@ func _update_info_label() -> void:
 	# follows. It became urgent the moment stakes could be built close together: a
 	# twenty-stake fence put twenty floating names across the middle of the screen, and
 	# each one said "Wooden Stakes" about a thing that is obviously a wooden stake.
-	var worth_saying: bool = (not is_constructed) or is_upgrading() or current_hp < max_hp or _get_extra_status_text() != ""
+	#
+	# Since v0.6 round three, hurt or going up is not enough either: the bar over it already
+	# says so, and a raid on the fence hung "Palisade 2 / 8 HP" in red over every section it bit,
+	# overlapping, the way a debug overlay looks ("要和网页游戏区分开"). The words show while it is
+	# the one picked -- and while it says something only it can (_get_extra_status_text).
+	var worth_saying: bool = _picked or _get_extra_status_text() != ""
 	var hide_idle: bool = true
 	var cfg_label = _get_config()
 	if cfg_label and "FEEDBACK" in cfg_label:
@@ -535,6 +540,12 @@ func _update_status_bar() -> void:
 func set_selected_visual(on: bool) -> void:
 	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
 		selection_ring.set_shown(on)
+	if _picked != on:
+		_picked = on
+		_update_info_label()
+
+## Whether this is the one the player has picked: its words show over it only then.
+var _picked: bool = false
 
 ## What the command card shows: its health as a bar, work under way -- going up, or being
 ## upgraded -- as a second bar ("work", 0..1, with what the work is), and under them the one

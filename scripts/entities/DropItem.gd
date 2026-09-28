@@ -65,6 +65,7 @@ static func spawn(context: Node, world_pos: Vector3, res_id: String, p_amount: i
 		return null
 	if p_amount <= 0 or res_id.is_empty():
 		return null
+	world_pos = _where_he_can_reach(context, world_pos)
 
 	var existing: DropItem = _find_pile_to_join(context, world_pos, res_id)
 	if existing != null:
@@ -86,6 +87,21 @@ static func spawn(context: Node, world_pos: Vector3, res_id: String, p_amount: i
 	drop._toss()
 	_announce(context, res_id, p_amount, world_pos)
 	return drop
+
+## Where a pile landing at `world_pos` can be picked up: there, unless it falls in something built --
+## a raptor killed against the fence drops its bone into the fence's cell, and he walked on the
+## spot beside it for ever (found playing, v0.6 round three) -- and then the nearest ground he can
+## walk (NavMaps, his map).
+static func _where_he_can_reach(context: Node, world_pos: Vector3) -> Vector3:
+	var tree: SceneTree = context.get_tree()
+	var gm: Node = tree.get_first_node_in_group("grid_manager")
+	if gm == null or not gm.has_method("building_at_point") or gm.building_at_point(world_pos) == null:
+		return world_pos
+	var maps: Node = tree.get_first_node_in_group(NavMaps.GROUP)
+	if maps == null or not maps.is_ready():
+		return world_pos
+	var on_ground: Vector3 = maps.closest_point(world_pos, NavMaps.For.HERO)
+	return Vector3(on_ground.x, world_pos.y, on_ground.z)
 
 ## Scatters `p_amount` over `count` piles around `world_pos`, which is what a
 ## death or an opening stockpile looks like rather than one tidy cube.

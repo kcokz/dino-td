@@ -103,3 +103,55 @@ func test_03_the_hud_says_he_is_under_attack_once_in_a_while() -> void:
 	await wait_frames(1)
 	assert_eq(String(hud.hint_label.text), "something else",
 		"Not again at the next bite: once in %.0fs" % float(config_node.FEEDBACK["hero_hurt_alert_seconds"]))
+
+func test_04_a_drop_that_falls_in_a_wall_lands_where_he_can_pick_it_up() -> void:
+	# A raptor killed against the fence dropped its bone in the fence's cell, and he walked on the
+	# spot beside it for ever.
+	var main = await _level()
+	stock_everything()
+	var gm = main.grid_manager
+	var cell: Vector2i = gm.world_to_build_cell(main.hero.global_position) + Vector2i(4, 4)
+	var wall = main.build_system.place_at("wall", cell, main.buildings_container, false)
+	assert_not_null(wall, "A section of fence")
+	if wall == null:
+		return
+	if not wall.is_constructed:
+		wall.complete_construction()
+	main.nav_maps.rebake()
+	await wait_frames(8)
+	var pile = DropItem.spawn(main, gm.build_cell_to_world(cell), "bone", 1)
+	assert_not_null(pile, "The bone falls")
+	var at: Vector3 = (pile as Node3D).global_position
+	assert_null(gm.building_at_point(at), "not in the fence's cell")
+	var reachable: Vector3 = main.nav_maps.closest_point(at, NavMaps.For.HERO)
+	assert_lt(Vector2(at.x - reachable.x, at.z - reachable.z).length(), 0.05, "but on ground he walks")
+	assert_lt(at.distance_to(gm.build_cell_to_world(cell)), 1.5, "right beside where it fell")
+
+func test_05_a_bitten_fence_shows_its_bar_not_its_name() -> void:
+	# In the final wave every bitten section hung "Palisade 2 / 8 HP" in red over itself, overlapping.
+	var main = await _level()
+	stock_everything()
+	var gm = main.grid_manager
+	var cell: Vector2i = gm.world_to_build_cell(main.hero.global_position) + Vector2i(3, 5)
+	var wall = main.build_system.place_at("wall", cell, main.buildings_container, false)
+	if not wall.is_constructed:
+		wall.complete_construction()
+	wall.take_damage(wall.max_hp * 0.5)
+	await wait_frames(1)
+	assert_true(wall.status_bar.visible, "Bitten, its bar shows how much is left")
+	assert_false(wall.label_3d.visible, "and no words hang over it")
+	tree.root.get_node("EventBus").unit_selected.emit(wall)
+	await wait_frames(1)
+	assert_true(wall.label_3d.visible, "Picked, it says what it is")
+
+func test_06_a_meal_wearing_off_is_not_an_attack() -> void:
+	# The warning came up at the start of a game nobody had touched: a meal's boost to his most ran
+	# out, and what he had came down with it.
+	var main = await _level()
+	var hud = main.hud
+	var eb = tree.root.get_node("EventBus")
+	eb.hero_hp_changed.emit(12.0, 12.0)
+	hud.show_hint("before")
+	eb.hero_hp_changed.emit(10.0, 10.0)
+	await wait_frames(1)
+	assert_eq(String(hud.hint_label.text), "before", "His most coming down with what he has is a meal ending, not a bite")
