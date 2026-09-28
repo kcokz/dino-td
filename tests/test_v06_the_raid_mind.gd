@@ -296,3 +296,50 @@ func test_09_a_guard_it_cannot_get_home_makes_its_home_where_it_is() -> void:
 	assert_true(settled, "It settles somewhere it can stand rather than pushing at the wall")
 	assert_false(Vector2(g.global_position.x, g.global_position.z).length() < 1.5,
 		"and it is not inside the ring it could not get into")
+
+func test_10_a_trap_it_cannot_get_round_to_is_got_at_through_the_wall() -> void:
+	# v0.6 round three, "摆成这样的时候，恐龙进攻又会傻站着不攻击了，挨trip bow的打": traps in a yard inside
+	# a sealed ring. The raid went for them, stood at the fence nearest them -- in a crowd, which
+	# never bites a fence it might go round -- and was shot where it stood. What it cannot get
+	# round to it gets at through the wall between.
+	var world := await _field()
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(gm)
+	tree.root.add_child(gm)
+	var ring: Array = []
+	for leg in [[Vector3(-2.0, 0.0, -2.0), Vector3(2.0, 0.0, -2.0)], [Vector3(2.0, 0.0, -2.0), Vector3(2.0, 0.0, 2.0)],
+			[Vector3(2.0, 0.0, 2.0), Vector3(-2.0, 0.0, 2.0)], [Vector3(-2.0, 0.0, 2.0), Vector3(-2.0, 0.0, -2.0)]]:
+		for w in run_of_stakes(world, gm, leg[0], leg[1]):
+			ring.append(w)
+	var trap = load("res://scripts/entities/Tower.gd").new()
+	world.add_child(trap)
+	var trap_cell: Vector2i = gm.world_to_build_cell(Vector3.ZERO)
+	trap.setup("set_crossbow", gm.world_to_cell(gm.build_cell_to_world(trap_cell)))
+	trap.position = gm.build_cell_to_world(trap_cell)
+	trap.complete_construction()
+	gm.occupy_building(trap, [trap_cell])
+	# Wanted for what it is (a shooter, Config.DINO_AI.shooter_kinds), not for having shot: held
+	# still, so it kills nobody before the test has seen what they do.
+	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	await rebake_fixture()
+	# A pack outside, the trap in its interest, on its way somewhere the ring does not shut off.
+	var pack: Array = []
+	for x in [-0.7, 0.0, 0.7]:
+		var d = _raptor(Vector3(x, 0.0, -4.3), world)
+		d.set_waypoints([Vector3(0.0, 0.0, 12.0)])
+		pack.append(d)
+	assert_eq(pack[1]._preferred_target(), trap, "The trap inside is what it wants")
+	var bitten: bool = false
+	var waited_on_it: bool = false
+	for frame in range(int(6.0 * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		for d in pack:
+			if not is_instance_valid(d):
+				continue
+			waited_on_it = waited_on_it or d.current_target == trap
+			if int(d.current_state) == int(d.State.ATTACKING) and ring.has(d.current_target):
+				bitten = true
+		if bitten:
+			break
+	assert_false(waited_on_it, "None of them goes for the trap it cannot get round to")
+	assert_true(bitten, "Within six seconds one of them is biting the ring between it and the trap")

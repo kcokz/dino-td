@@ -154,6 +154,11 @@ var _blocked_by: Node = null
 ## A building it has decided to go THROUGH because it could not get round it (_unstick): kept
 ## until it falls, whatever the route says -- or it would take hold and let go by turns.
 var _stubborn: Node = null
+## "Is what it wants shut away from it" (_shut_away), remembered for each thing it has asked
+## about: instance id -> [asked at, by _mind_clock; the answer; the wall between].
+var _shut_known: Dictionary = {}
+## Seconds this animal has been thinking: what _shut_known's answers are dated by.
+var _mind_clock: float = 0.0
 ## Headway: where it stood when the window opened, how long the window has run, and how many
 ## windows in a row it has made none.
 var _headway_from: Vector3 = Vector3.INF
@@ -480,6 +485,7 @@ func advance_towards_waypoint(delta: float) -> void:
 		return
 	_think_clock -= delta
 	_route_clock -= delta
+	_mind_clock += delta
 	if _think_clock <= 0.0:
 		_think_clock = _next_think()
 		_think()
@@ -512,7 +518,7 @@ func _think() -> void:
 		_let_go()
 	var want: Node = _find_threat_priority_target()
 	if want != null and want != current_target and _outranks(want, current_target):
-		_take(want, Mode.ENGAGE)
+		_take(want, Mode.BREACH if _is_wall(want) else Mode.ENGAGE)
 	if current_target == null:
 		var blocker: Node = _building_in_the_way()
 		if blocker != null:
@@ -545,6 +551,10 @@ func _still_wanted(target: Node) -> bool:
 	if target == _stubborn:
 		return true
 	if not _should_bite(target):
+		return false
+	# Shut away from where it stands: let go -- what it wants is got at through the wall between,
+	# found again on this thought (_find_threat_priority_target).
+	if _shut_away(target):
 		return false
 	# The Hero is chased only while he stays near, or loud (PackDino.hero_interest_range).
 	if target.is_in_group("hero"):
@@ -1027,7 +1037,48 @@ func _should_bite(node: Variant) -> bool:
 		return true
 	if not walks_round_walls():
 		return true
-	return _way_is_sealed()
+	# The wall between it and something it wants that is shut away (_shut_away) is in the way as
+	# surely as one that shuts the way to the cabin.
+	return _way_is_sealed() or _is_the_way_through(node)
+
+## Whether what it wants -- a trap shooting at it from inside a sealed ring, the Hero behind a
+## fence -- has no way round to it on the mesh this animal walks; and so (_wall_before) the wall
+## to go through: the first the route that ignores walls passes (_first_wall_on_the_way). Found
+## playing (v0.6 round three, "摆成这样的时候，恐龙进攻又会傻站着不攻击了"): a raid went for the traps in
+## a yard inside the ring, stood at the fence nearest them -- in a crowd, which never bites a fence
+## it might go round (_unstick) -- and was shot where it stood. Asked of the mesh no more than every
+## Config.DINO_AI.route_check_seconds for the same target.
+func _shut_away(target: Variant) -> bool:
+	if target == null or not is_instance_valid(target) or not (target is Node3D) or not walks_round_walls():
+		return false
+	if _is_wall(target) or not is_inside_tree():
+		return false
+	var id: int = (target as Node).get_instance_id()
+	var known: Array = _shut_known.get(id, [])
+	if not known.is_empty() and _mind_clock - float(known[0]) < _ai("route_check_seconds", 1.0) \
+			and (not bool(known[1]) or _is_target_valid(known[2])):
+		return bool(known[1])
+	var goal: Vector3 = (target as Node3D).global_position
+	var shut: bool = not _there_is_a_way_round(goal)
+	if _shut_known.size() >= 8:
+		_shut_known.clear()
+	_shut_known[id] = [_mind_clock, shut, _first_wall_on_the_way(goal) if shut else null]
+	return shut
+
+## The wall between it and `target`, as _shut_away last found it, or null.
+func _wall_before(target: Node) -> Node:
+	var known: Array = _shut_known.get(target.get_instance_id(), [])
+	var wall: Variant = known[2] if (not known.is_empty() and bool(known[1])) else null
+	return wall if _is_target_valid(wall) else null
+
+## Whether `wall` is what stands between it and something it wants that was, when last asked,
+## shut away -- so going through it is going somewhere.
+func _is_the_way_through(wall: Node) -> bool:
+	for id in _shut_known:
+		var known: Array = _shut_known[id]
+		if bool(known[1]) and known[2] == wall:
+			return true
+	return false
 
 ## Whether this species goes round a wall when it could. A siege dinosaur says no: walking
 ## THROUGH the defence instead of around it is the whole of its design.
@@ -1150,7 +1201,13 @@ func _find_threat_priority_target() -> Node:
 	if not is_inside_tree():
 		return null
 	var want: Node = _preferred_target()
-	return want if _should_bite(want) else null
+	if not _should_bite(want):
+		return null
+	# Shut away behind a wall: the wall is what to go for -- and with nothing built between, only
+	# the lie of the land, it is not to be had at all.
+	if _shut_away(want):
+		return _wall_before(want)
+	return want
 
 ## What this species WANTS to stop for, before the rule is applied.
 func _preferred_target() -> Node:

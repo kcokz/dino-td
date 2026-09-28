@@ -679,7 +679,9 @@ func _scenario_beacon() -> void:
 ## or -- with `all` -- streamed from every way in, as the beacon's final wave is. It prints what
 ## got through and what it cost, so the raid curve in Config is tuned against a base rather than
 ## a guess. `twin` sets the improved set crossbow instead. Real game, real speed: a long raid is a
-## long run.
+## long run. `inside` sets the traps in a yard inside the ring instead, facing out over it, the
+## ring whole -- the base a player built (v0.6 round three, "摆成这样的时候，恐龙进攻又会傻站着不攻击了"),
+## printing every few seconds what the raid is doing.
 func _scenario_siege(spec: String) -> void:
 	var parts: PackedStringArray = spec.split(":")
 	var towers: int = int(parts[1]) if parts.size() > 1 else 4
@@ -690,6 +692,7 @@ func _scenario_siege(spec: String) -> void:
 	var bare: bool = parts.size() > 4 and parts[4] == "bare"
 	# "twin" anywhere after: the traps improved where they stand, as a late base has them.
 	var trap_type: String = "set_crossbow_2" if parts.slice(4).has("twin") else "set_crossbow"
+	var inside: bool = parts.slice(4).has("inside")
 	var cfg := root.get_node_or_null("Config")
 	var gs := root.get_node_or_null("GameState")
 	var eb := root.get_node_or_null("EventBus")
@@ -714,7 +717,7 @@ func _scenario_siege(spec: String) -> void:
 	# nest, all round for the final wave; each facing straight out.
 	var placed_towers: Array[Node] = []
 	var trap_cells: Dictionary = {}
-	for i in range(towers if not ring.is_empty() else 0):
+	for i in range(towers if (not ring.is_empty() and not inside) else 0):
 		var a: float = TAU * float(i) / float(maxi(1, towers))
 		if not every_side:
 			a = deg_to_rad(-80.0 + 160.0 * (float(i) + 0.5) / float(maxi(1, towers)))
@@ -727,6 +730,16 @@ func _scenario_siege(spec: String) -> void:
 				nearest = c
 		var facing: int = (1 if out.x > 0.0 else 3) if absf(out.x) > absf(out.y) else (2 if out.y > 0.0 else 0)
 		trap_cells[nearest] = facing
+	# Inside: in two rows across the yard between the cabin and the ring's nest side, facing out.
+	if inside:
+		for i in range(towers):
+			var row: int = i % 2
+			var k: int = i / 2
+			var per_row: int = int(ceil(float(towers) / 2.0))
+			var x: float = -3.0 + 6.0 * (float(k) + 0.5) / float(maxi(1, per_row))
+			var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(x, 0.0, -3.0 - 1.4 * float(row)))
+			if not seen.has(cell):
+				trap_cells[cell] = 0
 	for cell in trap_cells:
 		var b = _main.build_system.place_at(trap_type, cell, _main.buildings_container, true, int(trap_cells[cell]))
 		if b != null:
@@ -762,6 +775,8 @@ func _scenario_siege(spec: String) -> void:
 	while wm.is_wave_active and not gs.is_game_over and seconds < 400:
 		await _advance(1.0)
 		seconds += 1
+		if seconds % 5 == 0:
+			print("[siege] %3ds %s" % [seconds, _raid_minds(stakes)])
 	eb.dino_died.disconnect(on_death)
 
 	var towers_left: int = 0
@@ -779,6 +794,31 @@ func _scenario_siege(spec: String) -> void:
 		killed[0], int(ceil(core.current_hp)) if is_instance_valid(core) else 0, int(core.max_hp) if is_instance_valid(core) else 0,
 		stakes_left, stakes.size(), towers_left, placed_towers.size()])
 	await _shoot("end")
+
+## What the raid is doing, in a line: its animals by mode and by what they are going for, and how
+## many stakes still stand.
+func _raid_minds(stakes: Array) -> String:
+	var modes: Dictionary = {}
+	var going_for: Dictionary = {}
+	var still: int = 0
+	for d in get_nodes_in_group("dinos"):
+		if not is_instance_valid(d) or ("is_dead" in d and d.is_dead):
+			continue
+		var m: String = ["march", "engage", "attack", "breach"][int(d.mode)] if int(d.mode) < 4 else str(d.mode)
+		modes[m] = int(modes.get(m, 0)) + 1
+		var t = d.current_target
+		var what: String = "nothing"
+		if t != null and is_instance_valid(t):
+			what = String(t.building_type) if "building_type" in t else ("hero" if t.is_in_group("hero") else t.name)
+		going_for[what] = int(going_for.get(what, 0)) + 1
+		if (d as Node3D).get("velocity") is Vector3 and (d.velocity as Vector3).length() < 0.1 and int(d.mode) != 2:
+			still += 1
+	var standing: int = 0
+	for w in stakes:
+		if is_instance_valid(w) and not w.is_destroyed:
+			standing += 1
+	return "modes %s | going for %s | standing still, not biting: %d | stakes %d/%d" % [
+		str(modes), str(going_for), still, standing, stakes.size()]
 
 ## A raid's account as it ends (v0.6 T8): the longest line the HUD says in the middle of
 ## the screen, so it is worth seeing that it fits.
