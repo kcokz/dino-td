@@ -1445,6 +1445,8 @@ const FEEDBACK: Dictionary = {
 	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
 	# 树和石头头上的"木材 150/150"：只在选中它、或者刚采过它的这几秒里显示（v0.6 第三轮：满地的字就是网页游戏）。
 	"node_label_seconds": 3.0,
+	# 人挨咬时顶部提示一次"人在挨打"，之后这么多秒内不再重复（真实时间）。
+	"hero_hurt_alert_seconds": 10.0,
 	# 捡起东西时在原地飘一个数字：掉落物消失了，只有 HUD 数字变化，
 	# 不给一个就地的反馈的话玩家看不出"进账了"。
 	"pickup_text_rise": 1.0,          # 飘起的高度（米）

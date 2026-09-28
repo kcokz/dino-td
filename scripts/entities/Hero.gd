@@ -530,6 +530,14 @@ func _process_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
 	if target_enemy == null or not _is_enemy_valid(target_enemy):
 		target_enemy = null
+		# The next one in reach, if the pack is still on him; then back to the work he left.
+		if not _resume_work.is_empty():
+			var next_one: Node3D = _find_nearest_enemy(attack_range + 0.3)
+			if next_one != null:
+				target_enemy = next_one
+				return
+			if _take_up_work_again():
+				return
 		current_state = State.IDLE
 		return
 
@@ -906,6 +914,7 @@ func _clear_orders() -> void:
 	target_building = null
 	target_enemy = null
 	target_resource_node = null
+	_resume_work = {}
 
 func move_to(dest: Vector3) -> void:
 	if current_state == State.DEAD:
@@ -1220,6 +1229,43 @@ func take_damage(amount: float) -> void:
 		eb.hero_hp_changed.emit(current_hp, max_hp)
 	if current_hp <= 0.0:
 		die()
+		return
+	_hit_back()
+
+## Bitten at his work, he turns on what is biting him (found playing, v0.6 round three: quarrying
+## by the nest, the guards bit him from twelve hit points to none while he went on swinging at
+## the rock). Only at work -- a walk the player sent him on, a meal, a fight already under way
+## are the player's to change -- and only at what is in his reach. The work is remembered and
+## taken up again when nothing is left to fight (_process_attacking).
+func _hit_back() -> void:
+	if current_state != State.HARVESTING and current_state != State.BUILDING:
+		return
+	var biter: Node3D = _find_nearest_enemy(attack_range + 0.3)
+	if biter == null:
+		return
+	_resume_work = {"node": target_resource_node, "building": target_building}
+	target_resource_node = null
+	target_building = null
+	target_enemy = biter
+	current_state = State.ATTACKING
+
+## What he was doing when he turned to fight (_hit_back): a node he was working, a building he
+## was raising or mending.
+var _resume_work: Dictionary = {}
+
+## Back to it, once the fight is over: the node, or the building, if it is still there to work.
+func _take_up_work_again() -> bool:
+	var work: Dictionary = _resume_work
+	_resume_work = {}
+	var node = work.get("node")
+	if node != null and is_instance_valid(node) and not ("is_depleted" in node and node.is_depleted):
+		order_harvest(node)
+		return true
+	var b = work.get("building")
+	if b != null and is_instance_valid(b) and not ("is_destroyed" in b and b.is_destroyed):
+		order_build(b, true)
+		return true
+	return false
 
 func die() -> void:
 	if current_state == State.DEAD:

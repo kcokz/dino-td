@@ -179,12 +179,26 @@ func _refresh_paused_overlay() -> void:
 	paused_overlay.visible = paused and not over and not is_pause_menu_open()
 
 func _on_hero_hp_changed(cur: float, max_val: float) -> void:
+	# Hurt, he says so -- once in a while, not at every bite: the player may be looking anywhere
+	# (v0.6 round three: found playing, he was bitten to death by the nest's guards at the far end
+	# of the valley with nothing on the screen to say so). Config.FEEDBACK.hero_hurt_alert_seconds.
+	if cur < _hero_hp_before - 0.001 and cur > 0.0:
+		var now: float = Time.get_ticks_msec() / 1000.0
+		var cfg = _get_config()
+		var every: float = float(cfg.FEEDBACK.get("hero_hurt_alert_seconds", 10.0)) if (cfg and "FEEDBACK" in cfg) else 10.0
+		if now - _hero_hurt_said_at >= every:
+			_hero_hurt_said_at = now
+			show_hint(tr("HINT_HERO_HURT") % [UiKit.fraction_text(cur, max_val)], UiTheme.toast_seconds("read"), "warning")
+	_hero_hp_before = cur
 	if hero_hp_label:
 		hero_hp_label.text = UiKit.fraction_text(cur, max_val)
 	if hero_hp_bar:
 		var ratio: float = clampf(cur / max_val, 0.0, 1.0) if max_val > 0.0 else 0.0
 		hero_hp_bar.value = ratio
 		hero_hp_bar.tint_progress = UiTheme.health_color(ratio)
+
+var _hero_hp_before: float = INF
+var _hero_hurt_said_at: float = -INF
 
 ## The counts, and income made visible: a count that went up flashes the accent colour and
 ## fades back, so a pickup is seen rather than searched for; an empty one is dimmed.

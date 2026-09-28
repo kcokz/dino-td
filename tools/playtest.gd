@@ -162,6 +162,9 @@ func _scenario_play(spec: String) -> void:
 	eb.meal_eaten.connect(func(m): note.call("ate %s" % str(m.get("dish", ""))))
 	eb.hero_died.connect(func(): note.call("THE HERO DIED"))
 	eb.game_lost.connect(func(): note.call("GAME LOST"))
+	eb.game_won.connect(func(): note.call("GAME WON -- the jump home"))
+	eb.beacon_launched.connect(func(): note.call("BEACON LAUNCHED -- the final wave"))
+	eb.beacon_changed.connect(func(n): note.call("beacon: %d steps done" % n))
 	eb.cabin_view_changed.connect(func(inside): note.call("he is %s the cabin" % ("in" if inside else "out of")))
 
 	# --- 1. The opening wood --------------------------------------------------------------
@@ -216,21 +219,38 @@ func _scenario_play(spec: String) -> void:
 			break
 	note.call("wood: %d; raid in %.0fs" % [int(gs.resources.get("wood", 0)), wm.raid_timer])
 
-	# --- 4 onwards: raids come and go; between them, the next thing on the list ---------------
-	var plan: Array[String] = ["beacon", "pick", "cook", "eat", "stone", "axe", "stone", "crossbow", "beacon"]
-	var step: int = 0
+	# --- 4 onwards: raids come and go; between them, what a player would do next -------------
+	# In order: the beacon when its next step can be paid; a meal when there is meat and none is
+	# put by, and eating one when he is not fed; the pick, then the axe; a set crossbow north of the
+	# ring, facing the nest, up to four; the ring mended where a raid broke it; and otherwise stone
+	# while there is less than a crossbow's worth, and wood. Launched, he shelters till the end.
 	var last_status: float = -100.0
 	var raids_seen: int = 0
+	var crossbow_cells: Array[Vector2i] = []
+	for x in [-3, -1, 1, 3]:
+		crossbow_cells.append(centre + Vector2i(x, -half.y - 2))
+	var shots_taken: Dictionary = {}
 	while _play_clock < minutes * 60.0 and not gs.is_game_over:
 		# At least a frame every time round: a step that finds nothing to wait for (the raid
 		# about to set out, a job it cannot start) must not spin the loop with the game held still.
 		await _advance(0.1)
 		_play_clock += 0.1 * Engine.time_scale
-		if _play_clock - last_status >= 15.0:
+		if _play_clock - last_status >= 20.0:
 			last_status = _play_clock
 			note.call(_play_status(hero, cabin, gs, wm))
-		if wm.is_wave_active:
-			# In the ring, by the gate, and fight what gets close.
+		if wm.is_wave_active or wm.final_wave or gs.is_beacon_launched():
+			if wm.final_wave and not shots_taken.has("final"):
+				shots_taken["final"] = true
+				await _shoot("final_wave")
+			for d in get_nodes_in_group("dinos"):
+				if is_instance_valid(d) and String(d.dino_type) == String(gs.map_data()["boss"]) and not shots_taken.has("boss"):
+					shots_taken["boss"] = true
+					note.call("THE BOSS IS ON THE FIELD")
+					await _portrait("boss", (d as Node3D).global_position, 7.0)
+				if is_instance_valid(d) and String(d.dino_type) == String(gs.map_data()["minor_boss"]) and not shots_taken.has("alpha"):
+					shots_taken["alpha"] = true
+					note.call("the alpha is on the field")
+					await _portrait("alpha", (d as Node3D).global_position, 4.0)
 			var home: Vector3 = cabin.door_inside()
 			var near: Node3D = hero._find_nearest_enemy(3.0)
 			if near != null:
@@ -244,49 +264,62 @@ func _scenario_play(spec: String) -> void:
 			raids_seen = wm.current_wave
 			await _gather_drops(hero, note)
 			continue
-		if step >= plan.size():
-			await _chop_a_while(hero, "wood", 6.0)
+		var wb = cabin.station("workbench")
+		var kitchen = cabin.station("kitchen")
+		var beacon_job: String = String(gs.beacon_next_job())
+		var pick_flag: String = String(cfg.RECIPES["stone_pick"]["unlocks"])
+		if beacon_job != "" and cabin.station(String(cfg.BEACON_STATION)).can_afford(beacon_job):
+			await _bench_job(hero, cabin, String(cfg.BEACON_STATION), beacon_job, note)
 			continue
-		var what: String = plan[step]
-		# A step that cannot be done yet waits: wood meanwhile.
-		if not _can_do(what, cabin, gs):
-			await _chop_a_while(hero, "wood", 6.0)
+		var dish: String = ""
+		for job in kitchen.jobs():
+			if kitchen.is_dish(job) and kitchen.can_afford(job):
+				dish = job
+		if dish != "" and gs.meals.is_empty():
+			await _bench_job(hero, cabin, "kitchen", dish, note)
 			continue
-		step += 1
-		match what:
-			"pick", "axe", "stone_pot":
-				await _bench_job(hero, cabin, "workbench", "stone_pick" if what == "pick" else "stone_axe", note)
-			"cook":
-				var kitchen = cabin.station("kitchen")
-				var dish: String = ""
-				for job in kitchen.jobs():
-					if kitchen.is_dish(job) and kitchen.can_afford(job):
-						dish = job
-				if dish != "":
-					await _bench_job(hero, cabin, "kitchen", dish, note)
-				else:
-					note.call("nothing to cook (%s)" % str(gs.resources))
-			"eat":
-				var keys: Array = gs.meals.keys()
-				if keys.is_empty():
-					note.call("no meal to eat")
-				else:
-					hero.order_eat(String(keys[0]))
-					await _play_until(func(): return int(hero.current_state) != 6, 10.0, "eating")
-			"stone":
-				await _chop_a_while(hero, "stone", 25.0)
-				note.call("stone: %d" % int(gs.resources.get("stone", 0)))
-			"crossbow":
-				var at_cell: Vector2i = centre + Vector2i(-3, -half.y - 2)
-				_main.on_build_selected("set_crossbow")
-				_main._placement_facing = 0
-				var b = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(at_cell)), gm.build_cell_to_world(at_cell))
-				_main.cancel_building_selection()
-				note.call("set crossbow ordered: %s" % ("yes" if b else "NO"))
-				await _play_until(func(): return _unfinished() == 0, 40.0, "building the crossbow")
-			"beacon":
-				var job: String = String(gs.beacon_next_job())
-				await _bench_job(hero, cabin, String(cfg.BEACON_STATION), job, note)
+		if not gs.meals.is_empty() and gs.fed.is_empty():
+			hero.order_eat(String(gs.meals.keys()[0]))
+			await _play_until(func(): return int(hero.current_state) != 6, 10.0, "eating")
+			continue
+		if not gs.has_unlock(pick_flag) and wb.can_afford("stone_pick"):
+			await _bench_job(hero, cabin, "workbench", "stone_pick", note)
+			continue
+		if wb.can_offer("stone_axe") and wb.can_afford("stone_axe"):
+			await _bench_job(hero, cabin, "workbench", "stone_axe", note)
+			continue
+		var next_bow: Vector2i = Vector2i(999, 999)
+		for c in crossbow_cells:
+			if gm.building_in_build_cell(c) == null:
+				next_bow = c
+				break
+		if next_bow.x != 999 and gs.can_afford(cfg.BUILDINGS["set_crossbow"]["cost"]):
+			_main.on_build_selected("set_crossbow")
+			_main._placement_facing = 0
+			var b = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(next_bow)), gm.build_cell_to_world(next_bow))
+			_main.cancel_building_selection()
+			note.call("set crossbow ordered at %s: %s" % [str(next_bow), "yes" if b else "NO"])
+			await _play_until(func(): return _unfinished() == 0, 40.0, "building a crossbow")
+			continue
+		var holes: int = 0
+		_main.on_build_selected("wall")
+		for cell in ring:
+			if cell == gate_cell or gm.building_in_build_cell(cell) != null or _main.current_build_type == "":
+				continue
+			var at: Vector3 = gm.build_cell_to_world(cell)
+			if _main.try_place_at_cell(gm.world_to_cell(at), at) != null:
+				holes += 1
+		_main.cancel_building_selection()
+		if holes > 0:
+			note.call("mending the ring: %d sections" % holes)
+			await _play_until(func(): return _unfinished() == 0, 40.0, "mending the ring")
+			continue
+		if gs.has_unlock(pick_flag) and int(gs.resources.get("stone", 0)) < 8:
+			await _chop_a_while(hero, "stone", 12.0)
+		else:
+			await _chop_a_while(hero, "wood", 8.0)
+	if gs.is_game_over:
+		note.call("GAME OVER (cabin %.0f, hero %.1f)" % [cabin.current_hp if is_instance_valid(cabin) else 0.0, hero.current_hp])
 	note.call(_play_status(hero, cabin, gs, wm))
 	await _shoot("end")
 	await _portrait("end_above", cabin.global_position, 16.0, true)
