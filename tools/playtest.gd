@@ -814,7 +814,9 @@ func _scenario_ui() -> void:
 		eb.unit_selected.emit(wall)
 		await _wait(8)
 		await _shoot("bitten_fence")
-	# The map's boss out, hit hard a moment ago: its bar low across the field, the blow still lit.
+	# The map's boss out, hit hard a moment ago: its bar low across the field, the blow still lit
+	# -- and him fed, so the meal's chip is beside his medallion, as long as it gets.
+	gs.eat("prime_meat")
 	var species: String = String(gs.map_data()["boss"])
 	var boss = load(String(cfg.get_dino_script_path(species))).new()
 	_main.add_child(boss)

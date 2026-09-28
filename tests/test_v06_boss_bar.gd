@@ -119,3 +119,17 @@ func test_05_the_last_to_come_is_followed_then_whoever_still_stands() -> void:
 	await wait_frames(2)
 	assert_eq(bar.boss, leader, "It down, the bar is the other still standing")
 	assert_eq(bar.name_label.text, String(config_node.get_dino_name(String(config_node.map_data()["minor_boss"]))), "by its name")
+
+func test_06_it_clears_his_corner_and_the_card() -> void:
+	# Found at 1280x720: fed, the meal's chip beside his medallion ran under the boss's name.
+	var main = await _level()
+	var hud = main.hud
+	_animal(main, String(config_node.map_data()["boss"]), true)
+	hud.fed_chip.visible = true
+	hud.fed_label.text = "Fed: +2 max health · walks ×1.2 · 1:20 · and then some more words"
+	await wait_frames(3)
+	var bar: Rect2 = hud.boss_bar.get_global_rect()
+	var corner: Rect2 = hud.find_child("HeroSide", true, false).get_global_rect()
+	assert_gt(bar.size.x, 0.0, "The bar has a width")
+	assert_false(bar.intersects(corner), "and stays clear of his medallion and the meal chip (%s vs %s)" % [bar, corner])
+	assert_false(bar.intersects(hud.option_panel.get_global_rect()), "and of the card")

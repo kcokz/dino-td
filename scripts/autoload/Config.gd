@@ -1427,9 +1427,6 @@ const UI: Dictionary = {
 	"game_speeds": [1.0, 2.0, 3.0],
 	"resource_count_width": 30,        # a count's box: four figures without the chip jumping
 	"objective_width": 290,            # the beacon card, top right
-	# A boss's bar (BossBar) runs low across the field from here to the command card: clear of the
-	# Hero's medallion and the meal chip beside it.
-	"boss_bar_left": 260,
 	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
 	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
 	# starts under the cabin's medallion and the figures under it.

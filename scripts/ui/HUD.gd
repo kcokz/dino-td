@@ -1072,8 +1072,10 @@ func _ensure_ui_components() -> void:
 	hero_side.offset_bottom = -(edge + UiTheme.font_size("caption") + UiTheme.space("xs"))
 	hero_side.offset_top = hero_side.offset_bottom
 
-	# Low across the field, between his medallion and the card: a boss's name and its bar while
-	# one is out (BossBar) -- level with his medallion's foot.
+	# Low across the field, from the edge to the card: a boss's name and its bar while one is out
+	# (BossBar) -- over his medallion rather than beside it, where the meal chip grows as long as
+	# what the meal does (found at 1280x720: the chip ran under the boss's name). About where
+	# Elden Ring puts its own, a sixth of the way up the screen.
 	var boss_script = load("res://scripts/ui/BossBar.gd")
 	if boss_script:
 		boss_bar = boss_script.new()
@@ -1082,10 +1084,10 @@ func _ensure_ui_components() -> void:
 		boss_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
 		var card_width: float = float(Vector2(_ui("option_panel_size", Vector2(440, 0))).x)
 		var card_margin: float = float(_ui("option_panel_margin", 16.0))
-		boss_bar.offset_left = float(_ui("boss_bar_left", 260))
+		boss_bar.offset_left = edge
 		boss_bar.offset_right = -(card_width + 2.0 * card_margin)
-		boss_bar.offset_bottom = hero_side.offset_bottom
-		boss_bar.offset_top = hero_side.offset_bottom
+		boss_bar.offset_bottom = hero_side.offset_bottom - hero_side.get_combined_minimum_size().y - UiTheme.space("m")
+		boss_bar.offset_top = boss_bar.offset_bottom
 
 	# --- Centre: what just happened, what is coming ------------------------------------
 	# No size of its own: as wide and as tall as what it holds, growing out from the middle
