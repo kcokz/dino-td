@@ -1,0 +1,5 @@
+# Raw run output (logs, frames). Anything worth keeping is copied into bug/ or design-doc/.
+runs/
+# Generated from tools/playtest.gd by tools/sync_harness.sh -- regenerate, don't edit.
+tools/agent_play.gd
+tools/agent_play.gd.uid
