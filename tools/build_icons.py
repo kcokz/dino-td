@@ -156,6 +156,38 @@ ICONS["hammer"] = item_svg(
      shape("rect", C["s3"], x=14, y=19, width=34, height=5, rx=2),
      shape("rect", C["rope"], x=27, y=22, width=12, height=6, rx=2)])
 
+# ------------------------------------------------------------------------------ abilities
+# What he has made for good (Config.RECIPES), a square each on his card (OptionPanel ability
+# slots): named for the recipe, so a new tool's slot finds its icon by its id.
+# The bone pick: a curved bone head, sharp both ends, lashed across a wooden haft.
+ICONS["stone_pick"] = item_svg(
+    [shape("path", None, C["post"], 6.5, d="M 13 55 L 44 21"),
+     shape("path", C["bone"], d="M 26 11 Q 55 3 59 38 Q 47 17 26 11 Z")],
+    [shape("path", None, C["post_dark"], 2.0, d="M 15 51 L 41 22"),
+     shape("path", None, C["bone_shade"], 1.8, d="M 33 12 Q 50 11 55 28"),
+     shape("rect", C["rope"], transform="rotate(-48 43 22)", x=38, y=18.5, width=10, height=7, rx=2)])
+
+# The stone axe: a ground stone head, its edge to the left, lashed to a haft.
+ICONS["stone_axe"] = item_svg(
+    [shape("path", None, C["post"], 6.5, d="M 20 58 L 41 8"),
+     shape("path", C["s2"], d="M 40 12 L 38 25 L 23 30 C 16 31 10 27 9 20 C 9 13 14 8 21 8 Z")],
+    [shape("path", C["s1"], d="M 21 8 C 14 8 9 13 9 20 L 17 19 C 17 15 19 12 23 12 L 39 13 L 40 12 Z"),
+     shape("path", C["s3"], d="M 23 30 L 38 25 L 38.5 22 L 21 26 C 16 26.5 12 24 11 22 C 12 27 17 31 23 30 Z"),
+     shape("rect", C["rope"], transform="rotate(23 38 18)", x=33, y=14, width=10, height=8, rx=2)])
+
+# The stone pot: a flat stone over the fire, a piece of meat searing on it.
+ICONS["stone_pot"] = item_svg(
+    [shape("path", C["fire"], d="M 17 60 C 14 54 18 50 21 46 C 23 51 26 53 24 60 Z"),
+     shape("path", C["fire"], d="M 29 60 C 27 53 31 48 34 44 C 36 50 40 53 37 60 Z"),
+     shape("path", C["fire"], d="M 41 60 C 39 55 42 51 45 48 C 47 52 49 55 47 60 Z"),
+     shape("polygon", C["s2"], points="6,36 12,29 50,27 58,33 53,42 11,43"),
+     shape("ellipse", C["meat"], cx=32, cy=26, rx=13, ry=7)],
+    [shape("polygon", C["s1"], points="6,36 12,29 50,27 58,33"),
+     shape("polygon", C["s3"], points="6,36 58,33 53,42 11,43"),
+     shape("ellipse", C["meat"], cx=32, cy=26, rx=13, ry=7),
+     shape("ellipse", C["meat_hi"], cx=28, cy=24, rx=6, ry=2.6),
+     shape("path", C["flame"], d="M 31 60 C 30 56 32 53 34 50 C 35 54 37 56 36 60 Z")])
+
 # ------------------------------------------------------------------------------ buildings
 def _post(x0, top=22, tip=10, w=12):
     return "%d,58 %d,%d %d,%d %d,%d %d,58" % (x0, x0, top, x0 + w // 2, tip, x0 + w, top, x0 + w)

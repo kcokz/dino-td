@@ -58,6 +58,9 @@ var _stat_rows: Dictionary = {}
 var boost_row: HBoxContainer = null
 var boost_text: Label = null
 var boost_bar: ProgressBar = null
+## His abilities, a square each (Config.abilities), and which ones it shows now.
+var ability_row: HFlowContainer = null
+var _abilities_shown: Array[String] = []
 var _last_refresh_time: float = 0.0
 var _shown_unit: Node = null
 
@@ -124,6 +127,7 @@ func _on_meals_changed(_meals: Dictionary) -> void:
 		_refresh_ui()
 
 func _on_locale_changed(_locale: String) -> void:
+	_show_abilities(true)
 	_refresh_ui()
 
 func _on_cabin_view_changed(inside: bool) -> void:
@@ -423,6 +427,53 @@ func _build_hero_stats(into: VBoxContainer) -> void:
 	boost_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	boost_row.add_child(boost_bar)
 	hero_stats.add_child(boost_row)
+	ability_row = HFlowContainer.new()
+	ability_row.name = "Abilities"
+	ability_row.add_theme_constant_override("h_separation", UiTheme.space("xs"))
+	ability_row.add_theme_constant_override("v_separation", UiTheme.space("xs"))
+	hero_stats.add_child(ability_row)
+	_abilities_shown.clear()
+	_show_abilities(true)
+
+## His abilities, a square each, in a row that grows as he gains them (Config.abilities): the
+## tool's own icon, and on hover its name and what it does (Config.recipe_effect_text). At least
+## THEME.ability_slots squares: the empty ones say where the next comes from. Rebuilt only when
+## what he has changes.
+func _show_abilities(force: bool = false) -> void:
+	if ability_row == null:
+		return
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	var owned: Array[String] = []
+	if cfg and gs and "unlocks" in gs:
+		owned = cfg.abilities(gs.unlocks)
+	if not force and owned == _abilities_shown:
+		return
+	_abilities_shown = owned.duplicate()
+	for child in ability_row.get_children():
+		ability_row.remove_child(child)
+		child.queue_free()
+	var slots: int = maxi(owned.size(), int(cfg.THEME.get("ability_slots", 4)) if cfg else 4)
+	for i in range(slots):
+		var slot := PanelContainer.new()
+		slot.theme_type_variation = &"InsetPanel"
+		slot.mouse_filter = Control.MOUSE_FILTER_PASS
+		if i < owned.size():
+			var recipe_id: String = owned[i]
+			slot.name = "Ability_" + recipe_id
+			slot.add_child(UiKit.icon_rect(recipe_id, UiTheme.icon_size("l"), "Icon"))
+			var effect: String = String(cfg.recipe_effect_text(recipe_id))
+			var name_text: String = tr(String(cfg.RECIPES[recipe_id].get("name", recipe_id)))
+			slot.tooltip_text = (tr("ABILITY_TIP") % [name_text, effect]) if effect != "" else name_text
+		else:
+			slot.name = "EmptySlot%d" % i
+			var blank := Control.new()
+			blank.custom_minimum_size = Vector2.ONE * UiTheme.icon_size("l")
+			blank.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			slot.add_child(blank)
+			slot.modulate = Color(1.0, 1.0, 1.0, 0.55)
+			slot.tooltip_text = tr("ABILITY_EMPTY")
+		ability_row.add_child(slot)
 
 ## One of his stats: his own part and the whole, as shares of its bar; its figure, gold while a
 ## meal is raising it.
@@ -459,6 +510,7 @@ func _show_hero_stats(info: Dictionary) -> void:
 		tr("STAT_MOVE_VALUE") % walk, walk > own_walk + 0.001)
 	# The meal he is living on, and how long it has left.
 	var fed: Dictionary = info.get("fed", {})
+	_show_abilities()
 	boost_row.visible = not fed.is_empty()
 	if not fed.is_empty():
 		var left: float = maxf(0.0, float(fed.get("seconds_left", 0.0)))

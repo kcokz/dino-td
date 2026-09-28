@@ -413,6 +413,20 @@ static func harvest_requires_unlock(res_id: String) -> String:
 		return String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
 	return ""
 
+## What he can do for good, in the order it can be made: every recipe whose unlock `owned`
+## (GameState.unlocks) holds -- a pick that opens stone, an axe that fells faster, a pot to sear
+## on (v0.6 round three: "人获得的物品，目前都是能力……作为一个小正方形图标……能力槽要可扩展"). His
+## card shows each as a square with its own icon (the recipe's id, tools/build_icons.py), named and
+## explained on hover (recipe_effect_text). Whatever else becomes his for good later is one more
+## source here, and gets its square the same way.
+static func abilities(owned: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for recipe_id in RECIPES:
+		var flag: String = String(RECIPES[recipe_id].get("unlocks", ""))
+		if flag != "" and bool(owned.get(flag, false)):
+			out.append(String(recipe_id))
+	return out
+
 ## What making `recipe_id` did, in words, for the moment it is done: the resources it
 ## brings in faster ("Wood x2"), the one it lets him gather at all, or -- a vessel -- that
 ## meals cooked on it do more. "" for anything else. From the recipe's own data, so a new
@@ -1187,6 +1201,10 @@ const THEME: Dictionary = {
 	# A command on a unit's card (UiKit.command_button) is a tile ("control_heights") tall and
 	# this many times as wide: room for its icon big over its word, and four to a row.
 	"command_aspect": 1.05,
+	# His abilities (OptionPanel ability slots): at least this many squares in the row, the empty
+	# ones saying what goes there -- a row of slots reads as room to fill, one lone square as a
+	# stray icon. More abilities than this, and the row grows.
+	"ability_slots": 4,
 	"pop_scale": 0.96,
 	"settle_alpha": 0.35,
 	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.

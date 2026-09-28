@@ -202,6 +202,10 @@ static func job_icon(station: Node, job_id: String) -> Texture2D:
 		return UiTheme.icon("beacon")
 	var cfg = _config()
 	if cfg and "RECIPES" in cfg and cfg.RECIPES.has(job_id):
+		# A tool drawn for itself is shown as itself -- the icon it has in his ability slots.
+		var own: Texture2D = UiTheme.icon(job_id)
+		if own != null:
+			return own
 		var speeds: Dictionary = cfg.RECIPES[job_id].get("harvest_speed", {})
 		for res_id in speeds:
 			return UiTheme.icon(String(res_id))

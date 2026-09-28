@@ -179,6 +179,10 @@ func _scenario_eating() -> void:
 	gs.stock_meal("meat")
 	gs.stock_meal("prime_meat")
 	hero.current_hp = hero.max_hp * 0.6      # hurt, so the heal is seen
+	# Two tools made, so his ability slots have something in them (round three, 4).
+	var cfg_tools := root.get_node("Config")
+	for recipe_id in cfg_tools.RECIPES.keys().slice(0, 2):
+		gs.grant_unlock(String(cfg_tools.RECIPES[recipe_id].get("unlocks", "")))
 	await _wait(6)
 	await _shoot("card")
 	panel._on_eat_pressed()
