@@ -282,6 +282,9 @@ func test_09_the_environment_never_reaches_past_its_own_level() -> void:
 	await wait_frames(1)
 	var sun := main.find_child("DirectionalLight3D", false, false) as DirectionalLight3D
 	assert_not_null(sun, "The level has its own sun")
+	# The level's own clock sets its sun every frame (the time of day, Config.DAY): held, so a write
+	# from anywhere else is what would show.
+	(main.find_child("WorldEnvironment", false, false) as Node).set_process(false)
 
 	# A value nothing in Config would produce, so any write is visible.
 	var untouched: float = 0.137

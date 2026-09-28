@@ -59,6 +59,10 @@ var wave_label: Label = null
 var core_hp_label: Label = null
 var core_hp_bar: TextureProgressBar = null
 var core_vital: Control = null
+## The day (_refresh_day_dial): its dial, the ring going round it, and the plate with the day on it.
+var day_dial: Control = null
+var day_ring: TextureProgressBar = null
+var day_label: Label = null
 var hero_hp_label: Label = null
 var hero_hp_bar: TextureProgressBar = null
 var deploy_timer_label: Label = null
@@ -223,7 +227,7 @@ func _place_speech() -> void:
 func _bus_handlers(eb: Node) -> Array:
 	var out: Array = []
 	for pair in [["resources_changed", _on_resources_changed], ["wave_started", _on_wave_started],
-			["stage_wave_started", _on_stage_wave_started],
+			["stage_wave_started", _on_stage_wave_started], ["day_part_changed", _on_day_part_changed],
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
@@ -336,6 +340,7 @@ func _process(delta: float) -> void:
 	_final_banner_up = gs_final != null and "final_wave_in" in gs_final and float(gs_final.final_wave_in) >= 0.0
 	if fed_label and fed_chip and fed_chip.visible:
 		_refresh_fed_label()
+	_refresh_day_dial()
 	var gs = _get_game_state()
 	if gs and gs.has_method("is_beacon_launched") and gs.is_beacon_launched():
 		_refresh_beacon_label()
@@ -539,6 +544,43 @@ func _on_wave_started(n: int, is_big: bool) -> void:
 	if raid_warning_panel:
 		raid_warning_panel.visible = false
 	_bosses_coming.clear()
+
+## The day's dial, from the clock (GameState.time_of_day): how far round today is, in the colour of
+## its part; the sun, or at night the moon; the day of the run; and on hover, how long this part has
+## left.
+func _refresh_day_dial() -> void:
+	if day_dial == null or not is_instance_valid(day_dial):
+		return
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs == null or not gs.has_method("time_of_day") or cfg == null or not ("DAY" in cfg):
+		day_dial.visible = false
+		return
+	day_dial.visible = true
+	var length: float = float(cfg.DAY.get("length", 360.0))
+	var t: float = float(gs.time_of_day())
+	var part: String = String(gs.day_part())
+	day_ring.value = t / maxf(1.0, length)
+	day_ring.tint_progress = UiTheme.color("day_" + part)
+	var face := day_dial.find_child("Portrait", true, false) as TextureRect
+	if face:
+		face.texture = UiTheme.icon("moon" if part == "night" else "sun")
+	day_label.text = tr("HUD_DAY") % int(gs.day_number())
+	var next_at: float = length
+	for p in cfg.DAY.get("parts", {}):
+		var at: float = float(cfg.DAY["parts"][p])
+		if at > t and at < next_at:
+			next_at = at
+	var left: int = int(ceil(next_at - t))
+	day_dial.tooltip_text = tr("HUD_DAY_TIP") % [int(gs.day_number()), tr("DAY_PART_" + part.to_upper()),
+		"%d:%02d" % [left / 60, left % 60]]
+
+## A part of the day begun: said, with what the raiders do in it (GAME-DESIGN 9.3).
+func _on_day_part_changed(part: String, _day: int) -> void:
+	var key: String = {"day": "HINT_DAWN", "dusk": "HINT_DUSK", "night": "HINT_NIGHT"}.get(part, "")
+	if key != "":
+		show_hint(tr(key), -1.0, "moon" if part == "night" else "sun")
+	_refresh_day_dial()
 
 ## A raid a repaired beacon stage stirred up: said as that, not as the raid count again.
 func _on_stage_wave_started(_size: int) -> void:
@@ -1136,6 +1178,24 @@ func _ensure_ui_components() -> void:
 	core_vital.offset_top = float(_ui("emblem_top", 2))
 	core_vital.offset_bottom = core_vital.offset_top
 	root_control.resized.connect(_fit_stock, CONNECT_DEFERRED)
+
+	# Beside it, the day (GAME-DESIGN 9.3): a dial going round once a day -- gold by day, red at
+	# dusk, blue in the night -- the sun or the moon in it, and which day of the run it is.
+	var dial := _medallion("DayDial", "day", "sun", float(_ui("day_dial_scale", 0.55)))
+	day_dial = dial[0]
+	day_ring = dial[1]
+	day_label = dial[2]
+	day_ring.name = "DayRing"
+	day_label.name = "DayLabel"
+	root_control.add_child(day_dial)
+	day_dial.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_SIZE)
+	day_dial.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var beside: float = float(_ui("day_dial_offset", 104.0))
+	day_dial.offset_left += beside
+	day_dial.offset_right += beside
+	day_dial.offset_top = float(_ui("emblem_top", 2))
+	day_dial.offset_bottom = day_dial.offset_top
+	_refresh_day_dial()
 
 	# Under the strip at its right: the goal.
 	objective_panel = _panel("ObjectivePanel", &"TechPanel")

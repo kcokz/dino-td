@@ -92,6 +92,9 @@ func _process(delta: float) -> void:
 		return
 	if not auto_raid_enabled or is_wave_active or final_wave:
 		return
+	# Out of the raiders' hours no raid is counted down to, and none sets out (GAME-DESIGN 9.3).
+	if not raiders_out():
+		return
 
 	elapsed_time += delta
 	# The raid a repaired stage stirred up, on its own clock and with its own warning -- on top of
@@ -195,6 +198,10 @@ func _connect_event_bus() -> void:
 			eb.phase_changed.connect(_on_phase_changed)
 		if eb.has_signal("dino_died") and not eb.dino_died.is_connected(_on_dino_died):
 			eb.dino_died.connect(_on_dino_died)
+		if eb.has_signal("dino_went_home") and not eb.dino_went_home.is_connected(_on_dino_went_home):
+			eb.dino_went_home.connect(_on_dino_went_home)
+		if eb.has_signal("day_part_changed") and not eb.day_part_changed.is_connected(_on_day_part_changed):
+			eb.day_part_changed.connect(_on_day_part_changed)
 		if eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(_on_beacon_launched):
 			eb.beacon_launched.connect(_on_beacon_launched)
 		if eb.has_signal("beacon_changed") and not eb.beacon_changed.is_connected(_on_beacon_changed):
@@ -207,6 +214,10 @@ func _disconnect_event_bus() -> void:
 			eb.phase_changed.disconnect(_on_phase_changed)
 		if eb.has_signal("dino_died") and eb.dino_died.is_connected(_on_dino_died):
 			eb.dino_died.disconnect(_on_dino_died)
+		if eb.has_signal("dino_went_home") and eb.dino_went_home.is_connected(_on_dino_went_home):
+			eb.dino_went_home.disconnect(_on_dino_went_home)
+		if eb.has_signal("day_part_changed") and eb.day_part_changed.is_connected(_on_day_part_changed):
+			eb.day_part_changed.disconnect(_on_day_part_changed)
 		if eb.has_signal("beacon_launched") and eb.beacon_launched.is_connected(_on_beacon_launched):
 			eb.beacon_launched.disconnect(_on_beacon_launched)
 		if eb.has_signal("beacon_changed") and eb.beacon_changed.is_connected(_on_beacon_changed):
@@ -559,6 +570,38 @@ func _on_dino_died(_dino: Node) -> void:
 
 	dinos_alive_count = maxi(0, dinos_alive_count - 1)
 	_check_wave_completion()
+
+## One of the raid back at the nest, its hours over: out of the raid as one killed is, with
+## nothing left behind.
+func _on_dino_went_home(dino: Node) -> void:
+	_on_dino_died(dino)
+
+## Whether the map's raiders keep this hour (Config.DINOS.<id>.hours, GAME-DESIGN 9.3): a raid sets
+## out, and is counted down to, only in the hours one of them keeps. Coelophysis hunted by day, so
+## the first map's raids come by day, and none in the dusk or the night.
+func raiders_out() -> bool:
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs == null or not gs.has_method("day_part") or cfg == null or not cfg.has_method("keeps_hours"):
+		return true
+	var part: String = String(gs.day_part())
+	for species in _map().get("raiders", {}):
+		if cfg.keeps_hours(String(species), part):
+			return true
+	return false
+
+## A part of the day begun: the raiders whose hours are over go home, the raid out and all -- at
+## dusk the Coelophysis go back to their nest (GAME-DESIGN 9.3). Not the beacon's last wave: the
+## valley was woken for it.
+func _on_day_part_changed(part: String, _day: int) -> void:
+	var cfg = _get_config()
+	if final_wave or cfg == null or not cfg.has_method("keeps_hours") or not is_inside_tree():
+		return
+	for d in get_tree().get_nodes_in_group("dinos"):
+		if not is_instance_valid(d) or d.is_in_group("guard_dinos") or not d.has_method("go_home"):
+			continue
+		if not cfg.keeps_hours(String(d.dino_type), part):
+			d.go_home(nest_spawn_position)
 
 func _check_wave_completion() -> void:
 	if dinos_alive_count <= 0:

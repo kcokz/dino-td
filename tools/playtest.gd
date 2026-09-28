@@ -121,6 +121,8 @@ func _run(name: String) -> void:
 			await _scenario_paused()
 		"kit":
 			await _scenario_kit()
+		"day":
+			await _scenario_day()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -776,6 +778,7 @@ func _scenario_siege(spec: String) -> void:
 	var on_death := func(_d): killed[0] += 1
 	eb.dino_died.connect(on_death)
 	gs.dino_stat_multipliers["hp"] = hp_mult
+	gs.day_clock = 110.0
 	wm.auto_raid_enabled = false
 	if every_side:
 		wm.final_wave = true
@@ -788,6 +791,9 @@ func _scenario_siege(spec: String) -> void:
 	while wm.is_wave_active and not gs.is_game_over and seconds < 400:
 		await _advance(1.0)
 		seconds += 1
+		# The clock held in the middle of the day: a siege is a measure of the base, and dusk would
+		# send the raid home half-way (GAME-DESIGN 9.3).
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
 		if seconds % 5 == 0:
 			print("[siege] %3ds %s" % [seconds, _raid_minds(stakes)])
 		if (seconds == 15 or seconds == 60) and OS.has_environment("SIEGE_DEBUG"):
@@ -984,6 +990,18 @@ func _scenario_kit() -> void:
 	panel.select_target(_main.hero)
 	await _wait(8)
 	await _shoot("his_row")
+
+## The day (GAME-DESIGN 9.3): the base at first light, in the middle of the day, at dusk and in the
+## night -- the same view each time, from over the cabin, the dial on the strip saying which.
+func _scenario_day() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var parts: Dictionary = cfg.DAY["parts"]
+	var noon: float = (float(cfg.DAY["light"][2]["at"]) + float(cfg.DAY["light"][3]["at"])) * 0.5
+	for beat in [["dawn", 8.0], ["noon", noon], ["dusk", float(parts["dusk"]) + 6.0], ["night", float(parts["night"]) + 40.0]]:
+		gs.day_clock = float(beat[1])
+		await _wait(20)
+		await _shoot(String(beat[0]))
 
 ## Paused with the menu shut: the frame and the word (UI-POLISH T9).
 ## And a pause is a snapshot (v0.6 round three: "pause就得像take snapshot一样，不能有任何状态在改变"): a raid

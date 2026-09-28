@@ -511,6 +511,9 @@ func _next_think() -> float:
 ##      shutting it is what to go for (BREACH). Otherwise, on to the cabin.
 func _think() -> void:
 	_unstack()
+	# Going home, its hours over: nothing to stop for on the way (go_home).
+	if going_home:
+		return
 	if current_target != null and not _still_wanted(current_target):
 		_let_go()
 	var want: Node = _find_threat_priority_target()
@@ -648,6 +651,9 @@ func _bite_interval() -> float:
 ## On the way to the cabin, by its waypoints. The last waypoint is the cabin: when the cabin is
 ## in reach it is bitten, and the first time says so on the bus (dino_reached_core).
 func _march(delta: float) -> void:
+	if going_home:
+		_walk_home(delta)
+		return
 	var cabin: Node = _cabin()
 	if cabin != null and _target_in_reach(cabin):
 		_reach_destination()
@@ -864,6 +870,32 @@ func _watch_headway(delta: float) -> void:
 	_stuck_count += 1
 	_unstick()
 
+## Whether it is on its way back to the nest, its hours over (go_home).
+var going_home: bool = false
+
+## Its hours are over (Config.DINOS.<id>.hours, GAME-DESIGN 9.3): it lets go of what it was at and
+## goes back to the nest, and is gone there -- not killed, nothing left behind.
+func go_home(nest: Vector3) -> void:
+	if is_dead or going_home:
+		return
+	_let_go()
+	going_home = true
+	set_waypoints([nest])
+	_nav_goal = Vector3.INF
+
+## On its way home: along its route to the nest, and gone once there (EventBus.dino_went_home).
+func _walk_home(delta: float) -> void:
+	if waypoints.is_empty():
+		return
+	var nest: Vector3 = waypoints[waypoints.size() - 1]
+	if _flat(global_position).distance_to(_flat(nest)) <= _ai("home_reach", 2.0):
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("dino_went_home"):
+			eb.dino_went_home.emit(self)
+		queue_free()
+		return
+	_travel(nest, delta)
+
 ## It has got nowhere. What is holding it?
 ##   * a building it is pressed against: bitten -- at once if it is not a wall (a target, and
 ##     right there), a wall once going round has failed twice, and at once by anything that does
@@ -872,6 +904,10 @@ func _watch_headway(delta: float) -> void:
 ##     (Config.DINO_AI.patience) rather than shoving, which in a jam is a shuffle; and then a
 ##     fresh route, in case the old one went stale.
 func _unstick() -> void:
+	# Going home it bites nothing: it only asks its way again.
+	if going_home:
+		_nav_goal = Vector3.INF
+		return
 	var holder: Node = _building_pressed_against()
 	var crowd: int = _bodies_pressed_against()
 	if holder != null and holder != current_target:

@@ -739,6 +739,9 @@ const DINOS: Dictionary = {
 	# same body width (the same gaps), the same bite, the same softness against a stake. A long
 	# neck carries its head a little higher.
 	"coelophysis": {
+		# Hunted by day (GAME-DESIGN 9.3): the ring of bone in a young one's eye is a hawk's -- sharp by
+		# day, poor in the dark (Rinehart et al., 2004). Its raids come in the day; at dusk it goes home.
+		"hours": ["day"],
 		"name": "DINO_COELOPHYSIS_NAME",
 		"hp": 2.8,
 		"speed": 4.0,
@@ -755,6 +758,8 @@ const DINOS: Dictionary = {
 	# big wave -- the alpha's numbers, and the middle of the run's high point: it is who comes, not
 	# the map's boss (v0.6 round three: "中段的小boss不应该把最后的大boss形象暴露").
 	"coelophysis_alpha": {
+		# The pack's hours are its leader's.
+		"hours": ["day"],
 		"name": "DINO_COELOPHYSIS_ALPHA_NAME",
 		"hp": 10.0,
 		"speed": 4.4,
@@ -773,6 +778,9 @@ const DINOS: Dictionary = {
 	# tall -- twice the Hero's height at the head -- and as hard as the big theropod it stands in
 	# for, so the stone wall is still what it is for (6.3).
 	"postosuchus": {
+		# No fossil tells its hours; an ambusher of the crocodiles' line, it keeps theirs -- out at
+		# dusk and in the night (GAME-DESIGN 9.3). It only comes last of all, in the final wave.
+		"hours": ["dusk", "night"],
 		"name": "DINO_POSTOSUCHUS_NAME",
 		"hp": 45.0,
 		"speed": 2.0,
@@ -885,6 +893,8 @@ const DINO_AI: Dictionary = {
 	# the fence, out of reach of the building -- and a raid stood there, milling, for the whole of
 	# it (v0.6 round three: "大多数都在后面转来转去"). About the mesh's own margin round a building.
 	"slot_stand_slack": 0.5,
+	# Going home at the end of its hours (Dino.go_home), it is home this near the nest, in metres.
+	"home_reach": 2.0,
 	# Its route (NavMaps.path): how close to a corner counts as there, how close to a spot it is
 	# ambling to, how far it may be pushed off the route before it asks again, and how far a goal
 	# must move before it asks again -- asking costs a route.
@@ -1250,6 +1260,10 @@ const THEME: Dictionary = {
 		# A meal's boost (v0.6 round two: "boost 要比较清楚地显示在移动速度、血量上面"): gold, on
 		# his bars over what he has of his own, at his feet, and in the words that rise off him.
 		"boost": Color(0.97, 0.77, 0.3),
+		# The day's dial (HUD): its ring by day, at dusk -- the red the sky goes -- and in the night.
+		"day_day": Color(0.97, 0.80, 0.36),
+		"day_dusk": Color(0.93, 0.38, 0.20),
+		"day_night": Color(0.42, 0.55, 0.92),
 		# His armour's hit points on his bar (v0.6 round three): tanned leather, told from his own
 		# health and a meal's gold by its colour and where it sits between them.
 		"armor": Color(0.66, 0.44, 0.24),
@@ -1465,6 +1479,10 @@ const UI: Dictionary = {
 	# starts under the cabin's medallion and the figures under it.
 	"strip_height": 48,                # a round button (34) with room above it and above the rim
 	"emblem_top": 2,
+	# The day's dial (HUD, GAME-DESIGN 9.3): this size of the cabin's medallion, and this far right
+	# of its middle, in pixels -- beside the cabin, clear of the controls.
+	"day_dial_scale": 0.55,
+	"day_dial_offset": 104.0,
 	"hero_emblem_scale": 0.8,
 	"toast_top": 132,                  # where the centre toasts start, under the cabin's medallion
 	"toast_max_width": 560,            # a longer toast wraps inside this
@@ -1814,6 +1832,61 @@ const CAMERA: Dictionary = {
 	# low-tilted view towards the valley wall would otherwise put the camera INSIDE it.
 	"ground_clearance": 2.5,
 }
+
+# ==============================================================================
+# 10c. The day
+# ==============================================================================
+## A day and its night, and who is out when (GAME-DESIGN 9.3; v0.6 round three: "一天六分钟OK";
+## "恐龙的正常习性黄昏和夜晚就会进攻吗？白天不进攻吗？这是我们要做到跟恐龙的习性一样"). Seconds of game
+## time from the first light. Each species keeps its own hours (DINOS.<id>.hours).
+const DAY: Dictionary = {
+	# Six minutes, a day and its night: four of daylight, half a minute of dusk, the rest night.
+	"length": 360.0,
+	# Where each part of it begins, from the first light.
+	"parts": {"day": 0.0, "dusk": 240.0, "night": 270.0},
+	# The run lands this far into its first morning: the dawn's glow over, the day ahead of it.
+	"start": 60.0,
+	# The light through the day, blended between these (SceneEnvironment.apply_time_of_day): where
+	# the sun stands (at night, the moon) and its colour and strength; how much the sky lights the
+	# shadows; the sky's own colours; the haze's light. The middle of the day is Config.ENVIRONMENT's
+	# own light, the look the valley was made in; the night is dark enough to be night and light
+	# enough to play in -- a fire is what makes it bright (GAME-DESIGN 9.3).
+	"light": [
+		{"at": 0.0, "sun_elevation": 10.0, "sun_azimuth": 85.0, "sun_color": Color(1.0, 0.58, 0.42), "sun_energy": 0.7,
+			"ambient_energy": 0.32, "sky_top": Color(0.20, 0.24, 0.40), "sky_horizon": Color(0.95, 0.62, 0.48),
+			"fog_color": Color(0.80, 0.58, 0.50)},
+		{"at": 45.0, "sun_elevation": 18.0, "sun_azimuth": 70.0, "sun_color": Color(1.0, 0.84, 0.64), "sun_energy": 1.05,
+			"ambient_energy": 0.42, "sky_top": Color(0.26, 0.40, 0.58), "sky_horizon": Color(0.90, 0.78, 0.62),
+			"fog_color": Color(0.80, 0.74, 0.66)},
+		{"at": 110.0, "sun_elevation": 34.0, "sun_azimuth": 40.0, "sun_color": Color(1.0, 0.93, 0.80), "sun_energy": 1.4,
+			"ambient_energy": 0.5, "sky_top": Color(0.28, 0.46, 0.62), "sky_horizon": Color(0.84, 0.82, 0.70),
+			"fog_color": Color(0.76, 0.80, 0.74)},
+		{"at": 170.0, "sun_elevation": 34.0, "sun_azimuth": 40.0, "sun_color": Color(1.0, 0.93, 0.80), "sun_energy": 1.4,
+			"ambient_energy": 0.5, "sky_top": Color(0.28, 0.46, 0.62), "sky_horizon": Color(0.84, 0.82, 0.70),
+			"fog_color": Color(0.76, 0.80, 0.74)},
+		{"at": 220.0, "sun_elevation": 16.0, "sun_azimuth": 10.0, "sun_color": Color(1.0, 0.78, 0.55), "sun_energy": 1.1,
+			"ambient_energy": 0.42, "sky_top": Color(0.28, 0.40, 0.56), "sky_horizon": Color(0.92, 0.74, 0.56),
+			"fog_color": Color(0.82, 0.72, 0.60)},
+		{"at": 245.0, "sun_elevation": 10.0, "sun_azimuth": -5.0, "sun_color": Color(1.0, 0.45, 0.22), "sun_energy": 0.95,
+			"ambient_energy": 0.34, "sky_top": Color(0.30, 0.26, 0.42), "sky_horizon": Color(0.96, 0.46, 0.26),
+			"fog_color": Color(0.80, 0.46, 0.34)},
+		{"at": 272.0, "sun_elevation": 40.0, "sun_azimuth": 20.0, "sun_color": Color(0.55, 0.65, 0.95), "sun_energy": 0.34,
+			"ambient_energy": 0.2, "sky_top": Color(0.04, 0.06, 0.12), "sky_horizon": Color(0.12, 0.13, 0.22),
+			"fog_color": Color(0.12, 0.14, 0.22)},
+		{"at": 345.0, "sun_elevation": 30.0, "sun_azimuth": 45.0, "sun_color": Color(0.55, 0.62, 0.90), "sun_energy": 0.3,
+			"ambient_energy": 0.2, "sky_top": Color(0.06, 0.07, 0.14), "sky_horizon": Color(0.20, 0.16, 0.24),
+			"fog_color": Color(0.16, 0.15, 0.22)},
+	],
+	# How often the sky's own colours are set again, in seconds: a change of them redraws the sky,
+	# and the day changes it slowly enough not to see a step.
+	"sky_every": 0.5,
+}
+
+## Whether `species` is out at `part` of the day (Config.DAY.parts): the hours it keeps
+## (DINOS.<id>.hours), or always, for one that keeps none.
+static func keeps_hours(species: String, part: String) -> bool:
+	var hours: Array = DINOS.get(species, {}).get("hours", [])
+	return hours.is_empty() or hours.has(part)
 
 # ==============================================================================
 # 11. Dinosaur Flocking & Attack Slots (v0.1)

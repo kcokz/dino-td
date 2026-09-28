@@ -12,6 +12,59 @@ func _ready() -> void:
 	apply_environment_config()
 	apply_sun_config()
 
+## The light of the time of day (GameState.time_of_day, Config.DAY.light), every frame; the sky's
+## own colours every Config.DAY.sky_every seconds, a change of them being a redraw of the sky.
+func _process(delta: float) -> void:
+	var gs = get_node_or_null("/root/GameState")
+	if gs == null or not gs.has_method("time_of_day"):
+		return
+	_sky_clock -= delta
+	var sky: bool = _sky_clock <= 0.0
+	if sky:
+		var cfg = _get_config()
+		_sky_clock = float(cfg.DAY.get("sky_every", 0.5)) if (cfg and "DAY" in cfg) else 0.5
+	apply_time_of_day(float(gs.time_of_day()), sky)
+
+## Seconds till the sky's own colours are set again.
+var _sky_clock: float = 0.0
+
+## The light at `t` seconds into the day (Config.DAY.light): the keyframes either side of it,
+## blended -- where the sun stands (at night, the moon), its colour and strength; the sky's light in
+## the shadows; the haze's light; and, with `sky`, the sky's own colours.
+func apply_time_of_day(t: float, sky: bool = true) -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("DAY" in cfg):
+		return
+	var keys: Array = cfg.DAY.get("light", [])
+	if keys.is_empty():
+		return
+	var length: float = float(cfg.DAY.get("length", 360.0))
+	var i: int = keys.size() - 1
+	for k in keys.size():
+		if float(keys[k]["at"]) <= t:
+			i = k
+	var a: Dictionary = keys[i]
+	var b: Dictionary = keys[(i + 1) % keys.size()]
+	var a_at: float = float(a["at"])
+	var b_at: float = float(b["at"])
+	if b_at <= a_at:
+		b_at += length   # across the night to the next first light
+	var w: float = clampf((t - a_at) / maxf(0.001, b_at - a_at), 0.0, 1.0)
+	var sun: DirectionalLight3D = _find_sun()
+	if sun:
+		sun.rotation_degrees = Vector3(-lerpf(float(a["sun_elevation"]), float(b["sun_elevation"]), w),
+			lerpf(float(a["sun_azimuth"]), float(b["sun_azimuth"]), w), 0.0)
+		sun.light_color = (a["sun_color"] as Color).lerp(b["sun_color"], w)
+		sun.light_energy = lerpf(float(a["sun_energy"]), float(b["sun_energy"]), w)
+	if environment == null:
+		return
+	environment.ambient_light_energy = lerpf(float(a["ambient_energy"]), float(b["ambient_energy"]), w)
+	environment.fog_light_color = (a["fog_color"] as Color).lerp(b["fog_color"], w)
+	if sky and environment.sky and environment.sky.sky_material is ProceduralSkyMaterial:
+		var m := environment.sky.sky_material as ProceduralSkyMaterial
+		m.sky_top_color = (a["sky_top"] as Color).lerp(b["sky_top"], w)
+		m.sky_horizon_color = (a["sky_horizon"] as Color).lerp(b["sky_horizon"], w)
+
 ## Builds or updates the attached Environment resource according to Config.ENVIRONMENT.
 func apply_environment_config() -> void:
 	var cfg = _get_config()

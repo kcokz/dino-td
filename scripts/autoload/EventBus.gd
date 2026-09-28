@@ -67,6 +67,10 @@ signal wave_ended(n: int)
 ## The raid out is one a repaired beacon stage stirred up (WaveManager.start_stage_wave), this many
 ## strong -- said after its wave_started, which carries the raid count it leaves as it was.
 signal stage_wave_started(size: int)
+## A part of the day has begun (GameState.day_part: "day", "dusk", "night") on day `day`.
+signal day_part_changed(part: String, day: int)
+## A raider whose hours are over is back at its nest and gone (Dino.go_home): not killed.
+signal dino_went_home(dino: Node)
 
 # ==============================================================================
 # 5. Dinosaur Combat Signals

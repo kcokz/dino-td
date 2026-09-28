@@ -109,6 +109,8 @@ func _init() -> void:
 	resources = _default_resources()
 	dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
 	_stage_raid = false
+	day_clock = float(_day().get("start", 0.0))
+	_day_part = day_part()
 	is_game_over = false
 	is_game_won = false
 	deploy_length = 90.0
@@ -128,6 +130,7 @@ func _process(delta: float) -> void:
 		return
 	wear_off(delta)
 	charge_beacon(delta)
+	_run_the_day(delta)
 	if continuous_mode:
 		return
 	if current_phase == Phase.DEPLOY:
@@ -236,6 +239,10 @@ func reset_game(p_seed: int = -1) -> void:
 	beacon_charge = 0.0
 	final_wave_in = -1.0
 	drop_misses.clear()
+	_stage_raid = false
+	# The run lands in its first morning (Config.DAY.start).
+	day_clock = float(_day().get("start", 0.0))
+	_day_part = day_part()
 
 	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 	deploy_length = float(time_cfg.get("deploy_length", 90.0))
@@ -722,6 +729,51 @@ func _cancel_produce_timer() -> void:
 func _on_wave_started(n: int, _is_big: bool) -> void:
 	wave_number = maxi(0, n)
 	_stage_raid = false
+
+# ==============================================================================
+# The day (Config.DAY, GAME-DESIGN 9.3)
+# ==============================================================================
+
+## Seconds of game time since the run's first light. Run on in _process, so a paused game's clock
+## holds with everything else.
+var day_clock: float = 0.0
+## The part of the day it was last said to be (EventBus.day_part_changed).
+var _day_part: String = ""
+
+func _day() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.DAY if (cfg and "DAY" in cfg) else {"length": 360.0, "parts": {"day": 0.0}, "start": 0.0}
+
+## Seconds into today, from its first light.
+func time_of_day() -> float:
+	return fposmod(day_clock, float(_day().get("length", 360.0)))
+
+## Which day of the run it is, the first being 1.
+func day_number() -> int:
+	return int(floor(day_clock / float(_day().get("length", 360.0)))) + 1
+
+## "day", "dusk" or "night" (Config.DAY.parts): the latest part begun by this time of day.
+func day_part() -> String:
+	var t: float = time_of_day()
+	var best: String = "day"
+	var best_at: float = -1.0
+	var parts: Dictionary = _day().get("parts", {"day": 0.0})
+	for part in parts:
+		var at: float = float(parts[part])
+		if at <= t and at > best_at:
+			best_at = at
+			best = String(part)
+	return best
+
+## The clock on by `delta`, and a new part of the day said when it begins.
+func _run_the_day(delta: float) -> void:
+	day_clock += delta
+	var part: String = day_part()
+	if part != _day_part:
+		_day_part = part
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("day_part_changed"):
+			eb.day_part_changed.emit(part, day_number())
 
 ## Whether the raid out is one a repaired beacon stage stirred up (EventBus.stage_wave_started).
 var _stage_raid: bool = false

@@ -239,6 +239,16 @@ ICONS["hide_boots"] = item_svg(
      shape("path", None, C["rope"], 1.8, d="M 24 18 L 32 22 M 32 18 L 24 22 M 24 26 L 32 30 M 32 26 L 24 30"),
      shape("path", None, C["hide_dark"], 1.6, d="M 37 38 C 44 40 51 43 54 48")])
 
+# The day's dial and its words (HUD, GAME-DESIGN 9.3): the sun, rayed; the moon, a crescent.
+ICONS["sun"] = item_svg(
+    [shape("circle", C["gold"], cx=32, cy=32, r=13)],
+    [shape("path", None, C["flame"], 3.2, d="M 32 6 L 32 14 M 32 50 L 32 58 M 6 32 L 14 32 M 50 32 L 58 32 "
+                                            "M 14 14 L 19.5 19.5 M 44.5 44.5 L 50 50 M 14 50 L 19.5 44.5 M 44.5 19.5 L 50 14"),
+     shape("circle", C["flame"], cx=27, cy=27, r=4.5)])
+ICONS["moon"] = item_svg(
+    [shape("path", "#dfe6f2", d="M 38 8 A 24 24 0 1 0 56 44 A 18 18 0 1 1 38 8 Z")],
+    [shape("circle", "#bfc8d8", cx=24, cy=40, r=3.2), shape("circle", "#bfc8d8", cx=33, cy=49, r=2.2)])
+
 # The stone pot: a flat stone over the fire, a piece of meat searing on it.
 ICONS["stone_pot"] = item_svg(
     [shape("path", C["fire"], d="M 17 60 C 14 54 18 50 21 46 C 23 51 26 53 24 60 Z"),
