@@ -579,16 +579,21 @@ def module(seed):
             return HAZARD
         return jitter(PANEL if int((x + 2.8) / 0.7) % 2 == 0 else PANEL_ALT, rng, 0.008)
 
+    # The plating outside: off-white gone grey with weather -- the camera looks down on it, and a
+    # clean white slab from above was the brightest thing in the valley -- in panels a shade apart,
+    # grimed towards the ground and scorched towards the shield end.
+    PLATE = mix(METAL, (0.52, 0.50, 0.46), 0.35)
+
     def outer_col(z, x):
         if BAND_X[0] <= x <= BAND_X[1]:
-            base = HAZARD
+            base = mix(HAZARD, SCORCH, 0.12)
         else:
-            base = METAL
+            base = PLATE if int(math.floor((x + 3.0) / 0.7)) % 2 == 0 else mix(PLATE, (0.40, 0.40, 0.38), 0.18)
         burn = max(0.0, (-1.2 - x)) * 0.35 + (0.2 if rng.random() < 0.05 else 0.0)
         c = mix(base, SCORCH, min(0.75, burn))
-        if z < 0.3:
-            c = mix(c, SOIL_LIGHT, 0.45 * (1.0 - z / 0.3))
-        return jitter(c, rng, 0.012)
+        if z < 0.6:
+            c = mix(c, SOIL_LIGHT, 0.5 * (1.0 - z / 0.6))
+        return jitter(c, rng, 0.02)
 
     # --- The walls, row by row, both faces --------------------------------------------------
     for front in (False, True):
@@ -761,6 +766,42 @@ def module(seed):
     pylon = Vector((3.08, 0.0, top_z - 0.1))
     hull.tube([pylon, pylon + UP * 0.2], [0.16, 0.13], [METAL_DARK, METAL_DARK], 12)
     pivot = pylon + UP * 0.2
+
+    # --- On the roof, what the camera sees most of (faded with it): a darker walkway along the
+    # ridge, the seams between its plates, a dorsal hatch, vents -----------------------------------
+    ridge = _se(MOD_OUT, math.pi / 2)[1]
+    walk_w = 0.32
+    for i in range(len(xs) - 1):
+        x0, x1 = xs[i], xs[i + 1]
+        if BAND_X[0] <= (x0 + x1) * 0.5 <= BAND_X[1]:
+            continue
+        col = jitter(mix(GUNMETAL, METAL_DARK, 0.5), rng, 0.02)
+        fade.quad(Vector((out_x(x0), -walk_w, ridge + 0.006)), Vector((out_x(x1), -walk_w, ridge + 0.006)),
+                  Vector((out_x(x1), walk_w, ridge + 0.006)), Vector((out_x(x0), walk_w, ridge + 0.006)), col, col, col, col)
+    # Seams across the roof every plate, a dark line over the crown.
+    for k in range(-4, 5):
+        xs_ = k * 0.7
+        tb = _t_back(MOD_OUT, EAVES)
+        for j in range(12):
+            ta = tb + (math.pi - 2 * tb) * j / 12
+            tt = tb + (math.pi - 2 * tb) * (j + 1) / 12
+            (ya, za), (yb, zb) = _se(MOD_OUT, ta), _se(MOD_OUT, tt)
+            fade.quad(Vector((xs_ - 0.012, ya, za + 0.004)), Vector((xs_ + 0.012, ya, za + 0.004)),
+                      Vector((xs_ + 0.012, yb, zb + 0.004)), Vector((xs_ - 0.012, yb, zb + 0.004)),
+                      METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
+    # The dorsal hatch: a square with a raised frame and a wheel, towards the engine end.
+    hc = Vector((0.95, 0.0, ridge + 0.01))
+    box(fade, (hc.x - 0.36, -0.36, hc.z), (hc.x + 0.36, 0.36, hc.z + 0.05), GUNMETAL)
+    box(fade, (hc.x - 0.3, -0.3, hc.z + 0.05), (hc.x + 0.3, 0.3, hc.z + 0.07), mix(PLATE, SCORCH, 0.15))
+    annulus(fade, hc + Vector((0.0, 0.0, 0.075)), Vector((0.0, 0.0, 1.0)), 0.09, 0.13, HAZARD, 12)
+    # Vents in a row near the back edge of the roof.
+    for vx in (-2.2, -1.75, -0.3, 0.2):
+        vy = 0.78
+        vz = _se(MOD_OUT, math.acos(min(1.0, (vy / MOD_OUT[0]) ** (MOD_N / 2.0))))[1]
+        box(fade, (vx - 0.14, vy - 0.08, vz - 0.02), (vx + 0.14, vy + 0.08, vz + 0.06), METAL_DARK)
+        for g in range(3):
+            gy = vy - 0.05 + g * 0.05
+            box(fade, (vx - 0.12, gy - 0.008, vz + 0.06), (vx + 0.12, gy + 0.008, vz + 0.065), SCORCH)
 
     # --- The roof's wreckage: a torn solar panel and a bent antenna (faded with the roof) ------
     roof_z = _se(MOD_OUT, math.pi / 2)[1]

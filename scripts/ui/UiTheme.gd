@@ -342,7 +342,7 @@ static func build() -> Theme:
 	_label(t, "AccentLabel", font("bold"), "small", color("accent"))
 	# Cut in capitals: a heading, a small capital label naming a card (the beacon's), a title,
 	# the verdict, a figure on the results.
-	_label(t, "HeadingLabel", display_font("bold", letter_spacing("heading")), "heading", color("text"))
+	_label(t, "HeadingLabel", display_font("bold", letter_spacing("heading")), "heading", color("title"))
 	_label(t, "TechLabel", display_font("bold", letter_spacing("button")), "small", color("tech"))
 	_title(t, "TitleLabel", display_font("black", letter_spacing("title")), "title")
 	_title(t, "DisplayLabel", display_font("black", letter_spacing("display")), "display", 8)
@@ -621,7 +621,8 @@ static func _label(t: Theme, name: String, face: Font, size_key: String, col: Co
 
 ## A title: cut in capitals and standing proud of the leather on a shadow (title_shadow).
 static func _title(t: Theme, name: String, face: Font, size_key: String, outline: int = 0) -> void:
-	_label(t, name, face, size_key, color("text"), outline)
+	# Pale gilt (Config.THEME.colors.title): the one warm thing on a quiet panel.
+	_label(t, name, face, size_key, color("title"), outline)
 	var drop: Vector2i = tokens().get("title_shadow", Vector2i.ZERO)
 	t.set_color("font_shadow_color", name, color("shadow"))
 	t.set_constant("shadow_offset_x", name, drop.x)

@@ -111,6 +111,8 @@ func _run(name: String) -> void:
 			await _scenario_summary()
 		"legible":
 			await _scenario_legible()
+		"ui":
+			await _scenario_ui()
 		"buildmenu":
 			await _scenario_buildmenu()
 		"menu":
@@ -220,6 +222,10 @@ func _scenario_play(spec: String) -> void:
 	var last_status: float = -100.0
 	var raids_seen: int = 0
 	while _play_clock < minutes * 60.0 and not gs.is_game_over:
+		# At least a frame every time round: a step that finds nothing to wait for (the raid
+		# about to set out, a job it cannot start) must not spin the loop with the game held still.
+		await _advance(0.1)
+		_play_clock += 0.1 * Engine.time_scale
 		if _play_clock - last_status >= 15.0:
 			last_status = _play_clock
 			note.call(_play_status(hero, cabin, gs, wm))
@@ -713,6 +719,42 @@ func _scenario_legible() -> void:
 	if panel and panel.has_method("_show_build_detail"):
 		panel._show_build_detail("set_crossbow")
 	await _shoot("why_no_crossbow")
+
+## The interface at its busiest (v0.6 round three: "界面……往精致游戏上靠近，比如学习暗黑破坏神4……
+## 界面质感在于细节"): a raid's warning naming the alpha; a tooltip, hovered for real, on an ability
+## slot; a bench chosen and its menu on the card; the account a raid leaves.
+func _scenario_ui() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	for recipe_id in cfg.RECIPES.keys().slice(0, 2):
+		gs.grant_unlock(String(cfg.RECIPES[recipe_id].get("unlocks", "")))
+	_grant({"wood": 14, "stone": 6, "bone": 2, "food": 2})
+	eb.raid_warning.emit(15.0)
+	eb.boss_warning.emit(String(gs.map_data()["minor_boss"]))
+	await _wait(8)
+	await _shoot("raid_warning")
+	var panel = _main.hud.option_panel
+	panel.select_target(_main.hero)
+	await _wait(6)
+	var slot: Control = panel.find_child("Ability_stone_pick", true, false) as Control
+	if slot:
+		root.get_viewport().warp_mouse(slot.get_global_rect().get_center())
+		for i in 90:
+			await process_frame
+		await _shoot("tooltip")
+	var kitchen = _main.current_core.station("kitchen")
+	eb.unit_selected.emit(kitchen)
+	await _wait(8)
+	var job: Control = panel.button_container.get_child(0) as Control if panel.button_container.get_child_count() > 0 else null
+	if job:
+		root.get_viewport().warp_mouse(job.get_global_rect().get_center())
+		await _wait(20)
+	await _shoot("kitchen_menu")
+	eb.raid_summary.emit({"wave": 3, "killed": 7, "drops": {"food": 6, "bone": 7, "prime_meat": 1},
+		"lost": {"wall": 2}})
+	await _wait(8)
+	await _shoot("raid_over")
 
 ## The build menu (v0.6): a hide card for each thing the known materials build -- wood's, and
 ## bone's once the first bone is in -- priced, the trip bow within the stock; then,

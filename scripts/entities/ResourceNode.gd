@@ -16,6 +16,9 @@ var is_depleted: bool = false
 var mesh_instance: MeshInstance3D = null
 var collision_shape: CollisionShape3D = null
 var label_3d: Label3D = null
+## Whether the player has this one picked, and how long its figure stays up after a stroke on it.
+var _picked: bool = false
+var _worked_for: float = 0.0
 
 func _init(p_type: String = "wood", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	resource_type = p_type
@@ -27,18 +30,51 @@ func _ready() -> void:
 	_ensure_components()
 	setup(resource_type, cell_pos)
 	_connect_event_bus()
+	set_process(false)
 
 func _exit_tree() -> void:
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb) and eb.has_signal("locale_changed"):
 		if eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.disconnect(_on_locale_changed)
+	for pair in [["unit_selected", _on_unit_selected], ["unit_deselected", _on_unit_deselected]]:
+		if eb and is_instance_valid(eb) and eb.has_signal(pair[0]) and eb.is_connected(pair[0], pair[1]):
+			eb.disconnect(pair[0], pair[1])
 
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("locale_changed"):
 		if not eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.connect(_on_locale_changed)
+	for pair in [["unit_selected", _on_unit_selected], ["unit_deselected", _on_unit_deselected]]:
+		if eb and eb.has_signal(pair[0]) and not eb.is_connected(pair[0], pair[1]):
+			eb.connect(pair[0], pair[1])
+
+# ------------------------------------------------------------------------------
+# Its name and what is left in it, over it: only when it matters (v0.6 round three: "界面质感在于
+# 细节，要和网页游戏区分开"). Every tree and rock wore "Wood 150 / 150" all the time -- a field of
+# captions, cut through by the fronds. It shows while the node is picked, and for a few seconds
+# after each stroke on it (Config.FEEDBACK.node_label_seconds); the rest of the time the hover ring
+# and the panel say what it is.
+# ------------------------------------------------------------------------------
+
+func _on_unit_selected(unit: Node) -> void:
+	_picked = unit == self
+	_show_label()
+
+func _on_unit_deselected() -> void:
+	_picked = false
+	_show_label()
+
+func _show_label() -> void:
+	if label_3d != null:
+		label_3d.visible = _picked or _worked_for > 0.0
+	set_process(_worked_for > 0.0)
+
+func _process(delta: float) -> void:
+	_worked_for = maxf(0.0, _worked_for - delta)
+	if _worked_for <= 0.0:
+		_show_label()
 
 func _on_locale_changed(_new_locale: String) -> void:
 	_update_label()
@@ -74,6 +110,9 @@ func harvest(amount: int = 1) -> int:
 			_ensure_body()
 		_update_visuals()
 	_update_label()
+	var cfg = _get_config()
+	_worked_for = float(cfg.FEEDBACK.get("node_label_seconds", 3.0)) if (cfg and "FEEDBACK" in cfg) else 3.0
+	_show_label()
 	return yield_amt
 
 func get_localized_name() -> String:
@@ -178,6 +217,7 @@ func _ensure_components() -> void:
 		label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label_3d.position = Vector3(0.0, 1.7, 0.0)
 		UiTheme.style_world_label(label_3d)
+		label_3d.visible = false
 		add_child(label_3d)
 
 ## Colour and stature say whether there is anything left here.

@@ -27,6 +27,15 @@ extends SceneTree
 ## knuckle, a brush's ragged end -- lives in the corner or end pieces. One small image covers a
 ## panel of any size without stretching its grain.
 ##
+## v0.6 round three: "界面格局还是不够精致……往精致游戏上靠近，比如学习暗黑破坏神4的那种界面风格，或者艾尔登
+## 环，界面质感在于细节，要和网页游戏区分开". The leather stays -- this is still a world of hides and
+## hand work -- but it is framed the way those are: darker, and quieter, so what it holds reads;
+## a rim of hammered bronze that takes a gilt sheen where the light crosses it, not pale bone; a
+## gilt pinstripe a hair inside the rim; the corners held by filigree brackets instead of pegs;
+## the one thing to press dyed oxblood; cards and tooltips a dark vellum written in pale ink;
+## rules of gilt that fade out at their ends, a lozenge at their middle. The detail is in the
+## edges -- a bevel, a highlight, a shadow the rim throws -- and the fills are left quiet.
+##
 ## Each is drawn in its natural colour and handed to the theme at its design size though drawn
 ## at Config.THEME.surface_scale times it: crisp on a 1440p screen, where the 1280x720 design is
 ## drawn at 2x. The theme only tints them for a state (Config.THEME.tints): lit under the
@@ -37,13 +46,15 @@ const CONFIG := "res://scripts/autoload/Config.gd"
 const LIGHT := Vector3(-0.42, -0.62, 0.66)
 
 ## The materials' own colours.
-const BONE := Color(0.85, 0.79, 0.66)            # a rim, a knuckle, a bar's cap, a rule
+const BONE := Color(0.85, 0.79, 0.66)            # a knuckle of bone, where one is still pegged
+const BRONZE := Color(0.46, 0.34, 0.19)          # a rim, a bracket, a bar's cap: hammered bronze
+const GILT := Color(0.83, 0.67, 0.40)            # the pinstripe inside a rim, a rule, an ornament
 const STEEL := Color(0.57, 0.61, 0.65)           # the ship's rim and rivets
-const EDGE := Color(0.055, 0.042, 0.032)         # the dark line round everything
-const LEATHER := Color(0.135, 0.112, 0.092)      # a panel's fill
-const TOOLED := Color(0.205, 0.165, 0.13)        # a button's: a shade up from the panel under it
-const OCHRE := Color(0.74, 0.47, 0.18)           # the one thing to press
-const HOLLOW := Color(0.075, 0.062, 0.05)        # a socket's floor
+const EDGE := Color(0.03, 0.024, 0.019)          # the dark line round everything
+const LEATHER := Color(0.082, 0.068, 0.056)      # a panel's fill: dark, so what it holds reads
+const TOOLED := Color(0.125, 0.101, 0.08)        # a button's: a shade up from the panel under it
+const OCHRE := Color(0.36, 0.095, 0.06)          # the one thing to press: oxblood
+const HOLLOW := Color(0.04, 0.033, 0.027)        # a socket's floor
 const SLATE := Color(0.085, 0.105, 0.125)        # the ship's panel
 const CYAN := Color(0.42, 0.78, 0.88, 0.85)      # the ship's light
 const INK := Color(0.075, 0.06, 0.048, 0.93)     # a toast's brush stroke
@@ -372,45 +383,53 @@ func _geo(spec: Dictionary) -> Array:
 # ==============================================================================
 
 func _draw_frame(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": LEATHER, "rim": 3.2, "knuckle": 5.5, "radius": 4.0, "vignette": 0.42,
-		"falloff": 11.0, "top_light": 0.1, "tooling": 5.0, "seed": 71})
+	return _framed(spec, {"fill": LEATHER, "rim": 2.6, "rim_color": BRONZE, "metal": true, "glow": Color(GILT, 0.38),
+		"brackets": 13.0, "bracket_w": 1.5, "radius": 2.0, "vignette": 0.55, "falloff": 11.0, "top_light": 0.07,
+		"seed": 71, "shadow": Vector4(0.0, 3.0, 9.0, 0.7)})
 
 func _draw_frame_tech(spec: Dictionary) -> Image:
 	return _framed(spec, {"fill": SLATE, "rim": 2.6, "rim_color": STEEL, "metal": true, "knuckle": 2.6,
 		"glow": CYAN, "radius": 3.0, "vignette": 0.4, "falloff": 11.0, "top_light": 0.08, "seed": 72})
 
 func _draw_plate(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": LEATHER, "rim": 2.0, "edge": 0.9, "knuckle": 2.8, "radius": 3.0, "vignette": 0.3,
-		"falloff": 4.0, "top_light": 0.08, "seed": 73, "shadow": Vector4(0.0, 2.0, 5.0, 0.55)})
+	return _framed(spec, {"fill": LEATHER, "rim": 1.7, "rim_color": BRONZE, "metal": true, "glow": Color(GILT, 0.3),
+		"edge": 0.9, "brackets": 5.0, "bracket_w": 1.1, "radius": 2.0, "vignette": 0.4, "falloff": 4.0,
+		"top_light": 0.06, "seed": 73, "shadow": Vector4(0.0, 2.0, 5.0, 0.6)})
 
 func _draw_button(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": TOOLED, "rim": 1.6, "edge": 0.9, "radius": 3.5, "vignette": 0.22,
-		"falloff": 6.0, "top_light": 0.14, "tooling": 2.6, "studs": 1.8, "seed": 74, "shadow": Vector4(0.0, 1.5, 3.5, 0.5)})
+	return _framed(spec, {"fill": TOOLED, "rim": 1.3, "rim_color": BRONZE, "metal": true, "glow": Color(GILT, 0.22),
+		"edge": 0.9, "radius": 2.0, "vignette": 0.3, "falloff": 6.0, "top_light": 0.1, "seed": 74,
+		"shadow": Vector4(0.0, 1.5, 3.5, 0.55)})
 
 func _draw_button_accent(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": OCHRE, "rim": 1.6, "edge": 0.9, "radius": 3.5, "vignette": 0.25,
-		"falloff": 6.0, "top_light": 0.16, "tooling": 2.6, "studs": 1.8, "seed": 75, "shadow": Vector4(0.0, 1.5, 3.5, 0.5)})
+	return _framed(spec, {"fill": OCHRE, "rim": 1.3, "rim_color": BRONZE, "metal": true, "glow": Color(GILT, 0.45),
+		"edge": 0.9, "radius": 2.0, "vignette": 0.35, "falloff": 6.0, "top_light": 0.12, "seed": 75,
+		"shadow": Vector4(0.0, 1.5, 3.5, 0.55)})
 
 ## The status bar's strip: leather along the top edge of the screen, a rim of bone along its
 ## bottom, its shadow thrown on the world below.
 func _draw_strip(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": LEATHER, "rim": 3.0, "edge": 1.0, "vignette": 0.35, "falloff": 3.5,
-		"top_light": 0.0, "tooling": 2.2, "bottom_only": true, "seed": 91, "shadow": Vector4(0.0, 2.0, 7.0, 0.6)})
+	return _framed(spec, {"fill": LEATHER, "rim": 2.2, "rim_color": BRONZE, "metal": true, "glow": Color(GILT, 0.3),
+		"edge": 1.0, "vignette": 0.4, "falloff": 3.5, "top_light": 0.0, "bottom_only": true, "seed": 91,
+		"shadow": Vector4(0.0, 2.0, 8.0, 0.7)})
 
 ## A round button: a disc of leather in a rim of bone, domed to the light.
 func _draw_round_button(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": TOOLED, "rim": 1.6, "edge": 0.9, "radius": _round(spec), "vignette": 0.3,
-		"falloff": 6.0, "top_light": 0.16, "seed": 92, "shadow": Vector4(0.0, 1.5, 2.5, 0.55)})
+	return _framed(spec, {"fill": TOOLED, "rim": 1.4, "rim_color": BRONZE, "metal": true, "edge": 0.9,
+		"radius": _round(spec), "vignette": 0.35, "falloff": 6.0, "top_light": 0.12, "seed": 92,
+		"shadow": Vector4(0.0, 1.5, 2.5, 0.6)})
 
 ## The one lit in a set -- the speed the game runs at: painted ochre.
 func _draw_round_button_lit(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": OCHRE, "rim": 1.6, "edge": 0.9, "radius": _round(spec), "vignette": 0.3,
-		"falloff": 6.0, "top_light": 0.18, "seed": 93, "shadow": Vector4(0.0, 1.5, 2.5, 0.55)})
+	return _framed(spec, {"fill": OCHRE, "rim": 1.4, "rim_color": GILT.darkened(0.25), "metal": true, "edge": 0.9,
+		"radius": _round(spec), "vignette": 0.35, "falloff": 6.0, "top_light": 0.14, "seed": 93,
+		"shadow": Vector4(0.0, 1.5, 2.5, 0.6)})
 
 ## A round socket sunk in the leather, for a material's icon on the strip.
 func _draw_socket_round(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": HOLLOW, "rim": 1.5, "edge": 0.8, "radius": _round(spec), "sunk": true,
-		"vignette": 0.5, "falloff": 7.0, "top_light": 0.0, "seed": 94, "shadow": Vector4(0.0, 1.0, 1.5, 0.4)})
+	return _framed(spec, {"fill": HOLLOW, "rim": 1.2, "rim_color": BRONZE, "metal": true, "edge": 0.8,
+		"radius": _round(spec), "sunk": true, "vignette": 0.5, "falloff": 7.0, "top_light": 0.0, "seed": 94,
+		"shadow": Vector4(0.0, 1.0, 1.5, 0.4)})
 
 ## The corner radius that makes a surface's outline a circle (design pixels).
 func _round(spec: Dictionary) -> float:
@@ -418,8 +437,9 @@ func _round(spec: Dictionary) -> float:
 	return float(mini(size.x, size.y)) * 0.5 - float(int(spec.get("pad", 0)))
 
 func _draw_socket(spec: Dictionary) -> Image:
-	return _framed(spec, {"fill": HOLLOW, "rim": 2.0, "edge": 0.9, "radius": 5.0, "sunk": true, "vignette": 0.5,
-		"falloff": 10.0, "top_light": 0.0, "seed": 76, "shadow": Vector4(0.0, 1.0, 2.0, 0.4)})
+	return _framed(spec, {"fill": HOLLOW, "rim": 1.5, "rim_color": BRONZE, "metal": true, "glow": Color(GILT, 0.16),
+		"edge": 0.9, "radius": 2.0, "sunk": true, "vignette": 0.55, "falloff": 10.0, "top_light": 0.0, "seed": 76,
+		"shadow": Vector4(0.0, 1.0, 2.0, 0.4)})
 
 func _draw_socket_tech(spec: Dictionary) -> Image:
 	return _framed(spec, {"fill": SLATE.darkened(0.3), "rim": 1.8, "rim_color": STEEL, "metal": true, "glow": CYAN,
@@ -499,6 +519,13 @@ func _framed(spec: Dictionary, look: Dictionary) -> Image:
 	var peg_size: Array[float] = []
 	for i in knuckles.size():
 		peg_size.append(knuckle if i < 4 and knuckle > 0.0 else stud)
+	# Filigree brackets holding each corner: an L of bronze inside the rim, its arms tapering to a
+	# point, a lozenge at its heel -- in the corner pieces, drawn once however big the panel.
+	var bracket: float = float(look.get("brackets", 0.0)) * k
+	var bracket_w: float = float(look.get("bracket_w", 1.4)) * k
+	var bracket_at: float = pad + rim_in + 0.6 * k
+	if bracket > 0.0:
+		assert(bracket_at + bracket + 1.5 * k <= float(mini(m.x, m.y)), "%s: a bracket reaches past the corner piece" % spec["image"])
 	var paint := func(x: int, y: int, d: float, _lit: float) -> Color:
 		var p := Vector2(float(x) + 0.5, float(y) + 0.5)
 		var col: Color
@@ -528,8 +555,68 @@ func _framed(spec: Dictionary, look: Dictionary) -> Image:
 				col = col.lerp(Color(glow.r, glow.g, glow.b), glow.a * line)
 		for i in knuckles.size():
 			col = _knuckle(col, p, knuckles[i], peg_size[i], rim, metal, grain.at(x, y))
+		if bracket > 0.0 and d >= rim_in:
+			col = _bracket(col, x, y, w, h, bracket_at, bracket, bracket_w, rim)
 		return col
 	return _compose(o, look.get("shadow", Vector4(0.0, 2.5, 7.0, 0.6)), 0.0, 0.0, paint)
+
+## `under` with a corner's filigree bracket over it where it reaches: an L laid along the rim's
+## inside from the corner `at` pixels in, `length` along each side, `width` thick at the heel and
+## tapering to a point; a lozenge at the heel; shaded as bronze, lit along its top-left edges,
+## and throwing a shadow down and right.
+func _bracket(under: Color, x: int, y: int, w: int, h: int, at: float, length: float, width: float, body: Color) -> Color:
+	var k: float = float(_k)
+	var px: float = float(x) + 0.5
+	var py: float = float(y) + 0.5
+	# Into the nearest corner's own frame: u along x from it, v along y, both inward.
+	var u: float = px - at if px < float(w) * 0.5 else float(w) - at - px
+	var v: float = py - at if py < float(h) * 0.5 else float(h) - at - py
+	var flip_x: bool = px >= float(w) * 0.5
+	var flip_y: bool = py >= float(h) * 0.5
+	var col: Color = under
+	# The shadow it throws on the leather, one step down and right.
+	var su: float = u + (0.7 * k if not flip_x else -0.7 * k)
+	var sv: float = v + (1.1 * k if not flip_y else -1.1 * k)
+	if _bracket_cover(su, sv, length, width) > 0.0 and _bracket_cover(u, v, length, width) <= 0.0:
+		col = col.darkened(0.45 * _bracket_cover(su, sv, length, width))
+	var cover: float = _bracket_cover(u, v, length, width)
+	if cover <= 0.0:
+		return col
+	# Lit along its edges that face the light: on the arm along the top, its upper edge; along
+	# the side, its left edge -- mirrored at the far corners, where the light meets the other edge.
+	var across: float
+	if v <= u:
+		across = v / maxf(0.001, _bracket_width(u, length, width))
+		if flip_y:
+			across = 1.0 - across
+	else:
+		across = u / maxf(0.001, _bracket_width(v, length, width))
+		if flip_x:
+			across = 1.0 - across
+	var lit: float = 0.55 * cos(PI * clampf(across, 0.0, 1.0))
+	var face: Color = _lit(body, lit, 1.0, true)
+	var heel: float = 1.0 - (absf(u - 2.4 * width) + absf(v - 2.4 * width)) / (1.8 * width)
+	if heel > 0.0:
+		face = _lit(body.lightened(0.08), 0.5 * signf((2.4 * width - u) + (2.4 * width - v)), 1.0, true)
+	var line: Color = EDGE.lerp(face, clampf(cover * 3.0, 0.0, 1.0))
+	return col.lerp(line, clampf(cover * 2.0, 0.0, 1.0))
+
+## How thick a bracket's arm is at `s` along it: full at the heel, to a point at its end.
+func _bracket_width(s: float, length: float, width: float) -> float:
+	return width * clampf(1.0 - 0.75 * s / length, 0.0, 1.0)
+
+## How much of a bracket covers (u, v): its two arms and its heel's lozenge, softened a pixel.
+func _bracket_cover(u: float, v: float, length: float, width: float) -> float:
+	if u < -0.5 or v < -0.5:
+		return 0.0
+	var best: float = 0.0
+	if u <= length:
+		best = maxf(best, clampf(_bracket_width(u, length, width) - v + 0.5, 0.0, 1.0) * clampf(length - u + 0.5, 0.0, 1.0))
+	if v <= length:
+		best = maxf(best, clampf(_bracket_width(v, length, width) - u + 0.5, 0.0, 1.0) * clampf(length - v + 0.5, 0.0, 1.0))
+	var heel: float = 1.8 * width - (absf(u - 2.4 * width) + absf(v - 2.4 * width))
+	best = maxf(best, clampf(heel + 0.5, 0.0, 1.0))
+	return best
 
 ## The light on a strip laid round inside the outline from `from` to `to` pixels in -- half-
 ## round in section, `height` pixels proud -- at (x, y): 0 where it would be flat.
@@ -637,7 +724,7 @@ func _draw_medallion(spec: Dictionary) -> Image:
 				if d < 1.0 * k:
 					col = EDGE
 				elif d < rim_w:
-					col = _lit(BONE.darkened(0.04 * grain.at(x, y)), _round_light(u, r, outer - rim_w, outer - 1.0 * k, false), 1.0)
+					col = _lit(BRONZE.darkened(0.04 * grain.at(x, y)), _round_light(u, r, outer - rim_w, outer - 1.0 * k, false), 1.05, true)
 				elif r > ring.y + 0.8 * k:
 					col = LEATHER.darkened(0.3 * (mottle.at(x, y) - 0.5))
 					col = col.darkened(0.35 * (1.0 - smoothstep(0.0, 2.0 * k, d - rim_w)))
@@ -653,7 +740,7 @@ func _draw_medallion(spec: Dictionary) -> Image:
 					col = HOLLOW.darkened(0.3 * (1.0 - smoothstep(0.0, 6.0 * k, socket - r)))
 					col = col.lightened(0.12 * clampf(u.dot(Vector2(0.6, 0.8)), 0.0, 1.0) * (1.0 - smoothstep(0.0, 2.5 * k, socket - r)))
 				for pc in pegs:
-					col = _knuckle(col, p, pc, 2.4 * k, BONE, false, grain.at(x, y))
+					col = _knuckle(col, p, pc, 1.9 * k, BRONZE, true, grain.at(x, y))
 			var sa: float = 0.0
 			if a < 1.0:
 				var out_d: float = (p - c - Vector2(0.0, 2.5) * k).length() - outer
@@ -772,7 +859,7 @@ func _draw_trough(spec: Dictionary) -> Image:
 				# The cap: round across the bar and rounded at its end, lit from the top left.
 				var n := Vector3((p - axis).x / radius, (p.y - radius) / radius, 0.0)
 				n.z = sqrt(maxf(0.0, 1.0 - n.x * n.x - n.y * n.y))
-				col = _shade(BONE, n.normalized().dot(l) - l.z, 1.0)
+				col = _lit(BRONZE, n.normalized().dot(l) - l.z, 1.1, true)
 				col = col.darkened(0.45 * (1.0 - smoothstep(0.0, 0.9 * k, cap - from_end)))
 			else:
 				col = HOLLOW.darkened(0.35 * (1.0 - smoothstep(0.15, 0.5, t)))
@@ -804,7 +891,7 @@ func _draw_rule(spec: Dictionary) -> Image:
 			var line: float = clampf(0.6 * k - absf(dy + 0.3 * k) + 0.5, 0.0, 1.0)
 			var under: float = clampf(0.5 * k - absf(dy - 0.8 * k) + 0.5, 0.0, 1.0)
 			if line > 0.0:
-				img.set_pixel(x, y, Color(BONE.lightened(0.1 * (1.0 - absf(dy) / k)), line * fade * 0.9))
+				img.set_pixel(x, y, Color(GILT.lightened(0.12 * (1.0 - absf(dy) / k)), line * fade * 0.85))
 			elif under > 0.0:
 				img.set_pixel(x, y, Color(EDGE, under * fade * 0.8))
 	return img
@@ -818,9 +905,9 @@ func _draw_ornament(spec: Dictionary) -> Image:
 	var k: float = float(_k)
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	var c := Vector2(float(w) * 0.5, float(h) * 0.5)
-	var half := Vector2(4.2, 5.2) * k
-	var studs: Array[Vector2] = [c + Vector2(-8.0 * k, 0.0), c + Vector2(8.0 * k, 0.0)]
-	var stud_r: float = 1.5 * k
+	var half := Vector2(5.2, 3.6) * k
+	var studs: Array[Vector2] = [c + Vector2(-8.5 * k, 0.0), c + Vector2(8.5 * k, 0.0)]
+	var stud_r: float = 1.1 * k
 	for y in h:
 		for x in w:
 			var p := Vector2(float(x) + 0.5, float(y) + 0.5)
@@ -831,7 +918,7 @@ func _draw_ornament(spec: Dictionary) -> Image:
 			if inner > -1.0 * k:
 				var facet := Vector3(signf(q.x) * 0.6, signf(q.y) * 0.5, 0.62).normalized()
 				var l: Vector3 = LIGHT.normalized()
-				var face: Color = _shade(BONE, facet.dot(l) - l.z, 1.2)
+				var face: Color = _lit(GILT, facet.dot(l) - l.z, 1.1, true)
 				var body: Color = EDGE.lerp(face, clampf(inner + 0.5, 0.0, 1.0))
 				col = Color(body, clampf(inner + 1.0 * k + 0.5, 0.0, 1.0))
 			for sc in studs:
@@ -840,7 +927,7 @@ func _draw_ornament(spec: Dictionary) -> Image:
 					var z: float = sqrt(maxf(0.0, stud_r * stud_r - sr * sr))
 					var n := Vector3((p - sc).x, (p - sc).y, z).normalized()
 					var l2: Vector3 = LIGHT.normalized()
-					var face2: Color = _shade(BONE, n.dot(l2) - l2.z, 1.1)
+					var face2: Color = _lit(GILT, n.dot(l2) - l2.z, 1.0, true)
 					var body2: Color = EDGE.lerp(face2, clampf(stud_r + 0.5 - sr, 0.0, 1.0))
 					col = Color(body2, clampf(stud_r + 1.0 * k + 0.5 - sr, 0.0, 1.0))
 			if col.a > 0.0:
@@ -851,59 +938,14 @@ func _draw_ornament(spec: Dictionary) -> Image:
 # Hide: every card, toast and tooltip
 # ==============================================================================
 
-## A scraped hide: pale, blotched and pored like skin, its edges darker where they were
-## handled, and a row of stitches a little in from the edge -- run along each side, spaced to
-## repeat over exactly the middle's length.
+## A card, a tooltip: dark vellum in a thin bronze rim with a gilt pinstripe inside it and a
+## bracket at each corner -- a smaller panel. It was a pale hide sewn round with a dashed row of
+## stitches, and a dashed outline is the one thing every web page has (v0.6 round three: "要和
+## 网页游戏区分开"). What a card holds still sits Config's "stitch" in from its edge.
 func _draw_hide(spec: Dictionary) -> Image:
-	var g: Array = _geo(spec)
-	var w: int = g[0]
-	var h: int = g[1]
-	var m: Vector2i = g[2]
-	var pad: float = g[3]
-	var k: int = _k
-	var mid := Vector2i(w - 2 * m.x, h - 2 * m.y)
-	var o := _outline(w, h, m, pad, 7.0, 2.4, 2.4, 2, 37)
-	var blotch := _field(_noise(mid, 37, 0.012, 3), m)
-	var pore := _field(_noise(mid, 38, 0.7, 1), m)
-	var fold := _cracks(mid, m, 5, 1.6, 40.0, 39)
-	var fold_mask := _field(_noise(mid, 40, 0.01, 2), m)
-	var pale := Color(0.87, 0.78, 0.60)
-	var thread := Color(0.30, 0.20, 0.12)
-	# The stitches: as far in as Config says (what a card holds sits inside them), each this
-	# long, spaced so a whole number fit the middle.
-	var inset: float = float(spec.get("stitch", 7)) * k
-	var period_x: float = float(mid.x) / round(float(mid.x) / (8.0 * k))
-	var period_y: float = float(mid.y) / round(float(mid.y) / (8.0 * k))
-	var dash: float = 4.6 * k
-	var half_thick: float = 0.75 * k
-	var paint := func(x: int, y: int, d: float, lit: float) -> Color:
-		var v: float = blotch.at(x, y)
-		var c: Color = pale.lerp(Color(0.74, 0.60, 0.42), 0.55 * (1.0 - v))
-		c = c.darkened(0.05 * pore.at(x, y))
-		var fl: float = fold.at(x, y) * smoothstep(0.5, 0.65, fold_mask.at(x, y))
-		c = c.darkened(0.07 * fl)
-		# Worked darker towards the edge.
-		c = c.darkened(0.26 * (1.0 - smoothstep(0.0, 6.0 * k, d)))
-		# Stitches along the straight of each side (none round the corners).
-		var s: Vector2 = o.sides(x, y)
-		var across: float = absf(d - inset)
-		if across < half_thick + 1.0:
-			var along: float = -1.0
-			if s.y < s.x and s.x > inset + 3.0 * k:
-				along = fposmod(float(x) + 0.5 - float(m.x), period_x)
-			elif s.x <= s.y and s.y > inset + 3.0 * k:
-				along = fposmod(float(y) + 0.5 - float(m.y), period_y)
-			if along >= 0.0:
-				var on: float = clampf(half_thick - across + 0.5, 0.0, 1.0) * clampf(minf(along, dash - along) + 0.5, 0.0, 1.0)
-				if on > 0.0:
-					var crown: float = 1.0 - across / (half_thick + 1.0)
-					c = c.lerp(thread.lightened(0.25 * crown), on)
-				# The holes the thread goes through, at each end of a stitch.
-				var hole: float = minf(Vector2(along, across).length(), Vector2(along - dash, across).length())
-				c = c.darkened(0.45 * (1.0 - smoothstep(0.5 * k, 1.1 * k, hole)))
-		c = c.darkened(0.3 * (1.0 - smoothstep(0.0, 1.2 * k, d)))
-		return _shade(c, lit, 0.7)
-	return _compose(o, Vector4(0.0, 2.0, 5.0, 0.5), 3.0, 1.4, paint)
+	return _framed(spec, {"fill": Color(0.115, 0.095, 0.078), "rim": 1.2, "rim_color": BRONZE, "metal": true,
+		"glow": Color(GILT, 0.26), "edge": 0.9, "brackets": 5.0, "bracket_w": 1.0, "radius": 2.0, "vignette": 0.45,
+		"falloff": 9.0, "top_light": 0.09, "seed": 37, "shadow": Vector4(0.0, 2.0, 5.0, 0.55)})
 
 # ==============================================================================
 # The groove: under a bar, a chosen tab, a portrait
@@ -922,7 +964,7 @@ func _draw_groove(spec: Dictionary) -> Image:
 	var grit := _field(_noise(mid, 51, 0.5, 1), m)
 	var mottle := _field(_noise(mid, 52, 0.05, 2), m)
 	var paint := func(x: int, y: int, d: float, lit: float) -> Color:
-		var v: float = 0.62 + 0.05 * (mottle.at(x, y) - 0.5) + 0.05 * (grit.at(x, y) - 0.5)
+		var v: float = 0.12 + 0.02 * (mottle.at(x, y) - 0.5) + 0.02 * (grit.at(x, y) - 0.5)
 		var c := Color(v, v * 0.98, v * 0.95)
 		# Darker into the corners of the floor, where the light does not reach.
 		c = c.darkened(0.18 * (1.0 - smoothstep(0.0, 4.0 * k, d)))

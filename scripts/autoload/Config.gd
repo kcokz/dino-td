@@ -1191,11 +1191,14 @@ const THEME: Dictionary = {
 		# The stone's own colour, where a flat box stands in for it.
 		"panel": Color(0.2, 0.185, 0.165, 0.95),
 		"panel_border": Color(0.36, 0.32, 0.27),
-		"text": Color(0.94, 0.9, 0.8),
-		"text_muted": Color(0.77, 0.71, 0.61),
-		"text_faint": Color(0.6, 0.55, 0.46),
-		"accent": Color(0.93, 0.62, 0.26),
-		"accent_text": Color(0.13, 0.08, 0.035),
+		"text": Color(0.9, 0.86, 0.78),
+		"text_muted": Color(0.66, 0.61, 0.52),
+		"text_faint": Color(0.5, 0.46, 0.39),
+		# Titles and names stand in pale gilt, over their rule (v0.6 round three: the D4 / Elden Ring
+		# way -- the heading is the one warm thing on a quiet panel).
+		"title": Color(0.9, 0.78, 0.55),
+		"accent": Color(0.86, 0.66, 0.36),
+		"accent_text": Color(0.96, 0.89, 0.74),
 		"tech": Color(0.42, 0.78, 0.88),
 		"danger": Color(0.8, 0.29, 0.21),
 		# Danger as text on a dark panel -- a count he is short of, a demolish -- a step
@@ -1206,13 +1209,14 @@ const THEME: Dictionary = {
 		# A meal's boost (v0.6 round two: "boost 要比较清楚地显示在移动速度、血量上面"): gold, on
 		# his bars over what he has of his own, at his feet, and in the words that rise off him.
 		"boost": Color(0.97, 0.77, 0.3),
-		# Ink: text on a pale hide -- a card's name and price, a tooltip. Dark, or it does not
-		# read on the pale; "ink_short" is a count he is short of, as danger_text is on stone.
-		"ink": Color(0.2, 0.13, 0.07),
-		"ink_muted": Color(0.36, 0.26, 0.16),
-		"ink_faint": Color(0.46, 0.36, 0.25),
-		"ink_short": Color(0.62, 0.15, 0.08),
-		"ink_accent": Color(0.56, 0.26, 0.04),
+		# Ink: text on a card's hide -- a card's name and price, a tooltip. Since v0.6 round three
+		# the hide is dark vellum, so the ink is pale; "ink_short" is a count he is short of, as
+		# danger_text is on stone.
+		"ink": Color(0.9, 0.85, 0.76),
+		"ink_muted": Color(0.68, 0.62, 0.52),
+		"ink_faint": Color(0.53, 0.48, 0.4),
+		"ink_short": Color(0.95, 0.48, 0.38),
+		"ink_accent": Color(0.9, 0.7, 0.42),
 		"shadow": Color(0.0, 0.0, 0.0, 0.45),
 		"scrim": Color(0.035, 0.028, 0.02, 0.62),
 	},
@@ -1227,7 +1231,7 @@ const THEME: Dictionary = {
 		"rust": Color(1.3, 0.78, 0.72),          # a thing that cannot be undone, under the cursor
 		"rust_down": Color(1.05, 0.62, 0.58),
 		"lost": Color(1.15, 0.72, 0.66),         # the verdict on a fall: the leather gone red
-		"hide": Color(0.98, 0.96, 0.92),         # a card, a tooltip: pale, for ink
+		"hide": Color(1.0, 1.0, 1.0),            # a card, a tooltip: dark vellum, for pale ink
 		"hide_hover": Color(1.06, 1.04, 1.0),
 		"hide_down": Color(0.9, 0.85, 0.78),
 		"hide_off": Color(0.8, 0.76, 0.72),      # one that cannot be taken yet: duller, still read
@@ -1439,6 +1443,8 @@ const FEEDBACK: Dictionary = {
 	# stakes writes "Wooden Stakes" twenty times across the middle of the screen.
 	"name_label_hide_when_idle": true,
 	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
+	# 树和石头头上的"木材 150/150"：只在选中它、或者刚采过它的这几秒里显示（v0.6 第三轮：满地的字就是网页游戏）。
+	"node_label_seconds": 3.0,
 	# 捡起东西时在原地飘一个数字：掉落物消失了，只有 HUD 数字变化，
 	# 不给一个就地的反馈的话玩家看不出"进账了"。
 	"pickup_text_rise": 1.0,          # 飘起的高度（米）
