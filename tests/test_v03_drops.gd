@@ -332,17 +332,28 @@ func test_17_a_lifetime_above_zero_does_make_them_rot() -> void:
 	assert_false(drop.is_in_group("drops"), "And out of everyone's sweep")
 
 func test_18_a_paused_game_does_not_age_the_ground() -> void:
+	# The engine's pause (GameState.is_paused, v0.6 round three): a paused game does not run a drop
+	# at all -- nothing of its own to check.
 	var hero = _spawn_hero(Vector3(40.0, 0.0, 40.0))
 	var drop = DropItem.spawn(hero, Vector3(9.0, 0.0, 9.0), "wood", 1)
 	await wait_frames(1)
-	drop.lifetime = 1.0
+	# Drops never rot on this map (Config.DROPS.lifetime 0, so the drop does not even tick): this
+	# one is given a lifetime as the config would give it, ticking and all.
+	drop.lifetime = 0.05
+	drop.set_process(true)
 
 	game_state_node.is_paused = true
-	drop._process(5.0)
-	assert_false(drop.is_collected, "Reading the map does not spoil the meat")
+	var age: float = drop.age
+	await wait_frames(30)
+	assert_eq(drop.age, age, "Reading the map does not spoil the meat")
+	assert_false(drop.is_collected, "It lies where it fell")
 	game_state_node.is_paused = false
-	drop._process(5.0)
-	assert_true(drop.is_collected, "Unpausing resumes the clock")
+	# Its lifetime and more, counted in physics ticks -- a headless frame is a fraction of one.
+	for i in range(Engine.physics_ticks_per_second):
+		await wait_physics_frames(1)
+		if not is_instance_valid(drop) or drop.is_collected:
+			break
+	assert_true(not is_instance_valid(drop) or drop.is_collected, "Unpausing resumes the clock")
 
 # ==============================================================================
 # 5. Feedback

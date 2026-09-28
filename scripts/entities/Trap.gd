@@ -273,13 +273,10 @@ func _physics_process(delta: float) -> void:
 	if not on_wire.is_empty():
 		loose(on_wire)
 
-## Finished, standing, and not paused -- a paused game must not have its traps going off while
-## the player reads the map.
+## Finished and standing. (A paused game does not run it at all: GameState.is_paused is the
+## engine's pause.)
 func _is_live() -> bool:
-	if is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion():
-		return false
-	var gs = _get_game_state()
-	return not (gs != null and "is_paused" in gs and bool(gs.is_paused))
+	return not (is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion())
 
 ## Every animal whose body is on the wire, nearest the trap first.
 func animals_on_wire() -> Array:

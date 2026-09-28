@@ -944,11 +944,45 @@ func _scenario_kit() -> void:
 	await _shoot("his_row")
 
 ## Paused with the menu shut: the frame and the word (UI-POLISH T9).
+## And a pause is a snapshot (v0.6 round three: "pause就得像take snapshot一样，不能有任何状态在改变"): a raid
+## at the cabin, its gun firing; paused, two frames a second apart must be the same picture, and
+## unpaused they must not be. It prints how many pixels differ.
 func _scenario_paused() -> void:
 	var gs := root.get_node_or_null("GameState")
+	var cfg := root.get_node_or_null("Config")
 	_grant({"wood": 12, "stone": 3, "bone": 1})
+	var wm = _main.wave_manager
+	wm.auto_raid_enabled = false
+	wm.start_wave(1, 6)
+	var core: Node3D = _main.current_core
+	await _advance(1.0)
+	for d in get_nodes_in_group("dinos"):
+		if d is Node3D and not d.is_in_group("guard_dinos"):
+			(d as Node3D).global_position = core.global_position + Vector3(randf_range(-3.0, 3.0), 0.0, float(cfg.get_building_half("core").y) + randf_range(1.0, 3.0))
+	await _advance(2.0)
 	gs.set_paused(true)
+	await _advance(1.0)
 	await _shoot("paused")
+	var first: Image = root.get_viewport().get_texture().get_image()
+	await _advance(1.0)
+	var second: Image = root.get_viewport().get_texture().get_image()
+	gs.set_paused(false)
+	await _advance(1.0)
+	var running: Image = root.get_viewport().get_texture().get_image()
+	print("[paused] a second apart, paused: %d pixels differ; running: %d" % [_pixels_apart(first, second), _pixels_apart(second, running)])
+
+## How many pixels of two frames differ by more than the renderer's own frame-to-frame grain
+## (its temporal anti-aliasing and fog dither move a still picture by a few hundredths), looking
+## at every other one each way.
+func _pixels_apart(a: Image, b: Image) -> int:
+	var n: int = 0
+	for y in range(0, mini(a.get_height(), b.get_height()), 2):
+		for x in range(0, mini(a.get_width(), b.get_width()), 2):
+			var ca: Color = a.get_pixel(x, y)
+			var cb: Color = b.get_pixel(x, y)
+			if maxf(absf(ca.r - cb.r), maxf(absf(ca.g - cb.g), absf(ca.b - cb.b))) > 0.1:
+				n += 1
+	return n
 
 ## The first thing a player sees. The frame the whole visual MVP is judged on.
 func _scenario_open() -> void:

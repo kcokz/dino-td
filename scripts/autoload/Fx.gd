@@ -56,6 +56,9 @@ var _debris_root: Node3D = null
 var _dice: RandomNumberGenerator = RandomNumberGenerator.new()
 
 func _ready() -> void:
+	# The interface's sounds and the valley's ambience go on while the game is paused; the world's
+	# own sounds hold where they are, mid-note, and go on with it (_build_world_players).
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_request_sounds()
 	_build_voices()
 	_build_world_players()
@@ -433,6 +436,7 @@ func _build_voices() -> void:
 func _build_world_players() -> void:
 	_world = Node3D.new()
 	_world.name = "WorldSound"
+	_world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_world)
 	for i in range(int(_sounds_table().get("world_players", 16))):
 		var p := AudioStreamPlayer3D.new()

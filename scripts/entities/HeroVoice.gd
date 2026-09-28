@@ -62,9 +62,6 @@ func _hooks() -> Array:
 func _process(delta: float) -> void:
 	if hero == null or not is_instance_valid(hero) or _dead():
 		return
-	var gs = get_node_or_null("/root/GameState")
-	if gs and bool(gs.get("is_paused")):
-		return
 	_clock += delta
 	var state: int = int(hero.get("current_state"))
 	if state != _state_was:

@@ -236,7 +236,7 @@ func _process(delta: float) -> void:
 	if is_collected or lifetime <= 0.0:
 		return
 	var gs := _get_game_state()
-	if gs and ("is_paused" in gs and gs.is_paused or "is_game_over" in gs and gs.is_game_over):
+	if gs and "is_game_over" in gs and gs.is_game_over:
 		return
 	age += delta
 	if age >= lifetime:

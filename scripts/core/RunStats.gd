@@ -69,10 +69,10 @@ func reset() -> void:
 	_told = false
 	_start_raid()
 
-## Game time only: a paused game, or one that is over, is not time he spent.
+## Game time only: a game that is over is not time he spent (and a paused one does not run this).
 func _process(delta: float) -> void:
 	var gs = _state()
-	if gs == null or gs.is_game_over or gs.is_paused:
+	if gs == null or gs.is_game_over:
 		return
 	run_seconds += delta
 	var activity: String = _activity()

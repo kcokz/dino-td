@@ -183,8 +183,6 @@ func _exit_tree() -> void:
 func _physics_process(delta: float) -> void:
 	if current_state == State.DEAD:
 		return
-	if _is_paused():
-		return
 
 	if provoke_timer > 0.0:
 		provoke_timer -= delta
@@ -1492,10 +1490,6 @@ func _his_mask() -> int:
 func _layer(key: String, fallback: int) -> int:
 	var cfg = _get_config()
 	return int(cfg.get(key)) if (cfg and key in cfg) else fallback
-
-func _is_paused() -> bool:
-	var gs = _get_game_state()
-	return gs != null and "is_paused" in gs and bool(gs.is_paused)
 
 func _get_current_phase() -> int:
 	var gs = _get_game_state()

@@ -128,15 +128,17 @@ func test_03_pause_system_toggling_and_timer_freezing() -> void:
 	assert_true(bool(game_state_node.is_paused), "is_paused is true")
 	assert_true(pause_watcher.emitted, "pause_toggled signal emitted")
 
-	# Process while paused: timer should not advance
-	game_state_node._process(15.0)
-	assert_almost_eq(float(game_state_node.remaining_deploy_time), 90.0, 0.01, "Timer does NOT tick down while paused")
+	# Paused, the engine does not run the game at all (GameState.is_paused is the engine's pause,
+	# v0.6 round three): the timer holds.
+	var left: float = float(game_state_node.remaining_deploy_time)
+	await wait_physics_frames(30)
+	assert_almost_eq(float(game_state_node.remaining_deploy_time), left, 0.0001, "Timer does NOT tick down while paused")
 
 	# Unpause
 	game_state_node.toggle_pause()
 	assert_false(bool(game_state_node.is_paused), "is_paused is false after second toggle")
-	game_state_node._process(5.0)
-	assert_almost_eq(float(game_state_node.remaining_deploy_time), 85.0, 0.01, "Timer resumes ticking after unpause")
+	await wait_physics_frames(30)
+	assert_lt(float(game_state_node.remaining_deploy_time), left, "Timer resumes ticking after unpause")
 
 # ==============================================================================
 # 4. Early End Deployment API

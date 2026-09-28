@@ -412,7 +412,7 @@ func _process(delta: float) -> void:
 	if not hero_inside:
 		return
 	var gs = _get_game_state()
-	if gs and (("is_paused" in gs and gs.is_paused) or ("is_game_over" in gs and gs.is_game_over)):
+	if gs and "is_game_over" in gs and gs.is_game_over:
 		return
 	for st in stations:
 		if is_instance_valid(st) and st.has_method("work"):

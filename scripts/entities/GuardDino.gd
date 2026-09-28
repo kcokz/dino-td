@@ -83,9 +83,6 @@ func setup_post(post_pos: Vector3) -> void:
 func _physics_process(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return
-	if _is_paused():
-		velocity = Vector3.ZERO
-		return
 	var was_at: Vector3 = global_position
 	_guard_step(delta)
 	_report_pace(was_at, delta)

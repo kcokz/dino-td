@@ -72,6 +72,19 @@ var waypoints: Array[Vector3] = []
 # Lifecycle
 # ==============================================================================
 
+## The level pauses with the game (GameState.is_paused, the engine's pause); Main itself goes on --
+## the camera, and the player's orders, which wait for the world to move again.
+func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	child_entered_tree.connect(_pause_with_the_world)
+
+## Every child of the level -- the map, the buildings, the raid, the Hero, a drop, and whatever is
+## added to it later -- pauses with the game unless it says otherwise, which only the interface
+## does (HUD). So a new kind of unit pauses without a line of its own.
+func _pause_with_the_world(child: Node) -> void:
+	if child.process_mode == Node.PROCESS_MODE_INHERIT:
+		child.process_mode = Node.PROCESS_MODE_PAUSABLE
+
 func _ready() -> void:
 	_init_level_coordinates()
 	_ensure_scene_dependencies()

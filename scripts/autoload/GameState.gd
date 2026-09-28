@@ -81,7 +81,18 @@ var _produce_timer: Timer = null
 # v0.1 Real-Time Deployment & Pause
 var deploy_length: float = 90.0
 var remaining_deploy_time: float = 90.0
-var is_paused: bool = false
+## Whether the game is paused -- and the pause is the engine's: the tree is paused, and everything
+## in it that does not say otherwise holds exactly where it is, every unit, building, drop, raid
+## and clock, with nothing of its own to check (v0.6 round three: "pause就得像take snapshot一样，不能有
+## 任何状态在改变……应该写成每个单位都继承的"). It asked this flag unit by unit before, and what did not
+## ask -- the cabin's gun, the animations -- went on. What answers while paused says so itself:
+## the interface (HUD, PauseMenu), the camera and the player's orders (Main), the interface's
+## sounds (Fx).
+var is_paused: bool = false:
+	set(value):
+		is_paused = value
+		if is_inside_tree():
+			get_tree().paused = value
 
 var wave_n: int:
 	get: return wave_number
@@ -114,19 +125,17 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_game_over:
 		return
-	if not is_paused:
-		wear_off(delta)
-		charge_beacon(delta)
+	wear_off(delta)
+	charge_beacon(delta)
 	if continuous_mode:
 		return
 	if current_phase == Phase.DEPLOY:
-		if not is_paused:
-			remaining_deploy_time = maxf(0.0, remaining_deploy_time - delta)
-			var eb = _get_event_bus()
-			if eb and eb.has_signal("deploy_time_changed"):
-				eb.deploy_time_changed.emit(remaining_deploy_time, deploy_length)
-			if remaining_deploy_time <= 0.0:
-				advance_phase()
+		remaining_deploy_time = maxf(0.0, remaining_deploy_time - delta)
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("deploy_time_changed"):
+			eb.deploy_time_changed.emit(remaining_deploy_time, deploy_length)
+		if remaining_deploy_time <= 0.0:
+			advance_phase()
 
 # ==============================================================================
 # 5. Internal Node Resolvers & Signal Helpers

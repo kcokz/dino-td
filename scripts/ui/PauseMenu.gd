@@ -43,6 +43,8 @@ var _was_paused_before_open: bool = false
 func _init() -> void:
 	name = "PauseMenu"
 	visible = false
+	# Open over a paused game, and answering (GameState.is_paused, the engine's pause).
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _ready() -> void:
 	_ensure_components()

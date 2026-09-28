@@ -77,7 +77,7 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	var gs = _get_game_state()
-	if gs and ("is_paused" in gs and gs.is_paused or "is_game_over" in gs and gs.is_game_over):
+	if gs and "is_game_over" in gs and gs.is_game_over:
 		return
 	# Launched, and the valley not answered yet: the grace counts down, and no raid sets out in it.
 	if _final_countdown > 0.0:

@@ -456,11 +456,6 @@ func set_waypoints(wps: Array) -> void:
 func _physics_process(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return
-	# A paused game is paused for the raid too. It went on walking before -- only the Hero and
-	# the guards asked GameState.is_paused.
-	if _is_paused():
-		velocity = Vector3.ZERO
-		return
 	var was_at: Vector3 = global_position
 	advance_towards_waypoint(delta)
 	_report_pace(was_at, delta)
@@ -1614,10 +1609,6 @@ static func _flat(p: Vector3) -> Vector2:
 
 static func _flat3(p: Vector3) -> Vector3:
 	return Vector3(p.x, 0.0, p.z)
-
-func _is_paused() -> bool:
-	var gs = _get_game_state()
-	return gs != null and "is_paused" in gs and bool(gs.is_paused)
 
 ## The run's dice (GameState.rng), or a throwaway set outside a run.
 func _dice() -> RandomNumberGenerator:

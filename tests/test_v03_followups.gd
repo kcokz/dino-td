@@ -314,17 +314,20 @@ func test_12_an_unfinished_stake_has_no_points_on_it_yet() -> void:
 	assert_lt(dino.current_hp, before, "Finishing it arms it")
 
 func test_13_a_paused_game_does_not_grind_anyone_down() -> void:
+	# The engine's pause (GameState.is_paused, v0.6 round three): a paused game does not run a stake
+	# at all -- nothing of its own to check.
 	var stake = _stake()
 	var dino = _raptor(Vector3(stake.contact_range * 0.5, 0.0, 0.0))
+	dino.set_physics_process(false)
 	await wait_frames(1)
 
 	game_state_node.is_paused = true
 	var before: float = dino.current_hp
-	stake._physics_process(stake.contact_tick * 3.0)
+	await wait_physics_frames(int(ceil(stake.contact_tick * 3.0 * float(Engine.physics_ticks_per_second))))
 	assert_eq(dino.current_hp, before, "Reading the map is not a fight")
 
 	game_state_node.is_paused = false
-	stake._physics_process(stake.contact_tick)
+	await wait_physics_frames(int(ceil(stake.contact_tick * 2.0 * float(Engine.physics_ticks_per_second))))
 	assert_lt(dino.current_hp, before, "Unpausing resumes it")
 
 func test_14_stakes_only_bite_the_attacking_side() -> void:

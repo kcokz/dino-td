@@ -109,6 +109,11 @@ var _pulse_time: float = 0.0
 # Lifecycle
 # ==============================================================================
 
+## The interface answers while the game is paused (GameState.is_paused): the pause menu, the
+## speed and pause buttons, the cards.
+func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 func _ready() -> void:
 	_ensure_ui_components()
 	_hide_legacy_phase_controls()

@@ -261,7 +261,8 @@ func _spawn_visual_bullet_effect(target_pos: Vector3) -> void:
 	# the closure used to be called with a freed capture.
 	var tree_ref = get_tree()
 	if tree_ref:
-		tree_ref.create_timer(0.1).timeout.connect(mesh_inst.queue_free)
+		# Not process_always: a paused game holds the streak where it is (GameState.is_paused).
+		tree_ref.create_timer(0.1, false).timeout.connect(mesh_inst.queue_free)
 	else:
 		mesh_inst.queue_free()
 

@@ -207,7 +207,7 @@ func _stakes_are_live() -> bool:
 		return false
 	if is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion():
 		return false
-	return not _is_paused()
+	return true
 
 ## One report of contact to everything of the attacking side pressed against it. Public so a test
 ## can drive one without waiting on the clock.
@@ -260,10 +260,6 @@ func contact_dps() -> float:
 	if contact_tick <= 0.0:
 		return 0.0
 	return contact_damage / contact_tick
-
-func _is_paused() -> bool:
-	var gs = _get_game_state()
-	return gs != null and "is_paused" in gs and bool(gs.is_paused)
 
 # ==============================================================================
 # Presentation
