@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"fog": await _p_fog()
 			"dusk_raid": await _p_dusk_raid()
 			"edge_pan": await _p_edge_pan()
 			"half_fence": await _p_half_fence(false)
@@ -982,6 +983,191 @@ func _p_dusk_raid() -> void:
 	_say("PASS" if not_going == 0 and out_at_night == 0 else "FAIL", "into the night (clock %.0f, night from %.0f): %d raiders still out, %d of them not going home" % [gs.day_clock, night, out_at_night, not_going])
 	_say("PASS" if biting_after.is_empty() else "FAIL", "after dusk: %s" % ("nobody bit anything" if biting_after.is_empty() else "; ".join(biting_after)))
 	_say("PASS" if ended_at >= 0.0 and ended_at <= dusk + 30.0 else "FAIL", "the raid ended at clock %.1f (dusk %.0f, wanted within 30 s)" % [ended_at, dusk])
+
+## TASK-008 (GAME-DESIGN 9.3 迷雾): the three states of a cell, what is hidden, the nest found once and
+## what finding it changes in the raid warning, the sight shrinking at dusk and night, and the cost.
+func _p_fog() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var cfg := root.get_node("Config")
+	var wm = _main.wave_manager
+	var fog = _main.fog
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var nest: Node3D = get_first_node_in_group("nest") as Node3D
+	var bad: Array = []
+	gs.day_clock = 100.0
+	await _advance(1.0)
+	# 1. The opening: light round the cabin, dark beyond; the nest and its guards not drawn.
+	var far: Vector3 = core + Vector3(16.0, 0.0, 0.0)
+	var guards_shown := 0
+	for d in get_nodes_in_group("guard_dinos"):
+		if (d as Node3D).visible:
+			guards_shown += 1
+	_say("INFO", "opening: shade at the cabin %.2f, 16 m east %.2f (unseen %.2f); nest drawn %s; guards drawn %d; nest %.1f m from the cabin" % [fog.shade_at(core), fog.shade_at(far), float(cfg.FOG["unseen"]), nest.visible, guards_shown, nest.global_position.distance_to(core)])
+	if fog.shade_at(core) > 0.05 or fog.shade_at(far) < 0.8 or nest.visible or guards_shown > 0:
+		bad.append("opening not dark beyond / nest or guards drawn")
+	await _shoot("opening")
+	# 2. The raid warning before the nest is found.
+	var warns: Array = []
+	var on_warn := func(left): warns.append(left)
+	eb.raid_warning.connect(on_warn)
+	wm.raid_timer = wm.warning_lead_time + float(cfg.FOG["found_nest_warning"]) + 3.0
+	wm.warning_emitted = false
+	var tw := 0.0
+	while warns.is_empty() and tw < 20.0:
+		await _advance(0.25)
+		tw += 0.25
+	await _advance(0.5)
+	var text_before: String = _banner_text()
+	var lead_before: float = float(warns[0]) if not warns.is_empty() else -1.0
+	await _shoot("warning_before")
+	wm.raid_timer = 200.0
+	wm.warning_emitted = false
+	# 3. A walk east and back: seen but out of sight is dim and shows no animals.
+	hero.move_to(far)
+	await _advance(7.0)
+	hero.move_to(core + Vector3(0.0, 0.0, 4.0))
+	await _advance(7.0)
+	var species: String = String(gs.map_data()["raiders"].keys()[0])
+	var d = load(String(cfg.get_dino_script_path(species))).new()
+	_main.add_child(d)
+	d.setup(species)
+	d.max_hp = 9999.0
+	d.current_hp = 9999.0
+	d.global_position = far
+	d.set_waypoints([far])
+	await _advance(1.0)
+	_say("INFO", "after the walk: 16 m east seen %s, in sight %s, shade %.2f (seen %.2f); a raider there drawn: %s" % [fog.is_seen(far), fog.is_in_sight(far), fog.shade_at(far), float(cfg.FOG["seen"]), d.visible])
+	if not fog.is_seen(far) or fog.is_in_sight(far) or absf(fog.shade_at(far) - float(cfg.FOG["seen"])) > 0.1 or d.visible:
+		bad.append("walked-over ground not dim-and-empty")
+	# The hidden raider under the cursor: hover and right-click find nothing.
+	var cam: Camera3D = _main._active_camera()
+	var at: Vector2 = cam.unproject_position(d.global_position + Vector3(0.0, 0.5, 0.0))
+	var picked = _main._raycast_object(at)
+	_say("INFO", "hidden raider at screen %s: picked %s" % [str(at), str(picked)])
+	if picked == d:
+		bad.append("a hidden raider can be picked")
+	d.queue_free()
+	await _shoot("walked")
+	# 4. The nest: walk at it; found once, said once.
+	var found := {"n": 0, "dist": -1.0}
+	var on_found := func(_n):
+		found["n"] += 1
+		found["dist"] = (hero as Node3D).global_position.distance_to(nest.global_position)
+	eb.nest_found.connect(on_found)
+	hero.move_to(nest.global_position + (core - nest.global_position).normalized() * 6.0)
+	var t := 0.0
+	while found["n"] == 0 and t < 30.0:
+		await _advance(0.25)
+		t += 0.25
+	var hint_up: bool = not _visible_labels(tr("HINT_NEST_FOUND").left(12)).is_empty()
+	await _shoot("nest_found")
+	await _portrait("the_nest", nest.global_position, 7.0)
+	hero.move_to(core + Vector3(0.0, 0.0, 4.0))
+	await _advance(12.0)
+	guards_shown = 0
+	for g in get_nodes_in_group("guard_dinos"):
+		if (g as Node3D).visible:
+			guards_shown += 1
+	_say("INFO", "nest_found fired %d time(s), at %.1f m (hero sight %.0f m); hint shown %s; back home: nest drawn %s, guards drawn %d" % [found["n"], found["dist"], float(cfg.FOG["sight"]["hero"]), hint_up, nest.visible, guards_shown])
+	if found["n"] != 1 or not hint_up or not nest.visible or guards_shown > 0 or found["dist"] > float(cfg.FOG["sight"]["hero"]) + 1.0:
+		bad.append("nest finding")
+	# 5. The raid warning after: seen setting out, and earlier.
+	warns.clear()
+	wm.raid_timer = wm.warning_lead_time + float(cfg.FOG["found_nest_warning"]) + 3.0
+	wm.warning_emitted = false
+	tw = 0.0
+	while warns.is_empty() and tw < 20.0:
+		await _advance(0.25)
+		tw += 0.25
+	await _advance(0.5)
+	var text_after: String = _banner_text()
+	var lead_after: float = float(warns[0]) if not warns.is_empty() else -1.0
+	await _shoot("warning_after")
+	eb.raid_warning.disconnect(on_warn)
+	eb.nest_found.disconnect(on_found)
+	_say("INFO", "warning before: %.1f s, banner [%s]" % [lead_before, text_before.replace(char(10), " / ")])
+	_say("INFO", "warning after:  %.1f s, banner [%s]" % [lead_after, text_after.replace(char(10), " / ")])
+	if not text_before.contains(tr("HUD_RAID_FROM").split("%")[0].strip_edges()) or not text_after.contains(tr("HUD_RAID_SEEN")) or absf((lead_after - lead_before) - float(cfg.FOG["found_nest_warning"])) > 1.0:
+		bad.append("warning text or lead")
+	wm.raid_timer = 200.0
+	# 6. Sight by the hour: the furthest point east of him in sight, day / dusk / night.
+	hero.move_to(core + Vector3(0.0, 0.0, 8.0))
+	await _advance(4.0)
+	var reach := {}
+	for part in ["day", "dusk", "night"]:
+		gs.day_clock = float(cfg.DAY["parts"][part]) + 360.0 + 5.0
+		await _advance(0.5)
+		var r := 0.0
+		for i in range(1, 30):
+			var p: Vector3 = hero.global_position + Vector3(float(i) * 0.5, 0.0, 0.0)
+			if fog.is_in_sight(p):
+				r = float(i) * 0.5
+		reach[part] = r
+		await _shoot("sight_" + part)
+	_say("INFO", "sight east of him: day %.1f m, dusk %.1f m, night %.1f m (Config: %.1f, x%.1f, x%.1f)" % [reach["day"], reach["dusk"], reach["night"], float(cfg.FOG["sight"]["hero"]), float(cfg.FOG["dusk"]), float(cfg.FOG["night"])])
+	var want_day: float = float(cfg.FOG["sight"]["hero"])
+	for part in ["day", "dusk", "night"]:
+		var want: float = want_day * (1.0 if part == "day" else float(cfg.FOG[part]))
+		if absf(float(reach[part]) - want) > 1.01:
+			bad.append("sight at %s %.1f, want %.1f" % [part, reach[part], want])
+	# 7. The cost: process time per frame with the fog drawing, and with it stopped.
+	gs.day_clock = 100.0 + 360.0 * 2.0
+	var blocks: Array = []
+	for k in range(4):
+		fog.set_process(k % 2 == 0)
+		hero.move_to(core + Vector3(-8.0 if k % 2 == 0 else 8.0, 0.0, 8.0))
+		var st: Array = await _frame_stats(1.5)
+		blocks.append("%s mean %.1f max %.1f ms" % ["fog on " if k % 2 == 0 else "fog off", st[0], st[1]])
+	fog.set_process(true)
+	# The fog's own work, timed directly, once.
+	var u0: int = Time.get_ticks_usec()
+	fog._look()
+	var u1: int = Time.get_ticks_usec()
+	fog._paint(0.1)
+	var u2: int = Time.get_ticks_usec()
+	fog._hide_the_unseen()
+	var u3: int = Time.get_ticks_usec()
+	_say("INFO", "fog grid %d x %d cells of %.1f m; one update: look %.2f ms, paint %.2f ms, hide %.2f ms" % [fog.cells, fog.cells, fog.cell, (u1 - u0) / 1000.0, (u2 - u1) / 1000.0, (u3 - u2) / 1000.0])
+	_say("INFO", "process time per frame, 1.5 s blocks: " + " | ".join(blocks))
+	_say("PASS" if bad.is_empty() else "FAIL", "fog of war: %s" % ("all as TASK-008 says" if bad.is_empty() else "; ".join(bad)))
+
+func _frame_stats(seconds: float) -> Array:
+	var total := 0.0
+	var worst := 0.0
+	var n := 0
+	for i in range(int(seconds * 60.0)):
+		await process_frame
+		var ms: float = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		total += ms
+		worst = maxf(worst, ms)
+		n += 1
+	return [total / maxf(1.0, float(n)), worst]
+
+func _frame_ms(seconds: float) -> float:
+	var total := 0.0
+	var n := 0
+	for i in range(int(seconds * 60.0)):
+		await process_frame
+		total += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		n += 1
+	return total / maxf(1.0, float(n))
+
+func _banner_text() -> String:
+	for n in _all(_main):
+		if "raid_warning_banner" in n and n.raid_warning_banner != null:
+			var b = n.raid_warning_banner
+			return String(b.text) if b.is_visible_in_tree() else "(banner hidden) " + String(b.text)
+	return "(no banner)"
+
+func _visible_labels(fragment: String) -> Array:
+	var out: Array = []
+	for n in _all(root):
+		if (n is Label or n is RichTextLabel) and (n as CanvasItem).is_visible_in_tree() and String(n.text).contains(fragment):
+			out.append(n)
+	return out
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
