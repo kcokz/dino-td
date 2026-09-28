@@ -98,11 +98,14 @@ func _process(delta: float) -> void:
 
 	elapsed_time += delta
 	# The raid a repaired stage stirred up, on its own clock and with its own warning -- on top of
-	# the raids the clock sends (start_stage_wave).
+	# the raids the clock sends (start_stage_wave). Two raids may be counting down at once: only
+	# the one to come first is warned of, and a warning given before a raid that went first is
+	# given again once that raid is over (debug-agent BUG-004: the stage's warning was given under
+	# a big raid's, and the stage's raid came after the big one with none).
 	if _stirred > 0:
 		_stirred_in -= delta
 		var eb_stage = _get_event_bus()
-		if not _stirred_warned and _stirred_in <= warning_lead_time:
+		if not _stirred_warned and _stirred_in <= warning_lead_time and _stirred_in <= raid_timer:
 			_stirred_warned = true
 			if eb_stage and eb_stage.has_signal("raid_warning"):
 				eb_stage.raid_warning.emit(maxf(0.0, _stirred_in))
@@ -112,7 +115,8 @@ func _process(delta: float) -> void:
 	raid_timer -= delta
 
 	var eb = _get_event_bus()
-	if not warning_emitted and raid_timer <= warning_lead_time and raid_timer > 0.0:
+	var clock_first: bool = _stirred <= 0 or raid_timer < _stirred_in
+	if clock_first and not warning_emitted and raid_timer <= warning_lead_time and raid_timer > 0.0:
 		warning_emitted = true
 		if eb and eb.has_signal("raid_warning"):
 			eb.raid_warning.emit(maxf(0.0, raid_timer))
@@ -299,6 +303,8 @@ func start_stage_wave() -> void:
 	var size: int = _stirred
 	_stirred = 0
 	_stirred_warned = false
+	# The clock's next raid, if it was warned of already, is warned of again once this is over.
+	warning_emitted = false
 	if is_wave_active and spawn_timer and is_instance_valid(spawn_timer):
 		spawn_timer.stop()
 	stage_wave = true
@@ -430,6 +436,8 @@ func start_wave(wave_num: int, override_count: int = -1, with_boss: bool = false
 			spawn_timer.stop()
 
 	current_wave = wave_num
+	# A stage's raid still to come is warned of again once this one is over (_process).
+	_stirred_warned = false
 	wave_roster = roster_for(wave_num, override_count if override_count > 0 else get_wave_dino_count(wave_num), with_boss)
 	dinos_to_spawn = wave_roster.size()
 	dinos_spawned_count = 0

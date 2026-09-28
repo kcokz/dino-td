@@ -156,6 +156,29 @@ func test_04b_a_stage_repaired_in_a_big_raids_warning_leaves_the_big_raid_whole(
 	assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), hp, 0.0001,
 		"and its end, with the big raid's number, is not a second big raid")
 
+func test_04c_two_raids_counting_down_each_is_warned_of_before_it_comes() -> void:
+	# debug-agent BUG-004: a stage repaired in a raid's warning -- the stage's warning was given
+	# under that raid's, and the stage's raid came after it with none.
+	var main = await _level()
+	var wm = main.wave_manager
+	wm.auto_raid_enabled = true
+	var lead: float = float(wm.warning_lead_time)
+	var raid_in: float = lead - 3.0
+	wm.raid_timer = raid_in
+	_next_step()
+	var warned = watch_signal(tree.root.get_node("EventBus"), "raid_warning")
+	# Into both warnings' lead: the stage's raid 1 s inside it, the clock's raid sooner still.
+	var first: float = float(_beacon()["stage_wave_delay"]) - lead + 1.0
+	wm._process(first)
+	assert_eq(warned.emit_count, 1, "Only the raid to come first is warned of")
+	wm._process(raid_in - first + 0.1)
+	assert_true(wm.is_wave_active and not wm.stage_wave, "The clock's raid goes first")
+	wm._end_wave()
+	wm._process(0.1)
+	assert_eq(warned.emit_count, 2, "Over, the stage's raid is warned of")
+	assert_lte(float(warned.last_args[0]), lead, "with the time it has left")
+	assert_gt(float(warned.last_args[0]), 0.0, "before it comes")
+
 func test_05_the_screen_says_the_valley_heard_it() -> void:
 	var main = await _level()
 	_next_step()
