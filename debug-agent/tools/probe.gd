@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"dusk_raid": await _p_dusk_raid()
+			"edge_pan": await _p_edge_pan()
 			"half_fence": await _p_half_fence(false)
 			"half_fence_bare": await _p_half_fence(true)
 			"boss_drops": await _p_boss_drops()
@@ -844,6 +846,123 @@ func _p_half_fence(bare: bool) -> void:
 			_say("INFO", "  twitch: " + line)
 	_say("INFO", "%s: most back-and-forth swings by one raider while moving about: %d" % [layout, most_flips])
 	_say("PASS" if most_spot <= 3 else "FAIL", "%s: most swings back ON THE SPOT (<0.15 m moved) by one raider in 60 s: %d %s" % [layout, most_spot, spot_what])
+
+## TASK-004 part 1 (GAME-DESIGN 3 视角): the cursor within `edge_pan_margin` px of the window's edge
+## pans the view that way, as fast as the arrow keys; the corners go diagonally; the middle, the
+## top bar's buttons and a cursor outside the window leave it be. MOVES THE REAL CURSOR (warp_mouse)
+## for about ten seconds -- run it alone, with the game window in front.
+func _p_edge_pan() -> void:
+	var rig = _main.camera_rig
+	var vp := root.get_viewport()
+	var size: Vector2 = vp.get_visible_rect().size
+	var results := {}
+	DisplayServer.window_move_to_foreground()
+	await _advance(0.5)
+	_say("INFO", "window focused: %s; viewport %s" % [DisplayServer.window_is_focused(), str(size)])
+	# The keys, for the speed to match: A held one second.
+	vp.warp_mouse(size / 2.0)
+	await _advance(0.5)
+	var f0: Vector3 = rig.focus
+	_key(KEY_A, true)
+	await _advance(1.0)
+	_key(KEY_A, false)
+	var by_key: float = rig.focus.distance_to(f0)
+	var spots := {
+		"middle": size / 2.0,
+		"left edge": Vector2(2.0, size.y / 2.0),
+		"right edge": Vector2(size.x - 2.0, size.y / 2.0),
+		"top-left corner": Vector2(2.0, 2.0),
+		"top bar button (y 30)": Vector2(size.x - 60.0, 30.0),
+		"7 px in from the left": Vector2(7.0, size.y / 2.0),
+		"outside, left": Vector2(-40.0, size.y / 2.0),
+	}
+	for name in spots:
+		vp.warp_mouse(spots[name])
+		await _advance(0.3)
+		var a: Vector3 = rig.focus
+		await _advance(1.0)
+		var d: Vector3 = rig.focus - a
+		results[name] = d
+		_say("INFO", "%s at %s: focus moved %.2f m (%.2f, %.2f)" % [name, str(spots[name]), d.length(), d.x, d.z])
+	vp.warp_mouse(size / 2.0)
+	var ok := true
+	var notes: Array = []
+	for still in ["middle", "top bar button (y 30)", "7 px in from the left", "outside, left"]:
+		if (results[still] as Vector3).length() > 0.05:
+			ok = false
+			notes.append("%s moved the view" % still)
+	for moving in ["left edge", "right edge", "top-left corner"]:
+		if (results[moving] as Vector3).length() < 0.5 * by_key:
+			ok = false
+			notes.append("%s hardly moved it" % moving)
+	var ratio: float = (results["left edge"] as Vector3).length() / maxf(0.001, by_key)
+	if absf(ratio - 1.0) > 0.15:
+		notes.append("left edge %.2f x the A key's speed" % ratio)
+		ok = false
+	var l: Vector3 = results["left edge"]
+	var r: Vector3 = results["right edge"]
+	if l.dot(r) > 0.0:
+		ok = false
+		notes.append("left and right edges pan the same way")
+	var c: Vector3 = results["top-left corner"]
+	if absf(c.normalized().dot(l.normalized())) > 0.9:
+		ok = false
+		notes.append("the corner is not diagonal")
+	_say("INFO", "A key for 1 s: %.2f m" % by_key)
+	_say("PASS" if ok else "FAIL", "edge panning%s" % ((": " + "; ".join(notes)) if not notes.is_empty() else ": edges pan at the keys' speed, corner diagonal, middle/top bar/7 px/outside still"))
+
+## TASK-006 (GAME-DESIGN 9.3): at dusk the raid out turns for the nest, bites nothing on the way and
+## is gone there, dropping nothing; none of it is out in the night. A BIG raid set out two seconds
+## before dusk -- still stepping out of the nest one at a time when dusk comes.
+func _p_dusk_raid() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var cabin = _main.current_core
+	var dusk: float = float(root.get_node("Config").DAY["parts"]["dusk"])
+	var night: float = float(root.get_node("Config").DAY["parts"]["night"])
+	gs.day_clock = dusk - 2.0
+	wm.start_wave(3, 10)
+	var home := {"n": 0}
+	var on_home := func(_d): home["n"] += 1
+	eb.dino_went_home.connect(on_home)
+	var drops0: int = get_nodes_in_group(DropItem.GROUP).size()
+	var hp0: float = cabin.current_hp
+	var late: Dictionary = {}          # raiders that stepped out after dusk began
+	var seen: Dictionary = {}
+	var biting_after: Array = []
+	var t := 0.0
+	var ended_at := -1.0
+	while t < 60.0:
+		await _advance(0.25)
+		t += 0.25
+		var part: String = String(gs.day_part())
+		for d in get_nodes_in_group("dinos"):
+			if not is_instance_valid(d) or d.is_in_group("guard_dinos") or ("is_dead" in d and d.is_dead):
+				continue
+			var id: int = d.get_instance_id()
+			if not seen.has(id):
+				seen[id] = true
+				if part != "day":
+					late[id] = "%.2f" % gs.day_clock
+			if part != "day" and float(gs.day_clock) > dusk + 1.0 and not d.going_home:
+				if biting_after.size() < 6 and int(d.mode) == 2:
+					biting_after.append("%s biting %s at clock %.1f" % [d.name, (String(d.current_target.building_type) if d.current_target != null and is_instance_valid(d.current_target) and "building_type" in d.current_target else "?"), gs.day_clock])
+		if ended_at < 0.0 and not wm.is_wave_active:
+			ended_at = float(gs.day_clock)
+	eb.dino_went_home.disconnect(on_home)
+	var out_at_night := 0
+	var not_going := 0
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not ("is_dead" in d and d.is_dead):
+			out_at_night += 1
+			if not d.going_home:
+				not_going += 1
+	await _portrait("night_after_the_raid", cabin.global_position + Vector3(0.0, 0.0, -4.0), 16.0)
+	_say("INFO", "roster %d; stepped out after dusk began: %d; went home: %d; cabin %.1f -> %.1f; new drops %d; clock now %.1f (%s)" % [seen.size(), late.size(), home["n"], hp0, cabin.current_hp, get_nodes_in_group(DropItem.GROUP).size() - drops0, gs.day_clock, gs.day_part()])
+	_say("PASS" if not_going == 0 and out_at_night == 0 else "FAIL", "into the night (clock %.0f, night from %.0f): %d raiders still out, %d of them not going home" % [gs.day_clock, night, out_at_night, not_going])
+	_say("PASS" if biting_after.is_empty() else "FAIL", "after dusk: %s" % ("nobody bit anything" if biting_after.is_empty() else "; ".join(biting_after)))
+	_say("PASS" if ended_at >= 0.0 and ended_at <= dusk + 30.0 else "FAIL", "the raid ended at clock %.1f (dusk %.0f, wanted within 30 s)" % [ended_at, dusk])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

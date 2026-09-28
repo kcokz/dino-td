@@ -11,6 +11,7 @@
 | [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
 | [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open | 2026-09-28 |
+| [BUG-006](bug/BUG-006-raid-stepping-out-at-dusk-never-goes-home.md) | 天快黑时出发的来袭，黄昏后才出巢的那些不回巢，照咬船舱 | **高** | open | 2026-09-28 |
 | [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-003](design-doc/DOC-003-small-stale-facts.md) | 栅栏段数、待定 2 的指向、9.3 的机器人数据 | — | **applied** ba2ca49 | 2026-09-28 |
@@ -21,10 +22,10 @@
 |---|---|---|
 | TASK-001 | 暂停就是定格 | **done** 通过 |
 | TASK-002 | 船舱背后半圈栅栏，来袭要绕过去咬 | **done**，没完全通过 → BUG-005 |
-| TASK-003 | 人身上那一行；人在舱里不自己出去 | **done** 通过（play:30 那一条补跑） |
-| TASK-004 | 鼠标碰边缘平移；院子里的机关 | open |
+| TASK-003 | 人身上那一行；人在舱里不自己出去 | **done** 通过 |
+| TASK-004 | 鼠标碰边缘平移；院子里的机关 | open（第 2 条 siege inside 已过；边缘平移待测，会动真鼠标） |
 | TASK-005 | 复测 BUG-001～003 | **done**（三个都过；另开 BUG-004） |
-| TASK-006 | 白天、黄昏、夜晚 | open |
+| TASK-006 | 白天、黄昏、夜晚 | **done**，没完全通过 → BUG-006 |
 | TASK-007 | 复测 BUG-004 | **done** 通过 |
 
 ## 检查记录
