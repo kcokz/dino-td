@@ -84,18 +84,18 @@ func test_01_the_alpha_is_a_bigger_harder_one_of_its_pack() -> void:
 	assert_gte(float(alpha["hp"]), float(raptor["hp"]) * 3.0, "And takes a good deal more killing")
 	assert_eq(String(alpha.get("boss", "")), "minor", "It is the lesser boss")
 
-func test_02_only_a_boss_leaves_prime_meat_and_every_boss_does() -> void:
+func test_02_the_map_s_elites_leave_hide_and_only_they_do() -> void:
+	# v0.6 round three: "精英就掉落皮可以做护甲和鞋子就行了" -- an elite's hide, not a prime cut: what
+	# his armour and boots are made of (RECIPES).
 	var boss_id: String = String(_map()["boss"])
 	assert_eq(String(_row(boss_id).get("boss", "")), "major", "The map's boss is the major one")
-	for species in config_node.DINOS:
-		var row: Dictionary = config_node.DINOS[species]
-		var is_boss: bool = String(row.get("boss", "")) != ""
-		var prime: int = int(row.get("drops", {}).get("prime_meat", 0))
-		if is_boss:
-			assert_gt(prime, 0, "%s is a boss, and pays in prime meat" % species)
-			assert_gt(int(row["drops"].get("bone", 0)), 0, "%s leaves bone too" % species)
-		else:
-			assert_eq(prime, 0, "%s is not a boss, and leaves none" % species)
+	for species in [String(_map()["minor_boss"]), boss_id]:
+		var drops: Dictionary = _row(species).get("drops", {})
+		assert_gt(int(drops.get("hide", 0)), 0, "%s is an elite, and pays in hide" % species)
+		assert_gt(int(drops.get("bone", 0)), 0, "%s leaves bone too" % species)
+		assert_eq(int(drops.get("prime_meat", 0)), 0, "and no prime cut")
+	for species in _map()["raiders"].keys() + [String(_map()["guards"])]:
+		assert_eq(int(_row(String(species)).get("drops", {}).get("hide", 0)), 0, "%s is not an elite, and leaves none" % species)
 
 # ==============================================================================
 # 2. When they come
@@ -174,7 +174,7 @@ func test_06_a_raider_is_the_species_it_was_drawn_as() -> void:
 # 3. What they leave
 # ==============================================================================
 
-func test_07_a_dead_alpha_leaves_prime_meat_on_the_ground() -> void:
+func test_07_a_dead_alpha_leaves_its_hide_on_the_ground() -> void:
 	var alpha_id: String = String(_map()["minor_boss"])
 	var dino = load(String(config_node.get_dino_script_path(alpha_id))).new()
 	_cleanup_nodes.append(dino)
@@ -184,5 +184,5 @@ func test_07_a_dead_alpha_leaves_prime_meat_on_the_ground() -> void:
 	await wait_frames(1)
 	dino.spawn_death_drops()
 	await wait_frames(1)
-	assert_eq(ground_total("prime_meat"), int(_row(alpha_id)["drops"]["prime_meat"]),
-		"The meal that makes killing it worth it, where it fell")
+	assert_eq(ground_total("hide"), int(_row(alpha_id)["drops"]["hide"]),
+		"What his armour is made of, where it fell")

@@ -112,9 +112,9 @@ func test_03_he_eats_standing_the_meat_in_his_hand_and_it_is_his_when_he_is_done
 	hero._process_eating(_eat_seconds() * 0.5 + 0.01)
 	assert_false(hero.is_eating(), "Done")
 	assert_eq(game_state_node.meal_count(key), 0, "The meal is gone from the stock")
-	var dish: Dictionary = config_node.DISHES["meat"]
-	assert_almost_eq(hero.current_hp, 2.0 + float(dish["max_hp"]) + float(dish["heal"]), 0.001,
-		"And into him: the heal, and the boost's hit points over his own")
+	var meal: Dictionary = config_node.meal_cooked("meat", _roast())
+	assert_almost_eq(hero.current_hp, 2.0 + float(meal["max_hp"]) + float(meal["heal"]), 0.001,
+		"And into him: the heal, and any hit points over his own the meal gives")
 	assert_false(game_state_node.fed.is_empty(), "He is fed")
 	await wait_frames(1)
 	assert_null(hero.find_child("MealInHand", true, false), "His hand is empty again")
@@ -157,20 +157,25 @@ func test_06_eating_is_his_hand_to_his_mouth() -> void:
 # ==============================================================================
 
 func test_07_every_meal_is_a_boost_and_a_pot_adds_to_it() -> void:
+	# v0.6 round three: his stride is his boots' now (RECIPES hide_boots); a meal heals him and he
+	# works faster for a while, and the pot heals more and holds him up with hit points over his own.
 	var roast: Dictionary = config_node.meal_cooked("meat", _roast())
-	assert_gt(float(roast["max_hp"]), 0.0, "Even a roast holds him up over his own hit points")
-	assert_gt(float(roast["move_speed"]), 1.0, "And quickens his stride")
+	assert_gt(float(roast["build_speed"]), 1.0, "Even a roast quickens his work")
 	assert_gt(float(roast["fed_seconds"]), 0.0, "For a while")
 	var best: Dictionary = config_node.meal_cooked("meat", String(config_node.COOKING_METHODS[0]["id"]))
-	assert_gt(float(best["build_speed"]), float(roast["build_speed"]), "The pot makes him build faster too")
-	for dish in config_node.DISHES:
-		assert_lte(float(config_node.DISHES[dish]["move_speed"]), config_node.best_meal("move_speed"),
-			"No meal walks him past the end of his bar (%s)" % dish)
+	assert_gt(float(best["heal"]), float(roast["heal"]), "The pot heals more")
+	assert_gt(float(best["max_hp"]), float(roast["max_hp"]), "and holds him up over his own hit points")
+	for method in config_node.COOKING_METHODS:
+		for dish in config_node.DISHES:
+			assert_eq(float(config_node.meal_cooked(dish, String(method["id"]))["move_speed"]), 1.0,
+				"No meal changes his stride (%s, %s)" % [dish, method["id"]])
 
 func test_08_when_it_wears_off_he_is_his_own_size_again() -> void:
 	var hero = _hero()
 	await wait_frames(1)
 	var own: float = hero.max_hp
+	# The pot's meal: the one that holds him up over his own hit points (COOKING_METHODS).
+	game_state_node.grant_unlock(String(config_node.COOKING_METHODS[0]["vessel"]))
 	game_state_node.eat("meat")
 	assert_gt(hero.max_hp, own, "Fed, he has more to lose")
 	var aura: Node3D = hero.find_child("FedAura", false, false) as Node3D
@@ -197,13 +202,16 @@ func test_09_his_card_has_his_three_bars_and_the_boost_is_gold_on_them() -> void
 	assert_false(_stat(panel, "move").get_node("Bar").has_boost(), "Nor on his stride")
 	assert_false(boost_row.visible, "And no meal to speak of")
 
+	# The pot's meal (v0.6 round three): hit points over his own and quicker hands; his stride is
+	# his boots', and no meal touches it.
+	game_state_node.grant_unlock(String(config_node.COOKING_METHODS[0]["vessel"]))
 	game_state_node.eat("meat")
 	panel._update_status_display()
 	assert_true(_stat(panel, "hp").get_node("Bar").has_boost(), "Fed: the meal's hit points gold on the end of his health")
-	assert_true(_stat(panel, "move").get_node("Bar").has_boost(), "And on his stride")
-	assert_false(_stat(panel, "build").get_node("Bar").has_boost(), "A roast does not touch his hands")
-	assert_eq(String((_stat(panel, "move").get_node("Figure") as Label).theme_type_variation), "BoostNumberLabel",
-		"His walking speed's figure is gold")
+	assert_true(_stat(panel, "build").get_node("Bar").has_boost(), "And on his hands")
+	assert_false(_stat(panel, "move").get_node("Bar").has_boost(), "Not on his stride")
+	assert_eq(String((_stat(panel, "build").get_node("Figure") as Label).theme_type_variation), "BoostNumberLabel",
+		"His building speed's figure is gold")
 	assert_true(boost_row.visible, "What he ate, and for how long")
 	var meat: String = tr(String(config_node.DISHES["meat"]["name"]))
 	assert_true(String((boost_row.get_node("Text") as Label).text).contains(meat), "Named")

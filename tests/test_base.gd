@@ -544,7 +544,12 @@ func unlock_all() -> void:
 		return
 	if "RECIPES" in cfg:
 		for recipe_id in cfg.RECIPES:
-			gs.grant_unlock(String(cfg.RECIPES[recipe_id].get("unlocks", "")))
+			# Not what he wears or wields (v0.6 round three): armour, boots and a weapon open
+			# nothing, and would quietly make every test's Hero other than Config.HERO says.
+			var row: Dictionary = cfg.RECIPES[recipe_id]
+			if row.has("max_hp") or row.has("move_speed") or row.has("damage"):
+				continue
+			gs.grant_unlock(String(row.get("unlocks", "")))
 
 ## Seeds the wallet with exactly what `type_ids` cost, in every resource they ask
 ## for. Since v0.4 a turret is bought with wood *and* stone, so "give them enough

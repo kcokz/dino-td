@@ -55,32 +55,46 @@ func _slots(panel: Node) -> Array[Node]:
 				out.append(child)
 	return out
 
-## Every recipe that grants something, in the order Config lists them.
+## Every recipe that goes in his row (it says its slot), in the order Config lists them.
 func _tools() -> Array[String]:
 	var out: Array[String] = []
 	for recipe_id in config_node.RECIPES:
-		if String(config_node.RECIPES[recipe_id].get("unlocks", "")) != "":
+		if String(config_node.RECIPES[recipe_id].get("slot", "")) != "":
 			out.append(String(recipe_id))
 	return out
 
-func test_01_an_ability_is_a_tool_he_has_made() -> void:
+func test_01_his_row_is_the_best_he_has_of_each_slot() -> void:
 	assert_eq(config_node.abilities({}), [] as Array[String], "A new run: none")
 	var tools := _tools()
-	assert_gt(tools.size(), 1, "There are tools to make")
+	assert_gt(tools.size(), 1, "There are things to make")
 	var first: String = tools[0]
 	game_state_node.grant_unlock(String(config_node.RECIPES[first]["unlocks"]))
 	assert_eq(config_node.abilities(game_state_node.unlocks), [first] as Array[String], "Made one: that one")
-	for recipe_id in tools:
+	for recipe_id in config_node.RECIPES:
 		game_state_node.grant_unlock(String(config_node.RECIPES[recipe_id]["unlocks"]))
-	assert_eq(config_node.abilities(game_state_node.unlocks), tools, "Made them all: all of them, in the order they are listed")
+	var row: Array[String] = config_node.abilities(game_state_node.unlocks)
+	assert_eq(row.size(), config_node.KIT_SLOTS.size(), "Made them all: one of each slot, no more")
+	for i in row.size():
+		var got: Dictionary = config_node.RECIPES[row[i]]
+		assert_eq(String(got["slot"]), String(config_node.KIT_SLOTS[i]), "in the slots' order")
+		for recipe_id in tools:
+			var other: Dictionary = config_node.RECIPES[recipe_id]
+			if String(other["slot"]) == String(got["slot"]):
+				assert_gte(int(got["tier"]), int(other["tier"]), "%s: the best of its slot" % row[i])
+	for recipe_id in config_node.RECIPES:
+		if String(config_node.RECIPES[recipe_id].get("station", "")) == "kitchen":
+			assert_false(row.has(String(recipe_id)), "The kitchen's %s stays in the kitchen" % recipe_id)
 
 func test_02_his_card_has_a_row_of_empty_slots_to_begin_with() -> void:
 	var panel = _card()
 	await wait_frames(2)
 	var slots := _slots(panel)
-	assert_eq(slots.size(), int(config_node.THEME["ability_slots"]), "A row of slots")
-	for slot in slots:
-		assert_eq((slot as Control).tooltip_text, tr("ABILITY_EMPTY"), "each empty one saying what goes there")
+	assert_eq(slots.size(), config_node.KIT_SLOTS.size(), "A square for each slot")
+	for i in slots.size():
+		var slot: Node = slots[i]
+		var kind: String = String(config_node.KIT_SLOTS[i])
+		assert_eq((slot as Control).tooltip_text, tr("KIT_EMPTY_" + kind.to_upper()), "each empty one saying what goes there (%s)" % kind)
+		assert_ne(tr("KIT_EMPTY_" + kind.to_upper()), "KIT_EMPTY_" + kind.to_upper(), "in words")
 		var mark: TextureRect = slot.get_node_or_null("Mark") as TextureRect
 		assert_true(mark != null and mark.texture != null, "and keeping a faint mark at its middle, not a black hole")
 		if mark:
@@ -103,21 +117,34 @@ func test_03_a_tool_made_is_a_square_with_its_icon_and_what_it_does() -> void:
 	assert_true(tip.contains(tr(String(config_node.RECIPES[pick]["name"]))), "Hovered, it says what it is")
 	assert_true(tip.contains(String(config_node.recipe_effect_text(pick))), "and what it does")
 	assert_ne(String(config_node.recipe_effect_text(pick)), "", "which is something")
-	assert_eq(_slots(panel).size(), int(config_node.THEME["ability_slots"]), "It takes a slot; the row is no longer")
+	assert_eq(_slots(panel).size(), config_node.KIT_SLOTS.size(), "It takes its slot; the row is no longer")
 
-func test_04_the_row_grows_past_its_slots() -> void:
+func test_04_a_better_one_takes_its_lesser_s_place() -> void:
 	var panel = _card()
 	await wait_frames(2)
-	var tools := _tools()
-	for recipe_id in tools:
-		game_state_node.grant_unlock(String(config_node.RECIPES[recipe_id]["unlocks"]))
+	# Two of one slot: the lesser made first, then the better.
+	var lesser: String = ""
+	var better: String = ""
+	for a in _tools():
+		for b in _tools():
+			var ra: Dictionary = config_node.RECIPES[a]
+			var rb: Dictionary = config_node.RECIPES[b]
+			if lesser == "" and String(ra["slot"]) == String(rb["slot"]) and int(rb["tier"]) > int(ra["tier"]):
+				lesser = a
+				better = b
+	assert_ne(lesser, "", "Some slot has a better one to make")
+	game_state_node.grant_unlock(String(config_node.RECIPES[lesser]["unlocks"]))
 	panel._show_abilities(true)
-	await wait_frames(2)
-	assert_eq(_slots(panel).size(), maxi(tools.size(), int(config_node.THEME["ability_slots"])),
-		"As many squares as he has abilities, or the row's slots if more")
-	assert_true(panel.find_child("Abilities", true, false) is HFlowContainer, "and a row that wraps as it fills")
+	await wait_frames(1)
+	assert_not_null(panel.find_child("Ability_" + lesser, true, false), "The lesser in its slot")
+	game_state_node.grant_unlock(String(config_node.RECIPES[better]["unlocks"]))
+	panel._show_abilities(true)
+	await wait_frames(1)
+	assert_null(panel.find_child("Ability_" + lesser, true, false), "Gone")
+	assert_not_null(panel.find_child("Ability_" + better, true, false), "the better in its place")
+	assert_eq(_slots(panel).size(), config_node.KIT_SLOTS.size(), "and the row no longer for it")
 
-func test_05_every_tool_has_an_icon_of_its_own() -> void:
+func test_05_every_thing_in_his_row_has_an_icon_of_its_own() -> void:
 	for recipe_id in _tools():
 		assert_not_null(UiTheme.icon(recipe_id), "%s has an icon" % recipe_id)
 		assert_true(ResourceLoader.exists(String(config_node.ICON_DIR) + recipe_id + ".svg"), "drawn for it")

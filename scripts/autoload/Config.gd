@@ -17,7 +17,7 @@ extends Node
 ##   water -- no use yet (GAME-DESIGN 4.4), so the game does not offer it
 ## Raw materials first, then what the raids leave (GAME-DESIGN 4.2): the order the top
 ## bar shows them in.
-const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat"]
+const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat", "hide"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (the map's opening_stock, Config.MAPS) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
@@ -29,6 +29,7 @@ const INITIAL_RESOURCES: Dictionary = {
 	"water": 0,
 	"food": 0,
 	"prime_meat": 0,
+	"hide": 0,
 }
 const TILE_SIZE: float = 2.0
 
@@ -446,10 +447,10 @@ static func harvest_requires_unlock(res_id: String) -> String:
 ## source here, and gets its square the same way.
 static func abilities(owned: Dictionary) -> Array[String]:
 	var out: Array[String] = []
-	for recipe_id in RECIPES:
-		var flag: String = String(RECIPES[recipe_id].get("unlocks", ""))
-		if flag != "" and bool(owned.get(flag, false)):
-			out.append(String(recipe_id))
+	var held: Dictionary = kit(owned)
+	for slot in KIT_SLOTS:
+		if held.has(slot):
+			out.append(String(held[slot]))
 	return out
 
 ## What making `recipe_id` did, in words, for the moment it is done: the resources it
@@ -471,6 +472,13 @@ static func recipe_effect_text(recipe_id: String) -> String:
 	for method in COOKING_METHODS:
 		if flag != "" and String(method.get("vessel", "")) == flag:
 			parts.append(TranslationServer.translate("TOOL_VESSEL"))
+	# What it does to him, for good (armour, boots, a weapon).
+	if float(row.get("max_hp", 0.0)) > 0.0:
+		parts.append(TranslationServer.translate("EFFECT_MAX_HP") % int(round(float(row["max_hp"]))))
+	if float(row.get("move_speed", 1.0)) != 1.0:
+		parts.append(TranslationServer.translate("EFFECT_MOVE_SPEED") % factor_text(float(row["move_speed"])))
+	if float(row.get("damage", 1.0)) != 1.0:
+		parts.append(TranslationServer.translate("EFFECT_DAMAGE") % factor_text(float(row["damage"])))
 	return " · ".join(parts)
 
 ## Why `res_id` cannot be cut yet, in words: the tool it takes, where that is made and what
@@ -754,7 +762,9 @@ const DINOS: Dictionary = {
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"boss": "minor",
-		"drops": {"prime_meat": 1, "bone": 2},
+		# Its hide (v0.6 round three: "精英就掉落皮可以做护甲和鞋子就行了"), not a prime cut -- what he
+		# makes armour and boots of (RECIPES, the row's armour and boots) -- and its bones.
+		"drops": {"hide": 2, "bone": 2},
 		"size": Vector3(0.8, 1.25, 0.8),
 	},
 	# Postosuchus: not a dinosaur -- a rauisuchian, a land-going relative of the crocodiles four
@@ -770,7 +780,7 @@ const DINOS: Dictionary = {
 		"attack_rate": 0.8,
 		"behaviour": "siege",
 		"boss": "major",
-		"drops": {"prime_meat": 3, "bone": 4},
+		"drops": {"hide": 2, "bone": 4},
 		"size": Vector3(1.5, 2.0, 1.5),
 	},
 	"pterosaur": {
@@ -1234,6 +1244,9 @@ const THEME: Dictionary = {
 		# A meal's boost (v0.6 round two: "boost 要比较清楚地显示在移动速度、血量上面"): gold, on
 		# his bars over what he has of his own, at his feet, and in the words that rise off him.
 		"boost": Color(0.97, 0.77, 0.3),
+		# His armour's hit points on his bar (v0.6 round three): tanned leather, told from his own
+		# health and a meal's gold by its colour and where it sits between them.
+		"armor": Color(0.66, 0.44, 0.24),
 		# Ink: text on a card's hide -- a card's name and price, a tooltip. Since v0.6 round three
 		# the hide is dark vellum, so the ink is pale; "ink_short" is a count he is short of, as
 		# danger_text is on stone.
@@ -1307,13 +1320,12 @@ const THEME: Dictionary = {
 	# A command on a unit's card (UiKit.command_button) is a tile ("control_heights") tall and
 	# this many times as wide: room for its icon big over its word, and four to a row.
 	"command_aspect": 1.05,
-	# His abilities (OptionPanel ability slots): at least this many squares in the row, the empty
-	# ones saying what goes there -- a row of slots reads as room to fill, one lone square as a
-	# stray icon. More abilities than this, and the row grows.
-	"ability_slots": 4,
 	# An empty one keeps the rules' gilt lozenge at its middle, this faint (over the slot's own
 	# dimming): there to be seen, not read as something he has.
 	"empty_mark_alpha": 0.6,
+	# A bench's jobs stand one to a row up to this many, two to a row past it (OptionPanel): six
+	# of them one to a row were most of the screen's height.
+	"one_column_most": 3,
 	"pop_scale": 0.96,
 	"settle_alpha": 0.35,
 	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.
@@ -2048,6 +2060,9 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/water":           {"scene": "res://assets/models/props/drop_water_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	# A hide off an elite, rolled and tied (tools/generate_props.py drop_hide).
+	"drop/hide":            {"scene": "res://assets/models/props/drop_hide_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	# Inside the cabin (tools/generate_cabin.py): the three benches the Hero fitted the module
 	# out with, along its back wall. Each is one file of named parts that show as the run goes
 	# on (scripts/fx/CabinArt.gd): the tools hang on the workbench's board once made, the stone
@@ -2149,6 +2164,7 @@ const RESOURCE_FALLBACK_COLORS: Dictionary = {
 	"food": Color(0.78, 0.32, 0.28),
 	"prime_meat": Color(0.62, 0.12, 0.16),   # darker and richer than meat: a boss's cut
 	"bone": Color(0.88, 0.85, 0.72),
+	"hide": Color(0.55, 0.38, 0.22),         # tanned leather: an elite's hide (DINOS drops)
 }
 
 ## The colour of a resource anywhere it has to be drawn -- a map node, a drop, a
@@ -2278,6 +2294,8 @@ const RECIPES: Dictionary = {
 		"inputs": {"bone": 1, "wood": 4},
 		"time": 8.0,
 		"unlocks": "harvest_stone",
+		"slot": "pick",
+		"tier": 1,
 	},
 	# A ground stone head lashed to a haft: the first thing the quarry gives, after the pick.
 	"stone_axe": {
@@ -2286,10 +2304,82 @@ const RECIPES: Dictionary = {
 		"inputs": {"wood": 3, "stone": 2},
 		"time": 6.0,
 		"unlocks": "stone_axe",
+		"slot": "axe",
+		"tier": 1,
 		# What a tool does is part of its recipe, so a new tool is a line here and no code
-		# (GAME-DESIGN 14.1): every stroke on a tree brings down twice as much. Tools that
-		# work the same resource multiply -- an iron axe later is another x2 on top.
+		# (GAME-DESIGN 14.1): every stroke on a tree brings down twice as much. Only the best
+		# of a slot counts (Config.kit): an iron axe later is its own factor, not one on top.
 		"harvest_speed": {"wood": 2.0},
+	},
+	# The pick's second step (v0.6 round three): a ground stone head lashed where the bone was --
+	# stone comes out twice as fast, and it takes the bone pick's place in his row.
+	"quarry_pick": {
+		"name": "RECIPE_QUARRY_PICK_NAME",
+		"station": "workbench",
+		"inputs": {"wood": 3, "stone": 4},
+		"time": 8.0,
+		"unlocks": "quarry_pick",
+		"slot": "pick",
+		"tier": 2,
+		"harvest_speed": {"stone": 2.0},
+	},
+	# A weapon (v0.6 round three: "武器和鞋子也可以有一格"): he hits harder -- "damage" multiplies
+	# his own (Config.HERO.damage). Always weaker than the traps (GAME-DESIGN 5.5): a man defends
+	# himself with it, the line is held by what he builds.
+	"stone_spear": {
+		"name": "RECIPE_STONE_SPEAR_NAME",
+		"station": "workbench",
+		"inputs": {"wood": 3, "stone": 2},
+		"time": 6.0,
+		"unlocks": "stone_spear",
+		"slot": "weapon",
+		"tier": 1,
+		"damage": 1.5,
+	},
+	"bone_spear": {
+		"name": "RECIPE_BONE_SPEAR_NAME",
+		"station": "workbench",
+		"inputs": {"wood": 3, "bone": 3},
+		"time": 8.0,
+		"unlocks": "bone_spear",
+		"slot": "weapon",
+		"tier": 2,
+		"damage": 2.0,
+	},
+	# Armour (v0.6 round three: "增加皮和护甲的一些制作……护甲可以专门做一个或者做成血量"): hit points
+	# over his own for good -- "max_hp" -- drawn on his bar in leather. The better one replaces the
+	# lesser: bone lamellar sewn on the hide is more than the vest, not the vest and more.
+	"hide_vest": {
+		"name": "RECIPE_HIDE_VEST_NAME",
+		"station": "workbench",
+		"inputs": {"hide": 1},
+		"time": 8.0,
+		"unlocks": "hide_vest",
+		"slot": "armor",
+		"tier": 1,
+		"max_hp": 3.0,
+	},
+	"bone_armor": {
+		"name": "RECIPE_BONE_ARMOR_NAME",
+		"station": "workbench",
+		"inputs": {"hide": 1, "bone": 4},
+		"time": 12.0,
+		"unlocks": "bone_armor",
+		"slot": "armor",
+		"tier": 2,
+		"max_hp": 5.0,
+	},
+	# Boots: he walks faster for good -- "move_speed" multiplies his own. What meals did for his
+	# stride before (COOKING_METHODS); a meal now makes him work faster instead.
+	"hide_boots": {
+		"name": "RECIPE_HIDE_BOOTS_NAME",
+		"station": "workbench",
+		"inputs": {"hide": 1},
+		"time": 6.0,
+		"unlocks": "hide_boots",
+		"slot": "boots",
+		"tier": 1,
+		"move_speed": 1.2,
 	},
 	# A flat stone set over the fire, to sear meat on (GAME-DESIGN 4.5). Made in the
 	# kitchen, like every vessel, and kept for good like a tool. Quarried stone, so it
@@ -2302,6 +2392,55 @@ const RECIPES: Dictionary = {
 		"unlocks": "stone_pot",
 	},
 }
+
+## His row (v0.6 round three: "能力栏还是得有吧……能力和装备栏两个都在又有点过于复杂……不能让玩家觉得
+## 复杂"): what he has made for good, a slot for each kind, in this order. A recipe in the row
+## says its "slot" and its "tier"; the best he holds of a slot is the one in it, and only its
+## effects count (kit, counts). Kept once made, one line each; nothing to put on or take off.
+## A kitchen's pot is not in it: it stays in the kitchen.
+const KIT_SLOTS: Array[String] = ["pick", "axe", "weapon", "armor", "boots"]
+
+## The best of each slot he holds: {slot: recipe id} -- a better one having taken its lesser's
+## place.
+static func kit(owned: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for recipe_id in RECIPES:
+		var row: Dictionary = RECIPES[recipe_id]
+		var slot: String = String(row.get("slot", ""))
+		if slot == "" or not owned.has(String(row.get("unlocks", ""))):
+			continue
+		if not out.has(slot) or int(row.get("tier", 1)) > int(RECIPES[out[slot]].get("tier", 1)):
+			out[slot] = String(recipe_id)
+	return out
+
+## Whether what `recipe_id` does counts for `owned`: one outside the row once it is made, one in
+## it while it is the best of its slot.
+static func counts(recipe_id: String, owned: Dictionary) -> bool:
+	var row: Dictionary = RECIPES.get(recipe_id, {})
+	if row.is_empty() or not owned.has(String(row.get("unlocks", ""))):
+		return false
+	var slot: String = String(row.get("slot", ""))
+	return slot == "" or String(kit(owned).get(slot, "")) == recipe_id
+
+## Whether a better one than `recipe_id` of its slot is held already -- so the bench does not
+## offer it (CraftingStation).
+static func outclassed(recipe_id: String, owned: Dictionary) -> bool:
+	var row: Dictionary = RECIPES.get(recipe_id, {})
+	var slot: String = String(row.get("slot", ""))
+	if slot == "":
+		return false
+	var held: String = String(kit(owned).get(slot, ""))
+	return held != "" and int(RECIPES[held].get("tier", 1)) >= int(row.get("tier", 1))
+
+## What his row adds to him: armour's hit points over his own ("max_hp", summed) and how much
+## faster he walks and harder he hits ("move_speed", "damage", multiplied).
+static func kit_bonus(owned: Dictionary, effect: String) -> float:
+	var summed: bool = effect == "max_hp"
+	var total: float = 0.0 if summed else 1.0
+	for recipe_id in kit(owned).values():
+		var v: float = float(RECIPES[recipe_id].get(effect, 0.0 if summed else 1.0))
+		total = total + v if summed else total * v
+	return total
 
 ## Stations in the order they stand in the cabin.
 const STATIONS: Array[String] = ["workbench", "kitchen", "beacon"]
@@ -2383,9 +2522,8 @@ static func recipes_at(station_id: String) -> Array[String]:
 static func harvest_speed(res_id: String, owned: Dictionary) -> float:
 	var factor: float = 1.0
 	for recipe_id in RECIPES:
-		var data: Dictionary = RECIPES[recipe_id]
-		if owned.has(String(data.get("unlocks", ""))):
-			factor *= float(data.get("harvest_speed", {}).get(res_id, 1.0))
+		if counts(String(recipe_id), owned):
+			factor *= float(RECIPES[recipe_id].get("harvest_speed", {}).get(res_id, 1.0))
 	return factor
 
 ## The held tools that speed up `res_id`, by recipe: what to name when saying why a
@@ -2394,7 +2532,7 @@ static func harvest_tools(res_id: String, owned: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for recipe_id in RECIPES:
 		var data: Dictionary = RECIPES[recipe_id]
-		if owned.has(String(data.get("unlocks", ""))) and float(data.get("harvest_speed", {}).get(res_id, 1.0)) != 1.0:
+		if counts(String(recipe_id), owned) and float(data.get("harvest_speed", {}).get(res_id, 1.0)) != 1.0:
 			out.append(String(recipe_id))
 	return out
 
@@ -2437,7 +2575,6 @@ const DISHES: Dictionary = {
 		"heal": 4.0,               # of the Hero's 10
 		"max_hp": 2.0,             # hit points over his own while he is fed, full when he eats
 		"build_speed": 1.3,
-		"move_speed": 1.2,
 		"fed_seconds": 90.0,       # about a raid's gap: fed on the way out, hungry by the next
 	},
 	# What a boss leaves (GAME-DESIGN 7.5), and the reward for having killed it: every effect
@@ -2450,7 +2587,6 @@ const DISHES: Dictionary = {
 		"heal": 10.0,
 		"max_hp": 4.0,
 		"build_speed": 1.8,
-		"move_speed": 1.5,
 		"fed_seconds": 150.0,
 	},
 }
@@ -2459,15 +2595,18 @@ const DISHES: Dictionary = {
 ## needs none, so there is always a way to eat. Each better vessel ADDS an effect to the
 ## method below it -- that is the "qualitative" step a pot is (GAME-DESIGN 4.5).
 ##
-## v0.6 round two ("肉的作用非常不明显……吃了饭之后会有一个 boost"): even a roast is a boost now, not
-## only a heal -- hit points over his own and a quicker stride for a while -- so that the first
-## meal of a run is felt, and seen, before there is a pot.
+## v0.6 round two ("肉的作用非常不明显……吃了饭之后会有一个 boost"): even a roast is a boost, not only a
+## heal, so the first meal of a run is felt before there is a pot. v0.6 round three: his stride is
+## his boots' now (RECIPES hide_boots) -- a meal heals him, and a fed man works faster; the pot
+## heals more (`heal_factor`) and holds him up with hit points over his own for a while. Food is
+## the only thing that heals him: the kitchen is his infirmary.
 const COOKING_METHODS: Array = [
-	# Seared on a flat stone heated in the fire: all a roast does, and a man who works faster.
-	{"id": "sear", "name": "COOK_SEAR", "vessel": "stone_pot", "effects": ["heal", "max_hp", "move_speed", "build_speed"]},
-	# Over the fire on a stick, the way he ate the first night: it heals, it holds him up, and
-	# he walks the quicker for it.
-	{"id": "roast", "name": "COOK_ROAST", "vessel": "", "effects": ["heal", "max_hp", "move_speed"]},
+	# Seared on a flat stone heated in the fire: all a roast does, half as much healing again,
+	# and hit points over his own while he is fed.
+	{"id": "sear", "name": "COOK_SEAR", "vessel": "stone_pot", "effects": ["heal", "max_hp", "build_speed"], "heal_factor": 1.5},
+	# Over the fire on a stick, the way he ate the first night: it heals, and he works the
+	# quicker for it.
+	{"id": "roast", "name": "COOK_ROAST", "vessel": "", "effects": ["heal", "build_speed"]},
 ]
 
 ## EATING (v0.6 round two: "吃饭的逻辑要彻底改一下……吃饭也是一个图标，点进去呢就有吃的东西"). The kitchen
@@ -2529,7 +2668,7 @@ static func meal_cooked(dish_id: String, method_id: String) -> Dictionary:
 	var meal: Dictionary = {
 		"dish": dish_id,
 		"method": method_id,
-		"heal": float(dish.get("heal", 0.0)) if effects.has("heal") else 0.0,
+		"heal": float(dish.get("heal", 0.0)) * float(method.get("heal_factor", 1.0)) if effects.has("heal") else 0.0,
 		"max_hp": float(dish.get("max_hp", 0.0)) if effects.has("max_hp") else 0.0,
 		"build_speed": float(dish.get("build_speed", 1.0)) if effects.has("build_speed") else 1.0,
 		"move_speed": float(dish.get("move_speed", 1.0)) if effects.has("move_speed") else 1.0,

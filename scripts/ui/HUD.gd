@@ -301,6 +301,18 @@ func _on_resources_changed(res: Dictionary) -> void:
 			lbl.modulate = UiTheme.color("accent")
 			var tw := lbl.create_tween()
 			tw.tween_property(lbl, "modulate", Color.WHITE, UiTheme.number("flash_seconds"))
+	_fit_stock()
+
+## The stock's gaps close up when it would reach the cabin's medallion -- a map with more
+## materials, counts in the thousands, a narrow window -- rather than running under it.
+func _fit_stock() -> void:
+	if resource_bar == null or core_vital == null or not core_vital.is_inside_tree():
+		return
+	var room: float = core_vital.get_global_rect().position.x - resource_bar.get_global_rect().position.x - UiTheme.space("m")
+	for gap in [UiTheme.space("l"), UiTheme.space("s"), UiTheme.space("xs")]:
+		resource_bar.add_theme_constant_override("separation", gap)
+		if resource_bar.get_combined_minimum_size().x <= room:
+			return
 
 ## He ate, or the meal wore off. The countdown itself is _process's.
 func _on_fed_changed(_fed: Dictionary) -> void:
@@ -1112,6 +1124,7 @@ func _ensure_ui_components() -> void:
 	core_vital.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	core_vital.offset_top = float(_ui("emblem_top", 2))
 	core_vital.offset_bottom = core_vital.offset_top
+	root_control.resized.connect(_fit_stock, CONNECT_DEFERRED)
 
 	# Under the strip at its right: the goal.
 	objective_panel = _panel("ObjectivePanel", &"TechPanel")

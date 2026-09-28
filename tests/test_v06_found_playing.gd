@@ -6,6 +6,10 @@
 # while he went on swinging at the rock -- only an idle man hit back -- and nothing on the screen
 # said so. Now, bitten at his work, he turns on what bites him, fights what else is in his reach,
 # and goes back to the work; and the HUD says he is under attack, once in a while.
+#
+# Sheltering at the workbench in a raid, he went out after a raptor biting the cabin's back wall
+# -- it was in his reach through the wall -- and the pack killed him. Now he fights on his own
+# only what is on his side of the wall; to go out is the player's call.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -155,3 +159,27 @@ func test_06_a_meal_wearing_off_is_not_an_attack() -> void:
 	eb.hero_hp_changed.emit(10.0, 10.0)
 	await wait_frames(1)
 	assert_eq(String(hud.hint_label.text), "before", "His most coming down with what he has is a meal ending, not a bite")
+
+func test_07_in_the_cabin_he_does_not_go_out_after_what_bites_its_wall() -> void:
+	var main = await _level()
+	var hero = main.hero
+	var cabin = main.current_core
+	var room: Vector2 = cabin.room_half()
+	# At the west end of the room, clear of the benches, and a raptor at the end wall's other side,
+	# in his reach through it.
+	hero.global_position = cabin.global_position + Vector3(-room.x + 0.4, 0.0, 0.0)
+	cabin.recheck_hero()
+	var biter = _raptor_at(main, cabin.global_position + Vector3(-room.x - 0.5, 0.0, 0.0))
+	assert_true(cabin.hero_inside, "He is in the cabin")
+	assert_false(cabin.is_inside(biter.global_position), "and it is outside")
+	assert_lt(hero.global_position.distance_to(biter.global_position), float(hero.attack_range),
+		"in his reach but for the wall")
+	await wait_physics_frames(10)
+	assert_eq(int(hero.current_state), int(hero.State.IDLE), "He stays in")
+	assert_null(hero.target_enemy, "and has not taken it on")
+	# The same raptor with him outside, the wall not between them: he takes it on.
+	hero.global_position = cabin.door_outside()
+	cabin.recheck_hero()
+	biter.global_position = hero.global_position + Vector3(float(hero.attack_range) * 0.6, 0.0, 0.0)
+	await wait_physics_frames(3)
+	assert_eq(hero.target_enemy, biter, "Out here he takes on what is in his reach")

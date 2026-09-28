@@ -119,6 +119,8 @@ func _run(name: String) -> void:
 			await _scenario_menu()
 		"paused":
 			await _scenario_paused()
+		"kit":
+			await _scenario_kit()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -221,8 +223,9 @@ func _scenario_play(spec: String) -> void:
 
 	# --- 4 onwards: raids come and go; between them, what a player would do next -------------
 	# In order: the beacon when its next step can be paid; a meal when there is meat and none is
-	# put by, and eating one when he is not fed; the pick, then the axe; a set crossbow north of the
-	# ring, facing the nest, up to four; the ring mended where a raid broke it; and otherwise stone
+	# put by, and eating one when he is not fed; the pick, then the axe; his row once the hide comes
+	# in -- armour, boots, the bone spear, the stone pick; a set crossbow north of the ring, facing
+	# the nest, up to four; the ring mended where a raid broke it; and otherwise stone
 	# while there is less than a crossbow's worth, and wood. Launched, he shelters till the end.
 	var last_status: float = -100.0
 	var raids_seen: int = 0
@@ -257,7 +260,9 @@ func _scenario_play(spec: String) -> void:
 			# In the final wave it is the cabin that is bitten: he goes out to what is at it, as a
 			# player would, while he has the health for it -- and eats when he has not.
 			var launched: bool = wm.final_wave or gs.is_beacon_launched()
-			var near: Node3D = hero._find_nearest_enemy(9.0 if launched else 3.0)
+			# Launched, he is sent out at what is at the cabin, as a click sends him; in a raid he
+			# fights only what has got to him on his side of the wall (Hero._find_nearest_enemy).
+			var near: Node3D = _nearest_dino(hero, 9.0) if launched else hero._find_nearest_enemy(3.0)
 			var hurt: bool = hero.current_hp < hero.max_hp * 0.35
 			if hurt and not gs.meals.is_empty() and int(hero.current_state) != 6:
 				hero.order_eat(String(gs.meals.keys()[0]))
@@ -300,6 +305,15 @@ func _scenario_play(spec: String) -> void:
 			continue
 		if wb.can_offer("stone_axe") and wb.can_afford("stone_axe"):
 			await _bench_job(hero, cabin, "workbench", "stone_axe", note)
+			continue
+		# His row as a player fills it (v0.6 round three): armour and boots first -- they cost what
+		# the elites and the raids leave, not the crossbows' stone -- then the spear, the stone pick.
+		var kit_job: String = ""
+		for job in ["bone_armor", "hide_vest", "hide_boots", "bone_spear", "quarry_pick"]:
+			if kit_job == "" and wb.can_offer(job) and wb.can_afford(job):
+				kit_job = job
+		if kit_job != "":
+			await _bench_job(hero, cabin, "workbench", kit_job, note)
 			continue
 		var next_bow: Vector2i = Vector2i(999, 999)
 		for c in crossbow_cells:
@@ -442,6 +456,18 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 	await _play_until(func(): return wm.is_wave_active or wm.raid_timer < 6.0, seconds, "working %s" % res_id)
 
 ## Walks in, to the bench, starts `job` and stays till it is done.
+## The nearest living raider within `radius` of him, wall or no wall: what a player would click.
+func _nearest_dino(hero: Node, radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_d: float = radius
+	for d in get_nodes_in_group("dinos"):
+		if d is Node3D and hero._is_enemy_valid(d):
+			var dist: float = (hero as Node3D).global_position.distance_to((d as Node3D).global_position)
+			if dist <= best_d:
+				best_d = dist
+				best = d
+	return best
+
 func _bench_job(hero: Node, cabin: Node, bench_id: String, job: String, note: Callable) -> void:
 	var bench = cabin.station(bench_id)
 	if bench == null or job == "":
@@ -852,6 +878,30 @@ func _scenario_menu() -> void:
 	if menu and menu.has_method("open_settings"):
 		menu.open_settings()
 	await _shoot("settings")
+
+## His row (v0.6 round three): the workbench with hide known -- what it offers now -- then his
+## card with a pick, an axe, a spear, armour and boots in it, the armour's part on his bar in
+## leather, and fed on the pot's meal besides so the three parts of his bar show together.
+func _scenario_kit() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	# As pickups bring them, so the bench hears of each material (GameState.knows).
+	gs.add_resources({"wood": 20, "stone": 12, "bone": 8, "hide": 3, "food": 2})
+	gs.grant_unlock(String(cfg.RECIPES["stone_pick"]["unlocks"]))
+	gs.grant_unlock(String(cfg.RECIPES["stone_axe"]["unlocks"]))
+	var bench = _main.current_core.station("workbench")
+	eb.unit_selected.emit(bench)
+	await _wait(8)
+	await _shoot("workbench")
+	for recipe_id in ["quarry_pick", "bone_spear", "hide_vest", "hide_boots", "stone_pot"]:
+		gs.grant_unlock(String(cfg.RECIPES[recipe_id]["unlocks"]))
+	gs.eat("meat")
+	_main.hero.current_hp = _main.hero.max_hp * 0.8
+	var panel = _main.hud.option_panel
+	panel.select_target(_main.hero)
+	await _wait(8)
+	await _shoot("his_row")
 
 ## Paused with the menu shut: the frame and the word (UI-POLISH T9).
 func _scenario_paused() -> void:

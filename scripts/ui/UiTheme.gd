@@ -528,7 +528,7 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "ProgressBar", font_size("caption"))
 	t.set_color("font_color", "ProgressBar", color("text"))
 	for pair in [["HealthBar", color("success")], ["WarnBar", color("warning")], ["DangerBar", color("danger")],
-			["BeaconBar", color("tech")], ["BoostBar", color("boost")]]:
+			["BeaconBar", color("tech")], ["BoostBar", color("boost")], ["ArmorBar", color("armor")]]:
 		t.set_type_variation(pair[0], "ProgressBar")
 		t.set_stylebox("background", pair[0], trough)
 		t.set_stylebox("fill", pair[0], _pigment("paint", pair[1]))

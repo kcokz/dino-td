@@ -21,8 +21,8 @@ enum State {
 # Configuration & Properties
 # ==============================================================================
 @export var max_hp: float = 10.0
-## His own hit points, without a meal's boost (Config.HERO.hp): max_hp is this and whatever
-## the meal he is living on adds (GameState.max_hp_bonus).
+## His own hit points, without a meal's boost: Config.HERO.hp and his armour's (Config.kit).
+## max_hp is this and whatever the meal he is living on adds (GameState.max_hp_bonus).
 var base_max_hp: float = 10.0
 @export var current_hp: float = 10.0
 @export var speed: float = 4.0
@@ -113,6 +113,35 @@ func _load_config() -> void:
 			attack_range = float(cfg.HERO.get("attack_range", 2.0))
 		if "TIME" in cfg and cfg.TIME is Dictionary:
 			build_range = float(cfg.TIME.get("build_range", 1.5))
+	_apply_kit()
+	current_hp = max_hp
+
+## His row (Config.kit, GAME-DESIGN 9.3): armour's hit points over his own, boots' stride, a
+## weapon's blows, on Config.HERO's and for good -- only the best of each slot. Worked out again
+## whenever he makes something; `grow` gives him the new armour whole, as a meal's hit points are.
+func _apply_kit(grow: bool = false) -> void:
+	var cfg = _get_config()
+	if cfg == null or not ("HERO" in cfg) or not cfg.has_method("kit_bonus"):
+		return
+	var gs = _get_game_state()
+	var owned: Dictionary = gs.unlocks if (gs and "unlocks" in gs) else {}
+	base_max_hp = float(cfg.HERO.get("hp", 10.0)) + float(cfg.kit_bonus(owned, "max_hp"))
+	speed = float(cfg.HERO.get("move_speed", 4.0)) * float(cfg.kit_bonus(owned, "move_speed"))
+	damage = float(cfg.HERO.get("damage", 1.0)) * float(cfg.kit_bonus(owned, "damage"))
+	var was: float = max_hp
+	max_hp = base_max_hp + (float(gs.max_hp_bonus()) if (gs and gs.has_method("max_hp_bonus")) else 0.0)
+	if grow and max_hp > was and current_state != State.DEAD:
+		current_hp += max_hp - was
+	current_hp = minf(current_hp, max_hp)
+
+func _on_unlock_granted(_unlock_id: String) -> void:
+	var was: float = max_hp
+	_apply_kit(true)
+	if not is_equal_approx(was, max_hp):
+		_refresh_health_bar()
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("hero_hp_changed"):
+			eb.hero_hp_changed.emit(current_hp, max_hp)
 
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -125,6 +154,9 @@ func _connect_event_bus() -> void:
 	if eb and eb.has_signal("fed_changed"):
 		if not eb.fed_changed.is_connected(_on_fed_changed):
 			eb.fed_changed.connect(_on_fed_changed)
+	if eb and eb.has_signal("unlock_granted"):
+		if not eb.unlock_granted.is_connected(_on_unlock_granted):
+			eb.unlock_granted.connect(_on_unlock_granted)
 
 func _exit_tree() -> void:
 	if _agent.is_valid():
@@ -140,6 +172,9 @@ func _exit_tree() -> void:
 	if eb and is_instance_valid(eb) and eb.has_signal("fed_changed"):
 		if eb.fed_changed.is_connected(_on_fed_changed):
 			eb.fed_changed.disconnect(_on_fed_changed)
+	if eb and is_instance_valid(eb) and eb.has_signal("unlock_granted"):
+		if eb.unlock_granted.is_connected(_on_unlock_granted):
+			eb.unlock_granted.disconnect(_on_unlock_granted)
 
 # ==============================================================================
 # State Machine & Movement
@@ -1038,8 +1073,9 @@ func get_display_info() -> Dictionary:
 		"type": "hero",
 		"hp": current_hp,
 		"max_hp": max_hp,
-		# The meal's part of it, drawn in the boost's colour on his panel.
+		# The meal's part of it, drawn in the boost's colour on his panel; his armour's, in leather.
 		"base_max_hp": base_max_hp,
+		"natural_max_hp": _natural_max_hp(),
 		# How fast he walks and works, and how much of it is the meal's (his panel's bars).
 		"move_speed": walk_speed(),
 		"base_move_speed": speed,
@@ -1227,6 +1263,11 @@ func work_rate() -> float:
 	var gs = _get_game_state()
 	return float(gs.build_multiplier()) if gs and gs.has_method("build_multiplier") else 1.0
 
+## His hit points bare: Config.HERO's, without armour or a meal.
+func _natural_max_hp() -> float:
+	var cfg = _get_config()
+	return float(cfg.HERO.get("hp", 10.0)) if (cfg and "HERO" in cfg) else base_max_hp
+
 ## Metres a second he walks: his own pace, or more on a good meal.
 func walk_speed() -> float:
 	var gs = _get_game_state()
@@ -1335,9 +1376,17 @@ func _find_nearest_enemy(max_dist: float) -> Node3D:
 			if node is Node3D and _is_enemy_valid(node):
 				if not candidates.has(node):
 					candidates.append(node)
+	# Only what is on his side of the cabin's wall (found playing, v0.6 round three: sheltering at
+	# the workbench in a raid, he went out after a raptor biting the back wall, into the pack). To
+	# go out and fight is the player's call (order_attack).
+	var cabin: Node = get_tree().get_first_node_in_group("core")
+	var walled: bool = cabin != null and cabin.has_method("is_inside")
+	var inside: bool = walled and bool(cabin.is_inside(global_position))
 	var nearest: Node3D = null
 	var min_dist_sq: float = max_dist * max_dist
 	for cand in candidates:
+		if walled and bool(cabin.is_inside(cand.global_position)) != inside:
+			continue
 		var d_sq = global_position.distance_squared_to(cand.global_position)
 		if d_sq <= min_dist_sq:
 			min_dist_sq = d_sq

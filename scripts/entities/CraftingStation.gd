@@ -118,6 +118,10 @@ func _still_to_do(recipe_id: String) -> bool:
 		return gs != null and gs.has_method("beacon_next_job") and String(gs.beacon_next_job()) == recipe_id
 	if gs and gs.has_method("has_unlock") and gs.has_unlock(String(data.get("unlocks", ""))):
 		return false
+	# A better one of its slot in his row already (Config.outclassed): the vest after the armour.
+	var cfg = _get_config()
+	if gs and cfg and cfg.has_method("outclassed") and "unlocks" in gs and cfg.outclassed(recipe_id, gs.unlocks):
+		return false
 	return true
 
 ## Whether every material `recipe_id` takes has turned up in this run (GameState.knows):

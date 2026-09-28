@@ -123,10 +123,15 @@ func test_05_a_bench_waits_on_its_materials_and_the_beacon_does_not() -> void:
 	_cleanup_nodes.append(main)
 	var bench: Node = main.current_core.station("workbench")
 	var beacon: Node = main.current_core.station(String(config_node.BEACON_STATION))
+	# One that bone is all it still waits on: the rest of what it takes has turned up already (the
+	# bone armour waits on hide as well, v0.6 round three).
 	var needs_bone: String = ""
 	for recipe_id in bench.recipes():
-		if bench.inputs_of(recipe_id).has("bone"):
-			needs_bone = recipe_id
+		var rest: Dictionary = bench.inputs_of(recipe_id).duplicate()
+		if needs_bone == "" and rest.has("bone"):
+			rest.erase("bone")
+			if game_state_node.knows_all(rest):
+				needs_bone = recipe_id
 	assert_ne(needs_bone, "", "Something at the workbench is made of bone")
 	assert_false(bench.can_offer(needs_bone), "Not offered before bone has turned up")
 	assert_true(bench.waiting_on_materials(), "The bench says it waits on a material, not that it is done")

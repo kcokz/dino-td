@@ -959,6 +959,11 @@ FAT = (0.86, 0.74, 0.62)
 CLAY = (0.46, 0.29, 0.19)
 CLAY_DARK = (0.29, 0.18, 0.12)
 WATER = (0.16, 0.42, 0.62)
+# A hide (v0.6 round three): the hair side out, dark and dun, the flesh side pale where it shows
+# at the ends of the roll.
+HIDE_OUT = (0.36, 0.25, 0.15)
+HIDE_OUT_LIGHT = (0.47, 0.34, 0.21)
+HIDE_IN = (0.72, 0.58, 0.42)
 
 
 def _log(b, p0, p1, radius, rng):
@@ -1024,6 +1029,44 @@ def drop_meat(seed):
             c = mix(c, FAT, 0.6)                   # marbling
         b.tri(out[i], out[j], out[k], c, c, c)
     _bone(b, Vector((-0.09, 0.0, 0.075)), Vector((-0.21, 0.0, 0.085)), rng)
+    return b
+
+
+def drop_hide(seed):
+    """A hide rolled up, hair side out, pale flesh side spiralling at its ends, tied with vine."""
+    rng = random.Random(seed)
+    b = Builder()
+    r = 0.075
+    half = 0.17
+    seg = 12
+    # The roll: a slightly flattened cylinder along x, its outside mottled.
+    rings = []
+    cols = []
+    for i in range(7):
+        x = -half + 2 * half * i / 6
+        rr = r * (0.9 if i in (0, 6) else 1.0) * rng.uniform(0.97, 1.03)
+        rings.append([Vector((x, math.cos(math.tau * k / seg) * rr, r * 0.9 + math.sin(math.tau * k / seg) * rr * 0.82))
+                      for k in range(seg)])
+        cols.append([jitter(mix(HIDE_OUT, HIDE_OUT_LIGHT, rng.uniform(0.0, 0.7)), rng, 0.02) for _ in range(seg)])
+    _rings(b, rings, cols)
+    # Its ends: the flesh side, spiralling in.
+    for end, sign in ((rings[0], -1.0), (rings[-1], 1.0)):
+        centre = Vector((end[0].x + sign * 0.004, 0.0, r * 0.9))
+        for k in range(seg):
+            a, c = end[k], end[(k + 1) % seg]
+            if sign < 0:
+                b.tri(c, a, centre, HIDE_IN, HIDE_IN, mix(HIDE_IN, HIDE_OUT, 0.5))
+            else:
+                b.tri(a, c, centre, HIDE_IN, HIDE_IN, mix(HIDE_IN, HIDE_OUT, 0.5))
+    # A loose flap where the roll ends, lying on the ground.
+    b.quad(Vector((-0.12, r * 0.95, 0.02)), Vector((0.12, r * 0.95, 0.02)),
+           Vector((0.13, r * 1.9, 0.004)), Vector((-0.11, r * 1.8, 0.004)),
+           HIDE_OUT, HIDE_OUT, HIDE_OUT_LIGHT, HIDE_OUT_LIGHT)
+    # Two ties of vine round it.
+    for x in (-0.08, 0.09):
+        pts = [Vector((x, math.cos(math.tau * k / 9) * (r + 0.01), r * 0.9 + math.sin(math.tau * k / 9) * (r * 0.82 + 0.01)))
+               for k in range(10)]
+        b.tube(pts, [0.009] * 10, [VINE_ROPE] * 10, 4)
     return b
 
 
@@ -1264,6 +1307,7 @@ PROPS = {
     "drop_bone": (lambda s: drop_bone(s), [7]),
     "drop_food": (lambda s: drop_meat(s), [11]),
     "drop_water": (lambda s: drop_water(s), [13]),
+    "drop_hide": (lambda s: drop_hide(s), [19]),
     "water_landing": (lambda s: water_landing(s), [17]),
 }
 

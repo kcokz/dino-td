@@ -18,6 +18,9 @@ var base_ratio: float = 0.0
 var total_ratio: float = 0.0
 ## The bar variation his own part is painted as (UiTheme: HealthBar, WarnBar, ...).
 var fill_variation: StringName = &"HealthBar"
+## How far what he wears reaches past his own, 0..1 -- his armour's hit points, in leather
+## (UiTheme "ArmorBar"), between his own part and the meal's; no further than base_ratio when none.
+var worn_ratio: float = 0.0
 
 func _init() -> void:
 	custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
@@ -25,22 +28,22 @@ func _init() -> void:
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-## Sets both parts, as shares of the bar, and what his own part is painted as.
-func set_values(base: float, total: float, variation: StringName = &"") -> void:
+## Sets the parts, as shares of the bar, and what his own part is painted as: his own to `base`,
+## what he wears to `worn` (none when it is under `base`), the meal's to `total`.
+func set_values(base: float, total: float, variation: StringName = &"", worn: float = -1.0) -> void:
 	var b: float = clampf(base, 0.0, 1.0)
-	var t: float = clampf(maxf(total, base), 0.0, 1.0)
+	var w: float = clampf(maxf(worn, b), 0.0, 1.0)
+	var t: float = clampf(maxf(total, w), 0.0, 1.0)
 	if variation != &"":
 		fill_variation = variation
-	if is_equal_approx(b, base_ratio) and is_equal_approx(t, total_ratio):
-		queue_redraw()
-		return
 	base_ratio = b
+	worn_ratio = w
 	total_ratio = t
 	queue_redraw()
 
 ## Whether any of it is the meal's.
 func has_boost() -> bool:
-	return total_ratio > base_ratio + 0.0001
+	return total_ratio > maxf(base_ratio, worn_ratio) + 0.0001
 
 func _draw() -> void:
 	var whole := Rect2(Vector2.ZERO, size)
@@ -53,6 +56,10 @@ func _draw() -> void:
 		var gold: StyleBox = get_theme_stylebox("fill", "BoostBar")
 		if gold:
 			draw_style_box(gold, Rect2(Vector2.ZERO, Vector2(size.x * total_ratio, size.y)))
+	if worn_ratio > base_ratio + 0.0001:
+		var leather: StyleBox = get_theme_stylebox("fill", "ArmorBar")
+		if leather:
+			draw_style_box(leather, Rect2(Vector2.ZERO, Vector2(size.x * worn_ratio, size.y)))
 	if base_ratio > 0.0:
 		var own: StyleBox = get_theme_stylebox("fill", fill_variation)
 		if own:

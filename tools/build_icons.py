@@ -41,6 +41,7 @@ C = {
     "leaf": "#64a24c", "leaf_dark": "#3f7334", "trunk": "#6e4a2a",
     "iron": "#5a6166", "iron_dark": "#3b4145", "fire": "#f28c28", "flame": "#f7cb4c",
     "metal": "#98a3aa", "cyan": "#58c7e8", "moss": "#6b9a45",
+    "hide": "#a8743f", "hide_dark": "#7a4f28", "hide_hi": "#cf9f64",
 }
 
 
@@ -142,6 +143,14 @@ ICONS["prime_meat"] = item_svg(
      shape("path", None, C["marble"], 1.8, d="M 28 18 C 32 21 36 16 41 20"),
      shape("polygon", C["gold"], points=star(49, 14, 10, 4.3))])
 
+# A hide off an elite (v0.6 round three): a pelt stretched out to dry, its legs out at the corners.
+ICONS["hide"] = item_svg(
+    [shape("path", C["hide"], d="M 32 7 C 38 7 40 12 44 13 L 55 8 L 52 20 C 55 26 55 37 52 43 L 57 54 "
+                                "L 45 51 C 41 56 37 58 32 58 C 27 58 23 56 19 51 L 7 54 L 12 43 "
+                                "C 9 37 9 26 12 20 L 9 8 L 20 13 C 24 12 26 7 32 7 Z")],
+    [shape("ellipse", C["hide_hi"], cx=32, cy=32, rx=12, ry=17),
+     shape("path", None, C["hide_dark"], 2.2, d="M 32 12 L 32 53")])
+
 ICONS["water"] = item_svg(
     [shape("path", C["water"], d="M 32 6 C 32 6 13 28 13 40 C 13 51 21 58 32 58 C 43 58 51 51 51 40 C 51 28 32 6 32 6 Z")],
     [shape("path", None, C["water_hi"], 3.8, d="M 22 40 C 22 46 26 50 30 51")])
@@ -174,6 +183,61 @@ ICONS["stone_axe"] = item_svg(
     [shape("path", C["s1"], d="M 21 8 C 14 8 9 13 9 20 L 17 19 C 17 15 19 12 23 12 L 39 13 L 40 12 Z"),
      shape("path", C["s3"], d="M 23 30 L 38 25 L 38.5 22 L 21 26 C 16 26.5 12 24 11 22 C 12 27 17 31 23 30 Z"),
      shape("rect", C["rope"], transform="rotate(23 38 18)", x=33, y=14, width=10, height=8, rx=2)])
+
+# The stone pick (v0.6 round three): the bone pick's shape, a ground stone head in the bone's place.
+ICONS["quarry_pick"] = item_svg(
+    [shape("path", None, C["post"], 6.5, d="M 13 55 L 44 21"),
+     shape("path", C["s2"], d="M 26 11 Q 55 3 59 38 Q 47 17 26 11 Z")],
+    [shape("path", None, C["post_dark"], 2.0, d="M 15 51 L 41 22"),
+     shape("path", None, C["s1"], 2.4, d="M 33 12 Q 50 11 55 28"),
+     shape("path", None, C["s3"], 1.6, d="M 30 14 Q 46 17 52 31"),
+     shape("rect", C["rope"], transform="rotate(-48 43 22)", x=38, y=18.5, width=10, height=7, rx=2)])
+
+# A spear: a long haft, its point lashed on -- ground stone, then a split bone ground sharp.
+def _spear(point, light, dark):
+    return item_svg(
+        [shape("path", None, C["post"], 5.5, d="M 8 59 L 45 19"),
+         shape("polygon", point, points="41,24 46,11 59,4 54,18")],
+        [shape("path", None, C["post_dark"], 1.8, d="M 10 55 L 43 19"),
+         shape("polygon", light, points="46,11 59,4 48,16"),
+         shape("polygon", dark, points="41,24 48,16 59,4 54,18"),
+         shape("rect", C["rope"], transform="rotate(-47 42 23)", x=37, y=19.5, width=10, height=7, rx=2)])
+
+ICONS["stone_spear"] = _spear(C["s2"], C["s1"], C["s3"])
+ICONS["bone_spear"] = _spear(C["bone"], "#fbf5e6", C["bone_shade"])
+
+# Armour: a vest of hide, laced up the front -- and with bone plates sewn over it in rows.
+_VEST = ("M 20 8 L 27 8 C 28 14 36 14 37 8 L 44 8 C 46 14 50 18 54 20 L 52 57 L 12 57 L 10 20 "
+         "C 14 18 18 14 20 8 Z")
+
+def _vest(plates):
+    detail = [shape("path", None, C["hide_hi"], 2.4, d="M 21 11 C 17 17 14 19 12 22"),
+              shape("path", None, C["hide_hi"], 2.4, d="M 43 11 C 47 17 50 19 52 22"),
+              shape("path", None, C["hide_dark"], 2.0, d="M 32 16 L 32 55")]
+    if plates:
+        for row, y in enumerate((22, 31, 40, 49)):
+            for k in range(4):
+                x = 14 + k * 9.5 + (4.7 if row % 2 else 0.0)
+                if x + 8 > 52:
+                    continue
+                detail.append(shape("rect", C["bone"], x=x, y=y, width=8, height=7.5, rx=2.5))
+                detail.append(shape("rect", C["bone_shade"], x=x, y=y + 5.2, width=8, height=2.3, rx=1.1))
+    else:
+        for y in (22, 30, 38, 46):
+            detail.append(shape("path", None, C["rope"], 1.8, d="M 29 %d L 35 %d M 35 %d L 29 %d" % (y, y + 5, y, y + 5)))
+    return item_svg([shape("path", C["hide"], d=_VEST)], detail)
+
+ICONS["hide_vest"] = _vest(False)
+ICONS["bone_armor"] = _vest(True)
+
+# Boots: one boot of hide in profile, a cuff at the top, laced, on a darker sole.
+ICONS["hide_boots"] = item_svg(
+    [shape("path", C["hide"], d="M 19 7 L 37 7 L 37 36 C 45 38 55 41 57 49 L 57 57 L 15 57 L 15 44 "
+                                "C 17 40 19 35 19 29 Z")],
+    [shape("rect", C["hide_hi"], x=19, y=7, width=18, height=7, rx=2),
+     shape("rect", C["hide_dark"], x=15, y=52, width=42, height=5, rx=2),
+     shape("path", None, C["rope"], 1.8, d="M 24 18 L 32 22 M 32 18 L 24 22 M 24 26 L 32 30 M 32 26 L 24 30"),
+     shape("path", None, C["hide_dark"], 1.6, d="M 37 38 C 44 40 51 43 54 48")])
 
 # The stone pot: a flat stone over the fire, a piece of meat searing on it.
 ICONS["stone_pot"] = item_svg(

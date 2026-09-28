@@ -417,10 +417,10 @@ func _build_hero_stats(into: VBoxContainer) -> void:
 	_abilities_shown.clear()
 	_show_abilities(true)
 
-## His abilities, a square each, in a row that grows as he gains them (Config.abilities): the
-## tool's own icon, and on hover its name and what it does (Config.recipe_effect_text). At least
-## THEME.ability_slots squares: the empty ones say where the next comes from. Rebuilt only when
-## what he has changes.
+## His row: a square for each slot (Config.KIT_SLOTS) -- pick, axe, weapon, armour, boots --
+## holding the best he has made of it (Config.kit): its own icon, and on hover its name and what
+## it does (Config.recipe_effect_text). An empty one says what goes there and where it is made.
+## Rebuilt only when what he has changes.
 func _show_abilities(force: bool = false) -> void:
 	if ability_row == null:
 		return
@@ -435,20 +435,21 @@ func _show_abilities(force: bool = false) -> void:
 	for child in ability_row.get_children():
 		ability_row.remove_child(child)
 		child.queue_free()
-	var slots: int = maxi(owned.size(), int(cfg.THEME.get("ability_slots", 4)) if cfg else 4)
-	for i in range(slots):
+	var held: Dictionary = cfg.kit(gs.unlocks) if (cfg and gs and "unlocks" in gs) else {}
+	var slot_ids: Array = cfg.KIT_SLOTS if cfg else []
+	for slot_id in slot_ids:
 		var slot := PanelContainer.new()
 		slot.theme_type_variation = &"InsetPanel"
 		slot.mouse_filter = Control.MOUSE_FILTER_PASS
-		if i < owned.size():
-			var recipe_id: String = owned[i]
+		if held.has(slot_id):
+			var recipe_id: String = String(held[slot_id])
 			slot.name = "Ability_" + recipe_id
 			slot.add_child(UiKit.icon_rect(recipe_id, UiTheme.icon_size("l"), "Icon"))
 			var effect: String = String(cfg.recipe_effect_text(recipe_id))
 			var name_text: String = tr(String(cfg.RECIPES[recipe_id].get("name", recipe_id)))
 			slot.tooltip_text = (tr("ABILITY_TIP") % [name_text, effect]) if effect != "" else name_text
 		else:
-			slot.name = "EmptySlot%d" % i
+			slot.name = "EmptySlot_" + String(slot_id)
 			# Not a black hole: the gilt lozenge of the rules, faint at its middle, as an empty
 			# slot on the D4 / Elden Ring bars keeps a mark of what goes there.
 			var blank := TextureRect.new()
@@ -460,16 +461,16 @@ func _show_abilities(force: bool = false) -> void:
 			blank.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(blank)
 			slot.modulate = Color(1.0, 1.0, 1.0, 0.55)
-			slot.tooltip_text = tr("ABILITY_EMPTY")
+			slot.tooltip_text = tr("KIT_EMPTY_" + String(slot_id).to_upper())
 		ability_row.add_child(slot)
 
 ## One of his stats: his own part and the whole, as shares of its bar; its figure, gold while a
 ## meal is raising it.
-func _set_stat(key: String, own: float, whole: float, variation: StringName, figure: String, boosted: bool) -> void:
+func _set_stat(key: String, own: float, whole: float, variation: StringName, figure: String, boosted: bool, worn: float = -1.0) -> void:
 	var row: Node = _stat_rows.get(key)
 	if row == null:
 		return
-	(row.get_node("Bar") as StatBar).set_values(own, whole, variation)
+	(row.get_node("Bar") as StatBar).set_values(own, whole, variation, worn)
 	var label := row.get_node("Figure") as Label
 	label.text = figure
 	label.theme_type_variation = &"BoostNumberLabel" if boosted else &"SmallNumberLabel"
@@ -479,21 +480,29 @@ func _set_stat(key: String, own: float, whole: float, variation: StringName, fig
 ## a length to be raised and the gold is how much this meal raises it.
 func _show_hero_stats(info: Dictionary) -> void:
 	var cfg = _get_config()
-	# Health: his own hit points in the health colour, and those the meal adds, gold.
+	# Health: his own hit points in the health colour, his armour's in leather, and those the meal
+	# adds, gold.
 	var max_hp: float = maxf(0.001, float(info.get("max_hp", 1.0)))
 	var own_max: float = float(info.get("base_max_hp", max_hp))
+	var natural: float = float(info.get("natural_max_hp", own_max))
 	var hp: float = float(info.get("hp", 0.0))
-	_set_stat("hp", minf(hp, own_max) / max_hp, hp / max_hp, UiTheme.health_bar(hp / max_hp),
-		UiKit.fraction_text(hp, max_hp), max_hp > own_max + 0.001)
+	_set_stat("hp", minf(hp, natural) / max_hp, hp / max_hp, UiTheme.health_bar(hp / max_hp),
+		UiKit.fraction_text(hp, max_hp), max_hp > own_max + 0.001, minf(hp, own_max) / max_hp)
 	# Building: his own pace is x1.
 	var best_build: float = maxf(1.0, float(cfg.best_meal("build_speed")) if cfg else 1.0)
 	var build: float = float(info.get("build_speed", 1.0))
 	_set_stat("build", 1.0 / best_build, build / best_build, &"BeaconBar",
 		tr("STAT_BUILD_VALUE") % (cfg.factor_text(build) if cfg else str(build)), build > 1.0001)
-	# Walking: his own stride, in metres a second.
+	# Walking: his own stride, in metres a second -- boots and all -- against the best he can have.
 	var own_walk: float = maxf(0.001, float(info.get("base_move_speed", 1.0)))
 	var walk: float = float(info.get("move_speed", own_walk))
-	var best_walk: float = own_walk * maxf(1.0, float(cfg.best_meal("move_speed")) if cfg else 1.0)
+	var best_walk: float = own_walk
+	if cfg:
+		var best_boots: float = 1.0
+		for recipe_id in cfg.RECIPES:
+			best_boots = maxf(best_boots, float(cfg.RECIPES[recipe_id].get("move_speed", 1.0)))
+		best_walk = float(cfg.HERO.get("move_speed", own_walk)) * best_boots * maxf(1.0, float(cfg.best_meal("move_speed")))
+		best_walk = maxf(best_walk, walk)
 	_set_stat("move", own_walk / best_walk, walk / best_walk, &"BeaconBar",
 		tr("STAT_MOVE_VALUE") % walk, walk > own_walk + 0.001)
 	# The meal he is living on, and how long it has left.
@@ -962,10 +971,16 @@ func _populate_station_buttons() -> void:
 	var station := selected_unit
 	if station == null or not is_instance_valid(station) or not station.has_method("recipes"):
 		return
-	button_container.columns = 1
 	_clear_craft_detail()
 	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
 	var busy: bool = "active_recipe" in station and String(station.active_recipe) != ""
+	# More than a few on offer -- the workbench, with everything for his row (v0.6 round three) --
+	# and they stand two to a row, as the build menu's do: one to a row, they ran off the screen.
+	var offered: int = 0
+	for recipe_id in jobs:
+		if station.can_offer(String(recipe_id)):
+			offered += 1
+	button_container.columns = 2 if offered > int(UiTheme.number("one_column_most")) else 1
 	for recipe_id in jobs:
 		var rid: String = String(recipe_id)
 		if not station.can_offer(rid):

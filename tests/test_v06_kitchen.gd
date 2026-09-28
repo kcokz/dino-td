@@ -57,7 +57,7 @@ func test_01_every_dish_is_one_piece_of_meat_cooked_at_the_kitchen() -> void:
 	assert_gt(config_node.DISHES.size(), 0, "There is something to cook")
 	for dish_id in config_node.DISHES:
 		var dish: Dictionary = config_node.DISHES[dish_id]
-		for key in ["name", "station", "inputs", "time", "heal", "build_speed", "move_speed", "fed_seconds"]:
+		for key in ["name", "station", "inputs", "time", "heal", "build_speed", "fed_seconds"]:
 			assert_has(dish, key, "%s declares '%s'" % [dish_id, key])
 		assert_has(config_node.STATIONS, String(dish["station"]), "%s is cooked at a station that exists" % dish_id)
 		assert_eq(dish["inputs"].size(), 1, "%s is one kind of meat" % dish_id)
@@ -75,7 +75,7 @@ func test_02_a_boss_s_meat_is_clearly_better_on_every_count() -> void:
 	assert_has(prime["inputs"], "prime_meat", "The better dish is the boss's cut")
 	for key in ["heal", "fed_seconds"]:
 		assert_gt(float(prime[key]), float(meat[key]), "More %s off a boss" % key)
-	for key in ["build_speed", "move_speed"]:
+	for key in ["build_speed"]:
 		assert_gte(float(prime[key]) - 1.0, (float(meat[key]) - 1.0) * 1.5,
 			"A boss's %s is clearly better (%.2f against %.2f)" % [key, float(prime[key]), float(meat[key])])
 
@@ -100,35 +100,40 @@ func test_03_there_is_always_a_way_to_eat_and_every_pot_adds_something() -> void
 # 2. Eating
 # ==============================================================================
 
-func test_04_roast_meat_heals_holds_him_up_and_quickens_him() -> void:
+func test_04_roast_meat_heals_him_and_quickens_his_work() -> void:
 	# It healed and did nothing else until v0.6 round two ("肉的作用非常不明显……吃了饭之后会有一个
-	# boost"): even the first meal of a run is a boost now -- hit points over his own and a quicker
-	# stride for a while -- and the pot is what makes him build faster too.
+	# boost"): even the first meal of a run is a boost. Since v0.6 round three his stride is his
+	# boots' (RECIPES hide_boots): a roast heals him and he works faster for a while; the pot is
+	# what holds him up with hit points over his own too.
 	var hero = _hero()
 	await wait_frames(1)
 	hero.current_hp = 1.0
 	var meal: Dictionary = game_state_node.eat("meat")
 	var dish: Dictionary = config_node.DISHES["meat"]
 	assert_eq(String(meal["method"]), String(_bare()["id"]), "With no pot, meat is roasted")
-	assert_almost_eq(hero.max_hp, float(config_node.HERO["hp"]) + float(dish["max_hp"]), 0.001,
-		"It holds him up: hit points over his own while he is fed")
-	assert_almost_eq(hero.current_hp, 1.0 + float(dish["max_hp"]) + float(dish["heal"]), 0.001,
-		"And heals him -- the meal's own hit points full, and the heal on top")
-	assert_almost_eq(game_state_node.move_multiplier(), float(dish["move_speed"]), 0.0001, "He walks the quicker for it")
-	assert_almost_eq(hero.work_rate(), 1.0, 0.0001, "But builds at his own pace: that is the pot's")
+	assert_almost_eq(hero.current_hp, 1.0 + float(dish["heal"]), 0.001, "It heals him")
+	assert_almost_eq(hero.work_rate(), float(dish["build_speed"]), 0.0001, "and he works the quicker for it")
+	assert_almost_eq(game_state_node.move_multiplier(), 1.0, 0.0001, "His stride is his boots', not a meal's")
+	assert_almost_eq(hero.max_hp, float(config_node.HERO["hp"]), 0.001, "Holding him up is the pot's")
 	assert_almost_eq(float(game_state_node.fed["seconds_left"]), float(dish["fed_seconds"]), 0.0001, "For a while")
 
-func test_05_seared_on_a_stone_pot_he_also_builds_faster_for_a_while() -> void:
+func test_05_seared_on_a_stone_pot_it_heals_more_and_holds_him_up() -> void:
 	var hero = _hero()
 	await wait_frames(1)
+	hero.current_hp = 1.0
 	game_state_node.grant_unlock(String(_best()["vessel"]))
 	var meal: Dictionary = game_state_node.eat("meat")
 	var dish: Dictionary = config_node.DISHES["meat"]
 	assert_eq(String(meal["method"]), String(_best()["id"]), "With the pot, it is cooked the better way")
+	var heal: float = float(dish["heal"]) * float(_best().get("heal_factor", 1.0))
+	assert_gt(heal, float(dish["heal"]), "It heals more than a roast")
+	assert_almost_eq(hero.max_hp, float(config_node.HERO["hp"]) + float(dish["max_hp"]), 0.001,
+		"It holds him up: hit points over his own while he is fed")
+	assert_almost_eq(hero.current_hp, 1.0 + float(dish["max_hp"]) + heal, 0.001,
+		"the meal's own hit points full, and the heal on top")
 	assert_almost_eq(game_state_node.build_multiplier(), float(dish["build_speed"]), 0.0001,
 		"He builds faster by what the meat gives")
-	var walks: float = float(dish["move_speed"]) if _best()["effects"].has("move_speed") else 1.0
-	assert_almost_eq(game_state_node.move_multiplier(), walks, 0.0001, "And walks as fast as the method allows")
+	assert_almost_eq(game_state_node.move_multiplier(), 1.0, 0.0001, "and walks at his own stride")
 	assert_almost_eq(float(game_state_node.fed["seconds_left"]), float(dish["fed_seconds"]), 0.0001,
 		"For as long as the meat lasts")
 	assert_almost_eq(hero.work_rate(), float(dish["build_speed"]), 0.0001, "Which is his work rate now")

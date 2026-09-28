@@ -215,7 +215,7 @@ def workbench(seed):
             base.quad(Vector((x - 0.01, 0.2865, z - 0.01)), Vector((x + 0.01, 0.2865, z - 0.01)),
                       Vector((x + 0.01, 0.2865, z + 0.01)), Vector((x - 0.01, 0.2865, z + 0.01)),
                       GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
-    for x in (-0.33, 0.30):
+    for x in (-0.33, 0.0, 0.30):
         rod(base, Vector((x, 0.29, 1.22)), Vector((x, 0.22, 1.24)), 0.011, GUNMETAL)
 
     # The Bone Pick, hung on the board: a haft with a long bone lashed across its head.
@@ -247,7 +247,118 @@ def workbench(seed):
         axe.quad(stone[k] + f, stone[k2] + f2, stone[k2] + bk2, stone[k] + bk, ROCK, ROCK, dark, dark)
     lashing(axe, h + Vector((0.0, 0.0, 0.0)), UP, 0.032, rng)
 
-    return [("base", base), ("stone_pick", pick), ("stone_axe", axe)]
+    # His row (v0.6 round three): what goes with him for good shows where it was made.
+    # The Stone Pick, lying on the top where it was knapped: a haft, and a head pointed both ways
+    # bound across its end.
+    quarry = Builder()
+    rod(quarry, Vector((-0.30, 0.17, top_z + 0.018)), Vector((0.13, 0.14, top_z + 0.018)), 0.018,
+        BARK_LIGHT, col1=FRESH_WOOD)
+    ys = (0.005, 0.07, 0.14, 0.21, 0.275)
+    quarry.tube([Vector((0.155, y, top_z + 0.03)) for y in ys], [0.004, 0.022, 0.03, 0.022, 0.004],
+                [ROCK_DARK, ROCK_LIGHT, ROCK, ROCK_LIGHT, ROCK_DARK], 5)
+    lashing(quarry, Vector((0.155, 0.14, top_z + 0.03)), Vector((0.0, 1.0, 0.0)), 0.034, rng, width=0.025)
+
+    # The spears lean at the ends of the bench, past the top's corners: the stone one at the
+    # right, a knapped leaf of stone bound on; the bone one at the left, a long ground bone point.
+    stone_spear = Builder()
+    tip = _spear_shaft(stone_spear, Vector((0.70, 0.02, 0.0)), Vector((0.55, 0.26, 1.42)), rng)
+    d = (tip - Vector((0.70, 0.02, 0.0))).normalized()
+    _point(stone_spear, tip - d * 0.02, tip + d * 0.15, 0.036, 0.012, ROCK, ROCK_LIGHT)
+    bone_spear = Builder()
+    tip = _spear_shaft(bone_spear, Vector((-0.70, 0.02, 0.0)), Vector((-0.56, 0.26, 1.44)), rng)
+    d = (tip - Vector((-0.70, 0.02, 0.0))).normalized()
+    bone_spear.tube([tip - d * 0.03, tip + d * 0.02], [0.02, 0.019], [BONE, BONE], 6)
+    _point(bone_spear, tip + d * 0.01, tip + d * 0.21, 0.02, 0.014, BONE, mix(BONE, ROCK_DARK, 0.25))
+
+    # The armour hangs from the middle peg: a vest of hide laced up the front; the bone armour
+    # is the same vest a hair in front of it, sewn over with bone slats in rows -- so the better
+    # one hides the lesser once both are made.
+    vest = Builder()
+    _vest(vest, 0.0, rng)
+    bone_armor = Builder()
+    _vest(bone_armor, 0.006, rng)
+    for zc in (0.93, 0.99, 1.05, 1.11):
+        for x in (-0.126, -0.094, -0.062, -0.03, 0.03, 0.062, 0.094, 0.126):
+            y = _vest_y(x, zc, 0.006) - 0.008
+            rod(bone_armor, Vector((x, y, zc - 0.024)), Vector((x, y, zc + 0.024)), 0.011,
+                jitter(BONE, rng, 0.04), sides=5, col1=mix(BONE, ROCK_DARK, 0.15))
+
+    # The boots, a pair standing on the top at the right, toes to the room.
+    boots = Builder()
+    for (x, toe_dx) in ((0.43, -0.01), (0.53, 0.02)):
+        heel = Vector((x, 0.17, top_z))
+        boots.tube([heel + UP * 0.02, heel + UP * 0.08, heel + UP * 0.13], [0.034, 0.033, 0.037],
+                   [HIDE_EDGE, HIDE, jitter(HIDE, rng, 0.04)], 8)
+        disc(boots, heel + UP * 0.125, UP, 0.033, HIDE_EDGE)
+        foot = [heel + Vector((0.0, 0.02, 0.028)), heel + Vector((toe_dx * 0.4, -0.04, 0.026)),
+                heel + Vector((toe_dx * 0.8, -0.10, 0.02)), heel + Vector((toe_dx, -0.13, 0.014))]
+        boots.tube(foot, [0.03, 0.03, 0.022, 0.006], [HIDE, jitter(HIDE, rng, 0.04), HIDE, HIDE_EDGE], 8)
+        lashing(boots, heel + UP * 0.11, UP, 0.038, rng, width=0.008)
+
+    return [("base", base), ("stone_pick", pick), ("stone_axe", axe), ("quarry_pick", quarry),
+            ("stone_spear", stone_spear), ("bone_spear", bone_spear), ("hide_vest", vest),
+            ("bone_armor", bone_armor), ("hide_boots", boots)]
+
+
+def _spear_shaft(b, foot, top, rng):
+    """A spear's shaft from `foot` to `top`, bound at the top where the point goes on; gives the
+    top back."""
+    rod(b, foot, top, 0.014, BARK_LIGHT, col1=FRESH_WOOD)
+    lashing(b, top - (top - foot).normalized() * 0.02, top - foot, 0.02, rng, width=0.03)
+    return top
+
+
+def _point(b, base, tip, width, thick, col, col_edge, face=Vector((0.0, -1.0, 0.0))):
+    """A knapped or ground point, leaf-shaped: widest a third of the way up, its flat to `face`."""
+    d = (tip - base).normalized()
+    t = face - d * face.dot(d)
+    t.normalize()
+    s = d.cross(t).normalized()
+    w = base.lerp(tip, 0.35)
+    ring = [w + s * width, w + t * thick, w - s * width, w - t * thick]
+    cols = [col_edge, col, col_edge, col]
+    for k in range(4):
+        k2 = (k + 1) % 4
+        b.tri(base, ring[k], ring[k2], col, cols[k], cols[k2])
+        b.tri(ring[k], tip, ring[k2], cols[k], col_edge, cols[k2])
+
+
+# The vest's front, each side from its armhole in to the lacing: (height, outside x, inside x).
+# The inside edge opens into the neck's V above the chest.
+VEST_ROWS = ((0.88, 0.148, 0.004), (1.00, 0.154, 0.004), (1.11, 0.158, 0.004),
+             (1.16, 0.128, 0.006), (1.23, 0.118, 0.034), (1.30, 0.110, 0.062))
+
+
+def _vest_y(x, z, forward):
+    """How far out from the tool board the vest's front is at (x, z): a little fuller at the chest."""
+    return 0.262 - forward - 0.016 * max(0.0, 1.0 - (x / 0.18) ** 2) * (1.0 if z < 1.16 else 0.6)
+
+
+def _vest(b, forward, rng):
+    """A sleeveless vest of hide hung on the board's middle peg, laced up its front; `forward`
+    stands it that much further off the board."""
+    cols_n = 3
+    for side in (-1.0, 1.0):
+        grid = []
+        for (z, outside, inside) in VEST_ROWS:
+            row = []
+            for j in range(cols_n + 1):
+                x = side * (outside + (inside - outside) * j / cols_n)
+                row.append(Vector((x, _vest_y(x, z, forward), z)))
+            grid.append(row)
+        for i in range(len(grid) - 1):
+            for j in range(cols_n):
+                lo = HIDE_EDGE if i == 0 else jitter(HIDE, rng, 0.04)
+                hi = jitter(HIDE, rng, 0.04)
+                edge = mix(HIDE, HIDE_EDGE, 0.5)
+                b.quad(grid[i][j], grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j],
+                       lo, edge if j + 1 == cols_n else lo, edge if j + 1 == cols_n else hi, hi)
+    # The lacing: a cord crossing the opening from the hem up to the chest.
+    for k in range(5):
+        z = 0.92 + k * 0.05
+        y = _vest_y(0.0, z, forward) - 0.004
+        rod(b, Vector((-0.022, y, z)), Vector((0.022, y, z + 0.025)), 0.004, ROPE, sides=4)
+        rod(b, Vector((0.022, y, z + 0.025)), Vector((-0.022, y, z + 0.05)), 0.004, ROPE, sides=4)
 
 
 # ==============================================================================
