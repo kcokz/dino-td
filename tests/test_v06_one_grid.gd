@@ -82,8 +82,8 @@ func test_01_everything_fills_whole_cells_of_one_grid() -> void:
 func test_02_its_collider_is_its_cells() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
-	for type_id in ["wall", "stone_wall", "gate", "tower"]:
-		var b = _put(bs, type_id, Vector2i(0, 4 * ["wall", "stone_wall", "gate", "tower"].find(type_id)))
+	for type_id in ["wall", "stone_wall", "gate", "set_crossbow"]:
+		var b = _put(bs, type_id, Vector2i(0, 4 * ["wall", "stone_wall", "gate", "set_crossbow"].find(type_id)))
 		assert_not_null(b, "%s goes up" % type_id)
 		if b == null:
 			continue
@@ -102,7 +102,7 @@ func test_03_a_click_lands_in_the_cell_under_it_and_a_tile_in_its_middle() -> vo
 	assert_not_null(b, "It goes up where he clicked")
 	assert_eq(gm.world_to_build_cell(b.global_position), gm.world_to_build_cell(at), "in the cell under the click")
 	var tile := Vector2i(-3, 2)
-	var t = bs.place_building("tower", tile, _world, false)
+	var t = bs.place_building("set_crossbow", tile, _world, false)
 	assert_not_null(t, "Placed by tile")
 	if t:
 		assert_almost_eq(t.global_position.distance_to(gm.cell_to_world(tile)), 0.0, 0.001, "it stands in the tile's middle")
@@ -111,8 +111,8 @@ func test_04_a_cell_holds_one_thing() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
 	assert_not_null(_put(bs, "wall", Vector2i(2, 2)), "The first goes up")
-	assert_null(_put(bs, "tower", Vector2i(2, 2)), "and nothing else in its cell")
-	assert_not_null(_put(bs, "tower", Vector2i(3, 2)), "but right beside it, yes")
+	assert_null(_put(bs, "set_crossbow", Vector2i(2, 2)), "and nothing else in its cell")
+	assert_not_null(_put(bs, "set_crossbow", Vector2i(3, 2)), "but right beside it, yes")
 
 # ==============================================================================
 # 2. Flush: nothing between a wall and what is beside it
@@ -124,12 +124,12 @@ func test_05_a_turret_stands_flush_against_a_wall() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
 	var wall = _put(bs, "wall", Vector2i(0, 0))
-	var tower = _put(bs, "tower", Vector2i(1, 0))
+	var tower = _put(bs, "set_crossbow", Vector2i(1, 0))
 	assert_not_null(tower, "A turret goes up in the next cell to a wall")
 	if wall == null or tower == null:
 		return
 	var gap: float = absf(tower.global_position.x - wall.global_position.x) \
-		- float(config_node.get_building_footprint("wall")) * 0.5 - float(config_node.get_building_footprint("tower")) * 0.5
+		- float(config_node.get_building_footprint("wall")) * 0.5 - float(config_node.get_building_footprint("set_crossbow")) * 0.5
 	assert_almost_eq(gap, 0.0, 0.001, "and their sides meet: nothing between them")
 
 func test_06_a_run_of_wall_across_the_way_shuts_it_and_one_missing_cell_opens_it() -> void:
@@ -260,7 +260,7 @@ func test_10_a_palisade_reaches_out_to_what_is_beside_it() -> void:
 	var end: Dictionary = _shown(a)
 	assert_true(end["Run_E"] and end["Run_W"], "At the end of a line, it is a straight section")
 	# A corner: something to its north as well.
-	var d = _put(bs, "tower", Vector2i(2, -1))
+	var d = _put(bs, "set_crossbow", Vector2i(2, -1))
 	await wait_frames(2)
 	var corner: Dictionary = _shown(c)
 	assert_true(corner["Run_W"] and corner["Run_N"], "At a corner it reaches both neighbours -- a turret too")

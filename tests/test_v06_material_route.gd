@@ -48,9 +48,9 @@ func test_01_no_building_waits_on_anything_but_its_materials() -> void:
 	tree.root.add_child(builder)
 	builder.setup(grid, null)
 	await wait_frames(1)
-	pay_for(["tower"], 1)
+	pay_for(["set_crossbow"], 1)
 	assert_true(game_state_node.unlocks.is_empty(), "Nothing has been made at the cabin")
-	assert_true(builder.can_place_building("tower", Vector2i(2, 2)),
+	assert_true(builder.can_place_building("set_crossbow", Vector2i(2, 2)),
 		"The materials are all a tower asks for")
 
 func test_02_a_building_is_two_materials_at_most() -> void:
@@ -127,7 +127,7 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	# bone stakes, not yet the crossbow tower -- that takes stone, which has not turned up.
 	var so_far: String = String(config_node.uses_text("bone", game_state_node.map_data(), game_state_node.knows))
 	assert_true(hud.hint_label.text.contains(so_far), "What bone is for: %s" % hud.hint_label.text)
-	assert_false(hud.hint_label.text.contains(config_node.get_building_name("tower")),
+	assert_false(hud.hint_label.text.contains(config_node.get_building_name("set_crossbow")),
 		"Not what is still to come: %s" % hud.hint_label.text)
 	hud.hint_label.visible = false
 	bus.resource_picked_up.emit("bone", 1, null)

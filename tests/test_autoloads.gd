@@ -113,21 +113,22 @@ func test_config_buildings_catalog() -> void:
 
 	var b: Dictionary = config_node.BUILDINGS
 	assert_has(b, "core", "BUILDINGS must define 'core'")
-	assert_has(b, "tower", "BUILDINGS must define 'tower'")
+	assert_has(b, "set_crossbow", "BUILDINGS must define 'set_crossbow'")
 	assert_has(b, "wall", "BUILDINGS must define 'wall'")
 
 	if "core" in b:
 		assert_eq(b["core"].get("kind", ""), "core", "core kind should be 'core'")
-		assert_gt(float(b["core"].get("hp", 0.0)), float(b.get("tower", {}).get("hp", 0.0)),
-			"The cabin stands more than any tower: losing it is losing the run")
+		assert_gt(float(b["core"].get("hp", 0.0)), float(b.get("set_crossbow", {}).get("hp", 0.0)),
+			"The cabin stands more than any trap: losing it is losing the run")
 
-	if "tower" in b:
-		assert_eq(b["tower"].get("kind", ""), "tower", "tower kind should be 'tower'")
-		assert_almost_eq(float(b["tower"].get("hp", 0.0)), 20.0, 0.01, "tower hp should be 20.0")
-		assert_almost_eq(float(b["tower"].get("range", 0.0)), 5.0, 0.01, "tower range should be 5.0")
-		assert_almost_eq(float(b["tower"].get("damage", 0.0)), 1.0, 0.01, "tower damage should be 1.0")
-		assert_gt(b["tower"].get("cost", {}).get("stone", 0), 0, "a tower is built of stone")
-		assert_gt(b["tower"].get("cost", {}).get("bone", 0), 0, "and tipped with bone")
+	if "set_crossbow" in b:
+		assert_eq(b["set_crossbow"].get("kind", ""), "trap", "The set crossbow is a trap")
+		assert_gt(float(b["set_crossbow"].get("hp", 0.0)), 0.0, "It stands a while")
+		assert_false(b["set_crossbow"].has("range"), "It aims at nothing: an animal on its wire looses it")
+		assert_gt(int(b["set_crossbow"].get("lane", 0)), 0, "It is set along a lane")
+		assert_gt(float(b["set_crossbow"].get("damage", 0.0)), 0.0, "And it hurts what trips it")
+		assert_gt(b["set_crossbow"].get("cost", {}).get("stone", 0), 0, "It is built of stone")
+		assert_gt(b["set_crossbow"].get("cost", {}).get("bone", 0), 0, "and tipped with bone")
 
 	if "wall" in b:
 		assert_eq(b["wall"].get("kind", ""), "wall", "wall kind should be 'wall'")

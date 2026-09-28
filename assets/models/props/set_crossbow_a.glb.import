@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://du1jo7x4eyf71"
-path="res://.godot/imported/bow_tower_a.glb-1ac6f9d90290e6326f81cb59993d47c7.scn"
+uid="uid://b6kmtaakvs5k8"
+path="res://.godot/imported/set_crossbow_a.glb-90e1d2958558ec4201b55b2d009e2c00.scn"
 
 [deps]
 
-source_file="res://assets/models/props/bow_tower_a.glb"
-dest_files=["res://.godot/imported/bow_tower_a.glb-1ac6f9d90290e6326f81cb59993d47c7.scn"]
+source_file="res://assets/models/props/set_crossbow_a.glb"
+dest_files=["res://.godot/imported/set_crossbow_a.glb-90e1d2958558ec4201b55b2d009e2c00.scn"]
 
 [params]
 

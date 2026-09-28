@@ -3,8 +3,12 @@
 # the nest the raid comes out of, which was a lump of stone with a black box stuck on it.
 #
 # Asked for as "之前做的不够精致的模型都重做" -- every model that was not up to standard
-# gets redone. The art is tools/generate_props.py (sentry, nest); what is tested here is
-# what the game does with it.
+# gets redone. The art is tools/generate_props.py (nest, and the turret head); what is tested
+# here is what the game does with it.
+#
+# The sentry is gone since v0.6 round two -- nothing the player builds aims (Trap.gd) -- and its
+# head is on the cabin's roof: the ship's own gun, the one turret there is. So the turret tested
+# here is the cabin's.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -28,8 +32,9 @@ func _keep(n: Node) -> Node:
 	_cleanup_nodes.append(n)
 	return n
 
+## The cabin, whose gun is the turret (CoreCampfire, on Tower.gd).
 func _tower(at: Vector3 = Vector3(30.0, 0.0, 30.0)) -> Node:
-	var tower = _keep(load("res://scripts/entities/Tower.gd").new())
+	var tower = _keep(load("res://scripts/entities/CoreCampfire.gd").new())
 	tree.root.add_child(tower)
 	tower.global_position = at
 	if tower.has_method("complete_construction") and not tower.is_constructed:
@@ -65,7 +70,7 @@ func _reach(root: Node3D, centre: Vector3) -> float:
 # ==============================================================================
 
 func test_01_the_sentry_has_a_head_to_turn_and_barrels_to_fire_from() -> void:
-	assert_true(VisualLibrary.has_art("building/tower"), "The turret has a model now")
+	assert_true(VisualLibrary.has_art("building/core"), "The cabin, and its gun, have a model")
 	var tower = _tower()
 	await wait_frames(1)
 	var head: Node3D = tower._turret_head()
@@ -99,14 +104,15 @@ func test_03_it_follows_its_target_round_at_its_own_speed() -> void:
 	if head == null:
 		_record_fail("No head to turn")
 		return
-	var want: Vector3 = dino.global_position - tower.global_position
+	# From the head, not the building's middle: on the cabin the gun stands off-centre on its roof.
+	var want: Vector3 = dino.global_position - head.global_position
 	want.y = 0.0
 	want = want.normalized()
 	tower.current_target = dino
 	head.rotation.y = tower._heading_to(head, dino.global_position) + PI    # facing directly away
 
 	var step: float = 0.05
-	var half_turn: float = 180.0 / float(config_node.BUILDINGS["tower"]["turn_speed"])
+	var half_turn: float = 180.0 / float(config_node.BUILDINGS["core"]["turn_speed"])
 	tower._track_target(step)
 	assert_lt(_facing(head).dot(want), 0.9, "One short step is not enough to turn right round")
 	var elapsed: float = step
@@ -126,7 +132,7 @@ func test_04_the_shot_leaves_from_the_barrels() -> void:
 	assert_almost_eq(tower.shot_origin().distance_to(muzzle.global_position), 0.0, 0.001,
 		"The tracer starts at the muzzle")
 	assert_gt(tower.shot_origin().y - tower.global_position.y, 1.5,
-		"Up on the stand, not out of the middle of it the way the box fired")
+		"Up on the roof, not out of the middle of it the way the box fired")
 
 func test_05_however_the_head_turns_it_stays_over_the_stand() -> void:
 	# The barrels swing round with the head. They must never reach past the footprint the
@@ -137,7 +143,7 @@ func test_05_however_the_head_turns_it_stays_over_the_stand() -> void:
 	if head == null:
 		_record_fail("No head")
 		return
-	var half: float = float(config_node.get_building_footprint("tower")) * 0.5
+	var half: float = float(config_node.get_building_footprint("core")) * 0.5
 	for step in range(12):
 		head.rotation.y = TAU * float(step) / 12.0
 		assert_lte(_reach(head, tower.global_position), half + 0.001,

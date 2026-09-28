@@ -114,7 +114,7 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 	# v0.4: buildings are defence and nothing else, so the menu is stakes and a
 	# turret. Anything offered has to be buildable.
 	assert_has(config_node.BUILDABLE_TYPES, "wall", "Stakes are offered in the build menu")
-	assert_has(config_node.BUILDABLE_TYPES, "tower", "So is the turret")
+	assert_has(config_node.BUILDABLE_TYPES, "set_crossbow", "So is the turret")
 	for b_type in config_node.BUILDABLE_TYPES:
 		# By kind first, as BuildSystem looks it up: a bone stake is a stake.
 		var scripts: Dictionary = build_system_script.SCRIPT_PATHS
@@ -238,10 +238,12 @@ func test_15_build_preview_ghost_follows_selection() -> void:
 
 	assert_null(main.build_preview, "No ghost exists before a building type is selected")
 
-	main.on_build_selected("tower")
+	main.on_build_selected("set_crossbow")
 	assert_not_null(main.build_preview, "Selecting a type creates the ghost")
 	assert_not_null(main.build_preview_mesh, "Ghost has a body the player can see")
-	assert_not_null(main.build_preview_ring, "A tower ghost shows its coverage ring")
+	# What a trap covers is its lane, not a circle (v0.6 round two: nothing the player builds aims).
+	assert_null(main.build_preview_ring, "A trap's ghost draws no ring")
+	assert_not_null(main.build_preview.find_child("LanePreview", false, false), "It shows its lane instead")
 
 	main.cancel_building_selection()
 	await wait_frames(1)
@@ -260,10 +262,8 @@ func test_16_preview_ring_size_matches_the_building() -> void:
 	assert_eq(main._preview_range_for("wall"), 0.0, "A wall has no coverage range")
 	assert_null(main.build_preview_ring, "A wall ghost draws no ring")
 
-	# A turret's ring is its attack range, and it is the only building with one.
-	assert_almost_eq(main._preview_range_for("tower"),
-		float(config_node.BUILDINGS["tower"]["range"]), 0.001,
-		"Tower preview ring uses its Config attack range")
+	# Nor has a trap: it shoots along its lane, and that is what its ghost shows.
+	assert_eq(main._preview_range_for("set_crossbow"), 0.0, "A trap has no coverage range")
 
 func test_17_only_the_turret_has_a_coverage_ring() -> void:
 	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
@@ -345,7 +345,7 @@ func test_22_the_opening_does_not_trivially_buy_the_whole_defence() -> void:
 	# The flip side: the opening must not hand over a tower, or the first real decision
 	# never happens. Since v0.6 a tower is tipped with bone, which lies nowhere but under
 	# a dead dinosaur -- so the opening cannot pay for one however it is tuned.
-	var price: Dictionary = config_node.BUILDINGS["tower"].get("cost", {})
+	var price: Dictionary = config_node.BUILDINGS["set_crossbow"].get("cost", {})
 	var short: Array = []
 	for res_id in price:
 		if int(config_node.get_opening_stock(String(res_id))) < int(price[res_id]):
@@ -456,7 +456,7 @@ func test_28_build_time_is_a_function_of_price() -> void:
 
 	# The invariant is that time tracks price, not that any two particular buildings
 	# sit in a given order -- prices move with every balance pass.
-	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("tower"),
+	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("set_crossbow"),
 		"Cheap stakes go up faster than a turret")
 	for a in config_node.BUILDABLE_TYPES:
 		for b in config_node.BUILDABLE_TYPES:
@@ -479,8 +479,8 @@ func test_28_build_time_is_a_function_of_price() -> void:
 			"%s build time follows the price formula" % b_type)
 
 	# Doubling the price must more than double the wait, which is the whole point.
-	var cheap: float = config_node.get_build_time("tower")
-	var dear: float = maxf(floor_t, pow(total_price_of("tower") * 2.0, expo) * per)
+	var cheap: float = config_node.get_build_time("set_crossbow")
+	var dear: float = maxf(floor_t, pow(total_price_of("set_crossbow") * 2.0, expo) * per)
 	assert_gt(dear, cheap * 2.0, "Twice the price costs more than twice the time")
 
 	# No building may restate a build_time of its own, or the two can drift apart.
@@ -501,7 +501,7 @@ func test_30_stakes_are_cheap_enough_to_lay_a_row() -> void:
 	# The point of one-wood stakes is that a whole fence is affordable in one go.
 	var stake: int = cost_of("wall")
 	assert_eq(stake, config_node.BUILDINGS["wall"]["cost"]["wood"], "A stake's price is whatever Config says")
-	assert_lt(total_price_of("wall"), total_price_of("tower"), "And it is the cheap thing on the menu")
+	assert_lt(total_price_of("wall"), total_price_of("set_crossbow"), "And it is the cheap thing on the menu")
 	var wallet: int = opening_wood()
 	assert_gte(wallet / stake, 10, "The opening affords at least ten stakes")
 
@@ -673,41 +673,41 @@ func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 		idx += 1
 
 	assert_false(seen["wall"].disabled, "A stake is affordable, so its entry is live")
-	assert_true(seen["tower"].disabled, "A turret is out of reach, so its entry is greyed out")
+	assert_true(seen["set_crossbow"].disabled, "A turret is out of reach, so its entry is greyed out")
 
 	# Paying for it lights the entry back up.
-	pay_for(["tower"])
+	pay_for(["set_crossbow"])
 	panel._refresh_ui()
-	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("tower")).disabled,
+	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("set_crossbow")).disabled,
 		"The turret entry lights up once affordable")
 
 func test_38_detail_line_reports_cost_and_build_time() -> void:
-	pay_for(["tower"], 999)
+	pay_for(["set_crossbow"], 999)
 	var pair = await _build_menu()
 	var panel = pair[0]
 
 	# Nothing hovered: the line prompts instead of showing a stale unit status.
 	assert_eq(panel.status_label.text, tr("BUILD_HINT_PICK"), "The build page prompts when nothing is hovered")
 
-	panel._show_build_detail("tower")
+	panel._show_build_detail("set_crossbow")
 	var detail: String = str(panel.status_label.text)
-	for res_id in config_node.BUILDINGS["tower"]["cost"]:
-		assert_true(detail.contains(str(int(config_node.BUILDINGS["tower"]["cost"][res_id]))),
+	for res_id in config_node.BUILDINGS["set_crossbow"]["cost"]:
+		assert_true(detail.contains(str(int(config_node.BUILDINGS["set_crossbow"]["cost"][res_id]))),
 			"Detail names what it costs in %s (got '%s')" % [res_id, detail])
-	var secs: String = "%.1f" % config_node.get_build_time("tower")
+	var secs: String = "%.1f" % config_node.get_build_time("set_crossbow")
 	assert_true(detail.contains(secs) or detail.contains(secs.replace(".", ",")),
 		"Detail names the derived build time (got '%s')" % detail)
 
 func test_39_detail_line_says_what_is_actually_missing() -> void:
 	# It used to say "need N wood" whatever was short, which became a lie the moment
 	# a turret wanted stone as well.
-	pay_for(["tower"])
+	pay_for(["set_crossbow"])
 	game_state_node.resources["stone"] = 0
-	var stone_cost: int = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
+	var stone_cost: int = int(config_node.BUILDINGS["set_crossbow"]["cost"].get("stone", 0))
 	var pair = await _build_menu()
 	var panel = pair[0]
 
-	panel._show_build_detail("tower")
+	panel._show_build_detail("set_crossbow")
 	var detail: String = str(panel.status_label.text)
 	assert_true(detail.contains(str(stone_cost)), "Names the stone that is short (got '%s')" % detail)
 	assert_false(detail.contains(tr("RESOURCE_WOOD")), "And says nothing about the wood already in hand")
@@ -719,7 +719,7 @@ func test_40_unit_status_does_not_overwrite_the_build_detail() -> void:
 	var pair = await _build_menu()
 	var panel = pair[0]
 
-	panel._show_build_detail("tower")
+	panel._show_build_detail("set_crossbow")
 	var detail: String = str(panel.status_label.text)
 	# The per-unit status ticker must leave the build page's line alone.
 	panel._update_status_display()

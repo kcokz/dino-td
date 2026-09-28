@@ -13,7 +13,7 @@ extends Node3D
 ## EVERY GAME RULE IS ALREADY A COLLISION LAYER, which is what makes this possible at all:
 ##
 ##   layer 1   ground, hillside, resource nodes   -- the surface, and what interrupts it
-##   layer 2   the wreck and the turrets          -- solid to everybody
+##   layer 2   the cabin and the traps            -- solid to everybody
 ##   layer 16  blueprints                         -- ordered, not built; solid to nobody
 ##   layer 32  walls                              -- solid to everybody (since v0.6 round two)
 ##   layer 128 gates                              -- solid to a raid, open to the Hero

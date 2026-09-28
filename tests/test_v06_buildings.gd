@@ -64,7 +64,7 @@ func _row(type_id: String) -> Dictionary:
 func test_01_the_menu_offers_bone_stakes_and_a_stone_wall_but_not_tower_ii() -> void:
 	assert_has(config_node.BUILDABLE_TYPES, "bone_stake", "Bone stakes are on the build menu")
 	assert_has(config_node.BUILDABLE_TYPES, "stone_wall", "So is the stone wall")
-	var target: String = String(config_node.upgrade_target("tower"))
+	var target: String = String(config_node.upgrade_target("set_crossbow"))
 	assert_ne(target, "", "A tower has somewhere to go")
 	assert_false(config_node.BUILDABLE_TYPES.has(target), "But that is reached by upgrading, not from the menu")
 
@@ -123,31 +123,31 @@ func test_04_a_stone_wall_stops_the_hero_and_a_dinosaur_alike() -> void:
 	assert_ne(int(dino.collision_mask) & wall_layer, 0, "And so is a dinosaur's body")
 
 # ==============================================================================
-# 4. Upgrading a tower where it stands
+# 4. Improving a set crossbow where it stands
 # ==============================================================================
 
 func test_05_an_upgrade_costs_the_difference_between_the_two_prices() -> void:
-	var target: String = String(config_node.upgrade_target("tower"))
-	assert_eq(config_node.get_building_kind(target), "tower", "A tower becomes a better tower")
-	assert_almost_eq(config_node.get_building_footprint(target), config_node.get_building_footprint("tower"), 0.001,
+	var target: String = String(config_node.upgrade_target("set_crossbow"))
+	assert_eq(config_node.get_building_kind(target), "trap", "A trap becomes a better trap")
+	assert_almost_eq(config_node.get_building_footprint(target), config_node.get_building_footprint("set_crossbow"), 0.001,
 		"On exactly the same ground, so nothing on the grid moves")
-	var have: Dictionary = _row("tower")["cost"]
+	var have: Dictionary = _row("set_crossbow")["cost"]
 	var want: Dictionary = _row(target)["cost"]
-	var cost: Dictionary = config_node.upgrade_cost("tower")
+	var cost: Dictionary = config_node.upgrade_cost("set_crossbow")
 	assert_false(cost.is_empty(), "It costs something")
 	for res_id in want:
 		var more: int = int(want[res_id]) - int(have.get(res_id, 0))
 		assert_eq(int(cost.get(res_id, 0)), maxi(0, more), "Its %s is the difference" % res_id)
-	assert_gt(float(_row(target)["fire_rate"]), float(_row("tower")["fire_rate"]), "And it looses faster")
-	assert_gt(config_node.get_upgrade_time("tower"), 0.0, "Upgrading is work")
+	assert_lt(float(_row(target)["rearm_seconds"]), float(_row("set_crossbow")["rearm_seconds"]), "And it re-arms faster")
+	assert_gt(config_node.get_upgrade_time("set_crossbow"), 0.0, "Upgrading is work")
 
-func test_06_upgrading_is_paid_up_front_and_the_tower_keeps_shooting() -> void:
-	var t = _built(_rig(), "tower", Vector2i(4, 4))
+func test_06_upgrading_is_paid_up_front_and_the_trap_keeps_working() -> void:
+	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
 	await wait_frames(1)
-	var cost: Dictionary = config_node.upgrade_cost("tower")
+	var cost: Dictionary = config_node.upgrade_cost("set_crossbow")
 	for res_id in config_node.RESOURCES:
 		game_state_node.resources[res_id] = int(cost.get(res_id, 0))
 	assert_true(t.can_upgrade(), "A finished tower can be upgraded")
@@ -155,18 +155,18 @@ func test_06_upgrading_is_paid_up_front_and_the_tower_keeps_shooting() -> void:
 	for res_id in cost:
 		assert_eq(int(game_state_node.resources[res_id]), 0, "Its %s is spent when it is ordered" % res_id)
 	assert_true(t.is_upgrading(), "The work is waiting")
-	assert_true(t.is_constructed, "And the tower is still a tower, not a blueprint")
-	assert_almost_eq(float(t.fire_rate), float(_row("tower")["fire_rate"]), 0.0001, "Shooting as it did")
+	assert_true(t.is_constructed, "And the trap is still a trap, not a blueprint")
+	assert_almost_eq(float(t.rearm_seconds), float(_row("set_crossbow")["rearm_seconds"]), 0.0001, "Working as it did")
 	assert_false(t.can_upgrade(), "It cannot be ordered twice")
 	assert_false(t.begin_upgrade(), "Or paid for twice")
 
-func test_07_the_hero_builds_it_and_it_becomes_the_next_tower() -> void:
-	var t = _built(_rig(), "tower", Vector2i(4, 4))
+func test_07_the_hero_builds_it_and_it_becomes_the_next_trap() -> void:
+	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
 	await wait_frames(1)
-	var target: String = String(config_node.upgrade_target("tower"))
+	var target: String = String(config_node.upgrade_target("set_crossbow"))
 	t.current_hp = t.max_hp * 0.5
 	stock_everything()
 	assert_true(t.begin_upgrade(), "Ordered")
@@ -176,22 +176,22 @@ func test_07_the_hero_builds_it_and_it_becomes_the_next_tower() -> void:
 	hero.global_position = t.global_position + Vector3(0.9, 0.0, 0.0)
 	await wait_frames(1)
 	hero.order_upgrade(t)
-	var needed: float = config_node.get_upgrade_time("tower")
+	var needed: float = config_node.get_upgrade_time("set_crossbow")
 	hero._process_building(needed * 0.5)
 	assert_true(t.is_upgrading(), "Half the work is not the thing")
 	hero._process_building(needed * 0.5 + 0.01)
 
 	assert_false(t.is_upgrading(), "Done")
-	assert_eq(String(t.building_type), target, "It is the next tower now")
-	assert_almost_eq(float(t.fire_rate), float(_row(target)["fire_rate"]), 0.0001, "With its rate of fire")
+	assert_eq(String(t.building_type), target, "It is the next trap now")
+	assert_almost_eq(float(t.rearm_seconds), float(_row(target)["rearm_seconds"]), 0.0001, "Re-arming as fast as it")
 	assert_almost_eq(float(t.max_hp), float(_row(target)["hp"]), 0.0001, "Its hit points")
 	assert_almost_eq(float(t.current_hp), float(_row(target)["hp"]) * 0.5, 0.01,
-		"And as much of them as the old tower had left")
+		"And as much of them as the old trap had left")
 	assert_true(watcher.emitted, "The bus says so")
 	assert_false(t.can_upgrade(), "It is the end of its line in v0.6")
 
 func test_08_an_upgrade_under_way_is_work_that_waits_for_him() -> void:
-	var t = _built(_rig(), "tower", Vector2i(4, 4))
+	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
@@ -204,7 +204,7 @@ func test_08_an_upgrade_under_way_is_work_that_waits_for_him() -> void:
 	assert_true(hero._is_unfinished_work(t), "An upgrade paid for and not built is")
 
 func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
-	var t = _built(_rig(), "tower", Vector2i(4, 4))
+	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
@@ -213,9 +213,9 @@ func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
 	stock_everything()
 	panel.select_target(t)
 	await wait_frames(1)
-	var target: String = String(config_node.upgrade_target("tower"))
+	var target: String = String(config_node.upgrade_target("set_crossbow"))
 	var target_name: String = String(config_node.get_building_name(target))
-	var button_text: String = tr("CMD_UPGRADE") % panel._amounts_text(config_node.upgrade_cost("tower"))
+	var button_text: String = tr("CMD_UPGRADE") % panel._amounts_text(config_node.upgrade_cost("set_crossbow"))
 	var offered: bool = false
 	for child in panel.button_container.get_children():
 		if child is Button and String(child.text) == button_text:
@@ -223,6 +223,6 @@ func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
 	assert_true(offered, "The tower's panel offers the upgrade, price on the button (%s)" % button_text)
 	var detail: String = panel.upgrade_detail_text(t)
 	assert_true(detail.contains(target_name), "Hovering it names what the tower becomes")
-	var rate: String = tr("STAT_FIRE_RATE") % [config_node.factor_text(float(_row("tower")["fire_rate"])),
-		config_node.factor_text(float(_row(target)["fire_rate"]))]
+	var rate: String = tr("STAT_REARM_SECONDS") % [config_node.factor_text(float(_row("set_crossbow")["rearm_seconds"])),
+		config_node.factor_text(float(_row(target)["rearm_seconds"]))]
 	assert_true(detail.contains(rate), "And says what it changes: %s" % detail)

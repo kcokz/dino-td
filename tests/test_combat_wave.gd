@@ -144,7 +144,11 @@ func _create_tower() -> Object:
 	assert_not_null(tower_script, "Tower.gd script must exist")
 	if tower_script == null:
 		return null
+	# The cabin's gun: since v0.6 round two the one thing in the valley that aims (Tower.gd),
+	# so its numbers are the cabin's row. What the player builds are traps (Trap.gd).
 	var tower = tower_script.new()
+	if tower.has_method("setup"):
+		tower.setup("core")
 	if tower is Node:
 		_cleanup_nodes.append(tower)
 		if tree != null and tree.root != null:
@@ -391,8 +395,8 @@ func test_tower_stats_match_config() -> void:
 	var expected_damage: float = 1.0
 	var expected_fire_rate: float = 1.0
 
-	if config_node != null and "BUILDINGS" in config_node and config_node.BUILDINGS.has("tower"):
-		var data = config_node.BUILDINGS["tower"]
+	if config_node != null and "BUILDINGS" in config_node and config_node.BUILDINGS.has("core"):
+		var data = config_node.BUILDINGS["core"]
 		expected_hp = float(data.get("hp", expected_hp))
 		expected_range = float(data.get("range", expected_range))
 		expected_damage = float(data.get("damage", expected_damage))
@@ -480,7 +484,7 @@ func test_tower_deals_config_damage_at_fire_rate() -> void:
 		var dmg = tower.get("damage") if "damage" in tower else 1.0
 		dino.take_damage(dmg)
 
-	assert_almost_eq(float(dino.current_hp), initial_hp - float(config_node.BUILDINGS["tower"]["damage"]), 0.01,
+	assert_almost_eq(float(dino.current_hp), initial_hp - float(config_node.BUILDINGS["core"]["damage"]), 0.01,
 		"Dino HP drops by one shot of the tower's damage")
 
 func test_tower_retargets_when_primary_target_dies() -> void:

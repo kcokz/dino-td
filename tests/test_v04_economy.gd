@@ -229,7 +229,7 @@ func test_15_the_chain_closes() -> void:
 	var pick_recipe: Dictionary = _recipe(String(config_node.harvest_requires_unlock("stone")))
 	assert_false(pick_recipe.is_empty(), "The pick is something the cabin can make")
 	assert_has(pick_recipe["inputs"], "bone", "And the pick is made of bone, which only a dinosaur has")
-	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
 	assert_has(tower_cost, "stone", "While the tower is built of the stone the pick cuts")
 	assert_has(tower_cost, "bone", "And tipped with bone off the same raid")
 
@@ -279,7 +279,7 @@ func test_16_the_opening_is_wood_a_fence_and_nothing_more() -> void:
 	# What keeps the tower out of reach on the first morning is the chain, not the
 	# wood: it wants stone, and bone, which the opening does not hold.
 	# Gating it on the opening wallet as well would be a second lock on the same door.
-	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
 	assert_gt(int(tower_cost.get("stone", 0)), 0, "A tower wants stone")
 	assert_gt(int(tower_cost.get("bone", 0)), 0, "And bone")
 
@@ -290,7 +290,7 @@ func test_17_one_raid_pays_for_the_pick_and_the_first_tower() -> void:
 	var drops: Dictionary = _first_raid_drops()
 	var pick: Dictionary = _recipe("harvest_stone")
 	assert_false(pick.is_empty(), "The pick is a recipe")
-	var tower_cost: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
 	var bone_needed: int = int(pick["inputs"].get("bone", 0)) + int(tower_cost.get("bone", 0))
 	assert_gte(int(drops.get("bone", 0)), bone_needed,
 		"One raid leaves the bone for the pick and the first tower's bolts")
@@ -319,12 +319,12 @@ func test_19_the_whole_chain_fits_between_the_first_two_raids() -> void:
 	# raise a tower. If that does not fit before the next wave arrives, the tower can
 	# never be up in time and the chain is decoration.
 	var pick: Dictionary = _recipe("harvest_stone")
-	var stone_needed: int = int(config_node.BUILDINGS["tower"]["cost"].get("stone", 0))
+	var stone_needed: int = int(config_node.BUILDINGS["set_crossbow"]["cost"].get("stone", 0))
 	var stone_rate: float = float(config_node.RESOURCE_NODES["stone"]["harvest_rate"])
 
 	var work: float = float(pick["time"])
 	work += float(stone_needed) / maxf(stone_rate, 0.01)
-	work += config_node.get_build_time("tower")
+	work += config_node.get_build_time("set_crossbow")
 
 	var gap: float = float(config_node.RAIDS["interval_min"])
 	assert_lt(work, gap,

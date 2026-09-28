@@ -53,9 +53,15 @@ func _spawn(script: GDScript, pos: Vector3 = Vector3.ZERO) -> Node:
 	n.position = pos
 	return n
 
-func _turret(pos: Vector3 = Vector3.ZERO) -> Node:
-	var t = _spawn(tower_script, pos)
-	t.complete_construction()
+## A set crossbow, finished: the dear thing, stone and bone, that repair is really for.
+func _crossbow(pos: Vector3 = Vector3.ZERO, finished: bool = true) -> Node:
+	var t = load("res://scripts/entities/Trap.gd").new()
+	t.setup("set_crossbow")
+	_cleanup_nodes.append(t)
+	tree.root.add_child(t)
+	t.position = pos
+	if finished:
+		t.complete_construction()
 	return t
 
 func _level() -> Node:
@@ -69,7 +75,7 @@ func _level() -> Node:
 # ==============================================================================
 
 func test_01_only_a_damaged_finished_building_wants_repair() -> void:
-	var turret = _turret()
+	var turret = _crossbow()
 	await wait_frames(1)
 	assert_false(turret.needs_repair(), "At full health there is nothing to mend")
 	assert_eq(turret.repair_cost(), {}, "And nothing to pay")
@@ -83,7 +89,7 @@ func test_01_only_a_damaged_finished_building_wants_repair() -> void:
 	for res_id in bill:
 		assert_gt(int(bill[res_id]), 0, "Which asks for some %s" % res_id)
 
-	var blueprint = _spawn(tower_script, Vector3(20.0, 0.0, 0.0))
+	var blueprint = _crossbow(Vector3(20.0, 0.0, 0.0), false)
 	blueprint.start_construction()
 	await wait_frames(1)
 	assert_false(blueprint.needs_repair(), "A blueprint is raised, not mended")
@@ -91,9 +97,9 @@ func test_01_only_a_damaged_finished_building_wants_repair() -> void:
 func test_02_the_bill_is_the_price_scaled_by_the_damage() -> void:
 	# Never more than building it again, and a scratch costs the minimum rather
 	# than a flat fee.
-	var turret = _turret()
+	var turret = _crossbow()
 	await wait_frames(1)
-	var price: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var price: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
 
 	turret.take_damage(turret.max_hp * 0.5)
 	for res_id in price:
@@ -102,32 +108,32 @@ func test_02_the_bill_is_the_price_scaled_by_the_damage() -> void:
 			"Half gone costs half the %s, rounded up" % res_id)
 
 func test_03_mending_never_costs_more_than_building_it_again() -> void:
-	var turret = _turret()
+	var turret = _crossbow()
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp - 0.001)   # all but destroyed
-	var price: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var price: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
 	for res_id in price:
 		assert_lte(int(turret.repair_cost().get(res_id, 0)), int(price[res_id]),
 			"Even gutted, the %s bill is capped at what it cost to build" % res_id)
-	assert_lte(turret.repair_price_total(), total_price_of("tower"),
+	assert_lte(turret.repair_price_total(), total_price_of("set_crossbow"),
 		"So repair is never the worse deal")
 
 func test_04_a_scratch_costs_the_minimum_not_a_flat_fee() -> void:
-	var turret = _turret()
+	var turret = _crossbow()
 	await wait_frames(1)
 	turret.take_damage(0.5)
 	assert_eq(turret.repair_price_total(), turret.repair_cost().size(),
 		"One unit of each resource it is short of, and no more")
-	assert_lt(turret.repair_price_total(), total_price_of("tower"),
+	assert_lt(turret.repair_price_total(), total_price_of("set_crossbow"),
 		"Which is far less than rebuilding it")
 
 func test_05_the_bill_is_charged_once_at_the_end() -> void:
 	# One transaction: walking away costs the time spent and nothing else, so there
 	# is never a half-paid building to explain.
-	var turret = _turret()
+	var turret = _crossbow()
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp * 0.5)
-	pay_for(["tower"], 99)
+	pay_for(["set_crossbow"], 99)
 	var owed: Dictionary = turret.repair_cost()
 	var before: Dictionary = {}
 	for res_id in owed:
@@ -140,7 +146,7 @@ func test_05_the_bill_is_charged_once_at_the_end() -> void:
 	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "And it is whole again")
 
 func test_05b_an_unpayable_bill_mends_nothing() -> void:
-	var turret = _turret()
+	var turret = _crossbow()
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp * 0.5)
 	for res_id in config_node.RESOURCES:
@@ -155,10 +161,10 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 	# building's business.
 	var hero = _spawn(hero_script, Vector3.ZERO)
 	hero.continuous_mode = true
-	var turret = _turret(Vector3(1.0, 0.0, 0.0))
+	var turret = _crossbow(Vector3(1.0, 0.0, 0.0))
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp - 1.0)
-	pay_for(["tower"], 99)   # a turret is mended with wood and stone
+	pay_for(["set_crossbow"], 99)   # a turret is mended with wood and stone
 
 	hero.order_repair(turret)
 	assert_eq(int(hero.current_state), int(hero_script.State.BUILDING), "He sets to work")
@@ -183,8 +189,8 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 func test_07_right_click_never_puts_anything_up_to_click_through() -> void:
 	var main = _level()
 	await wait_frames(2)
-	pay_for(["tower"], 99)
-	var turret = main.place_building_at_cell("tower", Vector2i(4, 4))
+	pay_for(["set_crossbow"], 99)
+	var turret = main.place_building_at_cell("set_crossbow", Vector2i(4, 4))
 	turret.complete_construction()
 	turret.take_damage(turret.max_hp * 0.5)
 	await wait_frames(1)
@@ -219,7 +225,7 @@ func test_10_mending_is_offered_on_the_panel_when_there_is_damage() -> void:
 	var panel = load("res://scripts/ui/OptionPanel.gd").new()
 	_cleanup_nodes.append(panel)
 	tree.root.add_child(panel)
-	var turret = _turret(Vector3(6.0, 0.0, 0.0))
+	var turret = _crossbow(Vector3(6.0, 0.0, 0.0))
 	await wait_frames(1)
 	game_state_node.resources["wood"] = 99
 
@@ -246,7 +252,7 @@ func test_11_an_unaffordable_repair_is_offered_but_disabled() -> void:
 	var panel = load("res://scripts/ui/OptionPanel.gd").new()
 	_cleanup_nodes.append(panel)
 	tree.root.add_child(panel)
-	var turret = _turret(Vector3(6.0, 0.0, 0.0))
+	var turret = _crossbow(Vector3(6.0, 0.0, 0.0))
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp * 0.5)
 	game_state_node.resources["wood"] = 0
@@ -259,8 +265,8 @@ func test_11_an_unaffordable_repair_is_offered_but_disabled() -> void:
 func test_12_choosing_it_sends_the_hero_to_work() -> void:
 	var main = _level()
 	await wait_frames(2)
-	pay_for(["tower"], 99)
-	var turret = main.place_building_at_cell("tower", Vector2i(5, 5))
+	pay_for(["set_crossbow"], 99)
+	var turret = main.place_building_at_cell("set_crossbow", Vector2i(5, 5))
 	turret.complete_construction()
 	turret.take_damage(turret.max_hp * 0.5)
 	var panel = load("res://scripts/ui/OptionPanel.gd").new()

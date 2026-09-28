@@ -81,28 +81,28 @@ func _wall_cfg(key: String, fallback: float) -> float:
 # 1. Size: stakes wide and low, turret narrow and tall
 # ==============================================================================
 
-func test_01_a_turret_stands_taller_than_a_wall_and_both_fill_a_cell() -> void:
+func test_01_a_wall_stands_over_his_head_and_a_trap_low_on_its_lane() -> void:
 	# The pair was the wrong way round once: stakes towered over a squat turret, so the thing
 	# that matters least on the field looked like the thing that matters most. Since v0.6 round
-	# two both fill one cell of the building grid -- how tall a thing stands is what says what it
-	# is -- and a palisade is "a little bigger": over the head of the man who builds it.
+	# two both fill one cell of the building grid, and how tall a thing stands says what it is:
+	# a palisade is "a little bigger", over the head of the man who builds it; a trap is set low,
+	# shooting along the ground (Trap.gd) -- and still tall enough to be in an animal's way.
 	var wall_w: float = config_node.get_building_footprint("wall")
-	var tower_w: float = config_node.get_building_footprint("tower")
+	var trap_w: float = config_node.get_building_footprint("set_crossbow")
 	var wall_h: float = config_node.get_building_height("wall")
-	var tower_h: float = config_node.get_building_height("tower")
+	var trap_h: float = config_node.get_building_height("set_crossbow")
 
 	assert_almost_eq(wall_w, float(config_node.BUILD_CELL), 0.0001, "A section of wall is one cell")
-	assert_almost_eq(tower_w, float(config_node.BUILD_CELL), 0.0001, "And so is a turret")
-	assert_gt(tower_h, wall_h, "A turret stands taller than a wall")
-	assert_gt(tower_h, config_node.BUILDING_HEIGHT_DEFAULT,
-		"A turret is taller than an ordinary shed, not merely equal to one")
+	assert_almost_eq(trap_w, float(config_node.BUILD_CELL), 0.0001, "And so is a trap")
 	assert_gt(wall_h, float(config_node.HERO["height"]), "A palisade stands over the Hero's head")
+	assert_lt(trap_h, wall_h, "A trap is set low, under a wall's height")
+	assert_gt(trap_h, float(config_node.DINO_PROBE_HEIGHT), "But an animal still sees it in its way")
 
 func test_03_height_and_style_are_declared_in_config_not_in_the_mesh() -> void:
 	for b_type in config_node.BUILDABLE_TYPES:
 		assert_gt(config_node.get_building_height(b_type), 0.0,
 			"%s resolves to a real height" % b_type)
-	assert_eq(config_node.get_building_mesh_style("tower"), "box",
+	assert_eq(config_node.get_building_mesh_style("set_crossbow"), "box",
 		"Anything that does not ask for a style gets the plain block")
 	assert_eq(config_node.get_building_mesh_style("no_such_building"), "box",
 		"An unknown type falls back rather than failing")
@@ -150,12 +150,12 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 		match type_id:
 			"wall":
 				placed = _stake(Vector3(30.0, 0.0, 0.0))
-			"tower", "bow_tower":
-				placed = tower_script.new()
+			"set_crossbow", "trip_bow":
+				placed = load("res://scripts/entities/Trap.gd").new()
 				placed.setup(type_id)
 				_cleanup_nodes.append(placed)
 				tree.root.add_child(placed)
-				placed.position = Vector3(34.0 if type_id == "tower" else 46.0, 0.0, 0.0)
+				placed.position = Vector3(34.0 if type_id == "set_crossbow" else 46.0, 0.0, 0.0)
 				placed.complete_construction()
 			"bone_stake", "stone_wall", "gate":
 				# Given its type before it enters the tree -- as BuildSystem does -- because
@@ -177,37 +177,42 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 
 		body.free()
 
-func test_05_a_turret_is_drawn_inside_its_declared_size() -> void:
-	# It was one block of exactly the declared size. It is a model now
-	# (tools/generate_props.py, sentry), fitted INTO that size: no wider than the ground it
-	# occupies, as tall as declared, standing on the ground.
-	var tower = _spawn(tower_script)
-	tower.complete_construction()
+func test_05_a_trap_is_drawn_inside_its_declared_size() -> void:
+	# A model (tools/generate_props.py set_crossbow), fitted INTO its declared size: no wider
+	# than the cell it fills, as tall as declared, standing on the ground.
+	var trap = load("res://scripts/entities/Trap.gd").new()
+	trap.setup("set_crossbow")
+	_cleanup_nodes.append(trap)
+	tree.root.add_child(trap)
+	trap.complete_construction()
 	await wait_frames(1)
 
-	var body = tower.find_child("Body", false, false)
-	assert_not_null(body, "The turret has a body")
+	var body = trap.find_child("Body", false, false)
+	assert_not_null(body, "The trap has a body")
 	if body == null:
 		return
 	var bounds: AABB = VisualLibrary.visual_bounds(body)
-	var footprint: float = config_node.get_building_footprint("tower")
+	var footprint: float = config_node.get_building_footprint("set_crossbow")
 	assert_lte(bounds.size.x, footprint + 0.01, "No wider than its footprint")
 	assert_lte(bounds.size.z, footprint + 0.01, "In either direction")
-	assert_almost_eq(bounds.size.y, config_node.get_building_height("tower"), 0.05, "As tall as declared")
+	assert_almost_eq(bounds.size.y, config_node.get_building_height("set_crossbow"), 0.05, "As tall as declared")
 	assert_almost_eq(bounds.position.y, 0.0, 0.01, "Standing on the ground, not in it")
 
 func test_06_labels_and_bars_sit_above_the_building_they_belong_to() -> void:
 	# A fixed label height reads as floating over a low building and buried in a
 	# tall one, so both must follow the building's own height.
 	var stake = _stake()
-	var tower = _spawn(tower_script, Vector3(20.0, 0.0, 0.0))
+	var trap = load("res://scripts/entities/Trap.gd").new()
+	_cleanup_nodes.append(trap)
+	tree.root.add_child(trap)
+	trap.position = Vector3(20.0, 0.0, 0.0)
 	await wait_frames(1)
 
-	for b in [stake, tower]:
+	for b in [stake, trap]:
 		var h: float = config_node.get_building_height(b.building_type)
 		assert_gt(b.label_3d.position.y, h, "%s's name clears its own roof" % b.building_type)
 		assert_gt(b.status_bar.position.y, h, "%s's bar clears its own roof" % b.building_type)
-	assert_gt(tower.label_3d.position.y, stake.label_3d.position.y,
+	assert_gt(stake.label_3d.position.y, trap.label_3d.position.y,
 		"The taller building carries its name higher")
 
 # ==============================================================================
@@ -223,7 +228,7 @@ func test_07_stakes_declare_a_bite_and_agree_with_config_about_it() -> void:
 		"The stake and the build menu quote the same figure")
 	assert_almost_eq(stake.contact_dps(), _wall_cfg("contact_damage", 0.0) / _wall_cfg("contact_tick", 1.0),
 		0.0001, "Damage per second is damage per tick over the tick")
-	assert_eq(config_node.get_contact_dps("tower"), 0.0,
+	assert_eq(config_node.get_contact_dps("set_crossbow"), 0.0,
 		"A building that is not sharpened bites nothing")
 	assert_eq(config_node.get_contact_dps("no_such_building"), 0.0,
 		"An unknown type is answered rather than crashed on")
@@ -243,7 +248,7 @@ func test_08_the_bite_reaches_where_a_dinosaur_actually_stands() -> void:
 		"A stake is small, so its attackers stand closer than the old fixed ring")
 	assert_gte(stake.contact_range, ring,
 		"Whatever is chewing on the stakes is within reach of them")
-	assert_lt(stake.contact_range, float(config_node.BUILDINGS["tower"].get("range", 5.0)),
+	assert_lt(stake.contact_range, float(config_node.BUILDINGS["set_crossbow"].get("range", 5.0)),
 		"But it is contact, not a turret's field of fire")
 
 func test_09_a_dinosaur_against_the_stakes_takes_damage() -> void:
@@ -371,12 +376,13 @@ func test_17_chewing_through_a_stake_costs_a_raptor_dearly_but_not_fatally() -> 
 	assert_lt(taken, float(raptor["hp"]), "A raptor survives the stake it destroys")
 	assert_gt(taken, float(raptor["hp"]) * 0.5, "But only just -- the fence is not decoration")
 
-func test_18_a_stake_is_not_a_cheaper_turret() -> void:
-	var tower: Dictionary = config_node.BUILDINGS["tower"]
-	var tower_dps: float = float(tower.get("damage", 0.0)) * float(tower.get("fire_rate", 0.0))
-	assert_gt(tower_dps, config_node.get_contact_dps("wall"),
-		"A turret out-damages a stake, or nobody would ever pay for one")
-	assert_lt(total_price_of("wall"), total_price_of("tower"),
+func test_18_a_stake_is_not_a_cheaper_trap() -> void:
+	# Per animal on its wire, as fast as it can be re-armed.
+	var trap: Dictionary = config_node.BUILDINGS["set_crossbow"]
+	var trap_dps: float = float(trap.get("damage", 0.0)) / float(trap.get("rearm_seconds", 1.0))
+	assert_gt(trap_dps, config_node.get_contact_dps("wall"),
+		"A trap out-damages a stake, or nobody would ever pay for one")
+	assert_lt(total_price_of("wall"), total_price_of("set_crossbow"),
 		"And the stake stays the cheap thing you lay out by the row")
 
 func test_19_a_big_dinosaur_shrugs_the_fence_off() -> void:
@@ -405,7 +411,7 @@ func _build_menu() -> Array:
 	return [panel, hero]
 
 func test_20_the_build_menu_says_that_stakes_bite() -> void:
-	pay_for(["wall", "tower"], 999)
+	pay_for(["wall", "set_crossbow"], 999)
 	var pair = await _build_menu()
 	var panel = pair[0]
 
@@ -416,12 +422,12 @@ func test_20_the_build_menu_says_that_stakes_bite() -> void:
 		"The stake's damage is on the line before the wood is spent (got '%s')" % detail)
 
 	# A building with no bite must not sprout an empty damage figure.
-	panel._show_build_detail("tower")
+	panel._show_build_detail("set_crossbow")
 	var plain: String = str(panel.status_label.text)
 	assert_false(plain.contains("%.1f" % config_node.get_contact_dps("wall")),
 		"A turret's line carries no bite figure (got '%s')" % plain)
-	assert_true(plain.contains("%.1f" % config_node.get_build_time("tower"))
-		or plain.contains(("%.1f" % config_node.get_build_time("tower")).replace(".", ",")),
+	assert_true(plain.contains("%.1f" % config_node.get_build_time("set_crossbow"))
+		or plain.contains(("%.1f" % config_node.get_build_time("set_crossbow")).replace(".", ",")),
 		"But it does carry its build time (got '%s')" % plain)
 
 func test_21_a_selected_stake_reports_its_bite() -> void:

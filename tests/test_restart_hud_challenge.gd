@@ -132,7 +132,7 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	# 1. Place 12 active player buildings across grid
 	var tracked_buildings: Array[Node] = []
 	var building_cells: Array[Vector2i] = []
-	var types = ["wall", "tower"]
+	var types = ["wall", "set_crossbow"]
 
 	for i in range(12):
 		# East of the cabin's block, which is (0, 0) to (1, 1).
@@ -142,7 +142,7 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 		var b: Node = null
 		match b_type:
 			"wall": b = wall_script.new()
-			"tower": b = tower_script.new()
+			"set_crossbow": b = tower_script.new()
 		b.setup(b_type, cell)
 		b.position = grid_mgr.cell_to_world(cell)
 		buildings_container.add_child(b)
@@ -270,7 +270,7 @@ func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -
 	for i in range(3):
 		var cell = Vector2i(i + 1, 2)
 		var b = tower_script.new()
-		b.setup("tower", cell)
+		b.setup("set_crossbow", cell)
 		main.buildings_container.add_child(b)
 		main.grid_manager.occupy_cell(cell, b)
 
@@ -318,7 +318,7 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 		grid_mgr.occupy_cell(FREE_TILE, wall)
 
 		var tower = tower_script.new()
-		tower.setup("tower", Vector2i(-1, 2))
+		tower.setup("set_crossbow", Vector2i(-1, 2))
 		buildings_container.add_child(tower)
 		grid_mgr.occupy_cell(Vector2i(-1, 2), tower)
 
@@ -524,7 +524,7 @@ func test_challenge_11_hud_action_buttons_rejected_after_defeat() -> void:
 	# Simulated clicks must be safe no-ops
 	var pre_phase = game_state_node.current_phase
 	hud.simulate_end_action_click()
-	hud.simulate_build_click("tower")
+	hud.simulate_build_click("set_crossbow")
 	await wait_frames(1)
 
 	assert_eq(game_state_node.current_phase, pre_phase, "Phase unchanged after illegal click under defeat")

@@ -141,8 +141,9 @@ func _scenario_kitchen() -> void:
 	await _shoot("fed")
 
 ## The v0.6 buildings side by side, south of the cabin where nothing else stands: a run of
-## wooden stakes, a run of bone stakes, a stone wall three tiles long, a crossbow tower and one
-## upgraded where it stands -- and then a tower's panel, offering the upgrade and what it changes.
+## a palisade, a run of bone palisade, a stone wall, and in front of the line a trip bow and two
+## set crossbows, one improved where it stands, their wires out across the ground -- and then a
+## set crossbow's panel, offering the improvement and what it changes.
 func _scenario_buildings() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var eb := root.get_node_or_null("EventBus")
@@ -161,8 +162,10 @@ func _scenario_buildings() -> void:
 		_build_at("bone_stake", Vector3(0.0 + float(i) * step, 0.0, z))
 	for i in range(3):
 		_build_at("stone_wall", Vector3(3.0 + float(i) * step, 0.0, z))
-	_build_at("tower", Vector3(-3.0, 0.0, z + step))
-	_build_at("tower", Vector3(1.0, 0.0, z + step))
+	# Facing south, away from the line: their lanes across the ground a raid comes over.
+	_build_at("set_crossbow", Vector3(-3.0, 0.0, z + step), 2)
+	_build_at("set_crossbow", Vector3(1.0, 0.0, z + step), 2)
+	_build_at("trip_bow", Vector3(4.0, 0.0, z + step), 2)
 	var gm = _main.grid_manager
 	var upgraded = gm.building_at_point(Vector3(1.0, 0.0, z + step))
 	if upgraded and upgraded.has_method("begin_upgrade") and upgraded.begin_upgrade():
@@ -199,22 +202,26 @@ func _scenario_beacon() -> void:
 	gs.charge_beacon(10000.0)
 	await _shoot("jumped")
 
-## How much a base holds (v0.6 balance): `siege:<towers>:<raiders>:<hp_mult>[:all]`.
+## How much a base holds (v0.6 balance): `siege:<traps>:<raiders>:<hp_mult>[:all]`.
 ##
-## N crossbow towers round the cabin inside a sealed ring of stakes, against one raid of
-## that many raptors at that hit-point multiplier (what GameState compounds after each big
-## wave), sent the way the game sends it: down the path from the nest, or -- with `all` --
-## streamed from every way in, as the beacon's final wave is. It prints what got through
-## and what it cost, so the raid curve in Config is tuned against a base rather than a
-## guess. Real game, real speed: a long raid is a long run.
+## A sealed ring of palisade round the cabin with N set crossbows set into it, facing out, their
+## wires across the ground a raid comes over and chews the ring from -- where a player sets
+## them -- against one raid of that many raptors at that hit-point multiplier (what GameState
+## compounds after each big wave), sent the way the game sends it: down the path from the nest,
+## or -- with `all` -- streamed from every way in, as the beacon's final wave is. It prints what
+## got through and what it cost, so the raid curve in Config is tuned against a base rather than
+## a guess. `twin` sets the improved set crossbow instead. Real game, real speed: a long raid is a
+## long run.
 func _scenario_siege(spec: String) -> void:
 	var parts: PackedStringArray = spec.split(":")
 	var towers: int = int(parts[1]) if parts.size() > 1 else 4
 	var raiders: int = int(parts[2]) if parts.size() > 2 else 10
 	var hp_mult: float = float(parts[3]) if parts.size() > 3 else 1.0
 	var every_side: bool = parts.size() > 4 and parts[4] == "all"
-	# "bare": no ring of stakes -- the cabin and its own gun against the raid (v0.6).
+	# "bare": no ring -- the cabin and its own gun against the raid (v0.6).
 	var bare: bool = parts.size() > 4 and parts[4] == "bare"
+	# "twin" anywhere after: the traps improved where they stand, as a late base has them.
+	var trap_type: String = "set_crossbow_2" if parts.slice(4).has("twin") else "set_crossbow"
 	var cfg := root.get_node_or_null("Config")
 	var gs := root.get_node_or_null("GameState")
 	var eb := root.get_node_or_null("EventBus")
@@ -223,31 +230,44 @@ func _scenario_siege(spec: String) -> void:
 	_grant({"wood": 4000, "stone": 4000, "bone": 4000})
 	var centre: Vector3 = _main.current_core.global_position
 
+	# The ring's cells, in order round it. 6.5 m: clear of the trees and the hills, which a ring
+	# cannot be built through -- and a tree is not solid to a raid, so a ring across one has a
+	# door in it.
+	var ring: Array[Vector2i] = []
+	var seen: Dictionary = {}
+	var around: int = 0 if bare else int(ceil(TAU * 6.5 / float(cfg.BUILD_CELL))) * 4
+	for i in range(around):
+		var a: float = TAU * float(i) / float(around)
+		var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(sin(a) * 6.5, 0.0, -cos(a) * 6.5))
+		if not seen.has(cell):
+			seen[cell] = true
+			ring.append(cell)
+	# The traps in the ring, spread over the side facing the nest (north) for a raid from the
+	# nest, all round for the final wave; each facing straight out.
 	var placed_towers: Array[Node] = []
-	# Where a player would put them: facing the nest for a raid from the nest, all round for
-	# the final wave.
-	for i in range(towers):
+	var trap_cells: Dictionary = {}
+	for i in range(towers if not ring.is_empty() else 0):
 		var a: float = TAU * float(i) / float(maxi(1, towers))
 		if not every_side:
 			a = deg_to_rad(-80.0 + 160.0 * (float(i) + 0.5) / float(maxi(1, towers)))
-		var at: Vector3 = centre + Vector3(sin(a) * 4.5, 0.0, -cos(a) * 4.5)
-		var cell: Vector2i = gm.world_to_cell(at)
-		var b = _main.build_system.place_building("tower", cell, _main.buildings_container, true, gm.cell_to_world(cell))
+		var out := Vector2(sin(a), -cos(a))
+		var nearest: Vector2i = ring[0]
+		for c in ring:
+			var d: Vector3 = gm.build_cell_to_world(c) - centre
+			var n: Vector3 = gm.build_cell_to_world(nearest) - centre
+			if Vector2(d.x, d.z).normalized().dot(out) > Vector2(n.x, n.z).normalized().dot(out):
+				nearest = c
+		var facing: int = (1 if out.x > 0.0 else 3) if absf(out.x) > absf(out.y) else (2 if out.y > 0.0 else 0)
+		trap_cells[nearest] = facing
+	for cell in trap_cells:
+		var b = _main.build_system.place_at(trap_type, cell, _main.buildings_container, true, int(trap_cells[cell]))
 		if b != null:
 			b.complete_construction()
 			placed_towers.append(b)
-	var step: float = float(cfg.BUILD_CELL)
-	var seen: Dictionary = {}
 	var stakes: Array[Node] = []
-	# 6.5 m: clear of the trees and the hills, which a ring cannot be built through -- and a
-	# tree is not solid to a raid, so a ring across one has a door in it.
-	var around: int = 0 if bare else int(ceil(TAU * 6.5 / step)) * 4
-	for i in range(around):
-		var a: float = TAU * float(i) / float(around)
-		var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(sin(a) * 6.5, 0.0, cos(a) * 6.5))
-		if seen.has(cell):
+	for cell in ring:
+		if trap_cells.has(cell):
 			continue
-		seen[cell] = true
 		var b = _main.build_system.place_at("wall", cell, _main.buildings_container, true)
 		if b != null:
 			b.complete_construction()
@@ -285,7 +305,7 @@ func _scenario_siege(spec: String) -> void:
 		if is_instance_valid(w) and not w.is_destroyed:
 			stakes_left += 1
 	var core = _main.current_core
-	print("[siege] towers %d, %d raptors at hp x%.2f from %s: %s after %ds -- killed %d, cabin %d/%d, stakes %d/%d, towers %d/%d" % [
+	print("[siege] traps %d, %d raptors at hp x%.2f from %s: %s after %ds -- killed %d, cabin %d/%d, stakes %d/%d, traps %d/%d" % [
 		placed_towers.size(), raiders, hp_mult, "every side" if every_side else "the nest",
 		"LOST" if gs.is_game_over else ("held" if not wm.is_wave_active else "still going"), seconds,
 		killed[0], int(ceil(core.current_hp)) if is_instance_valid(core) else 0, int(core.max_hp) if is_instance_valid(core) else 0,
@@ -297,22 +317,22 @@ func _scenario_siege(spec: String) -> void:
 func _scenario_summary() -> void:
 	var eb := root.get_node_or_null("EventBus")
 	eb.raid_summary.emit({"wave": 12, "killed": 39, "drops": {"food": 38, "bone": 40, "prime_meat": 1},
-		"lost": {"wall": 6, "tower": 1, "stone_wall": 2}})
+		"lost": {"wall": 6, "set_crossbow": 1, "stone_wall": 2}})
 	await _shoot("raid_over")
 
 ## What a material is for and where it comes from (v0.6 T2): the line the first bone
-## brings, and the build menu's reason for a crossbow tower before the pick has been made.
+## brings, and the build menu's reason for a set crossbow before the pick has been made.
 func _scenario_legible() -> void:
 	var eb := root.get_node_or_null("EventBus")
 	eb.resource_picked_up.emit("bone", 1, null)
 	await _shoot("first_bone")
 	var panel = _main.hud.option_panel
 	if panel and panel.has_method("_show_build_detail"):
-		panel._show_build_detail("tower")
-	await _shoot("why_no_tower")
+		panel._show_build_detail("set_crossbow")
+	await _shoot("why_no_crossbow")
 
 ## The build menu (v0.6): a hide card for each thing the known materials build -- wood's, and
-## bone's once the first bone is in -- priced, the bow tower beyond the stock and locked; then,
+## bone's once the first bone is in -- priced, the trip bow within the stock; then,
 ## stone in too, the whole menu, its longest names and all.
 func _scenario_buildmenu() -> void:
 	var gs := root.get_node("GameState")
@@ -415,7 +435,7 @@ func _scenario_cabin() -> void:
 ## is any good -- reviewing art from the play camera is how you end up shipping a
 ## dinosaur that turns out to have no head. These shots exist only to be looked at.
 func _scenario_closeup() -> void:
-	_grant({"wood": 40, "stone": 20})
+	_grant({"wood": 40, "stone": 20, "bone": 4})
 	var cfg := root.get_node_or_null("Config")
 	var tile: float = float(cfg.TILE_SIZE) if cfg else 2.0
 	var subjects: Array = [
@@ -430,24 +450,15 @@ func _scenario_closeup() -> void:
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
-	# The turret, with something to point at: a raptor off to one side, so the head is
-	# seen swung round towards it rather than sitting at rest.
-	var gs := root.get_node_or_null("GameState")
-	if gs != null and gs.has_method("grant_unlock"):
-		gs.grant_unlock("blueprint_tower")
-	var tower_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 2))
-	_build_at("tower", tower_at)
-	var prey = load("res://scripts/entities/Dino.gd").new()
-	_main.add_child(prey)
-	prey.setup("raptor")
-	prey.set_physics_process(false)
-	prey.global_position = tower_at + Vector3(-2.5, 0.0, 2.0)
-	for b in _main.buildings_container.get_children():
-		if b.has_method("aim_at") and b.global_position.distance_to(tower_at) < 0.5:
-			b.aim_at(prey.global_position)
+	# The traps, set and facing across the frame, their wires out along the ground.
+	var bow_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 2))
+	_build_at("trip_bow", bow_at, 1)
 	await _wait(4)
-	await _portrait("tower", tower_at, 5.5)
-	prey.queue_free()
+	await _portrait("trip_bow", bow_at + Vector3(1.0, 0.0, 0.0), 3.0)
+	var crossbow_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 4))
+	_build_at("set_crossbow", crossbow_at, 1)
+	await _wait(4)
+	await _portrait("set_crossbow", crossbow_at + Vector3(1.0, 0.0, 0.0), 3.0)
 
 	var dino_script := load("res://scripts/entities/Dino.gd")
 	var dinos_to_shoot: Array = [
@@ -678,14 +689,11 @@ func _scenario_scale() -> void:
 	if _main.hud:
 		_main.hud.visible = false
 	_grant({"wood": 40, "stone": 20})
-	var gs := root.get_node_or_null("GameState")
-	if gs != null and gs.has_method("grant_unlock"):
-		gs.grant_unlock("blueprint_tower")
 	var core_at: Vector3 = _main.current_core.global_position
 	# A row in front of the cabin's south wall, the cabin at its left end.
 	var row_z: float = core_at.z + float(cfg_row_half()) + 1.4
 	_build_at("wall", Vector3(core_at.x - 2.2, 0.0, row_z))
-	_build_at("tower", _main.grid_manager.cell_to_world(Vector2i(-2, 0)))
+	_build_at("set_crossbow", _main.grid_manager.cell_to_world(Vector2i(-2, 0)))
 	var hero = _main.hero
 	if hero != null:
 		hero.set_physics_process(false)
@@ -926,16 +934,18 @@ func _grant(amounts: Dictionary) -> void:
 ## Places at an exact world point, which is what the player's click does. Stakes snap
 ## to a finer grid than the tile, so placing them by tile would put one every two metres
 ## and photograph the wrong thing entirely.
-func _build_at(type_id: String, at: Vector3) -> void:
+## `type_id` put up whole in the cell under `at`, facing `facing` if it is a trap (Trap.FACINGS).
+func _build_at(type_id: String, at: Vector3, facing: int = 0) -> Node:
 	if _main == null or _main.build_system == null:
-		return
-	var cell: Vector2i = _main.grid_manager.world_to_cell(at)
+		return null
 	# Placed as a blueprint and then finished: that path is AP-free, and the harness is
 	# not trying to test the action-point budget -- it wants a fence to photograph. The
 	# first version paid AP and quietly stopped after three stakes.
-	var b = _main.build_system.place_building(type_id, cell, _main.buildings_container, true, at)
+	var b = _main.build_system.place_at(type_id, _main.grid_manager.world_to_build_cell(at),
+		_main.buildings_container, true, facing)
 	if b != null and b.has_method("complete_construction"):
 		b.complete_construction()
+	return b
 
 func _build(type_id: String, cell: Vector2i) -> void:
 	if _main != null and _main.has_method("place_building_at_cell"):

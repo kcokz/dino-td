@@ -55,6 +55,9 @@ var build_preview: Node3D = null
 var build_preview_mesh: MeshInstance3D = null
 var build_preview_ring: MeshInstance3D = null
 var _preview_cell: Vector2i = Vector2i(999999, 999999)
+## Which way the next trap faces (Trap.FACINGS): kept from one to the next, so a row of them set
+## along a funnel all face the same way without being turned each time.
+var _placement_facing: int = 0
 
 
 # Canonical coordinates
@@ -76,7 +79,7 @@ func _ready() -> void:
 ## The navigation meshes, baked from this level's own colliders. See NavMaps.gd.
 ##
 ## Main joins the source group rather than the meshes being told about individual nodes:
-## a bake then picks up the ground, the hills, the wreck, the turrets and every stake as
+## a bake then picks up the ground, the hills, the cabin, the traps and every wall as
 ## they are, with no list to keep in step.
 var nav_maps: NavMaps = null
 ## What the run has been -- each raid's account, and where his time went (v0.6 T8, T9).
@@ -1103,10 +1106,12 @@ func leave_cabin() -> bool:
 
 func on_build_selected(type_id: String) -> void:
 	# A different tool drops whatever the last one was in the middle of: a drag started
-	# with the fence must never be let go of as a run of turrets.
+	# with the fence must never be let go of as a run of traps.
 	_end_drag()
 	current_build_type = type_id
 	_rebuild_build_preview(type_id)
+	if _faces(type_id):
+		_hint("HINT_TRAP_TURN")
 
 func cancel_building_selection() -> void:
 	current_build_type = ""
@@ -1226,6 +1231,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				zoom_camera(-_zoom_step())
 				get_viewport().set_input_as_handled()
 				return
+
+	# A trap in hand turns with R (CONTROLS.trap_turn_key) -- ahead of the camera's reset, which has
+	# the same key the rest of the time.
+	if event is InputEventKey and event.pressed and not event.echo and _faces(current_build_type) \
+			and event.keycode == int(controls.get("trap_turn_key", KEY_R)) \
+			and not (event.ctrl_pressed or event.meta_pressed):
+		turn_placement(-1 if event.shift_pressed else 1)
+		get_viewport().set_input_as_handled()
+		return
 
 	# Back to the opening view, for when the player has turned themselves round.
 	if event is InputEventKey and event.pressed and not event.echo 			and event.keycode == int(controls.get("camera_reset_key", KEY_R)) 			and not (event.ctrl_pressed or event.meta_pressed):
@@ -1531,7 +1545,7 @@ func try_place_at_cell(cell: Vector2i, at_world: Variant = null) -> Node:
 		_hint("HINT_CELL_OCCUPIED")
 		return null
 
-	var placed = build_system.place_at(current_build_type, spot, buildings_container, true)
+	var placed = build_system.place_at(current_build_type, spot, buildings_container, true, _placement_facing)
 	if placed != null:
 		if hero != null and is_instance_valid(hero):
 			hero.order_build(placed, false)
@@ -2092,6 +2106,23 @@ func _rebuild_build_preview(type_id: String) -> void:
 		mi.material_override = _make_preview_material(Color.WHITE)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
+	# A trap's lane, a square on the ground for each cell its wire will run through (Trap.lane_from):
+	# where it will shoot, before it is paid for.
+	if _faces(type_id):
+		var lanes := Node3D.new()
+		lanes.name = "LanePreview"
+		build_preview.add_child(lanes)
+		var mat := _make_preview_material(_lane_colour(), 0.45)
+		for i in range(int(cfg.BUILDINGS[type_id].get("lane", 0))):
+			var square := MeshInstance3D.new()
+			var plane := PlaneMesh.new()
+			plane.size = Vector2.ONE * float(cfg.BUILD_CELL) * 0.86
+			square.mesh = plane
+			square.material_override = mat
+			square.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			square.position.y = 0.04
+			lanes.add_child(square)
+
 	var r: float = _preview_range_for(type_id)
 	if r > 0.0:
 		build_preview_ring = MeshInstance3D.new()
@@ -2108,8 +2139,8 @@ func _rebuild_build_preview(type_id: String) -> void:
 	build_preview.visible = false
 	_preview_cell = Vector2i(999999, 999999)
 
-## Area of effect a pending building would have: attack range for towers,
-## attack range for turrets, nothing for plain stakes.
+## Area of effect a pending building would have, as a ring: what a building with a reach declares.
+## A trap shows its lane instead (_show_lane).
 func _preview_range_for(type_id: String) -> float:
 	var cfg = _get_config()
 	if cfg == null or not cfg.BUILDINGS.has(type_id):
@@ -2177,17 +2208,60 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	var ghost: Node = build_preview.find_child("Body", false, false)
 	if ghost is Node3D:
 		_dress_ghost(ghost as Node3D, snap)
+		if _faces(current_build_type):
+			(ghost as Node3D).rotation.y = Trap.facing_yaw(_placement_facing)
+	_show_lane(snap)
 
 	var ok: bool = _can_afford_building(current_build_type)
 	if ok and build_system and build_system.has_method("can_place_at"):
 		ok = bool(build_system.can_place_at(current_build_type, snap))
 
 	# Tint every piece of the ghost, not just the first: a body is whatever
-	# Building.make_body() returns, and that will be a loaded scene once there is art.
+	# Building.make_body() returns, and that will be a loaded scene once there is art. The lane
+	# keeps its own colour: it is where the wire goes, whether or not the trap can.
 	var tint: Color = Color(0.35, 1.0, 0.4) if ok else Color(1.0, 0.3, 0.25)
+	var lanes: Node = build_preview.find_child("LanePreview", false, false)
 	for mi in _meshes_in(build_preview):
-		if mi != build_preview_ring:
+		if mi != build_preview_ring and (lanes == null or not lanes.is_ancestor_of(mi)):
 			mi.material_override = _make_preview_material(tint)
+
+## Lays the ghost's lane over the cells the wire would run through from `snap`, facing the way the
+## next trap will: the rest of its squares hidden.
+func _show_lane(snap: Vector2i) -> void:
+	var lanes: Node = build_preview.find_child("LanePreview", false, false) if build_preview else null
+	if lanes == null:
+		return
+	var cfg = _get_config()
+	var length: int = int(cfg.BUILDINGS[current_build_type].get("lane", 0)) if cfg else 0
+	var cells: Array[Vector2i] = Trap.lane_from(grid_manager, snap, _placement_facing, length)
+	var here: Vector3 = grid_manager.build_cell_to_world(snap)
+	var squares: Array = lanes.get_children()
+	for i in range(squares.size()):
+		var square: Node3D = squares[i] as Node3D
+		square.visible = i < cells.size()
+		if square.visible:
+			var at: Vector3 = grid_manager.build_cell_to_world(cells[i]) - here
+			square.position = Vector3(at.x, square.position.y, at.z)
+
+## Turns the trap in hand a quarter (`step` quarters, clockwise), and the ghost and its lane with
+## it, where the cursor is.
+func turn_placement(step: int = 1) -> void:
+	_placement_facing = posmod(_placement_facing + step, Trap.FACINGS.size())
+	_preview_cell = Vector2i(999999, 999999)
+	if build_preview != null and is_instance_valid(build_preview) and build_preview.visible:
+		_update_build_preview(get_viewport().get_mouse_position())
+
+## Whether a building of `type_id` faces a way -- a trap.
+func _faces(type_id: String) -> bool:
+	var cfg = _get_config()
+	return type_id != "" and cfg != null and cfg.has_method("get_building_kind") \
+		and String(cfg.get_building_kind(type_id)) == "trap"
+
+func _lane_colour() -> Color:
+	var cfg = _get_config()
+	if cfg and "TRAPS" in cfg:
+		return cfg.TRAPS.get("lane_color", Color(0.95, 0.8, 0.35))
+	return Color(0.95, 0.8, 0.35)
 
 
 

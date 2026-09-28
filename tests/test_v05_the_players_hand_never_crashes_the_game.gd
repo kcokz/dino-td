@@ -180,14 +180,14 @@ func test_03_a_drag_lays_a_run() -> void:
 
 func test_04_a_click_places_a_turret() -> void:
 	var main = await _level()
-	_select(main, "tower")
-	var spot: Vector3 = _open_spot(main, "tower")
+	_select(main, "set_crossbow")
+	var spot: Vector3 = _open_spot(main, "set_crossbow")
 	assert_ne(spot, Vector3.INF, "There is open ground for a turret")
 	if spot == Vector3.INF:
 		return
 	_click(main, _px(main, spot))
 	await wait_frames(2)
-	assert_eq(_count(main, "tower"), 1, "One click, one turret")
+	assert_eq(_count(main, "set_crossbow"), 1, "One click, one turret")
 
 func test_05_a_click_on_ground_that_cannot_be_built_on_places_nothing() -> void:
 	# On top of a hill, and on the cabin's own ground: refused, quietly, with the game
@@ -202,7 +202,7 @@ func test_05_a_click_on_ground_that_cannot_be_built_on_places_nothing() -> void:
 	var main = await _level()
 	var gm = main.grid_manager
 	var hill_top := Vector3.UP * float(config_node.map_data()["hill_height"])
-	for type_id in ["wall", "tower"]:
+	for type_id in ["wall", "set_crossbow"]:
 		_select(main, type_id)
 		var hill: Vector3 = gm.cell_to_world(config_node.map_data()["default_blocked_cells"][0]) + hill_top
 		var cabin: Vector3 = gm.cell_to_world(config_node.map_data()["default_core_cell"])

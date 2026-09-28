@@ -87,7 +87,7 @@ func test_01_config_v01_parameters_integrity() -> void:
 
 	var buildings: Dictionary = config_node.get("BUILDINGS")
 	# Build time is derived from price rather than stated per building.
-	for b_type in ["wall", "tower"]:
+	for b_type in ["wall", "set_crossbow"]:
 		assert_true(buildings.has(b_type), "%s is in the catalog" % b_type)
 		assert_gt(config_node.get_build_time(b_type), 0.0, "%s has a positive derived build time" % b_type)
 

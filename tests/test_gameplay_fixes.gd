@@ -281,8 +281,8 @@ func test_09_cancel_building_selection_and_hud_hint() -> void:
 	var hud = main_inst.find_child("HUD", true, false)
 	assert_not_null(hud, "HUD must exist")
 
-	main_inst.on_build_selected("tower")
-	assert_eq(main_inst.current_build_type, "tower", "Tower selected")
+	main_inst.on_build_selected("set_crossbow")
+	assert_eq(main_inst.current_build_type, "set_crossbow", "Tower selected")
 
 	# Cancel via helper
 	main_inst.cancel_building_selection()
@@ -332,7 +332,7 @@ func test_11_dino_detects_and_attacks_tower_without_clipping() -> void:
 	var tower = tower_script.new()
 	_cleanup_nodes.append(tower)
 	tree.root.add_child(tower)
-	tower.setup("tower", Vector2i(0, -2))
+	tower.setup("set_crossbow", Vector2i(0, -2))
 	tower.global_position = Vector3(1.0, 0.0, -4.0)
 
 	var dino = dino_script.new("raptor")

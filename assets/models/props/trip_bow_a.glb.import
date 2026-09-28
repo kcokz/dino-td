@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bom40qw6mrxrf"
-path="res://.godot/imported/sentry_a.glb-7fd4e652a4f3afd11792870fee34ddfd.scn"
+uid="uid://c7rffpwjtvb87"
+path="res://.godot/imported/trip_bow_a.glb-4d3c0b090a32f8e5118aa4b22566fd7b.scn"
 
 [deps]
 
-source_file="res://assets/models/props/sentry_a.glb"
-dest_files=["res://.godot/imported/sentry_a.glb-7fd4e652a4f3afd11792870fee34ddfd.scn"]
+source_file="res://assets/models/props/trip_bow_a.glb"
+dest_files=["res://.godot/imported/trip_bow_a.glb-4d3c0b090a32f8e5118aa4b22566fd7b.scn"]
 
 [params]
 

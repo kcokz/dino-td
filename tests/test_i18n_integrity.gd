@@ -37,7 +37,7 @@ func test_02_key_set_parity_and_no_empty_values() -> void:
 	var row_count = 0
 
 	var required_keys = [
-		"BUILDING_CORE_NAME", "BUILDING_TOWER_NAME", "BUILDING_WALL_NAME",
+		"BUILDING_CORE_NAME", "BUILDING_SET_CROSSBOW_NAME", "BUILDING_WALL_NAME",
 		"DINO_RAPTOR_NAME", "DINO_BIG_THEROPOD_NAME", "DINO_PTEROSAUR_NAME", "DINO_GUARD_NAME",
 		"RESOURCE_WOOD", "RESOURCE_STONE", "RESOURCE_WATER", "HERO_NAME", "NEST_NAME",
 		"GAME_VICTORY_TITLE", "GAME_DEFEAT_TITLE", "BTN_RESTART",
@@ -70,8 +70,8 @@ func test_03_default_english_translations() -> void:
 	if i18n_node and i18n_node.has_method("set_locale"):
 		i18n_node.set_locale("en")
 
-	var tower_name = tr("BUILDING_TOWER_NAME")
-	assert_eq(tower_name, "Crossbow Tower", "In 'en' locale, BUILDING_TOWER_NAME must be 'Crossbow Tower'")
+	var tower_name = tr("BUILDING_SET_CROSSBOW_NAME")
+	assert_eq(tower_name, "Set Crossbow", "In 'en' locale, BUILDING_SET_CROSSBOW_NAME must be 'Set Crossbow'")
 
 	var core_name = tr("BUILDING_CORE_NAME")
 	assert_eq(core_name, "Abandoned Cabin", "In 'en' locale, BUILDING_CORE_NAME must be 'Abandoned Cabin'")
@@ -96,7 +96,7 @@ func test_04_dynamic_locale_switching_to_chinese() -> void:
 		assert_true(locale_watcher.emitted, "EventBus.locale_changed must be emitted on switch")
 
 	# Verify instant reactive translations in zh_CN
-	assert_eq(tr("BUILDING_TOWER_NAME"), "弩塔", "In 'zh_CN', BUILDING_TOWER_NAME must be '弩塔'")
+	assert_eq(tr("BUILDING_SET_CROSSBOW_NAME"), "窝弩", "In 'zh_CN', BUILDING_SET_CROSSBOW_NAME must be '窝弩'")
 	assert_eq(tr("BUILDING_CORE_NAME"), "废弃船舱", "In 'zh_CN', BUILDING_CORE_NAME must be '废弃船舱'")
 	assert_eq(tr("BUILDING_WALL_NAME"), "木栅栏", "In 'zh_CN', BUILDING_WALL_NAME must be '木栅栏'")
 	assert_eq(tr("DINO_RAPTOR_NAME"), "迅猛龙", "In 'zh_CN', DINO_RAPTOR_NAME must be '迅猛龙'")
@@ -105,7 +105,7 @@ func test_04_dynamic_locale_switching_to_chinese() -> void:
 	# Switch back to en
 	i18n_node.set_locale("en")
 	assert_eq(i18n_node.get_locale(), "en", "I18n.get_locale() must return 'en'")
-	assert_eq(tr("BUILDING_TOWER_NAME"), "Crossbow Tower", "Switched back to 'en': Crossbow Tower")
+	assert_eq(tr("BUILDING_SET_CROSSBOW_NAME"), "Set Crossbow", "Switched back to 'en': Set Crossbow")
 
 func test_05_locale_persistence() -> void:
 	assert_not_null(i18n_node, "I18n autoload must exist")

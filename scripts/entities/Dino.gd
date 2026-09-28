@@ -1024,7 +1024,7 @@ func _is_shooter(node: Variant) -> bool:
 	var cfg = _get_config()
 	if cfg == null or not cfg.has_method("get_building_kind"):
 		return false
-	return String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["tower", "trap"])
+	return String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["trap"])
 
 ## Where it is going, as opposed to what it has stopped for: the current waypoint, or the cabin.
 func _journey_goal() -> Vector3:
@@ -1135,11 +1135,11 @@ func building_interest_range() -> float:
 func hero_interest_range() -> float:
 	return 0.0
 
-## Whether a shooter (a trap, a turret) is worth a detour, and from how far.
-func tower_interest_range() -> float:
+## Whether a trap -- what shoots at it -- is worth a detour, and from how far.
+func trap_interest_range() -> float:
 	return 0.0
 
-## The nearest finished building within `radius` -- only shooters with `only_kind` "tower", only
+## The nearest finished building within `radius` -- only shooters with `only_kind` "shooter", only
 ## one type with a type id -- measured to its walls, so a big building is as near as its face.
 func _nearest_building_within(radius: float, only_kind: String = "") -> Node:
 	if radius <= 0.0 or not is_inside_tree():
@@ -1150,9 +1150,9 @@ func _nearest_building_within(radius: float, only_kind: String = "") -> Node:
 	for b in get_tree().get_nodes_in_group("buildings"):
 		if not is_instance_valid(b) or not _is_target_valid(b):
 			continue
-		if only_kind == "tower" and not _is_shooter(b):
+		if only_kind == "shooter" and not _is_shooter(b):
 			continue
-		if only_kind != "" and only_kind != "tower":
+		if only_kind != "" and only_kind != "shooter":
 			if not ("building_type" in b) or String(b.building_type) != only_kind:
 				continue
 		var dist: float = global_position.distance_to(b.global_position)

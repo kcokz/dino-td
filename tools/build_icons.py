@@ -197,36 +197,57 @@ ICONS["gate"] = item_svg(
      shape("rect", C["rope"], x=3, y=47, width=16, height=4.5, rx=2)])
 
 
-def _tower(extra_body=(), extra_detail=()):
-    return item_svg(
-        [shape("polygon", C["post"], points="13,58 20,58 28,33 23,33"),
-         shape("polygon", C["post"], points="44,58 51,58 41,33 36,33"),
-         shape("rect", C["post"], x=17, y=28, width=30, height=7, rx=2),
-         shape("rect", C["post_dark"], x=29, y=11, width=6, height=20, rx=2),
-         shape("path", None, C["post_dark"], 5.0, d="M 11 21 Q 32 5 53 21")] + list(extra_body),
-        [shape("path", None, C["post_dark"], 3.0, d="M 19 46 L 45 46"),
-         shape("path", None, "#e2dccb", 1.5, d="M 12 22 L 32 27 L 52 22"),
-         shape("path", None, C["metal"], 2.2, d="M 32 27 L 32 8"),
-         shape("polygon", C["metal"], points="32,3 35.5,9 28.5,9")] + list(extra_detail))
+# The traps (Trap.gd): each drawn on its tripwire, which runs off down to a peg at the right --
+# the wire is what makes it a trap and not a tower, so it is in every one of them.
+def _tripwire():
+    return [shape("path", None, C["rope"], 1.6, d="M 47 41 L 59 55"),
+            shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)]
 
 
-ICONS["tower"] = _tower()
-# The opening's tower: all wood -- a wide pale sapling bow, a vine string drawn back, an arrow
-# with a charred point and leaves for fletching, on a stand of poles.
-ICONS["bow_tower"] = item_svg(
-    [shape("polygon", C["post"], points="15,58 21,58 27,36 23,36"),
-     shape("polygon", C["post"], points="43,58 49,58 41,36 37,36"),
-     shape("rect", C["post"], x=18, y=31, width=28, height=6, rx=2),
-     shape("path", None, C["grain"], 5.5, d="M 6 26 Q 32 2 58 26")],
-    [shape("path", None, C["post_dark"], 3.0, d="M 21 48 L 43 48"),
-     shape("path", None, C["rope"], 1.6, d="M 7 27 L 32 31 L 57 27"),
-     shape("path", None, C["grain"], 2.4, d="M 32 31 L 32 9"),
-     shape("polygon", C["char"], points="32,4 35,10 29,10"),
-     shape("polygon", C["leaf"], points="32,30 27,35 32,33"),
-     shape("polygon", C["leaf"], points="32,30 37,35 32,33")])
-ICONS["tower_2"] = _tower(
-    [shape("path", None, C["gold"], 4.0, d="M 45 50 L 51 44 L 57 50"),
-     shape("path", None, C["gold"], 4.0, d="M 45 58 L 51 52 L 57 58")])
+# The opening's trap, all wood: a sapling bow lashed across a stock in two forked stakes, the
+# string drawn back, an arrow with a charred point and leaves for fletching.
+ICONS["trip_bow"] = item_svg(
+    [shape("polygon", C["post"], points="18,58 23,58 25,38 20,38"),
+     shape("polygon", C["post"], points="39,58 44,58 42,38 37,38"),
+     shape("rect", C["post"], x=12, y=34, width=38, height=6, rx=2),
+     shape("path", None, C["grain"], 5.5, d="M 8 30 Q 32 8 56 30"),
+     shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)],
+    [shape("path", None, C["post_dark"], 2.5, d="M 20 38 L 17 32 M 25 38 L 27 32 M 37 38 L 35 32 M 42 38 L 45 32"),
+     shape("path", None, C["rope"], 1.6, d="M 9 31 L 32 36 L 55 31"),
+     shape("path", None, C["grain"], 2.4, d="M 32 36 L 32 12"),
+     shape("polygon", C["char"], points="32,6 35,12 29,12"),
+     shape("polygon", C["leaf"], points="32,34 27,39 32,37"),
+     shape("polygon", C["leaf"], points="32,34 37,39 32,37")] + _tripwire())
+
+_PLINTH = [(9, 48, 22, 10, "s2"), (32, 48, 23, 10, "s3"), (12, 38, 19, 10, "s1"), (32, 38, 19, 10, "s2")]
+
+
+def _set_crossbow(twin=False):
+    """The set crossbow: a seasoned stave with bone tips over a stock on a plinth of stone, a
+    bone-headed bolt on the sinew -- and, improved, a second stave and the upgrade's chevrons."""
+    staves = [shape("path", None, C["post"], 6.0, d="M 6 30 Q 32 10 58 30")]
+    if twin:
+        staves.append(shape("path", None, C["post"], 5.0, d="M 9 22 Q 32 4 55 22"))
+    body = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=2.5) for (x, y, w, h, c) in _PLINTH]
+            + [shape("rect", C["post"], x=15, y=31, width=34, height=7, rx=1.5)] + staves
+            + [shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)])
+    detail = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=2.5) for (x, y, w, h, c) in _PLINTH]
+              + [shape("circle", C["bone"], cx=7, cy=30, r=3.2), shape("circle", C["bone"], cx=57, cy=30, r=3.2),
+                 shape("path", None, C["bone"], 1.8, d="M 7 31 L 32 34 L 57 31"),
+                 shape("path", None, C["grain"], 3.0, d="M 32 34 L 32 13"),
+                 shape("polygon", C["bone"], points="32,4 36.5,14 27.5,14"),
+                 shape("polygon", C["leaf"], points="32,32 27,37 32,35"),
+                 shape("polygon", C["leaf"], points="32,32 37,37 32,35")]
+              + _tripwire())
+    if twin:
+        detail += [shape("path", None, C["bone"], 1.5, d="M 10 23 L 32 27 L 54 23"),
+                   shape("path", None, C["gold"], 4.0, d="M 3 50 L 9 44 L 15 50"),
+                   shape("path", None, C["gold"], 4.0, d="M 3 58 L 9 52 L 15 58")]
+    return item_svg(body, detail)
+
+
+ICONS["set_crossbow"] = _set_crossbow()
+ICONS["set_crossbow_2"] = _set_crossbow(twin=True)
 
 ICONS["core"] = item_svg(
     [shape("rect", C["hull"], x=5, y=17, width=54, height=31, rx=15.5)],

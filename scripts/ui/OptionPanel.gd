@@ -133,7 +133,7 @@ func _shown_buildables() -> Array:
 	var cfg = _get_config()
 	var gs = _get_game_state()
 	var out: Array = []
-	for b_type in (cfg.BUILDABLE_TYPES if (cfg and "BUILDABLE_TYPES" in cfg) else ["wall", "tower"]):
+	for b_type in (cfg.BUILDABLE_TYPES if (cfg and "BUILDABLE_TYPES" in cfg) else ["wall"]):
 		var cost: Dictionary = cfg.BUILDINGS[b_type].get("cost", {}) if cfg else {}
 		if gs == null or not gs.has_method("knows_all") or gs.knows_all(cost):
 			out.append(b_type)
@@ -552,14 +552,20 @@ func _show_build_detail(b_type: String) -> void:
 	if _can_afford(b_type):
 		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
 		var dps: float = float(cfg.get_contact_dps(b_type)) if cfg.has_method("get_contact_dps") else 0.0
-		if dps > 0.0:
+		var row: Dictionary = cfg.BUILDINGS[b_type]
+		if String(row.get("kind", "")) == "trap":
+			# What a trap does is what it does to what walks its lane (Trap.gd).
+			var key: String = "BUILD_DETAIL_FORMAT_TRAP_PIERCE" if bool(row.get("pierce", false)) else "BUILD_DETAIL_FORMAT_TRAP"
+			_set_status(tr(key) % [b_name, _cost_text(b_type), secs, float(row.get("damage", 0.0)),
+				int(row.get("lane", 0)), float(row.get("rearm_seconds", 0.0))])
+		elif dps > 0.0:
 			_set_status(tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, dps])
 		else:
 			_set_status(tr("BUILD_DETAIL_FORMAT") % [b_name, _cost_text(b_type), secs])
 		status_label.modulate = Color.WHITE
 	else:
-		# Name what is actually short. A turret is bought with wood and stone, so
-		# "need 8 wood" was a lie the moment the player had the wood and no rock.
+		# Name what is actually short. A set crossbow is bought with stone and bone, so
+		# "need 4 stone" was a lie the moment the player had the stone and no bone.
 		# And where the short things come from, when that is the real obstacle.
 		_set_status(tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)] \
 			+ _sources_text(cfg.BUILDINGS[b_type].get("cost", {})))
@@ -572,9 +578,9 @@ func _amounts_text(amounts: Dictionary) -> String:
 		parts.append("%d %s" % [int(amounts[res_id]), _resource_name(String(res_id))])
 	return ", ".join(parts)
 
-## What an upgrade changes, number by number -- "fires 1/s -> 1.6/s · HP 20 -> 26" --
+## What an upgrade changes, number by number -- "re-arms in 4s -> 2.5s · HP 16 -> 22" --
 ## with its price and how long the work is. Only what actually changes is listed.
-const _UPGRADE_STATS: Array[String] = ["fire_rate", "range", "damage", "hp"]
+const _UPGRADE_STATS: Array[String] = ["rearm_seconds", "lane", "damage", "hp"]
 
 func upgrade_detail_text(unit: Node) -> String:
 	var cfg = _get_config()
@@ -672,8 +678,8 @@ func _populate_building_buttons() -> void:
 		up_btn.mouse_exited.connect(_clear_craft_detail)
 
 	if selected_unit.has_method("needs_repair") and selected_unit.needs_repair():
-		# The bill is listed in what it actually costs: a turret is mended with wood
-		# and stone, so "N wood" would be the same lie the build menu used to tell.
+		# The bill is listed in what it actually costs: a set crossbow is mended with
+		# stone and bone, so "N stone" would be the same lie the build menu used to tell.
 		var raw: String = tr("CMD_REPAIR")
 		var cost_text: String = _amounts_text(selected_unit.repair_cost()) if selected_unit.has_method("repair_cost") else ""
 		var btn := _create_action_button((raw % cost_text) if ("%" in raw) else raw, func():

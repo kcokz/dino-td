@@ -3,8 +3,9 @@
 # 这样船舱的攻击能打败初始迅猛龙" and "除了木栅栏需要再想一个初始的防御建筑".
 #
 # The cabin stands a hundred hits and shoots what comes near it -- enough for the first
-# raid, not for a big one -- and the opening has a second defence made of wood: a bow tower,
-# weaker than the crossbow tower that comes with stone and bone.
+# raid, not for a big one -- and the opening has a second defence made of wood: a trip bow,
+# weaker than the set crossbow that comes with stone and bone. It was a bow tower that aimed by
+# itself, until v0.6 round two ("Bow tower作为初始防御太过于强大……防御装置自动可以攻击需要合理解释").
 #
 # Everything expected is read from Config.
 extends "res://tests/test_base.gd"
@@ -39,8 +40,13 @@ func after_each() -> void:
 func _row(type_id: String) -> Dictionary:
 	return config_node.BUILDINGS[type_id]
 
+## Damage a second to one animal: the cabin's gun at its rate of fire, a trap as fast as it is
+## re-armed.
 func _dps(type_id: String) -> float:
-	return float(_row(type_id)["damage"]) * float(_row(type_id)["fire_rate"])
+	var row: Dictionary = _row(type_id)
+	if row.has("fire_rate"):
+		return float(row["damage"]) * float(row["fire_rate"])
+	return float(row["damage"]) / float(row["rearm_seconds"])
 
 ## Seconds for a building of `type_id` to shoot `count` raptors dead, one after another.
 func _seconds_to_kill(type_id: String, count: int) -> float:
@@ -79,27 +85,28 @@ func test_02_by_itself_it_outlasts_the_first_raid_and_not_a_big_one() -> void:
 	assert_gt(big_bites, core_hp(), "A big raid could: the cabin alone is not a defence")
 
 # ==============================================================================
-# 2. The bow tower
+# 2. The trip bow
 # ==============================================================================
 
-func test_03_the_opening_has_a_tower_made_of_wood() -> void:
-	assert_has(config_node.BUILDABLE_TYPES, "bow_tower", "The bow tower is on the build menu")
-	var cost: Dictionary = _row("bow_tower")["cost"]
-	assert_eq(cost.keys(), ["wood"], "Wood and nothing else: it can be built from the first minute")
-	assert_eq(String(config_node.get_building_kind("bow_tower")), "tower", "And it shoots")
-	assert_lte(total_price_of("bow_tower"), opening_wood(), "The opening's wood pays for one")
+func test_03_the_opening_has_a_trap_made_of_wood() -> void:
+	assert_has(config_node.BUILDABLE_TYPES, "trip_bow", "The trip bow is on the build menu")
+	var cost: Dictionary = _row("trip_bow")["cost"]
+	assert_eq(cost.keys(), ["wood"], "Wood and nothing else: it can be set from the first minute")
+	assert_eq(String(config_node.get_building_kind("trip_bow")), "trap", "A trap: an animal on its wire looses it")
+	assert_false(_row("trip_bow").has("range"), "It aims at nothing")
+	assert_lte(total_price_of("trip_bow"), opening_wood(), "The opening's wood pays for one")
 
-func test_04_it_shoots_less_than_the_crossbow_and_more_than_a_stake() -> void:
-	assert_lt(_dps("bow_tower"), _dps("tower"), "Slower than the crossbow tower it gives way to")
-	assert_lt(float(_row("bow_tower")["range"]), float(_row("tower")["range"]), "And not as far")
-	assert_gt(_dps("bow_tower"), config_node.get_contact_dps("wall"), "But it does more than a stake's spikes")
-	assert_gt(total_price_of("bow_tower"), total_price_of("wall"), "And costs more than a stake")
+func test_04_it_does_less_than_the_set_crossbow_and_more_than_a_stake() -> void:
+	assert_lt(_dps("trip_bow"), _dps("set_crossbow"), "Less to one animal than the set crossbow it gives way to")
+	assert_lt(int(_row("trip_bow")["lane"]), int(_row("set_crossbow")["lane"]), "Along a shorter wire")
+	assert_false(bool(_row("trip_bow")["pierce"]), "And one animal a shot, where the crossbow's bolt goes through them all")
+	assert_lt(float(_row("trip_bow")["damage"]), raptor_stat("hp"), "One arrow does not kill a raptor")
+	assert_gt(_dps("trip_bow"), config_node.get_contact_dps("wall"), "But it does more than a stake's spikes")
+	assert_gt(total_price_of("trip_bow"), total_price_of("wall"), "And costs more than a stake")
 
-func test_05_its_bow_turns_to_what_it_shoots() -> void:
-	var body: Node3D = VisualLibrary.make("building/bow_tower")
+func test_05_its_string_is_drawn_and_an_arrow_is_on_it() -> void:
+	var body: Node3D = VisualLibrary.make("building/trip_bow")
 	_cleanup_nodes.append(body)
-	assert_true(VisualLibrary.has_art("building/bow_tower"), "It is a model")
-	var head := body.find_child("Head", true, false)
-	assert_not_null(head, "Its bow is a part that turns")
-	if head:
-		assert_not_null(head.find_child("Muzzle", true, false), "And shoots from the arrow's point")
+	assert_true(VisualLibrary.has_art("building/trip_bow"), "It is a model")
+	assert_not_null(body.find_child("String", true, false), "With a string the game draws back (Trap.gd)")
+	assert_not_null(body.find_child("Arrow", true, false), "And an arrow on it")

@@ -157,7 +157,7 @@ func _first_building_from(from: Node3D, to: Node3D) -> Node:
 func test_06_a_clear_line_at_the_right_distance_still_works() -> void:
 	var gm = _grid()
 	await wait_frames(1)
-	var tower = _building("tower", gm, Vector2i(0, 0))
+	var tower = _building("set_crossbow", gm, Vector2i(0, 0))
 	var raptor = _dino("raptor", Vector3.ZERO)
 	await wait_frames(2)
 	var bite: float = raptor.attack_reach() + raptor._half_width_of(tower)
@@ -180,7 +180,7 @@ func test_07_it_does_not_stop_at_a_distance_it_cannot_bite_from() -> void:
 	# state doing nothing. It now walks until it can actually reach.
 	var gm = _grid()
 	await wait_frames(1)
-	var tower = _building("tower", gm, Vector2i(0, -2))
+	var tower = _building("set_crossbow", gm, Vector2i(0, -2))
 	var raptor = _dino("raptor", Vector3(1.0, 0.0, -8.0))
 	raptor.set_waypoints([Vector3(1.0, 0.0, -8.0), Vector3(1.0, 0.0, 0.0)])
 	await wait_frames(2)

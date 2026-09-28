@@ -5,7 +5,7 @@ extends "res://scripts/entities/Dino.gd"
 ## Small, fast, and never alone: the swarming habit.
 ##
 ## A pack dinosaur is interested in everything nearby. It will break off the path
-## for a turret because a turret is what is shooting at it, it will turn on the
+## for a trap because a trap is what is shooting at it, it will turn on the
 ## Hero when he makes himself loud, and it bites whatever is in the way rather
 ## than picking a favourite. That is what makes a raid of them feel like a raid:
 ## they react to what the player does.
@@ -15,8 +15,8 @@ extends "res://scripts/entities/Dino.gd"
 ## the one thing a behaviour subclass is for. Any new small pack species uses this
 ## class as-is: the habits are shared, only the numbers in Config differ.
 
-## A turret is the thing hurting it, and worth leaving the path for.
-func tower_interest_range() -> float:
+## A trap is the thing hurting it, and worth leaving the path for.
+func trap_interest_range() -> float:
 	return 4.5
 
 ## It will stop for anything it nearly walks into.
@@ -31,20 +31,20 @@ func hero_interest_range() -> float:
 ## Threat order: whatever is shooting, then the man who just made himself the
 ## loudest thing on the field, then whatever happens to be in the way.
 ##
-## Provocation outranks a turret only when the Hero is actually the nearer of the
+## Provocation outranks a trap only when the Hero is actually the nearer of the
 ## two; a raptor being shot in the back does not turn around for somebody shouting.
 ## What a pack wants. Whether it may have it is decided by Dino._find_threat_priority_target,
 ## which applies the rule about walls that are not in the way -- this used to override
 ## THAT method and so skipped the rule entirely.
 func _preferred_target() -> Node:
-	var tower := _nearest_building_within(tower_interest_range(), "tower")
+	var trap := _nearest_building_within(trap_interest_range(), "shooter")
 	var hero := _hero_within(hero_interest_range())
 
 	if _hero_is_provoking() and hero != null:
-		if tower == null or global_position.distance_to(hero.global_position) < global_position.distance_to(tower.global_position):
+		if trap == null or global_position.distance_to(hero.global_position) < global_position.distance_to(trap.global_position):
 			return hero
-	if tower != null:
-		return tower
+	if trap != null:
+		return trap
 
 	var building := _nearest_building_within(building_interest_range())
 	if building != null:

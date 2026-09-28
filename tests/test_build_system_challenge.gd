@@ -170,7 +170,7 @@ func test_challenge_duplicate_placement_different_types() -> void:
 
 	var wood_before = _get_wood()
 
-	var types_to_test = ["tower", "wall", "core"]
+	var types_to_test = ["set_crossbow", "wall", "core"]
 	for t in types_to_test:
 		var watcher = watch_signal(event_bus_node, "building_placed")
 		assert_false(build_sys.can_place_building(t, cell), "can_place_building for type '%s' on occupied cell must be false" % t)
@@ -283,8 +283,8 @@ func test_challenge_placement_blocked_during_produce_phase() -> void:
 	var cell = Vector2i(2, 2)
 	var watcher = watch_signal(event_bus_node, "building_placed")
 
-	assert_false(build_sys.can_place_building("tower", cell), "can_place_building must return false during PRODUCE phase")
-	var b = build_sys.place_building("tower", cell)
+	assert_false(build_sys.can_place_building("set_crossbow", cell), "can_place_building must return false during PRODUCE phase")
+	var b = build_sys.place_building("set_crossbow", cell)
 	if b is Node: _cleanup_nodes.append(b)
 
 	assert_null(b, "place_building must return null during PRODUCE phase")
@@ -358,8 +358,8 @@ func test_challenge_partial_wood_rejection_tower() -> void:
 		var cell = Vector2i(50, 50 + idx)
 
 		var watcher = watch_signal(event_bus_node, "building_placed")
-		assert_false(build_sys.can_place_building("tower", cell), "Tower requires 4 wood, %d wood must fail validation" % w)
-		var b = build_sys.place_building("tower", cell)
+		assert_false(build_sys.can_place_building("set_crossbow", cell), "Tower requires 4 wood, %d wood must fail validation" % w)
+		var b = build_sys.place_building("set_crossbow", cell)
 		if b is Node: _cleanup_nodes.append(b)
 
 		assert_null(b, "Tower placement with %d wood must return null" % w)
@@ -380,7 +380,7 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	#
 	# It used to use "barracks", a building nobody could ever put up -- it was not in
 	# BUILDABLE_TYPES -- so this suite was exercising the transaction against a phantom.
-	var price: Dictionary = config_node.BUILDINGS["tower"]["cost"]
+	var price: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
 	assert_eq(price.size(), 2, "The tower is bought with two materials, which is what makes this test possible")
 	var a: String = String(price.keys()[0])
 	var b: String = String(price.keys()[1])
@@ -390,8 +390,8 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	game_state_node.resources = {a: int(price[a]), b: int(price[b]) - 1}
 	var cell_a = Vector2i(60, 60)
 
-	assert_false(build_sys.can_place_building("tower", cell_a), "One %s short must fail" % b)
-	var b_a = build_sys.place_building("tower", cell_a)
+	assert_false(build_sys.can_place_building("set_crossbow", cell_a), "One %s short must fail" % b)
+	var b_a = build_sys.place_building("set_crossbow", cell_a)
 	if b_a is Node: _cleanup_nodes.append(b_a)
 
 	assert_null(b_a, "Placement returns null when %s is insufficient" % b)
@@ -402,8 +402,8 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 	game_state_node.resources = {a: int(price[a]) - 1, b: int(price[b])}
 	var cell_b = Vector2i(60, 61)
 
-	assert_false(build_sys.can_place_building("tower", cell_b), "One %s short must fail too" % a)
-	var b_b = build_sys.place_building("tower", cell_b)
+	assert_false(build_sys.can_place_building("set_crossbow", cell_b), "One %s short must fail too" % a)
+	var b_b = build_sys.place_building("set_crossbow", cell_b)
 	if b_b is Node: _cleanup_nodes.append(b_b)
 
 	assert_null(b_b, "Placement returns null when %s is insufficient" % a)
@@ -412,8 +412,8 @@ func test_challenge_multi_resource_partial_affordability() -> void:
 
 	# Case C: exactly enough of both, which must go through and take all of it.
 	game_state_node.resources = {a: int(price[a]), b: int(price[b])}
-	assert_true(build_sys.can_place_building("tower", cell_b), "Exactly the price must pass")
-	var b_c = build_sys.place_building("tower", cell_b)
+	assert_true(build_sys.can_place_building("set_crossbow", cell_b), "Exactly the price must pass")
+	var b_c = build_sys.place_building("set_crossbow", cell_b)
 	if b_c is Node: _cleanup_nodes.append(b_c)
 
 	assert_not_null(b_c, "Placement with exactly the price succeeds")
@@ -430,8 +430,8 @@ func test_challenge_missing_resource_keys_handled_safely() -> void:
 	var cell = Vector2i(65, 65)
 
 	# The turret requires stone. Must return false safely without crashing.
-	assert_false(build_sys.can_place_building("tower", cell), "Missing resource key in inventory safely rejected")
-	var b = build_sys.place_building("tower", cell)
+	assert_false(build_sys.can_place_building("set_crossbow", cell), "Missing resource key in inventory safely rejected")
+	var b = build_sys.place_building("set_crossbow", cell)
 	if b is Node: _cleanup_nodes.append(b)
 
 	assert_null(b, "Placement safely returns null when resource key is missing")
@@ -466,8 +466,8 @@ func test_challenge_replacement_after_lethal_damage() -> void:
 	# 3. Re-place a Tower on the same cell
 	game_state_node.resources["wood"] = 9999 # ample under any balance
 
-	assert_true(build_sys.can_place_building("tower", cell), "can_place_building returns true on vacated cell")
-	var tower = build_sys.place_building("tower", cell)
+	assert_true(build_sys.can_place_building("set_crossbow", cell), "can_place_building returns true on vacated cell")
+	var tower = build_sys.place_building("set_crossbow", cell)
 	if tower is Node: _cleanup_nodes.append(tower)
 
 	assert_not_null(tower, "Re-placement of Tower on reclaimed cell succeeds")
@@ -483,7 +483,7 @@ func test_challenge_rapid_destroy_rebuild_multitype_stress() -> void:
 	if grid_mgr == null or build_sys == null: return
 
 	var cell = Vector2i(75, 75)
-	var sequence = ["wall", "tower", "wall", "tower", "wall", "tower", "wall", "tower"]
+	var sequence = ["wall", "set_crossbow", "wall", "set_crossbow", "wall", "set_crossbow", "wall", "set_crossbow"]
 
 	for idx in range(sequence.size()):
 		var b_type = sequence[idx]
@@ -512,7 +512,7 @@ func test_challenge_replacement_after_direct_destroy_call() -> void:
 	if grid_mgr == null or build_sys == null: return
 
 	var cell = Vector2i(78, 78)
-	var b1 = build_sys.place_building("tower", cell)
+	var b1 = build_sys.place_building("set_crossbow", cell)
 	if b1 is Node: _cleanup_nodes.append(b1)
 	assert_not_null(b1, "LumberHut placed")
 
@@ -603,8 +603,8 @@ func test_challenge_campfire_destruction_emits_game_lost_and_halts_all_placement
 	# 2. Assert ALL subsequent placement attempts across all types and cells are strictly rejected
 	var test_attempts = [
 		{"type": "wall", "cell": Vector2i(1, 1)},
-		{"type": "tower", "cell": Vector2i(2, 2)},
-		{"type": "tower", "cell": Vector2i(3, 3)},
+		{"type": "set_crossbow", "cell": Vector2i(2, 2)},
+		{"type": "set_crossbow", "cell": Vector2i(3, 3)},
 		{"type": "core", "cell": Vector2i(4, 4)},
 		{"type": "wall", "cell": Vector2i(0, 0)}
 	]
@@ -652,7 +652,7 @@ func test_challenge_cannot_overwrite_living_core_campfire() -> void:
 	var origin = Vector2i(0, 0)
 	grid_mgr.occupy_cell(origin, core)
 
-	var place_types = ["wall", "tower", "core"]
+	var place_types = ["wall", "set_crossbow", "core"]
 	for t in place_types:
 		assert_false(build_sys.can_place_building(t, origin), "Cannot place '%s' over living CoreCampfire at (0,0)" % t)
 		var b = build_sys.place_building(t, origin)
@@ -698,10 +698,10 @@ func test_challenge_replacement_immediately_after_queue_free_same_frame() -> voi
 
 	# GridManager.is_cell_occupied must recognize is_queued_for_deletion and allow immediate placement
 	assert_false(grid_mgr.is_cell_occupied(cell), "Cell vacated immediately upon queue_free in same frame")
-	assert_true(build_sys.can_place_building("tower", cell), "Immediate re-placement permitted in same frame")
+	assert_true(build_sys.can_place_building("set_crossbow", cell), "Immediate re-placement permitted in same frame")
 
 	game_state_node.resources["wood"] = 9999 # ample under any balance
-	var b2 = build_sys.place_building("tower", cell)
+	var b2 = build_sys.place_building("set_crossbow", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
 	assert_not_null(b2, "New tower successfully placed over queued-for-deletion cell")
 	assert_eq(grid_mgr.get_building_at(cell), b2, "GridManager now tracks new tower")

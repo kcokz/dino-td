@@ -74,7 +74,7 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 func _tower_at(gm: Node, cell: Vector2i) -> Node:
 	var t = load("res://scripts/entities/Tower.gd").new()
 	_world.add_child(t)
-	t.setup("tower", cell)
+	t.setup("set_crossbow", cell)
 	t.position = gm.cell_to_world(cell)
 	t.complete_construction()
 	gm.occupy_cell(cell, t)
@@ -115,7 +115,7 @@ func test_01_wall_is_a_kind_not_a_single_building() -> void:
 	# The rule is written against a CATEGORY, so anything declared kind "wall" obeys it
 	# -- stakes today, whatever palisade or barricade comes later without a code change.
 	assert_eq(String(config_node.BUILDINGS["wall"]["kind"]), "wall", "Stakes are of kind wall")
-	assert_ne(String(config_node.BUILDINGS["tower"]["kind"]), "wall", "A turret is not")
+	assert_ne(String(config_node.BUILDINGS["set_crossbow"]["kind"]), "wall", "A turret is not")
 	assert_ne(String(config_node.BUILDINGS["core"]["kind"]), "wall", "Nor is the wreck")
 
 func test_02_a_dinosaur_can_tell_a_wall_from_anything_else() -> void:

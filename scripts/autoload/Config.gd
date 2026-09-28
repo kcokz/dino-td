@@ -65,8 +65,8 @@ const BUILDINGS: Dictionary = {
 		"hp": 100.0,
 		# Its own gun: the wreck's second turret head, on the roof (tools/generate_props.py
 		# cabin). It covers the ground round the cabin and no further -- the first raptors
-		# die at the walls, a raid does not -- and fires a little slower than a crossbow
-		# tower, which is what the player builds when this is not enough.
+		# die at the walls, a raid does not. The one thing in the valley that picks its own
+		# targets, because it is the ship's machinery; what the player builds are traps.
 		"range": 4.5,
 		"damage": 1.0,
 		"fire_rate": 0.8,
@@ -74,67 +74,76 @@ const BUILDINGS: Dictionary = {
 		"cost": {},
 		"upgrades_to": "",
 	},
-	"tower": {
-		"name": "BUILDING_TOWER_NAME",
-		"kind": "tower",
+	# THE TRAPS, v0.6 round two: "Bow tower作为初始防御太过于强大，一开始就能造塔有点不合理……想一个能
+	# 攻击但不是tower的防御……防御装置自动可以攻击需要合理解释". Nothing the player builds aims -- a
+	# turret that picks its own targets is the ship's machinery, and only the cabin has one.
+	#
+	# A trap is set along a LANE: the cells in front of it, as far as `lane` (the wire stops at
+	# anything built or standing in the way), in the direction it faces -- R turns it while it
+	# is being placed. An animal walking into the tripwire looses it, the way hunters set these
+	# on game trails; then it has to be re-armed, `rearm_seconds` of the string being drawn
+	# back, which is watched happen (Trap.gd). A trap is a building like any other: it fills its
+	# cell, is solid, and a raid bites the ones that shoot it (DINO_AI.shooter_kinds).
+	#
+	# The opening's trap, wood and vine (tools/generate_props.py trip_bow): a sapling bow on a
+	# stock in two forked stakes. One arrow at the first animal on the wire, half a raptor
+	# (DINOS.raptor.hp) -- it does not stop a pack, it takes the fight out of the front of one,
+	# and a wall or the Hero finishes it -- and a slow re-arm. Four wood: a line of palisade is
+	# still where the opening's wood goes.
+	"trip_bow": {
+		"name": "BUILDING_TRIP_BOW_NAME",
+		"kind": "trap",
 		"cells": 1,
-		"height": 2.4,
-		"hp": 20.0,
-		# A crossbow he builds himself: a drystone plinth, a timber bow arm, bone bolt heads.
-		# Stone and bone and nothing else -- one building, two materials at most, and the
-		# price should read off the model (GAME-DESIGN 4.1 rule 2). Those two are its whole
-		# lock: stone wants the pick, and the pick and the bolts want bone, which only a
-		# dinosaur has. There is no blueprint any more (4.1 rule 1): he is a master builder,
-		# and what he lacks is never how, only what with.
-		#
-		# One bone: the first raid leaves two (WAVES.base_count raptors), and the pick takes
-		# the other -- one raid pays for the pick and the first tower (GAME-DESIGN 9.2).
-		"cost": {"stone": 5, "bone": 1},
-		"range": 5.0,
-		"damage": 1.0,
-		"fire_rate": 1.0,
-		# How fast the head swings round to follow its target, in degrees a second. Fast
-		# enough to be on target by the next shot from anywhere; slow enough to be seen
-		# turning, which is how the player can tell which dinosaur it has picked.
-		"turn_speed": 300.0,
-		# Improved where it stands (GAME-DESIGN 6.1: a line of buildings upgrades in place).
-		"upgrades_to": "tower_2",
-	},
-	# The opening's own tower (v0.6 feedback: "除了木栅栏需要再想一个初始的防御建筑，不然木头只能做
-	# 木栅栏有点无聊"): wood and nothing else -- a great bow bent from a sapling and strung with
-	# vine, on a stand of lashed poles (tools/generate_props.py bow_tower). It shoots, which a
-	# stake does not, but slowly and not far: half the crossbow tower's rate, a metre less
-	# reach, and a stake's wood four times over -- so the run's first choice is a real one, a
-	# line that holds or a bow that picks them off, and the crossbow tower (stone and bone) is
-	# what it gives way to.
-	"bow_tower": {
-		"name": "BUILDING_BOW_TOWER_NAME",
-		"kind": "tower",
-		"cells": 1,
-		"height": 2.0,
-		"hp": 12.0,
-		"cost": {"wood": 8},
-		"range": 4.0,
-		"damage": 1.0,
-		"fire_rate": 0.5,
-		"turn_speed": 200.0,
+		"height": 0.5,
+		"hp": 8.0,
+		"cost": {"wood": 4},
+		"lane": 4,
+		"damage": 1.4,
+		"pierce": false,
+		"rearm_seconds": 3.0,
 		"upgrades_to": "",
 	},
-	# The crossbow tower, improved where it stands: a second bow arm and a rack of bone bolts,
-	# so it looses faster. Never placed from the menu -- only reached by upgrading a tower.
-	# What the upgrade costs is the difference between the two prices (Config.upgrade_cost),
-	# so what a tower II is made of is still its price: stone and bone, and more bone.
-	"tower_2": {
-		"name": "BUILDING_TOWER_2_NAME",
-		"kind": "tower",
+	# The set crossbow, once there is stone and bone (tools/generate_props.py set_crossbow): a
+	# heavy stock on a stone plinth, a seasoned stave, a bone-headed bolt -- two bolts a raptor,
+	# heavier than the trip bow's arrow even to one animal. It stands like the stone it is set
+	# on: a pack goes for what shoots it (DINO_AI.shooter_kinds), and set into a ring facing out
+	# -- where it does most -- a trap that fell like a palisade section was the hole the raid
+	# came in by (measured: tools/playtest.gd siege, at 16 hit points six of them were gone and
+	# the cabin with them; at 40 they hold -- see WAVES). Its bolt flies the whole lane and
+	# goes through everything on it -- a raid walks a lane in file, so set down
+	# the line of a funnel it answers the column, not the one at the front. Stone for the
+	# plinth, bone for the bolts, and nothing else (GAME-DESIGN 4.1 rule 2): one bone, so the
+	# first raid's bone pays for the pick and the first crossbow (9.2).
+	"set_crossbow": {
+		"name": "BUILDING_SET_CROSSBOW_NAME",
+		"kind": "trap",
 		"cells": 1,
-		"height": 2.4,
-		"hp": 26.0,
-		"cost": {"stone": 5, "bone": 3},
-		"range": 5.0,
-		"damage": 1.0,
-		"fire_rate": 1.6,
-		"turn_speed": 300.0,
+		"height": 0.55,
+		"hp": 40.0,
+		"cost": {"stone": 4, "bone": 1},
+		"lane": 6,
+		"damage": 2.0,
+		"pierce": true,
+		"rearm_seconds": 4.0,
+		# Improved where it stands (GAME-DESIGN 6.1: a line of buildings upgrades in place).
+		"upgrades_to": "set_crossbow_2",
+	},
+	# The set crossbow improved where it stands: a second stave lashed over the first and a rack
+	# of spare bolts, so one is spanned while the other looses -- it re-arms in little more than
+	# half the time -- on a plinth built up to carry them: what a late base is held by, the
+	# beacon's final wave above all (MAPS.beacon.final_raids). Never placed from the menu; what the upgrade costs is the difference between
+	# the two prices (Config.upgrade_cost), so its price is still what it is made of.
+	"set_crossbow_2": {
+		"name": "BUILDING_SET_CROSSBOW_2_NAME",
+		"kind": "trap",
+		"cells": 1,
+		"height": 0.6,
+		"hp": 70.0,
+		"cost": {"stone": 4, "bone": 3},
+		"lane": 6,
+		"damage": 2.0,
+		"pierce": true,
+		"rearm_seconds": 2.5,
 		"upgrades_to": "",
 	},
 	# THE WALLS, v0.6 round two: "重新设计墙，让墙体逻辑简单清晰，墙必须让它们和别的建筑能更贴合……木栅栏成本
@@ -549,7 +558,27 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level rather than bought).
-const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "bow_tower", "bone_stake", "stone_wall", "tower"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "bone_stake", "stone_wall", "set_crossbow"]
+
+## What every trap shares (BUILDINGS kind "trap", Trap.gd).
+const TRAPS: Dictionary = {
+	# The tripwire, ankle-high on a raptor across the middle of its lane: a hand narrower than
+	# the cell each side, so an animal walking the next lane over does not brush it.
+	"wire_width": 0.8,
+	"wire_height": 0.18,
+	# What trips it: everything a body could be stepping through the wire with, up to this
+	# height. A wire is a line; an animal is not, and a raptor's legs are its whole height.
+	"trigger_height": 1.0,
+	# How far the string moves between drawn and let go, in metres: the nock to the chord of
+	# the bow on the model (tools/generate_props.py TRAP_STRING_TRAVEL). Re-arming draws it back
+	# along that path -- how the player sees a trap being made ready again.
+	"string_travel": 0.26,
+	# How fast a loosed arrow or bolt is drawn flying, in metres a second. The hit lands the
+	# moment it looses; the flight is only what is seen.
+	"shot_speed": 32.0,
+	# The lane shown on the ground under a trap being placed, the wire's colour.
+	"lane_color": Color(0.95, 0.8, 0.35),
+}
 
 ## The building `type_id` turns into when it is upgraded where it stands, or "".
 static func upgrade_target(type_id: String) -> String:
@@ -559,8 +588,9 @@ static func upgrade_target(type_id: String) -> String:
 	return target if BUILDINGS.has(target) else ""
 
 ## What it costs to upgrade a `type_id`: the difference between its price and the price of
-## what it becomes, never less than nothing. A tower II costs a tower and two more bone, so
-## the upgrade is two bone -- and a building's price stays exactly what it is made of.
+## what it becomes, never less than nothing. A twin set crossbow costs a set crossbow and two
+## more bone, so the upgrade is two bone -- and a building's price stays exactly what it is
+## made of.
 static func upgrade_cost(type_id: String) -> Dictionary:
 	var target: String = upgrade_target(type_id)
 	if target == "":
@@ -640,7 +670,7 @@ const DINOS: Dictionary = {
 		"size": Vector3(0.8, 1.15, 0.8),
 	},
 	# The map's boss (GAME-DESIGN 7.5: comes once in the middle of the game, on the map's
-	# beat, and last of all in the beacon's final wave). Hard enough that a tower or two is
+	# beat, and last of all in the beacon's final wave). Hard enough that a trap or two is
 	# not an answer on their own -- it is what the stone wall is for (6.3).
 	"big_theropod": {
 		"name": "DINO_BIG_THEROPOD_NAME",
@@ -779,7 +809,7 @@ const DINO_AI: Dictionary = {
 	# What its body bumps into (layer names above): everything but the nest it comes out of.
 	"collides_with": ["LAYER_GROUND", "LAYER_BUILDING", "LAYER_WALL", "LAYER_GATE", "LAYER_HERO", "LAYER_DINO"],
 	# What counts as shooting at it, by BUILDINGS kind: what a pack leaves its path for.
-	"shooter_kinds": ["tower", "trap"],
+	"shooter_kinds": ["trap"],
 }
 
 # ==============================================================================
@@ -791,11 +821,13 @@ const DINO_AI: Dictionary = {
 ## hit points a big wave) the raid at minute 25 was about a hundred raptors at 2.2 times
 ## their hit points, and the beacon's final wave three times that: no base holds that.
 ## Measured with `tools/playtest.gd siege` (v0.6): six crossbow towers facing the nest
-## hold thirty raptors at x1.3 and fall to fifty at x1.5; ten round the cabin hold ninety
-## at x1.5 streamed from every side, and fall to a big wave of fifty-three at x1.33. These
+## held thirty raptors at x1.3 and fell to fifty at x1.5. Since the towers became traps (v0.6
+## round two), six set crossbows set into a ring facing the nest hold thirty at x1.3 with half
+## of them standing, and fifty at x1.5 by a hair -- every trap gone, the cabin at 13 of 100;
+## ten improved ones round it hold the beacon's final wave (MAPS.beacon.final_raids). These
 ## figures put the raid at minute 25 near thirty at under x1.5, and a big wave half as
 ## big again rather than twice as big -- a base that kept building holds it, one that
-## stopped at the fourth tower does not.
+## stopped at the fourth trap does not.
 const WAVES: Dictionary = {
 	"base_count": 2,
 	"count_per_wave": 1,
@@ -834,7 +866,7 @@ const COLORS: Dictionary = {
 	"hill": Color(0.27, 0.26, 0.22),
 	"grid_hover": Color(1.0, 1.0, 0.2, 0.4),
 	"core": Color(0.9, 0.3, 0.1),
-	"tower": Color(0.2, 0.5, 0.9),
+	"trap": Color(0.62, 0.44, 0.24),
 	"wall": Color(0.5, 0.35, 0.2),
 	"stone_wall": Color(0.55, 0.53, 0.49),
 	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
@@ -894,7 +926,7 @@ const MAPS: Dictionary = {
 		# Time to fetch the stock, put a fence up and make an axe before anything arrives.
 		"first_raid": 90.0,
 		# The boss comes with the first raid after this (GAME-DESIGN 9.2: about ten minutes
-		# in) -- late enough that towers and a meal are within reach, early enough to leave
+		# in) -- late enough that traps and a meal are within reach, early enough to leave
 		# the stone wall something to be learned for.
 		"boss_raid": 600.0,
 	},
@@ -935,7 +967,11 @@ const MAPS: Dictionary = {
 		# `stream_share` of the charge. The map's boss comes last of all, and that share
 		# is what leaves it time to reach the cabin before the jump: the finale is a
 		# fight, not a boss stepping out as the capsule leaves.
-		"final_raids": 3.0,
+		#
+		# Two and a half since the towers became traps (v0.6 round two): ten improved set
+		# crossbows set into a ring hold seventy-five raptors at x1.5 streamed from every side,
+		# and fall to ninety -- where ten towers held ninety (tools/playtest.gd siege, WAVES).
+		"final_raids": 2.5,
 		"stream_share": 0.7,
 	},
 	## Hills: ground nobody crosses and nothing is built on.
@@ -1381,6 +1417,10 @@ const CONTROLS: Dictionary = {
 	"camera_tilt_up_key": KEY_F,                  # towards looking straight down
 	"camera_tilt_down_key": KEY_V,                # towards looking along the ground
 	"camera_reset_key": KEY_R,                    # back to the opening view
+	# Turns a trap being placed a quarter, clockwise -- with Shift, back (Trap.FACINGS). The same
+	# key as the camera's reset, which it takes over only while a trap is in hand: R is where
+	# every building game puts "rotate", and the view is not what the hand is on then.
+	"trap_turn_key": KEY_R,
 	# Pointing at things (Main._raycast_object). How far wide of a unit's body the cursor may
 	# be and still take it, in pixels: a raptor is a small thing to hit from eighteen metres
 	# up, and a unit is what a click most often means.
@@ -1633,11 +1673,16 @@ const VISUALS: Dictionary = {
 	# thing that ends the game if the raid reaches it. It was a 1 m pod his own height.
 	"building/core":        {"scene": "res://assets/models/props/cabin_a.glb",
 		"material": "vertex", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
-	# A machine off the wreck -- white plating, the orange band, twin barrels and a red
-	# eye -- on a stand the Hero lashed together from timber over a drystone plinth. The
-	# head is its own node and turns to face what it shoots (Tower.gd). It was a box.
-	"building/tower":       {"scene": "res://assets/models/props/sentry_a.glb",
-		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
+	# The traps (tools/generate_props.py trip_bow, set_crossbow): kits whose String is drawn
+	# back and let go, and whose Arrow or Bolt is gone while it is re-armed (Trap.gd). Built
+	# pointing north; the trap turns the whole body to the way it faces.
+	"building/trip_bow":       {"scene": "res://assets/models/props/trip_bow_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	"building/set_crossbow":   {"scene": "res://assets/models/props/set_crossbow_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	# Its second stave lashed over the first, and a rack of spare bolts on the plinth.
+	"building/set_crossbow_2": {"scene": "res://assets/models/props/set_crossbow_2_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
 	# A metre of palisade (tools/generate_props.py palisade): a post of sharpened logs in the
 	# middle, and a run of them out to each side of the cell, lashed to a rail -- the runs
 	# towards whatever stands in the cells beside it are shown, so a line of them is one
@@ -1656,13 +1701,6 @@ const VISUALS: Dictionary = {
 	# the door its own node, which swings open for the Hero (Gate.gd).
 	"building/gate":        {"scene": "res://assets/models/props/gate_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
-	# A great bow on a stand of lashed poles, the bow on a log turntable so it turns to what
-	# it shoots (tools/generate_props.py bow_tower). Wood and vine: what it is made of.
-	"building/bow_tower":   {"scene": "res://assets/models/props/bow_tower_a.glb",
-		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
-	# Tower II wears the tower's model until the crossbow gets one of its own (v0.6 T11).
-	"building/tower_2":     {"scene": "res://assets/models/props/sentry_a.glb",
-		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
 	# A tree fern, like the forest round it -- the choppable tree was a striped barrel
@@ -1822,7 +1860,7 @@ static func get_resource_color(res_id: String) -> Color:
 ## The bill is the building's own price scaled by how much of it is missing,
 ## rounded up, in every resource it was built from. So mending can never cost more
 ## than building the thing again, a scratch costs the minimum rather than a flat
-## fee, and a turret -- expensive, and worth keeping where it stands -- is the
+## fee, and a set crossbow -- expensive, and worth keeping where it stands -- is the
 ## thing repair is really for.
 ##
 ## It is one transaction, charged when the work finishes: walking away costs the
@@ -2167,8 +2205,8 @@ static func factor_text(f: float) -> String:
 ##   wooden stakes (1 wood)  -> 1.0s (the floor)
 ##   lumber hut   (12 wood)  -> 12.3s
 ## Superlinear on purpose: at a flat rate per resource the gap between a cheap and
-## an expensive building is barely noticeable, and raising a turret should feel
-## like work next to hammering in a stake.
+## an expensive building is barely noticeable, and setting a crossbow on its plinth should
+## feel like work next to hammering in a stake.
 ##   time = max(BUILD_TIME_MIN, total_cost ^ BUILD_TIME_EXPONENT * BUILD_SECONDS_PER_RESOURCE)
 const BUILD_SECONDS_PER_RESOURCE: float = 0.55
 const BUILD_TIME_EXPONENT: float = 1.25

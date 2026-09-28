@@ -372,26 +372,28 @@ func test_building_wall_initialization() -> void:
 	assert_almost_eq(float(wall.current_hp), float(config_node.BUILDINGS["wall"]["hp"]), 0.01, "Wall starts at full hp")
 
 func test_building_turret_initialization() -> void:
-	assert_not_null(tower_script, "Tower.gd script must exist")
-	if tower_script == null: return
+	# A trap made bare is the opening's trap, at its own numbers (Trap.gd).
+	var trap = load("res://scripts/entities/Trap.gd").new()
+	_cleanup_nodes.append(trap)
 
-	var hut = tower_script.new()
-	_cleanup_nodes.append(hut)
-
-	assert_eq(hut.building_type, "tower", "Tower building_type should be 'tower'")
-	var want_hp: float = float(config_node.BUILDINGS["tower"]["hp"])
-	assert_almost_eq(float(hut.max_hp), want_hp, 0.01, "Tower max_hp comes from Config")
-	assert_almost_eq(float(hut.current_hp), want_hp, 0.01, "And it starts at full")
+	assert_eq(trap.building_type, "trip_bow", "A bare trap is a trip bow")
+	var want_hp: float = float(config_node.BUILDINGS["trip_bow"]["hp"])
+	assert_almost_eq(float(trap.max_hp), want_hp, 0.01, "Its max_hp comes from Config")
+	assert_almost_eq(float(trap.current_hp), want_hp, 0.01, "And it starts at full")
 
 func test_building_tower_initialization() -> void:
+	# The one turret there is: the cabin's gun (Tower.gd, under CoreCampfire).
 	assert_not_null(tower_script, "Tower.gd script must exist")
 	if tower_script == null: return
 
-	var tower = tower_script.new()
-	_cleanup_nodes.append(tower)
+	var cabin = load("res://scripts/entities/CoreCampfire.gd").new()
+	_cleanup_nodes.append(cabin)
 
-	assert_eq(tower.building_type, "tower", "Tower building_type should be 'tower'")
-	assert_almost_eq(float(tower.max_hp), 20.0, 0.01, "Tower max_hp should match Config (20.0)")
+	assert_eq(cabin.building_type, "core", "The turret is the cabin's")
+	assert_almost_eq(float(cabin.max_hp), float(config_node.BUILDINGS["core"]["hp"]), 0.01,
+		"Its max_hp matches Config")
+	assert_almost_eq(float(cabin.attack_range), float(config_node.BUILDINGS["core"]["range"]), 0.01,
+		"And so does its reach")
 
 func test_building_take_damage_and_destruction_signal() -> void:
 	assert_not_null(wall_script, "Wall.gd script must exist")
@@ -452,12 +454,12 @@ func test_place_turret_success_transactions() -> void:
 	var watcher = watch_signal(event_bus_node, "building_placed")
 	var cell = Vector2i(2, 1)
 
-	var building = build_sys.place_building("tower", cell)
+	var building = build_sys.place_building("set_crossbow", cell)
 	if building is Node: _cleanup_nodes.append(building)
 
 	assert_not_null(building, "place_building tower should succeed")
-	for res_id in config_node.BUILDINGS["tower"]["cost"]:
-		assert_eq(int(game_state_node.resources.get(res_id, 0)), START_WOOD - cost_of("tower", String(res_id)),
+	for res_id in config_node.BUILDINGS["set_crossbow"]["cost"]:
+		assert_eq(int(game_state_node.resources.get(res_id, 0)), START_WOOD - cost_of("set_crossbow", String(res_id)),
 			"Placement consumes its %s cost" % res_id)
 	assert_true(watcher.emitted, "building_placed emitted")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (2,1) occupied in GridManager")
@@ -470,12 +472,12 @@ func test_place_tower_success_transactions() -> void:
 	var watcher = watch_signal(event_bus_node, "building_placed")
 	var cell = Vector2i(3, 1)
 
-	var building = build_sys.place_building("tower", cell)
+	var building = build_sys.place_building("set_crossbow", cell)
 	if building is Node: _cleanup_nodes.append(building)
 
 	assert_not_null(building, "place_building tower should succeed")
-	for res_id in config_node.BUILDINGS["tower"]["cost"]:
-		assert_eq(int(game_state_node.resources.get(res_id, 0)), START_WOOD - cost_of("tower", String(res_id)),
+	for res_id in config_node.BUILDINGS["set_crossbow"]["cost"]:
+		assert_eq(int(game_state_node.resources.get(res_id, 0)), START_WOOD - cost_of("set_crossbow", String(res_id)),
 			"Placement consumes its %s cost" % res_id)
 	assert_true(watcher.emitted, "building_placed emitted for Tower")
 	assert_true(grid_mgr.is_cell_occupied(cell), "Cell (3,1) occupied in GridManager")
@@ -497,10 +499,10 @@ func test_duplicate_placement_rejected_no_deductions() -> void:
 	var watcher = watch_signal(event_bus_node, "building_placed")
 
 	# Check validation
-	assert_false(build_sys.can_place_building("tower", cell), "can_place_building on occupied cell must return false")
+	assert_false(build_sys.can_place_building("set_crossbow", cell), "can_place_building on occupied cell must return false")
 
 	# Execute duplicate placement attempt
-	var b2 = build_sys.place_building("tower", cell)
+	var b2 = build_sys.place_building("set_crossbow", cell)
 	if b2 is Node: _cleanup_nodes.append(b2)
 
 	assert_null(b2, "Duplicate placement on occupied cell must return null")

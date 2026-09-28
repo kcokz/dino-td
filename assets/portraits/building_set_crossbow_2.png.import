@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://2ltiuvg030rd"
-path="res://.godot/imported/building_tower.png-4165163d387daa7f2d3d83d895f0199d.ctex"
+uid="uid://dugf58mt4um75"
+path="res://.godot/imported/building_set_crossbow_2.png-5452bd1dd72f3b430cf9077c6e75257b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/portraits/building_tower.png"
-dest_files=["res://.godot/imported/building_tower.png-4165163d387daa7f2d3d83d895f0199d.ctex"]
+source_file="res://assets/portraits/building_set_crossbow_2.png"
+dest_files=["res://.godot/imported/building_set_crossbow_2.png-5452bd1dd72f3b430cf9077c6e75257b.ctex"]
 
 [params]
 

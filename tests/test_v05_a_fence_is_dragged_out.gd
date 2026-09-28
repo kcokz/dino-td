@@ -179,7 +179,7 @@ func test_05_only_walls_are_dragged_out() -> void:
 	assert_true(main._is_dragged_out("wall"), "A fence is dragged")
 	assert_true(main._is_dragged_out("stone_wall"), "And so is a stone wall")
 	assert_false(main._is_dragged_out("gate"), "A gate is placed: it is one way through, not a run of them")
-	assert_false(main._is_dragged_out("tower"), "A turret is placed")
+	assert_false(main._is_dragged_out("set_crossbow"), "A turret is placed")
 	assert_false(main._is_dragged_out("core"), "And so is the cabin")
 	assert_eq(String(config_node.get_building_kind("wall")), "wall",
 		"Which is the same category the raid's rules are written against")

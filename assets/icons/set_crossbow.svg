@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="9" y="48" width="22" height="10" rx="2.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="32" y="48" width="23" height="10" rx="2.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="12" y="38" width="19" height="10" rx="2.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="32" y="38" width="19" height="10" rx="2.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="15" y="31" width="34" height="7" rx="1.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 6 30 Q 32 10 58 30" fill="none" stroke="#16110c" stroke-width="16.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="57" y="50" width="3.5" height="9" rx="1" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="9" y="48" width="22" height="10" rx="2.5" fill="#adb4b8"/>
+  <rect x="32" y="48" width="23" height="10" rx="2.5" fill="#8b9397"/>
+  <rect x="12" y="38" width="19" height="10" rx="2.5" fill="#d3d8da"/>
+  <rect x="32" y="38" width="19" height="10" rx="2.5" fill="#adb4b8"/>
+  <rect x="15" y="31" width="34" height="7" rx="1.5" fill="#a0703f"/>
+  <path d="M 6 30 Q 32 10 58 30" fill="none" stroke="#a0703f" stroke-width="6.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="57" y="50" width="3.5" height="9" rx="1" fill="#6f4523"/>
+  <rect x="9" y="48" width="22" height="10" rx="2.5" fill="#adb4b8"/>
+  <rect x="32" y="48" width="23" height="10" rx="2.5" fill="#8b9397"/>
+  <rect x="12" y="38" width="19" height="10" rx="2.5" fill="#d3d8da"/>
+  <rect x="32" y="38" width="19" height="10" rx="2.5" fill="#adb4b8"/>
+  <circle cx="7" cy="30" r="3.2" fill="#efe6cf"/>
+  <circle cx="57" cy="30" r="3.2" fill="#efe6cf"/>
+  <path d="M 7 31 L 32 34 L 57 31" fill="none" stroke="#efe6cf" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 32 34 L 32 13" fill="none" stroke="#dca466" stroke-width="3.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="32,4 36.5,14 27.5,14" fill="#efe6cf"/>
+  <polygon points="32,32 27,37 32,35" fill="#64a24c"/>
+  <polygon points="32,32 37,37 32,35" fill="#64a24c"/>
+  <path d="M 47 41 L 59 55" fill="none" stroke="#dcbb7c" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="57" y="50" width="3.5" height="9" rx="1" fill="#6f4523"/>
+</svg>

@@ -152,7 +152,7 @@ func test_01_the_heros_panel() -> void:
 func test_02_a_buildings_panel() -> void:
 	# Repair (so each is damaged first) and demolish, on a stake and on a turret.
 	var main = await _level()
-	for spec in [["wall", Vector3(-5.0, 0.0, 5.0)], ["tower", Vector3(5.0, 0.0, 5.0)]]:
+	for spec in [["wall", Vector3(-5.0, 0.0, 5.0)], ["set_crossbow", Vector3(5.0, 0.0, 5.0)]]:
 		var at: Vector3 = _open_ground(main, String(spec[0]), spec[1])
 		if at == Vector3.INF:
 			_record_fail("No open ground for a %s" % spec[0])

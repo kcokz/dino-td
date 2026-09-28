@@ -98,7 +98,7 @@ func test_03_a_new_material_brings_what_is_made_of_it() -> void:
 	var shown: Array = _menu(main)
 	assert_eq(shown, _names(_built_of(now_known)), "What is made of bone joins the menu: %s" % [shown])
 	assert_gt(shown.size(), menu_before.size(), "The menu grew")
-	assert_false(shown.has(config_node.get_building_name("tower")), "Not what still waits on stone")
+	assert_false(shown.has(config_node.get_building_name("set_crossbow")), "Not what still waits on stone")
 	game_state_node.add_resource("bone", 1)
 	assert_eq(told.emit_count, 1, "The second bone is not")
 

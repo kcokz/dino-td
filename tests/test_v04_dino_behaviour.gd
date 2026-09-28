@@ -125,13 +125,14 @@ func test_05_two_species_with_one_habit_share_a_class() -> void:
 		config_node.get_dino_script_path("big_theropod"),
 		"A theropod fights differently, so it is a different one")
 
-func test_06_a_pack_dinosaur_breaks_off_for_a_turret() -> void:
+func test_06_a_pack_dinosaur_breaks_off_for_a_trap() -> void:
+	# What shoots at a raid is a trap since v0.6 round two (Trap.gd).
 	var dino = _dino("raptor", Vector3.ZERO)
-	var tower = _spawn(tower_script, Vector3(3.0, 0.0, 0.0))
+	var trap = _spawn(load("res://scripts/entities/Trap.gd"), Vector3(3.0, 0.0, 0.0))
 	var wall = _spawn(wall_script, Vector3(1.0, 0.0, 0.0))
 	await wait_frames(1)
 
-	assert_eq(dino._find_threat_priority_target(), tower,
+	assert_eq(dino._find_threat_priority_target(), trap,
 		"The thing shooting at it is what it wants, even with a fence closer")
 
 func test_07_a_siege_dinosaur_walks_past_the_hero() -> void:

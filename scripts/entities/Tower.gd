@@ -2,9 +2,12 @@
 class_name Tower
 extends "res://scripts/entities/Building.gd"
 
-## Automated Defense Turret for Defend Dinosaur v0.0.
-## Detects enemy dinosaurs within 5.0m radius, selects nearest target,
-## and deals periodic damage via take_damage(amount).
+## A turret: finds the nearest dinosaur in range and shoots it, turning its head to follow.
+##
+## Since v0.6 round two only the cabin is one (CoreCampfire): the ship's own gun, the one thing
+## in the valley that picks its own targets. What the player builds are traps (Trap.gd) -- an
+## animal walking into the wire looses them -- because a machine that aims by itself is the
+## ship's, and could not be explained for anything he lashed together from wood and stone.
 
 # ==============================================================================
 # Configuration & Properties
@@ -42,10 +45,7 @@ var fire_timer: Timer = null
 # ==============================================================================
 
 func _init() -> void:
-	super("tower")
-	building_type = "tower"
-	max_hp = 20.0
-	current_hp = 20.0
+	super()
 	_load_tower_config()
 
 func _ready() -> void:
@@ -58,7 +58,7 @@ func _exit_tree() -> void:
 	if fire_timer and is_instance_valid(fire_timer):
 		fire_timer.stop()
 
-func setup(type_id: String = "tower", p_cell: Vector2i = Vector2i.ZERO) -> void:
+func setup(type_id: String = "core", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	super.setup(type_id, p_cell)
 	_load_tower_config()
 
@@ -69,13 +69,11 @@ func _panel_status() -> String:
 		return ""
 	return tr("STATUS_TOWER_STATS") % [cfg.factor_text(fire_rate), cfg.factor_text(attack_range), cfg.factor_text(damage)]
 
-## Its own type's numbers. It always read the "tower" row, which was harmless while there
-## was one kind of tower and would have left an upgraded tower shooting like the old one.
+## Its own type's numbers.
 func _load_tower_config() -> void:
 	var cfg = _get_config()
-	var row: String = building_type if (cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type)) else "tower"
-	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(row):
-		var data: Dictionary = cfg.BUILDINGS[row]
+	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
+		var data: Dictionary = cfg.BUILDINGS[building_type]
 		max_hp = float(data.get("hp", 20.0))
 		current_hp = max_hp
 		attack_range = float(data.get("range", 5.0))

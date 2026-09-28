@@ -328,7 +328,7 @@ func test_10_dino_threat_priority_targeting() -> void:
 	tree.root.add_child(wall)
 	tree.root.add_child(hero)
 
-	tower.setup("tower")
+	tower.setup("set_crossbow")
 	tower.complete_construction()
 	wall.setup("wall")
 	wall.complete_construction()

@@ -6,7 +6,7 @@ extends "res://scripts/entities/Dino.gd"
 ##
 ## A siege dinosaur walks through the defence rather than fighting the defenders.
 ## It does not stop for the Hero -- something the size of a house has no reason to
-## turn aside for one man -- and it does not chase a turret either: it bites
+## turn aside for one man -- and it does not chase a trap either: it bites
 ## whatever is standing in front of it, which on the way to the cabin is the
 ## fence and then the cabin.
 ##
@@ -30,8 +30,8 @@ func walks_round_walls() -> bool:
 func hero_interest_range() -> float:
 	return 0.0
 
-## A turret is just another building to it -- no detour, no priority.
-func tower_interest_range() -> float:
+## A trap is just another building to it -- no detour, no priority.
+func trap_interest_range() -> float:
 	return 0.0
 
 ## Whatever building is nearest, and nothing else.

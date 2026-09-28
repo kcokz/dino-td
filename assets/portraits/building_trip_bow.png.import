@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://opvgke8s2l4d"
-path="res://.godot/imported/building_tower_2.png-656b0db26a3a09c668be46521434766a.ctex"
+uid="uid://dy2xn8rcp8pd8"
+path="res://.godot/imported/building_trip_bow.png-cebe415e29569a1bfb9acdbbae69757a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/portraits/building_tower_2.png"
-dest_files=["res://.godot/imported/building_tower_2.png-656b0db26a3a09c668be46521434766a.ctex"]
+source_file="res://assets/portraits/building_trip_bow.png"
+dest_files=["res://.godot/imported/building_trip_bow.png-cebe415e29569a1bfb9acdbbae69757a.ctex"]
 
 [params]
 

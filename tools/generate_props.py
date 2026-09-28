@@ -287,6 +287,182 @@ def palisade(seed, bone=False):
     return parts
 
 
+# ==============================================================================
+# The traps (v0.6 round two)
+# ==============================================================================
+#
+# Nothing the player builds aims. A trap is set along a lane of ground in front of it, and an
+# animal walking into its tripwire looses it -- the trip bow and the set crossbow, as hunters
+# set them on game trails. Each is a kit (KITS) whose parts the game moves (Trap.gd): the
+# String, drawn back to the nock and let go forward when it looses, and the Arrow or Bolt on
+# it, gone while it is being re-armed. Both are built round the nock, so moving the String
+# forward by TRAP_STRING_TRAVEL (the nock to the chord of the bow, Config.TRAPS.string_travel)
+# is the string let go. Built pointing along +Y, the game's -Z: north, where the lane runs.
+
+def _wrap(b, centre, axis, radius, turns=3):
+    """A few turns of vine round a log lying along `axis`."""
+    axis = axis.normalized()
+    side = axis.cross(UP)
+    if side.length < 1e-4:
+        side = Vector((1.0, 0.0, 0.0))
+    side.normalize()
+    nrm = side.cross(axis).normalized()
+    pts = []
+    n = turns * 6
+    for k in range(n + 1):
+        a = math.tau * k / 6
+        pts.append(centre + axis * (0.012 * (k / 6.0 - turns * 0.5)) + (side * math.cos(a) + nrm * math.sin(a)) * (radius + 0.01))
+    b.tube(pts, [0.009] * len(pts), [mix(VINE, VINE_DARK, 0.5 if k % 4 == 0 else 0.0) for k in range(len(pts))], 4)
+
+
+def _forked_stake(b, x, y, top, rng):
+    """A stake with a fork at its top for something to rest in, driven into a little mound."""
+    base = Vector((x, y, 0.0))
+    b.tube([base - UP * 0.02, base + UP * 0.05], [0.09, 0.05], [SOIL, SOIL_LIGHT], 7)
+    fork = top - 0.09
+    b.tube([base + UP * (fork * i / 3) for i in range(4)], [0.032, 0.031, 0.03, 0.029],
+           [mix(BARK, BARK_LIGHT, 0.4 if i % 2 else 0.1) for i in range(4)], 6)
+    for sx in (-1.0, 1.0):
+        root = base + UP * fork
+        tip = root + Vector((sx * 0.045, rng.uniform(-0.01, 0.01), 0.1))
+        b.tube([root, tip], [0.022, 0.012], [BARK_LIGHT, FRESH_WOOD], 5)
+
+
+def _stave(b, half_span, y_mid, sweep, z, r_mid, r_tip, col_mid, col_tip):
+    """A bow stave across the front, thick in the middle and fine at the tips, its limbs swept
+    back towards the nock. Returns the tips."""
+    limb, radii, cols = [], [], []
+    for k in range(9):
+        t = -1.0 + 2.0 * k / 8
+        limb.append(Vector((t * half_span, y_mid - sweep * t * t, z)))
+        radii.append(r_mid - (r_mid - r_tip) * abs(t))
+        cols.append(mix(col_mid, col_tip, abs(t)))
+    b.tube(limb, radii, cols, 6)
+    return limb[0], limb[-1]
+
+
+def _string(tips, nock, radius, col):
+    """The string drawn back from the tips to the nock, built round the nock."""
+    s = Builder()
+    for tip in tips:
+        s.tube([tip - nock, Vector((0.0, 0.0, 0.0))], [radius, radius], [col, col], 4)
+    return s
+
+
+TRAP_STRING_TRAVEL = 0.26
+
+
+def trip_bow(seed):
+    """The opening's trap, wood and vine: a bow bent from a sapling, lashed across the front of a
+    stock that rests in two forked stakes a little above a raptor's knee, drawn back to a trigger
+    toggle and an arrow nocked -- and the tripwire from the toggle down to a peg at the front of
+    its cell, where the wire across the lane begins."""
+    rng = random.Random(seed)
+    frame = Builder()
+    stock_z = 0.40
+    for y in (-0.26, 0.14):
+        _forked_stake(frame, 0.0, y, stock_z + 0.05, rng)
+    frame.tube([Vector((0.0, -0.42, stock_z)), Vector((0.0, -0.1, stock_z + 0.005)), Vector((0.0, 0.28, stock_z))],
+               [0.034, 0.036, 0.032], [BARK, BARK_LIGHT, BARK], 7)
+    for y in (-0.26, 0.14):
+        _wrap(frame, Vector((0.0, y, stock_z)), Vector((0.0, 1.0, 0.0)), 0.036)
+    # The toggle at the back, and the wire from it forward and down to the peg at the cell's
+    # front edge.
+    toggle = Vector((0.0, -0.4, stock_z + 0.05))
+    frame.tube([Vector((0.0, -0.4, stock_z)), toggle], [0.012, 0.012], [FRESH_WOOD, FRESH_WOOD], 4)
+    peg = Vector((0.03, 0.46, 0.0))
+    frame.tube([peg, peg + UP * 0.12], [0.018, 0.012], [BARK_LIGHT, FRESH_WOOD], 5)
+    frame.tube([toggle, Vector((0.02, 0.0, 0.2)), peg + UP * 0.1], [0.005] * 3, [VINE_ROPE] * 3, 3)
+
+    bow = Builder()
+    tips = _stave(bow, 0.44, 0.22, 0.16, stock_z + 0.03, 0.026, 0.012, mix(BARK_LIGHT, FRESH_WOOD, 0.5), FRESH_WOOD)
+    _wrap(bow, Vector((0.0, 0.22, stock_z + 0.03)), Vector((1.0, 0.0, 0.0)), 0.028)
+
+    nock = tips[0].lerp(tips[1], 0.5) - Vector((0.0, TRAP_STRING_TRAVEL, 0.0))
+    string = _string(tips, nock, 0.005, VINE_ROPE)
+
+    arrow = Builder()
+    point = Vector((0.0, 0.66, 0.0))
+    arrow.tube([Vector((0.0, 0.0, 0.0)), point - Vector((0.0, 0.07, 0.0)), point],
+               [0.01, 0.01, 0.0015], [FRESH_WOOD, FRESH_WOOD, CHAR], 5)
+    for side in (-1.0, 1.0):
+        root = Vector((0.0, 0.03, 0.0))
+        arrow.tri(root, root + Vector((0.0, 0.11, 0.0)), root + Vector((side * 0.03, 0.02, 0.01)),
+                  FROND_BASE, FROND_TIP, FROND_TIP)
+    return [("Frame", frame, Vector((0.0, 0.0, 0.0))), ("Bow", bow, Vector((0.0, 0.0, 0.0))),
+            ("String", string, nock), ("Arrow", arrow, nock)]
+
+
+def _plinth(b, rng, half=0.42, height=0.34):
+    """Two courses of unmortared stone under a trap, as the drystone wall is laid."""
+    courses = 2
+    for c in range(courses):
+        z0 = height * c / courses
+        z1 = height * (c + 1) / courses
+        n = 2 if c % 2 == 0 else 3
+        for i in range(n):
+            x0 = -half + 2.0 * half * i / n
+            x1 = -half + 2.0 * half * (i + 1) / n
+            for (y0, y1) in ((-half, 0.0), (0.0, half)):
+                col = mix(ROCK, ROCK_DARK, rng.uniform(0.0, 0.5))
+                _dry_stone(b, Vector((x0 + 0.01, y0 + 0.01, z0)), Vector((x1 - 0.01, y1 - 0.01, z1)), rng, col)
+
+
+def set_crossbow(seed, twin=False):
+    """The crossbow he sets once he has stone and bone: a heavy timber stock on a plinth of
+    stone, a stave of seasoned wood across its front -- two, lashed one over the other, on the
+    improved one -- spanned with sinew back to a trigger, and a bone-headed bolt on it. Its
+    bolt flies the whole lane, through whatever is on it."""
+    rng = random.Random(seed)
+    base = Builder()
+    _plinth(base, rng)
+    top = 0.34
+    _slab(base, Vector((-0.06, -0.42, top)), Vector((0.06, 0.40, top + 0.09)), [(1.0, BARK_LIGHT)], 0.012)
+    # The trigger lever under the back of the stock, and the wire's peg at the front edge.
+    base.tube([Vector((0.0, -0.34, top)), Vector((0.0, -0.40, top - 0.14))], [0.012, 0.012], [FRESH_WOOD, BARK], 4)
+    peg = Vector((0.05, 0.46, 0.0))
+    base.tube([peg, peg + UP * 0.12], [0.018, 0.012], [BARK_LIGHT, FRESH_WOOD], 5)
+    base.tube([Vector((0.0, -0.40, top - 0.14)), Vector((0.05, 0.0, top - 0.1)), peg + UP * 0.1],
+              [0.005] * 3, [VINE_ROPE] * 3, 3)
+    if twin:
+        # A rack of spare bolts along the plinth's flank.
+        for k in range(3):
+            y0 = -0.3 + 0.03 * k
+            z = 0.08 + 0.05 * k
+            base.tube([Vector((0.44, y0, z)), Vector((0.44, y0 + 0.5, z))], [0.009, 0.009], [FRESH_WOOD, FRESH_WOOD], 4)
+            base.tube([Vector((0.44, y0 + 0.5, z)), Vector((0.44, y0 + 0.58, z))], [0.012, 0.002], [BONE, BONE], 4)
+
+    bow = Builder()
+    stave_z = top + 0.12
+    tips = list(_stave(bow, 0.46, 0.30, 0.14, stave_z, 0.04, 0.018, BARK_LIGHT, FRESH_WOOD))
+    _wrap(bow, Vector((0.0, 0.30, stave_z)), Vector((1.0, 0.0, 0.0)), 0.042)
+    strings = [tips]
+    if twin:
+        upper = list(_stave(bow, 0.44, 0.30, 0.13, stave_z + 0.07, 0.034, 0.016, BARK_LIGHT, FRESH_WOOD))
+        _wrap(bow, Vector((0.0, 0.30, stave_z + 0.07)), Vector((1.0, 0.0, 0.0)), 0.036)
+        strings.append(upper)
+    for tip in tips:
+        bow.tube([tip - Vector((0.0, 0.0, 0.02)), tip + Vector((0.0, 0.0, 0.02))], [0.02, 0.02], [BONE, BONE], 5)
+
+    nock = tips[0].lerp(tips[1], 0.5) - Vector((0.0, TRAP_STRING_TRAVEL, 0.0))
+    string = Builder()
+    for pair in strings:
+        for tip in pair:
+            string.tube([tip - nock, Vector((0.0, 0.0, tip.z - nock.z))], [0.008, 0.008], [BONE, BONE], 4)
+
+    bolt = Builder()
+    head = Vector((0.0, 0.58, 0.02))
+    bolt.tube([Vector((0.0, 0.0, 0.02)), head - Vector((0.0, 0.09, 0.0))], [0.013, 0.013], [FRESH_WOOD, FRESH_WOOD], 5)
+    bolt.tube([head - Vector((0.0, 0.1, 0.0)), head - Vector((0.0, 0.05, 0.0)), head], [0.02, 0.018, 0.002],
+              [BONE, BONE, mix(BONE, (0.95, 0.93, 0.86), 0.45)], 6)
+    for side in (-1.0, 1.0):
+        root = Vector((0.0, 0.02, 0.02))
+        bolt.tri(root, root + Vector((0.0, 0.1, 0.0)), root + Vector((side * 0.035, 0.015, 0.012)),
+                 FROND_BASE, FROND_TIP, FROND_TIP)
+    return [("Base", base, Vector((0.0, 0.0, 0.0))), ("Bow", bow, Vector((0.0, 0.0, 0.0))),
+            ("String", string, nock), ("Bolt", bolt, nock)]
+
+
 PLANK = (0.46, 0.33, 0.19)
 PLANK_LIGHT = (0.60, 0.46, 0.29)
 
@@ -734,140 +910,6 @@ def _slab(b, lo, hi, bands, bevel):
     b.quad(r1[0], r1[1], r1[2], r1[3], top_col, top_col, top_col, top_col)
     base = rect(lo.z, 0.0)
     b.quad(base[3], base[2], base[1], base[0], GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
-
-
-def sentry(seed):
-    """The auto turret: a machine off the wreck -- white plating, the orange hazard band,
-    twin barrels and a red eye -- on a stand the Hero put up out of what the valley had:
-    four lashed timber legs on a drystone plinth, and a deck of split planks.
-
-    Two pieces, because the head turns and the stand does not. The head is built round
-    its own pivot, the middle of the turntable, with its barrels along +Y -- the game's
-    -Z, the way a node faces -- so turning it in the game is setting one angle. Returned
-    as (stand, head, where the pivot is, where the muzzle is relative to it)."""
-    rng = random.Random(seed)
-    stand = Builder()
-
-    # A drystone plinth, two courses round a packed-earth core.
-    for course, (n, radius, z, size) in enumerate([(10, 0.36, 0.0, 0.13), (8, 0.30, 0.15, 0.11)]):
-        for k in range(n):
-            a = math.tau * k / n + course * 0.35 + rng.uniform(-0.08, 0.08)
-            _boulder(stand, Vector((math.cos(a) * radius, math.sin(a) * radius, z)), size * rng.uniform(0.9, 1.1), rng)
-    core = [Vector((math.cos(math.tau * k / 12) * 0.28, math.sin(math.tau * k / 12) * 0.28, 0.27)) for k in range(12)]
-    for k in range(12):
-        stand.tri(core[k], core[(k + 1) % 12], Vector((0.0, 0.0, 0.30)), SOIL, SOIL, SOIL_LIGHT)
-
-    # Four timber legs, leaning in a little, braced and lashed.
-    corners = [(1, 1), (1, -1), (-1, -1), (-1, 1)]
-    foot_z, top_z = 0.22, 1.50
-
-    def leg_at(sx, sy, z):
-        t = (z - foot_z) / (top_z - foot_z)
-        w = 0.28 - 0.08 * t
-        return Vector((sx * w, sy * w, z))
-    for (sx, sy) in corners:
-        spine = [leg_at(sx, sy, foot_z + (top_z - foot_z) * i / 6) for i in range(7)]
-        cols = [mix(BARK, BARK_LIGHT, 0.45 if i % 2 else 0.1) for i in range(7)]
-        stand.tube(spine, [0.05 - 0.01 * i / 6 for i in range(7)], cols, 7)
-        for z in (0.55, 1.25):
-            c = leg_at(sx, sy, z)
-            stand.tube([c - UP * 0.035, c + UP * 0.035], [0.058, 0.058], [VINE, VINE_DARK], 7)
-    for i in range(4):
-        (ax, ay), (bx, by) = corners[i], corners[(i + 1) % 4]
-        for (z0, z1) in ((0.55, 1.25), (1.25, 0.55)):
-            p0, p1 = leg_at(ax, ay, z0), leg_at(bx, by, z1)
-            stand.tube([p0, p0.lerp(p1, 0.5), p1], [0.024, 0.022, 0.02], [BARK_LIGHT, BARK, BARK_LIGHT], 5)
-
-    # A deck of split planks across the tops of the legs.
-    for i in range(5):
-        x0 = -0.29 + i * 0.116
-        _slab(stand, Vector((x0 + 0.004, -0.29, top_z)), Vector((x0 + 0.112, 0.29, top_z + 0.045)),
-              [(1.0, mix(BARK_LIGHT, FRESH_WOOD, rng.uniform(0.05, 0.3)))], 0.01)
-
-    # And the turntable the head sits on, off the wreck like the head.
-    deck = top_z + 0.045
-    pivot_z = deck + 0.055
-    stand.tube([Vector((0.0, 0.0, deck)), Vector((0.0, 0.0, pivot_z))], [0.17, 0.16], [METAL_DARK, METAL_DARK], 12)
-    rim = [Vector((math.cos(math.tau * k / 12) * 0.16, math.sin(math.tau * k / 12) * 0.16, pivot_z)) for k in range(12)]
-    for k in range(12):
-        stand.tri(rim[k], rim[(k + 1) % 12], Vector((0.0, 0.0, pivot_z)), METAL_DARK, METAL_DARK, METAL_DARK)
-
-    head, muzzle = _turret_head()
-    return stand, head, Vector((0.0, 0.0, pivot_z)), muzzle
-
-
-def bow_tower(seed):
-    """The opening's tower, wood and nothing else: four poles lashed into a stand and braced
-    crosswise, a deck of split planks, and on it a great bow bent from a sapling and strung
-    with vine, an arrow nocked -- on a log turntable, so it turns to what it shoots. Lower
-    and plainer than the crossbow tower he builds once he has stone and bone, and the first
-    thing in the valley that shoots back.
-
-    Two pieces, like the sentry: the stand, and the bow on its stock, built round its pivot
-    with the arrow along +Y (the game's -Z). Returned as (stand, head, pivot, muzzle)."""
-    rng = random.Random(seed)
-    stand = Builder()
-    top_z = 1.30
-    corners = [(1, 1), (1, -1), (-1, -1), (-1, 1)]
-
-    def leg_at(sx, sy, z):
-        w = 0.36 - 0.12 * (z / top_z)
-        return Vector((sx * w, sy * w, z))
-    for (sx, sy) in corners:
-        spine = [leg_at(sx, sy, top_z * i / 6) for i in range(7)]
-        cols = [mix(BARK, BARK_LIGHT, 0.45 if i % 2 else 0.1) for i in range(7)]
-        stand.tube(spine, [0.055 - 0.012 * i / 6 for i in range(7)], cols, 7)
-        for z in (0.45, 1.05):
-            c = leg_at(sx, sy, z)
-            stand.tube([c - UP * 0.035, c + UP * 0.035], [0.064, 0.064], [VINE, VINE_DARK], 7)
-        # Driven into a little mound of turned earth, the way the stakes are.
-        f = leg_at(sx, sy, 0.0)
-        stand.tube([f - UP * 0.02, f + UP * 0.06], [0.11, 0.07], [SOIL, SOIL_LIGHT], 7)
-    for i in range(4):
-        (ax, ay), (bx, by) = corners[i], corners[(i + 1) % 4]
-        for (z0, z1) in ((0.45, 1.05), (1.05, 0.45)):
-            p0, p1 = leg_at(ax, ay, z0), leg_at(bx, by, z1)
-            stand.tube([p0, p0.lerp(p1, 0.5), p1], [0.026, 0.024, 0.022], [BARK_LIGHT, BARK, BARK_LIGHT], 5)
-    for i in range(5):
-        x0 = -0.30 + i * 0.12
-        _slab(stand, Vector((x0 + 0.004, -0.30, top_z)), Vector((x0 + 0.116, 0.30, top_z + 0.045)),
-              [(1.0, mix(BARK_LIGHT, FRESH_WOOD, rng.uniform(0.05, 0.35)))], 0.01)
-    deck = top_z + 0.045
-    # A section of log for a turntable, its cut face up.
-    pivot_z = deck + 0.07
-    stand.tube([Vector((0.0, 0.0, deck)), Vector((0.0, 0.0, pivot_z))], [0.16, 0.15], [BARK, BARK_LIGHT], 10)
-    rim = [Vector((math.cos(math.tau * k / 10) * 0.15, math.sin(math.tau * k / 10) * 0.15, pivot_z)) for k in range(10)]
-    for k in range(10):
-        stand.tri(rim[k], rim[(k + 1) % 10], Vector((0.0, 0.0, pivot_z)), FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, BARK_LIGHT, 0.4))
-
-    head = Builder()
-    # The stock: a squared timber along the line of the shot, on a peg in the turntable.
-    head.tube([Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.08))], [0.04, 0.04], [BARK, BARK], 7)
-    _slab(head, Vector((-0.045, -0.30, 0.08)), Vector((0.045, 0.36, 0.15)), [(1.0, BARK_LIGHT)], 0.012)
-    # The bow: a sapling bent across the front of the stock, thick in the middle, fine at
-    # the tips, drawn back towards the shooter.
-    limb = []
-    radii = []
-    for k in range(9):
-        t = -1.0 + 2.0 * k / 8
-        limb.append(Vector((t * 0.60, 0.30 - 0.20 * t * t, 0.13)))
-        radii.append(0.034 - 0.018 * abs(t))
-    head.tube(limb, radii, [mix(BARK_LIGHT, FRESH_WOOD, 0.5 - 0.4 * abs(-1.0 + 2.0 * k / 8)) for k in range(9)], 6)
-    lashing_at = limb[4]
-    head.tube([lashing_at + Vector((-0.05, 0.0, 0.0)), lashing_at + Vector((0.05, 0.0, 0.0))], [0.042, 0.042],
-              [VINE, VINE_DARK], 7)
-    # The string, drawn back to the arrow's nock.
-    nock = Vector((0.0, -0.18, 0.13))
-    for tip in (limb[0], limb[-1]):
-        head.tube([tip, nock], [0.006, 0.006], [VINE_ROPE, VINE_ROPE], 4)
-    # The arrow: a straight shoot, a fire-hardened point, leaves for fletching.
-    point = Vector((0.0, 0.62, 0.13))
-    head.tube([nock, point - Vector((0.0, 0.07, 0.0)), point], [0.011, 0.011, 0.0015], [FRESH_WOOD, FRESH_WOOD, CHAR], 5)
-    for side in (-1.0, 1.0):
-        root = nock + Vector((0.0, 0.03, 0.0))
-        head.tri(root, root + Vector((0.0, 0.12, 0.0)), root + Vector((side * 0.035, 0.02, 0.012)),
-                 FROND_BASE, FROND_TIP, FROND_TIP)
-    return stand, head, Vector((0.0, 0.0, pivot_z)), point
 
 
 def _turret_head(k=1.0):
@@ -1420,12 +1462,13 @@ KITS = {
     "palisade": (lambda s: palisade(s), [3]),
     "bone_palisade": (lambda s: palisade(s, bone=True), [3]),
     "gate": (lambda s: gate(s), [5]),
+    "trip_bow": (lambda s: trip_bow(s), [7]),
+    "set_crossbow": (lambda s: set_crossbow(s), [11]),
+    "set_crossbow_2": (lambda s: set_crossbow(s, twin=True), [11]),
 }
 
 # Props with a part that moves: exported as a small hierarchy rather than one mesh.
 RIGS = {
-    "sentry": (lambda s: sentry(s), [2]),
-    "bow_tower": (lambda s: bow_tower(s), [6]),
     "cabin": (lambda s: cabin_rig(s), [19]),
 }
 

@@ -9,7 +9,7 @@ const SCRIPT_PATHS: Dictionary = {
 	"core": "res://scripts/entities/CoreCampfire.gd",
 	"wall": "res://scripts/entities/Wall.gd",
 	"gate": "res://scripts/entities/Gate.gd",
-	"tower": "res://scripts/entities/Tower.gd",
+	"trap": "res://scripts/entities/Trap.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 
@@ -139,7 +139,9 @@ func can_place_building(type_id: String, cell: Vector2i, _is_blueprint: bool = f
 
 ## Pays for a `type_id`, makes it, stands it with its middle in `build_cell` and registers its
 ## cells. Returns the building, or null -- having spent nothing -- if it cannot go there.
-func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, start_as_blueprint: bool = false) -> Node:
+## `facing` is the way a trap faces (Trap.FACINGS), given before it enters the tree so it lays its
+## wire the right way from the first; anything that does not face ignores it.
+func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, start_as_blueprint: bool = false, facing: int = 0) -> Node:
 	if not can_place_at(type_id, build_cell):
 		return null
 
@@ -183,6 +185,8 @@ func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, s
 			building.current_hp = building.max_hp
 	if "position" in building:
 		building.position = grid_manager.build_cell_to_world(build_cell, 0.0)
+	if "facing" in building:
+		building.facing = facing
 
 	# 4. Attach to scene tree if container available
 	var target_parent = parent_node
@@ -220,7 +224,7 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 # ==============================================================================
 
 func _instantiate_building(type_id: String) -> Node:
-	# By KIND, not by name: a bone stake is a stake and a tower II is a tower, and each new
+	# By KIND, not by name: a bone stake is a stake and a set crossbow is a trap, and each new
 	# building of a kind should need a Config row and nothing here -- unless the type has a
 	# script of its own (a gate is a wall that opens).
 	var cfg_kind = _get_config()
