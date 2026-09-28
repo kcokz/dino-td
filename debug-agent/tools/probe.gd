@@ -929,7 +929,14 @@ func _p_dusk_raid() -> void:
 	var cabin = _main.current_core
 	var dusk: float = float(root.get_node("Config").DAY["parts"]["dusk"])
 	var night: float = float(root.get_node("Config").DAY["parts"]["night"])
-	gs.day_clock = dusk - 2.0
+	# DA_DUSK_LEAD: how long before dusk the raid sets out (2 s: still stepping out at dusk; 25 s:
+	# all out and at the cabin when dusk comes).
+	var lead: float = float(OS.get_environment("DA_DUSK_LEAD")) if OS.get_environment("DA_DUSK_LEAD") != "" else 2.0
+	gs.day_clock = dusk - lead
+	_say("INFO", "raid sets out %.0f s before dusk" % lead)
+	# No defence here: the cabin is made to outlast the raid, so it is the dusk that ends it.
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
 	wm.start_wave(3, 10)
 	var home := {"n": 0}
 	var on_home := func(_d): home["n"] += 1
@@ -941,10 +948,13 @@ func _p_dusk_raid() -> void:
 	var biting_after: Array = []
 	var t := 0.0
 	var ended_at := -1.0
-	while t < 60.0:
+	var hp_at_dusk := -1.0
+	while t < 60.0 + lead:
 		await _advance(0.25)
 		t += 0.25
 		var part: String = String(gs.day_part())
+		if hp_at_dusk < 0.0 and part != "day":
+			hp_at_dusk = cabin.current_hp
 		for d in get_nodes_in_group("dinos"):
 			if not is_instance_valid(d) or d.is_in_group("guard_dinos") or ("is_dead" in d and d.is_dead):
 				continue
@@ -967,7 +977,8 @@ func _p_dusk_raid() -> void:
 			if not d.going_home:
 				not_going += 1
 	await _portrait("night_after_the_raid", cabin.global_position + Vector3(0.0, 0.0, -4.0), 16.0)
-	_say("INFO", "roster %d; stepped out after dusk began: %d; went home: %d; cabin %.1f -> %.1f; new drops %d; clock now %.1f (%s)" % [seen.size(), late.size(), home["n"], hp0, cabin.current_hp, get_nodes_in_group(DropItem.GROUP).size() - drops0, gs.day_clock, gs.day_part()])
+	_say("INFO", "roster %d; stepped out after dusk began: %d; went home: %d; cabin %.1f -> %.1f at dusk -> %.1f; new drops %d; clock now %.1f (%s)" % [seen.size(), late.size(), home["n"], hp0, hp_at_dusk, cabin.current_hp, get_nodes_in_group(DropItem.GROUP).size() - drops0, gs.day_clock, gs.day_part()])
+	_say("PASS" if late.is_empty() else "FAIL", "nobody stepped out of the nest after dusk began (%d did)" % late.size())
 	_say("PASS" if not_going == 0 and out_at_night == 0 else "FAIL", "into the night (clock %.0f, night from %.0f): %d raiders still out, %d of them not going home" % [gs.day_clock, night, out_at_night, not_going])
 	_say("PASS" if biting_after.is_empty() else "FAIL", "after dusk: %s" % ("nobody bit anything" if biting_after.is_empty() else "; ".join(biting_after)))
 	_say("PASS" if ended_at >= 0.0 and ended_at <= dusk + 30.0 else "FAIL", "the raid ended at clock %.1f (dusk %.0f, wanted within 30 s)" % [ended_at, dusk])
