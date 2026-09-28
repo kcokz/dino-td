@@ -328,7 +328,11 @@ func test_10_guard_dino_roam_aggro_and_leash() -> void:
 	hero.position = Vector3(0.0, 0.0, 0.0) # 15m away
 	guard.global_position = Vector3(0.0, 0.0, -1.0) # Chased 14m from post
 
-	guard._physics_process(0.1)
+	# It gives up at its next thought, a few times a second (Config.DINO_AI.think_seconds).
+	for step in range(5):
+		guard._physics_process(0.1)
+		if int(guard.guard_state) == 3:
+			break
 	assert_eq(int(guard.guard_state), 3, "Guard enters RETURNING (3) when chased beyond leash_radius")
 	assert_null(guard.chase_target, "Guard clears chase_target when leashing")
 
@@ -793,18 +797,22 @@ func test_22_dinos_never_overlap_after_building_breach() -> void:
 	wall.take_damage(999.0)
 	assert_true(wall.is_destroyed, "Wall must be destroyed")
 
-	# Simulate 30 physics frames as dinos transition to WALKING and march through
-	for frame in range(30):
-		for d in dinos:
-			d._physics_process(0.05)
+	# A second and a half of REAL physics frames as they transition to WALKING and march through.
+	# Their bodies collide (v0.6 round two), and a body sees where another has moved only when
+	# the physics space has stepped -- stepping them by hand between frames would test nothing.
+	var width: float = float(tree.root.get_node("Config").get_visual_size("dino/raptor").x)
+	for frame in range(90):
+		await wait_physics_frames(1)
 
-		# Strict pairwise anti-penetration invariant:
-		# Distance between any two 0.8m dino cube models must NEVER be < 0.8m (no overlapping/clipping)
+		# Strict pairwise anti-penetration invariant: two bodies never closer than their width,
+		# less the solver's contact margin.
 		for i in range(dinos.size()):
 			for j in range(i + 1, dinos.size()):
-				var dist = dinos[i].global_position.distance_to(dinos[j].global_position)
-				assert_true(dist >= 0.8,
-					"Dinos %d and %d must not overlap on frame %d (distance was %f < 0.8m)" % [i, j, frame, dist])
+				var a: Vector3 = dinos[i].global_position
+				var b: Vector3 = dinos[j].global_position
+				var dist: float = Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
+				assert_true(dist >= width - 0.02,
+					"Dinos %d and %d must not overlap on frame %d (distance was %f < %f)" % [i, j, frame, dist, width])
 
 	# Verify all dinos are in WALKING state and have advanced forward
 	for i in range(dinos.size()):

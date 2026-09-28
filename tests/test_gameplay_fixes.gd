@@ -126,9 +126,11 @@ func test_04_dino_detects_and_attacks_wooden_wall_on_path() -> void:
 	# Advance dino towards the wall
 	dino.advance_towards_waypoint(0.1)
 
-	# It SEES the wall -- the raycast is not the thing that changed.
-	var detected_obstacle = dino.check_obstacle()
-	assert_not_null(detected_obstacle, "Dino must detect the wooden wall as an obstacle")
+	# It knows the wall is there: the raid's mesh is carved round it, and the way on goes round
+	# it (v0.6 round two: the way is the mesh's, and the body collides with what is built).
+	var maps = main_inst.nav_maps
+	assert_true(maps.is_reachable(dino.global_position, Vector3(1.0, 0.0, 1.0), NavMaps.For.RAID),
+		"There is a way on past the wall")
 
 	# What changed is what it does about it. This used to assert that it stopped and ate
 	# the wall, which is exactly what the v0.4 rule removed: one stake in an open field
@@ -311,15 +313,16 @@ func test_10_dinosaurs_maintain_separation_without_overlapping() -> void:
 	dino1.global_position = Vector3(1.0, 0.0, -5.0)
 	dino2.global_position = Vector3(1.0, 0.0, -5.0)
 
-	await wait_frames(1)
+	# Their own bodies push them apart (v0.6 round two: each has a collider that the other's
+	# collides with). The hand-written shove this used to call is gone -- the engine recovers
+	# bodies from inside each other as part of moving them.
+	for i in range(30):
+		await wait_physics_frames(1)
 
-	# Run a few physics steps of separation
-	for i in range(10):
-		dino1._apply_dino_separation(0.05)
-		dino2._apply_dino_separation(0.05)
-
-	var final_dist: float = dino1.global_position.distance_to(dino2.global_position)
-	assert_true(final_dist >= 0.8, "Dinos must be pushed apart to at least 0.8m distance (got %f)" % final_dist)
+	var width: float = float(config_node.get_visual_size("dino/raptor").x)
+	var final_dist: float = Vector2(dino1.global_position.x, dino1.global_position.z).distance_to(
+		Vector2(dino2.global_position.x, dino2.global_position.z))
+	assert_gte(final_dist, width - 0.05, "Dinos must be pushed apart to their own width (got %f)" % final_dist)
 
 func test_11_dino_detects_and_attacks_tower_without_clipping() -> void:
 	assert_not_null(dino_script, "Dino script must exist")
@@ -389,9 +392,6 @@ func test_12_dinos_spread_into_lanes_and_still_advance() -> void:
 		d0.advance_towards_waypoint(0.05)
 		d1.advance_towards_waypoint(0.05)
 		d2.advance_towards_waypoint(0.05)
-		d0._apply_dino_separation(0.05)
-		d1._apply_dino_separation(0.05)
-		d2._apply_dino_separation(0.05)
 
 	assert_gt(d0.global_position.z, z_before, "They are still making for the waypoint")
 

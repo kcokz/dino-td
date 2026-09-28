@@ -117,7 +117,7 @@ func test_04_the_hero_climbs_a_stone_wall_and_a_dinosaur_does_not() -> void:
 	dino.set_physics_process(false)
 	await wait_frames(1)
 	assert_eq(int(hero.collision_mask) & wall_layer, 0, "The Hero is not stopped by it (a v0.6 decision)")
-	assert_ne(int(dino.raycast.collision_mask) & wall_layer, 0, "A dinosaur sees it in its way")
+	assert_ne(int(dino.collision_mask) & wall_layer, 0, "A dinosaur's body is stopped by it")
 
 # ==============================================================================
 # 4. Upgrading a tower where it stands

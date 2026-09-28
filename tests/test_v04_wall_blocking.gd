@@ -65,6 +65,10 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	w.position = gm.cell_to_world(cell)
 	w.complete_construction()
 	gm.occupy_cell(cell, w)
+	# Put up whole, it was never a blueprint and never said so on the bus: the meshes are told
+	# here, as the game tells them when anything is built (NavMaps rebakes on building_completed).
+	if maps_of() != null:
+		maps_of().rebake()
 	return w
 
 func _tower_at(gm: Node, cell: Vector2i) -> Node:
@@ -74,6 +78,8 @@ func _tower_at(gm: Node, cell: Vector2i) -> Node:
 	t.position = gm.cell_to_world(cell)
 	t.complete_construction()
 	gm.occupy_cell(cell, t)
+	if maps_of() != null:
+		maps_of().rebake()
 	return t
 
 func _dino_at(gm: Node, cell: Vector2i, goal_cell: Vector2i) -> Node:
@@ -219,7 +225,7 @@ func test_06b_it_bites_once_it_gets_there() -> void:
 	assert_not_null(near, "There is a stake on the northern face")
 	var bite: float = d.attack_reach() + float(config_node.get_building_footprint("wall")) * 0.5
 	d.global_position = near.global_position + Vector3(0.0, 0.0, -bite * 0.95)
-	d._route_checked_at = -999.0
+	d._route_clock = 0.0
 	await wait_frames(1)
 	assert_true(d._way_is_sealed(), "The goal is walled in")
 
@@ -256,8 +262,9 @@ func test_07_the_way_opening_lets_the_dinosaur_go() -> void:
 		w.destroy()
 		holed += 1
 	assert_gt(holed, 1, "A gap was opened in the near side, wide enough to walk through")
-	await wait_seconds(float(d.ROUTE_RECHECK_SECONDS) + 0.1)
+	await wait_seconds(float(config_node.DINO_AI["route_check_seconds"]) + 0.1)
 	await rebake_fixture()
+	d._route_clock = 0.0          # asked afresh, not whatever it last cached
 
 	assert_false(d._way_is_sealed(), "A hole in the fence is a way in")
 	assert_null(d._building_in_the_way(), "So nothing is in the way any more")
@@ -282,11 +289,15 @@ func test_08_a_waypoint_buried_in_a_building_is_skipped() -> void:
 	_wall_at(gm, Vector2i(0, 2))     # the first waypoint is now inside a stake
 	await wait_frames(1)
 
+	# It walks as near as the stake lets it, which is within a waypoint's reach of the point
+	# inside it (Config.DINO_AI.waypoint_reach), and goes on to the next.
 	d.current_waypoint_index = 0
-	d._skip_unwalkable_waypoints()
-	assert_gt(d.current_waypoint_index, 0, "It does not aim at a spot inside a building")
-	assert_true(gm.is_cell_walkable(gm.world_to_cell(d.waypoints[d.current_waypoint_index])),
-		"The one it aims at instead can actually be stood on")
+	for step in range(240):
+		d.advance_towards_waypoint(1.0 / 60.0)
+		if d.current_waypoint_index > 0:
+			break
+	assert_gt(d.current_waypoint_index, 0, "It does not stay aiming at a spot inside a building")
+	assert_false(d._is_wall(d.current_target), "and has not stopped to eat the stake to get there")
 
 func test_09_the_last_waypoint_is_never_skipped() -> void:
 	# The destination is the destination. If the player has walled the core in, that
@@ -299,6 +310,7 @@ func test_09_the_last_waypoint_is_never_skipped() -> void:
 	await wait_frames(1)
 
 	d.current_waypoint_index = 0
-	d._skip_unwalkable_waypoints()
+	for step in range(60):
+		d.advance_towards_waypoint(1.0 / 60.0)
 	assert_eq(d.current_waypoint_index, 0, "It keeps heading for where it was going")
 	assert_eq(d.waypoints.size(), 1, "Which was the only waypoint it had")

@@ -127,7 +127,7 @@ func test_04_it_cannot_bite_the_cabin_through_a_stake() -> void:
 	var raptor = _dino("raptor", gm.cell_to_world(Vector2i(2, 0)))
 	await wait_frames(2)
 
-	assert_true(raptor._solid_between(core), "The stake stands between them")
+	assert_eq(_first_building_from(raptor, core), stake, "The stake stands between them")
 	assert_false(raptor._target_in_reach(core), "So the cabin is not something it can bite")
 
 func test_05_and_still_bites_the_stake_that_is_in_the_way() -> void:
@@ -141,8 +141,18 @@ func test_05_and_still_bites_the_stake_that_is_in_the_way() -> void:
 	raptor.global_position = stake.global_position + Vector3(0.0, 0.0, -bite * 0.9)
 	await wait_frames(1)
 
-	assert_false(raptor._solid_between(stake), "Nothing stands between it and the stake")
+	assert_eq(_first_building_from(raptor, stake), stake, "Nothing stands between it and the stake")
 	assert_true(raptor._target_in_reach(stake), "Which it can reach")
+
+## The first building a ray from `from` towards `to` meets, at the height a dinosaur bites at --
+## what stands between them, since a body cannot be inside another (v0.6 round two).
+func _first_building_from(from: Node3D, to: Node3D) -> Node:
+	var lift := Vector3(0.0, float(config_node.DINO_PROBE_HEIGHT), 0.0)
+	var query := PhysicsRayQueryParameters3D.create(from.global_position + lift, to.global_position + lift,
+		int(config_node.LAYER_BUILDING) | int(config_node.LAYER_WALL))
+	query.exclude = [from.get_rid()]
+	var hit: Dictionary = from.get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.get("collider") as Node if not hit.is_empty() else null
 
 func test_06_a_clear_line_at_the_right_distance_still_works() -> void:
 	var gm = _grid()

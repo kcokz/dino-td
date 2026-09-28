@@ -54,6 +54,11 @@ var status_bar: Node3D = null
 var selection_ring: Node3D = null
 var is_hero: bool = true
 var continuous_mode: bool = false
+## His place in the dinosaurs' steering: an avoidance agent on the world's map, where theirs are,
+## told where he is and how he is moving every frame, so they steer round him rather than walking
+## into him and standing there (v0.6 round two). Above them in priority
+## (HERO.avoidance_priority): they give way, he goes where he is sent.
+var _agent: RID = RID()
 var has_provoked_dinos: bool = false
 var provoke_timer: float = 0.0
 
@@ -105,6 +110,9 @@ func _connect_event_bus() -> void:
 			eb.meal_eaten.connect(_on_meal_eaten)
 
 func _exit_tree() -> void:
+	if _agent.is_valid():
+		NavigationServer3D.free_rid(_agent)
+		_agent = RID()
 	var eb = _get_event_bus()
 	if eb and is_instance_valid(eb) and eb.has_signal("phase_changed"):
 		if eb.phase_changed.is_connected(_on_phase_changed):
@@ -153,11 +161,30 @@ func _physics_process(delta: float) -> void:
 ## Tells the animator how far he really went this frame, so a walk is shown only while he
 ## is walking (ActorAnimator.update_motion).
 func _report_pace(was_at: Vector3, delta: float) -> void:
-	if animator == null or not is_instance_valid(animator) or delta <= 0.0:
+	if delta <= 0.0:
 		return
 	var moved := global_position - was_at
 	moved.y = 0.0
+	_tell_the_steering(moved / delta)
+	if animator == null or not is_instance_valid(animator):
+		return
 	animator.update_motion(moved.length() / delta, delta)
+
+## Where he is and how he is going, for the dinosaurs' steering (see _agent).
+func _tell_the_steering(moving: Vector3) -> void:
+	if not _agent.is_valid():
+		if not is_inside_tree() or get_world_3d() == null:
+			return
+		_agent = NavigationServer3D.agent_create()
+		NavigationServer3D.agent_set_map(_agent, get_world_3d().navigation_map)
+		NavigationServer3D.agent_set_avoidance_enabled(_agent, true)
+		var cfg = _get_config()
+		NavigationServer3D.agent_set_radius(_agent, float(cfg.HERO.get("width", 0.8)) * 0.5 if cfg else 0.4)
+		NavigationServer3D.agent_set_avoidance_priority(_agent,
+			float(cfg.HERO.get("avoidance_priority", 1.0)) if cfg else 1.0)
+		NavigationServer3D.agent_set_max_speed(_agent, maxf(0.1, walk_speed()))
+	NavigationServer3D.agent_set_position(_agent, global_position)
+	NavigationServer3D.agent_set_velocity(_agent, moving)
 
 # ==============================================================================
 # Carrying things home
@@ -1020,8 +1047,8 @@ func _on_phase_changed(phase: int) -> void:
 	elif phase == 0: # Phase.DEPLOY
 		if current_state != State.DEAD:
 			visible = true
-			collision_layer = 4 # Layer 3: Hero/Player
-			collision_mask = 3 # Layer 1 Ground + Layer 2 Buildings
+			collision_layer = _layer("LAYER_HERO", 4)
+			collision_mask = _layer("LAYER_GROUND", 1) | _layer("LAYER_BUILDING", 2) | _layer("LAYER_DINO", 8)
 			current_state = State.IDLE
 
 # ==============================================================================
@@ -1054,8 +1081,10 @@ func _ensure_body() -> void:
 		animator.play_state(current_state)
 
 func _ensure_components() -> void:
-	collision_layer = 4 # Layer 3: Hero/Player
-	collision_mask = 3  # Layer 1 Ground + Layer 2 Buildings
+	# His own layer, and what he bumps into: the ground's obstacles, buildings -- and, since v0.6
+	# round two ("所有单位都不能重叠"), the dinosaurs, which bump into him back (Dino).
+	collision_layer = _layer("LAYER_HERO", 4)
+	collision_mask = _layer("LAYER_GROUND", 1) | _layer("LAYER_BUILDING", 2) | _layer("LAYER_DINO", 8)
 
 	if collision_shape == null:
 		for child in get_children():
@@ -1089,6 +1118,11 @@ func _ensure_components() -> void:
 # ==============================================================================
 # Resolvers
 # ==============================================================================
+
+## A collision layer by its Config name.
+func _layer(key: String, fallback: int) -> int:
+	var cfg = _get_config()
+	return int(cfg.get(key)) if (cfg and key in cfg) else fallback
 
 func _is_paused() -> bool:
 	var gs = _get_game_state()

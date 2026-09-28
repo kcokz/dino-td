@@ -167,7 +167,8 @@ func test_10_the_shared_machinery_stayed_shared() -> void:
 	# subclass should add wants and nothing else.
 	var pack = _dino("raptor", Vector3(50.0, 0.0, 50.0))
 	await wait_frames(1)
-	for method in ["take_damage", "die", "spawn_death_drops", "advance_towards_waypoint", "_steer_target"]:
+	for method in ["take_damage", "die", "spawn_death_drops", "advance_towards_waypoint", "_travel",
+			"_move_body", "_watch_headway"]:
 		assert_true(pack.has_method(method), "PackDino inherits %s" % method)
 	pack.take_damage(pack.max_hp)
 	assert_true(pack.is_dead, "And dies like any other")

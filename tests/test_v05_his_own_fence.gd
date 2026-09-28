@@ -117,7 +117,7 @@ func test_02_the_heros_mask_leaves_out_that_layer_and_only_that_one() -> void:
 	assert_ne(hero.collision_mask & 2, 0, "The wreck and the turrets still do")
 	assert_ne(hero.collision_mask & 1, 0, "And so does the landscape")
 
-func test_03_a_dinosaur_still_rays_against_walls() -> void:
+func test_03_a_dinosaur_still_collides_with_walls() -> void:
 	# The half that must not be lost. A fence a raid can ignore is not a fence.
 	var gm = await _grid([])
 	await wait_frames(1)
@@ -127,10 +127,10 @@ func test_03_a_dinosaur_still_rays_against_walls() -> void:
 	dino.setup("raptor")
 	await wait_frames(2)
 
-	assert_not_null(dino.raycast, "It has its forward ray")
-	assert_ne(dino.raycast.collision_mask & int(config_node.LAYER_WALL), 0,
-		"Which sees walls")
-	assert_ne(dino.raycast.collision_mask & 2, 0, "And everything else it always saw")
+	# Its BODY collides with them (v0.6 round two): the forward ray it used to look through is
+	# gone, and what stops it at a fence now is the fence.
+	assert_ne(dino.collision_mask & int(config_node.LAYER_WALL), 0, "Its body collides with walls")
+	assert_ne(dino.collision_mask & int(config_node.LAYER_BUILDING), 0, "And everything else it always did")
 
 # ==============================================================================
 # 2. And his route agrees with the physics

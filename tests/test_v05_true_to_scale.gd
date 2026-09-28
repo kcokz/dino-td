@@ -71,14 +71,15 @@ func test_04_stature_changes_nothing_the_game_touches() -> void:
 	# Every species looks for what is in its way below the top of a stake -- the lowest
 	# thing that stops one. At half its own height a three-metre tyrannosaur looked over a
 	# stake and walked into it.
+	# (Since v0.6 round two, what it feels for -- what its body is pressed against, and what
+	# stands between it and the cabin -- is felt for at that height: Dino._probe_height.)
 	var stake: float = float(config_node.get_building_height("wall"))
 	for kind in config_node.DINOS:
 		var d = _dino(String(kind))
 		await wait_frames(1)
-		var ray: RayCast3D = d.raycast
-		assert_not_null(ray, "The %s looks ahead" % kind)
-		if ray != null:
-			assert_lt(ray.position.y, stake, "The %s looks below the top of a stake (%.2f m)" % [kind, ray.position.y])
+		var feels_at: float = float(d._probe_height())
+		assert_gt(feels_at, 0.0, "The %s feels for what is in its way" % kind)
+		assert_lt(feels_at, stake, "The %s feels below the top of a stake (%.2f m)" % [kind, feels_at])
 	# The Hero's width, not his height, decides how much of a tile a building may fill.
 	var default_fp: float = float(config_node.get_default_building_footprint())
 	assert_almost_eq(default_fp, float(config_node.TILE_SIZE) - float(config_node.HERO["width"])

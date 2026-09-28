@@ -1770,7 +1770,7 @@ func _pick_mask() -> int:
 	var cfg = _get_config()
 	var mask: int = 1 | 2 | 4 | 8
 	if cfg:
-		mask |= int(cfg.LAYER_BLUEPRINT) | int(cfg.LAYER_WALL) | int(cfg.LAYER_PICK)
+		mask |= int(cfg.LAYER_BLUEPRINT) | int(cfg.LAYER_WALL) | int(cfg.LAYER_PICK) | int(cfg.LAYER_NEST) 			| int(cfg.LAYER_GATE)
 	return mask
 
 ## The thing `collider` belongs to -- itself, or the entity it is a part of -- or null for

@@ -4,7 +4,7 @@ extends StaticBody3D
 
 ## The dinosaurs' nest: where the raids come out of, guarded by the animals that live
 ## there. Stationary, at the enemy spawn origin (0, 0, -18) / cell (0, -9), on physics
-## layer 4 ("Nest", collision_layer = 8).
+## its own layer (Config.LAYER_NEST).
 ##
 ## It cannot be destroyed (v0.6, decided -- Config.NEST): it has no hit points, so nothing
 ## can hurt it and nothing aims at it. v0.0-v0.5 were won by knocking it down, which came
@@ -26,14 +26,20 @@ var mesh_instance: MeshInstance3D = null
 # ==============================================================================
 
 func _init() -> void:
-	collision_layer = 8
+	collision_layer = _nest_layer()
 	collision_mask = 0
 
 func _ready() -> void:
 	add_to_group("nest")
-	collision_layer = 8
+	collision_layer = _nest_layer()
 	collision_mask = 0
 	_ensure_components()
+
+## The nest's own layer (Config.LAYER_NEST): clicked, and in nobody's way -- the raid comes out
+## of it, and the dinosaurs' bodies collide on the layer it used to share with them.
+func _nest_layer() -> int:
+	var cfg = _get_config()
+	return int(cfg.LAYER_NEST) if (cfg and "LAYER_NEST" in cfg) else 256
 
 ## Spawns NEST_GUARDS.count guard dinosaurs in orbit around the nest.
 func spawn_guards(target_parent: Node = null) -> void:

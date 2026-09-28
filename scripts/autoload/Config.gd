@@ -265,6 +265,18 @@ const LAYER_WALL: int = 32
 ## from two metres off, swinging at the air.
 const LAYER_PICK: int = 64
 
+## The rest of the layers, named (v0.6 round two). The ground and what stands on it -- hills,
+## tree trunks -- is 1; finished buildings 2; the Hero 4; the dinosaurs 8. Every walker has a
+## body now that collides (Dino, Hero): nothing overlaps anything, and nothing walks through a
+## wall. The nest is on a layer of its own, which nobody walks into -- the raid pours out of it.
+const LAYER_GROUND: int = 1
+const LAYER_BUILDING: int = 2
+const LAYER_HERO: int = 4
+const LAYER_DINO: int = 8
+## A gate: a wall the Hero passes and nothing else does (reserved for the wall rework).
+const LAYER_GATE: int = 128
+const LAYER_NEST: int = 256
+
 ## How the navigation meshes are baked. See scripts/core/NavMaps.gd.
 const NAV: Dictionary = {
 	# Fine enough to see the gap between two stakes. A stake is 0.62m and they snap 0.67m
@@ -763,6 +775,78 @@ const DINO_AVOID_NEIGHBOURS: float = 4.0     # how far it looks for others, in m
 const DINO_AVOID_TIME_HORIZON: float = 1.2   # how far ahead it plans to miss them, in seconds
 const DINO_AVOID_MAX_NEIGHBOURS: int = 10
 
+## How a dinosaur makes up its mind, and how its body moves (Dino.gd; v0.6 round two: "我需要
+## 更专业的恐龙进攻逻辑，永远不要抽搐或者傻掉"). Every change of mind has a margin or a minimum
+## time here, so none can flip back and forth from one frame to the next -- which from outside
+## is a twitch -- and a dinosaur that is getting nowhere always has something to do about it.
+const DINO_AI: Dictionary = {
+	# It reconsiders what to do this often, in seconds -- not every frame. Each animal starts at
+	# its own phase, so a raid does not all think at once.
+	"think_seconds": 0.25,
+	# And asks whether the way to the cabin is shut this often: the answer costs a route, and a
+	# fence coming down half a second late is not something anyone can see.
+	"route_check_seconds": 1.0,
+	# When something is built or knocked down it asks again this soon, in seconds -- after the
+	# meshes are baked again, or it gets the old answer and keeps it for a whole recheck.
+	"rebake_grace": 0.1,
+	# It takes hold at its reach and lets go only this much PAST it, in metres. One step back from
+	# the Hero is not an escape, and one that let go at the reach it took hold at would let go and
+	# take hold on alternate frames.
+	"reach_release": 0.35,
+	# The Hero is chased this much past the range it noticed him at, in metres, and no further.
+	"chase_slack": 2.0,
+	# HEADWAY: over this many seconds a travelling animal must have got this far, in metres, or it
+	# is stuck, and looks at what is holding it (Dino._unstick).
+	"stuck_window": 1.2,
+	"stuck_distance": 0.25,
+	# How far past its own body it feels for what it is pressed against, in metres.
+	"press_reach": 0.3,
+	# Held up in a crowd, it waits its turn this long, in seconds, rather than shoving -- shoving
+	# in a jam is a shuffle.
+	"patience": 0.8,
+	# It turns at this many degrees a second, never snapping. At 540 a raptor turns about in a
+	# third of a second -- quick for an animal, and slow enough that a nudge from the avoidance
+	# solver is not a twitch.
+	"turn_speed": 540.0,
+	# Slower than this, in metres a second, it is not heading anywhere to face, and faces what it
+	# is going for instead.
+	"turn_min_speed": 0.3,
+	# An intermediate waypoint counts as reached this close, in metres: a crowd cannot all stand on
+	# one point, and the ones that could not would otherwise mill round it. (The last is stood on:
+	# it is the cabin, or the end of the road.)
+	"waypoint_reach": 1.0,
+	# Its route (NavMaps.path): how close to a corner counts as there, how close to a spot it is
+	# ambling to, how far it may be pushed off the route before it asks again, and how far a goal
+	# must move before it asks again -- asking costs a route.
+	"path_desired_distance": 0.5,
+	"target_desired_distance": 0.3,
+	"path_max_distance": 2.0,
+	"regoal_distance": 0.3,
+	# How many times one step may slide along what it meets (Dino._move_body).
+	"slide_steps": 4,
+	# Pressed against a wall it could go round, with nobody else in the way, it tries the way round
+	# this many headway windows before it bites through instead.
+	"wall_patience": 3,
+	# Two bodies whose middles are this close, in metres, are one on top of the other: the engine
+	# has no way out to push either along, so one is nudged (Dino._unstack).
+	"stacked_within": 0.05,
+	# How much a dinosaur's steering gives way, against the Hero's (HERO.avoidance_priority): an
+	# agent ignores those below it, so with his above theirs they steer round him and he walks
+	# where he is sent.
+	"avoidance_priority": 0.5,
+	# How much wider than its body it is to the steering solver, in metres: the room it keeps to
+	# pass a neighbour by. At none, steering that aims to pass body-to-body gives out when they
+	# meet, and an animal slides to a stop at the Hero's shoulder.
+	"avoid_margin": 0.1,
+	# Its box is lifted this far off the ground, in metres, so the ground it stands on is never
+	# something it is pressed against.
+	"ground_clearance": 0.08,
+	# What its body bumps into (layer names above): everything but the nest it comes out of.
+	"collides_with": ["LAYER_GROUND", "LAYER_BUILDING", "LAYER_WALL", "LAYER_GATE", "LAYER_HERO", "LAYER_DINO"],
+	# What counts as shooting at it, by BUILDINGS kind: what a pack leaves its path for.
+	"shooter_kinds": ["tower", "trap"],
+}
+
 # ==============================================================================
 # 4. Wave Spawning & Scaling Rules (WAVES)
 # ==============================================================================
@@ -980,6 +1064,9 @@ const HERO: Dictionary = {
 	# How far past his own body he works a tree or a rock from (metres, body to body): an
 	# arm and a swing. He walks up to it and stops there -- not a couple of metres off.
 	"harvest_reach": 0.45,
+	# 避让优先级（0–1）：比恐龙的高（DINO_AI.avoidance_priority），恐龙绕着他走，他照着命令走，
+	# 不给恐龙让路。他站在恐龙的路上时，恐龙从旁边绕过去，而不是顶在他身上走不动。
+	"avoidance_priority": 1.0,
 	# 身高（米）——碰撞体与外形都用它。和这个世界相称：木桩到他胸口、树蕨是他三倍高、
 	# 船舱是他两倍多高。1.6 米时他和霸王龙一样高、是迅猛龙的两倍。占地和通道只由
 	# width 决定，与身高无关，所以改身高不改玩法。
@@ -1323,6 +1410,11 @@ const NEST_GUARDS: Dictionary = {
 	"leash_radius": 12.0,         # 追出此距离放弃并返回岗位
 	"roam_seconds": Vector2(2.0, 4.0),   # 岗位上多久换一个溜达的点（秒，区间内随机）
 	"roam_min_distance": 0.5,            # 溜达点离岗位至少多远（米）
+	"roam_pace": 0.4,                    # 溜达时的速度（占全速的比例）
+	# 回到岗位后安静多久才会再去追人（秒）：刚被甩掉就马上又追，就是在警戒圈边上来回拉扯。
+	"reaggro_seconds": 1.5,
+	# 巢穴附近的建筑多近才会去咬（占警戒半径的比例）
+	"building_aggro_share": 0.7,
 }
 
 # ==============================================================================

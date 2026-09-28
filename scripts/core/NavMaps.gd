@@ -17,12 +17,16 @@ extends Node3D
 ##   layer 16  blueprints                         -- ordered, not built; solid to nobody
 ##   layer 32  walls                              -- solid to a raid, open to the Hero
 ##
-## So the two maps are one bake each with a different mask, and "the Hero walks through
-## his own fence" stops being a special case threaded through the pathfinder and becomes
-## a bit that is not set.
+## So the maps are one bake each with a different mask, and "the Hero walks through his
+## own fence" stops being a special case threaded through the pathfinder and becomes a bit
+## that is not set.
+##
+## A third, SIEGE, leaves walls out too (v0.6 round two): what a siege animal walks, since
+## going THROUGH the defence is its design -- and what a raid asks when the way is shut, for
+## the first wall the route through them crosses, which is the wall to bite (Dino).
 
-## Which walker a map is for. The only difference is whether walls are carved out of it.
-enum For { RAID = 0, HERO = 1 }
+## Which walker a map is for. The only difference is what is carved out of it.
+enum For { RAID = 0, HERO = 1, SIEGE = 2 }
 
 ## The group the level puts its geometry in, so a bake knows where to look.
 const SOURCE_GROUP: String = "navmesh_source"
@@ -36,9 +40,9 @@ var _baked_once: bool = false
 
 func _ready() -> void:
 	add_to_group(GROUP)
-	for which in [For.RAID, For.HERO]:
+	for which in [For.RAID, For.HERO, For.SIEGE]:
 		var region := NavigationRegion3D.new()
-		region.name = "Nav_%s" % ("Raid" if which == For.RAID else "Hero")
+		region.name = "Nav_%s" % ["Raid", "Hero", "Siege"][which]
 		region.navigation_mesh = _mesh_for(which)
 		# Each map is its own world: an agent on one must not path across the other.
 		region.set_navigation_map(NavigationServer3D.map_create())
@@ -119,7 +123,13 @@ func _mesh_for(which: int) -> NavigationMesh:
 func _mask_for(which: int) -> int:
 	var cfg = get_node_or_null("/root/Config")
 	var wall_layer: int = int(cfg.LAYER_WALL) if (cfg and "LAYER_WALL" in cfg) else 32
-	return (1 | 2 | wall_layer) if which == For.RAID else (1 | 2)
+	var gate_layer: int = int(cfg.LAYER_GATE) if (cfg and "LAYER_GATE" in cfg) else 0
+	match which:
+		For.RAID:
+			return 1 | 2 | wall_layer | gate_layer
+		For.SIEGE:
+			return 1 | 2
+	return 1 | 2
 
 ## How fine the bake is. Small enough to see the gap between two stakes, which is the
 ## whole reason the mesh exists; a coarse bake would smear a fence into a solid line.
@@ -152,15 +162,26 @@ func _agent_radius() -> float:
 # ==============================================================================
 
 func map_for(walls_are_open: bool) -> RID:
-	var region: NavigationRegion3D = _regions.get(For.HERO if walls_are_open else For.RAID)
+	return map_of(For.HERO if walls_are_open else For.RAID)
+
+## The map for `which` walker (For).
+func map_of(which: int) -> RID:
+	var region: NavigationRegion3D = _regions.get(which)
 	if region == null or not is_instance_valid(region):
 		return RID()
 	return region.get_navigation_map()
 
+## The map a caller means: `which` is a For, or -- as it always was -- a bool, true for the
+## Hero's mesh and false for the raid's.
+func _map(which: Variant) -> RID:
+	if which is bool:
+		return map_for(bool(which))
+	return map_of(int(which))
+
 ## The route from `from_pos` to `to_pos`, funnelled -- the corners actually needed rather
 ## than the centre of every tile crossed.
-func path(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> PackedVector3Array:
-	var map: RID = map_for(walls_are_open)
+func path(from_pos: Vector3, to_pos: Vector3, walls_are_open: Variant = false) -> PackedVector3Array:
+	var map: RID = _map(walls_are_open)
 	if not map.is_valid():
 		return PackedVector3Array()
 	return NavigationServer3D.map_get_path(map, from_pos, to_pos, true)
@@ -192,8 +213,8 @@ func path(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> P
 ## from all four of its walls, so "the nearest standable point" is a four-way tie, and the
 ## server can settle it one way for the route and another for the nearest point: a route
 ## that reached the north wall was judged against the south one and called sealed.
-func is_reachable(from_pos: Vector3, to_pos: Vector3, walls_are_open: bool = false) -> bool:
-	var map: RID = map_for(walls_are_open)
+func is_reachable(from_pos: Vector3, to_pos: Vector3, walls_are_open: Variant = false) -> bool:
+	var map: RID = _map(walls_are_open)
 	if not map.is_valid():
 		return false
 	var pts := path(from_pos, to_pos, walls_are_open)
@@ -214,12 +235,24 @@ func _same_place() -> float:
 
 ## The nearest point on the mesh to `pos` -- where a walker that tried to go somewhere
 ## impossible would actually end up.
-func closest_point(pos: Vector3, walls_are_open: bool = false) -> Vector3:
-	var map: RID = map_for(walls_are_open)
+func closest_point(pos: Vector3, walls_are_open: Variant = false) -> Vector3:
+	var map: RID = _map(walls_are_open)
 	if not map.is_valid():
 		return pos
 	return NavigationServer3D.map_get_closest_point(map, pos)
 
-## Whether the meshes have been built at least once -- false in a fixture with no level.
+## Whether the meshes can be asked yet: built at least once, and taken up by the navigation server.
+##
+## BUILT IS NOT ENOUGH. A map answers from its last sync, and until its first one every route is
+## empty and map_get_closest_point says (0, 0, 0) -- with nothing in either answer to say so. A
+## dinosaur asking in those first frames after a level loads was told the way to the cabin was
+## shut, and went for the first building on a straight line (v0.6 round two). Not ready is not
+## "shut": a caller that gets false here treats the way as open.
 func is_ready() -> bool:
-	return _baked_once
+	if not _baked_once:
+		return false
+	for which in _regions:
+		var map: RID = map_of(which)
+		if not map.is_valid() or NavigationServer3D.map_get_iteration_id(map) <= 0:
+			return false
+	return true

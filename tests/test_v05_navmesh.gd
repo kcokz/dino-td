@@ -89,16 +89,20 @@ func test_01_the_level_bakes_two_maps() -> void:
 	assert_ne(main.nav_maps.map_for(false), main.nav_maps.map_for(true),
 		"Which are different maps, or the exemption would leak both ways")
 
-func test_02_the_two_maps_differ_by_exactly_the_wall_layer() -> void:
-	# The whole of "the Hero walks through his own fence", as a bit rather than a flag
-	# threaded through the pathfinder.
+func test_02_the_maps_differ_by_exactly_what_keeps_a_raid_out() -> void:
+	# The whole of "the Hero walks through his own fence", as bits rather than a flag
+	# threaded through the pathfinder -- and the siege map, which a siege animal walks and a
+	# raid asks for the wall in its way (v0.6 round two), sees no walls either.
 	var main = _level()
 	await wait_frames(6)
 	var raid_mask: int = main.nav_maps._mask_for(NavMaps.For.RAID)
 	var hero_mask: int = main.nav_maps._mask_for(NavMaps.For.HERO)
+	var siege_mask: int = main.nav_maps._mask_for(NavMaps.For.SIEGE)
 
-	assert_eq(raid_mask ^ hero_mask, int(config_node.LAYER_WALL),
-		"The only difference between them is the wall layer")
+	assert_eq(raid_mask ^ hero_mask, int(config_node.LAYER_WALL) | int(config_node.LAYER_GATE),
+		"The only difference between them is the walls and gates")
+	assert_eq(siege_mask & (int(config_node.LAYER_WALL) | int(config_node.LAYER_GATE)), 0,
+		"The siege map sees no walls")
 	assert_ne(raid_mask & 2, 0, "Both still see the wreck and the turrets")
 	assert_ne(hero_mask & 2, 0, "Both still see the wreck and the turrets")
 	assert_eq(raid_mask & int(config_node.LAYER_BLUEPRINT), 0,
@@ -217,10 +221,9 @@ func test_08_a_walker_is_not_flung_across_the_map_while_the_map_warms_up() -> vo
 		"It is where it was put, give or take a step -- not wherever an unready map said")
 	assert_lt(absf(dino.global_position.x - spawned_at.x), cap, "And has not been moved sideways")
 
-func test_09_and_the_mesh_still_moves_one_that_is_off_it() -> void:
-	# The cap must not cost the clamp its job, which is that NOTHING PHYSICALLY STOPS A
-	# DINOSAUR: movement is a position added to, with no body sweep, so the mesh is the
-	# only thing keeping a raid out of a walled camp.
+func test_09_and_one_put_down_in_a_fence_is_put_out_of_it() -> void:
+	# A dinosaur has a body since v0.6 round two, and that body is what keeps it out of a
+	# walled camp -- not a clamp onto the mesh.
 	var main = _level()
 	await wait_frames(8)               # long enough for the map to be warm
 	if game_state_node and "resources" in game_state_node:
@@ -232,10 +235,13 @@ func test_09_and_the_mesh_still_moves_one_that_is_off_it() -> void:
 	var dino = load("res://scripts/entities/Dino.gd").new("raptor")
 	_cleanup_nodes.append(dino)
 	main.dinos_container.add_child(dino)
-	# Half a step inside the fence line, which is as far in as one can ever get.
+	# Half a step inside the fence line, which is as far in as one can ever get. Its own body
+	# puts it out of the stakes (v0.6 round two): the engine recovers a collider from inside
+	# another when it moves, and the clamp onto the mesh that did this is gone.
 	var into_the_stakes: Vector3 = core + Vector3(0.0, 0.0, -4.0 + 0.3)
 	dino.global_position = into_the_stakes
-	dino._stay_on_the_navmesh()
+	for i in range(10):
+		dino._move_body(Vector3.ZERO)
 
 	assert_gt(dino.global_position.distance_to(into_the_stakes), 0.05,
 		"Standing in the fence line is not somewhere it may stand, so it is moved")
@@ -285,7 +291,7 @@ func test_10_a_sealed_ring_is_still_sealed_when_you_are_standing_against_it() ->
 	# Past the recheck throttle, or the cached answer from out in the open is what comes
 	# back and the question is not being asked at all.
 	dino.global_position = core + Vector3(0.0, 0.0, -4.4)
-	await wait_seconds(dino.ROUTE_RECHECK_SECONDS + 0.1)
+	await wait_seconds(float(config_node.DINO_AI["route_check_seconds"]) + 0.1)
 	assert_true(dino._way_is_sealed(), "And still knows it with its nose against them")
 
 func test_11_so_it_commits_to_chewing_instead_of_looking_for_a_gap() -> void:

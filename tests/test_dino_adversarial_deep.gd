@@ -119,23 +119,19 @@ func test_adversarial_rapid_reentrant_take_damage() -> void:
 
 # 3. Pathological Attack Rate (zero / negative)
 func test_adversarial_zero_and_negative_attack_rate() -> void:
+	# Bites are timed on the animal's own clock (Dino._bite_interval): a rate of nothing, or
+	# less, must still be a finite, positive interval -- not a division by zero, and not a
+	# bite every frame.
 	var dino = _create_dino("raptor")
 	dino.attack_rate = 0.0
-	# Trigger ready again or update timer
-	if dino.attack_timer:
-		if dino.attack_rate > 0.0:
-			dino.attack_timer.wait_time = maxf(0.1, 1.0 / dino.attack_rate)
-		else:
-			dino.attack_timer.wait_time = 1.0
-		assert_gte(dino.attack_timer.wait_time, 0.1, "Attack timer clamped safely on zero attack rate")
+	var interval: float = dino._bite_interval()
+	assert_false(is_inf(interval) or is_nan(interval), "A zero rate is not an infinite wait")
+	assert_gt(interval, 0.0, "nor no wait at all")
 
 	dino.attack_rate = -5.0
-	if dino.attack_timer:
-		if dino.attack_rate > 0.0:
-			dino.attack_timer.wait_time = maxf(0.1, 1.0 / dino.attack_rate)
-		else:
-			dino.attack_timer.wait_time = 1.0
-		assert_gte(dino.attack_timer.wait_time, 0.1, "Attack timer clamped safely on negative attack rate")
+	interval = dino._bite_interval()
+	assert_false(is_inf(interval) or is_nan(interval), "A negative rate is not an infinite wait")
+	assert_gt(interval, 0.0, "nor a negative one")
 
 # 4. Target validity against malformed objects
 func test_adversarial_is_target_valid_robustness() -> void:
@@ -168,5 +164,13 @@ func test_adversarial_look_at_identical_position() -> void:
 func test_adversarial_node_groups_and_collision_layers() -> void:
 	var dino = _create_dino("raptor")
 	assert_true(dino.is_in_group("dinos"), "Dino is in group 'dinos'")
-	assert_eq(dino.collision_layer, 12, "Dino collision_layer has bit 2 (dinos) and bit 3 (enemies) set = 12")
-	assert_eq(dino.collision_mask, 0, "Dino collision_mask is 0 (handled by raycast)")
+	# Its own layer, and a body that bumps into everything Config says (v0.6 round two: nothing
+	# overlaps anything, nothing walks through a wall).
+	var cfg = tree.root.get_node("Config")
+	assert_eq(dino.collision_layer, int(cfg.LAYER_DINO), "Dino is on the dinosaurs' layer")
+	var mask: int = 0
+	for layer in cfg.DINO_AI["collides_with"]:
+		mask |= int(cfg.get(layer))
+	assert_eq(dino.collision_mask, mask, "and collides with what Config says")
+	assert_ne(dino.collision_mask & int(cfg.LAYER_WALL), 0, "walls among them")
+	assert_ne(dino.collision_mask & int(cfg.LAYER_DINO), 0, "and the others")

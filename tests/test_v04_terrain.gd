@@ -153,11 +153,12 @@ func test_06_a_dinosaur_routes_around_a_hill_in_its_way() -> void:
 	dino.current_waypoint_index = 0
 	await wait_frames(1)
 
-	# Straight ahead is hillside, so it must be steering somewhere else.
-	assert_false(dino._line_is_clear(dino.global_position, dino.waypoints[0]),
-		"The direct line runs into a hill")
-	var steer: Vector3 = dino._steer_target(dino.waypoints[0])
-	assert_ne(steer, dino.waypoints[0], "So it heads for a way round instead")
+	# Straight ahead is hillside, so the route it is given bends round it (NavMaps.path, on the
+	# mesh the hill is carved out of) and the corner it heads for first is not the goal.
+	var steer: Vector3 = dino._next_step_towards(dino.waypoints[0])
+	assert_gt(dino._route.size(), 2, "The route has a corner in it: the way round")
+	assert_gt(Vector2(steer.x, steer.z).distance_to(Vector2(dino.waypoints[0].x, dino.waypoints[0].z)), 0.5,
+		"So it heads for a way round instead")
 	assert_false(gm.is_cell_blocked(gm.world_to_cell(steer)), "And that way round is walkable")
 
 func test_07_open_ground_is_unchanged() -> void:
@@ -173,13 +174,20 @@ func test_07_open_ground_is_unchanged() -> void:
 	var goal: Vector3 = gm.cell_to_world(Vector2i(0, 1))
 	await wait_frames(1)
 
-	assert_true(dino._line_is_clear(dino.global_position, goal), "Nothing is in the way")
-	assert_eq(dino._steer_target(goal), goal, "So it heads straight for it")
-	assert_true(dino.nav_path.is_empty(), "And keeps no route it does not need")
+	var steer: Vector3 = dino._next_step_towards(goal)
+	# Nothing is in the way: every corner of the route is on the straight line (the mesh may
+	# keep a point where the line crosses one of its own edges -- a corner that turns nothing).
+	var a := Vector2(dino.global_position.x, dino.global_position.z)
+	var line := (Vector2(goal.x, goal.z) - a).normalized()
+	for pt in dino._route:
+		var off: Vector2 = Vector2(pt.x, pt.z) - a
+		assert_almost_eq(off.x * line.y - off.y * line.x, 0.0, 0.05, "The route runs straight (%s)" % str(pt))
+	var heading := (Vector2(steer.x, steer.z) - a).normalized()
+	assert_gt(heading.dot(line), 0.999, "So it heads straight for it")
 
 func test_08_nothing_ends_up_standing_in_a_hill() -> void:
-	# Separation and flanking both shove sideways and neither knows about the
-	# landscape, so the last word belongs to the terrain.
+	# Whatever steers it, the last word belongs to the terrain: its body stops at a hillside
+	# like at anything else (v0.6 round two -- the hand-written "put it back" is gone).
 	var gm = await _grid([Vector2i(0, 0)])
 	await wait_frames(1)
 	var dino = dino_script.new()
@@ -190,9 +198,10 @@ func test_08_nothing_ends_up_standing_in_a_hill() -> void:
 	dino.global_position = safe
 	await wait_frames(1)
 
-	dino.global_position = gm.cell_to_world(Vector2i(0, 0))   # shoved into the hill
-	dino._keep_off_the_hills(safe)
-	assert_eq(dino.global_position, safe, "It is put back where it came from")
+	# Driven straight at the hill for a second, the way a bad steer would.
+	var into: Vector3 = (gm.cell_to_world(Vector2i(0, 0)) - safe).normalized()
+	for i in range(60):
+		dino._move_body(into * (float(dino.speed) / 60.0))
 	assert_false(gm.is_cell_blocked(gm.world_to_cell(dino.global_position)), "Out of the scenery")
 
 func test_09_a_building_against_a_hill_loses_the_slots_behind_it() -> void:

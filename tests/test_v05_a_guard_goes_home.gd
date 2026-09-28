@@ -124,7 +124,13 @@ func test_03_it_still_chases_somebody_who_walks_up_to_the_nest() -> void:
 
 	guard.global_position = post
 	hero.global_position = post + Vector3(0.0, 0.0, guard.aggro_radius * 0.5)
-	await wait_physics_frames(3)
+	# It notices at its next thought: a few times a second (Config.DINO_AI.think_seconds, give or
+	# take a fifth), not on the very frame he arrives.
+	var noticed_within: float = float(config_node.DINO_AI["think_seconds"]) * 1.2
+	var waited: float = 0.0
+	while waited <= noticed_within + 0.05 and int(guard.guard_state) != int(guard.GuardState.AGGRO_CHASE):
+		await wait_physics_frames(1)
+		waited += 1.0 / float(Engine.physics_ticks_per_second)
 
 	assert_eq(int(guard.guard_state), int(guard.GuardState.AGGRO_CHASE),
 		"It comes after him")

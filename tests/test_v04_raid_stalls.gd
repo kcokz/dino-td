@@ -80,6 +80,10 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	w.position = gm.cell_to_world(cell)
 	w.complete_construction()
 	gm.occupy_cell(cell, w)
+	# Put up whole, it was never a blueprint and never said so on the bus: the meshes are told
+	# here, as the game tells them when anything is built (NavMaps rebakes on building_completed).
+	if maps_of() != null:
+		maps_of().rebake()
 	return w
 
 ## A fence all the way round `centre`, laid as four RUNS of stakes on the fine grid.
@@ -202,7 +206,7 @@ func test_04_sealed_is_judged_against_where_it_is_going() -> void:
 	# Now hand it the wall as a target, which is what happens a moment later anyway.
 	d.current_target = d._building_in_the_way()
 	assert_not_null(d.current_target, "There is a stake it would pick")
-	d._route_checked_at = -999.0
+	d._route_clock = 0.0
 	assert_true(d._way_is_sealed(), "And still sealed once it has picked something to bite")
 
 # ==============================================================================
@@ -253,16 +257,19 @@ func test_07_a_walker_slides_along_a_hill_instead_of_stopping_dead() -> void:
 	var d = _dino_at(gm, gm.cell_to_world(Vector2i(0, -1)), gm.cell_to_world(Vector2i(0, 3)))
 	await wait_frames(1)
 
-	# Step straight into the hill, the way a bad steer would.
-	var before: Vector3 = d.global_position
-	d.global_position = gm.cell_to_world(Vector2i(0, 0)) + Vector3(0.9, 0.0, 0.0)
-	d.velocity = Vector3(0.0, 0.0, 4.0)
-	d._keep_off_the_hills(before)
+	# Driven into the hill's face at a slant, the way a bad steer would: its own body stops it
+	# at the face and slides it along (v0.6 round two -- the hand-written slide is gone, and
+	# the engine's collision does it).
+	var face: Vector3 = gm.cell_to_world(Vector2i(0, 0)) - Vector3(0.0, 0.0, float(gm.tile_size) * 0.5)
+	d.global_position = face + Vector3(0.3, 0.0, -0.45)
+	var start: Vector3 = d.global_position
+	for i in range(20):
+		d._move_body(Vector3(0.6, 0.0, 1.0).normalized() * (4.0 / 60.0))
 
 	assert_false(gm.is_cell_blocked(gm.world_to_cell(d.global_position)),
 		"It does not end up standing in the hill")
-	assert_gt(d.velocity.length(), 0.0,
-		"And it keeps its speed, because a wall face only blocks one direction")
+	assert_gt(d.global_position.x - start.x, 0.3,
+		"And it keeps going along the face, because a wall face only blocks one direction")
 
 func test_08_a_raid_on_open_ground_past_two_hills_does_not_freeze() -> void:
 	# What the report looked like with no fence at all, which is how the third cause was

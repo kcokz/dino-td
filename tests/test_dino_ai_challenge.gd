@@ -205,52 +205,65 @@ func test_dense_sequential_walls_along_route() -> void:
 	# behaviour the v0.4 rule removed: A WALL IS ONLY WORTH BITING WHEN IT IS ACTUALLY IN
 	# THE WAY, and three stakes in an open field are three things to walk round.
 	#
-	# It kept passing after the rule went in because one branch -- the attack-slot walk
-	# in advance_towards_waypoint -- committed to a target without consulting it. That
-	# was the real bug behind "the raid stops short of my fence and does nothing": claim
-	# a slot on a fence, walk to it, be released for having a way round, claim it again.
-	await wait_frames(2)
+	# Round them on the raid's mesh: since v0.6 round two a dinosaur has a body that stakes
+	# stop, so the way round is the mesh's to find (a bare fixture with one, nav_fixture).
+	var world: Node3D = await _walled_fixture([Vector3(2.0, 0.0, 0.0), Vector3(4.0, 0.0, 0.0), Vector3(6.0, 0.0, 0.0)])
+	var walls: Array = world.get_meta("walls")
 	var dino = _create_dino("raptor")
-	var wall1 = _create_wall(Vector3(2.0, 0.0, 0.0))
-	var wall2 = _create_wall(Vector3(4.0, 0.0, 0.0))
-	var wall3 = _create_wall(Vector3(6.0, 0.0, 0.0))
 	await wait_frames(2)
 
 	dino.set_waypoints([Vector3(0.0, 0.0, 0.0), Vector3(8.0, 0.0, 0.0)])
 	dino.global_position = Vector3(0.0, 0.0, 0.0)
 
-	for step in range(200):
+	for step in range(300):
 		dino.advance_towards_waypoint(0.05)
 		if dino.current_waypoint_index >= dino.waypoints.size():
 			break
 
 	assert_gte(dino.current_waypoint_index, dino.waypoints.size(),
 		"It gets to the far end, because there was always a way round")
-	assert_false(wall1.is_destroyed, "Without eating the first stake")
-	assert_false(wall2.is_destroyed, "Or the second")
-	assert_false(wall3.is_destroyed, "Or the third")
+	assert_false(walls[0].is_destroyed, "Without eating the first stake")
+	assert_false(walls[1].is_destroyed, "Or the second")
+	assert_false(walls[2].is_destroyed, "Or the third")
 	assert_eq(int(dino.current_state), 0, "And it is still walking, not chewing")
+
+## A nav fixture with finished stakes standing at `spots`, in its bake, baked. The stakes are on
+## the world's meta "walls".
+func _walled_fixture(spots: Array) -> Node3D:
+	var world: Node3D = await nav_fixture()
+	_allocated_nodes.append(world)
+	var walls: Array = []
+	for at in spots:
+		var w = wall_script.new()
+		world.add_child(w)
+		w.setup("wall")
+		w.position = at
+		w.complete_construction()
+		walls.append(w)
+	world.set_meta("walls", walls)
+	await rebake_fixture()
+	return world
 
 func test_wall_placed_directly_at_waypoint_node() -> void:
 	# A wall on the exact spot the route said to walk to.
 	#
 	# The old expectation was that it stopped and ate the wall. What it has to do now is
-	# carry on: the waypoint is unusable, so it is skipped, and the wall is left alone
+	# carry on: the waypoint is unusable, so it is passed by, and the wall is left alone
 	# because there is open ground either side of it.
 	#
 	# This is the case that used to pin an entire raid. The route runs down the path
 	# column, the player drops a stake on a waypoint, and every dinosaur walks to the near
 	# side of it and stops -- not attacking, because there is a way round, and not moving,
 	# because where it was told to go is inside a building.
-	await wait_frames(2)
+	var world: Node3D = await _walled_fixture([Vector3(4.0, 0.0, 0.0)])
+	var wall = world.get_meta("walls")[0]
 	var dino = _create_dino("raptor")
-	var wall = _create_wall(Vector3(4.0, 0.0, 0.0))
 	await wait_frames(2)
 
 	dino.set_waypoints([Vector3(0.0, 0.0, 0.0), Vector3(4.0, 0.0, 0.0), Vector3(8.0, 0.0, 0.0)])
 	dino.global_position = Vector3(0.0, 0.0, 0.0)
 
-	for step in range(200):
+	for step in range(300):
 		dino.advance_towards_waypoint(0.05)
 		if dino.current_waypoint_index >= dino.waypoints.size():
 			break

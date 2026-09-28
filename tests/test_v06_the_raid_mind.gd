@@ -1,0 +1,298 @@
+# res://tests/test_v06_the_raid_mind.gd
+# v0.6 feedback, round two, 6: "恐龙攻击还是有问题，比如守卫恐龙攻击人之后，人开始逃跑，恐龙会追，追到一个
+# 地方就会回去，有的恐龙会回去，但有的会卡在一些防御不动了，或者直接在防御的周围抽搐，我需要更专业的恐龙
+# 进攻逻辑，永远不要抽搐或者傻掉这类情况" -- and 4, "所有单位都不能重叠".
+#
+# A dinosaur is the engine's walker now (Dino.gd): the server's route on a baked mesh, its
+# avoidance, and a round body the engine collides -- with one small mind on top whose every
+# change has a margin. What is asserted here is what the player saw go wrong: twitching (a
+# heading that snaps), dithering (taking hold and letting go by turns), standing for ever, and
+# bodies inside one another -- and that a guard neither runs at a wall its man is behind nor
+# stays out when it cannot get home.
+#
+# Everything expected is read from Config.
+extends "res://tests/test_base.gd"
+
+var config_node: Object = null
+var game_state_node: Object = null
+var _cleanup_nodes: Array[Node] = []
+
+func before_all() -> void:
+	if tree != null and tree.root != null:
+		config_node = tree.root.get_node_or_null("Config")
+		game_state_node = tree.root.get_node_or_null("GameState")
+
+func before_each() -> void:
+	if game_state_node != null:
+		game_state_node.reset_game()
+
+func after_each() -> void:
+	for n in _cleanup_nodes:
+		if is_instance_valid(n):
+			if n.is_inside_tree():
+				n.get_parent().remove_child(n)
+			if not n.is_queued_for_deletion():
+				n.free()
+	_cleanup_nodes.clear()
+	clear_drops()
+	if game_state_node != null:
+		game_state_node.reset_game()
+	super.after_each()
+
+func _ai(key: String) -> float:
+	return float(config_node.DINO_AI[key])
+
+## A bare field with a mesh over it (nav_fixture), kept for cleanup.
+func _field() -> Node3D:
+	var world: Node3D = await nav_fixture()
+	_cleanup_nodes.append(world)
+	return world
+
+func _raptor(at: Vector3, parent: Node) -> Node:
+	var d = load(String(config_node.get_dino_script_path("raptor"))).new("raptor")
+	parent.add_child(d)
+	d.setup("raptor")
+	d.global_position = at
+	_cleanup_nodes.append(d)
+	return d
+
+## A finished stake at `at`, in the field's bake.
+func _stake(world: Node3D, at: Vector3) -> Node:
+	var w = load("res://scripts/entities/Wall.gd").new()
+	world.add_child(w)
+	w.setup("wall")
+	w.position = at
+	w.complete_construction()
+	return w
+
+# ==============================================================================
+# 1. No twitch: the heading turns, it never snaps
+# ==============================================================================
+
+func test_01_a_heading_turns_at_its_turning_speed() -> void:
+	var world := await _field()
+	var d = _raptor(Vector3.ZERO, world)
+	await wait_physics_frames(2)
+	d.rotation.y = 0.0
+	# Asked to face straight behind it, in one frame it turns no further than a frame's worth.
+	var frame: float = 1.0 / 60.0
+	d._turn_towards(Vector3(0.0, 0.0, 1.0), frame)
+	assert_almost_eq(absf(d.rotation.y), deg_to_rad(_ai("turn_speed")) * frame, 0.0001,
+		"One frame turns it one frame's worth (Config.DINO_AI.turn_speed)")
+	for i in range(120):
+		d._turn_towards(Vector3(0.0, 0.0, 1.0), frame)
+	assert_almost_eq(absf(wrapf(d.rotation.y, -PI, PI)), PI, 0.01, "and keeps turning until it faces there")
+
+func test_02_marching_through_a_crowd_nobody_snaps_round() -> void:
+	# Six raptors walked through each other's way for two seconds of real frames: at no frame
+	# does any heading jump by more than the turning speed allows. The old heading was set outright
+	# every frame from a velocity the solver nudges about -- which is what a twitch is.
+	var world := await _field()
+	var raid: Array = []
+	for i in range(6):
+		var from := Vector3(-3.0 + float(i) * 1.2, 0.0, 6.0 if i % 2 == 0 else -6.0)
+		var d = _raptor(from, world)
+		d.set_waypoints([Vector3(3.0 - float(i) * 1.2, 0.0, -from.z)])
+		raid.append(d)
+	await wait_physics_frames(2)
+	var limit: float = deg_to_rad(_ai("turn_speed")) / float(Engine.physics_ticks_per_second) + 0.001
+	var headings: Array = raid.map(func(d): return d.rotation.y)
+	var worst: float = 0.0
+	for frame in range(120):
+		await wait_physics_frames(1)
+		for i in range(raid.size()):
+			worst = maxf(worst, absf(wrapf(raid[i].rotation.y - headings[i], -PI, PI)))
+			headings[i] = raid[i].rotation.y
+	assert_lte(worst, limit, "No heading ever turned faster than it turns (worst %.3f rad in a frame)" % worst)
+
+# ==============================================================================
+# 2. Nothing inside anything
+# ==============================================================================
+
+func test_03_a_crowd_never_stands_inside_itself() -> void:
+	# Eight raptors sent at one point from all round it: bodies meet there and push, and at no
+	# frame are two closer than their own width (less the solver's contact margin).
+	var world := await _field()
+	var raid: Array = []
+	for i in range(8):
+		var a: float = TAU * float(i) / 8.0
+		var d = _raptor(Vector3(cos(a) * 5.0, 0.0, sin(a) * 5.0), world)
+		d.set_waypoints([Vector3.ZERO])
+		raid.append(d)
+	var width: float = float(config_node.get_visual_size("dino/raptor").x)
+	await wait_physics_frames(2)
+	var closest: float = INF
+	for frame in range(150):
+		await wait_physics_frames(1)
+		for i in range(raid.size()):
+			for j in range(i + 1, raid.size()):
+				var p: Vector3 = raid[i].global_position
+				var q: Vector3 = raid[j].global_position
+				closest = minf(closest, Vector2(p.x, p.z).distance_to(Vector2(q.x, q.z)))
+	assert_gte(closest, width - 0.02, "Never closer than their width (closest %.3f m)" % closest)
+
+func test_04_the_hero_in_its_way_is_walked_round_or_bitten_never_walked_into() -> void:
+	# He stands in its way. It never stands inside him (its body collides with his), and it never
+	# stands there for good either: it gets round him, or -- held up by him time and again -- it
+	# bites the man in its way (Dino._unstick), whether or not its species came for him.
+	var world := await _field()
+	var hero = load("res://scripts/entities/Hero.gd").new()
+	world.add_child(hero)
+	_cleanup_nodes.append(hero)
+	hero.global_position = Vector3.ZERO
+	# A species with no business with him (the plain habit), so what is tested is his being in
+	# the way, not its going for him.
+	var d = load("res://scripts/entities/Dino.gd").new("raptor")
+	world.add_child(d)
+	_cleanup_nodes.append(d)
+	d.setup("raptor")
+	# He swings at anything that comes within his reach; this one has to live through it.
+	d.max_hp = 9999.0
+	d.current_hp = 9999.0
+	d.global_position = Vector3(0.0, 0.0, 5.0)
+	d.set_waypoints([Vector3(0.0, 0.0, -5.0)])
+	await wait_physics_frames(2)
+	assert_ne(int(d.collision_mask) & int(config_node.LAYER_HERO), 0, "Its body collides with his")
+	var touching: float = float(config_node.get_visual_size("dino/raptor").x) * 0.5 		+ float(config_node.HERO["width"]) * 0.5
+	var closest: float = INF
+	var window: float = _ai("stuck_window")
+	for frame in range(int(ceil(window * 4.0 * float(Engine.physics_ticks_per_second)))):
+		await wait_physics_frames(1)
+		var p: Vector3 = d.global_position
+		closest = minf(closest, Vector2(p.x, p.z).distance_to(Vector2.ZERO))
+	assert_gte(closest, touching - 0.02, "It never stands inside him (closest %.3f m)" % closest)
+	var past: bool = d.global_position.z < -touching
+	var biting: bool = d.current_target == hero
+	assert_true(past or biting, "It got round him, or it is going for him -- it is not standing there (z %.2f)" % d.global_position.z)
+
+# ==============================================================================
+# 3. No dithering, no standing for ever
+# ==============================================================================
+
+func test_05_it_lets_go_only_past_its_reach() -> void:
+	var world := await _field()
+	var d = _raptor(Vector3.ZERO, world)
+	var hero = load("res://scripts/entities/Hero.gd").new()
+	world.add_child(hero)
+	_cleanup_nodes.append(hero)
+	hero.set_physics_process(false)
+	await wait_physics_frames(2)
+	d.set_physics_process(false)
+	var reach: float = float(d.attack_reach()) + float(config_node.HERO["width"]) * 0.5
+	hero.global_position = Vector3(reach * 0.9, 0.0, 0.0)
+	d.on_obstacle_detected(hero)
+	assert_eq(int(d.mode), int(d.Mode.ATTACK), "In reach, it bites")
+	# A step back that is still inside the margin is not an escape.
+	hero.global_position = Vector3(reach + _ai("reach_release") * 0.5, 0.0, 0.0)
+	d._hold_and_bite(1.0 / 60.0)
+	assert_eq(int(d.mode), int(d.Mode.ATTACK), "A step back inside the margin: it keeps biting")
+	hero.global_position = Vector3(reach + _ai("reach_release") + 0.1, 0.0, 0.0)
+	d._hold_and_bite(1.0 / 60.0)
+	assert_ne(int(d.mode), int(d.Mode.ATTACK), "Past the margin, it lets go of the bite")
+
+func test_06_shut_in_with_nowhere_to_go_it_bites_its_way_out() -> void:
+	# The last word against standing still for ever: an animal with no way to where it is going
+	# goes through what is in the way.
+	var world := await _field()
+	var ring: Array = []
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(gm)
+	tree.root.add_child(gm)
+	for w in run_of_stakes(world, gm, Vector3(-2.0, 0.0, -2.0), Vector3(2.0, 0.0, -2.0)):
+		ring.append(w)
+	for w in run_of_stakes(world, gm, Vector3(2.0, 0.0, -2.0), Vector3(2.0, 0.0, 2.0)):
+		ring.append(w)
+	for w in run_of_stakes(world, gm, Vector3(2.0, 0.0, 2.0), Vector3(-2.0, 0.0, 2.0)):
+		ring.append(w)
+	for w in run_of_stakes(world, gm, Vector3(-2.0, 0.0, 2.0), Vector3(-2.0, 0.0, -2.0)):
+		ring.append(w)
+	await rebake_fixture()
+	var d = _raptor(Vector3.ZERO, world)
+	d.set_waypoints([Vector3(0.0, 0.0, 12.0)])
+	var bitten: bool = false
+	for frame in range(360):
+		await wait_physics_frames(1)
+		if int(d.current_state) == int(d.State.ATTACKING) and d._is_wall(d.current_target):
+			bitten = true
+			break
+	assert_true(bitten, "Within six seconds it is biting the ring that shuts it in")
+
+func test_07_a_paused_game_is_paused_for_the_raid_too() -> void:
+	var world := await _field()
+	var d = _raptor(Vector3.ZERO, world)
+	d.set_waypoints([Vector3(0.0, 0.0, 10.0)])
+	await wait_physics_frames(10)
+	var gs = game_state_node
+	gs.set_paused(true)
+	await wait_physics_frames(1)
+	var held: Vector3 = d.global_position
+	await wait_physics_frames(30)
+	assert_true(bool(gs.is_paused), "The game is paused")
+	assert_almost_eq(d.global_position.distance_to(held), 0.0, 0.001, "and the raid stands where it was")
+	gs.set_paused(false)
+	await wait_physics_frames(10)
+	assert_gt(d.global_position.distance_to(held), 0.1, "Unpaused, it walks on")
+
+# ==============================================================================
+# 4. The guards
+# ==============================================================================
+
+func _guard(world: Node, post: Vector3) -> Node:
+	var g = load("res://scripts/entities/GuardDino.gd").new()
+	world.add_child(g)
+	_cleanup_nodes.append(g)
+	g.setup("raptor")
+	g.setup_post(post)
+	return g
+
+func test_08_a_guard_does_not_run_at_a_wall_its_man_is_behind() -> void:
+	# He is close enough to chase, but on the far side of a closed ring: there is no way to
+	# him, so there is no chase -- a guard running at the wall and grinding there is the
+	# "卡在一些防御不动了" that was reported.
+	var world := await _field()
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(gm)
+	tree.root.add_child(gm)
+	for pair in [[Vector3(-2, 0, -2), Vector3(2, 0, -2)], [Vector3(2, 0, -2), Vector3(2, 0, 2)],
+			[Vector3(2, 0, 2), Vector3(-2, 0, 2)], [Vector3(-2, 0, 2), Vector3(-2, 0, -2)]]:
+		run_of_stakes(world, gm, pair[0], pair[1])
+	await rebake_fixture()
+	var hero = load("res://scripts/entities/Hero.gd").new()
+	world.add_child(hero)
+	_cleanup_nodes.append(hero)
+	hero.set_physics_process(false)
+	hero.global_position = Vector3.ZERO
+	var g = _guard(world, Vector3(0.0, 0.0, -2.0 - float(config_node.NEST_GUARDS["aggro_radius"]) * 0.6))
+	assert_lt(g.global_position.distance_to(hero.global_position), float(g.aggro_radius), "He is within its aggro")
+	for frame in range(60):
+		await wait_physics_frames(1)
+	# (The stakes themselves are near enough the nest to be fair game -- a guard goes for what is
+	# built by its post -- but not the man it cannot get at.)
+	assert_ne(g.chase_target, hero, "But it does not go for him through the wall")
+
+func test_09_a_guard_it_cannot_get_home_makes_its_home_where_it_is() -> void:
+	# Walled off from its post, it does not push at the wall for ever: once going home has failed
+	# for a couple of headway windows, where it stands is its post.
+	var world := await _field()
+	var gm = load("res://scripts/core/GridManager.gd").new()
+	_cleanup_nodes.append(gm)
+	tree.root.add_child(gm)
+	var post := Vector3(0.0, 0.0, 0.0)
+	for pair in [[Vector3(-2, 0, -2), Vector3(2, 0, -2)], [Vector3(2, 0, -2), Vector3(2, 0, 2)],
+			[Vector3(2, 0, 2), Vector3(-2, 0, 2)], [Vector3(-2, 0, 2), Vector3(-2, 0, -2)]]:
+		run_of_stakes(world, gm, pair[0], pair[1])
+	await rebake_fixture()
+	var g = _guard(world, post)
+	g.global_position = Vector3(0.0, 0.0, 6.0)      # outside the ring its post is inside
+	g._go_home()
+	var settled: bool = false
+	var window: float = _ai("stuck_window")
+	var frames: int = int(ceil(window * 5.0 * float(Engine.physics_ticks_per_second)))
+	for frame in range(frames):
+		await wait_physics_frames(1)
+		if int(g.guard_state) == int(g.GuardState.POST_ROAM) or g.post_position.distance_to(post) > 0.5:
+			settled = true
+			break
+	assert_true(settled, "It settles somewhere it can stand rather than pushing at the wall")
+	assert_false(Vector2(g.global_position.x, g.global_position.z).length() < 1.5,
+		"and it is not inside the ring it could not get into")

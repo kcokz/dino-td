@@ -71,6 +71,10 @@ func _wall_at(gm: Node, cell: Vector2i) -> Node:
 	w.position = gm.cell_to_world(cell)
 	w.complete_construction()
 	gm.occupy_cell(cell, w)
+	# Put up whole, it was never a blueprint and never said so on the bus: the meshes are told
+	# here, as the game tells them when anything is built (NavMaps rebakes on building_completed).
+	if maps_of() != null:
+		maps_of().rebake()
 	return w
 
 ## A fence all the way round `centre`, laid as four RUNS of stakes on the fine grid.
