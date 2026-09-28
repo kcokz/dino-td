@@ -147,3 +147,67 @@ func test_04_the_leash_is_what_stops_it_and_the_numbers_are_in_config() -> void:
 	assert_gt(float(config_node.NEST_GUARDS["leash_radius"]),
 		float(config_node.NEST_GUARDS["aggro_radius"]),
 		"A leash shorter than the aggro radius would be a guard that can never reach anything")
+
+# ==============================================================================
+# 3. The nest is defended by all its guards at once
+# ==============================================================================
+
+## The level's own nest guards, each put back on its post, and the Hero made hard to kill.
+func _the_nests_guards(main: Node) -> Array:
+	var guards: Array = []
+	for g in main.current_nest.guard_dinos:
+		if is_instance_valid(g):
+			g.global_position = g.post_position
+			g.max_hp = 9999.0
+			g.current_hp = 9999.0
+			guards.append(g)
+	main.hero.max_hp = 9999.0
+	main.hero.current_hp = 9999.0
+	return guards
+
+## Waits out a guard's next thought (Config.DINO_AI.think_seconds, give or take a fifth).
+func _a_thought() -> void:
+	var seconds: float = float(config_node.DINO_AI["think_seconds"]) * 1.2 + 0.1
+	await wait_physics_frames(int(ceil(seconds * float(Engine.physics_ticks_per_second))))
+
+func _after_him(g: Node) -> bool:
+	return int(g.guard_state) == int(g.GuardState.AGGRO_CHASE) or int(g.guard_state) == int(g.GuardState.ATTACKING)
+
+func test_05_one_guard_that_goes_for_him_brings_the_others() -> void:
+	# v0.6 round four: "初始人就能把守卫恐龙巢穴的小龙一个个杀掉，人杀伤力这么强吗" -- each came only when he
+	# was inside its own aggro radius, so he drew them off one at a time.
+	var main = _level()
+	await wait_frames(6)
+	var guards: Array = _the_nests_guards(main)
+	assert_gt(guards.size(), 1, "The nest has guards to call")
+	var first = guards[0]
+	var nest: Vector3 = main.current_nest.global_position
+	var out: Vector3 = first.post_position - nest
+	out.y = 0.0
+	main.hero.global_position = first.post_position + out.normalized() * first.aggro_radius * 0.8
+	for g in guards:
+		if g != first:
+			assert_gt(g.global_position.distance_to(main.hero.global_position), g.aggro_radius,
+				"%s would not have noticed him itself" % g.name)
+	await _a_thought()
+	for g in guards:
+		assert_true(_after_him(g), "%s comes for him: the first called" % g.name)
+		assert_eq(g.chase_target, main.hero, "%s is after the Hero" % g.name)
+
+func test_06_a_guard_that_is_hurt_goes_for_him_and_calls() -> void:
+	var main = _level()
+	await wait_frames(6)
+	var guards: Array = _the_nests_guards(main)
+	var hurt = guards[0]
+	# Settling after coming home: it would not notice him of itself.
+	hurt._calm = 10.0
+	var out: Vector3 = hurt.post_position - main.current_nest.global_position
+	out.y = 0.0
+	main.hero.global_position = hurt.post_position + out.normalized() * hurt.aggro_radius * 0.5
+	await _a_thought()
+	assert_false(_after_him(hurt), "Settling, it does not start after him of itself")
+	hurt.take_damage(1.0)
+	assert_true(_after_him(hurt), "Hurt, it does")
+	for g in guards:
+		if g != hurt:
+			assert_true(_after_him(g), "and %s with it" % g.name)

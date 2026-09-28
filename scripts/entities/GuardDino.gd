@@ -18,6 +18,9 @@ extends "res://scripts/entities/Dino.gd"
 ##   RETURNING    home, deaf to him on the way, and settling a moment once there
 ##                (reaggro_seconds) before it will start after anyone again
 ##
+## A nest is defended by all its guards at once: the first to go for him calls, and the others
+## come (_rally); one that is hurt goes for him too (take_damage).
+##
 ## Every way out of a chase is a clean one, and none can bounce straight back:
 ##   * he is further from its post than its leash, or it is -- home;
 ##   * there is no way to him (a wall between them: NavMaps.is_reachable), or it has made no
@@ -125,7 +128,7 @@ func _guard_think() -> void:
 					or not _can_get_at(chase_target):
 				_go_home()
 
-func _begin_chase(threat: Node3D) -> void:
+func _begin_chase(threat: Node3D, call_the_others: bool = true) -> void:
 	chase_target = threat
 	current_target = threat
 	guard_state = GuardState.AGGRO_CHASE
@@ -133,6 +136,44 @@ func _begin_chase(threat: Node3D) -> void:
 	_headway_clock = 0.0
 	_headway_from = global_position
 	_stuck_count = 0
+	if call_the_others:
+		_alert()
+		_rally(threat)
+
+## A NEST IS DEFENDED BY ALL ITS GUARDS AT ONCE (v0.6 round four: "初始人就能把守卫恐龙巢穴的小龙一个个
+## 杀掉，人杀伤力这么强吗"). Each went for him only when he came inside its own aggro_radius, so he could
+## draw them off one at a time and win every fight: a Coelophysis is three of his blows, and costs him
+## under three of his ten hit points. Now the first to go for him calls, and the guards of its nest --
+## posted within Config.NEST_GUARDS.rally_radius of its own post -- come too (answer_call).
+func _rally(threat: Node3D) -> void:
+	if not is_inside_tree():
+		return
+	var reach: float = float(_guards().get("rally_radius", 8.0))
+	for g in get_tree().get_nodes_in_group("guard_dinos"):
+		if g == self or not is_instance_valid(g) or not g.has_method("answer_call"):
+			continue
+		if _flat(g.post_position).distance_to(_flat(post_position)) <= reach:
+			g.answer_call(threat)
+
+## Another guard of its nest has called (_rally): after `threat` as well -- unless it is at somebody
+## already, or he is beyond its own leash, or there is no way to him. A call is not its own noticing,
+## so it answers even while settling after coming home (reaggro_seconds).
+func answer_call(threat: Node3D) -> void:
+	if is_dead or guard_state == GuardState.AGGRO_CHASE or guard_state == GuardState.ATTACKING:
+		return
+	if not _is_threat_valid(threat) or not _worth_chasing(threat) or not _can_get_at(threat):
+		return
+	_begin_chase(threat, false)
+
+## Hurt while it is not after anyone -- struck while settling, or shot from outside its aggro_radius:
+## it goes for the Hero, if he is inside its leash and there is a way to him, and calls the others.
+func take_damage(amount: float) -> void:
+	super.take_damage(amount)
+	if is_dead or not is_inside_tree() or guard_state == GuardState.AGGRO_CHASE or guard_state == GuardState.ATTACKING:
+		return
+	var hero: Node3D = get_tree().get_first_node_in_group("hero") as Node3D
+	if hero != null and _is_threat_valid(hero) and _worth_chasing(hero) and _can_get_at(hero):
+		_begin_chase(hero)
 
 func _go_home() -> void:
 	chase_target = null
