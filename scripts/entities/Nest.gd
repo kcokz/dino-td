@@ -86,8 +86,18 @@ func setup(cell: Vector2i) -> void:
 func _declared_size() -> Vector3:
 	var cfg = _get_config()
 	if cfg and cfg.has_method("get_visual_size"):
-		return cfg.get_visual_size("nest")
+		return cfg.get_visual_size(art_key())
 	return Vector3(2.0, 1.2, 2.0)
+
+## Which nest it is drawn as: its own species' -- the map's guards' (VISUALS "nest/<species>",
+## GAME-DESIGN 9.3: each species' nest is its own) -- or the mound, for one with none of its own.
+func art_key() -> String:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("map_data") and "VISUALS" in cfg:
+		var key: String = "nest/" + String(cfg.map_data().get("guards", ""))
+		if cfg.VISUALS.has(key):
+			return key
+	return "nest"
 
 ## (Re)builds the visible body and points `mesh_instance` at it. The entrance marker is
 ## left alone on purpose: it is not part of the nest's body, it is the mouth the raid
@@ -97,7 +107,7 @@ func _ensure_body() -> void:
 	if existing != null:
 		remove_child(existing)
 		existing.queue_free()
-	var body: Node3D = VisualLibrary.make("nest")
+	var body: Node3D = VisualLibrary.make(art_key())
 	add_child(body)
 	mesh_instance = null
 	for node in body.find_children("*", "MeshInstance3D", true, false):

@@ -178,7 +178,7 @@ func test_07_the_collider_comes_from_the_declared_size_for_everything() -> void:
 
 	var nest = _spawn("res://scripts/entities/Nest.gd", Vector3(80.0, 0.0, 80.0))
 	await wait_frames(1)
-	var nest_size: Vector3 = config_node.get_visual_size("nest")
+	var nest_size: Vector3 = config_node.get_visual_size(nest.art_key())
 	assert_almost_eq(_collider_size(nest).y, nest_size.y, 0.01, "The nest collides at its declared height")
 
 	var tree_node = load("res://scripts/entities/ResourceNode.gd").new("wood", Vector2i(9, 9))

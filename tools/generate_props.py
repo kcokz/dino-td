@@ -732,14 +732,15 @@ def _rings(b, rings, cols, centre=None, centre_col=None):
             b.tri(last[k], last[k2], centre, cols[-1][k], cols[-1][k2], centre_col)
 
 
-def _egg(b, centre, axis, rng):
-    """An egg: a sphere drawn out along `axis`, blunter at the top, speckled."""
+def _egg(b, centre, axis, rng, size=1.0):
+    """An egg: a sphere drawn out along `axis`, blunter at the top, speckled; `size` of the mound
+    nest's."""
     pts, faces = _icosphere(1.0, rng, 0.02)
     turn = axis.to_track_quat('Z', 'Y').to_matrix()
     out = []
     for q in pts:
         fat = 1.0 + 0.12 * q.z
-        out.append(centre + turn @ Vector((q.x * 0.085 * fat, q.y * 0.085 * fat, q.z * 0.16)))
+        out.append(centre + turn @ Vector((q.x * 0.085 * fat * size, q.y * 0.085 * fat * size, q.z * 0.16 * size)))
     for (i, j, k) in faces:
         c = mix(EGG, EGG_SPECK, rng.uniform(0.4, 0.7)) if rng.random() < 0.3 else jitter(EGG, rng, 0.02)
         b.tri(out[i], out[j], out[k], c, c, c)
@@ -868,6 +869,102 @@ def nest(seed):
     # What they eat, left by the door.
     _bone(b, Vector((0.48, -0.80, 0.03)), Vector((0.80, -0.52, 0.03)), rng)
     _bone(b, Vector((-0.62, -0.70, 0.03)), Vector((-0.44, -0.86, 0.05)), rng)
+    return b
+
+
+def nest_colony(seed):
+    """A Coelophysis nesting ground (GAME-DESIGN 9.3: each species' nest is its own; v0.6 round
+    three: "巢穴也不能长一个样，应该不同的恐龙巢穴也不一样"). They lived in crowds -- Ghost Ranch
+    buried a thousand together -- and a ground-nester of that kind scrapes a field of shallow bowls,
+    not one mound: a trampled patch of earth with scrapes across it, each lined with needles and
+    fern and most with a clutch half sunk in it, and what they ate lying between. No burrow: that is
+    the crocodiles' line (the mound nest above, for the maps that have them). Blender -Y is the
+    game's +Z. Authored to about 3.6 m across and low, inside NEST.sizes.coelophysis."""
+    rng = random.Random(seed)
+    b = Builder()
+    reach = 1.75
+
+    # The trampled patch: bare earth, darker where it is most trodden, under the whole colony.
+    seg = 40
+    rings, cols = [], []
+    for i, frac in enumerate((1.0, 0.8, 0.45)):
+        ring, col = [], []
+        for k in range(seg):
+            a = math.tau * k / seg
+            rr = reach * frac * (1.0 + 0.07 * math.sin(a * 3.0 + seed) + rng.uniform(-0.04, 0.04))
+            ring.append(Vector((math.cos(a) * rr, math.sin(a) * rr, 0.004 + 0.002 * i)))
+            col.append(jitter(mix(SOIL_LIGHT, SOIL, 0.3 + 0.3 * i), rng, 0.02))
+        rings.append(ring)
+        cols.append(col)
+    _rings(b, rings, cols, Vector((0.0, 0.0, 0.01)), SOIL)
+
+    # The scrapes: shallow bowls kicked out of the earth, a low rim round each, spaced apart.
+    scrapes = []
+    tries = 0
+    while len(scrapes) < 7 and tries < 400:
+        tries += 1
+        r_s = rng.uniform(0.26, 0.36)
+        a = rng.uniform(0.0, math.tau)
+        d = rng.uniform(0.0, reach - r_s - 0.12)
+        c = Vector((math.cos(a) * d, math.sin(a) * d, 0.0))
+        if all((c - o).length > r_s + r0 + 0.12 for (o, r0) in scrapes):
+            scrapes.append((c, r_s))
+    for n, (c, r_s) in enumerate(scrapes):
+        seg = 18
+        profile = [(1.0, 0.004), (0.86, 0.05), (0.72, 0.066), (0.58, 0.045), (0.38, 0.016)]
+        rings, cols = [], []
+        for i, (fr, z) in enumerate(profile):
+            ring, col = [], []
+            for k in range(seg):
+                a = math.tau * k / seg
+                rr = r_s * fr * (1.0 + rng.uniform(-0.05, 0.05))
+                ring.append(c + Vector((math.cos(a) * rr, math.sin(a) * rr, z)))
+                col.append(jitter(mix(SOIL_LIGHT, DEAD_FERN, 0.25) if i in (1, 2) else mix(SOIL, SOIL_DAMP, 0.5), rng, 0.03))
+            rings.append(ring)
+            cols.append(col)
+        _rings(b, rings, cols, c + Vector((0.0, 0.0, 0.012)), SOIL_DAMP)
+        # Lined with needles and bits of fern: slivers laid in the bowl.
+        for k in range(22):
+            a = rng.uniform(0.0, math.tau)
+            rr = rng.uniform(0.0, r_s * 0.6)
+            p = c + Vector((math.cos(a) * rr, math.sin(a) * rr, 0.02))
+            h = rng.uniform(0.0, math.tau)
+            along = Vector((math.cos(h), math.sin(h), 0.0)) * rng.uniform(0.05, 0.09)
+            side = Vector((-math.sin(h), math.cos(h), 0.0)) * 0.006
+            col = jitter(mix(DEAD_FERN, (0.18, 0.22, 0.10), rng.uniform(0.0, 0.8)), rng, 0.04)
+            b.tri(p - along - side, p + along, p - along + side, col, col, col)
+        # A clutch in most: half sunk in the lining, leaning out from the middle.
+        if n % 4 != 3:
+            eggs = rng.randint(4, 7)
+            for e in range(eggs):
+                a = math.tau * e / eggs + rng.uniform(-0.2, 0.2)
+                rr = r_s * rng.uniform(0.2, 0.3)
+                lean = Vector((math.cos(a) * 0.5, math.sin(a) * 0.5, 1.0)).normalized()
+                # A small theropod's clutch: eggs well under the mound nest's, a few to a scrape.
+                _egg(b, c + Vector((math.cos(a) * rr, math.sin(a) * rr, 0.03)), lean, rng, 0.55)
+
+    # What they ate, dropped between the scrapes and at the edge of the patch.
+    for i in range(7):
+        a = rng.uniform(0.0, math.tau)
+        d = rng.uniform(0.5, reach * 0.95)
+        mid = Vector((math.cos(a) * d, math.sin(a) * d, 0.03))
+        if any((mid - o).length < r0 + 0.08 for (o, r0) in scrapes):
+            continue
+        h = rng.uniform(0.0, math.tau)
+        along = Vector((math.cos(h), math.sin(h), 0.0)) * rng.uniform(0.12, 0.2)
+        _bone(b, mid - along, mid + along, rng)
+
+    # Dead fronds trodden flat at the patch's edge, and live ones round it: it sits in the valley.
+    for i in range(9):
+        a = math.tau * i / 9 + rng.uniform(-0.25, 0.25)
+        heading = Vector((math.cos(a), math.sin(a), 0.0))
+        root = Vector((math.cos(a) * reach * 0.92, math.sin(a) * reach * 0.92, 0.02))
+        if i % 3 == 0:
+            frond(b, root, heading, rng.uniform(0.3, 0.4), rng, 10.0, -20.0, 1, 0.07, 0.2,
+                  DEAD_FERN, DEAD_FERN_TIP, 0, rachis_r=0.005, withered=0.6, segs=6)
+        else:
+            frond(b, root, heading, rng.uniform(0.22, 0.3), rng, 55.0, 12.0, 1, 0.07, 0.22,
+                  jitter(FROND_BASE, rng, 0.1), jitter(FROND_TIP, rng, 0.1), 0, rachis_r=0.005, segs=6)
     return b
 
 
@@ -1300,6 +1397,7 @@ PROPS = {
     "fallen_log": (lambda s: fallen_log(s), [8, 27]),
     "rock_formation": (lambda s: rock_formation(s), [4, 17, 33]),
     "nest": (lambda s: nest(s), [9]),
+    "nest_coelophysis": (lambda s: nest_colony(s), [21]),
     "basalt_cliff": (lambda s: basalt_cliff(s), [41, 59, 77]),
     # What a drop of each resource is drawn as, named by the resource id the game uses.
     "drop_wood": (lambda s: drop_wood(s), [3]),

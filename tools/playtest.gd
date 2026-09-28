@@ -74,6 +74,13 @@ func _run(name: String) -> void:
 		await _scenario_play(name)
 		_tear_down()
 		return
+	# A look at one thing is taken in the middle of the day, in the valley's own light (Config.DAY):
+	# a run lands in its morning, whose low sun throws the trees' shadows across what is looked at.
+	# The day's own scenario sets its hours itself.
+	var gs_noon := root.get_node_or_null("GameState")
+	var cfg_noon := root.get_node_or_null("Config")
+	if gs_noon and cfg_noon and "DAY" in cfg_noon and name != "day":
+		gs_noon.day_clock = (float(cfg_noon.DAY["light"][2]["at"]) + float(cfg_noon.DAY["light"][3]["at"])) * 0.5
 	match name:
 		"open":
 			await _scenario_open()
@@ -1605,9 +1612,18 @@ func _portrait(name: String, at: Vector3, distance: float, overhead: bool = fals
 		cam.position = at + Vector3(distance * 0.72, distance * 0.42, distance * 0.72)
 		cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
 	var was: Camera3D = _main.camera
+	# A portrait is of the model: the fog of war lifted for it and put back after (FogOfWar).
+	var fog = _main.get("fog")
+	var lifted: bool = fog != null and is_instance_valid(fog) and not bool(fog.revealed)
+	if lifted:
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
 	cam.current = true
 	await _shoot(name)
 	cam.current = false
+	if lifted:
+		fog.revealed = false
 	if was != null and is_instance_valid(was):
 		was.current = true
 	_main.remove_child(cam)

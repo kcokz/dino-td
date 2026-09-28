@@ -186,7 +186,8 @@ func test_08_the_nest_stays_inside_its_own_box() -> void:
 	tree.root.add_child(nest)
 	nest.global_position = Vector3(-40.0, 0.0, 40.0)
 	await wait_frames(1)
-	var size: Vector3 = config_node.get_visual_size("nest")
+	# Its own species' declared size (Nest.art_key: each species' nest is its own, GAME-DESIGN 9.3).
+	var size: Vector3 = config_node.get_visual_size(nest.art_key())
 	var reach: float = _reach(nest.find_child("Body", false, false), nest.global_position)
 	assert_lte(reach, size.x * 0.5 + 0.001, "The nest never reaches past its footprint")
 	assert_gt(reach, size.x * 0.5 * 0.9, "And fills it: nearly all of the footprint is nest")

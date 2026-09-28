@@ -228,6 +228,7 @@ func _bus_handlers(eb: Node) -> Array:
 	var out: Array = []
 	for pair in [["resources_changed", _on_resources_changed], ["wave_started", _on_wave_started],
 			["stage_wave_started", _on_stage_wave_started], ["day_part_changed", _on_day_part_changed],
+			["nest_found", _on_nest_found],
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
@@ -597,9 +598,38 @@ func _render_raid_banner() -> void:
 	if raid_warning_banner == null:
 		return
 	var text: String = tr("HUD_RAID_WARNING") % _raid_seconds
+	# Where from (GAME-DESIGN 9.3): the nest not found, only the side its calls come from; found,
+	# they are seen setting out.
+	var gs = _get_game_state()
+	var found: bool = gs != null and "nest_found" in gs and bool(gs.nest_found)
+	var side: String = _side_of_the_nest()
+	if found:
+		text += "\n" + tr("HUD_RAID_SEEN")
+	elif side != "":
+		text += "\n" + tr("HUD_RAID_FROM") % tr("DIR_" + side)
 	if not _bosses_coming.is_empty():
 		text += "\n" + tr("HUD_RAID_BOSS") % ", ".join(_bosses_coming)
 	raid_warning_banner.text = text
+
+## Which way the nest lies from the cabin, as a point of the compass ("N", "NE", ... -- north is
+## up the map, away from the camera's opening view), or "" with no nest or no cabin.
+func _side_of_the_nest() -> String:
+	if not is_inside_tree():
+		return ""
+	var nest: Node3D = get_tree().get_first_node_in_group("nest") as Node3D
+	var core: Node3D = get_tree().get_first_node_in_group("core") as Node3D
+	if nest == null or core == null:
+		return ""
+	var d: Vector3 = nest.global_position - core.global_position
+	if Vector2(d.x, d.z).length() < 0.5:
+		return ""
+	var sides: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+	var turn: float = fposmod(rad_to_deg(atan2(d.x, -d.z)), 360.0)
+	return sides[int(round(turn / 45.0)) % 8]
+
+## The nest found (FogOfWar): said, with what it is good for.
+func _on_nest_found(_nest: Node) -> void:
+	show_hint(tr("HINT_NEST_FOUND"), UiTheme.toast_seconds("read"), "check")
 
 func _on_boss_warning(species_id: String) -> void:
 	var cfg = _get_config()

@@ -110,6 +110,18 @@ var nav_maps: NavMaps = null
 ## What the run has been -- each raid's account, and where his time went (v0.6 T8, T9).
 var run_stats: RunStats = null
 
+## The fog of war over the field (FogOfWar, GAME-DESIGN 9.3), laid afresh for each run.
+var fog: FogOfWar = null
+
+func _ensure_fog() -> void:
+	if fog == null or not is_instance_valid(fog):
+		fog = FogOfWar.new()
+		fog.name = "FogOfWar"
+		add_child(fog)
+	var cfg = _get_config()
+	fog.revealed = false
+	fog.setup(float(cfg.TERRAIN.get("field_half", 22.0)) if (cfg and "TERRAIN" in cfg) else 22.0)
+
 func _ensure_nav_maps() -> void:
 	if not is_in_group(NavMaps.SOURCE_GROUP):
 		add_to_group(NavMaps.SOURCE_GROUP)
@@ -321,6 +333,7 @@ func setup_level() -> void:
 	setup_initial_entities()
 	spawn_resource_nodes()
 	scatter_opening_stock()
+	_ensure_fog()
 	if hero and is_instance_valid(hero):
 		hero.continuous_mode = true
 	if wave_manager and is_instance_valid(wave_manager):
@@ -1711,6 +1724,9 @@ func _has_selection() -> bool:
 
 func _is_hoverable(node: Node) -> bool:
 	if node == null or not is_instance_valid(node) or not (node is Node3D):
+		return false
+	# Out of sight in the fog (FogOfWar): not there to be pointed at.
+	if not (node as Node3D).is_visible_in_tree():
 		return false
 	if "is_destroyed" in node and node.is_destroyed:
 		return false

@@ -105,7 +105,7 @@ func _process(delta: float) -> void:
 	if _stirred > 0:
 		_stirred_in -= delta
 		var eb_stage = _get_event_bus()
-		if not _stirred_warned and _stirred_in <= warning_lead_time and _stirred_in <= raid_timer:
+		if not _stirred_warned and _stirred_in <= _warning_lead() and _stirred_in <= raid_timer:
 			_stirred_warned = true
 			if eb_stage and eb_stage.has_signal("raid_warning"):
 				eb_stage.raid_warning.emit(maxf(0.0, _stirred_in))
@@ -116,7 +116,7 @@ func _process(delta: float) -> void:
 
 	var eb = _get_event_bus()
 	var clock_first: bool = _stirred <= 0 or raid_timer < _stirred_in
-	if clock_first and not warning_emitted and raid_timer <= warning_lead_time and raid_timer > 0.0:
+	if clock_first and not warning_emitted and raid_timer <= _warning_lead() and raid_timer > 0.0:
 		warning_emitted = true
 		if eb and eb.has_signal("raid_warning"):
 			eb.raid_warning.emit(maxf(0.0, raid_timer))
@@ -583,6 +583,15 @@ func _on_dino_died(_dino: Node) -> void:
 ## nothing left behind.
 func _on_dino_went_home(dino: Node) -> void:
 	_on_dino_died(dino)
+
+## How long before a raid sets out it is warned of: RAIDS.warning_lead_time, and longer once the
+## nest is found -- its setting out is seen (Config.FOG.found_nest_warning, GAME-DESIGN 9.3).
+func _warning_lead() -> float:
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs and "nest_found" in gs and bool(gs.nest_found) and cfg and "FOG" in cfg:
+		return warning_lead_time + float(cfg.FOG.get("found_nest_warning", 0.0))
+	return warning_lead_time
 
 ## Whether the map's raiders keep this hour (Config.DINOS.<id>.hours, GAME-DESIGN 9.3): a raid sets
 ## out, and is counted down to, only in the hours one of them keeps. Coelophysis hunted by day, so

@@ -967,6 +967,10 @@ const NEST: Dictionary = {
 	# Bigger than anything the player builds, because it is the thing the whole map is
 	# pointed at. Both its collider and its body come from this one figure.
 	"size": Vector3(2.0, 1.2, 2.0),
+	# Each species' nest is its own (GAME-DESIGN 9.3; v0.6 round three: "巢穴也不能长一个样，应该不同的
+	# 恐龙巢穴也不一样"), and some are not the mound's size: Coelophysis nested in crowds, a field of
+	# shallow scrapes across the ground (VISUALS "nest/coelophysis").
+	"sizes": {"coelophysis": Vector3(3.6, 0.3, 3.6)},
 }
 
 # ==============================================================================
@@ -1882,6 +1886,36 @@ const DAY: Dictionary = {
 	"sky_every": 0.5,
 }
 
+## The fog of war (FogOfWar, GAME-DESIGN 9.3; v0.6 round three: "游戏要加上战争迷雾，人不能一开始就知道
+## 恐龙巢穴"; "先在现在这张图上做迷雾和找巢"): never seen is dark, seen but out of sight is the land
+## dimmed with no animals on it, in sight is everything.
+const FOG: Dictionary = {
+	# Metres to a cell of it; metres of it round the field, over the foot of the valley's walls; the
+	# outer this-many metres of that fade out into the walls, which are scenery, not the field.
+	"cell": 1.0,
+	"margin": 10.0,
+	"edge_fade": 6.0,
+	# The shroud's box (a Decal): from this far below the ground to its height, over the tallest tree.
+	"below": 6.0,
+	"height": 40.0,
+	# It looks and paints again this often, in seconds; a cell's shade eases to what it should be
+	# over about this long, so the edge of the fog moves rather than jumps.
+	"every": 0.1,
+	"ease": 0.4,
+	# How dark, 0 clear to 1 black: never seen; seen, out of sight. In sight is clear.
+	"unseen": 0.94,
+	"seen": 0.55,
+	# How far each sees, in metres: the Hero; the cabin; a finished building by its kind -- a trap
+	# sees down its lane, a stake barely past itself.
+	"sight": {"hero": 10.0, "core": 9.0, "trap": 7.0, "wall": 2.5, "building": 3.0},
+	# Of the day's sight: at dusk and in the night (GAME-DESIGN 9.3: "看得见的范围缩小").
+	"dusk": 0.8,
+	"night": 0.6,
+	# Seconds earlier a raid is warned of once the nest is found: its setting out is seen
+	# (GAME-DESIGN 9.3: "找到了有用：看得见它们出发（预警更早）").
+	"found_nest_warning": 10.0,
+}
+
 ## Whether `species` is out at `part` of the day (Config.DAY.parts): the hours it keeps
 ## (DINOS.<id>.hours), or always, for one that keeps none.
 static func keeps_hours(species: String, part: String) -> bool:
@@ -2070,6 +2104,9 @@ const VISUALS: Dictionary = {
 	# out of, with bones by the door (tools/generate_props.py).
 	"nest":                 {"scene": "res://assets/models/props/nest_a.glb",
 		"material": "vertex", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
+	# The Coelophysis nesting ground (tools/generate_props.py nest_colony): the first map's nest.
+	"nest/coelophysis":     {"scene": "res://assets/models/props/nest_coelophysis_a.glb",
+		"material": "vertex", "placeholder": "nest_mound", "anchor": "feet", "color": "nest"},
 	# The cabin: the crew module of the ship that brought the Hero here, where it came down --
 	# its heat shield ploughed into the earth at the west end, the engine and the ship's gun at
 	# the east, a door and windows in its south side, a torn solar panel on the roof -- and the
@@ -2173,7 +2210,7 @@ static func get_visual_size(key: String) -> Vector3:
 				return DINOS[id]["size"]
 			return Vector3.ONE * 0.8
 		"nest":
-			return NEST.get("size", Vector3(2.0, 1.2, 2.0))
+			return NEST.get("sizes", {}).get(id, NEST.get("size", Vector3(2.0, 1.2, 2.0)))
 		"building":
 			var half: Vector2 = get_building_half(id)
 			return Vector3(half.x * 2.0, get_building_height(id), half.y * 2.0)

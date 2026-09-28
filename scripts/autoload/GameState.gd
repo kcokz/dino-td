@@ -240,6 +240,7 @@ func reset_game(p_seed: int = -1) -> void:
 	final_wave_in = -1.0
 	drop_misses.clear()
 	_stage_raid = false
+	nest_found = false
 	# The run lands in its first morning (Config.DAY.start).
 	day_clock = float(_day().get("start", 0.0))
 	_day_part = day_part()
@@ -774,6 +775,9 @@ func _run_the_day(delta: float) -> void:
 		var eb = _get_event_bus()
 		if eb and eb.has_signal("day_part_changed"):
 			eb.day_part_changed.emit(part, day_number())
+
+## Whether the nest has been found (FogOfWar: it came into sight): its raids are seen setting out.
+var nest_found: bool = false
 
 ## Whether the raid out is one a repaired beacon stage stirred up (EventBus.stage_wave_started).
 var _stage_raid: bool = false
