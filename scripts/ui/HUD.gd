@@ -223,6 +223,7 @@ func _place_speech() -> void:
 func _bus_handlers(eb: Node) -> Array:
 	var out: Array = []
 	for pair in [["resources_changed", _on_resources_changed], ["wave_started", _on_wave_started],
+			["stage_wave_started", _on_stage_wave_started],
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
@@ -538,6 +539,11 @@ func _on_wave_started(n: int, is_big: bool) -> void:
 	if raid_warning_panel:
 		raid_warning_panel.visible = false
 	_bosses_coming.clear()
+
+## A raid a repaired beacon stage stirred up: said as that, not as the raid count again.
+func _on_stage_wave_started(_size: int) -> void:
+	if wave_label:
+		wave_label.text = tr("HUD_STAGE_WAVE")
 
 ## The bosses the coming raid brings, by name, said with its warning (v0.6, GAME-DESIGN
 ## 7.5: a boss coming is announced) -- and the seconds the warning gave.

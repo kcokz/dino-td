@@ -94,6 +94,18 @@ func _process(delta: float) -> void:
 		return
 
 	elapsed_time += delta
+	# The raid a repaired stage stirred up, on its own clock and with its own warning -- on top of
+	# the raids the clock sends (start_stage_wave).
+	if _stirred > 0:
+		_stirred_in -= delta
+		var eb_stage = _get_event_bus()
+		if not _stirred_warned and _stirred_in <= warning_lead_time:
+			_stirred_warned = true
+			if eb_stage and eb_stage.has_signal("raid_warning"):
+				eb_stage.raid_warning.emit(maxf(0.0, _stirred_in))
+		if _stirred_in <= 0.0:
+			start_stage_wave()
+			return
 	raid_timer -= delta
 
 	var eb = _get_event_bus()
@@ -240,19 +252,21 @@ func start_next_wave() -> void:
 ## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter.
 func start_next_raid() -> void:
 	var next_n: int = _next_wave_number()
-	# A raid a beacon stage stirred up is its own size (MAPS.beacon.stage_waves), not the clock's.
-	var size: int = _stirred if _stirred > 0 else raid_size(next_n)
-	_stirred = 0
-	start_wave(next_n, size)
+	start_wave(next_n, raid_size(next_n))
 
-## The small raid a repaired stage has stirred up, still to come (its size), or 0.
+## The small raid repaired stages have stirred up, still to come (its size, or 0), the seconds
+## till it sets out, and whether its warning has been given; and whether the raid out now is one.
 var _stirred: int = 0
+var _stirred_in: float = 0.0
+var _stirred_warned: bool = false
+var stage_wave: bool = false
 ## Seconds of the launch's grace left before the final wave sets out; 0 when none is counting.
 var _final_countdown: float = 0.0
 
 ## A stage of the beacon repaired: its hum carries down the valley, and a small raid comes of it
-## (MAPS.beacon.stage_waves) -- the next raid, brought in to `stage_wave_delay` seconds and made
-## that size. A raid out already is fought first; this one follows it.
+## (MAPS.beacon.stage_waves), `stage_wave_delay` seconds on, with its own warning -- on top of the
+## raids the clock sends (start_stage_wave). A raid out then is fought first; this one follows it.
+## Two stages repaired close together stir up the two raids as one.
 func _on_beacon_changed(steps_done: int) -> void:
 	var gs = _get_game_state()
 	var stages: int = int(gs.beacon_stage_count()) if (gs and gs.has_method("beacon_stage_count")) else 0
@@ -261,15 +275,37 @@ func _on_beacon_changed(steps_done: int) -> void:
 	var sizes: Array = _map().get("beacon", {}).get("stage_waves", [])
 	if steps_done - 1 >= sizes.size():
 		return
-	_stirred = int(sizes[steps_done - 1])
-	if not is_wave_active:
-		_bring_in_the_stirred()
+	_stirred += int(sizes[steps_done - 1])
+	_stirred_in = float(_map().get("beacon", {}).get("stage_wave_delay", 20.0))
+	_stirred_warned = false
 
-func _bring_in_the_stirred() -> void:
-	var delay: float = float(_map().get("beacon", {}).get("stage_wave_delay", 20.0))
-	if raid_timer > delay:
-		raid_timer = delay
-		warning_emitted = raid_timer <= warning_lead_time and warning_emitted
+## The small raid a repaired stage stirred up (debug-agent BUG-001: it stood in for the clock's
+## next raid, at its own size -- so a stage repaired in a big raid's warning halved the big raid,
+## and repairing the beacon eased the pressure it was meant to add). Now it comes on top: its own
+## count and no leader, and the raid count, the leader's turn and the clock's next raid left
+## where they were -- that one is still to come when this is over.
+func start_stage_wave() -> void:
+	var size: int = _stirred
+	_stirred = 0
+	_stirred_warned = false
+	if is_wave_active and spawn_timer and is_instance_valid(spawn_timer):
+		spawn_timer.stop()
+	stage_wave = true
+	var roster: Array[String] = []
+	for i in range(maxi(0, size)):
+		roster.append(_species_to_spawn())
+	wave_roster = roster
+	dinos_to_spawn = roster.size()
+	dinos_spawned_count = 0
+	dinos_alive_count = dinos_to_spawn
+	is_wave_active = true
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("wave_started"):
+		eb.wave_started.emit(current_wave, false)
+	if eb and eb.has_signal("stage_wave_started"):
+		eb.stage_wave_started.emit(size)
+	if spawn_timer:
+		spawn_timer.start(spawn_interval)
 
 ## Launched: the final wave comes after the map's grace (MAPS.beacon.launch_grace), said on the
 ## bus and counted down in GameState.final_wave_in -- at once if there is none.
@@ -350,6 +386,9 @@ func reset_raid_state() -> void:
 	elapsed_time = 0.0
 	final_wave = false
 	_stirred = 0
+	_stirred_in = 0.0
+	_stirred_warned = false
+	stage_wave = false
 	_final_countdown = 0.0
 	_entry_turn = 0
 	var cfg = _get_config()
@@ -533,14 +572,16 @@ func _end_wave() -> void:
 	if spawn_timer and is_instance_valid(spawn_timer):
 		spawn_timer.stop()
 
+	var was_stage: bool = stage_wave
+	stage_wave = false
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("wave_ended"):
 		eb.wave_ended.emit(current_wave)
 
-	if auto_raid_enabled:
+	# After a raid of the clock's the next is drawn afresh; after a stage's, the clock's next raid
+	# is where it was, and still to come.
+	if auto_raid_enabled and not was_stage:
 		_reset_raid_timer()
-		if _stirred > 0:
-			_bring_in_the_stirred()
 
 # ==============================================================================
 # Resolvers

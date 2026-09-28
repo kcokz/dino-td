@@ -96,24 +96,25 @@ func test_02_the_lamps_blink_each_on_its_own_beat() -> void:
 # 2. Heard: each stage stirs the valley
 # ==============================================================================
 
-func test_03_a_stage_repaired_brings_a_small_raid() -> void:
+func test_03_a_stage_repaired_brings_a_small_raid_of_its_own() -> void:
+	# On top of the raids the clock sends, not in place of the next one (debug-agent BUG-001).
 	var main = await _level()
 	var wm = main.wave_manager
 	wm.auto_raid_enabled = true
 	wm.raid_timer = 999.0
+	var count_before: int = wm.current_wave
 	_next_step()
 	var delay: float = float(_beacon()["stage_wave_delay"])
-	assert_lte(wm.raid_timer, delay + 0.001, "The next raid is brought in to %.0fs" % delay)
+	assert_almost_eq(wm.raid_timer, 999.0, 0.001, "The clock's next raid is not brought in")
 	var started = watch_signal(tree.root.get_node("EventBus"), "wave_started")
+	var stirred = watch_signal(tree.root.get_node("EventBus"), "stage_wave_started")
 	wm._process(delay + 0.1)
-	assert_true(wm.is_wave_active, "and comes")
-	var want: int = int(_beacon()["stage_waves"][0])
-	var rank_and_file: int = 0
-	for species in wm.wave_roster:
-		if String(config_node.DINOS[String(species)].get("boss", "")) == "":
-			rank_and_file += 1
-	assert_eq(rank_and_file, want, "as small as the first stage says")
+	assert_true(wm.is_wave_active and wm.stage_wave, "A raid of its own comes, %.0fs on" % delay)
+	assert_eq(wm.wave_roster.size(), int(_beacon()["stage_waves"][0]), "as small as the first stage says, and no leader")
 	assert_eq(started.emit_count, 1, "one raid")
+	assert_eq(stirred.emit_count, 1, "said to be the beacon's")
+	assert_eq(wm.current_wave, count_before, "The raid count is where it was")
+	assert_almost_eq(wm.raid_timer, 999.0, 0.001, "and the clock's next raid still to come")
 
 func test_04_a_stage_repaired_in_a_raid_brings_its_own_after_it() -> void:
 	var main = await _level()
@@ -122,9 +123,38 @@ func test_04_a_stage_repaired_in_a_raid_brings_its_own_after_it() -> void:
 	wm.start_next_raid()
 	assert_true(wm.is_wave_active, "A raid is out")
 	_next_step()
+	wm._process(float(_beacon()["stage_wave_delay"]) + 0.1)
+	assert_false(wm.stage_wave, "The stage's raid does not set out while one is out")
 	wm._end_wave()
-	assert_lte(wm.raid_timer, float(_beacon()["stage_wave_delay"]) + 0.001, "Over, the stirred one comes soon after")
 	assert_gt(wm._stirred, 0, "still to come")
+	var drawn: float = wm.raid_timer
+	wm._process(float(_beacon()["stage_wave_delay"]) + 0.1)
+	assert_true(wm.stage_wave, "Over, the stirred one comes after it")
+	assert_almost_eq(wm.raid_timer, drawn, 0.001, "and the clock's next raid waits where it was")
+
+func test_04b_a_stage_repaired_in_a_big_raids_warning_leaves_the_big_raid_whole() -> void:
+	# BUG-001 (debug-agent): repaired in the warning of the third raid -- the big one, its leader at
+	# the head -- the stage's small raid stood in for it, and six became three.
+	var main = await _level()
+	var wm = main.wave_manager
+	wm.auto_raid_enabled = true
+	var big: int = int(config_node.WAVES["big_every"])
+	game_state_node.wave_number = big - 1
+	wm.current_wave = big - 1
+	wm.raid_timer = 12.0
+	_next_step()
+	wm._process(12.1)
+	assert_true(wm.is_wave_active and not wm.stage_wave, "The big raid sets out on time")
+	assert_eq(wm.current_wave, big, "as raid %d" % big)
+	assert_has(wm.wave_roster, String(game_state_node.map_data()["minor_boss"]), "its leader at its head")
+	assert_gt(wm.wave_roster.size() - 1, int(_beacon()["stage_waves"][0]), "and its whole count, not the stage's")
+	wm._end_wave()
+	wm._process(float(_beacon()["stage_wave_delay"]) + 0.1)
+	assert_true(wm.stage_wave, "The stage's raid comes after it, on top")
+	var hp: float = float(game_state_node.dino_stat_multipliers["hp"])
+	wm._end_wave()
+	assert_almost_eq(float(game_state_node.dino_stat_multipliers["hp"]), hp, 0.0001,
+		"and its end, with the big raid's number, is not a second big raid")
 
 func test_05_the_screen_says_the_valley_heard_it() -> void:
 	var main = await _level()

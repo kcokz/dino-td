@@ -1095,8 +1095,9 @@ const MAPS: Dictionary = {
 		"stream_share": 0.7,
 		# Each stage repaired is heard (v0.6 round three: "每次信标造成都会有一小波"): its hum carries down
 		# the valley, and a small raid comes of it -- this many, the first stage's first -- with its
-		# warning, `stage_wave_delay` seconds after the stage stands. It stands in for the next
-		# ordinary raid, which comes after it as after any.
+		# warning, `stage_wave_delay` seconds after the stage stands. On top of the raids the clock
+		# sends, not in place of one: standing in for the next it was smaller than the raid it
+		# replaced, and repairing the beacon eased the pressure it was meant to add (BUG-001).
 		"stage_waves": [2, 3, 4],
 		"stage_wave_delay": 22.0,
 	},

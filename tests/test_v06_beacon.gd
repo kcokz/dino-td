@@ -390,3 +390,24 @@ func test_20_a_new_run_starts_with_the_beacon_broken() -> void:
 	assert_eq(float(game_state_node.final_wave_in), -1.0, "Nothing counting down")
 	assert_almost_eq(float(game_state_node.beacon_charge), 0.0, 0.0001, "Nothing charged")
 	assert_false(main.wave_manager.final_wave, "And no final wave")
+
+func test_21_launched_the_launch_leaves_the_benchs_card() -> void:
+	# debug-agent BUG-002: after the launch the button stayed on the card -- pressing it again did
+	# nothing -- until the bench was chosen again.
+	var main = await _level()
+	var bench = main.current_core.station(String(config_node.BEACON_STATION))
+	_work_steps(bench, _jobs().size() - 1)
+	var launch: String = String(game_state_node.beacon_next_job())
+	var panel = main.hud.option_panel
+	panel.select_target(bench)
+	await wait_frames(2)
+	var named := func() -> bool:
+		for b in panel.button_container.get_children():
+			if b is Button and String((b as Button).text) == String(bench.recipe_name(launch)):
+				return true
+		return false
+	assert_true(named.call(), "Repaired, the launch is on the card")
+	_work_steps(bench, 1)
+	assert_true(game_state_node.is_beacon_launched(), "and it is launched")
+	await wait_physics_frames(int(ceil(float(UiTheme.number("refresh_seconds")) * float(Engine.physics_ticks_per_second))) + 2)
+	assert_false(named.call(), "Launched, it is gone from the card without choosing the bench again")

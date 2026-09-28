@@ -64,6 +64,9 @@ signal wave_started(n: int, is_big: bool)
 
 ## Emitted by WaveManager when all dinosaurs in wave n are eliminated or reach the core.
 signal wave_ended(n: int)
+## The raid out is one a repaired beacon stage stirred up (WaveManager.start_stage_wave), this many
+## strong -- said after its wave_started, which carries the raid count it leaves as it was.
+signal stage_wave_started(size: int)
 
 # ==============================================================================
 # 5. Dinosaur Combat Signals

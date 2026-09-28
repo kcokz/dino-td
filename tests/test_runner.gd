@@ -45,11 +45,15 @@ func _init() -> void:
 	_run_all_tests()
 
 ## Quits with `code`, taking the error watch back out of the engine first and the player's
-## settings back to what they were.
+## settings back to what they were -- a moment after the last suite, not the frame it ends: its
+## level stopped the valley's sound as it went, and a stop is only asked of the audio thread,
+## which lets the sound go on its next mix. Quit before it, and the sound was still held at exit
+## (debug-agent BUG-003: "1 resources still in use at exit").
 func _finish(code: int) -> void:
 	if _script_errors != null:
 		OS.remove_logger(_script_errors)
 	_restore_settings()
+	await create_timer(0.25).timeout
 	quit(code)
 
 func _restore_settings() -> void:

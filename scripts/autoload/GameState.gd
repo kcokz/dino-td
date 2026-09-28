@@ -108,6 +108,7 @@ var dino_multipliers: Dictionary:
 func _init() -> void:
 	resources = _default_resources()
 	dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
+	_stage_raid = false
 	is_game_over = false
 	is_game_won = false
 	deploy_length = 90.0
@@ -157,6 +158,8 @@ func _connect_event_bus() -> void:
 			eb.wave_started.connect(_on_wave_started)
 		if eb.has_signal("wave_ended") and not eb.wave_ended.is_connected(_on_wave_ended):
 			eb.wave_ended.connect(_on_wave_ended)
+		if eb.has_signal("stage_wave_started") and not eb.stage_wave_started.is_connected(_on_stage_wave_started):
+			eb.stage_wave_started.connect(_on_stage_wave_started)
 		if eb.has_signal("game_won") and not eb.game_won.is_connected(_on_game_won):
 			eb.game_won.connect(_on_game_won)
 		if eb.has_signal("game_lost") and not eb.game_lost.is_connected(_on_game_lost):
@@ -718,6 +721,13 @@ func _cancel_produce_timer() -> void:
 # ==============================================================================
 func _on_wave_started(n: int, _is_big: bool) -> void:
 	wave_number = maxi(0, n)
+	_stage_raid = false
+
+## Whether the raid out is one a repaired beacon stage stirred up (EventBus.stage_wave_started).
+var _stage_raid: bool = false
+
+func _on_stage_wave_started(_size: int) -> void:
+	_stage_raid = true
 
 func _on_wave_ended(n: int) -> void:
 	if is_game_over:
@@ -725,7 +735,11 @@ func _on_wave_ended(n: int) -> void:
 	var cfg = _get_config()
 	var waves_cfg: Dictionary = cfg.get("WAVES") if (cfg and "WAVES" in cfg) else {}
 	var big_every: int = waves_cfg.get("big_every", 3)
-	if big_every > 0 and n > 0 and n % big_every == 0:
+	# A beacon stage's raid ends with the number of the raid before it (WaveManager.start_stage_wave):
+	# after a big one, it is not a second big raid.
+	var stage_raid: bool = _stage_raid
+	_stage_raid = false
+	if big_every > 0 and n > 0 and n % big_every == 0 and not stage_raid:
 		var enhance: Dictionary = waves_cfg.get("enhance_after_big", {})
 		for stat in enhance:
 			if dino_stat_multipliers.has(stat):

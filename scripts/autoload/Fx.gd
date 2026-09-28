@@ -69,19 +69,41 @@ func _exit_tree() -> void:
 	for path in _pending:
 		ResourceLoader.load_threaded_get(path)
 	_pending.clear()
+	var was_playing: bool = false
 	for p in _players:
 		if is_instance_valid(p):
+			was_playing = was_playing or p.playing
 			p.stop()
 			p.stream = null
 	for v in _voices:
 		if is_instance_valid(v):
+			was_playing = was_playing or v.playing
 			v.stop()
 			v.stream = null
 	if _ambience != null:
+		was_playing = was_playing or _ambience.playing
 		_ambience.stop()
 		_ambience.stream = null
 	_streams.clear()
 	_loaded.clear()
+	# A stop is only asked of the audio thread: it lets the playback go on its next mix, and at quit
+	# there may be no next mix -- the valley's loop was held to the end (debug-agent BUG-003: "1
+	# resources still in use at exit"). The level stops it as it goes, a moment before this, so it is
+	# the time since any sound of ours was started or stopped that is waited out.
+	if was_playing:
+		_touched_audio()
+	var wait: int = AUDIO_RELEASE_MS - (Time.get_ticks_msec() - _last_audio_ms)
+	if wait > 0:
+		OS.delay_msec(wait)
+
+## How long the audio thread is given, in milliseconds, to let go of a sound stopped at quit: a few
+## of its mixes.
+const AUDIO_RELEASE_MS: int = 200
+## When a sound of ours was last started or stopped (Time.get_ticks_msec).
+var _last_audio_ms: int = -1000000
+
+func _touched_audio() -> void:
+	_last_audio_ms = Time.get_ticks_msec()
 
 func _process(_delta: float) -> void:
 	_place_listener()
@@ -274,6 +296,7 @@ func play_at(id: String, where: Vector3) -> bool:
 	p.volume_db = _master_db() + float(spec.get("db", 0.0))
 	_class_of[p] = String(spec.get("class", ""))
 	p.play()
+	_touched_audio()
 	return true
 
 ## Sound `id` heard everywhere, at no place: the interface.
@@ -292,6 +315,7 @@ func play_ui(id: String) -> bool:
 	voice.stream = stream
 	voice.volume_db = _master_db() + float(spec.get("db", 0.0))
 	voice.play()
+	_touched_audio()
 	return true
 
 ## The valley under everything (Config.SOUNDS.ambience), looping, from now on -- as soon as its
@@ -304,6 +328,7 @@ func stop_ambience() -> void:
 	_want_ambience = false
 	if _ambience != null and _ambience.playing:
 		_ambience.stop()
+		_touched_audio()
 
 func _start_ambience_now() -> void:
 	if _ambience == null or not bool(_cfg("audio_enabled", true)):
@@ -323,6 +348,7 @@ func _start_ambience_now() -> void:
 	_ambience.stream = wav
 	_ambience.volume_db = _master_db() + float(_sounds_table().get("ambience_db", -21.0))
 	_ambience.play()
+	_touched_audio()
 
 func is_ambience_playing() -> bool:
 	return _want_ambience

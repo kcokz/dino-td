@@ -350,6 +350,12 @@ func _ensure_components() -> void:
 func _update_status_display() -> void:
 	if selected_unit == null or not is_instance_valid(selected_unit):
 		return
+	# A bench's commands are made again when what it offers has changed by itself -- a job done,
+	# a stage of the beacon repaired, the beacon launched (debug-agent BUG-002: the launch stayed
+	# on the card after the launch, until the bench was chosen again).
+	if current_menu != "build" and selected_unit.has_method("can_offer") and _offer_of(selected_unit) != _station_offer:
+		_refresh_ui()
+		return
 	var info: Dictionary = selected_unit.get_display_info() if selected_unit.has_method("get_display_info") else {}
 	_show_vitals(info)
 	if current_menu == "build" or _hover_detail_shown:
@@ -967,6 +973,19 @@ func _populate_resource_buttons() -> void:
 ## at all -- an unlock is permanent, so a finished one is not a choice. The kitchen's meals
 ## come after its recipes: one per kind of meat, always on offer, named for however his
 ## best pot will cook it.
+## What the bench shown offers as its commands were made: the jobs on offer, and whether it is at
+## one (_update_status_display compares it with what it offers now).
+var _station_offer: Array = []
+
+func _offer_of(station: Node) -> Array:
+	var out: Array = []
+	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
+	for recipe_id in jobs:
+		if station.can_offer(String(recipe_id)):
+			out.append(String(recipe_id))
+	out.append("active_recipe" in station and String(station.active_recipe) != "")
+	return out
+
 func _populate_station_buttons() -> void:
 	var station := selected_unit
 	if station == null or not is_instance_valid(station) or not station.has_method("recipes"):
@@ -974,6 +993,7 @@ func _populate_station_buttons() -> void:
 	_clear_craft_detail()
 	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
 	var busy: bool = "active_recipe" in station and String(station.active_recipe) != ""
+	_station_offer = _offer_of(station)
 	# More than a few on offer -- the workbench, with everything for his row (v0.6 round three) --
 	# and they stand two to a row, as the build menu's do: one to a row, they ran off the screen.
 	var offered: int = 0
