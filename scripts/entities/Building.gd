@@ -103,10 +103,16 @@ func add_build_progress(delta_time: float) -> bool:
 		return true
 	
 	build_progress = minf(1.0, build_progress + (delta_time / build_time))
+	# The last stroke waits for its ground to be clear: a building that went solid round a
+	# dinosaur or the Hero would hold it inside for good. What is in the way is said on its panel.
+	var in_the_way: Node = unit_in_the_way() if build_progress >= 1.0 else null
+	if in_the_way != null:
+		build_progress = _held_progress()
+	_blocked_by = in_the_way
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("build_progress_updated"):
 		eb.build_progress_updated.emit(self, build_progress)
-	
+
 	if build_progress >= 1.0:
 		complete_construction()
 		return true
@@ -114,6 +120,37 @@ func add_build_progress(delta_time: float) -> bool:
 	_update_visuals_progress()
 	_update_info_label()
 	return false
+
+## What stood in the way of its last stroke, the last time one was struck, or null.
+var _blocked_by: Node = null
+
+## The Hero or a dinosaur whose body is in this building's cells, or null: its box against theirs
+## (Config.gap_to_building), their own half-width.
+func unit_in_the_way() -> Node:
+	if not is_inside_tree():
+		return null
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("gap_to_building"):
+		return null
+	for group_name in ["hero", "dinos"]:
+		for unit in get_tree().get_nodes_in_group(group_name):
+			if unit == null or not is_instance_valid(unit) or not (unit is Node3D):
+				continue
+			if "is_dead" in unit and unit.is_dead:
+				continue
+			var half: float = 0.4
+			if unit.is_in_group("hero"):
+				half = float(cfg.HERO.get("width", 0.8)) * 0.5
+			elif "dino_type" in unit and cfg.has_method("get_visual_size"):
+				half = float(cfg.get_visual_size("dino/" + String(unit.dino_type)).x) * 0.5
+			if float(cfg.gap_to_building((unit as Node3D).global_position, building_type, global_position)) < half:
+				return unit
+	return null
+
+## How far a building waiting for its ground to clear is held: a hair short of done, so the next
+## stroke once it is clear finishes it.
+func _held_progress() -> float:
+	return 1.0 - 0.001
 
 ## Finalizes construction, restoring collision layer and full interactivity.
 func complete_construction() -> void:
@@ -511,7 +548,7 @@ func get_display_info() -> Dictionary:
 		"max_hp": max_hp,
 		"is_constructed": is_constructed,
 		"build_progress": build_progress,
-		"status": _panel_status() if is_constructed else "",
+		"status": _panel_status() if is_constructed else _waiting_status(),
 	}
 	if not is_constructed:
 		info["work"] = build_progress
@@ -523,6 +560,12 @@ func get_display_info() -> Dictionary:
 
 ## The line under a building's bars: nothing, unless it has something of its own to say.
 func _panel_status() -> String:
+	return ""
+
+## An order held back from its last stroke says why: somebody is standing where it goes.
+func _waiting_status() -> String:
+	if _blocked_by != null and is_instance_valid(_blocked_by):
+		return tr("STATUS_WAITING_CLEAR")
 	return ""
 
 # ==============================================================================

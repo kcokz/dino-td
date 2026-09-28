@@ -1,5 +1,5 @@
 # res://tests/test_v05_nobody_gets_walled_in.gd
-# You cannot build on top of a person, and a person inside a building gets out.
+# Nothing is finished round a person, and a person inside a building gets out.
 #
 # Reported as "人是完全不动了" -- standing still with a route plainly available. It was
 # not pathfinding, and measuring it is what showed that: the Hero reported state MOVING
@@ -10,11 +10,14 @@
 # against it at full speed for ever, with a perfectly good path in hand. No amount of
 # replanning helps, because the route was never the problem.
 #
-# It became easy to do by accident in v0.5: a stake is 0.62m wide and snaps to a third
-# of a tile, so "just beside me" and "on me" are about half a metre apart.
+# v0.5 refused to PLACE anything where somebody stood. v0.6 round three took that back ("人在
+# pending建筑的地方pending建筑就不能放了……人在中间就那人在的那一格就没法造了"): an order is not solid, so
+# it goes down wherever the ground is free, and it is the last stroke that waits -- a building is
+# not finished round anybody (Building.add_build_progress), and says so on its panel. The Hero
+# steps out of one he is standing in before he works on it (test_v06_what_you_see_is_built).
 #
-# Two fixes, because one of them is a rule and the other is a net:
-#   * placement REFUSES to put a building where somebody is standing;
+# Two fixes still, because one of them is a rule and the other is a net:
+#   * a building is not FINISHED where somebody is standing;
 #   * a Hero who ends up inside one anyway is pushed clear.
 extends "res://tests/test_base.gd"
 
@@ -62,10 +65,10 @@ func _hero_at(at: Vector3) -> Node:
 	return h
 
 # ==============================================================================
-# 1. Nobody is built on top of
+# 1. Nobody is built on top of -- the order goes down, the last stroke waits
 # ==============================================================================
 
-func test_01_a_stake_cannot_be_placed_on_the_hero() -> void:
+func test_01_an_order_goes_down_where_the_hero_stands() -> void:
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
@@ -74,31 +77,40 @@ func test_01_a_stake_cannot_be_placed_on_the_hero() -> void:
 	var hero = _hero_at(spot)
 	await wait_frames(1)
 
-	assert_false(bs.can_place_building("wall", gm.world_to_cell(spot), false, spot),
-		"A stake may not be driven through the man standing there")
-	assert_null(bs.place_building("wall", gm.world_to_cell(spot), gm, false, spot),
-		"And asking anyway gets nothing")
+	assert_true(bs.can_place_building("wall", gm.world_to_cell(spot), false, spot),
+		"An order is not solid: it may go down where he stands")
+	var order = bs.place_building("wall", gm.world_to_cell(spot), gm, true, spot)
+	assert_not_null(order, "And it does")
+	_cleanup_nodes.append(order)
+	assert_false(order.is_constructed, "As an order")
 
-func test_02_the_check_is_about_where_it_would_LAND() -> void:
+func test_02_the_last_stroke_waits_for_him_to_step_clear() -> void:
 	# A wall snaps to a cell of the building grid, so the click and the wall are up to half a
-	# cell apart. Checking the click let one land on the Hero anyway -- which is how this bug
-	# survived its first fix.
+	# cell apart: what is asked is whether he is in the cell it LANDS in.
 	var rig := _rig()
 	var gm = rig[0]
 	var bs = rig[1]
 	await wait_frames(1)
 	var cell := Vector2i(9, 9)
 	var lands_at: Vector3 = gm.build_cell_to_world(cell)
-	# Stand him ON the cell's centre, then click slightly off it.
 	var hero = _hero_at(lands_at)
 	await wait_frames(1)
 	var clicked: Vector3 = lands_at + Vector3(0.3, 0.0, 0.0)
-
 	assert_eq(gm.world_to_build_cell(clicked), cell, "The click still snaps to that cell")
-	assert_false(bs.can_place_building("wall", gm.world_to_cell(clicked), false, clicked),
-		"So it is refused, because of where it would END UP rather than where the cursor was")
+	var order = bs.place_building("wall", gm.world_to_cell(clicked), gm, true, clicked)
+	_cleanup_nodes.append(order)
 
-func test_03_a_dinosaur_cannot_be_built_on_either() -> void:
+	assert_false(order.add_build_progress(order.build_time * 2.0), "Every stroke but the last is struck")
+	assert_false(order.is_constructed, "and it is not finished round him")
+	assert_eq(order.unit_in_the_way(), hero, "He is what is in the way")
+	assert_eq(String(order.get_display_info()["status"]), tr("STATUS_WAITING_CLEAR"), "and its panel says so")
+
+	var clear: float = (float(config_node.HERO.get("width", 0.8)) + float(config_node.get_building_footprint("wall"))) * 0.5
+	hero.global_position = lands_at + Vector3(clear + 0.05, 0.0, 0.0)
+	assert_true(order.add_build_progress(0.01), "Once he is clear, the next stroke finishes it")
+	assert_true(order.is_constructed, "Up")
+
+func test_03_nor_round_a_dinosaur() -> void:
 	# The same trap, sprung on something that cannot complain.
 	var rig := _rig()
 	var gm = rig[0]
@@ -109,11 +121,15 @@ func test_03_a_dinosaur_cannot_be_built_on_either() -> void:
 	_cleanup_nodes.append(dino)
 	tree.root.add_child(dino)
 	dino.setup("raptor")
+	dino.set_physics_process(false)
 	dino.global_position = spot
 	await wait_frames(1)
 
-	assert_false(bs.can_place_building("wall", gm.world_to_cell(spot), false, spot),
-		"Nor through a dinosaur")
+	var order = bs.place_building("wall", gm.world_to_cell(spot), gm, true, spot)
+	assert_not_null(order, "The order goes down on it too")
+	_cleanup_nodes.append(order)
+	assert_false(order.add_build_progress(order.build_time * 2.0), "But is not finished round it")
+	assert_eq(order.unit_in_the_way(), dino, "It is what is in the way")
 
 func test_04_open_ground_a_step_away_is_still_buildable() -> void:
 	# The rule must not be so wide that the player cannot lay a fence near himself.

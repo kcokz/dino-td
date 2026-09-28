@@ -97,6 +97,8 @@ func _run(name: String) -> void:
 			await _scenario_kitchen()
 		"eating":
 			await _scenario_eating()
+		"ghost":
+			await _scenario_ghost()
 		"buildings":
 			await _scenario_buildings()
 		"beacon":
@@ -118,6 +120,48 @@ func _run(name: String) -> void:
 # ==============================================================================
 # Scenarios
 # ==============================================================================
+
+## The ghost is what goes up (v0.6 round three: "pending的样子就是造下去的样子"): a line of palisade
+## with a ghost at its end, turning the corner -- the end section shown already turned to meet it;
+## a run dragged down from the other end; a row laid along the cabin's side, straight, not reaching
+## for the cabin; and a lone section on open ground, straight along the way it faces, not an X.
+func _scenario_ghost() -> void:
+	_grant({"wood": 400})
+	var gm = _main.grid_manager
+	var centre: Vector3 = _main.current_core.global_position
+	var c: Vector2i = gm.world_to_build_cell(centre)
+	var half: int = int(root.get_node("Config").get_building_cells("core")) / 2
+	# Along the cabin's east side, a cell out: straight, north to south.
+	for dz in range(-half, half + 1):
+		_build_at("wall", gm.build_cell_to_world(c + Vector2i(half + 1, dz)), 1)
+	# A line along X, south of the cabin.
+	var z0: int = c.y + half + 5
+	for x in range(c.x - 6, c.x - 1):
+		_build_at("wall", gm.build_cell_to_world(Vector2i(x, z0)), 0)
+	# A lone section, turned.
+	_build_at("wall", gm.build_cell_to_world(Vector2i(c.x + 2, z0)), 1)
+	await _wait(6)
+	_main.on_build_selected("wall")
+	_main._placement_facing = 0
+	var corner: Vector2i = Vector2i(c.x - 2, z0 + 1)
+	_main._update_build_preview(_main.camera.unproject_position(gm.build_cell_to_world(corner)))
+	await _wait(4)
+	await _portrait("ghost_corner", gm.build_cell_to_world(Vector2i(c.x - 2, z0 + 1)), 7.0, true)
+	# A run dragged south from the line's west end.
+	_main.build_preview.visible = false
+	_main._restore_neighbours()
+	var run: Array[Vector2i] = []
+	for dz in range(1, 5):
+		run.append(Vector2i(c.x - 6, z0 + dz))
+	_main._drag_from = run[0]
+	_main._dragging = true
+	_main._show_run_preview(run)
+	await _wait(4)
+	await _portrait("ghost_run", gm.build_cell_to_world(Vector2i(c.x - 4, z0 + 2)), 8.0, true)
+	_main._end_drag()
+	_main.cancel_building_selection()
+	await _wait(4)
+	await _portrait("cabin_side", centre + Vector3(1.0, 0.0, 0.0), 8.0, true)
 
 ## Eating (v0.6 round two: "吃饭也是一个图标……吃了饭之后会有一个 boost"): his card -- his three bars,
 ## his commands as icons, a count of meals on the eat command -- and the eat page with meals

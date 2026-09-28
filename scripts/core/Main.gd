@@ -55,9 +55,16 @@ var build_preview: Node3D = null
 var build_preview_mesh: MeshInstance3D = null
 var build_preview_ring: MeshInstance3D = null
 var _preview_cell: Vector2i = Vector2i(999999, 999999)
-## Which way the next trap faces (Trap.FACINGS): kept from one to the next, so a row of them set
-## along a funnel all face the same way without being turned each time.
+## Which way the next trap or lone section of wall faces (Trap.FACINGS): kept from one to the next,
+## so a row of them set along a funnel all face the same way without being turned each time.
 var _placement_facing: int = 0
+## Built sections of wall dressed, for the moment, as they will stand once what the ghost shows is
+## up (_preview_neighbours); refresh_joins puts them back.
+var _redressed: Array[Node] = []
+## Whether the Hero can get to a build cell to raise what is in hand there (_can_reach_cell),
+## asked once per cell for the length of one gesture: a drag asks the whole line again on every
+## step of the cursor.
+var _reach_asked: Dictionary = {}
 
 
 # Canonical coordinates
@@ -1109,9 +1116,12 @@ func on_build_selected(type_id: String) -> void:
 	# with the fence must never be let go of as a run of traps.
 	_end_drag()
 	current_build_type = type_id
+	_reach_asked.clear()
 	_rebuild_build_preview(type_id)
 	if _faces(type_id):
 		_hint("HINT_TRAP_TURN")
+	elif _turns(type_id):
+		_hint("HINT_WALL_TURN")
 
 func cancel_building_selection() -> void:
 	current_build_type = ""
@@ -1169,10 +1179,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		# untyped Array to an Array[Vector2i] -- a runtime error on every single-stake
 		# placement, which crashed the game.
 		var cells: Array[Vector2i] = [_drag_from]
+		var faces: int = _placement_facing
 		if _dragging:
 			cells = _run_to(event.position)
+			faces = _run_facing(event.position)
 		_end_drag()
-		_commit_run(cells)
+		_commit_run(cells, faces)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1232,9 +1244,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 
-	# A trap in hand turns with R (CONTROLS.trap_turn_key) -- ahead of the camera's reset, which has
-	# the same key the rest of the time.
-	if event is InputEventKey and event.pressed and not event.echo and _faces(current_build_type) \
+	# A trap or a section of wall in hand turns with R (CONTROLS.trap_turn_key) -- ahead of the
+	# camera's reset, which has the same key the rest of the time.
+	if event is InputEventKey and event.pressed and not event.echo and _turns(current_build_type) \
 			and event.keycode == int(controls.get("trap_turn_key", KEY_R)) \
 			and not (event.ctrl_pressed or event.meta_pressed):
 		turn_placement(-1 if event.shift_pressed else 1)
@@ -1459,6 +1471,17 @@ func _run_to(screen_pos: Vector2) -> Array[Vector2i]:
 			out.append(cell)
 	return out
 
+## The way a run dragged to the cursor faces: along the longer of its two spans -- a section of it
+## standing alone (a rock either side) runs the way the rest of the line does.
+func _run_facing(screen_pos: Vector2) -> int:
+	var hit = _raycast_ground(screen_pos)
+	if hit == null or _drag_from == NOT_DRAGGING:
+		return _placement_facing
+	var span: Vector2i = grid_manager.world_to_build_cell(hit) - _drag_from
+	if span == Vector2i.ZERO:
+		return _placement_facing
+	return 0 if absi(span.x) >= absi(span.y) else 1
+
 func _show_run_preview(cells: Array[Vector2i]) -> void:
 	if cells == _run_cells and _run_preview != null and is_instance_valid(_run_preview):
 		return
@@ -1469,22 +1492,33 @@ func _show_run_preview(cells: Array[Vector2i]) -> void:
 	_run_preview = Node3D.new()
 	_run_preview.name = "RunPreview"
 	add_child(_run_preview)
+	var faces: int = _run_facing(get_viewport().get_mouse_position())
+	var going_up: Array[Vector2i] = []
 	for cell in cells:
 		var body: Node3D = Building.make_body(current_build_type)
 		body.position = grid_manager.build_cell_to_world(cell)
 		# Dressed as it will stand: joined to the rest of the run and to what is already built.
-		_dress_ghost(body, cell, cells)
+		_dress_ghost(body, cell, cells, faces)
+		# A section he cannot get to is shown, red, and not laid (try_place_at_cell).
+		var reached: bool = _can_reach_cell(cell)
+		if reached:
+			going_up.append(cell)
 		for mi in _meshes_in(body):
-			mi.material_override = _make_preview_material(Color.WHITE)
+			mi.material_override = _make_preview_material(Color.WHITE if reached else Color(1.0, 0.3, 0.25))
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_run_preview.add_child(body)
-	# What it will cost, before the wood is spent rather than after.
-	_hint_run(cells.size())
+	_preview_neighbours(going_up)
+	# What it will cost, before the wood is spent rather than after -- or why some of it will not go.
+	if going_up.size() < cells.size():
+		_hint("HINT_UNREACHABLE")
+	else:
+		_hint_run(cells.size())
 
 func _clear_run_preview() -> void:
 	if _run_preview != null and is_instance_valid(_run_preview):
 		_run_preview.queue_free()
 	_run_preview = null
+	_restore_neighbours()
 
 func _hint_run(count: int) -> void:
 	var cfg = _get_config()
@@ -1503,7 +1537,7 @@ func _hint_run(count: int) -> void:
 ## registering it on the grid, telling the Hero and rebaking the navigation mesh all
 ## happen exactly as they always did -- and the run simply stops when one of them says no,
 ## which is how it stops when the wood runs out.
-func _commit_run(cells: Array[Vector2i]) -> int:
+func _commit_run(cells: Array[Vector2i], faces: int = -1) -> int:
 	if cells.is_empty():
 		return 0
 	var laid: int = 0
@@ -1511,18 +1545,59 @@ func _commit_run(cells: Array[Vector2i]) -> int:
 		if current_build_type == "":
 			break                          # the wallet emptied and build mode dropped
 		var at: Vector3 = grid_manager.build_cell_to_world(cell)
-		if try_place_at_cell(grid_manager.world_to_cell(at), at) != null:
+		if try_place_at_cell(grid_manager.world_to_cell(at), at, faces) != null:
 			laid += 1
+	_reach_asked.clear()
 	return laid
 
-## Dresses a ghost as the building will stand: a palisade's runs towards what is beside `cell`
-## (built, or in `planned`), a gate turned across the line of the wall it is in.
-func _dress_ghost(body: Node3D, cell: Vector2i, planned: Array = []) -> void:
+## Dresses a ghost as the building will stand -- by the code the building dresses itself with: a
+## palisade's runs towards the walls beside `cell` (built, or in `planned`), and straight along the
+## way it `faces` with none; a gate across the line of the wall it is in.
+func _dress_ghost(body: Node3D, cell: Vector2i, planned: Array = [], faces: int = -1) -> void:
+	if faces < 0:
+		faces = _placement_facing
 	var near: Dictionary = Wall.neighbours_of(grid_manager, cell, null, planned)
-	Wall.dress(body, near)
+	Wall.dress(body, near, faces)
 	var cfg = _get_config()
 	if cfg and cfg.has_method("hero_passes") and cfg.hero_passes(current_build_type):
-		body.rotation.y = Gate.across(near)
+		body.rotation.y = Gate.across(near, faces)
+
+## Shows the sections of wall already beside `planned` as they will stand once it is up: the end
+## of a fence turning the corner into a new run, a lone post becoming part of a line. The ghost
+## alone only told half of it -- what was built changed shape the moment the new piece went down.
+func _preview_neighbours(planned: Array) -> void:
+	_restore_neighbours()
+	if grid_manager == null or planned.is_empty() or not _is_wall_kind(current_build_type):
+		return
+	for cell in planned:
+		for run in Wall.RUNS:
+			var there: Vector2i = cell + Wall.RUNS[run]
+			if planned.has(there):
+				continue
+			var b: Node = grid_manager.building_in_build_cell(there)
+			if b == null or _redressed.has(b) or not Wall.is_wall(b) or not b.has_method("refresh_joins"):
+				continue
+			b.refresh_joins(planned)
+			_redressed.append(b)
+
+## Puts back what _preview_neighbours dressed for the moment.
+func _restore_neighbours() -> void:
+	for b in _redressed:
+		if b != null and is_instance_valid(b) and b.has_method("refresh_joins"):
+			b.refresh_joins()
+	_redressed.clear()
+
+## Whether the Hero can get close enough to `cell` to raise the building in hand there
+## (Hero.can_reach_to_build). Asked once per cell per gesture (_reach_asked). With no Hero to ask,
+## nobody says no.
+func _can_reach_cell(cell: Vector2i) -> bool:
+	if _reach_asked.has(cell):
+		return bool(_reach_asked[cell])
+	var yes: bool = true
+	if hero != null and is_instance_valid(hero) and hero.has_method("can_reach_to_build") and grid_manager != null:
+		yes = bool(hero.can_reach_to_build(current_build_type, grid_manager.build_cell_to_world(cell)))
+	_reach_asked[cell] = yes
+	return yes
 
 func _end_drag() -> void:
 	_drag_from = NOT_DRAGGING
@@ -1534,18 +1609,24 @@ func _end_drag() -> void:
 ## alive so the player can lay down a whole row of blueprints in one go, dropping
 ## it only when the next one is no longer affordable. The Hero picks the blueprints
 ## up one at a time. Returns the blueprint, or null if the spot was rejected.
-func try_place_at_cell(cell: Vector2i, at_world: Variant = null) -> Node:
+func try_place_at_cell(cell: Vector2i, at_world: Variant = null, faces: int = -1) -> Node:
 	if current_build_type == "" or build_system == null:
 		return null
 
 	# The spot taken -- by a building, a tree, a rock, a hillside -- is said as such, before the
-	# price is looked at: it is the nearer reason.
+	# price is looked at: it is the nearer reason. Somebody standing there is not a reason: the
+	# order goes down and waits for them (Building.add_build_progress).
 	var spot: Vector2i = build_system.build_cell_for(cell, at_world)
 	if grid_manager and not grid_manager.can_build_on(grid_manager.footprint_cells(current_build_type, spot)):
 		_hint("HINT_CELL_OCCUPIED")
 		return null
+	# Nor is a spot he could never get to: an order he cannot carry out is not placed.
+	if not _can_reach_cell(spot):
+		_hint("HINT_UNREACHABLE")
+		return null
 
-	var placed = build_system.place_at(current_build_type, spot, buildings_container, true, _placement_facing)
+	var placed = build_system.place_at(current_build_type, spot, buildings_container, true,
+		_placement_facing if faces < 0 else faces)
 	if placed != null:
 		if hero != null and is_instance_valid(hero):
 			hero.order_build(placed, false)
@@ -2195,6 +2276,8 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	var hit = _raycast_ground(screen_pos)
 	if hit == null:
 		build_preview.visible = false
+		_preview_cell = Vector2i(999999, 999999)
+		_restore_neighbours()
 		return
 
 	# Everything snaps to the building grid (Config.BUILD_CELL): the ghost stands in the cell the
@@ -2204,6 +2287,7 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	if snap == _preview_cell:
 		return
 	_preview_cell = snap
+	_reach_asked.clear()
 	build_preview.global_position = grid_manager.build_cell_to_world(snap)
 	var ghost: Node = build_preview.find_child("Body", false, false)
 	if ghost is Node3D:
@@ -2212,9 +2296,18 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 			(ghost as Node3D).rotation.y = Trap.facing_yaw(_placement_facing)
 	_show_lane(snap)
 
+	# Nobody standing there matters (try_place_at_cell); whether he could get there to build it does,
+	# and is said.
 	var ok: bool = _can_afford_building(current_build_type)
 	if ok and build_system and build_system.has_method("can_place_at"):
 		ok = bool(build_system.can_place_at(current_build_type, snap))
+	if ok and not _can_reach_cell(snap):
+		ok = false
+		_hint("HINT_UNREACHABLE")
+	if ok:
+		_preview_neighbours([snap])
+	else:
+		_restore_neighbours()
 
 	# Tint every piece of the ghost, not just the first: a body is whatever
 	# Building.make_body() returns, and that will be a loaded scene once there is art. The lane
@@ -2251,11 +2344,21 @@ func turn_placement(step: int = 1) -> void:
 	if build_preview != null and is_instance_valid(build_preview) and build_preview.visible:
 		_update_build_preview(get_viewport().get_mouse_position())
 
-## Whether a building of `type_id` faces a way -- a trap.
+## Whether a building of `type_id` faces a way it shoots -- a trap.
 func _faces(type_id: String) -> bool:
 	var cfg = _get_config()
 	return type_id != "" and cfg != null and cfg.has_method("get_building_kind") \
 		and String(cfg.get_building_kind(type_id)) == "trap"
+
+func _is_wall_kind(type_id: String) -> bool:
+	var cfg = _get_config()
+	return type_id != "" and cfg != null and cfg.has_method("get_building_kind") \
+		and String(cfg.get_building_kind(type_id)) == "wall"
+
+## Whether R turns a building of `type_id` in hand: a trap, and a wall -- a section with no wall
+## beside it runs along the way it faces (Wall.runs_shown), a gate stands across it.
+func _turns(type_id: String) -> bool:
+	return _faces(type_id) or _is_wall_kind(type_id)
 
 func _lane_colour() -> Color:
 	var cfg = _get_config()
@@ -2267,6 +2370,7 @@ func _lane_colour() -> Color:
 
 
 func _clear_build_preview() -> void:
+	_restore_neighbours()
 	if build_preview and is_instance_valid(build_preview):
 		build_preview.queue_free()
 	build_preview = null

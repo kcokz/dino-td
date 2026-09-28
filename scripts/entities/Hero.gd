@@ -377,9 +377,9 @@ func _process_moving(delta: float) -> void:
 ## a perfectly good path in hand. move_and_collide cannot resolve a body that is already
 ## overlapping, and no amount of replanning is going to change that.
 ##
-## Placement now refuses to put a building on somebody, so this should never fire. It
-## stays because "should never" is what the last one was too, and being nudged a few
-## centimetres is a great deal better than being retired from the game.
+## A building does not go solid round somebody standing in it (Building.add_build_progress), so
+## this should never fire. It stays because "should never" is what the last one was too, and
+## being nudged a few centimetres is a great deal better than being retired from the game.
 func _push_out_of_anything_solid() -> bool:
 	var gm = _get_grid_manager()
 	if gm == null or not gm.has_method("get_all_buildings"):
@@ -433,6 +433,13 @@ func _process_building(delta: float) -> void:
 		current_state = State.MOVING
 		return
 
+	# Standing in what he is raising -- it was ordered where he stood (v0.6 round three): a step
+	# out of it first, or it could never be finished (a building does not go solid round a body,
+	# Building.add_build_progress).
+	if "is_constructed" in target_building and not target_building.is_constructed and _inside_of(target_building):
+		_step_out_of(target_building, delta)
+		return
+
 	# Face the building
 	var diff = target_building.global_position - global_position
 	diff.y = 0.0
@@ -460,6 +467,35 @@ func _process_building(delta: float) -> void:
 			_continue_to_next_pending_building_or_idle()
 	else:
 		_continue_to_next_pending_building_or_idle()
+
+## Whether his body is in `b`'s cells.
+func _inside_of(b: Node) -> bool:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("gap_to_building") or not ("building_type" in b):
+		return false
+	var half_me: float = float(cfg.HERO.get("width", 0.8)) * 0.5
+	return float(cfg.gap_to_building(global_position, String(b.building_type), (b as Node3D).global_position)) < half_me
+
+## A step out of `b` at his walking pace, across the nearest of its edges that is open: in the
+## middle of a row of fence, the sections either side may already be up, and straight out along
+## the row is into one of them.
+func _step_out_of(b: Node, delta: float) -> void:
+	var cfg = _get_config()
+	var half_it: float = float(cfg.get_building_footprint(String(b.building_type))) * 0.5
+	var half_me: float = float(cfg.HERO.get("width", 0.8)) * 0.5
+	var off: Vector3 = global_position - (b as Node3D).global_position
+	var ways: Array = []
+	for dir in [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]:
+		ways.append([half_it + half_me - off.dot(dir), dir])
+	ways.sort_custom(func(a, c): return a[0] < c[0])
+	var out: Vector3 = ways[0][1]
+	for way in ways:
+		if not test_move(global_transform, way[1] * float(way[0])):
+			out = way[1]
+			break
+	velocity = out * walk_speed()
+	look_at(global_position + out, Vector3.UP)
+	move_and_collide(velocity * delta)
 
 ## Mending: he stands there for as long as the job is worth, and the bill is paid
 ## when the work is done. Walking away costs the time spent and nothing else --
@@ -587,7 +623,11 @@ func _stroke_note(res_id: String) -> String:
 func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> bool:
 	if b == null or not is_instance_valid(b):
 		return false
-	var b_pos = b.global_position
+	return _in_build_range_of(pos, b.global_position, String(b.building_type) if "building_type" in b else "", extra_buffer)
+
+## Close enough to work on a `type_id` standing at `b_pos` -- one that is there, or one that is
+## only in hand (can_reach_to_build).
+func _in_build_range_of(pos: Vector3, b_pos: Vector3, type_id: String, extra_buffer: float = 0.0) -> bool:
 	# Check 1: Euclidean distance to center
 	var dist_center = pos.distance_to(b_pos)
 	if dist_center <= (build_range + extra_buffer):
@@ -597,8 +637,8 @@ func _is_in_build_range(pos: Vector3, b: Node, extra_buffer: float = 0.0) -> boo
 	# stands in a block of them (Config.get_building_footprint).
 	var half_size: float = 0.5
 	var cfg_fp = _get_config()
-	if cfg_fp and cfg_fp.has_method("get_building_footprint") and "building_type" in b:
-		half_size = float(cfg_fp.get_building_footprint(String(b.building_type))) * 0.5
+	if cfg_fp and cfg_fp.has_method("get_building_footprint") and type_id != "":
+		half_size = float(cfg_fp.get_building_footprint(type_id)) * 0.5
 	var dx = maxf(0.0, absf(pos.x - b_pos.x) - half_size)
 	var dz = maxf(0.0, absf(pos.z - b_pos.z) - half_size)
 	var dist_box = sqrt(dx * dx + dz * dz)
@@ -787,6 +827,19 @@ func _find_nearest_unfinished_building() -> Node:
 ## inside a thing that is solid: the mesh stops him a body's width short of every
 ## building, and a wide enough one would then read as unreachable while he was standing
 ## against it with his hammer out.
+## Whether he could get close enough to raise a `type_id` at `at` -- asked of one that is not there
+## yet, by the build preview: an order he could never carry out is refused, and why is said (v0.6
+## round three: "如果人没法完成这个pending建造……那就提示没法建造的原因"). The same question as
+## _can_work_on. Nothing to ask it of -- no mesh yet -- is a yes.
+func can_reach_to_build(type_id: String, at: Vector3) -> bool:
+	if _in_build_range_of(global_position, at, type_id):
+		return true
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready():
+		return true
+	var route: PackedVector3Array = maps.path(global_position, at, true)
+	return not route.is_empty() and _in_build_range_of(route[route.size() - 1], at, type_id)
+
 func _can_work_on(b: Node) -> bool:
 	if b == null or not is_instance_valid(b) or not (b is Node3D):
 		return false

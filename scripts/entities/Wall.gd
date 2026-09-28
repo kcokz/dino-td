@@ -8,13 +8,20 @@ extends "res://scripts/entities/Building.gd"
 ## cell, whole: a run of them has nothing to slip between, it stands flush against whatever is in
 ## the next cell, and it stops everybody -- the Hero included; his way through is a gate (Gate.gd).
 ##
-## A PALISADE JOINS WHAT IS BESIDE IT. Its art is a post of sharpened logs in the middle of the
+## A PALISADE JOINS THE WALLS BESIDE IT. Its art is a post of sharpened logs in the middle of the
 ## cell and a run of them out to each side (tools/generate_props.py palisade); the runs towards
-## whatever stands in the four cells beside it are shown, so a line of sections is one palisade,
-## a corner is a corner, and a section beside a trap or the cabin reaches it. Alone it shows all
-## four -- a block of stakes as big as the cell it fills. Only the art depends on the neighbours:
-## the collider is the whole cell whatever is shown, so what stops a raptor never changes as the
-## wall grows. (The v0.4 fence that redrew itself from its neighbours broke because its SHAPE did.)
+## the walls in the four cells beside it are shown, so a line of sections is one palisade and a
+## corner is a corner. Walls only -- a palisade, a stone wall, a gate -- and not the cabin or a
+## trap: a fence laid along the cabin was a fence with a corner in it ("贴着船舱建造就会变成有拐角的
+## 栅栏"). With no wall beside it a section is a straight one, along the way it faces (`facing`:
+## R turns it while it is placed, and a dragged run faces along the drag) -- it was all four runs,
+## an X on open ground. Only the art depends on the neighbours: the collider is the whole cell
+## whatever is shown. (The v0.4 fence that redrew itself from its neighbours broke because its
+## SHAPE did.)
+##
+## WHAT THE GHOST SHOWS IS WHAT GOES UP ("pending的样子就是造下去的样子"): the build preview dresses its
+## ghosts with this same code and the same neighbours, and shows the sections beside them dressed
+## as they will be once it is built (Main._preview_neighbours).
 ##
 ## SHARPENED: whatever presses against it is hurt the whole time it is there (a chip, not a kill:
 ## Config.BUILDINGS.wall), body to body -- whoever is against it (Config.CONTACT_REACH), and
@@ -32,6 +39,10 @@ const RUNS: Dictionary = {
 
 var contact_damage: float = 0.0
 var contact_tick: float = 0.5
+
+## Which way it faces (Trap.FACINGS): a wall facing north or south runs east to west, one facing
+## east or west runs north to south. Only a section with no wall beside it goes by it (dress).
+@export var facing: int = 0
 
 ## How far from its middle, straight out from a face, a raptor-sized body still touches it
 ## (touches): half the section, half a raptor, and Config.CONTACT_REACH. For callers that want a
@@ -96,8 +107,9 @@ func _on_neighbour_changed(other: Node) -> void:
 		return
 	if not is_inside_tree():
 		return
-	# Beside it: its own half cell, one cell, and the other's half width -- a cabin's middle is a
-	# metre and a half from its side.
+	if not is_wall(other):
+		return        # only walls are joined
+	# Beside it: its own half cell, one cell, and the other's half width.
 	var other_half: float = _cell_size() * 0.5
 	var cfg = _get_config()
 	if cfg != null and "building_type" in other:
@@ -107,43 +119,62 @@ func _on_neighbour_changed(other: Node) -> void:
 	if maxf(absf(gap.x), absf(gap.z)) <= reach:
 		refresh_joins.call_deferred()
 
-## Shows the runs towards whatever stands beside it (Wall.dress).
-func refresh_joins() -> void:
+## Shows the runs towards the walls beside it (Wall.dress) -- and towards the cells in `planned`,
+## for the build preview's moment of showing it as it will be (Main._preview_neighbours).
+func refresh_joins(planned: Array = []) -> void:
 	if not is_inside_tree():
 		return
 	var body: Node = find_child("Body", false, false)
 	if body == null:
 		return
-	dress(body, neighbours_of(_grid(), _grid().world_to_build_cell(global_position) if _grid() else Vector2i.ZERO, self))
+	dress(body, neighbours_of(_grid(), _grid().world_to_build_cell(global_position) if _grid() else Vector2i.ZERO, self, planned), facing)
 
-## Which of the four cells beside `cell` hold something built (other than `me`), keyed by run.
+## Which of the four cells beside `cell` hold a WALL -- a palisade, a stone wall, a gate, built or
+## ordered -- other than `me`, or are among `extra` (a run being laid), keyed by run.
 static func neighbours_of(gm: Node, cell: Vector2i, me: Node = null, extra: Array = []) -> Dictionary:
 	var near: Dictionary = {}
 	for run in RUNS:
 		var there: Vector2i = cell + RUNS[run]
 		var b: Node = gm.building_in_build_cell(there) if gm != null else null
-		near[run] = (b != null and b != me) or extra.has(there)
+		near[run] = (b != null and b != me and is_wall(b)) or extra.has(there)
 	return near
 
-## Dresses a palisade's art for what is beside it: the runs towards its neighbours; alone, all
-## four -- a block as big as the cell; at the end of a line, the run to its one neighbour and the
-## one opposite, a straight section. Static, so the build preview dresses its ghosts the same way.
-## A body without runs (a stone wall) is left as it is.
-static func dress(body: Node, near: Dictionary) -> void:
+## Whether `b` is a wall of any sort (Config.BUILDINGS kind "wall").
+static func is_wall(b: Node) -> bool:
+	if b == null or not is_instance_valid(b) or not ("building_type" in b):
+		return false
+	var cfg: Node = null
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
+	return cfg != null and cfg.has_method("get_building_kind") and String(cfg.get_building_kind(String(b.building_type))) == "wall"
+
+## The runs a section shows, given the walls `near` it and the way it `faces`: the runs towards
+## its neighbours; at the end of a line, the run to its one neighbour and the one opposite -- a
+## straight section; with none, the two along the way it faces.
+static func runs_shown(near: Dictionary, faces: int) -> Dictionary:
 	var count: int = 0
 	for run in RUNS:
 		if near.get(run, false):
 			count += 1
+	var shown: Dictionary = {}
+	for run in RUNS:
+		var on: bool = bool(near.get(run, false))
+		if count == 0:
+			on = (run == "Run_E" or run == "Run_W") if posmod(faces, 2) == 0 else (run == "Run_N" or run == "Run_S")
+		elif count == 1:
+			on = on or bool(near.get(_opposite(run), false))
+		shown[run] = on
+	return shown
+
+## Dresses a palisade's art for the walls beside it (runs_shown). Static, so the build preview
+## dresses its ghosts the same way. A body without runs (a stone wall) is left as it is.
+static func dress(body: Node, near: Dictionary, faces: int = 0) -> void:
+	var shown: Dictionary = runs_shown(near, faces)
 	for run in RUNS:
 		var part: Node = body.find_child(run, true, false)
 		if part == null or not (part is Node3D):
 			continue
-		var shown: bool = bool(near.get(run, false))
-		if count == 0:
-			shown = true
-		elif count == 1:
-			shown = shown or bool(near.get(_opposite(run), false))
-		(part as Node3D).visible = shown
+		(part as Node3D).visible = bool(shown[run])
 
 static func _opposite(run: String) -> String:
 	return {"Run_E": "Run_W", "Run_W": "Run_E", "Run_S": "Run_N", "Run_N": "Run_S"}[run]

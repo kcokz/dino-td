@@ -242,14 +242,14 @@ func _shown(b: Node) -> Dictionary:
 		out[run] = part != null and (part as Node3D).visible
 	return out
 
-func test_10_a_palisade_reaches_out_to_what_is_beside_it() -> void:
+func test_10_a_palisade_joins_the_walls_beside_it() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
 	var lone = _put(bs, "wall", Vector2i(-6, -6))
 	await wait_frames(2)
 	var alone: Dictionary = _shown(lone)
-	assert_true(alone["Run_E"] and alone["Run_W"] and alone["Run_N"] and alone["Run_S"],
-		"Alone, it is a block of stakes as big as its cell")
+	assert_true(alone["Run_E"] and alone["Run_W"], "Alone, it is a straight section, along the way it faces")
+	assert_false(alone["Run_N"] or alone["Run_S"], "not a cross of stakes (v0.6 round three)")
 	var a = _put(bs, "wall", Vector2i(0, 0))
 	var b = _put(bs, "wall", Vector2i(1, 0))
 	var c = _put(bs, "wall", Vector2i(2, 0))
@@ -259,11 +259,11 @@ func test_10_a_palisade_reaches_out_to_what_is_beside_it() -> void:
 	assert_false(mid["Run_N"] or mid["Run_S"], "and not across it")
 	var end: Dictionary = _shown(a)
 	assert_true(end["Run_E"] and end["Run_W"], "At the end of a line, it is a straight section")
-	# A corner: something to its north as well.
-	var d = _put(bs, "set_crossbow", Vector2i(2, -1))
+	# A corner: a wall to its north as well.
+	_put(bs, "wall", Vector2i(2, -1))
 	await wait_frames(2)
 	var corner: Dictionary = _shown(c)
-	assert_true(corner["Run_W"] and corner["Run_N"], "At a corner it reaches both neighbours -- a turret too")
+	assert_true(corner["Run_W"] and corner["Run_N"], "At a corner it reaches both neighbours")
 	assert_false(corner["Run_E"] or corner["Run_S"], "and nowhere else")
 
 func test_11_a_gate_turns_across_the_line_it_stands_in() -> void:

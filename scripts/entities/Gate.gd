@@ -29,23 +29,25 @@ func _ready() -> void:
 
 ## The door and the frame across the line of the wall: along X, unless the wall it stands in
 ## runs north to south. Read off what is beside it, like a palisade's runs.
-func refresh_joins() -> void:
+func refresh_joins(planned: Array = []) -> void:
 	if not is_inside_tree():
 		return
 	var body: Node = find_child("Body", false, false)
 	if body == null or not (body is Node3D):
 		return
 	var gm: Node = _grid()
-	var near: Dictionary = neighbours_of(gm, gm.world_to_build_cell(global_position) if gm else Vector2i.ZERO, self)
-	(body as Node3D).rotation.y = across(near)
+	var near: Dictionary = neighbours_of(gm, gm.world_to_build_cell(global_position) if gm else Vector2i.ZERO, self, planned)
+	(body as Node3D).rotation.y = across(near, facing)
 	_door = body.find_child("Door", true, false) as Node3D
 
 ## How a gate turns to stand across the line of the wall `near` says it is in: a quarter turn when
-## that line runs north to south, none otherwise. Static, so the build preview turns its ghost
-## the same way.
-static func across(near: Dictionary) -> float:
+## that line runs north to south, none when it runs east to west -- and, standing in no wall, the
+## way it faces (Wall.facing). Static, so the build preview turns its ghost the same way.
+static func across(near: Dictionary, faces: int = 0) -> float:
 	var east_west: bool = bool(near.get("Run_E", false)) or bool(near.get("Run_W", false))
 	var north_south: bool = bool(near.get("Run_N", false)) or bool(near.get("Run_S", false))
+	if not east_west and not north_south:
+		return PI * 0.5 if posmod(faces, 2) == 1 else 0.0
 	return PI * 0.5 if (north_south and not east_west) else 0.0
 
 # ==============================================================================

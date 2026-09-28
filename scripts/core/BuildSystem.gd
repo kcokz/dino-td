@@ -53,50 +53,14 @@ func build_cell_for(cell: Vector2i, at_world: Variant = null) -> Vector2i:
 		return grid_manager.world_to_build_cell(at_world)
 	return grid_manager.tile_centre_build_cell(cell)
 
-## Whether a unit is standing where these cells are.
-##
-## WITHOUT THIS THE PLAYER CAN BUILD A WALL ON TOP OF HIS OWN HERO, and a man inside a finished
-## building cannot be pushed out of it by moving -- he walks on the spot for ever. Measured,
-## because it looks exactly like broken pathfinding and is not. Touching is allowed,
-## overlapping is not: a body is in the cells when it reaches into them past its own half-width.
-func _someone_is_standing_there(cells: Array) -> bool:
-	if not is_inside_tree() or grid_manager == null or cells.is_empty():
-		return false
-	var s: float = float(grid_manager.build_cell_size())
-	var lo: Vector3 = grid_manager.build_cell_to_world(cells[0])
-	var hi: Vector3 = lo
-	for c in cells:
-		var at: Vector3 = grid_manager.build_cell_to_world(c)
-		lo = Vector3(minf(lo.x, at.x), 0.0, minf(lo.z, at.z))
-		hi = Vector3(maxf(hi.x, at.x), 0.0, maxf(hi.z, at.z))
-	lo -= Vector3(s * 0.5, 0.0, s * 0.5)
-	hi += Vector3(s * 0.5, 0.0, s * 0.5)
-	for group_name in ["hero", "dinos"]:
-		for unit in get_tree().get_nodes_in_group(group_name):
-			if unit == null or not is_instance_valid(unit) or not (unit is Node3D):
-				continue
-			if "is_dead" in unit and unit.is_dead:
-				continue
-			var p: Vector3 = (unit as Node3D).global_position
-			var dx: float = maxf(maxf(lo.x - p.x, 0.0), p.x - hi.x)
-			var dz: float = maxf(maxf(lo.z - p.z, 0.0), p.z - hi.z)
-			if Vector2(dx, dz).length() < _unit_half_width(unit):
-				return true
-	return false
-
-## Half the width of whatever is standing there, from its own declaration.
-func _unit_half_width(unit: Node) -> float:
-	var cfg = _get_config()
-	if cfg == null:
-		return 0.4
-	if unit.is_in_group("hero"):
-		return float(cfg.HERO.get("width", 0.8)) * 0.5
-	if "dino_type" in unit and cfg.has_method("get_visual_size"):
-		return float(cfg.get_visual_size("dino/" + String(unit.dino_type)).x) * 0.5
-	return 0.4
-
 ## Whether a `type_id` can go with its middle in build cell `build_cell`: every cell of it free
-## ground, nobody standing there, the game on, and the price in hand.
+## ground, the game on, and the price in hand.
+##
+## NOT whether somebody is standing there (v0.6 round three: "人在pending建筑的地方pending建筑就不能放了，
+## 比如我要造一排栅栏，人在中间就那人在的那一格就没法造了"). An order is not solid; what must not happen
+## is a building going solid round a body, and that is held back where it happens -- at the last
+## moment of its building (Building.add_build_progress) -- with the Hero stepping out of what he is
+## raising before he raises it (Hero._process_building).
 func can_place_at(type_id: String, build_cell: Vector2i) -> bool:
 	if type_id.is_empty():
 		return false
@@ -109,8 +73,6 @@ func can_place_at(type_id: String, build_cell: Vector2i) -> bool:
 		return false
 	var cells: Array[Vector2i] = grid_manager.footprint_cells(type_id, build_cell)
 	if not grid_manager.can_build_on(cells):
-		return false
-	if _someone_is_standing_there(cells):
 		return false
 
 	var gs = _get_game_state()

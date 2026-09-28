@@ -166,7 +166,9 @@ func test_08_a_fed_man_raises_a_building_faster() -> void:
 	if b == null:
 		return
 	var hero = _hero()
-	hero.global_position = b.global_position + Vector3(0.6, 0.0, 0.0)
+	# Beside it, body to body: standing IN a blueprint he steps out of it first (Hero._step_out_of).
+	var beside: float = (float(config_node.get_building_footprint("wall")) + float(config_node.HERO["width"])) * 0.5 + 0.05
+	hero.global_position = b.global_position + Vector3(beside, 0.0, 0.0)
 	await wait_frames(1)
 	hero.target_building = b
 
