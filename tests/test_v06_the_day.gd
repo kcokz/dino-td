@@ -134,6 +134,39 @@ func test_05_at_dusk_the_raid_goes_home() -> void:
 	assert_eq(died.emit_count, 0, "not killed")
 	assert_eq(tree.get_nodes_in_group("drops").size(), drops_before, "and nothing left behind")
 
+func test_05b_at_dusk_those_still_in_the_nest_stay_there() -> void:
+	# debug-agent BUG-006: a raid setting out just before dusk went on stepping out after it, and
+	# those came for the cabin into the night.
+	var main = await _level()
+	var wm = main.wave_manager
+	wm.auto_raid_enabled = false
+	_set_clock(_at("dusk") - 30.0)
+	var size: int = 6
+	wm.start_wave(1, size)
+	var raid: int = wm.dinos_to_spawn
+	for i in range(int(10.0 * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		if wm.dinos_spawned_count >= 2:
+			break
+	var out: int = wm.dinos_spawned_count
+	assert_true(out >= 2 and out < raid, "Dusk comes with %d of the %d out" % [out, raid])
+	_set_clock(_at("dusk") + 0.1)
+	assert_eq(wm.wave_roster.size(), 0, "The rest are kept in the nest")
+	assert_eq(wm.dinos_alive_count, out, "and the raid counts only those out")
+	var home: bool = false
+	var stepped_out: int = out
+	for i in range(int(20.0 * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		stepped_out = maxi(stepped_out, wm.dinos_spawned_count)
+		if not wm.is_wave_active:
+			home = true
+			break
+	assert_eq(stepped_out, out, "Nobody steps out after dusk")
+	assert_true(home, "The raid is over when those out are home")
+	for d in tree.get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not d.is_queued_for_deletion():
+			assert_true(false, "No raider is left on the field: %s at %s" % [d.name, d.global_position])
+
 func test_06_the_beacons_last_wave_comes_whatever_the_hour() -> void:
 	var main = await _level()
 	var wm = main.wave_manager

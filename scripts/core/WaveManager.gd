@@ -608,8 +608,8 @@ func raiders_out() -> bool:
 	return false
 
 ## A part of the day begun: the raiders whose hours are over go home, the raid out and all -- at
-## dusk the Coelophysis go back to their nest (GAME-DESIGN 9.3). Not the beacon's last wave: the
-## valley was woken for it.
+## dusk the Coelophysis go back to their nest (GAME-DESIGN 9.3) -- and those of the raid still in
+## the nest stay there (_keep_to_hours). Not the beacon's last wave: the valley was woken for it.
 func _on_day_part_changed(part: String, _day: int) -> void:
 	var cfg = _get_config()
 	if final_wave or cfg == null or not cfg.has_method("keeps_hours") or not is_inside_tree():
@@ -619,6 +619,28 @@ func _on_day_part_changed(part: String, _day: int) -> void:
 			continue
 		if not cfg.keeps_hours(String(d.dino_type), part):
 			d.go_home(nest_spawn_position)
+	if is_wave_active:
+		_keep_to_hours(part)
+
+## The raid's animals still in the nest whose hours are over do not step out (debug-agent BUG-006:
+## a raid setting out just before dusk went on stepping out after it, one every spawn_interval, and
+## those came for the cabin into the night -- 100 down to 2.8). They are taken off the roster and
+## out of the raid's count, which may be the end of it: it is over when the last one out is home.
+func _keep_to_hours(part: String) -> void:
+	var cfg = _get_config()
+	var left: Array[String] = []
+	for species in wave_roster:
+		if cfg.keeps_hours(String(species), part):
+			left.append(String(species))
+	var kept_in: int = wave_roster.size() - left.size()
+	if kept_in <= 0:
+		return
+	wave_roster = left
+	dinos_to_spawn -= kept_in
+	dinos_alive_count = maxi(0, dinos_alive_count - kept_in)
+	if dinos_spawned_count >= dinos_to_spawn and spawn_timer and is_instance_valid(spawn_timer):
+		spawn_timer.stop()
+	_check_wave_completion()
 
 func _check_wave_completion() -> void:
 	if dinos_alive_count <= 0:
