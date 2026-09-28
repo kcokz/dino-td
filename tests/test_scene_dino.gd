@@ -127,8 +127,10 @@ func test_04_state_transitions_drive_animations_on_all_three_species() -> void:
 
 		var anim_player: AnimationPlayer = dino.animator.animation_player
 
-		# Walking
+		# Walking -- once its feet are moving (v0.6: a walker going nowhere stands). Its
+		# physics is off, so the pace is reported here.
 		dino.current_state = Dino.State.WALKING
+		dino.animator.update_motion(float(dino.speed), 1.0)
 		await wait_frames(2)
 		assert_true(anim_player.is_playing(), "%s is playing animation on WALKING" % species)
 		assert_has(["run", "walk"], anim_player.current_animation.to_lower(),

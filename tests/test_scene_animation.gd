@@ -87,12 +87,15 @@ func test_02_hero_state_change_updates_requested_clip_from_config() -> void:
 	assert_not_null(hero.animator, "Hero instantiates ActorAnimator")
 
 	var hero_anim_cfg: Dictionary = config_node.ANIMATIONS["hero"]
+	var travelling: Array = config_node.ANIMATIONS["travelling_states"]
 
 	for state_name in Hero.State.keys():
 		var enum_val: int = Hero.State[state_name]
 		hero.current_state = enum_val
 
-		var expected_clip: String = hero_anim_cfg[state_name]
+		# A travelling state is drawn from the feet (v0.6): standing, it stands.
+		var expected_clip: String = String(config_node.ANIMATIONS["standing"]["hero"]) if travelling.has(state_name) \
+			else String(hero_anim_cfg[state_name])
 		assert_eq(hero.animator.requested_clip, expected_clip,
 			"Hero state '%s' requests clip '%s' derived from Config" % [state_name, expected_clip])
 
@@ -103,12 +106,14 @@ func test_03_dino_state_change_updates_requested_clip_from_config() -> void:
 	assert_not_null(dino.animator, "Dino instantiates ActorAnimator")
 
 	var dino_anim_cfg: Dictionary = config_node.ANIMATIONS["dino"]
+	var travelling: Array = config_node.ANIMATIONS["travelling_states"]
 
 	for state_name in Dino.State.keys():
 		var enum_val: int = Dino.State[state_name]
 		dino.current_state = enum_val
 
-		var expected_clip: String = dino_anim_cfg[state_name]
+		var expected_clip: String = String(config_node.ANIMATIONS["standing"]["dino"]) if travelling.has(state_name) \
+			else String(dino_anim_cfg[state_name])
 		assert_eq(dino.animator.requested_clip, expected_clip,
 			"Dino state '%s' requests clip '%s' derived from Config" % [state_name, expected_clip])
 
@@ -164,8 +169,13 @@ func test_06_t_rex_drives_animation_player_across_states() -> void:
 	# Suspend autonomous AI target resolution so manual State assignments are tested cleanly
 	dino.set_physics_process(false)
 
-	# WALKING state -> drives walk/run animation
+	# WALKING state -> drives walk/run animation, once its feet are moving (v0.6: a walker
+	# held up stands). Its physics is off, so the pace is reported here.
 	dino.current_state = Dino.State.WALKING
+	await wait_frames(2)
+	assert_eq(anim_player.current_animation.to_lower(), String(config_node.ANIMATIONS["standing"]["dino"]),
+		"Going nowhere, it stands")
+	dino.animator.update_motion(float(dino.speed), 1.0)
 	await wait_frames(2)
 	assert_true(anim_player.is_playing(), "AnimationPlayer is playing during WALKING")
 	assert_has(["run", "walk"], anim_player.current_animation.to_lower(),

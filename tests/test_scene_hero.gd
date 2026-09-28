@@ -102,8 +102,10 @@ func test_03_all_six_hero_states_mapped_and_drive_animations() -> void:
 	assert_true(anim_player.is_playing(), "Playing animation on IDLE")
 	assert_eq(anim_player.current_animation.to_lower(), "idle", "Plays idle on IDLE")
 
-	# 2. MOVING
+	# 2. MOVING -- once his feet are moving (v0.6: going nowhere, he stands). His physics
+	# is off, so the pace is reported here.
 	hero.current_state = Hero.State.MOVING
+	hero.animator.update_motion(float(hero.speed), 1.0)
 	await wait_frames(2)
 	assert_true(anim_player.is_playing(), "Playing animation on MOVING")
 	assert_has(["walk", "run"], anim_player.current_animation.to_lower(), "Plays walk/run on MOVING")

@@ -136,6 +136,7 @@ func _physics_process(delta: float) -> void:
 	if not continuous_mode and _get_current_phase() != 0: # Only restricted during legacy DEPLOY phase
 		return
 
+	var was_at: Vector3 = global_position
 	match current_state:
 		State.IDLE:
 			_process_idle(delta)
@@ -147,6 +148,16 @@ func _physics_process(delta: float) -> void:
 			_process_attacking(delta)
 		State.HARVESTING:
 			_process_harvesting(delta)
+	_report_pace(was_at, delta)
+
+## Tells the animator how far he really went this frame, so a walk is shown only while he
+## is walking (ActorAnimator.update_motion).
+func _report_pace(was_at: Vector3, delta: float) -> void:
+	if animator == null or not is_instance_valid(animator) or delta <= 0.0:
+		return
+	var moved := global_position - was_at
+	moved.y = 0.0
+	animator.update_motion(moved.length() / delta, delta)
 
 # ==============================================================================
 # Carrying things home

@@ -501,11 +501,22 @@ func _physics_process(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return
 
+	var was_at: Vector3 = global_position
 	match current_state:
 		State.WALKING:
 			advance_towards_waypoint(delta)
 		State.ATTACKING:
 			_process_attacking(delta)
+	_report_pace(was_at, delta)
+
+## Tells the animator how far it really went this frame: a raptor held up at a gap stands
+## rather than running on the spot (ActorAnimator.update_motion).
+func _report_pace(was_at: Vector3, delta: float) -> void:
+	if animator == null or not is_instance_valid(animator) or delta <= 0.0:
+		return
+	var moved := global_position - was_at
+	moved.y = 0.0
+	animator.update_motion(moved.length() / delta, delta)
 
 ## Advances along waypoints. Checks for obstacles and Core arrival.
 func advance_towards_waypoint(delta: float) -> void:

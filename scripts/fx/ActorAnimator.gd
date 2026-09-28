@@ -21,6 +21,12 @@ var current_clip: String = ""
 var requested_clip: String = ""
 var current_state_name: String = ""
 
+## How fast the actor is really going, metres a second, smoothed (update_motion), and whether
+## that counts as moving. The two thresholds are apart so a walker easing to a stop cannot
+## flicker between standing and walking on the line between them.
+var pace: float = 0.0
+var is_moving: bool = false
+
 func _ready() -> void:
 	if actor == null and get_parent() is Node3D:
 		actor = get_parent() as Node3D
@@ -47,6 +53,11 @@ func refresh_animation_player() -> AnimationPlayer:
 ## `state_value` can be an integer enum value or a string state name.
 func play_state(state_value: Variant) -> void:
 	current_state_name = _resolve_state_name(state_value)
+	# A travelling state plays whatever the feet are doing, which update_motion decides.
+	if _is_travelling(current_state_name):
+		_play_gait()
+		return
+	_set_pace_scale(1.0)
 	var target_clip: String = _lookup_clip_for_state(current_state_name)
 	requested_clip = target_clip
 
@@ -72,6 +83,82 @@ func play_state(state_value: Variant) -> void:
 	current_clip = clip_to_play
 	_loop_if_it_should(clip_to_play, target_clip)
 	animation_player.play(clip_to_play, blend)
+
+## The owner's report of how fast it actually went this frame, in metres a second.
+##
+## LOCOMOTION FOLLOWS THE FEET, NOT THE STATE (v0.6 feedback: "人站着不动的时候还在走"). A
+## travelling state is not a travelling body: the Hero pressed against a wall is MOVING and
+## going nowhere, a raptor waiting its turn at a gap is WALKING on the spot -- and both played
+## a walk on the spot. So while the state is a travelling one the clip comes from the pace:
+## standing still stands, and otherwise the gait drawn nearest that speed is played at it
+## (Config.ANIMATIONS.gaits), so the stride of a fed man quickens with him.
+func update_motion(speed: float, delta: float) -> void:
+	var anim := _animations()
+	var follow: float = clampf(float(anim.get("pace_smoothing", 10.0)) * maxf(0.0, delta), 0.0, 1.0)
+	pace = lerpf(pace, maxf(0.0, speed), follow)
+	var was_moving: bool = is_moving
+	if is_moving and pace < float(anim.get("still_speed", 0.15)):
+		is_moving = false
+	elif not is_moving and pace > float(anim.get("moving_speed", 0.35)):
+		is_moving = true
+	if _is_travelling(current_state_name):
+		if was_moving != is_moving or is_moving:
+			_play_gait()
+
+## Whether `state_name` is one the actor travels in (Config.ANIMATIONS.travelling_states).
+func _is_travelling(state_name: String) -> bool:
+	return _animations().get("travelling_states", []).has(state_name)
+
+## Stands, or plays the gait nearest the pace, at the pace.
+func _play_gait() -> void:
+	if not is_moving:
+		_set_pace_scale(1.0)
+		_play_resolved(String(_animations().get("standing", {}).get(actor_type, "idle")))
+		return
+	var gaits: Dictionary = _animations().get("gaits", {}).get(actor_type, {})
+	var best: String = _lookup_clip_for_state(current_state_name)
+	var drawn_at: float = 0.0
+	var best_miss: float = INF
+	for clip in gaits:
+		if _find_best_clip(String(clip)) == "":
+			continue
+		var at: float = maxf(0.01, float(gaits[clip]))
+		var miss: float = absf(log(maxf(0.01, pace) / at))
+		if miss < best_miss:
+			best_miss = miss
+			best = String(clip)
+			drawn_at = at
+	if drawn_at > 0.0:
+		var span: Vector2 = _animations().get("pace_scale_range", Vector2(0.6, 1.8))
+		_set_pace_scale(clampf(pace / drawn_at, span.x, span.y))
+	_play_resolved(best)
+
+## Plays `wanted` (a name the game uses) unless it is already what is playing.
+func _play_resolved(wanted: String) -> void:
+	requested_clip = wanted
+	if wanted == "":
+		return
+	if animation_player == null or not is_instance_valid(animation_player):
+		refresh_animation_player()
+	if animation_player == null or not is_instance_valid(animation_player):
+		return
+	var clip_to_play: String = _find_best_clip(wanted)
+	if clip_to_play == "":
+		return
+	if current_clip == clip_to_play and animation_player.is_playing():
+		return
+	current_clip = clip_to_play
+	_loop_if_it_should(clip_to_play, wanted)
+	animation_player.play(clip_to_play, _get_blend_time())
+
+## How fast the clip plays against how it was drawn. The engine's own playback rate.
+func _set_pace_scale(scale: float) -> void:
+	if animation_player != null and is_instance_valid(animation_player):
+		animation_player.speed_scale = scale
+
+func _animations() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.ANIMATIONS if (cfg and "ANIMATIONS" in cfg) else {}
 
 ## Directly plays a clip by name with alias resolution and graceful degradation.
 func play_clip(clip_name: String) -> void:

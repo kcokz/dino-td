@@ -1354,6 +1354,13 @@ const CONTROLS: Dictionary = {
 	"camera_tilt_up_key": KEY_F,                  # towards looking straight down
 	"camera_tilt_down_key": KEY_V,                # towards looking along the ground
 	"camera_reset_key": KEY_R,                    # back to the opening view
+	# Pointing at things (Main._raycast_object). How far wide of a unit's body the cursor may
+	# be and still take it, in pixels: a raptor is a small thing to hit from eighteen metres
+	# up, and a unit is what a click most often means.
+	"pick_slop_px": 8.0,
+	# How many things one ray may pass through looking for what the click means: a tree's
+	# crown, a man under it, a building behind him. Past this many it is the ground.
+	"pick_depth": 6,
 }
 
 # ==============================================================================
@@ -1821,6 +1828,9 @@ const CABIN: Dictionary = {
 	# which for the old pod was 2 m from its walls -- and for a cabin three metres across
 	# would have been barely past its corners.
 	"enter_range": 2.0,
+	# Where he stands to go in and steps out: this far in front of the hatch (the south
+	# wall, the ramp), in metres -- clear of the ramp and in the camera's sight.
+	"door_standoff": 0.8,
 	# The interior is the same world 200 metres down, so it inherits the level's sky --
 	# and the room has no ceiling, so the camera looked straight over the wall into open
 	# daylight. Being "indoors" fell apart the moment you stepped in.
@@ -2695,6 +2705,27 @@ const ANIMATIONS: Dictionary = {
 		"WALKING": "run",     # bipedal locomotion gait
 		"ATTACKING": "attack", # bite / swipe
 		"DEAD": "death",
+	},
+
+	# Travelling is drawn from the feet, not from the state (ActorAnimator.update_motion; v0.6
+	# feedback: "人站着不动的时候还在走"). In a travelling state a walker whose smoothed pace is
+	# under `still_speed` stands; over `moving_speed` it moves again -- apart, so easing to a
+	# stop cannot flicker. Moving, it plays the gait drawn nearest its pace, sped up or slowed
+	# to it within `pace_scale_range`.
+	"travelling_states": ["MOVING", "WALKING"],
+	# What each walker plays standing, whatever its state says.
+	"standing": {"hero": "idle", "dino": "idle"},
+	"still_speed": 0.15,
+	"moving_speed": 0.35,
+	"pace_smoothing": 10.0,       # how quickly the measured pace follows the feet, per second
+	"pace_scale_range": Vector2(0.6, 1.8),
+	# Each walker's gaits: the clip, and the speed it is drawn at in metres a second at the
+	# size it is shown. The Hero is 1.2 m: his walk covers about a metre a second and his jog
+	# about three, so at his four he jogs, a little quick -- faster still when fed. A raptor's
+	# run is drawn at its own four; a theropod at two walks, heavily.
+	"gaits": {
+		"hero": {"walk": 1.1, "run": 3.0},
+		"dino": {"walk": 1.6, "run": 4.0},
 	},
 
 	# Common clip aliases across diverse CC0 / commercial asset packs:

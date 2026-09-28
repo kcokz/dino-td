@@ -66,6 +66,7 @@ func _physics_process(delta: float) -> void:
 	if _is_paused():
 		return
 
+	var was_at: Vector3 = global_position
 	match guard_state:
 		GuardState.POST_ROAM:
 			_process_post_roam(delta)
@@ -77,6 +78,7 @@ func _physics_process(delta: float) -> void:
 			_process_returning(delta)
 
 	_apply_dino_separation(delta)
+	_report_pace(was_at, delta)
 
 func _process_post_roam(delta: float) -> void:
 	# 1. Search for Hero or threats within aggro_radius

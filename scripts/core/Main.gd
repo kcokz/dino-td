@@ -997,8 +997,27 @@ func order_enter_cabin() -> bool:
 	_pending_cabin_entry = true
 	if _hero_is_at_cabin():
 		return enter_cabin()
-	hero.move_to(current_core.global_position)
+	# To the door, not to the middle of the cabin. Aimed at the middle he walked into its
+	# wall and kept walking, on the spot, until the view came back out -- pressed against a
+	# wall that hid him from the camera, so he could not be clicked either.
+	hero.move_to(cabin_door())
 	return true
+
+## Where the Hero stands to go in and where he steps out: in front of the hatch, which is
+## on the south side (the ramp, tools/generate_props.py cabin) -- the side the camera looks
+## from, so he comes out in plain view. Put on his walking mesh, so a fence built across
+## the door leaves him beside it rather than inside it.
+func cabin_door() -> Vector3:
+	if current_core == null or not is_instance_valid(current_core):
+		return Vector3.ZERO
+	var cfg = _get_config()
+	var half: float = float(cfg.get_building_footprint("core")) * 0.5 if cfg else 1.5
+	var standoff: float = float(cfg.CABIN.get("door_standoff", 0.8)) if (cfg and "CABIN" in cfg) else 0.8
+	var door: Vector3 = current_core.global_position + Vector3(0.0, 0.0, half + standoff)
+	if nav_maps != null and is_instance_valid(nav_maps) and nav_maps.is_ready():
+		var on_mesh: Vector3 = nav_maps.closest_point(door, true)
+		door = Vector3(on_mesh.x, current_core.global_position.y, on_mesh.z)
+	return door
 
 func _hero_is_at_cabin() -> bool:
 	if hero == null or not is_instance_valid(hero) or current_core == null or not is_instance_valid(current_core):
@@ -1027,6 +1046,12 @@ func enter_cabin() -> bool:
 		return false
 	cancel_building_selection()
 	in_cabin = true
+	# He is inside now: whatever he was walking to is done with, and he is at the door he
+	# will come out of.
+	if hero != null and is_instance_valid(hero):
+		if hero.has_method("order_stop"):
+			hero.order_stop()
+		hero.global_position = cabin_door()
 	if cabin_interior.has_method("set_open"):
 		cabin_interior.set_open(true)
 	var eb = _get_event_bus()
@@ -1049,7 +1074,16 @@ func leave_cabin() -> bool:
 	if camera and is_instance_valid(camera):
 		camera.current = true
 	var eb = _get_event_bus()
-	if eb and eb.has_signal("unit_deselected"):
+	# He steps out of the hatch, facing out, and is the one picked: whoever just came out
+	# of the cabin is who the player means to send somewhere next (v0.6 feedback: "从船舱
+	# 出来也是选不了人").
+	if hero != null and is_instance_valid(hero) and not ("current_state" in hero and int(hero.current_state) == 4):
+		hero.global_position = cabin_door()
+		var out: Vector3 = hero.global_position + Vector3(0.0, 0.0, 1.0)
+		hero.look_at(out, Vector3.UP)
+		if eb and eb.has_signal("unit_selected"):
+			eb.unit_selected.emit(hero)
+	elif eb and eb.has_signal("unit_deselected"):
 		eb.unit_deselected.emit()
 	if eb and eb.has_signal("cabin_view_changed"):
 		eb.cabin_view_changed.emit(false)
@@ -1682,34 +1716,137 @@ func _raycast_ground(screen_pos: Vector2) -> Variant:
 		return null                      # the plane is behind the camera
 	return from + dir * t
 
+## What a click at `screen_pos` means: the thing pointed at, which is not always the first
+## surface the ray meets.
+##
+## v0.6 feedback: "人经常选中不了". The ray used to stop at whatever it met first, and a tree
+## is clicked by its whole crown seen from above (Config.LAYER_PICK) -- so a man chopping it,
+## standing under that crown, could not be pointed at at all, and the cabin's walls hid him
+## the same way. Now somebody near the cursor is taken first (_unit_near_cursor), and
+## otherwise the ray goes on through what it meets and the one taken is by rank
+## (_pick_rank): a building before a tree it stands under.
 func _raycast_object(screen_pos: Vector2) -> Node:
+	var unit: Node = _unit_near_cursor(screen_pos)
+	if unit != null:
+		return unit
+	var best: Node = null
+	var best_rank: int = 1 << 30
+	for hit in _objects_along_ray(screen_pos):
+		var rank: int = _pick_rank(hit)
+		if rank < best_rank:
+			best_rank = rank
+			best = hit
+	return best
+
+## Everything the ray from `screen_pos` passes through before the ground, nearest first --
+## each one the thing that was hit, not the part of it (a tree's trunk is a body of its own).
+func _objects_along_ray(screen_pos: Vector2) -> Array[Node]:
+	var out: Array[Node] = []
 	var cam := _active_camera()
 	if cam == null or not is_inside_tree() or get_world_3d() == null:
-		return null
+		return out
 	var space_state = get_world_3d().direct_space_state
 	var from = cam.project_ray_origin(screen_pos)
-	var to = from + cam.project_ray_normal(screen_pos) * 1000.0
+	var query = PhysicsRayQueryParameters3D.create(from, from + cam.project_ray_normal(screen_pos) * 1000.0)
+	query.collision_mask = _pick_mask()
+	var exclude: Array[RID] = []
+	for i in range(int(_controls().get("pick_depth", 6))):
+		query.exclude = exclude
+		var result: Dictionary = space_state.intersect_ray(query)
+		if result.is_empty() or not result.has("collider"):
+			break
+		var thing: Node = _pickable_owner(result["collider"])
+		if thing == null:
+			break        # the ground or a hillside: nothing behind it can be seen
+		if not out.has(thing):
+			out.append(thing)
+		exclude.append(result["rid"])
+	return out
 
-	var query = PhysicsRayQueryParameters3D.create(from, to)
-	# Blueprints are on a layer of their own so that they can be pointed at without
-	# being in anyone's way. Leaving that layer out here is what stranded half-built
-	# work: walk away from a stake and there was nothing left to click.
-	var blueprint_layer: int = 16
-	var wall_layer: int = 32
-	var cfg_layers = _get_config()
-	if cfg_layers and "LAYER_BLUEPRINT" in cfg_layers:
-		blueprint_layer = int(cfg_layers.LAYER_BLUEPRINT)
-	if cfg_layers and "LAYER_WALL" in cfg_layers:
-		wall_layer = int(cfg_layers.LAYER_WALL)
-	# Walls are on their own layer so the Hero can walk through them; the cursor still
-	# has to find them, or a fence becomes unclickable. And a tree is clicked by its crown,
-	# which is on a layer of its own (Config.LAYER_PICK).
-	var pick_layer: int = int(cfg_layers.LAYER_PICK) if (cfg_layers and "LAYER_PICK" in cfg_layers) else 64
-	query.collision_mask = 1 | 2 | 4 | blueprint_layer | wall_layer | pick_layer
-	var result = space_state.intersect_ray(query)
-	if result and result.has("collider"):
-		return result["collider"]
+## The layers a pointer looks at. Blueprints are on a layer of their own so they can be
+## pointed at without being in anyone's way, walls on theirs, and a tree is clicked by its
+## crown (Config.LAYER_PICK).
+func _pick_mask() -> int:
+	var cfg = _get_config()
+	var mask: int = 1 | 2 | 4 | 8
+	if cfg:
+		mask |= int(cfg.LAYER_BLUEPRINT) | int(cfg.LAYER_WALL) | int(cfg.LAYER_PICK)
+	return mask
+
+## The thing `collider` belongs to -- itself, or the entity it is a part of -- or null for
+## what is only ground.
+func _pickable_owner(collider: Variant) -> Node:
+	var node: Node = collider as Node
+	for i in range(3):
+		if node == null:
+			return null
+		if _is_hoverable(node):
+			return node
+		node = node.get_parent()
 	return null
+
+## Which of several things under the cursor a click means: the lower, the sooner. Somebody
+## before a bench or a building, and a building before the tree whose crown hangs over it.
+func _pick_rank(node: Node) -> int:
+	if node.is_in_group("hero"):
+		return 0
+	if node.is_in_group("dinos"):
+		return 1
+	if node.is_in_group("stations"):
+		return 2
+	if node.is_in_group("buildings") or _is_cabin(node):
+		return 3
+	if node.is_in_group("resource_nodes"):
+		return 4
+	return 5
+
+## The Hero or a dinosaur the cursor is on or just beside, nearest the cursor first -- or
+## null. By where their bodies are on the screen rather than by the ray, so a raptor is not a
+## thing that has to be hit exactly from eighteen metres up (Config.CONTROLS.pick_slop_px).
+func _unit_near_cursor(screen_pos: Vector2) -> Node:
+	var cam := _active_camera()
+	if cam == null or in_cabin or not is_inside_tree():
+		return null
+	var cfg = _get_config()
+	var slop: float = float(_controls().get("pick_slop_px", 8.0))
+	var best: Node = null
+	var best_d: float = INF
+	for group_name in ["hero", "dinos"]:
+		for unit in get_tree().get_nodes_in_group(group_name):
+			if not (unit is Node3D) or not is_instance_valid(unit) or not (unit as Node3D).is_visible_in_tree():
+				continue
+			if ("is_dead" in unit and unit.is_dead) or ("current_state" in unit and group_name == "hero" and int(unit.current_state) == 4):
+				continue
+			var size: Vector3 = _unit_size(unit, cfg)
+			var foot: Vector3 = (unit as Node3D).global_position
+			var middle: Vector3 = foot + Vector3(0.0, size.y * 0.5, 0.0)
+			if cam.is_position_behind(middle):
+				continue
+			var at: Vector2 = cam.unproject_position(middle)
+			# How big the body is on the screen: its height, and its width at its middle.
+			var up: float = at.distance_to(cam.unproject_position(foot + Vector3(0.0, size.y, 0.0)))
+			var across: float = at.distance_to(cam.unproject_position(middle + cam.global_transform.basis.x * size.x * 0.5))
+			var reach: Vector2 = Vector2(across + slop, up + slop)
+			var off: Vector2 = screen_pos - at
+			var d: float = Vector2(off.x / maxf(1.0, reach.x), off.y / maxf(1.0, reach.y)).length()
+			if d <= 1.0 and d < best_d:
+				best_d = d
+				best = unit
+	return best
+
+## How big a unit is, as Config declares it: the Hero's size, or his species'.
+func _unit_size(unit: Node, cfg: Node) -> Vector3:
+	if cfg == null or not cfg.has_method("get_visual_size"):
+		return Vector3(0.8, 1.2, 0.8)
+	if unit.is_in_group("hero"):
+		return cfg.get_visual_size("hero")
+	if "dino_type" in unit:
+		return cfg.get_visual_size("dino/" + String(unit.dino_type))
+	return Vector3(0.8, 1.0, 0.8)
+
+func _controls() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.CONTROLS if (cfg and "CONTROLS" in cfg and cfg.CONTROLS is Dictionary) else {}
 
 ## Direct programmatic placement API for automated tests and scripts.
 func build_at_cell(type_id: String, cell: Vector2i) -> bool:
