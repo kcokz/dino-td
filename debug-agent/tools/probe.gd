@@ -38,6 +38,10 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"defeat_guard": await _p_defeat("guard")
+			"defeat_raider": await _p_defeat("raider")
+			"defeat_alone": await _p_defeat("alone")
+			"defeat_cabin": await _p_defeat("cabin")
 			"herocard_keys": await _p_herocard_keys()
 			"nest_stone_east": await _p_nest_stone("east")
 			"nest_stone_west": await _p_nest_stone("west")
@@ -1947,6 +1951,49 @@ func _card_state() -> Dictionary:
 		"tiles": [hc.build_button.get_global_rect(), hc.eat_button.get_global_rect()],
 		"pause_menu": pause_up,
 	}
+
+## TASK-016 (72b27c8, BUG-011): the defeat screen names the rule the run was lost on. `how`: "guard"
+## (killed beside a nest guard), "raider" (beside a raiding Coelophysis), "alone" (nobody within
+## HERO.killer_within), "cabin" (the cabin broken). Run several in one launch: each is a fresh run,
+## so a screen carrying the last run's words shows here.
+func _p_defeat(how: String) -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var hero = _main.hero
+	var cabin = _main.current_core
+	if OS.get_environment("DA_LANG") != "":
+		TranslationServer.set_locale(OS.get_environment("DA_LANG"))
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	var before: Dictionary = {}
+	for n in _all(_main.hud):
+		if n is Label and (n as Label).is_visible_in_tree():
+			before[(n as Label).text] = true
+	match how:
+		"guard":
+			var g: Node3D = get_nodes_in_group("guard_dinos")[0] as Node3D
+			hero.global_position = g.global_position + Vector3(1.2, 0.0, 0.0)
+			await _advance(0.2)
+			hero.take_damage(9999.0)
+		"raider":
+			var species: String = String(gs.map_data()["raiders"].keys()[0])
+			var d = load(String(cfg.get_dino_script_path(species))).new()
+			_main.add_child(d)
+			d.setup(species)
+			d.global_position = hero.global_position + Vector3(1.5, 0.0, 0.0)
+			await _advance(0.2)
+			hero.take_damage(9999.0)
+		"alone":
+			hero.take_damage(9999.0)
+		"cabin":
+			cabin.take_damage(99999.0)
+	await _advance(1.5)
+	var said: Array = []
+	for n in _all(_main.hud):
+		if n is Label and (n as Label).is_visible_in_tree() and (n as Label).text.length() > 3 and not before.has((n as Label).text):
+			said.append((n as Label).text.replace(char(10), " / "))
+	await _shoot("defeat_%s_%s" % [how, TranslationServer.get_locale()])
+	_say("INFO", "%s: game over %s; the screen says: %s" % [how, gs.is_game_over, " | ".join(said)])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

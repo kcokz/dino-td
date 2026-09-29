@@ -1,6 +1,6 @@
 # BUG-011 失败画面不说是怎么输的（船舱满血，写的却是"船舱被毁或人阵亡"）
 
-- 状态: open
+- 状态: fixed（72b27c8，2026-09-28 复测通过，见 TASK-016）
 - 严重度: 低（界面）
 - 发现: 2026-09-28 · 7426dbc，机器人整局（`play:25`，runs/20260928-194845）
 
@@ -21,3 +21,7 @@
 ## 位置（没改代码）
 
 `scripts/ui/HUD.gd:753` 两种情况都用同一个 `GAME_DEFEAT_DESC`；`translations/strings.csv:151`。
+
+## 复测（2026-09-28，72b27c8）：通过
+
+四种输法都说对了，中英文都放得下（英文两行）：[img/BUG-011-fixed-guard-en.png](img/BUG-011-fixed-guard-en.png)、[img/BUG-011-fixed-guard-zh.png](img/BUG-011-fixed-guard-zh.png)、[img/BUG-011-fixed-cabin-zh.png](img/BUG-011-fixed-cabin-zh.png)。
