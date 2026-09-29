@@ -31,6 +31,10 @@ func before_each() -> void:
 	unlock_all()
 	_heard.clear()
 	fx_node._last_in_class.clear()
+	# And the valley quiet: calls from the suite before still playing held a class's room ("max"), and a
+	# pack's one call here was none.
+	for p in fx_node._players:
+		(p as AudioStreamPlayer3D).stop()
 	if not fx_node.played.is_connected(_on_played):
 		fx_node.played.connect(_on_played)
 

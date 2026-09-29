@@ -1,0 +1,241 @@
+# res://tests/test_v06_the_night.gd
+# GAME-DESIGN 9.3: "夜里：……危险换成了河边：植龙沿岸巡，基地离河近就会被摸上来"; "火光照到的黑暗边上能看见眼睛反光";
+# v0.6 round four, the player: "火把我觉得在夜里是很有用，但需要不只是照明的作用，比如不用火把，晚上更多的夜行动物
+# 袭击（怕火把但是不怕暗淡灯光的船舱）".
+#
+# At night phytosaurs come up out of the river, at the field's river side, for the Hero and the cabin:
+# a few while a fire burns by the cabin, more while it is dark. They will not come into a fire's light
+# or the torch's: they wait at its edge, eyes shining, and back out as the torch comes at them. At
+# first light they go back to the river. A raid counts only its own.
+#
+# Everything expected is read from Config.
+extends "res://tests/test_base.gd"
+
+var config_node: Object = null
+var game_state_node: Object = null
+var _cleanup_nodes: Array[Node] = []
+
+func before_all() -> void:
+	if tree != null and tree.root != null:
+		config_node = tree.root.get_node_or_null("Config")
+		game_state_node = tree.root.get_node_or_null("GameState")
+
+func before_each() -> void:
+	if game_state_node != null:
+		game_state_node.reset_game()
+
+func after_each() -> void:
+	for n in _cleanup_nodes:
+		if is_instance_valid(n):
+			if n.is_inside_tree():
+				n.get_parent().remove_child(n)
+			if not n.is_queued_for_deletion():
+				n.free()
+	_cleanup_nodes.clear()
+	super.after_each()
+
+func _level() -> Node:
+	var main = await fresh_level()
+	_cleanup_nodes.append(main)
+	return main
+
+func _prowl() -> Dictionary:
+	return config_node.PROWL
+
+func _species() -> String:
+	return String(game_state_node.map_data()["prowlers"].keys()[0])
+
+func _at(part: String) -> float:
+	return float(config_node.DAY["parts"][part])
+
+func _set_clock(t: float, day: int = 1) -> void:
+	game_state_node.day_clock = float(day - 1) * float(config_node.DAY["length"]) + t
+	game_state_node._run_the_day(0.0)
+
+func _flat_gap(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+## A lit campfire `off` from the cabin's door.
+func _campfire(main: Node, off: Vector3) -> Node:
+	stock_everything()
+	var door: Vector3 = main.current_core.door_outside()
+	var fire = main.build_system.place_at("campfire", main.grid_manager.world_to_build_cell(door + off), main.buildings_container)
+	fire._tend(99.0)
+	return fire
+
+## A phytosaur put down at `at`, driven by hand.
+func _phytosaur(main: Node, at: Vector3) -> Node:
+	var d = load(String(config_node.get_dino_script_path(_species()))).new()
+	d.setup(_species())
+	d.home = at
+	d.waypoints = [at, main.current_core.global_position] as Array[Vector3]
+	d.position = at
+	main.dinos_container.add_child(d)
+	d.setup(_species())
+	d.set_physics_process(false)
+	return d
+
+## `d` thinking and walking for `seconds`, a physics frame at a time.
+func _drive(d: Node, seconds: float) -> void:
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var t: float = 0.0
+	while t < seconds and is_instance_valid(d):
+		d.advance_towards_waypoint(dt)
+		t += dt
+		await tree.physics_frame
+
+func test_01_the_phytosaur_hunts_by_night_up_from_the_river() -> void:
+	var s: String = _species()
+	assert_eq(s, "phytosaur", "The valley's night hunter is the phytosaur")
+	assert_true(config_node.keeps_hours(s, "night") and not config_node.keeps_hours(s, "day"), "out at night, not by day")
+	var made: Node = load(String(config_node.get_dino_script_path(s))).new()
+	assert_true(made is ProwlerDino, "a prowler (ProwlerDino)")
+	made.free()
+	assert_true(config_node.VISUALS.has("dino/" + s), "with a model of its own")
+	for kind in ["call", "alert", "bite", "hurt", "death"]:
+		assert_true(config_node.SOUNDS["sounds"].has("%s_%s" % [s, kind]), "and a %s of its own" % kind)
+
+func test_02_its_ways_up_are_on_the_river_side_and_reach_the_cabin() -> void:
+	var main = await _level()
+	await nav_settled(main)
+	var origins: Array = main.night_prowl.origins
+	assert_gt(origins.size(), 0, "It has places to come up")
+	var cabin: Vector3 = main.current_core.global_position
+	for at in origins:
+		assert_lt(float((at as Vector3).x), cabin.x - 15.0, "%s is on the river side, west" % at)
+		var route: PackedVector3Array = main.nav_maps.path(at, main.current_core.door_outside(), 0)
+		assert_gt(route.size(), 1, "and there is a way from %s to the cabin" % at)
+		if route.size() > 1:
+			assert_lt(_flat_gap(route[route.size() - 1], main.current_core.door_outside()), 1.5, "all the way")
+
+func test_03_at_night_one_comes_up_and_makes_for_the_cabin() -> void:
+	var main = await _level()
+	var prowl: NightProwl = main.night_prowl
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	_set_clock(_at("day") + 100.0)
+	prowl._process(float(_prowl()["first_after"]) + 1.0)
+	assert_eq(prowl.out_now(), 0, "By day none comes")
+	_set_clock(_at("night") + 1.0)
+	prowl._process(0.0)
+	prowl._process(float(_prowl()["first_after"]) + 0.1)
+	assert_eq(prowl.out_now(), 1, "A while into the night one comes up")
+	var d: Node = tree.get_nodes_in_group(ProwlerDino.GROUP)[0]
+	var near_one: bool = false
+	for at in prowl.origins:
+		near_one = near_one or _flat_gap(d.global_position, at) < 1.5
+	assert_true(near_one, "out of the river, where it comes up")
+	assert_eq(String(d.dino_type), _species(), "a %s" % _species())
+	assert_true(_flat_gap(d.waypoints[d.waypoints.size() - 1], main.current_core.global_position) < 0.5, "making for the cabin")
+
+func test_04_dark_more_come_lit_a_few() -> void:
+	var main = await _level()
+	var prowl: NightProwl = main.night_prowl
+	_set_clock(_at("night") + 10.0)
+	assert_false(prowl.camp_lit(), "No fire, the camp is dark")
+	assert_eq(prowl.most_now(), int(_prowl()["most_dark"]), "and as many as %d may be out" % int(_prowl()["most_dark"]))
+	_campfire(main, Vector3(-2.0, 0.0, 3.0))
+	assert_true(prowl.camp_lit(), "A fire burning by the cabin lights it")
+	assert_eq(prowl.most_now(), int(_prowl()["most_lit"]), "and only %d may be out" % int(_prowl()["most_lit"]))
+	assert_lt(int(_prowl()["most_lit"]), int(_prowl()["most_dark"]), "(\"不点火，夜里摸上来的就多\")")
+
+func test_05_it_will_not_come_into_a_fires_light() -> void:
+	var main = await _level()
+	await nav_settled(main)
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(25.0, 0.0, 12.0)
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var light: float = float(fire.light_radius())
+	# Put down on the far side of the fire from the cabin, the fire between it and where it is going.
+	var out: Vector3 = (fire.global_position - main.current_core.global_position)
+	out.y = 0.0
+	var d = _phytosaur(main, fire.global_position + out.normalized() * (light + 3.0))
+	var nearest: float = INF
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	for i in int(8.0 / dt):
+		d.advance_towards_waypoint(dt)
+		nearest = minf(nearest, _flat_gap(d.global_position, fire.global_position))
+		if i % 4 == 0:
+			await tree.physics_frame
+	assert_gt(nearest, light - float(_prowl()["flee_inside"]) - 0.3, "It never came further into the light than it stands")
+	assert_true(d.is_wary(), "It keeps to the light's edge")
+	var gap: float = _flat_gap(d.global_position, fire.global_position)
+	assert_almost_eq(gap, light - float(_prowl()["edge_inside"]), 1.2, "just inside it, dimly lit and seen")
+	main.fog._look()
+	assert_true(main.fog.sees(d.global_position), "(where it is seen)")
+
+func test_06_the_torch_drives_it_back() -> void:
+	var main = await _level()
+	await nav_settled(main)
+	_set_clock(_at("night") + 10.0)
+	var hero = main.hero
+	hero.process_mode = Node.PROCESS_MODE_DISABLED
+	hero.global_position = main.current_core.global_position + Vector3(-8.0, 0.0, 8.0)
+	var d = _phytosaur(main, hero.global_position + Vector3(-2.5, 0.0, 0.0))
+	d._think()
+	assert_eq(d.current_target, hero, "In the dark it goes for him")
+	stock_everything()
+	hero.light_torch()
+	var torch: float = float(hero.torch_light())
+	await _drive(d, 4.0)
+	assert_gt(_flat_gap(d.global_position, hero.global_position), torch - float(_prowl()["flee_inside"]) - 0.2,
+		"His torch lit, it backs out of its light")
+	assert_true(d.is_wary(), "and waits at its edge")
+
+func test_07_its_eyes_shine_at_the_edge_of_the_light() -> void:
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(25.0, 0.0, 12.0)
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var light: float = float(fire.light_radius())
+	var d = _phytosaur(main, fire.global_position + Vector3(-(light - 0.5), 0.0, 0.0))
+	assert_gt(d._eyes.size(), 0, "It has eyes of their own to shine (the model's \"Eye\")")
+	var worn: bool = false
+	for m in d.find_child("Body", false, false).find_children("*", "MeshInstance3D", true, false):
+		for i in (m as MeshInstance3D).get_surface_override_material_count():
+			worn = worn or d._eyes.has((m as MeshInstance3D).get_surface_override_material(i))
+	assert_true(worn, "on the body it has now -- set up twice, as it is sent, it is a new body")
+	d._shine()
+	assert_almost_eq(float(d.eye_shine), 1.0, 0.01, "At the light's edge they shine")
+	assert_gt(float(d._eyes[0].emission_energy_multiplier), 0.0, "(lit)")
+	d.global_position = fire.global_position + Vector3(-(light + float(_prowl()["eye_reach"]) + 2.0), 0.0, 0.0)
+	d._shine()
+	assert_almost_eq(float(d.eye_shine), 0.0, 0.001, "Far from any light they are dark")
+
+func test_08_at_first_light_it_goes_back_to_the_river() -> void:
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	var home: Vector3 = main.night_prowl.origins[0]
+	var d = _phytosaur(main, home)
+	d.global_position = main.current_core.global_position + Vector3(-6.0, 0.0, 6.0)
+	_set_clock(_at("day") + 2.0, 2)
+	assert_true(bool(d.going_home), "At first light it goes home")
+	assert_lt(_flat_gap(d.waypoints[d.waypoints.size() - 1], home), 0.5, "to the river it came up from, not the nest")
+
+func test_09_a_raid_counts_only_its_own() -> void:
+	var main = await _level()
+	var wm = main.wave_manager
+	wm.start_wave(1, 3)
+	var alive: int = int(wm.dinos_alive_count)
+	var d = _phytosaur(main, main.current_core.global_position + Vector3(-10.0, 0.0, 6.0))
+	d.take_damage(9999.0)
+	assert_eq(int(wm.dinos_alive_count), alive, "A phytosaur killed in the middle of a raid is not one of the raid")
+	for g in tree.get_nodes_in_group("guard_dinos"):
+		g.take_damage(9999.0)
+		break
+	assert_eq(int(wm.dinos_alive_count), alive, "nor is a nest's guard")
+
+func test_10_none_comes_up_where_he_can_see_it() -> void:
+	var main = await _level()
+	var prowl: NightProwl = main.night_prowl
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = prowl.origins[0] + Vector3(1.5, 0.0, 0.0)
+	await wait_seconds(float(config_node.FOG["every"]) * 3.0 + 0.1)
+	assert_true(main.fog.sees(prowl.origins[0]), "(he is watching one of the ways up)")
+	_set_clock(_at("night") + 10.0)
+	for i in prowl.origins.size():
+		var d = prowl.send_one()
+		if d != null:
+			assert_gt(_flat_gap(d.global_position, prowl.origins[0]), 1.5, "Nothing comes up where he stands")

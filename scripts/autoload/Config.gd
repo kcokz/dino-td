@@ -667,6 +667,38 @@ const TRAPS: Dictionary = {
 	"lane_color": Color(0.95, 0.8, 0.35),
 }
 
+## The night's hunters (NightProwl, ProwlerDino; GAME-DESIGN 9.3; v0.6 round four, the player: "不用火把，
+## 晚上更多的夜行动物袭击（怕火把但是不怕暗淡灯光的船舱）").
+const PROWL: Dictionary = {
+	# One comes up out of the river this many seconds into the night, and another every `every`
+	# after -- while fewer are out than may be: `most_lit` with a fire burning within `lit_within`
+	# metres of the cabin, `most_dark` without ("不点火，夜里摸上来的就多"). The night is 90 s (DAY).
+	"first_after": 8.0,
+	"every": 18.0,
+	"most_lit": 1,
+	"most_dark": 3,
+	"lit_within": 10.0,
+	# It goes for the Hero when he is this near and in the dark ("直接冲着人和基地来").
+	"hunts_within": 8.0,
+	# How it keeps out of a light (FIRE; the torch): it stands `edge_inside` metres inside the light's
+	# edge -- dimly lit there, and seen -- and backs out, at `back_out_pace` of its speed, when it finds
+	# itself further in than `flee_inside`. Along the edge it paces: `pace_step_degrees` round at a time,
+	# every `pace_every` seconds (between the two), at `wary_pace` of its speed, and now and then turns
+	# back (`turn_back_chance`).
+	"edge_inside": 0.6,
+	"flee_inside": 1.6,
+	"back_out_pace": 1.3,
+	"pace_step_degrees": 25.0,
+	"pace_every": [3.0, 5.0],
+	"wary_pace": 0.5,
+	"turn_back_chance": 0.3,
+	# The eye-shine ("火光照到的黑暗边上能看见眼睛反光"): its eyes glow this colour, this bright at a light's
+	# edge or in it, dimming over `eye_reach` metres further out -- a light is what an eye shines back.
+	"eye_color": Color(1.0, 0.45, 0.15),
+	"eye_energy": 12.0,
+	"eye_reach": 3.0,
+}
+
 ## What every fire shares (BUILDINGS kind "fire", Fire.gd), and the torch in his hand (Hero).
 const FIRE: Dictionary = {
 	# The parts of the day a fire burns in (DAY.parts): lit as the dusk comes, out at first light.
@@ -866,6 +898,24 @@ const DINOS: Dictionary = {
 		"drops": {"hide": 2, "bone": 4},
 		"size": Vector3(1.5, 2.0, 1.5),
 	},
+	# The phytosaur: not a crocodile, though it looks like one -- a long-snouted, armoured reptile of
+	# the rivers, Machaeroprosopus in the same Chinle rocks as Coelophysis (GAME-DESIGN 7.2), three
+	# and a half metres of it, a metre high. The night's hunter (9.3: "夜里：……危险换成了河边：植龙沿岸巡，
+	# 基地离河近就会被摸上来"): up out of the river in the dark (NightProwl), for the Hero and the cabin --
+	# and afraid of fire (ProwlerDino). Heavier than a Coelophysis, and slower on land; what it leaves is
+	# meat and bone -- hide is the elites' (v0.6 round three: "精英就掉落皮可以做护甲和鞋子就行了").
+	"phytosaur": {
+		# Out at night (9.3: crocodiles "傍晚到入夜后打猎，夜里还会在离水五十米内的岸上埋伏").
+		"hours": ["night"],
+		"name": "DINO_PHYTOSAUR_NAME",
+		"hp": 8.0,
+		"speed": 3.0,
+		"damage": 1.2,
+		"attack_rate": 0.8,
+		"behaviour": "prowl",
+		"drops": {"food": 2, "bone": 1},
+		"size": Vector3(0.9, 1.0, 0.9),
+	},
 	"pterosaur": {
 		"name": "DINO_PTEROSAUR_NAME",
 		"hp": 2.0,
@@ -883,6 +933,8 @@ const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
 const DINO_BEHAVIOURS: Dictionary = {
 	"pack": "res://scripts/entities/PackDino.gd",
 	"siege": "res://scripts/entities/SiegeDino.gd",
+	# Hunts by night, and will not come into a fire's light (GAME-DESIGN 9.3).
+	"prowl": "res://scripts/entities/ProwlerDino.gd",
 }
 
 ## The script a species is built from. Anything without a declared habit gets the
@@ -1106,6 +1158,7 @@ const COLORS: Dictionary = {
 	"coelophysis": Color(0.55, 0.40, 0.18),     # sand-ochre
 	"coelophysis_alpha": Color(0.45, 0.31, 0.14),
 	"postosuchus": Color(0.30, 0.23, 0.15),     # umber, armoured
+	"phytosaur": Color(0.22, 0.24, 0.15),       # dark olive, a river's colour
 	"pterosaur": Color(0.55, 0.50, 0.44),
 	"nest": Color(0.4, 0.1, 0.5),
 	"caveman": Color(0.1, 0.8, 0.8)
@@ -1228,6 +1281,11 @@ const MAPS: Dictionary = {
 	# (RAIDS.nest_most), unseen in the mist. Every one is walkable and reaches the cabin
 	# (test_v06_from_the_edge).
 	"reinforce_from": [Vector2i(-3, -10), Vector2i(3, -10)],
+	# Who comes up out of the river at night (NightProwl, GAME-DESIGN 9.3), by weight, and where: the
+	# field's west edge, the river side -- the river runs past it a few metres out (TERRAIN.river).
+	# Every one is walkable and reaches the cabin (test_v06_the_night).
+	"prowlers": {"phytosaur": 1.0},
+	"prowl_from": [Vector2i(-10, -5), Vector2i(-10, 2), Vector2i(-10, 7)],
 	# The beacon (GAME-DESIGN 8.3): the run's main line, and its only way to be won.
 	"beacon": {
 		# Repaired at the cabin a stage at a time, in order, each stage from a higher tier
@@ -1357,6 +1415,7 @@ const MAPS: Dictionary = {
 		"default_nest_cell": Vector2i(0, -18),
 		"entries": [Vector2i(-21, 0), Vector2i(20, 0), Vector2i(0, 20)],
 		"reinforce_from": [Vector2i(-6, -21), Vector2i(0, -21), Vector2i(6, -21)],
+		"prowl_from": [Vector2i(-21, -6), Vector2i(-21, 3), Vector2i(-21, 10)],
 		"default_blocked_cells": [
 			# The valley's outcrop north of the cabin.
 			Vector2i(-3, -5), Vector2i(-2, -5), Vector2i(2, -5), Vector2i(3, -5),
@@ -1931,6 +1990,14 @@ const SOUNDS: Dictionary = {
 		"postosuchus_bite":  {"files": ["postosuchus_bite"], "db": 0.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
 		"postosuchus_hurt":  {"files": ["postosuchus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
 		"postosuchus_death": {"files": ["postosuchus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
+		# The phytosaur: the crocodile-line's hiss and growl, a smaller animal's -- Postosuchus's own
+		# recordings pitched up and quieter, heard from nearer (its "unit"); in the dark, how the night's
+		# hunters are known before they are seen.
+		"phytosaur_call":  {"files": ["postosuchus_call_1", "postosuchus_call_2"], "db": -6.0, "pitch": 1.3, "class": "call", "unit": 7.0, "reach": 60.0},
+		"phytosaur_alert": {"files": ["postosuchus_hiss"], "db": -4.0, "pitch": 1.25, "class": "alert", "unit": 7.0},
+		"phytosaur_bite":  {"files": ["postosuchus_bite"], "db": -3.0, "pitch": 1.2, "class": "bite", "unit": 6.0},
+		"phytosaur_hurt":  {"files": ["postosuchus_hurt"], "db": -4.0, "pitch": 1.25, "class": "hurt", "unit": 6.0},
+		"phytosaur_death": {"files": ["postosuchus_death"], "db": -2.0, "pitch": 1.2, "class": "death", "unit": 9.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
 		# His work.
@@ -2477,6 +2544,9 @@ const VISUALS: Dictionary = {
 		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis_alpha"},
 	"dino/postosuchus":     {"scene": "res://assets/models/triassic/postosuchus.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus"},
+	# Long-snouted and armoured, its own eyes a material the game lights (ProwlerDino, the eye-shine).
+	"dino/phytosaur":       {"scene": "res://assets/models/triassic/phytosaur.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "phytosaur"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours

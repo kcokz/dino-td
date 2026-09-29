@@ -12,6 +12,13 @@
 #                 archosaur four or five metres long: a deep, narrow skull, a longer body and
 #                 tail, forelimbs long enough to walk on, and rows of bony scutes down its back,
 #                 dark olive and umber
+#   phytosaur     from the triceratops: not a crocodile, though it looks like one -- a phytosaur
+#                 (Machaeroprosopus, from the same Chinle rocks as Coelophysis), four metres long,
+#                 its frill and horns cut away, the beak drawn out into a long narrow snout, a long
+#                 body and a longer tail flattened from the sides for swimming, armour down its back,
+#                 dark olive above and pale below; and eyes of their own, set high on the skull, which
+#                 the game makes shine back a light in the dark (GAME-DESIGN 9.3: "鳄类的眼睛夜里真的
+#                 会反光")
 #
 # RESHAPED, NOT REDRAWN. Each is posed -- bones stretched and slimmed, never turned -- the pose
 # baked into its mesh, and that pose made the rest pose. Its bones keep their names and their
@@ -121,6 +128,47 @@ ANIMALS = {
                      ("Tail3", 0.5, 0.14), ("Tail4", 0.5, 0.11)],
             "spread": 0.16,              # each row is a pair, this far either side of the spine
         },
+    },
+    "phytosaur": {
+        "source": "triceratops.glb",
+        "bones": {
+            # The snout: long and narrow, flat on top -- a phytosaur's skull is a fifth of it.
+            "Head": ((0.5, 2.9, 0.55), True),
+            "Neck": ((0.85, 1.25, 0.8), True),
+            # A long, low trunk: stretched from end to end and a little flattened.
+            "Shoulders": ((0.95, 1.35, 0.8), True),
+            "Torso": ((1.15, 2.0, 1.1), True),
+            "Hips": ((1.0, 1.5, 0.8), True),
+            "Back": ((0.9, 1.3, 0.8), True),
+            # A long tail flattened from the sides: what it swims with.
+            "Tail1": ((0.75, 1.7, 0.85), True),
+            "Tail2": ((0.62, 1.8, 0.85), True),
+            "Tail3": ((0.55, 1.9, 0.85), True),
+            "Tail4": ((0.5, 1.7, 0.85), True),
+            "Tail5": ((0.45, 1.7, 0.85), True),
+        },
+        "colours": {
+            "Purple": (0.045, 0.050, 0.028),     # dark olive above, as a crocodile's back
+            "LightBrown": (0.22, 0.20, 0.12),    # a pale belly and jaw
+            "Brown": (0.025, 0.024, 0.016),
+        },
+        # The frill and the horns, as for Placerias -- the frill's back edge over the shoulders too; the
+        # beak stays -- it is the snout.
+        "cut": {"bones": ["Head", "Neck", "Shoulders"], "above": 0.3},
+        "scutes": {
+            "colour": (0.025, 0.027, 0.015),
+            "rows": [("Neck", 0.3, 0.26), ("Neck", 0.8, 0.28), ("Shoulders", 0.2, 0.32), ("Shoulders", 0.55, 0.34),
+                     ("Shoulders", 0.9, 0.34), ("Torso", 0.15, 0.36), ("Torso", 0.4, 0.36), ("Torso", 0.65, 0.36),
+                     ("Torso", 0.9, 0.35), ("Hips", 0.5, 0.34), ("Back", 0.5, 0.32), ("Tail1", 0.25, 0.3),
+                     ("Tail1", 0.75, 0.28), ("Tail2", 0.3, 0.25), ("Tail2", 0.8, 0.22), ("Tail3", 0.4, 0.19),
+                     ("Tail3", 0.9, 0.16), ("Tail4", 0.5, 0.13)],
+            "spread": 0.15,
+        },
+        # Its eyes, on top of the skull at the back of the snout (bone, how far along it, how far up
+        # from its line, how far either side, how big) -- a material of their own ("Eye"), which the
+        # game lights when a fire is near in the dark (Dino eye-shine).
+        "eyes": {"bone": "Head", "along": 0.18, "up": 0.34, "apart": 0.2, "size": 0.12,
+                 "colour": (0.30, 0.24, 0.08)},
     },
 }
 
@@ -246,6 +294,40 @@ def _top_along(mesh):
     return top
 
 
+def add_eyes(arm, mesh, spec):
+    """Two small domes on the skull, each weighted wholly to the head, in a material of their own
+    ("Eye") the game can find and light."""
+    import bmesh
+    mat = bpy.data.materials.new("Eye")
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (*spec["colour"], 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.2
+    mesh.data.materials.append(mat)
+    slot = len(mesh.data.materials) - 1
+    to_mesh = mesh.matrix_world.inverted() @ arm.matrix_world
+    bone = arm.data.bones[spec["bone"]]
+    group = mesh.vertex_groups.get(spec["bone"]) or mesh.vertex_groups.new(name=spec["bone"])
+    at = to_mesh @ bone.head_local.lerp(bone.tail_local, spec["along"])
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    deform = bm.verts.layers.deform.verify()
+    top_of = _top_along(mesh)
+    for side in (-1.0, 1.0):
+        centre = at.copy()
+        centre.x += side * spec["apart"]
+        centre.z = max(centre.z + spec["up"], top_of(centre) - spec["size"] * 0.4)
+        made = bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=spec["size"],
+                                         matrix=__import__("mathutils").Matrix.Translation(centre))
+        for v in made["verts"]:
+            v[deform][group.index] = 1.0
+            for f in v.link_faces:
+                f.material_index = slot
+    bm.normal_update()
+    bm.to_mesh(mesh.data)
+    bm.free()
+
+
 def cut_off(arm, mesh, spec):
     """Deletes what is weighted mostly to `bones` and stands `above` (model units) over the line
     they make -- a frill, a horn -- and closes the holes it leaves."""
@@ -338,6 +420,8 @@ def main():
             cut_off(arm, mesh, spec["cut"])
         if spec["scutes"]:
             add_scutes(arm, mesh, spec["scutes"])
+        if spec.get("eyes"):
+            add_eyes(arm, mesh, spec["eyes"])
         path = os.path.join(OUT, name + ".glb")
         export(arm, mesh, path)
         print("[OK] %s: %d verts, %.2f x %.2f x %.2f, clips %s" % (

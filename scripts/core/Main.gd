@@ -110,6 +110,8 @@ func _exit_tree() -> void:
 var nav_maps: NavMaps = null
 ## What the run has been -- each raid's account, and where his time went (v0.6 T8, T9).
 var run_stats: RunStats = null
+## The night's hunters, up from the river (NightProwl, GAME-DESIGN 9.3).
+var night_prowl: NightProwl = null
 
 ## The fog of war over the field (FogOfWar, GAME-DESIGN 9.3), laid afresh for each run.
 var fog: FogOfWar = null
@@ -268,6 +270,12 @@ func _ensure_scene_dependencies() -> void:
 		run_stats.name = "RunStats"
 		add_child(run_stats)
 
+	if night_prowl == null:
+		night_prowl = NightProwl.new()
+		night_prowl.name = "NightProwl"
+		add_child(night_prowl)
+	night_prowl.dinos_container = dinos_container
+
 	# 6. Discover Path Waypoints
 	_discover_waypoints()
 
@@ -322,6 +330,13 @@ func _discover_waypoints() -> void:
 			for cell in _map().get("reinforce_from", []):
 				edges.append(grid_manager.cell_to_world(cell))
 		wave_manager.reinforce_positions = edges
+	# The river side of the field, where the night's hunters come up (MAPS.<id>.prowl_from).
+	if night_prowl:
+		var banks: Array[Vector3] = []
+		if grid_manager and grid_manager.has_method("cell_to_world"):
+			for cell in _map().get("prowl_from", []):
+				banks.append(grid_manager.cell_to_world(cell))
+		night_prowl.origins = banks
 
 func _wire_signals() -> void:
 	if hud:
@@ -2020,6 +2035,8 @@ func restart_game() -> void:
 		_on_cabin_view_changed(false)
 	if run_stats and is_instance_valid(run_stats):
 		run_stats.reset()
+	if night_prowl and is_instance_valid(night_prowl):
+		night_prowl.reset()
 
 	# 1. Reset GameState (AP, resources, multipliers, wave, phase, game_over flag)
 	var gs = _get_game_state()

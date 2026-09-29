@@ -619,6 +619,10 @@ func _spawn_single_dino() -> Node:
 func _on_dino_died(_dino: Node) -> void:
 	if not is_wave_active:
 		return
+	# Only the raid's own: a nest's guard killed in the middle of a raid, or a night's hunter (NightProwl),
+	# is not one of it -- and was counted off it, so a raid could be over with its animals still out.
+	if _dino != null and is_instance_valid(_dino) and (_dino.is_in_group("guard_dinos") or _dino.is_in_group("prowlers")):
+		return
 
 	dinos_alive_count = maxi(0, dinos_alive_count - 1)
 	_check_wave_completion()
@@ -659,7 +663,7 @@ func _on_day_part_changed(part: String, _day: int) -> void:
 	if final_wave or cfg == null or not cfg.has_method("keeps_hours") or not is_inside_tree():
 		return
 	for d in get_tree().get_nodes_in_group("dinos"):
-		if not is_instance_valid(d) or d.is_in_group("guard_dinos") or not d.has_method("go_home"):
+		if not is_instance_valid(d) or d.is_in_group("guard_dinos") or d.is_in_group("prowlers") or not d.has_method("go_home"):
 			continue
 		if not cfg.keeps_hours(String(d.dino_type), part):
 			d.go_home(nest_spawn_position)
