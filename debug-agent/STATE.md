@@ -18,6 +18,7 @@
 | [BUG-016](bug/BUG-016-night-thick-mist-is-black.md) | 夜里没去过的浓雾是纯黑（又像黑色战争迷雾） | 中 | fixed 772b9c9 | 2026-09-29 |
 | [BUG-017](bug/BUG-017-torch-flame-trails-behind-him.md) | 举着火把走路，火苗拖出一串 3 米长的火球 | 低 | open | 2026-09-29 |
 | [BUG-018](bug/BUG-018-phytosaur-stays-in-the-torchlight-when-cornered.md) | 火把把植龙逼到场地边，它就停在火光里贴着人 | 低～中 | open | 2026-09-29 |
+| [BUG-019](bug/BUG-019-hero-does-not-hit-back-on-his-way-to-work.md) | 夜里去干活的路上被植龙堵住咬死，不还手 | 中 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -57,6 +58,12 @@
 | TASK-021 | 火与夜、怕火的植龙 | **done** 大体过；另开 BUG-017、BUG-018 |
 
 ## 检查记录
+
+### 2026-09-29 第 14 次（自由找 bug，7f8ee65，大山谷）
+
+- `map:valley_large play:25` 10:35 输：第 2 夜植龙咬栅栏，机器人出去修，在 (−3, 4) 原地走 4 秒，被咬死，打架 0% → BUG-019（`_hit_back` 只在砍、造的时候还手）。
+- `probe:bitten_on_the_way`：没复现堵路，但一只植龙能把他从 10 咬到 2.8。
+- 抽搐 1 份：天亮植龙回河边被当成 mill → 补进 BUG-015。
 
 ### 2026-09-29 第 13 次（自由找 bug，7f8ee65）
 
