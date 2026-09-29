@@ -167,11 +167,11 @@ func test_09_the_first_maps_nest_is_its_own_species_nesting_ground() -> void:
 	assert_true(ResourceLoader.exists(String(config_node.VISUALS[key]["scene"])), "from its own model")
 	assert_ne(config_node.get_visual_size(key), config_node.get_visual_size("nest"), "not the mound's size: a spread of scrapes")
 
-func test_10_never_seen_is_black_to_the_valleys_far_walls() -> void:
+func test_10_never_seen_is_unknown_to_the_valleys_far_walls() -> void:
 	# v0.6 round four: "迷雾没有遮挡远景只遮挡了近景很奇怪，而且没去过的地方应该完全看不到".
 	var main = await _level()
 	var fog: FogOfWar = main.fog
-	assert_almost_eq(float(_fog()["unseen"]), 1.0, 0.001, "Never seen is black: nothing of it known")
+	assert_almost_eq(float(_fog()["unseen"]), 1.0, 0.001, "Never seen is wholly unknown")
 	var cabin: Vector3 = main.current_core.global_position
 	var far_wall: Vector3 = cabin + Vector3(0.0, 0.0, -(fog.half + 20.0))
 	assert_almost_eq(fog.shade_at(far_wall), 1.0, 0.001, "Past the field, the valley's far walls are never seen")
@@ -187,3 +187,54 @@ func test_10_never_seen_is_black_to_the_valleys_far_walls() -> void:
 		assert_eq(mat.get_shader_parameter("shroud"), fog._texture, "from what is seen")
 	fog.reveal_all()
 	assert_false(fog.shroud.visible, "Lifted, it is not drawn at all")
+
+func test_11_it_is_the_valleys_own_mist_at_the_hour() -> void:
+	# "全黑是不是有点不真实": mist in the colour of the valley's haze -- pale by day, dark blue at night.
+	var main = await _level()
+	var fog: FogOfWar = main.fog
+	var env: Environment = fog.get_world_3d().environment
+	assert_not_null(env, "The valley has its haze")
+	if env == null:
+		return
+	var mist: Dictionary = _fog()["mist"]
+	assert_lt(float(mist["never"]), 1.0, "Never seen is thick mist, the lie of the land a shade through it -- not black")
+	assert_gt(float(mist["never"]), float(mist["veil"]), "thicker than over ground seen before")
+	for haze in [Color(0.76, 0.80, 0.74), Color(0.12, 0.14, 0.22)]:
+		env.fog_light_color = haze
+		fog._match_the_haze()
+		var grey: float = haze.get_luminance()
+		var want: Color = Color(grey, grey, grey).lerp(haze, float(mist["saturation"])) * float(mist["tone"])
+		var got: Color = fog._material.get_shader_parameter("mist_color")
+		assert_almost_eq(got.b, want.b, 0.001, "The mist takes the haze's colour at the hour (%s)" % haze)
+		assert_almost_eq(got.r, want.r, 0.001, "(red too)")
+
+func test_12_nothing_standing_on_never_seen_ground_is_drawn() -> void:
+	# Through the mist a tree or a rock showed as its own lighter shape: what stands on ground never
+	# seen is not drawn -- and once seen, it is there for good, as the land is.
+	var main = await _level()
+	var fog: FogOfWar = main.fog
+	var far: Node3D = null
+	for n in tree.get_nodes_in_group("resource_nodes"):
+		if n is Node3D and not fog.is_seen((n as Node3D).global_position):
+			far = n
+			break
+	assert_not_null(far, "Something growing out in the unknown")
+	if far == null:
+		return
+	assert_false(far.visible, "Never seen, it is not drawn")
+	main.hero.global_position = far.global_position + Vector3(1.5, 0.0, 1.5)
+	await _settle()
+	assert_true(far.visible, "Seen, it is")
+	main.hero.global_position = main.current_core.door_outside()
+	await _settle()
+	assert_true(far.visible and not fog.is_in_sight(far.global_position), "and out of sight again, it stays drawn")
+
+func test_13_a_moment_in_the_mist_is_explained_once() -> void:
+	# "只要玩家能感觉出来这个雾是迷雾不是天气就行".
+	var explained = watch_signal(tree.root.get_node("EventBus"), "fog_explained")
+	var main = await _level()
+	await wait_physics_frames(int(ceil((float(_fog()["hint_after"]) + 1.0) * float(Engine.physics_ticks_per_second))))
+	assert_eq(explained.emit_count, 1, "A moment into the run, what the mist is is said")
+	await wait_physics_frames(int(ceil(float(_fog()["hint_after"]) * float(Engine.physics_ticks_per_second))))
+	assert_eq(explained.emit_count, 1, "once")
+	assert_ne(tr("HINT_FOG"), "HINT_FOG", "in words the player reads")

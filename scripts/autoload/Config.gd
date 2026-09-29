@@ -1994,11 +1994,22 @@ const FOG: Dictionary = {
 	# over about this long, so the edge of the fog moves rather than jumps.
 	"every": 0.1,
 	"ease": 0.4,
-	# How dark, 0 clear to 1 black: never seen -- black, nothing of it known, not the lie of the land
-	# (v0.6 round four: "没去过的地方应该完全看不到"); seen, out of sight -- the land dimmed, no
-	# animals on it. In sight is clear.
+	# How unknown each cell is, 0 clear to 1 (the shroud's values; the mist below draws them): never
+	# seen; seen, out of sight -- the land, no animals on it. In sight is clear.
 	"unseen": 1.0,
 	"seen": 0.55,
+	# How it is drawn: the valley's own mist, not black (v0.6 round four: "考虑到这是一个追求真实场景的
+	# 游戏，全黑是不是有点不真实"). Its colour is the environment's haze at the hour, times `tone` --
+	# pale by day, warm at dusk, dark blue at night -- `saturation` of the haze's own colour kept
+	# (the dusk haze as it is, 0.80 0.46 0.34, made a red desert of the valley). `veil`: how thick over seen ground, the land
+	# plain through it; `never`: over never-seen ground, the lie of the land a shade through it and
+	# nothing on it drawn (FogOfWar._hide_the_unseen). `wisps`: how much its drifting shapes thicken
+	# and thin it; `wisp_scale`, per metre, how big they are; `wisp_drift`, how fast they go.
+	"mist": {"tone": 0.85, "saturation": 0.5, "veil": 0.4, "never": 0.9, "wisps": 0.14, "wisp_scale": 0.05,
+		"wisp_drift": Vector2(0.010, 0.004)},
+	# Seconds into a run the mist is explained, once: ground not seen yet -- not the weather ("只要
+	# 玩家能感觉出来这个雾是迷雾不是天气就行").
+	"hint_after": 4.0,
 	# How far each sees, in metres: the Hero; the cabin; a finished building by its kind -- a trap
 	# sees down its lane, a stake barely past itself.
 	"sight": {"hero": 10.0, "core": 9.0, "trap": 7.0, "wall": 2.5, "building": 3.0},

@@ -5,14 +5,17 @@ extends Node3D
 ## The fog of war (GAME-DESIGN 9.3; v0.6 round three: "游戏要加上战争迷雾，人不能一开始就知道恐龙巢穴"):
 ## the field in three states -- never seen (dark), seen but out of sight now (the land, dimmed, and
 ## no animals on it), in sight (everything). What sees is the Hero, the cabin and what he has built
-## (Config.FOG.sight), and less far at dusk and in the night. Never seen is black -- the land, the
-## trees, the river, and everything past the field to the valley's far walls: nothing is known of it
-## (v0.6 round four: "迷雾没有遮挡远景只遮挡了近景很奇怪，而且没去过的地方应该完全看不到"). It is drawn by
-## one quad over the whole screen, last of all (assets/shaders/fog_of_war.gdshader), black laid over
-## each pixel by how seen the ground under it is: a decal laid on the ground left the river, which is
-## drawn see-through, and the far walls in their haze as they were. Animals out of sight are hidden
-## outright, and hidden, cannot be pointed at (Main._is_hoverable). The nest is not seen until it is:
-## the first time it comes into sight it is found (EventBus.nest_found, GameState.nest_found).
+## (Config.FOG.sight), and less far at dusk and in the night. Never seen is thick mist in the
+## valley's own haze -- the lie of the land a shade through it, and nothing on it drawn: no tree, no
+## rock, no herd -- and everything past the field to the valley's far walls with it (v0.6 round four:
+## "没去过的地方应该完全看不到"; then "全黑是不是有点不真实"). It is drawn by one quad over the whole
+## screen, last of all (assets/shaders/fog_of_war.gdshader), the mist laid over each pixel by how
+## seen the ground under it is: a decal laid on the ground left the river, which is drawn
+## see-through, and the far walls in their haze as they were. It is the fog of war and not weather
+## because it clears round everything that sees, and nowhere else. Animals out of sight are hidden
+## outright, and hidden, cannot be pointed at (Main._is_hoverable). The nest is not seen until it
+## is: the first time it comes into sight it is found (EventBus.nest_found, GameState.nest_found).
+## A moment into a run it is explained, once (EventBus.fog_explained).
 
 ## Metres across the field's half, the margin round it included; metres to a cell; cells across.
 var half: float = 32.0
@@ -30,6 +33,9 @@ var _texture: ImageTexture = null
 var shroud: MeshInstance3D = null
 var _material: ShaderMaterial = null
 var _clock: float = 0.0
+## Seconds of this run played, and whether the mist has been explained yet (Config.FOG.hint_after).
+var _played: float = 0.0
+var _explained: bool = false
 ## Everything seen and in sight, and nothing hidden: for a view that has to show the whole field.
 var revealed: bool = false
 
@@ -67,8 +73,65 @@ func setup(field_half: float) -> void:
 	_material.set_shader_parameter("shroud", _texture)
 	_material.set_shader_parameter("origin", Vector2(global_position.x, global_position.z) if is_inside_tree() else Vector2.ZERO)
 	_material.set_shader_parameter("half_size", half)
+	var mist: Dictionary = cfg.get("mist", {})
+	_material.set_shader_parameter("seen_level", float(cfg.get("seen", 0.55)))
+	for key in ["veil", "never", "wisps", "wisp_scale", "wisp_drift"]:
+		if mist.has(key):
+			_material.set_shader_parameter(key, mist[key])
+	_material.set_shader_parameter("drift", _wisps())
+	_played = 0.0
+	_explained = false
 	_look()
 	_paint(1.0)
+	_match_the_haze()
+
+## The mist's own shapes: the engine's noise, tiling, soft (Config.FOG.mist.wisp_scale sizes them).
+static func _wisps() -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.02
+	noise.fractal_octaves = 3
+	var tex := NoiseTexture2D.new()
+	tex.width = 256
+	tex.height = 256
+	tex.seamless = true
+	tex.generate_mipmaps = true
+	tex.noise = noise
+	return tex
+
+## The mist in the valley's haze at this hour: the environment's fog colour, which the day turns
+## (SceneEnvironment) -- pale by day, warm at dusk, dark blue at night -- greyed towards its own
+## lightness (Config.FOG.mist.saturation: the dusk haze as it is made a red desert of the valley) and
+## toned (mist.tone).
+func _match_the_haze() -> void:
+	if _material == null or not is_inside_tree() or get_world_3d() == null:
+		return
+	var env: Environment = get_world_3d().environment
+	if env == null:
+		for we in get_tree().root.find_children("*", "WorldEnvironment", true, false):
+			env = (we as WorldEnvironment).environment
+			break
+	if env == null:
+		return
+	var mist: Dictionary = _cfg().get("mist", {})
+	var tone: float = float(mist.get("tone", 0.85))
+	var haze: Color = env.fog_light_color
+	var grey: float = haze.get_luminance()
+	var tint: Color = Color(grey, grey, grey).lerp(haze, float(mist.get("saturation", 0.5)))
+	_material.set_shader_parameter("mist_color", Color(tint.r * tone, tint.g * tone, tint.b * tone))
+
+## What the mist is, said once a moment into the run (Config.FOG.hint_after): mist that is the
+## unknown, not the weather (v0.6 round four: "只要玩家能感觉出来这个雾是迷雾不是天气就行").
+func _explain(delta: float) -> void:
+	if _explained or revealed:
+		return
+	_played += delta
+	if _played < float(_cfg().get("hint_after", 4.0)):
+		return
+	_explained = true
+	var eb = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("fog_explained"):
+		eb.fog_explained.emit()
 
 func _cfg() -> Dictionary:
 	var cfg = get_node_or_null("/root/Config") if is_inside_tree() else Engine.get_main_loop().root.get_node_or_null("Config")
@@ -77,6 +140,7 @@ func _cfg() -> Dictionary:
 func _process(delta: float) -> void:
 	if cells <= 0 or _seen.is_empty():
 		return
+	_explain(delta)
 	_clock -= delta
 	if _clock > 0.0:
 		return
@@ -85,6 +149,7 @@ func _process(delta: float) -> void:
 	_look()
 	_paint(every)
 	_hide_the_unseen()
+	_match_the_haze()
 
 # ==============================================================================
 # What is seen
@@ -230,6 +295,18 @@ func _hide_the_unseen() -> void:
 	for d in get_tree().get_nodes_in_group("dinos"):
 		if d is Node3D and is_instance_valid(d):
 			(d as Node3D).visible = is_in_sight((d as Node3D).global_position)
+	# What stands on never-seen ground is not drawn at all: through the mist its shape showed -- a
+	# tree, a rock, a pile -- lighter than the ground round it. Seen once, it is there for good, as
+	# the land is. The herds on the valley's walls are never seen.
+	for group in ["resource_nodes", "drops"]:
+		for thing in get_tree().get_nodes_in_group(group):
+			if thing is Node3D and is_instance_valid(thing):
+				(thing as Node3D).visible = is_seen((thing as Node3D).global_position)
+	var herds: Node = get_parent().get_node_or_null("Herds") if get_parent() != null else null
+	if herds != null:
+		for animal in herds.get_children():
+			if animal is Node3D:
+				(animal as Node3D).visible = is_seen((animal as Node3D).global_position)
 	for nest in get_tree().get_nodes_in_group("nest"):
 		if not (nest is Node3D) or not is_instance_valid(nest):
 			continue

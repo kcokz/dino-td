@@ -228,7 +228,7 @@ func _bus_handlers(eb: Node) -> Array:
 	var out: Array = []
 	for pair in [["resources_changed", _on_resources_changed], ["wave_started", _on_wave_started],
 			["stage_wave_started", _on_stage_wave_started], ["day_part_changed", _on_day_part_changed],
-			["nest_found", _on_nest_found],
+			["nest_found", _on_nest_found], ["fog_explained", _on_fog_explained],
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
@@ -626,6 +626,11 @@ func _side_of_the_nest() -> String:
 	var sides: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 	var turn: float = fposmod(rad_to_deg(atan2(d.x, -d.z)), 360.0)
 	return sides[int(round(turn / 45.0)) % 8]
+
+## A moment into the run (FogOfWar): what the mist is -- ground not yet seen, cleared by going
+## there or building near it -- so it is not taken for the weather.
+func _on_fog_explained() -> void:
+	show_hint(tr("HINT_FOG"), UiTheme.toast_seconds("read"), "info")
 
 ## The nest found (FogOfWar): said, with what it is good for.
 func _on_nest_found(_nest: Node) -> void:

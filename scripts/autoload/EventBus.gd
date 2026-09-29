@@ -71,6 +71,8 @@ signal stage_wave_started(size: int)
 signal day_part_changed(part: String, day: int)
 ## The nest has come into sight for the first time (FogOfWar): found.
 signal nest_found(nest: Node)
+## A moment into a run: the mist is to be explained, once (FogOfWar; Config.FOG.hint_after).
+signal fog_explained()
 ## A raider whose hours are over is back at its nest and gone (Dino.go_home): not killed.
 signal dino_went_home(dino: Node)
 ## An animal twitched, and this is the report on it (TwitchWatch): for whatever keeps reports.

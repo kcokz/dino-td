@@ -75,7 +75,9 @@ func test_01_a_man_chopping_under_a_crown_is_still_the_one_pointed_at() -> void:
 	# Beside the trunk, under the crown -- where he stands to chop it.
 	var reach: float = float(trunk_tree.block_radius()) + float(config_node.HERO["width"]) * 0.5 + 0.05
 	hero.global_position = trunk_tree.global_position + Vector3(0.0, 0.0, reach)
-	await wait_physics_frames(2)
+	# And the fog has looked again: a tree on ground never seen is not drawn, nor pointed at, until
+	# he has seen it (FogOfWar._hide_the_unseen) -- he is put down beside it, not walked there.
+	await wait_physics_frames(int(ceil(float(config_node.FOG["every"]) * 2.0 * float(Engine.physics_ticks_per_second))) + 2)
 	var at: Vector2 = _on_screen(main, hero)
 	var passed: Array = main._objects_along_ray(at)
 	assert_true(passed.has(trunk_tree), "The crown is in the way of the ray to him")
