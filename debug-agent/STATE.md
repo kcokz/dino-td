@@ -10,8 +10,9 @@
 | [BUG-002](bug/BUG-002-launch-button-stays-after-launch.md) | 启动以后"启动信标"按钮还在卡片上 | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
-| [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open（7817a1e 复测：没好，5～11 份） | 2026-09-28 |
+| [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open（f65f8ea 复测：好了一部分，还没过，见 TASK-011） | 2026-09-28 |
 | [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | open（7817a1e 上明显好了：4～6 份 → 1 份，等 dev 派任务再关） | 2026-09-28 |
+| [BUG-009](bug/BUG-009-full-ring-raid-piles-on-one-crossbow.md) | 整圈栅栏 + 窝弩：来袭全冲同一架窝弩，堆在栅栏角外转圈、顶 | 中 | open | 2026-09-28 |
 | [BUG-008](bug/BUG-008-twitch-watch-misses-a-slow-swing.md) | 抽搐监测漏报：原地不动、每秒甩一次头 22 秒 | 中 | open | 2026-09-28 |
 | [BUG-006](bug/BUG-006-raid-stepping-out-at-dusk-never-goes-home.md) | 天快黑时出发的来袭，黄昏后才出巢的那些不回巢，照咬船舱 | **高** | **fixed** d2c30d5 | 2026-09-28 |
 | [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
@@ -32,6 +33,7 @@
 | TASK-008 | 战争迷雾和找巢 | **done** 通过 |
 | TASK-009 | 复测 BUG-006 | **done** 通过 |
 | TASK-010 | 抽搐监测：找漏报和误报 | **done**（BUG-007；建议加 stall） |
+| TASK-011 | 复测 BUG-005；整圈栅栏的抽搐 | **done**，没通过（BUG-005 仍 open）；另开 BUG-009 |
 | TASK-012 | 迷雾：没去过的全黑，远景也遮住 | **done** 通过 |
 
 ## 检查记录

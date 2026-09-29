@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"ring_traps": await _p_ring_traps()
 			"black_fog": await _p_black_fog()
 			"fps": await _p_fps()
 			"twitch_cam": await _p_twitch_cam()
@@ -767,6 +768,15 @@ func _p_half_fence(bare: bool) -> void:
 	wm.auto_raid_enabled = false
 	cabin.max_hp = 100000.0
 	cabin.current_hp = 100000.0
+	# DA_HERO_IN: the Hero inside at the bench, out of the raid's way (else he stands by the door,
+	# and what crowds there may be crowding him).
+	if OS.get_environment("DA_HERO_IN") != "":
+		_main._walk_to_bench(cabin.station("workbench"))
+		var tin := 0.0
+		while not cabin.hero_inside and tin < 20.0:
+			await _advance(0.25)
+			tin += 0.25
+		_say("INFO", "the Hero is inside: %s" % cabin.hero_inside)
 	wm.start_wave(3, 10)
 	var stall_now: Dictionary = {}
 	var stall_max: Dictionary = {}
@@ -820,6 +830,10 @@ func _p_half_fence(bare: bool) -> void:
 			await _portrait("t35", centre, 14.0)
 		if is_equal_approx(t, 18.5) or is_equal_approx(t, 19.0):
 			await _portrait("west_end_%d" % int(t * 10), centre + Vector3(-3.5, 0.0, 0.5), 5.0)
+		# The cabin's south-west corner, by the door, where one waits and swings (BUG-005/008): a close
+		# strip of five a quarter-second apart.
+		if t >= 19.0 and t <= 20.0 and OS.get_environment("DA_FILM_CORNER") != "":
+			await _portrait("sw_corner_%03d" % int(t * 100), centre + Vector3(-5.0, 0.0, 1.6), 3.0)
 	var worst := 0.0
 	var worst_what := ""
 	for id in stall_max:
@@ -1546,6 +1560,78 @@ func _fps_over(seconds: float) -> float:
 		await process_frame
 		frames += 1
 	return float(frames) / seconds
+
+## TASK-011's second part: the layout of `siege:4:12:1` -- a sealed ring of palisade 6.5 m round the
+## cabin with four set crossbows in its nest side, facing out -- and a raid of twelve. What the raid
+## does at the ring: an overhead picture at 12 s and 20 s, and the first four twitch reports filmed.
+func _p_ring_traps() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var wm = _main.wave_manager
+	var cabin = _main.current_core
+	var centre: Vector3 = cabin.global_position
+	var ring: Array[Vector2i] = []
+	var seen := {}
+	var around: int = int(ceil(TAU * 6.5 / float(cfg.BUILD_CELL))) * 4
+	for i in range(around):
+		var a: float = TAU * float(i) / float(around)
+		var cell: Vector2i = gm.world_to_build_cell(centre + Vector3(sin(a) * 6.5, 0.0, -cos(a) * 6.5))
+		if not seen.has(cell):
+			seen[cell] = true
+			ring.append(cell)
+	var traps := {}
+	for i in range(4):
+		var a: float = deg_to_rad(-80.0 + 160.0 * (float(i) + 0.5) / 4.0)
+		var out := Vector2(sin(a), -cos(a))
+		var nearest: Vector2i = ring[0]
+		for c in ring:
+			var d: Vector3 = gm.build_cell_to_world(c) - centre
+			var n: Vector3 = gm.build_cell_to_world(nearest) - centre
+			if Vector2(d.x, d.z).normalized().dot(out) > Vector2(n.x, n.z).normalized().dot(out):
+				nearest = c
+		traps[nearest] = (1 if out.x > 0.0 else 3) if absf(out.x) > absf(out.y) else (2 if out.y > 0.0 else 0)
+	for c in traps:
+		for r in cfg.BUILDINGS["set_crossbow"]["cost"]:
+			gs.resources[r] = int(gs.resources.get(r, 0)) + int(cfg.BUILDINGS["set_crossbow"]["cost"][r])
+		var b = _main.build_system.place_at("set_crossbow", c, _main.buildings_container, true, int(traps[c]))
+		if b != null:
+			b.complete_construction()
+	for c in ring:
+		if not traps.has(c):
+			_build_at("wall", c)
+	_main.nav_maps.rebake()
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(6.0)
+	var queue: Array = []
+	var on_twitch := func(rec):
+		if queue.size() < 4:
+			queue.append(rec)
+	eb.twitch_detected.connect(on_twitch)
+	gs.day_clock = 110.0
+	wm.auto_raid_enabled = false
+	wm.start_wave(1, 12)
+	var t := 0.0
+	var filmed := 0
+	while t < 40.0 and wm.is_wave_active:
+		await _advance(0.25)
+		t += 0.25
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		if is_equal_approx(t, 12.0) or is_equal_approx(t, 20.0):
+			await _portrait("overhead_%ds" % int(t), centre + Vector3(-1.0, 0.0, -5.0), 11.0)
+		if queue.size() > filmed and filmed < 4:
+			var rec: Dictionary = queue[filmed]
+			var d: Node3D = instance_from_id(int(rec.get("dino", {}).get("id", 0))) as Node3D
+			_say("INFO", "report #%s %s %s -> %s at %s, filming" % [rec.get("n"), rec.get("kind"), rec.get("dino", {}).get("mode"), str((rec.get("dino", {}).get("target") if rec.get("dino", {}).get("target") != null else {}).get("type", "-")), str(rec.get("dino", {}).get("pos"))])
+			for k in range(4):
+				if d == null or not is_instance_valid(d):
+					break
+				await _portrait("r%s_%s_%d" % [rec.get("n"), rec.get("kind"), k], d.global_position, 3.5)
+				await _advance(0.3)
+			filmed += 1
+	eb.twitch_detected.disconnect(on_twitch)
+	_say("INFO", "raid over %s after %.1f s; %d reports filmed" % [not wm.is_wave_active, t, filmed])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
