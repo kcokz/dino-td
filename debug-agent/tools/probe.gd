@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"mist_hours": await _p_mist_hours()
 			"edge_plain": await _p_edge_raid("plain")
 			"edge_nest_watched": await _p_edge_raid("nest_watched")
 			"edge_edge_watched": await _p_edge_raid("edge_watched")
@@ -2669,6 +2670,180 @@ func _p_edge_raid(where: String) -> void:
 		"final":
 			ok = int(counts.get("nest", 0)) <= int(cfg.RAIDS.get("nest_most", 5)) and counts.size() == edges.size() + 1 and not counts.has("?")
 	_say("PASS" if ok and hurried_seen.is_empty() and back.is_empty() and popped.is_empty() else "FAIL", "%s: where they came from, nobody stepping out in sight, nobody seen running, nobody turning back" % where)
+
+## TASK-020 (04b79b1): the mist lit by the land under it, by the hour. He walks a round (west, south,
+## east) so there is "been there" mist on screen, comes back, and at noon, dusk and night the opening
+## camera is photographed and measured: every sampled pixel of the field is put to its world point
+## (the ground plane) and sorted by what the fog says of it -- in sight, seen (thin mist), never seen
+## (thick mist) -- keeping only points whose neighbours 1.5 m round say the same, so the soft edges
+## do not count. The mean brightness of each layer, bright spots in the mist (samples far above
+## its median), and how much the mist changes between two frames of a still camera (flicker). Then
+## the camera zoomed out and lowered to the horizon, three frames, for the sky and the valley walls.
+func _p_mist_hours() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	for off in [Vector3(-14.0, 0.0, 0.0), Vector3(-10.0, 0.0, 10.0), Vector3(0.0, 0.0, 14.0), Vector3(10.0, 0.0, 10.0), Vector3(14.0, 0.0, 0.0)]:
+		var to: Vector3 = core + off
+		hero.move_to(to)
+		var tw := 0.0
+		while tw < 12.0 and _flat3(hero.global_position).distance_to(_flat3(to)) > 1.5:
+			await _advance(0.25)
+			tw += 0.25
+	hero.move_to(core + Vector3(0.0, 0.0, 4.5))
+	await _advance(8.0)
+	var rig = _main.camera_rig
+	var parts: Dictionary = cfg.DAY["parts"]
+	var verdicts: Array = []
+	var kept := {}
+	for hour in [["noon", 120.0], ["dusk", float(parts["dusk"]) + 12.0], ["night", float(parts["night"]) + 40.0]]:
+		gs.day_clock = float(hour[1])
+		rig.reset()
+		rig.apply_to(_main.camera)
+		await _advance(2.0)
+		var m: Dictionary = _mist_layers()
+		await _advance(0.2)
+		var m2: Dictionary = _mist_layers()
+		var flick: float = _layer_diff(m, m2)
+		kept[hour[0]] = [hour[1], m]
+		await _shoot("mist_" + String(hour[0]))
+		var s: float = float(m["sight"][0])
+		var thin: float = float(m["thin"][0])
+		var thick: float = float(m["thick"][0])
+		_say("INFO", "%s (clock %.0f, %s): brightness in sight %.3f (n %d), thin mist %.3f (n %d), thick mist %.3f (n %d); thick/sight %.2f, thin/sight %.2f; bright spots in the mist %d %s; mist change between two still frames %.4f" % [hour[0], gs.day_clock, gs.day_part(), s, int(m["sight"][1]), thin, int(m["thin"][1]), thick, int(m["thick"][1]), thick / maxf(0.001, s), thin / maxf(0.001, s), (m["spots"] as Array).size(), str((m["spots"] as Array).slice(0, 3)), flick])
+		if hour[0] == "noon":
+			verdicts.append(["noon: the mist not near-white (thick < 0.75) and not far brighter than the land (thick/sight <= 1.5)", thick < 0.75 and thick / maxf(0.001, s) <= 1.5])
+		else:
+			verdicts.append(["%s: both mists darker than what he sees" % hour[0], thick < s and thin < s])
+		verdicts.append(["%s: three layers apart (thick and thin differ by 5%%+)" % hour[0], absf(thick - thin) / maxf(0.001, maxf(thick, thin)) >= 0.05])
+		verdicts.append(["%s: no bright spots, no flicker (< 0.01)" % hour[0], (m["spots"] as Array).is_empty() and flick < 0.01])
+	# The same pixels with the fog lifted: how bright the land under each layer is without it -- the
+	# mist's own factor (Config.DAY.light mist) is mist / this.
+	_main.fog.reveal_all()
+	for key in kept:
+		gs.day_clock = float(kept[key][0])
+		rig.reset()
+		rig.apply_to(_main.camera)
+		await _advance(2.0)
+		var img: Image = root.get_viewport().get_texture().get_image()
+		var bare := {"sight": [0.0, 0], "thin": [0.0, 0], "thick": [0.0, 0]}
+		var px: Dictionary = kept[key][1]["px"]
+		for at in px:
+			var c: Color = img.get_pixel(at.x, at.y)
+			bare[px[at][0]][0] += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+			bare[px[at][0]][1] += 1
+		var line: Array = []
+		for layer in ["sight", "thin", "thick"]:
+			var under: float = float(bare[layer][0]) / maxf(1.0, float(bare[layer][1]))
+			var with_fog: float = float(kept[key][1][layer][0])
+			line.append("%s %.3f -> %.3f (x%.2f)" % [layer, under, with_fog, with_fog / maxf(0.001, under)])
+		_say("INFO", "%s, the land with no fog -> with it: %s" % [key, ", ".join(line)])
+		await _shoot("bare_" + String(key))
+	# Zoomed out and lowered to the horizon, three frames, noon and night.
+	for hour in [["noon", 120.0], ["night", float(parts["night"]) + 40.0]]:
+		gs.day_clock = float(hour[1])
+		rig.reset()
+		rig.distance = 45.0
+		rig.tilt_by(-90.0)
+		rig.rotate_by(30.0)
+		rig.apply_to(_main.camera)
+		await _advance(1.5)
+		var frames: Array = []
+		for i in 3:
+			frames.append(root.get_viewport().get_texture().get_image())
+			await _advance(0.1)
+		var worst := 0.0
+		for i in range(1, 3):
+			worst = maxf(worst, _image_diff(frames[i - 1], frames[i], 0.0, 0.45))
+		await _shoot("horizon_" + String(hour[0]))
+		_say("INFO", "%s at the horizon (tilt %.0f, distance %.0f): change between frames in the top 45%% of the screen %.4f" % [hour[0], rig.tilt, rig.distance, worst])
+		verdicts.append(["%s at the horizon: no flicker (< 0.01)" % hour[0], worst < 0.01])
+	for v in verdicts:
+		_say("PASS" if v[1] else "FAIL", v[0])
+
+## The field on screen sorted by the fog, brightness per layer; see _p_mist_hours.
+func _mist_layers() -> Dictionary:
+	var fog = _main.fog
+	var cam: Camera3D = _main._active_camera()
+	var img: Image = root.get_viewport().get_texture().get_image()
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	var k: float = float(w) / root.get_viewport().get_visible_rect().size.x
+	var acc := {"sight": [0.0, 0], "thin": [0.0, 0], "thick": [0.0, 0]}
+	var mist_samples: Array = []
+	var layer_px := {}
+	var centre: Vector3 = _main.current_core.global_position
+	var half: float = float(root.get_node("GameState").map_data().get("terrain", {}).get("field_half", root.get_node("Config").TERRAIN.get("field_half", 22.0)))
+	for y in range(int(h * 0.12), int(h * 0.8), 8):
+		for x in range(int(w * 0.05), int(w * 0.78), 8):
+			var sp := Vector2(x, y) / k
+			var o: Vector3 = cam.project_ray_origin(sp)
+			var d: Vector3 = cam.project_ray_normal(sp)
+			if d.y > -0.02:
+				continue
+			var p: Vector3 = o + d * (-o.y / d.y)
+			if absf(p.x - centre.x) > half or absf(p.z - centre.z) > half:
+				continue
+			var layer: String = _layer_of(fog, p)
+			var same := true
+			for e in [Vector3(1.5, 0, 0), Vector3(-1.5, 0, 0), Vector3(0, 0, 1.5), Vector3(0, 0, -1.5)]:
+				if _layer_of(fog, p + e) != layer:
+					same = false
+					break
+			if not same:
+				continue
+			var c: Color = img.get_pixel(x, y)
+			var l: float = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+			acc[layer][0] += l
+			acc[layer][1] += 1
+			layer_px[Vector2i(x, y)] = [layer, l]
+			if layer != "sight":
+				mist_samples.append([l, p])
+	var out := {}
+	for layer in acc:
+		out[layer] = [float(acc[layer][0]) / maxf(1.0, float(acc[layer][1])), int(acc[layer][1])]
+	var ls: Array = []
+	for s in mist_samples:
+		ls.append(float(s[0]))
+	ls.sort()
+	var med: float = float(ls[ls.size() / 2]) if not ls.is_empty() else 0.0
+	var spots: Array = []
+	for s in mist_samples:
+		if med > 0.0 and float(s[0]) > med * 1.6 and float(s[0]) - med > 0.12:
+			spots.append("%.2f at (%.0f, %.0f)" % [float(s[0]), (s[1] as Vector3).x, (s[1] as Vector3).z])
+	out["spots"] = spots
+	out["px"] = layer_px
+	return out
+
+func _layer_of(fog, p: Vector3) -> String:
+	return "sight" if fog.is_in_sight(p) else ("thin" if fog.is_seen(p) else "thick")
+
+## Mean brightness change of the mist pixels between two measures of a still camera.
+func _layer_diff(a: Dictionary, b: Dictionary) -> float:
+	var total := 0.0
+	var n := 0
+	for key in a["px"]:
+		if b["px"].has(key) and String(a["px"][key][0]) != "sight":
+			total += absf(float(a["px"][key][1]) - float(b["px"][key][1]))
+			n += 1
+	return total / maxf(1.0, float(n))
+
+## Mean brightness change between two frames, over the rows from `top` to `bottom` (shares of height).
+func _image_diff(a: Image, b: Image, top: float, bottom: float) -> float:
+	var total := 0.0
+	var n := 0
+	for y in range(int(a.get_height() * top) + int(a.get_height() * 0.08), int(a.get_height() * bottom), 8):
+		for x in range(0, a.get_width(), 8):
+			var ca: Color = a.get_pixel(x, y)
+			var cb: Color = b.get_pixel(x, y)
+			total += absf((ca.r + ca.g + ca.b) - (cb.r + cb.g + cb.b)) / 3.0
+			n += 1
+	return total / maxf(1.0, float(n))
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
