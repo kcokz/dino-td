@@ -1,6 +1,6 @@
 # BUG-007 船舱一点不围，普通大波也会挤在船舱背面抖（抽搐监测报 shake / jitter）
 
-- 状态: open
+- 状态: fixed（5ad2d35，2026-09-28 复测通过，见 TASK-013）
 - 严重度: 中（和 BUG-005 同一类现象，但不需要栅栏）
 - 发现: 2026-09-28 · 在 7c86862 的干净快照上测（TASK-010）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 7c86862) bash debug-agent/tools/run_check.sh probe:twitch_cam`
@@ -44,3 +44,9 @@ BUG-005 是背后半圈栅栏以后，恐龙挤在船舱开口那一头。这里
 ## 补：一整局里也有（`play:20`，7c86862）
 
 机器人那一局，第 3 波（大波）的腔骨龙挤在栅栏圈北边的窝弩那里，7 份报告（shake 5、flicker 1、jitter 1、mill 1），念头都是 ENGAGE / ATTACK → 窝弩，位置都在 (−2.7～−0.2, −1.8～−3.4)。看起来是同一回事：一群恐龙抢同一个目标，咬的位置不够，后面的在原地转。
+
+## 复测（2026-09-28，5ad2d35）：通过
+
+`probe:half_fence_bare` 两次、`probe:twitch_cam` 一次：每局抽搐报告 **1 份**（以前 4～6 份），都是西北角 (−2.3, −1.0) 的一次 shake；我的计数器最多 3 次原地来回摆；最长站着不咬 6.3 秒；15 秒时 7 只在咬船舱。15 秒俯视图里，背墙那一面排着七八只一起在咬，不再挤成一团：
+
+![背墙排开](img/BUG-007-fixed-back-wall-5ad2d35.png)

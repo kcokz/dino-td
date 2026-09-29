@@ -1,6 +1,6 @@
 # BUG-008 抽搐监测漏报：原地一动不动、每秒来回摆一次头，摆了 22 秒，没有报告
 
-- 状态: open
+- 状态: fixed（5ad2d35，2026-09-28 复测通过，见 TASK-013）
 - 严重度: 中（监测本身的漏报：最显眼的那种"傻站着甩头"它看不见）
 - 发现: 2026-09-28 · 7817a1e（TASK-010 的"找漏报"）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 7817a1e) bash debug-agent/tools/run_check.sh probe:half_fence`（两次里有一次最清楚；看日志里的 `twitch:` 行和 `twitch.txt`）
@@ -33,3 +33,7 @@
 截图（18.5 s、19.0 s，西头近景；最下面那只在西南角）：
 
 ![西南角](img/BUG-008-sw-corner-18s-19s.png)
+
+## 复测（2026-09-28，5ad2d35）：漏报修好了
+
+`probe:half_fence`（人站在门外）3 次里有 2 次，西南角那一只还在原地慢慢甩头（我的计数器 16、14 次），**这次监测报了 `fidget`**：3 份、3 份，位置都在 (−3.0, 3.5～3.9)，念头 ENGAGE → 船舱，挤着它的有 3～4 只。所以监测的漏报修好了。甩头本身还在，另开了 [BUG-010](BUG-010-waiting-raider-swings-its-head.md)。
