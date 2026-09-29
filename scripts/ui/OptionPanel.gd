@@ -692,6 +692,8 @@ func _set_header(title: String, kind: String, tex: Texture2D) -> void:
 
 ## What kind of thing it is, under its name.
 func _kind_text(info: Dictionary) -> String:
+	if info.has("kind_text"):
+		return tr(String(info["kind_text"]))
 	match String(info.get("type", "")):
 		"hero":
 			return tr("PANEL_KIND_HERO")

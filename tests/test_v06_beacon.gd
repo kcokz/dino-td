@@ -86,7 +86,12 @@ func test_01_the_stages_climb_the_map_from_what_is_lying_about_to_what_only_a_fi
 	assert_gte(stages.size(), 2, "More than one stage: it is repaired over the run, not at once")
 	for i in range(stages.size()):
 		var inputs: Dictionary = stages[i]["inputs"]
-		_assert_between(inputs.size(), 1, 2, "Stage %d asks for one or two materials" % (i + 1))
+		# And one part out of a wreck (GAME-DESIGN 9.3; test_v06_wrecks), which is not a material.
+		var materials: int = 0
+		for res_id in inputs:
+			if not config_node.is_part(String(res_id)):
+				materials += 1
+		_assert_between(materials, 1, 2, "Stage %d asks for one or two materials" % (i + 1))
 		for res_id in inputs:
 			assert_has(config_node.RESOURCES, String(res_id), "Stage %d's %s is a material" % [i + 1, res_id])
 			_assert_between(int(inputs[res_id]), 1, 9, "Single figures (GAME-DESIGN 4.6): %d %s" % [int(inputs[res_id]), res_id])

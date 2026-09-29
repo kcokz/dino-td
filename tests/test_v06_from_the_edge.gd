@@ -130,18 +130,19 @@ func test_02_the_beacons_final_wave_comes_from_every_edge() -> void:
 	assert_lte(from_nest, _nest_most(), "No more than the nest's party from the nest")
 	assert_eq(used.size(), edges.size(), "and every edge sends its share")
 
-func test_03_a_beacon_stage_raid_is_a_party_from_the_nest_too() -> void:
+func test_03_a_beacon_stage_raid_comes_in_by_the_valleys_ways_in() -> void:
+	# What a repaired stage stirs up is the beacon's, and comes in from the valley's ends ("信标恐龙
+	# 就应该来自边界"; the ship's wrecks, v0.6 round four: GAME-DESIGN 8.3, test_v06_wrecks 8) --
+	# none of it out of the nest, however many.
 	var main = await _level_on()
 	var wm = main.wave_manager
 	wm._stirred = _nest_most() + 2
 	wm.start_stage_wave()
 	var dinos: Array = _step_out(wm, wm.dinos_to_spawn)
-	var from_nest: int = 0
+	assert_eq(dinos.size(), _nest_most() + 2, "All of it steps out")
 	for d in dinos:
-		if _near(d.global_position, wm.nest_spawn_position):
-			from_nest += 1
-	assert_eq(from_nest, _nest_most(), "The nest's party")
-	assert_eq(dinos.size() - from_nest, 2, "and the rest in from the edge")
+		assert_false(_near(d.global_position, wm.nest_spawn_position), "none out of the nest")
+		assert_gte(_out_of(d.global_position, wm.entry_positions), 0, "each by one of the valley's ways in")
 
 func test_04_come_in_from_the_edge_it_hurries_while_nobody_sees_it() -> void:
 	# The large valley: its edge is far enough off for the walk in to be worth hurrying.

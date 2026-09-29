@@ -1586,6 +1586,267 @@ def torch(seed):
     return b
 
 
+
+# ==============================================================================
+# The ship's wrecks (GAME-DESIGN 9.3, "信标变成冒险"): torn pieces of the time-travel ship lying where
+# they came down, each holding one of the beacon's parts. Plated as the cabin is -- the white plating,
+# the orange markings -- and scorched by the fall, half in a burnt furrow, plates spilled round. The
+# smoke over one is the game's own (WreckSmoke); what is here is metal and burnt ground.
+# ==============================================================================
+
+SCORCH = (0.09, 0.08, 0.07)
+PLATE_ALT = (0.70, 0.72, 0.75)
+CABLE = (0.14, 0.13, 0.12)
+CABLE_RED = (0.55, 0.12, 0.08)
+CIRCUIT = (0.10, 0.24, 0.16)
+CHIP_DARK = (0.06, 0.06, 0.07)
+OK_DOT = (0.30, 0.85, 0.40)
+
+
+def _oriented_box(b, centre, half, yaw, pitch=0.0, roll=0.0, side=None, top=None, open_top=False):
+    """A box of half-extents `half` about `centre`, turned `yaw` round the vertical, then pitched and
+    rolled: a plate lying skew on the ground, a bay standing out of a hull. `open_top` leaves its lid
+    off and shows its inside dark."""
+    rot = Matrix.Rotation(yaw, 3, 'Z') @ Matrix.Rotation(pitch, 3, 'X') @ Matrix.Rotation(roll, 3, 'Y')
+    hx, hy, hz = half
+    lo = [centre + rot @ Vector((sx * hx, sy * hy, -hz)) for (sx, sy) in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    hi = [centre + rot @ Vector((sx * hx, sy * hy, hz)) for (sx, sy) in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    side = side or METAL
+    top = top or mix(side, (1.0, 1.0, 1.0), 0.06)
+    under = mix(side, (0.0, 0.0, 0.0), 0.4)
+    if open_top:
+        inside = CHIP_DARK
+        for k in range(4):
+            k2 = (k + 1) % 4
+            b.quad(hi[k], hi[k2], lo[k2], lo[k], inside, inside, inside, inside)
+    else:
+        b.quad(hi[0], hi[1], hi[2], hi[3], top, top, top, top)
+    b.quad(lo[3], lo[2], lo[1], lo[0], under, under, under, under)
+    for k in range(4):
+        k2 = (k + 1) % 4
+        b.quad(lo[k], lo[k2], hi[k2], hi[k], side, side, side, side)
+    return rot
+
+
+def _scorched_furrow(b, rng, half_x, half_y):
+    """Burnt ground where it came down: an uneven dark oval, ash at its middle, and clods of the
+    earth it ploughed up heaped at its far end."""
+    n = 18
+    centre = Vector((0.0, 0.0, 0.012))
+    ring = []
+    for k in range(n):
+        a = math.tau * k / n
+        wob = rng.uniform(0.82, 1.08)
+        ring.append(Vector((math.cos(a) * half_x * wob, math.sin(a) * half_y * wob, 0.004)))
+    for k in range(n):
+        b.tri(ring[k], ring[(k + 1) % n], centre, mix(SCORCH, SOIL, 0.5), mix(SCORCH, SOIL, 0.5), SCORCH)
+    for _ in range(9):
+        a = rng.uniform(-0.7, 0.7)
+        at = Vector((math.cos(a) * half_x * rng.uniform(0.85, 1.05), math.sin(a) * half_y * rng.uniform(0.6, 1.0), 0.0))
+        _chip(b, at, rng.uniform(0.07, 0.13), rng, mix(SOIL_LIGHT, CHINLE_SHADE, 0.4))
+
+
+def _hull_shell(b, rng, length, radius, arc0, arc1, sink, roll, band_at=0.35):
+    """A torn piece of the hull: `arc0`..`arc1` (radians round its axis, which runs along X) of a tube
+    of plating `radius` round and `length` long, rolled `roll` onto its side and sunk `sink` into the
+    ground. Its plating in panels, a band of the orange markings `band_at` along it, scorched towards
+    the end it was torn off at (+X), which is ragged. Returns where on it things stand: its top."""
+    n_a, n_l = 10, 8
+    thick = 0.05
+    rot = Matrix.Rotation(roll, 3, 'X')
+
+    def at(a, x, r):
+        return rot @ Vector((x, math.cos(a) * r, math.sin(a) * r)) + Vector((0.0, 0.0, -sink))
+
+    x0 = -length * 0.5
+    ends = [length * 0.5 - rng.uniform(0.0, 0.3) * length for _ in range(n_a + 1)]
+    starts = [x0 + rng.uniform(0.0, 0.08) * length for _ in range(n_a + 1)]
+    # Dented by the fall: the plating pushed in and out, the more towards the end it tore at.
+    dents = [[rng.uniform(-1.0, 1.0) for _ in range(n_l + 1)] for _ in range(n_a + 1)]
+    outer, inner = [], []
+    for j in range(n_a + 1):
+        a = arc0 + (arc1 - arc0) * j / n_a
+        col_o, col_i = [], []
+        for i in range(n_l + 1):
+            x = starts[j] + (ends[j] - starts[j]) * i / n_l
+            r = radius + dents[j][i] * (0.03 + 0.1 * (i / n_l) ** 2)
+            col_o.append(at(a, x, r))
+            col_i.append(at(a, x, r - thick))
+        outer.append(col_o)
+        inner.append(col_i)
+    for j in range(n_a):
+        for i in range(n_l):
+            t = i / n_l
+            panel = METAL if ((i // 2) + (j // 3)) % 2 == 0 else PLATE_ALT
+            if abs(t - band_at) < 0.07:
+                panel = HAZARD
+            # Burnt towards the torn end, and soot streaked back along it from there.
+            burn = max(0.0, min(1.0, (t - 0.2) * 1.5 + rng.uniform(-0.2, 0.2)))
+            if rng.random() < 0.18:
+                burn = min(1.0, burn + 0.45)
+            c = mix(panel, SCORCH, burn * 0.9)
+            b.quad(outer[j][i], outer[j][i + 1], outer[j + 1][i + 1], outer[j + 1][i], c, c, c, c)
+            ci = mix(METAL_DARK, SCORCH, burn * 0.6)
+            b.quad(inner[j + 1][i], inner[j + 1][i + 1], inner[j][i + 1], inner[j][i], ci, ci, ci, ci)
+    # Its edges: the long ones, and the two ends -- the torn one charred.
+    for j in (0, n_a):
+        for i in range(n_l):
+            c = METAL_DARK
+            if j == 0:
+                b.quad(inner[j][i], inner[j][i + 1], outer[j][i + 1], outer[j][i], c, c, c, c)
+            else:
+                b.quad(outer[j][i], outer[j][i + 1], inner[j][i + 1], inner[j][i], c, c, c, c)
+    for j in range(n_a):
+        b.quad(outer[j][0], outer[j + 1][0], inner[j + 1][0], inner[j][0], METAL_DARK, METAL_DARK, METAL_DARK, METAL_DARK)
+        b.quad(inner[j][n_l], inner[j + 1][n_l], outer[j + 1][n_l], outer[j][n_l], CHAR, CHAR, CHAR, CHAR)
+    # Its ribs, bared at the torn end and bent.
+    for j in (2, 5, 8):
+        a = arc0 + (arc1 - arc0) * j / n_a
+        base = at(a, ends[j] - 0.05, radius - thick * 0.5)
+        tip = at(a + rng.uniform(-0.2, 0.2), ends[j] + rng.uniform(0.2, 0.45), radius * rng.uniform(0.8, 1.05))
+        mid = base.lerp(tip, 0.5) + Vector((0.0, 0.0, rng.uniform(-0.08, 0.08)))
+        b.tube([base, mid, tip], [0.035, 0.03, 0.022], [METAL_DARK, METAL_DARK, CHAR], 5)
+    top_a = (arc0 + arc1) * 0.5
+    return at(top_a, -length * 0.1, radius)
+
+
+def _spilled_plates(b, rng, count, reach):
+    """Plating torn off in the fall, lying skew round the wreck; one with its orange marking."""
+    for k in range(count):
+        a = rng.uniform(0.0, math.tau)
+        r = rng.uniform(reach * 0.65, reach)
+        centre = Vector((math.cos(a) * r, math.sin(a) * r * 0.8, 0.02))
+        panel = HAZARD if k == 0 else mix(METAL, SCORCH, rng.uniform(0.1, 0.55))
+        _oriented_box(b, centre, (rng.uniform(0.14, 0.3), rng.uniform(0.1, 0.22), 0.012),
+                      rng.uniform(0.0, math.pi), rng.uniform(-0.12, 0.12), rng.uniform(-0.12, 0.12), side=panel)
+
+
+def wreck(seed, part, searched=False):
+    """A wreck of the ship holding `part` -- "antenna", "battery", "board": three metres of torn hull
+    lying on its side in a scorched furrow, plates spilled round it, and on it what the part was
+    fitted in: a bent mast with its dish, a battery bay, a console. `searched`: the part is gone out
+    of it -- the mast's dish broken off, the bay's lid thrown down by it, the console's screen torn out."""
+    rng = random.Random(seed)
+    b = Builder()
+    _scorched_furrow(b, rng, 1.65, 1.15)
+    top = _hull_shell(b, rng, 2.5, 1.05, math.radians(25.0), math.radians(145.0), 0.42, math.radians(32.0))
+    _spilled_plates(b, rng, 6, 1.55)
+    if part == "antenna":
+        foot = top + Vector((0.25, 0.1, -0.05))
+        if searched:
+            b.tube([foot, foot + Vector((0.06, 0.02, 0.45))], [0.04, 0.035], [METAL_DARK, CHAR], 6)
+            _oriented_box(b, Vector((1.25, -0.9, 0.03)), (0.2, 0.14, 0.012), 0.6, side=mix(METAL, SCORCH, 0.3))
+        else:
+            knee = foot + Vector((0.12, 0.05, 0.7))
+            tip = knee + Vector((0.35, 0.1, 0.25))
+            b.tube([foot, knee, tip], [0.04, 0.035, 0.03], [METAL_DARK, METAL_DARK, METAL], 6)
+            # The dish, hanging off the bent top, and the orange light at the tip.
+            rim = []
+            n = 10
+            axis = Vector((0.6, 0.2, -0.3)).normalized()
+            side = axis.cross(UP).normalized()
+            up2 = side.cross(axis).normalized()
+            centre = tip + axis * 0.1
+            for k in range(n):
+                a = math.tau * k / n
+                rim.append(centre + (side * math.cos(a) + up2 * math.sin(a)) * 0.3 + axis * 0.1)
+            for k in range(n):
+                b.tri(rim[k], rim[(k + 1) % n], centre, METAL, METAL, PLATE_ALT)
+                b.tri(rim[(k + 1) % n], rim[k], centre, METAL_DARK, METAL_DARK, METAL_DARK)
+            _oriented_box(b, tip + Vector((0.0, 0.0, 0.05)), (0.035, 0.035, 0.035), 0.0, side=HAZARD)
+    elif part == "battery":
+        bay = top + Vector((-0.35, -0.25, 0.05))
+        _oriented_box(b, bay, (0.34, 0.24, 0.2), 0.2, side=METAL_DARK, open_top=searched)
+        if searched:
+            _oriented_box(b, Vector((-1.2, -1.05, 0.03)), (0.34, 0.24, 0.015), 0.9, 0.1, side=mix(METAL, SCORCH, 0.2))
+        else:
+            _oriented_box(b, bay + Vector((0.0, 0.0, 0.21)), (0.35, 0.25, 0.015), 0.2, side=METAL)
+            _oriented_box(b, bay + Vector((0.22, -0.1, 0.23)), (0.08, 0.08, 0.01), 0.2, side=HAZARD)
+        # Its cables, run out of it onto the ground -- cut short once it has been opened.
+        for (k, colr) in ((0, CABLE), (1, CABLE_RED)):
+            start = bay + Vector((0.3, 0.1 * k - 0.05, -0.05))
+            far = 0.35 if searched else 0.9
+            mid = start + Vector((far * 0.5, 0.15 + 0.1 * k, -0.25))
+            end = start + Vector((far, 0.3 + 0.15 * k, -start.z + 0.03))
+            b.tube([start, mid, end], [0.022, 0.022, 0.02], [colr, colr, colr], 5)
+    else:
+        face = top + Vector((0.1, -0.35, 0.1))
+        rot = _oriented_box(b, face, (0.42, 0.07, 0.3), 0.15, math.radians(-25.0), side=METAL)
+        n_out = rot @ Vector((0.0, -1.0, 0.0))
+        screen_at = face + n_out * 0.075
+        if searched:
+            _oriented_box(b, screen_at, (0.32, 0.01, 0.2), 0.15, math.radians(-25.0), side=CHIP_DARK)
+            _oriented_box(b, Vector((0.9, -1.25, 0.03)), (0.32, 0.22, 0.012), 1.2, side=mix(METAL, SCORCH, 0.25))
+            for k in range(3):
+                start = screen_at + Vector((-0.15 + 0.15 * k, 0.0, -0.05))
+                b.tube([start, start + Vector((0.02, -0.12, -0.18))], [0.012, 0.012], [CABLE_RED if k == 1 else CABLE] * 2, 4)
+        else:
+            _oriented_box(b, screen_at, (0.32, 0.01, 0.2), 0.15, math.radians(-25.0), side=LENS)
+            for k in range(4):
+                dot = screen_at + rot @ Vector((-0.24 + 0.16 * k, -0.012, -0.14))
+                _oriented_box(b, dot, (0.025, 0.004, 0.018), 0.15, math.radians(-25.0),
+                              side=LENS_DOT if k % 2 == 0 else OK_DOT)
+    return b
+
+
+def drop_antenna(seed):
+    """The antenna out of its wreck: a dish folded half shut on a short mast, a base plate, the orange
+    light at its tip."""
+    rng = random.Random(seed)
+    b = Builder()
+    _oriented_box(b, Vector((0.0, 0.0, 0.02)), (0.09, 0.09, 0.02), 0.3, side=METAL_DARK)
+    foot = Vector((0.0, 0.0, 0.04))
+    head = Vector((0.04, 0.02, 0.24))
+    b.tube([foot, head], [0.016, 0.013], [METAL_DARK, METAL], 6)
+    n = 12
+    axis = Vector((0.35, 0.1, 0.9)).normalized()
+    side = axis.cross(Vector((1.0, 0.0, 0.0))).normalized()
+    up2 = side.cross(axis).normalized()
+    centre = head + axis * 0.02
+    rim = [centre + (side * math.cos(math.tau * k / n) + up2 * math.sin(math.tau * k / n)) * 0.17 + axis * 0.07
+           for k in range(n)]
+    for k in range(n):
+        b.tri(rim[k], rim[(k + 1) % n], centre, METAL, METAL, PLATE_ALT)
+        b.tri(rim[(k + 1) % n], rim[k], centre, METAL_DARK, METAL_DARK, METAL_DARK)
+    b.tube([centre, centre + axis * 0.16], [0.01, 0.008], [METAL_DARK, METAL_DARK], 5)
+    _oriented_box(b, centre + axis * 0.17, (0.02, 0.02, 0.02), 0.0, side=HAZARD)
+    return b
+
+
+def drop_battery(seed):
+    """A battery cell out of its bay: a dark block with the orange band round it and its two
+    terminals, one capped red."""
+    rng = random.Random(seed)
+    b = Builder()
+    body = Vector((0.0, 0.0, 0.1))
+    _oriented_box(b, body, (0.16, 0.11, 0.1), 0.25, side=METAL_DARK)
+    _oriented_box(b, body + Vector((0.0, 0.0, 0.01)), (0.165, 0.115, 0.03), 0.25, side=HAZARD)
+    rot = Matrix.Rotation(0.25, 3, 'Z')
+    for (k, cap) in ((-1, CABLE_RED), (1, METAL)):
+        at = body + rot @ Vector((k * 0.08, 0.0, 0.1))
+        b.tube([at, at + Vector((0.0, 0.0, 0.045))], [0.022, 0.02], [METAL_DARK, cap], 6)
+    return b
+
+
+def drop_board(seed):
+    """The control board, in its case: a flat unit, its top a dark panel of chips and a lit screen,
+    connector pins along one edge, the orange tab at a corner."""
+    rng = random.Random(seed)
+    b = Builder()
+    yaw = -0.35
+    rot = Matrix.Rotation(yaw, 3, 'Z')
+    body = Vector((0.0, 0.0, 0.035))
+    _oriented_box(b, body, (0.19, 0.14, 0.035), yaw, side=METAL)
+    _oriented_box(b, body + Vector((0.0, 0.0, 0.037)), (0.16, 0.115, 0.004), yaw, side=CIRCUIT)
+    for (x, y, sx, sy, colr) in ((-0.08, 0.04, 0.045, 0.035, CHIP_DARK), (0.05, 0.05, 0.03, 0.03, CHIP_DARK),
+                                 (0.06, -0.05, 0.06, 0.035, LENS), (-0.09, -0.05, 0.03, 0.025, CHIP_DARK)):
+        _oriented_box(b, body + rot @ Vector((x, y, 0.045)), (sx, sy, 0.006), yaw, side=colr)
+    for k in range(7):
+        _oriented_box(b, body + rot @ Vector((-0.12 + 0.04 * k, -0.15, 0.0)), (0.008, 0.012, 0.008), yaw, side=METAL_DARK)
+    _oriented_box(b, body + rot @ Vector((0.17, 0.12, 0.04)), (0.025, 0.025, 0.006), yaw, side=HAZARD)
+    return b
+
+
 PROPS = {
     "stone_wall": (lambda s: stone_wall(s), [23]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
@@ -1608,6 +1869,16 @@ PROPS = {
     "campfire": (lambda s: campfire(s), [31]),
     "brazier": (lambda s: brazier(s), [37]),
     "torch": (lambda s: torch(s), [43]),
+    # The ship's wrecks, each by the part it holds, whole and searched; and the parts on the ground.
+    "wreck_antenna": (lambda s: wreck(s, "antenna"), [71]),
+    "wreck_antenna_searched": (lambda s: wreck(s, "antenna", searched=True), [71]),
+    "wreck_battery": (lambda s: wreck(s, "battery"), [73]),
+    "wreck_battery_searched": (lambda s: wreck(s, "battery", searched=True), [73]),
+    "wreck_board": (lambda s: wreck(s, "board"), [79]),
+    "wreck_board_searched": (lambda s: wreck(s, "board", searched=True), [79]),
+    "drop_antenna": (lambda s: drop_antenna(s), [83]),
+    "drop_battery": (lambda s: drop_battery(s), [89]),
+    "drop_board": (lambda s: drop_board(s), [97]),
 }
 
 # Props made of named parts the game shows, hides or moves (Wall.dress, Gate): each part an

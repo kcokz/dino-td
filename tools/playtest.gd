@@ -300,6 +300,14 @@ func _scenario_play(spec: String) -> void:
 		if beacon_job != "" and cabin.station(String(cfg.BEACON_STATION)).can_afford(beacon_job):
 			await _bench_job(hero, cabin, String(cfg.BEACON_STATION), beacon_job, note)
 			continue
+		# The part the next stage takes, out of its wreck, once the rest of its price is in -- while
+		# nothing guards it (the battery's wreck is behind the nest, and is searched by night), and not
+		# with a raid about to set out: it set off and turned back every step till the raid came.
+		var wreck: Node = _wreck_to_search(beacon_job) if wm.raid_timer >= 6.0 else null
+		if wreck != null:
+			note.call("to the wreck for the %s" % String(wreck.resource_type))
+			await _search_wreck(hero, wreck)
+			continue
 		var dish: String = ""
 		for job in kitchen.jobs():
 			if kitchen.is_dish(job) and kitchen.can_afford(job):
@@ -469,6 +477,38 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 	hero.order_harvest(best)
 	var wm = _main.wave_manager
 	await _play_until(func(): return wm.is_wave_active or wm.raid_timer < 6.0, seconds, "working %s" % res_id)
+
+## The wreck holding the part `job` (a beacon stage) still lacks, when that is all it lacks and the
+## wreck can be worked now (not searched, not guarded); null otherwise.
+func _wreck_to_search(job: String) -> Node:
+	var cfg = root.get_node("Config")
+	var gs = root.get_node("GameState")
+	if job == "":
+		return null
+	var inputs: Dictionary = cfg.beacon_job(gs.map_data(), job).get("inputs", {})
+	var part: String = ""
+	for res_id in inputs:
+		var short: bool = int(gs.resources.get(res_id, 0)) < int(inputs[res_id])
+		if cfg.is_part(String(res_id)):
+			if short:
+				part = String(res_id)
+		elif short:
+			return null
+	if part == "":
+		return null
+	for n in get_nodes_in_group("resource_nodes"):
+		if is_instance_valid(n) and String(n.resource_type) == part and int(n.current_amount) > 0 and not _guarded(n):
+			return n
+	return null
+
+## Out to the wreck `node` and through it, till its part is in the stock -- or a raid is coming.
+func _search_wreck(hero: Node, node: Node) -> void:
+	var gs = root.get_node("GameState")
+	var wm = _main.wave_manager
+	var part: String = String(node.resource_type)
+	hero.order_harvest(node)
+	await _play_until(func(): return int(gs.resources.get(part, 0)) > 0 or wm.is_wave_active or wm.raid_timer < 6.0,
+		90.0, "searching the wreck for the %s" % part)
 
 ## Whether a nest's guards are awake and near enough `n` to go for him there -- the bot leaves the
 ## nest's stones be while they are, as a player does once warned: it went on quarrying through their

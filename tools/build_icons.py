@@ -184,6 +184,34 @@ ICONS["water"] = item_svg(
     [shape("path", C["water"], d="M 32 6 C 32 6 13 28 13 40 C 13 51 21 58 32 58 C 43 58 51 51 51 40 C 51 28 32 6 32 6 Z")],
     [shape("path", None, C["water_hi"], 3.8, d="M 22 40 C 22 46 26 50 30 51")])
 
+# The beacon's parts, out of the ship's wrecks (Config.WRECKS): a dish on its mast, a battery cell,
+# the control board in its case.
+ICONS["antenna"] = item_svg(
+    [shape("rect", C["iron_dark"], x=19, y=51, width=26, height=8, rx=2),
+     shape("polygon", C["metal"], points="29,52 35,52 34,27 30,27"),
+     shape("ellipse", C["hull"], transform="rotate(-28 30 22)", cx=30, cy=22, rx=21, ry=8.5)],
+    [shape("ellipse", C["hull_shade"], transform="rotate(-28 30 22)", cx=31, cy=23, rx=14, ry=4.5),
+     shape("path", None, C["iron_dark"], 2.4, d="M 31 23 L 44 8"),
+     shape("circle", C["hazard"], cx=45, cy=7, r=3.6)])
+
+ICONS["battery"] = item_svg(
+    [shape("rect", C["metal"], x=17, y=9, width=9, height=10, rx=2),
+     shape("rect", C["metal"], x=38, y=9, width=9, height=10, rx=2),
+     shape("rect", C["iron_dark"], x=11, y=17, width=42, height=40, rx=4)],
+    [shape("rect", C["hazard"], x=11, y=32, width=42, height=10),
+     shape("rect", "#c9433b", x=17, y=8, width=9, height=4.5, rx=2),
+     shape("path", None, C["hull_shade"], 2.4, d="M 18.5 25 L 24.5 25 M 21.5 22 L 21.5 28 M 39.5 25 L 45.5 25")])
+
+ICONS["board"] = item_svg(
+    [shape("rect", C["hull"], x=7, y=12, width=50, height=38, rx=3)]
+    + [shape("rect", C["metal"], x=12 + 7 * k, y=48, width=4, height=8, rx=1) for k in range(6)],
+    [shape("rect", "#2b5a40", x=11, y=16, width=42, height=30, rx=2),
+     shape("rect", C["iron_dark"], x=15, y=20, width=11, height=9, rx=1),
+     shape("rect", C["cyan"], x=30, y=20, width=19, height=11, rx=1),
+     shape("rect", C["iron_dark"], x=15, y=33, width=8, height=9, rx=1),
+     shape("rect", C["iron_dark"], x=27, y=35, width=12, height=7, rx=1),
+     shape("rect", C["hazard"], x=44, y=36, width=6, height=6, rx=1)])
+
 # ------------------------------------------------------------------------------ commands
 # Build, as a card on his panel (UiKit.command_button): a stone head lashed to a wooden haft.
 ICONS["hammer"] = item_svg(
@@ -478,6 +506,15 @@ ICONS["tree"] = item_svg(
     + [shape("ellipse", C["leaf"], transform="rotate(%d 32 26)" % a, cx=32 + L, cy=26, rx=L, ry=5.2) for (a, L) in _FROND],
     [shape("path", None, C["leaf_dark"], 1.6, transform="rotate(%d 32 26)" % a, d="M 33 26 L %d 26" % (32 + 2 * L - 3))
      for (a, L) in _FROND])
+
+# A wreck of the ship (Config.WRECKS): a torn piece of the hull, its orange band, smoke over it.
+ICONS["wreck"] = item_svg(
+    [shape("path", C["hull"], d="M 6 56 C 6 36 16 26 32 24 L 38 29 L 35 33 L 44 35 L 41 40 L 50 42 L 47 48 L 58 50 L 58 56 Z"),
+     shape("circle", "#8f8a82", cx=42, cy=15, r=7), shape("circle", "#8f8a82", cx=50, cy=9, r=5.5),
+     shape("circle", "#8f8a82", cx=34, cy=11, r=4.5)],
+    [shape("path", C["hazard"], d="M 17 31 C 20 29 23 27.5 26 26.5 L 30 56 L 22 56 Z"),
+     shape("path", None, C["char"], 2.4, d="M 38 29 L 35 33 L 44 35 L 41 40 L 50 42 L 47 48 L 58 50"),
+     shape("path", None, C["hull_shade"], 2.0, d="M 11 50 C 12 42 16 36 22 32")])
 
 ICONS["workbench"] = item_svg(
     [shape("rect", C["post"], x=7, y=31, width=50, height=8, rx=2),

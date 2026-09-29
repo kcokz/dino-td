@@ -66,8 +66,9 @@ func setup(field_half: float) -> void:
 		quad.size = Vector2(2.0, 2.0)
 		_material = ShaderMaterial.new()
 		_material.shader = load("res://assets/shaders/fog_of_war.gdshader")
-		# Last of everything see-through, so nothing is drawn over it.
-		_material.render_priority = Material.RENDER_PRIORITY_MAX
+		# Last of everything see-through, so nothing is drawn over it -- but the smoke of the ship's
+		# wrecks, which rises out of the mist and is seen over it from afar (WreckSmoke.PRIORITY).
+		_material.render_priority = WreckSmoke.PRIORITY - 1
 		quad.material = _material
 		shroud = MeshInstance3D.new()
 		shroud.name = "Shroud"

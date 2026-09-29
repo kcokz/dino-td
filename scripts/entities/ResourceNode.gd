@@ -19,6 +19,8 @@ var label_3d: Label3D = null
 ## Whether the player has this one picked, and how long its figure stays up after a stroke on it.
 var _picked: bool = false
 var _worked_for: float = 0.0
+## Strokes put into the unit still coming out (strokes_each): a wreck's search so far.
+var _struck: int = 0
 
 func _init(p_type: String = "wood", p_cell: Vector2i = Vector2i.ZERO) -> void:
 	resource_type = p_type
@@ -93,14 +95,25 @@ func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO, p_capacity: int = 
 
 	current_amount = max_capacity
 	is_depleted = (current_amount <= 0)
+	_struck = 0
 	_ensure_components()
 	_update_visuals()
 	_update_label()
 
+## `amount` strokes' worth of work on it; returns what came out. Every stroke brings a tree's wood
+## in; a wreck's part comes out only at the last of its search's strokes (strokes_each).
 func harvest(amount: int = 1) -> int:
 	if is_depleted or current_amount <= 0:
 		return 0
-	var yield_amt: int = mini(amount, current_amount)
+	var yield_amt: int = 0
+	var work: int = strokes_each()
+	if work > 1:
+		_struck += maxi(0, amount)
+		if _struck >= work:
+			_struck = 0
+			yield_amt = 1
+	else:
+		yield_amt = mini(amount, current_amount)
 	current_amount -= yield_amt
 	if current_amount <= 0:
 		current_amount = 0
@@ -114,6 +127,20 @@ func harvest(amount: int = 1) -> int:
 	_worked_for = float(cfg.FEEDBACK.get("node_label_seconds", 3.0)) if (cfg and "FEEDBACK" in cfg) else 3.0
 	_show_label()
 	return yield_amt
+
+## Strokes of work each unit takes to come out (RESOURCE_NODES "strokes"): one for a tree or a rock,
+## ten for a wreck, whose one part comes out of a search.
+func strokes_each() -> int:
+	return maxi(1, int(_node_row().get("strokes", 1)))
+
+## What is left in it and what it held, in strokes for a search, in units for the rest: what its
+## label and its card count down.
+func _left() -> int:
+	var work: int = strokes_each()
+	return current_amount * work - _struck if work > 1 else current_amount
+
+func _whole() -> int:
+	return max_capacity * strokes_each()
 
 func get_localized_name() -> String:
 	var cfg = _get_config()
@@ -273,29 +300,38 @@ func _update_label() -> void:
 		return
 	var status_text: String
 	if is_depleted:
-		status_text = TranslationServer.translate("STATUS_DEPLETED")
+		status_text = TranslationServer.translate(String(_node_row().get("depleted_text", "STATUS_DEPLETED")))
 		label_3d.modulate = Color(0.7, 0.7, 0.7, 0.8)
 		label_3d.text = "%s\n[%s]" % [get_localized_name(), status_text]
 	else:
 		label_3d.modulate = Color(1.0, 1.0, 1.0, 1.0)
-		label_3d.text = "%s\n%d / %d" % [get_localized_name(), current_amount, max_capacity]
+		label_3d.text = "%s\n%d / %d" % [get_localized_name(), _left(), _whole()]
 
 func get_display_info() -> Dictionary:
-	return {
+	var info: Dictionary = {
 		"title": get_localized_name(),
 		"type": "resource_node",
 		"resource_type": resource_type,
-		"current_amount": current_amount,
-		"max_capacity": max_capacity,
+		"current_amount": _left(),
+		"max_capacity": _whole(),
 		"is_depleted": is_depleted,
 		"status": _panel_status(),
 	}
+	# What kind of thing it is, when it is not simply a place to gather: a wreck of the ship.
+	if _node_row().has("kind"):
+		info["kind_text"] = String(_node_row()["kind"])
+	return info
 
 ## The line under a node's reserve bar: that it is spent, what it takes before bare hands
 ## can work it (Config.missing_tool_hint), or how to set him to it.
 func _panel_status() -> String:
 	if is_depleted:
-		return TranslationServer.translate("STATUS_DEPLETED")
+		return TranslationServer.translate(String(_node_row().get("depleted_text", "STATUS_DEPLETED")))
+	# A wreck says what is in it and how long the search is.
+	var hint: String = String(_node_row().get("hint", ""))
+	if hint != "":
+		return TranslationServer.translate(hint) % [TranslationServer.translate("RESOURCE_%s" % resource_type.to_upper()),
+			int(round(float(strokes_each()) / maxf(0.1, harvest_rate)))]
 	var cfg = _get_config()
 	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
 	if cfg and cfg.has_method("harvest_requires_unlock"):

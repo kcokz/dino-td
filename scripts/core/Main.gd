@@ -956,6 +956,10 @@ func spawn_resource_nodes() -> void:
 	for child in resource_nodes_container.get_children():
 		resource_nodes_container.remove_child(child)
 		child.queue_free()
+	var smoke: Node3D = _smoke_container()
+	for child in smoke.get_children():
+		smoke.remove_child(child)
+		child.queue_free()
 
 	var nodes_def: Array = []
 	var cfg = _get_config()
@@ -984,6 +988,19 @@ func spawn_resource_nodes() -> void:
 		resource_nodes_container.add_child(node)
 		if grid_manager and grid_manager.has_method("occupy_resource_cell"):
 			grid_manager.occupy_resource_cell(item["cell"], node)
+		# A wreck not yet searched smoulders, and its smoke is seen over the mist (WreckSmoke): not the
+		# wreck's own child, which the fog hides until it is seen.
+		if cfg and "RESOURCE_NODES" in cfg and bool(cfg.RESOURCE_NODES.get(String(item["type"]), {}).get("smoke", false)):
+			smoke.add_child(WreckSmoke.make(node))
+
+## Where the wrecks' smoke is raised (WreckSmoke): beside the nodes, not among them.
+func _smoke_container() -> Node3D:
+	var holder: Node3D = get_node_or_null("WreckSmoke") as Node3D
+	if holder == null:
+		holder = Node3D.new()
+		holder.name = "WreckSmoke"
+		add_child(holder)
+	return holder
 
 ## Lays the opening stock on the ground around the cabin instead of handing it
 ## over as a number. The first thing the game teaches is that resources are

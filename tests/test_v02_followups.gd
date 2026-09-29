@@ -798,7 +798,9 @@ func test_43c_being_fenced_in_is_undone_by_demolishing() -> void:
 	await wait_frames(2)
 	game_state_node.resources["wood"] = 999
 
-	var centre := Vector2i(6, 6)
+	# Open ground, nothing of the map's in the ring round it: (6, 6) was, until the control board's
+	# wreck came to lie at (6, 7) (Config.MAPS, the ship's wrecks).
+	var centre := Vector2i(-6, 7)
 	main.hero.global_position = main.grid_manager.cell_to_world(centre)
 	main.on_build_selected("wall")
 

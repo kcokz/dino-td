@@ -179,9 +179,12 @@ func test_10_a_big_stock_stays_clear_of_the_cabins_medallion() -> void:
 	# The strip's left holds the stock, its right the controls, and the cabin's medallion
 	# hangs from its middle: however big the counts get, none of the three runs into another.
 	var hud = await _hud()
+	# The most a run can hold: four figures of every material -- the valleys hold a couple of
+	# thousand wood at most, every tree's reserve together (RESOURCE_NODES.capacity) -- and the
+	# beacon's parts one each, all three found and not yet fitted (test_v06_wrecks).
 	var huge: Dictionary = {}
 	for res_id in config_node.RESOURCES:
-		huge[String(res_id)] = 99999
+		huge[String(res_id)] = 1 if config_node.is_part(String(res_id)) else 9999
 	hud._on_resources_changed(huge)
 	await wait_frames(2)
 	var stock: Rect2 = hud.root_control.find_child("ResourcePanel", true, false).get_global_rect()

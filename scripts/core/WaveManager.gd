@@ -37,6 +37,10 @@ var final_wave: bool = false
 ## Of this raid, how many have stepped out of the nest, and whose turn it is at the edge (_next_origin).
 var _from_nest: int = 0
 var _edge_turn: int = 0
+## Whose turn it is among the valley's ways in, for what a repaired stage stirs up: kept from one
+## stage's raid to the next, so each way in has its turn over the run -- the south-east's too, the
+## way past the third wreck (Config.WRECKS).
+var _stage_turn: int = 0
 
 # v0.2 Continuous Random Raids
 var raid_timer: float = 60.0
@@ -407,6 +411,15 @@ func start_final_wave() -> void:
 ## (the debug-agent's BUG-014). With every way in watched it waits, unseen, for one not to be: [] --
 ## nothing steps out this time (_on_spawn_timer_timeout tries again).
 func _next_origin() -> Array:
+	# What a repaired stage stirs up comes in from the valley's ends, not out of the nest: its hum
+	# carries down the valley and what answers it comes by the ways in (MAPS.entries; the player:
+	# "信标恐龙就应该来自边界"), each in turn, none that is watched.
+	if stage_wave and not final_wave:
+		for k in entry_positions.size():
+			var way_in: Vector3 = entry_positions[(_stage_turn + k) % entry_positions.size()]
+			if not _watched(way_in):
+				_stage_turn += k + 1
+				return [way_in, true]
 	var edges: Array[Vector3] = edge_origins()
 	if edges.is_empty() or (_from_nest < _nest_most() and not _watched(nest_spawn_position)):
 		_from_nest += 1
@@ -457,6 +470,7 @@ func reset_raid_state() -> void:
 	_final_countdown = 0.0
 	_from_nest = 0
 	_edge_turn = 0
+	_stage_turn = 0
 	var cfg = _get_config()
 	var lead_time: float = 15.0
 	if cfg and "RAIDS" in cfg:

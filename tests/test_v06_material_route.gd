@@ -90,6 +90,8 @@ func test_02c_every_material_on_the_bar_is_for_one_or_two_things() -> void:
 				kinds[String(use["kind"])] = true
 		if config_node.uses_of(String(res_id), map).is_empty():
 			continue   # not shown at all (rule 1; test_v02_followups)
+		if config_node.is_part(String(res_id)):
+			continue   # a part of the beacon, no material: it is a stage of the beacon and for nothing else (9.3)
 		assert_gte(kinds.size(), 1, "%s is for something besides the beacon" % res_id)
 		assert_lte(kinds.size(), 2, "%s is for at most two things: %s" % [res_id, kinds.keys()])
 

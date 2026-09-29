@@ -406,6 +406,12 @@ func _on_resource_picked_up(res_id: String, _amount: int, _by: Node) -> void:
 	if _materials_seen.has(res_id):
 		return
 	_materials_seen[res_id] = true
+	# A part of the beacon is said as found, with the stage it is for (Config.WRECKS).
+	var cfg = _get_config()
+	if cfg and cfg.has_method("is_part") and cfg.is_part(res_id):
+		show_hint(tr("HINT_FOUND_PART") % [tr("RESOURCE_%s" % res_id.to_upper()), _stage_taking(res_id)],
+			UiTheme.toast_seconds("long"), res_id)
+		return
 	var uses: String = _uses_text(res_id)
 	if uses != "":
 		show_hint(tr("HINT_NEW_MATERIAL") % [tr("RESOURCE_%s" % res_id.to_upper()), uses], UiTheme.toast_seconds("long"), res_id)
@@ -438,9 +444,22 @@ func _on_material_discovered(res_id: String) -> void:
 	_show_chip(res_id, true)
 	_refresh_resource_tooltips()
 
+## The stage of this run's beacon that takes `res_id`, counted from 1; 0 for none.
+func _stage_taking(res_id: String) -> int:
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("beacon_jobs"):
+		return 0
+	var jobs: Array = cfg.beacon_jobs(_run_map())
+	for i in jobs.size():
+		if cfg.beacon_job(_run_map(), String(jobs[i])).get("inputs", {}).has(res_id):
+			return i + 1
+	return 0
+
 ## A material's chip is on the bar when the material is for something in this game (GAME-
 ## DESIGN 4.3 rule 1) and the run has turned it up -- or `holding` says it is in the stock
-## now, which is the same thing (v0.6: the bar grows as the run does, from wood alone).
+## now, which is the same thing (v0.6: the bar grows as the run does, from wood alone). A part of
+## the beacon only while it is held: it is found once and goes into the beacon, and a chip
+## at nought after that would be a thing to look for that is not there.
 func _show_chip(res_id: String, holding: bool = false) -> void:
 	var chip: Control = resource_chips.get(res_id)
 	var count: Control = resource_labels.get(res_id)
@@ -450,9 +469,14 @@ func _show_chip(res_id: String, holding: bool = false) -> void:
 	var gs = _get_game_state()
 	var useful: bool = not (cfg and cfg.has_method("uses_of")) or not cfg.uses_of(res_id, _run_map()).is_empty()
 	var known: bool = holding or gs == null or not gs.has_method("knows") or gs.knows(res_id)
+	var part: bool = cfg != null and cfg.has_method("is_part") and cfg.is_part(res_id)
+	if part:
+		known = holding
 	chip.visible = useful and known
 	if count and is_instance_valid(count):
-		count.visible = chip.visible
+		# A part is one or none: its icon says it is held, and a count beside it would only ever
+		# say 1 -- and take the room the materials' counts need.
+		count.visible = chip.visible and not part
 
 ## Hovering a material on the bar says what it is for (GAME-DESIGN 4.3 rule 3).
 func _refresh_resource_tooltips() -> void:

@@ -17,7 +17,11 @@ extends Node
 ##   water -- no use yet (GAME-DESIGN 4.4), so the game does not offer it
 ## Raw materials first, then what the raids leave (GAME-DESIGN 4.2): the order the top
 ## bar shows them in.
-const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat", "hide"]
+const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat", "hide",
+	# The beacon's parts, one out of each of the ship's wrecks (WRECKS): the stock holds them as it
+	# holds wood, so a stage's price, what is missing from it and where to get that are said the way
+	# every price is.
+	"antenna", "battery", "board"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (the map's opening_stock, Config.MAPS) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
@@ -30,6 +34,9 @@ const INITIAL_RESOURCES: Dictionary = {
 	"food": 0,
 	"prime_meat": 0,
 	"hide": 0,
+	"antenna": 0,
+	"battery": 0,
+	"board": 0,
 }
 const TILE_SIZE: float = 2.0
 
@@ -473,6 +480,11 @@ static func hero_passes(type_id: String) -> bool:
 
 ## The flag needed before `res_id` can be cut by hand, or "" for anything bare
 ## hands can take.
+## Whether `res_id` is one of the beacon's parts, which come out of the ship's wrecks (WRECKS): the
+## bar shows one only while it is held, and its first find is said as a part found.
+static func is_part(res_id: String) -> bool:
+	return RESOURCE_NODES.has(res_id) and bool(RESOURCE_NODES[res_id].get("part", false))
+
 static func harvest_requires_unlock(res_id: String) -> String:
 	if RESOURCE_NODES.has(res_id):
 		return String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
@@ -631,7 +643,10 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 	if flag != "" and not owned.has(flag):
 		return missing_tool_hint(res_id, known)
 	if RESOURCE_NODES.has(res_id):
-		return ""
+		# A part is in one wreck, and where that is is said: the smoke over it is the one to go to.
+		var found: String = String(RESOURCE_NODES[res_id].get("found", ""))
+		return (TranslationServer.translate(found) % TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())) \
+			if found != "" else ""
 	var dropped: bool = false
 	var bosses_only: bool = true
 	for species in DINOS:
@@ -1295,10 +1310,13 @@ const MAPS: Dictionary = {
 	# the middle of the run must not give away what comes at the end).
 	"boss": "postosuchus",
 	# Where else raids come from, besides the nest: cells at the edge of the field, west,
-	# east and south. Only the beacon's final wave uses them -- "from every direction at
-	# once" (GAME-DESIGN 8.3) -- so the base the player built facing the nest has to have
-	# a back as well. Every one is walkable and reaches the cabin (test_v06_beacon).
-	"entries": [Vector2i(-10, 0), Vector2i(9, 0), Vector2i(0, 9)],
+	# east, south and south-east. The beacon's final wave uses them -- "from every direction
+	# at once" (GAME-DESIGN 8.3) -- so the base the player built facing the nest has to have
+	# a back as well; and what a repaired stage stirs up comes in by them, in turn
+	# (WaveManager._next_origin; the player: "信标恐龙就应该来自边界"). The south-east one is the
+	# way past the third wreck (WRECKS). Every one is walkable and reaches the cabin
+	# (test_v06_beacon).
+	"entries": [Vector2i(-10, 0), Vector2i(9, 0), Vector2i(0, 9), Vector2i(9, 9)],
 	# The valley's edge behind the nest, where a raid's numbers past its party from the nest come in
 	# (RAIDS.nest_most), unseen in the mist. Every one is walkable and reaches the cabin
 	# (test_v06_from_the_edge).
@@ -1318,9 +1336,12 @@ const MAPS: Dictionary = {
 		# has come, the third on the bone that only fighting brings in. `time` is seconds
 		# at the bench, which, like every job there, are seconds nobody holds the line.
 		"stages": [
-			{"inputs": {"wood": 8}, "time": 10.0},
-			{"inputs": {"stone": 8}, "time": 15.0},
-			{"inputs": {"stone": 6, "bone": 6}, "time": 20.0},
+			# And each its part, out of one of the ship's wrecks (WRECKS; GAME-DESIGN 9.3, "信标变成
+			# 冒险"): the antenna by the river, the battery behind the nest, the control board where
+			# the valley's south-east way comes in.
+			{"inputs": {"wood": 8, "antenna": 1}, "time": 10.0},
+			{"inputs": {"stone": 8, "battery": 1}, "time": 15.0},
+			{"inputs": {"stone": 6, "bone": 6, "board": 1}, "time": 20.0},
 		],
 		# Repaired, it waits until the player launches it -- there is no hurry but the
 		# raids, which keep growing (RAIDS.intensity_per_minute) -- and then charges for
@@ -1395,7 +1416,13 @@ const MAPS: Dictionary = {
 		{"type": "wood", "cell": Vector2i(6, 3)},
 		# At the field's west edge, where the river runs closest (TERRAIN.river): the
 		# spot the Hero draws water from. It was a pool in the middle of the field.
-		{"type": "water", "cell": Vector2i(-11, -4)}
+		{"type": "water", "cell": Vector2i(-11, -4)},
+		# The ship's wrecks (WRECKS), one part in each: by the river, where the phytosaurs come up at
+		# night (MAPS.prowl_from); behind the nest, in its guards' reach while they are awake; and on
+		# the way in from the south-east (MAPS.entries).
+		{"type": "antenna", "cell": Vector2i(-9, 4)},
+		{"type": "battery", "cell": Vector2i(0, -11)},
+		{"type": "board", "cell": Vector2i(6, 7)},
 	],
 	},
 
@@ -1435,7 +1462,7 @@ const MAPS: Dictionary = {
 			]},
 		},
 		"default_nest_cell": Vector2i(0, -18),
-		"entries": [Vector2i(-21, 0), Vector2i(20, 0), Vector2i(0, 20)],
+		"entries": [Vector2i(-21, 0), Vector2i(20, 0), Vector2i(0, 20), Vector2i(19, 19)],
 		"reinforce_from": [Vector2i(-6, -21), Vector2i(0, -21), Vector2i(6, -21)],
 		"prowl_from": [Vector2i(-21, -6), Vector2i(-21, 3), Vector2i(-21, 10)],
 		"default_blocked_cells": [
@@ -1480,6 +1507,10 @@ const MAPS: Dictionary = {
 			{"type": "stone", "cell": Vector2i(-6, 15)},
 			# Water at the field's west edge, where the river runs closest.
 			{"type": "water", "cell": Vector2i(-22, -4)},
+			# The ship's wrecks, as the valley has them, twice as far.
+			{"type": "antenna", "cell": Vector2i(-19, 6)},
+			{"type": "battery", "cell": Vector2i(3, -20)},
+			{"type": "board", "cell": Vector2i(15, 16)},
 		],
 	},
 }
@@ -1991,7 +2022,7 @@ const SOUNDS: Dictionary = {
 	"herd_call_chance": 0.3,
 	# His work: a stroke on a node is the sound of what it is; building and mending, a knock
 	# this often.
-	"harvest": {"wood": "chop", "stone": "quarry"},
+	"harvest": {"wood": "chop", "stone": "quarry", "antenna": "salvage", "battery": "salvage", "board": "salvage"},
 	"hammer_every": 0.55,
 	# A building bitten sounds of what it is made of; the cabin is plate metal.
 	"hit_by_building": {"stone_wall": "stone_hit", "core": "hull_hit"},
@@ -2039,6 +2070,8 @@ const SOUNDS: Dictionary = {
 		"hero_hurt": {"files": ["hero_hurt"], "db": -3.0, "pitch": 1.08, "class": "hurt"},
 		"eat":      {"files": ["eat"], "db": -8.0, "pitch": 1.05, "class": "work"},
 		"pickup":   {"files": ["pickup"], "db": -12.0, "pitch": 1.1, "class": "ui"},
+		# Rummaging in a wreck: plate knocked about, lighter than a bite on the cabin's hull.
+		"salvage":  {"files": ["hull_hit"], "db": -14.0, "pitch": 1.3, "class": "work"},
 		# What is built, and what becomes of it.
 		"build_done": {"files": ["build_done"], "db": -5.0, "pitch": 1.04, "class": "event"},
 		"wood_hit":   {"files": ["wood_hit_1", "wood_hit_2"], "db": -10.0, "pitch": 1.1, "class": "impact"},
@@ -2468,6 +2501,39 @@ const RAIDS: Dictionary = {
 	"edge_hurry_until": 20.0,
 }
 
+## The ship's wrecks (GAME-DESIGN 9.3, "信标变成冒险"; v0.6 round four, the player chose: "翻找几秒，
+## 直接入库"; "烟柱，远处看得见"; "河边 / 巢后 / 东南边缘"). The time-travel ship broke up coming down and
+## its pieces lie about the valley; three hold what the beacon lacks, one part each -- the antenna,
+## the battery, the control board -- and each stage of the beacon takes one (MAPS.<id>.beacon). A
+## wreck is a node he works like a tree (RESOURCE_NODES "antenna", "battery", "board"): ten strokes'
+## search, and its part falls at his feet. Until it is searched it smoulders, and its smoke rises
+## above the mist (WreckSmoke): where the three lie is seen from the cabin from the first, and what is
+## on the way to them is not.
+const WRECKS: Dictionary = {
+	# The column over one: puffs rising off a fire as wide as `spread` metres, at `rise` metres a
+	# second, slowing (`damping`), leant on by the wind (`wind`, metres a second each second), for
+	# `lifetime` seconds -- some twenty metres of smoke, over
+	# the tallest tree and seen over the ridge. A puff starts `puff` metres across and grows to
+	# `billow` times it. Thin where it leaves the wreck -- the wreck is seen through it -- and
+	# thickest some metres up (`alpha` at each share of its life, from nothing out of the mist to
+	# nothing at the top). Dark, as what burns in a wreck is -- a pale grey was the mist's own, and
+	# lost in it -- and as bright as the valley is lit at the hour (`light`: of the sun's energy and
+	# of the sky's, DAY.light): barely there at night.
+	"smoke": {
+		"amount": 80,
+		"lifetime": 14.0,
+		"spread": 0.25,
+		"rise": 1.8,
+		"damping": 0.02,
+		"wind": Vector3(0.04, 0.0, 0.02),
+		"puff": 0.8,
+		"billow": 3.5,
+		"colour": Color(0.24, 0.23, 0.22),
+		"alpha": [[0.0, 0.0], [0.1, 0.14], [0.35, 0.45], [0.7, 0.28], [1.0, 0.0]],
+		"light": Vector2(0.45, 0.6),
+	},
+}
+
 const RESOURCE_NODES: Dictionary = {
 	"wood": {
 		"name": "RESOURCE_WOOD",
@@ -2514,7 +2580,63 @@ const RESOURCE_NODES: Dictionary = {
 		"color": Color(0.2, 0.5, 0.8),
 		"depleted_color": Color(0.25, 0.3, 0.35),
 		"size": Vector3(1.8, 0.5, 1.8),   # a patch of bank, as tall as the biggest jar on it
-	}
+	},
+	# The ship's wrecks (WRECKS), each by the part it holds: one to give (`capacity`), after
+	# `strokes` of search at one a second -- ten seconds at it, bitten or not. A torn piece of
+	# hull half in the ground in a scorched furrow, its plating spilled round it: three metres of
+	# it, most of it low; what stands in the way is its middle (`trunk_radius`), what is clicked
+	# all of it. `found` says where it is, where the part's price is (Config.source_hint).
+	"antenna": {
+		"name": "NODE_WRECK_ANTENNA",
+		"icon": "wreck",
+		"kind": "PANEL_KIND_WRECK",
+		"part": true,
+		"smoke": true,
+		"capacity": 1,
+		"harvest_rate": 1.0,
+		"strokes": 10,
+		"hint": "NODE_HINT_WRECK",
+		"depleted_text": "STATUS_SEARCHED",
+		"found": "SOURCE_ANTENNA",
+		"color": Color(0.75, 0.76, 0.78),
+		"depleted_color": Color(0.35, 0.35, 0.36),
+		"size": Vector3(3.0, 1.5, 3.0),
+		"trunk_radius": 0.8,
+	},
+	"battery": {
+		"name": "NODE_WRECK_BATTERY",
+		"icon": "wreck",
+		"kind": "PANEL_KIND_WRECK",
+		"part": true,
+		"smoke": true,
+		"capacity": 1,
+		"harvest_rate": 1.0,
+		"strokes": 10,
+		"hint": "NODE_HINT_WRECK",
+		"depleted_text": "STATUS_SEARCHED",
+		"found": "SOURCE_BATTERY",
+		"color": Color(0.75, 0.76, 0.78),
+		"depleted_color": Color(0.35, 0.35, 0.36),
+		"size": Vector3(3.0, 1.5, 3.0),
+		"trunk_radius": 0.8,
+	},
+	"board": {
+		"name": "NODE_WRECK_BOARD",
+		"icon": "wreck",
+		"kind": "PANEL_KIND_WRECK",
+		"part": true,
+		"smoke": true,
+		"capacity": 1,
+		"harvest_rate": 1.0,
+		"strokes": 10,
+		"hint": "NODE_HINT_WRECK",
+		"depleted_text": "STATUS_SEARCHED",
+		"found": "SOURCE_BOARD",
+		"color": Color(0.75, 0.76, 0.78),
+		"depleted_color": Color(0.35, 0.35, 0.36),
+		"size": Vector3(3.0, 1.5, 3.0),
+		"trunk_radius": 0.8,
+	},
 }
 
 # ==============================================================================
@@ -2659,6 +2781,28 @@ const VISUALS: Dictionary = {
 	# level turns it to face the river. It was a blue puddle in the middle of the field.
 	"node/water":           {"scene": "res://assets/models/props/water_landing_a.glb",
 		"material": "vertex", "placeholder": "pool", "anchor": "feet", "color": ""},
+	# The ship's wrecks (WRECKS; tools/generate_props.py wreck): a torn piece of the hull, the white
+	# plating and orange markings the cabin wears, scorched, half in a burnt furrow, plates spilled
+	# round it -- and what the part was fitted in: a bent mast, a battery bay, a console. Searched,
+	# its bay is torn open and the panel that closed it lies by it. Built to size, in metres, and
+	# not fitted: searched, it is the same wreck, and fitting each to the box would rescale it.
+	"node/antenna":         {"scene": "res://assets/models/props/wreck_antenna_a.glb", "fit": "none",
+		"scene_depleted": "res://assets/models/props/wreck_antenna_searched_a.glb",
+		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
+	"node/battery":         {"scene": "res://assets/models/props/wreck_battery_a.glb", "fit": "none",
+		"scene_depleted": "res://assets/models/props/wreck_battery_searched_a.glb",
+		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
+	"node/board":           {"scene": "res://assets/models/props/wreck_board_a.glb", "fit": "none",
+		"scene_depleted": "res://assets/models/props/wreck_board_searched_a.glb",
+		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
+	# The parts, lying where they fell out of the search (tools/generate_props.py drop_antenna ...):
+	# a folded dish on its mast, a battery cell, the control unit.
+	"drop/antenna":         {"scene": "res://assets/models/props/drop_antenna_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/battery":         {"scene": "res://assets/models/props/drop_battery_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/board":           {"scene": "res://assets/models/props/drop_board_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	# What a drop of each resource looks like lying on the ground: split logs, a heap of
 	# quarried stone, bones, a haunch of meat, a clay pot of water (tools/generate_props.py
 	# drop_*). They were cubes in the resource's colour, and a green cube was wood.

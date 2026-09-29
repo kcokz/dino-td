@@ -183,7 +183,8 @@ func test_10_never_seen_is_unknown_to_the_valleys_far_walls() -> void:
 	assert_not_null(mat, "with the fog's own shader")
 	if mat != null:
 		assert_eq(String(mat.shader.resource_path), "res://assets/shaders/fog_of_war.gdshader", "(assets/shaders/fog_of_war.gdshader)")
-		assert_eq(mat.render_priority, Material.RENDER_PRIORITY_MAX, "drawn after everything see-through")
+		assert_eq(mat.render_priority, WreckSmoke.PRIORITY - 1,
+			"drawn after everything see-through but the wrecks' smoke, which rises over it (test_v06_wrecks)")
 		assert_eq(mat.get_shader_parameter("shroud"), fog._texture, "from what is seen")
 	fog.reveal_all()
 	assert_false(fog.shroud.visible, "Lifted, it is not drawn at all")
