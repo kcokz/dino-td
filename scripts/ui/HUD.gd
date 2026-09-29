@@ -752,7 +752,25 @@ func _on_game_lost() -> void:
 		return
 	if is_game_over_visible():
 		return
-	_show_game_over(tr("GAME_DEFEAT_TITLE"), tr("GAME_DEFEAT_DESC"), false)
+	var fell: bool = gs != null and "lost_to" in gs and String(gs.lost_to) == "hero"
+	_show_game_over(tr("GAME_DEFEAT_HERO_TITLE" if fell else "GAME_DEFEAT_TITLE"), _defeat_text(gs), false)
+
+## How the run was lost, in words (the debug-agent's BUG-011: one line, "the cabin was destroyed or the
+## hero was killed", over a cabin at full health). The cabin broken open; or the engineer killed -- by
+## what, when it was at his side, and whether it was guarding its nest; or, when nothing said, both.
+func _defeat_text(gs: Node) -> String:
+	var to: String = String(gs.lost_to) if (gs != null and "lost_to" in gs) else ""
+	if to == "cabin":
+		return tr("GAME_DEFEAT_CABIN")
+	if to != "hero":
+		return tr("GAME_DEFEAT_DESC")
+	var killer: Dictionary = gs.hero_killer if "hero_killer" in gs else {}
+	if killer.is_empty():
+		return tr("GAME_DEFEAT_HERO")
+	var cfg = _get_config()
+	var kind: String = String(killer.get("type", ""))
+	var named: String = String(cfg.get_dino_name(kind)) if cfg else kind
+	return tr("GAME_DEFEAT_HERO_BY_GUARD" if bool(killer.get("guard", false)) else "GAME_DEFEAT_HERO_BY") % named
 
 ## The end of the run: the verdict, told apart by more than colour -- a different icon, a
 ## different word, a different stone under them -- and the run's account under it (UI-POLISH

@@ -1277,6 +1277,7 @@
     - `OptionPanel.view()`：人的卡片是 `none`（不开）、`menu`、`full`（属性卡）三种；别的东西选中时永远是 `full`。
     - 参考：暗黑破坏神 4 的技能栏不动、角色面板按 C；帝国时代 4、星际争霸 2 的建造菜单从按钮弹出、选好就回去。
     - 新测试 `test_v06_the_hero_card.gd`（10 条）；`test_v06_command_keys` 第 1、4、7 条，`test_v06_eating` 第 10 条，`test_v06_the_interface` 第 6 条按新样子改写。`playtest.gd herocard` 拍这几种样子；`ui`、`kit`、`eating` 场景先打开属性卡再拍。
+  - **（debug-agent BUG-011）失败画面不说是怎么输的**：人在巢边被守卫咬死、船舱满血，画面写的是"船舱被毁或角色阵亡！"。现在游戏记下输在哪（`GameState.lost_to`：船舱被攻破时 `CoreCampfire` 记 "cabin"，人倒下时记 "hero"）和咬死他的是什么（`GameState.hero_killer`：`Hero.die` 取身边 `HERO.killer_within` 3 米内最近的那只，记下种类、是不是守巢的）。船舱：标题照旧"防线沦陷！"，写"船舱被攻破了，回去的路也跟着断了"；人：标题"倒下了！"，写"工程师被守巢的腔骨龙咬死了。没人修信标，就回不去了"（不是守卫就没有"守巢的"，身边没有就只写"工程师倒下了"）。新测试 `test_v06_how_the_run_was_lost.gd`（5 条）。
   - **（debug-agent BUG-005，接着修）排队，和按墙长排的咬位**：
     - 咬的位置原来是按角度分的，任何建筑周围都是里外各 8 个：船舱 7 米的南面只有 1 个。背后和东头一围，只剩三个能咬的，其余的在栅栏后面等（"来袭实际攻击效果很差"）。现在每一面每 1 米一个（`DINO_AI.slot_spacing`），四个角各一个（`Dino.ring_round`）：船舱里圈 24 个；一根栅栏还是 8 个。里圈外圈是位置上的标记，不再按下标算。
     - 位置都满了时，原来去抢最近的、已经有主的那个，挤进人堆；现在在人群外面等：离墙 `DINO_AI.queue_standoff`（2.8 米）、它来的那一边（`Dino.queue_spot`）。

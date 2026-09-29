@@ -1340,6 +1340,15 @@ func _take_up_work_again() -> bool:
 func die() -> void:
 	if current_state == State.DEAD:
 		return
+	# What bit him last is at his side: the defeat screen says what killed him (the debug-agent's
+	# BUG-011).
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs != null and "hero_killer" in gs:
+		var within: float = float(cfg.HERO.get("killer_within", 3.0)) if cfg else 3.0
+		var killer: Node3D = _find_nearest_enemy(within)
+		gs.hero_killer = {} if killer == null else \
+			{"type": String(killer.get("dino_type")), "guard": killer.is_in_group("guard_dinos")}
 	current_state = State.DEAD
 	velocity = Vector3.ZERO
 	var eb = _get_event_bus()

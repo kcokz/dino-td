@@ -29,6 +29,12 @@ var wave_number: int = 0
 var dino_stat_multipliers: Dictionary = {}
 var is_game_over: bool = false
 var is_game_won: bool = false
+## How the run was lost (the debug-agent's BUG-011): "cabin" -- broken open -- or "hero" -- he fell;
+## "" while it is not, or when nothing said.
+var lost_to: String = ""
+## What killed him, when it was at his side (Hero.die): {"type": its Config.DINOS id, "guard": whether
+## it was guarding its nest} -- or nothing.
+var hero_killer: Dictionary = {}
 var active_buildings: Array[Node] = []
 
 ## Everything the Hero has made at the cabin, as a set of permanent flags. Not an
@@ -208,6 +214,8 @@ func reset_game(p_seed: int = -1) -> void:
 	_cancel_produce_timer()
 	is_game_over = false
 	is_game_won = false
+	lost_to = ""
+	hero_killer = {}
 	var cfg_run = _get_config()
 	map_id = String(cfg_run.DEFAULT_MAP_ID) if (cfg_run and "DEFAULT_MAP_ID" in cfg_run) else ""
 	if p_seed >= 0:
@@ -816,6 +824,7 @@ func _on_game_lost() -> void:
 
 func _on_hero_died() -> void:
 	if not is_game_over:
+		lost_to = "hero"
 		_emit_game_lost()
 
 ## Zeroed resource wallet covering every id in Config.RESOURCES.

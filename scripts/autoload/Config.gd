@@ -1199,6 +1199,9 @@ const HERO: Dictionary = {
 	"damage": 1.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
 	"attack_rate": 1.0,           # 攻击间隔（秒）
 	"attack_range": 2.0,          # 攻击距离（米）
+	# What killed him is taken to be the nearest animal this far from him when he falls (metres): a
+	# bite is at arm's length, and the defeat screen names it (debug-agent BUG-011).
+	"killer_within": 3.0,
 	"provoke_duration": 5.0,      # 挑衅仇恨持续时长（秒）
 	"provoke_radius": 4.0,        # 挑衅仇恨生效半径（米）
 	"width": 0.8,                 # 碰撞体宽度（米）——建筑占地由它推导

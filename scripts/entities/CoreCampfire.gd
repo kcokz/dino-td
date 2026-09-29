@@ -106,6 +106,8 @@ func _on_before_destroy() -> void:
 	var gs = _get_game_state()
 	if gs != null and gs.is_game_over:
 		return
+	if gs != null and "lost_to" in gs:
+		gs.lost_to = "cabin"
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("game_lost"):
 		eb.game_lost.emit()
