@@ -259,14 +259,16 @@ func test_08_option_panel_two_level_command_hierarchy() -> void:
 	tree.root.add_child(panel)
 	tree.root.add_child(hero)
 
-	# 1. Select Hero -> Level 1 menu (Build, Stop)
+	# 1. Select Hero -> Level 1: his commands are tiles of their own in the corner (v0.6 round four),
+	# and with nothing of his open no card is shown.
 	panel.select_target(hero)
-	assert_true(panel.visible, "Panel is visible when Hero selected")
+	assert_false(panel.visible, "Nothing of his open, no card is shown")
 	assert_eq(panel.current_menu_level, 1, "Menu is at Level 1")
 
 	# 2. Click Build button -> Transitions to Level 2 menu
 	panel._on_build_pressed()
 	assert_eq(panel.current_menu_level, 2, "Menu entered Level 2 (Building catalog)")
+	assert_true(panel.visible, "and the build menu is shown")
 
 	# 3. Click Back button -> Transitions back to Level 1 menu
 	panel._on_back_pressed()

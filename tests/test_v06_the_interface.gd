@@ -108,30 +108,32 @@ func test_04_no_text_is_sized_by_hand() -> void:
 # 2. The command card
 # ==============================================================================
 
-func test_06_the_command_card_grows_upward_from_its_corner() -> void:
+func test_06_the_command_card_grows_upward_from_his_commands() -> void:
+	# The card stands on his two commands in the corner (v0.6 round four), and grows upward from there.
 	var main = await _level()
 	var panel: Control = main.hud.option_panel
-	panel.set_selected_unit(main.hero)
+	var commands: Control = main.hud.hero_commands
+	var node: Node = main.get_tree().get_nodes_in_group("resource_nodes")[0]
+	panel.set_selected_unit(node)
 	await wait_frames(2)
 	var screen: Rect2 = main.hud.root_control.get_global_rect()
 	var margin: float = float(config_node.UI["option_panel_margin"])
-	var hero_rect: Rect2 = panel.get_global_rect()
-	assert_almost_eq(hero_rect.end.x, screen.end.x - margin, 1.0, "Its right edge is the margin in from the screen's")
-	assert_almost_eq(hero_rect.end.y, screen.end.y - margin, 1.0, "And so is its bottom edge")
-	assert_almost_eq(hero_rect.size.x, float(config_node.UI["option_panel_size"].x), 1.0, "It is as wide as Config says")
-	# The build menu holds more: the card grows up, its corner where it was.
-	panel.current_menu = "build"
-	panel._refresh_ui()
+	var node_rect: Rect2 = panel.get_global_rect()
+	assert_almost_eq(node_rect.end.x, screen.end.x - margin, 1.0, "Its right edge is the margin in from the screen's")
+	assert_lte(node_rect.end.y, commands.get_global_rect().position.y, "Its foot is above his commands")
+	assert_almost_eq(node_rect.size.x, float(config_node.UI["option_panel_size"].x), 1.0, "It is as wide as Config says")
+	# The build menu holds more: the card grows up, its foot where it was.
+	panel.set_selected_unit(main.hero)
+	panel.show_menu("build")
 	await wait_frames(2)
 	var build_rect: Rect2 = panel.get_global_rect()
-	assert_gt(build_rect.size.y, hero_rect.size.y, "The build menu is taller than the Hero's card")
-	assert_almost_eq(build_rect.end.y, hero_rect.end.y, 1.0, "And its bottom has not moved: it grew upward")
+	assert_gt(build_rect.size.y, node_rect.size.y, "The build menu is taller than a tree's card")
+	assert_almost_eq(build_rect.end.y, node_rect.end.y, 1.0, "And its bottom has not moved: it grew upward")
 	assert_gte(build_rect.position.y, screen.position.y, "All of it still on the screen")
 	# And back: it shrinks again rather than keeping the height it had.
-	panel.current_menu = "default"
-	panel._refresh_ui()
+	panel.set_selected_unit(node)
 	await wait_frames(2)
-	assert_almost_eq(panel.get_global_rect().size.y, hero_rect.size.y, 1.0, "Back to the Hero's card, back to its height")
+	assert_almost_eq(panel.get_global_rect().size.y, node_rect.size.y, 1.0, "Back to the tree's card, back to its height")
 
 # ==============================================================================
 # 3. The cabin

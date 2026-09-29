@@ -20,12 +20,39 @@ extends PanelContainer
 ## The panel is as tall as what it holds and grows upward from the corner; it used to be a
 ## fixed box with its lower half empty. Everything is styled by UiTheme through type
 ## variations; nothing here picks a colour or a size.
+##
+## His card stands one of three ways (view) -- v0.6 round four: "surviver面板太大，大部分时间都是要选着
+## 这个人到处采到处造，这个面板就一直占着游戏版面……有没有方法既方便建造有不要一直显示着这个面板？". The
+## games that keep the screen clear show a hero's commands and bring the rest when it is asked for:
+## Diablo IV's character sheet on C; the build menu of Age of Empires IV or StarCraft II, which
+## comes up off its button and goes once a building is in hand. His two commands, Build and Eat,
+## are tiles of their own in the corner (HeroCommands), there all the while and never moving
+## ("最好建造和吃的两个图标不要变动位置，就在右下角原处"); the card stands on them (stand_on):
+##   * "none", the rest of the time: no card. His health and his meal are on his medallion at the
+##     bottom left (HUD) all the while;
+##   * "menu": one of his menus (Build, Eat), come up off its tile -- what it offers and the line
+##     about the entry under the cursor, nothing of him. A building taken in hand puts it away;
+##   * "full" (details_open -- Config.CONTROLS.details_key, or his medallion): his sheet -- his
+##     portrait, his bars, his meal, his kit, what he is doing. No commands: those are below.
+## Anything else chosen shows its whole card, above his tiles too.
 
 signal build_option_selected(building_type: String)
 signal action_triggered(action_name: String, target_node: Node)
+## What it shows has changed (_settle): his commands below take the number keys or give them up
+## (HUD, leaves_keys).
+signal card_changed()
 
 var selected_unit: Node = null
 var current_menu: String = "default" # "default", "build" or "eat"
+## Whether his card is open in full (show_details), rather than his commands alone. A new subject,
+## or the selection cleared, shuts it.
+var details_open: bool = false
+## What the card stands on: his commands in the corner (HUD). It is pinned above them while they show.
+var below: Control = null
+## Put away at the end of the run (HUD.set_shut): nothing is chosen any more.
+var shut: bool = false
+## How many of the card's commands are on the number keys (_mark_keys).
+var _keyed: int = 0
 
 ## True while the status line is showing the detail for whatever the cursor is
 ## over. The per-unit status ticker runs every quarter second and would otherwise
@@ -34,6 +61,7 @@ var current_menu: String = "default" # "default", "build" or "eat"
 var _hover_detail_shown: bool = false
 
 # UI Nodes
+var header: HBoxContainer = null
 var portrait: TextureRect = null
 var title_label: Label = null
 var subtitle_label: Label = null
@@ -58,6 +86,7 @@ var ability_row: HFlowContainer = null
 var _abilities_shown: Array[String] = []
 var _last_refresh_time: float = 0.0
 var _shown_unit: Node = null
+var _shown_view: String = ""
 
 func _init() -> void:
 	custom_minimum_size = _panel_size()
@@ -165,6 +194,8 @@ func refresh_build_affordability() -> void:
 			_fill_price_row(btn, cfg.BUILDINGS[b_type].get("cost", {}))
 
 func set_selected_unit(unit: Node) -> void:
+	if unit != selected_unit:
+		details_open = false
 	selected_unit = unit
 	current_menu = "default"
 	_hover_detail_shown = false
@@ -181,11 +212,13 @@ func clear_selection() -> void:
 	else:
 		selected_unit = null
 	current_menu = "default"
+	details_open = false
 	_refresh_ui()
 
 func deselect() -> void:
 	selected_unit = null
 	current_menu = "default"
+	details_open = false
 	_refresh_ui()
 
 var selected_target: Node:
@@ -196,12 +229,10 @@ var current_menu_level: int:
 	get: return 2 if current_menu == "build" else 1
 
 func _on_build_pressed() -> void:
-	current_menu = "build"
-	_refresh_ui()
+	show_menu("build")
 
 func _on_eat_pressed() -> void:
-	current_menu = "eat"
-	_refresh_ui()
+	show_menu("eat")
 
 ## He eats the meal `key` (Hero.order_eat), and the card goes back to his commands.
 func _trigger_eat(key: String) -> void:
@@ -211,26 +242,63 @@ func _trigger_eat(key: String) -> void:
 	current_menu = "default"
 	_refresh_ui()
 
-## How many meals are cooked and waiting, all told.
-func _meals_cooked() -> int:
-	var gs = _get_game_state()
-	var n: int = 0
-	if gs and "meals" in gs:
-		for key in gs.meals:
-			n += int(gs.meals[key])
-	return n
-
-func _hero_is_eating() -> bool:
-	var hero = _get_hero()
-	return hero != null and is_instance_valid(hero) and hero.has_method("is_eating") and hero.is_eating()
-
+## One step back: out of one of his menus, to his card as it stood; else his card in full, shut.
 func _on_back_pressed() -> void:
+	if current_menu != "default":
+		current_menu = "default"
+	else:
+		details_open = false
+	_refresh_ui()
+
+## Whether the card has something the cancel key closes: one of his menus (build, eat), or his sheet.
+func in_submenu() -> bool:
+	return current_menu != "default" or showing_details()
+
+## How the card stands now: for him, "none" (no card -- his commands are below it), "menu" (one of his
+## menus) or "full" (his sheet); anything else's card is always "full".
+func view() -> String:
+	if not shows_him():
+		return "full"
+	if current_menu != "default":
+		return "menu"
+	return "full" if details_open else "none"
+
+## Whether his sheet is open now: not one of his menus, and not nothing.
+func showing_details() -> bool:
+	return shows_him() and view() == "full"
+
+## His sheet, or no card (HUD.toggle_hero_details: the details key, his medallion).
+func show_details(open: bool) -> void:
+	details_open = open
 	current_menu = "default"
 	_refresh_ui()
 
-## Whether the card is in one of his submenus (build, eat), which the cancel key backs out of.
-func in_submenu() -> bool:
-	return current_menu != "default"
+## One of his menus -- "build", "eat" -- come up off its tile (HUD, his commands); "default" shuts it.
+func show_menu(menu: String) -> void:
+	current_menu = menu
+	_refresh_ui()
+
+## Whether his menu `menu` is what the card shows.
+func showing_menu(menu: String) -> bool:
+	return shows_him() and current_menu == menu
+
+## Whether the card is his, rather than something else's.
+func shows_him() -> bool:
+	return selected_unit != null and is_instance_valid(selected_unit) and selected_unit == _get_hero()
+
+## Whether the number keys are left to his commands below: nothing shown, or nothing on them here.
+func leaves_keys() -> bool:
+	return not visible or _keyed == 0
+
+## Stands on `node` -- his commands in the corner -- and is pinned above it from now on.
+func stand_on(node: Control) -> void:
+	below = node
+	_pin()
+
+## Put away at the end of the run, and back at a restart.
+func set_shut(yes: bool) -> void:
+	shut = yes
+	_settle()
 
 func _process(delta: float) -> void:
 	# Whatever the panel was showing has gone (destroyed, depleted): fall back to
@@ -272,7 +340,7 @@ func _ensure_components() -> void:
 		add_child(main_vbox)
 
 	if title_label == null:
-		var header := HBoxContainer.new()
+		header = HBoxContainer.new()
 		header.name = "Header"
 		main_vbox.add_child(header)
 		var frame := PanelContainer.new()
@@ -358,8 +426,8 @@ func _update_status_display() -> void:
 		return
 	var info: Dictionary = selected_unit.get_display_info() if selected_unit.has_method("get_display_info") else {}
 	_show_vitals(info)
-	if current_menu == "build" or _hover_detail_shown:
-		return # this line is showing the hovered entry's detail, not a unit's status
+	if current_menu != "default" or _hover_detail_shown:
+		return # this line is a menu's -- the hovered entry's detail, or what to pick -- not a unit's status
 	if title_label:
 		title_label.text = info.get("title", "")
 	_set_status(String(info.get("status", "")))
@@ -540,7 +608,7 @@ func _show_vitals(info: Dictionary) -> void:
 		return
 	var is_hero: bool = String(info.get("type", "")) == "hero"
 	if hero_stats != null:
-		hero_stats.visible = is_hero
+		hero_stats.visible = is_hero and view() == "full"
 	if is_hero:
 		hp_row.visible = false
 		work_row.visible = false
@@ -570,7 +638,7 @@ func _set_status(text: String) -> void:
 	if status_label == null:
 		return
 	status_label.text = text
-	status_label.visible = text != ""
+	status_label.visible = text != "" and view() != "none"
 
 func _refresh_ui() -> void:
 	_ensure_components()
@@ -670,27 +738,38 @@ func _visual_key(info: Dictionary) -> String:
 ## The box's own rect is a line along the corner's bottom edge -- no height of its own --
 ## so the engine makes it exactly as tall as what it holds, growing upward, and shrinking
 ## again when it holds less. (Resizing it by hand instead kept its top edge where it was
-## and pushed its bottom off the screen.)
+## and pushed its bottom off the screen.) The edge is the top of his commands, while they show.
 func _pin() -> void:
 	var margin: float = _panel_margin()
+	var lift: float = 0.0
+	if below != null and is_instance_valid(below) and below.visible:
+		lift = below.get_combined_minimum_size().y + UiTheme.space("s")
 	offset_left = -(_panel_size().x + margin)
 	offset_right = -margin
-	offset_top = -margin
-	offset_bottom = -margin
+	offset_top = -(margin + lift)
+	offset_bottom = -(margin + lift)
 
 ## After the content changes: drop the separator when there is nothing under it, and fade
 ## the new content in -- a transition, not a hard cut (UI-POLISH T10).
 func _settle() -> void:
+	var how: String = view()
+	if header:
+		header.visible = how == "full"
 	if separator and button_container:
 		separator.visible = button_container.get_child_count() > 0
+	# Nothing open for him is no card at all: his commands are below, his health and his meal on his
+	# medallion.
+	visible = how != "none" and not shut
 	_mark_keys()
 	_pin()
-	if _shown_unit != selected_unit:
+	if _shown_unit != selected_unit or _shown_view != how:
 		_shown_unit = selected_unit
+		_shown_view = how
 		if is_inside_tree():
 			modulate.a = UiTheme.number("settle_alpha")
 			var tw := create_tween()
 			tw.tween_property(self, "modulate:a", 1.0, UiTheme.number("fade_seconds"))
+	card_changed.emit()
 
 ## The number keys press the card's commands in the order they stand (Config.CONTROLS.command_keys),
 ## each marked with its key in a corner (UiKit.keycap). What cannot be taken back -- a demolish,
@@ -703,6 +782,7 @@ func _mark_keys() -> void:
 	var controls: Dictionary = cfg.CONTROLS if cfg else {}
 	var keys: Array = controls.get("command_keys", [])
 	var n: int = 0
+	_keyed = 0
 	for child in button_container.get_children():
 		var btn := child as Button
 		if btn == null:
@@ -715,6 +795,7 @@ func _mark_keys() -> void:
 		if n < keys.size():
 			UiKit.key_shortcut(btn, int(keys[n]))
 			UiKit.keycap(btn, OS.get_keycode_string(int(keys[n])))
+			_keyed += 1
 		n += 1
 
 ## What the Back command is called on the card, so the cancel key can find it and keys skip it.
@@ -743,27 +824,16 @@ func _create_card_button(text: String, icon: Texture2D, price: Dictionary, callb
 func _fill_price_row(btn: Button, price: Dictionary, extra: String = "") -> void:
 	UiKit.fill_price_row(btn, price, extra)
 
+## His menus. His commands themselves -- Build, and Eat with the meals cooked on a badge (v0.6 round
+## two) -- are tiles of their own under the card (HeroCommands), and his sheet has none.
 func _populate_hero_buttons() -> void:
-	if current_menu == "default":
-		# His commands as icons, the games' way (v0.6 round two): build, and eat -- the meals
-		# cooked on a badge, and nothing to press when there are none.
-		button_container.columns = 4
-		var build := UiKit.command_button(tr("CMD_BUILD"), UiTheme.icon("hammer"), _on_build_pressed, tr("TIP_CMD_BUILD"))
-		build.name = "BuildCommand"
-		button_container.add_child(build)
-		var meals: int = _meals_cooked()
-		var eat := UiKit.command_button(tr("CMD_EAT"), UiTheme.icon("roast"), _on_eat_pressed, tr("TIP_CMD_EAT"), meals)
-		eat.name = "EatCommand"
-		eat.disabled = meals <= 0 or _hero_is_eating()
-		button_container.add_child(eat)
-	elif current_menu == "eat":
+	if current_menu == "eat":
 		# One card per meal cooked: named for how it was cooked, how many, and what it does.
 		button_container.columns = 1
 		var cfg = _get_config()
 		var gs = _get_game_state()
 		var stock: Array = gs.meals_in_stock() if (gs and gs.has_method("meals_in_stock")) else []
-		if stock.is_empty():
-			_set_status(tr("EAT_NOTHING"))
+		_set_status(tr("EAT_NOTHING") if stock.is_empty() else tr("EAT_HINT_PICK"))
 		for entry in stock:
 			var key: String = String(entry["key"])
 			var dish: String = String(entry["dish"])
@@ -1070,6 +1140,11 @@ func _trigger_build(type_id: String) -> void:
 	var hud = _get_hud()
 	if hud and is_instance_valid(hud) and hud.has_method("select_build_type"):
 		hud.select_build_type(type_id)
+	# A building in hand puts the menu away: the ground it goes on is what matters now, and it stays
+	# in hand for as many as can be paid for (Main.try_place_at_cell). The menu is a key away for
+	# the next.
+	current_menu = "default"
+	_refresh_ui()
 
 func _get_hero() -> Node:
 	if is_inside_tree():

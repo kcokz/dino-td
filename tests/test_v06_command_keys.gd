@@ -65,8 +65,8 @@ func test_01_the_first_key_opens_the_first_command() -> void:
 	var panel = main.hud.option_panel
 	panel.select_target(main.hero)
 	await wait_frames(1)
-	var first: Button = _buttons(panel)[0]
-	assert_eq(String(first.name), "BuildCommand", "Build stands first on his card")
+	var first: Button = main.hud.hero_commands.build_button
+	assert_eq(String(first.name), "BuildCommand", "Build stands first of his commands")
 	await _press(int(_keys()[0]))
 	assert_eq(String(panel.current_menu), "build", "and the first number key opens it")
 
@@ -112,7 +112,7 @@ func test_03_a_key_picks_a_card_in_the_build_menu() -> void:
 	await _press(int(_keys()[1]))
 	assert_eq(String(main.current_build_type), wanted, "The second key puts the second card's building in hand")
 
-func test_04_the_cancel_key_peels_the_ghost_then_the_submenu() -> void:
+func test_04_the_cancel_key_peels_the_ghost_the_submenu_and_his_card() -> void:
 	var main = await _level()
 	stock_everything()
 	var panel = main.hud.option_panel
@@ -120,14 +120,21 @@ func test_04_the_cancel_key_peels_the_ghost_then_the_submenu() -> void:
 	panel.select_target(main.hero)
 	panel._on_build_pressed()
 	await wait_frames(1)
+	await _press(cancel)
+	assert_eq(String(panel.current_menu), "default", "The cancel key shuts the build menu")
+	panel._on_build_pressed()
+	await wait_frames(1)
 	await _press(int(_keys()[0]))
 	assert_ne(String(main.current_build_type), "", "A building in hand")
+	assert_eq(String(panel.current_menu), "default", "which puts the menu away (v0.6 round four)")
 	await _press(cancel)
 	assert_eq(String(main.current_build_type), "", "The cancel key puts it down first")
-	assert_eq(String(panel.current_menu), "build", "and leaves the build menu open")
-	await _press(cancel)
-	assert_eq(String(panel.current_menu), "default", "Again, and the card is back at his commands")
 	assert_false(main.hud.is_pause_menu_open(), "not yet the menu")
+	await _press(int(config_node.CONTROLS["details_key"]))
+	assert_true(panel.showing_details(), "His card open in full")
+	await _press(cancel)
+	assert_false(panel.showing_details(), "the cancel key shuts it")
+	assert_false(main.hud.is_pause_menu_open(), "and not yet the menu")
 	await _press(cancel)
 	assert_true(main.hud.is_pause_menu_open(), "Nothing left to peel off, it opens the menu")
 
@@ -176,6 +183,7 @@ func test_07_the_settings_page_says_so() -> void:
 	if line == null:
 		return
 	assert_ne(tr("MENU_COMMAND_KEYS"), "MENU_COMMAND_KEYS", "written down")
-	assert_eq(line.text, tr("MENU_COMMAND_KEYS"), "and shown")
+	assert_eq(line.text, tr("MENU_COMMAND_KEYS") % OS.get_keycode_string(int(config_node.CONTROLS["details_key"])),
+		"and shown, with the key that shows all of him")
 	assert_true(line.is_visible_in_tree(), "on the settings page")
 	main.hud.toggle_pause_menu()

@@ -128,6 +128,8 @@ func _run(name: String) -> void:
 			await _scenario_paused()
 		"kit":
 			await _scenario_kit()
+		"herocard":
+			await _scenario_herocard()
 		"day":
 			await _scenario_day()
 		_:
@@ -573,6 +575,7 @@ func _scenario_eating() -> void:
 		return
 	hero.set_physics_process(true)
 	panel.select_target(hero)
+	_main.hud.toggle_hero_details()    # his sheet: his bars are on it (v0.6 round four)
 	gs.stock_meal("meat")
 	gs.stock_meal("meat")
 	gs.stock_meal("prime_meat")
@@ -910,6 +913,7 @@ func _scenario_ui() -> void:
 	await _shoot("raid_warning")
 	var panel = _main.hud.option_panel
 	panel.select_target(_main.hero)
+	_main.hud.toggle_hero_details()    # his sheet: his kit is on it (v0.6 round four)
 	await _wait(6)
 	var slot: Control = panel.find_child("Ability_stone_pick", true, false) as Control
 	if slot:
@@ -995,8 +999,44 @@ func _scenario_kit() -> void:
 	_main.hero.current_hp = _main.hero.max_hp * 0.8
 	var panel = _main.hud.option_panel
 	panel.select_target(_main.hero)
+	_main.hud.toggle_hero_details()    # his sheet: his row is on it (v0.6 round four)
 	await _wait(8)
 	await _shoot("his_row")
+
+## His card (v0.6 round four: "surviver面板太大"): chosen, his two commands in the corner and no
+## card; Build and its menu above them; a building in hand and the menu gone; the details key, his
+## sheet; a fence chosen, its whole card -- his commands where they were throughout.
+func _scenario_herocard() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	gs.add_resources({"wood": 30, "stone": 8, "bone": 4, "food": 2})
+	for recipe_id in ["stone_pick", "stone_axe", "stone_pot"]:
+		gs.grant_unlock(String(cfg.RECIPES[recipe_id]["unlocks"]))
+	gs.eat("meat")
+	gs.stock_meal("meat")
+	var panel = _main.hud.option_panel
+	panel.select_target(_main.hero)
+	await _wait(12)
+	await _shoot("commands")
+	panel._on_build_pressed()
+	await _wait(8)
+	await _shoot("build_menu")
+	panel._trigger_build(String(panel._shown_buildables()[0]))
+	var spot: Vector3 = _main.hero.global_position + Vector3(2.5, 0.0, 2.5)
+	_main._update_build_preview(_main.camera.unproject_position(spot))
+	await _wait(8)
+	await _shoot("in_hand")
+	_main.cancel_building_selection()
+	_main.hud.toggle_hero_details()
+	await _wait(8)
+	await _shoot("details")
+	var wall = _build_at("wall", _main.hero.global_position + Vector3(3.0, 0.0, 4.0))
+	if wall:
+		wall.take_damage(wall.max_hp * 0.4)
+		eb.unit_selected.emit(wall)
+		await _wait(8)
+		await _shoot("fence")
 
 ## The day (GAME-DESIGN 9.3): the base at first light, in the middle of the day, at dusk and in the
 ## night -- the same view each time, from over the cabin, the dial on the strip saying which.

@@ -82,6 +82,8 @@ var menu_btn: Button = null
 var raid_warning_banner: Label = null
 var raid_warning_panel: Control = null
 var option_panel: Node = null
+## His two commands, Build and Eat, in the corner under the card (v0.6 round four).
+var hero_commands: HeroCommands = null
 var pause_menu: Node = null
 var paused_overlay: Control = null
 var _raid_horn_sounded: bool = false
@@ -774,7 +776,9 @@ func _show_game_over(title: String, details: String, won: bool = true) -> void:
 		game_over_panel.move_to_front()
 		_pop_in(game_over_card if game_over_card else game_over_panel)
 	if option_panel and is_instance_valid(option_panel):
-		option_panel.visible = false
+		option_panel.set_shut(true)
+	if hero_commands:
+		hero_commands.visible = false
 	_set_action_buttons_enabled(false)
 	_refresh_paused_overlay()
 
@@ -890,8 +894,10 @@ func reset_hud() -> void:
 	if raid_warning_panel:
 		raid_warning_panel.visible = false
 	_update_speed_btn_label()
+	if hero_commands:
+		hero_commands.visible = true
 	if option_panel and is_instance_valid(option_panel) and option_panel.has_method("clear_selection"):
-		option_panel.visible = true
+		option_panel.set_shut(false)
 		option_panel.clear_selection()
 
 	# Synchronize baseline values from GameState & Config
@@ -944,7 +950,7 @@ func _refresh_texts() -> void:
 		core_vital.tooltip_text = tr("HUD_CABIN_TIP")
 	var hero_emblem = find_child("HeroEmblem", true, false)
 	if hero_emblem:
-		hero_emblem.tooltip_text = tr("HUD_HERO_TIP")
+		hero_emblem.tooltip_text = tr("HUD_HERO_TIP") % _details_key_text()
 	var title = find_child("ObjectiveTitle", true, false) as Label
 	if title:
 		title.text = tr("HUD_OBJECTIVE_BEACON")
@@ -1288,6 +1294,14 @@ func _ensure_ui_components() -> void:
 	hero[0].mouse_filter = Control.MOUSE_FILTER_STOP
 	hero[0].mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	hero[0].gui_input.connect(_on_hero_emblem_input)
+	# The key that opens his card in full, on a chip at the medallion's shoulder, as a command wears
+	# its key.
+	var cap := _label("Keycap", &"KeycapLabel", _details_key_text())
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var disc: Control = hero[0].get_node("Disc")
+	disc.add_child(cap)
+	cap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	hero_side.add_child(hero[0])
 	fed_chip = _panel("FedChip", &"PillPanel")
 	fed_chip.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -1422,6 +1436,15 @@ func _ensure_ui_components() -> void:
 		root_control.add_child(option_panel)
 		if option_panel.has_signal("build_option_selected"):
 			option_panel.build_option_selected.connect(select_build_type)
+	# His two commands in the corner, where they always are; the card stands on them.
+	hero_commands = HeroCommands.new()
+	root_control.add_child(hero_commands)
+	hero_commands.build_pressed.connect(func(): _open_hero_menu("build"))
+	hero_commands.eat_pressed.connect(func(): _open_hero_menu("eat"))
+	if option_panel:
+		option_panel.card_changed.connect(_on_card_changed)
+		option_panel.stand_on(hero_commands)
+		_on_card_changed()
 	var menu_script = load("res://scripts/ui/PauseMenu.gd")
 	if menu_script:
 		pause_menu = menu_script.new()
@@ -1591,11 +1614,46 @@ func _medallion(node_name: String, key: String, icon_name: String, grow: float =
 	plate.add_child(value)
 	return [box, ring, value]
 
-## The Hero's medallion clicked: he is picked, as a click on him in the world picks him.
+## The Hero's medallion clicked: he is picked, as a click on him in the world picks him, and his
+## card opens in full -- or, open, shuts again.
 func _on_hero_emblem_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_select_hero()
+		toggle_hero_details()
 		get_viewport().set_input_as_handled()
+
+## His card in full, or his commands alone again: the details key (Config.CONTROLS.details_key) and
+## his medallion, as C opens the character sheet in Diablo IV (v0.6 round four). He is picked if he
+## was not.
+func toggle_hero_details() -> void:
+	var panel_ok: bool = option_panel != null and is_instance_valid(option_panel) and option_panel.has_method("show_details")
+	var open: bool = not (panel_ok and option_panel.showing_details())
+	_select_hero()
+	if panel_ok:
+		option_panel.show_details(open)
+
+## Build or Eat pressed: his menu comes up above its tile -- he is picked if he was not -- or, open
+## already, goes.
+func _open_hero_menu(menu: String) -> void:
+	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
+	if hero == null or option_panel == null or not is_instance_valid(option_panel):
+		return
+	var open: bool = not option_panel.showing_menu(menu)
+	_select_hero()
+	option_panel.show_menu(menu if open else "default")
+
+## The card above his commands changed: they take the number keys while it has none on them, and the
+## tile whose menu is open stays pressed in.
+func _on_card_changed() -> void:
+	if hero_commands == null or option_panel == null or not is_instance_valid(option_panel):
+		return
+	hero_commands.set_keys_live(option_panel.leaves_keys())
+	hero_commands.mark_open(String(option_panel.current_menu) if option_panel.shows_him() else "")
+
+## The details key as the keyboard writes it.
+func _details_key_text() -> String:
+	var cfg = _get_config()
+	var key: int = int(cfg.CONTROLS.get("details_key", KEY_C)) if (cfg and "CONTROLS" in cfg) else KEY_C
+	return OS.get_keycode_string(key)
 
 func _select_hero() -> void:
 	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null

@@ -219,11 +219,14 @@ func test_09_his_card_has_his_three_bars_and_the_boost_is_gold_on_them() -> void
 func test_10_build_and_eat_are_icons_and_eat_counts_what_is_cooked() -> void:
 	var hero = _hero()
 	await wait_frames(1)
-	var panel = _card(hero)
+	# His two commands, tiles of their own in the corner (v0.6 round four).
+	var commands = load("res://scripts/ui/HeroCommands.gd").new()
+	_cleanup_nodes.append(commands)
+	tree.root.add_child(commands)
 	await wait_frames(1)
-	var build: Button = panel.find_child("BuildCommand", true, false) as Button
-	var eat: Button = panel.find_child("EatCommand", true, false) as Button
-	assert_not_null(build, "Build is a command on his card")
+	var build: Button = commands.find_child("BuildCommand", true, false) as Button
+	var eat: Button = commands.find_child("EatCommand", true, false) as Button
+	assert_not_null(build, "Build is one of his commands")
 	assert_not_null(eat, "And so is Eat")
 	if build == null or eat == null:
 		return
@@ -234,7 +237,7 @@ func test_10_build_and_eat_are_icons_and_eat_counts_what_is_cooked() -> void:
 	game_state_node.stock_meal("meat")
 	game_state_node.stock_meal("meat")
 	await wait_frames(1)
-	eat = panel.find_child("EatCommand", true, false) as Button
+	eat = commands.find_child("EatCommand", true, false) as Button
 	assert_false(eat.disabled, "Cooked: it can be pressed")
 	var badge: Label = eat.get_node_or_null("Badge") as Label
 	assert_not_null(badge, "With a count on it")
@@ -282,9 +285,13 @@ func test_12_a_meal_is_drawn_cooked_never_as_the_raw_meat_it_came_from() -> void
 	game_state_node.stock_meal("prime_meat")
 	await wait_frames(1)
 	var panel = _card(hero)
+	# Eat is one of his two commands in the corner (v0.6 round four).
+	var commands = load("res://scripts/ui/HeroCommands.gd").new()
+	_cleanup_nodes.append(commands)
+	tree.root.add_child(commands)
 	await wait_frames(1)
-	var eat: Button = panel.find_child("EatCommand", true, false) as Button
-	assert_not_null(eat, "Eat is on his card")
+	var eat: Button = commands.find_child("EatCommand", true, false) as Button
+	assert_not_null(eat, "Eat is one of his commands")
 	if eat == null:
 		return
 	assert_false(raw.has(eat.icon), "Eat is not drawn as raw meat")

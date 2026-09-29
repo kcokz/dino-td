@@ -360,6 +360,12 @@ func _populate_languages() -> void:
 		if loc == current:
 			language_picker.select(i)
 
+## The details key as the keyboard writes it (Config.CONTROLS.details_key).
+func _details_key_text() -> String:
+	var cfg = _get_config()
+	var key: int = int(cfg.CONTROLS.get("details_key", KEY_C)) if (cfg and "CONTROLS" in cfg) else KEY_C
+	return OS.get_keycode_string(key)
+
 func _refresh_texts() -> void:
 	if resume_btn: resume_btn.text = tr("MENU_RESUME")
 	if settings_btn: settings_btn.text = tr("MENU_SETTINGS")
@@ -370,7 +376,7 @@ func _refresh_texts() -> void:
 	if camera_label: camera_label.text = tr("MENU_CAMERA")
 	if camera_keys_label: camera_keys_label.text = tr("MENU_CAMERA_KEYS")
 	if commands_label: commands_label.text = tr("MENU_COMMANDS")
-	if command_keys_label: command_keys_label.text = tr("MENU_COMMAND_KEYS")
+	if command_keys_label: command_keys_label.text = tr("MENU_COMMAND_KEYS") % _details_key_text()
 	_populate_window_modes()
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if current_page == Page.ROOT else tr("MENU_SETTINGS_TITLE")

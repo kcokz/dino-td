@@ -1791,6 +1791,11 @@ const CONTROLS: Dictionary = {
 	# cannot be taken back -- a demolish, the beacon's launch -- is not on a key: it is pressed by
 	# hand. Back is the cancel key's, which peels a submenu off as it does a ghost in hand.
 	"command_keys": [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9],
+	# His card in full -- his portrait, his bars, his kit -- and shut again, as C opens the
+	# character sheet in Diablo IV (v0.6 round four: the card stood open all the while he was
+	# chosen, which is most of the time). His medallion does the same. A letter the camera's keys
+	# leave free.
+	"details_key": KEY_C,
 	# Pointing at things (Main._raycast_object). How far wide of a unit's body the cursor may
 	# be and still take it, in pixels: a raptor is a small thing to hit from eighteen metres
 	# up, and a unit is what a click most often means.

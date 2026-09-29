@@ -1276,6 +1276,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# His card in full, and shut again (Config.CONTROLS.details_key; HUD.toggle_hero_details).
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == int(controls.get("details_key", KEY_C)) \
+			and not (event.ctrl_pressed or event.meta_pressed):
+		if hud and is_instance_valid(hud) and hud.has_method("toggle_hero_details"):
+			hud.toggle_hero_details()
+		get_viewport().set_input_as_handled()
+		return
+
 	# Space key to toggle pause
 	if event is InputEventKey and event.pressed and event.keycode == pause_key:
 		var gs = _get_game_state()
@@ -1297,7 +1306,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var eb = _get_event_bus()
 		var panel = _get_option_panel()
-		# Then a submenu of his card (build, eat): back to his commands, as its Back button does.
+		# Then a submenu of his card (build, eat), as its Back button does -- or his card open in full.
 		if panel != null and is_instance_valid(panel) and panel.has_method("in_submenu") and panel.in_submenu():
 			panel._on_back_pressed()
 			return

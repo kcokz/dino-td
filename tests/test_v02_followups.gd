@@ -961,19 +961,29 @@ func test_48_a_move_order_mid_harvest_is_actually_obeyed() -> void:
 func test_49_hero_level_1_menu_is_build_and_eat() -> void:
 	var panel = option_panel_script.new()
 	var hero = hero_script.new()
+	var commands = load("res://scripts/ui/HeroCommands.gd").new()
 	_cleanup_nodes.append(panel)
 	_cleanup_nodes.append(hero)
+	_cleanup_nodes.append(commands)
 	tree.root.add_child(panel)
 	tree.root.add_child(hero)
+	tree.root.add_child(commands)
 	await wait_frames(1)
 
 	panel.select_target(hero)
 	assert_eq(panel.current_menu, "default", "Starts at default level-1 menu")
 	# Stop was removed as redundant long ago. Since v0.6 round two eating is a command of his
-	# own ("吃饭也是一个图标"): [ Build ] [ Eat ], and nothing else.
-	assert_eq(panel.button_container.get_child_count(), 2, "Level 1 menu has exactly 2 commands")
-	assert_eq(panel.button_container.get_child(0).text, tr("CMD_BUILD"), "Build first")
-	assert_eq(panel.button_container.get_child(1).text, tr("CMD_EAT"), "Then Eat")
+	# own ("吃饭也是一个图标"): [ Build ] [ Eat ], and nothing else -- since round four, tiles of their
+	# own in the corner that never move ("最好建造和吃的两个图标不要变动位置"), and none on his card.
+	var tiles: Array = []
+	for child in commands.get_children():
+		if child is Button:
+			tiles.append(child)
+	assert_eq(tiles.size(), 2, "Level 1 menu has exactly 2 commands")
+	if tiles.size() == 2:
+		assert_eq(tiles[0].text, tr("CMD_BUILD"), "Build first")
+		assert_eq(tiles[1].text, tr("CMD_EAT"), "Then Eat")
+	assert_eq(panel.button_container.get_child_count(), 0, "and none on his card")
 
 
 func test_58_depleted_nodes_report_themselves_unavailable() -> void:
