@@ -1,6 +1,6 @@
 # DOC-005 9.3 迷雾那一条还写着"没去过的是黑的"
 
-- 状态: open
+- 状态: resolved（772b9c9 改了设计书：迷雾三层，没去过的是浓雾，2026-09-29 核对）
 - 对照: GAME-DESIGN.md 第 625 行 × 7426dbc（"the fog of war is the valley's mist, not black"）× TASK-014
 - 发现: 2026-09-28
 
