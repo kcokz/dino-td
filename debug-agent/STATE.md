@@ -14,6 +14,7 @@
 | [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
 | [BUG-013](bug/BUG-013-raid-mills-at-a-blocked-waypoint.md) | 大山谷：中间口子封了，绕过来的挤在原路点上转 | 中 | open | 2026-09-29 |
 | [BUG-014](bug/BUG-014-small-valley-raid-steps-out-in-his-sight.md) | 小山谷：站在巢前看着，来袭在他眼前的边缘点出生 | 中 | open | 2026-09-29 |
+| [BUG-015](bug/BUG-015-twitch-watch-calls-the-dusk-turn-a-mill.md) | 抽搐监视把黄昏掉头回巢报成 mill（误报） | 低 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -51,6 +52,12 @@
 | TASK-019 | 守卫先示威；巢里只出一小群，其余从边缘来 | **done** 1、2、3、5 过；第 4 条小山谷另开 BUG-014 |
 
 ## 检查记录
+
+### 2026-09-29 第 8 次（自由找 bug，d9b75e9）
+
+- `map:valley_large play:25`：23 分钟打赢（跳走），守住 9 波、杀 55，船舱 78/100；0 错、0 卡住。
+- 抽搐报告 12 份：6 份 mill 全是黄昏掉头回巢被窗口跨过 → BUG-015（误报）；其余是船舱边的挤、巢口刚出来的抖，没有新问题。
+- TASK-019 的观感里把"守卫头上加记号"改成"加大示威动作"（项目方向：线索来自世界，不加标记）。
 
 ### 2026-09-29 第 7 次（监控循环，TASK-019 第 2～5 部分，d9b75e9）
 
