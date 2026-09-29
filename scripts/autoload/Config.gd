@@ -1669,6 +1669,14 @@ const THEME: Dictionary = {
 		"hide_hover": Color(1.06, 1.04, 1.0),
 		"hide_down": Color(0.9, 0.85, 0.78),
 		"hide_off": Color(0.8, 0.76, 0.72),      # one that cannot be taken yet: duller, still read
+		# A command in the corner he cannot give now (HeroCommands: no meal, daylight, no wood): plainly
+		# dull, its icon greyed down -- at "hide_off" and the card's icon dimming, a greyed Eat was as
+		# bright as a Torch to be pressed (the debug-agent's TASK-024).
+		"tile_off": Color(0.58, 0.55, 0.52, 0.9),
+		"icon_off": Color(0.42, 0.4, 0.38, 0.7),
+		# A command just become his, lit up as it comes into the corner, fading over "come_seconds"
+		# (UiKit.come_in; TASK-024: "新按钮出现时注意得到吗：不太注意得到").
+		"come": Color(1.55, 1.35, 0.9),
 		"groove": Color(0.15, 0.13, 0.115),      # bare chrome, pressed
 		"groove_faint": Color(0.15, 0.13, 0.115, 0.55),   # and under the cursor
 	},
@@ -1723,6 +1731,10 @@ const THEME: Dictionary = {
 	# of them one to a row were most of the screen's height.
 	"one_column_most": 3,
 	"pop_scale": 0.96,
+	# A command come into the corner grows in from this much of its size, and its light fades
+	# over this long (UiKit.come_in): an arrival, where a card's pop is a nudge.
+	"come_scale": 0.7,
+	"come_seconds": 1.4,
 	"settle_alpha": 0.35,
 	# The cabin's bar, nearly gone, pulses this fast (radians a second), down to this much.
 	"pulse_speed": 7.0,

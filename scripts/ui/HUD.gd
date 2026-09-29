@@ -922,17 +922,9 @@ func _fill_run_stats(stats: Node) -> void:
 		parts.append(tr("ACTIVITY_%s" % String(activities[i]).to_upper()) % percent)
 	time_share_legend.text = tr("RUN_TIME_SHARE") % " · ".join(parts) if not parts.is_empty() else ""
 
-## Appears rather than blinks on: a quick fade and a little growth (UI-POLISH T10, T14).
+## Appears rather than blinks on (UiKit.pop_in).
 func _pop_in(node: Control) -> void:
-	if node == null or not node.is_inside_tree():
-		return
-	node.pivot_offset = node.size * 0.5
-	node.modulate.a = 0.0
-	node.scale = Vector2.ONE * UiTheme.number("pop_scale")
-	var tw := node.create_tween().set_parallel(true)
-	var t: float = UiTheme.number("pop_seconds")
-	tw.tween_property(node, "modulate:a", 1.0, t)
-	tw.tween_property(node, "scale", Vector2.ONE, t).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	UiKit.pop_in(node)
 
 # ==============================================================================
 # Button Callbacks & Actions

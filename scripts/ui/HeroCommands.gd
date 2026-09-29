@@ -110,6 +110,8 @@ func _come(id: String) -> void:
 	move_child(btn, 0)
 	btn.visible = true
 	set_keys_live(_keys_live)
+	# Seen as it comes: it grows in, lit, and the light fades (the debug-agent's TASK-024).
+	UiKit.come_in(btn)
 
 ## The key of the command `id` as the keyboard writes it: its place among those come -- one not come
 ## yet, the place it would come to -- or "" past the last key.
@@ -169,6 +171,11 @@ func refresh() -> void:
 	var badge: Label = eat_button.get_node_or_null("Badge") as Label
 	if badge:
 		badge.text = str(meals)
+		# None cooked: its 0 in the colour of what he is short of, as a price he cannot pay is.
+		if meals <= 0:
+			badge.add_theme_color_override("font_color", UiTheme.color("ink_short"))
+		else:
+			badge.remove_theme_color_override("font_color")
 	var hero: Node = get_tree().get_first_node_in_group("hero")
 	var eating: bool = hero != null and is_instance_valid(hero) and hero.has_method("is_eating") and bool(hero.is_eating())
 	eat_button.disabled = meals <= 0 or eating

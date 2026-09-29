@@ -489,15 +489,18 @@ static func build() -> Theme:
 	t.set_type_variation("TileButton", "CardButton")
 	t.set_constant("icon_max_width", "TileButton", icon_size("xxl"))
 	# No price row along its foot, so none of the card's room for one.
+	# One that cannot be pressed now is plainly dull -- its hide, its icon greyed down, its word
+	# faint -- not a card's "still to be had" dimming: in the corner a greyed command stood as
+	# bright as one to press (the debug-agent's TASK-024).
 	var tiles: Array[StyleBox] = []
-	for key in ["hide", "hide_hover", "hide_down", "hide_off"]:
+	for key in ["hide", "hide_hover", "hide_down", "tile_off"]:
 		tiles.append(surface("hide", key, inset.x, inset.y))
 	_buttons(t, "TileButton", tiles[0], tiles[1], _sunk(tiles[2]), tiles[3],
-		color("ink"), color("ink"), color("ink_accent"), color("ink_muted"))
+		color("ink"), color("ink"), color("ink_accent"), color("ink_faint"))
 	# Its icon in its own colours, as a card's is.
 	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
 		t.set_color(c, "TileButton", Color.WHITE)
-	t.set_color("icon_disabled_color", "TileButton", Color(1, 1, 1, 0.55))
+	t.set_color("icon_disabled_color", "TileButton", tint("icon_off"))
 
 	# --- Dropdowns --------------------------------------------------------------
 	for state in ["normal", "hover", "pressed", "disabled"]:

@@ -209,14 +209,14 @@ func test_08_its_tile_comes_with_the_first_dusk_and_stays_and_build_does_not_mov
 	tiles.refresh()
 	await wait_physics_frames(2)
 	assert_false(tiles.torch_button.visible, "Before the first dusk there is no torch tile")
-	var build_at: Vector2 = tiles.build_button.global_position
+	var build_at: Vector2 = _place(tiles.build_button)
 	_set_clock(_at("dusk") + 1.0)
 	tiles.refresh()
 	await wait_physics_frames(2)
 	assert_true(tiles.torch_button.visible, "At dusk it is there")
 	assert_false(tiles.torch_button.disabled, "to be pressed, with wood in the stock")
-	assert_lt(tiles.torch_button.global_position.x, tiles.build_button.global_position.x, "to the left of Build")
-	assert_eq(tiles.build_button.global_position, build_at, "Build has not moved")
+	assert_lt(_place(tiles.torch_button).x, _place(tiles.build_button).x, "to the left of Build")
+	assert_eq(_place(tiles.build_button), build_at, "Build has not moved")
 	tiles.torch_pressed.emit()
 	assert_gt(float(main.hero.torch_left), 0.0, "Pressed, he lights one")
 	tiles.refresh()
@@ -227,13 +227,17 @@ func test_08_its_tile_comes_with_the_first_dusk_and_stays_and_build_does_not_mov
 	assert_eq(int(tiles.torch_button.shortcut.events[0].keycode), int(keys[1]),
 		"The first command to come after Build (nothing cooked yet), the second key lights it")
 	# Come, it stays: by day greyed out, not gone, so nothing to its left moves (v0.6 round four).
-	var torch_at: Vector2 = tiles.torch_button.global_position
+	var torch_at: Vector2 = _place(tiles.torch_button)
 	_set_clock(_at("day") + 100.0, 2)
 	tiles.refresh()
 	await wait_physics_frames(2)
 	assert_true(tiles.torch_button.visible, "By day it is still there")
 	assert_true(tiles.torch_button.disabled, "greyed out")
-	assert_eq(tiles.torch_button.global_position, torch_at, "where it was")
+	assert_eq(_place(tiles.torch_button), torch_at, "where it was")
+
+## Where the corner lays `btn` out, on the screen: not where it is drawn while it grows in (UiKit.come_in).
+func _place(btn: Control) -> Vector2:
+	return (btn.get_parent() as Control).global_position + btn.position
 
 func test_08b_the_tile_answers_at_once() -> void:
 	# The debug-agent's check 17: pressed the moment wood came in, the first press on 3 was lost -- the

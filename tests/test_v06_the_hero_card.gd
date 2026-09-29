@@ -303,30 +303,30 @@ func test_11_each_command_comes_in_to_the_left_as_it_becomes_his_and_stays() -> 
 	assert_true(_shown(tiles.build_button), "Build is there from the first")
 	assert_false(tiles.eat_button.visible, "Eat is not: nothing is cooked")
 	assert_false(tiles.torch_button.visible, "nor Torch: it is morning")
-	var build_at: Vector2 = tiles.build_button.global_position
+	var build_at: Vector2 = _place(tiles.build_button)
 	# The first dusk before the first meal: Torch is the first to come.
 	_set_clock(_at("dusk") + 1.0)
 	await wait_frames(2)
 	assert_true(tiles.torch_button.visible, "The first dusk, Torch comes")
-	assert_lt(tiles.torch_button.global_position.x, build_at.x, "to Build's left")
-	assert_eq(tiles.build_button.global_position, build_at, "Build where it was")
+	assert_lt(_place(tiles.torch_button).x, build_at.x, "to Build's left")
+	assert_eq(_place(tiles.build_button), build_at, "Build where it was")
 	assert_eq(_key_on(tiles.torch_button), int(keys[1]), "on the second key, the first to come")
-	var torch_at: Vector2 = tiles.torch_button.global_position
+	var torch_at: Vector2 = _place(tiles.torch_button)
 	game_state_node.stock_meal("meat")
 	await wait_frames(2)
 	assert_true(tiles.eat_button.visible, "The first meal, Eat comes")
-	assert_lt(tiles.eat_button.global_position.x, torch_at.x, "to the left of both")
-	assert_eq([tiles.build_button.global_position, tiles.torch_button.global_position], [build_at, torch_at],
+	assert_lt(_place(tiles.eat_button).x, torch_at.x, "to the left of both")
+	assert_eq([_place(tiles.build_button), _place(tiles.torch_button)], [build_at, torch_at],
 		"and neither moves")
 	assert_eq(_key_on(tiles.eat_button), int(keys[2]), "on the third key")
 	# Come, they stay: greyed out while they cannot be pressed, so none moves.
-	var eat_at: Vector2 = tiles.eat_button.global_position
+	var eat_at: Vector2 = _place(tiles.eat_button)
 	game_state_node._set_meals({})
 	_set_clock(_at("day") + 100.0, 2)
 	await wait_frames(2)
 	assert_true(tiles.torch_button.visible and tiles.torch_button.disabled, "By day the torch's is there, greyed out")
 	assert_true(tiles.eat_button.visible and tiles.eat_button.disabled, "and with nothing cooked, Eat's")
-	assert_eq([tiles.build_button.global_position, tiles.torch_button.global_position, tiles.eat_button.global_position],
+	assert_eq([_place(tiles.build_button), _place(tiles.torch_button), _place(tiles.eat_button)],
 		[build_at, torch_at, eat_at], "none has moved")
 	# Its words put into another language, it is the same run (HUD._on_locale_changed).
 	tree.root.get_node("EventBus").locale_changed.emit(TranslationServer.get_locale())
@@ -343,8 +343,41 @@ func test_11_each_command_comes_in_to_the_left_as_it_becomes_his_and_stays() -> 
 	_set_clock(_at("dusk") + 1.0)
 	await wait_frames(2)
 	assert_eq(_key_on(tiles.torch_button), int(keys[2]), "and Torch the third")
-	assert_lt(tiles.torch_button.global_position.x, tiles.eat_button.global_position.x, "to Eat's left")
-	assert_eq(tiles.build_button.global_position, build_at, "Build where it always is")
+	assert_lt(_place(tiles.torch_button).x, _place(tiles.eat_button).x, "to Eat's left")
+	assert_eq(_place(tiles.build_button), build_at, "Build where it always is")
+
+func test_12_a_command_come_is_seen_arriving_and_one_he_cannot_give_is_plainly_dull() -> void:
+	# The debug-agent's TASK-024: "新按钮出现时……不太注意得到"; "灰得太淡：没饭的'吃饭'（灰）和能点的'火把'几乎
+	# 一样亮".
+	var main = await _level()
+	var tiles: HeroCommands = _tiles(main)
+	await wait_frames(2)
+	_set_clock(_at("dusk") + 1.0)
+	var torch: Button = tiles.torch_button
+	var lit: Color = torch.modulate
+	assert_gt(lit.r, 1.0, "Come, it is lit up")
+	assert_lt(torch.scale.x, 1.0, "and grows in")
+	await wait_seconds(float(config_node.THEME["come_seconds"]) + 0.2)
+	assert_almost_eq(torch.modulate.r, 1.0, 0.02, "the light fades")
+	assert_almost_eq(torch.scale.x, 1.0, 0.02, "at its size")
+	# One he cannot give is plainly dull: its icon greyed down, its word faint.
+	var off: Color = torch.get_theme_color("icon_disabled_color")
+	var on: Color = torch.get_theme_color("icon_normal_color")
+	assert_lt(off.v * off.a, on.v * on.a * 0.5, "A greyed command's icon is not half as bright as one to press")
+	assert_eq(torch.get_theme_color("font_disabled_color"), UiTheme.color("ink_faint"), "and its word faint")
+	# Eat with nothing cooked says 0 in the colour of what he is short of.
+	game_state_node.stock_meal("meat")
+	await wait_frames(1)
+	var badge: Label = tiles.eat_button.get_node("Badge") as Label
+	assert_ne(badge.get_theme_color("font_color"), UiTheme.color("ink_short"), "A meal cooked: its count as it is")
+	game_state_node._set_meals({})
+	await wait_frames(1)
+	assert_eq(badge.get_theme_color("font_color"), UiTheme.color("ink_short"), "none: its 0 short")
+
+## Where the corner lays `btn` out, on the screen: not where it is drawn while it grows in (UiKit.come_in),
+## which is about its middle.
+func _place(btn: Control) -> Vector2:
+	return (btn.get_parent() as Control).global_position + btn.position
 
 ## The key that presses `btn`, or -1 for none.
 func _key_on(btn: Button) -> int:

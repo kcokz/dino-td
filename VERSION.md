@@ -1369,6 +1369,11 @@
     - 模型：`tools/generate_props.py` 的 `wreck`（三种，各有翻过的样子）、`drop_antenna`、`drop_battery`、`drop_board`；图标 `tools/build_icons.py` 的 wreck、antenna、battery、board，材料图标和残骸头像由 `render_portraits.gd` 渲染。残骸按米做、不缩放（`"fit": "none"`），翻过前后大小不跳。翻找的声音用船壳被咬的声音，轻一点、高一点（`SOUNDS.salvage`）。
     - 机器人：下一段只差部件、残骸没人看守时去翻（`_wreck_to_search`、`_search_wreck`；电池那处白天有守卫，等夜里）。
     - 测试：新 `test_v06_wrecks.gd`（8 条）。改写：`test_v06_beacon` 第 1 条（每段一两种材料，另加一个部件）；`test_v06_from_the_edge` 第 3 条（修好一段引来的那波从入口进来，一只也不从巢里出来——原来断言先从巢里出 5 只）；`test_v06_the_fog` 第 10 条（迷雾在一切半透明的东西之后画，除了烟）；`test_v06_the_interface` 第 10 条（材料栏不压到船舱徽章：原来每种材料都填 99999，现在按一局最多能有的——每种材料四位数、三个部件各一个；多了三个部件图标，五位数的放不下，而山谷里所有树加起来也就两千来木头）。
+  - **右下角按钮的两条观感**（debug-agent TASK-024："新按钮出现时注意得到吗：不太注意得到"；"灰得太淡：没饭的'吃饭'（灰）和能点的'火把'几乎一样亮"）：
+    - 新命令出现时从 0.7 倍弹到原大，整块亮一下金光，1.4 秒褪掉（`UiKit.come_in`；`THEME.tints.come`、`come_scale`、`come_seconds`）。原来 HUD 里的 `_pop_in` 挪到 `UiKit.pop_in`，大家共用。
+    - 用不了的命令（`TileButton` 的禁用样子）明显暗下去：底色用新的 `tile_off`，图标用 `icon_off`（灰、暗），字用 `ink_faint`。卡片（`CardButton`）"还买不起"的样子不变——那是"以后能买"，要看得清。
+    - "吃饭"角标没饭时是 0，用"缺的东西"的颜色（`ink_short`，和买不起的价格一样）。
+    - 测试：`test_v06_the_hero_card` 加第 12 条；第 11 条、`test_v06_fire` 第 8 条量按钮的位置改成量布局给它的位置（`_place`），不量画出来的位置——新按钮长大的那一下是绕自己中心缩放的，画出来的位置会跟着变。
   - **（debug-agent BUG-005，接着修）排队，和按墙长排的咬位**：
     - 咬的位置原来是按角度分的，任何建筑周围都是里外各 8 个：船舱 7 米的南面只有 1 个。背后和东头一围，只剩三个能咬的，其余的在栅栏后面等（"来袭实际攻击效果很差"）。现在每一面每 1 米一个（`DINO_AI.slot_spacing`），四个角各一个（`Dino.ring_round`）：船舱里圈 24 个；一根栅栏还是 8 个。里圈外圈是位置上的标记，不再按下标算。
     - 位置都满了时，原来去抢最近的、已经有主的那个，挤进人堆；现在在人群外面等：离墙 `DINO_AI.queue_standoff`（2.8 米）、它来的那一边（`Dino.queue_spot`）。

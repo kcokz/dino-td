@@ -149,6 +149,32 @@ static func command_button(text: String, icon: Texture2D, callback: Callable, to
 		btn.add_child(count)
 	return btn
 
+## Appears rather than blinks on: a quick fade and a little growth (UI-POLISH T10, T14).
+static func pop_in(node: Control) -> void:
+	if node == null or not node.is_inside_tree():
+		return
+	node.pivot_offset = node.size * 0.5
+	node.modulate.a = 0.0
+	node.scale = Vector2.ONE * UiTheme.number("pop_scale")
+	var tw := node.create_tween().set_parallel(true)
+	var t: float = UiTheme.number("pop_seconds")
+	tw.tween_property(node, "modulate:a", 1.0, t)
+	tw.tween_property(node, "scale", Vector2.ONE, t).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## A command just become his, into the corner (HeroCommands): it grows in, lit (THEME tints "come"),
+## and the light fades over "come_seconds" -- seen as it arrives, where it had only been there the
+## next time one looked (the debug-agent's TASK-024: "新按钮出现时注意得到吗：不太注意得到").
+static func come_in(node: Control) -> void:
+	if node == null or not node.is_inside_tree():
+		return
+	var at: Vector2 = node.size if node.size.x > 0.0 else node.get_combined_minimum_size()
+	node.pivot_offset = at * 0.5
+	node.scale = Vector2.ONE * UiTheme.number("come_scale")
+	node.modulate = UiTheme.tint("come")
+	var tw := node.create_tween().set_parallel(true)
+	tw.tween_property(node, "scale", Vector2.ONE, UiTheme.number("pop_seconds") * 2.0).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "modulate", Color.WHITE, UiTheme.number("come_seconds")).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
 ## A key as the engine's shortcut for a button (BaseButton.shortcut): the key presses it, and
 ## it flashes as though clicked -- and does nothing while it cannot be pressed or is hidden. The
 ## key is on the button already (keycap), so it is not added to the tooltip as well.
