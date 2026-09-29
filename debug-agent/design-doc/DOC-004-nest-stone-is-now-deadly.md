@@ -1,6 +1,6 @@
 # DOC-004 "采巢边的石头要和守卫打一架"：0c1f442 以后是"三只一起上，满血 6 秒倒下"
 
-- 状态: open（需要设计拍板：是改设计书的话，还是改摆法 / 数值）
+- 状态: resolved（玩家选了 A：守卫先示威，5c887f9；见 TASK-019）
 - 对照: GAME-DESIGN.md 第 576 行（9.2 资源分圈）、第 91 / 611 / 679 行（人倒下还是输，但要"不容易死"）× 0c1f442（"a nest is defended by all its guards at once"）× 7426dbc 的实际游戏
 - 发现: 2026-09-28，机器人整局 + 探针 `probe:nest_stone_east` / `probe:nest_stone_west`
 

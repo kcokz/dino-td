@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"guard_warn": await _p_guard_warn()
 			"reach_all": await _p_reach_all()
 			"settings_map": await _p_settings_map()
 			"routes": await _p_routes()
@@ -2448,6 +2449,109 @@ func _p_reach_all() -> void:
 		_look_at(spot[1], float(spot[2]))
 		await _advance(0.5)
 		await _shoot("place_" + String(spot[0]))
+
+## TASK-019 part 1 (5c887f9, DOC-004 choice A): the nest's guards warn before they come. A: he walks
+## at the east nest-side stone; the moment they warn he turns back -- they let him go, nobody bitten.
+## B: he walks in again and stays -- two seconds on they all come. The hint is said once a run.
+func _p_guard_warn() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	if OS.get_environment("DA_LANG") != "":
+		TranslationServer.set_locale(OS.get_environment("DA_LANG"))
+	gs.day_clock = 80.0
+	_main.wave_manager.auto_raid_enabled = false
+	gs.grant_unlock("harvest_stone")
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	var stone: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) == "stone" and (n as Node3D).global_position.x > core.x and (n as Node3D).global_position.z < core.z - 8.0:
+			stone = n
+	var warns := {"n": 0, "t": -1.0}
+	var clock := {"t": 0.0}
+	var on_warn := func(_g):
+		warns["n"] += 1
+		if float(warns["t"]) < 0.0:
+			warns["t"] = clock["t"]
+	eb.guards_warned.connect(on_warn)
+	var hint: String = tr("HINT_GUARDS_WARN").left(10)
+	var hint_seen := 0
+	var hint_was := false
+	for case in ["A_back_away", "B_stay"]:
+		warns["t"] = -1.0
+		clock["t"] = 0.0
+		hero.global_position = core + Vector3(0.0, 0.0, -4.0)
+		hero.order_stop()
+		await _advance(3.0)
+		var hp0: float = hero.current_hp
+		if case == "A_back_away":
+			hero.order_harvest(stone)
+		else:
+			# B: clearly inside the ring -- 4.5 m from the nearest guard's post, on the cabin side,
+			# and held there (the east stone is ~7.8 m off, on the ring's edge: a guard wandering back
+			# to its post can leave him outside it, and let him be).
+			var near_post: Vector3 = Vector3.INF
+			for g in get_nodes_in_group("guard_dinos"):
+				if is_instance_valid(g) and (near_post == Vector3.INF or g.post_position.distance_to(core) < near_post.distance_to(core)):
+					near_post = g.post_position
+			hero.move_to(near_post + (core - near_post).normalized() * 4.5)
+		var threatening := 0
+		var shot := false
+		var chased_at := -1.0
+		var backed := false
+		while clock["t"] < 30.0:
+			await _advance(0.1)
+			clock["t"] += 0.1
+			var up: bool = not _visible_labels(hint).is_empty()
+			if up and not hint_was:
+				hint_seen += 1
+			hint_was = up
+			var th := 0
+			var ch := 0
+			for g in get_nodes_in_group("guard_dinos"):
+				if not is_instance_valid(g):
+					continue
+				if int(g.guard_state) == 4:
+					th += 1
+				elif int(g.guard_state) in [1, 2]:
+					ch += 1
+			threatening = maxi(threatening, th)
+			if float(warns["t"]) >= 0.0 and not shot:
+				shot = true
+				await _portrait("%s_warning" % case, (stone.global_position + get_first_node_in_group("nest").global_position) * 0.5, 9.0)
+			if case == "A_back_away" and float(warns["t"]) >= 0.0 and not backed:
+				backed = true
+				hero.move_to(core + Vector3(0.0, 0.0, -2.0))
+			if ch > 0 and chased_at < 0.0:
+				chased_at = clock["t"]
+			if case == "A_back_away" and backed and clock["t"] > float(warns["t"]) + 8.0:
+				break
+			if case == "B_stay" and chased_at >= 0.0 and clock["t"] > chased_at + 2.0:
+				break
+		var states: Array = []
+		for g in get_nodes_in_group("guard_dinos"):
+			if is_instance_valid(g):
+				states.append(int(g.guard_state))
+		_say("INFO", "%s: warned at %.1f s (%.1f m from the nest's nearest post); up to %d guards threatening at once; first to come at him at %s; bitten %.1f; guards now %s" % [case, warns["t"], _nearest_post(hero), threatening, ("%.1f s" % chased_at) if chased_at >= 0.0 else "never", hp0 - hero.current_hp, str(states)])
+		if case == "A_back_away":
+			_say("PASS" if chased_at < 0.0 and hp0 - hero.current_hp < 0.01 else "FAIL", "A: warned, he backed away, they let him go")
+		else:
+			var gap: float = chased_at - float(warns["t"])
+			_say("PASS" if chased_at >= 0.0 and gap > 1.5 and gap < 2.8 else "FAIL", "B: warned, he stayed -- they came %.1f s after the warning" % gap)
+		hero.order_stop()
+		hero.global_position = core + Vector3(0.0, 0.0, -2.0)
+		await _advance(10.0)
+	eb.guards_warned.disconnect(on_warn)
+	_say("PASS" if hint_seen == 1 else "FAIL", "the warning's hint on screen %d time(s) in the run (want 1); guards_warned fired %d time(s)" % [hint_seen, warns["n"]])
+
+func _nearest_post(hero: Node3D) -> float:
+	var best := INF
+	for g in get_nodes_in_group("guard_dinos"):
+		if is_instance_valid(g):
+			best = minf(best, hero.global_position.distance_to(g.post_position))
+	return best
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
