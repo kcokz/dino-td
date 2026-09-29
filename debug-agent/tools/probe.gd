@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"herocard_keys": await _p_herocard_keys()
 			"nest_stone_east": await _p_nest_stone("east")
 			"nest_stone_west": await _p_nest_stone("west")
 			"mist": await _p_mist()
@@ -1756,6 +1757,196 @@ func _p_nest_stone(which: String) -> void:
 		if is_instance_valid(g) and not ("is_dead" in g and g.is_dead):
 			alive += 1
 	_say("INFO", "%s stone: first bite at %.1f s; up to %d guards after him at once; after %.1f s: hero %s (hp %.1f), game over %s, guards left %d, stone got %d" % [which, first_bite, max_chasing, t, "DEAD" if hero.current_hp <= 0.0 else "alive", hero.current_hp, gs.is_game_over, alive, int(gs.resources.get("stone", 0)) - stone0])
+
+## TASK-015 (69f127e): Build and Eat fixed in the corner, his card only when asked for. The keys as a
+## player presses them -- real key events through the engine -- and after each, what is open, what is
+## picked, what is in hand, where the two tiles are, and how many "1"s and "2"s the screen shows.
+func _p_herocard_keys() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var hud = _main.hud
+	var hero = _main.hero
+	var gm = _main.grid_manager
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	gs.resources["wood"] = 40
+	gs.known["wood"] = true
+	# Two meals put by: with none, Eat is off (nothing to press) and 2 rightly does nothing.
+	gs.meals["meat/roast"] = 2
+	# A bitten stake and a whole one, to pick later.
+	var core: Vector3 = _main.current_core.global_position
+	var bitten = _build_at("wall", gm.world_to_build_cell(core + Vector3(-5.0, 0.0, 5.0)))
+	var whole = _build_at("wall", gm.world_to_build_cell(core + Vector3(-5.0, 0.0, 7.0)))
+	bitten.current_hp = bitten.max_hp * 0.4
+	await _advance(0.5)
+	var rects := {}
+	var bad: Array = []
+	var step := func(name: String) -> Dictionary:
+		var st := _card_state()
+		rects[name] = st["tiles"]
+		_say("INFO", "%-28s %s" % [name, str(st)])
+		return st
+	eb.unit_selected.emit(hero)
+	await _advance(0.3)
+	var s0: Dictionary = step.call("hero picked")
+	if s0["details"] or s0["menu"] != "default":
+		bad.append("picking him opened a card")
+	await _press(KEY_1)
+	var s1: Dictionary = step.call("1")
+	if s1["menu"] != "build":
+		bad.append("1 did not open the build menu")
+	await _press(KEY_1)
+	var s2: Dictionary = step.call("1 again (first building)")
+	if s2["in_hand"] == "" or s2["menu"] == "build":
+		bad.append("1 in the menu did not take a building and close it")
+	await _shoot("in_hand")
+	await _press(KEY_ESCAPE)
+	var s3: Dictionary = step.call("Esc")
+	if s3["in_hand"] != "":
+		bad.append("Esc did not drop the building in hand")
+	await _press(KEY_1)
+	await _press(KEY_C)
+	var s4: Dictionary = step.call("1 then C")
+	if not s4["details"] or s4["menu"] == "build":
+		bad.append("C in the build menu did not turn it into his card")
+	await _shoot("details_card")
+	await _press(KEY_C)
+	var s5: Dictionary = step.call("C again")
+	if s5["details"]:
+		bad.append("C again did not close his card")
+	await _click_emblem()
+	var s6: Dictionary = step.call("click the medallion")
+	if not s6["details"]:
+		bad.append("the medallion did not open his card")
+	await _press(KEY_ESCAPE)
+	var s7: Dictionary = step.call("Esc (card open)")
+	if s7["details"]:
+		bad.append("Esc did not close his card")
+	if s7["pause_menu"]:
+		bad.append("Esc with his card open opened the game menu (the card was not open)")
+		await _press(KEY_ESCAPE)
+	await _press(KEY_ESCAPE)
+	var s7b: Dictionary = step.call("Esc (him picked, nothing open)")
+	_say("INFO", "Esc with only him picked: game menu %s, still picked '%s'" % [s7b["pause_menu"], s7b["picked"]])
+	if s7b["pause_menu"]:
+		await _press(KEY_ESCAPE)
+	eb.unit_selected.emit(hero)
+	await _advance(0.3)
+	await _press(KEY_2)
+	var s8: Dictionary = step.call("2")
+	if s8["menu"] != "eat":
+		bad.append("2 did not open the eat menu")
+	# With a menu open the number keys are the menu's (1-6 choose); clicking the tile again closes it.
+	_main.hud.hero_commands.eat_button.pressed.emit()
+	await _advance(0.3)
+	var s9: Dictionary = step.call("Eat clicked again")
+	if s9["menu"] == "eat":
+		bad.append("clicking Eat again did not close the eat menu")
+	await _press(KEY_2)
+	await _press(KEY_1)
+	await _advance(0.5)
+	var s9b: Dictionary = step.call("2, then 1 (a meal)")
+	_say("INFO", "eating after choosing a meal: %s; meals left %s" % [hero.is_eating() if hero.has_method("is_eating") else "?", str(gs.meals)])
+	if s9b["menu"] == "eat":
+		bad.append("choosing a meal did not close the eat menu")
+	await _advance(3.0)
+	# The bitten stake: its card over the tiles; 1 is Repair, the tiles unmarked.
+	eb.unit_selected.emit(bitten)
+	await _advance(0.3)
+	var s12: Dictionary = step.call("bitten stake picked")
+	await _shoot("bitten_stake")
+	var hero_state0: int = int(hero.current_state)
+	await _press(KEY_1)
+	await _advance(0.5)
+	var s13: Dictionary = step.call("1 on the bitten stake")
+	_say("INFO", "hero state before %d after %d (2 = building/mending); his target %s" % [hero_state0, int(hero.current_state), str(hero.get("build_target"))])
+	if s13["menu"] == "build":
+		bad.append("1 on a bitten stake opened the build menu instead of Repair")
+	# The whole stake: only Demolish on it -- 1 and 2 stay Build and Eat.
+	hero.order_stop()
+	eb.unit_selected.emit(whole)
+	await _advance(0.3)
+	var s14: Dictionary = step.call("whole stake picked")
+	await _press(KEY_1)
+	var s15: Dictionary = step.call("1 on a whole stake")
+	if s15["menu"] != "build":
+		bad.append("1 with a whole stake picked did not open Build")
+	# Build clicked with the stake picked: he is picked and his build menu opens.
+	await _press(KEY_ESCAPE)
+	var s15b: Dictionary = step.call("Esc (build menu)")
+	if s15b["pause_menu"]:
+		await _press(KEY_ESCAPE)
+	eb.unit_selected.emit(whole)
+	await _advance(0.3)
+	hud.hero_commands.build_button.pressed.emit()
+	await _advance(0.3)
+	var s16: Dictionary = step.call("Build clicked, stake picked")
+	if s16["menu"] != "build" or s16["picked"] != String(hero.name):
+		bad.append("clicking Build with a stake picked did not pick him and open Build")
+	# The tiles never move.
+	var first: String = str(rects["hero picked"])
+	for k in rects:
+		if str(rects[k]) != first:
+			bad.append("the tiles moved at '%s': %s vs %s" % [k, str(rects[k]), first])
+	for k in rects:
+		pass
+	_say("PASS" if bad.is_empty() else "FAIL", "hero card and keys: %s" % ("all as TASK-015 says" if bad.is_empty() else "; ".join(bad)))
+
+func _press(code: int) -> void:
+	_key(code, true)
+	for i in range(3):
+		await process_frame
+	_key(code, false)
+	for i in range(8):
+		await process_frame
+
+func _click_emblem() -> void:
+	var em: Control = _main.hud.find_child("HeroEmblem", true, false) as Control
+	if em == null:
+		_say("INFO", "no HeroEmblem")
+		return
+	var at: Vector2 = em.get_global_rect().get_center()
+	for down in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = down
+		ev.position = at
+		ev.global_position = at
+		# In the viewport's own coordinates: the window may be scaled over it (2560 over 1280).
+		root.push_input(ev, true)
+		for i in range(4):
+			await process_frame
+
+## What the corner shows now.
+func _card_state() -> Dictionary:
+	var hud = _main.hud
+	var op = hud.option_panel
+	var hc = hud.hero_commands
+	var sel = op.selected_unit if ("selected_unit" in op) else null
+	var ones := 0
+	var twos := 0
+	for n in _all(hud):
+		if n is Label and (n as Label).is_visible_in_tree():
+			var t: String = (n as Label).text.strip_edges()
+			if t == "1":
+				ones += 1
+			elif t == "2":
+				twos += 1
+	var pause_up := false
+	for n in _all(root):
+		if n is Control and (n as Control).is_visible_in_tree() and String(n.name).to_lower().contains("pause") and (n as Control).get_global_rect().size.x > 100:
+			pause_up = true
+	return {
+		"menu": String(op.current_menu),
+		"details": bool(op.showing_details()),
+		"card_shown": bool(op.is_visible_in_tree()),
+		"picked": String(sel.name) if sel != null and is_instance_valid(sel) else "",
+		"in_hand": String(_main.current_build_type),
+		"keys_on_tiles": bool(hc.keys_live()),
+		"ones": ones, "twos": twos,
+		"tiles": [hc.build_button.get_global_rect(), hc.eat_button.get_global_rect()],
+		"pause_menu": pause_up,
+	}
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
