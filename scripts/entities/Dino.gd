@@ -349,13 +349,14 @@ func queue_spot(building: Node) -> Vector3:
 		spot = Vector3(on_mesh.x, centre.y, on_mesh.z)
 	return spot
 
-## Whether `dino` holds one of the places round `building` -- as against waiting at the crowd's edge.
-static func holds_attack_slot(building: Node, dino: Node) -> bool:
+## Whether `dino` holds one of the places round `building` -- as against waiting at the crowd's edge;
+## `to_bite_from`, one in the inner ring, where it can bite, as against the outer, where it waits.
+static func holds_attack_slot(building: Node, dino: Node, to_bite_from: bool = false) -> bool:
 	if building == null or not is_instance_valid(building) or dino == null:
 		return false
 	for s in _building_slots.get(building.get_instance_id(), []):
 		if int(s.get("dino_id", 0)) == dino.get_instance_id():
-			return true
+			return bool(s.get("inner", false)) or not to_bite_from
 	return false
 
 static func release_attack_slot(building: Node, dino: Node) -> void:
@@ -660,8 +661,9 @@ func _take(target: Node, new_mode: Mode) -> void:
 	# A trap with every place round it taken is no place to wait -- it is shooting at the queue.
 	# Ten raptors went for the one crossbow nearest the nest, which two could bite, and the rest
 	# milled at the fence corner under its fire (the debug-agent's BUG-009). It leaves that one be a
-	# while and chooses again: another trap with room, or the wall in its way.
-	if _is_shooter(target) and not holds_attack_slot(target, self):
+	# while and chooses again: another trap with room, or the wall in its way. A place in the ring
+	# round it where the others wait is no better -- the same fire, and they milled there too.
+	if _is_shooter(target) and not holds_attack_slot(target, self, true):
 		_mark_crowded(target)
 		_let_go()
 
@@ -783,10 +785,16 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 	# Near its place, it faces what it came for -- walking the last steps or waiting there -- not the
 	# spot it stands on, a hand's breadth off, which it turned right round to look at. It faced the
 	# spot while it tried for it and the cabin while it waited, by turns: stood still 22 seconds,
-	# swinging its head 22 degrees each way every second (the debug-agent's BUG-008).
+	# swinging its head 22 degrees each way every second (the debug-agent's BUG-008). So too held up at
+	# the crowd's edge short of its place (_stuck_count, within DINO_AI.queue_standoff of it): it faced
+	# the cabin while it waited and the way in while it tried, by turns, 25 to 50 degrees a second
+	# (the debug-agent's BUG-010).
 	var look: Vector3 = goal
+	var to_goal: float = _flat(goal).distance_to(_flat(global_position))
+	var held_at_the_edge: bool = _stuck_count > 0 \
+		and to_goal <= _ai("queue_standoff", 2.8) + _ai("spot_slack", 0.4)
 	var facing_it: bool = current_target is Node3D and is_instance_valid(current_target) \
-		and (desired == Vector3.ZERO or _flat(goal).distance_to(_flat(global_position)) <= _ai("face_target_within", 2.0))
+		and (desired == Vector3.ZERO or held_at_the_edge or to_goal <= _ai("face_target_within", 2.0))
 	if facing_it:
 		look = (current_target as Node3D).global_position
 	_drive(desired, delta, look, facing_it)
@@ -1780,6 +1788,8 @@ func _ensure_walker() -> void:
 		float(cfg.DINO_AVOID_NEIGHBOURS) if (cfg and "DINO_AVOID_NEIGHBOURS" in cfg) else 4.0)
 	NavigationServer3D.agent_set_time_horizon_agents(_agent,
 		float(cfg.DINO_AVOID_TIME_HORIZON) if (cfg and "DINO_AVOID_TIME_HORIZON" in cfg) else 1.2)
+	# And buildings' outlines (Building._update_avoidance), this far ahead.
+	NavigationServer3D.agent_set_time_horizon_obstacles(_agent, _ai("obstacle_horizon", 0.4))
 	# Below the Hero's (Config.DINO_AI.avoidance_priority): they steer round him, he does not
 	# steer round them.
 	NavigationServer3D.agent_set_avoidance_priority(_agent, _ai("avoidance_priority", 0.5))
@@ -1802,6 +1812,10 @@ func _refresh_walker() -> void:
 	NavigationServer3D.agent_set_radius(_agent, _avoid_radius + _ai("avoid_margin", 0.1))
 	NavigationServer3D.agent_set_height(_agent, _declared_size().y)
 	NavigationServer3D.agent_set_max_speed(_agent, maxf(0.1, speed))
+	# The others, and buildings (Building._update_avoidance) -- not for a siege animal, which goes
+	# through them.
+	var buildings: int = int(_ai("building_avoidance_layers", 0)) if walks_round_walls() else 0
+	NavigationServer3D.agent_set_avoidance_mask(_agent, 1 | buildings)
 	if is_inside_tree() and get_world_3d() != null:
 		NavigationServer3D.agent_set_map(_agent, get_world_3d().navigation_map)
 		NavigationServer3D.agent_set_position(_agent, global_position)

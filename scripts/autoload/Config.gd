@@ -949,6 +949,18 @@ const DINO_AI: Dictionary = {
 	# went for the one crossbow nearest the nest, which two could bite (the debug-agent's BUG-009).
 	"shot_memory": 4.0,
 	"crowded_memory": 3.0,
+	# Buildings are in the raiders' steering (Building._update_avoidance): an outline of each finished
+	# one on these avoidance layers (a bitmask), which their agents avoid (Dino._refresh_walker) and
+	# the Hero's does not -- he goes through his gates. Steering round each other, they knew nothing
+	# of walls: a raptor squeezed at a fence corner was steered into the fence, pressed there and
+	# swung its head (the debug-agent's BUG-009).
+	"building_avoidance_layers": 2,
+	# How far ahead (seconds) the steering looks for a building's outline: it turns off before it
+	# would reach one this soon -- about a body's length at a run -- rather than being held off only
+	# at the touch (the engine's own default is none at all). Not much further: at 0.4 a crowd at the
+	# cabin's corner turned off a stride and a half early, each by the others' turning, and swung
+	# their heads there.
+	"obstacle_horizon": 0.2,
 }
 
 # ==============================================================================

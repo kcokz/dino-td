@@ -448,6 +448,31 @@ func test_12b_it_does_not_wait_its_turn_under_a_traps_fire() -> void:
 	assert_eq(d._preferred_target(), null, "and chooses something else -- here, nothing: the road on")
 	dino_script.clear_all_attack_slots()
 
+func test_12d_a_place_where_the_others_wait_round_a_trap_is_no_better() -> void:
+	# The ring round a trap where raiders wait for a place to bite from is under its fire as much as
+	# the queue beyond it: they milled there (BUG-009). A raider that gets only a place there leaves
+	# the trap be too.
+	var world := await _field()
+	var trap = load("res://scripts/entities/Tower.gd").new()
+	world.add_child(trap)
+	trap.setup("set_crossbow")
+	trap.position = Vector3.ZERO
+	trap.complete_construction()
+	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	await rebake_fixture()
+	var dino_script = load("res://scripts/entities/Dino.gd")
+	# Every place to bite it from taken; the ring where they wait, free.
+	for i in 32:
+		var o := Node3D.new()
+		world.add_child(o)
+		if dino_script.free_inner_slot(trap, o) != Vector3.ZERO:
+			dino_script.claim_attack_slot(trap, o)
+	var d = _raptor(Vector3(0.0, 0.0, 3.0), world)
+	await wait_physics_frames(int(2.0 * float(Engine.physics_ticks_per_second)))
+	assert_ne(d.current_target, trap, "A place in the ring where the others wait is no place to wait")
+	assert_true(d._is_crowded(trap), "it leaves that one be a while")
+	dino_script.clear_all_attack_slots()
+
 func test_12c_it_goes_for_the_trap_that_shot_it() -> void:
 	# Not the nearest trap to it: the one hurting it (BUG-009).
 	var world := await _field()

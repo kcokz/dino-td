@@ -193,6 +193,34 @@ func _update_construction_state() -> void:
 		if child is CollisionShape3D:
 			child.disabled = false
 	_update_visuals_progress()
+	_update_avoidance()
+
+## Finished, it is in the raiders' steering too (Config.DINO_AI.building_avoidance_layers): an
+## outline of its box the engine's avoidance steers them round. Steering round each other, they knew
+## nothing of walls, and a raptor squeezed at a fence corner was steered into the fence and swung its
+## head there (the debug-agent's BUG-009). The outline is its box less the steering's margin
+## (DINO_AI.avoid_margin), so a body still comes up against its face and the places to bite it from
+## are clear of it. The Hero's steering leaves it out -- he goes through his gates -- and so does a
+## siege animal's (Dino.walks_round_walls). A blueprint is in nobody's way.
+func _update_avoidance() -> void:
+	var cfg = _get_config()
+	var layers: int = int(cfg.DINO_AI.get("building_avoidance_layers", 0)) if (cfg and "DINO_AI" in cfg) else 0
+	var obstacle := find_child("AvoidObstacle", false, false) as NavigationObstacle3D
+	if obstacle == null:
+		if layers == 0 or not is_constructed or is_destroyed or not cfg.has_method("get_building_half"):
+			return
+		var margin: float = float(cfg.DINO_AI.get("avoid_margin", 0.1))
+		var half: Vector2 = cfg.get_building_half(building_type) - Vector2.ONE * margin
+		half = Vector2(maxf(half.x, margin), maxf(half.y, margin))
+		obstacle = NavigationObstacle3D.new()
+		obstacle.name = "AvoidObstacle"
+		obstacle.affect_navigation_mesh = false
+		obstacle.avoidance_layers = layers
+		obstacle.height = _building_height()
+		obstacle.vertices = PackedVector3Array([Vector3(-half.x, 0.0, -half.y), Vector3(half.x, 0.0, -half.y),
+			Vector3(half.x, 0.0, half.y), Vector3(-half.x, 0.0, half.y)])
+		add_child(obstacle)
+	obstacle.avoidance_enabled = is_constructed and not is_destroyed
 
 ## A blueprint is drawn translucent and fills in as it goes up.
 ##
@@ -259,6 +287,7 @@ func destroy() -> void:
 	var obstacle: Node = find_child("BakeObstacle", false, false)
 	if obstacle is NavigationObstacle3D:
 		(obstacle as NavigationObstacle3D).affect_navigation_mesh = false
+	_update_avoidance()
 
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_destroyed"):
