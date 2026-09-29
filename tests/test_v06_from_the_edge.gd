@@ -192,6 +192,38 @@ func test_07_one_that_let_go_further_along_marches_on_not_back() -> void:
 	assert_eq(int(d.current_waypoint_index), d.waypoints.size() - 1, "It rejoins its road on the last leg")
 	assert_true(_near(d._journey_goal(), cabin, 2.0), "which leads on to the cabin, not back to the edge")
 
+func test_09_watching_the_nest_and_the_edge_behind_it_they_come_round_the_other_ways() -> void:
+	# The debug-agent's BUG-014: in the small valley the edge is two metres behind the nest, and standing
+	# before the nest he saw the nest and both ways in behind it -- and the raid stepped out in front of
+	# him anyway. Now it comes round by the valley's other ways in; and with every way in watched it
+	# waits, unseen, and steps out when one is not.
+	var main = await _level_on()
+	var wm = main.wave_manager
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.max_hp = 9999.0       # the nest's guards will have a go at him
+	main.hero.current_hp = 9999.0
+	main.hero.global_position = wm.nest_spawn_position + Vector3(0.3, 0.0, 4.0)
+	await wait_seconds(float(config_node.FOG["every"]) * 3.0 + 0.1)
+	assert_true(main.fog.sees(wm.nest_spawn_position), "(he is watching the nest)")
+	for edge in wm.reinforce_positions:
+		assert_true(main.fog.sees(edge), "(and the way in behind it at %s)" % edge)
+	wm.start_wave(1, 4)
+	var dinos: Array = _step_out(wm, 4)
+	assert_eq(dinos.size(), 4, "They still come")
+	for d in dinos:
+		assert_false(main.fog.sees(d.global_position), "none where he can see it")
+		assert_gte(_out_of(d.global_position, wm.entry_positions), 0, "round by the valley's other ways in")
+	# Every way in watched -- a fire lit at each, say -- none steps out, and the raid waits.
+	for at in wm.entry_positions:
+		main.fog._see_round(at, 3.0)
+	for edge in wm.reinforce_positions:
+		main.fog._see_round(edge, 3.0)
+	wm.start_wave(2, 2)
+	var none: Array = _step_out(wm, 2)
+	assert_eq(none.size(), 0, "Every way in watched, nothing steps out")
+	assert_eq(int(wm.dinos_spawned_count), 0, "and the raid waits for one to be free")
+	assert_eq(wm.wave_roster.size(), 2, "with nobody taken off its roster")
+
 func test_08_nothing_steps_out_where_he_can_see_it() -> void:
 	# "raid的时候直接冒出新的恐龙似乎有点奇怪": the nest watched, its party comes in from the edge behind it;
 	# a way in at the edge watched, the next one nobody sees.

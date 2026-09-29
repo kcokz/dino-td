@@ -283,6 +283,26 @@ func test_12_standing_and_swinging_its_head_slowly_is_fidget() -> void:
 	assert_eq(_reports_on(d, "fidget").size(), 1, "Standing still, its head going each way every second, is reported")
 	assert_eq(_reports_on(d, "shake").size(), 0, "(not as SHAKE: it stood between)")
 
+func test_12b_turning_for_home_is_not_milling() -> void:
+	# The debug-agent's BUG-015: at the first moment of dusk six raiders on their way in were reported
+	# milling -- three seconds towards the cabin, the turn, three seconds back towards the nest: a long
+	# path, and nowhere net. Turned for home, an animal is watched afresh.
+	var main = await _level()
+	var at: Vector3 = _clear_ground(main)
+	var d = _raider(main, at)
+	var seconds: float = float(_tw()["mill_window"])
+	var pace: float = float(_tw()["mill_path"]) / seconds * 1.5
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var frames: int = _frames_for(seconds)
+	var x: float = 0.0
+	for i in frames:
+		await wait_physics_frames(1)
+		if i == frames / 2:
+			d.going_home = true
+		x += pace * dt * (1.0 if i < frames / 2 else -1.0)
+		d.global_position = at + Vector3(x, 0.0, 0.0)
+	assert_eq(_reports_on(d, "mill").size(), 0, "Out and back again, turned for home, is not milling")
+
 func test_13_one_turn_and_back_after_a_long_stand_is_not_fidget() -> void:
 	var main = await _level()
 	var d = _raider(main, _clear_ground(main))

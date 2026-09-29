@@ -98,6 +98,7 @@ MEAL_DETAIL_FORMAT,"%s  —  %s  ·  %.1fs  —  %s","%s  —  %s  ·  %.1f 秒 
 EFFECT_HEAL,"heals %d","回血 %d"
 EFFECT_MAX_HP,"+%d max health","生命上限 +%d"
 EFFECT_BUILD_SPEED,"builds ×%s","建造 ×%s"
+EFFECT_HARVEST_SPEED,"%s ×%s","%s ×%s"
 EFFECT_MOVE_SPEED,"walks ×%s","走路 ×%s"
 EFFECT_FED_FOR,"for %ds","持续 %d 秒"
 HUD_FED,"Fed: %s · %d:%02d","吃饱：%s · %d:%02d"

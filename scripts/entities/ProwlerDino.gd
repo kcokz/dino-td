@@ -11,8 +11,10 @@ extends "res://scripts/entities/Dino.gd"
 ## will not come into a fire's light, nor the light of the torch in his hand (lights): what it wants in
 ## one it waits for at the light's edge -- a little inside it, dimly lit, where it is seen -- facing in,
 ## and paces along the edge a few steps at a time, its eyes catching the light (the eye-shine). Found
-## deeper in, as the torch comes at it, it backs out to the edge. At first light it goes back to the
-## river it came up from (go_home).
+## deeper in, as the torch comes at it, it backs out to the edge -- the nearest part of it it can reach,
+## round the light where straight back is the field's end or a wall -- and with nowhere left to go it
+## turns at bay on the one who cornered it for a while (PROWL.at_bay_seconds), then tries again. At
+## first light it goes back to the river it came up from (go_home).
 
 ## Every one out, for NightProwl to count.
 const GROUP: String = "prowlers"
@@ -28,9 +30,18 @@ var _backing_out: bool = false
 var _edge_angle: float = INF
 var _edge_clock: float = 0.0
 var _edge_way: float = 0.0
-## Its eyes' own material, lit when a light is near (the eye-shine), and how bright they are now.
+## Where it backs out to (_way_out), INF with nowhere to go; the furthest out from the light's middle it
+## has got while backing out, and how long since it got any further; how long it is still at bay.
+var _escape: Vector3 = Vector3.INF
+var _backing_best: float = 0.0
+var _backing_clock: float = 0.0
+var at_bay_left: float = 0.0
+## Its eyes' own material, lit when a light is near (the eye-shine), and how bright they are now; and
+## the glint of each, what is seen of them from the game's camera (_glint).
 var _eyes: Array[StandardMaterial3D] = []
 var eye_shine: float = 0.0
+var _glint_mat: StandardMaterial3D = null
+var glints: Array[MeshInstance3D] = []
 
 func _ready() -> void:
 	super._ready()
@@ -45,6 +56,7 @@ func _ensure_body() -> void:
 	_find_the_eyes()
 
 func _physics_process(delta: float) -> void:
+	at_bay_left = maxf(0.0, at_bay_left - delta)
 	super._physics_process(delta)
 	_shine()
 
@@ -52,10 +64,11 @@ func _physics_process(delta: float) -> void:
 # What it wants
 # ==============================================================================
 
-## The Hero when he is near and in the dark; else whatever is in its way, and the cabin at its road's end.
+## The Hero when he is near and in the dark -- or, at bay, in his light as he is; else whatever is in its
+## way, and the cabin at its road's end.
 func _preferred_target() -> Node:
 	var hero := _hero_within(hero_interest_range())
-	if hero != null and ProwlerDino.light_over(get_tree(), (hero as Node3D).global_position).is_empty():
+	if hero != null and (at_bay_left > 0.0 or ProwlerDino.light_over(get_tree(), (hero as Node3D).global_position).is_empty()):
 		return hero
 	return _nearest_building_within(building_interest_range())
 
@@ -75,9 +88,15 @@ func _think() -> void:
 	if going_home:
 		super._think()
 		return
+	if at_bay_left > 0.0:
+		# At bay: no light holds it back.
+		_keep_to({}, false)
+		super._think()
+		return
 	var inside: Dictionary = ProwlerDino.light_over(get_tree(), global_position, -_prowl("flee_inside", 1.6))
 	if not inside.is_empty():
 		_keep_to(inside, true)
+		_escape = _way_out(inside["at"], maxf(0.5, float(inside["radius"]) - _prowl("edge_inside", 0.6)))
 		return
 	super._think()
 	var goal: Vector3 = _engage_spot() if (current_target != null and mode != Mode.MARCH) else _journey_goal()
@@ -89,8 +108,12 @@ func _think() -> void:
 
 func _keep_to(light: Dictionary, backing_out: bool) -> void:
 	var was: Dictionary = _wary
+	var was_backing: bool = _backing_out and not was.is_empty()
 	_wary = light
 	_backing_out = backing_out
+	if backing_out and not was_backing:
+		_backing_best = _flat(global_position).distance_to(_flat(light["at"]))
+		_backing_clock = 0.0
 	# A new light, or none: a new place at its edge. The same light moving -- the torch coming on -- keeps
 	# it where it was round it, so it gives ground straight back rather than stepping aside.
 	if light.is_empty() or was.is_empty() or float(was["radius"]) != float(light["radius"]) \
@@ -112,11 +135,19 @@ func _act(delta: float) -> void:
 	var centre: Vector3 = _wary["at"]
 	var edge: float = maxf(0.5, float(_wary["radius"]) - _prowl("edge_inside", 0.6))
 	if _backing_out:
-		var away: Vector3 = global_position - centre
-		away.y = 0.0
-		if away.length_squared() < 0.0001:
-			away = Vector3(cos(float(get_instance_id() % 628) * 0.01), 0.0, sin(float(get_instance_id() % 628) * 0.01))
-		_travel(centre + away.normalized() * edge, delta, _prowl("back_out_pace", 1.3))
+		# Getting any further out? Cornered -- straight back the field's end, round the edge nothing it
+		# can reach, or no further out for a while -- it turns at bay (the debug-agent's BUG-018: backed
+		# into the field's corner by the torch it stood in the light at his feet, still, for seven seconds).
+		var gap: float = _flat(global_position).distance_to(_flat(centre))
+		if gap > _backing_best + 0.05:
+			_backing_best = gap
+			_backing_clock = 0.0
+		else:
+			_backing_clock += delta
+		if _escape == Vector3.INF or _backing_clock >= _prowl("cornered_seconds", 1.2):
+			_turn_at_bay()
+			return
+		_travel(_escape, delta, _prowl("back_out_pace", 1.3))
 		return
 	var from: Vector3 = global_position - centre
 	if _edge_angle == INF:
@@ -138,6 +169,46 @@ func _act(delta: float) -> void:
 		var look: Vector3 = (current_target as Node3D).global_position \
 			if (current_target is Node3D and is_instance_valid(current_target)) else centre
 		_drive(Vector3.ZERO, delta, look, true)
+
+## Where to back out of a light round `centre` to, `edge` metres out: straight out from its middle if it
+## can stand there, else the nearest part of the edge it can -- round it, where straight back is the
+## field's end, a wall, a hill -- and can get to (NavMaps). INF with none: cornered.
+func _way_out(centre: Vector3, edge: float) -> Vector3:
+	var maps := _nav_maps()
+	var from: Vector3 = global_position - centre
+	var a0: float = atan2(from.z, from.x)
+	var steps: int = maxi(4, int(_prowl("way_out_tries", 12.0)))
+	var tried: int = 0
+	for k in steps:
+		# Straight out first, then a step either side, and so on round.
+		var turn: float = TAU / float(steps) * float((k + 1) / 2) * (1.0 if k % 2 == 1 else -1.0)
+		var spot: Vector3 = centre + Vector3(cos(a0 + turn), 0.0, sin(a0 + turn)) * edge
+		spot.y = global_position.y
+		if maps == null or not maps.is_ready():
+			return spot
+		var ground: Vector3 = maps.closest_point(spot, _map_kind())
+		if _flat(ground).distance_to(_flat(spot)) > _prowl("way_out_slack", 0.6):
+			continue            # the field's end, a wall, a hill: nowhere to stand
+		tried += 1
+		if maps.is_reachable(global_position, ground, _map_kind()):
+			return Vector3(ground.x, spot.y, ground.z)
+		if tried >= 3:
+			break
+	return Vector3.INF
+
+## Cornered: it goes for the one who cornered it, the light or no, for PROWL.at_bay_seconds -- then backs
+## out again if it still can.
+func _turn_at_bay() -> void:
+	at_bay_left = _prowl("at_bay_seconds", 3.0)
+	_backing_clock = 0.0
+	_keep_to({}, false)
+	# At him, whatever it was going for: turned on him, it would otherwise keep to the cabin it had
+	# (no swapping for its equal, Dino._outranks) and bite that at his feet.
+	var hero := _hero_within(hero_interest_range())
+	if hero != null:
+		_take(hero, Mode.ENGAGE)
+	_alert()
+	_think_clock = 0.0
 
 ## A step round the light from where it keeps (PROWL.pace_step_degrees), the way it has been going,
 ## and now and then the other way.
@@ -247,6 +318,74 @@ func _find_the_eyes() -> void:
 			own.emission_energy_multiplier = 0.0
 			mesh_node.set_surface_override_material(i, own)
 			_eyes.append(own)
+			_make_glints(mesh_node, i)
+
+## A glint over each eye (PROWL.glint_size across, the eye's colour, brighter than white where it is
+## brightest so it glows): the eyes themselves are a few centimetres, a pixel or two from the game's
+## camera and lost at twelve metres (the debug-agent's TASK-021). Each follows the head, over the eye's
+## middle, drawn over the head it sits in, and faces the camera; how bright is the eye-shine's (_shine).
+func _make_glints(mesh_node: MeshInstance3D, surface: int) -> void:
+	for g in glints:
+		if is_instance_valid(g):
+			g.queue_free()
+	glints.clear()
+	var skeleton: Skeleton3D = mesh_node.get_parent() as Skeleton3D
+	if skeleton == null or not is_inside_tree():
+		return
+	var head: int = skeleton.find_bone(String(_prowl_text("eye_bone", "Head")))
+	if head < 0:
+		return
+	var verts: PackedVector3Array = mesh_node.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+	if verts.is_empty():
+		return
+	var mid: Vector3 = Vector3.ZERO
+	for v in verts:
+		mid += v
+	mid /= float(verts.size())
+	var sides: Array = [Vector3.ZERO, Vector3.ZERO]
+	var counts: Array = [0, 0]
+	for v in verts:
+		var k: int = 0 if v.x < mid.x else 1
+		sides[k] += v
+		counts[k] += 1
+	# From the mesh's space to the head bone's: the skin's own bind pose for it, which is what moves the
+	# eyes -- the bone's rest put the glints at its hips.
+	var to_bone: Transform3D = skeleton.get_bone_global_rest(head).affine_inverse()
+	var skin: Skin = mesh_node.skin
+	if skin != null:
+		for b in skin.get_bind_count():
+			var named: String = String(skin.get_bind_name(b))
+			if named == skeleton.get_bone_name(head) or (named == "" and skin.get_bind_bone(b) == head):
+				to_bone = skin.get_bind_pose(b)
+				break
+	var hold := BoneAttachment3D.new()
+	hold.name = "EyeGlints"
+	hold.bone_name = skeleton.get_bone_name(head)
+	skeleton.add_child(hold)
+	if _glint_mat == null:
+		_glint_mat = StandardMaterial3D.new()
+		_glint_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_glint_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_glint_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_glint_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_glint_mat.billboard_keep_scale = true
+		_glint_mat.no_depth_test = true
+		_glint_mat.albedo_texture = Fire._soft_disc()
+		_glint_mat.disable_receive_shadows = true
+	var across: float = _prowl("glint_size", 0.3) / maxf(0.0001, skeleton.global_transform.basis.get_scale().x)
+	for k in 2:
+		if counts[k] == 0:
+			continue
+		var quad := QuadMesh.new()
+		quad.size = Vector2(across, across)
+		var g := MeshInstance3D.new()
+		g.name = "Glint%d" % k
+		g.mesh = quad
+		g.material_override = _glint_mat
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		g.position = to_bone * (sides[k] / float(counts[k]))
+		hold.add_child(g)
+		glints.append(g)
 
 ## How bright its eyes are: full at a light's edge or in it, dimming over PROWL.eye_reach metres
 ## further out, and dark with no light near -- a light is what an eye shines back.
@@ -260,7 +399,14 @@ func _shine() -> void:
 			best = maxf(best, clampf(1.0 - gap / reach, 0.0, 1.0))
 	eye_shine = best
 	for mat in _eyes:
-		mat.emission_energy_multiplier = best * _prowl("eye_energy", 6.0)
+		mat.emission_energy_multiplier = best * _prowl("eye_energy", 4.0)
+	if _glint_mat != null:
+		var c: Color = _prowl_color("eye_color", Color(1.0, 0.45, 0.15))
+		var e: float = _prowl("glint_energy", 2.5)
+		_glint_mat.albedo_color = Color(c.r * e, c.g * e, c.b * e, best)
+	for g in glints:
+		if is_instance_valid(g):
+			g.visible = best > 0.01
 
 # ==============================================================================
 # Its numbers (Config.PROWL)
@@ -273,6 +419,10 @@ func _prowl(key: String, fallback: float) -> float:
 func _prowl_list(key: String, fallback: Array) -> Array:
 	var cfg = _get_config()
 	return cfg.PROWL.get(key, fallback) if (cfg and "PROWL" in cfg) else fallback
+
+func _prowl_text(key: String, fallback: String) -> String:
+	var cfg = _get_config()
+	return String(cfg.PROWL.get(key, fallback)) if (cfg and "PROWL" in cfg) else fallback
 
 func _prowl_color(key: String, fallback: Color) -> Color:
 	var cfg = _get_config()

@@ -401,7 +401,11 @@ func start_final_wave() -> void:
 ##
 ## And nothing steps out where he can see it (v0.6 round four: "raid的时候直接冒出新的恐龙似乎有点奇
 ## 怪"): the nest watched, its party comes in from the edge behind it instead; a way in at the edge
-## watched, the next one nobody sees.
+## watched, the next one nobody sees; every way in behind the nest watched, it comes round by the
+## valley's other ways in (entry_positions) -- in the small valley the edge is two metres behind the
+## nest, and standing before the nest he saw all of it, and a raid stepped out in front of him anyway
+## (the debug-agent's BUG-014). With every way in watched it waits, unseen, for one not to be: [] --
+## nothing steps out this time (_on_spawn_timer_timeout tries again).
 func _next_origin() -> Array:
 	var edges: Array[Vector3] = edge_origins()
 	if edges.is_empty() or (_from_nest < _nest_most() and not _watched(nest_spawn_position)):
@@ -412,9 +416,12 @@ func _next_origin() -> Array:
 		if not _watched(at):
 			_edge_turn += k + 1
 			return [at, true]
-	var anyway: Vector3 = edges[_edge_turn % edges.size()]
-	_edge_turn += 1
-	return [anyway, true]
+	for k in entry_positions.size():
+		var at: Vector3 = entry_positions[(_edge_turn + k) % entry_positions.size()]
+		if not edges.has(at) and not _watched(at):
+			_edge_turn += k + 1
+			return [at, true]
+	return []
 
 ## Whether the Hero or his buildings see `at` now (FogOfWar.sees).
 func _watched(at: Vector3) -> bool:
@@ -547,6 +554,12 @@ func spawn_dino() -> Node:
 	return _spawn_single_dino()
 
 func _spawn_single_dino() -> Node:
+	# Out of the nest and down the path -- or, past the nest's party, in from the valley's edge,
+	# straight for the cabin at the path's end (hills are steered round: Dino._steer_target),
+	# hurrying while nobody sees it (Dino.hurry_in). Every way in watched, none steps out yet.
+	var next: Array = _next_origin()
+	if next.is_empty():
+		return null
 	var species: String = String(wave_roster.pop_front()) if not wave_roster.is_empty() else _species_to_spawn()
 	var dino: Node = _instantiate_for_species(species)
 	if dino == null and dino_script:
@@ -571,10 +584,6 @@ func _spawn_single_dino() -> Node:
 		offset = float(lane_offsets[dinos_spawned_count % lane_offsets.size()])
 	dinos_spawned_count += 1
 
-	# Out of the nest and down the path -- or, past the nest's party, in from the valley's edge,
-	# straight for the cabin at the path's end (hills are steered round: Dino._steer_target),
-	# hurrying while nobody sees it (Dino.hurry_in).
-	var next: Array = _next_origin()
 	var origin: Vector3 = next[0]
 	var from_the_edge: bool = bool(next[1])
 	var route: Array[Vector3] = waypoints.duplicate()

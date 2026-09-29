@@ -168,8 +168,8 @@ func _show_the_flame() -> void:
 		_light.visible = lit
 
 ## The flame of a fire, `size` times the campfire's (Config.FIRE.flame): the engine's particles --
-## soft tongues rising off the wood, yellow to red to nothing -- drawn over the world and left where
-## they rose, so a torch carried trails its flame. Shared with the torch in his hand (Hero).
+## soft tongues rising off the wood, yellow to red to nothing -- left where they rose, in the world.
+## Shared with the torch in his hand (Hero), which carries its own with it.
 static func make_flame(fire: Dictionary, size: float = 1.0) -> GPUParticles3D:
 	var f: Dictionary = fire.get("flame", {})
 	var p := GPUParticles3D.new()

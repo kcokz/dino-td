@@ -504,7 +504,10 @@ static func recipe_effect_text(recipe_id: String) -> String:
 	var parts: PackedStringArray = []
 	var speeds: Dictionary = row.get("harvest_speed", {})
 	for res_id in speeds:
-		parts.append("%s x%s" % [TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper()), factor_text(float(speeds[res_id]))])
+		# Its words from the table, with the times sign the rest of them use (the debug-agent's BUG-020:
+		# the axe said "Wood x2" with a letter x, the spear "hits ×2").
+		parts.append(TranslationServer.translate("EFFECT_HARVEST_SPEED") % [TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper()),
+			factor_text(float(speeds[res_id]))])
 	for res_id in RESOURCE_NODES:
 		if flag != "" and String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
 			parts.append(TranslationServer.translate("TOOL_OPENS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
@@ -688,15 +691,30 @@ const PROWL: Dictionary = {
 	"edge_inside": 0.6,
 	"flee_inside": 1.6,
 	"back_out_pace": 1.3,
+	# Backing out, it goes to the nearest part of the edge it can stand on and reach -- tried this many
+	# ways round, a place this near the walkable ground counting as on it -- and cornered, getting no
+	# further out for `cornered_seconds`, it turns at bay on whoever cornered it for `at_bay_seconds`,
+	# the light or no, then tries again (the debug-agent's BUG-018: it stood in the torchlight at his
+	# feet in the field's corner). Cornered animals do.
+	"way_out_tries": 12.0,
+	"way_out_slack": 0.6,
+	"cornered_seconds": 1.2,
+	"at_bay_seconds": 3.0,
 	"pace_step_degrees": 25.0,
 	"pace_every": [3.0, 5.0],
 	"wary_pace": 0.5,
 	"turn_back_chance": 0.3,
 	# The eye-shine ("火光照到的黑暗边上能看见眼睛反光"): its eyes glow this colour, this bright at a light's
 	# edge or in it, dimming over `eye_reach` metres further out -- a light is what an eye shines back.
+	# The eyes on `eye_bone` are a few centimetres, lost from the game's camera: over each a glint
+	# `glint_size` metres across, `glint_energy` times its colour at the brightest, so it glows without
+	# burning out to white (the debug-agent's TASK-021: "两个白色的小点……默认镜头下看不出来").
 	"eye_color": Color(1.0, 0.45, 0.15),
-	"eye_energy": 12.0,
+	"eye_energy": 4.0,
 	"eye_reach": 3.0,
+	"eye_bone": "Head",
+	"glint_size": 0.3,
+	"glint_energy": 2.5,
 }
 
 ## What every fire shares (BUILDINGS kind "fire", Fire.gd), and the torch in his hand (Hero).

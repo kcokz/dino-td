@@ -239,3 +239,67 @@ func test_10_none_comes_up_where_he_can_see_it() -> void:
 		var d = prowl.send_one()
 		if d != null:
 			assert_gt(_flat_gap(d.global_position, prowl.origins[0]), 1.5, "Nothing comes up where he stands")
+
+func test_11_cornered_by_the_torch_it_finds_a_way_round_or_turns_at_bay() -> void:
+	# The debug-agent's BUG-018: walked at with the torch into the field's corner, it stood in the
+	# torchlight at his feet, still, for seven seconds. Now it backs out round the light's edge where it
+	# can, and with nowhere to go turns at bay on him -- it is never stood still in the light for long.
+	var main = await _level()
+	await nav_settled(main)
+	_set_clock(_at("night") + 10.0)
+	var hero = main.hero
+	hero.process_mode = Node.PROCESS_MODE_DISABLED
+	var half: float = float(config_node.terrain()["field_half"])
+	var corner: Vector3 = Vector3(-half + 1.5, 0.0, -half + 1.5)
+	var d = _phytosaur(main, corner)
+	hero.global_position = corner + Vector3(7.5, 0.0, 7.5)
+	stock_everything()
+	hero.light_torch()
+	var torch: float = float(hero.torch_light())
+	var deep: float = torch - float(_prowl()["flee_inside"])
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var still_in_light: float = 0.0
+	var longest: float = 0.0
+	var turned: bool = false
+	for i in int(12.0 / dt):
+		var to: Vector3 = d.global_position - hero.global_position
+		to.y = 0.0
+		if to.length() > 1.2:
+			hero.global_position += to.normalized() * 3.0 * dt
+		var was: Vector3 = d.global_position
+		d.advance_towards_waypoint(dt)
+		d.at_bay_left = maxf(0.0, d.at_bay_left - dt)
+		turned = turned or d.at_bay_left > 0.0
+		var in_deep: bool = _flat_gap(d.global_position, hero.global_position) < deep
+		if in_deep and d.at_bay_left <= 0.0 and _flat_gap(d.global_position, was) < 0.002:
+			still_in_light += dt
+			longest = maxf(longest, still_in_light)
+		else:
+			still_in_light = 0.0
+		if i % 4 == 0:
+			await tree.physics_frame
+	assert_lt(longest, float(_prowl()["cornered_seconds"]) + 0.5,
+		"Never stood still deep in the torchlight longer than it takes to find itself cornered (%.2fs)" % longest)
+	assert_true(turned or _flat_gap(d.global_position, hero.global_position) >= deep - 0.3,
+		"It got out of the light, or turned at bay on him")
+
+func test_12_its_eyes_glint_from_the_games_camera() -> void:
+	# The debug-agent's TASK-021: the eyes were a few centimetres, two white pixels, lost at twelve metres.
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(25.0, 0.0, 12.0)
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var light: float = float(fire.light_radius())
+	var d = _phytosaur(main, fire.global_position + Vector3(-(light - 0.5), 0.0, 0.0))
+	await wait_physics_frames(2)
+	assert_eq(d.glints.size(), 2, "A glint over each eye")
+	d._shine()
+	var across: float = (d.glints[0].mesh as QuadMesh).size.x * d.glints[0].global_transform.basis.get_scale().x
+	assert_almost_eq(across, float(_prowl()["glint_size"]), 0.02, "as big across as it says, whatever the body's fit")
+	assert_true(d.glints[0].visible and d.glints[1].visible, "At the light's edge they show")
+	var eye_mid: Vector3 = (d.glints[0].global_position + d.glints[1].global_position) * 0.5
+	assert_gt(eye_mid.y, float(config_node.DINOS[_species()]["size"].y) * 0.4, "up on its head")
+	d.global_position = fire.global_position + Vector3(-(light + float(_prowl()["eye_reach"]) + 2.0), 0.0, 0.0)
+	d._shine()
+	assert_false(d.glints[0].visible, "Far from any light, none")

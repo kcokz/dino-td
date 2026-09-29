@@ -77,6 +77,8 @@ class Track:
 	var minds: Array = []
 	## Kind -> the watch's clock before which it is not reported for that again.
 	var quiet_until: Dictionary = {}
+	## Whether it was on its way home (Dino.going_home) -- turned for home, it is watched afresh.
+	var home: bool = false
 
 ## Every animal watched, by instance id; the marks up on the field, [Label3D, seconds left]; and
 ## the game seconds this watch has run.
@@ -100,8 +102,15 @@ func _physics_process(delta: float) -> void:
 		var id: int = d.get_instance_id()
 		alive[id] = true
 		var t: Track = _tracks.get(id)
-		if t == null:
-			_tracks[id] = _new_track(d as Node3D)
+		# Its hours over, it turns for home: a new walk, watched afresh. The seconds either side of the
+		# turn were a walk out and the same walk back, and read as round and round on the spot -- six
+		# raiders reported milling at the first moment of dusk, going home at full speed (the
+		# debug-agent's BUG-015). Milling on the way home is still seen: it is after the turn.
+		if t == null or t.home != _going_home(d):
+			var fresh: Track = _new_track(d as Node3D)
+			if t != null:
+				fresh.quiet_until = t.quiet_until
+			_tracks[id] = fresh
 		else:
 			_watch(d as Node3D, t, delta, cfg)
 	for id in _tracks.keys():
@@ -120,7 +129,11 @@ func _new_track(d: Node3D) -> Track:
 	t.open = _bucket_at(d.global_position)
 	t.clip = _clip_of(d)
 	t.mind = _mind_of(d)
+	t.home = _going_home(d)
 	return t
+
+func _going_home(d: Node) -> bool:
+	return "going_home" in d and bool(d.going_home)
 
 func _bucket_at(pos: Vector3) -> PackedFloat32Array:
 	var b := PackedFloat32Array()
@@ -303,7 +316,8 @@ func _mills(d: Node3D, m: Dictionary, cfg: Dictionary) -> bool:
 	var target = d.current_target if "current_target" in d else null
 	if target != null and is_instance_valid(target) and (target as Node).is_in_group("hero"):
 		return false
-	return float(m["path"]) >= float(cfg.get("mill_path", 6.0)) and float(m["net"]) <= float(cfg.get("mill_net", 1.5)) 		and float(m["path"]) / float(int(m["jitter"]) + 1) >= float(cfg.get("mill_leg", 1.0))
+	return float(m["path"]) >= float(cfg.get("mill_path", 6.0)) and float(m["net"]) <= float(cfg.get("mill_net", 1.5)) \
+		and float(m["path"]) / float(int(m["jitter"]) + 1) >= float(cfg.get("mill_leg", 1.0))
 
 # ==============================================================================
 # Reporting

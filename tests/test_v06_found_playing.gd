@@ -83,6 +83,28 @@ func test_01_bitten_at_his_work_he_turns_on_it_and_goes_back_to_it() -> void:
 			break
 	assert_eq(hero.target_resource_node, tree_node, "It dead, he goes back to the tree")
 
+func test_01b_bitten_on_his_way_to_work_he_turns_on_it_too() -> void:
+	# The debug-agent's BUG-019: sent out at night to cut wood, a phytosaur stood across his way and bit
+	# him from ten hit points to none while he walked on the spot, never hitting back.
+	var main = await _level()
+	var hero = main.hero
+	var tree_node: Node = _nearest_tree(main)
+	assert_not_null(tree_node, "A tree to cut")
+	hero.order_harvest(tree_node)
+	await wait_physics_frames(2)
+	assert_eq(int(hero.current_state), int(hero.State.MOVING), "(on his way to it)")
+	var biter = _raptor_at(main, hero.global_position + Vector3(hero.attack_range * 0.6, 0.0, 0.0))
+	await wait_physics_frames(1)
+	hero.take_damage(0.5)
+	assert_eq(int(hero.current_state), int(hero.State.ATTACKING), "Bitten on his way, he turns on it")
+	assert_eq(hero.target_enemy, biter, "on what bit him")
+	biter.take_damage(9999.0)
+	for i in 10:
+		await wait_physics_frames(1)
+		if hero.target_resource_node == tree_node:
+			break
+	assert_eq(hero.target_resource_node, tree_node, "It dead, he goes on to the tree")
+
 func test_02_a_walk_he_was_sent_on_is_not_broken_off() -> void:
 	var main = await _level()
 	var hero = main.hero

@@ -1336,6 +1336,10 @@ func _hold_the_torch() -> void:
 	_torch.add_child(VisualLibrary.make("prop/torch"))
 	var head: float = float(_torch_cfg().get("length", 0.62)) * 0.78
 	var flame: GPUParticles3D = Fire.make_flame(_fire(), float(_torch_cfg().get("flame_size", 0.45)))
+	# Carried with the torch, not left where each tongue rose: walking, a fire's flame drawn in the world
+	# trailed three metres of separate balls of fire behind him, a comet's tail (the debug-agent's
+	# BUG-017). A campfire's stays in the world -- it does not move.
+	flame.local_coords = true
 	flame.name = "Flame"
 	flame.position = Vector3(0.0, head, 0.0)
 	_torch.add_child(flame)
@@ -1427,11 +1431,18 @@ func take_damage(amount: float) -> void:
 
 ## Bitten at his work, he turns on what is biting him (found playing, v0.6 round three: quarrying
 ## by the nest, the guards bit him from twelve hit points to none while he went on swinging at
-## the rock). Only at work -- a walk the player sent him on, a meal, a fight already under way
-## are the player's to change -- and only at what is in his reach. The work is remembered and
-## taken up again when nothing is left to fight (_process_attacking).
+## the rock). At work, or on his way to it: sent to cut wood or to mend a fence at night, a
+## phytosaur stood across his way and bit him from ten hit points to none while he walked on the
+## spot, never hitting back (the debug-agent's BUG-019). Not on a walk the player sent him on, at a
+## meal, or in a fight already under way -- those are the player's to change -- and only at what is
+## in his reach. The work is remembered and taken up again when nothing is left to fight
+## (_process_attacking).
 func _hit_back() -> void:
-	if current_state != State.HARVESTING and current_state != State.BUILDING:
+	var at_work: bool = current_state == State.HARVESTING or current_state == State.BUILDING
+	var going_to_work: bool = current_state == State.MOVING and (
+		(target_resource_node != null and is_instance_valid(target_resource_node))
+		or (target_building != null and is_instance_valid(target_building)))
+	if not at_work and not going_to_work:
 		return
 	var biter: Node3D = _find_nearest_enemy(attack_range + 0.3)
 	if biter == null:
