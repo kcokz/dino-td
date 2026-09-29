@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"reach_all": await _p_reach_all()
 			"settings_map": await _p_settings_map()
 			"routes": await _p_routes()
 			"fence_in_their_way": await _p_fence_in_their_way()
@@ -2405,6 +2406,48 @@ func _field_half() -> float:
 	var gs := root.get_node("GameState")
 	var m: Dictionary = gs.map_data() if gs.has_method("map_data") else {}
 	return float(m.get("terrain", {}).get("field_half", root.get_node("Config").TERRAIN.get("field_half", 0.0)))
+
+## TASK-018 follow-up (DA_MAP=valley_large): every resource node on the map worked, from the cabin --
+## the Hero sent to each in turn (the pick granted, so stone counts too), and whether he gets to work
+## on it. Then the ridge and the rock field photographed with the fog lifted, for the eye.
+func _p_reach_all() -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	gs.grant_unlock("harvest_stone")
+	# The guards would make the nest's stones a fight, not a walk: out of the way for this.
+	for g in get_nodes_in_group("guard_dinos"):
+		g.queue_free()
+	var bad: Array = []
+	var n := 0
+	for node in get_nodes_in_group("resource_nodes"):
+		if not is_instance_valid(node) or String(node.resource_type) == "water" or OS.get_environment("DA_PHOTOS_ONLY") != "":
+			continue
+		n += 1
+		hero.global_position = core + Vector3(0.0, 0.0, 4.5)
+		hero.order_stop()
+		await _advance(0.3)
+		var p: Vector3 = (node as Node3D).global_position
+		hero.order_harvest(node)
+		var t := 0.0
+		while t < 40.0 and int(hero.current_state) != 5:
+			await _advance(0.25)
+			t += 0.25
+		var line: String = "%s at %s (%.0f m): %s" % [String(node.resource_type), str(p), p.distance_to(core), ("working after %.1f s" % t) if int(hero.current_state) == 5 else "NOT reached in 40 s (stuck at %s, state %d)" % [str(hero.global_position), int(hero.current_state)]]
+		_say("INFO", line)
+		if int(hero.current_state) != 5:
+			bad.append(line)
+	_say("PASS" if bad.is_empty() else "FAIL", "%d resource nodes, every one worked from the cabin%s" % [n, "" if bad.is_empty() else ": " + "; ".join(bad)])
+	# The places, with the fog lifted, at noon.
+	gs.day_clock = 120.0
+	var fog = _main.fog
+	fog.reveal_all()
+	for spot in [["ridge", Vector3(2.0, 0.0, -24.0), 40.0], ["rock_field", Vector3(29.0, 0.0, -24.0), 26.0], ["woods_sw", Vector3(-26.0, 0.0, 16.0), 26.0], ["whole", Vector3(0.0, 0.0, -6.0), 45.0]]:
+		_look_at(spot[1], float(spot[2]))
+		await _advance(0.5)
+		await _shoot("place_" + String(spot[0]))
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
