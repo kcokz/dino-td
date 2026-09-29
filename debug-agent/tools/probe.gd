@@ -1747,8 +1747,10 @@ func _p_nest_stone(which: String) -> void:
 	var hero = _main.hero
 	var core: Vector3 = _main.current_core.global_position
 	var nest: Node3D = get_first_node_in_group("nest") as Node3D
-	gs.day_clock = 80.0
+	gs.day_clock = float(OS.get_environment("DA_CLOCK")) if OS.get_environment("DA_CLOCK") != "" else 80.0
 	_main.wave_manager.auto_raid_enabled = false
+	if _main.get("night_prowl") != null:
+		_main.night_prowl.enabled = false
 	gs.grant_unlock("harvest_stone")
 	var stone: Node3D = null
 	for n in get_nodes_in_group("resource_nodes"):
@@ -2527,6 +2529,11 @@ func _p_guard_warn() -> void:
 					ch += 1
 			threatening = maxi(threatening, th)
 			if float(warns["t"]) >= 0.0 and not shot:
+				var vis: Array = []
+				for g in get_nodes_in_group("guard_dinos"):
+					if is_instance_valid(g) and int(g.guard_state) == 4:
+						vis.append("%.1f m from him, drawn %s, in his sight %s" % [_flat3(g.global_position).distance_to(_flat3(hero.global_position)), g.is_visible_in_tree(), _main.fog.is_in_sight(g.global_position)])
+				_say("INFO", "%s: at the warning (clock %.0f, %s): the warning guards %s" % [case, gs.day_clock, gs.day_part(), str(vis)])
 				shot = true
 				await _portrait("%s_warning" % case, (stone.global_position + get_first_node_in_group("nest").global_position) * 0.5, 9.0)
 			if case == "A_back_away" and float(warns["t"]) >= 0.0 and not backed:
