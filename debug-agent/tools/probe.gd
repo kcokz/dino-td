@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"bitten_on_the_way": await _p_bitten_on_the_way()
 			"fire_night": await _p_fire_night()
 			"prowl": await _p_prowl()
 			"raid_count": await _p_raid_count()
@@ -3253,6 +3254,46 @@ func _after_fmt(s: String) -> String:
 				return rest.left(10)
 			return s.left(i).strip_edges().left(10)
 	return s.left(10)
+
+## Found in a large-valley play:25 (7f8ee65): walking to a tree at night he was bitten from ten to none by
+## phytosaurs, walking on the spot, never turning on them ("fight 0%"). Here: night, one phytosaur set
+## down half way between him and a tree 9 m off, and he is sent to cut it. Every 0.25 s: his state, his
+## health, how far the phytosaur is, how fast he goes -- does he turn on it, or walk on the spot.
+func _p_bitten_on_the_way() -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	gs.day_clock = 300.0
+	hero.global_position = core + Vector3(0.0, 0.0, 5.0)
+	hero.order_stop()
+	await _advance(1.0)
+	var tree: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		var dd: float = (n as Node3D).global_position.distance_to(hero.global_position)
+		if String(n.resource_type) == "wood" and dd > 7.0 and (tree == null or dd < tree.global_position.distance_to(hero.global_position)):
+			tree = n
+	var o: Array[Vector3] = [hero.global_position.lerp(tree.global_position, 0.5)]
+	_main.night_prowl.origins = o
+	var p = _main.night_prowl.send_one()
+	p.global_position = hero.global_position.lerp(tree.global_position, 0.55)
+	await _advance(0.1)
+	var hp0: float = hero.current_hp
+	hero.order_harvest(tree)
+	var log: Array = []
+	var fought := false
+	var t := 0.0
+	while t < 12.0 and int(hero.current_state) != 4:
+		await _advance(0.25)
+		t += 0.25
+		if int(hero.current_state) == 3:
+			fought = true
+		if log.size() < 24:
+			log.append("%.2f:%d hp%.1f d%.1f v%.1f" % [t, int(hero.current_state), hero.current_hp, _flat3(hero.global_position).distance_to(_flat3(p.global_position)) if is_instance_valid(p) else -1.0, Vector3(hero.velocity.x, 0, hero.velocity.z).length()])
+	_say("INFO", "tree %.1f m off, the phytosaur between; every 0.25 s (time:state hp distance speed): %s" % [tree.global_position.distance_to(core + Vector3(0.0, 0.0, 5.0)), " ".join(log)])
+	_say("INFO", "after %.1f s: his state %d, health %.1f -> %.1f, turned on it %s, it alive %s" % [t, int(hero.current_state), hp0, hero.current_hp, fought, is_instance_valid(p) and not p.is_dead])
+	_say("PASS" if fought or hero.current_hp >= hp0 - 1.0 else "FAIL", "bitten on his way to work, he turns on what bites him")
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
