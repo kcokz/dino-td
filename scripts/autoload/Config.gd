@@ -888,6 +888,18 @@ const DINO_AI: Dictionary = {
 	# one point, and the ones that could not would otherwise mill round it. (The last is stood on:
 	# it is the cabin, or the end of the road.)
 	"waypoint_reach": 1.0,
+	# A bend in the road this close to the cabin's walls, in metres, is not gone to: the cabin is
+	# (Dino._on_the_doorstep) -- the first map's last bend is a metre behind its back.
+	"cabin_approach": 3.0,
+	# A place round a building to stand at while biting it, one every this many metres along each
+	# face (Dino.ring_round): a body's width (DINOS.coelophysis.size, 0.8) and a little. The cabin's
+	# seven-metre face takes seven.
+	"slot_spacing": 1.0,
+	# Every place round what it came to bite taken, it waits its turn this far out from its walls,
+	# in metres -- beyond the outer ring (DINO_STANDOFF_OUTER), at the crowd's edge (Dino.queue_spot);
+	# and, waiting, it looks again for a place to bite from every this many seconds.
+	"queue_standoff": 2.8,
+	"queue_patience": 1.5,
 	# A place round a building to bite it from counts as one it can get to when its route there ends
 	# this near it, in metres. A place behind a fence from it has a route too -- to the near side of
 	# the fence, out of reach of the building -- and a raid stood there, milling, for the whole of

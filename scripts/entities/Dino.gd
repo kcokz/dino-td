@@ -287,7 +287,7 @@ static func claim_attack_slot(building: Node, dino: Node) -> Vector3:
 	for i in range(slots.size()):
 		if slots[i].get("dino_id", 0) != 0:
 			taken.append(i)
-		elif i < 8:
+		elif bool(slots[i].get("inner", false)):
 			inner.append(i)
 		else:
 			outer.append(i)
@@ -300,12 +300,51 @@ static func claim_attack_slot(building: Node, dino: Node) -> Vector3:
 		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(slots[i]["pos"])):
 			slots[i]["dino_id"] = dino_id
 			return slots[i]["pos"]
-	# Every place it can get to is taken: the nearest of those, shared, and the crowd sorts it out;
-	# with none it can get to, the building itself.
+	# Every place it can get to is taken: it waits its turn at the crowd's edge, on its own side
+	# (queue_spot) -- it went for the nearest of those places, shared, and pushed into the crowd
+	# at it (the twitch watch, BUG-005). With none it can get to, the building itself.
 	for i in taken:
 		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(slots[i]["pos"])):
-			return slots[i]["pos"]
+			return dino.queue_spot(building) if dino.has_method("queue_spot") else slots[i]["pos"]
 	return (building as Node3D).global_position
+
+## The nearest place in `building`'s inner ring -- one to bite it from -- that is free and that
+## `dino` can get to, or Vector3.ZERO.
+static func free_inner_slot(building: Node, dino: Node) -> Vector3:
+	if building == null or not is_instance_valid(building) or not (building is Node3D):
+		return Vector3.ZERO
+	var b_id: int = building.get_instance_id()
+	if not _building_slots.has(b_id):
+		_init_building_slots(building as Node3D)
+	var at: Vector3 = (dino as Node3D).global_position
+	var free: Array = []
+	for s in _building_slots[b_id]:
+		if bool(s.get("inner", false)) and (int(s.get("dino_id", 0)) == 0 or int(s.get("dino_id", 0)) == dino.get_instance_id()):
+			free.append(s["pos"])
+	free.sort_custom(func(a: Vector3, b: Vector3) -> bool: return at.distance_squared_to(a) < at.distance_squared_to(b))
+	for pos in free:
+		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(pos)):
+			return pos
+	return Vector3.ZERO
+
+## Where it waits its turn at `building` when every place round it is taken: Config.DINO_AI
+## .queue_standoff out from its walls, on the side this animal is coming from -- at the edge of
+## the crowd, not in it -- on ground it can stand on.
+func queue_spot(building: Node) -> Vector3:
+	var centre: Vector3 = (building as Node3D).global_position
+	var out: Vector3 = _flat3(global_position - centre)
+	if out.length() < 0.01:
+		out = Vector3(0.0, 0.0, -1.0)
+	out = out.normalized()
+	var cfg = _get_config()
+	var b_type: String = String(building.building_type) if "building_type" in building else ""
+	var reach_out: float = _extent_along(cfg, b_type, out, 0.5) + _ai("queue_standoff", 2.8)
+	var spot: Vector3 = centre + out * reach_out
+	var maps := _nav_maps()
+	if maps != null and maps.is_ready():
+		var on_mesh: Vector3 = maps.closest_point(spot, _map_kind())
+		spot = Vector3(on_mesh.x, centre.y, on_mesh.z)
+	return spot
 
 static func release_attack_slot(building: Node, dino: Node) -> void:
 	if building == null or not is_instance_valid(building):
@@ -329,60 +368,56 @@ static func release_all_building_slots(building: Node) -> void:
 static func clear_all_attack_slots() -> void:
 	_building_slots.clear()
 
-## Sixteen places a dinosaur can stand while chewing on a building, eight close and eight
-## further out, measured from the building's FACE (Config.get_attack_slot_radius). Any that
-## lands in a hill is dropped: a slot inside the scenery is a dinosaur standing in the scenery.
+## Places a dinosaur can stand while chewing on a building, in two rings measured from its FACES --
+## the inner to bite from (Config.DINO_STANDOFF_INNER), the outer to wait in (_OUTER): along each
+## face one every Config.DINO_AI.slot_spacing, a body's width and a little, and one off each corner.
+## A long wall has a place for every body that fits along it. It was eight places round any
+## building, by angle -- one on the cabin's seven-metre south face -- and a raid on a cabin fenced
+## at its back and east end had three places left to bite from, and waited behind the fence for
+## them (the debug-agent's BUG-005: "来袭实际攻击效果很差"). A stake is as it was: a place off each
+## face and each corner. Any that lands in a hill or a fence is dropped: a slot inside something is
+## a dinosaur standing in it.
 static func _init_building_slots(building: Node3D) -> void:
 	var b_id: int = building.get_instance_id()
 	var slots: Array = []
 	var center: Vector3 = building.global_position
-	var cfg_slots = building.get_node_or_null("/root/Config")
-	var b_type: String = String(building.building_type) if ("building_type" in building) else ""
-	var r_inner: float = 1.6
-	var r_outer: float = 2.6
-	if cfg_slots != null and cfg_slots.has_method("get_attack_slot_radius") and b_type != "":
-		r_inner = float(cfg_slots.get_attack_slot_radius(b_type, false))
-		r_outer = float(cfg_slots.get_attack_slot_radius(b_type, true))
-	var half: float = 0.5
-	if cfg_slots != null and cfg_slots.has_method("get_building_footprint") and b_type != "":
-		half = float(cfg_slots.get_building_footprint(b_type)) * 0.5
-	var standoff_inner: float = r_inner - half
-	var standoff_outer: float = r_outer - half
-
-	var gm_slots: Node = null
+	var cfg: Node = null
 	if building.is_inside_tree():
-		gm_slots = building.get_tree().get_first_node_in_group("grid_manager")
-
-	for i in range(8):
-		var angle: float = float(i) * (PI / 4.0)
-		var dir := Vector3(sin(angle), 0.0, cos(angle))
-		var offset: Vector3 = _slot_offset(cfg_slots, b_type, dir, half, standoff_inner)
-		if _slot_is_standable(gm_slots, center + offset):
-			slots.append({ "pos": center + offset, "dino_id": 0 })
-
-	for i in range(8):
-		var angle: float = (float(i) + 0.5) * (PI / 4.0)
-		var dir := Vector3(sin(angle), 0.0, cos(angle))
-		var offset: Vector3 = _slot_offset(cfg_slots, b_type, dir, half, standoff_outer)
-		if _slot_is_standable(gm_slots, center + offset):
-			slots.append({ "pos": center + offset, "dino_id": 0 })
-
-	_building_slots[b_id] = slots
-
-## A place to stand `standoff` out from a building's face, heading out from its middle along
-## `dir`: where the ray leaves its box, then straight out from the face it leaves by -- or from
-## the corner, out along the corner. Along the ray alone, a slot off the long side of the cabin
-## stood closer to it than its standoff.
-static func _slot_offset(cfg: Node, b_type: String, dir: Vector3, half: float, standoff: float) -> Vector3:
-	var exit: Vector3 = dir * _extent_along(cfg, b_type, dir, half)
-	var box := Vector2(half, half)
+		cfg = building.get_node_or_null("/root/Config")
+	elif Engine.get_main_loop() is SceneTree:
+		cfg = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Config")
+	var b_type: String = String(building.building_type) if ("building_type" in building) else ""
+	var box := Vector2(0.5, 0.5)
 	if cfg != null and cfg.has_method("get_building_half") and b_type != "":
 		box = cfg.get_building_half(b_type)
-	var out := Vector3(signf(dir.x) if absf(exit.x) >= box.x - 0.001 else 0.0, 0.0,
-		signf(dir.z) if absf(exit.z) >= box.y - 0.001 else 0.0)
-	if out.length_squared() < 0.0001:
-		out = dir
-	return exit + out.normalized() * standoff
+	var inner_out: float = float(cfg.DINO_STANDOFF_INNER) if cfg != null else 0.5
+	var outer_out: float = float(cfg.DINO_STANDOFF_OUTER) if cfg != null else 1.6
+	var spacing: float = float(cfg.DINO_AI.get("slot_spacing", 1.0)) if (cfg != null and "DINO_AI" in cfg) else 1.0
+	var gm_slots: Node = building.get_tree().get_first_node_in_group("grid_manager") if building.is_inside_tree() else null
+	for ring in [[inner_out, true], [outer_out, false]]:
+		for offset in ring_round(box, float(ring[0]), spacing):
+			if _slot_is_standable(gm_slots, center + offset):
+				slots.append({"pos": center + offset, "dino_id": 0, "inner": bool(ring[1])})
+	_building_slots[b_id] = slots
+
+## Places `standoff` out from the faces of a box `half` wide either way (x, z): along each face one
+## every `spacing` or less, centred on it, and one off each corner, out along the corner.
+static func ring_round(half: Vector2, standoff: float, spacing: float) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for face in [Vector2(1.0, 0.0), Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2(0.0, -1.0)]:
+		var runs_along_z: bool = face.x != 0.0
+		var length: float = (half.y if runs_along_z else half.x) * 2.0
+		var n: int = maxi(1, int(floor(length / maxf(0.1, spacing) + 0.001)))
+		for k in range(n):
+			var t: float = -length * 0.5 + (float(k) + 0.5) * length / float(n)
+			if runs_along_z:
+				out.append(Vector3(face.x * (half.x + standoff), 0.0, t))
+			else:
+				out.append(Vector3(t, 0.0, face.y * (half.y + standoff)))
+	var diagonal: float = standoff * sqrt(0.5)
+	for corner in [Vector2(1.0, 1.0), Vector2(1.0, -1.0), Vector2(-1.0, 1.0), Vector2(-1.0, -1.0)]:
+		out.append(Vector3(corner.x * (half.x + diagonal), 0.0, corner.y * (half.y + diagonal)))
+	return out
 
 ## How far a building's outside is from its middle, heading along `dir`.
 static func _extent_along(cfg: Node, b_type: String, dir: Vector3, half: float) -> float:
@@ -683,9 +718,23 @@ func _march(delta: float) -> void:
 func _skip_reached_waypoints() -> void:
 	var reach: float = _ai("waypoint_reach", 1.0)
 	while current_waypoint_index < waypoints.size() - 1:
-		if _flat(global_position).distance_to(_flat(_lane_point(current_waypoint_index))) > reach:
+		var point: Vector3 = _lane_point(current_waypoint_index)
+		if _flat(global_position).distance_to(_flat(point)) > reach and not _on_the_doorstep(point):
 			return
 		current_waypoint_index += 1
+
+## Whether `point` is on the cabin's doorstep (Config.DINO_AI.cabin_approach, from its walls): a
+## bend in the road there is no place to go -- the cabin is, and a place round it to bite from
+## (claim_attack_slot). The road's last bend on the first map is a metre behind the cabin's back:
+## fenced there, it was where the raid waiting its turn stood, and one marching for it never got
+## within reach of it, and paced up and down the fence (found by the twitch watch, BUG-005).
+func _on_the_doorstep(point: Vector3) -> bool:
+	var cabin: Node = _cabin()
+	var cfg = _get_config()
+	if cabin == null or cfg == null or not cfg.has_method("gap_to_building") or not ("building_type" in cabin):
+		return false
+	return float(cfg.gap_to_building(point, String(cabin.building_type), (cabin as Node3D).global_position)) \
+		<= _ai("cabin_approach", 3.0)
 
 ## Heads for `goal`, along the agent's route, at `pace` of its speed.
 func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
@@ -960,13 +1009,17 @@ func _unstick() -> void:
 		release_attack_slot(holder, self)
 		assigned_slot = Vector3.ZERO
 	elif current_target != null and _is_building(current_target) and not _target_in_reach(current_target):
-		# Going for a building, out of its reach and getting nowhere: waiting in the outer ring, or
-		# at a place it could not get to after all. It chooses again -- the inner ring first, and
-		# only a place it can get to (claim_attack_slot) -- so it moves in as the raid thins. It stood
-		# in the outer ring, out of reach, to the end of the raid before (found playing, v0.6 round
-		# three), two of those places behind the fence at the cabin's back.
-		release_attack_slot(current_target, self)
-		assigned_slot = claim_attack_slot(current_target, self)
+		# Going for a building, out of its reach and getting nowhere: waiting its turn. It moves in when
+		# a place in the inner ring it can get to is free (free_inner_slot) -- it stood in the outer
+		# ring to the end of the raid before (found playing, v0.6 round three) -- and otherwise waits
+		# where it is. It chose again whatever was free, and paced from one end of the cabin to the
+		# other and back, the place it went for taken each time it got there (the twitch watch,
+		# BUG-005: "是同伴就排队等").
+		if free_inner_slot(current_target, self) != Vector3.ZERO:
+			release_attack_slot(current_target, self)
+			assigned_slot = claim_attack_slot(current_target, self)
+		else:
+			_patience = _ai("queue_patience", 1.5)
 	# Held up by the Hero himself, standing in its way, time and again: he is what is in the way,
 	# and what is in the way is bitten -- whether or not this species came for him.
 	var man: Node = _hero_pressed_against()
@@ -974,7 +1027,7 @@ func _unstick() -> void:
 		_take(man, Mode.ENGAGE)
 		return
 	if crowd > 0:
-		_patience = _ai("patience", 0.8)
+		_patience = maxf(_patience, _ai("patience", 0.8))
 	_nav_goal = Vector3.INF
 
 ## The building its body is up against, favouring the one ahead of it, or null. Asked of the

@@ -123,7 +123,12 @@ func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 	await wait_frames(1)
 	dino_script._init_building_slots(core)
 	var slots: Array = dino_script._building_slots[core.get_instance_id()]
-	assert_eq(slots.size(), 16, "Sixteen places to stand")
+	# A place every slot_spacing along each face and one off each corner, in each of two rings (a
+	# long face has a place for every body that fits along it -- the debug-agent's BUG-005).
+	var half: Vector2 = config_node.get_building_half("core")
+	var spacing: float = float(config_node.DINO_AI["slot_spacing"])
+	var per_ring: int = 2 * (maxi(1, int(floor(half.x * 2.0 / spacing + 0.001))) + maxi(1, int(floor(half.y * 2.0 / spacing + 0.001)))) + 4
+	assert_eq(slots.size(), per_ring * 2, "%d places to stand, two rings of %d" % [per_ring * 2, per_ring])
 	var inside: int = 0
 	var inner: int = 0
 	var out_of_reach: int = 0
@@ -139,7 +144,7 @@ func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 			if not raptor._target_in_reach(core):
 				out_of_reach += 1
 	assert_eq(inside, 0, "None of them inside its walls, or too close to stand at")
-	assert_eq(inner, 8, "Eight of them close enough to bite from")
+	assert_eq(inner, per_ring, "The whole inner ring close enough to bite from")
 	assert_eq(out_of_reach, 0, "And from every one of those, it can")
 	# And the corner: touching it there is touching it.
 	raptor.global_position = core.global_position + Vector3(_half().x + 0.3, 0.0, _half().y + 0.3)
