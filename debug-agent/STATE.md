@@ -12,6 +12,7 @@
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
 | [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open（f65f8ea 复测：好了一部分，还没过，见 TASK-011） | 2026-09-28 |
 | [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
+| [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | open | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | open | 2026-09-28 |
 | [BUG-009](bug/BUG-009-full-ring-raid-piles-on-one-crossbow.md) | 整圈栅栏 + 窝弩：来袭全冲同一架窝弩，堆在栅栏角外转圈、顶 | 中 | open | 2026-09-28 |
 | [BUG-008](bug/BUG-008-twitch-watch-misses-a-slow-swing.md) | 抽搐监测漏报：原地不动、每秒甩一次头 22 秒 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
@@ -48,6 +49,8 @@
 - `play:25` 机器人：第 4 分半在东边巢边的石头那里被三只守卫围死（满血），船舱 100/100。探针复现：东边那块两次里一次死（第一口到死 5.7 秒），西边那块两次都没事 → DOC-004（设计取舍，不算 bug）。
 - 这一局抽搐报告 0 份（只到第 2 波）。
 - 设计书 9.3 第 625 行还写着迷雾是黑的 → DOC-005。
+- 那一局的失败画面写"船舱被毁或人阵亡"，船舱却是满血 → BUG-011。
+- 最后一波从四面来（`siege:8:30:1:all`）：155 秒守住，没有卡在入口的，抽搐报告 0 份；8 架窝弩剩 2 架、船舱 45/100（平衡，不报）。
 
 ### 2026-09-28 第 5 次（自由找 bug，7817a1e 快照）
 
