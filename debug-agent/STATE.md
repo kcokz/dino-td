@@ -10,8 +10,9 @@
 | [BUG-002](bug/BUG-002-launch-button-stays-after-launch.md) | 启动以后"启动信标"按钮还在卡片上 | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-003](bug/BUG-003-ambience-leaks-at-exit.md) | 退出时环境音还被占着（冒烟测试 ERROR） | 低 | **fixed** ba2ca49 | 2026-09-28 |
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
-| [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open | 2026-09-28 |
-| [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | open | 2026-09-28 |
+| [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open（7817a1e 复测：没好，5～11 份） | 2026-09-28 |
+| [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | open（7817a1e 上明显好了：4～6 份 → 1 份，等 dev 派任务再关） | 2026-09-28 |
+| [BUG-008](bug/BUG-008-twitch-watch-misses-a-slow-swing.md) | 抽搐监测漏报：原地不动、每秒甩一次头 22 秒 | 中 | open | 2026-09-28 |
 | [BUG-006](bug/BUG-006-raid-stepping-out-at-dusk-never-goes-home.md) | 天快黑时出发的来袭，黄昏后才出巢的那些不回巢，照咬船舱 | **高** | **fixed** d2c30d5 | 2026-09-28 |
 | [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
