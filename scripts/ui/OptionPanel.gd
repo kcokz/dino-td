@@ -891,6 +891,10 @@ func _show_build_detail(b_type: String) -> void:
 			var key: String = "BUILD_DETAIL_FORMAT_TRAP_PIERCE" if bool(row.get("pierce", false)) else "BUILD_DETAIL_FORMAT_TRAP"
 			_set_status(tr(key) % [b_name, _cost_text(b_type), secs, float(row.get("damage", 0.0)),
 				int(row.get("lane", 0)), float(row.get("rearm_seconds", 0.0))])
+		elif String(row.get("kind", "")) == "fire":
+			# What a fire does is light the night, and what it costs is wood every night (Fire.gd).
+			_set_status(tr("BUILD_DETAIL_FORMAT_FIRE") % [b_name, _cost_text(b_type), secs,
+				float(row.get("light", 0.0)), int(row.get("fuel", 0))])
 		elif dps > 0.0:
 			_set_status(tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, dps])
 		else:

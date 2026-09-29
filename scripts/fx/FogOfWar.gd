@@ -244,7 +244,9 @@ func _see_round(at: Vector3, radius: float) -> void:
 				_seen[i] = 1
 
 ## What sees, and how far (Config.FOG.sight): the Hero; the cabin; each finished building, by its
-## kind -- all less far at dusk and at night (Config.FOG.dusk, night).
+## kind -- all less far at dusk and at night (Config.FOG.dusk, night) -- and whatever a light reaches:
+## a fire burning, the torch in his hand (GAME-DESIGN 9.3: "看得见的范围缩小，火把它撑开"). A light is its
+## own, so the night does not shorten it.
 func _sources() -> Array:
 	var out: Array = []
 	if not is_inside_tree():
@@ -258,7 +260,8 @@ func _sources() -> Array:
 		scale = float(fog.get(String(gs.day_part()), 1.0))
 	var hero = get_tree().get_first_node_in_group("hero")
 	if hero is Node3D and is_instance_valid(hero):
-		out.append([(hero as Node3D).global_position, float(sight.get("hero", 10.0)) * scale])
+		var torch: float = float(hero.torch_light()) if hero.has_method("torch_light") else 0.0
+		out.append([(hero as Node3D).global_position, maxf(float(sight.get("hero", 10.0)) * scale, torch)])
 	for core in get_tree().get_nodes_in_group("core"):
 		if core is Node3D and is_instance_valid(core):
 			out.append([(core as Node3D).global_position, float(sight.get("core", 9.0)) * scale])
@@ -268,8 +271,10 @@ func _sources() -> Array:
 		if ("is_constructed" in b and not b.is_constructed) or ("is_destroyed" in b and b.is_destroyed):
 			continue
 		var kind: String = String(cfg.get_building_kind(String(b.building_type))) if (cfg and "building_type" in b) else ""
-		var radius: float = float(sight.get(kind, sight.get("building", 3.0)))
-		out.append([(b as Node3D).global_position, radius * scale])
+		var radius: float = float(sight.get(kind, sight.get("building", 3.0))) * scale
+		if b.has_method("light_radius"):
+			radius = maxf(radius, float(b.light_radius()))
+		out.append([(b as Node3D).global_position, radius])
 	return out
 
 # ==============================================================================

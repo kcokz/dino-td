@@ -217,6 +217,45 @@ const BUILDINGS: Dictionary = {
 		"cost": {"wood": 2},
 		"upgrades_to": "",
 	},
+	# THE FIRES (GAME-DESIGN 9.3, "火与夜"; v0.6 round four, the player: "火把我觉得在夜里是很有用，但需要不只
+	# 是照明的作用，比如不用火把，晚上更多的夜行动物袭击（怕火把但是不怕暗淡灯光的船舱）"). A fire burns from dusk
+	# to first light, and what it burns is wood from the stock, a night's worth (`fuel`) taken as it
+	# lights (5.4 rule 4: "燃料和弹药直接从仓库扣……添柴就是照料"): no wood, no fire. Lit, it lights the
+	# ground `light` metres round it -- seen at night that far, where without a light he sees little
+	# (FOG.night) -- and what hunts by night will not come into its light (Fire.gd, FIRE). Its flame
+	# burns `flame_height` metres up, `flame_size` times a campfire's.
+	#
+	# The campfire: a ring of stones, a bed of ash, logs leaned together -- what he can make with his
+	# hands and wood by the first dusk (GAME-DESIGN 9.2's timeline: "约 6:00 第一个黄昏：生火").
+	"campfire": {
+		"name": "BUILDING_CAMPFIRE_NAME",
+		"kind": "fire",
+		"cells": 1,
+		"height": 0.4,
+		"hp": 6.0,
+		"cost": {"wood": 3},
+		"light": 7.0,
+		"fuel": 2,
+		"flame_height": 0.22,
+		"flame_size": 1.0,
+		"upgrades_to": "",
+	},
+	# The brazier: a stone bowl on a drystone plinth -- the fire raised to his chest, which lights
+	# further, and burns more (GAME-DESIGN 6: "火盆（石，1：夜里照得更远，每晚从仓库扣木头）"). Stone, so it
+	# comes once there is a pick; and it stands a raid's bites like the stone it is.
+	"brazier": {
+		"name": "BUILDING_BRAZIER_NAME",
+		"kind": "fire",
+		"cells": 1,
+		"height": 0.7,
+		"hp": 20.0,
+		"cost": {"stone": 4, "wood": 2},
+		"light": 10.0,
+		"fuel": 3,
+		"flame_height": 0.66,
+		"flame_size": 1.2,
+		"upgrades_to": "",
+	},
 }
 
 ## THE BUILDING GRID (v0.6 round two). Every building stands on whole cells of this size and
@@ -605,7 +644,8 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 ## Types offered in the Hero's build menu, in display order.
 ## Buildings absent here exist in BUILDINGS but cannot be placed by the player
 ## (e.g. "core" is spawned by the level rather than bought).
-const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "bone_stake", "stone_wall", "set_crossbow"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "bone_stake", "stone_wall", "set_crossbow",
+	"campfire", "brazier"]
 
 ## What every trap shares (BUILDINGS kind "trap", Trap.gd).
 const TRAPS: Dictionary = {
@@ -625,6 +665,41 @@ const TRAPS: Dictionary = {
 	"shot_speed": 32.0,
 	# The lane shown on the ground under a trap being placed, the wire's colour.
 	"lane_color": Color(0.95, 0.8, 0.35),
+}
+
+## What every fire shares (BUILDINGS kind "fire", Fire.gd), and the torch in his hand (Hero).
+const FIRE: Dictionary = {
+	# The parts of the day a fire burns in (DAY.parts): lit as the dusk comes, out at first light.
+	"burns": ["dusk", "night"],
+	# A fire with no wood for its night tries the stock again this often, in seconds: wood brought in
+	# lights it.
+	"retry_seconds": 2.0,
+	# Its light: warm and wavering, `light_above` metres over the flame. It reaches `light_reach` times
+	# as far as the fire keeps the night off (BUILDINGS.<id>.light), so the edge of it is dim -- where
+	# eyes are seen shining -- and falls off by the engine's `light_attenuation`. It wavers by `flicker`
+	# of its energy, at about `flicker_speed` a second.
+	"light_color": Color(1.0, 0.62, 0.32),
+	"light_energy": 5.0,
+	"light_above": 0.4,
+	"light_reach": 1.25,
+	"light_attenuation": 0.7,
+	"flicker": 0.18,
+	"flicker_speed": 7.0,
+	# The flame (Fire.make_flame): how many tongues at once and how long each lives (seconds), how far
+	# round the middle they start (metres), how fast they rise, how big each is -- a campfire's; a
+	# fire's own flame_size scales all of it -- and their colour from white-yellow leaving the wood,
+	# through orange, to nothing -- brighter than white where it is hottest, so it glows (the environment's
+	# glow).
+	"flame": {"amount": 32, "lifetime": 0.8, "spread": 0.1, "spread_degrees": 10.0, "rise": 0.9,
+		"speed_min": 0.5, "speed_max": 1.0, "tongue": 0.4,
+		"colours": [Color(2.2, 1.8, 0.9, 1.0), Color(1.9, 0.8, 0.2, 0.8), Color(0.7, 0.13, 0.03, 0.0)]},
+	# THE TORCH in his hand (Hero.light_torch; GAME-DESIGN 9.3: "火把会烧完"): a wood, and it burns this
+	# many seconds -- two of them see a night through (DAY: the dusk is 30 s and the night 90) -- lighting
+	# this far round him, as far as a campfire; its flame this big, held in `bone` and kept upright,
+	# `tilt_degrees` off it. It dims over its last `fade_seconds`. Only in the dark (burns): by day
+	# there is nothing for it to do.
+	"torch": {"cost": {"wood": 1}, "seconds": 60.0, "light": 7.0, "flame_size": 0.45, "bone": "hand_l",
+		"length": 0.62, "tilt_degrees": 12.0, "fade_seconds": 6.0, "light_energy": 3.5},
 }
 
 ## The building `type_id` turns into when it is upgraded where it stands, or "".
@@ -1024,6 +1099,7 @@ const COLORS: Dictionary = {
 	"trap": Color(0.62, 0.44, 0.24),
 	"wall": Color(0.5, 0.35, 0.2),
 	"stone_wall": Color(0.55, 0.53, 0.49),
+	"fire": Color(0.45, 0.4, 0.36),
 	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
 	"big_theropod": Color(0.35, 0.29, 0.24),    # darker and heavier than the pack
 	"raptor_alpha": Color(0.40, 0.30, 0.20),
@@ -2059,7 +2135,10 @@ const DAY: Dictionary = {
 	# takes its brightness from the land it lies on): a little paler by day, as mist is, and darker
 	# than it at dusk and at night -- a mist of one colour whatever the light was white paper at noon
 	# and, at dusk and at night, brighter than the ground in sight round the Hero, which drew the eye
-	# to the unknown (the debug-agent's TASK-014).
+	# to the unknown (the debug-agent's TASK-014). The night's is not less than the dusk's: its land is
+	# so dark that the screen's tone curve (ENVIRONMENT.tonemap_mode) crushes whatever is darker still
+	# -- at 0.5 the never-seen mist came out a twentieth of the land under it, pure black, "像地图没开"
+	# (the debug-agent's BUG-016); at 0.7 it is a shade under the mist over ground seen before.
 	"light": [
 		{"at": 0.0, "sun_elevation": 10.0, "sun_azimuth": 85.0, "sun_color": Color(1.0, 0.58, 0.42), "sun_energy": 0.7,
 			"ambient_energy": 0.32, "sky_top": Color(0.20, 0.24, 0.40), "sky_horizon": Color(0.95, 0.62, 0.48),
@@ -2081,10 +2160,10 @@ const DAY: Dictionary = {
 			"fog_color": Color(0.80, 0.46, 0.34), "mist": 0.6},
 		{"at": 272.0, "sun_elevation": 40.0, "sun_azimuth": 20.0, "sun_color": Color(0.55, 0.65, 0.95), "sun_energy": 0.34,
 			"ambient_energy": 0.2, "sky_top": Color(0.04, 0.06, 0.12), "sky_horizon": Color(0.12, 0.13, 0.22),
-			"fog_color": Color(0.12, 0.14, 0.22), "mist": 0.5},
+			"fog_color": Color(0.12, 0.14, 0.22), "mist": 0.7},
 		{"at": 345.0, "sun_elevation": 30.0, "sun_azimuth": 45.0, "sun_color": Color(0.55, 0.62, 0.90), "sun_energy": 0.3,
 			"ambient_energy": 0.2, "sky_top": Color(0.06, 0.07, 0.14), "sky_horizon": Color(0.20, 0.16, 0.24),
-			"fog_color": Color(0.16, 0.15, 0.22), "mist": 0.5},
+			"fog_color": Color(0.16, 0.15, 0.22), "mist": 0.7},
 	],
 	# How often the sky's own colours are set again, in seconds: a change of them redraws the sky,
 	# and the day changes it slowly enough not to see a step.
@@ -2194,9 +2273,12 @@ const FOG: Dictionary = {
 	# How far each sees, in metres: the Hero; the cabin; a finished building by its kind -- a trap
 	# sees down its lane, a stake barely past itself.
 	"sight": {"hero": 10.0, "core": 9.0, "trap": 7.0, "wall": 2.5, "building": 3.0},
-	# Of the day's sight: at dusk and in the night (GAME-DESIGN 9.3: "看得见的范围缩小").
+	# Of the day's sight: at dusk and in the night (GAME-DESIGN 9.3: "看得见的范围缩小，火把它撑开"). In the
+	# night he sees a few metres by the moon -- 4.5, the cabin's dim windows 4 -- and a fire, or the torch
+	# in his hand, lights further (FIRE; BUILDINGS.<id>.light): it was six metres, as far as a campfire,
+	# and a fire lit nothing he did not see.
 	"dusk": 0.8,
-	"night": 0.6,
+	"night": 0.45,
 	# Seconds earlier a raid is warned of once the nest is found: its setting out is seen
 	# (GAME-DESIGN 9.3: "找到了有用：看得见它们出发（预警更早）").
 	"found_nest_warning": 10.0,
@@ -2441,6 +2523,12 @@ const VISUALS: Dictionary = {
 	# the door its own node, which swings open for the Hero (Gate.gd).
 	"building/gate":        {"scene": "res://assets/models/props/gate_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
+	# The fires (tools/generate_props.py campfire, brazier): the stones and the wood; the flame and
+	# its light are the game's (Fire.gd), lit at dusk.
+	"building/campfire":    {"scene": "res://assets/models/props/campfire_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
+	"building/brazier":     {"scene": "res://assets/models/props/brazier_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
 	# A tree fern, like the forest round it -- the choppable tree was a striped barrel
@@ -2480,6 +2568,10 @@ const VISUALS: Dictionary = {
 	# A hide off an elite, rolled and tied (tools/generate_props.py drop_hide).
 	"drop/hide":            {"scene": "res://assets/models/props/drop_hide_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	# The torch in his hand (tools/generate_props.py torch): a stick, its head wrapped in resinous bark.
+	# Built with its grip at the origin; held there (Hero.light_torch), its flame the game's.
+	"prop/torch":           {"scene": "res://assets/models/props/torch_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
 	# Inside the cabin (tools/generate_cabin.py): the three benches the Hero fitted the module
 	# out with, along its back wall. Each is one file of named parts that show as the run goes
 	# on (scripts/fx/CabinArt.gd): the tools hang on the workbench's board once made, the stone

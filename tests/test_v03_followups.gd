@@ -166,6 +166,13 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 				tree.root.add_child(placed)
 				placed.position = Vector3({"bone_stake": 38.0, "stone_wall": 42.0, "gate": 50.0}[type_id], 0.0, 0.0)
 				placed.complete_construction()
+			"campfire", "brazier":
+				placed = load("res://scripts/entities/Fire.gd").new()
+				placed.setup(type_id)
+				_cleanup_nodes.append(placed)
+				tree.root.add_child(placed)
+				placed.position = Vector3(54.0 if type_id == "campfire" else 58.0, 0.0, 0.0)
+				placed.complete_construction()
 		assert_not_null(placed, "This test knows how to place a %s" % type_id)
 		if placed == null:
 			body.free()

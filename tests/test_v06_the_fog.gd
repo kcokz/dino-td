@@ -231,7 +231,9 @@ func test_11b_it_is_lit_by_what_lights_the_land_under_it() -> void:
 	assert_gt(by_day, 1.0, "By day the mist is paler than the land under it")
 	assert_lt(at_dusk, 1.0, "at dusk darker than it")
 	assert_lt(at_night, 1.0, "and at night darker than it")
-	assert_lte(at_night, at_dusk, "the night's the darkest")
+	# Not much darker: the night's land is so dark that the screen's tone curve crushes darker to black
+	# (the debug-agent's BUG-016: at half the land's light the never-seen mist was pure black).
+	assert_gt(at_night, 0.5, "but not so much darker that the night's mist is black")
 	fog._match_the_haze()
 	assert_almost_eq(float((fog.shroud.mesh.material as ShaderMaterial).get_shader_parameter("lift")), at_night, 0.001,
 		"What it is drawn with is the hour's")

@@ -77,6 +77,12 @@ signal fog_explained()
 signal guards_warned(guard: Node)
 ## A raider whose hours are over is back at its nest and gone (Dino.go_home): not killed.
 signal dino_went_home(dino: Node)
+## A fire he built was lit, or went out (Fire.gd): at dusk and at first light.
+signal fire_changed(fire: Node, lit: bool)
+## A fire had no wood for its night in the stock (Fire.gd): said once a night for each (HUD).
+signal fire_starved(fire: Node)
+## The torch in his hand was lit, or burnt out (Hero.light_torch).
+signal torch_changed(lit: bool)
 ## An animal twitched, and this is the report on it (TwitchWatch): for whatever keeps reports.
 signal twitch_detected(record: Dictionary)
 

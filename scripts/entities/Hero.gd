@@ -193,6 +193,8 @@ func _physics_process(delta: float) -> void:
 	# the state machine: walking past a pile while on the way to a build site
 	# should still pick it up.
 	sweep_for_drops()
+	# And the torch in his hand burns down whatever he does.
+	_burn_the_torch(delta)
 
 	if not continuous_mode and _get_current_phase() != 0: # Only restricted during legacy DEPLOY phase
 		return
@@ -1256,6 +1258,127 @@ func _eating_number(key: String, fallback: float) -> float:
 		return float(cfg.EATING.get(key, fallback))
 	return fallback
 
+# ==============================================================================
+# The torch (GAME-DESIGN 9.3: "看得见的范围缩小，火把它撑开"; "人举着火把……火把会烧完")
+# ==============================================================================
+
+## Seconds the torch in his hand has left to burn; none in it at 0.
+var torch_left: float = 0.0
+var _torch_hand: BoneAttachment3D = null
+var _torch: Node3D = null
+var _torch_light: OmniLight3D = null
+var _torch_clock: float = 0.0
+
+## Whether he can light a torch now: in the dark (Config.FIRE.burns) -- by day it has nothing to do --
+## with none alight already, and its wood in the stock (FIRE.torch.cost).
+func can_light_torch() -> bool:
+	if current_state == State.DEAD or torch_left > 0.0:
+		return false
+	var gs = _get_game_state()
+	if gs == null or not gs.has_method("day_part") or not (String(gs.day_part()) in _fire().get("burns", ["dusk", "night"])):
+		return false
+	return not gs.has_method("can_afford") or bool(gs.can_afford(_torch_cfg().get("cost", {})))
+
+## Lights a torch: its wood from the stock, and it burns in his hand for FIRE.torch.seconds, lighting
+## the ground round him as far as FIRE.torch.light. Returns whether he did.
+func light_torch() -> bool:
+	if not can_light_torch():
+		return false
+	var gs = _get_game_state()
+	if gs != null and gs.has_method("spend_resources") and not bool(gs.spend_resources(_torch_cfg().get("cost", {}))):
+		return false
+	torch_left = float(_torch_cfg().get("seconds", 60.0))
+	_hold_the_torch()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("torch_changed"):
+		eb.torch_changed.emit(true)
+	return true
+
+## How far his torch lights now, in metres: FIRE.torch.light, dimming over its last fade_seconds, or
+## nothing with no torch alight.
+func torch_light() -> float:
+	if torch_left <= 0.0:
+		return 0.0
+	var fade: float = maxf(0.001, float(_torch_cfg().get("fade_seconds", 6.0)))
+	return float(_torch_cfg().get("light", 7.0)) * clampf(torch_left / fade, 0.0, 1.0)
+
+## Burns it down; out, it is gone from his hand.
+func _burn_the_torch(delta: float) -> void:
+	if torch_left <= 0.0:
+		return
+	torch_left -= delta
+	if torch_left <= 0.0:
+		torch_left = 0.0
+		_put_the_torch_out()
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("torch_changed"):
+			eb.torch_changed.emit(false)
+		return
+	_carry_the_torch(delta)
+
+## The torch in his hand (Config.VISUALS "prop/torch", FIRE.torch.bone): where his hand is, but kept
+## upright, a little tilted -- a torch is held up whatever the arm is doing -- with the fire's own
+## flame and light at its head (Fire.make_flame).
+func _hold_the_torch() -> void:
+	_put_the_torch_out()
+	var body: Node = find_child("Body", false, false)
+	var skeletons: Array = body.find_children("*", "Skeleton3D", true, false) if body != null else []
+	var bone: String = String(_torch_cfg().get("bone", "hand_l"))
+	if not skeletons.is_empty() and (skeletons[0] as Skeleton3D).find_bone(bone) >= 0:
+		_torch_hand = BoneAttachment3D.new()
+		_torch_hand.name = "TorchHand"
+		_torch_hand.bone_name = bone
+		(skeletons[0] as Skeleton3D).add_child(_torch_hand)
+	_torch = Node3D.new()
+	_torch.name = "Torch"
+	_torch.top_level = true
+	add_child(_torch)
+	_torch.add_child(VisualLibrary.make("prop/torch"))
+	var head: float = float(_torch_cfg().get("length", 0.62)) * 0.78
+	var flame: GPUParticles3D = Fire.make_flame(_fire(), float(_torch_cfg().get("flame_size", 0.45)))
+	flame.name = "Flame"
+	flame.position = Vector3(0.0, head, 0.0)
+	_torch.add_child(flame)
+	_torch_light = OmniLight3D.new()
+	_torch_light.name = "TorchLight"
+	_torch_light.position = Vector3(0.0, head + 0.2, 0.0)
+	_torch_light.light_color = _fire().get("light_color", Color(1.0, 0.6, 0.3))
+	_torch_light.omni_range = float(_torch_cfg().get("light", 7.0)) * float(_fire().get("light_reach", 1.25))
+	_torch_light.omni_attenuation = float(_fire().get("light_attenuation", 1.2))
+	_torch_light.shadow_enabled = false
+	_torch.add_child(_torch_light)
+	_carry_the_torch(0.0)
+
+func _carry_the_torch(delta: float) -> void:
+	if _torch == null or not is_instance_valid(_torch):
+		return
+	_torch_clock += delta
+	var in_hand: bool = _torch_hand != null and is_instance_valid(_torch_hand) and _torch_hand.is_inside_tree()
+	var at: Vector3 = _torch_hand.global_position if in_hand else global_position + Vector3(0.0, 0.8, 0.0)
+	var tilt: float = deg_to_rad(float(_torch_cfg().get("tilt_degrees", 12.0)))
+	_torch.global_transform = Transform3D(Basis(Vector3.UP, global_rotation.y) * Basis(Vector3.RIGHT, -tilt), at)
+	if _torch_light != null:
+		var fire: Dictionary = _fire().duplicate()
+		fire["light_energy"] = float(_torch_cfg().get("light_energy", 1.8))
+		var fade: float = torch_light() / maxf(0.001, float(_torch_cfg().get("light", 7.0)))
+		_torch_light.light_energy = Fire.flicker_energy(fire, _torch_clock) * fade
+
+func _put_the_torch_out() -> void:
+	if _torch != null and is_instance_valid(_torch):
+		_torch.queue_free()
+	if _torch_hand != null and is_instance_valid(_torch_hand):
+		_torch_hand.queue_free()
+	_torch = null
+	_torch_hand = null
+	_torch_light = null
+
+func _fire() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.FIRE if (cfg and "FIRE" in cfg) else {}
+
+func _torch_cfg() -> Dictionary:
+	return _fire().get("torch", {})
+
 ## How fast he raises and mends: 1.0, or more on a good meal (GameState.build_multiplier).
 func work_rate() -> float:
 	var gs = _get_game_state()
@@ -1351,6 +1474,8 @@ func die() -> void:
 			{"type": String(killer.get("dino_type")), "guard": killer.is_in_group("guard_dinos")}
 	current_state = State.DEAD
 	velocity = Vector3.ZERO
+	torch_left = 0.0
+	_put_the_torch_out()
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("hero_died"):
 		eb.hero_died.emit()

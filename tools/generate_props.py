@@ -1390,6 +1390,116 @@ def basalt_cliff(seed):
     return b
 
 
+# ==============================================================================
+# Fire (GAME-DESIGN 9.3, v0.7 "火与夜"): what the Hero burns wood in. The flame is the game's own
+# (Fire.gd: the engine's particles and a light, lit at dusk); these are the stones and the wood.
+# ==============================================================================
+
+ASH = (0.22, 0.21, 0.20)
+ASH_DARK = (0.08, 0.075, 0.07)
+RESIN = (0.10, 0.07, 0.04)
+
+
+def _ash_bed(b, radius, rng, z=0.012):
+    """A disc of ash and coals, darker in the middle where it burns hottest."""
+    n = 14
+    centre = Vector((0.0, 0.0, z))
+    ring = [Vector((math.cos(math.tau * k / n) * radius * rng.uniform(0.85, 1.05),
+                    math.sin(math.tau * k / n) * radius * rng.uniform(0.85, 1.05), z * 0.3)) for k in range(n)]
+    for k in range(n):
+        b.tri(ring[k], ring[(k + 1) % n], centre, ASH, ASH, ASH_DARK)
+
+
+def _charred_log(b, p0, p1, radius):
+    """A log with one end in the fire: bark at `p0`, charcoal at `p1`."""
+    sides = 6
+    rings = b.tube([p0, p0.lerp(p1, 0.5), p1], [radius, radius * 0.95, radius * 0.75],
+                   [mix(BARK, BARK_LIGHT, 0.3), mix(BARK, CHAR, 0.5), CHAR], sides)
+    for k in range(sides):
+        k2 = (k + 1) % sides
+        b.tri(rings[0][k2], rings[0][k], p0, FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, BARK_LIGHT, 0.35))
+        b.tri(rings[-1][k], rings[-1][k2], p1, CHAR, CHAR, CHAR)
+
+
+def campfire(seed):
+    """A ring of stones round a bed of ash, logs leaned together over it -- a metre across, a cell of
+    the building grid: the fire he can make with his hands and wood."""
+    rng = random.Random(seed)
+    b = Builder()
+    _ash_bed(b, 0.3, rng)
+    n = 9
+    for k in range(n):
+        a = math.tau * (k + rng.uniform(-0.15, 0.15)) / n
+        _boulder(b, Vector((math.cos(a) * 0.37, math.sin(a) * 0.37, 0.0)), rng.uniform(0.07, 0.095), rng)
+    # Leaned together, their feet in the ash and their tops meeting over the middle.
+    m = 5
+    for k in range(m):
+        a = math.tau * (k + rng.uniform(-0.1, 0.1)) / m
+        foot = Vector((math.cos(a) * 0.27, math.sin(a) * 0.27, 0.02))
+        top = Vector((math.cos(a) * 0.03, math.sin(a) * 0.03, 0.3 + rng.uniform(-0.03, 0.03)))
+        _charred_log(b, foot, top, rng.uniform(0.022, 0.03))
+    return b
+
+
+def brazier(seed):
+    """A stone bowl on a drystone plinth, logs laid crosswise in it: a fire raised to the Hero's chest,
+    which lights further than one on the ground. Stone, as the set crossbow's plinth is laid."""
+    rng = random.Random(seed)
+    b = Builder()
+    half = 0.3
+    height = 0.45
+    courses = 3
+    for c in range(courses):
+        z0 = height * c / courses
+        z1 = height * (c + 1) / courses
+        n = 2 if c % 2 == 0 else 3
+        for i in range(n):
+            x0 = -half + 2.0 * half * i / n
+            x1 = -half + 2.0 * half * (i + 1) / n
+            for (y0, y1) in ((-half, 0.0), (0.0, half)):
+                col = mix(ROCK, ROCK_DARK, rng.uniform(0.0, 0.5))
+                _dry_stone(b, Vector((x0 + 0.01, y0 + 0.01, z0)), Vector((x1 - 0.01, y1 - 0.01, z1)), rng, col)
+    # The bowl, turned in stone: out and up from the plinth to its rim, and down inside to a sooty floor.
+    up = [Vector((0.0, 0.0, height + dz)) for dz in (0.0, 0.1, 0.2, 0.24)]
+    b.tube(up, [0.2, 0.3, 0.36, 0.37], [ROCK_DARK, ROCK, ROCK, ROCK_LIGHT], 12)
+    rim = [Vector((0.0, 0.0, height + 0.24)), Vector((0.0, 0.0, height + 0.245))]
+    b.tube(rim, [0.37, 0.31], [ROCK_LIGHT, mix(ROCK, CHAR, 0.4)], 12)
+    down = [Vector((0.0, 0.0, height + dz)) for dz in (0.245, 0.17, 0.12)]
+    b.tube(down, [0.31, 0.26, 0.14], [mix(ROCK, CHAR, 0.4), CHAR, CHAR], 12)
+    floor = height + 0.12
+    for k in range(12):
+        a0 = math.tau * k / 12
+        a1 = math.tau * (k + 1) / 12
+        b.tri(Vector((math.cos(a0) * 0.14, math.sin(a0) * 0.14, floor)), Vector((math.cos(a1) * 0.14, math.sin(a1) * 0.14, floor)),
+              Vector((0.0, 0.0, floor)), ASH_DARK, ASH_DARK, ASH)
+    # Logs laid crosswise, two and two, burnt where they cross.
+    for layer, turn in ((0, 0.0), (1, math.pi * 0.5)):
+        z = floor + 0.04 + layer * 0.05
+        for off in (-0.07, 0.07):
+            d = Vector((math.cos(turn), math.sin(turn), 0.0))
+            n = Vector((-d.y, d.x, 0.0))
+            p0 = d * -0.22 + n * off + Vector((0.0, 0.0, z))
+            p1 = d * 0.22 + n * (off + rng.uniform(-0.02, 0.02)) + Vector((0.0, 0.0, z + 0.01))
+            _charred_log(b, p0, p0.lerp(p1, 0.5), 0.028)
+            _charred_log(b, p1, p0.lerp(p1, 0.5), 0.028)
+    return b
+
+
+def torch(seed):
+    """A torch: a straight stick, its head wrapped in resin-soaked bark lashed with vine. Held at the
+    origin, the head up -- the flame is the game's, at the top of the head."""
+    rng = random.Random(seed)
+    b = Builder()
+    shaft = [Vector((0.0, 0.0, z)) for z in (-0.2, 0.0, 0.2, 0.34)]
+    b.tube(shaft, [0.014, 0.016, 0.017, 0.018], [BARK, mix(BARK, BARK_LIGHT, 0.5), BARK_LIGHT, BARK_LIGHT], 6)
+    head = [Vector((0.0, 0.0, z)) for z in (0.32, 0.36, 0.42, 0.47, 0.49)]
+    b.tube(head, [0.02, 0.036, 0.04, 0.033, 0.012], [RESIN, RESIN, mix(RESIN, CHAR, 0.5), CHAR, CHAR], 7,
+           radial=lambda i, k: rng.uniform(0.9, 1.1))
+    for z in (0.35, 0.43):
+        _wrap(b, Vector((0.0, 0.0, z)), Vector((0.0, 0.0, 1.0)), 0.036, turns=2)
+    return b
+
+
 PROPS = {
     "stone_wall": (lambda s: stone_wall(s), [23]),
     "outcrop": (lambda s: outcrop(s), [5, 21]),
@@ -1407,6 +1517,9 @@ PROPS = {
     "drop_water": (lambda s: drop_water(s), [13]),
     "drop_hide": (lambda s: drop_hide(s), [19]),
     "water_landing": (lambda s: water_landing(s), [17]),
+    "campfire": (lambda s: campfire(s), [31]),
+    "brazier": (lambda s: brazier(s), [37]),
+    "torch": (lambda s: torch(s), [43]),
 }
 
 # Props made of named parts the game shows, hides or moves (Wall.dress, Gate): each part an

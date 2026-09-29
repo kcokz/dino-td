@@ -231,7 +231,8 @@ func _bus_handlers(eb: Node) -> Array:
 	for pair in [["resources_changed", _on_resources_changed], ["wave_started", _on_wave_started],
 			["stage_wave_started", _on_stage_wave_started], ["day_part_changed", _on_day_part_changed],
 			["nest_found", _on_nest_found], ["fog_explained", _on_fog_explained],
-			["guards_warned", _on_guards_warned],
+			["guards_warned", _on_guards_warned], ["fire_starved", _on_fire_starved],
+			["torch_changed", _on_torch_changed],
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
@@ -579,12 +580,59 @@ func _refresh_day_dial() -> void:
 	day_dial.tooltip_text = tr("HUD_DAY_TIP") % [int(gs.day_number()), tr("DAY_PART_" + part.to_upper()),
 		"%d:%02d" % [left / 60, left % 60]]
 
-## A part of the day begun: said, with what the raiders do in it (GAME-DESIGN 9.3).
-func _on_day_part_changed(part: String, _day: int) -> void:
+## A part of the day begun: said, with what the raiders do in it (GAME-DESIGN 9.3). The run's first
+## dusk says too what the dark is and what fire is for (9.2's timeline: "第一个黄昏：生火"), with the
+## torch's key.
+func _on_day_part_changed(part: String, day: int) -> void:
 	var key: String = {"day": "HINT_DAWN", "dusk": "HINT_DUSK", "night": "HINT_NIGHT"}.get(part, "")
-	if key != "":
+	if part == "dusk" and not _first_dusk_said:
+		_first_dusk_said = true
+		show_hint(tr("HINT_DUSK_FIRST") % _torch_key_text(), UiTheme.toast_seconds("read"), "sun")
+	elif key != "":
 		show_hint(tr(key), -1.0, "moon" if part == "night" else "sun")
 	_refresh_day_dial()
+
+## Whether the first dusk's word on fire has been said this run.
+var _first_dusk_said: bool = false
+## The night a fire's having no wood was last said (GameState.day_number): once a night.
+var _starved_said_night: int = -1
+
+## A fire with no wood for its night (Fire.gd): said once a night, whichever fire it is.
+func _on_fire_starved(fire: Node) -> void:
+	var gs = _get_game_state()
+	var night: int = int(gs.day_number()) if (gs and gs.has_method("day_number")) else 0
+	if night == _starved_said_night:
+		return
+	_starved_said_night = night
+	var fire_name: String = String(fire.get_localized_name()) if (fire and fire.has_method("get_localized_name")) else ""
+	show_hint(tr("HINT_FIRE_STARVED") % fire_name, UiTheme.toast_seconds("read"), "warning")
+
+## The torch burnt out: said while it is still dark, when another is what he may want.
+func _on_torch_changed(lit: bool) -> void:
+	if hero_commands:
+		hero_commands.refresh()
+	if lit:
+		return
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	var burns: Array = cfg.FIRE.get("burns", ["dusk", "night"]) if (cfg and "FIRE" in cfg) else ["dusk", "night"]
+	if gs and gs.has_method("day_part") and String(gs.day_part()) in burns:
+		var cost: int = int(cfg.FIRE.get("torch", {}).get("cost", {}).get("wood", 1)) if (cfg and "FIRE" in cfg) else 1
+		show_hint(tr("HINT_TORCH_OUT") % [cost, _torch_key_text()], -1.0, "info")
+
+## The torch tile pressed: he lights one, if he can.
+func _light_his_torch() -> void:
+	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
+	if hero != null and hero.has_method("light_torch"):
+		hero.light_torch()
+	if hero_commands:
+		hero_commands.refresh()
+
+## The key that lights the torch, as the keyboard writes it (Config.CONTROLS.command_keys, its tile's).
+func _torch_key_text() -> String:
+	var cfg = _get_config()
+	var keys: Array = cfg.CONTROLS.get("command_keys", []) if (cfg and "CONTROLS" in cfg) else []
+	return OS.get_keycode_string(int(keys[2])) if keys.size() > 2 else "3"
 
 ## A raid a repaired beacon stage stirred up: said as that, not as the raid count again.
 func _on_stage_wave_started(_size: int) -> void:
@@ -917,6 +965,8 @@ func _on_restart_pressed() -> void:
 func reset_hud() -> void:
 	selected_build_type = ""
 	_guards_warning_said = false
+	_first_dusk_said = false
+	_starved_said_night = -1
 	if game_over_panel:
 		game_over_panel.visible = false
 	if raid_warning_banner:
@@ -1471,6 +1521,7 @@ func _ensure_ui_components() -> void:
 	root_control.add_child(hero_commands)
 	hero_commands.build_pressed.connect(func(): _open_hero_menu("build"))
 	hero_commands.eat_pressed.connect(func(): _open_hero_menu("eat"))
+	hero_commands.torch_pressed.connect(_light_his_torch)
 	if option_panel:
 		option_panel.card_changed.connect(_on_card_changed)
 		option_panel.stand_on(hero_commands)

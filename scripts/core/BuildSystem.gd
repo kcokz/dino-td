@@ -10,6 +10,7 @@ const SCRIPT_PATHS: Dictionary = {
 	"wall": "res://scripts/entities/Wall.gd",
 	"gate": "res://scripts/entities/Gate.gd",
 	"trap": "res://scripts/entities/Trap.gd",
+	"fire": "res://scripts/entities/Fire.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 

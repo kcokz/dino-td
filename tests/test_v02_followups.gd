@@ -974,10 +974,11 @@ func test_49_hero_level_1_menu_is_build_and_eat() -> void:
 	assert_eq(panel.current_menu, "default", "Starts at default level-1 menu")
 	# Stop was removed as redundant long ago. Since v0.6 round two eating is a command of his
 	# own ("吃饭也是一个图标"): [ Build ] [ Eat ], and nothing else -- since round four, tiles of their
-	# own in the corner that never move ("最好建造和吃的两个图标不要变动位置"), and none on his card.
+	# own in the corner that never move ("最好建造和吃的两个图标不要变动位置"), and none on his card. (In
+	# the dark a third, Torch, to the left of them: test_v06_fire. This is the day.)
 	var tiles: Array = []
 	for child in commands.get_children():
-		if child is Button:
+		if child is Button and (child as Button).visible:
 			tiles.append(child)
 	assert_eq(tiles.size(), 2, "Level 1 menu has exactly 2 commands")
 	if tiles.size() == 2:

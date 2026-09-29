@@ -7,6 +7,10 @@ extends HBoxContainer
 ## -- his menus -- and every other card stand above them (OptionPanel.stand_on), as a menu comes up off
 ## its button in the games that keep the screen clear.
 ##
+## And in the dark a third, Torch, to the left of them, so they do not move (GAME-DESIGN 9.3: "人举着
+## 火把"): shown from dusk to first light and while a torch burns, its badge the seconds it has left,
+## not to be pressed while one burns or there is no wood for it (Hero.can_light_torch).
+##
 ## The number keys press them while the card above has no commands on the keys of its own
 ## (set_keys_live); while it has, the keys are its, and the tiles' keycaps go, so no key is shown
 ## twice. A tile whose menu is open stays pressed in (mark_open). Styled by UiTheme like the rest:
@@ -14,9 +18,11 @@ extends HBoxContainer
 
 signal build_pressed()
 signal eat_pressed()
+signal torch_pressed()
 
 var build_button: Button = null
 var eat_button: Button = null
+var torch_button: Button = null
 var _keys_live: bool = false
 var _clock: float = 0.0
 
@@ -32,6 +38,10 @@ func _ready() -> void:
 	add_child(eat_button)
 	for btn in [build_button, eat_button]:
 		btn.toggle_mode = true
+	torch_button = UiKit.command_button(tr("CMD_TORCH"), UiTheme.icon("torch"), func(): torch_pressed.emit(), _torch_tip(), 0)
+	torch_button.name = "TorchCommand"
+	add_child(torch_button)
+	move_child(torch_button, 0)
 	_pin()
 	set_keys_live(true)
 	refresh()
@@ -66,8 +76,8 @@ func set_keys_live(live: bool) -> void:
 	_keys_live = live
 	var cfg = get_node_or_null("/root/Config")
 	var keys: Array = cfg.CONTROLS.get("command_keys", []) if (cfg and "CONTROLS" in cfg) else []
-	for i in 2:
-		var btn: Button = build_button if i == 0 else eat_button
+	for i in 3:
+		var btn: Button = [build_button, eat_button, torch_button][i]
 		if btn == null:
 			continue
 		if live and i < keys.size():
@@ -102,9 +112,36 @@ func refresh() -> void:
 	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
 	var eating: bool = hero != null and is_instance_valid(hero) and hero.has_method("is_eating") and bool(hero.is_eating())
 	eat_button.disabled = meals <= 0 or eating
+	_refresh_torch(hero)
+
+## The torch's tile: there in the dark and while one burns, its seconds left on its badge.
+func _refresh_torch(hero: Node) -> void:
+	if torch_button == null:
+		return
+	var has_hero: bool = hero != null and is_instance_valid(hero) and hero.has_method("can_light_torch")
+	var left: float = float(hero.torch_left) if (has_hero and "torch_left" in hero) else 0.0
+	var gs = get_node_or_null("/root/GameState")
+	var cfg = get_node_or_null("/root/Config")
+	var burns: Array = cfg.FIRE.get("burns", ["dusk", "night"]) if (cfg and "FIRE" in cfg) else ["dusk", "night"]
+	var dark: bool = gs != null and gs.has_method("day_part") and String(gs.day_part()) in burns
+	torch_button.visible = has_hero and (dark or left > 0.0)
+	torch_button.disabled = not has_hero or not bool(hero.can_light_torch())
+	var badge: Label = torch_button.get_node_or_null("Badge") as Label
+	if badge:
+		badge.visible = left > 0.0
+		badge.text = str(int(ceil(left)))
 
 func _retext() -> void:
 	build_button.text = tr("CMD_BUILD")
 	build_button.tooltip_text = tr("TIP_CMD_BUILD")
 	eat_button.text = tr("CMD_EAT")
 	eat_button.tooltip_text = tr("TIP_CMD_EAT")
+	torch_button.text = tr("CMD_TORCH")
+	torch_button.tooltip_text = _torch_tip()
+
+## What a torch costs and does, from its numbers (Config.FIRE.torch).
+func _torch_tip() -> String:
+	var cfg = get_node_or_null("/root/Config") if is_inside_tree() else Engine.get_main_loop().root.get_node_or_null("Config")
+	var torch: Dictionary = cfg.FIRE.get("torch", {}) if (cfg and "FIRE" in cfg) else {}
+	return tr("TIP_CMD_TORCH") % [int(torch.get("cost", {}).get("wood", 1)), int(torch.get("seconds", 60.0)),
+		int(torch.get("light", 7.0))]

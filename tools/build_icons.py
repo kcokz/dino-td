@@ -44,6 +44,7 @@ C = {
     "iron": "#5a6166", "iron_dark": "#3b4145", "fire": "#f28c28", "flame": "#f7cb4c",
     "metal": "#98a3aa", "cyan": "#58c7e8", "moss": "#6b9a45",
     "hide": "#a8743f", "hide_dark": "#7a4f28", "hide_hi": "#cf9f64",
+    "resin": "#3a2616",
 }
 
 
@@ -339,6 +340,50 @@ ICONS["gate"] = item_svg(
      shape("polygon", C["post_dark"], points="49,58 49,16 52,9 52,58"),
      shape("rect", C["rope"], x=3, y=26, width=16, height=4.5, rx=2),
      shape("rect", C["rope"], x=3, y=47, width=16, height=4.5, rx=2)])
+
+
+# The fires (Fire.gd, tools/generate_props.py campfire, brazier, torch): each with its flame up, as it
+# is at night -- what it is for.
+def _flame(cx, base, h, w):
+    """A flame standing `h` tall on `base`, `w` wide: an outer tongue and a pale heart."""
+    outer = shape("path", C["fire"], d="M %g %g C %g %g %g %g %g %g C %g %g %g %g %g %g Z" % (
+        cx - w, base, cx - w * 1.2, base - h * 0.45, cx - w * 0.2, base - h * 0.6, cx, base - h,
+        cx + w * 0.3, base - h * 0.55, cx + w * 1.25, base - h * 0.45, cx + w, base))
+    heart = shape("path", C["flame"], d="M %g %g C %g %g %g %g %g %g C %g %g %g %g %g %g Z" % (
+        cx - w * 0.5, base, cx - w * 0.65, base - h * 0.3, cx - w * 0.1, base - h * 0.4, cx + w * 0.05, base - h * 0.62,
+        cx + w * 0.2, base - h * 0.35, cx + w * 0.7, base - h * 0.3, cx + w * 0.5, base))
+    return outer, heart
+
+
+# The campfire: a ring of stones, logs leaned together, the fire in them.
+_CAMP_FLAME = _flame(32, 50, 34, 11)
+ICONS["campfire"] = item_svg(
+    [shape("path", None, C["post"], 6.0, d="M 14 56 L 30 26"), shape("path", None, C["post"], 6.0, d="M 50 56 L 34 26"),
+     _CAMP_FLAME[0]]
+    + [shape("ellipse", C[c], cx=x, cy=y, rx=6.5, ry=4.5) for (x, y, c) in
+       [(8, 56, "s2"), (20, 59, "s3"), (32, 60, "s1"), (44, 59, "s3"), (56, 56, "s2")]],
+    [_CAMP_FLAME[1], shape("path", None, C["char"], 3.0, d="M 25 36 L 30 26 M 39 36 L 34 26")]
+    + [shape("ellipse", C[c], cx=x, cy=y, rx=6.5, ry=4.5) for (x, y, c) in
+       [(8, 56, "s2"), (20, 59, "s3"), (32, 60, "s1"), (44, 59, "s3"), (56, 56, "s2")]])
+
+# The brazier: a stone bowl on a plinth of stone, the fire standing up out of it.
+_BRAZIER_FLAME = _flame(32, 30, 28, 12)
+ICONS["brazier"] = item_svg(
+    [_BRAZIER_FLAME[0],
+     shape("path", C["s2"], d="M 10 28 L 54 28 C 53 36 45 41 32 41 C 19 41 11 36 10 28 Z"),
+     shape("rect", C["s3"], x=20, y=41, width=24, height=9, rx=2),
+     shape("rect", C["s2"], x=17, y=50, width=30, height=9, rx=2)],
+    [_BRAZIER_FLAME[1], shape("rect", C["char"], x=12, y=26.5, width=40, height=3.5, rx=1.5),
+     shape("path", None, C["s1"], 2.0, d="M 14 32 C 20 37 44 37 50 32"),
+     shape("path", None, C["s4"], 1.6, d="M 32 41 L 32 50 M 26 50 L 26 59 M 38 50 L 38 59")])
+
+# The torch in his hand: a stick held up, its wrapped head alight.
+_TORCH_FLAME = _flame(40, 22, 20, 8)
+ICONS["torch"] = item_svg(
+    [shape("path", None, C["post"], 6.0, d="M 20 60 L 38 24"),
+     shape("rect", C["resin"], transform="rotate(27 39 23)", x=34, y=16, width=10, height=13, rx=3),
+     _TORCH_FLAME[0]],
+    [shape("path", None, C["rope"], 2.2, d="M 34.5 21 L 43.5 25.5 M 33.5 25.5 L 41.5 29.5"), _TORCH_FLAME[1]])
 
 
 # The traps (Trap.gd): each drawn on its tripwire, which runs off down to a peg at the right --
