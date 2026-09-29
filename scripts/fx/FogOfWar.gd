@@ -81,7 +81,7 @@ func setup(field_half: float) -> void:
 	_material.set_shader_parameter("half_size", half)
 	var mist: Dictionary = cfg.get("mist", {})
 	_material.set_shader_parameter("seen_level", float(cfg.get("seen", 0.55)))
-	for key in ["veil", "never", "wisps", "wisp_scale", "wisp_drift"]:
+	for key in ["veil", "never", "wisps", "wisp_scale", "wisp_drift", "blur", "round_about", "brightest", "ground"]:
 		if mist.has(key):
 			_material.set_shader_parameter(key, mist[key])
 	_material.set_shader_parameter("drift", _wisps())
@@ -106,9 +106,10 @@ static func _wisps() -> NoiseTexture2D:
 	return tex
 
 ## The mist in the valley's haze at this hour: the environment's fog colour, which the day turns
-## (SceneEnvironment) -- pale by day, warm at dusk, dark blue at night -- greyed towards its own
-## lightness (Config.FOG.mist.saturation: the dusk haze as it is made a red desert of the valley) and
-## toned (mist.tone).
+## (SceneEnvironment) -- pale by day, warm at dusk, dark blue at night -- as a hue alone, greyed
+## towards white (Config.FOG.mist.saturation: the dusk haze as it is made a red desert of the valley).
+## How bright it is is the land's under it (the shader), lifted by the hour (Config.DAY.light "mist":
+## paler than the land by day, darker than it at dusk and at night -- mist_lift).
 func _match_the_haze() -> void:
 	if _material == null or not is_inside_tree() or get_world_3d() == null:
 		return
@@ -119,12 +120,27 @@ func _match_the_haze() -> void:
 			break
 	if env == null:
 		return
-	var mist: Dictionary = _cfg().get("mist", {})
-	var tone: float = float(mist.get("tone", 0.85))
-	var haze: Color = env.fog_light_color
-	var grey: float = haze.get_luminance()
-	var tint: Color = Color(grey, grey, grey).lerp(haze, float(mist.get("saturation", 0.5)))
-	_material.set_shader_parameter("mist_color", Color(tint.r * tone, tint.g * tone, tint.b * tone))
+	_material.set_shader_parameter("mist_hue", mist_hue(env.fog_light_color, float(_cfg().get("mist", {}).get("saturation", 0.5))))
+	_material.set_shader_parameter("lift", mist_lift())
+
+## The haze's colour `haze` (as the environment holds it) as the mist's hue: in linear light, `saturation`
+## of its own colour kept and the rest white, and as bright as white -- the land under the mist says
+## how bright it is.
+static func mist_hue(haze: Color, saturation: float) -> Vector3:
+	var lin: Color = haze.srgb_to_linear()
+	var y: float = maxf(0.0001, 0.2126 * lin.r + 0.7152 * lin.g + 0.0722 * lin.b)
+	var hue: Vector3 = Vector3(lin.r, lin.g, lin.b) / y
+	return Vector3.ONE.lerp(hue, clampf(saturation, 0.0, 1.0))
+
+## How much brighter than the land under it the mist is now (Config.DAY.light "mist", at the hour).
+func mist_lift() -> float:
+	var cfg = get_node_or_null("/root/Config") if is_inside_tree() else null
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
+	if cfg == null or not ("DAY" in cfg) or gs == null or not gs.has_method("time_of_day"):
+		return 1.0
+	var now: Dictionary = SceneEnvironment.light_at(cfg.DAY.get("light", []), float(cfg.DAY.get("length", 360.0)),
+		float(gs.time_of_day()))
+	return float(now.get("mist", 1.0))
 
 ## What the mist is, said once a moment into the run (Config.FOG.hint_after): mist that is the
 ## unknown, not the weather (v0.6 round four: "只要玩家能感觉出来这个雾是迷雾不是天气就行").

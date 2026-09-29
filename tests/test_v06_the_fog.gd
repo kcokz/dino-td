@@ -202,11 +202,39 @@ func test_11_it_is_the_valleys_own_mist_at_the_hour() -> void:
 	for haze in [Color(0.76, 0.80, 0.74), Color(0.12, 0.14, 0.22)]:
 		env.fog_light_color = haze
 		fog._match_the_haze()
-		var grey: float = haze.get_luminance()
-		var want: Color = Color(grey, grey, grey).lerp(haze, float(mist["saturation"])) * float(mist["tone"])
-		var got: Color = fog._material.get_shader_parameter("mist_color")
-		assert_almost_eq(got.b, want.b, 0.001, "The mist takes the haze's colour at the hour (%s)" % haze)
-		assert_almost_eq(got.r, want.r, 0.001, "(red too)")
+		var want: Vector3 = FogOfWar.mist_hue(haze, float(mist["saturation"]))
+		var got: Vector3 = fog._material.get_shader_parameter("mist_hue")
+		assert_almost_eq(got.z, want.z, 0.001, "The mist takes the haze's colour at the hour (%s)" % haze)
+		assert_almost_eq(got.x, want.x, 0.001, "(red too)")
+		# As a hue alone, as bright as white: how bright it is is the land's under it.
+		assert_almost_eq(0.2126 * got.x + 0.7152 * got.y + 0.0722 * got.z, 1.0, 0.001, "as bright as white (%s)" % haze)
+	var night: Vector3 = FogOfWar.mist_hue(Color(0.12, 0.14, 0.22), float(mist["saturation"]))
+	assert_gt(night.z, night.x, "The night's mist is blue")
+
+func test_11b_it_is_lit_by_what_lights_the_land_under_it() -> void:
+	# The debug-agent's TASK-014: a mist of one colour whatever the light was white paper at noon, and at
+	# dusk and at night brighter than the ground in sight round the Hero. Now its brightness is the
+	# land's under it (the shader reads the scene), lifted by the hour: paler than the land by day,
+	# darker at dusk and at night.
+	var main = await _level()
+	var fog: FogOfWar = main.fog
+	var code: String = String((fog.shroud.mesh.material as ShaderMaterial).shader.code)
+	assert_true(code.contains("hint_screen_texture"), "The mist reads the land under it, as lit")
+	var day: Dictionary = config_node.DAY
+	var noon: float = (float(day["light"][2]["at"]) + float(day["light"][3]["at"])) * 0.5
+	game_state_node.day_clock = noon
+	var by_day: float = fog.mist_lift()
+	game_state_node.day_clock = float(day["parts"]["dusk"]) + 5.0
+	var at_dusk: float = fog.mist_lift()
+	game_state_node.day_clock = float(day["parts"]["night"]) + 30.0
+	var at_night: float = fog.mist_lift()
+	assert_gt(by_day, 1.0, "By day the mist is paler than the land under it")
+	assert_lt(at_dusk, 1.0, "at dusk darker than it")
+	assert_lt(at_night, 1.0, "and at night darker than it")
+	assert_lte(at_night, at_dusk, "the night's the darkest")
+	fog._match_the_haze()
+	assert_almost_eq(float((fog.shroud.mesh.material as ShaderMaterial).get_shader_parameter("lift")), at_night, 0.001,
+		"What it is drawn with is the hour's")
 
 func test_12_nothing_standing_on_never_seen_ground_is_drawn() -> void:
 	# Through the mist a tree or a rock showed as its own lighter shape: what stands on ground never

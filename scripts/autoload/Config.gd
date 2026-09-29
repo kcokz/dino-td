@@ -2054,31 +2054,37 @@ const DAY: Dictionary = {
 	# shadows; the sky's own colours; the haze's light. The middle of the day is Config.ENVIRONMENT's
 	# own light, the look the valley was made in; the night is dark enough to be night and light
 	# enough to play in -- a fire is what makes it bright (GAME-DESIGN 9.3).
+	#
+	# "mist": how much brighter than the land under it the fog of war is drawn (FogOfWar; the mist
+	# takes its brightness from the land it lies on): a little paler by day, as mist is, and darker
+	# than it at dusk and at night -- a mist of one colour whatever the light was white paper at noon
+	# and, at dusk and at night, brighter than the ground in sight round the Hero, which drew the eye
+	# to the unknown (the debug-agent's TASK-014).
 	"light": [
 		{"at": 0.0, "sun_elevation": 10.0, "sun_azimuth": 85.0, "sun_color": Color(1.0, 0.58, 0.42), "sun_energy": 0.7,
 			"ambient_energy": 0.32, "sky_top": Color(0.20, 0.24, 0.40), "sky_horizon": Color(0.95, 0.62, 0.48),
-			"fog_color": Color(0.80, 0.58, 0.50)},
+			"fog_color": Color(0.80, 0.58, 0.50), "mist": 1.15},
 		{"at": 45.0, "sun_elevation": 18.0, "sun_azimuth": 70.0, "sun_color": Color(1.0, 0.84, 0.64), "sun_energy": 1.05,
 			"ambient_energy": 0.42, "sky_top": Color(0.26, 0.40, 0.58), "sky_horizon": Color(0.90, 0.78, 0.62),
-			"fog_color": Color(0.80, 0.74, 0.66)},
+			"fog_color": Color(0.80, 0.74, 0.66), "mist": 1.3},
 		{"at": 110.0, "sun_elevation": 34.0, "sun_azimuth": 40.0, "sun_color": Color(1.0, 0.93, 0.80), "sun_energy": 1.4,
 			"ambient_energy": 0.5, "sky_top": Color(0.28, 0.46, 0.62), "sky_horizon": Color(0.84, 0.82, 0.70),
-			"fog_color": Color(0.76, 0.80, 0.74)},
+			"fog_color": Color(0.76, 0.80, 0.74), "mist": 1.3},
 		{"at": 170.0, "sun_elevation": 34.0, "sun_azimuth": 40.0, "sun_color": Color(1.0, 0.93, 0.80), "sun_energy": 1.4,
 			"ambient_energy": 0.5, "sky_top": Color(0.28, 0.46, 0.62), "sky_horizon": Color(0.84, 0.82, 0.70),
-			"fog_color": Color(0.76, 0.80, 0.74)},
+			"fog_color": Color(0.76, 0.80, 0.74), "mist": 1.3},
 		{"at": 220.0, "sun_elevation": 16.0, "sun_azimuth": 10.0, "sun_color": Color(1.0, 0.78, 0.55), "sun_energy": 1.1,
 			"ambient_energy": 0.42, "sky_top": Color(0.28, 0.40, 0.56), "sky_horizon": Color(0.92, 0.74, 0.56),
-			"fog_color": Color(0.82, 0.72, 0.60)},
+			"fog_color": Color(0.82, 0.72, 0.60), "mist": 1.0},
 		{"at": 245.0, "sun_elevation": 10.0, "sun_azimuth": -5.0, "sun_color": Color(1.0, 0.45, 0.22), "sun_energy": 0.95,
 			"ambient_energy": 0.34, "sky_top": Color(0.30, 0.26, 0.42), "sky_horizon": Color(0.96, 0.46, 0.26),
-			"fog_color": Color(0.80, 0.46, 0.34)},
+			"fog_color": Color(0.80, 0.46, 0.34), "mist": 0.6},
 		{"at": 272.0, "sun_elevation": 40.0, "sun_azimuth": 20.0, "sun_color": Color(0.55, 0.65, 0.95), "sun_energy": 0.34,
 			"ambient_energy": 0.2, "sky_top": Color(0.04, 0.06, 0.12), "sky_horizon": Color(0.12, 0.13, 0.22),
-			"fog_color": Color(0.12, 0.14, 0.22)},
+			"fog_color": Color(0.12, 0.14, 0.22), "mist": 0.5},
 		{"at": 345.0, "sun_elevation": 30.0, "sun_azimuth": 45.0, "sun_color": Color(0.55, 0.62, 0.90), "sun_energy": 0.3,
 			"ambient_energy": 0.2, "sky_top": Color(0.06, 0.07, 0.14), "sky_horizon": Color(0.20, 0.16, 0.24),
-			"fog_color": Color(0.16, 0.15, 0.22)},
+			"fog_color": Color(0.16, 0.15, 0.22), "mist": 0.5},
 	],
 	# How often the sky's own colours are set again, in seconds: a change of them redraws the sky,
 	# and the day changes it slowly enough not to see a step.
@@ -2172,14 +2178,16 @@ const FOG: Dictionary = {
 	"unseen": 1.0,
 	"seen": 0.55,
 	# How it is drawn: the valley's own mist, not black (v0.6 round four: "考虑到这是一个追求真实场景的
-	# 游戏，全黑是不是有点不真实"). Its colour is the environment's haze at the hour, times `tone` --
-	# pale by day, warm at dusk, dark blue at night -- `saturation` of the haze's own colour kept
-	# (the dusk haze as it is, 0.80 0.46 0.34, made a red desert of the valley). `veil`: how thick over seen ground, the land
-	# plain through it; `never`: over never-seen ground, the lie of the land a shade through it and
-	# nothing on it drawn (FogOfWar._hide_the_unseen). `wisps`: how much its drifting shapes thicken
-	# and thin it; `wisp_scale`, per metre, how big they are; `wisp_drift`, how fast they go.
-	"mist": {"tone": 0.85, "saturation": 0.5, "veil": 0.4, "never": 0.9, "wisps": 0.14, "wisp_scale": 0.05,
-		"wisp_drift": Vector2(0.010, 0.004)},
+	# 游戏，全黑是不是有点不真实"). Its colour is the environment's haze at the hour -- pale by day,
+	# warm at dusk, dark blue at night -- `saturation` of the haze's own colour kept (the dusk haze as
+	# it is, 0.80 0.46 0.34, made a red desert of the valley); its brightness is the land's under it,
+	# read `blur` levels down the scene's mipmaps -- its lie, not its grass -- times the hour's lift
+	# (DAY.light "mist"). `veil`: how thick over seen ground, the land plain through it; `never`: over
+	# never-seen ground, the lie of the land a shade through it and nothing on it drawn
+	# (FogOfWar._hide_the_unseen). `wisps`: how much its drifting shapes thicken and thin it;
+	# `wisp_scale`, per metre, how big they are; `wisp_drift`, how fast they go.
+	"mist": {"saturation": 0.5, "veil": 0.4, "never": 0.9, "wisps": 0.14, "wisp_scale": 0.05,
+		"wisp_drift": Vector2(0.010, 0.004), "blur": 5.0, "round_about": 3.0, "brightest": 1.0, "ground": 0.3},
 	# Seconds into a run the mist is explained, once: ground not seen yet -- not the weather ("只要
 	# 玩家能感觉出来这个雾是迷雾不是天气就行").
 	"hint_after": 4.0,

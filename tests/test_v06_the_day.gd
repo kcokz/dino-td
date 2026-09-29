@@ -95,6 +95,22 @@ func test_03_the_light_follows_the_day() -> void:
 	env.apply_time_of_day(_at("dusk") + 5.0)
 	assert_gt(sun.light_color.r - sun.light_color.b, 0.4, "Dusk is red")
 
+func test_03b_the_light_at_a_moment_is_its_keyframes_blended() -> void:
+	# SceneEnvironment.light_at: what the light is at a moment, for anything that follows it (the mist).
+	var keys: Array = _day()["light"]
+	var length: float = float(_day()["length"])
+	var k: Dictionary = keys[2]
+	var at_k: Dictionary = SceneEnvironment.light_at(keys, length, float(k["at"]))
+	assert_almost_eq(float(at_k["sun_energy"]), float(k["sun_energy"]), 0.0001, "At a keyframe it is that keyframe")
+	assert_eq(at_k["fog_color"], k["fog_color"], "(its colours too)")
+	var last: Dictionary = keys[keys.size() - 1]
+	var first: Dictionary = keys[0]
+	var mid: float = (float(last["at"]) + float(first["at"]) + length) * 0.5
+	var across: Dictionary = SceneEnvironment.light_at(keys, length, mid)
+	assert_almost_eq(float(across["mist"]), (float(last["mist"]) + float(first["mist"])) * 0.5, 0.0001,
+		"Between the last keyframe and the next first light it is half of each")
+	assert_true(SceneEnvironment.light_at([], length, 10.0).is_empty(), "No keyframes, no light")
+
 func test_04_no_raid_sets_out_out_of_the_raiders_hours() -> void:
 	var main = await _level()
 	var wm = main.wave_manager

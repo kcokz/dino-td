@@ -12,10 +12,20 @@
 // colour of the valley's haze at the hour -- pale by day, red at dusk, dark blue at night. What
 // keeps it the fog of war rather than weather is its shape: it clears round everything that sees
 // and nowhere else ("只要玩家能感觉出来这个雾是迷雾不是天气就行"). Weather never does (GAME-DESIGN 9.3).
+//
+// LIT BY WHAT LIGHTS THE LAND UNDER IT. Its brightness is the land's own there -- the scene under
+// it, blurred to its lie -- times the hour's `lift`: a mist of one colour whatever the light was a
+// sheet of white paper at noon, brighter than the base, and at dusk and at night brighter than the
+// ground in sight round the Hero, which drew the eye to the unknown (the debug-agent's TASK-014).
+// Lit by the land, it is as dark as the night is, the hills' shade shows through it, and where a
+// fire lights the ground the mist round its light glows with it.
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_disabled, fog_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
+// The scene under the mist, as lit -- in linear light, before it is toned for the screen; its
+// mipmaps are how blurred the land is read (`blur`).
+uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 // How unknown each cell of the field is (red channel), one texel a cell: 0 in sight, `seen_level`
 // seen and out of sight, 1 never seen.
 uniform sampler2D shroud : repeat_disable, filter_linear;
@@ -24,16 +34,28 @@ uniform sampler2D drift : repeat_enable, filter_linear_mipmap;
 // The world's x and z at the shroud's middle, and metres from there to its edge.
 uniform vec2 origin = vec2(0.0);
 uniform float half_size = 32.0;
-// The valley's haze at this hour (the environment's fog colour, toned): the mist's colour.
-uniform vec3 mist_color : source_color = vec3(0.7, 0.74, 0.68);
+// The valley's haze at this hour as a hue: linear, and as bright as white (FogOfWar._match_the_haze).
+uniform vec3 mist_hue = vec3(1.0);
+// How much brighter than the land under it the mist is at this hour (Config.DAY.light "mist").
+uniform float lift = 1.0;
 // Config.FOG: the shroud's value for seen; how thick the mist is over seen ground and over never
-// seen ground; how much the wisps thicken and thin it; their size and drift.
+// seen ground; how much the wisps thicken and thin it; their size and drift; and how blurred the land
+// under it is read -- a level of the scene's mipmaps: its lie, not its grass.
 uniform float seen_level = 0.55;
 uniform float veil = 0.4;
 uniform float never = 0.9;
 uniform float wisps = 0.14;
 uniform float wisp_scale = 0.05;
 uniform vec2 wisp_drift = vec2(0.010, 0.004);
+uniform float blur = 4.0;
+// And no brighter than this many times the light of the land round about (`blur` + `round_about`
+// levels down): a pale rock under the mist is a pale blob in it otherwise, where a hill's shade
+// still shows as the lie of the land.
+uniform float round_about = 3.0;
+uniform float brightest = 1.15;
+// How much of the land's own colour the mist takes on, over the haze's: grass shows faintly green
+// through it at noon, rather than the mist being a grey of its own.
+uniform float ground = 0.3;
 
 void vertex() {
 	// Straight onto the screen, in front of everything (the engine's depth runs from 1 near to 0 far).
@@ -57,6 +79,16 @@ void fragment() {
 	float beyond = smoothstep(seen_level, 1.0, unknown);
 	float thin = seen * veil * (1.0 + wisps * w);
 	float thick = never * (1.0 + 2.0 * wisps * w);
-	ALBEDO = mist_color * (1.0 + 0.4 * w);
+	// The land under it, blurred to its lie, and how bright it is -- no brighter than the land round
+	// about it.
+	vec3 land = textureLod(screen_texture, SCREEN_UV, blur).rgb;
+	vec3 luma = vec3(0.2126, 0.7152, 0.0722);
+	float around = dot(textureLod(screen_texture, SCREEN_UV, blur + round_about).rgb, luma) * brightest;
+	float light = dot(land, luma);
+	if (light > around) {
+		land *= around / max(0.0001, light);
+		light = around;
+	}
+	ALBEDO = mix(mist_hue * light, land, ground) * lift * (1.0 + 0.4 * w);
 	ALPHA = clamp(mix(thin, thick, beyond), 0.0, 0.98);
 }
