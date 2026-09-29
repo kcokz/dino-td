@@ -1887,6 +1887,9 @@ const FEEDBACK: Dictionary = {
 	# 悬停圈：鼠标下面是什么。和选中圈刻意不同色，否则"我选中的"和"我指着的"分不清。
 	# 木尖刺只有 0.62m 宽，一排挨在一起时，没有这个圈根本看不出点的是哪一根。
 	"hover_ring_color": Color(1.0, 1.0, 1.0, 0.55),
+	# 悬停时能采的树和石头微微提亮（UI-POLISH T21："悬停时的一点反应"）：叠一层加亮的暖色，
+	# 看得出"这是能动手的"，又不像描边、光圈那样是个游戏标记。
+	"hover_lift_color": Color(0.11, 0.09, 0.05),
 	"audio_volume_db": -8.0,
 	"audio_enabled": true,
 }
@@ -2471,8 +2474,9 @@ const RESOURCE_NODES: Dictionary = {
 		# grid says is free.
 		# A tree's CROWN may spread past its cell: it is up in the air, and who can walk
 		# where is decided by the cell, never by the art. Fitted into the old 1.6m box the
-		# tree fern's four-metre crown shrank the whole tree to a 1.7m shrub.
-		"size": Vector3(3.2, 3.6, 3.2),
+		# tree fern's four-metre crown shrank the whole tree to a 1.7m shrub. A young conifer
+		# four times his height (VISUALS "node/wood"), over the tree ferns' three.
+		"size": Vector3(3.2, 4.8, 3.2),
 		# What stands in the way, and what he stands at to chop: the trunk. The crown is
 		# only clicked (LAYER_PICK).
 		"trunk_radius": 0.3,
@@ -2488,7 +2492,10 @@ const RESOURCE_NODES: Dictionary = {
 		"requires_unlock": "harvest_stone",
 		"color": Color(0.6, 0.6, 0.65),
 		"depleted_color": Color(0.3, 0.3, 0.3),
-		"size": Vector3(1.6, 1.2, 1.6),   # an outcrop: wide and low, unlike a tree
+		# An outcrop: wide and low, unlike a tree -- sandstone breaking out of the ground (VISUALS
+		# "node/stone"). No wider than it was: at 1.8 m the two by the nest narrowed the raid's way out
+		# of it, and a raider stood and walked by turns in the squeeze (the twitch watch, test_07).
+		"size": Vector3(1.6, 1.4, 1.6),
 	},
 	"water": {
 		"name": "RESOURCE_WATER",
@@ -2619,17 +2626,24 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
-	# A tree fern, like the forest round it -- the choppable tree was a striped barrel
-	# with a tuft on top, standing among the real ones. Cut down, it is a stump with its
-	# crown lying beside it (tools/generate_flora.py).
-	"node/wood":            {"scene": "res://assets/models/flora/tree_fern_a.glb",
-		"scene_depleted": "res://assets/models/flora/tree_fern_stump_a.glb",
+	#
+	# WHAT CAN BE WORKED IS TOLD FROM THE VALLEY BY WHAT IT IS (UI-POLISH T21; v0.6 round four, the
+	# player: "比如石头，树木，能点的个背景现在很像"; "要还原真实"): no ring or mark on it. The tree
+	# he cuts was a tree fern, like the forest round the field -- it could not be told from it. It
+	# is a young conifer now, Araucarioxylon, the timber of the Chinle's own Petrified Forest: a
+	# spire of whorled branches in a litter of its own fallen needles, where the forest is tree
+	# ferns and cycads -- fibre, not timber. Felled, a stump with the trunk and its crown lying
+	# where they fell (tools/generate_flora.py timber_conifer, timber_stump).
+	"node/wood":            {"scene": "res://assets/models/flora/timber_conifer_a.glb",
+		"scene_depleted": "res://assets/models/flora/timber_stump_a.glb",
 		"material": "flora",    # coloured by its vertices, like the forest it stands in
 		"placeholder": "cycad", "anchor": "feet", "color": ""},
-	# Mossy boulders half sunk in the ground; quarried, a split low stump of rock with
-	# pale fresh faces and rubble round it (tools/generate_props.py).
-	"node/stone":           {"scene": "res://assets/models/props/outcrop_a.glb",
-		"scene_depleted": "res://assets/models/props/outcrop_quarried_a.glb",
+	# And the stone he quarries was mossy grey boulders, like every rock the valley is strewn
+	# with: it is a low ledge of the Chinle's bedded sandstone now, slabs banded red, ochre and
+	# mauve, broken pieces at its foot -- the rock that is already breaking. Quarried, cut down
+	# to a stub with pale fresh tops, rubble round it (tools/generate_props.py sandstone_outcrop).
+	"node/stone":           {"scene": "res://assets/models/props/sandstone_outcrop_a.glb",
+		"scene_depleted": "res://assets/models/props/sandstone_quarried_a.glb",
 		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	# Where the Hero draws water, on the river bank at the field's edge: trodden wet mud, a
 	# flat stone at the water's edge, clay jars (tools/generate_props.py water_landing). The

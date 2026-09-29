@@ -553,6 +553,120 @@ def araucaria(seed):
     return trunk_b, leaf_b
 
 
+# THE TIMBER (UI-POLISH T21, v0.6 round four, the player: "比如石头，树木，能点的个背景现在很像"). The
+# tree he cuts for wood was a tree fern like the forest round the field, and could not be told from it.
+# It is a conifer now, of the Chinle's own kind -- Araucarioxylon, whose trunks are the Petrified
+# Forest's logs -- and a tree fern, all fibre inside, is not timber: the forest of tree ferns and cycads
+# is the valley, and a conifer standing in the field is wood.
+TIMBER_LITTER = (0.26, 0.17, 0.09)       # its own fallen needles, rust-brown
+TIMBER_LITTER_DARK = (0.15, 0.10, 0.06)
+TIMBER_LITTER_EDGE = (0.16, 0.20, 0.09)  # thinning out into the grass
+TIMBER_CUT = (0.80, 0.64, 0.42)          # the pale cut face of conifer wood
+TIMBER_RESIN = (0.58, 0.38, 0.14)
+
+
+def _needle_litter(b, radius, rng):
+    """The ground under a conifer: its own fallen needles, rust-brown, darkest at the trunk and
+    thinning into the grass at the edge -- nothing grows through it -- and a few cones in it. What a
+    timber tree stands in, and a tree fern does not."""
+    n = 16
+    centre = Vector((0.0, 0.0, 0.016))
+    ring = []
+    for k in range(n):
+        a = math.tau * k / n
+        r = radius * rng.uniform(0.82, 1.1)
+        ring.append(Vector((math.cos(a) * r, math.sin(a) * r, 0.008)))
+    mid = [Vector((p.x * 0.55, p.y * 0.55, 0.014)) for p in ring]
+    for k in range(n):
+        k2 = (k + 1) % n
+        b.tri(centre, mid[k], mid[k2], TIMBER_LITTER_DARK, TIMBER_LITTER, TIMBER_LITTER)
+        b.quad(mid[k], ring[k], ring[k2], mid[k2], TIMBER_LITTER, TIMBER_LITTER_EDGE, TIMBER_LITTER_EDGE, TIMBER_LITTER)
+    for _ in range(5):
+        a = rng.uniform(0.0, math.tau)
+        at = Vector((math.cos(a), math.sin(a), 0.0)) * rng.uniform(0.35, radius * 0.8) + UP * 0.05
+        foliage_clump(b, at, 0.06, 0.8, rng, TIMBER_RESIN, TIMBER_LITTER)
+
+
+def timber_conifer(seed):
+    """The tree he cuts for wood: a young Araucarioxylon, a straight trunk with its branches in whorls
+    nearly to the ground, a narrow spire -- not the old trees' umbrella on the skyline, nor a tree
+    fern's crown of fronds -- standing in its own litter of fallen needles."""
+    rng = random.Random(seed)
+    trunk_b = Builder()
+    leaf_b = Builder()
+    h = rng.uniform(5.3, 5.8)
+    segs = 12
+    spine = [Vector((0.0, 0.0, h * i / segs)) for i in range(segs + 1)]
+    radii = [0.2 * (1.0 - 0.78 * (i / segs)) + 0.03 + (0.1 if i == 0 else 0.03 if i == 1 else 0.0)
+             for i in range(segs + 1)]
+    colours = [mix(ARAUCARIA_BARK, ARAUCARIA_RING, 0.7 if i % 3 == 0 else 0.0) for i in range(segs + 1)]
+    trunk_b.tube(spine, radii, colours, 8, radial=lambda i, k: 1.07 if k % 2 == 0 else 0.95)
+    # Whorls from a fifth of the way up to the top, longest at the bottom: a spire.
+    whorls = rng.randint(7, 9)
+    for w in range(whorls):
+        frac = w / (whorls - 1)
+        at = Vector((0.0, 0.0, h * (0.2 + 0.74 * frac)))
+        reach = (1.55 - 1.25 * frac) * rng.uniform(0.9, 1.1)
+        n = rng.randint(5, 6)
+        for k in range(n):
+            a = math.tau * k / n + w * 0.6 + rng.uniform(-0.2, 0.2)
+            d = Vector((math.cos(a), math.sin(a), 0.0))
+            pts = []
+            for i in range(6):
+                u = i / 5
+                z = -0.2 * math.sin(math.pi * u) * reach * 0.5 + (u ** 2) * reach * 0.22
+                pts.append(at + d * (reach * u) + UP * z)
+            trunk_b.tube(pts, [0.05 * (1.0 - 0.8 * i / 5) + 0.008 for i in range(6)], [ARAUCARIA_BARK] * 6, 4)
+            for c in range(1, 6):
+                u = c / 5
+                seg = pts[min(c + 1, 5)] - pts[c - 1]
+                size = (0.16 + 0.08 * math.sin(math.pi * u)) * (0.85 + 0.3 * (1.0 - frac))
+                foliage_clump(leaf_b, pts[c], size, 0.6, rng,
+                              jitter(ARAUCARIA_NEEDLE, rng, 0.1), jitter(ARAUCARIA_NEEDLE_TIP, rng, 0.1),
+                              along=seg, stretch=1.8)
+    top = spine[-1]
+    for c in range(3):
+        foliage_clump(leaf_b, top + UP * (0.15 + 0.22 * c), 0.34 - 0.08 * c, 0.95, rng,
+                      ARAUCARIA_NEEDLE, ARAUCARIA_NEEDLE_TIP)
+    _needle_litter(leaf_b, 1.35, rng)
+    return trunk_b, leaf_b
+
+
+def timber_stump(seed):
+    """What is left of a conifer he has felled: a short stump with a pale cut face ringed with resin,
+    the trunk lying where it fell with its crown at the far end, in the same litter of needles. Built
+    at the SAME scale as the tree, because it is the stump of that tree (VisualLibrary fits it with
+    the tree's factor)."""
+    rng = random.Random(seed)
+    trunk_b = Builder()
+    leaf_b = Builder()
+    h = 0.45
+    spine = [Vector((0.0, 0.0, h * i / 3)) for i in range(4)]
+    radii = [0.33, 0.24, 0.23, 0.23]
+    trunk_b.tube(spine, radii, [mix(ARAUCARIA_BARK, ARAUCARIA_RING, 0.4 if i % 2 else 0.0) for i in range(4)], 8)
+    top = spine[-1]
+    ring = [top + Vector((math.cos(math.tau * k / 8), math.sin(math.tau * k / 8), 0.0)) * 0.23 for k in range(8)]
+    for k in range(8):
+        trunk_b.tri(top + UP * 0.01, ring[k], ring[(k + 1) % 8], TIMBER_CUT, TIMBER_RESIN, TIMBER_RESIN)
+    # The felled trunk, and its crown fallen at the end of it.
+    fall = Vector((1.0, 0.35, 0.0)).normalized()
+    length = 4.2
+    log = [Vector((0.0, 0.0, 0.18)) + fall * (0.4 + length * i / 8) for i in range(9)]
+    trunk_b.tube(log, [0.2 - 0.14 * i / 8 for i in range(9)],
+                 [mix(ARAUCARIA_BARK, ARAUCARIA_RING, 0.6 if i % 3 == 0 else 0.0) for i in range(9)], 7)
+    side = Vector((-fall.y, fall.x, 0.0))
+    for i in range(3, 9):
+        for s in (-1.0, 1.0):
+            root = log[i]
+            tip = root + side * s * rng.uniform(0.4, 0.8) + UP * rng.uniform(-0.05, 0.1)
+            trunk_b.tube([root, tip], [0.035, 0.012], [ARAUCARIA_BARK, ARAUCARIA_BARK], 4)
+            foliage_clump(leaf_b, root.lerp(tip, 0.7), 0.16, 0.5, rng,
+                          mix(ARAUCARIA_NEEDLE, DEAD_FROND, 0.35), mix(ARAUCARIA_NEEDLE_TIP, DEAD_TIP, 0.35),
+                          along=tip - root, stretch=1.8)
+    _needle_litter(leaf_b, 1.35, rng)
+    return trunk_b, leaf_b
+
+
 def tree_fern_stump(seed):
     """What is left of a tree fern the Hero has cut down: a short fibrous stump with a
     pale cut face, and its crown lying on the ground beside it where it fell.
@@ -599,6 +713,8 @@ PLANTS = {
     "ground_fern": (ground_fern, [7, 19, 31]),
     "araucaria": (araucaria, [13, 47]),
     "tree_fern_stump": (tree_fern_stump, [11]),
+    "timber_conifer": (timber_conifer, [53]),
+    "timber_stump": (timber_stump, [53]),
 }
 
 
@@ -699,7 +815,11 @@ def main():
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     made = []
+    # Names after the "--" make only those plants, so adding one does not re-export the rest.
+    only = [a for a in args if not a.startswith("--")]
     for name, (fn, seeds) in PLANTS.items():
+        if only and name not in only:
+            continue
         for v, seed in enumerate(seeds):
             label = "%s_%s" % (name, "abc"[v])
             obj = build(label, fn, seed, mats)

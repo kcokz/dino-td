@@ -1391,6 +1391,92 @@ def basalt_cliff(seed):
 
 
 # ==============================================================================
+# The stone he quarries (UI-POLISH T21, v0.6 round four, the player: "比如石头，树木，能点的个背景现在很
+# 像"). It was a heap of mossy grey boulders, like every rock the valley is strewn with. It is the
+# Chinle's own bedded sandstone now, breaking out of the ground in a low ledge -- angular slabs banded
+# red, ochre and mauve, the way those rocks are -- with a spill of broken pieces at its foot: what can be
+# cut is the rock that is already breaking, and the grey rounded boulders are the valley.
+# ==============================================================================
+
+# sRGB, as the rest: the Chinle's red and ochre beds, a mauve one, and the pale sand between.
+CHINLE_BEDS = [(0.50, 0.28, 0.20), (0.58, 0.43, 0.29), (0.46, 0.35, 0.35), (0.66, 0.57, 0.45), (0.54, 0.33, 0.24)]
+CHINLE_TOP = (0.66, 0.58, 0.47)          # the weathered top of a slab, the palest
+CHINLE_FRESH = (0.86, 0.74, 0.58)        # a fresh break
+CHINLE_SHADE = (0.34, 0.20, 0.14)        # the foot of it, in the joints
+
+
+def _chip(b, centre, size, rng, col):
+    """A broken piece of sandstone lying on the ground: a small squat wedge, angular."""
+    w = size * rng.uniform(0.8, 1.2)
+    d = size * rng.uniform(0.6, 1.0)
+    h = size * rng.uniform(0.4, 0.7)
+    a = rng.uniform(0.0, math.pi)
+    ax = Vector((math.cos(a), math.sin(a), 0.0))
+    ay = Vector((-ax.y, ax.x, 0.0))
+    base = [centre + ax * sx * w + ay * sy * d for (sx, sy) in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    top = [p + UP * h + ax * rng.uniform(-0.3, 0.1) * w for p in base]
+    lit = mix(col, CHINLE_TOP, 0.35)
+    for k in range(4):
+        k2 = (k + 1) % 4
+        b.quad(base[k], base[k2], top[k2], top[k], mix(col, CHINLE_SHADE, 0.3), mix(col, CHINLE_SHADE, 0.3), col, col)
+    b.quad(top[0], top[1], top[2], top[3], lit, lit, lit, lit)
+
+
+def _sandstone_chunk(b, centre, size, rng, base, fresh=False):
+    """A broken block of the Chinle's sandstone: an icosahedron pushed about into an angular chunk,
+    flat-topped where it weathers, its colour the bed it came from -- only faintly banded, as the
+    beds show through a weathered face -- darker at its foot, paler on top, pale and clean where it is
+    freshly broken. Angular and red-brown where the valley's boulders are rounded and grey."""
+    t = (1.0 + 5.0 ** 0.5) / 2.0
+    raw = [(-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0), (0, -1, t), (0, 1, t),
+           (0, -1, -t), (0, 1, -t), (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]
+    faces = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4),
+             (11, 10, 2), (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8),
+             (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
+    squash = rng.uniform(0.75, 1.0)
+    pts = []
+    for (x, y, z) in raw:
+        v = Vector((x, y, z)).normalized() * size * rng.uniform(0.78, 1.2)
+        v.z *= squash
+        if v.z > size * squash * 0.45:           # a flat weathered top, as sandstone breaks
+            v.z = size * squash * 0.45 + (v.z - size * squash * 0.45) * 0.2
+        pts.append(centre + v + UP * (size * squash * 0.4))
+    top_z = max(q.z for q in pts)
+    for (i, j, k) in faces:
+        cs = []
+        for n in (i, j, k):
+            h = max(0.0, min(1.0, (pts[n].z - centre.z) / max(0.01, top_z - centre.z)))
+            bed = CHINLE_BEDS[int(pts[n].z / 0.16) % len(CHINLE_BEDS)]
+            col = mix(base, bed, 0.25)
+            col = mix(mix(col, CHINLE_SHADE, 0.45), mix(col, CHINLE_TOP, 0.35), h)
+            if fresh and h > 0.7:
+                col = mix(col, CHINLE_FRESH, 0.6)
+            cs.append(col)
+        b.tri(pts[i], pts[j], pts[k], cs[0], cs[1], cs[2])
+
+
+def sandstone_outcrop(seed, quarried=False):
+    """Stone to quarry: an outcrop of the Chinle's sandstone breaking out of the ground in angular
+    red-brown blocks, broken pieces spilled at its foot. Quarried, it is cut down to low stubs with
+    pale fresh tops, and the spill is rubble."""
+    rng = random.Random(seed)
+    b = Builder()
+    chunks = [
+        # (x, y, size): the big block at the back, smaller ones leaning on it
+        (0.05, 0.12, 0.62), (-0.42, -0.22, 0.44), (0.42, -0.30, 0.40), (-0.30, 0.42, 0.32),
+    ]
+    for (x, y, size) in chunks:
+        at = Vector((x, y, -size * 0.1))
+        _sandstone_chunk(b, at, size * (0.55 if quarried else 1.0), rng, rng.choice(CHINLE_BEDS), fresh=quarried)
+    for _ in range(18 if quarried else 11):
+        a = rng.uniform(0.0, math.tau)
+        r = rng.uniform(0.75, 1.05)
+        centre = Vector((math.cos(a) * r, math.sin(a) * r * 0.9, 0.0))
+        _chip(b, centre, rng.uniform(0.05, 0.1), rng, rng.choice(CHINLE_BEDS))
+    return b
+
+
+# ==============================================================================
 # Fire (GAME-DESIGN 9.3, v0.7 "火与夜"): what the Hero burns wood in. The flame is the game's own
 # (Fire.gd: the engine's particles and a light, lit at dusk); these are the stones and the wood.
 # ==============================================================================
@@ -1517,6 +1603,8 @@ PROPS = {
     "drop_water": (lambda s: drop_water(s), [13]),
     "drop_hide": (lambda s: drop_hide(s), [19]),
     "water_landing": (lambda s: water_landing(s), [17]),
+    "sandstone_outcrop": (lambda s: sandstone_outcrop(s), [61]),
+    "sandstone_quarried": (lambda s: sandstone_outcrop(s, quarried=True), [61]),
     "campfire": (lambda s: campfire(s), [31]),
     "brazier": (lambda s: brazier(s), [37]),
     "torch": (lambda s: torch(s), [43]),

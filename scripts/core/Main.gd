@@ -1811,6 +1811,7 @@ func _show_hover(node: Node) -> void:
 			_hover_ring.global_position = (node as Node3D).global_position
 		return
 	_hovered = node
+	_lift(node)
 	if node == null or not is_instance_valid(node):
 		if _hover_ring != null:
 			_hover_ring.set_shown(false)
@@ -1842,6 +1843,41 @@ func _show_hover(node: Node) -> void:
 	_hover_ring.configure(shape, size, depth)
 	_hover_ring.global_position = (node as Node3D).global_position
 	_hover_ring.set_shown(true)
+
+## What can be worked lifts a little under the cursor (UI-POLISH T21, the player: "能点的和不能点的要分得
+## 开……悬停时的一点反应"): a faint warm wash over the tree or the rock (Config.FEEDBACK.hover_lift_color),
+## gone when the cursor leaves. The ring under it says what a click would pick; this, that the thing is
+## there to be worked and not the valley. Only its body (ResourceNode "Body") -- not its ring or its bar --
+## and never over a wash already on it (Fx: a flash).
+var _lifted: Array[MeshInstance3D] = []
+var _lift_mat: StandardMaterial3D = null
+
+func _lift(node: Node) -> void:
+	for m in _lifted:
+		if is_instance_valid(m) and m.material_overlay == _lift_mat:
+			m.material_overlay = null
+	_lifted.clear()
+	if node == null or not is_instance_valid(node) or not node.is_in_group("resource_nodes"):
+		return
+	var body: Node = node.find_child("Body", false, false)
+	if body == null:
+		return
+	if _lift_mat == null:
+		var cfg = _get_config()
+		_lift_mat = StandardMaterial3D.new()
+		_lift_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_lift_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_lift_mat.albedo_color = cfg.FEEDBACK.get("hover_lift_color", Color(0.1, 0.08, 0.05)) if (cfg and "FEEDBACK" in cfg) \
+			else Color(0.1, 0.08, 0.05)
+	for m in body.find_children("*", "MeshInstance3D", true, false):
+		var mesh := m as MeshInstance3D
+		if mesh.material_overlay == null:
+			mesh.material_overlay = _lift_mat
+			_lifted.append(mesh)
+
+## What is lifted under the cursor now (for a test).
+func lifted() -> Array[MeshInstance3D]:
+	return _lifted
 
 func _raycast_ground(screen_pos: Vector2) -> Variant:
 	var cam := _active_camera()
