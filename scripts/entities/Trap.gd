@@ -310,6 +310,9 @@ func loose(on_wire: Array) -> int:
 	var hit: int = 0
 	for animal in struck:
 		if _is_quarry(animal):
+			# It knows what shot it (Dino.shot_by): that is the trap it goes for.
+			if animal.has_method("shot_by"):
+				animal.shot_by(self)
 			animal.take_damage(damage)
 			hit += 1
 	armed = false

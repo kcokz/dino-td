@@ -37,7 +37,14 @@ func hero_interest_range() -> float:
 ## which applies the rule about walls that are not in the way -- this used to override
 ## THAT method and so skipped the rule entirely.
 func _preferred_target() -> Node:
-	var trap := _nearest_building_within(trap_interest_range(), "shooter")
+	# The trap that is shooting at it, first; else the nearest -- and neither if every place round
+	# it is taken (Dino._is_crowded, BUG-009).
+	var trap: Node = _shot_lately()
+	# Not across the base for it: one that shot it from the far side is left to the others there.
+	if trap != null and _flat((trap as Node3D).global_position).distance_to(_flat(global_position)) > trap_interest_range() * 2.0:
+		trap = null
+	if trap == null:
+		trap = _nearest_building_within(trap_interest_range(), "shooter")
 	var hero := _hero_within(hero_interest_range())
 
 	if _hero_is_provoking() and hero != null:

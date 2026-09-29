@@ -349,6 +349,15 @@ func queue_spot(building: Node) -> Vector3:
 		spot = Vector3(on_mesh.x, centre.y, on_mesh.z)
 	return spot
 
+## Whether `dino` holds one of the places round `building` -- as against waiting at the crowd's edge.
+static func holds_attack_slot(building: Node, dino: Node) -> bool:
+	if building == null or not is_instance_valid(building) or dino == null:
+		return false
+	for s in _building_slots.get(building.get_instance_id(), []):
+		if int(s.get("dino_id", 0)) == dino.get_instance_id():
+			return true
+	return false
+
 static func release_attack_slot(building: Node, dino: Node) -> void:
 	if building == null or not is_instance_valid(building):
 		return
@@ -648,6 +657,13 @@ func _take(target: Node, new_mode: Mode) -> void:
 	current_target = target
 	assigned_slot = claim_attack_slot(target, self) if _is_building(target) else Vector3.ZERO
 	_set_mode(new_mode)
+	# A trap with every place round it taken is no place to wait -- it is shooting at the queue.
+	# Ten raptors went for the one crossbow nearest the nest, which two could bite, and the rest
+	# milled at the fence corner under its fire (the debug-agent's BUG-009). It leaves that one be a
+	# while and chooses again: another trap with room, or the wall in its way.
+	if _is_shooter(target) and not holds_attack_slot(target, self):
+		_mark_crowded(target)
+		_let_go()
 
 ## Drops what it was going for, and goes on to the cabin.
 func _let_go() -> void:
@@ -974,6 +990,39 @@ func _watch_headway(delta: float) -> void:
 ## Whether it is on its way back to the nest, its hours over (go_home).
 var going_home: bool = false
 
+## The trap that last shot at it, and when (by _mind_clock): the one a pack goes for (PackDino).
+var _shot_by: Node = null
+var _shot_at: float = -INF
+## Buildings it found every place round taken, and until when (by _mind_clock) it leaves them be:
+## instance id -> the time.
+var _crowded: Dictionary = {}
+
+## Shot at by `source` (a trap): remembered -- it goes for what is hurting it, not for the nearest
+## trap to it (the debug-agent's BUG-009).
+func shot_by(source: Node) -> void:
+	_shot_by = source
+	_shot_at = _mind_clock
+
+## The trap that shot at it lately (Config.DINO_AI.shot_memory), still there and not crowded -- or
+## null.
+func _shot_lately() -> Node:
+	if _shot_by == null or not is_instance_valid(_shot_by) or not _is_target_valid(_shot_by):
+		return null
+	if _mind_clock - _shot_at > _ai("shot_memory", 4.0) or _is_crowded(_shot_by):
+		return null
+	return _shot_by
+
+## Whether every place round `building` to bite it from was taken when it last tried for one
+## (Config.DINO_AI.crowded_memory ago or less): it leaves it be meanwhile.
+func _is_crowded(building: Node) -> bool:
+	if building == null or not is_instance_valid(building):
+		return false
+	return _mind_clock < float(_crowded.get(building.get_instance_id(), -INF))
+
+func _mark_crowded(building: Node) -> void:
+	if building != null and is_instance_valid(building):
+		_crowded[building.get_instance_id()] = _mind_clock + _ai("crowded_memory", 3.0)
+
 ## Its hours are over (Config.DINOS.<id>.hours, GAME-DESIGN 9.3): it lets go of what it was at and
 ## goes back to the nest, and is gone there -- not killed, nothing left behind.
 func go_home(nest: Vector3) -> void:
@@ -1036,6 +1085,10 @@ func _unstick() -> void:
 		if free_inner_slot(current_target, self) != Vector3.ZERO:
 			release_attack_slot(current_target, self)
 			assigned_slot = claim_attack_slot(current_target, self)
+		elif _is_shooter(current_target):
+			# Not waiting its turn under a trap's fire: something else (BUG-009).
+			_mark_crowded(current_target)
+			_let_go()
 		else:
 			_patience = _ai("queue_patience", 1.5)
 	# Held up by the Hero himself, standing in its way, time and again: he is what is in the way,
@@ -1406,6 +1459,8 @@ func _nearest_building_within(radius: float, only_kind: String = "") -> Node:
 		if not is_instance_valid(b) or not _is_target_valid(b):
 			continue
 		if only_kind == "shooter" and not _is_shooter(b):
+			continue
+		if _is_crowded(b):
 			continue
 		if only_kind != "" and only_kind != "shooter":
 			if not ("building_type" in b) or String(b.building_type) != only_kind:

@@ -391,9 +391,41 @@ func test_11_a_fence_at_the_cabins_back_is_gone_round() -> void:
 			break
 	assert_gte(most, 3, "Within twenty seconds the raid is biting the cabin -- three at once -- not milling behind the fence")
 
-func test_12_waiting_in_the_outer_ring_it_moves_in_when_a_place_frees() -> void:
-	# The outer ring round a building is where a raider waits while the places to bite from are
-	# taken. It stood there, out of reach, to the end of a raid -- nothing moved it in.
+func test_12_waiting_its_turn_it_moves_in_when_a_place_frees() -> void:
+	# Waiting at the crowd's edge while every place to bite from is taken, it moves in when one frees
+	# (it stood out of reach to the end of a raid before) -- at a building that is not shooting at it.
+	var world := await _field()
+	var wall = _stake(world, Vector3.ZERO)
+	await rebake_fixture()
+	var dino_script = load("res://scripts/entities/Dino.gd")
+	var d = _raptor(Vector3(0.0, 0.0, 3.0), world)
+	d.set_physics_process(false)
+	var others: Array[Node3D] = []
+	for i in 32:
+		var o := Node3D.new()
+		world.add_child(o)
+		others.append(o)
+	for o in others:
+		if dino_script.free_inner_slot(wall, o) != Vector3.ZERO:
+			dino_script.claim_attack_slot(wall, o)
+	d.current_target = wall
+	d.assigned_slot = dino_script.claim_attack_slot(wall, d)
+	d._unstick()
+	assert_eq(d.current_target, wall, "Every place taken, it keeps to what it came for")
+	assert_gt(float(d._patience), 0.0, "and waits its turn")
+	for o in others:
+		dino_script.release_attack_slot(wall, o)
+	d._patience = 0.0
+	d._unstick()
+	assert_true(dino_script.holds_attack_slot(wall, d), "A place freed, it takes it")
+	assert_lt(float(config_node.gap_to_building(d.assigned_slot, "wall", wall.global_position)),
+		float(config_node.DINO_STANDOFF_INNER) + 0.01, "one it can bite from")
+	dino_script.clear_all_attack_slots()
+
+func test_12b_it_does_not_wait_its_turn_under_a_traps_fire() -> void:
+	# The debug-agent's BUG-009: ten raptors went for the one crossbow nearest the nest, which two
+	# could bite, and the rest milled at the fence corner under its fire. Every place round a trap
+	# taken, it leaves that trap be a while and chooses again.
 	var world := await _field()
 	var trap = load("res://scripts/entities/Tower.gd").new()
 	world.add_child(trap)
@@ -403,24 +435,35 @@ func test_12_waiting_in_the_outer_ring_it_moves_in_when_a_place_frees() -> void:
 	trap.process_mode = Node.PROCESS_MODE_DISABLED
 	await rebake_fixture()
 	var dino_script = load("res://scripts/entities/Dino.gd")
-	# The eight places to bite from, taken.
 	var others: Array[Node3D] = []
-	for i in 8:
+	for i in 32:
 		var o := Node3D.new()
 		world.add_child(o)
 		others.append(o)
 		dino_script.claim_attack_slot(trap, o)
 	var d = _raptor(Vector3(0.0, 0.0, 3.0), world)
-	await wait_physics_frames(int(3.0 * float(Engine.physics_ticks_per_second)))
-	assert_eq(d.current_target, trap, "It goes for the trap")
-	assert_false(int(d.current_state) == int(d.State.ATTACKING), "and waits, out of reach, every place taken")
-	for o in others:
-		dino_script.release_attack_slot(trap, o)
-	var bit: bool = false
-	for frame in range(int(5.0 * float(Engine.physics_ticks_per_second))):
-		await wait_physics_frames(1)
-		if int(d.current_state) == int(d.State.ATTACKING) and d.current_target == trap:
-			bit = true
-			break
-	assert_true(bit, "A place freed, it moves in and bites within five seconds")
+	await wait_physics_frames(int(2.0 * float(Engine.physics_ticks_per_second)))
+	assert_ne(d.current_target, trap, "Every place round it taken, it does not queue under its fire")
+	assert_true(d._is_crowded(trap), "it leaves that one be a while")
+	assert_eq(d._preferred_target(), null, "and chooses something else -- here, nothing: the road on")
 	dino_script.clear_all_attack_slots()
+
+func test_12c_it_goes_for_the_trap_that_shot_it() -> void:
+	# Not the nearest trap to it: the one hurting it (BUG-009).
+	var world := await _field()
+	var near_one = load("res://scripts/entities/Tower.gd").new()
+	var shooter = load("res://scripts/entities/Tower.gd").new()
+	for t in [near_one, shooter]:
+		world.add_child(t)
+		t.setup("set_crossbow")
+		t.complete_construction()
+		t.process_mode = Node.PROCESS_MODE_DISABLED
+	near_one.position = Vector3(1.5, 0.0, 0.0)
+	shooter.position = Vector3(-3.0, 0.0, 0.0)
+	await rebake_fixture()
+	var d = _raptor(Vector3(0.5, 0.0, 2.0), world)
+	d.set_physics_process(false)
+	assert_eq(d._preferred_target(), near_one, "Unshot, it goes for the nearest trap")
+	d.shot_by(shooter)
+	assert_eq(d._preferred_target(), shooter, "shot, for the one that shot it")
+	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()

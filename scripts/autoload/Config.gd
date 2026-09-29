@@ -944,6 +944,11 @@ const DINO_AI: Dictionary = {
 	"collides_with": ["LAYER_GROUND", "LAYER_BUILDING", "LAYER_WALL", "LAYER_GATE", "LAYER_HERO", "LAYER_DINO"],
 	# What counts as shooting at it, by BUILDINGS kind: what a pack leaves its path for.
 	"shooter_kinds": ["trap"],
+	# A trap that shot at it is the one it goes for for this long (seconds); a building it found
+	# every place round taken is left be for this long, and something else chosen -- ten raptors
+	# went for the one crossbow nearest the nest, which two could bite (the debug-agent's BUG-009).
+	"shot_memory": 4.0,
+	"crowded_memory": 3.0,
 }
 
 # ==============================================================================
