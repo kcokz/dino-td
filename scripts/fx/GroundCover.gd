@@ -199,7 +199,7 @@ static func scatter_placements(cfg: Node, count: int, field_half: float, keep_cl
 		clear_radius: float, seed_value: int, scale_range: Vector2) -> Array[Transform3D]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
+	var t: Dictionary = cfg.terrain() if (cfg and "TERRAIN" in cfg) else {}
 	var cover_reach: float = float(t.get("cover_reach", 34.0))
 	var outer: float = field_half + float(t.get("flat_apron", 3.0)) + cover_reach
 	var outer_half: float = float(t.get("outskirts_half", 110.0))
@@ -314,7 +314,7 @@ static func band_placements(cfg: Node, count: int, field_half: float, from_edge:
 		footprint: AABB = AABB()) -> Array[Transform3D]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var t: Dictionary = cfg.TERRAIN if (cfg and "TERRAIN" in cfg) else {}
+	var t: Dictionary = cfg.terrain() if (cfg and "TERRAIN" in cfg) else {}
 	var outer_half: float = float(t.get("outskirts_half", 110.0))
 	var foot: float = float(t.get("mountains_from", 72.0))
 	var reach: float = (foot if on_mountains else field_half) + to_edge

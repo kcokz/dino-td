@@ -132,7 +132,7 @@ func test_05_a_sealed_ring_stops_everybody_and_a_gate_lets_him_in() -> void:
 
 	var ring: Array[Node] = ring_in_level(main, core, 4.0)
 	assert_gt(ring.size(), 12, "A ring of wall went up round the cabin")
-	await wait_frames(6)
+	await nav_settled(main)
 	assert_false(main.nav_maps.is_reachable(far, core),
 		"A raid has no way in -- and it is a CURVE, which the first hand-written rule missed")
 	assert_false(main.nav_maps.is_reachable(far, core, true),
@@ -143,11 +143,11 @@ func test_05_a_sealed_ring_stops_everybody_and_a_gate_lets_him_in() -> void:
 	var section = main.grid_manager.building_in_build_cell(south)
 	assert_not_null(section, "There is a section due south")
 	section.destroy()
-	await wait_frames(2)
+	await nav_settled(main)
 	var gate = main.build_system.place_at("gate", south, main.buildings_container, true)
 	assert_not_null(gate, "A gate goes in where it stood")
 	gate.complete_construction()
-	await wait_frames(8)
+	await nav_settled(main)
 	assert_true(main.nav_maps.is_reachable(far, core, true), "Now he has a way in: the gate")
 	assert_false(main.nav_maps.is_reachable(far, core), "And a raid still has none")
 
@@ -171,7 +171,7 @@ func test_07_a_blueprint_ring_seals_nothing() -> void:
 	# Ordered, and never built.
 	var ordered: Array[Node] = ring_in_level(main, core, 4.0, false)
 	assert_gt(ordered.size(), 12, "A whole ring was ORDERED")
-	await wait_frames(6)
+	await nav_settled(main)
 
 	assert_true(main.nav_maps.is_reachable(far, core),
 		"And a raid walks straight through it, because none of it is built")
@@ -215,7 +215,7 @@ func test_09_and_one_put_down_in_a_fence_is_put_out_of_it() -> void:
 		game_state_node.resources["wood"] = 4000
 	var core: Vector3 = _core_of(main)
 	assert_gt(_ring_around(main, core, 4.0), 12, "A ring of stakes went up round the cabin")
-	await wait_frames(8)
+	await nav_settled(main)
 
 	var dino = load("res://scripts/entities/Dino.gd").new("raptor")
 	_cleanup_nodes.append(dino)
@@ -266,7 +266,7 @@ func test_10_a_sealed_ring_is_still_sealed_when_you_are_standing_against_it() ->
 		game_state_node.resources["wood"] = 4000
 	var core: Vector3 = _core_of(main)
 	assert_gt(_ring_around(main, core, 4.0), 12, "A ring of stakes went up round the cabin")
-	await wait_frames(8)
+	await nav_settled(main)
 
 	var dino = _raptor_outside(main, core)
 	await wait_frames(2)
@@ -287,7 +287,7 @@ func test_11_so_it_commits_to_chewing_instead_of_looking_for_a_gap() -> void:
 		game_state_node.resources["wood"] = 4000
 	var core: Vector3 = _core_of(main)
 	_ring_around(main, core, 4.0)
-	await wait_frames(8)
+	await nav_settled(main)
 
 	var dino = _raptor_outside(main, core)
 	dino.global_position = core + Vector3(0.0, 0.0, -4.4)
@@ -323,7 +323,7 @@ func test_12_the_dinosaur_and_the_mesh_give_the_same_answer() -> void:
 		"Open ground: the dinosaur is asking the mesh")
 	_ring_around(main, core, 4.0)
 	dino.global_position = core + Vector3(0.0, 0.0, -4.4)
-	await wait_frames(8)
+	await nav_settled(main)
 	assert_eq(dino._there_is_a_way_round(core), main.nav_maps.is_reachable(dino.global_position, core),
 		"Standing at the fence: still the mesh, and not the grid that disagreed with it here")
 	assert_false(dino._there_is_a_way_round(core), "Which says there is no way in")
@@ -376,7 +376,7 @@ func test_14_his_way_through_a_fence_is_its_gate() -> void:
 		if String(b.building_type) == "gate":
 			gates += 1
 	assert_eq(gates, 1, "The ring has one gate in it, due south")
-	await wait_frames(8)
+	await nav_settled(main)
 	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
 
 	var his: PackedVector3Array = main.nav_maps.path(outside, core, true)
@@ -480,7 +480,7 @@ func test_16_a_fence_that_does_not_enclose_anything_seals_nothing() -> void:
 			b.complete_construction()
 			placed += 1
 	assert_gt(placed, 2, "Some stakes went up beside the cabin")
-	await wait_frames(8)
+	await nav_settled(main)
 
 	var outside: Vector3 = core + Vector3(0.0, 0.0, -12.0)
 	assert_true(main.nav_maps.is_reachable(outside, core),
@@ -516,7 +516,7 @@ func test_17_and_a_route_that_stops_somewhere_else_still_means_no() -> void:
 		game_state_node.resources["wood"] = 4000
 	var core: Vector3 = _core_of(main)
 	assert_gt(_ring_around(main, core, 4.0), 12, "A ring went up")
-	await wait_frames(8)
+	await nav_settled(main)
 	var outside: Vector3 = core + Vector3(0.0, 0.0, -9.0)
 
 	assert_false(main.nav_maps.is_reachable(outside, core), "A raid still has no way in")
@@ -564,7 +564,7 @@ func test_19_a_fence_the_hero_has_just_finished_actually_blocks() -> void:
 	# Ordered, with a gate in it, and then LEFT for a while, which is the part that matters.
 	var ordered: Array[Node] = ring_in_level(main, core, 4.0, false, 0.0)
 	assert_gt(ordered.size(), 12, "A ring was ordered")
-	await wait_frames(8)
+	await nav_settled(main)
 	assert_true(main.nav_maps.is_reachable(outside, core),
 		"Ordered and not built, it stops nobody -- which is the blueprint rule")
 
@@ -572,7 +572,7 @@ func test_19_a_fence_the_hero_has_just_finished_actually_blocks() -> void:
 	for b in ordered:
 		if is_instance_valid(b):
 			b.complete_construction()
-	await wait_frames(8)
+	await nav_settled(main)
 
 	assert_false(main.nav_maps.is_reachable(outside, core),
 		"Finished, it stops a raid -- without anything else being built to jog the meshes")

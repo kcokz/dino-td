@@ -128,7 +128,7 @@ func test_03_a_dragged_fence_actually_seals() -> void:
 		laid += _drag(main, corners[i], corners[(i + 1) % 4])
 	var per_side: int = int(round(2.0 * half / float(config_node.BUILD_CELL)))
 	assert_eq(laid, per_side * 4, "A box of fence was ORDERED in four gestures, a section a cell")
-	await wait_frames(8)
+	await nav_settled(main)
 
 	# A drag orders work; it does not do it. Until the Hero has been round them the
 	# stakes are blueprints, and a blueprint is in neither navigation bake -- ordering a
@@ -141,7 +141,7 @@ func test_03_a_dragged_fence_actually_seals() -> void:
 	for b in main.grid_manager.get_all_buildings():
 		if is_instance_valid(b) and ("building_type" in b) and String(b.building_type) == "wall":
 			b.complete_construction()
-	await wait_frames(8)
+	await nav_settled(main)
 
 	assert_false(main.nav_maps.is_reachable(outside, core), "Built, a raid has no way in")
 	assert_false(main.nav_maps.is_reachable(outside, core, true),

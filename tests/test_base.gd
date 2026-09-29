@@ -257,6 +257,17 @@ func fresh_level() -> Node:
 	await wait_frames(8)
 	return main
 
+## Until the level's navigation meshes have caught up with what was built or pulled down: in play
+## they bake in the background (NavMaps.rebake_in_background), a region takes up its new mesh at the
+## end of a frame, and the map answers from its next sync after that -- a handful of frames on the
+## small valley, waited for rather than guessed at.
+func nav_settled(main: Node, most_frames: int = 300) -> void:
+	var nav = main.get("nav_maps") if (main != null and is_instance_valid(main)) else null
+	var frames: int = 0
+	while nav != null and is_instance_valid(nav) and not nav.is_caught_up() and frames < most_frames:
+		await wait_frames(1)
+		frames += 1
+
 ## A bare fixture with a NAVIGATION MESH over it, for suites that do not want a whole
 ## level but do ask where somebody can walk.
 ##

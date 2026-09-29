@@ -66,6 +66,9 @@ var meals: Dictionary = {}
 ## from the engine's global randf -- so one seed replays one run: a seed can be shared,
 ## and a bug can be replayed. Decoration keeps generators of its own.
 var map_id: String = ""
+## The map the player's runs are played on (Main._choose_the_map, from the settings page), kept
+## across a restart; empty, the default -- the small valley, which the tests and tools play.
+var chosen_map_id: String = ""
 var run_seed: int = 0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -217,7 +220,7 @@ func reset_game(p_seed: int = -1) -> void:
 	lost_to = ""
 	hero_killer = {}
 	var cfg_run = _get_config()
-	map_id = String(cfg_run.DEFAULT_MAP_ID) if (cfg_run and "DEFAULT_MAP_ID" in cfg_run) else ""
+	map_id = chosen_map_id if chosen_map_id != "" else (String(cfg_run.DEFAULT_MAP_ID) if (cfg_run and "DEFAULT_MAP_ID" in cfg_run) else "")
 	if p_seed >= 0:
 		rng.seed = p_seed
 	else:

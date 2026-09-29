@@ -1060,9 +1060,56 @@ const INITIAL_DINO_MULTIPLIERS: Dictionary = {
 ## change (12.6).
 const DEFAULT_MAP_ID: String = "valley"
 
-## The map `map_id` names -- or, with no id, the one a run starts on.
+## The map `map_id` names -- or, with no id, the one a run starts on. A map `like` another is that
+## one with its own keys over it (the large valley is the valley, bigger). Made once a map.
 static func map_data(map_id: String = "") -> Dictionary:
-	return MAPS.get(map_id if map_id != "" else DEFAULT_MAP_ID, {})
+	var id: String = map_id if map_id != "" else DEFAULT_MAP_ID
+	if _maps.has(id):
+		return _maps[id]
+	var own: Dictionary = MAPS.get(id, {})
+	var map: Dictionary = own
+	if own.has("like"):
+		map = map_data(String(own["like"])).duplicate()
+		map.merge(own, true)
+		map.erase("like")
+		map.make_read_only()
+	_maps[id] = map
+	return map
+
+static var _maps: Dictionary = {}
+
+## The land of map `map_id`: TERRAIN, with the map's own "terrain" laid over it key by key -- a
+## bigger valley has a bigger field, and its river further out. Made once a map, and read-only as
+## TERRAIN is: the ground and the river are built once for land that cannot change under them
+## (TerrainBuilder), and a map with nothing of its own is TERRAIN itself.
+static func terrain_of(map_id: String = "") -> Dictionary:
+	var id: String = map_id if map_id != "" else DEFAULT_MAP_ID
+	if _terrains.has(id):
+		return _terrains[id]
+	var own: Dictionary = map_data(id).get("terrain", {})
+	var land: Dictionary = TERRAIN
+	if not own.is_empty():
+		land = TERRAIN.duplicate()
+		for key in own:
+			# A table of its own (the river) says only what differs: its course, and the rest as TERRAIN's.
+			if own[key] is Dictionary and TERRAIN.get(key) is Dictionary:
+				var part: Dictionary = (TERRAIN[key] as Dictionary).duplicate()
+				part.merge(own[key], true)
+				part.make_read_only()
+				land[key] = part
+			else:
+				land[key] = own[key]
+		land.make_read_only()
+	_terrains[id] = land
+	return land
+
+## The land of the map being played (GameState.map_id).
+static func terrain() -> Dictionary:
+	var loop := Engine.get_main_loop()
+	var gs: Node = (loop as SceneTree).root.get_node_or_null("GameState") if loop is SceneTree else null
+	return terrain_of(String(gs.map_id) if (gs != null and "map_id" in gs) else "")
+
+static var _terrains: Dictionary = {}
 
 const MAPS: Dictionary = {
 	"valley": {
@@ -1191,7 +1238,95 @@ const MAPS: Dictionary = {
 		{"type": "water", "cell": Vector2i(-11, -4)}
 	],
 	},
+
+	# The same valley, bigger (v0.6 round four, the player: "地图放大做成可自定义……测试的时候可以用小地
+	# 图，我玩的时候用大地图"; GAME-DESIGN 9.3: three to five times the ground, and places rather than
+	# paths). Four times the ground, the nest twice as far; between them a ridge with ways through it,
+	# a stone forest to the north-east, a stand of trees to the south-west, water at the west edge.
+	# What it does not say is the valley's: the same raid, beacon, stock and beats. The player's map;
+	# the small one is the tests' and the debug-agent's (MAP_SIZES, Main._choose_the_map).
+	"valley_large": {
+		"like": "valley",
+		"terrain": {
+			"field_half": 44.0,
+			# Its river past the bigger field's west edge, as the valley's runs past its own: off the
+			# plateau, down the wall, along the floor two or three metres past the flat, into the canyon.
+			"river": {"course": [
+				{"at": Vector2(-130.0, -96.0), "half_width": 1.1, "bank": 1.2},
+				{"at": Vector2(-108.0, -90.0), "half_width": 1.1, "bank": 1.2},
+				{"at": Vector2(-88.0, -82.0), "half_width": 1.1, "bank": 1.2},
+				{"at": Vector2(-72.0, -72.0), "half_width": 1.1, "bank": 1.3},
+				{"at": Vector2(-63.0, -61.0), "half_width": 1.0, "bank": 1.4},
+				{"at": Vector2(-57.0, -50.0), "half_width": 1.1, "bank": 1.3},
+				{"at": Vector2(-53.0, -40.0), "half_width": 1.5, "bank": 1.1},
+				{"at": Vector2(-50.0, -30.0), "half_width": 2.0, "bank": 0.9},
+				{"at": Vector2(-48.5, -18.0), "half_width": 2.1, "bank": 1.0},
+				{"at": Vector2(-48.0, -8.0), "half_width": 2.1, "bank": 1.1},
+				{"at": Vector2(-48.5, 2.0), "half_width": 2.2, "bank": 0.9},
+				{"at": Vector2(-50.0, 12.0), "half_width": 2.3, "bank": 0.8},
+				{"at": Vector2(-53.0, 20.0), "half_width": 2.3, "bank": 1.0},
+				{"at": Vector2(-58.0, 27.0), "half_width": 2.2, "bank": 1.6},
+				{"at": Vector2(-64.0, 34.0), "half_width": 2.1, "bank": 2.4},
+				{"at": Vector2(-68.0, 44.0), "half_width": 2.0, "bank": 2.8},
+				{"at": Vector2(-71.0, 58.0), "half_width": 2.0, "bank": 2.6},
+				{"at": Vector2(-73.0, 76.0), "half_width": 2.0, "bank": 2.2},
+				{"at": Vector2(-75.0, 96.0), "half_width": 2.0, "bank": 1.8},
+				{"at": Vector2(-76.0, 114.0), "half_width": 2.0, "bank": 1.8},
+			]},
+		},
+		"default_nest_cell": Vector2i(0, -18),
+		"entries": [Vector2i(-21, 0), Vector2i(20, 0), Vector2i(0, 20)],
+		"default_blocked_cells": [
+			# The valley's outcrop north of the cabin.
+			Vector2i(-3, -5), Vector2i(-2, -5), Vector2i(2, -5), Vector2i(3, -5),
+			Vector2i(-3, -8), Vector2i(3, -3),
+			# A ridge between the cabin and the nest, with ways through it: a narrow one to the west,
+			# a wide one in the middle, the long way round to the east.
+			Vector2i(-9, -12), Vector2i(-8, -12), Vector2i(-7, -12),
+			Vector2i(-4, -13), Vector2i(-3, -13),
+			Vector2i(5, -12), Vector2i(6, -12), Vector2i(7, -12), Vector2i(8, -13),
+			# The stone forest: a ring of pillars with the stone in among them.
+			Vector2i(12, -10), Vector2i(13, -9), Vector2i(16, -10), Vector2i(17, -12),
+			Vector2i(16, -14), Vector2i(13, -15), Vector2i(11, -13),
+			# Rocks to the west and south-east.
+			Vector2i(-15, -6), Vector2i(-16, -5), Vector2i(10, 12), Vector2i(11, 13),
+		],
+		"default_resource_nodes": [
+			# The opening's, where the valley has them.
+			{"type": "wood", "cell": Vector2i(-4, -2)},
+			{"type": "wood", "cell": Vector2i(4, -2)},
+			{"type": "wood", "cell": Vector2i(6, 3)},
+			{"type": "stone", "cell": Vector2i(-6, 3)},
+			# By the nest: the danger's stone.
+			{"type": "stone", "cell": Vector2i(-4, -16)},
+			{"type": "stone", "cell": Vector2i(4, -16)},
+			# The stone forest.
+			{"type": "stone", "cell": Vector2i(14, -12)},
+			{"type": "stone", "cell": Vector2i(14, -11)},
+			{"type": "stone", "cell": Vector2i(15, -13)},
+			# The stand of trees to the south-west.
+			{"type": "wood", "cell": Vector2i(-12, 6)},
+			{"type": "wood", "cell": Vector2i(-14, 8)},
+			{"type": "wood", "cell": Vector2i(-11, 9)},
+			{"type": "wood", "cell": Vector2i(-15, 5)},
+			{"type": "wood", "cell": Vector2i(-13, 11)},
+			# Trees east and south, and stone to the south.
+			{"type": "wood", "cell": Vector2i(16, 3)},
+			{"type": "wood", "cell": Vector2i(18, 7)},
+			{"type": "wood", "cell": Vector2i(3, 14)},
+			{"type": "wood", "cell": Vector2i(-2, 17)},
+			{"type": "stone", "cell": Vector2i(-6, 15)},
+			# Water at the field's west edge, where the river runs closest.
+			{"type": "water", "cell": Vector2i(-22, -4)},
+		],
+	},
 }
+
+## Which map each map size plays (the settings page, Main._choose_the_map): the small valley is
+## the tests' and the debug-agent's; the large one is the player's (v0.6 round four).
+const MAP_SIZES: Dictionary = {"small": "valley", "large": "valley_large"}
+## The size a player's first run is played at, before they have chosen one.
+const DEFAULT_MAP_SIZE: String = "large"
 ## How long the retired phase machine's produce phase showed before moving on.
 const PRODUCE_DELAY: float = 1.0
 

@@ -53,6 +53,10 @@ func _init() -> void:
 		if String(w).begins_with("lang:"):
 			TranslationServer.set_locale(String(w).substr(5))
 			continue
+		# "map:valley_large" plays on that map; the default is the small valley.
+		if String(w).begins_with("map:"):
+			root.get_node("GameState").chosen_map_id = String(w).substr(4)
+			continue
 		names.append(String(w))
 	if names.is_empty():
 		names = ["open", "fence", "cabin", "closeup", "gap", "raid", "hero", "wreck", "snug", "showcase", "scale"]

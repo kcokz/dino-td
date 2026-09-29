@@ -44,6 +44,12 @@ const HERO_ONLY_GROUP: String = "nav_hero_only"
 var _regions: Dictionary = {}     # For -> NavigationRegion3D
 var _dirty: bool = true
 var _baked_once: bool = false
+## Meshes still baking on the engine's worker threads (rebake_in_background).
+var _baking: int = 0
+## Which bake is the latest: a mesh from an older one, finishing after a newer, is not put in.
+var _generation: int = 0
+## Each map's sync count when its latest mesh went in (For -> int): it answers from the next one.
+var _landed: Dictionary = {}
 
 func _ready() -> void:
 	add_to_group(GROUP)
@@ -88,20 +94,19 @@ func _on_world_changed(_arg: Variant = null) -> void:
 	_dirty = true
 
 func _process(_delta: float) -> void:
-	if _dirty:
-		rebake()
+	if _dirty and _baking == 0:
+		rebake_in_background()
 
 # ==============================================================================
 # Baking
 # ==============================================================================
 
-## Rebuilds both meshes from the level as it stands.
-##
-## Synchronous on purpose. The level is a forty-metre field and the bake is milliseconds;
-## an async bake would mean a window where a fence has gone up and nothing knows it yet,
-## which is a race condition bought for nothing.
+## Rebuilds the meshes from the level as it stands, at once: the level's first bake, and anyone
+## who needs the answer before going on (the tests, a fixture). Changes in play bake in the
+## background (rebake_in_background).
 func rebake() -> void:
 	_dirty = false
+	_generation += 1
 	for which in _regions:
 		var region: NavigationRegion3D = _regions[which]
 		if not is_instance_valid(region):
@@ -115,7 +120,50 @@ func rebake() -> void:
 			_add_hero_only_spaces(source)
 		NavigationServer3D.bake_from_source_geometry_data(mesh, source)
 		region.navigation_mesh = mesh
+		_landed[which] = NavigationServer3D.map_get_iteration_id(region.get_navigation_map())
 	_baked_once = true
+
+## Rebuilds the meshes as rebake does, the baking itself on the engine's worker threads
+## (NavigationServer3D.bake_from_source_geometry_data_async): only reading the level is left on
+## this one, a millisecond or two. Baked here, every stake finished stopped the game for as long as
+## the bake took -- a tenth of a second on the small valley, three fifths on the large (v0.6 round
+## four; it had been a forty-metre field and milliseconds). Until the new meshes are in the old ones
+## answer: for a fifth of a second at most a raider may route through a fence just finished, walk
+## into it, and be dealt with as anything held up is (Dino._unstick). What changes meanwhile marks
+## the maps stale again, and one more bake follows this one.
+func rebake_in_background() -> void:
+	_dirty = false
+	_generation += 1
+	for which in _regions:
+		var region: NavigationRegion3D = _regions[which]
+		if not is_instance_valid(region):
+			continue
+		var mesh: NavigationMesh = _mesh_for(which)
+		var source := NavigationMeshSourceGeometryData3D.new()
+		NavigationServer3D.parse_source_geometry_data(mesh, source, region)
+		if which != For.HERO:
+			_add_hero_only_spaces(source)
+		_baking += 1
+		NavigationServer3D.bake_from_source_geometry_data_async(mesh, source, _baked.bind(which, region, mesh, _generation))
+
+## A mesh baked in the background (the engine calls this on the main thread): into its region,
+## unless a newer bake has answered since.
+func _baked(which: int, region: NavigationRegion3D, mesh: NavigationMesh, generation: int) -> void:
+	_baking = maxi(0, _baking - 1)
+	if generation == _generation and is_instance_valid(region) and region.is_inside_tree():
+		region.navigation_mesh = mesh
+		_landed[which] = NavigationServer3D.map_get_iteration_id(region.get_navigation_map())
+
+## Whether every map answers from the level as it stands: nothing waiting to bake or baking, and
+## every map synced since its latest mesh went in -- a region takes up a new mesh at the end of a
+## frame, and its map answers from the sync after.
+func is_caught_up() -> bool:
+	if _dirty or _baking > 0:
+		return false
+	for which in _landed:
+		if NavigationServer3D.map_get_iteration_id(map_of(which)) <= int(_landed[which]):
+			return false
+	return true
 
 ## Every hero-only space (HERO_ONLY_GROUP) into `source` as a solid block, exactly its box: the
 ## walls round it are in the bake already.

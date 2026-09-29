@@ -36,7 +36,7 @@ func _ready() -> void:
 	if _cfg == null or not ("HERDS" in _cfg):
 		return
 	_rng.seed = int(_cfg.HERDS.get("seed", 1))
-	_river = TerrainBuilder.river_of(_cfg.TERRAIN) if "TERRAIN" in _cfg else null
+	_river = TerrainBuilder.river_of(_cfg.terrain()) if "TERRAIN" in _cfg else null
 	for spec in _cfg.HERDS.get("herds", []):
 		_place_herd(spec)
 
@@ -91,7 +91,7 @@ static func _clearance(spec: Dictionary) -> float:
 	return float(spec.get("length", 2.5)) * 0.5 + 0.5
 
 func _is_clear(at: Vector3, clear: float) -> bool:
-	var half: float = float(_cfg.TERRAIN.get("field_half", 22.0)) if "TERRAIN" in _cfg else 22.0
+	var half: float = float(_cfg.terrain().get("field_half", 22.0)) if "TERRAIN" in _cfg else 22.0
 	if maxf(absf(at.x), absf(at.z)) < half + clear:
 		return false
 	return _river == null or _river.bank_clearance(at.x, at.z) >= clear
@@ -149,7 +149,7 @@ func _player_of(art: Node) -> AnimationPlayer:
 
 ## The ground as drawn, wobble and all (TerrainBuilder.ground_noise).
 func _ground(at: Vector3) -> float:
-	var t: Dictionary = _cfg.TERRAIN if "TERRAIN" in _cfg else {}
+	var t: Dictionary = _cfg.terrain() if "TERRAIN" in _cfg else {}
 	if _ground_noise == null:
 		_ground_noise = TerrainBuilder.ground_noise(_cfg)
 	return TerrainBuilder.ground_height(at.x, at.z, float(t.get("field_half", 22.0)),

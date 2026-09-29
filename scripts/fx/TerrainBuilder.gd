@@ -450,7 +450,7 @@ static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector
 
 static func _terrain(cfg: Node) -> Dictionary:
 	if cfg and "TERRAIN" in cfg:
-		return cfg.TERRAIN
+		return cfg.terrain()
 	return {}
 
 ## The noise the ground mesh is built with, for anything that has to stand ON that

@@ -86,6 +86,7 @@ func _pause_with_the_world(child: Node) -> void:
 		child.process_mode = Node.PROCESS_MODE_PAUSABLE
 
 func _ready() -> void:
+	_choose_the_map()
 	_init_level_coordinates()
 	_ensure_scene_dependencies()
 	_wire_signals()
@@ -128,7 +129,7 @@ func _ensure_fog() -> void:
 		add_child(fog)
 	var cfg = _get_config()
 	fog.revealed = false
-	fog.setup(float(cfg.TERRAIN.get("field_half", 22.0)) if (cfg and "TERRAIN" in cfg) else 22.0)
+	fog.setup(float(cfg.terrain().get("field_half", 22.0)) if (cfg and "TERRAIN" in cfg) else 22.0)
 
 func _ensure_nav_maps() -> void:
 	if not is_in_group(NavMaps.SOURCE_GROUP):
@@ -154,7 +155,7 @@ func _ensure_camera_rig() -> void:
 	camera_rig.adopt(camera)
 	# Where the world ends, and how high the ground is -- the valley's own numbers.
 	if cfg and "TERRAIN" in cfg:
-		var t: Dictionary = cfg.TERRAIN
+		var t: Dictionary = cfg.terrain()
 		var field_half: float = float(t.get("field_half", 22.0))
 		var outer_half: float = float(t.get("outskirts_half", 110.0))
 		var margin: float = float(cfg.CAMERA.get("focus_margin", 8.0)) if "CAMERA" in cfg else 8.0
@@ -277,7 +278,9 @@ func _ensure_scene_dependencies() -> void:
 func _discover_waypoints() -> void:
 	waypoints.clear()
 	var path_node = find_child("Path", true, false)
-	if path_node:
+	# The map's own way from its nest to its cabin (below); the scene's markers are the small
+	# valley's, for a level with no map.
+	if path_node and _map().is_empty():
 		for child in path_node.get_children():
 			if child is Marker3D:
 				waypoints.append(child.global_position)
@@ -365,7 +368,7 @@ func setup_initial_entities() -> void:
 	if current_core == null or not is_instance_valid(current_core):
 		var core_pos: Vector3
 		var core_marker = find_child("CoreSpawn", true, false)
-		if core_marker is Node3D and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
+		if core_marker is Node3D and _map().is_empty() and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
 			core_cell = grid_manager.world_to_cell(core_marker.global_position)
 			core_pos = _cabin_centre(core_cell)
 		elif grid_manager and grid_manager.has_method("cell_to_world"):
@@ -390,7 +393,7 @@ func setup_initial_entities() -> void:
 	if current_nest == null or not is_instance_valid(current_nest):
 		var nest_pos: Vector3
 		var nest_marker = find_child("NestSpawn", true, false)
-		if nest_marker is Node3D and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
+		if nest_marker is Node3D and _map().is_empty() and grid_manager and grid_manager.has_method("world_to_cell") and grid_manager.has_method("cell_to_world"):
 			nest_cell = grid_manager.world_to_cell(nest_marker.global_position)
 			nest_pos = grid_manager.cell_to_world(nest_cell)
 		elif grid_manager and grid_manager.has_method("cell_to_world"):
@@ -624,11 +627,11 @@ func _lay_the_river(cfg) -> void:
 		old.queue_free()
 	if cfg == null or not ("TERRAIN" in cfg):
 		return
-	var river: River = TerrainBuilder.river_of(cfg.TERRAIN)
+	var river: River = TerrainBuilder.river_of(cfg.terrain())
 	if river == null:
 		return
-	var spec: Dictionary = cfg.TERRAIN["river"]
-	var field_half: float = float(cfg.TERRAIN.get("field_half", 22.0))
+	var spec: Dictionary = cfg.terrain()["river"]
+	var field_half: float = float(cfg.terrain().get("field_half", 22.0))
 	var holder := Node3D.new()
 	holder.name = "River"
 	add_child(holder)
@@ -636,7 +639,7 @@ func _lay_the_river(cfg) -> void:
 	var water_spec: Dictionary = spec.get("water", {})
 	var water := MeshInstance3D.new()
 	water.name = "Water"
-	water.mesh = river.water_mesh(water_spec, float(cfg.TERRAIN.get("outskirts_half", 110.0)))
+	water.mesh = river.water_mesh(water_spec, float(cfg.terrain().get("outskirts_half", 110.0)))
 	var mat := River.water_material(water_spec)
 	water.material_override = mat
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -691,7 +694,7 @@ func _face_the_river(node: Node3D, at: Vector3) -> void:
 	var cfg = _get_config()
 	if cfg == null or not ("TERRAIN" in cfg):
 		return
-	var river: River = TerrainBuilder.river_of(cfg.TERRAIN)
+	var river: River = TerrainBuilder.river_of(cfg.terrain())
 	if river == null:
 		return
 	var to: Vector2 = river.curve.get_closest_point(Vector2(at.x, at.z)) - Vector2(at.x, at.z)
@@ -726,7 +729,7 @@ func _ground_material(cfg) -> StandardMaterial3D:
 	mat.roughness = 1.0        # soil and grass have no gloss at all
 	mat.metallic = 0.0
 
-	var t: Dictionary = cfg.TERRAIN if "TERRAIN" in cfg else {}
+	var t: Dictionary = cfg.terrain() if "TERRAIN" in cfg else {}
 	var scale: float = float(t.get("detail_scale", 2.4))
 	var strength: float = float(t.get("detail_strength", 0.35))
 	var bumpiness: float = float(t.get("detail_bumpiness", 0.85))
@@ -793,7 +796,7 @@ func _rebuild_ground(cfg) -> void:
 
 	var field_half: float = 22.0
 	if "TERRAIN" in cfg:
-		field_half = float(cfg.TERRAIN.get("field_half", field_half))
+		field_half = float(cfg.terrain().get("field_half", field_half))
 	for node in ground.find_children("*", "CollisionShape3D", true, false):
 		var col := node as CollisionShape3D
 		if col != null and col.shape is BoxShape3D:
@@ -811,7 +814,7 @@ func _scatter_ground_cover(cfg) -> void:
 	if cfg == null or not ("GROUND_COVER" in cfg):
 		return
 	var cover: Dictionary = cfg.GROUND_COVER
-	var field_half: float = float(cfg.TERRAIN.get("field_half", 22.0)) if "TERRAIN" in cfg else 22.0
+	var field_half: float = float(cfg.terrain().get("field_half", 22.0)) if "TERRAIN" in cfg else 22.0
 
 	# Its own node, NOT inside terrain_container. The hills in there are gameplay -- the
 	# tests count them against the blocked cells -- and scenery filed among them made
@@ -1654,6 +1657,34 @@ func try_place_at_cell(cell: Vector2i, at_world: Variant = null, faces: int = -1
 
 ## The map this run is played on (GameState.map_data): where everything stands and what
 ## lies by the cabin at the start. Config.MAPS holds every map; which one is the run's.
+## The map this run is played on: the one the player chose on the settings page (Config.MAP_SIZES)
+## -- when this is the game itself, the level the player launched. A level a test or a tool builds
+## plays the default, the small valley, whatever the player chose (v0.6 round four: "测试的时候可以
+## 用小地图，我玩的时候用大地图").
+func _choose_the_map() -> void:
+	var gs = _get_game_state()
+	if gs == null or not _plays_the_players_map():
+		return
+	var chosen: String = map_setting()
+	if String(gs.chosen_map_id) != chosen or String(gs.map_id) != chosen:
+		gs.chosen_map_id = chosen
+		gs.reset_game()
+
+## Whether this level is the game the player launched (its main scene), not one a script built.
+func _plays_the_players_map() -> bool:
+	return is_inside_tree() and get_tree().current_scene == self
+
+## The map the settings page has chosen: its size (I18n's settings file, "game"/"map_size"), as a map.
+func map_setting() -> String:
+	var cfg = _get_config()
+	if cfg == null:
+		return ""
+	var i18n = get_node_or_null("/root/I18n")
+	var size: String = String(cfg.DEFAULT_MAP_SIZE)
+	if i18n and i18n.has_method("load_setting"):
+		size = String(i18n.load_setting("game", "map_size", size))
+	return String(cfg.MAP_SIZES.get(size, cfg.DEFAULT_MAP_ID))
+
 func _map() -> Dictionary:
 	var gs = _get_game_state()
 	if gs and gs.has_method("map_data"):
@@ -1973,6 +2004,11 @@ func place_building_at_cell(type_id: String, cell: Vector2i) -> Node:
 
 ## Completely restores pristine starting game state without reloading scene.
 func restart_game() -> void:
+	# A map chosen on the settings page since this run began is a different level: built afresh.
+	var gs_now = _get_game_state()
+	if _plays_the_players_map() and gs_now and String(gs_now.chosen_map_id) != map_setting():
+		get_tree().reload_current_scene()
+		return
 	cancel_building_selection()
 	if in_cabin:
 		_on_cabin_view_changed(false)
