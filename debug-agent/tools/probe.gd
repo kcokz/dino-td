@@ -38,6 +38,10 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"settings_map": await _p_settings_map()
+			"routes": await _p_routes()
+			"fence_in_their_way": await _p_fence_in_their_way()
+			"build_hitch": await _p_build_hitch()
 			"gaps": await _p_gaps()
 			"boss_rams": await _p_boss_rams()
 			"defeat_guard": await _p_defeat("guard")
@@ -2161,6 +2165,247 @@ func _p_boss_rams() -> void:
 	_say("INFO", "%s from %.1f m out: first bite at %.1f s on a %s; walked %.1f m in %.1f s; ring sections lost %d of %d" % [boss, start.distance_to(core), first_bite, bitten, walked, t, lost, ring.size()])
 	_say("PASS" if first_bite >= 0.0 and first_bite < 15.0 and walked < 15.0 else "FAIL", "the boss rams the ring rather than going round it")
 
+## TASK-018 (30c4d1a), run with DA_MAP=valley_large. Which of the ridge's ways a raid from the nest
+## takes (the x each raider crosses the ridge's line at), and whether a raider set down at each of the
+## final wave's entries reaches the cabin.
+func _p_routes() -> void:
+	var gs := root.get_node("GameState")
+	var wm = _main.wave_manager
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var nest: Node3D = get_first_node_in_group("nest") as Node3D
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(8.0)
+	_say("INFO", "map %s: cabin %s, nest %s (%.1f m); entries %s" % [String(gs.map_data().get("name", "?")), str(core), str(nest.global_position), nest.global_position.distance_to(core), str(wm.entry_positions)])
+	# The ridge's line: tile rows -12/-13 of the large valley (tiles are 2 m), just south of it.
+	var ridge_z: float = -22.0
+	# DA_BLOCK_MIDDLE: palisade across the ridge's wide middle way (tiles x -2..4 -> metres -5..10).
+	if OS.get_environment("DA_BLOCK_MIDDLE") != "":
+		var gm = _main.grid_manager
+		var put := 0
+		for x in range(-6, 12):
+			for z in [-25, -24]:
+				if _build_at("wall", gm.world_to_build_cell(Vector3(float(x) + 0.5, 0.0, float(z) + 0.5))) != null:
+					put += 1
+		_main.nav_maps.rebake()
+		await _advance(2.0)
+		_say("INFO", "middle way fenced: %d stakes" % put)
+	var crossed := {}
+	var reached := {}
+	var band := {}
+	wm.start_wave(2, 9)
+	var t := 0.0
+	var last := {}
+	while t < 60.0:
+		await _advance(0.25)
+		t += 0.25
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		for d in get_nodes_in_group("dinos"):
+			if not is_instance_valid(d) or d.is_in_group("guard_dinos"):
+				continue
+			var id: int = d.get_instance_id()
+			var p: Vector3 = (d as Node3D).global_position
+			if last.has(id) and float(last[id].z) < ridge_z and p.z >= ridge_z and not crossed.has(id):
+				crossed[id] = p.x
+			# The way it went through the ridge band: its x range while z is in -30..-18.
+			if p.z > -30.0 and p.z < -18.0:
+				var r: Array = band.get(id, [INF, -INF, INF, -INF])
+				band[id] = [minf(r[0], p.x), maxf(r[1], p.x), minf(r[2], p.z), maxf(r[3], p.z)]
+			last[id] = p
+			if int(d.mode) == 2 and d.current_target == cabin and not reached.has(id):
+				reached[id] = t
+		if is_equal_approx(t, 14.0):
+			_look_at((nest.global_position + core) * 0.5, 45.0)
+			await _advance(0.2)
+			await _shoot("raid_at_the_ridge")
+	var ways := {"west": 0, "middle": 0, "east": 0}
+	for id in crossed:
+		var x: float = float(crossed[id])
+		ways["west" if x < -5.0 else ("east" if x > 10.0 else "middle")] += 1
+	var xs: Array = []
+	for id in crossed:
+		xs.append("%.0f" % float(crossed[id]))
+	if OS.get_environment("DA_BLOCK_MIDDLE") != "":
+		_say("INFO", "fence sections standing after the raid: %d" % _count_walls())
+	for id in band:
+		var r: Array = band[id]
+		_say("INFO", "  a raider in the ridge band: x %.1f..%.1f, z %.1f..%.1f" % [r[0], r[1], r[2], r[3]])
+	_say("INFO", "raid of 9 from the nest: crossed the ridge line (z %.0f) at x = %s -> %s; reached the cabin %d of 9 (first at %.1f s)" % [ridge_z, ", ".join(xs), str(ways), reached.size(), (reached.values().min() if not reached.is_empty() else -1.0)])
+	# The final wave's entries: one raider from each, sent at the cabin.
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos"):
+			d.queue_free()
+	await _advance(0.5)
+	var species: String = String(gs.map_data()["raiders"].keys()[0])
+	var cfg := root.get_node("Config")
+	var from_entry := {}
+	for e in wm.entry_positions:
+		var d = load(String(cfg.get_dino_script_path(species))).new()
+		_main.add_child(d)
+		d.setup(species)
+		d.max_hp = 9999.0
+		d.current_hp = 9999.0
+		d.global_position = e
+		d.set_waypoints([core])
+		from_entry[d] = {"from": e, "at": -1.0}
+	t = 0.0
+	while t < 60.0:
+		await _advance(0.25)
+		t += 0.25
+		for d in from_entry:
+			if float(from_entry[d]["at"]) < 0.0 and is_instance_valid(d) and int(d.mode) == 2 and d.current_target == cabin:
+				from_entry[d]["at"] = t
+	var lines: Array = []
+	var all_ok := true
+	for d in from_entry:
+		var at: float = float(from_entry[d]["at"])
+		lines.append("from %s: %s" % [str(from_entry[d]["from"]), ("biting the cabin at %.1f s" % at) if at >= 0.0 else "NOT at the cabin in 60 s (at %s)" % str((d as Node3D).global_position if is_instance_valid(d) else "gone")])
+		all_ok = all_ok and at >= 0.0
+	_say("INFO", "entries: " + "; ".join(lines))
+	_say("PASS" if all_ok and reached.size() >= 7 else "FAIL", "routes: the raid through the ridge and every entry to the cabin")
+
+## TASK-018 (5): palisade built across a raid's way while it walks -- the navmesh bakes in the
+## background, so for some frames the raid walks on the old one. Nobody should end up inside the new
+## stakes or pressed against them for good.
+func _p_fence_in_their_way() -> void:
+	var gs := root.get_node("GameState")
+	var wm = _main.wave_manager
+	var gm = _main.grid_manager
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var nest: Node3D = get_first_node_in_group("nest") as Node3D
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(6.0)
+	wm.start_wave(2, 8)
+	# When the first is a third of the way from the cabin to the nest, a line across their way.
+	var dir: Vector3 = (nest.global_position - core).normalized()
+	var line_at: Vector3 = core + dir * 7.0
+	var t := 0.0
+	var built := false
+	var walls: Array = []
+	var inside := 0
+	var inside_what: Array = []
+	var t_built := 0.0
+	while t < 50.0:
+		await _advance(0.25 if built else 0.05)
+		t += 0.25 if built else 0.05
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		if not built:
+			for d in get_nodes_in_group("dinos"):
+				if is_instance_valid(d) and not d.is_in_group("guard_dinos") and (d as Node3D).global_position.distance_to(line_at) < 6.0:
+					built = true
+			if built:
+				t_built = t
+				var c: Vector2i = gm.world_to_build_cell(line_at)
+				var side := Vector2i(1, 0) if absf(dir.z) > absf(dir.x) else Vector2i(0, 1)
+				for k in range(-6, 7):
+					var b = _build_at("wall", c + side * k)
+					if b != null:
+						walls.append(b)
+				_say("INFO", "at %.1f s, %d stakes put up across their way at %s" % [t, walls.size(), str(line_at)])
+				await _shoot("stakes_up")
+			continue
+		for d in get_nodes_in_group("dinos"):
+			if not is_instance_valid(d) or d.is_in_group("guard_dinos"):
+				continue
+			for w in walls:
+				if is_instance_valid(w) and not w.is_destroyed and _flat3((d as Node3D).global_position).distance_to(_flat3(w.global_position)) < 0.35:
+					inside += 1
+					if inside_what.size() < 4:
+						inside_what.append("%.1f s at %s" % [t - t_built, str((d as Node3D).global_position)])
+	await _portrait("after_the_stakes", line_at, 12.0)
+	_say("INFO", "raid samples inside a stake's cell (< 0.35 m from its middle): %d %s" % [inside, str(inside_what)])
+	_say("PASS" if inside == 0 else "FAIL", "stakes put up across a raid's way: nobody walked into them")
+
+func _flat3(v: Vector3) -> Vector3:
+	return Vector3(v.x, 0.0, v.z)
+
+## TASK-018 (4): a line of twelve stakes put up one after another, and the longest frame in the two
+## seconds after each -- the rebake used to hold the game 0.11 s (small) / 0.6 s (large).
+func _p_build_hitch() -> void:
+	var gs := root.get_node("GameState")
+	var gm = _main.grid_manager
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	await _advance(1.0)
+	var worst := 0.0
+	var worsts: Array = []
+	var c: Vector2i = gm.world_to_build_cell(core + Vector3(-6.0, 0.0, 6.0))
+	for k in range(12):
+		_build_at("wall", c + Vector2i(k, 0))
+		var last: int = Time.get_ticks_usec()
+		var w := 0.0
+		for i in range(120):
+			await process_frame
+			var now: int = Time.get_ticks_usec()
+			w = maxf(w, (now - last) / 1000.0)
+			last = now
+		worsts.append("%.0f" % w)
+		worst = maxf(worst, w)
+	_say("INFO", "longest frame after each of 12 stakes (ms): %s" % ", ".join(worsts))
+	_say("PASS" if worst < 50.0 else "FAIL", "putting up stakes: the longest frame %.0f ms" % worst)
+
+## TASK-018 (7): the settings page's map row, and a restart after choosing -- through the real main
+## scene (current_scene), since only it reads the setting. WRITES the player's settings file
+## (game/map_size): the caller backs it up and puts it back.
+func _p_settings_map() -> void:
+	if OS.get_environment("DA_LANG") != "":
+		TranslationServer.set_locale(OS.get_environment("DA_LANG"))
+	current_scene = _main
+	var gs := root.get_node("GameState")
+	_say("INFO", "first run: map %s, field half %s" % [String(gs.get("map_id") if "map_id" in gs else gs.get("chosen_map_id")), str(_field_half())])
+	var hud = _main.hud
+	hud.toggle_pause_menu()
+	await _advance(0.3)
+	var pm: Node = _find_with_method(hud, "open_settings")
+	if pm == null:
+		pm = _find_with_method(root, "open_settings")
+	pm.open_settings()
+	await _advance(0.5)
+	var picker: OptionButton = pm.get("map_picker") as OptionButton
+	var items: Array = []
+	for i in picker.item_count:
+		items.append(picker.get_item_text(i))
+	_say("INFO", "the map row: items %s, selected '%s', tooltip '%s'" % [str(items), picker.get_item_text(picker.selected), picker.tooltip_text])
+	await _shoot("settings_" + TranslationServer.get_locale())
+	for want in ["large", "small"]:
+		var cfg := root.get_node("Config")
+		var idx: int = cfg.MAP_SIZES.keys().find(want)
+		picker.select(idx)
+		picker.item_selected.emit(idx)
+		await _advance(0.2)
+		# Restart as the game-over and pause menus do.
+		current_scene.restart_game()
+		for i in range(40):
+			await process_frame
+		_main = current_scene
+		await _advance(1.0)
+		var nest: Node3D = get_first_node_in_group("nest") as Node3D
+		_say("INFO", "chose %s, restarted: current scene %s, field half %s, nest %.1f m from the cabin" % [want, current_scene.name, str(_field_half()), nest.global_position.distance_to(_main.current_core.global_position) if nest != null and _main.current_core != null else -1.0])
+		if want == "large":
+			await _shoot("large_after_restart")
+		hud = _main.hud
+		hud.toggle_pause_menu()
+		await _advance(0.3)
+		pm = _find_with_method(root, "open_settings")
+		pm.open_settings()
+		await _advance(0.3)
+		picker = pm.get("map_picker") as OptionButton
+
+func _field_half() -> float:
+	var gs := root.get_node("GameState")
+	var m: Dictionary = gs.map_data() if gs.has_method("map_data") else {}
+	return float(m.get("terrain", {}).get("field_half", root.get_node("Config").TERRAIN.get("field_half", 0.0)))
+
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
 # ------------------------------------------------------------------------------
@@ -2177,6 +2422,10 @@ func _all(n: Node) -> Array:
 func _fresh_level() -> void:
 	_tear_down()
 	var gs := root.get_node_or_null("GameState")
+	# DA_MAP: the map to build (since TASK-018: "valley_large"); a scripted level is the small valley
+	# unless told otherwise.
+	if gs and OS.get_environment("DA_MAP") != "" and "chosen_map_id" in gs:
+		gs.chosen_map_id = OS.get_environment("DA_MAP")
 	if gs and gs.has_method("reset_game"):
 		gs.reset_game()
 	_main = load("res://scenes/Main.tscn").instantiate()
