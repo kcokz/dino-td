@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"mist": await _p_mist()
 			"ring_traps": await _p_ring_traps()
 			"black_fog": await _p_black_fog()
 			"fps": await _p_fps()
@@ -1632,6 +1633,79 @@ func _p_ring_traps() -> void:
 			filmed += 1
 	eb.twitch_detected.disconnect(on_twitch)
 	_say("INFO", "raid over %s after %.1f s; %d reports filmed" % [not wm.is_wave_active, t, filmed])
+
+## TASK-014 (7426dbc): the fog of war as the valley's mist. The opening hint said once (in DA_LANG,
+## default the saved language); a tree in the mist not drawn and not to be picked, yet walked to --
+## and there, drawn and cut; pictures of the opening, the walk, noon, dusk and night through the
+## game's own camera.
+func _p_mist() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	if OS.get_environment("DA_LANG") != "":
+		TranslationServer.set_locale(OS.get_environment("DA_LANG"))
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	var hint: String = tr("HINT_FOG")
+	var frag: String = hint.left(8)
+	var seen_at: Array = []
+	var t := 0.0
+	while t < 12.0:
+		await _advance(0.25)
+		t += 0.25
+		if not _visible_labels(frag).is_empty():
+			seen_at.append(t)
+		if is_equal_approx(t, 5.0):
+			await _shoot("A_opening_hint_" + TranslationServer.get_locale())
+	_say("INFO", "hint '%s' on screen from %.2f s to %.2f s (%d samples)" % [frag, seen_at[0] if not seen_at.is_empty() else -1.0, seen_at[seen_at.size() - 1] if not seen_at.is_empty() else -1.0, seen_at.size()])
+	# What the mist hides: resource nodes drawn or not.
+	var drawn := 0
+	var hidden: Array = []
+	for n in get_nodes_in_group("resource_nodes"):
+		if (n as Node3D).is_visible_in_tree():
+			drawn += 1
+		else:
+			hidden.append(n)
+	_say("INFO", "resource nodes drawn %d, hidden in the mist %d" % [drawn, hidden.size()])
+	# A tree in the mist: not pickable; walked to; then drawn and cut.
+	var tree: Node3D = null
+	for n in hidden:
+		if String(n.resource_type) == "wood" and (tree == null or (n as Node3D).global_position.distance_to(core) < tree.global_position.distance_to(core)):
+			tree = n
+	if tree != null:
+		_look_at(tree.global_position, 20.0)
+		await _advance(0.5)
+		var at: Vector2 = _main._active_camera().unproject_position(tree.global_position + Vector3(0.0, 1.5, 0.0))
+		var picked = _main._raycast_object(at)
+		_say("INFO", "a tree in the mist at %s: drawn %s; under the cursor: %s" % [str(tree.global_position), tree.is_visible_in_tree(), str(picked)])
+		await _shoot("B_tree_in_the_mist")
+		hero.move_to(tree.global_position + (core - tree.global_position).normalized() * 1.2)
+		var tw := 0.0
+		while tw < 25.0 and not tree.is_visible_in_tree():
+			await _advance(0.25)
+			tw += 0.25
+		var wood0: int = int(gs.resources.get("wood", 0))
+		hero.order_harvest(tree)
+		await _advance(6.0)
+		_say("INFO", "walked there: tree drawn %s after %.1f s; wood %d -> %d while cutting" % [tree.is_visible_in_tree(), tw, wood0, int(gs.resources.get("wood", 0))])
+		_say("PASS" if picked != tree and tree.is_visible_in_tree() and int(gs.resources.get("wood", 0)) > wood0 else "FAIL", "a tree in the mist: not pickable, walked to, then drawn and cut")
+	hero.move_to(core + Vector3(0.0, 0.0, 4.5))
+	await _advance(10.0)
+	_look_at(core + Vector3(-4.0, 0.0, -4.0), 30.0)
+	await _advance(1.0)
+	await _shoot("C_walked_and_back_noon")
+	for part in ["dusk", "night"]:
+		gs.day_clock = float(cfg.DAY["parts"][part]) + 5.0
+		_look_at(core, 25.0)
+		await _advance(1.5)
+		await _shoot("D_" + part)
+	gs.day_clock = 100.0 + 360.0
+	var half: float = float(cfg.TERRAIN.get("field_half", 22.0))
+	_look_at(core + Vector3(half, 0.0, 0.0), 45.0)
+	await _advance(1.5)
+	await _shoot("E_edge_zoomed_out")
+	_say("INFO", "hint samples after 12 s: still on screen %s" % (not _visible_labels(frag).is_empty()))
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
