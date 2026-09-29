@@ -20,6 +20,7 @@
 | [BUG-018](bug/BUG-018-phytosaur-stays-in-the-torchlight-when-cornered.md) | 火把把植龙逼到场地边，它就停在火光里贴着人 | 低～中 | open | 2026-09-29 |
 | [BUG-019](bug/BUG-019-hero-does-not-hit-back-on-his-way-to-work.md) | 夜里去干活的路上被植龙堵住咬死，不还手 | 中 | open | 2026-09-29 |
 | [BUG-020](bug/BUG-020-axe-effect-uses-a-letter-x.md) | 能力槽：斧头"木材 x2"用字母 x，别的用 × | 很低 | open | 2026-09-29 |
+| [BUG-021](bug/BUG-021-test-suite-leaks-at-exit.md) | 测试套件退出泄漏 63 对象 / 9 资源（在涨） | 低 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -59,6 +60,10 @@
 | TASK-021 | 火与夜、怕火的植龙 | **done** 大体过；另开 BUG-017、BUG-018 |
 
 ## 检查记录
+
+### 2026-09-29 第 16 次（自由找 bug，7f8ee65）
+
+- 测试全过，但退出时漏 63 个对象、9 个资源（上次 51 / 7）。`--verbose` 看：两整棵 SceneTree 带窗口和世界、两个挂着的协程、一段墙 → BUG-021。
 
 ### 2026-09-29 第 15 次（自由找 bug，7f8ee65）
 
@@ -190,4 +195,4 @@
 - [x] 围栏里摆绊索弓（3 章"想打的东西被墙整个围住"）：恐龙会不会站在外面挨打不咬墙。`siege:...:inside` 场景。（第 9 次：会咬、会进去；口子前抖 → BUG-005 补充）
 - [x] 能力槽悬停文字、空格子的提示（3 章）。（第 15 次：都在、中英文对；斧头的 x → BUG-020）
 - [x] 鼠标碰窗口边缘平移视角 → TASK-004（真鼠标那一半留给人）
-- [ ] 测试套件退出时的 RID/ObjectDB 泄漏（dev 说有 51 个对象、7 个资源，是测试卫生问题，可以另开 BUG）。
+- [x] 测试套件退出时的 RID/ObjectDB 泄漏（dev 说有 51 个对象、7 个资源，是测试卫生问题，可以另开 BUG）。（第 16 次：63 / 9 → BUG-021）
