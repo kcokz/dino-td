@@ -16,6 +16,8 @@
 | [BUG-014](bug/BUG-014-small-valley-raid-steps-out-in-his-sight.md) | 小山谷：站在巢前看着，来袭在他眼前的边缘点出生 | 中 | open | 2026-09-29 |
 | [BUG-015](bug/BUG-015-twitch-watch-calls-the-dusk-turn-a-mill.md) | 抽搐监视把黄昏掉头回巢报成 mill（误报） | 低 | open | 2026-09-29 |
 | [BUG-016](bug/BUG-016-night-thick-mist-is-black.md) | 夜里没去过的浓雾是纯黑（又像黑色战争迷雾） | 中 | fixed 772b9c9 | 2026-09-29 |
+| [BUG-017](bug/BUG-017-torch-flame-trails-behind-him.md) | 举着火把走路，火苗拖出一串 3 米长的火球 | 低 | open | 2026-09-29 |
+| [BUG-018](bug/BUG-018-phytosaur-stays-in-the-torchlight-when-cornered.md) | 火把把植龙逼到场地边，它就停在火光里贴着人 | 低～中 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -52,6 +54,7 @@
 | TASK-018 | 大山谷和后台烘导航 | **done** 大部分过；另开 BUG-013 |
 | TASK-019 | 守卫先示威；巢里只出一小群，其余从边缘来 | **done** 1、2、3、5 过；第 4 条小山谷另开 BUG-014 |
 | TASK-020 | 迷雾的亮度跟着时辰 | **done** 正午、白斑、闪、帧率过；夜里浓雾纯黑 → BUG-016 |
+| TASK-021 | 火与夜、怕火的植龙 | **done** 大体过；另开 BUG-017、BUG-018 |
 
 ## 检查记录
 

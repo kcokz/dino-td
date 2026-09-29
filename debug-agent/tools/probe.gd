@@ -38,6 +38,9 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"fire_night": await _p_fire_night()
+			"prowl": await _p_prowl()
+			"raid_count": await _p_raid_count()
 			"mist_hours": await _p_mist_hours()
 			"edge_plain": await _p_edge_raid("plain")
 			"edge_nest_watched": await _p_edge_raid("nest_watched")
@@ -2844,6 +2847,405 @@ func _image_diff(a: Image, b: Image, top: float, bottom: float) -> float:
 			total += absf((ca.r + ca.g + ca.b) - (cb.r + cb.g + cb.b)) / 3.0
 			n += 1
 	return total / maxf(1.0, float(n))
+
+## TASK-021 (772b9c9) parts 2-4: fire and the torch, the prowlers kept off (NightProwl disabled).
+## Night 1, no fire: how far he sees (the moon) and the cabin; the torch tile and key 3, its badge,
+## the light round him, the burnt-out word; the torch held walking and cutting. Day 2: a campfire and a
+## brazier by the cabin; dusk 2 lights them and takes the night's wood once; how far round each is
+## seen. First light puts them out. Dusk 3 with no wood: not lit, said once; wood brought, lit.
+func _p_fire_night() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	var fog = _main.fog
+	var gm = _main.grid_manager
+	_main.wave_manager.auto_raid_enabled = false
+	if _main.night_prowl:
+		_main.night_prowl.enabled = false
+	for g in get_nodes_in_group("guard_dinos"):
+		g.queue_free()
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	var cmds: Node = _find_with_method(root, "_refresh_torch")
+	var tb: Button = cmds.get("torch_button") as Button if cmds else null
+	var first_dusk: String = _after_fmt(tr("HINT_DUSK_FIRST"))
+	var starved_txt: String = _after_fmt(tr("HINT_FIRE_STARVED"))
+	var torch_out_txt: String = tr("HINT_TORCH_OUT").left(8)
+	var starved := {"n": 0}
+	eb.fire_starved.connect(func(_f): starved["n"] += 1)
+	# --- Day 1, then dusk 1: the tile, the first dusk's word.
+	gs.day_clock = 230.0
+	hero.global_position = core + Vector3(0.0, 0.0, 12.0)
+	hero.order_stop()
+	await _advance(1.0)
+	var tile_day: bool = tb != null and tb.is_visible_in_tree()
+	gs.day_clock = 238.5
+	var said_first := false
+	var t := 0.0
+	while t < 4.0:
+		await _advance(0.25)
+		t += 0.25
+		said_first = said_first or not _visible_labels(first_dusk).is_empty()
+	var tile_dusk: bool = tb != null and tb.is_visible_in_tree()
+	_say("INFO", "torch tile: by day %s, at dusk %s; the first dusk's word on fire on screen %s ('%s')" % [tile_day, tile_dusk, said_first, first_dusk])
+	_say("PASS" if (not tile_day) and tile_dusk and said_first else "FAIL", "the torch tile only in the dark; the first dusk speaks of fire")
+	# --- Night 1, no fire: how far he and the cabin see.
+	gs.day_clock = 300.0
+	await _advance(1.5)
+	var his: Array = _sight_radius(fog, hero.global_position, [0, 45, 90, 135, 180, 225, 270, 315])
+	var cab: Array = _sight_radius(fog, core, [180, 225, 270, 315, 0])
+	_say("INFO", "night 1, no fire: he sees %.2f-%.2f m round him (FOG night %.2f x his 10 m); the cabin %.2f-%.2f m" % [his[0], his[1], float(cfg.FOG.get("night", 0.0)) if "FOG" in cfg else -1.0, cab[0], cab[1]])
+	await _look_and_shoot(hero.global_position, 14.0, "night1_no_fire")
+	# --- The torch: key 3.
+	gs.resources["wood"] = 5
+	await _press(KEY_3)
+	await _advance(0.5)
+	var badge: Label = tb.get_node_or_null("Badge") as Label if tb else null
+	_say("INFO", "key 3: torch_left %.1f, wood 5 -> %d; tile disabled %s, badge '%s' shown %s" % [hero.torch_left, int(gs.resources.get("wood", 0)), tb.disabled if tb else false, badge.text if badge else "?", badge.visible if badge else false])
+	var lit_ok: bool = hero.torch_left > 55.0 and int(gs.resources.get("wood", 0)) == 4 and tb != null and tb.disabled
+	await _advance(1.0)
+	var tor: Array = _sight_radius(fog, hero.global_position, [0, 45, 90, 135, 180, 225, 270, 315])
+	_say("INFO", "torch: he sees %.2f-%.2f m round him (torch light %.1f)" % [tor[0], tor[1], hero.torch_light()])
+	await _look_and_shoot(hero.global_position, 10.0, "torch_standing")
+	# Held walking and cutting.
+	hero.move_to(core + Vector3(8.0, 0.0, 12.0))
+	await _advance(1.2)
+	await _look_and_shoot(hero.global_position, 7.0, "torch_walking")
+	var tree: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) == "wood" and (tree == null or (n as Node3D).global_position.distance_to(hero.global_position) < tree.global_position.distance_to(hero.global_position)):
+			tree = n
+	if tree:
+		hero.order_harvest(tree)
+		var tw := 0.0
+		while tw < 20.0 and int(hero.current_state) != 5:
+			await _advance(0.25)
+			tw += 0.25
+		await _advance(1.0)
+		await _look_and_shoot(hero.global_position, 7.0, "torch_cutting")
+		hero.order_stop()
+	# Burnt out: the badge counting, then the word.
+	hero.torch_left = 8.0
+	await _advance(3.0)
+	var badge_mid: String = badge.text if badge else "?"
+	var out_said := false
+	t = 0.0
+	while t < 8.0:
+		await _advance(0.25)
+		t += 0.25
+		out_said = out_said or not _visible_labels(torch_out_txt).is_empty()
+	_say("INFO", "torch near its end: badge '%s' with ~5 s left; burnt out: torch_left %.1f, the word said %s, tile shown %s enabled %s" % [badge_mid, hero.torch_left, out_said, tb.is_visible_in_tree() if tb else false, not tb.disabled if tb else false])
+	_say("PASS" if lit_ok and out_said and hero.torch_left <= 0.0 and tb.is_visible_in_tree() and not tb.disabled else "FAIL", "the torch: key 3 lights it for a wood, the tile counts down, it burns out and says so")
+	# --- Day 2: a campfire and a brazier by the cabin.
+	gs.day_clock = 360.0 + 200.0
+	await _advance(1.0)
+	var tile_day2: bool = tb != null and tb.is_visible_in_tree()
+	var camp = _build_at("campfire", gm.world_to_build_cell(core + Vector3(6.0, 0.0, 3.0)))
+	var braz = _build_at("brazier", gm.world_to_build_cell(core + Vector3(-6.0, 0.0, 3.0)))
+	await _advance(1.0)
+	if camp == null or braz == null:
+		_say("FAIL", "could not build the fires")
+		return
+	gs.resources["wood"] = 10
+	_say("INFO", "day 2: tile shown %s; campfire lit %s, brazier lit %s; wood 10" % [tile_day2, camp.lit, braz.lit])
+	var day_out: bool = not camp.lit and not braz.lit
+	gs.day_clock = 360.0 + 238.5
+	await _advance(4.0)
+	var w_dusk: int = int(gs.resources.get("wood", 0))
+	_say("INFO", "dusk 2: campfire lit %s (light %.1f), brazier lit %s (light %.1f); wood 10 -> %d (want 10 - 2 - 3 = 5)" % [camp.lit, camp.light_radius(), braz.lit, braz.light_radius(), w_dusk])
+	await _look_and_shoot(core + Vector3(0.0, 0.0, 3.0), 18.0, "fires_dusk2")
+	gs.day_clock = 360.0 + 300.0
+	hero.global_position = core + Vector3(0.0, 0.0, 16.0)
+	hero.order_stop()
+	await _advance(2.0)
+	var w_night: int = int(gs.resources.get("wood", 0))
+	var cs: Array = _sight_radius(fog, camp.global_position, [300, 330, 0, 30, 60])
+	var bs: Array = _sight_radius(fog, braz.global_position, [120, 150, 180, 210, 240])
+	_say("INFO", "night 2: wood %d (still %d?); round the campfire seen %.2f-%.2f m (lights %.0f); round the brazier %.2f-%.2f m (lights %.0f)" % [w_night, w_dusk, cs[0], cs[1], camp.light_radius(), bs[0], bs[1], braz.light_radius()])
+	await _look_and_shoot(core + Vector3(0.0, 0.0, 3.0), 22.0, "fires_night2")
+	await _look_and_shoot(camp.global_position, 6.0, "campfire_close")
+	await _look_and_shoot(braz.global_position, 6.0, "brazier_close")
+	# --- First light.
+	gs.day_clock = 720.0 + 2.0
+	await _advance(3.0)
+	var dawn_out: bool = not camp.lit and not braz.lit
+	_say("INFO", "first light: campfire lit %s, brazier lit %s; wood %d" % [camp.lit, braz.lit, int(gs.resources.get("wood", 0))])
+	# --- Dusk 3 with no wood.
+	gs.resources["wood"] = 0
+	var n0: int = starved["n"]
+	gs.day_clock = 720.0 + 238.5
+	var shown := 0
+	var was := false
+	t = 0.0
+	while t < 10.0:
+		await _advance(0.25)
+		t += 0.25
+		var up: bool = not _visible_labels(starved_txt).is_empty()
+		if up and not was:
+			shown += 1
+		was = up
+	var starved_lit: bool = camp.lit or braz.lit
+	gs.resources["wood"] = 10
+	await _advance(3.0)
+	_say("INFO", "dusk 3, no wood: lit %s; fire_starved %d, the word on screen %d time(s); wood 10 brought: campfire %s, brazier %s, wood now %d" % [starved_lit, starved["n"] - n0, shown, camp.lit, braz.lit, int(gs.resources.get("wood", 0))])
+	_say("PASS" if day_out and camp.lit and braz.lit and w_dusk == 5 and w_night == 5 and dawn_out else "FAIL", "the fires: out by day, lit at dusk, the night's wood taken once, out at first light")
+	_say("PASS" if not starved_lit and shown == 1 and camp.lit and braz.lit and int(gs.resources.get("wood", 0)) == 5 else "FAIL", "no wood: not lit, said once; wood brought, lit")
+	_say("PASS" if absf(his[1] - 4.5) <= 1.0 and tor[0] >= 6.0 and cs[0] >= 6.0 and bs[0] >= 9.0 else "FAIL", "what is seen at night: about 4.5 m by the moon, the torch and the fires as far as they light")
+
+## TASK-021 part 5 (7f8ee65): the phytosaurs. DA_PROWL: "dark" -- three nights, no fire, he at the bench
+## inside the cabin; "lit" -- a campfire 5 m from the cabin; "torch" -- he out by the cabin with a
+## torch, walking at the first one; the torch burnt out, then. Each: how many come up and where,
+## how many out at once, what they go for and bite, the cabin's health, the nearest any comes to a
+## light's middle, the eye-shine at the edge, and at first light whether all go home.
+func _p_prowl() -> void:
+	var mode: String = OS.get_environment("DA_PROWL") if OS.get_environment("DA_PROWL") != "" else "dark"
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var gm = _main.grid_manager
+	_main.wave_manager.auto_raid_enabled = false
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	gs.resources["wood"] = 40
+	var fire: Node = null
+	if mode == "lit":
+		fire = _build_at("campfire", gm.world_to_build_cell(core + Vector3(0.0, 0.0, 5.0)))
+	if mode == "torch":
+		hero.global_position = core + Vector3(-3.0, 0.0, 5.0)
+		hero.order_stop()
+	else:
+		_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(6.0)
+	var came: Array = []
+	var from: Dictionary = {}
+	var on_spawn := func(d):
+		if d.is_in_group("prowlers"):
+			came.append(d)
+			from[d.get_instance_id()] = (d as Node3D).global_position
+	eb.dino_spawned.connect(on_spawn)
+	var nights: int = int(OS.get_environment("DA_NIGHTS")) if OS.get_environment("DA_NIGHTS") != "" else (3 if mode == "dark" else 1)
+	var all_ok := true
+	for night in nights:
+		var base: float = 360.0 * night
+		gs.day_clock = base + 268.0
+		await _advance(1.0)
+		if not is_instance_valid(cabin):
+			break
+		var hp0: float = cabin.current_hp
+		var most := 0
+		var goes_for := {}
+		var nearest_light := INF
+		var inside_samples := 0
+		var wary_samples := 0
+		var shine_samples := 0
+		var torch_phase := "none"
+		var dist_log: Array = []
+		var walls0: int = _count_walls()
+		var t := 0.0
+		var shot := false
+		var at_cabin := -1.0
+		var life := {}
+		var cornered: Array = []
+		while gs.day_part() == "night" or gs.day_part() == "dusk":
+			await _advance(0.25)
+			t += 0.25
+			var out := 0
+			for d in get_nodes_in_group("prowlers"):
+				if not is_instance_valid(d) or d.is_dead:
+					continue
+				if not d.going_home:
+					out += 1
+				var tg = d.current_target
+				var what: String = "nothing" if tg == null or not is_instance_valid(tg) else (String(tg.building_type) if "building_type" in tg else ("hero" if tg.is_in_group("hero") else String(tg.name)))
+				goes_for[what] = int(goes_for.get(what, 0)) + 1
+				if at_cabin < 0.0 and tg == cabin and int(d.mode) == 2:
+					at_cabin = t
+				var lid: int = d.get_instance_id()
+				if not life.has(lid):
+					life[lid] = {"up": t, "bite": -1.0, "home": -1.0, "hp": d.current_hp}
+				if float(life[lid]["bite"]) < 0.0 and int(d.mode) == 2:
+					life[lid]["bite"] = t
+				if float(life[lid]["home"]) < 0.0 and d.going_home:
+					life[lid]["home"] = t
+				life[lid]["last"] = t
+				if d.current_hp < float(life[lid].get("hp_now", d.current_hp)) and int(life[lid].get("hits", 0)) < 3:
+					life[lid]["hits"] = int(life[lid].get("hits", 0)) + 1
+					var near: Array = []
+					for o in get_nodes_in_group("dinos"):
+						if o != d and is_instance_valid(o) and (o as Node3D).global_position.distance_to(d.global_position) < 4.0:
+							near.append("%s %.1f m" % [String(o.dino_type), (o as Node3D).global_position.distance_to(d.global_position)])
+					for b in get_nodes_in_group("buildings"):
+						if is_instance_valid(b) and (b as Node3D).global_position.distance_to(d.global_position) < 6.0:
+							near.append("%s %.1f m" % [String(b.building_type), (b as Node3D).global_position.distance_to(d.global_position)])
+					_say("INFO", "a phytosaur hurt %.1f -> %.1f at %.1f s, at %s: he %.1f m off (state %d, inside %s); near it: %s" % [float(life[lid].get("hp_now", 0.0)), d.current_hp, t, str(d.global_position), _flat3(hero.global_position).distance_to(_flat3(d.global_position)), int(hero.current_state), str(cabin.hero_inside), ", ".join(near)])
+				life[lid]["hp_now"] = d.current_hp
+				if mode == "torch" and hero.torch_light() > 0.0 and _flat3(d.global_position).distance_to(_flat3(hero.global_position)) < 2.0 and cornered.size() < 3:
+					cornered.append("at %s (he at %s), mode %d, wary %s, velocity %.2f" % [str(d.global_position), str(hero.global_position), int(d.mode), d.is_wary(), Vector3(d.velocity.x, 0, d.velocity.z).length()])
+				for light in ProwlerDino.lights(self):
+					var gap: float = Vector2(d.global_position.x - light["at"].x, d.global_position.z - light["at"].z).length()
+					nearest_light = minf(nearest_light, gap - float(light["radius"]))
+					if gap < float(light["radius"]) - float(cfg.PROWL.get("flee_inside", 1.6)) - 0.3:
+						inside_samples += 1
+				if d.is_wary():
+					wary_samples += 1
+					if d.eye_shine > 0.2:
+						shine_samples += 1
+					var near_l: Dictionary = ProwlerDino.light_over(self, d.global_position, 1.5)
+					if not shot and mode != "dark" and not near_l.is_empty() and t > 20.0:
+						shot = true
+						await _look_and_shoot((d.global_position + (near_l["at"] as Vector3)) * 0.5, 12.0, "%s_at_the_edge" % mode)
+						await _look_and_shoot(d.global_position, 6.0, "%s_eyes_close" % mode)
+			most = maxi(most, out)
+			if mode == "torch":
+				var first: Node3D = null
+				for d in get_nodes_in_group("prowlers"):
+					if is_instance_valid(d) and not d.is_dead and not d.going_home:
+						first = d
+						break
+				if first != null:
+					var gap_h: float = _flat3(first.global_position).distance_to(_flat3(hero.global_position))
+					if torch_phase == "none" and gap_h < 14.0:
+						torch_phase = "lit"
+						hero.light_torch()
+						_say("INFO", "torch: lit with the first %.1f m off" % gap_h)
+					if torch_phase == "lit":
+						hero.move_to(first.global_position)
+						dist_log.append("%.1f" % gap_h)
+						if dist_log.size() == 60:
+							torch_phase = "out"
+							hero.torch_left = 0.5
+							hero.order_stop()
+							_say("INFO", "torch: 15 s walking at it, the distance every 0.25 s: %s" % " ".join(dist_log))
+							dist_log = []
+					elif torch_phase == "out":
+						dist_log.append("%.1f" % gap_h)
+						if dist_log.size() == 40:
+							torch_phase = "done"
+							_say("INFO", "torch out: the next 10 s: %s; he was bitten to %.0f/%.0f" % [" ".join(dist_log), hero.current_hp, hero.max_hp])
+			if t > 200.0:
+				break
+		var alive: Array = []
+		for d in came:
+			if is_instance_valid(d) and not d.is_dead:
+				alive.append(d)
+		var origins: Array = []
+		for id in from:
+			origins.append("(%.0f, %.0f)" % [from[id].x, from[id].z])
+		_say("INFO", "%s night %d: came up %d so far in all from %s; most out at once %d; going for (samples) %s; cabin %.0f -> %.0f; walls lost %d; the first biting the cabin %.1f s into the dusk" % [mode, night + 1, came.size(), ", ".join(origins.slice(0, 8)), most, str(goes_for), hp0, cabin.current_hp if is_instance_valid(cabin) else 0.0, walls0 - _count_walls(), at_cabin])
+		var lines: Array = []
+		for lid in life:
+			var L: Dictionary = life[lid]
+			lines.append("up %.0f bite %.0f home %.0f last seen %.0f hp %.0f->%.0f" % [L["up"], L["bite"], L["home"], L["last"], L["hp"], L.get("hp_now", -1.0)])
+		_say("INFO", "%s night %d, each one: %s" % [mode, night + 1, "; ".join(lines)])
+		if not cornered.is_empty():
+			_say("INFO", "torch: within 2 m of him with the torch lit: %s" % "; ".join(cornered))
+		if mode != "dark":
+			_say("INFO", "%s: nearest any came to a light's edge %.2f m (negative is inside); samples deeper than it stands %d; wary samples %d, eyes shining in %d" % [mode, nearest_light, inside_samples, wary_samples, shine_samples])
+		# First light: they go home.
+		await _advance(0.5)
+		var t2 := 0.0
+		while t2 < 60.0:
+			var left := 0
+			for d in get_nodes_in_group("prowlers"):
+				if is_instance_valid(d) and not d.is_dead:
+					left += 1
+			if left == 0:
+				break
+			await _advance(0.5)
+			t2 += 0.5
+		var stuck: Array = []
+		for d in get_nodes_in_group("prowlers"):
+			if is_instance_valid(d) and not d.is_dead:
+				stuck.append("%s going_home %s home %s" % [str(d.global_position), d.going_home, str(d.home)])
+		_say("INFO", "%s night %d: first light -- all gone after %.1f s; still out after 60 s: %d %s" % [mode, night + 1, t2, stuck.size(), str(stuck.slice(0, 3))])
+		var ok: bool = stuck.is_empty()
+		if mode == "lit":
+			ok = ok and most <= 1 and inside_samples == 0 and wary_samples > 0 and shine_samples > wary_samples / 2
+		all_ok = all_ok and ok
+		if not is_instance_valid(cabin) or cabin.current_hp <= 0.0:
+			_say("INFO", "the cabin fell on night %d" % (night + 1))
+			break
+	_say("PASS" if all_ok else "FAIL", "the phytosaurs (%s): %s" % [mode, "at most one out, never in the light, eyes shining at its edge, all home at first light" if mode == "lit" else "all home at first light"])
+
+## TASK-021 part 6: a raid's count is its own -- guards killed while it is out do not end it early.
+func _p_raid_count() -> void:
+	var gs := root.get_node("GameState")
+	var wm = _main.wave_manager
+	var cabin = _main.current_core
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(4.0)
+	var spawned: Array = []
+	var on_spawn := func(d):
+		if not d.is_in_group("guard_dinos") and not d.is_in_group("prowlers"):
+			spawned.append(d)
+	root.get_node("EventBus").dino_spawned.connect(on_spawn)
+	var ended := {"at": -1.0}
+	wm.start_wave(2, 6)
+	await _advance(2.0)
+	var guards: int = 0
+	for g in get_nodes_in_group("guard_dinos"):
+		if is_instance_valid(g) and not g.is_dead:
+			g.take_damage(99999.0)
+			guards += 1
+	var tw := 0.0
+	while tw < 40.0 and spawned.size() < 6:
+		await _advance(0.5)
+		tw += 0.5
+	await _advance(1.0)
+	var raiders: Array = []
+	for d in spawned:
+		if is_instance_valid(d) and not d.is_dead:
+			raiders.append(d)
+	_say("INFO", "raid of 6 set out; %d guards killed as it went; %d raiders stepped out in %.1f s (%d alive), the wave active %s" % [guards, spawned.size(), tw + 3.0, raiders.size(), wm.is_wave_active])
+	var active_while_out := true
+	for i in raiders.size():
+		raiders[i].take_damage(99999.0)
+		await _advance(0.5)
+		if i < raiders.size() - 1 and not wm.is_wave_active:
+			active_while_out = false
+			_say("INFO", "the wave ended with %d raiders still out" % (raiders.size() - 1 - i))
+	await _advance(3.0)
+	_say("INFO", "every raider killed: the wave active %s" % wm.is_wave_active)
+	_say("PASS" if raiders.size() == 6 and active_while_out and not wm.is_wave_active else "FAIL", "a raid ends at its own count, the guards killed or not")
+
+## How far round `at` is seen now: along each of `dirs` (degrees), the first point not seen, in 0.25 m
+## steps -- [least, most].
+func _sight_radius(fog, at: Vector3, dirs: Array) -> Array:
+	var lo := INF
+	var hi := 0.0
+	for a in dirs:
+		var dir := Vector3(cos(deg_to_rad(float(a))), 0.0, sin(deg_to_rad(float(a))))
+		var r := 0.0
+		while r < 25.0 and fog.sees(at + dir * (r + 0.25)):
+			r += 0.25
+		lo = minf(lo, r)
+		hi = maxf(hi, r)
+	return [lo, hi]
+
+func _look_and_shoot(at: Vector3, distance: float, beat: String) -> void:
+	_look_at(at, distance)
+	await _advance(0.3)
+	await _shoot(beat)
+
+## The text of a line with a %s/%d in it, from after the first -- what shows whatever is put there.
+func _after_fmt(s: String) -> String:
+	for mark in ["%s", "%d"]:
+		var i: int = s.find(mark)
+		if i >= 0:
+			var rest: String = s.substr(i + 2).strip_edges()
+			if rest.length() >= 6:
+				return rest.left(10)
+			return s.left(i).strip_edges().left(10)
+	return s.left(10)
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
