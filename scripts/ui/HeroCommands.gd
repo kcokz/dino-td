@@ -49,6 +49,16 @@ func _ready() -> void:
 	if eb:
 		if eb.has_signal("meals_changed"):
 			eb.meals_changed.connect(func(_meals: Dictionary): refresh())
+		# And at once whatever changes what the torch's tile says: the wood in the stock, the part of the
+		# day, a torch lit or burnt out. Waiting for the next refresh, it came up a few seconds after the
+		# dusk was said, and a press on it the moment the wood came in was lost (the debug-agent's check
+		# 17: "夜里第一次按 3 常常没反应，第二次按就点着").
+		if eb.has_signal("resources_changed"):
+			eb.resources_changed.connect(func(_stock: Dictionary): refresh())
+		if eb.has_signal("day_part_changed"):
+			eb.day_part_changed.connect(func(_part: String, _day: int): refresh())
+		if eb.has_signal("torch_changed"):
+			eb.torch_changed.connect(func(_lit: bool): refresh())
 		if eb.has_signal("locale_changed"):
 			eb.locale_changed.connect(func(_locale: String): _retext())
 

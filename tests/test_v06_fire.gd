@@ -228,6 +228,23 @@ func test_08_its_tile_is_there_in_the_dark_and_build_and_eat_do_not_move() -> vo
 	var keys: Array = config_node.CONTROLS["command_keys"]
 	assert_eq(int(tiles.torch_button.shortcut.events[0].keycode), int(keys[2]), "The third command key lights it")
 
+func test_08b_the_tile_answers_at_once() -> void:
+	# The debug-agent's check 17: pressed the moment wood came in, the first press on 3 was lost -- the
+	# tile was still greyed out until its next refresh; and it came up a moment after the dusk was said.
+	var main = await _level()
+	var tiles: HeroCommands = main.hud.hero_commands
+	tiles.set_process(false)       # no refresh on its clock: only what changes it
+	_wood(0)
+	_set_clock(_at("day") + 100.0)
+	tiles.refresh()
+	assert_false(tiles.torch_button.visible, "(by day, no tile)")
+	_set_clock(_at("dusk") + 1.0)
+	assert_true(tiles.torch_button.visible, "The dusk come, the tile is there at once")
+	assert_true(tiles.torch_button.disabled, "(no wood: nothing to press)")
+	game_state_node.add_resources({"wood": 3})
+	assert_false(tiles.torch_button.disabled, "Wood in, it can be pressed at once")
+	tiles.set_process(true)
+
 func test_09_the_build_menu_says_what_a_fire_does() -> void:
 	var main = await _level()
 	var panel = main.hud.option_panel

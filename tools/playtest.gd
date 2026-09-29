@@ -455,7 +455,7 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 	for n in get_nodes_in_group("resource_nodes"):
 		if not is_instance_valid(n) or String(n.resource_type) != res_id or int(n.current_amount) <= 0:
 			continue
-		if not hero.can_harvest(n):
+		if not hero.can_harvest(n) or _guarded(n):
 			continue
 		var d: float = (n as Node3D).global_position.distance_to(hero.global_position)
 		if d < best_d:
@@ -469,6 +469,24 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 	hero.order_harvest(best)
 	var wm = _main.wave_manager
 	await _play_until(func(): return wm.is_wave_active or wm.raid_timer < 6.0, seconds, "working %s" % res_id)
+
+## Whether a nest's guards are awake and near enough `n` to go for him there -- the bot leaves the
+## nest's stones be while they are, as a player does once warned: it went on quarrying through their
+## warning and was bitten to death, and a long run ended at 3:47 (the debug-agent, 7f8ee65).
+func _guarded(n: Node) -> bool:
+	var cfg = root.get_node("Config")
+	var gs = root.get_node("GameState")
+	var guards: Dictionary = cfg.NEST_GUARDS
+	var reach: float = float(guards.get("aggro_radius", 6.0)) + float(guards.get("post_radius", 3.0)) + 1.0
+	for g in get_nodes_in_group("guard_dinos"):
+		if not is_instance_valid(g) or bool(g.get("is_dead")):
+			continue
+		if not cfg.keeps_hours(String(g.get("dino_type")), String(gs.day_part())):
+			continue
+		var post: Vector3 = g.post_position if "post_position" in g else (g as Node3D).global_position
+		if post.distance_to((n as Node3D).global_position) <= reach:
+			return true
+	return false
 
 ## Walks in, to the bench, starts `job` and stays till it is done.
 ## The nearest living raider within `radius` of him, wall or no wall: what a player would click.
