@@ -5,10 +5,14 @@ extends Node3D
 ## The fog of war (GAME-DESIGN 9.3; v0.6 round three: "游戏要加上战争迷雾，人不能一开始就知道恐龙巢穴"):
 ## the field in three states -- never seen (dark), seen but out of sight now (the land, dimmed, and
 ## no animals on it), in sight (everything). What sees is the Hero, the cabin and what he has built
-## (Config.FOG.sight), and less far at dusk and in the night. It is drawn by one of the engine's
-## decals laid over the field, its texture the fog; animals out of sight are hidden outright, and
-## hidden, cannot be pointed at (Main._is_hoverable). The nest is not seen until it is: the first
-## time it comes into sight it is found (EventBus.nest_found, GameState.nest_found).
+## (Config.FOG.sight), and less far at dusk and in the night. Never seen is black -- the land, the
+## trees, the river, and everything past the field to the valley's far walls: nothing is known of it
+## (v0.6 round four: "迷雾没有遮挡远景只遮挡了近景很奇怪，而且没去过的地方应该完全看不到"). It is drawn by
+## one quad over the whole screen, last of all (assets/shaders/fog_of_war.gdshader), black laid over
+## each pixel by how seen the ground under it is: a decal laid on the ground left the river, which is
+## drawn see-through, and the far walls in their haze as they were. Animals out of sight are hidden
+## outright, and hidden, cannot be pointed at (Main._is_hoverable). The nest is not seen until it is:
+## the first time it comes into sight it is found (EventBus.nest_found, GameState.nest_found).
 
 ## Metres across the field's half, the margin round it included; metres to a cell; cells across.
 var half: float = 32.0
@@ -21,7 +25,10 @@ var _shade: PackedFloat32Array = PackedFloat32Array()
 var _bytes: PackedByteArray = PackedByteArray()
 var _image: Image = null
 var _texture: ImageTexture = null
-var shroud: Decal = null
+## The quad over the screen, and its material: the shroud texture (one byte a cell, how dark), and
+## where on the field it lies.
+var shroud: MeshInstance3D = null
+var _material: ShaderMaterial = null
 var _clock: float = 0.0
 ## Everything seen and in sight, and nothing hidden: for a view that has to show the whole field.
 var revealed: bool = false
@@ -37,30 +44,29 @@ func setup(field_half: float) -> void:
 	_now.resize(cells * cells)
 	_now.fill(0)
 	_shade.resize(cells * cells)
-	_shade.fill(float(cfg.get("unseen", 0.94)))
-	_bytes.resize(cells * cells * 4)
-	_bytes.fill(0)
-	_image = Image.create_from_data(cells, cells, false, Image.FORMAT_RGBA8, _bytes)
-	_texture = null
+	_shade.fill(float(cfg.get("unseen", 1.0)))
+	_bytes.resize(cells * cells)
+	_bytes.fill(255)
+	_image = Image.create_from_data(cells, cells, false, Image.FORMAT_R8, _bytes)
+	_texture = ImageTexture.create_from_image(_image)
 	if shroud == null:
-		shroud = Decal.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(2.0, 2.0)
+		_material = ShaderMaterial.new()
+		_material.shader = load("res://assets/shaders/fog_of_war.gdshader")
+		# Last of everything see-through, so nothing is drawn over it.
+		_material.render_priority = Material.RENDER_PRIORITY_MAX
+		quad.material = _material
+		shroud = MeshInstance3D.new()
 		shroud.name = "Shroud"
+		shroud.mesh = quad
+		shroud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# The shader puts it on the screen wherever the node is: never culled for being off it.
+		shroud.extra_cull_margin = 16384.0
 		add_child(shroud)
-	var height: float = float(cfg.get("height", 40.0))
-	shroud.size = Vector3(half * 2.0, height, half * 2.0)
-	shroud.position = Vector3(0.0, height * 0.5 - float(cfg.get("below", 6.0)), 0.0)
-	# And the light it would have caught, taken with the colour and under the same shade: no light
-	# from the sky in its shadows (occlusion 0) and no shine (roughness 1) -- or never seen was a dark
-	# grey the rocks and the river glinted through. The engine lays it on by the colour's alpha, so
-	# one picture serves for good (measured: the ground in sight the same to four places with it,
-	# without it, and with no shroud).
-	var orm: Image = Image.create(cells, cells, false, Image.FORMAT_RGB8)
-	orm.fill(Color(0.0, 1.0, 0.0))
-	shroud.texture_orm = ImageTexture.create_from_image(orm)
-	shroud.albedo_mix = 1.0
-	shroud.upper_fade = 0.0
-	shroud.lower_fade = 0.0
-	shroud.normal_fade = 0.0
+	_material.set_shader_parameter("shroud", _texture)
+	_material.set_shader_parameter("origin", Vector2(global_position.x, global_position.z) if is_inside_tree() else Vector2.ZERO)
+	_material.set_shader_parameter("half_size", half)
 	_look()
 	_paint(1.0)
 
@@ -185,39 +191,32 @@ func _paint(dt: float) -> void:
 	if _image == null:
 		return
 	var fog: Dictionary = _cfg()
-	var unseen: float = float(fog.get("unseen", 0.94))
+	var unseen: float = float(fog.get("unseen", 1.0))
 	var dim: float = float(fog.get("seen", 0.55))
 	var step: float = clampf(dt / maxf(0.01, float(fog.get("ease", 0.4))), 0.0, 1.0)
-	var fade: float = float(fog.get("edge_fade", 6.0)) / cell
-	var changed: bool = _texture == null
-	for z in cells:
-		var edge_z: float = minf(float(z) + 0.5, float(cells - z) - 0.5)
-		for x in cells:
-			var i: int = z * cells + x
-			var want: float = 0.0 if (revealed or _now[i] != 0) else (dim if _seen[i] != 0 else unseen)
-			_shade[i] += (want - _shade[i]) * step
-			var edge: float = minf(edge_z, minf(float(x) + 0.5, float(cells - x) - 0.5))
-			var a: float = _shade[i] * clampf(edge / maxf(0.001, fade), 0.0, 1.0)
-			var alpha: int = int(clampf(a, 0.0, 1.0) * 255.0)
-			if _bytes[i * 4 + 3] != alpha:
-				changed = true
-				_bytes[i * 4 + 3] = alpha
-	# Nothing to draw anew when nothing moved -- he stood still and the fog had settled: each new
-	# texture has the engine lay its decals out again.
+	var changed: bool = false
+	for i in cells * cells:
+		var want: float = 0.0 if (revealed or _now[i] != 0) else (dim if _seen[i] != 0 else unseen)
+		_shade[i] += (want - _shade[i]) * step
+		var dark: int = int(round(clampf(_shade[i], 0.0, 1.0) * 255.0))
+		if _bytes[i] != dark:
+			changed = true
+			_bytes[i] = dark
+	if shroud != null:
+		shroud.visible = not revealed
+	# Nothing to send when nothing moved: he stood still and the fog had settled.
 	if not changed:
 		return
-	_image.set_data(cells, cells, false, Image.FORMAT_RGBA8, _bytes)
-	# A new texture each time, not the old one updated: a decal keeps its textures in an atlas, and
-	# took an updated texture's first picture for good -- the fog drew where it was when the run
-	# began and never moved (measured: lifted, not a pixel changed).
-	_texture = ImageTexture.create_from_image(_image)
-	if shroud != null:
-		shroud.texture_albedo = _texture
+	_image.set_data(cells, cells, false, Image.FORMAT_R8, _bytes)
+	_texture.update(_image)
 
-## How dark `pos` is drawn now, 0 clear to 1 black: what a test can ask of the shroud.
+## How dark `pos` is drawn now, 0 clear to 1 black: what a test can ask of the shroud. Past its
+## square nothing is ever seen.
 func shade_at(pos: Vector3) -> float:
+	if revealed:
+		return 0.0
 	var i: int = _index(pos)
-	return _shade[i] if i >= 0 else 0.0
+	return _shade[i] if i >= 0 else float(_cfg().get("unseen", 1.0))
 
 # ==============================================================================
 # What is hidden

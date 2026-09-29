@@ -166,3 +166,24 @@ func test_09_the_first_maps_nest_is_its_own_species_nesting_ground() -> void:
 	assert_eq(String(main.current_nest.art_key()), key, "and it is the one drawn")
 	assert_true(ResourceLoader.exists(String(config_node.VISUALS[key]["scene"])), "from its own model")
 	assert_ne(config_node.get_visual_size(key), config_node.get_visual_size("nest"), "not the mound's size: a spread of scrapes")
+
+func test_10_never_seen_is_black_to_the_valleys_far_walls() -> void:
+	# v0.6 round four: "迷雾没有遮挡远景只遮挡了近景很奇怪，而且没去过的地方应该完全看不到".
+	var main = await _level()
+	var fog: FogOfWar = main.fog
+	assert_almost_eq(float(_fog()["unseen"]), 1.0, 0.001, "Never seen is black: nothing of it known")
+	var cabin: Vector3 = main.current_core.global_position
+	var far_wall: Vector3 = cabin + Vector3(0.0, 0.0, -(fog.half + 20.0))
+	assert_almost_eq(fog.shade_at(far_wall), 1.0, 0.001, "Past the field, the valley's far walls are never seen")
+	assert_almost_eq(fog.shade_at(cabin + Vector3(fog.half - 1.0, 0.0, 0.0)), 1.0, 0.05, "and the field's far side, till he goes there")
+	# Drawn over the whole screen, last: what a decal on the ground left -- the river, the far haze --
+	# it covers.
+	assert_true(fog.shroud is MeshInstance3D and fog.shroud.mesh is QuadMesh, "One quad over the screen")
+	var mat: ShaderMaterial = fog.shroud.mesh.material as ShaderMaterial
+	assert_not_null(mat, "with the fog's own shader")
+	if mat != null:
+		assert_eq(String(mat.shader.resource_path), "res://assets/shaders/fog_of_war.gdshader", "(assets/shaders/fog_of_war.gdshader)")
+		assert_eq(mat.render_priority, Material.RENDER_PRIORITY_MAX, "drawn after everything see-through")
+		assert_eq(mat.get_shader_parameter("shroud"), fog._texture, "from what is seen")
+	fog.reveal_all()
+	assert_false(fog.shroud.visible, "Lifted, it is not drawn at all")

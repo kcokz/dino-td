@@ -1960,20 +1960,18 @@ const TWITCH: Dictionary = {
 }
 
 const FOG: Dictionary = {
-	# Metres to a cell of it; metres of it round the field, over the foot of the valley's walls; the
-	# outer this-many metres of that fade out into the walls, which are scenery, not the field.
+	# Metres to a cell of it; metres of it round the field, over the foot of the valley's walls --
+	# which he sees from the field's edge. Past that, the far walls and all, nothing is ever seen.
 	"cell": 1.0,
 	"margin": 10.0,
-	"edge_fade": 6.0,
-	# The shroud's box (a Decal): from this far below the ground to its height, over the tallest tree.
-	"below": 6.0,
-	"height": 40.0,
 	# It looks and paints again this often, in seconds; a cell's shade eases to what it should be
 	# over about this long, so the edge of the fog moves rather than jumps.
 	"every": 0.1,
 	"ease": 0.4,
-	# How dark, 0 clear to 1 black: never seen; seen, out of sight. In sight is clear.
-	"unseen": 0.94,
+	# How dark, 0 clear to 1 black: never seen -- black, nothing of it known, not the lie of the land
+	# (v0.6 round four: "没去过的地方应该完全看不到"); seen, out of sight -- the land dimmed, no
+	# animals on it. In sight is clear.
+	"unseen": 1.0,
 	"seen": 0.55,
 	# How far each sees, in metres: the Hero; the cabin; a finished building by its kind -- a trap
 	# sees down its lane, a stake barely past itself.
