@@ -900,6 +900,13 @@ const DINO_AI: Dictionary = {
 	# and, waiting, it looks again for a place to bite from every this many seconds.
 	"queue_standoff": 2.8,
 	"queue_patience": 1.5,
+	# This near its place (metres), it faces what it came for, walking or waiting: facing the place
+	# while it tried for it and the target while it waited, by turns, was a head swinging each way
+	# every second (the debug-agent's BUG-008).
+	"face_target_within": 2.0,
+	# Come to rest on its spot, it is not sent back onto it for a nudge shorter than this (metres):
+	# in a crowd it stepped back at every one, turning to each step and back.
+	"spot_slack": 0.4,
 	# A place round a building to bite it from counts as one it can get to when its route there ends
 	# this near it, in metres. A place behind a fence from it has a route too -- to the near side of
 	# the fence, out of reach of the building -- and a raid stood there, milling, for the whole of
@@ -1934,6 +1941,13 @@ const TWITCH: Dictionary = {
 	"shake_flips": 3,
 	"shake_path": 1.5,
 	"shake_net": 1.0,
+	# FIDGET: standing -- walking no more than fidget_path in fidget_window seconds -- biting nothing,
+	# and turning back on its own turning this many times, however long it stood between: a head
+	# swinging each way every second or so, for twenty seconds, was counted a swing at a time and never
+	# reported (settle; the debug-agent's BUG-008). One turn and back after a long stand is not it.
+	"fidget_window": 6.0,
+	"fidget_flips": 4,
+	"fidget_path": 0.5,
 	# FLICKER: drawn walking, standing, walking -- this many changes back, not while it bites.
 	"flicker_flips": 4,
 	# DITHER: going for a thing, letting it go, going for it -- this many changes of mind back.

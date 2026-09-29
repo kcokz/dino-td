@@ -267,3 +267,30 @@ func test_11_in_a_debug_build_it_is_marked_with_the_reports_number() -> void:
 	for i in _frames_for(float(_tw()["mark_seconds"])):
 		await wait_physics_frames(1)
 	assert_null(d.get_node_or_null("TwitchMark"), "for a moment")
+
+func test_12_standing_and_swinging_its_head_slowly_is_fidget() -> void:
+	# The debug-agent's BUG-008: "原地一动不动、每秒来回摆一次头，摆了 22 秒，没有报告" -- each swing
+	# lapsed in the stand before the next (settle), and SHAKE never counted to three.
+	var main = await _level()
+	var d = _raider(main, _clear_ground(main))
+	var swing: float = deg_to_rad(float(_tw()["swing_min_deg"]) * 1.5)
+	var per: int = int(Engine.physics_ticks_per_second)       # a swing each second: turned, then still
+	for i in _frames_for(float(_tw()["fidget_window"]) + 1.0):
+		await wait_physics_frames(1)
+		var phase: int = i % per
+		if phase < 6:
+			d.rotation.y += (swing / 6.0) * (1.0 if (i / per) % 2 == 0 else -1.0)
+	assert_eq(_reports_on(d, "fidget").size(), 1, "Standing still, its head going each way every second, is reported")
+	assert_eq(_reports_on(d, "shake").size(), 0, "(not as SHAKE: it stood between)")
+
+func test_13_one_turn_and_back_after_a_long_stand_is_not_fidget() -> void:
+	var main = await _level()
+	var d = _raider(main, _clear_ground(main))
+	var swing: float = deg_to_rad(float(_tw()["swing_min_deg"]) * 2.0)
+	for i in _frames_for(float(_tw()["fidget_window"]) + 1.0):
+		await wait_physics_frames(1)
+		if i < 6:
+			d.rotation.y += swing / 6.0
+		elif i >= 180 and i < 186:
+			d.rotation.y -= swing / 6.0
+	assert_eq(_reports_on(d).size(), 0, "A turn, a long stand and a turn back is a raptor looking about")

@@ -11,6 +11,8 @@ extends Node
 ##   JITTER   its body stepping back the way it came, again and again, getting nowhere;
 ##   SHAKE    its heading swinging one way and back, again and again, getting nowhere -- the
 ##            debug-agent's BUG-005, "左右各摆 48°";
+##   FIDGET   standing, biting nothing, and its head going one way and back, however slowly --
+##            "傻站着甩头" (BUG-008);
 ##   FLICKER  what it is drawn doing changing back and forth -- walk, stand, walk -- while it is
 ##            not biting (a bite is a clip and back, each bite);
 ##   DITHER   its mind changing back and forth: going for a thing, letting go, going for it;
@@ -46,7 +48,8 @@ const B_DITHER := 6
 const B_BITING := 7
 const B_X := 8
 const B_Z := 9
-const B_FIELDS := 10
+const B_FIDGET := 10
+const B_FIELDS := 11
 
 ## One animal's record: where it was a frame ago and what it was doing, the way it has been going
 ## and turning since it last turned back, and its last seconds in buckets, oldest first.
@@ -55,6 +58,8 @@ class Track:
 	var yaw: float
 	var leg: Vector2 = Vector2.ZERO
 	var swing: float = 0.0
+	## The same swing, never let lapse for standing: FIDGET counts turns back however far apart.
+	var slow_swing: float = 0.0
 	## Seconds it has stood without a step, and without turning: a leg or a swing is over once it
 	## has been still for Config.TWITCH.settle.
 	var still: float = 0.0
@@ -154,12 +159,19 @@ func _watch(d: Node3D, t: Track, delta: float, cfg: Dictionary) -> void:
 	if t.steady >= settle:
 		t.swing = 0.0
 	if absf(turn) > 0.0001:
+		var swing_min: float = deg_to_rad(float(cfg.get("swing_min_deg", 15.0)))
 		if t.swing != 0.0 and signf(turn) != signf(t.swing):
-			if absf(t.swing) >= deg_to_rad(float(cfg.get("swing_min_deg", 15.0))):
+			if absf(t.swing) >= swing_min:
 				b[B_SHAKE] += 1.0
 			t.swing = turn
 		else:
 			t.swing += turn
+		if t.slow_swing != 0.0 and signf(turn) != signf(t.slow_swing):
+			if absf(t.slow_swing) >= swing_min:
+				b[B_FIDGET] += 1.0
+			t.slow_swing = turn
+		else:
+			t.slow_swing += turn
 	# FLICKER: drawn doing again what it was drawn doing the change before -- not while it bites.
 	var clip: String = _clip_of(d)
 	if clip != t.clip:
@@ -193,7 +205,8 @@ func _watch(d: Node3D, t: Track, delta: float, cfg: Dictionary) -> void:
 		t.open = b
 		return
 	t.buckets.append(b)
-	var keep: int = _buckets_in(maxf(float(cfg.get("mill_window", 6.0)), float(cfg.get("push_window", 4.0))), cfg)
+	var keep: int = _buckets_in(maxf(maxf(float(cfg.get("mill_window", 6.0)), float(cfg.get("push_window", 4.0))),
+		float(cfg.get("fidget_window", 6.0))), cfg)
 	while t.buckets.size() > keep:
 		t.buckets.pop_front()
 	t.open = _bucket_at(pos)
@@ -232,7 +245,7 @@ func _sum(t: Track, seconds: float, cfg: Dictionary) -> Dictionary:
 	if t.buckets.size() < n:
 		return {}
 	var s: Dictionary = {"seconds": 0.0, "path": 0.0, "asked": 0.0, "jitter": 0, "shake": 0, "flicker": 0,
-		"dither": 0, "biting_frames": 0}
+		"dither": 0, "fidget": 0, "biting_frames": 0}
 	for i in range(t.buckets.size() - n, t.buckets.size()):
 		var b: PackedFloat32Array = t.buckets[i]
 		s["seconds"] += b[B_SECONDS]
@@ -242,6 +255,7 @@ func _sum(t: Track, seconds: float, cfg: Dictionary) -> Dictionary:
 		s["shake"] += int(b[B_SHAKE])
 		s["flicker"] += int(b[B_FLICKER])
 		s["dither"] += int(b[B_DITHER])
+		s["fidget"] += int(b[B_FIDGET])
 		s["biting_frames"] += int(b[B_BITING])
 	var first: PackedFloat32Array = t.buckets[t.buckets.size() - n]
 	s["net"] = Vector2(t.pos.x - first[B_X], t.pos.z - first[B_Z]).length()
@@ -275,6 +289,11 @@ func _judge(d: Node3D, t: Track, cfg: Dictionary) -> void:
 		var m: Dictionary = _sum(t, float(cfg.get("mill_window", 6.0)), cfg)
 		if not m.is_empty() and _mills(d, m, cfg):
 			_report(d, t, "mill", m, cfg)
+			return
+		var f: Dictionary = _sum(t, float(cfg.get("fidget_window", 6.0)), cfg)
+		if not f.is_empty() and int(f["biting_frames"]) == 0 and int(f["fidget"]) >= int(cfg.get("fidget_flips", 4)) \
+				and float(f["path"]) <= float(cfg.get("fidget_path", 0.5)):
+			_report(d, t, "fidget", f, cfg)
 
 ## MILL is a raider's: a guard ambles about its post by design, and one after the Hero follows him
 ## round whatever he walks round.
@@ -345,11 +364,11 @@ func _trail_of(t: Track) -> Dictionary:
 	for b in t.buckets:
 		buckets.append([snappedf(b[B_X], 0.01), snappedf(b[B_Z], 0.01), snappedf(b[B_PATH], 0.01),
 			snappedf(b[B_ASKED], 0.01), int(b[B_JITTER]), int(b[B_SHAKE]), int(b[B_FLICKER]),
-			int(b[B_DITHER]), int(b[B_BITING])])
+			int(b[B_DITHER]), int(b[B_BITING]), int(b[B_FIDGET])])
 	var frames: Array = []
 	for f in t.frames:
 		frames.append([f.x, f.y, f.z])
-	return {"bucket_fields": ["x", "z", "path", "asked", "jitter", "shake", "flicker", "dither", "biting_frames"],
+	return {"bucket_fields": ["x", "z", "path", "asked", "jitter", "shake", "flicker", "dither", "biting_frames", "fidget"],
 		"buckets": buckets, "frame_fields": ["x", "z", "heading"], "frames": frames,
 		"now": snappedf(_clock, 0.01), "clips": t.clips.duplicate(), "minds": t.minds.duplicate()}
 
@@ -395,11 +414,11 @@ func _line_for(r: Dictionary) -> String:
 	var target = dino.get("target")
 	var going: String = "%s %s" % [String(target.get("kind", "")), String(target.get("type", ""))] if target is Dictionary else "-"
 	var mind: String = String(dino["guard"].get("state", "")) if dino.get("guard") is Dictionary else String(dino.get("mode", ""))
-	return "[TWITCH] #%d %s: %s %s at (%.1f, %.1f), %s -> %s | %d s: jitter %d, shake %d, flicker %d, dither %d, walked %.1f m, asked %.1f m, net %.2f m" % [
+	return "[TWITCH] #%d %s: %s %s at (%.1f, %.1f), %s -> %s | %d s: jitter %d, shake %d, fidget %d, flicker %d, dither %d, walked %.1f m, asked %.1f m, net %.2f m" % [
 		int(r.get("n", 0)), String(r.get("kind", "")), String(dino.get("species", "")), String(dino.get("name", "")),
 		float(pos[0]), float(pos[pos.size() - 1]), mind, going.strip_edges(),
 		int(round(float(w.get("seconds", 0.0)))), int(w.get("jitter", 0)), int(w.get("shake", 0)),
-		int(w.get("flicker", 0)), int(w.get("dither", 0)), float(w.get("path", 0.0)), float(w.get("asked", 0.0)),
+		int(w.get("fidget", 0)), int(w.get("flicker", 0)), int(w.get("dither", 0)), float(w.get("path", 0.0)), float(w.get("asked", 0.0)),
 		float(w.get("net", 0.0))]
 
 ## Appends the report to this launch's file, starting the file -- and clearing out the oldest past

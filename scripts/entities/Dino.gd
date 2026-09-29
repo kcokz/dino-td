@@ -141,6 +141,9 @@ var _answered: int = -1
 var _route: PackedVector3Array = PackedVector3Array()
 var _route_index: int = 0
 var _nav_goal: Vector3 = Vector3.INF
+## The spot it has come to rest on, or Vector3.INF: there, a nudge short of Config.DINO_AI.spot_slack
+## does not send it back.
+var _settled_on: Vector3 = Vector3.INF
 
 ## Its clocks. Thinking a few times a second rather than every frame is half of what keeps a
 ## mind from flickering; each animal starts at its own phase, so a raid does not all think on
@@ -745,18 +748,32 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 	var to: Vector3 = step - global_position
 	to.y = 0.0
 	var desired := Vector3.ZERO
-	if to.length() > 0.05 and _patience <= 0.0:
+	# Come to rest on its spot, it stays unless shoved well off it (Config.DINO_AI.spot_slack): waiting
+	# in a crowd, it stepped back onto its spot at every nudge, turned to each step and back, and stood
+	# there swinging its head (the debug-agent's BUG-008).
+	var slack: float = 0.05
+	if _settled_on != Vector3.INF and _flat(_settled_on).distance_to(_flat(goal)) < 0.05:
+		slack = _ai("spot_slack", 0.4)
+	else:
+		_settled_on = Vector3.INF
+	if to.length() > slack and _patience <= 0.0:
 		# No further in a frame than there is to go (found by the twitch watch, v0.6 round four): at
 		# its full speed a raptor went 6.7 cm a frame at a spot it had to be within 5 cm of -- past it,
 		# turned, past it the other way, its head swinging each time, for as long as it was sent there
 		# (the debug-agent's BUG-005: a raid waiting at the cabin's fenced back, "原地打转").
 		desired = to.normalized() * minf(speed * pace, to.length() / maxf(delta, 0.0001))
-	# There, it faces what it came for -- not the spot it stands on, a hand's breadth off, which it
-	# turned right round to look at.
+	elif to.length() <= 0.05:
+		_settled_on = goal
+	# Near its place, it faces what it came for -- walking the last steps or waiting there -- not the
+	# spot it stands on, a hand's breadth off, which it turned right round to look at. It faced the
+	# spot while it tried for it and the cabin while it waited, by turns: stood still 22 seconds,
+	# swinging its head 22 degrees each way every second (the debug-agent's BUG-008).
 	var look: Vector3 = goal
-	if desired == Vector3.ZERO and current_target is Node3D and is_instance_valid(current_target):
+	var facing_it: bool = current_target is Node3D and is_instance_valid(current_target) \
+		and (desired == Vector3.ZERO or _flat(goal).distance_to(_flat(global_position)) <= _ai("face_target_within", 2.0))
+	if facing_it:
 		look = (current_target as Node3D).global_position
-	_drive(desired, delta, look)
+	_drive(desired, delta, look, facing_it)
 
 ## The next corner of the route to `goal` -- or `goal` itself, when there is no mesh to ask.
 ##
@@ -797,8 +814,9 @@ func _off_route() -> bool:
 	return p.distance_to(a + ab * t) > _ai("path_max_distance", 2.0)
 
 ## Moves the body at `desired` (flat, metres a second), after the solver has had its say, and
-## turns it -- to where it is going, or, when it is not going anywhere, to `look_at_point`.
-func _drive(desired: Vector3, delta: float, look_at_point: Vector3) -> void:
+## turns it -- to where it is going, or, when it is not going anywhere or `facing_only`, to
+## `look_at_point`.
+func _drive(desired: Vector3, delta: float, look_at_point: Vector3, facing_only: bool = false) -> void:
 	_patience = maxf(0.0, _patience - delta)
 	var v: Vector3 = _avoid(desired)
 	# No faster than it asks THIS frame. The solver's answer is to last frame's asking, a frame
@@ -824,7 +842,7 @@ func _drive(desired: Vector3, delta: float, look_at_point: Vector3) -> void:
 	var went: Vector3 = (global_position - from) / maxf(delta, 0.0001)
 	went.y = 0.0
 	var turn_min: float = _ai("turn_min_speed", 0.3)
-	var moving: Vector3 = went if (went.length() > turn_min and velocity.length() > turn_min
+	var moving: Vector3 = went if (not facing_only and went.length() > turn_min and velocity.length() > turn_min
 		and went.dot(velocity) > 0.0) else Vector3.ZERO
 	if moving != Vector3.ZERO:
 		_turn_towards(moving, delta)
