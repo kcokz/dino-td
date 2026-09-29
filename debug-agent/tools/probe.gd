@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"worked_look": await _p_worked_look()
 			"restart_twice": await _p_restart_twice()
 			"kit_slots": await _p_kit_slots()
 			"bitten_on_the_way": await _p_bitten_on_the_way()
@@ -3377,6 +3378,121 @@ func _p_restart_twice() -> void:
 		if n.name == "HeroCommands":
 			rows += 1
 	_say("INFO", "HeroCommands nodes in the tree now: %d; orphan nodes %d" % [rows, int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))])
+
+## TASK-023 (eb21574): what can be worked, told from the valley by what it is. In DA_MAP's valley: the
+## opening camera at noon and at dusk (as the player sees it, and the fog lifted); the nearest tree and
+## the nearest stone close up, whole and worked out; the hover lift -- the mouse put over a tree and a
+## stone by real motion events, the lifted meshes counted and the brightness round it measured with and
+## without; a sweep of the cursor across the field, frame by frame, for flicker; the camera round the
+## cabin at four headings, for the taller trees in the way.
+func _p_worked_look() -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	var fog = _main.fog
+	var rig = _main.camera_rig
+	gs.day_clock = 120.0
+	_main.wave_manager.auto_raid_enabled = false
+	if _main.night_prowl:
+		_main.night_prowl.enabled = false
+	gs.grant_unlock("harvest_stone")
+	await _advance(1.0)
+	# The opening camera, noon and dusk, as seen and with everything seen.
+	for hour in [["noon", 120.0], ["dusk", 252.0]]:
+		gs.day_clock = float(hour[1])
+		rig.reset()
+		rig.apply_to(_main.camera)
+		await _advance(1.5)
+		await _shoot("open_%s" % hour[0])
+	# The nearest tree and stone.
+	var tree: Node3D = null
+	var stone: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		var d: float = (n as Node3D).global_position.distance_to(core)
+		if String(n.resource_type) == "wood" and (tree == null or d < tree.global_position.distance_to(core)):
+			tree = n
+		if String(n.resource_type) == "stone" and (stone == null or d < stone.global_position.distance_to(core)):
+			stone = n
+	gs.day_clock = 120.0
+	fog.reveal_all()
+	await _advance(1.0)
+	rig.reset()
+	rig.apply_to(_main.camera)
+	await _advance(0.5)
+	await _shoot("open_noon_revealed")
+	# Hover: the cursor over each, by motion events.
+	for node in [tree, stone]:
+		_look_at(node.global_position, 14.0)
+		await _advance(0.5)
+		var at: Vector2 = _main._active_camera().unproject_position(node.global_position + Vector3(0.0, 0.8, 0.0))
+		_move_mouse(Vector2(20.0, 400.0))
+		await _advance(0.3)
+		var before: float = _lum_round(at, 40)
+		await _shoot("%s_no_hover" % node.resource_type)
+		_move_mouse(at)
+		await _advance(0.3)
+		var after: float = _lum_round(at, 40)
+		await _shoot("%s_hover" % node.resource_type)
+		_say("INFO", "hover over the %s at %s: lifted meshes %d; brightness round it %.3f -> %.3f (x%.2f)" % [node.resource_type, str(node.global_position), _main.lifted().size(), before, after, after / maxf(0.001, before)])
+		_move_mouse(Vector2(20.0, 400.0))
+		await _advance(0.2)
+		_say("INFO", "cursor away: lifted %d" % _main.lifted().size())
+	# A sweep across the field: frame by frame, how many frames lift something and how often it changes.
+	rig.reset()
+	rig.apply_to(_main.camera)
+	await _advance(0.5)
+	var vs: Vector2 = root.get_visible_rect().size
+	var changes := 0
+	var lifted_frames := 0
+	var last := -1
+	for i in 120:
+		_move_mouse(Vector2(vs.x * (0.1 + 0.6 * float(i) / 119.0), vs.y * 0.45))
+		await process_frame
+		var n: int = _main.lifted().size()
+		if n > 0:
+			lifted_frames += 1
+		if last >= 0 and (n > 0) != (last > 0):
+			changes += 1
+		last = n
+	_say("INFO", "a sweep across the field in 120 frames: lifted in %d frames, on/off changes %d" % [lifted_frames, changes])
+	_move_mouse(Vector2(20.0, 400.0))
+	# Worked out: the tree cut down, the stone quarried to nothing.
+	for node in [tree, stone]:
+		while not node.is_depleted:
+			node.harvest(100)
+		await _advance(0.5)
+		_look_at(node.global_position, 9.0)
+		await _advance(0.4)
+		await _shoot("%s_worked_out" % node.resource_type)
+		_say("INFO", "%s worked out: depleted %s, still in the group %s, pickable %s" % [node.resource_type, node.is_depleted, node.is_in_group("resource_nodes"), node.is_available() if node.has_method("is_available") else "?"])
+	# The camera round the cabin: is the cabin or a fight hidden by the trees.
+	for yaw in [0.0, 90.0, 180.0, 270.0]:
+		rig.reset()
+		rig.rotate_by(yaw)
+		rig.apply_to(_main.camera)
+		await _advance(0.5)
+		await _shoot("round_the_cabin_%d" % int(yaw))
+
+func _move_mouse(at: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	root.push_input(ev, true)
+
+## Mean brightness of the screen in a square `half` px round `at` (viewport coordinates).
+func _lum_round(at: Vector2, half: int) -> float:
+	var img: Image = root.get_viewport().get_texture().get_image()
+	var k: float = float(img.get_width()) / root.get_visible_rect().size.x
+	var cx: int = int(at.x * k)
+	var cy: int = int(at.y * k)
+	var total := 0.0
+	var n := 0
+	for y in range(maxi(0, cy - half), mini(img.get_height(), cy + half), 2):
+		for x in range(maxi(0, cx - half), mini(img.get_width(), cx + half), 2):
+			var c: Color = img.get_pixel(x, y)
+			total += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+			n += 1
+	return total / maxf(1.0, float(n))
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
