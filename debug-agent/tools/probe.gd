@@ -38,6 +38,10 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"edge_plain": await _p_edge_raid("plain")
+			"edge_nest_watched": await _p_edge_raid("nest_watched")
+			"edge_edge_watched": await _p_edge_raid("edge_watched")
+			"edge_final": await _p_edge_raid("final")
 			"guard_warn": await _p_guard_warn()
 			"reach_all": await _p_reach_all()
 			"settings_map": await _p_settings_map()
@@ -2552,6 +2556,119 @@ func _nearest_post(hero: Node3D) -> float:
 		if is_instance_valid(g):
 			best = minf(best, hero.global_position.distance_to(g.post_position))
 	return best
+
+## TASK-019 parts 2-5 (d9b75e9). `where`: "plain" -- nobody near the nest; "nest_watched" -- he
+## stands looking at the nest; "edge_watched" -- he stands on the first edge way in. A raid of 14 sets
+## out; each raider's first position says where it came from (the nest, or which edge); an edge one's
+## speed is sampled while unseen and far, and while seen; and anyone who turns back -- getting 6 m
+## further from the cabin over 5 s -- is counted.
+func _p_edge_raid(where: String) -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var fog = _main.fog
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	for g in get_nodes_in_group("guard_dinos"):
+		g.queue_free()
+	var nest_at: Vector3 = wm.nest_spawn_position
+	if where == "final":
+		wm.final_wave = true
+	var edges: Array = wm.edge_origins().duplicate() if wm.has_method("edge_origins") else wm.reinforce_positions.duplicate()
+	match where:
+		"nest_watched":
+			hero.global_position = nest_at + (core - nest_at).normalized() * 6.0
+		"edge_watched":
+			hero.global_position = edges[0] + (core - edges[0]).normalized() * 3.0
+		_:
+			_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(6.0)
+	_say("INFO", "%s: nest %s (seen by him: %s); edges behind it %s (first seen: %s); hero at %s" % [where, str(nest_at), fog.sees(nest_at) if fog.has_method("sees") else "?", str(edges), fog.sees(edges[0]) if fog.has_method("sees") else "?", str(hero.global_position)])
+	var size := 30 if where == "final" else 14
+	wm.start_wave(3, size)
+	var origin := {}
+	var popped: Array = []
+	var hurried_seen: Array = []
+	var fast_unseen := 0
+	var back := {}
+	var hist := {}
+	var t := 0.0
+	var dt := 0.05 if where == "nest_watched" else 0.25
+	var fast_seen := {}
+	var step := 0
+	while t < (70.0 if where == "final" else 45.0):
+		await _advance(dt)
+		t += dt
+		step += 1
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		for d in get_nodes_in_group("dinos"):
+			if not is_instance_valid(d) or d.is_in_group("guard_dinos"):
+				continue
+			var id: int = d.get_instance_id()
+			var p: Vector3 = (d as Node3D).global_position
+			if not origin.has(id):
+				var o := "?"
+				if p.distance_to(nest_at) < 3.0:
+					o = "nest"
+				else:
+					for k in edges.size():
+						if p.distance_to(edges[k]) < 3.0:
+							o = "edge%d" % k
+				origin[id] = o
+				# Stepped out where he can see it?
+				if fog.is_in_sight(p):
+					if popped.size() == 1:
+						_look_at(hero.global_position.lerp(p, 0.5), 16.0)
+						await _advance(0.1)
+						await _shoot("%s_stepped_out_in_sight" % where)
+					popped.append("%s at %s, %.1f m from him" % [o, str(p), p.distance_to(hero.global_position)])
+			var v: float = Vector3(d.velocity.x, 0.0, d.velocity.z).length()
+			var seen: bool = fog.is_in_sight(p)
+			if seen and v > float(d.speed) * 1.3 and String(origin[id]).begins_with("edge"):
+				fast_seen[id] = float(fast_seen.get(id, 0.0)) + dt
+			if step % int(round(0.25 / dt)) != 0:
+				continue
+			if float(d.get("hurry")) > 1.0 and v > float(d.speed) * 1.3:
+				if seen:
+					hurried_seen.append("%.1f m/s at %s, %.1f m from the cabin" % [v, str(p), p.distance_to(core)])
+				else:
+					fast_unseen += 1
+			var h: Array = hist.get(id, [])
+			h.append(p.distance_to(core))
+			if h.size() > 20:
+				h.pop_front()
+			hist[id] = h
+			if h.size() == 20 and float(h[19]) - float(h.min()) > 6.0 and not bool(d.get("going_home")):
+				back[id] = "%.1f s: %.1f m further from the cabin than 5 s ago, at %s" % [t, float(h[19]) - float(h.min()), str(p)]
+	var counts := {}
+	for id in origin:
+		counts[origin[id]] = int(counts.get(origin[id], 0)) + 1
+	_say("INFO", "%s: raid of %d -- came from %s (edges: %s)" % [where, size, str(counts), str(edges)])
+	_say("INFO", "%s: samples running at double pace unseen %d; seen running at double pace: %d %s" % [where, fast_unseen, hurried_seen.size(), str(hurried_seen.slice(0, 3))])
+	var worst_fast := 0.0
+	for id in fast_seen:
+		worst_fast = maxf(worst_fast, float(fast_seen[id]))
+	_say("INFO", "%s: edge raiders seen going faster than 1.3x their pace: %d, the longest %.2f s in all (sampled every %.2f s)" % [where, fast_seen.size(), worst_fast, dt])
+	_say("INFO", "%s: turned back (not going home): %d %s" % [where, back.size(), str(back.values().slice(0, 3))])
+	_say("INFO", "%s: stepped out in his sight: %d %s" % [where, popped.size(), str(popped.slice(0, 3))])
+	var ok := true
+	match where:
+		"plain":
+			ok = int(counts.get("nest", 0)) <= int(cfg.RAIDS.get("nest_most", 5))
+		"nest_watched":
+			ok = int(counts.get("nest", 0)) == 0
+		"edge_watched":
+			ok = int(counts.get("edge0", 0)) == 0
+		"final":
+			ok = int(counts.get("nest", 0)) <= int(cfg.RAIDS.get("nest_most", 5)) and counts.size() == edges.size() + 1 and not counts.has("?")
+	_say("PASS" if ok and hurried_seen.is_empty() and back.is_empty() and popped.is_empty() else "FAIL", "%s: where they came from, nobody stepping out in sight, nobody seen running, nobody turning back" % where)
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
