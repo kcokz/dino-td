@@ -2877,6 +2877,9 @@ func _p_fire_night() -> void:
 		g.queue_free()
 	hero.max_hp = 9999.0
 	hero.current_hp = 9999.0
+	if OS.get_environment("DA_LANG") != "":
+		TranslationServer.set_locale(OS.get_environment("DA_LANG"))
+		eb.locale_changed.emit(OS.get_environment("DA_LANG"))
 	var cmds: Node = _find_with_method(root, "_refresh_torch")
 	var tb: Button = cmds.get("torch_button") as Button if cmds else null
 	var first_dusk: String = _after_fmt(tr("HINT_DUSK_FIRST"))
@@ -2896,6 +2899,8 @@ func _p_fire_night() -> void:
 	while t < 4.0:
 		await _advance(0.25)
 		t += 0.25
+		if OS.get_environment("DA_DUSK_SHOT") != "" and not said_first and not _visible_labels(first_dusk).is_empty():
+			await _shoot("first_dusk_hint_" + TranslationServer.get_locale())
 		said_first = said_first or not _visible_labels(first_dusk).is_empty()
 	var tile_dusk: bool = tb != null and tb.is_visible_in_tree()
 	_say("INFO", "torch tile: by day %s, at dusk %s; the first dusk's word on fire on screen %s ('%s')" % [tile_day, tile_dusk, said_first, first_dusk])
@@ -2913,6 +2918,16 @@ func _p_fire_night() -> void:
 	await _advance(0.5)
 	var badge: Label = tb.get_node_or_null("Badge") as Label if tb else null
 	_say("INFO", "key 3: torch_left %.1f, wood 5 -> %d; tile disabled %s, badge '%s' shown %s" % [hero.torch_left, int(gs.resources.get("wood", 0)), tb.disabled if tb else false, badge.text if badge else "?", badge.visible if badge else false])
+	if hero.torch_left <= 0.0:
+		_say("INFO", "key 3 did nothing: can_light_torch %s, window focused %s, hero state %d, focus owner %s, tile shortcut %s, keys live %s; pressing the tile instead" % [hero.can_light_torch(), DisplayServer.window_is_focused(), int(hero.current_state), str(root.gui_get_focus_owner().get_path()) if root.gui_get_focus_owner() else "none", str(tb.shortcut != null), str(cmds.keys_live())])
+		var hints_up: Array = _visible_labels(tr("HINT_NIGHT").left(4))
+		await _press(KEY_3)
+		await _advance(0.5)
+		_say("INFO", "key 3 again: torch_left %.1f (the night hint was up: %d labels)" % [hero.torch_left, hints_up.size()])
+		if hero.torch_left <= 0.0:
+			tb.pressed.emit()
+		await _advance(0.5)
+		_say("INFO", "the tile pressed: torch_left %.1f, wood %d" % [hero.torch_left, int(gs.resources.get("wood", 0))])
 	var lit_ok: bool = hero.torch_left > 55.0 and int(gs.resources.get("wood", 0)) == 4 and tb != null and tb.disabled
 	await _advance(1.0)
 	var tor: Array = _sight_radius(fog, hero.global_position, [0, 45, 90, 135, 180, 225, 270, 315])
@@ -2940,10 +2955,14 @@ func _p_fire_night() -> void:
 	await _advance(3.0)
 	var badge_mid: String = badge.text if badge else "?"
 	var out_said := false
+	var out_shot := false
 	t = 0.0
 	while t < 8.0:
 		await _advance(0.25)
 		t += 0.25
+		if not out_shot and not _visible_labels(torch_out_txt).is_empty():
+			out_shot = true
+			await _shoot("torch_out_hint_" + TranslationServer.get_locale())
 		out_said = out_said or not _visible_labels(torch_out_txt).is_empty()
 	_say("INFO", "torch near its end: badge '%s' with ~5 s left; burnt out: torch_left %.1f, the word said %s, tile shown %s enabled %s" % [badge_mid, hero.torch_left, out_said, tb.is_visible_in_tree() if tb else false, not tb.disabled if tb else false])
 	_say("PASS" if lit_ok and out_said and hero.torch_left <= 0.0 and tb.is_visible_in_tree() and not tb.disabled else "FAIL", "the torch: key 3 lights it for a wood, the tile counts down, it burns out and says so")
