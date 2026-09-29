@@ -40,6 +40,12 @@ var _explained: bool = false
 var revealed: bool = false
 
 ## Laid over a field `field_half` metres from its middle to its edge (Config.TERRAIN.field_half).
+## How anything finds the fog without being handed it (Dino: whether it is in sight).
+const GROUP: String = "fog_of_war"
+
+func _ready() -> void:
+	add_to_group(GROUP)
+
 func setup(field_half: float) -> void:
 	var cfg = _cfg()
 	cell = maxf(0.25, float(cfg.get("cell", 1.0)))
@@ -178,6 +184,13 @@ func is_in_sight(pos: Vector3) -> bool:
 	var i: int = _index(pos)
 	return i >= 0 and _now[i] != 0
 
+## Whether anything of his -- the Hero, the cabin, a finished building -- sees `pos` now, the fog lifted
+## or not: what appears there appears in front of him (WaveManager: nothing steps out where he can
+## see it; Dino: hurrying in from the edge).
+func sees(pos: Vector3) -> bool:
+	var i: int = _index(pos)
+	return i >= 0 and _now[i] != 0
+
 ## Everything seen, for good: a view that has to show the whole field. What is in sight is still
 ## only what he and his buildings see -- lifting the fog finds nothing (_hide_the_unseen).
 func reveal_all() -> void:
@@ -186,10 +199,9 @@ func reveal_all() -> void:
 	_paint(1.0)
 	_hide_the_unseen()
 
-## What is in sight now, and so seen: a circle round everything that sees (_sources).
+## What is in sight now, and so seen: a circle round everything that sees (_sources) -- worked out
+## with the fog lifted too, for what asks what he sees (sees).
 func _look() -> void:
-	if revealed:
-		return
 	_now.fill(0)
 	for src in _sources():
 		_see_round(src[0], float(src[1]))

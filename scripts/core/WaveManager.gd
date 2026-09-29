@@ -19,6 +19,9 @@ extends Node3D
 ## Where else raiders step out, besides the nest: the map's `entries`, in the world (Main
 ## places them). Only the beacon's final wave uses them.
 @export var entry_positions: Array[Vector3] = []
+## The valley's edge behind the nest (MAPS.reinforce_from): where a raid's numbers past the nest's
+## party come in (Config.RAIDS.nest_most).
+@export var reinforce_positions: Array[Vector3] = []
 
 var current_wave: int = 0
 var dinos_to_spawn: int = 0
@@ -31,8 +34,9 @@ var is_wave_active: bool = false
 ## The beacon's final wave is under way (GAME-DESIGN 8.3): from its launch to the jump there
 ## are no more ordinary raids, only the one stream -- see start_final_wave.
 var final_wave: bool = false
-## Which way out the final wave's next raider takes: the nest, then each entry, in turn.
-var _entry_turn: int = 0
+## Of this raid, how many have stepped out of the nest, and whose turn it is at the edge (_next_origin).
+var _from_nest: int = 0
+var _edge_turn: int = 0
 
 # v0.2 Continuous Random Raids
 var raid_timer: float = 60.0
@@ -308,6 +312,8 @@ func start_stage_wave() -> void:
 	if is_wave_active and spawn_timer and is_instance_valid(spawn_timer):
 		spawn_timer.stop()
 	stage_wave = true
+	_from_nest = 0
+	_edge_turn = 0
 	var roster: Array[String] = []
 	for i in range(maxi(0, size)):
 		roster.append(_species_to_spawn())
@@ -378,7 +384,6 @@ func start_final_wave() -> void:
 	var next_n: int = _next_wave_number()
 	var count: int = maxi(1, int(round(float(raid_size(next_n)) * float(beacon.get("final_raids", 1.0)))))
 	final_wave = true
-	_entry_turn = 0
 	start_wave(next_n, count, true)
 	dinos_alive_count += still_out
 	# Over the charge that is left once the grace is out (launch_grace), so the boss, last, still
@@ -388,11 +393,47 @@ func start_final_wave() -> void:
 	if spawn_timer and stream > 0.0:
 		spawn_timer.start(maxf(0.05, stream / float(maxi(1, dinos_to_spawn))))
 
-## Every way out a raider can take in the final wave, in turn: the nest first.
-func final_wave_origins() -> Array[Vector3]:
-	var out: Array[Vector3] = [nest_spawn_position]
-	out.append_array(entry_positions)
+## Where the next of this raid steps out, and whether that is the valley's edge: the nest for the
+## first of it (Config.RAIDS.nest_most) -- a hunting party of the nest, not all of it -- and the rest
+## from the edge, in turn: behind the nest (reinforce_positions), and in the beacon's final wave every
+## edge (entry_positions too). v0.6 round four, the player: "我认为巢穴不应该出来太多，如果需要很多恐龙，
+## 比如信标恐龙就应该来自边界".
+##
+## And nothing steps out where he can see it (v0.6 round four: "raid的时候直接冒出新的恐龙似乎有点奇
+## 怪"): the nest watched, its party comes in from the edge behind it instead; a way in at the edge
+## watched, the next one nobody sees.
+func _next_origin() -> Array:
+	var edges: Array[Vector3] = edge_origins()
+	if edges.is_empty() or (_from_nest < _nest_most() and not _watched(nest_spawn_position)):
+		_from_nest += 1
+		return [nest_spawn_position, false]
+	for k in edges.size():
+		var at: Vector3 = edges[(_edge_turn + k) % edges.size()]
+		if not _watched(at):
+			_edge_turn += k + 1
+			return [at, true]
+	var anyway: Vector3 = edges[_edge_turn % edges.size()]
+	_edge_turn += 1
+	return [anyway, true]
+
+## Whether the Hero or his buildings see `at` now (FogOfWar.sees).
+func _watched(at: Vector3) -> bool:
+	if not is_inside_tree():
+		return false
+	var fog: Node = get_tree().get_first_node_in_group(FogOfWar.GROUP)
+	return fog != null and fog.has_method("sees") and bool(fog.sees(at))
+
+## Every edge a raider of this raid may come in from: behind the nest, and in the final wave every
+## way into the valley.
+func edge_origins() -> Array[Vector3]:
+	var out: Array[Vector3] = reinforce_positions.duplicate()
+	if final_wave:
+		out.append_array(entry_positions)
 	return out
+
+func _nest_most() -> int:
+	var cfg = _get_config()
+	return int(cfg.RAIDS.get("nest_most", 5)) if (cfg and "RAIDS" in cfg) else 5
 
 func _next_wave_number() -> int:
 	var gs = _get_game_state()
@@ -407,7 +448,8 @@ func reset_raid_state() -> void:
 	_stirred_warned = false
 	stage_wave = false
 	_final_countdown = 0.0
-	_entry_turn = 0
+	_from_nest = 0
+	_edge_turn = 0
 	var cfg = _get_config()
 	var lead_time: float = 15.0
 	if cfg and "RAIDS" in cfg:
@@ -436,6 +478,8 @@ func start_wave(wave_num: int, override_count: int = -1, with_boss: bool = false
 			spawn_timer.stop()
 
 	current_wave = wave_num
+	_from_nest = 0
+	_edge_turn = 0
 	# A stage's raid still to come is warned of again once this one is over (_process).
 	_stirred_warned = false
 	wave_roster = roster_for(wave_num, override_count if override_count > 0 else get_wave_dino_count(wave_num), with_boss)
@@ -527,17 +571,17 @@ func _spawn_single_dino() -> Node:
 		offset = float(lane_offsets[dinos_spawned_count % lane_offsets.size()])
 	dinos_spawned_count += 1
 
-	# Out of the nest and down the path -- or, in the beacon's final wave, out of whichever
-	# way is next, straight for the cabin at the path's end (hills are steered round:
-	# Dino._steer_target).
-	var origin: Vector3 = nest_spawn_position
+	# Out of the nest and down the path -- or, past the nest's party, in from the valley's edge,
+	# straight for the cabin at the path's end (hills are steered round: Dino._steer_target),
+	# hurrying while nobody sees it (Dino.hurry_in).
+	var next: Array = _next_origin()
+	var origin: Vector3 = next[0]
+	var from_the_edge: bool = bool(next[1])
 	var route: Array[Vector3] = waypoints.duplicate()
-	if final_wave:
-		var origins: Array[Vector3] = final_wave_origins()
-		origin = origins[_entry_turn % origins.size()]
-		_entry_turn += 1
-		if origin != nest_spawn_position and not waypoints.is_empty():
-			route = [origin, waypoints.back()]
+	if from_the_edge and not waypoints.is_empty():
+		route = [origin, waypoints.back()]
+	if from_the_edge and dino.has_method("hurry_in"):
+		dino.hurry_in(float(cfg.RAIDS.get("edge_hurry", 1.0)) if (cfg and "RAIDS" in cfg) else 1.0)
 	if "lane_offset" in dino:
 		dino.lane_offset = offset
 	if "waypoints" in dino:

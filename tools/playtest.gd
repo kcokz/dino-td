@@ -796,7 +796,7 @@ func _scenario_siege(spec: String) -> void:
 	wm.auto_raid_enabled = false
 	if every_side:
 		wm.final_wave = true
-		wm._entry_turn = 0
+		wm._edge_turn = 0
 	wm.start_wave(1, raiders)
 	if every_side:
 		var beacon: Dictionary = gs.map_data()["beacon"]

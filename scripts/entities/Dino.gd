@@ -507,6 +507,7 @@ func _physics_process(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return
 	var was_at: Vector3 = global_position
+	_keep_hurrying()
 	advance_towards_waypoint(delta)
 	_report_pace(was_at, delta)
 	_call_clock -= delta
@@ -681,6 +682,8 @@ func _let_go() -> void:
 func _set_mode(new_mode: Mode) -> void:
 	if mode == new_mode:
 		return
+	if new_mode == Mode.MARCH:
+		_rejoin_the_road()
 	mode = new_mode
 	current_state = State.ATTACKING if new_mode == Mode.ATTACK else State.WALKING
 	# A new mind is a new window for headway: it has not been failing at THIS yet.
@@ -688,6 +691,28 @@ func _set_mode(new_mode: Mode) -> void:
 	_headway_from = global_position
 	if new_mode != Mode.ATTACK:
 		_stuck_count = 0
+
+## Back on its road after going for something else: at the leg of it it is nearest, heading for that
+## leg's far end -- not for the bend it had set out for. Gone for something from its first thought, a
+## raider never came within reach of that bend (_skip_reached_waypoints), and let go of it further on
+## marched all the way back to it: to the nest, or the edge it came in from (found in the large
+## valley's final wave, v0.6 round four: from the north edge, twelve metres south and back again).
+func _rejoin_the_road() -> void:
+	if waypoints.size() < 2 or current_waypoint_index >= waypoints.size():
+		return
+	var here: Vector2 = _flat(global_position)
+	var best: int = current_waypoint_index
+	var best_gap: float = INF
+	for i in range(maxi(0, current_waypoint_index - 1), waypoints.size() - 1):
+		var a: Vector2 = _flat(_lane_point(i))
+		var b: Vector2 = _flat(_lane_point(i + 1))
+		var ab: Vector2 = b - a
+		var t: float = clampf((here - a).dot(ab) / maxf(0.0001, ab.length_squared()), 0.0, 1.0)
+		var gap: float = here.distance_to(a + ab * t)
+		if gap < best_gap:
+			best_gap = gap
+			best = i + 1
+	current_waypoint_index = maxi(current_waypoint_index, best)
 
 ## Standing at what it bites, biting it.
 func _begin_attack() -> void:
@@ -779,7 +804,7 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 		# its full speed a raptor went 6.7 cm a frame at a spot it had to be within 5 cm of -- past it,
 		# turned, past it the other way, its head swinging each time, for as long as it was sent there
 		# (the debug-agent's BUG-005: a raid waiting at the cabin's fenced back, "原地打转").
-		desired = to.normalized() * minf(speed * pace, to.length() / maxf(delta, 0.0001))
+		desired = to.normalized() * minf(speed * pace * hurry, to.length() / maxf(delta, 0.0001))
 	elif to.length() <= 0.05:
 		_settled_on = goal
 	# Near its place, it faces what it came for -- walking the last steps or waiting there -- not the
@@ -997,6 +1022,27 @@ func _watch_headway(delta: float) -> void:
 
 ## Whether it is on its way back to the nest, its hours over (go_home).
 var going_home: bool = false
+
+## How many times its own pace it goes. Come in from the valley's edge (WaveManager), it hurries while
+## nobody sees it and it is far from the cabin (Config.RAIDS.edge_hurry, edge_hurry_until) -- then its
+## own pace, for good: the walk in is the valley's size, not the raid's, and nobody watches it run
+## like that (v0.6 round four: "从边界出来的你可以先加速后正常速度"). 1 is its own pace.
+var hurry: float = 1.0
+
+func hurry_in(times: float) -> void:
+	hurry = maxf(1.0, times)
+
+## Hurrying in from the edge: no longer once it is in sight (FogOfWar.is_in_sight) or near the cabin.
+func _keep_hurrying() -> void:
+	if hurry <= 1.0 or not is_inside_tree():
+		return
+	var cfg = _get_config()
+	var near: float = float(cfg.RAIDS.get("edge_hurry_until", 20.0)) if (cfg and "RAIDS" in cfg) else 20.0
+	var cabin: Node = _cabin()
+	var fog: Node = get_tree().get_first_node_in_group(FogOfWar.GROUP)
+	if (cabin is Node3D and _flat(global_position).distance_to(_flat((cabin as Node3D).global_position)) <= near) \
+			or (fog != null and fog.sees(global_position)):
+		hurry = 1.0
 
 ## The trap that last shot at it, and when (by _mind_clock): the one a pack goes for (PackDino).
 var _shot_by: Node = null

@@ -248,24 +248,27 @@ func test_12_launching_sets_out_one_wave_streamed_over_the_charge_with_the_boss_
 	assert_almost_eq(wm.spawn_timer.wait_time * float(wm.dinos_to_spawn), stream, stream * 0.01,
 		"Stepping out one after another over the stream's share of the charge")
 
-func test_13_they_come_out_of_the_nest_and_every_entry_in_turn() -> void:
+func test_13_they_come_out_of_the_nest_and_then_every_edge_in_turn() -> void:
+	# The nest's party first (Config.RAIDS.nest_most), then in from every edge of the valley in turn:
+	# behind the nest, and every way in (v0.6 round four: "信标恐龙就应该来自边界"; test_v06_from_the_edge).
 	var main = await _level()
 	var wm = main.wave_manager
-	var entries: Array = _map()["entries"]
-	var origins: Array[Vector3] = [wm.nest_spawn_position]
-	for cell in entries:
-		origins.append(main.grid_manager.cell_to_world(cell))
-	wm.start_final_wave()
+	var edges: Array[Vector3] = []
+	for cell in _map().get("reinforce_from", []) + _map()["entries"]:
+		edges.append(main.grid_manager.cell_to_world(cell))
+	var party: int = int(config_node.RAIDS["nest_most"])
+	wm.final_wave = true
+	wm.start_wave(wm._next_wave_number(), party + edges.size() + 1, true)
 	wm.spawn_timer.stop()    # these are stepped out by hand, in order
 	var cabin: Vector3 = wm.waypoints.back()
-	for i in range(origins.size() + 1):
+	for i in range(party + edges.size() + 1):
 		var dino = wm._spawn_single_dino()
 		assert_not_null(dino, "Raider %d stepped out" % i)
 		if dino == null:
 			return
-		var at: Vector3 = origins[i % origins.size()]
+		var at: Vector3 = wm.nest_spawn_position if i < party else edges[(i - party) % edges.size()]
 		assert_lt(Vector2(dino.position.x - at.x, dino.position.z - at.z).length(), 1.0,
-			"Raider %d came out of way %d" % [i, i % origins.size()])
+			"Raider %d came out of %s" % [i, "the nest" if i < party else "edge %d" % ((i - party) % edges.size())])
 		assert_eq(dino.waypoints.back(), cabin, "And is headed for the cabin")
 
 func test_14_no_ordinary_raid_comes_while_it_lasts() -> void:

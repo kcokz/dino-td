@@ -1148,6 +1148,10 @@ const MAPS: Dictionary = {
 	# once" (GAME-DESIGN 8.3) -- so the base the player built facing the nest has to have
 	# a back as well. Every one is walkable and reaches the cabin (test_v06_beacon).
 	"entries": [Vector2i(-10, 0), Vector2i(9, 0), Vector2i(0, 9)],
+	# The valley's edge behind the nest, where a raid's numbers past its party from the nest come in
+	# (RAIDS.nest_most), unseen in the mist. Every one is walkable and reaches the cabin
+	# (test_v06_from_the_edge).
+	"reinforce_from": [Vector2i(-3, -10), Vector2i(3, -10)],
 	# The beacon (GAME-DESIGN 8.3): the run's main line, and its only way to be won.
 	"beacon": {
 		# Repaired at the cabin a stage at a time, in order, each stage from a higher tier
@@ -1276,6 +1280,7 @@ const MAPS: Dictionary = {
 		},
 		"default_nest_cell": Vector2i(0, -18),
 		"entries": [Vector2i(-21, 0), Vector2i(20, 0), Vector2i(0, 20)],
+		"reinforce_from": [Vector2i(-6, -21), Vector2i(0, -21), Vector2i(6, -21)],
 		"default_blocked_cells": [
 			# The valley's outcrop north of the cabin.
 			Vector2i(-3, -5), Vector2i(-2, -5), Vector2i(2, -5), Vector2i(3, -5),
@@ -2263,6 +2268,17 @@ const RAIDS: Dictionary = {
 	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
 	"intensity_per_minute": 0.05, # Raid intensity escalation slope per minute (see WAVES: it multiplies)
 	"intensity_jitter": 0.3,      # Random intensity fluctuation (+/- 30%)
+	# A raid is a hunting party of the nest, not all of it (v0.6 round four, the player: "我认为巢穴不应该
+	# 出来太多，如果需要很多恐龙，比如信标恐龙就应该来自边界"): at most this many of one step out of the
+	# nest; the rest come in from the valley's edge behind it (MAPS.reinforce_from) -- and in the
+	# beacon's final wave from every edge (MAPS.entries too).
+	"nest_most": 5,
+	# Come in from the edge, one hurries, this many times its own pace, while nobody sees it
+	# (FogOfWar.is_in_sight) and it is further than edge_hurry_until metres from the cabin: the walk in
+	# is the valley's size, not the raid's ("从边界出来的你可以先加速后正常速度"). Seen, or near, and it goes
+	# at its own pace from then on -- nobody watches it run like that.
+	"edge_hurry": 2.0,
+	"edge_hurry_until": 20.0,
 }
 
 const RESOURCE_NODES: Dictionary = {

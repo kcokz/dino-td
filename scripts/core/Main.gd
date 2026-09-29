@@ -316,6 +316,12 @@ func _discover_waypoints() -> void:
 			for cell in _map().get("entries", []):
 				entries.append(grid_manager.cell_to_world(cell))
 		wave_manager.entry_positions = entries
+		# Its edge behind the nest, where a raid's numbers past the nest's party come in.
+		var edges: Array[Vector3] = []
+		if grid_manager and grid_manager.has_method("cell_to_world"):
+			for cell in _map().get("reinforce_from", []):
+				edges.append(grid_manager.cell_to_world(cell))
+		wave_manager.reinforce_positions = edges
 
 func _wire_signals() -> void:
 	if hud:
