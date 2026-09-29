@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"nest_stone_east": await _p_nest_stone("east")
+			"nest_stone_west": await _p_nest_stone("west")
 			"mist": await _p_mist()
 			"ring_traps": await _p_ring_traps()
 			"black_fog": await _p_black_fog()
@@ -1706,6 +1708,54 @@ func _p_mist() -> void:
 	await _advance(1.5)
 	await _shoot("E_edge_zoomed_out")
 	_say("INFO", "hint samples after 12 s: still on screen %s" % (not _visible_labels(frag).is_empty()))
+
+## The stones by the nest (MAPS.valley default_resource_nodes, GAME-DESIGN 9.2: "巢边的两块还在，离危险更近")
+## since 0c1f442 ("a nest is defended by all its guards at once"): the Hero at full health with the
+## bone pick, sent to quarry each nest-side stone in turn, from the cabin, as a click sends him --
+## how long he lasts, what came at him, and whether he lives. `which` picks the stone: the nearest
+## to the nest on the east or west.
+func _p_nest_stone(which: String) -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	var nest: Node3D = get_first_node_in_group("nest") as Node3D
+	gs.day_clock = 80.0
+	_main.wave_manager.auto_raid_enabled = false
+	gs.grant_unlock("harvest_stone")
+	var stone: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) != "stone":
+			continue
+		var p: Vector3 = (n as Node3D).global_position
+		if (which == "east" and p.x < core.x) or (which == "west" and p.x >= core.x):
+			continue
+		if stone == null or p.distance_to(nest.global_position) < stone.global_position.distance_to(nest.global_position):
+			stone = n
+	var posts: Array = []
+	for g in get_nodes_in_group("guard_dinos"):
+		posts.append("%.1f m" % g.post_position.distance_to(stone.global_position))
+	_say("INFO", "%s stone at %s: %.1f m from the nest; guard posts %s from it; hero hp %.0f" % [which, str(stone.global_position), stone.global_position.distance_to(nest.global_position), ", ".join(posts), hero.current_hp])
+	hero.order_harvest(stone)
+	var t := 0.0
+	var first_bite := -1.0
+	var max_chasing := 0
+	var stone0: int = int(gs.resources.get("stone", 0))
+	while t < 40.0 and not gs.is_game_over:
+		await _advance(0.25)
+		t += 0.25
+		var chasing := 0
+		for g in get_nodes_in_group("guard_dinos"):
+			if is_instance_valid(g) and int(g.guard_state) in [1, 2]:
+				chasing += 1
+		max_chasing = maxi(max_chasing, chasing)
+		if first_bite < 0.0 and hero.current_hp < hero.max_hp:
+			first_bite = t
+			await _shoot("%s_first_bite" % which)
+	var alive: int = 0
+	for g in get_nodes_in_group("guard_dinos"):
+		if is_instance_valid(g) and not ("is_dead" in g and g.is_dead):
+			alive += 1
+	_say("INFO", "%s stone: first bite at %.1f s; up to %d guards after him at once; after %.1f s: hero %s (hp %.1f), game over %s, guards left %d, stone got %d" % [which, first_bite, max_chasing, t, "DEAD" if hero.current_hp <= 0.0 else "alive", hero.current_hp, gs.is_game_over, alive, int(gs.resources.get("stone", 0)) - stone0])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

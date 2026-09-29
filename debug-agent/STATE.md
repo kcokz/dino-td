@@ -16,6 +16,8 @@
 | [BUG-009](bug/BUG-009-full-ring-raid-piles-on-one-crossbow.md) | 整圈栅栏 + 窝弩：来袭全冲同一架窝弩，堆在栅栏角外转圈、顶 | 中 | open | 2026-09-28 |
 | [BUG-008](bug/BUG-008-twitch-watch-misses-a-slow-swing.md) | 抽搐监测漏报：原地不动、每秒甩一次头 22 秒 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
 | [BUG-006](bug/BUG-006-raid-stepping-out-at-dusk-never-goes-home.md) | 天快黑时出发的来袭，黄昏后才出巢的那些不回巢，照咬船舱 | **高** | **fixed** d2c30d5 | 2026-09-28 |
+| [DOC-004](design-doc/DOC-004-nest-stone-is-now-deadly.md) | 巢边石头：0c1f442 以后三只守卫一起上，满血 6 秒倒下（需要拍板） | — | open | 2026-09-28 |
+| [DOC-005](design-doc/DOC-005-fog-line-still-says-black.md) | 9.3 第 625 行还写着"没去过的是黑的" | — | open | 2026-09-28 |
 | [DOC-001](design-doc/DOC-001-meals-no-longer-speed-walking.md) | 饭已经不管走路，设计书七处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-002](design-doc/DOC-002-prime-meat-left-on-station-1.md) | 第 1 站没有珍贵肉了，五处还写着 | — | **applied** ba2ca49 | 2026-09-28 |
 | [DOC-003](design-doc/DOC-003-small-stale-facts.md) | 栅栏段数、待定 2 的指向、9.3 的机器人数据 | — | **applied** ba2ca49 | 2026-09-28 |
@@ -40,6 +42,12 @@
 | TASK-014 | 迷雾改成山谷里的雾 | **done** 功能都过；观感：正午太白、黄昏夜里雾比视野亮 |
 
 ## 检查记录
+
+### 2026-09-28 第 6 次（自由找 bug，7426dbc）
+
+- `play:25` 机器人：第 4 分半在东边巢边的石头那里被三只守卫围死（满血），船舱 100/100。探针复现：东边那块两次里一次死（第一口到死 5.7 秒），西边那块两次都没事 → DOC-004（设计取舍，不算 bug）。
+- 这一局抽搐报告 0 份（只到第 2 波）。
+- 设计书 9.3 第 625 行还写着迷雾是黑的 → DOC-005。
 
 ### 2026-09-28 第 5 次（自由找 bug，7817a1e 快照）
 
