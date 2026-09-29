@@ -19,6 +19,7 @@
 | [BUG-017](bug/BUG-017-torch-flame-trails-behind-him.md) | 举着火把走路，火苗拖出一串 3 米长的火球 | 低 | open | 2026-09-29 |
 | [BUG-018](bug/BUG-018-phytosaur-stays-in-the-torchlight-when-cornered.md) | 火把把植龙逼到场地边，它就停在火光里贴着人 | 低～中 | open | 2026-09-29 |
 | [BUG-019](bug/BUG-019-hero-does-not-hit-back-on-his-way-to-work.md) | 夜里去干活的路上被植龙堵住咬死，不还手 | 中 | open | 2026-09-29 |
+| [BUG-020](bug/BUG-020-axe-effect-uses-a-letter-x.md) | 能力槽：斧头"木材 x2"用字母 x，别的用 × | 很低 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -58,6 +59,12 @@
 | TASK-021 | 火与夜、怕火的植龙 | **done** 大体过；另开 BUG-017、BUG-018 |
 
 ## 检查记录
+
+### 2026-09-29 第 15 次（自由找 bug，7f8ee65）
+
+- DOC-004（选了 A，守卫示威）、DOC-005（设计书迷雾已改成"浓雾"）标成 resolved。
+- 新探针 `kit_slots`：人的面板五格的悬停文字，空的、有东西的，中英文都对。斧头"木材 x2"是字母 x → BUG-020。
+- 探针注意：换语言要发 `EventBus.locale_changed`，只设 TranslationServer 面板不会重建（不是游戏 bug）。
 
 ### 2026-09-29 第 14 次（自由找 bug，7f8ee65，大山谷）
 
@@ -181,6 +188,6 @@
 - [ ] 换几局机器人（不同时长 `play:25`），找 STUCK / gave up / 奇怪的 LOST。
 - [x] 最后一波从三个入口（西、东、南）来：入口附近有没有卡住、被地形堵住的恐龙。（第 7 次，两张图都没有）
 - [x] 围栏里摆绊索弓（3 章"想打的东西被墙整个围住"）：恐龙会不会站在外面挨打不咬墙。`siege:...:inside` 场景。（第 9 次：会咬、会进去；口子前抖 → BUG-005 补充）
-- [ ] 能力槽悬停文字、空格子的提示（3 章）。
+- [x] 能力槽悬停文字、空格子的提示（3 章）。（第 15 次：都在、中英文对；斧头的 x → BUG-020）
 - [x] 鼠标碰窗口边缘平移视角 → TASK-004（真鼠标那一半留给人）
 - [ ] 测试套件退出时的 RID/ObjectDB 泄漏（dev 说有 51 个对象、7 个资源，是测试卫生问题，可以另开 BUG）。

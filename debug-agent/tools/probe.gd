@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"kit_slots": await _p_kit_slots()
 			"bitten_on_the_way": await _p_bitten_on_the_way()
 			"fire_night": await _p_fire_night()
 			"prowl": await _p_prowl()
@@ -3294,6 +3295,44 @@ func _p_bitten_on_the_way() -> void:
 	_say("INFO", "tree %.1f m off, the phytosaur between; every 0.25 s (time:state hp distance speed): %s" % [tree.global_position.distance_to(core + Vector3(0.0, 0.0, 5.0)), " ".join(log)])
 	_say("INFO", "after %.1f s: his state %d, health %.1f -> %.1f, turned on it %s, it alive %s" % [t, int(hero.current_state), hp0, hero.current_hp, fought, is_instance_valid(p) and not p.is_dead])
 	_say("PASS" if fought or hero.current_hp >= hp0 - 1.0 else "FAIL", "bitten on his way to work, he turns on what bites him")
+
+## GAME-DESIGN 3 "能力槽": the hero card's row of five, read off the real card -- each slot's name and hover
+## text with nothing made, and again with one of each made (the unlocks granted). An empty one should
+## say what goes there and where it is made; a held one its name and what it does. In DA_LANG.
+func _p_kit_slots() -> void:
+	var gs := root.get_node("GameState")
+	if OS.get_environment("DA_LANG") != "":
+		TranslationServer.set_locale(OS.get_environment("DA_LANG"))
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	await _advance(1.0)
+	var panel: Node = _find_with_method(root, "_show_abilities")
+	if panel == null:
+		_say("FAIL", "no hero card with _show_abilities")
+		return
+	if panel.has_method("show_hero"):
+		panel.show_hero(_main.hero)
+	await _press(KEY_C)
+	await _advance(0.5)
+	var bad: Array = []
+	for phase in ["empty", "made"]:
+		if phase == "made":
+			for u in ["bone_pick", "stone_axe", "bone_spear", "bone_armor", "hide_boots"]:
+				gs.grant_unlock(u)
+			panel._show_abilities(true)
+			await _advance(0.5)
+		var row: Node = panel.get("ability_row")
+		var lines: Array = []
+		for slot in row.get_children():
+			var tip: String = String((slot as Control).tooltip_text)
+			lines.append("%s: '%s'" % [slot.name, tip])
+			if tip.strip_edges() == "" or tip.contains("KIT_") or tip.contains("RECIPE_") or tip.contains("%"):
+				bad.append("%s %s: '%s'" % [phase, slot.name, tip])
+			if phase == "made" and not tip.contains("—"):
+				bad.append("%s %s says no effect: '%s'" % [phase, slot.name, tip])
+		_say("INFO", "%s (%s): %d slots: %s" % [phase, TranslationServer.get_locale(), row.get_child_count(), "; ".join(lines)])
+		await _shoot("kit_%s_%s" % [phase, TranslationServer.get_locale()])
+	_say("PASS" if bad.is_empty() else "FAIL", "the kit row's hover texts%s" % ("" if bad.is_empty() else ": " + "; ".join(bad)))
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
