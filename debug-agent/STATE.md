@@ -12,8 +12,9 @@
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
 | [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open（f65f8ea 复测：好了一部分，还没过，见 TASK-011） | 2026-09-28 |
 | [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
+| [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
-| [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | open | 2026-09-28 |
+| [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
 | [BUG-009](bug/BUG-009-full-ring-raid-piles-on-one-crossbow.md) | 整圈栅栏 + 窝弩：来袭全冲同一架窝弩，堆在栅栏角外转圈、顶 | 中 | open | 2026-09-28 |
 | [BUG-008](bug/BUG-008-twitch-watch-misses-a-slow-swing.md) | 抽搐监测漏报：原地不动、每秒甩一次头 22 秒 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
 | [BUG-006](bug/BUG-006-raid-stepping-out-at-dusk-never-goes-home.md) | 天快黑时出发的来袭，黄昏后才出巢的那些不回巢，照咬船舱 | **高** | **fixed** d2c30d5 | 2026-09-28 |
@@ -43,6 +44,7 @@
 | TASK-014 | 迷雾改成山谷里的雾 | **done** 功能都过；观感：正午太白、黄昏夜里雾比视野亮 |
 | TASK-015 | 人的面板平时不开，建造吃饭固定在右下角 | **done** 通过；观感：徽章的 C 太小、吃饭图标两个数字 |
 | TASK-016 | 复测 BUG-011 | **done** 通过 |
+| TASK-017 | 复测 BUG-009（第二步）、BUG-010 | **done**：BUG-010 过；BUG-009 没少一半；另开 BUG-012 |
 
 ## 检查记录
 

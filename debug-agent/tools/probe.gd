@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"gaps": await _p_gaps()
+			"boss_rams": await _p_boss_rams()
 			"defeat_guard": await _p_defeat("guard")
 			"defeat_raider": await _p_defeat("raider")
 			"defeat_alone": await _p_defeat("alone")
@@ -1590,7 +1592,8 @@ func _p_ring_traps() -> void:
 			seen[cell] = true
 			ring.append(cell)
 	var traps := {}
-	for i in range(4):
+	# DA_NO_TRAPS: the ring alone, sealed -- the raid has to bite through it.
+	for i in range(0 if OS.get_environment("DA_NO_TRAPS") != "" else 4):
 		var a: float = deg_to_rad(-80.0 + 160.0 * (float(i) + 0.5) / 4.0)
 		var out := Vector2(sin(a), -cos(a))
 		var nearest: Vector2i = ring[0]
@@ -1626,8 +1629,14 @@ func _p_ring_traps() -> void:
 		await _advance(0.25)
 		t += 0.25
 		gs.day_clock = minf(float(gs.day_clock), 150.0)
-		if is_equal_approx(t, 12.0) or is_equal_approx(t, 20.0):
-			await _portrait("overhead_%ds" % int(t), centre + Vector3(-1.0, 0.0, -5.0), 11.0)
+		if is_equal_approx(t, 12.0) or is_equal_approx(t, 20.0) or (OS.get_environment("DA_NO_TRAPS") != "" and (is_equal_approx(t, 9.0) or is_equal_approx(t, 15.0))):
+			await _portrait("overhead_%ds" % int(t), centre + Vector3(-1.0, 0.0, -9.0), 16.0)
+			var modes := {}
+			for dd in get_nodes_in_group("dinos"):
+				if is_instance_valid(dd) and not dd.is_in_group("guard_dinos"):
+					var m: String = ["march", "engage", "attack", "breach"][int(dd.mode)] if int(dd.mode) < 4 else str(dd.mode)
+					modes[m] = int(modes.get(m, 0)) + 1
+			_say("INFO", "%.0f s: raiders by mode %s; ring sections standing %d" % [t, str(modes), _count_walls()])
 		if queue.size() > filmed and filmed < 4:
 			var rec: Dictionary = queue[filmed]
 			var d: Node3D = instance_from_id(int(rec.get("dino", {}).get("id", 0))) as Node3D
@@ -1896,6 +1905,13 @@ func _p_herocard_keys() -> void:
 		pass
 	_say("PASS" if bad.is_empty() else "FAIL", "hero card and keys: %s" % ("all as TASK-015 says" if bad.is_empty() else "; ".join(bad)))
 
+func _count_walls() -> int:
+	var n := 0
+	for b in _main.grid_manager.get_all_buildings():
+		if is_instance_valid(b) and "building_type" in b and String(b.building_type) == "wall" and not b.is_destroyed:
+			n += 1
+	return n
+
 func _press(code: int) -> void:
 	_key(code, true)
 	for i in range(3):
@@ -1994,6 +2010,156 @@ func _p_defeat(how: String) -> void:
 			said.append((n as Label).text.replace(char(10), " / "))
 	await _shoot("defeat_%s_%s" % [how, TranslationServer.get_locale()])
 	_say("INFO", "%s: game over %s; the screen says: %s" % [how, gs.is_game_over, " | ".join(said)])
+
+## TASK-017, what buildings as avoidance obstacles might break: (A) a one-cell gap between two runs
+## of palisade -- a raider sent through it gets through; (B) a one-cell lane between the cabin's west
+## end and a palisade laid parallel to it -- a raider walks the lane end to end. The cells are the
+## game's (BUILD_CELL, 1 m); a raider is 0.8 m wide (GAME-DESIGN 3: "一格空地就是一条路").
+func _p_gaps() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var core: Vector3 = _main.current_core.global_position
+	var cc: Vector2i = gm.world_to_build_cell(core)
+	var h := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	# A: a wall across open ground south of the cabin, x from cc.x-6 to cc.x+6 at z = cc.y+6, with a
+	# one-cell gap at cc.x.
+	var zA: int = cc.y + h.y + 5
+	for x in range(cc.x - 6, cc.x + 7):
+		if x != cc.x:
+			_build_at("wall", Vector2i(x, zA))
+	# B: a run of palisade one cell off the cabin's west end, from its north row to its south row:
+	# the lane is the column between the cabin and the run.
+	# (Beside the cabin a raider rightly stops to bite the cabin at the lane's mouth, so the lane is
+	# laid in open ground east of it: two parallel runs, the lane between them.)
+	# B is its own layout (below, after A): a sealed square round the cabin whose one way in is a
+	# lane one cell wide and four long, running out east from a gap in its east side.
+	var xB: int = 0
+	_main.nav_maps.rebake()
+	await _advance(0.5)
+	var species: String = String(gs.map_data()["raiders"].keys()[0])
+	var results := {}
+	for case in ["A_gap", "B_lane"]:
+		var from: Vector3
+		var to: Vector3
+		if case == "A_gap":
+			from = gm.build_cell_to_world(Vector2i(cc.x - 3, zA + 3))
+			to = gm.build_cell_to_world(Vector2i(cc.x + 3, zA - 2))
+		else:
+			# Clear A away and lay B.
+			for b in gm.get_all_buildings():
+				if is_instance_valid(b) and "building_type" in b and String(b.building_type) == "wall":
+					b.queue_free()
+			await _advance(0.2)
+			var x0: int = cc.x - h.x - 3
+			var x1: int = cc.x + h.x + 3
+			var z0: int = cc.y - h.y - 3
+			var z1: int = cc.y + h.y + 3
+			for x in range(x0, x1 + 1):
+				_build_at("wall", Vector2i(x, z0))
+				_build_at("wall", Vector2i(x, z1))
+			for z in range(z0 + 1, z1):
+				_build_at("wall", Vector2i(x0, z))
+				if z != cc.y:
+					_build_at("wall", Vector2i(x1, z))
+			for x in range(x1 + 1, x1 + 5):
+				_build_at("wall", Vector2i(x, cc.y - 1))
+				_build_at("wall", Vector2i(x, cc.y + 1))
+			_main.nav_maps.rebake()
+			await _advance(0.5)
+			xB = x1
+			from = gm.build_cell_to_world(Vector2i(x1 + 7, cc.y))
+			to = core
+		var reachable: bool = _main.nav_maps.is_reachable(from, to, false)
+		var d = load(String(cfg.get_dino_script_path(species))).new()
+		_main.add_child(d)
+		d.setup(species)
+		d.max_hp = 9999.0
+		d.current_hp = 9999.0
+		d.global_position = from
+		d.set_waypoints([to])
+		var t := 0.0
+		var best: float = from.distance_to(to)
+		# What counts: through the gap -- on the far side of the fence line; into the lane -- at its
+		# middle. (Near the cabin a raider rightly turns to bite it; getting there is the question.)
+		var mid: Vector3 = gm.build_cell_to_world(Vector2i(xB + 1, cc.y))
+		var through := false
+		while t < 25.0:
+			await _advance(0.25)
+			t += 0.25
+			var p: Vector3 = (d as Node3D).global_position
+			best = minf(best, p.distance_to(to))
+			if case == "A_gap" and p.z < gm.build_cell_to_world(Vector2i(cc.x, zA)).z - 0.6:
+				through = true
+			if case == "B_lane" and p.x < gm.build_cell_to_world(Vector2i(xB, cc.y)).x - 0.6:
+				through = true
+			if through:
+				break
+		var bit: String = ""
+		if d.current_target != null and is_instance_valid(d.current_target) and "building_type" in d.current_target:
+			bit = " (biting a %s)" % String(d.current_target.building_type)
+		results[case] = "on the raid's mesh: %s; %s after %.1f s%s" % [reachable, "GOT THROUGH" if through else "did not get through", t, bit]
+		await _portrait(case, (from + to) * 0.5, 9.0)
+		d.queue_free()
+		await _advance(0.5)
+	for k in results:
+		_say("INFO", "%s: %s" % [k, results[k]])
+	var ok: bool = results["A_gap"].contains("GOT THROUGH") and results["B_lane"].contains("GOT THROUGH")
+	_say("PASS" if ok else "FAIL", "a raider through a one-cell gap and down a one-cell lane")
+
+## TASK-017: the map's boss (siege behaviour) still goes THROUGH a wall -- rams it -- rather than round:
+## a sealed ring 6.5 m round the cabin, the boss put down outside it on the nest side.
+func _p_boss_rams() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	var seen := {}
+	var around: int = int(ceil(TAU * 6.5 / float(cfg.BUILD_CELL))) * 4
+	var ring: Array = []
+	for i in range(around):
+		var a: float = TAU * float(i) / float(around)
+		var cell: Vector2i = gm.world_to_build_cell(core + Vector3(sin(a) * 6.5, 0.0, -cos(a) * 6.5))
+		if not seen.has(cell):
+			seen[cell] = true
+			var b = _build_at("wall", cell)
+			if b != null:
+				ring.append(b)
+	_main.nav_maps.rebake()
+	await _advance(0.5)
+	var boss: String = String(gs.map_data()["boss"])
+	var d = load(String(cfg.get_dino_script_path(boss))).new()
+	_main.add_child(d)
+	d.setup(boss)
+	d.max_hp = 9999.0
+	d.current_hp = 9999.0
+	var start: Vector3 = core + Vector3(0.0, 0.0, -11.0)
+	d.global_position = start
+	d.set_waypoints([core])
+	var t := 0.0
+	var walked := 0.0
+	var last: Vector3 = start
+	var first_bite := -1.0
+	var bitten: String = ""
+	while t < 40.0:
+		await _advance(0.25)
+		t += 0.25
+		walked += (d as Node3D).global_position.distance_to(last)
+		last = (d as Node3D).global_position
+		if first_bite < 0.0 and int(d.current_state) == int(d.State.ATTACKING) and d.current_target != null and is_instance_valid(d.current_target):
+			first_bite = t
+			bitten = String(d.current_target.building_type) if "building_type" in d.current_target else str(d.current_target)
+	var lost := 0
+	for b in ring:
+		if not is_instance_valid(b) or b.is_destroyed:
+			lost += 1
+	await _portrait("boss_at_the_ring", core + Vector3(0.0, 0.0, -6.0), 12.0)
+	_say("INFO", "%s from %.1f m out: first bite at %.1f s on a %s; walked %.1f m in %.1f s; ring sections lost %d of %d" % [boss, start.distance_to(core), first_bite, bitten, walked, t, lost, ring.size()])
+	_say("PASS" if first_bite >= 0.0 and first_bite < 15.0 and walked < 15.0 else "FAIL", "the boss rams the ring rather than going round it")
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

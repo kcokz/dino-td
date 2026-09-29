@@ -1,6 +1,6 @@
 # BUG-010 等位置的恐龙在人群外面原地甩头（半圈栅栏、人站在门外时）
 
-- 状态: open
+- 状态: fixed（357b603，2026-09-28 复测通过，见 TASK-017）
 - 严重度: 低～中（抽搐监测已经会报 `fidget` 了；只在一种摆法下、大约三次里两次）
 - 发现: 2026-09-28 · 5ad2d35（TASK-013 复测 BUG-008 时，按任务说的"甩头本身另开 BUG"）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 5ad2d35) bash debug-agent/tools/run_check.sh probe:half_fence`（人站在门外，不加 `DA_HERO_IN`），看 `twitch.txt` 里的 `fidget`
@@ -29,3 +29,7 @@
 
 - 人先进船舱（`DA_HERO_IN=1`）的两次都没有出现（最多 4 次、0 次），只有 BUG-005 那边的 push。
 - 一点不围的船舱（BUG-007 已修好）也没有出现。
+
+## 复测（2026-09-28，357b603）：通过
+
+`probe:half_fence`（人在门外）三次：没有 fidget；西南角那只等位置时不再甩头（原地来回摆最多 1～3 次）。
