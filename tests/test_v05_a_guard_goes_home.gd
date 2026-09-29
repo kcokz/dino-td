@@ -175,7 +175,8 @@ func _after_him(g: Node) -> bool:
 
 func test_05_one_guard_that_goes_for_him_brings_the_others() -> void:
 	# v0.6 round four: "初始人就能把守卫恐龙巢穴的小龙一个个杀掉，人杀伤力这么强吗" -- each came only when he
-	# was inside its own aggro radius, so he drew them off one at a time.
+	# was inside its own aggro radius, so he drew them off one at a time. The first to see him warns him
+	# off and the others turn to him too (DOC-004, test_v06_the_guards_warn); he stays, and all come.
 	var main = _level()
 	await wait_frames(6)
 	var guards: Array = _the_nests_guards(main)
@@ -191,7 +192,10 @@ func test_05_one_guard_that_goes_for_him_brings_the_others() -> void:
 				"%s would not have noticed him itself" % g.name)
 	await _a_thought()
 	for g in guards:
-		assert_true(_after_him(g), "%s comes for him: the first called" % g.name)
+		assert_eq(int(g.guard_state), int(g.GuardState.THREATENING), "%s warns him off: the first called" % g.name)
+	await wait_seconds(float(config_node.NEST_GUARDS["threat_seconds"]) + float(config_node.DINO_AI["think_seconds"]) * 1.2 + 0.2)
+	for g in guards:
+		assert_true(_after_him(g), "%s comes for him: he stayed" % g.name)
 		assert_eq(g.chase_target, main.hero, "%s is after the Hero" % g.name)
 
 func test_06_a_guard_that_is_hurt_goes_for_him_and_calls() -> void:

@@ -1295,6 +1295,12 @@
     - **导航网格改在后台烘**（`NavMaps.rebake_in_background`，引擎的 `bake_from_source_geometry_data_async`）：实测每造完一段栅栏，小山谷卡 0.11 秒、大山谷卡 0.6 秒（烘焙本身，读关卡只要 1～2 毫秒）。现在主线程最长一帧 16 毫秒，新网格小山谷 8 帧、大山谷 37 帧以后生效；这段时间恐龙按旧网格走，撞上新墙由"被挡住"的处理接手。开局那次和测试里显式要的重烘照旧当场烘完；后台还没烘完时来了一次当场的，旧的那次结果不会盖掉新的（`_generation`）。
     - 测试里造完东西再问"还有没有路"，要等后台烘完、而且每张导航图在新网格放进去以后同步过一次（`NavMaps.is_caught_up`，测试用 `test_base.nav_settled`）——只等固定几帧不够：网格已经换了，图还按旧的回答。`test_v05_navmesh`、`test_v05_a_fence_is_dragged_out` 改用它。
     - 新测试 `test_v06_the_map_size.gd`（9 条）。
+  - **守卫先示威再动手**（玩家定，debug-agent DOC-004 选 A）：守卫一起上以后，开局去采巢边那块石头的人还没看见它们就被围住，6 秒倒下（机器人整局就是这样输的）。
+    - 新状态 `GuardDino.GuardState.THREATENING`：看见人走进警戒圈，站住、面朝他、冲空中咬一下（咬的动作放 0.6 秒）、叫一声（`alert`）；同一个巢的守卫（`rally_radius` 以内）也转过来示威（`answer_threat`）。
+    - 2 秒（`NEST_GUARDS.threat_seconds`）以内人退到警戒圈外再多 1 米（`calm_margin`）就回岗位，安静 1.5 秒；靠近任何一只到 3 米以内（`threat_close`）、打了其中一只、或者 2 秒到了还在圈里，就一起扑上来（原来的 `_rally`）。人退没退开按离他最近的那只示威的守卫算——按自己算的话，被叫过来的那几只本来就离人远，一转过来就以为人走了。
+    - 巢边造的建筑照旧直接咬（房子不会退）。
+    - 每局第一次示威时屏幕上说一句（`EventBus.guards_warned`、`HINT_GUARDS_WARN`）。
+    - 新测试 `test_v06_the_guards_warn.gd`（7 条）；`test_v05_a_guard_goes_home` 第 5 条、`test_v01_deployment_and_hero` 第 10 条按新规则改写（先示威，不走才追）。
   - **（debug-agent BUG-005，接着修）排队，和按墙长排的咬位**：
     - 咬的位置原来是按角度分的，任何建筑周围都是里外各 8 个：船舱 7 米的南面只有 1 个。背后和东头一围，只剩三个能咬的，其余的在栅栏后面等（"来袭实际攻击效果很差"）。现在每一面每 1 米一个（`DINO_AI.slot_spacing`），四个角各一个（`Dino.ring_round`）：船舱里圈 24 个；一根栅栏还是 8 个。里圈外圈是位置上的标记，不再按下标算。
     - 位置都满了时，原来去抢最近的、已经有主的那个，挤进人堆；现在在人群外面等：离墙 `DINO_AI.queue_standoff`（2.8 米）、它来的那一边（`Dino.queue_spot`）。

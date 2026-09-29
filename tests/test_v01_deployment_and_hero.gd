@@ -321,10 +321,17 @@ func test_10_guard_dino_roam_aggro_and_leash() -> void:
 	tree.root.add_child(hero)
 	hero.position = Vector3(0.0, 0.0, -11.0) # 4.0m away (within aggro_radius 6.0m)
 
-	# Physics tick detects Hero
+	# Physics tick detects Hero: it warns him off first (v0.6 round four), and comes for him when he
+	# stays out the warning (Config.NEST_GUARDS.threat_seconds).
 	guard._physics_process(0.1)
-	assert_eq(int(guard.guard_state), 1, "Guard enters AGGRO_CHASE (1) upon detecting Hero")
+	assert_eq(int(guard.guard_state), int(guard.GuardState.THREATENING), "Guard warns the Hero off upon detecting him")
 	assert_eq(guard.chase_target, hero, "Guard targets Hero")
+	var warned: float = float(config_node.NEST_GUARDS["threat_seconds"])
+	for step in range(int(ceil(warned / 0.1)) + 6):
+		guard._physics_process(0.1)
+		if int(guard.guard_state) == 1:
+			break
+	assert_eq(int(guard.guard_state), 1, "He stayed: Guard enters AGGRO_CHASE (1)")
 
 	# Move Hero beyond leash_radius (> 12m from post at -15)
 	hero.position = Vector3(0.0, 0.0, 0.0) # 15m away

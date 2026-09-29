@@ -73,6 +73,8 @@ signal day_part_changed(part: String, day: int)
 signal nest_found(nest: Node)
 ## A moment into a run: the mist is to be explained, once (FogOfWar; Config.FOG.hint_after).
 signal fog_explained()
+## A nest's guards are warning the Hero off (GuardDino, THREATENING): said once a run (HUD).
+signal guards_warned(guard: Node)
 ## A raider whose hours are over is back at its nest and gone (Dino.go_home): not killed.
 signal dino_went_home(dino: Node)
 ## An animal twitched, and this is the report on it (TwitchWatch): for whatever keeps reports.

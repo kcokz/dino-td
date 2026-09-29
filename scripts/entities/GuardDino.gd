@@ -13,13 +13,18 @@ extends "res://scripts/entities/Dino.gd"
 ##
 ## The mind (GuardState):
 ##   POST_ROAM    about its post, a few steps at a time, at an amble (Config.NEST_GUARDS)
+##   THREATENING  standing, facing the Hero, warning him off -- before any chase (threat_seconds)
 ##   AGGRO_CHASE  after the Hero, or a building put up by the nest, along the mesh
 ##   ATTACKING    standing at it, biting -- letting go only past its reach (reach_release)
 ##   RETURNING    home, deaf to him on the way, and settling a moment once there
 ##                (reaggro_seconds) before it will start after anyone again
 ##
 ## A nest is defended by all its guards at once: the first to go for him calls, and the others
-## come (_rally); one that is hurt goes for him too (take_damage).
+## come (_rally); one that is hurt goes for him too (take_damage). But they WARN before they come
+## (v0.6 round four, the player's choice for the debug-agent's DOC-004): the first to see him inside
+## its aggro_radius stands, faces him, snaps at the air and calls, and the guards of its nest turn to
+## him too (_begin_threat). Backed off past the radius and a margin, he is let be; closer than
+## threat_close, or striking one, or staying out the warning, and they all come.
 ##
 ## Every way out of a chase is a clean one, and none can bounce straight back:
 ##   * he is further from its post than its leash, or it is -- home;
@@ -32,7 +37,8 @@ enum GuardState {
 	POST_ROAM = 0,
 	AGGRO_CHASE = 1,
 	ATTACKING = 2,
-	RETURNING = 3
+	RETURNING = 3,
+	THREATENING = 4
 }
 
 # ==============================================================================
@@ -50,6 +56,9 @@ var chase_target: Node3D = null
 var guard_attack_timer: float = 0.0
 ## Seconds before it will take up a chase again, after coming home.
 var _calm: float = 0.0
+## Seconds of warning left (THREATENING), and of the snap at the air it warns with.
+var _threat_left: float = 0.0
+var _snap_left: float = 0.0
 
 # ==============================================================================
 # Lifecycle & Initialization
@@ -112,6 +121,8 @@ func _guard_step(delta: float) -> void:
 			_process_guard_attacking(delta)
 		GuardState.RETURNING:
 			_process_returning(delta)
+		GuardState.THREATENING:
+			_process_threatening(delta)
 
 ## The decisions that are not the frame's business: whether to start after somebody, whether to
 ## give up.
@@ -121,7 +132,20 @@ func _guard_think() -> void:
 		GuardState.POST_ROAM:
 			var threat: Node3D = _detect_threat()
 			if threat != null:
-				_begin_chase(threat)
+				# The man is warned first; a building put up by the nest does not back off.
+				if threat.is_in_group("hero"):
+					_begin_threat(threat)
+				else:
+					_begin_chase(threat)
+		GuardState.THREATENING:
+			if not _is_threat_valid(chase_target) or not _worth_chasing(chase_target) or not _can_get_at(chase_target):
+				_stand_down()
+			else:
+				var gap: float = _nearest_warning_gap(chase_target)
+				if gap > aggro_radius + float(_guards().get("calm_margin", 1.0)):
+					_stand_down()
+				elif gap <= float(_guards().get("threat_close", 3.0)) or _threat_left <= 0.0:
+					_begin_chase(chase_target)
 		GuardState.AGGRO_CHASE, GuardState.ATTACKING:
 			if not _is_threat_valid(chase_target) or not _worth_chasing(chase_target) \
 					or global_position.distance_to(post_position) > leash_radius \
@@ -139,6 +163,72 @@ func _begin_chase(threat: Node3D, call_the_others: bool = true) -> void:
 	if call_the_others:
 		_alert()
 		_rally(threat)
+
+## Warns `threat` off: stands, faces him, snaps at the air, calls (Config.NEST_GUARDS.threat_seconds,
+## threat_snap) -- and, the first to see him, turns the guards of its nest to him as well (answer_threat)
+## and says so (EventBus.guards_warned: the HUD's hint, once a run).
+func _begin_threat(threat: Node3D, call_the_others: bool = true) -> void:
+	chase_target = threat
+	current_target = null
+	guard_state = GuardState.THREATENING
+	_threat_left = float(_guards().get("threat_seconds", 2.0))
+	_snap_left = float(_guards().get("threat_snap", 0.6))
+	velocity = Vector3.ZERO
+	current_state = State.ATTACKING      # the snap at the air: the bite clip, standing
+	say("alert")
+	if not call_the_others or not is_inside_tree():
+		return
+	var reach: float = float(_guards().get("rally_radius", 8.0))
+	for g in get_tree().get_nodes_in_group("guard_dinos"):
+		if g != self and is_instance_valid(g) and g.has_method("answer_threat") \
+				and _flat(g.post_position).distance_to(_flat(post_position)) <= reach:
+			g.answer_threat(threat)
+	var eb = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("guards_warned"):
+		eb.guards_warned.emit(self)
+
+## Another guard of its nest is warning `threat` off: it turns to him too -- if it is only about its
+## post; one already after somebody, or on its way home, keeps to that.
+func answer_threat(threat: Node3D) -> void:
+	if is_dead or guard_state != GuardState.POST_ROAM:
+		return
+	if not _is_threat_valid(threat) or not _worth_chasing(threat):
+		return
+	_begin_threat(threat, false)
+
+## How near `threat` is to the nearest of its nest's guards warning him, itself among them: the
+## warning stands while he is inside any one's radius. Measured from itself alone, a guard turned to
+## him by another -- farther off, not having seen him itself -- stood down the moment it turned.
+func _nearest_warning_gap(threat: Node3D) -> float:
+	var best: float = _flat(global_position).distance_to(_flat(threat.global_position))
+	if not is_inside_tree():
+		return best
+	var reach: float = float(_guards().get("rally_radius", 8.0))
+	for g in get_tree().get_nodes_in_group("guard_dinos"):
+		if g == self or not is_instance_valid(g) or not ("guard_state" in g):
+			continue
+		if int(g.guard_state) == int(GuardState.THREATENING) and g.chase_target == threat 				and _flat(g.post_position).distance_to(_flat(post_position)) <= reach:
+			best = minf(best, _flat(g.global_position).distance_to(_flat(threat.global_position)))
+	return best
+
+## He backed off: back to its post, settling a moment (reaggro_seconds) before it will warn again.
+func _stand_down() -> void:
+	chase_target = null
+	current_target = null
+	guard_state = GuardState.POST_ROAM
+	roam_timer = 0.0
+	_calm = float(_guards().get("reaggro_seconds", 1.5))
+	current_state = State.WALKING
+
+## Standing its ground, facing him; the snap at the air played out, it stands.
+func _process_threatening(delta: float) -> void:
+	_threat_left -= delta
+	if _snap_left > 0.0:
+		_snap_left -= delta
+		if _snap_left <= 0.0:
+			current_state = State.WALKING
+	var look: Vector3 = chase_target.global_position if _is_threat_valid(chase_target) else Vector3.INF
+	_drive(Vector3.ZERO, delta, look, true)
 
 ## A NEST IS DEFENDED BY ALL ITS GUARDS AT ONCE (v0.6 round four: "初始人就能把守卫恐龙巢穴的小龙一个个
 ## 杀掉，人杀伤力这么强吗"). Each went for him only when he came inside its own aggro_radius, so he could

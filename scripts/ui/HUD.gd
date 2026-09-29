@@ -231,6 +231,7 @@ func _bus_handlers(eb: Node) -> Array:
 	for pair in [["resources_changed", _on_resources_changed], ["wave_started", _on_wave_started],
 			["stage_wave_started", _on_stage_wave_started], ["day_part_changed", _on_day_part_changed],
 			["nest_found", _on_nest_found], ["fog_explained", _on_fog_explained],
+			["guards_warned", _on_guards_warned],
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
@@ -634,6 +635,16 @@ func _side_of_the_nest() -> String:
 func _on_fog_explained() -> void:
 	show_hint(tr("HINT_FOG"), UiTheme.toast_seconds("read"), "info")
 
+## A nest's guards warning him off (GuardDino): what it means and what to do, the first time in a
+## run -- he has two seconds to take it in, and the next time he knows the look of it.
+var _guards_warning_said: bool = false
+
+func _on_guards_warned(_guard: Node) -> void:
+	if _guards_warning_said:
+		return
+	_guards_warning_said = true
+	show_hint(tr("HINT_GUARDS_WARN"), UiTheme.toast_seconds("read"), "warning")
+
 ## The nest found (FogOfWar): said, with what it is good for.
 func _on_nest_found(_nest: Node) -> void:
 	show_hint(tr("HINT_NEST_FOUND"), UiTheme.toast_seconds("read"), "check")
@@ -905,6 +916,7 @@ func _on_restart_pressed() -> void:
 
 func reset_hud() -> void:
 	selected_build_type = ""
+	_guards_warning_said = false
 	if game_over_panel:
 		game_over_panel.visible = false
 	if raid_warning_banner:
