@@ -697,8 +697,17 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 	to.y = 0.0
 	var desired := Vector3.ZERO
 	if to.length() > 0.05 and _patience <= 0.0:
-		desired = to.normalized() * speed * pace
-	_drive(desired, delta, goal)
+		# No further in a frame than there is to go (found by the twitch watch, v0.6 round four): at
+		# its full speed a raptor went 6.7 cm a frame at a spot it had to be within 5 cm of -- past it,
+		# turned, past it the other way, its head swinging each time, for as long as it was sent there
+		# (the debug-agent's BUG-005: a raid waiting at the cabin's fenced back, "原地打转").
+		desired = to.normalized() * minf(speed * pace, to.length() / maxf(delta, 0.0001))
+	# There, it faces what it came for -- not the spot it stands on, a hand's breadth off, which it
+	# turned right round to look at.
+	var look: Vector3 = goal
+	if desired == Vector3.ZERO and current_target is Node3D and is_instance_valid(current_target):
+		look = (current_target as Node3D).global_position
+	_drive(desired, delta, look)
 
 ## The next corner of the route to `goal` -- or `goal` itself, when there is no mesh to ask.
 ##
@@ -743,14 +752,31 @@ func _off_route() -> bool:
 func _drive(desired: Vector3, delta: float, look_at_point: Vector3) -> void:
 	_patience = maxf(0.0, _patience - delta)
 	var v: Vector3 = _avoid(desired)
+	# No faster than it asks THIS frame. The solver's answer is to last frame's asking, a frame
+	# behind: arriving, it asked to stop and was sent on a step past its spot; asked to come back
+	# and was held; came back and was sent past it again -- three places, six frames round, for as
+	# long as it waited there (found by the twitch watch in the debug-agent's BUG-005, a raid
+	# waiting at the cabin's fenced end). The solver may slow it or turn it, never carry it on.
+	if v.length() > desired.length():
+		v = v.normalized() * desired.length() if desired.length() > 0.0001 else Vector3.ZERO
 	velocity = Vector3(v.x, 0.0, v.z)
 	var y: float = global_position.y
+	var from: Vector3 = global_position
 	if is_inside_tree() and get_world_3d() != null:
 		_move_body(velocity * delta)
 	else:
 		global_position += velocity * delta
 	global_position.y = y
-	var moving: Vector3 = velocity if velocity.length() > _ai("turn_min_speed", 0.3) else Vector3.ZERO
+	# It turns to the way it went, and only when that is the way it was sent. The solver steers round
+	# the others and knows nothing of fences: crowded against the cabin's fenced back it sent a raptor
+	# into the fence, where it went nowhere, and it turned to the fence and back each frame the solver
+	# changed its mind (found by the twitch watch, the debug-agent's BUG-005). Shoved back or aside by
+	# the others it does not turn either -- it is not walking that way.
+	var went: Vector3 = (global_position - from) / maxf(delta, 0.0001)
+	went.y = 0.0
+	var turn_min: float = _ai("turn_min_speed", 0.3)
+	var moving: Vector3 = went if (went.length() > turn_min and velocity.length() > turn_min
+		and went.dot(velocity) > 0.0) else Vector3.ZERO
 	if moving != Vector3.ZERO:
 		_turn_towards(moving, delta)
 	elif look_at_point != Vector3.INF:
