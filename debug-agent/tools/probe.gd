@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"black_fog": await _p_black_fog()
+			"fps": await _p_fps()
 			"twitch_cam": await _p_twitch_cam()
 			"quiet": await _p_quiet()
 			"build_under_dino": await _p_build_under_dino()
@@ -1448,6 +1450,103 @@ func _p_twitch_cam() -> void:
 	eb.twitch_detected.disconnect(on_twitch)
 	_say("INFO", "%d reports filmed in %.1f s of raid" % [filmed, t])
 
+## TASK-012 (7817a1e): the fog as a last full-screen layer -- never seen is black, the far walls and
+## the sky too; seen and out of sight is dimmed; in sight is untouched; the interface is never dimmed.
+## Every picture through the game's own camera (a portrait camera leaves the layer out).
+func _p_black_fog() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var hero = _main.hero
+	var rig = _main.camera_rig
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	await _advance(1.5)
+	await _shoot("A_opening")
+	_say("INFO", "A opening: %s" % _black_share())
+	# B. To the river bank where he draws water, and back: the way walked dim, the rest black.
+	var water: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) == "water":
+			water = n
+	var bank: Vector3 = water.global_position if water != null else core + Vector3(-18.0, 0.0, -6.0)
+	hero.move_to(bank)
+	var t := 0.0
+	while t < 20.0 and hero.global_position.distance_to(bank) > 2.5:
+		await _advance(0.5)
+		t += 0.5
+	_say("INFO", "at the river bank %s after %.1f s (%.1f m off)" % [str(bank), t, hero.global_position.distance_to(bank)])
+	_look_at(bank, 16.0)
+	await _advance(1.0)
+	await _shoot("C_river_in_sight")
+	hero.move_to(core + Vector3(0.0, 0.0, 4.5))
+	await _advance(12.0)
+	_look_at((bank + core) * 0.5, 34.0)
+	await _advance(1.0)
+	await _shoot("B_walked_and_back")
+	_say("INFO", "B walked and back: %s" % _black_share())
+	# D. Dusk and night, the default view over the cabin.
+	for part in ["dusk", "night"]:
+		gs.day_clock = float(cfg.DAY["parts"][part]) + 5.0
+		_look_at(core, 25.0)
+		await _advance(1.5)
+		await _shoot("D_" + part)
+		_say("INFO", "D %s: %s" % [part, _black_share()])
+	gs.day_clock = 100.0 + 360.0
+	# E. Zoomed right out and panned to the field's east edge: beyond it, nothing.
+	var half: float = float(cfg.TERRAIN.get("field_half", 22.0))
+	_look_at(core + Vector3(half, 0.0, 0.0), 45.0)
+	await _advance(1.5)
+	await _shoot("E_edge_zoomed_out")
+	_say("INFO", "E field edge, zoomed out: %s" % _black_share())
+
+## Puts the game's camera over `at`, `distance` off, through its own rig.
+func _look_at(at: Vector3, distance: float) -> void:
+	var rig = _main.camera_rig
+	rig.focus = Vector3(at.x, 0.0, at.z)
+	rig.distance = distance
+	rig.apply_to(_main.camera)
+
+## How much of the world part of the screen is black: the viewport less the top bar and the card.
+func _black_share() -> String:
+	var img: Image = root.get_viewport().get_texture().get_image()
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	var black := 0
+	var n := 0
+	for y in range(int(h * 0.1), int(h * 0.95), 6):
+		for x in range(int(w * 0.02), int(w * 0.62), 6):
+			var c: Color = img.get_pixel(x, y)
+			n += 1
+			if c.get_luminance() < 0.02:
+				black += 1
+	return "%.0f%% of the world view black" % (100.0 * black / maxf(1.0, float(n)))
+
+## Frames a second with vsync off: the default view idle, then with a raid of ten on the field.
+func _p_fps() -> void:
+	var gs := root.get_node("GameState")
+	var wm = _main.wave_manager
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	await _advance(2.0)
+	var idle: float = await _fps_over(5.0)
+	_main.current_core.max_hp = 100000.0
+	_main.current_core.current_hp = 100000.0
+	wm.start_wave(3, 10)
+	await _advance(8.0)
+	var raid: float = await _fps_over(5.0)
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	_say("INFO", "frames a second, vsync off, %s: idle %.0f, raid of 11 %.0f" % [str(root.get_viewport().get_visible_rect().size), idle, raid])
+
+func _fps_over(seconds: float) -> float:
+	var t0: int = Time.get_ticks_usec()
+	var frames := 0
+	while Time.get_ticks_usec() - t0 < int(seconds * 1000000.0):
+		await process_frame
+		frames += 1
+	return float(frames) / seconds
+
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
 # ------------------------------------------------------------------------------
@@ -1496,9 +1595,18 @@ func _portrait(beat: String, at: Vector3, distance: float) -> void:
 	cam.position = at + Vector3(0.0, distance, distance * 0.28)
 	cam.look_at(at + Vector3(0.0, 0.6, 0.0), Vector3.UP)
 	var was: Camera3D = _main.camera
+	# A close-up is of the model: the fog lifted for it and put back after, as tools/playtest.gd does.
+	var fog = _main.get("fog")
+	var lifted: bool = fog != null and is_instance_valid(fog) and not bool(fog.revealed)
+	if lifted:
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
 	cam.current = true
 	await _shoot(beat)
 	cam.current = false
+	if lifted:
+		fog.revealed = false
 	if was != null and is_instance_valid(was):
 		was.current = true
 	cam.queue_free()
