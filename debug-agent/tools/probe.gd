@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"restart_twice": await _p_restart_twice()
 			"kit_slots": await _p_kit_slots()
 			"bitten_on_the_way": await _p_bitten_on_the_way()
 			"fire_night": await _p_fire_night()
@@ -2913,7 +2914,9 @@ func _p_fire_night() -> void:
 	_say("INFO", "night 1, no fire: he sees %.2f-%.2f m round him (FOG night %.2f x his 10 m); the cabin %.2f-%.2f m" % [his[0], his[1], float(cfg.FOG.get("night", 0.0)) if "FOG" in cfg else -1.0, cab[0], cab[1]])
 	await _look_and_shoot(hero.global_position, 14.0, "night1_no_fire")
 	# --- The torch: key 3.
-	gs.resources["wood"] = 5
+	gs.resources["wood"] = 0
+	gs.add_resource("wood", 5)
+	await _advance(0.1)
 	await _press(KEY_3)
 	await _advance(0.5)
 	var badge: Label = tb.get_node_or_null("Badge") as Label if tb else null
@@ -3128,6 +3131,7 @@ func _p_prowl() -> void:
 						shot = true
 						await _look_and_shoot((d.global_position + (near_l["at"] as Vector3)) * 0.5, 12.0, "%s_at_the_edge" % mode)
 						await _look_and_shoot(d.global_position, 6.0, "%s_eyes_close" % mode)
+						await _look_and_shoot(d.global_position, 25.0, "%s_eyes_default" % mode)
 			most = maxi(most, out)
 			if mode == "torch":
 				var first: Node3D = null
@@ -3352,6 +3356,27 @@ func _p_kit_slots() -> void:
 		_say("INFO", "%s (%s): %d slots: %s" % [phase, TranslationServer.get_locale(), row.get_child_count(), "; ".join(lines)])
 		await _shoot("kit_%s_%s" % [phase, TranslationServer.get_locale()])
 	_say("PASS" if bad.is_empty() else "FAIL", "the kit row's hover texts%s" % ("" if bad.is_empty() else ": " + "; ".join(bad)))
+
+## 7dd3f34: the game's own restart (Main.restart_game, as the game-over and pause menus call it), twice,
+## then wood coming in -- does the old HUD's command row still answer, from outside the tree?
+func _p_restart_twice() -> void:
+	current_scene = _main
+	var gs := root.get_node("GameState")
+	for i in 2:
+		_say("INFO", "restart %d" % (i + 1))
+		current_scene.restart_game()
+		for k in range(40):
+			await process_frame
+		_main = current_scene
+		await _advance(1.0)
+	_say("INFO", "wood coming in after two restarts")
+	gs.add_resource("wood", 3)
+	await _advance(1.0)
+	var rows := 0
+	for n in _all(root):
+		if n.name == "HeroCommands":
+			rows += 1
+	_say("INFO", "HeroCommands nodes in the tree now: %d; orphan nodes %d" % [rows, int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

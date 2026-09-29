@@ -1,6 +1,6 @@
 # BUG-014 小山谷：英雄站在巢边看着，来袭照样在他眼前"冒"出来（边缘出生点离巢太近）
 
-- 状态: open
+- 状态: fixed（0974047 复测：巢和巢后边缘都被看着时从别的入口进来，0 只在眼前出生）
 - 严重度: 中（违反 v0.6 第四轮玩家说的"raid 的时候直接冒出新的恐龙似乎有点奇怪"，而 d9b75e9 就是为这个修的）
 - 发现: 2026-09-29 · d9b75e9（TASK-019 第 3 条）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh d9b75e9) bash debug-agent/tools/run_check.sh probe:edge_nest_watched`（小山谷；大山谷加 `DA_MAP=valley_large` 是好的）

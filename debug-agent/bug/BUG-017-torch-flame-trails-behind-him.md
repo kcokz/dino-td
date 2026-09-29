@@ -1,6 +1,6 @@
 # BUG-017 举着火把走路时，火苗在身后拖出一串 3 米长的"火球"
 
-- 状态: open
+- 状态: fixed（0974047 复测：走路时火苗在火把头上，没有尾巴）
 - 严重度: 低（看起来怪，不影响玩）
 - 发现: 2026-09-29 · 7f8ee65（TASK-021）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 7f8ee65) bash debug-agent/tools/run_check.sh probe:fire_night`，看 `torch_walking` 那张

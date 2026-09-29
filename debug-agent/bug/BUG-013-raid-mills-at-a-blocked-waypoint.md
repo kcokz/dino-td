@@ -1,6 +1,6 @@
 # BUG-013 大山谷：山梁中间的口子被栅栏封住，来袭绕西边过来以后，挤在栅栏后面"原来的路点"上转圈
 
-- 状态: open
+- 状态: fixed（7dd3f34 复测：没有 mill，2026-09-29，TASK-022；探针这次有 8 格放不下，栅栏两头有缝）
 - 严重度: 中（大山谷里"封一个口子"本来就是设计要玩家做的选择：9.2"有了绕路，要不要把口子封死才是一个有代价的选择"）
 - 发现: 2026-09-29 · 30c4d1a（TASK-018）
 - 复现: `DA_MAP=valley_large DA_BLOCK_MIDDLE=1 GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 30c4d1a) bash debug-agent/tools/run_check.sh probe:routes`

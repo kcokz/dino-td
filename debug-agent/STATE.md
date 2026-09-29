@@ -12,16 +12,17 @@
 | [BUG-004](bug/BUG-004-stage-raid-comes-without-its-warning.md) | 信标小波的预警被别的来袭盖住，到的时候没有再预警 | 低 | **fixed** ea36313 | 2026-09-28 |
 | [BUG-005](bug/BUG-005-raid-mills-at-the-open-end.md) | 背后半圈栅栏时，来袭挤在船舱开口一头原地打转 | 中 | open（f65f8ea 复测：好了一部分，还没过，见 TASK-011） | 2026-09-28 |
 | [BUG-007](bug/BUG-007-bare-cabin-raid-twitches-at-the-back-wall.md) | 一点不围，普通大波也挤在船舱背面抖 | 中 | **fixed** 5ad2d35 | 2026-09-28 |
-| [BUG-013](bug/BUG-013-raid-mills-at-a-blocked-waypoint.md) | 大山谷：中间口子封了，绕过来的挤在原路点上转 | 中 | open | 2026-09-29 |
-| [BUG-014](bug/BUG-014-small-valley-raid-steps-out-in-his-sight.md) | 小山谷：站在巢前看着，来袭在他眼前的边缘点出生 | 中 | open | 2026-09-29 |
-| [BUG-015](bug/BUG-015-twitch-watch-calls-the-dusk-turn-a-mill.md) | 抽搐监视把黄昏掉头回巢报成 mill（误报） | 低 | open | 2026-09-29 |
+| [BUG-013](bug/BUG-013-raid-mills-at-a-blocked-waypoint.md) | 大山谷：中间口子封了，绕过来的挤在原路点上转 | 中 | fixed | 2026-09-29 |
+| [BUG-014](bug/BUG-014-small-valley-raid-steps-out-in-his-sight.md) | 小山谷：站在巢前看着，来袭在他眼前的边缘点出生 | 中 | fixed | 2026-09-29 |
+| [BUG-015](bug/BUG-015-twitch-watch-calls-the-dusk-turn-a-mill.md) | 抽搐监视把黄昏掉头回巢报成 mill（误报） | 低 | fixed | 2026-09-29 |
 | [BUG-016](bug/BUG-016-night-thick-mist-is-black.md) | 夜里没去过的浓雾是纯黑（又像黑色战争迷雾） | 中 | fixed 772b9c9 | 2026-09-29 |
-| [BUG-017](bug/BUG-017-torch-flame-trails-behind-him.md) | 举着火把走路，火苗拖出一串 3 米长的火球 | 低 | open | 2026-09-29 |
-| [BUG-018](bug/BUG-018-phytosaur-stays-in-the-torchlight-when-cornered.md) | 火把把植龙逼到场地边，它就停在火光里贴着人 | 低～中 | open | 2026-09-29 |
-| [BUG-019](bug/BUG-019-hero-does-not-hit-back-on-his-way-to-work.md) | 夜里去干活的路上被植龙堵住咬死，不还手 | 中 | open | 2026-09-29 |
-| [BUG-020](bug/BUG-020-axe-effect-uses-a-letter-x.md) | 能力槽：斧头"木材 x2"用字母 x，别的用 × | 很低 | open | 2026-09-29 |
+| [BUG-017](bug/BUG-017-torch-flame-trails-behind-him.md) | 举着火把走路，火苗拖出一串 3 米长的火球 | 低 | fixed | 2026-09-29 |
+| [BUG-018](bug/BUG-018-phytosaur-stays-in-the-torchlight-when-cornered.md) | 火把把植龙逼到场地边，它就停在火光里贴着人 | 低～中 | fixed | 2026-09-29 |
+| [BUG-019](bug/BUG-019-hero-does-not-hit-back-on-his-way-to-work.md) | 夜里去干活的路上被植龙堵住咬死，不还手 | 中 | fixed | 2026-09-29 |
+| [BUG-020](bug/BUG-020-axe-effect-uses-a-letter-x.md) | 能力槽：斧头"木材 x2"用字母 x，别的用 × | 很低 | fixed | 2026-09-29 |
 | [BUG-021](bug/BUG-021-test-suite-leaks-at-exit.md) | 测试套件退出泄漏 63 对象 / 9 资源（在涨） | 低 | open | 2026-09-29 |
-| [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | open | 2026-09-28 |
+| [BUG-022](bug/BUG-022-pinned-at-the-cabins-west-end-at-night.md) | 小山谷夜里回船舱，在西头被咬船舱的植龙堵住咬死 | 中 | open | 2026-09-29 |
+| [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
 | [BUG-009](bug/BUG-009-full-ring-raid-piles-on-one-crossbow.md) | 整圈栅栏 + 窝弩：来袭全冲同一架窝弩，堆在栅栏角外转圈、顶 | 中 | open | 2026-09-28 |
@@ -58,8 +59,17 @@
 | TASK-019 | 守卫先示威；巢里只出一小群，其余从边缘来 | **done** 1、2、3、5 过；第 4 条小山谷另开 BUG-014 |
 | TASK-020 | 迷雾的亮度跟着时辰 | **done** 正午、白斑、闪、帧率过；夜里浓雾纯黑 → BUG-016 |
 | TASK-021 | 火与夜、怕火的植龙 | **done** 大体过；另开 BUG-017、BUG-018 |
+| TASK-022 | 复测夜里那几条和旧的 012～020 | **done** 都修好；另开 BUG-022 |
 
 ## 检查记录
+
+### 2026-09-29 第 18 次（监控循环，TASK-022，7dd3f34）
+
+- BUG-012、013、014、015、017、018、019、020 都复测修好。按 3 一次就点着（探针原来直接改 resources 不发信号，改用 add_resource）。
+- 眼睛反光：12 米一个橙点清楚，默认 25 米很小；近看是一团橙光，大过头。
+- `play:25` 小山谷 4:17 死：夜里去工作台，在船舱西头被咬船舱的植龙堵住 → BUG-022。大山谷 14:32 赢。
+- 机器人的 `_fresh_level` 现在每次开新局打 30 行 "Can't use get_node() ... outside the active scene tree"（HeroCommands 接了 resources_changed）；游戏自己的重新开始没有 → 给 dev 的附注。
+- run_check 的参数要一个一个传，"map:valley_large play:25" 当一个参数传就跑成默认场景了。
 
 ### 2026-09-29 第 17 次（自由找 bug，7f8ee65）
 
@@ -177,6 +187,8 @@
 - 边缘来的恐龙进视野后还快跑 ≤ 0.05 s：迷雾每 0.1 s 算一次"看得见"，一帧的延迟，眼睛看不出（第 7 次）。
 
 ## 给 dev 的附注（不是游戏 bug）
+
+- 7dd3f34 起，机器人（tools/playtest.gd）的 `_fresh_level` 调 `GameState.reset_game()` 时旧关卡已经离开树、还没释放，HeroCommands 接的 `resources_changed` 还在响，每开一局打两串 "Can't use get_node() with absolute paths from outside the active scene tree"（一个默认场景集 30 行）。游戏自己的"重新开始"（`Main.restart_game`）量过是干净的（`probe:restart_twice`：0 错、0 孤儿节点）。只是机器人日志的噪音。
 
 - 请真人试一下：夜里按一次 3 点火把，一次就点着吗？探针（`probe:fire_night`，7f8ee65）四次里三次第一下没反应、第二下才点着；焦点、快捷键、keys_live 都看过是对的，可能只是探针的问题。
 

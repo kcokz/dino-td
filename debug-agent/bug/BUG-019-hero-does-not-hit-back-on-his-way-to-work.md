@@ -1,6 +1,6 @@
 # BUG-019 夜里人在去干活的路上被植龙堵住、咬死，一下都没还手（原地走了 4 秒）
 
-- 状态: open
+- 状态: fixed（0974047：去干活的路上被咬会还手；"走到那里"被堵死的情形另开 BUG-022）
 - 严重度: 中（人死了一局就输；玩家夜里派人出去修栅栏、砍树时会遇到）
 - 发现: 2026-09-29 · 7f8ee65（自由找 bug，`map:valley_large play:25`）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 7f8ee65) bash debug-agent/tools/run_check.sh map:valley_large play:25`（这一局 10:35 结束）

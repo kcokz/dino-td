@@ -1,6 +1,6 @@
 # BUG-012 整圈栅栏被咬开一个口子以后，整群来袭先跑回巢边转圈，过十来秒才回来进口子
 
-- 状态: open
+- 状态: fixed（d9b75e9 / 7dd3f34 复测：咬开以后都去船舱，不回巢边，2026-09-29，TASK-022）
 - 严重度: 中（整圈封死是最常见的防守；每一波都会这样，而且是这一波里抽搐报告最多的来源）
 - 发现: 2026-09-28 · 357b603（TASK-017 里测 `siege:0:12:1` 时看到），8646202 上也有，357b603 更严重
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 357b603) bash debug-agent/tools/run_check.sh siege:0:12:1`，或 `DA_NO_TRAPS=1 … probe:ring_traps`（带俯视图和连拍）

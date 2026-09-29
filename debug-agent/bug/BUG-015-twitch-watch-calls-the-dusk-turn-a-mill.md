@@ -1,6 +1,6 @@
 # BUG-015 抽搐监视把"黄昏掉头回巢"报成 mill（误报）
 
-- 状态: open
+- 状态: fixed（0974047 复测：两局长局、植龙几晚都没有掉头报成 mill）
 - 严重度: 低（游戏本身没问题；是 TwitchWatch 的误报，一局大山谷 6 份，会让人白查）
 - 发现: 2026-09-29 · d9b75e9（自由找 bug，`map:valley_large play:25`）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh d9b75e9) bash debug-agent/tools/run_check.sh map:valley_large play:25`，看 `twitch.txt` 里第 5 波黄昏刚开始的几份 mill

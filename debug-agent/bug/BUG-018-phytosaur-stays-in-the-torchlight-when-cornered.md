@@ -1,6 +1,6 @@
 # BUG-018 举着火把追植龙，把它逼到场地边上以后，它就停在火光里、贴着人不动
 
-- 状态: open
+- 状态: fixed（0974047 复测：逼到角落就扑上来咬，再跑开；见 TASK-022）
 - 严重度: 低～中（和"植龙不进火光"的规则相反；玩家举火把去赶植龙时一定会遇到）
 - 发现: 2026-09-29 · 7f8ee65（TASK-021 第 5 条）
 - 复现: `DA_NIGHTS=1 DA_PROWL=torch GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 7f8ee65) bash debug-agent/tools/run_check.sh probe:prowl`
