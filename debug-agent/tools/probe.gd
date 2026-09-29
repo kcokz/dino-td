@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"commands_order": await _p_commands_order()
 			"worked_look": await _p_worked_look()
 			"restart_twice": await _p_restart_twice()
 			"kit_slots": await _p_kit_slots()
@@ -3493,6 +3494,163 @@ func _lum_round(at: Vector2, half: int) -> float:
 			total += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 			n += 1
 	return total / maxf(1.0, float(n))
+
+## TASK-024 (592bac4): the corner's commands in the order they became his. DA_ORDER "dusk_first" (the
+## first dusk before any meal) or "meal_first" (a meal cooked by day, then the dusk). At each step:
+## which tiles show, left to right, each one's key and its screen x; Build's place must never move. The
+## first dusk's words name the torch's own key; the keys press what they wear; by day the torch stays,
+## greyed; eaten out, Eat stays greyed with 0. A menu open or a mended-wall card up: the keycaps go and
+## come back the same. A language change there and back (I18n, not saved): nothing moves, the next dusk
+## says nothing twice. A restart: Build alone again.
+func _p_commands_order() -> void:
+	var order: String = OS.get_environment("DA_ORDER") if OS.get_environment("DA_ORDER") != "" else "dusk_first"
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var hero = _main.hero
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	if _main.night_prowl:
+		_main.night_prowl.enabled = false
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	await _advance(1.0)
+	var cmds: Node = _find_with_method(root, "key_of")
+	var bad: Array = []
+	var build_x: float = (cmds.build_button as Control).global_position.x
+	var check_build := func(when: String):
+		var x: float = (cmds.build_button as Control).global_position.x
+		if absf(x - build_x) > 0.5:
+			bad.append("%s: Build moved %.1f -> %.1f" % [when, build_x, x])
+	_say("INFO", "%s -- start: %s" % [order, _corner(cmds)])
+	if _corner(cmds) != "build[1]":
+		bad.append("start: %s, want build[1] alone" % _corner(cmds))
+	await _press(KEY_1)
+	await _advance(0.3)
+	var build_opened: bool = cmds.build_button.button_pressed
+	var keys_live_in_menu: bool = cmds.keys_live()
+	await _press(KEY_ESCAPE)
+	await _advance(0.3)
+	_say("INFO", "key 1: the build menu open %s (keys live while it is: %s); closed: keys live %s, %s" % [build_opened, keys_live_in_menu, cmds.keys_live(), _corner(cmds)])
+	if not build_opened:
+		bad.append("key 1 did not open the build menu")
+	var dish: String = String(cfg.DISHES.keys()[0])
+	var hint_key := ""
+	for step in (["dusk", "meal"] if order == "dusk_first" else ["meal", "dusk"]):
+		if step == "meal":
+			gs.stock_meal(dish)
+			await _advance(0.5)
+		else:
+			gs.day_clock = 238.5
+			var t := 0.0
+			var frag: String = _after_fmt(tr("HINT_DUSK_FIRST"))
+			while t < 4.0:
+				await _advance(0.25)
+				t += 0.25
+				for l in _visible_labels(frag):
+					hint_key = String(l.text)
+			gs.add_resource("wood", 5)
+			await _advance(0.3)
+		check_build.call("after the %s" % step)
+		_say("INFO", "%s -- after the %s: %s" % [order, step, _corner(cmds)])
+	var want: String = "eat[3] torch[2] build[1]" if order == "dusk_first" else "torch[3] eat[2] build[1]"
+	if _corner(cmds) != want:
+		bad.append("both come: %s, want %s" % [_corner(cmds), want])
+	var tk: String = cmds.key_of("torch")
+	var said_key: bool = hint_key.contains("(%s)" % tk) or hint_key.contains("（%s）" % tk)
+	_say("INFO", "the first dusk's words name key %s: %s ('%s')" % [tk, said_key, hint_key.right(60)])
+	if not said_key:
+		bad.append("the first dusk's words do not name the torch's key %s" % tk)
+	# Each key presses what it wears.
+	await _press(_keycode(tk))
+	await _advance(0.5)
+	var torch_ok: bool = hero.torch_left > 0.0
+	var ek: String = cmds.key_of("eat")
+	await _press(_keycode(ek))
+	await _advance(0.3)
+	var eat_ok: bool = cmds.eat_button.button_pressed
+	await _press(KEY_ESCAPE)
+	await _advance(0.3)
+	_say("INFO", "key %s lit the torch %s; key %s opened Eat %s" % [tk, torch_ok, ek, eat_ok])
+	if not torch_ok or not eat_ok:
+		bad.append("a key did not press its tile (torch %s, eat %s)" % [torch_ok, eat_ok])
+	# By day: the torch stays, greyed; its key does nothing. Eaten out: Eat stays, greyed, 0.
+	hero.torch_left = 0.0
+	gs.day_clock = 360.0 + 5.0
+	await _advance(1.0)
+	var wood0: int = int(gs.resources.get("wood", 0))
+	await _press(_keycode(tk))
+	await _advance(0.3)
+	gs.meals = {}
+	eb.meals_changed.emit(gs.meals)
+	await _advance(0.5)
+	var badge: Label = cmds.eat_button.get_node_or_null("Badge") as Label
+	_say("INFO", "day 2: torch shown %s disabled %s, its key lit it %s (wood %d -> %d); Eat shown %s disabled %s badge '%s'; %s" % [cmds.torch_button.is_visible_in_tree(), cmds.torch_button.disabled, hero.torch_left > 0.0, wood0, int(gs.resources.get("wood", 0)), cmds.eat_button.is_visible_in_tree(), cmds.eat_button.disabled, badge.text if badge else "?", _corner(cmds)])
+	if not cmds.torch_button.is_visible_in_tree() or not cmds.torch_button.disabled or hero.torch_left > 0.0:
+		bad.append("by day the torch tile is not there greyed, or its key lit it")
+	if not cmds.eat_button.is_visible_in_tree() or not cmds.eat_button.disabled:
+		bad.append("eaten out, Eat is not there greyed")
+	check_build.call("day 2")
+	# A mended-wall card up: repair on key 1, the corner's keycaps gone and back the same.
+	var wall = _build_at("wall", _main.grid_manager.world_to_build_cell(_main.current_core.global_position + Vector3(6.0, 0.0, 6.0)))
+	wall.take_damage(wall.max_hp * 0.5)
+	eb.unit_selected.emit(wall)
+	await _advance(0.5)
+	var live_card: bool = cmds.keys_live()
+	eb.unit_deselected.emit()
+	await _advance(0.5)
+	_say("INFO", "a bitten wall's card up: corner keys live %s; put down: live %s, %s" % [live_card, cmds.keys_live(), _corner(cmds)])
+	if live_card or not cmds.keys_live():
+		bad.append("the corner's keys did not give way to the card and come back")
+	# Language there and back (not saved), then the next dusk.
+	var before: String = _corner(cmds)
+	var i18n := root.get_node("I18n")
+	var was: String = TranslationServer.get_locale()
+	i18n.set_locale("zh_CN" if not was.begins_with("zh") else "en", false)
+	await _advance(0.5)
+	var mid: String = _corner(cmds)
+	i18n.set_locale(was, false)
+	await _advance(0.5)
+	_say("INFO", "language %s -> other -> back: %s | %s | %s" % [was, before, mid, _corner(cmds)])
+	if mid != before or _corner(cmds) != before:
+		bad.append("a language change moved the corner: %s / %s / %s" % [before, mid, _corner(cmds)])
+	check_build.call("after the language change")
+	var first_again := false
+	var frag2: String = _after_fmt(tr("HINT_DUSK_FIRST"))
+	gs.day_clock = 360.0 + 238.5
+	var t2 := 0.0
+	while t2 < 4.0:
+		await _advance(0.25)
+		t2 += 0.25
+		first_again = first_again or not _visible_labels(frag2).is_empty()
+	_say("INFO", "dusk 2: the first dusk's words again %s" % first_again)
+	if first_again:
+		bad.append("the first dusk's words said again after a language change")
+	await _shoot("corner_%s" % order)
+	# A restart: Build alone.
+	current_scene = _main
+	current_scene.restart_game()
+	for k in range(40):
+		await process_frame
+	_main = current_scene
+	await _advance(1.0)
+	var cmds2: Node = _find_with_method(root, "key_of")
+	_say("INFO", "after a restart: %s" % _corner(cmds2))
+	if _corner(cmds2) != "build[1]":
+		bad.append("after a restart: %s" % _corner(cmds2))
+	_say("PASS" if bad.is_empty() else "FAIL", "the corner's commands (%s)%s" % [order, "" if bad.is_empty() else ": " + "; ".join(bad)])
+
+## The corner's tiles shown, left to right, each with the key it wears: "eat[3] torch[2] build[1]".
+func _corner(cmds: Node) -> String:
+	var out: Array = []
+	for c in cmds.get_children():
+		if c is Button and (c as Control).is_visible_in_tree():
+			var id: String = {"BuildCommand": "build", "EatCommand": "eat", "TorchCommand": "torch"}.get(String(c.name), String(c.name))
+			out.append("%s[%s]" % [id, cmds.key_of(id)])
+	return " ".join(out)
+
+func _keycode(text: String) -> int:
+	return OS.find_keycode_from_string(text)
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

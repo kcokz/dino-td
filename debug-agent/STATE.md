@@ -21,7 +21,7 @@
 | [BUG-019](bug/BUG-019-hero-does-not-hit-back-on-his-way-to-work.md) | 夜里去干活的路上被植龙堵住咬死，不还手 | 中 | fixed | 2026-09-29 |
 | [BUG-020](bug/BUG-020-axe-effect-uses-a-letter-x.md) | 能力槽：斧头"木材 x2"用字母 x，别的用 × | 很低 | fixed | 2026-09-29 |
 | [BUG-021](bug/BUG-021-test-suite-leaks-at-exit.md) | 测试套件退出泄漏 63 对象 / 9 资源（在涨） | 低 | open | 2026-09-29 |
-| [BUG-022](bug/BUG-022-pinned-at-the-cabins-west-end-at-night.md) | 小山谷夜里回船舱，在西头被咬船舱的植龙堵住咬死 | 中 | open | 2026-09-29 |
+| [BUG-022](bug/BUG-022-pinned-at-the-cabins-west-end-at-night.md) | 小山谷夜里回船舱，在西头被咬船舱的植龙堵住咬死 | 中 | fixed | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -61,8 +61,15 @@
 | TASK-021 | 火与夜、怕火的植龙 | **done** 大体过；另开 BUG-017、BUG-018 |
 | TASK-022 | 复测夜里那几条和旧的 012～020 | **done** 都修好；另开 BUG-022 |
 | TASK-023 | 能采的和风景分得开 | **done** 都过；石头太小、提亮看不出（观感） |
+| TASK-024 | 右下角的命令按解锁先后排 | **done** 都过；新按钮不显眼、灰得太淡（观感） |
 
 ## 检查记录
+
+### 2026-09-29 第 20 次（监控循环，0c903fb 和 TASK-024 / 592bac4）
+
+- 0c903fb：BUG-022 复测过（小山谷 play:25 被堵时还手，11:47 打赢）；眼睛近看两个点。
+- TASK-024：新探针 `commands_order`，两种顺序两张图都过；换语言用 `I18n.set_locale(x, false)` 不存盘，settings.cfg 备份放回 md5 不变。
+- 592bac4 的 `play:25` 小山谷 4:03 输：第一夜去西边砍木头，打死一只植龙后被第二只咬死（他还手了）。机器人夜里不点火出门 → 平衡，给 dev 看。
 
 ### 2026-09-29 第 19 次（监控循环，TASK-023，eb21574）
 
