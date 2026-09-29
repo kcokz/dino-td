@@ -53,6 +53,9 @@ var repair_timer: float = 0.0
 var current_path: Array[Vector3] = []
 var current_path_index: int = 0
 var _stuck_timer: float = 0.0
+## Seconds he has been walking and getting nowhere, however often the way was planned again in them
+## (_stuck_timer starts over at each new plan): what says he is held (_hit_back).
+var _held_for: float = 0.0
 var _last_pos: Vector3 = Vector3.ZERO
 
 var collision_shape: CollisionShape3D = null
@@ -401,6 +404,7 @@ func _process_moving(delta: float) -> void:
 	# 4. Stuck detection & auto-recovery
 	var moved_dist = global_position.distance_to(_last_pos)
 	if moved_dist < (walk_speed() * delta * 0.2):
+		_held_for += delta
 		_stuck_timer += delta
 		if _stuck_timer >= 0.4:
 			_stuck_timer = 0.0
@@ -415,6 +419,7 @@ func _process_moving(delta: float) -> void:
 			_replan_current_target_path()
 	else:
 		_stuck_timer = 0.0
+		_held_for = 0.0
 	_last_pos = global_position
 
 ## Shoves the Hero clear of any finished building he is standing inside, and reports
@@ -1434,20 +1439,28 @@ func take_damage(amount: float) -> void:
 ## the rock). At work, or on his way to it: sent to cut wood or to mend a fence at night, a
 ## phytosaur stood across his way and bit him from ten hit points to none while he walked on the
 ## spot, never hitting back (the debug-agent's BUG-019). Not on a walk the player sent him on, at a
-## meal, or in a fight already under way -- those are the player's to change -- and only at what is
-## in his reach. The work is remembered and taken up again when nothing is left to fight
-## (_process_attacking).
+## meal, or in a fight already under way -- those are the player's to change -- unless he is held
+## there, walking on the spot for HERO.fight_when_held seconds: sent home at night past a phytosaur
+## lying across the way at the cabin's end, biting it, he walked on the spot and was bitten to death
+## (the debug-agent's BUG-022). A walk the player sent him on that gets him away is still his to walk.
+## Only at what is in his reach. What he was doing is remembered and taken up again when nothing is
+## left to fight (_process_attacking): the work, or the walk.
 func _hit_back() -> void:
 	var at_work: bool = current_state == State.HARVESTING or current_state == State.BUILDING
 	var going_to_work: bool = current_state == State.MOVING and (
 		(target_resource_node != null and is_instance_valid(target_resource_node))
 		or (target_building != null and is_instance_valid(target_building)))
-	if not at_work and not going_to_work:
+	var cfg = _get_config()
+	var held: bool = current_state == State.MOVING \
+		and _held_for >= (float(cfg.HERO.get("fight_when_held", 1.0)) if (cfg and "HERO" in cfg) else 1.0)
+	if not at_work and not going_to_work and not held:
 		return
 	var biter: Node3D = _find_nearest_enemy(attack_range + 0.3)
 	if biter == null:
 		return
-	_resume_work = {"node": target_resource_node, "building": target_building}
+	_held_for = 0.0
+	_resume_work = {"node": target_resource_node, "building": target_building,
+		"walk": target_destination if (held and not going_to_work) else null}
 	target_resource_node = null
 	target_building = null
 	target_enemy = biter
@@ -1468,6 +1481,10 @@ func _take_up_work_again() -> bool:
 	var b = work.get("building")
 	if b != null and is_instance_valid(b) and not ("is_destroyed" in b and b.is_destroyed):
 		order_build(b, true)
+		return true
+	var walk = work.get("walk")
+	if walk is Vector3:
+		move_to(walk)
 		return true
 	return false
 

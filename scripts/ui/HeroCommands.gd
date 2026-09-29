@@ -107,9 +107,11 @@ func mark_open(menu: String) -> void:
 	build_button.set_pressed_no_signal(menu == "build")
 	eat_button.set_pressed_no_signal(menu == "eat")
 
-## The meals cooked on Eat's badge -- nothing to press when there are none, or while he eats.
+## The meals cooked on Eat's badge -- nothing to press when there are none, or while he eats. Not out
+## of the tree: a level taken down but not yet freed still heard the stock change, and asked for the
+## Hero outside the tree (the debug-agent's check of 7dd3f34, thirty lines of it in the bot's log).
 func refresh() -> void:
-	if eat_button == null:
+	if eat_button == null or not is_inside_tree():
 		return
 	var gs = get_node_or_null("/root/GameState")
 	var meals: int = 0

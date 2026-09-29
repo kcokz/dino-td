@@ -212,12 +212,34 @@ func _turn_at_bay() -> void:
 
 ## A step round the light from where it keeps (PROWL.pace_step_degrees), the way it has been going,
 ## and now and then the other way.
+##
+## Never to a place it cannot stand -- inside the cabin, a wall, a hill -- which it walked at and back
+## from along the edge, eight metres in six seconds by the cabin's end (the debug-agent's TASK-022):
+## it turns the other way, and with neither way open it stays.
 func _next_edge_angle() -> float:
 	if _edge_way == 0.0:
 		_edge_way = 1.0 if _dice().randf() < 0.5 else -1.0
 	elif _dice().randf() < _prowl("turn_back_chance", 0.3):
 		_edge_way = -_edge_way
-	return _edge_angle + deg_to_rad(_prowl("pace_step_degrees", 25.0)) * _edge_way
+	var step: float = deg_to_rad(_prowl("pace_step_degrees", 25.0))
+	for way in [_edge_way, -_edge_way]:
+		var angle: float = _edge_angle + step * way
+		if _can_stand_on_the_edge(angle):
+			_edge_way = way
+			return angle
+	return _edge_angle
+
+## Whether the edge of the light it keeps to, round at `angle`, is ground it can stand on.
+func _can_stand_on_the_edge(angle: float) -> bool:
+	if _wary.is_empty():
+		return false
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready():
+		return true
+	var edge: float = maxf(0.5, float(_wary["radius"]) - _prowl("edge_inside", 0.6))
+	var spot: Vector3 = (_wary["at"] as Vector3) + Vector3(cos(angle), 0.0, sin(angle)) * edge
+	var ground: Vector3 = maps.closest_point(spot, _map_kind())
+	return _flat(ground).distance_to(_flat(spot)) <= _prowl("way_out_slack", 0.6)
 
 ## Seconds it waits where it is before pacing on (PROWL.pace_every, between the two).
 func _pause() -> float:
@@ -404,9 +426,19 @@ func _shine() -> void:
 		var c: Color = _prowl_color("eye_color", Color(1.0, 0.45, 0.15))
 		var e: float = _prowl("glint_energy", 2.5)
 		_glint_mat.albedo_color = Color(c.r * e, c.g * e, c.b * e, best)
+	# As big as the camera is far (PROWL.glint_per_metre): two small points up close, where the eyes are
+	# seen -- one glint as big as its head was a lamp, not eyes -- and still a point at the game's
+	# distance (the debug-agent's TASK-022).
+	var cam: Camera3D = get_viewport().get_camera_3d() if (is_inside_tree() and not glints.is_empty()) else null
+	var k: float = 1.0
+	if cam != null and is_instance_valid(glints[0]):
+		var far: float = cam.global_position.distance_to(glints[0].global_position)
+		var across: float = clampf(far * _prowl("glint_per_metre", 0.008), _prowl("glint_least", 0.04), _prowl("glint_size", 0.3))
+		k = across / maxf(0.001, _prowl("glint_size", 0.3))
 	for g in glints:
 		if is_instance_valid(g):
 			g.visible = best > 0.01
+			g.scale = Vector3.ONE * k
 
 # ==============================================================================
 # Its numbers (Config.PROWL)

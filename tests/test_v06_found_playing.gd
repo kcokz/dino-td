@@ -115,6 +115,28 @@ func test_02_a_walk_he_was_sent_on_is_not_broken_off() -> void:
 	hero.take_damage(0.5)
 	assert_eq(int(hero.current_state), int(hero.State.MOVING), "Sent somewhere, he keeps going: that is the player's call")
 
+func test_02b_held_on_a_walk_and_bitten_he_turns_on_it_and_walks_on() -> void:
+	# The debug-agent's BUG-022: sent home at night past a phytosaur lying across the way at the
+	# cabin's end, he walked on the spot and was bitten to death. Held -- walking and getting nowhere
+	# for a while -- he turns on what bites him whatever he was sent to do, and walks on after.
+	var main = await _level()
+	var hero = main.hero
+	var to: Vector3 = hero.global_position + Vector3(6.0, 0.0, 0.0)
+	hero.move_to(to)
+	await wait_physics_frames(2)
+	var biter = _raptor_at(main, hero.global_position + Vector3(hero.attack_range * 0.6, 0.0, 0.0))
+	await wait_physics_frames(1)
+	hero._held_for = float(config_node.HERO["fight_when_held"]) + 0.1
+	hero.take_damage(0.5)
+	assert_eq(int(hero.current_state), int(hero.State.ATTACKING), "Held on his walk, bitten, he turns on it")
+	biter.take_damage(9999.0)
+	for i in 10:
+		await wait_physics_frames(1)
+		if int(hero.current_state) == int(hero.State.MOVING):
+			break
+	assert_eq(int(hero.current_state), int(hero.State.MOVING), "It dead, he walks on")
+	assert_lt(Vector2(hero.target_destination.x - to.x, hero.target_destination.z - to.z).length(), 0.3, "where he was going")
+
 func test_03_the_hud_says_he_is_under_attack_once_in_a_while() -> void:
 	var main = await _level()
 	var hero = main.hero

@@ -296,10 +296,60 @@ func test_12_its_eyes_glint_from_the_games_camera() -> void:
 	assert_eq(d.glints.size(), 2, "A glint over each eye")
 	d._shine()
 	var across: float = (d.glints[0].mesh as QuadMesh).size.x * d.glints[0].global_transform.basis.get_scale().x
-	assert_almost_eq(across, float(_prowl()["glint_size"]), 0.02, "as big across as it says, whatever the body's fit")
+	var far: float = main.camera.global_position.distance_to(d.glints[0].global_position)
+	var want: float = clampf(far * float(_prowl()["glint_per_metre"]), float(_prowl()["glint_least"]), float(_prowl()["glint_size"]))
+	assert_almost_eq(across, want, 0.02, "as big across as the camera is far, whatever the body's fit (%.2f m at %.0f m)" % [across, far])
 	assert_true(d.glints[0].visible and d.glints[1].visible, "At the light's edge they show")
 	var eye_mid: Vector3 = (d.glints[0].global_position + d.glints[1].global_position) * 0.5
 	assert_gt(eye_mid.y, float(config_node.DINOS[_species()]["size"].y) * 0.4, "up on its head")
 	d.global_position = fire.global_position + Vector3(-(light + float(_prowl()["eye_reach"]) + 2.0), 0.0, 0.0)
 	d._shine()
 	assert_false(d.glints[0].visible, "Far from any light, none")
+
+func test_13_it_paces_only_where_it_can_stand() -> void:
+	# The debug-agent's TASK-022: by the cabin's end a phytosaur walked back and forth along the edge,
+	# eight metres in six seconds, at a pacing place inside the cabin it could not reach.
+	var main = await _level()
+	await nav_settled(main)
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(25.0, 0.0, 12.0)
+	var fire = _campfire(main, Vector3(0.0, 0.0, 1.5))
+	var d = _phytosaur(main, fire.global_position + Vector3(0.0, 0.0, 6.0))
+	d._keep_to({"at": fire.global_position, "radius": float(fire.light_radius())}, false)
+	var to_cabin: Vector3 = main.current_core.global_position - fire.global_position
+	var into_cabin: float = atan2(to_cabin.z, to_cabin.x)
+	# The edge's point towards the cabin is inside it only if the light reaches past its walls.
+	var edge: float = float(fire.light_radius()) - float(_prowl()["edge_inside"])
+	var spot: Vector3 = fire.global_position + Vector3(cos(into_cabin), 0.0, sin(into_cabin)) * edge
+	var half: Vector2 = config_node.get_building_half("core")
+	var local: Vector3 = spot - main.current_core.global_position
+	if absf(local.x) < half.x and absf(local.z) < half.y:
+		assert_false(d._can_stand_on_the_edge(into_cabin), "Not in the cabin")
+	assert_true(d._can_stand_on_the_edge(into_cabin + PI), "and on the open ground the other side")
+	d._edge_angle = into_cabin + PI * 0.5
+	for i in 24:
+		d._edge_angle = d._next_edge_angle()
+		var at: Vector3 = fire.global_position + Vector3(cos(d._edge_angle), 0.0, sin(d._edge_angle)) * edge
+		assert_true(d._can_stand_on_the_edge(d._edge_angle), "Every place it paces to is ground it can stand on (%s)" % at)
+
+func test_14_its_eyes_are_two_points_up_close_and_one_seen_from_afar() -> void:
+	# The debug-agent's TASK-022: at six metres the glint was a lamp as big as its head.
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(25.0, 0.0, 12.0)
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var d = _phytosaur(main, fire.global_position + Vector3(-(float(fire.light_radius()) - 0.5), 0.0, 0.0))
+	await wait_physics_frames(2)
+	var cam: Camera3D = main.camera
+	var head: Vector3 = d.glints[0].global_position
+	var apart: float = d.glints[0].global_position.distance_to(d.glints[1].global_position)
+	for far in [6.0, 25.0]:
+		cam.global_position = head + Vector3(0.0, 0.7, 0.7).normalized() * far
+		d._shine()
+		var across: float = (d.glints[0].mesh as QuadMesh).size.x * d.glints[0].global_transform.basis.get_scale().x
+		if far < 10.0:
+			assert_lt(across, apart, "Up close each glint is smaller than the eyes are apart: two points (%.3f < %.3f)" % [across, apart])
+		else:
+			assert_gt(across, 0.15, "From the game's distance, one glint big enough to see (%.2f m)" % across)

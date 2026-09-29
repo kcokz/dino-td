@@ -715,6 +715,10 @@ const PROWL: Dictionary = {
 	"eye_bone": "Head",
 	"glint_size": 0.3,
 	"glint_energy": 2.5,
+	# And sized to the camera: `glint_per_metre` of its distance across, from `glint_least` up to
+	# `glint_size` -- two small points up close, one still seen at the game's distance.
+	"glint_per_metre": 0.008,
+	"glint_least": 0.04,
 }
 
 ## What every fire shares (BUILDINGS kind "fire", Fire.gd), and the torch in his hand (Hero).
@@ -1499,6 +1503,11 @@ const TIME: Dictionary = {
 }
 
 const HERO: Dictionary = {
+	# Walking and getting nowhere this many seconds with something biting him, he turns on it whatever
+	# he was sent to do (Hero._hit_back; the debug-agent's BUG-022: held at the cabin's end by a
+	# phytosaur on his way home, he walked on the spot and was bitten to death). Long enough that a
+	# walk the player sent him on past a raid is still walked; a second is his way being shut.
+	"fight_when_held": 1.0,
 	"hp": 10.0,                   # 生命值（归零直接 Game Over）
 	"move_speed": 4.0,            # 移动速度（米/秒）
 	"damage": 1.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
