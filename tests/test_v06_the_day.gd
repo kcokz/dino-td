@@ -206,6 +206,8 @@ func test_07_the_screen_shows_the_day_and_says_each_part_as_it_begins() -> void:
 	_set_clock(_at("dusk") + 1.0, 2)
 	await wait_frames(2)
 	assert_ne(ring.tint_progress, by_day, "At dusk the ring turns")
-	# The run's first dusk says, with that, what the dark is and what fire is for (test_v06_fire).
-	var key: String = OS.get_keycode_string(int(config_node.CONTROLS["command_keys"][2]))
+	# The run's first dusk says, with that, what the dark is and what fire is for (test_v06_fire), with
+	# the key of the torch's tile -- which comes with it, the first after Build: the second key.
+	var key: String = hud.hero_commands.key_of("torch")
+	assert_eq(key, OS.get_keycode_string(int(config_node.CONTROLS["command_keys"][1])), "(the torch's the second key)")
 	assert_eq(String(hud.hint_label.text), tr("HINT_DUSK_FIRST") % key, "and the screen says the raiders are going home")

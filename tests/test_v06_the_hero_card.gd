@@ -4,8 +4,10 @@
 # 一下各个经典游戏怎么处理这个问题的" -- and then: "属性卡按C打开，内容和原来应该稍微有些区别，最好建造和吃的两个
 # 图标不要变动位置，就在右下角原处（除了按c打开点击左下头像应该也可以打开）".
 #
-# His two commands, Build and Eat, are tiles in the bottom right corner, there all the while and never
-# moving; chosen, he has no card open. A menu comes up above its tile and goes once a building is in
+# His commands are tiles in the bottom right corner, there all the while and never moving: Build from the
+# first, at the right end, and each other as it becomes his to the left of those there, on the next
+# number key -- Eat with the first meal, Torch with the first dusk ("Build 按钮放最右边，哪个能力先解锁放哪
+# 个在靠右，以此类推，吃一开始隐藏因为没有食物，火把也是"). Chosen, he has no card open. A menu comes up above its tile and goes once a building is in
 # hand (Age of Empires IV, StarCraft II); his sheet -- no commands on it -- opens on the details key or
 # his medallion, as C opens the character sheet in Diablo IV, and the cancel key shuts it. His health
 # and his meal are on his medallion all the while. Anything else chosen shows its whole card, above
@@ -93,7 +95,7 @@ func _fence(main: Node) -> Node:
 		wall.complete_construction()
 	return wall
 
-func test_01_chosen_he_has_his_two_commands_in_the_corner_and_no_card() -> void:
+func test_01_chosen_he_has_his_commands_in_the_corner_and_no_card() -> void:
 	var main = await _level()
 	var panel = main.hud.option_panel
 	var tiles = _tiles(main)
@@ -104,8 +106,9 @@ func test_01_chosen_he_has_his_two_commands_in_the_corner_and_no_card() -> void:
 		return
 	assert_eq(panel.view(), "none", "Chosen, he has no card open")
 	assert_false(panel.visible, "none is shown")
-	assert_eq([String(tiles.build_button.name), String(tiles.eat_button.name)], ["BuildCommand", "EatCommand"],
-		"Build and Eat")
+	assert_true(_shown(tiles.build_button), "Build")
+	assert_false(tiles.eat_button.visible, "and nothing else yet: Eat comes with the first meal")
+	assert_false(tiles.torch_button.visible, "and Torch with the first dusk")
 	var corner: Vector2 = tiles.get_parent_area_size() - Vector2.ONE * float(config_node.UI["option_panel_margin"])
 	assert_almost_eq(tiles.get_rect().end.x, corner.x, 1.0, "in the bottom right corner")
 	assert_almost_eq(tiles.get_rect().end.y, corner.y, 1.0, "at its foot")
@@ -290,3 +293,67 @@ func test_10_at_the_end_of_the_run_they_go_and_at_a_restart_they_are_back() -> v
 	await wait_frames(1)
 	assert_true(_shown(tiles), "Back at a restart")
 	assert_eq(panel.view(), "none", "with no card open")
+
+func test_11_each_command_comes_in_to_the_left_as_it_becomes_his_and_stays() -> void:
+	# The player: "Build 按钮放最右边，哪个能力先解锁放哪个在靠右，以此类推，吃一开始隐藏因为没有食物，火把也是".
+	var main = await _level()
+	var tiles: HeroCommands = _tiles(main)
+	var keys: Array = _keys()
+	await wait_frames(2)
+	assert_true(_shown(tiles.build_button), "Build is there from the first")
+	assert_false(tiles.eat_button.visible, "Eat is not: nothing is cooked")
+	assert_false(tiles.torch_button.visible, "nor Torch: it is morning")
+	var build_at: Vector2 = tiles.build_button.global_position
+	# The first dusk before the first meal: Torch is the first to come.
+	_set_clock(_at("dusk") + 1.0)
+	await wait_frames(2)
+	assert_true(tiles.torch_button.visible, "The first dusk, Torch comes")
+	assert_lt(tiles.torch_button.global_position.x, build_at.x, "to Build's left")
+	assert_eq(tiles.build_button.global_position, build_at, "Build where it was")
+	assert_eq(_key_on(tiles.torch_button), int(keys[1]), "on the second key, the first to come")
+	var torch_at: Vector2 = tiles.torch_button.global_position
+	game_state_node.stock_meal("meat")
+	await wait_frames(2)
+	assert_true(tiles.eat_button.visible, "The first meal, Eat comes")
+	assert_lt(tiles.eat_button.global_position.x, torch_at.x, "to the left of both")
+	assert_eq([tiles.build_button.global_position, tiles.torch_button.global_position], [build_at, torch_at],
+		"and neither moves")
+	assert_eq(_key_on(tiles.eat_button), int(keys[2]), "on the third key")
+	# Come, they stay: greyed out while they cannot be pressed, so none moves.
+	var eat_at: Vector2 = tiles.eat_button.global_position
+	game_state_node._set_meals({})
+	_set_clock(_at("day") + 100.0, 2)
+	await wait_frames(2)
+	assert_true(tiles.torch_button.visible and tiles.torch_button.disabled, "By day the torch's is there, greyed out")
+	assert_true(tiles.eat_button.visible and tiles.eat_button.disabled, "and with nothing cooked, Eat's")
+	assert_eq([tiles.build_button.global_position, tiles.torch_button.global_position, tiles.eat_button.global_position],
+		[build_at, torch_at, eat_at], "none has moved")
+	# Its words put into another language, it is the same run (HUD._on_locale_changed).
+	tree.root.get_node("EventBus").locale_changed.emit(TranslationServer.get_locale())
+	await wait_frames(2)
+	assert_true(tiles.torch_button.visible and tiles.eat_button.visible, "In another language they are still there")
+	assert_eq([_key_on(tiles.torch_button), _key_on(tiles.eat_button)], [int(keys[1]), int(keys[2])], "on their keys")
+	# A new run: Build alone again -- and this time the meal first.
+	main.restart_game()
+	await wait_frames(2)
+	assert_false(tiles.eat_button.visible or tiles.torch_button.visible, "A new run, Build alone again")
+	game_state_node.stock_meal("meat")
+	await wait_frames(2)
+	assert_eq(_key_on(tiles.eat_button), int(keys[1]), "Eat the first to come this time: the second key")
+	_set_clock(_at("dusk") + 1.0)
+	await wait_frames(2)
+	assert_eq(_key_on(tiles.torch_button), int(keys[2]), "and Torch the third")
+	assert_lt(tiles.torch_button.global_position.x, tiles.eat_button.global_position.x, "to Eat's left")
+	assert_eq(tiles.build_button.global_position, build_at, "Build where it always is")
+
+## The key that presses `btn`, or -1 for none.
+func _key_on(btn: Button) -> int:
+	return int(btn.shortcut.events[0].keycode) if (btn.shortcut != null and not btn.shortcut.events.is_empty()) else -1
+
+func _at(part: String) -> float:
+	return float(config_node.DAY["parts"][part])
+
+## Sets the clock to `t` seconds into day `day`, and says the part of the day that is.
+func _set_clock(t: float, day: int = 1) -> void:
+	game_state_node.day_clock = float(day - 1) * float(config_node.DAY["length"]) + t
+	game_state_node._run_the_day(0.0)

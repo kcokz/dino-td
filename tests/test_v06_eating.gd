@@ -232,12 +232,14 @@ func test_10_build_and_eat_are_icons_and_eat_counts_what_is_cooked() -> void:
 		return
 	assert_not_null(build.icon, "Build is an icon")
 	assert_not_null(eat.icon, "And Eat")
-	assert_true(eat.disabled, "Nothing cooked: nothing to press")
+	assert_false(eat.visible, "Nothing cooked yet: no Eat in the corner (v0.6 round four)")
+	assert_true(eat.disabled, "and nothing to press")
 
 	game_state_node.stock_meal("meat")
 	game_state_node.stock_meal("meat")
 	await wait_frames(1)
 	eat = commands.find_child("EatCommand", true, false) as Button
+	assert_true(eat.visible, "The first meal cooked, it is there")
 	assert_false(eat.disabled, "Cooked: it can be pressed")
 	var badge: Label = eat.get_node_or_null("Badge") as Label
 	assert_not_null(badge, "With a count on it")

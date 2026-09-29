@@ -249,7 +249,7 @@ func _bus_handlers(eb: Node) -> Array:
 	return out
 
 func _on_locale_changed(_new_locale: String) -> void:
-	reset_hud()
+	reset_hud(false)
 
 func _on_deploy_time_changed(remaining: float, _total: float) -> void:
 	if deploy_timer_label:
@@ -587,6 +587,9 @@ func _on_day_part_changed(part: String, day: int) -> void:
 	var key: String = {"day": "HINT_DAWN", "dusk": "HINT_DUSK", "night": "HINT_NIGHT"}.get(part, "")
 	if part == "dusk" and not _first_dusk_said:
 		_first_dusk_said = true
+		# The torch's tile comes with this dusk, and the key it comes with is the one said.
+		if hero_commands:
+			hero_commands.refresh()
 		show_hint(tr("HINT_DUSK_FIRST") % _torch_key_text(), UiTheme.toast_seconds("read"), "sun")
 	elif key != "":
 		show_hint(tr(key), -1.0, "moon" if part == "night" else "sun")
@@ -628,11 +631,10 @@ func _light_his_torch() -> void:
 	if hero_commands:
 		hero_commands.refresh()
 
-## The key that lights the torch, as the keyboard writes it (Config.CONTROLS.command_keys, its tile's).
+## The key that lights the torch, as the keyboard writes it: its tile's, which is its place in the
+## corner (HeroCommands.key_of).
 func _torch_key_text() -> String:
-	var cfg = _get_config()
-	var keys: Array = cfg.CONTROLS.get("command_keys", []) if (cfg and "CONTROLS" in cfg) else []
-	return OS.get_keycode_string(int(keys[2])) if keys.size() > 2 else "3"
+	return hero_commands.key_of("torch") if hero_commands else ""
 
 ## A raid a repaired beacon stage stirred up: said as that, not as the raid count again.
 func _on_stage_wave_started(_size: int) -> void:
@@ -962,11 +964,17 @@ func _on_restart_pressed() -> void:
 # State Reset & Inspection API
 # ==============================================================================
 
-func reset_hud() -> void:
+## `new_run`: what is said once a run, and his commands in the corner, start over -- not when the
+## words are only put in another language (_on_locale_changed), which is the same run: a torch tile
+## that had come would go until the next dusk, and come back on another key.
+func reset_hud(new_run: bool = true) -> void:
 	selected_build_type = ""
-	_guards_warning_said = false
-	_first_dusk_said = false
-	_starved_said_night = -1
+	if new_run:
+		_guards_warning_said = false
+		_first_dusk_said = false
+		_starved_said_night = -1
+		if hero_commands:
+			hero_commands.reset()
 	if game_over_panel:
 		game_over_panel.visible = false
 	if raid_warning_banner:

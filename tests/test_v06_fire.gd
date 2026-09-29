@@ -200,7 +200,7 @@ func test_07_the_torch_dims_before_it_goes_out() -> void:
 	hero._burn_the_torch(float(_torch()["seconds"]) - fade * 0.5)
 	assert_almost_eq(float(hero.torch_light()), float(_torch()["light"]) * 0.5, 0.01, "Halfway into its last seconds it lights half as far")
 
-func test_08_its_tile_is_there_in_the_dark_and_build_and_eat_do_not_move() -> void:
+func test_08_its_tile_comes_with_the_first_dusk_and_stays_and_build_does_not_move() -> void:
 	var main = await _level()
 	var hud = main.hud
 	var tiles: HeroCommands = hud.hero_commands
@@ -208,9 +208,8 @@ func test_08_its_tile_is_there_in_the_dark_and_build_and_eat_do_not_move() -> vo
 	_set_clock(_at("day") + 100.0)
 	tiles.refresh()
 	await wait_physics_frames(2)
-	assert_false(tiles.torch_button.visible, "By day there is no torch tile")
+	assert_false(tiles.torch_button.visible, "Before the first dusk there is no torch tile")
 	var build_at: Vector2 = tiles.build_button.global_position
-	var eat_at: Vector2 = tiles.eat_button.global_position
 	_set_clock(_at("dusk") + 1.0)
 	tiles.refresh()
 	await wait_physics_frames(2)
@@ -218,7 +217,6 @@ func test_08_its_tile_is_there_in_the_dark_and_build_and_eat_do_not_move() -> vo
 	assert_false(tiles.torch_button.disabled, "to be pressed, with wood in the stock")
 	assert_lt(tiles.torch_button.global_position.x, tiles.build_button.global_position.x, "to the left of Build")
 	assert_eq(tiles.build_button.global_position, build_at, "Build has not moved")
-	assert_eq(tiles.eat_button.global_position, eat_at, "nor Eat")
 	tiles.torch_pressed.emit()
 	assert_gt(float(main.hero.torch_left), 0.0, "Pressed, he lights one")
 	tiles.refresh()
@@ -226,7 +224,16 @@ func test_08_its_tile_is_there_in_the_dark_and_build_and_eat_do_not_move() -> vo
 	var badge: Label = tiles.torch_button.get_node("Badge") as Label
 	assert_eq(badge.text, str(int(ceil(float(main.hero.torch_left)))), "its badge the seconds it has left")
 	var keys: Array = config_node.CONTROLS["command_keys"]
-	assert_eq(int(tiles.torch_button.shortcut.events[0].keycode), int(keys[2]), "The third command key lights it")
+	assert_eq(int(tiles.torch_button.shortcut.events[0].keycode), int(keys[1]),
+		"The first command to come after Build (nothing cooked yet), the second key lights it")
+	# Come, it stays: by day greyed out, not gone, so nothing to its left moves (v0.6 round four).
+	var torch_at: Vector2 = tiles.torch_button.global_position
+	_set_clock(_at("day") + 100.0, 2)
+	tiles.refresh()
+	await wait_physics_frames(2)
+	assert_true(tiles.torch_button.visible, "By day it is still there")
+	assert_true(tiles.torch_button.disabled, "greyed out")
+	assert_eq(tiles.torch_button.global_position, torch_at, "where it was")
 
 func test_08b_the_tile_answers_at_once() -> void:
 	# The debug-agent's check 17: pressed the moment wood came in, the first press on 3 was lost -- the
@@ -237,7 +244,7 @@ func test_08b_the_tile_answers_at_once() -> void:
 	_wood(0)
 	_set_clock(_at("day") + 100.0)
 	tiles.refresh()
-	assert_false(tiles.torch_button.visible, "(by day, no tile)")
+	assert_false(tiles.torch_button.visible, "(before the first dusk, no tile)")
 	_set_clock(_at("dusk") + 1.0)
 	assert_true(tiles.torch_button.visible, "The dusk come, the tile is there at once")
 	assert_true(tiles.torch_button.disabled, "(no wood: nothing to press)")

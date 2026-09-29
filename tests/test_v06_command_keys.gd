@@ -66,7 +66,7 @@ func test_01_the_first_key_opens_the_first_command() -> void:
 	panel.select_target(main.hero)
 	await wait_frames(1)
 	var first: Button = main.hud.hero_commands.build_button
-	assert_eq(String(first.name), "BuildCommand", "Build stands first of his commands")
+	assert_eq(String(first.name), "BuildCommand", "Build is the first of his commands, on the first key")
 	await _press(int(_keys()[0]))
 	assert_eq(String(panel.current_menu), "build", "and the first number key opens it")
 

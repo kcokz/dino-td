@@ -109,7 +109,7 @@ func test_04_no_text_is_sized_by_hand() -> void:
 # ==============================================================================
 
 func test_06_the_command_card_grows_upward_from_his_commands() -> void:
-	# The card stands on his two commands in the corner (v0.6 round four), and grows upward from there.
+	# The card stands on his commands in the corner (v0.6 round four), and grows upward from there.
 	var main = await _level()
 	var panel: Control = main.hud.option_panel
 	var commands: Control = main.hud.hero_commands

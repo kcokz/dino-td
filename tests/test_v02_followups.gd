@@ -958,7 +958,7 @@ func test_48_a_move_order_mid_harvest_is_actually_obeyed() -> void:
 # 14. Standardized Interaction-Aware Highlight & Stop Button Removal
 # ==============================================================================
 
-func test_49_hero_level_1_menu_is_build_and_eat() -> void:
+func test_49_hero_level_1_menu_is_build_and_then_what_becomes_his() -> void:
 	var panel = option_panel_script.new()
 	var hero = hero_script.new()
 	var commands = load("res://scripts/ui/HeroCommands.gd").new()
@@ -973,18 +973,30 @@ func test_49_hero_level_1_menu_is_build_and_eat() -> void:
 	panel.select_target(hero)
 	assert_eq(panel.current_menu, "default", "Starts at default level-1 menu")
 	# Stop was removed as redundant long ago. Since v0.6 round two eating is a command of his
-	# own ("吃饭也是一个图标"): [ Build ] [ Eat ], and nothing else -- since round four, tiles of their
-	# own in the corner that never move ("最好建造和吃的两个图标不要变动位置"), and none on his card. (In
-	# the dark a third, Torch, to the left of them: test_v06_fire. This is the day.)
+	# own ("吃饭也是一个图标") -- since round four, tiles of their own in the corner that never move
+	# ("最好建造和吃的两个图标不要变动位置"), none on his card; and a command comes into the corner only
+	# when it is his: Build from the first, at the right end, and each other to the left of those
+	# there as it becomes his ("Build 按钮放最右边，哪个能力先解锁放哪个在靠右，以此类推，吃一开始隐藏因为
+	# 没有食物，火把也是"; test_v06_the_hero_card 11). This is the first morning, nothing cooked.
+	var tiles: Array = _shown_tiles(commands)
+	assert_eq(tiles.size(), 1, "Level 1 menu has one command at the start")
+	if tiles.size() == 1:
+		assert_eq(tiles[0].text, tr("CMD_BUILD"), "Build")
+	assert_eq(panel.button_container.get_child_count(), 0, "and none on his card")
+	game_state_node.stock_meal("meat")
+	await wait_frames(1)
+	tiles = _shown_tiles(commands)
+	assert_eq(tiles.size(), 2, "A meal cooked, Eat comes")
+	if tiles.size() == 2:
+		assert_eq(tiles[0].text, tr("CMD_EAT"), "to the left")
+		assert_eq(tiles[1].text, tr("CMD_BUILD"), "of Build, at the right end")
+
+func _shown_tiles(commands: Node) -> Array:
 	var tiles: Array = []
 	for child in commands.get_children():
 		if child is Button and (child as Button).visible:
 			tiles.append(child)
-	assert_eq(tiles.size(), 2, "Level 1 menu has exactly 2 commands")
-	if tiles.size() == 2:
-		assert_eq(tiles[0].text, tr("CMD_BUILD"), "Build first")
-		assert_eq(tiles[1].text, tr("CMD_EAT"), "Then Eat")
-	assert_eq(panel.button_container.get_child_count(), 0, "and none on his card")
+	return tiles
 
 
 func test_58_depleted_nodes_report_themselves_unavailable() -> void:
