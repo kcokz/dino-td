@@ -141,8 +141,22 @@ func test_05b_one_step_of_a_slot_at_a_time_at_the_difference() -> void:
 		for res_id in price:
 			assert_true(whole.has(res_id), "%s: and nothing it is not made of" % slot)
 	var armour: Array[String] = _of("armor")
-	assert_eq(bench.inputs_of(armour[1]).get("hide", 0), 0,
-		"The bone armour over the vest is the bone sewn onto it: no more hide")
+	assert_eq(bench.inputs_of(armour[1]).keys(), ["hide"], "The armour over the vest is more hide, and only hide")
+
+func test_05c_a_tool_is_made_of_what_it_is_named_for_and_only_that() -> void:
+	# The player, v0.6 round six: "材料各种各样，每次造东西都需要各种各样的材料，装备，建筑都需要各种材料，总感觉
+	# 有点confuse哪个材料是用来做什么，也很难做规划" -- chosen: a tool or a piece of gear is made of one
+	# material, the one in its name (GAME-DESIGN 6.0 rule 1).
+	for recipe_id in config_node.RECIPES:
+		var row: Dictionary = config_node.RECIPES[recipe_id]
+		if String(row.get("slot", "")) == "" and String(row.get("station", "")) != "kitchen":
+			continue
+		assert_eq((row["inputs"] as Dictionary).size(), 1, "%s is made of one material" % recipe_id)
+	for slot in ["armor", "boots"]:
+		for recipe_id in _of(slot):
+			assert_eq(config_node.RECIPES[recipe_id]["inputs"].keys(), ["hide"], "%s is hide (what he wears binds)" % recipe_id)
+	for recipe_id in _of("weapon"):
+		assert_false(config_node.RECIPES[recipe_id]["inputs"].has("wood"), "%s: no wood for its haft any more" % recipe_id)
 
 func test_06_hide_comes_off_the_map_s_elites() -> void:
 	var map: Dictionary = config_node.map_data()

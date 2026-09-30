@@ -3119,7 +3119,11 @@ const CABIN: Dictionary = {
 
 ## Every recipe, whatever station it belongs to, has the same shape:
 ##   station  -- which bench it is made at
-##   inputs   -- what it costs, spent when work begins
+##   inputs   -- what it costs, spent when work begins: a tool or a piece of gear is made of what it
+##               is named for and nothing else (GAME-DESIGN 6.0 rule 1; v0.6 round six, the player:
+##               "材料各种各样……总感觉有点confuse哪个材料是用来做什么，也很难做规划") -- the bone pick of
+##               bone, the stone axe of stone, the vest of hide; the few pieces of wood for a haft
+##               went, and so did the bone plates on the second armour (bone is for what cuts)
 ##   time     -- seconds the Hero must stand there (progress is kept if he leaves)
 ##   unlocks  -- the permanent flag it grants
 ## Adding a third station later is an entry here plus a node in the scene, not a
@@ -3133,7 +3137,7 @@ const RECIPES: Dictionary = {
 	"stone_pick": {
 		"name": "RECIPE_STONE_PICK_NAME",
 		"station": "workbench",
-		"inputs": {"bone": 1, "wood": 4},
+		"inputs": {"bone": 1},
 		"time": 8.0,
 		"unlocks": "harvest_stone",
 		"slot": "pick",
@@ -3143,7 +3147,7 @@ const RECIPES: Dictionary = {
 	"stone_axe": {
 		"name": "RECIPE_STONE_AXE_NAME",
 		"station": "workbench",
-		"inputs": {"wood": 3, "stone": 2},
+		"inputs": {"stone": 3},
 		"time": 6.0,
 		"unlocks": "stone_axe",
 		"slot": "axe",
@@ -3158,7 +3162,7 @@ const RECIPES: Dictionary = {
 	"quarry_pick": {
 		"name": "RECIPE_QUARRY_PICK_NAME",
 		"station": "workbench",
-		"inputs": {"wood": 3, "stone": 4},
+		"inputs": {"stone": 5},
 		"time": 8.0,
 		"unlocks": "quarry_pick",
 		"slot": "pick",
@@ -3171,7 +3175,7 @@ const RECIPES: Dictionary = {
 	"stone_spear": {
 		"name": "RECIPE_STONE_SPEAR_NAME",
 		"station": "workbench",
-		"inputs": {"wood": 3, "stone": 2},
+		"inputs": {"stone": 3},
 		"time": 6.0,
 		"unlocks": "stone_spear",
 		"slot": "weapon",
@@ -3181,7 +3185,7 @@ const RECIPES: Dictionary = {
 	"bone_spear": {
 		"name": "RECIPE_BONE_SPEAR_NAME",
 		"station": "workbench",
-		"inputs": {"wood": 3, "bone": 3},
+		"inputs": {"bone": 3},
 		"time": 8.0,
 		"unlocks": "bone_spear",
 		"slot": "weapon",
@@ -3190,7 +3194,8 @@ const RECIPES: Dictionary = {
 	},
 	# Armour (v0.6 round three: "增加皮和护甲的一些制作……护甲可以专门做一个或者做成血量"): hit points
 	# over his own for good -- "max_hp" -- drawn on his bar in leather. The better one replaces the
-	# lesser: bone lamellar sewn on the hide is more than the vest, not the vest and more.
+	# lesser, and both are hide: the second is the vest under another layer of it, thick and tanned
+	# (v0.6 round six: it was bone lamellar, and bone is for what cuts). The id stays (12.6).
 	"hide_vest": {
 		"name": "RECIPE_HIDE_VEST_NAME",
 		"station": "workbench",
@@ -3204,7 +3209,7 @@ const RECIPES: Dictionary = {
 	"bone_armor": {
 		"name": "RECIPE_BONE_ARMOR_NAME",
 		"station": "workbench",
-		"inputs": {"hide": 1, "bone": 4},
+		"inputs": {"hide": 2},
 		"time": 12.0,
 		"unlocks": "bone_armor",
 		"slot": "armor",

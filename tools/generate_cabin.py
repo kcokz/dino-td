@@ -270,18 +270,33 @@ def workbench(seed):
     bone_spear.tube([tip - d * 0.03, tip + d * 0.02], [0.02, 0.019], [BONE, BONE], 6)
     _point(bone_spear, tip + d * 0.01, tip + d * 0.21, 0.02, 0.014, BONE, mix(BONE, ROCK_DARK, 0.25))
 
-    # The armour hangs from the middle peg: a vest of hide laced up the front; the bone armour
-    # is the same vest a hair in front of it, sewn over with bone slats in rows -- so the better
-    # one hides the lesser once both are made.
+    # The armour hangs from the middle peg: a vest of hide laced up the front; the thick hide
+    # armour (its id is still "bone_armor": ids never change) is the same vest a hair in front of
+    # it under a second layer of hide -- broad panels of darker, tanned hide overlapping downwards
+    # like shingles, stitched along their tops -- so the better one hides the lesser once both are
+    # made. It was bone slats; bone is only for what cuts now (v0.6 round six).
     vest = Builder()
     _vest(vest, 0.0, rng)
     bone_armor = Builder()
     _vest(bone_armor, 0.006, rng)
-    for zc in (0.93, 0.99, 1.05, 1.11):
-        for x in (-0.126, -0.094, -0.062, -0.03, 0.03, 0.062, 0.094, 0.126):
-            y = _vest_y(x, zc, 0.006) - 0.008
-            rod(bone_armor, Vector((x, y, zc - 0.024)), Vector((x, y, zc + 0.024)), 0.011,
-                jitter(BONE, rng, 0.04), sides=5, col1=mix(BONE, ROCK_DARK, 0.15))
+    tanned = mix(HIDE, HIDE_EDGE, 0.55)
+    for (zc, proud) in ((0.945, 0.016), (1.025, 0.012), (1.105, 0.008)):
+        for side in (-1.0, 1.0):
+            for (x0, x1) in ((0.012, 0.078), (0.082, 0.150)):
+                xa, xb = side * x0, side * x1
+                ya = _vest_y(xa, zc, 0.006) - 0.006
+                yb = _vest_y(xb, zc, 0.006) - 0.006
+                col = jitter(tanned, rng, 0.05)
+                edge = mix(col, HIDE_EDGE, 0.65)
+                # Its lower edge stands proud of the one below, as a shingle does.
+                bone_armor.quad(Vector((xa, ya - proud, zc - 0.05)), Vector((xb, yb - proud, zc - 0.05)),
+                                Vector((xb, yb, zc + 0.036)), Vector((xa, ya, zc + 0.036)),
+                                edge, edge, col, col)
+                for k in range(4):
+                    xs = xa + (xb - xa) * (k + 0.5) / 4.0
+                    ys = _vest_y(xs, zc, 0.006) - 0.008
+                    rod(bone_armor, Vector((xs, ys, zc + 0.024)), Vector((xs, ys, zc + 0.034)), 0.0028,
+                        ROPE, sides=4)
 
     # The boots, a pair standing on the top at the right, toes to the room.
     boots = Builder()
