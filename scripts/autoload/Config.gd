@@ -2618,6 +2618,30 @@ const DAY: Dictionary = {
 ## THE TWITCH WATCH (TwitchWatch; v0.6 round four: "我觉得你需要做一个恐龙抽搐detector，如果恐龙抽搐，它就
 ## 立刻report一些debug 信息，这个在release的时候甚至可以作为telemetry"): what counts as a twitch, and
 ## where a report goes. Every count is over game seconds, so it holds at any of the HUD's speeds.
+## THE HAND-DRAWN MAP in the corner (MiniMap; RECIPES.hide_map), and its inks -- the bare hide where he has not
+## been, the land where he has, the hills darker, the river, what he has built darkest, the cabin pale, him, a
+## smoking wreck, the nest.
+const MINIMAP: Dictionary = {
+	# Pixels a side: under the goal's panel (UI.objective_width) and narrower than it, so the corner is
+	# still the world's -- about three pixels to a metre on the small valley's field.
+	"size": 176.0,
+	# Seconds between looks at what he has seen -- the fog looks ten times a second (FOG.every); a map drawn by
+	# hand need not keep up -- and drawn again only if it grew.
+	"refresh_seconds": 0.5,
+	# Pixels between the goal's panel and the map under it.
+	"gap": 8.0,
+	"hide": Color(0.80, 0.68, 0.50),
+	"land": Color(0.60, 0.50, 0.34),
+	"hill": Color(0.40, 0.31, 0.20),
+	"water": Color(0.42, 0.52, 0.55),
+	"built": Color(0.20, 0.14, 0.09),
+	"ink": Color(0.16, 0.10, 0.06),
+	"cabin": Color(0.92, 0.92, 0.88),
+	"hero": Color(0.95, 0.35, 0.18),
+	"smoke": Color(0.30, 0.28, 0.26),
+	"nest": Color(0.55, 0.12, 0.08),
+}
+
 ## THE BUG REPORT (BugReport; the player, 2026-09-29: "你弄一个bug report功能（加到dev版，release版本没有这个功能）
 ## ……snap所有你想要知道的当前参数并dump出来……给个快捷键"): how many of the last things that happened it keeps,
 ## and which of what the game says are too many to be worth keeping -- said every frame, or at every step.
@@ -3505,6 +3529,16 @@ const RECIPES: Dictionary = {
 		"slot": "boots",
 		"tier": 1,
 		"move_speed": 1.2,
+	},
+	# THE HAND-DRAWN MAP (GAME-DESIGN 9.3; v0.6 round five, the player: "小地图没有还是会有点confusing，我们需要设计怎么
+	# 能获得小地图" -- chosen "在工作台做一张地图"): the valley as he has seen it, drawn on a hide (6.0: made of what it
+	# is named for). Made, it is in the corner for good (MiniMap), outside his row.
+	"hide_map": {
+		"name": "RECIPE_HIDE_MAP_NAME",
+		"station": "workbench",
+		"inputs": {"hide": 1},
+		"time": 10.0,
+		"unlocks": "hide_map",
 	},
 	# A flat stone set over the fire, to sear meat on (GAME-DESIGN 4.5). Made in the
 	# kitchen, like every vessel, and kept for good like a tool. Quarried stone, so it

@@ -136,6 +136,8 @@ func _run(name: String) -> void:
 			await _scenario_herocard()
 		"day":
 			await _scenario_day()
+		"map":
+			await _scenario_map()
 		_:
 			print("[playtest] unknown scenario: %s" % name)
 	_tear_down()
@@ -1102,6 +1104,21 @@ func _scenario_herocard() -> void:
 
 ## The day (GAME-DESIGN 9.3): the base at first light, in the middle of the day, at dusk and in the
 ## night -- the same view each time, from over the cabin, the dial on the strip saying which.
+## The hand-drawn map in the corner (v0.6 round five): made at the bench, it shows where he has been -- the
+## cabin, a fence, him, the smoking wrecks -- under the goal's panel.
+func _scenario_map() -> void:
+	var gs := root.get_node("GameState")
+	_grant({"wood": 20})
+	for k in 4:
+		_build_at("wall", _main.current_core.global_position + Vector3(-3.0 + float(k), 0.0, 5.0))
+	# Out a way first, so there is more on it than the cabin's clearing.
+	for at in [Vector3(10.0, 0.0, -6.0), Vector3(-12.0, 0.0, 4.0), Vector3(0.0, 0.0, 0.0)]:
+		_main.hero.global_position = _main.current_core.global_position + at
+		await _wait(12)
+	gs.grant_unlock("hide_map")
+	await _wait(30)
+	await _shoot("map")
+
 func _scenario_day() -> void:
 	var gs := root.get_node("GameState")
 	var cfg := root.get_node("Config")

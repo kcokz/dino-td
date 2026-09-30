@@ -352,6 +352,16 @@ ICONS["stone_wall"] = item_svg(
     + [shape("ellipse", C["moss"], cx=20, cy=19.5, rx=7, ry=2.4), shape("ellipse", C["moss"], cx=38, cy=19.5, rx=5, ry=2)])
 
 
+# The hand-drawn map (v0.6 round five): a hide stretched flat, the valley inked on it -- a river down one side,
+# a path, a cross where the cabin is.
+ICONS["hide_map"] = item_svg(
+    [shape("path", C["hide"], d="M 8 14 C 18 9 26 12 32 10 C 40 8 48 12 56 10 L 58 50 C 48 54 40 50 32 54 C 24 56 16 52 6 54 Z")],
+    [shape("path", None, C["hide_dark"], 2.0, d="M 8 14 C 18 9 26 12 32 10 C 40 8 48 12 56 10"),
+     shape("path", None, C["water"], 3.2, d="M 14 16 C 12 26 18 34 12 50"),
+     shape("path", None, C["char"], 1.8, d="M 22 44 C 28 36 34 34 38 26 L 46 20"),
+     shape("path", None, C["char"], 2.4, d="M 41 34 L 47 40 M 47 34 L 41 40"),
+     shape("circle", C["meat_dark"], cx=47, cy=20, r=3)])
+
 # The fence with a rock on it (v0.6 round six): the three posts, a block of sandstone balanced on their points,
 # a thong round it.
 ICONS["rock_fence"] = item_svg(

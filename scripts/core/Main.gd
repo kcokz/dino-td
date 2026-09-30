@@ -366,6 +366,9 @@ func _wire_signals() -> void:
 			hud.restart_requested.connect(restart_game)
 		if hud.has_signal("home_view_requested") and not hud.home_view_requested.is_connected(reset_camera):
 			hud.home_view_requested.connect(reset_camera)
+		# The hand-drawn map clicked (MiniMap): the view goes there.
+		if "minimap" in hud and hud.minimap != null and not hud.minimap.look_requested.is_connected(look_at_ground):
+			hud.minimap.look_requested.connect(look_at_ground)
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("phase_changed"):
 		if not eb.phase_changed.is_connected(_on_phase_changed):
@@ -2247,6 +2250,14 @@ func reset_camera() -> void:
 	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
 	camera_rig.reset()
+	camera_rig.apply_to(camera)
+
+## The view over `at` on the ground, as the player had it turned and zoomed (the hand-drawn map clicked, MiniMap).
+func look_at_ground(at: Vector3) -> void:
+	_ensure_camera_rig()
+	if camera_rig == null or camera == null or not is_instance_valid(camera):
+		return
+	camera_rig.look_at_ground(at)
 	camera_rig.apply_to(camera)
 
 func _zoom_step() -> float:

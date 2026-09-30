@@ -187,6 +187,16 @@ func _index(pos: Vector3) -> int:
 		return -1
 	return z * cells + x
 
+## Every cell, ever seen or not (one byte a cell, row by row, `cells` across): what the hand-drawn map
+## draws (MiniMap). Everything, with the whole field shown.
+func seen_cells() -> PackedByteArray:
+	if revealed:
+		var all := PackedByteArray()
+		all.resize(cells * cells)
+		all.fill(1)
+		return all
+	return _seen
+
 ## Whether `pos` has been seen, ever.
 func is_seen(pos: Vector3) -> bool:
 	if revealed:

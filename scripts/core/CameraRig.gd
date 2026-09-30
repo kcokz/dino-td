@@ -147,6 +147,11 @@ func pan(amount: Vector2, metres: float) -> void:
 	focus += (right * amount.x + away * amount.y) * metres
 	_keep_in_bounds()
 
+## The focus moved to `at` on the ground, inside the world; the bearing, tilt and distance as they were.
+func look_at_ground(at: Vector3) -> void:
+	focus = Vector3(at.x, focus.y, at.z)
+	_keep_in_bounds()
+
 ## Holds the focus inside the world. A square, because the playfield is one.
 func _keep_in_bounds() -> void:
 	if is_inf(bounds_half):

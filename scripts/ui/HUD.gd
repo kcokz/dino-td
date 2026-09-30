@@ -37,6 +37,8 @@ var root_control: Control = null
 ## resource is a new chip without anyone writing one (v0.6 T2).
 var resource_bar: Container = null
 var resource_labels: Dictionary = {}     # res_id -> the count Label
+## The hand-drawn map in the corner, once he has made it (MiniMap; RECIPES.hide_map).
+var minimap: MiniMap = null
 ## The pinned goal's line under the beacon's (GameState.goal).
 var goal_label: Label = null
 var resource_chips: Dictionary = {}      # res_id -> the chip (icon + count)
@@ -367,6 +369,28 @@ func _refresh_goal(res: Dictionary = {}) -> void:
 func _on_din_carried(_wreck: Node, draws: String) -> void:
 	show_hint(tr("HINT_DIN_" + draws.to_upper()), UiTheme.toast_seconds("read"), "warning")
 
+## The hand-drawn map shown once he has made it, under the goal at the right.
+func _refresh_minimap() -> void:
+	if minimap == null or not is_instance_valid(minimap):
+		return
+	var gs = _get_game_state()
+	minimap.visible = gs != null and gs.has_method("has_unlock") and gs.has_unlock("hide_map")
+	_place_minimap()
+	if minimap.visible:
+		minimap.redraw_ground()
+
+func _place_minimap() -> void:
+	if minimap == null or not is_instance_valid(minimap) or objective_panel == null:
+		return
+	var cfg = _get_config()
+	var side: float = float(cfg.MINIMAP.get("size", 176.0)) if (cfg and "MINIMAP" in cfg) else 176.0
+	var gap: float = float(cfg.MINIMAP.get("gap", 8.0)) if (cfg and "MINIMAP" in cfg) else 8.0
+	var top: float = objective_panel.offset_top + (objective_panel.size.y + gap if objective_panel.visible else 0.0)
+	minimap.offset_right = objective_panel.offset_right
+	minimap.offset_left = minimap.offset_right - side
+	minimap.offset_top = top
+	minimap.offset_bottom = top + side
+
 func _on_goal_changed(_goal: Dictionary) -> void:
 	_refresh_goal()
 
@@ -477,6 +501,10 @@ func _on_resource_picked_up(res_id: String, _amount: int, _by: Node) -> void:
 ## Something made at the cabin: what it does, said as it is done -- "Made: Stone Axe --
 ## Wood x2" (GAME-DESIGN 14.2, path 4: did I get stronger).
 func _on_unlock_granted(unlock_id: String) -> void:
+	_refresh_minimap()
+	if unlock_id == "hide_map":
+		show_hint(tr("HINT_MAP_MADE"), UiTheme.toast_seconds("read"), "check")
+		return
 	var cfg = _get_config()
 	if cfg == null or not ("RECIPES" in cfg) or not cfg.has_method("recipe_effect_text"):
 		return
@@ -1052,6 +1080,9 @@ func _on_restart_pressed() -> void:
 ## that had come would go until the next dusk, and come back on another key.
 func reset_hud(new_run: bool = true) -> void:
 	selected_build_type = ""
+	if new_run and minimap != null:
+		minimap.forget()
+	_refresh_minimap()
 	if new_run:
 		_guards_warning_said = false
 		_first_dusk_said = false
@@ -1461,6 +1492,14 @@ func _ensure_ui_components() -> void:
 	beacon_bar.custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
 	beacon_bar.visible = false
 	objective.add_child(beacon_bar)
+	# The hand-drawn map, under the goal at the right, once made (MiniMap): it follows the panel's foot.
+	minimap = MiniMap.new()
+	minimap.name = "MiniMap"
+	minimap.visible = false
+	root_control.add_child(minimap)
+	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	objective_panel.item_rect_changed.connect(_place_minimap)
+	objective_panel.visibility_changed.connect(_place_minimap)
 	# The pinned goal, under the beacon's line (GameState.goal): what it is, what is short; a click
 	# unpins it.
 	goal_label = _label("GoalLabel", &"MutedLabel", "")
