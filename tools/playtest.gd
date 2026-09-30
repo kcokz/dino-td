@@ -662,6 +662,19 @@ func _scenario_ghost() -> void:
 	await _wait(4)
 	await _portrait("ghost_run", gm.build_cell_to_world(Vector2i(c.x - 4, z0 + 2)), 8.0, true)
 	_main._end_drag()
+	# A run longer than the stock stretches: the sections past it red, and said (v0.6 round six).
+	var cost: Dictionary = root.get_node("Config").BUILDINGS["wall"]["cost"]
+	for res_id in cost:
+		root.get_node("GameState").resources[res_id] = int(cost[res_id]) * 2
+	var long_run: Array[Vector2i] = []
+	for dz in range(1, 7):
+		long_run.append(Vector2i(c.x - 9, z0 + dz))
+	_main._drag_from = long_run[0]
+	_main._dragging = true
+	_main._show_run_preview(long_run)
+	await _wait(4)
+	await _portrait("ghost_short", gm.build_cell_to_world(Vector2i(c.x - 9, z0 + 3)), 9.0, true)
+	_main._end_drag()
 	_main.cancel_building_selection()
 	await _wait(4)
 	await _portrait("cabin_side", centre + Vector3(1.0, 0.0, 0.0), 8.0, true)

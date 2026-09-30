@@ -1520,7 +1520,8 @@ func _drag_number(key: String, fallback: float) -> float:
 	return fallback
 
 ## The build cells a run from `_drag_from` to the cursor would cover, already filtered to the
-## ones a section of wall can actually go in.
+## ones a section of wall can stand in -- paid for or not: the ones the stock does not stretch to
+## are shown red and not laid (_run_plan).
 ##
 ## Blocked cells are SKIPPED rather than cutting the run short: dragging a fence past a
 ## rock should give a fence either side of the rock, which is what the player meant, and
@@ -1543,9 +1544,28 @@ func _run_to(screen_pos: Vector2) -> Array[Vector2i]:
 	for cell in line:
 		if out.size() >= cap:
 			break
-		if build_system != null and build_system.can_place_at(current_build_type, cell):
+		if build_system != null and build_system.can_stand_at(current_build_type, cell):
 			out.append(cell)
 	return out
+
+## How a run goes down, in the order it was dragged: the sections he can get to, paid for while the
+## stock lasts ("going": white in the preview, laid on release); the ones he can get to that the stock
+## does not stretch to ("short"); and the ones he cannot get to ("unreached"). Both of those are red,
+## and neither is laid -- what goes down is what was white (v0.6 round six: "连续建造的时候，如果材料
+## 不够的pending就显示红色，然后点击会提示没法造材料不够，这样不会出现造下去的比pending的少").
+func _run_plan(cells: Array[Vector2i]) -> Dictionary:
+	var budget: int = build_system.affordable_count(current_build_type) if build_system != null else 0
+	var going: Array[Vector2i] = []
+	var short: int = 0
+	var unreached: int = 0
+	for cell in cells:
+		if not _can_reach_cell(cell):
+			unreached += 1
+		elif going.size() < budget:
+			going.append(cell)
+		else:
+			short += 1
+	return {"going": going, "short": short, "unreached": unreached}
 
 ## The way a run dragged to the cursor faces: along the longer of its two spans -- a section of it
 ## standing alone (a rock either side) runs the way the rest of the line does.
@@ -1569,23 +1589,24 @@ func _show_run_preview(cells: Array[Vector2i]) -> void:
 	_run_preview.name = "RunPreview"
 	add_child(_run_preview)
 	var faces: int = _run_facing(get_viewport().get_mouse_position())
-	var going_up: Array[Vector2i] = []
+	var plan: Dictionary = _run_plan(cells)
+	var going_up: Array[Vector2i] = plan["going"]
 	for cell in cells:
 		var body: Node3D = Building.make_body(current_build_type)
 		body.position = grid_manager.build_cell_to_world(cell)
 		# Dressed as it will stand: joined to the rest of the run and to what is already built.
 		_dress_ghost(body, cell, cells, faces)
-		# A section he cannot get to is shown, red, and not laid (try_place_at_cell).
-		var reached: bool = _can_reach_cell(cell)
-		if reached:
-			going_up.append(cell)
+		# A section he cannot get to, or past what the stock pays for, is shown red and not laid.
+		var going: bool = going_up.has(cell)
 		for mi in _meshes_in(body):
-			mi.material_override = _make_preview_material(Color.WHITE if reached else Color(1.0, 0.3, 0.25))
+			mi.material_override = _make_preview_material(Color.WHITE if going else Color(1.0, 0.3, 0.25))
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_run_preview.add_child(body)
 	_preview_neighbours(going_up)
 	# What it will cost, before the wood is spent rather than after -- or why some of it will not go.
-	if going_up.size() < cells.size():
+	if int(plan["short"]) > 0:
+		_hint("HINT_RUN_SHORT", [going_up.size(), going_up.size() + int(plan["short"])])
+	elif int(plan["unreached"]) > 0:
 		_hint("HINT_UNREACHABLE")
 	else:
 		_hint_run(cells.size())
@@ -1607,22 +1628,34 @@ func _hint_run(count: int) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 		hud.show_hint(tr("HINT_DRAG_RUN") % [count, ", ".join(parts)])
 
-## Lays the whole run, in the order it was dragged.
+## Lays the run, in the order it was dragged: what the preview showed white (_run_plan), and
+## no more -- the sections past what the stock pays for are not laid, and that is said, the
+## same words as a click with too little in hand.
 ##
 ## Each stake goes down through the same call a single click makes, so paying for it,
 ## registering it on the grid, telling the Hero and rebaking the navigation mesh all
-## happen exactly as they always did -- and the run simply stops when one of them says no,
-## which is how it stops when the wood runs out.
+## happen exactly as they always did.
 func _commit_run(cells: Array[Vector2i], faces: int = -1) -> int:
 	if cells.is_empty():
 		return 0
+	var plan: Dictionary = _run_plan(cells)
+	var going: Array[Vector2i] = plan["going"]
 	var laid: int = 0
 	for cell in cells:
 		if current_build_type == "":
 			break                          # the wallet emptied and build mode dropped
+		# A section he cannot get to goes through too, to be refused and said (try_place_at_cell).
+		if not going.has(cell) and _can_reach_cell(cell):
+			continue
 		var at: Vector3 = grid_manager.build_cell_to_world(cell)
 		if try_place_at_cell(grid_manager.world_to_cell(at), at, faces) != null:
 			laid += 1
+	var short: int = int(plan["short"])
+	if short > 0:
+		if laid == 0:
+			_hint("HINT_NO_RESOURCES")
+		else:
+			_hint("HINT_RUN_SHORT_LAID", [laid, short])
 	_reach_asked.clear()
 	return laid
 
@@ -1757,9 +1790,9 @@ func _map() -> Dictionary:
 	var cfg = _get_config()
 	return cfg.map_data() if (cfg and cfg.has_method("map_data")) else {}
 
-func _hint(key: String) -> void:
+func _hint(key: String, args: Array = []) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
-		hud.show_hint(tr(key))
+		hud.show_hint(tr(key) % args if not args.is_empty() else tr(key))
 
 ## Why he cannot cut `node` yet: which tool, where it is made, what it costs.
 func _hint_need_tool(node: Node) -> void:

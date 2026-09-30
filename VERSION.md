@@ -1481,6 +1481,12 @@
     - 还剩多久：右上角信标卡片最后一行灰色小字"15 秒后来袭"（`HUD.raid_line`，`MutedLabel`，前面一个小恐龙图标），每帧跟着来袭自己的钟走（`WaveManager.warned_raid_in`：时钟的来袭和修信标招来的那波，谁先到算谁），暂停就停、加速就快——原来横幅上的秒数从头到尾不动。最后一波的"最后一波：N 秒后到"也在这一行。没有信标、没有钉目标时，卡片为倒数单独出来（`HUD._refresh_objective_panel`）。
     - 预警以后到了来袭者歇着的时辰（腔骨龙黄昏回巢），这波先取消、倒数收起，等它们再出来重新预警（`WaveManager._process` 发 `raid_warning(0)`）。原来横幅整夜停在最后那个秒数上。
     - 测试：新 `test_v06_heard_not_shouted.gd`（5 条：没有横幅，卡片里一行灰字；跟着来袭的钟倒数、出发了就收；歇着的时辰取消、再出来重新预警；一句说完才说下一句，台词里填了方向；倒下了没说完的不说）。`test_v06_the_fog` 第 7 条、`test_v06_the_runner` 第 4、5 条、`test_v06_bosses` 第 5 条从读横幅改成听他说；`test_v06_the_beacon_is_heard` 第 7 条读 `raid_line`；`test_v06_the_frames` 去掉 `BannerPanel`；`test_v06_the_valley_heard` 里听他说话的都多收一个参数。
+  - **拖一排栅栏，材料不够的那几段是红的，造下去的就是白的那几段**（玩家，2026-09-30："连续建造的时候，如果材料不够的pending就显示红色，然后点击会提示没法造材料不够，这样不会出现造下去的比pending的少"；设计书 2）：
+    - 原来拖的时候每格只问"够不够造一段"（`BuildSystem.can_place_at`），拖 10 段、木头够 3 段，预览 10 段全是白的，松手只造出 3 段。
+    - 现在拖出来的格子只看地面（新的 `BuildSystem.can_stand_at`：空地、游戏还在进行，不管价钱）；材料按拖的顺序一段一段算（`Main._run_plan`，库存够几段用新的 `BuildSystem.affordable_count`：最缺的那样材料说了算）：够的白、不够的红（走不到的照旧红），上面写"材料只够 3 段（拉了 10 段）——红色的造不了"（`HINT_RUN_SHORT`）。
+    - 松手只造白的那几段（`Main._commit_run` 按同一个计划），不够的说"造了 3 段，还有 7 段材料不够，没法造"（`HINT_RUN_SHORT_LAID`），一段都不够就是"资源不足，无法建造！"（`HINT_NO_RESOURCES`，和单点一样）。`Main._hint` 多了参数 `args`。
+    - playtest 场景 `ghost` 多一张 `ghost_short`（材料够 2 段、拉 6 段）。
+    - 测试：新 `test_v06_no_more_than_was_shown.gd`（5 条：够 3 段拉一长排，前 3 段白、后面红、有提示；松手造 3 段、说剩下的材料不够；一点材料没有全红、一段不造、说资源不足；够 1、2、5 段时造出来的和白的一样多；库存按最缺的材料算，没材料也能摆出红的但放不下）。
 
 ## v0.x 远期构想（不排期，仅记录）
 

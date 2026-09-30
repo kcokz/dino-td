@@ -67,6 +67,21 @@ func build_cell_for(cell: Vector2i, at_world: Variant = null) -> Vector2i:
 ## moment of its building (Building.add_build_progress) -- with the Hero stepping out of what he is
 ## raising before he raises it (Hero._process_building).
 func can_place_at(type_id: String, build_cell: Vector2i) -> bool:
+	if not can_stand_at(type_id, build_cell):
+		return false
+	var gs = _get_game_state()
+	var cost: Dictionary = _get_config().BUILDINGS[type_id].get("cost", {})
+	if gs.has_method("can_afford"):
+		return gs.can_afford(cost)
+	for r in cost:
+		if gs.resources.get(r, 0) < int(cost[r]):
+			return false
+	return true
+
+## Whether a `type_id` could stand with its middle in build cell `build_cell` -- every cell of it free
+## ground, and the game on -- the price aside. A run dragged further than the stock stretches is laid
+## out over all of it, and the sections past the stock are shown red (Main._run_plan).
+func can_stand_at(type_id: String, build_cell: Vector2i) -> bool:
 	if type_id.is_empty():
 		return false
 	var cfg = _get_config()
@@ -79,7 +94,6 @@ func can_place_at(type_id: String, build_cell: Vector2i) -> bool:
 	var cells: Array[Vector2i] = grid_manager.footprint_cells(type_id, build_cell)
 	if not grid_manager.can_build_on(cells):
 		return false
-
 	var gs = _get_game_state()
 	if gs == null:
 		return false
@@ -87,13 +101,29 @@ func can_place_at(type_id: String, build_cell: Vector2i) -> bool:
 		return false
 	if "current_phase" in gs and int(gs.current_phase) != 0:
 		return false
-	var cost: Dictionary = cfg.BUILDINGS[type_id].get("cost", {})
-	if gs.has_method("can_afford"):
-		return gs.can_afford(cost)
-	for r in cost:
-		if gs.resources.get(r, 0) < int(cost[r]):
-			return false
 	return true
+
+## How many of `type_id` the stock pays for, one after another: as many as the scarcest of its
+## materials stretches to (GameState.can_afford for the first). A building that costs nothing has
+## no end to them.
+func affordable_count(type_id: String) -> int:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or gs == null or not ("BUILDINGS" in cfg) or not cfg.BUILDINGS.has(type_id):
+		return 0
+	var cost: Dictionary = cfg.BUILDINGS[type_id].get("cost", {})
+	if gs.has_method("can_afford") and not gs.can_afford(cost):
+		return 0
+	var most: int = -1
+	for res_id in cost:
+		var each: int = int(cost[res_id])
+		if each > 0:
+			var n: int = floori(float(gs.resources.get(res_id, 0)) / float(each))
+			most = n if most < 0 else mini(most, n)
+	return most if most >= 0 else NO_END
+
+## "No end to them": more than any run is long (Config.BUILD_DRAG.max_run).
+const NO_END: int = 1 << 30
 
 ## Validates whether a building of type_id can be placed at a map tile -- at the build cell
 ## under `at_world` when it is given, or in the middle of the tile.
