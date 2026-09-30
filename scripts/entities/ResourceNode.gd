@@ -109,6 +109,10 @@ func harvest(amount: int = 1) -> int:
 	var work: int = strokes_each()
 	if work > 1:
 		_struck += maxi(0, amount)
+		# Every stroke of a search is heard (Din: the din of metal carries).
+		var eb_din = _get_event_bus()
+		if eb_din and eb_din.has_signal("wreck_struck"):
+			eb_din.wreck_struck.emit(self, mini(_struck, work), work)
 		if _struck >= work:
 			_struck = 0
 			yield_amt = 1

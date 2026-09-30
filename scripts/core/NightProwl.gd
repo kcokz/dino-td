@@ -51,8 +51,14 @@ func _process(delta: float) -> void:
 	if _clock > 0.0:
 		return
 	_clock = _number("every", 18.0)
+	# In pairs (PROWL.pair): the second up beside the first.
 	if out_now() < most_now():
-		send_one()
+		var first: Node = send_one()
+		if first != null:
+			for k in range(1, maxi(1, int(_number("pair", 1)))):
+				if out_now() >= most_now():
+					break
+				send_one_from((first as Node3D).global_position + Vector3(0.0, 0.0, 1.2 * float(k)))
 
 ## Whether it is the hours one of the map's prowlers keeps.
 func prowling_hours() -> bool:
@@ -101,6 +107,11 @@ func send_one() -> Node:
 	var at: Variant = _next_origin()
 	if at == null:
 		return null
+	return send_one_from(at)
+
+## One up out of the river at `at`, seen or not -- a wreck's din brings one up where it is heard (Din) --
+## heading for the cabin.
+func send_one_from(at: Vector3) -> Node:
 	var species: String = _species()
 	var cfg = get_node_or_null("/root/Config")
 	if species == "" or cfg == null:

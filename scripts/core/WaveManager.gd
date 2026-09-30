@@ -712,7 +712,8 @@ func _on_dino_died(_dino: Node) -> void:
 		return
 	# Only the raid's own: a nest's guard killed in the middle of a raid, or a night's hunter (NightProwl),
 	# is not one of it -- and was counted off it, so a raid could be over with its animals still out.
-	if _dino != null and is_instance_valid(_dino) and (_dino.is_in_group("guard_dinos") or _dino.is_in_group("prowlers")):
+	if _dino != null and is_instance_valid(_dino) and (_dino.is_in_group("guard_dinos") or _dino.is_in_group("prowlers") \
+			or _dino.is_in_group("drawn")):
 		return
 
 	dinos_alive_count = maxi(0, dinos_alive_count - 1)

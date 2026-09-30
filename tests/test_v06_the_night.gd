@@ -118,7 +118,8 @@ func test_03_at_night_one_comes_up_and_makes_for_the_cabin() -> void:
 	_set_clock(_at("night") + 1.0)
 	prowl._process(0.0)
 	prowl._process(float(_prowl()["first_after"]) + 0.1)
-	assert_eq(prowl.out_now(), 1, "A while into the night one comes up")
+	# In pairs since v0.6 round five ("成对出现"): the first up, and the second beside it.
+	assert_eq(prowl.out_now(), mini(int(_prowl()["pair"]), prowl.most_now()), "A while into the night a pair comes up")
 	var d: Node = tree.get_nodes_in_group(ProwlerDino.GROUP)[0]
 	var near_one: bool = false
 	for at in prowl.origins:
@@ -355,3 +356,33 @@ func test_14_its_eyes_are_two_points_up_close_and_one_seen_from_afar() -> void:
 			assert_gt(across, 0.1, "From the game's distance, one glint big enough to see (%.2f m)" % across)
 			# And no lamp (the player's report, 2026-09-29: "两个眼睛太亮了，有点像两个灯泡").
 			assert_lt(across, 0.2, "but a point, not a lamp (%.2f m)" % across)
+
+func test_15_in_the_dark_it_smells_the_man_from_far_off_and_a_torch_keeps_it_off() -> void:
+	# The player's choice, v0.6 round five: "植龙专找黑里的人" -- "没火的人是植龙的首要目标：闻到就来……举着火把就
+	# 不敢近身". It was 8 metres, and a man out in the dark was left be.
+	var main = await _level()
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	_set_clock(_at("night") + 10.0)
+	var reach: float = float(_prowl()["hunts_within"])
+	assert_gte(reach, 20.0, "(it smells him from across a good part of the field)")
+	var d = _phytosaur(main, main.hero.global_position + Vector3(reach * 0.8, 0.0, 0.0))
+	assert_eq(d._preferred_target(), main.hero, "The man in the dark, far off, is what it is out for")
+	stock_everything()
+	assert_true(main.hero.light_torch(), "(a torch alight in his hand)")
+	assert_ne(d._preferred_target(), main.hero, "Lit, he is not")
+
+func test_16_they_come_up_in_pairs_tougher_than_they_were() -> void:
+	var main = await _level()
+	var prowl: NightProwl = main.night_prowl
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position
+	_set_clock(_at("night") + 30.0)
+	prowl._was_out = true
+	prowl._clock = 0.0
+	var before: int = prowl.out_now()
+	prowl._process(0.01)
+	assert_eq(prowl.out_now() - before, int(_prowl()["pair"]), "They come up %d at a time" % int(_prowl()["pair"]))
+	var row: Dictionary = config_node.DINOS[_species()]
+	var pack: Dictionary = config_node.DINOS["coelophysis"]
+	assert_gte(float(row["hp"]), float(pack["hp"]) * 4.0, "Four of a Coelophysis's hit points (\"更抗打\")")
+	assert_gte(float(row["damage"]), float(pack["damage"]) * 2.0, "and twice its bite (\"咬得更疼\")")

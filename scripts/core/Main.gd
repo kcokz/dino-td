@@ -113,6 +113,8 @@ var nav_maps: NavMaps = null
 var run_stats: RunStats = null
 ## The night's hunters, up from the river (NightProwl, GAME-DESIGN 9.3).
 var night_prowl: NightProwl = null
+## What a wreck's din brings when it is searched (Din, GAME-DESIGN 9.3).
+var din: Din = null
 
 ## The fog of war over the field (FogOfWar, GAME-DESIGN 9.3), laid afresh for each run.
 var fog: FogOfWar = null
@@ -276,6 +278,14 @@ func _ensure_scene_dependencies() -> void:
 		night_prowl.name = "NightProwl"
 		add_child(night_prowl)
 	night_prowl.dinos_container = dinos_container
+	# What a wreck's din brings (Din): out of the river, the guards woken, a few in from the edge.
+	if din == null:
+		din = Din.new()
+		din.name = "Din"
+		add_child(din)
+	din.night_prowl = night_prowl
+	din.wave_manager = wave_manager
+	din.dinos_container = dinos_container
 
 	# 6. Discover Path Waypoints
 	_discover_waypoints()
@@ -2102,6 +2112,8 @@ func restart_game() -> void:
 		run_stats.reset()
 	if night_prowl and is_instance_valid(night_prowl):
 		night_prowl.reset()
+	if din and is_instance_valid(din):
+		din.reset()
 
 	# 1. Reset GameState (AP, resources, multipliers, wave, phase, game_over flag)
 	var gs = _get_game_state()

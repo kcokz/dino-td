@@ -887,11 +887,18 @@ const PROWL: Dictionary = {
 	# metres of the cabin, `most_dark` without ("不点火，夜里摸上来的就多"). The night is 90 s (DAY).
 	"first_after": 8.0,
 	"every": 18.0,
-	"most_lit": 1,
-	"most_dark": 3,
+	# They come up in pairs (`pair` at a time; v0.6 round five, the player chose "植龙专找黑里的人": "成对出现"),
+	# so as many may be out as two pairs in the dark and one by a fire.
+	"most_lit": 2,
+	"most_dark": 4,
+	"pair": 2,
 	"lit_within": 10.0,
-	# It goes for the Hero when he is this near and in the dark ("直接冲着人和基地来").
-	"hunts_within": 8.0,
+	# It goes for the Hero when he is this near and in the dark ("直接冲着人和基地来") -- smelt from this far, the
+	# man in the dark is what it is out for (v0.6 round five, the player: "晚上人跑到野外目前也没什么危险，是有恐龙但
+	# 没多少会进攻人（没点火把的情况下）" -- chosen "植龙专找黑里的人": "没火的人是植龙的首要目标：闻到就来"). It was
+	# 8 m, and a man out in the dark was left be. Lit -- a torch in his hand, a fire's light on him -- it will
+	# not come in (lights).
+	"hunts_within": 28.0,
 	# How it keeps out of a light (FIRE; the torch): it stands `edge_inside` metres inside the light's
 	# edge -- dimly lit there, and seen -- and backs out, at `back_out_pace` of its speed, when it finds
 	# itself further in than `flee_inside`. Along the edge it paces: `pace_step_degrees` round at a time,
@@ -932,6 +939,9 @@ const PROWL: Dictionary = {
 	# `glint_size` -- two small points up close, one still seen at the game's distance.
 	"glint_per_metre": 0.005,
 	"glint_least": 0.03,
+	# Brought up out of the river by a wreck's din by day (Din), out of its hours: it goes back to the river
+	# once it has not had the man within its reach for this long (seconds).
+	"drawn_linger": 20.0,
 }
 
 ## What every fire shares (BUILDINGS kind "fire", Fire.gd), and the torch in his hand (Hero).
@@ -1154,9 +1164,11 @@ const DINOS: Dictionary = {
 		# Out at night (9.3: crocodiles "傍晚到入夜后打猎，夜里还会在离水五十米内的岸上埋伏").
 		"hours": ["night"],
 		"name": "DINO_PHYTOSAUR_NAME",
-		"hp": 8.0,
+		# Tougher and harder-biting than it was (v0.6 round five: "咬得更疼、更抗打" -- it was 8 and 1.2, and "人还能
+		# 把那个恐龙干掉"): four of a Coelophysis's hit points, twice its bite. A man in the dark is its meat.
+		"hp": 12.0,
 		"speed": 3.0,
-		"damage": 1.2,
+		"damage": 1.8,
 		"attack_rate": 0.8,
 		"behaviour": "prowl",
 		"drops": {"food": 2, "bone": 1},
@@ -2910,6 +2922,9 @@ const RESOURCE_NODES: Dictionary = {
 		"hint": "NODE_HINT_WRECK",
 		"depleted_text": "STATUS_SEARCHED",
 		"found": "SOURCE_ANTENNA",
+		# Its din (Din; v0.6 round five, the player chose "翻找的响声引来附近的恐龙"): at these strokes of the
+		# search, phytosaurs up out of the river by it -- by day too -- one at the third, one more at the seventh.
+		"din": {"draws": "river", "at": [3, 7], "count": [1, 1]},
 		"color": Color(0.75, 0.76, 0.78),
 		"depleted_color": Color(0.35, 0.35, 0.36),
 		"size": Vector3(3.0, 1.5, 3.0),
@@ -2927,6 +2942,9 @@ const RESOURCE_NODES: Dictionary = {
 		"hint": "NODE_HINT_WRECK",
 		"depleted_text": "STATUS_SEARCHED",
 		"found": "SOURCE_BATTERY",
+		# Its din: the sleeping guards at the nest nearest it woken, one at a time -- asleep at night they
+		# come one by one; awake by day they are on him already.
+		"din": {"draws": "guards", "at": [3, 6, 9], "count": [1, 1, 1]},
 		"color": Color(0.75, 0.76, 0.78),
 		"depleted_color": Color(0.35, 0.35, 0.36),
 		"size": Vector3(3.0, 1.5, 3.0),
@@ -2944,6 +2962,8 @@ const RESOURCE_NODES: Dictionary = {
 		"hint": "NODE_HINT_WRECK",
 		"depleted_text": "STATUS_SEARCHED",
 		"found": "SOURCE_BOARD",
+		# Its din: a few of the valley's raiders in from the nearest way in, by day -- one, then two.
+		"din": {"draws": "edge", "at": [3, 7], "count": [1, 2]},
 		"color": Color(0.75, 0.76, 0.78),
 		"depleted_color": Color(0.35, 0.35, 0.36),
 		"size": Vector3(3.0, 1.5, 3.0),

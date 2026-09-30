@@ -21,6 +21,10 @@ const GROUP: String = "prowlers"
 
 ## Where it came up out of the river: where it goes back to at first light.
 var home: Vector3 = Vector3.INF
+## Brought up by a wreck's din (Din), whatever the hour: out of its hours it goes back to the river once the
+## man has been out of its reach PROWL.drawn_linger seconds.
+var drawn: bool = false
+var _drawn_idle: float = 0.0
 ## The light whose edge it keeps to, {"at": Vector3, "radius": float}, or empty in the dark.
 var _wary: Dictionary = {}
 ## Whether it is inside that light further than it will stand, and backing out.
@@ -88,6 +92,14 @@ func _think() -> void:
 	if going_home:
 		super._think()
 		return
+	if drawn and not _its_hours():
+		if _hero_within(hero_interest_range()) != null:
+			_drawn_idle = 0.0
+		else:
+			_drawn_idle += _ai("think_seconds", 0.25)
+			if _drawn_idle >= _prowl("drawn_linger", 20.0):
+				go_home(home)
+				return
 	if at_bay_left > 0.0:
 		# At bay: no light holds it back.
 		_keep_to({}, false)
@@ -310,6 +322,14 @@ static func light_over(tree: SceneTree, point: Vector3, margin: float = 0.0) -> 
 # ==============================================================================
 # Going home
 # ==============================================================================
+
+## Whether it is its hours (Config.DINOS.<id>.hours): the phytosaur's are the night's.
+func _its_hours() -> bool:
+	var gs = get_node_or_null("/root/GameState")
+	var cfg = _get_config()
+	if gs == null or cfg == null or not gs.has_method("day_part"):
+		return true
+	return bool(cfg.keeps_hours(dino_type, String(gs.day_part())))
 
 ## Its hours over: back to the river it came up from, whatever it is told (the raids' manager says the
 ## nest).

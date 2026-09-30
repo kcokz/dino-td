@@ -247,7 +247,8 @@ func _bus_handlers(eb: Node) -> Array:
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
 			["unlock_granted", _on_unlock_granted], ["hero_spoke", _on_hero_spoke],
 			["final_wave_warning", _on_final_wave_warning],
-			["material_discovered", _on_material_discovered], ["goal_changed", _on_goal_changed]]:
+			["material_discovered", _on_material_discovered], ["goal_changed", _on_goal_changed],
+			["din_carried", _on_din_carried]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
 	return out
@@ -361,6 +362,10 @@ func _refresh_goal(res: Dictionary = {}) -> void:
 	goal_label.modulate = UiTheme.color("accent") if short.is_empty() else Color.WHITE
 	if objective_panel:
 		objective_panel.visible = true
+
+## A wreck's din has brought something (Din): what the noise did, once a search.
+func _on_din_carried(_wreck: Node, draws: String) -> void:
+	show_hint(tr("HINT_DIN_" + draws.to_upper()), UiTheme.toast_seconds("read"), "warning")
 
 func _on_goal_changed(_goal: Dictionary) -> void:
 	_refresh_goal()

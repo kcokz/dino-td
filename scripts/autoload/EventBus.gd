@@ -173,6 +173,13 @@ signal resource_dropped(res_id: String, amount: int, world_pos: Vector3)
 ## was made.
 signal unlock_granted(unlock_id: String)
 
+## Emitted at every stroke of a wreck's search (ResourceNode.harvest): `struck` of its `strokes` so far --
+## what its din carries to (Din).
+signal wreck_struck(wreck: Node, struck: int, strokes: int)
+
+## Emitted the first time in a search its din brings something (Din): what -- "river", "guards", "edge".
+signal din_carried(wreck: Node, draws: String)
+
 ## Emitted when the player pins a goal, or unpins it (GameState.goal): the material bar counts
 ## against its price (GAME-DESIGN 6.0 rule 4).
 signal goal_changed(goal: Dictionary)
