@@ -38,6 +38,10 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"deaths": await _p_deaths()
+			"anim_shots": await _p_anim_shots()
+			"faces_banner": await _p_faces_banner()
+			"sounds": await _p_sounds()
 			"hand_map": await _p_hand_map()
 			"prowl_hunt": await _p_prowl_hunt()
 			"din_search": await _p_din_search()
@@ -4998,6 +5002,318 @@ func _count_ones(a) -> int:
 			if b != 0:
 				n += 1
 	return n
+
+## TASK-029 (e7462eb) 1-4: the sculpted cast at work -- a raid walking and biting at the cabin, three of it
+## dying (two frames each), a runner, a phytosaur at night with its eyes (where they are on it), the nest's
+## guards asleep, the herbivores far off. Pictures, and each eye's place on its animal in numbers.
+func _p_anim_shots() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	_main.fog.reveal_all()
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(5.0)
+	var came: Array = []
+	var on_come := func(d):
+		if not d.is_in_group("guard_dinos") and not d.is_in_group("prowlers"):
+			came.append(d)
+			d.max_hp = 9999.0
+			d.current_hp = 9999.0
+	eb.dino_spawned.connect(on_come)
+	wm.start_wave(3, 8)
+	await _advance(7.0)
+	if not came.is_empty() and is_instance_valid(came[0]):
+		_look_at(came[0].global_position, 6.0)
+		await _shoot("raid_walking")
+	var t := 0.0
+	while t < 30.0:
+		await _advance(0.25)
+		t += 0.25
+		var biting: Node = null
+		for d in came:
+			if is_instance_valid(d) and int(d.mode) == 2:
+				biting = d
+		if biting != null:
+			_look_at(biting.global_position, 5.0)
+			await _advance(0.1)
+			await _shoot("raid_biting")
+			break
+	var k := 0
+	for d in came:
+		if k >= 3 or not is_instance_valid(d) or d.is_dead:
+			continue
+		k += 1
+		var at: Vector3 = d.global_position
+		d.take_damage(99999.0)
+		_look_at(at, 5.0)
+		await _advance(0.3)
+		await _shoot("death_%d_a" % k)
+		await _advance(1.0)
+		await _shoot("death_%d_b" % k)
+	for d in came:
+		if is_instance_valid(d):
+			d.queue_free()
+	# The runner.
+	hero.global_position = core + Vector3(-4.0, 0.0, 9.0)
+	hero.order_stop()
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	var r = load(String(cfg.get_dino_script_path("hesperosuchus"))).new()
+	_main.add_child(r)
+	r.setup("hesperosuchus")
+	r.max_hp = 999.0
+	r.current_hp = 999.0
+	r.global_position = hero.global_position + Vector3(-12.0, 0.0, 0.0)
+	r.set_waypoints([core])
+	await _advance(0.9)
+	_look_at(r.global_position, 5.0)
+	await _shoot("runner_running")
+	await _advance(1.8)
+	_look_at(r.global_position, 4.0)
+	await _shoot("runner_biting")
+	var rat: Vector3 = r.global_position
+	r.take_damage(99999.0)
+	await _advance(0.4)
+	_look_at(rat, 4.0)
+	await _shoot("runner_dying")
+	await _advance(1.2)
+	await _shoot("runner_dead")
+	# A phytosaur at night, and its eyes.
+	gs.day_clock = 300.0
+	var o: Array[Vector3] = [core + Vector3(-12.0, 0.0, 0.0)]
+	_main.night_prowl.origins = o
+	var p = _main.night_prowl.send_one()
+	await _advance(2.0)
+	var eyes: Array = []
+	var fwd: Vector3 = -p.global_transform.basis.z
+	for m in p.find_children("*", "MeshInstance3D", true, false):
+		if String(m.name).to_lower().contains("eye") or (m.get_surface_override_material(0) != null and String(m.get_surface_override_material(0).resource_name).to_lower().contains("eye")):
+			var off: Vector3 = (m as MeshInstance3D).global_transform * (m as MeshInstance3D).get_aabb().get_center() - p.global_position
+			eyes.append("%s: forward %.2f, side %.2f, up %.2f" % [m.name, off.dot(fwd), off.dot(p.global_transform.basis.x), off.y])
+	var body_len: float = float(cfg.get_visual_size("dino/phytosaur").z) if cfg.has_method("get_visual_size") else -1.0
+	_say("INFO", "phytosaur eyes (body %.1f m long, facing %s): %s; eye_shine %.2f" % [body_len, str(fwd), "; ".join(eyes), float(p.get("eye_shine"))])
+	_look_at(p.global_position, 5.0)
+	await _shoot("phytosaur_night_walk")
+	# The nest's guards asleep.
+	gs.day_clock = 310.0
+	await _advance(3.0)
+	var nest: Vector3 = wm.nest_spawn_position
+	_look_at(nest, 8.0)
+	await _advance(0.3)
+	var gstates: Array = []
+	for g in get_nodes_in_group("guard_dinos"):
+		gstates.append(str(g.debug_state().get("guard", {}).get("state", "?")))
+	_say("INFO", "guards at night: %s" % str(gstates))
+	await _shoot("guards_asleep")
+	# The herbivores far off, by day.
+	gs.day_clock = 360.0 + 120.0
+	var herd: Node3D = null
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not d.is_in_group("prowlers") and not d.is_in_group("raiders") and String(d.get("dino_type")) not in ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur"]:
+			herd = d
+			break
+	if herd == null:
+		for n in get_nodes_in_group("herbivores"):
+			herd = n
+			break
+	if herd != null:
+		_look_at(herd.global_position, 10.0)
+		await _advance(0.5)
+		await _shoot("herd_near")
+		_look_at(herd.global_position, 30.0)
+		await _advance(0.3)
+		await _shoot("herd_far")
+		_say("INFO", "herd: a %s at %s" % [str(herd.get("dino_type")) if "dino_type" in herd else herd.name, str(herd.global_position)])
+	else:
+		_say("INFO", "herd: none found")
+
+## TASK-029 5, 6: faces and the banner. The alpha's coming said (with its face); a raid warned while a
+## building's card is up (the banner and its details against the card); the final wave's countdown; the
+## defeat screen of a man bitten to death by a phytosaur.
+func _p_faces_banner() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var hud = _main.hud
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	# A raid warned with a building's card up.
+	var wall = _build_at("set_crossbow", _main.grid_manager.world_to_build_cell(core + Vector3(5.0, 0.0, 5.0)))
+	eb.unit_selected.emit(wall)
+	await _advance(0.5)
+	gs.wave_number = 5
+	wm.auto_raid_enabled = true
+	wm.raid_timer = 16.0
+	var t := 0.0
+	var shot := false
+	while t < 8.0:
+		await _advance(0.25)
+		t += 0.25
+		var b: Control = hud.get("raid_warning_banner")
+		var dt: Control = hud.get("raid_warning_details")
+		if not shot and b != null and b.is_visible_in_tree():
+			shot = true
+			var panel: Node = _find_with_method(root, "_show_abilities")
+			var card: Rect2 = (panel as Control).get_global_rect() if panel is Control else Rect2()
+			_say("INFO", "banner with a card up: banner %s '%s'; details %s '%s'; card %s; banner over the card %s, details over the card %s" % [str(b.get_global_rect()), String(b.text).replace("\n", " / ").left(80), str(dt.get_global_rect()) if dt else "-", String(dt.text).replace("\n", " / ").left(80) if dt else "-", str(card), str(b.get_global_rect().intersects(card)), str(dt.get_global_rect().intersects(card)) if dt else "-"])
+			await _shoot("banner_with_card")
+	# The alpha's coming said with its face.
+	var said_alpha := false
+	t = 0.0
+	while t < 20.0 and not said_alpha:
+		await _advance(0.25)
+		t += 0.25
+		for l in _visible_labels("Alpha"):
+			said_alpha = true
+		for l in _visible_labels("头领"):
+			said_alpha = true
+		if said_alpha:
+			await _shoot("alpha_said")
+	_say("INFO", "the alpha's coming said: %s" % said_alpha)
+	eb.unit_deselected.emit()
+	wm.auto_raid_enabled = false
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos"):
+			d.queue_free()
+	await _advance(1.0)
+	# The final wave's countdown.
+	if wm.has_method("_on_beacon_launched"):
+		wm._on_beacon_launched()
+		await _advance(1.0)
+		var b2: Control = hud.get("raid_warning_banner")
+		_say("INFO", "final wave countdown: banner shown %s '%s'; final_wave_in %.1f" % [b2.is_visible_in_tree() if b2 else false, String(b2.text).replace("\n", " / ").left(80) if b2 else "", float(gs.final_wave_in)])
+		await _shoot("final_countdown")
+	# Bitten to death by a phytosaur: the defeat screen.
+	wm.final_wave = false
+	wm.set("_final_countdown", 0.0)
+	gs.day_clock = 300.0
+	hero.global_position = core + Vector3(-8.0, 0.0, 6.0)
+	hero.order_stop()
+	hero.max_hp = 10.0
+	hero.current_hp = 2.0
+	var o: Array[Vector3] = [hero.global_position + Vector3(-2.0, 0.0, 0.0)]
+	_main.night_prowl.origins = o
+	_main.night_prowl.send_one()
+	t = 0.0
+	while t < 20.0 and int(hero.current_state) != 4:
+		await _advance(0.25)
+		t += 0.25
+	await _advance(2.5)
+	_say("INFO", "defeat: he dead %s after %.1f s" % [int(hero.current_state) == 4, t])
+	await _shoot("defeat_screen")
+
+## TASK-029 7: the sounds, as far as they can be seen: a lit campfire's crackle playing and not once it is
+## out; the night's mix over the dusk, night and dawn (Fx.night_mix); a landing phytosaur's splash; with
+## the game paused, which players stop.
+func _p_sounds() -> void:
+	var gs := root.get_node("GameState")
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	var fx: Node = root.get_node_or_null("Fx")
+	gs.resources["wood"] = 20
+	var camp = _build_at("campfire", _main.grid_manager.world_to_build_cell(core + Vector3(0.0, 0.0, 6.0)))
+	var mix: Array = []
+	for clk in [100.0, 240.0, 265.0, 290.0, 330.0, 360.0 + 5.0, 360.0 + 20.0, 360.0 + 40.0]:
+		gs.day_clock = clk
+		await _advance(1.0)
+		var players: Array = []
+		for pl in camp.find_children("*", "AudioStreamPlayer3D", true, false):
+			players.append("%s %s" % [pl.name, "on" if (pl as AudioStreamPlayer3D).playing else "off"])
+		mix.append("%.0f %s: mix %s, fire lit %s [%s]" % [clk, gs.day_part(), str(snappedf(float(fx.night_mix()), 0.01)) if (fx and fx.has_method("night_mix")) else "?", camp.lit, ", ".join(players)])
+	for m in mix:
+		_say("INFO", "sound: " + m)
+	# A phytosaur landing: what starts playing near where it comes up.
+	gs.day_clock = 300.0
+	await _advance(0.5)
+	var o: Array[Vector3] = [core + Vector3(-12.0, 0.0, 0.0)]
+	_main.night_prowl.origins = o
+	var before := {}
+	for pl in _all(root):
+		if pl is AudioStreamPlayer3D and (pl as AudioStreamPlayer3D).playing:
+			before[pl.get_instance_id()] = true
+	_main.night_prowl.send_one()
+	await _advance(0.3)
+	var fresh: Array = []
+	for pl in _all(root):
+		if pl is AudioStreamPlayer3D and (pl as AudioStreamPlayer3D).playing and not before.has(pl.get_instance_id()):
+			var st: AudioStream = (pl as AudioStreamPlayer3D).stream
+			fresh.append("%s at %s (%s)" % [pl.name, str((pl as Node3D).global_position), st.resource_path.get_file() if st else "?"])
+	_say("INFO", "sound: a phytosaur up at %s -- new sounds: %s" % [str(o[0]), str(fresh)])
+	# Paused.
+	paused = true
+	await process_frame
+	await process_frame
+	var on_3d := 0
+	var on_2d := 0
+	for pl in _all(root):
+		if pl is AudioStreamPlayer3D and (pl as AudioStreamPlayer3D).playing and not (pl as AudioStreamPlayer3D).stream_paused and pl.can_process():
+			on_3d += 1
+		if pl is AudioStreamPlayer and (pl as AudioStreamPlayer).playing and pl.can_process():
+			on_2d += 1
+	paused = false
+	_say("INFO", "sound: paused -- world (3D) players still going %d; flat (2D, the ambience) going %d" % [on_3d, on_2d])
+
+## TASK-029 1: each of the stage's kinds set down in the open by day, the fog lifted, and killed: a frame
+## as it falls and one when it lies still, 5 m off; and a close look at one walking.
+func _p_deaths() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 120.0
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	_main.fog.reveal_all()
+	var i := 0
+	for sp in ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur", "postosuchus"]:
+		var at: Vector3 = core + Vector3(-14.0 + 7.0 * float(i), 0.0, 12.0)
+		i += 1
+		var d = load(String(cfg.get_dino_script_path(sp))).new()
+		_main.add_child(d)
+		d.setup(sp)
+		d.global_position = at
+		d.set_waypoints([at + Vector3(0.0, 0.0, 8.0)])
+		await _advance(1.0)
+		_look_at(d.global_position, 5.0)
+		await _advance(0.2)
+		await _shoot("%s_walking" % sp)
+		var here: Vector3 = d.global_position
+		d.take_damage(99999.0)
+		var life: Array = []
+		var tt := 0.0
+		var fr := 0
+		while tt < 1.6:
+			await process_frame
+			fr += 1
+			tt += 1.0 / 60.0
+			if fr % 6 == 1:
+				if not is_instance_valid(d):
+					life.append("%.2f gone" % tt)
+					break
+				var ap: AnimationPlayer = d.find_child("AnimationPlayer", true, false) as AnimationPlayer
+				life.append("%.2f vis %s anim '%s'" % [tt, str(d.is_visible_in_tree()).left(1), ap.current_animation if ap else "-"])
+		_say("INFO", "%s after death: %s" % [sp, " ".join(life)])
+		await _advance(0.05)
+		_look_at(here, 5.0)
+		await _shoot("%s_falling" % sp)
+		await _advance(1.5)
+		await _shoot("%s_dead" % sp)
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)

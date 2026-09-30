@@ -26,8 +26,9 @@
 | [BUG-024](bug/BUG-024-the-new-tile-does-not-grow-in.md) | 右下角新按钮出现时没有弹大（容器把 scale 压回 1） | 低 | open | 2026-09-29 |
 | [BUG-025](bug/BUG-025-the-corridor-queue-never-counts-as-jammed.md) | 走廊里排队的来袭不算卡住，72 秒不咬墙 | 中 | open | 2026-09-29 |
 | [BUG-026](bug/BUG-026-raptors-still-go-round-the-campfire.md) | 篝火人能走过去，恐龙还绕 | 低 | fixed b631095 | 2026-09-29 |
-| [BUG-027](bug/BUG-027-the-map-stays-after-a-restart.md) | 小山谷重新开始，手绘地图还在 | 低～中 | open | 2026-09-30 |
+| [BUG-027](bug/BUG-027-the-map-stays-after-a-restart.md) | 小山谷重新开始，手绘地图还在 | 低～中 | fixed 1388240 | 2026-09-30 |
 | [BUG-028](bug/BUG-028-the-test-suite-is-red-four-portraits-missing.md) | 6baadac 测试红：四种不用的恐龙没有头像 | 低 | open | 2026-09-30 |
+| [BUG-029](bug/BUG-029-the-death-animation-never-plays.md) | 死亡动作从来没播：死的那一帧就删掉 | 中 | open | 2026-09-30 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -72,8 +73,15 @@
 | TASK-026 | 右下角按钮出现看得见、灰的看得出 | **done** 灰的好；弹大没有 → BUG-024 |
 | TASK-027 | 第五轮的修正和 bug 报告 | **done** 走廊没过（BUG-025）、恐龙绕篝火（BUG-026），其余过 |
 | TASK-028 | 第六轮、翻找响声、植龙猎人、手绘地图 | **done** 大体过；BUG-027；大山谷第一夜船舱塌（平衡） |
+| TASK-029 | 精做：新模型、头像、横幅、声音 | **done** 死亡动作不播 → BUG-029；其余大体过 |
 
 ## 检查记录
+
+### 2026-09-30 第 28 次（监控循环，TASK-029，6a387b1 / 8a1799f）
+
+- 新探针 anim_shots、faces_banner、sounds、deaths。模型、颜色、比例、眼睛、横幅、声音（播放器层面）都过；恐龙死的那一帧就被删 → BUG-029；失败画面植龙头像框太紧。
+- BUG-027 复测修好。fps 两边都顶在 ~100（有上限），比不出。
+- 我的一次 tests 在 dev 同时跑 tests 时卡住（02:23），停了我自己的；以后 dev 在跑 tests 时先别跑。
 
 ### 2026-09-30 第 27 次（自由找 bug，6baadac）
 

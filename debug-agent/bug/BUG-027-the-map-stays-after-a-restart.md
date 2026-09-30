@@ -1,6 +1,6 @@
 # BUG-027 小山谷重新开始一局，手绘地图还挂在右上角（没做就有）
 
-- 状态: open
+- 状态: fixed（1388240；8a1799f 复测：重新开始后地图不显示）
 - 严重度: 低～中（新一局一开始就有地图，等于白送；地图也会跟新一局的状态不符）
 - 发现: 2026-09-30 · b631095（TASK-028 第 10 条）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh b631095) bash debug-agent/tools/run_check.sh probe:hand_map`（小山谷）；加 `DA_MAP=valley_large` 是好的
