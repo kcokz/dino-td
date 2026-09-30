@@ -47,6 +47,8 @@ var _class_of: Dictionary = {}         # player -> the class of what it is playi
 var _last_in_class: Dictionary = {}    # class -> Time.get_ticks_msec() it last played
 var _listener: AudioListener3D = null
 var _ambience: AudioStreamPlayer = null
+## The valley after dark, faded in and out against the day's (Config.SOUNDS.ambience_night).
+var _ambience_night: AudioStreamPlayer = null
 var _want_ambience: bool = false
 var _debris_root: Node3D = null
 
@@ -80,10 +82,11 @@ func _exit_tree() -> void:
 			was_playing = was_playing or v.playing
 			v.stop()
 			v.stream = null
-	if _ambience != null:
-		was_playing = was_playing or _ambience.playing
-		_ambience.stop()
-		_ambience.stream = null
+	for amb in [_ambience, _ambience_night]:
+		if amb != null:
+			was_playing = was_playing or amb.playing
+			amb.stop()
+			amb.stream = null
 	_streams.clear()
 	_loaded.clear()
 	# A stop is only asked of the audio thread: it lets the playback go on its next mix, and at quit
@@ -110,6 +113,7 @@ func _process(_delta: float) -> void:
 	_take_what_is_in()
 	if _want_ambience and _ambience != null and not _ambience.playing:
 		_start_ambience_now()
+	_fade_ambience()
 
 # ==============================================================================
 # Hit flash
@@ -326,9 +330,10 @@ func start_ambience() -> void:
 
 func stop_ambience() -> void:
 	_want_ambience = false
-	if _ambience != null and _ambience.playing:
-		_ambience.stop()
-		_touched_audio()
+	for amb in [_ambience, _ambience_night]:
+		if amb != null and amb.playing:
+			amb.stop()
+			_touched_audio()
 
 func _start_ambience_now() -> void:
 	if _ambience == null or not bool(_cfg("audio_enabled", true)):
@@ -348,7 +353,66 @@ func _start_ambience_now() -> void:
 	_ambience.stream = wav
 	_ambience.volume_db = _master_db() + float(_sounds_table().get("ambience_db", -21.0))
 	_ambience.play()
+	var night := _looped(String(_sounds_table().get("ambience_night", "")))
+	if night != null and _ambience_night != null:
+		_ambience_night.stream = night
+		_ambience_night.play()
+	_fade_ambience()
 	_touched_audio()
+
+## A sound's first file, set to loop over its whole length -- one take that joins itself
+## (tools/build_sounds.gd _seamless) -- or null while it is not in.
+func _looped(id: String) -> AudioStreamWAV:
+	var files: Array = _files.get(id, [])
+	if files.is_empty():
+		return null
+	var wav := _file_stream(String(files[0])) as AudioStreamWAV
+	if wav == null:
+		return null
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = int(wav.get_length() * float(wav.mix_rate))
+	return wav
+
+## How far into the night the valley sounds, 0 by day and 1 by night: up through the dusk, down with the
+## first light (Config.SOUNDS.night_fade, DAY.parts).
+func night_mix() -> float:
+	var gs = get_node_or_null("/root/GameState")
+	var cfg = get_node_or_null("/root/Config")
+	if gs == null or cfg == null or not gs.has_method("time_of_day") or not ("DAY" in cfg):
+		return 0.0
+	var t: float = float(gs.time_of_day())
+	var dusk: float = float(cfg.DAY["parts"].get("dusk", 240.0))
+	var fade: Array = _sounds_table().get("night_fade", [50.0, 30.0])
+	if t >= dusk:
+		return smoothstep(dusk, dusk + float(fade[0]), t)
+	return 1.0 - smoothstep(0.0, float(fade[1]), t)
+
+## The day's sound and the night's, each at its share of the mix (an equal-power fade).
+func _fade_ambience() -> void:
+	if _ambience == null or _ambience_night == null or not _ambience.playing:
+		return
+	var k: float = night_mix()
+	var base: float = _master_db()
+	_ambience.volume_db = base + float(_sounds_table().get("ambience_db", -21.0)) + linear_to_db(maxf(0.001, cos(k * PI * 0.5)))
+	_ambience_night.volume_db = base + float(_sounds_table().get("ambience_night_db", -20.0)) + linear_to_db(maxf(0.001, sin(k * PI * 0.5)))
+
+## A sound that goes on where it is -- a fire's crackle (Fire) -- as a player of its own, looping, set up as
+## Config.SOUNDS says; not yet playing, the caller's to keep, start and stop. Null while the sound is not in.
+func make_loop(id: String) -> AudioStreamPlayer3D:
+	var spec: Dictionary = _spec(id)
+	var wav := _looped(id)
+	if spec.is_empty() or wav == null:
+		return null
+	var table: Dictionary = _sounds_table()
+	var p := AudioStreamPlayer3D.new()
+	p.stream = wav
+	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	p.unit_size = float(spec.get("unit", table.get("unit", 7.0)))
+	p.max_distance = float(spec.get("reach", table.get("reach", 70.0)))
+	p.volume_db = _master_db() + float(spec.get("db", 0.0))
+	p.pitch_scale = float(spec.get("pitch", 1.0))
+	return p
 
 func is_ambience_playing() -> bool:
 	return _want_ambience
@@ -458,6 +522,9 @@ func _build_voices() -> void:
 	_ambience = AudioStreamPlayer.new()
 	_ambience.name = "Ambience"
 	add_child(_ambience)
+	_ambience_night = AudioStreamPlayer.new()
+	_ambience_night.name = "AmbienceNight"
+	add_child(_ambience_night)
 
 func _build_world_players() -> void:
 	_world = Node3D.new()

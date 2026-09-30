@@ -352,3 +352,20 @@ func test_16_the_night_hunter_and_the_runner_have_voices_of_their_own() -> void:
 	assert_ne(snappedf(night, 50.0), snappedf(boss, 50.0), "and the phytosaur is not the Postosuchus (%.0f vs %.0f)" % [night, boss])
 	# A phytosaur landing is heard where it lands (NightProwl.send_one_from).
 	assert_true(sounds.has("river_splash"), "The river is heard broken")
+
+func test_17_the_night_is_heard_coming() -> void:
+	# The valley after dark (Config.SOUNDS.ambience_night): faded in through the dusk, out with the first light.
+	var fx = tree.root.get_node("Fx")
+	var gs = tree.root.get_node("GameState")
+	var parts: Dictionary = config_node.DAY["parts"]
+	var fade: Array = config_node.SOUNDS["night_fade"]
+	var at := func(t: float) -> float:
+		gs.day_clock = t
+		gs._run_the_day(0.0)
+		return float(fx.night_mix())
+	assert_almost_eq(at.call(float(parts["day"]) + 100.0), 0.0, 0.001, "By day, the day's sound")
+	var halfway: float = at.call(float(parts["dusk"]) + float(fade[0]) * 0.5)
+	assert_true(halfway > 0.2 and halfway < 0.8, "Half the dusk in, both (%.2f)" % halfway)
+	assert_almost_eq(at.call(float(parts["night"]) + 60.0), 1.0, 0.001, "By night, the night's")
+	assert_almost_eq(at.call(float(config_node.DAY["length"]) + float(fade[1]) + 1.0), 0.0, 0.001, "and the day's again after the first light")
+	assert_true(config_node.SOUNDS["sounds"].has(String(config_node.SOUNDS["ambience_night"])), "(the night's sound is there)")

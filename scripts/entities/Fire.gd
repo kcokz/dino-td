@@ -31,6 +31,8 @@ var _retry: float = 0.0
 var _clock: float = 0.0
 var _light: OmniLight3D = null
 var _flame: GPUParticles3D = null
+## Its crackle while it burns, heard where it is (Fx.make_loop, Config.SOUNDS.fire_crackle).
+var _crackle: AudioStreamPlayer3D = null
 
 func _ready() -> void:
 	super._ready()
@@ -180,6 +182,24 @@ func _show_the_flame() -> void:
 		_flame.visible = lit
 	if _light != null:
 		_light.visible = lit
+	_sound_the_flame()
+
+## Crackling while it burns, still when it is out. Made the first time it is lit (the sound may not have
+## been in when it was built).
+func _sound_the_flame() -> void:
+	if lit and _crackle == null and is_inside_tree():
+		var fx = get_node_or_null("/root/Fx")
+		_crackle = fx.make_loop("fire_crackle") if (fx and fx.has_method("make_loop")) else null
+		if _crackle != null:
+			_crackle.name = "Crackle"
+			_crackle.position = Vector3(0.0, float(_row().get("flame_height", 0.3)), 0.0)
+			add_child(_crackle)
+	if _crackle == null:
+		return
+	if lit and not _crackle.playing:
+		_crackle.play()
+	elif not lit and _crackle.playing:
+		_crackle.stop()
 
 ## The flame of a fire, `size` times the campfire's (Config.FIRE.flame): the engine's particles --
 ## soft tongues rising off the wood, yellow to red to nothing -- left where they rose, in the world.

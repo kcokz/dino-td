@@ -2323,6 +2323,12 @@ const SOUNDS: Dictionary = {
 	# The valley under everything, not placed: wind, insects, the river.
 	"ambience": "ambience_valley",
 	"ambience_db": -21.0,
+	# The valley after dark (Fx): the wind down and the insects' chorus up, faded in through the dusk over
+	# `night_fade`[0] seconds from its start and out over [1] from the first light -- the day's own sound
+	# faded the other way -- so the night is heard coming, not switched on.
+	"ambience_night": "ambience_night",
+	"ambience_night_db": -20.0,
+	"night_fade": [50.0, 30.0],
 	"sounds": {
 		# Coelophysis: a small, quick theropod -- high chitters and trills, hisses.
 		"coelophysis_call":  {"files": ["coelophysis_call_1", "coelophysis_call_2", "coelophysis_call_3"], "db": -5.0, "pitch": 1.1, "class": "call"},
@@ -2393,6 +2399,9 @@ const SOUNDS: Dictionary = {
 		"beacon_launch": {"files": ["beacon_launch"], "db": -1.0, "pitch": 1.0, "class": "event", "unit": 30.0, "reach": 200.0},
 		"ui_click": {"files": ["ui_click"], "db": -16.0, "pitch": 1.05, "class": "ui"},
 		"ambience_valley": {"files": ["ambience_valley"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"ambience_night": {"files": ["ambience_night"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		# A lit fire's crackle, where it burns (Fire, Fx.make_loop): heard near, as a fire is.
+		"fire_crackle": {"files": ["fire_crackle"], "db": -7.0, "pitch": 1.0, "class": "loop", "unit": 3.0, "reach": 26.0},
 	},
 }
 

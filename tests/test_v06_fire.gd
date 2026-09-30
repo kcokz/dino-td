@@ -332,3 +332,24 @@ func test_14_a_raider_walks_over_a_campfire_too() -> void:
 			break
 	assert_gt(raptor.global_position.x, at.x + 3.0, "(it got across)")
 	assert_lt(nearest, 0.5, "A raider walks over a campfire's ring as he does, not round it (%.2f m from its middle)" % nearest)
+
+func test_15_a_fire_is_heard_crackling_while_it_burns() -> void:
+	# Sound polish (the player, 2026-09-30: "你有什么界面和声音的精做就开始吧"): a lit fire crackles where it
+	# is (Config.SOUNDS.fire_crackle), heard near; out, it is still.
+	var main = await _level()
+	var spec: Dictionary = config_node.SOUNDS["sounds"]["fire_crackle"]
+	var fire = _build(main, "campfire")
+	_wood(10)
+	_set_clock(_at("dusk") + 1.0)
+	fire._tend(1.0)
+	assert_true(fire.lit, "(lit at dusk)")
+	var crackle: AudioStreamPlayer3D = fire.get_node_or_null("Crackle") as AudioStreamPlayer3D
+	assert_not_null(crackle, "A lit fire has its crackle")
+	if crackle == null:
+		return
+	assert_true(crackle.playing, "and it is crackling")
+	assert_almost_eq(crackle.max_distance, float(spec["reach"]), 0.01, "heard as far as it says, and no further")
+	_set_clock(_at("day") + 5.0, 2)
+	fire._tend(1.0)
+	assert_false(fire.lit, "(out at first light)")
+	assert_false(crackle.playing, "Out, it is still")

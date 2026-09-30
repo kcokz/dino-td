@@ -617,6 +617,63 @@ func _s_ambience_valley() -> PackedFloat32Array:
 	_seamless(out, 0.6)
 	return out
 
+func _s_ambience_night() -> PackedFloat32Array:
+	# The valley after dark, ten seconds that loop: the wind down, the river, the insects' chorus thick in
+	# the grass (every one of them at it now, not a few here and there), and now and then, far off by the
+	# water, the low croak of something amphibian (the Chinle's big metoposaurs; there were no birds).
+	var dur: float = 10.0
+	var n: int = int(dur * RATE)
+	var out := _buf(dur)
+	var brown: float = 0.0
+	var lp: float = 0.0
+	for i in n:
+		brown = clampf(brown + _rng.randf_range(-1.0, 1.0) * 0.02, -1.0, 1.0)
+		lp += 0.05 * (brown - lp)
+		var t: float = float(i) / float(RATE)
+		out[i] += lp * (0.6 + 0.4 * sin(TAU * t / dur * 2.0 + 1.3)) * 0.7
+	var river := _hiss(dur, [[0.0, 650.0], [1.0, 650.0]], 0.8, [[0.0, 1.0], [1.0, 1.0]])
+	_mix(out, river, 0.0, 0.1)
+	# The chorus: five singers, each its own pitch and its own rhythm of chirp trains, over the whole take.
+	for singer in 5:
+		var pitch: float = _rng.randf_range(3600.0, 5200.0)
+		var rate: float = _rng.randf_range(22.0, 34.0)
+		var period: float = _rng.randf_range(0.7, 1.4)
+		var train: float = period * _rng.randf_range(0.35, 0.6)
+		var gain: float = _rng.randf_range(0.02, 0.035)
+		var at: float = _rng.randf_range(0.0, period)
+		while at < dur - train:
+			var chirps: int = int(train * rate)
+			for c in chirps:
+				_mix(out, _tone(0.022, [[0.0, pitch], [1.0, pitch * 0.99]], [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), at + float(c) / rate, gain)
+			at += period
+	# Far off by the water, now and then: a low, breathy croak.
+	for k in 4:
+		var croak := _voice({"dur": 0.24, "f0": [[0.0, 150.0], [1.0, 120.0]],
+			"amp": [[0.0, 0.0], [0.2, 1.0], [1.0, 0.0]], "formants": [[480.0, 4.0, 1.0], [1350.0, 5.0, 0.4]],
+			"rough": 0.6, "rough_am": [30.0, 0.7], "breath": 0.35, "tilt": 1500.0})
+		_mix(out, croak, _rng.randf_range(0.3, dur - 0.6), 0.08)
+	_seamless(out, 0.6)
+	return out
+
+func _s_fire_crackle() -> PackedFloat32Array:
+	# A fire, six seconds that loop: the low breath of it burning, the crackle of its wood, and now and
+	# then a pop.
+	var dur: float = 6.0
+	var n: int = int(dur * RATE)
+	var out := _buf(dur)
+	var brown: float = 0.0
+	var lp: float = 0.0
+	for i in n:
+		brown = clampf(brown + _rng.randf_range(-1.0, 1.0) * 0.03, -1.0, 1.0)
+		lp += 0.08 * (brown - lp)
+		out[i] += lp * 0.5
+	_mix(out, _crackle(dur, 16.0, 2600.0), 0.0, 0.5)
+	_mix(out, _crackle(dur, 6.0, 1300.0), 0.0, 0.45)
+	for k in 5:
+		_mix(out, _burst(0.035, _rng.randf_range(2200.0, 3600.0), 1.4), _rng.randf_range(0.1, dur - 0.2), 0.6)
+	_seamless(out, 0.4)
+	return out
+
 # ==============================================================================
 # The voice: a source through the formants of a throat
 # ==============================================================================
