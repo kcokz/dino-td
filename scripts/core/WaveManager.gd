@@ -104,8 +104,16 @@ func _process(delta: float) -> void:
 		return
 	if not auto_raid_enabled or is_wave_active or final_wave:
 		return
-	# Out of the raiders' hours no raid is counted down to, and none sets out (GAME-DESIGN 9.3).
+	# Out of the raiders' hours no raid is counted down to, and none sets out (GAME-DESIGN 9.3). One
+	# warned of is called off (the HUD's count stood still at its last second all night) and warned of
+	# again once they are out.
 	if not raiders_out():
+		if warning_emitted or _stirred_warned:
+			warning_emitted = false
+			_stirred_warned = false
+			var eb_off = _get_event_bus()
+			if eb_off and eb_off.has_signal("raid_warning"):
+				eb_off.raid_warning.emit(0.0)
 		return
 
 	elapsed_time += delta
@@ -139,6 +147,14 @@ func _process(delta: float) -> void:
 	if raid_timer <= 0.0:
 		warning_emitted = false
 		start_next_raid()
+
+## How long until the raid warned of sets out -- the first of them, the clock's or the one a stage
+## stirred up -- or -1 with none warned of. The HUD counts it down (raid_line).
+func warned_raid_in() -> float:
+	var left: float = maxf(0.0, raid_timer) if warning_emitted else -1.0
+	if _stirred > 0 and _stirred_warned and (left < 0.0 or _stirred_in < left):
+		left = maxf(0.0, _stirred_in)
+	return left
 
 func _load_waves_config() -> void:
 	var cfg = _get_config()

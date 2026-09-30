@@ -1474,6 +1474,13 @@
   - **（debug-agent TASK-028）两处小事**：
     - 来袭预警不再说他正看着的入口（`WaveManager.way_open`，`HUD._render_raid_banner`）：那一边让给巢，一只也不从那里进来，横幅却说"还有一群从东边进来"。新测试 `test_v06_the_runner` 第 5 条。
     - 机器人（`tools/playtest.gd` `_search_wreck`）：输了以后不再去读已经没了的船舱（3 个 SCRIPT ERROR，只在机器人里）；"响声招来了……"每只只记一行。
+  - **来袭不打红字横幅了：听得见，他说出来**（玩家，2026-09-30："来袭击不要直接红字提醒，要用声音加上别的一些提醒就够了，比如人说话之类的，红字提醒太突兀了"；设计书 2、9.3）：
+    - 屏幕上方的红色横幅去掉了（`HUD` 里的 `RaidWarning`；只给它用的主题样式 `BannerPanel`、`BannerDetailLabel` 和红赭色笔刷 `brush_blood` 也删了）。
+    - 警告是声音和他的话：号角照旧从巢那边传来；他说从哪边来——没找到巢："听——它们从北边来了"（`BARK_RAID_FROM_*`，方向 `HeroVoice.nest_side` → `WaveManager.side_of`），找到了："看，它们从巢里出来了"（`BARK_RAID_SEEN_*`）；接着说今天别的入口（"东边也有一群"，`BARK_RAID_ALSO_*`，他正看着的入口不说）；有首领再说一句（"还有腔骨龙头领跟着！"，`BARK_RAID_BOSS_*`，`boss_warning` 现在是 `HeroVoice` 在听）。一句说完才说下一句（`HeroVoice._then`、`_busy_until`）；他倒下了，没说完的就不说了。没有巢的地图照旧说 `BARK_RAID_*`。这几种每次都说（`BARKS.lines.raid_from` 等，`chance` 1、`again` 0、`urgent`）。
+    - `EventBus.hero_spoke` 多了第三个参数 `args`：填进台词空里的方向、名字；HUD 显示 `tr(key) % args`，说多久也按填好以后的字数算。
+    - 还剩多久：右上角信标卡片最后一行灰色小字"15 秒后来袭"（`HUD.raid_line`，`MutedLabel`，前面一个小恐龙图标），每帧跟着来袭自己的钟走（`WaveManager.warned_raid_in`：时钟的来袭和修信标招来的那波，谁先到算谁），暂停就停、加速就快——原来横幅上的秒数从头到尾不动。最后一波的"最后一波：N 秒后到"也在这一行。没有信标、没有钉目标时，卡片为倒数单独出来（`HUD._refresh_objective_panel`）。
+    - 预警以后到了来袭者歇着的时辰（腔骨龙黄昏回巢），这波先取消、倒数收起，等它们再出来重新预警（`WaveManager._process` 发 `raid_warning(0)`）。原来横幅整夜停在最后那个秒数上。
+    - 测试：新 `test_v06_heard_not_shouted.gd`（5 条：没有横幅，卡片里一行灰字；跟着来袭的钟倒数、出发了就收；歇着的时辰取消、再出来重新预警；一句说完才说下一句，台词里填了方向；倒下了没说完的不说）。`test_v06_the_fog` 第 7 条、`test_v06_the_runner` 第 4、5 条、`test_v06_bosses` 第 5 条从读横幅改成听他说；`test_v06_the_beacon_is_heard` 第 7 条读 `raid_line`；`test_v06_the_frames` 去掉 `BannerPanel`；`test_v06_the_valley_heard` 里听他说话的都多收一个参数。
 
 ## v0.x 远期构想（不排期，仅记录）
 

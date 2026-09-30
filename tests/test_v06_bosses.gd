@@ -135,6 +135,10 @@ func test_05_the_warning_names_the_alpha() -> void:
 	var wm = main.wave_manager
 	var boss_id: String = String(_map()["minor_boss"])
 	var watcher = watch_signal(event_bus_node, "boss_warning")
+	# He names it, after where they come from (HeroVoice: the warning is his to tell -- no banner).
+	var said: Array = []
+	var ear := func(key: String, _s: float, args: Array = []) -> void: said.append([key, args])
+	event_bus_node.hero_spoke.connect(ear)
 	game_state_node.wave_number = _big_wave(wm) - 1
 	wm.auto_raid_enabled = true
 	wm.raid_timer = wm.warning_lead_time - 0.01
@@ -146,10 +150,16 @@ func test_05_the_warning_names_the_alpha() -> void:
 		if not args.is_empty() and String(args[0]) == boss_id:
 			named = true
 	assert_true(named, "And which one")
-	var hud = main.hud
-	if hud and hud.raid_warning_banner:
-		assert_true(hud.raid_warning_banner.text.contains(String(config_node.get_dino_name(boss_id))),
-			"On the banner, by name: %s" % hud.raid_warning_banner.text)
+	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
+	for i in 80:
+		voice._process(0.25)
+	event_bus_node.hero_spoke.disconnect(ear)
+	var by_name: bool = false
+	for line in said:
+		if String(line[0]).begins_with("BARK_RAID_BOSS_") and not (line[1] as Array).is_empty() \
+				and String(line[1][0]).contains(String(config_node.get_dino_name(boss_id))):
+			by_name = true
+	assert_true(by_name, "He says it is with them, by name: %s" % [said])
 
 func test_06_a_raider_is_the_species_it_was_drawn_as() -> void:
 	# It was always set up as a raptor, whatever came out of the nest.

@@ -89,7 +89,7 @@ func test_02_each_kind_of_thing_is_made_of_its_material() -> void:
 	var made_of: Array = [
 		["panel", "HudPanel", "frame"], ["panel", "ModalPanel", "frame"], ["panel", "SolidPanel", "frame"],
 		["panel", "PillPanel", "plate"], ["panel", "TechPanel", "frame_tech"], ["panel", "VictoryPanel", "frame_tech"],
-		["panel", "DefeatPanel", "frame"], ["panel", "ToastPanel", "brush"], ["panel", "BannerPanel", "brush_blood"],
+		["panel", "DefeatPanel", "frame"], ["panel", "ToastPanel", "brush"],
 		["panel", "TooltipPanel", "hide"], ["panel", "CardPanel", "hide"],
 		["panel", "InsetPanel", "socket"], ["panel", "InsetTechPanel", "socket_tech"],
 		["normal", "Button", "button"], ["normal", "DangerButton", "button"], ["normal", "OptionButton", "button"],

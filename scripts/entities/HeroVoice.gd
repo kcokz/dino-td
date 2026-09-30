@@ -7,6 +7,11 @@ extends Node
 ## at a stake, eating, fighting, bitten, and when the raid comes, the leader or the boss shows
 ## itself, a tool comes off the bench, a stage of the beacon comes back on line.
 ##
+## A raid on its way is his to tell: the pack's call is heard from the nest's side, and he says
+## where they come from, then any other way in they take, then who comes with them -- a line
+## each, one after another (_then). There is no banner (v0.6 round six: "来袭击不要直接红字提醒，
+## 要用声音加上别的一些提醒就够了，比如人说话之类的").
+##
 ## Each situation has a handful of lines (Config.BARKS.lines; the words are strings.csv's
 ## BARK_<SITUATION>_<n>), taken in no fixed order and never the same one twice running. He is
 ## not a radio: a line only so often (BARKS.gap), a situation only so often (its "again"), and
@@ -32,6 +37,10 @@ var _enemy_was: Node = null
 var _hp_before: float = INF
 var _dice := RandomNumberGenerator.new()
 var _mouth: AudioStreamPlayer3D = null
+## What he has still to say, in order -- {situation, args} or, for who comes with a raid, {situation, names}
+## -- each line once the one before has had its time (_busy_until, on _clock).
+var _then: Array = []
+var _busy_until: float = -1000.0
 
 func _ready() -> void:
 	if hero == null and get_parent() is Node3D:
@@ -54,15 +63,18 @@ func _exit_tree() -> void:
 			eb.disconnect(pair[0], pair[1])
 
 func _hooks() -> Array:
-	return [["raid_warning", _on_raid_warning], ["wave_ended", _on_wave_ended],
+	return [["raid_warning", _on_raid_warning], ["boss_warning", _on_boss_warning], ["wave_ended", _on_wave_ended],
 		["boss_arrived", _on_boss_arrived], ["unlock_granted", _on_unlock_granted],
 		["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 		["cabin_view_changed", _on_cabin_view_changed], ["hero_hp_changed", _on_hero_hp_changed]]
 
 func _process(delta: float) -> void:
 	if hero == null or not is_instance_valid(hero) or _dead():
+		_then.clear()
 		return
 	_clock += delta
+	if not _then.is_empty() and _clock >= _busy_until:
+		_say_next()
 	var state: int = int(hero.get("current_state"))
 	if state != _state_was:
 		_state_was = state
@@ -119,8 +131,8 @@ func consider(situation: String) -> bool:
 
 ## A line about `situation`, now, if it is not too soon: after his last line (BARKS.gap) unless it
 ## is urgent, and after the last line about the same thing (its "again"). Never the line he said
-## last time about it.
-func speak(situation: String) -> bool:
+## last time about it. `args` fill the line's blanks (a side of the valley, a name).
+func speak(situation: String, args: Array = []) -> bool:
 	var spec: Dictionary = _barks().get("lines", {}).get(situation, {})
 	var count: int = int(spec.get("count", 0))
 	if count <= 0 or _dead():
@@ -137,14 +149,23 @@ func speak(situation: String) -> bool:
 	_said_at[situation] = _clock
 	_last_said_at = _clock
 	var key: String = "BARK_%s_%d" % [situation.to_upper(), index + 1]
-	var words: String = tr(key)
+	var words: String = tr(key) % args if not args.is_empty() else tr(key)
 	var seconds: float = clampf(float(words.length()) * _number("seconds_per_char", 0.07),
 		_number("min_seconds", 2.2), _number("max_seconds", 5.0))
+	_busy_until = _clock + seconds
 	var eb = _bus()
 	if eb and eb.has_signal("hero_spoke"):
-		eb.hero_spoke.emit(key, seconds)
+		eb.hero_spoke.emit(key, seconds, args)
 	_say_aloud(key)
 	return true
+
+## The next of what he has still to say.
+func _say_next() -> void:
+	var next: Dictionary = _then.pop_front()
+	var args: Array = next.get("args", [])
+	if next.has("names"):
+		args = [tr("DIR_AND").join(PackedStringArray(next["names"]))]
+	speak(String(next["situation"]), args)
 
 ## A recording of the line, if there is one, from where he stands.
 func _say_aloud(key: String) -> void:
@@ -166,8 +187,50 @@ func _say_aloud(key: String) -> void:
 # ------------------------------------------------------------------------------
 # What happens round him
 
-func _on_raid_warning(_time_left: float) -> void:
-	consider("raid")
+## A raid on its way (WaveManager): where from -- the nest not found, the side its calls come from; found,
+## he sees them set out -- and, after, the day's other ways in they take (WaveManager.ways_now), not one he
+## is watching: none comes in by that (the debug-agent's TASK-028). No nest to place it, only that they come.
+func _on_raid_warning(time_left: float) -> void:
+	if time_left <= 0.0:
+		return
+	_then.clear()
+	var side: String = nest_side()
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null and "nest_found" in gs and bool(gs.nest_found):
+		speak("raid_seen")
+	elif side != "":
+		speak("raid_from", [tr("DIR_" + side)])
+	else:
+		consider("raid")
+	var others: PackedStringArray = []
+	var waves = _waves()
+	if waves != null and waves.has_method("ways_now"):
+		for way in waves.ways_now():
+			if String(way) != side and (not waves.has_method("way_open") or waves.way_open(String(way))):
+				others.append(tr("DIR_" + String(way)))
+	if not others.is_empty():
+		_then.append({"situation": "raid_also", "args": [tr("DIR_AND").join(others)]})
+
+## A boss with the raid (WaveManager, straight after its warning): named, last -- two of them in one line.
+func _on_boss_warning(species_id: String) -> void:
+	var cfg = get_node_or_null("/root/Config")
+	var boss_name: String = String(cfg.get_dino_name(species_id)) if (cfg and cfg.has_method("get_dino_name")) else species_id
+	for next in _then:
+		if String(next["situation"]) == "raid_boss":
+			if not (next["names"] as Array).has(boss_name):
+				(next["names"] as Array).append(boss_name)
+			return
+	_then.append({"situation": "raid_boss", "names": [boss_name]})
+
+## Which way the nest lies from the cabin, by the compass (WaveManager.side_of: "N", "NE" ...), or "" with
+## no nest.
+func nest_side() -> String:
+	var nest: Node3D = get_tree().get_first_node_in_group("nest") as Node3D if is_inside_tree() else null
+	var waves = _waves()
+	if nest == null or waves == null or not waves.has_method("side_of"):
+		return ""
+	var side: String = String(waves.side_of(nest.global_position))
+	return "" if side == "here" else side
 
 func _on_wave_ended(_n: int) -> void:
 	consider("raid_over")
@@ -218,3 +281,6 @@ func _number(key: String, fallback: float) -> float:
 
 func _bus() -> Node:
 	return get_node_or_null("/root/EventBus") if is_inside_tree() else null
+
+func _waves() -> Node:
+	return get_tree().get_first_node_in_group("wave_manager") if is_inside_tree() else null

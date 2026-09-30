@@ -137,17 +137,27 @@ func test_06_found_the_raids_are_warned_of_sooner() -> void:
 	assert_almost_eq(wm._warning_lead(), before + float(_fog()["found_nest_warning"]), 0.001,
 		"The nest found, its raids are seen setting out, and warned of sooner")
 
-func test_07_the_warning_says_which_side_the_calls_come_from_until_the_nest_is_found() -> void:
+func test_07_he_says_which_side_the_calls_come_from_until_the_nest_is_found() -> void:
+	# The warning is his to tell (HeroVoice; no banner since v0.6 round six).
 	var main = await _level()
-	var hud = main.hud
-	var side: String = hud._side_of_the_nest()
+	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
+	var side: String = voice.nest_side()
 	assert_eq(side, "N", "The first map's nest is north of the cabin")
-	hud._on_raid_warning(10.0)
-	assert_true(String(hud.raid_warning_banner.text).contains(tr("HUD_RAID_FROM") % tr("DIR_" + side)),
-		"The warning says where the calls come from")
+	var eb = tree.root.get_node("EventBus")
+	var said: Array = []
+	var ear := func(key: String, _s: float, args: Array = []) -> void: said.append([key, args])
+	eb.hero_spoke.connect(ear)
+	eb.raid_warning.emit(10.0)
+	var from: Array = said.filter(func(line: Array) -> bool: return String(line[0]).begins_with("BARK_RAID_FROM_"))
+	assert_eq(from.size(), 1, "He says where the calls come from, as they come (%s)" % [said])
+	if from.size() == 1:
+		assert_eq(from[0][1], [tr("DIR_" + side)], "-- the north")
 	game_state_node.nest_found = true
-	hud._render_raid_banner()
-	assert_true(String(hud.raid_warning_banner.text).contains(tr("HUD_RAID_SEEN")), "Found: they are seen setting out")
+	said.clear()
+	eb.raid_warning.emit(10.0)
+	assert_true(said.any(func(line: Array) -> bool: return String(line[0]).begins_with("BARK_RAID_SEEN_")),
+		"Found: he sees them set out (%s)" % [said])
+	eb.hero_spoke.disconnect(ear)
 
 func test_08_a_view_that_must_show_the_whole_field_can_lift_it() -> void:
 	var main = await _level()

@@ -103,13 +103,31 @@ func test_03_from_the_third_day_a_raid_comes_in_by_the_east_as_well() -> void:
 	assert_gt(from_east, 0, "A raid is shared out: some of it comes in by the east")
 	assert_lt(from_east, origins.size(), "and some from the nest")
 
+## Everything he says of a raid on its way, one line after another (HeroVoice): [key, args] a line.
+func _raid_lines(main: Node) -> Array:
+	var said: Array = []
+	var ear := func(key: String, _s: float, args: Array = []) -> void: said.append([key, args])
+	var eb = tree.root.get_node("EventBus")
+	eb.hero_spoke.connect(ear)
+	eb.raid_warning.emit(20.0)
+	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
+	for i in 80:
+		voice._process(0.25)
+	eb.hero_spoke.disconnect(ear)
+	return said
+
+## Whether he said a party comes in from the east as well.
+func _said_the_east(said: Array) -> bool:
+	for line in said:
+		if String(line[0]).begins_with("BARK_RAID_ALSO_") and String(line[1][0]).contains(tr("DIR_E")):
+			return true
+	return false
+
 func test_04_the_warning_names_every_side() -> void:
 	var main = await _level()
 	_to_day(3)
-	var hud = main.hud
-	hud._on_raid_warning(20.0)
-	await wait_frames(1)
-	assert_true(String(hud.raid_warning_banner.text).contains(tr("DIR_E")), "The warning says the east too: %s" % hud.raid_warning_banner.text)
+	var said: Array = _raid_lines(main)
+	assert_true(_said_the_east(said), "He says the east too: %s" % [said])
 
 func test_05_a_way_he_watches_is_not_said() -> void:
 	# The debug-agent's TASK-028: a way into the valley he is watching gives its turn to the nest's, and none
@@ -121,8 +139,5 @@ func test_05_a_way_he_watches_is_not_said() -> void:
 	main.hero.global_position = main.wave_manager.entry_toward("E")
 	await wait_seconds(float(config_node.FOG["every"]) * 3.0 + 0.1)
 	assert_false(main.wave_manager.way_open("E"), "(he is watching the east)")
-	var hud = main.hud
-	hud._on_raid_warning(20.0)
-	await wait_frames(1)
-	assert_false(String(hud.raid_warning_banner.text).contains(tr("HUD_RAID_ALSO") % tr("DIR_E")),
-		"Watched, the east is not said: %s" % hud.raid_warning_banner.text)
+	var said: Array = _raid_lines(main)
+	assert_false(_said_the_east(said), "Watched, the east is not said: %s" % [said])

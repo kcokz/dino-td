@@ -85,10 +85,12 @@ var pause_btn: Button = null
 var speed_btn: Button = null
 var speed_buttons: Array[Button] = []
 var menu_btn: Button = null
-var raid_warning_banner: Label = null
-## The banner's lines after its first -- which way, who comes with them -- smaller, under it (_set_raid_text).
-var raid_warning_details: Label = null
-var raid_warning_panel: Control = null
+## A raid on its way, said quietly in the goal's card -- "Raid in 12 s", or the final wave's count -- and
+## counted down. The alarm itself is the pack's call, heard from the nest's side, and his word on where they
+## come from (HeroVoice): a red banner across the screen was too much (v0.6 round six: "红字提醒太突兀了").
+var raid_line: Label = null
+## The line with its mark, shown and hidden as one.
+var raid_row: Control = null
 var option_panel: Node = null
 ## His two commands, Build and Eat, in the corner under the card (v0.6 round four).
 var hero_commands: HeroCommands = null
@@ -181,10 +183,10 @@ func _disconnect_event_bus() -> void:
 
 ## He said something: the words over his head for as long as the voice says, as wide as they
 ## are up to UI.speech_max_width.
-func _on_hero_spoke(line_key: String, seconds: float) -> void:
+func _on_hero_spoke(line_key: String, seconds: float, args: Array = []) -> void:
 	if speech_bubble == null or speech_label == null:
 		return
-	speech_label.text = tr(line_key)
+	speech_label.text = tr(line_key) % args if not args.is_empty() else tr(line_key)
 	var font: Font = speech_label.get_theme_font("font")
 	var size_px: int = speech_label.get_theme_font_size("font_size")
 	var wide: float = font.get_string_size(speech_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x if font else 200.0
@@ -246,7 +248,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
 			["hero_hp_changed", _on_hero_hp_changed], ["locale_changed", _on_locale_changed],
 			["raid_warning", _on_raid_warning], ["fed_changed", _on_fed_changed],
-			["boss_warning", _on_boss_warning], ["boss_arrived", _on_boss_arrived],
+			["boss_arrived", _on_boss_arrived],
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
 			["unlock_granted", _on_unlock_granted], ["hero_spoke", _on_hero_spoke],
@@ -364,8 +366,7 @@ func _refresh_goal(res: Dictionary = {}) -> void:
 	var state: String = tr("GOAL_MET") if short.is_empty() else (tr("GOAL_SHORT") % ", ".join(parts))
 	goal_label.text = tr("GOAL_LABEL") % [String(gs.goal_name()), state]
 	goal_label.modulate = UiTheme.color("accent") if short.is_empty() else Color.WHITE
-	if objective_panel:
-		objective_panel.visible = true
+	_refresh_objective_panel()
 
 ## A wreck's din has brought something (Din): what the noise did, once a search -- with the face of what came.
 func _on_din_carried(_wreck: Node, draws: String, species: String = "") -> void:
@@ -404,14 +405,7 @@ func _on_fed_changed(_fed: Dictionary) -> void:
 
 func _process(delta: float) -> void:
 	_place_speech()
-	# The final wave's countdown, second by second; the banner goes as it sets out.
-	var gs_final = _get_game_state()
-	if gs_final and raid_warning_banner and raid_warning_banner.visible and "final_wave_in" in gs_final:
-		if float(gs_final.final_wave_in) >= 0.0:
-			_render_final_banner()
-		elif _final_banner_up:
-			_on_raid_warning(0.0)
-	_final_banner_up = gs_final != null and "final_wave_in" in gs_final and float(gs_final.final_wave_in) >= 0.0
+	_tick_raid_line()
 	if fed_label and fed_chip and fed_chip.visible:
 		_refresh_fed_label()
 	_refresh_day_dial()
@@ -437,19 +431,38 @@ func _on_beacon_changed(steps_done: int) -> void:
 			and not gs.map_data().get("beacon", {}).get("stage_waves", []).is_empty():
 		show_hint(tr("HINT_BEACON_STIRS"), UiTheme.toast_seconds("long"), "warning")
 
-## The signal is out and the valley will answer: the raid banner counts down to the final wave
-## (GameState.final_wave_in, _render_final_banner) and says to build what he can meanwhile.
+## The signal is out and the valley will answer: the raid line counts down to the final wave
+## (GameState.final_wave_in, _render_final_line) and a hint says to build what he can meanwhile.
 func _on_final_wave_warning(seconds: float) -> void:
 	show_hint(tr("HINT_FINAL_WAVE_SOON") % int(ceil(seconds)), UiTheme.toast_seconds("long"), "warning")
 	_raid_horn_sounded = false
 	_on_raid_warning(seconds)
-	_render_final_banner()
+	_render_final_line()
 
-func _render_final_banner() -> void:
+func _render_final_line() -> void:
 	var gs = _get_game_state()
-	if raid_warning_banner == null or gs == null or float(gs.final_wave_in) < 0.0:
+	if raid_line == null or gs == null or float(gs.final_wave_in) < 0.0:
 		return
-	_set_raid_text(tr("HUD_FINAL_WAVE") % int(ceil(float(gs.final_wave_in))))
+	raid_line.text = tr("HUD_FINAL_WAVE") % int(ceil(float(gs.final_wave_in)))
+
+## The raid line, second by second: to the final wave while the valley's answer is on its way
+## (GameState.final_wave_in), gone as it sets out; otherwise to the raid warned of, on the raid's own
+## clock (WaveManager.warned_raid_in) -- so a pause holds it and the game's speed runs it.
+func _tick_raid_line() -> void:
+	var gs = _get_game_state()
+	var final_in: float = float(gs.final_wave_in) if (gs != null and "final_wave_in" in gs) else -1.0
+	if raid_line != null and raid_line.visible:
+		if final_in >= 0.0:
+			_render_final_line()
+		elif _final_line_up:
+			_on_raid_warning(0.0)
+		else:
+			var waves = get_tree().get_first_node_in_group("wave_manager") if is_inside_tree() else null
+			var left: float = float(waves.warned_raid_in()) if (waves != null and waves.has_method("warned_raid_in")) else -1.0
+			if left >= 0.0:
+				_raid_seconds = int(ceil(left))
+				_render_raid_line()
+	_final_line_up = final_in >= 0.0
 
 ## Launched: everything in the valley is on its way, from every side (GAME-DESIGN 8.3).
 func _on_beacon_launched() -> void:
@@ -592,8 +605,7 @@ func _refresh_beacon_label() -> void:
 		text = String(cfg.beacon_status(gs.map_data(), int(gs.beacon_steps), float(gs.beacon_charge)))
 	beacon_label.text = text
 	beacon_label.visible = text != ""
-	if objective_panel:
-		objective_panel.visible = text != "" or (goal_label != null and is_instance_valid(goal_label) and goal_label.visible)
+	_refresh_objective_panel()
 	if text == "" or gs == null:
 		return
 	var stages: int = int(gs.beacon_stage_count()) if gs.has_method("beacon_stage_count") else 0
@@ -641,11 +653,7 @@ func _refresh_fed_label() -> void:
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
 		wave_label.text = tr("HUD_BIG_WAVE") % n if is_big else tr("HUD_WAVE") % n
-	if raid_warning_banner:
-		raid_warning_banner.visible = false
-	if raid_warning_panel:
-		raid_warning_panel.visible = false
-	_bosses_coming.clear()
+	_show_raid_line(false)
 
 ## The day's dial, from the clock (GameState.time_of_day): how far round today is, in the colour of
 ## its part; the sun, or at night the moon; the day of the run; and on hover, how long this part has
@@ -738,73 +746,29 @@ func _on_stage_wave_started(_size: int) -> void:
 	if wave_label:
 		wave_label.text = tr("HUD_STAGE_WAVE")
 
-## The bosses the coming raid brings, by name, said with its warning (v0.6, GAME-DESIGN
-## 7.5: a boss coming is announced) -- and the seconds the warning gave.
-var _bosses_coming: PackedStringArray = []
+## The seconds the raid line gives, and whether it was counting to the final wave last frame.
 var _raid_seconds: int = 0
-var _final_banner_up: bool = false
+var _final_line_up: bool = false
 
-func _render_raid_banner() -> void:
-	if raid_warning_banner == null:
+func _render_raid_line() -> void:
+	if raid_line != null:
+		raid_line.text = tr("HUD_RAID_WARNING") % _raid_seconds
+
+## The raid line up or down, and the goal's card with it when nothing else keeps it up.
+func _show_raid_line(on: bool) -> void:
+	if raid_line != null:
+		raid_line.visible = on
+	if raid_row != null:
+		raid_row.visible = on
+	_refresh_objective_panel()
+
+## The goal's card is up while it has something to say: the beacon, a pinned goal, a raid on its way.
+func _refresh_objective_panel() -> void:
+	if objective_panel == null:
 		return
-	var text: String = tr("HUD_RAID_WARNING") % _raid_seconds
-	# Where from (GAME-DESIGN 9.3): the nest not found, only the side its calls come from; found,
-	# they are seen setting out.
-	var gs = _get_game_state()
-	var found: bool = gs != null and "nest_found" in gs and bool(gs.nest_found)
-	var side: String = _side_of_the_nest()
-	if found:
-		text += "\n" + tr("HUD_RAID_SEEN")
-	elif side != "":
-		text += "\n" + tr("HUD_RAID_FROM") % tr("DIR_" + side)
-	# The day's other ways in (WaveManager.ways_now): a party by each of them as well.
-	var others: PackedStringArray = []
-	var waves = get_tree().get_first_node_in_group("wave_manager") if is_inside_tree() else null
-	if waves != null and waves.has_method("ways_now"):
-		for way in waves.ways_now():
-			# Not a way he is watching: none comes in by it then, and the banner said one would (the
-			# debug-agent's TASK-028). Said again at every tick of the countdown, so it follows him.
-			if String(way) != side and (not waves.has_method("way_open") or waves.way_open(String(way))):
-				others.append(tr("DIR_" + String(way)))
-	if not others.is_empty():
-		text += "\n" + tr("HUD_RAID_ALSO") % tr("DIR_AND").join(others)
-	if not _bosses_coming.is_empty():
-		text += "\n" + tr("HUD_RAID_BOSS") % ", ".join(_bosses_coming)
-	_set_raid_text(text)
-
-## The raid banner's text: all of it on the banner's label, which shows the first line; the rest under it.
-func _set_raid_text(text: String) -> void:
-	raid_warning_banner.text = text
-	var lines: PackedStringArray = text.split("\n")
-	# As wide as its first line in its own letters: the lines it keeps but does not show would make it as wide
-	# as they are in the heading's.
-	var font: Font = raid_warning_banner.get_theme_font("font")
-	var size: int = raid_warning_banner.get_theme_font_size("font_size")
-	raid_warning_banner.clip_text = true
-	raid_warning_banner.custom_minimum_size.x = ceilf(font.get_string_size(lines[0], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x) + 2.0
-	if raid_warning_details:
-		raid_warning_details.text = "\n".join(lines.slice(1)) if lines.size() > 1 else ""
-	_show_raid_details()
-
-func _show_raid_details() -> void:
-	if raid_warning_details and raid_warning_banner:
-		raid_warning_details.visible = raid_warning_banner.visible and raid_warning_details.text != ""
-
-## Which way the nest lies from the cabin, as a point of the compass ("N", "NE", ... -- north is
-## up the map, away from the camera's opening view), or "" with no nest or no cabin.
-func _side_of_the_nest() -> String:
-	if not is_inside_tree():
-		return ""
-	var nest: Node3D = get_tree().get_first_node_in_group("nest") as Node3D
-	var core: Node3D = get_tree().get_first_node_in_group("core") as Node3D
-	if nest == null or core == null:
-		return ""
-	var d: Vector3 = nest.global_position - core.global_position
-	if Vector2(d.x, d.z).length() < 0.5:
-		return ""
-	var sides: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-	var turn: float = fposmod(rad_to_deg(atan2(d.x, -d.z)), 360.0)
-	return sides[int(round(turn / 45.0)) % 8]
+	var beacon: bool = beacon_label != null and is_instance_valid(beacon_label) and beacon_label.visible
+	var goal: bool = goal_label != null and is_instance_valid(goal_label) and goal_label.visible
+	objective_panel.visible = beacon or goal or (raid_row != null and raid_row.visible)
 
 ## A moment into the run (FogOfWar): what the mist is -- ground not yet seen, cleared by going
 ## there or building near it -- so it is not taken for the weather.
@@ -825,34 +789,24 @@ func _on_guards_warned(_guard: Node) -> void:
 func _on_nest_found(_nest: Node) -> void:
 	show_hint(tr("HINT_NEST_FOUND"), UiTheme.toast_seconds("read"), "check")
 
-func _on_boss_warning(species_id: String) -> void:
-	var cfg = _get_config()
-	var boss_name: String = String(cfg.get_dino_name(species_id)) if (cfg and cfg.has_method("get_dino_name")) else species_id
-	if not _bosses_coming.has(boss_name):
-		_bosses_coming.append(boss_name)
-	if raid_warning_banner and raid_warning_banner.visible:
-		_render_raid_banner()
-
 func _on_boss_arrived(dino: Node) -> void:
 	var cfg = _get_config()
 	var species: String = String(dino.dino_type) if (dino and "dino_type" in dino) else ""
 	var boss_name: String = String(cfg.get_dino_name(species)) if (cfg and cfg.has_method("get_dino_name")) else species
 	show_hint(tr("HUD_BOSS_ARRIVED") % boss_name, UiTheme.toast_seconds("read"), "warning", UiTheme.portrait("dino/" + species))
 
+## A raid on its way (WaveManager, or the final wave's grace): the pack's call, once, from the nest's side, far
+## off -- that and his word are the warning (HeroVoice) -- and the quiet line in the goal's card. Nothing
+## flashes: time_left 0 takes the line down.
 func _on_raid_warning(time_left: float) -> void:
-	if raid_warning_banner == null:
+	if raid_line == null:
 		return
 	if time_left <= 0.0:
-		raid_warning_banner.visible = false
-		if raid_warning_panel:
-			raid_warning_panel.visible = false
+		_show_raid_line(false)
 		_raid_horn_sounded = false
 		return
-	# Sound the horn once as the warning appears, not on every countdown tick.
-	var appearing: bool = not _raid_horn_sounded
 	if not _raid_horn_sounded:
 		_raid_horn_sounded = true
-		# The pack itself, calling from the nest: heard from that side, far off (Fx.play_at).
 		var fx = get_node_or_null("/root/Fx")
 		if fx:
 			var nest: Node3D = get_tree().get_first_node_in_group("nest") as Node3D
@@ -860,13 +814,9 @@ func _on_raid_warning(time_left: float) -> void:
 				fx.play_at("raid_warning", nest.global_position + Vector3(0.0, 2.0, 0.0))
 			else:
 				fx.play(fx.Sound.RAID_WARNING)
-	raid_warning_banner.visible = true
-	if raid_warning_panel:
-		raid_warning_panel.visible = true
-		if appearing:
-			_pop_in(raid_warning_panel)
 	_raid_seconds = int(ceil(time_left))
-	_render_raid_banner()
+	_render_raid_line()
+	_show_raid_line(true)
 
 func _on_speed_btn_pressed() -> void:
 	var cur_idx = _speeds().find(current_speed)
@@ -1109,10 +1059,7 @@ func reset_hud(new_run: bool = true) -> void:
 			hero_commands.reset()
 	if game_over_panel:
 		game_over_panel.visible = false
-	if raid_warning_banner:
-		raid_warning_banner.visible = false
-	if raid_warning_panel:
-		raid_warning_panel.visible = false
+	_show_raid_line(false)
 	_update_speed_btn_label()
 	if hero_commands:
 		hero_commands.visible = true
@@ -1536,6 +1483,17 @@ func _ensure_ui_components() -> void:
 	goal_label.visible = false
 	goal_label.gui_input.connect(_on_goal_label_input)
 	objective.add_child(goal_label)
+	# A raid on its way, quietly, last in the card (raid_line): the words muted, the mark small -- it is
+	# heard and said first; this is only how long.
+	raid_row = HBoxContainer.new()
+	raid_row.name = "RaidRow"
+	raid_row.visible = false
+	raid_row.add_theme_constant_override("separation", UiTheme.space("xs"))
+	objective.add_child(raid_row)
+	raid_row.add_child(_icon("RaidIcon", "dino", UiTheme.icon_size("s")))
+	raid_line = _label("RaidLine", &"MutedLabel", "")
+	raid_line.visible = false
+	raid_row.add_child(raid_line)
 
 	# Bottom left: the Hero's medallion -- click it to pick him -- his figures and the meal he
 	# is living on beside it.
@@ -1606,29 +1564,6 @@ func _ensure_ui_components() -> void:
 	toasts.offset_right = 0.0
 	toasts.offset_top = float(_ui("toast_top", 66))
 	toasts.offset_bottom = toasts.offset_top
-	raid_warning_panel = _panel("RaidWarning", &"BannerPanel")
-	raid_warning_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	raid_warning_panel.visible = false
-	toasts.add_child(raid_warning_panel)
-	var raid_row := HBoxContainer.new()
-	raid_row.name = "RaidRow"
-	raid_row.add_theme_constant_override("separation", UiTheme.space("m"))
-	raid_warning_panel.add_child(raid_row)
-	raid_row.add_child(_icon("RaidIcon", "warning", UiTheme.icon_size("l")))
-	# The countdown in the heading's letters; which way and who comes, under it in the body's. All of it in
-	# the heading's letters was a banner as wide as its longest line -- "WITH THEM: COELOPHYSIS ALPHA" --
-	# and ran in under the card at the right. The banner label keeps every line (and shows its first).
-	var raid_lines := _vbox("RaidLines")
-	raid_lines.add_theme_constant_override("separation", UiTheme.space("hair"))
-	raid_row.add_child(raid_lines)
-	raid_warning_banner = _label("RaidWarningBanner", &"HeadingLabel", "")
-	raid_warning_banner.visible = false
-	raid_warning_banner.max_lines_visible = 1
-	raid_lines.add_child(raid_warning_banner)
-	raid_warning_details = _label("RaidWarningDetails", &"BannerDetailLabel", "")
-	raid_warning_details.visible = false
-	raid_lines.add_child(raid_warning_details)
-	raid_warning_banner.visibility_changed.connect(_show_raid_details)
 	hint_toast = _panel("HintToast", &"ToastPanel")
 	hint_toast.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	hint_toast.visible = false

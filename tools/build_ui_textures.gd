@@ -9,7 +9,7 @@ extends SceneTree
 ## rim of bone, pegged at each corner with a knuckle of it; the ship's own things -- the
 ## beacon, what it knows -- are slate in steel with a line of cyan light; a button is leather
 ## in a thinner rim, the one thing to press painted ochre; a portrait sits in a sunk socket; a
-## toast is a stroke of ink from a broad brush, a raid's the same in red ochre; a bar is a
+## toast is a stroke of ink from a broad brush; a bar is a
 ## trough capped with bone with pigment in it; a title stands over a rule with a tooth of bone
 ## at its middle. Cards and tooltips stay a stitched hide.
 ##
@@ -58,7 +58,6 @@ const HOLLOW := Color(0.04, 0.033, 0.027)        # a socket's floor
 const SLATE := Color(0.085, 0.105, 0.125)        # the ship's panel
 const CYAN := Color(0.42, 0.78, 0.88, 0.85)      # the ship's light
 const INK := Color(0.075, 0.06, 0.048, 0.93)     # a toast's brush stroke
-const RED_OCHRE := Color(0.42, 0.1, 0.06, 0.95)  # a raid's
 
 var _k: int = 2          # Config.THEME.surface_scale: pixels drawn per design pixel
 
@@ -779,9 +778,6 @@ func _draw_ring_fill(spec: Dictionary) -> Image:
 
 func _draw_brush(spec: Dictionary) -> Image:
 	return _brush(spec, INK, 81)
-
-func _draw_brush_blood(spec: Dictionary) -> Image:
-	return _brush(spec, RED_OCHRE, 82)
 
 ## A stroke laid with a broad brush -- what a toast's line is written on: its ends ragged where
 ## each bristle touched down and lifted (in the end pieces, drawn once), dry streaks along its

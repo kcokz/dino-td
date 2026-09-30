@@ -343,9 +343,6 @@ static func build() -> Theme:
 	# Cut in capitals: a heading, a small capital label naming a card (the beacon's), a title,
 	# the verdict, a figure on the results.
 	_label(t, "HeadingLabel", display_font("bold", letter_spacing("heading")), "heading", color("title"))
-	# The lines under a banner's heading -- which way a raid comes, who comes with it: the body's letters in
-	# the heading's gilt, on the banner's red.
-	_label(t, "BannerDetailLabel", font("regular"), "body", color("title"))
 	_label(t, "TechLabel", display_font("bold", letter_spacing("button")), "small", color("tech"))
 	_title(t, "TitleLabel", display_font("black", letter_spacing("title")), "title")
 	_title(t, "DisplayLabel", display_font("black", letter_spacing("display")), "display", 8)
@@ -378,11 +375,10 @@ static func build() -> Theme:
 	# Round a portrait or a bench's icon: a socket sunk in the leather.
 	_panel(t, "InsetPanel", surface("socket", "plain", space("s"), space("s")))
 	_panel(t, "InsetTechPanel", surface("socket_tech", "plain", space("s"), space("s")))
-	# A toast is a stroke of ink -- news, not an alarm; a raid is the same in red ochre. Their
-	# words sit inside the stroke's ragged ends.
+	# A toast is a stroke of ink -- news, not an alarm; its words sit inside the stroke's ragged
+	# ends. (A raid had a banner in red ochre; now it is heard and said -- HUD.raid_line.)
 	var brush_h: int = int(tokens().get("surfaces", {}).get("brush", {}).get("margin", Vector2i.ZERO).x)
 	_panel(t, "ToastPanel", surface("brush", "plain", brush_h, space("s") + space("xs")))
-	_panel(t, "BannerPanel", surface("brush_blood", "plain", brush_h, space("s") + space("xs")))
 	_panel(t, "TechPanel", surface("frame_tech", "plain", space("l") + space("xs"), space("l")))
 	_panel(t, "ModalPanel", surface("frame", "plain", space("xl") + space("s"), space("xl")))
 	_panel(t, "SolidPanel", frame)

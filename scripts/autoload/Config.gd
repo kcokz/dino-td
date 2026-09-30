@@ -2057,8 +2057,6 @@ const THEME: Dictionary = {
 		# ("tile_v"), to the height of the lines on it.
 		"brush": {"image": "res://assets/ui/brush.png", "size": Vector2i(256, 40), "margin": Vector2i(40, 0), "pad": 0,
 			"tile_v": false},
-		"brush_blood": {"image": "res://assets/ui/brush_blood.png", "size": Vector2i(256, 40), "margin": Vector2i(40, 0), "pad": 0,
-			"tile_v": false},
 		# "cap": how wide each bone cap on a trough's ends is -- the pigment runs between them.
 		"trough": {"image": "res://assets/ui/trough.png", "size": Vector2i(48, 12), "margin": Vector2i(6, 0), "pad": 0,
 			"tile_v": false, "cap": 4},
@@ -2257,7 +2255,15 @@ const BARKS: Dictionary = {
 		"fight": {"count": 5, "chance": 0.5, "again": 15.0},
 		"hurt": {"count": 4, "chance": 1.0, "again": 12.0, "urgent": true},
 		"kill": {"count": 4, "chance": 0.4, "again": 12.0},
+		# The raid on its way, where there is no nest to place it (HeroVoice._on_raid_warning).
 		"raid": {"count": 4, "chance": 1.0, "again": 30.0, "urgent": true},
+		# The raid on its way, told (no banner; v0.6 round six): where from -- the side the calls come
+		# from, or the nest found, seen setting out -- then the other ways in, then who comes with them.
+		# Every raid, every time: this is the warning.
+		"raid_from": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
+		"raid_seen": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
+		"raid_also": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
+		"raid_boss": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
 		"raid_over": {"count": 4, "chance": 0.8, "again": 30.0},
 		"leader": {"count": 3, "chance": 1.0, "again": 60.0, "urgent": true},
 		"boss": {"count": 3, "chance": 1.0, "again": 60.0, "urgent": true},

@@ -238,7 +238,7 @@ func test_11_not_all_the_time_and_never_the_same_line_twice_running() -> void:
 	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
 	var eb = tree.root.get_node("EventBus")
 	var keys: Array = []
-	var ear := func(key: String, _s: float) -> void: keys.append(key)
+	var ear := func(key: String, _s: float, _args: Array = []) -> void: keys.append(key)
 	eb.hero_spoke.connect(ear)
 	assert_true(voice.speak("tool"), "A line")
 	assert_false(voice.speak("tool"), "and not straight away another, however many he has")
@@ -256,7 +256,7 @@ func test_12_left_standing_he_talks_to_himself() -> void:
 	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
 	var eb = tree.root.get_node("EventBus")
 	var keys: Array = []
-	var ear := func(key: String, _s: float) -> void: keys.append(key)
+	var ear := func(key: String, _s: float, _args: Array = []) -> void: keys.append(key)
 	eb.hero_spoke.connect(ear)
 	main.hero.current_state = main.hero.State.IDLE
 	var step: float = 0.5
@@ -276,7 +276,7 @@ func test_13_sent_to_a_tree_he_may_say_what_he_is_doing() -> void:
 	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
 	var eb = tree.root.get_node("EventBus")
 	var keys: Array = []
-	var ear := func(key: String, _s: float) -> void: keys.append(key)
+	var ear := func(key: String, _s: float, _args: Array = []) -> void: keys.append(key)
 	eb.hero_spoke.connect(ear)
 	# What he is doing picks the situation; whether he speaks is its chance -- here, every time.
 	var harvest: Dictionary = config_node.BARKS["harvest"]
@@ -325,13 +325,13 @@ func test_15_the_bubble_is_as_small_as_its_words() -> void:
 	var voice: HeroVoice = main.hero.find_child("Voice", false, false) as HeroVoice
 	var hud = main.hud
 	var eb = tree.root.get_node("EventBus")
-	eb.hero_spoke.emit("BARK_IDLE_1", 3.0)
+	eb.hero_spoke.emit("BARK_IDLE_1", 3.0, [])
 	await wait_frames(3)
-	eb.hero_spoke.emit("BARK_MOVE_2", 3.0)
+	eb.hero_spoke.emit("BARK_MOVE_2", 3.0, [])
 	await wait_frames(3)
 	var line: float = float(hud.speech_label.get_line_height())
 	assert_lt(hud.speech_bubble.size.y, line * 3.0, "A short line in a bubble one line high (%.0f px, a line is %.0f)" % [hud.speech_bubble.size.y, line])
-	eb.hero_spoke.emit("BARK_IDLE_1", 3.0)
+	eb.hero_spoke.emit("BARK_IDLE_1", 3.0, [])
 	await wait_frames(3)
 	assert_lte(hud.speech_bubble.size.x, float(config_node.UI["speech_max_width"]) + 80.0, "A long one wraps at the most")
 	assert_lt(hud.speech_bubble.size.y, line * 6.0, "into a few lines, not a column")

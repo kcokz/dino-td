@@ -211,12 +211,12 @@ func test_07_the_countdown_is_on_the_screen() -> void:
 		_next_step()
 	await wait_frames(1)
 	var hud = main.hud
-	assert_true(hud.raid_warning_banner.visible, "The banner is up")
+	assert_true(hud.raid_line.visible, "The count is up, in the goal's card")
 	var secs: int = int(ceil(float(game_state_node.final_wave_in)))
-	assert_eq(String(hud.raid_warning_banner.text), tr("HUD_FINAL_WAVE") % secs, "counting to the final wave (%s)" % hud.raid_warning_banner.text)
+	assert_eq(String(hud.raid_line.text), tr("HUD_FINAL_WAVE") % secs, "counting to the final wave (%s)" % hud.raid_line.text)
 	main.wave_manager._process(float(_beacon()["launch_grace"]) + 0.1)
 	await wait_frames(2)
-	assert_false(hud.raid_warning_banner.visible, "and gone when it sets out")
+	assert_false(hud.raid_line.visible, "and gone when it sets out")
 
 func test_08_the_fight_after_the_grace_is_as_long_as_it_was() -> void:
 	var fight: float = float(_beacon()["charge_seconds"]) - float(_beacon()["launch_grace"])
