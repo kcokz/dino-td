@@ -64,5 +64,28 @@ func test_01_a_development_build_has_one_and_it_writes_everything() -> void:
 		if FileAccess.file_exists(f):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 
-func test_02_its_key_is_in_the_controls() -> void:
-	assert_eq(int(config_node.CONTROLS["bug_report_key"]), KEY_F9, "F9 writes a bug report")
+func test_02_its_key_is_one_the_hand_reaches_and_writes_a_report() -> void:
+	# The player, 2026-09-29: "我f按键不方便，有没有别的快捷键可以用给bug report".
+	var key: int = int(config_node.CONTROLS["bug_report_key"])
+	assert_false(key >= KEY_F1 and key <= KEY_F12, "Not an F key")
+	for name in config_node.CONTROLS:
+		var bound = config_node.CONTROLS[name]
+		if name != "bug_report_key" and (bound is int) and String(name).ends_with("_key"):
+			assert_ne(int(bound), key, "and not one the game uses for anything else (%s)" % name)
+		if bound is Array:
+			assert_false((bound as Array).has(key), "(%s)" % name)
+	var main = await _level()
+	var report: BugReport = main.get_node_or_null("BugReport") as BugReport
+	if not OS.is_debug_build() or report == null:
+		return
+	var dir: String = "user://bugreports"
+	var before: int = DirAccess.get_files_at(dir).size() if DirAccess.dir_exists_absolute(dir) else 0
+	var press := InputEventKey.new()
+	press.physical_keycode = key as Key
+	press.pressed = true
+	report._unhandled_input(press)
+	var files: PackedStringArray = DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
+	assert_gt(files.size(), before, "Pressed where it is on the board, it writes a report")
+	for f in files:
+		if f.begins_with("bug-") and FileAccess.get_modified_time(dir.path_join(f)) >= int(Time.get_unix_time_from_system()) - 5:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(f)))

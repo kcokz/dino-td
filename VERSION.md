@@ -1372,7 +1372,7 @@
     - **人一直原地跑**：只是走路时被挡住 3 秒一点没动就停下（`HERO.give_up_after`、`Hero._give_up_the_walk`）。玩家图里的布局没能复现出来——圈里的通道被机关堵住时，人会绕船舱另一边——这一条是不管什么原因，都不会一直跑下去。新测试 `test_v06_found_playing` 第 8 条。
     - **"看不出来是什么"的东西**：是能采的砂岩（夜里在火光下是一团橙色碎块，只到膝盖）。现在是一层层叠起来、一边台阶一边陡壁的砂岩露头，一人高，顶层裂成两块（`tools/generate_props.py sandstone_outcrop`、`_bed`）。
     - **（debug-agent BUG-024）新按钮没有弹大**：容器排版时把子节点的缩放设回 1。现在排版之后才缩小，补间从小开始（`UiKit.come_in`）；`test_v06_the_hero_card` 第 12 条改成隔两帧再看。
-    - **bug 报告**（只在开发版）：按 F9 把当时的一切写进 `user://bugreports/bug-时间.json`，旁边存截图（新 `BugReport`，`CONTROLS.bug_report_key`、`BUG_REPORT`；`Hero.debug_state`；恐龙的 `debug_state` 多了 `jammed_for`）。新测试 `test_v06_bug_report.gd`（2 条）。
+    - **bug 报告**（只在开发版）：按 ` 键（Esc 下面、1 左边；原来是 F9，玩家："我f按键不方便，有没有别的快捷键可以用给bug report"——按位置认，换了键盘布局也是那个键）把当时的一切写进 `user://bugreports/bug-时间.json`，旁边存截图（新 `BugReport`，`CONTROLS.bug_report_key`、`BUG_REPORT`；`Hero.debug_state`；恐龙的 `debug_state` 多了 `jammed_for`）。新测试 `test_v06_bug_report.gd`（2 条）。
   - **坠毁残骸和信标部件**（设计书 9.3"信标变成冒险"；玩家定："翻找几秒，直接入库"；"烟柱，远处看得见"；"河边 / 巢后 / 东南边缘"）：
     - 信标三段各要一个部件：第 1 段天线（8 木头 + 天线）、第 2 段电池（8 石头 + 电池）、第 3 段主控板（6 石头 + 6 骨头 + 主控板）。部件是仓库里的材料（`Config.RESOURCES` 多了 antenna、battery、board；`Config.is_part`），所以价格、缺什么、去哪找，都和别的价格一样说。
     - 部件在三块残骸里：残骸是一种资源点（`RESOURCE_NODES` 的 antenna / battery / board：一个，`strokes` 10 下才出来，一秒一下）。`ResourceNode.harvest` 新规则：`strokes` 大于 1 的，前几下什么也不出，最后一下出一个；卡片和标签按"还剩几下"倒数；卡片写里面有什么、翻多久（`NODE_HINT_WRECK`），翻完写"翻过了"（`STATUS_SEARCHED`），类型写"飞船残骸"（`PANEL_KIND_WRECK`）。

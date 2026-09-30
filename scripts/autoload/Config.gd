@@ -2197,7 +2197,10 @@ const CONTROLS: Dictionary = {
 	"camera_tilt_down_key": KEY_V,                # towards looking along the ground
 	"camera_reset_key": KEY_R,                    # back to the opening view
 	# A bug report, in a development build (BugReport): everything the game was doing, to a file.
-	"bug_report_key": KEY_F9,
+	# The key under Esc, left of 1 -- a dev console's, by where it is on the board whatever the
+	# layout: the left hand reaches it without leaving the keys or needing Fn (it was F9; the
+	# player: "我f按键不方便"). Nothing else in the game answers to it.
+	"bug_report_key": KEY_QUOTELEFT,
 	# Turns a trap being placed a quarter, clockwise -- with Shift, back (Trap.FACINGS). The same
 	# key as the camera's reset, which it takes over only while a trap is in hand: R is where
 	# every building game puts "rotate", and the view is not what the hand is on then.

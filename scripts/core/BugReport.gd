@@ -58,8 +58,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	var cfg = get_node_or_null("/root/Config")
-	var key: int = int(cfg.CONTROLS.get("bug_report_key", KEY_F9)) if (cfg and "CONTROLS" in cfg) else KEY_F9
-	if (event as InputEventKey).keycode != key:
+	var key: int = int(cfg.CONTROLS.get("bug_report_key", KEY_QUOTELEFT)) if (cfg and "CONTROLS" in cfg) else KEY_QUOTELEFT
+	# By the letter or by where the key is: on a board laid out otherwise the key under Esc is still it.
+	if (event as InputEventKey).keycode != key and (event as InputEventKey).physical_keycode != key:
 		return
 	get_viewport().set_input_as_handled()
 	var path: String = save()
