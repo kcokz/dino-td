@@ -372,13 +372,10 @@ func _on_din_carried(_wreck: Node, draws: String, species: String = "") -> void:
 	show_hint(tr("HINT_DIN_" + draws.to_upper()), UiTheme.toast_seconds("read"), "warning",
 		UiTheme.portrait("dino/" + species) if species != "" else null)
 
-## The hand-drawn map shown once he has made it.
+## The hand-drawn map's ground drawn afresh (a new run, something made). Whether it is shown at all is the
+## map's own to ask (MiniMap._process).
 func _refresh_minimap() -> void:
-	if minimap == null or not is_instance_valid(minimap):
-		return
-	var gs = _get_game_state()
-	minimap.visible = gs != null and gs.has_method("has_unlock") and gs.has_unlock("hide_map")
-	if minimap.visible:
+	if minimap != null and is_instance_valid(minimap) and minimap.visible:
 		minimap.redraw_ground()
 
 func _on_goal_changed(_goal: Dictionary) -> void:

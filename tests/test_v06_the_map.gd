@@ -94,3 +94,20 @@ func test_03_a_click_on_it_takes_the_view_there() -> void:
 	assert_lt(Vector2(focus.x - target.x, focus.z - target.z).length(), 0.6, "The view is where the click was on the map")
 	var cabin: Vector2 = map.to_map(main.current_core.global_position)
 	assert_true(Rect2(Vector2.ZERO, map.size).has_point(cabin), "and the cabin is on it")
+
+func test_04_a_new_run_starts_without_it() -> void:
+	# The debug-agent's BUG-027: made, then the run restarted, the map was still up with nothing made -- the
+	# new run's level built before its unlocks were cleared, the map shown on the old run's word.
+	var main = await _level()
+	game_state_node.grant_unlock("hide_map")
+	await wait_frames(2)
+	assert_true(main.hud.minimap.visible, "(made, it is up)")
+	# The run's unlocks cleared on their own, the HUD not told: the map asks for itself.
+	game_state_node.reset_game()
+	await wait_frames(2)
+	assert_false(main.hud.minimap.visible, "A run with nothing made has no map")
+	game_state_node.grant_unlock("hide_map")
+	await wait_frames(2)
+	main.restart_game()
+	await wait_frames(2)
+	assert_false(main.hud.minimap.visible, "and nor does a run begun again")

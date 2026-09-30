@@ -38,7 +38,19 @@ func _number(key: String, fallback: float) -> float:
 func _colour(key: String, fallback: Color) -> Color:
 	return _cfg().get(key, fallback)
 
+## The unlock its recipe grants (Config.RECIPES.hide_map): made, it is shown.
+const MADE: String = "hide_map"
+
 func _process(delta: float) -> void:
+	# Shown while it is made, and only then -- asked every frame, not told: a new run's level can be built
+	# before the run's unlocks are cleared, and a map shown on the old run's word stayed up with none made
+	# (the debug-agent's BUG-027).
+	var gs = get_node_or_null("/root/GameState")
+	var made: bool = gs != null and gs.has_method("has_unlock") and bool(gs.has_unlock(MADE))
+	if made != visible:
+		visible = made
+		if made:
+			_clock = 0.0
 	if not visible:
 		return
 	_clock -= delta
