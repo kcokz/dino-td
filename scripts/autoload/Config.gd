@@ -302,7 +302,7 @@ const BUILDINGS: Dictionary = {
 		# The fence slot of the build menu (GAME-DESIGN 6.0 rule 2, v0.6 round six: "墙上挂机关类似升级
 		# 方向，可以做成升级"): most of a wall stays wood, a funnel; where it is bitten, it becomes what
 		# the place needs -- bone points on it (sharp), or stone in its place (heavy).
-		"upgrades_to": ["bone_stake", "stone_wall"],
+		"upgrades_to": ["bone_stake", "rock_fence", "stone_wall"],
 	},
 	# The fence with bone (GAME-DESIGN 6.0: bone is what cuts): the same section with bone points
 	# lashed to its logs, biting more than twice as hard and lasting a little longer. One bone a
@@ -319,6 +319,24 @@ const BUILDINGS: Dictionary = {
 		"cost": {"wood": 1, "bone": 1},
 		"upgrades_to": "",
 	},
+	# The fence with a rock set on it (GAME-DESIGN 6.0: 砸 as a wall's upgrade -- stone is what weighs; the
+	# player: "墙上挂机关类似升级方向，可以做成升级"): a block of sandstone balanced on the post's points, held
+	# by a thong (tools/generate_props.py rock_palisade). Bitten, the section shakes it off onto what is
+	# biting it -- everything against it takes `drop_damage` -- and it is set back on over
+	# `drop_rearm_seconds`, seen rising (Wall). Where a fence is chewed, the chewing costs.
+	"rock_fence": {
+		"name": "BUILDING_ROCK_FENCE_NAME",
+		"kind": "wall",
+		"cells": 1,
+		"hp": 8.0,
+		"height": 1.25,
+		"contact_damage": 0.15,
+		"contact_tick": 0.5,
+		"cost": {"wood": 1, "stone": 2},
+		"drop_damage": 4.0,
+		"drop_rearm_seconds": 12.0,
+		"upgrades_to": "",
+	},
 	# Courses of unmortared stone, capstones on top (GAME-DESIGN 6.2: only blocks, many hit
 	# points): it bites nothing, but a big predator that would eat through a palisade is held
 	# here a long time (6.3). The fence with stone in its place (6.0: stone is what weighs): a
@@ -330,6 +348,27 @@ const BUILDINGS: Dictionary = {
 		"hp": 20.0,
 		"height": 1.2,
 		"cost": {"stone": 1},
+		# With bone, a crossbow set into it (6.0): the wall crossbow.
+		"upgrades_to": ["wall_crossbow"],
+	},
+	# A set crossbow built into a stone wall (GAME-DESIGN 6.0; the player: "bow不是很flexible，如果前方被墙挡住了
+	# 就不能进攻"): the wall is its body and the bolt what cuts -- stone and bone. It shoots out along a lane
+	# from the wall's face, so the wall is no longer what blinds the bow, and it stands a raid's bites as
+	# the stone it is set in (tools/generate_props.py wall_crossbow). It is a trap (Trap.gd): a stone wall
+	# becomes one by a new building going up in its cells (Building._become), facing out from the cabin;
+	# it is joined by the fences beside it as a wall is (`joins_walls`).
+	"wall_crossbow": {
+		"name": "BUILDING_WALL_CROSSBOW_NAME",
+		"kind": "trap",
+		"cells": 1,
+		"height": 1.2,
+		"hp": 60.0,
+		"cost": {"stone": 1, "bone": 2},
+		"lane": 6,
+		"damage": 2.0,
+		"pierce": true,
+		"rearm_seconds": 4.0,
+		"joins_walls": true,
 		"upgrades_to": "",
 	},
 	# A gate: a section of wall the Hero walks through and nothing else does. Now that a wall
@@ -2979,6 +3018,12 @@ const VISUALS: Dictionary = {
 	# middle, and a run of them out to each side of the cell, lashed to a rail -- the runs
 	# towards whatever stands in the cells beside it are shown, so a line of them is one
 	# palisade (Wall.gd). Axe-cut points, fire-hardened tips, vine lashing, turned earth.
+	# The fence with a rock on it: the same kit, and the Rock the Wall drops and lifts back.
+	"building/rock_fence":  {"scene": "res://assets/models/props/rock_palisade_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
+	# A crossbow in a stone wall: Base, Bow, String, Bolt, as the set crossbow's.
+	"building/wall_crossbow": {"scene": "res://assets/models/props/wall_crossbow_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
 	"building/wall":        {"scene": "res://assets/models/props/palisade_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
 	# The same palisade with bone points lashed to its logs (palisade bone=True): what it is

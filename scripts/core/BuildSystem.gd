@@ -190,13 +190,19 @@ func place_building(type_id: String, cell: Vector2i, parent_node: Node = null, s
 # 3. Entity Factory
 # ==============================================================================
 
+## The script a `type_id` is made of: by KIND, not by name -- a bone stake is a stake and a set
+## crossbow is a trap, and each new building of a kind needs a Config row and nothing here -- unless
+## the type has a script of its own (a gate is a wall that opens).
+static func script_for(type_id: String) -> String:
+	var kind: String = ""
+	if Engine.get_main_loop() is SceneTree and (Engine.get_main_loop() as SceneTree).root:
+		var cfg = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Config")
+		if cfg and cfg.has_method("get_building_kind"):
+			kind = String(cfg.get_building_kind(type_id))
+	return String(SCRIPT_PATHS.get(type_id, SCRIPT_PATHS.get(kind, SCRIPT_PATHS["base"])))
+
 func _instantiate_building(type_id: String) -> Node:
-	# By KIND, not by name: a bone stake is a stake and a set crossbow is a trap, and each new
-	# building of a kind should need a Config row and nothing here -- unless the type has a
-	# script of its own (a gate is a wall that opens).
-	var cfg_kind = _get_config()
-	var kind: String = String(cfg_kind.get_building_kind(type_id)) if (cfg_kind and cfg_kind.has_method("get_building_kind")) else ""
-	var path: String = SCRIPT_PATHS.get(type_id, SCRIPT_PATHS.get(kind, SCRIPT_PATHS["base"]))
+	var path: String = script_for(type_id)
 	if ResourceLoader.exists(path):
 		var res = load(path)
 		if res is GDScript:

@@ -76,8 +76,8 @@ func test_02_each_step_up_adds_one_material_and_none_is_made_of_three() -> void:
 			assert_false(cost.has("wood") and String(b_type) != "", "and it is not more wood: wood is the body (%s -> %s)" % [b_type, target])
 			steps += 1
 	assert_gt(steps, 3, "(there are ways up)")
-	assert_eq(config_node.upgrade_targets("wall"), ["bone_stake", "stone_wall"] as Array[String],
-		"The fence goes two ways: bone, or stone")
+	assert_eq(config_node.upgrade_targets("wall"), ["bone_stake", "rock_fence", "stone_wall"] as Array[String],
+		"The fence goes three ways: bone, a rock on it, or stone")
 
 func test_03_a_fence_becomes_bone_stakes_or_a_stone_wall_where_it_stands() -> void:
 	var main = await _level()

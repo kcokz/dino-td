@@ -261,6 +261,14 @@ func occupy_building(building: Node, cells: Array) -> bool:
 		building.cell_pos = world_to_cell(build_cell_to_world(cells[cells.size() / 2]))
 	return true
 
+## The build cells `building` holds.
+func cells_of(building: Node) -> Array:
+	var out: Array = []
+	for c in building_cells:
+		if building_cells[c] == building:
+			out.append(c)
+	return out
+
 ## Takes `building` out of every cell it held.
 func vacate_building(building: Node) -> void:
 	for c in building_cells.keys():

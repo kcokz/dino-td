@@ -465,6 +465,9 @@ func _finish_upgrade() -> void:
 	var to: String = upgrading_to
 	upgrading_to = ""
 	upgrade_progress = 0.0
+	if _takes_another_body(to):
+		_become(to, health)
+		return
 	setup(to, cell_pos)
 	current_hp = max_hp * health
 	_rebuild_body(was)
@@ -474,6 +477,61 @@ func _finish_upgrade() -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_upgraded"):
 		eb.building_upgraded.emit(self)
+
+## Whether what it becomes is another kind of thing, made of another script (BuildSystem.script_for): a
+## stone wall with a crossbow set into it shoots, and a wall does not.
+func _takes_another_body(to: String) -> bool:
+	var mine: Script = get_script() as Script
+	var path: String = BuildSystem.script_for(to)
+	return mine != null and path != "" and mine.resource_path != path
+
+## Becomes `to` by a new building of it going up in its cells, as whole as this one was (`health`), and
+## facing out from the cabin if it faces at all -- and this one gone without a fall: building_upgraded is
+## said of the new one, and nothing of this one being destroyed, for it was not.
+func _become(to: String, health: float) -> void:
+	var gm: Node = get_tree().get_first_node_in_group("grid_manager") if is_inside_tree() else null
+	var parent: Node = get_parent()
+	if gm == null or parent == null or not gm.has_method("cells_of"):
+		return
+	var script: Script = load(BuildSystem.script_for(to)) as Script
+	if script == null:
+		return
+	var cells: Array = gm.cells_of(self)
+	var fresh: Node = script.new()
+	fresh.setup(to, cell_pos)
+	fresh.position = position
+	if "facing" in fresh:
+		fresh.facing = _facing_out()
+	gm.vacate_building(self)
+	is_destroyed = true
+	collision_layer = 0
+	_update_avoidance()
+	parent.add_child(fresh)
+	gm.occupy_building(fresh, cells)
+	if fresh.has_method("complete_construction"):
+		fresh.complete_construction()
+	fresh.current_hp = fresh.max_hp * clampf(health, 0.0, 1.0)
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("building_upgraded"):
+		eb.building_upgraded.emit(fresh)
+	queue_free()
+
+## Which way out of the cabin it stands (Trap.FACINGS): the facing nearest the way from the cabin's middle
+## to it -- a crossbow set into a wall looks out of the wall.
+func _facing_out() -> int:
+	var core: Node3D = get_tree().get_first_node_in_group("core") as Node3D if is_inside_tree() else null
+	if core == null:
+		return 0
+	var out: Vector3 = global_position - core.global_position
+	var best: int = 0
+	var best_dot: float = -INF
+	var facings: Array = [Vector2(0.0, -1.0), Vector2(1.0, 0.0), Vector2(0.0, 1.0), Vector2(-1.0, 0.0)]
+	for i in facings.size():
+		var d: float = (facings[i] as Vector2).dot(Vector2(out.x, out.z))
+		if d > best_dot:
+			best_dot = d
+			best = i
+	return best
 
 ## What else changes with what it is: whose way it stands in (a campfire is stepped over, the brazier
 ## it becomes is not: Config.walk_over) -- its layer and the steering round it. A kind with more of its
