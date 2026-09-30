@@ -729,10 +729,15 @@ func _on_torch_changed(lit: bool) -> void:
 		show_hint(tr("HINT_TORCH_OUT") % [cost, _torch_key_text()], -1.0, "info")
 
 ## The torch tile pressed: he lights one, if he can.
+## The torch's tile (or its key): a torch lit if he has none burning, and the one burning put out if he has
+## (v0.6 round six, the player: "火把点燃了就不能取消（再按一下就取消）").
 func _light_his_torch() -> void:
 	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
-	if hero != null and hero.has_method("light_torch"):
-		hero.light_torch()
+	if hero != null:
+		if float(hero.get("torch_left")) > 0.0 and hero.has_method("put_out_torch"):
+			hero.put_out_torch()
+		elif hero.has_method("light_torch"):
+			hero.light_torch()
 	if hero_commands:
 		hero_commands.refresh()
 
@@ -1650,6 +1655,7 @@ func _ensure_ui_components() -> void:
 	if option_panel:
 		option_panel.card_changed.connect(_on_card_changed)
 		option_panel.stand_on(hero_commands)
+		option_panel.keep_below(objective_panel)
 		_on_card_changed()
 	var menu_script = load("res://scripts/ui/PauseMenu.gd")
 	if menu_script:

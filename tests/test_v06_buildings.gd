@@ -219,12 +219,16 @@ func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
 	await wait_frames(1)
 	var target: String = String(config_node.upgrade_target("set_crossbow"))
 	var target_name: String = String(config_node.get_building_name(target))
-	var button_text: String = tr("CMD_UPGRADE_TO") % [target_name, panel._amounts_text(config_node.upgrade_cost("set_crossbow"))]
-	var offered: bool = false
-	for child in panel.button_container.get_children():
-		if child is Button and String(child.text) == button_text:
-			offered = true
-	assert_true(offered, "The tower's panel offers the upgrade, price on the button (%s)" % button_text)
+	# The card the build menu has for what it becomes (v0.6 round six: "升级建筑单位图标应该跟build里面的建造图标一样").
+	var offered: Button = null
+	for btn in panel.command_buttons():
+		if String(btn.text) == target_name:
+			offered = btn
+	assert_not_null(offered, "The tower's panel offers the upgrade, as the build menu's card for it (%s)" % target_name)
+	if offered != null:
+		assert_eq(offered.icon, UiTheme.icon(target), "its icon, as in the build menu")
+		var row: Node = offered.get_node_or_null("PriceRow")
+		assert_true(row != null and row.get_child_count() > 0, "and its price on it")
 	var detail: String = panel.upgrade_detail_text(t)
 	assert_true(detail.contains(target_name), "Hovering it names what the tower becomes")
 	var rate: String = tr("STAT_REARM_SECONDS") % [config_node.factor_text(float(_row("set_crossbow")["rearm_seconds"])),

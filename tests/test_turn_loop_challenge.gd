@@ -137,9 +137,12 @@ func test_challenge_50_plus_continuous_cycles_state_invariants() -> void:
 		assert_true(produce_watcher.emitted, "Cycle %d: produce_phase signal must be emitted upon entering PRODUCE" % cycle)
 
 		# Dino multiplier check every 3 waves
+		# Compounding after each big wave, up to the valley's toughest (MAPS.<id>.toughest; v0.6 round six:
+		# a raid grows to what the valley holds and no further).
 		if cycle % 3 == 0:
-			expected_hp_mult *= float(config_node.WAVES["enhance_after_big"]["hp"])
-			expected_dmg_mult *= float(config_node.WAVES["enhance_after_big"]["damage"])
+			var toughest: float = float(game_state_node.map_data().get("toughest", INF))
+			expected_hp_mult = minf(expected_hp_mult * float(config_node.WAVES["enhance_after_big"]["hp"]), toughest)
+			expected_dmg_mult = minf(expected_dmg_mult * float(config_node.WAVES["enhance_after_big"]["damage"]), toughest)
 
 		var current_hp_mult = float(game_state_node.dino_stat_multipliers.get("hp", 1.0))
 		var current_dmg_mult = float(game_state_node.dino_stat_multipliers.get("damage", 1.0))

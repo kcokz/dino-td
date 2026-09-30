@@ -559,6 +559,18 @@ static func build() -> Theme:
 	t.set_font("font", "TooltipLabel", font("regular"))
 	t.set_font_size("font_size", "TooltipLabel", font_size("small"))
 
+	# --- Scrolling ----------------------------------------------------------------
+	# A column that holds more than there is room for scrolls (the command card's, OptionPanel._fit): a
+	# thin dark groove and a bone-pale grabber, lit when held -- the theme's, not the engine's grey.
+	var groove := _box(Color(color("bg"), 0.6), Color(color("text"), 0.1), 1, radius("s"), space("xs"), space("xs"))
+	var grabber := _box(Color(color("text_muted"), 0.6), Color(0, 0, 0, 0), 0, radius("s"), space("xs"), space("xs"))
+	var held := _box(Color(color("accent"), 0.85), Color(0, 0, 0, 0), 0, radius("s"), space("xs"), space("xs"))
+	t.set_stylebox("scroll", "VScrollBar", groove)
+	t.set_stylebox("scroll_focus", "VScrollBar", groove)
+	t.set_stylebox("grabber", "VScrollBar", grabber)
+	t.set_stylebox("grabber_highlight", "VScrollBar", held)
+	t.set_stylebox("grabber_pressed", "VScrollBar", held)
+
 	# --- Containers ---------------------------------------------------------------
 	t.set_constant("separation", "HBoxContainer", space("s"))
 	t.set_constant("separation", "VBoxContainer", space("s"))

@@ -44,7 +44,7 @@ func _right_click(btn: Control) -> void:
 	btn.gui_input.emit(click)
 
 func _button_with_goal(panel: Node, goal: Dictionary) -> Control:
-	for child in panel.button_container.get_children():
+	for child in panel.command_buttons():
 		if child is Control and child.has_meta("goal"):
 			var g: Dictionary = child.get_meta("goal")
 			if String(g.get("kind", "")) == String(goal["kind"]) and String(g.get("id", "")) == String(goal["id"]):
@@ -94,6 +94,23 @@ func test_02_a_way_up_is_pinned_at_its_difference() -> void:
 		return
 	_right_click(btn)
 	assert_eq(game_state_node.goal_price(), config_node.upgrade_cost("wall", "stone_wall"), "Pinned, it costs what the step up does")
+
+func test_04_a_building_ordered_or_a_way_up_begun_is_no_longer_the_goal() -> void:
+	# The player, v0.6 round six, asked whether a building pinned should go once it is paid for: "下单就取消".
+	var main = await _level()
+	stock_everything()
+	var door: Vector3 = main.current_core.door_outside()
+	game_state_node.pin_goal({"kind": "build", "id": "wall"})
+	var fence = main.build_system.place_at("wall", main.grid_manager.world_to_build_cell(door + Vector3(-3.0, 0.0, 3.0)), main.buildings_container, true)
+	assert_not_null(fence, "(a fence ordered)")
+	assert_true(game_state_node.goal.is_empty(), "Ordered, the building pinned is no longer the goal")
+	game_state_node.pin_goal({"kind": "build", "id": "trip_bow"})
+	main.build_system.place_at("wall", main.grid_manager.world_to_build_cell(door + Vector3(-5.0, 0.0, 3.0)), main.buildings_container, true)
+	assert_true(game_state_node.is_pinned({"kind": "build", "id": "trip_bow"}), "(something else ordered, it stays)")
+	fence.complete_construction()
+	game_state_node.pin_goal({"kind": "upgrade", "id": "stone_wall", "from": "wall"})
+	assert_true(fence.begin_upgrade("stone_wall"), "(the fence's way up to stone, begun)")
+	assert_true(game_state_node.goal.is_empty(), "Begun, the way up pinned is no longer the goal")
 
 func test_03_a_recipe_made_is_no_longer_the_goal_and_a_beacon_step_done_hands_on_to_the_next() -> void:
 	var main = await _level()

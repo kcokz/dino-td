@@ -191,6 +191,7 @@ func test_07_its_eyes_shine_at_the_edge_of_the_light() -> void:
 	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
 	var light: float = float(fire.light_radius())
 	var d = _phytosaur(main, fire.global_position + Vector3(-(light - 0.5), 0.0, 0.0))
+	d._face_now(fire.global_position)
 	assert_gt(d._eyes.size(), 0, "It has eyes of their own to shine (the model's \"Eye\")")
 	var worn: bool = false
 	for m in d.find_child("Body", false, false).find_children("*", "MeshInstance3D", true, false):
@@ -293,6 +294,7 @@ func test_12_its_eyes_glint_from_the_games_camera() -> void:
 	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
 	var light: float = float(fire.light_radius())
 	var d = _phytosaur(main, fire.global_position + Vector3(-(light - 0.5), 0.0, 0.0))
+	d._face_now(fire.global_position)
 	await wait_physics_frames(2)
 	assert_eq(d.glints.size(), 2, "A glint over each eye")
 	d._shine()
@@ -356,6 +358,47 @@ func test_14_its_eyes_are_two_points_up_close_and_one_seen_from_afar() -> void:
 			assert_gt(across, 0.1, "From the game's distance, one glint big enough to see (%.2f m)" % across)
 			# And no lamp (the player's report, 2026-09-29: "两个眼睛太亮了，有点像两个灯泡").
 			assert_lt(across, 0.2, "but a point, not a lamp (%.2f m)" % across)
+
+func test_14b_in_the_light_at_his_feet_its_eyes_are_eyes_not_lamps() -> void:
+	# The player, v0.6 round six: "植龙晚上进攻眼睛还是像灯泡" -- up at him in his torchlight its eyes burned full.
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	var hero = main.hero
+	hero.process_mode = Node.PROCESS_MODE_DISABLED
+	hero.global_position = main.current_core.global_position + Vector3(-8.0, 0.0, 8.0)
+	stock_everything()
+	hero.light_torch()
+	var torch: float = float(hero.torch_light())
+	var d = _phytosaur(main, hero.global_position + Vector3(-1.2, 0.0, 0.0))
+	d._face_now(hero.global_position)
+	await wait_physics_frames(2)
+	d._shine()
+	assert_almost_eq(float(d.eye_shine), 0.0, 0.001, "At his feet in the torchlight its eyes do not shine: it is lit, and seen")
+	assert_false(d.glints[0].visible, "(no glints)")
+	d.global_position = hero.global_position + Vector3(-(torch - float(_prowl()["edge_inside"])), 0.0, 0.0)
+	d._face_now(hero.global_position)
+	d._shine()
+	assert_almost_eq(float(d.eye_shine), 1.0, 0.01, "Where it paces, at the light's edge, they do")
+
+func test_14c_its_eyes_shine_back_only_the_way_it_looks() -> void:
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(25.0, 0.0, 12.0)
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var d = _phytosaur(main, fire.global_position + Vector3(-float(fire.light_radius()), 0.0, 0.0))
+	d._face_now(fire.global_position)
+	d._shine()
+	var looking: float = float(d.eye_shine)
+	d._face_now(d.global_position + Vector3(0.0, 0.0, 5.0))
+	d._shine()
+	var side_on: float = float(d.eye_shine)
+	d._face_now(d.global_position + Vector3(-5.0, 0.0, 0.0))
+	d._shine()
+	var away: float = float(d.eye_shine)
+	assert_almost_eq(looking, 1.0, 0.01, "Looking at the light, they shine")
+	assert_almost_eq(side_on, float(_prowl()["eye_side"]), 0.05, "side on, less")
+	assert_almost_eq(away, 0.0, 0.001, "looking away, not at all")
 
 func test_15_in_the_dark_it_smells_the_man_from_far_off_and_a_torch_keeps_it_off() -> void:
 	# The player's choice, v0.6 round five: "植龙专找黑里的人" -- "没火的人是植龙的首要目标：闻到就来……举着火把就

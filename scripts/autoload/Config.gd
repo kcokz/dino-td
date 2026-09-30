@@ -933,12 +933,20 @@ const PROWL: Dictionary = {
 	# on each side of its head. Then half that and half as bright, and two white specks lost twenty metres
 	# off (the debug-agent's TASK-027: "20 米就找不到了……建议在这次和上次中间取一个值"). Now halfway
 	# between the two: about 0.16 m at the game's distance, bright enough to find at a fire's edge.
-	"eye_color": Color(1.0, 0.55, 0.2),
-	"eye_energy": 3.2,
+	#
+	# In the light itself the shine fades: full as far in as it paces (edge_inside) and a little more
+	# (`eye_lit_from` metres), out by `eye_lit_over` further -- lit, it is seen; at his feet in his torchlight
+	# its eyes burned full (v0.6 round six, the player: "植龙晚上进攻眼睛还是像灯泡"). And it is seen looking at the
+	# light: `eye_side` of it side on, none looking away. A little dimmer at the same time.
+	"eye_color": Color(1.0, 0.5, 0.18),
+	"eye_energy": 2.6,
 	"eye_reach": 3.0,
+	"eye_lit_from": 1.0,
+	"eye_lit_over": 1.5,
+	"eye_side": 0.6,
 	"eye_bone": "Head",
 	"glint_size": 0.22,
-	"glint_energy": 1.9,
+	"glint_energy": 1.6,
 	# And sized to the camera: `glint_per_metre` of its distance across, from `glint_least` up to
 	# `glint_size` -- two small points up close, one still seen at the game's distance.
 	"glint_per_metre": 0.0065,
@@ -1576,6 +1584,14 @@ const MAPS: Dictionary = {
 	# the way into the valley (`entries`) that lies most that way from the cabin. A raid is shared out among the
 	# nest and them, one after another (WaveManager._next_origin); the warning says every side it comes from.
 	"ways_by_day": [{"from_day": 3, "ways": ["E"]}, {"from_day": 5, "ways": ["E", "S"]}],
+	# The most a raid the clock sends brings, and the toughest a big raid leaves them (WAVES.enhance_after_big):
+	# the valley holds so many animals (v0.6 round six, the player: "没有及时造信标，恐龙会一直增加吗，那感觉也不符合
+	# 真实感"; chosen "材料会用完"). What keeps a run from waiting it out behind its walls is not more of them but
+	# less of everything else: the trees, the rock and the wrecks do not come back, and every raid is bitten walls
+	# to mend. About where the raid stands at minute 25 (WAVES: near thirty at under x1.5), where a run that kept
+	# building meets its final wave -- which is sized from it (beacon.final_raids).
+	"raid_most": 30,
+	"toughest": 1.5,
 	# Who guards the nest (NEST_GUARDS): the same animal.
 	"guards": "coelophysis",
 	# At the head of every big wave (WAVES.big_every): the lesser boss (GAME-DESIGN 7.5) -- the
@@ -2976,7 +2992,8 @@ const RESOURCE_NODES: Dictionary = {
 		"depleted_text": "STATUS_SEARCHED",
 		"found": "SOURCE_ANTENNA",
 		# Its din (Din; v0.6 round five, the player chose "翻找的响声引来附近的恐龙"): at these strokes of the
-		# search, phytosaurs up out of the river by it -- by day too -- one at the third, one more at the seventh.
+		# search, phytosaurs up out of the river by it -- one at the third, one more at the seventh -- at night:
+		# by day they lie in the river (v0.6 round six: "如果植龙是夜行动物，那么白天翻天线不该出来吧").
 		"din": {"draws": "river", "at": [3, 7], "count": [1, 1]},
 		"color": Color(0.75, 0.76, 0.78),
 		"depleted_color": Color(0.35, 0.35, 0.36),

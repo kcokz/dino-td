@@ -45,6 +45,8 @@ func _ready() -> void:
 		btn.toggle_mode = true
 	torch_button = UiKit.command_button(tr("CMD_TORCH"), UiTheme.icon("torch"), func(): torch_pressed.emit(), _torch_tip(), 0)
 	torch_button.name = "TorchCommand"
+	# Pressed in while one burns; pressed again, it is put out (_refresh_torch).
+	torch_button.toggle_mode = true
 	add_child(torch_button)
 	_pin()
 	_keys_live = true
@@ -181,8 +183,8 @@ func refresh() -> void:
 	eat_button.disabled = meals <= 0 or eating
 	_refresh_torch(hero)
 
-## The torch's tile: come with the first dusk, greyed out by day and while one burns, its badge the
-## seconds a lit one has left.
+## The torch's tile: come with the first dusk, greyed out by day; while one burns pressed in, its badge the
+## seconds it has left -- and pressed again, it is put out (v0.6 round six: "再按一下就取消").
 func _refresh_torch(hero: Node) -> void:
 	if torch_button == null:
 		return
@@ -194,7 +196,9 @@ func _refresh_torch(hero: Node) -> void:
 	var dark: bool = gs != null and gs.has_method("day_part") and String(gs.day_part()) in burns
 	if has_hero and (dark or left > 0.0):
 		_come("torch")
-	torch_button.disabled = not has_hero or not bool(hero.can_light_torch())
+	torch_button.disabled = not has_hero or not (left > 0.0 or bool(hero.can_light_torch()))
+	torch_button.set_pressed_no_signal(left > 0.0)
+	torch_button.tooltip_text = tr("TIP_CMD_TORCH_LIT") % int(ceil(left)) if left > 0.0 else _torch_tip()
 	var badge: Label = torch_button.get_node_or_null("Badge") as Label
 	if badge:
 		badge.visible = left > 0.0

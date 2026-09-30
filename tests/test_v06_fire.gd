@@ -222,13 +222,16 @@ func test_08_its_tile_comes_with_the_first_dusk_and_stays_and_build_does_not_mov
 	tiles.torch_pressed.emit()
 	assert_gt(float(main.hero.torch_left), 0.0, "Pressed, he lights one")
 	tiles.refresh()
-	assert_true(tiles.torch_button.disabled, "and it cannot be pressed while one burns")
+	assert_false(tiles.torch_button.disabled, "While one burns the tile can still be pressed -- to put it out")
+	assert_true(tiles.torch_button.button_pressed, "(pressed in while it burns)")
 	var badge: Label = tiles.torch_button.get_node("Badge") as Label
 	assert_eq(badge.text, str(int(ceil(float(main.hero.torch_left)))), "its badge the seconds it has left")
 	var keys: Array = config_node.CONTROLS["command_keys"]
 	assert_eq(int(tiles.torch_button.shortcut.events[0].keycode), int(keys[1]),
 		"The first command to come after Build (nothing cooked yet), the second key lights it")
-	# Come, it stays: by day greyed out, not gone, so nothing to its left moves (v0.6 round four).
+	# Come, it stays: by day greyed out, not gone, so nothing to its left moves (v0.6 round four). (Burnt
+	# down first: one still burning can be put out by day too.)
+	main.hero._burn_the_torch(float(main.hero.torch_left) + 0.5)
 	var torch_at: Vector2 = _place(tiles.torch_button)
 	_set_clock(_at("day") + 100.0, 2)
 	tiles.refresh()
@@ -236,6 +239,32 @@ func test_08_its_tile_comes_with_the_first_dusk_and_stays_and_build_does_not_mov
 	assert_true(tiles.torch_button.visible, "By day it is still there")
 	assert_true(tiles.torch_button.disabled, "greyed out")
 	assert_eq(_place(tiles.torch_button), torch_at, "where it was")
+
+func test_08c_pressed_again_the_torch_is_put_out() -> void:
+	# The player, v0.6 round six: "火把点燃了就不能取消（再按一下就取消）".
+	var main = await _level()
+	var tiles: HeroCommands = main.hud.hero_commands
+	var hero = main.hero
+	_wood(5)
+	_set_clock(_at("night") + 10.0)
+	tiles.refresh()
+	var changed: Array = []
+	var eb = tree.root.get_node("EventBus")
+	var heard := func(lit: bool): changed.append(lit)
+	eb.torch_changed.connect(heard)
+	tiles.torch_pressed.emit()
+	assert_gt(float(hero.torch_left), 0.0, "Pressed, he lights one")
+	var wood: int = int(game_state_node.resources["wood"])
+	tiles.torch_pressed.emit()
+	assert_almost_eq(float(hero.torch_left), 0.0, 0.001, "Pressed again, it is put out")
+	assert_almost_eq(float(hero.torch_light()), 0.0, 0.001, "and lights nothing")
+	assert_eq(int(game_state_node.resources["wood"]), wood, "(its wood is burnt, not given back)")
+	await wait_physics_frames(2)
+	assert_null(hero.find_child("Torch", true, false), "It is gone from his hand")
+	assert_false(tiles.torch_button.button_pressed, "The tile is out again")
+	assert_false(tiles.torch_button.disabled, "and another can be lit, with wood in the stock")
+	assert_eq(changed, [true, false], "Lit and put out, each said")
+	eb.torch_changed.disconnect(heard)
 
 ## Where the corner lays `btn` out, on the screen: not where it is drawn while it grows in (UiKit.come_in).
 func _place(btn: Control) -> Vector2:

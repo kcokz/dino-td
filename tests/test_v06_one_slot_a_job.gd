@@ -110,14 +110,17 @@ func test_04_its_card_names_each_way_up_with_its_price() -> void:
 	var panel = main.hud.option_panel
 	panel.select_target(fence)
 	await wait_frames(2)
-	var texts: Array = []
-	for child in panel.button_container.get_children():
-		if child is Button:
-			texts.append(String((child as Button).text))
+	var cards: Dictionary = {}
+	for btn in panel.command_buttons():
+		cards[String(btn.text)] = btn
+	# Each the build menu's card for it: its name and icon, its price in the chips under it (v0.6 round six).
 	for target in config_node.upgrade_targets("wall"):
-		var price: String = panel._amounts_text(config_node.upgrade_cost("wall", String(target)))
-		var want: String = tr("CMD_UPGRADE_TO") % [String(config_node.get_building_name(String(target))), price]
-		assert_true(texts.has(want), "The card offers \"%s\" (got %s)" % [want, texts])
+		var want: String = String(config_node.get_building_name(String(target)))
+		assert_true(cards.has(want), "The card offers \"%s\" (got %s)" % [want, cards.keys()])
+		if cards.has(want):
+			assert_eq((cards[want] as Button).icon, UiTheme.icon(String(target)), "%s wears its build-menu icon" % want)
+			var row: Node = (cards[want] as Button).get_node_or_null("PriceRow")
+			assert_true(row != null and row.get_child_count() > 0, "and its price")
 
 func test_05_a_campfire_raised_into_a_brazier_stands_in_the_way() -> void:
 	var main = await _level()

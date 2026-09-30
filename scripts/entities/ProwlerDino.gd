@@ -366,6 +366,14 @@ func _find_the_eyes() -> void:
 ## brightest so it glows): the eyes themselves are a few centimetres, a pixel or two from the game's
 ## camera and lost at twelve metres (the debug-agent's TASK-021). Each follows the head, over the eye's
 ## middle, drawn over the head it sits in, and faces the camera; how bright is the eye-shine's (_shine).
+## How much of the shine comes back to where the light is, by how far it is looking that way (`toward`: 1
+## straight at it, 0 side on, -1 away): all of it looking at it, PROWL.eye_side side on, none looking away.
+func _looking_at_it(toward: float) -> float:
+	var side: float = _prowl("eye_side", 0.6)
+	if toward >= 0.0:
+		return lerpf(side, 1.0, smoothstep(0.0, 0.6, toward))
+	return lerpf(side, 0.0, smoothstep(0.0, 0.35, -toward))
+
 func _make_glints(mesh_node: MeshInstance3D, surface: int) -> void:
 	for g in glints:
 		if is_instance_valid(g):
@@ -429,16 +437,28 @@ func _make_glints(mesh_node: MeshInstance3D, surface: int) -> void:
 		hold.add_child(g)
 		glints.append(g)
 
-## How bright its eyes are: full at a light's edge or in it, dimming over PROWL.eye_reach metres
-## further out, and dark with no light near -- a light is what an eye shines back.
+## How bright its eyes are. A light is what an eye shines back, and the shine is seen in the dark at the
+## light's edge: full there, dimming over PROWL.eye_reach metres further out, dark with no light near. In
+## the light itself, past where it paces (eye_lit_from), it fades over eye_lit_over metres: lit, it is
+## seen, eyes and all -- at his feet in his torchlight its eyes burned full, two lamps (v0.6 round six, the
+## player: "植龙晚上进攻眼睛还是像灯泡"). And the shine goes back the way the light came: looking at the
+## light, full; side on, less (eye_side); looking away, none.
 func _shine() -> void:
 	var best: float = 0.0
 	if is_inside_tree() and not is_dead:
 		var reach: float = maxf(0.1, _prowl("eye_reach", 3.0))
+		var lit_from: float = _prowl("eye_lit_from", 1.0)
+		var lit_over: float = maxf(0.1, _prowl("eye_lit_over", 1.5))
+		var ahead: Vector3 = -global_transform.basis.z
+		var looking := Vector2(ahead.x, ahead.z).normalized()
 		for light in ProwlerDino.lights(get_tree()):
 			var at: Vector3 = light["at"]
-			var gap: float = Vector2(global_position.x - at.x, global_position.z - at.z).length() - float(light["radius"])
-			best = maxf(best, clampf(1.0 - gap / reach, 0.0, 1.0))
+			var to_light := Vector2(at.x - global_position.x, at.z - global_position.z)
+			var gap: float = to_light.length() - float(light["radius"])
+			var edge: float = clampf(1.0 - gap / reach, 0.0, 1.0) if gap >= 0.0 \
+				else clampf(1.0 - (-gap - lit_from) / lit_over, 0.0, 1.0)
+			var toward: float = looking.dot(to_light.normalized()) if to_light.length() > 0.01 else 1.0
+			best = maxf(best, edge * _looking_at_it(toward))
 	eye_shine = best
 	for mat in _eyes:
 		mat.emission_energy_multiplier = best * _prowl("eye_energy", 4.0)

@@ -295,6 +295,43 @@ func stand_on(node: Control) -> void:
 	below = node
 	_pin()
 
+## Grows up no further than the bottom of `node` -- the goal's card at the top right -- while it shows:
+## past that its commands scroll (_fit). A fence with three ways up was a card as tall as the screen's
+## right side, over the beacon's line and the raid's count under it (v0.6 round six).
+func keep_below(node: Control) -> void:
+	above = node
+	if node != null:
+		node.resized.connect(_fit_later)
+		node.visibility_changed.connect(_fit_later)
+	_fit_later()
+
+## The goal's card the card keeps below (keep_below), the column its commands scroll in, and whether a fit
+## is on its way.
+var above: Control = null
+var command_scroll: ScrollContainer = null
+var _fit_queued: bool = false
+
+func _fit_later() -> void:
+	if _fit_queued:
+		return
+	_fit_queued = true
+	_fit.call_deferred()
+
+## The commands' column as tall as they are, or as the room between the card's foot and the goal's card
+## over it leaves them -- at the least one card's height -- and scrolling for the rest.
+func _fit() -> void:
+	_fit_queued = false
+	if command_scroll == null or button_container == null or not is_inside_tree():
+		return
+	var content: float = button_container.get_combined_minimum_size().y
+	var tall: float = content
+	if above != null and is_instance_valid(above) and above.is_visible_in_tree():
+		var room: float = get_global_rect().end.y - (above.get_global_rect().end.y + float(UiTheme.space("s")))
+		var rest: float = get_combined_minimum_size().y - command_scroll.custom_minimum_size.y
+		tall = minf(content, maxf(room - rest, minf(content, float(UiTheme.height("card")))))
+	if not is_equal_approx(command_scroll.custom_minimum_size.y, tall):
+		command_scroll.custom_minimum_size.y = tall
+
 ## Put away at the end of the run, and back at a restart.
 func set_shut(yes: bool) -> void:
 	shut = yes
@@ -406,10 +443,20 @@ func _ensure_components() -> void:
 		main_vbox.add_child(separator)
 
 	if button_container == null:
+		# Its commands in a column that scrolls when the card would reach the goal's card over it (_fit).
+		command_scroll = ScrollContainer.new()
+		command_scroll.name = "CommandScroll"
+		command_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		command_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		command_scroll.follow_focus = true
+		main_vbox.add_child(command_scroll)
 		button_container = GridContainer.new()
 		button_container.name = "ButtonContainer"
 		button_container.columns = 1
-		main_vbox.add_child(button_container)
+		button_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		command_scroll.add_child(button_container)
+		button_container.minimum_size_changed.connect(_fit_later)
+		resized.connect(_fit_later)
 
 # ==============================================================================
 # What is shown
@@ -785,10 +832,7 @@ func _mark_keys() -> void:
 	var keys: Array = controls.get("command_keys", [])
 	var n: int = 0
 	_keyed = 0
-	for child in button_container.get_children():
-		var btn := child as Button
-		if btn == null:
-			continue
+	for btn in command_buttons():
 		if btn.name == BACK_NAME:
 			UiKit.keycap(btn, tr("KEY_CANCEL"))
 			continue
@@ -802,6 +846,23 @@ func _mark_keys() -> void:
 
 ## What the Back command is called on the card, so the cancel key can find it and keys skip it.
 const BACK_NAME := &"BackCommand"
+## The cards of what a building can become, two to a row under their heading (_populate_building_buttons).
+const UPGRADES_NAME := &"UpgradeCards"
+
+## The card's commands in the order they stand: its own buttons, and the ones in a row of cards among
+## them (the ways up a building can go).
+func command_buttons() -> Array[Button]:
+	var out: Array[Button] = []
+	if button_container == null:
+		return out
+	for child in button_container.get_children():
+		if child is Button:
+			out.append(child as Button)
+		elif child is GridContainer:
+			for inner in child.get_children():
+				if inner is Button:
+					out.append(inner as Button)
+	return out
 
 func _clear_buttons() -> void:
 	if button_container == null:
@@ -1027,17 +1088,26 @@ func _can_afford(b_type: String) -> bool:
 ## button.
 func _populate_building_buttons() -> void:
 	button_container.columns = 1
-	# Upgrading where it stands (v0.6): the price on the button, and on hover the numbers
+	# Upgrading where it stands (v0.6): the price on the card, and on hover the numbers
 	# that change -- before and after is the whole of the choice. Paid when chosen, like a
-	# blueprint, and the Hero goes straight over to build it. One button for each thing it can
-	# become (v0.6 round six, GAME-DESIGN 6.0: a fence becomes bone stakes or a stone wall), each
-	# named, with its own price.
+	# blueprint, and the Hero goes straight over to build it. One card for each thing it can
+	# become (v0.6 round six, GAME-DESIGN 6.0: a fence becomes bone stakes or a stone wall), under
+	# "Make it" -- each the card the build menu has for it, its icon, its name and its price, two
+	# to a row as there (v0.6 round six, the player: "升级建筑单位图标应该跟build里面的建造图标一样").
 	if selected_unit.has_method("can_upgrade") and selected_unit.can_upgrade():
 		var unit: Node = selected_unit
+		var heading := Label.new()
+		heading.name = "UpgradeHeading"
+		heading.theme_type_variation = &"MutedLabel"
+		heading.text = tr("CARD_MAKE_IT")
+		button_container.add_child(heading)
+		var ways := GridContainer.new()
+		ways.name = UPGRADES_NAME
+		ways.columns = 2
+		button_container.add_child(ways)
 		for to_type in unit.upgrade_targets():
 			var target: String = String(to_type)
-			var up_text: String = tr("CMD_UPGRADE_TO") % [_building_name(target), _amounts_text(unit.upgrade_cost(target))]
-			var up_btn := _create_action_button(up_text, func():
+			var up_btn := UiKit.card_button(_building_name(target), UiTheme.icon(target), func():
 				if not is_instance_valid(unit) or not unit.begin_upgrade(target):
 					return
 				var hero = _get_hero()
@@ -1045,7 +1115,9 @@ func _populate_building_buttons() -> void:
 					hero.order_upgrade(unit)
 				action_triggered.emit("upgrade", unit)
 				_refresh_ui()
-			, "upgrade")
+			)
+			ways.add_child(up_btn)
+			_fill_price_row(up_btn, unit.upgrade_cost(target))
 			var gs_up = _get_game_state()
 			up_btn.disabled = gs_up == null or not gs_up.has_method("can_afford") or not gs_up.can_afford(unit.upgrade_cost(target))
 			_pins(up_btn, {"kind": "upgrade", "id": target, "from": String(unit.building_type)})

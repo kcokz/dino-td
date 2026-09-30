@@ -438,6 +438,8 @@ func begin_upgrade(target: String = "") -> bool:
 	var gs = _get_game_state()
 	if gs == null or not gs.has_method("spend_resources") or not gs.spend_resources(upgrade_cost(target)):
 		return false
+	if gs.has_method("goal_paid"):
+		gs.goal_paid({"kind": "upgrade", "id": target, "from": building_type})
 	upgrading_to = target
 	upgrade_progress = 0.0
 	_update_info_label()

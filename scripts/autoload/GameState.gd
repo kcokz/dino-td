@@ -545,6 +545,14 @@ func unpin_goal() -> void:
 	goal = {}
 	_say_goal()
 
+## What was pinned is paid for -- a building ordered off the menu, a way up begun (BuildSystem.place_at,
+## Building.begin_upgrade): it is no longer something to aim at (v0.6 round six, the player chose "下单就取消";
+## it hung on after it was built). A job at a bench goes when it is made (grant_unlock); a stage of the beacon
+## hands on to the next.
+func goal_paid(g: Dictionary) -> void:
+	if is_pinned(g):
+		unpin_goal()
+
 ## Whether `g` is the goal pinned.
 func is_pinned(g: Dictionary) -> bool:
 	return not g.is_empty() and not goal.is_empty() and String(g.get("kind", "")) == String(goal.get("kind", "")) \
@@ -907,9 +915,12 @@ func _on_wave_ended(n: int) -> void:
 	_stage_raid = false
 	if big_every > 0 and n > 0 and n % big_every == 0 and not stage_raid:
 		var enhance: Dictionary = waves_cfg.get("enhance_after_big", {})
+		# No tougher than the valley's toughest (MAPS.<id>.toughest): they grow to it and no further.
+		var toughest: float = float(map_data().get("toughest", 0.0)) if has_method("map_data") else 0.0
 		for stat in enhance:
 			if dino_stat_multipliers.has(stat):
-				dino_stat_multipliers[stat] *= float(enhance[stat])
+				var grown: float = float(dino_stat_multipliers[stat]) * float(enhance[stat])
+				dino_stat_multipliers[stat] = minf(grown, maxf(toughest, float(dino_stat_multipliers[stat]))) if toughest > 0.0 else grown
 	set_phase(Phase.PRODUCE)
 
 func _on_game_won() -> void:

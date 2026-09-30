@@ -6,7 +6,8 @@ extends Node
 ## 但是没有危险，感觉时间花的很无聊，周围的守卫恐龙并不会进攻" -- chosen: "翻找的响声引来附近的恐龙"). Metal knocked
 ## about carries: at some strokes of a search (RESOURCE_NODES.<wreck>.din.at) something comes, as many as that
 ## stroke's count -- the longer he is at it, the more:
-##   river   out of the river by the wreck, even by day: phytosaurs (NightProwl.send_one_from), for him
+##   river   out of the river by the wreck, in their hours: phytosaurs (NightProwl.send_one_from), for him --
+##           by day they lie in the river, and nothing comes (v0.6 round six)
 ##   guards  at the nest: the sleeping guards nearest the wreck, woken one by one (GuardDino.wake)
 ##   edge    down the valley: a few of the map's raiders in from the nearest way in, by the wreck, if it is
 ##           their hours (Config.keeps_hours) -- at night the pack sleeps, and nothing comes
@@ -67,9 +68,13 @@ func answer(wreck: Node, draws: String, count: int) -> int:
 			return _from_the_edge(wreck, count)
 	return 0
 
-## Out of the water by the wreck, whatever the hour: from the place along the river nearest it.
+## Out of the water by the wreck: from the place along the river nearest it, in their hours. By day the night's
+## hunters lie in the river and the din brings none up (v0.6 round six, the player: "如果植龙是夜行动物，那么白天翻天线
+## 不该出来吧？……但是最终，人应该能去拿天线"); at night one comes -- slower than he is on land (DINOS.phytosaur.speed).
 func _from_the_river(wreck: Node, count: int) -> int:
 	if night_prowl == null or not is_instance_valid(night_prowl) or not night_prowl.has_method("send_one_from"):
+		return 0
+	if night_prowl.has_method("in_their_hours") and not bool(night_prowl.in_their_hours()):
 		return 0
 	var at: Vector3 = _nearest((wreck as Node3D).global_position, night_prowl.origins)
 	if at == Vector3.INF:

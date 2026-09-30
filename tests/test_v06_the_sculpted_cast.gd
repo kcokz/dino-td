@@ -171,6 +171,9 @@ func test_08_what_a_wrecks_din_brought_is_named() -> void:
 	if wreck == null:
 		return
 	var din: Dictionary = config_node.RESOURCE_NODES["antenna"]["din"]
+	# At night: by day the phytosaurs lie in the river and the din brings none (v0.6 round six).
+	game_state_node.day_clock = float(config_node.DAY["parts"]["night"]) + 10.0
+	game_state_node._run_the_day(0.0)
 	for i in int(din["at"][0]):
 		wreck.harvest(1)
 	await wait_frames(2)

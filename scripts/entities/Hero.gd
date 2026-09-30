@@ -1368,6 +1368,18 @@ func light_torch() -> bool:
 		eb.torch_changed.emit(true)
 	return true
 
+## Puts out the torch in his hand before it has burnt down (v0.6 round six, the player: "火把点燃了就不能取消
+## （再按一下就取消）"): the torch's tile pressed again. The wood it cost is burnt. Returns whether one was out.
+func put_out_torch() -> bool:
+	if torch_left <= 0.0:
+		return false
+	torch_left = 0.0
+	_put_the_torch_out()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("torch_changed"):
+		eb.torch_changed.emit(false)
+	return true
+
 ## How far his torch lights now, in metres: FIRE.torch.light, dimming over its last fade_seconds, or
 ## nothing with no torch alight.
 func torch_light() -> float:

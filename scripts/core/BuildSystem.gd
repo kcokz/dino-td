@@ -205,7 +205,11 @@ func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, s
 	if start_as_blueprint and building.has_method("start_construction"):
 		building.start_construction()
 
-	# 7. Broadcast placement event
+	# 7. The goal, if it was this, is paid for.
+	if gs.has_method("goal_paid"):
+		gs.goal_paid({"kind": "build", "id": type_id})
+
+	# 8. Broadcast placement event
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_placed"):
 		eb.building_placed.emit(building)

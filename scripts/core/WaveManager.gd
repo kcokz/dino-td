@@ -384,7 +384,10 @@ func raid_size(wave_num: int) -> int:
 	var intensity_baseline: float = 1.0 + minutes * per_min
 	var jitter: float = _rng().randf_range(-jitter_range, jitter_range)
 	var multiplier: float = maxf(0.5, intensity_baseline * (1.0 + jitter))
-	return maxi(1, int(round(float(get_wave_dino_count(wave_num)) * multiplier)))
+	var sized: int = maxi(1, int(round(float(get_wave_dino_count(wave_num)) * multiplier)))
+	# The valley holds so many (MAPS.<id>.raid_most): a raid grows to it and no further.
+	var most: int = int(_map().get("raid_most", 0))
+	return mini(sized, most) if most > 0 else sized
 
 ## The beacon's final wave (GAME-DESIGN 8.3), set out when it is launched: the whole valley
 ## comes for the cabin, and keeps coming until the jump.

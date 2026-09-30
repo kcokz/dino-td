@@ -153,6 +153,18 @@ func _next_origin() -> Variant:
 			return at
 	return null
 
+## Whether any of the map's night hunters keeps this part of the day (Config.keeps_hours): only then does
+## anything come up out of the river -- for the dark, or for a wreck's din (Din).
+func in_their_hours() -> bool:
+	var cfg = get_node_or_null("/root/Config")
+	var gs = get_node_or_null("/root/GameState")
+	if cfg == null or gs == null or not cfg.has_method("keeps_hours") or not gs.has_method("day_part"):
+		return true
+	for species in _prowlers():
+		if cfg.keeps_hours(String(species), String(gs.day_part())):
+			return true
+	return false
+
 ## The prowler it sends: one of the map's (MAPS.<id>.prowlers), by weight, on the run's dice
 ## (GameState.rng) -- so a seed replays a night as it does a raid.
 func _species() -> String:

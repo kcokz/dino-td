@@ -1,7 +1,8 @@
 # res://tests/test_v06_the_din.gd
 # The player, v0.6 round five: "信标残骸里捡东西虽然花时间但是没有危险，感觉时间花的很无聊，周围的守卫恐龙并不会进攻"
 # -- chosen: "翻找的响声引来附近的恐龙" (GAME-DESIGN 9.3). Metal knocked about carries: at some strokes of a search
-# something comes, the longer the more -- phytosaurs out of the river by the antenna's wreck, by day too; the
+# something comes, the longer the more -- phytosaurs out of the river by the antenna's wreck, at night (by day
+# they lie in the river: v0.6 round six, "如果植龙是夜行动物，那么白天翻天线不该出来吧"); the
 # guards at the nest woken one by one by the battery's; a few raiders in from the edge by the board's, in their
 # hours only. None of it is a raid's.
 #
@@ -61,13 +62,15 @@ func _drawn() -> Array:
 			out.append(d)
 	return out
 
-func test_01_the_rivers_wreck_brings_phytosaurs_up_by_day_the_longer_the_more() -> void:
+func test_01_the_rivers_wreck_brings_phytosaurs_up_at_night_the_longer_the_more() -> void:
 	var main = await _level()
 	var wreck = _wreck("antenna")
 	assert_not_null(wreck, "(the antenna's wreck is on the map)")
 	if wreck == null:
 		return
-	assert_eq(String(game_state_node.day_part()), "day", "(by day)")
+	game_state_node.day_clock = float(config_node.DAY["parts"]["night"]) + 10.0
+	game_state_node._run_the_day(0.0)
+	assert_eq(String(game_state_node.day_part()), "night", "(at night)")
 	var din: Dictionary = _din("antenna")
 	var said = watch_signal(tree.root.get_node("EventBus"), "din_carried")
 	_search(wreck, int(din["at"][0]) - 1)
@@ -80,6 +83,23 @@ func test_01_the_rivers_wreck_brings_phytosaurs_up_by_day_the_longer_the_more() 
 	_search(wreck, int(din["at"][1]) - int(din["at"][0]))
 	assert_eq(_drawn().size(), int(din["count"][0]) + int(din["count"][1]), "Kept at, more come")
 	assert_eq(said.emit_count, 1, "What the noise did is said once")
+
+func test_01b_by_day_they_lie_in_the_river_and_he_gets_the_antenna() -> void:
+	# The player, v0.6 round six: "如果植龙是夜行动物，那么白天翻天线不该出来吧？植龙真实情况下跑的比人快吗，如果慢的话人可以跑，
+	# 但是最终，人应该能去拿天线".
+	var main = await _level()
+	var wreck = _wreck("antenna")
+	if wreck == null:
+		return
+	assert_eq(String(game_state_node.day_part()), "day", "(by day)")
+	var said = watch_signal(tree.root.get_node("EventBus"), "din_carried")
+	_search(wreck, int(config_node.RESOURCE_NODES["antenna"]["strokes"]))
+	assert_eq(_drawn().size(), 0, "By day nothing comes up out of the river, however long he is at it")
+	assert_false(said.emitted, "and nothing is said of it")
+	assert_true(bool(wreck.is_depleted), "He has the antenna")
+	# And at night, what comes is slower than he is on land: he can run for it.
+	assert_lt(float(config_node.DINOS["phytosaur"]["speed"]), float(config_node.HERO["move_speed"]),
+		"On land a phytosaur is slower than he is")
 
 func test_02_the_nests_wreck_wakes_the_guards_one_by_one() -> void:
 	var main = await _level()

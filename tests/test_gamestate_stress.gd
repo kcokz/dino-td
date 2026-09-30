@@ -197,9 +197,12 @@ func test_stress_multi_wave_compounding_to_wave_30() -> void:
 		# After wave ends, phase must be PRODUCE (2)
 		assert_eq(game_state.current_phase, 2, "Phase must advance to PRODUCE (2) after wave %d" % wave)
 
+		# Compounding after each big wave, up to the valley's toughest (MAPS.<id>.toughest; v0.6 round six:
+		# a raid grows to what the valley holds and no further).
 		if wave % 3 == 0:
-			expected_hp *= float(config_node.WAVES["enhance_after_big"]["hp"])
-			expected_dmg *= float(config_node.WAVES["enhance_after_big"]["damage"])
+			var toughest: float = float(game_state.map_data().get("toughest", INF))
+			expected_hp = minf(expected_hp * float(config_node.WAVES["enhance_after_big"]["hp"]), toughest)
+			expected_dmg = minf(expected_dmg * float(config_node.WAVES["enhance_after_big"]["damage"]), toughest)
 
 		var mults = game_state.dino_stat_multipliers
 		assert_almost_eq(float(mults.get("hp", 0.0)), expected_hp, 0.005, "HP multiplier at wave %d must be ~%f" % [wave, expected_hp])
