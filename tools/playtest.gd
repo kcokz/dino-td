@@ -108,6 +108,8 @@ func _run(name: String) -> void:
 			await _scenario_showcase()
 		"scale":
 			await _scenario_scale()
+		"cast":
+			await _scenario_cast()
 		"kitchen":
 			await _scenario_kitchen()
 		"eating":
@@ -1551,6 +1553,77 @@ func _scenario_showcase() -> void:
 func cfg_row_half() -> float:
 	var cfg := root.get_node_or_null("Config")
 	return float(cfg.get_building_footprint("core")) * 0.5 if cfg else 0.5
+
+## The first map's cast side by side with him (tools/triassic_bodies.py; the player, 2026-09-30: "恐龙目前模型做的都
+## 粗糙，我需要它们更精致"): from the side at eye height, from the game's camera, and each close by its head --
+## standing, then the Coelophysis walking.
+func _scenario_cast() -> void:
+	if _main.hud:
+		_main.hud.visible = false
+	var core_at: Vector3 = _main.current_core.global_position
+	var row_z: float = core_at.z + float(cfg_row_half()) + 3.0
+	var hero = _main.hero
+	if hero != null:
+		hero.set_physics_process(false)
+		hero.global_position = Vector3(core_at.x - 3.2, 0.0, row_z)
+		hero.rotation.y = PI * 0.5
+	var dino_script := load("res://scripts/entities/Dino.gd")
+	var lineup: Array = [["coelophysis", -1.2], ["coelophysis_alpha", 1.4], ["hesperosuchus", 3.8],
+		["phytosaur", 6.8], ["postosuchus", 11.5]]
+	var dinos: Array = []
+	for item in lineup:
+		var d = dino_script.new()
+		_main.add_child(d)
+		d.setup(String(item[0]))
+		d.set_physics_process(false)
+		d.global_position = Vector3(core_at.x + float(item[1]), 0.0, row_z)
+		d.rotation.y = PI * 0.5
+		dinos.append(d)
+	# The fog of war lifted, as for a portrait (FogOfWar): these are pictures of the models.
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	await _wait(8)
+	var mid := Vector3(core_at.x + 4.0, 0.0, row_z)
+	var cam := Camera3D.new()
+	# No depth of field: the game's blurs the near ground, and these are looked at close.
+	cam.attributes = CameraAttributesPractical.new()
+	_main.add_child(cam)
+	var was: Camera3D = _main.camera
+	cam.current = true
+	cam.position = mid + Vector3(0.0, 1.1, 11.0)
+	cam.look_at(mid + Vector3(0.0, 0.8, 0.0), Vector3.UP)
+	await _shoot("side_on")
+	# Each close by, a little in front and above, framed by its own size.
+	for d in dinos:
+		var box := AABB()
+		var first := true
+		for m in (d as Node).find_children("*", "MeshInstance3D", true, false):
+			var mi := m as MeshInstance3D
+			var wb: AABB = mi.global_transform * mi.get_aabb()
+			box = wb if first else box.merge(wb)
+			first = false
+		var size: float = maxf(box.size.x, maxf(box.size.y, box.size.z))
+		var look: Vector3 = box.get_center()
+		cam.position = look + Vector3(size * 0.3, size * 0.22, size * 0.8)
+		cam.look_at(look, Vector3.UP)
+		await _shoot("close_%s" % String(d.get("dino_type")))
+	cam.current = false
+	if was != null and is_instance_valid(was):
+		was.current = true
+	_main.remove_child(cam)
+	cam.queue_free()
+	# From the game's own camera, over the row.
+	if _main.get("camera_rig") != null:
+		_main.look_at_ground(mid)
+	await _wait(4)
+	await _shoot("from_the_game_camera")
+	for d in dinos:
+		d.queue_free()
+	if _main.hud:
+		_main.hud.visible = true
 
 func _scenario_scale() -> void:
 	if _main.hud:

@@ -220,6 +220,9 @@ static func _dress(art: Node, key: String) -> void:
 			mat = GroundCover.flora_material()      # plants: backlit, two-sided
 		"vertex":
 			mat = GroundCover.cover_material()      # props: vertex-coloured, matte
+		"skin":
+			read_vertex_colours(art)
+			return
 		_:
 			return
 	# ONE MATERIAL PER PIECE OF ART, never shared: a blueprint fades by changing its own
@@ -230,6 +233,22 @@ static func _dress(art: Node, key: String) -> void:
 		(mi as MeshInstance3D).material_override = mat
 	if art is MeshInstance3D:
 		(art as MeshInstance3D).material_override = mat
+
+## THE SCULPTED ANIMALS ARE COLOURED BY THEIR VERTICES TOO (tools/triassic_bodies.py), but keep the materials
+## they came with -- their skin's and their eyes' ("Eye", which the eye-shine finds by name, ProwlerDino) -- each
+## only told to read the colours. The same materials every copy of the model shares: told once, told for all.
+static func read_vertex_colours(art: Node) -> void:
+	var meshes: Array = art.find_children("*", "MeshInstance3D", true, false)
+	if art is MeshInstance3D:
+		meshes.append(art)
+	for m in meshes:
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var sm := mi.mesh.surface_get_material(i) as StandardMaterial3D
+			if sm != null and not sm.vertex_color_use_as_albedo:
+				sm.vertex_color_use_as_albedo = true
 
 ## Path to the art `key` wears in `variant` -- "depleted", say -- or "" when that variant
 ## has none of its own and simply wears the main art.

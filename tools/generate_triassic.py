@@ -1,34 +1,25 @@
 # tools/generate_triassic.py
 # The first map's cast (GAME-DESIGN 7.2, station 1: the Late Triassic, the Chinle Formation),
-# made from the Quaternius rigs the game already animates (tools/convert_quaternius.py):
+# on the Quaternius rigs the game already animates (tools/convert_quaternius.py):
 #
-#   coelophysis   from the velociraptor: a long S of a neck, a long narrow snout, a slighter
-#                 body and a longer tail, sand-ochre with a pale belly -- the light three-metre
-#                 theropod that raids in packs (found by the hundred together at Ghost Ranch)
-#   placerias     from the triceratops: its frill and horns cut away, a short beaked head, a
-#                 short tail and a barrel of a body -- the dicynodont that grazes in
-#                 herds on the valley's far side (7.2: "二齿兽类（如 Placerias），成群")
-#   postosuchus   from the tyrannosaur: not a dinosaur -- a rauisuchian, a land crocodile-line
-#                 archosaur four or five metres long: a deep, narrow skull, a longer body and
-#                 tail, forelimbs long enough to walk on, and rows of bony scutes down its back,
-#                 dark olive and umber
-#   hesperosuchus from the velociraptor: an early crocodylomorph of the same Chinle rocks (Hesperosuchus
-#                 agilis -- "agile"), a metre and a bit, slender and long-legged, the crocodile's line
-#                 before it went to the water: a long narrow snout, a short neck, a slim body, a long
-#                 tail, paired bony scutes down the back, long forelimbs -- up on its hind legs to run,
-#                 as it may have done (GAME-DESIGN 7.2 station one: the runner, from the third day)
-#   phytosaur     from the triceratops: not a crocodile, though it looks like one -- a phytosaur
-#                 (Machaeroprosopus, from the same Chinle rocks as Coelophysis), four metres long,
-#                 its frill and horns cut away, the beak drawn out into a long narrow snout, a long
-#                 body and a longer tail flattened from the sides for swimming, armour down its back,
-#                 dark olive above and pale below; and eyes of their own, set high on the skull, which
-#                 the game makes shine back a light in the dark (GAME-DESIGN 9.3: "鳄类的眼睛夜里真的
-#                 会反光")
+#   coelophysis   on the velociraptor's: the light three-metre theropod that raids in packs (found by
+#                 the hundred together at Ghost Ranch)
+#   placerias     on the triceratops': the tusked, beaked dicynodont that grazes in herds on the
+#                 valley's far side (7.2: "二齿兽类（如 Placerias），成群")
+#   postosuchus   on the tyrannosaur's: not a dinosaur -- a rauisuchian, a land crocodile-line archosaur
+#                 four or five metres long, forelimbs long enough to walk on
+#   hesperosuchus on the velociraptor's: an early crocodylomorph of the same Chinle rocks (Hesperosuchus
+#                 agilis -- "agile"), slender and long-legged, the crocodile's line before it went to the
+#                 water (GAME-DESIGN 7.2 station one: the runner, from the third day)
+#   phytosaur     on the triceratops': not a crocodile, though it looks like one -- a phytosaur
+#                 (Machaeroprosopus, from the same Chinle rocks as Coelophysis), the river's night hunter,
+#                 with eyes the game makes shine back a light in the dark (GAME-DESIGN 9.3)
 #
-# RESHAPED, NOT REDRAWN. Each is posed -- bones stretched and slimmed, never turned -- the pose
-# baked into its mesh, and that pose made the rest pose. Its bones keep their names and their
-# orientation, so every clip the game plays (idle, walk, run, attack, death) plays on it as it
-# did on the animal it came from.
+# THE SKELETON RESHAPED, THE BODY REDRAWN. Each rig is posed -- bones stretched and slimmed, never
+# turned -- and that pose made its rest pose; its bones keep their names and their orientation, so every
+# clip the game plays (idle, walk, run, attack, death) plays on it as it did on the animal it came from.
+# The source's mesh then goes, and a body is sculpted round those bones (tools/triassic_bodies.py,
+# tools/sculpt.py; GAME-DESIGN 7.1, the player 2026-09-30: "恐龙目前模型做的都粗糙，我需要它们更精致").
 #
 # AND ONE CLIP OF ITS OWN where the source has none: the Coelophysis asleep ("sleep"; the guards at
 # the nest sleep at night, GAME-DESIGN 9.3). Lying on its belly, its legs folded under it the way a
@@ -45,21 +36,26 @@ import math
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from generate_flora import vertex_colour_material  # noqa: E402
+import triassic_bodies  # noqa: E402
+
 REPO = r"z:\home\zkl-unix\repo\game\dino"
 SRC = os.path.join(REPO, "assets", "models", "quaternius")
-OUT = os.path.join(REPO, "assets", "models", "triassic")
+# TRIASSIC_OUT: somewhere else to write them, to look at before the game gets them.
+OUT = os.environ.get("TRIASSIC_OUT", os.path.join(REPO, "assets", "models", "triassic"))
 PREVIEW_DIR = os.environ.get("PREVIEW_DIR", os.path.join(os.environ.get("TEMP", "."), "triassic_preview"))
 
 # Per bone: a scale along its own axes in pose (x across, y along the bone, z the third), and
-# whether its children keep their own size (a longer neck does not make a bigger head).
-# Colours are linear RGB, by the source model's material names.
+# whether its children keep their own size (a longer neck does not make a bigger head). Each
+# animal's body -- its shape, its parts, its colours -- is tools/triassic_bodies.py's ("sculpt").
 ANIMALS = {
     "coelophysis": {
         "source": "velociraptor.glb",
         "bones": {
-            "Neck": ((0.85, 2.1, 0.85), True),
+            "Neck": ((0.85, 1.75, 0.85), True),
             "Shoulders": ((0.85, 1.25, 0.9), True),
-            "Head": ((0.72, 1.35, 0.72), True),
+            "Head": ((0.72, 1.45, 0.72), True),
             "Torso": ((0.82, 1.08, 0.85), True),
             "Hips": ((0.85, 1.0, 0.9), True),
             "Tail1": ((0.85, 1.12, 0.85), True),
@@ -71,13 +67,16 @@ ANIMALS = {
             "BackUpLeg.R": ((0.8, 1.0, 0.8), True),
             "FrontUpLeg.L": ((0.8, 0.9, 0.8), True),
             "FrontUpLeg.R": ((0.8, 0.9, 0.8), True),
+            # The hips and the shoulders drawn in: the velociraptor stood with its feet a leg's width apart,
+            # and a theropod walks with them nearly under its middle. Its feet, which hang off the root, are
+            # brought in after them (feet_follow).
+            "BackLeg.L": ((1.0, 0.62, 1.0), True),
+            "BackLeg.R": ((1.0, 0.62, 1.0), True),
+            "FrontLeg.L": ((1.0, 0.8, 1.0), True),
+            "FrontLeg.R": ((1.0, 0.8, 1.0), True),
         },
-        "colours": {
-            "Brown": (0.30, 0.17, 0.055),        # sand-ochre back
-            "LightBrown": (0.52, 0.40, 0.24),    # a pale belly and throat
-            "Black": (0.012, 0.010, 0.008),
-        },
-        "scutes": None,
+        "feet_follow": [("BackFoot.L", "BackLowLeg.L"), ("BackFoot.R", "BackLowLeg.R")],
+        "sculpt": "coelophysis",
         # Asleep (add_sleep): the body let down `drop` model units (its hips stand a little over 3),
         # then each bone turned to point along a direction in the armature's space -- forward is -y, up
         # is +z, its left +x -- in this order, parents first; each foot, which hangs off the root, put
@@ -126,15 +125,7 @@ ANIMALS = {
             "Tail4": ((0.6, 0.45, 0.6), True),
             "Tail5": ((0.5, 0.45, 0.5), True),
         },
-        "colours": {
-            "Purple": (0.16, 0.11, 0.07),        # a dun, pig-like hide
-            "LightBrown": (0.30, 0.24, 0.16),
-            "Brown": (0.12, 0.08, 0.05),
-        },
-        # The frill and the horns: what is weighted to the head or the neck and stands up off the
-        # line of them. (Its tusks are a few centimetres at the distance a herd is seen from.)
-        "cut": {"bones": ["Head", "Neck"], "above": 0.4},
-        "scutes": None,
+        "sculpt": "placerias",
     },
     "postosuchus": {
         "source": "trex.glb",
@@ -155,23 +146,12 @@ ANIMALS = {
             "FrontLowLeg.R": ((1.8, 2.5, 1.8), True),
             "FrontFoot.L": ((1.8, 1.5, 1.8), True),
             "FrontFoot.R": ((1.8, 1.5, 1.8), True),
+            # Its legs under it, as a rauisuchian's were -- pillars, not a sprawl.
+            "BackLeg.L": ((1.0, 0.72, 1.0), True),
+            "BackLeg.R": ((1.0, 0.72, 1.0), True),
         },
-        "colours": {
-            "Green": (0.075, 0.052, 0.030),      # dark umber back
-            "LightGreen": (0.24, 0.19, 0.11),    # a dun belly
-            "LightYellow": (0.55, 0.36, 0.10),   # its eye
-            "Red": (0.30, 0.05, 0.05),           # its mouth
-            "Black": (0.012, 0.010, 0.008),
-        },
-        # Rows of bony plates down its back, as in its fossils: (bone, how far along it, size).
-        "scutes": {
-            "colour": (0.035, 0.030, 0.020),
-            "rows": [("Neck", 0.5, 0.22), ("Shoulders", 0.5, 0.26), ("Torso", 0.1, 0.28), ("Torso", 0.35, 0.3),
-                     ("Torso", 0.6, 0.3), ("Torso", 0.85, 0.3), ("Hips", 0.5, 0.28), ("Back", 0.5, 0.26),
-                     ("Tail1", 0.3, 0.24), ("Tail1", 0.8, 0.22), ("Tail2", 0.4, 0.19), ("Tail2", 0.9, 0.17),
-                     ("Tail3", 0.5, 0.14), ("Tail4", 0.5, 0.11)],
-            "spread": 0.16,              # each row is a pair, this far either side of the spine
-        },
+        "feet_follow": [("BackFoot.L", "BackLowLeg.L"), ("BackFoot.R", "BackLowLeg.R")],
+        "sculpt": "postosuchus",
     },
     "hesperosuchus": {
         "source": "velociraptor.glb",
@@ -194,20 +174,13 @@ ANIMALS = {
             "FrontUpLeg.R": ((0.8, 1.7, 0.8), True),
             "FrontLowLeg.L": ((0.8, 1.6, 0.8), True),
             "FrontLowLeg.R": ((0.8, 1.6, 0.8), True),
+            "BackLeg.L": ((1.0, 0.62, 1.0), True),
+            "BackLeg.R": ((1.0, 0.62, 1.0), True),
+            "FrontLeg.L": ((1.0, 0.8, 1.0), True),
+            "FrontLeg.R": ((1.0, 0.8, 1.0), True),
         },
-        "colours": {
-            "Brown": (0.16, 0.13, 0.08),         # a dun-grey back
-            "LightBrown": (0.42, 0.36, 0.25),    # a pale belly
-            "Black": (0.012, 0.010, 0.008),
-        },
-        # Paired bony scutes down the back, as every crocodylomorph has: small, close.
-        "scutes": {
-            "colour": (0.07, 0.06, 0.04),
-            "rows": [("Neck", 0.5, 0.14), ("Shoulders", 0.5, 0.16), ("Torso", 0.2, 0.17), ("Torso", 0.5, 0.17),
-                     ("Torso", 0.8, 0.17), ("Hips", 0.5, 0.16), ("Back", 0.5, 0.15), ("Tail1", 0.3, 0.14),
-                     ("Tail1", 0.8, 0.13), ("Tail2", 0.4, 0.11), ("Tail2", 0.9, 0.1), ("Tail3", 0.5, 0.08)],
-            "spread": 0.1,
-        },
+        "feet_follow": [("BackFoot.L", "BackLowLeg.L"), ("BackFoot.R", "BackLowLeg.R")],
+        "sculpt": "hesperosuchus",
     },
     "phytosaur": {
         "source": "triceratops.glb",
@@ -227,28 +200,7 @@ ANIMALS = {
             "Tail4": ((0.5, 1.7, 0.85), True),
             "Tail5": ((0.45, 1.7, 0.85), True),
         },
-        "colours": {
-            "Purple": (0.045, 0.050, 0.028),     # dark olive above, as a crocodile's back
-            "LightBrown": (0.22, 0.20, 0.12),    # a pale belly and jaw
-            "Brown": (0.025, 0.024, 0.016),
-        },
-        # The frill and the horns, as for Placerias -- the frill's back edge over the shoulders too; the
-        # beak stays -- it is the snout.
-        "cut": {"bones": ["Head", "Neck", "Shoulders"], "above": 0.3},
-        "scutes": {
-            "colour": (0.025, 0.027, 0.015),
-            "rows": [("Neck", 0.3, 0.26), ("Neck", 0.8, 0.28), ("Shoulders", 0.2, 0.32), ("Shoulders", 0.55, 0.34),
-                     ("Shoulders", 0.9, 0.34), ("Torso", 0.15, 0.36), ("Torso", 0.4, 0.36), ("Torso", 0.65, 0.36),
-                     ("Torso", 0.9, 0.35), ("Hips", 0.5, 0.34), ("Back", 0.5, 0.32), ("Tail1", 0.25, 0.3),
-                     ("Tail1", 0.75, 0.28), ("Tail2", 0.3, 0.25), ("Tail2", 0.8, 0.22), ("Tail3", 0.4, 0.19),
-                     ("Tail3", 0.9, 0.16), ("Tail4", 0.5, 0.13)],
-            "spread": 0.15,
-        },
-        # Its eyes, on top of the skull at the back of the snout (bone, how far along it, how far up
-        # from its line, how far either side, how big) -- a material of their own ("Eye"), which the
-        # game lights when a fire is near in the dark (Dino eye-shine).
-        "eyes": {"bone": "Head", "along": 0.18, "up": 0.34, "apart": 0.2, "size": 0.12,
-                 "colour": (0.30, 0.24, 0.08)},
+        "sculpt": "phytosaur",
     },
 }
 
@@ -311,141 +263,6 @@ def reshape(arm, mesh, bones):
     bpy.ops.object.mode_set(mode='OBJECT')
     m = mesh.modifiers.new("Armature", 'ARMATURE')
     m.object = arm
-
-
-def recolour(mesh, colours):
-    for mat in mesh.data.materials:
-        if mat is None or mat.name not in colours or not mat.use_nodes:
-            continue
-        bsdf = mat.node_tree.nodes.get("Principled BSDF")
-        if bsdf:
-            c = colours[mat.name]
-            bsdf.inputs["Base Color"].default_value = (c[0], c[1], c[2], 1.0)
-
-
-def add_scutes(arm, mesh, spec):
-    """Low pyramids down the back in pairs, each weighted wholly to the bone it rides on."""
-    mat = bpy.data.materials.new("Scute")
-    mat.use_nodes = True
-    mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*spec["colour"], 1.0)
-    mat.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.9
-    mesh.data.materials.append(mat)
-    slot = len(mesh.data.materials) - 1
-    to_mesh = mesh.matrix_world.inverted() @ arm.matrix_world
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(mesh.data)
-    deform = bm.verts.layers.deform.verify()
-    top_of = _top_along(mesh)
-    for (bone_name, t, size) in spec["rows"]:
-        bone = arm.data.bones.get(bone_name)
-        if bone is None:
-            continue
-        group = mesh.vertex_groups.get(bone_name) or mesh.vertex_groups.new(name=bone_name)
-        at = to_mesh @ bone.head_local.lerp(bone.tail_local, t)
-        for side in (-1.0, 1.0):
-            base = at.copy()
-            base.x += side * spec["spread"]
-            base.z = top_of(base) - size * 0.1
-            half = size * 0.5
-            corners = [bm.verts.new((base.x + dx * half, base.y + dy * half * 1.3, base.z))
-                       for (dx, dy) in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-            tip = bm.verts.new((base.x + side * half * 0.15, base.y + half * 0.4, base.z + size * 0.5))
-            for v in corners + [tip]:
-                v[deform][group.index] = 1.0
-            for k in range(4):
-                f = bm.faces.new((corners[k], corners[(k + 1) % 4], tip))
-                f.material_index = slot
-    bm.normal_update()
-    bm.to_mesh(mesh.data)
-    bm.free()
-
-
-def _top_along(mesh):
-    """The top of the mesh near a point (x, y), in mesh space: where a scute sits."""
-    verts = [v.co.copy() for v in mesh.data.vertices]
-
-    def top(p):
-        best = None
-        for v in verts:
-            if abs(v.y - p.y) < 0.35 and abs(v.x - p.x) < 0.35:
-                best = v.z if best is None else max(best, v.z)
-        return best if best is not None else p.z
-    return top
-
-
-def add_eyes(arm, mesh, spec):
-    """Two small domes on the skull, each weighted wholly to the head, in a material of their own
-    ("Eye") the game can find and light."""
-    import bmesh
-    mat = bpy.data.materials.new("Eye")
-    mat.use_nodes = True
-    bsdf = mat.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (*spec["colour"], 1.0)
-    bsdf.inputs["Roughness"].default_value = 0.2
-    mesh.data.materials.append(mat)
-    slot = len(mesh.data.materials) - 1
-    to_mesh = mesh.matrix_world.inverted() @ arm.matrix_world
-    bone = arm.data.bones[spec["bone"]]
-    group = mesh.vertex_groups.get(spec["bone"]) or mesh.vertex_groups.new(name=spec["bone"])
-    at = to_mesh @ bone.head_local.lerp(bone.tail_local, spec["along"])
-    bm = bmesh.new()
-    bm.from_mesh(mesh.data)
-    deform = bm.verts.layers.deform.verify()
-    top_of = _top_along(mesh)
-    for side in (-1.0, 1.0):
-        centre = at.copy()
-        centre.x += side * spec["apart"]
-        centre.z = max(centre.z + spec["up"], top_of(centre) - spec["size"] * 0.4)
-        made = bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=spec["size"],
-                                         matrix=__import__("mathutils").Matrix.Translation(centre))
-        for v in made["verts"]:
-            v[deform][group.index] = 1.0
-            for f in v.link_faces:
-                f.material_index = slot
-    bm.normal_update()
-    bm.to_mesh(mesh.data)
-    bm.free()
-
-
-def cut_off(arm, mesh, spec):
-    """Deletes what is weighted mostly to `bones` and stands `above` (model units) over the line
-    they make -- a frill, a horn -- and closes the holes it leaves."""
-    import bmesh
-    to_mesh = mesh.matrix_world.inverted() @ arm.matrix_world
-    line = []
-    for name in spec["bones"]:
-        bone = arm.data.bones[name]
-        line.append((to_mesh @ bone.head_local, to_mesh @ bone.tail_local))
-    groups = [mesh.vertex_groups[n].index for n in spec["bones"]]
-    bm = bmesh.new()
-    bm.from_mesh(mesh.data)
-    deform = bm.verts.layers.deform.verify()
-
-    def line_z(y):
-        best = None
-        for (h, t) in line:
-            lo, hi = min(h.y, t.y), max(h.y, t.y)
-            k = (y - t.y) / (h.y - t.y) if abs(h.y - t.y) > 1e-4 else 0.0
-            z = t.z + (h.z - t.z) * max(0.0, min(1.0, k))
-            if lo - 0.5 <= y <= hi + 0.5:
-                best = z if best is None else max(best, z)
-        return best
-
-    doomed = []
-    for v in bm.verts:
-        if sum(v[deform].get(g, 0.0) for g in groups) < 0.5:
-            continue
-        z = line_z(v.co.y)
-        if z is not None and v.co.z - z > spec["above"]:
-            doomed.append(v)
-    bmesh.ops.delete(bm, geom=doomed, context='VERTS')
-    edges = [e for e in bm.edges if e.is_boundary]
-    if edges:
-        bmesh.ops.holes_fill(bm, edges=edges, sides=0)
-    bm.to_mesh(mesh.data)
-    bm.free()
-    print("  cut %d vertices" % len(doomed))
 
 
 def add_sleep(arm, spec):
@@ -522,10 +339,14 @@ def add_sleep(arm, spec):
 def export(arm, mesh, path):
     bpy.ops.object.select_all(action='DESELECT')
     arm.select_set(True)
-    mesh.select_set(True)
+    for m in (mesh if isinstance(mesh, list) else [mesh]):
+        m.select_set(True)
     bpy.context.view_layer.objects.active = arm
+    # Every surface's colours (the eyes' too): left to the materials, only the skin's went, and the eyes came
+    # out white.
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_animations=True,
-                              export_animation_mode='ACTIONS', export_anim_single_armature=True)
+                              export_animation_mode='ACTIONS', export_anim_single_armature=True,
+                              export_vertex_color='ACTIVE')
 
 
 def preview(name, arm, mesh):
@@ -556,6 +377,26 @@ def preview(name, arm, mesh):
     print("[OK] preview", scene.render.filepath)
 
 
+def feet_follow(arm, pairs):
+    """Each foot that hangs off the root brought to where its leg now ends -- the hips drawn in -- along the
+    ground, its own bones after it. Moved, not turned: its clips move it from where it rests."""
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='EDIT')
+    for (foot, leg) in pairs:
+        eb = arm.data.edit_bones.get(foot)
+        lb = arm.data.edit_bones.get(leg)
+        if eb is None or lb is None:
+            continue
+        delta = lb.tail - eb.head
+        delta.z = 0.0
+        moved = [eb] + list(eb.children_recursive)
+        was = [(b.head.copy(), b.tail.copy()) for b in moved]
+        for b, (h, t) in zip(moved, was):
+            b.head = h + delta
+            b.tail = t + delta
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     only = [a for a in args if not a.startswith("--")]
@@ -566,21 +407,22 @@ def main():
         reset()
         arm, mesh = import_source(spec["source"])
         reshape(arm, mesh, spec["bones"])
-        recolour(mesh, spec["colours"])
-        if spec.get("cut"):
-            cut_off(arm, mesh, spec["cut"])
-        if spec["scutes"]:
-            add_scutes(arm, mesh, spec["scutes"])
-        if spec.get("eyes"):
-            add_eyes(arm, mesh, spec["eyes"])
+        if spec.get("feet_follow"):
+            feet_follow(arm, spec["feet_follow"])
+        # Drawn anew round its bones (tools/triassic_bodies.py): the source's own mesh goes.
+        mats = [vertex_colour_material("Skin", 0.72, False), vertex_colour_material("Eye", 0.3, False)]
+        parts = triassic_bodies.build(spec["sculpt"], arm, mats)
+        bpy.data.objects.remove(mesh)
+        mesh = parts
         if spec.get("sleep"):
             add_sleep(arm, spec["sleep"])
         path = os.path.join(OUT, name + ".glb")
         export(arm, mesh, path)
+        meshes = mesh if isinstance(mesh, list) else [mesh]
         print("[OK] %s: %d verts, %.2f x %.2f x %.2f, clips %s" % (
-            name, len(mesh.data.vertices), *mesh.dimensions, [a.name for a in bpy.data.actions]))
+            name, sum(len(m.data.vertices) for m in meshes), *meshes[0].dimensions, [a.name for a in bpy.data.actions]))
         if "--preview" in args:
-            preview(name, arm, mesh)
+            preview(name, arm, meshes[0])
 
 
 if __name__ == "__main__":

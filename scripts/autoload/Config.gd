@@ -3056,18 +3056,18 @@ const VISUALS: Dictionary = {
 	# The first map's cast (tools/generate_triassic.py): reshaped from the Quaternius rigs, so they
 	# play the same clips. The alpha is the same animal, fitted to its own taller size.
 	"dino/coelophysis":     {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis"},
+		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis", "material": "skin"},
 	"dino/coelophysis_alpha": {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis_alpha"},
+		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis_alpha", "material": "skin"},
 	"dino/postosuchus":     {"scene": "res://assets/models/triassic/postosuchus.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus"},
+		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
 	# Long-snouted and armoured, its own eyes a material the game lights (ProwlerDino, the eye-shine).
 	"dino/phytosaur":       {"scene": "res://assets/models/triassic/phytosaur.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "phytosaur"},
+		"placeholder": "raptor", "anchor": "feet", "color": "phytosaur", "material": "skin"},
 	# Hesperosuchus (tools/generate_triassic.py): the velociraptor's rig with a crocodile's snout, scutes
 	# down its back, long forelimbs -- up on its hind legs to run.
 	"dino/hesperosuchus":   {"scene": "res://assets/models/triassic/hesperosuchus.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "hesperosuchus"},
+		"placeholder": "raptor", "anchor": "feet", "color": "hesperosuchus", "material": "skin"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours

@@ -60,6 +60,8 @@ func _place_herd(spec: Dictionary) -> void:
 		add_child(animal)
 		var art: Node3D = packed.instantiate()
 		animal.add_child(art)
+		# Coloured by its vertices, as the sculpted cast is (tools/triassic_bodies.py).
+		VisualLibrary.read_vertex_colours(art)
 		# Sized by LENGTH, on one scale for the whole valley: the in-game T-Rex is the ruler,
 		# and a sauropod is twice its length whatever its pose makes its height.
 		var bounds: AABB = VisualLibrary.visual_bounds(art)
