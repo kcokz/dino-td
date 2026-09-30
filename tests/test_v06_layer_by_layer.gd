@@ -96,9 +96,15 @@ func test_03_a_new_material_brings_what_is_made_of_it() -> void:
 	assert_eq(String(told.last_args[0]), "bone", "About bone")
 	var now_known: Array = _opening() + ["bone"]
 	var shown: Array = _menu(main)
-	assert_eq(shown, _names(_built_of(now_known)), "What is made of bone joins the menu: %s" % [shown])
-	assert_gt(shown.size(), menu_before.size(), "The menu grew")
-	assert_false(shown.has(config_node.get_building_name("set_crossbow")), "Not what still waits on stone")
+	# v0.6 round six (GAME-DESIGN 6.0): the menu is one slot a job and never grows by a material --
+	# what bone brings is ways up for what stands (the fence's bone stakes, the bow's crossbow).
+	assert_eq(shown, menu_before, "The menu stays one slot a job: %s" % [shown])
+	var ways: Array = []
+	for b_type in config_node.player_building_types():
+		for target in config_node.upgrade_targets(String(b_type)):
+			if config_node.upgrade_cost(String(b_type), String(target)).has("bone"):
+				ways.append(String(target))
+	assert_gt(ways.size(), 0, "What is made with bone is a way up for what stands: %s" % [ways])
 	game_state_node.add_resource("bone", 1)
 	assert_eq(told.emit_count, 1, "The second bone is not")
 

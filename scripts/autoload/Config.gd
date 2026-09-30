@@ -118,26 +118,30 @@ const BUILDINGS: Dictionary = {
 		"damage": 1.4,
 		"pierce": false,
 		"rearm_seconds": 3.0,
-		"upgrades_to": "",
+		# The shooting slot of the build menu (GAME-DESIGN 6.0 rule 2, v0.6 round six): bone makes it the
+		# set crossbow where it stands.
+		"upgrades_to": ["set_crossbow"],
 	},
-	# The set crossbow, once there is stone and bone (tools/generate_props.py set_crossbow): a
-	# heavy stock on a stone plinth, a seasoned stave, a bone-headed bolt -- two bolts a raptor,
+	# The set crossbow, the trip bow with bone (tools/generate_props.py set_crossbow): a heavy stock
+	# on a crib of logs, a seasoned stave, a bone-headed bolt -- two bolts a raptor,
 	# heavier than the trip bow's arrow even to one animal. It stands like the stone it is set
 	# on: a pack goes for what shoots it (DINO_AI.shooter_kinds), and set into a ring facing out
 	# -- where it does most -- a trap that fell like a palisade section was the hole the raid
 	# came in by (measured: tools/playtest.gd siege, at 16 hit points six of them were gone and
 	# the cabin with them; at 40 they hold -- see WAVES). Its bolt flies the whole lane and
 	# goes through everything on it -- a raid walks a lane in file, so set down
-	# the line of a funnel it answers the column, not the one at the front. Stone for the
-	# plinth, bone for the bolts, and nothing else (GAME-DESIGN 4.1 rule 2): one bone, so the
-	# first raid's bone pays for the pick and the first crossbow (9.2).
+	# the line of a funnel it answers the column, not the one at the front. Wood for its body and
+	# bone for what cuts, and nothing else (GAME-DESIGN 6.0: one word a material -- it was stone
+	# and bone until v0.6 round six, a plinth under it): the trip bow's four wood and one bone
+	# more, so the first raid's bone still pays for the pick and the first crossbow (9.2). Its
+	# hit points stay what held a ring: heavy timber on a crib, not a sapling on two sticks.
 	"set_crossbow": {
 		"name": "BUILDING_SET_CROSSBOW_NAME",
 		"kind": "trap",
 		"cells": 1,
 		"height": 0.55,
 		"hp": 40.0,
-		"cost": {"stone": 4, "bone": 1},
+		"cost": {"wood": 4, "bone": 1},
 		"lane": 6,
 		"damage": 2.0,
 		"pierce": true,
@@ -156,7 +160,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 1,
 		"height": 0.6,
 		"hp": 70.0,
-		"cost": {"stone": 4, "bone": 3},
+		"cost": {"wood": 4, "bone": 3},
 		"lane": 6,
 		"damage": 2.0,
 		"pierce": true,
@@ -188,12 +192,15 @@ const BUILDINGS: Dictionary = {
 		"contact_damage": 0.15,
 		"contact_tick": 0.5,
 		"cost": {"wood": 1},
-		"upgrades_to": "",
+		# The fence slot of the build menu (GAME-DESIGN 6.0 rule 2, v0.6 round six: "墙上挂机关类似升级
+		# 方向，可以做成升级"): most of a wall stays wood, a funnel; where it is bitten, it becomes what
+		# the place needs -- bone points on it (sharp), or stone in its place (heavy).
+		"upgrades_to": ["bone_stake", "stone_wall"],
 	},
-	# The palisade's second step (GAME-DESIGN 6.2: wood -> bone -> iron): the same section with
-	# bone points lashed to its logs, biting more than twice as hard and lasting a little longer.
-	# One bone a metre: the raids' bone spent where it does the most harm -- the mouth of a
-	# funnel, not a whole ring.
+	# The fence with bone (GAME-DESIGN 6.0: bone is what cuts): the same section with bone points
+	# lashed to its logs, biting more than twice as hard and lasting a little longer. One bone a
+	# metre, as an upgrade where it stands: the raids' bone spent where it does the most harm -- the
+	# mouth of a funnel, not a whole ring.
 	"bone_stake": {
 		"name": "BUILDING_BONE_STAKE_NAME",
 		"kind": "wall",
@@ -207,7 +214,8 @@ const BUILDINGS: Dictionary = {
 	},
 	# Courses of unmortared stone, capstones on top (GAME-DESIGN 6.2: only blocks, many hit
 	# points): it bites nothing, but a big predator that would eat through a palisade is held
-	# here a long time (6.3). A metre of it is a stone.
+	# here a long time (6.3). The fence with stone in its place (6.0: stone is what weighs): a
+	# metre of it is a stone.
 	"stone_wall": {
 		"name": "BUILDING_STONE_WALL_NAME",
 		"kind": "wall",
@@ -257,18 +265,20 @@ const BUILDINGS: Dictionary = {
 		"fuel": 2,
 		"flame_height": 0.22,
 		"flame_size": 1.0,
-		"upgrades_to": "",
+		# The fire slot of the build menu (GAME-DESIGN 6.0): stone raises it into a brazier.
+		"upgrades_to": ["brazier"],
 	},
 	# The brazier: a stone bowl on a drystone plinth -- the fire raised to his chest, which lights
-	# further, and burns more (GAME-DESIGN 6: "火盆（石，1：夜里照得更远，每晚从仓库扣木头）"). Stone, so it
-	# comes once there is a pick; and it stands a raid's bites like the stone it is.
+	# further, and burns more (GAME-DESIGN 6: "火盆（石，1：夜里照得更远，每晚从仓库扣木头）"). The campfire
+	# with stone (6.0), so it comes once there is a pick; and it stands a raid's bites like the stone
+	# it is, and stands in the way as the campfire does not.
 	"brazier": {
 		"name": "BUILDING_BRAZIER_NAME",
 		"kind": "fire",
 		"cells": 1,
 		"height": 0.7,
 		"hp": 20.0,
-		"cost": {"stone": 4, "wood": 2},
+		"cost": {"wood": 3, "stone": 4},
 		"light": 10.0,
 		"fuel": 3,
 		"flame_height": 0.66,
@@ -593,7 +603,7 @@ static func missing_tool_hint(res_id: String, known: Callable = Callable()) -> S
 ## the bar and the first-pickup line say, so neither gives away what is still to come.
 static func uses_of(res_id: String, map: Dictionary = {}, known: Callable = Callable()) -> Array:
 	var out: Array = []
-	for b_type in BUILDABLE_TYPES:
+	for b_type in player_building_types():
 		var cost: Dictionary = BUILDINGS[b_type].get("cost", {}) if BUILDINGS.has(b_type) else {}
 		if cost.has(res_id) and _all_known(cost, known):
 			out.append({"kind": "building", "id": b_type})
@@ -676,11 +686,27 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 	return TranslationServer.translate("SOURCE_BOSSES" if bosses_only else "SOURCE_DINOSAURS") % \
 		TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
 
-## Types offered in the Hero's build menu, in display order.
-## Buildings absent here exist in BUILDINGS but cannot be placed by the player
-## (e.g. "core" is spawned by the level rather than bought).
-const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "bone_stake", "stone_wall", "set_crossbow",
-	"campfire", "brazier"]
+## Types offered in the Hero's build menu, in display order: one a job, each its first form, of
+## wood alone (GAME-DESIGN 6.0 rule 2; v0.6 round six, the player: "当新的材料出现，老的材料又在，可选的
+## 建造物一下子变太多，有点杂乱无章"). Every other material is an upgrade where a building stands
+## (BUILDINGS.<id>.upgrades_to): bone stakes and the stone wall off the fence, the set crossbow off
+## the trip bow, the brazier off the campfire -- the menu never grows by a material.
+## Buildings absent here exist in BUILDINGS but are not placed from the menu ("core" is spawned
+## by the level; the rest are what these become).
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "campfire"]
+
+## Everything the player can have standing: what the menu offers and all it becomes where it stands,
+## however many steps up. What a material is for is worked out over these (uses_of).
+static func player_building_types() -> Array[String]:
+	var out: Array[String] = []
+	var todo: Array = BUILDABLE_TYPES.duplicate()
+	while not todo.is_empty():
+		var t: String = String(todo.pop_front())
+		if out.has(t) or not BUILDINGS.has(t):
+			continue
+		out.append(t)
+		todo.append_array(upgrade_targets(t))
+	return out
 
 ## What every trap shares (BUILDINGS kind "trap", Trap.gd).
 const TRAPS: Dictionary = {
@@ -792,20 +818,31 @@ const FIRE: Dictionary = {
 		"length": 0.62, "tilt_degrees": 12.0, "fade_seconds": 6.0, "light_energy": 3.5},
 }
 
-## The building `type_id` turns into when it is upgraded where it stands, or "".
-static func upgrade_target(type_id: String) -> String:
+## Everything `type_id` can be turned into where it stands (BUILDINGS.<id>.upgrades_to: one id, or a
+## list -- a fence becomes bone stakes or a stone wall, GAME-DESIGN 6.0), in the order given.
+static func upgrade_targets(type_id: String) -> Array[String]:
+	var out: Array[String] = []
 	if not BUILDINGS.has(type_id):
-		return ""
-	var target: String = String(BUILDINGS[type_id].get("upgrades_to", ""))
-	return target if BUILDINGS.has(target) else ""
+		return out
+	var to: Variant = BUILDINGS[type_id].get("upgrades_to", "")
+	for t in (to if to is Array else [to]):
+		if BUILDINGS.has(String(t)) and not out.has(String(t)):
+			out.append(String(t))
+	return out
 
-## What it costs to upgrade a `type_id`: the difference between its price and the price of
-## what it becomes, never less than nothing. A twin set crossbow costs a set crossbow and two
-## more bone, so the upgrade is two bone -- and a building's price stays exactly what it is
-## made of.
-static func upgrade_cost(type_id: String) -> Dictionary:
-	var target: String = upgrade_target(type_id)
+## The first of them, or "".
+static func upgrade_target(type_id: String) -> String:
+	var all: Array[String] = upgrade_targets(type_id)
+	return all[0] if not all.is_empty() else ""
+
+## What it costs to turn a `type_id` into `target` (the first it can become, if none is named): the
+## difference between its price and the price of what it becomes, never less than nothing. A twin
+## set crossbow costs a set crossbow and two more bone, so the upgrade is two bone -- and a
+## building's price stays exactly what it is made of. {} for what it cannot become.
+static func upgrade_cost(type_id: String, target: String = "") -> Dictionary:
 	if target == "":
+		target = upgrade_target(type_id)
+	if target == "" or not upgrade_targets(type_id).has(target):
 		return {}
 	var have: Dictionary = BUILDINGS[type_id].get("cost", {})
 	var out: Dictionary = {}
@@ -816,11 +853,11 @@ static func upgrade_cost(type_id: String) -> Dictionary:
 			out[res_id] = more
 	return out
 
-## Seconds the Hero works to upgrade a `type_id`: the build-time curve on the upgrade's own
-## price, so an upgrade takes what building that much would.
-static func get_upgrade_time(type_id: String) -> float:
+## Seconds the Hero works to turn a `type_id` into `target` (the first, if none is named): the
+## build-time curve on the upgrade's own price, so an upgrade takes what building that much would.
+static func get_upgrade_time(type_id: String, target: String = "") -> float:
 	var total: float = 0.0
-	var cost: Dictionary = upgrade_cost(type_id)
+	var cost: Dictionary = upgrade_cost(type_id, target)
 	for res_id in cost:
 		total += float(cost[res_id])
 	if total <= 0.0:

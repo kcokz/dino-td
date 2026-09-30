@@ -96,7 +96,8 @@ func test_01_nothing_the_player_builds_aims_and_only_the_cabin_does() -> void:
 	for type_id in config_node.BUILDABLE_TYPES:
 		assert_ne(String(config_node.get_building_kind(type_id)), "tower", "No tower on the build menu (%s)" % type_id)
 	assert_true(config_node.BUILDABLE_TYPES.has("trip_bow"), "The opening's trap is on the menu")
-	assert_true(config_node.BUILDABLE_TYPES.has("set_crossbow"), "And the set crossbow")
+	assert_true(config_node.upgrade_targets("trip_bow").has("set_crossbow"),
+		"And bone makes it the set crossbow where it stands (GAME-DESIGN 6.0)")
 	assert_eq(config_node.BUILDINGS["trip_bow"]["cost"].keys(), ["wood"], "The trip bow is wood and nothing else")
 	assert_eq(config_node.upgrade_target("set_crossbow"), "set_crossbow_2", "The set crossbow improves where it stands")
 

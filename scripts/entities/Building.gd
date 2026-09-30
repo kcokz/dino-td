@@ -404,27 +404,41 @@ func upgrade_target() -> String:
 	var cfg = _get_config()
 	return String(cfg.upgrade_target(building_type)) if (cfg and cfg.has_method("upgrade_target")) else ""
 
-## Finished, standing, with somewhere further up its line to go, and not already on its way.
-func can_upgrade() -> bool:
-	return is_constructed and not is_destroyed and upgrading_to == "" and upgrade_target() != ""
+## Everything it can become where it stands (Config.upgrade_targets): a fence, bone stakes or a
+## stone wall (GAME-DESIGN 6.0).
+func upgrade_targets() -> Array[String]:
+	var cfg = _get_config()
+	return cfg.upgrade_targets(building_type) if (cfg and cfg.has_method("upgrade_targets")) else ([] as Array[String])
+
+## Finished, standing, with somewhere further up its line to go -- `target`, or anywhere, with none
+## named -- and not already on its way.
+func can_upgrade(target: String = "") -> bool:
+	if not is_constructed or is_destroyed or upgrading_to != "":
+		return false
+	var all: Array[String] = upgrade_targets()
+	return not all.is_empty() if target == "" else all.has(target)
 
 func is_upgrading() -> bool:
 	return upgrading_to != ""
 
-## What the upgrade costs: the difference between this building's price and the next one's.
-func upgrade_cost() -> Dictionary:
+## What turning it into `target` costs (the first it can become, with none named): the difference
+## between this building's price and that one's.
+func upgrade_cost(target: String = "") -> Dictionary:
 	var cfg = _get_config()
-	return cfg.upgrade_cost(building_type) if (cfg and cfg.has_method("upgrade_cost")) else {}
+	return cfg.upgrade_cost(building_type, target) if (cfg and cfg.has_method("upgrade_cost")) else {}
 
-## Pays for the upgrade and marks the work as there to be done. False, with nothing spent,
-## when it cannot be upgraded or the warehouse cannot pay for it.
-func begin_upgrade() -> bool:
-	if not can_upgrade():
+## Pays for turning it into `target` (the first it can become, with none named) and marks the work
+## as there to be done. False, with nothing spent, when it cannot become that or the warehouse
+## cannot pay for it.
+func begin_upgrade(target: String = "") -> bool:
+	if target == "":
+		target = upgrade_target()
+	if not can_upgrade(target):
 		return false
 	var gs = _get_game_state()
-	if gs == null or not gs.has_method("spend_resources") or not gs.spend_resources(upgrade_cost()):
+	if gs == null or not gs.has_method("spend_resources") or not gs.spend_resources(upgrade_cost(target)):
 		return false
-	upgrading_to = upgrade_target()
+	upgrading_to = target
 	upgrade_progress = 0.0
 	_update_info_label()
 	return true
@@ -435,7 +449,7 @@ func add_upgrade_progress(delta: float) -> bool:
 	if not is_upgrading():
 		return true
 	var cfg = _get_config()
-	var total: float = float(cfg.get_upgrade_time(building_type)) if (cfg and cfg.has_method("get_upgrade_time")) else 0.0
+	var total: float = float(cfg.get_upgrade_time(building_type, upgrading_to)) if (cfg and cfg.has_method("get_upgrade_time")) else 0.0
 	upgrade_progress = 1.0 if total <= 0.0 else minf(1.0, upgrade_progress + maxf(0.0, delta) / total)
 	if upgrade_progress >= 1.0:
 		_finish_upgrade()
@@ -454,11 +468,26 @@ func _finish_upgrade() -> void:
 	setup(to, cell_pos)
 	current_hp = max_hp * health
 	_rebuild_body(was)
+	_after_upgrade()
 	_sound("build_done")
 	_update_info_label()
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("building_upgraded"):
 		eb.building_upgraded.emit(self)
+
+## What else changes with what it is: whose way it stands in (a campfire is stepped over, the brazier
+## it becomes is not: Config.walk_over) -- its layer and the steering round it. A kind with more of its
+## own to change (Fire: its flame) adds to this.
+func _after_upgrade() -> void:
+	# Its box the size of what it is now: a campfire's hand-high ring raised into a chest-high
+	# brazier stood no higher to the navigation mesh, and the way across climbed over it.
+	for child in get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape is BoxShape3D:
+			var fp: float = _footprint()
+			var h: float = _building_height()
+			((child as CollisionShape3D).shape as BoxShape3D).size = Vector3(fp, h, fp)
+			(child as CollisionShape3D).position = Vector3(0.0, h * 0.5, 0.0)
+	_update_construction_state()
 
 ## Swaps the body for the one this type declares -- only when it is a different thing to
 ## draw, so a tower II still in the tower's model keeps its head turned at its target.

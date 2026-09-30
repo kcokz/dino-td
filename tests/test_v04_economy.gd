@@ -229,9 +229,11 @@ func test_15_the_chain_closes() -> void:
 	var pick_recipe: Dictionary = _recipe(String(config_node.harvest_requires_unlock("stone")))
 	assert_false(pick_recipe.is_empty(), "The pick is something the cabin can make")
 	assert_has(pick_recipe["inputs"], "bone", "And the pick is made of bone, which only a dinosaur has")
+	# v0.6 round six (GAME-DESIGN 6.0): the crossbow is wood and bone, and stone is what the pick
+	# brings for what must weigh -- the wall a big one cannot eat through.
 	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
-	assert_has(tower_cost, "stone", "While the tower is built of the stone the pick cuts")
-	assert_has(tower_cost, "bone", "And tipped with bone off the same raid")
+	assert_has(tower_cost, "bone", "The crossbow is tipped with bone off the same raid")
+	assert_has(config_node.BUILDINGS["stone_wall"]["cost"], "stone", "and the stone the pick cuts is the stone wall")
 
 # ==============================================================================
 # 6. The opening, stated once so a balance pass cannot quietly break it
@@ -276,12 +278,11 @@ func test_16_the_opening_is_wood_a_fence_and_nothing_more() -> void:
 	assert_false(axe.is_empty(), "The axe is a recipe")
 	assert_gt(int(axe["inputs"].get("stone", 0)), 0, "The stone axe is stone, so it comes after the pick")
 
-	# What keeps the tower out of reach on the first morning is the chain, not the
-	# wood: it wants stone, and bone, which the opening does not hold.
+	# What keeps the crossbow out of reach on the first morning is the chain, not the
+	# wood: it wants bone, which the opening does not hold (v0.6 round six: no stone in it now).
 	# Gating it on the opening wallet as well would be a second lock on the same door.
 	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
-	assert_gt(int(tower_cost.get("stone", 0)), 0, "A tower wants stone")
-	assert_gt(int(tower_cost.get("bone", 0)), 0, "And bone")
+	assert_gt(int(tower_cost.get("bone", 0)), 0, "A crossbow wants bone")
 
 func test_17_one_raid_pays_for_the_pick_and_the_first_tower() -> void:
 	# If the pick or the first tower needed a second wave, the player would be sent home

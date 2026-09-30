@@ -86,7 +86,8 @@ func _connect_event_bus() -> void:
 	# should cost one bake.
 	# building_completed as well as building_placed: a blueprint is in neither mesh, so
 	# the moment that changes what anyone can walk through is the moment it is FINISHED.
-	for sig in ["building_placed", "building_completed", "building_destroyed"]:
+	# And building_upgraded: a campfire stepped over becomes a brazier in the way.
+	for sig in ["building_placed", "building_completed", "building_destroyed", "building_upgraded"]:
 		if eb.has_signal(sig) and not eb.is_connected(sig, _on_world_changed):
 			eb.connect(sig, _on_world_changed)
 

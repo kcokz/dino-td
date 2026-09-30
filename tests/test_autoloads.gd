@@ -127,8 +127,9 @@ func test_config_buildings_catalog() -> void:
 		assert_false(b["set_crossbow"].has("range"), "It aims at nothing: an animal on its wire looses it")
 		assert_gt(int(b["set_crossbow"].get("lane", 0)), 0, "It is set along a lane")
 		assert_gt(float(b["set_crossbow"].get("damage", 0.0)), 0.0, "And it hurts what trips it")
-		assert_gt(b["set_crossbow"].get("cost", {}).get("stone", 0), 0, "It is built of stone")
-		assert_gt(b["set_crossbow"].get("cost", {}).get("bone", 0), 0, "and tipped with bone")
+		# GAME-DESIGN 6.0 (v0.6 round six): a trap's body is wood, and bone is what cuts.
+		assert_gt(b["set_crossbow"].get("cost", {}).get("wood", 0), 0, "Its body is wood")
+		assert_gt(b["set_crossbow"].get("cost", {}).get("bone", 0), 0, "and it is tipped with bone")
 
 	if "wall" in b:
 		assert_eq(b["wall"].get("kind", ""), "wall", "wall kind should be 'wall'")

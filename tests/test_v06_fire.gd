@@ -69,7 +69,9 @@ func test_01_the_fires_are_built_and_burn_wood() -> void:
 	for type_id in config_node.BUILDABLE_TYPES:
 		if String(config_node.get_building_kind(type_id)) == "fire":
 			fires.append(type_id)
-	assert_true(fires.has("campfire") and fires.has("brazier"), "The campfire and the brazier are in his build menu")
+	assert_true(fires.has("campfire"), "The campfire is in his build menu")
+	assert_has(config_node.upgrade_targets("campfire"), "brazier", "and stone raises it into the brazier (GAME-DESIGN 6.0)")
+	fires.append("brazier")
 	var camp: Dictionary = config_node.BUILDINGS["campfire"]
 	var brazier: Dictionary = config_node.BUILDINGS["brazier"]
 	assert_eq(camp["cost"].keys(), ["wood"], "A campfire is wood alone: made with his hands by the first dusk")

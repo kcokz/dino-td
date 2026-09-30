@@ -62,8 +62,12 @@ func _row(type_id: String) -> Dictionary:
 # ==============================================================================
 
 func test_01_the_menu_offers_bone_stakes_and_a_stone_wall_but_not_tower_ii() -> void:
-	assert_has(config_node.BUILDABLE_TYPES, "bone_stake", "Bone stakes are on the build menu")
-	assert_has(config_node.BUILDABLE_TYPES, "stone_wall", "So is the stone wall")
+	# v0.6 round six (GAME-DESIGN 6.0): the menu is one slot a job; bone stakes and the stone wall are
+	# what a fence becomes where it stands.
+	assert_has(config_node.upgrade_targets("wall"), "bone_stake", "A fence becomes bone stakes")
+	assert_has(config_node.upgrade_targets("wall"), "stone_wall", "or a stone wall")
+	assert_false(config_node.BUILDABLE_TYPES.has("bone_stake") or config_node.BUILDABLE_TYPES.has("stone_wall"),
+		"neither an entry of the menu")
 	var target: String = String(config_node.upgrade_target("set_crossbow"))
 	assert_ne(target, "", "A tower has somewhere to go")
 	assert_false(config_node.BUILDABLE_TYPES.has(target), "But that is reached by upgrading, not from the menu")
@@ -215,7 +219,7 @@ func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
 	await wait_frames(1)
 	var target: String = String(config_node.upgrade_target("set_crossbow"))
 	var target_name: String = String(config_node.get_building_name(target))
-	var button_text: String = tr("CMD_UPGRADE") % panel._amounts_text(config_node.upgrade_cost("set_crossbow"))
+	var button_text: String = tr("CMD_UPGRADE_TO") % [target_name, panel._amounts_text(config_node.upgrade_cost("set_crossbow"))]
 	var offered: bool = false
 	for child in panel.button_container.get_children():
 		if child is Button and String(child.text) == button_text:

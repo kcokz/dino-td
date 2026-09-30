@@ -921,25 +921,26 @@ func _amounts_text(amounts: Dictionary) -> String:
 ## with its price and how long the work is. Only what actually changes is listed.
 const _UPGRADE_STATS: Array[String] = ["rearm_seconds", "lane", "damage", "hp"]
 
-func upgrade_detail_text(unit: Node) -> String:
+func upgrade_detail_text(unit: Node, to_type: String = "") -> String:
 	var cfg = _get_config()
 	if cfg == null or unit == null or not is_instance_valid(unit) or not unit.has_method("upgrade_target"):
 		return ""
 	var from: Dictionary = cfg.BUILDINGS.get(String(unit.building_type), {})
-	var to_type: String = unit.upgrade_target()
+	if to_type == "":
+		to_type = unit.upgrade_target()
 	var to: Dictionary = cfg.BUILDINGS.get(to_type, {})
 	var parts: PackedStringArray = []
 	for stat in _UPGRADE_STATS:
 		if from.has(stat) and to.has(stat) and float(from[stat]) != float(to[stat]):
 			parts.append(tr("STAT_%s" % stat.to_upper()) % [cfg.factor_text(float(from[stat])), cfg.factor_text(float(to[stat]))])
-	return tr("UPGRADE_DETAIL_FORMAT") % [_building_name(to_type), _amounts_text(unit.upgrade_cost()),
-		float(cfg.get_upgrade_time(String(unit.building_type))), " · ".join(parts)]
+	return tr("UPGRADE_DETAIL_FORMAT") % [_building_name(to_type), _amounts_text(unit.upgrade_cost(to_type)),
+		float(cfg.get_upgrade_time(String(unit.building_type), to_type)), " · ".join(parts)]
 
-func _show_upgrade_detail(unit: Node) -> void:
+func _show_upgrade_detail(unit: Node, to_type: String = "") -> void:
 	if status_label == null:
 		return
 	_hover_detail_shown = true
-	_set_status(upgrade_detail_text(unit))
+	_set_status(upgrade_detail_text(unit, to_type))
 	status_label.modulate = Color.WHITE
 
 ## What a building costs, in every resource it asks for.
@@ -997,24 +998,28 @@ func _populate_building_buttons() -> void:
 	button_container.columns = 1
 	# Upgrading where it stands (v0.6): the price on the button, and on hover the numbers
 	# that change -- before and after is the whole of the choice. Paid when chosen, like a
-	# blueprint, and the Hero goes straight over to build it.
+	# blueprint, and the Hero goes straight over to build it. One button for each thing it can
+	# become (v0.6 round six, GAME-DESIGN 6.0: a fence becomes bone stakes or a stone wall), each
+	# named, with its own price.
 	if selected_unit.has_method("can_upgrade") and selected_unit.can_upgrade():
 		var unit: Node = selected_unit
-		var up_text: String = tr("CMD_UPGRADE") % _amounts_text(unit.upgrade_cost())
-		var up_btn := _create_action_button(up_text, func():
-			if not is_instance_valid(unit) or not unit.begin_upgrade():
-				return
-			var hero = _get_hero()
-			if hero and is_instance_valid(hero) and hero.has_method("order_upgrade"):
-				hero.order_upgrade(unit)
-			action_triggered.emit("upgrade", unit)
-			_refresh_ui()
-		, "upgrade")
-		var gs_up = _get_game_state()
-		up_btn.disabled = gs_up == null or not gs_up.has_method("can_afford") or not gs_up.can_afford(unit.upgrade_cost())
-		up_btn.mouse_entered.connect(func(): _show_upgrade_detail(unit))
-		up_btn.focus_entered.connect(func(): _show_upgrade_detail(unit))
-		up_btn.mouse_exited.connect(_clear_craft_detail)
+		for to_type in unit.upgrade_targets():
+			var target: String = String(to_type)
+			var up_text: String = tr("CMD_UPGRADE_TO") % [_building_name(target), _amounts_text(unit.upgrade_cost(target))]
+			var up_btn := _create_action_button(up_text, func():
+				if not is_instance_valid(unit) or not unit.begin_upgrade(target):
+					return
+				var hero = _get_hero()
+				if hero and is_instance_valid(hero) and hero.has_method("order_upgrade"):
+					hero.order_upgrade(unit)
+				action_triggered.emit("upgrade", unit)
+				_refresh_ui()
+			, "upgrade")
+			var gs_up = _get_game_state()
+			up_btn.disabled = gs_up == null or not gs_up.has_method("can_afford") or not gs_up.can_afford(unit.upgrade_cost(target))
+			up_btn.mouse_entered.connect(func(): _show_upgrade_detail(unit, target))
+			up_btn.focus_entered.connect(func(): _show_upgrade_detail(unit, target))
+			up_btn.mouse_exited.connect(_clear_craft_detail)
 
 	if selected_unit.has_method("needs_repair") and selected_unit.needs_repair():
 		# The bill is listed in what it actually costs: a set crossbow is mended with

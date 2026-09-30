@@ -408,14 +408,31 @@ def _plinth(b, rng, half=0.42, height=0.34):
                 _dry_stone(b, Vector((x0 + 0.01, y0 + 0.01, z0)), Vector((x1 - 0.01, y1 - 0.01, z1)), rng, col)
 
 
+def _crib(b, rng, half=0.42, height=0.34):
+    """A crib of short logs under a trap, laid two and two crosswise as a woodpile is, cut ends out."""
+    courses = 4
+    r = height / courses * 0.5
+    for c in range(courses):
+        z = r + c * 2.0 * r
+        for side in (-1.0, 1.0):
+            off = side * (half - r - 0.02)
+            wob = rng.uniform(-0.015, 0.015)
+            if c % 2 == 0:
+                _log(b, Vector((off + wob, -half, z)), Vector((off - wob, half, z)), r * rng.uniform(0.95, 1.05), rng)
+            else:
+                _log(b, Vector((-half, off + wob, z)), Vector((half, off - wob, z)), r * rng.uniform(0.95, 1.05), rng)
+
+
 def set_crossbow(seed, twin=False):
-    """The crossbow he sets once he has stone and bone: a heavy timber stock on a plinth of
-    stone, a stave of seasoned wood across its front -- two, lashed one over the other, on the
-    improved one -- spanned with sinew back to a trigger, and a bone-headed bolt on it. Its
-    bolt flies the whole lane, through whatever is on it."""
+    """The crossbow the opening's bow becomes with bone (GAME-DESIGN 6.0: wood and bone -- a trap's
+    body is wood, and bone is what cuts): a heavy timber stock on a crib of logs, a stave of
+    seasoned wood across its front -- two, lashed one over the other, on the improved one --
+    spanned with sinew back to a trigger, bone caps on the stave's tips and a bone-headed bolt on
+    it. Its bolt flies the whole lane, through whatever is on it. (It stood on a plinth of stone
+    until v0.6 round six, when stone and bone were both in its price.)"""
     rng = random.Random(seed)
     base = Builder()
-    _plinth(base, rng)
+    _crib(base, rng)
     top = 0.34
     _slab(base, Vector((-0.06, -0.42, top)), Vector((0.06, 0.40, top + 0.09)), [(1.0, BARK_LIGHT)], 0.012)
     # The trigger lever under the back of the stock, and the wire's peg at the front edge.

@@ -125,12 +125,18 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	game_state_node.add_resource("bone", 1)
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_true(hud.hint_label.visible, "The first bone says something")
-	# What it is for as far as the run has turned things up (v0.6): the Bone Pick and the
-	# bone stakes, not yet the crossbow tower -- that takes stone, which has not turned up.
+	# What it is for as far as the run has turned things up (v0.6): not what takes a material still
+	# to come as well (the stone of a wall crossbow, when it takes one).
 	var so_far: String = String(config_node.uses_text("bone", game_state_node.map_data(), game_state_node.knows))
 	assert_true(hud.hint_label.text.contains(so_far), "What bone is for: %s" % hud.hint_label.text)
-	assert_false(hud.hint_label.text.contains(config_node.get_building_name("set_crossbow")),
-		"Not what is still to come: %s" % hud.hint_label.text)
+	for b_type in config_node.player_building_types():
+		var cost: Dictionary = config_node.BUILDINGS[b_type].get("cost", {})
+		var waits: bool = false
+		for res_id in cost:
+			waits = waits or not game_state_node.knows(String(res_id))
+		if cost.has("bone") and waits:
+			assert_false(hud.hint_label.text.contains(config_node.get_building_name(String(b_type))),
+				"Not what is still to come (%s): %s" % [b_type, hud.hint_label.text])
 	hud.hint_label.visible = false
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_false(hud.hint_label.visible, "The second says nothing")

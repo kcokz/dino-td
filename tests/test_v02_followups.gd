@@ -112,9 +112,11 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 		"Build menu shows %d buttons (one per BUILDABLE_TYPES entry plus Back)" % expected)
 
 	# v0.4: buildings are defence and nothing else, so the menu is stakes and a
-	# turret. Anything offered has to be buildable.
+	# trap. Anything offered has to be buildable. (v0.6 round six: one slot a job, its first form --
+	# the set crossbow is what the trip bow becomes with bone, not an entry of its own.)
 	assert_has(config_node.BUILDABLE_TYPES, "wall", "Stakes are offered in the build menu")
-	assert_has(config_node.BUILDABLE_TYPES, "set_crossbow", "So is the turret")
+	assert_has(config_node.BUILDABLE_TYPES, "trip_bow", "So is the trap")
+	assert_false(config_node.BUILDABLE_TYPES.has("set_crossbow"), "and what it becomes is an upgrade, not an entry")
 	for b_type in config_node.BUILDABLE_TYPES:
 		# By kind first, as BuildSystem looks it up: a bone stake is a stake.
 		var scripts: Dictionary = build_system_script.SCRIPT_PATHS
@@ -673,13 +675,13 @@ func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 		idx += 1
 
 	assert_false(seen["wall"].disabled, "A stake is affordable, so its entry is live")
-	assert_true(seen["set_crossbow"].disabled, "A turret is out of reach, so its entry is greyed out")
+	assert_true(seen["trip_bow"].disabled, "A trap is out of reach, so its entry is greyed out")
 
 	# Paying for it lights the entry back up.
-	pay_for(["set_crossbow"])
+	pay_for(["trip_bow"])
 	panel._refresh_ui()
-	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("set_crossbow")).disabled,
-		"The turret entry lights up once affordable")
+	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("trip_bow")).disabled,
+		"The trap's entry lights up once affordable")
 
 func test_38_detail_line_reports_cost_and_build_time() -> void:
 	pay_for(["set_crossbow"], 999)
@@ -700,16 +702,16 @@ func test_38_detail_line_reports_cost_and_build_time() -> void:
 
 func test_39_detail_line_says_what_is_actually_missing() -> void:
 	# It used to say "need N wood" whatever was short, which became a lie the moment
-	# a turret wanted stone as well.
+	# a turret wanted stone as well. (The set crossbow is wood and bone since v0.6 round six.)
 	pay_for(["set_crossbow"])
-	game_state_node.resources["stone"] = 0
-	var stone_cost: int = int(config_node.BUILDINGS["set_crossbow"]["cost"].get("stone", 0))
+	game_state_node.resources["bone"] = 0
+	var stone_cost: int = int(config_node.BUILDINGS["set_crossbow"]["cost"].get("bone", 0))
 	var pair = await _build_menu()
 	var panel = pair[0]
 
 	panel._show_build_detail("set_crossbow")
 	var detail: String = str(panel.status_label.text)
-	assert_true(detail.contains(str(stone_cost)), "Names the stone that is short (got '%s')" % detail)
+	assert_true(detail.contains(str(stone_cost)), "Names the bone that is short (got '%s')" % detail)
 	assert_false(detail.contains(tr("RESOURCE_WOOD")), "And says nothing about the wood already in hand")
 	assert_gt(panel.status_label.modulate.r, panel.status_label.modulate.g,
 		"The shortfall is tinted red rather than left for the player to notice")

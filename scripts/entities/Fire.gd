@@ -141,6 +141,20 @@ func _fire_cfg() -> Dictionary:
 # The flame
 # ==============================================================================
 
+## Raised into a brazier where it stood: its flame and light made again at the brazier's height and
+## size.
+func _after_upgrade() -> void:
+	super._after_upgrade()
+	for node in [_flame, _light]:
+		if node != null and is_instance_valid(node):
+			# Out of the tree at once, so the new one is "Flame" and not a second name beside it.
+			remove_child(node)
+			node.queue_free()
+	_flame = null
+	_light = null
+	_make_the_flame()
+	_show_the_flame()
+
 func _make_the_flame() -> void:
 	var fire: Dictionary = _fire_cfg()
 	var at: float = float(_row().get("flame_height", 0.3))
