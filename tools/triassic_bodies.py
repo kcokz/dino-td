@@ -548,10 +548,13 @@ def _limb(body, skel, limb, skin, plan):
         return sc.shade(c, skin["mottle"] * mot)
 
     foot = limb.get("foot") or limb.get("hand")
+    lower = [x for x in lb.path.segs if x[6] > 1e-6][-1][6]
 
     def to_foot(s, w):
-        # The last bit above the ankle moves with the foot a little: the joint does not tear.
-        k = 0.4 * sc.smoothstep(end - 0.14, end, s)
+        # The lower half of the shank moves with the foot, wholly by the ankle -- as the source's mesh did:
+        # its feet hang off the root, and in a clip that lifts one off the leg's end (the death, the animal
+        # on its side) the shank stretches down to it instead of the foot lying apart from the leg.
+        k = sc.smoothstep(end - 0.55 * lower, end - 0.04, s)
         if k <= 0.0:
             return w
         out = {b: x * (1.0 - k) for b, x in w.items()}
