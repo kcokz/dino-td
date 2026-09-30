@@ -2344,21 +2344,23 @@ const SOUNDS: Dictionary = {
 		"postosuchus_bite":  {"files": ["postosuchus_bite"], "db": 0.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
 		"postosuchus_hurt":  {"files": ["postosuchus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
 		"postosuchus_death": {"files": ["postosuchus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
-		# The phytosaur: the crocodile-line's hiss and growl, a smaller animal's -- Postosuchus's own
-		# recordings pitched up and quieter, heard from nearer (its "unit"); in the dark, how the night's
-		# hunters are known before they are seen.
-		"phytosaur_call":  {"files": ["postosuchus_call_1", "postosuchus_call_2"], "db": -6.0, "pitch": 1.3, "class": "call", "unit": 7.0, "reach": 60.0},
-		"phytosaur_alert": {"files": ["postosuchus_hiss"], "db": -4.0, "pitch": 1.25, "class": "alert", "unit": 7.0},
-		"phytosaur_bite":  {"files": ["postosuchus_bite"], "db": -3.0, "pitch": 1.2, "class": "bite", "unit": 6.0},
-		"phytosaur_hurt":  {"files": ["postosuchus_hurt"], "db": -4.0, "pitch": 1.25, "class": "hurt", "unit": 6.0},
-		"phytosaur_death": {"files": ["postosuchus_death"], "db": -2.0, "pitch": 1.2, "class": "death", "unit": 9.0},
-		# Hesperosuchus: a small crocodylomorph -- hisses and a snap, Postosuchus's own pitched right up and
-		# quiet, heard only near.
-		"hesperosuchus_call":  {"files": ["postosuchus_hiss"], "db": -9.0, "pitch": 1.9, "class": "call", "unit": 5.0, "reach": 40.0},
-		"hesperosuchus_alert": {"files": ["postosuchus_hiss"], "db": -6.0, "pitch": 1.8, "class": "alert", "unit": 5.0},
-		"hesperosuchus_bite":  {"files": ["postosuchus_bite"], "db": -6.0, "pitch": 1.7, "class": "bite", "unit": 4.0},
-		"hesperosuchus_hurt":  {"files": ["postosuchus_hurt"], "db": -7.0, "pitch": 1.8, "class": "hurt", "unit": 4.0},
-		"hesperosuchus_death": {"files": ["postosuchus_death"], "db": -5.0, "pitch": 1.7, "class": "death", "unit": 6.0},
+		# The phytosaur: a voice of its own (tools/build_sounds.gd) -- a long snout's low, wet growl, a hiss,
+		# a long jaw clapped shut -- heard from nearer than Postosuchus (its "unit"); in the dark, how the
+		# night's hunters are known before they are seen. They were Postosuchus's own, pitched up.
+		"phytosaur_call":  {"files": ["phytosaur_call_1", "phytosaur_call_2"], "db": -5.0, "pitch": 1.04, "class": "call", "unit": 7.0, "reach": 60.0},
+		"phytosaur_alert": {"files": ["phytosaur_hiss"], "db": -4.0, "pitch": 1.04, "class": "alert", "unit": 7.0},
+		"phytosaur_bite":  {"files": ["phytosaur_bite"], "db": -3.0, "pitch": 1.05, "class": "bite", "unit": 6.0},
+		"phytosaur_hurt":  {"files": ["phytosaur_hurt"], "db": -4.0, "pitch": 1.05, "class": "hurt", "unit": 6.0},
+		"phytosaur_death": {"files": ["phytosaur_death"], "db": -2.0, "pitch": 1.0, "class": "death", "unit": 9.0},
+		# One coming up out of the river onto the bank (NightProwl): heard from the side it lands on.
+		"river_splash":    {"files": ["river_splash"], "db": -3.0, "pitch": 1.06, "class": "call", "unit": 9.0, "reach": 70.0},
+		# Hesperosuchus: a voice of its own -- raspy barks, a thin rattling hiss, a light snap -- heard only
+		# near: a small, quick hunter's, not a big one's pitched up.
+		"hesperosuchus_call":  {"files": ["hesperosuchus_call_1", "hesperosuchus_call_2"], "db": -7.0, "pitch": 1.06, "class": "call", "unit": 5.0, "reach": 40.0},
+		"hesperosuchus_alert": {"files": ["hesperosuchus_hiss"], "db": -6.0, "pitch": 1.06, "class": "alert", "unit": 5.0},
+		"hesperosuchus_bite":  {"files": ["hesperosuchus_bite"], "db": -6.0, "pitch": 1.08, "class": "bite", "unit": 4.0},
+		"hesperosuchus_hurt":  {"files": ["hesperosuchus_hurt"], "db": -7.0, "pitch": 1.08, "class": "hurt", "unit": 4.0},
+		"hesperosuchus_death": {"files": ["hesperosuchus_death"], "db": -5.0, "pitch": 1.04, "class": "death", "unit": 6.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
 		# His work.

@@ -336,3 +336,19 @@ func test_15_the_bubble_is_as_small_as_its_words() -> void:
 	assert_lte(hud.speech_bubble.size.x, float(config_node.UI["speech_max_width"]) + 80.0, "A long one wraps at the most")
 	assert_lt(hud.speech_bubble.size.y, line * 6.0, "into a few lines, not a column")
 	assert_true(voice != null, "his voice")
+
+func test_16_the_night_hunter_and_the_runner_have_voices_of_their_own() -> void:
+	# Sound polish (the player, 2026-09-30: "你有什么界面和声音的精做就开始吧"): the phytosaur and the
+	# Hesperosuchus were Postosuchus's own recordings, pitched up.
+	var sounds: Dictionary = config_node.SOUNDS["sounds"]
+	for species in ["phytosaur", "hesperosuchus"]:
+		for kind in ["call", "alert", "bite", "hurt", "death"]:
+			for f in sounds[species + "_" + kind]["files"]:
+				assert_true(String(f).begins_with(species), "%s's %s is its own (%s)" % [species, kind, f])
+	var runner: float = _brightness("hesperosuchus_call")
+	var night: float = _brightness("phytosaur_call")
+	var boss: float = _brightness("postosuchus_call")
+	assert_gt(runner, night * 3.0, "The little runner barks high, the phytosaur growls low (%.0f vs %.0f)" % [runner, night])
+	assert_ne(snappedf(night, 50.0), snappedf(boss, 50.0), "and the phytosaur is not the Postosuchus (%.0f vs %.0f)" % [night, boss])
+	# A phytosaur landing is heard where it lands (NightProwl.send_one_from).
+	assert_true(sounds.has("river_splash"), "The river is heard broken")

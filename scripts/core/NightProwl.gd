@@ -135,6 +135,10 @@ func send_one_from(at: Vector3) -> Node:
 	parent.add_child(d)
 	d.setup(species, multipliers)
 	came_tonight += 1
+	# The water broken where it comes up: heard from the side it lands on, before it is seen (Fx.play_at).
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("play_at"):
+		fx.play_at("river_splash", at)
 	var eb = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("dino_spawned"):
 		eb.dino_spawned.emit(d)

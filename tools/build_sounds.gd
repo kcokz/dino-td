@@ -22,6 +22,14 @@ extends SceneTree
 ##                 a heavy jaw that claps.
 ##   Placerias     a tonne of dicynodont, a beaked plant-eater: nasal grunts and honks, low and
 ##                 pulsed, like a hippo or a pig -- a sound that is plainly not a hunter's.
+##   the phytosaur the river's night hunter, four metres of long-snouted archosaur: a long tract, so
+##                 low formants; a crocodile's low growl with a wet rasp through it, a hiss lower than a
+##                 small one's, a long jaw clapped shut. They were Postosuchus's own, pitched up.
+##   Hesperosuchus a metre of quick early crocodylomorph: short raspy barks, a thin hiss with a rattle
+##                 in it, a light snap -- a small hunter's, not a big one's pitched up.
+##
+## And the river broken: something heavy coming up out of it onto the bank (river_splash) -- how a
+## phytosaur is heard landing in the dark, from the side it lands on.
 ##
 ## Things struck are made of their modes: a few damped resonances at the frequencies of the
 ## material -- wood low and short, stone high and ringing, a bowstring's thrum -- and the burst of
@@ -229,6 +237,119 @@ func _s_postosuchus_death() -> PackedFloat32Array:
 	var out := _bellow(2.4, 70.0, 36.0, 0.9)
 	_mix(out, _hiss(1.2, [[0.0, 1100.0], [1.0, 600.0]], 1.5, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.3, 0.4)
 	return _space(out, 0.15, [[0.45, 0.2]])
+
+# ==============================================================================
+# The phytosaur: the river at night -- a long snout's low, wet growl, a hiss, a jaw clapped shut
+# ==============================================================================
+
+const PHYTO_FORMANTS: Array = [[270.0, 3.0, 1.0], [720.0, 3.5, 0.5], [1450.0, 4.5, 0.2]]
+
+## A low growl through a long snout, a slow wet rasp through it: lower and wetter than Postosuchus's
+## bellow, out of a smaller chest.
+func _growl(dur: float, f0_from: float, f0_to: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0_from], [0.35, f0_from * 1.05], [1.0, f0_to]],
+		"amp": [[0.0, 0.0], [0.12, 1.0], [0.75, 0.85], [1.0, 0.0]], "formants": PHYTO_FORMANTS,
+		"rough": 0.8, "rough_am": [9.0, 0.7], "breath": 0.32, "tilt": 1100.0, "jitter": 0.04})
+
+func _s_phytosaur_call_1() -> PackedFloat32Array:
+	# A growl out over the water, its sub-octave under it.
+	var out := _growl(1.6, 74.0, 60.0)
+	_mix(out, _tone(1.6, [[0.0, 37.0], [1.0, 30.0]], [[0.0, 0.0], [0.2, 1.0], [0.8, 0.7], [1.0, 0.0]]), 0.0, 0.35)
+	return _space(out, 0.14, [[0.5, 0.2]])
+
+func _s_phytosaur_call_2() -> PackedFloat32Array:
+	# Two short chuffs and a growl: "hff -- hff -- grrr".
+	var out := _buf(1.9)
+	for i in 2:
+		_mix(out, _hiss(0.16, [[0.0, 700.0], [1.0, 500.0]], 0.9, [[0.0, 0.0], [0.15, 1.0], [1.0, 0.0]]), 0.05 + 0.32 * i, 0.8)
+		_mix(out, _growl(0.18, 90.0, 80.0), 0.05 + 0.32 * i, 0.6)
+	_mix(out, _growl(1.1, 78.0, 58.0), 0.75, 1.0)
+	return _space(out, 0.12, [])
+
+func _s_phytosaur_hiss() -> PackedFloat32Array:
+	# A crocodile warned off, mouth open: a hiss lower than a small one's, a growl in it.
+	var out := _hiss(1.5, [[0.0, 900.0], [0.4, 1300.0], [1.0, 800.0]], 0.9, [[0.0, 0.0], [0.08, 1.0], [0.75, 0.85], [1.0, 0.0]])
+	_mix(out, _growl(1.3, 70.0, 62.0), 0.05, 0.45)
+	return out
+
+func _s_phytosaur_bite() -> PackedFloat32Array:
+	# A long, narrow jaw clapped shut: a sharp crack -- the snout's length is its lever -- and a knock.
+	var out := _modes(0.35, [[150.0, 0.07, 1.0], [290.0, 0.05, 0.7], [880.0, 0.02, 0.4], [1700.0, 0.012, 0.3]], 0.003)
+	_mix(out, _snap(0.75, 0.0), 0.0, 0.8)
+	_mix(out, _burst(0.04, 2600.0, 1.3), 0.0, 0.5)
+	return out
+
+func _s_phytosaur_hurt() -> PackedFloat32Array:
+	# A grunt forced out with a hiss.
+	var out := _voice({"dur": 0.6, "f0": [[0.0, 110.0], [0.25, 118.0], [1.0, 76.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.55, 0.7], [1.0, 0.0]], "formants": PHYTO_FORMANTS,
+		"fshift": [[0.0, 1.25], [1.0, 1.0]], "rough": 0.85, "rough_am": [11.0, 0.5], "breath": 0.5, "tilt": 1700.0})
+	_mix(out, _hiss(0.5, [[0.0, 1100.0], [1.0, 800.0]], 1.0, [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]]), 0.02, 0.35)
+	return out
+
+func _s_phytosaur_death() -> PackedFloat32Array:
+	# A growl that sinks into a gurgle, and the breath going out of it.
+	var out := _voice({"dur": 2.2, "f0": [[0.0, 70.0], [0.3, 64.0], [1.0, 32.0]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.6, 0.6], [1.0, 0.0]], "formants": PHYTO_FORMANTS,
+		"rough": 0.9, "rough_am": [6.0, 0.85], "breath": 0.4, "tilt": 1000.0, "jitter": 0.05})
+	_mix(out, _hiss(1.3, [[0.0, 900.0], [1.0, 500.0]], 1.2, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 1.0, 0.3)
+	return _space(out, 0.12, [[0.45, 0.15]])
+
+## Something heavy coming up out of the river onto the bank: the water broken, falling back, running off
+## it in drops.
+func _s_river_splash() -> PackedFloat32Array:
+	var out := _buf(1.4)
+	_mix(out, _hiss(0.5, [[0.0, 700.0], [0.3, 1400.0], [1.0, 900.0]], 0.7, [[0.0, 0.0], [0.05, 1.0], [0.4, 0.5], [1.0, 0.0]]), 0.0, 0.9)
+	_mix(out, _burst(0.12, 380.0, 0.8), 0.0, 0.6)
+	_mix(out, _hiss(0.9, [[0.0, 2400.0], [1.0, 1800.0]], 1.0, [[0.0, 0.0], [0.15, 0.6], [1.0, 0.0]]), 0.2, 0.4)
+	_mix(out, _crackle(1.1, 30.0, 2800.0), 0.25, 0.5)
+	return _space(out, 0.1, [])
+
+# ==============================================================================
+# Hesperosuchus: small and quick -- raspy barks, a thin rattling hiss, a light snap
+# ==============================================================================
+
+const HESPERO_FORMANTS: Array = [[720.0, 5.0, 1.0], [1950.0, 5.5, 0.5], [3300.0, 6.5, 0.22]]
+
+## A short raspy bark: "kak".
+func _bark(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0], [1.0, f0 * 0.82]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.5, 0.6], [1.0, 0.0]], "formants": HESPERO_FORMANTS,
+		"rough": 0.55, "rough_am": [38.0, 0.5], "breath": 0.45, "tilt": 2600.0})
+
+func _s_hesperosuchus_call_1() -> PackedFloat32Array:
+	# "kak-kak-kak-kak", falling.
+	var out := _buf(0.9)
+	for i in 4:
+		_mix(out, _bark(360.0 - 18.0 * i, 0.09), 0.03 + 0.14 * i, 1.0 - 0.12 * i)
+	return _space(out, 0.08, [])
+
+func _s_hesperosuchus_call_2() -> PackedFloat32Array:
+	var out := _buf(0.7)
+	_mix(out, _bark(410.0, 0.12), 0.03, 1.0)
+	_mix(out, _bark(330.0, 0.16), 0.22, 0.85)
+	return _space(out, 0.08, [])
+
+func _s_hesperosuchus_hiss() -> PackedFloat32Array:
+	# A thin hiss, a rattle through it: a small animal's warning.
+	var out := _hiss(0.8, [[0.0, 2400.0], [0.4, 3100.0], [1.0, 2100.0]], 1.3, [[0.0, 0.0], [0.08, 1.0], [0.7, 0.8], [1.0, 0.0]])
+	for i in out.size():
+		out[i] *= 0.65 + 0.35 * sin(TAU * 28.0 * float(i) / float(RATE))
+	return out
+
+func _s_hesperosuchus_bite() -> PackedFloat32Array:
+	return _snap(1.25, 0.0)
+
+func _s_hesperosuchus_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.28, "f0": [[0.0, 520.0], [0.3, 560.0], [1.0, 360.0]],
+		"amp": [[0.0, 0.0], [0.08, 1.0], [1.0, 0.0]], "formants": HESPERO_FORMANTS,
+		"rough": 0.4, "breath": 0.4, "tilt": 3000.0})
+
+func _s_hesperosuchus_death() -> PackedFloat32Array:
+	var out := _voice({"dur": 0.95, "f0": [[0.0, 440.0], [0.2, 460.0], [1.0, 170.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.6, 0.6], [1.0, 0.0]], "formants": HESPERO_FORMANTS,
+		"rough": 0.6, "rough_am": [30.0, 0.5], "breath": 0.5, "tilt": 2400.0})
+	return _space(out, 0.08, [])
 
 # ==============================================================================
 # Placerias: a tonne of beaked plant-eater -- nasal grunts and honks
