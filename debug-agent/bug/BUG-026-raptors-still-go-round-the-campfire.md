@@ -1,6 +1,6 @@
 # BUG-026 篝火人能走过去，恐龙还是绕着走
 
-- 状态: open
+- 状态: fixed（b631095 复测：腔骨龙从篝火中心 0.01 m 走过去，火盆照旧绕 1.35 m）
 - 严重度: 低
 - 发现: 2026-09-29 · 22743e4 / 2fff793（TASK-027 第 7 条）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 2fff793) bash debug-agent/tools/run_check.sh probe:round5`（第 7 条那两行）
