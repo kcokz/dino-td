@@ -595,6 +595,63 @@ func _act(delta: float) -> void:
 		_:
 			_march(delta)
 	_watch_headway(delta)
+	_watch_for_a_jam(delta)
+
+## JAMMED (Config.DINO_AI.jam_seconds). How far it has got is how much nearer its goal it is along
+## its way (_way_left), not how far it has walked: in a jam it walks plenty -- shoved on, backing
+## off, back again -- and gets nowhere. Getting nowhere that long, up against a wall between it and
+## where it is going, it goes through the wall (_stubborn), in a crowd or not: the crowd is what is
+## in the way, and the wall is what is between it and where it is going.
+var _jam_clock: float = 0.0
+var _jam_best: float = INF
+var _jam_goal: Vector3 = Vector3.INF
+
+func _watch_for_a_jam(delta: float) -> void:
+	if mode == Mode.ATTACK or going_home or _nav_goal == Vector3.INF:
+		_jam_clock = 0.0
+		_jam_best = INF
+		return
+	var progress: float = _ai("jam_progress", 0.5)
+	# A new goal is a new way: it has not been failing at this one yet.
+	if _jam_goal == Vector3.INF or _flat(_jam_goal).distance_to(_flat(_nav_goal)) > progress * 2.0:
+		_jam_goal = _nav_goal
+		_jam_best = INF
+		_jam_clock = 0.0
+	var left: float = _way_left()
+	if left < _jam_best - progress:
+		_jam_best = left
+		_jam_clock = 0.0
+		return
+	_jam_clock += delta
+	if _jam_clock < _ai("jam_seconds", 6.0):
+		return
+	_jam_clock = 0.0
+	_jam_best = INF
+	var wall: Node = _building_pressed_against()
+	if wall == null or wall == current_target or not _is_wall(wall) or not _is_target_valid(wall):
+		return
+	if not _wall_is_between(wall, _nav_goal):
+		return
+	_stubborn = wall
+	_take(wall, Mode.BREACH)
+
+## Whether `wall` stands between it and `goal`: on its side of the way there, not beside or behind.
+func _wall_is_between(wall: Node, goal: Vector3) -> bool:
+	var to_goal: Vector3 = _flat3(goal - global_position)
+	var to_wall: Vector3 = _flat3((wall as Node3D).global_position - global_position)
+	if to_goal.length() < 0.01 or to_wall.length() < 0.01:
+		return false
+	return to_wall.normalized().dot(to_goal.normalized()) > 0.3
+
+## How far it still has to go, in metres: along its route -- to the corner it is making for and on
+## from there -- or, with none, straight to where it is going.
+func _way_left() -> float:
+	if _route.is_empty() or _route_index <= 0 or _route_index >= _route.size():
+		return _flat(global_position).distance_to(_flat(_nav_goal)) if _nav_goal != Vector3.INF else 0.0
+	var left: float = _flat(global_position).distance_to(_flat(_route[_route_index]))
+	for i in range(_route_index + 1, _route.size()):
+		left += _flat(_route[i - 1]).distance_to(_flat(_route[i]))
+	return left
 
 ## Still worth going for? Gone, or no longer what made it interesting -- the Hero walked off, a
 ## wall stopped being in the way -- and it is let go.
@@ -1904,6 +1961,7 @@ func debug_state() -> Dictionary:
 		"blocked_by": _describe(_blocked_by),
 		"stubborn": _describe(_stubborn),
 		"stuck": _stuck_count,
+		"jammed_for": snappedf(_jam_clock, 0.01),
 		"patience": snappedf(_patience, 0.01),
 		"going_home": going_home,
 		"pressed": {"building": _describe(_building_pressed_against()), "bodies": _bodies_pressed_against(),

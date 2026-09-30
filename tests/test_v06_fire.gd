@@ -278,3 +278,26 @@ func test_10_the_first_dusk_says_what_fire_is_for() -> void:
 	_set_clock(_at("dusk") + 1.0, 2)
 	var then: String = String(hud.hint_label.text) if "hint_label" in hud and hud.hint_label else ""
 	assert_eq(then, tr("HINT_DUSK"), "later dusks say only what the raiders do")
+
+func test_13_a_campfire_is_in_nobodys_way_and_a_brazier_is() -> void:
+	# The player's report, 2026-09-29: "camp fire造着会挡住人的路，让campfire不block比较make sense".
+	var main = await _level()
+	var fire = _build(main, "campfire")
+	fire.complete_construction()
+	var stone = _build(main, "brazier", Vector3(3.0, 0.0, 3.0))
+	stone.complete_construction()
+	for layer in [int(config_node.LAYER_BUILDING), int(config_node.LAYER_WALL), int(config_node.LAYER_GATE)]:
+		assert_eq(int(fire.collision_layer) & layer, 0, "A campfire is on no layer anybody is stopped by")
+	assert_ne(int(fire.collision_layer) & int(config_node.LAYER_PICK), 0, "(it can still be pointed at)")
+	assert_ne(int(stone.collision_layer) & int(config_node.LAYER_BUILDING), 0, "A brazier, stone, stands in the way")
+	main.nav_maps.rebake()
+	await wait_physics_frames(3)
+	var at: Vector3 = fire.global_position
+	var west: Vector3 = at + Vector3(-2.5, 0.0, 0.0)
+	var east: Vector3 = at + Vector3(2.5, 0.0, 0.0)
+	for kind in [NavMaps.For.HERO, NavMaps.For.RAID]:
+		var route: PackedVector3Array = main.nav_maps.path(west, east, kind)
+		var length: float = 0.0
+		for i in range(1, route.size()):
+			length += route[i - 1].distance_to(route[i])
+		assert_lt(length, west.distance_to(east) * 1.05, "The way across its cell is straight across it (%s)" % kind)

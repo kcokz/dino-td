@@ -92,6 +92,7 @@ func _ready() -> void:
 	_wire_signals()
 	setup_level()
 	_ensure_nav_maps()
+	_add_bug_report()
 	# The valley under everything: wind, insects, the river (Config.SOUNDS.ambience).
 	var fx = get_node_or_null("/root/Fx")
 	if fx and fx.has_method("start_ambience"):
@@ -338,12 +339,23 @@ func _discover_waypoints() -> void:
 				banks.append(grid_manager.cell_to_world(cell))
 		night_prowl.origins = banks
 
+## The bug report's key (BugReport, Config.CONTROLS.bug_report_key), in a development build only: a
+## release has no such thing.
+func _add_bug_report() -> void:
+	if not OS.is_debug_build() or get_node_or_null("BugReport") != null:
+		return
+	var report := BugReport.new()
+	report.main = self
+	add_child(report)
+
 func _wire_signals() -> void:
 	if hud:
 		if not hud.build_requested.is_connected(on_build_selected):
 			hud.build_requested.connect(on_build_selected)
 		if not hud.restart_requested.is_connected(restart_game):
 			hud.restart_requested.connect(restart_game)
+		if hud.has_signal("home_view_requested") and not hud.home_view_requested.is_connected(reset_camera):
+			hud.home_view_requested.connect(reset_camera)
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("phase_changed"):
 		if not eb.phase_changed.is_connected(_on_phase_changed):

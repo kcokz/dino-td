@@ -416,6 +416,8 @@ func _process_moving(delta: float) -> void:
 				return
 			if _abandon_unreachable_building():
 				return
+			if _give_up_the_walk():
+				return
 			_replan_current_target_path()
 	else:
 		_stuck_timer = 0.0
@@ -807,6 +809,15 @@ func _plan_path_to_building(b: Node) -> void:
 	var maps := _nav_maps()
 	if maps != null and maps.is_ready():
 		var route: PackedVector3Array = maps.path(global_position, b_pos, true)
+		# Not from inside the cabin, through its wall: the nearest he can stand to a trap set against
+		# its end was in the room, and he walked in to build it (the player's report, 2026-09-29: "造上
+		# 面两个bow的时候人会走到cabin里造它们"). What is outside is built from outside: from the nearest
+		# ground outside it (the raiders' mesh has no room in it).
+		if not route.is_empty() and _in_the_cabin(route[route.size() - 1]) and not _in_the_cabin(b.global_position):
+			var outside: Vector3 = maps.closest_point(b_pos, NavMaps.For.RAID)
+			var from_outside: PackedVector3Array = maps.path(global_position, outside, true)
+			if not from_outside.is_empty():
+				route = from_outside
 		if not route.is_empty() and _is_in_build_range(route[route.size() - 1], b):
 			current_path.clear()
 			for pt in route:
@@ -818,6 +829,31 @@ func _plan_path_to_building(b: Node) -> void:
 			return
 
 	_plan_path(b_pos, b)
+
+## A plain walk that has got him nowhere for HERO.give_up_after seconds is given up: he stops where he
+## is, rather than run on the spot for ever at whatever the route did not know was in the way. A walk
+## to work, a meal or a fight has its own ways of giving up (_abandon_unreachable_building).
+func _give_up_the_walk() -> bool:
+	if target_building != null or target_resource_node != null or target_enemy != null:
+		return false
+	var cfg = _get_config()
+	var most: float = float(cfg.HERO.get("give_up_after", 3.0)) if (cfg and "HERO" in cfg) else 3.0
+	if _held_for < most:
+		return false
+	_held_for = 0.0
+	velocity = Vector3.ZERO
+	current_path.clear()
+	current_path_index = 0
+	current_state = State.IDLE
+	return true
+
+## Whether `pos` is inside the cabin's box (Config.gap_to_building): in its room.
+func _in_the_cabin(pos: Vector3) -> bool:
+	var cabin: Node = get_tree().get_first_node_in_group("core") if is_inside_tree() else null
+	var cfg = _get_config()
+	if cabin == null or not is_instance_valid(cabin) or cfg == null or not cfg.has_method("gap_to_building"):
+		return false
+	return float(cfg.gap_to_building(pos, String(cabin.building_type), (cabin as Node3D).global_position)) <= 0.0
 
 ## Next blueprint the Hero should work on: the one queued earliest.
 ## Work that is paid for and waiting on him: a blueprint, or an upgrade under way.
@@ -1145,6 +1181,39 @@ func order_eat(key: String) -> bool:
 	return true
 
 ## Whether he is eating right now.
+## What he is doing and why, for a bug report (BugReport): where, in what state, going where by what
+## way, at what, and what is holding him -- in plain values for JSON.
+func debug_state() -> Dictionary:
+	var path: Array = []
+	for i in range(mini(current_path.size(), 16)):
+		path.append([snappedf(current_path[i].x, 0.01), snappedf(current_path[i].z, 0.01)])
+	var named := func(n: Variant) -> Variant:
+		if n == null or not is_instance_valid(n) or not (n is Node3D):
+			return null
+		var out: Dictionary = {"name": String((n as Node).name), "pos": [snappedf((n as Node3D).global_position.x, 0.01),
+			snappedf((n as Node3D).global_position.z, 0.01)]}
+		for key in ["building_type", "resource_type", "dino_type"]:
+			if key in n:
+				out[key] = String(n.get(key))
+		return out
+	return {
+		"pos": [snappedf(global_position.x, 0.01), snappedf(global_position.y, 0.01), snappedf(global_position.z, 0.01)],
+		"state": String(State.keys()[current_state]),
+		"hp": [snappedf(current_hp, 0.01), snappedf(max_hp, 0.01)],
+		"destination": [snappedf(target_destination.x, 0.01), snappedf(target_destination.z, 0.01)],
+		"path": path,
+		"path_index": current_path_index,
+		"building": named.call(target_building),
+		"node": named.call(target_resource_node),
+		"enemy": named.call(target_enemy),
+		"held_for": snappedf(_held_for, 0.01),
+		"stuck_timer": snappedf(_stuck_timer, 0.01),
+		"velocity": [snappedf(velocity.x, 0.01), snappedf(velocity.z, 0.01)],
+		"speed": snappedf(walk_speed(), 0.01),
+		"torch_left": snappedf(torch_left, 0.1),
+		"eating": is_eating(),
+	}
+
 func is_eating() -> bool:
 	return current_state == State.EATING
 

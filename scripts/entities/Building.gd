@@ -183,7 +183,11 @@ func _update_construction_state() -> void:
 	var solid_layer: int = 2
 	# A wall is on a layer of its own (Config.LAYER_WALL), and a gate -- the wall the Hero walks
 	# through -- on another (LAYER_GATE), which his body and his mesh leave out.
-	if cfg and "LAYER_WALL" in cfg and cfg.has_method("get_building_kind"):
+	if cfg and cfg.has_method("walk_over") and cfg.walk_over(building_type):
+		# In nobody's way: only on the layer it is pointed at by (Config.LAYER_PICK), which no body is
+		# stopped by and no mesh is carved for.
+		solid_layer = int(cfg.LAYER_PICK) if "LAYER_PICK" in cfg else 64
+	elif cfg and "LAYER_WALL" in cfg and cfg.has_method("get_building_kind"):
 		if cfg.has_method("hero_passes") and cfg.hero_passes(building_type):
 			solid_layer = int(cfg.LAYER_GATE)
 		elif String(cfg.get_building_kind(building_type)) == "wall":
@@ -208,6 +212,8 @@ func _update_avoidance() -> void:
 	var obstacle := find_child("AvoidObstacle", false, false) as NavigationObstacle3D
 	if obstacle == null:
 		if layers == 0 or not is_constructed or is_destroyed or not cfg.has_method("get_building_half"):
+			return
+		if cfg.has_method("walk_over") and cfg.walk_over(building_type):
 			return
 		var margin: float = float(cfg.DINO_AI.get("avoid_margin", 0.1))
 		var half: Vector2 = cfg.get_building_half(building_type) - Vector2.ONE * margin

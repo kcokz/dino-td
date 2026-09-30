@@ -1359,6 +1359,20 @@
     - `HeroCommands.came` 记着出现的先后（"build" 在最前），键就是在这里的位置（`CONTROLS.command_keys`）；新出现的按钮 `move_child` 到最前（最左）。`key_of(id)` 给出某个命令的键：第一个黄昏的提示、"火把烧完了"的提示都用火把按钮自己的键（原来写死第三个键）。`reset()` 回到只有"建造"，新开一局时调（`HUD.reset_hud`）。
     - 换语言也调 `HUD.reset_hud`，但那是同一局：现在是 `reset_hud(false)`，不重置右下角的按钮，也不重置一局只说一次的话（"第一个黄昏说过了""今晚说过没木头了""守卫示威说过了"：原来换一次语言，下一个黄昏又把第一个黄昏的话说一遍）。
     - 测试：`test_v06_the_hero_card` 加第 11 条（先黄昏后做饭、先做饭后黄昏两种顺序；白天、没饭时还在、变灰、不挪；换语言不变；新开一局回到只有建造）；`test_v06_the_hero_card` 第 1 条、`test_v02_followups` 第 49 条、`test_v06_eating` 第 10 条、`test_v06_fire` 第 8 条、`test_v06_the_day` 第 7 条按新规则改写。
+  - **v0.6 第五轮的报告（玩家，2026-09-29）**：
+    - **走廊里的大波来回走**（"恐龙大波会在走廊（两行栅栏中间徘徊），这个是正常的吗"）：玩家的两排栅栏隔一格，中间只剩 1 米宽（栅栏的碰撞体占满一格），西头开着，内排缺一格——这是来袭唯一的路，照规则会绕进去；一整波单行挤着，避让把缺口口上的那只往后推过缺口，再逆着队伍挤回来（遥测里 6 秒走 16 米、净走不到 1 米）。试了五种避让的改法（离目标近的先走、不许往回退、退得慢、转弯前减速……），各有各的毛病（摇头、死锁、更慢），都没留下。留下的是：**4 秒没离目标更近（按剩下的路，不按走了多远）、又顶着一道挡在它和目标之间的墙，就咬穿那道墙**，有没有同伴都一样（`Dino._watch_for_a_jam`，`DINO_AI.jam_seconds`、`jam_progress`；原来走得动就不算卡住，挤在人群里又永远不咬能绕开的墙）。新测试 `test_v06_the_raid_mind` 第 13、13b 条。
+    - **回到船舱**：点顶上船舱的徽章回到开局的视角（和 R 一样），徽章角上标着 R（`HUD.home_view_requested` → `Main.reset_camera`）。新测试 `test_v06_the_interface` 第 8 条。
+    - **夜里恐龙头上的"twitch#1"**：抽搐监测的标记只在要看的时候才有（`TwitchWatch.show_marks`，测试和 debug-agent 设 `DINO_TWITCH_MARKS`），玩家看不到；监测和报告照旧。
+    - **早上/夜里的"隐身"**：船舱看得见的范围原来从它中间算，夜里只有 4 米，够不着 7 米长的船舱两头——咬在船舱两头的恐龙在黑里不画出来，船舱掉血却看不见谁在咬。现在船舱至少看得见自己墙外 2 米（`FOG.round_the_cabin`）。新测试 `test_v06_the_fog` 第 14 条。
+    - **看不出植龙挨了谁的打**：船舱的炮原来画一条一像素的线，夜里看不见。现在是一道发光的弹迹，炮口亮一下照亮周围（`BUILDINGS.core.shot`）。
+    - **眼睛像两个灯泡**：亮点小一半、暗一半（`PROWL.glint_*`、`eye_energy`）；`test_v06_the_night` 第 14 条加上"不是灯"。
+    - **黄昏和清晨太红**：黄昏是金色斜阳、天色冷下去，清晨淡金（`DAY.light` 的两帧）。新测试 `test_v06_the_day` 第 10 条。
+    - **篝火挡路**：篝火造好后只在"点得中"的那层，人和恐龙都从上面走过去，不挖导航（`BUILDINGS.campfire.walk_over`、`Config.walk_over`）；火盆照旧挡。新测试 `test_v06_fire` 第 13 条。
+    - **人走进船舱造紧贴船舱的机关**：路的终点落在船舱里、要造的东西在外面时，改走到船舱外面离它最近的地方（来袭的网格里没有船舱里面）。新测试 `test_v06_found_playing` 第 9 条。
+    - **人一直原地跑**：只是走路时被挡住 3 秒一点没动就停下（`HERO.give_up_after`、`Hero._give_up_the_walk`）。玩家图里的布局没能复现出来——圈里的通道被机关堵住时，人会绕船舱另一边——这一条是不管什么原因，都不会一直跑下去。新测试 `test_v06_found_playing` 第 8 条。
+    - **"看不出来是什么"的东西**：是能采的砂岩（夜里在火光下是一团橙色碎块，只到膝盖）。现在是一层层叠起来、一边台阶一边陡壁的砂岩露头，一人高，顶层裂成两块（`tools/generate_props.py sandstone_outcrop`、`_bed`）。
+    - **（debug-agent BUG-024）新按钮没有弹大**：容器排版时把子节点的缩放设回 1。现在排版之后才缩小，补间从小开始（`UiKit.come_in`）；`test_v06_the_hero_card` 第 12 条改成隔两帧再看。
+    - **bug 报告**（只在开发版）：按 F9 把当时的一切写进 `user://bugreports/bug-时间.json`，旁边存截图（新 `BugReport`，`CONTROLS.bug_report_key`、`BUG_REPORT`；`Hero.debug_state`；恐龙的 `debug_state` 多了 `jammed_for`）。新测试 `test_v06_bug_report.gd`（2 条）。
   - **坠毁残骸和信标部件**（设计书 9.3"信标变成冒险"；玩家定："翻找几秒，直接入库"；"烟柱，远处看得见"；"河边 / 巢后 / 东南边缘"）：
     - 信标三段各要一个部件：第 1 段天线（8 木头 + 天线）、第 2 段电池（8 石头 + 电池）、第 3 段主控板（6 石头 + 6 骨头 + 主控板）。部件是仓库里的材料（`Config.RESOURCES` 多了 antenna、battery、board；`Config.is_part`），所以价格、缺什么、去哪找，都和别的价格一样说。
     - 部件在三块残骸里：残骸是一种资源点（`RESOURCE_NODES` 的 antenna / battery / board：一个，`strokes` 10 下才出来，一秒一下）。`ResourceNode.harvest` 新规则：`strokes` 大于 1 的，前几下什么也不出，最后一下出一个；卡片和标签按"还剩几下"倒数；卡片写里面有什么、翻多久（`NODE_HINT_WRECK`），翻完写"翻过了"（`STATUS_SEARCHED`），类型写"飞船残骸"（`PANEL_KIND_WRECK`）。

@@ -492,3 +492,63 @@ func test_12c_it_goes_for_the_trap_that_shot_it() -> void:
 	d.shot_by(shooter)
 	assert_eq(d._preferred_target(), shooter, "shot, for the one that shot it")
 	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
+
+# ==============================================================================
+# 13. Held up long against a wall between it and where it is going, it goes through
+# ==============================================================================
+
+## A raptor up against `wall`, making for `goal` by a route round it that gets it no nearer
+## (Dino._way_left stays put): what a line of them jammed in a corridor is to each of them.
+func _held_at(world: Node3D, at: Vector3, goal: Vector3) -> Node:
+	var d = _raptor(at, world)
+	d.set_physics_process(false)
+	d._nav_goal = goal
+	d._route = PackedVector3Array([at, at + Vector3(3.0, 0.0, -1.0), goal])
+	d._route_index = 1
+	return d
+
+func test_13_held_up_long_against_a_wall_between_it_and_its_goal_it_goes_through() -> void:
+	# The player's report, 2026-09-29: "恐龙大波会在走廊（两行栅栏中间徘徊）" -- a raid's worth in single file
+	# up a one-metre corridor to a one-cell gap milled up and down it, walking a lot and getting no
+	# nearer, and a crowd never bites a wall it could go round.
+	var world := await _field()
+	var wall = _stake(world, Vector3(0.0, 0.0, -1.0))
+	await rebake_fixture()
+	var d = _held_at(world, Vector3.ZERO, Vector3(0.0, 0.0, -6.0))
+	await wait_physics_frames(2)
+	var step: float = 0.25
+	var jam: float = _ai("jam_seconds")
+	var t: float = 0.0
+	while t + step < jam:
+		d._watch_for_a_jam(step)
+		t += step
+	assert_ne(d.current_target, wall, "Not before it has been held up the while")
+	d._watch_for_a_jam(step * 2.0)
+	assert_eq(d.current_target, wall, "Held up that long, it goes through the wall between it and where it is going")
+	assert_eq(int(d.mode), int(d.Mode.BREACH), "to break it")
+	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
+
+func test_13b_one_getting_nearer_or_with_the_wall_beside_it_goes_round() -> void:
+	var world := await _field()
+	var ahead = _stake(world, Vector3(6.0, 0.0, -1.0))
+	var beside = _stake(world, Vector3(-5.0, 0.0, 0.0))
+	await rebake_fixture()
+	var jam: float = _ai("jam_seconds")
+	# Getting nearer all the while: however long it takes, it is not held up.
+	var going = _held_at(world, Vector3(6.0, 0.0, 0.0), Vector3(6.0, 0.0, -6.0))
+	going._route = PackedVector3Array([going.global_position, Vector3(6.0, 0.0, -6.0)])
+	going._route_index = 1
+	await wait_physics_frames(2)
+	for i in int(ceil(jam / 0.25)) + 4:
+		going.global_position.z -= float(config_node.DINO_AI["jam_progress"]) * 1.2
+		going._watch_for_a_jam(0.25)
+	assert_ne(going.current_target, ahead, "Getting nearer all the while, it is not held up")
+	# The wall beside it, not in its way: held up or not, it is not what is between it and its goal.
+	var aside = _held_at(world, Vector3(-4.0, 0.0, 0.0), Vector3(-4.0, 0.0, -6.0))
+	await wait_physics_frames(2)
+	var t: float = 0.0
+	while t < jam + 0.5:
+		aside._watch_for_a_jam(0.25)
+		t += 0.25
+	assert_ne(aside.current_target, beside, "A wall beside it is not what is in its way")
+	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()

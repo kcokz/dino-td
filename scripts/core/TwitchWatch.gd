@@ -29,6 +29,11 @@ extends Node
 ## Whether reports are written to a file. The test runner turns it off: a test's twitches go to
 ## its log, not into the player's telemetry.
 static var to_file: bool = true
+## Whether a report puts its number over the animal's head (TwitchMark): for whoever is hunting
+## twitches -- a test, the debug-agent's runs (DINO_TWITCH_MARKS in the environment) -- and not for the
+## player, to whom "twitch#1" over a phytosaur at night was a bug of its own (the player's report,
+## 2026-09-29).
+static var show_marks: bool = OS.get_environment("DINO_TWITCH_MARKS") != ""
 ## Where this launch's file goes, when not Config.TWITCH.dir (a test's own folder), and the file
 ## itself -- named once a launch, on the first report.
 static var file_dir: String = ""
@@ -347,7 +352,7 @@ func _report(d: Node3D, t: Track, kind: String, window: Dictionary, cfg: Diction
 	var eb = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("twitch_detected"):
 		eb.twitch_detected.emit(record)
-	if OS.is_debug_build():
+	if OS.is_debug_build() and show_marks:
 		_mark(d, reports_made, cfg)
 
 ## The run it happened in: the build, the map and its seed, the raid, the hour, the speed.

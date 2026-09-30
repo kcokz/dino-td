@@ -269,3 +269,18 @@ func test_13_a_moment_in_the_mist_is_explained_once() -> void:
 	await wait_physics_frames(int(ceil(float(_fog()["hint_after"]) * float(Engine.physics_ticks_per_second))))
 	assert_eq(explained.emit_count, 1, "once")
 	assert_ne(tr("HINT_FOG"), "HINT_FOG", "in words the player reads")
+
+func test_14_what_bites_the_cabin_in_the_dark_is_seen() -> void:
+	# The player's report, 2026-09-29: "晚上篝火完全不放，恐龙进攻会有点stealth的状态" -- from its middle, the
+	# night's sight did not reach the ends of the cabin, and what bit it there was not drawn.
+	var main = await _level()
+	game_state_node.day_clock = float(config_node.DAY["parts"]["night"]) + 10.0
+	game_state_node._run_the_day(0.0)
+	main.hero.global_position = main.current_core.global_position + Vector3(0.0, 0.0, 30.0)
+	await _settle()
+	var cabin: Vector3 = main.current_core.global_position
+	var half: Vector2 = config_node.get_building_half("core")
+	var at_its_end: Vector3 = cabin + Vector3(half.x + 0.6, 0.0, 0.0)
+	assert_gt(at_its_end.distance_to(cabin), float(_fog()["sight"]["core"]) * float(_fog()["night"]),
+		"(further from its middle than it sees at night)")
+	assert_true(main.fog.is_in_sight(at_its_end), "At its end, in the dark, what stands at its wall is in sight")

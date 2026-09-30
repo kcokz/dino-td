@@ -192,3 +192,20 @@ func test_10_a_big_stock_stays_clear_of_the_cabins_medallion() -> void:
 	var controls: Rect2 = hud.root_control.find_child("ControlsPanel", true, false).get_global_rect()
 	assert_lte(stock.end.x, cabin.position.x, "The stock ends before the cabin's medallion begins")
 	assert_lte(cabin.end.x, controls.position.x, "And the medallion before the controls")
+
+func test_08_the_cabins_medallion_takes_the_view_home() -> void:
+	# The player's report, 2026-09-29: "当人在外面explore 的时候，没法用简单直接的方式把视角回到cabin那里".
+	var main = await _level()
+	var rig = main.camera_rig
+	var home: Vector3 = rig.focus
+	rig.focus = home + Vector3(30.0, 0.0, 20.0)
+	rig.apply_to(main.camera)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	main.hud.core_vital.gui_input.emit(click)
+	assert_lt(Vector2(rig.focus.x - home.x, rig.focus.z - home.z).length(), 0.1, "Its medallion clicked, the view is home over the cabin")
+	var cap: Label = main.hud.core_vital.find_child("Keycap", true, false) as Label
+	assert_not_null(cap, "and it wears the key that does the same")
+	if cap != null:
+		assert_eq(cap.text, OS.get_keycode_string(int(config_node.CONTROLS["camera_reset_key"])), "(that key)")

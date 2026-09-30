@@ -81,6 +81,13 @@ const BUILDINGS: Dictionary = {
 		"damage": 1.0,
 		"fire_rate": 0.8,
 		"turn_speed": 240.0,
+		# Each shot, seen (Tower._spawn_visual_bullet_effect): a streak `width` metres thick from the
+		# muzzle to what it hit, `energy` times its colour (over one: it glows), for `seconds`; and a
+		# flash at the muzzle lighting `flash_range` metres round it. A line a pixel wide went unseen at
+		# night, and a phytosaur at the fence flashed white under fire from nowhere (the player's report,
+		# 2026-09-29: "晚上这种情况下看不出来夜行恐龙受到了什么攻击").
+		"shot": {"width": 0.06, "colour": Color(1.0, 0.82, 0.32), "energy": 3.5, "seconds": 0.12,
+			"flash_energy": 3.0, "flash_range": 4.5},
 		"cost": {},
 		"upgrades_to": "",
 	},
@@ -238,6 +245,11 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_CAMPFIRE_NAME",
 		"kind": "fire",
 		"cells": 1,
+		# In nobody's way (Building: walk_over): a ring of stones and ash a hand high, stepped over --
+		# built by the cabin it shut the way between the cabin and the fence, and he ran on the spot
+		# at it (the player's report, 2026-09-29: "camp fire造着会挡住人的路，让campfire不block比较make
+		# sense"). The brazier, a chest-high stone plinth, stands in the way as stone does.
+		"walk_over": true,
 		"height": 0.4,
 		"hp": 6.0,
 		"cost": {"wood": 3},
@@ -475,6 +487,11 @@ static func get_building_footprint(type_id: String = "") -> float:
 	return float(get_building_cells(type_id)) * BUILD_CELL
 
 ## Whether the Hero walks through `type_id` -- a gate -- where everything else stops him.
+## Whether `type_id` is in nobody's way once built: walked over, by him and the animals alike, and
+## not carved out of anybody's mesh (the campfire).
+static func walk_over(type_id: String) -> bool:
+	return BUILDINGS.has(type_id) and bool(BUILDINGS[type_id].get("walk_over", false))
+
 static func hero_passes(type_id: String) -> bool:
 	return BUILDINGS.has(type_id) and bool(BUILDINGS[type_id].get("hero_passes", false))
 
@@ -724,16 +741,20 @@ const PROWL: Dictionary = {
 	# The eyes on `eye_bone` are a few centimetres, lost from the game's camera: over each a glint
 	# `glint_size` metres across, `glint_energy` times its colour at the brightest, so it glows without
 	# burning out to white (the debug-agent's TASK-021: "两个白色的小点……默认镜头下看不出来").
-	"eye_color": Color(1.0, 0.45, 0.15),
-	"eye_energy": 4.0,
+	#
+	# Smaller and dimmer since the player's report of 2026-09-29: "夜晚的恐龙两个眼睛太亮了，有点像两个灯泡，是需要
+	# 炯炯有神，但是不能这么滑稽" -- at 0.3 m and two and a half times its colour, the glint was a lamp
+	# on each side of its head. Now a point that catches the eye, no bigger than an eye could be.
+	"eye_color": Color(1.0, 0.55, 0.2),
+	"eye_energy": 2.5,
 	"eye_reach": 3.0,
 	"eye_bone": "Head",
-	"glint_size": 0.3,
-	"glint_energy": 2.5,
+	"glint_size": 0.14,
+	"glint_energy": 1.3,
 	# And sized to the camera: `glint_per_metre` of its distance across, from `glint_least` up to
 	# `glint_size` -- two small points up close, one still seen at the game's distance.
-	"glint_per_metre": 0.008,
-	"glint_least": 0.04,
+	"glint_per_metre": 0.005,
+	"glint_least": 0.03,
 }
 
 ## What every fire shares (BUILDINGS kind "fire", Fire.gd), and the torch in his hand (Hero).
@@ -1090,6 +1111,16 @@ const DINO_AI: Dictionary = {
 	# Pressed against a wall it could go round, with nobody else in the way, it tries the way round
 	# this many headway windows before it bites through instead.
 	"wall_patience": 3,
+	# JAMMED (Dino._watch_for_a_jam): getting no nearer its goal -- by `jam_progress` metres of the
+	# way it has left -- for `jam_seconds`, crowd or no crowd, and up against a wall between it and
+	# where it is going, it goes through that wall. The way round was there, but a raid's worth of
+	# them in single file up a one-metre corridor to a one-cell gap is not a way round: they milled
+	# up and down it, walking a lot and getting nowhere, which the headway window (moved, not got
+	# nearer) never counted as stuck -- and a crowd never bites a wall it could go round (the player's
+	# report, 2026-09-29: "恐龙大波会在走廊（两行栅栏中间徘徊）"). A few, through a funnel, are through
+	# long before.
+	"jam_seconds": 4.0,
+	"jam_progress": 0.5,
 	# Two bodies whose middles are this close, in metres, are one on top of the other: the engine
 	# has no way out to push either along, so one is nudged (Dino._unstack).
 	"stacked_within": 0.05,
@@ -1539,6 +1570,10 @@ const HERO: Dictionary = {
 	# phytosaur on his way home, he walked on the spot and was bitten to death). Long enough that a
 	# walk the player sent him on past a raid is still walked; a second is his way being shut.
 	"fight_when_held": 1.0,
+	# Walking and getting nowhere this many seconds on a plain walk -- nothing to build, gather or fight
+	# at its end -- he stops, rather than run on the spot for ever at whatever the route did not know
+	# was in the way (the player's report, 2026-09-29: "人会一直有跑的动作但会一直卡着进不去").
+	"give_up_after": 3.0,
 	"hp": 10.0,                   # 生命值（归零直接 Game Over）
 	"move_speed": 4.0,            # 移动速度（米/秒）
 	"damage": 1.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
@@ -2161,6 +2196,8 @@ const CONTROLS: Dictionary = {
 	"camera_tilt_up_key": KEY_F,                  # towards looking straight down
 	"camera_tilt_down_key": KEY_V,                # towards looking along the ground
 	"camera_reset_key": KEY_R,                    # back to the opening view
+	# A bug report, in a development build (BugReport): everything the game was doing, to a file.
+	"bug_report_key": KEY_F9,
 	# Turns a trap being placed a quarter, clockwise -- with Shift, back (Trap.FACINGS). The same
 	# key as the camera's reset, which it takes over only while a trap is in hand: R is where
 	# every building game puts "rotate", and the view is not what the hand is on then.
@@ -2282,9 +2319,12 @@ const DAY: Dictionary = {
 	# -- at 0.5 the never-seen mist came out a twentieth of the land under it, pure black, "像地图没开"
 	# (the debug-agent's BUG-016); at 0.7 it is a shade under the mist over ground seen before.
 	"light": [
-		{"at": 0.0, "sun_elevation": 10.0, "sun_azimuth": 85.0, "sun_color": Color(1.0, 0.58, 0.42), "sun_energy": 0.7,
-			"ambient_energy": 0.32, "sky_top": Color(0.20, 0.24, 0.40), "sky_horizon": Color(0.95, 0.62, 0.48),
-			"fog_color": Color(0.80, 0.58, 0.50), "mist": 1.15},
+		# Dawn and dusk say themselves by the light -- low, golden and long-shadowed, the sky cooling to
+		# blue-violet -- not by red: at the deep red they were, the eyes tired of them (the player's report,
+		# 2026-09-29: "Dawn和evening的颜色有点过于红，眼睛会不太舒服").
+		{"at": 0.0, "sun_elevation": 10.0, "sun_azimuth": 85.0, "sun_color": Color(1.0, 0.76, 0.58), "sun_energy": 0.75,
+			"ambient_energy": 0.34, "sky_top": Color(0.22, 0.28, 0.44), "sky_horizon": Color(0.86, 0.72, 0.62),
+			"fog_color": Color(0.72, 0.66, 0.64), "mist": 1.15},
 		{"at": 45.0, "sun_elevation": 18.0, "sun_azimuth": 70.0, "sun_color": Color(1.0, 0.84, 0.64), "sun_energy": 1.05,
 			"ambient_energy": 0.42, "sky_top": Color(0.26, 0.40, 0.58), "sky_horizon": Color(0.90, 0.78, 0.62),
 			"fog_color": Color(0.80, 0.74, 0.66), "mist": 1.3},
@@ -2297,9 +2337,9 @@ const DAY: Dictionary = {
 		{"at": 220.0, "sun_elevation": 16.0, "sun_azimuth": 10.0, "sun_color": Color(1.0, 0.78, 0.55), "sun_energy": 1.1,
 			"ambient_energy": 0.42, "sky_top": Color(0.28, 0.40, 0.56), "sky_horizon": Color(0.92, 0.74, 0.56),
 			"fog_color": Color(0.82, 0.72, 0.60), "mist": 1.0},
-		{"at": 245.0, "sun_elevation": 10.0, "sun_azimuth": -5.0, "sun_color": Color(1.0, 0.45, 0.22), "sun_energy": 0.95,
-			"ambient_energy": 0.34, "sky_top": Color(0.30, 0.26, 0.42), "sky_horizon": Color(0.96, 0.46, 0.26),
-			"fog_color": Color(0.80, 0.46, 0.34), "mist": 0.6},
+		{"at": 245.0, "sun_elevation": 10.0, "sun_azimuth": -5.0, "sun_color": Color(1.0, 0.68, 0.42), "sun_energy": 0.9,
+			"ambient_energy": 0.32, "sky_top": Color(0.24, 0.26, 0.44), "sky_horizon": Color(0.88, 0.62, 0.46),
+			"fog_color": Color(0.64, 0.56, 0.58), "mist": 0.6},
 		{"at": 272.0, "sun_elevation": 40.0, "sun_azimuth": 20.0, "sun_color": Color(0.55, 0.65, 0.95), "sun_energy": 0.34,
 			"ambient_energy": 0.2, "sky_top": Color(0.04, 0.06, 0.12), "sky_horizon": Color(0.12, 0.13, 0.22),
 			"fog_color": Color(0.12, 0.14, 0.22), "mist": 0.7},
@@ -2318,6 +2358,15 @@ const DAY: Dictionary = {
 ## THE TWITCH WATCH (TwitchWatch; v0.6 round four: "我觉得你需要做一个恐龙抽搐detector，如果恐龙抽搐，它就
 ## 立刻report一些debug 信息，这个在release的时候甚至可以作为telemetry"): what counts as a twitch, and
 ## where a report goes. Every count is over game seconds, so it holds at any of the HUD's speeds.
+## THE BUG REPORT (BugReport; the player, 2026-09-29: "你弄一个bug report功能（加到dev版，release版本没有这个功能）
+## ……snap所有你想要知道的当前参数并dump出来……给个快捷键"): how many of the last things that happened it keeps,
+## and which of what the game says are too many to be worth keeping -- said every frame, or at every step.
+const BUG_REPORT: Dictionary = {
+	"events": 120,
+	"quiet": ["build_progress_updated", "deploy_time_changed", "resources_changed", "hero_hp_changed",
+		"core_hp_changed", "game_speed_changed"],
+}
+
 const TWITCH: Dictionary = {
 	# An animal's record is kept in buckets this long and judged as each closes: often enough to
 	# report a twitch while it is still on the screen, and no oftener than it thinks (DINO_AI).
@@ -2415,6 +2464,9 @@ const FOG: Dictionary = {
 	# How far each sees, in metres: the Hero; the cabin; a finished building by its kind -- a trap
 	# sees down its lane, a stake barely past itself.
 	"sight": {"hero": 10.0, "core": 9.0, "trap": 7.0, "wall": 2.5, "building": 3.0},
+	# However dark it is, the cabin sees this many metres out from its walls (FogOfWar._sources): what
+	# bites it is seen biting it.
+	"round_the_cabin": 2.0,
 	# Of the day's sight: at dusk and in the night (GAME-DESIGN 9.3: "看得见的范围缩小，火把它撑开"). In the
 	# night he sees a few metres by the moon -- 4.5, the cabin's dim windows 4 -- and a fire, or the torch
 	# in his hand, lights further (FIRE; BUILDINGS.<id>.light): it was six metres, as far as a campfire,

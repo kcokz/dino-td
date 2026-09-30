@@ -251,11 +251,19 @@ func test_10_a_report_is_a_line_of_json_in_the_launchs_file() -> void:
 		DirAccess.remove_absolute(dir.path_join(f))
 	DirAccess.remove_absolute(dir)
 
-func test_11_in_a_debug_build_it_is_marked_with_the_reports_number() -> void:
+func test_11_in_a_debug_build_it_is_marked_with_the_reports_number_when_asked() -> void:
+	# Only when asked (TwitchWatch.show_marks: a test, the debug-agent's runs): to the player "twitch#1"
+	# over a phytosaur was a bug of its own (the player's report, 2026-09-29).
 	var main = await _level()
 	var at: Vector3 = _clear_ground(main)
-	var d = _raider(main, at)
-	await _jitter(d, at, _frames_for(float(_tw()["window"])))
+	var quiet = _raider(main, at)
+	await _jitter(quiet, at, _frames_for(float(_tw()["window"])))
+	assert_eq(_reports_on(quiet, "jitter").size(), 1, "(reported)")
+	assert_null(quiet.get_node_or_null("TwitchMark"), "Not asked for, nothing is put over its head")
+	TwitchWatch.show_marks = true
+	var d = _raider(main, at + Vector3(4.0, 0.0, 0.0))
+	await _jitter(d, at + Vector3(4.0, 0.0, 0.0), _frames_for(float(_tw()["window"])))
+	TwitchWatch.show_marks = false
 	var got: Array = _reports_on(d, "jitter")
 	assert_eq(got.size(), 1, "(reported)")
 	if got.is_empty() or not OS.is_debug_build():

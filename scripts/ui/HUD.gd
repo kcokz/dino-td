@@ -25,6 +25,8 @@ signal build_requested(building_type: String)
 signal end_action_clicked()
 signal restart_clicked()
 signal restart_requested()
+## The view back over the cabin, as the scene opened it: its medallion clicked (Main.reset_camera).
+signal home_view_requested()
 signal pause_clicked()
 
 # ==============================================================================
@@ -1322,6 +1324,19 @@ func _ensure_ui_components() -> void:
 	core_vital.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	core_vital.offset_top = float(_ui("emblem_top", 2))
 	core_vital.offset_bottom = core_vital.offset_top
+	# Clicked, it takes the view home to the cabin, as its key does -- out exploring there was no
+	# plain way back (the player's report, 2026-09-29: "当人在外面explore 的时候，没法用简单直接的方式把视角回到
+	# cabin那里"). The key is on a chip at its shoulder, as the Hero's details key is on his.
+	core_vital.mouse_filter = Control.MOUSE_FILTER_STOP
+	core_vital.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	core_vital.gui_input.connect(_on_cabin_emblem_input)
+	var home_cap := _label("Keycap", &"KeycapLabel", _home_key_text())
+	home_cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var cabin_disc: Control = core_vital.get_node_or_null("Disc") as Control
+	if cabin_disc != null:
+		cabin_disc.add_child(home_cap)
+		home_cap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		home_cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	root_control.resized.connect(_fit_stock, CONNECT_DEFERRED)
 
 	# Beside it, the day (GAME-DESIGN 9.3): a dial going round once a day -- gold by day, red at
@@ -1721,6 +1736,17 @@ func _medallion(node_name: String, key: String, icon_name: String, grow: float =
 
 ## The Hero's medallion clicked: he is picked, as a click on him in the world picks him, and his
 ## card opens in full -- or, open, shuts again.
+func _on_cabin_emblem_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		home_view_requested.emit()
+		get_viewport().set_input_as_handled()
+
+## The key that takes the view home, as the keyboard writes it (Config.CONTROLS.camera_reset_key).
+func _home_key_text() -> String:
+	var cfg = _get_config()
+	var key: int = int(cfg.CONTROLS.get("camera_reset_key", KEY_R)) if (cfg and "CONTROLS" in cfg) else KEY_R
+	return OS.get_keycode_string(key)
+
 func _on_hero_emblem_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		toggle_hero_details()

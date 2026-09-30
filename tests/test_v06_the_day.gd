@@ -211,3 +211,23 @@ func test_07_the_screen_shows_the_day_and_says_each_part_as_it_begins() -> void:
 	var key: String = hud.hero_commands.key_of("torch")
 	assert_eq(key, OS.get_keycode_string(int(config_node.CONTROLS["command_keys"][1])), "(the torch's the second key)")
 	assert_eq(String(hud.hint_label.text), tr("HINT_DUSK_FIRST") % key, "and the screen says the raiders are going home")
+
+func test_10_dawn_and_dusk_say_themselves_by_the_light_not_by_red() -> void:
+	# The player's report, 2026-09-29: "Dawn和evening的颜色有点过于红，眼睛会不太舒服，需要一种配色让玩家能感觉出要晚上
+	# 了，但不会眼睛不舒服". Low, golden, dimmer than the day -- and no deep red.
+	var keys: Array = _day()["light"]
+	var noon: Dictionary = keys[2]
+	for at in [0.0, float(_day()["parts"]["dusk"]) + 5.0]:
+		var k: Dictionary = {}
+		for key in keys:
+			if absf(float(key["at"]) - at) < 6.0:
+				k = key
+		assert_false(k.is_empty(), "(a light keyed at %.0f)" % at)
+		if k.is_empty():
+			continue
+		var sun: Color = k["sun_color"]
+		assert_gte(sun.g / maxf(0.01, sun.r), 0.65, "At %.0f s the sun is gold, not red" % at)
+		var haze: Color = k["fog_color"]
+		assert_gte(haze.g / maxf(0.01, haze.r), 0.8, "and the haze is not red")
+		assert_lt(float(k["sun_energy"]), float(noon["sun_energy"]), "and it is dimmer than noon")
+		assert_lt(float(k["sun_elevation"]), float(noon["sun_elevation"]), "and lower")

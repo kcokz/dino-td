@@ -265,7 +265,13 @@ func _sources() -> Array:
 		out.append([(hero as Node3D).global_position, maxf(float(sight.get("hero", 10.0)) * scale, torch)])
 	for core in get_tree().get_nodes_in_group("core"):
 		if core is Node3D and is_instance_valid(core):
-			out.append([(core as Node3D).global_position, float(sight.get("core", 9.0)) * scale])
+			# Round its own walls at the least, whatever the hour (Config.FOG.round_the_cabin): from its
+			# middle, the night's 4 metres did not reach the ends of a cabin 7 long, and what bit it there
+			# in the dark was not drawn -- the cabin lost its health to nothing (the player's report,
+			# 2026-09-29: "晚上篝火完全不放，恐龙进攻会有点stealth的状态").
+			var half: Vector2 = cfg.get_building_half(String(core.building_type)) if (cfg and "building_type" in core) else Vector2.ZERO
+			var round_walls: float = maxf(half.x, half.y) + float(fog.get("round_the_cabin", 2.0))
+			out.append([(core as Node3D).global_position, maxf(float(sight.get("core", 9.0)) * scale, round_walls)])
 	for b in get_tree().get_nodes_in_group("buildings"):
 		if not (b is Node3D) or not is_instance_valid(b) or b.is_in_group("core"):
 			continue

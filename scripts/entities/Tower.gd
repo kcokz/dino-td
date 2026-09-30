@@ -238,23 +238,39 @@ func _spawn_visual_bullet_effect(target_pos: Vector3) -> void:
 	if not is_inside_tree() or DisplayServer.get_name() == "headless":
 		return
 
+	# Seen at night (BUILDINGS.<type>.shot): a streak of light from the muzzle to what it hit, thick
+	# and bright enough to glow, and a flash at the muzzle lighting the ground round it for a moment.
+	# A line a pixel wide went unseen, and a phytosaur at the fence flashed white under fire from
+	# nowhere (the player's report, 2026-09-29).
+	var cfg = get_node_or_null("/root/Config")
+	var shot: Dictionary = cfg.BUILDINGS.get(building_type, {}).get("shot", {}) if (cfg and "BUILDINGS" in cfg) else {}
 	var origin: Vector3 = shot_origin()
-	var tracer = ImmediateMesh.new()
+	var end: Vector3 = target_pos + Vector3(0.0, 0.4, 0.0)
+	var along: Vector3 = end - origin
+	if along.length() < 0.05:
+		return
+	var width: float = float(shot.get("width", 0.06))
+	var box := BoxMesh.new()
+	box.size = Vector3(width, width, along.length())
 	var mesh_inst = MeshInstance3D.new()
-	mesh_inst.mesh = tracer
-
+	mesh_inst.mesh = box
 	var mat = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.9, 0.2) # Bright yellow bullet streak
+	var c: Color = shot.get("colour", Color(1.0, 0.82, 0.32))
+	var e: float = float(shot.get("energy", 3.5))
+	mat.albedo_color = Color(c.r * e, c.g * e, c.b * e)
 	mesh_inst.material_override = mat
-
-	tracer.clear_surfaces()
-	tracer.surface_begin(Mesh.PRIMITIVE_LINES)
-	tracer.surface_add_vertex(origin - global_position)
-	tracer.surface_add_vertex(target_pos - global_position + Vector3(0.0, 0.4, 0.0))
-	tracer.surface_end()
-
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mesh_inst)
+	var up: Vector3 = Vector3.RIGHT if absf(along.normalized().dot(Vector3.UP)) > 0.99 else Vector3.UP
+	mesh_inst.global_transform = Transform3D(Basis.looking_at(along, up), origin + along * 0.5)
+	var flash := OmniLight3D.new()
+	flash.light_color = c
+	flash.light_energy = float(shot.get("flash_energy", 3.0))
+	flash.omni_range = float(shot.get("flash_range", 4.5))
+	flash.shadow_enabled = false
+	add_child(flash)
+	flash.global_position = origin
 
 	# Connected to the tracer's own queue_free rather than to a closure holding it: if the
 	# turret goes first, taking the tracer with it, the engine drops the connection, where
@@ -262,9 +278,12 @@ func _spawn_visual_bullet_effect(target_pos: Vector3) -> void:
 	var tree_ref = get_tree()
 	if tree_ref:
 		# Not process_always: a paused game holds the streak where it is (GameState.is_paused).
-		tree_ref.create_timer(0.1, false).timeout.connect(mesh_inst.queue_free)
+		var seconds: float = float(shot.get("seconds", 0.12))
+		tree_ref.create_timer(seconds, false).timeout.connect(mesh_inst.queue_free)
+		tree_ref.create_timer(seconds * 0.6, false).timeout.connect(flash.queue_free)
 	else:
 		mesh_inst.queue_free()
+		flash.queue_free()
 
 # ==============================================================================
 # The head: turning to face what it shoots

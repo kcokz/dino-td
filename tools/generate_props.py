@@ -1455,24 +1455,83 @@ def _sandstone_chunk(b, centre, size, rng, base, fresh=False):
         b.tri(pts[i], pts[j], pts[k], cs[0], cs[1], cs[2])
 
 
+def _bed(b, rng, z0, height, rx, ry, offset, col, top_col, n=14, arc=(0.0, math.tau)):
+    """One bed of the Chinle's sandstone, laid flat: an uneven slab `rx` by `ry` metres over the arc
+    `arc` of a round (a whole bed, or a block split off one), `height` thick, notched where it has
+    weathered back, its top edge worn round (the top ring drawn in), its side dark at the foot and its
+    own colour above, its top the weathered pale of the rock."""
+    shade = mix(col, CHINLE_SHADE, 0.55)
+    whole = abs((arc[1] - arc[0]) - math.tau) < 1e-6
+    count = n if whole else n // 2 + 1
+    wobble = []
+    for k in range(count):
+        w = rng.uniform(0.8, 1.1)
+        if rng.random() < 0.18:
+            w *= rng.uniform(0.6, 0.8)          # a notch, weathered back
+        wobble.append(w)
+    bottom, rim, top = [], [], []
+    for k in range(count):
+        a = arc[0] + (arc[1] - arc[0]) * k / (count if whole else count - 1)
+        r = Vector((math.cos(a) * rx * wobble[k], math.sin(a) * ry * wobble[k], 0.0))
+        bottom.append(offset + r + Vector((0.0, 0.0, z0)))
+        rim.append(offset + r * 0.98 + Vector((0.0, 0.0, z0 + height * rng.uniform(0.74, 0.86))))
+        top.append(offset + r * 0.86 + Vector((0.0, 0.0, z0 + height * rng.uniform(0.94, 1.04))))
+    centre = offset + Vector((0.0, 0.0, z0 + height))
+    if not whole:
+        centre = offset + Vector((math.cos((arc[0] + arc[1]) * 0.5) * rx * 0.25,
+                                  math.sin((arc[0] + arc[1]) * 0.5) * ry * 0.25, z0 + height))
+    edges = count if whole else count - 1
+    for k in range(edges):
+        k2 = (k + 1) % count
+        b.quad(bottom[k], bottom[k2], rim[k2], rim[k], shade, shade, col, col)
+        b.quad(rim[k], rim[k2], top[k2], top[k], col, col, top_col, top_col)
+        b.tri(top[k], top[k2], centre, top_col, top_col, mix(top_col, (1.0, 1.0, 1.0), 0.05))
+    if not whole:
+        # The split face: straight across, fresh-ish where it cracked off.
+        face = mix(col, CHINLE_TOP, 0.25)
+        base_c = offset + Vector((0.0, 0.0, z0))
+        b.quad(bottom[0], base_c, centre, top[0], shade, shade, face, face)
+        b.quad(base_c, bottom[-1], top[-1], centre, shade, shade, face, face)
+
+
 def sandstone_outcrop(seed, quarried=False):
-    """Stone to quarry: an outcrop of the Chinle's sandstone breaking out of the ground in angular
-    red-brown blocks, broken pieces spilled at its foot. Quarried, it is cut down to low stubs with
-    pale fresh tops, and the spill is rubble."""
+    """Stone to quarry: a ledge of the Chinle's sandstone breaking out of the ground, its beds laid one
+    on another -- banded red, ochre, mauve and buff -- each set back from the one below on one side, a
+    worn step, and standing sheer on the other; its top bed cracked in two, a couple of blocks fallen at
+    its foot. A man's height, and plainly rock to cut, where the first was a spill of red chunks knee-high
+    that could not be told for anything at night (the player's report, 2026-09-29: "视角里有很多这个东西，
+    也不在动，看不出来是什么"). Quarried, it is cut down to its lowest beds, the cut pale and fresh, rubble
+    by it."""
     rng = random.Random(seed)
     b = Builder()
-    chunks = [
-        # (x, y, size): the big block at the back, smaller ones leaning on it
-        (0.05, 0.12, 0.62), (-0.42, -0.22, 0.44), (0.42, -0.30, 0.40), (-0.30, 0.42, 0.32),
-    ]
-    for (x, y, size) in chunks:
-        at = Vector((x, y, -size * 0.1))
-        _sandstone_chunk(b, at, size * (0.55 if quarried else 1.0), rng, rng.choice(CHINLE_BEDS), fresh=quarried)
-    for _ in range(18 if quarried else 11):
+    beds = [(0.34, 0.80, 0.66), (0.30, 0.74, 0.62), (0.34, 0.62, 0.56), (0.30, 0.52, 0.46)]
+    if quarried:
+        beds = beds[:2]
+    z = -0.04
+    offset = Vector((0.0, 0.0, 0.0))
+    step = Vector((-0.12, 0.05, 0.0))      # each bed set back this way: the stepped side
+    for i, (h, rx, ry) in enumerate(beds):
+        col = CHINLE_BEDS[(i * 2 + seed) % len(CHINLE_BEDS)]
+        last = i == len(beds) - 1
+        top_col = CHINLE_FRESH if (quarried and last) else mix(col, CHINLE_TOP, 0.5)
+        if last and not quarried:
+            # Cracked in two, the halves a hand apart.
+            gap = Vector((0.03, 0.03, 0.0))
+            _bed(b, rng, z, h, rx, ry, offset + gap, col, top_col, 14, (-0.9, 2.2))
+            _bed(b, rng, z, h * 0.9, rx, ry, offset - gap, col, top_col, 14, (2.25, 5.35))
+        else:
+            _bed(b, rng, z, h, rx, ry, offset, col, top_col)
+        z += h
+        offset = offset + step + Vector((rng.uniform(-0.04, 0.04), rng.uniform(-0.04, 0.04), 0.0))
+    for k in range(2):
+        a = rng.uniform(-0.8, 0.8)          # fallen off the sheer side
+        at = Vector((math.cos(a) * 0.8, math.sin(a) * 0.62, 0.0))
+        _sandstone_chunk(b, at, rng.uniform(0.13, 0.17), rng, rng.choice(CHINLE_BEDS), fresh=quarried)
+    for _ in range(14 if quarried else 7):
         a = rng.uniform(0.0, math.tau)
-        r = rng.uniform(0.75, 1.05)
-        centre = Vector((math.cos(a) * r, math.sin(a) * r * 0.9, 0.0))
-        _chip(b, centre, rng.uniform(0.05, 0.1), rng, rng.choice(CHINLE_BEDS))
+        r = rng.uniform(0.7, 0.88)
+        _chip(b, Vector((math.cos(a) * r, math.sin(a) * r * 0.9, 0.0)), rng.uniform(0.04, 0.08), rng,
+              rng.choice(CHINLE_BEDS))
     return b
 
 

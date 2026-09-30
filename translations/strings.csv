@@ -348,3 +348,4 @@ SOURCE_ANTENNA,"%s: in the smoking wreck by the river, to the west","%s：在西
 SOURCE_BATTERY,"%s: in the smoking wreck to the north","%s：在北边冒烟的残骸里"
 SOURCE_BOARD,"%s: in the smoking wreck to the south‐east","%s：在东南边冒烟的残骸里"
 HINT_FOUND_PART,"Found the %s — the beacon's stage %d takes it","找到了%s——信标第 %d 段要用它"
+HINT_BUG_REPORT,"Bug report saved: %s","已保存 bug 报告：%s"

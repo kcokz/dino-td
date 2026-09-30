@@ -227,3 +227,39 @@ func test_07_in_the_cabin_he_does_not_go_out_after_what_bites_its_wall() -> void
 	biter.global_position = hero.global_position + Vector3(float(hero.attack_range) * 0.6, 0.0, 0.0)
 	await wait_physics_frames(3)
 	assert_eq(hero.target_enemy, biter, "Out here he takes on what is in his reach")
+
+func test_08_a_walk_that_gets_him_nowhere_is_given_up() -> void:
+	# The player's report, 2026-09-29: "人会一直有跑的动作但会一直卡着进不去" -- held at something his route
+	# did not know was in the way, he ran on the spot for good.
+	var main = await _level()
+	var hero = main.hero
+	hero.move_to(hero.global_position + Vector3(6.0, 0.0, 0.0))
+	await wait_physics_frames(2)
+	assert_eq(int(hero.current_state), int(hero.State.MOVING), "(walking)")
+	hero._held_for = float(config_node.HERO["give_up_after"]) - 0.1
+	assert_false(hero._give_up_the_walk(), "Not before he has got nowhere the while")
+	hero._held_for = float(config_node.HERO["give_up_after"]) + 0.1
+	assert_true(hero._give_up_the_walk(), "Getting nowhere that long on a plain walk, he gives it up")
+	assert_eq(int(hero.current_state), int(hero.State.IDLE), "and stands")
+
+func test_09_what_is_by_the_cabin_is_built_from_outside_it() -> void:
+	# The player's report, 2026-09-29: "造上面两个bow的时候人会走到cabin里造它们".
+	var main = await _level()
+	stock_everything()
+	var gm = main.grid_manager
+	var cabin = main.current_core
+	var c: Vector2i = gm.world_to_build_cell(cabin.global_position)
+	var half: Vector2 = config_node.get_building_half("core")
+	var bow = main.build_system.place_at("trip_bow", Vector2i(c.x + int(ceil(half.x)), c.y), main.buildings_container, true)
+	assert_not_null(bow, "(a trap goes down against the cabin's end)")
+	if bow == null:
+		return
+	main.nav_maps.rebake()
+	await wait_physics_frames(3)
+	var hero = main.hero
+	hero.global_position = bow.global_position + Vector3(4.0, 0.0, 0.0)
+	hero.order_build(bow, true)
+	assert_false(hero.current_path.is_empty(), "(he has a way there)")
+	var end: Vector3 = hero.current_path[hero.current_path.size() - 1]
+	assert_gt(float(config_node.gap_to_building(end, "core", cabin.global_position)), 0.0,
+		"He stands outside the cabin to build what is outside it, not in its room through the wall")

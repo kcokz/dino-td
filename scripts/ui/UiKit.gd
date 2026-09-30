@@ -169,10 +169,15 @@ static func come_in(node: Control) -> void:
 		return
 	var at: Vector2 = node.size if node.size.x > 0.0 else node.get_combined_minimum_size()
 	node.pivot_offset = at * 0.5
-	node.scale = Vector2.ONE * UiTheme.number("come_scale")
+	var small: Vector2 = Vector2.ONE * UiTheme.number("come_scale")
+	# After its container has laid it out, not before: a container sets its children's scale back to
+	# one as it lays them out, and it grew in from its full size (the debug-agent's BUG-024). The
+	# tween starts from the small size, whatever the scale is when it takes its first step.
+	node.set_deferred("scale", small)
 	node.modulate = UiTheme.tint("come")
 	var tw := node.create_tween().set_parallel(true)
-	tw.tween_property(node, "scale", Vector2.ONE, UiTheme.number("pop_seconds") * 2.0).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "scale", Vector2.ONE, UiTheme.number("pop_seconds") * 2.0).from(small) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(node, "modulate", Color.WHITE, UiTheme.number("come_seconds")).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 ## A key as the engine's shortcut for a button (BaseButton.shortcut): the key presses it, and

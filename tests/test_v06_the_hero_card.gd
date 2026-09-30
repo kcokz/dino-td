@@ -356,7 +356,10 @@ func test_12_a_command_come_is_seen_arriving_and_one_he_cannot_give_is_plainly_d
 	var torch: Button = tiles.torch_button
 	var lit: Color = torch.modulate
 	assert_gt(lit.r, 1.0, "Come, it is lit up")
-	assert_lt(torch.scale.x, 1.0, "and grows in")
+	# Laid out by its row a frame on, and still growing: a row sets its tiles' scale back to one as it
+	# lays them out, and it had grown in from its full size (the debug-agent's BUG-024).
+	await wait_frames(2)
+	assert_lt(torch.scale.x, 0.95, "and grows in, after its row has laid it out")
 	await wait_seconds(float(config_node.THEME["come_seconds"]) + 0.2)
 	assert_almost_eq(torch.modulate.r, 1.0, 0.02, "the light fades")
 	assert_almost_eq(torch.scale.x, 1.0, 0.02, "at its size")

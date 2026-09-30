@@ -352,4 +352,6 @@ func test_14_its_eyes_are_two_points_up_close_and_one_seen_from_afar() -> void:
 		if far < 10.0:
 			assert_lt(across, apart, "Up close each glint is smaller than the eyes are apart: two points (%.3f < %.3f)" % [across, apart])
 		else:
-			assert_gt(across, 0.15, "From the game's distance, one glint big enough to see (%.2f m)" % across)
+			assert_gt(across, 0.1, "From the game's distance, one glint big enough to see (%.2f m)" % across)
+			# And no lamp (the player's report, 2026-09-29: "两个眼睛太亮了，有点像两个灯泡").
+			assert_lt(across, 0.2, "but a point, not a lamp (%.2f m)" % across)
