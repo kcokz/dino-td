@@ -3,8 +3,8 @@
 # 我需要它们更精致").
 #
 # The cast was the Quaternius animals' meshes, stretched: a few hundred flat facets in two or three flat colours,
-# no eyes, bony plates floating over the back. This draws a new body on the same skeleton, so every clip the
-# game plays still plays:
+# no eyes, bony plates floating over the back. This draws a body round an animal's skeleton (tools/dino_rig.py:
+# each species' own), weighted to its bones, so every clip it is given plays:
 #
 #   THE TRUNK is one tube from the tip of the snout to the tip of the tail, lofted along the spine -- a ring at
 #   every station, each ring the animal's cross-section there: how wide, how high over the spine, how deep under
@@ -14,11 +14,12 @@
 #   dark), teeth along the lip, claws, toes and fingers, the bony plates of the crocodile line -- each set on
 #   the skin where it grows and moving with the skin under it.
 #   THE SKIN is painted, a colour at each vertex: dark back, paler flanks, a pale belly, and each species' own
-#   marks -- bands, blotches, a stripe through the eye.
+#   marks -- bands, blotches, a stripe through the eye -- then baked with its scales to images
+#   (tools/dino_skin.py).
 #   THE WEIGHTS are worked out, not guessed: a vertex belongs to the bone its station is on, shared with the
 #   next bone only near the joint between them; the skull is one rigid piece.
 #
-# Blender only (bpy); used by tools/generate_triassic.py.
+# Blender only (bpy); used by tools/dino_body.py (tools/generate_dinos.py).
 
 import math
 
@@ -184,11 +185,18 @@ class Body:
         self.w = []
         self.f = []
         self.fm = []
+        self.tag = []
+        self.mask = None     # set by the caller: a value per vertex, kept as the "Mask" attribute
+        # Per vertex, for the bake (tools/dino_feathers.py): how feathered the skin is there; whether it is a
+        # feather's vane; where on the vane (along its shaft, and across it).
+        self.feather = []
 
-    def add(self, p, col, w):
+    def add(self, p, col, w, tag=None, feather=None):
         self.v.append(p.copy())
         self.col.append(tuple(col))
         self.w.append(dict(w))
+        self.tag.append(tag)
+        self.feather.append(tuple(feather) if feather else (0.0, 0.0, 0.0, 0.0))
         return len(self.v) - 1
 
     def face(self, idx, mat=0):
@@ -226,6 +234,8 @@ class Body:
             part.v = [self.v[i] for i in used]
             part.col = [self.col[i] for i in used]
             part.w = [self.w[i] for i in used]
+            part.mask = [self.mask[i] for i in used] if self.mask is not None else None
+            part.feather = [self.feather[i] for i in used]
             part.f = [tuple(back[i] for i in f) for f in faces]
             part.fm = [0] * len(faces)
             out.append(part._object(name if m == 0 else "%s_%s" % (name, mat.name.lower()), arm, mat))
@@ -240,6 +250,14 @@ class Body:
         attr = mesh.color_attributes.new(name="Col", type='FLOAT_COLOR', domain='POINT')
         for i, c in enumerate(self.col):
             attr.data[i].color = (c[0], c[1], c[2], 1.0)
+        if self.mask is not None:
+            mk = mesh.color_attributes.new(name="Mask", type='FLOAT_COLOR', domain='POINT')
+            for i, m in enumerate(self.mask):
+                mk.data[i].color = (m[0], m[1], m[2], 1.0)
+        if any(f != (0.0, 0.0, 0.0, 0.0) for f in self.feather):
+            fa = mesh.color_attributes.new(name="Feather", type='FLOAT_COLOR', domain='POINT')
+            for i, f in enumerate(self.feather):
+                fa.data[i].color = f
         mesh.color_attributes.active_color = attr
         mesh.materials.append(mat)
         obj = bpy.data.objects.new(name, mesh)
@@ -273,21 +291,57 @@ class Body:
 KEYS = ("w", "top", "bot", "lift", "n_top", "n_bot", "keel", "step")
 
 
+def _slope(xs, ys, k):
+    """How fast `ys` goes at its `k`th point, for a curve through them all that never overshoots them
+    (Fritsch-Carlson): level where it turns, the secant at the ends."""
+    n = len(xs)
+
+    def d(i):
+        return (ys[i + 1] - ys[i]) / max(1e-9, xs[i + 1] - xs[i])
+    if n < 2:
+        return 0.0
+    if k == 0:
+        return d(0)
+    if k == n - 1:
+        return d(n - 2)
+    d0, d1 = d(k - 1), d(k)
+    if d0 * d1 <= 0.0:
+        return 0.0
+    h0, h1 = xs[k] - xs[k - 1], xs[k + 1] - xs[k]
+    w0, w1 = 2.0 * h1 + h0, h1 + 2.0 * h0
+    return (w0 + w1) / (w0 / d0 + w1 / d1)
+
+
+def smooth_through(xs, ys, x):
+    """The value at `x` of a smooth curve through the points (`xs` rising): a cubic between each two, meeting the
+    next with the same slope -- where easing each span on its own stood level at every point, and a body or a
+    limb drawn through its stations that way came out in terraces, a ring at each."""
+    if x <= xs[0]:
+        return ys[0]
+    if x >= xs[-1]:
+        return ys[-1]
+    k = 0
+    while k < len(xs) - 2 and x > xs[k + 1]:
+        k += 1
+    h = max(1e-9, xs[k + 1] - xs[k])
+    t = (x - xs[k]) / h
+    m0, m1 = _slope(xs, ys, k), _slope(xs, ys, k + 1)
+    t2, t3 = t * t, t * t * t
+    return ((2.0 * t3 - 3.0 * t2 + 1.0) * ys[k] + (t3 - 2.0 * t2 + t) * h * m0
+            + (-2.0 * t3 + 3.0 * t2) * ys[k + 1] + (t3 - t2) * h * m1)
+
+
 def _interp(stations, s):
-    """The cross-section at `s`, eased between the stations either side of it."""
+    """The cross-section at `s`: each of its measures on a smooth curve through the stations'."""
     if s <= stations[0]["s"]:
         return dict(stations[0])
     if s >= stations[-1]["s"]:
         return dict(stations[-1])
-    for a, b in zip(stations, stations[1:]):
-        if a["s"] <= s <= b["s"]:
-            t = (s - a["s"]) / max(1e-6, b["s"] - a["s"])
-            t = t * t * (3.0 - 2.0 * t)
-            out = {"s": s}
-            for k in KEYS:
-                out[k] = a[k] + (b[k] - a[k]) * t
-            return out
-    return dict(stations[-1])
+    xs = [st["s"] for st in stations]
+    out = {"s": s}
+    for k in KEYS:
+        out[k] = smooth_through(xs, [st[k] for st in stations], s)
+    return out
 
 
 def section_point(sec, phi):
@@ -378,21 +432,23 @@ class Loft:
                 r += h * math.exp(-((s - bs) / rad) ** 2 - (d / (rad * 2.2)) ** 2)
         return r
 
-    def build(self, body, paint, rough=0.0):
+    def build(self, body, paint, rough=0.0, weigh=None, phis=None):
         """The tube into `body`: its rings, the tip of the snout and of the tail closed. `paint(s, phi, p, n)`
-        colours each vertex; `rough`, the skin's unevenness, a fraction of its local size."""
+        colours each vertex; `rough`, the skin's unevenness, a fraction of its local size; `weigh(s, phi, w)`,
+        a vertex's bones where they are not its ring's (the lower jaw's); `phis`, the angles round each ring,
+        where they are not evenly spaced (closer at the lips, so the mouth opens cleanly)."""
         rings = []
+        angles = phis if phis is not None else [2.0 * math.pi * j / self.around for j in range(self.around)]
         for s in self.ss:
             sec = self.section(s)
             w = self.path.weights(s, self.blend)
             ring = []
             size = max(sec["w"], 0.5 * (sec["top"] + sec["bot"]))
-            for j in range(self.around):
-                phi = 2.0 * math.pi * j / self.around
+            for phi in angles:
                 p, n = self.surface(s, phi)
                 if rough > 0.0:
                     p = p + n * (rough * size * noise.noise(p * (3.0 / max(0.05, size))))
-                ring.append(body.add(p, paint(s, phi, p, n), w))
+                ring.append(body.add(p, paint(s, phi, p, n), weigh(s, phi, w) if weigh else w, tag=s))
             rings.append(ring)
         ends = []
         for (s, sign) in ((self.s0, -1.0), (self.s1, 1.0)):
@@ -408,8 +464,9 @@ class Loft:
 # ==============================================================================
 
 class Limb:
-    """A tube down a limb's bones: `plan` its stations top to bottom, each (bone, t, w, d) -- half as wide
-    across the animal and as deep fore and aft; the top sunk in the body, the bottom closed."""
+    """A tube down a limb's bones: `plan` its stations top to bottom, each (bone, t, w, d[, shift]) -- half as
+    wide across the animal and as deep fore and aft, and its middle moved `shift` forward of the bone (a thigh's
+    muscle before the femur, a calf behind the shin); the top sunk in the body, the bottom closed."""
 
     def __init__(self, skel, links, plan, around=16, soften=0.12, step=0.1):
         self.skel = skel
@@ -417,8 +474,9 @@ class Limb:
         self.around = around
         self.soften = soften
         self.stations = []
-        for (bone, t, w, d) in plan:
-            self.stations.append({"s": self.path.s_of(bone, t), "w": w, "d": d})
+        for st in plan:
+            bone, t, w, d = st[:4]
+            self.stations.append({"s": self.path.s_of(bone, t), "w": w, "d": d, "shift": st[4] if len(st) > 4 else 0.0})
         self.stations.sort(key=lambda x: x["s"])
         self.ss = [self.stations[0]["s"]]
         while self.ss[-1] < self.stations[-1]["s"]:
@@ -426,15 +484,12 @@ class Limb:
         self.blend = (0.3, 0.35)
 
     def section(self, s):
+        return self.section3(s)[:2]
+
+    def section3(self, s):
         st = self.stations
-        if s <= st[0]["s"]:
-            return st[0]["w"], st[0]["d"]
-        for a, b in zip(st, st[1:]):
-            if a["s"] <= s <= b["s"]:
-                t = (s - a["s"]) / max(1e-6, b["s"] - a["s"])
-                t = t * t * (3.0 - 2.0 * t)
-                return a["w"] + (b["w"] - a["w"]) * t, a["d"] + (b["d"] - a["d"]) * t
-        return st[-1]["w"], st[-1]["d"]
+        xs = [x["s"] for x in st]
+        return tuple(smooth_through(xs, [x[k] for x in st], s) for k in ("w", "d", "shift"))
 
     def frame(self, s):
         c = self.path.centre(s, self.soften)
@@ -450,15 +505,15 @@ class Limb:
         rings = []
         for s in self.ss:
             c, t, x, f = self.frame(s)
-            w, d = self.section(s)
+            w, d, shift = self.section3(s)
             wt = self.path.weights(s, self.blend)
             if extra:
                 wt = extra(s, wt)
             ring = []
             for j in range(self.around):
                 a = 2.0 * math.pi * j / self.around
-                n = (x * math.cos(a) + f * math.sin(a)).normalized()
-                p = c + x * (w * math.cos(a)) + f * (d * math.sin(a))
+                n = (x * (math.cos(a) / max(1e-4, w)) + f * (math.sin(a) / max(1e-4, d))).normalized()
+                p = c + f * shift + x * (w * math.cos(a)) + f * (d * math.sin(a))
                 ring.append(body.add(p, paint(s, a, p, n), wt))
             rings.append(ring)
         c, t, _, _ = self.frame(self.ss[-1])
@@ -583,24 +638,33 @@ def lids(body, centre, look, radius, colour, weights, upper=0.3, lower=0.2, rise
             body.face((r0[i], r0[(i + 1) % m], r1[(i + 1) % m], r1[i]))
 
 
-def plate(body, centre, along, normal, length, width, height, colour, weights):
-    """A bony plate lying on the skin: an oval `length` by `width`, `height` high along a keel down its middle,
-    its underside sunk a little into the skin."""
+def plate(body, centre, along, normal, length, width, height, colour, weights, square=0.0, keel=0.55):
+    """A bony plate lying on the skin: an oval `length` by `width` -- squarer as `square` goes to 1, as a
+    crocodile's are, not a pebble -- `height` high along a keel down its middle (its sides lower by `keel` of
+    that), its underside sunk a little into the skin."""
     n = normal.normalized()
     t = (along - n * along.dot(n)).normalized()
     x = t.cross(n).normalized()
+    # Its outline: an ellipse, or a superellipse whose corners fill out towards a rectangle's.
+    e = 1.0 / (1.0 + 3.0 * square)
+    k = 12 if square > 0.0 else 10
+    turn = 0.5 if square > 0.0 else 0.0     # a point at each corner
+
+    def outline(j):
+        a = 2.0 * math.pi * (j + turn) / k
+        c, s = math.cos(a), math.sin(a)
+        return math.copysign(abs(c) ** e, c), math.copysign(abs(s) ** e, s)
     ring = []
-    k = 10
     base = centre - n * height * 0.35
     for j in range(k):
-        a = 2.0 * math.pi * j / k
-        p = base + t * (math.cos(a) * length * 0.5) + x * (math.sin(a) * width * 0.5)
+        u, v = outline(j)
+        p = base + t * (u * length * 0.5) + x * (v * width * 0.5)
         ring.append(body.add(p, shade(colour, -0.15), weights))
     mid = []
     for j in range(k):
-        a = 2.0 * math.pi * j / k
-        keel = 1.0 - abs(math.sin(a)) * 0.55
-        p = centre + t * (math.cos(a) * length * 0.33) + x * (math.sin(a) * width * 0.22) + n * height * 0.5 * keel
+        u, v = outline(j)
+        rise = 1.0 - abs(v) * keel
+        p = centre + t * (u * length * 0.33) + x * (v * width * 0.22) + n * height * 0.5 * rise
         mid.append(body.add(p, colour, weights))
     top = body.add(centre + n * height + t * length * 0.08, shade(colour, 0.06), weights)
     body.rings([ring, mid], closed_end=top)

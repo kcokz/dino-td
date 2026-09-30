@@ -341,7 +341,7 @@ func go_home(_nest: Vector3) -> void:
 # The eye-shine (GAME-DESIGN 9.3: "火光照到的黑暗边上能看见眼睛反光——鳄类的眼睛夜里真的会反光")
 # ==============================================================================
 
-## Its eyes' material ("Eye", tools/generate_triassic.py), made its own so they shine alone. The ones
+## Its eyes' material ("Eye", tools/dino_body.py), made its own so they shine alone. The ones
 ## made for a body since thrown away are kept, not let go: a body is rebuilt in the frame it was built
 ## (Dino.setup, as it is sent), and let go, their material was freed while the renderer still drew the
 ## old body with it ("material is null").

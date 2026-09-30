@@ -1,14 +1,16 @@
 # res://tests/test_v06_the_sculpted_cast.gd
-# The player, 2026-09-30: "恐龙目前模型做的都粗糙，我需要它们更精致". The first map's cast is drawn anew round the
-# bones it was animated on (tools/triassic_bodies.py, tools/sculpt.py): a smooth body lofted from the snout to
-# the tail, coloured by its vertices -- a dark back, pale belly, each species' marks -- eyes, teeth and claws of
-# its own, and every clip the game plays still there.
+# The player, 2026-09-30: "恐龙目前模型做的都粗糙，我需要它们更精致", and then "精修恐龙blender形象，每个恐龙都要修". The
+# first map's cast is built anew (tools/generate_dinos.py): each on bones of its own, a smooth body lofted from the
+# snout to the tail with its muscles on it, its skin -- scales, a dark back, pale belly, each species' marks --
+# baked to a colour and a relief image; eyes, teeth and claws of its own, and every clip the game plays.
 #
 # Everything expected is read from the models and Config.
 extends "res://tests/test_base.gd"
 
-## The species the valley's raids and nights are made of, and the herds on its walls.
-const CAST := ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur", "postosuchus"]
+## The species the valley's raids and nights are made of -- and the later maps': the feathered raptors, the
+## tyrannosaur, the pterosaur.
+const CAST := ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur", "postosuchus",
+	"raptor", "raptor_alpha", "big_theropod", "pterosaur"]
 
 var config_node: Object = null
 var game_state_node: Object = null
@@ -41,26 +43,45 @@ func _art(key: String) -> Node3D:
 func _meshes(art: Node) -> Array:
 	return art.find_children("*", "MeshInstance3D", true, false)
 
-func test_01_each_reads_the_colours_it_is_painted_in() -> void:
+func test_01_each_wears_its_skin_baked_to_images() -> void:
+	# Its skin a colour image and a relief image (tools/dino_skin.py); its eyes a material of their own that
+	# reads the colours at their vertices (VISUALS material "skin").
 	for species in CAST:
 		var art: Node3D = _art("dino/" + species)
 		var meshes: Array = _meshes(art)
 		assert_gt(meshes.size(), 0, "%s has its model" % species)
+		var skins: int = 0
 		var colours: Dictionary = {}
 		var dark: int = 0
 		for m in meshes:
 			var mi := m as MeshInstance3D
 			for i in mi.mesh.get_surface_count():
 				var mat := mi.mesh.surface_get_material(i) as StandardMaterial3D
-				assert_true(mat != null and mat.vertex_color_use_as_albedo,
-					"%s's %s reads its vertex colours (VISUALS material \"skin\")" % [species, String(mat.resource_name) if mat else "?"])
-				var cols: PackedColorArray = mi.mesh.surface_get_arrays(i)[Mesh.ARRAY_COLOR]
-				for k in range(0, cols.size(), 7):
-					var c: Color = cols[k]
-					colours[Color(snappedf(c.r, 0.05), snappedf(c.g, 0.05), snappedf(c.b, 0.05))] = true
-					if c.get_luminance() < 0.2:
-						dark += 1
-		# Painted, not one flat colour: a dark back, pale belly, marks.
+				assert_not_null(mat, "%s's surfaces have their materials" % species)
+				if mat == null:
+					continue
+				if String(mat.resource_name).begins_with("Eye"):
+					assert_true(mat.vertex_color_use_as_albedo, "%s's eyes read the colours at their vertices" % species)
+					continue
+				skins += 1
+				assert_not_null(mat.albedo_texture, "%s's skin has its colour image" % species)
+				assert_true(mat.normal_enabled and mat.normal_texture != null, "%s's skin has its relief image" % species)
+				if mat.albedo_texture == null:
+					continue
+				var img: Image = mat.albedo_texture.get_image()
+				if img.is_compressed():
+					img.decompress()
+				for y in range(0, img.get_height(), 8):
+					for x in range(0, img.get_width(), 8):
+						var c: Color = img.get_pixel(x, y)
+						# The square's unused corners are black; the skin is not.
+						if c.get_luminance() < 0.01:
+							continue
+						colours[Color(snappedf(c.r, 0.05), snappedf(c.g, 0.05), snappedf(c.b, 0.05))] = true
+						if c.get_luminance() < 0.2:
+							dark += 1
+		assert_gt(skins, 0, "%s has its skin" % species)
+		# Painted, not one flat colour: a dark back, pale belly, marks, each scale a shade apart.
 		assert_gt(colours.size(), 20, "%s is painted in many shades (%d)" % [species, colours.size()])
 		assert_gt(dark, 0, "%s has its dark back and marks" % species)
 
@@ -158,6 +179,37 @@ func test_07_killed_he_sees_what_killed_him() -> void:
 	game_state_node.hero_killer = {}
 	main.hud._show_game_over("FALLEN", "", false)
 	assert_ne(main.hud.result_icon.texture, UiTheme.portrait("dino/phytosaur"), "(the cabin lost: no face)")
+
+func test_09_every_species_is_drawn_from_the_new_cast() -> void:
+	# Built by tools/generate_dinos.py, one .gltf a species, its skin read as the "skin" material says -- no
+	# Quaternius animal left.
+	for kind in config_node.DINOS:
+		var entry: Dictionary = config_node.VISUALS.get("dino/" + String(kind), {})
+		var scene: String = String(entry.get("scene", ""))
+		assert_true(scene.begins_with("res://assets/models/dinos/") and scene.ends_with(".gltf"),
+			"The %s is drawn from the new cast (%s)" % [kind, scene])
+		assert_eq(String(entry.get("material", "")), "skin", "The %s's eyes read their colours" % kind)
+		assert_true(ResourceLoader.exists(scene), "(its model is there: %s)" % scene)
+
+func test_10_the_pterosaur_folds_its_wings() -> void:
+	# The wing finger folded up along the arm from the knuckle, moving with the hand it grows from.
+	var art: Node3D = _art("dino/pterosaur")
+	var skeletons: Array = art.find_children("*", "Skeleton3D", true, false)
+	assert_gt(skeletons.size(), 0, "(it has its skeleton)")
+	if skeletons.is_empty():
+		return
+	var sk := skeletons[0] as Skeleton3D
+	for side in ["L", "R"]:
+		var first: int = sk.find_bone("Wing1." + side)
+		assert_gt(first, -1, "A wing finger on its %s" % side)
+		if first < 0:
+			continue
+		assert_eq(sk.get_bone_name(sk.get_bone_parent(first)), "Hand." + side, "growing from its hand (%s)" % side)
+		var tip: int = sk.find_bone("Wing4." + side)
+		var hand: int = sk.find_bone("Hand." + side)
+		# Folded: its tip up over the hand's top (the wrist), not out along the ground.
+		assert_gt(sk.get_bone_global_rest(tip).origin.y, sk.get_bone_global_rest(hand).origin.y,
+			"folded up along the arm (%s)" % side)
 
 func test_08_what_a_wrecks_din_brought_is_named() -> void:
 	# The din says what came, so the line about it wears its face (HUD._on_din_carried).

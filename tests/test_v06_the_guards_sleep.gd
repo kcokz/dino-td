@@ -188,7 +188,7 @@ func test_06_up_a_while_it_lies_down_again_and_at_first_light_they_are_up() -> v
 
 func test_07_the_guards_kind_has_a_sleep_of_its_own() -> void:
 	# Upright and belly-down, its own clip -- not the death's, on its side: a sleeping guard must not read
-	# as a dead one (tools/generate_triassic.py add_sleep).
+	# as a dead one (tools/dino_moves.py, sleep).
 	var clip: String = String(config_node.ANIMATIONS["dino"]["SLEEPING"])
 	assert_ne(clip, String(config_node.ANIMATIONS["dino"]["DEAD"]), "Sleep is not death")
 	assert_true((config_node.ANIMATIONS["looping"] as Array).has(clip), "and goes round, a slow breath")

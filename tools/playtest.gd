@@ -33,6 +33,8 @@ const SETTLE_FRAMES := 30      # long enough for shaders to compile and the firs
 var _main: Node = null
 var _shot_index: int = 0
 var _scenario: String = ""
+## What "only:<name>" arguments narrowed a list-going scenario to (gaits); empty for all of it.
+var _only: PackedStringArray = []
 
 func _init() -> void:
 	# Rule 1. Without this the whole HUD renders untranslated.
@@ -56,6 +58,10 @@ func _init() -> void:
 		# "map:valley_large" plays on that map; the default is the small valley.
 		if String(w).begins_with("map:"):
 			root.get_node("GameState").chosen_map_id = String(w).substr(4)
+			continue
+		# "only:postosuchus" narrows a scenario that goes through a list (gaits) to that one.
+		if String(w).begins_with("only:"):
+			_only.append(String(w).substr(5))
 			continue
 		names.append(String(w))
 	if names.is_empty():
@@ -110,6 +116,8 @@ func _run(name: String) -> void:
 			await _scenario_scale()
 		"cast":
 			await _scenario_cast()
+		"gaits":
+			await _scenario_gaits()
 		"kitchen":
 			await _scenario_kitchen()
 		"eating":
@@ -1578,7 +1586,7 @@ func cfg_row_half() -> float:
 	var cfg := root.get_node_or_null("Config")
 	return float(cfg.get_building_footprint("core")) * 0.5 if cfg else 0.5
 
-## The first map's cast side by side with him (tools/triassic_bodies.py; the player, 2026-09-30: "恐龙目前模型做的都
+## The first map's cast side by side with him (tools/generate_dinos.py; the player, 2026-09-30: "恐龙目前模型做的都
 ## 粗糙，我需要它们更精致"): from the side at eye height, from the game's camera, and each close by its head --
 ## standing, then the Coelophysis walking.
 func _scenario_cast() -> void:
@@ -1656,6 +1664,98 @@ func _scenario_cast() -> void:
 	await _advance(float(root.get_node("Config").FEEDBACK["carcass_lie"]) + 0.6)
 	await _shoot("sinking")
 	current_scene = null
+	if _main.hud:
+		_main.hud.visible = true
+
+## The cast going (tools/dino_moves.py): each on its own, side on and close, at four points of its walk, its run
+## and its idle -- the herd's Placerias too -- to see how each carries itself as the game draws it.
+func _scenario_gaits() -> void:
+	if _main.hud:
+		_main.hud.visible = false
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	var cfg := root.get_node("Config")
+	var core_at: Vector3 = _main.current_core.global_position
+	var at := Vector3(core_at.x + 4.0, 0.0, core_at.z + float(cfg_row_half()) + 3.0)
+	var cam := Camera3D.new()
+	cam.attributes = CameraAttributesPractical.new()
+	cam.fov = 40.0
+	_main.add_child(cam)
+	var was: Camera3D = _main.camera
+	cam.current = true
+	var dino_script := load("res://scripts/entities/Dino.gd")
+	var species_list: Array = ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur", "postosuchus",
+		"placerias", "raptor", "raptor_alpha", "big_theropod", "pterosaur"]
+	for species in species_list:
+		if not _only.is_empty() and not _only.has(String(species)):
+			continue
+		var body: Node3D = null
+		var player: AnimationPlayer = null
+		if species == "placerias":
+			# As the herd makes it (Herds): its scene, fitted to its length.
+			var herd: Dictionary = {}
+			for h in cfg.HERDS["herds"]:
+				if String(h.get("species", "")) == species:
+					herd = h
+			body = Node3D.new()
+			_main.add_child(body)
+			var art: Node3D = VisualLibrary.scene_at(String(herd["scene"])).instantiate()
+			body.add_child(art)
+			VisualLibrary.read_vertex_colours(art)
+			var bounds: AABB = VisualLibrary.visual_bounds(art)
+			VisualLibrary.place(art, float(herd["length"]) / bounds.size.z, "feet")
+			var players: Array = art.find_children("*", "AnimationPlayer", true, false)
+			player = players[0] if not players.is_empty() else null
+		else:
+			var d = dino_script.new()
+			_main.add_child(d)
+			d.setup(String(species))
+			d.set_physics_process(false)
+			d.set_process(false)
+			body = d
+			player = d.animator.animation_player if d.animator != null else null
+		body.global_position = at
+		body.rotation.y = PI * 0.5
+		await _wait(4)
+		if player == null:
+			body.queue_free()
+			continue
+		# Framed by the animal's model (a dinosaur's "Body", Dino._ensure_body), not whatever else the entity
+		# carries.
+		var art_root: Node = body.find_child("Body", false, false)
+		if art_root == null:
+			art_root = body
+		var box := AABB()
+		var first := true
+		for m in art_root.find_children("*", "MeshInstance3D", true, false):
+			var mi := m as MeshInstance3D
+			var wb: AABB = mi.global_transform * mi.get_aabb()
+			box = wb if first else box.merge(wb)
+			first = false
+		# All of it in the picture, long or tall.
+		var size: float = maxf(box.size.x, maxf(box.size.y * 1.6, box.size.z))
+		var look: Vector3 = box.get_center()
+		cam.position = look + Vector3(0.0, size * 0.08, size * 0.95)
+		cam.look_at(look, Vector3.UP)
+		for clip in ["walk", "run", "idle"]:
+			if not player.has_animation(clip):
+				continue
+			var length: float = player.get_animation(clip).length
+			for i in range(4):
+				player.play(clip)
+				player.seek(length * float(i) / 4.0, true)
+				player.pause()
+				await _shoot("%s_%s_%d" % [species, clip, i])
+		body.queue_free()
+		await _wait(2)
+	cam.current = false
+	if was != null and is_instance_valid(was):
+		was.current = true
+	_main.remove_child(cam)
+	cam.queue_free()
 	if _main.hud:
 		_main.hud.visible = true
 

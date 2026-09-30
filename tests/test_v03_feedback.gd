@@ -181,7 +181,10 @@ func test_05_a_damaged_dinosaur_flashes() -> void:
 	# that still has to hold.
 	var dino = _spawn(dino_script)
 	dino.setup("raptor", {"hp": 1.0, "damage": 1.0, "speed": 1.0})
-	await wait_frames(1)
+	# Two frames, not one: the frame after its model is first loaded (its skin's images and all, a tenth of a
+	# second) is that long, and a flash begun in it was over within it -- a tween's first step is the frame's
+	# whole time. Struck in a frame of ordinary length, the flash is there a frame later.
+	await wait_frames(2)
 	assert_not_null(dino.mesh_instance, "The dinosaur has a mesh")
 
 	var before: String = _paint_signature(dino.mesh_instance)
@@ -204,7 +207,10 @@ func test_05b_a_model_with_its_own_materials_still_flashes() -> void:
 	var mesh: MeshInstance3D = dino.mesh_instance
 	assert_not_null(mesh, "The dinosaur has a mesh")
 	assert_null(mesh.material_override, "Which carries its materials on its own surfaces")
-	assert_gt(mesh.mesh.get_surface_count(), 1, "Several of them, in fact")
+	# Its skin's material on its surface (since the cast was built anew, 2026-09-30, its eyes are a mesh of
+	# their own beside it).
+	assert_gt(mesh.mesh.get_surface_count(), 0, "Its own surface")
+	assert_not_null(mesh.mesh.surface_get_material(0), "with its own material on it")
 
 	dino.take_damage(0.5)
 	await wait_frames(1)

@@ -1207,6 +1207,10 @@ const DINOS: Dictionary = {
 		"drop_chance": {"food": 0.5, "bone": 0.5},
 		"size": Vector3(0.6, 0.55, 0.6),
 	},
+	# An azhdarchid (GAME-DESIGN 7.2: "大型神龙翼龙类……像鹳一样在地上走着捕猎"; tools/generate_dinos.py): a stork's build
+	# on four legs, its head held up on a long neck nearly twice the Hero's height -- the stature of the model it
+	# has now (2026-09-30); what it touches (its width) is the raptor's. Not on a map yet: its numbers are the
+	# old placeholder's.
 	"pterosaur": {
 		"name": "DINO_PTEROSAUR_NAME",
 		"hp": 2.0,
@@ -1215,7 +1219,7 @@ const DINOS: Dictionary = {
 		"attack_rate": 1.2,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
-		"size": Vector3(0.8, 0.5, 0.8),
+		"size": Vector3(0.8, 2.2, 0.8),
 	}
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
@@ -3076,42 +3080,51 @@ const VISUALS: Dictionary = {
 	# always in a clip, arms down.
 	"hero":                 {"scene": "res://assets/models/quaternius/hero.glb", "fit": "height",
 		"placeholder": "hero", "anchor": "feet", "color": "caveman"},
-	# Every dinosaur gets its own row even while they share a placeholder: the row is
-	# where its model will go, and they will not share that.
-	# Quaternius' animated dinosaurs (CC0, tools/convert_quaternius.py), one author for the
-	# whole cast. The pterosaur has none there and stays the generated one.
+	# Every dinosaur gets its own row: the row is where its model goes.
 	#
 	# Fitted by HEIGHT. A dinosaur's collider is a box -- a gameplay shape: reach, blocking
 	# and paths are all worked out from it -- and a long-tailed animal fitted INSIDE that
 	# box by its length stood a third of its declared height: the raptor came in 33 cm tall
 	# and was lost in the ferns. By height it is as tall as Config says, and its tail
 	# reaches past the box, as a tail does.
-	"dino/raptor":          {"scene": "res://assets/models/quaternius/velociraptor.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "raptor"},
-	"dino/big_theropod":    {"scene": "res://assets/models/quaternius/trex.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod"},
-	# The raptor, grown: fitted by height to its own taller size (GAME-DESIGN v0.6: a scaled
-	# raptor until it has a model of its own).
-	"dino/raptor_alpha":    {"scene": "res://assets/models/quaternius/velociraptor.glb", "fit": "height",
-		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha"},
-	# The first map's cast (tools/generate_triassic.py): the Quaternius rigs reshaped, so they play the same
-	# clips, and a body sculpted round them (tools/triassic_bodies.py), coloured at its vertices ("skin").
-	# The alpha is the same animal, fitted to its own taller size and painted apart: darker, rust-flanked,
-	# its head flushed red -- the pack's leader picked out at a glance.
-	"dino/coelophysis":     {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
+	#
+	# The whole cast is built anew (tools/generate_dinos.py; the player, 2026-09-30: "精修恐龙blender形象，每个恐龙都要修"):
+	# each on bones of its own laid out from its own proportions, moving as it did -- the quadrupeds on four legs
+	# (tools/dino_rig.py, tools/dino_moves.py) -- its body sculpted with the muscles on it, its skin's scales, feathers
+	# and marks baked to a colour and a normal image (tools/dino_body.py, tools/dino_feathers.py, tools/dino_skin.py).
+	# Its eyes a material of their own, coloured at their vertices ("skin": the material reads them; the eye-shine
+	# finds it by name). It was the Quaternius animals, stretched (tools/convert_quaternius.py).
+	#
+	# The later maps' pack: Velociraptor, feathered -- wing feathers along its folded arms, a fan down its stiff
+	# tail, the sickle claw held up off the ground.
+	"dino/raptor":          {"scene": "res://assets/models/dinos/velociraptor.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor", "material": "skin"},
+	# Tyrannosaurus: the huge skull broad behind the eyes, the tiny arms, small pebbly scales.
+	"dino/big_theropod":    {"scene": "res://assets/models/dinos/tyrannosaurus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod", "material": "skin"},
+	# The pack's head, painted apart: near-black, rust along its flanks, its head flushed red, its wing and tail
+	# feathers black tipped white, a red crest down its neck -- fitted to its own taller size.
+	"dino/raptor_alpha":    {"scene": "res://assets/models/dinos/velociraptor_alpha.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha", "material": "skin"},
+	# The first map's cast. The alpha is the same animal, fitted to its own taller size and painted apart: darker,
+	# rust-flanked, its head flushed red -- the pack's leader picked out at a glance.
+	"dino/coelophysis":     {"scene": "res://assets/models/dinos/coelophysis.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis", "material": "skin"},
-	"dino/coelophysis_alpha": {"scene": "res://assets/models/triassic/coelophysis_alpha.glb", "fit": "height",
+	"dino/coelophysis_alpha": {"scene": "res://assets/models/dinos/coelophysis_alpha.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis_alpha", "material": "skin"},
-	"dino/postosuchus":     {"scene": "res://assets/models/triassic/postosuchus.glb", "fit": "height",
+	"dino/postosuchus":     {"scene": "res://assets/models/dinos/postosuchus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
 	# Long-snouted and armoured, its own eyes a material the game lights (ProwlerDino, the eye-shine).
-	"dino/phytosaur":       {"scene": "res://assets/models/triassic/phytosaur.glb", "fit": "height",
+	"dino/phytosaur":       {"scene": "res://assets/models/dinos/phytosaur.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "phytosaur", "material": "skin"},
-	# Hesperosuchus (tools/generate_triassic.py): the velociraptor's rig with a crocodile's snout, scutes
-	# down its back, long forelimbs -- up on its hind legs to run.
-	"dino/hesperosuchus":   {"scene": "res://assets/models/triassic/hesperosuchus.glb", "fit": "height",
+	# Hesperosuchus: an early crocodylomorph on long slender legs, a narrow snout, a pair of plates down its back
+	# -- on four legs, running in bounds.
+	"dino/hesperosuchus":   {"scene": "res://assets/models/dinos/hesperosuchus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "hesperosuchus", "material": "skin"},
-	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
+	# An azhdarchid, stalking on all fours with its wings folded (the wing finger up along the arm, the membrane
+	# furled between them), its head up on a long neck, a crest flushed red.
+	"dino/pterosaur":       {"scene": "res://assets/models/dinos/pterosaur.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "pterosaur", "material": "skin"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours
 	# out of, with bones by the door (tools/generate_props.py).
@@ -4176,15 +4189,15 @@ const HERDS: Dictionary = {
 	"seed": 4417,
 	"herds": [
 		# The Late Triassic's grazers (GAME-DESIGN 7.2, station 1; v0.6 round three): Placerias,
-		# a tusked, beaked dicynodont about three and a half metres long, in herds
-		# (tools/generate_triassic.py). The sauropods, hadrosaurs, ceratopsians and stegosaurs that
-		# grazed here belong to later maps. On the far bank of the river, across from the water
-		# spot; and up the valley's two sides.
-		{"species": "placerias", "scene": "res://assets/models/triassic/placerias.glb",
+		# a tusked, beaked dicynodont about three and a half metres long, in herds. The sauropods,
+		# hadrosaurs, ceratopsians and stegosaurs that grazed here belong to later maps. On the far
+		# bank of the river, across from the water spot; and up the valley's two sides.
+		# (tools/generate_dinos.py: it grazes, head down, now and then up to look about.)
+		{"species": "placerias", "scene": "res://assets/models/dinos/placerias.gltf",
 			"count": 6, "length": 3.5, "bearing": 84.0, "distance": 42.0, "spread": 6.0, "speed": 0.6},
-		{"species": "placerias", "scene": "res://assets/models/triassic/placerias.glb",
+		{"species": "placerias", "scene": "res://assets/models/dinos/placerias.gltf",
 			"count": 4, "length": 3.5, "bearing": 290.0, "distance": 42.0, "spread": 5.0, "speed": 0.6},
-		{"species": "placerias", "scene": "res://assets/models/triassic/placerias.glb",
+		{"species": "placerias", "scene": "res://assets/models/dinos/placerias.gltf",
 			"count": 4, "length": 3.5, "bearing": 20.0, "distance": 42.0, "spread": 5.0, "speed": 0.6},
 	],
 	"wander_radius": 4.0,            # how far an animal ambles from where it grazes (m)
@@ -4537,8 +4550,8 @@ const ANIMATIONS: Dictionary = {
 		"WALKING": "run",     # bipedal locomotion gait
 		"ATTACKING": "attack", # bite / swipe
 		"DEAD": "death",
-		# Lying on its belly, legs folded, head on the ground, breathing (tools/generate_triassic.py
-		# add_sleep: the Coelophysis's; a species without it goes on standing).
+		# Lying on its belly, legs folded, head on the ground, breathing (tools/dino_moves.py
+		# sleep: the Coelophysis's and the raptors'; a species without it goes on standing).
 		"SLEEPING": "sleep",
 	},
 

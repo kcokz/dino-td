@@ -162,7 +162,8 @@ func test_05_credits_ledger_covers_all_three_dinosaur_models() -> void:
 	var text = f.get_as_text()
 	f.close()
 
-	assert_true(text.contains("t_rex.glb"), "CREDITS.md records t_rex.glb")
-	assert_true(text.contains("raptor.glb"), "CREDITS.md records raptor.glb")
-	assert_true(text.contains("pterosaur.glb"), "CREDITS.md records pterosaur.glb")
+	# The models the three are drawn from now (tools/generate_dinos.py).
+	for k in ["dino/raptor", "dino/big_theropod", "dino/pterosaur"]:
+		var file: String = String(config_node.VISUALS[k]["scene"]).get_file()
+		assert_true(text.contains(file), "CREDITS.md records %s" % file)
 	assert_true(text.contains("CC0"), "CREDITS.md documents CC0 licensing")

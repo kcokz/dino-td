@@ -13,7 +13,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 
 ### Big Theropod / T-Rex (`assets/models/t_rex.glb`)
 - **Asset Name**: Low-Poly Rigged Tyrannosaurus Rex
-- **Source**: `tools/generate_dinos.py` (Scripted Blender Procedural Low-Poly Mesh & Armature)
+- **Source**: `tools/generate_dinos.py` as it was until 2026-09-30 (Scripted Blender Procedural Low-Poly Mesh & Armature; in the history at 556cb17 -- the name now belongs to the generator of the new cast, below)
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5 & Antigravity)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-15 (Updated 2026-09-18 with Death clip)
@@ -24,7 +24,7 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 
 ### Velociraptor (`assets/models/raptor.glb`)
 - **Asset Name**: Low-Poly Rigged Velociraptor with Sickle Claws & Tiger Stripes
-- **Source**: `tools/generate_dinos.py` (Scripted Blender Procedural Low-Poly Mesh & Armature)
+- **Source**: `tools/generate_dinos.py` as it was until 2026-09-30 (Scripted Blender Procedural Low-Poly Mesh & Armature; in the history at 556cb17 -- the name now belongs to the generator of the new cast, below)
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5 & Antigravity)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-18
@@ -35,13 +35,14 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 
 ### Pterosaur / Pterodactyl (`assets/models/pterosaur.glb`)
 - **Asset Name**: Low-Poly Rigged Pterodactyl with Cranial Crest & Wing Membranes
-- **Source**: `tools/generate_dinos.py` (Scripted Blender Procedural Low-Poly Mesh & Armature)
+- **Source**: `tools/generate_dinos.py` as it was until 2026-09-30 (Scripted Blender Procedural Low-Poly Mesh & Armature; in the history at 556cb17 -- the name now belongs to the generator of the new cast, below)
 - **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5 & Antigravity)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
 - **Date Added**: 2026-09-18
 - **Files**: `assets/models/pterosaur.glb`
 - **Animations Included**: `idle`, `run` (wing-assisted lope), `attack` (beak spear peck), `death`, `alert`
 - **Usage**: Primary model for `dino/pterosaur` (1.0m size).
+- **Superseded**: 2026-09-30 by the new cast (below). The file stays; nothing loads it.
 
 ### Hero / Explorer (`assets/models/hero.glb`)
 - **Asset Name**: Low-Poly Rigged Humanoid Hero / Explorer with Survival Pack & Multitool
@@ -72,15 +73,16 @@ All external assets adhere strictly to **CC0 (Public Domain)** or compatible com
 - **Date Added**: 2026-09-23, downloaded with the user's permission
 - **Source Files (unchanged)**: `assets/source/quaternius/{Trex,Velociraptor,Apatosaurus,Parasaurolophus,Stegosaurus,Triceratops}.fbx`
 - **Converted By**: `tools/convert_quaternius.py` -- turned to face the game's -Z; the rig object's own keyed transform taken out of every clip; each mesh's transform baked into its vertices; clips renamed to the names `Config.ANIMATIONS` uses; matte; and made OPAQUE (the FBX materials import with an alpha of 0, which drew every dinosaur invisible)
-- **Usage**: `dino/big_theropod` (trex), `dino/raptor` (velociraptor). The four plant-eaters are converted for background herds (the first map's herds are Placerias since v0.6 round three; these wait for later maps).
+- **Usage**: the four plant-eaters are converted for background herds (the first map's herds are Placerias since v0.6 round three; these wait for later maps). The trex and the velociraptor were `dino/big_theropod` and `dino/raptor` until 2026-09-30, superseded by the new cast (below); their files stay.
 
-### The First Map's Cast, reshaped from the Quaternius pack (`assets/models/triassic/{coelophysis,postosuchus,placerias}.glb`)
-- **Asset Name**: Coelophysis (from the velociraptor), Postosuchus (from the trex), Placerias (from the triceratops) -- the Late Triassic's raiders, boss and grazers (GAME-DESIGN 7.2, station 1)
-- **Source**: the converted Quaternius models above (CC0), reshaped by `tools/generate_triassic.py`: bones stretched and slimmed in pose, the pose baked into the mesh and made the rest pose, so every clip still plays; recoloured; Postosuchus given rows of scutes, Placerias its frill and horns cut away
-- **Author**: Quaternius (the rigs, meshes and animations); reshaped by Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
+### The Cast, built anew (`assets/models/dinos/<species>.gltf` with its `.bin`, `<species>_skin.jpg` and `<species>_skin_normal.png`)
+- **Asset Name**: Coelophysis, its pack's alpha, Hesperosuchus, a phytosaur, Postosuchus, Placerias -- the Late Triassic's raiders, bosses, night hunter and grazers (GAME-DESIGN 7.1, 7.2 station 1) -- and the later maps' Velociraptor (feathered), its pack's alpha, Tyrannosaurus and an azhdarchid pterosaur
+- **Files**: `coelophysis.gltf`, `coelophysis_alpha.gltf`, `hesperosuchus.gltf`, `phytosaur.gltf`, `postosuchus.gltf`, `placerias.gltf`, `velociraptor.gltf`, `velociraptor_alpha.gltf`, `tyrannosaurus.gltf`, `pterosaur.gltf`, each with its `.bin` and its two images
+- **Source**: `tools/generate_dinos.py` (Blender 5.2): each species' skeleton, body, feathers, skin and clips worked out from its description (`tools/dino_species.py`; `tools/dino_rig.py`, `tools/dino_body.py`, `tools/dino_feathers.py`, `tools/sculpt.py`, `tools/dino_moves.py`, `tools/dino_skin.py`) -- no third-party meshes, rigs or animations
+- **Author**: Defend Dinosaur Project Contributors (Co-authored with Claude Opus 5.5)
 - **License**: CC0 1.0 Universal (Public Domain Dedication)
-- **Date Added**: 2026-09-28
-- **Usage**: `dino/coelophysis`, `dino/coelophysis_alpha`, `dino/postosuchus` (`Config.VISUALS`); the herds (`Config.HERDS`).
+- **Date Added**: 2026-09-30 (replacing `assets/models/triassic/*.glb`, reshaped from the Quaternius pack by `tools/generate_triassic.py` on 2026-09-28; both removed)
+- **Usage**: every `dino/<species>` in `Config.VISUALS` (the raptor's is `velociraptor.gltf`, the big theropod's `tyrannosaurus.gltf`); the herds (`Config.HERDS`).
 
 ### Quaternius Ultimate Animated Character Pack -- Worker (`assets/models/quaternius/worker.glb`)
 - **Asset Name**: Ultimate Animated Character Pack (November 2019), `Worker_Male`

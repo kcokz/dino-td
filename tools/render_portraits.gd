@@ -39,7 +39,7 @@ const FRAMING := {
 	"node": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 1.04},
 	"station": {"mode": "whole", "yaw": 20.0, "pitch": -16.0, "room": 0.92},
 	"drop": {"mode": "whole", "yaw": 35.0, "pitch": -40.0, "room": 0.84},
-	# An animal by its head (the sculpted cast, tools/triassic_bodies.py): framed round its Head bone, posed,
+	# An animal by its head (the cast, tools/generate_dinos.py): framed round its Head bone, posed,
 	# `centre` of the way from the bone to its end's, `span` head-lengths about it; seen from `yaw` degrees
 	# round from its side towards its front.
 	"dino": {"mode": "head", "centre": 0.5, "span": 0.62, "yaw": 48.0, "pitch": -8.0, "room": 1.0},
@@ -47,8 +47,10 @@ const FRAMING := {
 ## A subject framed otherwise than its kind.
 const FRAMING_FOR := {
 	# A snout a skull and more long, the eyes at its back.
-	"dino/phytosaur": {"mode": "head", "centre": 0.55, "span": 0.85, "yaw": 42.0, "pitch": -14.0, "room": 1.0},
+	"dino/phytosaur": {"mode": "head", "centre": 0.38, "span": 0.4, "yaw": 64.0, "pitch": -18.0, "room": 1.0},
 	"dino/hesperosuchus": {"mode": "head", "centre": 0.45, "span": 0.6, "yaw": 46.0, "pitch": -8.0, "room": 1.0},
+	# A beak longer than the rest of the head: framed on the head's back half, the crest and the eye.
+	"dino/pterosaur": {"mode": "head", "centre": 0.3, "span": 0.42, "yaw": 50.0, "pitch": -6.0, "room": 1.0},
 	"node/wood": {"mode": "bust", "from": 0.35, "to": 1.02, "yaw": 32.0, "pitch": -14.0, "room": 1.0},
 	# A rock is wide and low: framed round it, not round the sphere that holds it.
 	"node/stone": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 0.82},

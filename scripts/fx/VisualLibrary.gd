@@ -234,9 +234,10 @@ static func _dress(art: Node, key: String) -> void:
 	if art is MeshInstance3D:
 		(art as MeshInstance3D).material_override = mat
 
-## THE SCULPTED ANIMALS ARE COLOURED BY THEIR VERTICES TOO (tools/triassic_bodies.py), but keep the materials
-## they came with -- their skin's and their eyes' ("Eye", which the eye-shine finds by name, ProwlerDino) -- each
-## only told to read the colours. The same materials every copy of the model shares: told once, told for all.
+## THE ANIMALS' EYES ARE COLOURED BY THEIR VERTICES (tools/dino_body.py) -- their skins are baked to images
+## (tools/dino_skin.py) -- and keep the materials they came with ("Eye", which the eye-shine finds by name,
+## ProwlerDino), each surface that has colours only told to read them. The same materials every copy of the model
+## shares: told once, told for all.
 static func read_vertex_colours(art: Node) -> void:
 	var meshes: Array = art.find_children("*", "MeshInstance3D", true, false)
 	if art is MeshInstance3D:
@@ -246,6 +247,8 @@ static func read_vertex_colours(art: Node) -> void:
 		if mi.mesh == null:
 			continue
 		for i in mi.mesh.get_surface_count():
+			if (mi.mesh.surface_get_format(i) & Mesh.ARRAY_FORMAT_COLOR) == 0:
+				continue
 			var sm := mi.mesh.surface_get_material(i) as StandardMaterial3D
 			if sm != null and not sm.vertex_color_use_as_albedo:
 				sm.vertex_color_use_as_albedo = true
