@@ -38,6 +38,8 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"wrecks_look": await _p_wrecks_look()
+			"wreck_search": await _p_wreck_search()
 			"commands_order": await _p_commands_order()
 			"worked_look": await _p_worked_look()
 			"restart_twice": await _p_restart_twice()
@@ -3651,6 +3653,201 @@ func _corner(cmds: Node) -> String:
 
 func _keycode(text: String) -> int:
 	return OS.find_keycode_from_string(text)
+
+## TASK-025 (ee5c5dc): the ship's wrecks. The three smokes from the opening camera at noon, zoomed out and
+## round at four headings, at dusk and at night; then each wreck close with the fog lifted, the cursor on
+## it (the lift), and its card's line.
+func _p_wrecks_look() -> void:
+	var gs := root.get_node("GameState")
+	var rig = _main.camera_rig
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 120.0
+	_main.wave_manager.auto_raid_enabled = false
+	if _main.night_prowl:
+		_main.night_prowl.enabled = false
+	await _advance(2.0)
+	var wrecks: Array = _wrecks()
+	var lines: Array = []
+	for w in wrecks:
+		var smoke: Node = null
+		for s in get_nodes_in_group("wreck_smoke"):
+			if s.wreck == w:
+				smoke = s
+		lines.append("%s at %s (%.0f m from the cabin): drawn %s, smoke %s" % [w.resource_type, str(w.global_position), w.global_position.distance_to(core), w.is_visible_in_tree(), "smoking" if smoke != null and smoke.is_smoking() else "none"])
+	_say("INFO", "wrecks: %s" % "; ".join(lines))
+	rig.reset()
+	rig.apply_to(_main.camera)
+	await _advance(1.0)
+	await _shoot("smoke_open_noon")
+	for yaw in [0.0, 90.0, 180.0, 270.0]:
+		rig.reset()
+		rig.distance = 45.0
+		rig.rotate_by(yaw)
+		rig.apply_to(_main.camera)
+		await _advance(0.8)
+		await _shoot("smoke_far_%d" % int(yaw))
+	for hour in [["dusk", 252.0], ["night", 310.0]]:
+		gs.day_clock = float(hour[1])
+		rig.reset()
+		rig.distance = 45.0
+		rig.apply_to(_main.camera)
+		await _advance(1.5)
+		await _shoot("smoke_%s" % hour[0])
+	gs.day_clock = 360.0 + 120.0
+	_main.fog.reveal_all()
+	await _advance(1.0)
+	for w in wrecks:
+		_look_at(w.global_position, 12.0)
+		await _advance(0.5)
+		var at: Vector2 = _main._active_camera().unproject_position(w.global_position + Vector3(0.0, 0.5, 0.0))
+		_move_mouse(at)
+		await _advance(0.3)
+		var info: Dictionary = w.get_display_info()
+		_say("INFO", "%s close: lifted %d under the cursor; picked by a click %s; card '%s' / '%s'" % [w.resource_type, _main.lifted().size(), str(_main._raycast_object(at) == w), String(info.get("kind_text", "")), String(info.get("status", ""))])
+		await _shoot("wreck_%s" % w.resource_type)
+		_move_mouse(Vector2(20.0, 400.0))
+
+## TASK-025: DA_PART's wreck (antenna, battery or board) searched from the cabin, at DA_CLOCK (default
+## noon), prowlers and guards as the map has them. A raptor set on him while he searches (DA_BITE=1).
+## Then the part repairs its stage at the beacon, and what that stirs up comes in by the ways in.
+func _p_wreck_search() -> void:
+	var part: String = OS.get_environment("DA_PART") if OS.get_environment("DA_PART") != "" else "antenna"
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	gs.day_clock = float(OS.get_environment("DA_CLOCK")) if OS.get_environment("DA_CLOCK") != "" else 120.0
+	wm.auto_raid_enabled = false
+	if OS.get_environment("DA_STEPS") != "":
+		gs.beacon_steps = int(OS.get_environment("DA_STEPS"))
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	var w: Node3D = null
+	for n in _wrecks():
+		if String(n.resource_type) == part:
+			w = n
+	var warned := {"n": 0}
+	eb.guards_warned.connect(func(_g): warned["n"] += 1)
+	var found_said: String = tr("HINT_FOUND_PART").left(6)
+	hero.global_position = core + Vector3(0.0, 0.0, 4.5)
+	hero.order_stop()
+	if OS.get_environment("DA_TORCH") != "":
+		gs.add_resource("wood", 3)
+		hero.light_torch()
+	await _advance(0.5)
+	var hp0: float = hero.current_hp
+	if OS.get_environment("DA_GRANT") != "":
+		gs.add_resource(part, 1)
+	else:
+		hero.order_harvest(w)
+	var t := 0.0
+	var began := -1.0
+	var got := -1.0
+	var said := false
+	var bitten := false
+	var fought := false
+	var resumed := false
+	var biter: Node = null
+	var states: Array = []
+	while t < 90.0 and int(hero.current_state) != 4:
+		await _advance(0.25)
+		t += 0.25
+		var st: int = int(hero.current_state)
+		if began < 0.0 and st == 5:
+			began = t
+			await _look_and_shoot(w.global_position, 9.0, "%s_searching" % part)
+		if began >= 0.0 and OS.get_environment("DA_BITE") != "" and biter == null and not bitten and t > began + 3.0:
+			biter = load(String(cfg.get_dino_script_path("coelophysis"))).new()
+			_main.add_child(biter)
+			biter.setup("coelophysis")
+			biter.global_position = hero.global_position + Vector3(1.2, 0.0, 0.0)
+			biter.set_waypoints([hero.global_position])
+			_say("INFO", "a raptor set on him %.1f s into the search" % (t - began))
+		if biter != null:
+			if hero.current_hp < hp0:
+				bitten = true
+			if st == 3:
+				fought = true
+			if fought and st == 5 and (not is_instance_valid(biter) or biter.is_dead):
+				resumed = true
+		said = said or not _visible_labels(found_said).is_empty()
+		if got < 0.0 and int(gs.resources.get(part, 0)) > 0:
+			got = t
+		if states.is_empty() or states[states.size() - 1] != st:
+			states.append(st)
+		if got >= 0.0 and t > got + 2.0:
+			break
+		if OS.get_environment("DA_GRANT") != "" and got >= 0.0:
+			break
+	var chip: Control = _main.hud.resource_chips.get(part)
+	var smoke_on := false
+	for s in get_nodes_in_group("wreck_smoke"):
+		if s.wreck == w and s.is_smoking():
+			smoke_on = true
+	_say("INFO", "%s at %s (clock %.0f %s): walked %.1f s, searching from then %.1f s to the part in the stock; states %s; guards warned %d; hp %.1f -> %.1f; found said %s; chip shown %s; smoke still %s; searched %s" % [part, str(w.global_position), gs.day_clock, gs.day_part(), began, (got - began) if got >= 0.0 else -1.0, str(states), warned["n"], hp0, hero.current_hp, said, chip.visible if chip else false, smoke_on, w.is_depleted])
+	if biter != null:
+		_say("INFO", "the raptor: bitten %s, he fought %s, took the search up again %s" % [bitten, fought, resumed])
+	await _look_and_shoot(w.global_position, 9.0, "%s_searched" % part)
+	if got < 0.0:
+		_say("FAIL", "%s: the part never reached the stock (he is %s)" % [part, "dead" if int(hero.current_state) == 4 else "alive"])
+		return
+	# The beacon: this stage with and without its part.
+	var bench = cabin.station(String(cfg.BEACON_STATION))
+	var job: String = String(gs.beacon_next_job())
+	var inputs: Dictionary = cfg.beacon_job(gs.map_data(), job)["inputs"]
+	var need: String = ""
+	for r in inputs:
+		if cfg.is_part(String(r)):
+			need = String(r)
+		else:
+			gs.add_resource(String(r), int(inputs[r]))
+	if need != part:
+		_say("INFO", "the next stage (%s) takes %s, not %s -- the stage's line is not tried" % [job, need, part])
+		_say("PASS", "%s searched out and in the stock" % part)
+		return
+	var had: int = int(gs.resources.get(part, 0))
+	gs.resources[part] = 0
+	var without: bool = bench.can_afford(job)
+	gs.resources[part] = had
+	_main._walk_to_bench(bench)
+	var t3 := 0.0
+	while not cabin.hero_inside and t3 < 30.0:
+		await _advance(0.25)
+		t3 += 0.25
+	var origins: Array = []
+	var came: Array = []
+	var on_spawn := func(d):
+		if not d.is_in_group("guard_dinos") and not d.is_in_group("prowlers"):
+			came.append(d)
+			origins.append("(%.0f, %.0f)" % [(d as Node3D).global_position.x, (d as Node3D).global_position.z])
+	eb.dino_spawned.connect(on_spawn)
+	var began_job: bool = bench.begin(job)
+	var t4 := 0.0
+	while t4 < 60.0 and String(bench.active_recipe) != "":
+		await _advance(0.5)
+		t4 += 0.5
+	await _advance(1.0)
+	var stirred: int = int(wm.get("_stirred"))
+	if stirred > 0:
+		wm.start_stage_wave()
+	await _advance(40.0)
+	_say("INFO", "the stage stirred up %d (started by hand; its own countdown runs with the clock's raids)" % stirred)
+	var at_cabin := 0
+	for d in came:
+		if is_instance_valid(d) and int(d.mode) == 2 and d.current_target == cabin:
+			at_cabin += 1
+	_say("INFO", "the beacon: stage %s without the %s affordable %s; begun %s, done in %.1f s; %s left %d, chip shown %s; stirred up %d from %s; biting the cabin 20 s on %d; nest %s" % [job, part, without, began_job, t4, part, int(gs.resources.get(part, 0)), chip.visible if chip else false, came.size(), ", ".join(origins), at_cabin, str(wm.nest_spawn_position)])
+	_say("PASS" if (not without) and began_job and int(gs.resources.get(part, 0)) == 0 else "FAIL", "%s: searched out, into the stock, and it repairs its stage" % part)
+
+func _wrecks() -> Array:
+	var out: Array = []
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) in ["antenna", "battery", "board"]:
+			out.append(n)
+	return out
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
