@@ -607,35 +607,79 @@ func _act(delta: float) -> void:
 var _jam_clock: float = 0.0
 var _jam_best: float = INF
 var _jam_goal: Vector3 = Vector3.INF
+## What it was going for when the clock began: its target, or null on its road.
+var _jam_for: Object = null
 
 func _watch_for_a_jam(delta: float) -> void:
-	if mode == Mode.ATTACK or going_home or _nav_goal == Vector3.INF:
+	if mode == Mode.ATTACK or going_home:
 		_jam_clock = 0.0
 		_jam_best = INF
+		_jam_for = null
 		return
-	var progress: float = _ai("jam_progress", 0.5)
-	# A new goal is a new way: it has not been failing at this one yet.
-	if _jam_goal == Vector3.INF or _flat(_jam_goal).distance_to(_flat(_nav_goal)) > progress * 2.0:
+	# Something else to go for is a new way: it has not been failing at it yet. The same thing's place
+	# moving is not -- its turn at the cabin handed from one place round it to another, the queue's end
+	# moving -- and neither is a fresh route asked for after getting nowhere (_unstick drops the old
+	# one): both kept the clock under two seconds while a queue stood in a corridor seventy seconds (the
+	# debug-agent's BUG-025).
+	if current_target != _jam_for:
+		_jam_for = current_target
+		_jam_clock = 0.0
+		_jam_best = INF
 		_jam_goal = _nav_goal
-		_jam_best = INF
-		_jam_clock = 0.0
-	var left: float = _way_left()
-	if left < _jam_best - progress:
-		_jam_best = left
-		_jam_clock = 0.0
-		return
+	if _nav_goal != Vector3.INF:
+		var progress: float = _ai("jam_progress", 0.5)
+		if _jam_goal == Vector3.INF or _flat(_jam_goal).distance_to(_flat(_nav_goal)) > progress * 2.0:
+			# The same thing, a new place at it: measured on the new way from where it stands.
+			_jam_goal = _nav_goal
+			_jam_best = _way_left()
+		var left: float = _way_left()
+		if left < _jam_best - progress:
+			_jam_best = left
+			_jam_clock = 0.0
+			return
 	_jam_clock += delta
 	if _jam_clock < _ai("jam_seconds", 6.0):
 		return
 	_jam_clock = 0.0
 	_jam_best = INF
-	var wall: Node = _building_pressed_against()
-	if wall == null or wall == current_target or not _is_wall(wall) or not _is_target_valid(wall):
-		return
-	if not _wall_is_between(wall, _nav_goal):
+	var wall: Node = _wall_in_the_way()
+	if wall == null or wall == current_target:
 		return
 	_stubborn = wall
 	_take(wall, Mode.BREACH)
+
+## The wall in its way to what it is going for -- the thing itself, not its place at it, which is handed
+## about -- or to its road's next point: within DINO_AI.jam_reach of its body, on its side of the way
+## there (_wall_is_between), the nearest and most squarely ahead; or null. Not only one it is up against:
+## a queue waits a body's length behind the one ahead of it, not at the fence (BUG-025).
+func _wall_in_the_way() -> Node:
+	if not is_inside_tree() or get_world_3d() == null:
+		return null
+	# Its way asked afresh just now (_unstick), the last place it was making for says which way.
+	var toward: Vector3 = (current_target as Node3D).global_position \
+		if (current_target is Node3D and is_instance_valid(current_target)) \
+		else (_nav_goal if _nav_goal != Vector3.INF else (_jam_goal if _jam_goal != Vector3.INF else _journey_goal()))
+	if toward == Vector3.INF:
+		return null
+	var query := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = _avoid_radius + _ai("jam_reach", 1.0)
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3(0.0, _probe_height(), 0.0))
+	query.collision_mask = _building_layers()
+	var ahead: Vector3 = _flat3(toward - global_position).normalized()
+	var best: Node = null
+	var best_score: float = -INF
+	for hit in get_world_3d().direct_space_state.intersect_shape(query, 16):
+		var b: Node = _building_of(hit.get("collider"))
+		if b == null or not _is_wall(b) or not _is_target_valid(b) or not _wall_is_between(b, toward):
+			continue
+		var to: Vector3 = _flat3((b as Node3D).global_position - global_position)
+		var score: float = to.normalized().dot(ahead) - to.length() * 0.5
+		if score > best_score:
+			best_score = score
+			best = b
+	return best
 
 ## Whether `wall` stands between it and `goal`: on its side of the way there, not beside or behind.
 func _wall_is_between(wall: Node, goal: Vector3) -> bool:

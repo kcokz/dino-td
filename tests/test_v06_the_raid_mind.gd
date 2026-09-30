@@ -552,3 +552,32 @@ func test_13b_one_getting_nearer_or_with_the_wall_beside_it_goes_round() -> void
 		t += 0.25
 	assert_ne(aside.current_target, beside, "A wall beside it is not what is in its way")
 	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
+
+func test_13c_waiting_in_a_queue_behind_a_wall_it_is_held_up_too() -> void:
+	# The debug-agent's BUG-025: in the player's corridor a raid stood in a queue seventy seconds, one
+	# biting the cabin at a time, and no wall was bitten: each one's place at the cabin was handed about
+	# and its way asked afresh after getting nowhere (_unstick), and either put the clock back; and none
+	# was up against the fence -- a queue waits a body's length behind the one ahead.
+	var world := await _field()
+	var reach: float = _ai("jam_reach")
+	var between = _stake(world, Vector3(0.0, 0.0, -(0.5 + reach * 0.8)))
+	var behind = _stake(world, Vector3(0.0, 0.0, 0.5 + reach * 0.8))
+	await rebake_fixture()
+	var d = _held_at(world, Vector3.ZERO, Vector3(0.0, 0.0, -6.0))
+	await wait_physics_frames(2)
+	assert_null(d._building_pressed_against(), "(it is not up against either)")
+	var step: float = 0.25
+	var jam: float = _ai("jam_seconds")
+	var t: float = 0.0
+	var k: int = 0
+	while t < jam - step:
+		k += 1
+		# Its place handed about, and a fresh way asked for now and then, by turns.
+		d._nav_goal = Vector3.INF if k % 5 == 0 else Vector3(float(k % 3) * 1.5 - 1.5, 0.0, -6.0)
+		d._watch_for_a_jam(step)
+		t += step
+	assert_ne(d.current_target, between, "(not before it has waited the while)")
+	d._watch_for_a_jam(step * 2.0)
+	assert_eq(d.current_target, between, "Waiting that long, it goes through the wall between it and where it is going")
+	assert_ne(d.current_target, behind, "(not the one behind it)")
+	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()

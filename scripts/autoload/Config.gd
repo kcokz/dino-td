@@ -1121,6 +1121,10 @@ const DINO_AI: Dictionary = {
 	# long before.
 	"jam_seconds": 4.0,
 	"jam_progress": 0.5,
+	# And the wall it goes through need not be one it is up against: this far past its body (metres) --
+	# a queue waits a body's length behind the one ahead of it, and in a corridor never touches the fence
+	# (the debug-agent's BUG-025: seventy seconds, eleven standing, no wall bitten).
+	"jam_reach": 1.0,
 	# Two bodies whose middles are this close, in metres, are one on top of the other: the engine
 	# has no way out to push either along, so one is nudged (Dino._unstack).
 	"stacked_within": 0.05,
