@@ -1455,7 +1455,7 @@
     - playtest 场景 `cast`：第 1 站这几种和人站成一排，侧面、各自近景、游戏镜头各一张（迷雾揭开、不要景深）。
     - 新测试 `test_v06_the_sculpted_cast.gd`（4 条）：每种都读顶点色、上色有深有浅；两只眼睛、有瞳孔；动作都在；顶点数过六千（不是原来那几千个平面）。
   - **界面精做：动物的脸，和来袭横幅**（同上，玩家："你有什么界面和声音的精做就开始吧"）：
-    - 每种恐龙一张头像（`Config.PORTRAITS.kinds` 加了 "dino"；`tools/render_portraits.gd` 新取景方式 "head"：按摆好姿势的 Head 骨和它末端取景，植龙、黄昏鳄各有自己的取景），`assets/portraits/dino_*.png`。
+    - 每种恐龙一张头像（`Config.PORTRAITS.kinds` 加了 "dino"；`tools/render_portraits.gd` 新取景方式 "head"：按摆好姿势的 Head 骨和它末端取景，植龙、黄昏鳄各有自己的取景），`assets/portraits/dino_*.png`（别的地图的迅猛龙、霸王龙、迅猛龙头领、翼龙也渲了——`test_v06_portraits` 要卡片能显示的每种东西都有头像）。
     - 用在三处：首领上场的提示（`HUD.show_hint` 多了参数 `picture`，头像比图标大）；翻残骸的响声招来东西的提示（`EventBus.din_carried` 多了第三个参数：招来的物种，`Din._brought`）；失败画面上咬死他的那只（`HUD._killer_portrait`，代替红色警告三角）。
     - 来袭横幅：第一行（几秒后来袭）大字，后面几行（方向、同行的首领）用正文字（新的主题样式 `BannerDetailLabel`，`HUD.raid_warning_details`、`_set_raid_text`）。横幅标签还是存着整段文字（测试和 debug-agent 的探针照读），只显示第一行、按第一行的宽度。原来整块大字，最长一行"WITH THEM: COELOPHYSIS ALPHA"把横幅撑到右边卡片底下，被截断。
     - 测试：`test_v06_the_sculpted_cast` 加第 5～8 条（每种有头像；首领上场的提示是它的脸、普通提示回到图标大小；被植龙咬死，失败画面是植龙的脸、船舱被破没有脸；翻找招来的物种有名字、有脸）。
