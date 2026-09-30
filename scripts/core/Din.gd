@@ -78,6 +78,7 @@ func _from_the_river(wreck: Node, count: int) -> int:
 			d.add_to_group(GROUP_DRAWN)
 			if "drawn" in d:
 				d.drawn = true
+			d.came_from = "din: " + String(d.came_from)
 			came += 1
 	return came
 
@@ -134,6 +135,7 @@ func _from_the_edge(wreck: Node, count: int) -> int:
 		d.position = origin + Vector3(0.9 * float(k), 0.0, 0.0)
 		if d.has_method("hurry_in"):
 			d.hurry_in(float(cfg.RAIDS.get("edge_hurry", 1.0)))
+		d.came_from = "din: " + String(wave_manager.origin_name(origin, true))
 		var parent: Node = dinos_container if (dinos_container != null and is_instance_valid(dinos_container)) else self
 		parent.add_child(d)
 		d.setup(species, multipliers)

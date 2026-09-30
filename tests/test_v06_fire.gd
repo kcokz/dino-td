@@ -303,3 +303,32 @@ func test_13_a_campfire_is_in_nobodys_way_and_a_brazier_is() -> void:
 		for i in range(1, route.size()):
 			length += route[i - 1].distance_to(route[i])
 		assert_lt(length, west.distance_to(east) * 1.05, "The way across its cell is straight across it (%s)" % kind)
+
+func test_14_a_raider_walks_over_a_campfire_too() -> void:
+	# The debug-agent's BUG-026: the Hero stepped straight over a campfire, and a Coelophysis sent across it went a
+	# metre round (1.20 m from its middle at the nearest). A campfire's ring is nobody's target now either
+	# (Dino._is_target_valid), and nothing is carved or steered round for it.
+	var main = await _level()
+	main.wave_manager.auto_raid_enabled = false
+	var fire = _build(main, "campfire", Vector3(-3.0, 0.0, 5.0))
+	fire.complete_construction()
+	main.nav_maps.rebake()
+	await wait_physics_frames(3)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.current_core.global_position + Vector3(18.0, 0.0, -14.0)
+	var at: Vector3 = fire.global_position
+	var raptor = load(String(config_node.get_dino_script_path("raptor"))).new()
+	raptor.setup("raptor")
+	var road: Array[Vector3] = [at + Vector3(4.0, 0.0, 0.0), at + Vector3(8.0, 0.0, 0.0)]
+	raptor.waypoints = road
+	raptor.position = at + Vector3(-4.0, 0.0, 0.0)
+	main.dinos_container.add_child(raptor)
+	raptor.setup("raptor")
+	var nearest: float = INF
+	for i in 300:
+		await wait_physics_frames(1)
+		nearest = minf(nearest, Vector2(raptor.global_position.x - at.x, raptor.global_position.z - at.z).length())
+		if raptor.global_position.x > at.x + 3.0:
+			break
+	assert_gt(raptor.global_position.x, at.x + 3.0, "(it got across)")
+	assert_lt(nearest, 0.5, "A raider walks over a campfire's ring as he does, not round it (%.2f m from its middle)" % nearest)

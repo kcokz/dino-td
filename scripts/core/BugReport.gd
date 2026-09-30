@@ -7,12 +7,13 @@ extends Node
 ## 数并dump出来……给个快捷键……类似于抽搐telemetry，但这个是就用于本地debug用").
 ##
 ## Its key (Config.CONTROLS.bug_report_key) writes everything a reader needs to know what the game was
-## doing when something went wrong, to user://bugreports/bug-<time>.json, and a picture of the screen
-## beside it (bug-<time>.png): the run and its clock; the view, and what the cursor was on; what was
-## picked, and what was in hand to build; the Hero -- where, doing what, going where by what way; every
-## animal's mind (Dino.debug_state); every building, node and drop; the stock, the meals and the
-## beacon; the raids; the corner's commands; and the last things that happened, as the game said them
-## (EventBus), with how long ago. The screen says where it went.
+## doing when something went wrong, to user://bugreports/bug-<time, to the millisecond>.json, and a picture of
+## the screen beside it (bug-<time>.png): the run and its clock; the view, and what the cursor was on; what
+## was picked, and what was in hand to build; the Hero -- where, doing what, going where by what way; every
+## animal's mind and where it came from (Dino.debug_state); every building, node and drop; the stock, the
+## meals and the beacon; the raids, and whose each place round a building is (Dino.attack_slots); the
+## corner's commands; the last twitches the watch wrote up (TwitchWatch); and the last things that happened,
+## as the game said them (EventBus), with how long ago. The screen says where it went.
 ##
 ## Not in a release build: the level adds it only where OS.is_debug_build() (Main._add_bug_report).
 
@@ -23,6 +24,8 @@ const GROUP := "bug_report"
 var main: Node = null
 ## The last things that happened: [seconds into the level, signal, what it said], oldest first.
 var _events: Array = []
+## The last twitches the watch wrote up, whole: {at: seconds into the level, record}, oldest first.
+var _twitches: Array = []
 var _clock: float = 0.0
 
 func _ready() -> void:
@@ -50,6 +53,8 @@ func _ready() -> void:
 				eb.connect(sig, func(a, b, c) -> void: _note(name_of, [a, b, c]))
 			4:
 				eb.connect(sig, func(a, b, c, d) -> void: _note(name_of, [a, b, c, d]))
+	if eb.has_signal("twitch_detected"):
+		eb.twitch_detected.connect(_on_twitch)
 
 func _process(delta: float) -> void:
 	_clock += delta
@@ -68,6 +73,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if hud != null and is_instance_valid(hud) and hud.has_method("show_hint") and path != "":
 		hud.show_hint(tr("HINT_BUG_REPORT") % ProjectSettings.globalize_path(path), UiTheme.toast_seconds("long"), "info")
 
+func _on_twitch(record: Dictionary) -> void:
+	_twitches.append({"at": snappedf(_clock, 0.01), "record": _plain(record)})
+	var most: int = int(_cfg().get("twitches", 5))
+	while _twitches.size() > most:
+		_twitches.pop_front()
+
 func _note(sig: String, args: Array) -> void:
 	var said: Array = []
 	for a in args:
@@ -80,8 +91,15 @@ func _note(sig: String, args: Array) -> void:
 ## Writes the report and the picture; returns the report's path ("" if it could not be written).
 func save() -> String:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DIR))
-	var stamp: String = Time.get_datetime_string_from_system().replace(":", "-")
+	# To the millisecond, and never over another: two presses in a second were one report, the second
+	# written over the first (the debug-agent's TASK-027: "文件名只到秒，一秒里按两次，后一份会盖掉前一份").
+	var stamp: String = "%s-%03d" % [Time.get_datetime_string_from_system().replace(":", "-"),
+		int(fmod(Time.get_unix_time_from_system(), 1.0) * 1000.0)]
 	var path: String = "%s/bug-%s.json" % [DIR, stamp]
+	var again: int = 1
+	while FileAccess.file_exists(path):
+		again += 1
+		path = "%s/bug-%s-%d.json" % [DIR, stamp, again]
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return ""
@@ -149,8 +167,28 @@ func snapshot() -> Dictionary:
 				"pos": _xz((d as Node3D).global_position)})
 	out["drops"] = drops
 	out["raids"] = _raids()
+	out["slots"] = _slots()
+	out["twitches"] = _twitches.duplicate()
 	out["corner"] = _corner()
 	out["events"] = _events.duplicate()
+	return out
+
+## The places round each building an animal bites it from (inner) or waits at, and which animal holds each
+## (Dino.attack_slots).
+func _slots() -> Array:
+	var out: Array = []
+	var all: Dictionary = Dino.attack_slots()
+	for b_id in all:
+		var b: Object = instance_from_id(int(b_id))
+		var places: Array = []
+		for s in all[b_id]:
+			var who: int = int(s.get("dino_id", 0))
+			var holder: Object = instance_from_id(who) if who != 0 else null
+			places.append({"pos": _xz(s["pos"]), "inner": bool(s.get("inner", false)),
+				"held_by": who if who != 0 else null,
+				"name": String((holder as Node).name) if (holder is Node and is_instance_valid(holder)) else null})
+		out.append({"building": String(b.get("building_type")) if (b != null and is_instance_valid(b)) else "(gone)",
+			"id": int(b_id), "places": places})
 	return out
 
 func _view() -> Dictionary:

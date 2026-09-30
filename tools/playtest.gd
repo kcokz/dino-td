@@ -443,6 +443,12 @@ func _play_until(done: Callable, seconds: float, what: String) -> bool:
 			return true
 		await _advance(0.25)
 		_play_clock += 0.25 * Engine.time_scale
+		# Out in the dark he carries a torch, as a player does: the night's hunters are out for a man without
+		# one (GAME-DESIGN 9.3). Without, the bot was bitten to death on the small valley's first night, run
+		# after run (the debug-agent's note of 2026-09-29).
+		if hero.has_method("can_light_torch") and hero.can_light_torch() \
+				and not bool(_main.current_core.is_inside(hero.global_position)) and hero.light_torch():
+			print("[play %5.1fs] lit a torch, out in the dark while %s" % [_play_clock, what])
 		var moved: float = hero.global_position.distance_to(was)
 		was = hero.global_position
 		if int(hero.current_state) == 1 and moved < 0.02:
@@ -503,14 +509,34 @@ func _wreck_to_search(job: String) -> Node:
 			return n
 	return null
 
-## Out to the wreck `node` and through it, till its part is in the stock -- or a raid is coming.
+## Out to the wreck `node` and through it, till its part is in the stock -- or a raid is coming. What its din
+## brings (Din) he does not stand and fight bare-handed: he goes in and waits for it to give up -- one brought
+## out of its hours goes back once he is out of its reach -- and comes back to the wreck, as a player learns
+## to. Standing, the bot was bitten to death at the river's antenna on its first day.
 func _search_wreck(hero: Node, node: Node) -> void:
 	var gs = root.get_node("GameState")
 	var wm = _main.wave_manager
 	var part: String = String(node.resource_type)
-	hero.order_harvest(node)
-	await _play_until(func(): return int(gs.resources.get(part, 0)) > 0 or wm.is_wave_active or wm.raid_timer < 6.0,
-		90.0, "searching the wreck for the %s" % part)
+	var over := func() -> bool: return int(gs.resources.get(part, 0)) > 0 or wm.is_wave_active or wm.raid_timer < 6.0
+	for turn in 4:
+		hero.order_harvest(node)
+		await _play_until(func(): return over.call() or _drawn_near(hero, 12.0) != null, 90.0,
+			"searching the wreck for the %s" % part)
+		var drawn: Node = _drawn_near(hero, 12.0)
+		if over.call() or drawn == null:
+			return
+		print("[play %5.1fs] the wreck's din brought a %s: in, till it goes" % [_play_clock, String(drawn.get("dino_type"))])
+		_main.order_enter_cabin()
+		await _play_until(func(): return _main.current_core.hero_inside and _drawn_near(_main.current_core, 12.0) == null,
+			60.0, "in the cabin, waiting out the din")
+
+## A living animal a wreck's din brought (Din.GROUP_DRAWN) within `radius` of `at`, or null.
+func _drawn_near(at: Node, radius: float) -> Node:
+	for d in get_nodes_in_group(Din.GROUP_DRAWN):
+		if is_instance_valid(d) and not bool(d.get("is_dead")) \
+				and (d as Node3D).global_position.distance_to((at as Node3D).global_position) <= radius:
+			return d
+	return null
 
 ## Whether a nest's guards are awake and near enough `n` to go for him there -- the bot leaves the
 ## nest's stones be while they are, as a player does once warned: it went on quarrying through their

@@ -82,6 +82,8 @@ func _init(p_type: String = "raptor") -> void:
 
 func _ready() -> void:
 	super._ready()
+	if came_from == "":
+		came_from = "guard"
 	add_to_group("guard_dinos")
 	add_to_group("enemies")
 	_load_guard_config()

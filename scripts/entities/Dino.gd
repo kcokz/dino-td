@@ -92,6 +92,13 @@ var mode: Mode = Mode.MARCH
 var waypoints: Array[Vector3] = []
 var current_waypoint_index: int = 0
 
+## Where it came from, for the bug report (BugReport; the debug-agent's TASK-027: "每只恐龙从哪出来的（巢 / 哪个边缘
+## 入口）"): "nest", "behind the nest", "edge E" -- the way into the valley, by the compass from the cabin
+## (WaveManager.origin_name) -- "river" or "guard", with "din: " before it when a wreck's din brought it (Din). Set
+## by what put it down; and where that was.
+var came_from: String = ""
+var came_in_at: Vector3 = Vector3.INF
+
 var current_target: Node = null
 var target_building: Node:
 	get: return current_target
@@ -189,6 +196,8 @@ func _init(p_type: String = "raptor") -> void:
 
 func _ready() -> void:
 	add_to_group("dinos")
+	if came_in_at == Vector3.INF:
+		came_in_at = global_position
 	_apply_collision_configuration()
 	_ensure_components()
 	_connect_event_bus()
@@ -382,6 +391,11 @@ static func release_all_building_slots(building: Node) -> void:
 
 static func clear_all_attack_slots() -> void:
 	_building_slots.clear()
+
+## Every building's places to bite it from and wait at, and whose each is: {building id: [{pos, inner,
+## dino_id}]} -- for the bug report to read (BugReport); written here only.
+static func attack_slots() -> Dictionary:
+	return _building_slots
 
 ## Places a dinosaur can stand while chewing on a building, in two rings measured from its FACES --
 ## the inner to bite from (Config.DINO_STANDOFF_INNER), the outer to wait in (_OUTER): along each
@@ -2030,6 +2044,8 @@ func debug_state() -> Dictionary:
 		"id": get_instance_id(),
 		"name": String(name),
 		"species": dino_type,
+		"came_from": came_from,
+		"came_in_at": _xz(came_in_at) if came_in_at != Vector3.INF else null,
 		"pos": [snappedf(global_position.x, 0.01), snappedf(global_position.y, 0.01), snappedf(global_position.z, 0.01)],
 		"heading": snappedf(rad_to_deg(rotation.y), 0.1),
 		"velocity": _xz(velocity),

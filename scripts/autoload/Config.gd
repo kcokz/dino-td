@@ -85,8 +85,10 @@ const BUILDINGS: Dictionary = {
 		# muzzle to what it hit, `energy` times its colour (over one: it glows), for `seconds`; and a
 		# flash at the muzzle lighting `flash_range` metres round it. A line a pixel wide went unseen at
 		# night, and a phytosaur at the fence flashed white under fire from nowhere (the player's report,
-		# 2026-09-29: "晚上这种情况下看不出来夜行恐龙受到了什么攻击").
-		"shot": {"width": 0.06, "colour": Color(1.0, 0.82, 0.32), "energy": 3.5, "seconds": 0.12,
+		# 2026-09-29: "晚上这种情况下看不出来夜行恐龙受到了什么攻击"). A tenth of a second was a frame or two,
+		# caught only by looking at the right moment (the debug-agent's TASK-027: "很短，要正好看着"): a quarter
+		# of a second, and still gone long before the next shot.
+		"shot": {"width": 0.06, "colour": Color(1.0, 0.82, 0.32), "energy": 3.5, "seconds": 0.25,
 			"flash_energy": 3.0, "flash_range": 4.5},
 		"cost": {},
 		"upgrades_to": "",
@@ -928,17 +930,19 @@ const PROWL: Dictionary = {
 	#
 	# Smaller and dimmer since the player's report of 2026-09-29: "夜晚的恐龙两个眼睛太亮了，有点像两个灯泡，是需要
 	# 炯炯有神，但是不能这么滑稽" -- at 0.3 m and two and a half times its colour, the glint was a lamp
-	# on each side of its head. Now a point that catches the eye, no bigger than an eye could be.
+	# on each side of its head. Then half that and half as bright, and two white specks lost twenty metres
+	# off (the debug-agent's TASK-027: "20 米就找不到了……建议在这次和上次中间取一个值"). Now halfway
+	# between the two: about 0.16 m at the game's distance, bright enough to find at a fire's edge.
 	"eye_color": Color(1.0, 0.55, 0.2),
-	"eye_energy": 2.5,
+	"eye_energy": 3.2,
 	"eye_reach": 3.0,
 	"eye_bone": "Head",
-	"glint_size": 0.14,
-	"glint_energy": 1.3,
+	"glint_size": 0.22,
+	"glint_energy": 1.9,
 	# And sized to the camera: `glint_per_metre` of its distance across, from `glint_least` up to
 	# `glint_size` -- two small points up close, one still seen at the game's distance.
-	"glint_per_metre": 0.005,
-	"glint_least": 0.03,
+	"glint_per_metre": 0.0065,
+	"glint_least": 0.035,
 	# Brought up out of the river by a wreck's din by day (Din), out of its hours: it goes back to the river
 	# once it has not had the man within its reach for this long (seconds).
 	"drawn_linger": 20.0,
@@ -2648,7 +2652,10 @@ const MINIMAP: Dictionary = {
 const BUG_REPORT: Dictionary = {
 	"events": 120,
 	"quiet": ["build_progress_updated", "deploy_time_changed", "resources_changed", "hero_hp_changed",
-		"core_hp_changed", "game_speed_changed"],
+		"core_hp_changed", "game_speed_changed", "twitch_detected"],
+	# The last twitches the watch wrote up (TwitchWatch), kept whole beside the events -- and so not among
+	# them (the debug-agent's TASK-027: "我想再要的：最近几份抽搐报告").
+	"twitches": 5,
 }
 
 const TWITCH: Dictionary = {

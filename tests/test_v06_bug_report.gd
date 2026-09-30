@@ -64,6 +64,45 @@ func test_01_a_development_build_has_one_and_it_writes_everything() -> void:
 		if FileAccess.file_exists(f):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 
+func test_03_two_at_once_are_two_and_it_says_where_each_came_from() -> void:
+	# The debug-agent's TASK-027: "文件名只到秒，一秒里按两次，后一份会盖掉前一份"; and "我想再要的：最近几份抽搐报告
+	# （TwitchWatch）；每只恐龙从哪出来的（巢 / 哪个边缘入口）；攻击位置（slot）归谁".
+	var main = await _level()
+	var report: BugReport = main.get_node_or_null("BugReport") as BugReport
+	if not OS.is_debug_build() or report == null:
+		return
+	var raider = main.wave_manager.spawn_dino()
+	assert_not_null(raider, "(a raider out)")
+	if raider == null:
+		return
+	var id: int = raider.get_instance_id()
+	tree.root.get_node("EventBus").twitch_detected.emit({"kind": "jitter", "n": 1, "dino": {"id": id}})
+	Dino.claim_attack_slot(main.current_core, raider)
+	var first: String = report.save()
+	var second: String = report.save()
+	assert_ne(first, second, "Two reports at once are two files")
+	assert_true(FileAccess.file_exists(first) and FileAccess.file_exists(second), "and both are kept")
+	var got = JSON.parse_string(FileAccess.get_file_as_string(second))
+	assert_true(got is Dictionary, "(as JSON)")
+	if got is Dictionary:
+		var came: String = ""
+		for d in got["dinos"]:
+			if int(d["id"]) == id:
+				came = String(d.get("came_from", ""))
+		assert_true(came == "nest" or came == "behind the nest" or came.begins_with("edge "),
+			"Each animal says where it came from (%s)" % came)
+		assert_eq(got["twitches"].size(), 1, "The last twitches are in it, whole")
+		var held: bool = false
+		for b in got["slots"]:
+			for p in b["places"]:
+				if p["held_by"] != null and int(p["held_by"]) == id:
+					held = true
+		assert_true(held, "and whose each place round a building is")
+	for f in [first, second]:
+		for g in [f, f.replace(".json", ".png")]:
+			if FileAccess.file_exists(g):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(g))
+
 func test_02_its_key_is_one_the_hand_reaches_and_writes_a_report() -> void:
 	# The player, 2026-09-29: "我f按键不方便，有没有别的快捷键可以用给bug report".
 	var key: int = int(config_node.CONTROLS["bug_report_key"])

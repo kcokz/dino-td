@@ -124,6 +124,7 @@ func send_one_from(at: Vector3) -> Node:
 	var multipliers: Dictionary = gs.dino_stat_multipliers if (gs and "dino_stat_multipliers" in gs) else {}
 	d.setup(species, multipliers)
 	d.home = at
+	d.came_from = "river"
 	var road: Array[Vector3] = [at as Vector3]
 	var core = get_tree().get_first_node_in_group("core") if is_inside_tree() else null
 	if core is Node3D:

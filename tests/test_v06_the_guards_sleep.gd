@@ -120,7 +120,10 @@ func test_02_the_man_passing_by_does_not_wake_it_right_beside_it_does() -> void:
 	_him_off(main, g, near * 0.7)
 	await _a_thought()
 	assert_false(_asleep(g), "Right beside it, it wakes")
-	assert_eq(int(g.guard_state), int(g.GuardState.THREATENING), "and turns on him")
+	# Turned on him: warning him off -- or, him that near (inside NEST_GUARDS.threat_close), after him already at
+	# its next thought, which may fall within the one waited for.
+	assert_true([int(g.GuardState.THREATENING), int(g.GuardState.AGGRO_CHASE)].has(int(g.guard_state)),
+		"and turns on him (%s)" % String(g.GuardState.keys()[int(g.guard_state)]))
 	assert_eq(g.chase_target, main.hero, "(him)")
 
 func test_03_a_torch_wakes_it_from_the_edge_of_its_light() -> void:

@@ -618,6 +618,25 @@ func entry_toward(side: String) -> Vector3:
 			best = at
 	return best
 
+## Which way a raider came in, as the bug report says it (Dino.came_from): out of the nest, from the edge
+## behind it, or by the way into the valley on that side of the cabin.
+func origin_name(at: Vector3, from_the_edge: bool) -> String:
+	if not from_the_edge:
+		return "nest"
+	if reinforce_positions.has(at):
+		return "behind the nest"
+	return "edge " + side_of(at)
+
+## The side of the cabin `at` is on, by the compass -- N, NE, E ... as entry_toward reads them (north is -z).
+func side_of(at: Vector3) -> String:
+	var core: Node3D = get_tree().get_first_node_in_group("core") as Node3D if is_inside_tree() else null
+	var from: Vector3 = core.global_position if core != null else Vector3.ZERO
+	var d := Vector2(at.x - from.x, at.z - from.z)
+	if d.length() < 0.01:
+		return "here"
+	var sides: Array[String] = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
+	return sides[wrapi(roundi(d.angle() / (PI / 4.0)), 0, 8)]
+
 ## Builds a dinosaur from the class its habit calls for -- a pack raptor and a
 ## siege theropod are different classes, and two species with the same habit share
 ## one outright.
@@ -668,6 +687,8 @@ func _spawn_single_dino() -> Node:
 
 	var origin: Vector3 = next[0]
 	var from_the_edge: bool = bool(next[1])
+	if "came_from" in dino:
+		dino.came_from = origin_name(origin, from_the_edge)
 	var route: Array[Vector3] = waypoints.duplicate()
 	if from_the_edge and not waypoints.is_empty():
 		route = [origin, waypoints.back()]
