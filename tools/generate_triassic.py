@@ -12,6 +12,11 @@
 #                 archosaur four or five metres long: a deep, narrow skull, a longer body and
 #                 tail, forelimbs long enough to walk on, and rows of bony scutes down its back,
 #                 dark olive and umber
+#   hesperosuchus from the velociraptor: an early crocodylomorph of the same Chinle rocks (Hesperosuchus
+#                 agilis -- "agile"), a metre and a bit, slender and long-legged, the crocodile's line
+#                 before it went to the water: a long narrow snout, a short neck, a slim body, a long
+#                 tail, paired bony scutes down the back, long forelimbs -- up on its hind legs to run,
+#                 as it may have done (GAME-DESIGN 7.2 station one: the runner, from the third day)
 #   phytosaur     from the triceratops: not a crocodile, though it looks like one -- a phytosaur
 #                 (Machaeroprosopus, from the same Chinle rocks as Coelophysis), four metres long,
 #                 its frill and horns cut away, the beak drawn out into a long narrow snout, a long
@@ -166,6 +171,42 @@ ANIMALS = {
                      ("Tail1", 0.3, 0.24), ("Tail1", 0.8, 0.22), ("Tail2", 0.4, 0.19), ("Tail2", 0.9, 0.17),
                      ("Tail3", 0.5, 0.14), ("Tail4", 0.5, 0.11)],
             "spread": 0.16,              # each row is a pair, this far either side of the spine
+        },
+    },
+    "hesperosuchus": {
+        "source": "velociraptor.glb",
+        "bones": {
+            # The snout: long and narrow and low, a crocodile's -- not a theropod's short deep skull.
+            "Head": ((0.52, 1.85, 0.5), True),
+            # A short, thick neck carried low.
+            "Neck": ((0.85, 0.7, 0.8), True),
+            "Shoulders": ((0.8, 1.0, 0.8), True),
+            "Torso": ((0.72, 1.12, 0.68), True),
+            "Hips": ((0.75, 1.0, 0.72), True),
+            # A long tail.
+            "Tail1": ((0.7, 1.2, 0.7), True),
+            "Tail2": ((0.66, 1.25, 0.66), True),
+            "Tail3": ((0.62, 1.25, 0.62), True),
+            "Tail4": ((0.6, 1.25, 0.6), True),
+            "Tail5": ((0.55, 1.3, 0.55), True),
+            # Forelimbs long enough to walk on, as a sphenosuchian's were.
+            "FrontUpLeg.L": ((0.8, 1.7, 0.8), True),
+            "FrontUpLeg.R": ((0.8, 1.7, 0.8), True),
+            "FrontLowLeg.L": ((0.8, 1.6, 0.8), True),
+            "FrontLowLeg.R": ((0.8, 1.6, 0.8), True),
+        },
+        "colours": {
+            "Brown": (0.16, 0.13, 0.08),         # a dun-grey back
+            "LightBrown": (0.42, 0.36, 0.25),    # a pale belly
+            "Black": (0.012, 0.010, 0.008),
+        },
+        # Paired bony scutes down the back, as every crocodylomorph has: small, close.
+        "scutes": {
+            "colour": (0.07, 0.06, 0.04),
+            "rows": [("Neck", 0.5, 0.14), ("Shoulders", 0.5, 0.16), ("Torso", 0.2, 0.17), ("Torso", 0.5, 0.17),
+                     ("Torso", 0.8, 0.17), ("Hips", 0.5, 0.16), ("Back", 0.5, 0.15), ("Tail1", 0.3, 0.14),
+                     ("Tail1", 0.8, 0.13), ("Tail2", 0.4, 0.11), ("Tail2", 0.9, 0.1), ("Tail3", 0.5, 0.08)],
+            "spread": 0.1,
         },
     },
     "phytosaur": {

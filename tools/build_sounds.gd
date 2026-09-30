@@ -381,6 +381,24 @@ func _s_trap_twang() -> PackedFloat32Array:
 	_mix(out, _hiss(0.1, [[0.0, 1200.0], [1.0, 2400.0]], 1.5, [[0.0, 0.0], [0.2, 1.0], [1.0, 0.0]]), 0.02, 0.3)
 	return out
 
+func _s_trap_thud() -> PackedFloat32Array:
+	# A deadfall coming down (CellTrap): the snap of its trigger, then a heavy weight hitting earth and
+	# whatever is under it -- a low, dull, short knock with a thump of air, and grit after.
+	var out := _burst(0.008, 2600.0, 1.2)
+	_mix(out, _modes(0.45, [[62.0, 0.22, 1.0], [118.0, 0.14, 0.6], [240.0, 0.07, 0.35], [510.0, 0.03, 0.2]], 0.004), 0.05, 1.0)
+	_mix(out, _hiss(0.25, [[0.0, 600.0], [1.0, 300.0]], 0.7, [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]]), 0.05, 0.5)
+	_mix(out, _crackle(0.3, 120.0, 2200.0), 0.1, 0.25)
+	return out
+
+func _s_trap_snap() -> PackedFloat32Array:
+	# A snare sprung (CellTrap): the peg's click, the sapling whipping up through the air, the noose
+	# snapping tight.
+	var out := _burst(0.006, 3400.0, 1.4)
+	_mix(out, _hiss(0.22, [[0.0, 900.0], [1.0, 2600.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.01, 0.7)
+	_mix(out, _modes(0.18, [[520.0, 0.04, 1.0], [1310.0, 0.02, 0.5]], 0.002), 0.2, 0.6)
+	_mix(out, _burst(0.01, 1800.0, 1.0), 0.21, 0.6)
+	return out
+
 func _s_stone_hit() -> PackedFloat32Array:
 	# A stone wall bitten or struck: a dull knock, higher and harder than timber, grit after.
 	var out := _modes(0.2, [[880.0, 0.03, 1.0], [1560.0, 0.02, 0.6], [2700.0, 0.012, 0.35]], 0.002)

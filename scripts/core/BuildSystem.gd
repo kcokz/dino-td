@@ -11,6 +11,10 @@ const SCRIPT_PATHS: Dictionary = {
 	"gate": "res://scripts/entities/Gate.gd",
 	"trap": "res://scripts/entities/Trap.gd",
 	"fire": "res://scripts/entities/Fire.gd",
+	# The traps laid in the way (GAME-DESIGN 6.0: 刺、砸、困).
+	"spikes": "res://scripts/entities/CellTrap.gd",
+	"deadfall": "res://scripts/entities/CellTrap.gd",
+	"snare": "res://scripts/entities/CellTrap.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 

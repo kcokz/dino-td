@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <polygon points="8,58 8,38 11,30 14,38 14,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="19,58 19,30 22,22 25,30 25,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="30,58 30,24 33,16 36,24 36,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="41,58 41,30 44,22 47,30 47,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="52,58 52,38 55,30 58,38 58,58" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="8,58 8,38 11,30 14,38 14,58" fill="#a0703f"/>
+  <polygon points="19,58 19,30 22,22 25,30 25,58" fill="#a0703f"/>
+  <polygon points="30,58 30,24 33,16 36,24 36,58" fill="#a0703f"/>
+  <polygon points="41,58 41,30 44,22 47,30 47,58" fill="#a0703f"/>
+  <polygon points="52,58 52,38 55,30 58,38 58,58" fill="#a0703f"/>
+  <polygon points="8,58 8,38 10,33 10,58" fill="#6f4523"/>
+  <polygon points="9,34 11,30 13,34" fill="#2e2019"/>
+  <polygon points="19,58 19,30 21,25 21,58" fill="#6f4523"/>
+  <polygon points="20,26 22,22 24,26" fill="#2e2019"/>
+  <polygon points="30,58 30,24 32,19 32,58" fill="#6f4523"/>
+  <polygon points="31,20 33,16 35,20" fill="#2e2019"/>
+  <polygon points="41,58 41,30 43,25 43,58" fill="#6f4523"/>
+  <polygon points="42,26 44,22 46,26" fill="#2e2019"/>
+  <polygon points="52,58 52,38 54,33 54,58" fill="#6f4523"/>
+  <polygon points="53,34 55,30 57,34" fill="#2e2019"/>
+  <path d="M 4 59 L 60 59" fill="none" stroke="#6f4523" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

@@ -534,6 +534,7 @@ func advance_towards_waypoint(delta: float) -> void:
 	_think_clock -= delta
 	_route_clock -= delta
 	_mind_clock += delta
+	_tick_traps(delta)
 	if _think_clock <= 0.0:
 		_think_clock = _next_think()
 		_think()
@@ -611,7 +612,7 @@ var _jam_goal: Vector3 = Vector3.INF
 var _jam_for: Object = null
 
 func _watch_for_a_jam(delta: float) -> void:
-	if mode == Mode.ATTACK or going_home:
+	if mode == Mode.ATTACK or going_home or held_left > 0.0:
 		_jam_clock = 0.0
 		_jam_best = INF
 		_jam_for = null
@@ -890,6 +891,11 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 	if goal == Vector3.INF:
 		_drive(Vector3.ZERO, delta, Vector3.INF)
 		return
+	if held_left > 0.0:
+		# In a snare's noose: it strains towards where it was going, and goes nowhere.
+		_drive(Vector3.ZERO, delta, goal, true)
+		return
+	pace *= trap_pace
 	var step: Vector3 = _next_step_towards(goal)
 	var to: Vector3 = step - global_position
 	to.y = 0.0
@@ -1105,7 +1111,8 @@ func _engage_spot() -> Vector3:
 ## got, and one that got nowhere is looked at (_unstick). One biting, or waiting on purpose, is
 ## not travelling.
 func _watch_headway(delta: float) -> void:
-	if mode == Mode.ATTACK or _patience > 0.0:
+	# Held in a snare is not held up by anything to bite or go round.
+	if mode == Mode.ATTACK or _patience > 0.0 or held_left > 0.0:
 		_headway_clock = 0.0
 		_headway_from = global_position
 		return
@@ -1690,7 +1697,41 @@ func _is_target_valid(target: Variant) -> bool:
 		return false
 	if not target.has_method("take_damage"):
 		return false
+	# IN NOBODY'S WAY, NOBODY'S TARGET: what is stepped over -- a campfire's ring, spikes, a deadfall, a snare
+	# (Config.walk_over) -- is not something an animal sees to bite.
+	if "building_type" in target and _is_walk_over(target):
+		return false
 	return true
+
+func _is_walk_over(target: Node) -> bool:
+	var cfg = _get_config()
+	return cfg != null and cfg.has_method("walk_over") and bool(cfg.walk_over(String(target.building_type)))
+
+# ==============================================================================
+# The traps laid in the way (CellTrap): slowed on spikes, held by a snare
+# ==============================================================================
+## How much of its pace it goes, on spikes, and for how long more; how long a snare holds it still.
+var trap_pace: float = 1.0
+var _slow_left: float = 0.0
+var held_left: float = 0.0
+
+## Slowed to `factor` of its pace for `seconds` -- the slowest of what is slowing it.
+func slow_for(factor: float, seconds: float) -> void:
+	trap_pace = minf(trap_pace, clampf(factor, 0.0, 1.0)) if _slow_left > 0.0 else clampf(factor, 0.0, 1.0)
+	_slow_left = maxf(_slow_left, seconds)
+
+## Held where it stands `seconds` -- a snare's noose on it: it turns and bites what is in its reach, and
+## goes nowhere.
+func hold_for(seconds: float) -> void:
+	held_left = maxf(held_left, seconds)
+	velocity = Vector3.ZERO
+
+func _tick_traps(delta: float) -> void:
+	if _slow_left > 0.0:
+		_slow_left = maxf(0.0, _slow_left - delta)
+		if _slow_left <= 0.0:
+			trap_pace = 1.0
+	held_left = maxf(0.0, held_left - delta)
 
 func perform_attack() -> void:
 	if not _is_target_valid(current_target):

@@ -167,6 +167,113 @@ const BUILDINGS: Dictionary = {
 		"rearm_seconds": 2.5,
 		"upgrades_to": "",
 	},
+	# THE TRAPS LAID IN THE WAY (GAME-DESIGN 6.0 rule 3: 刺、砸、困; v0.6 round six, the player: "防御太单调，木头石头
+	# 都是bow（而且bow不是很flexible，如果前方被墙挡住了就不能进攻）"): three more jobs on the menu, each its own answer,
+	# each on the ground of one cell and in nobody's way (walk_over) -- what walks onto it is what it takes, and no
+	# wall in front of it stops it (CellTrap.gd). Their first forms are wood alone; one material takes each up.
+	#
+	# 刺 SPIKES: a patch of fire-hardened stakes, points up among the litter (tools/generate_props.py
+	# ground_spikes). Whatever steps on it is stabbed as it steps on (`damage`) and goes at `slow` of its pace
+	# while on it; every stab blunts it (`wear` of its hit points), mended at its price. Always set: the answer to
+	# what is too quick for a bow's re-arming.
+	"ground_spikes": {
+		"name": "BUILDING_GROUND_SPIKES_NAME",
+		"kind": "spikes",
+		"cells": 1,
+		"walk_over": true,
+		"height": 0.35,
+		"hp": 6.0,
+		"cost": {"wood": 2},
+		"damage": 0.6,
+		"slow": 0.5,
+		"wear": 1.0,
+		"upgrades_to": ["bone_spikes"],
+	},
+	# With bone points lashed on (6.0: bone is what cuts): deeper, slower to cross, longer to blunt.
+	"bone_spikes": {
+		"name": "BUILDING_BONE_SPIKES_NAME",
+		"kind": "spikes",
+		"cells": 1,
+		"walk_over": true,
+		"height": 0.4,
+		"hp": 10.0,
+		"cost": {"wood": 2, "bone": 2},
+		"damage": 1.2,
+		"slow": 0.4,
+		"wear": 1.0,
+		"upgrades_to": "",
+	},
+	# 砸 THE DEADFALL: a weight propped over the way on a figure-four of sticks (tools/generate_props.py
+	# deadfall) -- a heavy log first. The first thing to walk under it brings it down on everything on its cell
+	# (`damage`): the answer to the big and the armoured. Propped again over `rearm_seconds`, the weight seen
+	# rising: it turns `swing_degrees` about `swing_axis` from propped to down (CellTrap._show_set; the model's
+	# DEADFALL_RISE_DEGREES).
+	"log_deadfall": {
+		"name": "BUILDING_LOG_DEADFALL_NAME",
+		"kind": "deadfall",
+		"cells": 1,
+		"walk_over": true,
+		"height": 0.5,
+		"hp": 10.0,
+		"cost": {"wood": 3},
+		"damage": 2.5,
+		"rearm_seconds": 8.0,
+		"swing_axis": Vector3(0.0, 0.0, 1.0),
+		"swing_degrees": -26.0,
+		"upgrades_to": ["stone_deadfall"],
+	},
+	# A slab of stone in the log's place (6.0: stone is what weighs): what it comes down on does not walk away
+	# from it -- a Coelophysis never, a Postosuchus a ninth of it gone.
+	"stone_deadfall": {
+		"name": "BUILDING_STONE_DEADFALL_NAME",
+		"kind": "deadfall",
+		"cells": 1,
+		"walk_over": true,
+		"height": 0.5,
+		"hp": 20.0,
+		"cost": {"wood": 3, "stone": 3},
+		"damage": 5.0,
+		"rearm_seconds": 10.0,
+		"swing_axis": Vector3(0.0, 0.0, 1.0),
+		"swing_degrees": -26.0,
+		"upgrades_to": "",
+	},
+	# 困 THE SNARE: a running noose on a sapling bent down to a trigger peg (tools/generate_props.py snare) --
+	# twisted grass first, plant fibre, which is the wood's. The first thing to step in is caught and held where
+	# it stands (`hold_seconds`; a boss `boss_hold_seconds` -- grass does not hold one), the sapling seen
+	# springing up (`swing_degrees` about `swing_axis`, the model's SNARE_BEND_DEGREES); set again over
+	# `rearm_seconds` once it lets go. The answer to what has to be made to stand still: on a bow's lane.
+	"grass_snare": {
+		"name": "BUILDING_GRASS_SNARE_NAME",
+		"kind": "snare",
+		"cells": 1,
+		"walk_over": true,
+		"height": 1.0,
+		"hp": 6.0,
+		"cost": {"wood": 2},
+		"hold_seconds": 2.5,
+		"boss_hold_seconds": 0.0,
+		"rearm_seconds": 6.0,
+		"swing_axis": Vector3(-0.434, 0.0, 0.901),
+		"swing_degrees": 58.0,
+		"upgrades_to": ["hide_snare"],
+	},
+	# A thong of hide for the noose (6.0: hide is what binds): it holds longer, and holds a boss a while.
+	"hide_snare": {
+		"name": "BUILDING_HIDE_SNARE_NAME",
+		"kind": "snare",
+		"cells": 1,
+		"walk_over": true,
+		"height": 1.0,
+		"hp": 8.0,
+		"cost": {"wood": 2, "hide": 1},
+		"hold_seconds": 4.0,
+		"boss_hold_seconds": 1.5,
+		"rearm_seconds": 5.0,
+		"swing_axis": Vector3(-0.434, 0.0, 0.901),
+		"swing_degrees": 58.0,
+		"upgrades_to": "",
+	},
 	# THE WALLS, v0.6 round two: "重新设计墙，让墙体逻辑简单清晰，墙必须让它们和别的建筑能更贴合……木栅栏成本
 	# 太高，用处太小……石墙恐龙能穿过，不合理，木栅栏可以稍微大一点，而且人不能再穿过墙了".
 	#
@@ -693,7 +800,7 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 ## the trip bow, the brazier off the campfire -- the menu never grows by a material.
 ## Buildings absent here exist in BUILDINGS but are not placed from the menu ("core" is spawned
 ## by the level; the rest are what these become).
-const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "campfire"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "trip_bow", "ground_spikes", "log_deadfall", "grass_snare", "campfire"]
 
 ## Everything the player can have standing: what the menu offers and all it becomes where it stands,
 ## however many steps up. What a material is for is worked out over these (uses_of).
@@ -726,6 +833,11 @@ const TRAPS: Dictionary = {
 	"shot_speed": 32.0,
 	# The lane shown on the ground under a trap being placed, the wire's colour.
 	"lane_color": Color(0.95, 0.8, 0.35),
+	# The traps laid in the way (CellTrap): an animal is on one when its middle is on the cell or this far
+	# past its edge (metres) -- a foot is ahead of a middle -- and a slowing lasts this long after it steps off
+	# (seconds), so a stride across the edge does not flicker it.
+	"cell_reach": 0.2,
+	"slow_linger": 0.25,
 }
 
 ## The night's hunters (NightProwl, ProwlerDino; GAME-DESIGN 9.3; v0.6 round four, the player: "不用火把，
@@ -2167,6 +2279,9 @@ const SOUNDS: Dictionary = {
 		"hull_hit":   {"files": ["hull_hit"], "db": -9.0, "pitch": 1.08, "class": "impact"},
 		"wood_break": {"files": ["wood_break"], "db": -3.0, "pitch": 1.06, "class": "event"},
 		"trap_twang": {"files": ["trap_twang"], "db": -6.0, "pitch": 1.06, "class": "impact"},
+		# The traps laid in the way (CellTrap): a deadfall's weight coming down, a snare's sapling springing up.
+		"trap_thud": {"files": ["trap_thud"], "db": -4.0, "pitch": 1.06, "class": "impact"},
+		"trap_snap": {"files": ["trap_snap"], "db": -6.0, "pitch": 1.08, "class": "impact"},
 		"craft_done": {"files": ["craft_done"], "db": -5.0, "pitch": 1.0, "class": "event"},
 		"cook_done":  {"files": ["cook_done"], "db": -7.0, "pitch": 1.05, "class": "event"},
 		# The raid is heard before it is seen: the pack calling from the nest, far off.
@@ -2845,6 +2960,20 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
 	# Its second stave lashed over the first, and a rack of spare bolts on the plinth.
 	"building/set_crossbow_2": {"scene": "res://assets/models/props/set_crossbow_2_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	# The traps laid in the way (tools/generate_props.py ground_spikes, deadfall, snare): built to the cell,
+	# not fitted -- a deadfall's Weight and a snare's Sapling turn about their feet (CellTrap).
+	"building/ground_spikes":  {"scene": "res://assets/models/props/ground_spikes_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	"building/bone_spikes":    {"scene": "res://assets/models/props/bone_spikes_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	"building/log_deadfall":   {"scene": "res://assets/models/props/log_deadfall_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	"building/stone_deadfall": {"scene": "res://assets/models/props/stone_deadfall_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	"building/grass_snare":    {"scene": "res://assets/models/props/grass_snare_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
+	"building/hide_snare":     {"scene": "res://assets/models/props/hide_snare_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
 	# A metre of palisade (tools/generate_props.py palisade): a post of sharpened logs in the
 	# middle, and a run of them out to each side of the cell, lashed to a rail -- the runs

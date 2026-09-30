@@ -166,6 +166,14 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 				tree.root.add_child(placed)
 				placed.position = Vector3({"bone_stake": 38.0, "stone_wall": 42.0, "gate": 50.0}[type_id], 0.0, 0.0)
 				placed.complete_construction()
+			"ground_spikes", "log_deadfall", "grass_snare":
+				# The traps laid in the way (v0.6 round six, CellTrap).
+				placed = load("res://scripts/entities/CellTrap.gd").new()
+				placed.setup(type_id)
+				_cleanup_nodes.append(placed)
+				tree.root.add_child(placed)
+				placed.position = Vector3({"ground_spikes": 62.0, "log_deadfall": 66.0, "grass_snare": 70.0}[type_id], 0.0, 0.0)
+				placed.complete_construction()
 			"campfire", "brazier":
 				placed = load("res://scripts/entities/Fire.gd").new()
 				placed.setup(type_id)

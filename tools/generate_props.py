@@ -287,6 +287,62 @@ def palisade(seed, bone=False):
     return parts
 
 
+ROCK_ON_TOP = 1.36
+
+
+def rock_palisade(seed):
+    """The palisade with a rock set on it (GAME-DESIGN 6.0: 砸 as a wall's upgrade -- stone is what weighs):
+    the same kit, and Rock, a block of the valley's sandstone balanced on the post's points and held by a
+    thong, built round its own middle ROCK_ON_TOP up. What bites the section shakes it off onto itself; the
+    game drops it to the foot of the post and lifts it back as it is set again (Wall)."""
+    rng = random.Random(seed * 7 + 1)
+    parts = palisade(seed)
+    rock = Builder()
+    bands = [(0.62, 0.36, 0.24), (0.52, 0.30, 0.20), (0.66, 0.46, 0.30)]
+    lo = Vector((-0.17, -0.14, -0.1))
+    hi = Vector((0.17, 0.14, 0.1))
+    _dry_stone(rock, lo, hi, rng, jitter(bands[seed % 3], rng, 0.05))
+    for sx in (-1.0, 1.0):
+        rock.tube([Vector((sx * 0.12, -0.15, 0.05)), Vector((sx * 0.12, -0.04, -0.16)), Vector((sx * 0.1, 0.04, -0.24))],
+                  [0.008, 0.008, 0.008], [VINE_ROPE] * 3, 4)
+    parts.append(("Rock", rock, UP * ROCK_ON_TOP))
+    return parts
+
+
+def wall_crossbow(seed):
+    """A set crossbow built into a stone wall (GAME-DESIGN 6.0: a stone wall with bone -- the wall is the
+    body, the bolt what cuts): the drystone section with a loophole through it at waist height, and in it
+    the crossbow's stock, its stave across the outer face, spanned, a bone-headed bolt on it -- shooting out
+    along a lane from the wall's face, so the wall is no longer what stops the bow. Parts as the set
+    crossbow's: Base, Bow, String, Bolt. Built pointing along +Y, the game's -Z (north), which the trap turns
+    to face out of the wall."""
+    rng = random.Random(seed)
+    base = stone_wall(seed)
+    top = 0.52
+    # The stock through the loophole, and a dark mouth round it on the outer face.
+    _slab(base, Vector((-0.06, -0.3, top)), Vector((0.06, 0.56, top + 0.08)), [(1.0, BARK_LIGHT)], 0.012)
+    mouth = [Vector((-0.16, 0.495, top - 0.08)), Vector((0.16, 0.495, top - 0.08)), Vector((0.16, 0.495, top + 0.2)),
+             Vector((-0.16, 0.495, top + 0.2))]
+    base.quad(mouth[0], mouth[1], mouth[2], mouth[3], CHAR, CHAR, mix(CHAR, ROCK_DARK, 0.4), mix(CHAR, ROCK_DARK, 0.4))
+    bow = Builder()
+    stave_z = top + 0.1
+    tips = list(_stave(bow, 0.42, 0.58, 0.12, stave_z, 0.036, 0.016, BARK_LIGHT, FRESH_WOOD))
+    _wrap(bow, Vector((0.0, 0.58, stave_z)), Vector((1.0, 0.0, 0.0)), 0.038)
+    for tip in tips:
+        bow.tube([tip - Vector((0.0, 0.0, 0.02)), tip + Vector((0.0, 0.0, 0.02))], [0.018, 0.018], [BONE, BONE], 5)
+    nock = tips[0].lerp(tips[1], 0.5) - Vector((0.0, TRAP_STRING_TRAVEL, 0.0))
+    string = Builder()
+    for tip in tips:
+        string.tube([tip - nock, Vector((0.0, 0.0, tip.z - nock.z))], [0.007, 0.007], [BONE, BONE], 4)
+    bolt = Builder()
+    head = Vector((0.0, 0.5, 0.02))
+    bolt.tube([Vector((0.0, 0.0, 0.02)), head - Vector((0.0, 0.08, 0.0))], [0.012, 0.012], [FRESH_WOOD, FRESH_WOOD], 5)
+    bolt.tube([head - Vector((0.0, 0.09, 0.0)), head - Vector((0.0, 0.045, 0.0)), head], [0.018, 0.016, 0.002],
+              [BONE, BONE, mix(BONE, (0.95, 0.93, 0.86), 0.45)], 6)
+    return [("Base", base, Vector((0.0, 0.0, 0.0))), ("Bow", bow, Vector((0.0, 0.0, 0.0))),
+            ("String", string, nock), ("Bolt", bolt, nock)]
+
+
 # ==============================================================================
 # The traps (v0.6 round two)
 # ==============================================================================
@@ -478,6 +534,157 @@ def set_crossbow(seed, twin=False):
                  FROND_BASE, FROND_TIP, FROND_TIP)
     return [("Base", base, Vector((0.0, 0.0, 0.0))), ("Bow", bow, Vector((0.0, 0.0, 0.0))),
             ("String", string, nock), ("Bolt", bolt, nock)]
+
+
+# ==============================================================================
+# The traps laid in the way (GAME-DESIGN 6.0 rule 3: 刺、砸、困; CellTrap.gd): each on the ground of one
+# cell, in nobody's way -- what walks onto it is what it takes.
+# ==============================================================================
+
+LITTER = (0.34, 0.25, 0.13)
+LITTER_DARK = (0.20, 0.14, 0.08)
+GRASS_CORD = (0.52, 0.47, 0.24)
+HIDE_CORD = (0.38, 0.24, 0.13)
+
+
+def _litter(b, rng, n=22, spread=0.44):
+    """Dead leaves and needles over the ground of a cell: what half hides a trap."""
+    for k in range(n):
+        c = Vector((rng.uniform(-spread, spread), rng.uniform(-spread, spread), 0.006 + 0.001 * (k % 3)))
+        a = rng.uniform(0.0, math.tau)
+        d = Vector((math.cos(a), math.sin(a), 0.0)) * rng.uniform(0.045, 0.085)
+        side = d.cross(UP).normalized() * rng.uniform(0.018, 0.034)
+        col = mix(LITTER, LITTER_DARK, rng.uniform(0.0, 0.7))
+        b.quad(c - d, c - side, c + d, c + side, col, col, mix(col, LITTER, 0.5), col)
+
+
+def ground_spikes(seed, bone=False):
+    """刺: a patch of stakes driven in points up among the litter, fire-hardened -- or, with bone, each
+    with a bone point lashed on (GAME-DESIGN 6.0: bone is what cuts). Nothing moves: it is always set."""
+    rng = random.Random(seed)
+    b = Builder()
+    _litter(b, rng)
+    for i in range(4):
+        for j in range(4):
+            x = -0.36 + i * 0.24 + rng.uniform(-0.05, 0.05)
+            y = -0.36 + j * 0.24 + rng.uniform(-0.05, 0.05)
+            h = rng.uniform(0.24, 0.34)
+            lean = Vector((x * 0.12 + rng.uniform(-0.03, 0.03), y * 0.12 + rng.uniform(-0.03, 0.03), 0.0))
+            base = Vector((x, y, -0.02))
+            top = base + Vector((0.0, 0.0, h)) + lean
+            r = rng.uniform(0.02, 0.028)
+            if bone:
+                mid = base.lerp(top, 0.62)
+                b.tube([base, mid], [r, r * 0.92], [BARK, BARK_LIGHT], 6)
+                tip = top + (top - base).normalized() * 0.06
+                b.tube([mid - (top - base).normalized() * 0.02, mid, tip], [r * 0.95, r * 0.9, 0.002],
+                       [BONE, BONE, mix(BONE, (0.95, 0.93, 0.86), 0.5)], 6)
+                _wrap(b, mid, top - base, r * 0.8, turns=1)
+            else:
+                b.tube([base, base.lerp(top, 0.72), top], [r, r * 0.82, 0.002], [BARK, BARK_LIGHT, CHAR], 6)
+    return b
+
+
+DEADFALL_RISE_DEGREES = 26.0
+
+
+def deadfall(seed, stone=False):
+    """砸: a weight propped over the way on a figure-four of sticks -- a heavy log, or with stone a slab
+    (6.0: stone is what weighs) -- its foot on the ground at the cell's west edge, its far end held up;
+    what walks under it knocks the trigger and it comes down. Parts: Frame, the trigger and the stakes
+    that guide the weight; Weight, built round its foot, propped DEADFALL_RISE_DEGREES -- the game turns
+    it down about its foot, and back up as it is propped again (CellTrap)."""
+    rng = random.Random(seed)
+    frame = Builder()
+    _litter(frame, rng, n=14)
+    foot = Vector((-0.44, 0.0, 0.0))
+    rise = math.radians(DEADFALL_RISE_DEGREES)
+    along = Vector((math.cos(rise), 0.0, math.sin(rise)))
+    span = 0.9
+    # The figure four under the raised end: an upright, the diagonal lever on it, the bait stick along
+    # the ground.
+    held = foot + along * (span * 0.78)
+    post = Vector((held.x + 0.02, 0.05, 0.0))
+    frame.tube([post, post + UP * (held.z - 0.02)], [0.018, 0.015], [BARK, BARK_LIGHT], 5)
+    frame.tube([Vector((held.x - 0.16, 0.05, 0.03)), Vector((held.x + 0.1, 0.05, held.z + 0.02))], [0.013, 0.011],
+               [FRESH_WOOD, BARK_LIGHT], 5)
+    frame.tube([Vector((held.x - 0.2, 0.05, 0.02)), Vector((held.x + 0.18, -0.06, 0.02))], [0.012, 0.012],
+               [BARK_LIGHT, FRESH_WOOD], 5)
+    # Two stakes either side of the weight's foot, to lay it true.
+    for sy in (-1.0, 1.0):
+        s = Vector((foot.x + 0.06, sy * 0.2, 0.0))
+        frame.tube([s - UP * 0.02, s + UP * 0.22], [0.02, 0.013], [BARK, BARK_LIGHT], 5)
+    weight = Builder()
+    if stone:
+        # A slab, thick and flat, lying along the lever from its foot.
+        half_w, thick = 0.3, 0.1
+        lo = [Vector((0.0, -half_w, 0.0)), Vector((span, -half_w * 0.9, 0.0)), Vector((span, half_w * 0.9, 0.0)),
+              Vector((0.0, half_w, 0.0))]
+        corners = [(p.x * along + Vector((0.0, p.y, 0.0))) for p in lo]
+        up = Vector((-math.sin(rise), 0.0, math.cos(rise))) * thick
+        # The valley's own stone: a slab of the Chinle sandstone he quarries, banded, its top weathered.
+        bands = [(0.62, 0.36, 0.24), (0.52, 0.30, 0.20), (0.66, 0.46, 0.30)]
+        cols = [jitter(bands[k % 3], rng, 0.05) for k in range(4)]
+        shade = (0.30, 0.17, 0.11)
+        top = [c + up for c in corners]
+        weight.quad(top[0], top[1], top[2], top[3], mix(cols[0], CHINLE_TOP, 0.35), cols[1], cols[2], mix(cols[3], CHINLE_TOP, 0.25))
+        weight.quad(corners[3], corners[2], corners[1], corners[0], shade, shade, shade, shade)
+        for k in range(4):
+            k2 = (k + 1) % 4
+            weight.quad(corners[k], corners[k2], top[k2], top[k], shade, shade, cols[k2], cols[k])
+    else:
+        r = 0.085
+        start = along * 0.0 + UP * r
+        end = along * span + UP * r
+        _log(weight, start, end, r, rng)
+    return [("Frame", frame, Vector((0.0, 0.0, 0.0))), ("Weight", weight, foot)]
+
+
+SNARE_BEND_DEGREES = 58.0
+
+
+def snare(seed, hide=False):
+    """困: a sapling planted at the cell's west edge, bent over to a trigger peg by the middle, and a
+    running noose laid on the ground where a foot will go -- of twisted grass, or with hide a thong
+    (6.0: hide is what binds). Parts: Frame, the peg and the litter; Sapling, built round its foot,
+    bent SNARE_BEND_DEGREES over with the noose on its tip -- the game springs it up about its foot,
+    and bends it down again as it is set (CellTrap)."""
+    rng = random.Random(seed)
+    frame = Builder()
+    _litter(frame, rng, n=14)
+    foot = Vector((-0.42, 0.28, 0.0))
+    peg = Vector((0.12, 0.02, 0.0))
+    frame.tube([peg - UP * 0.02, peg + UP * 0.12], [0.016, 0.012], [BARK, FRESH_WOOD], 5)
+    frame.tube([peg + UP * 0.1, peg + Vector((0.06, 0.0, 0.14))], [0.01, 0.008], [BARK_LIGHT, FRESH_WOOD], 4)
+    frame.tube([foot - UP * 0.02, foot + UP * 0.06], [0.07, 0.04], [SOIL, SOIL_LIGHT], 6)
+    sapling = Builder()
+    # Its trunk from the foot up and over in an arc to the peg -- a curve built round its foot.
+    tip = peg - foot + Vector((0.0, 0.0, 0.14))
+    pts, radii, cols = [], [], []
+    for k in range(9):
+        t = k / 8.0
+        # Up first, then over: a quarter of an ellipse from the foot to the tip.
+        a = t * math.pi * 0.5
+        p = Vector((tip.x * (1.0 - math.cos(a)), tip.y * (1.0 - math.cos(a)), 0.95 * math.sin(a) + (tip.z - 0.95) * t * t))
+        pts.append(p)
+        radii.append(0.026 - 0.018 * t)
+        cols.append(mix(BARK, BARK_LIGHT, t))
+    sapling.tube(pts, radii, cols, 6)
+    for k in (3, 5, 7):
+        # A few leaves left on it.
+        c = pts[k]
+        for side in (-1.0, 1.0):
+            d = Vector((side * 0.06, 0.03, 0.02))
+            sapling.tri(c, c + d, c + d * 0.5 + Vector((0.0, 0.05, 0.0)), VINE, VINE, VINE_DARK)
+    cord = HIDE_CORD if hide else GRASS_CORD
+    width = 0.009 if hide else 0.006
+    # The line from the tip down to the noose, and the noose -- a ring on the ground by the middle.
+    centre = Vector((0.0, -0.08, 0.012)) - foot
+    sapling.tube([tip, tip + (centre - tip) * 0.5 + Vector((0.0, 0.0, 0.02)), centre + Vector((0.14, 0.0, 0.0))],
+                 [width] * 3, [cord] * 3, 4)
+    ring = [centre + Vector((0.14 * math.cos(math.tau * k / 12), 0.14 * math.sin(math.tau * k / 12), 0.0)) for k in range(13)]
+    sapling.tube(ring, [width * 1.2] * 13, [mix(cord, CHAR, 0.15 if k % 3 == 0 else 0.0) for k in range(13)], 4)
+    return [("Frame", frame, Vector((0.0, 0.0, 0.0))), ("Sapling", sapling, foot)]
 
 
 PLANK = (0.46, 0.33, 0.19)
@@ -1945,6 +2152,9 @@ PROPS = {
     "campfire": (lambda s: campfire(s), [31]),
     "brazier": (lambda s: brazier(s), [37]),
     "torch": (lambda s: torch(s), [43]),
+    # The traps laid in the way that do not move: always set (CellTrap).
+    "ground_spikes": (lambda s: ground_spikes(s), [13]),
+    "bone_spikes": (lambda s: ground_spikes(s, bone=True), [13]),
     # The ship's wrecks, each by the part it holds, whole and searched; and the parts on the ground.
     "wreck_antenna": (lambda s: wreck(s, "antenna"), [71]),
     "wreck_antenna_searched": (lambda s: wreck(s, "antenna", searched=True), [71]),
@@ -1964,6 +2174,12 @@ KITS = {
     "bone_palisade": (lambda s: palisade(s, bone=True), [3]),
     "gate": (lambda s: gate(s), [5]),
     "trip_bow": (lambda s: trip_bow(s), [7]),
+    "rock_palisade": (lambda s: rock_palisade(s), [3]),
+    "wall_crossbow": (lambda s: wall_crossbow(s), [23]),
+    "log_deadfall": (lambda s: deadfall(s), [17]),
+    "stone_deadfall": (lambda s: deadfall(s, stone=True), [17]),
+    "grass_snare": (lambda s: snare(s), [19]),
+    "hide_snare": (lambda s: snare(s, hide=True), [19]),
     "set_crossbow": (lambda s: set_crossbow(s), [11]),
     "set_crossbow_2": (lambda s: set_crossbow(s, twin=True), [11]),
 }

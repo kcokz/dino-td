@@ -121,6 +121,7 @@ func _guard_step(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return
 	_calm = maxf(0.0, _calm - delta)
+	_tick_traps(delta)
 	# After somebody, or warning him off, or on its way home from it: up, and for a while after.
 	if guard_state != GuardState.POST_ROAM and guard_state != GuardState.SLEEPING:
 		_up_for = float(_guards().get("stay_up", 20.0))
@@ -485,6 +486,9 @@ func _detect_threat() -> Node3D:
 
 	var share: float = float(_guards().get("building_aggro_share", 0.7))
 	for b in get_tree().get_nodes_in_group("buildings"):
+		# What is stepped over is nothing it sees to go for (Dino._is_walk_over): a campfire, a trap laid in the way.
+		if "building_type" in b and _is_walk_over(b):
+			continue
 		if b is Node3D and _is_threat_valid(b) and _worth_chasing(b) \
 				and ("is_constructed" in b and b.is_constructed):
 			if global_position.distance_to(b.global_position) <= aggro_radius * share:

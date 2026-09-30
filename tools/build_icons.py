@@ -272,13 +272,13 @@ def _vest(plates):
               shape("path", None, C["hide_hi"], 2.4, d="M 43 11 C 47 17 50 19 52 22"),
               shape("path", None, C["hide_dark"], 2.0, d="M 32 16 L 32 55")]
     if plates:
-        for row, y in enumerate((22, 31, 40, 49)):
-            for k in range(4):
-                x = 14 + k * 9.5 + (4.7 if row % 2 else 0.0)
-                if x + 8 > 52:
-                    continue
-                detail.append(shape("rect", C["bone"], x=x, y=y, width=8, height=7.5, rx=2.5))
-                detail.append(shape("rect", C["bone_shade"], x=x, y=y + 5.2, width=8, height=2.3, rx=1.1))
+        # The thick hide armour (v0.6 round six: all hide -- it was bone lamellar): the vest under a second
+        # layer, broad panels of darker tanned hide overlapping like shingles, stitched along their tops.
+        for row, y in enumerate((20, 31, 42)):
+            for (x, w) in ((13, 17), (34, 17)):
+                detail.append(shape("rect", C["hide_dark"], x=x, y=y, width=w, height=12, rx=2.5))
+                detail.append(shape("rect", C["hide"], x=x, y=y, width=w, height=3.2, rx=1.2))
+                detail.append(shape("path", None, C["rope"], 1.3, d="M %d %d L %d %d" % (x + 2, y + 1.6, x + w - 2, y + 1.6)))
     else:
         for y in (22, 30, 38, 46):
             detail.append(shape("path", None, C["rope"], 1.8, d="M 29 %d L 35 %d M 35 %d L 29 %d" % (y, y + 5, y, y + 5)))
@@ -436,19 +436,24 @@ ICONS["trip_bow"] = item_svg(
      shape("polygon", C["leaf"], points="32,34 27,39 32,37"),
      shape("polygon", C["leaf"], points="32,34 37,39 32,37")] + _tripwire())
 
-_PLINTH = [(9, 48, 22, 10, "s2"), (32, 48, 23, 10, "s3"), (12, 38, 19, 10, "s1"), (32, 38, 19, 10, "s2")]
+# The crib of logs the set crossbow stands on (v0.6 round six: wood and bone; it was a plinth of stone),
+# two courses, each log's cut end showing.
+_CRIB = [(8, 49, 48, 9, "post"), (12, 39, 40, 9, "post_dark")]
+_CRIB_ENDS = [(12, 53.5), (52, 53.5), (16, 43.5), (48, 43.5)]
 
 
 def _set_crossbow(twin=False):
-    """The set crossbow: a seasoned stave with bone tips over a stock on a plinth of stone, a
+    """The set crossbow: a seasoned stave with bone tips over a stock on a crib of logs, a
     bone-headed bolt on the sinew -- and, improved, a second stave and the upgrade's chevrons."""
     staves = [shape("path", None, C["post"], 6.0, d="M 6 30 Q 32 10 58 30")]
     if twin:
         staves.append(shape("path", None, C["post"], 5.0, d="M 9 22 Q 32 4 55 22"))
-    body = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=2.5) for (x, y, w, h, c) in _PLINTH]
+    body = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=4.5) for (x, y, w, h, c) in _CRIB]
             + [shape("rect", C["post"], x=15, y=31, width=34, height=7, rx=1.5)] + staves
             + [shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)])
-    detail = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=2.5) for (x, y, w, h, c) in _PLINTH]
+    detail = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=4.5) for (x, y, w, h, c) in _CRIB]
+              + [shape("circle", C["grain"], cx=x, cy=y, r=4.0) for (x, y) in _CRIB_ENDS]
+              + [shape("circle", C["ring"], cx=x, cy=y, r=1.6) for (x, y) in _CRIB_ENDS]
               + [shape("circle", C["bone"], cx=7, cy=30, r=3.2), shape("circle", C["bone"], cx=57, cy=30, r=3.2),
                  shape("path", None, C["bone"], 1.8, d="M 7 31 L 32 34 L 57 31"),
                  shape("path", None, C["grain"], 3.0, d="M 32 34 L 32 13"),
@@ -580,6 +585,68 @@ GLYPHS["signal"] = glyph_svg([shape("circle", cx=32, cy=24, r=6), shape("path", 
                               shape("path", None, "#ffffff", 5, d="M 42 15.6 A 13 13 0 0 1 42 32.4"),
                               shape("path", None, "#ffffff", 5, d="M 14.4 9.2 A 23 23 0 0 0 14.4 38.8"),
                               shape("path", None, "#ffffff", 5, d="M 49.6 9.2 A 23 23 0 0 1 49.6 38.8")])
+
+
+# The traps laid in the way (CellTrap; GAME-DESIGN 6.0: 刺、砸、困): each on the ground, in the litter.
+def _litter_line():
+    return [shape("path", None, C["post_dark"], 2.2, d="M 4 59 L 60 59")]
+
+
+def _spikes(bone=False):
+    """Stakes driven in points up -- charred, or with bone points lashed on."""
+    posts = [(8, 30), (19, 22), (30, 16), (41, 22), (52, 30)]
+    body = [shape("polygon", C["post"], points="%d,58 %d,%d %d,%d %d,%d %d,58" % (x, x, top + 8, x + 3, top, x + 6, top + 8, x + 6))
+            for (x, top) in posts]
+    detail = []
+    for (x, top) in posts:
+        detail.append(shape("polygon", C["post_dark"], points="%d,58 %d,%d %d,%d %d,58" % (x, x, top + 8, x + 2, top + 3, x + 2)))
+        if bone:
+            detail.append(shape("polygon", C["bone"], points="%d,%d %d,%d %d,%d" % (x - 1, top + 11, x + 3, top - 4, x + 7, top + 11)))
+            detail.append(shape("polygon", C["bone_shade"], points="%d,%d %d,%d %d,%d" % (x - 1, top + 11, x + 3, top - 4, x + 3, top + 11)))
+            detail.append(shape("rect", C["rope"], x=x - 1, y=top + 10, width=8, height=3, rx=1))
+        else:
+            detail.append(shape("polygon", C["char"], points="%d,%d %d,%d %d,%d" % (x + 1, top + 4, x + 3, top, x + 5, top + 4)))
+    return item_svg(body, detail + _litter_line())
+
+
+ICONS["ground_spikes"] = _spikes()
+ICONS["bone_spikes"] = _spikes(bone=True)
+
+
+def _deadfall(stone=False):
+    """A weight propped over the way on a figure four of sticks: a log, or a slab of stone."""
+    if stone:
+        weight = [shape("polygon", C["s2"], points="4,52 50,22 58,30 12,58")]
+        weight_detail = [shape("polygon", C["s1"], points="4,52 50,22 54,26 8,55"),
+                         shape("polygon", C["s3"], points="12,58 58,30 58,33 13,60")]
+    else:
+        weight = [shape("path", None, C["post"], 11.0, d="M 7 54 L 53 25")]
+        weight_detail = [shape("path", None, C["post_dark"], 3.0, d="M 9 57 L 55 28"),
+                         shape("circle", C["grain"], cx=54, cy=24.5, r=5.2), shape("circle", C["ring"], cx=54, cy=24.5, r=2.0)]
+    trigger = [shape("path", None, C["grain"], 3.2, d="M 42 58 L 42 34"),
+               shape("path", None, C["grain"], 3.0, d="M 30 50 L 50 32"),
+               shape("path", None, C["grain"], 3.0, d="M 28 57 L 56 51")]
+    return item_svg(trigger + weight, weight_detail + _litter_line())
+
+
+ICONS["log_deadfall"] = _deadfall()
+ICONS["stone_deadfall"] = _deadfall(stone=True)
+
+
+def _snare(hide=False):
+    """A sapling bent over to a peg, a running noose on the ground where a foot will go."""
+    cord = C["hide"] if hide else C["rope"]
+    body = [shape("path", None, C["post"], 5.0, d="M 10 58 C 8 30 22 10 44 30"),
+            shape("rect", C["post_dark"], x=44, y=44, width=4, height=15, rx=1)]
+    detail = [shape("path", None, cord, 2.4 if hide else 1.8, d="M 44 30 L 38 50"),
+              shape("ellipse", None, cord, 3.0 if hide else 2.2, cx=32, cy=53, rx=13, ry=4.5),
+              shape("polygon", C["leaf"], points="16,22 10,18 17,17"),
+              shape("polygon", C["leaf"], points="27,14 24,7 31,11")]
+    return item_svg(body, detail + _litter_line())
+
+
+ICONS["grass_snare"] = _snare()
+ICONS["hide_snare"] = _snare(hide=True)
 
 
 def write():
