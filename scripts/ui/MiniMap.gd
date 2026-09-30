@@ -4,7 +4,7 @@ extends Control
 
 ## THE HAND-DRAWN MAP (GAME-DESIGN 9.3; v0.6 round five, the player: "小地图没有还是会有点confusing，我们需要设计怎么能获得
 ## 小地图" -- chosen "在工作台做一张地图"). Not there at the start: he draws it on a hide at the workbench
-## (Config.RECIPES.hide_map), and from then it is in the corner for good (HUD). It shows only what he has seen of the
+## (Config.RECIPES.hide_map), and from then it is at the top left for good (HUD). It shows only what he has seen of the
 ## valley (FogOfWar) -- the ground inked in, the hills darker, the river -- and on it what he has built, the cabin,
 ## him, the wrecks still smoking (their smoke is seen from anywhere) and, once found, the nest. A click on it
 ## takes the view there (Main.look_at_ground).

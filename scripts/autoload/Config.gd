@@ -2626,14 +2626,12 @@ const DAY: Dictionary = {
 ## been, the land where he has, the hills darker, the river, what he has built darkest, the cabin pale, him, a
 ## smoking wreck, the nest.
 const MINIMAP: Dictionary = {
-	# Pixels a side: under the goal's panel (UI.objective_width) and narrower than it, so the corner is
+	# Pixels a side: narrower than the goal's panel across from it (UI.objective_width), so the corner is
 	# still the world's -- about three pixels to a metre on the small valley's field.
 	"size": 176.0,
 	# Seconds between looks at what he has seen -- the fog looks ten times a second (FOG.every); a map drawn by
 	# hand need not keep up -- and drawn again only if it grew.
 	"refresh_seconds": 0.5,
-	# Pixels between the goal's panel and the map under it.
-	"gap": 8.0,
 	"hide": Color(0.80, 0.68, 0.50),
 	"land": Color(0.60, 0.50, 0.34),
 	"hill": Color(0.40, 0.31, 0.20),

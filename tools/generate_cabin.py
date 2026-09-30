@@ -310,9 +310,46 @@ def workbench(seed):
         boots.tube(foot, [0.03, 0.03, 0.022, 0.006], [HIDE, jitter(HIDE, rng, 0.04), HIDE, HIDE_EDGE], 8)
         lashing(boots, heel + UP * 0.11, UP, 0.038, rng, width=0.008)
 
+    # The hand-drawn map (v0.6 round five), spread on the top at the back left where it was drawn: a hide
+    # scraped thin, its edge ragged, the valley inked on it -- the river down one side, a path, a cross
+    # where the cabin is.
+    hide_map = Builder()
+    turn = math.radians(-8.0)
+    centre = Vector((-0.46, 0.18, top_z + 0.004))
+
+    def on_map(u, v, lift=0.0):
+        """The point `u` across and `v` along the map from its middle, on the bench top."""
+        return centre + Vector((u * math.cos(turn) - v * math.sin(turn), u * math.sin(turn) + v * math.cos(turn),
+                                lift))
+
+    rim = []
+    for k in range(14):
+        a = math.tau * k / 14
+        r = rng.uniform(0.9, 1.04)
+        rim.append(on_map(math.cos(a) * 0.12 * r, math.sin(a) * 0.09 * r))
+    scraped = mix(HIDE, (0.86, 0.74, 0.56), 0.55)
+    for k in range(14):
+        hide_map.tri(on_map(0.0, 0.0), rim[k], rim[(k + 1) % 14], scraped, mix(scraped, HIDE_EDGE, 0.6),
+                     mix(scraped, HIDE_EDGE, 0.6))
+
+    def inked(points, width, col):
+        """A line of ink along `points` (map coordinates), a hair above the hide."""
+        for (u0, v0), (u1, v1) in zip(points, points[1:]):
+            along = Vector((u1 - u0, v1 - v0, 0.0)).normalized()
+            side = Vector((-along.y, along.x, 0.0)) * width * 0.5
+            hide_map.quad(on_map(u0 - side.x, v0 - side.y, 0.001), on_map(u1 - side.x, v1 - side.y, 0.001),
+                          on_map(u1 + side.x, v1 + side.y, 0.001), on_map(u0 + side.x, v0 + side.y, 0.001),
+                          col, col, col, col)
+
+    ink = (0.10, 0.07, 0.05)
+    inked([(-0.085, -0.07), (-0.07, -0.02), (-0.09, 0.03), (-0.075, 0.075)], 0.012, (0.20, 0.30, 0.36))
+    inked([(-0.02, -0.06), (0.01, -0.01), (0.03, 0.02), (0.07, 0.05)], 0.005, ink)
+    inked([(0.015, -0.02), (0.045, 0.005)], 0.006, ink)
+    inked([(0.015, 0.005), (0.045, -0.02)], 0.006, ink)
+
     return [("base", base), ("stone_pick", pick), ("stone_axe", axe), ("quarry_pick", quarry),
             ("stone_spear", stone_spear), ("bone_spear", bone_spear), ("hide_vest", vest),
-            ("bone_armor", bone_armor), ("hide_boots", boots)]
+            ("bone_armor", bone_armor), ("hide_boots", boots), ("hide_map", hide_map)]
 
 
 def _spear_shaft(b, foot, top, rng):

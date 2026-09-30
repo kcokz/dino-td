@@ -37,7 +37,7 @@ var root_control: Control = null
 ## resource is a new chip without anyone writing one (v0.6 T2).
 var resource_bar: Container = null
 var resource_labels: Dictionary = {}     # res_id -> the count Label
-## The hand-drawn map in the corner, once he has made it (MiniMap; RECIPES.hide_map).
+## The hand-drawn map at the top left, once he has made it (MiniMap; RECIPES.hide_map).
 var minimap: MiniMap = null
 ## The pinned goal's line under the beacon's (GameState.goal).
 var goal_label: Label = null
@@ -369,27 +369,14 @@ func _refresh_goal(res: Dictionary = {}) -> void:
 func _on_din_carried(_wreck: Node, draws: String) -> void:
 	show_hint(tr("HINT_DIN_" + draws.to_upper()), UiTheme.toast_seconds("read"), "warning")
 
-## The hand-drawn map shown once he has made it, under the goal at the right.
+## The hand-drawn map shown once he has made it.
 func _refresh_minimap() -> void:
 	if minimap == null or not is_instance_valid(minimap):
 		return
 	var gs = _get_game_state()
 	minimap.visible = gs != null and gs.has_method("has_unlock") and gs.has_unlock("hide_map")
-	_place_minimap()
 	if minimap.visible:
 		minimap.redraw_ground()
-
-func _place_minimap() -> void:
-	if minimap == null or not is_instance_valid(minimap) or objective_panel == null:
-		return
-	var cfg = _get_config()
-	var side: float = float(cfg.MINIMAP.get("size", 176.0)) if (cfg and "MINIMAP" in cfg) else 176.0
-	var gap: float = float(cfg.MINIMAP.get("gap", 8.0)) if (cfg and "MINIMAP" in cfg) else 8.0
-	var top: float = objective_panel.offset_top + (objective_panel.size.y + gap if objective_panel.visible else 0.0)
-	minimap.offset_right = objective_panel.offset_right
-	minimap.offset_left = minimap.offset_right - side
-	minimap.offset_top = top
-	minimap.offset_bottom = top + side
 
 func _on_goal_changed(_goal: Dictionary) -> void:
 	_refresh_goal()
@@ -1492,14 +1479,18 @@ func _ensure_ui_components() -> void:
 	beacon_bar.custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
 	beacon_bar.visible = false
 	objective.add_child(beacon_bar)
-	# The hand-drawn map, under the goal at the right, once made (MiniMap): it follows the panel's foot.
+	# The hand-drawn map, once made (MiniMap): at the top left under the strip, level with the goal's panel
+	# at the right. Under that panel it was pushed down onto the cards that come up at the right as the
+	# panel grew (a goal pinned); here nothing else is. Its size is its own (MINIMAP.size).
 	minimap = MiniMap.new()
 	minimap.name = "MiniMap"
 	minimap.visible = false
 	root_control.add_child(minimap)
-	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	objective_panel.item_rect_changed.connect(_place_minimap)
-	objective_panel.visibility_changed.connect(_place_minimap)
+	minimap.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	minimap.offset_left = edge
+	minimap.offset_right = edge
+	minimap.offset_top = objective_panel.offset_top
+	minimap.offset_bottom = objective_panel.offset_top
 	# The pinned goal, under the beacon's line (GameState.goal): what it is, what is short; a click
 	# unpins it.
 	goal_label = _label("GoalLabel", &"MutedLabel", "")

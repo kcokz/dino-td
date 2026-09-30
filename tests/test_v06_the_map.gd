@@ -49,6 +49,11 @@ func test_01_no_map_at_first_and_the_bench_draws_one_on_a_hide() -> void:
 	await wait_frames(2)
 	assert_true(main.hud.minimap.visible, "Made, it is in the corner")
 	assert_false(bench.can_offer("hide_map"), "(and it is made once)")
+	# At the left, clear of the right side's panels: under the goal's panel it was pushed down onto the cards
+	# as the panel grew with a goal pinned.
+	var at: Rect2 = main.hud.minimap.get_global_rect()
+	assert_false(at.intersects(main.hud.objective_panel.get_global_rect()), "(clear of the goal's panel)")
+	assert_lt(at.end.x, main.hud.get_viewport().get_visible_rect().size.x * 0.5, "At the left, away from the cards at the right")
 
 func test_02_it_shows_only_what_he_has_seen() -> void:
 	var main = await _level()
