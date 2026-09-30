@@ -24,6 +24,8 @@
 | [BUG-022](bug/BUG-022-pinned-at-the-cabins-west-end-at-night.md) | 小山谷夜里回船舱，在西头被咬船舱的植龙堵住咬死 | 中 | fixed | 2026-09-29 |
 | [BUG-023](bug/BUG-023-the-battery-is-guarded-day-and-night.md) | 电池残骸白天夜里都在守卫圈里，只能打死守卫拿；提示却说夜里腔骨龙睡了 | 低～中 | open | 2026-09-29 |
 | [BUG-024](bug/BUG-024-the-new-tile-does-not-grow-in.md) | 右下角新按钮出现时没有弹大（容器把 scale 压回 1） | 低 | open | 2026-09-29 |
+| [BUG-025](bug/BUG-025-the-corridor-queue-never-counts-as-jammed.md) | 走廊里排队的来袭不算卡住，72 秒不咬墙 | 中 | open | 2026-09-29 |
+| [BUG-026](bug/BUG-026-raptors-still-go-round-the-campfire.md) | 篝火人能走过去，恐龙还绕 | 低 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -66,8 +68,14 @@
 | TASK-024 | 右下角的命令按解锁先后排 | **done** 都过；新按钮不显眼、灰得太淡（观感） |
 | TASK-025 | 坠毁残骸和信标部件 | **done** 大体过；烟像脏斑；电池只能打守卫 → BUG-023 |
 | TASK-026 | 右下角按钮出现看得见、灰的看得出 | **done** 灰的好；弹大没有 → BUG-024 |
+| TASK-027 | 第五轮的修正和 bug 报告 | **done** 走廊没过（BUG-025）、恐龙绕篝火（BUG-026），其余过 |
 
 ## 检查记录
+
+### 2026-09-29 第 23 次（监控循环，TASK-027，22743e4 / 2fff793）
+
+- 新探针 `corridor`、`round5`、`round5_shots`。走廊排队的来袭 `jammed_for` 一直被清零 → BUG-025；恐龙绕篝火 → BUG-026；其余（视角回家、夜里两头、炮、光、紧贴造、原地跑、砂岩、` 键）过。
+- bug 报告的键在 2fff793 从 F9 改成 `（KEY_QUOTELEFT）；报告在 `%APPDATA%/Godot/app_userdata/dino/bugreports/`，可以拿来对着查。
 
 ### 2026-09-29 第 22 次（监控循环，TASK-026，f3fbc72）
 

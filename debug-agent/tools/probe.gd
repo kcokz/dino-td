@@ -38,6 +38,9 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"round5": await _p_round5()
+			"round5_shots": await _p_round5_shots()
+			"corridor": await _p_corridor()
 			"corner_look": await _p_corner_look()
 			"wrecks_look": await _p_wrecks_look()
 			"wreck_search": await _p_wreck_search()
@@ -3944,6 +3947,375 @@ func _lum_rect(r: Rect2) -> float:
 			total += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 			n += 1
 	return total / maxf(1.0, float(n))
+
+## TASK-027 (22743e4) 1: the player's corridor -- two rings of palisade round the cabin a cell apart (a
+## one-metre corridor), the outer open at its west end, the inner short one cell on its east side: the
+## raid's one way in. DA_RAID raiders (default 12) from the nest, too tough to die to the cabin's gun;
+## every half second what they are doing, the stakes standing, the first to bite a wall and the first at
+## the cabin; an overhead picture at 15 s and 40 s.
+func _p_corridor() -> void:
+	var n_raid: int = int(OS.get_environment("DA_RAID")) if OS.get_environment("DA_RAID") != "" else 12
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var gm = _main.grid_manager
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	if _main.get("night_prowl") != null:
+		_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	var c: Vector2i = gm.world_to_build_cell(core)
+	var stakes: Array = []
+	for ring in [[2, "inner"], [4, "outer"]]:
+		var m: int = int(ring[0])
+		for x in range(c.x - 3 - m, c.x + 4 + m):
+			for z in range(c.y - 1 - m, c.y + 2 + m):
+				var edge: bool = x == c.x - 3 - m or x == c.x + 3 + m or z == c.y - 1 - m or z == c.y + 1 + m
+				if not edge:
+					continue
+				if ring[1] == "outer" and x == c.x - 3 - m and absi(z - c.y) <= 1:
+					continue        # the outer ring open at its west end
+				if ring[1] == "inner" and x == c.x + 3 + m and z == c.y:
+					continue        # the inner ring short one cell on its east side
+				var b = _build_at("wall", Vector2i(x, z))
+				if b != null:
+					stakes.append(b)
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(8.0)
+	_say("INFO", "corridor: %d stakes (cabin cell %s); raid of %d" % [stakes.size(), str(c), n_raid])
+	var tough := func(d):
+		if not d.is_in_group("guard_dinos") and not d.is_in_group("prowlers"):
+			d.max_hp = 9999.0
+			d.current_hp = 9999.0
+	eb.dino_spawned.connect(tough)
+	wm.start_wave(2, n_raid)
+	var t := 0.0
+	var first_bite := -1.0
+	var first_bite_at := ""
+	var first_cabin := -1.0
+	var at_cabin_most := 0
+	var line: Array = []
+	while t < 90.0:
+		await _advance(0.5)
+		t += 0.5
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		var modes := {}
+		var at_cabin := 0
+		for d in get_nodes_in_group("dinos"):
+			if not is_instance_valid(d) or d.is_in_group("guard_dinos") or d.is_dead:
+				continue
+			var mname: String = String(d.Mode.keys()[int(d.mode)]).to_lower()
+			modes[mname] = int(modes.get(mname, 0)) + 1
+			var tg = d.current_target
+			if first_bite < 0.0 and tg != null and is_instance_valid(tg) and "building_type" in tg and String(tg.building_type) == "wall" and int(d.mode) in [2, 3]:
+				first_bite = t
+				first_bite_at = "%s" % str((tg as Node3D).global_position)
+			if tg == cabin and int(d.mode) == 2:
+				at_cabin += 1
+		if first_cabin < 0.0 and at_cabin > 0:
+			first_cabin = t
+		at_cabin_most = maxi(at_cabin_most, at_cabin)
+		var standing := 0
+		for w in stakes:
+			if is_instance_valid(w) and not w.is_destroyed:
+				standing += 1
+		if int(t * 2.0) % 10 == 0:
+			line.append("%.0fs %s stakes %d cabin %d" % [t, str(modes), standing, at_cabin])
+		if is_equal_approx(t, 40.0):
+			var who: Array = []
+			for d in get_nodes_in_group("dinos"):
+				if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not d.is_dead and who.size() < 12:
+					var tg2 = d.current_target
+					who.append("(%.1f,%.1f) %s ->%s jam %s v%.2f slot %s" % [d.global_position.x, d.global_position.z, String(d.Mode.keys()[int(d.mode)]), (String(tg2.building_type) if tg2 != null and is_instance_valid(tg2) and "building_type" in tg2 else "-"), str(d.debug_state().get("jammed_for", "?")) if d.has_method("debug_state") else "?", Vector3(d.velocity.x, 0, d.velocity.z).length(), str(d.get("assigned_slot"))])
+			_say("INFO", "at 40 s: " + " | ".join(who))
+		if is_equal_approx(t, 15.0) or is_equal_approx(t, 40.0):
+			_look_at(core, 26.0)
+			await _advance(0.1)
+			await _shoot("corridor_%ds" % int(t))
+	var lost := 0
+	for w in stakes:
+		if not is_instance_valid(w) or w.is_destroyed:
+			lost += 1
+	for l in line:
+		_say("INFO", "  " + l)
+	_say("INFO", "corridor, raid of %d: first bit a stake at %.1f s %s; first at the cabin %.1f s; most at the cabin at once %d; stakes lost %d of %d" % [n_raid, first_bite, first_bite_at, first_cabin, at_cabin_most, lost, stakes.size()])
+
+## TASK-027 (22743e4) 2-11: the round-five fixes, one after another on one level.
+func _p_round5() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var gm = _main.grid_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var rig = _main.camera_rig
+	var fog = _main.fog
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	await _advance(1.0)
+	# 2. The view home: the camera sent far, the cabin's medallion clicked.
+	rig.focus = core + Vector3(25.0, 0.0, 20.0)
+	rig.apply_to(_main.camera)
+	await _advance(0.3)
+	var cv: Control = _main.hud.core_vital
+	var cap: Label = cv.find_child("Keycap", true, false) as Label
+	var at: Vector2 = cv.get_global_rect().get_center()
+	for down in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = down
+		ev.position = at
+		ev.global_position = at
+		root.push_input(ev, true)
+		await process_frame
+	await _advance(0.5)
+	var by_click: Vector3 = rig.focus
+	rig.focus = core + Vector3(25.0, 0.0, 20.0)
+	rig.apply_to(_main.camera)
+	await _advance(0.3)
+	await _press(KEY_R)
+	await _advance(0.5)
+	_say("INFO", "2. R from 32 m off: focus %.1f m from the cabin; the click's focus and R's are %.2f m apart" % [_flat3(rig.focus).distance_to(_flat3(core)), _flat3(rig.focus).distance_to(_flat3(by_click))])
+	_say("INFO", "2. the medallion clicked with the view 32 m off: the view's focus now %.1f m from the cabin; its key chip '%s' shown %s" % [_flat3(rig.focus).distance_to(_flat3(core)), cap.text if cap else "?", cap.is_visible_in_tree() if cap else false])
+	await _shoot("medallion_home")
+	# 3. No "twitch#" over any head: a raid at the cabin a while.
+	var tough := func(d):
+		if not d.is_in_group("guard_dinos"):
+			d.max_hp = 9999.0
+			d.current_hp = 9999.0
+	eb.dino_spawned.connect(tough)
+	wm.start_wave(2, 6)
+	await _advance(25.0)
+	var marks := 0
+	for n in _all(root):
+		if n is Label3D and String((n as Label3D).text).to_lower().contains("twitch"):
+			marks += 1
+	_say("INFO", "3. twitch marks over heads with DINO_TWITCH_MARKS %s: %d" % ["set" if OS.has_environment("DINO_TWITCH_MARKS") else "unset", marks])
+	# 4. At night, no fire, a raider at each end of the cabin: drawn?
+	var ends: Array = []
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not d.is_dead and ends.size() < 2:
+			ends.append(d)
+	var half_x: float = float(cfg.get_building_half("core").x) if cfg.has_method("get_building_half") else 3.5
+	gs.day_clock = 300.0
+	for i in ends.size():
+		ends[i].set_physics_process(false)
+		ends[i].global_position = core + Vector3((half_x + 0.8) * (1.0 if i == 0 else -1.0), 0.0, 0.0)
+	await _advance(1.5)
+	var drawn: Array = []
+	for d in ends:
+		if is_instance_valid(d):
+			drawn.append("at (%.1f, %.1f): drawn %s, in sight %s" % [d.global_position.x, d.global_position.z, d.is_visible_in_tree(), fog.is_in_sight(d.global_position)])
+	_say("INFO", "4. night, raiders at the cabin's ends: %s" % "; ".join(drawn))
+	_look_at(core, 14.0)
+	await _advance(0.2)
+	await _shoot("night_cabin_ends")
+	gs.day_clock = 360.0 + 2.0
+	await _advance(1.5)
+	var dawn: Array = []
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not d.is_dead and d.global_position.distance_to(core) < 10.0:
+			dawn.append("(%.1f,%.1f) drawn %s" % [d.global_position.x, d.global_position.z, d.is_visible_in_tree()])
+	_say("INFO", "4. first light, raiders near the cabin: %s" % ", ".join(dawn))
+	for d in get_nodes_in_group("dinos"):
+		if is_instance_valid(d) and not d.is_in_group("guard_dinos"):
+			d.queue_free()
+	await _advance(1.0)
+	gs.day_clock = 360.0 + 100.0
+	# 7. Through a campfire, not through a brazier.
+	gs.resources["wood"] = 20
+	gs.resources["stone"] = 20
+	var camp = _build_at("campfire", gm.world_to_build_cell(core + Vector3(0.0, 0.0, 9.0)))
+	var braz = _build_at("brazier", gm.world_to_build_cell(core + Vector3(0.0, 0.0, 13.0)))
+	await _advance(2.0)
+	for f in [camp, braz]:
+		var fp: Vector3 = f.global_position
+		hero.global_position = fp + Vector3(-4.0, 0.0, 0.0)
+		hero.order_stop()
+		await _advance(0.3)
+		hero.move_to(fp + Vector3(4.0, 0.0, 0.0))
+		var nearest := INF
+		var tw := 0.0
+		while tw < 6.0:
+			await _advance(0.1)
+			tw += 0.1
+			nearest = minf(nearest, _flat3(hero.global_position).distance_to(_flat3(fp)))
+		var raptor = load(String(cfg.get_dino_script_path("coelophysis"))).new()
+		_main.add_child(raptor)
+		raptor.setup("coelophysis")
+		raptor.global_position = fp + Vector3(-4.0, 0.0, 0.0)
+		raptor.set_waypoints([fp + Vector3(4.0, 0.0, 0.0), fp + Vector3(8.0, 0.0, 0.0)])
+		var rnear := INF
+		tw = 0.0
+		while tw < 6.0:
+			await _advance(0.1)
+			tw += 0.1
+			if is_instance_valid(raptor):
+				rnear = minf(rnear, _flat3(raptor.global_position).distance_to(_flat3(fp)))
+		if is_instance_valid(raptor):
+			raptor.queue_free()
+		_say("INFO", "7. %s at %s: he came within %.2f m of its middle walking across; a raptor within %.2f m" % [f.building_type, str(fp), nearest, rnear])
+	# 8. A crossbow flush against each end of the cabin, built by him from outside.
+	var c: Vector2i = gm.world_to_build_cell(core)
+	var hs: Vector2i = (cfg.get_building_size("core") - Vector2i.ONE) / 2
+	for side in [1, -1]:
+		var cell := Vector2i(c.x + side * (hs.x + 1), c.y)
+		for r in cfg.BUILDINGS["set_crossbow"].get("cost", {}):
+			gs.resources[r] = int(gs.resources.get(r, 0)) + int(cfg.BUILDINGS["set_crossbow"]["cost"][r])
+		var b = _main.build_system.place_at("set_crossbow", cell, _main.buildings_container, true, 0)
+		if b == null:
+			_say("INFO", "8. could not place a crossbow at %s" % str(cell))
+			continue
+		hero.global_position = core + Vector3(side * 6.0, 0.0, 4.0)
+		hero.order_stop()
+		await _advance(0.3)
+		hero.order_build(b)
+		var inside := false
+		var tb := 0.0
+		var stood: Vector3 = Vector3.INF
+		while tb < 30.0 and not b.is_constructed:
+			await _advance(0.25)
+			tb += 0.25
+			inside = inside or cabin.hero_inside
+			if int(hero.current_state) == 2:
+				stood = hero.global_position
+		_say("INFO", "8. crossbow at the %s end %s: built %s in %.1f s; he went inside the cabin %s; he built from %s" % ["east" if side == 1 else "west", str(cell), b.is_constructed, tb, inside, str(stood)])
+	# 9. A walk to where he cannot get: inside a small closed ring. How long does he run on the spot?
+	var ring_c: Vector2i = gm.world_to_build_cell(core + Vector3(-10.0, 0.0, 8.0))
+	for x in range(ring_c.x - 1, ring_c.x + 2):
+		for z in range(ring_c.y - 1, ring_c.y + 2):
+			if x != ring_c.x or z != ring_c.y:
+				_build_at("wall", Vector2i(x, z))
+	await _advance(2.0)
+	hero.global_position = core + Vector3(-10.0, 0.0, 14.0)
+	hero.order_stop()
+	await _advance(0.5)
+	hero.move_to(gm.build_cell_to_world(ring_c))
+	var tr_ := 0.0
+	var on_spot := 0.0
+	var last: Vector3 = hero.global_position
+	var stopped := -1.0
+	while tr_ < 15.0:
+		await _advance(0.25)
+		tr_ += 0.25
+		var moved: float = _flat3(hero.global_position).distance_to(_flat3(last))
+		last = hero.global_position
+		if int(hero.current_state) == 1 and moved < 0.05:
+			on_spot += 0.25
+		if stopped < 0.0 and int(hero.current_state) == 0:
+			stopped = tr_
+	_say("INFO", "9. sent inside a closed ring: stopped walking at %.2f s; on the spot (walking, not moving) %.2f s in all; he stands %.1f m from its middle" % [stopped, on_spot, _flat3(hero.global_position).distance_to(_flat3(gm.build_cell_to_world(ring_c)))])
+	# 11. F9: a report, three quick ones, one paused.
+	var dir := "user://bugreports"
+	var before: PackedStringArray = DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
+	await _press(KEY_QUOTELEFT)
+	await _advance(0.5)
+	var after: PackedStringArray = DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
+	var fresh: Array = []
+	for f in after:
+		if not before.has(f):
+			fresh.append(f)
+	var summary := "none"
+	for f in fresh:
+		if String(f).ends_with(".json"):
+			var j = JSON.parse_string(FileAccess.get_file_as_string(dir + "/" + f))
+			if j is Dictionary:
+				var keys: Array = (j as Dictionary).keys()
+				var h: Dictionary = j.get("hero", {}) if j.get("hero") is Dictionary else {}
+				var dl = j.get("dinos", [])
+				summary = "keys %s; hero keys %s; dinos %d; events %d" % [str(keys), str(h.keys()), (dl as Array).size() if dl is Array else -1, (j.get("events", []) as Array).size() if j.get("events") is Array else -1]
+	_say("INFO", "11. F9: new files %s; %s; said on screen %s" % [str(fresh), summary, not _visible_labels("bugreport").is_empty() or not _visible_labels("bug-").is_empty()])
+	for i in 3:
+		await _press(KEY_QUOTELEFT)
+	await _advance(0.5)
+	var after3: PackedStringArray = DirAccess.get_files_at(dir)
+	gs.set("is_paused", true)
+	paused = true
+	await _press(KEY_QUOTELEFT)
+	for i in 10:
+		await process_frame
+	paused = false
+	gs.set("is_paused", false)
+	var after4: PackedStringArray = DirAccess.get_files_at(dir)
+	_say("INFO", "11. three quick F9s: files %d -> %d; one while paused: -> %d" % [after.size(), after3.size(), after4.size()])
+
+## TASK-027 5, 6, 10: pictures -- first light and dusk from the opening camera; the nearest sandstone at
+## noon, dusk and night; at night the cabin's gun at a phytosaur (three frames as it is hit), and the
+## eyes at a campfire's edge.
+func _p_round5_shots() -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var rig = _main.camera_rig
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	for hour in [["dawn", 360.0 + 8.0], ["morning", 360.0 + 40.0], ["noon", 360.0 + 120.0], ["dusk_in", 360.0 + 245.0], ["dusk_late", 360.0 + 264.0]]:
+		gs.day_clock = float(hour[1])
+		rig.reset()
+		rig.apply_to(_main.camera)
+		await _advance(1.2)
+		await _shoot("light_%s" % hour[0])
+	var stone: Node3D = null
+	for n in get_nodes_in_group("resource_nodes"):
+		if String(n.resource_type) == "stone" and (stone == null or (n as Node3D).global_position.distance_to(core) < stone.global_position.distance_to(core)):
+			stone = n
+	_main.fog.reveal_all()
+	for hour in [["noon", 720.0 + 120.0], ["dusk", 720.0 + 252.0], ["night", 720.0 + 310.0]]:
+		gs.day_clock = float(hour[1])
+		_look_at(stone.global_position, 9.0)
+		await _advance(1.0)
+		await _shoot("sandstone_%s" % hour[0])
+	# The gun at night.
+	gs.day_clock = 1080.0 + 300.0
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(4.0)
+	var o: Array[Vector3] = [core + Vector3(-9.0, 0.0, 0.0)]
+	_main.night_prowl.origins = o
+	var p = _main.night_prowl.send_one()
+	p.max_hp = 9999.0
+	p.current_hp = 9999.0
+	var t := 0.0
+	var hp0: float = p.current_hp
+	while t < 30.0 and is_instance_valid(p) and p.current_hp >= hp0:
+		await _advance(0.1)
+		t += 0.1
+	_look_at(p.global_position.lerp(core, 0.5), 12.0)
+	var frames_n: int = int(OS.get_environment("DA_GUN_FRAMES")) if OS.get_environment("DA_GUN_FRAMES") != "" else 3
+	for i in frames_n:
+		await _advance(0.1)
+		await _shoot("gun_at_night_%02d" % i)
+	_say("INFO", "5. the gun first hit the phytosaur %.1f s after it came up, at %s" % [t, str(p.global_position) if is_instance_valid(p) else "?"])
+	# The eyes at a campfire's edge.
+	p.queue_free()
+	gs.resources["wood"] = 10
+	var camp = _build_at("campfire", _main.grid_manager.world_to_build_cell(core + Vector3(0.0, 0.0, 5.0)))
+	await _advance(2.0)
+	var q = _main.night_prowl.send_one()
+	var t2 := 0.0
+	while t2 < 40.0 and is_instance_valid(q) and not q.is_wary():
+		await _advance(0.25)
+		t2 += 0.25
+	await _advance(3.0)
+	_look_at(q.global_position, 8.0)
+	await _advance(0.2)
+	await _shoot("eyes_close")
+	_look_at(q.global_position.lerp(camp.global_position, 0.5), 20.0)
+	await _advance(0.2)
+	await _shoot("eyes_20m")
+	_say("INFO", "5. eyes: the phytosaur wary at the fire's edge after %.1f s, eye_shine %.2f" % [t2, q.eye_shine if is_instance_valid(q) else -1.0])
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
