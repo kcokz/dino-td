@@ -2163,6 +2163,13 @@ const NEST_GUARDS: Dictionary = {
 	"threat_close": 3.0,
 	"calm_margin": 1.0,
 	"threat_snap": 0.6,
+	# 夜里睡（v0.6 第五轮，玩家定："夜里睡，靠太近或火光照到会醒"——"举火把防植龙、却会弄醒守卫，成了取舍"；
+	# debug-agent BUG-023：守卫白天夜里一样，夜里的提示却说"腔骨龙睡了"）：过了它这种恐龙的时辰（DINOS.<id>.hours，
+	# 腔骨龙是白天）就在岗位上趴下睡。人走到离它这么近（米，中心到中心）、火光照到它（篝火、火盆、他手里的火把，
+	# 和植龙怕的是同一些光）、挨了打、或者附近残骸翻找的响声，才醒；醒了只有它自己醒——同伴的叫声叫不醒睡着的，
+	# 所以一只一只地来。醒了以后没事这么多秒（秒）才又趴下；追过人、示过威以后也从头算。
+	"wake_within": 2.0,
+	"stay_up": 20.0,
 	# 巢穴附近的建筑多近才会去咬（占警戒半径的比例）
 	"building_aggro_share": 0.7,
 }
@@ -4104,7 +4111,7 @@ const ANIMATIONS: Dictionary = {
 	# dying, a jump -- plays once and holds its last frame. Decided here, for every model,
 	# rather than in each file's import settings: it is the game's rule, not the asset's,
 	# and a clip that played once and froze mid-stride was what every model did before.
-	"looping": ["idle", "walk", "run", "attack", "build", "harvest", "eat"],
+	"looping": ["idle", "walk", "run", "attack", "build", "harvest", "eat", "sleep"],
 
 	# Hero states (corresponds to Hero.State enum keys)
 	"hero": {
@@ -4123,6 +4130,9 @@ const ANIMATIONS: Dictionary = {
 		"WALKING": "run",     # bipedal locomotion gait
 		"ATTACKING": "attack", # bite / swipe
 		"DEAD": "death",
+		# Lying on its belly, legs folded, head on the ground, breathing (tools/generate_triassic.py
+		# add_sleep: the Coelophysis's; a species without it goes on standing).
+		"SLEEPING": "sleep",
 	},
 
 	# Travelling is drawn from the feet, not from the state (ActorAnimator.update_motion; v0.6

@@ -1373,6 +1373,11 @@
     - **"看不出来是什么"的东西**：是能采的砂岩（夜里在火光下是一团橙色碎块，只到膝盖）。现在是一层层叠起来、一边台阶一边陡壁的砂岩露头，一人高，顶层裂成两块（`tools/generate_props.py sandstone_outcrop`、`_bed`）。
     - **（debug-agent BUG-024）新按钮没有弹大**：容器排版时把子节点的缩放设回 1。现在排版之后才缩小，补间从小开始（`UiKit.come_in`）；`test_v06_the_hero_card` 第 12 条改成隔两帧再看。
     - **bug 报告**（只在开发版）：按 ` 键（Esc 下面、1 左边；原来是 F9，玩家："我f按键不方便，有没有别的快捷键可以用给bug report"——按位置认，换了键盘布局也是那个键）把当时的一切写进 `user://bugreports/bug-时间.json`，旁边存截图（新 `BugReport`，`CONTROLS.bug_report_key`、`BUG_REPORT`；`Hero.debug_state`；恐龙的 `debug_state` 多了 `jammed_for`）。新测试 `test_v06_bug_report.gd`（2 条）。
+  - **守卫夜里睡**（v0.6 第五轮，玩家定："夜里睡，靠太近或火光照到会醒"；debug-agent BUG-023）：
+    - 过了它这种恐龙的时辰（`DINOS.<id>.hours`，腔骨龙是白天）、岗位上没事，守卫就趴下睡（`GuardDino.GuardState.SLEEPING`、`Dino.State.SLEEPING`）。只被到了它身上的东西弄醒：人走到 2 米以内（`NEST_GUARDS.wake_within`）、火光照到它（`ProwlerDino.lights`：篝火、火盆、火把）、挨打、残骸的响声（`GuardDino.wake`，下一项接上）。醒了只有它自己醒——睡着的听不见同伴叫（`answer_call`、`answer_threat`）——醒着的和白天一样；没事 20 秒才又趴下（`NEST_GUARDS.stay_up`；追过、示过威从头算；火光照着的不趴下，免得刚趴下又被照醒）。天亮都起来。
+    - **它自己的睡觉动作**：腔骨龙原来的动作里没有躺下的（只有 攻击/死亡/待机/跳/跑/走），死亡是侧躺、腿伸出去，睡着的守卫不能看着像死了。`tools/generate_triassic.py` 的 `add_sleep` 给腔骨龙做了一个 "sleep"：身子放低到肚子贴地，每根骨头按方向摆（腿像歇着的鸟那样折在身下，脖子和头顺着地面，尾巴绕到身边），每根骨头都打关键帧（游戏一个接一个放，没打帧的骨头会停在上一个动作里），4 秒一次慢慢的呼吸（胸口抬 4°，头还在地上）。`Config.ANIMATIONS.dino.SLEEPING`，`looping` 加了 sleep。
+    - `ActorAnimator` 找状态名时顺着脚本往上找：守卫的脚本没有自己的 `State`，是 Dino 的，原来找不到就放不出新状态的动作。
+    - 新测试 `test_v06_the_guards_sleep.gd`（7 条）：夜里趴下、放 sleep；3 米走过不醒、1.4 米醒并示威；火把照到就醒；醒了一只别的照睡、叫不醒；挨打醒了就扑；醒 20 秒后又趴下，天亮都起来；sleep 不是 death、会循环、模型里有。
   - **坠毁残骸和信标部件**（设计书 9.3"信标变成冒险"；玩家定："翻找几秒，直接入库"；"烟柱，远处看得见"；"河边 / 巢后 / 东南边缘"）：
     - 信标三段各要一个部件：第 1 段天线（8 木头 + 天线）、第 2 段电池（8 石头 + 电池）、第 3 段主控板（6 石头 + 6 骨头 + 主控板）。部件是仓库里的材料（`Config.RESOURCES` 多了 antenna、battery、board；`Config.is_part`），所以价格、缺什么、去哪找，都和别的价格一样说。
     - 部件在三块残骸里：残骸是一种资源点（`RESOURCE_NODES` 的 antenna / battery / board：一个，`strokes` 10 下才出来，一秒一下）。`ResourceNode.harvest` 新规则：`strokes` 大于 1 的，前几下什么也不出，最后一下出一个；卡片和标签按"还剩几下"倒数；卡片写里面有什么、翻多久（`NODE_HINT_WRECK`），翻完写"翻过了"（`STATUS_SEARCHED`），类型写"飞船残骸"（`PANEL_KIND_WRECK`）。

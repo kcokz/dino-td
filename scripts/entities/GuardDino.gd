@@ -18,6 +18,16 @@ extends "res://scripts/entities/Dino.gd"
 ##   ATTACKING    standing at it, biting -- letting go only past its reach (reach_release)
 ##   RETURNING    home, deaf to him on the way, and settling a moment once there
 ##                (reaggro_seconds) before it will start after anyone again
+##   SLEEPING     lying down about its post, out of its hours -- the Coelophysis's are the day's, so
+##                the dusk and the night (Config.DINOS.<id>.hours) -- woken only by what is AT it:
+##                the Hero right beside it (NEST_GUARDS.wake_within), a light on it (a fire's, his
+##                torch: ProwlerDino.lights), a blow, the din of a wreck searched near it (wake).
+##
+## ASLEEP AT NIGHT (v0.6 round five, the player's choice: "夜里睡，靠太近或火光照到会醒" -- "举火把防植龙、
+## 却会弄醒守卫，成了取舍"; the debug-agent's BUG-023: day and night the same, while the night's hint said
+## the Coelophysis slept). Woken, it is up alone: a call does not wake a sleeping guard -- only what is at
+## it -- so they come one at a time, the longer he stays the more. Up, it is a guard as by day, and lies
+## down again once nothing has kept it up for a while (NEST_GUARDS.stay_up).
 ##
 ## A nest is defended by all its guards at once: the first to go for him calls, and the others
 ## come (_rally); one that is hurt goes for him too (take_damage). But they WARN before they come
@@ -38,7 +48,8 @@ enum GuardState {
 	AGGRO_CHASE = 1,
 	ATTACKING = 2,
 	RETURNING = 3,
-	THREATENING = 4
+	THREATENING = 4,
+	SLEEPING = 5
 }
 
 # ==============================================================================
@@ -59,6 +70,8 @@ var _calm: float = 0.0
 ## Seconds of warning left (THREATENING), and of the snap at the air it warns with.
 var _threat_left: float = 0.0
 var _snap_left: float = 0.0
+## Seconds it stays up, woken out of its hours, before it lies down again (NEST_GUARDS.stay_up).
+var _up_for: float = 0.0
 
 # ==============================================================================
 # Lifecycle & Initialization
@@ -108,6 +121,11 @@ func _guard_step(delta: float) -> void:
 	if is_dead or current_state == State.DEAD:
 		return
 	_calm = maxf(0.0, _calm - delta)
+	# After somebody, or warning him off, or on its way home from it: up, and for a while after.
+	if guard_state != GuardState.POST_ROAM and guard_state != GuardState.SLEEPING:
+		_up_for = float(_guards().get("stay_up", 20.0))
+	else:
+		_up_for = maxf(0.0, _up_for - delta)
 	_think_clock -= delta
 	if _think_clock <= 0.0:
 		_think_clock = _next_think()
@@ -123,12 +141,19 @@ func _guard_step(delta: float) -> void:
 			_process_returning(delta)
 		GuardState.THREATENING:
 			_process_threatening(delta)
+		GuardState.SLEEPING:
+			_drive(Vector3.ZERO, delta, Vector3.INF)
 
 ## The decisions that are not the frame's business: whether to start after somebody, whether to
 ## give up.
 func _guard_think() -> void:
 	_unstack()
 	match guard_state:
+		GuardState.SLEEPING:
+			if _its_hours():
+				_get_up()
+			elif _stirred():
+				wake(get_tree().get_first_node_in_group("hero") as Node3D)
 		GuardState.POST_ROAM:
 			var threat: Node3D = _detect_threat()
 			if threat != null:
@@ -137,6 +162,9 @@ func _guard_think() -> void:
 					_begin_threat(threat)
 				else:
 					_begin_chase(threat)
+			elif not _its_hours() and _up_for <= 0.0 and not _stirred():
+				# Not in a light, nor with him beside it: it would only be woken again at once.
+				_lie_down()
 		GuardState.THREATENING:
 			if not _is_threat_valid(chase_target) or not _worth_chasing(chase_target) or not _can_get_at(chase_target):
 				_stand_down()
@@ -247,23 +275,82 @@ func _rally(threat: Node3D) -> void:
 
 ## Another guard of its nest has called (_rally): after `threat` as well -- unless it is at somebody
 ## already, or he is beyond its own leash, or there is no way to him. A call is not its own noticing,
-## so it answers even while settling after coming home (reaggro_seconds).
+## so it answers even while settling after coming home (reaggro_seconds). Asleep, it does not hear it.
 func answer_call(threat: Node3D) -> void:
-	if is_dead or guard_state == GuardState.AGGRO_CHASE or guard_state == GuardState.ATTACKING:
+	if is_dead or guard_state == GuardState.AGGRO_CHASE or guard_state == GuardState.ATTACKING \
+			or guard_state == GuardState.SLEEPING:
 		return
 	if not _is_threat_valid(threat) or not _worth_chasing(threat) or not _can_get_at(threat):
 		return
 	_begin_chase(threat, false)
 
-## Hurt while it is not after anyone -- struck while settling, or shot from outside its aggro_radius:
-## it goes for the Hero, if he is inside its leash and there is a way to him, and calls the others.
+## Hurt while it is not after anyone -- struck while settling, or shot from outside its aggro_radius,
+## or asleep: it goes for the Hero, if he is inside its leash and there is a way to him, and calls the
+## others (those asleep sleep on: answer_call).
 func take_damage(amount: float) -> void:
 	super.take_damage(amount)
 	if is_dead or not is_inside_tree() or guard_state == GuardState.AGGRO_CHASE or guard_state == GuardState.ATTACKING:
 		return
+	if guard_state == GuardState.SLEEPING:
+		_up_for = float(_guards().get("stay_up", 20.0))
+		_get_up()
 	var hero: Node3D = get_tree().get_first_node_in_group("hero") as Node3D
 	if hero != null and _is_threat_valid(hero) and _worth_chasing(hero) and _can_get_at(hero):
 		_begin_chase(hero)
+
+# ==============================================================================
+# Asleep
+# ==============================================================================
+
+## Whether it is its hours (Config.DINOS.<id>.hours): the Coelophysis's are the day's. Without a clock
+## -- a level built without one -- always.
+func _its_hours() -> bool:
+	var gs = get_node_or_null("/root/GameState")
+	var cfg = _get_config()
+	if gs == null or cfg == null or not gs.has_method("day_part") or not cfg.has_method("keeps_hours"):
+		return true
+	return bool(cfg.keeps_hours(dino_type, String(gs.day_part())))
+
+## Whether it is lying asleep.
+func is_asleep() -> bool:
+	return guard_state == GuardState.SLEEPING
+
+## Out of its hours with nothing about: down where it is, about its post, still.
+func _lie_down() -> void:
+	chase_target = null
+	current_target = null
+	guard_state = GuardState.SLEEPING
+	velocity = Vector3.ZERO
+	current_state = State.SLEEPING
+
+## Up, about its post again.
+func _get_up() -> void:
+	guard_state = GuardState.POST_ROAM
+	roam_timer = 0.0
+	current_state = State.WALKING
+
+## Whether what is at it wakes it where it lies: the Hero right beside it (NEST_GUARDS.wake_within,
+## middle to middle), or a light on it -- a fire's, or his torch (ProwlerDino.lights: the ones the
+## phytosaurs keep out of).
+func _stirred() -> bool:
+	if not is_inside_tree():
+		return false
+	var hero: Node3D = get_tree().get_first_node_in_group("hero") as Node3D
+	if hero != null and _is_threat_valid(hero) \
+			and _flat(global_position).distance_to(_flat(hero.global_position)) <= float(_guards().get("wake_within", 2.0)):
+		return true
+	return not ProwlerDino.light_over(get_tree(), global_position).is_empty()
+
+## Woken -- by the Hero beside it, a light on it, the din of a wreck searched near it: up for a while
+## (NEST_GUARDS.stay_up), and, `by` the Hero where it can get at him, warning him off -- alone: the
+## rest of its nest sleeps on. Nothing asleep, nothing to do.
+func wake(by: Node3D = null) -> void:
+	if is_dead or guard_state != GuardState.SLEEPING:
+		return
+	_up_for = float(_guards().get("stay_up", 20.0))
+	_get_up()
+	if by != null and _is_threat_valid(by) and _worth_chasing(by) and _can_get_at(by):
+		_begin_threat(by, false)
 
 func _go_home() -> void:
 	chase_target = null
@@ -446,7 +533,8 @@ func _guards() -> Dictionary:
 func debug_state() -> Dictionary:
 	var s: Dictionary = super.debug_state()
 	s["guard"] = {"state": String(GuardState.keys()[guard_state]), "post": _xz(post_position),
-		"roam_target": _xz(roam_target), "chase": _describe(chase_target), "calm": snappedf(_calm, 0.01)}
+		"roam_target": _xz(roam_target), "chase": _describe(chase_target), "calm": snappedf(_calm, 0.01),
+		"up_for": snappedf(_up_for, 0.01)}
 	return s
 
 ## The run's dice (GameState.rng), or a throwaway set outside a run.

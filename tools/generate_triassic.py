@@ -25,6 +25,12 @@
 # orientation, so every clip the game plays (idle, walk, run, attack, death) plays on it as it
 # did on the animal it came from.
 #
+# AND ONE CLIP OF ITS OWN where the source has none: the Coelophysis asleep ("sleep"; the guards at
+# the nest sleep at night, GAME-DESIGN 9.3). Lying on its belly, its legs folded under it the way a
+# resting bird's are, its neck and head down along the ground, its tail laid round beside it -- still,
+# but for a slow breath. Upright and belly-down, not on its side: the death clip lies on its side with
+# its legs out, and a sleeping guard must not read as a dead one.
+#
 #   "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python tools/generate_triassic.py
 #   ... -- coelophysis         makes only that one
 #   ... -- --preview           also renders each to the scratch directory
@@ -67,6 +73,39 @@ ANIMALS = {
             "Black": (0.012, 0.010, 0.008),
         },
         "scutes": None,
+        # Asleep (add_sleep): the body let down `drop` model units (its hips stand a little over 3),
+        # then each bone turned to point along a direction in the armature's space -- forward is -y, up
+        # is +z, its left +x -- in this order, parents first; each foot, which hangs off the root, put
+        # at the end of its leg on the ground and pointed ahead. The breath: `bone` raised by `degrees`
+        # halfway through `frames` and down again, the bones after it on the list kept pointing where
+        # they were, so the chest rises and the head stays on the ground.
+        "sleep": {
+            "drop": 2.2,
+            "aim": [
+                ("Hips", (0.0, -1.0, -0.05)),
+                ("Torso", (0.0, -1.0, -0.02)),
+                ("BackUpLeg.L", (0.15, -0.95, -0.15)),
+                ("BackUpLeg.R", (-0.15, -0.95, -0.15)),
+                ("BackLowLeg.L", (0.05, 0.8, -0.45)),
+                ("BackLowLeg.R", (-0.05, 0.8, -0.45)),
+                ("Shoulders", (0.0, -0.8, -0.35)),
+                ("Neck", (0.12, -0.93, -0.3)),
+                ("Head", (0.3, -0.94, 0.1)),
+                ("FrontUpLeg.L", (0.2, 0.6, -0.8)),
+                ("FrontUpLeg.R", (-0.2, 0.6, -0.8)),
+                ("FrontLowLeg.L", (0.1, -0.9, -0.3)),
+                ("FrontLowLeg.R", (-0.1, -0.9, -0.3)),
+                ("Back", (0.0, 1.0, -0.15)),
+                ("Tail1", (0.15, 0.9, -0.45)),
+                ("Tail2", (0.35, 0.93, -0.1)),
+                ("Tail3", (0.75, 0.65, 0.0)),
+                ("Tail4", (0.98, 0.1, 0.0)),
+                ("Tail5", (0.75, -0.65, 0.0)),
+            ],
+            "feet": [("BackFoot.L", "BackLowLeg.L", (0.1, -1.0, 0.0)), ("BackFoot.R", "BackLowLeg.R", (-0.1, -1.0, 0.0))],
+            "foot_height": 0.09,
+            "breath": {"bone": "Torso", "degrees": 4.0, "frames": 96},
+        },
     },
     "placerias": {
         "source": "triceratops.glb",
@@ -368,6 +407,77 @@ def cut_off(arm, mesh, spec):
     print("  cut %d vertices" % len(doomed))
 
 
+def add_sleep(arm, spec):
+    """A clip of its own, "sleep": the pose in `spec` (ANIMALS.<name>.sleep) keyed on every bone -- the
+    game plays one clip after another, and a bone this one left unkeyed would keep whatever the last
+    clip left it at -- with a slow breath."""
+    from mathutils import Vector
+    act = bpy.data.actions.new("sleep")
+    arm.animation_data_create()
+    arm.animation_data.action = act
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    for pb in arm.pose.bones:
+        pb.rotation_mode = 'QUATERNION'
+
+    def settle():
+        bpy.context.view_layer.update()
+
+    def aim(name, direction):
+        pb = arm.pose.bones.get(name)
+        if pb is None:
+            return
+        m = pb.matrix.copy()
+        cur = (m.to_3x3() @ Vector((0.0, 1.0, 0.0))).normalized()
+        turned = (cur.rotation_difference(Vector(direction).normalized()).to_matrix() @ m.to_3x3()).to_4x4()
+        turned.translation = m.translation
+        pb.matrix = turned
+        settle()
+
+    def pose(breath):
+        for pb in arm.pose.bones:
+            pb.location = (0.0, 0.0, 0.0)
+            pb.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+            pb.scale = (1.0, 1.0, 1.0)
+        settle()
+        body = arm.pose.bones["Body"]
+        m = body.matrix.copy()
+        m.translation = m.translation + Vector((0.0, 0.0, -spec["drop"]))
+        body.matrix = m
+        settle()
+        lift = spec["breath"]
+        for (name, direction) in spec["aim"]:
+            d = Vector(direction)
+            if breath and name == lift["bone"]:
+                # Its front end up by the breath's angle, about its own side-to-side axis.
+                d = d.normalized()
+                side = d.cross(Vector((0.0, 0.0, 1.0))).normalized()
+                from mathutils import Quaternion
+                d = Quaternion(side, math.radians(lift["degrees"])) @ d
+            aim(name, d)
+        for (foot, leg, direction) in spec["feet"]:
+            pb = arm.pose.bones.get(foot)
+            if pb is None:
+                continue
+            ankle = arm.pose.bones[leg].tail.copy()
+            m = pb.matrix.copy()
+            m.translation = Vector((ankle.x, ankle.y, spec["foot_height"]))
+            pb.matrix = m
+            settle()
+            aim(foot, direction)
+
+    last = spec["breath"]["frames"]
+    for (frame, breath) in ((1, False), (last // 2 + 1, True), (last + 1, False)):
+        pose(breath)
+        for pb in arm.pose.bones:
+            pb.keyframe_insert("location", frame=frame)
+            pb.keyframe_insert("rotation_quaternion", frame=frame)
+            pb.keyframe_insert("scale", frame=frame)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    arm.animation_data.action = None
+    print("  sleep: %d bones keyed" % len(arm.pose.bones))
+
+
 def export(arm, mesh, path):
     bpy.ops.object.select_all(action='DESELECT')
     arm.select_set(True)
@@ -422,6 +532,8 @@ def main():
             add_scutes(arm, mesh, spec["scutes"])
         if spec.get("eyes"):
             add_eyes(arm, mesh, spec["eyes"])
+        if spec.get("sleep"):
+            add_sleep(arm, spec["sleep"])
         path = os.path.join(OUT, name + ".glb")
         export(arm, mesh, path)
         print("[OK] %s: %d verts, %.2f x %.2f x %.2f, clips %s" % (

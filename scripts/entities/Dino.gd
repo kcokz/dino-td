@@ -36,7 +36,9 @@ extends CharacterBody3D
 enum State {
 	WALKING = 0,
 	ATTACKING = 1,
-	DEAD = 2
+	DEAD = 2,
+	# Lying down, out of its hours (GuardDino): its own clip, "sleep" (Config.ANIMATIONS).
+	SLEEPING = 3
 }
 
 ## What it is doing, as opposed to what it looks like it is doing (State, which the animator

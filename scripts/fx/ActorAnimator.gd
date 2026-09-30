@@ -208,21 +208,24 @@ func _resolve_state_name(state_value: Variant) -> String:
 	if state_value is int:
 		var int_val: int = int(state_value)
 		if actor != null:
-			var script_obj = actor.get_script()
-			if script_obj != null:
+			# The actor's own script, or the one it extends: a guard's State is its Dino's.
+			var script_obj: Script = actor.get_script() as Script
+			while script_obj != null:
 				var constants: Dictionary = script_obj.get_script_constant_map()
 				if constants.has("State") and constants["State"] is Dictionary:
 					var state_map: Dictionary = constants["State"]
 					for k in state_map:
 						if state_map[k] == int_val:
 							return String(k).to_upper()
+					break
+				script_obj = script_obj.get_base_script()
 		# Fallback standard keys by index
 		if actor_type == "hero":
 			var hero_states = ["IDLE", "MOVING", "BUILDING", "ATTACKING", "DEAD", "HARVESTING"]
 			if int_val >= 0 and int_val < hero_states.size():
 				return hero_states[int_val]
 		elif actor_type == "dino":
-			var dino_states = ["WALKING", "ATTACKING", "DEAD"]
+			var dino_states = ["WALKING", "ATTACKING", "DEAD", "SLEEPING"]
 			if int_val >= 0 and int_val < dino_states.size():
 				return dino_states[int_val]
 	return str(state_value).to_upper()
