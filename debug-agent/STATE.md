@@ -23,6 +23,7 @@
 | [BUG-021](bug/BUG-021-test-suite-leaks-at-exit.md) | 测试套件退出泄漏 63 对象 / 9 资源（在涨） | 低 | open | 2026-09-29 |
 | [BUG-022](bug/BUG-022-pinned-at-the-cabins-west-end-at-night.md) | 小山谷夜里回船舱，在西头被咬船舱的植龙堵住咬死 | 中 | fixed | 2026-09-29 |
 | [BUG-023](bug/BUG-023-the-battery-is-guarded-day-and-night.md) | 电池残骸白天夜里都在守卫圈里，只能打死守卫拿；提示却说夜里腔骨龙睡了 | 低～中 | open | 2026-09-29 |
+| [BUG-024](bug/BUG-024-the-new-tile-does-not-grow-in.md) | 右下角新按钮出现时没有弹大（容器把 scale 压回 1） | 低 | open | 2026-09-29 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -64,8 +65,14 @@
 | TASK-023 | 能采的和风景分得开 | **done** 都过；石头太小、提亮看不出（观感） |
 | TASK-024 | 右下角的命令按解锁先后排 | **done** 都过；新按钮不显眼、灰得太淡（观感） |
 | TASK-025 | 坠毁残骸和信标部件 | **done** 大体过；烟像脏斑；电池只能打守卫 → BUG-023 |
+| TASK-026 | 右下角按钮出现看得见、灰的看得出 | **done** 灰的好；弹大没有 → BUG-024 |
 
 ## 检查记录
+
+### 2026-09-29 第 22 次（监控循环，TASK-026，f3fbc72）
+
+- 新探针 `corner_look`：按钮自己的 scale/modulate 逐帧读、按钮那一块屏幕亮度。灰的约为能按的一半亮，红 0；金光在；弹大被容器压掉 → BUG-024。
+- 卡片上要有"升级"得是绊弩（`set_crossbow` 升 `set_crossbow_2`），栅栏没有升级。
 
 ### 2026-09-29 第 21 次（监控循环，TASK-025，ee5c5dc）
 

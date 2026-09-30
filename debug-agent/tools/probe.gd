@@ -38,6 +38,7 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"corner_look": await _p_corner_look()
 			"wrecks_look": await _p_wrecks_look()
 			"wreck_search": await _p_wreck_search()
 			"commands_order": await _p_commands_order()
@@ -3848,6 +3849,101 @@ func _wrecks() -> Array:
 		if String(n.resource_type) in ["antenna", "battery", "board"]:
 			out.append(n)
 	return out
+
+## TASK-026 (f3fbc72): the corner's tiles seen arriving, and plainly dull when he cannot give them. The
+## torch tile's coming in at the first dusk, frame by frame (its scale, the brightness of its square,
+## Build's x); then each tile's brightness can / cannot at noon, dusk and night with Eat's 0; then a
+## bitten wall's card with its buttons (Repair can, Upgrade cannot).
+func _p_corner_look() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var hero = _main.hero
+	gs.day_clock = 230.0
+	_main.wave_manager.auto_raid_enabled = false
+	if _main.night_prowl:
+		_main.night_prowl.enabled = false
+	await _advance(1.0)
+	var cmds: Node = _find_with_method(root, "key_of")
+	var build_x: float = cmds.build_button.global_position.x
+	var base_torch: float = -1.0
+	gs.day_clock = 239.9
+	var frames: Array = []
+	var moved := false
+	var shots := 0
+	var t0: int = Time.get_ticks_msec()
+	var t := 0.0
+	while t < 2.2:
+		await process_frame
+		t = float(Time.get_ticks_msec() - t0) / 1000.0
+		if absf(cmds.build_button.global_position.x - build_x) > 0.5:
+			moved = true
+		var tb: Button = cmds.torch_button
+		if tb.is_visible_in_tree():
+			frames.append("%.2f:s%.2f l%.2f" % [t, tb.scale.x, _lum_rect(tb.get_global_rect())])
+			if shots < 4 and (frames.size() == 2 or frames.size() == 12 or frames.size() == 30 or frames.size() == 70):
+				shots += 1
+				await _shoot("torch_coming_%d" % frames.size())
+	_say("INFO", "the torch tile coming in (time:scale brightness): %s" % " ".join(frames.slice(0, 40)))
+	# The Eat tile's coming in, every frame, its own scale and tint.
+	var eb2 := root.get_node("EventBus")
+	gs.stock_meal(String(root.get_node("Config").DISHES.keys()[0]))
+	var eat_frames: Array = []
+	for i in 24:
+		await process_frame
+		var eb_: Button = cmds.eat_button
+		eat_frames.append("%d:vis%s s%.2f m(%.2f,%.2f,%.2f)" % [i, str(eb_.is_visible_in_tree()).left(1), eb_.scale.x, eb_.modulate.r, eb_.modulate.g, eb_.modulate.b])
+	_say("INFO", "the Eat tile coming in, frame by frame (scale, modulate): %s" % " ".join(eat_frames))
+	_say("INFO", "Build moved while it came in: %s" % moved)
+	# Can and cannot: Build can; the torch by day cannot; Eat with no meals cannot.
+	gs.stock_meal(String(root.get_node("Config").DISHES.keys()[0]))
+	await _advance(2.5)
+	gs.meals = {}
+	eb.meals_changed.emit(gs.meals)
+	for hour in [["noon", 360.0 + 120.0], ["dusk", 360.0 + 252.0], ["night", 360.0 + 310.0]]:
+		gs.day_clock = float(hour[1])
+		gs.resources["wood"] = 0
+		eb.resources_changed.emit(gs.resources)
+		await _advance(1.0)
+		var line: Array = []
+		for id in ["eat", "torch", "build"]:
+			var b: Button = cmds.tile(id)
+			line.append("%s %s %.3f" % [id, "cannot" if b.disabled else "can", _lum_rect(b.get_global_rect())])
+		var badge: Label = cmds.eat_button.get_node_or_null("Badge") as Label
+		var badge_col: Color = badge.get_theme_color("font_color") if badge else Color.BLACK
+		_say("INFO", "%s: %s; Eat's badge '%s' colour %s" % [hour[0], ", ".join(line), badge.text if badge else "?", str(badge_col)])
+		await _shoot("corner_%s" % hour[0])
+	# A bitten wall's card: Repair can, Upgrade cannot.
+	gs.day_clock = 360.0 * 2 + 120.0
+	var wall = _build_at("set_crossbow", _main.grid_manager.world_to_build_cell(_main.current_core.global_position + Vector3(6.0, 0.0, 6.0)))
+	wall.take_damage(wall.max_hp * 0.5)
+	gs.resources["wood"] = 2
+	gs.resources["stone"] = 2
+	gs.resources["bone"] = 1
+	eb.resources_changed.emit(gs.resources)
+	eb.unit_selected.emit(wall)
+	await _advance(0.8)
+	var panel: Node = _find_with_method(root, "_show_abilities")
+	var bl: Array = []
+	for b in _all(panel):
+		if b is Button and (b as Control).is_visible_in_tree() and String((b as Button).text) != "":
+			bl.append("'%s' %s %.3f" % [(b as Button).text, "cannot" if (b as Button).disabled else "can", _lum_rect((b as Control).get_global_rect())])
+	_say("INFO", "a bitten crossbow's card: %s" % "; ".join(bl))
+	await _shoot("crossbow_card")
+
+## Mean brightness of the screen over `r` (viewport coordinates).
+func _lum_rect(r: Rect2) -> float:
+	var img: Image = root.get_viewport().get_texture().get_image()
+	var k: float = float(img.get_width()) / root.get_visible_rect().size.x
+	var total := 0.0
+	var n := 0
+	for y in range(int(r.position.y * k), int(r.end.y * k), 3):
+		for x in range(int(r.position.x * k), int(r.end.x * k), 3):
+			if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
+				continue
+			var c: Color = img.get_pixel(x, y)
+			total += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+			n += 1
+	return total / maxf(1.0, float(n))
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
