@@ -352,6 +352,31 @@ ICONS["stone_wall"] = item_svg(
     + [shape("ellipse", C["moss"], cx=20, cy=19.5, rx=7, ry=2.4), shape("ellipse", C["moss"], cx=38, cy=19.5, rx=5, ry=2)])
 
 
+# The fence with a rock on it (v0.6 round six): the three posts, a block of sandstone balanced on their points,
+# a thong round it.
+ICONS["rock_fence"] = item_svg(
+    [shape("polygon", C["post"], points=_post(x, top=30, tip=20)) for x in (10, 26, 42)]
+    + [shape("rect", C["rope"], x=7, y=44, width=50, height=5.5, rx=2),
+       shape("rect", "#b0603c", x=16, y=6, width=32, height=17, rx=4)],
+    [s for x in (10, 26, 42) for s in (
+        shape("polygon", C["post_dark"], points="%d,58 %d,30 %d,22 %d,58" % (x, x, x + 4, x + 4)),)]
+    + [shape("rect", C["rope"], x=7, y=44, width=50, height=5.5, rx=2),
+       shape("rect", "#c97a50", x=16, y=6, width=32, height=6, rx=3),
+       shape("rect", "#8a4a2e", x=16, y=17, width=32, height=6, rx=3),
+       shape("path", None, C["rope"], 2.0, d="M 22 5 L 22 25 M 42 5 L 42 25")])
+
+# A crossbow set into a stone wall (v0.6 round six): the drystone courses, a dark loophole, the stave across it.
+ICONS["wall_crossbow"] = item_svg(
+    [shape("rect", C[c], x=x, y=y, width=w, height=h, rx=3) for (x, y, w, h, c) in _STONES]
+    + [shape("path", None, C["post"], 5.5, d="M 10 30 Q 32 16 54 30")],
+    [shape("rect", C[c], x=x, y=y, width=w, height=h, rx=3) for (x, y, w, h, c) in _STONES]
+    + [shape("rect", C["char"], x=25, y=26, width=14, height=12, rx=2),
+       shape("path", None, C["post"], 5.5, d="M 10 30 Q 32 16 54 30"),
+       shape("circle", C["bone"], cx=10, cy=30, r=3.2), shape("circle", C["bone"], cx=54, cy=30, r=3.2),
+       shape("path", None, C["bone"], 1.8, d="M 10 31 L 32 34 L 54 31"),
+       shape("polygon", C["bone"], points="32,8 36,17 28,17")])
+
+
 # A gate: two sharpened posts with a door of planks hung between them on rope, braced with a Z --
 # a door that swings, not more fence (tools/generate_props.py gate).
 ICONS["gate"] = item_svg(
