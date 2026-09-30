@@ -86,6 +86,8 @@ var speed_btn: Button = null
 var speed_buttons: Array[Button] = []
 var menu_btn: Button = null
 var raid_warning_banner: Label = null
+## The banner's lines after its first -- which way, who comes with them -- smaller, under it (_set_raid_text).
+var raid_warning_details: Label = null
 var raid_warning_panel: Control = null
 var option_panel: Node = null
 ## His two commands, Build and Eat, in the corner under the card (v0.6 round four).
@@ -365,9 +367,10 @@ func _refresh_goal(res: Dictionary = {}) -> void:
 	if objective_panel:
 		objective_panel.visible = true
 
-## A wreck's din has brought something (Din): what the noise did, once a search.
-func _on_din_carried(_wreck: Node, draws: String) -> void:
-	show_hint(tr("HINT_DIN_" + draws.to_upper()), UiTheme.toast_seconds("read"), "warning")
+## A wreck's din has brought something (Din): what the noise did, once a search -- with the face of what came.
+func _on_din_carried(_wreck: Node, draws: String, species: String = "") -> void:
+	show_hint(tr("HINT_DIN_" + draws.to_upper()), UiTheme.toast_seconds("read"), "warning",
+		UiTheme.portrait("dino/" + species) if species != "" else null)
 
 ## The hand-drawn map shown once he has made it.
 func _refresh_minimap() -> void:
@@ -449,7 +452,7 @@ func _render_final_banner() -> void:
 	var gs = _get_game_state()
 	if raid_warning_banner == null or gs == null or float(gs.final_wave_in) < 0.0:
 		return
-	raid_warning_banner.text = tr("HUD_FINAL_WAVE") % int(ceil(float(gs.final_wave_in)))
+	_set_raid_text(tr("HUD_FINAL_WAVE") % int(ceil(float(gs.final_wave_in))))
 
 ## Launched: everything in the valley is on its way, from every side (GAME-DESIGN 8.3).
 func _on_beacon_launched() -> void:
@@ -768,7 +771,25 @@ func _render_raid_banner() -> void:
 		text += "\n" + tr("HUD_RAID_ALSO") % tr("DIR_AND").join(others)
 	if not _bosses_coming.is_empty():
 		text += "\n" + tr("HUD_RAID_BOSS") % ", ".join(_bosses_coming)
+	_set_raid_text(text)
+
+## The raid banner's text: all of it on the banner's label, which shows the first line; the rest under it.
+func _set_raid_text(text: String) -> void:
 	raid_warning_banner.text = text
+	var lines: PackedStringArray = text.split("\n")
+	# As wide as its first line in its own letters: the lines it keeps but does not show would make it as wide
+	# as they are in the heading's.
+	var font: Font = raid_warning_banner.get_theme_font("font")
+	var size: int = raid_warning_banner.get_theme_font_size("font_size")
+	raid_warning_banner.clip_text = true
+	raid_warning_banner.custom_minimum_size.x = ceilf(font.get_string_size(lines[0], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x) + 2.0
+	if raid_warning_details:
+		raid_warning_details.text = "\n".join(lines.slice(1)) if lines.size() > 1 else ""
+	_show_raid_details()
+
+func _show_raid_details() -> void:
+	if raid_warning_details and raid_warning_banner:
+		raid_warning_details.visible = raid_warning_banner.visible and raid_warning_details.text != ""
 
 ## Which way the nest lies from the cabin, as a point of the compass ("N", "NE", ... -- north is
 ## up the map, away from the camera's opening view), or "" with no nest or no cabin.
@@ -817,7 +838,7 @@ func _on_boss_arrived(dino: Node) -> void:
 	var cfg = _get_config()
 	var species: String = String(dino.dino_type) if (dino and "dino_type" in dino) else ""
 	var boss_name: String = String(cfg.get_dino_name(species)) if (cfg and cfg.has_method("get_dino_name")) else species
-	show_hint(tr("HUD_BOSS_ARRIVED") % boss_name, UiTheme.toast_seconds("read"), "warning")
+	show_hint(tr("HUD_BOSS_ARRIVED") % boss_name, UiTheme.toast_seconds("read"), "warning", UiTheme.portrait("dino/" + species))
 
 func _on_raid_warning(time_left: float) -> void:
 	if raid_warning_banner == null:
@@ -939,6 +960,15 @@ func _defeat_text(gs: Node) -> String:
 	var named: String = String(cfg.get_dino_name(kind)) if cfg else kind
 	return tr("GAME_DEFEAT_HERO_BY_GUARD" if bool(killer.get("guard", false)) else "GAME_DEFEAT_HERO_BY") % named
 
+## What killed him, by its face (UiTheme.portrait) -- or null: the cabin lost, nothing said, no face.
+func _killer_portrait() -> Texture2D:
+	var gs = _get_game_state()
+	if gs == null or not ("lost_to" in gs) or String(gs.lost_to) != "hero":
+		return null
+	var killer: Dictionary = gs.hero_killer if "hero_killer" in gs else {}
+	var kind: String = String(killer.get("type", ""))
+	return UiTheme.portrait("dino/" + kind) if kind != "" else null
+
 ## The end of the run: the verdict, told apart by more than colour -- a different icon, a
 ## different word, a different stone under them -- and the run's account under it (UI-POLISH
 ## T15).
@@ -950,8 +980,10 @@ func _show_game_over(title: String, details: String, won: bool = true) -> void:
 	if game_over_card:
 		game_over_card.theme_type_variation = &"VictoryPanel" if won else &"DefeatPanel"
 	if result_icon:
-		result_icon.texture = UiTheme.icon("beacon" if won else "warning")
-		result_icon.modulate = Color.WHITE if won else UiTheme.color("danger")
+		# Killed: the face of what killed him (UiTheme.portrait), where there is one, over the verdict.
+		var face: Texture2D = null if won else _killer_portrait()
+		result_icon.texture = face if face != null else UiTheme.icon("beacon" if won else "warning")
+		result_icon.modulate = Color.WHITE if (won or face != null) else UiTheme.color("danger")
 	var stats = get_tree().get_first_node_in_group(RunStats.GROUP) if is_inside_tree() else null
 	_fill_run_stats(stats)
 	if game_over_panel:
@@ -1157,7 +1189,9 @@ func _refresh_texts() -> void:
 ## says what kind of news it is (a material's icon for a first pickup, a warning, a tick).
 ## A line in the toast under the top row, for `duration` seconds (a glance, unless the
 ## caller says it is worth longer: Config.THEME.toast_seconds).
-func show_hint(msg: String, duration: float = -1.0, icon_name: String = "info") -> void:
+## `picture`, where the line is about an animal -- a boss on the field, what a wreck's din brought -- is its
+## face (UiTheme.portrait), shown bigger than an icon, in the icon's place.
+func show_hint(msg: String, duration: float = -1.0, icon_name: String = "info", picture: Texture2D = null) -> void:
 	if duration < 0.0:
 		duration = UiTheme.toast_seconds("glance")
 	if hint_label == null:
@@ -1173,7 +1207,9 @@ func show_hint(msg: String, duration: float = -1.0, icon_name: String = "info") 
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if width > wrap_at else TextServer.AUTOWRAP_OFF
 	hint_label.custom_minimum_size.x = wrap_at if width > wrap_at else 0.0
 	if hint_icon:
-		hint_icon.texture = UiTheme.icon(icon_name)
+		hint_icon.texture = picture if picture != null else UiTheme.icon(icon_name)
+		var px: int = UiTheme.icon_size("xl" if picture != null else "m")
+		hint_icon.custom_minimum_size = Vector2(px, px)
 		hint_icon.visible = hint_icon.texture != null
 	if hint_toast:
 		var was_shown: bool = hint_toast.visible
@@ -1580,9 +1616,20 @@ func _ensure_ui_components() -> void:
 	raid_row.add_theme_constant_override("separation", UiTheme.space("m"))
 	raid_warning_panel.add_child(raid_row)
 	raid_row.add_child(_icon("RaidIcon", "warning", UiTheme.icon_size("l")))
+	# The countdown in the heading's letters; which way and who comes, under it in the body's. All of it in
+	# the heading's letters was a banner as wide as its longest line -- "WITH THEM: COELOPHYSIS ALPHA" --
+	# and ran in under the card at the right. The banner label keeps every line (and shows its first).
+	var raid_lines := _vbox("RaidLines")
+	raid_lines.add_theme_constant_override("separation", UiTheme.space("hair"))
+	raid_row.add_child(raid_lines)
 	raid_warning_banner = _label("RaidWarningBanner", &"HeadingLabel", "")
 	raid_warning_banner.visible = false
-	raid_row.add_child(raid_warning_banner)
+	raid_warning_banner.max_lines_visible = 1
+	raid_lines.add_child(raid_warning_banner)
+	raid_warning_details = _label("RaidWarningDetails", &"BannerDetailLabel", "")
+	raid_warning_details.visible = false
+	raid_lines.add_child(raid_warning_details)
+	raid_warning_banner.visibility_changed.connect(_show_raid_details)
 	hint_toast = _panel("HintToast", &"ToastPanel")
 	hint_toast.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	hint_toast.visible = false

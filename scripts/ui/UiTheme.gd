@@ -343,6 +343,9 @@ static func build() -> Theme:
 	# Cut in capitals: a heading, a small capital label naming a card (the beacon's), a title,
 	# the verdict, a figure on the results.
 	_label(t, "HeadingLabel", display_font("bold", letter_spacing("heading")), "heading", color("title"))
+	# The lines under a banner's heading -- which way a raid comes, who comes with it: the body's letters in
+	# the heading's gilt, on the banner's red.
+	_label(t, "BannerDetailLabel", font("regular"), "body", color("title"))
 	_label(t, "TechLabel", display_font("bold", letter_spacing("button")), "small", color("tech"))
 	_title(t, "TitleLabel", display_font("black", letter_spacing("title")), "title")
 	_title(t, "DisplayLabel", display_font("black", letter_spacing("display")), "display", 8)

@@ -39,9 +39,16 @@ const FRAMING := {
 	"node": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 1.04},
 	"station": {"mode": "whole", "yaw": 20.0, "pitch": -16.0, "room": 0.92},
 	"drop": {"mode": "whole", "yaw": 35.0, "pitch": -40.0, "room": 0.84},
+	# An animal by its head (the sculpted cast, tools/triassic_bodies.py): framed round its Head bone, posed,
+	# `centre` of the way from the bone to its end's, `span` head-lengths about it; seen from `yaw` degrees
+	# round from its side towards its front.
+	"dino": {"mode": "head", "centre": 0.5, "span": 0.62, "yaw": 48.0, "pitch": -8.0, "room": 1.0},
 }
 ## A subject framed otherwise than its kind.
 const FRAMING_FOR := {
+	# A snout a skull and more long, the eyes at its back.
+	"dino/phytosaur": {"mode": "head", "centre": 0.55, "span": 0.85, "yaw": 42.0, "pitch": -14.0, "room": 1.0},
+	"dino/hesperosuchus": {"mode": "head", "centre": 0.45, "span": 0.6, "yaw": 46.0, "pitch": -8.0, "room": 1.0},
 	"node/wood": {"mode": "bust", "from": 0.35, "to": 1.02, "yaw": 32.0, "pitch": -14.0, "room": 1.0},
 	# A rock is wide and low: framed round it, not round the sphere that holds it.
 	"node/stone": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 0.82},
@@ -170,12 +177,24 @@ func _render(key: String, px: int) -> Image:
 	var radius: float = region.size.length() * 0.5
 	if String(frame["mode"]) == "bust":
 		radius = region.size.y * 0.5 * 1.15
+	var yaw: float = float(frame["yaw"])
+	var head: Dictionary = _head_of(subject, float(frame.get("centre", 0.45))) if String(frame["mode"]) == "head" else {}
+	if not head.is_empty():
+		target = head["centre"]
+		radius = float(head["length"]) * float(frame.get("span", 1.0))
+		# Round from its side towards its front: the side facing the camera's +Z.
+		var fwd: Vector3 = head["forward"]
+		fwd.y = 0.0
+		fwd = fwd.normalized() if fwd.length() > 0.001 else Vector3.FORWARD
+		var side: Vector3 = fwd.cross(Vector3.UP).normalized()
+		var look: Vector3 = side * cos(deg_to_rad(yaw)) + fwd * sin(deg_to_rad(yaw))
+		yaw = rad_to_deg(atan2(look.x, look.z))
 	var distance: float = radius / sin(deg_to_rad(FOV * 0.5)) * float(frame["room"])
 
 	# The stage turns with the view, so every subject is lit alike whichever way it is seen.
 	var rig := Node3D.new()
 	rig.position = target
-	rig.rotation_degrees.y = float(frame["yaw"])
+	rig.rotation_degrees.y = yaw
 	view.add_child(rig)
 	var pitch: float = deg_to_rad(float(frame["pitch"]))
 	var cam := Camera3D.new()
@@ -198,6 +217,20 @@ func _render(key: String, px: int) -> Image:
 	view.queue_free()
 	await process_frame
 	return img
+
+## An animal's head, posed: `centre` of the way from its Head bone to its end's, which way it points, and
+## how long it is -- or empty, for what has no head bone.
+func _head_of(subject: Node, centre: float) -> Dictionary:
+	for node in subject.find_children("*", "Skeleton3D", true, false):
+		var sk := node as Skeleton3D
+		var h: int = sk.find_bone("Head")
+		var e: int = sk.find_bone("Head_end")
+		if h < 0 or e < 0:
+			continue
+		var a: Vector3 = sk.global_transform * sk.get_bone_global_pose(h).origin
+		var b: Vector3 = sk.global_transform * sk.get_bone_global_pose(e).origin
+		return {"centre": a.lerp(b, centre), "forward": (b - a).normalized(), "length": a.distance_to(b)}
+	return {}
 
 ## A directional light shining from `from` (in the stage's own turn) onto the subject.
 func _light(rig: Node3D, target: Vector3, from: Vector3, colour: Color, energy: float, shadow: bool) -> void:

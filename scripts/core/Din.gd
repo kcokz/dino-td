@@ -18,6 +18,8 @@ var wave_manager: Node = null
 var dinos_container: Node = null
 ## The wrecks whose din has been said this search, by instance id.
 var _said: Dictionary = {}
+## The species of what the din last brought (the screen shows its face: HUD._on_din_carried).
+var _brought: String = ""
 
 const GROUP_DRAWN: String = "drawn"
 
@@ -46,12 +48,13 @@ func _on_wreck_struck(wreck: Node, struck: int, _of: int) -> void:
 		return
 	var counts: Array = din.get("count", [])
 	var count: int = int(counts[i]) if i < counts.size() else 1
+	_brought = ""
 	var came: int = answer(wreck, String(din.get("draws", "")), count)
 	if came > 0 and not _said.has(wreck.get_instance_id()):
 		_said[wreck.get_instance_id()] = true
 		var eb = get_node_or_null("/root/EventBus")
 		if eb and eb.has_signal("din_carried"):
-			eb.din_carried.emit(wreck, String(din.get("draws", "")))
+			eb.din_carried.emit(wreck, String(din.get("draws", "")), _brought)
 
 ## What the din at `wreck` brings, `count` of it; how many came.
 func answer(wreck: Node, draws: String, count: int) -> int:
@@ -79,6 +82,7 @@ func _from_the_river(wreck: Node, count: int) -> int:
 			if "drawn" in d:
 				d.drawn = true
 			d.came_from = "din: " + String(d.came_from)
+			_brought = String(d.dino_type)
 			came += 1
 	return came
 
@@ -97,6 +101,7 @@ func _wake_the_guards(wreck: Node, count: int) -> int:
 	var came: int = 0
 	for g in asleep.slice(0, count):
 		g.wake(hero)
+		_brought = String(g.dino_type)
 		came += 1
 	return came
 
@@ -140,6 +145,7 @@ func _from_the_edge(wreck: Node, count: int) -> int:
 		parent.add_child(d)
 		d.setup(species, multipliers)
 		d.add_to_group(GROUP_DRAWN)
+		_brought = species
 		var eb = get_node_or_null("/root/EventBus")
 		if eb and eb.has_signal("dino_spawned"):
 			eb.dino_spawned.emit(d)

@@ -2101,7 +2101,9 @@ const PORTRAITS: Dictionary = {
 	"dir": "res://assets/portraits/",
 	"size": 64,
 	"scale": 2,
-	"kinds": ["hero", "building", "node", "station"],
+	# The animals too, by their heads (tools/render_portraits.gd): shown where one is named -- a boss on the
+	# field, what a wreck's din brought, what killed him.
+	"kinds": ["hero", "building", "node", "station", "dino"],
 }
 
 ## Each material's icon, rendered by tools/render_portraits.gd from the pile the game drops of

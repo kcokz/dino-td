@@ -177,8 +177,9 @@ signal unlock_granted(unlock_id: String)
 ## what its din carries to (Din).
 signal wreck_struck(wreck: Node, struck: int, strokes: int)
 
-## Emitted the first time in a search its din brings something (Din): what -- "river", "guards", "edge".
-signal din_carried(wreck: Node, draws: String)
+## Emitted the first time in a search its din brings something (Din): what -- "river", "guards", "edge" -- and
+## the species of what came.
+signal din_carried(wreck: Node, draws: String, species: String)
 
 ## Emitted when the player pins a goal, or unpins it (GameState.goal): the material bar counts
 ## against its price (GAME-DESIGN 6.0 rule 4).

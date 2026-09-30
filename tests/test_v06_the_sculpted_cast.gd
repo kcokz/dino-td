@@ -11,11 +11,17 @@ extends "res://tests/test_base.gd"
 const CAST := ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur", "postosuchus"]
 
 var config_node: Object = null
+var game_state_node: Object = null
 var _cleanup_nodes: Array[Node] = []
 
 func before_all() -> void:
 	if tree != null and tree.root != null:
 		config_node = tree.root.get_node_or_null("Config")
+		game_state_node = tree.root.get_node_or_null("GameState")
+
+func before_each() -> void:
+	if game_state_node != null:
+		game_state_node.reset_game()
 
 func after_each() -> void:
 	for n in _cleanup_nodes:
@@ -112,3 +118,61 @@ func test_04_they_are_drawn_round_not_faceted() -> void:
 			for i in mi.mesh.get_surface_count():
 				verts += (mi.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
 		assert_gt(verts, 6000, "%s is drawn in some detail (%d vertices)" % [species, verts])
+
+# ==============================================================================
+# Their faces (tools/render_portraits.gd, Config.PORTRAITS "dino")
+# ==============================================================================
+
+func _level() -> Node:
+	var main = await fresh_level()
+	_cleanup_nodes.append(main)
+	main.wave_manager.auto_raid_enabled = false
+	return main
+
+func test_05_each_has_a_face() -> void:
+	for species in CAST:
+		assert_not_null(UiTheme.portrait("dino/" + species), "%s has its portrait, by its head" % species)
+
+func test_06_a_boss_on_the_field_is_shown_by_its_face() -> void:
+	var main = await _level()
+	var boss = load(String(config_node.get_dino_script_path("postosuchus"))).new()
+	boss.setup("postosuchus")
+	_cleanup_nodes.append(boss)
+	tree.root.get_node("EventBus").boss_arrived.emit(boss)
+	await wait_frames(1)
+	assert_eq(main.hud.hint_icon.texture, UiTheme.portrait("dino/postosuchus"), "The line that it is here wears its face")
+	assert_gt(main.hud.hint_icon.custom_minimum_size.x, float(UiTheme.icon_size("m")), "(bigger than an icon)")
+	main.hud.show_hint("plain", 1.0, "info")
+	assert_eq(main.hud.hint_icon.custom_minimum_size.x, float(UiTheme.icon_size("m")), "and a plain line an icon's size again")
+
+func test_07_killed_he_sees_what_killed_him() -> void:
+	var main = await _level()
+	game_state_node.lost_to = "hero"
+	game_state_node.hero_killer = {"type": "phytosaur", "guard": false}
+	main.hud._show_game_over("FALLEN", "", false)
+	assert_eq(main.hud.result_icon.texture, UiTheme.portrait("dino/phytosaur"), "Its face over the verdict")
+	game_state_node.lost_to = "cabin"
+	game_state_node.hero_killer = {}
+	main.hud._show_game_over("FALLEN", "", false)
+	assert_ne(main.hud.result_icon.texture, UiTheme.portrait("dino/phytosaur"), "(the cabin lost: no face)")
+
+func test_08_what_a_wrecks_din_brought_is_named() -> void:
+	# The din says what came, so the line about it wears its face (HUD._on_din_carried).
+	var main = await _level()
+	var said = watch_signal(tree.root.get_node("EventBus"), "din_carried")
+	var wreck: Node = null
+	for n in tree.get_nodes_in_group("resource_nodes"):
+		if String(n.get("resource_type")) == "antenna":
+			wreck = n
+	assert_not_null(wreck, "(the antenna's wreck)")
+	if wreck == null:
+		return
+	var din: Dictionary = config_node.RESOURCE_NODES["antenna"]["din"]
+	for i in int(din["at"][0]):
+		wreck.harvest(1)
+	await wait_frames(2)
+	assert_eq(said.emit_count, 1, "(the din carried)")
+	if said.emit_count > 0:
+		var species: String = String(said.last_args[2]) if said.last_args.size() > 2 else ""
+		assert_ne(species, "", "It names what came")
+		assert_not_null(UiTheme.portrait("dino/" + species), "and what came has a face (%s)" % species)
