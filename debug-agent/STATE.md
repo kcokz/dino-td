@@ -27,7 +27,7 @@
 | [BUG-025](bug/BUG-025-the-corridor-queue-never-counts-as-jammed.md) | 走廊里排队的来袭不算卡住，72 秒不咬墙 | 中 | open | 2026-09-29 |
 | [BUG-026](bug/BUG-026-raptors-still-go-round-the-campfire.md) | 篝火人能走过去，恐龙还绕 | 低 | fixed b631095 | 2026-09-29 |
 | [BUG-027](bug/BUG-027-the-map-stays-after-a-restart.md) | 小山谷重新开始，手绘地图还在 | 低～中 | fixed 1388240 | 2026-09-30 |
-| [BUG-028](bug/BUG-028-the-test-suite-is-red-four-portraits-missing.md) | 6baadac 测试红：四种不用的恐龙没有头像 | 低 | open | 2026-09-30 |
+| [BUG-028](bug/BUG-028-the-test-suite-is-red-four-portraits-missing.md) | 6baadac 测试红：四种不用的恐龙没有头像 | 低 | fixed e7462eb | 2026-09-30 |
 | [BUG-029](bug/BUG-029-the-death-animation-never-plays.md) | 死亡动作从来没播：死的那一帧就删掉 | 中 | open | 2026-09-30 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |

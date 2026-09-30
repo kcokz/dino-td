@@ -1,6 +1,6 @@
 # BUG-028 6baadac 起测试不全绿：raptor、big_theropod、raptor_alpha、pterosaur 没有头像
 
-- 状态: open
+- 状态: fixed（e7462eb 补了头像；8a1799f 复测：ALL TESTS PASSED，SCRIPT ERROR 0）
 - 严重度: 低（游戏里用不到这四种，玩家看不到；但测试红着会盖住以后真的退化）
 - 发现: 2026-09-30 · 6baadac（没派任务，自己跑的 tests + smoke）
 - 复现: `GODOT_PROJECT=$(bash debug-agent/tools/snapshot.sh 6baadac) bash debug-agent/tools/run_check.sh tests`
