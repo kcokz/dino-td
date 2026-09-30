@@ -117,6 +117,33 @@ func test_05_the_bench_does_not_offer_what_is_outclassed() -> void:
 	assert_false(bench.can_offer(armour[0]), "Not once the better armour is his")
 	assert_false(bench.can_offer(armour[1]), "nor the armour he has")
 
+func test_05b_one_step_of_a_slot_at_a_time_at_the_difference() -> void:
+	# The player, v0.6 round six: "bone armer，皮革armer直接冲突了，一起出现（而且很容易一起出现），却只能造
+	# 更好的那个". Every slot shows only its next step; a step up costs the difference.
+	var main = await fresh_level()
+	_cleanup_nodes.append(main)
+	stock_everything()
+	var bench = main.current_core.station("workbench")
+	for slot in config_node.KIT_SLOTS:
+		var line: Array[String] = _of(String(slot))
+		if line.size() < 2 or String(config_node.RECIPES[line[0]].get("station", "")) != "workbench":
+			continue
+		assert_true(bench.can_offer(line[0]), "%s: its first step is on the bench" % slot)
+		assert_false(bench.can_offer(line[1]), "%s: and not the next one with it" % slot)
+		_make(line[0])
+		assert_true(bench.can_offer(line[1]), "%s: made, the next step is" % slot)
+		var whole: Dictionary = config_node.RECIPES[line[1]]["inputs"]
+		var first: Dictionary = config_node.RECIPES[line[0]]["inputs"]
+		var price: Dictionary = bench.inputs_of(line[1])
+		for res_id in whole:
+			assert_eq(int(price.get(res_id, 0)), maxi(0, int(whole[res_id]) - int(first.get(res_id, 0))),
+				"%s: the step up costs the difference in %s" % [slot, res_id])
+		for res_id in price:
+			assert_true(whole.has(res_id), "%s: and nothing it is not made of" % slot)
+	var armour: Array[String] = _of("armor")
+	assert_eq(bench.inputs_of(armour[1]).get("hide", 0), 0,
+		"The bone armour over the vest is the bone sewn onto it: no more hide")
+
 func test_06_hide_comes_off_the_map_s_elites() -> void:
 	var map: Dictionary = config_node.map_data()
 	for species in [String(map["minor_boss"]), String(map["boss"])]:

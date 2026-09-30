@@ -118,9 +118,10 @@ func _still_to_do(recipe_id: String) -> bool:
 		return gs != null and gs.has_method("beacon_next_job") and String(gs.beacon_next_job()) == recipe_id
 	if gs and gs.has_method("has_unlock") and gs.has_unlock(String(data.get("unlocks", ""))):
 		return false
-	# A better one of its slot in his row already (Config.outclassed): the vest after the armour.
+	# Only the next step up its slot of his row (Config.next_in_slot): the vest, and the bone armour
+	# once the vest is his -- never the two together, nor the vest after the armour.
 	var cfg = _get_config()
-	if gs and cfg and cfg.has_method("outclassed") and "unlocks" in gs and cfg.outclassed(recipe_id, gs.unlocks):
+	if gs and cfg and cfg.has_method("next_in_slot") and "unlocks" in gs and not cfg.next_in_slot(recipe_id, gs.unlocks):
 		return false
 	return true
 
@@ -242,7 +243,13 @@ func _beacon_row(job_id: String) -> Dictionary:
 		return {}
 	return cfg.beacon_job(gs.map_data(), job_id)
 
+## What `recipe_id` takes now: a step up his row costs the difference from the one it replaces
+## (Config.recipe_price); anything else, its price.
 func inputs_of(recipe_id: String) -> Dictionary:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg and "RECIPES" in cfg and cfg.RECIPES.has(recipe_id) and cfg.has_method("recipe_price") and gs and "unlocks" in gs:
+		return cfg.recipe_price(recipe_id, gs.unlocks)
 	return recipe_data(recipe_id).get("inputs", {})
 
 func time_of(recipe_id: String) -> float:

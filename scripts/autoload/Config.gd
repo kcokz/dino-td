@@ -3264,6 +3264,44 @@ static func counts(recipe_id: String, owned: Dictionary) -> bool:
 	var slot: String = String(row.get("slot", ""))
 	return slot == "" or String(kit(owned).get(slot, "")) == recipe_id
 
+## Whether `recipe_id` is the next step up its slot of his row for `owned` -- the lowest tier above the
+## one he holds -- or not in the row at all: the bench offers only that (CraftingStation; GAME-DESIGN 6.0
+## rule 4, 5.5). The vest and the bone armour were on it together, and the vest was a waste once both
+## could be paid for (v0.6 round six, the player: "bone armer，皮革armer直接冲突了，一起出现（而且很容易
+## 一起出现），却只能造更好的那个"). Now the armour is the vest's next step, at the difference.
+static func next_in_slot(recipe_id: String, owned: Dictionary) -> bool:
+	var row: Dictionary = RECIPES.get(recipe_id, {})
+	var slot: String = String(row.get("slot", ""))
+	if row.is_empty() or slot == "":
+		return true
+	var held: String = String(kit(owned).get(slot, ""))
+	var held_tier: int = int(RECIPES[held].get("tier", 1)) if held != "" else 0
+	var next_tier: int = -1
+	for other in RECIPES:
+		var tier: int = int(RECIPES[other].get("tier", 1))
+		if String(RECIPES[other].get("slot", "")) == slot and tier > held_tier and (next_tier < 0 or tier < next_tier):
+			next_tier = tier
+	return int(row.get("tier", 1)) == next_tier
+
+## What `recipe_id` costs, with `owned` made: in his row, the difference from the one it takes the place
+## of -- the bone armour over the vest is the bone sewn onto it, the stone pick over the bone one its
+## stone head -- never less than nothing; out of the row, or first in its slot, its whole price. So the
+## two steps together cost what the better one always did.
+static func recipe_price(recipe_id: String, owned: Dictionary) -> Dictionary:
+	var row: Dictionary = RECIPES.get(recipe_id, {})
+	var want: Dictionary = row.get("inputs", {})
+	var slot: String = String(row.get("slot", ""))
+	var held: String = String(kit(owned).get(slot, "")) if slot != "" else ""
+	if held == "" or held == recipe_id:
+		return want
+	var have: Dictionary = RECIPES[held].get("inputs", {})
+	var out: Dictionary = {}
+	for res_id in want:
+		var more: int = int(want[res_id]) - int(have.get(res_id, 0))
+		if more > 0:
+			out[res_id] = more
+	return out
+
 ## Whether a better one than `recipe_id` of its slot is held already -- so the bench does not
 ## offer it (CraftingStation).
 static func outclassed(recipe_id: String, owned: Dictionary) -> bool:
