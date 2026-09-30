@@ -1644,8 +1644,18 @@ func _scenario_cast() -> void:
 		_main.look_at_ground(mid)
 	await _wait(4)
 	await _shoot("from_the_game_camera")
+	# Killed where they stand: each falls as its death clip has it, lies a while, and sinks away
+	# (Fx.lay_down; the debug-agent's BUG-029) -- under the running scene, as in the game.
+	current_scene = _main
 	for d in dinos:
-		d.queue_free()
+		d.die()
+	await _advance(0.5)
+	await _shoot("falling")
+	await _advance(1.5)
+	await _shoot("fallen")
+	await _advance(float(root.get_node("Config").FEEDBACK["carcass_lie"]) + 0.6)
+	await _shoot("sinking")
+	current_scene = null
 	if _main.hud:
 		_main.hud.visible = true
 

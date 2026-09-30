@@ -1833,12 +1833,27 @@ func die() -> void:
 
 	_on_death_fx()
 	spawn_death_drops()
+	_leave_body()
 
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("dino_died"):
 		eb.dino_died.emit(self)
 
 	queue_free()
+
+## Its body falls where it died -- the death clip, begun as it died (current_state) -- and lies a while
+## before it sinks away (Fx.lay_down). The dinosaur itself goes now, as it always did.
+func _leave_body() -> void:
+	var body: Node3D = find_child("Body", false, false) as Node3D
+	var fx = _get_fx()
+	if body == null or fx == null or not fx.has_method("lay_down"):
+		return
+	var fall: float = 0.0
+	var player: AnimationPlayer = animator.animation_player if (animator != null and is_instance_valid(animator)) else null
+	if player != null and is_instance_valid(player) and player.current_animation != "":
+		fall = player.current_animation_length - player.current_animation_position
+	if fx.lay_down(body, fall, _declared_size().y) != null:
+		mesh_instance = null
 
 ## Leaves meat where it fell. This is the only source of food in the game, and the reason a raid
 ## is worth walking out to after it is over rather than just surviving. What is left is declared

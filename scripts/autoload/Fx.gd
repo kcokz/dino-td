@@ -579,6 +579,29 @@ func _place_listener() -> void:
 
 ## Parent for short-lived presentation nodes -- debris, floating text. One bucket
 ## under the running scene, so restarting a level takes all of it along.
+## A dinosaur's body where it fell (the debug-agent's BUG-029: it went the frame it died, and its fall
+## was never seen). The dinosaur itself still goes at once -- nothing hunts, counts or steers round the
+## dead -- and its body is handed here, to lie under the running scene with the debris: it falls as its
+## death clip has it (playing already, `fall_seconds` of it left), lies (FEEDBACK.carcass_lie), then
+## sinks `depth` into the ground (carcass_sink) and is gone. Hidden in the fog as it was. Returns what
+## is left, or null -- nothing taken -- with no scene to lay it in.
+func lay_down(body: Node3D, fall_seconds: float, depth: float) -> Node3D:
+	var root := _get_debris_root()
+	if root == null or body == null or not is_instance_valid(body) or not body.is_inside_tree():
+		return null
+	var carcass := Node3D.new()
+	carcass.name = "Carcass"
+	carcass.visible = body.is_visible_in_tree()
+	root.add_child(carcass)
+	carcass.global_position = body.global_position
+	body.reparent(carcass, true)
+	var sink := carcass.create_tween()
+	sink.tween_interval(maxf(0.0, fall_seconds) + float(_cfg("carcass_lie", 2.0)))
+	sink.tween_property(carcass, "position:y", carcass.position.y - depth, float(_cfg("carcass_sink", 1.6))) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	sink.tween_callback(carcass.queue_free)
+	return carcass
+
 func _get_debris_root() -> Node3D:
 	if _debris_root != null and is_instance_valid(_debris_root) and _debris_root.is_inside_tree():
 		return _debris_root

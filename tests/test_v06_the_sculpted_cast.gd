@@ -136,8 +136,11 @@ func test_05_each_has_a_face() -> void:
 func test_06_a_boss_on_the_field_is_shown_by_its_face() -> void:
 	var main = await _level()
 	var boss = load(String(config_node.get_dino_script_path("postosuchus"))).new()
-	boss.setup("postosuchus")
 	_cleanup_nodes.append(boss)
+	# On the field, as a boss that arrives is: what hears of it reads where it is (BugReport).
+	main.dinos_container.add_child(boss)
+	boss.setup("postosuchus")
+	boss.set_physics_process(false)
 	tree.root.get_node("EventBus").boss_arrived.emit(boss)
 	await wait_frames(1)
 	assert_eq(main.hud.hint_icon.texture, UiTheme.portrait("dino/postosuchus"), "The line that it is here wears its face")

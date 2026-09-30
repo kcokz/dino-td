@@ -2172,6 +2172,11 @@ const FEEDBACK: Dictionary = {
 	"debris_size": 0.16,              # 碎块边长（米）
 	"debris_speed": 3.4,              # 碎块初速（米/秒）
 	"debris_lifetime": 0.7,           # 碎块存在时长（秒）
+	# A dinosaur's body where it fell (Fx.lay_down; the debug-agent's BUG-029: it was gone the frame it
+	# died, and its fall was never seen). After its fall it lies this long, then sinks into the ground
+	# over this long -- long enough to see what fell and where, not so long a raid paves the field.
+	"carcass_lie": 2.0,
+	"carcass_sink": 1.6,
 	"health_bar_width": 1.1,          # 血条宽度（米）
 	"health_bar_height": 0.13,        # 血条高度（米）
 	# A bar stands this far over the top of what it belongs to (Dino: its declared height), so a
