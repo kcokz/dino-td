@@ -1471,6 +1471,9 @@
     - 测试：`test_v06_fire` 第 15 条（点着有声、听得到的距离对、熄了停）；`test_v06_the_valley_heard` 第 17 条（白天 0、黄昏一半时两边都有、夜里 1、天亮后回到 0）。
   - **（debug-agent BUG-027）重新开始一局，手绘地图还挂着**：换地图大小重新开始时，新一局的界面先建好、再清空上一局的解锁，地图按上一局的话显示出来，之后没人再问。现在地图每帧自己问一次"做过没有"（`MiniMap._process`，`MiniMap.MADE`），HUD 不再管它显不显示（`_refresh_minimap` 只重画）。新测试 `test_v06_the_map` 第 4 条（解锁被清空、没人通知 HUD，地图也收起；重新开始一局也没有）。
   - **（debug-agent BUG-028）测试没全绿**：头像加了恐龙这一类以后，别的地图的四种没有头像——e7462eb 补渲了。
+  - **（debug-agent TASK-028）两处小事**：
+    - 来袭预警不再说他正看着的入口（`WaveManager.way_open`，`HUD._render_raid_banner`）：那一边让给巢，一只也不从那里进来，横幅却说"还有一群从东边进来"。新测试 `test_v06_the_runner` 第 5 条。
+    - 机器人（`tools/playtest.gd` `_search_wreck`）：输了以后不再去读已经没了的船舱（3 个 SCRIPT ERROR，只在机器人里）；"响声招来了……"每只只记一行。
 
 ## v0.x 远期构想（不排期，仅记录）
 

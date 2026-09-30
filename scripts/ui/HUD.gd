@@ -762,7 +762,9 @@ func _render_raid_banner() -> void:
 	var waves = get_tree().get_first_node_in_group("wave_manager") if is_inside_tree() else null
 	if waves != null and waves.has_method("ways_now"):
 		for way in waves.ways_now():
-			if String(way) != side:
+			# Not a way he is watching: none comes in by it then, and the banner said one would (the
+			# debug-agent's TASK-028). Said again at every tick of the countdown, so it follows him.
+			if String(way) != side and (not waves.has_method("way_open") or waves.way_open(String(way))):
 				others.append(tr("DIR_" + String(way)))
 	if not others.is_empty():
 		text += "\n" + tr("HUD_RAID_ALSO") % tr("DIR_AND").join(others)

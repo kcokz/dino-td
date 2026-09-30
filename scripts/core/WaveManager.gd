@@ -600,6 +600,12 @@ func _day_now() -> int:
 	return int(gs.day_number()) if (gs and gs.has_method("day_number")) else 1
 
 ## The way into the valley (entry_positions) that lies most toward `side` from the cabin ("E", "S", ...).
+## Whether a party can come in by the way into the valley on `side` now: there is one, and nobody sees it --
+## a way that is watched gives its turn to the nest's (_next_origin).
+func way_open(side: String) -> bool:
+	var at: Vector3 = entry_toward(side)
+	return at != Vector3.INF and not _watched(at)
+
 func entry_toward(side: String) -> Vector3:
 	var dirs: Dictionary = {"N": Vector2(0.0, -1.0), "NE": Vector2(1.0, -1.0), "E": Vector2(1.0, 0.0), "SE": Vector2(1.0, 1.0),
 		"S": Vector2(0.0, 1.0), "SW": Vector2(-1.0, 1.0), "W": Vector2(-1.0, 0.0), "NW": Vector2(-1.0, -1.0)}

@@ -521,16 +521,27 @@ func _search_wreck(hero: Node, node: Node) -> void:
 	var part: String = String(node.resource_type)
 	var over := func() -> bool: return int(gs.resources.get(part, 0)) > 0 or wm.is_wave_active or wm.raid_timer < 6.0
 	for turn in 4:
+		if gs.is_game_over or not is_instance_valid(node):
+			return
 		hero.order_harvest(node)
 		await _play_until(func(): return over.call() or _drawn_near(hero, 12.0) != null, 90.0,
 			"searching the wreck for the %s" % part)
-		var drawn: Node = _drawn_near(hero, 12.0)
+		var drawn: Node = _drawn_near(hero, 12.0) if not gs.is_game_over else null
 		if over.call() or drawn == null:
 			return
-		print("[play %5.1fs] the wreck's din brought a %s: in, till it goes" % [_play_clock, String(drawn.get("dino_type"))])
+		# Said once for each that came, not at every look round (the debug-agent's TASK-028: seven lines, one
+		# phytosaur).
+		if not _din_said.has(drawn.get_instance_id()):
+			_din_said[drawn.get_instance_id()] = true
+			print("[play %5.1fs] the wreck's din brought a %s: in, till it goes" % [_play_clock, String(drawn.get("dino_type"))])
 		_main.order_enter_cabin()
-		await _play_until(func(): return _main.current_core.hero_inside and _drawn_near(_main.current_core, 12.0) == null,
-			60.0, "in the cabin, waiting out the din")
+		# (The run lost while he waits, the cabin may be gone: asked of what is still there.)
+		await _play_until(func():
+			var core = _main.current_core
+			return gs.is_game_over or (core != null and is_instance_valid(core) and core.hero_inside 				and _drawn_near(core, 12.0) == null), 60.0, "in the cabin, waiting out the din")
+
+## The animals a wreck's din brought that the log has named.
+var _din_said: Dictionary = {}
 
 ## A living animal a wreck's din brought (Din.GROUP_DRAWN) within `radius` of `at`, or null.
 func _drawn_near(at: Node, radius: float) -> Node:

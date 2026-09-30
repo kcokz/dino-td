@@ -110,3 +110,19 @@ func test_04_the_warning_names_every_side() -> void:
 	hud._on_raid_warning(20.0)
 	await wait_frames(1)
 	assert_true(String(hud.raid_warning_banner.text).contains(tr("DIR_E")), "The warning says the east too: %s" % hud.raid_warning_banner.text)
+
+func test_05_a_way_he_watches_is_not_said() -> void:
+	# The debug-agent's TASK-028: a way into the valley he is watching gives its turn to the nest's, and none
+	# comes in by it -- yet the banner said a party would.
+	var main = await _level()
+	_to_day(3)
+	# Him at the east way in, seeing it.
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	main.hero.global_position = main.wave_manager.entry_toward("E")
+	await wait_seconds(float(config_node.FOG["every"]) * 3.0 + 0.1)
+	assert_false(main.wave_manager.way_open("E"), "(he is watching the east)")
+	var hud = main.hud
+	hud._on_raid_warning(20.0)
+	await wait_frames(1)
+	assert_false(String(hud.raid_warning_banner.text).contains(tr("HUD_RAID_ALSO") % tr("DIR_E")),
+		"Watched, the east is not said: %s" % hud.raid_warning_banner.text)
