@@ -55,14 +55,25 @@ func _connect_event_bus() -> void:
 func _on_locale_changed(_new_locale: String) -> void:
 	_update_info_label()
 
+## The hit points Config gives `type_id` (BUILDINGS.<id>.hp, `fallback` for none) -- the cabin's as sturdy as the
+## game being played says (Config.CUSTOM_GAME "cabin_hp").
+func declared_hp(type_id: String, fallback: float) -> float:
+	var cfg = _get_config()
+	var hp: float = float(cfg.BUILDINGS.get(type_id, {}).get("hp", fallback)) if (cfg and "BUILDINGS" in cfg) else fallback
+	if type_id == "core":
+		var loop := Engine.get_main_loop()
+		var gs: Node = (loop as SceneTree).root.get_node_or_null("GameState") if loop is SceneTree else null
+		if gs and gs.has_method("run_scale"):
+			hp *= float(gs.run_scale("cabin_hp"))
+	return hp
+
 ## Configures building stats from Config.BUILDINGS dictionary.
 func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO) -> void:
 	building_type = type_id
 	cell_pos = p_cell
 	var cfg = _get_config()
 	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(type_id):
-		var data: Dictionary = cfg.BUILDINGS[type_id]
-		max_hp = float(data.get("hp", 10.0))
+		max_hp = declared_hp(type_id, 10.0)
 		current_hp = max_hp
 		build_time = _resolve_build_time()
 	_update_info_label()

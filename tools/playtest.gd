@@ -118,6 +118,10 @@ func _run(name: String) -> void:
 			await _scenario_cast()
 		"gaits":
 			await _scenario_gaits()
+		"start":
+			await _scenario_start()
+		"custom":
+			await _scenario_custom()
 		"kitchen":
 			await _scenario_kitchen()
 		"eating":
@@ -1758,6 +1762,47 @@ func _scenario_gaits() -> void:
 	cam.queue_free()
 	if _main.hud:
 		_main.hud.visible = true
+
+## The start screen (StartScreen) over the stopped valley, as the game launched opens on it: its title page, and
+## the custom game's page -- its first rows, and scrolled to its last.
+func _scenario_start() -> void:
+	_main.hud.show_start_screen(true)
+	await _wait(4)
+	await _shoot("title")
+	var screen = _main.hud.start_screen
+	screen.show_custom()
+	await _wait(4)
+	await _shoot("custom_page")
+	var scroll := screen.find_child("SettingsScroll", true, false) as ScrollContainer
+	if scroll:
+		scroll.scroll_vertical = 10000
+		await _wait(4)
+		await _shoot("custom_page_end")
+	screen.close()
+	var gs := root.get_node_or_null("GameState")
+	if gs:
+		gs.set_paused(false)
+
+## A custom game (GameState.play): the Late Cretaceous, the hardest, on the small valley, no fog -- its three nests
+## with their raptor guards from the game's camera, the goal's card counting the days to rescue, and its first raid.
+func _scenario_custom() -> void:
+	var gs := root.get_node_or_null("GameState")
+	gs.play("custom", {"era": "late_cretaceous", "difficulty": "nightmare", "map": "small", "fog": "off"}, 7)
+	_tear_down()
+	await _fresh_level()
+	await _wait(10)
+	await _shoot("nests")
+	var nest: Node3D = _main.current_nest as Node3D
+	if nest != null and _main.get("camera_rig") != null:
+		_main.look_at_ground(nest.global_position + Vector3(4.0, 0.0, 3.0))
+		await _wait(6)
+		await _shoot("the_nests_up_close")
+	_main.look_at_ground(_main.current_core.global_position)
+	# To the first raid, and it on its way to the cabin.
+	var first: float = float(gs.map_data().get("beats", {}).get("first_raid", 60.0))
+	await _advance(first + 12.0)
+	await _shoot("its_first_raid")
+	gs.game = {}
 
 func _scenario_scale() -> void:
 	if _main.hud:

@@ -15,7 +15,8 @@ extends Node3D
 ## because it clears round everything that sees, and nowhere else. Animals out of sight are hidden
 ## outright, and hidden, cannot be pointed at (Main._is_hoverable). The nest is not seen until it
 ## is: the first time it comes into sight it is found (EventBus.nest_found, GameState.nest_found).
-## A moment into a run it is explained, once (EventBus.fog_explained).
+## A moment into a run it is explained, once (EventBus.fog_explained) -- in a game that teaches (Config.GAMES
+## "tutorial": ours does; a custom game's player knows it).
 
 ## Metres across the field's half, the margin round it included; metres to a cell; cells across.
 var half: float = 32.0
@@ -146,7 +147,7 @@ func mist_lift() -> float:
 ## What the mist is, said once a moment into the run (Config.FOG.hint_after): mist that is the
 ## unknown, not the weather (v0.6 round four: "只要玩家能感觉出来这个雾是迷雾不是天气就行").
 func _explain(delta: float) -> void:
-	if _explained or revealed:
+	if _explained or revealed or not _teaches():
 		return
 	_played += delta
 	if _played < float(_cfg().get("hint_after", 4.0)):
@@ -361,12 +362,20 @@ func _hide_the_unseen() -> void:
 		if not (nest is Node3D) or not is_instance_valid(nest):
 			continue
 		(nest as Node3D).visible = is_seen((nest as Node3D).global_position)
-		# Found by being seen -- by him or what he built -- not by a view with the fog lifted.
+		# Found by being seen -- by him or what he built -- not by a view with the fog lifted. Each nest of a
+		# harder game's several is found on its own (its "found" mark: the hand-drawn map draws it); the run's
+		# raids are seen setting out once any is (GameState.nest_found).
 		var i: int = _index((nest as Node3D).global_position)
-		if i >= 0 and _now[i] != 0:
+		if i >= 0 and _now[i] != 0 and not bool(nest.get_meta(&"found", false)):
+			nest.set_meta(&"found", true)
 			var gs = get_node_or_null("/root/GameState")
-			if gs and "nest_found" in gs and not bool(gs.nest_found):
+			if gs and "nest_found" in gs:
 				gs.nest_found = true
-				var eb = get_node_or_null("/root/EventBus")
-				if eb and eb.has_signal("nest_found"):
-					eb.nest_found.emit(nest)
+			var eb = get_node_or_null("/root/EventBus")
+			if eb and eb.has_signal("nest_found"):
+				eb.nest_found.emit(nest)
+
+## Whether the game being played teaches as it goes (GameState.internal "tutorial").
+func _teaches() -> bool:
+	var gs = get_node_or_null("/root/GameState")
+	return gs == null or not gs.has_method("internal") or bool(gs.internal("tutorial", true))

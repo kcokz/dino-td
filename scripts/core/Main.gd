@@ -37,6 +37,8 @@ var hero_script: GDScript = preload("res://scripts/entities/Hero.gd")
 var resource_node_script: GDScript = null
 var current_core: Node = null
 var current_nest: Node = null
+## A harder game's other nests (Config.CUSTOM_GAME "difficulty": the map's "nest_cells"), each with its guards.
+var extra_nests: Array[Node] = []
 var current_build_type: String = ""
 
 ## Whether the Hero is in the cabin (CoreCampfire says, over the bus). It never swaps the scene:
@@ -93,6 +95,14 @@ func _ready() -> void:
 	setup_level()
 	_ensure_nav_maps()
 	_add_bug_report()
+	# The game launched opens on the start screen, the valley stopped behind it -- unless it was the start screen
+	# that built this level, for the game chosen there (GameState.launch_straight_in).
+	var gs_start = _get_game_state()
+	if _plays_the_players_map() and gs_start:
+		if bool(gs_start.launch_straight_in):
+			gs_start.launch_straight_in = false
+		elif hud and hud.has_method("show_start_screen"):
+			hud.show_start_screen(true)
 	# The valley under everything: wind, insects, the river (Config.SOUNDS.ambience).
 	var fx = get_node_or_null("/root/Fx")
 	if fx and fx.has_method("start_ambience"):
@@ -135,6 +145,14 @@ func _ensure_fog() -> void:
 	var cfg = _get_config()
 	fog.revealed = false
 	fog.setup(float(cfg.terrain().get("field_half", 22.0)) if (cfg and "TERRAIN" in cfg) else 22.0)
+	# A game without the fog of war (CUSTOM_GAME "fog"): the whole valley in sight from the start.
+	var gs_fog = _get_game_state()
+	if gs_fog and gs_fog.has_method("rule") and not bool(gs_fog.rule("fog")):
+		fog.revealed = true
+		if fog.has_method("_paint"):
+			fog._paint(1.0)
+		if fog.has_method("_hide_the_unseen"):
+			fog._hide_the_unseen()
 
 func _ensure_nav_maps() -> void:
 	if not is_in_group(NavMaps.SOURCE_GROUP):
@@ -463,6 +481,7 @@ func setup_initial_entities() -> void:
 
 		if current_nest.has_method("spawn_guards"):
 			current_nest.spawn_guards(guards_container if is_instance_valid(guards_container) else self)
+	_place_extra_nests()
 
 	# 3. Place Hero (Modern Person), a step south of the cabin, by its door.
 	if hero == null or not is_instance_valid(hero):
@@ -487,6 +506,40 @@ func setup_initial_entities() -> void:
 				core_max_hp = float(cfg.BUILDINGS["core"].get("hp", 10.0))
 		var core_cur_hp: float = float(current_core.current_hp) if (current_core != null and is_instance_valid(current_core) and "current_hp" in current_core) else core_max_hp
 		eb.core_hp_changed.emit(core_cur_hp, core_max_hp)
+
+## A harder game's other nests (the run's map: "nests", how many; "nest_cells", where the others are, in the
+## order they are opened -- Config.CUSTOM_GAME "difficulty"): each its tile, its guards and its party of every raid
+## (WaveManager.nest_positions), found in the fog like the first.
+func _place_extra_nests() -> void:
+	for n in extra_nests:
+		if is_instance_valid(n):
+			if n.is_inside_tree():
+				n.get_parent().remove_child(n)
+			n.queue_free()
+	extra_nests.clear()
+	var mouths: Array[Vector3] = []
+	if wave_manager and is_instance_valid(wave_manager):
+		mouths.append(wave_manager.nest_spawn_position)
+	var cells: Array = _map().get("nest_cells", [])
+	var more: int = mini(maxi(0, int(_map().get("nests", 1)) - 1), cells.size())
+	for i in range(more):
+		if grid_manager == null or not grid_manager.has_method("cell_to_world"):
+			break
+		var cell: Vector2i = cells[i]
+		var nest = nest_script.new()
+		nest.name = "Nest%d" % (i + 2)
+		nest.add_to_group("nest")
+		nest.setup(cell)
+		nest.position = grid_manager.cell_to_world(cell)
+		(nest_holder if is_instance_valid(nest_holder) else self).add_child(nest)
+		if grid_manager.has_method("occupy_building"):
+			grid_manager.occupy_building(nest, grid_manager.build_cells_in_tile(cell))
+		if nest.has_method("spawn_guards"):
+			nest.spawn_guards(guards_container if is_instance_valid(guards_container) else self)
+		extra_nests.append(nest)
+		mouths.append(nest.global_position)
+	if wave_manager and is_instance_valid(wave_manager):
+		wave_manager.nest_positions = mouths if mouths.size() > 1 else ([] as Array[Vector3])
 
 ## The middle of the block of `span` x `span` tiles that runs south and east from `cell`.
 ## For a one-tile building, the middle of its tile.
@@ -1003,7 +1056,13 @@ func spawn_resource_nodes() -> void:
 	if cfg and "TILE_SIZE" in cfg:
 		t_size = float(cfg.TILE_SIZE)
 
+	var gs_nodes = _get_game_state()
+	var wrecks_wanted: bool = gs_nodes == null or not gs_nodes.has_method("goal_kind") or String(gs_nodes.goal_kind()) == "beacon"
 	for item in nodes_def:
+		# The ship's wrecks hold the beacon's parts: a whole cabin's beacon wants none (GAMES.custom), so none
+		# lies about, smoking, to be searched.
+		if not wrecks_wanted and cfg and "RESOURCE_NODES" in cfg and bool(cfg.RESOURCE_NODES.get(String(item["type"]), {}).get("smoke", false)):
+			continue
 		var node = resource_node_script.new(item["type"], item["cell"])
 		node.name = "ResourceNode_%s_%d_%d" % [item["type"], item["cell"].x, item["cell"].y]
 		var world_pos = grid_manager.cell_to_world(item["cell"]) if grid_manager else Vector3(float(item["cell"].x) * t_size, 0.0, float(item["cell"].y) * t_size)
@@ -1753,33 +1812,23 @@ func try_place_at_cell(cell: Vector2i, at_world: Variant = null, faces: int = -1
 
 ## The map this run is played on (GameState.map_data): where everything stands and what
 ## lies by the cabin at the start. Config.MAPS holds every map; which one is the run's.
-## The map this run is played on: the one the player chose on the settings page (Config.MAP_SIZES)
-## -- when this is the game itself, the level the player launched. A level a test or a tool builds
-## plays the default, the small valley, whatever the player chose (v0.6 round four: "测试的时候可以
-## 用小地图，我玩的时候用大地图").
+## The game this level plays, and so its map (GameState.game, Config.GAMES) -- when this is the game
+## itself, the level the player launched: ours on the large valley, or what the start screen chose. A level a
+## test or a tool builds plays the default, the small valley (v0.6 round four: "测试的时候可以用小地图，我玩的
+## 时候用大地图").
 func _choose_the_map() -> void:
 	var gs = _get_game_state()
 	if gs == null or not _plays_the_players_map():
 		return
-	var chosen: String = map_setting()
-	if String(gs.chosen_map_id) != chosen or String(gs.map_id) != chosen:
-		gs.chosen_map_id = chosen
-		gs.reset_game()
+	# The launch plays our game (Config.GAMES.campaign) till the start screen chooses another; the run it builds
+	# is the game's, on the game's map.
+	if String(gs.game_id()) == "":
+		gs.play("campaign")
+	gs.reset_game()
 
 ## Whether this level is the game the player launched (its main scene), not one a script built.
 func _plays_the_players_map() -> bool:
 	return is_inside_tree() and get_tree().current_scene == self
-
-## The map the settings page has chosen: its size (I18n's settings file, "game"/"map_size"), as a map.
-func map_setting() -> String:
-	var cfg = _get_config()
-	if cfg == null:
-		return ""
-	var i18n = get_node_or_null("/root/I18n")
-	var size: String = String(cfg.DEFAULT_MAP_SIZE)
-	if i18n and i18n.has_method("load_setting"):
-		size = String(i18n.load_setting("game", "map_size", size))
-	return String(cfg.MAP_SIZES.get(size, cfg.DEFAULT_MAP_ID))
 
 func _map() -> Dictionary:
 	var gs = _get_game_state()
@@ -2136,11 +2185,8 @@ func place_building_at_cell(type_id: String, cell: Vector2i) -> Node:
 
 ## Completely restores pristine starting game state without reloading scene.
 func restart_game() -> void:
-	# A map chosen on the settings page since this run began is a different level: built afresh.
-	var gs_now = _get_game_state()
-	if _plays_the_players_map() and gs_now and String(gs_now.chosen_map_id) != map_setting():
-		get_tree().reload_current_scene()
-		return
+	# The same game again, on the same level (a new game -- another map, age, nests -- is built afresh from the
+	# start screen, StartScreen).
 	cancel_building_selection()
 	if in_cabin:
 		_on_cabin_view_changed(false)

@@ -4,8 +4,9 @@
 #
 # A map is `like` another with its own keys over it: the large valley is the valley, four times the
 # ground, the nest twice as far, a ridge, a stone forest and a stand of trees between, its river past
-# its own edge (Config.terrain_of: the land, merged a table deep). The settings page chooses the size;
-# only the game the player launched plays it (Main._choose_the_map) -- a level a test or a tool
+# its own edge (Config.terrain_of: the land, merged a table deep). Our game plays the large valley, a
+# custom game the one its page chooses (Config.GAMES, CUSTOM_GAME "map"; it was the settings page's);
+# only the game the player launched plays a game (Main._choose_the_map) -- a level a test or a tool
 # builds plays the small valley. And a bake of the bigger ground takes three fifths of a second: it
 # is done in the background in play (NavMaps.rebake_in_background), never stopping the game.
 #
@@ -49,7 +50,7 @@ func _level_on(map_id: String) -> Node:
 	return main
 
 func _small() -> String:
-	return String(config_node.MAP_SIZES["small"])
+	return String(config_node.custom_choice("map", "small")["map_id"])
 
 func _field_half(map_id: String) -> float:
 	return float(config_node.terrain_of(map_id)["field_half"])
@@ -60,10 +61,10 @@ func _at(cell: Vector2i) -> Vector2:
 	return Vector2((float(cell.x) + 0.5) * tile, (float(cell.y) + 0.5) * tile)
 
 func test_01_the_sizes_are_the_small_valley_and_the_large() -> void:
-	assert_eq(String(config_node.MAP_SIZES["small"]), String(config_node.DEFAULT_MAP_ID),
+	assert_eq(_small(), String(config_node.DEFAULT_MAP_ID),
 		"The small valley is the default: the tests' and the tools'")
-	assert_eq(String(config_node.MAP_SIZES["large"]), LARGE, "The large is its own map")
-	assert_eq(String(config_node.DEFAULT_MAP_SIZE), "large", "and the player's until they choose")
+	assert_eq(String(config_node.custom_choice("map", "large")["map_id"]), LARGE, "The large is its own map")
+	assert_eq(String(config_node.GAMES["campaign"]["settings"]["map"]), "large", "and our game's")
 
 func test_02_the_large_valley_is_the_valley_bigger() -> void:
 	var small: Dictionary = config_node.map_data(_small())
@@ -154,27 +155,24 @@ func test_06_a_level_a_script_builds_plays_the_small_valley() -> void:
 	assert_false(main._plays_the_players_map(), "A level a script built is not the game the player launched")
 	assert_eq(String(game_state_node.map_id), String(config_node.DEFAULT_MAP_ID), "It plays the small valley")
 
-func test_07_the_settings_page_offers_the_sizes() -> void:
+func test_07_the_custom_games_page_offers_the_sizes() -> void:
 	var main = await fresh_level()
 	_cleanup_nodes.append(main)
-	var menu = main.hud.pause_menu
-	main.hud.toggle_pause_menu()
-	menu.open_settings()
+	main.hud.show_start_screen(true)
+	var screen = main.hud.start_screen
+	screen.show_custom()
 	await wait_frames(1)
-	var picker: OptionButton = menu.find_child("MapPicker", true, false) as OptionButton
-	assert_not_null(picker, "The settings page has a map picker")
+	var picker: OptionButton = screen.pickers.get("map")
+	assert_not_null(picker, "The custom game's page has a map picker")
 	if picker == null:
-		main.hud.toggle_pause_menu()
 		return
-	assert_true(picker.is_visible_in_tree(), "on the settings page")
-	var sizes: Array = config_node.MAP_SIZES.keys()
-	assert_eq(picker.item_count, sizes.size(), "A size each")
-	for i in sizes.size():
-		assert_eq(picker.get_item_text(i), tr("MENU_MAP_" + String(sizes[i]).to_upper()), "named")
-	var note: Label = menu.find_child("MapNote", true, false) as Label
-	assert_true(note != null and note.text == tr("MENU_MAP_NOTE") and note.is_visible_in_tree(),
-		"and it says a new map is for the next run")
-	main.hud.toggle_pause_menu()
+	assert_true(picker.is_visible_in_tree(), "on its page")
+	var choices: Array = config_node.custom_setting("map")["choices"]
+	assert_eq(picker.item_count, choices.size(), "A size each")
+	for i in choices.size():
+		assert_eq(picker.get_item_text(i), tr(String(choices[i]["name"])), "named")
+	screen.close()
+	game_state_node.set_paused(false)
 
 func test_08_a_stake_finished_in_play_is_baked_in_the_background() -> void:
 	var main = await fresh_level()

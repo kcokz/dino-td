@@ -93,8 +93,10 @@ func _declared_size() -> Vector3:
 ## GAME-DESIGN 9.3: each species' nest is its own) -- or the mound, for one with none of its own.
 func art_key() -> String:
 	var cfg = _get_config()
-	if cfg and cfg.has_method("map_data") and "VISUALS" in cfg:
-		var key: String = "nest/" + String(cfg.map_data().get("guards", ""))
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
+	var map: Dictionary = gs.map_data() if (gs and gs.has_method("map_data")) else (cfg.map_data() if cfg else {})
+	if cfg and "VISUALS" in cfg:
+		var key: String = "nest/" + String(map.get("guards", ""))
 		if cfg.VISUALS.has(key):
 			return key
 	return "nest"

@@ -66,11 +66,30 @@ var meals: Dictionary = {}
 ## from the engine's global randf -- so one seed replays one run: a seed can be shared,
 ## and a bug can be replayed. Decoration keeps generators of its own.
 var map_id: String = ""
-## The map the player's runs are played on (Main._choose_the_map, from the settings page), kept
-## across a restart; empty, the default -- the small valley, which the tests and tools play.
+## The map a level a test or a tool builds is played on, when it plays no game of its own (`game` empty); empty,
+## the default -- the small valley. A game says its own map (its "map" setting).
 var chosen_map_id: String = ""
 var run_seed: int = 0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
+## THE GAME BEING PLAYED (Config.GAMES, CUSTOM_GAME; GAME-DESIGN 11, 12): which ("campaign", ours; "custom", the
+## player's), what the player chose for it (setting id -> choice id) and the seed they gave (-1: a new one each run).
+## Chosen before the level is built (StartScreen), and kept: a new run plays the same game. Empty for a level a test
+## or a tool builds -- ours, on the small valley (chosen_map_id).
+var game: Dictionary = {}
+## A game chosen on the start screen is played from a level built afresh for it, straight in: this tells the new
+## level not to open on the start screen again (Main).
+var launch_straight_in: bool = false
+
+## What this run is, worked out from `game` as it begins (reset_game, _settle_the_game): every setting's choice, the
+## game's internals (tutorial, cabin, goal), its map with the settings' keys laid over it, the multipliers and the
+## switches the settings make, and -- the "rescue" goal -- the days to hold out.
+var settings: Dictionary = {}
+var _internal: Dictionary = {}
+var _run_map: Dictionary = {}
+var _scales: Dictionary = {}
+var _rules: Dictionary = {}
+var _rescue_days: int = 0
 
 ## How far along the beacon is (v0.6, GAME-DESIGN 8.3): how many of its steps are done --
 ## the run's map's repair stages, then the launch (Config.beacon_jobs) -- and, once it is
@@ -81,10 +100,95 @@ var beacon_charge: float = 0.0
 ## WaveManager counts it); -1 when none is coming, or it has come.
 var final_wave_in: float = -1.0
 
-## The map this run is played on (Config.MAPS).
+## The map this run is played on (Config.MAPS), with its game's settings over it.
 func map_data() -> Dictionary:
+	if not _run_map.is_empty():
+		return _run_map
 	var cfg = _get_config()
 	return cfg.map_data(map_id) if (cfg and cfg.has_method("map_data")) else {}
+
+## Plays `game_id` (Config.GAMES) from the next run on: with `chosen` for the custom game's settings (setting id ->
+## choice id; ours keeps its own), and `seed_value` for its dice (-1, a new seed each run).
+func play(game_id: String, chosen: Dictionary = {}, seed_value: int = -1) -> void:
+	game = {"id": game_id, "settings": chosen.duplicate(), "seed": seed_value}
+
+## Which game this run is ("campaign" or "custom"); "" for a level a script built (ours, on its map).
+func game_id() -> String:
+	return String(game.get("id", ""))
+
+## A multiplier of this run's (Config.CUSTOM_GAME "scale"): 1 but where a setting says otherwise.
+func run_scale(key: String) -> float:
+	return float(_scales.get(key, 1.0))
+
+## A switch of this run's (Config.CUSTOM_GAME "rules"): on but where a setting turns it off.
+func rule(key: String) -> bool:
+	return bool(_rules.get(key, true))
+
+## What only our own games set (Config.GAMES.<id>.internal): "tutorial", "cabin", "goal"; `fallback` for none.
+func internal(key: String, fallback: Variant = null) -> Variant:
+	return _internal.get(key, fallback)
+
+## How this run is won: "beacon" (mended, launched, charged) or "rescue" (held out for `rescue_days`).
+func goal_kind() -> String:
+	return String(_internal.get("goal", "beacon"))
+
+## The days to hold out till the rescue comes (the "rescue" goal); 0 for another.
+func rescue_days() -> int:
+	return _rescue_days if goal_kind() == "rescue" else 0
+
+## Days still to hold out, today among them: the rescue comes with the first light after the last.
+func rescue_days_left() -> int:
+	return maxi(0, rescue_days() - day_number() + 1)
+
+## Works out what this run is from `game` (Config.game_settings): its settings, its internals, its map with the
+## settings' keys over it (a table of the map's own a table deep, so "beats" keeps the beats a setting does not
+## change), the multipliers and switches, and the days to hold out.
+func _settle_the_game() -> void:
+	var cfg = _get_config()
+	settings = {}
+	_internal = {}
+	_run_map = {}
+	_scales = {}
+	_rules = {}
+	_rescue_days = 0
+	if cfg == null or not ("GAMES" in cfg):
+		return
+	var id: String = game_id() if game_id() != "" else "campaign"
+	settings = cfg.game_settings(id, game.get("settings", {}))
+	_internal = (cfg.GAMES.get(id, {}).get("internal", {}) as Dictionary).duplicate()
+	if game_id() != "":
+		map_id = String(cfg.custom_choice("map", String(settings.get("map", ""))).get("map_id", cfg.DEFAULT_MAP_ID))
+	var over: Dictionary = {}
+	for setting_id in settings:
+		var choice: Dictionary = cfg.custom_choice(String(setting_id), String(settings[setting_id]))
+		for key in choice.get("scale", {}):
+			_scales[key] = float(_scales.get(key, 1.0)) * float(choice["scale"][key])
+		for key in choice.get("rules", {}):
+			_rules[key] = bool(choice["rules"][key])
+		for key in choice.get("map", {}):
+			over[key] = choice["map"][key]
+		if choice.has("days"):
+			_rescue_days = int(choice["days"])
+	# The whole cabin's beacon is mended and calling: nothing to launch (the rescue comes by the days).
+	if goal_kind() == "rescue":
+		var beacon: Dictionary = (cfg.map_data(map_id).get("beacon", {}) as Dictionary).duplicate()
+		if not beacon.is_empty():
+			beacon["launch"] = false
+			over["beacon"] = beacon
+	if over.is_empty():
+		return
+	var map: Dictionary = cfg.map_data(map_id).duplicate()
+	for key in over:
+		# The beats are several things, each its own: a setting names the ones it changes. Anything else it says
+		# is said whole -- the raiders, the stock.
+		if key == "beats" and map.get(key) is Dictionary:
+			var part: Dictionary = (map[key] as Dictionary).duplicate()
+			part.merge(over[key], true)
+			map[key] = part
+		else:
+			map[key] = over[key]
+	map.make_read_only()
+	_run_map = map
 var _produce_timer: Timer = null
 
 # v0.1 Real-Time Deployment & Pause
@@ -221,8 +325,12 @@ func reset_game(p_seed: int = -1) -> void:
 	hero_killer = {}
 	var cfg_run = _get_config()
 	map_id = chosen_map_id if chosen_map_id != "" else (String(cfg_run.DEFAULT_MAP_ID) if (cfg_run and "DEFAULT_MAP_ID" in cfg_run) else "")
+	# The game it is (its own map, if it says one) and everything its settings make of it.
+	_settle_the_game()
 	if p_seed >= 0:
 		rng.seed = p_seed
+	elif int(game.get("seed", -1)) >= 0:
+		rng.seed = int(game["seed"])
 	else:
 		rng.randomize()
 	run_seed = int(rng.seed)
@@ -235,6 +343,9 @@ func reset_game(p_seed: int = -1) -> void:
 	if cfg:
 		resources = cfg.get("INITIAL_RESOURCES").duplicate(true) if "INITIAL_RESOURCES" in cfg else _default_resources()
 		dino_stat_multipliers = cfg.get("INITIAL_DINO_MULTIPLIERS").duplicate(true) if "INITIAL_DINO_MULTIPLIERS" in cfg else {"hp": 1.0, "damage": 1.0, "speed": 1.0}
+		# How hard the game is: the raiders start as tough as it says (CUSTOM_GAME "difficulty").
+		dino_stat_multipliers["hp"] = float(dino_stat_multipliers.get("hp", 1.0)) * run_scale("dino_hp")
+		dino_stat_multipliers["damage"] = float(dino_stat_multipliers.get("damage", 1.0)) * run_scale("dino_damage")
 	else:
 		resources = _default_resources()
 		dino_stat_multipliers = {"hp": 1.0, "damage": 1.0, "speed": 1.0}
@@ -246,7 +357,8 @@ func reset_game(p_seed: int = -1) -> void:
 		known[String(res_id)] = true
 	_set_fed({})
 	_set_meals({})
-	beacon_steps = 0
+	# The whole cabin's beacon stands mended (GAMES.custom: "连信标也是修好的"); the wrecked one is mended stage by stage.
+	beacon_steps = beacon_stage_count() if String(internal("cabin", "wrecked")) == "whole" else 0
 	beacon_charge = 0.0
 	goal = {}
 	final_wave_in = -1.0
@@ -621,14 +733,19 @@ func _say_goal() -> void:
 
 ## How many repair stages the beacon has, and how many of them stand repaired.
 func beacon_stage_count() -> int:
-	return maxi(0, _beacon_jobs().size() - 1)
+	var cfg = _get_config()
+	var launch: String = String(cfg.BEACON_LAUNCH) if (cfg and "BEACON_LAUNCH" in cfg) else "beacon_launch"
+	var jobs: Array[String] = _beacon_jobs()
+	return maxi(0, jobs.size() - (1 if jobs.has(launch) else 0))
 
 func beacon_stages_done() -> int:
 	return mini(beacon_steps, beacon_stage_count())
 
 func is_beacon_launched() -> bool:
 	var jobs: Array[String] = _beacon_jobs()
-	return not jobs.is_empty() and beacon_steps >= jobs.size()
+	var cfg = _get_config()
+	var launch: String = String(cfg.BEACON_LAUNCH) if (cfg and "BEACON_LAUNCH" in cfg) else "beacon_launch"
+	return jobs.has(launch) and beacon_steps >= jobs.size()
 
 ## A step finished at the cabin: a stage stands repaired, or -- the last step -- the beacon
 ## is switched on and starts to charge. Only the next step counts: one already done, or a
@@ -650,6 +767,26 @@ func finish_beacon_job(job_id: String) -> bool:
 	if is_beacon_launched() and eb and eb.has_signal("beacon_launched"):
 		eb.beacon_launched.emit()
 	return true
+
+## What the goal's card and the beacon's bench say of the run's end: the beacon's mending, launch and charge
+## (Config.beacon_status) -- or, the rescue coming, how many days are still to be held out.
+func objective_status() -> String:
+	if goal_kind() == "rescue":
+		var left: int = rescue_days_left()
+		if left <= 1:
+			return TranslationServer.translate("RESCUE_STATUS_LAST")
+		return TranslationServer.translate("RESCUE_STATUS") % left
+	var cfg = _get_config()
+	return String(cfg.beacon_status(map_data(), beacon_steps, beacon_charge)) if (cfg and cfg.has_method("beacon_status")) else ""
+
+## How far the rescue has come, 0..1: the days held out of the days to hold out.
+func rescue_ratio() -> float:
+	var days: int = rescue_days()
+	if days <= 0:
+		return 0.0
+	var length: float = float(_day().get("length", 360.0))
+	var start: float = float(_day().get("start", 0.0))
+	return clampf((day_clock - start) / (float(days) * length - start), 0.0, 1.0)
 
 ## How much of the charge is done, 0..1.
 func beacon_charge_ratio() -> float:
@@ -884,9 +1021,18 @@ func day_part() -> String:
 			best = String(part)
 	return best
 
-## The clock on by `delta`, and a new part of the day said when it begins.
+## The clock on by `delta` -- at the pace the game's days go (CUSTOM_GAME "day_length": a longer day, a slower
+## clock) -- and a new part of the day said when it begins. With no night (CUSTOM_GAME "night"), the dusk is the
+## next morning. With the rescue coming (the "rescue" goal), the first light after the last day brings it.
 func _run_the_day(delta: float) -> void:
-	day_clock += delta
+	day_clock += delta / maxf(0.05, run_scale("day_length"))
+	if not rule("night"):
+		var parts: Dictionary = _day().get("parts", {})
+		var length: float = float(_day().get("length", 360.0))
+		if parts.has("dusk") and time_of_day() >= float(parts["dusk"]):
+			day_clock = float(day_number()) * length + float(_day().get("start", 0.0))
+	if goal_kind() == "rescue" and rescue_days() > 0 and day_number() > rescue_days() and not is_game_over:
+		_emit_game_won()
 	var part: String = day_part()
 	if part != _day_part:
 		_day_part = part

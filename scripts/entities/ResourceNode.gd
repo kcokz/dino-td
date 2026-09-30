@@ -92,6 +92,11 @@ func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO, p_capacity: int = 
 	
 	if p_capacity > 0:
 		max_capacity = p_capacity
+	# How much the valley holds (CUSTOM_GAME "resources"): a tree, a rock that much more or less -- not a wreck's
+	# one part.
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else _game_state_anywhere()
+	if gs and gs.has_method("run_scale") and max_capacity > 1:
+		max_capacity = maxi(1, int(round(float(max_capacity) * float(gs.run_scale("resource_amount")))))
 
 	current_amount = max_capacity
 	is_depleted = (current_amount <= 0)
@@ -363,3 +368,8 @@ func _get_event_bus() -> Node:
 ## build preview, so "is this worth harvesting" is answered in exactly one place.
 func is_available() -> bool:
 	return not is_depleted and current_amount > 0 and not is_queued_for_deletion()
+
+## GameState, from anywhere -- a node not yet in the tree too (setup runs before it is added).
+func _game_state_anywhere() -> Node:
+	var loop := Engine.get_main_loop()
+	return (loop as SceneTree).root.get_node_or_null("GameState") if loop is SceneTree else null

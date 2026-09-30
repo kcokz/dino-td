@@ -176,11 +176,10 @@ func _draw() -> void:
 		var smoke: Color = _colour("smoke", Color(0.30, 0.28, 0.26))
 		draw_circle(p, 3.2, smoke)
 		draw_line(p, p + Vector2(3.0, -8.0), smoke, 2.0)
-	# The nest, once found.
-	var gs = get_node_or_null("/root/GameState")
-	var nest: Node3D = get_tree().get_first_node_in_group("nest") as Node3D
-	if nest != null and gs != null and bool(gs.get("nest_found")):
-		draw_circle(to_map(nest.global_position), 4.0, _colour("nest", Color(0.55, 0.12, 0.08)))
+	# The nests, each once found (FogOfWar marks it).
+	for nest in get_tree().get_nodes_in_group("nest"):
+		if nest is Node3D and is_instance_valid(nest) and bool(nest.get_meta(&"found", false)):
+			draw_circle(to_map((nest as Node3D).global_position), 4.0, _colour("nest", Color(0.55, 0.12, 0.08)))
 	# Him.
 	var hero: Node3D = get_tree().get_first_node_in_group("hero") as Node3D
 	if hero != null:

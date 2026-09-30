@@ -37,7 +37,13 @@ func _ready() -> void:
 		return
 	_rng.seed = int(_cfg.HERDS.get("seed", 1))
 	_river = TerrainBuilder.river_of(_cfg.terrain()) if "TERRAIN" in _cfg else null
-	for spec in _cfg.HERDS.get("herds", []):
+	# The age's own grazers: the run's map says them when its era does (Config.CUSTOM_GAME "era": the Late
+	# Cretaceous has none of its own yet); else the valley's.
+	var herds: Array = _cfg.HERDS.get("herds", [])
+	var gs: Node = get_node_or_null("/root/GameState")
+	if gs and gs.has_method("map_data") and gs.map_data().has("herds"):
+		herds = gs.map_data()["herds"]
+	for spec in herds:
 		_place_herd(spec)
 
 ## Where the herd grazes: `bearing` on the camera rig's compass, like the volcanoes, and

@@ -95,6 +95,8 @@ var option_panel: Node = null
 ## His two commands, Build and Eat, in the corner under the card (v0.6 round four).
 var hero_commands: HeroCommands = null
 var pause_menu: Node = null
+## What to play (StartScreen): over the stopped valley at the launch, and again for a new game.
+var start_screen: Node = null
 var paused_overlay: Control = null
 var _raid_horn_sounded: bool = false
 
@@ -599,14 +601,24 @@ func _refresh_beacon_label() -> void:
 	if beacon_label == null or not is_instance_valid(beacon_label):
 		return
 	var gs = _get_game_state()
-	var cfg = _get_config()
 	var text: String = ""
-	if gs and cfg and cfg.has_method("beacon_status") and gs.has_method("map_data"):
-		text = String(cfg.beacon_status(gs.map_data(), int(gs.beacon_steps), float(gs.beacon_charge)))
+	if gs and gs.has_method("objective_status"):
+		text = String(gs.objective_status())
 	beacon_label.text = text
 	beacon_label.visible = text != ""
 	_refresh_objective_panel()
 	if text == "" or gs == null:
+		return
+	var title = find_child("ObjectiveTitle", true, false) as Label
+	var rescue: bool = gs.has_method("goal_kind") and String(gs.goal_kind()) == "rescue"
+	if title:
+		title.text = tr("HUD_OBJECTIVE_RESCUE" if rescue else "HUD_OBJECTIVE_BEACON")
+	# Held out for rescue (GameState "rescue" goal): the days gone of the days to go, as the charge is drawn.
+	if rescue:
+		_draw_pips(0, 0)
+		if beacon_bar:
+			beacon_bar.visible = true
+			beacon_bar.value = float(gs.rescue_ratio())
 		return
 	var stages: int = int(gs.beacon_stage_count()) if gs.has_method("beacon_stage_count") else 0
 	var done: int = int(gs.beacon_stages_done()) if gs.has_method("beacon_stages_done") else 0
@@ -681,7 +693,9 @@ func _refresh_day_dial() -> void:
 		var at: float = float(cfg.DAY["parts"][p])
 		if at > t and at < next_at:
 			next_at = at
-	var left: int = int(ceil(next_at - t))
+	# In the game's own time (CUSTOM_GAME "day_length": a longer day, a slower clock).
+	var pace: float = float(gs.run_scale("day_length")) if gs.has_method("run_scale") else 1.0
+	var left: int = int(ceil((next_at - t) * pace))
 	day_dial.tooltip_text = tr("HUD_DAY_TIP") % [int(gs.day_number()), tr("DAY_PART_" + part.to_upper()),
 		"%d:%02d" % [left / 60, left % 60]]
 
@@ -690,7 +704,10 @@ func _refresh_day_dial() -> void:
 ## torch's key.
 func _on_day_part_changed(part: String, day: int) -> void:
 	var key: String = {"day": "HINT_DAWN", "dusk": "HINT_DUSK", "night": "HINT_NIGHT"}.get(part, "")
-	if part == "dusk" and not _first_dusk_said:
+	# A day gone: the days still to hold out for rescue are one fewer.
+	_refresh_beacon_label()
+	# The first dusk teaches what the dark is and what fire is for -- in a game that teaches (GameState "tutorial").
+	if part == "dusk" and not _first_dusk_said and _teaches():
 		_first_dusk_said = true
 		# The torch's tile comes with this dusk, and the key it comes with is the one said.
 		if hero_commands:
@@ -774,6 +791,11 @@ func _refresh_objective_panel() -> void:
 	var beacon: bool = beacon_label != null and is_instance_valid(beacon_label) and beacon_label.visible
 	var goal: bool = goal_label != null and is_instance_valid(goal_label) and goal_label.visible
 	objective_panel.visible = beacon or goal or (raid_row != null and raid_row.visible)
+
+## Whether the game being played teaches as it goes (GameState.internal "tutorial": ours does).
+func _teaches() -> bool:
+	var gs = _get_game_state()
+	return gs == null or not gs.has_method("internal") or bool(gs.internal("tutorial", true))
 
 ## A moment into the run (FogOfWar): what the mist is -- ground not yet seen, cleared by going
 ## there or building near it -- so it is not taken for the weather.
@@ -885,6 +907,10 @@ func _on_game_won() -> void:
 	if gs and gs.is_game_over and not gs.is_game_won:
 		return
 	if is_game_over_visible():
+		return
+	# Held out till the rescue came (GameState "rescue" goal), or jumped home on the beacon.
+	if gs and gs.has_method("goal_kind") and String(gs.goal_kind()) == "rescue":
+		_show_game_over(tr("GAME_RESCUED_TITLE"), tr("GAME_RESCUED_DESC") % int(gs.rescue_days()), true)
 		return
 	_show_game_over(tr("GAME_VICTORY_TITLE"), tr("GAME_VICTORY_DESC"), true)
 
@@ -1125,7 +1151,9 @@ func _refresh_texts() -> void:
 		hero_emblem.tooltip_text = tr("HUD_HERO_TIP") % _details_key_text()
 	var title = find_child("ObjectiveTitle", true, false) as Label
 	if title:
-		title.text = tr("HUD_OBJECTIVE_BEACON")
+		var gs_title = _get_game_state()
+		var rescue_title: bool = gs_title and gs_title.has_method("goal_kind") and String(gs_title.goal_kind()) == "rescue"
+		title.text = tr("HUD_OBJECTIVE_RESCUE" if rescue_title else "HUD_OBJECTIVE_BEACON")
 	if paused_overlay:
 		(paused_overlay.find_child("PausedWord", true, false) as Label).text = tr("HUD_PAUSED")
 	if stats_row:
@@ -1663,6 +1691,8 @@ func _ensure_ui_components() -> void:
 		root_control.add_child(pause_menu)
 		if pause_menu.has_signal("resumed"):
 			pause_menu.resumed.connect(_refresh_paused_overlay)
+		if pause_menu.has_signal("new_game_requested"):
+			pause_menu.new_game_requested.connect(show_start_screen.bind(false))
 
 	# Both places the player can read a version, filled from the one source.
 	#
@@ -1959,6 +1989,16 @@ func _hide_legacy_phase_controls() -> void:
 			ctrl.visible = false
 
 ## ESC handling lives in Main; this is the HUD's side of it.
+## The start screen over the stopped valley (StartScreen): `fresh`, the level was just built for our game (the
+## launch), so playing it needs no new one. Under the pause menu, whose settings it opens.
+func show_start_screen(fresh: bool = false) -> void:
+	if start_screen == null or not is_instance_valid(start_screen):
+		start_screen = StartScreen.new()
+		root_control.add_child(start_screen)
+		if pause_menu and is_instance_valid(pause_menu):
+			root_control.move_child(start_screen, pause_menu.get_index())
+	start_screen.open(fresh)
+
 func toggle_pause_menu() -> void:
 	if pause_menu and is_instance_valid(pause_menu) and pause_menu.has_method("toggle"):
 		pause_menu.toggle()

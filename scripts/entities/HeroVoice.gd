@@ -204,9 +204,18 @@ func _on_raid_warning(time_left: float) -> void:
 		consider("raid")
 	var others: PackedStringArray = []
 	var waves = _waves()
+	# A harder game's other nests (Config.CUSTOM_GAME "difficulty"): each a party of the raid, from its own side.
+	if waves != null and waves.has_method("side_of") and is_inside_tree():
+		for nest in get_tree().get_nodes_in_group("nest"):
+			if not (nest is Node3D) or not is_instance_valid(nest):
+				continue
+			var nest_way: String = String(waves.side_of((nest as Node3D).global_position))
+			if nest_way != side and nest_way != "here" and not others.has(tr("DIR_" + nest_way)):
+				others.append(tr("DIR_" + nest_way))
 	if waves != null and waves.has_method("ways_now"):
 		for way in waves.ways_now():
-			if String(way) != side and (not waves.has_method("way_open") or waves.way_open(String(way))):
+			if String(way) != side and (not waves.has_method("way_open") or waves.way_open(String(way))) \
+					and not others.has(tr("DIR_" + String(way))):
 				others.append(tr("DIR_" + String(way)))
 	if not others.is_empty():
 		_then.append({"situation": "raid_also", "args": [tr("DIR_AND").join(others)]})

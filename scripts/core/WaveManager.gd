@@ -15,6 +15,9 @@ extends Node3D
 @export var big_every: int = 3
 @export var big_multiplier: float = 2.0
 @export var nest_spawn_position: Vector3 = Vector3.ZERO
+## Every nest's mouth, the first the nest_spawn_position's (Main places them): a harder game has more nests
+## (Config.CUSTOM_GAME "difficulty"), and a raid is shared out among them. Empty: the one nest.
+@export var nest_positions: Array[Vector3] = []
 @export var waypoints: Array[Vector3] = []
 ## Where else raiders step out, besides the nest: the map's `entries`, in the world (Main
 ## places them). Only the beacon's final wave uses them.
@@ -34,9 +37,13 @@ var is_wave_active: bool = false
 ## The beacon's final wave is under way (GAME-DESIGN 8.3): from its launch to the jump there
 ## are no more ordinary raids, only the one stream -- see start_final_wave.
 var final_wave: bool = false
-## Of this raid, how many have stepped out of the nest, and whose turn it is at the edge (_next_origin).
+## Of this raid, how many have stepped out of the nests, and whose turn it is at the edge (_next_origin) -- and
+## among the nests.
 var _from_nest: int = 0
 var _edge_turn: int = 0
+var _nest_turn: int = 0
+## Whether the map's boss has come to close a rescue game (start_next_raid).
+var _finale_sent: bool = false
 ## Whose turn among the nest and the day's other ways in the next of a raid is (ways_now).
 var _way_turn: int = 0
 ## Whose turn it is among the valley's ways in, for what a repaired stage stirs up: kept from one
@@ -292,10 +299,23 @@ func start_next_wave() -> void:
 	var next_n: int = (gs.wave_number + 1) if gs else (current_wave + 1)
 	start_wave(next_n)
 
-## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter.
+## Starts next raid in continuous real-time mode with dynamic intensity scaling and jitter. A game won by holding
+## out for rescue (GameState.goal_kind "rescue") has no final wave: the map's boss comes with the first raid of the
+## last day instead -- the last thing to hold out against.
 func start_next_raid() -> void:
 	var next_n: int = _next_wave_number()
-	start_wave(next_n, raid_size(next_n))
+	var finale: bool = _finale_due()
+	if finale:
+		_finale_sent = true
+	start_wave(next_n, raid_size(next_n), finale)
+
+## Whether the next raid brings a rescue game's boss: the last day come, and it not yet sent.
+func _finale_due() -> bool:
+	var gs = _get_game_state()
+	if _finale_sent or gs == null or not gs.has_method("goal_kind") or String(gs.goal_kind()) != "rescue":
+		return false
+	return int(gs.rescue_days()) > 0 and int(gs.day_number()) >= int(gs.rescue_days()) \
+		and _is_species(String(_map().get("boss", "")))
 
 ## The small raid repaired stages have stirred up, still to come (its size, or 0), the seconds
 ## till it sets out, and whether its warning has been given; and whether the raid out now is one.
@@ -384,7 +404,9 @@ func raid_size(wave_num: int) -> int:
 	var intensity_baseline: float = 1.0 + minutes * per_min
 	var jitter: float = _rng().randf_range(-jitter_range, jitter_range)
 	var multiplier: float = maxf(0.5, intensity_baseline * (1.0 + jitter))
-	var sized: int = maxi(1, int(round(float(get_wave_dino_count(wave_num)) * multiplier)))
+	# How hard the game is (CUSTOM_GAME "difficulty"): the raids that much bigger.
+	var scale: float = float(gs_scale("raid_size"))
+	var sized: int = maxi(1, int(round(float(get_wave_dino_count(wave_num)) * multiplier * scale)))
 	# The valley holds so many (MAPS.<id>.raid_most): a raid grows to it and no further.
 	var most: int = int(_map().get("raid_most", 0))
 	return mini(sized, most) if most > 0 else sized
@@ -456,9 +478,14 @@ func _next_origin() -> Array:
 				if way_in != Vector3.INF and not _watched(way_in):
 					return [way_in, true]
 	var edges: Array[Vector3] = edge_origins()
-	if edges.is_empty() or (_from_nest < _nest_most() and not _watched(nest_spawn_position)):
-		_from_nest += 1
-		return [nest_spawn_position, false]
+	var mouths: Array[Vector3] = nests()
+	if _from_nest < _nest_most() * mouths.size():
+		for k in mouths.size():
+			var mouth: Vector3 = mouths[(_nest_turn + k) % mouths.size()]
+			if edges.is_empty() or not _watched(mouth):
+				_nest_turn += k + 1
+				_from_nest += 1
+				return [mouth, false]
 	for k in edges.size():
 		var at: Vector3 = edges[(_edge_turn + k) % edges.size()]
 		if not _watched(at):
@@ -486,6 +513,28 @@ func edge_origins() -> Array[Vector3]:
 		out.append_array(entry_positions)
 	return out
 
+## Every nest's mouth: the one nest's, or all a harder game has (nest_positions).
+func nests() -> Array[Vector3]:
+	if nest_positions.is_empty():
+		return [nest_spawn_position]
+	return nest_positions
+
+## The nest nearest `at` -- the one a raider goes home to.
+func nearest_nest(at: Vector3) -> Vector3:
+	var best: Vector3 = nest_spawn_position
+	var best_d: float = INF
+	for mouth in nests():
+		var d: float = Vector2(mouth.x - at.x, mouth.z - at.z).length()
+		if d < best_d:
+			best_d = d
+			best = mouth
+	return best
+
+## One of this run's multipliers (GameState.run_scale; CUSTOM_GAME "scale"), 1 without a GameState.
+func gs_scale(key: String) -> float:
+	var gs = _get_game_state()
+	return float(gs.run_scale(key)) if (gs and gs.has_method("run_scale")) else 1.0
+
 func _nest_most() -> int:
 	var cfg = _get_config()
 	return int(cfg.RAIDS.get("nest_most", 5)) if (cfg and "RAIDS" in cfg) else 5
@@ -505,6 +554,8 @@ func reset_raid_state() -> void:
 	_final_countdown = 0.0
 	_from_nest = 0
 	_edge_turn = 0
+	_nest_turn = 0
+	_finale_sent = false
 	_stage_turn = 0
 	var cfg = _get_config()
 	var lead_time: float = 15.0
@@ -523,7 +574,8 @@ func _reset_raid_timer() -> void:
 		var r_cfg: Dictionary = cfg.RAIDS
 		min_i = float(r_cfg.get("interval_min", 45.0))
 		max_i = float(r_cfg.get("interval_max", 90.0))
-	raid_timer = _rng().randf_range(min_i, max_i)
+	# And that much oftener, or seldomer (CUSTOM_GAME "difficulty").
+	raid_timer = _rng().randf_range(min_i, max_i) * float(gs_scale("raid_interval"))
 	warning_emitted = false
 
 ## Starts a specific wave number. Optionally accepts override_count -- the rank and
@@ -715,7 +767,8 @@ func _spawn_single_dino() -> Node:
 	if "came_from" in dino:
 		dino.came_from = origin_name(origin, from_the_edge)
 	var route: Array[Vector3] = waypoints.duplicate()
-	if from_the_edge and not waypoints.is_empty():
+	# The path runs from the first nest; out of another, or in from the edge, it is straight for its end.
+	if (from_the_edge or origin != nest_spawn_position) and not waypoints.is_empty():
 		route = [origin, waypoints.back()]
 	if from_the_edge and dino.has_method("hurry_in"):
 		dino.hurry_in(float(cfg.RAIDS.get("edge_hurry", 1.0)) if (cfg and "RAIDS" in cfg) else 1.0)
@@ -804,7 +857,7 @@ func _on_day_part_changed(part: String, _day: int) -> void:
 		if not is_instance_valid(d) or d.is_in_group("guard_dinos") or d.is_in_group("prowlers") or not d.has_method("go_home"):
 			continue
 		if not cfg.keeps_hours(String(d.dino_type), part):
-			d.go_home(nest_spawn_position)
+			d.go_home(nearest_nest((d as Node3D).global_position))
 	if is_wave_active:
 		_keep_to_hours(part)
 
@@ -879,6 +932,8 @@ func upcoming_bosses() -> Array[String]:
 	var minor: String = String(_map().get("minor_boss", ""))
 	if is_big_wave(next_n) and _is_species(minor):
 		out.append(minor)
+	if _finale_due():
+		out.append(String(_map().get("boss", "")))
 	return out
 
 func _is_species(species: String) -> bool:

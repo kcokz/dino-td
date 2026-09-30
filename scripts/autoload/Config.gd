@@ -1075,6 +1075,8 @@ const DINOS: Dictionary = {
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.9, 0.8),   # head at the Hero's chest, three times his length
+		# No voice of its own yet: a small theropod's chitters, the Coelophysis's (SOUNDS).
+		"voice": "coelophysis",
 	},
 	# The head of the pack (GAME-DESIGN 7.5): a bigger, harder raptor at the front of every
 	# big wave -- the same habit and the same body width as the rest (it has to fit the
@@ -1090,6 +1092,7 @@ const DINOS: Dictionary = {
 		"boss": "minor",
 		"drops": {"prime_meat": 1, "bone": 2},
 		"size": Vector3(0.8, 1.15, 0.8),
+		"voice": "coelophysis_alpha",
 	},
 	# The map's boss (GAME-DESIGN 7.5: comes once in the middle of the game, on the map's
 	# beat, and last of all in the beacon's final wave). Hard enough that a trap or two is
@@ -1104,6 +1107,8 @@ const DINOS: Dictionary = {
 		"boss": "major",
 		"drops": {"prime_meat": 3, "bone": 4},
 		"size": Vector3(1.6, 3.0, 1.6),   # two and a half times the Hero's height
+		# No voice of its own yet: the other great hunter's growl, Postosuchus's (SOUNDS).
+		"voice": "postosuchus",
 	},
 	# THE FIRST MAP'S CAST (GAME-DESIGN 7.2, station 1: the Late Triassic, the Chinle Formation,
 	# v0.6 round three: "第一关还应该是三叠纪"). The raptor, its alpha and the big theropod stay for
@@ -1220,6 +1225,8 @@ const DINOS: Dictionary = {
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 2.2, 0.8),
+		# No voice of its own yet: a thin rasp, Hesperosuchus's (SOUNDS).
+		"voice": "hesperosuchus",
 	}
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
@@ -1560,6 +1567,10 @@ const MAPS: Dictionary = {
 	"name": "MAP_VALLEY_NAME",
 	"default_core_cell": Vector2i(0, 0),
 	"default_nest_cell": Vector2i(0, -9),
+	# The nests a harder game opens besides it, in order (CUSTOM_GAME "difficulty": "nests"): to the north-east,
+	# then the north-west -- each its own party of the raid and its own guards, clear of the rocks, the stone
+	# and the wrecks.
+	"nest_cells": [Vector2i(8, -7), Vector2i(-7, -8)],
 	"path_column_x": 0,
 	# What the player starts with, lying by the cabin rather than in the warehouse (DROPS
 	# says how it is laid out): wood, and nothing else. Stone only ever comes out of the
@@ -1725,8 +1736,8 @@ const MAPS: Dictionary = {
 	# 图，我玩的时候用大地图"; GAME-DESIGN 9.3: three to five times the ground, and places rather than
 	# paths). Four times the ground, the nest twice as far; between them a ridge with ways through it,
 	# a stone forest to the north-east, a stand of trees to the south-west, water at the west edge.
-	# What it does not say is the valley's: the same raid, beacon, stock and beats. The player's map;
-	# the small one is the tests' and the debug-agent's (MAP_SIZES, Main._choose_the_map).
+	# What it does not say is the valley's: the same raid, beacon, stock and beats. Our own game's map
+	# (GAMES.campaign); the small one is the tests' and the debug-agent's -- and a custom game's, if chosen.
 	"valley_large": {
 		"like": "valley",
 		"terrain": {
@@ -1757,6 +1768,8 @@ const MAPS: Dictionary = {
 			]},
 		},
 		"default_nest_cell": Vector2i(0, -18),
+		# The harder games' nests: past the stone forest to the north-east, then up the north-west corner.
+		"nest_cells": [Vector2i(18, -18), Vector2i(-16, -17)],
 		"entries": [Vector2i(-21, 0), Vector2i(20, 0), Vector2i(0, 20), Vector2i(19, 19)],
 		"reinforce_from": [Vector2i(-6, -21), Vector2i(0, -21), Vector2i(6, -21)],
 		"prowl_from": [Vector2i(-21, -6), Vector2i(-21, 3), Vector2i(-21, 10)],
@@ -1810,11 +1823,160 @@ const MAPS: Dictionary = {
 	},
 }
 
-## Which map each map size plays (the settings page, Main._choose_the_map): the small valley is
-## the tests' and the debug-agent's; the large one is the player's (v0.6 round four).
-const MAP_SIZES: Dictionary = {"small": "valley", "large": "valley_large"}
-## The size a player's first run is played at, before they have chosen one.
-const DEFAULT_MAP_SIZE: String = "large"
+## ==============================================================================
+## THE GAMES: what a run is (GAME-DESIGN 11, 12; the player, 2026-09-30: "v0.6还有自定义地图机制没做呢，这个功能很重要，
+## 我的想法是，把自定义地图需要的参数列出来，玩家就能选这些参数自定义游戏（自定义的cabin是完整的）。正式通关版的游戏是
+## 我们自定义的游戏，只不过加了一些玩家不能调的内部参数，比如有没有tutorial（教学机制），cabin的版本，信标机制"; and
+## "自定义地图有还有难度调整（难度高的恐龙巢穴多，波次厉害），恐龙纪元等").
+##
+## Every run is a game: the settings a custom game lets the player choose (CUSTOM_GAME) -- our own game chooses them
+## too, and keeps them -- and what only our own games set, `internal`:
+##   tutorial   whether the game teaches as it goes (the line on the fog, FogOfWar; the tutorial, when there is one)
+##   cabin      the cabin's version: "wrecked" -- its beacon broken, mended stage by stage from what the wrecks hold
+##              -- or "whole", everything in it working, the beacon mended and calling (the player chose: "连信标也
+##              是修好的")
+##   goal       how a run is won: "beacon" -- mended, launched, charged, the jump -- or "rescue": the beacon calling,
+##              what it calls comes after so many days (the "days" setting); held out till then, it is won (chosen:
+##              "撑过 N 天就赢")
+## A level a test or a tool builds plays no game of its own: ours, on the small valley (GameState.reset_game).
+const GAMES: Dictionary = {
+	# Ours: station 1, the Late Triassic valley, as we set it.
+	"campaign": {
+		"name": "GAME_CAMPAIGN",
+		"settings": {"map": "large"},
+		"internal": {"tutorial": true, "cabin": "wrecked", "goal": "beacon"},
+	},
+	# The player's own: whatever they choose; the whole cabin, its beacon calling for rescue.
+	"custom": {
+		"name": "GAME_CUSTOM",
+		"internal": {"tutorial": false, "cabin": "whole", "goal": "rescue"},
+	},
+}
+
+## THE CUSTOM GAME'S SETTINGS, in the order its page shows them: each a choice among a few, `default` the one our own
+## game plays. What a choice does is data --
+##   map      keys laid over the run's map (MAPS; "beats" keeps the beats it does not say; `nests`, how many nests,
+##            one when none says)
+##   scale    multipliers the systems read (GameState.run_scale): raid_size, raid_interval, dino_hp, dino_damage,
+##            resource_amount, day_length, cabin_hp
+##   rules    switches (GameState.rule): night, fog
+##   map_id   the map the run is played on; `days`, how many to hold out for (the "rescue" goal)
+## -- and `note`, what the page says of it under its name. A run's seed is not one of these: the page takes a number,
+## or none for a new one each run (GameState.game.seed).
+const CUSTOM_GAME: Dictionary = {
+	"settings": [
+		# The age the valley is in: whose raids, whose nest, whose boss, what hunts the river by night, what grazes.
+		# The Late Triassic is the map's own (MAPS.valley: Coelophysis, Hesperosuchus, the phytosaur, Postosuchus,
+		# Placerias); the Late Cretaceous is the later maps' cast (tools/generate_dinos.py) -- the feathered
+		# raptors, the pterosaur, the tyrannosaur; nothing of its own in the river, no herds on the walls yet.
+		{"id": "era", "name": "CUSTOM_ERA", "default": "late_triassic", "choices": [
+			{"id": "late_triassic", "name": "ERA_LATE_TRIASSIC", "note": "ERA_LATE_TRIASSIC_NOTE"},
+			{"id": "late_cretaceous", "name": "ERA_LATE_CRETACEOUS", "note": "ERA_LATE_CRETACEOUS_NOTE", "map": {
+				"raiders": {"raptor": 1.0},
+				"raiders_by_day": [{"from_day": 3, "raiders": {"raptor": 3.0, "pterosaur": 1.0}}],
+				"guards": "raptor", "minor_boss": "raptor_alpha", "boss": "big_theropod",
+				"prowlers": {}, "herds": []}},
+		]},
+		# How hard (the player: "难度高的恐龙巢穴多，波次厉害"): more nests the harder -- the raid shared out among
+		# them, each with its guards (MAPS.<id>.nest_cells, in the order they are opened) -- and the raids bigger,
+		# tougher, sooner and oftener, the valley holding more of them, and more ways in sooner.
+		{"id": "difficulty", "name": "CUSTOM_DIFFICULTY", "default": "normal", "choices": [
+			{"id": "easy", "name": "DIFFICULTY_EASY", "note": "DIFFICULTY_EASY_NOTE",
+				"map": {"nests": 1, "raid_most": 20, "toughest": 1.25, "beats": {"first_raid": 150.0}, "ways_by_day": []},
+				"scale": {"raid_size": 0.7, "raid_interval": 1.3, "dino_hp": 0.8, "dino_damage": 0.8}},
+			{"id": "normal", "name": "DIFFICULTY_NORMAL", "note": "DIFFICULTY_NORMAL_NOTE"},
+			{"id": "hard", "name": "DIFFICULTY_HARD", "note": "DIFFICULTY_HARD_NOTE",
+				"map": {"nests": 2, "raid_most": 40, "toughest": 1.8, "beats": {"first_raid": 75.0},
+					"ways_by_day": [{"from_day": 2, "ways": ["E"]}, {"from_day": 4, "ways": ["E", "S"]}]},
+				"scale": {"raid_size": 1.25, "raid_interval": 0.85, "dino_hp": 1.2, "dino_damage": 1.15}},
+			{"id": "nightmare", "name": "DIFFICULTY_NIGHTMARE", "note": "DIFFICULTY_NIGHTMARE_NOTE",
+				"map": {"nests": 3, "raid_most": 50, "toughest": 2.0, "beats": {"first_raid": 60.0},
+					"ways_by_day": [{"from_day": 2, "ways": ["E", "S"]}]},
+				"scale": {"raid_size": 1.5, "raid_interval": 0.7, "dino_hp": 1.4, "dino_damage": 1.3}},
+		]},
+		{"id": "map", "name": "CUSTOM_MAP", "default": "large", "choices": [
+			{"id": "small", "name": "MENU_MAP_SMALL", "note": "MAP_SMALL_NOTE", "map_id": "valley"},
+			{"id": "large", "name": "MENU_MAP_LARGE", "note": "MAP_LARGE_NOTE", "map_id": "valley_large"},
+		]},
+		# How long the beacon's rescue takes to come: the days to hold out (a day is DAY.length, six minutes).
+		{"id": "days", "name": "CUSTOM_DAYS", "default": "5", "choices": [
+			{"id": "3", "name": "DAYS_N", "days": 3},
+			{"id": "5", "name": "DAYS_N", "days": 5},
+			{"id": "8", "name": "DAYS_N", "days": 8},
+			{"id": "12", "name": "DAYS_N", "days": 12},
+		]},
+		# How much the trees and the rock hold (RESOURCE_NODES.<type>.amount) -- they do not grow back.
+		{"id": "resources", "name": "CUSTOM_RESOURCES", "default": "standard", "choices": [
+			{"id": "scarce", "name": "AMOUNT_SCARCE", "scale": {"resource_amount": 0.6}},
+			{"id": "standard", "name": "AMOUNT_STANDARD"},
+			{"id": "plenty", "name": "AMOUNT_PLENTY", "scale": {"resource_amount": 1.6}},
+		]},
+		# What lies by the cabin at the start (MAPS.<id>.opening_stock): less than a ring of palisade; the valley's;
+		# enough for a ring, an axe and a first trap.
+		{"id": "stock", "name": "CUSTOM_STOCK", "default": "standard", "choices": [
+			{"id": "little", "name": "AMOUNT_SCARCE", "map": {"opening_stock": {"wood": 16}}},
+			{"id": "standard", "name": "AMOUNT_STANDARD"},
+			{"id": "much", "name": "AMOUNT_PLENTY", "map": {"opening_stock": {"wood": 44, "stone": 8, "bone": 4}}},
+		]},
+		# How long a day is: four minutes, six, nine -- the clock's own pace (GameState._run_the_day), so everything
+		# that keeps to the hours keeps to them.
+		{"id": "day_length", "name": "CUSTOM_DAY_LENGTH", "default": "standard", "choices": [
+			{"id": "short", "name": "LENGTH_SHORT", "scale": {"day_length": 0.67}},
+			{"id": "standard", "name": "LENGTH_STANDARD"},
+			{"id": "long", "name": "LENGTH_LONG", "scale": {"day_length": 1.5}},
+		]},
+		# Whether night comes: without it, the day runs from morning to the dusk and on to the next morning -- no
+		# dark, nothing that keeps to it (the river's hunters), nobody asleep at the nest.
+		{"id": "night", "name": "CUSTOM_NIGHT", "default": "on", "choices": [
+			{"id": "on", "name": "SWITCH_ON"},
+			{"id": "off", "name": "SWITCH_OFF", "rules": {"night": false}},
+		]},
+		# The fog of war (FOG): off, the whole valley is seen from the start.
+		{"id": "fog", "name": "CUSTOM_FOG", "default": "on", "choices": [
+			{"id": "on", "name": "SWITCH_ON"},
+			{"id": "off", "name": "SWITCH_OFF", "rules": {"fog": false}},
+		]},
+		# How much the cabin stands (BUILDINGS.core.hp).
+		{"id": "cabin_hp", "name": "CUSTOM_CABIN", "default": "standard", "choices": [
+			{"id": "fragile", "name": "CABIN_FRAGILE", "scale": {"cabin_hp": 0.6}},
+			{"id": "standard", "name": "AMOUNT_STANDARD"},
+			{"id": "sturdy", "name": "CABIN_STURDY", "scale": {"cabin_hp": 1.6}},
+		]},
+	],
+}
+
+## The setting `setting_id` of the custom game (CUSTOM_GAME.settings), or {}.
+static func custom_setting(setting_id: String) -> Dictionary:
+	for s in CUSTOM_GAME["settings"]:
+		if String(s["id"]) == setting_id:
+			return s
+	return {}
+
+## The choice `choice_id` of setting `setting_id`, or its default for one it does not have.
+static func custom_choice(setting_id: String, choice_id: String) -> Dictionary:
+	var s: Dictionary = custom_setting(setting_id)
+	var fallback: Dictionary = {}
+	for c in s.get("choices", []):
+		if String(c["id"]) == choice_id:
+			return c
+		if String(c["id"]) == String(s.get("default", "")):
+			fallback = c
+	return fallback
+
+## Every setting's choice for game `game_id` played with `chosen` (setting id -> choice id): the setting's default,
+## the game's own over it, and -- for the custom game only -- what the player chose over that. Ours keeps its own.
+static func game_settings(game_id: String, chosen: Dictionary = {}) -> Dictionary:
+	var out: Dictionary = {}
+	var own: Dictionary = GAMES.get(game_id, {}).get("settings", {})
+	for s in CUSTOM_GAME["settings"]:
+		var id: String = String(s["id"])
+		var pick: String = String(own.get(id, s.get("default", "")))
+		if game_id == "custom" and chosen.has(id) and not custom_choice(id, String(chosen[id])).is_empty() \
+				and String(custom_choice(id, String(chosen[id]))["id"]) == String(chosen[id]):
+			pick = String(chosen[id])
+		out[id] = pick
+	return out
+
 ## How long the retired phase machine's produce phase showed before moving on.
 const PRODUCE_DELAY: float = 1.0
 
@@ -2181,6 +2343,12 @@ const UI: Dictionary = {
 	"result_card_width": 560,
 	"menu_width": 400,
 	"menu_picker_width": 190,
+	# The start screen (StartScreen): its title page a little wider than the pause menu, what each game is
+	# written under its button; the custom game's page wider still -- a setting's name, its picker and what the
+	# choice does on each row -- and its rows scrolling past this height, so it fits a 720-line window.
+	"start_width": 460,
+	"custom_width": 580,
+	"custom_height": 420,
 }
 
 ## Presentation feedback (v0.3). None of this changes what happens in the game;
@@ -3720,7 +3888,9 @@ static func beacon_jobs(map: Dictionary) -> Array[String]:
 		return out
 	for i in range(stages.size()):
 		out.append("beacon_%d" % (i + 1))
-	out.append(BEACON_LAUNCH)
+	# A beacon that calls for rescue (GameState: the "rescue" goal) is not launched.
+	if bool(map["beacon"].get("launch", true)):
+		out.append(BEACON_LAUNCH)
 	return out
 
 ## One of the beacon's steps as a bench job, in a recipe's shape -- station, inputs, time,
@@ -3753,7 +3923,7 @@ static func beacon_status(map: Dictionary, steps_done: int, charged: float) -> S
 	var jobs: Array[String] = beacon_jobs(map)
 	if jobs.is_empty():
 		return ""
-	var stages: int = jobs.size() - 1
+	var stages: int = jobs.size() - (1 if jobs.has(BEACON_LAUNCH) else 0)
 	if steps_done < stages:
 		var price: PackedStringArray = []
 		var inputs: Dictionary = beacon_job(map, jobs[steps_done]).get("inputs", {})

@@ -11,6 +11,8 @@ extends Control
 
 signal resumed()
 signal quit_requested()
+## "New game": the start screen, to choose what to play next (HUD.show_start_screen).
+signal new_game_requested()
 
 enum Page { ROOT = 0, SETTINGS = 1 }
 
@@ -23,6 +25,7 @@ var page_vbox: VBoxContainer = null
 var title_label: Label = null
 var resume_btn: Button = null
 var settings_btn: Button = null
+var new_game_btn: Button = null
 var quit_btn: Button = null
 var back_btn: Button = null
 var language_row: HBoxContainer = null
@@ -35,15 +38,12 @@ var commands_label: Label = null
 var command_keys_label: Label = null
 var window_label: Label = null
 var window_picker: OptionButton = null
-## The map's size (Config.MAP_SIZES): for the next run.
-var map_row: VBoxContainer = null
-var map_label: Label = null
-var map_picker: OptionButton = null
-var map_note_label: Label = null
 var language_picker: OptionButton = null
 var version_caption: Label = null
 
 var _was_paused_before_open: bool = false
+## Opened on its settings page alone -- from the start screen (open_settings_only): its "back" closes it.
+var _settings_only: bool = false
 
 func _init() -> void:
 	name = "PauseMenu"
@@ -98,6 +98,7 @@ func open() -> void:
 func close() -> void:
 	is_open = false
 	visible = false
+	_settings_only = false
 	current_page = Page.ROOT
 	# Only lift the pause the menu itself applied.
 	var gs = _get_game_state()
@@ -120,6 +121,12 @@ func open_settings() -> void:
 	current_page = Page.SETTINGS
 	_show_page()
 
+## Open on the settings page alone, for the start screen: its "back" closes it, back to that screen.
+func open_settings_only() -> void:
+	open()
+	_settings_only = true
+	open_settings()
+
 func back_to_root() -> void:
 	current_page = Page.ROOT
 	_show_page()
@@ -128,13 +135,13 @@ func _show_page() -> void:
 	var root_page: bool = current_page == Page.ROOT
 	if resume_btn: resume_btn.visible = root_page
 	if settings_btn: settings_btn.visible = root_page
+	if new_game_btn: new_game_btn.visible = root_page
 	if quit_btn: quit_btn.visible = root_page
 	if back_btn: back_btn.visible = not root_page
 	if language_row: language_row.visible = not root_page
 	# Settings only. Leaving it off this list is why it appeared on the main menu too --
 	# every row added to page_vbox shows on every page unless it is told otherwise.
 	if window_row: window_row.visible = not root_page
-	if map_row: map_row.visible = not root_page
 	if camera_row: camera_row.visible = not root_page
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if root_page else tr("MENU_SETTINGS_TITLE")
@@ -150,7 +157,19 @@ func _on_settings_pressed() -> void:
 	open_settings()
 
 func _on_back_pressed() -> void:
+	if _settings_only:
+		close()
+		return
 	back_to_root()
+
+## A new game: the menu closes onto the start screen, the run still paused under it.
+func _on_new_game_pressed() -> void:
+	var gs = _get_game_state()
+	_was_paused_before_open = true     # the start screen holds the pause now
+	close()
+	if gs and gs.has_method("set_paused"):
+		gs.set_paused(true)
+	new_game_requested.emit()
 
 func _on_quit_pressed() -> void:
 	quit_requested.emit()
@@ -225,6 +244,7 @@ func _ensure_components() -> void:
 
 	resume_btn = _make_button(resume_btn, "ResumeBtn", _on_resume_pressed, &"AccentButton", "play")
 	settings_btn = _make_button(settings_btn, "SettingsBtn", _on_settings_pressed)
+	new_game_btn = _make_button(new_game_btn, "NewGameBtn", _on_new_game_pressed)
 	quit_btn = _make_button(quit_btn, "QuitBtn", _on_quit_pressed, &"DangerButton")
 
 	if language_row == null:
@@ -260,32 +280,6 @@ func _ensure_components() -> void:
 		window_row.add_child(window_picker)
 		if not window_picker.item_selected.is_connected(_on_window_mode_selected):
 			window_picker.item_selected.connect(_on_window_mode_selected)
-
-	# The map's size (v0.6 round four): the large valley is the player's, the small one the tests';
-	# chosen here, played from the next run.
-	if map_row == null:
-		map_row = VBoxContainer.new()
-		map_row.name = "MapRow"
-		map_row.add_theme_constant_override("separation", UiTheme.space("xs"))
-		page_vbox.add_child(map_row)
-		var line := HBoxContainer.new()
-		line.name = "MapLine"
-		map_row.add_child(line)
-		map_label = Label.new()
-		map_label.name = "MapLabel"
-		map_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		line.add_child(map_label)
-		map_picker = OptionButton.new()
-		map_picker.name = "MapPicker"
-		map_picker.custom_minimum_size = Vector2(_picker_width(), UiTheme.height("command"))
-		line.add_child(map_picker)
-		if not map_picker.item_selected.is_connected(_on_map_size_selected):
-			map_picker.item_selected.connect(_on_map_size_selected)
-		map_note_label = Label.new()
-		map_note_label.name = "MapNote"
-		map_note_label.theme_type_variation = &"MutedLabel"
-		map_note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		map_row.add_child(map_note_label)
 
 	if camera_row == null:
 		camera_row = VBoxContainer.new()
@@ -327,7 +321,6 @@ func _ensure_components() -> void:
 		version_caption.text = "%s  %s" % [AppInfo.APP_NAME, AppInfo.get_version()]
 	_populate_languages()
 	_populate_window_modes()
-	_populate_map_sizes()
 
 ## A menu entry: full width, one height, styled by what it does -- the way back to the
 ## game lit in the accent, the way out of it in red.
@@ -371,30 +364,6 @@ func _on_window_mode_selected(index: int) -> void:
 	if wm and wm.has_method("set_fullscreen"):
 		wm.set_fullscreen(index == 0)
 
-## The sizes, in Config.MAP_SIZES's order, the chosen one selected.
-func _populate_map_sizes() -> void:
-	if map_picker == null:
-		return
-	var cfg = _get_config()
-	var i18n = _get_i18n()
-	var sizes: Array = cfg.MAP_SIZES.keys() if cfg else ["small", "large"]
-	var chosen: String = String(cfg.DEFAULT_MAP_SIZE) if cfg else "large"
-	if i18n and i18n.has_method("load_setting"):
-		chosen = String(i18n.load_setting("game", "map_size", chosen))
-	map_picker.clear()
-	for i in sizes.size():
-		map_picker.add_item(tr("MENU_MAP_" + String(sizes[i]).to_upper()), i)
-		if String(sizes[i]) == chosen:
-			map_picker.select(i)
-
-## A size chosen: remembered, and played from the next run (Main._choose_the_map, restart_game).
-func _on_map_size_selected(index: int) -> void:
-	var cfg = _get_config()
-	var i18n = _get_i18n()
-	var sizes: Array = cfg.MAP_SIZES.keys() if cfg else []
-	if i18n and i18n.has_method("save_setting") and index >= 0 and index < sizes.size():
-		i18n.save_setting("game", "map_size", String(sizes[index]))
-
 func _populate_languages() -> void:
 	if language_picker == null:
 		return
@@ -426,13 +395,11 @@ func _details_key_text() -> String:
 func _refresh_texts() -> void:
 	if resume_btn: resume_btn.text = tr("MENU_RESUME")
 	if settings_btn: settings_btn.text = tr("MENU_SETTINGS")
+	if new_game_btn: new_game_btn.text = tr("MENU_NEW_GAME")
 	if quit_btn: quit_btn.text = tr("MENU_QUIT")
 	if back_btn: back_btn.text = tr("MENU_BACK")
 	if language_label: language_label.text = tr("MENU_LANGUAGE")
 	if window_label: window_label.text = tr("MENU_WINDOW_MODE")
-	if map_label: map_label.text = tr("MENU_MAP")
-	if map_note_label: map_note_label.text = tr("MENU_MAP_NOTE")
-	_populate_map_sizes()
 	if camera_label: camera_label.text = tr("MENU_CAMERA")
 	if camera_keys_label: camera_keys_label.text = tr("MENU_CAMERA_KEYS")
 	if commands_label: commands_label.text = tr("MENU_COMMANDS")

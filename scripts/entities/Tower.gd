@@ -74,7 +74,7 @@ func _load_tower_config() -> void:
 	var cfg = _get_config()
 	if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has(building_type):
 		var data: Dictionary = cfg.BUILDINGS[building_type]
-		max_hp = float(data.get("hp", 20.0))
+		max_hp = declared_hp(building_type, 20.0)
 		current_hp = max_hp
 		attack_range = float(data.get("range", 5.0))
 		damage = float(data.get("damage", 1.0))

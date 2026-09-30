@@ -442,7 +442,9 @@ func _beacon_status() -> String:
 		return ""
 	if String(cfg.BEACON_STATION) != station_id:
 		return ""
-	return String(cfg.beacon_status(gs.map_data(), int(gs.beacon_steps), float(gs.beacon_charge)))
+	# Its mending and launch -- or, mended and calling (a custom game's), how long the rescue is.
+	return String(gs.objective_status()) if gs.has_method("objective_status") \
+		else String(cfg.beacon_status(gs.map_data(), int(gs.beacon_steps), float(gs.beacon_charge)))
 
 # ==============================================================================
 # Resolvers

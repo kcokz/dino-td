@@ -1521,6 +1521,16 @@
     - playtest 新场景 `gaits`：十种每种单独侧面近拍走、跑、待机各四帧（加 `only:<物种>` 只拍那几种）。
     - 测试：`test_v06_the_sculpted_cast` 第 1 条改成读贴图（颜色图和法线图都在，颜色图里深浅二十种以上、有深色的背和花纹；眼睛读顶点色），第 1～5 条从五种扩到九种（加迅猛龙、头领、霸王龙、翼龙）；加第 9 条（`Config.DINOS` 每一种都画的是新做的模型）、第 10 条（翼龙的翼指长在手上、折回去、翼尖高过手腕）。`test_scene_dino` 第 5 条改成查三种现在用的模型文件在 `CREDITS.md` 里。
 
+  - **自定义游戏和开始界面**（玩家，2026-09-30："v0.6还有自定义地图机制没做呢，这个功能很重要……把自定义地图需要的参数列出来，玩家就能选这些参数自定义游戏（自定义的cabin是完整的）。正式通关版的游戏是我们自定义的游戏，只不过加了一些玩家不能调的内部参数，比如有没有tutorial（教学机制），cabin的版本，信标机制"；"自定义地图有还有难度调整（难度高的恐龙巢穴多，波次厉害），恐龙纪元等"；定了"撑过 N 天就赢""连信标也是修好的""启动时先出开始界面"；设计书 11、12 章）：
+    - **每局是一个游戏**（`Config.GAMES`）：`campaign`（正式游戏：大山谷，设置都是默认；内部参数 tutorial 开、cabin `wrecked`、goal `beacon`）和 `custom`（自定义：玩家的设置；tutorial 关、cabin `whole`、goal `rescue`）。设置和选项写在 `Config.CUSTOM_GAME`：恐龙纪元、难度、地图、撑过几天、资源、开局物资、一天多长、夜晚、迷雾、船舱；每个选项的作用是数据——`map`（盖到这一局的地图上）、`scale`（各系统读的倍率）、`rules`（开关）、`map_id`、`days`。
+    - **GameState 算出"这一局"**（`play`、`_settle_the_game`、`map_data`、`run_scale`、`rule`、`internal`、`goal_kind`、`rescue_days`）：地图 = 选的地图 + 设置盖上去的键；测试和工具搭的关卡没有游戏，照旧是小山谷 + 正式游戏的内部参数，地图就是 Config 的那一份。
+    - **接到各系统**：来袭规模（`WaveManager.raid_size`）和间隔乘难度的倍率；恐龙开局的血和咬乘倍率；多个巢（`MAPS.<id>.nest_cells`，`Main._place_extra_nests`，`WaveManager.nest_positions`、`nests`、`nearest_nest`：来袭轮流从每个巢出来，黄昏回最近的巢；每个巢在迷雾里单独被发现，手绘地图画出找到的每一个；预警说出每个巢的方向）；纪元换掉来袭物种、守卫、首领、夜里上岸的和兽群（`Herds` 读地图的 `herds`）；树和石头的储量（`ResourceNode.setup`）；船舱的血（`Building.declared_hp`）；钟的快慢和没有夜晚（`GameState._run_the_day`）；没有迷雾（`Main._ensure_fog`）；教学（`FogOfWar._teaches`、`HUD._teaches`：迷雾那句和第一个黄昏那句）。
+    - **船舱完整、撑过 N 天**：信标三段开局就修好（`beacon_steps`），没有启动这一步（地图的信标 `launch` 为 false，`Config.beacon_jobs` 就不加启动；`is_beacon_launched` 只认启动那一步）；残骸不出现；右上角卡片标题"救援"，写"信标在呼叫救援。还要撑 N 天。"，下面一根条是过了多少天（`GameState.objective_status`、`rescue_ratio`）；最后一天的第一波由大首领压阵（`WaveManager._finale_due`）；撑到之后那天的第一缕光就赢，结果画面"获救"。
+    - **晚白垩世的动物**先借用声音：迅猛龙和头领用腔骨龙的、霸王龙用波斯特鳄的、翼龙用黄昏鳄的（`DINOS.<id>.voice`）。
+    - **开始界面**（新的 `scripts/ui/StartScreen.gd`，挂在 HUD 下、ESC 菜单下面一层）：启动游戏先出来，山谷停在后面；开始游戏 / 自定义游戏 / 游戏设置（打开 ESC 菜单的设置页，返回就回开始界面）/ 退出游戏。自定义页每项一行（名字、下拉选项、选中项的说明），可以滚动，最后是种子和"返回""开始"；上次的选择记在设置文件里。选好以后设 `GameState.play(...)`、`launch_straight_in`，重新搭关卡直接开始；刚启动搭好的正式游戏关卡就直接放开。ESC 菜单多一项"新的一局"（`PauseMenu.new_game_requested`），设置页的"地图"一行删了（字符串 `MENU_MAP`、`MENU_MAP_NOTE` 也删了），`Config.MAP_SIZES`、`DEFAULT_MAP_SIZE`、`Main.map_setting` 删了。
+    - playtest 新场景：`start`（开始界面、自定义页）、`custom`（晚白垩世、噩梦、小山谷、没有迷雾的一局：三个巢、救援卡片、第一波）。
+    - 测试：新 `test_v06_custom_games.gd`（15 条：每项设置有选项、有名字、越难巢越多；正式游戏就是默认设置加大山谷、有教学、要修信标，玩家的选择改不了它；脚本搭的关卡照旧；自定义把设置盖到地图上、倍率对、恐龙开局更硬；船舱完整、信标修好、没有残骸、卡片是救援；撑到最后一天之后的第一缕光就赢；最后一天大首领来；三个巢各有守卫、都走得到船舱、轮流出来；纪元换动物；资源、船舱血、一天的长短、没有迷雾；没有夜晚；自定义不教；种子复现；开始界面；ESC 菜单的新的一局）。`test_v06_the_map_size` 第 1、7 条改成读自定义的地图设置。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。
