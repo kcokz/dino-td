@@ -111,6 +111,8 @@ ANIMALS = {
             "breath": {"bone": "Torso", "degrees": 4.0, "frames": 96},
         },
     },
+    # The pack's alpha: the same rig and clips, painted apart (tools/triassic_bodies.py).
+    "coelophysis_alpha": {"same_as": "coelophysis", "sculpt": "coelophysis_alpha"},
     "placerias": {
         "source": "triceratops.glb",
         "bones": {
@@ -404,6 +406,8 @@ def main():
     for name, spec in ANIMALS.items():
         if only and name not in only:
             continue
+        if spec.get("same_as"):
+            spec = dict(ANIMALS[spec["same_as"]], sculpt=spec["sculpt"])
         reset()
         arm, mesh = import_source(spec["source"])
         reshape(arm, mesh, spec["bones"])

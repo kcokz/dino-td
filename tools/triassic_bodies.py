@@ -124,6 +124,22 @@ COELOPHYSIS = {
 }
 
 
+# The pack's alpha (the minor boss, GAME-DESIGN 7.5): the same animal, grown (Config.DINOS), and marked so it
+# is picked out of its pack at a glance -- a darker back, rust flanks, heavier saddles, its head and neck
+# flushed red.
+import copy as _copy
+COELOPHYSIS_ALPHA = _copy.deepcopy(COELOPHYSIS)
+COELOPHYSIS_ALPHA["skin"].update({
+    "back": (0.06, 0.025, 0.01),
+    "flank": (0.3, 0.11, 0.035),
+    "belly": (0.58, 0.46, 0.32),
+    "mottle": 0.16,
+    "flush": {"colour": (0.36, 0.05, 0.02), "from": ("Head", 1.05), "to": ("Neck", 0.3), "strength": 0.6},
+})
+COELOPHYSIS_ALPHA["skin"]["bands"] = dict(COELOPHYSIS["skin"]["bands"], colour=(0.015, 0.008, 0.004), strength=0.88)
+COELOPHYSIS_ALPHA["eyes"] = dict(COELOPHYSIS["eyes"], iris=(0.7, 0.3, 0.03))
+
+
 # ==============================================================================
 # Hesperosuchus agilis: the crocodile's line before it took to the water -- small, slender, long-legged, a
 # long narrow snout and big eyes, paired bony plates down its back
@@ -417,7 +433,7 @@ PLACERIAS = {
     },
 }
 
-PLANS = {"coelophysis": COELOPHYSIS, "hesperosuchus": HESPEROSUCHUS, "phytosaur": PHYTOSAUR,
+PLANS = {"coelophysis": COELOPHYSIS, "coelophysis_alpha": COELOPHYSIS_ALPHA, "hesperosuchus": HESPEROSUCHUS, "phytosaur": PHYTOSAUR,
          "postosuchus": POSTOSUCHUS, "placerias": PLACERIAS}
 
 
@@ -472,6 +488,8 @@ def _painter(plan, path, loft, skin):
     stripe = skin.get("eye_stripe")
     spots = skin.get("spots")
     beak = skin.get("beak")
+    flush = skin.get("flush")
+    fl_range = sorted((path.s_of(*flush["from"]), path.s_of(*flush["to"]))) if flush else (0.0, 0.0)
     s_nose = path.s_of(*plan["nostrils"]["at"]) if plan.get("nostrils") else None
     s_head0 = path.s_of("Head", 0.0)
     s_eye = path.s_of(*plan["eyes"]["at"])
@@ -502,6 +520,9 @@ def _painter(plan, path, loft, skin):
             reach = max(reach, tail * 0.8)
             fade = sc.smoothstep(b_from, b_from + bands["period"], s)
             c = sc.mix(c, bands["colour"], bands["strength"] * band * reach * fade)
+        if flush and fl_range[0] <= s <= fl_range[1]:
+            k = (1.0 - sc.smoothstep(fl_range[1] - 0.6, fl_range[1], s)) * sc.smoothstep(-0.6, 0.3, v)
+            c = sc.mix(c, flush["colour"], flush["strength"] * k)
         if spots and sp_range[0] <= s <= sp_range[1]:
             k = noise.noise(p * spots["scale"]) + 0.5 * noise.noise(p * spots["scale"] * 2.3)
             spot = sc.smoothstep(spots["above"], spots["above"] + 0.12, k) * sc.smoothstep(-0.5, 0.2, v)

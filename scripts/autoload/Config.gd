@@ -3053,11 +3053,13 @@ const VISUALS: Dictionary = {
 	# raptor until it has a model of its own).
 	"dino/raptor_alpha":    {"scene": "res://assets/models/quaternius/velociraptor.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha"},
-	# The first map's cast (tools/generate_triassic.py): reshaped from the Quaternius rigs, so they
-	# play the same clips. The alpha is the same animal, fitted to its own taller size.
+	# The first map's cast (tools/generate_triassic.py): the Quaternius rigs reshaped, so they play the same
+	# clips, and a body sculpted round them (tools/triassic_bodies.py), coloured at its vertices ("skin").
+	# The alpha is the same animal, fitted to its own taller size and painted apart: darker, rust-flanked,
+	# its head flushed red -- the pack's leader picked out at a glance.
 	"dino/coelophysis":     {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis", "material": "skin"},
-	"dino/coelophysis_alpha": {"scene": "res://assets/models/triassic/coelophysis.glb", "fit": "height",
+	"dino/coelophysis_alpha": {"scene": "res://assets/models/triassic/coelophysis_alpha.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "coelophysis_alpha", "material": "skin"},
 	"dino/postosuchus":     {"scene": "res://assets/models/triassic/postosuchus.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
