@@ -258,17 +258,27 @@ func test_08_another_subject_or_a_cleared_one_starts_his_card_shut() -> void:
 	assert_eq(panel.view(), "none", "A click on the bare ground shuts it as well")
 
 func test_09_the_keys_are_whichever_has_commands_on_them() -> void:
-	# A whole fence's card has nothing on a key (pulling it down is pressed by hand): the keys stay his
-	# commands'. A bitten one's has Repair: they are the card's. His tiles answer the mouse either way.
+	# A whole gate's card has nothing on a key (pulling it down is pressed by hand): the keys stay his
+	# commands'. A fence's has its ways up (v0.6 round six: bone stakes, a stone wall), a bitten one's
+	# Repair: they are the card's. His tiles answer the mouse either way.
 	var main = await _level()
 	stock_everything()
 	var panel = main.hud.option_panel
 	var tiles = _tiles(main)
 	var eb = tree.root.get_node("EventBus")
+	var gm = main.grid_manager
+	var gate = main.build_system.place_at("gate", gm.world_to_build_cell(main.hero.global_position) + Vector2i(-4, 4),
+		main.buildings_container, false)
+	if not gate.is_constructed:
+		gate.complete_construction()
+	eb.unit_selected.emit(gate)
+	await wait_frames(1)
+	assert_true(config_node.upgrade_targets("gate").is_empty(), "(a gate has no way up)")
+	assert_true(tiles.keys_live(), "A whole gate chosen, the keys are still his commands'")
 	var wall = _fence(main)
 	eb.unit_selected.emit(wall)
 	await wait_frames(1)
-	assert_true(tiles.keys_live(), "A whole fence chosen, the keys are still his commands'")
+	assert_false(tiles.keys_live(), "A fence's ways up are on keys: they are its card's")
 	wall.take_damage(wall.max_hp * 0.5)
 	eb.unit_selected.emit(wall)
 	await wait_frames(1)

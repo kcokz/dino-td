@@ -37,6 +37,8 @@ var root_control: Control = null
 ## resource is a new chip without anyone writing one (v0.6 T2).
 var resource_bar: Container = null
 var resource_labels: Dictionary = {}     # res_id -> the count Label
+## The pinned goal's line under the beacon's (GameState.goal).
+var goal_label: Label = null
 var resource_chips: Dictionary = {}      # res_id -> the chip (icon + count)
 # The readouts every older caller asks for by name. They are entries of resource_labels.
 var wood_label: Label = null
@@ -245,7 +247,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
 			["unlock_granted", _on_unlock_granted], ["hero_spoke", _on_hero_spoke],
 			["final_wave_warning", _on_final_wave_warning],
-			["material_discovered", _on_material_discovered]]:
+			["material_discovered", _on_material_discovered], ["goal_changed", _on_goal_changed]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
 	return out
@@ -318,7 +320,56 @@ func _on_resources_changed(res: Dictionary) -> void:
 			lbl.modulate = UiTheme.color("accent")
 			var tw := lbl.create_tween()
 			tw.tween_property(lbl, "modulate", Color.WHITE, UiTheme.number("flash_seconds"))
+	_refresh_goal(res)
 	_fit_stock()
+
+## THE PINNED GOAL (GameState.goal; GAME-DESIGN 6.0 rule 4): what it takes of each material is on that
+## material's count, "3/5" -- gold once there is enough -- and under the beacon's line, what it is and
+## what is still short, or that there is enough; clicking that line unpins it.
+## `res` is the stock as said (EventBus.resources_changed), or the stock itself with nothing said.
+func _refresh_goal(res: Dictionary = {}) -> void:
+	var gs = _get_game_state()
+	var price: Dictionary = gs.goal_price() if (gs and gs.has_method("goal_price")) else {}
+	var stock: Dictionary = res if not res.is_empty() else (gs.resources if gs else {})
+	for res_id in resource_labels:
+		var lbl: Label = resource_labels[res_id]
+		if lbl == null or not is_instance_valid(lbl):
+			continue
+		var n: int = int(stock.get(res_id, 0))
+		var need: int = int(price.get(res_id, 0))
+		if need > 0:
+			lbl.text = "%d/%d" % [n, need]
+			_show_chip(String(res_id), true)
+			lbl.add_theme_color_override("font_color", UiTheme.color("accent") if n >= need else UiTheme.color("text"))
+		elif lbl.text.contains("/"):
+			# A count the goal took over, handed back.
+			lbl.text = str(n)
+			lbl.remove_theme_color_override("font_color")
+	if goal_label == null or not is_instance_valid(goal_label):
+		return
+	var has_goal: bool = gs != null and "goal" in gs and not (gs.goal as Dictionary).is_empty()
+	goal_label.visible = has_goal
+	if not has_goal:
+		_refresh_beacon_label()
+		return
+	var short: Dictionary = gs.goal_short()
+	var parts: PackedStringArray = []
+	for res_id in short:
+		parts.append("%d %s" % [int(short[res_id]), tr("RESOURCE_%s" % String(res_id).to_upper())])
+	var state: String = tr("GOAL_MET") if short.is_empty() else (tr("GOAL_SHORT") % ", ".join(parts))
+	goal_label.text = tr("GOAL_LABEL") % [String(gs.goal_name()), state]
+	goal_label.modulate = UiTheme.color("accent") if short.is_empty() else Color.WHITE
+	if objective_panel:
+		objective_panel.visible = true
+
+func _on_goal_changed(_goal: Dictionary) -> void:
+	_refresh_goal()
+
+func _on_goal_label_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		var gs = _get_game_state()
+		if gs and gs.has_method("unpin_goal"):
+			gs.unpin_goal()
 
 ## The stock's gaps close up when it would reach the cabin's medallion -- a map with more
 ## materials, counts in the thousands, a narrow window -- rather than running under it.
@@ -522,7 +573,7 @@ func _refresh_beacon_label() -> void:
 	beacon_label.text = text
 	beacon_label.visible = text != ""
 	if objective_panel:
-		objective_panel.visible = text != ""
+		objective_panel.visible = text != "" or (goal_label != null and is_instance_valid(goal_label) and goal_label.visible)
 	if text == "" or gs == null:
 		return
 	var stages: int = int(gs.beacon_stage_count()) if gs.has_method("beacon_stage_count") else 0
@@ -1396,6 +1447,16 @@ func _ensure_ui_components() -> void:
 	beacon_bar.custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
 	beacon_bar.visible = false
 	objective.add_child(beacon_bar)
+	# The pinned goal, under the beacon's line (GameState.goal): what it is, what is short; a click
+	# unpins it.
+	goal_label = _label("GoalLabel", &"MutedLabel", "")
+	goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	goal_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	goal_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	goal_label.tooltip_text = tr("GOAL_UNPIN")
+	goal_label.visible = false
+	goal_label.gui_input.connect(_on_goal_label_input)
+	objective.add_child(goal_label)
 
 	# Bottom left: the Hero's medallion -- click it to pick him -- his figures and the meal he
 	# is living on beside it.

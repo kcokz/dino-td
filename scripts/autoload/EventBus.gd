@@ -173,6 +173,10 @@ signal resource_dropped(res_id: String, amount: int, world_pos: Vector3)
 ## was made.
 signal unlock_granted(unlock_id: String)
 
+## Emitted when the player pins a goal, or unpins it (GameState.goal): the material bar counts
+## against its price (GAME-DESIGN 6.0 rule 4).
+signal goal_changed(goal: Dictionary)
+
 ## Emitted the first time in a run a material comes into the stock (GameState.known): what
 ## is built and made of it shows from then on (v0.6: the run unfolds a material at a time).
 signal material_discovered(res_id: String)

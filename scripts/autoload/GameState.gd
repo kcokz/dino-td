@@ -248,6 +248,7 @@ func reset_game(p_seed: int = -1) -> void:
 	_set_meals({})
 	beacon_steps = 0
 	beacon_charge = 0.0
+	goal = {}
 	final_wave_in = -1.0
 	drop_misses.clear()
 	_stage_raid = false
@@ -377,6 +378,11 @@ func grant_unlock(unlock_id: String) -> bool:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("unlock_granted"):
 		eb.unlock_granted.emit(unlock_id)
+	# Made, it is no longer something to aim at.
+	var cfg = _get_config()
+	if String(goal.get("kind", "")) == "job" and cfg and "RECIPES" in cfg \
+			and String(cfg.RECIPES.get(String(goal.get("id", "")), {}).get("unlocks", "")) == unlock_id:
+		unpin_goal()
 	return true
 
 # ==============================================================================
@@ -519,6 +525,92 @@ func beacon_next_job() -> String:
 	var jobs: Array[String] = _beacon_jobs()
 	return jobs[beacon_steps] if beacon_steps < jobs.size() else ""
 
+# ==============================================================================
+# The pinned goal (GAME-DESIGN 6.0 rule 4)
+# ==============================================================================
+## One thing the player wants next, whose price the material bar counts against (v0.6 round six, the
+## player: "也很难做规划"; chosen: "钉住一个目标"): a building off the menu, a way up for one that stands,
+## a job at a bench -- {"kind": "build" | "upgrade" | "job", "id": ..., "from": the type an upgrade is
+## from} -- or {} with none. One at a time.
+var goal: Dictionary = {}
+
+## Pins `g` -- or unpins it, if it is what is pinned already (EventBus.goal_changed).
+func pin_goal(g: Dictionary) -> void:
+	goal = {} if (g.is_empty() or is_pinned(g)) else g.duplicate()
+	_say_goal()
+
+func unpin_goal() -> void:
+	if goal.is_empty():
+		return
+	goal = {}
+	_say_goal()
+
+## Whether `g` is the goal pinned.
+func is_pinned(g: Dictionary) -> bool:
+	return not g.is_empty() and not goal.is_empty() and String(g.get("kind", "")) == String(goal.get("kind", "")) \
+		and String(g.get("id", "")) == String(goal.get("id", "")) and String(g.get("from", "")) == String(goal.get("from", ""))
+
+## What the goal costs now: a building its price, a way up the difference (Config.upgrade_cost), a
+## job at a bench its inputs -- a step up his row at the difference (Config.recipe_price), a beacon
+## step its own. {} with none pinned.
+func goal_price() -> Dictionary:
+	var cfg = _get_config()
+	if goal.is_empty() or cfg == null:
+		return {}
+	var id: String = String(goal.get("id", ""))
+	match String(goal.get("kind", "")):
+		"build":
+			return cfg.BUILDINGS.get(id, {}).get("cost", {})
+		"upgrade":
+			return cfg.upgrade_cost(String(goal.get("from", "")), id)
+		"job":
+			if cfg.RECIPES.has(id):
+				return cfg.recipe_price(id, unlocks)
+			if "DISHES" in cfg and cfg.DISHES.has(id):
+				return cfg.DISHES[id].get("inputs", {})
+			return cfg.beacon_job(map_data(), id).get("inputs", {})
+	return {}
+
+## What the goal is called, as the bar says it.
+func goal_name() -> String:
+	var cfg = _get_config()
+	if goal.is_empty() or cfg == null:
+		return ""
+	var id: String = String(goal.get("id", ""))
+	match String(goal.get("kind", "")):
+		"build", "upgrade":
+			return String(cfg.get_building_name(id))
+		"job":
+			if cfg.RECIPES.has(id):
+				return TranslationServer.translate(String(cfg.RECIPES[id].get("name", id)))
+			if "DISHES" in cfg and cfg.DISHES.has(id):
+				return TranslationServer.translate(String(cfg.DISHES[id].get("name", id)))
+			var row: Dictionary = cfg.beacon_job(map_data(), id)
+			var title: String = TranslationServer.translate(String(row.get("name", id)))
+			var args: Array = row.get("name_args", [])
+			return (title % args) if (not args.is_empty() and "%" in title) else title
+	return ""
+
+## What of the goal's price the stock is still short of: {res_id: how many more}.
+func goal_short() -> Dictionary:
+	var out: Dictionary = {}
+	var price: Dictionary = goal_price()
+	for res_id in price:
+		var more: int = int(price[res_id]) - int(resources.get(res_id, 0))
+		if more > 0:
+			out[res_id] = more
+	return out
+
+## A beacon step that costs nothing -- the launch -- is a decision, not something to save up for.
+func _beacon_row_free(job_id: String) -> bool:
+	var cfg = _get_config()
+	return cfg == null or cfg.beacon_job(map_data(), job_id).get("inputs", {}).is_empty()
+
+func _say_goal() -> void:
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("goal_changed"):
+		eb.goal_changed.emit(goal)
+
 ## How many repair stages the beacon has, and how many of them stand repaired.
 func beacon_stage_count() -> int:
 	return maxi(0, _beacon_jobs().size() - 1)
@@ -537,6 +629,13 @@ func finish_beacon_job(job_id: String) -> bool:
 	if is_game_over or job_id == "" or job_id != beacon_next_job():
 		return false
 	beacon_steps += 1
+	# The beacon's next step pinned: done, the one after it is what is aimed at now.
+	if String(goal.get("kind", "")) == "job" and String(goal.get("id", "")) == job_id:
+		var next: String = beacon_next_job()
+		if next != "" and not _beacon_row_free(next):
+			pin_goal({"kind": "job", "id": next})
+		else:
+			unpin_goal()
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("beacon_changed"):
 		eb.beacon_changed.emit(beacon_steps)

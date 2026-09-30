@@ -862,6 +862,7 @@ func _populate_hero_buttons() -> void:
 			)
 			btn.disabled = not _can_afford(b_type)
 			_fill_price_row(btn, price)
+			_pins(btn, {"kind": "build", "id": b_type})
 			btn.mouse_entered.connect(func(): _show_build_detail(b_type))
 			btn.focus_entered.connect(func(): _show_build_detail(b_type))
 			btn.mouse_exited.connect(_clear_build_detail)
@@ -909,6 +910,27 @@ func _show_build_detail(b_type: String) -> void:
 		_set_status(tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)] \
 			+ _sources_text(cfg.BUILDINGS[b_type].get("cost", {})))
 		status_label.modulate = UiKit.tone_color("short")
+
+## PINNING A GOAL (GameState.goal; GAME-DESIGN 6.0 rule 4): right-click on an entry with a price -- a
+## building off the menu, a way up on a building's card, a job at a bench -- pins it, and again unpins
+## it; the material bar then counts against its price. It is disabled to a left click it cannot pay
+## for, so it listens even so.
+func _pins(btn: Button, goal: Dictionary) -> void:
+	btn.set_meta("goal", goal)
+	btn.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed 				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_RIGHT:
+			var gs = _get_game_state()
+			if gs and gs.has_method("pin_goal"):
+				gs.pin_goal(goal)
+			btn.accept_event()
+			_set_status(_pin_hint(goal))
+	)
+
+## What the detail line adds about pinning `goal`: how to, or that it is.
+func _pin_hint(goal: Dictionary) -> String:
+	var gs = _get_game_state()
+	var pinned: bool = gs != null and gs.has_method("is_pinned") and gs.is_pinned(goal)
+	return tr("PIN_DONE") if pinned else tr("PIN_HINT")
 
 ## A {resource: amount} bill, written out for a button or a status line.
 func _amounts_text(amounts: Dictionary) -> String:
@@ -1017,6 +1039,7 @@ func _populate_building_buttons() -> void:
 			, "upgrade")
 			var gs_up = _get_game_state()
 			up_btn.disabled = gs_up == null or not gs_up.has_method("can_afford") or not gs_up.can_afford(unit.upgrade_cost(target))
+			_pins(up_btn, {"kind": "upgrade", "id": target, "from": String(unit.building_type)})
 			up_btn.mouse_entered.connect(func(): _show_upgrade_detail(unit, target))
 			up_btn.focus_entered.connect(func(): _show_upgrade_detail(unit, target))
 			up_btn.mouse_exited.connect(_clear_craft_detail)
@@ -1100,6 +1123,7 @@ func _populate_station_buttons() -> void:
 		else:
 			btn = _create_card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), {}, start)
 			_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
+			_pins(btn, {"kind": "job", "id": rid})
 		btn.name = "Job_%s" % rid
 		btn.disabled = busy or not station.can_afford(rid)
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
