@@ -37,6 +37,8 @@ var final_wave: bool = false
 ## Of this raid, how many have stepped out of the nest, and whose turn it is at the edge (_next_origin).
 var _from_nest: int = 0
 var _edge_turn: int = 0
+## Whose turn among the nest and the day's other ways in the next of a raid is (ways_now).
+var _way_turn: int = 0
 ## Whose turn it is among the valley's ways in, for what a repaired stage stirs up: kept from one
 ## stage's raid to the next, so each way in has its turn over the run -- the south-east's too, the
 ## way past the third wreck (Config.WRECKS).
@@ -67,6 +69,8 @@ func _init() -> void:
 	_load_waves_config()
 
 func _ready() -> void:
+	# Found by what says where a raid comes from (HUD: the warning names every way in).
+	add_to_group("wave_manager")
 	set_process(true)
 	_load_waves_config()
 	_ensure_components()
@@ -420,6 +424,18 @@ func _next_origin() -> Array:
 			if not _watched(way_in):
 				_stage_turn += k + 1
 				return [way_in, true]
+	# More ways in as the days go (MAPS.<id>.ways_by_day): the raid shared out between the nest and each of
+	# them in turn -- one from the nest, one from the east, and so on; a way that is watched gives its turn to
+	# the nest's.
+	if not final_wave and not stage_wave:
+		var ways: Array[String] = ways_now()
+		if not ways.is_empty():
+			var turn: int = _way_turn % (ways.size() + 1)
+			_way_turn += 1
+			if turn > 0:
+				var way_in: Vector3 = entry_toward(ways[turn - 1])
+				if way_in != Vector3.INF and not _watched(way_in):
+					return [way_in, true]
 	var edges: Array[Vector3] = edge_origins()
 	if edges.is_empty() or (_from_nest < _nest_most() and not _watched(nest_spawn_position)):
 		_from_nest += 1
@@ -501,6 +517,7 @@ func start_wave(wave_num: int, override_count: int = -1, with_boss: bool = false
 	current_wave = wave_num
 	_from_nest = 0
 	_edge_turn = 0
+	_way_turn = 0
 	# A stage's raid still to come is warned of again once this one is over (_process).
 	_stirred_warned = false
 	wave_roster = roster_for(wave_num, override_count if override_count > 0 else get_wave_dino_count(wave_num), with_boss)
@@ -537,7 +554,7 @@ func _on_spawn_timer_timeout() -> void:
 ## Which species this one is: drawn from the run's map (its "raiders", by weight), with
 ## the run's own dice, so the same seed sends the same animals.
 func _species_to_spawn() -> String:
-	var raiders: Dictionary = _map().get("raiders", {})
+	var raiders: Dictionary = _raiders_now()
 	var total: float = 0.0
 	for species in raiders:
 		total += maxf(0.0, float(raiders[species]))
@@ -549,6 +566,57 @@ func _species_to_spawn() -> String:
 		if roll < 0.0:
 			return String(species)
 	return String(raiders.keys().back())
+
+## Who raids now: the map's raiders, or the latest of its raiders_by_day begun (GameState.day_number) --
+## from the third day on the valley's, a runner for every three of the pack.
+func _raiders_now() -> Dictionary:
+	var out: Dictionary = _map().get("raiders", {})
+	var best_day: int = -1
+	var day: int = _day_now()
+	for step in _map().get("raiders_by_day", []):
+		var from_day: int = int(step.get("from_day", 1))
+		if from_day <= day and from_day > best_day:
+			best_day = from_day
+			out = step.get("raiders", out)
+	return out
+
+## The ways in, other than the nest's, that raids come by now (MAPS.<id>.ways_by_day): points of the
+## compass, the latest begun.
+func ways_now() -> Array[String]:
+	var out: Array[String] = []
+	var best_day: int = -1
+	var day: int = _day_now()
+	for step in _map().get("ways_by_day", []):
+		var from_day: int = int(step.get("from_day", 1))
+		if from_day <= day and from_day > best_day:
+			best_day = from_day
+			out.clear()
+			for w in step.get("ways", []):
+				out.append(String(w))
+	return out
+
+func _day_now() -> int:
+	var gs = _get_game_state()
+	return int(gs.day_number()) if (gs and gs.has_method("day_number")) else 1
+
+## The way into the valley (entry_positions) that lies most toward `side` from the cabin ("E", "S", ...).
+func entry_toward(side: String) -> Vector3:
+	var dirs: Dictionary = {"N": Vector2(0.0, -1.0), "NE": Vector2(1.0, -1.0), "E": Vector2(1.0, 0.0), "SE": Vector2(1.0, 1.0),
+		"S": Vector2(0.0, 1.0), "SW": Vector2(-1.0, 1.0), "W": Vector2(-1.0, 0.0), "NW": Vector2(-1.0, -1.0)}
+	var want: Vector2 = (dirs.get(side, Vector2.ZERO) as Vector2).normalized()
+	var core: Node3D = get_tree().get_first_node_in_group("core") as Node3D if is_inside_tree() else null
+	var from: Vector3 = core.global_position if core != null else Vector3.ZERO
+	var best: Vector3 = Vector3.INF
+	var best_dot: float = -INF
+	for at in entry_positions:
+		var d := Vector2(at.x - from.x, at.z - from.z)
+		if d.length() < 0.01:
+			continue
+		var dot: float = d.normalized().dot(want)
+		if dot > best_dot:
+			best_dot = dot
+			best = at
+	return best
 
 ## Builds a dinosaur from the class its habit calls for -- a pack raptor and a
 ## siege theropod are different classes, and two species with the same habit share

@@ -737,6 +737,15 @@ func _render_raid_banner() -> void:
 		text += "\n" + tr("HUD_RAID_SEEN")
 	elif side != "":
 		text += "\n" + tr("HUD_RAID_FROM") % tr("DIR_" + side)
+	# The day's other ways in (WaveManager.ways_now): a party by each of them as well.
+	var others: PackedStringArray = []
+	var waves = get_tree().get_first_node_in_group("wave_manager") if is_inside_tree() else null
+	if waves != null and waves.has_method("ways_now"):
+		for way in waves.ways_now():
+			if String(way) != side:
+				others.append(tr("DIR_" + String(way)))
+	if not others.is_empty():
+		text += "\n" + tr("HUD_RAID_ALSO") % tr("DIR_AND").join(others)
 	if not _bosses_coming.is_empty():
 		text += "\n" + tr("HUD_RAID_BOSS") % ", ".join(_bosses_coming)
 	raid_warning_banner.text = text

@@ -1162,6 +1162,27 @@ const DINOS: Dictionary = {
 		"drops": {"food": 2, "bone": 1},
 		"size": Vector3(0.9, 1.0, 0.9),
 	},
+	# Hesperosuchus agilis: an early crocodylomorph of the same Chinle rocks, the crocodile's line before it
+	# went to the water -- a metre and a bit, slender, long-legged, "agile" by name (GAME-DESIGN 7.2; v0.6 round
+	# six, the player: "恐龙每次都是从一个地方来进攻，物种到day 4也就一种，太单调" -- chosen "快跑的黄昏鳄").
+	# THE RUNNER (RunnerDino): half as fast again as a Coelophysis and brittle -- a trip bow's arrow all but
+	# kills it, but at its pace a bow re-arms after it has gone by. It comes for the man, not the cabin, and
+	# stops for no trap: spikes and snares, which need no re-arming, and a wall between him and it answer it.
+	# In the raids from the third day (MAPS.<id>.raiders_by_day). By day, as its raid is.
+	"hesperosuchus": {
+		"hours": ["day"],
+		"name": "DINO_HESPEROSUCHUS_NAME",
+		"hp": 1.6,
+		"speed": 6.5,
+		"damage": 0.6,
+		"attack_rate": 1.4,
+		"behaviour": "runner",
+		# The crocodile-line's hiss, a small animal's (SOUNDS: Postosuchus's recordings pitched right up).
+		"voice": "hesperosuchus",
+		"drops": {"food": 1, "bone": 1},
+		"drop_chance": {"food": 0.5, "bone": 0.5},
+		"size": Vector3(0.6, 0.55, 0.6),
+	},
 	"pterosaur": {
 		"name": "DINO_PTEROSAUR_NAME",
 		"hp": 2.0,
@@ -1181,6 +1202,8 @@ const DINO_BEHAVIOURS: Dictionary = {
 	"siege": "res://scripts/entities/SiegeDino.gd",
 	# Hunts by night, and will not come into a fire's light (GAME-DESIGN 9.3).
 	"prowl": "res://scripts/entities/ProwlerDino.gd",
+	# Quick and brittle, for the man and past the traps (GAME-DESIGN 7.2: Hesperosuchus).
+	"runner": "res://scripts/entities/RunnerDino.gd",
 }
 
 ## The script a species is built from. Anything without a declared habit gets the
@@ -1307,6 +1330,9 @@ const DINO_AI: Dictionary = {
 	# nearer) never counted as stuck -- and a crowd never bites a wall it could go round (the player's
 	# report, 2026-09-29: "恐龙大波会在走廊（两行栅栏中间徘徊）"). A few, through a funnel, are through
 	# long before.
+	# The runner (RunnerDino, Hesperosuchus): how far off it comes for the man from, in metres -- across
+	# most of the small valley's field; he is what it is after.
+	"runner_hunts_within": 18.0,
 	"jam_seconds": 4.0,
 	"jam_progress": 0.5,
 	# And the wall it goes through need not be one it is up against: this far past its body (metres) --
@@ -1419,6 +1445,7 @@ const COLORS: Dictionary = {
 	"coelophysis_alpha": Color(0.45, 0.31, 0.14),
 	"postosuchus": Color(0.30, 0.23, 0.15),     # umber, armoured
 	"phytosaur": Color(0.22, 0.24, 0.15),       # dark olive, a river's colour
+	"hesperosuchus": Color(0.36, 0.32, 0.22),   # dun-grey, a dry bank's
 	"pterosaur": Color(0.55, 0.50, 0.44),
 	"nest": Color(0.4, 0.1, 0.5),
 	"caveman": Color(0.1, 0.8, 0.8)
@@ -1524,6 +1551,15 @@ const MAPS: Dictionary = {
 	},
 	# Who raids here, and how often each, by weight: the Late Triassic's (GAME-DESIGN 7.2).
 	"raiders": {"coelophysis": 1.0},
+	# And from a day on (GameState.day_number), who raids instead: the latest begun (WaveManager._raiders_now;
+	# v0.6 round six, the player: "物种到day 4也就一种，太单调" -- chosen "快跑的黄昏鳄"). From the third day, a
+	# runner for every three of the pack.
+	"raiders_by_day": [{"from_day": 3, "raiders": {"coelophysis": 3.0, "hesperosuchus": 1.0}}],
+	# The ways a raid comes in by, as the days go (v0.6 round six: "恐龙每次都是从一个地方来进攻" -- chosen "更多来
+	# 袭方向"): the nest's, and from `from_day` a party in by each of `ways` as well -- a point of the compass,
+	# the way into the valley (`entries`) that lies most that way from the cabin. A raid is shared out among the
+	# nest and them, one after another (WaveManager._next_origin); the warning says every side it comes from.
+	"ways_by_day": [{"from_day": 3, "ways": ["E"]}, {"from_day": 5, "ways": ["E", "S"]}],
 	# Who guards the nest (NEST_GUARDS): the same animal.
 	"guards": "coelophysis",
 	# At the head of every big wave (WAVES.big_every): the lesser boss (GAME-DESIGN 7.5) -- the
@@ -2298,6 +2334,13 @@ const SOUNDS: Dictionary = {
 		"phytosaur_bite":  {"files": ["postosuchus_bite"], "db": -3.0, "pitch": 1.2, "class": "bite", "unit": 6.0},
 		"phytosaur_hurt":  {"files": ["postosuchus_hurt"], "db": -4.0, "pitch": 1.25, "class": "hurt", "unit": 6.0},
 		"phytosaur_death": {"files": ["postosuchus_death"], "db": -2.0, "pitch": 1.2, "class": "death", "unit": 9.0},
+		# Hesperosuchus: a small crocodylomorph -- hisses and a snap, Postosuchus's own pitched right up and
+		# quiet, heard only near.
+		"hesperosuchus_call":  {"files": ["postosuchus_hiss"], "db": -9.0, "pitch": 1.9, "class": "call", "unit": 5.0, "reach": 40.0},
+		"hesperosuchus_alert": {"files": ["postosuchus_hiss"], "db": -6.0, "pitch": 1.8, "class": "alert", "unit": 5.0},
+		"hesperosuchus_bite":  {"files": ["postosuchus_bite"], "db": -6.0, "pitch": 1.7, "class": "bite", "unit": 4.0},
+		"hesperosuchus_hurt":  {"files": ["postosuchus_hurt"], "db": -7.0, "pitch": 1.8, "class": "hurt", "unit": 4.0},
+		"hesperosuchus_death": {"files": ["postosuchus_death"], "db": -5.0, "pitch": 1.7, "class": "death", "unit": 6.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
 		# His work.
@@ -2972,6 +3015,10 @@ const VISUALS: Dictionary = {
 	# Long-snouted and armoured, its own eyes a material the game lights (ProwlerDino, the eye-shine).
 	"dino/phytosaur":       {"scene": "res://assets/models/triassic/phytosaur.glb", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "phytosaur"},
+	# Hesperosuchus (tools/generate_triassic.py): the velociraptor's rig with a crocodile's snout, scutes
+	# down its back, long forelimbs -- up on its hind legs to run.
+	"dino/hesperosuchus":   {"scene": "res://assets/models/triassic/hesperosuchus.glb", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "hesperosuchus"},
 	"dino/pterosaur":       {"scene": "res://assets/models/pterosaur.glb", "placeholder": "raptor",   "anchor": "feet",   "color": "pterosaur"},
 	# A low mound of scraped-up earth with a clutch of eggs in the hollow on top, a rim of
 	# broken branches, and a burrow at its foot facing the field: the mouth the raid pours
