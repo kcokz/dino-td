@@ -25,7 +25,8 @@
 | [BUG-023](bug/BUG-023-the-battery-is-guarded-day-and-night.md) | 电池残骸白天夜里都在守卫圈里，只能打死守卫拿；提示却说夜里腔骨龙睡了 | 低～中 | open | 2026-09-29 |
 | [BUG-024](bug/BUG-024-the-new-tile-does-not-grow-in.md) | 右下角新按钮出现时没有弹大（容器把 scale 压回 1） | 低 | open | 2026-09-29 |
 | [BUG-025](bug/BUG-025-the-corridor-queue-never-counts-as-jammed.md) | 走廊里排队的来袭不算卡住，72 秒不咬墙 | 中 | open | 2026-09-29 |
-| [BUG-026](bug/BUG-026-raptors-still-go-round-the-campfire.md) | 篝火人能走过去，恐龙还绕 | 低 | open | 2026-09-29 |
+| [BUG-026](bug/BUG-026-raptors-still-go-round-the-campfire.md) | 篝火人能走过去，恐龙还绕 | 低 | fixed b631095 | 2026-09-29 |
+| [BUG-027](bug/BUG-027-the-map-stays-after-a-restart.md) | 小山谷重新开始，手绘地图还在 | 低～中 | open | 2026-09-30 |
 | [BUG-012](bug/BUG-012-raid-goes-back-to-the-nest-after-a-breach.md) | 整圈栅栏咬开口子以后，整群先跑回巢边转圈 | 中 | fixed | 2026-09-28 |
 | [BUG-011](bug/BUG-011-defeat-screen-does-not-say-why.md) | 失败画面不说是船舱没了还是人死了 | 低 | **fixed** 72b27c8 | 2026-09-28 |
 | [BUG-010](bug/BUG-010-waiting-raider-swings-its-head.md) | 等位置的恐龙在人群外面原地甩头（半圈栅栏、人在门外） | 低～中 | **fixed** 357b603 | 2026-09-28 |
@@ -69,8 +70,16 @@
 | TASK-025 | 坠毁残骸和信标部件 | **done** 大体过；烟像脏斑；电池只能打守卫 → BUG-023 |
 | TASK-026 | 右下角按钮出现看得见、灰的看得出 | **done** 灰的好；弹大没有 → BUG-024 |
 | TASK-027 | 第五轮的修正和 bug 报告 | **done** 走廊没过（BUG-025）、恐龙绕篝火（BUG-026），其余过 |
+| TASK-028 | 第六轮、翻找响声、植龙猎人、手绘地图 | **done** 大体过；BUG-027；大山谷第一夜船舱塌（平衡） |
 
 ## 检查记录
+
+### 2026-09-30 第 25 次（监控循环，TASK-028，b631095）
+
+- 新探针 round6_a、round6_traps、rock_fence、round6_c、runner、din_search、prowl_hunt、hand_map。都大体过；地图重开还在 → BUG-027。
+- 守卫现在夜里睡（SLEEPING），翻电池的响声会叫醒——BUG-023 大概是改了，下次复测。
+- 机器人：小山谷活过第一夜（点火把），第 2 天黄昏去翻电池被守卫咬死（黄昏守卫还醒着）；大山谷第一夜躲在船舱里、船舱被植龙咬塌。
+- 探针注意：落石栅栏要从栅栏升级才上石头（直接造的不上）；`din_carried` 一块残骸只发一次。
 
 ### 2026-09-29 第 24 次（自由找 bug，第六轮提交 7b7639b / 2835d15，还没派任务）
 

@@ -38,6 +38,14 @@ func _init() -> void:
 			"after_the_jump": await _p_after_the_jump()
 			"pause_raid": await _p_pause_raid()
 			"kit_row": await _p_kit_row()
+			"hand_map": await _p_hand_map()
+			"prowl_hunt": await _p_prowl_hunt()
+			"din_search": await _p_din_search()
+			"runner": await _p_runner()
+			"round6_c": await _p_round6_c()
+			"rock_fence": await _p_rock_fence()
+			"round6_traps": await _p_round6_traps()
+			"round6_a": await _p_round6_a()
 			"round5": await _p_round5()
 			"round5_shots": await _p_round5_shots()
 			"corridor": await _p_corridor()
@@ -4316,6 +4324,670 @@ func _p_round5_shots() -> void:
 	await _advance(0.2)
 	await _shoot("eyes_20m")
 	_say("INFO", "5. eyes: the phytosaur wary at the fire's edge after %.1f s, eye_shine %.2f" % [t2, q.eye_shine if is_instance_valid(q) else -1.0])
+
+## TASK-028 (b631095) 1, 2, 5, 12: the workbench's one step a slot at the difference; the build menu's
+## seven and every way up, each from a half-bitten building (where it stands, its share of health, its
+## facing); a pinned goal; the bug report's new parts.
+func _p_round6_a() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var eb := root.get_node("EventBus")
+	var gm = _main.grid_manager
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	for r in ["wood", "stone", "bone", "hide"]:
+		gs.resources[r] = 99
+		gs.known[r] = true
+	await _advance(1.0)
+	# 1. The workbench.
+	var wb = cabin.station("workbench")
+	for step in ["start", "hide_vest", "stone_pick"]:
+		if step != "start":
+			gs.grant_unlock(String(cfg.RECIPES[step].get("unlocks", step)))
+			await _advance(0.2)
+		var offered: Array = []
+		var by_slot := {}
+		for j in wb.jobs():
+			var jid: String = String(j)
+			if not wb.can_offer(jid):
+				continue
+			var slot: String = String(cfg.RECIPES[jid].get("slot", "-")) if cfg.RECIPES.has(jid) else "-"
+			by_slot[slot] = int(by_slot.get(slot, 0)) + 1
+			offered.append("%s[%s] %s (full %s)" % [jid, slot, str(cfg.recipe_price(jid, gs.unlocks)), str(cfg.RECIPES[jid].get("inputs", {})) if cfg.RECIPES.has(jid) else "?"])
+		var two: Array = []
+		for s in by_slot:
+			if s != "-" and int(by_slot[s]) > 1:
+				two.append(s)
+		_say("INFO", "1. workbench after %s: %s%s" % [step, "; ".join(offered), "" if two.is_empty() else " -- MORE THAN ONE in %s" % str(two)])
+	# 2. The build menu.
+	await _press(KEY_1)
+	await _advance(0.5)
+	var panel: Node = _find_with_method(root, "_show_abilities")
+	var entries: Array = []
+	for b in _all(panel):
+		if b is Button and (b as Control).is_visible_in_tree() and String((b as Button).text) != "":
+			entries.append(String((b as Button).text).replace("\n", " "))
+	_say("INFO", "2. the build menu: %d entries: %s" % [entries.size(), " | ".join(entries)])
+	await _shoot("build_menu")
+	await _press(KEY_ESCAPE)
+	await _advance(0.3)
+	# 2. Every way up, from half-bitten.
+	var ways: Array = [["wall", "bone_stake"], ["wall", "stone_wall"], ["wall", "rock_fence"], ["stone_wall", "wall_crossbow"], ["trip_bow", "set_crossbow"], ["set_crossbow", "set_crossbow_2"], ["ground_spikes", "bone_spikes"], ["log_deadfall", "stone_deadfall"], ["grass_snare", "hide_snare"], ["campfire", "brazier"]]
+	var i := 0
+	for w in ways:
+		var cell: Vector2i = gm.world_to_build_cell(core + Vector3(-12.0 + 3.0 * float(i % 9), 0.0, 10.0 + 4.0 * float(i / 9)))
+		i += 1
+		var b = _build_at(String(w[0]), cell)
+		if b == null:
+			continue
+		await _advance(0.2)
+		var at_pos: Vector3 = (b as Node3D).global_position
+		var targets: Array = b.upgrade_targets()
+		b.take_damage(b.max_hp * 0.5)
+		var ratio0: float = b.current_hp / b.max_hp
+		var f0 = b.get("facing")
+		var cost: Dictionary = b.upgrade_cost(String(w[1]))
+		var began: bool = b.begin_upgrade(String(w[1]))
+		b.add_upgrade_progress(9999.0)
+		await _advance(0.5)
+		var now: Node = null
+		for n in get_nodes_in_group("buildings"):
+			if is_instance_valid(n) and not n.is_destroyed and not n.is_queued_for_deletion() and _flat3((n as Node3D).global_position).distance_to(_flat3(at_pos)) < 0.3:
+				now = n
+		var line := "%s -> %s (ways %s, cost %s): begun %s" % [w[0], w[1], str(targets), str(cost), began]
+		if now != null:
+			line += "; now %s at the same cell, hp %.2f of max (was %.2f), facing %s (was %s)" % [String(now.building_type), now.current_hp / now.max_hp, ratio0, str(now.get("facing")), str(f0)]
+		else:
+			line += "; NOTHING at its cell now"
+		_say("INFO", "2. " + line)
+	# 5. A pinned goal.
+	gs.resources["bone"] = 0
+	eb.resources_changed.emit(gs.resources)
+	gs.pin_goal({"kind": "build", "id": "trip_bow"})
+	await _advance(0.5)
+	var bar_says: Array = []
+	for l in _visible_labels(""):
+		var tx: String = String(l.text)
+		if tx.length() > 0 and tx.length() < 40 and (tx.contains("/") or tx.contains("−") or tx.contains("-")):
+			bar_says.append(tx)
+	_say("INFO", "5. pinned trip_bow: goal %s, name '%s', short %s, price %s" % [str(gs.goal), gs.goal_name(), str(gs.goal_short()), str(gs.goal_price())])
+	await _shoot("goal_pinned")
+	gs.pin_goal({"kind": "build", "id": "trip_bow"})
+	_say("INFO", "5. pinned again: goal %s (want it unpinned)" % str(gs.goal))
+	gs.pin_goal({"kind": "build", "id": "trip_bow"})
+	gs.resources["wood"] = 1
+	eb.resources_changed.emit(gs.resources)
+	await _advance(0.5)
+	_say("INFO", "5. with 1 wood: short %s" % str(gs.goal_short()))
+	await _shoot("goal_short")
+	gs.resources["wood"] = 99
+	_build_at("trip_bow", gm.world_to_build_cell(core + Vector3(10.0, 0.0, -6.0)))
+	await _advance(0.5)
+	_say("INFO", "5. a trip_bow built with it pinned: goal now %s" % str(gs.goal))
+	gs.pin_goal({"kind": "job", "id": "hide_boots"})
+	gs.grant_unlock(String(cfg.RECIPES["hide_boots"].get("unlocks", "hide_boots")))
+	eb.resources_changed.emit(gs.resources)
+	await _advance(0.5)
+	_say("INFO", "5. hide_boots pinned, then made (unlock granted): goal now %s" % str(gs.goal))
+	# 12. Three quick reports.
+	var dir := "user://bugreports"
+	var before: int = DirAccess.get_files_at(dir).size() if DirAccess.dir_exists_absolute(dir) else 0
+	for k in 3:
+		await _press(KEY_QUOTELEFT)
+	await _advance(0.5)
+	var files: PackedStringArray = DirAccess.get_files_at(dir)
+	var newest := ""
+	for f in files:
+		if String(f).ends_with(".json") and String(f) > newest:
+			newest = String(f)
+	var j = JSON.parse_string(FileAccess.get_file_as_string(dir + "/" + newest))
+	var d0: Dictionary = (j["dinos"][0] if (j is Dictionary and (j["dinos"] as Array).size() > 0) else {})
+	_say("INFO", "12. three quick reports: files %d -> %d; newest %s: twitches %s, slots %s, a dino's came_from '%s' came_in_at %s, report.speed %s" % [before, files.size(), newest, str(j.get("twitches") is Array), str(j.get("slots") != null), str(d0.get("came_from", "?")), str(d0.get("came_in_at", "?")), str(j.get("report", {}).get("speed", "?"))])
+
+## TASK-028 3, 4: the traps laid in the way and the wall's own. Across the raid's way from the nest, 6 m
+## out: a row of spikes, deadfalls and snares; 9 m out a line of rock fence with wall crossbows in it,
+## a gap at each end. A raid of 10; every tenth of a second each trap's state, so its springs and
+## settings-again are counted; the rock fence's drops; deaths; pictures at 12 s and 25 s.
+func _p_round6_traps() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var gm = _main.grid_manager
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	var nest: Vector3 = wm.nest_spawn_position
+	gs.day_clock = 100.0
+	wm.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	var dir: Vector3 = (nest - core)
+	dir.y = 0.0
+	dir = dir.normalized()
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	var traps: Array = []
+	var kinds: Array = ["ground_spikes", "log_deadfall", "grass_snare"]
+	if OS.get_environment("DA_TRAP_KIND") != "":
+		kinds = [OS.get_environment("DA_TRAP_KIND")]
+	for k in range(-4, 5):
+		var at: Vector3 = core + dir * 6.0 + side * float(k)
+		var b = _build_at(String(kinds[(k + 4) % kinds.size()]), gm.world_to_build_cell(at))
+		if b != null:
+			traps.append(b)
+	var walls: Array = []
+	for k in range(-4, 5):
+		var at2: Vector3 = core + dir * 9.0 + side * float(k)
+		var t2: String = "wall_crossbow" if k % 3 == 0 else "rock_fence"
+		var cell2: Vector2i = gm.world_to_build_cell(at2)
+		var w = _build_at("stone_wall" if t2 == "wall_crossbow" else "wall", cell2)
+		if w == null:
+			continue
+		for r in ["wood", "stone", "bone"]:
+			gs.resources[r] = int(gs.resources.get(r, 0)) + 10
+		w.begin_upgrade(t2)
+		w.add_upgrade_progress(9999.0)
+		await _advance(0.3)
+		for n in get_nodes_in_group("buildings"):
+			if is_instance_valid(n) and not n.is_destroyed and not n.is_queued_for_deletion() and _flat3((n as Node3D).global_position).distance_to(_flat3(at2)) < 0.6 and String(n.building_type) == t2:
+				walls.append(n)
+	_main._walk_to_bench(cabin.station("workbench"))
+	await _advance(6.0)
+	_say("INFO", "traps: %d laid, %d wall pieces (rock fence / wall crossbow)" % [traps.size(), walls.size()])
+	var died := {"n": 0}
+	eb.dino_died.connect(func(_d): died["n"] += 1)
+	var springs := {}
+	var resets := {}
+	var was := {}
+	var rock_drops := 0
+	var rock_was := {}
+	wm.start_wave(2, 10)
+	var t := 0.0
+	var held_biting := 0
+	while t < 60.0:
+		await _advance(0.1)
+		t += 0.1
+		gs.day_clock = minf(float(gs.day_clock), 150.0)
+		for b in traps:
+			if not is_instance_valid(b):
+				continue
+			var id: int = b.get_instance_id()
+			var a: bool = bool(b.armed)
+			if was.has(id) and was[id] and not a:
+				springs[b.building_type] = int(springs.get(b.building_type, 0)) + 1
+			if was.has(id) and not was[id] and a:
+				resets[b.building_type] = int(resets.get(b.building_type, 0)) + 1
+			was[id] = a
+		for w in walls:
+			if not is_instance_valid(w) or String(w.building_type) != "rock_fence":
+				continue
+			var id2: int = w.get_instance_id()
+			var up: bool = float(w.get("_rock_left")) <= 0.0
+			if rock_was.has(id2) and rock_was[id2] and not up:
+				rock_drops += 1
+			rock_was[id2] = up
+		for d in get_nodes_in_group("dinos"):
+			if is_instance_valid(d) and not d.is_in_group("guard_dinos") and not d.is_dead and d.has_method("debug_state"):
+				var ds: Dictionary = d.debug_state()
+				if float(ds.get("held_for", 0.0)) > 0.0 and int(d.mode) == 2:
+					held_biting += 1
+		if is_equal_approx(t, 12.0) or is_equal_approx(t, 25.0):
+			_look_at(core + dir * 7.0, 16.0)
+			await _advance(0.05)
+			await _shoot("traps_%ds" % int(t))
+	var standing := 0
+	for w in walls:
+		if is_instance_valid(w) and not w.is_destroyed:
+			standing += 1
+	var spikes_hp: Array = []
+	for b in traps:
+		if is_instance_valid(b) and String(b.building_type) == "ground_spikes":
+			spikes_hp.append("%.1f/%.1f" % [b.current_hp, b.max_hp])
+	_say("INFO", "raid of 10 over 60 s: died %d; springs %s; set again %s; rock drops %d; wall pieces standing %d of %d; spikes worn to %s; held-and-biting samples %d; raid over %s" % [died["n"], str(springs), str(resets), rock_drops, standing, walls.size(), ", ".join(spikes_hp), held_biting, not wm.is_wave_active])
+
+## TASK-028 4: one rock fence (a palisade taken up to it) and one raptor told to bite it through: the
+## rock comes off onto it when bitten? rises again? The raptor's health, the fence's, the rock's state.
+func _p_rock_fence() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	var at: Vector3 = core + Vector3(0.0, 0.0, 10.0)
+	var w = _build_at("wall", gm.world_to_build_cell(at))
+	gs.resources["stone"] = 10
+	w.begin_upgrade("rock_fence")
+	w.add_upgrade_progress(9999.0)
+	await _advance(1.0)
+	var rf: Node = null
+	for n in get_nodes_in_group("buildings"):
+		if is_instance_valid(n) and not n.is_destroyed and String(n.building_type) == "rock_fence":
+			rf = n
+	_say("INFO", "rock fence: %s rock_set %s drop_damage %s physics %s" % [str(rf.global_position), str(rf.get("rock_set")), str(rf.get("drop_damage")), rf.is_physics_processing()])
+	var d = load(String(cfg.get_dino_script_path("coelophysis"))).new()
+	_main.add_child(d)
+	d.setup("coelophysis")
+	d.max_hp = 50.0
+	d.current_hp = 50.0
+	d.global_position = rf.global_position + Vector3(0.0, 0.0, 1.1)
+	d.set_waypoints([rf.global_position + Vector3(0.0, 0.0, -4.0)])
+	await _advance(0.3)
+	d._stubborn = rf
+	d._take(rf, d.Mode.BREACH)
+	var log: Array = []
+	var t := 0.0
+	var last_set: bool = bool(rf.get("rock_set"))
+	while t < 25.0 and is_instance_valid(rf) and not rf.is_destroyed:
+		await _advance(0.25)
+		t += 0.25
+		if not is_instance_valid(rf):
+			log.append("%.1f: the fence is gone (raptor hp %.1f)" % [t, d.current_hp if is_instance_valid(d) else -1.0])
+			break
+		var rs: bool = bool(rf.get("rock_set"))
+		if rs != last_set or int(t * 4) % 8 == 0:
+			log.append("%.1f: fence %.1f rock_set %s raptor hp %.1f mode %d gap %.2f" % [t, rf.current_hp, str(rs), d.current_hp if is_instance_valid(d) else -1.0, int(d.mode) if is_instance_valid(d) else -1, _flat3(d.global_position).distance_to(_flat3(rf.global_position)) if is_instance_valid(d) else -1.0])
+		last_set = rs
+		if is_equal_approx(t, 3.0):
+			_look_at(rf.global_position, 6.0)
+			await _shoot("rock_fence_bitten")
+	for l in log.slice(0, 20):
+		_say("INFO", "  " + l)
+
+## TASK-028 6, 7: day 3's raid -- the clock's own (its warning's words), who is in it and where each came
+## in (debug_state came_from); the runner: what it goes for, how fast, over a spike cell without
+## stopping, what it bites, pictures running / biting / dead. DA_WATCH_EAST=1: he stands on the east way
+## in as it comes -- then all from the nest?
+func _p_round6_c() -> void:
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var gm = _main.grid_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	gs.day_clock = 720.0 + 60.0
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	var east: Vector3 = Vector3.INF
+	for e in wm.entry_positions:
+		if e.x > core.x + 5.0 and absf(e.z - core.z) < 5.0:
+			east = e
+	if OS.get_environment("DA_WATCH_EAST") != "":
+		hero.global_position = east + (core - east).normalized() * 3.0
+	else:
+		hero.global_position = core + Vector3(-6.0, 0.0, 7.0)
+	hero.order_stop()
+	# A spike cell on the way from the east.
+	_build_at("ground_spikes", gm.world_to_build_cell(core + Vector3(12.0, 0.0, 0.0)))
+	var came: Array = []
+	var on_come := func(d):
+		if not d.is_in_group("guard_dinos") and not d.is_in_group("prowlers"):
+			came.append(d)
+			d.max_hp = 9999.0
+			d.current_hp = 9999.0
+	eb.dino_spawned.connect(on_come)
+	gs.wave_number = 5
+	wm.auto_raid_enabled = true
+	wm.raid_timer = 20.0
+	var also: String = tr("HUD_RAID_ALSO").split("%s")[0].strip_edges().left(8)
+	var warn_text := ""
+	var t := 0.0
+	while t < 25.0 and came.is_empty():
+		await _advance(0.25)
+		t += 0.25
+		var banner = _main.hud.get("raid_warning_banner")
+		if warn_text == "" and banner != null and (banner as Control).is_visible_in_tree() and String(banner.text) != "":
+			warn_text = String(banner.text).replace("
+", " / ")
+	await _shoot("day3_warning")
+	await _advance(12.0)
+	var who: Array = []
+	var runner: Node = null
+	for d in came:
+		if not is_instance_valid(d):
+			continue
+		var ds: Dictionary = d.debug_state() if d.has_method("debug_state") else {}
+		who.append("%s from %s" % [String(d.dino_type), str(ds.get("came_from", "?"))])
+		if String(d.dino_type) == "hesperosuchus" and runner == null:
+			runner = d
+	_say("INFO", "day 3 raid (%s): %d came: %s; the warning said '%s'" % ["he watching the east way in" if OS.get_environment("DA_WATCH_EAST") != "" else "east way in not watched", came.size(), "; ".join(who), warn_text])
+	if runner == null:
+		_say("INFO", "no runner in this raid")
+		return
+	# The runner: its target, its pace, over the spikes.
+	var log: Array = []
+	var fastest := 0.0
+	var t2 := 0.0
+	var shot_run := false
+	var shot_bite := false
+	while t2 < 30.0 and is_instance_valid(runner) and not runner.is_dead:
+		await _advance(0.2)
+		t2 += 0.2
+		var v: float = Vector3(runner.velocity.x, 0, runner.velocity.z).length()
+		fastest = maxf(fastest, v)
+		var tg = runner.current_target
+		var tname: String = "-" if tg == null or not is_instance_valid(tg) else (String(tg.building_type) if "building_type" in tg else ("hero" if tg.is_in_group("hero") else String(tg.name)))
+		if log.size() < 30 and int(t2 * 5) % 5 == 0:
+			log.append("%.0f s (%.0f,%.0f) %s ->%s v%.1f to him %.1f" % [t2, runner.global_position.x, runner.global_position.z, String(runner.Mode.keys()[int(runner.mode)]), tname, v, _flat3(runner.global_position).distance_to(_flat3(hero.global_position))])
+		if not shot_run and v > 4.0 and tname == "hero":
+			shot_run = true
+			_look_at(runner.global_position, 8.0)
+			await _shoot("runner_running")
+		if not shot_bite and int(runner.mode) == 2:
+			shot_bite = true
+			_look_at(runner.global_position, 6.0)
+			await _shoot("runner_biting")
+	for l in log:
+		_say("INFO", "  " + l)
+	_say("INFO", "the runner: fastest %.1f m/s" % fastest)
+	if is_instance_valid(runner) and not runner.is_dead:
+		runner.take_damage(999.0)
+		await _advance(0.4)
+		_look_at(runner.global_position, 6.0)
+		await _shoot("runner_dead")
+
+## TASK-028 6: one runner set down 16 m from him on open ground, a spike cell and a palisade on the line
+## between (the palisade a little to one side): its pace, what it goes for, over the spikes, what it
+## bites; pictures running, biting, dead.
+func _p_runner() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var hero = _main.hero
+	var core: Vector3 = _main.current_core.global_position
+	gs.day_clock = 720.0 + 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	var he_at: Vector3 = core + Vector3(-4.0, 0.0, 9.0)
+	hero.global_position = he_at
+	hero.order_stop()
+	_build_at("ground_spikes", gm.world_to_build_cell(he_at + Vector3(-8.0, 0.0, 0.0)))
+	var fence = _build_at("wall", gm.world_to_build_cell(he_at + Vector3(-12.0, 0.0, 0.6)))
+	await _advance(1.0)
+	var r = load(String(cfg.get_dino_script_path("hesperosuchus"))).new()
+	_main.add_child(r)
+	r.setup("hesperosuchus")
+	r.global_position = he_at + Vector3(-16.0, 0.0, 0.0)
+	r.set_waypoints([core])
+	var log: Array = []
+	var fastest := 0.0
+	var spiked := false
+	var shot_run := false
+	var shot_bite := false
+	var fence_hp0: float = fence.current_hp if fence else 0.0
+	var t := 0.0
+	var hp_last: float = r.current_hp
+	while t < 12.0 and is_instance_valid(r) and not r.is_dead:
+		await _advance(0.1)
+		t += 0.1
+		if not is_instance_valid(r):
+			log.append("%.1f gone" % t)
+			break
+		var v: float = Vector3(r.velocity.x, 0, r.velocity.z).length()
+		fastest = maxf(fastest, v)
+		if r.current_hp < hp_last:
+			spiked = true
+		hp_last = r.current_hp
+		var tg = r.current_target
+		var tname: String = "-" if tg == null or not is_instance_valid(tg) else (String(tg.building_type) if "building_type" in tg else ("hero" if tg.is_in_group("hero") else String(tg.name)))
+		if int(round(t * 10)) % 5 == 0:
+			log.append("%.1f (%.1f,%.1f) %s->%s v%.1f d%.1f hp%.1f" % [t, r.global_position.x, r.global_position.z, String(r.Mode.keys()[int(r.mode)]).left(3), tname, v, _flat3(r.global_position).distance_to(_flat3(hero.global_position)), r.current_hp])
+		if not shot_run and v > 5.0:
+			shot_run = true
+			_look_at(r.global_position, 7.0)
+			await _shoot("runner_running")
+			if not is_instance_valid(r):
+				log.append("%.1f gone" % t)
+				break
+		if not shot_bite and int(r.mode) == 2:
+			shot_bite = true
+			_look_at(r.global_position, 5.0)
+			await _shoot("runner_biting")
+	_say("INFO", "runner: " + " | ".join(log.slice(0, 24)))
+	_say("INFO", "runner: fastest %.1f m/s; hurt on the way (the spikes) %s; the palisade %.1f -> %.1f; he lost %.1f" % [fastest, spiked, fence_hp0, fence.current_hp if is_instance_valid(fence) else -1.0, 9999.0 - hero.current_hp])
+	if is_instance_valid(r) and not r.is_dead:
+		r.take_damage(999.0)
+		await _advance(0.5)
+		_look_at(r.global_position, 5.0)
+		await _shoot("runner_dead")
+
+## TASK-028 8: a wreck's din. DA_PART's wreck searched at DA_CLOCK (default noon), he set down beside it,
+## too tough to fall: every din carried (EventBus.din_carried), what came of it and from where
+## (debug_state came_from), the guards' states before and after, the words on screen, and the raid's
+## count not touched (a raid of 2 set out first, the din's arrivals not in it).
+func _p_din_search() -> void:
+	var part: String = OS.get_environment("DA_PART") if OS.get_environment("DA_PART") != "" else "antenna"
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	var wm = _main.wave_manager
+	var hero = _main.hero
+	var cabin = _main.current_core
+	gs.day_clock = float(OS.get_environment("DA_CLOCK")) if OS.get_environment("DA_CLOCK") != "" else 120.0
+	wm.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	var w: Node3D = null
+	for n in _wrecks():
+		if String(n.resource_type) == part:
+			w = n
+	var guards0: Array = []
+	for g in get_nodes_in_group("guard_dinos"):
+		if is_instance_valid(g):
+			guards0.append(str(g.debug_state().get("guard", {}).get("state", "?")) if g.has_method("debug_state") else str(g.guard_state))
+	var dins: Array = []
+	var on_din := func(a = null, b = null, c = null, d = null):
+		dins.append("%s %s %s" % [str(a).left(30), str(b), str(c)])
+	eb.din_carried.connect(on_din)
+	var came: Array = []
+	var came_log: Array = []
+	var on_come := func(d):
+		came.append(d)
+		came_log.append("%s %s" % [String(d.dino_type), str(d.get("came_from"))])
+	eb.dino_spawned.connect(on_come)
+	wm.start_wave(2, 2)
+	await _advance(0.5)
+	var raid_alive0: int = int(wm.dinos_alive_count)
+	hero.global_position = w.global_position + Vector3(w.block_radius() + 0.5, 0.0, 0.0)
+	hero.order_harvest(w)
+	var said: Array = []
+	var frags: Array = []
+	for k in ["HINT_DIN_RIVER", "HINT_DIN_GUARDS", "HINT_DIN_EDGE"]:
+		frags.append(tr(k).left(12))
+	var t := 0.0
+	while t < 60.0 and not w.is_depleted:
+		await _advance(0.25)
+		t += 0.25
+		for f in frags:
+			if not said.has(f) and not _visible_labels(f).is_empty():
+				said.append(f)
+	await _advance(3.0)
+	var from: Array = []
+	for d in came:
+		if is_instance_valid(d):
+			var ds: Dictionary = d.debug_state() if d.has_method("debug_state") else {}
+			from.append("%s %s" % [String(d.dino_type), str(ds.get("came_from", "?"))])
+	var guards1: Array = []
+	for g in get_nodes_in_group("guard_dinos"):
+		if is_instance_valid(g):
+			guards1.append(str(g.debug_state().get("guard", {}).get("state", "?")) if g.has_method("debug_state") else str(g.guard_state))
+	_say("INFO", "%s at clock %.0f (%s): searched %s in %.1f s; dins %d %s; came %s (every arrival: %s); guards %s -> %s; said %s; the raid's alive count %d -> %d; he %.0f/%.0f" % [part, gs.day_clock, gs.day_part(), w.is_depleted, t, dins.size(), str(dins.slice(0, 4)), str(from), str(came_log), str(guards0), str(guards1), str(said), raid_alive0, int(wm.dinos_alive_count), hero.current_hp, hero.max_hp])
+	# The raid's own two killed: does it end with the din's still out?
+	for d in came:
+		if is_instance_valid(d) and not d.is_dead and not String(d.debug_state().get("came_from", "")).begins_with("din") and not d.is_in_group("guard_dinos"):
+			d.take_damage(9999.0)
+	await _advance(2.0)
+	var din_out := 0
+	for d in came:
+		if is_instance_valid(d) and not d.is_dead and String(d.debug_state().get("came_from", "")).begins_with("din"):
+			din_out += 1
+	_say("INFO", "%s: the raid's own killed: raid active %s with %d of the din's still out" % [part, wm.is_wave_active, din_out])
+	_look_at(w.global_position, 14.0)
+	await _shoot("din_%s_%s" % [part, gs.day_part()])
+
+## TASK-028 9: the phytosaurs hunting the man in the dark. Night, no fire; he stands 13 m from the bank,
+## too tough to fall. How many come up and when (pairs?), what they go for, how near they get to him;
+## at 30 s he lights a torch -- how near then; at 55 s it goes out -- and then.
+func _p_prowl_hunt() -> void:
+	var gs := root.get_node("GameState")
+	var hero = _main.hero
+	var cabin = _main.current_core
+	var core: Vector3 = cabin.global_position
+	_main.wave_manager.auto_raid_enabled = false
+	cabin.max_hp = 100000.0
+	cabin.current_hp = 100000.0
+	hero.max_hp = 9999.0
+	hero.current_hp = 9999.0
+	gs.resources["wood"] = 5
+	gs.day_clock = 268.0
+	var bank: Vector3 = _main.night_prowl.origins[0] if not _main.night_prowl.origins.is_empty() else core + Vector3(-19.0, 0.0, 0.0)
+	var he_at: Vector3 = bank + (core - bank).normalized() * 13.0
+	hero.global_position = he_at
+	hero.order_stop()
+	var ups: Array = []
+	var t := 0.0
+	var phase := "dark"
+	var nearest := {"dark": INF, "torch": INF, "out": INF}
+	var at_him := {"dark": 0, "torch": 0, "out": 0}
+	var most_out := 0
+	var line: Array = []
+	var seen := {}
+	while t < 75.0:
+		await _advance(0.25)
+		t += 0.25
+		hero.global_position = he_at
+		if is_equal_approx(t, 30.0):
+			var lit: bool = hero.light_torch()
+			phase = "torch"
+			_say("INFO", "prowl hunt: light_torch at 30 s -> %s, torch_left %.1f, torch_light %.1f, wood %d, day part %s" % [lit, hero.torch_left, hero.torch_light(), int(gs.resources.get("wood", 0)), gs.day_part()])
+		if is_equal_approx(t, 35.0) or is_equal_approx(t, 45.0):
+			var lines: Array = []
+			for p2 in get_nodes_in_group("prowlers"):
+				if is_instance_valid(p2) and not p2.is_dead:
+					lines.append("%.1f m %s wary %s" % [_flat3(p2.global_position).distance_to(_flat3(hero.global_position)), String(p2.Mode.keys()[int(p2.mode)]), str(p2.is_wary())])
+			_say("INFO", "prowl hunt at %.0f s: torch_left %.1f; %s" % [t, hero.torch_left, "; ".join(lines)])
+		if is_equal_approx(t, 55.0):
+			hero.torch_left = 0.3
+			phase = "out"
+		var out := 0
+		for p in get_nodes_in_group("prowlers"):
+			if not is_instance_valid(p) or p.is_dead:
+				continue
+			out += 1
+			var id: int = p.get_instance_id()
+			if not seen.has(id):
+				seen[id] = t
+				ups.append("%.1f" % t)
+			var gap: float = _flat3(p.global_position).distance_to(_flat3(hero.global_position))
+			nearest[phase] = minf(float(nearest[phase]), gap)
+			var tg = p.current_target
+			if tg != null and is_instance_valid(tg) and tg.is_in_group("hero"):
+				at_him[phase] = int(at_him[phase]) + 1
+		most_out = maxi(most_out, out)
+		if int(t * 4) % 20 == 0:
+			line.append("%.0fs %s out %d" % [t, phase, out])
+		if is_equal_approx(t, 45.0):
+			_look_at(hero.global_position, 12.0)
+			await _shoot("hunt_torch")
+		if is_equal_approx(t, 26.0):
+			_look_at(hero.global_position, 12.0)
+			await _shoot("hunt_dark")
+	_say("INFO", "prowl hunt: came up at %s; most out at once %d; nearest to him dark %.1f / torch %.1f / after it went out %.1f m; samples going for him dark %d / torch %d / out %d; he %.0f/%.0f" % [", ".join(ups), most_out, nearest["dark"], nearest["torch"], nearest["out"], at_him["dark"], at_him["torch"], at_him["out"], hero.current_hp, hero.max_hp])
+	_say("INFO", "prowl hunt: " + " | ".join(line))
+
+## TASK-028 10: the hand-drawn map. Made at the workbench (a hide, ten seconds); where it sits (over the
+## beacon card? the top bar?); a walk round and what is drawn grows; a click on it -- where the view goes;
+## a restart -- gone. Pictures.
+func _p_hand_map() -> void:
+	var gs := root.get_node("GameState")
+	var cabin = _main.current_core
+	var hero = _main.hero
+	var core: Vector3 = cabin.global_position
+	var rig = _main.camera_rig
+	gs.day_clock = 100.0
+	_main.wave_manager.auto_raid_enabled = false
+	_main.night_prowl.enabled = false
+	gs.resources["hide"] = 2
+	gs.known["hide"] = true
+	var mm: Control = _main.hud.minimap
+	var before: bool = mm.is_visible_in_tree()
+	var wb = cabin.station("workbench")
+	_main._walk_to_bench(wb)
+	var t := 0.0
+	while not cabin.hero_inside and t < 30.0:
+		await _advance(0.25)
+		t += 0.25
+	var began: bool = wb.begin("hide_map")
+	var t2 := 0.0
+	while String(wb.active_recipe) != "" and t2 < 30.0:
+		await _advance(0.25)
+		t2 += 0.25
+	await _advance(1.0)
+	var r: Rect2 = mm.get_global_rect()
+	var over: Array = []
+	for c in _all(_main.hud):
+		if c is Control and c != mm and not mm.is_ancestor_of(c) and not (c as Node).is_ancestor_of(mm) and (c as Control).is_visible_in_tree() and (c is PanelContainer or c is Button or c is Label):
+			var cr: Rect2 = (c as Control).get_global_rect()
+			if cr.size.x > 4.0 and cr.intersects(r) and cr.intersection(r).get_area() > 40.0:
+				over.append("%s %s" % [c.name, str(cr)])
+	_say("INFO", "map: shown before %s; begun %s, made in %.1f s; shown now %s at %s (screen %s); overlapping %s" % [before, began, t2, mm.is_visible_in_tree(), str(r), str(root.get_visible_rect().size), str(over.slice(0, 4))])
+	var seen0: int = _count_ones(mm.get("_drawn_seen"))
+	await _shoot("map_made")
+	# A walk round.
+	hero.move_to(core + Vector3(0.0, 0.0, 6.0))
+	await _advance(3.0)
+	for at in [Vector3(12.0, 0.0, -6.0), Vector3(-12.0, 0.0, 8.0), Vector3(0.0, 0.0, 14.0)]:
+		hero.move_to(core + at)
+		var tw := 0.0
+		while tw < 12.0 and _flat3(hero.global_position).distance_to(_flat3(core + at)) > 1.5:
+			await _advance(0.25)
+			tw += 0.25
+	await _advance(1.5)
+	var seen1: int = _count_ones(mm.get("_drawn_seen"))
+	_say("INFO", "map: drawn cells %d -> %d after a walk round" % [seen0, seen1])
+	await _shoot("map_after_walk")
+	# A click on it.
+	var target: Vector3 = core + Vector3(-10.0, 0.0, -8.0)
+	var mp: Vector2 = mm.to_map(target)
+	var at_screen: Vector2 = r.position + mp
+	for down in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = down
+		ev.position = at_screen
+		ev.global_position = at_screen
+		root.push_input(ev, true)
+		await process_frame
+	await _advance(0.5)
+	_say("INFO", "map: clicked where %s is drawn: the view's focus now %s (%.1f m from it)" % [str(target), str(rig.focus), _flat3(rig.focus).distance_to(_flat3(target))])
+	await _shoot("map_clicked")
+	# A restart.
+	current_scene = _main
+	current_scene.restart_game()
+	for k in range(40):
+		await process_frame
+	_main = current_scene
+	await _advance(1.0)
+	_say("INFO", "map: after a restart shown %s (unlock %s)" % [_main.hud.minimap.is_visible_in_tree(), gs.has_unlock("hide_map")])
+
+func _count_ones(a) -> int:
+	var n := 0
+	if a is PackedByteArray:
+		for b in a:
+			if b != 0:
+				n += 1
+	return n
 
 # ------------------------------------------------------------------------------
 # Plumbing (same rules as tools/playtest.gd: frames and physics ticks, never wall-clock)
