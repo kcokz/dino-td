@@ -22,7 +22,7 @@
 | [BUG-020](bug/BUG-020-axe-effect-uses-a-letter-x.md) | 能力槽：斧头"木材 x2"用字母 x，别的用 × | 很低 | fixed | 2026-09-29 |
 | [BUG-021](bug/BUG-021-test-suite-leaks-at-exit.md) | 测试套件退出泄漏 63 对象 / 9 资源（在涨） | 低 | open | 2026-09-29 |
 | [BUG-022](bug/BUG-022-pinned-at-the-cabins-west-end-at-night.md) | 小山谷夜里回船舱，在西头被咬船舱的植龙堵住咬死 | 中 | fixed | 2026-09-29 |
-| [BUG-023](bug/BUG-023-the-battery-is-guarded-day-and-night.md) | 电池残骸白天夜里都在守卫圈里，只能打死守卫拿；提示却说夜里腔骨龙睡了 | 低～中 | open | 2026-09-29 |
+| [BUG-023](bug/BUG-023-the-battery-is-guarded-day-and-night.md) | 电池残骸：b631095 起守卫夜里睡，但响声叫醒的直接扑；举火把更糟 | 低～中 | open（改善） | 2026-09-29 |
 | [BUG-024](bug/BUG-024-the-new-tile-does-not-grow-in.md) | 右下角新按钮出现时没有弹大（容器把 scale 压回 1） | 低 | open | 2026-09-29 |
 | [BUG-025](bug/BUG-025-the-corridor-queue-never-counts-as-jammed.md) | 走廊里排队的来袭不算卡住，72 秒不咬墙 | 中 | open | 2026-09-29 |
 | [BUG-026](bug/BUG-026-raptors-still-go-round-the-campfire.md) | 篝火人能走过去，恐龙还绕 | 低 | fixed b631095 | 2026-09-29 |
@@ -73,6 +73,10 @@
 | TASK-028 | 第六轮、翻找响声、植龙猎人、手绘地图 | **done** 大体过；BUG-027；大山谷第一夜船舱塌（平衡） |
 
 ## 检查记录
+
+### 2026-09-30 第 26 次（自由找 bug，b631095）
+
+- BUG-023 复测：守卫夜里睡了；翻电池时响声一只只叫醒，醒的不示威直接扑；夜里的植龙也来；举火把三只几乎一起醒。改善了，但还开着。`wreck_search` 加了 `DA_NO_PROWL` 和"掉血时身边是谁"。
 
 ### 2026-09-30 第 25 次（监控循环，TASK-028，b631095）
 

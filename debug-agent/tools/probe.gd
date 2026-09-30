@@ -3735,6 +3735,9 @@ func _p_wreck_search() -> void:
 	wm.auto_raid_enabled = false
 	if OS.get_environment("DA_STEPS") != "":
 		gs.beacon_steps = int(OS.get_environment("DA_STEPS"))
+	if OS.get_environment("DA_NO_PROWL") != "":
+		_main.night_prowl.enabled = false
+	var hurt_by: Array = []
 	cabin.max_hp = 100000.0
 	cabin.current_hp = 100000.0
 	var w: Node3D = null
@@ -3786,7 +3789,13 @@ func _p_wreck_search() -> void:
 			if fought and st == 5 and (not is_instance_valid(biter) or biter.is_dead):
 				resumed = true
 		said = said or not _visible_labels(found_said).is_empty()
-		if got < 0.0 and int(gs.resources.get(part, 0)) > 0:
+		if hero.current_hp < hp0 and hurt_by.size() < 6:
+			var near: Array = []
+			for d2 in get_nodes_in_group("dinos"):
+				if is_instance_valid(d2) and not d2.is_dead and _flat3(d2.global_position).distance_to(_flat3(hero.global_position)) < 2.5:
+					near.append("%s(%s)" % [String(d2.dino_type), str(d2.debug_state().get("guard", {}).get("state", "")) if d2.has_method("debug_state") else ""])
+			hurt_by.append("%.1f s hp %.1f: %s" % [t, hero.current_hp, ", ".join(near)])
+			hp0 = hero.current_hp
 			got = t
 		if states.is_empty() or states[states.size() - 1] != st:
 			states.append(st)
@@ -3800,6 +3809,7 @@ func _p_wreck_search() -> void:
 		if s.wreck == w and s.is_smoking():
 			smoke_on = true
 	_say("INFO", "%s at %s (clock %.0f %s): walked %.1f s, searching from then %.1f s to the part in the stock; states %s; guards warned %d; hp %.1f -> %.1f; found said %s; chip shown %s; smoke still %s; searched %s" % [part, str(w.global_position), gs.day_clock, gs.day_part(), began, (got - began) if got >= 0.0 else -1.0, str(states), warned["n"], hp0, hero.current_hp, said, chip.visible if chip else false, smoke_on, w.is_depleted])
+	_say("INFO", "hurt by: %s" % " | ".join(hurt_by))
 	if biter != null:
 		_say("INFO", "the raptor: bitten %s, he fought %s, took the search up again %s" % [bitten, fought, resumed])
 	await _look_and_shoot(w.global_position, 9.0, "%s_searched" % part)
