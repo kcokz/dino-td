@@ -710,6 +710,19 @@ static func recipe_effect_text(recipe_id: String) -> String:
 		parts.append(TranslationServer.translate("EFFECT_DAMAGE") % factor_text(float(row["damage"])))
 	return " · ".join(parts)
 
+## Whether making `recipe_id` makes its bench better, rather than being what the bench is for: a pot for
+## the stove (a vessel, COOKING_METHODS) -- every meal after it is cooked on it. The panel shows it apart
+## from the bench's jobs, as the bench's upgrade (OptionPanel._add_bench_upgrade; v0.6 round seven, the
+## player: "kitchen的石锅目的是升级kitchen（应该叫灶台），roast meat是功能，这两个不应该放在一起").
+static func improves_bench(recipe_id: String) -> bool:
+	var flag: String = String(RECIPES.get(recipe_id, {}).get("unlocks", ""))
+	if flag == "":
+		return false
+	for method in COOKING_METHODS:
+		if String(method.get("vessel", "")) == flag:
+			return true
+	return false
+
 ## Why `res_id` cannot be cut yet, in words: the tool it takes, where that is made and what
 ## it costs -- "Stone takes a Bone Pick: make one at the Workbench (1 Bone, 4 Wood)". Said
 ## where the player meets the wall, right-clicking the rock, so the chain is never a
@@ -2706,11 +2719,17 @@ const CONTROLS: Dictionary = {
 ## starts, drag to where it ends, let go. Clicking a hundred stakes one at a time is not
 ## a decision a hundred times over, it is the same decision a hundred times.
 ##
-## Only things of kind "wall" do this, and that is derived rather than declared: it is
-## already the category the rest of the rules are written against (Dino._is_wall,
-## _should_bite), so a new kind of barrier gets the drag for free and nothing has to be
-## kept in step.
+## Which buildings do this goes by their KIND (`kinds`), not building by building: the kind
+## is already the category the rest of the rules are written against (Dino._is_wall,
+## _should_bite), so a new kind of barrier, or a better spike, gets the drag for free and
+## nothing has to be kept in step. A run goes down whole or not at all (Main._commit_run).
 const BUILD_DRAG: Dictionary = {
+	# The kinds laid in runs (Main._is_dragged_out): a fence and every wall but a gate (a gate is
+	# one way through, and a run of them is a hole), and a patch of spikes (v0.6 round seven, the
+	# player: "地刺这种也可以连续建造") -- both laid along a way a cell at a time, the same decision
+	# over and over. Not a trap that faces (where its lane runs is a decision about one spot), nor
+	# a deadfall or a snare (one weight, one noose: where it goes is the decision).
+	"kinds": ["wall", "spikes"],
 	# The longest run one drag may lay, in stakes. A cap rather than a budget: the run
 	# already stops when the wood does, and this only stops a wild drag across the whole
 	# map from building a preview of four hundred ghosts before it finds that out.
@@ -2718,6 +2737,15 @@ const BUILD_DRAG: Dictionary = {
 	# How far the cursor must travel before a press counts as a DRAG rather than a CLICK,
 	# in pixels. Without it, the hand-shake in an ordinary click lays two stakes.
 	"drag_threshold_px": 6.0,
+}
+
+## The ghost of what is in hand (Main._update_build_preview, _show_run_preview): green where it
+## would go down, red where it would not. One pair for a single ghost and for every section of a
+## run, so a run that will go down looks exactly as a single one that will (v0.6 round seven, the
+## player: "白色部分应该就变成绿色，和单个一样" -- a run's sections that would go down were white).
+const BUILD_GHOST: Dictionary = {
+	"go": Color(0.35, 1.0, 0.4),
+	"no": Color(1.0, 0.3, 0.25),
 }
 
 # ==============================================================================
@@ -2866,6 +2894,12 @@ const BUG_REPORT: Dictionary = {
 	# The last twitches the watch wrote up (TwitchWatch), kept whole beside the events -- and so not among
 	# them (the debug-agent's TASK-027: "我想再要的：最近几份抽搐报告").
 	"twitches": 5,
+	# Its button (v0.6 round seven, the player: "Debug版本给我一个按钮可以按（上面显示快捷键），可以用比较透明的
+	# 方法显示"): faint while the cursor is elsewhere -- read, not looked at -- and whole under it.
+	"button_alpha": 0.45,
+	"button_alpha_hover": 1.0,
+	# Its own canvas layer, over the HUD's (1), so the menus and the start screen do not cover it.
+	"button_layer": 90,
 }
 
 const TWITCH: Dictionary = {
@@ -4109,6 +4143,17 @@ static func meal_cooked(dish_id: String, method_id: String) -> Dictionary:
 	var lasting: bool = meal["build_speed"] != 1.0 or meal["move_speed"] != 1.0 or meal["max_hp"] > 0.0
 	meal["fed_seconds"] = float(dish.get("fed_seconds", 0.0)) if lasting else 0.0
 	return meal
+
+## "Roast meat", "Seared prime meat": a meal named for how it was cooked (COOKING_METHODS).
+static func meal_name(dish_id: String, method_id: String) -> String:
+	if not DISHES.has(dish_id):
+		return ""
+	var title: String = TranslationServer.translate(String(DISHES[dish_id].get("name", dish_id)))
+	for method in COOKING_METHODS:
+		if String(method.get("id", "")) == method_id:
+			var fmt: String = TranslationServer.translate(String(method.get("name", "")))
+			return (fmt % title) if "%s" in fmt else title
+	return title
 
 ## The icon a dish is drawn with, cooked (DISHES.<id>.icon) -- or, for one with none, what it is
 ## cooked from.

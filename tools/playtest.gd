@@ -686,6 +686,25 @@ func _scenario_ghost() -> void:
 	_main._show_run_preview(long_run)
 	await _wait(4)
 	await _portrait("ghost_short", gm.build_cell_to_world(Vector2i(c.x - 9, z0 + 3)), 9.0, true)
+	# Let go with red in it -- as a release does it, the drag ended first: none of it goes down, and the hint
+	# says how much is short (v0.6 round seven: "我要的效果是all or nothing").
+	_main._end_drag()
+	_main._commit_run(long_run)
+	await _wait(4)
+	await _shoot("run_refused")
+	# A strip of spikes, dragged out as a fence is (v0.6 round seven: "地刺这种也可以连续建造"), past the stock.
+	var spike_cost: Dictionary = root.get_node("Config").BUILDINGS["ground_spikes"]["cost"]
+	for res_id in spike_cost:
+		root.get_node("GameState").resources[res_id] = int(spike_cost[res_id]) * 4
+	_main.on_build_selected("ground_spikes")
+	var strip: Array[Vector2i] = []
+	for dz in range(1, 7):
+		strip.append(Vector2i(c.x - 12, z0 + dz))
+	_main._drag_from = strip[0]
+	_main._dragging = true
+	_main._show_run_preview(strip)
+	await _wait(4)
+	await _portrait("spikes_run", gm.build_cell_to_world(Vector2i(c.x - 12, z0 + 3)), 9.0, true)
 	_main._end_drag()
 	_main.cancel_building_selection()
 	await _wait(4)
@@ -732,7 +751,8 @@ func _scenario_kitchen() -> void:
 	var gs := root.get_node_or_null("GameState")
 	var cfg := root.get_node_or_null("Config")
 	var eb := root.get_node_or_null("EventBus")
-	_grant({"food": 2, "prime_meat": 1})
+	# Stone in hand too: the pot is on offer, in its block under the meals (v0.6 round seven).
+	_grant({"food": 2, "prime_meat": 1, "stone": 3})
 	await _walk_in()
 	var kitchen: Node = _main.current_core.station("kitchen")
 	if kitchen and eb:

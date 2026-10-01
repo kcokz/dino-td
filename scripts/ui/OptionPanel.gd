@@ -637,17 +637,10 @@ func _show_hero_stats(info: Dictionary) -> void:
 			secs / 60, secs % 60]
 		boost_bar.value = clampf(left / maxf(0.001, float(fed.get("seconds_total", 1.0))), 0.0, 1.0)
 
-## "Roast meat", "Seared prime meat": a meal named for how it was cooked (Config.COOKING_METHODS).
+## "Roast meat", "Seared prime meat": a meal named for how it was cooked (Config.meal_name).
 func _meal_name(dish_id: String, method_id: String) -> String:
 	var cfg = _get_config()
-	if cfg == null or not cfg.DISHES.has(dish_id):
-		return ""
-	var title: String = tr(String(cfg.DISHES[dish_id].get("name", dish_id)))
-	for method in cfg.COOKING_METHODS:
-		if String(method.get("id", "")) == method_id:
-			var fmt: String = tr(String(method.get("name", "")))
-			return (fmt % title) if "%s" in fmt else title
-	return title
+	return String(cfg.meal_name(dish_id, method_id)) if cfg else ""
 
 ## The two bars, from what the selected thing reports about itself -- or, for the Hero, his block.
 func _show_vitals(info: Dictionary) -> void:
@@ -849,8 +842,8 @@ const BACK_NAME := &"BackCommand"
 ## The cards of what a building can become, two to a row under their heading (_populate_building_buttons).
 const UPGRADES_NAME := &"UpgradeCards"
 
-## The card's commands in the order they stand: its own buttons, and the ones in a row of cards among
-## them (the ways up a building can go).
+## The card's commands in the order they stand: its own buttons, and the ones in a block among them --
+## the row of cards of the ways up a building can go, a bench's upgrade (_add_bench_upgrade).
 func command_buttons() -> Array[Button]:
 	var out: Array[Button] = []
 	if button_container == null:
@@ -858,10 +851,9 @@ func command_buttons() -> Array[Button]:
 	for child in button_container.get_children():
 		if child is Button:
 			out.append(child as Button)
-		elif child is GridContainer:
-			for inner in child.get_children():
-				if inner is Button:
-					out.append(inner as Button)
+		else:
+			for inner in child.find_children("*", "Button", true, false):
+				out.append(inner as Button)
 	return out
 
 func _clear_buttons() -> void:
@@ -1154,9 +1146,10 @@ func _populate_resource_buttons() -> void:
 	pass
 
 ## One card per job this bench still has to offer. A recipe already made is not listed
-## at all -- an unlock is permanent, so a finished one is not a choice. The kitchen's meals
-## come after its recipes: one per kind of meat, always on offer, named for however his
-## best pot will cook it.
+## at all -- an unlock is permanent, so a finished one is not a choice. The stove's meals
+## are one per kind of meat, always on offer, named for however his best pot will cook it.
+## What makes the bench itself better -- the stove's pot -- is not one of its jobs: it stands
+## apart under them, as its upgrade (_add_bench_upgrade).
 ## What the bench shown offers as its commands were made: the jobs on offer, and whether it is at
 ## one (_update_status_display compares it with what it offers now).
 var _station_offer: Array = []
@@ -1178,17 +1171,25 @@ func _populate_station_buttons() -> void:
 	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
 	var busy: bool = "active_recipe" in station and String(station.active_recipe) != ""
 	_station_offer = _offer_of(station)
-	# More than a few on offer -- the workbench, with everything for his row (v0.6 round three) --
-	# and they stand two to a row, as the build menu's do: one to a row, they ran off the screen.
-	var offered: int = 0
+	# What the bench does, and -- set apart -- what makes the bench itself better (v0.6 round seven, the
+	# player: "kitchen的石锅目的是升级kitchen（应该叫灶台），roast meat是功能，这两个不应该放在一起，对于灶台的升级
+	# 应该有个不一样的layout形式").
+	var cfg = _get_config()
+	var works: Array[String] = []
+	var upgrades: Array[String] = []
 	for recipe_id in jobs:
-		if station.can_offer(String(recipe_id)):
-			offered += 1
-	button_container.columns = 2 if offered > int(UiTheme.number("one_column_most")) else 1
-	for recipe_id in jobs:
-		var rid: String = String(recipe_id)
-		if not station.can_offer(rid):
+		var job: String = String(recipe_id)
+		if not station.can_offer(job):
 			continue
+		if cfg != null and cfg.improves_bench(job):
+			upgrades.append(job)
+		else:
+			works.append(job)
+	# More than a few on offer -- the workbench, with everything for his row (v0.6 round three) --
+	# and they stand two to a row, as the build menu's do: one to a row, they ran off the screen. A
+	# bench with an upgrade keeps to one: its block is as wide as the card.
+	button_container.columns = 2 if (works.size() > int(UiTheme.number("one_column_most")) and upgrades.is_empty()) else 1
+	for rid in works:
 		var start := func():
 			if is_instance_valid(station):
 				station.begin(rid)
@@ -1210,6 +1211,60 @@ func _populate_station_buttons() -> void:
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.mouse_exited.connect(_clear_craft_detail)
+	for rid in upgrades:
+		_add_bench_upgrade(station, rid, busy)
+
+## The name a bench's upgrade block goes by (_add_bench_upgrade).
+const BENCH_UPGRADE_NAME := &"BenchUpgrade"
+
+## A bench's upgrade, under its jobs and set apart from them: in a sunken block of its own, a heading --
+## "Upgrade the Stove" -- what it changes, before and after, in a line (UiKit.bench_upgrade_change: "Roast meat
+## → Seared meat: heals 4 → 6 · +2 max health"), and the card that makes it, its price and its time along its
+## foot and its key in the corner, as any job's.
+func _add_bench_upgrade(station: Node, rid: String, busy: bool) -> void:
+	var block := PanelContainer.new()
+	block.name = BENCH_UPGRADE_NAME
+	block.theme_type_variation = &"InsetPanel"
+	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button_container.add_child(block)
+	var column := VBoxContainer.new()
+	column.name = "Column"
+	column.add_theme_constant_override("separation", UiTheme.space("xs"))
+	block.add_child(column)
+	var heading := HBoxContainer.new()
+	heading.name = "Heading"
+	heading.add_theme_constant_override("separation", UiTheme.space("xs"))
+	column.add_child(heading)
+	var mark := UiKit.icon_rect("upgrade", UiTheme.icon_size("s"), "UpgradeIcon")
+	mark.modulate = UiTheme.color("accent")
+	heading.add_child(mark)
+	var title := Label.new()
+	title.name = "UpgradeTitle"
+	title.theme_type_variation = &"AccentLabel"
+	title.text = tr("STATION_UPGRADE") % String(station.get_localized_name())
+	heading.add_child(title)
+	var change: String = UiKit.bench_upgrade_change(station, rid)
+	if change != "":
+		var said := Label.new()
+		said.name = "UpgradeChange"
+		said.theme_type_variation = &"MutedLabel"
+		said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		said.text = change
+		column.add_child(said)
+	var btn := UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), func():
+		if is_instance_valid(station):
+			station.begin(rid)
+			_refresh_ui()
+	)
+	btn.name = "Job_%s" % rid
+	column.add_child(btn)
+	_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
+	_pins(btn, {"kind": "job", "id": rid})
+	btn.disabled = busy or not station.can_afford(rid)
+	btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
+	btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
+	btn.mouse_exited.connect(_clear_craft_detail)
 
 ## What a job costs, takes and does, for whichever entry the cursor is over (UiKit.job_detail).
 func _show_craft_detail(station: Node, recipe_id: String) -> void:

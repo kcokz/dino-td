@@ -367,13 +367,19 @@ func _discover_waypoints() -> void:
 				banks.append(grid_manager.cell_to_world(cell))
 		night_prowl.origins = banks
 
-## The bug report's key (BugReport, Config.CONTROLS.bug_report_key), in a development build only: a
-## release has no such thing.
+## Where the bug report is, by its path: it is in the development build only -- the release export leaves out
+## everything under res://scripts/dev/ (export_presets.cfg; tools/build.py) -- so nothing the release ships
+## may name it, or the release would not load.
+const BUG_REPORT_SCRIPT := "res://scripts/dev/BugReport.gd"
+
+## The bug report -- its key and its button (BugReport, Config.CONTROLS.bug_report_key) -- in a development
+## build only: where the build shipped it, and the build is a debug one. A release has no such thing (v0.6
+## round seven, the player: "release版本没有这个功能和按钮，这在你的build file或者build script得区分").
 func _add_bug_report() -> void:
-	if not OS.is_debug_build() or get_node_or_null("BugReport") != null:
+	if not OS.is_debug_build() or get_node_or_null("BugReport") != null or not ResourceLoader.exists(BUG_REPORT_SCRIPT):
 		return
-	var report := BugReport.new()
-	report.main = self
+	var report: Node = (load(BUG_REPORT_SCRIPT) as GDScript).new()
+	report.set("main", self)
 	add_child(report)
 
 func _wire_signals() -> void:
@@ -1560,17 +1566,19 @@ var _run_cells: Array[Vector2i] = []
 
 const NOT_DRAGGING := Vector2i(2147483647, 2147483647)
 
-## Whether this kind of building is laid in runs. Derived from the KIND rather than
-## declared, because "wall" is already the category the rest of the rules are written
-## against -- so a new sort of barrier gets this for free. Not a gate: it is a wall, but
-## where it goes is a decision about one spot, and a run of gates is a hole.
+## Whether this kind of building is laid in runs: the kinds Config.BUILD_DRAG names -- a fence and every
+## wall, and a patch of spikes (v0.6 round seven, the player: "地刺这种也可以连续建造"). Derived from the KIND
+## rather than declared building by building, because the kind is already the category the rest of the
+## rules are written against -- so a new sort of barrier, or a better spike, gets this for free. Not a gate:
+## it is a wall, but where it goes is a decision about one spot, and a run of gates is a hole.
 func _is_dragged_out(type_id: String) -> bool:
 	var cfg = _get_config()
 	if cfg == null or not cfg.has_method("get_building_kind"):
 		return false
 	if cfg.has_method("hero_passes") and cfg.hero_passes(type_id):
 		return false
-	return String(cfg.get_building_kind(type_id)) == "wall"
+	var kinds: Array = cfg.BUILD_DRAG.get("kinds", ["wall"]) if ("BUILD_DRAG" in cfg) else ["wall"]
+	return kinds.has(String(cfg.get_building_kind(type_id)))
 
 func _drag_number(key: String, fallback: float) -> float:
 	var cfg = _get_config()
@@ -1607,11 +1615,11 @@ func _run_to(screen_pos: Vector2) -> Array[Vector2i]:
 			out.append(cell)
 	return out
 
-## How a run goes down, in the order it was dragged: the sections he can get to, paid for while the
-## stock lasts ("going": white in the preview, laid on release); the ones he can get to that the stock
-## does not stretch to ("short"); and the ones he cannot get to ("unreached"). Both of those are red,
-## and neither is laid -- what goes down is what was white (v0.6 round six: "连续建造的时候，如果材料
-## 不够的pending就显示红色，然后点击会提示没法造材料不够，这样不会出现造下去的比pending的少").
+## How a run stands, in the order it was dragged: the sections he can get to, paid for while the stock
+## lasts ("going": green in the preview, as a single ghost that would go down is); the ones he can get to
+## that the stock does not stretch to ("short"); and the ones he cannot get to ("unreached"). Both of those
+## are red (v0.6 round six: "连续建造的时候，如果材料不够的pending就显示红色"), and while any section is red
+## none of the run goes down (_commit_run; round seven: "我要的效果是all or nothing").
 func _run_plan(cells: Array[Vector2i]) -> Dictionary:
 	var budget: int = build_system.affordable_count(current_build_type) if build_system != null else 0
 	var going: Array[Vector2i] = []
@@ -1655,18 +1663,19 @@ func _show_run_preview(cells: Array[Vector2i]) -> void:
 		body.position = grid_manager.build_cell_to_world(cell)
 		# Dressed as it will stand: joined to the rest of the run and to what is already built.
 		_dress_ghost(body, cell, cells, faces)
-		# A section he cannot get to, or past what the stock pays for, is shown red and not laid.
-		var going: bool = going_up.has(cell)
+		# Green where the section would go down, as a single ghost is; red where he cannot get to it, or
+		# past what the stock pays for -- and then none of the run goes down (_commit_run).
 		for mi in _meshes_in(body):
-			mi.material_override = _make_preview_material(Color.WHITE if going else Color(1.0, 0.3, 0.25))
+			mi.material_override = _make_preview_material(_ghost_colour(going_up.has(cell)))
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_run_preview.add_child(body)
 	_preview_neighbours(going_up)
-	# What it will cost, before the wood is spent rather than after -- or why some of it will not go.
+	# What it will cost, before the wood is spent rather than after -- or why none of it would go.
 	if int(plan["short"]) > 0:
-		_hint("HINT_RUN_SHORT", [going_up.size(), going_up.size() + int(plan["short"])])
+		# Of the whole run as dragged -- the count the line on letting go says.
+		_hint("HINT_RUN_SHORT", [going_up.size(), cells.size()])
 	elif int(plan["unreached"]) > 0:
-		_hint("HINT_UNREACHABLE")
+		_hint("HINT_RUN_UNREACHABLE")
 	else:
 		_hint_run(cells.size())
 
@@ -1687,36 +1696,59 @@ func _hint_run(count: int) -> void:
 	if hud and is_instance_valid(hud) and hud.has_method("show_hint"):
 		hud.show_hint(tr("HINT_DRAG_RUN") % [count, ", ".join(parts)])
 
-## Lays the run, in the order it was dragged: what the preview showed white (_run_plan), and
-## no more -- the sections past what the stock pays for are not laid, and that is said, the
-## same words as a click with too little in hand.
+## Lays the run -- all of it, or none of it (v0.6 round seven, the player: "墙连续建造，材料不够现在是会显示红色
+## 了，但是按左键还是会把能造得造下去，我要的效果是all or nothing，有红色的时候点下去会有一行小字说明材料不够，白色
+## 部分也没法造下去"). While a section is red (_run_plan) -- past what the stock pays for, or where he cannot get
+## to -- nothing goes down, nothing is paid, and the hint at the top says why; with none red, every
+## section goes down, in the order it was dragged. A run of one is a click, refused and said as a click is
+## (try_place_at_cell: the spot taken, where he cannot get to, then the price).
 ##
-## Each stake goes down through the same call a single click makes, so paying for it,
-## registering it on the grid, telling the Hero and rebaking the navigation mesh all
-## happen exactly as they always did.
+## Each section goes down through the same call a single click makes, so paying for it, registering it on
+## the grid, telling the Hero and rebaking the navigation mesh all happen exactly as they always did.
 func _commit_run(cells: Array[Vector2i], faces: int = -1) -> int:
 	if cells.is_empty():
 		return 0
-	var plan: Dictionary = _run_plan(cells)
-	var going: Array[Vector2i] = plan["going"]
+	if cells.size() > 1:
+		var plan: Dictionary = _run_plan(cells)
+		if int(plan["short"]) > 0:
+			_reach_asked.clear()
+			_hint("HINT_RUN_SHORT_NONE", [cells.size(), _missing_for(current_build_type, cells.size())])
+			return 0
+		if int(plan["unreached"]) > 0:
+			_reach_asked.clear()
+			_hint("HINT_RUN_UNREACHABLE_NONE", [int(plan["unreached"])])
+			return 0
 	var laid: int = 0
 	for cell in cells:
 		if current_build_type == "":
 			break                          # the wallet emptied and build mode dropped
-		# A section he cannot get to goes through too, to be refused and said (try_place_at_cell).
-		if not going.has(cell) and _can_reach_cell(cell):
-			continue
 		var at: Vector3 = grid_manager.build_cell_to_world(cell)
 		if try_place_at_cell(grid_manager.world_to_cell(at), at, faces) != null:
 			laid += 1
-	var short: int = int(plan["short"])
-	if short > 0:
-		if laid == 0:
-			_hint("HINT_NO_RESOURCES")
-		else:
-			_hint("HINT_RUN_SHORT_LAID", [laid, short])
 	_reach_asked.clear()
 	return laid
+
+## What the stock is short of for `count` of `type_id`, in words -- "14 wood, 2 stone" -- or "" when it is
+## short of nothing.
+func _missing_for(type_id: String, count: int) -> String:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or gs == null or not cfg.BUILDINGS.has(type_id):
+		return ""
+	var cost: Dictionary = cfg.BUILDINGS[type_id].get("cost", {})
+	var parts: PackedStringArray = []
+	for res_id in cost:
+		var short: int = int(cost[res_id]) * count - int(gs.resources.get(res_id, 0))
+		if short > 0:
+			parts.append("%d %s" % [short, tr("RESOURCE_" + String(res_id).to_upper())])
+	return ", ".join(parts)
+
+## The ghost's colour: green where it would go down, red where it would not (Config.BUILD_GHOST) -- one pair
+## for a single ghost and every section of a run.
+func _ghost_colour(goes: bool) -> Color:
+	var cfg = _get_config()
+	var ghost: Dictionary = cfg.BUILD_GHOST if (cfg and "BUILD_GHOST" in cfg) else {}
+	return ghost.get("go", Color.GREEN) if goes else ghost.get("no", Color.RED)
 
 ## Dresses a ghost as the building will stand -- by the code the building dresses itself with: a
 ## palisade's runs towards the walls beside `cell` (built, or in `planned`), and straight along the
@@ -2563,7 +2595,7 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	# Tint every piece of the ghost, not just the first: a body is whatever
 	# Building.make_body() returns, and that will be a loaded scene once there is art. The lane
 	# keeps its own colour: it is where the wire goes, whether or not the trap can.
-	var tint: Color = Color(0.35, 1.0, 0.4) if ok else Color(1.0, 0.3, 0.25)
+	var tint: Color = _ghost_colour(ok)
 	var lanes: Node = build_preview.find_child("LanePreview", false, false)
 	for mi in _meshes_in(build_preview):
 		if mi != build_preview_ring and (lanes == null or not lanes.is_ancestor_of(mi)):

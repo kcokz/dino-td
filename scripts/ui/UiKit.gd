@@ -332,6 +332,45 @@ static func job_detail(station: Node, job_id: String) -> Array:
 	return [TranslationServer.translate("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(job_id), cost_text]
 		+ sources_text(station.inputs_of(job_id)), "short"]
 
+## What a bench's upgrade (Config.improves_bench) changes, in one line for its block on the card, the way a
+## building's upgrade says it -- only what changes, before and after: a pot, the first meal the stove cooks
+## as it comes out now and as it would on the pot -- "Roast meat → Seared meat: heals 4 → 6 · +2 max health"
+## (an effect the meal had none of is said as it comes). "" for anything else.
+static func bench_upgrade_change(station: Node, recipe_id: String) -> String:
+	var cfg = _config()
+	var gs = _state()
+	if cfg == null or gs == null or not cfg.RECIPES.has(recipe_id) or not station.has_method("dishes"):
+		return ""
+	var dishes: Array = station.dishes()
+	var flag: String = String(cfg.RECIPES[recipe_id].get("unlocks", ""))
+	if dishes.is_empty() or flag == "":
+		return ""
+	var dish: String = String(dishes[0])
+	var owned: Dictionary = gs.unlocks if "unlocks" in gs else {}
+	var upgraded: Dictionary = owned.duplicate()
+	upgraded[flag] = true
+	var now: Dictionary = cfg.meal_of(dish, owned)
+	var then: Dictionary = cfg.meal_of(dish, upgraded)
+	var parts: PackedStringArray = []
+	# Each effect: [its key in the meal, what it is when the meal has none of it, its words for a change, its
+	# words for one that comes new].
+	for effect in [["heal", 0.0, "MEAL_STAT_HEAL", "EFFECT_HEAL"], ["max_hp", 0.0, "MEAL_STAT_MAX_HP", "EFFECT_MAX_HP"],
+			["build_speed", 1.0, "MEAL_STAT_BUILD_SPEED", "EFFECT_BUILD_SPEED"], ["move_speed", 1.0, "MEAL_STAT_MOVE_SPEED", "EFFECT_MOVE_SPEED"],
+			["fed_seconds", 0.0, "MEAL_STAT_FED_FOR", "EFFECT_FED_FOR"]]:
+		var key: String = String(effect[0])
+		var was: float = float(now.get(key, effect[1]))
+		var will: float = float(then.get(key, effect[1]))
+		if is_equal_approx(was, will):
+			continue
+		var speed: bool = key.ends_with("_speed")
+		if is_equal_approx(was, float(effect[1])):
+			var word: String = TranslationServer.translate(String(effect[3]))
+			parts.append(word % (cfg.factor_text(will) if speed else int(round(will))))
+		else:
+			parts.append(TranslationServer.translate(String(effect[2])) % [cfg.factor_text(was), cfg.factor_text(will)])
+	return TranslationServer.translate("BENCH_CHANGE") % [cfg.meal_name(dish, String(now.get("method", ""))),
+		cfg.meal_name(dish, String(then.get("method", ""))), " · ".join(parts)]
+
 ## What launching the beacon brings: how long it charges, that the whole valley comes from
 ## every side, and who comes last (GAME-DESIGN 8.3).
 static func launch_detail() -> String:

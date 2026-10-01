@@ -209,3 +209,24 @@ func test_08_the_cabins_medallion_takes_the_view_home() -> void:
 	assert_not_null(cap, "and it wears the key that does the same")
 	if cap != null:
 		assert_eq(cap.text, OS.get_keycode_string(int(config_node.CONTROLS["camera_reset_key"])), "(that key)")
+
+func test_11_the_cabins_key_sits_at_its_shoulder_as_his_does() -> void:
+	# v0.6 round seven, the player: "现在回到cabin的快捷键显示脱位置了，应该跟人的快捷键一样在人头像旁边" -- the cabin's
+	# chip stood at its disc's top LEFT.
+	var main = await _level()
+	await wait_frames(2)
+	var hero_medallion: Control = main.hud.root_control.find_child("HeroEmblem", true, false) as Control
+	for medallion in [main.hud.core_vital, hero_medallion]:
+		assert_not_null(medallion, "(the medallion)")
+		if medallion == null:
+			continue
+		var disc: Control = (medallion as Control).get_node("Disc") as Control
+		var cap: Control = disc.get_node_or_null("Keycap") as Control
+		assert_not_null(cap, "%s wears its key on its disc" % medallion.name)
+		if cap == null:
+			continue
+		var d: Rect2 = disc.get_global_rect()
+		var c: Rect2 = cap.get_global_rect()
+		assert_almost_eq(c.end.x, d.end.x, 1.0, "%s: the chip's right edge is the disc's" % medallion.name)
+		assert_almost_eq(c.position.y, d.position.y, 1.0, "%s: and its top the disc's top" % medallion.name)
+		assert_gt(c.position.x, d.get_center().x, "%s: on the right of it, not the left" % medallion.name)

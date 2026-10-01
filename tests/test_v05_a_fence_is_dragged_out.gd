@@ -171,15 +171,18 @@ func test_04_a_press_that_never_moves_still_lays_exactly_one() -> void:
 
 	assert_eq(_stakes_standing(main) - before, 1, "One click, one stake")
 
-func test_05_only_walls_are_dragged_out() -> void:
+func test_05_walls_and_spikes_are_dragged_out_and_nothing_else() -> void:
 	# A turret is a decision about ONE spot, and dragging a row of them out is not
 	# something anybody means to do. Derived from the kind rather than declared, so a new
-	# sort of barrier gets the drag for free and nothing has to be kept in step.
+	# sort of barrier gets the drag for free and nothing has to be kept in step. Spikes are
+	# laid along a way as a fence is (v0.6 round seven: "地刺这种也可以连续建造").
 	var main = await _level()
 	assert_true(main._is_dragged_out("wall"), "A fence is dragged")
 	assert_true(main._is_dragged_out("stone_wall"), "And so is a stone wall")
+	assert_true(main._is_dragged_out("ground_spikes"), "And a patch of spikes")
 	assert_false(main._is_dragged_out("gate"), "A gate is placed: it is one way through, not a run of them")
 	assert_false(main._is_dragged_out("set_crossbow"), "A turret is placed")
+	assert_false(main._is_dragged_out("trip_bow"), "A trap that faces is placed: where its lane runs is one spot's decision")
 	assert_false(main._is_dragged_out("core"), "And so is the cabin")
 	assert_eq(String(config_node.get_building_kind("wall")), "wall",
 		"Which is the same category the raid's rules are written against")
@@ -211,18 +214,24 @@ func test_06_the_run_steps_over_what_it_cannot_build_on() -> void:
 	assert_gt(left, 0, "Stakes on one side of the cabin")
 	assert_gt(right, 0, "And on the other -- the run stepped over it rather than stopping")
 
-func test_07_the_run_stops_when_the_wood_does() -> void:
-	# It is not a way to build for free, and it must not half-charge either.
+func test_07_the_run_goes_down_whole_or_not_at_all() -> void:
+	# It is not a way to build for free, and it must not half-charge either -- nor lay half a fence: a
+	# run the wood does not stretch to goes down not at all (v0.6 round seven: "我要的效果是all or nothing").
 	var main = await _level(0)
-	var gm = main.grid_manager
 	var core: Vector3 = cabin_at(main)
 	var each: int = cost_of("wall")
 	game_state_node.resources["wood"] = each * 3
 
 	var laid: int = _drag(main, core + Vector3(-6.0, 0.0, -8.0), core + Vector3(6.0, 0.0, -8.0))
 	await wait_frames(4)
+	assert_eq(laid, 0, "Three stakes' worth of wood lays none of a longer run")
+	assert_eq(int(game_state_node.resources.get("wood", 0)), each * 3, "and charges nothing")
 
-	assert_eq(laid, 3, "Three stakes' worth of wood laid three stakes")
+	# A run of three: a section either side of the middle one.
+	var c: float = float(config_node.BUILD_CELL)
+	laid = _drag(main, core + Vector3(-c, 0.0, -8.0), core + Vector3(c, 0.0, -8.0))
+	await wait_frames(4)
+	assert_eq(laid, 3, "Three stakes' worth lays a run of three")
 	assert_lt(int(game_state_node.resources.get("wood", 0)), each, "And paid for all three")
 
 func test_08_the_numbers_are_in_config() -> void:

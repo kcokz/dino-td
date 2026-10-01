@@ -1,4 +1,4 @@
-# res://scripts/core/BugReport.gd
+# res://scripts/dev/BugReport.gd
 class_name BugReport
 extends Node
 
@@ -15,7 +15,16 @@ extends Node
 ## corner's commands; the last twitches the watch wrote up (TwitchWatch); and the last things that happened,
 ## as the game said them (EventBus), with how long ago. The screen says where it went.
 ##
-## Not in a release build: the level adds it only where OS.is_debug_build() (Main._add_bug_report).
+## A BUTTON for it too (v0.6 round seven, the player: "Debug版本给我一个按钮可以按（上面显示快捷键），可以用比较透明
+## 的方法显示（release版本没有这个功能和按钮），这在你的build file或者build script得区分"): at the bottom left beside
+## the version, the key on a chip at its end as a command wears its key, faint until the cursor is on it
+## (Config.BUG_REPORT button_alpha), over everything -- the menus and the start screen too -- in a layer of its
+## own. Pressed, it does what the key does.
+##
+## Not in a release build, and that is the build's doing: everything under res://scripts/dev/ is left out of the
+## release export (export_presets.cfg, "Windows Release": exclude_filter; tools/build.py checks the pack), and
+## the level adds this by its path, only where the file was shipped and the build is a debug one
+## (Main._add_bug_report) -- nothing the release ships names it.
 
 const DIR := "user://bugreports"
 const GROUP := "bug_report"
@@ -28,11 +37,16 @@ var _events: Array = []
 var _twitches: Array = []
 var _clock: float = 0.0
 
+## Its button (_add_button), in a layer of its own over the rest.
+var button: Button = null
+var _layer: CanvasLayer = null
+
 func _ready() -> void:
 	name = "BugReport"
 	add_to_group(GROUP)
 	# It reports a paused game as readily as a running one.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_add_button.call_deferred()
 	var eb = get_node_or_null("/root/EventBus")
 	if eb == null:
 		return
@@ -68,10 +82,85 @@ func _unhandled_input(event: InputEvent) -> void:
 	if (event as InputEventKey).keycode != key and (event as InputEventKey).physical_keycode != key:
 		return
 	get_viewport().set_input_as_handled()
+	report_now()
+
+## Writes a report and says where it went -- the key's and the button's.
+func report_now() -> String:
 	var path: String = save()
 	var hud = main.get("hud") if (main != null and is_instance_valid(main)) else null
 	if hud != null and is_instance_valid(hud) and hud.has_method("show_hint") and path != "":
 		hud.show_hint(tr("HINT_BUG_REPORT") % ProjectSettings.globalize_path(path), UiTheme.toast_seconds("long"), "info")
+	return path
+
+## The report's key as the board writes it: "`" for the key under Esc, a letter for a letter, else its name.
+static func key_text(key: int) -> String:
+	# A printable key's code is its character (KEY_QUOTELEFT is "`"): the engine's names for those
+	# ("QuoteLeft") are words a chip has no room for.
+	if key > KEY_SPACE and key < 127:
+		return char(key).to_upper()
+	return OS.get_keycode_string(key)
+
+## Its button: a faint one at the bottom left, beside the version the HUD writes there, the key on a chip
+## at its end -- in a layer of its own over the rest of the screen, the menus and the start screen with it.
+func _add_button() -> void:
+	if button != null or not is_inside_tree():
+		return
+	var cfg: Dictionary = _cfg()
+	_layer = CanvasLayer.new()
+	_layer.name = "BugReportLayer"
+	_layer.layer = int(cfg.get("button_layer", 90))
+	add_child(_layer)
+	button = UiKit.action_button(tr("DEV_BUG_REPORT"), UiTheme.icon("warning"), func() -> void: report_now(), &"GhostButton")
+	button.name = "BugReportButton"
+	button.tooltip_text = tr("DEV_BUG_REPORT_TIP")
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	button.focus_mode = Control.FOCUS_NONE
+	# Its whole word: a command trims its word to the width it is given, and so leaves the word out of the
+	# width it asks for -- a button sized to what it asks for showed its first letter.
+	button.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	# A layer is no Control: the theme the HUD's controls take from its root is given here again.
+	var root := Control.new()
+	root.name = "BugReportRoot"
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UiTheme.get_theme()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_layer.add_child(root)
+	root.add_child(button)
+	var cfg_node = get_node_or_null("/root/Config")
+	var key: int = int(cfg_node.CONTROLS.get("bug_report_key", KEY_QUOTELEFT)) if (cfg_node and "CONTROLS" in cfg_node) else KEY_QUOTELEFT
+	# The key at the button's end, where a plain command wears it (UiKit.keycap) -- the button as much wider
+	# as the chip, so its word never runs under it.
+	var cap: Label = UiKit.keycap(button, key_text(key))
+	button.custom_minimum_size.x = button.get_minimum_size().x + cap.get_combined_minimum_size().x + float(UiTheme.space("s"))
+	# Faint: it is for whoever is testing, not part of the game -- there when wanted, clear when not.
+	button.modulate.a = float(cfg.get("button_alpha", 0.45))
+	button.mouse_entered.connect(func() -> void: button.modulate.a = float(_cfg().get("button_alpha_hover", 1.0)))
+	button.mouse_exited.connect(func() -> void: button.modulate.a = float(_cfg().get("button_alpha", 0.45)))
+	var hud = main.get("hud") if (main != null and is_instance_valid(main)) else null
+	var version: Control = hud.get("version_label") if (hud != null and is_instance_valid(hud)) else null
+	if version != null:
+		version.resized.connect(_place_button)
+	get_viewport().size_changed.connect(_place_button)
+	button.resized.connect(_place_button)
+	_place_button()
+
+## Beside the version at the bottom left, its middle on the version's line as far as the screen's foot lets it
+## -- it is taller than the line, and the line sits on the foot: centred, its lower half was off the screen.
+## With no version to stand by, in that corner.
+func _place_button() -> void:
+	if button == null or not is_instance_valid(button):
+		return
+	var hud = main.get("hud") if (main != null and is_instance_valid(main)) else null
+	var version: Control = hud.get("version_label") if (hud != null and is_instance_valid(hud)) else null
+	var seen: Vector2 = get_viewport().get_visible_rect().size
+	var size: Vector2 = button.get_combined_minimum_size()
+	var gap: float = float(UiTheme.space("s"))
+	var at: Vector2 = Vector2(gap, seen.y - size.y - gap)
+	if version != null and is_instance_valid(version) and version.is_visible_in_tree():
+		var by: Rect2 = version.get_global_rect()
+		at = Vector2(by.end.x + gap, minf(by.get_center().y - size.y * 0.5, seen.y - size.y))
+	button.position = at
+	button.size = size
 
 func _on_twitch(record: Dictionary) -> void:
 	_twitches.append({"at": snappedf(_clock, 0.01), "record": _plain(record)})

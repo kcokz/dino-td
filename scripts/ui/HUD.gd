@@ -1428,13 +1428,7 @@ func _ensure_ui_components() -> void:
 	core_vital.mouse_filter = Control.MOUSE_FILTER_STOP
 	core_vital.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	core_vital.gui_input.connect(_on_cabin_emblem_input)
-	var home_cap := _label("Keycap", &"KeycapLabel", _home_key_text())
-	home_cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var cabin_disc: Control = core_vital.get_node_or_null("Disc") as Control
-	if cabin_disc != null:
-		cabin_disc.add_child(home_cap)
-		home_cap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		home_cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_shoulder_keycap(core_vital, _home_key_text())
 	root_control.resized.connect(_fit_stock, CONNECT_DEFERRED)
 
 	# Beside it, the day (GAME-DESIGN 9.3): a dial going round once a day -- gold by day, red at
@@ -1546,12 +1540,7 @@ func _ensure_ui_components() -> void:
 	hero[0].gui_input.connect(_on_hero_emblem_input)
 	# The key that opens his card in full, on a chip at the medallion's shoulder, as a command wears
 	# its key.
-	var cap := _label("Keycap", &"KeycapLabel", _details_key_text())
-	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var disc: Control = hero[0].get_node("Disc")
-	disc.add_child(cap)
-	cap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_shoulder_keycap(hero[0], _details_key_text())
 	hero_side.add_child(hero[0])
 	fed_chip = _panel("FedChip", &"PillPanel")
 	fed_chip.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -1855,6 +1844,26 @@ func _medallion(node_name: String, key: String, icon_name: String, grow: float =
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	plate.add_child(value)
 	return [box, ring, value]
+
+## The key a medallion answers to, on a chip at its shoulder -- the top right of its disc -- the same on the
+## Hero's and the cabin's: its corner meets the disc's, and it grows away from it to fit what it says. Its
+## offsets are set as well as its anchors: the cabin's disc is already laid out when its chip goes on, and
+## anchors moved on their own keep a control where it was -- which left the cabin's key at the disc's top
+## LEFT (v0.6 round seven, the player: "现在回到cabin的快捷键显示脱位置了，应该跟人的快捷键一样在人头像旁边").
+func _shoulder_keycap(medallion: Control, key_text: String) -> Label:
+	var disc: Control = medallion.get_node_or_null("Disc") as Control
+	if disc == null:
+		return null
+	var cap := _label("Keycap", &"KeycapLabel", key_text)
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	disc.add_child(cap)
+	cap.set_anchors_preset(Control.PRESET_TOP_RIGHT, true)
+	cap.offset_left = 0.0
+	cap.offset_right = 0.0
+	cap.offset_top = 0.0
+	cap.offset_bottom = 0.0
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	return cap
 
 ## The Hero's medallion clicked: he is picked, as a click on him in the world picks him, and his
 ## card opens in full -- or, open, shuts again.
