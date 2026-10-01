@@ -54,6 +54,7 @@ func _init() -> void:
 func _finish(code: int) -> void:
 	if _script_errors != null:
 		OS.remove_logger(_script_errors)
+		_script_errors = null
 	_restore_settings()
 	await create_timer(0.25).timeout
 	quit(code)
@@ -219,6 +220,20 @@ func _discover_test_suites() -> Array[String]:
 func _execute_test_suite(suite_path: String) -> void:
 	var suite_file = suite_path.get_file()
 	print("\n>>> Running Test Suite: %s" % suite_file)
+	var orphans_before: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	await _run_suite(suite_path, suite_file)
+	# Nodes it took out of the tree, or never put in, and never freed: they are left to the end of the run --
+	# with their bodies, their scripts and whatever they hold (the debug-agent's BUG-021: "可以在 test_runner 最后
+	# 打印 OBJECT_ORPHAN_NODE_COUNT，哪个测试之后涨了就是哪个"). Counted a frame or two on, once what it queued
+	# for freeing has gone.
+	await process_frame
+	await process_frame
+	var orphans: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) - orphans_before
+	if orphans > 0:
+		print("  [ORPHANS] %d node(s) out of the tree and never freed after %s -- every orphan of the run so far:" % [orphans, suite_file])
+		Node.print_orphan_nodes()
+
+func _run_suite(suite_path: String, suite_file: String) -> void:
 
 	var script_res = load(suite_path)
 	if script_res == null:
@@ -243,6 +258,16 @@ func _execute_test_suite(suite_path: String) -> void:
 			"test": "suite_compiler",
 			"message": "The suite did not compile, so none of its tests ran."
 		})
+		return
+
+	# A script that is not a suite -- a check of its own that extends SceneTree and runs from its _init when
+	# launched with --script (the victory auditors' probes) -- is not made here. Made, it was a whole second
+	# SceneTree -- its window, its worlds, its multiplayer -- with its _init waiting for a frame that tree would
+	# never have, all of it left at exit every run (the debug-agent's BUG-021: "两个 SceneTree、两个 Window……
+	# 还有两个 GDScriptFunctionState"). It has no tests for this runner either way.
+	if script_res is GDScript and not ClassDB.is_parent_class(String((script_res as GDScript).get_instance_base_type()), "RefCounted"):
+		print("  [SKIP] %s is a script of its own, not a suite -- run it with --script" % suite_file)
+		total_suites_without_tests += 1
 		return
 
 	var suite_instance = script_res.new()
@@ -377,6 +402,10 @@ func _execute_test_suite(suite_path: String) -> void:
 				"message": rec.get("message", "")
 			}
 			all_failure_records.append(full_rec)
+
+	# Whatever it would be kept alive by, let go (test_base.release) -- before its tree is taken from it.
+	if suite_instance.has_method("release"):
+		suite_instance.release()
 
 	if "tree" in suite_instance:
 		suite_instance.tree = null

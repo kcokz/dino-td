@@ -621,6 +621,10 @@ func test_restart_05_reenables_gameplay_actions() -> void:
 		assert_true(bs.can_place_building("wall", Vector2i(1, 1)), "can_place_building must succeed after restart")
 		var placed = bs.place_building("wall", Vector2i(1, 1))
 		assert_not_null(placed, "place_building must succeed after restart")
+		# Placed with no level to put it in, it is nobody's: freed with the rest (the debug-agent's BUG-021 --
+		# a wall, its body and its scripts, left to the end of the run).
+		if placed is Node:
+			_cleanup_nodes.append(placed)
 
 	# Verify phase advancement re-enabled
 	game_state_node.trigger_end_action()

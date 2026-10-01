@@ -324,6 +324,9 @@ func test_challenge_6_self_disconnection_during_callback() -> void:
 	# Second emission should not trigger callback
 	event_bus.emit_signal("wave_started", 2, false)
 	assert_eq(holder["call_count"], 1, "Callback should not execute on second emission after self-disconnect")
+	# The callback is in `holder` and holds `holder` -- and, reading event_bus, this suite: a ring nothing
+	# frees, which kept the suite to the end of the run (the debug-agent's BUG-021). Broken here.
+	holder["cb"] = null
 
 # ==============================================================================
 # Challenge 7: Reentrant Cascading Signals

@@ -71,15 +71,18 @@ func _exit_tree() -> void:
 	for path in _pending:
 		ResourceLoader.load_threaded_get(path)
 	_pending.clear()
+	# Held, not only playing: a world sound paused mid-note with the game (PROCESS_MODE_PAUSABLE) is not
+	# `playing`, and its playback was left to the end -- the meal's sound of a test that ended paused, still
+	# in use at exit (the debug-agent's BUG-021).
 	var was_playing: bool = false
 	for p in _players:
 		if is_instance_valid(p):
-			was_playing = was_playing or p.playing
+			was_playing = was_playing or p.playing or p.has_stream_playback()
 			p.stop()
 			p.stream = null
 	for v in _voices:
 		if is_instance_valid(v):
-			was_playing = was_playing or v.playing
+			was_playing = was_playing or v.playing or v.has_stream_playback()
 			v.stop()
 			v.stream = null
 	for amb in [_ambience, _ambience_night]:

@@ -94,7 +94,11 @@ func test_02_terrain_is_not_something_a_restart_clears() -> void:
 	# Hills are the map, not anything the player did to it.
 	var gm = await _grid([Vector2i(1, 1)])
 	await wait_frames(1)
-	gm.occupy_cell(Vector2i(3, 3), Node3D.new())
+	# Something standing there -- freed with the rest (the debug-agent's BUG-021: left out of the tree, it
+	# was an orphan to the end of the run).
+	var occupant := Node3D.new()
+	_cleanup_nodes.append(occupant)
+	gm.occupy_cell(Vector2i(3, 3), occupant)
 
 	gm.clear_grid()
 	assert_false(gm.is_cell_occupied(Vector2i(3, 3)), "A new game takes the buildings")

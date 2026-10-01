@@ -59,6 +59,25 @@ func after_each() -> void:
 func after_all() -> void:
 	pass
 
+## Lets go of whatever would keep this suite alive once it is done -- called by the runner after after_all,
+## whatever the suite's own hooks did (the debug-agent's BUG-021: a suite left alive is everything it holds,
+## to the end of the run). Every watcher: a watcher holds what it watches, and a suite watching its own
+## signal, whose after_each never called this base's, held itself through it. And every connection of the
+## game's EventBus that comes back to it: a lambda that calls into the suite holds the suite.
+func release() -> void:
+	for watcher in _active_watchers:
+		watcher.disconnect_watcher()
+	_active_watchers.clear()
+	var eb: Object = tree.root.get_node_or_null("EventBus") if (tree != null and tree.root != null) else null
+	if eb == null:
+		return
+	for sig in eb.get_signal_list():
+		var sig_name: String = String(sig["name"])
+		for conn in eb.get_signal_connection_list(sig_name):
+			var c: Callable = conn["callable"]
+			if c.get_object() == self:
+				eb.disconnect(sig_name, c)
+
 # --- Signal Watcher Factory ---
 func watch_signal(p_target: Object, p_signal_name: String) -> SignalWatcher:
 	var watcher = SignalWatcher.new(p_target, p_signal_name)
