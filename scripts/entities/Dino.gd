@@ -631,16 +631,17 @@ func _watch_for_a_jam(delta: float) -> void:
 		_jam_best = INF
 		_jam_for = null
 		return
-	# Something else to go for is a new way: it has not been failing at it yet. The same thing's place
-	# moving is not -- its turn at the cabin handed from one place round it to another, the queue's end
-	# moving -- and neither is a fresh route asked for after getting nowhere (_unstick drops the old
-	# one): both kept the clock under two seconds while a queue stood in a corridor seventy seconds (the
-	# debug-agent's BUG-025).
+	# Something else to go for is measured on its own way from where it stands -- but the clock runs on:
+	# getting nowhere is getting nowhere, whatever it is going for. A raid crowded outside the one breach in
+	# a ring of fence went from one trap inside to another and back, and every change put the clock back:
+	# ten stood at the gap half a minute and none bit a way in of its own (the debug-agent's BUG-005, walled-in
+	# traps; the player's choice: "堵住了就另咬一个口子"). Nor does the same thing's place moving -- its turn at
+	# the cabin handed from one place round it to another, the queue's end moving -- or a fresh route asked
+	# for after getting nowhere (_unstick drops the old one): both kept the clock under two seconds while a
+	# queue stood in a corridor seventy seconds (the debug-agent's BUG-025).
 	if current_target != _jam_for:
 		_jam_for = current_target
-		_jam_clock = 0.0
-		_jam_best = INF
-		_jam_goal = _nav_goal
+		_jam_goal = Vector3.INF          # measured afresh on its new way, below -- the clock running on
 	if _nav_goal != Vector3.INF:
 		var progress: float = _ai("jam_progress", 0.5)
 		if _jam_goal == Vector3.INF or _flat(_jam_goal).distance_to(_flat(_nav_goal)) > progress * 2.0:
@@ -742,13 +743,16 @@ func _outranks(want: Node, have: Node) -> bool:
 	return _rank(want) > _rank(have)
 
 ## How much it cares about a thing, for _outranks: the Hero when he is loud, then what is
-## shooting at it, then any building.
+## shooting at it -- or the wall it has set out to go through (_stubborn), which is its way to what is
+## beyond: a trap behind a ring of fence shot at the raptor biting its way in, and it let go of the wall
+## for the trap, went back to the crowd at the breach, and was held up again, by turns (the player's
+## choice: "堵住了就另咬一个口子") -- then any building.
 func _rank(node: Node) -> int:
 	if node == null:
 		return 0
 	if node.is_in_group("hero"):
 		return 3 if _hero_is_provoking() else 1
-	if _is_shooter(node):
+	if _is_shooter(node) or node == _stubborn:
 		return 2
 	return 1
 

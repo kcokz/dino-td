@@ -581,3 +581,64 @@ func test_13c_waiting_in_a_queue_behind_a_wall_it_is_held_up_too() -> void:
 	assert_eq(d.current_target, between, "Waiting that long, it goes through the wall between it and where it is going")
 	assert_ne(d.current_target, behind, "(not the one behind it)")
 	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
+
+## A trap at `at`, set and still (it shoots nobody by itself here).
+func _crossbow(world: Node3D, at: Vector3) -> Node:
+	var trap = load("res://scripts/entities/Tower.gd").new()
+	world.add_child(trap)
+	trap.setup("set_crossbow")
+	trap.position = at
+	trap.complete_construction()
+	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	return trap
+
+func test_13d_going_from_one_thing_to_another_and_getting_nowhere_is_held_up_too() -> void:
+	# The player's choice, v0.6 ("堵住了就另咬一个口子"): a raid crowded outside the one breach in a ring of
+	# fence round two traps went from one trap to the other and back, and every change put the clock back --
+	# ten stood at the gap half a minute and none bit a way in of its own (the debug-agent's BUG-005,
+	# walled-in traps).
+	var world := await _field()
+	var wall = _stake(world, Vector3(0.0, 0.0, -1.0))
+	var one = _crossbow(world, Vector3(-1.0, 0.0, -4.0))
+	var other = _crossbow(world, Vector3(1.0, 0.0, -4.0))
+	await rebake_fixture()
+	var d = _held_at(world, Vector3.ZERO, Vector3(0.0, 0.0, -6.0))
+	await wait_physics_frames(2)
+	var step: float = 0.25
+	var jam: float = _ai("jam_seconds")
+	var t: float = 0.0
+	var k: int = 0
+	while t + step < jam:
+		k += 1
+		# From one trap to the other, by turns, getting no nearer either.
+		d.current_target = one if k % 2 == 0 else other
+		d._nav_goal = (d.current_target as Node3D).global_position + Vector3(0.0, 0.0, 1.0)
+		d._watch_for_a_jam(step)
+		t += step
+	assert_ne(d.current_target, wall, "(not before it has been held up the while)")
+	d._watch_for_a_jam(step * 2.0)
+	assert_eq(d.current_target, wall, "Getting nowhere all the while, whatever it went for: it goes through the wall between")
+	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
+
+func test_13e_the_wall_it_goes_through_is_not_let_go_for_the_trap_that_shoots_it() -> void:
+	# Biting its way in, a trap beyond shot at it, and it let go of the wall for the trap -- back to the
+	# crowd at the breach, held up again, by turns.
+	var world := await _field()
+	var wall = _stake(world, Vector3(0.0, 0.0, -1.0))
+	var trap = _crossbow(world, Vector3(0.0, 0.0, -4.0))
+	await rebake_fixture()
+	var d = _held_at(world, Vector3.ZERO, Vector3(0.0, 0.0, -6.0))
+	await wait_physics_frames(2)
+	d._stubborn = wall
+	d._take(wall, d.Mode.BREACH)
+	d.shot_by(trap)
+	d._think()
+	assert_eq(d.current_target, wall, "Shot at by the trap beyond, it keeps at the wall it is going through")
+	assert_eq(int(d.mode), int(d.Mode.BREACH), "(to break it)")
+	# A wall it only happens to be at is not that: the trap that shoots it outranks it.
+	var e = _held_at(world, Vector3(2.0, 0.0, 0.0), Vector3(2.0, 0.0, -6.0))
+	await wait_physics_frames(2)
+	e._take(wall, e.Mode.BREACH)
+	e.shot_by(trap)
+	assert_true(e._outranks(trap, wall), "Any other wall gives way to the trap that shoots it")
+	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()

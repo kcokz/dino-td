@@ -1384,11 +1384,17 @@ const DINO_AI: Dictionary = {
 	# most of the small valley's field; he is what it is after.
 	"runner_hunts_within": 18.0,
 	"jam_seconds": 4.0,
-	"jam_progress": 0.5,
-	# And the wall it goes through need not be one it is up against: this far past its body (metres) --
-	# a queue waits a body's length behind the one ahead of it, and in a corridor never touches the fence
-	# (the debug-agent's BUG-025: seventy seconds, eleven standing, no wall bitten).
-	"jam_reach": 1.0,
+	# Getting nearer by less than this in jam_seconds is held up too (v0.6, the player's choice: "堵住了就另咬
+	# 一个口子"): a raid crowded outside the one breach in a ring, inching in, gained half a metre every few
+	# seconds -- and every half metre put the clock back, so for half a minute ten stood and shook at the gap
+	# (the debug-agent's BUG-005, walled-in traps). A raptor walking gets this far in a quarter of a second.
+	"jam_progress": 1.5,
+	# And the wall it goes through need not be one it is up against: the nearest between it and where it is
+	# going, this far past its body (metres) -- a queue waits a body's length behind the one ahead of it, and in
+	# a corridor never touches the fence (the debug-agent's BUG-025: seventy seconds, eleven standing, no wall
+	# bitten); a crowd at a breach stands rows deep, and each held up in it goes for the fence nearest it --
+	# spread along it, they bite their own ways in (the player: "去咬离自己最近的那段栅栏").
+	"jam_reach": 3.0,
 	# Two bodies whose middles are this close, in metres, are one on top of the other: the engine
 	# has no way out to push either along, so one is nudged (Dino._unstack).
 	"stacked_within": 0.05,
