@@ -79,6 +79,29 @@ func _preferred_target() -> Node:
 func hero_interest_range() -> float:
 	return _prowl("hunts_within", 8.0)
 
+## The man in the dark is what it is out for ("没火的人是植龙的首要目标"): above any building -- the cabin it may have
+## set out for among them. His equal, he was never taken over it (Dino._outranks): two stood at a campfire's edge
+## staring in at the cabin while he quarried four metres off in the dark, and the fire looked like enough to keep
+## the night off (the player's bug report, 2026-10-01: "篝火范围不知道是不是有点大，我在旁边采石头，植龙就看着，
+## 也不来进攻"). Lit, he is as any raider ranks him.
+func _rank(node: Node) -> int:
+	if node != null and is_instance_valid(node) and node.is_in_group("hero") and is_inside_tree() \
+			and ProwlerDino.light_over(get_tree(), (node as Node3D).global_position).is_empty():
+		return 3
+	return super._rank(node)
+
+## Struck by him, it turns on him (_turn_at_bay: PROWL.at_bay_seconds), the light or no -- a crocodile struck
+## snaps back -- and then backs out to the dark again: the light keeps it from coming in, not from striking back
+## (the player's bug report, 2026-10-01: "这时候我进攻恐龙它们都不会还手？似乎有点不合理"). Hurt by a trap, it
+## does not know who did it.
+func take_damage(amount: float) -> void:
+	super.take_damage(amount)
+	if is_dead or going_home or not is_inside_tree() or at_bay_left > 0.0:
+		return
+	var hero: Node = get_tree().get_first_node_in_group("hero")
+	if hero != null and is_instance_valid(hero) and hero.get("target_enemy") == self:
+		_turn_at_bay()
+
 func building_interest_range() -> float:
 	return 2.0
 

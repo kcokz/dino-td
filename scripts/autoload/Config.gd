@@ -2942,6 +2942,11 @@ const BUG_REPORT: Dictionary = {
 	"button_alpha_hover": 1.0,
 	# Its own canvas layer, over the HUD's (1), so the menus and the start screen do not cover it.
 	"button_layer": 90,
+	# The dialog asking what went wrong (the player, 2026-10-01: "还应该有个对话框可以填写原因"): the veil over the
+	# game behind it, how dark; the card's width and the reason box's height (pixels) -- a few lines to write in.
+	"dialog_veil": 0.45,
+	"dialog_width": 520.0,
+	"dialog_reason_height": 120.0,
 }
 
 const TWITCH: Dictionary = {

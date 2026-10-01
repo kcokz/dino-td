@@ -414,6 +414,62 @@ func test_15_in_the_dark_it_smells_the_man_from_far_off_and_a_torch_keeps_it_off
 	assert_true(main.hero.light_torch(), "(a torch alight in his hand)")
 	assert_ne(d._preferred_target(), main.hero, "Lit, he is not")
 
+func test_15b_set_on_the_cabin_it_turns_to_the_man_in_the_dark() -> void:
+	# The player's bug report, 2026-10-01: "篝火范围不知道是不是有点大，我在旁边采石头，植龙就看着，也不来进攻" --
+	# two stood at the campfire's edge staring in at the cabin while he quarried four metres off in the dark: the
+	# cabin was what they had set out for, and the man, its equal, was never taken over it.
+	var main = await _level()
+	await nav_settled(main)
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var light: float = float(fire.light_radius())
+	var out: Vector3 = (fire.global_position - main.current_core.global_position)
+	out.y = 0.0
+	out = out.normalized()
+	var d = _phytosaur(main, fire.global_position + out * (light - float(_prowl()["edge_inside"])))
+	d._take(main.current_core, d.Mode.ENGAGE)
+	assert_eq(d.current_target, main.current_core, "(set on the cabin, at the light's edge)")
+	# Him out in the dark beside it, at work.
+	var side := Vector3(-out.z, 0.0, out.x)
+	main.hero.global_position = d.global_position + out * 1.5 + side * 2.5
+	assert_true(ProwlerDino.light_over(tree, main.hero.global_position).is_empty(), "(he is in the dark)")
+	d._think()
+	assert_eq(d.current_target, main.hero, "The man in the dark beside it is what it goes for, not the cabin in the light")
+	# Lit, he is not.
+	main.hero.global_position = fire.global_position
+	assert_false(d._outranks(main.hero, main.current_core), "In the firelight he does not outrank the cabin")
+
+func test_15c_struck_from_the_light_it_strikes_back_then_backs_out() -> void:
+	# The player's bug report, 2026-10-01: "这时候我进攻恐龙它们都不会还手？似乎有点不合理" -- standing in the light he
+	# could cut at one at its edge as long as he liked.
+	var main = await _level()
+	await nav_settled(main)
+	_set_clock(_at("night") + 10.0)
+	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
+	var fire = _campfire(main, Vector3(-3.0, 0.0, 4.0))
+	var light: float = float(fire.light_radius())
+	var out: Vector3 = (fire.global_position - main.current_core.global_position)
+	out.y = 0.0
+	out = out.normalized()
+	var d = _phytosaur(main, fire.global_position + out * (light - float(_prowl()["edge_inside"])))
+	d._take(main.current_core, d.Mode.ENGAGE)
+	main.hero.global_position = d.global_position - out * 1.5
+	assert_false(ProwlerDino.light_over(tree, main.hero.global_position).is_empty(), "(he stands in the light)")
+	# Hurt by a trap, it does not know who: it keeps to the edge.
+	d.take_damage(0.1)
+	assert_almost_eq(float(d.at_bay_left), 0.0, 0.001, "A blow from nobody it knows is not his")
+	# His blow.
+	main.hero.target_enemy = d
+	d.take_damage(0.1)
+	assert_gt(float(d.at_bay_left), 0.0, "Struck by him, it turns on him")
+	assert_eq(d.current_target, main.hero, "him, light or no")
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	for i in int(1.0 / dt):
+		d._physics_process(dt)
+	assert_lt(float(d.at_bay_left), float(_prowl()["at_bay_seconds"]), "for a while (PROWL.at_bay_seconds), running down")
+	main.hero.target_enemy = null
+
 func test_16_they_come_up_in_pairs_tougher_than_they_were() -> void:
 	var main = await _level()
 	var prowl: NightProwl = main.night_prowl

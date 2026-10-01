@@ -84,13 +84,160 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 	report_now()
 
-## Writes a report and says where it went -- the key's and the button's.
-func report_now() -> String:
-	var path: String = save()
+## The key's and the button's: the game as it is this moment -- its state and a picture of the screen, taken
+## before anything is put over it -- held, and the player asked what went wrong (the player, 2026-10-01: "我点bug
+## report的时候还应该有个对话框可以填写原因，然后也记录到bug report中"). The game waits while they write; saved, the
+## reason heads the report. Asked already, nothing.
+func report_now() -> void:
+	if asking():
+		return
+	_held = {"snapshot": snapshot(), "picture": _screen()}
+	_ask()
+
+## Whether the player is being asked what went wrong.
+func asking() -> bool:
+	return _dialog != null and is_instance_valid(_dialog) and _dialog.visible
+
+## The reason written so far.
+func reason_text() -> String:
+	return _reason.text if (_reason != null and is_instance_valid(_reason)) else ""
+
+func set_reason_text(text: String) -> void:
+	if _reason != null and is_instance_valid(_reason):
+		_reason.text = text
+
+## Saved with the reason written: the report as it was when asked, the reason at its head; said where it went.
+func confirm() -> String:
+	if not asking():
+		return ""
+	var path: String = _write(_held.get("snapshot", snapshot()), _held.get("picture"), reason_text().strip_edges())
+	_close()
 	var hud = main.get("hud") if (main != null and is_instance_valid(main)) else null
 	if hud != null and is_instance_valid(hud) and hud.has_method("show_hint") and path != "":
 		hud.show_hint(tr("HINT_BUG_REPORT") % ProjectSettings.globalize_path(path), UiTheme.toast_seconds("long"), "info")
 	return path
+
+## Not saved after all: nothing written.
+func cancel() -> void:
+	if asking():
+		_close()
+
+## What was held when asked: {snapshot, picture}.
+var _held: Dictionary = {}
+## The dialog that asks, its reason box, and whether the game was paused before it asked.
+var _dialog: Control = null
+var _reason: TextEdit = null
+var _was_paused: bool = false
+
+func _ask() -> void:
+	if _layer == null or not is_instance_valid(_layer):
+		_add_button()
+	if _dialog == null or not is_instance_valid(_dialog):
+		_build_dialog()
+	_dialog.visible = true
+	_reason.text = ""
+	_reason.grab_focus()
+	var gs = get_node_or_null("/root/GameState")
+	_was_paused = gs != null and bool(gs.is_paused)
+	if gs != null and gs.has_method("set_paused"):
+		gs.set_paused(true)
+
+func _close() -> void:
+	_held = {}
+	if _dialog != null and is_instance_valid(_dialog):
+		_dialog.visible = false
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null and gs.has_method("set_paused") and not _was_paused:
+		gs.set_paused(false)
+
+## A veil over the game and in the middle a card: what this is, a box to write in, and Cancel / Save. Enter
+## saves, Shift+Enter is a new line, Esc cancels -- in the box, before the game hears any of it.
+func _build_dialog() -> void:
+	var root: Control = button.get_parent() as Control if (button != null and is_instance_valid(button)) else null
+	if root == null:
+		return
+	# Anchored with their offsets: put in a laid-out parent first and anchored alone, a control keeps where it
+	# was -- the veil a rect of nothing, the card in the corner (the cabin's keycap, HUD._shoulder_keycap).
+	_dialog = Control.new()
+	_dialog.name = "BugReasonDialog"
+	_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(_dialog)
+	_dialog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# A click on the veil keeps the box writing -- Enter and Esc are the dialog's, never the game's.
+	_dialog.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and e.pressed and _reason != null:
+			_reason.grab_focus())
+	var veil := ColorRect.new()
+	veil.name = "Veil"
+	veil.color = Color(0.0, 0.0, 0.0, float(_cfg().get("dialog_veil", 0.45)))
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dialog.add_child(veil)
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var card := PanelContainer.new()
+	card.name = "Card"
+	card.theme_type_variation = &"ModalPanel"
+	card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_dialog.add_child(card)
+	card.set_anchors_preset(Control.PRESET_CENTER, true)
+	card.offset_left = 0.0
+	card.offset_right = 0.0
+	card.offset_top = 0.0
+	card.offset_bottom = 0.0
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", UiTheme.space("s"))
+	card.add_child(column)
+	var title := Label.new()
+	title.theme_type_variation = &"HeadingLabel"
+	title.text = tr("DEV_BUG_REPORT")
+	column.add_child(title)
+	var prompt := Label.new()
+	prompt.theme_type_variation = &"MutedLabel"
+	prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	prompt.custom_minimum_size.x = float(_cfg().get("dialog_width", 520.0))
+	prompt.text = tr("DEV_BUG_REASON_PROMPT")
+	column.add_child(prompt)
+	_reason = TextEdit.new()
+	_reason.name = "Reason"
+	_reason.placeholder_text = tr("DEV_BUG_REASON_PLACEHOLDER")
+	_reason.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_reason.custom_minimum_size = Vector2(float(_cfg().get("dialog_width", 520.0)), float(_cfg().get("dialog_reason_height", 120.0)))
+	_reason.gui_input.connect(_on_reason_key)
+	column.add_child(_reason)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_END
+	row.add_theme_constant_override("separation", UiTheme.space("s"))
+	column.add_child(row)
+	var no := UiKit.action_button(tr("DEV_BUG_CANCEL"), null, cancel, &"GhostButton")
+	no.name = "CancelButton"
+	row.add_child(no)
+	var yes := UiKit.action_button(tr("DEV_BUG_SAVE"), UiTheme.icon("check"), func() -> void: confirm(), &"AccentButton")
+	yes.name = "SaveButton"
+	row.add_child(yes)
+	# Each as wide as its word: a command trims its word to the width it is given and so asks for none --
+	# Save showed its tick alone, and Cancel, with no icon, was nothing at all (the button above, _add_button).
+	for b in [no, yes]:
+		(b as Button).size_flags_horizontal = Control.SIZE_SHRINK_END
+		(b as Button).text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+
+func _on_reason_key(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var key := event as InputEventKey
+	if (key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER) and not key.shift_pressed:
+		_reason.accept_event()
+		confirm()
+	elif key.keycode == KEY_ESCAPE:
+		_reason.accept_event()
+		cancel()
+
+## A picture of the screen as it is -- or null headless (the tests), where there is nothing to take one of.
+func _screen() -> Image:
+	var tex: Texture2D = get_viewport().get_texture() if (is_inside_tree() and DisplayServer.get_name() != "headless") else null
+	if tex == null:
+		return null
+	var img: Image = tex.get_image()
+	return img if (img != null and not img.is_empty()) else null
 
 ## The report's key as the board writes it: "`" for the key under Esc, a letter for a letter, else its name.
 static func key_text(key: int) -> String:
@@ -110,7 +257,7 @@ func _add_button() -> void:
 	_layer.name = "BugReportLayer"
 	_layer.layer = int(cfg.get("button_layer", 90))
 	add_child(_layer)
-	button = UiKit.action_button(tr("DEV_BUG_REPORT"), UiTheme.icon("warning"), func() -> void: report_now(), &"GhostButton")
+	button = UiKit.action_button(tr("DEV_BUG_REPORT"), UiTheme.icon("warning"), report_now, &"GhostButton")
 	button.name = "BugReportButton"
 	button.tooltip_text = tr("DEV_BUG_REPORT_TIP")
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -178,7 +325,12 @@ func _note(sig: String, args: Array) -> void:
 		_events.pop_front()
 
 ## Writes the report and the picture; returns the report's path ("" if it could not be written).
-func save() -> String:
+func save(reason: String = "") -> String:
+	return _write(snapshot(), _screen(), reason)
+
+## Writes `snap` as a report, `reason` at its head, and `picture` beside it; returns the report's path ("" if it
+## could not be written).
+func _write(snap: Dictionary, picture: Variant, reason: String) -> String:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DIR))
 	# To the millisecond, and never over another: two presses in a second were one report, the second
 	# written over the first (the debug-agent's TASK-027: "文件名只到秒，一秒里按两次，后一份会盖掉前一份").
@@ -192,14 +344,14 @@ func save() -> String:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return ""
-	f.store_string(JSON.stringify(snapshot(), "  "))
+	# What the player said went wrong, first: it is what the rest is read for.
+	var out: Dictionary = {"reason": reason}
+	out.merge(snap)
+	f.store_string(JSON.stringify(out, "  "))
 	f.close()
 	# A picture only where there is a screen: headless (the tests) there is nothing to take one of.
-	var tex: Texture2D = get_viewport().get_texture() if (is_inside_tree() and DisplayServer.get_name() != "headless") else null
-	if tex != null:
-		var img: Image = tex.get_image()
-		if img != null and not img.is_empty():
-			img.save_png(path.replace(".json", ".png"))
+	if picture is Image and not (picture as Image).is_empty():
+		(picture as Image).save_png(path.replace(".json", ".png"))
 	return path
 
 ## Everything, in plain values for JSON.

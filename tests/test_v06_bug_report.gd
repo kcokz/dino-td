@@ -123,8 +123,12 @@ func test_02_its_key_is_one_the_hand_reaches_and_writes_a_report() -> void:
 	press.physical_keycode = key as Key
 	press.pressed = true
 	report._unhandled_input(press)
+	await wait_frames(1)
+	assert_true(report.asking(), "Pressed where it is on the board, it asks what went wrong")
+	report.set_reason_text("(a test's reason)")
+	report.confirm()
 	var files: PackedStringArray = DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
-	assert_gt(files.size(), before, "Pressed where it is on the board, it writes a report")
+	assert_gt(files.size(), before, "and, told, writes a report")
 	for f in files:
 		if f.begins_with("bug-") and FileAccess.get_modified_time(dir.path_join(f)) >= int(Time.get_unix_time_from_system()) - 5:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(f)))
@@ -169,8 +173,11 @@ func test_04_its_button_wears_its_key_and_is_faint_till_the_cursor_is_on_it() ->
 	var dir: String = "user://bugreports"
 	var before: int = DirAccess.get_files_at(dir).size() if DirAccess.dir_exists_absolute(dir) else 0
 	btn.pressed.emit()
+	await wait_frames(1)
+	assert_true(report.asking(), "Pressed, it asks what went wrong, as the key does")
+	report.confirm()
 	var files: PackedStringArray = DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
-	assert_gt(files.size(), before, "Pressed, it writes a report, as the key does")
+	assert_gt(files.size(), before, "and writes a report")
 	for f in files:
 		if f.begins_with("bug-") and FileAccess.get_modified_time(dir.path_join(f)) >= int(Time.get_unix_time_from_system()) - 5:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(f)))
@@ -220,6 +227,72 @@ func test_05_the_release_build_leaves_it_out() -> void:
 				if at >= 0 and not (at > 0 and (code[at - 1] == "_" or code[at - 1].is_valid_identifier())):
 					named.append("%s: %s" % [path, line.strip_edges()])
 	assert_eq(named.size(), 0, "No shipped script names one in its code: %s" % "; ".join(named))
+
+func test_06_it_asks_what_went_wrong_and_the_report_says_it() -> void:
+	# The player, 2026-10-01: "我点bug report的时候还应该有个对话框可以填写原因，然后也记录到bug report中".
+	var main = await _level()
+	var report: BugReport = main.get_node_or_null("BugReport") as BugReport
+	if not OS.is_debug_build():
+		assert_null(report, "A release has no bug report")
+		return
+	assert_not_null(report, "(a development build has the bug report)")
+	if report == null:
+		return
+	await wait_frames(2)
+	var dir: String = "user://bugreports"
+	var count := func() -> int: return DirAccess.get_files_at(dir).size() if DirAccess.dir_exists_absolute(dir) else 0
+	var gs = tree.root.get_node("GameState")
+	assert_false(bool(gs.is_paused), "(the game running)")
+	report.report_now()
+	await wait_frames(1)
+	assert_true(report.asking(), "Asked what went wrong")
+	assert_true(bool(gs.is_paused), "and the game waits while it is written")
+	var before: int = count.call()
+	# Changed its mind: nothing written, and the game goes on.
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	report._on_reason_key(esc)
+	assert_false(report.asking(), "Esc: not asked any more")
+	assert_eq(count.call(), before, "and nothing written")
+	assert_false(bool(gs.is_paused), "and the game going on again")
+	# Asked again, and told: Enter saves, the reason at the report's head.
+	report.report_now()
+	await wait_frames(1)
+	var reason: String = "the phytosaur stands at the firelight's edge and does not bite back"
+	report.set_reason_text(reason)
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	report._on_reason_key(enter)
+	assert_false(report.asking(), "Enter saves it")
+	assert_false(bool(gs.is_paused), "and the game goes on")
+	var newest: String = ""
+	var newest_time: int = -1
+	for f in DirAccess.get_files_at(dir):
+		if f.begins_with("bug-") and f.ends_with(".json") and FileAccess.get_modified_time(dir.path_join(f)) >= newest_time:
+			newest_time = FileAccess.get_modified_time(dir.path_join(f))
+			newest = dir.path_join(f)
+	assert_ne(newest, "", "(the report)")
+	if newest != "":
+		var text: String = FileAccess.get_file_as_string(newest)
+		var got = JSON.parse_string(text)
+		assert_true(got is Dictionary and String(got.get("reason", "")) == reason, "The reason is in the report")
+		assert_true(text.find("\"reason\"") < text.find("\"report\""), "at its head, before the rest")
+		assert_true(got is Dictionary and got.has("hero") and got.has("dinos"), "with the game's state as it was")
+	# Shift+Enter is a new line, not a save.
+	report.report_now()
+	await wait_frames(1)
+	var shift_enter := InputEventKey.new()
+	shift_enter.keycode = KEY_ENTER
+	shift_enter.shift_pressed = true
+	shift_enter.pressed = true
+	report._on_reason_key(shift_enter)
+	assert_true(report.asking(), "Shift+Enter does not save")
+	report.cancel()
+	for f in DirAccess.get_files_at(dir):
+		if f.begins_with("bug-") and FileAccess.get_modified_time(dir.path_join(f)) >= int(Time.get_unix_time_from_system()) - 5:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(f)))
 
 func _scripts_under(dir: String) -> Array[String]:
 	var out: Array[String] = []
