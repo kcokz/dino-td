@@ -1088,8 +1088,8 @@ const DINOS: Dictionary = {
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 0.9, 0.8),   # head at the Hero's chest, three times his length
-		# No voice of its own yet: a small theropod's chitters, the Coelophysis's (SOUNDS).
-		"voice": "coelophysis",
+		# A voice of its own (SOUNDS): a rattling chatter, a goose's honk -- a feathered dromaeosaur's.
+		"voice": "velociraptor",
 	},
 	# The head of the pack (GAME-DESIGN 7.5): a bigger, harder raptor at the front of every
 	# big wave -- the same habit and the same body width as the rest (it has to fit the
@@ -1105,7 +1105,8 @@ const DINOS: Dictionary = {
 		"boss": "minor",
 		"drops": {"prime_meat": 1, "bone": 2},
 		"size": Vector3(0.8, 1.15, 0.8),
-		"voice": "coelophysis_alpha",
+		# Its pack's throat, bigger (SOUNDS).
+		"voice": "velociraptor_alpha",
 	},
 	# The map's boss (GAME-DESIGN 7.5: comes once in the middle of the game, on the map's
 	# beat, and last of all in the beacon's final wave). Hard enough that a trap or two is
@@ -1120,8 +1121,9 @@ const DINOS: Dictionary = {
 		"boss": "major",
 		"drops": {"prime_meat": 3, "bone": 4},
 		"size": Vector3(1.6, 3.0, 1.6),   # two and a half times the Hero's height
-		# No voice of its own yet: the other great hunter's growl, Postosuchus's (SOUNDS).
-		"voice": "postosuchus",
+		# A voice of its own (SOUNDS): a closed-mouth boom, not the films' roar -- its kin, the crocodiles and
+		# the big ground birds, call with the mouth shut.
+		"voice": "tyrannosaurus",
 	},
 	# THE FIRST MAP'S CAST (GAME-DESIGN 7.2, station 1: the Late Triassic, the Chinle Formation,
 	# v0.6 round three: "第一关还应该是三叠纪"). The raptor, its alpha and the big theropod stay for
@@ -1238,8 +1240,8 @@ const DINOS: Dictionary = {
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
 		"size": Vector3(0.8, 2.2, 0.8),
-		# No voice of its own yet: a thin rasp, Hesperosuchus's (SOUNDS).
-		"voice": "hesperosuchus",
+		# A voice of its own (SOUNDS): a heron's croak through a long bill.
+		"voice": "pterosaur",
 	}
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
@@ -2581,6 +2583,33 @@ const SOUNDS: Dictionary = {
 		"hesperosuchus_death": {"files": ["hesperosuchus_death"], "db": -5.0, "pitch": 1.04, "class": "death", "unit": 6.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
+		# THE LATE CRETACEOUS (a custom game's age), each a voice of its own (tools/build_sounds.gd) -- they
+		# borrowed the Late Triassic's till now. Heard as far as the Late Triassic's of their size.
+		# Velociraptor: a feathered dromaeosaur -- a rattling chatter, a goose's honk, a hiss into a screech.
+		"velociraptor_call":  {"files": ["velociraptor_call_1", "velociraptor_call_2"], "db": -5.0, "pitch": 1.1, "class": "call"},
+		"velociraptor_alert": {"files": ["velociraptor_alert"], "db": -3.0, "pitch": 1.08, "class": "alert"},
+		"velociraptor_bite":  {"files": ["velociraptor_bite_1", "velociraptor_bite_2"], "db": -4.0, "pitch": 1.1, "class": "bite"},
+		"velociraptor_hurt":  {"files": ["velociraptor_hurt"], "db": -4.0, "pitch": 1.08, "class": "hurt"},
+		"velociraptor_death": {"files": ["velociraptor_death"], "db": -2.0, "pitch": 1.06, "class": "death"},
+		# Its leader: the same throat, bigger -- a fourth lower, a longer, rougher honk; heard further.
+		"velociraptor_alpha_call":  {"files": ["velociraptor_alpha_call_1", "velociraptor_alpha_call_2"], "db": -3.0, "pitch": 1.05, "class": "call", "unit": 10.0},
+		"velociraptor_alpha_alert": {"files": ["velociraptor_alpha_alert"], "db": 0.0, "pitch": 1.03, "class": "boss", "unit": 22.0, "reach": 140.0},
+		"velociraptor_alpha_bite":  {"files": ["velociraptor_alpha_bite"], "db": -3.0, "pitch": 1.06, "class": "bite"},
+		"velociraptor_alpha_hurt":  {"files": ["velociraptor_alpha_hurt"], "db": -3.0, "pitch": 1.05, "class": "hurt"},
+		"velociraptor_alpha_death": {"files": ["velociraptor_alpha_death"], "db": 0.0, "pitch": 1.03, "class": "death", "unit": 12.0},
+		# Tyrannosaurus: a closed-mouth boom, below Postosuchus's bellow; its arrival heard across the valley.
+		"tyrannosaurus_call":  {"files": ["tyrannosaurus_call_1", "tyrannosaurus_call_2"], "db": 1.0, "pitch": 1.04, "class": "call", "unit": 18.0, "reach": 130.0},
+		"tyrannosaurus_alert": {"files": ["tyrannosaurus_alert"], "db": -1.0, "pitch": 1.04, "class": "alert", "unit": 12.0},
+		"tyrannosaurus_roar":  {"files": ["tyrannosaurus_roar"], "db": 3.0, "pitch": 1.0, "class": "boss", "unit": 45.0, "reach": 220.0},
+		"tyrannosaurus_bite":  {"files": ["tyrannosaurus_bite"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
+		"tyrannosaurus_hurt":  {"files": ["tyrannosaurus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
+		"tyrannosaurus_death": {"files": ["tyrannosaurus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
+		# The azhdarchid: a heron's croak through a two-metre bill, a screech, the bill clacked shut.
+		"pterosaur_call":  {"files": ["pterosaur_call_1", "pterosaur_call_2"], "db": -5.0, "pitch": 1.06, "class": "call", "unit": 8.0, "reach": 70.0},
+		"pterosaur_alert": {"files": ["pterosaur_alert"], "db": -4.0, "pitch": 1.06, "class": "alert", "unit": 7.0},
+		"pterosaur_bite":  {"files": ["pterosaur_bite"], "db": -5.0, "pitch": 1.08, "class": "bite", "unit": 5.0},
+		"pterosaur_hurt":  {"files": ["pterosaur_hurt"], "db": -5.0, "pitch": 1.06, "class": "hurt", "unit": 5.0},
+		"pterosaur_death": {"files": ["pterosaur_death"], "db": -3.0, "pitch": 1.04, "class": "death", "unit": 8.0},
 		# His work.
 		"chop":     {"files": ["chop_1", "chop_2", "chop_3"], "db": -7.0, "pitch": 1.06, "class": "work"},
 		"quarry":   {"files": ["quarry_1", "quarry_2", "quarry_3"], "db": -9.0, "pitch": 1.06, "class": "work"},
@@ -2647,6 +2676,8 @@ const NEST_GUARDS: Dictionary = {
 	# 腔骨龙是白天）就在岗位上趴下睡。人走到离它这么近（米，中心到中心）、火光照到它（篝火、火盆、他手里的火把，
 	# 和植龙怕的是同一些光）、挨了打、或者附近残骸翻找的响声，才醒；醒了只有它自己醒——同伴的叫声叫不醒睡着的，
 	# 所以一只一只地来。醒了以后没事这么多秒（秒）才又趴下；追过人、示过威以后也从头算。
+	# 刚醒的那一次示威一定做完整（debug-agent BUG-023："叫醒的守卫不示威，直接扑"）：被吵醒的守卫就在人旁边，
+	# threat_close 管不了它——醒着的守卫是人自己走近了，睡着的是被他吵醒的。人停手走开，它就作罢。
 	"wake_within": 2.0,
 	"stay_up": 20.0,
 	# 巢穴附近的建筑多近才会去咬（占警戒半径的比例）
@@ -2854,6 +2885,11 @@ const DAY: Dictionary = {
 	# How often the sky's own colours are set again, in seconds: a change of them redraws the sky,
 	# and the day changes it slowly enough not to see a step.
 	"sky_every": 0.5,
+	# A game without the night (CUSTOM_GAME "night") leaps from dusk to the next morning; the light goes
+	# the long way round, through the evening and the night, in this many seconds (GameState.light_time)
+	# -- the night as a time-lapse, over before a raid could notice it -- instead of from the afternoon's
+	# light to the morning's in one frame (TASK-033: "灯光会不会一下跳变得很难看").
+	"leap_seconds": 3.0,
 }
 
 ## The fog of war (FogOfWar, GAME-DESIGN 9.3; v0.6 round three: "游戏要加上战争迷雾，人不能一开始就知道

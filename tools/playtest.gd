@@ -954,7 +954,9 @@ func _scenario_siege(spec: String) -> void:
 		gs.day_clock = minf(float(gs.day_clock), 150.0)
 		if seconds % 5 == 0:
 			print("[siege] %3ds %s" % [seconds, _raid_minds(stakes)])
-		if (seconds == 15 or seconds == 60) and OS.has_environment("SIEGE_DEBUG"):
+		# The seconds to print every animal's mind at: SIEGE_DEBUG="15,60" (any value but a list: 15 and 60).
+		var at_seconds: PackedStringArray = OS.get_environment("SIEGE_DEBUG").split(",") if OS.has_environment("SIEGE_DEBUG") else PackedStringArray()
+		if OS.has_environment("SIEGE_DEBUG") and (at_seconds.has(str(seconds)) or (not OS.get_environment("SIEGE_DEBUG").contains(",") and (seconds == 15 or seconds == 60))):
 			var cpos: Vector3 = _main.current_core.global_position
 			for d in get_nodes_in_group("dinos"):
 				if not is_instance_valid(d) or d.is_in_group("guard_dinos") or d.is_dead:

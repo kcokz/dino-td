@@ -241,6 +241,24 @@ func test_11_no_night() -> void:
 	assert_eq(int(game_state_node.day_number()), day + 1, "the next day's")
 	assert_almost_eq(float(game_state_node.time_of_day()), float(config_node.DAY.get("start", 0.0)), 0.001, "at its first light")
 	assert_lt(float(game_state_node.day_clock), float(day + 1) * length, "(the clock where that is)")
+	# The light goes the long way round (TASK-033: "灯光会不会一下跳变得很难看"): the evening and the night as a
+	# time-lapse over DAY.leap_seconds, not the afternoon's light to the morning's in a frame.
+	var leap: float = float(config_node.DAY["leap_seconds"])
+	assert_true(game_state_node.light_leaping(), "The light has hours to catch up")
+	assert_lt(fposmod(float(game_state_node.light_time()) - float(parts["dusk"]), length), 2.0,
+		"It is still the dusk's light (%.1f)" % float(game_state_node.light_time()))
+	var lights: Array = config_node.DAY["light"]
+	var darkest: float = INF
+	var steps: int = 30
+	for i in steps:
+		game_state_node._run_the_day(leap / float(steps))
+		var now: Dictionary = SceneEnvironment.light_at(lights, length, float(game_state_node.light_time()))
+		darkest = minf(darkest, float(now["sun_energy"]))
+	var night_light: float = float(SceneEnvironment.light_at(lights, length, float(parts["night"]) + 30.0)["sun_energy"])
+	assert_almost_eq(darkest, night_light, 0.05, "through the night's light on its way (%.2f)" % darkest)
+	assert_false(game_state_node.light_leaping(), "and caught up in %.1f s" % leap)
+	assert_almost_eq(float(game_state_node.light_time()), float(game_state_node.time_of_day()), 0.01, "the light the clock's again")
+	assert_eq(String(game_state_node.day_part()), "day", "(the clock never went through the dusk or the night)")
 
 func test_12_a_custom_game_does_not_teach() -> void:
 	_play("custom", {"map": "small"})

@@ -371,3 +371,34 @@ func test_15_a_model_is_read_from_disk_once() -> void:
 	body.free()
 	# No raptor anywhere now.
 	assert_true(ResourceLoader.has_cached(path), "Its model is still in memory for the next one")
+
+func test_16_a_level_reads_its_cast_ahead() -> void:
+	# The first of a species to come out of the nest stalled the game a seventh of a second reading its model
+	# and skin from disk. A level now reads every animal its run can field on the engine's loading threads as
+	# it is built (Main._warm_the_cast, VisualLibrary.warm): by the time one is made, it is in memory.
+	var main = await fresh_level()
+	_keep(main)
+	main.wave_manager.auto_raid_enabled = false
+	var map: Dictionary = game_state_node.map_data()
+	var cast: Array[String] = []
+	for id in (map.get("raiders", {}) as Dictionary):
+		cast.append(String(id))
+	for later in map.get("raiders_by_day", []):
+		for id in (later.get("raiders", {}) as Dictionary):
+			if not cast.has(String(id)):
+				cast.append(String(id))
+	for key in ["guards", "minor_boss", "boss"]:
+		if String(map.get(key, "")) != "" and not cast.has(String(map[key])):
+			cast.append(String(map[key]))
+	for id in (map.get("prowlers", {}) as Dictionary):
+		if not cast.has(String(id)):
+			cast.append(String(id))
+	assert_gt(cast.size(), 3, "(the run fields several species: %s)" % ", ".join(cast))
+	var frames: int = 0
+	while VisualLibrary.warming() and frames < 600:
+		await wait_frames(1)
+		frames += 1
+	assert_false(VisualLibrary.warming(), "Read within a few seconds of the level being built (%d frames)" % frames)
+	for id in cast:
+		var path: String = VisualLibrary.declared_scene("dino/%s" % id)
+		assert_true(ResourceLoader.has_cached(path), "%s is in memory before the first of them comes out" % id)

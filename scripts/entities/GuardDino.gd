@@ -70,6 +70,8 @@ var _calm: float = 0.0
 ## Seconds of warning left (THREATENING), and of the snap at the air it warns with.
 var _threat_left: float = 0.0
 var _snap_left: float = 0.0
+## Woken from its sleep and warning him off: the whole warning, however near he is (wake).
+var _roused: bool = false
 ## Seconds it stays up, woken out of its hours, before it lies down again (NEST_GUARDS.stay_up).
 var _up_for: float = 0.0
 
@@ -175,7 +177,7 @@ func _guard_think() -> void:
 				var gap: float = _nearest_warning_gap(chase_target)
 				if gap > aggro_radius + float(_guards().get("calm_margin", 1.0)):
 					_stand_down()
-				elif gap <= float(_guards().get("threat_close", 3.0)) or _threat_left <= 0.0:
+				elif (gap <= float(_guards().get("threat_close", 3.0)) and not _roused) or _threat_left <= 0.0:
 					_begin_chase(chase_target)
 		GuardState.AGGRO_CHASE, GuardState.ATTACKING:
 			if not _is_threat_valid(chase_target) or not _worth_chasing(chase_target) \
@@ -186,6 +188,7 @@ func _guard_think() -> void:
 func _begin_chase(threat: Node3D, call_the_others: bool = true) -> void:
 	chase_target = threat
 	current_target = threat
+	_roused = false
 	guard_state = GuardState.AGGRO_CHASE
 	current_state = State.WALKING
 	_headway_clock = 0.0
@@ -246,6 +249,7 @@ func _nearest_warning_gap(threat: Node3D) -> float:
 func _stand_down() -> void:
 	chase_target = null
 	current_target = null
+	_roused = false
 	guard_state = GuardState.POST_ROAM
 	roam_timer = 0.0
 	_calm = float(_guards().get("reaggro_seconds", 1.5))
@@ -347,6 +351,13 @@ func _stirred() -> bool:
 ## Woken -- by the Hero beside it, a light on it, the din of a wreck searched near it: up for a while
 ## (NEST_GUARDS.stay_up), and, `by` the Hero where it can get at him, warning him off -- alone: the
 ## rest of its nest sleeps on. Nothing asleep, nothing to do.
+##
+## THE WHOLE WARNING, however near he is (the debug-agent's BUG-023: "叫醒的守卫不示威，直接扑"). A guard
+## up and about comes at once for a man closer than NEST_GUARDS.threat_close -- he walked up to it -- but one
+## woken where it lay is woken right beside him: the battery's wreck lies four metres behind the nest, and a
+## guard roused by the din of its search bit without a warning, where by day the same guard stands, snaps and
+## lets a man who backs off be. Woken, it stands and warns him off for its threat_seconds first: he stops and
+## goes, and it lets him be; he searches on, or strikes it, and it comes (take_damage).
 func wake(by: Node3D = null) -> void:
 	if is_dead or guard_state != GuardState.SLEEPING:
 		return
@@ -354,6 +365,7 @@ func wake(by: Node3D = null) -> void:
 	_get_up()
 	if by != null and _is_threat_valid(by) and _worth_chasing(by) and _can_get_at(by):
 		_begin_threat(by, false)
+		_roused = true
 
 func _go_home() -> void:
 	chase_target = null

@@ -381,7 +381,7 @@ func night_mix() -> float:
 	var cfg = get_node_or_null("/root/Config")
 	if gs == null or cfg == null or not gs.has_method("time_of_day") or not ("DAY" in cfg):
 		return 0.0
-	var t: float = float(gs.time_of_day())
+	var t: float = float(gs.light_time()) if gs.has_method("light_time") else float(gs.time_of_day())
 	var dusk: float = float(cfg.DAY["parts"].get("dusk", 240.0))
 	var fade: Array = _sounds_table().get("night_fade", [50.0, 30.0])
 	if t >= dusk:

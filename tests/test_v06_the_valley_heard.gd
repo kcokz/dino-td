@@ -116,6 +116,36 @@ func test_02_the_voices_are_told_apart_by_ear() -> void:
 	var herd: float = _brightness(String(config_node.HERDS["herds"][0]["species"]) + "_call")
 	assert_ne(snappedf(herd, 100.0), snappedf(small, 100.0), "The grazers sound like neither")
 
+func test_02b_every_animal_of_every_age_has_a_voice_of_its_own() -> void:
+	# The Late Cretaceous (a custom game's age) borrowed the Late Triassic's voices -- the raptor the
+	# Coelophysis's chitter, the tyrannosaur Postosuchus's bellow (TASK-033); each has its own now.
+	var table: Dictionary = config_node.SOUNDS
+	var sounds: Dictionary = table["sounds"]
+	var whose: Dictionary = {}
+	for species in config_node.DINOS:
+		var d = _animal(String(species), Vector3(30.0, 0.0, 30.0))
+		var v: String = String(d.voice())
+		assert_false(whose.has(v), "%s has a voice of its own, not %s's (%s)" % [species, whose.get(v, ""), v])
+		whose[v] = species
+		var kinds: Array = ["call", "alert", "bite", "hurt", "death"]
+		if String(config_node.DINOS[species].get("boss", "")) == "major":
+			kinds.append("roar")
+		for kind in kinds:
+			assert_true(sounds.has(v + "_" + kind), "%s has a %s" % [species, kind])
+			for f in sounds.get(v + "_" + kind, {}).get("files", []):
+				assert_true(ResourceLoader.exists(String(table["dir"]) + String(f) + ".wav"), "(%s is made)" % f)
+	# Told apart by ear as the Late Triassic's are: the small hunter well above its leader, its leader far
+	# above the age's great hunter -- and that one the deepest thing in the game.
+	var cast: Dictionary = config_node.custom_choice("era", "late_cretaceous")["map"]
+	var small: float = _brightness(String(_animal(String(cast["raiders"].keys()[0]), Vector3(30.0, 0.0, 34.0)).voice()) + "_call")
+	var leader: float = _brightness(String(_animal(String(cast["minor_boss"]), Vector3(30.0, 0.0, 36.0)).voice()) + "_call")
+	var boss_voice: String = String(_animal(String(cast["boss"]), Vector3(30.0, 0.0, 38.0)).voice())
+	var boss: float = _brightness(boss_voice + "_call")
+	assert_gt(small, leader * 1.3, "The raptor is well above its leader (%.0f vs %.0f)" % [small, leader])
+	assert_gt(leader, boss * 3.0, "and its leader far above the tyrannosaur (%.0f vs %.0f)" % [leader, boss])
+	assert_lt(_brightness(boss_voice + "_roar"), _brightness(String(config_node.map_data()["boss"]) + "_roar"),
+		"whose roar is below even Postosuchus's")
+
 # ==============================================================================
 # 2. They are heard doing what they do
 # ==============================================================================

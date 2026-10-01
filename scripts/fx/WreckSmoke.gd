@@ -110,7 +110,7 @@ func _tint() -> void:
 	if _material == null or cfg == null or not ("DAY" in cfg) or gs == null or not gs.has_method("time_of_day"):
 		return
 	var now: Dictionary = SceneEnvironment.light_at(cfg.DAY.get("light", []), float(cfg.DAY.get("length", 360.0)),
-		float(gs.time_of_day()))
+		float(gs.light_time()) if gs.has_method("light_time") else float(gs.time_of_day()))
 	var k: float = clampf(float(now.get("sun_energy", 1.0)) * _light.x + float(now.get("ambient_energy", 0.5)) * _light.y, 0.05, 1.0)
 	_material.albedo_color = Color(k, k, k)
 

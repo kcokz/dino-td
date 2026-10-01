@@ -92,6 +92,8 @@ static func has_art(key: String) -> bool:
 ## models are few and a game draws every one of them sooner or later, so keeping them
 ## costs nothing worth counting.
 static var _scenes: Dictionary = {}
+## The scenes asked for ahead (warm), loading on the engine's own threads until they are taken in.
+static var _coming: Dictionary = {}
 
 static func scene_at(path: String) -> PackedScene:
 	if path == "":
@@ -99,12 +101,54 @@ static func scene_at(path: String) -> PackedScene:
 	var kept: PackedScene = _scenes.get(path)
 	if kept != null:
 		return kept
+	# Asked for ahead: the engine's thread has it, or is still at it -- then this waits only for the rest.
+	if _coming.has(path):
+		_coming.erase(path)
+		var warmed := ResourceLoader.load_threaded_get(path) as PackedScene
+		if warmed != null:
+			_scenes[path] = warmed
+			return warmed
 	if not ResourceLoader.exists(path):
 		return null
 	var packed := load(path) as PackedScene
 	if packed != null:
 		_scenes[path] = packed
 	return packed
+
+## Starts reading the art for `keys` on the engine's loading threads (ResourceLoader.load_threaded_request),
+## so the first thing made from it does not wait on the disk. A dinosaur is a model and its skin -- four files
+## -- and the first of a species to come out of the nest stalled the game a seventh of a second reading them
+## (on the WSL share every file opened costs some 20 ms). Asked for when a level is built, for the animals its
+## run can field (Main._warm_the_cast).
+static func warm(keys: Array) -> void:
+	for key in keys:
+		var path: String = declared_scene(String(key))
+		if path == "" or _scenes.has(path) or _coming.has(path) or not ResourceLoader.exists(path):
+			continue
+		if ResourceLoader.load_threaded_request(path, "PackedScene") == OK:
+			_coming[path] = true
+
+## Takes in what the loading threads have finished, so nothing is left with them: a load asked for and never
+## taken is held by the loader to the end. Called every frame while any is coming (Main._process).
+static func take_warmed() -> void:
+	if _coming.is_empty():
+		return
+	for path in _coming.keys():
+		var status: int = ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			continue
+		_coming.erase(path)
+		# Finished, or failed: either way taken off the loader's hands (a failed one is loaded again, plainly,
+		# when it is wanted). One the loader has no word of is nothing to take.
+		if status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			continue
+		var warmed: PackedScene = ResourceLoader.load_threaded_get(path) as PackedScene
+		if warmed != null:
+			_scenes[path] = warmed
+
+## Whether any art asked for ahead is still on its way.
+static func warming() -> bool:
+	return not _coming.is_empty()
 
 ## Scales and shifts `art` so that it occupies exactly `size` metres and sits on the
 ## ground the way `anchor` says.

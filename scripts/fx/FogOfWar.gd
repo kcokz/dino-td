@@ -141,7 +141,7 @@ func mist_lift() -> float:
 	if cfg == null or not ("DAY" in cfg) or gs == null or not gs.has_method("time_of_day"):
 		return 1.0
 	var now: Dictionary = SceneEnvironment.light_at(cfg.DAY.get("light", []), float(cfg.DAY.get("length", 360.0)),
-		float(gs.time_of_day()))
+		float(gs.light_time()) if gs.has_method("light_time") else float(gs.time_of_day()))
 	return float(now.get("mist", 1.0))
 
 ## What the mist is, said once a moment into the run (Config.FOG.hint_after): mist that is the

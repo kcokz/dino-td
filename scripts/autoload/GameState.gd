@@ -368,6 +368,7 @@ func reset_game(p_seed: int = -1) -> void:
 	# The run lands in its first morning (Config.DAY.start).
 	day_clock = float(_day().get("start", 0.0))
 	_day_part = day_part()
+	_light_behind = 0.0
 
 	var time_cfg: Dictionary = cfg.get("TIME") if (cfg and "TIME" in cfg and cfg.TIME is Dictionary) else {}
 	deploy_length = float(time_cfg.get("deploy_length", 90.0))
@@ -1004,6 +1005,23 @@ func _day() -> Dictionary:
 func time_of_day() -> float:
 	return fposmod(day_clock, float(_day().get("length", 360.0)))
 
+## How far behind the clock the light is (seconds of the day), and how fast it catches up (seconds of the
+## day a second): see light_time.
+var _light_behind: float = 0.0
+var _light_rate: float = 0.0
+
+## The hour the light shows -- the sun and the sky (SceneEnvironment), the mist (FogOfWar), the smoke
+## (WreckSmoke), the night's sounds (Fx) -- the clock's own, but where the clock leaps over hours, the light
+## goes through them: a game without the night leaps from dusk to the next morning (_run_the_day), and its
+## light goes the long way round, the evening and the night as a time-lapse over Config.DAY.leap_seconds,
+## not from the afternoon's to the morning's in a frame. What the hours mean to the animals is the clock's.
+func light_time() -> float:
+	return fposmod(time_of_day() - _light_behind, float(_day().get("length", 360.0)))
+
+## Whether the light is still catching up with a leap of the clock.
+func light_leaping() -> bool:
+	return _light_behind > 0.0
+
 ## Which day of the run it is, the first being 1.
 func day_number() -> int:
 	return int(floor(day_clock / float(_day().get("length", 360.0)))) + 1
@@ -1026,11 +1044,17 @@ func day_part() -> String:
 ## next morning. With the rescue coming (the "rescue" goal), the first light after the last day brings it.
 func _run_the_day(delta: float) -> void:
 	day_clock += delta / maxf(0.05, run_scale("day_length"))
+	if _light_behind > 0.0:
+		_light_behind = maxf(0.0, _light_behind - _light_rate * delta)
 	if not rule("night"):
 		var parts: Dictionary = _day().get("parts", {})
 		var length: float = float(_day().get("length", 360.0))
 		if parts.has("dusk") and time_of_day() >= float(parts["dusk"]):
+			var was: float = time_of_day()
 			day_clock = float(day_number()) * length + float(_day().get("start", 0.0))
+			# The light goes the long way round (light_time).
+			_light_behind += fposmod(time_of_day() - was, length)
+			_light_rate = _light_behind / maxf(0.1, float(_day().get("leap_seconds", 3.0)))
 	if goal_kind() == "rescue" and rescue_days() > 0 and day_number() > rescue_days() and not is_game_over:
 		_emit_game_won()
 	var part: String = day_part()

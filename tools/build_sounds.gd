@@ -28,6 +28,21 @@ extends SceneTree
 ##   Hesperosuchus a metre of quick early crocodylomorph: short raspy barks, a thin hiss with a rattle
 ##                 in it, a light snap -- a small hunter's, not a big one's pitched up.
 ##
+## The Late Cretaceous (a custom game's age, CUSTOM_GAME "age"), each its own -- they borrowed the Late
+## Triassic's voices till now:
+##
+##   Velociraptor  a fifteen-kilo dromaeosaur, feathered, a cousin of the birds: a throat about the
+##                 Coelophysis's size, hoarser -- a rattling chatter, a goose's honk, a hiss that breaks into
+##                 a screech -- told from the Coelophysis by its rattle and its honk, not by its height.
+##   its leader    the same throat, bigger: a fourth lower, a longer, rougher honk.
+##   Tyrannosaurus nine tonnes of tyrannosaurid -- and not the films' open-mouthed roar: its living kin, the
+##                 crocodiles and the big ground birds, call with the mouth shut. A deep closed-mouth boom,
+##                 below Postosuchus's bellow and smooth where that is rough, its sub-octave felt as much as
+##                 heard; a long rumbling boom to come in with; a huff for a warning; a jaw that is the
+##                 heaviest thing in the valley.
+##   the azhdarchid a stork's build and a two-metre bill: a heron's or a crane's harsh croak, a screech, the
+##                 bill clacked shut -- nothing like a theropod's.
+##
 ## And the river broken: something heavy coming up out of it onto the bank (river_splash) -- how a
 ## phytosaur is heard landing in the dark, from the side it lands on.
 ##
@@ -380,6 +395,209 @@ func _s_placerias_call_2() -> PackedFloat32Array:
 
 func _s_placerias_call_3() -> PackedFloat32Array:
 	return _space(_grunts(2, 108.0, 0.34, 0.3), 0.1, [])
+
+# ==============================================================================
+# Velociraptor: a feathered dromaeosaur -- a rattling chatter, a goose's honk, a hiss into a screech
+# ==============================================================================
+
+const RAPTOR_FORMANTS: Array = [[980.0, 5.0, 1.0], [2200.0, 6.0, 0.5], [3400.0, 7.0, 0.22]]
+
+func _s_velociraptor_call_1() -> PackedFloat32Array:
+	# A rattling chatter: "k-k-k-krrr", a buzz through it.
+	return _voice({"dur": 0.55, "f0": [[0.0, 470.0], [0.3, 520.0], [1.0, 400.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.75, 0.8], [1.0, 0.0]], "formants": RAPTOR_FORMANTS,
+		"trill": [32.0, 0.85], "rough": 0.35, "rough_am": [11.0, 0.3], "breath": 0.25, "tilt": 3000.0, "jitter": 0.03})
+
+func _s_velociraptor_call_2() -> PackedFloat32Array:
+	# A goose's honk, twice: "hronk -- hronk".
+	var out := _buf(0.75)
+	for i in 2:
+		_mix(out, _voice({"dur": 0.22, "f0": [[0.0, 380.0 + 40.0 * i], [0.5, 430.0 + 40.0 * i], [1.0, 360.0]],
+			"amp": [[0.0, 0.0], [0.15, 1.0], [0.7, 0.8], [1.0, 0.0]], "formants": RAPTOR_FORMANTS,
+			"rough": 0.3, "breath": 0.15, "tilt": 2600.0, "nasal": 0.45}), 0.03 + 0.3 * i, 1.0 - 0.1 * i)
+	return out
+
+func _s_velociraptor_alert() -> PackedFloat32Array:
+	# Seen something: a hiss that breaks into a rattling screech.
+	var out := _buf(0.8)
+	_mix(out, _hiss(0.3, [[0.0, 2600.0], [1.0, 3300.0]], 2.5, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.2]]), 0.0, 0.55)
+	_mix(out, _voice({"dur": 0.5, "f0": [[0.0, 520.0], [0.3, 760.0], [1.0, 600.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.7, 0.9], [1.0, 0.0]], "formants": RAPTOR_FORMANTS,
+		"trill": [36.0, 0.6], "rough": 0.4, "breath": 0.3, "tilt": 3800.0}), 0.22, 1.0)
+	return out
+
+func _s_velociraptor_bite_1() -> PackedFloat32Array:
+	return _snap(1.05, 0.15)
+
+func _s_velociraptor_bite_2() -> PackedFloat32Array:
+	return _snap(1.16, 0.1)
+
+func _s_velociraptor_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.3, "f0": [[0.0, 820.0], [0.2, 880.0], [1.0, 520.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": RAPTOR_FORMANTS,
+		"rough": 0.5, "trill": [30.0, 0.4], "breath": 0.3, "tilt": 3800.0})
+
+func _s_velociraptor_death() -> PackedFloat32Array:
+	# A squawk falling away into a rattle.
+	var out := _buf(1.0)
+	_mix(out, _voice({"dur": 0.8, "f0": [[0.0, 700.0], [0.3, 600.0], [1.0, 210.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.7], [1.0, 0.0]], "formants": RAPTOR_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.8]], "trill": [24.0, 0.5], "rough": 0.5, "breath": 0.35, "tilt": 2800.0}), 0.0, 1.0)
+	_mix(out, _hiss(0.4, [[0.0, 1700.0], [1.0, 1100.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.55, 0.25)
+	return out
+
+# ==============================================================================
+# Its leader: the same throat, bigger -- a fourth lower, a longer, rougher honk
+# ==============================================================================
+
+const RAPTOR_ALPHA_FORMANTS: Array = [[740.0, 5.0, 1.0], [1700.0, 6.0, 0.55], [2650.0, 7.0, 0.25]]
+
+func _s_velociraptor_alpha_call_1() -> PackedFloat32Array:
+	# A long honk that cracks into a rattle.
+	return _space(_voice({"dur": 0.75, "f0": [[0.0, 290.0], [0.35, 330.0], [1.0, 250.0]],
+		"amp": [[0.0, 0.0], [0.08, 1.0], [0.7, 0.85], [1.0, 0.0]], "formants": RAPTOR_ALPHA_FORMANTS,
+		"rough": 0.55, "rough_am": [14.0, 0.4], "trill": [26.0, 0.35], "breath": 0.2, "tilt": 2400.0, "nasal": 0.4}), 0.08, [])
+
+func _s_velociraptor_alpha_call_2() -> PackedFloat32Array:
+	# "hronk -- hronk -- krrr".
+	var out := _buf(1.1)
+	for i in 2:
+		_mix(out, _voice({"dur": 0.28, "f0": [[0.0, 270.0 + 25.0 * i], [0.5, 310.0 + 25.0 * i], [1.0, 250.0]],
+			"amp": [[0.0, 0.0], [0.15, 1.0], [0.7, 0.8], [1.0, 0.0]], "formants": RAPTOR_ALPHA_FORMANTS,
+			"rough": 0.45, "breath": 0.18, "tilt": 2200.0, "nasal": 0.5}), 0.03 + 0.34 * i, 1.0)
+	_mix(out, _voice({"dur": 0.3, "f0": [[0.0, 300.0], [1.0, 240.0]], "amp": [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]],
+		"formants": RAPTOR_ALPHA_FORMANTS, "trill": [30.0, 0.8], "rough": 0.5, "breath": 0.25, "tilt": 2600.0}), 0.72, 0.8)
+	return out
+
+func _s_velociraptor_alpha_alert() -> PackedFloat32Array:
+	# The pack's leader has seen him: a hiss, and a screech that carries.
+	var out := _buf(1.0)
+	_mix(out, _hiss(0.35, [[0.0, 2200.0], [1.0, 2900.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.2]]), 0.0, 0.6)
+	_mix(out, _voice({"dur": 0.7, "f0": [[0.0, 380.0], [0.3, 560.0], [1.0, 430.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.7, 0.9], [1.0, 0.0]], "formants": RAPTOR_ALPHA_FORMANTS,
+		"trill": [28.0, 0.5], "rough": 0.55, "breath": 0.3, "tilt": 3200.0}), 0.25, 1.0)
+	return _space(out, 0.12, [[0.4, 0.2]])
+
+func _s_velociraptor_alpha_bite() -> PackedFloat32Array:
+	return _snap(0.9, 0.35)
+
+func _s_velociraptor_alpha_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.38, "f0": [[0.0, 600.0], [0.2, 650.0], [1.0, 380.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": RAPTOR_ALPHA_FORMANTS,
+		"rough": 0.6, "trill": [26.0, 0.4], "breath": 0.3, "tilt": 3200.0})
+
+func _s_velociraptor_alpha_death() -> PackedFloat32Array:
+	var out := _buf(1.3)
+	_mix(out, _voice({"dur": 1.05, "f0": [[0.0, 520.0], [0.3, 440.0], [1.0, 150.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.75], [1.0, 0.0]], "formants": RAPTOR_ALPHA_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.8]], "trill": [20.0, 0.5], "rough": 0.6, "breath": 0.35, "tilt": 2400.0}), 0.0, 1.0)
+	_mix(out, _hiss(0.5, [[0.0, 1400.0], [1.0, 900.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.75, 0.3)
+	return _space(out, 0.1, [])
+
+# ==============================================================================
+# Tyrannosaurus: a closed-mouth boom, below Postosuchus's bellow and smooth where that is rough
+# ==============================================================================
+
+const TREX_FORMANTS: Array = [[165.0, 3.0, 1.0], [420.0, 3.5, 0.4], [920.0, 4.0, 0.12]]
+
+## A closed-mouth boom: very low and smooth -- the sound pushed down into the throat and chest and out through
+## the skin, the way an emu or a crocodile booms -- a deep sub-octave under it, felt more than heard.
+func _boom(dur: float, f0_from: float, f0_to: float) -> PackedFloat32Array:
+	var out := _voice({"dur": dur, "f0": [[0.0, f0_from], [0.25, f0_from * 1.08], [1.0, f0_to]],
+		"amp": [[0.0, 0.0], [0.25, 1.0], [0.65, 0.95], [1.0, 0.0]], "formants": TREX_FORMANTS,
+		"rough": 0.15, "rough_am": [6.0, 0.35], "breath": 0.06, "tilt": 600.0, "jitter": 0.02, "nasal": 0.15})
+	_mix(out, _tone(dur, [[0.0, f0_from * 0.5], [1.0, f0_to * 0.5]], [[0.0, 0.0], [0.3, 1.0], [0.7, 0.9], [1.0, 0.0]]), 0.0, 0.8)
+	return out
+
+func _s_tyrannosaurus_call_1() -> PackedFloat32Array:
+	return _space(_boom(2.2, 46.0, 38.0), 0.15, [])
+
+func _s_tyrannosaurus_call_2() -> PackedFloat32Array:
+	# "hoom -- hoooom": a short boom, and a long one under it.
+	var out := _buf(2.9)
+	_mix(out, _boom(0.9, 50.0, 44.0), 0.0, 0.85)
+	_mix(out, _boom(1.8, 44.0, 36.0), 0.9, 1.0)
+	return _space(out, 0.15, [])
+
+func _s_tyrannosaurus_roar() -> PackedFloat32Array:
+	# Its arrival, heard across the valley: a long rumbling boom swelling out of the ground, a rattle in the
+	# throat at its height, and the valley walls throwing it back.
+	var dry := _boom(3.4, 40.0, 31.0)
+	_mix(dry, _voice({"dur": 1.6, "f0": [[0.0, 62.0], [0.5, 70.0], [1.0, 52.0]],
+		"amp": [[0.0, 0.0], [0.3, 1.0], [0.8, 0.7], [1.0, 0.0]], "formants": TREX_FORMANTS,
+		"rough": 0.7, "rough_am": [17.0, 0.6], "breath": 0.2, "tilt": 1100.0}), 0.9, 0.45)
+	return _space(dry, 0.3, [[0.45, 0.45], [0.9, 0.3], [1.4, 0.15]])
+
+func _s_tyrannosaurus_alert() -> PackedFloat32Array:
+	# A huff -- a great breath forced out through the nostrils -- over a low rumble.
+	var out := _hiss(0.9, [[0.0, 700.0], [0.3, 900.0], [1.0, 500.0]], 1.0, [[0.0, 0.0], [0.08, 1.0], [0.5, 0.6], [1.0, 0.0]])
+	_mix(out, _boom(1.0, 44.0, 40.0), 0.05, 0.6)
+	return out
+
+func _s_tyrannosaurus_bite() -> PackedFloat32Array:
+	# The heaviest jaw in the valley clapping shut: a deep thump, the crack of the teeth, bone in it.
+	var out := _modes(0.55, [[58.0, 0.18, 1.0], [104.0, 0.12, 0.75], [190.0, 0.07, 0.45], [480.0, 0.035, 0.25]], 0.005)
+	_mix(out, _burst(0.06, 1800.0, 1.1), 0.0, 0.6)
+	_mix(out, _snap(0.45, 0.0), 0.01, 0.5)
+	return out
+
+func _s_tyrannosaurus_hurt() -> PackedFloat32Array:
+	# Hurt, the mouth opens: a rough bellowing grunt, the boom's throat strained.
+	return _voice({"dur": 0.8, "f0": [[0.0, 96.0], [0.2, 104.0], [1.0, 66.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.6, 0.8], [1.0, 0.0]], "formants": TREX_FORMANTS,
+		"fshift": [[0.0, 1.4], [1.0, 1.1]], "rough": 0.75, "rough_am": [19.0, 0.5], "breath": 0.3, "tilt": 1600.0})
+
+func _s_tyrannosaurus_death() -> PackedFloat32Array:
+	var out := _boom(2.8, 48.0, 26.0)
+	_mix(out, _hiss(1.4, [[0.0, 900.0], [1.0, 450.0]], 1.2, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.4, 0.4)
+	return _space(out, 0.15, [[0.45, 0.2]])
+
+# ==============================================================================
+# The azhdarchid: a stork's build, a two-metre bill -- a heron's croak, a screech, the bill clacked shut
+# ==============================================================================
+
+const PTERO_FORMANTS: Array = [[620.0, 4.0, 1.0], [1500.0, 5.0, 0.6], [2700.0, 6.0, 0.3]]
+
+## A croak through a long bill: "kraaak" -- harsh, nasal, low for its height, a heron's.
+func _croak(dur: float, f0_from: float, f0_to: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0_from], [0.3, f0_from * 1.05], [1.0, f0_to]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.7, 0.85], [1.0, 0.0]], "formants": PTERO_FORMANTS,
+		"rough": 0.7, "rough_am": [48.0, 0.6], "breath": 0.35, "tilt": 2200.0, "nasal": 0.35, "jitter": 0.04})
+
+func _s_pterosaur_call_1() -> PackedFloat32Array:
+	return _space(_croak(0.6, 300.0, 255.0), 0.1, [])
+
+func _s_pterosaur_call_2() -> PackedFloat32Array:
+	# "krek -- krek -- kraaak".
+	var out := _buf(1.2)
+	_mix(out, _croak(0.16, 330.0, 300.0), 0.02, 0.9)
+	_mix(out, _croak(0.16, 340.0, 305.0), 0.25, 0.9)
+	_mix(out, _croak(0.5, 320.0, 250.0), 0.5, 1.0)
+	return _space(out, 0.1, [])
+
+func _s_pterosaur_alert() -> PackedFloat32Array:
+	# A screech through the bill, and the bill clattering.
+	var out := _buf(0.9)
+	_mix(out, _voice({"dur": 0.55, "f0": [[0.0, 420.0], [0.35, 640.0], [1.0, 480.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.7, 0.9], [1.0, 0.0]], "formants": PTERO_FORMANTS,
+		"rough": 0.6, "rough_am": [52.0, 0.5], "breath": 0.4, "tilt": 3200.0}), 0.0, 1.0)
+	for i in 4:
+		_mix(out, _s_pterosaur_bite(), 0.5 + 0.07 * i, 0.35)
+	return out
+
+func _s_pterosaur_bite() -> PackedFloat32Array:
+	# A long bill clacked shut: hard and light, high -- keratin and bone, no growl behind it.
+	var out := _modes(0.12, [[1400.0, 0.03, 1.0], [2600.0, 0.02, 0.6], [3900.0, 0.015, 0.35]], 0.0015)
+	_mix(out, _burst(0.015, 4200.0, 1.8), 0.0, 0.5)
+	return out
+
+func _s_pterosaur_hurt() -> PackedFloat32Array:
+	return _croak(0.28, 420.0, 300.0)
+
+func _s_pterosaur_death() -> PackedFloat32Array:
+	var out := _croak(1.0, 360.0, 150.0)
+	_mix(out, _hiss(0.5, [[0.0, 1500.0], [1.0, 900.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.6, 0.25)
+	return _space(out, 0.1, [])
 
 # ==============================================================================
 # His work: an axe in wood, a pick on stone, a mallet on a stake

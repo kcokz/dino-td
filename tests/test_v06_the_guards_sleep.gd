@@ -170,6 +170,32 @@ func test_05_struck_asleep_it_wakes_and_goes_for_him() -> void:
 	assert_false(_asleep(g), "A blow wakes it")
 	assert_eq(int(g.guard_state), int(g.GuardState.AGGRO_CHASE), "and it goes for him")
 
+func test_05b_woken_beside_him_it_warns_him_off_first() -> void:
+	# The debug-agent's BUG-023: "叫醒的守卫不示威，直接扑" -- the battery's wreck lies four metres behind the nest,
+	# and a guard roused by the din of its search was right beside him, inside threat_close, and bit at once.
+	var main = await _level()
+	var guards: Array = await _all_asleep(main)
+	var g = guards[0]
+	var close: float = float(_guards_cfg()["threat_close"])
+	_him_off(main, g, close * 0.6)
+	g.wake(main.hero)
+	assert_eq(int(g.guard_state), int(g.GuardState.THREATENING), "Woken beside him, it warns him off")
+	await _a_thought()
+	await _a_thought()
+	assert_eq(int(g.guard_state), int(g.GuardState.THREATENING), "however near he is: the whole warning (%.1f m)" % (close * 0.6))
+	# He goes: out past its radius and the margin, and it lets him be.
+	_him_off(main, g, float(g.aggro_radius) + float(_guards_cfg()["calm_margin"]) + 1.0)
+	await _a_thought()
+	assert_ne(int(g.guard_state), int(g.GuardState.AGGRO_CHASE), "He backs off, and it lets him be")
+	assert_ne(int(g.guard_state), int(g.GuardState.ATTACKING), "(not after him)")
+	# Another, and he stays: the warning out, it comes.
+	var h = guards[1]
+	_him_off(main, h, close * 0.6)
+	h.wake(main.hero)
+	await wait_seconds(float(_guards_cfg()["threat_seconds"]) + float(config_node.DINO_AI["think_seconds"]) * 2.0 + 0.2)
+	assert_true([int(h.GuardState.AGGRO_CHASE), int(h.GuardState.ATTACKING)].has(int(h.guard_state)),
+		"He stays out its warning, and it comes (%s)" % String(h.GuardState.keys()[int(h.guard_state)]))
+
 func test_06_up_a_while_it_lies_down_again_and_at_first_light_they_are_up() -> void:
 	var main = await _level()
 	var guards: Array = await _all_asleep(main)

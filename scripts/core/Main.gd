@@ -94,6 +94,7 @@ func _ready() -> void:
 	_wire_signals()
 	setup_level()
 	_ensure_nav_maps()
+	_warm_the_cast()
 	_add_bug_report()
 	# The game launched opens on the start screen, the valley stopped behind it -- unless it was the start screen
 	# that built this level, for the game chosen there (GameState.launch_straight_in).
@@ -192,6 +193,7 @@ func _ensure_camera_rig() -> void:
 func _process(delta: float) -> void:
 	_ensure_camera_rig()
 	_handle_camera_keys(delta)
+	VisualLibrary.take_warmed()
 
 func _init_level_coordinates() -> void:
 	var cfg = _get_config()
@@ -366,6 +368,27 @@ func _discover_waypoints() -> void:
 			for cell in _map().get("prowl_from", []):
 				banks.append(grid_manager.cell_to_world(cell))
 		night_prowl.origins = banks
+
+## The animals this run can field, read ahead on the engine's loading threads (VisualLibrary.warm): its raiders
+## from the first day and the later ones, the nest's guards, its bosses, what comes up out of the river at night.
+## The first of each species to come out stalled the game a seventh of a second reading its model and skin.
+func _warm_the_cast() -> void:
+	var map: Dictionary = _map()
+	var species: Dictionary = {}
+	for id in (map.get("raiders", {}) as Dictionary):
+		species[String(id)] = true
+	for later in map.get("raiders_by_day", []):
+		for id in (later.get("raiders", {}) as Dictionary):
+			species[String(id)] = true
+	for key in ["guards", "minor_boss", "boss"]:
+		if String(map.get(key, "")) != "":
+			species[String(map[key])] = true
+	for id in (map.get("prowlers", {}) as Dictionary):
+		species[String(id)] = true
+	var keys: Array = []
+	for id in species:
+		keys.append("dino/%s" % id)
+	VisualLibrary.warm(keys)
 
 ## Where the bug report is, by its path: it is in the development build only -- the release export leaves out
 ## everything under res://scripts/dev/ (export_presets.cfg; tools/build.py) -- so nothing the release ships

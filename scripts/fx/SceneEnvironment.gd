@@ -19,11 +19,13 @@ func _process(delta: float) -> void:
 	if gs == null or not gs.has_method("time_of_day"):
 		return
 	_sky_clock -= delta
-	var sky: bool = _sky_clock <= 0.0
+	# Through a leap of the clock -- the night of a game without one, in a few seconds -- every frame.
+	var leaping: bool = gs.has_method("light_leaping") and bool(gs.light_leaping())
+	var sky: bool = _sky_clock <= 0.0 or leaping
 	if sky:
 		var cfg = _get_config()
 		_sky_clock = float(cfg.DAY.get("sky_every", 0.5)) if (cfg and "DAY" in cfg) else 0.5
-	apply_time_of_day(float(gs.time_of_day()), sky)
+	apply_time_of_day(float(gs.light_time()) if gs.has_method("light_time") else float(gs.time_of_day()), sky)
 
 ## Seconds till the sky's own colours are set again.
 var _sky_clock: float = 0.0
