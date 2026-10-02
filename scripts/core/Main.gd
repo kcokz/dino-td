@@ -422,6 +422,35 @@ func _wire_signals() -> void:
 			eb.phase_changed.connect(_on_phase_changed)
 	if eb and eb.has_signal("cabin_view_changed") and not eb.cabin_view_changed.is_connected(_on_cabin_view_changed):
 		eb.cabin_view_changed.connect(_on_cabin_view_changed)
+	if eb and eb.has_signal("wreck_located") and not eb.wreck_located.is_connected(_on_wreck_located):
+		eb.wreck_located.connect(_on_wreck_located)
+
+## A stage mended has heard where the wreck holding `part` lies (Config.WRECKS): its smoke goes up -- seen
+## rising -- and the mist round it becomes seen ground, so the place shows by night too. Nothing for a wreck
+## already searched (found by walking onto it).
+func _on_wreck_located(part: String) -> void:
+	var wreck: Node3D = wreck_of(part)
+	if wreck == null or bool(wreck.get("is_depleted")):
+		return
+	var smoke: Node3D = _smoke_container()
+	var smoking: bool = false
+	for s in smoke.get_children():
+		if s is WreckSmoke and (s as WreckSmoke).wreck == wreck:
+			smoking = true
+	if not smoking:
+		smoke.add_child(WreckSmoke.make(wreck, false))
+	var cfg = _get_config()
+	if fog != null and is_instance_valid(fog) and cfg and "WRECKS" in cfg:
+		fog.mark_seen(wreck.global_position, float(cfg.WRECKS.get("located_seen", 0.0)))
+
+## The wreck that holds `part` on the field, or null.
+func wreck_of(part: String) -> Node3D:
+	if resource_nodes_container == null:
+		return null
+	for n in resource_nodes_container.get_children():
+		if n is Node3D and String(n.get("resource_type")) == part:
+			return n as Node3D
+	return null
 
 func _on_phase_changed(phase: int) -> void:
 	if phase != 0:
@@ -1102,8 +1131,10 @@ func spawn_resource_nodes() -> void:
 		if grid_manager and grid_manager.has_method("occupy_resource_cell"):
 			grid_manager.occupy_resource_cell(item["cell"], node)
 		# A wreck not yet searched smoulders, and its smoke is seen over the mist (WreckSmoke): not the
-		# wreck's own child, which the fog hides until it is seen.
-		if cfg and "RESOURCE_NODES" in cfg and bool(cfg.RESOURCE_NODES.get(String(item["type"]), {}).get("smoke", false)):
+		# wreck's own child, which the fog hides until it is seen. Only one whose place is known: the first
+		# stage's; the others' go up as the stages before them are mended (Config.WRECKS, _on_wreck_located).
+		if cfg and "RESOURCE_NODES" in cfg and bool(cfg.RESOURCE_NODES.get(String(item["type"]), {}).get("smoke", false)) \
+				and (gs_nodes == null or not gs_nodes.has_method("wreck_located") or gs_nodes.wreck_located(String(item["type"]))):
 			smoke.add_child(WreckSmoke.make(node))
 
 ## Where the wrecks' smoke is raised (WreckSmoke): beside the nodes, not among them.

@@ -227,6 +227,23 @@ func reveal_all() -> void:
 	_paint(1.0)
 	_hide_the_unseen()
 
+## The ground within `radius` metres of `at` seen from now on, as if he had been there -- not in sight: a
+## place he has been told of (a wreck located, Config.WRECKS.located_seen). What stands on it is drawn, dim.
+func mark_seen(at: Vector3, radius: float) -> void:
+	if cells <= 0 or _seen.is_empty() or radius <= 0.0:
+		return
+	var local: Vector3 = at - global_position
+	var cx: float = (local.x + half) / cell
+	var cz: float = (local.z + half) / cell
+	var r: float = radius / cell
+	for z in range(maxi(0, int(floor(cz - r))), mini(cells - 1, int(ceil(cz + r))) + 1):
+		var dz: float = float(z) + 0.5 - cz
+		for x in range(maxi(0, int(floor(cx - r))), mini(cells - 1, int(ceil(cx + r))) + 1):
+			var dx: float = float(x) + 0.5 - cx
+			if dx * dx + dz * dz <= r * r:
+				_seen[z * cells + x] = 1
+	_hide_the_unseen()
+
 ## What is in sight now, and so seen: a circle round everything that sees (_sources) -- worked out
 ## with the fog lifted too, for what asks what he sees (sees).
 func _look() -> void:

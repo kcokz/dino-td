@@ -166,13 +166,13 @@ func _draw() -> void:
 		if cabin:
 			corners.append(corners[0])
 			draw_polyline(corners, ink, 1.0)
-	# The wrecks still smoking: a smudge and its plume.
-	for n in get_tree().get_nodes_in_group("resource_nodes"):
-		if not is_instance_valid(n) or n.get("is_depleted") == true or cfg == null:
+	# The wrecks still smoking: a smudge and its plume -- where the smoke is up, which is where a wreck is
+	# known to lie (Config.WRECKS: found one from another).
+	for s in get_tree().get_nodes_in_group(WreckSmoke.GROUP):
+		if not is_instance_valid(s) or not (s as WreckSmoke).is_smoking() or (s as WreckSmoke).wreck == null \
+				or not is_instance_valid((s as WreckSmoke).wreck):
 			continue
-		if not bool(cfg.RESOURCE_NODES.get(String(n.get("resource_type")), {}).get("smoke", false)):
-			continue
-		var p: Vector2 = to_map((n as Node3D).global_position)
+		var p: Vector2 = to_map((s as WreckSmoke).wreck.global_position)
 		var smoke: Color = _colour("smoke", Color(0.30, 0.28, 0.26))
 		draw_circle(p, 3.2, smoke)
 		draw_line(p, p + Vector2(3.0, -8.0), smoke, 2.0)

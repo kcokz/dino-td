@@ -256,7 +256,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["unlock_granted", _on_unlock_granted], ["hero_spoke", _on_hero_spoke],
 			["final_wave_warning", _on_final_wave_warning],
 			["material_discovered", _on_material_discovered], ["goal_changed", _on_goal_changed],
-			["din_carried", _on_din_carried]]:
+			["din_carried", _on_din_carried], ["wreck_located", _on_wreck_located]]:
 		if eb.has_signal(pair[0]):
 			out.append([Signal(eb, pair[0]), pair[1]])
 	return out
@@ -433,6 +433,24 @@ func _on_beacon_changed(steps_done: int) -> void:
 			and not gs.map_data().get("beacon", {}).get("stage_waves", []).is_empty():
 		show_hint(tr("HINT_BEACON_STIRS"), UiTheme.toast_seconds("long"), "warning")
 
+## A stage mended has heard where the next part's wreck lies (Config.WRECKS): said, with the stage's own news
+## -- its hum carried, something heard it -- since it comes after it. Nothing when the part is in hand already
+## or its wreck searched: he walked onto it.
+func _on_wreck_located(part: String) -> void:
+	var gs = _get_game_state()
+	if gs == null or int(gs.resources.get(part, 0)) > 0:
+		return
+	var wreck: Node3D = null
+	for n in get_tree().get_nodes_in_group("resource_nodes"):
+		if n is Node3D and is_instance_valid(n) and String(n.get("resource_type")) == part:
+			wreck = n as Node3D
+	if wreck == null or bool(wreck.get("is_depleted")):
+		return
+	var waves = get_tree().get_first_node_in_group("wave_manager")
+	var side: String = String(waves.side_of(wreck.global_position)) if (waves != null and waves.has_method("side_of")) else ""
+	var where: String = tr("DIR_" + side) if side != "" and side != "here" else ""
+	show_hint(tr("HINT_WRECK_LOCATED") % [tr("RESOURCE_%s" % part.to_upper()), where], UiTheme.toast_seconds("long"), part)
+
 ## The signal is out and the valley will answer: the raid line counts down to the final wave
 ## (GameState.final_wave_in, _render_final_line) and a hint says to build what he can meanwhile.
 func _on_final_wave_warning(seconds: float) -> void:
@@ -535,13 +553,7 @@ func _on_material_discovered(res_id: String) -> void:
 ## The stage of this run's beacon that takes `res_id`, counted from 1; 0 for none.
 func _stage_taking(res_id: String) -> int:
 	var cfg = _get_config()
-	if cfg == null or not cfg.has_method("beacon_jobs"):
-		return 0
-	var jobs: Array = cfg.beacon_jobs(_run_map())
-	for i in jobs.size():
-		if cfg.beacon_job(_run_map(), String(jobs[i])).get("inputs", {}).has(res_id):
-			return i + 1
-	return 0
+	return int(cfg.part_stage(_run_map(), res_id)) if (cfg and cfg.has_method("part_stage")) else 0
 
 ## A material's chip is on the bar when the material is for something in this game (GAME-
 ## DESIGN 4.3 rule 1) and the run has turned it up -- or `holding` says it is in the stock

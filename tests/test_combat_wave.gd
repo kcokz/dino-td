@@ -144,8 +144,9 @@ func _create_tower() -> Object:
 	assert_not_null(tower_script, "Tower.gd script must exist")
 	if tower_script == null:
 		return null
-	# The cabin's gun: since v0.6 round two the one thing in the valley that aims (Tower.gd),
-	# so its numbers are the cabin's row. What the player builds are traps (Trap.gd).
+	# The turret machinery as such (Tower.gd): nothing in the game is one now -- the cabin's gun was
+	# the last, gone since 2026-10-02 -- so it stands on the cabin's row only for its hit points and
+	# keeps its own numbers. What the player builds are traps (Trap.gd).
 	var tower = tower_script.new()
 	if tower.has_method("setup"):
 		tower.setup("core")
@@ -484,7 +485,7 @@ func test_tower_deals_config_damage_at_fire_rate() -> void:
 		var dmg = tower.get("damage") if "damage" in tower else 1.0
 		dino.take_damage(dmg)
 
-	assert_almost_eq(float(dino.current_hp), initial_hp - float(config_node.BUILDINGS["core"]["damage"]), 0.01,
+	assert_almost_eq(float(dino.current_hp), initial_hp - float(tower.damage), 0.01,
 		"Dino HP drops by one shot of the tower's damage")
 
 func test_tower_retargets_when_primary_target_dies() -> void:

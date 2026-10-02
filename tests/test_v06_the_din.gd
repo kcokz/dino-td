@@ -97,9 +97,13 @@ func test_01b_by_day_they_lie_in_the_river_and_he_gets_the_antenna() -> void:
 	assert_eq(_drawn().size(), 0, "By day nothing comes up out of the river, however long he is at it")
 	assert_false(said.emitted, "and nothing is said of it")
 	assert_true(bool(wreck.is_depleted), "He has the antenna")
-	# And at night, what comes is slower than he is on land: he can run for it.
+	# And at night, what comes is slower than he is on land: he can run for it -- from further off than its
+	# lunge (Config.DINO_AI.bursts, 2026-10-02).
 	assert_lt(float(config_node.DINOS["phytosaur"]["speed"]), float(config_node.HERO["move_speed"]),
 		"On land a phytosaur is slower than he is")
+	var lunge: Dictionary = config_node.DINO_AI["bursts"][String(config_node.DINOS["phytosaur"]["burst"])]
+	assert_lt(float(lunge["within"]), float(config_node.HERO["move_speed"]),
+		"and its lunge reaches less than a second's walk of his")
 
 func test_02_the_nests_wreck_wakes_the_guards_one_by_one() -> void:
 	var main = await _level()

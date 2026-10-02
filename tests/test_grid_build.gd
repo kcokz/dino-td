@@ -382,18 +382,15 @@ func test_building_turret_initialization() -> void:
 	assert_almost_eq(float(trap.current_hp), want_hp, 0.01, "And it starts at full")
 
 func test_building_tower_initialization() -> void:
-	# The one turret there is: the cabin's gun (Tower.gd, under CoreCampfire).
-	assert_not_null(tower_script, "Tower.gd script must exist")
-	if tower_script == null: return
-
+	# There is no turret in the game: the cabin was the one, and since 2026-10-02 it has no gun
+	# ("cabin的自动射击得取消了，太厉害").
 	var cabin = load("res://scripts/entities/CoreCampfire.gd").new()
 	_cleanup_nodes.append(cabin)
 
-	assert_eq(cabin.building_type, "core", "The turret is the cabin's")
+	assert_eq(cabin.building_type, "core", "The cabin is the core")
 	assert_almost_eq(float(cabin.max_hp), float(config_node.BUILDINGS["core"]["hp"]), 0.01,
 		"Its max_hp matches Config")
-	assert_almost_eq(float(cabin.attack_range), float(config_node.BUILDINGS["core"]["range"]), 0.01,
-		"And so does its reach")
+	assert_false("attack_range" in cabin, "And it has no gun")
 
 func test_building_take_damage_and_destruction_signal() -> void:
 	assert_not_null(wall_script, "Wall.gd script must exist")

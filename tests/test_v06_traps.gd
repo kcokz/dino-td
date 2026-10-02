@@ -82,12 +82,10 @@ func _row(type_id: String) -> Dictionary:
 # 1. Nothing the player builds aims
 # ==============================================================================
 
-func test_01_nothing_the_player_builds_aims_and_only_the_cabin_does() -> void:
+func test_01_nothing_the_player_builds_aims_and_nor_does_the_cabin() -> void:
+	# The cabin's gun was the one thing that aimed; it has none since 2026-10-02 ("cabin的自动射击得取消了").
 	for type_id in config_node.BUILDINGS:
 		var row: Dictionary = config_node.BUILDINGS[type_id]
-		if String(type_id) == "core":
-			assert_true(row.has("range"), "The cabin's gun has a reach: the ship's machinery aims")
-			continue
 		assert_false(row.has("range") or row.has("fire_rate"),
 			"%s picks no targets of its own" % type_id)
 		if String(row.get("kind", "")) == "trap":

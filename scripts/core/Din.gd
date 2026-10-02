@@ -70,7 +70,8 @@ func answer(wreck: Node, draws: String, count: int) -> int:
 
 ## Out of the water by the wreck: from the place along the river nearest it, in their hours. By day the night's
 ## hunters lie in the river and the din brings none up (v0.6 round six, the player: "如果植龙是夜行动物，那么白天翻天线
-## 不该出来吧？……但是最终，人应该能去拿天线"); at night one comes -- slower than he is on land (DINOS.phytosaur.speed).
+## 不该出来吧？……但是最终，人应该能去拿天线"); at night one comes -- slower than he is on land (DINOS.phytosaur.speed),
+## but for its lunge from close (DINO_AI.bursts): he gets away if he goes when he sees it.
 func _from_the_river(wreck: Node, count: int) -> int:
 	if night_prowl == null or not is_instance_valid(night_prowl) or not night_prowl.has_method("send_one_from"):
 		return 0

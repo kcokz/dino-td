@@ -7,8 +7,8 @@
 # here is what the game does with it.
 #
 # The sentry is gone since v0.6 round two -- nothing the player builds aims (Trap.gd) -- and its
-# head is on the cabin's roof: the ship's own gun, the one turret there is. So the turret tested
-# here is the cabin's.
+# head went on the cabin's roof as the ship's own gun; since 2026-10-02 that is dead too and not
+# drawn (CoreCampfire: "cabin的自动射击得取消了，太厉害"). What is tested of it is that it is gone.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -32,7 +32,7 @@ func _keep(n: Node) -> Node:
 	_cleanup_nodes.append(n)
 	return n
 
-## The cabin, whose gun is the turret (CoreCampfire, on Tower.gd).
+## The cabin (CoreCampfire), whose gun is dead.
 func _tower(at: Vector3 = Vector3(30.0, 0.0, 30.0)) -> Node:
 	var tower = _keep(load("res://scripts/entities/CoreCampfire.gd").new())
 	tree.root.add_child(tower)
@@ -47,12 +47,6 @@ func _raptor(at: Vector3) -> Node:
 	dino.setup("raptor")
 	dino.global_position = at
 	return dino
-
-## Which way the head's barrels point, flat on the ground.
-func _facing(head: Node3D) -> Vector3:
-	var f: Vector3 = -head.global_transform.basis.z
-	f.y = 0.0
-	return f.normalized()
 
 ## The furthest any vertex under `root` reaches from `centre`, sideways, in the world.
 func _reach(root: Node3D, centre: Vector3) -> float:
@@ -69,100 +63,23 @@ func _reach(root: Node3D, centre: Vector3) -> float:
 # 1. The sentry
 # ==============================================================================
 
-func test_01_the_sentry_has_a_head_to_turn_and_barrels_to_fire_from() -> void:
-	assert_true(VisualLibrary.has_art("building/core"), "The cabin, and its gun, have a model")
+func test_01_the_ship_gun_on_the_roof_is_dead_and_not_drawn() -> void:
+	# The player, 2026-10-02: "家里不需要任何防御就能顶住，cabin的自动射击得取消了，太厉害".
+	assert_true(VisualLibrary.has_art("building/core"), "The cabin has a model")
 	var tower = _tower()
 	await wait_frames(1)
-	var head: Node3D = tower._turret_head()
-	assert_not_null(head, "Its model has a head that turns")
-	if head == null:
-		return
-	assert_not_null(head.find_child("Muzzle", true, false), "With a muzzle at the end of its barrels")
-
-func test_02_it_turns_to_face_what_it_shoots() -> void:
-	var tower = _tower()
+	assert_false("attack_range" in tower, "The cabin is no turret: no reach")
+	assert_null(tower.find_child("DetectionArea", true, false), "nothing that looks for a target")
+	assert_null(tower.find_child("FireTimer", true, false), "and nothing that fires")
+	assert_eq(float(tower._get_display_range()), 0.0, "No ring round it when it is picked")
+	var head := tower.find_child("Head", true, false) as Node3D
+	assert_true(head == null or not head.visible, "Its dead gun is not drawn, to say it guards nothing")
 	var dino = _raptor(tower.global_position + Vector3(3.0, 0.0, 1.5))
-	await wait_frames(1)
-	var head: Node3D = tower._turret_head()
-	if head == null:
-		_record_fail("No head to turn")
-		return
-	head.rotation.y = PI      # looking the wrong way to start with
-	tower.fire_at(dino)
-	# From the head, not the building's middle: on the cabin the gun stands on its engine end.
-	var want: Vector3 = (dino.global_position - head.global_position)
-	want.y = 0.0
-	assert_gt(_facing(head).dot(want.normalized()), 0.999,
-		"The barrels point at the dinosaur it has just shot")
-
-func test_03_it_follows_its_target_round_at_its_own_speed() -> void:
-	# Swinging round rather than snapping is what shows the player which dinosaur a
-	# turret has picked -- so it must actually take time, and it must actually get there.
-	var tower = _tower()
-	var dino = _raptor(tower.global_position + Vector3(-2.0, 0.0, 3.0))
-	await wait_frames(1)
-	var head: Node3D = tower._turret_head()
-	if head == null:
-		_record_fail("No head to turn")
-		return
-	# From the head, not the building's middle: on the cabin the gun stands off-centre on its roof.
-	var want: Vector3 = dino.global_position - head.global_position
-	want.y = 0.0
-	want = want.normalized()
-	tower.current_target = dino
-	head.rotation.y = tower._heading_to(head, dino.global_position) + PI    # facing directly away
-
-	var step: float = 0.05
-	var half_turn: float = 180.0 / float(config_node.BUILDINGS["core"]["turn_speed"])
-	tower._track_target(step)
-	assert_lt(_facing(head).dot(want), 0.9, "One short step is not enough to turn right round")
-	var elapsed: float = step
-	while elapsed < half_turn + step:
-		tower._track_target(step)
-		elapsed += step
-	assert_gt(_facing(head).dot(want), 0.999, "But half a turn's worth of time is")
-
-func test_04_the_shot_leaves_from_the_barrels() -> void:
-	var tower = _tower()
-	await wait_frames(1)
-	var head: Node3D = tower._turret_head()
-	if head == null:
-		_record_fail("No head")
-		return
-	var muzzle := head.find_child("Muzzle", true, false) as Node3D
-	assert_almost_eq(tower.shot_origin().distance_to(muzzle.global_position), 0.0, 0.001,
-		"The tracer starts at the muzzle")
-	assert_gt(tower.shot_origin().y - tower.global_position.y, 1.5,
-		"Up on the roof, not out of the middle of it the way the box fired")
-
-func test_05_however_the_head_turns_it_stays_over_the_stand() -> void:
-	# The barrels swing round with the head. They must never reach past the footprint the
-	# turret occupies, or the art hangs over ground the rules say is free.
-	var tower = _tower()
-	await wait_frames(1)
-	var head: Node3D = tower._turret_head()
-	if head == null:
-		_record_fail("No head")
-		return
-	var half: float = float(config_node.get_building_footprint("core")) * 0.5
-	for step in range(12):
-		head.rotation.y = TAU * float(step) / 12.0
-		assert_lte(_reach(head, tower.global_position), half + 0.001,
-			"Turned to %d degrees, the head is still inside the footprint" % (step * 30))
-
-func test_06_a_blueprint_does_not_track_anything() -> void:
-	var tower = _tower()
-	var dino = _raptor(tower.global_position + Vector3(2.0, 0.0, 0.0))
-	await wait_frames(1)
-	var head: Node3D = tower._turret_head()
-	if head == null:
-		_record_fail("No head")
-		return
-	tower.is_constructed = false
-	tower.current_target = dino
-	head.rotation.y = 0.0
-	tower._track_target(0.5)
-	assert_almost_eq(head.rotation.y, 0.0, 0.0001, "A turret that is not built yet does not move")
+	dino.set_physics_process(false)
+	await wait_seconds(1.5)
+	assert_almost_eq(float(dino.current_hp), raptor_stat("hp"), 0.001, "A raptor beside it is not shot")
+	for key in ["range", "damage", "fire_rate", "turn_speed", "shot"]:
+		assert_false(config_node.BUILDINGS["core"].has(key), "Config gives the cabin no gun (%s)" % key)
 
 # ==============================================================================
 # 2. The nest

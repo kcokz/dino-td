@@ -84,6 +84,9 @@ class Track:
 	var quiet_until: Dictionary = {}
 	## Whether it was on its way home (Dino.going_home) -- turned for home, it is watched afresh.
 	var home: bool = false
+	## The watch's clock when it was last after the Hero (-INF never): MILL leaves alone the walk it took
+	## after him and back.
+	var after_him_at: float = -INF
 
 ## Every animal watched, by instance id; the marks up on the field, [Label3D, seconds left]; and
 ## the game seconds this watch has run.
@@ -152,6 +155,9 @@ func _watch(d: Node3D, t: Track, delta: float, cfg: Dictionary) -> void:
 	var pos: Vector3 = d.global_position
 	var yaw: float = d.rotation.y
 	var biting: bool = "current_state" in d and int(d.current_state) == int(Dino.State.ATTACKING)
+	var after = d.current_target if "current_target" in d else null
+	if after != null and is_instance_valid(after) and (after as Node).is_in_group("hero"):
+		t.after_him_at = _clock
 	var b: PackedFloat32Array = t.open
 	b[B_SECONDS] += delta
 	# JITTER: a step back against the way it has been going, once that way was long enough to see.
@@ -314,12 +320,17 @@ func _judge(d: Node3D, t: Track, cfg: Dictionary) -> void:
 			_report(d, t, "fidget", f, cfg)
 
 ## MILL is a raider's: a guard ambles about its post by design, and one after the Hero follows him
-## round whatever he walks round.
+## round whatever he walks round -- and, let go of him, walks back the way it came: out after him and
+## back is not round and round on the spot (a dash after him, then the cabin again, was reported -- the
+## player, 2026-10-02, "恐龙追不上人": a raider set on him bursts now, Config.DINO_AI.bursts).
 func _mills(d: Node3D, m: Dictionary, cfg: Dictionary) -> bool:
 	if d.is_in_group("guard_dinos") or int(m["biting_frames"]) > 0:
 		return false
 	var target = d.current_target if "current_target" in d else null
 	if target != null and is_instance_valid(target) and (target as Node).is_in_group("hero"):
+		return false
+	var t: Track = _tracks.get(d.get_instance_id())
+	if t != null and _clock - t.after_him_at <= float(cfg.get("mill_window", 6.0)):
 		return false
 	return float(m["path"]) >= float(cfg.get("mill_path", 6.0)) and float(m["net"]) <= float(cfg.get("mill_net", 1.5)) \
 		and float(m["path"]) / float(int(m["jitter"]) + 1) >= float(cfg.get("mill_leg", 1.0))

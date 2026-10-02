@@ -68,34 +68,20 @@ const BUILDINGS: Dictionary = {
 		"size": Vector2i(7, 3),
 		"hollow": true,
 		"height": 2.6,
-		# v0.6 feedback: "船舱血量提升到100，这样船舱的攻击能打败初始迅猛龙". A hundred: the
-		# opening's stakes are thin, and the cabin has to be able to take the first raid's
-		# bites while its gun and the Hero deal with them -- and still be worth defending
-		# when a raid of thirty reaches it.
+		# A hundred (v0.6 feedback: "船舱血量提升到100"). It has no gun any more (2026-10-02, the
+		# player: "家里不需要任何防御就能顶住，cabin的自动射击得取消了，太厉害" -- its gun killed what came
+		# up to it, and a raid could be sat out inside with nothing built): the first raid's two
+		# Coelophysis bring it down in about a minute (WAVES.base_count x DINOS.coelophysis damage),
+		# time for him to come out and fight them, not to wait them out -- and it is still worth
+		# defending when a raid of thirty reaches it.
 		"hp": 100.0,
-		# Its own gun: the wreck's second turret head, on the roof (tools/generate_props.py
-		# cabin). It covers the ground round the cabin and no further -- the first raptors
-		# die at the walls, a raid does not. The one thing in the valley that picks its own
-		# targets, because it is the ship's machinery; what the player builds are traps.
-		"range": 4.5,
-		"damage": 1.0,
-		"fire_rate": 0.8,
-		"turn_speed": 240.0,
-		# Each shot, seen (Tower._spawn_visual_bullet_effect): a streak `width` metres thick from the
-		# muzzle to what it hit, `energy` times its colour (over one: it glows), for `seconds`; and a
-		# flash at the muzzle lighting `flash_range` metres round it. A line a pixel wide went unseen at
-		# night, and a phytosaur at the fence flashed white under fire from nowhere (the player's report,
-		# 2026-09-29: "晚上这种情况下看不出来夜行恐龙受到了什么攻击"). A tenth of a second was a frame or two,
-		# caught only by looking at the right moment (the debug-agent's TASK-027: "很短，要正好看着"): a quarter
-		# of a second, and still gone long before the next shot.
-		"shot": {"width": 0.06, "colour": Color(1.0, 0.82, 0.32), "energy": 3.5, "seconds": 0.25,
-			"flash_energy": 3.0, "flash_range": 4.5},
 		"cost": {},
 		"upgrades_to": "",
 	},
 	# THE TRAPS, v0.6 round two: "Bow tower作为初始防御太过于强大，一开始就能造塔有点不合理……想一个能
-	# 攻击但不是tower的防御……防御装置自动可以攻击需要合理解释". Nothing the player builds aims -- a
-	# turret that picks its own targets is the ship's machinery, and only the cabin has one.
+	# 攻击但不是tower的防御……防御装置自动可以攻击需要合理解释". Nothing in the valley aims: a turret
+	# that picks its own targets would be the ship's machinery, and the cabin's own gun is dead too
+	# (BUILDINGS.core, 2026-10-02).
 	#
 	# A trap is set along a LANE: the cells in front of it, as far as `lane` (the wire stops at
 	# anything built or standing in the way), in the direction it faces -- R turns it while it
@@ -296,7 +282,7 @@ const BUILDINGS: Dictionary = {
 		# Sharpened: whatever presses against it is hurt, per tick, so a line wears a raid
 		# down instead of only holding it -- a chip, not a kill: a raptor (DINOS.raptor.hp)
 		# chewing through the 8 hit points comes out alive but nearly dead, leaving the
-		# finishing to a trap, the cabin or the Hero. It reaches whoever is against it, body
+		# finishing to a trap or the Hero. It reaches whoever is against it, body
 		# to body (CONTACT_REACH), and nobody walking past.
 		"contact_damage": 0.15,
 		"contact_tick": 0.5,
@@ -1083,6 +1069,7 @@ const DINOS: Dictionary = {
 		# single stake would kill raptors forever without falling.
 		"hp": 2.8,
 		"speed": 4.0,
+		"burst": "dash",            # set on the man, a dash from close (DINO_AI.bursts)
 		"damage": 0.9,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
@@ -1099,6 +1086,7 @@ const DINOS: Dictionary = {
 		"name": "DINO_RAPTOR_ALPHA_NAME",
 		"hp": 10.0,
 		"speed": 4.4,
+		"burst": "dash",
 		"damage": 1.5,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
@@ -1140,6 +1128,7 @@ const DINOS: Dictionary = {
 		"name": "DINO_COELOPHYSIS_NAME",
 		"hp": 2.8,
 		"speed": 4.0,
+		"burst": "dash",            # set on the man, a dash from close (DINO_AI.bursts) -- the nest's guards too
 		"damage": 0.9,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
@@ -1158,6 +1147,7 @@ const DINOS: Dictionary = {
 		"name": "DINO_COELOPHYSIS_ALPHA_NAME",
 		"hp": 10.0,
 		"speed": 4.4,
+		"burst": "dash",
 		"damage": 1.5,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
@@ -1200,6 +1190,7 @@ const DINOS: Dictionary = {
 		# 把那个恐龙干掉"): four of a Coelophysis's hit points, twice its bite. A man in the dark is its meat.
 		"hp": 12.0,
 		"speed": 3.0,
+		"burst": "lunge",           # slower than he is on land, but a crocodile's lunge from close (DINO_AI.bursts)
 		"damage": 1.8,
 		"attack_rate": 0.8,
 		"behaviour": "prowl",
@@ -1218,6 +1209,7 @@ const DINOS: Dictionary = {
 		"name": "DINO_HESPEROSUCHUS_NAME",
 		"hp": 1.6,
 		"speed": 6.5,
+		# No burst: it is always half as fast again as the man -- a burst is for what is not.
 		"damage": 0.6,
 		"attack_rate": 1.4,
 		"behaviour": "runner",
@@ -1314,6 +1306,24 @@ const DINO_AI: Dictionary = {
 	"reach_release": 0.35,
 	# The Hero is chased this much past the range it noticed him at, in metres, and no further.
 	"chase_slack": 2.0,
+	# BURSTS (the player, 2026-10-02: "我可以直接去捡，恐龙追不上人，它们上来，跑就行了"): at its own pace no raider
+	# or guard ever closed on him walking away (a Coelophysis 4.0 m/s, he 4.0). A hunter bursts and a man
+	# endures: set on him (current_target the Hero) and within `within` metres of him (flat, middle to middle),
+	# it goes `pace` times its own pace for `seconds`, then is winded -- `winded_pace` -- for `rest` seconds
+	# while still after him, and cannot burst again till that is over. The burst ends in a bite on the moment
+	# it reaches him (Dino._begin_attack). So close up he cannot get away, and seen coming from further off he
+	# can (DINOS.<id>.burst names which).
+	#   dash -- the Coelophysis's (and the Velociraptor's): 4.0 x 1.4 = 5.6 m/s closes 1.6 m/s for 2.5 s, 4 m,
+	#     on a man without boots -- from anywhere within the 4 m it catches him; on boots (4.8) it closes 2 m,
+	#     and he gets away from past some 3.2. Winded, 3.2 m/s: he pulls away 0.8 m/s, out of a pack's let-go
+	#     (PackDino 3 m + chase_slack) before it has its wind back. The stride quickens with it (ANIMATIONS
+	#     plays the run at the real pace, within its 1.8): what the player sees coming.
+	#   lunge -- the phytosaur's on land (3.0 m/s, slower than he is): a crocodile's few strides from close,
+	#     5.4 m/s for a second from within 2.5 m; then 2.4. Not while it keeps to a light's edge (ProwlerDino).
+	"bursts": {
+		"dash": {"within": 4.0, "pace": 1.4, "seconds": 2.5, "rest": 6.0, "winded_pace": 0.8},
+		"lunge": {"within": 2.5, "pace": 1.8, "seconds": 1.0, "rest": 8.0, "winded_pace": 0.8},
+	},
 	# HEADWAY: over this many seconds a travelling animal must have got this far, in metres, or it
 	# is stuck, and looks at what is holding it (Dino._unstick).
 	"stuck_window": 1.2,
@@ -3152,10 +3162,22 @@ const RAIDS: Dictionary = {
 ## its pieces lie about the valley; three hold what the beacon lacks, one part each -- the antenna,
 ## the battery, the control board -- and each stage of the beacon takes one (MAPS.<id>.beacon). A
 ## wreck is a node he works like a tree (RESOURCE_NODES "antenna", "battery", "board"): ten strokes'
-## search, and its part falls at his feet. Until it is searched it smoulders, and its smoke rises
-## above the mist (WreckSmoke): where the three lie is seen from the cabin from the first, and what is
-## on the way to them is not.
+## search, and its part falls at his feet.
+##
+## FOUND ONE FROM ANOTHER (the player, 2026-10-02: "信标三个没有区分度，拿了哪个也不知道，和一个地图一个信标
+## 差不多，可以第一个信标有烟，第二个信标需要第一个信标给位置，第三个需要第二个"). At the start only the wreck of the
+## first stage's part smoulders, its smoke over the mist (WreckSmoke) -- the one column seen from the cabin. The
+## others lie cold under the mist, where they are not known: a stage of the beacon mended hears the distress
+## call of the wreck that holds the next stage's part (the mended antenna catches the battery bay's; the
+## battery's power, the control room's), and it is told where it lies, its smoke goes up, and the mist over it
+## thins (GameState.wreck_located, EventBus.wreck_located). Walked onto before that, a wreck is still metal on
+## the ground and can be searched.
 const WRECKS: Dictionary = {
+	# Whether the wrecks are found one from another (above). Off, all three smoke from the start, as they did.
+	"in_turn": true,
+	# Metres of the mist round a wreck just located that become seen ground (FogOfWar.mark_seen): the place shows
+	# on the field and on the hand-drawn map, by night too, when its smoke is barely there.
+	"located_seen": 5.0,
 	# The column over one: puffs rising off a fire as wide as `spread` metres, at `rise` metres a
 	# second, slowing (`damping`), leant on by the wind (`wind`, metres a second each second), for
 	# `lifetime` seconds -- some twenty metres of smoke, over
@@ -3231,10 +3253,13 @@ const RESOURCE_NODES: Dictionary = {
 	# `strokes` of search at one a second -- ten seconds at it, bitten or not. A torn piece of
 	# hull half in the ground in a scorched furrow, its plating spilled round it: three metres of
 	# it, most of it low; what stands in the way is its middle (`trunk_radius`), what is clicked
-	# all of it. `found` says where it is, where the part's price is (Config.source_hint).
+	# all of it. `found` says where it is, where the part's price is (Config.source_hint). Each is called, and
+	# shown on its card, by what it holds -- its part's icon, "the battery bay's wreck" -- not by where it lies:
+	# three "wrecks" one like another, he did not know which he had searched (the player, 2026-10-02:
+	# "拿了哪个也不知道").
 	"antenna": {
 		"name": "NODE_WRECK_ANTENNA",
-		"icon": "wreck",
+		"icon": "antenna",
 		"kind": "PANEL_KIND_WRECK",
 		"part": true,
 		"smoke": true,
@@ -3255,7 +3280,7 @@ const RESOURCE_NODES: Dictionary = {
 	},
 	"battery": {
 		"name": "NODE_WRECK_BATTERY",
-		"icon": "wreck",
+		"icon": "battery",
 		"kind": "PANEL_KIND_WRECK",
 		"part": true,
 		"smoke": true,
@@ -3275,7 +3300,7 @@ const RESOURCE_NODES: Dictionary = {
 	},
 	"board": {
 		"name": "NODE_WRECK_BOARD",
-		"icon": "wreck",
+		"icon": "board",
 		"kind": "PANEL_KIND_WRECK",
 		"part": true,
 		"smoke": true,
@@ -3994,6 +4019,25 @@ static func beacon_job(map: Dictionary, job_id: String) -> Dictionary:
 		"name": "BEACON_STAGE_NAME",
 		"name_args": [i + 1, jobs.size() - 1],
 	}
+
+## The stage of the beacon on `map` that takes `res_id`, counted from 1; 0 for none.
+static func part_stage(map: Dictionary, res_id: String) -> int:
+	var stages: Array = map.get("beacon", {}).get("stages", [])
+	for i in stages.size():
+		if (stages[i] as Dictionary).get("inputs", {}).has(res_id):
+			return i + 1
+	return 0
+
+## The part of the ship (RESOURCE_NODES "part") stage `stage` of the beacon on `map` takes, counted from 1;
+## "" for a stage that takes none, or none at all.
+static func stage_part(map: Dictionary, stage: int) -> String:
+	var stages: Array = map.get("beacon", {}).get("stages", [])
+	if stage < 1 or stage > stages.size():
+		return ""
+	for res_id in (stages[stage - 1] as Dictionary).get("inputs", {}):
+		if is_part(String(res_id)):
+			return String(res_id)
+	return ""
 
 ## Where the beacon on `map` has got to, in words: how many stages stand repaired and what
 ## the next one takes, that it is ready to launch, or how far it has charged and how long is

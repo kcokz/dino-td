@@ -181,9 +181,14 @@ func test_04c_two_raids_counting_down_each_is_warned_of_before_it_comes() -> voi
 
 func test_05_the_screen_says_the_valley_heard_it() -> void:
 	var main = await _level()
-	_next_step()
+	var stages: int = int(game_state_node.beacon_stage_count())
+	for i in range(stages):
+		_next_step()
 	await wait_frames(1)
 	assert_eq(String(main.hud.hint_label.text), tr("HINT_BEACON_STIRS"), "Its hum carried down the valley")
+	# A stage that locates the next part's wreck says that too, with the hum (Config.WRECKS).
+	assert_true(tr("HINT_WRECK_LOCATED").begins_with(tr("HINT_BEACON_STIRS").substr(0, 6)),
+		"(and the line that says where the next part is begins with the hum)")
 
 # ==============================================================================
 # 3. Launched: a grace, counted down, before the final wave

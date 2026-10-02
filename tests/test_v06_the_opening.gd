@@ -2,8 +2,9 @@
 # v0.6 feedback on the opening: "初始木栅栏强度很低，需要把迅猛龙强度稍微调低，船舱血量提升到100，
 # 这样船舱的攻击能打败初始迅猛龙" and "除了木栅栏需要再想一个初始的防御建筑".
 #
-# The cabin stands a hundred hits and shoots what comes near it -- enough for the first
-# raid, not for a big one -- and the opening has a second defence made of wood: a trip bow,
+# The cabin stands a hundred hits -- and since 2026-10-02 shoots nothing ("家里不需要任何防御就能顶住，
+# cabin的自动射击得取消了，太厉害"): left alone, the first raid brings it down before dusk, and he can
+# save it -- and the opening has a second defence made of wood: a trip bow,
 # weaker than the set crossbow that comes with stone and bone. It was a bow tower that aimed by
 # itself, until v0.6 round two ("Bow tower作为初始防御太过于强大……防御装置自动可以攻击需要合理解释").
 #
@@ -40,49 +41,44 @@ func after_each() -> void:
 func _row(type_id: String) -> Dictionary:
 	return config_node.BUILDINGS[type_id]
 
-## Damage a second to one animal: the cabin's gun at its rate of fire, a trap as fast as it is
-## re-armed.
+## Damage a second to one animal from a trap, as fast as it is re-armed.
 func _dps(type_id: String) -> float:
 	var row: Dictionary = _row(type_id)
-	if row.has("fire_rate"):
-		return float(row["damage"]) * float(row["fire_rate"])
 	return float(row["damage"]) / float(row["rearm_seconds"])
-
-## Seconds for a building of `type_id` to shoot `count` raptors dead, one after another.
-func _seconds_to_kill(type_id: String, count: int) -> float:
-	var shots_each: float = ceil(raptor_stat("hp") / float(_row(type_id)["damage"]))
-	return float(count) * shots_each / float(_row(type_id)["fire_rate"])
 
 # ==============================================================================
 # 1. The cabin
 # ==============================================================================
 
-func test_01_the_cabin_shoots_what_comes_near_it() -> void:
+func test_01_the_cabin_shoots_nothing() -> void:
 	var main = await fresh_level()
 	_cleanup_nodes.append(main)
 	var cabin = main.current_core
 	assert_almost_eq(float(cabin.max_hp), core_hp(), 0.001, "The cabin stands as many hits as Config says")
-	assert_almost_eq(float(cabin.attack_range), float(_row("core")["range"]), 0.001, "It has a gun, with the reach Config gives it")
+	assert_false("attack_range" in cabin, "It has no gun")
+	assert_eq(String(cabin._panel_status()), "", "and its card gives no rate of fire")
 	var raptor = load(String(config_node.get_dino_script_path("raptor"))).new()
 	_cleanup_nodes.append(raptor)
 	main.add_child(raptor)
 	raptor.setup("raptor")
 	raptor.set_physics_process(false)
-	raptor.global_position = cabin.global_position + Vector3(float(_row("core")["range"]) * 0.6, 0.0, 0.0)
+	raptor.global_position = cabin.global_position + Vector3(config_node.get_building_half("core").x + 1.5, 0.0, 0.0)
 	await wait_physics_frames(2)
-	await wait_seconds(1.0 / float(_row("core")["fire_rate"]) + 0.3)
-	assert_lt(float(raptor.current_hp), raptor_stat("hp"), "A raptor that comes near is shot")
-	assert_not_null(cabin.find_child("Head", true, false), "From the gun on its roof")
+	await wait_seconds(2.0)
+	assert_almost_eq(float(raptor.current_hp), raptor_stat("hp"), 0.001, "A raptor that comes up to it is not shot")
 
-func test_02_by_itself_it_outlasts_the_first_raid_and_not_a_big_one() -> void:
-	# Worst case -- every raptor biting the whole time it takes the gun to kill them all.
+func test_02_left_alone_the_first_raid_brings_it_down_before_dusk_and_he_can_save_it() -> void:
+	# Every raptor of the first raid biting it, nothing in their way: the cabin is down before the day
+	# is -- a raid is not sat out inside (the player, 2026-10-02: "家里不需要任何防御就能顶住").
 	var first: int = int(config_node.WAVES["base_count"])
-	var first_bites: float = float(first) * raptor_stat("damage") * _seconds_to_kill("core", first)
-	assert_lt(first_bites, core_hp(), "The first raid, all of it biting, cannot bring the cabin down before its gun is done")
-	var big: int = int(ceil(float(first + int(config_node.WAVES["count_per_wave"]) * (int(config_node.WAVES["big_every"]) - 1))
-		* float(config_node.WAVES["big_multiplier"])))
-	var big_bites: float = float(big) * raptor_stat("damage") * _seconds_to_kill("core", big)
-	assert_gt(big_bites, core_hp(), "A big raid could: the cabin alone is not a defence")
+	var falls_in: float = core_hp() / (float(first) * raptor_stat("damage") * raptor_stat("attack_rate"))
+	var parts: Dictionary = config_node.DAY["parts"]
+	var daylight: float = float(parts["dusk"]) - float(config_node.DAY["start"]) - float(config_node.map_data()["beats"]["first_raid"])
+	assert_lt(falls_in, daylight, "Left alone, the first raid brings the cabin down before dusk takes it home")
+	# He, at it, kills them one by one long before that.
+	var hits_each: float = ceil(raptor_stat("hp") / float(config_node.HERO["damage"]))
+	var he_takes: float = float(first) * hits_each * float(config_node.HERO["attack_rate"])
+	assert_lt(he_takes * 2.0, falls_in, "He has time to come out and kill them all, twice over")
 
 # ==============================================================================
 # 2. The trip bow

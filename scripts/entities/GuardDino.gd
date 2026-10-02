@@ -126,6 +126,7 @@ func _guard_step(delta: float) -> void:
 		return
 	_calm = maxf(0.0, _calm - delta)
 	_tick_traps(delta)
+	_tick_burst(delta)
 	# After somebody, or warning him off, or on its way home from it: up, and for a while after.
 	if guard_state != GuardState.POST_ROAM and guard_state != GuardState.SLEEPING:
 		_up_for = float(_guards().get("stay_up", 20.0))
@@ -135,6 +136,7 @@ func _guard_step(delta: float) -> void:
 	if _think_clock <= 0.0:
 		_think_clock = _next_think()
 		_guard_think()
+		_consider_burst()
 	match guard_state:
 		GuardState.POST_ROAM:
 			_process_post_roam(delta)
@@ -184,6 +186,10 @@ func _guard_think() -> void:
 					or global_position.distance_to(post_position) > leash_radius \
 					or not _can_get_at(chase_target):
 				_go_home()
+
+## A guard bursts only after him: not warning him off, not going home (Config.DINO_AI.bursts).
+func _may_burst() -> bool:
+	return guard_state == GuardState.AGGRO_CHASE
 
 func _begin_chase(threat: Node3D, call_the_others: bool = true) -> void:
 	chase_target = threat
@@ -247,6 +253,7 @@ func _nearest_warning_gap(threat: Node3D) -> float:
 
 ## He backed off: back to its post, settling a moment (reaggro_seconds) before it will warn again.
 func _stand_down() -> void:
+	_drop_burst()
 	chase_target = null
 	current_target = null
 	_roused = false
@@ -368,6 +375,7 @@ func wake(by: Node3D = null) -> void:
 		_roused = true
 
 func _go_home() -> void:
+	_drop_burst()
 	chase_target = null
 	current_target = null
 	post_position = _reachable_home()
@@ -410,7 +418,8 @@ func _process_aggro_chase(delta: float) -> void:
 	if _target_in_reach(chase_target):
 		guard_state = GuardState.ATTACKING
 		current_state = State.ATTACKING
-		guard_attack_timer = _bite_interval() * 0.5
+		# Got to him on a burst, it bites at once (Dino._begin_attack).
+		guard_attack_timer = 0.0 if _end_burst_in_a_bite() else _bite_interval() * 0.5
 		velocity = Vector3.ZERO
 		return
 	_travel(chase_target.global_position, delta)

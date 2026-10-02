@@ -3,7 +3,8 @@
 # 单位都继承的，之后写新的单位都可以直接继承，我就发现pause的时候cabin的塔还在进攻恐龙，有的恐龙还在抽搐".
 #
 # The pause was a flag each unit asked for itself (GameState.is_paused), and what did not ask went
-# on: the cabin's gun fires on a timer of its own, and the animations played on. Now the flag is
+# on: the cabin's gun fired on a timer of its own (it has no gun since 2026-10-02), and the
+# animations played on. Now the flag is
 # the engine's pause: the tree is paused, and everything in the level that does not say otherwise
 # holds where it is -- a unit added later too, with nothing of its own to check (Main pauses every
 # child of the level unless it says otherwise). What answers while paused says so: the interface,
@@ -91,23 +92,28 @@ func test_02_what_is_added_later_holds_too_without_a_line_of_its_own() -> void:
 	main.add_child(asks)
 	assert_true(asks.can_process(), "Only what says so answers -- as the interface does")
 
-func test_03_the_cabins_gun_holds_its_fire() -> void:
-	# The report: paused, the cabin's gun went on shooting the raid (its fire timer ran on).
+func test_03_a_raider_at_the_cabin_holds_its_bite() -> void:
+	# The report: paused, the cabin's gun went on shooting the raid (its fire timer ran on). It has no
+	# gun now; what runs on a clock at the cabin is the raid's bite.
 	var main = await _level()
 	main.hero.process_mode = Node.PROCESS_MODE_DISABLED
 	main.hero.global_position = main.current_core.global_position + Vector3(20.0, 0.0, 20.0)
-	var reach: float = float(config_node.BUILDINGS["core"]["range"])
-	# In the gun's reach from the start. Not disabled: a disabled body is taken out of the physics
-	# the gun sees by -- a pause is not (it holds everything where it is, the bodies included).
-	var d = _raider(main, main.current_core.global_position + Vector3(0.0, 0.0, config_node.get_building_half("core").y + reach * 0.4))
-	await wait_physics_frames(1)
-	game_state_node.is_paused = true
-	var hp: float = d.current_hp
-	await wait_physics_frames(int(4.0 / float(config_node.BUILDINGS["core"]["fire_rate"]) * float(Engine.physics_ticks_per_second)))
-	assert_eq(d.current_hp, hp, "Paused, the cabin's gun does not fire")
-	game_state_node.is_paused = false
-	for i in range(int(6.0 * float(Engine.physics_ticks_per_second))):
+	var core = main.current_core
+	var d = _raider(main, core.global_position + Vector3(0.0, 0.0, -(config_node.get_building_half("core").y + 1.0)))
+	var full: float = float(core.current_hp)
+	for i in range(int(10.0 * float(Engine.physics_ticks_per_second))):
 		await wait_physics_frames(1)
-		if not is_instance_valid(d) or d.current_hp < hp:
+		if float(core.current_hp) < full:
 			break
-	assert_true(not is_instance_valid(d) or d.current_hp < hp, "Unpaused, it does")
+	assert_lt(float(core.current_hp), full, "(the raider at the cabin is biting it)")
+	game_state_node.is_paused = true
+	var hp: float = float(core.current_hp)
+	var interval: float = 1.0 / float(config_node.DINOS[String(d.dino_type)]["attack_rate"])
+	await wait_physics_frames(int(3.0 * interval * float(Engine.physics_ticks_per_second)))
+	assert_eq(float(core.current_hp), hp, "Paused, it does not bite")
+	game_state_node.is_paused = false
+	for i in range(int(6.0 * interval * float(Engine.physics_ticks_per_second))):
+		await wait_physics_frames(1)
+		if float(core.current_hp) < hp:
+			break
+	assert_lt(float(core.current_hp), hp, "Unpaused, it does")

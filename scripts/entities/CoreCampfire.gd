@@ -1,10 +1,15 @@
 # res://scripts/entities/CoreCampfire.gd
 class_name CoreCampfire
-extends "res://scripts/entities/Tower.gd"
+extends "res://scripts/entities/Building.gd"
 
 ## The cabin: the crew module of the ship that brought the Hero here. The run's objective -- its
-## loss is the game lost -- a turret of its own (the ship's gun on its engine end, which shoots
-## like any tower by Config BUILDINGS.core), and since v0.6 round three a room he walks into.
+## loss is the game lost -- and since v0.6 round three a room he walks into.
+##
+## IT DOES NOT SHOOT (the player, 2026-10-02: "家里不需要任何防御就能顶住，cabin的自动射击得取消了，太厉害").
+## It was a turret (Tower.gd) and its gun killed what came up to it, so a raid could be sat out
+## inside with nothing built. The gun on its engine end is dead now -- the lifeboat's battery keeps
+## the lights and the benches and no more -- and is not drawn (show_the_beacon): what keeps a raid
+## off the cabin is what he builds and he himself.
 ##
 ## "栅栏围了一圈船舱之后，人在船舱外面还是能直接进到船舱，这个不合理，而且人进入船舱应该只能从船舱入口处进去，
 ## 还应该有个进入的效果，船舱应该外形和内置一致，进入船舱之后，应该也是同样的人在船舱里面". It was a box on the
@@ -44,9 +49,8 @@ var _lights: Array[OmniLight3D] = []
 var _light_time: float = 0.0
 
 func _init() -> void:
-	super()             # a turret's machinery -- the range, the fire timer, the head to turn
-	setup("core")       # and the cabin's own numbers
-	_load_tower_config()
+	super()
+	setup("core")       # the cabin's own numbers
 
 func _ready() -> void:
 	add_to_group(NavMaps.HERO_ONLY_GROUP)
@@ -86,6 +90,11 @@ func show_the_beacon() -> void:
 	var done: int = int(gs.beacon_steps)
 	CabinArt.show_parts(body, func(job: String) -> bool: return steps.has(job),
 		func(job: String) -> bool: return steps.find(job) < done)
+	# The dead gun on the engine end is not drawn (it does not shoot: the class's head) -- a gun on the
+	# roof that never fired would say it guards the cabin. After the parts: they show all that is not a job.
+	var gun := body.find_child("Head", true, false) as Node3D
+	if gun != null:
+		gun.visible = false
 
 func _emit_core_hp_changed() -> void:
 	if _last_emitted_hp == current_hp:
@@ -101,7 +110,7 @@ func _on_damaged(_amount: float) -> void:
 	_sound_hit()
 
 func _on_before_destroy() -> void:
-	super._on_before_destroy()      # its gun stops
+	super._on_before_destroy()
 	_emit_core_hp_changed()
 	var gs = _get_game_state()
 	if gs != null and gs.is_game_over:
@@ -408,7 +417,6 @@ func busy_stations() -> Array[Node]:
 ## Work goes on at the benches while he is in here and not otherwise -- the same deal an
 ## unfinished building gets: walking out keeps what is done, and nothing moves in an empty room.
 func _process(delta: float) -> void:
-	super._process(delta)
 	_light_time += delta
 	CabinArt.animate(_lights, _light_time)
 	if not hero_inside:

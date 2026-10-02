@@ -742,6 +742,16 @@ func beacon_stage_count() -> int:
 func beacon_stages_done() -> int:
 	return mini(beacon_steps, beacon_stage_count())
 
+## Whether where the wreck holding `part` lies is known (Config.WRECKS: "第一个信标有烟，第二个信标需要第一个信标给
+## 位置，第三个需要第二个"): the first stage's from the start, each other's once the stage before it stands mended.
+## Worked out from the beacon, held nowhere -- a new run starts it over with the beacon.
+func wreck_located(part: String) -> bool:
+	var cfg = _get_config()
+	if cfg == null or not ("WRECKS" in cfg) or not bool(cfg.WRECKS.get("in_turn", false)):
+		return true
+	var stage: int = int(cfg.part_stage(map_data(), part))
+	return stage <= 1 or beacon_stages_done() >= stage - 1
+
 func is_beacon_launched() -> bool:
 	var jobs: Array[String] = _beacon_jobs()
 	var cfg = _get_config()
@@ -765,6 +775,13 @@ func finish_beacon_job(job_id: String) -> bool:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("beacon_changed"):
 		eb.beacon_changed.emit(beacon_steps)
+	# The stage mended hears where the next stage's part lies (Config.WRECKS) -- said after the stage itself, so
+	# what the screen says last is where to go.
+	var cfg = _get_config()
+	if cfg and "WRECKS" in cfg and bool(cfg.WRECKS.get("in_turn", false)) and eb and eb.has_signal("wreck_located"):
+		var next_part: String = String(cfg.stage_part(map_data(), beacon_steps + 1))
+		if next_part != "":
+			eb.wreck_located.emit(next_part)
 	if is_beacon_launched() and eb and eb.has_signal("beacon_launched"):
 		eb.beacon_launched.emit()
 	return true

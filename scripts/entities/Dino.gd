@@ -549,9 +549,11 @@ func advance_towards_waypoint(delta: float) -> void:
 	_route_clock -= delta
 	_mind_clock += delta
 	_tick_traps(delta)
+	_tick_burst(delta)
 	if _think_clock <= 0.0:
 		_think_clock = _next_think()
 		_think()
+		_consider_burst()
 	_act(delta)
 
 ## Seconds to its next thought: the declared interval, give or take a fifth, so a raid that
@@ -840,8 +842,10 @@ func _rejoin_the_road() -> void:
 func _begin_attack() -> void:
 	is_blocked = true
 	_set_mode(Mode.ATTACK)
-	# Half an interval to the first bite: quick, but not on the frame it arrives.
-	_bite_clock = _bite_interval() * 0.5
+	# Half an interval to the first bite: quick, but not on the frame it arrives -- unless it got to him on a
+	# burst, which ends in the bite (DINO_AI.bursts): it would reach him, stop, and see him walk out of reach
+	# before it bit, again and again.
+	_bite_clock = 0.0 if _end_burst_in_a_bite() else _bite_interval() * 0.5
 	velocity = Vector3.ZERO
 
 func _bite_interval() -> float:
@@ -931,7 +935,7 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 		# its full speed a raptor went 6.7 cm a frame at a spot it had to be within 5 cm of -- past it,
 		# turned, past it the other way, its head swinging each time, for as long as it was sent there
 		# (the debug-agent's BUG-005: a raid waiting at the cabin's fenced back, "原地打转").
-		desired = to.normalized() * minf(speed * pace * hurry, to.length() / maxf(delta, 0.0001))
+		desired = to.normalized() * minf(speed * pace * hurry * _burst_pace(), to.length() / maxf(delta, 0.0001))
 	elif to.length() <= 0.05:
 		_settled_on = goal
 	# Near its place, it faces what it came for -- walking the last steps or waiting there -- not the
@@ -1159,6 +1163,79 @@ var hurry: float = 1.0
 
 func hurry_in(times: float) -> void:
 	hurry = maxf(1.0, times)
+
+## A burst at the man (Config.DINO_AI.bursts, DINOS.<id>.burst; the player, 2026-10-02: "恐龙追不上人"): the
+## seconds left of it, and then of being winded. Its own pace (`speed`) is never changed: the burst is a
+## pace it goes at (_travel), as hurrying in is.
+var _burst_left: float = 0.0
+var _rest_left: float = 0.0
+
+## Its species' burst, {within, pace, seconds, rest, winded_pace}; empty for one that has none.
+func _burst() -> Dictionary:
+	var cfg = _get_config()
+	if cfg == null or not ("DINO_AI" in cfg) or not ("DINOS" in cfg):
+		return {}
+	var kind: String = String(cfg.DINOS.get(dino_type, {}).get("burst", ""))
+	return cfg.DINO_AI.get("bursts", {}).get(kind, {}) if kind != "" else {}
+
+## Whether what it is after is the man.
+func _after_the_man() -> bool:
+	return current_target is Node3D and is_instance_valid(current_target) and (current_target as Node).is_in_group("hero")
+
+## Whether it is bursting at the man now.
+func bursting() -> bool:
+	return _burst_left > 0.0 and _after_the_man()
+
+## Times its own pace the burst has it going: its pace in the burst, winded after it, 1 otherwise -- and 1
+## whenever it is not after him.
+func _burst_pace() -> float:
+	if not _after_the_man():
+		return 1.0
+	if _burst_left > 0.0:
+		return float(_burst().get("pace", 1.0))
+	if _rest_left > 0.0:
+		return float(_burst().get("winded_pace", 1.0))
+	return 1.0
+
+func _tick_burst(delta: float) -> void:
+	if _burst_left > 0.0:
+		_burst_left -= delta
+		if _burst_left <= 0.0:
+			_burst_left = 0.0
+			_rest_left = float(_burst().get("rest", 0.0))
+	elif _rest_left > 0.0:
+		_rest_left = maxf(0.0, _rest_left - delta)
+
+## On a thought: after the man, close, not yet at him, its wind in it -- it bursts, with its call (the cue).
+func _consider_burst() -> void:
+	if _burst_left > 0.0 or _rest_left > 0.0 or going_home or is_dead or held_left > 0.0 \
+			or not _after_the_man() or not _may_burst():
+		return
+	var b: Dictionary = _burst()
+	if b.is_empty():
+		return
+	var him := current_target as Node3D
+	if _flat(global_position).distance_to(_flat(him.global_position)) > float(b.get("within", 0.0)) \
+			or _target_in_reach(him):
+		return
+	_burst_left = float(b.get("seconds", 0.0))
+	_alert()
+
+## Whether how it is going lets it burst: a raider set on him.
+func _may_burst() -> bool:
+	return mode == Mode.ENGAGE
+
+## Got to him on a burst: the burst is over, in the bite -- winded from now. True when it was bursting.
+func _end_burst_in_a_bite() -> bool:
+	if not bursting():
+		return false
+	_burst_left = 0.0
+	_rest_left = float(_burst().get("rest", 0.0))
+	return true
+
+## The burst dropped, its wind left as it was: gone home, stood down, held back by a light.
+func _drop_burst() -> void:
+	_burst_left = 0.0
 
 ## Hurrying in from the edge: no longer once it is in sight (FogOfWar.is_in_sight) or near the cabin.
 func _keep_hurrying() -> void:
@@ -2070,6 +2147,8 @@ func debug_state() -> Dictionary:
 		"velocity": _xz(velocity),
 		"safe_velocity": _xz(_safe_velocity),
 		"speed": snappedf(speed, 0.01),
+		"burst": snappedf(_burst_left, 0.01),
+		"winded": snappedf(_rest_left, 0.01),
 		"mode": String(Mode.keys()[mode]),
 		"state": String(State.keys()[current_state]),
 		"target": _describe(target),

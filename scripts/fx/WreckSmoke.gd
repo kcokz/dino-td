@@ -5,10 +5,11 @@ extends GPUParticles3D
 ## The smoke over one of the ship's wrecks while it has not been searched (Config.WRECKS; GAME-DESIGN
 ## 9.3, the player: "烟柱，远处看得见"): a column of the engine's particles rising off it, leaning on
 ## the wind, some twenty metres of it. It is drawn over the fog of war -- one step after the mist
-## (FogOfWar), so it rises out of the mist where nothing else on unseen ground is drawn: where the
-## wrecks lie is known from the cabin from the first, and what is on the way to them is not. It is
-## not the wreck's own child, which the fog hides until it is seen; the level raises it beside it
-## (Main.spawn_resource_nodes). Searched, it stops, and what is in the air thins away.
+## (FogOfWar), so it rises out of the mist where nothing else on unseen ground is drawn: where a wreck
+## lies is known from far off, and what is on the way to it is not. Only a wreck that is located smokes
+## (Config.WRECKS: the first stage's from the start, the next once the stage before it is mended -- its
+## column then seen going up). It is not the wreck's own child, which the fog hides until it is seen; the
+## level raises it beside it (Main). Searched, it stops, and what is in the air thins away.
 
 ## Drawn after everything, the mist included (FogOfWar draws at one less).
 const PRIORITY: int = Material.RENDER_PRIORITY_MAX
@@ -17,8 +18,9 @@ const GROUP: String = "wreck_smoke"
 ## The wreck it rises off.
 var wreck: Node3D = null
 
-## Smoke for `over`, from Config.WRECKS.smoke, already risen: the column is there when the level is.
-static func make(over: Node3D) -> WreckSmoke:
+## Smoke for `over`, from Config.WRECKS.smoke: `risen`, already up -- the column is there when the level
+## is; or not, seen going up (a wreck just located).
+static func make(over: Node3D, risen: bool = true) -> WreckSmoke:
 	var cfg = Engine.get_main_loop().root.get_node_or_null("Config") if Engine.get_main_loop() is SceneTree else null
 	var s: Dictionary = cfg.WRECKS.get("smoke", {}) if (cfg and "WRECKS" in cfg) else {}
 	var p := WreckSmoke.new()
@@ -26,7 +28,7 @@ static func make(over: Node3D) -> WreckSmoke:
 	p.wreck = over
 	p.amount = int(s.get("amount", 56))
 	p.lifetime = float(s.get("lifetime", 16.0))
-	p.preprocess = p.lifetime
+	p.preprocess = p.lifetime if risen else 0.0
 	p.local_coords = false
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var m := ParticleProcessMaterial.new()

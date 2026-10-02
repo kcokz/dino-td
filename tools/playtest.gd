@@ -288,16 +288,15 @@ func _scenario_play(spec: String) -> void:
 					note.call("the alpha is on the field")
 					await _portrait("alpha", (d as Node3D).global_position, 4.0)
 			var home: Vector3 = cabin.door_inside()
-			# In the final wave it is the cabin that is bitten: he goes out to what is at it, as a
-			# player would, while he has the health for it -- and eats when he has not.
-			var launched: bool = wm.final_wave or gs.is_beacon_launched()
-			# Launched, he is sent out at what is at the cabin, as a click sends him; in a raid he
-			# fights only what has got to him on his side of the wall (Hero._find_nearest_enemy).
-			var near: Node3D = _nearest_dino(hero, 9.0) if launched else hero._find_nearest_enemy(3.0)
+			# What is at the cabin he goes out to, as a player would, while he has the health for it --
+			# and eats when he has not. The cabin's gun used to finish a raid while he sheltered at the
+			# door; it has none since 2026-10-02 ("cabin的自动射击得取消了"), and a raid sat out inside
+			# brings it down.
+			var near: Node3D = _nearest_dino(hero, 9.0)
 			var hurt: bool = hero.current_hp < hero.max_hp * 0.35
 			if hurt and not gs.meals.is_empty() and int(hero.current_state) != 6:
 				hero.order_eat(String(gs.meals.keys()[0]))
-			elif near != null and not (hurt and launched):
+			elif near != null and not hurt:
 				if hero.target_enemy != near:
 					hero.order_attack(near)
 			elif hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
@@ -460,7 +459,7 @@ func _play_until(done: Callable, seconds: float, what: String) -> bool:
 		# Out in the dark he carries a torch, as a player does: the night's hunters are out for a man without
 		# one (GAME-DESIGN 9.3). Without, the bot was bitten to death on the small valley's first night, run
 		# after run (the debug-agent's note of 2026-09-29).
-		if hero.has_method("can_light_torch") and hero.can_light_torch() \
+		if not _no_torch and hero.has_method("can_light_torch") and hero.can_light_torch() \
 				and not bool(_main.current_core.is_inside(hero.global_position)) and hero.light_torch():
 			print("[play %5.1fs] lit a torch, out in the dark while %s" % [_play_clock, what])
 		var moved: float = hero.global_position.distance_to(was)
@@ -528,6 +527,20 @@ func _wreck_to_search(job: String) -> Node:
 ## out of its hours goes back once he is out of its reach -- and comes back to the wreck, as a player learns
 ## to. Standing, the bot was bitten to death at the river's antenna on its first day.
 func _search_wreck(hero: Node, node: Node) -> void:
+	# The nest's wreck he goes to in the dark without a torch, as a player learns to: its light wakes the
+	# guards (NEST_GUARDS), and since 2026-10-02 they dash at a man close by (DINO_AI.bursts) -- the bot went
+	# with its torch lit and was dead in three seconds, run after run.
+	var cfg = root.get_node("Config")
+	_no_torch = String(cfg.RESOURCE_NODES.get(String(node.resource_type), {}).get("din", {}).get("draws", "")) == "guards"
+	if _no_torch and hero.has_method("put_out_torch"):
+		hero.put_out_torch()
+	await _search_wreck_through(hero, node)
+	_no_torch = false
+
+## Whether he keeps his torch out for now (_search_wreck).
+var _no_torch: bool = false
+
+func _search_wreck_through(hero: Node, node: Node) -> void:
 	var gs = root.get_node("GameState")
 	var wm = _main.wave_manager
 	var part: String = String(node.resource_type)
@@ -546,6 +559,15 @@ func _search_wreck(hero: Node, node: Node) -> void:
 		if not _din_said.has(drawn.get_instance_id()):
 			_din_said[drawn.get_instance_id()] = true
 			print("[play %5.1fs] the wreck's din brought a %s: in, till it goes" % [_play_clock, String(drawn.get("dino_type"))])
+		# One that came up out of the river or in from the edge he fights, as a player would -- hiding in
+		# the cabin waited it out only while the cabin's gun shot what followed him there (it has none
+		# since 2026-10-02). A nest's guards, woken, come all together: he runs for the cabin from them,
+		# and from anything once hurt.
+		if hero.current_hp >= hero.max_hp * 0.35 and not drawn.is_in_group("guard_dinos"):
+			hero.order_attack(drawn)
+			await _play_until(func(): return gs.is_game_over or not is_instance_valid(drawn) or bool(drawn.get("is_dead")) \
+				or hero.current_hp < hero.max_hp * 0.35, 30.0, "fighting what the din brought")
+			continue
 		_main.order_enter_cabin()
 		# (The run lost while he waits, the cabin may be gone: asked of what is still there.)
 		await _play_until(func():
@@ -848,7 +870,7 @@ func _scenario_siege(spec: String) -> void:
 	var raiders: int = int(parts[2]) if parts.size() > 2 else 10
 	var hp_mult: float = float(parts[3]) if parts.size() > 3 else 1.0
 	var every_side: bool = parts.size() > 4 and parts[4] == "all"
-	# "bare": no ring -- the cabin and its own gun against the raid (v0.6).
+	# "bare": no ring -- the cabin alone against the raid (it has had no gun since 2026-10-02).
 	var bare: bool = parts.size() > 4 and parts[4] == "bare"
 	# "twin" anywhere after: the traps improved where they stand, as a late base has them.
 	var trap_type: String = "set_crossbow_2" if parts.slice(4).has("twin") else "set_crossbow"

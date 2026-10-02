@@ -9,6 +9,9 @@
 # search, and the part falls at his feet. Until it is searched its smoke rises over the mist
 # (WreckSmoke). What a repaired stage stirs up comes in by the valley's ways in, in turn.
 #
+# Found one from another (the player, 2026-10-02: "第一个信标有烟，第二个信标需要第一个信标给位置，第三个需要
+# 第二个"): only the first stage's wreck smokes at the start; a stage mended locates the next one's.
+#
 # Everything expected is read from Config.
 extends "res://tests/test_base.gd"
 
@@ -196,10 +199,16 @@ func test_05_its_smoke_rises_over_the_mist_where_the_wreck_is_not_drawn() -> voi
 	var main = await _level_on()
 	await wait_frames(3)
 	var shroud_priority: int = (main.fog.shroud.mesh as QuadMesh).material.render_priority
+	var map: Dictionary = game_state_node.map_data()
+	assert_true(bool(config_node.WRECKS["in_turn"]), "(the wrecks are found one from another)")
 	for part in PARTS:
 		var w: Node3D = _wreck(part) as Node3D
 		var smoke: WreckSmoke = _smoke_of(w)
-		assert_not_null(smoke, "The %s's wreck smokes" % part)
+		if int(config_node.part_stage(map, part)) > 1:
+			assert_null(smoke, "The %s's wreck, not located yet, does not smoke" % part)
+			assert_false(w.is_visible_in_tree(), "and is not drawn in the mist")
+			continue
+		assert_not_null(smoke, "The %s's wreck -- the first stage's -- smokes from the start" % part)
 		if smoke == null:
 			continue
 		assert_lt(_flat(smoke.global_position, w.global_position), 0.1, "over it")
@@ -214,9 +223,73 @@ func test_05_its_smoke_rises_over_the_mist_where_the_wreck_is_not_drawn() -> voi
 	var gone: WreckSmoke = _smoke_of(searched)
 	gone._process(0.016)
 	assert_false(gone.is_smoking(), "Searched, it stops")
-	assert_true(_smoke_of(_wreck("battery")).is_smoking(), "the others smoke on")
 	gone._process(gone.lifetime + 0.1)
 	assert_true(gone.is_queued_for_deletion(), "and what was in the air has thinned away a lifetime on")
+
+func test_09_each_wreck_is_located_by_the_stage_before_it() -> void:
+	# The player, 2026-10-02: "第一个信标有烟，第二个信标需要第一个信标给位置，第三个需要第二个".
+	var main = await _level_on()
+	await wait_frames(3)
+	var map: Dictionary = game_state_node.map_data()
+	var order: Array[String] = []
+	for stage in range(1, int(game_state_node.beacon_stage_count()) + 1):
+		var part: String = String(config_node.stage_part(map, stage))
+		assert_ne(part, "", "Stage %d takes a part" % stage)
+		assert_eq(int(config_node.part_stage(map, part)), stage, "and that part is stage %d's" % stage)
+		order.append(part)
+	assert_true(game_state_node.wreck_located(order[0]), "The first stage's wreck is located from the start")
+	for i in range(1, order.size()):
+		assert_false(game_state_node.wreck_located(order[i]), "The %s's is not" % order[i])
+	var heard: Array = []
+	var eb = tree.root.get_node("EventBus")
+	var listen := func(part: String) -> void: heard.append(part)
+	eb.wreck_located.connect(listen)
+	for i in range(1, order.size()):
+		var w: Node3D = _wreck(order[i]) as Node3D
+		assert_false(main.fog.is_seen(w.global_position), "(the %s's wreck lies in the mist)" % order[i])
+		heard.clear()
+		game_state_node.finish_beacon_job(String(game_state_node.beacon_next_job()))
+		assert_eq(heard, [order[i]], "Stage %d mended locates the %s's wreck, and only it" % [i, order[i]])
+		assert_true(game_state_node.wreck_located(order[i]), "located for good")
+		var smoke: WreckSmoke = _smoke_of(w)
+		assert_not_null(smoke, "Its smoke goes up")
+		if smoke != null:
+			assert_almost_eq(float(smoke.preprocess), 0.0, 0.001, "seen going up, not already risen")
+		assert_true(main.fog.is_seen(w.global_position), "and the mist over it becomes seen ground: its place shows")
+		var where: String = tr("DIR_" + String(main.wave_manager.side_of(w.global_position)))
+		assert_eq(String(main.hud.hint_label.text), tr("HINT_WRECK_LOCATED") % [tr("RESOURCE_%s" % order[i].to_upper()), where],
+			"The screen says what is there and which way, last")
+	heard.clear()
+	game_state_node.finish_beacon_job(String(game_state_node.beacon_next_job()))
+	assert_true(heard.is_empty(), "The last stage locates nothing")
+	assert_eq(String(main.hud.hint_label.text), tr("HINT_BEACON_STIRS"), "and only its hum is said")
+	eb.wreck_located.disconnect(listen)
+	# A new run starts the chain over.
+	game_state_node.reset_game()
+	assert_false(game_state_node.wreck_located(order[1]), "A new run: the second is not located again")
+
+func test_10_found_by_walking_onto_it_it_is_not_located_again() -> void:
+	var main = await _level_on()
+	await wait_frames(3)
+	var map: Dictionary = game_state_node.map_data()
+	var second: String = String(config_node.stage_part(map, 2))
+	var w = _wreck(second)
+	w.harvest(w.strokes_each())
+	game_state_node.add_resources({second: 1})
+	main.hud.show_hint("(before)")
+	game_state_node.finish_beacon_job(String(game_state_node.beacon_next_job()))
+	assert_null(_smoke_of(w), "A wreck searched before it was located raises no smoke")
+	assert_ne(String(main.hud.hint_label.text), tr("HINT_WRECK_LOCATED") % [tr("RESOURCE_%s" % second.to_upper()),
+		tr("DIR_" + String(main.wave_manager.side_of((w as Node3D).global_position)))], "and is not said as found")
+
+func test_11_each_wreck_is_called_and_shown_by_what_it_holds() -> void:
+	# The player, 2026-10-02: "拿了哪个也不知道".
+	var names: Dictionary = {}
+	for part in PARTS:
+		var row: Dictionary = config_node.RESOURCE_NODES[part]
+		assert_eq(String(row["icon"]), part, "The %s's wreck shows the %s's icon" % [part, part])
+		names[tr(String(row["name"]))] = true
+	assert_eq(names.size(), PARTS.size(), "Each is called by its own name")
 
 # ==============================================================================
 # 4. What is said

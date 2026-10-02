@@ -4,10 +4,10 @@ extends "res://scripts/entities/Building.gd"
 
 ## A turret: finds the nearest dinosaur in range and shoots it, turning its head to follow.
 ##
-## Since v0.6 round two only the cabin is one (CoreCampfire): the ship's own gun, the one thing
-## in the valley that picks its own targets. What the player builds are traps (Trap.gd) -- an
-## animal walking into the wire looses them -- because a machine that aims by itself is the
-## ship's, and could not be explained for anything he lashed together from wood and stone.
+## Nothing in the game is one now. From v0.6 round two only the cabin was (the ship's own gun);
+## since 2026-10-02 the cabin does not shoot either (CoreCampfire: "cabin的自动射击得取消了，太厉害").
+## What the player builds are traps (Trap.gd) -- an animal walking into the wire looses them. The
+## machinery stays for the old suites that test a turret as such.
 
 # ==============================================================================
 # Configuration & Properties

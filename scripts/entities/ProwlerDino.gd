@@ -145,6 +145,9 @@ func _keep_to(light: Dictionary, backing_out: bool) -> void:
 	var was: Dictionary = _wary
 	var was_backing: bool = _backing_out and not was.is_empty()
 	_wary = light
+	# A light in the way ends a lunge: it keeps out of it (Config.DINO_AI.bursts).
+	if not light.is_empty():
+		_drop_burst()
 	_backing_out = backing_out
 	if backing_out and not was_backing:
 		_backing_best = _flat(global_position).distance_to(_flat(light["at"]))
@@ -159,6 +162,14 @@ func _keep_to(light: Dictionary, backing_out: bool) -> void:
 	if light.is_empty() and not was.is_empty():
 		_headway_clock = 0.0
 		_headway_from = global_position
+
+## It lunges only in the dark or at bay -- never keeping to a light's edge or backing out of it, which would
+## have it backing out of a torch at a lunge's pace (Config.DINO_AI.bursts).
+func _may_burst() -> bool:
+	return _wary.is_empty() and super._may_burst()
+
+func _burst_pace() -> float:
+	return 1.0 if not _wary.is_empty() else super._burst_pace()
 
 ## In the dark, as any raider; at a light, keeping to its edge or backing out to it.
 func _act(delta: float) -> void:
