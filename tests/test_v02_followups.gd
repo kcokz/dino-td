@@ -112,11 +112,12 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 		"Build menu shows %d buttons (one per BUILDABLE_TYPES entry plus Back)" % expected)
 
 	# v0.4: buildings are defence and nothing else, so the menu is stakes and a
-	# trap. Anything offered has to be buildable. (v0.6 round six: one slot a job, its first form --
-	# the set crossbow is what the trip bow becomes with bone, not an entry of its own.)
+	# tower. Anything offered has to be buildable. (v0.6 round six: one slot a job, its first form --
+	# since the 2026-10-02 rebuild the bow tower's bigger store is what it becomes, not an entry of its own.)
 	assert_has(config_node.BUILDABLE_TYPES, "wall", "Stakes are offered in the build menu")
-	assert_has(config_node.BUILDABLE_TYPES, "trip_bow", "So is the trap")
-	assert_false(config_node.BUILDABLE_TYPES.has("set_crossbow"), "and what it becomes is an upgrade, not an entry")
+	assert_has(config_node.BUILDABLE_TYPES, "bow_tower", "So is the tower")
+	var bigger: String = String(config_node.upgrade_targets("bow_tower")[0])
+	assert_false(config_node.BUILDABLE_TYPES.has(bigger), "and what it becomes (%s) is an upgrade, not an entry" % bigger)
 	for b_type in config_node.BUILDABLE_TYPES:
 		# By kind first, as BuildSystem looks it up: a bone stake is a stake.
 		var scripts: Dictionary = build_system_script.SCRIPT_PATHS
@@ -240,11 +241,12 @@ func test_15_build_preview_ghost_follows_selection() -> void:
 
 	assert_null(main.build_preview, "No ghost exists before a building type is selected")
 
-	main.on_build_selected("set_crossbow")
+	main.on_build_selected("log_tower")
 	assert_not_null(main.build_preview, "Selecting a type creates the ghost")
 	assert_not_null(main.build_preview_mesh, "Ghost has a body the player can see")
-	# What a trap covers is its lane, not a circle (v0.6 round two: nothing the player builds aims).
-	assert_null(main.build_preview_ring, "A trap's ghost draws no ring")
+	# What the log tower covers is its lane, not a circle (the 2026-10-02 rebuild: it rolls its logs
+	# down the lane in front of it -- it took the lane-shooting trap's place).
+	assert_null(main.build_preview_ring, "A log tower's ghost draws no ring")
 	assert_not_null(main.build_preview.find_child("LanePreview", false, false), "It shows its lane instead")
 
 	main.cancel_building_selection()
@@ -264,8 +266,8 @@ func test_16_preview_ring_size_matches_the_building() -> void:
 	assert_eq(main._preview_range_for("wall"), 0.0, "A wall has no coverage range")
 	assert_null(main.build_preview_ring, "A wall ghost draws no ring")
 
-	# Nor has a trap: it shoots along its lane, and that is what its ghost shows.
-	assert_eq(main._preview_range_for("set_crossbow"), 0.0, "A trap has no coverage range")
+	# Nor has the log tower: it rolls along its lane, and that is what its ghost shows.
+	assert_eq(main._preview_range_for("log_tower"), 0.0, "A log tower has no coverage range")
 
 func test_17_only_the_turret_has_a_coverage_ring() -> void:
 	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")
@@ -344,15 +346,17 @@ func test_21_the_opening_can_buy_something() -> void:
 			"The opening stock covers the %s the cheapest building '%s' needs" % [res_id, cheapest_name])
 
 func test_22_the_opening_does_not_trivially_buy_the_whole_defence() -> void:
-	# The flip side: the opening must not hand over a tower, or the first real decision
-	# never happens. Since v0.6 a tower is tipped with bone, which lies nowhere but under
-	# a dead dinosaur -- so the opening cannot pay for one however it is tuned.
-	var price: Dictionary = config_node.BUILDINGS["set_crossbow"].get("cost", {})
+	# The flip side: the opening must not hand over the whole defence, or the first real decision
+	# never happens. Since the 2026-10-02 rebuild the bow tower is the opening's decision (Config:
+	# it and its first arrows are most of the opening's wood); the catapult is built with stone,
+	# which comes out of the ground only to the pick, made of bone off a dead dinosaur -- so the
+	# opening cannot pay for one however it is tuned.
+	var price: Dictionary = config_node.BUILDINGS["catapult"].get("cost", {})
 	var short: Array = []
 	for res_id in price:
 		if int(config_node.get_opening_stock(String(res_id))) < int(price[res_id]):
 			short.append(String(res_id))
-	assert_gt(short.size(), 0, "The opening stock cannot pay for a tower (it has no %s)" % ", ".join(short))
+	assert_gt(short.size(), 0, "The opening stock cannot pay for a catapult (it has no %s)" % ", ".join(short))
 
 # ==============================================================================
 # 7. Left-click inspects, right-click acts -- and the two never interfere
@@ -458,8 +462,8 @@ func test_28_build_time_is_a_function_of_price() -> void:
 
 	# The invariant is that time tracks price, not that any two particular buildings
 	# sit in a given order -- prices move with every balance pass.
-	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("set_crossbow"),
-		"Cheap stakes go up faster than a turret")
+	assert_lt(config_node.get_build_time("wall"), config_node.get_build_time("bow_tower"),
+		"Cheap stakes go up faster than a tower")
 	for a in config_node.BUILDABLE_TYPES:
 		for b in config_node.BUILDABLE_TYPES:
 			if total_price_of(String(a)) < total_price_of(String(b)):
@@ -468,21 +472,26 @@ func test_28_build_time_is_a_function_of_price() -> void:
 
 	# The relationship is the stated formula, not an accident of hand-tuning. It is
 	# superlinear, so an expensive building is disproportionately slower than a
-	# cheap one rather than merely proportionally slower.
+	# cheap one rather than merely proportionally slower -- and since the 2026-10-02
+	# rebuild it is times the building's side in cells to BUILD_TIME_SIZE_EXPONENT
+	# (one for anything of one cell): a tower of four cells a side is a work.
 	var per: float = float(config_node.BUILD_SECONDS_PER_RESOURCE)
 	var expo: float = float(config_node.BUILD_TIME_EXPONENT)
 	var floor_t: float = float(config_node.BUILD_TIME_MIN)
+	var side_expo: float = float(config_node.BUILD_TIME_SIZE_EXPONENT)
 	assert_gt(expo, 1.0, "The curve is superlinear, so price differences are felt")
 	for b_type in config_node.BUILDABLE_TYPES:
 		var cost_sum: float = 0.0
 		for res_id in config_node.BUILDINGS[b_type].get("cost", {}):
 			cost_sum += float(config_node.BUILDINGS[b_type]["cost"][res_id])
-		assert_almost_eq(config_node.get_build_time(b_type), maxf(floor_t, pow(cost_sum, expo) * per), 0.001,
+		var side: float = pow(float(config_node.get_building_cells(b_type)), side_expo)
+		assert_almost_eq(config_node.get_build_time(b_type), maxf(floor_t, pow(cost_sum, expo) * per) * side, 0.001,
 			"%s build time follows the price formula" % b_type)
 
 	# Doubling the price must more than double the wait, which is the whole point.
-	var cheap: float = config_node.get_build_time("set_crossbow")
-	var dear: float = maxf(floor_t, pow(total_price_of("set_crossbow") * 2.0, expo) * per)
+	var cheap: float = config_node.get_build_time("bow_tower")
+	var dear: float = maxf(floor_t, pow(total_price_of("bow_tower") * 2.0, expo) * per) \
+		* pow(float(config_node.get_building_cells("bow_tower")), side_expo)
 	assert_gt(dear, cheap * 2.0, "Twice the price costs more than twice the time")
 
 	# No building may restate a build_time of its own, or the two can drift apart.
@@ -503,7 +512,7 @@ func test_30_stakes_are_cheap_enough_to_lay_a_row() -> void:
 	# The point of one-wood stakes is that a whole fence is affordable in one go.
 	var stake: int = cost_of("wall")
 	assert_eq(stake, config_node.BUILDINGS["wall"]["cost"]["wood"], "A stake's price is whatever Config says")
-	assert_lt(total_price_of("wall"), total_price_of("set_crossbow"), "And it is the cheap thing on the menu")
+	assert_lt(total_price_of("wall"), total_price_of("bow_tower"), "And it is the cheap thing on the menu")
 	var wallet: int = opening_wood()
 	assert_gte(wallet / stake, 10, "The opening affords at least ten stakes")
 
@@ -675,43 +684,44 @@ func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 		idx += 1
 
 	assert_false(seen["wall"].disabled, "A stake is affordable, so its entry is live")
-	assert_true(seen["trip_bow"].disabled, "A trap is out of reach, so its entry is greyed out")
+	assert_true(seen["bow_tower"].disabled, "A tower is out of reach, so its entry is greyed out")
 
 	# Paying for it lights the entry back up.
-	pay_for(["trip_bow"])
+	pay_for(["bow_tower"])
 	panel._refresh_ui()
-	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("trip_bow")).disabled,
-		"The trap's entry lights up once affordable")
+	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("bow_tower")).disabled,
+		"The tower's entry lights up once affordable")
 
 func test_38_detail_line_reports_cost_and_build_time() -> void:
-	pay_for(["set_crossbow"], 999)
+	pay_for(["bow_tower"], 999)
 	var pair = await _build_menu()
 	var panel = pair[0]
 
 	# Nothing hovered: the line prompts instead of showing a stale unit status.
 	assert_eq(panel.status_label.text, tr("BUILD_HINT_PICK"), "The build page prompts when nothing is hovered")
 
-	panel._show_build_detail("set_crossbow")
+	panel._show_build_detail("bow_tower")
 	var detail: String = str(panel.status_label.text)
-	for res_id in config_node.BUILDINGS["set_crossbow"]["cost"]:
-		assert_true(detail.contains(str(int(config_node.BUILDINGS["set_crossbow"]["cost"][res_id]))),
+	for res_id in config_node.BUILDINGS["bow_tower"]["cost"]:
+		assert_true(detail.contains(str(int(config_node.BUILDINGS["bow_tower"]["cost"][res_id]))),
 			"Detail names what it costs in %s (got '%s')" % [res_id, detail])
-	var secs: String = "%.1f" % config_node.get_build_time("set_crossbow")
+	var secs: String = "%.1f" % config_node.get_build_time("bow_tower")
 	assert_true(detail.contains(secs) or detail.contains(secs.replace(".", ",")),
 		"Detail names the derived build time (got '%s')" % detail)
 
 func test_39_detail_line_says_what_is_actually_missing() -> void:
 	# It used to say "need N wood" whatever was short, which became a lie the moment
-	# a turret wanted stone as well. (The set crossbow is wood and bone since v0.6 round six.)
-	pay_for(["set_crossbow"])
-	game_state_node.resources["bone"] = 0
-	var stone_cost: int = int(config_node.BUILDINGS["set_crossbow"]["cost"].get("bone", 0))
+	# a turret wanted stone as well. (Since the 2026-10-02 rebuild the catapult is wood and stone.)
+	pay_for(["catapult"])
+	game_state_node.resources["stone"] = 0
+	var stone_cost: int = int(config_node.BUILDINGS["catapult"]["cost"].get("stone", 0))
 	var pair = await _build_menu()
 	var panel = pair[0]
 
-	panel._show_build_detail("set_crossbow")
+	panel._show_build_detail("catapult")
 	var detail: String = str(panel.status_label.text)
-	assert_true(detail.contains(str(stone_cost)), "Names the bone that is short (got '%s')" % detail)
+	assert_gt(stone_cost, 0, "The catapult is built with stone")
+	assert_true(detail.contains(str(stone_cost)), "Names the stone that is short (got '%s')" % detail)
 	assert_false(detail.contains(tr("RESOURCE_WOOD")), "And says nothing about the wood already in hand")
 	assert_gt(panel.status_label.modulate.r, panel.status_label.modulate.g,
 		"The shortfall is tinted red rather than left for the player to notice")
@@ -721,7 +731,7 @@ func test_40_unit_status_does_not_overwrite_the_build_detail() -> void:
 	var pair = await _build_menu()
 	var panel = pair[0]
 
-	panel._show_build_detail("set_crossbow")
+	panel._show_build_detail("bow_tower")
 	var detail: String = str(panel.status_label.text)
 	# The per-unit status ticker must leave the build page's line alone.
 	panel._update_status_display()

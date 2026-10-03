@@ -33,12 +33,21 @@ func _drop(res_id: String, at: Vector3, amount: int = 3) -> Node:
 	tree.root.add_child(context)
 	return DropItem.spawn(context, at, res_id, amount)
 
-func test_01_every_resource_has_a_pile_of_its_own() -> void:
+## What lies on the ground: every resource but the towers' ammunition, which is made at the bench and kept in the
+## stock (Config.is_made) -- never found, never dropped.
+func _found() -> Array:
+	var out: Array = []
 	for res in config_node.RESOURCES:
+		if not config_node.is_made(String(res)):
+			out.append(res)
+	return out
+
+func test_01_every_resource_has_a_pile_of_its_own() -> void:
+	for res in _found():
 		assert_true(VisualLibrary.has_art("drop/" + String(res)), "%s has a pile model" % res)
 
 func test_02_a_drop_is_its_pile_not_a_cube() -> void:
-	for res in config_node.RESOURCES:
+	for res in _found():
 		var drop = _drop(String(res), Vector3(60.0 + 3.0 * float(config_node.RESOURCES.find(res)), 0.0, 60.0))
 		assert_not_null(drop, "A %s pile was dropped" % res)
 		if drop == null:
@@ -53,7 +62,7 @@ func test_02_a_drop_is_its_pile_not_a_cube() -> void:
 func test_03_a_pile_is_the_size_config_declares() -> void:
 	var want: Vector3 = config_node.get_visual_size("drop/wood")
 	assert_gt(want.x, want.y, "A pile is declared wider than it is tall")
-	for res in config_node.RESOURCES:
+	for res in _found():
 		var drop = _drop(String(res), Vector3(-60.0 - 3.0 * float(config_node.RESOURCES.find(res)), 0.0, 60.0))
 		if drop == null:
 			continue

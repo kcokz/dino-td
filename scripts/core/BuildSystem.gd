@@ -9,12 +9,14 @@ const SCRIPT_PATHS: Dictionary = {
 	"core": "res://scripts/entities/CoreCampfire.gd",
 	"wall": "res://scripts/entities/Wall.gd",
 	"gate": "res://scripts/entities/Gate.gd",
-	"trap": "res://scripts/entities/Trap.gd",
 	"fire": "res://scripts/entities/Fire.gd",
-	# The traps laid in the way (GAME-DESIGN 6.0: 刺、砸、困).
+	# The spikes laid in the way (GAME-DESIGN 6.0).
 	"spikes": "res://scripts/entities/CellTrap.gd",
-	"deadfall": "res://scripts/entities/CellTrap.gd",
-	"snare": "res://scripts/entities/CellTrap.gd",
+	# The towers (the 2026-10-02 rebuild): each kind its own, all loaded as AmmoTower is.
+	"bow": "res://scripts/entities/BowTower.gd",
+	"roller": "res://scripts/entities/LogTower.gd",
+	"thrower": "res://scripts/entities/Catapult.gd",
+	"bait": "res://scripts/entities/BaitRack.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 
@@ -136,7 +138,7 @@ func can_place_building(type_id: String, cell: Vector2i, _is_blueprint: bool = f
 
 ## Pays for a `type_id`, makes it, stands it with its middle in `build_cell` and registers its
 ## cells. Returns the building, or null -- having spent nothing -- if it cannot go there.
-## `facing` is the way a trap faces (Trap.FACINGS), given before it enters the tree so it lays its
+## `facing` is the way a tower faces (AmmoTower.FACINGS), given before it enters the tree so it lays its
 ## wire the right way from the first; anything that does not face ignores it.
 func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, start_as_blueprint: bool = false, facing: int = 0) -> Node:
 	if not can_place_at(type_id, build_cell):
@@ -181,7 +183,7 @@ func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, s
 			building.max_hp = float(b_data.get("hp", 10.0))
 			building.current_hp = building.max_hp
 	if "position" in building:
-		building.position = grid_manager.build_cell_to_world(build_cell, 0.0)
+		building.position = grid_manager.footprint_centre(type_id, build_cell, 0.0)
 	if "facing" in building:
 		building.facing = facing
 

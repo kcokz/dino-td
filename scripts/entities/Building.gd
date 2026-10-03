@@ -492,7 +492,7 @@ func _finish_upgrade() -> void:
 		eb.building_upgraded.emit(self)
 
 ## Whether what it becomes is another kind of thing, made of another script (BuildSystem.script_for): a
-## stone wall with a crossbow set into it shoots, and a wall does not.
+## thing that does what a wall does not is not a wall with something added.
 func _takes_another_body(to: String) -> bool:
 	var mine: Script = get_script() as Script
 	var path: String = BuildSystem.script_for(to)
@@ -529,8 +529,8 @@ func _become(to: String, health: float) -> void:
 		eb.building_upgraded.emit(fresh)
 	queue_free()
 
-## Which way out of the cabin it stands (Trap.FACINGS): the facing nearest the way from the cabin's middle
-## to it -- a crossbow set into a wall looks out of the wall.
+## Which way out of the cabin it stands (AmmoTower.FACINGS): the facing nearest the way from the cabin's middle
+## to it -- what faces, become another kind of thing where it stands, looks out.
 func _facing_out() -> int:
 	var core: Node3D = get_tree().get_first_node_in_group("core") as Node3D if is_inside_tree() else null
 	if core == null:

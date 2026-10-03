@@ -57,9 +57,9 @@ func test_01_a_building_pinned_off_the_menu_is_counted_on_the_bar() -> void:
 	panel.select_target(main.hero)
 	panel._on_build_pressed()
 	await wait_frames(2)
-	var bow: String = "trip_bow"
+	var bow: String = "bow_tower"
 	var btn: Control = _button_with_goal(panel, {"kind": "build", "id": bow})
-	assert_not_null(btn, "(the trap's entry)")
+	assert_not_null(btn, "(the bow tower's entry)")
 	if btn == null:
 		return
 	game_state_node.resources["wood"] = 1
@@ -104,9 +104,9 @@ func test_04_a_building_ordered_or_a_way_up_begun_is_no_longer_the_goal() -> voi
 	var fence = main.build_system.place_at("wall", main.grid_manager.world_to_build_cell(door + Vector3(-3.0, 0.0, 3.0)), main.buildings_container, true)
 	assert_not_null(fence, "(a fence ordered)")
 	assert_true(game_state_node.goal.is_empty(), "Ordered, the building pinned is no longer the goal")
-	game_state_node.pin_goal({"kind": "build", "id": "trip_bow"})
+	game_state_node.pin_goal({"kind": "build", "id": "bow_tower"})
 	main.build_system.place_at("wall", main.grid_manager.world_to_build_cell(door + Vector3(-5.0, 0.0, 3.0)), main.buildings_container, true)
-	assert_true(game_state_node.is_pinned({"kind": "build", "id": "trip_bow"}), "(something else ordered, it stays)")
+	assert_true(game_state_node.is_pinned({"kind": "build", "id": "bow_tower"}), "(something else ordered, it stays)")
 	fence.complete_construction()
 	game_state_node.pin_goal({"kind": "upgrade", "id": "stone_wall", "from": "wall"})
 	assert_true(fence.begin_upgrade("stone_wall"), "(the fence's way up to stone, begun)")

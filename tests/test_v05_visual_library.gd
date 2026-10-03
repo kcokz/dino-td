@@ -138,7 +138,7 @@ func test_05_a_placeholder_is_exactly_the_declared_size() -> void:
 	# Asked of the fallback directly. Every key has art now, and the placeholder is what a
 	# key falls back to when its art is missing; the tower's box is the last plain
 	# primitive any key declares.
-	for key in ["building/set_crossbow"]:
+	for key in ["building/bow_tower"]:
 		var body := Node3D.new()
 		VisualLibrary._build_placeholder(body, key, "")
 		_keep(body)

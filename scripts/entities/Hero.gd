@@ -198,6 +198,8 @@ func _physics_process(delta: float) -> void:
 	sweep_for_drops()
 	# And the torch in his hand burns down whatever he does.
 	_burn_the_torch(delta)
+	# A tower he goes past that wants loading is loaded from the stock (AmmoTower; Config.AMMO_LOADING).
+	_load_in_passing(delta)
 
 	if not continuous_mode and _get_current_phase() != 0: # Only restricted during legacy DEPLOY phase
 		return
@@ -502,6 +504,16 @@ func _process_building(delta: float) -> void:
 	diff.y = 0.0
 	if diff.length_squared() > 0.001:
 		look_at(global_position + diff.normalized(), Vector3.UP)
+
+	# A tower that wants loading is loaded while he is at it, before anything else is done to it -- it takes him
+	# a moment (Config.AMMO_LOADING.order_seconds), and is not hammered.
+	if _loads(target_building):
+		_load_timer += delta
+		if _load_timer >= _loading("order_seconds", 1.0):
+			_load_timer = 0.0
+			target_building.load_from_stock()
+		return
+	_load_timer = 0.0
 
 	# Building and mending are the same verb -- he walks over and works on it with
 	# a hammer. Which one happens is the building's business, not the order's: an
@@ -1049,6 +1061,53 @@ func order_repair(building: Node) -> void:
 ## it is the same work -- the building says what the hammer is for.
 func order_upgrade(building: Node) -> void:
 	order_build(building, true)
+
+## Sends the Hero to load a tower from the stock (its card's command; a right-click on it): the same order again
+## -- at it, he loads it first (_process_building).
+func order_load(tower: Node) -> void:
+	_load_timer = 0.0
+	order_build(tower, true)
+
+# ==============================================================================
+# Loading the towers (AmmoTower; Config.AMMO_LOADING)
+# ==============================================================================
+
+## Seconds before he loads another tower in passing; seconds he has been at the one he was sent to load.
+var _load_clock: float = 0.0
+var _load_timer: float = 0.0
+
+func _loading(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.AMMO_LOADING.get(key, fallback)) if (cfg and "AMMO_LOADING" in cfg) else fallback
+
+## Whether `b` is a finished tower, not being upgraded, that loading would fill.
+func _loads(b: Node) -> bool:
+	if b == null or not is_instance_valid(b) or not b.has_method("wants_load"):
+		return false
+	if b.has_method("is_upgrading") and b.is_upgrading():
+		return false
+	return bool(b.wants_load())
+
+## Going past a tower that wants loading -- or standing by one -- he loads it, if he is about nothing else: walking
+## or standing, not at work, not fighting. Within AMMO_LOADING.reach of its box; one tower every `every` seconds.
+func _load_in_passing(delta: float) -> void:
+	_load_clock = maxf(0.0, _load_clock - delta)
+	if _load_clock > 0.0 or not is_inside_tree():
+		return
+	if not (current_state == State.IDLE or current_state == State.MOVING) or target_enemy != null:
+		return
+	var reach: float = _loading("reach", 1.4)
+	var cfg = _get_config()
+	for t in get_tree().get_nodes_in_group(AmmoTower.GROUP):
+		if not (t is Node3D) or not _loads(t):
+			continue
+		var at: Vector3 = (t as Node3D).global_position
+		var gap: float = global_position.distance_to(at)
+		if cfg and cfg.has_method("gap_to_building"):
+			gap = float(cfg.gap_to_building(global_position, String(t.building_type), at))
+		if gap <= reach and int(t.load_from_stock()) > 0:
+			_load_clock = _loading("every", 0.25)
+			return
 
 func order_attack(enemy: Node3D) -> void:
 	if current_state == State.DEAD:

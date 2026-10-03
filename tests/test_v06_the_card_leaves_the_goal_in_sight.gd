@@ -63,7 +63,7 @@ func test_02_the_card_grows_no_further_than_the_goals_card_and_its_commands_scro
 	stock_everything()
 	var hud = main.hud
 	# The goal's card as tall as it gets: the beacon's line, a goal pinned, a raid's count.
-	game_state_node.pin_goal({"kind": "build", "id": "trip_bow"})
+	game_state_node.pin_goal({"kind": "build", "id": "bow_tower"})
 	hud._on_raid_warning(15.0)
 	var panel = hud.option_panel
 	panel.select_target(_fence(main))

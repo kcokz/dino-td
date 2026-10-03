@@ -413,7 +413,7 @@ func test_15_a_raid_walks_past_a_turret_nobody_has_built() -> void:
 
 	# Ordered, never built, standing beside the road the raid walks down.
 	var cell: Vector2i = gm.world_to_cell(core + Vector3(0.0, 0.0, -5.0))
-	var ordered = main.build_system.place_building("set_crossbow", cell, main.buildings_container, true)
+	var ordered = main.build_system.place_building("bow_tower", cell, main.buildings_container, true)
 	assert_not_null(ordered, "A turret was ordered")
 	assert_false(ordered.is_constructed, "And never built")
 	await wait_frames(4)

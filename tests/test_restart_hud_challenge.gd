@@ -46,7 +46,8 @@ func before_all() -> void:
 		hud_scene_packed = load("res://scenes/ui/HUD.tscn")
 
 	dino_script = _load_script(["res://scripts/entities/Dino.gd"])
-	tower_script = _load_script(["res://scripts/entities/Tower.gd"])
+	# What the game makes a bow tower of (BuildSystem.script_for: by its kind).
+	tower_script = _load_script(["res://scripts/entities/BowTower.gd"])
 	wall_script = _load_script(["res://scripts/entities/Wall.gd"])
 	core_campfire_script = _load_script(["res://scripts/entities/CoreCampfire.gd"])
 	nest_script = _load_script(["res://scripts/entities/Nest.gd"])
@@ -132,7 +133,9 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 	# 1. Place 12 active player buildings across grid
 	var tracked_buildings: Array[Node] = []
 	var building_cells: Array[Vector2i] = []
-	var types = ["wall", "set_crossbow"]
+	var types = ["wall", "bow_tower"]
+	# The cells of the building grid they fill: a stake one, a bow tower two a side.
+	var player_cells: int = 0
 
 	for i in range(12):
 		# East of the cabin's block, which is (0, 0) to (1, 1).
@@ -142,16 +145,21 @@ func test_challenge_01_mid_wave_restart_purges_10_plus_dinos_and_buildings() -> 
 		var b: Node = null
 		match b_type:
 			"wall": b = wall_script.new()
-			"set_crossbow": b = tower_script.new()
+			"bow_tower": b = tower_script.new()
 		b.setup(b_type, cell)
-		b.position = grid_mgr.cell_to_world(cell)
+		# In the middle of the cells it takes round the tile's middle (GridManager.occupy_cell) -- for an
+		# even size, between cells (footprint_centre).
+		var middle: Vector2i = grid_mgr.tile_centre_build_cell(cell)
+		b.position = grid_mgr.footprint_centre(b_type, middle)
 		buildings_container.add_child(b)
 		grid_mgr.occupy_cell(cell, b)
+		player_cells += grid_mgr.footprint_cells(b_type, middle).size()
 		tracked_buildings.append(b)
 
 	# Total buildings: 12 player + 1 Core = 13
 	assert_eq(buildings_container.get_child_count(), 13, "Buildings container has 13 nodes (12 player + 1 Core)")
-	assert_eq(grid_mgr.building_cells.size(), 12 + level_cells_at_start(), "Grid tracks 12 player cells, the cabin's and the nest's")
+	assert_eq(grid_mgr.building_cells.size(), player_cells + level_cells_at_start(),
+		"Grid tracks the 12 player buildings' cells, the cabin's and the nest's")
 
 	# 2. Spawn 12 active dinos in Dinos container
 	var tracked_dinos: Array[Node] = []
@@ -270,7 +278,7 @@ func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -
 	for i in range(3):
 		var cell = Vector2i(i + 1, 2)
 		var b = tower_script.new()
-		b.setup("set_crossbow", cell)
+		b.setup("bow_tower", cell)
 		main.buildings_container.add_child(b)
 		main.grid_manager.occupy_cell(cell, b)
 
@@ -318,7 +326,7 @@ func test_challenge_04_20_consecutive_restarts_grid_restoration_and_zero_drift()
 		grid_mgr.occupy_cell(FREE_TILE, wall)
 
 		var tower = tower_script.new()
-		tower.setup("set_crossbow", Vector2i(-1, 2))
+		tower.setup("bow_tower", Vector2i(-1, 2))
 		buildings_container.add_child(tower)
 		grid_mgr.occupy_cell(Vector2i(-1, 2), tower)
 
@@ -524,7 +532,7 @@ func test_challenge_11_hud_action_buttons_rejected_after_defeat() -> void:
 	# Simulated clicks must be safe no-ops
 	var pre_phase = game_state_node.current_phase
 	hud.simulate_end_action_click()
-	hud.simulate_build_click("set_crossbow")
+	hud.simulate_build_click("bow_tower")
 	await wait_frames(1)
 
 	assert_eq(game_state_node.current_phase, pre_phase, "Phase unchanged after illegal click under defeat")

@@ -6,7 +6,8 @@
 # gets redone. The art is tools/generate_props.py (nest, and the turret head); what is tested
 # here is what the game does with it.
 #
-# The sentry is gone since v0.6 round two -- nothing the player builds aims (Trap.gd) -- and its
+# The sentry is gone since v0.6 round two -- nothing the player builds turns to aim (the towers,
+# AmmoTower.gd: a bow tower shoots all round it from a ring of fixed bows) -- and its
 # head went on the cabin's roof as the ship's own gun; since 2026-10-02 that is dead too and not
 # drawn (CoreCampfire: "cabin的自动射击得取消了，太厉害"). What is tested of it is that it is gone.
 extends "res://tests/test_base.gd"

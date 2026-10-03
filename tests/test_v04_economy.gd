@@ -229,11 +229,13 @@ func test_15_the_chain_closes() -> void:
 	var pick_recipe: Dictionary = _recipe(String(config_node.harvest_requires_unlock("stone")))
 	assert_false(pick_recipe.is_empty(), "The pick is something the cabin can make")
 	assert_has(pick_recipe["inputs"], "bone", "And the pick is made of bone, which only a dinosaur has")
-	# v0.6 round six (GAME-DESIGN 6.0): the crossbow is wood and bone, and stone is what the pick
-	# brings for what must weigh -- the wall a big one cannot eat through.
-	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
-	assert_has(tower_cost, "bone", "The crossbow is tipped with bone off the same raid")
-	assert_has(config_node.BUILDINGS["stone_wall"]["cost"], "stone", "and the stone the pick cuts is the stone wall")
+	# The 2026-10-02 rebuild (GAME-DESIGN 6.0): the crossbow's place is the bow tower's, built of wood;
+	# the bone off the same raids tips its arrows (made at the workbench, RECIPES "makes"), and stone is
+	# what the pick brings for what must weigh -- the catapult, and the wall a big one cannot eat through.
+	assert_has(config_node.ammo_accepts("bow_tower"), "arrow_bone", "The bow tower takes bone-tipped arrows")
+	assert_has(_recipe_making("arrow_bone").get("inputs", {}), "bone", "Tipped with bone off the same raid")
+	assert_has(config_node.BUILDINGS["catapult"]["cost"], "stone", "The stone the pick cuts is the catapult")
+	assert_has(config_node.BUILDINGS["stone_wall"]["cost"], "stone", "and the stone wall")
 
 # ==============================================================================
 # 6. The opening, stated once so a balance pass cannot quietly break it
@@ -241,8 +243,8 @@ func test_15_the_chain_closes() -> void:
 #
 # v0.4's opening is a chain, not a purchase. As v0.6 has it:
 #
-#   fetch the stock -> stakes and a stone axe -> survive the first raid and kill
-#     something -> bone + meat -> the pick at the cabin -> stone -> a crossbow tower
+#   fetch the stock -> stakes and a bow tower -> survive the raids and kill
+#     something -> bone + meat -> the pick at the cabin -> stone -> a stone axe, a catapult
 #
 # Every link below is asserted against Config rather than against a number typed
 # here, so tuning stays a matter of editing Config and re-reading these.
@@ -250,6 +252,13 @@ func test_15_the_chain_closes() -> void:
 func _recipe(unlock_id: String) -> Dictionary:
 	for recipe_id in config_node.RECIPES:
 		if String(config_node.RECIPES[recipe_id].get("unlocks", "")) == unlock_id:
+			return config_node.RECIPES[recipe_id]
+	return {}
+
+## The workbench recipe that makes the ammunition `ammo_id` (RECIPES "makes"), or {}.
+func _recipe_making(ammo_id: String) -> Dictionary:
+	for recipe_id in config_node.RECIPES:
+		if config_node.RECIPES[recipe_id].get("makes", {}).has(ammo_id):
 			return config_node.RECIPES[recipe_id]
 	return {}
 
@@ -278,23 +287,33 @@ func test_16_the_opening_is_wood_a_fence_and_nothing_more() -> void:
 	assert_false(axe.is_empty(), "The axe is a recipe")
 	assert_gt(int(axe["inputs"].get("stone", 0)), 0, "The stone axe is stone, so it comes after the pick")
 
-	# What keeps the crossbow out of reach on the first morning is the chain, not the
-	# wood: it wants bone, which the opening does not hold (v0.6 round six: no stone in it now).
+	# What keeps the catapult out of reach on the first morning is the chain, not the
+	# wood: it wants stone, which the opening does not hold (the 2026-10-02 rebuild: the bow
+	# tower, all wood, is the opening's own; the tower that waits on the chain is the catapult).
 	# Gating it on the opening wallet as well would be a second lock on the same door.
-	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
-	assert_gt(int(tower_cost.get("bone", 0)), 0, "A crossbow wants bone")
+	var tower_cost: Dictionary = config_node.BUILDINGS["catapult"]["cost"]
+	assert_gt(int(tower_cost.get("stone", 0)), 0, "A catapult wants stone")
 
-func test_17_one_raid_pays_for_the_pick_and_the_first_tower() -> void:
-	# If the pick or the first tower needed a second wave, the player would be sent home
-	# with nothing to do there -- and the first raid would stop being the pivot the whole
-	# design turns on (GAME-DESIGN 9.2: the first wave pays for the pick and the first tower).
+func test_17_the_first_tower_is_the_openings_and_the_pick_waits_on_the_raids() -> void:
+	# It was "one raid pays for the pick and the first tower" (GAME-DESIGN 9.2): if either needed a
+	# second wave, the player would be sent home with nothing to do there. Since the 2026-10-02
+	# rebuild the first tower needs no raid at all -- the bow tower and its first arrows are wood,
+	# most of the opening's (Config.BUILDINGS.bow_tower) -- and the pick asks for more bone than one
+	# raid leaves (RECIPES.stone_pick; the player: "骨头来太快了，骨头镐可能需要多一点骨头来做，这样解锁
+	# 慢一点，玩家至少要打几波用木头的才能解锁"): the wood stage lasts more than one raid.
 	var drops: Dictionary = _first_raid_drops()
 	var pick: Dictionary = _recipe("harvest_stone")
 	assert_false(pick.is_empty(), "The pick is a recipe")
-	var tower_cost: Dictionary = config_node.BUILDINGS["set_crossbow"]["cost"]
-	var bone_needed: int = int(pick["inputs"].get("bone", 0)) + int(tower_cost.get("bone", 0))
-	assert_gte(int(drops.get("bone", 0)), bone_needed,
-		"One raid leaves the bone for the pick and the first tower's bolts")
+	var bill: Dictionary = config_node.BUILDINGS["bow_tower"]["cost"].duplicate()
+	var arrows: Dictionary = _recipe_making(config_node.ammo_accepts("bow_tower")[0]).get("inputs", {})
+	assert_false(arrows.is_empty(), "Its first arrows are made at the workbench")
+	for res_id in arrows:
+		bill[res_id] = int(bill.get(res_id, 0)) + int(arrows[res_id])
+	for res_id in bill:
+		assert_gte(int(config_node.get_opening_stock(String(res_id))), int(bill[res_id]),
+			"The opening's %s pays for the first tower and its first arrows" % res_id)
+	assert_gt(int(pick["inputs"].get("bone", 0)), int(drops.get("bone", 0)),
+		"The pick waits on more than one raid's bone")
 	for res_id in pick["inputs"]:
 		if res_id == "wood" or res_id == "bone":
 			continue   # wood is cut, not dropped; bone is counted above
@@ -320,12 +339,12 @@ func test_19_the_whole_chain_fits_between_the_first_two_raids() -> void:
 	# raise a tower. If that does not fit before the next wave arrives, the tower can
 	# never be up in time and the chain is decoration.
 	var pick: Dictionary = _recipe("harvest_stone")
-	var stone_needed: int = int(config_node.BUILDINGS["set_crossbow"]["cost"].get("stone", 0))
+	var stone_needed: int = int(config_node.BUILDINGS["bow_tower"]["cost"].get("stone", 0))
 	var stone_rate: float = float(config_node.RESOURCE_NODES["stone"]["harvest_rate"])
 
 	var work: float = float(pick["time"])
 	work += float(stone_needed) / maxf(stone_rate, 0.01)
-	work += config_node.get_build_time("set_crossbow")
+	work += config_node.get_build_time("bow_tower")
 
 	var gap: float = float(config_node.RAIDS["interval_min"])
 	assert_lt(work, gap,

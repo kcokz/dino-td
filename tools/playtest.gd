@@ -163,8 +163,9 @@ func _run(name: String) -> void:
 ## A run played the way a player plays it, through the same orders a click gives -- nothing
 ## granted, nothing placed by hand: pick up the opening wood, ring the cabin with palisade and a
 ## gate at its door, chop trees until the raid, stand inside the ring while it comes, gather what
-## it leaves, go in and make the pick, cook and eat, then quarry stone and set a crossbow. A line
-## of what is happening every ten seconds of game time, and a frame at each beat.
+## it leaves, go in and make the pick, cook and eat, then quarry stone; towers north of the ring, loaded with what
+## the workbench makes for them (the 2026-10-02 rebuild). A line of what is happening every ten seconds of game time,
+## and a frame at each beat.
 ##
 ## `play:<minutes>` plays that long (default 8), at the game's own 3x.
 func _scenario_play(spec: String) -> void:
@@ -255,14 +256,20 @@ func _scenario_play(spec: String) -> void:
 	# --- 4 onwards: raids come and go; between them, what a player would do next -------------
 	# In order: the beacon when its next step can be paid; a meal when there is meat and none is
 	# put by, and eating one when he is not fed; the pick, then the axe; his row once the hide comes
-	# in -- armour, boots, the bone spear, the stone pick; a set crossbow north of the ring, facing
-	# the nest, up to four; the ring mended where a raid broke it; and otherwise stone
-	# while there is less than a crossbow's worth, and wood. Launched, he shelters till the end.
+	# in -- armour, boots, the bone spear, the stone pick; the towers north of the ring, the way the
+	# nest is -- a bow tower each side, a log tower between them rolling down the way the raid comes, a
+	# catapult further out once there is stone -- each loaded with what the workbench makes for it,
+	# carried over by him; the ring mended where a raid broke it; and otherwise stone while there is
+	# little, and wood. Launched, he shelters till the end.
 	var last_status: float = -100.0
 	var raids_seen: int = 0
-	var crossbow_cells: Array[Vector2i] = []
-	for x in [-3, -1, 1, 3]:
-		crossbow_cells.append(centre + Vector2i(x, -half.y - 2))
+	var tower_plan: Array = [
+		["bow_tower", centre + Vector2i(-4, -half.y - 3)],
+		["log_tower", centre + Vector2i(0, -half.y - 4)],
+		["bow_tower", centre + Vector2i(3, -half.y - 3)],
+		["catapult", centre + Vector2i(-9, -half.y - 4)],
+	]
+	var refused_towers: Dictionary = {}
 	var shots_taken: Dictionary = {}
 	while _play_clock < minutes * 60.0 and not gs.is_game_over:
 		# At least a frame every time round: a step that finds nothing to wait for (the raid
@@ -345,7 +352,7 @@ func _scenario_play(spec: String) -> void:
 			await _bench_job(hero, cabin, "workbench", "stone_axe", note)
 			continue
 		# His row as a player fills it (v0.6 round three): armour and boots first -- they cost what
-		# the elites and the raids leave, not the crossbows' stone -- then the spear, the stone pick.
+		# the elites and the raids leave, not the towers' wood and stone -- then the spear, the stone pick.
 		var kit_job: String = ""
 		for job in ["bone_armor", "hide_vest", "hide_boots", "bone_spear", "quarry_pick"]:
 			if kit_job == "" and wb.can_offer(job) and wb.can_afford(job):
@@ -353,18 +360,34 @@ func _scenario_play(spec: String) -> void:
 		if kit_job != "":
 			await _bench_job(hero, cabin, "workbench", kit_job, note)
 			continue
-		var next_bow: Vector2i = Vector2i(999, 999)
-		for c in crossbow_cells:
-			if gm.building_in_build_cell(c) == null:
-				next_bow = c
+		var next_tower: Array = []
+		for plan in tower_plan:
+			if not refused_towers.has(plan[1]) and gm.building_in_build_cell(plan[1]) == null:
+				next_tower = plan
 				break
-		if next_bow.x != 999 and gs.can_afford(cfg.BUILDINGS["set_crossbow"]["cost"]):
-			_main.on_build_selected("set_crossbow")
+		if not next_tower.is_empty() and gs.knows_all(cfg.BUILDINGS[next_tower[0]]["cost"]) \
+				and gs.can_afford(cfg.BUILDINGS[next_tower[0]]["cost"]):
+			_main.on_build_selected(String(next_tower[0]))
 			_main._placement_facing = 0
-			var b = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(next_bow)), gm.build_cell_to_world(next_bow))
+			var tower_at: Vector3 = gm.build_cell_to_world(next_tower[1])
+			var b = _main.try_place_at_cell(gm.world_to_cell(tower_at), tower_at)
 			_main.cancel_building_selection()
-			note.call("set crossbow ordered at %s: %s" % [str(next_bow), "yes" if b else "NO"])
-			await _play_until(func(): return _unfinished() == 0, 40.0, "building a crossbow")
+			note.call("%s ordered at %s: %s" % [next_tower[0], str(next_tower[1]), "yes" if b else "NO"])
+			if b == null:
+				refused_towers[next_tower[1]] = true
+			await _play_until(func(): return _unfinished() == 0, 40.0, "building a tower")
+			continue
+		# Ammunition a tower on the field wants, made at the workbench a batch at a time; then he takes it over.
+		var ammo_job: String = _ammo_wanted(wb)
+		if ammo_job != "":
+			await _bench_job(hero, cabin, "workbench", ammo_job, note)
+			continue
+		var empty: Node = _tower_wanting_load()
+		if empty != null:
+			var empty_id: int = empty.get_instance_id()
+			hero.order_load(empty)
+			note.call("loading the %s" % String(empty.building_type))
+			await _play_until(func(): return not is_instance_id_valid(empty_id) or not empty.wants_load(), 30.0, "loading a tower")
 			continue
 		var holes: int = 0
 		_main.on_build_selected("wall")
@@ -379,8 +402,8 @@ func _scenario_play(spec: String) -> void:
 			note.call("mending the ring: %d sections" % holes)
 			await _play_until(func(): return _unfinished() == 0, 40.0, "mending the ring")
 			continue
-		# Wood first while there is not enough put by to mend the ring: crossbows eat the stone as
-		# fast as it comes, and a bot that only quarried let the ring fall for want of a stake.
+		# Wood first while there is not enough put by to mend the ring: the towers and their arrows eat
+		# it as fast as it comes, and a bot that only quarried let the ring fall for want of a stake.
 		if int(gs.resources.get("wood", 0)) < 8:
 			await _chop_a_while(hero, "wood", 8.0)
 		elif gs.has_unlock(pick_flag) and int(gs.resources.get("stone", 0)) < 8:
@@ -418,12 +441,32 @@ func _can_do(what: String, cabin: Node, gs: Node) -> bool:
 			return not gs.meals.is_empty()
 		"stone":
 			return gs.has_unlock(String(root.get_node("Config").RECIPES["stone_pick"]["unlocks"]))
-		"crossbow":
-			return gs.can_afford(root.get_node("Config").BUILDINGS["set_crossbow"]["cost"])
+		"tower":
+			return gs.can_afford(root.get_node("Config").BUILDINGS["bow_tower"]["cost"])
 		"beacon":
 			var job: String = String(gs.beacon_next_job())
 			return job != "" and cabin.station(String(root.get_node("Config").BEACON_STATION)).can_afford(job)
 	return true
+
+## The ammunition job a standing tower wants made (AmmoTower): the kind it is set to -- or the first of its kinds
+## the workbench can make -- while the stock holds less than it has room for and the workbench can make it now.
+func _ammo_wanted(wb: Node) -> String:
+	var gs := root.get_node("GameState")
+	for t in get_nodes_in_group(AmmoTower.GROUP):
+		if not is_instance_valid(t) or not t.is_constructed or t.room() <= 0:
+			continue
+		var kinds: Array = [String(t.ammo_type)] if String(t.ammo_type) != "" else t.accepts()
+		for kind in kinds:
+			if int(gs.resources.get(kind, 0)) < t.room() and wb.can_offer(kind) and wb.can_afford(kind):
+				return String(kind)
+	return ""
+
+## A standing tower that loading would fill from the stock now, or null.
+func _tower_wanting_load() -> Node:
+	for t in get_nodes_in_group(AmmoTower.GROUP):
+		if is_instance_valid(t) and t.wants_load():
+			return t
+	return null
 
 ## Out through the gate for what the raid left, and back.
 func _gather_drops(hero: Node, note: Callable) -> void:
@@ -790,10 +833,10 @@ func _scenario_kitchen() -> void:
 	await _walk_out()
 	await _shoot("fed")
 
-## The v0.6 buildings side by side, south of the cabin where nothing else stands: a run of
-## a palisade, a run of bone palisade, a stone wall, and in front of the line a trip bow and two
-## set crossbows, one improved where it stands, their wires out across the ground -- and then a
-## set crossbow's panel, offering the improvement and what it changes.
+## The buildings side by side, south of the cabin where nothing else stands: a run of a palisade, a run of bone
+## palisade, a stone wall, and in front of the line the four towers (the 2026-10-02 rebuild), loaded, the facing
+## ones facing south, one bow tower upgraded where it stands -- and then a bow tower's card, its ammunition and
+## its bigger store.
 func _scenario_buildings() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var eb := root.get_node_or_null("EventBus")
@@ -812,18 +855,25 @@ func _scenario_buildings() -> void:
 		_build_at("bone_stake", Vector3(0.0 + float(i) * step, 0.0, z))
 	for i in range(3):
 		_build_at("stone_wall", Vector3(3.0 + float(i) * step, 0.0, z))
-	# Facing south, away from the line: their lanes across the ground a raid comes over.
-	_build_at("set_crossbow", Vector3(-3.0, 0.0, z + step), 2)
-	_build_at("set_crossbow", Vector3(1.0, 0.0, z + step), 2)
-	_build_at("trip_bow", Vector3(4.0, 0.0, z + step), 2)
-	var gm = _main.grid_manager
-	var upgraded = gm.building_at_point(Vector3(1.0, 0.0, z + step))
+	# In front of the line, the facing ones facing south, away from it: their ground the ground a raid comes over.
+	var towers: Array = [
+		_build_at("bow_tower", Vector3(-6.0, 0.0, z + 2.0 * step)),
+		_build_at("log_tower", Vector3(-2.0, 0.0, z + 3.0 * step), 2),
+		_build_at("bait_rack", Vector3(1.5, 0.0, z + 2.0 * step)),
+		_build_at("catapult", Vector3(6.0, 0.0, z + 3.0 * step), 2),
+		_build_at("bow_tower", Vector3(-9.0, 0.0, z + 2.0 * step)),
+	]
+	_grant({"arrow_wood": 200, "log_round": 200, "shot_stone": 200, "food": 20})
+	for t in towers:
+		if t != null and t.has_method("load_from_stock"):
+			t.load_from_stock()
+	var upgraded = towers[4]
 	if upgraded and upgraded.has_method("begin_upgrade") and upgraded.begin_upgrade():
 		upgraded.add_upgrade_progress(1000.0)
 	await _wait(10)
-	await _portrait("the_line", Vector3(-1.0, 0.0, z + 1.0), 11.0)
-	await _portrait("the_line_from_above", Vector3(-1.0, 0.0, z), 11.0, true)
-	var plain = gm.building_at_point(Vector3(-3.0, 0.0, z + step))
+	await _portrait("the_line", Vector3(-1.0, 0.0, z + 2.0), 13.0)
+	await _portrait("the_line_from_above", Vector3(-1.0, 0.0, z + 1.0), 13.0, true)
+	var plain = towers[0]
 	if plain and eb:
 		eb.unit_selected.emit(plain)
 	await _shoot("upgrade_offered")
@@ -854,16 +904,13 @@ func _scenario_beacon() -> void:
 
 ## How much a base holds (v0.6 balance): `siege:<traps>:<raiders>:<hp_mult>[:all]`.
 ##
-## A sealed ring of palisade round the cabin with N set crossbows set into it, facing out, their
-## wires across the ground a raid comes over and chews the ring from -- where a player sets
-## them -- against one raid of that many raptors at that hit-point multiplier (what GameState
-## compounds after each big wave), sent the way the game sends it: down the path from the nest,
-## or -- with `all` -- streamed from every way in, as the beacon's final wave is. It prints what
-## got through and what it cost, so the raid curve in Config is tuned against a base rather than
-## a guess. `twin` sets the improved set crossbow instead. Real game, real speed: a long raid is a
-## long run. `inside` sets the traps in a yard inside the ring instead, facing out over it, the
-## ring whole -- the base a player built (v0.6 round three, "摆成这样的时候，恐龙进攻又会傻站着不攻击了"),
-## printing every few seconds what the raid is doing.
+## A sealed ring of palisade round the cabin with N bow towers inside it against the ring, loaded with wooden
+## arrows (the 2026-10-02 rebuild), against one raid of that many raptors at that hit-point multiplier (what
+## GameState compounds after each big wave), sent the way the game sends it: down the path from the nest, or --
+## with `all` -- streamed from every way in, as the beacon's final wave is. It prints what got through and what it
+## cost. `twin` sets the bigger-stored bow tower instead. Real game, real speed: a long raid is a long run.
+## `inside` sets them in two rows across the yard instead -- the base a player built (v0.6 round three,
+## "摆成这样的时候，恐龙进攻又会傻站着不攻击了"), printing every few seconds what the raid is doing.
 func _scenario_siege(spec: String) -> void:
 	var parts: PackedStringArray = spec.split(":")
 	var towers: int = int(parts[1]) if parts.size() > 1 else 4
@@ -872,8 +919,8 @@ func _scenario_siege(spec: String) -> void:
 	var every_side: bool = parts.size() > 4 and parts[4] == "all"
 	# "bare": no ring -- the cabin alone against the raid (it has had no gun since 2026-10-02).
 	var bare: bool = parts.size() > 4 and parts[4] == "bare"
-	# "twin" anywhere after: the traps improved where they stand, as a late base has them.
-	var trap_type: String = "set_crossbow_2" if parts.slice(4).has("twin") else "set_crossbow"
+	# "twin" anywhere after: the towers' bigger store, as a late base has them.
+	var trap_type: String = "bow_tower_2" if parts.slice(4).has("twin") else "bow_tower"
 	var inside: bool = parts.slice(4).has("inside")
 	# "back": no ring -- a fence hugging the cabin's back (the nest side) and its east end, open to
 	# the west and the door, as a player half-way round has it (v0.6 round three: "即使没有完全包裹住
@@ -884,7 +931,7 @@ func _scenario_siege(spec: String) -> void:
 	var eb := root.get_node_or_null("EventBus")
 	var gm = _main.grid_manager
 	var wm = _main.wave_manager
-	_grant({"wood": 4000, "stone": 4000, "bone": 4000})
+	_grant({"wood": 4000, "stone": 4000, "bone": 4000, "arrow_wood": 4000})
 	var centre: Vector3 = _main.current_core.global_position
 
 	# The ring's cells, in order round it. 6.5 m: clear of the trees and the hills, which a ring
@@ -899,8 +946,8 @@ func _scenario_siege(spec: String) -> void:
 		if not seen.has(cell):
 			seen[cell] = true
 			ring.append(cell)
-	# The traps in the ring, spread over the side facing the nest (north) for a raid from the
-	# nest, all round for the final wave; each facing straight out.
+	# The towers against the ring, inside it, spread over the side facing the nest (north) for a raid from
+	# the nest, all round for the final wave.
 	var placed_towers: Array[Node] = []
 	var trap_cells: Dictionary = {}
 	for i in range(towers if (not ring.is_empty() and not inside) else 0):
@@ -915,7 +962,14 @@ func _scenario_siege(spec: String) -> void:
 			if Vector2(d.x, d.z).normalized().dot(out) > Vector2(n.x, n.z).normalized().dot(out):
 				nearest = c
 		var facing: int = (1 if out.x > 0.0 else 3) if absf(out.x) > absf(out.y) else (2 if out.y > 0.0 else 0)
-		trap_cells[nearest] = facing
+		# In from the ring towards the cabin -- a bow tower is two cells a side -- as near the ring as it goes down:
+		# further in, it stood in the cabin's own cells, and was refused.
+		var towards: Vector3 = (centre - gm.build_cell_to_world(nearest)).normalized()
+		for metres in [1.5, 2.0, 2.5, 3.0]:
+			var spot: Vector2i = gm.world_to_build_cell(gm.build_cell_to_world(nearest) + towards * float(metres) * float(cfg.BUILD_CELL))
+			if _main.build_system.can_place_at(trap_type, spot):
+				trap_cells[spot] = facing
+				break
 	if back:
 		var c: Vector2i = gm.world_to_build_cell(centre)
 		var h := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
@@ -939,6 +993,8 @@ func _scenario_siege(spec: String) -> void:
 		var b = _main.build_system.place_at(trap_type, cell, _main.buildings_container, true, int(trap_cells[cell]))
 		if b != null:
 			b.complete_construction()
+			b.set_ammo("arrow_wood")
+			b.load_from_stock()
 			placed_towers.append(b)
 	var stakes: Array[Node] = []
 	for cell in ring:
@@ -1055,19 +1111,19 @@ func _raid_minds(stakes: Array) -> String:
 func _scenario_summary() -> void:
 	var eb := root.get_node_or_null("EventBus")
 	eb.raid_summary.emit({"wave": 12, "killed": 39, "drops": {"food": 38, "bone": 40, "prime_meat": 1},
-		"lost": {"wall": 6, "set_crossbow": 1, "stone_wall": 2}})
+		"lost": {"wall": 6, "bow_tower": 1, "stone_wall": 2}})
 	await _shoot("raid_over")
 
 ## What a material is for and where it comes from (v0.6 T2): the line the first bone
-## brings, and the build menu's reason for a set crossbow before the pick has been made.
+## brings, and the build menu's reason for a catapult before the pick has been made.
 func _scenario_legible() -> void:
 	var eb := root.get_node_or_null("EventBus")
 	eb.resource_picked_up.emit("bone", 1, null)
 	await _shoot("first_bone")
 	var panel = _main.hud.option_panel
 	if panel and panel.has_method("_show_build_detail"):
-		panel._show_build_detail("set_crossbow")
-	await _shoot("why_no_crossbow")
+		panel._show_build_detail("catapult")
+	await _shoot("why_no_catapult")
 
 ## The interface at its busiest (v0.6 round three: "界面……往精致游戏上靠近，比如学习暗黑破坏神4……
 ## 界面质感在于细节"): a raid's warning naming the alpha; a tooltip, hovered for real, on an ability
@@ -1399,15 +1455,20 @@ func _scenario_closeup() -> void:
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
-	# The traps, set and facing across the frame, their wires out along the ground.
+	# Two of the towers close up, loaded: the bow tower's ring of bows, the log tower's cradle and ramp.
 	var bow_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 2))
-	_build_at("trip_bow", bow_at, 1)
+	_grant({"arrow_wood": 40, "log_round": 40})
+	var bow = _build_at("bow_tower", bow_at)
+	if bow != null:
+		bow.load_from_stock()
 	await _wait(4)
-	await _portrait("trip_bow", bow_at + Vector3(1.0, 0.0, 0.0), 3.0)
-	var crossbow_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 4))
-	_build_at("set_crossbow", crossbow_at, 1)
+	await _portrait("bow_tower", bow_at, 5.0)
+	var logs_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 5))
+	var logs = _build_at("log_tower", logs_at, 1)
+	if logs != null:
+		logs.load_from_stock()
 	await _wait(4)
-	await _portrait("set_crossbow", crossbow_at + Vector3(1.0, 0.0, 0.0), 3.0)
+	await _portrait("log_tower", logs_at, 5.0)
 
 	var dino_script := load("res://scripts/entities/Dino.gd")
 	var dinos_to_shoot: Array = [
@@ -1856,7 +1917,7 @@ func _scenario_scale() -> void:
 	# A row in front of the cabin's south wall, the cabin at its left end.
 	var row_z: float = core_at.z + float(cfg_row_half()) + 1.4
 	_build_at("wall", Vector3(core_at.x - 2.2, 0.0, row_z))
-	_build_at("set_crossbow", _main.grid_manager.cell_to_world(Vector2i(-2, 0)))
+	_build_at("bow_tower", _main.grid_manager.cell_to_world(Vector2i(-2, 0)))
 	var hero = _main.hero
 	if hero != null:
 		hero.set_physics_process(false)
@@ -2106,7 +2167,7 @@ func _grant(amounts: Dictionary) -> void:
 ## Places at an exact world point, which is what the player's click does. Stakes snap
 ## to a finer grid than the tile, so placing them by tile would put one every two metres
 ## and photograph the wrong thing entirely.
-## `type_id` put up whole in the cell under `at`, facing `facing` if it is a trap (Trap.FACINGS).
+## `type_id` put up whole in the cell under `at`, facing `facing` if it faces a way (AmmoTower.FACINGS).
 func _build_at(type_id: String, at: Vector3, facing: int = 0) -> Node:
 	if _main == null or _main.build_system == null:
 		return null

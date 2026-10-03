@@ -77,7 +77,7 @@ func probe_r1_autoloads_and_config() -> void:
 	var buildings = cfg.get("BUILDINGS")
 	probe_assert(buildings is Dictionary, "Config.BUILDINGS must be a Dictionary")
 	probe_assert(buildings.has("core") and buildings["core"].get("hp") == 10.0, "Config core HP must be 10")
-	probe_assert(buildings.has("set_crossbow") and buildings["set_crossbow"].get("cost", {}).get("wood") == 4, "Config tower wood cost must be 4")
+	probe_assert(buildings.has("bow_tower") and buildings["bow_tower"].get("cost", {}).get("wood") == 4, "Config tower wood cost must be 4")
 	probe_assert(buildings.has("wall") and buildings["wall"].get("hp") == 30.0, "Config wall HP must be 30")
 	probe_assert(buildings.has("lumber_hut") and buildings["lumber_hut"].get("produces", {}).get("wood") == 2, "Config lumber hut produces 2 wood")
 
@@ -136,28 +136,28 @@ func probe_r2_grid_and_placement() -> void:
 	probe_assert(gs.resources["wood"] == 10, "Starting wood is 10")
 
 	var target_cell = Vector2i(5, 5)
-	probe_assert(bs.can_place_building("set_crossbow", target_cell), "Can place tower on empty cell (5,5)")
-	var tower_node = bs.place_building("set_crossbow", target_cell)
+	probe_assert(bs.can_place_building("bow_tower", target_cell), "Can place tower on empty cell (5,5)")
+	var tower_node = bs.place_building("bow_tower", target_cell)
 	probe_assert(tower_node != null, "Tower placed successfully")
 	probe_assert(gm.is_cell_occupied(target_cell), "Cell (5,5) is now occupied")
 	probe_assert(gs.resources["wood"] == 6, "Wood deducted from 10 to 6")
 
 	# Duplicate placement check on same tile
-	probe_assert(not bs.can_place_building("set_crossbow", target_cell), "Cannot place tower on occupied cell (5,5)")
-	var dup_node = bs.place_building("set_crossbow", target_cell)
+	probe_assert(not bs.can_place_building("bow_tower", target_cell), "Cannot place tower on occupied cell (5,5)")
+	var dup_node = bs.place_building("bow_tower", target_cell)
 	probe_assert(dup_node == null, "Duplicate placement returns null")
 	probe_assert(gs.resources["wood"] == 6, "Wood remains 6 on rejected placement")
 
 	# Insufficient wood check: spend remaining wood
 	gs.resources["wood"] = 1
 	var cell_nowood = Vector2i(6, 6)
-	probe_assert(not bs.can_place_building("set_crossbow", cell_nowood), "Cannot place tower with only 1 wood")
-	probe_assert(bs.place_building("set_crossbow", cell_nowood) == null, "Placement rejected due to lack of wood")
+	probe_assert(not bs.can_place_building("bow_tower", cell_nowood), "Cannot place tower with only 1 wood")
+	probe_assert(bs.place_building("bow_tower", cell_nowood) == null, "Placement rejected due to lack of wood")
 
 	gs.resources["wood"] = 10
 	var cell_noap = Vector2i(7, 7)
-	probe_assert(not bs.can_place_building("set_crossbow", cell_noap), "Cannot place tower with 0 AP")
-	probe_assert(bs.place_building("set_crossbow", cell_noap) == null, "Placement rejected due to 0 AP")
+	probe_assert(not bs.can_place_building("bow_tower", cell_noap), "Cannot place tower with 0 AP")
+	probe_assert(bs.place_building("bow_tower", cell_noap) == null, "Placement rejected due to 0 AP")
 
 	# Destroy tower and verify grid cell becomes unoccupied
 	tower_node.take_damage(tower_node.max_hp)

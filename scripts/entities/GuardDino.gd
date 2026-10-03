@@ -118,6 +118,8 @@ func _physics_process(delta: float) -> void:
 
 ## A guard is not on its way to the cabin: a test driving it by the raid's step drives the guard.
 func advance_towards_waypoint(delta: float) -> void:
+	if not is_dead and _shoved(delta):
+		return
 	_guard_step(delta)
 
 ## One step of the guard: think when it is time to, then act. Public for a test to drive.

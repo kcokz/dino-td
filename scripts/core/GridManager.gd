@@ -186,8 +186,21 @@ func build_cell_to_world(cell: Vector2i, y: float = 0.0) -> Vector3:
 func tile_centre_build_cell(tile: Vector2i) -> Vector2i:
 	return world_to_build_cell(cell_to_world(tile))
 
+## Where a `type_id` put down at build cell `centre` stands, in the world: the middle of the cells it takes
+## (footprint_cells) -- the middle of `centre` for an odd size, and for an even one (the 2026-10-02 towers, two and
+## four cells a side) the corner between `centre` and the cells east and south of it, which is the middle of its
+## block. A building is placed there, so its box -- reach, the place to bite it from -- is its cells.
+func footprint_centre(type_id: String, centre: Vector2i, y: float = 0.0) -> Vector3:
+	var cells: Array[Vector2i] = footprint_cells(type_id, centre)
+	if cells.is_empty():
+		return build_cell_to_world(centre, y)
+	var sum := Vector3.ZERO
+	for c in cells:
+		sum += build_cell_to_world(c, y)
+	return sum / float(cells.size())
+
 ## The cells a `type_id` standing with its middle in `centre` takes: a block of
-## Config.get_building_size round it.
+## Config.get_building_size round it (an even side reaching one further east and south than west and north).
 func footprint_cells(type_id: String, centre: Vector2i) -> Array[Vector2i]:
 	var cfg = _get_config()
 	var size: Vector2i = cfg.get_building_size(type_id) if (cfg and cfg.has_method("get_building_size")) else Vector2i.ONE

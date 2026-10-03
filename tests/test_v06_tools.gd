@@ -125,6 +125,8 @@ func test_05_tools_on_the_same_resource_multiply() -> void:
 	var expected: float = 1.0
 	for recipe_id in config_node.RECIPES:
 		var data: Dictionary = config_node.RECIPES[recipe_id]
+		if not data.has("unlocks"):
+			continue    # ammunition: a batch into the stock, no tool
 		owned[String(data["unlocks"])] = true
 		expected *= float(data.get("harvest_speed", {}).get("wood", 1.0))
 	assert_almost_eq(config_node.harvest_speed("wood", owned), expected, 0.0001,

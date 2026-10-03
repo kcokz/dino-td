@@ -307,6 +307,8 @@ func _sources() -> Array:
 			continue
 		var kind: String = String(cfg.get_building_kind(String(b.building_type))) if (cfg and "building_type" in b) else ""
 		var radius: float = float(sight.get(kind, sight.get("building", 3.0))) * scale
+		if b.has_method("sight_radius"):
+			radius = maxf(radius, float(b.sight_radius()) * scale)
 		if b.has_method("light_radius"):
 			radius = maxf(radius, float(b.light_radius()))
 		out.append([(b as Node3D).global_position, radius])

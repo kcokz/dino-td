@@ -114,6 +114,13 @@ func _physics_process(delta: float) -> void:
 		# turn were a walk out and the same walk back, and read as round and round on the spot -- six
 		# raiders reported milling at the first moment of dusk, going home at full speed (the
 		# debug-agent's BUG-015). Milling on the way home is still seen: it is after the turn.
+		# Shoved by a log (Dino.knock_back): carried back the way it came is not a twitch -- watched afresh after.
+		if d.has_method("is_shoved") and d.is_shoved():
+			var shoved: Track = _new_track(d as Node3D)
+			if t != null:
+				shoved.quiet_until = t.quiet_until
+			_tracks[id] = shoved
+			continue
 		if t == null or t.home != _going_home(d):
 			var fresh: Track = _new_track(d as Node3D)
 			if t != null:

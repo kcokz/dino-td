@@ -471,6 +471,10 @@ func _update_status_display() -> void:
 	if current_menu != "build" and selected_unit.has_method("can_offer") and _offer_of(selected_unit) != _station_offer:
 		_refresh_ui()
 		return
+	# And a tower's, when what it holds or the stock of what it takes has changed (_ammo_offer_of).
+	if current_menu != "build" and selected_unit.has_method("accepts") and _ammo_offer_of(selected_unit) != _tower_offer:
+		_refresh_ui()
+		return
 	var info: Dictionary = selected_unit.get_display_info() if selected_unit.has_method("get_display_info") else {}
 	_show_vitals(info)
 	if current_menu != "default" or _hover_detail_shown:
@@ -757,7 +761,7 @@ func _portrait(info: Dictionary) -> Texture2D:
 		"hero":
 			return UiTheme.icon("hero")
 		"building":
-			return UiTheme.icon(String(info.get("building_type", "")))
+			return _building_icon(String(info.get("building_type", "")))
 		"resource_node":
 			return UiTheme.node_icon(String(info.get("resource_type", "")))
 		"station":
@@ -942,20 +946,12 @@ func _show_build_detail(b_type: String) -> void:
 		var secs: float = float(cfg.get_build_time(b_type)) if cfg.has_method("get_build_time") else 0.0
 		var dps: float = float(cfg.get_contact_dps(b_type)) if cfg.has_method("get_contact_dps") else 0.0
 		var row: Dictionary = cfg.BUILDINGS[b_type]
-		if String(row.get("kind", "")) == "trap":
-			# What a trap does is what it does to what walks its lane (Trap.gd).
-			var key: String = "BUILD_DETAIL_FORMAT_TRAP_PIERCE" if bool(row.get("pierce", false)) else "BUILD_DETAIL_FORMAT_TRAP"
-			_set_status(tr(key) % [b_name, _cost_text(b_type), secs, float(row.get("damage", 0.0)),
-				int(row.get("lane", 0)), float(row.get("rearm_seconds", 0.0))])
+		if cfg.has_method("ammo_capacity") and int(cfg.ammo_capacity(b_type)) > 0:
+			# What a tower does, and how much it holds: empty, it does nothing (AmmoTower).
+			_set_status(_tower_detail(b_type, b_name, secs))
 		elif String(row.get("kind", "")) == "spikes":
 			_set_status(tr("BUILD_DETAIL_FORMAT_SPIKES") % [b_name, _cost_text(b_type), secs, float(row.get("damage", 0.0)),
 				int(round(float(row.get("slow", 1.0)) * 100.0))])
-		elif String(row.get("kind", "")) == "deadfall":
-			_set_status(tr("BUILD_DETAIL_FORMAT_DEADFALL") % [b_name, _cost_text(b_type), secs, float(row.get("damage", 0.0)),
-				float(row.get("rearm_seconds", 0.0))])
-		elif String(row.get("kind", "")) == "snare":
-			_set_status(tr("BUILD_DETAIL_FORMAT_SNARE") % [b_name, _cost_text(b_type), secs, float(row.get("hold_seconds", 0.0)),
-				float(row.get("rearm_seconds", 0.0))])
 		elif String(row.get("kind", "")) == "fire":
 			# What a fire does is light the night, and what it costs is wood every night (Fire.gd).
 			_set_status(tr("BUILD_DETAIL_FORMAT_FIRE") % [b_name, _cost_text(b_type), secs,
@@ -966,12 +962,27 @@ func _show_build_detail(b_type: String) -> void:
 			_set_status(tr("BUILD_DETAIL_FORMAT") % [b_name, _cost_text(b_type), secs])
 		status_label.modulate = Color.WHITE
 	else:
-		# Name what is actually short. A set crossbow is bought with stone and bone, so
-		# "need 4 stone" was a lie the moment the player had the stone and no bone.
+		# Name what is actually short. A catapult is bought with wood and stone, so
+		# "need 6 stone" would be a lie the moment the player had the stone and no wood.
 		# And where the short things come from, when that is the real obstacle.
 		_set_status(tr("BUILD_DETAIL_UNAFFORDABLE") % [b_name, _missing_text(b_type)] \
 			+ _sources_text(cfg.BUILDINGS[b_type].get("cost", {})))
 		status_label.modulate = UiKit.tone_color("short")
+
+## A tower's line in the build menu (AmmoTower): its name, price and time, what it does by its own numbers, and how
+## many rounds it holds.
+func _tower_detail(b_type: String, b_name: String, secs: float) -> String:
+	var cfg = _get_config()
+	var row: Dictionary = cfg.BUILDINGS[b_type]
+	var cap: int = int(cfg.ammo_capacity(b_type))
+	match String(row.get("kind", "")):
+		"bow":
+			return tr("BUILD_DETAIL_FORMAT_BOW") % [b_name, _cost_text(b_type), secs, float(row.get("range", 0.0)), cap]
+		"roller":
+			return tr("BUILD_DETAIL_FORMAT_ROLLER") % [b_name, _cost_text(b_type), secs, int(row.get("lane", 0)), cap]
+		"thrower":
+			return tr("BUILD_DETAIL_FORMAT_THROWER") % [b_name, _cost_text(b_type), secs, float(row.get("zone_distance", 0.0)), cap]
+	return tr("BUILD_DETAIL_FORMAT_BAIT") % [b_name, _cost_text(b_type), secs, float(row.get("range", 0.0)), cap]
 
 ## PINNING A GOAL (GameState.goal; GAME-DESIGN 6.0 rule 4): right-click on an entry with a price -- a
 ## building off the menu, a way up on a building's card, a job at a bench -- pins it, and again unpins
@@ -1003,7 +1014,8 @@ func _amounts_text(amounts: Dictionary) -> String:
 
 ## What an upgrade changes, number by number -- "re-arms in 4s -> 2.5s · HP 16 -> 22" --
 ## with its price and how long the work is. Only what actually changes is listed.
-const _UPGRADE_STATS: Array[String] = ["rearm_seconds", "lane", "damage", "hp"]
+## A tower's store (Config.ammo_capacity) is said as well: it is what a tower's upgrade is.
+const _UPGRADE_STATS: Array[String] = ["damage", "hp"]
 
 func upgrade_detail_text(unit: Node, to_type: String = "") -> String:
 	var cfg = _get_config()
@@ -1017,6 +1029,11 @@ func upgrade_detail_text(unit: Node, to_type: String = "") -> String:
 	for stat in _UPGRADE_STATS:
 		if from.has(stat) and to.has(stat) and float(from[stat]) != float(to[stat]):
 			parts.append(tr("STAT_%s" % stat.to_upper()) % [cfg.factor_text(float(from[stat])), cfg.factor_text(float(to[stat]))])
+	if cfg.has_method("ammo_capacity"):
+		var holds: int = int(cfg.ammo_capacity(String(unit.building_type)))
+		var will_hold: int = int(cfg.ammo_capacity(to_type))
+		if holds != will_hold:
+			parts.append(tr("STAT_CAPACITY") % [holds, will_hold])
 	return tr("UPGRADE_DETAIL_FORMAT") % [_building_name(to_type), _amounts_text(unit.upgrade_cost(to_type)),
 		float(cfg.get_upgrade_time(String(unit.building_type), to_type)), " · ".join(parts)]
 
@@ -1080,6 +1097,9 @@ func _can_afford(b_type: String) -> bool:
 ## button.
 func _populate_building_buttons() -> void:
 	button_container.columns = 1
+	_tower_offer = _ammo_offer_of(selected_unit)
+	if selected_unit.has_method("accepts") and "is_constructed" in selected_unit and selected_unit.is_constructed:
+		_add_ammo_choice(selected_unit)
 	# Upgrading where it stands (v0.6): the price on the card, and on hover the numbers
 	# that change -- before and after is the whole of the choice. Paid when chosen, like a
 	# blueprint, and the Hero goes straight over to build it. One card for each thing it can
@@ -1099,7 +1119,7 @@ func _populate_building_buttons() -> void:
 		button_container.add_child(ways)
 		for to_type in unit.upgrade_targets():
 			var target: String = String(to_type)
-			var up_btn := UiKit.card_button(_building_name(target), UiTheme.icon(target), func():
+			var up_btn := UiKit.card_button(_building_name(target), _building_icon(target), func():
 				if not is_instance_valid(unit) or not unit.begin_upgrade(target):
 					return
 				var hero = _get_hero()
@@ -1118,8 +1138,8 @@ func _populate_building_buttons() -> void:
 			up_btn.mouse_exited.connect(_clear_craft_detail)
 
 	if selected_unit.has_method("needs_repair") and selected_unit.needs_repair():
-		# The bill is listed in what it actually costs: a set crossbow is mended with
-		# stone and bone, so "N stone" would be the same lie the build menu used to tell.
+		# The bill is listed in what it actually costs: a catapult is mended with
+		# wood and stone, so "N stone" would be the same lie the build menu used to tell.
 		var raw: String = tr("CMD_REPAIR")
 		var cost_text: String = _amounts_text(selected_unit.repair_cost()) if selected_unit.has_method("repair_cost") else ""
 		var btn := _create_action_button((raw % cost_text) if ("%" in raw) else raw, func():
@@ -1138,6 +1158,98 @@ func _populate_building_buttons() -> void:
 				clear_selection()
 				unit_to_demolish.demolish()
 		, "demolish", &"DangerButton")
+
+## A building's icon: its own, or -- a tower's bigger store, drawn as the tower -- the one it is a bigger store of
+## (bow_tower_2 is a bow tower).
+func _building_icon(b_type: String) -> Texture2D:
+	var tex: Texture2D = UiTheme.icon(b_type)
+	var cut: int = b_type.rfind("_")
+	if tex == null and cut > 0 and b_type.substr(cut + 1).is_valid_int():
+		tex = UiTheme.icon(b_type.substr(0, cut))
+	return tex
+
+## The name the tower's ammunition cards stand under (_add_ammo_choice).
+const AMMO_KINDS_NAME := &"AmmoKinds"
+## What the tower shown was showing when its commands were made: what it is set to, whether it wants loading, and
+## the stock of each of its kinds (_update_status_display makes them again when that has changed).
+var _tower_offer: Array = []
+
+func _ammo_offer_of(unit: Node) -> Array:
+	if unit == null or not is_instance_valid(unit) or not unit.has_method("accepts"):
+		return []
+	var gs = _get_game_state()
+	var out: Array = [String(unit.ammo_type), bool(unit.wants_load()), bool(unit.is_constructed)]
+	for id in unit.accepts():
+		out.append(int(gs.resources.get(id, 0)) if gs else 0)
+	return out
+
+## What a tower is loaded with, on its card (AmmoTower; GAME-DESIGN 6.0): under "Ammunition", a card for each kind it
+## takes that the run can come by -- the one it is set to pressed in, each with how much of it the stock holds --
+## and Load, which sends him to fill it from the stock. Choosing a kind sets it to that (what was in it of another
+## goes back to the stock) and sends him to load it, when there is some.
+func _add_ammo_choice(tower: Node) -> void:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	if cfg == null or not ("AMMO" in cfg):
+		return
+	var heading := Label.new()
+	heading.name = "AmmoHeading"
+	heading.theme_type_variation = &"MutedLabel"
+	heading.text = tr("CARD_AMMO")
+	button_container.add_child(heading)
+	# One to a row: each says how much of it the stock holds, and two to a row cut that off.
+	var kinds := GridContainer.new()
+	kinds.name = AMMO_KINDS_NAME
+	kinds.columns = 1
+	button_container.add_child(kinds)
+	var set_to: String = String(tower.ammo_type) if String(tower.ammo_type) != "" else String(tower.kind_to_load())
+	for kind in tower.accepts():
+		var id: String = String(kind)
+		if not _ammo_known(id):
+			continue
+		var stock: int = int(gs.resources.get(id, 0)) if gs else 0
+		var label: String = tr("CARD_AMMO_KIND") % [tr(String(cfg.AMMO.get(id, {}).get("name", id))), stock]
+		var btn := UiKit.card_button(label, UiTheme.icon(id), func():
+			if not is_instance_valid(tower) or not tower.set_ammo(id):
+				return
+			var hero = _get_hero()
+			if tower.wants_load() and hero and is_instance_valid(hero) and hero.has_method("order_load"):
+				hero.order_load(tower)
+			_refresh_ui()
+		)
+		btn.name = "Ammo_%s" % id
+		btn.toggle_mode = true
+		btn.set_pressed_no_signal(id == set_to)
+		kinds.add_child(btn)
+		btn.mouse_entered.connect(func(): _show_ammo_detail(id))
+		btn.focus_entered.connect(func(): _show_ammo_detail(id))
+		btn.mouse_exited.connect(_clear_craft_detail)
+	var load_btn := _create_action_button(tr("CMD_LOAD"), func():
+		var hero = _get_hero()
+		if is_instance_valid(tower) and hero and is_instance_valid(hero) and hero.has_method("order_load"):
+			hero.order_load(tower)
+			action_triggered.emit("load", tower)
+	, "reload")
+	load_btn.name = "LoadCommand"
+	load_btn.disabled = not tower.wants_load()
+
+## Whether the run can come by `ammo_id`: it is in the stock or has been, or what it is made of has turned up.
+func _ammo_known(ammo_id: String) -> bool:
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	if gs == null or not gs.has_method("knows"):
+		return true
+	if gs.knows(ammo_id):
+		return true
+	return cfg != null and cfg.RECIPES.has(ammo_id) and gs.knows_all(cfg.RECIPES[ammo_id].get("inputs", {}))
+
+## What a round of `ammo_id` does, for whichever ammunition the cursor is over (UiKit.ammo_detail).
+func _show_ammo_detail(ammo_id: String) -> void:
+	if status_label == null:
+		return
+	_hover_detail_shown = true
+	_set_status(UiKit.ammo_detail(ammo_id))
+	status_label.modulate = Color.WHITE
 
 ## Resource nodes are scenery, not units: they take no orders. Right-clicking one
 ## while the Hero is selected already sends him to harvest it, so a button here
@@ -1177,18 +1289,31 @@ func _populate_station_buttons() -> void:
 	var cfg = _get_config()
 	var works: Array[String] = []
 	var upgrades: Array[String] = []
+	var ammo: Array[String] = []
 	for recipe_id in jobs:
 		var job: String = String(recipe_id)
 		if not station.can_offer(job):
 			continue
-		if cfg != null and cfg.improves_bench(job):
+		if station.has_method("is_ammo") and station.is_ammo(job):
+			ammo.append(job)
+		elif cfg != null and cfg.improves_bench(job):
 			upgrades.append(job)
 		else:
 			works.append(job)
 	# More than a few on offer -- the workbench, with everything for his row (v0.6 round three) --
 	# and they stand two to a row, as the build menu's do: one to a row, they ran off the screen. A
-	# bench with an upgrade keeps to one: its block is as wide as the card.
-	button_container.columns = 2 if (works.size() > int(UiTheme.number("one_column_most")) and upgrades.is_empty()) else 1
+	# bench with an upgrade, or with ammunition, keeps to one: its block is as wide as the card, and the jobs
+	# above it stand two to a row in a grid of their own.
+	var many: bool = works.size() > int(UiTheme.number("one_column_most"))
+	var blocks: bool = not upgrades.is_empty() or not ammo.is_empty()
+	button_container.columns = 2 if (many and not blocks) else 1
+	var into: Container = button_container
+	if many and blocks:
+		var grid := GridContainer.new()
+		grid.name = "Works"
+		grid.columns = 2
+		button_container.add_child(grid)
+		into = grid
 	for rid in works:
 		var start := func():
 			if is_instance_valid(station):
@@ -1201,9 +1326,10 @@ func _populate_station_buttons() -> void:
 		if decision:
 			btn = UiKit.action_button(station.recipe_name(rid), UiTheme.icon("signal"), start, &"AccentButton")
 			btn.custom_minimum_size.y = UiTheme.height("card")
-			button_container.add_child(btn)
+			into.add_child(btn)
 		else:
-			btn = _create_card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), {}, start)
+			btn = UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), start)
+			into.add_child(btn)
 			_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
 			_pins(btn, {"kind": "job", "id": rid})
 		btn.name = "Job_%s" % rid
@@ -1211,8 +1337,51 @@ func _populate_station_buttons() -> void:
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.mouse_exited.connect(_clear_craft_detail)
+	if not ammo.is_empty():
+		_add_ammo_block(station, ammo, busy)
 	for rid in upgrades:
 		_add_bench_upgrade(station, rid, busy)
+
+## The name a bench's ammunition block goes by (_add_ammo_block).
+const AMMO_BLOCK_NAME := &"AmmoBlock"
+
+## The workbench's ammunition (Config.AMMO; the player: "工作台做，专门的弹药系统"), apart from what it makes for good:
+## in a sunken block under its jobs, a heading -- "Ammunition" -- and a card for each, two to a row, its price and
+## time along its foot as any job's; on hover, what a batch makes, what a round of it does and how much of it the
+## stock holds (UiKit.job_detail).
+func _add_ammo_block(station: Node, ammo: Array[String], busy: bool) -> void:
+	var block := PanelContainer.new()
+	block.name = AMMO_BLOCK_NAME
+	block.theme_type_variation = &"InsetPanel"
+	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button_container.add_child(block)
+	var column := VBoxContainer.new()
+	column.name = "Column"
+	column.add_theme_constant_override("separation", UiTheme.space("xs"))
+	block.add_child(column)
+	var title := Label.new()
+	title.name = "AmmoTitle"
+	title.theme_type_variation = &"AccentLabel"
+	title.text = tr("STATION_AMMO")
+	column.add_child(title)
+	var grid := GridContainer.new()
+	grid.name = "AmmoJobs"
+	grid.columns = 2
+	column.add_child(grid)
+	for rid in ammo:
+		var btn := UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), func():
+			if is_instance_valid(station):
+				station.begin(rid)
+				_refresh_ui()
+		)
+		btn.name = "Job_%s" % rid
+		grid.add_child(btn)
+		_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
+		_pins(btn, {"kind": "job", "id": rid})
+		btn.disabled = busy or not station.can_afford(rid)
+		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
+		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
+		btn.mouse_exited.connect(_clear_craft_detail)
 
 ## The name a bench's upgrade block goes by (_add_bench_upgrade).
 const BENCH_UPGRADE_NAME := &"BenchUpgrade"

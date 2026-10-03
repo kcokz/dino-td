@@ -113,23 +113,29 @@ func test_config_buildings_catalog() -> void:
 
 	var b: Dictionary = config_node.BUILDINGS
 	assert_has(b, "core", "BUILDINGS must define 'core'")
-	assert_has(b, "set_crossbow", "BUILDINGS must define 'set_crossbow'")
+	assert_has(b, "bow_tower", "BUILDINGS must define 'bow_tower'")
+	assert_has(b, "log_tower", "BUILDINGS must define 'log_tower'")
 	assert_has(b, "wall", "BUILDINGS must define 'wall'")
 
 	if "core" in b:
 		assert_eq(b["core"].get("kind", ""), "core", "core kind should be 'core'")
-		assert_gt(float(b["core"].get("hp", 0.0)), float(b.get("set_crossbow", {}).get("hp", 0.0)),
-			"The cabin stands more than any trap: losing it is losing the run")
+		assert_gt(float(b["core"].get("hp", 0.0)), float(b.get("bow_tower", {}).get("hp", 0.0)),
+			"The cabin stands more than a tower: losing it is losing the run")
 
-	if "set_crossbow" in b:
-		assert_eq(b["set_crossbow"].get("kind", ""), "trap", "The set crossbow is a trap")
-		assert_gt(float(b["set_crossbow"].get("hp", 0.0)), 0.0, "It stands a while")
-		assert_false(b["set_crossbow"].has("range"), "It aims at nothing: an animal on its wire looses it")
-		assert_gt(int(b["set_crossbow"].get("lane", 0)), 0, "It is set along a lane")
-		assert_gt(float(b["set_crossbow"].get("damage", 0.0)), 0.0, "And it hurts what trips it")
-		# GAME-DESIGN 6.0 (v0.6 round six): a trap's body is wood, and bone is what cuts.
-		assert_gt(b["set_crossbow"].get("cost", {}).get("wood", 0), 0, "Its body is wood")
-		assert_gt(b["set_crossbow"].get("cost", {}).get("bone", 0), 0, "and it is tipped with bone")
+	# The towers of the 2026-10-02 rebuild: each shoots what it is loaded with (Config.AMMO).
+	if "bow_tower" in b:
+		assert_eq(b["bow_tower"].get("kind", ""), "bow", "The bow tower is a bow")
+		assert_gt(float(b["bow_tower"].get("hp", 0.0)), 0.0, "It stands a while")
+		assert_gt(float(b["bow_tower"].get("range", 0.0)), 0.0, "It shoots what comes within its range, all round it")
+		assert_gt(int(b["bow_tower"].get("ammo", {}).get("capacity", 0)), 0, "It holds arrows")
+		for ammo_id in b["bow_tower"].get("ammo", {}).get("accepts", []):
+			assert_gt(float(config_node.AMMO.get(ammo_id, {}).get("damage", 0.0)), 0.0, "And its %s hurts what it hits" % ammo_id)
+		# GAME-DESIGN 6.0 (v0.6 round six): a tower's body is wood, and bone is what cuts -- the points of its arrows.
+		assert_gt(b["bow_tower"].get("cost", {}).get("wood", 0), 0, "Its body is wood")
+		assert_gt(int(config_node.RECIPES.get("arrow_bone", {}).get("inputs", {}).get("bone", 0)), 0,
+			"and its arrows are tipped with bone")
+	if "log_tower" in b:
+		assert_gt(int(b["log_tower"].get("lane", 0)), 0, "The log tower rolls its logs along a lane")
 
 	if "wall" in b:
 		assert_eq(b["wall"].get("kind", ""), "wall", "wall kind should be 'wall'")

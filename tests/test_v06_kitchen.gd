@@ -92,7 +92,7 @@ func test_03_there_is_always_a_way_to_eat_and_every_pot_adds_something() -> void
 		var made_in_kitchen: bool = false
 		for recipe_id in config_node.RECIPES:
 			var r: Dictionary = config_node.RECIPES[recipe_id]
-			if String(r["unlocks"]) == String(better["vessel"]) and String(r["station"]) == "kitchen":
+			if String(r.get("unlocks", "")) == String(better["vessel"]) and String(r["station"]) == "kitchen":
 				made_in_kitchen = true
 		assert_true(made_in_kitchen, "The %s's vessel is made in the kitchen" % better["id"])
 

@@ -65,11 +65,17 @@ func _dino(type_id: String, at: Vector3) -> Node:
 	d.global_position = at
 	return d
 
+## A finished `type_id` standing in map tile `cell`: made of its kind's script and set up before it enters
+## the tree, as BuildSystem.place_at makes one, so its body is its own size -- a bow tower two cells a side,
+## its middle between them (GridManager.footprint_centre) -- and in the cells it takes (occupy_cell).
 func _building(type_id: String, gm: Node, cell: Vector2i) -> Node:
-	var path := "res://scripts/entities/Wall.gd" if type_id == "wall" else "res://scripts/entities/Tower.gd"
-	var b = _spawn(path, gm.cell_to_world(cell))
+	var b = load(BuildSystem.script_for(type_id)).new()
 	b.setup(type_id, cell)
-	b.global_position = gm.cell_to_world(cell)
+	var at: Vector3 = gm.footprint_centre(type_id, gm.tile_centre_build_cell(cell))
+	b.position = at
+	_cleanup_nodes.append(b)
+	tree.root.add_child(b)
+	b.global_position = at
 	b.complete_construction()
 	gm.occupy_cell(cell, b)
 	return b
@@ -165,7 +171,7 @@ func _first_building_from(from: Node3D, to: Node3D) -> Node:
 func test_06_a_clear_line_at_the_right_distance_still_works() -> void:
 	var gm = _grid()
 	await wait_frames(1)
-	var tower = _building("set_crossbow", gm, Vector2i(0, 0))
+	var tower = _building("bow_tower", gm, Vector2i(0, 0))
 	var raptor = _dino("raptor", Vector3.ZERO)
 	await wait_frames(2)
 	var bite: float = raptor.attack_reach() + raptor._half_width_of(tower)
@@ -188,7 +194,7 @@ func test_07_it_does_not_stop_at_a_distance_it_cannot_bite_from() -> void:
 	# state doing nothing. It now walks until it can actually reach.
 	var gm = _grid()
 	await wait_frames(1)
-	var tower = _building("set_crossbow", gm, Vector2i(0, -2))
+	var tower = _building("bow_tower", gm, Vector2i(0, -2))
 	var raptor = _dino("raptor", Vector3(1.0, 0.0, -8.0))
 	raptor.set_waypoints([Vector3(1.0, 0.0, -8.0), Vector3(1.0, 0.0, 0.0)])
 	await wait_frames(2)
@@ -199,7 +205,7 @@ func test_07_it_does_not_stop_at_a_distance_it_cannot_bite_from() -> void:
 		raptor.advance_towards_waypoint(0.05)
 		await wait_frames(1)
 
-	assert_eq(int(raptor.current_state), int(raptor.State.ATTACKING), "It commits to the turret")
+	assert_eq(int(raptor.current_state), int(raptor.State.ATTACKING), "It commits to the tower")
 	assert_true(raptor._target_in_reach(tower),
 		"From somewhere it can actually bite it, not from wherever it first saw it")
 	var before: float = tower.current_hp

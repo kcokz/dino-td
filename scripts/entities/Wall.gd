@@ -40,16 +40,7 @@ const RUNS: Dictionary = {
 var contact_damage: float = 0.0
 var contact_tick: float = 0.5
 
-## A ROCK ON IT (BUILDINGS.<id>.drop_damage: the rock fence, GAME-DESIGN 6.0 -- 砸 as a wall's upgrade).
-## Bitten, the section shakes the rock off onto what is biting it: everything against it takes
-## `drop_damage`. It is set back on over `drop_rearm_seconds`, seen rising from the foot of the post.
-var drop_damage: float = 0.0
-var rock_set: bool = true
-var _rock_left: float = 0.0
-var _rock: Node3D = null
-var _rock_up: Vector3 = Vector3.ZERO
-
-## Which way it faces (Trap.FACINGS): a wall facing north or south runs east to west, one facing
+## Which way it faces (AmmoTower.FACINGS): a wall facing north or south runs east to west, one facing
 ## east or west runs north to south. Only a section with no wall beside it goes by it (dress).
 @export var facing: int = 0
 
@@ -72,8 +63,7 @@ func _init() -> void:
 func _ready() -> void:
 	super._ready()
 	_load_contact_config()
-	_find_rock()
-	set_physics_process(contact_damage > 0.0 or drop_damage > 0.0)
+	set_physics_process(contact_damage > 0.0)
 	_connect_neighbour_events()
 	refresh_joins.call_deferred()
 
@@ -97,7 +87,6 @@ func _load_contact_config() -> void:
 	var data: Dictionary = cfg.BUILDINGS[building_type]
 	contact_damage = maxf(0.0, float(data.get("contact_damage", 0.0)))
 	contact_tick = maxf(0.05, float(data.get("contact_tick", 0.5)))
-	drop_damage = maxf(0.0, float(data.get("drop_damage", 0.0)))
 
 # ==============================================================================
 # Joining what is beside it
@@ -159,9 +148,7 @@ static func is_wall(b: Node) -> bool:
 		cfg = Engine.get_main_loop().root.get_node_or_null("Config")
 	if cfg == null or not cfg.has_method("get_building_kind"):
 		return false
-	# And what is built into a wall -- a crossbow in stone (BUILDINGS.<id>.joins_walls) -- is joined as a wall is.
-	return String(cfg.get_building_kind(String(b.building_type))) == "wall" \
-		or bool(cfg.BUILDINGS.get(String(b.building_type), {}).get("joins_walls", false))
+	return String(cfg.get_building_kind(String(b.building_type))) == "wall"
 
 ## The runs a section shows, given the walls `near` it and the way it `faces`: the runs towards
 ## its neighbours; at the end of a line, the run to its one neighbour and the one opposite -- a
@@ -208,13 +195,6 @@ func _cell_size() -> float:
 # ==============================================================================
 
 func _physics_process(delta: float) -> void:
-	if drop_damage > 0.0 and not rock_set and is_constructed and not is_destroyed:
-		_rock_left = maxf(0.0, _rock_left - delta)
-		var rearm: float = maxf(0.01, _drop_rearm())
-		_show_rock(1.0 - _rock_left / rearm)
-		if _rock_left <= 0.0:
-			rock_set = true
-			_show_rock(1.0)
 	if not _stakes_are_live():
 		return
 	# Reported every frame rather than ticked here. The wall says "I am against you, for this
@@ -276,53 +256,11 @@ func _is_contact_target(target: Variant) -> bool:
 		return false
 	return target.has_method("take_damage")
 
-# ==============================================================================
-# The rock on it
-# ==============================================================================
-
-## Bitten: the rock off onto everything against it, if it is set on; then the bite, as on any wall.
-func take_damage(amount: float) -> void:
-	if drop_damage > 0.0 and rock_set and is_constructed and not is_destroyed and amount > 0.0 and is_inside_tree():
-		var hit: int = 0
-		for d in get_tree().get_nodes_in_group("dinos"):
-			if _is_contact_target(d) and touches(d):
-				d.take_damage(drop_damage)
-				hit += 1
-		if hit > 0:
-			rock_set = false
-			_rock_left = _drop_rearm()
-			_show_rock(0.0)
-			_sound("trap_thud")
-	super.take_damage(amount)
-
-func _drop_rearm() -> float:
-	var cfg = _get_config()
-	if cfg == null or not cfg.BUILDINGS.has(building_type):
-		return 12.0
-	return float(cfg.BUILDINGS[building_type].get("drop_rearm_seconds", 12.0))
-
-func _find_rock() -> void:
-	var body: Node = get_node_or_null("Body")
-	_rock = body.find_child("Rock", true, false) as Node3D if body != null else null
-	if _rock != null:
-		_rock_up = _rock.position
-
-## How far set back on the rock is, 0 fallen to the foot of the post to 1 on top.
-func _show_rock(t: float) -> void:
-	if _rock == null or not is_instance_valid(_rock):
-		_find_rock()
-	if _rock == null:
-		return
-	var down: Vector3 = Vector3(_rock_up.x, 0.12, _rock_up.z)
-	_rock.position = down.lerp(_rock_up, clampf(t, 0.0, 1.0))
-
-## Taken up into what has a rock on it: its numbers and its rock found on the new body.
+## Taken up into what bites (bone stakes): its numbers.
 func _after_upgrade() -> void:
 	super._after_upgrade()
 	_load_contact_config()
-	_find_rock()
-	rock_set = true
-	set_physics_process(contact_damage > 0.0 or drop_damage > 0.0)
+	set_physics_process(contact_damage > 0.0)
 
 ## Damage per second while something is against it. The single place that figure is worked out:
 ## the build menu and the tests both read it from here.

@@ -205,8 +205,8 @@ func test_win_06_action_lockout_on_victory() -> void:
 		_cleanup_nodes.append(grid)
 		_cleanup_nodes.append(bs)
 		bs.setup(grid)
-		assert_false(bs.can_place_building("set_crossbow", Vector2i(2, 2)), "can_place_building must return false when game is won")
-		var placed = bs.place_building("set_crossbow", Vector2i(2, 2))
+		assert_false(bs.can_place_building("bow_tower", Vector2i(2, 2)), "can_place_building must return false when game is won")
+		var placed = bs.place_building("bow_tower", Vector2i(2, 2))
 		assert_null(placed, "place_building must return null when game is won")
 
 # ==============================================================================

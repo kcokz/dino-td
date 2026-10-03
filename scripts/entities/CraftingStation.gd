@@ -12,7 +12,9 @@ extends StaticBody3D
 ## is the line that stops the cabin becoming an inventory screen. A meal (Config.
 ## DISHES) is not a flag, and it is not an object either: it is eaten the moment it is
 ## done (GAME-DESIGN 4.5: no bag, no stored food). A step of the beacon (Config.
-## beacon_job) is neither: finishing it moves the run towards its end (GameState).
+## beacon_job) is neither: finishing it moves the run towards its end (GameState). Nor is the
+## ammunition (Config.AMMO; RECIPES "makes"): a batch goes into the stock, as wood does, to be
+## loaded into the towers and shot away -- made as often as there is the stuff for it.
 ##
 ## Work costs real seconds and the world does not stop while they pass -- while
 ## the Hero is at the bench, nobody is holding the line. Leaving keeps the
@@ -87,6 +89,11 @@ func is_dish(job_id: String) -> bool:
 func is_beacon_job(job_id: String) -> bool:
 	return not _beacon_row(job_id).is_empty()
 
+## Whether `job_id` makes ammunition (Config.makes_ammo): a batch into the stock, as often as wanted.
+func is_ammo(job_id: String) -> bool:
+	var cfg = _get_config()
+	return cfg != null and cfg.has_method("makes_ammo") and cfg.makes_ammo(job_id)
+
 ## Everything this bench does, in the order the cabin panel lists it: its recipes, its
 ## meals, and -- at the beacon's bench -- the beacon's next step. One step at a time and
 ## in order, so the panel always says what the beacon needs next (GAME-DESIGN 14.3).
@@ -111,7 +118,7 @@ func _still_to_do(recipe_id: String) -> bool:
 	var data: Dictionary = recipe_data(recipe_id)
 	if data.is_empty() or String(data.get("station", "")) != station_id:
 		return false
-	if is_dish(recipe_id):
+	if is_dish(recipe_id) or is_ammo(recipe_id):
 		return true
 	var gs = _get_game_state()
 	if is_beacon_job(recipe_id):
@@ -198,6 +205,9 @@ func work(delta: float) -> String:
 	elif is_beacon_job(done):
 		if gs and gs.has_method("finish_beacon_job"):
 			gs.finish_beacon_job(done)
+	elif is_ammo(done):
+		if gs and gs.has_method("add_resources"):
+			gs.add_resources(recipe_data(done).get("makes", {}))
 	else:
 		unlock = String(recipe_data(done).get("unlocks", ""))
 		if gs and gs.has_method("grant_unlock"):
@@ -263,6 +273,11 @@ func recipe_name(recipe_id: String) -> String:
 	var args: Array = recipe_data(recipe_id).get("name_args", [])
 	if not args.is_empty() and "%" in title:
 		return title % args
+	# A batch of ammunition is named for what it makes and how many: "Wooden Arrows ×20".
+	if is_ammo(recipe_id):
+		var makes: Dictionary = recipe_data(recipe_id).get("makes", {})
+		for ammo_id in makes:
+			return TranslationServer.translate("AMMO_BATCH_NAME") % [title, int(makes[ammo_id])]
 	if not is_dish(recipe_id):
 		return title
 	var fmt: String = TranslationServer.translate(String(meal_preview(recipe_id).get("method_name", "")))
@@ -340,6 +355,8 @@ func job_done(job_id: String) -> bool:
 		var steps: Array = cfg.beacon_jobs(gs.map_data()) if (cfg and cfg.has_method("beacon_jobs")) else []
 		var at: int = steps.find(job_id)
 		return at >= 0 and at < int(gs.beacon_steps)
+	if is_ammo(job_id):
+		return false
 	var flag: String = String(recipe_data(job_id).get("unlocks", ""))
 	return flag != "" and gs.has_method("has_unlock") and gs.has_unlock(flag)
 

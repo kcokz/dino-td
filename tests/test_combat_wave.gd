@@ -146,7 +146,7 @@ func _create_tower() -> Object:
 		return null
 	# The turret machinery as such (Tower.gd): nothing in the game is one now -- the cabin's gun was
 	# the last, gone since 2026-10-02 -- so it stands on the cabin's row only for its hit points and
-	# keeps its own numbers. What the player builds are traps (Trap.gd).
+	# keeps its own numbers. What the player builds are towers he loads (AmmoTower.gd).
 	var tower = tower_script.new()
 	if tower.has_method("setup"):
 		tower.setup("core")

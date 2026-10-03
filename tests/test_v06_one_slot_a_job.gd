@@ -4,7 +4,9 @@
 # Chosen (GAME-DESIGN 6.0): the build menu is one slot a job, each its first form, of wood alone; every
 # other material is an upgrade where a building stands, one material a step; a building is made of two
 # materials at most. A fence becomes bone stakes or a stone wall; the card names each way up with its
-# price; a campfire raised into a brazier stands in the way.
+# price; a campfire raised into a brazier stands in the way. Since the 2026-10-02 rebuild of the defences
+# (Config.BUILDABLE_TYPES): the catapult, weighted with stone, is the one first form of wood and stone --
+# it comes once there is a pick -- and a tower's bigger stores (<id>_2, _3) are more racks of its wood.
 #
 # Everything expected is read from Config.
 extends "res://tests/test_base.gd"
@@ -50,7 +52,12 @@ func _build(main: Node, type_id: String, off: Vector3) -> Node:
 func test_01_the_menu_is_one_slot_a_job_each_of_wood_alone() -> void:
 	var menu: Array = config_node.BUILDABLE_TYPES
 	for b_type in menu:
-		assert_eq(config_node.BUILDINGS[b_type]["cost"].keys(), ["wood"], "%s: its first form is wood alone" % b_type)
+		var made_of: Array = (config_node.BUILDINGS[b_type]["cost"].keys() as Array).duplicate()
+		if String(b_type) == "catapult":
+			made_of.sort()
+			assert_eq(made_of, ["stone", "wood"], "catapult: its first form is wood, weighted with stone")
+		else:
+			assert_eq(made_of, ["wood"], "%s: its first form is wood alone" % b_type)
 	var reached: Array = config_node.player_building_types()
 	for b_type in reached:
 		if menu.has(b_type):
@@ -73,11 +80,17 @@ func test_02_each_step_up_adds_one_material_and_none_is_made_of_three() -> void:
 		for target in config_node.upgrade_targets(String(b_type)):
 			var cost: Dictionary = config_node.upgrade_cost(String(b_type), String(target))
 			assert_eq(cost.size(), 1, "%s -> %s adds one material (%s)" % [b_type, target, cost])
-			assert_false(cost.has("wood") and String(b_type) != "", "and it is not more wood: wood is the body (%s -> %s)" % [b_type, target])
+			if int(config_node.tower_level(String(target))) > int(config_node.tower_level(String(b_type))):
+				# A tower's bigger store: the same tower, holding more -- more racks of its wood.
+				assert_eq(String(config_node.get_building_kind(String(target))), String(config_node.get_building_kind(String(b_type))),
+					"%s is a bigger store of the same tower as %s" % [target, b_type])
+				assert_true(cost.has("wood"), "a bigger store is more racks of wood (%s -> %s)" % [b_type, target])
+			else:
+				assert_false(cost.has("wood"), "and it is not more wood: wood is the body (%s -> %s)" % [b_type, target])
 			steps += 1
 	assert_gt(steps, 3, "(there are ways up)")
-	assert_eq(config_node.upgrade_targets("wall"), ["bone_stake", "rock_fence", "stone_wall"] as Array[String],
-		"The fence goes three ways: bone, a rock on it, or stone")
+	assert_eq(config_node.upgrade_targets("wall"), ["bone_stake", "stone_wall"] as Array[String],
+		"The fence goes two ways: bone, or stone")
 
 func test_03_a_fence_becomes_bone_stakes_or_a_stone_wall_where_it_stands() -> void:
 	var main = await _level()

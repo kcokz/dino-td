@@ -150,9 +150,10 @@ func test_01_the_heros_panel() -> void:
 	assert_true(is_instance_valid(main.hero), "And the game is still there")
 
 func test_02_a_buildings_panel() -> void:
-	# Repair (so each is damaged first) and demolish, on a stake and on a turret.
+	# Repair (so each is damaged first) and demolish, on a stake and on a tower -- and on the tower its
+	# ammunition, Load and its bigger store.
 	var main = await _level()
-	for spec in [["wall", Vector3(-5.0, 0.0, 5.0)], ["set_crossbow", Vector3(5.0, 0.0, 5.0)]]:
+	for spec in [["wall", Vector3(-5.0, 0.0, 5.0)], ["bow_tower", Vector3(5.0, 0.0, 5.0)]]:
 		var at: Vector3 = _open_ground(main, String(spec[0]), spec[1])
 		if at == Vector3.INF:
 			_record_fail("No open ground for a %s" % spec[0])

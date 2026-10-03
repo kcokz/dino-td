@@ -327,10 +327,46 @@ static func job_detail(station: Node, job_id: String) -> Array:
 	if is_meal and station.can_afford(job_id) and cfg and cfg.has_method("describe_meal"):
 		return [TranslationServer.translate("MEAL_DETAIL_FORMAT") % [station.recipe_name(job_id), cost_text,
 			station.time_of(job_id), cfg.describe_meal(station.meal_preview(job_id))], ""]
+	# A batch of ammunition says how much it makes, what a round of it does, and how much of it is put by already.
+	if station.has_method("is_ammo") and station.is_ammo(job_id) and cfg:
+		var makes: Dictionary = cfg.RECIPES[job_id].get("makes", {})
+		var gs = _state()
+		var made: String = ""
+		for ammo_id in makes:
+			var have: int = int(gs.resources.get(ammo_id, 0)) if gs else 0
+			made = TranslationServer.translate("AMMO_BATCH") % [int(makes[ammo_id]), have] + " " + ammo_detail(String(ammo_id))
+		if station.can_afford(job_id):
+			return [TranslationServer.translate("CRAFT_DETAIL_FORMAT") % [station.recipe_name(job_id), cost_text,
+				station.time_of(job_id)] + " " + made, ""]
+		return [TranslationServer.translate("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(job_id), cost_text]
+			+ sources_text(station.inputs_of(job_id)), "short"]
 	if station.can_afford(job_id):
 		return [TranslationServer.translate("CRAFT_DETAIL_FORMAT") % [station.recipe_name(job_id), cost_text, station.time_of(job_id)], ""]
 	return [TranslationServer.translate("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(job_id), cost_text]
 		+ sources_text(station.inputs_of(job_id)), "short"]
+
+## What a round of `ammo_id` does (Config.AMMO), in words and its own numbers: for the tower's card and the
+## workbench's. "" for what is not ammunition.
+static func ammo_detail(ammo_id: String) -> String:
+	var cfg = _config()
+	if cfg == null or not ("AMMO" in cfg) or not cfg.AMMO.has(ammo_id):
+		return ""
+	var row: Dictionary = cfg.AMMO[ammo_id]
+	var title: String = TranslationServer.translate(String(row.get("name", ammo_id)))
+	var f := func(key: String) -> String: return String(cfg.factor_text(float(row.get(key, 0.0))))
+	match String(row.get("for", "")):
+		"bow":
+			if int(row.get("pierce", 1)) > 1:
+				return TranslationServer.translate("AMMO_DETAIL_BOW_PIERCE") % [title, f.call("damage"), int(row["pierce"])]
+			return TranslationServer.translate("AMMO_DETAIL_BOW") % [title, f.call("damage")]
+		"roller":
+			var key: String = "AMMO_DETAIL_ROLLER_HEAVY" if bool(row.get("moves_heavy", false)) else "AMMO_DETAIL_ROLLER"
+			return TranslationServer.translate(key) % [title, f.call("damage"), f.call("push")]
+		"thrower":
+			return TranslationServer.translate("AMMO_DETAIL_THROWER") % [title, f.call("splash"), f.call("damage"), f.call("knockdown")]
+		"bait":
+			return TranslationServer.translate("AMMO_DETAIL_BAIT") % [title, int(row.get("uses", 1))]
+	return title
 
 ## What a bench's upgrade (Config.improves_bench) changes, in one line for its block on the card, the way a
 ## building's upgrade says it -- only what changes, before and after: a pot, the first meal the stove cooks

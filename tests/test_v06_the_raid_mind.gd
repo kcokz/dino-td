@@ -311,24 +311,19 @@ func test_10_a_trap_it_cannot_get_round_to_is_got_at_through_the_wall() -> void:
 			[Vector3(2.0, 0.0, 2.0), Vector3(-2.0, 0.0, 2.0)], [Vector3(-2.0, 0.0, 2.0), Vector3(-2.0, 0.0, -2.0)]]:
 		for w in run_of_stakes(world, gm, leg[0], leg[1]):
 			ring.append(w)
-	var trap = load("res://scripts/entities/Tower.gd").new()
-	world.add_child(trap)
+	# A bow tower in the yard (_bow_tower: wanted for what it is, not for having shot), its cells on the
+	# grid as the ring's are -- two a side, its middle between them (GridManager.footprint_centre).
 	var trap_cell: Vector2i = gm.world_to_build_cell(Vector3.ZERO)
-	trap.setup("set_crossbow", gm.world_to_cell(gm.build_cell_to_world(trap_cell)))
-	trap.position = gm.build_cell_to_world(trap_cell)
-	trap.complete_construction()
-	gm.occupy_building(trap, [trap_cell])
-	# Wanted for what it is (a shooter, Config.DINO_AI.shooter_kinds), not for having shot: held
-	# still, so it kills nobody before the test has seen what they do.
-	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	var trap = _bow_tower(world, gm.footprint_centre("bow_tower", trap_cell))
+	assert_true(gm.occupy_building(trap, gm.footprint_cells("bow_tower", trap_cell)), "(the tower stands in the yard)")
 	await rebake_fixture()
-	# A pack outside, the trap in its interest, on its way somewhere the ring does not shut off.
+	# A pack outside, the tower in its interest, on its way somewhere the ring does not shut off.
 	var pack: Array = []
 	for x in [-0.7, 0.0, 0.7]:
 		var d = _raptor(Vector3(x, 0.0, -4.3), world)
 		d.set_waypoints([Vector3(0.0, 0.0, 12.0)])
 		pack.append(d)
-	assert_eq(pack[1]._preferred_target(), trap, "The trap inside is what it wants")
+	assert_eq(pack[1]._preferred_target(), trap, "The tower inside is what it wants")
 	var bitten: bool = false
 	var waited_on_it: bool = false
 	for frame in range(int(6.0 * float(Engine.physics_ticks_per_second))):
@@ -341,8 +336,8 @@ func test_10_a_trap_it_cannot_get_round_to_is_got_at_through_the_wall() -> void:
 				bitten = true
 		if bitten:
 			break
-	assert_false(waited_on_it, "None of them goes for the trap it cannot get round to")
-	assert_true(bitten, "Within six seconds one of them is biting the ring between it and the trap")
+	assert_false(waited_on_it, "None of them goes for the tower it cannot get round to")
+	assert_true(bitten, "Within six seconds one of them is biting the ring between it and the tower")
 
 func test_11_a_fence_at_the_cabins_back_is_gone_round() -> void:
 	# v0.6 round three, "即使没有完全包裹住cabin，恐龙实际攻击效果很差，因为大多数都在后面转来转去，而且还是
@@ -427,12 +422,7 @@ func test_12b_it_does_not_wait_its_turn_under_a_traps_fire() -> void:
 	# could bite, and the rest milled at the fence corner under its fire. Every place round a trap
 	# taken, it leaves that trap be a while and chooses again.
 	var world := await _field()
-	var trap = load("res://scripts/entities/Tower.gd").new()
-	world.add_child(trap)
-	trap.setup("set_crossbow")
-	trap.position = Vector3.ZERO
-	trap.complete_construction()
-	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	var trap = _bow_tower(world, Vector3.ZERO)
 	await rebake_fixture()
 	var dino_script = load("res://scripts/entities/Dino.gd")
 	var others: Array[Node3D] = []
@@ -453,12 +443,7 @@ func test_12d_a_place_where_the_others_wait_round_a_trap_is_no_better() -> void:
 	# the queue beyond it: they milled there (BUG-009). A raider that gets only a place there leaves
 	# the trap be too.
 	var world := await _field()
-	var trap = load("res://scripts/entities/Tower.gd").new()
-	world.add_child(trap)
-	trap.setup("set_crossbow")
-	trap.position = Vector3.ZERO
-	trap.complete_construction()
-	trap.process_mode = Node.PROCESS_MODE_DISABLED
+	var trap = _bow_tower(world, Vector3.ZERO)
 	await rebake_fixture()
 	var dino_script = load("res://scripts/entities/Dino.gd")
 	# Every place to bite it from taken; the ring where they wait, free.
@@ -474,21 +459,14 @@ func test_12d_a_place_where_the_others_wait_round_a_trap_is_no_better() -> void:
 	dino_script.clear_all_attack_slots()
 
 func test_12c_it_goes_for_the_trap_that_shot_it() -> void:
-	# Not the nearest trap to it: the one hurting it (BUG-009).
+	# Not the nearest tower to it: the one hurting it (BUG-009).
 	var world := await _field()
-	var near_one = load("res://scripts/entities/Tower.gd").new()
-	var shooter = load("res://scripts/entities/Tower.gd").new()
-	for t in [near_one, shooter]:
-		world.add_child(t)
-		t.setup("set_crossbow")
-		t.complete_construction()
-		t.process_mode = Node.PROCESS_MODE_DISABLED
-	near_one.position = Vector3(1.5, 0.0, 0.0)
-	shooter.position = Vector3(-3.0, 0.0, 0.0)
+	var near_one = _bow_tower(world, Vector3(1.5, 0.0, 0.0))
+	var shooter = _bow_tower(world, Vector3(-3.0, 0.0, 0.0))
 	await rebake_fixture()
 	var d = _raptor(Vector3(0.5, 0.0, 2.0), world)
 	d.set_physics_process(false)
-	assert_eq(d._preferred_target(), near_one, "Unshot, it goes for the nearest trap")
+	assert_eq(d._preferred_target(), near_one, "Unshot, it goes for the nearest tower")
 	d.shot_by(shooter)
 	assert_eq(d._preferred_target(), shooter, "shot, for the one that shot it")
 	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
@@ -582,15 +560,21 @@ func test_13c_waiting_in_a_queue_behind_a_wall_it_is_held_up_too() -> void:
 	assert_ne(d.current_target, behind, "(not the one behind it)")
 	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()
 
-## A trap at `at`, set and still (it shoots nobody by itself here).
-func _crossbow(world: Node3D, at: Vector3) -> Node:
-	var trap = load("res://scripts/entities/Tower.gd").new()
-	world.add_child(trap)
-	trap.setup("set_crossbow")
-	trap.position = at
-	trap.complete_construction()
-	trap.process_mode = Node.PROCESS_MODE_DISABLED
-	return trap
+## A bow tower with its middle at `at` -- what shoots at a raid since the 2026-10-02 rebuild (a raider shot
+## at goes for it: Config.DINO_AI.shooter_kinds) -- finished, loaded as one that shoots is, and held still:
+## wanted for what it is, not for having shot, it kills nobody before the test has seen what they do. Set up
+## before it enters the tree, as BuildSystem.place_at does, so its body is its own two cells a side.
+func _bow_tower(world: Node3D, at: Vector3) -> Node:
+	var t = load(BuildSystem.script_for("bow_tower")).new()
+	t.setup("bow_tower")
+	t.position = at
+	world.add_child(t)
+	t.complete_construction()
+	stock_everything()
+	t.load_from_stock()
+	assert_true(t.has_ammo(), "(the bow tower is loaded)")
+	t.process_mode = Node.PROCESS_MODE_DISABLED
+	return t
 
 func test_13d_going_from_one_thing_to_another_and_getting_nowhere_is_held_up_too() -> void:
 	# The player's choice, v0.6 ("堵住了就另咬一个口子"): a raid crowded outside the one breach in a ring of
@@ -599,8 +583,8 @@ func test_13d_going_from_one_thing_to_another_and_getting_nowhere_is_held_up_too
 	# walled-in traps).
 	var world := await _field()
 	var wall = _stake(world, Vector3(0.0, 0.0, -1.0))
-	var one = _crossbow(world, Vector3(-1.0, 0.0, -4.0))
-	var other = _crossbow(world, Vector3(1.0, 0.0, -4.0))
+	var one = _bow_tower(world, Vector3(-1.0, 0.0, -4.0))
+	var other = _bow_tower(world, Vector3(1.0, 0.0, -4.0))
 	await rebake_fixture()
 	var d = _held_at(world, Vector3.ZERO, Vector3(0.0, 0.0, -6.0))
 	await wait_physics_frames(2)
@@ -610,7 +594,7 @@ func test_13d_going_from_one_thing_to_another_and_getting_nowhere_is_held_up_too
 	var k: int = 0
 	while t + step < jam:
 		k += 1
-		# From one trap to the other, by turns, getting no nearer either.
+		# From one tower to the other, by turns, getting no nearer either.
 		d.current_target = one if k % 2 == 0 else other
 		d._nav_goal = (d.current_target as Node3D).global_position + Vector3(0.0, 0.0, 1.0)
 		d._watch_for_a_jam(step)
@@ -625,7 +609,7 @@ func test_13e_the_wall_it_goes_through_is_not_let_go_for_the_trap_that_shoots_it
 	# crowd at the breach, held up again, by turns.
 	var world := await _field()
 	var wall = _stake(world, Vector3(0.0, 0.0, -1.0))
-	var trap = _crossbow(world, Vector3(0.0, 0.0, -4.0))
+	var trap = _bow_tower(world, Vector3(0.0, 0.0, -4.0))
 	await rebake_fixture()
 	var d = _held_at(world, Vector3.ZERO, Vector3(0.0, 0.0, -6.0))
 	await wait_physics_frames(2)
@@ -633,12 +617,12 @@ func test_13e_the_wall_it_goes_through_is_not_let_go_for_the_trap_that_shoots_it
 	d._take(wall, d.Mode.BREACH)
 	d.shot_by(trap)
 	d._think()
-	assert_eq(d.current_target, wall, "Shot at by the trap beyond, it keeps at the wall it is going through")
+	assert_eq(d.current_target, wall, "Shot at by the tower beyond, it keeps at the wall it is going through")
 	assert_eq(int(d.mode), int(d.Mode.BREACH), "(to break it)")
-	# A wall it only happens to be at is not that: the trap that shoots it outranks it.
+	# A wall it only happens to be at is not that: the tower that shoots it outranks it.
 	var e = _held_at(world, Vector3(2.0, 0.0, 0.0), Vector3(2.0, 0.0, -6.0))
 	await wait_physics_frames(2)
 	e._take(wall, e.Mode.BREACH)
 	e.shot_by(trap)
-	assert_true(e._outranks(trap, wall), "Any other wall gives way to the trap that shoots it")
+	assert_true(e._outranks(trap, wall), "Any other wall gives way to the tower that shoots it")
 	load("res://scripts/entities/Dino.gd").clear_all_attack_slots()

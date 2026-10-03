@@ -1,5 +1,6 @@
 # res://tests/test_v06_buildings.gd
-# v0.6 T5: bone stakes, a stone wall, and a crossbow tower improved where it stands.
+# v0.6 T5: bone stakes, a stone wall, and a tower improved where it stands -- since the 2026-10-02
+# rebuild, a bow tower given a bigger store of arrows (the set crossbow and its re-arming are gone).
 #
 # GAME-DESIGN 6: every building answers a question -- a bone stake bites a swarm harder at
 # the mouth of a funnel, a stone wall holds a big predator that walks through stakes -- and
@@ -68,7 +69,7 @@ func test_01_the_menu_offers_bone_stakes_and_a_stone_wall_but_not_tower_ii() -> 
 	assert_has(config_node.upgrade_targets("wall"), "stone_wall", "or a stone wall")
 	assert_false(config_node.BUILDABLE_TYPES.has("bone_stake") or config_node.BUILDABLE_TYPES.has("stone_wall"),
 		"neither an entry of the menu")
-	var target: String = String(config_node.upgrade_target("set_crossbow"))
+	var target: String = String(config_node.upgrade_target("bow_tower"))
 	assert_ne(target, "", "A tower has somewhere to go")
 	assert_false(config_node.BUILDABLE_TYPES.has(target), "But that is reached by upgrading, not from the menu")
 
@@ -127,31 +128,36 @@ func test_04_a_stone_wall_stops_the_hero_and_a_dinosaur_alike() -> void:
 	assert_ne(int(dino.collision_mask) & wall_layer, 0, "And so is a dinosaur's body")
 
 # ==============================================================================
-# 4. Improving a set crossbow where it stands
+# 4. Improving a bow tower where it stands
 # ==============================================================================
 
 func test_05_an_upgrade_costs_the_difference_between_the_two_prices() -> void:
-	var target: String = String(config_node.upgrade_target("set_crossbow"))
-	assert_eq(config_node.get_building_kind(target), "trap", "A trap becomes a better trap")
-	assert_almost_eq(config_node.get_building_footprint(target), config_node.get_building_footprint("set_crossbow"), 0.001,
+	var target: String = String(config_node.upgrade_target("bow_tower"))
+	assert_eq(config_node.get_building_kind(target), config_node.get_building_kind("bow_tower"), "A bow tower becomes a bigger bow tower")
+	assert_almost_eq(config_node.get_building_footprint(target), config_node.get_building_footprint("bow_tower"), 0.001,
 		"On exactly the same ground, so nothing on the grid moves")
-	var have: Dictionary = _row("set_crossbow")["cost"]
+	var have: Dictionary = _row("bow_tower")["cost"]
 	var want: Dictionary = _row(target)["cost"]
-	var cost: Dictionary = config_node.upgrade_cost("set_crossbow")
+	var cost: Dictionary = config_node.upgrade_cost("bow_tower")
 	assert_false(cost.is_empty(), "It costs something")
 	for res_id in want:
 		var more: int = int(want[res_id]) - int(have.get(res_id, 0))
 		assert_eq(int(cost.get(res_id, 0)), maxi(0, more), "Its %s is the difference" % res_id)
-	assert_lt(float(_row(target)["rearm_seconds"]), float(_row("set_crossbow")["rearm_seconds"]), "And it re-arms faster")
-	assert_gt(config_node.get_upgrade_time("set_crossbow"), 0.0, "Upgrading is work")
+	assert_gt(int(config_node.ammo_capacity(target)), int(config_node.ammo_capacity("bow_tower")), "And it holds more arrows")
+	assert_gt(config_node.get_upgrade_time("bow_tower"), 0.0, "Upgrading is work")
 
-func test_06_upgrading_is_paid_up_front_and_the_trap_keeps_working() -> void:
-	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
+func test_06_upgrading_is_paid_up_front_and_the_tower_keeps_working() -> void:
+	var t = _built(_rig(), "bow_tower", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
 	await wait_frames(1)
-	var cost: Dictionary = config_node.upgrade_cost("set_crossbow")
+	# Loaded, so there is something for it to keep working with (AmmoTower).
+	game_state_node.resources["arrow_wood"] = int(config_node.ammo_capacity("bow_tower"))
+	t.set_ammo("arrow_wood")
+	var loaded: int = int(t.load_from_stock())
+	assert_gt(loaded, 0, "(loaded with arrows)")
+	var cost: Dictionary = config_node.upgrade_cost("bow_tower")
 	for res_id in config_node.RESOURCES:
 		game_state_node.resources[res_id] = int(cost.get(res_id, 0))
 	assert_true(t.can_upgrade(), "A finished tower can be upgraded")
@@ -159,43 +165,46 @@ func test_06_upgrading_is_paid_up_front_and_the_trap_keeps_working() -> void:
 	for res_id in cost:
 		assert_eq(int(game_state_node.resources[res_id]), 0, "Its %s is spent when it is ordered" % res_id)
 	assert_true(t.is_upgrading(), "The work is waiting")
-	assert_true(t.is_constructed, "And the trap is still a trap, not a blueprint")
-	assert_almost_eq(float(t.rearm_seconds), float(_row("set_crossbow")["rearm_seconds"]), 0.0001, "Working as it did")
+	assert_true(t.is_constructed, "And the tower is still a tower, not a blueprint")
+	assert_eq(int(t.capacity()), int(config_node.ammo_capacity("bow_tower")), "Working as it did: the store it had")
+	assert_eq(int(t.rounds()), loaded, "with its arrows in it")
 	assert_false(t.can_upgrade(), "It cannot be ordered twice")
 	assert_false(t.begin_upgrade(), "Or paid for twice")
 
-func test_07_the_hero_builds_it_and_it_becomes_the_next_trap() -> void:
-	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
+func test_07_the_hero_builds_it_and_it_becomes_the_next_tower() -> void:
+	var t = _built(_rig(), "bow_tower", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
 	await wait_frames(1)
-	var target: String = String(config_node.upgrade_target("set_crossbow"))
+	var target: String = String(config_node.upgrade_target("bow_tower"))
 	t.current_hp = t.max_hp * 0.5
 	stock_everything()
 	assert_true(t.begin_upgrade(), "Ordered")
 	var watcher = watch_signal(event_bus_node, "building_upgraded")
 
 	var hero = _spawn(load("res://scripts/entities/Hero.gd").new())
-	hero.global_position = t.global_position + Vector3(0.9, 0.0, 0.0)
+	# Just outside its east side: the tower is more than a cell across now.
+	hero.global_position = t.global_position + Vector3(float(config_node.get_building_half("bow_tower").x) + 0.4, 0.0, 0.0)
 	await wait_frames(1)
 	hero.order_upgrade(t)
-	var needed: float = config_node.get_upgrade_time("set_crossbow")
+	var needed: float = config_node.get_upgrade_time("bow_tower")
 	hero._process_building(needed * 0.5)
 	assert_true(t.is_upgrading(), "Half the work is not the thing")
 	hero._process_building(needed * 0.5 + 0.01)
 
 	assert_false(t.is_upgrading(), "Done")
-	assert_eq(String(t.building_type), target, "It is the next trap now")
-	assert_almost_eq(float(t.rearm_seconds), float(_row(target)["rearm_seconds"]), 0.0001, "Re-arming as fast as it")
+	assert_eq(String(t.building_type), target, "It is the next tower now")
+	assert_eq(int(t.capacity()), int(config_node.ammo_capacity(target)), "Holding as many as it")
 	assert_almost_eq(float(t.max_hp), float(_row(target)["hp"]), 0.0001, "Its hit points")
 	assert_almost_eq(float(t.current_hp), float(_row(target)["hp"]) * 0.5, 0.01,
-		"And as much of them as the old trap had left")
+		"And as much of them as the old tower had left")
 	assert_true(watcher.emitted, "The bus says so")
-	assert_false(t.can_upgrade(), "It is the end of its line in v0.6")
+	assert_eq(t.can_upgrade(), not config_node.upgrade_targets(target).is_empty(),
+		"And it goes on up its line from there as far as Config says (%s)" % str(config_node.upgrade_targets(target)))
 
 func test_08_an_upgrade_under_way_is_work_that_waits_for_him() -> void:
-	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
+	var t = _built(_rig(), "bow_tower", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
@@ -208,7 +217,7 @@ func test_08_an_upgrade_under_way_is_work_that_waits_for_him() -> void:
 	assert_true(hero._is_unfinished_work(t), "An upgrade paid for and not built is")
 
 func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
-	var t = _built(_rig(), "set_crossbow", Vector2i(4, 4))
+	var t = _built(_rig(), "bow_tower", Vector2i(4, 4))
 	assert_not_null(t, "A tower")
 	if t == null:
 		return
@@ -217,7 +226,7 @@ func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
 	stock_everything()
 	panel.select_target(t)
 	await wait_frames(1)
-	var target: String = String(config_node.upgrade_target("set_crossbow"))
+	var target: String = String(config_node.upgrade_target("bow_tower"))
 	var target_name: String = String(config_node.get_building_name(target))
 	# The card the build menu has for what it becomes (v0.6 round six: "升级建筑单位图标应该跟build里面的建造图标一样").
 	var offered: Button = null
@@ -231,6 +240,5 @@ func test_09_the_panel_offers_the_upgrade_with_what_it_changes() -> void:
 		assert_true(row != null and row.get_child_count() > 0, "and its price on it")
 	var detail: String = panel.upgrade_detail_text(t)
 	assert_true(detail.contains(target_name), "Hovering it names what the tower becomes")
-	var rate: String = tr("STAT_REARM_SECONDS") % [config_node.factor_text(float(_row("set_crossbow")["rearm_seconds"])),
-		config_node.factor_text(float(_row(target)["rearm_seconds"]))]
-	assert_true(detail.contains(rate), "And says what it changes: %s" % detail)
+	var holds: String = tr("STAT_CAPACITY") % [int(config_node.ammo_capacity("bow_tower")), int(config_node.ammo_capacity(target))]
+	assert_true(detail.contains(holds), "And says what it changes: %s" % detail)

@@ -356,7 +356,7 @@ func test_challenge_lockout_won_complete_action_rejection() -> void:
 
 	# 2. Building placement & wood spend rejection for all building types
 	var place_watcher = watch_signal(event_bus_node, "building_placed")
-	var types = ["set_crossbow", "wall"]
+	var types = ["bow_tower", "wall"]
 	for i in range(types.size()):
 		var b_type = types[i]
 		var cell = Vector2i(i + 1, i + 1)
@@ -392,7 +392,7 @@ func test_challenge_lockout_won_hammering_loop() -> void:
 	var initial_wood = game_state_node.resources.get("wood", 0)
 
 	for i in range(50):
-		assert_null(bs.place_building("set_crossbow", Vector2i(i + 1, 0)), "place_building rejected on iteration %d" % i)
+		assert_null(bs.place_building("bow_tower", Vector2i(i + 1, 0)), "place_building rejected on iteration %d" % i)
 		game_state_node.trigger_end_action()
 		game_state_node.advance_phase()
 		assert_eq(int(game_state_node.current_phase), 0, "Phase locked at 0 on iteration %d" % i)
@@ -430,7 +430,7 @@ func test_challenge_lockout_lost_complete_action_rejection() -> void:
 
 	# 2. Building placement & wood spend rejection for all building types
 	var place_watcher = watch_signal(event_bus_node, "building_placed")
-	var types = ["set_crossbow", "wall"]
+	var types = ["bow_tower", "wall"]
 	for i in range(types.size()):
 		var b_type = types[i]
 		var cell = Vector2i(i + 2, i + 2)

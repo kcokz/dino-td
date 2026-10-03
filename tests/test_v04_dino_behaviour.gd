@@ -125,14 +125,21 @@ func test_05_two_species_with_one_habit_share_a_class() -> void:
 		config_node.get_dino_script_path("big_theropod"),
 		"A theropod fights differently, so it is a different one")
 
-func test_06_a_pack_dinosaur_breaks_off_for_a_trap() -> void:
-	# What shoots at a raid is a trap since v0.6 round two (Trap.gd).
+func test_06_a_pack_dinosaur_breaks_off_for_a_tower() -> void:
+	# What shoots at a raid is a tower since the 2026-10-02 rebuild (BowTower.gd; DINO_AI.shooter_kinds).
+	# Given its type before it enters the tree, as BuildSystem does: its body and box are a bow tower's.
 	var dino = _dino("raptor", Vector3.ZERO)
-	var trap = _spawn(load("res://scripts/entities/Trap.gd"), Vector3(3.0, 0.0, 0.0))
+	var tower = load(BuildSystem.script_for("bow_tower")).new()
+	tower.setup("bow_tower")
+	_cleanup_nodes.append(tower)
+	tree.root.add_child(tower)
+	tower.position = Vector3(3.0, 0.0, 0.0)
+	tower.complete_construction()
 	var wall = _spawn(wall_script, Vector3(1.0, 0.0, 0.0))
 	await wait_frames(1)
 
-	assert_eq(dino._find_threat_priority_target(), trap,
+	assert_true(dino._is_shooter(tower), "A bow tower is what shoots at it")
+	assert_eq(dino._find_threat_priority_target(), tower,
 		"The thing shooting at it is what it wants, even with a fence closer")
 
 func test_07_a_siege_dinosaur_walks_past_the_hero() -> void:

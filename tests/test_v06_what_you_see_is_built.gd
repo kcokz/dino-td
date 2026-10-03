@@ -161,14 +161,19 @@ func test_04_a_lone_section_runs_the_way_it_faces() -> void:
 	assert_true(b["Run_N"] and b["Run_S"] and not b["Run_E"] and not b["Run_W"], "facing east, north to south")
 
 func test_05_it_joins_walls_and_nothing_else() -> void:
-	# "贴着船舱建造就会变成有拐角的栅栏": a trap or the cabin beside it is not a wall to join.
+	# "贴着船舱建造就会变成有拐角的栅栏": a tower or the cabin beside it is not a wall to join.
 	var pair: Array = await _field()
+	var gm = pair[0]
 	var bs = pair[1]
-	_put(bs, "set_crossbow", Vector2i(0, -1))
+	# A bow tower with its south edge in the cell north of the section: its cells reach half its side south of
+	# its middle (GridManager.footprint_cells).
+	var tower = _put(bs, "bow_tower", Vector2i(0, -1 - int(config_node.get_building_cells("bow_tower")) / 2))
+	assert_not_null(tower, "A tower goes up")
+	assert_eq(gm.building_in_build_cell(Vector2i(0, -1)), tower, "(its edge just north of where the section goes)")
 	var section = _put(bs, "wall", Vector2i(0, 0), 0)
 	await wait_frames(2)
 	var shown: Dictionary = _shown(section)
-	assert_false(shown["Run_N"], "It does not reach out to the trap beside it")
+	assert_false(shown["Run_N"], "It does not reach out to the tower beside it")
 	assert_true(shown["Run_E"] and shown["Run_W"], "and stays the straight section it faces")
 	var gate = _put(bs, "gate", Vector2i(0, 1))
 	await wait_frames(2)
@@ -298,7 +303,7 @@ func test_10_r_turns_a_section_in_hand() -> void:
 	assert_true(main._turns("gate"), "a gate too")
 	var was: int = main._placement_facing
 	main.turn_placement(1)
-	assert_eq(main._placement_facing, posmod(was + 1, Trap.FACINGS.size()), "a quarter at a press")
+	assert_eq(main._placement_facing, posmod(was + 1, AmmoTower.FACINGS.size()), "a quarter at a press")
 	assert_false(main._turns("workbench"), "A workbench faces no way that matters")
 
 func test_11_the_reasons_are_in_the_string_table() -> void:

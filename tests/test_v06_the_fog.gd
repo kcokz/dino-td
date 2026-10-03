@@ -122,12 +122,13 @@ func test_05_what_he_builds_sees_round_itself() -> void:
 	stock_everything()
 	var gm = main.grid_manager
 	var cell: Vector2i = gm.world_to_build_cell(main.current_core.global_position + Vector3(14.0, 0.0, 12.0))
-	var trap = main.build_system.place_at("set_crossbow", cell, main.buildings_container, true)
-	assert_not_null(trap, "A trap put up away from the cabin")
-	trap.complete_construction()
-	var near: Vector3 = (trap as Node3D).global_position + Vector3(float(_fog()["sight"]["trap"]) * 0.7, 0.0, 0.0)
+	var tower = main.build_system.place_at("bow_tower", cell, main.buildings_container, true)
+	assert_not_null(tower, "A bow tower put up away from the cabin")
+	tower.complete_construction()
+	# A tower sees as far as it shoots (Config.FOG.sight; AmmoTower.sight_radius): the bow tower its range.
+	var near: Vector3 = (tower as Node3D).global_position + Vector3(float(config_node.BUILDINGS["bow_tower"]["range"]) * 0.7, 0.0, 0.0)
 	await _settle()
-	assert_true(fog.is_in_sight(near), "Finished, it sees down its lane")
+	assert_true(fog.is_in_sight(near), "Finished, it sees as far as it shoots")
 
 func test_06_found_the_raids_are_warned_of_sooner() -> void:
 	var main = await _level()

@@ -45,6 +45,8 @@ C = {
     "metal": "#98a3aa", "cyan": "#58c7e8", "moss": "#6b9a45",
     "hide": "#a8743f", "hide_dark": "#7a4f28", "hide_hi": "#cf9f64",
     "resin": "#3a2616",
+    "sand": "#b0603c", "sand_hi": "#c97a50", "sand_dark": "#8a4a2e",
+    "wicker": "#c49a52", "wicker_dark": "#8b6430",
 }
 
 
@@ -362,29 +364,7 @@ ICONS["hide_map"] = item_svg(
      shape("path", None, C["char"], 2.4, d="M 41 34 L 47 40 M 47 34 L 41 40"),
      shape("circle", C["meat_dark"], cx=47, cy=20, r=3)])
 
-# The fence with a rock on it (v0.6 round six): the three posts, a block of sandstone balanced on their points,
-# a thong round it.
-ICONS["rock_fence"] = item_svg(
-    [shape("polygon", C["post"], points=_post(x, top=30, tip=20)) for x in (10, 26, 42)]
-    + [shape("rect", C["rope"], x=7, y=44, width=50, height=5.5, rx=2),
-       shape("rect", "#b0603c", x=16, y=6, width=32, height=17, rx=4)],
-    [s for x in (10, 26, 42) for s in (
-        shape("polygon", C["post_dark"], points="%d,58 %d,30 %d,22 %d,58" % (x, x, x + 4, x + 4)),)]
-    + [shape("rect", C["rope"], x=7, y=44, width=50, height=5.5, rx=2),
-       shape("rect", "#c97a50", x=16, y=6, width=32, height=6, rx=3),
-       shape("rect", "#8a4a2e", x=16, y=17, width=32, height=6, rx=3),
-       shape("path", None, C["rope"], 2.0, d="M 22 5 L 22 25 M 42 5 L 42 25")])
 
-# A crossbow set into a stone wall (v0.6 round six): the drystone courses, a dark loophole, the stave across it.
-ICONS["wall_crossbow"] = item_svg(
-    [shape("rect", C[c], x=x, y=y, width=w, height=h, rx=3) for (x, y, w, h, c) in _STONES]
-    + [shape("path", None, C["post"], 5.5, d="M 10 30 Q 32 16 54 30")],
-    [shape("rect", C[c], x=x, y=y, width=w, height=h, rx=3) for (x, y, w, h, c) in _STONES]
-    + [shape("rect", C["char"], x=25, y=26, width=14, height=12, rx=2),
-       shape("path", None, C["post"], 5.5, d="M 10 30 Q 32 16 54 30"),
-       shape("circle", C["bone"], cx=10, cy=30, r=3.2), shape("circle", C["bone"], cx=54, cy=30, r=3.2),
-       shape("path", None, C["bone"], 1.8, d="M 10 31 L 32 34 L 54 31"),
-       shape("polygon", C["bone"], points="32,8 36,17 28,17")])
 
 
 # A gate: two sharpened posts with a door of planks hung between them on rope, braced with a Z --
@@ -456,20 +436,6 @@ def _tripwire():
             shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)]
 
 
-# The opening's trap, all wood: a sapling bow lashed across a stock in two forked stakes, the
-# string drawn back, an arrow with a charred point and leaves for fletching.
-ICONS["trip_bow"] = item_svg(
-    [shape("polygon", C["post"], points="18,58 23,58 25,38 20,38"),
-     shape("polygon", C["post"], points="39,58 44,58 42,38 37,38"),
-     shape("rect", C["post"], x=12, y=34, width=38, height=6, rx=2),
-     shape("path", None, C["grain"], 5.5, d="M 8 30 Q 32 8 56 30"),
-     shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)],
-    [shape("path", None, C["post_dark"], 2.5, d="M 20 38 L 17 32 M 25 38 L 27 32 M 37 38 L 35 32 M 42 38 L 45 32"),
-     shape("path", None, C["rope"], 1.6, d="M 9 31 L 32 36 L 55 31"),
-     shape("path", None, C["grain"], 2.4, d="M 32 36 L 32 12"),
-     shape("polygon", C["char"], points="32,6 35,12 29,12"),
-     shape("polygon", C["leaf"], points="32,34 27,39 32,37"),
-     shape("polygon", C["leaf"], points="32,34 37,39 32,37")] + _tripwire())
 
 # The crib of logs the set crossbow stands on (v0.6 round six: wood and bone; it was a plinth of stone),
 # two courses, each log's cut end showing.
@@ -477,34 +443,8 @@ _CRIB = [(8, 49, 48, 9, "post"), (12, 39, 40, 9, "post_dark")]
 _CRIB_ENDS = [(12, 53.5), (52, 53.5), (16, 43.5), (48, 43.5)]
 
 
-def _set_crossbow(twin=False):
-    """The set crossbow: a seasoned stave with bone tips over a stock on a crib of logs, a
-    bone-headed bolt on the sinew -- and, improved, a second stave and the upgrade's chevrons."""
-    staves = [shape("path", None, C["post"], 6.0, d="M 6 30 Q 32 10 58 30")]
-    if twin:
-        staves.append(shape("path", None, C["post"], 5.0, d="M 9 22 Q 32 4 55 22"))
-    body = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=4.5) for (x, y, w, h, c) in _CRIB]
-            + [shape("rect", C["post"], x=15, y=31, width=34, height=7, rx=1.5)] + staves
-            + [shape("rect", C["post_dark"], x=57, y=50, width=3.5, height=9, rx=1)])
-    detail = ([shape("rect", C[c], x=x, y=y, width=w, height=h, rx=4.5) for (x, y, w, h, c) in _CRIB]
-              + [shape("circle", C["grain"], cx=x, cy=y, r=4.0) for (x, y) in _CRIB_ENDS]
-              + [shape("circle", C["ring"], cx=x, cy=y, r=1.6) for (x, y) in _CRIB_ENDS]
-              + [shape("circle", C["bone"], cx=7, cy=30, r=3.2), shape("circle", C["bone"], cx=57, cy=30, r=3.2),
-                 shape("path", None, C["bone"], 1.8, d="M 7 31 L 32 34 L 57 31"),
-                 shape("path", None, C["grain"], 3.0, d="M 32 34 L 32 13"),
-                 shape("polygon", C["bone"], points="32,4 36.5,14 27.5,14"),
-                 shape("polygon", C["leaf"], points="32,32 27,37 32,35"),
-                 shape("polygon", C["leaf"], points="32,32 37,37 32,35")]
-              + _tripwire())
-    if twin:
-        detail += [shape("path", None, C["bone"], 1.5, d="M 10 23 L 32 27 L 54 23"),
-                   shape("path", None, C["gold"], 4.0, d="M 3 50 L 9 44 L 15 50"),
-                   shape("path", None, C["gold"], 4.0, d="M 3 58 L 9 52 L 15 58")]
-    return item_svg(body, detail)
 
 
-ICONS["set_crossbow"] = _set_crossbow()
-ICONS["set_crossbow_2"] = _set_crossbow(twin=True)
 
 # The crew module (tools/generate_cabin.py module) from the front: a long hull with a rounded roof,
 # the orange band towards its engine end, its door and two windows in its side.
@@ -648,40 +588,286 @@ ICONS["ground_spikes"] = _spikes()
 ICONS["bone_spikes"] = _spikes(bone=True)
 
 
-def _deadfall(stone=False):
-    """A weight propped over the way on a figure four of sticks: a log, or a slab of stone."""
-    if stone:
-        weight = [shape("polygon", C["s2"], points="4,52 50,22 58,30 12,58")]
-        weight_detail = [shape("polygon", C["s1"], points="4,52 50,22 54,26 8,55"),
-                         shape("polygon", C["s3"], points="12,58 58,30 58,33 13,60")]
-    else:
-        weight = [shape("path", None, C["post"], 11.0, d="M 7 54 L 53 25")]
-        weight_detail = [shape("path", None, C["post_dark"], 3.0, d="M 9 57 L 55 28"),
-                         shape("circle", C["grain"], cx=54, cy=24.5, r=5.2), shape("circle", C["ring"], cx=54, cy=24.5, r=2.0)]
-    trigger = [shape("path", None, C["grain"], 3.2, d="M 42 58 L 42 34"),
-               shape("path", None, C["grain"], 3.0, d="M 30 50 L 50 32"),
-               shape("path", None, C["grain"], 3.0, d="M 28 57 L 56 51")]
-    return item_svg(trigger + weight, weight_detail + _litter_line())
 
 
-ICONS["log_deadfall"] = _deadfall()
-ICONS["stone_deadfall"] = _deadfall(stone=True)
 
 
-def _snare(hide=False):
-    """A sapling bent over to a peg, a running noose on the ground where a foot will go."""
-    cord = C["hide"] if hide else C["rope"]
-    body = [shape("path", None, C["post"], 5.0, d="M 10 58 C 8 30 22 10 44 30"),
-            shape("rect", C["post_dark"], x=44, y=44, width=4, height=15, rx=1)]
-    detail = [shape("path", None, cord, 2.4 if hide else 1.8, d="M 44 30 L 38 50"),
-              shape("ellipse", None, cord, 3.0 if hide else 2.2, cx=32, cy=53, rx=13, ry=4.5),
-              shape("polygon", C["leaf"], points="16,22 10,18 17,17"),
-              shape("polygon", C["leaf"], points="27,14 24,7 31,11")]
-    return item_svg(body, detail + _litter_line())
 
 
-ICONS["grass_snare"] = _snare()
-ICONS["hide_snare"] = _snare(hide=True)
+
+
+# ------------------------------------------------------------------------------ towers and engines
+# The defences rebuilt as machines (v0.6 round eight; tools/generate_props.py bow_tower, log_tower,
+# catapult, bait_rack) and what they throw. A building's level 2 and 3 carry one and two small marks of
+# what it holds more of -- a quiver, a log, a shot, a hunk of meat -- along its bottom edge, each
+# rimmed on its own over the drawing so it reads apart from it.
+def _marks(mark, level):
+    """`level` - 1 marks along the bottom left, the first in the corner."""
+    out = []
+    for k in range(level - 1):
+        out += mark(3 + 14 * k, 45)
+    return out
+
+
+def _quiver_mark(x, y):
+    """A small quiver: a basket with three arrows standing in it."""
+    return item_svg(
+        [shape("path", None, C["grain"], 2.2, d="M %g %g L %g %g M %g %g L %g %g M %g %g L %g %g" % (
+            x + 3, y + 9, x + 1.5, y + 1, x + 5.5, y + 9, x + 5.5, y, x + 8, y + 9, x + 9.5, y + 1)),
+         shape("rect", C["wicker"], x=x, y=y + 7, width=11, height=10, rx=2)],
+        [shape("path", None, C["wicker_dark"], 1.4, d="M %g %g L %g %g M %g %g L %g %g" % (
+            x + 1, y + 10.5, x + 10, y + 10.5, x + 1, y + 13.8, x + 10, y + 13.8)),
+         shape("polygon", C["char"], points="%g,%g %g,%g %g,%g" % (x + 0.6, y + 2.6, x + 1.2, y - 1.2, x + 2.8, y + 2))])
+
+
+def _log_mark(x, y):
+    """A small log, its cut end out."""
+    return item_svg([shape("circle", C["bark"], cx=x + 6, cy=y + 10, r=6.5)],
+                    [shape("circle", C["grain"], cx=x + 6, cy=y + 10, r=4.4),
+                     shape("circle", C["ring"], cx=x + 6, cy=y + 10, r=1.4)])
+
+
+def _shot_mark(x, y):
+    """A small round shot of sandstone."""
+    return item_svg([shape("circle", C["sand"], cx=x + 6, cy=y + 10, r=6.5)],
+                    [shape("path", C["sand_dark"], d="M %g %g A 6.5 6.5 0 0 0 %g %g A 7 5 0 0 1 %g %g Z" % (
+                        x - 0.4, y + 10.5, x + 12.4, y + 10.5, x - 0.4, y + 10.5)),
+                     shape("circle", C["sand_hi"], cx=x + 4, cy=y + 7.5, r=1.8)])
+
+
+def _meat_mark(x, y):
+    """A small hunk of meat on its loop."""
+    return item_svg([shape("ellipse", C["meat"], cx=x + 6, cy=y + 10.5, rx=5.5, ry=7)],
+                    [shape("ellipse", C["meat_dark"], cx=x + 7, cy=y + 12.5, rx=3.5, ry=4.5),
+                     shape("ellipse", C["meat_hi"], cx=x + 4.5, cy=y + 8, rx=1.8, ry=2.6)])
+
+
+def _bow_tower(level=1):
+    """A lookout on splayed legs, cross-braced, its deck across their tops -- and on it a bow, spanned,
+    an arrow on the string."""
+    body = [shape("polygon", C["post"], points="11,61 18,61 24,31 18,31"),
+            shape("polygon", C["post"], points="46,61 53,61 46,31 40,31"),
+            shape("rect", C["post"], x=7, y=26, width=50, height=7, rx=1.5),
+            shape("path", None, C["grain"], 5.5, d="M 8 22 Q 32 2 56 22"),
+            shape("path", None, C["grain"], 2.8, d="M 32 27 L 32 9"),
+            shape("polygon", C["ring"], points="32,2 35.6,11 28.4,11")]
+    detail = [shape("path", None, C["post_dark"], 2.6, d="M 19.5 55 L 43 36.5 M 44.5 55 L 21 36.5"),
+              shape("polygon", C["post_dark"], points="15.5,61 18,61 24,31 21.5,31"),
+              shape("polygon", C["post_dark"], points="46,61 48.5,61 42.5,31 40,31"),
+              shape("rect", C["post_dark"], x=7, y=30.5, width=50, height=2.5, rx=1),
+              shape("path", None, C["post_dark"], 1.4, d="M 19 26 L 19 30.5 M 45 26 L 45 30.5"),
+              shape("path", None, C["rope"], 1.7, d="M 9 22.5 L 32 27.5 L 55 22.5"),
+              shape("path", None, C["grain"], 2.8, d="M 32 27 L 32 9"),
+              shape("polygon", C["char"], points="32,2 33.5,5.5 30.5,5.5")]
+    return item_svg(body, detail) + _marks(_quiver_mark, level)
+
+
+def _log_tower(level=1):
+    """A crib of timbers with logs piled on its cradle, their cut ends out, and the ramp they are rolled
+    down running off it to the ground."""
+    logs = [(13, 21), (28, 21), (20.5, 9)]
+    body = ([shape("path", None, C["post"], 7.5, d="M 30 30 L 60 56"),
+             shape("rect", C["post"], x=7, y=28, width=6, height=33, rx=1),
+             shape("rect", C["post"], x=25, y=28, width=6, height=33, rx=1),
+             shape("rect", C["post_dark"], x=4, y=26, width=32, height=6, rx=1.5)]
+            + [shape("circle", C["bark"], cx=x, cy=y, r=7.6) for (x, y) in logs])
+    detail = ([shape("path", None, C["post_dark"], 1.5, d="M %g %g L %g %g" % (a, b, a + 3.2, b - 3.7))
+               for (a, b) in ((35.5, 37.5), (41, 42.3), (46.5, 47.1), (52, 51.9))]
+              + [shape("path", None, C["post_dark"], 2.4, d="M 10 56 L 28 36"),
+                 shape("rect", C["post_dark"], x=7, y=28, width=2.4, height=33, rx=1),
+                 shape("rect", C["post_dark"], x=25, y=28, width=2.4, height=33, rx=1)]
+              + [s for (x, y) in logs for s in (shape("circle", C["grain"], cx=x, cy=y, r=5.3),
+                                               shape("circle", None, C["ring"], 1.5, cx=x, cy=y, r=2.9),
+                                               shape("circle", C["ring"], cx=x, cy=y, r=1.1))])
+    return item_svg(body, detail) + _marks(_log_mark, level)
+
+
+def _catapult(level=1):
+    """A torsion engine from the side: its frame on the ground, the skein its arm turns in, the stop on
+    its upright, and the arm thrown back with a red shot in its cup."""
+    body = [shape("rect", C["bark"], x=3, y=50, width=58, height=8, rx=2),
+            shape("rect", C["post"], x=43, y=24, width=6, height=28, rx=1),
+            shape("path", None, C["post"], 3.6, d="M 47 34 L 58 51"),
+            shape("path", None, C["post"], 6.5, d="M 31 47 L 14 20"),
+            shape("path", C["post_dark"], d="M 5 14 A 8.5 8.5 0 0 0 21 18 Z"),
+            shape("circle", C["sand"], cx=11.5, cy=11, r=6.8),
+            shape("circle", C["rope"], cx=31, cy=47, r=6.5),
+            shape("circle", C["rope"], cx=46, cy=24, r=5.5)]
+    detail = [shape("rect", C["post_dark"], x=3, y=55, width=58, height=3, rx=1.5),
+              shape("path", None, C["post_dark"], 1.6, d="M 27 44 L 34 51 M 30 41.5 L 36.5 48 M 25.5 47.5 L 31 53"),
+              shape("path", None, C["post_dark"], 1.4, d="M 42 21 L 49 27 M 41.5 25 L 47 29.5"),
+              shape("path", C["sand_dark"], d="M 4.8 12 A 6.8 6.8 0 0 0 18.2 12 A 7.5 5.5 0 0 1 4.8 12 Z"),
+              shape("circle", C["sand_hi"], cx=9, cy=8.5, r=2.2),
+              shape("path", None, C["rope"], 2.0, d="M 20 30 L 24 33 M 23.5 35.5 L 27.5 38.5")]
+    return item_svg(body, detail) + _marks(_shot_mark, level)
+
+
+def _bait_rack(level=1):
+    """Two forked posts, a crossbar laid in their forks, hunks of raw meat hung from it on vine; the
+    earth under it dark with what dripped."""
+    hunks = [(20, 30, 6.2, 9.5), (32, 32, 6.6, 10.5), (44, 30, 6.2, 9.5)]
+    body = ([shape("ellipse", C["meat_dark"], cx=32, cy=58.5, rx=20, ry=3.5),
+             shape("rect", C["post"], x=8.5, y=12, width=5.5, height=48, rx=1),
+             shape("rect", C["post"], x=50, y=12, width=5.5, height=48, rx=1),
+             shape("path", None, C["post"], 3.0, d="M 11 14 L 6.5 4.5 M 11 14 L 15.5 4.5 M 53 14 L 48.5 4.5 M 53 14 L 57.5 4.5"),
+             shape("rect", C["grain"], x=3, y=9, width=58, height=5, rx=2)]
+            + [shape("ellipse", C["meat"], cx=x, cy=y, rx=rx, ry=ry) for (x, y, rx, ry) in hunks])
+    detail = ([shape("rect", C["post_dark"], x=8.5, y=14, width=2.2, height=46, rx=1),
+               shape("rect", C["post_dark"], x=50, y=14, width=2.2, height=46, rx=1),
+               shape("rect", C["ring"], x=3, y=12, width=58, height=2, rx=1),
+               shape("path", None, C["rope"], 2.0, d="M 9 8.5 L 13 14.5 M 51 8.5 L 55 14.5")]
+              + [s for (x, y, rx, ry) in hunks for s in (
+                  shape("path", None, C["rope"], 1.8, d="M %g 13 L %g %g" % (x, x, y - ry + 1)),
+                  shape("ellipse", C["meat_dark"], cx=x + 1.2, cy=y + ry * 0.3, rx=rx * 0.62, ry=ry * 0.55),
+                  shape("ellipse", C["meat_hi"], cx=x - rx * 0.35, cy=y - ry * 0.3, rx=rx * 0.32, ry=ry * 0.28),
+                  shape("path", None, C["fat"], 1.4, d="M %g %g Q %g %g %g %g" % (
+                      x - rx * 0.6, y + ry * 0.1, x, y + ry * 0.35, x + rx * 0.55, y)))])
+    return item_svg(body, detail) + _marks(_meat_mark, level)
+
+
+for _lvl in (1, 2, 3):
+    _sfx = "" if _lvl == 1 else "_%d" % _lvl
+    ICONS["bow_tower" + _sfx] = _bow_tower(_lvl)
+    ICONS["log_tower" + _sfx] = _log_tower(_lvl)
+    ICONS["catapult" + _sfx] = _catapult(_lvl)
+    ICONS["bait_rack" + _sfx] = _bait_rack(_lvl)
+
+
+# The ammunition. Arrows have no fletching: nothing in the valley yet has feathers to give.
+_FAN = [((9, 57), (37, 5)), ((12, 59), (50, 11)), ((15, 61), (59, 24))]
+
+
+def _arrows(bone=False):
+    """A sheaf of three arrows tied at the middle: points whittled and fire-hardened, their tips charred --
+    or points of split bone lashed on."""
+    body, detail = [], []
+    for (tx, ty), (hx, hy) in _FAN:
+        dx, dy = hx - tx, hy - ty
+        n = math.hypot(dx, dy)
+        ux, uy = dx / n, dy / n
+        px, py = -uy, ux
+        w, length = (3.7, 13.0) if bone else (2.5, 9.0)
+        base = (hx - ux * length, hy - uy * length)
+        mid = (base[0] + ux * length * 0.35, base[1] + uy * length * 0.35)
+        head = "%g,%g %g,%g %g,%g %g,%g" % (base[0], base[1], mid[0] + px * w, mid[1] + py * w, hx, hy,
+                                            mid[0] - px * w, mid[1] - py * w)
+        shaft = shape("path", None, C["grain"], 3.2, d="M %g %g L %g %g" % (tx, ty, base[0], base[1]))
+        point = shape("polygon", C["bone"] if bone else C["ring"], points=head)
+        body += [shaft, point]
+        detail.append(shape("path", None, C["post_dark"], 1.6, d="M %g %g L %g %g" % (
+            tx + px * 1.1, ty + py * 1.1, tx + px * 1.1 + ux * 3, ty + py * 1.1 + uy * 3)))
+        if bone:
+            detail.append(shape("polygon", C["bone_shade"], points="%g,%g %g,%g %g,%g" % (
+                base[0], base[1], mid[0] - px * w, mid[1] - py * w, hx, hy)))
+            detail.append(shape("path", None, C["rope"], 2.6, d="M %g %g L %g %g" % (
+                base[0] - ux * 1.5, base[1] - uy * 1.5, base[0] + ux * 1.5, base[1] + uy * 1.5)))
+        else:
+            tip = (hx - ux * 3.6, hy - uy * 3.6)
+            detail.append(shape("polygon", C["char"], points="%g,%g %g,%g %g,%g" % (
+                tip[0] + px * 1.3, tip[1] + py * 1.3, hx, hy, tip[0] - px * 1.3, tip[1] - py * 1.3)))
+    detail.append(shape("rect", C["rope"], transform="rotate(-48 25 37)", x=18, y=33.5, width=14, height=7, rx=2))
+    return item_svg(body, detail)
+
+
+ICONS["arrow_wood"] = _arrows()
+ICONS["arrow_bone"] = _arrows(bone=True)
+
+
+# A log for the log tower, lying slanted, its near end cut and ringed -- and dressed: plain, with bone
+# spikes lashed round it, or with blocks of the valley's red sandstone lashed on.
+_LOG_AXIS = (math.cos(math.radians(-38.0)), math.sin(math.radians(-38.0)))
+_LOG_NEAR, _LOG_FAR, _LOG_R = (16.0, 45.5), (48.5, 20.0), 11.0
+
+
+_STONE_BLOCKS = [(0.34, -1.0), (0.74, 1.0)]         # (how far along, which side): one each side, so it rolls
+
+
+def _along(t, off=0.0):
+    """A point `t` of the way from the log's near end to its far end, `off` out from its axis."""
+    ux, uy = _LOG_AXIS
+    x = _LOG_NEAR[0] + (_LOG_FAR[0] - _LOG_NEAR[0]) * t + (-uy) * off
+    y = _LOG_NEAR[1] + (_LOG_FAR[1] - _LOG_NEAR[1]) * t + ux * off
+    return x, y
+
+
+def _log_icon(dress=None):
+    ux, uy = _LOG_AXIS
+    px, py = -uy, ux
+    rot = "rotate(-38 %g %g)" % _LOG_NEAR
+    body, detail = [], []
+    if dress == "spiked":
+        for t in (0.22, 0.55, 0.88):
+            for side in (-1.0, 1.0):
+                bx, by = _along(t, side * (_LOG_R - 1.5))
+                tx, ty = _along(t + 0.06 * side, side * (_LOG_R + 9.5))
+                body.append(shape("polygon", C["bone"], points="%g,%g %g,%g %g,%g" % (
+                    bx - ux * 2.6, by - uy * 2.6, tx, ty, bx + ux * 2.6, by + uy * 2.6)))
+    (nx, ny), (fx, fy), r = _LOG_NEAR, _LOG_FAR, _LOG_R
+    body.append(shape("polygon", C["bark"], points="%g,%g %g,%g %g,%g %g,%g" % (
+        nx + px * r, ny + py * r, fx + px * r, fy + py * r, fx - px * r, fy - py * r, nx - px * r, ny - py * r)))
+    body.append(shape("ellipse", C["bark"], transform="rotate(-38 %g %g)" % _LOG_FAR, cx=fx, cy=fy, rx=5.5, ry=r))
+    if dress == "stone":
+        for t, side in _STONE_BLOCKS:
+            cx, cy = _along(t, side * (_LOG_R + 5.0))
+            body.append(shape("rect", C["sand"], transform="rotate(-38 %g %g)" % (cx, cy),
+                              x=cx - 8.5, y=cy - 7.5, width=17, height=15, rx=2.5))
+    body.append(shape("ellipse", C["grain"], transform=rot, cx=_LOG_NEAR[0], cy=_LOG_NEAR[1], rx=5.5, ry=_LOG_R))
+    detail.append(shape("path", None, C["post_dark"], 2.0, d="M %g %g L %g %g M %g %g L %g %g" % (
+        _along(0.15, 4.5) + _along(0.75, 4.5) + _along(0.35, -5) + _along(0.95, -5))))
+    if dress == "spiked":
+        for t in (0.22, 0.55, 0.88):
+            a, b = _along(t, -_LOG_R - 1), _along(t, _LOG_R + 1)
+            detail.append(shape("path", None, C["rope"], 2.4, d="M %g %g L %g %g" % (a + b)))
+            for side in (-1.0, 1.0):
+                bx, by = _along(t, side * (_LOG_R - 1.5))
+                tx, ty = _along(t + 0.06 * side, side * (_LOG_R + 9.5))
+                detail.append(shape("polygon", C["bone_shade"], points="%g,%g %g,%g %g,%g" % (
+                    bx - ux * 2.6, by - uy * 2.6, tx, ty, bx, by)))
+    if dress == "stone":
+        for t, side in _STONE_BLOCKS:
+            cx, cy = _along(t, side * (_LOG_R + 3.5))
+            # Lit on its outer face, shadowed where it bears on the log.
+            ox, oy = _along(t, side * (_LOG_R + 8.5))
+            ix, iy = _along(t, side * (_LOG_R + 0.5))
+            detail.append(shape("rect", C["sand_hi"], transform="rotate(-38 %g %g)" % (ox, oy),
+                                x=ox - 8.5, y=oy - 4, width=17, height=8, rx=2))
+            detail.append(shape("rect", C["sand_dark"], transform="rotate(-38 %g %g)" % (ix, iy),
+                                x=ix - 8.5, y=iy - 2, width=17, height=4, rx=1.5))
+            for k in (-0.1, 0.1):
+                a, b = _along(t + k, -side * (_LOG_R + 0.5)), _along(t + k, side * (_LOG_R + 12.0))
+                detail.append(shape("path", None, C["rope"], 1.7, d="M %g %g L %g %g" % (a + b)))
+    detail += [shape("ellipse", None, C["ring"], 1.5, transform=rot, cx=_LOG_NEAR[0], cy=_LOG_NEAR[1], rx=3.4, ry=7),
+               shape("ellipse", C["ring"], transform=rot, cx=_LOG_NEAR[0], cy=_LOG_NEAR[1], rx=1.2, ry=2.4),
+               shape("ellipse", None, C["bark"], 1.6, transform=rot, cx=_LOG_NEAR[0], cy=_LOG_NEAR[1], rx=5.5, ry=_LOG_R)]
+    return item_svg(body, detail)
+
+
+ICONS["log_round"] = _log_icon()
+ICONS["log_spiked"] = _log_icon("spiked")
+ICONS["roller_stone"] = _log_icon("stone")
+
+# The catapult's shot: a stone pecked round out of the valley's red sandstone -- out of true, faceted
+# where it was struck, pitted.
+_SHOT_R = [22.5, 21.2, 23.0, 22.0, 20.8, 22.6, 23.2, 21.6, 22.2, 21.0, 22.8]
+_SHOT = [(32 + r * math.cos(math.radians(8 + 360.0 * k / 11)), 33 + r * math.sin(math.radians(8 + 360.0 * k / 11)))
+         for k, r in enumerate(_SHOT_R)]
+_SHOT_UNDER = [p for p in _SHOT if p[1] > 33] + [(13, 39), (28, 44), (44, 41), (53, 34)]
+ICONS["shot_stone"] = item_svg(
+    [shape("polygon", C["sand"], points=" ".join("%.1f,%.1f" % p for p in _SHOT))],
+    [shape("polygon", C["sand_dark"], points=" ".join("%.1f,%.1f" % p for p in sorted(
+        _SHOT_UNDER, key=lambda p: math.atan2(p[1] - 33, p[0] - 32)))),
+     shape("polygon", C["sand_hi"], points="17,22 27,13 37,14 33,24 22,28"),
+     shape("polygon", C["sand_hi"], points="40,16 48,22 43,27"),
+     shape("path", None, C["sand_dark"], 1.5, d="M 12 31 L 24 33 L 38 32 L 52 28"),
+     shape("circle", C["sand_dark"], cx=26, cy=38, r=1.6), shape("circle", C["sand_dark"], cx=41, cy=36, r=1.3),
+     shape("circle", C["sand_dark"], cx=35, cy=46, r=1.5)])
+
+# Load ammunition: a turning arrow round an arrow.
+GLYPHS["reload"] = glyph_svg(
+    [shape("path", None, "#ffffff", 6, d="M 51.05 21 A 22 22 0 1 1 32 10"),
+     shape("polygon", points="31,2.5 42,10 31,17.5"),
+     shape("path", None, "#ffffff", 4.5, d="M 23 41 L 36 28"),
+     shape("polygon", points="42.5,21.5 39.5,34 30,24.5")])
 
 
 def write():

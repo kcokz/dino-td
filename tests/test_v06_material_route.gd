@@ -39,7 +39,8 @@ func test_01_no_building_waits_on_anything_but_its_materials() -> void:
 			"%s is locked by its materials alone, never by a flag" % b_type)
 
 	# And in play: with a tower's materials in the warehouse and nothing made at the
-	# cabin, a tower goes up.
+	# cabin, a tower goes up -- the bow tower, and the catapult, whose stone takes a pick
+	# to cut: what it asks is the stone, not the pick.
 	var grid = load("res://scripts/core/GridManager.gd").new()
 	_cleanup_nodes.append(grid)
 	tree.root.add_child(grid)
@@ -48,10 +49,11 @@ func test_01_no_building_waits_on_anything_but_its_materials() -> void:
 	tree.root.add_child(builder)
 	builder.setup(grid, null)
 	await wait_frames(1)
-	pay_for(["set_crossbow"], 1)
+	pay_for(["bow_tower", "catapult"], 1)
 	assert_true(game_state_node.unlocks.is_empty(), "Nothing has been made at the cabin")
-	assert_true(builder.can_place_building("set_crossbow", Vector2i(2, 2)),
-		"The materials are all a tower asks for")
+	for t in ["bow_tower", "catapult"]:
+		assert_true(builder.can_place_building(t, Vector2i(2, 2)),
+			"The materials are all a tower asks for (%s)" % t)
 
 func test_02_a_building_is_two_materials_at_most() -> void:
 	# One material says which tier it is, and at most one more is a working part: a
@@ -68,7 +70,8 @@ func test_02b_a_rock_he_cannot_cut_says_what_it_takes() -> void:
 	var hint: String = String(config_node.missing_tool_hint("stone"))
 	for recipe_id in config_node.RECIPES:
 		var row: Dictionary = config_node.RECIPES[recipe_id]
-		if String(row["unlocks"]) != flag:
+		# A batch of ammunition (RECIPES "makes", the 2026-10-02 rebuild) unlocks nothing.
+		if String(row.get("unlocks", "")) != flag:
 			continue
 		assert_true(hint.contains(tr(String(row["name"]))), "It names the tool: %s" % hint)
 		assert_true(hint.contains(tr("STATION_%s_NAME" % String(row["station"]).to_upper())), "And where it is made")
@@ -126,7 +129,7 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_true(hud.hint_label.visible, "The first bone says something")
 	# What it is for as far as the run has turned things up (v0.6): not what takes a material still
-	# to come as well (the stone of a wall crossbow, when it takes one).
+	# to come as well.
 	var so_far: String = String(config_node.uses_text("bone", game_state_node.map_data(), game_state_node.knows))
 	assert_true(hud.hint_label.text.contains(so_far), "What bone is for: %s" % hud.hint_label.text)
 	for b_type in config_node.player_building_types():
@@ -156,7 +159,12 @@ func test_04_every_unlock_the_cabin_makes_is_a_tool_or_a_vessel() -> void:
 	assert_has(stations, "workbench", "There is a workbench")
 	assert_has(stations, "kitchen", "And a kitchen")
 	for recipe_id in config_node.RECIPES:
-		var unlock: String = String(config_node.RECIPES[recipe_id]["unlocks"])
+		var unlock: String = String(config_node.RECIPES[recipe_id].get("unlocks", ""))
+		if unlock == "":
+			# What unlocks nothing is a batch of ammunition (2026-10-02): made as often as there is the
+			# stuff for it, and a right to nothing.
+			assert_true(config_node.makes_ammo(String(recipe_id)), "%s unlocks nothing: it makes ammunition" % recipe_id)
+			continue
 		for b_type in config_node.BUILDINGS:
 			for key in config_node.BUILDINGS[b_type]:
 				var value = config_node.BUILDINGS[b_type][key]

@@ -588,15 +588,16 @@ func test_26_build_entries_light_up_when_the_wood_arrives() -> void:
 	await wait_frames(1)
 
 	# One unit short of the whole bill, in whichever material it names first: a tower
-	# was wood and stone, then stone and bone; the menu's trap is the trip bow (v0.6 round six).
-	pay_for(["trip_bow"])
-	var short: String = String(config_node.BUILDINGS["trip_bow"]["cost"].keys()[0])
+	# was wood and stone, then stone and bone; the menu's first tower is the bow tower (the
+	# 2026-10-02 rebuild).
+	pay_for(["bow_tower"])
+	var short: String = String(config_node.BUILDINGS["bow_tower"]["cost"].keys()[0])
 	game_state_node.resources[short] = maxi(0, int(game_state_node.resources.get(short, 0)) - 1)
 	panel.select_target(hero)
 	panel._on_build_pressed()
 
-	var idx: int = config_node.BUILDABLE_TYPES.find("trip_bow")
-	assert_gte(idx, 0, "The trap is in the build menu")
+	var idx: int = config_node.BUILDABLE_TYPES.find("bow_tower")
+	assert_gte(idx, 0, "The tower is in the build menu")
 	var btn = panel.button_container.get_child(idx)
 	assert_true(btn.disabled, "One %s short, so the entry is greyed out" % short)
 

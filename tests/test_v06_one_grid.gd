@@ -70,20 +70,42 @@ func _box_of(b: Node) -> Vector3:
 # ==============================================================================
 
 func test_01_everything_fills_whole_cells_of_one_grid() -> void:
+	# A building fills a block of whole cells and stands at the middle of it: an odd side on its middle
+	# cell, an even one -- the 2026-10-02 towers, two and four cells a side -- on the line between the two
+	# middle ones (GridManager.footprint_centre). What is laid in a line is one cell; a tower is a wall's
+	# multiple, square, so it stands flush in a line of wall and turning it never changes its cells.
 	var cell: float = float(config_node.BUILD_CELL)
+	var gm = load("res://scripts/core/GridManager.gd").new()
 	for type_id in config_node.BUILDINGS:
+		var size: Vector2i = config_node.get_building_size(String(type_id))
 		var n: int = int(config_node.get_building_cells(String(type_id)))
-		assert_eq(n % 2, 1, "%s takes an odd number of cells a side, so it has a middle one" % type_id)
 		assert_almost_eq(float(config_node.get_building_footprint(String(type_id))), float(n) * cell, 0.0001,
 			"%s is as wide as its cells" % type_id)
+		var cells: Array[Vector2i] = gm.footprint_cells(String(type_id), Vector2i.ZERO)
+		assert_eq(cells.size(), size.x * size.y, "%s takes a whole block of cells" % type_id)
+		if cells.is_empty():
+			continue
+		var lo: Vector2i = cells[0]
+		var hi: Vector2i = cells[0]
+		for c in cells:
+			lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+			hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+		assert_eq(hi - lo + Vector2i.ONE, size, "%s's cells are its box, with no gap in it" % type_id)
+		var middle: Vector3 = (gm.build_cell_to_world(lo) + gm.build_cell_to_world(hi)) * 0.5
+		assert_true(gm.footprint_centre(String(type_id), Vector2i.ZERO).is_equal_approx(middle),
+			"%s stands at the middle of its cells" % type_id)
+	gm.free()
 	for type_id in config_node.BUILDABLE_TYPES:
-		assert_eq(int(config_node.get_building_cells(String(type_id))), 1, "What the player builds is one cell (%s)" % type_id)
+		var size: Vector2i = config_node.get_building_size(String(type_id))
+		assert_eq(size.x, size.y, "What the player builds is square (%s)" % type_id)
+		if int(config_node.ammo_capacity(String(type_id))) <= 0:
+			assert_eq(size.x, 1, "What the player builds that is not a tower is one cell (%s)" % type_id)
 
 func test_02_its_collider_is_its_cells() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
-	for type_id in ["wall", "stone_wall", "gate", "set_crossbow"]:
-		var b = _put(bs, type_id, Vector2i(0, 4 * ["wall", "stone_wall", "gate", "set_crossbow"].find(type_id)))
+	for type_id in ["wall", "stone_wall", "gate", "bow_tower"]:
+		var b = _put(bs, type_id, Vector2i(0, 4 * ["wall", "stone_wall", "gate", "bow_tower"].find(type_id)))
 		assert_not_null(b, "%s goes up" % type_id)
 		if b == null:
 			continue
@@ -102,17 +124,20 @@ func test_03_a_click_lands_in_the_cell_under_it_and_a_tile_in_its_middle() -> vo
 	assert_not_null(b, "It goes up where he clicked")
 	assert_eq(gm.world_to_build_cell(b.global_position), gm.world_to_build_cell(at), "in the cell under the click")
 	var tile := Vector2i(-3, 2)
-	var t = bs.place_building("set_crossbow", tile, _world, false)
+	var t = bs.place_building("bow_tower", tile, _world, false)
 	assert_not_null(t, "Placed by tile")
 	if t:
-		assert_almost_eq(t.global_position.distance_to(gm.cell_to_world(tile)), 0.0, 0.001, "it stands in the tile's middle")
+		# Two cells a side, it has no middle cell: it stands round the cell in the tile's middle.
+		assert_almost_eq(t.global_position.distance_to(gm.footprint_centre("bow_tower", gm.tile_centre_build_cell(tile))), 0.0, 0.001,
+			"it stands with the tile's middle cell as its own")
+		assert_eq(gm.building_in_build_cell(gm.tile_centre_build_cell(tile)), t, "which it takes")
 
 func test_04_a_cell_holds_one_thing() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
 	assert_not_null(_put(bs, "wall", Vector2i(2, 2)), "The first goes up")
-	assert_null(_put(bs, "set_crossbow", Vector2i(2, 2)), "and nothing else in its cell")
-	assert_not_null(_put(bs, "set_crossbow", Vector2i(3, 2)), "but right beside it, yes")
+	assert_null(_put(bs, "bow_tower", Vector2i(2, 2)), "and nothing else in its cell")
+	assert_not_null(_put(bs, "bow_tower", Vector2i(3, 2)), "but right beside it, yes")
 
 # ==============================================================================
 # 2. Flush: nothing between a wall and what is beside it
@@ -124,12 +149,12 @@ func test_05_a_turret_stands_flush_against_a_wall() -> void:
 	var pair: Array = await _field()
 	var bs = pair[1]
 	var wall = _put(bs, "wall", Vector2i(0, 0))
-	var tower = _put(bs, "set_crossbow", Vector2i(1, 0))
+	var tower = _put(bs, "bow_tower", Vector2i(1, 0))
 	assert_not_null(tower, "A turret goes up in the next cell to a wall")
 	if wall == null or tower == null:
 		return
 	var gap: float = absf(tower.global_position.x - wall.global_position.x) \
-		- float(config_node.get_building_footprint("wall")) * 0.5 - float(config_node.get_building_footprint("set_crossbow")) * 0.5
+		- float(config_node.get_building_footprint("wall")) * 0.5 - float(config_node.get_building_footprint("bow_tower")) * 0.5
 	assert_almost_eq(gap, 0.0, 0.001, "and their sides meet: nothing between them")
 
 func test_06_a_run_of_wall_across_the_way_shuts_it_and_one_missing_cell_opens_it() -> void:

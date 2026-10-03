@@ -69,8 +69,11 @@ func test_01_every_recipe_has_the_same_shape() -> void:
 	assert_gt(config_node.RECIPES.size(), 0, "There is something to make")
 	for recipe_id in config_node.RECIPES:
 		var data: Dictionary = config_node.RECIPES[recipe_id]
-		for key in ["station", "inputs", "time", "unlocks", "name"]:
+		for key in ["station", "inputs", "time", "name"]:
 			assert_has(data, key, "%s declares '%s'" % [recipe_id, key])
+		# What it gives: a flag for good (a tool, a pot) or a batch into the stock (the towers' ammunition) --
+		# one or the other.
+		assert_ne(data.has("unlocks"), data.has("makes"), "%s either unlocks something or makes something" % recipe_id)
 		assert_has(config_node.STATIONS, String(data["station"]),
 			"%s is made at a station that exists" % recipe_id)
 		assert_gt(float(data["time"]), 0.0, "%s takes real seconds" % recipe_id)
@@ -79,14 +82,21 @@ func test_01_every_recipe_has_the_same_shape() -> void:
 			assert_has(config_node.RESOURCES, String(res_id),
 				"%s is paid for in a real resource (%s)" % [recipe_id, res_id])
 
-func test_02_a_recipe_grants_a_flag_and_nothing_else() -> void:
-	# The line that keeps the cabin from becoming an inventory screen: what comes
-	# out is a permanent flag, so there is nothing to carry, stack or lose.
+func test_02_a_recipe_grants_a_flag_or_fills_the_stock_and_nothing_else() -> void:
+	# The line that keeps the cabin from becoming an inventory screen: what comes out is a permanent flag, so
+	# there is nothing to carry, stack or lose -- or, since the towers' ammunition (2026-10-02, the player:
+	# "工作台做，专门的弹药系统"), a batch of it into the stock, held as wood is held: a count, never an item.
 	for recipe_id in config_node.RECIPES:
 		var data: Dictionary = config_node.RECIPES[recipe_id]
-		assert_ne(String(data["unlocks"]), "", "%s unlocks something" % recipe_id)
+		if data.has("makes"):
+			assert_true(config_node.makes_ammo(String(recipe_id)), "%s makes ammunition" % recipe_id)
+			for res_id in data["makes"]:
+				assert_has(config_node.RESOURCES, String(res_id), "%s goes into the stock" % res_id)
+				assert_true(config_node.AMMO.has(String(res_id)), "%s is ammunition" % res_id)
+		else:
+			assert_ne(String(data.get("unlocks", "")), "", "%s unlocks something" % recipe_id)
 		for key in ["amount", "count", "durability", "stack", "item"]:
-			assert_false(data.has(key), "%s must not carry '%s' -- unlocks are not items" % [recipe_id, key])
+			assert_false(data.has(key), "%s must not carry '%s' -- what it gives is not an item" % [recipe_id, key])
 
 func test_03_stations_only_offer_their_own_recipes() -> void:
 	for station_id in config_node.STATIONS:

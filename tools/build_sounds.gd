@@ -720,22 +720,58 @@ func _s_trap_twang() -> PackedFloat32Array:
 	_mix(out, _hiss(0.1, [[0.0, 1200.0], [1.0, 2400.0]], 1.5, [[0.0, 0.0], [0.2, 1.0], [1.0, 0.0]]), 0.02, 0.3)
 	return out
 
-func _s_trap_thud() -> PackedFloat32Array:
-	# A deadfall coming down (CellTrap): the snap of its trigger, then a heavy weight hitting earth and
-	# whatever is under it -- a low, dull, short knock with a thump of air, and grit after.
-	var out := _burst(0.008, 2600.0, 1.2)
-	_mix(out, _modes(0.45, [[62.0, 0.22, 1.0], [118.0, 0.14, 0.6], [240.0, 0.07, 0.35], [510.0, 0.03, 0.2]], 0.004), 0.05, 1.0)
-	_mix(out, _hiss(0.25, [[0.0, 600.0], [1.0, 300.0]], 0.7, [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]]), 0.05, 0.5)
-	_mix(out, _crackle(0.3, 120.0, 2200.0), 0.1, 0.25)
+# The towers (AmmoTower, the 2026-10-02 rebuild): what each does is heard as what it is.
+
+func _s_bow_loose() -> PackedFloat32Array:
+	# A bow on the tower let go (BowTower): the string's snap, a short bright thrum -- a smaller bow than the
+	# old trap's, so higher and shorter -- and the arrow hissing away.
+	var out := _burst(0.008, 3600.0, 1.2)
+	var thrum := _tone(0.22, [[0.0, 262.0], [1.0, 240.0]], [[0.0, 0.0], [0.03, 1.0], [1.0, 0.0]])
+	_mix(thrum, _tone(0.22, [[0.0, 524.0], [1.0, 480.0]], [[0.0, 0.0], [0.03, 0.4], [0.5, 0.08], [1.0, 0.0]]), 0.0, 1.0)
+	_mix(out, thrum, 0.0, 0.7)
+	_mix(out, _hiss(0.26, [[0.0, 2600.0], [1.0, 1500.0]], 2.2, [[0.0, 0.0], [0.15, 1.0], [1.0, 0.0]]), 0.02, 0.45)
 	return out
 
-func _s_trap_snap() -> PackedFloat32Array:
-	# A snare sprung (CellTrap): the peg's click, the sapling whipping up through the air, the noose
-	# snapping tight.
-	var out := _burst(0.006, 3400.0, 1.4)
-	_mix(out, _hiss(0.22, [[0.0, 900.0], [1.0, 2600.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.01, 0.7)
-	_mix(out, _modes(0.18, [[520.0, 0.04, 1.0], [1310.0, 0.02, 0.5]], 0.002), 0.2, 0.6)
-	_mix(out, _burst(0.01, 1800.0, 1.0), 0.21, 0.6)
+func _s_log_roll() -> PackedFloat32Array:
+	# A log let go down the ramp (LogTower): the lever's clack, the log dropping onto the boards, and a
+	# long low rumble of timber rolling over earth, knocking as it turns.
+	var out := _buf(1.5)
+	_mix(out, _modes(0.12, [[610.0, 0.03, 1.0], [1350.0, 0.015, 0.5]], 0.002), 0.0, 0.6)
+	_mix(out, _modes(0.4, [[88.0, 0.16, 1.0], [170.0, 0.1, 0.6], [330.0, 0.05, 0.35]], 0.004), 0.08, 1.0)
+	var rumble := _hiss(1.3, [[0.0, 160.0], [1.0, 120.0]], 0.9, [[0.0, 0.0], [0.08, 1.0], [0.7, 0.8], [1.0, 0.0]])
+	_lowpass(rumble, 420.0)
+	_mix(out, rumble, 0.15, 1.1)
+	for i in 5:
+		_mix(out, _modes(0.14, [[120.0 + 9.0 * i, 0.05, 1.0], [250.0, 0.03, 0.4]], 0.003), 0.25 + 0.22 * i, 0.45 - 0.06 * i)
+	_mix(out, _crackle(1.2, 50.0, 1500.0), 0.2, 0.25)
+	return out
+
+func _s_catapult_throw() -> PackedFloat32Array:
+	# The catapult's arm thrown (Catapult): the twisted rope's creak let go, the arm whooshing up, and the
+	# heavy knock of it against its stop beam.
+	var out := _buf(0.9)
+	_mix(out, _crackle(0.18, 220.0, 900.0), 0.0, 0.5)
+	_mix(out, _hiss(0.32, [[0.0, 300.0], [0.5, 900.0], [1.0, 500.0]], 1.4, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 0.05, 0.8)
+	_mix(out, _modes(0.5, [[74.0, 0.2, 1.0], [150.0, 0.12, 0.7], [310.0, 0.06, 0.4], [640.0, 0.03, 0.2]], 0.005), 0.26, 1.0)
+	_mix(out, _modes(0.25, [[180.0, 0.08, 1.0], [400.0, 0.04, 0.4]], 0.003), 0.36, 0.35)
+	return out
+
+func _s_stone_impact() -> PackedFloat32Array:
+	# A thrown stone coming down (Catapult): a heavy, dull blow on earth and on what is under it, a thump of
+	# air, and grit and pebbles after.
+	var out := _modes(0.55, [[58.0, 0.22, 1.0], [112.0, 0.14, 0.65], [230.0, 0.07, 0.4], [880.0, 0.02, 0.2]], 0.006)
+	_mix(out, _hiss(0.3, [[0.0, 500.0], [1.0, 260.0]], 0.7, [[0.0, 0.0], [0.04, 1.0], [1.0, 0.0]]), 0.0, 0.55)
+	_mix(out, _crackle(0.45, 160.0, 2400.0), 0.05, 0.35)
+	return out
+
+func _s_reload() -> PackedFloat32Array:
+	# A tower loaded (AmmoTower.load_from_stock): a bundle set in -- shafts rattling against each other, and a
+	# soft knock as it settles.
+	var out := _buf(0.5)
+	_mix(out, _crackle(0.28, 120.0, 1700.0), 0.0, 0.6)
+	for i in 3:
+		_mix(out, _modes(0.08, [[700.0 + 140.0 * i, 0.02, 1.0], [1500.0, 0.012, 0.4]], 0.002), 0.03 + 0.07 * i, 0.4)
+	_mix(out, _modes(0.18, [[210.0, 0.05, 1.0], [480.0, 0.03, 0.5]], 0.003), 0.26, 0.7)
 	return out
 
 func _s_stone_hit() -> PackedFloat32Array:

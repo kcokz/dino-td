@@ -168,11 +168,11 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	# of its bill is paid separately and the running total tracks wood only.
 	# One short of another wall on top, so the fourth placement below is refused for want of
 	# wood -- whatever a wall costs.
-	var expected_wood: int = total_cost_of(["wall", "set_crossbow", "wall"]) + cost_of("wall") - 1
+	var expected_wood: int = total_cost_of(["wall", "bow_tower", "wall"]) + cost_of("wall") - 1
 	game_state_node.resources["wood"] = expected_wood
-	for res_id in config_node.BUILDINGS["set_crossbow"]["cost"]:
+	for res_id in config_node.BUILDINGS["bow_tower"]["cost"]:
 		if res_id != "wood":   # the wood is counted into the running total above
-			game_state_node.resources[res_id] = int(config_node.BUILDINGS["set_crossbow"]["cost"][res_id])
+			game_state_node.resources[res_id] = int(config_node.BUILDINGS["bow_tower"]["cost"][res_id])
 	await wait_frames(1)
 
 	var wall_node = main.place_building_at_cell("wall", FREE_TILE)
@@ -190,10 +190,10 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the stake cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(2, 2)), "Cell (2, 2) is occupied")
 
-	# 3. Place Tower at (1, -1)
-	var tower_node = main.place_building_at_cell("set_crossbow", Vector2i(1, -1))
+	# 3. Place Tower at (1, -1): a bow tower.
+	var tower_node = main.place_building_at_cell("bow_tower", Vector2i(1, -1))
 	assert_not_null(tower_node, "Tower placed successfully at (1, -1)")
-	expected_wood -= cost_of("set_crossbow")
+	expected_wood -= cost_of("bow_tower")
 	assert_eq(int(game_state_node.resources["wood"]), expected_wood, "Wood deducted by the tower cost")
 	assert_true(main.grid_manager.is_cell_occupied(Vector2i(1, -1)), "Cell (1, -1) is occupied")
 

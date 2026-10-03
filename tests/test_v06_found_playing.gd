@@ -250,8 +250,8 @@ func test_09_what_is_by_the_cabin_is_built_from_outside_it() -> void:
 	var cabin = main.current_core
 	var c: Vector2i = gm.world_to_build_cell(cabin.global_position)
 	var half: Vector2 = config_node.get_building_half("core")
-	var bow = main.build_system.place_at("trip_bow", Vector2i(c.x + int(ceil(half.x)), c.y), main.buildings_container, true)
-	assert_not_null(bow, "(a trap goes down against the cabin's end)")
+	var bow = main.build_system.place_at("bow_tower", Vector2i(c.x + int(ceil(half.x)), c.y), main.buildings_container, true)
+	assert_not_null(bow, "(a bow tower goes down against the cabin's end)")
 	if bow == null:
 		return
 	main.nav_maps.rebake()

@@ -71,7 +71,8 @@ func test_01_his_row_is_the_best_he_has_of_each_slot() -> void:
 	game_state_node.grant_unlock(String(config_node.RECIPES[first]["unlocks"]))
 	assert_eq(config_node.abilities(game_state_node.unlocks), [first] as Array[String], "Made one: that one")
 	for recipe_id in config_node.RECIPES:
-		game_state_node.grant_unlock(String(config_node.RECIPES[recipe_id]["unlocks"]))
+		# (Ammunition unlocks nothing: a batch goes into the stock.)
+		game_state_node.grant_unlock(String(config_node.RECIPES[recipe_id].get("unlocks", "")))
 	var row: Array[String] = config_node.abilities(game_state_node.unlocks)
 	assert_eq(row.size(), config_node.KIT_SLOTS.size(), "Made them all: one of each slot, no more")
 	for i in row.size():

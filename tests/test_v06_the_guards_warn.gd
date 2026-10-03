@@ -151,14 +151,14 @@ func test_06_a_building_by_the_nest_is_gone_for_without_a_warning() -> void:
 	out.y = 0.0
 	var at: Vector3 = first.post_position + out.normalized() * first.aggro_radius * float(_guards_cfg()["building_aggro_share"]) * 0.6
 	var cell: Vector2i = main.grid_manager.world_to_build_cell(at)
-	var trap = main.build_system.place_at("set_crossbow", cell, main.buildings_container, true)
-	assert_not_null(trap, "(a trap by the nest)")
-	if trap == null:
+	var tower = main.build_system.place_at("bow_tower", cell, main.buildings_container, true)
+	assert_not_null(tower, "(a bow tower by the nest)")
+	if tower == null:
 		return
-	trap.complete_construction()
+	tower.complete_construction()
 	await _a_thought()
 	assert_eq(int(first.guard_state), int(first.GuardState.AGGRO_CHASE), "Gone for at once")
-	assert_eq(first.chase_target, trap, "the trap")
+	assert_eq(first.chase_target, tower, "the tower")
 
 func test_07_what_a_warning_means_is_said_once_a_run() -> void:
 	var main = await _level()

@@ -53,7 +53,7 @@ var build_preview: Node3D = null
 var build_preview_mesh: MeshInstance3D = null
 var build_preview_ring: MeshInstance3D = null
 var _preview_cell: Vector2i = Vector2i(999999, 999999)
-## Which way the next trap or lone section of wall faces (Trap.FACINGS): kept from one to the next,
+## Which way the next facing tower or lone section of wall faces (AmmoTower.FACINGS): kept from one to the next,
 ## so a row of them set along a funnel all face the same way without being turned each time.
 var _placement_facing: int = 0
 ## Built sections of wall dressed, for the moment, as they will stand once what the ghost shows is
@@ -424,6 +424,8 @@ func _wire_signals() -> void:
 		eb.cabin_view_changed.connect(_on_cabin_view_changed)
 	if eb and eb.has_signal("wreck_located") and not eb.wreck_located.is_connected(_on_wreck_located):
 		eb.wreck_located.connect(_on_wreck_located)
+	if eb and eb.has_signal("building_completed") and not eb.building_completed.is_connected(_on_tower_finished):
+		eb.building_completed.connect(_on_tower_finished)
 
 ## A stage mended has heard where the wreck holding `part` lies (Config.WRECKS): its smoke goes up -- seen
 ## rising -- and the mist round it becomes seen ground, so the place shows by night too. Nothing for a wreck
@@ -1183,6 +1185,22 @@ func scatter_opening_stock() -> void:
 # Right-clicking a building
 # ==============================================================================
 
+## The first tower finished with nothing in it, the run is told -- once -- what fills it (AmmoTower): what it takes,
+## made at the workbench (or the meat in the stock), and that he loads it walking past. A tower nobody loads does
+## nothing, and nothing else on the screen says so before the raid comes.
+var _told_to_load: bool = false
+
+func _on_tower_finished(b: Node) -> void:
+	if _told_to_load or b == null or not is_instance_valid(b) or not b.has_method("accepts") or b.has_ammo():
+		return
+	_told_to_load = true
+	var cfg = _get_config()
+	var kinds: Array = b.accepts()
+	var first: String = String(kinds[0]) if not kinds.is_empty() else ""
+	var what: String = tr(String(cfg.AMMO.get(first, {}).get("name", first))) if cfg else first
+	var made: bool = cfg != null and cfg.has_method("is_made") and cfg.is_made(first)
+	_hint("HINT_TOWER_NEEDS_AMMO" if made else "HINT_TOWER_NEEDS_MEAT", [String(b.get_localized_name()), what])
+
 ## Right-click always does one thing, immediately, and never puts anything up to
 ## click through. It was briefly a menu when a building had several sensible
 ## answers, and that was worse: right-click is easy to hit by accident, and a box
@@ -1202,6 +1220,11 @@ func right_click_building(b: Node, at: Vector3) -> void:
 	# right-click on it means.
 	if ("is_constructed" in b and not b.is_constructed) or (b.has_method("is_upgrading") and b.is_upgrading()):
 		hero.order_build(b, true)
+		return
+	# A tower that wants loading, and the stock has what it takes: loading it (AmmoTower) -- nothing spent that
+	# is not put into it.
+	if b.has_method("wants_load") and b.wants_load() and hero.has_method("order_load"):
+		hero.order_load(b)
 		return
 	hero.move_to(at if at != Vector3.ZERO else b.global_position)
 
@@ -1321,7 +1344,7 @@ func on_build_selected(type_id: String) -> void:
 	_reach_asked.clear()
 	_rebuild_build_preview(type_id)
 	if _faces(type_id):
-		_hint("HINT_TRAP_TURN")
+		_hint("HINT_TOWER_TURN")
 	elif _turns(type_id):
 		_hint("HINT_WALL_TURN")
 
@@ -1849,7 +1872,7 @@ func _can_reach_cell(cell: Vector2i) -> bool:
 		return bool(_reach_asked[cell])
 	var yes: bool = true
 	if hero != null and is_instance_valid(hero) and hero.has_method("can_reach_to_build") and grid_manager != null:
-		yes = bool(hero.can_reach_to_build(current_build_type, grid_manager.build_cell_to_world(cell)))
+		yes = bool(hero.can_reach_to_build(current_build_type, grid_manager.footprint_centre(current_build_type, cell)))
 	_reach_asked[cell] = yes
 	return yes
 
@@ -2524,22 +2547,25 @@ func _rebuild_build_preview(type_id: String) -> void:
 		mi.material_override = _make_preview_material(Color.WHITE)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	# A trap's lane, a square on the ground for each cell its wire will run through (Trap.lane_from):
-	# where it will shoot, before it is paid for.
+	# The ground a facing tower acts on, laid out before it is paid for (_show_zone): the log tower's lane ahead of
+	# it, as wide as a log is long; the catapult's patch, out where it throws.
 	if _faces(type_id):
-		var lanes := Node3D.new()
-		lanes.name = "LanePreview"
-		build_preview.add_child(lanes)
-		var mat := _make_preview_material(_lane_colour(), 0.45)
-		for i in range(int(cfg.BUILDINGS[type_id].get("lane", 0))):
-			var square := MeshInstance3D.new()
+		var zone := MeshInstance3D.new()
+		zone.name = "LanePreview"
+		zone.material_override = _make_preview_material(_lane_colour(), 0.35)
+		zone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var row: Dictionary = cfg.BUILDINGS[type_id]
+		if row.has("zone_distance"):
+			var disc := CylinderMesh.new()
+			disc.top_radius = float(row.get("zone_radius", 2.0))
+			disc.bottom_radius = disc.top_radius
+			disc.height = 0.04
+			zone.mesh = disc
+		else:
 			var plane := PlaneMesh.new()
-			plane.size = Vector2.ONE * float(cfg.BUILD_CELL) * 0.86
-			square.mesh = plane
-			square.material_override = mat
-			square.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			square.position.y = 0.04
-			lanes.add_child(square)
+			plane.size = Vector2(float(row.get("lane_width", 1.0)), 1.0)
+			zone.mesh = plane
+		build_preview.add_child(zone)
 
 	var r: float = _preview_range_for(type_id)
 	if r > 0.0:
@@ -2558,7 +2584,7 @@ func _rebuild_build_preview(type_id: String) -> void:
 	_preview_cell = Vector2i(999999, 999999)
 
 ## Area of effect a pending building would have, as a ring: what a building with a reach declares.
-## A trap shows its lane instead (_show_lane).
+## A facing tower shows its lane or patch as well (_show_zone).
 func _preview_range_for(type_id: String) -> float:
 	var cfg = _get_config()
 	if cfg == null or not cfg.BUILDINGS.has(type_id):
@@ -2625,13 +2651,13 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 		return
 	_preview_cell = snap
 	_reach_asked.clear()
-	build_preview.global_position = grid_manager.build_cell_to_world(snap)
+	build_preview.global_position = grid_manager.footprint_centre(current_build_type, snap)
 	var ghost: Node = build_preview.find_child("Body", false, false)
 	if ghost is Node3D:
 		_dress_ghost(ghost as Node3D, snap)
 		if _faces(current_build_type):
-			(ghost as Node3D).rotation.y = Trap.facing_yaw(_placement_facing)
-	_show_lane(snap)
+			(ghost as Node3D).rotation.y = AmmoTower.facing_yaw(_placement_facing)
+	_show_zone(snap)
 
 	# Nobody standing there matters (try_place_at_cell); whether he could get there to build it does,
 	# and is said.
@@ -2655,37 +2681,51 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 		if mi != build_preview_ring and (lanes == null or not lanes.is_ancestor_of(mi)):
 			mi.material_override = _make_preview_material(tint)
 
-## Lays the ghost's lane over the cells the wire would run through from `snap`, facing the way the
-## next trap will: the rest of its squares hidden.
-func _show_lane(snap: Vector2i) -> void:
-	var lanes: Node = build_preview.find_child("LanePreview", false, false) if build_preview else null
-	if lanes == null:
+## Lays the ghost's zone out the way the next tower will face from `snap`: the log tower's lane from its front
+## edge out `lane` cells -- as far as the first thing built across its middle, as its logs will roll (LogTower) --
+## and the catapult's patch at its distance.
+func _show_zone(snap: Vector2i) -> void:
+	var zone: MeshInstance3D = build_preview.find_child("LanePreview", false, false) as MeshInstance3D if build_preview else null
+	if zone == null:
 		return
 	var cfg = _get_config()
-	var length: int = int(cfg.BUILDINGS[current_build_type].get("lane", 0)) if cfg else 0
-	var cells: Array[Vector2i] = Trap.lane_from(grid_manager, snap, _placement_facing, length)
-	var here: Vector3 = grid_manager.build_cell_to_world(snap)
-	var squares: Array = lanes.get_children()
-	for i in range(squares.size()):
-		var square: Node3D = squares[i] as Node3D
-		square.visible = i < cells.size()
-		if square.visible:
-			var at: Vector3 = grid_manager.build_cell_to_world(cells[i]) - here
-			square.position = Vector3(at.x, square.position.y, at.z)
+	var row: Dictionary = cfg.BUILDINGS.get(current_build_type, {}) if cfg else {}
+	var dir: Vector3 = AmmoTower.facing_dir(_placement_facing)
+	if row.has("zone_distance"):
+		zone.position = dir * float(row["zone_distance"]) + Vector3(0.0, 0.05, 0.0)
+		zone.visible = true
+		return
+	var size: int = int(cfg.get_building_cells(current_build_type))
+	var step: Vector2i = AmmoTower.FACINGS[posmod(_placement_facing, AmmoTower.FACINGS.size())]
+	var first: int = (size + 1) / 2
+	var run: int = 0
+	for k in range(first, first + int(row.get("lane", 0))):
+		var c: Vector2i = snap + step * k
+		if not grid_manager.is_build_cell_ground(c):
+			break
+		var b: Node = grid_manager.building_in_build_cell(c)
+		if b != null and not ("building_type" in b and cfg.walk_over(String(b.building_type))):
+			break
+		run += 1
+	zone.visible = run > 0
+	var length: float = float(run) * float(cfg.BUILD_CELL)
+	var half: float = float(cfg.get_building_half(current_build_type).y)
+	(zone.mesh as PlaneMesh).size = Vector2(float(row.get("lane_width", 1.0)), maxf(0.01, length))
+	zone.rotation.y = AmmoTower.facing_yaw(_placement_facing)
+	zone.position = dir * (half + length * 0.5) + Vector3(0.0, 0.04, 0.0)
 
-## Turns the trap in hand a quarter (`step` quarters, clockwise), and the ghost and its lane with
+## Turns the tower in hand a quarter (`step` quarters, clockwise), and the ghost and its zone with
 ## it, where the cursor is.
 func turn_placement(step: int = 1) -> void:
-	_placement_facing = posmod(_placement_facing + step, Trap.FACINGS.size())
+	_placement_facing = posmod(_placement_facing + step, AmmoTower.FACINGS.size())
 	_preview_cell = Vector2i(999999, 999999)
 	if build_preview != null and is_instance_valid(build_preview) and build_preview.visible:
 		_update_build_preview(get_viewport().get_mouse_position())
 
-## Whether a building of `type_id` faces a way it shoots -- a trap.
+## Whether a building of `type_id` faces a way it acts (Config.faces): the log tower, the catapult.
 func _faces(type_id: String) -> bool:
 	var cfg = _get_config()
-	return type_id != "" and cfg != null and cfg.has_method("get_building_kind") \
-		and String(cfg.get_building_kind(type_id)) == "trap"
+	return type_id != "" and cfg != null and cfg.has_method("faces") and bool(cfg.faces(type_id))
 
 func _is_wall_kind(type_id: String) -> bool:
 	var cfg = _get_config()

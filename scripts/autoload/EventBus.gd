@@ -108,6 +108,9 @@ signal beacon_changed(steps_done: int)
 ## The beacon is switched on: it starts to charge, and the final wave sets out.
 signal beacon_launched()
 
+## A tower's ammunition changed -- loaded, shot, set to another kind (AmmoTower): its card says so.
+signal tower_ammo_changed(tower: Node)
+
 ## A stage mended has heard where the wreck holding `part` lies -- the next stage's part (Config.WRECKS,
 ## GameState.wreck_located): its smoke goes up, the mist over it thins, the screen says where.
 signal wreck_located(part: String)
