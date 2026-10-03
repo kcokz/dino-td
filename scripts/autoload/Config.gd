@@ -18,13 +18,15 @@ extends Node
 ## Raw materials first, then what the raids leave (GAME-DESIGN 4.2): the order the top
 ## bar shows them in.
 const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "prime_meat", "hide",
+	# Station 2's (GAME-DESIGN 5.2: "2 制陶 | 挖、烧 | 骨铲……| 黏土"): dug from the river bank with the bone shovel.
+	"clay",
 	# The beacon's parts, one out of each of the ship's wrecks (WRECKS): the stock holds them as it
 	# holds wood, so a stage's price, what is missing from it and where to get that are said the way
 	# every price is.
 	"antenna", "battery", "board",
 	# What the towers shoot (AMMO), made at the workbench and kept in the stock until he loads a tower with it: a
 	# price, a missing amount and where it comes from are said as for anything else.
-	"arrow_wood", "arrow_bone", "log_round", "log_spiked", "roller_stone", "shot_stone"]
+	"arrow_wood", "arrow_bone", "log_round", "log_spiked", "roller_stone", "shot_stone", "fire_pot"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (the map's opening_stock, Config.MAPS) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
@@ -37,6 +39,7 @@ const INITIAL_RESOURCES: Dictionary = {
 	"food": 0,
 	"prime_meat": 0,
 	"hide": 0,
+	"clay": 0,
 	"antenna": 0,
 	"battery": 0,
 	"board": 0,
@@ -46,6 +49,7 @@ const INITIAL_RESOURCES: Dictionary = {
 	"log_spiked": 0,
 	"roller_stone": 0,
 	"shot_stone": 0,
+	"fire_pot": 0,
 }
 const TILE_SIZE: float = 2.0
 
@@ -260,7 +264,7 @@ const BUILDINGS: Dictionary = {
 		"zone_radius": 2.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
-		"ammo": {"accepts": ["shot_stone"], "capacity": 10},
+		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 10},
 		"level": 1,
 		"upgrades_to": ["catapult_2"],
 	},
@@ -276,7 +280,7 @@ const BUILDINGS: Dictionary = {
 		"zone_radius": 2.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
-		"ammo": {"accepts": ["shot_stone"], "capacity": 15},
+		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 15},
 		"level": 2,
 		"upgrades_to": ["catapult_3"],
 	},
@@ -292,7 +296,7 @@ const BUILDINGS: Dictionary = {
 		"zone_radius": 2.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
-		"ammo": {"accepts": ["shot_stone"], "capacity": 20},
+		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 20},
 		"level": 3,
 		"upgrades_to": "",
 	},
@@ -1008,6 +1012,12 @@ const AMMO: Dictionary = {
 	# A rounded block of sandstone: everything where it lands is hit, and knocked flat a moment.
 	"shot_stone": {"name": "RESOURCE_SHOT_STONE", "for": "thrower", "prop": "shot_stone", "damage": 4.0,
 		"splash": 1.8, "knockdown": 0.8},
+	# A fire pot (station 2; GAME-DESIGN 6.0: "火挪到第 2 站，做成投石塔扔的火罐"): a clay pot of burning resin. It hits
+	# less than a stone and knocks nothing down, and where it breaks the ground burns (FirePatch): `burn.seconds`,
+	# `burn.radius` metres round, `burn.dps` a second to what is in it, lighting the dark `burn.light` metres round.
+	"fire_pot": {"name": "RESOURCE_FIRE_POT", "for": "thrower", "prop": "fire_pot", "damage": 2.0,
+		"splash": 2.2, "knockdown": 0.0,
+		"burn": {"seconds": 6.0, "radius": 2.2, "dps": 1.0, "light": 5.0, "fade": 1.5}},
 	# Raw meat on the rack: so many bites of it (BAIT).
 	"food": {"name": "RESOURCE_FOOD", "for": "bait", "uses": 12},
 }
@@ -1020,6 +1030,21 @@ const AMMO_LOADING: Dictionary = {
 	"reach": 1.4,
 	"every": 0.25,
 	"order_seconds": 1.0,
+}
+
+## A PATCH OF GROUND ON FIRE where a fire pot broke (FirePatch; AMMO.fire_pot.burn says how long, how wide, how hot):
+## it is a fire, and looks like one -- the campfire's own flame (Fire.make_flame, FIRE.flame) and its wavering light
+## (FIRE.flicker). The light is the campfire's colour, half as strong (the pot's resin is a thin spread, not a stack of
+## wood), hung `light_height` metres up so it falls on what stands in it. The burning resin lies splashed about in
+## `clumps`, one where the pot broke and the rest round it out to `ring` of the patch's radius, each a fire's flame
+## `flame_size` of a campfire's: tongues spread thin over the whole patch read as glowing eggs, not as fire.
+const FIRE_PATCH: Dictionary = {
+	"light_color": Color(1.0, 0.6, 0.3),
+	"light_energy": 2.5,
+	"light_height": 0.8,
+	"clumps": 7,
+	"flame_size": 0.7,
+	"ring": 0.7,
 }
 
 ## THE BAIT RACK (BUILDINGS.bait_rack): what eats meat goes to it -- the raiders and the night's hunters, by their
@@ -1393,6 +1418,67 @@ const DINOS: Dictionary = {
 		"size": Vector3(0.8, 2.2, 0.8),
 		# A voice of its own (SOUNDS): a heron's croak through a long bill.
 		"voice": "pterosaur",
+	},
+	# STATION 2'S CAST (GAME-DESIGN 7.2: the Late Jurassic, the Morrison Formation; MAPS.morrison; tools/generate_dinos.py).
+	# Ornitholestes: a light coelurosaur two metres long -- the pack that raids, and the nest's guards: the
+	# Coelophysis's numbers, which the raids are balanced on. Each of station 2's has a voice of its own (SOUNDS).
+	"ornitholestes": {
+		"hours": ["day"],
+		"name": "DINO_ORNITHOLESTES_NAME",
+		"hp": 2.8,
+		"speed": 4.2,
+		"burst": "dash",
+		"damage": 0.9,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"drops": {"food": 1, "bone": 1},
+		"drop_chance": {"food": 0.5, "bone": 0.5},
+		"size": Vector3(0.8, 0.85, 0.8),
+	},
+	# Ceratosaurus: six metres, a horn on its nose -- at the head of the big raids (the minor boss), its hide and
+	# bones what it leaves, as the first station's alpha's.
+	"ceratosaurus": {
+		"hours": ["day"],
+		"name": "DINO_CERATOSAURUS_NAME",
+		"hp": 14.0,
+		"speed": 4.0,
+		"burst": "dash",
+		"damage": 2.0,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"boss": "minor",
+		"drops": {"hide": 2, "bone": 3},
+		"size": Vector3(1.1, 2.0, 1.1),
+	},
+	# Allosaurus: eight and a half metres, the Jurassic's great hunter -- last of all, in the beacon's final wave.
+	"allosaurus": {
+		"name": "DINO_ALLOSAURUS_NAME",
+		"hp": 50.0,
+		"speed": 2.2,
+		"damage": 3.5,
+		"attack_rate": 0.8,
+		"behaviour": "siege",
+		"boss": "major",
+		# Tonnes of it: a rolling log does not shove it -- one weighted with stone does (AMMO "moves_heavy").
+		"heavy": true,
+		"drops": {"prime_meat": 3, "bone": 4},
+		"size": Vector3(1.6, 2.8, 1.6),
+	},
+	# Harpactognathus: a rhamphorhynchid pterosaur, two and a half metres across the wings -- the first raider that
+	# FLIES (FlyerDino): over the walls, at the man; one wooden arrow brings it down, and only the bow tower reaches
+	# it up there (AmmoTower.flies).
+	"harpactognathus": {
+		"hours": ["day"],
+		"name": "DINO_HARPACTOGNATHUS_NAME",
+		"hp": 2.0,
+		"speed": 5.5,
+		"damage": 0.6,
+		"attack_rate": 1.2,
+		"behaviour": "flyer",
+		"flies": true,
+		"drops": {"food": 1, "bone": 1},
+		"drop_chance": {"food": 0.5, "bone": 0.5},
+		"size": Vector3(1.0, 0.6, 1.0),
 	}
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
@@ -1405,6 +1491,8 @@ const DINO_BEHAVIOURS: Dictionary = {
 	"prowl": "res://scripts/entities/ProwlerDino.gd",
 	# Quick and brittle, for the man and past the traps (GAME-DESIGN 7.2: Hesperosuchus).
 	"runner": "res://scripts/entities/RunnerDino.gd",
+	# On the wing: over the walls, at the man or the cabin, a swoop and away (station 2: Harpactognathus).
+	"flyer": "res://scripts/entities/FlyerDino.gd",
 }
 
 ## The script a species is built from. Anything without a declared habit gets the
@@ -1587,6 +1675,13 @@ const DINO_AI: Dictionary = {
 	# every place round taken is left be for this long, and something else chosen -- ten raptors
 	# went for the one crossbow nearest the nest, which two could bite (the debug-agent's BUG-009).
 	"shot_memory": 4.0,
+	# ON THE WING (FlyerDino; station 2's Harpactognathus): it cruises `cruise_height` metres up -- over a man's
+	# head and a wall's, under a bow tower's reach -- after the man while he is within `hunt_reach` of it, else the
+	# cabin; from `dive_reach` out it comes down on what it is after, gliding down and up again no faster than
+	# `climb_rate` metres a second; it bites once it is within `bite_slack` of the height of its bite, and then
+	# climbs away on past it for `climb_seconds` before it comes round again.
+	"flight": {"cruise_height": 3.5, "hunt_reach": 18.0, "dive_reach": 6.0, "climb_rate": 2.5, "bite_slack": 0.8,
+		"climb_seconds": 2.0},
 	"crowded_memory": 3.0,
 	# Buildings are in the raiders' steering (Building._update_avoidance): an outline of each finished
 	# one on these avoidance layers (a bitmask), which their agents avoid (Dino._refresh_walker) and
@@ -2013,6 +2108,133 @@ const MAPS: Dictionary = {
 			{"type": "board", "cell": Vector2i(15, 16)},
 		],
 	},
+
+	# STATION 2: THE LATE JURASSIC, THE MORRISON FORMATION (GAME-DESIGN 7.2; the player, 2026-10-02: "把第一关先做完，做完之后
+	# 可以试着做第二关"). About 150 million years ago, the American West: semi-arid, a dry season and a wet; conifers
+	# along the rivers and fern prairie between them; the sauropods' golden age. Where the capsule lands after the
+	# first station's jump (GAMES.campaign.stations), and a map a custom game can choose (CUSTOM_GAME "map").
+	#
+	# Laid out as the large valley -- its size, its ridge, its ways in, its nest, the wrecks where they lie there (a
+	# first version: the layout is tested; a station of its own shape comes later) -- with its own: the ground drier,
+	# clay along the river for the bone shovel (RECIPES
+	# bone_shovel: station 2's new craft, GAME-DESIGN 5.2: "2 制陶 | 挖、烧 | 骨铲"), and its own cast -- Ornitholestes
+	# raiding, Harpactognathus FLYING in from the second day (the first thing that flies at him: the bow tower is the
+	# only answer, GAME-DESIGN 7.2: "第一次要对空"), Ceratosaurus at the head of the big raids, Allosaurus last of all.
+	# Nothing hunts the river by night here yet (no prowlers); Diplodocus and Stegosaurus graze the valley's walls.
+	"morrison": {
+		"like": "valley_large",
+		"name": "MAP_MORRISON_NAME",
+		"terrain": {
+			"field_half": 44.0,
+			# Drier ground than the Chinle's floodplain: a dusty olive, the rock a paler tan (TerrainBuilder).
+			"ground_colour": Color(0.24, 0.27, 0.13),
+			"rock_colour": Color(0.48, 0.40, 0.30),
+			# The large valley's river, as it runs past the field's west edge.
+			"river": {"course": [
+				{"at": Vector2(-130.0, -96.0), "half_width": 1.1, "bank": 1.2},
+				{"at": Vector2(-108.0, -90.0), "half_width": 1.1, "bank": 1.2},
+				{"at": Vector2(-88.0, -82.0), "half_width": 1.1, "bank": 1.2},
+				{"at": Vector2(-72.0, -72.0), "half_width": 1.1, "bank": 1.3},
+				{"at": Vector2(-63.0, -61.0), "half_width": 1.0, "bank": 1.4},
+				{"at": Vector2(-57.0, -50.0), "half_width": 1.1, "bank": 1.3},
+				{"at": Vector2(-53.0, -40.0), "half_width": 1.5, "bank": 1.1},
+				{"at": Vector2(-50.0, -30.0), "half_width": 2.0, "bank": 0.9},
+				{"at": Vector2(-48.5, -18.0), "half_width": 2.1, "bank": 1.0},
+				{"at": Vector2(-48.0, -8.0), "half_width": 2.1, "bank": 1.1},
+				{"at": Vector2(-48.5, 2.0), "half_width": 2.2, "bank": 0.9},
+				{"at": Vector2(-50.0, 12.0), "half_width": 2.3, "bank": 0.8},
+				{"at": Vector2(-53.0, 20.0), "half_width": 2.3, "bank": 1.0},
+				{"at": Vector2(-58.0, 27.0), "half_width": 2.2, "bank": 1.6},
+				{"at": Vector2(-64.0, 34.0), "half_width": 2.1, "bank": 2.4},
+				{"at": Vector2(-68.0, 44.0), "half_width": 2.0, "bank": 2.8},
+				{"at": Vector2(-71.0, 58.0), "half_width": 2.0, "bank": 2.6},
+				{"at": Vector2(-73.0, 76.0), "half_width": 2.0, "bank": 2.2},
+				{"at": Vector2(-75.0, 96.0), "half_width": 2.0, "bank": 1.8},
+				{"at": Vector2(-76.0, 114.0), "half_width": 2.0, "bank": 1.8},
+			]},
+		},
+		# What he lands with (GAME-DESIGN 9.2: "带走船舱和工具，带不走基地……每张图自己声明开局带什么"): the first station's
+		# tools -- the picks, the axe, the spear, the vest and boots, the stone pot, the hide map -- whatever that run
+		# made: the start is the map's own, so it is the same every time. Not the second-tier armour or spear, which are
+		# the first station's bosses' hide and bone. The stock and the base stayed where they were built.
+		"kit": ["harvest_stone", "quarry_pick", "stone_axe", "stone_spear", "hide_vest", "hide_boots", "stone_pot", "hide_map"],
+		# Its ground cover over the valley's (GROUND_COVER; Main._scatter_ground_cover): a semi-arid floor between the
+		# rivers -- the sedge sparser and dried yellow-olive, the ferns duller.
+		"ground_cover": {"grass_count": 1500, "grass_base": Color(0.20, 0.20, 0.09), "grass_tip": Color(0.52, 0.47, 0.22),
+			"fern_leaf": Color(0.36, 0.42, 0.20)},
+		"opening_stock": {"wood": 28},
+		"raiders": {"ornitholestes": 1.0},
+		# From the second day, one in four of a raid comes on the wing (FlyerDino).
+		"raiders_by_day": [{"from_day": 2, "raiders": {"ornitholestes": 3.0, "harpactognathus": 1.0}}],
+		"guards": "ornitholestes",
+		"minor_boss": "ceratosaurus",
+		"boss": "allosaurus",
+		"prowlers": {},
+		# What the day's turns say (HUD._on_day_part_changed): the Morrison's raiders going and coming, and nothing up
+		# out of its river by night -- the Chinle's words (HINT_DAWN and the rest) told him of coelophysis and
+		# phytosaurs at a station with neither. Part of the cast (CAST_KEYS): an age says its own on any map.
+		"day_hints": {"dawn": "HINT_DAWN_JURASSIC", "dusk": "HINT_DUSK_JURASSIC", "night": "HINT_NIGHT_JURASSIC",
+			"dusk_first": "HINT_DUSK_FIRST_JURASSIC"},
+		"herds": [
+			{"species": "diplodocus", "scene": "res://assets/models/dinos/diplodocus.gltf",
+				"count": 3, "length": 25.0, "bearing": 84.0, "distance": 70.0, "spread": 14.0, "speed": 0.5},
+			{"species": "stegosaurus", "scene": "res://assets/models/dinos/stegosaurus.gltf",
+				"count": 4, "length": 7.0, "bearing": 300.0, "distance": 55.0, "spread": 8.0, "speed": 0.6},
+		],
+		# The large valley's ground, as it lies (the wrecks where they lie there), and clay along the river bank at
+		# the field's west edge -- the bone shovel's.
+		"default_resource_nodes": [
+			{"type": "wood", "cell": Vector2i(-4, -2)},
+			{"type": "wood", "cell": Vector2i(4, -2)},
+			{"type": "wood", "cell": Vector2i(6, 3)},
+			{"type": "stone", "cell": Vector2i(-6, 3)},
+			{"type": "stone", "cell": Vector2i(-4, -16)},
+			{"type": "stone", "cell": Vector2i(4, -16)},
+			{"type": "stone", "cell": Vector2i(14, -12)},
+			{"type": "stone", "cell": Vector2i(14, -11)},
+			{"type": "stone", "cell": Vector2i(15, -13)},
+			{"type": "wood", "cell": Vector2i(-12, 6)},
+			{"type": "wood", "cell": Vector2i(-14, 8)},
+			{"type": "wood", "cell": Vector2i(-11, 9)},
+			{"type": "wood", "cell": Vector2i(-15, 5)},
+			{"type": "wood", "cell": Vector2i(-13, 11)},
+			{"type": "wood", "cell": Vector2i(16, 3)},
+			{"type": "wood", "cell": Vector2i(18, 7)},
+			{"type": "wood", "cell": Vector2i(3, 14)},
+			{"type": "wood", "cell": Vector2i(-2, 17)},
+			{"type": "stone", "cell": Vector2i(-6, 15)},
+			{"type": "clay", "cell": Vector2i(-21, -10)},
+			{"type": "clay", "cell": Vector2i(-21, 2)},
+			{"type": "clay", "cell": Vector2i(-20, 10)},
+			{"type": "water", "cell": Vector2i(-22, -4)},
+			{"type": "antenna", "cell": Vector2i(-19, 6)},
+			{"type": "battery", "cell": Vector2i(3, -20)},
+			{"type": "board", "cell": Vector2i(15, 16)},
+		],
+	},
+}
+
+## THE JUMP BETWEEN STATIONS (StationJump; GAME-DESIGN 8.3): its timings (seconds) and sizes (metres).
+##   view_*      the view swinging in to the cabin as it goes: how long; how far from it; how steeply down
+##   beam_*      the column of light out of the beacon: how long it takes to stand up; how wide, how tall; its colour
+##   light_*     the light it throws round: how far, how strong, how high
+##   shake(s)    the cabin's shaking before it lifts: how far each way, how many times, each how long (shake_step);
+##               lift, how high it rises
+##   white       the screen's white; white_seconds, how long it takes to come up -- and to go, landing (drop_seconds)
+##   card_*      the card on the white: how long it takes to show; how long it is read; its ink
+##   drop_*      landing: how high up the capsule starts, how long it takes to come down
+##   landing_*   the view over the landing: how far, how steep
+##   settle_seconds  after it is down, before the run begins; dust, the clods thrown up at each corner, their colour
+const STATION_JUMP: Dictionary = {
+	"view_seconds": 1.6, "view_distance": 16.0, "view_tilt": 30.0,
+	"beam_seconds": 1.8, "beam_radius": 0.8, "beam_height": 60.0, "beam_colour": Color(0.55, 0.85, 1.0, 0.75),
+	"light_range": 30.0, "light_energy": 6.0, "light_height": 4.0,
+	"shake": 0.06, "shakes": 6, "shake_step": 0.05, "lift": 1.5,
+	"white": Color(1.0, 0.99, 0.96), "white_seconds": 1.2,
+	"card_fade": 0.6, "card_seconds": 3.0, "ink": Color(0.12, 0.10, 0.08), "ink_faint": Color(0.3, 0.27, 0.22),
+	"drop_height": 40.0, "drop_seconds": 1.6,
+	"landing_distance": 26.0, "landing_tilt": 38.0,
+	"settle_seconds": 0.8, "dust": 14, "dust_colour": Color(0.62, 0.52, 0.38),
 }
 
 ## ==============================================================================
@@ -2037,6 +2259,16 @@ const GAMES: Dictionary = {
 		"name": "GAME_CAMPAIGN",
 		"settings": {"map": "large"},
 		"internal": {"tutorial": true, "cabin": "wrecked", "goal": "beacon"},
+		# Its stations, in order (GAME-DESIGN 7.2): each the settings it lays over the game's for that leg -- its map,
+		# its age -- and what the jump's card says of it (StationJump): its name, its age, its place, how long ago.
+		# The beacon's jump at the end of one lands the capsule at the next (GameState.jump_to_next_station); the
+		# last one's jump ends the game as far as it goes.
+		"stations": [
+			{"id": "chinle", "name": "STATION_1_NAME", "age": "ERA_LATE_TRIASSIC", "place": "PLACE_CHINLE",
+				"when": "WHEN_STATION_1", "settings": {}},
+			{"id": "morrison", "name": "STATION_2_NAME", "age": "ERA_LATE_JURASSIC", "place": "PLACE_MORRISON",
+				"when": "WHEN_STATION_2", "settings": {"map": "morrison", "era": "late_jurassic"}},
+		],
 	},
 	# The player's own: whatever they choose; the whole cabin, its beacon calling for rescue.
 	"custom": {
@@ -2044,6 +2276,12 @@ const GAMES: Dictionary = {
 		"internal": {"tutorial": false, "cabin": "whole", "goal": "rescue"},
 	},
 }
+
+## What a map's cast is (an age, CUSTOM_GAME "era" `cast_of`): who raids, from when, who guards the nest, the lesser and
+## the great boss, what comes up out of the river, what grazes the walls (a map without "herds" grazes HERDS'), and
+## what the day's turns say of them (a map without "day_hints" says the Chinle's: HINT_DAWN and the rest).
+const CAST_KEYS: Array[String] = ["raiders", "raiders_by_day", "guards", "minor_boss", "boss", "prowlers", "herds",
+	"day_hints"]
 
 ## THE CUSTOM GAME'S SETTINGS, in the order its page shows them: each a choice among a few, `default` the one our own
 ## game plays. What a choice does is data --
@@ -2062,12 +2300,21 @@ const CUSTOM_GAME: Dictionary = {
 		# Placerias); the Late Cretaceous is the later maps' cast (tools/generate_dinos.py) -- the feathered
 		# raptors, the pterosaur, the tyrannosaur; nothing of its own in the river, no herds on the walls yet.
 		{"id": "era", "name": "CUSTOM_ERA", "default": "late_triassic", "choices": [
-			{"id": "late_triassic", "name": "ERA_LATE_TRIASSIC", "note": "ERA_LATE_TRIASSIC_NOTE"},
+			# The Late Triassic is the valley's own cast (`cast_of`, CAST_KEYS: worked out from the map when the game is
+			# settled) -- so on station 2's Jurassic map it is still the Late Triassic's animals that come.
+			{"id": "late_triassic", "name": "ERA_LATE_TRIASSIC", "note": "ERA_LATE_TRIASSIC_NOTE", "cast_of": "valley"},
 			{"id": "late_cretaceous", "name": "ERA_LATE_CRETACEOUS", "note": "ERA_LATE_CRETACEOUS_NOTE", "map": {
 				"raiders": {"raptor": 1.0},
 				"raiders_by_day": [{"from_day": 3, "raiders": {"raptor": 3.0, "pterosaur": 1.0}}],
 				"guards": "raptor", "minor_boss": "raptor_alpha", "boss": "big_theropod",
-				"prowlers": {}, "herds": []}},
+				"prowlers": {}, "herds": [],
+				# The raptors keep every hour (no DINOS.raptor.hours): no going home at dusk to tell of.
+				"day_hints": {"dawn": "HINT_DAWN_CRETACEOUS", "dusk": "HINT_DUSK_CRETACEOUS", "night": "HINT_NIGHT_CRETACEOUS",
+					"dusk_first": "HINT_DUSK_FIRST_CRETACEOUS"}}},
+			# The Late Jurassic is station 2's age, MAPS.morrison's own cast (`cast_of`): Ornitholestes raiding,
+			# Harpactognathus on the wing from the second day, Ceratosaurus and Allosaurus; nothing in the river; the
+			# sauropods and the stegosaurs on the walls -- and the Morrison's words for the day's turns.
+			{"id": "late_jurassic", "name": "ERA_LATE_JURASSIC", "note": "ERA_LATE_JURASSIC_NOTE", "cast_of": "morrison"},
 		]},
 		# How hard (the player: "难度高的恐龙巢穴多，波次厉害"): more nests the harder -- the raid shared out among
 		# them, each with its guards (MAPS.<id>.nest_cells, in the order they are opened) -- and the raids bigger,
@@ -2089,6 +2336,8 @@ const CUSTOM_GAME: Dictionary = {
 		{"id": "map", "name": "CUSTOM_MAP", "default": "large", "choices": [
 			{"id": "small", "name": "MENU_MAP_SMALL", "note": "MAP_SMALL_NOTE", "map_id": "valley"},
 			{"id": "large", "name": "MENU_MAP_LARGE", "note": "MAP_LARGE_NOTE", "map_id": "valley_large"},
+			# Station 2's (MAPS.morrison): the Late Jurassic's dry valley, as big as the large one.
+			{"id": "morrison", "name": "MENU_MAP_MORRISON", "note": "MAP_MORRISON_NOTE", "map_id": "morrison"},
 		]},
 		# How long the beacon's rescue takes to come: the days to hold out (a day is DAY.length, six minutes).
 		{"id": "days", "name": "CUSTOM_DAYS", "default": "5", "choices": [
@@ -2514,6 +2763,9 @@ const UI: Dictionary = {
 	# The speeds the top bar offers, one segment each (UI-POLISH T9).
 	"game_speeds": [1.0, 2.0, 3.0],
 	"resource_count_width": 30,        # a count's box: four figures without the chip jumping
+	# Squeezed (HUD._fit_stock: every material in the thousands on a map with more of them -- station 2's clay),
+	# the chips a size down: the count's box for the small figures, the icon a size smaller (UiTheme icon "s").
+	"resource_count_width_squeezed": 22,
 	"objective_width": 290,            # the beacon card, top right
 	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
 	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
@@ -2787,6 +3039,30 @@ const SOUNDS: Dictionary = {
 		"pterosaur_bite":  {"files": ["pterosaur_bite"], "db": -5.0, "pitch": 1.08, "class": "bite", "unit": 5.0},
 		"pterosaur_hurt":  {"files": ["pterosaur_hurt"], "db": -5.0, "pitch": 1.06, "class": "hurt", "unit": 5.0},
 		"pterosaur_death": {"files": ["pterosaur_death"], "db": -3.0, "pitch": 1.04, "class": "death", "unit": 8.0},
+		# STATION 2 (the Late Jurassic, MAPS.morrison), each its own (tools/build_sounds.gd): Ornitholestes' quick yelps,
+		# Ceratosaurus's nasal honk, Allosaurus's rough boom (its coming heard over the valley), Harpactognathus's
+		# shrill squawk -- heard as far as the first station's of their size.
+		"ornitholestes_call":  {"files": ["ornitholestes_call_1", "ornitholestes_call_2"], "db": -5.0, "pitch": 1.1, "class": "call"},
+		"ornitholestes_alert": {"files": ["ornitholestes_alert"], "db": -3.0, "pitch": 1.08, "class": "alert"},
+		"ornitholestes_bite":  {"files": ["ornitholestes_bite"], "db": -4.0, "pitch": 1.1, "class": "bite"},
+		"ornitholestes_hurt":  {"files": ["ornitholestes_hurt"], "db": -4.0, "pitch": 1.08, "class": "hurt"},
+		"ornitholestes_death": {"files": ["ornitholestes_death"], "db": -2.0, "pitch": 1.06, "class": "death"},
+		"ceratosaurus_call":  {"files": ["ceratosaurus_call_1", "ceratosaurus_call_2"], "db": -3.0, "pitch": 1.05, "class": "call", "unit": 10.0},
+		"ceratosaurus_alert": {"files": ["ceratosaurus_alert"], "db": 0.0, "pitch": 1.03, "class": "boss", "unit": 22.0, "reach": 140.0},
+		"ceratosaurus_bite":  {"files": ["ceratosaurus_bite"], "db": -3.0, "pitch": 1.06, "class": "bite"},
+		"ceratosaurus_hurt":  {"files": ["ceratosaurus_hurt"], "db": -3.0, "pitch": 1.05, "class": "hurt"},
+		"ceratosaurus_death": {"files": ["ceratosaurus_death"], "db": 0.0, "pitch": 1.03, "class": "death", "unit": 12.0},
+		"allosaurus_call":  {"files": ["allosaurus_call_1", "allosaurus_call_2"], "db": 1.0, "pitch": 1.04, "class": "call", "unit": 16.0, "reach": 120.0},
+		"allosaurus_alert": {"files": ["allosaurus_alert"], "db": -1.0, "pitch": 1.04, "class": "alert", "unit": 12.0},
+		"allosaurus_roar":  {"files": ["allosaurus_roar"], "db": 3.0, "pitch": 1.0, "class": "boss", "unit": 45.0, "reach": 220.0},
+		"allosaurus_bite":  {"files": ["allosaurus_bite"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
+		"allosaurus_hurt":  {"files": ["allosaurus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
+		"allosaurus_death": {"files": ["allosaurus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
+		"harpactognathus_call":  {"files": ["harpactognathus_call_1", "harpactognathus_call_2"], "db": -5.0, "pitch": 1.06, "class": "call", "unit": 8.0, "reach": 70.0},
+		"harpactognathus_alert": {"files": ["harpactognathus_alert"], "db": -4.0, "pitch": 1.06, "class": "alert", "unit": 7.0},
+		"harpactognathus_bite":  {"files": ["harpactognathus_bite"], "db": -5.0, "pitch": 1.08, "class": "bite", "unit": 5.0},
+		"harpactognathus_hurt":  {"files": ["harpactognathus_hurt"], "db": -5.0, "pitch": 1.06, "class": "hurt", "unit": 5.0},
+		"harpactognathus_death": {"files": ["harpactognathus_death"], "db": -3.0, "pitch": 1.04, "class": "death", "unit": 8.0},
 		# His work.
 		"chop":     {"files": ["chop_1", "chop_2", "chop_3"], "db": -7.0, "pitch": 1.06, "class": "work"},
 		"quarry":   {"files": ["quarry_1", "quarry_2", "quarry_3"], "db": -9.0, "pitch": 1.06, "class": "work"},
@@ -2820,6 +3096,8 @@ const SOUNDS: Dictionary = {
 		# The ship's own voice.
 		"beacon_stage":  {"files": ["beacon_stage"], "db": -4.0, "pitch": 1.0, "class": "event", "unit": 14.0},
 		"beacon_launch": {"files": ["beacon_launch"], "db": -1.0, "pitch": 1.0, "class": "event", "unit": 30.0, "reach": 200.0},
+		# The capsule come down at the next station (StationJump): a hull's weight on earth.
+		"landing": {"files": ["landing"], "db": 0.0, "pitch": 1.0, "class": "event", "unit": 30.0, "reach": 200.0},
 		"ui_click": {"files": ["ui_click"], "db": -16.0, "pitch": 1.05, "class": "ui"},
 		"ambience_valley": {"files": ["ambience_valley"], "db": 0.0, "pitch": 1.0, "class": "ui"},
 		"ambience_night": {"files": ["ambience_night"], "db": 0.0, "pitch": 1.0, "class": "ui"},
@@ -3407,6 +3685,18 @@ const RESOURCE_NODES: Dictionary = {
 		# of it, and a raider stood and walked by turns in the squeeze (the twitch watch, test_07).
 		"size": Vector3(1.6, 1.4, 1.6),
 	},
+	# The river bank's clay (station 2; GAME-DESIGN 5.2): grey-blue and ochre, wet -- dug with the bone shovel and
+	# nothing else (bare hands do not shift a bank). Low and wide, like the bank it is.
+	"clay": {
+		"name": "RESOURCE_CLAY",
+		"icon": "clay",
+		"capacity": 60,
+		"harvest_rate": 0.4,
+		"requires_unlock": "harvest_clay",
+		"color": Color(0.55, 0.52, 0.46),
+		"depleted_color": Color(0.3, 0.3, 0.3),
+		"size": Vector3(1.6, 0.6, 1.6),
+	},
 	"water": {
 		"name": "RESOURCE_WATER",
 		"icon": "water",
@@ -3562,6 +3852,18 @@ const VISUALS: Dictionary = {
 	# -- on four legs, running in bounds.
 	"dino/hesperosuchus":   {"scene": "res://assets/models/dinos/hesperosuchus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "hesperosuchus", "material": "skin"},
+	# Station 2's cast (MAPS.morrison; tools/generate_dinos.py): Ornitholestes, Ceratosaurus, Allosaurus, and
+	# Harpactognathus on the wing.
+	"dino/ornitholestes":   {"scene": "res://assets/models/dinos/ornitholestes.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor", "material": "skin"},
+	"dino/ceratosaurus":    {"scene": "res://assets/models/dinos/ceratosaurus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha", "material": "skin"},
+	"dino/allosaurus":      {"scene": "res://assets/models/dinos/allosaurus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod", "material": "skin"},
+	# The flyer is not fitted by its height: wings spread flat it is a hand high and two and a half metres across, and
+	# fitted to a height it came out five times as big. Built to its true size (tools/generate_dinos.py), it is drawn so.
+	"dino/harpactognathus": {"scene": "res://assets/models/dinos/harpactognathus.gltf", "fit": "none",
+		"placeholder": "raptor", "anchor": "feet", "color": "pterosaur", "material": "skin"},
 	# An azhdarchid, stalking on all fours with its wings folded (the wing finger up along the arm, the membrane
 	# furled between them), its head up on a long neck, a crest flushed red.
 	"dino/pterosaur":       {"scene": "res://assets/models/dinos/pterosaur.gltf", "fit": "height",
@@ -3625,6 +3927,8 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
 	"prop/shot_stone":      {"scene": "res://assets/models/props/shot_stone_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
+	"prop/fire_pot":        {"scene": "res://assets/models/props/fire_pot_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
 	# The spikes laid in the way (tools/generate_props.py ground_spikes): built to the cell, not fitted.
 	"building/ground_spikes":  {"scene": "res://assets/models/props/ground_spikes_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "trap"},
@@ -3680,6 +3984,12 @@ const VISUALS: Dictionary = {
 	# level turns it to face the river. It was a blue puddle in the middle of the field.
 	"node/water":           {"scene": "res://assets/models/props/water_landing_a.glb",
 		"material": "vertex", "placeholder": "pool", "anchor": "feet", "color": ""},
+	# The river bank's clay (station 2; tools/generate_props.py clay_bank): a low bank of wet clay with a cut face;
+	# dug out, a scooped hollow with the spoil beside it. Built to size, in metres, and not fitted: fitted to the
+	# node's box it came out a third too big, and dug out it is the same bank.
+	"node/clay":            {"scene": "res://assets/models/props/clay_bank_a.glb", "fit": "none",
+		"scene_depleted": "res://assets/models/props/clay_bank_dug_a.glb",
+		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	# The ship's wrecks (WRECKS; tools/generate_props.py wreck): a torn piece of the hull, the white
 	# plating and orange markings the cabin wears, scorched, half in a burnt furrow, plates spilled
 	# round it -- and what the part was fitted in: a bent mast, a battery bay, a console. Searched,
@@ -3708,6 +4018,8 @@ const VISUALS: Dictionary = {
 	"drop/wood":            {"scene": "res://assets/models/props/drop_wood_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/stone":           {"scene": "res://assets/models/props/drop_stone_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/clay":            {"scene": "res://assets/models/props/drop_clay_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/bone":            {"scene": "res://assets/models/props/drop_bone_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
@@ -4075,6 +4387,16 @@ const RECIPES: Dictionary = {
 		"time": 6.0,
 		"unlocks": "stone_pot",
 	},
+	# The bone shovel (station 2; GAME-DESIGN 5.2: "骨铲……新石器时代用牛肩胛骨做铲"): a big animal's shoulder blade on a
+	# short haft -- what digs the river bank's clay (RESOURCE_NODES.clay). Bone alone, named for what it is made of
+	# (6.0: a tool takes the one material in its name); four, the first big raid's.
+	"bone_shovel": {
+		"name": "RECIPE_BONE_SHOVEL_NAME",
+		"station": "workbench",
+		"inputs": {"bone": 4},
+		"time": 8.0,
+		"unlocks": "harvest_clay",
+	},
 	# THE AMMUNITION (2026-10-02, the player: "工作台做，专门的弹药系统"): what the towers are loaded with (AMMO), made
 	# here a batch at a time -- `makes`, into the stock -- as often as there is the stuff for it. Not his row and not
 	# for good: each batch is shot away. Two materials at most, named for what they are (GAME-DESIGN 4.1): wooden
@@ -4121,6 +4443,14 @@ const RECIPES: Dictionary = {
 		"inputs": {"stone": 5},
 		"time": 8.0,
 		"makes": {"shot_stone": 10},
+	},
+	# Fire pots (station 2): clay pots, fired, filled with resin -- clay and the wood to burn.
+	"fire_pot": {
+		"name": "RESOURCE_FIRE_POT",
+		"station": "workbench",
+		"inputs": {"clay": 2, "wood": 2},
+		"time": 10.0,
+		"makes": {"fire_pot": 5},
 	},
 }
 

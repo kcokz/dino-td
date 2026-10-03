@@ -96,6 +96,7 @@ func _ready() -> void:
 	_ensure_nav_maps()
 	_warm_the_cast()
 	_add_bug_report()
+	_ensure_station_jump()
 	# The game launched opens on the start screen, the valley stopped behind it -- unless it was the start screen
 	# that built this level, for the game chosen there (GameState.launch_straight_in).
 	var gs_start = _get_game_state()
@@ -113,6 +114,30 @@ func _exit_tree() -> void:
 	var fx = get_node_or_null("/root/Fx")
 	if fx and fx.has_method("stop_ambience"):
 		fx.stop_ambience()
+	var eb = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("game_won") and eb.game_won.is_connected(_on_won_jump):
+		eb.game_won.disconnect(_on_won_jump)
+
+## The jump between our game's stations (StationJump; GAME-DESIGN 8.3): the beacon charged with a station still ahead
+## sends the capsule on, and a level built by the jump opens on its landing.
+var station_jump: StationJump = null
+
+func _ensure_station_jump() -> void:
+	if station_jump == null or not is_instance_valid(station_jump):
+		station_jump = StationJump.new()
+		add_child(station_jump)
+	var eb = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("game_won") and not eb.game_won.is_connected(_on_won_jump):
+		eb.game_won.connect(_on_won_jump)
+	var gs = _get_game_state()
+	if gs and bool(gs.arrived_by_jump) and _plays_the_players_map():
+		station_jump.arrive.call_deferred(self)
+
+## Won with a station still to go: the jump, not the victory (HUD._on_game_won leaves it the screen).
+func _on_won_jump() -> void:
+	var gs = _get_game_state()
+	if gs and gs.has_method("has_next_station") and gs.has_next_station() and station_jump != null:
+		station_jump.depart(self)
 
 ## The navigation meshes, baked from this level's own colliders. See NavMaps.gd.
 ##
@@ -972,7 +997,9 @@ func _rebuild_ground(cfg) -> void:
 func _scatter_ground_cover(cfg) -> void:
 	if cfg == null or not ("GROUND_COVER" in cfg):
 		return
-	var cover: Dictionary = cfg.GROUND_COVER
+	# The map's own over the valley's (MAPS.<id>.ground_cover): station 2's drier, sparser sedge.
+	var cover: Dictionary = cfg.GROUND_COVER.duplicate()
+	cover.merge(_map().get("ground_cover", {}), true)
 	var field_half: float = float(cfg.terrain().get("field_half", 22.0)) if "TERRAIN" in cfg else 22.0
 
 	# Its own node, NOT inside terrain_container. The hills in there are gameplay -- the

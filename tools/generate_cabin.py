@@ -347,9 +347,45 @@ def workbench(seed):
     inked([(0.015, -0.02), (0.045, 0.005)], 0.006, ink)
     inked([(0.015, 0.005), (0.045, -0.02)], 0.006, ink)
 
+    # The bone shovel (the second station's: GAME-DESIGN 5.2, "骨铲（肩胛骨）"), hung from a peg of its own at the
+    # board's lower left, below the pick's head: a dinosaur's shoulder blade bound by its narrow end to a short haft
+    # -- the blade down, its broad digging edge smeared with the river's blue-grey clay, the ridge of the blade's
+    # spine across its face -- the haft's top hung over the peg by a loop of cord.
+    shovel = Builder()
+    xc, zn, yb = -0.47, 0.87, 0.272          # its middle line, the blade's neck, and the blade's face off the board
+    rod(shovel, Vector((xc, 0.29, 1.15)), Vector((xc, 0.235, 1.165)), 0.011, GUNMETAL)
+    rod(shovel, Vector((xc, 0.262, zn - 0.005)), Vector((xc, 0.262, zn + 0.255)), 0.016, BARK_LIGHT, col1=FRESH_WOOD)
+    for side in (-1.0, 1.0):
+        rod(shovel, Vector((xc + side * 0.011, 0.258, zn + 0.245)), Vector((xc, 0.236, 1.172)), 0.0045, ROPE, sides=4)
+    outline = [(-0.022, 0.0), (-0.034, -0.05), (-0.05, -0.1), (-0.063, -0.148), (-0.06, -0.178), (-0.036, -0.192),
+               (0.0, -0.198), (0.036, -0.195), (0.061, -0.184), (0.07, -0.165), (0.062, -0.13), (0.046, -0.085),
+               (0.03, -0.04), (0.022, 0.0)]
+    clay = (0.36, 0.4, 0.41)
+
+    def blade_col(dz, lift):
+        c = mix(BONE, (0.93, 0.9, 0.82), 0.25 * lift)
+        return mix(c, clay, 0.75 * max(0.0, (-dz - 0.15) / 0.05))   # the digging edge, smeared with clay
+    front = [Vector((xc + dx, yb - 0.006, zn + dz)) for (dx, dz) in outline]
+    back = [Vector((xc + dx, yb + 0.006, zn + dz)) for (dx, dz) in outline]
+    mid_f = Vector((xc + 0.004, yb - 0.011, zn - 0.11))
+    mid_b = Vector((xc + 0.004, yb + 0.006, zn - 0.11))
+    n = len(outline)
+    for k in range(n - 1):
+        (dx0, dz0), (dx1, dz1) = outline[k], outline[k + 1]
+        shovel.tri(front[k], mid_f, front[k + 1], blade_col(dz0, 1.0), blade_col(-0.11, 0.6), blade_col(dz1, 1.0))
+        shovel.tri(back[k + 1], mid_b, back[k], blade_col(dz1, 0.0), blade_col(-0.11, 0.0), blade_col(dz0, 0.0))
+        rim = mix(BONE, ROCK_DARK, 0.2)
+        shovel.quad(front[k + 1], back[k + 1], back[k], front[k], blade_col(dz1, 0.0), rim, rim, blade_col(dz0, 0.0))
+    shovel.tri(front[-1], mid_f, front[0], blade_col(0.0, 1.0), blade_col(-0.11, 0.6), blade_col(0.0, 1.0))
+    shovel.quad(front[0], back[0], back[-1], front[-1], BONE, BONE, BONE, BONE)
+    # The ridge of its spine, from the neck across the face to the far edge.
+    rod(shovel, Vector((xc - 0.004, yb - 0.01, zn - 0.012)), Vector((xc + 0.052, yb - 0.01, zn - 0.165)), 0.0055,
+        mix(BONE, ROCK_DARK, 0.12))
+    lashing(shovel, Vector((xc, 0.264, zn + 0.012)), UP, 0.026, rng, width=0.022)
+
     return [("base", base), ("stone_pick", pick), ("stone_axe", axe), ("quarry_pick", quarry),
             ("stone_spear", stone_spear), ("bone_spear", bone_spear), ("hide_vest", vest),
-            ("bone_armor", bone_armor), ("hide_boots", boots), ("hide_map", hide_map)]
+            ("bone_armor", bone_armor), ("hide_boots", boots), ("hide_map", hide_map), ("bone_shovel", shovel)]
 
 
 def _spear_shaft(b, foot, top, rng):

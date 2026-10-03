@@ -1516,6 +1516,347 @@ def sandstone_outcrop(seed, quarried=False):
 
 
 # ==============================================================================
+# The clay he digs (GAME-DESIGN 7.2, station 2; 4.1: 黏土 -- 水边的泥岸, dug with the bone shovel): a bank of the
+# river's own clay, slumped and soft where the sandstone is hard and broken -- the blue-grey of clay that has lain
+# under water, iron-stained in ochre beds and rusty mottles, its top dried pale and cracked into plates, and a face
+# cut into it where it has been dug, wet and smeared, the spade's scoops in it, the cut lumps lying at its foot.
+# ==============================================================================
+
+CLAY_GLEY = (0.35, 0.39, 0.41)         # the river's blue-grey clay, as it is cut
+CLAY_GLEY_LIGHT = (0.47, 0.51, 0.52)   # a fresh cut catching the light
+CLAY_WET = (0.19, 0.22, 0.24)          # wet: at the foot of the cut, smeared where it was dug
+CLAY_OCHRE = (0.58, 0.42, 0.19)        # the iron-stained beds through it
+CLAY_RUST = (0.45, 0.25, 0.11)         # its mottles
+CLAY_CRUST = (0.55, 0.53, 0.48)        # its top, dried pale and cracked into plates
+CLAY_CRACK = (0.14, 0.13, 0.12)        # the cracks between them
+SILT = (0.26, 0.24, 0.2)               # the river mud about it
+PUDDLE = (0.1, 0.13, 0.15)             # water seeping in where it was dug
+
+
+def _clay_colour(p, top, beds=1.0):
+    """The clay at `p`: blue-grey, ochre in its beds (by height; `beds` of their strength -- they show on a cut,
+    smeared over where it has weathered), rust-mottled, dried pale towards `top` (0..1)."""
+    from mathutils import noise
+    c = CLAY_GLEY
+    bed = math.sin(p.z * 60.0 + noise.noise(p * 6.0) * 1.6)
+    c = mix(c, CLAY_OCHRE, beds * 0.75 * max(0.0, bed - 0.55) / 0.45)
+    mottle = noise.noise(p * 14.0 + Vector((3.1, 0.7, 5.3)))
+    c = mix(c, CLAY_RUST, 0.6 * max(0.0, mottle - 0.25) / 0.75)
+    return mix(c, CLAY_CRUST, top)
+
+
+def _clay_lump(b, centre, size, rng, cut=None, wet=0.6, ochre=0.0):
+    """A lump of dug clay lying where it fell: rounded and slumped flat underneath, its spade-cut side (towards
+    `cut`) a flat face showing the fresh clay; wet and dark where it has been handled."""
+    # A finer ball than a stone's: clay is soft and rounded, not faceted.
+    pts, faces = [], []
+    seg, rows = 12, 7
+    for r in range(1, rows):
+        th = math.pi * r / rows
+        for k in range(seg):
+            a = math.tau * (k + 0.5 * (r % 2)) / seg
+            pts.append(Vector((math.sin(th) * math.cos(a), math.sin(th) * math.sin(a), math.cos(th)))
+                       * rng.uniform(0.94, 1.06))
+    pts += [Vector((0.0, 0.0, 1.0)), Vector((0.0, 0.0, -1.0))]
+    top, bottom = len(pts) - 2, len(pts) - 1
+    for k in range(seg):
+        k2 = (k + 1) % seg
+        faces.append((top, k, k2))
+        last = (rows - 2) * seg
+        faces.append((bottom, last + k2, last + k))
+        for r in range(rows - 2):
+            a0, a1 = r * seg, (r + 1) * seg
+            faces.append((a0 + k, a1 + k, a1 + k2))
+            faces.append((a0 + k, a1 + k2, a0 + k2))
+    d = cut.normalized() if cut is not None else None
+    out = []
+    for q in pts:
+        v = Vector((q.x * size * rng.uniform(0.95, 1.12), q.y * size * rng.uniform(0.95, 1.12), q.z * size * 0.6))
+        if d is not None and v.dot(d) > size * 0.5:
+            v -= d * (v.dot(d) - size * 0.5)             # the spade's cut: flat
+        v.z += size * 0.42
+        if v.z < 0.0:
+            v.z *= 0.1                                    # slumped flat on the ground
+        out.append(centre + v)
+    for (i, j, k) in faces:
+        n = (out[j] - out[i]).cross(out[k] - out[i])
+        n = n.normalized() if n.length > 1e-12 else UP
+        cs = []
+        for m in (i, j, k):
+            q = out[m]
+            col = mix(_clay_colour(q, 0.0), CLAY_OCHRE, ochre * (0.5 + 0.5 * math.sin(q.z * 90.0 + q.x * 40.0)))
+            if d is not None and n.dot(d) > 0.9:
+                col = mix(col, CLAY_GLEY_LIGHT, 0.35)    # the cut face, fresh
+            else:
+                col = mix(col, CLAY_WET, wet * (1.0 - 0.5 * max(0.0, n.z)))
+            if q.z - centre.z < size * 0.08:
+                col = mix(col, CLAY_WET, 0.5)
+            cs.append(col)
+        b.tri(out[i], out[j], out[k], cs[0], cs[1], cs[2])
+
+
+def _clay_plates(b, rng, height, inside, count, gap=0.012, lift=0.004, space=0.06):
+    """Its dried top cracked into plates: cells round scattered seeds (each the part of the top nearer its seed
+    than any other's), drawn in from their cracks by `gap`, a little domed, following the surface `height(x, y)`
+    -- only where `inside(x, y)` is."""
+    seeds = []
+    tries = 0
+    while len(seeds) < count and tries < count * 40:
+        tries += 1
+        s = Vector((rng.uniform(-0.6, 0.6), rng.uniform(-0.6, 0.6), 0.0))
+        if inside(s.x, s.y) and all((s - o).length > space for o in seeds):
+            seeds.append(s)
+    for s in seeds:
+        # Its cell: a square about it, no bigger than a plate is, cut by the half-plane of each nearer seed.
+        r = space * 1.1
+        poly = [s + Vector((x, y, 0.0)) for (x, y) in ((-r, -r), (r, -r), (r, r), (-r, r))]
+        for o in seeds:
+            if o is s or (o - s).length > 4.0 * r:
+                continue
+            m = (s + o) * 0.5
+            nrm = (o - s).normalized()
+            out = []
+            for k in range(len(poly)):
+                a, c = poly[k], poly[(k + 1) % len(poly)]
+                da, dc = (a - m).dot(nrm), (c - m).dot(nrm)
+                if da <= 0.0:
+                    out.append(a)
+                if (da < 0.0) != (dc < 0.0):
+                    out.append(a + (c - a) * (da / (da - dc)))
+            poly = out
+            if len(poly) < 3:
+                break
+        if len(poly) < 3 or rng.random() < 0.15:
+            continue                     # here and there a plate fallen out, the clay bare
+        poly = [p + Vector((rng.uniform(-0.005, 0.005), rng.uniform(-0.005, 0.005), 0.0)) for p in poly]
+        mid = sum(poly, Vector()) / len(poly)
+        ring = []
+        for p in poly:
+            q = mid + (p - mid) * max(0.0, 1.0 - gap / max(1e-6, (p - mid).length))
+            ring.append(Vector((q.x, q.y, height(q.x, q.y) + lift)))
+        if len(ring) < 3 or not all(inside(q.x, q.y) for q in ring):
+            continue                     # only whole plates, inside the dried top
+        top = Vector((mid.x, mid.y, height(mid.x, mid.y) + lift * 2.2))
+        col = jitter(mix(CLAY_CRUST, CLAY_GLEY, rng.uniform(0.35, 0.65)), rng, 0.04)
+        edge = mix(col, CLAY_GLEY, 0.3)
+        for k in range(len(ring)):
+            b.tri(ring[k], ring[(k + 1) % len(ring)], top, edge, edge, col)
+
+
+def clay_bank(seed, dug=False):
+    """The clay to dig, a metre across: a low, slumped bank of the river's clay, knee-high to the Hero at its
+    highest, lumpy and rounded, its top dried pale and cracked into plates -- and a bay dug into its front, its
+    back a wet face cut in the clay, banded blue-grey and ochre, the spade's scoops in it, the cut lumps lying in
+    the trodden mud of its floor, water seeping in. Not a rock: soft, rounded, cracked, wet. The bay opens to -Y.
+    Dug out (`dug`), it is a shallow, wet hollow where the bank was: a low ring of the clay round it, cut faces
+    inside, water in the bottom, the spoil about it."""
+    from mathutils import noise
+    rng = random.Random(seed)
+    b = Builder()
+    if dug:
+        return _clay_dug(b, rng)
+    c0 = Vector((0.0, 0.05, 0.0))
+    top_h = 0.17
+    # Slumps on it, each a heap of the clay slid down: (x, y, height, spread).
+    lumps = [(-0.22, 0.12, 0.09, 0.16), (0.2, 0.16, 0.07, 0.14), (0.0, 0.3, 0.05, 0.15), (-0.32, -0.12, 0.04, 0.11),
+             (0.33, -0.05, 0.035, 0.1)]
+    # The bay dug into its front: a round notch, its back the cut face.
+    bay_c, bay_r = Vector((0.06, -0.42, 0.0)), 0.23
+    floor_z = 0.012
+
+    def outline(a):
+        """How far out the bank's slumped edge is, at the angle `a` from its middle."""
+        rx, ry = 0.54, 0.44
+        r = 1.0 / math.sqrt((math.cos(a) / rx) ** 2 + (math.sin(a) / ry) ** 2)
+        return r * (1.0 + 0.12 * noise.noise(Vector((math.cos(a) * 1.8, math.sin(a) * 1.8, 4.2))))
+
+    def height(x, y):
+        d = Vector((x, y, 0.0)) - c0
+        a = math.atan2(d.y, d.x)
+        f = d.length / outline(a)
+        if f >= 1.0:
+            return 0.0
+        h = top_h * (1.0 - f ** 2.6) ** 0.7
+        for (lx, ly, lh, ls) in lumps:
+            h += lh * math.exp(-((x - lx) ** 2 + (y - ly) ** 2) / (ls * ls)) * (1.0 - f ** 3)
+        return max(0.0, h + 0.012 * noise.noise(Vector((x * 5.0, y * 5.0, 1.7))) * min(1.0, h / 0.08))
+
+    def inside_top(x, y):
+        return (height(x, y) > 0.13 and (Vector((x, y, 0.0)) - bay_c).length > bay_r + 0.07)
+
+    seg, rings = 56, 10
+    grid = []                  # each ray from the middle: its points, and whether it ends on the cut
+    for k in range(seg):
+        a = -math.pi * 0.5 + math.tau * k / seg
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        end = outline(a)
+        cut = False
+        # Where the ray runs into the bay, it ends there, on the top edge of the cut.
+        oc = c0 - bay_c
+        bq = d.dot(oc)
+        disc = bq * bq - (oc.length_squared - bay_r * bay_r)
+        if disc > 0.0:
+            t1 = -bq - math.sqrt(disc)
+            if 0.0 < t1 < end:
+                end, cut = t1, True
+        ray = []
+        for i in range(rings + 1):
+            f = (i / rings) ** 0.8
+            p = c0 + d * (end * f)
+            z = height(p.x, p.y)
+            if cut and i == rings:
+                z = max(z, floor_z + 0.03)
+            ray.append(Vector((p.x, p.y, z)))
+        grid.append((ray, cut, d))
+
+    def top_colour(p, n_up):
+        dry = 0.85 * min(1.0, max(0.0, (p.z - 0.06) / 0.14)) * n_up
+        col = _clay_colour(p, dry, beds=0.2)
+        col = mix(col, SILT, 0.55 * max(0.0, 1.0 - p.z / 0.05))
+        return mix(col, CLAY_CRACK, 0.35 if inside_top(p.x, p.y) else 0.0)
+    for k in range(seg):
+        ray_a = grid[k][0]
+        ray_b = grid[(k + 1) % seg][0]
+        for i in range(rings):
+            quad = [ray_a[i], ray_a[i + 1], ray_b[i + 1], ray_b[i]]
+            n = (quad[1] - quad[0]).cross(quad[3] - quad[0])
+            n_up = max(0.0, n.normalized().z) if n.length > 1e-12 else 1.0
+            cols = [top_colour(q, n_up) for q in quad]
+            b.quad(quad[0], quad[1], quad[2], quad[3], cols[0], cols[1], cols[2], cols[3])
+    _clay_plates(b, rng, height, inside_top, 50, gap=0.006, lift=0.003, space=0.045)
+    # The cut face: down from the top edge of the bay's back to its floor, leaning back into the bank, the
+    # spade's scoops in it, its beds showing, wet at its foot. Its columns in the order the rays go round,
+    # from where the bay's edge meets the bank's on one side to the other.
+    first = next(k for k in range(seg) if grid[k][1] and not grid[(k - 1) % seg][1])
+    run = []
+    while grid[(first + len(run)) % seg][1] and len(run) < seg:
+        run.append(grid[(first + len(run)) % seg])
+    before = grid[(first - 1) % seg][0][-1]
+    after = grid[(first + len(run)) % seg][0][-1]
+    rows = 7
+    face = [[before.copy() for _ in range(rows + 1)]]
+    for (ray, _, d) in run:
+        top = ray[-1]
+        column = []
+        for m in range(rows + 1):
+            t = m / rows
+            z = floor_z + (top.z - floor_z) * t
+            scoop = 0.016 * (0.5 - 0.5 * math.cos(math.atan2(d.y, d.x) * 9.0 + 1.3 * math.floor(z / 0.09)))
+            q = top + d * (0.035 * (1.0 - t) - scoop * math.sin(math.pi * t))
+            column.append(Vector((q.x, q.y, z)))
+        face.append(column)
+    face.append([after.copy() for _ in range(rows + 1)])
+    for k in range(len(face) - 1):
+        for m in range(rows):
+            quad = [face[k][m], face[k + 1][m], face[k + 1][m + 1], face[k][m + 1]]
+            cols = []
+            for q in quad:
+                c = mix(_clay_colour(q, 0.0), CLAY_GLEY_LIGHT, 0.15)
+                c = mix(c, CLAY_WET, 0.8 * max(0.0, 1.0 - (q.z - floor_z) / 0.07))
+                cols.append(c)
+            b.quad(quad[0], quad[1], quad[2], quad[3], cols[0], cols[1], cols[2], cols[3])
+    # The bay's floor and the trodden mud out before it, water seeping into a hollow of it, and the cut lumps.
+    n = 18
+    mud_c = bay_c + Vector((0.0, 0.02, floor_z))
+    rim = []
+    for k in range(n):
+        a = math.tau * k / n
+        r = rng.uniform(0.9, 1.05)
+        rim.append(mud_c + Vector((math.cos(a) * 0.3 * r, math.sin(a) * 0.22 * r, -floor_z + 0.003)))
+    for k in range(n):
+        ca = mix(SILT, CLAY_GLEY, 0.35)
+        b.tri(rim[k], rim[(k + 1) % n], mud_c, ca, ca, mix(CLAY_GLEY, CLAY_WET, 0.45))
+    pud_c = bay_c + Vector((0.07, 0.04, floor_z + 0.003))
+    pud = [pud_c + Vector((math.cos(math.tau * k / 9) * 0.075 * rng.uniform(0.75, 1.1),
+                           math.sin(math.tau * k / 9) * 0.045 * rng.uniform(0.75, 1.1), 0.0)) for k in range(9)]
+    for k in range(9):
+        b.tri(pud[k], pud[(k + 1) % 9], pud_c, PUDDLE, PUDDLE, mix(PUDDLE, (0.6, 0.7, 0.75), 0.15))
+    for (x, y, size) in ((-0.09, 0.08, 0.06), (0.16, -0.02, 0.05), (-0.02, -0.12, 0.045)):
+        _clay_lump(b, bay_c + Vector((x, y, 0.0)), size, rng,
+                   cut=Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)))
+    # A few horsetails at its back, where the bank meets the river's edge.
+    for k in range(6):
+        a = rng.uniform(0.35, 2.8)
+        base = c0 + Vector((math.cos(a), math.sin(a), 0.0)) * outline(a) * rng.uniform(0.85, 0.97)
+        base.z = height(base.x, base.y) - 0.01
+        tall = rng.uniform(0.25, 0.45)
+        lean = Vector((rng.uniform(-0.05, 0.05), rng.uniform(0.0, 0.06), 0.0))
+        pts = [base + lean * (z / tall) + Vector((0.0, 0.0, z)) for z in (0.0, tall * 0.35, tall * 0.7, tall)]
+        cols = [mix((0.24, 0.42, 0.14), (0.07, 0.08, 0.05), 0.6 if i % 2 else 0.0) for i in range(4)]
+        b.tube(pts, [0.007, 0.0065, 0.006, 0.003], cols, 5)
+    return b
+
+
+def _clay_dug(b, rng):
+    """Where the bank was, dug out: a shallow wet hollow in a low ring of the clay, its inner side cut steep and
+    scooped, water lying in its bottom, the spoil heaped about -- open at the front (-Y), where he dug from."""
+    from mathutils import noise
+    radii = [0.0, 0.1, 0.18, 0.24, 0.27, 0.29, 0.31, 0.34, 0.38, 0.43, 0.48, 0.52]
+    seg = 40
+
+    def height(r, a):
+        front = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(a))          # lower towards the front (-Y), where he dug in
+        wall = 0.13 * front * (1.0 + 0.25 * noise.noise(Vector((math.cos(a) * 2.5, math.sin(a) * 2.5, 0.9))))
+        if r <= 0.27:
+            return 0.008
+        if r <= 0.34:
+            t = (r - 0.27) / 0.07
+            return 0.008 + wall * (t * t * (3.0 - 2.0 * t))
+        t = (r - 0.34) / 0.18
+        return wall * (1.0 - t) ** 1.6
+    rings = []
+    for r in radii:
+        ring = []
+        for k in range(seg):
+            a = math.tau * k / seg
+            w = 1.0 + 0.05 * noise.noise(Vector((math.cos(a) * 3.0, math.sin(a) * 3.0, r * 4.0)))
+            ring.append(Vector((math.cos(a) * r * w, math.sin(a) * r * w * 0.92, height(r, a))))
+        rings.append(ring)
+    for i in range(len(radii) - 1):
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            quad = [rings[i][k], rings[i + 1][k], rings[i + 1][k2], rings[i][k2]]
+            cols = []
+            for q in quad:
+                r = math.hypot(q.x, q.y / 0.92)
+                if r < 0.275:
+                    c = mix(CLAY_WET, SILT, 0.3)                     # the hollow's wet floor
+                elif r < 0.345:
+                    c = mix(_clay_colour(q, 0.0), CLAY_GLEY_LIGHT, 0.15)  # its cut inner side
+                    c = mix(c, CLAY_WET, 0.6 * max(0.0, 1.0 - (q.z - 0.008) / 0.05))
+                else:
+                    c = _clay_colour(q, 0.6)                           # the rim, dried on top
+                    c = mix(c, SILT, 0.6 * max(0.0, 1.0 - q.z / 0.04))
+                cols.append(c)
+            b.quad(quad[0], quad[1], quad[2], quad[3], cols[0], cols[1], cols[2], cols[3])
+    # Water in the bottom of the hollow.
+    pud_c = Vector((0.03, 0.02, 0.014))
+    pud = [pud_c + Vector((math.cos(math.tau * k / 11) * 0.2 * rng.uniform(0.75, 1.0),
+                           math.sin(math.tau * k / 11) * 0.17 * rng.uniform(0.75, 1.0), 0.0)) for k in range(11)]
+    for k in range(11):
+        b.tri(pud[k], pud[(k + 1) % 11], pud_c, PUDDLE, PUDDLE, mix(PUDDLE, (0.6, 0.7, 0.75), 0.15))
+    # The spoil: lumps of the clay about the rim.
+    for k in range(6):
+        a = rng.uniform(0.0, math.tau)
+        r = rng.uniform(0.4, 0.5)
+        _clay_lump(b, Vector((math.cos(a) * r, math.sin(a) * r * 0.92, 0.0)), rng.uniform(0.045, 0.075), rng,
+                   cut=Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)))
+    return b
+
+
+def drop_clay(seed):
+    """Clay as it is carried off the bank: a few lumps of it heaped as the stone's are, wet blue-grey and streaked
+    ochre, the spade's cuts flat on them."""
+    rng = random.Random(seed)
+    b = Builder()
+    for (x, y, z, size, ochre) in ((0.0, 0.0, 0.0, 0.1, 0.0), (0.12, 0.05, 0.0, 0.075, 0.55), (-0.11, 0.06, 0.0, 0.08, 0.0),
+                                   (0.03, -0.12, 0.0, 0.075, 0.3), (0.02, 0.02, 0.075, 0.065, 0.0)):
+        _clay_lump(b, Vector((x, y, z)), size, rng, cut=Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)),
+                   ochre=ochre)
+    return b
+
+
+# ==============================================================================
 # Fire (GAME-DESIGN 9.3, v0.7 "火与夜"): what the Hero burns wood in. The flame is the game's own
 # (Fire.gd: the engine's particles and a light, lit at dusk); these are the stones and the wood.
 # ==============================================================================
@@ -2540,6 +2881,105 @@ def shot_stone(seed):
     return b
 
 
+# The second map's shot (GAME-DESIGN 5.2, 6.0: 投石塔的火罐, fire moved to station 2): a pot of fired clay the
+# catapult throws, about as round as the stone shot, filled with pine resin, its neck stoppered, a resin-soaked rag
+# bound round the neck and set alight before it is loosed -- it bursts where it lands and burns.
+FIRE_POT_RADIUS = 0.15                 # the belly's: 0.3 m across, the stone shot's size (CATAPULT_SHOT_RADIUS)
+POT_FIRED = (0.5, 0.31, 0.19)          # fired earthenware, unglazed
+POT_FIRED_DARK = (0.3, 0.18, 0.11)
+POT_SOOT = (0.08, 0.065, 0.055)
+RAG = (0.3, 0.24, 0.16)
+FLAME_ROOT = (1.0, 0.86, 0.45)
+FLAME_TIP = (0.95, 0.33, 0.05)
+
+
+def fire_pot(seed):
+    """One fire pot, round its own middle (the belly's), its neck up (+Z): a round-bellied pot of fired clay
+    0.3 m across, a cord-pressed band round its shoulder, a short neck stoppered with a wooden plug, a rag soaked
+    in resin bound round the neck with cord and alight, the clay sooted under it. Parts: Pot (the pot, the plug,
+    the rag and its cord) and Flame (the burning rag's flame: a few tongues of fire, light at the root, for the
+    game to light up or put its own fire in place of; in the file, a material of its own that glows)."""
+    from mathutils import noise
+    rng = random.Random(seed)
+    pot = Builder()
+    k = FIRE_POT_RADIUS / 0.15
+    seg = 16
+    profile = [(0.0, -0.138), (0.055, -0.136), (0.1, -0.12), (0.135, -0.075), (0.15, -0.015), (0.146, 0.035),
+               (0.128, 0.08), (0.095, 0.115), (0.062, 0.135), (0.047, 0.15), (0.045, 0.17), (0.056, 0.182),
+               (0.05, 0.19), (0.04, 0.186)]
+    rings, cols = [], []
+    for i, (r, z) in enumerate(profile):
+        ring, row = [], []
+        for j in range(seg):
+            a = math.tau * j / seg
+            rr = r * k * (1.0 + 0.012 * noise.noise(Vector((math.cos(a) * 3.0, math.sin(a) * 3.0, z * 9.0))))
+            p = Vector((math.cos(a) * rr, math.sin(a) * rr, z * k))
+            ring.append(p)
+            c = mix(POT_FIRED_DARK, POT_FIRED, min(1.0, max(0.0, (z + 0.13) / 0.12)))
+            c = jitter(c, rng, 0.03)
+            # Fire-clouded where it was fired; the cord-pressed band round its shoulder.
+            c = mix(c, POT_SOOT, 0.35 * max(0.0, noise.noise(p * 9.0 + Vector((1.3, 2.1, 0.4)))))
+            if 0.06 < z < 0.1:
+                c = mix(c, POT_FIRED_DARK, 0.55 if j % 2 == 0 else 0.2)
+            # Sooted up the neck and the shoulder, under the burning rag.
+            c = mix(c, POT_SOOT, 0.85 * min(1.0, max(0.0, (z - 0.09) / 0.06)))
+            row.append(c)
+        rings.append(ring)
+        cols.append(row)
+    # The bottom (its first ring all one point) up to the lip and in over its top.
+    for i in range(len(rings) - 1):
+        for j in range(seg):
+            j2 = (j + 1) % seg
+            pot.quad(rings[i][j], rings[i][j2], rings[i + 1][j2], rings[i + 1][j], cols[i][j], cols[i][j2],
+                     cols[i + 1][j2], cols[i + 1][j])
+    # The plug: a short round of wood standing out of the neck.
+    plug = [Vector((0.0, 0.0, z * k)) for z in (0.16, 0.2, 0.215)]
+    pot.tube(plug, [0.04 * k, 0.04 * k, 0.034 * k], [BARK, BARK_LIGHT, FRESH_WOOD], 9)
+    cap = Vector((0.0, 0.0, 0.217 * k))
+    for j in range(9):
+        a0, a1 = math.tau * j / 9, math.tau * (j + 1) / 9
+        pot.tri(Vector((math.cos(a0) * 0.034 * k, math.sin(a0) * 0.034 * k, 0.215 * k)),
+                Vector((math.cos(a1) * 0.034 * k, math.sin(a1) * 0.034 * k, 0.215 * k)), cap,
+                mix(FRESH_WOOD, CHAR, 0.6), mix(FRESH_WOOD, CHAR, 0.6), CHAR)
+    # The rag bound round the neck, its folds, soaked dark with resin and charring where it burns.
+    rag = []
+    for z in (0.13, 0.15, 0.175, 0.2, 0.215):
+        rag.append(Vector((0.0, 0.0, z * k)))
+    rag_r = [0.06 * k, 0.07 * k, 0.068 * k, 0.062 * k, 0.045 * k]
+    rag_c = [mix(RAG, RESIN, 0.4), mix(RAG, RESIN, 0.6), mix(RESIN, CHAR, 0.4), CHAR, CHAR]
+    pot.tube(rag, rag_r, rag_c, 11, radial=lambda i, j: 1.0 + 0.12 * math.sin(j * 2.3 + i * 1.7) + rng.uniform(-0.04, 0.04))
+    # A loose end of it hanging down the shoulder.
+    end = [Vector((0.06 * k, 0.0, 0.15 * k)), Vector((0.1 * k, 0.012 * k, 0.11 * k)), Vector((0.125 * k, 0.02 * k, 0.07 * k))]
+    pot.tube(end, [0.02 * k, 0.018 * k, 0.012 * k], [mix(RAG, RESIN, 0.5), RAG, RAG], 5)
+    # The cord bound round it, twice.
+    for z in (0.145, 0.168):
+        loop = [Vector((math.cos(math.tau * j / 12) * 0.077 * k, math.sin(math.tau * j / 12) * 0.077 * k, z * k))
+                for j in range(13)]
+        pot.tube(loop, [0.0055 * k] * 13, [VINE_ROPE] * 13, 4)
+    # The flame: tongues of fire up from the rag, leaning a little as they go, light at the root, red at the tip.
+    flame = Builder()
+    tongues = [(0.0, 0.0, 0.2, 0.034), (0.03, 0.4, 0.15, 0.022), (-0.028, 2.4, 0.14, 0.022), (0.02, 4.3, 0.12, 0.018)]
+    for (off, a, tall, rad) in tongues:
+        base = Vector((math.cos(a) * abs(off), math.sin(a) * abs(off), 0.2 * k))
+        lean = Vector((math.cos(a + 1.0) * 0.03, math.sin(a + 1.0) * 0.03, 0.0))
+        pts = [base + lean * (f * f) + Vector((0.0, 0.0, tall * f * k)) for f in (0.0, 0.3, 0.6, 0.85, 1.0)]
+        radii = [rad * k * s for s in (0.9, 1.0, 0.75, 0.4, 0.06)]
+        cols = [mix(FLAME_ROOT, FLAME_TIP, f) for f in (0.0, 0.25, 0.55, 0.85, 1.0)]
+        flame.tube(pts, radii, cols, 7, radial=lambda i, j: 1.0 + 0.15 * math.sin(j * 2.0 + i))
+    return [("Pot", pot, (0.0, 0.0, 0.0)), ("Flame", flame, (0.0, 0.0, 0.0))]
+
+
+def _flame_material():
+    """A fire pot's flame's own material (generate_props main: a kit's part named "Flame..."): coloured by its
+    vertices like the rest, and glowing (glTF emissive) -- lit in the file as it is; the game may light it its own
+    way instead."""
+    mat = vertex_colour_material("FlameGlow", 0.9, True)
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Emission Color"].default_value = (1.0, 0.55, 0.18, 1.0)
+    bsdf.inputs["Emission Strength"].default_value = 3.0
+    return mat
+
+
 # The heaps of shot beside the frame: (x, y, course) of each, a course on top in the hollows of the one below.
 _HEAP_SMALL = [(-0.165, -0.165, 0), (0.165, -0.165, 0), (-0.165, 0.165, 0), (0.165, 0.165, 0), (0.0, 0.0, 1)]
 _HEAP_BIG = [(-0.33, -0.19, 0), (0.0, -0.19, 0), (0.33, -0.19, 0), (-0.165, 0.095, 0), (0.165, 0.095, 0),
@@ -2809,9 +3249,14 @@ PROPS = {
     "drop_food": (lambda s: drop_meat(s), [11]),
     "drop_water": (lambda s: drop_water(s), [13]),
     "drop_hide": (lambda s: drop_hide(s), [19]),
+    # The second map's clay (GAME-DESIGN 7.2, station 2): what a dug lump of it is drawn as.
+    "drop_clay": (lambda s: drop_clay(s), [23]),
     "water_landing": (lambda s: water_landing(s), [17]),
     "sandstone_outcrop": (lambda s: sandstone_outcrop(s), [61]),
     "sandstone_quarried": (lambda s: sandstone_outcrop(s, quarried=True), [61]),
+    # The second map's clay to dig with the bone shovel: a bank of it on the river's edge, and where it was, dug out.
+    "clay_bank": (lambda s: clay_bank(s), [67]),
+    "clay_bank_dug": (lambda s: clay_bank(s, dug=True), [67]),
     "campfire": (lambda s: campfire(s), [31]),
     "brazier": (lambda s: brazier(s), [37]),
     "torch": (lambda s: torch(s), [43]),
@@ -2850,12 +3295,15 @@ KITS = {
     "log_tower": (lambda s: log_tower(s), [17]),
     "catapult": (lambda s: catapult(s), [19]),
     "bait_rack": (lambda s: bait_rack(s), [23]),
+    # The second map's catapult shot: a burning fire pot (its Pot, and its Flame, which glows).
+    "fire_pot": (lambda s: fire_pot(s), [41]),
 }
 
 def main():
     args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     reset()
     mat = vertex_colour_material("PropVertex", 0.85, True)
+    flame_mat = _flame_material()
     os.makedirs(OUT_DIR, exist_ok=True)
     made = []
     # Names after the "--" make only those props, so adding one does not re-export the rest.
@@ -2879,7 +3327,7 @@ def main():
             objs = []
             for spec in fn(seed):
                 part, builder, where = spec[:3]
-                obj = builder.to_object(part, [mat])
+                obj = builder.to_object(part, [flame_mat if part.startswith("Flame") else mat])
                 obj.location = where
                 if len(spec) > 3:
                     # Turned about the vertical: a part that moves along its own forward (a tower's bows)

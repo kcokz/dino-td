@@ -53,6 +53,9 @@ func animals_on_it() -> Array:
 			continue
 		if ("is_dead" in d and d.is_dead) or not d.has_method("take_damage"):
 			continue
+		# What flies is over them (FlyerDino).
+		if d.has_method("is_flying") and d.is_flying():
+			continue
 		var at: Vector3 = (d as Node3D).global_position
 		if absf(at.x - here.x) <= half and absf(at.z - here.z) <= half:
 			out.append(d)

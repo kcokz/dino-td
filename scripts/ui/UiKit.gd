@@ -363,6 +363,9 @@ static func ammo_detail(ammo_id: String) -> String:
 			var key: String = "AMMO_DETAIL_ROLLER_HEAVY" if bool(row.get("moves_heavy", false)) else "AMMO_DETAIL_ROLLER"
 			return TranslationServer.translate(key) % [title, f.call("damage"), f.call("push")]
 		"thrower":
+			if row.has("burn"):
+				return TranslationServer.translate("AMMO_DETAIL_THROWER_BURN") % [title, f.call("splash"), f.call("damage"),
+					String(cfg.factor_text(float((row["burn"] as Dictionary).get("seconds", 0.0))))]
 			return TranslationServer.translate("AMMO_DETAIL_THROWER") % [title, f.call("splash"), f.call("damage"), f.call("knockdown")]
 		"bait":
 			return TranslationServer.translate("AMMO_DETAIL_BAIT") % [title, int(row.get("uses", 1))]

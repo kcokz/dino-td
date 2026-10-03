@@ -95,7 +95,9 @@ func loose_at(target: Node3D) -> bool:
 	shot.speed = float(_towers("arrow_speed", 24.0))
 	var dir: Vector3 = target.global_position - global_position
 	dir.y = 0.0
-	shot.arrived = _arrive.bind(target, row, dir.normalized())
+	# What it was let go at, by its id: it may be gone by the time the arrow comes down -- killed by another arrow
+	# -- and a gone animal is no argument to call with (the playtest bot found it).
+	shot.arrived = _arrive.bind(target.get_instance_id(), row, dir.normalized())
 	_sound("bow_loose")
 	return true
 
@@ -108,7 +110,8 @@ func _aim_height(target: Node3D) -> float:
 
 ## The arrow comes down at `at`: it hits what it was let go at, if it is there -- and a bone point goes on through
 ## the next behind it (AMMO "pierce": so many in all, in a line along its flight, within a stride of it).
-func _arrive(at: Vector3, target: Node, row: Dictionary, dir: Vector3) -> void:
+func _arrive(at: Vector3, target_id: int, row: Dictionary, dir: Vector3) -> void:
+	var target: Object = instance_from_id(target_id)
 	var hit_first: bool = AmmoTower.is_quarry(target) and Vector2(at.x, at.z).distance_to(
 		Vector2((target as Node3D).global_position.x, (target as Node3D).global_position.z)) <= float(_towers("arrow_hit_reach", 1.2))
 	if hit_first:
@@ -120,7 +123,7 @@ func _arrive(at: Vector3, target: Node, row: Dictionary, dir: Vector3) -> void:
 	var reach_on: float = float(_towers("pierce_reach", 3.0))
 	var reach_aside: float = float(_towers("pierce_aside", 0.6))
 	for d in get_tree().get_nodes_in_group("dinos"):
-		if d == target or not AmmoTower.is_quarry(d):
+		if (d as Object).get_instance_id() == target_id or not AmmoTower.is_quarry(d):
 			continue
 		var off: Vector3 = (d as Node3D).global_position - at
 		off.y = 0.0

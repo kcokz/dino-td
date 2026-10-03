@@ -44,8 +44,9 @@ static var _built: Array = []
 ## are the height field's own slope, measured over the same three metres as the colour.
 static func build_ground(cfg: Node) -> Mesh:
 	var t: Dictionary = _terrain(cfg)
-	var grass: Color = _colour(cfg, "ground", Color(0.28, 0.32, 0.24))
-	var rock: Color = _colour(cfg, "hill", Color(0.36, 0.33, 0.28))
+	# A map's own ground (MAPS.<id>.terrain "ground_colour", "rock_colour": station 2's drier valley), or COLORS'.
+	var grass: Color = t.get("ground_colour", _colour(cfg, "ground", Color(0.28, 0.32, 0.24)))
+	var rock: Color = t.get("rock_colour", _colour(cfg, "hill", Color(0.36, 0.33, 0.28)))
 	if t.is_read_only():
 		for entry in _built:
 			if is_same(entry[0], t) and entry[1] == grass and entry[2] == rock:

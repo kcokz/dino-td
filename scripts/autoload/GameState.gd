@@ -81,6 +81,15 @@ var game: Dictionary = {}
 ## level not to open on the start screen again (Main).
 var launch_straight_in: bool = false
 
+## OUR GAME'S STATIONS (Config.GAMES.<id>.stations; GAME-DESIGN 7.2; the player, 2026-10-02: "把第一关先做完，做完之后可以
+## 试着做第二关，把这个串联动画也做出来"): which leg of it this run is, 0 the first. The beacon's jump at the end of one is
+## the next one's landing (StationJump). Kept across the level the jump builds; back to the first when a game is
+## chosen (play).
+var station: int = 0
+## Set by the jump for the level it builds -- which opens on the capsule landing (StationJump.arrive), not on the
+## start screen -- and cleared once it is down.
+var arrived_by_jump: bool = false
+
 ## What this run is, worked out from `game` as it begins (reset_game, _settle_the_game): every setting's choice, the
 ## game's internals (tutorial, cabin, goal), its map with the settings' keys laid over it, the multipliers and the
 ## switches the settings make, and -- the "rescue" goal -- the days to hold out.
@@ -111,6 +120,36 @@ func map_data() -> Dictionary:
 ## choice id; ours keeps its own), and `seed_value` for its dice (-1, a new seed each run).
 func play(game_id: String, chosen: Dictionary = {}, seed_value: int = -1) -> void:
 	game = {"id": game_id, "settings": chosen.duplicate(), "seed": seed_value}
+	station = 0
+	arrived_by_jump = false
+
+## The stations of the game being played (Config.GAMES.<id>.stations), in order -- [] for a game of one map.
+func stations() -> Array:
+	var cfg = _get_config()
+	var id: String = game_id() if game_id() != "" else "campaign"
+	return cfg.GAMES.get(id, {}).get("stations", []) if (cfg and "GAMES" in cfg) else []
+
+## Station `index`'s row (Config.GAMES.<id>.stations): this run's with none named; {} past the last, and for a game
+## without stations.
+func station_row(index: int = -1) -> Dictionary:
+	var all: Array = stations()
+	var at: int = station if index < 0 else index
+	return all[at] if (at >= 0 and at < all.size()) else {}
+
+## Whether a station comes after this one -- the beacon's jump goes on to it. Never for a level a script built (no
+## game of its own).
+func has_next_station() -> bool:
+	return game_id() != "" and station + 1 < stations().size()
+
+## On to the next station: the next run is played there, and its level opens on the landing, straight in. False,
+## and nothing changed, at the last.
+func jump_to_next_station() -> bool:
+	if not has_next_station():
+		return false
+	station += 1
+	arrived_by_jump = true
+	launch_straight_in = true
+	return true
 
 ## Which game this run is ("campaign" or "custom"); "" for a level a script built (ours, on its map).
 func game_id() -> String:
@@ -155,6 +194,11 @@ func _settle_the_game() -> void:
 		return
 	var id: String = game_id() if game_id() != "" else "campaign"
 	settings = cfg.game_settings(id, game.get("settings", {}))
+	# The station of the game this run is played at lays its own over the game's: its map (Config.GAMES.<id>.stations).
+	if game_id() != "":
+		var own: Dictionary = station_row().get("settings", {})
+		for setting_id in own:
+			settings[String(setting_id)] = String(own[setting_id])
 	_internal = (cfg.GAMES.get(id, {}).get("internal", {}) as Dictionary).duplicate()
 	if game_id() != "":
 		map_id = String(cfg.custom_choice("map", String(settings.get("map", ""))).get("map_id", cfg.DEFAULT_MAP_ID))
@@ -167,6 +211,18 @@ func _settle_the_game() -> void:
 			_rules[key] = bool(choice["rules"][key])
 		for key in choice.get("map", {}):
 			over[key] = choice["map"][key]
+		# An age that is a map's own cast (Config.CUSTOM_GAME era "cast_of"): that map's animals, on whatever map --
+		# only where they differ from the run's map's own, so the age a map already has changes nothing.
+		if choice.has("cast_of") and "CAST_KEYS" in cfg:
+			var cast: Dictionary = cfg.map_data(String(choice["cast_of"]))
+			var own: Dictionary = cfg.map_data(map_id)
+			# What a map without the key has: HERDS' grazers; the Chinle's words for the day ({}: HINT_DAWN and the rest).
+			var none: Dictionary = {"herds": cfg.HERDS.get("herds", []) if "HERDS" in cfg else [], "day_hints": {}}
+			for key in cfg.CAST_KEYS:
+				var theirs: Variant = cast.get(key, none.get(key))
+				var ours: Variant = own.get(key, none.get(key))
+				if theirs != null and theirs != ours:
+					over[key] = theirs
 		if choice.has("days"):
 			_rescue_days = int(choice["days"])
 	# The whole cabin's beacon is mended and calling: nothing to launch (the rescue comes by the days).
@@ -352,6 +408,10 @@ func reset_game(p_seed: int = -1) -> void:
 	wave_number = 0
 	active_buildings.clear()
 	unlocks.clear()
+	# What the map says he lands with (MAPS.<id>.kit; GAME-DESIGN 9.2: "带走船舱和工具……每张图自己声明开局带什么"): a
+	# later station's, the tools of the stations before it.
+	for flag in map_data().get("kit", []):
+		unlocks[String(flag)] = true
 	known.clear()
 	for res_id in map_data().get("opening_stock", {}):
 		known[String(res_id)] = true

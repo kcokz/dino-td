@@ -91,6 +91,9 @@ func _land(at: Vector3, row: Dictionary) -> void:
 			strike(d, row)
 			if AmmoTower.is_quarry(d) and d.has_method("hold_for"):
 				d.hold_for(float(row.get("knockdown", 0.0)))
+	# A fire pot breaks and the ground burns where it fell (FirePatch).
+	if row.has("burn") and get_parent() != null:
+		FirePatch.ignite(get_parent(), at, row)
 	var fx = _get_fx()
 	if fx and fx.has_method("play_at"):
 		fx.play_at("stone_impact", at)

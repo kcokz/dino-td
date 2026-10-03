@@ -100,6 +100,10 @@ func _run(name: String) -> void:
 			await _scenario_cabin()
 		"closeup":
 			await _scenario_closeup()
+		"jump":
+			await _scenario_jump()
+		"firepot":
+			await _scenario_firepot()
 		"gap":
 			await _scenario_gap()
 		"raid":
@@ -116,6 +120,10 @@ func _run(name: String) -> void:
 			await _scenario_scale()
 		"cast":
 			await _scenario_cast()
+		"cast2":
+			# Station 2's (the Late Jurassic, MAPS.morrison): the same lineup, by the man.
+			await _scenario_cast([["ornitholestes", -1.2], ["harpactognathus", 1.4], ["ceratosaurus", 4.6],
+				["allosaurus", 11.0]])
 		"gaits":
 			await _scenario_gaits()
 		"start":
@@ -877,6 +885,90 @@ func _scenario_buildings() -> void:
 	if plain and eb:
 		eb.unit_selected.emit(plain)
 	await _shoot("upgrade_offered")
+
+## A fire pot thrown (station 2: AMMO.fire_pot, FirePatch): a catapult south of the cabin facing south, loaded with
+## them, a raptor walking into its patch at dusk -- the pot in the air, and the ground burning where it broke.
+func _scenario_firepot() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	gs.day_clock = float(cfg.DAY["light"][6]["at"]) if cfg.DAY["light"].size() > 6 else gs.day_clock
+	_grant({"fire_pot": 40, "wood": 100, "stone": 100})
+	var at: Vector3 = _main.current_core.global_position + Vector3(0.0, 0.0, 8.0)
+	var cat = _build_at("catapult", at, 2)
+	if cat == null:
+		print("[playtest] no room for the catapult")
+		return
+	cat.set_ammo("fire_pot")
+	cat.load_from_stock()
+	# A campfire beside the patch, to judge the burning ground against the fire everybody knows.
+	_build_at("campfire", cat.zone_centre() + Vector3(-4.0, 0.0, 0.0))
+	var d = load(String(cfg.get_dino_script_path("raptor"))).new()
+	_main.dinos_container.add_child(d)
+	d.setup("raptor")
+	d.max_hp = 999.0
+	d.current_hp = 999.0
+	d.global_position = cat.zone_centre()
+	d.set_physics_process(false)
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	# The pot in the air, burning: waited for until the catapult lets go, and looked at a third of the way over.
+	var pot: Node3D = null
+	for i in 80:
+		for c in cat.get_parent().get_children():
+			if c is Projectile:
+				pot = c
+		if pot != null:
+			break
+		await _advance(0.1)
+	if pot == null:
+		print("[playtest] the catapult never threw")
+	else:
+		await _advance(float(cfg.BUILDINGS["catapult"].get("flight_seconds", 1.2)) * 0.3)
+	var seen: Vector3 = pot.global_position if (pot != null and is_instance_valid(pot)) else cat.global_position
+	await _portrait("fire_pot_flight", seen, 5.0)
+	await _advance(1.2)
+	await _portrait("fire_patch", cat.zone_centre(), 7.0)
+	await _advance(2.0)
+	await _portrait("fire_patch_burning", cat.zone_centre(), 7.0)
+
+## The jump between our game's stations (StationJump, v0.7), beat by beat: the first station won, the view swinging
+## in, the beacon's light, the white and the card -- then the second station's level (built here by hand: the game's
+## own scene is built afresh by the jump) and the capsule coming down onto it, and the run begun.
+func _scenario_jump() -> void:
+	var gs := root.get_node("GameState")
+	gs.play("campaign")
+	_tear_down()
+	await _fresh_level()
+	await _shoot("before")
+	_main.station_jump.depart(_main)
+	await _advance(1.2)
+	await _shoot("view_in")
+	await _advance(1.4)
+	await _shoot("beam")
+	await _advance(1.0)
+	await _shoot("lift")
+	await _advance(1.4)
+	await _shoot("card")
+	await _advance(3.0)
+	print("[playtest] after the jump: station %d, map %s" % [int(gs.station), String(gs.map_id)])
+	_tear_down()
+	await _fresh_level()
+	print("[playtest] the level built for it: map %s" % String(gs.map_id))
+	_main.station_jump.arrive(_main)
+	await _wait(3)
+	await _shoot("arrive_card")
+	await _advance(3.4)
+	await _shoot("falling")
+	await _advance(1.0)
+	await _shoot("landed")
+	await _advance(2.0)
+	await _shoot("begun")
+	await _portrait("morrison_from_above", _main.current_core.global_position, 30.0, true)
+	gs.game = {}
+	gs.station = 0
 
 ## The run's end (v0.6 T7), beat by beat: the beacon's line on a fresh landing, its bench in
 ## the cabin, repaired and waiting for the launch, charging while the final wave comes in from
@@ -1698,7 +1790,7 @@ func cfg_row_half() -> float:
 ## The first map's cast side by side with him (tools/generate_dinos.py; the player, 2026-09-30: "恐龙目前模型做的都
 ## 粗糙，我需要它们更精致"): from the side at eye height, from the game's camera, and each close by its head --
 ## standing, then the Coelophysis walking.
-func _scenario_cast() -> void:
+func _scenario_cast(lineup: Array = []) -> void:
 	if _main.hud:
 		_main.hud.visible = false
 	var core_at: Vector3 = _main.current_core.global_position
@@ -1709,8 +1801,9 @@ func _scenario_cast() -> void:
 		hero.global_position = Vector3(core_at.x - 3.2, 0.0, row_z)
 		hero.rotation.y = PI * 0.5
 	var dino_script := load("res://scripts/entities/Dino.gd")
-	var lineup: Array = [["coelophysis", -1.2], ["coelophysis_alpha", 1.4], ["hesperosuchus", 3.8],
-		["phytosaur", 6.8], ["postosuchus", 11.5]]
+	if lineup.is_empty():
+		lineup = [["coelophysis", -1.2], ["coelophysis_alpha", 1.4], ["hesperosuchus", 3.8],
+			["phytosaur", 6.8], ["postosuchus", 11.5]]
 	var dinos: Array = []
 	for item in lineup:
 		var d = dino_script.new()

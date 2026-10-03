@@ -1580,6 +1580,19 @@
   - **我自己定的**（玩家睡了，"有问题先自己决定"）：塔都是正方形（诱饵台 2×2 高 2 米、弩塔 2×2 高 3.1 米、滚木塔 3×3、投石塔 4×4），转向不改占地；落石栅栏、墙弩拿掉；诱饵台的饵就是库存里的生肉，不另做；一座塔一次一种弹药，卡片上选；扩容用 `_2`、`_3` 两级、按差价付木头；人路过自动装、也能派去装；重家伙用 `heavy` 标出来（波斯特鳄、霸王龙），不按身高算。
   - 数都是先定的，平衡等真人试。
 
+- **v0.7 第二批：第 2 站（第一版）和两站之间的跳跃（玩家，2026-10-02："把第一关先做完，做完之后可以试着做第二关，把这个串联动画也做出来"；设计书 7.2、8.3、9.2）**：
+  - **一站接一站**：`Config.GAMES.campaign.stations`（第 1 站钦尔组、第 2 站莫里森组：名字、时代、地层、多少年前、这一站换的设置）；`GameState.station`、`stations()`、`station_row()`、`has_next_station()`、`jump_to_next_station()`、`arrived_by_jump`；`play()` 回到第 1 站；这一站的设置盖在游戏的设置上（`_settle_the_game`）。
+  - **跳跃动画**（`scripts/fx/StationJump.gd`，`Config.STATION_JUMP`）：赢了而后面还有站，HUD 不出结局卡（`HUD._on_game_won`），`Main._on_won_jump` 放"走"：场上的恐龙散回巢（`StationJump._quiet_the_field`，不然最后一波还在咬升起来的船舱、还能把人咬死）、镜头推到船舱、信标光柱、船舱抖着升起、白屏、站卡；然后关卡重新造（`reload_current_scene`）；新关卡开在"到"：白屏和站卡、整个船舱从 40 米高掉下来、落地扬土、闷响（新声音 `landing`）、人出门、提示 `HINT_STATION_ARRIVED`；落地前游戏停着。机器人 `jump` 场景拍下全程。
+  - **开局带什么**：`MAPS.<id>.kit`（`GameState.reset_game` 给），第 2 站带第 1 站的工具；材料、建筑不带，信标从头修。
+  - **第 2 站**（`MAPS.morrison`，像大山谷一样大，同样的山梁、入口、巢和残骸位置——第一版先用测过的布局）：地面更干（`terrain.ground_colour`、`rock_colour`，`TerrainBuilder`）；河岸三处黏土；来袭嗜鸟龙（也守巢），第 2 天起四只里一只是会飞的猎颌翼龙；角鼻龙领大波；异特龙压轴（重家伙）；河里夜里没有东西；山坡上梁龙、剑龙。自定义游戏也能选这张图（`CUSTOM_GAME` 地图"莫里森（第 2 站）"）和晚侏罗世这个时代（`cast_of: "morrison"`，不再抄一份）。
+  - **晨昏的提示说这一站的动物**（`MAPS.<id>.day_hints`，`HUD._day_hints`）：天亮、黄昏、天黑、第一个黄昏原来写死了腔骨龙和植龙，第 2 站没有这两种；现在每一套动物带自己的话（`HINT_*_JURASSIC`；晚白垩世的迅猛龙日夜都出来，`HINT_*_CRETACEOUS`——这一处 v0.6 起就是错的），`day_hints` 算动物的一部分（`CAST_KEYS`），换时代就跟着换。
+  - **会飞的**（`scripts/entities/FlyerDino.gd`，`DINO_BEHAVIOURS.flyer`，`DINO_AI.flight`，`DINOS.<id>.flies`）：3.5 米高直线飞，不碰任何东西（不走导航、不避让、碰撞掩码 0），人在 18 米内扑人、不然扑船舱；6 米外开始俯冲，咬一口，往前爬升 2 秒再绕回来；地刺、骨刺栅栏、滚木、投石、火都碰不到它（`CellTrap`、`Wall.touches`、`LogTower`、`Catapult`、`FirePatch`），只有弩塔射得到；抽搐监视不看它；打死掉到地上。
+  - **新工艺**：骨铲（`RECIPES.bone_shovel`，4 骨，解锁 `harvest_clay`）→ 黏土（`RESOURCE_NODES.clay`，库存新材料）→ 火罐（`RECIPES.fire_pot`、`AMMO.fire_pot`，投石塔能装）→ 落地烧一片（`scripts/fx/FirePatch.gd`，`Config.FIRE_PATCH`）。烧的样子就是营火的火（`Fire.make_flame` 的火苗、`Fire.flicker_energy` 会闪的光），一团团散在碎开的地方——第一版自己画的火苗是一片方块。飞在天上的火罐口上有一团火：美术给火苗做了自己会发光的材质，`VisualLibrary._dress` 现在不再用统一的哑光顶点色把会发光的部件盖掉（`VisualLibrary.glows`）。黏土岸按自己的尺寸摆（`"fit": "none"`），不再被塞进格子的框放大三分之一。机器人 `firepot` 场景在旁边点一堆营火对照。
+  - **四种新恐龙各有自己的声音**（`tools/build_sounds.gd`：嗜鸟龙的尖叫、角鼻龙的鼻音吼、异特龙的闭口低吼和出场吼、猎颌翼龙的尖啸）；模型在 `tools/generate_dinos.py`：嗜鸟龙、角鼻龙、异特龙、猎颌翼龙（扇翅膀飞，按真实大小画，不按高度拉伸——按高度拉伸时翼展变成十几米）、梁龙、剑龙（山坡上吃草）；黏土岸、火罐、黏土堆和图标在 `tools/generate_props.py`、`tools/build_icons.py`。
+  - **测试**：新的 `test_v07_station_two`（一站接一站、带什么来、自己的生物、会飞的飞过一切只有弩塔打得到、俯冲咬人再爬升、黏土要骨铲、火罐烧地、跳跃的走和到、后面还有站时不出结局卡）。
+  - **一起修的**：弩塔的箭飞到半路、目标已经被别的箭打死时，落地报错（机器人在第 2 站发现的）——现在落到空处什么都不做；自定义游戏里"晚三叠世"这个时代原来只是"这张图自己的动物"，在莫里森河谷上选它出来的还是侏罗纪的动物——现在它带着山谷的动物（`CUSTOM_GAME` era `cast_of`、`Config.CAST_KEYS`），和图本来就一样时什么都不改。
+  - 数都是先定的，平衡等真人试；机器人在第 2 站 15 分钟一局里没有报错，人在第一次大波（角鼻龙）时死了，这是平衡，记一笔。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。

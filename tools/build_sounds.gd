@@ -600,6 +600,186 @@ func _s_pterosaur_death() -> PackedFloat32Array:
 	return _space(out, 0.1, [])
 
 # ==============================================================================
+# STATION 2, the Late Jurassic (MAPS.morrison), each its own voice
+# ==============================================================================
+#   Ornitholestes  a twelve-kilo coelurosaur: a short tract, high -- quick yelping "kit-kit-kit"s and a whistled
+#                  trill, brighter and thinner than the Coelophysis's chitter, no rattle in it.
+#   Ceratosaurus   six metres: a nasal, resonant honk-growl -- the long snout under its horn -- well below the
+#                  small ones, rough.
+#   Allosaurus     eight and a half metres: a closed-mouth boom, as the great hunters' kin boom, higher and rougher
+#                  than the tyrannosaur's -- a smaller animal -- with a growl worked into it.
+#   Harpactognathus  a rhamphorhynchid, two and a half metres across: shrill squawks and a screech -- a gull's
+#                  harshness through a toothed bill, far above the azhdarchid's croak.
+
+const ORNI_FORMANTS: Array = [[1350.0, 5.0, 1.0], [2800.0, 6.0, 0.5], [4000.0, 7.0, 0.2]]
+
+func _yip(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0], [0.3, f0 * 1.15], [1.0, f0 * 0.9]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.6, 0.7], [1.0, 0.0]], "formants": ORNI_FORMANTS,
+		"rough": 0.1, "breath": 0.2, "tilt": 4200.0, "jitter": 0.02})
+
+func _s_ornitholestes_call_1() -> PackedFloat32Array:
+	# "kit-kit-kit-kit": quick yelps, rising.
+	var out := _buf(0.7)
+	for i in 4:
+		_mix(out, _yip(820.0 + 40.0 * i, 0.09), 0.02 + 0.13 * i, 0.9)
+	return out
+
+func _s_ornitholestes_call_2() -> PackedFloat32Array:
+	# A whistled trill, falling.
+	return _voice({"dur": 0.6, "f0": [[0.0, 1100.0], [0.4, 980.0], [1.0, 760.0]],
+		"amp": [[0.0, 0.0], [0.08, 1.0], [0.7, 0.8], [1.0, 0.0]], "formants": ORNI_FORMANTS,
+		"trill": [22.0, 0.5], "rough": 0.05, "breath": 0.25, "tilt": 4500.0})
+
+func _s_ornitholestes_alert() -> PackedFloat32Array:
+	# A sharp double yelp, and a hiss.
+	var out := _buf(0.6)
+	_mix(out, _yip(1000.0, 0.12), 0.0, 1.0)
+	_mix(out, _yip(1150.0, 0.14), 0.15, 1.0)
+	_mix(out, _hiss(0.25, [[0.0, 3000.0], [1.0, 3600.0]], 2.5, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.32, 0.4)
+	return out
+
+func _s_ornitholestes_bite() -> PackedFloat32Array:
+	return _snap(1.3, 0.0)
+
+func _s_ornitholestes_hurt() -> PackedFloat32Array:
+	return _yip(1300.0, 0.22)
+
+func _s_ornitholestes_death() -> PackedFloat32Array:
+	var out := _voice({"dur": 0.7, "f0": [[0.0, 1150.0], [0.3, 950.0], [1.0, 380.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.6], [1.0, 0.0]], "formants": ORNI_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.85]], "rough": 0.2, "breath": 0.35, "tilt": 3800.0})
+	_mix(out, _hiss(0.3, [[0.0, 2000.0], [1.0, 1300.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.45, 0.25)
+	return out
+
+const CERATO_FORMANTS: Array = [[430.0, 4.0, 1.0], [1150.0, 5.0, 0.5], [2050.0, 6.0, 0.2]]
+
+func _s_ceratosaurus_call_1() -> PackedFloat32Array:
+	# A long nasal honk with a growl under it.
+	return _space(_voice({"dur": 0.9, "f0": [[0.0, 160.0], [0.3, 185.0], [1.0, 140.0]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.7, 0.85], [1.0, 0.0]], "formants": CERATO_FORMANTS,
+		"rough": 0.5, "rough_am": [12.0, 0.4], "breath": 0.15, "tilt": 1800.0, "nasal": 0.55}), 0.1, [])
+
+func _s_ceratosaurus_call_2() -> PackedFloat32Array:
+	# "hrunk -- hrunk", the second lower.
+	var out := _buf(1.0)
+	for i in 2:
+		_mix(out, _voice({"dur": 0.32, "f0": [[0.0, 175.0 - 20.0 * i], [0.5, 195.0 - 20.0 * i], [1.0, 150.0 - 20.0 * i]],
+			"amp": [[0.0, 0.0], [0.15, 1.0], [0.7, 0.8], [1.0, 0.0]], "formants": CERATO_FORMANTS,
+			"rough": 0.45, "breath": 0.15, "tilt": 1700.0, "nasal": 0.6}), 0.03 + 0.42 * i, 1.0)
+	return _space(out, 0.1, [])
+
+func _s_ceratosaurus_alert() -> PackedFloat32Array:
+	# A rasping hiss into a growl.
+	var out := _buf(1.0)
+	_mix(out, _hiss(0.4, [[0.0, 1600.0], [1.0, 2100.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.3]]), 0.0, 0.6)
+	_mix(out, _voice({"dur": 0.6, "f0": [[0.0, 150.0], [0.4, 175.0], [1.0, 140.0]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.7, 0.9], [1.0, 0.0]], "formants": CERATO_FORMANTS,
+		"rough": 0.7, "rough_am": [18.0, 0.5], "breath": 0.25, "tilt": 2000.0}), 0.3, 1.0)
+	return out
+
+func _s_ceratosaurus_bite() -> PackedFloat32Array:
+	return _snap(0.75, 0.4)
+
+func _s_ceratosaurus_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.45, "f0": [[0.0, 260.0], [0.2, 290.0], [1.0, 170.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": CERATO_FORMANTS,
+		"rough": 0.65, "breath": 0.3, "tilt": 2200.0, "nasal": 0.4})
+
+func _s_ceratosaurus_death() -> PackedFloat32Array:
+	var out := _voice({"dur": 1.3, "f0": [[0.0, 230.0], [0.3, 200.0], [1.0, 80.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.7], [1.0, 0.0]], "formants": CERATO_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.8]], "rough": 0.6, "breath": 0.35, "tilt": 1800.0, "nasal": 0.4})
+	return _space(out, 0.12, [])
+
+const ALLO_FORMANTS: Array = [[230.0, 3.0, 1.0], [580.0, 3.5, 0.45], [1200.0, 4.0, 0.15]]
+
+## A closed-mouth boom, higher and rougher than the tyrannosaur's, a growl worked into it.
+func _allo_boom(dur: float, f0_from: float, f0_to: float) -> PackedFloat32Array:
+	var out := _voice({"dur": dur, "f0": [[0.0, f0_from], [0.25, f0_from * 1.1], [1.0, f0_to]],
+		"amp": [[0.0, 0.0], [0.2, 1.0], [0.65, 0.9], [1.0, 0.0]], "formants": ALLO_FORMANTS,
+		"rough": 0.4, "rough_am": [9.0, 0.45], "breath": 0.1, "tilt": 900.0, "jitter": 0.03, "nasal": 0.2})
+	_mix(out, _tone(dur, [[0.0, f0_from * 0.5], [1.0, f0_to * 0.5]], [[0.0, 0.0], [0.3, 1.0], [0.7, 0.8], [1.0, 0.0]]), 0.0, 0.6)
+	return out
+
+func _s_allosaurus_call_1() -> PackedFloat32Array:
+	return _space(_allo_boom(1.8, 68.0, 56.0), 0.15, [])
+
+func _s_allosaurus_call_2() -> PackedFloat32Array:
+	var out := _buf(2.4)
+	_mix(out, _allo_boom(0.7, 72.0, 64.0), 0.0, 0.85)
+	_mix(out, _allo_boom(1.4, 64.0, 52.0), 0.75, 1.0)
+	return _space(out, 0.15, [])
+
+func _s_allosaurus_roar() -> PackedFloat32Array:
+	# Its coming, heard over the valley: a long boom that breaks into a rasping growl, and the walls throwing it back.
+	var dry := _allo_boom(3.0, 60.0, 46.0)
+	_mix(dry, _voice({"dur": 1.4, "f0": [[0.0, 90.0], [0.5, 104.0], [1.0, 76.0]],
+		"amp": [[0.0, 0.0], [0.3, 1.0], [0.8, 0.7], [1.0, 0.0]], "formants": ALLO_FORMANTS,
+		"rough": 0.8, "rough_am": [21.0, 0.6], "breath": 0.25, "tilt": 1400.0}), 0.8, 0.5)
+	return _space(dry, 0.3, [[0.45, 0.45], [0.9, 0.3], [1.4, 0.15]])
+
+func _s_allosaurus_alert() -> PackedFloat32Array:
+	var out := _hiss(0.8, [[0.0, 900.0], [0.3, 1150.0], [1.0, 650.0]], 1.1, [[0.0, 0.0], [0.08, 1.0], [0.5, 0.6], [1.0, 0.0]])
+	_mix(out, _allo_boom(0.9, 66.0, 60.0), 0.05, 0.6)
+	return out
+
+func _s_allosaurus_bite() -> PackedFloat32Array:
+	var out := _modes(0.5, [[70.0, 0.16, 1.0], [125.0, 0.1, 0.7], [230.0, 0.06, 0.4], [560.0, 0.03, 0.25]], 0.005)
+	_mix(out, _burst(0.06, 2000.0, 1.1), 0.0, 0.6)
+	_mix(out, _snap(0.55, 0.1), 0.01, 0.5)
+	return out
+
+func _s_allosaurus_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.7, "f0": [[0.0, 130.0], [0.2, 142.0], [1.0, 90.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.6, 0.8], [1.0, 0.0]], "formants": ALLO_FORMANTS,
+		"fshift": [[0.0, 1.4], [1.0, 1.1]], "rough": 0.75, "rough_am": [19.0, 0.5], "breath": 0.3, "tilt": 1900.0})
+
+func _s_allosaurus_death() -> PackedFloat32Array:
+	var out := _allo_boom(2.4, 70.0, 34.0)
+	_mix(out, _hiss(1.2, [[0.0, 1000.0], [1.0, 500.0]], 1.2, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.2, 0.4)
+	return _space(out, 0.15, [[0.45, 0.2]])
+
+const HARP_FORMANTS: Array = [[950.0, 4.0, 1.0], [2200.0, 5.0, 0.6], [3500.0, 6.0, 0.3]]
+
+## A shrill squawk through a toothed bill: a gull's harshness, short.
+func _squawk(dur: float, f0_from: float, f0_to: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0_from], [0.25, f0_from * 1.1], [1.0, f0_to]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.7, 0.85], [1.0, 0.0]], "formants": HARP_FORMANTS,
+		"rough": 0.55, "rough_am": [60.0, 0.5], "breath": 0.3, "tilt": 3200.0, "nasal": 0.25, "jitter": 0.04})
+
+func _s_harpactognathus_call_1() -> PackedFloat32Array:
+	# "kek-kek-keeer".
+	var out := _buf(0.9)
+	_mix(out, _squawk(0.1, 640.0, 600.0), 0.02, 0.85)
+	_mix(out, _squawk(0.1, 660.0, 610.0), 0.18, 0.85)
+	_mix(out, _squawk(0.4, 700.0, 520.0), 0.36, 1.0)
+	return out
+
+func _s_harpactognathus_call_2() -> PackedFloat32Array:
+	return _squawk(0.5, 720.0, 560.0)
+
+func _s_harpactognathus_alert() -> PackedFloat32Array:
+	# A screech as it comes down.
+	return _voice({"dur": 0.6, "f0": [[0.0, 700.0], [0.35, 1050.0], [1.0, 820.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.7, 0.9], [1.0, 0.0]], "formants": HARP_FORMANTS,
+		"rough": 0.5, "rough_am": [64.0, 0.45], "breath": 0.4, "tilt": 3800.0})
+
+func _s_harpactognathus_bite() -> PackedFloat32Array:
+	# A toothed bill snapping: lighter than a theropod's jaw, sharper than the azhdarchid's clack.
+	var out := _modes(0.1, [[1800.0, 0.025, 1.0], [3100.0, 0.015, 0.5]], 0.0012)
+	_mix(out, _burst(0.012, 4500.0, 1.8), 0.0, 0.5)
+	return out
+
+func _s_harpactognathus_hurt() -> PackedFloat32Array:
+	return _squawk(0.22, 900.0, 650.0)
+
+func _s_harpactognathus_death() -> PackedFloat32Array:
+	var out := _squawk(0.8, 820.0, 300.0)
+	_mix(out, _hiss(0.5, [[0.0, 1800.0], [1.0, 1000.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.5, 0.25)
+	return out
+
+# ==============================================================================
 # His work: an axe in wood, a pick on stone, a mallet on a stake
 # ==============================================================================
 
@@ -828,6 +1008,16 @@ func _s_beacon_launch() -> PackedFloat32Array:
 	_mix(out, _tone(3.0, [[0.0, 110.0], [1.0, 220.0]], [[0.0, 0.0], [0.4, 0.4], [0.85, 0.6], [1.0, 0.0]]), 0.0, 0.6)
 	for i in 3:
 		_mix(out, _bell(1.2, 660.0 * pow(1.26, i), 1.4), 0.6 + 0.6 * i, 0.4)
+	return out
+
+func _s_landing() -> PackedFloat32Array:
+	# The capsule come down at the next station (StationJump): the air it pushes before it, a hull's weight on earth
+	# -- plate ringing, a deep thud felt more than heard -- and earth and grit falling back after.
+	var out := _buf(2.2)
+	_mix(out, _hiss(0.6, [[0.0, 300.0], [1.0, 900.0]], 1.0, [[0.0, 0.0], [0.8, 1.0], [1.0, 0.2]]), 0.0, 0.5)
+	_mix(out, _modes(1.4, [[38.0, 0.6, 1.0], [71.0, 0.4, 0.7], [140.0, 0.2, 0.4]], 0.008), 0.55, 1.0)
+	_mix(out, _modes(1.2, [[412.0, 0.35, 1.0], [1127.0, 0.25, 0.5], [1873.0, 0.15, 0.3]], 0.0015), 0.55, 0.35)
+	_mix(out, _crackle(1.4, 90.0, 1800.0), 0.75, 0.4)
 	return out
 
 func _s_ui_click() -> PackedFloat32Array:

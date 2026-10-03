@@ -58,6 +58,8 @@ def build(name, rig, arm, spec, materials):
     sk = sc.Skeleton(arm)
     path = sc.Path(sk, trunk_links(rig), rename={"Head_end": "Head"}, rigid={"Head"})
     loft = sc.Loft(sk, path, spec["trunk"], around=spec["around"], soften=spec["soften"])
+    if "tips" in spec:
+        loft.tips = tuple(spec["tips"])
     body = sc.Body()
     skin = spec["skin"]
 
@@ -75,6 +77,12 @@ def build(name, rig, arm, spec, materials):
             loft.bumps.append((s_at(b["at"]), _deg(b["phi"]), b["size"], b["height"]))
     for mound in spec.get("mounds", []):
         loft.bumps.append((s_at(mound["at"]), _deg(mound.get("phi", 0.0)), mound["size"], mound["height"] * 0.5))
+    # Ridges along the skin (an Allosaurus's down each side of its snout): a groove turned outward, laid on both
+    # sides as a groove is -- once only on the midline, where both sides are the same place.
+    for ridge in spec.get("ridges", []):
+        a, b = sorted((s_at(ridge["from"]), s_at(ridge["to"])))
+        h = ridge["height"] * (0.5 if ridge.get("phi", 0.0) == 0.0 else 1.0)
+        loft.dents.append((a, b, _deg(ridge.get("phi", 0.0)), -h, ridge.get("width", 0.1)))
 
     paint = painter(spec, path, loft, skin)
     weigh = jaw_weights(spec, path, rig)
@@ -91,6 +99,10 @@ def build(name, rig, arm, spec, materials):
     _teeth(body, loft, path, spec)
     _plates(body, loft, path, spec)
     _tusks(body, loft, path, spec)
+    _horns(body, loft, path, spec)
+    _back_plates(body, loft, path, spec)
+    _patagia(body, sk, rig, spec)
+    _tail_vane(body, loft, path, spec)
     # Feathers, where the species had them (tools/dino_feathers.py).
     dino_feathers.wings(body, sk, rig, spec, skin)
     dino_feathers.tail_fan(body, loft, path, spec)
@@ -442,7 +454,7 @@ def _plates(body, loft, path, spec):
         c, t, x, u = loft.frame(s)
         w = path.weights(s, loft.blend)
         for row in pl["rows"]:
-            for phi in (_deg(row), 2.0 * math.pi - _deg(row)):
+            for phi in ((0.0,) if row == 0.0 else (_deg(row), 2.0 * math.pi - _deg(row))):
                 p, n = loft.surface(s, phi)
                 sc.plate(body, p, t, n, pl["length"] * k, pl["width"] * k, pl["height"] * k, pl["colour"], w,
                          square=pl.get("square", 0.0), keel=pl.get("keel", 0.55))
@@ -461,3 +473,425 @@ def _tusks(body, loft, path, spec):
         pts = [p, p + d * tk["length"] * 0.5, p + d * tk["length"]]
         sc.tube(body, pts, [tk["radius"], tk["radius"] * 0.75, tk["radius"] * 0.35], [tk["colour"]] * 3,
                 {"Head": 1.0}, around=7, close_tip=True)
+
+
+def _horns(body, loft, path, spec):
+    """Horns and bony crests out of the skin, each where it grows: a Ceratosaurus's blade over its nostrils and the
+    hornlet over each eye, an Allosaurus's crest before each eye. Each a tube from its base -- sunk a little into
+    the skin -- to its tip: `base` its half-width across the animal and its half-length along it (a blade is thin
+    across and long along), tapering by `taper`; standing out along the skin's normal, leant back by `rake`
+    degrees (forward if less than nought) and out to its side by `splay`, its tip bent back by `curve` of its
+    length. Its colour from the skin's at its foot to `colour`, and `tip` at the point. A pair, one each side,
+    unless it is on the midline (phi 0). It moves with the bone it grows on (`bone`), or with the skin there."""
+    skin = spec["skin"]
+    for h in spec.get("horns", []):
+        s = path.s_of(*h["at"])
+        phi0 = _deg(h.get("phi", 0.0))
+        c, t, x, u = loft.frame(s)
+        w = {h["bone"]: 1.0} if h.get("bone") else path.weights(s, loft.blend)
+        across, along = h["base"]
+        rake = _deg(h.get("rake", 0.0))
+        splay = _deg(h.get("splay", 0.0))
+        rings = h.get("rings", 6)
+        for phi in ((phi0,) if phi0 == 0.0 else (phi0, 2.0 * math.pi - phi0)):
+            p, n = loft.surface(s, phi)
+            out = x if x.dot(p - c) >= 0.0 else -x
+            axis = (n * math.cos(rake) + t * math.sin(rake)).normalized()
+            if phi0 != 0.0:
+                axis = (axis * math.cos(splay) + out * math.sin(splay)).normalized()
+            # Its along-the-animal direction, square to its axis: what its blade's length lies along.
+            lie = t - axis * t.dot(axis)
+            lie = lie.normalized() if lie.length > 1e-6 else t
+            base = p - n * (across * 0.6)
+            pts, radii, cols = [], [], []
+            for k in range(rings + 1):
+                f = k / rings
+                q = base + axis * (h["length"] * f) + t * (h.get("curve", 0.0) * h["length"] * f * f)
+                pts.append(q)
+                radii.append(across * max(0.04, (1.0 - f) ** h.get("taper", 0.8)))
+                col = sc.mix(skin.get("horn_base", skin["back"]), h["colour"], sc.smoothstep(0.0, 0.4, f))
+                cols.append(sc.mix(col, h.get("tip", h["colour"]), sc.smoothstep(0.55, 1.0, f)))
+            start = len(body.v)
+            sc.tube(body, pts, radii, cols, w, around=h.get("around", 10), close_tip=True,
+                    flat=along / max(1e-6, across), up=lie)
+            if spec.get("skin_detail", {}).get("horn"):
+                body.mark_horn(start)
+
+
+def _through(points, f):
+    """The value at `f` on a run of (f, a, b, ...) points, straight between them."""
+    if f <= points[0][0]:
+        return points[0][1:]
+    for p, q in zip(points, points[1:]):
+        if f <= q[0]:
+            k = (f - p[0]) / max(1e-9, q[0] - p[0])
+            return tuple(a + (b - a) * k for a, b in zip(p[1:], q[1:]))
+    return points[-1][1:]
+
+
+def _back_plates(body, loft, path, spec):
+    """A stegosaur's plates (Stegosaurus stenops: seventeen, Gilmore 1914; "Sophie", Maidment et al. 2015): thin and
+    tall, standing up off the back in two rows a hand either side of the spine whose plates alternate -- small on
+    the neck, the biggest over the hips and the root of the tail, smaller again down it -- each a broad leaf in
+    outline leaning back a little, thick at its root and thin at its rim, the whole plate leant out from the
+    midline by `lean`. With "rows": 1, a single row down the midline (a sauropod's spines, "shape": "spine": a
+    narrow triangle). `sizes`: (fraction along from..to, height, length at the root). Each moves with the bone at
+    its root; its colour from the skin's at the root to `colour`, its rim `rim`, grooved up its faces."""
+    bp = spec.get("back_plates")
+    if not bp:
+        return
+    skin = spec["skin"]
+    s0, s1 = sorted((path.s_of(*bp["from"]), path.s_of(*bp["to"])))
+    n = bp["count"]
+    rows = bp.get("rows", 2)
+    spine = bp.get("shape", "plate") == "spine"
+    # The outline, (along the back -- forward negative --, up), for a plate one long and one high: a broad leaf,
+    # its tip set back over its rear half; or a spine's narrow triangle.
+    if spine:
+        outline = [(-0.5, 0.0), (-0.3, 0.35), (-0.05, 0.75), (0.12, 1.0), (0.22, 0.7), (0.36, 0.32), (0.5, 0.0)]
+    else:
+        # Broadest a third of the way up, a blunt point at the top set back over the rear half.
+        outline = [(-0.5, 0.0), (-0.6, 0.2), (-0.56, 0.4), (-0.36, 0.7), (-0.06, 0.94), (0.1, 1.0), (0.3, 0.8),
+                   (0.52, 0.48), (0.58, 0.22), (0.46, 0.0)]
+    # Rounded: each corner cut, twice (Chaikin).
+    for _ in range(2):
+        cut = [outline[0]]
+        for a, b in zip(outline, outline[1:]):
+            cut.append((a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25))
+            cut.append((a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75))
+        cut.append(outline[-1])
+        outline = cut
+    levels = bp.get("levels", 2 if spine else 4)
+    for i in range(n):
+        f = i / max(1, n - 1)
+        s = s0 + (s1 - s0) * f
+        height, length = _through(bp["sizes"], f)
+        side = 0.0 if rows == 1 else (1.0 if i % 2 == 0 else -1.0)
+        c, t, x, u = loft.frame(s)
+        phi = 0.0 if side == 0.0 else _deg(bp.get("phi", 5.0))
+        if side < 0.0:
+            phi = 2.0 * math.pi - phi
+        p, nrm = loft.surface(s, phi)
+        out = x if x.dot(p - c) >= 0.0 else -x
+        lean = _deg(bp.get("lean", 8.0)) if side != 0.0 else 0.0
+        up = (u * math.cos(lean) + out * math.sin(lean)).normalized()
+        back = (t - up * t.dot(up)).normalized()           # along the back, towards the tail
+        across = back.cross(up).normalized()
+        w = path.weights(s, loft.blend)
+        root = p - up * bp.get("sink", 0.05) * height
+        thick = bp.get("thick", 0.06) * height
+        centre2 = (0.02, 0.32)
+
+        def at(a, b, k, face):
+            # The point (a, b) of the outline drawn in to `k` of the way from its middle, on one face.
+            q = (centre2[0] + (a - centre2[0]) * k, centre2[1] + (b - centre2[1]) * k)
+            swell = thick * 0.5 * (1.0 - k * k) * (1.0 - 0.5 * q[1])
+            return root + back * (q[0] * length) + up * (q[1] * height) + across * (swell * face)
+
+        def colour(a, b, k):
+            col = sc.mix(skin["back"], bp["colour"], sc.smoothstep(0.0, 0.35, b))
+            col = sc.mix(col, bp.get("rim", bp["colour"]), sc.smoothstep(0.7, 1.0, k) * sc.smoothstep(0.1, 0.4, b))
+            # Grooves up its faces, where the vessels ran.
+            groove = 0.5 + 0.5 * math.sin((a * length) / max(0.01, bp.get("groove", 0.05)) * math.pi)
+            return sc.shade(col, -bp.get("groove_dark", 0.12) * groove * (1.0 - k))
+        # Its rim shared by its two faces, so the plate is one closed piece.
+        start = len(body.v)
+        rim = [body.add(at(a, b, 1.0, 1.0), colour(a, b, 1.0), w) for (a, b) in outline]
+        for face in (1.0, -1.0):
+            def put(idx):
+                # Wound so its normal faces the side the face is on (the outline runs clockwise seen from it).
+                body.face(tuple(reversed(idx)) if face > 0 else tuple(idx))
+            mid = body.add(at(0.0, 0.0, 0.0, face), colour(centre2[0], centre2[1], 0.0), w)
+            prev = None
+            for lv in range(1, levels + 1):
+                k = lv / levels
+                ring = rim if lv == levels else [body.add(at(a, b, k, face), colour(a, b, k), w) for (a, b) in outline]
+                if prev is None:
+                    for j in range(len(ring) - 1):
+                        put((mid, ring[j], ring[j + 1]))
+                else:
+                    for j in range(len(ring) - 1):
+                        put((prev[j], ring[j], ring[j + 1], prev[j + 1]))
+                prev = ring
+            # Closed along the root, down in the skin.
+            put((mid, prev[-1], prev[0]))
+        if spec.get("skin_detail", {}).get("horn"):
+            body.mark_horn(start, bp.get("horn", 1.0))
+
+
+# ==============================================================================
+# A pterosaur on the wing
+# ==============================================================================
+
+def _blend(*parts):
+    """Weights mixed: each (k, weights)."""
+    out = {}
+    for k, w in parts:
+        if k <= 0.0:
+            continue
+        for b, x in w.items():
+            out[b] = out.get(b, 0.0) + x * k
+    total = sum(out.values()) or 1.0
+    return {b: x / total for b, x in out.items() if x / total > 1e-3}
+
+
+def _sheet(body, grid, weights, colours, thick, closed_rows=()):
+    """A thin closed sheet over a grid of points (rows of equal length): its top and its underside, apart by
+    `thick` (a grid of its own: nought at the edges), sharing the points round its edge. A row in `closed_rows`
+    is all one point (a wing's tip). Wound so each side faces out: the top up."""
+    rows, cols = len(grid), len(grid[0])
+    normals = []
+    for i in range(rows):
+        line = []
+        for j in range(cols):
+            du = grid[min(rows - 1, i + 1)][j] - grid[max(0, i - 1)][j]
+            dv = grid[i][min(cols - 1, j + 1)] - grid[i][max(0, j - 1)]
+            n = du.cross(dv)
+            if n.length < 1e-9:
+                n = Vector((0.0, 0.0, 1.0))
+            n = n.normalized()
+            if n.z < 0.0:
+                n = -n
+            line.append(n)
+        normals.append(line)
+    top, bottom = [], []
+    for i in range(rows):
+        t_row, b_row = [], []
+        for j in range(cols):
+            edge = i in (0, rows - 1) or j in (0, cols - 1)
+            if i in closed_rows and j > 0:
+                t_row.append(t_row[0])
+                b_row.append(b_row[0])
+                continue
+            h = 0.0 if edge else thick[i][j] * 0.5
+            vi = body.add(grid[i][j] + normals[i][j] * h, colours[i][j], weights[i][j])
+            t_row.append(vi)
+            b_row.append(vi if edge else body.add(grid[i][j] - normals[i][j] * h, sc.shade(colours[i][j], -0.15),
+                                                  weights[i][j]))
+        top.append(t_row)
+        bottom.append(b_row)
+    # Which way round is up: the first real quad's normal against the grid's.
+    for layer, sign in ((top, 1.0), (bottom, -1.0)):
+        for i in range(rows - 1):
+            for j in range(cols - 1):
+                quad = [layer[i][j], layer[i + 1][j], layer[i + 1][j + 1], layer[i][j + 1]]
+                pts = [body.v[k] for k in quad]
+                n = (pts[1] - pts[0]).cross(pts[3] - pts[0])
+                if n.length < 1e-12:
+                    n = (pts[2] - pts[1]).cross(pts[3] - pts[1])
+                want = normals[i][j] * sign
+                if n.dot(want) < 0.0:
+                    quad.reverse()
+                # A wing's tip: all its row one point -- a triangle, not a quad.
+                clean = []
+                for k in quad:
+                    if k not in clean:
+                        clean.append(k)
+                if len(clean) >= 3:
+                    body.face(tuple(clean))
+
+
+def _patagia(body, sk, rig, spec):
+    """A flying pterosaur's wings, spread (dino_rig "spread", "wing"; spec "patagia"): the wing finger's four long
+    bones a slim tube along the leading edge; the main membrane (the brachiopatagium) from the tip of the wing
+    finger in along the hand, the forearm and the upper arm to the shoulder, back along the flank and down the
+    leg to the ankle, its trailing edge cut in between the tip and the ankle; the membrane before the arm (the
+    propatagium) from the neck's root to the wrist; and the one between the legs (the cruropatagium). Each a thin
+    closed sheet, thickest in its middle, every point moving with the bones it lies between -- and drawn as bare
+    skin, not scales (the "Horn" surface: smooth, finely grained)."""
+    pt = spec.get("patagia")
+    if not pt:
+        return
+    start = len(body.v)
+    colour = pt["colour"]
+    edge = pt.get("edge", colour)
+    rows_u = pt.get("rows", 22)
+    rows_v = pt.get("chord", 7)
+    thick = pt.get("thick", 0.004)
+    legs = {}
+    for key, info in rig.limbs.items():
+        if key.startswith("hind"):
+            legs[key.split(".")[1]] = info
+    for key, info in rig.limbs.items():
+        wing = info.get("wing")
+        if not wing:
+            continue
+        side = key.split(".")[1]
+        names = info["names"]
+        chest = info["parent"]
+        leg = legs[side]["names"]
+        out = Vector((info["sign"], 0.0, 0.0))
+        # The wing finger's bones.
+        for i, n in enumerate(wing):
+            a, b = sk.head[n], sk.tail[n]
+            r = pt.get("finger", 0.007) * (1.0 - 0.55 * i / len(wing))
+            sc.tube(body, [a, (a + b) * 0.5, b], [r, r * 0.92, r * 0.8], [pt["bone"]] * 3, {n: 1.0}, around=8,
+                    close_tip=(i == len(wing) - 1), flat=0.75)
+        # The leading edge, from the tip in to the shoulder; and in from the shoulder along the flank and down
+        # the leg to the ankle.
+        tip = sk.tail[wing[-1]]
+        lead = [(tip, {wing[-1]: 1.0})]
+        for n in reversed(wing):
+            lead.append((sk.head[n], {n: 1.0}))
+        lead += [(sk.head[names[2]], {names[2]: 0.5, names[1]: 0.5}),
+                 (sk.head[names[1]], {names[1]: 0.5, names[0]: 0.5}),
+                 (sk.head[names[0]], {names[0]: 0.5, chest: 0.5})]
+        shoulder = sk.head[names[0]]
+        hip = sk.head[leg[0]]
+        ankle = sk.head[leg[2]]
+        inner = [(shoulder, {names[0]: 0.5, chest: 0.5}),
+                 (shoulder.lerp(hip, 0.5) + out * 0.004, {chest: 0.5, "Hips": 0.5}),
+                 (hip, {"Hips": 0.5, leg[0]: 0.5}),
+                 (sk.head[leg[1]], {leg[0]: 0.5, leg[1]: 0.5}),
+                 (ankle, {leg[1]: 0.6, leg[2]: 0.4})]
+        ankle_w = inner[-1][1]
+        cut = pt.get("concave", 0.22)
+        grid, weights, cols, th = [], [], [], []
+        for i in range(rows_u + 1):
+            u = i / rows_u
+            # Closer rows towards the tip, where the wing is narrow and moves most.
+            u = u ** 1.15
+            lp, lw = _along(lead, u)
+            straight = tip.lerp(ankle, u)
+            tp = straight + (lp - straight) * cut * math.sin(math.pi * u) ** 0.7
+            tw = _blend((1.0 - u ** 1.4, lw), (u ** 1.4, ankle_w))
+            g_row, w_row, c_row, t_row = [], [], [], []
+            for j in range(rows_v + 1):
+                v = j / rows_v
+                ip, iw = _along(inner, v)
+                p = lp * (1.0 - v) + tp * v + (ip - (shoulder * (1.0 - v) + ankle * v)) * u
+                w = _blend((1.0 - v, lw), (v, tw))
+                w = _blend((1.0 - sc.smoothstep(0.78, 1.0, u), w), (sc.smoothstep(0.78, 1.0, u), iw))
+                g_row.append(p)
+                w_row.append(w)
+                # Darker towards its trailing edge, fibres running out along it.
+                c = sc.mix(colour, edge, sc.smoothstep(0.65, 1.0, v))
+                c = sc.shade(c, 0.06 * math.sin(u * 90.0) * (1.0 - v))
+                c_row.append(c)
+                t_row.append(thick * math.sin(math.pi * v) ** 0.6 * min(1.0, 3.0 * u))
+            grid.append(g_row)
+            weights.append(w_row)
+            cols.append(c_row)
+            th.append(t_row)
+        _sheet(body, grid, weights, cols, th, closed_rows=(0,))
+        # The propatagium: from the root of the neck out to the wrist, before the upper arm and the forearm.
+        if pt.get("pro", True):
+            neck_root = sk.tail[chest] + out * 0.012 + Vector((0.0, 0.01, 0.0))
+            wrist = sk.head[names[2]]
+            elbow = sk.head[names[1]]
+            arm = [(shoulder, {names[0]: 0.5, chest: 0.5}), (elbow, {names[1]: 0.5, names[0]: 0.5}),
+                   (wrist, {names[2]: 0.5, names[1]: 0.5})]
+            front_w = {names[2]: 0.4, names[1]: 0.6}
+            grid, weights, cols, th = [], [], [], []
+            n_u, n_v = 8, 3
+            for i in range(n_u + 1):
+                u = i / n_u
+                ap, aw = _along(arm, u)
+                fp = neck_root.lerp(wrist + Vector((0.0, 0.012, 0.0)), u)
+                fw = _blend((1.0 - u, {chest: 0.6, names[0]: 0.4}), (u, front_w))
+                g_row, w_row, c_row, t_row = [], [], [], []
+                for j in range(n_v + 1):
+                    v = j / n_v
+                    g_row.append(ap.lerp(fp, v))
+                    w_row.append(_blend((1.0 - v, aw), (v, fw)))
+                    c_row.append(sc.mix(colour, edge, 0.3 * v))
+                    t_row.append(thick * 0.7 * math.sin(math.pi * v) ** 0.6)
+                grid.append(g_row)
+                weights.append(w_row)
+                cols.append(c_row)
+                th.append(t_row)
+            _sheet(body, grid, weights, cols, th)
+    # The cruropatagium: between the legs, from the knees to the toes, under the root of the tail.
+    if pt.get("uro", True) and "L" in legs and "R" in legs:
+        ln, rn = legs["L"]["names"], legs["R"]["names"]
+        root_bone = rig.chains["tail"][0]
+        under = sk.head[root_bone] - Vector((0.0, 0.0, 0.02))
+        grid, weights, cols, th = [], [], [], []
+        n_u, n_v = 8, 4
+        for i in range(n_u + 1):
+            u = i / n_u
+            g_row, w_row, c_row, t_row = [], [], [], []
+            for j in range(n_v + 1):
+                v = j / n_v
+                lp = sk.head[ln[1]].lerp(sk.tail[ln[2]], v)
+                rp = sk.head[rn[1]].lerp(sk.tail[rn[2]], v)
+                p = lp.lerp(rp, u)
+                mid = math.sin(math.pi * u)
+                p = p + (under - sk.head[ln[1]].lerp(sk.head[rn[1]], 0.5)) * mid * (1.0 - v) ** 2
+                p = p + Vector((0.0, 1.0, 0.0)) * pt.get("uro_cut", 0.03) * mid * v
+                lw = {ln[1]: 1.0 - v, ln[2]: v}
+                rw = {rn[1]: 1.0 - v, rn[2]: v}
+                w = _blend((1.0 - u, lw), (u, rw), (mid * (1.0 - v) ** 2, {root_bone: 1.0}))
+                g_row.append(p)
+                w_row.append(w)
+                c_row.append(sc.mix(colour, edge, 0.5 * v))
+                t_row.append(thick * 0.7 * math.sin(math.pi * u) ** 0.6 * math.sin(math.pi * v) ** 0.6)
+            grid.append(g_row)
+            weights.append(w_row)
+            cols.append(c_row)
+            th.append(t_row)
+        _sheet(body, grid, weights, cols, th)
+    if spec.get("skin_detail", {}).get("horn"):
+        body.mark_horn(start, pt.get("horn", 1.0))
+
+
+def _tail_vane(body, loft, path, spec):
+    """The vane at the end of a rhamphorhynchid's tail (spec "vane"): a kite of skin standing up and down from the
+    tail's last length, its long axis along it -- a thin closed lens, each point moving with the tail where it is."""
+    vn = spec.get("vane")
+    if not vn:
+        return
+    s0 = path.s_of(*vn["from"])
+    s1 = path.s_of("Tail_end", 0.0) + vn.get("past", 0.0)
+    length = s1 - s0
+    # The outline, (along, up): from its front point on the tail, up to its top, back to its rear point and down
+    # to its bottom -- a diamond, its widest a third of the way back, rounded.
+    outline = [(0.0, 0.0), (0.18, 0.32), (0.38, 0.5), (0.62, 0.36), (1.0, 0.0), (0.62, -0.36), (0.38, -0.5),
+               (0.18, -0.32)]
+    for _ in range(2):
+        cut = []
+        for a, b in zip(outline, outline[1:] + outline[:1]):
+            cut.append((a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25))
+            cut.append((a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75))
+        outline = cut
+    centre2 = (0.4, 0.0)
+    levels = 3
+    start = len(body.v)
+
+    def place(a, b, k, face):
+        q = (centre2[0] + (a - centre2[0]) * k, centre2[1] + (b - centre2[1]) * k)
+        s = s0 + q[0] * length
+        c, t, x, u = loft.frame(min(s, path.length))
+        p = c + u * (q[1] * vn["height"]) + x * (vn.get("thick", 0.004) * 0.5 * (1.0 - k * k) * face)
+        return p, path.weights(min(s, s1), loft.blend)
+
+    def colour(a, b, k):
+        c = sc.mix(vn["colour"], vn.get("rim", vn["colour"]), sc.smoothstep(0.6, 1.0, k))
+        return c
+    rim = []
+    for (a, b) in outline:
+        p, w = place(a, b, 1.0, 1.0)
+        rim.append(body.add(p, colour(a, b, 1.0), w))
+    n = len(outline)
+    for face in (1.0, -1.0):
+        p, w = place(centre2[0], centre2[1], 0.0, face)
+        mid = body.add(p, colour(centre2[0], centre2[1], 0.0), w)
+        prev = None
+        for lv in range(1, levels + 1):
+            k = lv / levels
+            if lv == levels:
+                ring = rim
+            else:
+                ring = []
+                for (a, b) in outline:
+                    p, w = place(a, b, k, face)
+                    ring.append(body.add(p, colour(a, b, k), w))
+            for j in range(n):
+                j2 = (j + 1) % n
+                idx = (mid, ring[j], ring[j2]) if prev is None else (prev[j], ring[j], ring[j2], prev[j2])
+                # The outline runs clockwise along and up the tail, so as it is wound a face looks to the animal's
+                # right: the right face so, the left reversed.
+                body.face(idx if face > 0 else tuple(reversed(idx)))
+            prev = ring
+    if spec.get("skin_detail", {}).get("horn"):
+        body.mark_horn(start, vn.get("horn", 1.0))

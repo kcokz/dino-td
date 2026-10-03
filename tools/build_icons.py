@@ -47,6 +47,9 @@ C = {
     "resin": "#3a2616",
     "sand": "#b0603c", "sand_hi": "#c97a50", "sand_dark": "#8a4a2e",
     "wicker": "#c49a52", "wicker_dark": "#8b6430",
+    # The second map's clay (blue-grey, ochre-bedded) and its fired pots.
+    "clay": "#7c8a90", "clay_hi": "#a6b3b7", "clay_dark": "#55636a", "ochre": "#c99543",
+    "pot": "#b8693b", "pot_hi": "#d9915f", "pot_dark": "#7c3f20",
 }
 
 
@@ -861,6 +864,46 @@ ICONS["shot_stone"] = item_svg(
      shape("path", None, C["sand_dark"], 1.5, d="M 12 31 L 24 33 L 38 32 L 52 28"),
      shape("circle", C["sand_dark"], cx=26, cy=38, r=1.6), shape("circle", C["sand_dark"], cx=41, cy=36, r=1.3),
      shape("circle", C["sand_dark"], cx=35, cy=46, r=1.5)])
+
+# THE SECOND MAP'S (GAME-DESIGN 7.2, station 2: 制陶). Clay, as it is dug from the river's bank (the drop and the
+# panel's resource): a slumped lump of the blue-grey clay, its spade-cut face to the front showing an ochre bed
+# through it, its top dried and cracked.
+ICONS["clay"] = item_svg(
+    [shape("path", C["clay"], d="M 7 47 C 5 37 11 26 22 22 C 30 15 44 14 52 21 C 59 27 60 39 57 47 "
+                                "C 55 54 45 57 32 57 C 18 57 9 54 7 47 Z")],
+    [shape("path", C["clay_dark"], d="M 57 47 C 55 54 45 57 32 57 C 30 50 33 43 38 40 C 46 38 54 40 57 47 Z"),
+     shape("path", C["clay_hi"], d="M 9 46 C 8 38 11 31 15 28 L 35 29 C 36 36 37 44 36 55 C 22 55 12 52 9 46 Z"),
+     shape("path", None, C["ochre"], 3.6, d="M 10 40 C 17 38 27 39 36 41"),
+     shape("path", None, C["clay"], 1.6, d="M 16 33 L 22 35 M 25 46 L 31 48"),
+     shape("path", None, C["clay_dark"], 1.6, d="M 24 22 C 30 19 38 19 44 22 M 37 20 L 39 26 L 47 26 M 39 26 L 36 29"),
+     shape("path", None, "#dfe8ea", 2.0, d="M 12 36 C 13 33 15 31 18 30")])
+
+# The fire pot, the second map's catapult shot: a round pot of fired clay, its stoppered neck bound with a rag
+# soaked in resin, alight.
+_POT_FLAME = _flame(32, 22, 18, 7)
+ICONS["fire_pot"] = item_svg(
+    [_POT_FLAME[0],
+     shape("circle", C["pot"], cx=32, cy=41, r=17),
+     shape("rect", C["resin"], x=24.5, y=18, width=15, height=8, rx=3.5)],
+    [shape("path", C["pot_dark"], d="M 15.5 44 C 17 52 24 58 32 58 C 40 58 47 52 48.5 44 C 44 50 38 53 32 53 "
+                                   "C 26 53 20 50 15.5 44 Z"),
+     shape("ellipse", C["pot_hi"], cx=25, cy=35, rx=6, ry=4, transform="rotate(-30 25 35)"),
+     shape("path", None, C["pot_dark"], 1.6, d="M 18 33 C 26 30 38 30 46 33"),
+     shape("rect", C["resin"], x=24.5, y=18, width=15, height=8, rx=3.5),
+     shape("path", None, C["rope"], 2.0, d="M 25 23.5 L 39 23.5"),
+     _POT_FLAME[1]])
+
+# The bone shovel (GAME-DESIGN 4.2: 骨铲, 肩胛骨做的): a dinosaur's shoulder blade -- a broad flat blade, the ridge of its
+# spine across it -- lashed by its narrow end to a short wooden haft.
+ICONS["bone_shovel"] = item_svg(
+    [shape("path", None, C["post"], 6.5, d="M 8 8 L 32 32"),
+     shape("path", C["bone"], d="M 27 36 C 30 45 32 52 34 60 C 43 62 54 58 58 51 C 61 46 61 40 60 34 "
+                                "C 52 32 44 30 36 27 Z")],
+    [shape("path", None, C["post_dark"], 2.0, d="M 10 13 L 30 33"),
+     shape("path", C["bone_shade"], d="M 27 36 C 30 45 32 52 34 60 C 36 60.5 38 60.8 40 60.8 C 37 52 34 44 31 34 Z"),
+     shape("path", None, C["bone_shade"], 3.0, d="M 33 33 C 41 39 49 43 59 45"),
+     shape("path", None, "#fbf5e6", 1.4, d="M 34 31 C 42 36 50 40 59 42"),
+     shape("rect", C["rope"], transform="rotate(45 31 31)", x=25.5, y=27.5, width=11, height=7, rx=2)])
 
 # Load ammunition: a turning arrow round an arrow.
 GLYPHS["reload"] = glyph_svg(

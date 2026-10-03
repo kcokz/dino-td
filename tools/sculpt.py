@@ -190,6 +190,9 @@ class Body:
         # Per vertex, for the bake (tools/dino_feathers.py): how feathered the skin is there; whether it is a
         # feather's vane; where on the vane (along its shaft, and across it).
         self.feather = []
+        # Per vertex, for the bake: how much it is horn or bare bone rather than scaled skin (a horn's sheath, a
+        # stegosaur's plates and spikes) -- written only where some vertex is.
+        self.horn = []
 
     def add(self, p, col, w, tag=None, feather=None):
         self.v.append(p.copy())
@@ -197,7 +200,13 @@ class Body:
         self.w.append(dict(w))
         self.tag.append(tag)
         self.feather.append(tuple(feather) if feather else (0.0, 0.0, 0.0, 0.0))
+        self.horn.append(0.0)
         return len(self.v) - 1
+
+    def mark_horn(self, start, k=1.0):
+        """Every vertex added since `start` is horn (or bare plate), `k` of it."""
+        for i in range(start, len(self.v)):
+            self.horn[i] = k
 
     def face(self, idx, mat=0):
         self.f.append(tuple(idx))
@@ -236,6 +245,7 @@ class Body:
             part.w = [self.w[i] for i in used]
             part.mask = [self.mask[i] for i in used] if self.mask is not None else None
             part.feather = [self.feather[i] for i in used]
+            part.horn = [self.horn[i] for i in used]
             part.f = [tuple(back[i] for i in f) for f in faces]
             part.fm = [0] * len(faces)
             out.append(part._object(name if m == 0 else "%s_%s" % (name, mat.name.lower()), arm, mat))
@@ -258,6 +268,10 @@ class Body:
             fa = mesh.color_attributes.new(name="Feather", type='FLOAT_COLOR', domain='POINT')
             for i, f in enumerate(self.feather):
                 fa.data[i].color = f
+        if any(h > 0.0 for h in self.horn):
+            ha = mesh.color_attributes.new(name="Horn", type='FLOAT_COLOR', domain='POINT')
+            for i, h in enumerate(self.horn):
+                ha.data[i].color = (h, h, h, 1.0)
         mesh.color_attributes.active_color = attr
         mesh.materials.append(mat)
         obj = bpy.data.objects.new(name, mesh)
@@ -389,6 +403,7 @@ class Loft:
         self.dents = []      # (s0, s1, phi, depth, width): a groove -- the lip line
         self.bumps = []      # (s, phi, radius, height): a swelling -- a brow
         self.blend = (0.35, 0.6)
+        self.tips = (0.02, 0.02)     # how far past its last rings the snout's and the tail's points are
 
     def frame(self, s):
         c = self.path.centre(s, self.soften)
@@ -451,9 +466,9 @@ class Loft:
                 ring.append(body.add(p, paint(s, phi, p, n), weigh(s, phi, w) if weigh else w, tag=s))
             rings.append(ring)
         ends = []
-        for (s, sign) in ((self.s0, -1.0), (self.s1, 1.0)):
+        for (s, sign, tip) in ((self.s0, -1.0, self.tips[0]), (self.s1, 1.0, self.tips[1])):
             c, t, x, u = self.frame(s)
-            p = c + u * self.section(s)["lift"] + t * (0.02 * sign)
+            p = c + u * self.section(s)["lift"] + t * (tip * sign)
             ends.append(body.add(p, paint(s, 0.0, p, t * sign), self.path.weights(s, self.blend)))
         body.rings(rings, closed_start=ends[0], closed_end=ends[1])
         return rings

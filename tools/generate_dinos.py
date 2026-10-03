@@ -91,6 +91,10 @@ def make(name):
         # Scenery fitted by its length (Config.HERDS).
         span = [(m.matrix_world @ v.co).y for m in parts for v in m.data.vertices]
         k = float(spec["length"]) / (max(span) - min(span))
+    elif spec.get("fit") == "span":
+        # A flyer, by its wingspan, tip to tip as it flies.
+        span = [(m.matrix_world @ v.co).x for m in parts for v in m.data.vertices]
+        k = float(spec["span"]) / (max(span) - min(span))
     else:
         k = game_height(name, spec) / model_height(parts)
     paces = dict(GAITS)

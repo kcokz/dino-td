@@ -274,9 +274,22 @@ static func _dress(art: Node, key: String) -> void:
 	# every stake on the map at once. That fade also only works on material_override at
 	# all -- an imported model without one never went translucent as a blueprint.
 	for mi in art.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).material_override = mat
-	if art is MeshInstance3D:
+		if not glows(mi as MeshInstance3D):
+			(mi as MeshInstance3D).material_override = mat
+	if art is MeshInstance3D and not glows(art as MeshInstance3D):
 		(art as MeshInstance3D).material_override = mat
+
+## A PART THE ART MADE TO GLOW keeps its own lit material: the burning rag in a fire pot's neck (station 2;
+## tools/generate_props.py fire_pot) is drawn with an emissive material of its own, and the matte vertex colour
+## every prop is dressed in would put it out -- a pot flying at night with no fire on it.
+static func glows(mi: MeshInstance3D) -> bool:
+	if mi == null or mi.mesh == null:
+		return false
+	for i in mi.mesh.get_surface_count():
+		var sm := mi.mesh.surface_get_material(i) as BaseMaterial3D
+		if sm != null and sm.emission_enabled:
+			return true
+	return false
 
 ## THE ANIMALS' EYES ARE COLOURED BY THEIR VERTICES (tools/dino_body.py) -- their skins are baked to images
 ## (tools/dino_skin.py) -- and keep the materials they came with ("Eye", which the eye-shine finds by name,

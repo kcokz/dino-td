@@ -234,6 +234,9 @@ func touches(d: Node) -> bool:
 	var cfg = _get_config()
 	if cfg == null or not (d is Node3D):
 		return false
+	# What flies goes over it (FlyerDino).
+	if d.has_method("is_flying") and d.is_flying():
+		return false
 	var half: float = 0.4
 	if "dino_type" in d and cfg.has_method("get_visual_size"):
 		half = float(cfg.get_visual_size("dino/" + String(d.dino_type)).x) * 0.5

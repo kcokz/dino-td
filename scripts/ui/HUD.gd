@@ -391,15 +391,42 @@ func _on_goal_label_input(event: InputEvent) -> void:
 			gs.unpin_goal()
 
 ## The stock's gaps close up when it would reach the cabin's medallion -- a map with more
-## materials, counts in the thousands, a narrow window -- rather than running under it.
+## materials, counts in the thousands, a narrow window -- rather than running under it; and when even
+## the closest gaps are not enough, its chips go a size down (_squeeze_chips): smaller icons, smaller
+## figures. Back to full size as soon as it fits again.
 func _fit_stock() -> void:
 	if resource_bar == null or core_vital == null or not core_vital.is_inside_tree():
 		return
 	var room: float = core_vital.get_global_rect().position.x - resource_bar.get_global_rect().position.x - UiTheme.space("m")
-	for gap in [UiTheme.space("l"), UiTheme.space("s"), UiTheme.space("xs")]:
-		resource_bar.add_theme_constant_override("separation", gap)
-		if resource_bar.get_combined_minimum_size().x <= room:
-			return
+	for squeezed in [false, true]:
+		_squeeze_chips(squeezed)
+		for gap in [UiTheme.space("l"), UiTheme.space("s"), UiTheme.space("xs")]:
+			resource_bar.add_theme_constant_override("separation", gap)
+			if resource_bar.get_combined_minimum_size().x <= room:
+				return
+
+## Whether the stock's chips are a size down (_fit_stock).
+var _chips_squeezed: bool = false
+
+func _squeeze_chips(on: bool) -> void:
+	if on == _chips_squeezed:
+		return
+	_chips_squeezed = on
+	var px: int = UiTheme.icon_size("s" if on else "m")
+	var width: float = float(_ui("resource_count_width_squeezed" if on else "resource_count_width", 30))
+	for res_id in resource_chips:
+		var chip: Control = resource_chips[res_id]
+		if chip == null or not is_instance_valid(chip):
+			continue
+		var icon: Control = chip.find_child("%sIcon" % String(res_id).to_pascal_case(), true, false) as Control
+		if icon != null:
+			icon.custom_minimum_size = Vector2(px, px)
+		var lbl: Label = resource_labels.get(res_id)
+		if lbl == null or not is_instance_valid(lbl):
+			continue
+		lbl.custom_minimum_size = Vector2(width, 0)
+		# The theme's own small figures (UI-POLISH T1: a size is a step on the theme's ladder).
+		lbl.theme_type_variation = &"SmallNumberLabel" if on else &"NumberLabel"
 
 ## He ate, or the meal wore off. The countdown itself is _process's.
 func _on_fed_changed(_fed: Dictionary) -> void:
@@ -716,6 +743,10 @@ func _refresh_day_dial() -> void:
 ## torch's key.
 func _on_day_part_changed(part: String, day: int) -> void:
 	var key: String = {"day": "HINT_DAWN", "dusk": "HINT_DUSK", "night": "HINT_NIGHT"}.get(part, "")
+	# In the words of this run's animals (MAPS.<id>.day_hints: the Morrison's raiders, no hunters in its river).
+	var words: Dictionary = _day_hints()
+	if key != "":
+		key = String(words.get("dawn" if part == "day" else part, key))
 	# A day gone: the days still to hold out for rescue are one fewer.
 	_refresh_beacon_label()
 	# The first dusk teaches what the dark is and what fire is for -- in a game that teaches (GameState "tutorial").
@@ -724,10 +755,17 @@ func _on_day_part_changed(part: String, day: int) -> void:
 		# The torch's tile comes with this dusk, and the key it comes with is the one said.
 		if hero_commands:
 			hero_commands.refresh()
-		show_hint(tr("HINT_DUSK_FIRST") % _torch_key_text(), UiTheme.toast_seconds("read"), "sun")
+		show_hint(tr(String(words.get("dusk_first", "HINT_DUSK_FIRST"))) % _torch_key_text(), UiTheme.toast_seconds("read"), "sun")
 	elif key != "":
 		show_hint(tr(key), -1.0, "moon" if part == "night" else "sun")
 	_refresh_day_dial()
+
+## What the day's turns are said in for this run's animals (MAPS.<id>.day_hints, carried with an age's cast): "dawn",
+## "dusk", "night", "dusk_first" to a string's key; {} for the Chinle's own (HINT_DAWN and the rest).
+func _day_hints() -> Dictionary:
+	var gs = _get_game_state()
+	var words: Variant = gs.map_data().get("day_hints", {}) if (gs and gs.has_method("map_data")) else {}
+	return words if words is Dictionary else {}
 
 ## Whether the first dusk's word on fire has been said this run.
 var _first_dusk_said: bool = false
@@ -919,6 +957,9 @@ func _on_game_won() -> void:
 	if gs and gs.is_game_over and not gs.is_game_won:
 		return
 	if is_game_over_visible():
+		return
+	# The beacon's jump goes on to our game's next station (StationJump): no verdict, the run goes on there.
+	if gs and gs.has_method("has_next_station") and gs.has_next_station():
 		return
 	# Held out till the rescue came (GameState "rescue" goal), or jumped home on the beacon.
 	if gs and gs.has_method("goal_kind") and String(gs.goal_kind()) == "rescue":

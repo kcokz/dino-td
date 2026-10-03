@@ -199,6 +199,19 @@ func test_03_the_bow_tower_shoots_all_round_one_at_a_time() -> void:
 	assert_eq(_lost(beyond), 0.0, "what is beyond its reach is not")
 	assert_eq(bow.rounds(), int(config_node.ammo_capacity("bow_tower")) - shots, "an arrow spent on each")
 
+func test_03b_an_arrow_at_what_is_gone_lands_on_nothing() -> void:
+	# The playtest bot: two arrows let go at one animal, the first killed it, and the second's landing was a
+	# script error -- it was bound to an animal already freed.
+	var f: Array = await _field()
+	var bow = await _tower(f[1], "bow_tower", Vector2i(0, 0), 0, "arrow_wood")
+	var d = _animal("raptor", bow.global_position + Vector3(0.0, 0.0, -(float(_row("bow_tower")["range"]) - 0.5)))
+	var other = _animal("raptor", bow.global_position + Vector3(4.0, 0.0, 0.0))
+	assert_true(bow.loose_at(d), "an arrow is let go at it")
+	_cleanup_nodes.erase(d)
+	d.free()
+	await wait_physics_frames(int(float(Engine.physics_ticks_per_second) * float(_row("bow_tower")["range"]) / float(config_node.TOWERS["arrow_speed"])) + 10)
+	assert_eq(_lost(other), 0.0, "it comes down on nothing, and nothing else is hit for it")
+
 func test_04_nothing_on_it_turns_to_aim() -> void:
 	var f: Array = await _field()
 	var bow = await _tower(f[1], "bow_tower", Vector2i(0, 0), 0, "arrow_wood")

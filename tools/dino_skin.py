@@ -131,6 +131,9 @@ def bake_material(spec):
     # Feathers where it had them (tools/dino_feathers.py): the coat, and each feather's vane.
     if spec.get("feathers"):
         height_out, tint_out = _plumage(nt, tex, height_out, tint_out, spec["feathers"])
+    # Horn and bare plate where it had them (sculpt.Body.horn): no scales -- a smooth sheath with a fine grain.
+    if spec.get("horn"):
+        height_out, tint_out = _horn(nt, tex, height_out, tint_out, spec["horn"])
     shade = _node(nt, "ShaderNodeMapRange", (-100, -100))
     shade.inputs["From Min"].default_value = 0.0
     shade.inputs["From Max"].default_value = 1.0
@@ -282,6 +285,28 @@ def _plumage(nt, tex, scale_height, scale_tint, fe):
     return height, tint
 
 
+def _horn(nt, tex, scale_height, scale_tint, hn):
+    """Where the skin is horn (the "Horn" attribute): no scales, a sheath with a fine grain over it and a faint
+    mottle -- the scales' height and tint kept elsewhere."""
+    attr = _node(nt, "ShaderNodeAttribute", (-1900, 1500))
+    attr.attribute_name = "Horn"
+    k = _node(nt, "ShaderNodeSeparateColor", (-1700, 1500))
+    nt.links.new(attr.outputs["Color"], k.inputs["Color"])
+    grain = _node(nt, "ShaderNodeTexNoise", (-1500, 1500))
+    grain.inputs["Scale"].default_value = hn.get("grain", 60.0)
+    grain.inputs["Detail"].default_value = 3.0
+    nt.links.new(tex.outputs["Object"], grain.inputs["Vector"])
+    blot = _node(nt, "ShaderNodeTexNoise", (-1500, 1300))
+    blot.inputs["Scale"].default_value = hn.get("grain", 60.0) * 0.12
+    nt.links.new(tex.outputs["Object"], blot.inputs["Vector"])
+    h = _range(nt, (-1300, 1500), grain.outputs["Fac"], 0.3, 0.7, 0.5 - hn.get("relief", 0.15), 0.5 + hn.get("relief", 0.15))
+    t = _math(nt, 'MULTIPLY', (-1100, 1300),
+              _range(nt, (-1300, 1300), blot.outputs["Fac"], 0.3, 0.7, 1.0 - hn.get("mottle", 0.12), 1.0 + hn.get("mottle", 0.12)),
+              _range(nt, (-1300, 1100), grain.outputs["Fac"], 0.3, 0.7, 1.0 - hn.get("streak", 0.06), 1.0 + hn.get("streak", 0.06)))
+    return (_mixf(nt, (-900, 1500), k.outputs["Red"], scale_height, h),
+            _mixf(nt, (-900, 1300), k.outputs["Red"], scale_tint, t))
+
+
 def _scutes(nt, tex, normal_xyz, pebbles, sc, where):
     """The crocodile line's skin: square scales in rows across the belly, where the skin faces down, and long
     ones in rows up the flanks -- a grid in the body's own space, its lines the grooves -- the pebbly scales
@@ -409,7 +434,7 @@ def bake(obj, spec, size=2048, name="skin", normal_size=None):
     bsdf.inputs["Roughness"].default_value = spec.get("roughness", 0.62)
     obj.data.materials[0] = worn
     bpy.data.materials.remove(bake_mat)
-    for attr_name in ("Col", "Mask", "Feather"):
+    for attr_name in ("Col", "Mask", "Feather", "Horn"):
         a = obj.data.color_attributes.get(attr_name)
         if a is not None:
             obj.data.color_attributes.remove(a)

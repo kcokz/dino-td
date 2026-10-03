@@ -102,7 +102,7 @@ class Skeleton:
 
     def _lay_out(self):
         s = self.spec
-        hip = Vector((0.0, 0.0, s["hip_height"]))
+        hip = Vector((0.0, s.get("hip_y", 0.0), s["hip_height"]))
         # The root on the ground under the hips, the game's origin: nothing is weighted to it.
         self.add("Root", None, Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.1, 0.0)), UP, deform=False)
         # The pelvis: from the hip joints back over the first of the tail.
@@ -143,20 +143,43 @@ class Skeleton:
         base = self.bones[parent].head if limb["from"] == "hips" else self.bones[parent].tail
         socket = base + Vector((sign * limb["socket"][0], limb["socket"][1], limb["socket"][2]))
         names = [n + "." + side for n in limb["bones"]]
-        rig = LimbRig(limb, sign)
-        if limb.get("arm"):
-            # Held off the ground: its wrist where it rests, in front of the chest.
-            r = limb["rest_hand"]
-            foot = socket + Vector((sign * r[0], r[1], r[2]))
+        if limb.get("spread"):
+            # Held out in the air, each bone along its own direction (right side; mirrored to the left) -- a flying
+            # pterosaur's arm spread, its legs trailing behind it. Its Z up, so a bone's pitch raises it and lowers
+            # it (the wingbeat), its yaw sweeps it fore and aft, its roll twists it.
+            joints = [socket]
+            for length, d in zip(limb["lengths"], limb["spread"]):
+                joints.append(joints[-1] + Vector((sign * d[0], d[1], d[2])).normalized() * length)
+            foot = joints[3].copy()
         else:
-            foot = Vector((socket.x + sign * limb["stance"][0], socket.y + limb["stance"][1], 0.0))
-        joints = rig.solve(socket, foot, FWD, 0.0)
+            rig = LimbRig(limb, sign)
+            if limb.get("arm"):
+                # Held off the ground: its wrist where it rests, in front of the chest.
+                r = limb["rest_hand"]
+                foot = socket + Vector((sign * r[0], r[1], r[2]))
+            else:
+                foot = Vector((socket.x + sign * limb["stance"][0], socket.y + limb["stance"][1], 0.0))
+            joints = rig.solve(socket, foot, FWD, 0.0)
         prev = parent
         for i, n in enumerate(names):
-            self.add(n, prev, joints[i], joints[i + 1], FWD if i < 2 else UP)
+            self.add(n, prev, joints[i], joints[i + 1], UP if limb.get("spread") else (FWD if i < 2 else UP))
             prev = n
         self.limbs["%s.%s" % (key, side)] = {"spec": limb, "names": names, "sign": sign, "socket": socket,
                                             "foot": foot, "parent": parent}
+        spread_wing = limb.get("wing")
+        if spread_wing:
+            # The wing finger spread: its four long bones out from the knuckle, each along its own direction.
+            at = joints[3]
+            prev = names[2]
+            wnames = []
+            for k, (length, d) in enumerate(spread_wing):
+                n = "Wing%d.%s" % (k + 1, side)
+                tip = at + Vector((sign * d[0], d[1], d[2])).normalized() * length
+                self.add(n, prev, at, tip, UP)
+                wnames.append(n)
+                prev = n
+                at = tip
+            self.limbs["%s.%s" % (key, side)]["wing"] = wnames
         wing = limb.get("wing_finger")
         if wing:
             # A pterosaur's wing finger, folded: from the knuckle at the foot of the long hand bone flat back up
