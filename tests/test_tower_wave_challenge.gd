@@ -556,15 +556,16 @@ func test_challenge_wavemanager_anomalous_signals_handling() -> void:
 	event_bus_node.dino_died.emit(null)
 	assert_false(end_watcher.emitted, "wave_ended must NOT emit when no wave is active")
 
-	# 2. Start wave with 2 dinos
+	# 2. Start wave with its base_count dinos
+	var n: int = int(config_node.WAVES["base_count"])
 	wm.start_wave(1)
 	assert_true(wm.is_wave_active, "Wave 1 active")
-	assert_eq(wm.dinos_alive_count, 2, "Wave 1 starts with 2 dinos")
+	assert_eq(wm.dinos_alive_count, n, "Wave 1 starts with base_count dinos")
 
-	# 3. Kill both dinos
-	event_bus_node.dino_died.emit(null)
-	event_bus_node.dino_died.emit(null)
-	assert_true(end_watcher.emitted, "wave_ended emitted on second death")
+	# 3. Kill them all
+	for i in range(n):
+		event_bus_node.dino_died.emit(null)
+	assert_true(end_watcher.emitted, "wave_ended emitted on the last death")
 	assert_false(wm.is_wave_active, "Wave is now inactive")
 
 	# 4. Excess death signal -> dinos_alive_count should clamp at 0 and not emit duplicate wave_ended
@@ -580,8 +581,10 @@ func test_challenge_wavemanager_invalid_wave_number_clamping() -> void:
 	var count_zero = wm.get_wave_dino_count(0)
 	var count_negative = wm.get_wave_dino_count(-10)
 
-	assert_eq(count_zero, 2, "Wave 0 clamps to Wave 1 (2 dinos)")
-	assert_eq(count_negative, 2, "Wave -10 clamps to Wave 1 (2 dinos)")
+	var first: int = wm.get_wave_dino_count(1)
+	assert_eq(first, int(config_node.WAVES["base_count"]), "Wave 1 is base_count dinos")
+	assert_eq(count_zero, first, "Wave 0 clamps to Wave 1")
+	assert_eq(count_negative, first, "Wave -10 clamps to Wave 1")
 
 func test_challenge_tower_target_with_zero_or_negative_hp_rejected() -> void:
 	var tower = _create_tower(Vector3.ZERO)

@@ -219,14 +219,14 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_true(wave_mgr.is_wave_active, "WaveManager is_wave_active is true")
 	assert_eq(wave_mgr.current_wave, 1, "WaveManager current_wave is 1")
 	assert_eq(game_state_node.wave_number, 1, "GameState wave_number is 1")
-	assert_eq(wave_mgr.dinos_alive_count, 2, "Wave 1 spawns 2 dinos (base_count 2)")
+	assert_eq(wave_mgr.dinos_alive_count, int(config_node.WAVES["base_count"]), "Wave 1 spawns base_count dinos")
 
 	# --------------------------------------------------------------------------
 	# --------------------------------------------------------------------------
 	# --- Wave 1 Combat & Resolution ---
-	# Eliminate the 2 dinos of wave 1
-	event_bus_node.dino_died.emit(null)
-	event_bus_node.dino_died.emit(null)
+	# Eliminate the dinos of wave 1 (Config.WAVES.base_count)
+	for i in range(int(config_node.WAVES["base_count"])):
+		event_bus_node.dino_died.emit(null)
 	await wait_frames(1)
 
 	assert_false(wave_mgr.is_wave_active, "Wave 1 ended")
@@ -250,12 +250,12 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 
 	assert_eq(int(game_state_node.current_phase), 1, "Phase transitioned to ATTACK (1)")
 	assert_eq(wave_mgr.current_wave, 2, "WaveManager current_wave is 2")
-	assert_eq(wave_mgr.dinos_alive_count, 3, "Wave 2 spawns 3 dinos (base 2 + 1)")
+	var second: int = int(config_node.WAVES["base_count"]) + int(config_node.WAVES["count_per_wave"])
+	assert_eq(wave_mgr.dinos_alive_count, second, "Wave 2 spawns base_count + count_per_wave dinos")
 
-	# Eliminate 3 dinos of wave 2
-	event_bus_node.dino_died.emit(null)
-	event_bus_node.dino_died.emit(null)
-	event_bus_node.dino_died.emit(null)
+	# Eliminate the dinos of wave 2
+	for i in range(second):
+		event_bus_node.dino_died.emit(null)
 	await wait_frames(1)
 
 	assert_false(wave_mgr.is_wave_active, "Wave 2 ended")
@@ -271,7 +271,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_eq(int(game_state_node.current_phase), 0, "Transitioned to PLAN (0)")
 
 	# --------------------------------------------------------------------------
-	# Phase E: Reach Wave 3 (Horde Wave, 8 dinos), verify horde multiplier & buff
+	# Phase E: Reach Wave 3 (Horde Wave), verify horde multiplier & buff
 	# --------------------------------------------------------------------------
 	hud.simulate_end_action_click()
 	await wait_frames(1)

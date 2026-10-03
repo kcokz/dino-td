@@ -544,37 +544,35 @@ func test_tower_retargets_when_target_exits_range() -> void:
 # 5. Category 3: WaveManager Progression & Horde Scaling Tests (R4.3)
 # ==============================================================================
 
-func test_wave_1_spawns_2_dinos() -> void:
+func test_wave_1_spawns_base_count_dinos() -> void:
 	var wm = _create_wave_manager()
 	if wm == null: return
 
+	var w_cfg: Dictionary = config_node.WAVES
 	var count = -1
 	if wm.has_method("get_wave_count"):
 		count = wm.call("get_wave_count", 1)
 	elif wm.has_method("calculate_wave_dinos"):
 		count = wm.call("calculate_wave_dinos", 1)
 	else:
-		var base_count = 2
-		var count_per_wave = 1
-		count = base_count + (1 - 1) * count_per_wave
+		count = wm.get_wave_dino_count(1)
 
-	assert_eq(count, 2, "Wave 1 should calculate 2 dinos (base_count 2 + 0)")
+	assert_eq(count, int(w_cfg["base_count"]), "Wave 1 should calculate base_count dinos (+ 0)")
 
-func test_wave_2_spawns_3_dinos() -> void:
+func test_wave_2_spawns_one_more() -> void:
 	var wm = _create_wave_manager()
 	if wm == null: return
 
+	var w_cfg: Dictionary = config_node.WAVES
 	var count = -1
 	if wm.has_method("get_wave_count"):
 		count = wm.call("get_wave_count", 2)
 	elif wm.has_method("calculate_wave_dinos"):
 		count = wm.call("calculate_wave_dinos", 2)
 	else:
-		var base_count = 2
-		var count_per_wave = 1
-		count = base_count + (2 - 1) * count_per_wave
+		count = wm.get_wave_dino_count(2)
 
-	assert_eq(count, 3, "Wave 2 should calculate 3 dinos (base_count 2 + 1)")
+	assert_eq(count, int(w_cfg["base_count"]) + int(w_cfg["count_per_wave"]), "Wave 2 should calculate base_count + count_per_wave dinos")
 
 func test_wave_3_horde_spawns_8_dinos() -> void:
 	var wm = _create_wave_manager()
@@ -635,21 +633,24 @@ func test_wave_manager_emits_wave_ended_when_all_dinos_eliminated() -> void:
 
 	var end_watcher = watch_signal(event_bus_node, "wave_ended")
 
-	# Simulate wave 1 with 2 dinos
+	# Simulate wave 1 with its base_count dinos
+	var n: int = int(config_node.WAVES["base_count"])
 	if wm.has_method("start_wave"):
 		wm.call("start_wave", 1)
 	elif "dinos_alive" in wm:
-		wm.dinos_alive = 2
+		wm.dinos_alive = n
 
-	var d1 = _create_dino("raptor", {})
-	var d2 = _create_dino("raptor", {})
+	var killed: Array = []
+	for i in range(n):
+		killed.append(_create_dino("raptor", {}))
 
-	# Kill first dino
-	event_bus_node.dino_died.emit(d1)
+	# Kill all but the last
+	for i in range(n - 1):
+		event_bus_node.dino_died.emit(killed[i])
 	assert_false(end_watcher.emitted, "wave_ended must not emit while 1 dino remains alive")
 
-	# Kill second dino
-	event_bus_node.dino_died.emit(d2)
+	# Kill the last
+	event_bus_node.dino_died.emit(killed[n - 1])
 	assert_true(end_watcher.emitted, "wave_ended must emit when all wave dinos are eliminated")
 
 func test_post_horde_stat_enhancement_applied() -> void:

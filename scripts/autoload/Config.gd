@@ -1713,8 +1713,13 @@ const DINO_AI: Dictionary = {
 ## figures put the raid at minute 25 near thirty at under x1.5, and a big wave half as
 ## big again rather than twice as big -- a base that kept building holds it, one that
 ## stopped at the fourth trap does not.
+##
+## THE PRESSURE (2026-10-03, the player's son, eight, after a game: "又难又简单——简单的是恐龙强度不高，不会给什么
+## 真正的压力"): a raid of two, then three, broke on the first fence and the first tower. It starts at three now, and
+## raids come oftener (RAIDS.interval_min/max) -- more of them before the caps (MAPS.raid_most, toughest), which keep
+## the late run where it was.
 const WAVES: Dictionary = {
-	"base_count": 2,
+	"base_count": 3,
 	"count_per_wave": 1,
 	"big_every": 3,
 	"big_multiplier": 1.5,
@@ -3584,8 +3589,11 @@ static func get_attack_slot_radius(type_id: String, outer: bool = false) -> floa
 # 12. Continuous Real-Time Raids & Resource Nodes (v0.2)
 # ==============================================================================
 const RAIDS: Dictionary = {
-	"interval_min": 80.0,         # 两次来袭的最小间隔（秒）——v0.4 的开局链条多了几趟路
-	"interval_max": 120.0,        # 最大间隔——区间内随机，不是固定周期
+	# Seconds between raids, least and most -- at random between them, not a fixed beat. 80 to 120 (v0.4: the opening
+	# had more trips to it); 60 to 90 since 2026-10-03 (the player's son: "恐龙强度不高，不会给什么真正的压力" -- and
+	# building quicker, WAVES "THE PRESSURE"): less standing about between raids, more of them.
+	"interval_min": 60.0,
+	"interval_max": 90.0,
 	"warning_lead_time": 15.0,    # Pre-raid warning duration (seconds)
 	"intensity_per_minute": 0.05, # Raid intensity escalation slope per minute (see WAVES: it multiplies)
 	"intensity_jitter": 0.3,      # Random intensity fluctuation (+/- 30%)
@@ -3652,9 +3660,10 @@ const RESOURCE_NODES: Dictionary = {
 		"name": "RESOURCE_WOOD",
 		"icon": "tree",           # what the panel shows when one is picked (Config.ICON_DIR)
 		"capacity": 150,
-		# 0.75 wood/s by hand (v0.6 round three: "木头和石头太紧就影响建造的乐趣" -- it was 0.5, and
-		# a run spent its middle short of both, the ring falling for want of a stake).
-		"harvest_rate": 0.75,
+		# 1 wood/s by hand (v0.6 round three: "木头和石头太紧就影响建造的乐趣" -- it was 0.5, and a run spent its
+		# middle short of both, the ring falling for want of a stake; then 0.75 -- and 2026-10-03, the player's son
+		# after a game: "造东西要很久，要花时间": the materials for a tower were half a minute at a tree).
+		"harvest_rate": 1.0,
 		"color": Color(0.35, 0.55, 0.25),
 		"depleted_color": Color(0.3, 0.3, 0.3),
 		# A tree stands taller than the Hero, which is how it reads as a tree rather
@@ -3673,7 +3682,7 @@ const RESOURCE_NODES: Dictionary = {
 		"name": "RESOURCE_STONE",
 		"icon": "stone",
 		"capacity": 100,
-		"harvest_rate": 0.5,      # 0.5 stone/s by hand (was 0.35; see wood)
+		"harvest_rate": 0.7,      # 0.7 stone/s by hand (was 0.35, then 0.5; see wood)
 		# Bare hands do not cut rock. The pick is made at the cabin out of bone, and
 		# bone comes off a dinosaur -- which is what turns the first raid from a
 		# threat into something the player needs.
@@ -3691,7 +3700,8 @@ const RESOURCE_NODES: Dictionary = {
 		"name": "RESOURCE_CLAY",
 		"icon": "clay",
 		"capacity": 60,
-		"harvest_rate": 0.4,
+		# A little slower than stone (a wet bank sucks at the shovel), quickened with it (see wood).
+		"harvest_rate": 0.55,
 		"requires_unlock": "harvest_clay",
 		"color": Color(0.55, 0.52, 0.46),
 		"depleted_color": Color(0.3, 0.3, 0.3),
@@ -4861,9 +4871,14 @@ static func factor_text(f: float) -> String:
 ## feel like work next to hammering in a stake.
 ##   time = max(BUILD_TIME_MIN, total_cost ^ BUILD_TIME_EXPONENT * BUILD_SECONDS_PER_RESOURCE) * side ^ BUILD_TIME_SIZE_EXPONENT
 ## and, since the 2026-10-02 rebuild, times its side (in cells) to BUILD_TIME_SIZE_EXPONENT: a tower two to four
-## cells across is a work of a quarter to most of a minute, a stake still a moment (the player: "建造时间也没区
-## 别"). A cell a side is 1: nothing of one cell changes.
-const BUILD_SECONDS_PER_RESOURCE: float = 0.55
+## cells across takes longer than a stake by its size (the player: "建造时间也没区别"). A cell a side is 1: nothing of
+## one cell changes.
+##
+## THE PACE (2026-10-03, the player's son, eight, after a game: "又难又简单……难的是造东西要很久，要花时间"): at 0.55
+## a bow tower took 17 seconds, the catapult 52 and its third rack a minute and a half -- standing and hammering while
+## nothing happened, the waiting GAME-DESIGN 9.3 warns of ("间隔拉长只是磨时间"). At 0.3 every building takes a little
+## over half as long, in the same proportions: the bow tower about 10 seconds, the catapult under half a minute.
+const BUILD_SECONDS_PER_RESOURCE: float = 0.3
 const BUILD_TIME_EXPONENT: float = 1.25
 const BUILD_TIME_MIN: float = 1.0
 const BUILD_TIME_SIZE_EXPONENT: float = 0.5

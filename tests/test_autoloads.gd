@@ -168,7 +168,7 @@ func test_config_dinos_and_waves() -> void:
 	assert_has(config_node, "WAVES", "Config must define WAVES")
 	if "WAVES" in config_node:
 		var w: Dictionary = config_node.WAVES
-		assert_eq(w.get("base_count", 0), 2, "wave base_count should be 2")
+		assert_eq(w.get("base_count", 0), 3, "wave base_count should be 3 (2026-10-03: a raid with some weight from the first)")
 		assert_eq(w.get("count_per_wave", 0), 1, "wave count_per_wave should be 1")
 		assert_eq(w.get("big_every", 0), 3, "wave big_every should be 3")
 		assert_gt(float(w.get("big_multiplier", 0.0)), 1.0, "A big wave is bigger than an ordinary one")
