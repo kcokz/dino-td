@@ -34,6 +34,11 @@ const SOUND_IDS: Dictionary = {
 ## Players heard everywhere at once: the interface, and what has no place.
 const VOICE_COUNT: int = 8
 
+## The mix's groups (Config.AUDIO, the engine's audio buses), each its own slider on the settings page: what happens,
+## and what is always there.
+const EFFECTS_BUS: StringName = &"Effects"
+const AMBIENCE_BUS: StringName = &"Ambience"
+
 var _streams: Dictionary = {}          # sound id -> AudioStreamRandomizer over its files, once they are in
 var _files: Dictionary = {}            # sound id -> its file paths
 var _loaded: Dictionary = {}           # file path -> AudioStream
@@ -61,9 +66,11 @@ func _ready() -> void:
 	# The interface's sounds and the valley's ambience go on while the game is paused; the world's
 	# own sounds hold where they are, mid-note, and go on with it (_build_world_players).
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_ensure_buses()
 	_request_sounds()
 	_build_voices()
 	_build_world_players()
+	_restore_volumes()
 
 ## Quitting: whatever is still on the loader threads is waited for and let go, and nothing is
 ## held -- a file half-loaded when the game closes is otherwise still in use at exit.
@@ -415,6 +422,8 @@ func make_loop(id: String) -> AudioStreamPlayer3D:
 	p.max_distance = float(spec.get("reach", table.get("reach", 70.0)))
 	p.volume_db = _master_db() + float(spec.get("db", 0.0))
 	p.pitch_scale = float(spec.get("pitch", 1.0))
+	# Going on where it is, the place's own sound: the ambience's level, not the effects'.
+	p.bus = AMBIENCE_BUS
 	return p
 
 func is_ambience_playing() -> bool:
@@ -520,13 +529,16 @@ func _build_voices() -> void:
 	for i in range(VOICE_COUNT):
 		var p := AudioStreamPlayer.new()
 		p.name = "Voice%d" % i
+		p.bus = EFFECTS_BUS
 		add_child(p)
 		_voices.append(p)
 	_ambience = AudioStreamPlayer.new()
 	_ambience.name = "Ambience"
+	_ambience.bus = AMBIENCE_BUS
 	add_child(_ambience)
 	_ambience_night = AudioStreamPlayer.new()
 	_ambience_night.name = "AmbienceNight"
+	_ambience_night.bus = AMBIENCE_BUS
 	add_child(_ambience_night)
 
 func _build_world_players() -> void:
@@ -538,11 +550,70 @@ func _build_world_players() -> void:
 		var p := AudioStreamPlayer3D.new()
 		p.name = "Sound%d" % i
 		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		p.bus = EFFECTS_BUS
 		_world.add_child(p)
 		_players.append(p)
 	_listener = AudioListener3D.new()
 	_listener.name = "Listener"
 	_world.add_child(_listener)
+
+# ==============================================================================
+# The mix (Config.AUDIO; the settings page's sliders, PauseMenu)
+# ==============================================================================
+
+## The buses the mix is made of (Config.AUDIO.buses), each into Master: made here, the project's layout having only
+## Master.
+func _ensure_buses() -> void:
+	for bus in _audio().get("buses", {}):
+		if AudioServer.get_bus_index(StringName(bus)) != -1:
+			continue
+		AudioServer.add_bus()
+		var i: int = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, String(bus))
+		AudioServer.set_bus_send(i, &"Master")
+
+## The effects' bus, for a player of someone else's (HeroVoice's mouth).
+func effects_bus() -> StringName:
+	return EFFECTS_BUS
+
+## The mix's buses, in the order the settings page shows them (Config.AUDIO.buses).
+func buses() -> Array:
+	return _audio().get("buses", {}).keys()
+
+## How loud `bus` is set: 0 to 100.
+func volume(bus: String) -> int:
+	var i: int = AudioServer.get_bus_index(StringName(bus))
+	if i == -1 or AudioServer.is_bus_mute(i):
+		return 0
+	return int(round(db_to_linear(AudioServer.get_bus_volume_db(i)) * 100.0))
+
+## Sets `bus` to `percent`, 0 to 100: as the ear hears a slider (linear), and at 0 muted, not only quiet. Remembered
+## with the other settings, unless `remember` is false -- the levels read back as the game starts.
+func set_volume(bus: String, percent: int, remember: bool = true) -> void:
+	var i: int = AudioServer.get_bus_index(StringName(bus))
+	if i == -1:
+		return
+	var p: int = clampi(percent, 0, 100)
+	AudioServer.set_bus_mute(i, p == 0)
+	AudioServer.set_bus_volume_db(i, linear_to_db(maxf(0.0001, float(p) / 100.0)))
+	if remember:
+		var i18n = get_node_or_null("/root/I18n")
+		if i18n and i18n.has_method("save_setting"):
+			i18n.save_setting("audio", bus, p)
+
+## The levels the player set, back as the game starts (the settings file's "audio"; Config.AUDIO's defaults).
+func _restore_volumes() -> void:
+	var i18n = get_node_or_null("/root/I18n")
+	var defaults: Dictionary = _audio().get("buses", {})
+	for bus in defaults:
+		var p: int = int(defaults[bus])
+		if i18n and i18n.has_method("load_setting"):
+			p = int(i18n.load_setting("audio", String(bus), p))
+		set_volume(String(bus), p, false)
+
+func _audio() -> Dictionary:
+	var cfg = get_node_or_null("/root/Config")
+	return cfg.AUDIO if (cfg and "AUDIO" in cfg) else {}
 
 ## The next player not busy, or -- all of them busy -- the one after the last used.
 func _free_player() -> AudioStreamPlayer3D:

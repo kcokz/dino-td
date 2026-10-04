@@ -2792,6 +2792,9 @@ const UI: Dictionary = {
 	"result_card_width": 560,
 	"menu_width": 400,
 	"menu_picker_width": 190,
+	# The settings page's volumes (AUDIO): a level's slider as wide as a picker, and its figure ("100%") this wide
+	# after it, so the sliders line up whatever they are set to.
+	"menu_volume_figure_width": 56,
 	# The start screen (StartScreen): its title page a little wider than the pause menu, what each game is
 	# written under its button; the custom game's page wider still -- a setting's name, its picker and what the
 	# choice does on each row -- and its rows scrolling past this height, so it fits a 720-line window.
@@ -2915,6 +2918,22 @@ const BARKS: Dictionary = {
 		"enter": {"count": 3, "chance": 0.5, "again": 30.0},
 		"leave": {"count": 2, "chance": 0.4, "again": 30.0},
 	},
+}
+
+# ==============================================================================
+# The mix (the player, 2026-10-03: "设置里加一个audio，可以调整音量")
+# ==============================================================================
+## THE VOLUMES the player sets (the settings page, PauseMenu): the engine's own audio buses (AudioServer), each a
+## slider, 0 to 100 -- heard as it is set (linear, the engine's linear_to_db), and at 0 off, the bus muted rather than
+## only quiet. Remembered with the other settings (I18n.save_setting, section "audio"). Master is all of it; the rest
+## go into it:
+##   Effects   what happens: his work, blows and bites, the animals' calls, the interface (Fx's players)
+##   Ambience  what is always there: the valley by day and by night, a fire's crackle (Fx's loops)
+## Each at its default till the player moves it: all the way up -- SOUNDS' own levels are the mix as it was made.
+## A slider moves in `step`s.
+const AUDIO: Dictionary = {
+	"buses": {"Master": 100, "Effects": 100, "Ambience": 100},
+	"step": 5,
 }
 
 # ==============================================================================

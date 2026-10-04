@@ -571,6 +571,16 @@ static func build() -> Theme:
 	t.set_stylebox("grabber_highlight", "VScrollBar", held)
 	t.set_stylebox("grabber_pressed", "VScrollBar", held)
 
+	# --- Sliders ------------------------------------------------------------------
+	# A level (the settings page's volumes, PauseMenu): the scroll's thin dark groove, filled in the accent as far as
+	# it is set, brighter while held.
+	var slot := _box(Color(color("bg"), 0.6), Color(color("text"), 0.14), 1, radius("s"), 0, space("hair"))
+	var filled := _box(Color(color("accent"), 0.8), Color(0, 0, 0, 0), 0, radius("s"), 0, space("hair"))
+	var filled_held := _box(color("accent"), Color(0, 0, 0, 0), 0, radius("s"), 0, space("hair"))
+	t.set_stylebox("slider", "HSlider", slot)
+	t.set_stylebox("grabber_area", "HSlider", filled)
+	t.set_stylebox("grabber_area_highlight", "HSlider", filled_held)
+
 	# --- Containers ---------------------------------------------------------------
 	t.set_constant("separation", "HBoxContainer", space("s"))
 	t.set_constant("separation", "VBoxContainer", space("s"))

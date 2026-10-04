@@ -504,3 +504,8 @@ HINT_DAWN_CRETACEOUS,"Dawn. The raptors hunt by day as they did by night.","天�
 HINT_DUSK_CRETACEOUS,"Dusk. The raptors do not go home: they hunt in the dark too.","黄昏了。迅猛龙不回巢：黑里它们也出来。"
 HINT_NIGHT_CRETACEOUS,"Night. The raptors are still out — and you will see little in the dark.","天黑了。迅猛龙还在外面——黑里看不远。"
 HINT_DUSK_FIRST_CRETACEOUS,"Dusk. The dark is coming: you will see little in it, and the raptors hunt on through it. Build a campfire, or light a torch (%s). Fire burns wood.","黄昏了。天要黑了：黑里看不远，迅猛龙黑里也出来。造一堆篝火，或者点一支火把（%s）。火要烧木头。"
+MENU_SOUND,"Sound","声音"
+MENU_VOLUME_MASTER,"Volume","总音量"
+MENU_VOLUME_EFFECTS,"Effects","音效"
+MENU_VOLUME_AMBIENCE,"Ambience","环境声"
+MENU_VOLUME_PERCENT,"%d%%","%d%%"

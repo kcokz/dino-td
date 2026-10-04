@@ -178,6 +178,10 @@ func _say_aloud(key: String) -> void:
 			if _mouth == null:
 				_mouth = AudioStreamPlayer3D.new()
 				_mouth.name = "Mouth"
+				# Heard with what happens (Fx: the effects' level on the settings page).
+				var fx = get_node_or_null("/root/Fx")
+				if fx and fx.has_method("effects_bus"):
+					_mouth.bus = fx.effects_bus()
 				hero.add_child(_mouth)
 				_mouth.position = Vector3(0.0, 1.5, 0.0)
 			_mouth.stream = load(path)

@@ -4,8 +4,8 @@ extends Control
 
 ## ESC menu for Defend Dinosaur v0.2.
 ##
-## Two pages: the root menu (Resume / Settings / Quit) and a Settings page that
-## currently holds the language picker. Opening the menu pauses the game through
+## Two pages: the root menu (Resume / Settings / Quit) and a Settings page: the language,
+## the window, the sound's volumes (Fx, Config.AUDIO), and the keys. Opening the menu pauses the game through
 ## GameState so the world stops behind it; closing restores whatever the pause
 ## state was before, so the menu never un-pauses a game the player had paused.
 
@@ -38,6 +38,13 @@ var commands_label: Label = null
 var command_keys_label: Label = null
 var window_label: Label = null
 var window_picker: OptionButton = null
+## The sound (the player, 2026-10-03: "设置里加一个audio，可以调整音量"): a slider to each of the mix's buses
+## (Fx.buses, Config.AUDIO), its name before it and its figure after.
+var sound_row: VBoxContainer = null
+var sound_label: Label = null
+var volume_sliders: Dictionary = {}    # bus -> HSlider
+var volume_names: Dictionary = {}      # bus -> Label
+var volume_figures: Dictionary = {}    # bus -> Label
 var language_picker: OptionButton = null
 var version_caption: Label = null
 
@@ -87,6 +94,7 @@ func open() -> void:
 	is_open = true
 	visible = true
 	current_page = Page.ROOT
+	_show_volumes()
 	var gs = _get_game_state()
 	if gs:
 		_was_paused_before_open = bool(gs.is_paused) if "is_paused" in gs else false
@@ -142,6 +150,7 @@ func _show_page() -> void:
 	# Settings only. Leaving it off this list is why it appeared on the main menu too --
 	# every row added to page_vbox shows on every page unless it is told otherwise.
 	if window_row: window_row.visible = not root_page
+	if sound_row: sound_row.visible = not root_page
 	if camera_row: camera_row.visible = not root_page
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if root_page else tr("MENU_SETTINGS_TITLE")
@@ -175,6 +184,26 @@ func _on_quit_pressed() -> void:
 	quit_requested.emit()
 	if is_inside_tree():
 		get_tree().quit()
+
+## A volume moved: the bus set to it at once -- heard as it moves -- and remembered (Fx.set_volume).
+func _on_volume_changed(value: float, bus: String) -> void:
+	var fx = _autoload("Fx")
+	if fx and fx.has_method("set_volume"):
+		fx.set_volume(bus, int(round(value)))
+	_show_figure(bus, int(round(value)))
+
+## Each slider where its bus is (Fx.volume), without moving anything.
+func _show_volumes() -> void:
+	var fx = _autoload("Fx")
+	for bus in volume_sliders:
+		var at: int = int(fx.volume(String(bus))) if (fx and fx.has_method("volume")) else 100
+		(volume_sliders[bus] as HSlider).set_value_no_signal(at)
+		_show_figure(String(bus), at)
+
+func _show_figure(bus: String, percent: int) -> void:
+	var figure: Label = volume_figures.get(bus, null)
+	if figure:
+		figure.text = tr("MENU_VOLUME_PERCENT") % percent
 
 func _on_language_selected(index: int) -> void:
 	if language_picker == null:
@@ -281,6 +310,43 @@ func _ensure_components() -> void:
 		if not window_picker.item_selected.is_connected(_on_window_mode_selected):
 			window_picker.item_selected.connect(_on_window_mode_selected)
 
+	if sound_row == null:
+		sound_row = VBoxContainer.new()
+		sound_row.name = "SoundRow"
+		sound_row.add_theme_constant_override("separation", UiTheme.space("xs"))
+		page_vbox.add_child(sound_row)
+		sound_label = Label.new()
+		sound_label.name = "SoundLabel"
+		sound_row.add_child(sound_label)
+		var fx = _autoload("Fx")
+		var buses: Array = fx.buses() if (fx and fx.has_method("buses")) else []
+		for bus in buses:
+			var row := HBoxContainer.new()
+			row.name = "Volume%s" % String(bus)
+			sound_row.add_child(row)
+			var bus_name := Label.new()
+			bus_name.name = "Name"
+			bus_name.theme_type_variation = &"MutedLabel"
+			bus_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(bus_name)
+			var slider := HSlider.new()
+			slider.name = "Slider"
+			slider.min_value = 0.0
+			slider.max_value = 100.0
+			slider.step = _volume_step()
+			slider.custom_minimum_size = Vector2(_picker_width(), 0.0)
+			slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(slider)
+			var figure := Label.new()
+			figure.name = "Figure"
+			figure.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			figure.custom_minimum_size = Vector2(_volume_figure_width(), 0.0)
+			row.add_child(figure)
+			slider.value_changed.connect(_on_volume_changed.bind(String(bus)))
+			volume_sliders[String(bus)] = slider
+			volume_names[String(bus)] = bus_name
+			volume_figures[String(bus)] = figure
+
 	if camera_row == null:
 		camera_row = VBoxContainer.new()
 		camera_row.name = "CameraRow"
@@ -347,6 +413,14 @@ func _picker_width() -> float:
 	var cfg = _get_config()
 	return float(cfg.UI.get("menu_picker_width", 190)) if (cfg and "UI" in cfg) else 190.0
 
+func _volume_figure_width() -> float:
+	var cfg = _get_config()
+	return float(cfg.UI.get("menu_volume_figure_width", 56)) if (cfg and "UI" in cfg) else 56.0
+
+func _volume_step() -> float:
+	var cfg = _get_config()
+	return float(cfg.AUDIO.get("step", 5)) if (cfg and "AUDIO" in cfg) else 5.0
+
 ## Fullscreen or windowed. Index 0 is fullscreen, 1 is windowed -- the order is fixed
 ## rather than derived, because there are exactly two and they are not going to grow.
 func _populate_window_modes() -> void:
@@ -400,6 +474,10 @@ func _refresh_texts() -> void:
 	if back_btn: back_btn.text = tr("MENU_BACK")
 	if language_label: language_label.text = tr("MENU_LANGUAGE")
 	if window_label: window_label.text = tr("MENU_WINDOW_MODE")
+	if sound_label: sound_label.text = tr("MENU_SOUND")
+	for bus in volume_names:
+		(volume_names[bus] as Label).text = tr("MENU_VOLUME_" + String(bus).to_upper())
+	_show_volumes()
 	if camera_label: camera_label.text = tr("MENU_CAMERA")
 	if camera_keys_label: camera_keys_label.text = tr("MENU_CAMERA_KEYS")
 	if commands_label: commands_label.text = tr("MENU_COMMANDS")

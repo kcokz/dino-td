@@ -1598,6 +1598,12 @@
   - **恐龙压力大**：`WAVES.base_count` 2 → 3（第一波 3 只）；`RAIDS.interval_min/max` 80～120 → 60～90 秒。后期的上限（`raid_most`、`toughest`）不变。
   - 测试：`test_autoloads` 的 base_count 定值改成 3；`test_full_loop_stress`、`test_combat_wave`、`test_tower_wave_challenge` 里写死的"第一波 2 只"改成从 `Config.WAVES` 算。
 
+- **v0.7 第四批：设置里调音量（玩家，2026-10-03："设置里加一个audio，可以调整音量"；设计书 7 声音"音量自己调"）**：
+  - `Config.AUDIO`：三条引擎自带的声音总线（`AudioServer`）——Master（全部）、Effects（干活、打斗、叫声、界面）、Ambience（山谷的底声、篝火）；`Fx._ensure_buses` 开局建好，`Fx` 的每个播放器都接到其中一条（`EFFECTS_BUS`、`AMBIENCE_BUS`；`make_loop` 的篝火声进环境声；`HeroVoice` 的嘴进音效）。
+  - `Fx.volume` / `set_volume`：0～100，按耳朵听的线性（`linear_to_db`），0 是静音；存在设置文件的 `[audio]`（`I18n.save_setting`），开局 `_restore_volumes` 读回来。
+  - 设置页（`PauseMenu`）："声音"一栏，每条总线一行——名字、滑条（步长 `AUDIO.step`）、百分数；拖动马上听得到。滑条的样子在 `UiTheme`（和滚动条一样的细槽，设到哪儿就用强调色填到哪儿）。
+  - 测试：新的 `test_v07_the_sound`（总线、每个声音走哪条、线性和静音、设置页的滑条、下次打开还在）；它动设置文件，跑完原样放回。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。
