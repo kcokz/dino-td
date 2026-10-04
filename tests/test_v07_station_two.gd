@@ -217,6 +217,8 @@ func test_05_only_the_bow_tower_brings_it_down() -> void:
 	await _until(func(): return died[0], float(config_node.BUILDINGS["bow_tower"]["fire_seconds"]) * 2.0)
 	assert_true(died[0], "an arrow brings it down")
 
+## It swoops on what it is after -- the man who strikes at it, here (the cabin otherwise: Dino._think) -- bites once,
+## and climbs away.
 func test_06_it_swoops_on_him_bites_and_climbs_away() -> void:
 	await _field()
 	var species: String = _flyer()
@@ -228,6 +230,12 @@ func test_06_it_swoops_on_him_bites_and_climbs_away() -> void:
 	hero.set_physics_process(false)
 	var hp: float = float(hero.current_hp)
 	var d = _animal(species, Vector3(0.0, float(flight["cruise_height"]), -10.0), false)
+	# He has just struck at it (Hero.has_provoked_dinos): within his reach of it, it answers him. Kept so while it
+	# comes round (provoke_timer is his to run down; his physics is held).
+	hero.has_provoked_dinos = true
+	hero.provoke_timer = 30.0
+	var radius: float = float(config_node.HERO.get("provoke_radius", 4.0))
+	d.global_position = Vector3(0.0, float(flight["cruise_height"]), -radius * 0.25)
 	await _until(func(): return float(hero.current_hp) < hp, 12.0)
 	assert_almost_eq(hp - float(hero.current_hp), float(config_node.DINOS[species]["damage"]), 0.001, "it came down and bit him")
 	var low: float = d.global_position.y

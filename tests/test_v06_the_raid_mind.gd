@@ -172,12 +172,14 @@ func test_04_the_hero_in_its_way_is_walked_round_or_bitten_never_walked_into() -
 func test_05_it_lets_go_only_past_its_reach() -> void:
 	var world := await _field()
 	var d = _raptor(Vector3.ZERO, world)
+	# Held still from the first: the man on his own is nothing it goes for (Dino._think), and left to think it
+	# walked off its spot -- pushed out of him, put down where it stood -- before the bite was ever begun.
+	d.set_physics_process(false)
 	var hero = load("res://scripts/entities/Hero.gd").new()
 	world.add_child(hero)
 	_cleanup_nodes.append(hero)
 	hero.set_physics_process(false)
 	await wait_physics_frames(2)
-	d.set_physics_process(false)
 	var reach: float = float(d.attack_reach()) + float(config_node.HERO["width"]) * 0.5
 	hero.global_position = Vector3(reach * 0.9, 0.0, 0.0)
 	d.on_obstacle_detected(hero)

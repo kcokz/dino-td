@@ -570,6 +570,14 @@ func _next_think() -> float:
 # The mind
 # ==============================================================================
 
+## WHY THEY COME, AND FOR WHAT FIRST (2026-10-03, the player: "恐龙进攻船舱是出于对不明物体的恐惧，它们智商高，懂得
+## 撞击船舱损坏它……对人，优先级低一些，优先攻击攻击它们的"; GAME-DESIGN 1): the cabin fell out of the sky into their
+## valley, and they are afraid of it -- clever enough to know that ramming it breaks it. So it is the cabin they come
+## for. What attacks them on the way they answer first: a tower shooting at one (shot_by), the man who has just struck
+## at one of them (_provoker). The man on his own is the least of it: bitten when he is in the way, not hunted.
+## (The night's hunters up out of the river are the other thing -- hungry, and the man in the dark is their meal:
+## ProwlerDino.)
+##
 ## What to do next. Called a few times a second (Config.DINO_AI.think_seconds).
 ##
 ## In this order, each step only if the one before left it free:
@@ -1749,6 +1757,13 @@ func _hero_within(radius: float) -> Node:
 	if hero == null or not is_instance_valid(hero) or not _is_target_valid(hero):
 		return null
 	return hero if global_position.distance_to(hero.global_position) <= radius else null
+
+## The man, if he has just struck at it or at one of its kind beside it (Hero.has_provoked_dinos, HERO.provoke_radius) --
+## what attacks them they answer first -- or null: on his own he is the least of what it came for.
+func _provoker() -> Node:
+	if not _hero_is_provoking():
+		return null
+	return get_tree().get_first_node_in_group("hero")
 
 ## Whether the Hero has just made himself the loudest thing on the field.
 func _hero_is_provoking() -> bool:

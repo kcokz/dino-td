@@ -4,11 +4,12 @@ extends "res://scripts/entities/Dino.gd"
 
 ## Small, fast, and never alone: the swarming habit.
 ##
-## A pack dinosaur is interested in everything nearby. It will break off the path
-## for a trap because a trap is what is shooting at it, it will turn on the
-## Hero when he makes himself loud, and it bites whatever is in the way rather
-## than picking a favourite. That is what makes a raid of them feel like a raid:
-## they react to what the player does.
+## A pack dinosaur answers whatever attacks it. It will break off the path for a
+## tower because a tower is what is shooting at it, it will turn on the Hero when
+## he strikes at one of them, and it bites whatever is in the way rather than
+## picking a favourite. That is what makes a raid of them feel like a raid: they
+## react to what the player does. The man on his own it leaves be: it came for the
+## cabin (Dino._think).
 ##
 ## Everything about how it moves, fights and dies lives in Dino. This file is only
 ## what a raptor *wants* -- which is the one thing that differs by species, and so
@@ -23,16 +24,14 @@ func trap_interest_range() -> float:
 func building_interest_range() -> float:
 	return 2.0
 
-## And it will come for the Hero when he is close, whether or not he provoked
-## them -- a pack notices you.
+## Not for the man on his own (2026-10-03, the player: "对人，优先级低一些，优先攻击攻击它们的"): only for the man who
+## has struck at them (Dino._provoker). It was three metres -- a pack noticed you -- and walked off the cabin for him.
 func hero_interest_range() -> float:
-	return 3.0
+	return 0.0
 
-## Threat order: whatever is shooting, then the man who just made himself the
-## loudest thing on the field, then whatever happens to be in the way.
-##
-## Provocation outranks a trap only when the Hero is actually the nearer of the
-## two; a raptor being shot in the back does not turn around for somebody shouting.
+## Threat order: whatever is attacking it -- the tower shooting, the man who has just
+## struck at one of them, the nearer of the two -- then whatever happens to be in the
+## way. A raptor being shot in the back does not turn round for somebody further off.
 ## What a pack wants. Whether it may have it is decided by Dino._find_threat_priority_target,
 ## which applies the rule about walls that are not in the way -- this used to override
 ## THAT method and so skipped the rule entirely.
@@ -45,15 +44,10 @@ func _preferred_target() -> Node:
 		trap = null
 	if trap == null:
 		trap = _nearest_building_within(trap_interest_range(), "shooter")
-	var hero := _hero_within(hero_interest_range())
-
-	if _hero_is_provoking() and hero != null:
-		if trap == null or global_position.distance_to(hero.global_position) < global_position.distance_to(trap.global_position):
+	var hero: Node = _provoker()
+	if hero != null:
+		if trap == null or global_position.distance_to((hero as Node3D).global_position) < global_position.distance_to(trap.global_position):
 			return hero
 	if trap != null:
 		return trap
-
-	var building := _nearest_building_within(building_interest_range())
-	if building != null:
-		return building
-	return hero
+	return _nearest_building_within(building_interest_range())

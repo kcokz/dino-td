@@ -7,10 +7,11 @@ extends "res://scripts/entities/Dino.gd"
 ## ground touches it -- not the spikes, not a stake's points, not a rolling log or a catapult's stone (AmmoTower.flies).
 ## Only the bow tower's arrows reach it up there, and the man's blows when it comes down to bite.
 ##
-## It cruises at Config.DINO_AI.flight.cruise_height towards what it is after -- the man, if he is within `hunt_reach`
-## of it, else the cabin -- comes down on it from `dive_reach` out, bites once when it is in its reach, and climbs
-## away the way it was going for `climb_seconds` before it turns and comes round again: a swoop, not a stand -- so
-## the man gets a blow in as it comes down, and towers a shot as it goes. Its way is a straight line through the air:
+## It cruises at Config.DINO_AI.flight.cruise_height towards what it is after -- the cabin, the thing that fell into
+## its valley (Dino._think); or, first, what has just attacked it: the bow tower that shot it, the man who struck at it
+## -- comes down on it from `dive_reach` out, bites once when it is in its reach, and climbs away the way it was going
+## for `climb_seconds` before it turns and comes round again: a swoop, not a stand -- so the man gets a blow in as it
+## comes down, and towers a shot as it goes. Its way is a straight line through the air:
 ## no navigation mesh, no steering round the others. Hit by an arrow, it drops out of the sky where it was (die).
 
 ## Seconds left of climbing away after a bite; where it is climbing away to.
@@ -97,14 +98,18 @@ func _fly_home(delta: float) -> void:
 		return
 	_fly_towards(nest, _flight("cruise_height", 3.5), delta)
 
-## What it is after now: the man, within its hunting reach and alive; else the cabin.
+## What it is after now: what has just attacked it -- the bow tower that shot it (Dino._shot_lately), the man who
+## struck at it (Dino._provoker) -- else the cabin. It hunted the man within eighteen metres before the cabin; since
+## 2026-10-03 (the player: "对人，优先级低一些，优先攻击攻击它们的") he is the least of what it came for.
 func _choose() -> void:
 	if going_home:
 		current_target = null
 		return
-	var hero: Node = _hero_within(_flight("hunt_reach", 18.0))
-	if hero != null and _is_target_valid(hero):
-		current_target = hero
+	var at: Node = _shot_lately()
+	if at == null:
+		at = _provoker()
+	if at != null and _is_target_valid(at):
+		current_target = at
 		return
 	var cabin: Node = _cabin()
 	current_target = cabin if _is_target_valid(cabin) else null

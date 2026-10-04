@@ -62,6 +62,10 @@ func _raider_behind(main: Node, species: String, gap: float) -> Node:
 	d.global_position = start - Vector3(0.0, 0.0, gap)
 	d.set_waypoints([main.current_core.global_position])
 	d._take(main.hero, d.Mode.ENGAGE)
+	# Set on him because he has just struck at it: what attacks them they answer first (Dino._provoker). On his own he
+	# is not what it came for (2026-10-03, the player: "对人，优先级低一些") -- it let go of him two metres off.
+	main.hero.has_provoked_dinos = true
+	main.hero.provoke_timer = 600.0
 	return d
 
 ## Walks him straight away from the cabin at his own speed for `seconds`, a physics frame at a time; returns

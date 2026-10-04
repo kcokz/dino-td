@@ -69,16 +69,21 @@ func test_01_from_the_third_day_the_raids_have_runners_in_them() -> void:
 	assert_lt(float(row["hp"]), float(pack["hp"]), "and the more brittle")
 	assert_eq(Array(row.get("hours", [])), Array(pack.get("hours", [])), "and keeps its raid's hours")
 
-func test_02_a_runner_goes_for_the_man_and_past_the_traps() -> void:
+## It runs for the cabin, past the towers -- and the man only when he strikes at it (2026-10-03, the player: "对人，
+## 优先级低一些，优先攻击攻击它们的"; it hunted him from across the field before).
+func test_02_a_runner_goes_for_the_cabin_past_the_traps_and_for_the_man_who_strikes_it() -> void:
 	var main = await _level()
 	var d = load(String(config_node.get_dino_script_path("hesperosuchus"))).new("hesperosuchus")
 	_cleanup_nodes.append(d)
 	main.dinos_container.add_child(d)
 	d.setup("hesperosuchus")
-	d.global_position = main.hero.global_position + Vector3(float(config_node.DINO_AI["runner_hunts_within"]) * 0.8, 0.0, 0.0)
+	d.global_position = main.hero.global_position + Vector3(3.0, 0.0, 0.0)
 	await wait_physics_frames(2)
-	assert_eq(d._preferred_target(), main.hero, "Within its reach of him, it is him it wants")
-	assert_eq(d.trap_interest_range(), 0.0, "and no trap turns it aside")
+	assert_ne(d._preferred_target(), main.hero, "The man on his own a few metres off: not what it stops for (the cabin by him, if anything)")
+	assert_eq(d.trap_interest_range(), 0.0, "and no tower turns it aside")
+	main.hero.has_provoked_dinos = true
+	main.hero.provoke_timer = 5.0
+	assert_eq(d._preferred_target(), main.hero, "struck at, it answers him")
 
 func test_03_from_the_third_day_a_raid_comes_in_by_the_east_as_well() -> void:
 	var main = await _level()

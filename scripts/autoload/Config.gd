@@ -1638,9 +1638,6 @@ const DINO_AI: Dictionary = {
 	# nearer) never counted as stuck -- and a crowd never bites a wall it could go round (the player's
 	# report, 2026-09-29: "恐龙大波会在走廊（两行栅栏中间徘徊）"). A few, through a funnel, are through
 	# long before.
-	# The runner (RunnerDino, Hesperosuchus): how far off it comes for the man from, in metres -- across
-	# most of the small valley's field; he is what it is after.
-	"runner_hunts_within": 18.0,
 	"jam_seconds": 4.0,
 	# Getting nearer by less than this in jam_seconds is held up too (v0.6, the player's choice: "堵住了就另咬
 	# 一个口子"): a raid crowded outside the one breach in a ring, inching in, gained half a metre every few
@@ -1677,12 +1674,11 @@ const DINO_AI: Dictionary = {
 	# went for the one crossbow nearest the nest, which two could bite (the debug-agent's BUG-009).
 	"shot_memory": 4.0,
 	# ON THE WING (FlyerDino; station 2's Harpactognathus): it cruises `cruise_height` metres up -- over a man's
-	# head and a wall's, under a bow tower's reach -- after the man while he is within `hunt_reach` of it, else the
-	# cabin; from `dive_reach` out it comes down on what it is after, gliding down and up again no faster than
-	# `climb_rate` metres a second; it bites once it is within `bite_slack` of the height of its bite, and then
-	# climbs away on past it for `climb_seconds` before it comes round again.
-	"flight": {"cruise_height": 3.5, "hunt_reach": 18.0, "dive_reach": 6.0, "climb_rate": 2.5, "bite_slack": 0.8,
-		"climb_seconds": 2.0},
+	# head and a wall's, under a bow tower's reach -- after the cabin, or what has just attacked it (Dino._think);
+	# from `dive_reach` out it comes down on what it is after, gliding down and up again no faster than `climb_rate`
+	# metres a second; it bites once it is within `bite_slack` of the height of its bite, and then climbs away on past
+	# it for `climb_seconds` before it comes round again.
+	"flight": {"cruise_height": 3.5, "dive_reach": 6.0, "climb_rate": 2.5, "bite_slack": 0.8, "climb_seconds": 2.0},
 	"crowded_memory": 3.0,
 	# Buildings are in the raiders' steering (Building._update_avoidance): an outline of each finished
 	# one on these avoidance layers (a bitmask), which their agents avoid (Dino._refresh_walker) and
