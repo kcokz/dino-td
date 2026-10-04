@@ -915,8 +915,8 @@ func _s_bow_loose() -> PackedFloat32Array:
 	return out
 
 func _s_log_roll() -> PackedFloat32Array:
-	# A log let go down the ramp (LogTower): the lever's clack, the log dropping onto the boards, and a
-	# long low rumble of timber rolling over earth, knocking as it turns.
+	# A log let go (DropTower): the boom's clack, the log coming down hard, and a low rumble of timber
+	# rolling over earth, knocking as it turns. (It was the log tower's, rolling down its ramp.)
 	var out := _buf(1.5)
 	_mix(out, _modes(0.12, [[610.0, 0.03, 1.0], [1350.0, 0.015, 0.5]], 0.002), 0.0, 0.6)
 	_mix(out, _modes(0.4, [[88.0, 0.16, 1.0], [170.0, 0.1, 0.6], [330.0, 0.05, 0.35]], 0.004), 0.08, 1.0)

@@ -497,8 +497,8 @@ ICONS["bone_spikes"] = _spikes(bone=True)
 
 
 # ------------------------------------------------------------------------------ towers and engines
-# The defences rebuilt as machines (v0.6 round eight; tools/generate_props.py bow_tower, log_tower,
-# catapult, bait_rack) and what they throw. A building's level 2 and 3 carry one and two small marks of
+# The defences rebuilt as machines (v0.6 round eight; one set since v0.7 -- tools/generate_props.py bow_tower,
+# drop_tower, catapult, bait_rack) and what they throw. A building's level 2 and 3 carry one and two small marks of
 # what it holds more of -- a quiver, a log, a shot, a hunk of meat -- along its bottom edge, each
 # rimmed on its own over the drawing so it reads apart from it.
 def _marks(mark, level):
@@ -562,23 +562,24 @@ def _bow_tower(level=1):
     return item_svg(body, detail) + _marks(_quiver_mark, level)
 
 
-def _log_tower(level=1):
-    """A crib of timbers with logs piled on its cradle, their cut ends out, and the ramp they are rolled
-    down running off it to the ground."""
-    logs = [(13, 21), (28, 21), (20.5, 9)]
-    body = ([shape("path", None, C["post"], 7.5, d="M 30 30 L 60 56"),
-             shape("rect", C["post"], x=7, y=28, width=6, height=33, rx=1),
-             shape("rect", C["post"], x=25, y=28, width=6, height=33, rx=1),
-             shape("rect", C["post_dark"], x=4, y=26, width=32, height=6, rx=1.5)]
-            + [shape("circle", C["bark"], cx=x, cy=y, r=7.6) for (x, y) in logs])
-    detail = ([shape("path", None, C["post_dark"], 1.5, d="M %g %g L %g %g" % (a, b, a + 3.2, b - 3.7))
-               for (a, b) in ((35.5, 37.5), (41, 42.3), (46.5, 47.1), (52, 51.9))]
-              + [shape("path", None, C["post_dark"], 2.4, d="M 10 56 L 28 36"),
-                 shape("rect", C["post_dark"], x=7, y=28, width=2.4, height=33, rx=1),
-                 shape("rect", C["post_dark"], x=25, y=28, width=2.4, height=33, rx=1)]
-              + [s for (x, y) in logs for s in (shape("circle", C["grain"], cx=x, cy=y, r=5.3),
-                                               shape("circle", None, C["ring"], 1.5, cx=x, cy=y, r=2.9),
-                                               shape("circle", C["ring"], cx=x, cy=y, r=1.1))])
+def _drop_tower(level=1):
+    """A mast on the towers' log crib with a boom pinned across its head, as a well sweep's is (GAME-DESIGN 3.0): stones
+    lashed on its short end, and from its long end a log slung crosswise, its cut end out -- let fall on what is at
+    its foot."""
+    body = [shape("rect", C["bark"], x=6, y=51, width=52, height=9, rx=2),
+            shape("rect", C["post"], x=29, y=15, width=6.5, height=38, rx=1.2),
+            shape("path", None, C["post"], 5.5, d="M 9 24 L 57 13"),
+            shape("circle", C["s2"], cx=54, cy=15, r=5.2),
+            shape("path", None, C["rope"], 2.0, d="M 12 23.5 L 12 30"),
+            shape("circle", C["bark"], cx=12, cy=37, r=7.6)]
+    detail = [shape("rect", C["post_dark"], x=29, y=15, width=2.4, height=38, rx=1),
+              shape("rect", C["post_dark"], x=6, y=56, width=52, height=4, rx=1.5),
+              shape("path", None, C["post_dark"], 1.6, d="M 10 51 L 10 56 M 22 51 L 22 56 M 42 51 L 42 56 M 54 51 L 54 56"),
+              shape("circle", C["rope"], cx=32.2, cy=18.6, r=3.0),
+              shape("circle", C["s1"], cx=52.5, cy=13.5, r=1.8),
+              shape("circle", C["grain"], cx=12, cy=37, r=5.3),
+              shape("circle", None, C["ring"], 1.5, cx=12, cy=37, r=2.9),
+              shape("circle", C["ring"], cx=12, cy=37, r=1.1)]
     return item_svg(body, detail) + _marks(_log_mark, level)
 
 
@@ -628,7 +629,7 @@ def _bait_rack(level=1):
 for _lvl in (1, 2, 3):
     _sfx = "" if _lvl == 1 else "_%d" % _lvl
     ICONS["bow_tower" + _sfx] = _bow_tower(_lvl)
-    ICONS["log_tower" + _sfx] = _log_tower(_lvl)
+    ICONS["drop_tower" + _sfx] = _drop_tower(_lvl)
     ICONS["catapult" + _sfx] = _catapult(_lvl)
     ICONS["bait_rack" + _sfx] = _bait_rack(_lvl)
 

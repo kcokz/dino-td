@@ -594,10 +594,6 @@ func _think() -> void:
 		return
 	if current_target != null and not _still_wanted(current_target):
 		_let_go()
-	# Meat on a rack near it (BaitRack): what eats meat goes to it, ranking it with what shoots at it.
-	var meat: Node = _bait_near()
-	if meat != null and meat != current_target and _outranks(meat, current_target):
-		_take(meat, Mode.ENGAGE)
 	var want: Node = _find_threat_priority_target()
 	if want != null and want != current_target and _outranks(want, current_target):
 		_take(want, Mode.BREACH if _is_wall(want) else Mode.ENGAGE)
@@ -744,10 +740,6 @@ func _still_wanted(target: Node) -> bool:
 	# found again on this thought (_find_threat_priority_target).
 	if _shut_away(target):
 		return false
-	# Meat is gone to while there is some, and until it is full (BAIT); what does not want it bites the rack as it
-	# would any building.
-	if _is_bait(target) and _wants_meat():
-		return target.has_meat()
 	# The Hero is chased only while he stays near, or loud (PackDino.hero_interest_range).
 	if target.is_in_group("hero"):
 		var keep: float = hero_interest_range() + _ai("chase_slack", 2.0)
@@ -772,7 +764,7 @@ func _rank(node: Node) -> int:
 		return 0
 	if node.is_in_group("hero"):
 		return 3 if _hero_is_provoking() else 1
-	if _is_shooter(node) or node == _stubborn or (_is_bait(node) and _wants_meat()):
+	if _is_shooter(node) or node == _stubborn:
 		return 2
 	return 1
 
@@ -1603,7 +1595,7 @@ func _is_shooter(node: Variant) -> bool:
 	var cfg = _get_config()
 	if cfg == null or not cfg.has_method("get_building_kind"):
 		return false
-	return String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["bow", "roller", "thrower"])
+	return String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["bow", "drop", "thrower"])
 
 ## Where it is going, as opposed to what it has stopped for: the current waypoint, or the cabin.
 func _journey_goal() -> Vector3:
@@ -1836,48 +1828,17 @@ var _slow_left: float = 0.0
 var held_left: float = 0.0
 
 # ==============================================================================
-# The bait (BaitRack; Config.BAIT): meat on a rack, eaten, and full a while after
+# The bait (BaitRack; Config.BAIT): passing a rack, it stops and eats a while
 # ==============================================================================
-## Bites of the bait eaten this time; the mind's clock (_mind_clock) before which it is too full to turn for meat.
-var _bites_eaten: int = 0
-var _full_until: float = -INF
-
-## Whether `node` is a bait rack.
-func _is_bait(node: Variant) -> bool:
-	return node != null and is_instance_valid(node) and (node as Node).is_in_group(BaitRack.BAIT_GROUP)
-
-func _is_full() -> bool:
-	return _mind_clock < _full_until
-
-## Whether it would eat meat now: it is one that does (Config.takes_bait), and it is not full.
-func _wants_meat() -> bool:
-	if _is_full():
-		return false
-	var cfg = _get_config()
-	return cfg != null and cfg.has_method("takes_bait") and bool(cfg.takes_bait(dino_type))
-
-## The nearest rack with meat on it whose smell reaches it -- if it wants meat now, and is not on its way home.
-func _bait_near() -> Node:
-	if going_home or not is_inside_tree() or not _wants_meat():
-		return null
-	return BaitRack.nearest_with_meat(get_tree(), global_position)
-
-## A bite of the rack's meat; full, it goes on its way (Config.BAIT).
-func _eat(rack: Node) -> void:
-	var cfg = _get_config()
-	var bait: Dictionary = cfg.BAIT if (cfg and "BAIT" in cfg) else {}
-	if not rack.feed(self):
-		_let_go()
-		return
+## Stops where it is and eats for `seconds` (BaitRack.feed), facing the meat at `rack_at`: held as a snare holds it,
+## and then on its way.
+func eat_for(seconds: float, rack_at: Vector3) -> void:
+	hold_for(seconds)
+	_face_now(rack_at)
 	say("bite")
-	_bites_eaten += 1
-	if _bites_eaten >= int(bait.get("bites_to_eat", 4)):
-		_bites_eaten = 0
-		_full_until = _mind_clock + float(bait.get("full_seconds", 60.0))
-		_let_go()
 
 # ==============================================================================
-# Shoved (LogTower): carried back a moment by what hit it, and nothing else meanwhile
+# Shoved (DropTower): carried off a moment by what hit it, and nothing else meanwhile
 # ==============================================================================
 var _shove: Vector3 = Vector3.ZERO
 var _shove_left: float = 0.0
@@ -1945,9 +1906,6 @@ func attack_target(target: Node) -> void:
 	# Reach is checked here as well as in the mind, so nothing can deal damage at a distance by
 	# calling this directly.
 	if _is_target_valid(target) and _target_in_reach(target, _ai("reach_release", 0.35)):
-		if _is_bait(target) and _wants_meat():
-			_eat(target)
-			return
 		target.take_damage(damage)
 		say("bite")
 
@@ -2254,7 +2212,7 @@ func debug_state() -> Dictionary:
 		"speed": snappedf(speed, 0.01),
 		"burst": snappedf(_burst_left, 0.01),
 		"shoved": snappedf(_shove_left, 0.01),
-		"full": snappedf(maxf(0.0, _full_until - _mind_clock), 0.1),
+		"ate_at_rack": has_meta(BaitRack.EATEN_META),
 		"winded": snappedf(_rest_left, 0.01),
 		"mode": String(Mode.keys()[mode]),
 		"state": String(State.keys()[current_state]),

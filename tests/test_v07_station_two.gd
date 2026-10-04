@@ -192,14 +192,14 @@ func test_04_what_flies_is_over_everything_on_the_ground() -> void:
 	spikes.complete_construction()
 	d.global_position = Vector3(spikes.global_position.x, d.global_position.y, spikes.global_position.z)
 	assert_false(spikes.animals_on_it().has(d), "nor do the spikes")
-	var logs = f[1].place_at("log_tower", Vector2i(0, 6), _world, false, 0)
-	logs.complete_construction()
-	d.global_position = logs.lane_origin() + logs.forward() * 2.0 + Vector3(0.0, d.global_position.y, 0.0)
-	assert_false(logs.animals_in_lane(0.0, logs.lane_length()).has(d), "nor a log tower's lane")
-	var cat = f[1].place_at("catapult", Vector2i(10, 0), _world, false, 0)
+	var drop = f[1].place_at("drop_tower", Vector2i(0, 6), _world, false)
+	drop.complete_construction()
+	d.global_position = drop.global_position + Vector3(1.0, d.global_position.y, 0.0)
+	assert_ne(drop.target_in_reach(), d, "nor the drop tower's log")
+	var cat = f[1].place_at("catapult", Vector2i(10, 0), _world, false)
 	cat.complete_construction()
-	d.global_position = cat.zone_centre() + Vector3(0.0, d.global_position.y, 0.0)
-	assert_false(cat.animals_in_zone().has(d), "nor the catapult's patch")
+	d.global_position = cat.global_position + Vector3(0.0, d.global_position.y, -(cat.min_reach() + cat.reach()) * 0.5)
+	assert_false(cat.animals_in_reach().has(d), "nor the catapult's stones")
 
 func test_05_only_the_bow_tower_brings_it_down() -> void:
 	var f: Array = await _field()
@@ -287,10 +287,11 @@ func test_08_a_fire_pot_sets_the_ground_burning() -> void:
 	cat.set_ammo("fire_pot")
 	cat.load_from_stock()
 	var burn: Dictionary = config_node.AMMO["fire_pot"]["burn"]
-	var d = _animal("raptor", cat.zone_centre())
+	var d = _animal("raptor", cat.global_position + Vector3(0.0, 0.0, -(cat.min_reach() + cat.reach()) * 0.5))
 	d.max_hp = 999.0
 	d.current_hp = 999.0
-	await _until(func(): return not tree.get_nodes_in_group(FirePatch.GROUP).is_empty(), float(config_node.BUILDINGS["catapult"]["flight_seconds"]) + 1.0)
+	await _until(func(): return not tree.get_nodes_in_group(FirePatch.GROUP).is_empty(),
+		float(config_node.TOWERS["turn_seconds"]) + float(config_node.BUILDINGS["catapult"]["flight_seconds"]) + 1.0)
 	var patches: Array = tree.get_nodes_in_group(FirePatch.GROUP)
 	assert_eq(patches.size(), 1, "where it broke, the ground burns")
 	if patches.is_empty():

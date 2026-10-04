@@ -182,7 +182,7 @@ func test_05_walls_and_spikes_are_dragged_out_and_nothing_else() -> void:
 	assert_true(main._is_dragged_out("ground_spikes"), "And a patch of spikes")
 	assert_false(main._is_dragged_out("gate"), "A gate is placed: it is one way through, not a run of them")
 	assert_false(main._is_dragged_out("bow_tower"), "A tower is placed")
-	assert_false(main._is_dragged_out("log_tower"), "A tower that faces is placed: where its lane runs is one spot's decision")
+	assert_false(main._is_dragged_out("drop_tower"), "Every tower is placed: where it stands is one spot's decision")
 	assert_false(main._is_dragged_out("core"), "And so is the cabin")
 	assert_eq(String(config_node.get_building_kind("wall")), "wall",
 		"Which is the same category the raid's rules are written against")

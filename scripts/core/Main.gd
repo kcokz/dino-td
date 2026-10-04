@@ -1370,9 +1370,7 @@ func on_build_selected(type_id: String) -> void:
 	current_build_type = type_id
 	_reach_asked.clear()
 	_rebuild_build_preview(type_id)
-	if _faces(type_id):
-		_hint("HINT_TOWER_TURN")
-	elif _turns(type_id):
+	if _turns(type_id):
 		_hint("HINT_WALL_TURN")
 
 func cancel_building_selection() -> void:
@@ -2574,24 +2572,20 @@ func _rebuild_build_preview(type_id: String) -> void:
 		mi.material_override = _make_preview_material(Color.WHITE)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	# The ground a facing tower acts on, laid out before it is paid for (_show_zone): the log tower's lane ahead of
-	# it, as wide as a log is long; the catapult's patch, out where it throws.
-	if _faces(type_id):
+	# The ground too near a tower to act on, laid out inside its ring before it is paid for: the catapult cannot bring
+	# a shot down at its own foot (BUILDINGS.<id>.min_range) -- dark, inside the blue.
+	var row: Dictionary = cfg.BUILDINGS.get(type_id, {})
+	if float(row.get("min_range", 0.0)) > 0.0:
 		var zone := MeshInstance3D.new()
-		zone.name = "LanePreview"
-		zone.material_override = _make_preview_material(_lane_colour(), 0.35)
+		zone.name = ZONE_PREVIEW
+		zone.material_override = _make_preview_material(Color(0.0, 0.0, 0.0), 0.3)
 		zone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var row: Dictionary = cfg.BUILDINGS[type_id]
-		if row.has("zone_distance"):
-			var disc := CylinderMesh.new()
-			disc.top_radius = float(row.get("zone_radius", 2.0))
-			disc.bottom_radius = disc.top_radius
-			disc.height = 0.04
-			zone.mesh = disc
-		else:
-			var plane := PlaneMesh.new()
-			plane.size = Vector2(float(row.get("lane_width", 1.0)), 1.0)
-			zone.mesh = plane
+		var disc := CylinderMesh.new()
+		disc.top_radius = float(row["min_range"])
+		disc.bottom_radius = disc.top_radius
+		disc.height = 0.04
+		zone.mesh = disc
+		zone.position = Vector3(0.0, 0.07, 0.0)
 		build_preview.add_child(zone)
 
 	var r: float = _preview_range_for(type_id)
@@ -2611,7 +2605,6 @@ func _rebuild_build_preview(type_id: String) -> void:
 	_preview_cell = Vector2i(999999, 999999)
 
 ## Area of effect a pending building would have, as a ring: what a building with a reach declares.
-## A facing tower shows its lane or patch as well (_show_zone).
 func _preview_range_for(type_id: String) -> float:
 	var cfg = _get_config()
 	if cfg == null or not cfg.BUILDINGS.has(type_id):
@@ -2682,9 +2675,6 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	var ghost: Node = build_preview.find_child("Body", false, false)
 	if ghost is Node3D:
 		_dress_ghost(ghost as Node3D, snap)
-		if _faces(current_build_type):
-			(ghost as Node3D).rotation.y = AmmoTower.facing_yaw(_placement_facing)
-	_show_zone(snap)
 
 	# Nobody standing there matters (try_place_at_cell); whether he could get there to build it does,
 	# and is said.
@@ -2703,69 +2693,36 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 
 ## Tints every piece of the ghost green where it would go down and red where not (_ghost_colour), not just the first:
 ## a body is whatever Building.make_body() returns, a loaded scene once there is art. What it would act on keeps its
-## own colour, the reach's (_reach_colour), whether or not it can go down: its ring, and its lane or patch -- which
-## is the mesh itself, not something holding one, and was tinted the ghost's green with the rest (the player:
-## "能攻击的范围应该显示蓝色而不是绿色").
+## own colour whether or not it can go down: its ring, the reach's (_reach_colour; the player: "能攻击的范围应该显示
+## 蓝色而不是绿色"), and the catapult's ground too near to throw at, dark.
 func _tint_ghost(ok: bool) -> void:
 	if build_preview == null or not is_instance_valid(build_preview):
 		return
 	var tint: Color = _ghost_colour(ok)
-	var lanes: Node = build_preview.find_child("LanePreview", false, false)
+	var zone: Node = build_preview.find_child(ZONE_PREVIEW, false, false)
 	for mi in _meshes_in(build_preview):
-		if mi != build_preview_ring and mi != lanes and (lanes == null or not lanes.is_ancestor_of(mi)):
+		if mi != build_preview_ring and mi != zone and (zone == null or not zone.is_ancestor_of(mi)):
 			mi.material_override = _make_preview_material(tint)
 
-## Lays the ghost's zone out the way the next tower will face from `snap`: the log tower's lane from its front
-## edge out `lane` cells -- as far as the first thing built across its middle, as its logs will roll (LogTower) --
-## and the catapult's patch at its distance.
-func _show_zone(snap: Vector2i) -> void:
-	var zone: MeshInstance3D = build_preview.find_child("LanePreview", false, false) as MeshInstance3D if build_preview else null
-	if zone == null:
-		return
-	var cfg = _get_config()
-	var row: Dictionary = cfg.BUILDINGS.get(current_build_type, {}) if cfg else {}
-	var dir: Vector3 = AmmoTower.facing_dir(_placement_facing)
-	if row.has("zone_distance"):
-		zone.position = dir * float(row["zone_distance"]) + Vector3(0.0, 0.05, 0.0)
-		zone.visible = true
-		return
-	# As far as the tower's logs will roll (LogTower.lane_rows, lane_run: the same cells, worked out the same way).
-	var half: float = float(cfg.get_building_half(current_build_type).y)
-	var rows: Array = LogTower.lane_rows(grid_manager, grid_manager.footprint_centre(current_build_type, snap), half,
-		_placement_facing, int(cfg.get_building_cells(current_build_type)), int(row.get("lane", 0)))
-	var run: int = LogTower.lane_run(grid_manager, cfg, rows)
-	zone.visible = run > 0
-	var length: float = float(run) * float(cfg.BUILD_CELL)
-	(zone.mesh as PlaneMesh).size = Vector2(float(row.get("lane_width", 1.0)), maxf(0.01, length))
-	zone.rotation.y = AmmoTower.facing_yaw(_placement_facing)
-	zone.position = dir * (half + length * 0.5) + Vector3(0.0, 0.04, 0.0)
+## The name of the ghost's dark disc inside its ring: the ground too near the tower to act on (the catapult's).
+const ZONE_PREVIEW := "ZonePreview"
 
-## Turns the tower in hand a quarter (`step` quarters, clockwise), and the ghost and its zone with
-## it, where the cursor is.
+## Turns the wall in hand a quarter (`step` quarters, clockwise), and its ghost with it, where the cursor is.
 func turn_placement(step: int = 1) -> void:
 	_placement_facing = posmod(_placement_facing + step, AmmoTower.FACINGS.size())
 	_preview_cell = Vector2i(999999, 999999)
 	if build_preview != null and is_instance_valid(build_preview) and build_preview.visible:
 		_update_build_preview(get_viewport().get_mouse_position())
 
-## Whether a building of `type_id` faces a way it acts (Config.faces): the log tower, the catapult.
-func _faces(type_id: String) -> bool:
-	var cfg = _get_config()
-	return type_id != "" and cfg != null and cfg.has_method("faces") and bool(cfg.faces(type_id))
-
 func _is_wall_kind(type_id: String) -> bool:
 	var cfg = _get_config()
 	return type_id != "" and cfg != null and cfg.has_method("get_building_kind") \
 		and String(cfg.get_building_kind(type_id)) == "wall"
 
-## Whether R turns a building of `type_id` in hand: a trap, and a wall -- a section with no wall
-## beside it runs along the way it faces (Wall.runs_shown), a gate stands across it.
+## Whether R turns a building of `type_id` in hand: a wall -- a section with no wall beside it runs along the way
+## it faces (Wall.runs_shown), a gate stands across it. No tower: each acts all round it (GAME-DESIGN 3.0).
 func _turns(type_id: String) -> bool:
-	return _faces(type_id) or _is_wall_kind(type_id)
-
-## What a tower acts on, wherever it is shown (Config.FEEDBACK.reach_color): the lane and the patch under a ghost, as its ring.
-func _lane_colour() -> Color:
-	return _reach_colour()
+	return _is_wall_kind(type_id)
 
 func _reach_colour() -> Color:
 	var cfg = _get_config()

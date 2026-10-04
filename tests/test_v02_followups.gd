@@ -241,13 +241,13 @@ func test_15_build_preview_ghost_follows_selection() -> void:
 
 	assert_null(main.build_preview, "No ghost exists before a building type is selected")
 
-	main.on_build_selected("log_tower")
+	main.on_build_selected("catapult")
 	assert_not_null(main.build_preview, "Selecting a type creates the ghost")
 	assert_not_null(main.build_preview_mesh, "Ghost has a body the player can see")
-	# What the log tower covers is its lane, not a circle (the 2026-10-02 rebuild: it rolls its logs
-	# down the lane in front of it -- it took the lane-shooting trap's place).
-	assert_null(main.build_preview_ring, "A log tower's ghost draws no ring")
-	assert_not_null(main.build_preview.find_child("LanePreview", false, false), "It shows its lane instead")
+	# Every tower acts within a circle round it (GAME-DESIGN 3.0): its ghost draws its ring -- and the catapult's the
+	# ground too near it to throw at, inside.
+	assert_not_null(main.build_preview_ring, "A catapult's ghost draws its ring")
+	assert_not_null(main.build_preview.find_child(main.ZONE_PREVIEW, false, false), "and the ground too near, inside it")
 
 	main.cancel_building_selection()
 	await wait_frames(1)
@@ -266,8 +266,9 @@ func test_16_preview_ring_size_matches_the_building() -> void:
 	assert_eq(main._preview_range_for("wall"), 0.0, "A wall has no coverage range")
 	assert_null(main.build_preview_ring, "A wall ghost draws no ring")
 
-	# Nor has the log tower: it rolls along its lane, and that is what its ghost shows.
-	assert_eq(main._preview_range_for("log_tower"), 0.0, "A log tower has no coverage range")
+	# Every tower has: it acts all round it (GAME-DESIGN 3.0).
+	for t in ["bow_tower", "drop_tower", "bait_rack", "catapult"]:
+		assert_almost_eq(main._preview_range_for(t), float(config_node.BUILDINGS[t]["range"]), 0.001, "%s's ring is its reach" % t)
 
 func test_17_only_the_turret_has_a_coverage_ring() -> void:
 	var tower_script: GDScript = load("res://scripts/entities/Tower.gd")

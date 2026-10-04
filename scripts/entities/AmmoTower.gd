@@ -2,10 +2,11 @@
 class_name AmmoTower
 extends "res://scripts/entities/Building.gd"
 
-## A TOWER (Config.BUILDINGS kinds "bow", "roller", "thrower", "bait"; GAME-DESIGN 6.0, the 2026-10-02 rebuild): what
-## every tower shares -- what it is loaded with and how much of it, which way it faces, and the parts of its model
-## that show how full it is and how big a store it has. What it does with what it is loaded with is its kind's
-## (BowTower, LogTower, Catapult, BaitRack).
+## A TOWER (Config.BUILDINGS kinds "bow", "drop", "thrower", "bait"; GAME-DESIGN 6.0, the 2026-10-02 rebuild; one set
+## since v0.7, 3.0): what every tower shares -- what it is loaded with and how much of it, how hard a level of it hits,
+## what on it turns to aim, and the parts of its model that show how full it is and how big a store it has. What it
+## does with what it is loaded with is its kind's (BowTower, DropTower, Catapult, BaitRack). None of them faces a way:
+## each acts all round it, within a circle.
 ##
 ## LOADED BY HIM (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量"; and
 ## why it is loaded at all: "现在已经有的小机关其实也是自动化的……它就自己能自己重新trigger了，似乎有点自欺欺人了"). A
@@ -17,13 +18,11 @@ extends "res://scripts/entities/Building.gd"
 ## A meat on the bait rack is several bites (Config.AMMO "uses"): what it holds is counted in uses, and shown in
 ## rounds -- a piece of meat half eaten is still a piece on the rack.
 
-## The four ways a tower can face, clockwise from north, as steps on the building grid; Body built facing north.
+## The four ways a thing can face, clockwise from north, as steps on the building grid: a wall's run, a gate's
+## (Wall, Gate; Main's placement). No tower faces any more (GAME-DESIGN 3.0).
 const FACINGS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const GROUP: String = "ammo_towers"
 
-## Which way it faces (FACINGS): given before it enters the tree (BuildSystem.place_at). Only a tower that faces
-## (Config.faces) turns its body; the others stand as built.
-@export var facing: int = 0
 ## The kind of ammunition it is set to (Config.AMMO id), "" until it has had any.
 var ammo_type: String = ""
 ## Uses left in it (rounds -- or bites, for meat).
@@ -41,7 +40,6 @@ static func facing_dir(f: int) -> Vector3:
 func _ready() -> void:
 	add_to_group(GROUP)
 	super._ready()
-	_face_body()
 	_dress()
 
 func setup(type_id: String, p_cell: Vector2i = Vector2i.ZERO) -> void:
@@ -171,22 +169,37 @@ func demolish() -> void:
 func _is_live() -> bool:
 	return not (is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion())
 
-func _faces() -> bool:
-	var cfg = _get_config()
-	return cfg != null and cfg.has_method("faces") and bool(cfg.faces(building_type))
+## What on it turns to aim -- the catapult's turntable, the drop tower's collar and boom: its Turn part -- swung round
+## to face `at`, about the vertical (its forward, the model's -Z, towards it), over `seconds` the short way round; at
+## once with none, or with nothing drawn (headless). The way it faces is the Turn's: the tower itself does not turn.
+var _turn_tween: Tween = null
+func turn_to(at: Vector3, seconds: float = 0.0) -> void:
+	var turn: Node3D = part("Turn")
+	if turn == null or not turn.is_inside_tree():
+		return
+	var parent: Node3D = turn.get_parent() as Node3D
+	var flat := Vector3(at.x, turn.global_position.y, at.z)
+	var local: Vector3 = (parent.to_local(flat) if parent != null else flat) - turn.position
+	if Vector2(local.x, local.z).length() < 0.01:
+		return
+	var yaw: float = atan2(-local.x, -local.z)
+	if _turn_tween != null and _turn_tween.is_valid():
+		_turn_tween.kill()
+	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
+		turn.rotation.y = yaw
+		return
+	var from: float = turn.rotation.y
+	_turn_tween = turn.create_tween()
+	_turn_tween.tween_property(turn, "rotation:y", from + wrapf(yaw - from, -PI, PI), seconds)
 
-## The way it faces, flat, in the world.
+## The way its Turn faces now, flat, in the world (north for a tower with none).
 func forward() -> Vector3:
-	return facing_dir(facing) if _faces() else Vector3(0.0, 0.0, -1.0)
-
-func set_facing(f: int) -> void:
-	facing = posmod(f, FACINGS.size())
-	_face_body()
-
-func _face_body() -> void:
-	var body: Node3D = get_node_or_null("Body") as Node3D
-	if body != null:
-		body.rotation.y = facing_yaw(facing) if _faces() else 0.0
+	var turn: Node3D = part("Turn")
+	if turn == null or not turn.is_inside_tree():
+		return Vector3(0.0, 0.0, -1.0)
+	var f: Vector3 = -turn.global_transform.basis.z
+	f.y = 0.0
+	return f.normalized() if f.length_squared() > 0.0001 else Vector3(0.0, 0.0, -1.0)
 
 ## One of Config.TOWERS, what the towers share.
 func _towers(key: String, fallback: Variant) -> Variant:
@@ -197,16 +210,16 @@ func _towers(key: String, fallback: Variant) -> Variant:
 # What it acts on, shown while it is picked
 # ==============================================================================
 
-## Its ring (Building's coverage ring: the bow tower's reach, the bait rack's) in the colour of what a tower acts on
+## Its ring (Building's coverage ring: every tower's reach) in the colour of what a tower acts on
 ## (Config.FEEDBACK.reach_color), not the brown its placeholder was drawn in -- over the grass that read green.
 func _get_range_indicator_color() -> Color:
 	var cfg = _get_config()
-	var ui: Dictionary = cfg.UI if (cfg and "UI" in cfg) else {}
-	var c: Color = ui.get("reach_color", Color(0.35, 0.65, 1.0))
-	return Color(c.r, c.g, c.b, float(ui.get("reach_alpha", 0.22)))
+	var fb: Dictionary = cfg.FEEDBACK if (cfg and "FEEDBACK" in cfg) else {}
+	var c: Color = fb.get("reach_color", Color(0.35, 0.65, 1.0))
+	return Color(c.r, c.g, c.b, float(fb.get("reach_alpha", 0.22)))
 
-## Picked, it shows what it acts on: its ring (Building), and -- a tower that acts ahead of it -- the ground it acts
-## on there (_show_zone): the log tower's lane, the catapult's patch. They were shown only under the ghost.
+## Picked, it shows what it acts on: its ring (Building), and -- the catapult -- the ground too near to throw at
+## (_show_zone).
 func set_range_visible(p_visible: bool) -> void:
 	super.set_range_visible(p_visible)
 	if not p_visible:
@@ -216,7 +229,7 @@ func set_range_visible(p_visible: bool) -> void:
 	if is_constructed and _show_zone():
 		_zone_holder.visible = true
 
-## Lays out the ground it acts on ahead of it (`_zone_mesh`); false for a tower that has none -- its ring is it.
+## Lays out more of what it acts on than its ring (`_zone_mesh`); false for a tower that has none -- its ring is it.
 func _show_zone() -> bool:
 	return false
 
@@ -269,10 +282,9 @@ func _show_share(prefix: String, count: int) -> void:
 		if p != null:
 			p.visible = i < shown
 
-## Upgraded to a bigger store: the same model (Config.VISUALS), turned and dressed again.
+## Upgraded to a bigger store: the same model (Config.VISUALS), dressed again.
 func _rebuild_body(old_type: String) -> void:
 	super._rebuild_body(old_type)
-	_face_body()
 	_dress()
 
 func _after_upgrade() -> void:
@@ -316,14 +328,17 @@ func is_heavy(d: Node) -> bool:
 		return false
 	return bool(cfg.DINOS[String(d.dino_type)].get("heavy", false))
 
-## Hits `d` as `row` says (Config.AMMO): its damage -- a quarter of it, an arrow into an armoured animal (Config.ARMOR)
-## -- and, it knows what hit it, the tower is what it goes for (Dino.shot_by, DINO_AI.shooter_kinds).
+## Hits `d` as `row` says (Config.AMMO): its damage, times its level's (Config.damage_factor) -- a quarter of it, an
+## arrow into an armoured animal (Config.ARMOR) -- and, it knows what hit it, the tower is what it goes for
+## (Dino.shot_by, DINO_AI.shooter_kinds).
 func strike(d: Node, row: Dictionary) -> void:
 	if not is_quarry(d):
 		return
 	if d.has_method("shot_by"):
 		d.shot_by(self)
-	d.take_damage(float(row.get("damage", 0.0)) * AmmoTower.armour_factor(d, row))
+	var cfg = _get_config()
+	var level: float = float(cfg.damage_factor(building_type)) if (cfg and cfg.has_method("damage_factor")) else 1.0
+	d.take_damage(float(row.get("damage", 0.0)) * level * AmmoTower.armour_factor(d, row))
 
 ## How much of `row`'s damage goes into `d` (Config.ARMOR): all of it, but what pierces (an arrow) into what is armoured.
 static func armour_factor(d: Node, row: Dictionary) -> float:

@@ -114,7 +114,7 @@ func test_config_buildings_catalog() -> void:
 	var b: Dictionary = config_node.BUILDINGS
 	assert_has(b, "core", "BUILDINGS must define 'core'")
 	assert_has(b, "bow_tower", "BUILDINGS must define 'bow_tower'")
-	assert_has(b, "log_tower", "BUILDINGS must define 'log_tower'")
+	assert_has(b, "drop_tower", "BUILDINGS must define 'drop_tower'")
 	assert_has(b, "wall", "BUILDINGS must define 'wall'")
 
 	if "core" in b:
@@ -134,8 +134,8 @@ func test_config_buildings_catalog() -> void:
 		assert_gt(b["bow_tower"].get("cost", {}).get("wood", 0), 0, "Its body is wood")
 		assert_gt(int(config_node.RECIPES.get("arrow_bone", {}).get("inputs", {}).get("bone", 0)), 0,
 			"and its arrows are tipped with bone")
-	if "log_tower" in b:
-		assert_gt(int(b["log_tower"].get("lane", 0)), 0, "The log tower rolls its logs along a lane")
+	if "drop_tower" in b:
+		assert_gt(float(b["drop_tower"].get("range", 0.0)), 0.0, "The drop tower drops its logs on what is at its foot")
 
 	if "wall" in b:
 		assert_eq(b["wall"].get("kind", ""), "wall", "wall kind should be 'wall'")

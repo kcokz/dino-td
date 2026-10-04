@@ -67,8 +67,8 @@ func _animal(main: Node, at: Vector3, species: String = "coelophysis") -> Node:
 
 func test_01_the_menu_is_one_slot_a_job_and_the_spikes_are_taken_up_by_bone() -> void:
 	assert_eq(config_node.BUILDABLE_TYPES,
-		["wall", "gate", "ground_spikes", "campfire", "bow_tower", "log_tower", "bait_rack", "catapult"] as Array[String],
-		"Fence, gate, spike, fire, and the towers: shoot, roll, bait, smash -- one slot a job")
+		["wall", "gate", "ground_spikes", "campfire", "bow_tower", "drop_tower", "bait_rack", "catapult"] as Array[String],
+		"Fence, gate, spike, fire, and the towers: shoot, drop, bait, throw -- one slot a job")
 	for pair in [["ground_spikes", "bone"]]:
 		var t: String = String(pair[0])
 		assert_eq(_row(t)["cost"].keys(), ["wood"], "%s is wood alone" % t)

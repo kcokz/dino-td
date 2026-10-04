@@ -154,13 +154,13 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 		match type_id:
 			"wall":
 				placed = _stake(Vector3(30.0, 0.0, 0.0))
-			"bow_tower", "log_tower", "bait_rack", "catapult":
+			"bow_tower", "drop_tower", "bait_rack", "catapult":
 				# The towers (the 2026-10-02 rebuild): each kind its own script, as BuildSystem makes it.
 				placed = load(BuildSystem.script_for(type_id)).new()
 				placed.setup(type_id)
 				_cleanup_nodes.append(placed)
 				tree.root.add_child(placed)
-				placed.position = Vector3({"bow_tower": 74.0, "log_tower": 80.0, "bait_rack": 86.0, "catapult": 94.0}[type_id], 0.0, 0.0)
+				placed.position = Vector3({"bow_tower": 74.0, "drop_tower": 80.0, "bait_rack": 86.0, "catapult": 94.0}[type_id], 0.0, 0.0)
 				placed.complete_construction()
 			"bone_stake", "stone_wall", "gate":
 				# Given its type before it enters the tree -- as BuildSystem does -- because

@@ -870,10 +870,11 @@ func _tower_detail(b_type: String, b_name: String, secs: float) -> String:
 	match String(row.get("kind", "")):
 		"bow":
 			return tr("BUILD_DETAIL_FORMAT_BOW") % [b_name, _cost_text(b_type), secs, float(row.get("range", 0.0)), cap]
-		"roller":
-			return tr("BUILD_DETAIL_FORMAT_ROLLER") % [b_name, _cost_text(b_type), secs, int(row.get("lane", 0)), cap]
+		"drop":
+			return tr("BUILD_DETAIL_FORMAT_DROP") % [b_name, _cost_text(b_type), secs, float(row.get("range", 0.0)), cap]
 		"thrower":
-			return tr("BUILD_DETAIL_FORMAT_THROWER") % [b_name, _cost_text(b_type), secs, float(row.get("zone_distance", 0.0)), cap]
+			return tr("BUILD_DETAIL_FORMAT_THROWER") % [b_name, _cost_text(b_type), secs, float(row.get("min_range", 0.0)),
+				float(row.get("range", 0.0)), cap]
 	return tr("BUILD_DETAIL_FORMAT_BAIT") % [b_name, _cost_text(b_type), secs, float(row.get("range", 0.0)), cap]
 
 ## PINNING A GOAL (GameState.goal; GAME-DESIGN 6.0 rule 4): right-click on an entry with a price -- a

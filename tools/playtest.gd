@@ -288,7 +288,7 @@ func _scenario_play(spec: String) -> void:
 	# --- 4 onwards: raids come and go; between them, what a player would do next -------------
 	# In order: the beacon when its next step can be paid; a rest in the healing pod when he is hurt;
 	# the pick, then the axe; the towers north of the ring, the way the
-	# nest is -- a bow tower each side, a log tower between them rolling down the way the raid comes, a
+	# nest is -- a bow tower each side, a drop tower between them where the raid comes past, a
 	# catapult further out once there is stone -- each loaded with what the workbench makes for it,
 	# carried over by him; the ring mended where a raid broke it; and otherwise stone while there is
 	# little, and wood. Launched, he shelters till the end.
@@ -296,7 +296,7 @@ func _scenario_play(spec: String) -> void:
 	var raids_seen: int = 0
 	var tower_plan: Array = [
 		["bow_tower", centre + Vector2i(-4, -half.y - 3)],
-		["log_tower", centre + Vector2i(0, -half.y - 4)],
+		["drop_tower", centre + Vector2i(0, -half.y - 4)],
 		["bow_tower", centre + Vector2i(3, -half.y - 3)],
 		["catapult", centre + Vector2i(-9, -half.y - 4)],
 	]
@@ -1022,9 +1022,8 @@ func _scenario_pod() -> void:
 	await _shoot("whole_again")
 
 ## The buildings side by side, south of the cabin where nothing else stands: a run of a palisade, a run of bone
-## palisade, a stone wall, and in front of the line the four towers (the 2026-10-02 rebuild), loaded, the facing
-## ones facing south, one bow tower upgraded where it stands -- and then a bow tower's card, its ammunition and
-## its bigger store.
+## palisade, a stone wall, and in front of the line the four towers (one set on one plinth, GAME-DESIGN 3.0), loaded,
+## one bow tower upgraded where it stands -- and then a bow tower's card, its ammunition and its bigger store.
 func _scenario_buildings() -> void:
 	var cfg := root.get_node_or_null("Config")
 	var eb := root.get_node_or_null("EventBus")
@@ -1043,13 +1042,13 @@ func _scenario_buildings() -> void:
 		_build_at("bone_stake", Vector3(0.0 + float(i) * step, 0.0, z))
 	for i in range(3):
 		_build_at("stone_wall", Vector3(3.0 + float(i) * step, 0.0, z))
-	# In front of the line, the facing ones facing south, away from it: their ground the ground a raid comes over.
+	# In front of the line, the four of the set side by side on their one plinth.
 	var towers: Array = [
-		_build_at("bow_tower", Vector3(-6.0, 0.0, z + 2.0 * step)),
-		_build_at("log_tower", Vector3(-2.0, 0.0, z + 3.0 * step), 2),
-		_build_at("bait_rack", Vector3(1.5, 0.0, z + 2.0 * step)),
-		_build_at("catapult", Vector3(6.0, 0.0, z + 3.0 * step), 2),
-		_build_at("bow_tower", Vector3(-9.0, 0.0, z + 2.0 * step)),
+		_build_at("bow_tower", Vector3(-6.0, 0.0, z + 3.0 * step)),
+		_build_at("drop_tower", Vector3(-2.0, 0.0, z + 3.0 * step)),
+		_build_at("bait_rack", Vector3(2.0, 0.0, z + 3.0 * step)),
+		_build_at("catapult", Vector3(6.0, 0.0, z + 3.0 * step)),
+		_build_at("bow_tower", Vector3(-10.0, 0.0, z + 3.0 * step)),
 	]
 	_grant({"arrow_wood": 200, "log_round": 200, "shot_stone": 200, "food": 20})
 	for t in towers:
@@ -1068,15 +1067,15 @@ func _scenario_buildings() -> void:
 
 ## A tower's card, its ammunition (OptionPanel._add_ammo_choice; the player, 2026-10-03: "弹夹，装填是新系统，不能做的这么
 ## 粗糙"): a bow tower empty with wooden arrows in the stock and no bone ones; Load pressed, he on his way; loaded; and
-## the log tower's and the catapult's cards, their ground shown in blue as they are picked.
+## the drop tower's and the catapult's cards, their reach shown in blue as they are picked.
 func _scenario_ammocard() -> void:
 	var eb := root.get_node_or_null("EventBus")
 	var gs := root.get_node("GameState")
 	_grant({"wood": 200, "stone": 200, "bone": 1})
 	var at: Vector3 = _main.current_core.global_position
 	var bow = _build_at("bow_tower", at + Vector3(-5.0, 0.0, 6.0))
-	var logs = _build_at("log_tower", at + Vector3(0.0, 0.0, 7.0), 2)
-	var cat = _build_at("catapult", at + Vector3(7.0, 0.0, 8.0), 2)
+	var logs = _build_at("drop_tower", at + Vector3(0.0, 0.0, 7.0))
+	var cat = _build_at("catapult", at + Vector3(7.0, 0.0, 8.0))
 	_grant({"arrow_wood": 34, "log_round": 40, "shot_stone": 20})
 	gs.resources["arrow_bone"] = 0
 	if gs.has_method("knows") and "known" in gs:
@@ -1104,12 +1103,12 @@ func _scenario_ammocard() -> void:
 	await _shoot("bow_loaded")
 	if logs and eb:
 		eb.unit_selected.emit(logs)
-		_look_at(logs.global_position + logs.forward() * 3.0)
+		_look_at(logs.global_position)
 	await _wait(6)
-	await _shoot("log_tower")
+	await _shoot("drop_tower")
 	if cat and eb:
 		eb.unit_selected.emit(cat)
-		_look_at(cat.global_position + cat.forward() * 5.0)
+		_look_at(cat.global_position)
 	await _wait(6)
 	await _shoot("catapult")
 
@@ -1122,28 +1121,30 @@ func _look_at(at: Vector3) -> void:
 	if "camera" in _main and _main.camera != null:
 		rig.apply_to(_main.camera)
 
-## A fire pot thrown (station 2: AMMO.fire_pot, FirePatch): a catapult south of the cabin facing south, loaded with
-## them, a raptor walking into its patch at dusk -- the pot in the air, and the ground burning where it broke.
+## A fire pot thrown (station 2: AMMO.fire_pot, FirePatch): a catapult south of the cabin, loaded with them, a raptor
+## within its throw at dusk -- the pot in the air, and the ground burning where it broke.
 func _scenario_firepot() -> void:
 	var gs := root.get_node("GameState")
 	var cfg := root.get_node("Config")
 	gs.day_clock = float(cfg.DAY["light"][6]["at"]) if cfg.DAY["light"].size() > 6 else gs.day_clock
 	_grant({"fire_pot": 40, "wood": 100, "stone": 100})
 	var at: Vector3 = _main.current_core.global_position + Vector3(0.0, 0.0, 8.0)
-	var cat = _build_at("catapult", at, 2)
+	var cat = _build_at("catapult", at)
 	if cat == null:
 		print("[playtest] no room for the catapult")
 		return
 	cat.set_ammo("fire_pot")
 	cat.load_from_stock()
-	# A campfire beside the patch, to judge the burning ground against the fire everybody knows.
-	_build_at("campfire", cat.zone_centre() + Vector3(-4.0, 0.0, 0.0))
+	# Where it will throw: south, between too near and as far as it throws.
+	var spot: Vector3 = cat.global_position + Vector3(0.0, 0.0, (cat.min_reach() + cat.reach()) * 0.5)
+	# A campfire beside the spot, to judge the burning ground against the fire everybody knows.
+	_build_at("campfire", spot + Vector3(-4.0, 0.0, 0.0))
 	var d = load(String(cfg.get_dino_script_path("raptor"))).new()
 	_main.dinos_container.add_child(d)
 	d.setup("raptor")
 	d.max_hp = 999.0
 	d.current_hp = 999.0
-	d.global_position = cat.zone_centre()
+	d.global_position = spot
 	d.set_physics_process(false)
 	var fog = _main.get("fog")
 	if fog != null and is_instance_valid(fog):
@@ -1166,9 +1167,9 @@ func _scenario_firepot() -> void:
 	var seen: Vector3 = pot.global_position if (pot != null and is_instance_valid(pot)) else cat.global_position
 	await _portrait("fire_pot_flight", seen, 5.0)
 	await _advance(1.2)
-	await _portrait("fire_patch", cat.zone_centre(), 7.0)
+	await _portrait("fire_patch", spot, 7.0)
 	await _advance(2.0)
-	await _portrait("fire_patch_burning", cat.zone_centre(), 7.0)
+	await _portrait("fire_patch_burning", spot, 7.0)
 
 ## The jump between our game's stations (StationJump, v0.7), beat by beat: the first station won, the view swinging
 ## in, the beacon's light, the white and the card -- then the second station's level (built here by hand: the game's
@@ -1781,7 +1782,7 @@ func _scenario_closeup() -> void:
 	for s in subjects:
 		await _portrait(String(s[0]), s[1], float(s[2]))
 
-	# Two of the towers close up, loaded: the bow tower's ring of bows, the log tower's cradle and ramp.
+	# Two of the towers close up, loaded: the bow tower's ring of bows, the drop tower's boom and its log.
 	var bow_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 2))
 	_grant({"arrow_wood": 40, "log_round": 40})
 	var bow = _build_at("bow_tower", bow_at)
@@ -1790,11 +1791,11 @@ func _scenario_closeup() -> void:
 	await _wait(4)
 	await _portrait("bow_tower", bow_at, 5.0)
 	var logs_at: Vector3 = _main.grid_manager.cell_to_world(Vector2i(3, 5))
-	var logs = _build_at("log_tower", logs_at, 1)
+	var logs = _build_at("drop_tower", logs_at)
 	if logs != null:
 		logs.load_from_stock()
 	await _wait(4)
-	await _portrait("log_tower", logs_at, 5.0)
+	await _portrait("drop_tower", logs_at, 5.0)
 
 	var dino_script := load("res://scripts/entities/Dino.gd")
 	var dinos_to_shoot: Array = [

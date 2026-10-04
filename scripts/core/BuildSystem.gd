@@ -14,7 +14,7 @@ const SCRIPT_PATHS: Dictionary = {
 	"spikes": "res://scripts/entities/CellTrap.gd",
 	# The towers (the 2026-10-02 rebuild): each kind its own, all loaded as AmmoTower is.
 	"bow": "res://scripts/entities/BowTower.gd",
-	"roller": "res://scripts/entities/LogTower.gd",
+	"drop": "res://scripts/entities/DropTower.gd",
 	"thrower": "res://scripts/entities/Catapult.gd",
 	"bait": "res://scripts/entities/BaitRack.gd",
 	"base": "res://scripts/entities/Building.gd"
@@ -138,8 +138,8 @@ func can_place_building(type_id: String, cell: Vector2i, _is_blueprint: bool = f
 
 ## Pays for a `type_id`, makes it, stands it with its middle in `build_cell` and registers its
 ## cells. Returns the building, or null -- having spent nothing -- if it cannot go there.
-## `facing` is the way a tower faces (AmmoTower.FACINGS), given before it enters the tree so it lays its
-## wire the right way from the first; anything that does not face ignores it.
+## `facing` is the way a wall or a gate faces (AmmoTower.FACINGS), given before it enters the tree; anything that
+## does not face -- the towers among them, since v0.7 -- ignores it.
 func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, start_as_blueprint: bool = false, facing: int = 0) -> Node:
 	if not can_place_at(type_id, build_cell):
 		return null

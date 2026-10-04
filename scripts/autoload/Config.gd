@@ -90,52 +90,55 @@ const BUILDINGS: Dictionary = {
 		"cost": {},
 		"upgrades_to": "",
 	},
-	# THE TOWERS (2026-10-02, the player's rebuild of the defences: "防御每个类别要不一样，作用要明显不同，大小也要不
-	# 一致（但是要是墙的倍数，这样可以连着墙），而且要intuitive，基本上造之前玩家大概就知道是什么作用，可以参考各种塔防游
-	# 戏的塔的搭配"). Four towers, each its own job, its own size and its own look (GAME-DESIGN 6.0): the bow tower
-	# shoots one at a time all round it; the log tower rolls a log down a lane ahead of it, slowing and shoving
-	# back all it rolls over; the bait rack shoots nothing and holds them at one spot, eating; the catapult (with
-	# stone) smashes a patch of ground ahead of it. Square, one to four cells a side -- a wall's multiples, so a
-	# tower stands flush in a line of wall -- so turning one never changes the cells it takes. Taller than a man,
-	# each, and taking its time to go up (get_build_time: the cells it fills). And each what one man puts up in a
-	# moment (2026-10-03, the player: "log tower太大了，可以高度一样但是横向不能那么大，看着不像能一下造好的样子"; "bow
-	# tower也显得太大，高度一样但大小小一些"): as tall as they were, on less ground -- the bow tower a slim lookout
-	# one cell across (it was two), the log tower two (it was three).
+	# THE TOWERS (2026-10-02, the player's rebuild of the defences: "防御每个类别要不一样，作用要明显不同……而且要
+	# intuitive，基本上造之前玩家大概就知道是什么作用，可以参考各种塔防游戏的塔的搭配"). ONE SET SINCE v0.7 (GAME-DESIGN 3.0;
+	# the player: "投石机样子显得很蠢，而且我发现这几个tower，在其他defend游戏里都是可以很好的互相配合，模样也很接近，在我
+	# 这里都长的不一样也很不好互相配合，投石干脆和滚木都做成一个圈内都能进攻，然后基座模型一样大"): every tower stands on
+	# the same log crib two cells a side (tools/generate_props.py _tower_plinth) with its own engine on top, and every one
+	# acts all round it within a circle -- nothing faces a way, nothing is turned with R. Each its own job: the bow tower
+	# shoots one at a time, far, and only it reaches what flies; the catapult turns and throws into a crowd, not at its
+	# foot; the drop tower drops a log on what is at its foot, knocking it flat and shoving it off; the bait rack holds
+	# what eats meat a few seconds as it passes. What the bow cannot hurt -- the armoured (ARMOR) -- the catapult and the
+	# drop tower crush.
 	#
 	# AMMUNITION (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量"): a
 	# tower shoots what it is loaded with (AMMO) -- made at the workbench, and loaded by him: walking past, or sent
 	# to it (AmmoTower, AMMO_LOADING). `ammo.accepts` the kinds it takes, `ammo.capacity` how many it holds; empty,
-	# it does nothing. Its upgrades (<id>_2, <id>_3) are bigger racks: the same tower, holding more (`level`).
+	# it does nothing.
 	#
-	# 弩塔 THE BOW TOWER (tools/generate_props.py bow_tower): a platform on four legs with eight bows round its
-	# edge, one to each point of the compass (the player: "弩塔八面是造型，但实际上范围就是一个圆圈内的都射的到……适当
-	# 简化也是没办法的，做出来的动画效果不能像箭塔就行"): whatever is within `range` metres of its middle, on the ground
-	# or in the air, the bow facing it shoots, an arrow every `fire_seconds`; nothing on it turns to aim. What an
-	# arrow does is the arrow's (AMMO): a wooden one kills a Coelophysis. Twelve wood -- a tower is a decision of
-	# the opening, not a stake: it and its first arrows are most of the opening's wood (MAPS.<id>.opening_stock).
+	# A LEVEL UP (<id>_2, <id>_3; `level`): the same tower, holding more and hitting harder (`damage_factor`, on what its
+	# ammunition does: AmmoTower.strike). A cost here is the whole price of that level, and a way up costs the
+	# difference (upgrade_cost): the second level is the first's and four stone, the third the second's and four
+	# bone -- stone once there is a pick, bone off what the towers have killed (GAME-DESIGN 3.0, rule 2).
+	# 弩塔 THE BOW TOWER (tools/generate_props.py bow_tower: a slim lookout on the towers' plinth, eight bows round
+	# its deck; the player: "弩塔八面是造型，但实际上范围就是一个圆圈内的都射的到"): whatever it can see within `range`
+	# metres of its middle, on the ground or in the air, the bow facing it shoots, an arrow every `fire_seconds`; nothing
+	# on it turns to aim. An arrow pierces (ARMOR): into the armoured it goes a quarter of itself. Twelve wood: a tower
+	# is a decision of the opening, not a stake -- it and its first arrows are most of the opening's wood.
 	"bow_tower": {
 		"name": "BUILDING_BOW_TOWER_NAME",
 		"kind": "bow",
-		"cells": 1,
-		"height": 3.1,
+		"cells": 2,
+		"height": 3.5,
 		"hp": 30.0,
 		"cost": {"wood": 12},
 		"range": 7.0,
 		"fire_seconds": 1.5,
+		"damage_factor": 1.0,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 20},
 		"level": 1,
 		"upgrades_to": ["bow_tower_2"],
 	},
-	# A second rack of arrows lashed to its legs, then a third: half as many again, then twice the first.
 	"bow_tower_2": {
 		"name": "BUILDING_BOW_TOWER_2_NAME",
 		"kind": "bow",
-		"cells": 1,
-		"height": 3.1,
+		"cells": 2,
+		"height": 3.5,
 		"hp": 30.0,
-		"cost": {"wood": 16},
+		"cost": {"wood": 12, "stone": 4},
 		"range": 7.0,
 		"fire_seconds": 1.5,
+		"damage_factor": 1.25,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 30},
 		"level": 2,
 		"upgrades_to": ["bow_tower_3"],
@@ -143,84 +146,81 @@ const BUILDINGS: Dictionary = {
 	"bow_tower_3": {
 		"name": "BUILDING_BOW_TOWER_3_NAME",
 		"kind": "bow",
-		"cells": 1,
-		"height": 3.1,
+		"cells": 2,
+		"height": 3.5,
 		"hp": 30.0,
-		"cost": {"wood": 21},
+		"cost": {"wood": 12, "stone": 4, "bone": 4},
 		"range": 7.0,
 		"fire_seconds": 1.5,
+		"damage_factor": 1.5,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 40},
 		"level": 3,
 		"upgrades_to": "",
 	},
-	# 滚木塔 THE LOG TOWER (tools/generate_props.py log_tower; the player: "tower的样子，大一点，有高度，方向是向前方
-	# 滚木（有个类似滑滑梯的坡，向下滚木）……滚木作用，减速所有范围内的恐龙单位，并有推回效果，伤害低，滚木要长一点，不然范
-	# 围太小没作用，也是通过恐龙触碰触发"): a cradle of logs up on a frame, a ramp down its front. Something walks into
-	# the lane in front of it -- `lane` cells out from its front edge, `lane_width` metres across (as long as a log
-	# is: a little longer than the frame is wide, its ends out over the sides), as far as the first thing built
-	# across it -- and a log is let go down the ramp and rolls the lane at
-	# `roll_speed`: everything it rolls over is slowed, shoved back the way it came and hurt a little (AMMO: what
-	# the log is). A log every `roll_seconds` at most. It faces the way it was set down (R).
-	"log_tower": {
-		"name": "BUILDING_LOG_TOWER_NAME",
-		"kind": "roller",
+	# 落木塔 THE DROP TOWER (GAME-DESIGN 3.0, in the log tower's place -- the player: "投石干脆和滚木都做成一个圈内
+	# 都能进攻，然后基座模型一样大"; tools/generate_props.py drop_tower: a mast on the plinth with a boom that swings
+	# round and drops a log): whatever on the ground it can see within `range` metres of its middle -- at its foot --
+	# it swings to and drops its load on, a drop every `drop_seconds`: everything within the load's `splash` of where
+	# it falls is crushed (AMMO: what the load is), knocked flat and shoved away from the tower; the heavy ones only
+	# by a stone-weighted log. What it holds at its foot the bow and the catapult can get at.
+	"drop_tower": {
+		"name": "BUILDING_DROP_TOWER_NAME",
+		"kind": "drop",
 		"cells": 2,
-		"height": 2.6,
+		"height": 3.3,
 		"hp": 40.0,
-		"faces": true,
 		"cost": {"wood": 14},
-		"lane": 6,
-		"lane_width": 2.4,
-		"roll_speed": 6.0,
-		"roll_seconds": 3.0,
+		"range": 2.5,
+		"drop_seconds": 2.5,
+		"fall_seconds": 0.35,
+		"damage_factor": 1.0,
 		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 20},
 		"level": 1,
-		"upgrades_to": ["log_tower_2"],
+		"upgrades_to": ["drop_tower_2"],
 	},
-	"log_tower_2": {
-		"name": "BUILDING_LOG_TOWER_2_NAME",
-		"kind": "roller",
+	"drop_tower_2": {
+		"name": "BUILDING_DROP_TOWER_2_NAME",
+		"kind": "drop",
 		"cells": 2,
-		"height": 2.6,
+		"height": 3.3,
 		"hp": 40.0,
-		"faces": true,
-		"cost": {"wood": 19},
-		"lane": 6,
-		"lane_width": 2.4,
-		"roll_speed": 6.0,
-		"roll_seconds": 3.0,
+		"cost": {"wood": 14, "stone": 4},
+		"range": 2.5,
+		"drop_seconds": 2.5,
+		"fall_seconds": 0.35,
+		"damage_factor": 1.25,
 		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 30},
 		"level": 2,
-		"upgrades_to": ["log_tower_3"],
+		"upgrades_to": ["drop_tower_3"],
 	},
-	"log_tower_3": {
-		"name": "BUILDING_LOG_TOWER_3_NAME",
-		"kind": "roller",
+	"drop_tower_3": {
+		"name": "BUILDING_DROP_TOWER_3_NAME",
+		"kind": "drop",
 		"cells": 2,
-		"height": 2.6,
+		"height": 3.3,
 		"hp": 40.0,
-		"faces": true,
-		"cost": {"wood": 25},
-		"lane": 6,
-		"lane_width": 2.4,
-		"roll_speed": 6.0,
-		"roll_seconds": 3.0,
+		"cost": {"wood": 14, "stone": 4, "bone": 4},
+		"range": 2.5,
+		"drop_seconds": 2.5,
+		"fall_seconds": 0.35,
+		"damage_factor": 1.5,
 		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 40},
 		"level": 3,
 		"upgrades_to": "",
 	},
-	# 诱饵台 THE BAIT RACK (tools/generate_props.py bait_rack; the player: "诱饵台，不错，但是需要大一点，中等高度，不能
-	# 是1"): raw meat hung on a drying rack. What eats meat (BAIT.eaters, by habit) within `range` metres of it goes to it
-	# and eats a while, standing still (BAIT), instead of going on -- held where the other towers can get at it.
-	# It shoots nothing. Loaded with raw meat from the stock: what the raids leave, as the cooking pot's is.
+	# 诱饵台 THE BAIT RACK (tools/generate_props.py bait_rack: a drying rack of meat on the plinth; GAME-DESIGN 3.0 --
+	# the player: "诱引建筑感觉逻辑有点复杂，恐龙如果全部凑上去显得太厉害了，而且容易出bug"): it draws nothing to it.
+	# What eats meat (BAIT.eaters) and passes within `range` metres of its middle stops there and eats a while
+	# (BAIT.eat_seconds), once, a bite of its meat each -- held on its way, where the other towers can get at it. It
+	# shoots nothing. Loaded with raw meat from the stock: what the raids leave.
 	"bait_rack": {
 		"name": "BUILDING_BAIT_RACK_NAME",
 		"kind": "bait",
 		"cells": 2,
-		"height": 2.0,
+		"height": 2.6,
 		"hp": 20.0,
 		"cost": {"wood": 6},
-		"range": 12.0,
+		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 2},
 		"level": 1,
 		"upgrades_to": ["bait_rack_2"],
@@ -229,10 +229,10 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_BAIT_RACK_2_NAME",
 		"kind": "bait",
 		"cells": 2,
-		"height": 2.0,
+		"height": 2.6,
 		"hp": 20.0,
-		"cost": {"wood": 9},
-		"range": 12.0,
+		"cost": {"wood": 6, "stone": 4},
+		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 3},
 		"level": 2,
 		"upgrades_to": ["bait_rack_3"],
@@ -241,32 +241,32 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_BAIT_RACK_3_NAME",
 		"kind": "bait",
 		"cells": 2,
-		"height": 2.0,
+		"height": 2.6,
 		"hp": 20.0,
-		"cost": {"wood": 12},
-		"range": 12.0,
+		"cost": {"wood": 6, "stone": 4, "bone": 4},
+		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 4},
 		"level": 3,
 		"upgrades_to": "",
 	},
-	# 投石塔 THE CATAPULT (tools/generate_props.py catapult; GAME-DESIGN 6.0: "有了石头才能造……砸一片"): a throwing arm
-	# through a twisted rope, on a log frame weighted down with stone -- so it comes once there is a pick. It throws
-	# at one patch of ground ahead of it, `zone_distance` metres from its middle the way it faces, `zone_radius`
-	# across: something walks into the patch and a shot lands there `flight_seconds` later, hitting everything near
-	# where it lands (AMMO). Not what flies (a stone thrown in an arc does not catch a wing). A throw every
-	# `throw_seconds`. It faces the way it was set down (R).
+	# 投石塔 THE CATAPULT (tools/generate_props.py catapult: a small throwing engine on a turntable on the plinth --
+	# the player: "投石机样子显得很蠢"; GAME-DESIGN 3.0): it throws all round it, at the ground between `min_range`
+	# and `range` metres from its middle -- too close in, the arm cannot bring a shot down -- turning to where most of
+	# them are; the shot lands `flight_seconds` later and everything within its `splash` is hit (AMMO). It crushes:
+	# the armoured take all of it. Not what flies. A throw every `throw_seconds`. Built with stone, so it comes once
+	# there is a pick.
 	"catapult": {
 		"name": "BUILDING_CATAPULT_NAME",
 		"kind": "thrower",
-		"cells": 4,
-		"height": 2.1,
+		"cells": 2,
+		"height": 2.8,
 		"hp": 50.0,
-		"faces": true,
 		"cost": {"wood": 16, "stone": 6},
-		"zone_distance": 9.0,
-		"zone_radius": 2.0,
+		"range": 9.0,
+		"min_range": 3.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
+		"damage_factor": 1.0,
 		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 10},
 		"level": 1,
 		"upgrades_to": ["catapult_2"],
@@ -274,15 +274,15 @@ const BUILDINGS: Dictionary = {
 	"catapult_2": {
 		"name": "BUILDING_CATAPULT_2_NAME",
 		"kind": "thrower",
-		"cells": 4,
-		"height": 2.1,
+		"cells": 2,
+		"height": 2.8,
 		"hp": 50.0,
-		"faces": true,
-		"cost": {"wood": 21, "stone": 6},
-		"zone_distance": 9.0,
-		"zone_radius": 2.0,
+		"cost": {"wood": 16, "stone": 10},
+		"range": 9.0,
+		"min_range": 3.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
+		"damage_factor": 1.25,
 		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 15},
 		"level": 2,
 		"upgrades_to": ["catapult_3"],
@@ -290,15 +290,15 @@ const BUILDINGS: Dictionary = {
 	"catapult_3": {
 		"name": "BUILDING_CATAPULT_3_NAME",
 		"kind": "thrower",
-		"cells": 4,
-		"height": 2.1,
+		"cells": 2,
+		"height": 2.8,
 		"hp": 50.0,
-		"faces": true,
-		"cost": {"wood": 27, "stone": 6},
-		"zone_distance": 9.0,
-		"zone_radius": 2.0,
+		"cost": {"wood": 16, "stone": 10, "bone": 4},
+		"range": 9.0,
+		"min_range": 3.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
+		"damage_factor": 1.5,
 		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 20},
 		"level": 3,
 		"upgrades_to": "",
@@ -677,13 +677,14 @@ static func ammo_capacity(type_id: String) -> int:
 static func ammo_uses(ammo_id: String) -> int:
 	return maxi(1, int(AMMO.get(ammo_id, {}).get("uses", 1)))
 
-## Whether `type_id` faces a way it acts and is turned with R as it is placed: the log tower's lane, the catapult's patch.
-static func faces(type_id: String) -> bool:
-	return BUILDINGS.has(type_id) and bool(BUILDINGS[type_id].get("faces", false))
-
 ## How big a tower's store is (BUILDINGS.<id>.level): 1, or 2 and 3 for its bigger racks.
 static func tower_level(type_id: String) -> int:
 	return int(BUILDINGS.get(type_id, {}).get("level", 1)) if BUILDINGS.has(type_id) else 1
+
+## How much harder than its ammunition alone a tower of `type_id` hits (BUILDINGS.<id>.damage_factor): 1 at its first
+## level, more at each level up (AmmoTower.strike).
+static func damage_factor(type_id: String) -> float:
+	return float(BUILDINGS.get(type_id, {}).get("damage_factor", 1.0)) if BUILDINGS.has(type_id) else 1.0
 
 ## Whether a `species` goes to the bait rack (BAIT.eaters, by its habit).
 static func takes_bait(species: String) -> bool:
@@ -898,12 +899,12 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 
 ## Types offered in the Hero's build menu, in display order: one a job (GAME-DESIGN 6.0; v0.6 round six, the
 ## player: "当新的材料出现，老的材料又在，可选的建造物一下子变太多，有点杂乱无章"). The walls, the spikes and the fire
-## first, then the towers (2026-10-02 rebuild): the three of wood, and the catapult, which wants stone. Every
+## first, then the towers (GAME-DESIGN 3.0): the three of wood, and the catapult, which wants stone. Every
 ## other material is an upgrade where a building stands (BUILDINGS.<id>.upgrades_to: bone stakes and the stone
 ## wall off the fence, the brazier off the campfire, a tower's bigger racks) or what a tower is loaded with
 ## (AMMO). Buildings absent here exist in BUILDINGS but are not placed from the menu ("core" is spawned by the
 ## level; the rest are what these become).
-const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "ground_spikes", "campfire", "bow_tower", "log_tower", "bait_rack", "catapult"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "ground_spikes", "campfire", "bow_tower", "drop_tower", "bait_rack", "catapult"]
 
 ## Everything the player can have standing: what the menu offers and all it becomes where it stands,
 ## however many steps up. What a material is for is worked out over these (uses_of).
@@ -944,25 +945,24 @@ const TOWERS: Dictionary = {
 	"pierce_aside": 0.6,
 	# Seconds a bow shows with no arrow on its string after it has shot: the shot is seen.
 	"renock_seconds": 0.6,
-	# How thick a log is, half across (metres): it rolls on that, and turns as it rolls.
-	"log_radius": 0.2,
-	# A log hits what is within this of its middle along the lane as it rolls (metres): its own thickness and half
-	# a body.
-	"log_hit_reach": 0.6,
-	# Seconds between workings-out of how far a log tower's lane runs (LogTower): something may be built across it.
-	"lane_check_seconds": 1.0,
-	# The lever thrown to let a log go: how far it is pulled (radians about its pin -- negative tips it forward, the
-	# way the logs go: tools/generate_props.py log_tower), in how long, and how long it takes to come back (seconds).
-	"lever_throw": -0.6,
-	"lever_seconds": [0.1, 0.6],
+	# What turns to aim on a tower -- the catapult's turntable, the drop tower's boom (their Turn part) -- swings round
+	# to what it acts on in this long before it lets go (seconds): seen turning, not snapped.
+	"turn_seconds": 0.35,
+	# The drop tower's boom (tools/generate_props.py drop_tower: DROP_TIP_DEGREES): nodded this far to let its log go
+	# (degrees about its pin -- negative, the long end down to level; no deeper, or the sling swings the log back over
+	# the plinth), in the first of `drop_tip_seconds`, and back up over the second.
+	"drop_tip_degrees": -14.0,
+	"drop_tip_seconds": [0.15, 0.6],
+	# A dropped log comes down this far over the ground at its middle (metres): half its thickness (DROP_LOG_RADIUS).
+	"log_radius": 0.14,
 	# How high a thrown stone goes (metres over the line of its flight), and how fast it tumbles (turns a second).
 	"throw_arc": 5.0,
 	"throw_spin": 1.5,
-	# How far the catapult's arm swings to throw (degrees about its axle, from rest -- negative is up and over
-	# towards the way it faces: the arm lies cocked back, and meets its padded stop at -98, tools/generate_props.py
-	# catapult): up in the first of `swing_seconds`, held the second, and wound back down over the third at least
-	# -- or half the time between throws, if that is longer. The shot leaves the cup where the swing ends.
-	"catapult_swing_degrees": -96.0,
+	# How far the catapult's arm is wound back while it is loaded (degrees about its axle, from its padded stop, where
+	# the model has it -- tools/generate_props.py catapult: CATAPULT_COCK_DEGREES): a throw swings it forward to the
+	# stop in the first of `swing_seconds`, holds the second, and winds it back over the third at least -- or half the
+	# time between throws, if that is longer. Empty, it stands at the stop. The shot leaves the cup at the stop.
+	"catapult_wound_degrees": 60.0,
 	"swing_seconds": [0.18, 0.4, 0.5],
 	# Earth thrown up where a stone comes down: the valley floor's red-brown.
 	"impact_debris": Color(0.55, 0.32, 0.22),
@@ -974,10 +974,10 @@ const TOWERS: Dictionary = {
 ## the kind of tower that takes it (BUILDINGS.<id>.ammo.accepts says which of them a tower does); `prop` what is
 ## seen going (VISUALS "prop/<prop>"); the rest is what a round does:
 ##   bow    `damage` to what it hits; `pierce`: through that many in a line, the first and those behind it
-##   roller `damage`, `slow` of their pace for `slow_seconds`, shoved back `push` metres over `push_seconds` --
-##          -- the heavy ones (DINOS.<id>.heavy) only with `moves_heavy`
+##   drop   `damage` to all within `splash` metres of where it falls, held down `knockdown` seconds and shoved
+##          `push` metres off the tower over `push_seconds` -- the heavy ones (DINOS.<id>.heavy) only with `moves_heavy`
 ##   thrower `damage` to all within `splash` metres of where it lands, held down `knockdown` seconds
-##   bait   `uses`: bites of it, one each time an animal eats (BAIT.bites_to_eat a visit)
+##   bait   `uses`: bites of it, one each time an animal stops to eat (BAIT)
 ## ARMOUR (GAME-DESIGN 3.0, the table: "披甲 -- 箭只打得进 1/4"): what pierces -- an arrow (AMMO "for" in `piercing`) --
 ## goes into an armoured animal (DINOS.<id>.armored: plates of bone in its skin, an aetosaur's, a stegosaur's,
 ## Postosuchus's) for only `pierce` of its damage; what crushes -- a stone, a log -- for all of it. So arrows alone do not
@@ -994,15 +994,17 @@ const AMMO: Dictionary = {
 	# A bone point lashed on: deeper, and through the first into the next behind it -- the answer to a column, and
 	# a third of the big boss's health in five (DINOS.postosuchus.hp 45).
 	"arrow_bone": {"name": "RESOURCE_ARROW_BONE", "for": "bow", "prop": "arrow_bone", "damage": 5.0, "pierce": 3},
-	# A plain log: it bowls them over, it hardly hurts them -- the answer to a rush, not a killer.
-	"log_round": {"name": "RESOURCE_LOG_ROUND", "for": "roller", "prop": "rolling_log", "damage": 0.5,
-		"slow": 0.4, "slow_seconds": 2.0, "push": 1.5, "push_seconds": 0.35},
-	# With bone spikes lashed round it: the same shove, and it cuts as it goes.
-	"log_spiked": {"name": "RESOURCE_LOG_SPIKED", "for": "roller", "prop": "rolling_log_spiked", "damage": 1.5,
-		"slow": 0.4, "slow_seconds": 2.0, "push": 1.5, "push_seconds": 0.35},
-	# Weighted with sandstone: twice the shove, and the big ones are moved by it too.
-	"roller_stone": {"name": "RESOURCE_ROLLER_STONE", "for": "roller", "prop": "rolling_stone", "damage": 1.0,
-		"slow": 0.3, "slow_seconds": 2.5, "push": 3.0, "push_seconds": 0.45, "moves_heavy": true},
+	# What the drop tower lets fall (DropTower; GAME-DESIGN 3.0 -- they were the log tower's rolling logs, and keep
+	# their ids). A short heavy log: it crushes what is under it -- the armoured take all of it -- knocks it flat
+	# `knockdown` seconds and shoves it `push` metres off the tower, everything within `splash` of where it falls.
+	"log_round": {"name": "RESOURCE_LOG_ROUND", "for": "drop", "prop": "drop_log", "damage": 2.0,
+		"splash": 1.2, "knockdown": 1.0, "push": 1.5, "push_seconds": 0.35},
+	# With bone spikes lashed round it: it cuts as it crushes.
+	"log_spiked": {"name": "RESOURCE_LOG_SPIKED", "for": "drop", "prop": "drop_log_spiked", "damage": 3.5,
+		"splash": 1.2, "knockdown": 1.0, "push": 1.5, "push_seconds": 0.35},
+	# Weighted with sandstone: heavier -- knocked flat longer, shoved twice as far, and the big ones are moved by it too.
+	"roller_stone": {"name": "RESOURCE_ROLLER_STONE", "for": "drop", "prop": "drop_log_stone", "damage": 3.0,
+		"splash": 1.4, "knockdown": 1.5, "push": 3.0, "push_seconds": 0.45, "moves_heavy": true},
 	# A rounded block of sandstone: everything where it lands is hit, and knocked flat a moment.
 	"shot_stone": {"name": "RESOURCE_SHOT_STONE", "for": "thrower", "prop": "shot_stone", "damage": 4.0,
 		"splash": 1.8, "knockdown": 0.8},
@@ -1041,16 +1043,16 @@ const FIRE_PATCH: Dictionary = {
 	"ring": 0.7,
 }
 
-## THE BAIT RACK (BUILDINGS.bait_rack): what eats meat goes to it -- the raiders and the night's hunters, by their
-## habit (DINOS.<id>.behaviour in `eaters`; the siege boss and the nest's guards do not leave what they are about) --
-## ranking it with what shoots at them (DINO_AI.shooter_kinds: a raider on its way to the meat is not drawn off
-## by a bow; one already set on a bow is not drawn off by meat). It eats `bites_to_eat` bites, a bite at a time as
-## it would bite anything (DINOS.<id>.attack_rate), standing at the rack, and then is full for `full_seconds`:
-## it goes on, and does not turn for meat again until then. A rack holds AMMO.food.uses bites a piece of meat.
+## THE BAIT RACK (BUILDINGS.bait_rack; GAME-DESIGN 3.0 -- the player: "诱引建筑感觉逻辑有点复杂，恐龙如果全部凑上去显得
+## 太厉害了，而且容易出bug，有什么简化的方法吗"): it draws nothing to it. What eats meat -- the raiders and the night's
+## hunters, by their habit (DINOS.<id>.behaviour in `eaters`; the siege boss, the nest's guards and what flies do not
+## stop for it) -- and passes within its `range` stops there and eats for `eat_seconds`, a bite of the rack's meat,
+## and then goes on its way: once each, its hunger for it gone. It used to draw them from twelve metres and hold them
+## eating till they were full -- a whole raid crowded at it, and it held them all. A rack holds AMMO.food.uses bites a
+## piece of meat.
 const BAIT: Dictionary = {
 	"eaters": ["pack", "runner", "prowl"],
-	"bites_to_eat": 4,
-	"full_seconds": 60.0,
+	"eat_seconds": 3.0,
 }
 
 ## The night's hunters (NightProwl, ProwlerDino; GAME-DESIGN 9.3; v0.6 round four, the player: "不用火把，
@@ -1663,7 +1665,7 @@ const DINO_AI: Dictionary = {
 	"collides_with": ["LAYER_GROUND", "LAYER_BUILDING", "LAYER_WALL", "LAYER_GATE", "LAYER_HERO", "LAYER_DINO"],
 	# What counts as shooting at it, by BUILDINGS kind: what a pack leaves its path for -- the towers that hit it
 	# (2026-10-02 rebuild; the bait rack hits nothing, and is gone to for another reason: BAIT).
-	"shooter_kinds": ["bow", "roller", "thrower"],
+	"shooter_kinds": ["bow", "drop", "thrower"],
 	# A trap that shot at it is the one it goes for for this long (seconds); a building it found
 	# every place round taken is left be for this long, and something else chosen -- ten raptors
 	# went for the one crossbow nearest the nest, which two could bite (the debug-agent's BUG-009).
@@ -3906,21 +3908,22 @@ const VISUALS: Dictionary = {
 	# reaches it.
 	"building/core":        {"scene": "res://assets/models/cabin/module_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "ship_wreck", "anchor": "feet", "color": "core"},
-	# THE TOWERS (2026-10-02 rebuild; tools/generate_props.py bow_tower, log_tower, bait_rack, catapult): kits built to
-	# their cells, not fitted, of named parts the towers show, hide and move (AmmoTower and its kinds) -- the bows
-	# and their arrows, the logs in the cradle, the meat on the rack, the arm and its stone; and the racks a
-	# bigger store adds (Store2, Store3). Each level of a tower is the same model.
+	# THE TOWERS (one set on one plinth since v0.7; tools/generate_props.py bow_tower, drop_tower, bait_rack, catapult):
+	# kits built to their cells, not fitted, of named parts the towers show, hide and move (AmmoTower and its kinds) --
+	# the bows and their arrows; the drop tower's Turn, its Boom and the Load in its sling; the meat on the rack; the
+	# catapult's Turn, its Arm and the Stone in the cup; and the stores a bigger level adds (Store2, Store3). Each level
+	# of a tower is the same model.
 	"building/bow_tower":   {"scene": "res://assets/models/props/bow_tower_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/bow_tower_2": {"scene": "res://assets/models/props/bow_tower_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/bow_tower_3": {"scene": "res://assets/models/props/bow_tower_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
-	"building/log_tower":   {"scene": "res://assets/models/props/log_tower_a.glb", "fit": "none",
+	"building/drop_tower":   {"scene": "res://assets/models/props/drop_tower_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
-	"building/log_tower_2": {"scene": "res://assets/models/props/log_tower_a.glb", "fit": "none",
+	"building/drop_tower_2": {"scene": "res://assets/models/props/drop_tower_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
-	"building/log_tower_3": {"scene": "res://assets/models/props/log_tower_a.glb", "fit": "none",
+	"building/drop_tower_3": {"scene": "res://assets/models/props/drop_tower_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/bait_rack":   {"scene": "res://assets/models/props/bait_rack_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
@@ -3934,17 +3937,17 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/catapult_3":  {"scene": "res://assets/models/props/catapult_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
-	# What the towers send flying (AMMO: each kind's "flies"): an arrow, a log rolling, a stone in the air -- built
+	# What the towers send flying (AMMO: each kind's "prop"): an arrow, a log falling, a stone in the air -- built
 	# to size, its middle at the origin, an arrow pointing along -Z (north), a log lying along X.
 	"prop/arrow_wood":      {"scene": "res://assets/models/props/arrow_wood_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
 	"prop/arrow_bone":      {"scene": "res://assets/models/props/arrow_bone_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
-	"prop/rolling_log":     {"scene": "res://assets/models/props/rolling_log_a.glb", "fit": "none",
+	"prop/drop_log":        {"scene": "res://assets/models/props/drop_log_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
-	"prop/rolling_log_spiked": {"scene": "res://assets/models/props/rolling_log_spiked_a.glb", "fit": "none",
+	"prop/drop_log_spiked": {"scene": "res://assets/models/props/drop_log_spiked_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
-	"prop/rolling_stone":   {"scene": "res://assets/models/props/rolling_stone_a.glb", "fit": "none",
+	"prop/drop_log_stone":  {"scene": "res://assets/models/props/drop_log_stone_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
 	"prop/shot_stone":      {"scene": "res://assets/models/props/shot_stone_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
