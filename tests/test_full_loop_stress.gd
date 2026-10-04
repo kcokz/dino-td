@@ -155,7 +155,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_not_null(hud, "HUD exists in Main")
 	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
 	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays the cabin's full health")
+	assert_eq(hud.get_core_hp_text(), tree.root.get_node("Config").shown_pair(core_hp(), core_hp()), "HUD displays the cabin's full health (as shown: Config.SHOWN)")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 	assert_false(hud.is_game_over_visible(), "GameOver modal is hidden initially")
 	assert_false(hud.end_action_btn.disabled, "End Action button enabled in PLAN")
@@ -381,7 +381,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after restart")
 	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
 	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays the cabin's full health")
+	assert_eq(hud.get_core_hp_text(), tree.root.get_node("Config").shown_pair(core_hp(), core_hp()), "HUD displays the cabin's full health (as shown: Config.SHOWN)")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "HUD displays Phase: PLAN")
 
 	# --------------------------------------------------------------------------
@@ -443,7 +443,7 @@ func test_01_full_loop_multi_cycle_integration_e2e() -> void:
 	assert_false(hud.end_action_btn.disabled, "End Action re-enabled after 2nd restart")
 	# The top bar: the wood chip's count, and the cabin's health as a bar and its figure.
 	assert_eq(hud.get_wood_text(), str(opening_banked_wood()), "HUD displays the opening wood balance")
-	assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays the cabin's full health")
+	assert_eq(hud.get_core_hp_text(), tree.root.get_node("Config").shown_pair(core_hp(), core_hp()), "HUD displays the cabin's full health (as shown: Config.SHOWN)")
 
 # ==============================================================================
 # Test 2: Consecutive Horde Progression & Multiplier Compounding Stress

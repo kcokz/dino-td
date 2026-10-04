@@ -316,8 +316,9 @@ static func job_icon(station: Node, job_id: String) -> Texture2D:
 			for res_id in cfg.RESOURCE_NODES:
 				if String(cfg.harvest_requires_unlock(String(res_id))) == String(cfg.RECIPES[job_id].get("unlocks", "")):
 					return UiTheme.icon(String(res_id))
+	# The pod's job is a sleep: the moon, as his stamina's bar and the corner's Sleep wear it.
 	if station is HealingPod:
-		return UiTheme.icon("heart")
+		return UiTheme.icon("moon")
 	return UiTheme.icon(String(station.station_id)) if "station_id" in station else null
 
 ## What a job at a bench costs, takes and does, for whichever entry the cursor is over: the
@@ -362,20 +363,22 @@ static func ammo_detail(ammo_id: String) -> String:
 	var row: Dictionary = cfg.AMMO[ammo_id]
 	var title: String = TranslationServer.translate(String(row.get("name", ammo_id)))
 	var f := func(key: String) -> String: return String(cfg.factor_text(float(row.get(key, 0.0))))
+	# Its damage as the interface shows hit points (Config.SHOWN), the metres and seconds as they are.
+	var hit: String = String(cfg.shown_text(float(row.get("damage", 0.0))))
 	match String(row.get("for", "")):
 		"bow":
 			if int(row.get("pierce", 1)) > 1:
-				return TranslationServer.translate("AMMO_DETAIL_BOW_PIERCE") % [title, f.call("damage"), int(row["pierce"])]
-			return TranslationServer.translate("AMMO_DETAIL_BOW") % [title, f.call("damage")]
+				return TranslationServer.translate("AMMO_DETAIL_BOW_PIERCE") % [title, hit, int(row["pierce"])]
+			return TranslationServer.translate("AMMO_DETAIL_BOW") % [title, hit]
 		"drop":
 			var key: String = "AMMO_DETAIL_DROP_HEAVY" if bool(row.get("moves_heavy", false)) else "AMMO_DETAIL_DROP"
-			return TranslationServer.translate(key) % [title, f.call("splash"), f.call("damage"), f.call("knockdown"),
+			return TranslationServer.translate(key) % [title, f.call("splash"), hit, f.call("knockdown"),
 				f.call("push")]
 		"thrower":
 			if row.has("burn"):
-				return TranslationServer.translate("AMMO_DETAIL_THROWER_BURN") % [title, f.call("splash"), f.call("damage"),
+				return TranslationServer.translate("AMMO_DETAIL_THROWER_BURN") % [title, f.call("splash"), hit,
 					String(cfg.factor_text(float((row["burn"] as Dictionary).get("seconds", 0.0))))]
-			return TranslationServer.translate("AMMO_DETAIL_THROWER") % [title, f.call("splash"), f.call("damage"), f.call("knockdown")]
+			return TranslationServer.translate("AMMO_DETAIL_THROWER") % [title, f.call("splash"), hit, f.call("knockdown")]
 		"bait":
 			return TranslationServer.translate("AMMO_DETAIL_BAIT") % [title, int(row.get("uses", 1))]
 	return title

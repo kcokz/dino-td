@@ -418,7 +418,9 @@ func test_hud_05_updates_on_core_hp_changed_signal() -> void:
 
 	event_bus_node.core_hp_changed.emit(7.0, 10.0)
 	await wait_frames(1)
-	assert_true("7" in hp_label.text and "10" in hp_label.text, "Core HP label must reflect 7/10 (got '%s')" % hp_label.text)
+	# As the interface shows hit points (Config.SHOWN).
+	var shown: String = tree.root.get_node("Config").shown_pair(7.0, 10.0)
+	assert_eq(hp_label.text, shown, "Core HP label must reflect 7/10 as shown, %s (got '%s')" % [shown, hp_label.text])
 
 func test_hud_06_victory_overlay_displayed_on_game_won() -> void:
 	var hud = _create_hud()

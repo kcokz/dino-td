@@ -244,7 +244,8 @@ func _bus_handlers(eb: Node) -> Array:
 			["core_hp_changed", _on_core_hp_changed], ["phase_changed", _on_phase_changed],
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
-			["hero_hp_changed", _on_hero_hp_changed], ["locale_changed", _on_locale_changed],
+			["hero_hp_changed", _on_hero_hp_changed], ["hero_stamina_changed", _on_hero_stamina_changed],
+			["locale_changed", _on_locale_changed],
 			["raid_warning", _on_raid_warning],
 			["boss_arrived", _on_boss_arrived],
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
@@ -293,11 +294,15 @@ func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 		var every: float = float(cfg.FEEDBACK.get("hero_hurt_alert_seconds", 10.0)) if (cfg and "FEEDBACK" in cfg) else 10.0
 		if now - _hero_hurt_said_at >= every:
 			_hero_hurt_said_at = now
-			show_hint(tr("HINT_HERO_HURT") % [UiKit.fraction_text(cur, max_val)], UiTheme.toast_seconds("read"), "warning")
+			# Worn out for want of sleep, it is that he is told, not that he is bitten (Hero._wear_out).
+			if _hero_spent:
+				show_hint(tr("HINT_EXHAUSTED"), UiTheme.toast_seconds("read"), "warning")
+			else:
+				show_hint(tr("HINT_HERO_HURT") % [String(_get_config().shown_pair(cur, max_val))], UiTheme.toast_seconds("read"), "warning")
 	_hero_hp_before = cur
 	_hero_max_before = max_val
 	if hero_hp_label:
-		hero_hp_label.text = UiKit.fraction_text(cur, max_val)
+		hero_hp_label.text = String(_get_config().shown_pair(cur, max_val))
 	if hero_hp_bar:
 		var ratio: float = clampf(cur / max_val, 0.0, 1.0) if max_val > 0.0 else 0.0
 		hero_hp_bar.value = ratio
@@ -306,6 +311,25 @@ func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 var _hero_hp_before: float = INF
 var _hero_max_before: float = -1.0
 var _hero_hurt_said_at: float = -INF
+
+## His stamina under the medallion (Config.STAMINA): its bar; whether he is spent (his health going for want of
+## sleep: the hurt hint says so instead); and whether he has been told, this run, that he is tired and to sleep.
+var hero_stamina_bar: StatBar = null
+var _hero_spent: bool = false
+var _tired_told: bool = false
+
+func _on_hero_stamina_changed(cur: float, max_val: float) -> void:
+	var share: float = clampf(cur / max_val, 0.0, 1.0) if max_val > 0.0 else 0.0
+	var cfg = _get_config()
+	var below: float = float(cfg.STAMINA.get("tired_below", 0.25)) if (cfg and "STAMINA" in cfg) else 0.25
+	if hero_stamina_bar:
+		hero_stamina_bar.set_values(share, &"DangerBar" if share < below else &"StaminaBar")
+		hero_stamina_bar.tooltip_text = "%s %s" % [tr("STAT_STAMINA_NAME"), String(cfg.shown_pair(cur, max_val))]
+	_hero_spent = cur <= 0.0
+	# Tired the first time this run: what to do about it, once.
+	if share < below and not _tired_told:
+		_tired_told = true
+		show_hint(tr("HINT_TIRED"), UiTheme.toast_seconds("read"), "warning")
 
 ## The counts, and income made visible: a count that went up flashes the accent colour and
 ## fades back, so a pickup is seen rather than searched for; an empty one is dimmed.
@@ -900,7 +924,7 @@ func _speeds() -> Array:
 
 func _on_core_hp_changed(cur: float, max_val: float) -> void:
 	if core_hp_label:
-		core_hp_label.text = UiKit.fraction_text(cur, max_val)
+		core_hp_label.text = String(_get_config().shown_pair(cur, max_val))
 	_core_ratio = clampf(cur / max_val, 0.0, 1.0) if max_val > 0.0 else 0.0
 	if core_hp_bar:
 		var dropped: bool = _core_ratio < core_hp_bar.value - 0.0001
@@ -962,6 +986,8 @@ func _defeat_text(gs: Node) -> String:
 	var killer: Dictionary = gs.hero_killer if "hero_killer" in gs else {}
 	if killer.is_empty():
 		return tr("GAME_DEFEAT_HERO")
+	if bool(killer.get("exhausted", false)):
+		return tr("GAME_DEFEAT_HERO_EXHAUSTED")
 	var cfg = _get_config()
 	var kind: String = String(killer.get("type", ""))
 	var named: String = String(cfg.get_dino_name(kind)) if cfg else kind
@@ -1113,6 +1139,11 @@ func reset_hud(new_run: bool = true) -> void:
 		_guards_warning_said = false
 		_first_dusk_said = false
 		_starved_said_night = -1
+		# His stamina told afresh (_on_hero_stamina_changed): rested, not spent, the tired hint yet to come.
+		_tired_told = false
+		_hero_spent = false
+		if hero_stamina_bar:
+			hero_stamina_bar.set_values(1.0, &"StaminaBar")
 		if hero_commands:
 			hero_commands.reset()
 	if game_over_panel:
@@ -1563,6 +1594,21 @@ func _ensure_ui_components() -> void:
 	hero[0].mouse_filter = Control.MOUSE_FILTER_STOP
 	hero[0].mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	hero[0].gui_input.connect(_on_hero_emblem_input)
+	# His stamina under it (Config.STAMINA): a thin bar of the night's blue, red once he is tired -- clear of the
+	# plate the box's negative separation tucks under the disc.
+	var stamina_room := MarginContainer.new()
+	stamina_room.name = "HeroStaminaRoom"
+	stamina_room.mouse_filter = Control.MOUSE_FILTER_PASS
+	stamina_room.add_theme_constant_override("margin_top", UiTheme.space("s") + UiTheme.space("xs"))
+	stamina_room.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	hero[0].add_child(stamina_room)
+	hero_stamina_bar = StatBar.new()
+	hero_stamina_bar.name = "HeroStaminaBar"
+	hero_stamina_bar.size_flags_horizontal = Control.SIZE_FILL
+	hero_stamina_bar.custom_minimum_size = Vector2(UiTheme.width("figure") * 1.2, UiTheme.thickness("bar") * 0.6)
+	hero_stamina_bar.mouse_filter = Control.MOUSE_FILTER_PASS
+	hero_stamina_bar.set_values(1.0, &"StaminaBar")
+	stamina_room.add_child(hero_stamina_bar)
 	# The key that opens his card in full, on a chip at the medallion's shoulder, as a command wears
 	# its key.
 	_shoulder_keycap(hero[0], _details_key_text())

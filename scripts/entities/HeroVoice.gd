@@ -67,7 +67,8 @@ func _hooks() -> Array:
 		["dino_spawned", _on_dino_spawned],
 		["boss_arrived", _on_boss_arrived], ["unlock_granted", _on_unlock_granted],
 		["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
-		["cabin_view_changed", _on_cabin_view_changed], ["hero_hp_changed", _on_hero_hp_changed]]
+		["cabin_view_changed", _on_cabin_view_changed], ["hero_hp_changed", _on_hero_hp_changed],
+		["hero_stamina_changed", _on_hero_stamina_changed]]
 
 func _process(delta: float) -> void:
 	if hero == null or not is_instance_valid(hero) or _dead():
@@ -286,10 +287,25 @@ func _on_cabin_view_changed(inside: bool) -> void:
 	consider("enter" if inside else "leave")
 
 func _on_hero_hp_changed(cur: float, max_val: float) -> void:
-	# Bitten, and it is getting serious: under half.
-	if cur < _hp_before - 0.001 and cur > 0.0 and cur < max_val * 0.5:
+	# Bitten, and it is getting serious: under half. Not worn out for want of sleep -- that is not a bite, and he
+	# has said so (_on_hero_stamina_changed).
+	var spent: bool = hero != null and is_instance_valid(hero) and hero.has_method("is_spent") and bool(hero.is_spent())
+	if cur < _hp_before - 0.001 and cur > 0.0 and cur < max_val * 0.5 and not spent:
 		consider("hurt")
 	_hp_before = cur
+
+## His stamina's last figure (_on_hero_stamina_changed).
+var _stamina_before: float = INF
+
+## Tired, he says so as he goes under STAMINA.tired_below of it; run out, that he cannot go on -- once each time down.
+func _on_hero_stamina_changed(cur: float, max_val: float) -> void:
+	var cfg = get_node_or_null("/root/Config")
+	var below: float = max_val * (float(cfg.STAMINA.get("tired_below", 0.25)) if (cfg and "STAMINA" in cfg) else 0.25)
+	if cur <= 0.0 and _stamina_before > 0.0:
+		speak("spent")
+	elif cur < below and _stamina_before >= below:
+		speak("tired")
+	_stamina_before = cur
 
 # ------------------------------------------------------------------------------
 

@@ -39,7 +39,8 @@ func _ready() -> void:
 	build_button = UiKit.command_button(tr("CMD_BUILD"), UiTheme.icon("hammer"), func(): build_pressed.emit(), tr("TIP_CMD_BUILD"))
 	build_button.name = "BuildCommand"
 	add_child(build_button)
-	rest_button = UiKit.command_button(tr("CMD_REST"), UiTheme.icon("heart"), func(): rest_pressed.emit(), tr("TIP_CMD_REST"))
+	# Sleep: the moon, his stamina's own mark (OptionPanel's stamina row) -- a sleep mends him as well.
+	rest_button = UiKit.command_button(tr("CMD_REST"), UiTheme.icon("moon"), func(): rest_pressed.emit(), tr("TIP_CMD_REST"))
 	rest_button.name = "RestCommand"
 	add_child(rest_button)
 	for btn in [build_button, rest_button]:
@@ -54,9 +55,11 @@ func _ready() -> void:
 	reset()
 	var eb = get_node_or_null("/root/EventBus")
 	if eb:
-		# His health: Rest comes the first time he is hurt.
+		# His health: Sleep comes the first time he is hurt -- and his stamina: as he wears down, and is rested.
 		if eb.has_signal("hero_hp_changed"):
 			eb.hero_hp_changed.connect(func(_hp: float, _most: float): refresh())
+		if eb.has_signal("hero_stamina_changed"):
+			eb.hero_stamina_changed.connect(func(_left: float, _most: float): refresh())
 		# And at once whatever changes what a tile says: the wood in the stock, the part of the day, a
 		# torch lit or burnt out. Waiting for the next refresh, the torch's came up a few seconds after
 		# the dusk was said, and a press on it the moment the wood came in was lost (the debug-agent's
@@ -173,11 +176,15 @@ func refresh() -> void:
 func _refresh_rest(hero: Node) -> void:
 	var alive: bool = hero != null and is_instance_valid(hero) and "current_hp" in hero and float(hero.current_hp) > 0.0
 	var hurt: bool = alive and float(hero.current_hp) < float(hero.max_hp) - 0.001
+	# Or wearing down: under STAMINA.offer_below of his stamina, the command comes, as it does when he is hurt.
+	var cfg = get_node_or_null("/root/Config")
+	var below: float = float(cfg.STAMINA.get("offer_below", 0.6)) if (cfg and "STAMINA" in cfg) else 0.6
+	var weary: bool = alive and "stamina" in hero and float(hero.stamina) <= float(hero.max_stamina) * below
 	var pod: HealingPod = HealingPod.of(get_tree())
 	var going: bool = alive and pod != null and hero.has_method("rest_pod") and hero.rest_pod() == pod
-	if hurt:
+	if hurt or weary:
 		_come("rest")
-	rest_button.disabled = pod == null or not (hurt or going)
+	rest_button.disabled = pod == null or not (going or pod.can_offer(HealingPod.REST))
 	rest_button.set_pressed_no_signal(going)
 
 ## The torch's tile: come with the first dusk, greyed out by day; while one burns pressed in, its badge the

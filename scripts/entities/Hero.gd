@@ -112,7 +112,10 @@ func _load_config() -> void:
 			attack_range = float(cfg.HERO.get("attack_range", 2.0))
 		if "TIME" in cfg and cfg.TIME is Dictionary:
 			build_range = float(cfg.TIME.get("build_range", 1.5))
+		if "STAMINA" in cfg and cfg.STAMINA is Dictionary:
+			max_stamina = float(cfg.STAMINA.get("max", 40.0))
 	current_hp = max_hp
+	stamina = max_stamina
 
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -150,6 +153,8 @@ func _physics_process(delta: float) -> void:
 	_burn_the_torch(delta)
 	# A tower he goes past that wants loading is loaded from the stock (AmmoTower; Config.AMMO_LOADING).
 	_load_in_passing(delta)
+	# And awake, he tires (Config.STAMINA).
+	_tire(delta)
 
 	if not continuous_mode and _get_current_phase() != 0: # Only restricted during legacy DEPLOY phase
 		return
@@ -1124,15 +1129,20 @@ func order_stop() -> void:
 
 func get_display_info() -> Dictionary:
 	var name_str = TranslationServer.translate("HERO_NAME")
+	var cfg = _get_config()
+	var hp_shown: String = String(cfg.shown_pair(current_hp, max_hp)) if cfg else "%d / %d" % [int(ceil(current_hp)), int(ceil(max_hp))]
+	var stamina_shown: String = String(cfg.shown_pair(stamina, max_stamina)) if cfg else "%d / %d" % [int(ceil(stamina)), int(ceil(max_stamina))]
 	return {
 		"title": name_str,
 		"type": "hero",
 		"hp": current_hp,
 		"max_hp": max_hp,
+		"stamina": stamina,
+		"max_stamina": max_stamina,
 		"resting": is_resting(),
-		# His health is the card's bar; the line under it says what he can be told to do -- or, in the
-		# healing pod, how whole he is.
-		"status": (TranslationServer.translate("HERO_RESTING") % [int(ceil(current_hp)), int(ceil(max_hp))]) \
+		# His health and his stamina are the card's bars; the line under them says what he can be told to do -- or,
+		# asleep in the healing pod, how whole and how rested he is.
+		"status": (TranslationServer.translate("HERO_RESTING") % [hp_shown, stamina_shown]) \
 			if is_resting() else TranslationServer.translate("HERO_HINT"),
 	}
 
@@ -1150,6 +1160,78 @@ func heal(amount: float) -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("hero_hp_changed"):
 		eb.hero_hp_changed.emit(current_hp, max_hp)
+
+# ==============================================================================
+# 精力 Stamina (Config.STAMINA; GAME-DESIGN 3.0)
+# ==============================================================================
+
+## What he has left before he must sleep, and the most of it (Config.STAMINA.max). Awake it runs down (_tire), faster
+## in the dark; asleep in the healing pod it comes back (rest_stamina); run out, his health goes (_wear_out).
+var stamina: float = 0.0
+var max_stamina: float = 40.0
+## What the interface was last told of it (hero_stamina_changed): told again only once it has moved a tenth of a point.
+var _stamina_told: float = -1.0
+## Whether it was his want of sleep that killed him (die: the defeat says so).
+var _worn_out: bool = false
+
+func _stamina_row() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.STAMINA if (cfg and "STAMINA" in cfg) else {}
+
+## Awake, `delta` seconds of it gone: STAMINA.drain_per_second, night_factor times that while it is dark (FIRE.burns).
+## Asleep in the pod, none; with none left, his health instead (_wear_out).
+func _tire(delta: float) -> void:
+	if current_state == State.DEAD or current_state == State.RESTING or delta <= 0.0 or max_stamina <= 0.0:
+		return
+	var row: Dictionary = _stamina_row()
+	if stamina <= 0.0:
+		_wear_out(float(row.get("exhausted_hp_per_second", 1.0)) * delta)
+		return
+	var rate: float = float(row.get("drain_per_second", 0.075))
+	var gs = _get_game_state()
+	if gs and gs.has_method("day_part") and String(gs.day_part()) in _fire().get("burns", ["dusk", "night"]):
+		rate *= float(row.get("night_factor", 1.3))
+	stamina = maxf(0.0, stamina - rate * delta)
+	_tell_stamina()
+
+## Rested by `amount` (the healing pod, as he sleeps in it), never past his most.
+func rest_stamina(amount: float) -> void:
+	if current_state == State.DEAD or amount <= 0.0:
+		return
+	stamina = minf(max_stamina, stamina + amount)
+	_tell_stamina()
+
+## Whether he is under STAMINA.tired_below of his most: he says so, and its bar is red.
+func is_tired() -> bool:
+	return stamina < max_stamina * float(_stamina_row().get("tired_below", 0.25))
+
+## Whether he has none left: his health is going.
+func is_spent() -> bool:
+	return stamina <= 0.0
+
+## Tells the interface (hero_stamina_changed) once it has moved a tenth of a point, or reached either end.
+func _tell_stamina() -> void:
+	var ends: bool = stamina <= 0.0 or stamina >= max_stamina
+	if absf(stamina - _stamina_told) < 0.1 and not (ends and stamina != _stamina_told):
+		return
+	_stamina_told = stamina
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("hero_stamina_changed"):
+		eb.hero_stamina_changed.emit(stamina, max_stamina)
+
+## Worn out, his health goes for want of sleep (STAMINA.exhausted_hp_per_second): not a bite -- nothing flashes, he
+## does not turn to fight -- and the HUD says why (it knows he is spent: hero_stamina_changed at none).
+func _wear_out(amount: float) -> void:
+	if amount <= 0.0 or current_state == State.DEAD:
+		return
+	current_hp = maxf(0.0, current_hp - amount)
+	_refresh_health_bar()
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("hero_hp_changed"):
+		eb.hero_hp_changed.emit(current_hp, max_hp)
+	if current_hp <= 0.0:
+		_worn_out = true
+		die()
 
 # ==============================================================================
 # Resting in the healing pod (HealingPod; GAME-DESIGN 3.0)
@@ -1496,9 +1578,12 @@ func die() -> void:
 	var cfg = _get_config()
 	if gs != null and "hero_killer" in gs:
 		var within: float = float(cfg.HERO.get("killer_within", 3.0)) if cfg else 3.0
-		var killer: Node3D = _find_nearest_enemy(within)
-		gs.hero_killer = {} if killer == null else \
-			{"type": String(killer.get("dino_type")), "guard": killer.is_in_group("guard_dinos")}
+		var killer: Node3D = null if _worn_out else _find_nearest_enemy(within)
+		if _worn_out:
+			gs.hero_killer = {"exhausted": true}
+		else:
+			gs.hero_killer = {} if killer == null else \
+				{"type": String(killer.get("dino_type")), "guard": killer.is_in_group("guard_dinos")}
 	current_state = State.DEAD
 	velocity = Vector3.ZERO
 	torch_left = 0.0

@@ -2653,6 +2653,8 @@ const THEME: Dictionary = {
 		"day_day": Color(0.97, 0.80, 0.36),
 		"day_dusk": Color(0.93, 0.38, 0.20),
 		"day_night": Color(0.42, 0.55, 0.92),
+		# His stamina's bar (STAMINA): the night's blue, a little paler -- sleep.
+		"stamina": Color(0.5, 0.58, 0.93),
 		# Ink: text on a card's hide -- a card's name and price, a tooltip. Since v0.6 round three
 		# the hide is dark vellum, so the ink is pale; "ink_short" is a count he is short of, as
 		# danger_text is on stone.
@@ -3007,6 +3009,9 @@ const BARKS: Dictionary = {
 		"repair": {"count": 3, "chance": 0.6, "again": 30.0},
 		# Climbing into the healing pod (HealingPod).
 		"rest": {"count": 3, "chance": 0.8, "again": 30.0},
+		# Tired (STAMINA.tired_below), and run out of it -- his health going (Hero._tire): once each time down.
+		"tired": {"count": 2, "chance": 1.0, "again": 60.0, "urgent": true},
+		"spent": {"count": 2, "chance": 1.0, "again": 30.0, "urgent": true},
 		"fight": {"count": 5, "chance": 0.5, "again": 15.0},
 		"hurt": {"count": 4, "chance": 1.0, "again": 12.0, "urgent": true},
 		"kill": {"count": 4, "chance": 0.4, "again": 12.0},
@@ -4693,17 +4698,57 @@ static func harvest_note(res_id: String, owned: Dictionary) -> String:
 ## nothing else in the cabin is worked, and nothing outside is done. It replaced the kitchen, its meals, its pot and
 ## being fed: a second economy of meat for a few seconds' boost, which a player who only built towers never missed.
 const POD: Dictionary = {
-	# Hit points a second while he floats in it: from four of his ten to whole in twelve seconds -- as long as a
-	# job at the workbench, long enough that a rest in the middle of a raid is a decision.
+	# Hit points a second while he floats in it: from 16 of his 40 to whole in twelve seconds -- as long as a job at the
+	# workbench, long enough that a rest in the middle of a raid is a decision. And it is where he sleeps: his stamina
+	# comes back as he floats (STAMINA.rest_per_second), and the rest lasts till both are whole.
 	"heal_per_second": 2.0,
 	# How high the tank's floor is over the room's, in metres (tools/generate_cabin.py POD_FLOOR): he is drawn
 	# standing on it while he floats.
 	"floor": 0.30,
 }
 
+## 精力 STAMINA (GAME-DESIGN 3.0; the player, 2026-10-04: "加一个疲劳值（或者叫精力），人会逐步疲劳这样就需要去睡觉，精力掉完，
+## 就开始掉血"; "睡觉用治疗仓，回血回精力，晚上精力掉的稍微快一点"): what he has left before he must sleep -- on the hit points'
+## scale (`max`, shown a quarter of it: SHOWN). Awake it runs down `drain_per_second`, `night_factor` times that in the
+## dark part of the day (FIRE.burns: dusk and night) -- about three quarters of it over a whole day (360 s: 240 light,
+## 120 dark). Asleep in the healing pod it comes back `rest_per_second`: empty to full in twenty seconds, as his health
+## does (POD). Under `tired_below` of it he says so and its bar goes red; at none he wears his own health away,
+## `exhausted_hp_per_second` (his 40 in forty seconds -- time to get to the pod) till he sleeps. The pod offers a sleep
+## once he is hurt, or down to `offer_below` of it.
+const STAMINA: Dictionary = {
+	"max": 40.0,
+	"drain_per_second": 0.075,
+	"night_factor": 1.3,
+	"rest_per_second": 2.0,
+	"tired_below": 0.25,
+	"offer_below": 0.6,
+	"exhausted_hp_per_second": 1.0,
+}
+
 ## A speed factor as the player reads it: "2" for a whole one, "1.3" otherwise.
 static func factor_text(f: float) -> String:
 	return ("%d" % int(round(f))) if is_equal_approx(f, round(f)) else ("%.1f" % f)
+
+## THE NUMBERS THE PLAYER SEES (the player, 2026-10-04: "显示数值400太高，显示数值低一些，code里的数值和界面分开，或者你用
+## 行业practice处理这个数值问题"): hit points, damage and his stamina are kept four times finer than they are shown (the x4
+## scale, BUILDINGS' note: so a number can move a quarter of a step), and the interface shows them at `points` of
+## themselves -- the cabin's 400 is 100 on the screen, his 40 is 10, a wooden arrow's 12 is 3. Every such figure the
+## player reads goes through shown(): the code's numbers and the screen's are apart, and this is the one step between.
+const SHOWN: Dictionary = {"points": 0.25}
+
+## `v` hit points (or damage, or stamina) as the interface shows them.
+static func shown(v: float) -> float:
+	return v * float(SHOWN.get("points", 1.0))
+
+## `v` as a line of text says it: shown, whole or to one place (factor_text).
+static func shown_text(v: float) -> String:
+	return factor_text(shown(v))
+
+## "9 / 10": `current` of `whole` as the interface shows them (shown) -- rounded, so a bite shows when it takes one,
+## and what is left of a living thing at least 1, so a scratch of it never reads as dead.
+static func shown_pair(current: float, whole: float) -> String:
+	var cur: int = 0 if current <= 0.0 else maxi(1, int(round(shown(current))))
+	return "%d / %d" % [cur, int(round(shown(whole)))]
 
 ## Construction time is a function of price: the more a building costs, the longer
 ## the Hero stands there making it. Keeping it derived means a designer tunes one

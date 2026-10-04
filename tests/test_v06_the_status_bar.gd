@@ -83,7 +83,7 @@ func test_02_the_cabins_medallion_hangs_from_its_middle_and_rings_its_health() -
 	await wait_frames(1)
 	assert_almost_eq(hud.core_hp_bar.value, 0.25, 0.001, "The ring is as full as the cabin is whole")
 	assert_eq(hud.core_hp_bar.tint_progress, UiTheme.health_color(0.25), "in the colour its health is")
-	assert_eq(hud.core_hp_label.text, UiKit.fraction_text(whole * 0.25, whole), "its figures on the plate under it")
+	assert_eq(hud.core_hp_label.text, config_node.shown_pair(whole * 0.25, whole), "its figures on the plate under it (as shown)")
 	var face: TextureRect = hud.core_vital.find_child("Portrait", true, false) as TextureRect
 	assert_not_null(face, "It shows the cabin")
 	if face:

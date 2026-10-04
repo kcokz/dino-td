@@ -50,7 +50,16 @@ func _missing() -> float:
 		return 0.0
 	return maxf(0.0, float(hero.max_hp) - float(hero.current_hp))
 
-## A rest, while he is hurt.
+## How much of his stamina is missing (Config.STAMINA): it is where he sleeps.
+func _tired() -> float:
+	var hero = _hero()
+	if hero == null or not ("stamina" in hero) or not ("max_stamina" in hero):
+		return 0.0
+	if "current_state" in hero and int(hero.current_state) == Hero.State.DEAD:
+		return 0.0
+	return maxf(0.0, float(hero.max_stamina) - float(hero.stamina))
+
+## A sleep, while he is hurt or less than rested.
 func recipes() -> Array[String]:
 	return [REST] as Array[String]
 
@@ -58,7 +67,7 @@ func jobs() -> Array[String]:
 	return recipes()
 
 func can_offer(recipe_id: String) -> bool:
-	return recipe_id == REST and _missing() > 0.0
+	return recipe_id == REST and (_missing() > 0.0 or _tired() > 0.01)
 
 func can_afford(recipe_id: String) -> bool:
 	return recipe_id == REST
@@ -69,11 +78,16 @@ func waiting_on_materials() -> bool:
 func inputs_of(_recipe_id: String) -> Dictionary:
 	return {}
 
-## As long as it takes to mend what is missing of him.
+## As long as it takes to mend what is missing of him and to rest him: the longer of the two.
 func time_of(recipe_id: String) -> float:
 	if recipe_id != REST:
 		return 0.0
-	return _missing() / maxf(0.01, _pod("heal_per_second", 2.0))
+	return maxf(_missing() / maxf(0.01, _pod("heal_per_second", 2.0)), _tired() / maxf(0.01, _rest_rate()))
+
+## Stamina a second while he sleeps in it (Config.STAMINA.rest_per_second).
+func _rest_rate() -> float:
+	var cfg = _get_config()
+	return float(cfg.STAMINA.get("rest_per_second", 2.0)) if (cfg and "STAMINA" in cfg) else 2.0
 
 func recipe_name(_recipe_id: String) -> String:
 	return TranslationServer.translate("POD_REST")
@@ -86,9 +100,9 @@ func recipe_data(recipe_id: String) -> Dictionary:
 func job_done(_job_id: String) -> bool:
 	return false
 
-## What it is for -- or, with him whole, that there is nothing to mend.
+## What it is for -- or, with him whole and rested, that there is no need of it.
 func _purpose() -> String:
-	return TranslationServer.translate("STATION_POD_DESC" if _missing() > 0.0 else "POD_WHOLE")
+	return TranslationServer.translate("STATION_POD_DESC" if can_offer(REST) else "POD_WHOLE")
 
 ## Begun, he is sent to it to climb in (Hero.order_rest). Nothing to pay.
 func begin(recipe_id: String) -> bool:
@@ -128,14 +142,17 @@ func _process(_delta: float) -> void:
 	if active_recipe == REST and not holds_him():
 		_stop()
 
-## He mends while he floats in it: POD.heal_per_second a second; whole, it lets him out.
+## He mends and sleeps while he floats in it: POD.heal_per_second of health a second, STAMINA.rest_per_second of
+## stamina; whole and rested, it lets him out.
 func work(delta: float) -> String:
 	if active_recipe != REST or delta <= 0.0 or not occupied():
 		return ""
 	var hero = _hero()
 	progress += delta
 	hero.heal(_pod("heal_per_second", 2.0) * delta)
-	if _missing() <= 0.0:
+	if hero.has_method("rest_stamina"):
+		hero.rest_stamina(_rest_rate() * delta)
+	if _missing() <= 0.0 and _tired() <= 0.0:
 		_stop()
 		var fx = _get_fx()
 		if fx and fx.has_method("play_at") and is_inside_tree():
@@ -149,9 +166,11 @@ func _stop() -> void:
 	progress = 0.0
 	_refresh_label()
 
-## Its work bar is how whole he is.
+## Its work bar is how whole and how rested he is: the less of the two.
 func ratio() -> float:
 	var hero = _hero()
 	if active_recipe != REST or hero == null:
 		return 0.0
-	return clampf(float(hero.current_hp) / maxf(0.01, float(hero.max_hp)), 0.0, 1.0)
+	var whole: float = float(hero.current_hp) / maxf(0.01, float(hero.max_hp))
+	var rested: float = float(hero.stamina) / maxf(0.01, float(hero.max_stamina)) if "stamina" in hero else 1.0
+	return clampf(minf(whole, rested), 0.0, 1.0)

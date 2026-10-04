@@ -488,7 +488,8 @@ func test_20_the_build_menu_says_that_stakes_bite() -> void:
 
 	panel._show_build_detail("wall")
 	var detail: String = str(panel.status_label.text)
-	var dps: String = "%.1f" % config_node.get_contact_dps("wall")
+	# As the interface shows damage (Config.SHOWN).
+	var dps: String = "%.1f" % config_node.shown(config_node.get_contact_dps("wall"))
 	assert_true(detail.contains(dps) or detail.contains(dps.replace(".", ",")),
 		"The stake's damage is on the line before the wood is spent (got '%s')" % detail)
 

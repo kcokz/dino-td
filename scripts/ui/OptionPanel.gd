@@ -458,7 +458,8 @@ func _update_status_display() -> void:
 		title_label.text = info.get("title", "")
 	_set_status(String(info.get("status", "")))
 
-## His block: his health -- its icon, named in its tooltip; its bar; its figure -- and his row of tools.
+## His block: his health and his stamina (Config.STAMINA) -- each its icon, named in its tooltip; its bar; its figure --
+## and his row of tools.
 ## His build and walk speeds had bars of their own while meals and boots raised them (v0.6); since v0.7
 ## nothing does, and a bar that never moves says nothing (GAME-DESIGN 3.0).
 func _build_hero_stats(into: VBoxContainer) -> void:
@@ -467,7 +468,7 @@ func _build_hero_stats(into: VBoxContainer) -> void:
 	hero_stats.visible = false
 	hero_stats.add_theme_constant_override("separation", UiTheme.space("xs"))
 	into.add_child(hero_stats)
-	for spec in [["hp", "heart", "STAT_HP_NAME"]]:
+	for spec in [["hp", "heart", "STAT_HP_NAME"], ["stamina", "moon", "STAT_STAMINA_NAME"]]:
 		var row := HBoxContainer.new()
 		row.name = String(spec[0]).capitalize() + "Stat"
 		var icon := UiKit.icon_rect(String(spec[1]), UiTheme.icon_size("s"), "Icon")
@@ -551,9 +552,15 @@ func _set_stat(key: String, share: float, variation: StringName, figure: String)
 
 ## His health and his tools, from what he reports (Hero.get_display_info).
 func _show_hero_stats(info: Dictionary) -> void:
+	var cfg = _get_config()
 	var max_hp: float = maxf(0.001, float(info.get("max_hp", 1.0)))
 	var hp: float = float(info.get("hp", 0.0))
-	_set_stat("hp", hp / max_hp, UiTheme.health_bar(hp / max_hp), UiKit.fraction_text(hp, max_hp))
+	_set_stat("hp", hp / max_hp, UiTheme.health_bar(hp / max_hp), String(cfg.shown_pair(hp, max_hp)))
+	# His stamina: the night's blue, red once he is tired (Config.STAMINA.tired_below).
+	var most: float = maxf(0.001, float(info.get("max_stamina", 1.0)))
+	var left: float = float(info.get("stamina", most))
+	var tired: bool = left < most * float(cfg.STAMINA.get("tired_below", 0.25))
+	_set_stat("stamina", left / most, &"DangerBar" if tired else &"StaminaBar", String(cfg.shown_pair(left, most)))
 	_show_abilities()
 
 ## The two bars, from what the selected thing reports about itself -- or, for the Hero, his block.
@@ -576,7 +583,7 @@ func _show_vitals(info: Dictionary) -> void:
 		var ratio: float = clampf(float(info["hp"]) / float(info["max_hp"]), 0.0, 1.0)
 		hp_bar.value = ratio
 		hp_bar.theme_type_variation = UiTheme.health_bar(ratio)
-		hp_text.text = UiKit.fraction_text(float(info["hp"]), float(info["max_hp"]))
+		hp_text.text = String(_get_config().shown_pair(float(info["hp"]), float(info["max_hp"])))
 	elif has_reserve:
 		hp_bar.value = clampf(float(info.get("current_amount", 0)) / float(info["max_capacity"]), 0.0, 1.0)
 		hp_bar.theme_type_variation = &"BeaconBar"
@@ -842,14 +849,14 @@ func _show_build_detail(b_type: String) -> void:
 			# What a tower does, and how much it holds: empty, it does nothing (AmmoTower).
 			_set_status(_tower_detail(b_type, b_name, secs))
 		elif String(row.get("kind", "")) == "spikes":
-			_set_status(tr("BUILD_DETAIL_FORMAT_SPIKES") % [b_name, _cost_text(b_type), secs, float(row.get("damage", 0.0)),
+			_set_status(tr("BUILD_DETAIL_FORMAT_SPIKES") % [b_name, _cost_text(b_type), secs, cfg.shown(float(row.get("damage", 0.0))),
 				int(round(float(row.get("slow", 1.0)) * 100.0))])
 		elif String(row.get("kind", "")) == "fire":
 			# What a fire does is light the night, and what it costs is wood every night (Fire.gd).
 			_set_status(tr("BUILD_DETAIL_FORMAT_FIRE") % [b_name, _cost_text(b_type), secs,
 				float(row.get("light", 0.0)), int(row.get("fuel", 0))])
 		elif dps > 0.0:
-			_set_status(tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, dps])
+			_set_status(tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, cfg.shown(dps)])
 		else:
 			_set_status(tr("BUILD_DETAIL_FORMAT") % [b_name, _cost_text(b_type), secs])
 		status_label.modulate = Color.WHITE
@@ -921,7 +928,8 @@ func upgrade_detail_text(unit: Node, to_type: String = "") -> String:
 	var parts: PackedStringArray = []
 	for stat in _UPGRADE_STATS:
 		if from.has(stat) and to.has(stat) and float(from[stat]) != float(to[stat]):
-			parts.append(tr("STAT_%s" % stat.to_upper()) % [cfg.factor_text(float(from[stat])), cfg.factor_text(float(to[stat]))])
+			# Hit points and damage as the interface shows them (Config.SHOWN).
+			parts.append(tr("STAT_%s" % stat.to_upper()) % [cfg.shown_text(float(from[stat])), cfg.shown_text(float(to[stat]))])
 	if cfg.has_method("ammo_capacity"):
 		var holds: int = int(cfg.ammo_capacity(String(unit.building_type)))
 		var will_hold: int = int(cfg.ammo_capacity(to_type))

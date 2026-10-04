@@ -455,7 +455,9 @@ func _scenario_play(spec: String) -> void:
 		# Hurt, he rests in the healing pod before he goes out again (HealingPod): whole in a few seconds,
 		# nothing else done meanwhile.
 		var pod = cabin.station("pod")
-		if _plan_has("pod") and pod != null and pod.can_offer("rest") and hero.current_hp < hero.max_hp * 0.7:
+		# Or tired (Config.STAMINA): he sleeps in it before he is worn out -- under a third of it, by day.
+		var tired: bool = "stamina" in hero and float(hero.stamina) < float(hero.max_stamina) * 0.35
+		if _plan_has("pod") and pod != null and pod.can_offer("rest") and (hero.current_hp < hero.max_hp * 0.7 or tired):
 			_ctx = "rest"
 			note.call("resting in the pod (%d/%d)" % [int(hero.current_hp), int(hero.max_hp)])
 			pod.begin("rest")
@@ -495,6 +497,15 @@ func _scenario_play(spec: String) -> void:
 			dark = false
 		if dark:
 			_ctx = "night"
+			# The night is for sleeping (Config.STAMINA: the pod rests him as it mends him) -- in the pod while it can
+			# rest him, else in the cabin.
+			var bed = cabin.station("pod")
+			if _plan_has("pod") and bed != null and bed.can_offer("rest") and hero.rest_pod() == null:
+				_ctx = "rest"
+				bed.begin("rest")
+				await _play_until(func(): return hero.rest_pod() == null or String(gs.day_part()) == "day" or wm.is_wave_active,
+					float(bed.time_of("rest")) + 20.0, "asleep in the pod")
+				continue
 			if not cabin.hero_inside:
 				_main.order_enter_cabin()
 			await _play_until(func(): return String(gs.day_part()) == "day" or wm.is_wave_active, 12.0, "in the cabin, the night out")

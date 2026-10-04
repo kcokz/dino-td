@@ -70,7 +70,8 @@ func test_02_a_rest_is_offered_while_he_is_hurt_and_costs_only_time() -> void:
 	var main = await _level()
 	var pod = main.current_core.station(HealingPod.STATION)
 	var hero = main.hero
-	assert_false(pod.can_offer(HealingPod.REST), "Whole, there is nothing to mend")
+	hero.stamina = hero.max_stamina
+	assert_false(pod.can_offer(HealingPod.REST), "Whole and rested, there is no need of it")
 	assert_eq(pod.get_display_info()["status"], tr("POD_WHOLE"), "and it says so")
 	hero.current_hp = hero.max_hp - 4.0
 	assert_true(pod.can_offer(HealingPod.REST), "Hurt, a rest is on offer")

@@ -264,7 +264,7 @@ func test_challenge_02_mid_wave_restart_with_damaged_entities_and_active_physics
 	# Verify HUD shows full HP
 	var hud = main.hud
 	if hud and hud.has_method("get_core_hp_text"):
-		assert_eq(hud.get_core_hp_text(), "%d / %d" % [int(core_hp()), int(core_hp())], "HUD displays full Core HP")
+		assert_eq(hud.get_core_hp_text(), config_node.shown_pair(core_hp(), core_hp()), "HUD displays full Core HP (as shown: Config.SHOWN)")
 
 func test_challenge_03_mid_wave_restart_cancels_wave_progression_and_economy() -> void:
 	var main = _create_main()
@@ -409,7 +409,7 @@ func test_challenge_06_rapid_fire_hud_signal_bombardment() -> void:
 	# Verify immediate synchronization without crashing or desync
 	assert_eq(hud.get_wood_text(), "888", "WoodLabel matches final emitted value")
 	assert_true("大波" in hud.get_wave_text() or "Horde" in hud.get_wave_text(), "WaveLabel matches final emitted value with big wave text")
-	assert_eq(hud.get_core_hp_text(), "7 / 10", "CoreHPLabel matches final emitted value")
+	assert_eq(hud.get_core_hp_text(), config_node.shown_pair(7.0, 10.0), "CoreHPLabel matches final emitted value (as shown)")
 	assert_eq(hud.get_phase_text(), "Phase: PLAN", "PhaseLabel matches final emitted phase")
 
 	# Verify action buttons enabled in PLAN
@@ -432,8 +432,9 @@ func test_challenge_07_rapid_fire_hud_extreme_values_and_formatting() -> void:
 		event_bus_node.resources_changed.emit({"wood": 0})
 		event_bus_node.core_hp_changed.emit(0.1, 10.0)
 
-	# 0.1 HP should ceil to 1
-	assert_eq(hud.get_core_hp_text(), "1 / 10", "Core HP 0.1 properly ceils to 1")
+	# 0.1 HP, alive, shows at least 1 (Config.shown_pair)
+	assert_eq(hud.get_core_hp_text(), config_node.shown_pair(0.1, 10.0), "Core HP 0.1 shows as alive")
+	assert_true(hud.get_core_hp_text().begins_with("1 /"), "as 1")
 	assert_eq(hud.get_wood_text(), "0", "Zero Wood formatted correctly")
 
 	# Massive numbers

@@ -336,10 +336,11 @@ func test_11_each_command_comes_in_to_the_left_as_it_becomes_his_and_stays() -> 
 	# Come, they stay: greyed out while they cannot be pressed, so none moves.
 	var rest_at: Vector2 = _place(tiles.rest_button)
 	main.hero.heal(main.hero.max_hp)
+	main.hero.rest_stamina(main.hero.max_stamina)
 	_set_clock(_at("day") + 100.0, 2)
 	await wait_frames(2)
 	assert_true(tiles.torch_button.visible and tiles.torch_button.disabled, "By day the torch's is there, greyed out")
-	assert_true(tiles.rest_button.visible and tiles.rest_button.disabled, "and with him whole, Rest's")
+	assert_true(tiles.rest_button.visible and tiles.rest_button.disabled, "and with him whole and rested, Sleep's")
 	assert_eq([_place(tiles.build_button), _place(tiles.torch_button), _place(tiles.rest_button)],
 		[build_at, torch_at, rest_at], "none has moved")
 	# Its words put into another language, it is the same run (HUD._on_locale_changed).
@@ -387,8 +388,9 @@ func test_12_a_command_come_is_seen_arriving_and_one_he_cannot_give_is_plainly_d
 	await wait_frames(1)
 	assert_false(tiles.rest_button.disabled, "Hurt, Rest can be pressed")
 	main.hero.heal(main.hero.max_hp)
+	main.hero.rest_stamina(main.hero.max_stamina)
 	await wait_frames(1)
-	assert_true(tiles.rest_button.disabled, "whole, it cannot")
+	assert_true(tiles.rest_button.disabled, "whole and rested, it cannot")
 
 ## Where the corner lays `btn` out, on the screen: not where it is drawn while it grows in (UiKit.come_in),
 ## which is about its middle.
