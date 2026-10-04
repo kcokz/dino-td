@@ -117,8 +117,12 @@ func lane_coords(point: Vector3) -> Vector2:
 	return Vector2(along, (off - dir * along).length())
 
 ## Whether an animal stands in its lane, on the ground.
+## Something it can see in its lane (AmmoTower.can_see: in the dark, only what a light is on).
 func someone_in_lane() -> bool:
-	return not animals_in_lane(0.0, lane_length()).is_empty()
+	for d in animals_in_lane(0.0, lane_length()):
+		if can_see(d):
+			return true
+	return false
 
 func animals_in_lane(from_m: float, to_m: float) -> Array:
 	var out: Array = []

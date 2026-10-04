@@ -316,14 +316,41 @@ func is_heavy(d: Node) -> bool:
 		return false
 	return bool(cfg.DINOS[String(d.dino_type)].get("heavy", false))
 
-## Hits `d` as `row` says (Config.AMMO): its damage, and -- it knows what hit it -- the tower is what it goes for
-## (Dino.shot_by, DINO_AI.shooter_kinds).
+## Hits `d` as `row` says (Config.AMMO): its damage -- a quarter of it, an arrow into an armoured animal (Config.ARMOR)
+## -- and, it knows what hit it, the tower is what it goes for (Dino.shot_by, DINO_AI.shooter_kinds).
 func strike(d: Node, row: Dictionary) -> void:
 	if not is_quarry(d):
 		return
 	if d.has_method("shot_by"):
 		d.shot_by(self)
-	d.take_damage(float(row.get("damage", 0.0)))
+	d.take_damage(float(row.get("damage", 0.0)) * AmmoTower.armour_factor(d, row))
+
+## How much of `row`'s damage goes into `d` (Config.ARMOR): all of it, but what pierces (an arrow) into what is armoured.
+static func armour_factor(d: Node, row: Dictionary) -> float:
+	var cfg = Engine.get_main_loop().root.get_node_or_null("Config") if Engine.get_main_loop() is SceneTree else null
+	if cfg == null or not ("ARMOR" in cfg) or d == null or not ("dino_type" in d):
+		return 1.0
+	if not bool(cfg.DINOS.get(String(d.dino_type), {}).get("armored", false)):
+		return 1.0
+	if not Array(cfg.ARMOR.get("piercing", [])).has(String(row.get("for", ""))):
+		return 1.0
+	return float(cfg.ARMOR.get("pierce", 0.25))
+
+## Whether it can see `d` to act on it (GAME-DESIGN 3.0, rule 3): always by day and at dusk; in the dark
+## (Config.TOWERS.dark_parts) only an animal a light is on -- a fire, his torch, a burning patch of ground
+## (ProwlerDino.lights).
+func can_see(d: Node) -> bool:
+	if not is_dark():
+		return true
+	return is_inside_tree() and d is Node3D \
+		and not ProwlerDino.light_over(get_tree(), (d as Node3D).global_position).is_empty()
+
+## Whether it is dark now (Config.TOWERS.dark_parts).
+func is_dark() -> bool:
+	var gs = get_node_or_null("/root/GameState") if is_inside_tree() else null
+	if gs == null or not gs.has_method("day_part"):
+		return false
+	return Array(_towers("dark_parts", ["night"])).has(String(gs.day_part()))
 
 # ==============================================================================
 # Presentation

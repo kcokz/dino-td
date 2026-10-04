@@ -333,6 +333,12 @@ static func lights(tree: SceneTree) -> Array:
 			var r: float = float(f.light_radius())
 			if r > 0.0:
 				out.append({"at": (f as Node3D).global_position, "radius": r})
+	# A fire pot's burning ground (FirePatch): a fire like any other.
+	for p in tree.get_nodes_in_group(FirePatch.GROUP):
+		if p is Node3D and is_instance_valid(p) and p.has_method("light_radius"):
+			var pr: float = float(p.light_radius())
+			if pr > 0.0:
+				out.append({"at": (p as Node3D).global_position, "radius": pr})
 	var hero = tree.get_first_node_in_group("hero")
 	if hero is Node3D and is_instance_valid(hero) and hero.has_method("torch_light"):
 		var t: float = float(hero.torch_light())

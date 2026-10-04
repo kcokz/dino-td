@@ -62,8 +62,11 @@ func _physics_process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	if cooldown > 0.0 or not has_ammo():
 		return
-	if not animals_in_zone().is_empty():
-		throw()
+	# Something it can see in its patch (AmmoTower.can_see: in the dark, only what a light is on).
+	for d in animals_in_zone():
+		if can_see(d):
+			throw()
+			return
 
 ## Throws a shot at its patch. False with none in it.
 func throw() -> bool:

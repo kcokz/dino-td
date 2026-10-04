@@ -44,6 +44,11 @@ func radius() -> float:
 func seconds_left() -> float:
 	return _left
 
+## How far round it its fire lights the ground while it burns (AMMO.<id>.burn "light"): a light like a campfire's
+## (ProwlerDino.lights) -- the towers see by it in the dark, and what keeps out of firelight keeps out of it.
+func light_radius() -> float:
+	return _number("light", 5.0) if _left > 0.0 else 0.0
+
 func _build() -> void:
 	if DisplayServer.get_name() == "headless":
 		return

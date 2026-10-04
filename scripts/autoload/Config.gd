@@ -950,6 +950,10 @@ const TRAPS: Dictionary = {
 
 ## What the towers share (AmmoTower and its kinds).
 const TOWERS: Dictionary = {
+	# THE DARK (GAME-DESIGN 3.0, rule 3: "夜里，塔只打得到火光照着的恐龙"): in these parts of the day a tower sees only
+	# what a light is on -- a campfire's, a brazier's, his torch's, a fire pot's burning ground (ProwlerDino.lights) --
+	# and acts on nothing it cannot see. At dusk there is still light enough to see by.
+	"dark_parts": ["night"],
 	# How fast an arrow flies (metres a second): a flight seen, a few tenths of a second over the bow tower's reach.
 	"arrow_speed": 24.0,
 	# An arrow hits what it was let go at if that is still within this of where it comes down (metres): a stride --
@@ -995,6 +999,16 @@ const TOWERS: Dictionary = {
 ##          -- the heavy ones (DINOS.<id>.heavy) only with `moves_heavy`
 ##   thrower `damage` to all within `splash` metres of where it lands, held down `knockdown` seconds
 ##   bait   `uses`: bites of it, one each time an animal eats (BAIT.bites_to_eat a visit)
+## ARMOUR (GAME-DESIGN 3.0, the table: "披甲 -- 箭只打得进 1/4"): what pierces -- an arrow (AMMO "for" in `piercing`) --
+## goes into an armoured animal (DINOS.<id>.armored: plates of bone in its skin, an aetosaur's, a stegosaur's,
+## Postosuchus's) for only `pierce` of its damage; what crushes -- a stone, a log -- for all of it. So arrows alone do not
+## hold the armoured: they are the catapult's and the drop tower's.
+const ARMOR: Dictionary = {
+	"pierce": 0.25,
+	"piercing": ["bow"],
+}
+
+## What it does to an armoured animal is ARMOR's to say.
 const AMMO: Dictionary = {
 	# A wooden arrow, its point fire-hardened: one kills a Coelophysis (DINOS.coelophysis.hp 2.8).
 	"arrow_wood": {"name": "RESOURCE_ARROW_WOOD", "for": "bow", "prop": "arrow_wood", "damage": 3.0},
@@ -1349,6 +1363,8 @@ const DINOS: Dictionary = {
 		# No fossil tells its hours; an ambusher of the crocodiles' line, it keeps theirs -- out at
 		# dusk and in the night (GAME-DESIGN 9.3). It only comes last of all, in the final wave.
 		"hours": ["dusk", "night"],
+		# Rows of bony plates down its back, as rauisuchians had (ARMOR): an arrow goes in for a quarter of itself.
+		"armored": true,
 		"name": "DINO_POSTOSUCHUS_NAME",
 		"hp": 45.0,
 		"speed": 2.0,

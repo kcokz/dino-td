@@ -55,7 +55,7 @@ func target_in_reach() -> Node3D:
 	var best_d: float = reach()
 	var here := Vector2(global_position.x, global_position.z)
 	for d in get_tree().get_nodes_in_group("dinos"):
-		if not AmmoTower.is_quarry(d):
+		if not AmmoTower.is_quarry(d) or not can_see(d):
 			continue
 		var at: Vector3 = (d as Node3D).global_position
 		var gap: float = here.distance_to(Vector2(at.x, at.z))

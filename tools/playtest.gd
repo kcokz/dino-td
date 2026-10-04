@@ -35,6 +35,8 @@ var _shot_index: int = 0
 var _scenario: String = ""
 ## What "only:<name>" arguments narrowed a list-going scenario to (gaits); empty for all of it.
 var _only: PackedStringArray = []
+## The run's seed ("seed:N"), or -1 for a new one each run.
+var _seed: int = -1
 
 func _init() -> void:
 	# Rule 1. Without this the whole HUD renders untranslated.
@@ -54,6 +56,11 @@ func _init() -> void:
 		# settings are not touched).
 		if String(w).begins_with("lang:"):
 			TranslationServer.set_locale(String(w).substr(5))
+			continue
+		# "seed:7" plays every scenario's run on that seed (GameState.reset_game): the same valley, the same dice --
+		# so two plans played on it are told apart by the plan, not by luck.
+		if String(w).begins_with("seed:"):
+			_seed = int(String(w).substr(5))
 			continue
 		# "map:valley_large" plays on that map; the default is the small valley.
 		if String(w).begins_with("map:"):
@@ -178,9 +185,20 @@ func _run(name: String) -> void:
 ## and a frame at each beat.
 ##
 ## `play:<minutes>` plays that long (default 8), at the game's own 3x.
+## "play:<minutes>[:<plan>]" -- a run played as a player would, for `minutes` of game time. THE PLAN (2026-10-04, the
+## player: "如果有的事情不做也可以过关，就要考虑这个是玩家可选的方向吗……如果不是，那就是没存在的必要") is what it does
+## and what it leaves undone, so a run without one thing can be laid beside a run with it:
+##   all          everything below (the default)
+##   bows         only bow towers -- five -- and wooden arrows: no ring of palisade, no other tower, no kit, no meals
+##   -<thing>     all but that: -ring, -log, -catapult, -bait, -kit (armour, vest, boots, spears, the stone pick),
+##                -meals (cooking and eating), -torch, -axe
+## (commas between: "play:25:-meals,-kit"). Its account is printed at the end as one line, "[report] {json}" (_report):
+## where his time went, what came in and went out, how much timber is left standing, and each raid.
 func _scenario_play(spec: String) -> void:
 	var parts: PackedStringArray = spec.split(":")
 	var minutes: float = float(parts[1]) if parts.size() > 1 else 8.0
+	_plan_words = PackedStringArray(String(parts[2]).split(",")) if parts.size() > 2 else PackedStringArray(["all"])
+	_ledger_begin()
 	var gs := root.get_node("GameState")
 	var cfg := root.get_node("Config")
 	var eb := root.get_node("EventBus")
@@ -210,8 +228,10 @@ func _scenario_play(spec: String) -> void:
 	eb.beacon_launched.connect(func(): note.call("BEACON LAUNCHED -- the final wave"))
 	eb.beacon_changed.connect(func(n): note.call("beacon: %d steps done" % n))
 	eb.cabin_view_changed.connect(func(inside): note.call("he is %s the cabin" % ("in" if inside else "out of")))
+	note.call("plan: %s, seed %d, map %s" % [",".join(_plan_words), _seed, String(gs.map_id)])
 
 	# --- 1. The opening wood --------------------------------------------------------------
+	_ctx = "drops"
 	var piles: Array = get_nodes_in_group(DropItem.GROUP)
 	note.call("%d piles of opening stock on the ground" % piles.size())
 	for pile in piles:
@@ -224,13 +244,17 @@ func _scenario_play(spec: String) -> void:
 	await _shoot("stock_picked_up")
 
 	# --- 2. A ring of palisade round the cabin, a cell out, a gate at the door -----------
+	_ctx = "build"
 	var centre: Vector2i = gm.world_to_build_cell(cabin.global_position)
 	var half := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
 	var gate_cell: Vector2i = centre + Vector2i(0, half.y + 1)
-	_main.on_build_selected("gate")
-	var gate = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(gate_cell)), gm.build_cell_to_world(gate_cell))
+	var ringed: bool = _plan_has("ring")
+	if ringed:
+		_main.on_build_selected("gate")
+	var gate = _main.try_place_at_cell(gm.world_to_cell(gm.build_cell_to_world(gate_cell)), gm.build_cell_to_world(gate_cell)) if ringed else null
 	note.call("gate ordered: %s" % ("yes" if gate else "NO"))
-	_main.on_build_selected("wall")
+	if ringed:
+		_main.on_build_selected("wall")
 	var ring: Array[Vector2i] = []
 	for x in range(-half.x - 1, half.x + 2):
 		ring.append(centre + Vector2i(x, -half.y - 1))
@@ -243,7 +267,7 @@ func _scenario_play(spec: String) -> void:
 	var ordered: int = 0
 	var refused: int = 0
 	for cell in ring:
-		if cell == gate_cell or _main.current_build_type == "":
+		if not ringed or cell == gate_cell or _main.current_build_type == "":
 			continue
 		var at: Vector3 = gm.build_cell_to_world(cell)
 		if _main.try_place_at_cell(gm.world_to_cell(at), at) != null:
@@ -257,6 +281,8 @@ func _scenario_play(spec: String) -> void:
 	await _portrait("ring", cabin.global_position, 13.0, true)
 
 	# --- 3. Wood until the raid ------------------------------------------------------------
+	if not ringed:
+		ring.clear()
 	while wm.current_wave == 0 and _play_clock < minutes * 60.0:
 		await _chop_a_while(hero, "wood", 8.0)
 		if wm.raid_timer < 8.0:
@@ -279,13 +305,26 @@ func _scenario_play(spec: String) -> void:
 		["bow_tower", centre + Vector2i(3, -half.y - 3)],
 		["catapult", centre + Vector2i(-9, -half.y - 4)],
 	]
+	# Only bow towers (the player's run, 2026-10-03: "我就靠造了5个bow tower，加不停地做木箭装填就行了"): five, round the
+	# cabin's north, east and west, the way raids come.
+	if _plan_words.has("bows"):
+		tower_plan = [
+			["bow_tower", centre + Vector2i(-4, -half.y - 3)],
+			["bow_tower", centre + Vector2i(3, -half.y - 3)],
+			["bow_tower", centre + Vector2i(half.x + 4, 0)],
+			["bow_tower", centre + Vector2i(-half.x - 4, 0)],
+			["bow_tower", centre + Vector2i(0, -half.y - 7)],
+		]
+	tower_plan = tower_plan.filter(func(p): return _plan_has(String(cfg.BUILDINGS[String(p[0])].get("kind", ""))) \
+		or _plan_words.has("bows"))
 	var refused_towers: Dictionary = {}
 	var shots_taken: Dictionary = {}
 	while _play_clock < minutes * 60.0 and not gs.is_game_over:
 		# At least a frame every time round: a step that finds nothing to wait for (the raid
 		# about to set out, a job it cannot start) must not spin the loop with the game held still.
 		await _advance(0.1)
-		_play_clock += 0.1 * Engine.time_scale
+		_ctx = "think"
+		_tick(0.1 * Engine.time_scale)
 		if _play_clock - last_status >= 20.0:
 			last_status = _play_clock
 			note.call(_play_status(hero, cabin, gs, wm))
@@ -318,11 +357,13 @@ func _scenario_play(spec: String) -> void:
 					hero.order_attack(near)
 			elif hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
 				hero.move_to(home)
+			_ctx = "raid"
 			await _advance(1.0)
-			_play_clock += Engine.time_scale
+			_tick(Engine.time_scale)
 			continue
 		if wm.current_wave > raids_seen:
 			raids_seen = wm.current_wave
+			_ctx = "drops"
 			await _gather_drops(hero, note)
 			continue
 		var wb = cabin.station("workbench")
@@ -338,6 +379,7 @@ func _scenario_play(spec: String) -> void:
 		var wreck: Node = _wreck_to_search(beacon_job) if wm.raid_timer >= 6.0 else null
 		if wreck != null:
 			note.call("to the wreck for the %s" % String(wreck.resource_type))
+			_ctx = "wreck"
 			await _search_wreck(hero, wreck)
 			continue
 		var dish: String = ""
@@ -348,24 +390,25 @@ func _scenario_play(spec: String) -> void:
 		var put_by: int = 0
 		for key in gs.meals:
 			put_by += int(gs.meals[key])
-		if dish != "" and (put_by == 0 or (put_by < 3 and beacon_job != "" and not beacon_job.begins_with("beacon_1"))):
+		if _plan_has("meals") and dish != "" and (put_by == 0 or (put_by < 3 and beacon_job != "" and not beacon_job.begins_with("beacon_1"))):
 			await _bench_job(hero, cabin, "kitchen", dish, note)
 			continue
-		if not gs.meals.is_empty() and (gs.fed.is_empty() or hero.current_hp < hero.max_hp * 0.6):
+		if _plan_has("meals") and not gs.meals.is_empty() and (gs.fed.is_empty() or hero.current_hp < hero.max_hp * 0.6):
+			_ctx = "eat"
 			hero.order_eat(String(gs.meals.keys()[0]))
 			await _play_until(func(): return int(hero.current_state) != 6, 10.0, "eating")
 			continue
 		if not gs.has_unlock(pick_flag) and wb.can_afford("stone_pick"):
 			await _bench_job(hero, cabin, "workbench", "stone_pick", note)
 			continue
-		if wb.can_offer("stone_axe") and wb.can_afford("stone_axe"):
+		if _plan_has("axe") and wb.can_offer("stone_axe") and wb.can_afford("stone_axe"):
 			await _bench_job(hero, cabin, "workbench", "stone_axe", note)
 			continue
 		# His row as a player fills it (v0.6 round three): armour and boots first -- they cost what
 		# the elites and the raids leave, not the towers' wood and stone -- then the spear, the stone pick.
 		var kit_job: String = ""
 		for job in ["bone_armor", "hide_vest", "hide_boots", "bone_spear", "quarry_pick"]:
-			if kit_job == "" and wb.can_offer(job) and wb.can_afford(job):
+			if _plan_has("kit") and kit_job == "" and wb.can_offer(job) and wb.can_afford(job):
 				kit_job = job
 		if kit_job != "":
 			await _bench_job(hero, cabin, "workbench", kit_job, note)
@@ -377,6 +420,7 @@ func _scenario_play(spec: String) -> void:
 				break
 		if not next_tower.is_empty() and gs.knows_all(cfg.BUILDINGS[next_tower[0]]["cost"]) \
 				and gs.can_afford(cfg.BUILDINGS[next_tower[0]]["cost"]):
+			_ctx = "build"
 			_main.on_build_selected(String(next_tower[0]))
 			_main._placement_facing = 0
 			var tower_at: Vector3 = gm.build_cell_to_world(next_tower[1])
@@ -395,6 +439,7 @@ func _scenario_play(spec: String) -> void:
 		var empty: Node = _tower_wanting_load()
 		if empty != null:
 			var empty_id: int = empty.get_instance_id()
+			_ctx = "load"
 			hero.order_load(empty)
 			note.call("loading the %s" % String(empty.building_type))
 			await _play_until(func(): return not is_instance_id_valid(empty_id) or not empty.wants_load(), 30.0, "loading a tower")
@@ -410,6 +455,7 @@ func _scenario_play(spec: String) -> void:
 		_main.cancel_building_selection()
 		if holes > 0:
 			note.call("mending the ring: %d sections" % holes)
+			_ctx = "build"
 			await _play_until(func(): return _unfinished() == 0, 40.0, "mending the ring")
 			continue
 		# Wood first while there is not enough put by to mend the ring: the towers and their arrows eat
@@ -428,6 +474,177 @@ func _scenario_play(spec: String) -> void:
 		await _portrait("end_above", cabin.global_position, 16.0, true)
 	Engine.time_scale = 1.0
 	note.call("played %.1f game minutes in %.0f s" % [_play_clock / 60.0, (Time.get_ticks_msec() - _play_t0) / 1000.0])
+	_report(minutes)
+
+# ==============================================================================
+# The plan and the account (_scenario_play "play:<minutes>:<plan>")
+# ==============================================================================
+
+## The plan's words ("all", "bows", "-catapult" ...).
+var _plan_words: PackedStringArray = PackedStringArray(["all"])
+
+## Whether the plan has `thing` in it: everything but what it leaves out ("-thing"); with "bows", only the bow towers
+## and their arrows -- no ring, no other tower, no kit, no meals.
+func _plan_has(thing: String) -> bool:
+	if _plan_words.has("-" + thing):
+		return false
+	if _plan_words.has("bows"):
+		return thing in ["bow", "torch", "axe"]
+	return true
+
+## What he is about this moment, for the account: "gather:wood", "craft:ammo", "build", "load", "raid", "drops",
+## "wreck", "eat", "torch", "think" (the bot choosing what next).
+var _ctx: String = "think"
+var _ctx_time: Dictionary = {}
+var _income: Dictionary = {}       # resource -> {where from -> how much}
+var _spend: Dictionary = {}        # resource -> {what for -> how much}
+var _last_res: Dictionary = {}
+var _kills_by: Dictionary = {}     # what killed them (a tower's kind, "hero", "other") -> how many
+var _raids_log: Array = []
+var _raid_rec: Dictionary = {}
+var _timber_at_start: int = 0
+
+## Game seconds passed, counted against what he is about.
+func _tick(seconds: float) -> void:
+	_play_clock += seconds
+	_ctx_time[_ctx] = float(_ctx_time.get(_ctx, 0.0)) + seconds
+
+func _ledger_begin() -> void:
+	_ctx = "think"
+	_ctx_time.clear()
+	_income.clear()
+	_spend.clear()
+	_kills_by.clear()
+	_raids_log.clear()
+	_raid_rec = {}
+	var gs := root.get_node("GameState")
+	var eb := root.get_node("EventBus")
+	_last_res = gs.resources.duplicate()
+	_timber_at_start = _timber_standing()
+	for pair in [[eb.resources_changed, _on_res_changed], [eb.wave_started, _ledger_raid_began],
+			[eb.dino_spawned, _ledger_came], [eb.dino_died, _ledger_died], [eb.building_destroyed, _ledger_lost],
+			[eb.wave_ended, _ledger_raid_over]]:
+		if not (pair[0] as Signal).is_connected(pair[1]):
+			(pair[0] as Signal).connect(pair[1])
+
+## A raid set out: its line in the account opened.
+func _ledger_raid_began(n: int, big: bool) -> void:
+	var gs := root.get_node("GameState")
+	var cabin = _main.current_core
+	_raid_rec = {"n": n, "big": big, "day": int(gs.day_number()), "at": snappedf(_play_clock, 0.1),
+		"came": {}, "killed_by": {}, "lost": {},
+		"cabin_before": snappedf(float(cabin.current_hp), 0.1) if is_instance_valid(cabin) else 0.0}
+
+## An animal come on the field during the raid: who came.
+func _ledger_came(d: Node) -> void:
+	if _raid_rec.is_empty() or not is_instance_valid(d):
+		return
+	var came: Dictionary = _raid_rec["came"]
+	came[String(d.dino_type)] = int(came.get(String(d.dino_type), 0)) + 1
+
+## An animal killed: by what.
+func _ledger_died(d: Node) -> void:
+	var by: String = _killer_of(d)
+	_kills_by[by] = int(_kills_by.get(by, 0)) + 1
+	if not _raid_rec.is_empty():
+		var kb: Dictionary = _raid_rec["killed_by"]
+		kb[by] = int(kb.get(by, 0)) + 1
+
+## A building brought down in the raid (not one he pulled down: it has hit points left).
+func _ledger_lost(b: Node) -> void:
+	if _raid_rec.is_empty() or not is_instance_valid(b) or not ("building_type" in b) or float(b.get("current_hp")) > 0.0:
+		return
+	var lost: Dictionary = _raid_rec["lost"]
+	lost[String(b.building_type)] = int(lost.get(String(b.building_type), 0)) + 1
+
+## The raid over: the cabin as it left it, and the line closed.
+func _ledger_raid_over(_n: int) -> void:
+	if _raid_rec.is_empty():
+		return
+	var cabin = _main.current_core
+	_raid_rec["cabin_after"] = snappedf(float(cabin.current_hp), 0.1) if is_instance_valid(cabin) else 0.0
+	_raid_rec["ended"] = snappedf(_play_clock, 0.1)
+	_raids_log.append(_raid_rec)
+	_raid_rec = {}
+
+## What came in and what went out, by what he was about as it did.
+func _on_res_changed(res: Dictionary) -> void:
+	var cfg := root.get_node("Config")
+	for k in res:
+		var d: int = int(res[k]) - int(_last_res.get(k, 0))
+		if d > 0:
+			var from: String = "made" if _ctx.begins_with("craft") else ("gather" if _ctx.begins_with("gather") else _ctx)
+			_book(_income, String(k), from, d)
+		elif d < 0:
+			var for_what: String = _ctx
+			if _ctx.begins_with("craft:"):
+				for_what = _ctx.substr(6)
+			elif cfg.AMMO.has(String(k)):
+				for_what = "loaded"
+			elif _ctx in ["think", "raid", "drops", "gather:wood", "gather:stone", "wreck"]:
+				for_what = "fires & the rest"
+			_book(_spend, String(k), for_what, -d)
+	_last_res = res.duplicate()
+
+func _book(into: Dictionary, res_id: String, key: String, amount: int) -> void:
+	if not into.has(res_id):
+		into[res_id] = {}
+	into[res_id][key] = int(into[res_id].get(key, 0)) + amount
+
+## What killed `d`: the tower that shot it lately (its kind), him if he was at it, or "other" (the spikes, fire).
+func _killer_of(d: Node) -> String:
+	if d == null or not is_instance_valid(d):
+		return "other"
+	var cfg := root.get_node("Config")
+	var by = d.get("_shot_by")
+	if by != null and is_instance_valid(by) and "building_type" in by \
+			and float(d.get("_mind_clock")) - float(d.get("_shot_at")) <= 4.0:
+		return String(cfg.BUILDINGS.get(String(by.building_type), {}).get("kind", by.building_type))
+	var hero = _main.hero if _main != null else null
+	if hero != null and is_instance_valid(hero) and hero.get("target_enemy") == d:
+		return "hero"
+	return "other"
+
+## The timber still standing in the valley: what is left in its trees.
+func _timber_standing() -> int:
+	var n: int = 0
+	for node in get_nodes_in_group("resource_nodes"):
+		if is_instance_valid(node) and String(node.resource_type) == "wood":
+			n += int(node.current_amount)
+	return n
+
+## What a job at a bench is, for the account: the beacon, a meal, ammunition (a recipe that makes some), a tool.
+func _job_kind(bench_id: String, job: String) -> String:
+	var cfg := root.get_node("Config")
+	if bench_id == String(cfg.BEACON_STATION):
+		return "beacon"
+	if bench_id == "kitchen":
+		return "meal"
+	if cfg.RECIPES.get(job, {}).has("makes"):
+		return "ammo"
+	return "tools"
+
+## The run's account, as one line of JSON (the comparisons are made from these).
+func _report(minutes: float) -> void:
+	var gs := root.get_node("GameState")
+	var cabin = _main.current_core if _main != null else null
+	var hero = _main.hero if _main != null else null
+	var result: String = "running"
+	if gs.is_game_over:
+		result = "won" if bool(gs.is_game_won) else "lost"
+	if not _raid_rec.is_empty():
+		_raids_log.append(_raid_rec)
+	var report: Dictionary = {
+		"plan": ",".join(_plan_words), "seed": _seed, "map": String(gs.map_id), "minutes": minutes,
+		"played": snappedf(_play_clock / 60.0, 0.1), "result": result, "lost_to": String(gs.get("lost_to")),
+		"cabin": snappedf(float(cabin.current_hp), 0.1) if (cabin != null and is_instance_valid(cabin)) else 0.0,
+		"hero_alive": hero != null and is_instance_valid(hero) and float(hero.current_hp) > 0.0,
+		"beacon_steps": int(gs.beacon_steps), "beacon_charge": snappedf(float(gs.beacon_charge_ratio()), 0.01),
+		"day": int(gs.day_number()) if gs.has_method("day_number") else 0,
+		"time": _ctx_time, "income": _income, "spend": _spend, "stock": gs.resources,
+		"timber": [_timber_at_start, _timber_standing()], "kills_by": _kills_by, "raids": _raids_log,
+	}
+	print("[report] " + JSON.stringify(report))
 
 var _play_log: Array = []
 var _play_t0: int = 0
@@ -508,13 +725,17 @@ func _play_until(done: Callable, seconds: float, what: String) -> bool:
 		if done.call():
 			return true
 		await _advance(0.25)
-		_play_clock += 0.25 * Engine.time_scale
+		_tick(0.25 * Engine.time_scale)
 		# Out in the dark he carries a torch, as a player does: the night's hunters are out for a man without
 		# one (GAME-DESIGN 9.3). Without, the bot was bitten to death on the small valley's first night, run
 		# after run (the debug-agent's note of 2026-09-29).
-		if not _no_torch and hero.has_method("can_light_torch") and hero.can_light_torch() \
-				and not bool(_main.current_core.is_inside(hero.global_position)) and hero.light_torch():
-			print("[play %5.1fs] lit a torch, out in the dark while %s" % [_play_clock, what])
+		if not _no_torch and _plan_has("torch") and hero.has_method("can_light_torch") and hero.can_light_torch() \
+				and not bool(_main.current_core.is_inside(hero.global_position)):
+			var was_ctx: String = _ctx
+			_ctx = "torch"
+			if hero.light_torch():
+				print("[play %5.1fs] lit a torch, out in the dark while %s" % [_play_clock, what])
+			_ctx = was_ctx
 		var moved: float = hero.global_position.distance_to(was)
 		was = hero.global_position
 		if int(hero.current_state) == 1 and moved < 0.02:
@@ -543,10 +764,11 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 		if d < best_d:
 			best_d = d
 			best = n
+	_ctx = "gather:" + res_id
 	if best == null:
 		print("[play] nothing of %s he can work" % res_id)
 		await _advance(seconds / Engine.time_scale)
-		_play_clock += seconds
+		_tick(seconds)
 		return
 	hero.order_harvest(best)
 	var wm = _main.wave_manager
@@ -677,6 +899,7 @@ func _bench_job(hero: Node, cabin: Node, bench_id: String, job: String, note: Ca
 	if not bench.can_afford(job):
 		note.call("cannot afford %s at the %s (%s)" % [job, bench_id, str(root.get_node("GameState").resources)])
 		return
+	_ctx = "craft:" + _job_kind(bench_id, job)
 	_main._walk_to_bench(bench)
 	await _play_until(func(): return cabin.hero_inside and int(hero.current_state) == 0, 40.0, "walking to the %s" % bench_id)
 	if not cabin.hero_inside:
@@ -2297,7 +2520,7 @@ func _fresh_level() -> void:
 	# one's starting point (the cabin's shots repair the beacon the beacon's shots start from).
 	var gs := root.get_node_or_null("GameState")
 	if gs and gs.has_method("reset_game"):
-		gs.reset_game()
+		gs.reset_game(_seed)
 	_main = load("res://scenes/Main.tscn").instantiate()
 	root.add_child(_main)
 	await _wait(SETTLE_FRAMES)
