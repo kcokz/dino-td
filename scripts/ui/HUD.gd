@@ -1140,7 +1140,7 @@ func reset_hud(new_run: bool = true) -> void:
 	_on_wave_started(w_num, false)
 
 	var core_cfg: Dictionary = cfg.BUILDINGS.get("core", {}) if (cfg and "BUILDINGS" in cfg) else {}
-	var c_hp: float = float(core_cfg.get("hp", 10.0))
+	var c_hp: float = float(core_cfg.get("hp", 400.0))
 	_on_core_hp_changed(c_hp, c_hp)
 
 	var p_val: int = int(gs.current_phase) if (gs and "current_phase" in gs) else 0
@@ -1153,7 +1153,7 @@ func reset_hud(new_run: bool = true) -> void:
 	var is_p: bool = bool(gs.is_paused) if (gs and "is_paused" in gs) else false
 	_on_pause_toggled(is_p)
 
-	var hero_max: float = float(cfg.HERO.get("hp", 10.0)) if (cfg and "HERO" in cfg) else 10.0
+	var hero_max: float = float(cfg.HERO.get("hp", 40.0)) if (cfg and "HERO" in cfg) else 40.0
 	_on_hero_hp_changed(hero_max, hero_max)
 
 	if end_action_btn:

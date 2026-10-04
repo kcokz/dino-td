@@ -73,9 +73,10 @@ func test_01_config_v01_parameters_integrity() -> void:
 
 	assert_true("HERO" in config_node, "Config must define HERO dictionary")
 	var hero_cfg: Dictionary = config_node.get("HERO")
-	assert_almost_eq(float(hero_cfg.get("hp", 0.0)), 10.0, 0.01, "HERO hp must be 10.0")
+	# His 10 hit points and his 1 a blow of v0.1, on the x4 scale of v0.7 (Config.BUILDINGS' note).
+	assert_almost_eq(float(hero_cfg.get("hp", 0.0)), 40.0, 0.01, "HERO hp must be 40.0")
 	assert_almost_eq(float(hero_cfg.get("move_speed", 0.0)), 4.0, 0.01, "HERO move_speed must be 4.0 m/s")
-	assert_almost_eq(float(hero_cfg.get("damage", 0.0)), 1.0, 0.01, "HERO damage must be 1.0")
+	assert_almost_eq(float(hero_cfg.get("damage", 0.0)), 4.0, 0.01, "HERO damage must be 4.0")
 	assert_almost_eq(float(hero_cfg.get("attack_range", 0.0)), 2.0, 0.01, "HERO attack_range must be 2.0m")
 
 	assert_true("NEST_GUARDS" in config_node, "Config must define NEST_GUARDS dictionary")
@@ -162,8 +163,9 @@ func test_05_hero_entity_creation_and_movement() -> void:
 	_cleanup_nodes.append(hero)
 	tree.root.add_child(hero)
 
-	assert_almost_eq(hero.max_hp, 10.0, 0.01, "Hero max_hp is 10.0")
-	assert_almost_eq(hero.current_hp, 10.0, 0.01, "Hero current_hp is 10.0")
+	var whole: float = float(config_node.HERO["hp"])
+	assert_almost_eq(hero.max_hp, whole, 0.01, "Hero max_hp is Config's (%.0f)" % whole)
+	assert_almost_eq(hero.current_hp, whole, 0.01, "and he starts whole")
 	assert_almost_eq(hero.speed, 4.0, 0.01, "Hero speed is 4.0")
 	assert_true(hero.is_in_group("hero"), "Hero in 'hero' group")
 
@@ -268,11 +270,12 @@ func test_08_hero_death_triggers_game_lost() -> void:
 	var hero_died_watcher = watch_signal(event_bus_node, "hero_died")
 	var game_lost_watcher = watch_signal(event_bus_node, "game_lost")
 
-	hero.take_damage(5.0)
-	assert_almost_eq(hero.current_hp, 5.0, 0.01, "Hero HP drops to 5.0")
+	var half: float = hero.max_hp * 0.5
+	hero.take_damage(half)
+	assert_almost_eq(hero.current_hp, half, 0.01, "Hero HP drops to half")
 	assert_false(hero_died_watcher.emitted, "Hero not dead yet")
 
-	hero.take_damage(5.0)
+	hero.take_damage(half)
 	assert_almost_eq(hero.current_hp, 0.0, 0.01, "Hero HP reaches 0.0")
 	assert_true(hero_died_watcher.emitted, "hero_died signal emitted")
 	assert_true(game_lost_watcher.emitted, "game_lost signal emitted upon Hero death")

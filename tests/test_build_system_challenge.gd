@@ -463,7 +463,7 @@ func test_challenge_replacement_after_lethal_damage() -> void:
 
 	# 2. Destroy Wall via lethal damage
 	assert_has_method(wall, "take_damage", "Wall must have take_damage method")
-	wall.take_damage(30.0)
+	wall.take_damage(wall.max_hp)
 	assert_true(destroyed_watcher.emitted, "building_destroyed emitted on lethal damage")
 	assert_false(grid_mgr.is_cell_occupied(cell), "GridManager auto-vacated cell on building_destroyed")
 

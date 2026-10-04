@@ -73,7 +73,7 @@ func inputs_of(_recipe_id: String) -> Dictionary:
 func time_of(recipe_id: String) -> float:
 	if recipe_id != REST:
 		return 0.0
-	return _missing() / maxf(0.01, _pod("heal_per_second", 0.5))
+	return _missing() / maxf(0.01, _pod("heal_per_second", 2.0))
 
 func recipe_name(_recipe_id: String) -> String:
 	return TranslationServer.translate("POD_REST")
@@ -134,7 +134,7 @@ func work(delta: float) -> String:
 		return ""
 	var hero = _hero()
 	progress += delta
-	hero.heal(_pod("heal_per_second", 0.5) * delta)
+	hero.heal(_pod("heal_per_second", 2.0) * delta)
 	if _missing() <= 0.0:
 		_stop()
 		var fx = _get_fx()

@@ -64,6 +64,13 @@ const TILE_SIZE: float = 2.0
 ## Hand-harvesting yields RESOURCE_NODES.harvest_rate per second and occupies the
 ## Hero completely, so every second of gathering is a second not spent building.
 ## That trade is now the whole economy.
+##
+## THE SCALE OF HIT POINTS (v0.7; the player, 2026-10-04: "3改2,2改3调整幅度太大，能不能把所有数值都乘以4，这样调整
+## 可以以12改10，8改9"): every hit point and every point of damage in this file -- the buildings' (here), the
+## animals' (DINOS), his (HERO), the ammunition's (AMMO), the spikes' and their wear, a fence's thorns, a fire pot's
+## burning ground, the pod's mending (POD) -- is four times what it was through v0.6, so a number can move a quarter
+## of the old step. Who falls to how many blows is as it was. What multiplies them (WAVES, CUSTOM_GAME's scale,
+## ARMOR, a level's damage_factor) is a ratio, and did not change.
 const BUILDINGS: Dictionary = {
 	"core": {
 		"name": "BUILDING_CORE_NAME",
@@ -85,8 +92,8 @@ const BUILDINGS: Dictionary = {
 		# up to it, and a raid could be sat out inside with nothing built): the first raid's two
 		# Coelophysis bring it down in about a minute (WAVES.base_count x DINOS.coelophysis damage),
 		# time for him to come out and fight them, not to wait them out -- and it is still worth
-		# defending when a raid of thirty reaches it.
-		"hp": 100.0,
+		# defending when a raid of thirty reaches it. Four hundred: that hundred on the x4 scale (above).
+		"hp": 400.0,
 		"cost": {},
 		"upgrades_to": "",
 	},
@@ -120,7 +127,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "bow",
 		"cells": 2,
 		"height": 3.5,
-		"hp": 30.0,
+		"hp": 120.0,
 		"cost": {"wood": 12},
 		"range": 7.0,
 		"fire_seconds": 1.5,
@@ -134,7 +141,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "bow",
 		"cells": 2,
 		"height": 3.5,
-		"hp": 30.0,
+		"hp": 120.0,
 		"cost": {"wood": 12, "stone": 4},
 		"range": 7.0,
 		"fire_seconds": 1.5,
@@ -148,7 +155,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "bow",
 		"cells": 2,
 		"height": 3.5,
-		"hp": 30.0,
+		"hp": 120.0,
 		"cost": {"wood": 12, "stone": 4, "bone": 4},
 		"range": 7.0,
 		"fire_seconds": 1.5,
@@ -168,7 +175,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "drop",
 		"cells": 2,
 		"height": 3.3,
-		"hp": 40.0,
+		"hp": 160.0,
 		"cost": {"wood": 14},
 		"range": 2.5,
 		"drop_seconds": 2.5,
@@ -183,7 +190,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "drop",
 		"cells": 2,
 		"height": 3.3,
-		"hp": 40.0,
+		"hp": 160.0,
 		"cost": {"wood": 14, "stone": 4},
 		"range": 2.5,
 		"drop_seconds": 2.5,
@@ -198,7 +205,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "drop",
 		"cells": 2,
 		"height": 3.3,
-		"hp": 40.0,
+		"hp": 160.0,
 		"cost": {"wood": 14, "stone": 4, "bone": 4},
 		"range": 2.5,
 		"drop_seconds": 2.5,
@@ -218,7 +225,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "bait",
 		"cells": 2,
 		"height": 2.6,
-		"hp": 20.0,
+		"hp": 80.0,
 		"cost": {"wood": 6},
 		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 2},
@@ -230,7 +237,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "bait",
 		"cells": 2,
 		"height": 2.6,
-		"hp": 20.0,
+		"hp": 80.0,
 		"cost": {"wood": 6, "stone": 4},
 		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 3},
@@ -242,7 +249,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "bait",
 		"cells": 2,
 		"height": 2.6,
-		"hp": 20.0,
+		"hp": 80.0,
 		"cost": {"wood": 6, "stone": 4, "bone": 4},
 		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 4},
@@ -260,7 +267,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "thrower",
 		"cells": 2,
 		"height": 2.8,
-		"hp": 50.0,
+		"hp": 200.0,
 		"cost": {"wood": 16, "stone": 6},
 		"range": 9.0,
 		"min_range": 3.0,
@@ -276,7 +283,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "thrower",
 		"cells": 2,
 		"height": 2.8,
-		"hp": 50.0,
+		"hp": 200.0,
 		"cost": {"wood": 16, "stone": 10},
 		"range": 9.0,
 		"min_range": 3.0,
@@ -292,7 +299,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "thrower",
 		"cells": 2,
 		"height": 2.8,
-		"hp": 50.0,
+		"hp": 200.0,
 		"cost": {"wood": 16, "stone": 10, "bone": 4},
 		"range": 9.0,
 		"min_range": 3.0,
@@ -319,11 +326,11 @@ const BUILDINGS: Dictionary = {
 		"cells": 1,
 		"walk_over": true,
 		"height": 0.35,
-		"hp": 6.0,
+		"hp": 24.0,
 		"cost": {"wood": 2},
-		"damage": 0.6,
+		"damage": 2.4,
 		"slow": 0.5,
-		"wear": 1.0,
+		"wear": 4.0,
 		"upgrades_to": ["bone_spikes"],
 	},
 	# With bone points lashed on (6.0: bone is what cuts): deeper, slower to cross, longer to blunt.
@@ -333,11 +340,11 @@ const BUILDINGS: Dictionary = {
 		"cells": 1,
 		"walk_over": true,
 		"height": 0.4,
-		"hp": 10.0,
+		"hp": 40.0,
 		"cost": {"wood": 2, "bone": 2},
-		"damage": 1.2,
+		"damage": 4.8,
 		"slow": 0.4,
-		"wear": 1.0,
+		"wear": 4.0,
 		"upgrades_to": "",
 	},
 	# THE WALLS, v0.6 round two: "重新设计墙，让墙体逻辑简单清晰，墙必须让它们和别的建筑能更贴合……木栅栏成本
@@ -355,14 +362,14 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_WALL_NAME",
 		"kind": "wall",
 		"cells": 1,
-		"hp": 8.0,
+		"hp": 32.0,
 		"height": 1.25,
 		# Sharpened: whatever presses against it is hurt, per tick, so a line wears a raid
 		# down instead of only holding it -- a chip, not a kill: a raptor (DINOS.raptor.hp)
-		# chewing through the 8 hit points comes out alive but nearly dead, leaving the
+		# chewing through the 32 hit points comes out alive but nearly dead, leaving the
 		# finishing to a trap or the Hero. It reaches whoever is against it, body
 		# to body (CONTACT_REACH), and nobody walking past.
-		"contact_damage": 0.15,
+		"contact_damage": 0.6,
 		"contact_tick": 0.5,
 		"cost": {"wood": 1},
 		# The fence slot of the build menu (GAME-DESIGN 6.0): most of a wall stays wood, a funnel; where it is
@@ -379,9 +386,9 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_BONE_STAKE_NAME",
 		"kind": "wall",
 		"cells": 1,
-		"hp": 10.0,
+		"hp": 40.0,
 		"height": 1.25,
-		"contact_damage": 0.35,
+		"contact_damage": 1.4,
 		"contact_tick": 0.5,
 		"cost": {"wood": 1, "bone": 1},
 		"upgrades_to": "",
@@ -394,7 +401,7 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_STONE_WALL_NAME",
 		"kind": "wall",
 		"cells": 1,
-		"hp": 20.0,
+		"hp": 80.0,
 		"height": 1.2,
 		"cost": {"stone": 1},
 		"upgrades_to": "",
@@ -407,7 +414,7 @@ const BUILDINGS: Dictionary = {
 		"name": "BUILDING_GATE_NAME",
 		"kind": "wall",
 		"cells": 1,
-		"hp": 12.0,
+		"hp": 48.0,
 		"height": 1.45,
 		"hero_passes": true,
 		"cost": {"wood": 2},
@@ -433,7 +440,7 @@ const BUILDINGS: Dictionary = {
 		# sense"). The brazier, a chest-high stone plinth, stands in the way as stone does.
 		"walk_over": true,
 		"height": 0.4,
-		"hp": 6.0,
+		"hp": 24.0,
 		"cost": {"wood": 3},
 		"light": 7.0,
 		"fuel": 2,
@@ -451,7 +458,7 @@ const BUILDINGS: Dictionary = {
 		"kind": "fire",
 		"cells": 1,
 		"height": 0.7,
-		"hp": 20.0,
+		"hp": 80.0,
 		"cost": {"wood": 3, "stone": 4},
 		"light": 10.0,
 		"fuel": 3,
@@ -989,31 +996,34 @@ const ARMOR: Dictionary = {
 
 ## What it does to an armoured animal is ARMOR's to say.
 const AMMO: Dictionary = {
-	# A wooden arrow, its point fire-hardened: one kills a Coelophysis (DINOS.coelophysis.hp 2.8).
-	"arrow_wood": {"name": "RESOURCE_ARROW_WOOD", "for": "bow", "prop": "arrow_wood", "damage": 3.0},
+	# A wooden arrow, its point fire-hardened: two to a Coelophysis (DINOS.coelophysis.hp 11.2). At 12 (3 before the x4
+	# scale) one killed it, and bow towers were all a defence needed against a pack -- the bench's cautious bot lasted
+	# longest on bows alone (GAME-DESIGN 3.0); the player: "12改10".
+	"arrow_wood": {"name": "RESOURCE_ARROW_WOOD", "for": "bow", "prop": "arrow_wood", "damage": 10.0},
 	# A bone point lashed on: deeper, and through the first into the next behind it -- the answer to a column, and
-	# a third of the big boss's health in five (DINOS.postosuchus.hp 45).
-	"arrow_bone": {"name": "RESOURCE_ARROW_BONE", "for": "bow", "prop": "arrow_bone", "damage": 5.0, "pierce": 3},
+	# over half the big boss's health in five (DINOS.postosuchus.hp 180).
+	"arrow_bone": {"name": "RESOURCE_ARROW_BONE", "for": "bow", "prop": "arrow_bone", "damage": 20.0, "pierce": 3},
 	# What the drop tower lets fall (DropTower; GAME-DESIGN 3.0 -- they were the log tower's rolling logs, and keep
 	# their ids). A short heavy log: it crushes what is under it -- the armoured take all of it -- knocks it flat
 	# `knockdown` seconds and shoves it `push` metres off the tower, everything within `splash` of where it falls.
-	"log_round": {"name": "RESOURCE_LOG_ROUND", "for": "drop", "prop": "drop_log", "damage": 2.0,
+	# 9: a little heavier than it was (8 on the x4 scale; the player: "8改9"), against the arrow's 12 -> 10.
+	"log_round": {"name": "RESOURCE_LOG_ROUND", "for": "drop", "prop": "drop_log", "damage": 9.0,
 		"splash": 1.2, "knockdown": 1.0, "push": 1.5, "push_seconds": 0.35},
 	# With bone spikes lashed round it: it cuts as it crushes.
-	"log_spiked": {"name": "RESOURCE_LOG_SPIKED", "for": "drop", "prop": "drop_log_spiked", "damage": 3.5,
+	"log_spiked": {"name": "RESOURCE_LOG_SPIKED", "for": "drop", "prop": "drop_log_spiked", "damage": 14.0,
 		"splash": 1.2, "knockdown": 1.0, "push": 1.5, "push_seconds": 0.35},
 	# Weighted with sandstone: heavier -- knocked flat longer, shoved twice as far, and the big ones are moved by it too.
-	"roller_stone": {"name": "RESOURCE_ROLLER_STONE", "for": "drop", "prop": "drop_log_stone", "damage": 3.0,
+	"roller_stone": {"name": "RESOURCE_ROLLER_STONE", "for": "drop", "prop": "drop_log_stone", "damage": 12.0,
 		"splash": 1.4, "knockdown": 1.5, "push": 3.0, "push_seconds": 0.45, "moves_heavy": true},
 	# A rounded block of sandstone: everything where it lands is hit, and knocked flat a moment.
-	"shot_stone": {"name": "RESOURCE_SHOT_STONE", "for": "thrower", "prop": "shot_stone", "damage": 4.0,
+	"shot_stone": {"name": "RESOURCE_SHOT_STONE", "for": "thrower", "prop": "shot_stone", "damage": 16.0,
 		"splash": 1.8, "knockdown": 0.8},
 	# A fire pot (station 2; GAME-DESIGN 6.0: "火挪到第 2 站，做成投石塔扔的火罐"): a clay pot of burning resin. It hits
 	# less than a stone and knocks nothing down, and where it breaks the ground burns (FirePatch): `burn.seconds`,
 	# `burn.radius` metres round, `burn.dps` a second to what is in it, lighting the dark `burn.light` metres round.
-	"fire_pot": {"name": "RESOURCE_FIRE_POT", "for": "thrower", "prop": "fire_pot", "damage": 2.0,
+	"fire_pot": {"name": "RESOURCE_FIRE_POT", "for": "thrower", "prop": "fire_pot", "damage": 8.0,
 		"splash": 2.2, "knockdown": 0.0,
-		"burn": {"seconds": 6.0, "radius": 2.2, "dps": 1.0, "light": 5.0, "fade": 1.5}},
+		"burn": {"seconds": 6.0, "radius": 2.2, "dps": 4.0, "light": 5.0, "fade": 1.5}},
 	# Raw meat on the rack: so many bites of it (BAIT).
 	"food": {"name": "RESOURCE_FOOD", "for": "bait", "uses": 12},
 }
@@ -1243,10 +1253,10 @@ const DINOS: Dictionary = {
 		# stake stands nine bites instead of eight, and the raptor that chews through one
 		# still comes out alive and nearly dead (BUILDINGS.wall) -- softer than that and a
 		# single stake would kill raptors forever without falling.
-		"hp": 2.8,
+		"hp": 11.2,
 		"speed": 4.0,
 		"burst": "dash",            # set on the man, a dash from close (DINO_AI.bursts)
-		"damage": 0.9,
+		"damage": 3.6,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
@@ -1260,10 +1270,10 @@ const DINOS: Dictionary = {
 	# reward for having killed it: more of what a raptor leaves.
 	"raptor_alpha": {
 		"name": "DINO_RAPTOR_ALPHA_NAME",
-		"hp": 10.0,
+		"hp": 40.0,
 		"speed": 4.4,
 		"burst": "dash",
-		"damage": 1.5,
+		"damage": 6.0,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"boss": "minor",
@@ -1277,9 +1287,9 @@ const DINOS: Dictionary = {
 	# not an answer on their own -- it is what the stone wall is for (6.3).
 	"big_theropod": {
 		"name": "DINO_BIG_THEROPOD_NAME",
-		"hp": 45.0,
+		"hp": 180.0,
 		"speed": 2.0,
-		"damage": 3.0,
+		"damage": 12.0,
 		"attack_rate": 0.8,
 		"behaviour": "siege",
 		"boss": "major",
@@ -1304,10 +1314,10 @@ const DINOS: Dictionary = {
 		# day, poor in the dark (Rinehart et al., 2004). Its raids come in the day; at dusk it goes home.
 		"hours": ["day"],
 		"name": "DINO_COELOPHYSIS_NAME",
-		"hp": 2.8,
+		"hp": 11.2,
 		"speed": 4.0,
 		"burst": "dash",            # set on the man, a dash from close (DINO_AI.bursts) -- the nest's guards too
-		"damage": 0.9,
+		"damage": 3.6,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
@@ -1323,10 +1333,10 @@ const DINOS: Dictionary = {
 		# The pack's hours are its leader's.
 		"hours": ["day"],
 		"name": "DINO_COELOPHYSIS_ALPHA_NAME",
-		"hp": 10.0,
+		"hp": 40.0,
 		"speed": 4.4,
 		"burst": "dash",
-		"damage": 1.5,
+		"damage": 6.0,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"boss": "minor",
@@ -1347,9 +1357,9 @@ const DINOS: Dictionary = {
 		# Rows of bony plates down its back, as rauisuchians had (ARMOR): an arrow goes in for a quarter of itself.
 		"armored": true,
 		"name": "DINO_POSTOSUCHUS_NAME",
-		"hp": 45.0,
+		"hp": 180.0,
 		"speed": 2.0,
-		"damage": 3.0,
+		"damage": 12.0,
 		"attack_rate": 0.8,
 		"behaviour": "siege",
 		"boss": "major",
@@ -1370,10 +1380,10 @@ const DINOS: Dictionary = {
 		"name": "DINO_PHYTOSAUR_NAME",
 		# Tougher and harder-biting than it was (v0.6 round five: "咬得更疼、更抗打" -- it was 8 and 1.2, and "人还能
 		# 把那个恐龙干掉"): four of a Coelophysis's hit points, twice its bite. A man in the dark is its meat.
-		"hp": 12.0,
+		"hp": 48.0,
 		"speed": 3.0,
 		"burst": "lunge",           # slower than he is on land, but a crocodile's lunge from close (DINO_AI.bursts)
-		"damage": 1.8,
+		"damage": 7.2,
 		"attack_rate": 0.8,
 		"behaviour": "prowl",
 		"drops": {"food": 2, "bone": 1},
@@ -1389,10 +1399,10 @@ const DINOS: Dictionary = {
 	"hesperosuchus": {
 		"hours": ["day"],
 		"name": "DINO_HESPEROSUCHUS_NAME",
-		"hp": 1.6,
+		"hp": 6.4,
 		"speed": 6.5,
 		# No burst: it is always half as fast again as the man -- a burst is for what is not.
-		"damage": 0.6,
+		"damage": 2.4,
 		"attack_rate": 1.4,
 		"behaviour": "runner",
 		# The crocodile-line's hiss, a small animal's (SOUNDS: Postosuchus's recordings pitched right up).
@@ -1407,9 +1417,9 @@ const DINOS: Dictionary = {
 	# old placeholder's.
 	"pterosaur": {
 		"name": "DINO_PTEROSAUR_NAME",
-		"hp": 2.0,
+		"hp": 8.0,
 		"speed": 6.0,
-		"damage": 1.0,
+		"damage": 4.0,
 		"attack_rate": 1.2,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
@@ -1423,10 +1433,10 @@ const DINOS: Dictionary = {
 	"ornitholestes": {
 		"hours": ["day"],
 		"name": "DINO_ORNITHOLESTES_NAME",
-		"hp": 2.8,
+		"hp": 11.2,
 		"speed": 4.2,
 		"burst": "dash",
-		"damage": 0.9,
+		"damage": 3.6,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"drops": {"food": 1, "bone": 1},
@@ -1438,10 +1448,10 @@ const DINOS: Dictionary = {
 	"ceratosaurus": {
 		"hours": ["day"],
 		"name": "DINO_CERATOSAURUS_NAME",
-		"hp": 14.0,
+		"hp": 56.0,
 		"speed": 4.0,
 		"burst": "dash",
-		"damage": 2.0,
+		"damage": 8.0,
 		"attack_rate": 1.0,
 		"behaviour": "pack",
 		"boss": "minor",
@@ -1451,9 +1461,9 @@ const DINOS: Dictionary = {
 	# Allosaurus: eight and a half metres, the Jurassic's great hunter -- last of all, in the beacon's final wave.
 	"allosaurus": {
 		"name": "DINO_ALLOSAURUS_NAME",
-		"hp": 50.0,
+		"hp": 200.0,
 		"speed": 2.2,
-		"damage": 3.5,
+		"damage": 14.0,
 		"attack_rate": 0.8,
 		"behaviour": "siege",
 		"boss": "major",
@@ -1468,9 +1478,9 @@ const DINOS: Dictionary = {
 	"harpactognathus": {
 		"hours": ["day"],
 		"name": "DINO_HARPACTOGNATHUS_NAME",
-		"hp": 2.0,
+		"hp": 8.0,
 		"speed": 5.5,
-		"damage": 0.6,
+		"damage": 2.4,
 		"attack_rate": 1.2,
 		"behaviour": "flyer",
 		"flies": true,
@@ -1489,13 +1499,13 @@ const DINOS: Dictionary = {
 	"desmatosuchus": {
 		"hours": ["day", "dusk"],
 		"name": "DINO_DESMATOSUCHUS_NAME",
-		"hp": 12.0,
+		"hp": 48.0,
 		"speed": 2.4,
-		# A point a second at the cabin, a coelophysis' worth: what makes it dangerous is that arrows hardly hurt it,
-		# not how hard it rams. Two of them left alone take the cabin's hundred in about fifty seconds -- time to go
-		# out and beat them (they do not strike back: a man is a second a point, twelve seconds each) or for the drop
-		# tower to crush them. At 1.8 a second each, two had it down in under half a minute (the v0.7 bench, day 2).
-		"damage": 1.0,
+		# Four a second at the cabin, about a coelophysis' worth: what makes it dangerous is that arrows hardly hurt
+		# it, not how hard it rams. Two of them left alone take the cabin's four hundred in about fifty seconds -- time
+		# to go out and beat them (they do not strike back: he strikes 4 a second, twelve seconds each) or for the drop
+		# tower to crush them. At 7.2 a second each, two had it down in under half a minute (the v0.7 bench, day 2).
+		"damage": 4.0,
 		"attack_rate": 1.0,
 		"behaviour": "charger",
 		"armored": true,
@@ -1512,10 +1522,10 @@ const DINOS: Dictionary = {
 	"stegosaurus": {
 		"hours": ["day", "dusk"],
 		"name": "DINO_STEGOSAURUS_NAME",
-		"hp": 30.0,
+		"hp": 120.0,
 		"speed": 1.8,
 		# Twice the aetosaur's ram, one at a time: alone at the cabin it takes about fifty seconds as well.
-		"damage": 2.0,
+		"damage": 8.0,
 		"attack_rate": 1.0,
 		"behaviour": "charger",
 		"armored": true,
@@ -2528,9 +2538,9 @@ const HERO: Dictionary = {
 	# at its end -- he stops, rather than run on the spot for ever at whatever the route did not know
 	# was in the way (the player's report, 2026-09-29: "人会一直有跑的动作但会一直卡着进不去").
 	"give_up_after": 3.0,
-	"hp": 10.0,                   # 生命值（归零直接 Game Over）
+	"hp": 40.0,                   # 生命值（归零直接 Game Over）
 	"move_speed": 4.0,            # 移动速度（米/秒）
-	"damage": 1.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
+	"damage": 4.0,                # 攻击力（仅部署阶段生效，前期攻击力较低）
 	"attack_rate": 1.0,           # 攻击间隔（秒）
 	"attack_range": 2.0,          # 攻击距离（米）
 	# What killed him is taken to be the nearest animal this far from him when he falls (metres): a
@@ -4668,7 +4678,7 @@ static func harvest_note(res_id: String, owned: Dictionary) -> String:
 const POD: Dictionary = {
 	# Hit points a second while he floats in it: from four of his ten to whole in twelve seconds -- as long as a
 	# job at the workbench, long enough that a rest in the middle of a raid is a decision.
-	"heal_per_second": 0.5,
+	"heal_per_second": 2.0,
 	# How high the tank's floor is over the room's, in metres (tools/generate_cabin.py POD_FLOOR): he is drawn
 	# standing on it while he floats.
 	"floor": 0.30,

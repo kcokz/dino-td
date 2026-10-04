@@ -310,16 +310,17 @@ func test_multiple_concurrent_dinos_attacking_same_wall() -> void:
 		assert_eq(d.current_target, wall, "Dino target is the shared wall")
 
 	# This test is about damage accumulating from many attackers, not about balance,
-	# so give the wall enough hp to survive the barrage whatever a stake costs.
-	wall.max_hp = 30.0
-	wall.current_hp = 30.0
+	# so give the wall enough hp to survive the barrage whatever a stake costs -- or a bite does.
+	var barrage: float = 16.0 * raptor_stat("damage")
+	wall.max_hp = barrage * 2.0
+	wall.current_hp = wall.max_hp
 
 	# Each dino performs 2 attacks (8 * 2 = 16 bites)
 	for d in dinos:
 		d.perform_attack()
 		d.perform_attack()
 
-	assert_almost_eq(float(wall.current_hp), 30.0 - 16.0 * raptor_stat("damage"), 0.01,
+	assert_almost_eq(float(wall.current_hp), wall.max_hp - barrage, 0.01,
 		"Wall took combined damage from all 8 dinos (16 bites)")
 
 	# Dino 0 delivers fatal strike

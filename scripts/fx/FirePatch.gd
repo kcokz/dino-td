@@ -106,7 +106,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_tick = 1.0
 	for d in animals_in_it():
-		d.take_damage(_number("dps", 1.0))
+		d.take_damage(_number("dps", 4.0))
 
 ## What is on the ground in it: alive, and not up in the air.
 func animals_in_it() -> Array:

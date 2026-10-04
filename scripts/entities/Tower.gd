@@ -77,7 +77,7 @@ func _load_tower_config() -> void:
 		max_hp = declared_hp(building_type, 20.0)
 		current_hp = max_hp
 		attack_range = float(data.get("range", 5.0))
-		damage = float(data.get("damage", 1.0))
+		damage = float(data.get("damage", 4.0))
 		fire_rate = float(data.get("fire_rate", 1.0))
 		turn_speed = float(data.get("turn_speed", 300.0))
 

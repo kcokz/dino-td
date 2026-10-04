@@ -684,7 +684,7 @@ func test_grid_auto_vacate_on_building_destroyed() -> void:
 	assert_true(grid_mgr.is_cell_occupied(target_cell), "Cell (1, 0) must be occupied")
 
 	# Destroy wall
-	wall.take_damage(30.0)
+	wall.take_damage(wall.max_hp)
 	assert_false(grid_mgr.is_cell_occupied(target_cell), "GridManager must automatically vacate cell (1, 0) on building_destroyed")
 
 	# Re-placing on vacated cell should now be permitted

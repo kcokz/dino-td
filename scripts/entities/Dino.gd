@@ -487,15 +487,15 @@ func setup(type_id: String = "raptor", stat_multipliers: Dictionary = {}) -> voi
 	var cfg = _get_config()
 	if cfg and "DINOS" in cfg and cfg.DINOS.has(type_id):
 		var data: Dictionary = cfg.DINOS[type_id]
-		max_hp = float(data.get("hp", 3.0)) * mult_hp
+		max_hp = float(data.get("hp", 12.0)) * mult_hp
 		current_hp = max_hp
-		damage = float(data.get("damage", 1.0)) * mult_dmg
+		damage = float(data.get("damage", 4.0)) * mult_dmg
 		speed = float(data.get("speed", 4.0)) * mult_spd
 		attack_rate = float(data.get("attack_rate", 1.0))
 	else:
-		max_hp = 3.0 * mult_hp
+		max_hp = 12.0 * mult_hp
 		current_hp = max_hp
-		damage = 1.0 * mult_dmg
+		damage = 4.0 * mult_dmg
 		speed = 4.0 * mult_spd
 		attack_rate = 1.0
 

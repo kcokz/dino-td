@@ -600,7 +600,7 @@ func setup_initial_entities() -> void:
 		else:
 			var cfg = _get_config()
 			if cfg and "BUILDINGS" in cfg and cfg.BUILDINGS.has("core"):
-				core_max_hp = float(cfg.BUILDINGS["core"].get("hp", 10.0))
+				core_max_hp = float(cfg.BUILDINGS["core"].get("hp", 400.0))
 		var core_cur_hp: float = float(current_core.current_hp) if (current_core != null and is_instance_valid(current_core) and "current_hp" in current_core) else core_max_hp
 		eb.core_hp_changed.emit(core_cur_hp, core_max_hp)
 

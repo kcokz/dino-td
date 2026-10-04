@@ -180,7 +180,7 @@ func place_at(type_id: String, build_cell: Vector2i, parent_node: Node = null, s
 		if "cell_pos" in building:
 			building.cell_pos = tile
 		if "max_hp" in building:
-			building.max_hp = float(b_data.get("hp", 10.0))
+			building.max_hp = float(b_data.get("hp", 40.0))
 			building.current_hp = building.max_hp
 	if "position" in building:
 		building.position = grid_manager.footprint_centre(type_id, build_cell, 0.0)

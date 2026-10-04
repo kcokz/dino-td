@@ -104,10 +104,10 @@ func _load_config() -> void:
 	var cfg = _get_config()
 	if cfg:
 		if "HERO" in cfg and cfg.HERO is Dictionary:
-			max_hp = float(cfg.HERO.get("hp", 10.0))
+			max_hp = float(cfg.HERO.get("hp", 40.0))
 			current_hp = max_hp
 			speed = float(cfg.HERO.get("move_speed", 4.0))
-			damage = float(cfg.HERO.get("damage", 1.0))
+			damage = float(cfg.HERO.get("damage", 4.0))
 			attack_rate = float(cfg.HERO.get("attack_rate", 1.0))
 			attack_range = float(cfg.HERO.get("attack_range", 2.0))
 		if "TIME" in cfg and cfg.TIME is Dictionary:

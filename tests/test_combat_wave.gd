@@ -322,7 +322,7 @@ func test_dino_resumes_pathing_when_wall_destroyed() -> void:
 		dino.call("on_obstacle_detected", wall)
 
 	# Destroy wall
-	wall.take_damage(30.0)
+	wall.take_damage(wall.max_hp)
 	assert_true(wall.is_destroyed, "Wall is destroyed")
 
 	# Notify dino or step obstacle check
@@ -363,7 +363,7 @@ func test_dino_fatal_damage_emits_dino_died_and_frees() -> void:
 	var death_watcher = watch_signal(event_bus_node, "dino_died")
 
 	assert_has_method(dino, "take_damage", "Dino must implement take_damage")
-	dino.take_damage(3.0)
+	dino.take_damage(dino.max_hp)
 
 	assert_lte(float(dino.current_hp), 0.0, "Dino current_hp must be <= 0")
 	assert_true(death_watcher.emitted, "EventBus.dino_died must be emitted upon fatal damage")
@@ -393,7 +393,8 @@ func test_tower_stats_match_config() -> void:
 
 	var expected_hp: float = 20.0
 	var expected_range: float = 5.0
-	var expected_damage: float = 1.0
+	# The legacy tower's own fallback, on the x4 scale of hit points (Config.BUILDINGS' note): the cabin's row has none.
+	var expected_damage: float = 4.0
 	var expected_fire_rate: float = 1.0
 
 	if config_node != null and "BUILDINGS" in config_node and config_node.BUILDINGS.has("core"):
