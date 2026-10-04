@@ -115,7 +115,7 @@ func test_04_a_building_ordered_or_a_way_up_begun_is_no_longer_the_goal() -> voi
 func test_03_a_recipe_made_is_no_longer_the_goal_and_a_beacon_step_done_hands_on_to_the_next() -> void:
 	var main = await _level()
 	game_state_node.pin_goal({"kind": "job", "id": "stone_pick"})
-	assert_eq(game_state_node.goal_price(), config_node.recipe_price("stone_pick", game_state_node.unlocks), "(the pick, at its price)")
+	assert_eq(game_state_node.goal_price(), config_node.RECIPES["stone_pick"]["inputs"], "(the pick, at its price)")
 	game_state_node.grant_unlock(String(config_node.RECIPES["stone_pick"]["unlocks"]))
 	assert_true(game_state_node.goal.is_empty(), "Made, it is no longer the goal")
 	var first: String = String(game_state_node.beacon_next_job())
