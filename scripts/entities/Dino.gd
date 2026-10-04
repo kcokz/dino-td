@@ -503,8 +503,17 @@ func setup(type_id: String = "raptor", stat_multipliers: Dictionary = {}) -> voi
 	# and the walker are refitted -- otherwise every species keeps the default's size, which is
 	# how the big theropod spent four versions being small.
 	_refresh_walker()
+	if animator != null:
+		animator.own_gaits = _own_gaits()
 	if is_inside_tree():
 		_refit_to_size()
+
+## Its own strides' paces, where they are not a raptor's (Config.DINOS.<id>.gaits) -- or empty, for its kind's.
+func _own_gaits() -> Dictionary:
+	var cfg = _get_config()
+	if cfg and "DINOS" in cfg:
+		return cfg.DINOS.get(dino_type, {}).get("gaits", {})
+	return {}
 
 func set_waypoints(wps: Array) -> void:
 	waypoints.clear()
@@ -2125,6 +2134,7 @@ func _ensure_components() -> void:
 		animator.name = "ActorAnimator"
 		add_child(animator)
 		animator.setup(self, "dino")
+		animator.own_gaits = _own_gaits()
 	else:
 		animator.refresh_animation_player()
 

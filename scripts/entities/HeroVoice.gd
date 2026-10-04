@@ -64,6 +64,7 @@ func _exit_tree() -> void:
 
 func _hooks() -> Array:
 	return [["raid_warning", _on_raid_warning], ["boss_warning", _on_boss_warning], ["wave_ended", _on_wave_ended],
+		["dino_spawned", _on_dino_spawned],
 		["boss_arrived", _on_boss_arrived], ["unlock_granted", _on_unlock_granted],
 		["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 		["cabin_view_changed", _on_cabin_view_changed], ["hero_hp_changed", _on_hero_hp_changed]]
@@ -247,6 +248,22 @@ func nest_side() -> String:
 
 func _on_wave_ended(_n: int) -> void:
 	consider("raid_over")
+	_chargers_told.clear()
+
+## The kinds of frightened charger already told of this raid (_on_dino_spawned).
+var _chargers_told: Dictionary = {}
+
+## A frightened plant-eater come onto the field (ChargerDino; GAME-DESIGN 3.0): what it is, and that fire turns it --
+## once a raid for each kind.
+func _on_dino_spawned(dino: Node) -> void:
+	var cfg = get_node_or_null("/root/Config")
+	if cfg == null or dino == null or not is_instance_valid(dino) or not ("dino_type" in dino):
+		return
+	var kind: String = String(dino.dino_type)
+	if String(cfg.DINOS.get(kind, {}).get("behaviour", "")) != "charger" or _chargers_told.has(kind):
+		return
+	_chargers_told[kind] = true
+	speak("charger", [String(cfg.get_dino_name(kind)) if cfg.has_method("get_dino_name") else kind])
 
 func _on_boss_arrived(dino: Node) -> void:
 	var cfg = get_node_or_null("/root/Config")

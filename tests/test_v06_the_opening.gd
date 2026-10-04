@@ -95,7 +95,7 @@ func test_03_the_opening_has_a_tower_made_of_wood_and_arrows_of_wood_for_it() ->
 	assert_eq(cost.keys(), ["wood"], "Wood and nothing else: it can be built from the first minute")
 	assert_eq(String(config_node.get_building_kind("bow_tower")), "bow", "A bow tower: it shoots what comes within its reach")
 	assert_gt(float(_row("bow_tower")["range"]), 0.0, "all round it")
-	assert_false(config_node.faces("bow_tower"), "facing no way: nothing on it turns to aim")
+	assert_false(_row("bow_tower").has("faces"), "no way to face it when it is set down: it turns to what it shoots")
 	# It shoots only what it is loaded with: the arrows, made at the workbench.
 	assert_has(config_node.ammo_accepts("bow_tower"), "arrow_wood", "It shoots wooden arrows")
 	var arrows: Dictionary = config_node.RECIPES["arrow_wood"]

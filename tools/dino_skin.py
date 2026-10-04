@@ -303,6 +303,21 @@ def _horn(nt, tex, scale_height, scale_tint, hn):
     t = _math(nt, 'MULTIPLY', (-1100, 1300),
               _range(nt, (-1300, 1300), blot.outputs["Fac"], 0.3, 0.7, 1.0 - hn.get("mottle", 0.12), 1.0 + hn.get("mottle", 0.12)),
               _range(nt, (-1300, 1100), grain.outputs["Fac"], 0.3, 0.7, 1.0 - hn.get("streak", 0.06), 1.0 + hn.get("streak", 0.06)))
+    pits = hn.get("pits")
+    if pits:
+        # Bare bone pitted all over, as an osteoderm's face is (an aetosaur's plates): small round pits a few
+        # millimetres across, sunk and dark -- `scale` of them to a metre, each `size` of its cell, `depth` down,
+        # `dark` darker.
+        cells = _node(nt, "ShaderNodeTexVoronoi", (-1500, 1750))
+        cells.voronoi_dimensions = '3D'
+        cells.feature = 'F1'
+        cells.inputs["Scale"].default_value = pits.get("scale", 90.0)
+        cells.inputs["Randomness"].default_value = 0.9
+        nt.links.new(tex.outputs["Object"], cells.inputs["Vector"])
+        size = pits.get("size", 0.28)
+        out_of = _range(nt, (-1300, 1750), cells.outputs["Distance"], size * 0.55, size, 0.0, 1.0, smooth=True)
+        h = _math(nt, 'MULTIPLY', (-1100, 1650), h, _range(nt, (-1100, 1800), out_of, 0.0, 1.0, 1.0 - pits.get("depth", 0.6), 1.0))
+        t = _math(nt, 'MULTIPLY', (-1100, 1150), t, _range(nt, (-1100, 1000), out_of, 0.0, 1.0, 1.0 - pits.get("dark", 0.25), 1.0))
     return (_mixf(nt, (-900, 1500), k.outputs["Red"], scale_height, h),
             _mixf(nt, (-900, 1300), k.outputs["Red"], scale_tint, t))
 

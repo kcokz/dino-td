@@ -231,6 +231,7 @@ class Moves:
             neck = [(nod / n_neck, look / n_neck)] * n_neck
             head = (0.0, look * 0.3, 0.0)
             jaw = max(0.0, breath) * g.get("pant", 0.0)
+            pitch = 0.0
             if graze:
                 # Its head down at the ground cropping, its jaw working; up for a while to look about.
                 a, b = graze["up"]
@@ -242,8 +243,11 @@ class Moves:
                 neck = [((graze["neck"] * down + nod * up) / n_neck, (look * up + sweep) / n_neck)] * n_neck
                 head = (graze["head"] * down, look * 0.3 * up, 0.0)
                 jaw = graze["chew"] * max(0.0, math.sin(TAU * graze["chews"] * t)) * down
+                # A short neck reaches the ground only with the shoulders let down to it, the forelegs bending
+                # ("pitch": degrees, the front lowered about the hips).
+                pitch = graze.get("pitch", 0.0) * down
             tail = self.wave(n_tail, t, g.get("tail_swing", 3.0), 0.3)
-            self.body(pose, lift, 0.0, 0.0, 0.0, spine, neck, head, jaw=jaw, tail=tail,
+            self.body(pose, lift, pitch, 0.0, 0.0, spine, neck, head, jaw=jaw, tail=tail,
                       breath=breath * g.get("swell", 0.02))
             self.standing(pose, t)
             return pose
@@ -309,6 +313,54 @@ class Moves:
             return pose
         return frames, at, True
 
+    def ram(self):
+        """A butt, in place of a bite: an armoured grazer's blow is its body (an aetosaur's, its shoulder horns). It
+        gathers itself -- weight back, crouched, head and shoulders dropping -- then drives forward off its planted
+        feet, its head tucked down, the front of it swung to one side and rolled into what it hits so the horn on that
+        shoulder hooks it; a jolt at the blow, its head tossed; and it draws back to where it began (the game loops it
+        while it rams). Spec attack "ram": `lunge` how far it drives (metres) -- its forefeet stepping in with it,
+        `step` high -- `back` how far it draws back first, `crouch` and `dip` how far it sinks, `lower` the front let
+        down about the hips (degrees), `tuck` the neck bent down, `head_down`, `toss`, `hook` the turn into the blow,
+        `roll` the shoulder dipped into it, `push` the hind heels lifting as it drives off them."""
+        g = self.spec["attack"]
+        frames = int(round(g["period"] * FPS))
+        s = self.skel
+        n_neck = len(s.chains["neck"])
+        n_spine = len(s.chains["spine"])
+        n_tail = len(s.chains["tail"])
+
+        def at(t):
+            pose = Pose(s)
+            pose.set_root()
+            gather = ramp(t, 0.0, 0.38) * (1.0 - ramp(t, 0.38, 0.5))
+            drive = ramp(t, 0.38, 0.52) * (1.0 - ramp(t, 0.62, 1.0))
+            jolt = pulse(t, 0.48, 0.66)
+            hook = pulse(t, 0.36, 0.78)
+            down = 0.5 * gather + drive
+            lift = Vector((0.0, g["lunge"] * drive - g.get("back", 0.08) * gather - 0.03 * jolt,
+                           -g.get("crouch", 0.04) * gather - g.get("dip", 0.03) * drive))
+            yaw = g.get("hook", 8.0) * hook
+            spine = [(0.0, yaw / n_spine)] * n_spine
+            neck = [(-g.get("tuck", 20.0) * down / n_neck, -0.6 * yaw / n_neck)] * n_neck
+            head = (-g.get("head_down", 12.0) * down + g.get("toss", 8.0) * jolt, 0.0, 0.0)
+            tail = [(g.get("tail_up", 3.0) * drive / n_tail, -0.8 * yaw / n_tail)] * n_tail
+            self.body(pose, lift, g.get("lower", 5.0) * down, g.get("roll", 4.0) * hook, 0.0, spine, neck, head,
+                      g.get("jaw", 0.0) * jolt, tail)
+            # Its forefeet step in with it as it drives and back as it draws back -- left to stand, a lunge as far
+            # as its body goes folded the forelegs under it like a kneel; its hind feet stay planted, the heels
+            # coming up as it pushes off them.
+            step_in = ramp(t, 0.38, 0.52) * (1.0 - ramp(t, 0.66, 0.92))
+            stepping = pulse(t, 0.38, 0.52) + pulse(t, 0.66, 0.92)
+            for key in self.legs:
+                rest = self.rest_feet[key]
+                if key.startswith("fore"):
+                    foot = rest + Vector((0.0, g["lunge"] * step_in, g.get("step", 0.06) * stepping))
+                    pose.limb(key, foot, 0.5 * stepping, curl=0.4 * stepping)
+                else:
+                    pose.limb(key, rest, g.get("push", 0.5) * drive)
+            return pose
+        return frames, at, True
+
     def graze(self):
         """Grazing and nothing else: its head down at the ground the whole loop, cropping, its neck sweeping --
         the idle's grazing (spec idle "graze") without its looks about."""
@@ -361,6 +413,55 @@ class Moves:
                 pose.limb(key, root @ limp, 0.3 * fall, forward=fwd, curl=0.5 * settle, up=up)
             if self.plan == "biped":
                 self.arms_at(pose, 0.0, t, raise_=0.03 * settle, curl=0.9, forward=fwd, up=up)
+            return pose
+        return frames, at, False
+
+    def slump(self):
+        """Killed, a broad armoured animal goes down on its belly, not over onto its side -- its shoulder horns stand
+        out either side of it: a stagger, the forelegs giving way and its chest going down first, then the hind and
+        its hips; its legs sprawled out to the sides as it settles, tipped a little onto its right, its head laid on
+        the ground turned aside, its tail along it. It lies as it fell. Spec death "slump": `drop` how far its body
+        comes down to lie on its belly (metres), `front` the chest's lead (degrees), `roll` the tip onto its side
+        about the edge of its belly (`edge`, metres out), `splay` how far out its feet go (a fraction of where they
+        stood)."""
+        g = self.spec["death"]
+        frames = int(round(g["period"] * FPS))
+        s = self.skel
+        n_neck = len(s.chains["neck"])
+        n_tail = len(s.chains["tail"])
+
+        def at(t):
+            pose = Pose(s)
+            stagger = pulse(t, 0.0, 0.3)
+            fore = ramp(t, 0.1, 0.48)
+            hind = ramp(t, 0.28, 0.7)
+            settle = ramp(t, 0.55, 1.0)
+            tip = Quaternion(FWD, math.radians(g.get("roll", 12.0) * settle))
+            pose.set_root(None, tip, Vector((g.get("edge", 0.3), 0.0, 0.0)))
+            up = tip @ UP
+            fwd = tip @ FWD
+            lift = Vector((0.0, -0.04 * stagger, -g.get("drop", 0.35) * hind))
+            pitch = g.get("front", 15.0) * fore * (1.0 - hind) - g.get("rear_pitch", 3.0) * stagger
+            neck = [((g.get("rear_neck", 8.0) * stagger - g.get("limp_neck", 14.0) * settle) / n_neck,
+                     g.get("turn", 15.0) * settle / n_neck) for _ in range(n_neck)]
+            head = (g.get("rear_head", 8.0) * stagger - g.get("limp_head", 12.0) * settle, 0.0, 0.0)
+            tail = [((g.get("tail_lie", 3.0) * settle if i == 0 else 0.0), g.get("tail_curl", 2.0) * settle)
+                    for i in range(n_tail)]
+            self.body(pose, lift, pitch, 0.0, 0.0, None, neck, head, g.get("jaw", 10.0) * stagger + 6.0 * settle,
+                      tail)
+            # The legs buckling, then sprawled out from the body lying on them, each foot on the ground -- those of
+            # the side it tips up from laid down there too, not held out in the air.
+            root = pose.m["Root"]
+            sprawl = max(fore, hind) * 0.4 + 0.6 * settle
+            for key in self.legs:
+                rest = self.rest_feet[key]
+                front = key.startswith("fore")
+                limp = Vector((rest.x * (1.0 + g.get("splay", 0.7) * sprawl),
+                               rest.y + (g.get("reach_fore", 0.1) if front else -g.get("reach_hind", 0.1)) * sprawl,
+                               0.0))
+                foot = root @ limp
+                foot.z = 0.0
+                pose.limb(key, foot, 0.2 * settle, forward=fwd, curl=0.2 * settle, up=up)
             return pose
         return frames, at, False
 
@@ -632,9 +733,10 @@ class Moves:
             return {"fly": self.flap("fly"), "walk": self.flap("fly"), "run": self.flap("run"),
                     "glide": self.glide(), "idle": self.glide(), "attack": self.dive(), "hurt": self.hurt(),
                     "fall": self.tumble(), "death": self.crash()}
+        attack = self.spec["attack"]
         out = {"idle": self.idle(), "walk": self.gait("walk"), "run": self.gait("run"),
-               "attack": self.swipe() if "swipe" in self.spec["attack"] else self.attack(),
-               "death": self.death()}
+               "attack": self.swipe() if "swipe" in attack else self.ram() if "ram" in attack else self.attack(),
+               "death": self.slump() if "slump" in self.spec["death"] else self.death()}
         if "sleep" in self.spec:
             out["sleep"] = self.sleep()
         if "graze" in self.spec:

@@ -756,6 +756,215 @@ PLACERIAS = {
 
 
 # ==============================================================================
+# Desmatosuchus spurensis: an aetosaur -- a plant-eater of the crocodile's line, armoured from its neck to the tip of
+# its tail -- of the same Chinle rocks as Coelophysis, Postosuchus, the phytosaurs and Placerias (Parker 2008). Four
+# and a half metres of it, low and broad on short stout legs, the hind longer than the fore, so its back falls a little
+# to its shoulders; a metre high at the hips. Its back and its tail one carapace: transverse rows of thick rectangular
+# bony plates, each row a pair of wide paramedians either side of the midline and a lateral at each edge bent down
+# over the flank. The laterals of its neck drawn out into long horns, curving back, longer row by row to the biggest
+# pair at the shoulders, nearly half a metre each; behind them the laterals keep only a low point. A small head, its
+# snout blunt and turned up at the tip like a pig's, toothless at the front -- to root for plants with. Built true to
+# size; the game's armoured grazer that, frightened by the crashed capsule, charges it and rams it -- arrows bounce
+# off it.
+
+
+DESMATOSUCHUS = {
+    # No Config.DINOS entry fits it yet: its height as built (the top of the carapace over its hips), so it is drawn
+    # at its own size -- 4.5 m long.
+    "height": 1.01,
+    # Its strides drawn at its own paces: a heavy walk, and the trot it charges at.
+    "paces": {"walk": 0.8, "run": 2.4},
+    "skeleton": {
+        # The hip joints 0.66 m up: the back over them a metre (its plates and all).
+        "hip_height": 0.66,
+        "pelvis_length": 0.24,
+        "pelvis_pitch": -10.0,
+        # From the hips forward and a little down to the shoulders.
+        "spine": [(0.33, -2.0), (0.33, -4.0), (0.33, -5.0), (0.31, -4.0)],
+        # A short, thick neck, rising a little from the shoulders; the small head held low before them.
+        "neck": [(0.16, 8.0), (0.15, 5.0), (0.14, 0.0)],
+        "skull": (0.31, -12.0),
+        "jaw": (0.27, 0.05, -15.0),
+        "jaw_hinge": 0.1,
+        # The tail as long as the rest of it, sloping down from the hips and level towards its tip.
+        "tail": [(0.22, -20.0), (0.21, -17.0), (0.2, -14.0), (0.19, -11.0), (0.18, -9.0), (0.17, -7.0), (0.16, -6.0),
+                 (0.15, -5.0), (0.14, -4.0), (0.13, -3.0), (0.12, -2.0), (0.11, -2.0), (0.1, -1.0), (0.09, -1.0)],
+        "limbs": {
+            # Semi-erect: the hind legs under the hips, the knees a little out; plantigrade, four broad-clawed toes.
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.36, 0.27, 0.14, 0.1],
+                     "socket": (0.25, 0.0, -0.06), "stance": (0.05, 0.04), "foot": "plantigrade", "heel": 22.0,
+                     "roll_tilt": 40.0, "bend": "forward", "splay": 18.0},
+            # The forelegs shorter and more sprawled, the elbows out; five short fingers.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.28, 0.21, 0.09, 0.07], "socket": (0.21, -0.07, -0.15), "stance": (0.11, 0.08),
+                     "foot": "plantigrade", "heel": 30.0, "roll_tilt": 35.0, "bend": "back", "splay": 36.0},
+        },
+    },
+    "moves": {
+        "plan": "quadruped",
+        # A heavy walk, each foot down two thirds of its cycle, the body swaying a little over them.
+        "walk": {"period": 1.1, "duty": 0.68, "step": 0.08, "bob": 0.014, "snake": 2.5, "tail_swing": 4.0,
+                 "order": "walk", "steady": 0.75, "push": 0.5, "curl": 0.3, "hip_roll": 2.5},
+        # Its charge: a heavy trot, head and shoulders down, its spikes before it.
+        "run": {"period": 0.5, "duty": 0.42, "step": 0.12, "bob": 0.03, "snake": 2.0, "tail_swing": 3.0,
+                "order": "trot", "lean": 3.0, "steady": 0.6, "push": 0.7, "curl": 0.4, "neck_pitch": -14.0,
+                "head_pitch": -6.0},
+        # Rooting: its snout down in the ground, nosing and cropping; up now and then to look about.
+        "idle": {"period": 6.0, "breaths": 2, "look": 14.0, "nod": 2.5, "swell": 0.012, "tail_swing": 3.0,
+                 "heave": 0.006, "graze": {"neck": -32.0, "head": -13.0, "chew": 8.0, "chews": 10, "up": (0.42, 0.95),
+                                           "pitch": 5.0}},
+        # Its blow is its body: it gathers itself, then drives in head down, a shoulder swung into what it hits
+        # so the spike there hooks it -- and draws back (the game loops it while it rams).
+        "attack": {"period": 1.1, "ram": True, "lunge": 0.22, "back": 0.08, "crouch": 0.03, "dip": 0.02,
+                   "lower": 4.0, "tuck": 8.0, "head_down": 4.0, "toss": 10.0, "hook": 14.0, "roll": 7.0},
+        # Killed, it goes down on its belly -- forelegs first -- its legs sprawled out, tipping a little onto its side.
+        "death": {"period": 1.8, "slump": True, "drop": 0.31, "front": 15.0, "roll": 7.0, "splay": 0.9,
+                  "reach_hind": 0.26, "limp_neck": 14.0, "limp_head": 18.0, "turn": 16.0},
+    },
+    "body": {
+        "around": 44,
+        "soften": 0.05,
+        "rough": 0.01,
+        "scale": 0.45,
+        "throat": 0.25,
+        # The snout's tip blunt: its point hardly past its last ring.
+        "tips": (0.004, 0.02),
+        "trunk": [
+            # The skull: small, the snout narrowing from the eyes and widening again at its tip into a blunt spade
+            # turned up -- the pig's snout it rooted with.
+            st("Head", 1.008, 0.034, 0.02, 0.019, lift=0.017, n_top=2.6, n_bot=2.6, step=0.004),
+            st("Head", 0.985, 0.043, 0.029, 0.027, lift=0.015, n_top=2.5, n_bot=2.5, step=0.008),
+            st("Head", 0.94, 0.041, 0.034, 0.031, lift=0.01, n_top=2.3, step=0.012),
+            st("Head", 0.86, 0.034, 0.039, 0.035, lift=0.004, step=0.015),
+            st("Head", 0.74, 0.037, 0.045, 0.04, step=0.02),
+            st("Head", 0.6, 0.045, 0.052, 0.046, step=0.02),
+            st("Head", 0.45, 0.056, 0.06, 0.053, step=0.02),
+            st("Head", 0.32, 0.068, 0.066, 0.06, lift=0.004, step=0.02),
+            st("Head", 0.2, 0.078, 0.066, 0.067, step=0.02),
+            st("Head", 0.08, 0.083, 0.062, 0.074, step=0.02),
+            st("Head", -0.04, 0.084, 0.06, 0.08, step=0.025),
+            st("Head", -0.12, 0.088, 0.066, 0.088, step=0.03),
+            # The neck: short and thick, armoured round.
+            st("Neck3", 0.5, 0.1, 0.085, 0.1, step=0.035),
+            st("Neck2", 0.5, 0.13, 0.1, 0.12, step=0.04),
+            st("Neck1", 0.5, 0.17, 0.12, 0.14, step=0.04),
+            # The body: broad and flat-topped, the carapace's edges bent down over the flanks; the belly flat. Broad
+            # already at the shoulders, where the forelegs come out under the great horns.
+            st("Spine4", 0.75, 0.27, 0.18, 0.2, n_top=2.7, step=0.045),
+            st("Spine4", 0.2, 0.3, 0.22, 0.25, n_top=2.9, n_bot=2.3, step=0.05),
+            st("Spine3", 0.5, 0.37, 0.27, 0.3, n_top=3.1, n_bot=2.5, step=0.05),
+            st("Spine2", 0.5, 0.4, 0.3, 0.32, n_top=3.1, n_bot=2.5, step=0.05),
+            st("Spine1", 0.5, 0.39, 0.31, 0.29, n_top=3.0, n_bot=2.4, step=0.05),
+            st("Hips", 0.2, 0.34, 0.32, 0.23, n_top=2.8, step=0.05),
+            st("Hips", 0.85, 0.27, 0.27, 0.18, n_top=2.6, step=0.05),
+            # The tail: broad at its root, tapering for all its length.
+            st("Tail1", 0.5, 0.2, 0.2, 0.15, n_top=2.4, step=0.05),
+            st("Tail2", 0.5, 0.165, 0.16, 0.13, n_top=2.3, step=0.05),
+            st("Tail3", 0.5, 0.138, 0.128, 0.112, step=0.05),
+            st("Tail4", 0.5, 0.116, 0.108, 0.096, step=0.05),
+            st("Tail5", 0.5, 0.097, 0.092, 0.082, step=0.05),
+            st("Tail6", 0.5, 0.081, 0.078, 0.07, step=0.05),
+            st("Tail7", 0.5, 0.067, 0.066, 0.059, step=0.045),
+            st("Tail8", 0.5, 0.055, 0.055, 0.05, step=0.045),
+            st("Tail9", 0.5, 0.045, 0.045, 0.041, step=0.04),
+            st("Tail10", 0.5, 0.036, 0.037, 0.034, step=0.04),
+            st("Tail11", 0.5, 0.028, 0.029, 0.027, step=0.035),
+            st("Tail12", 0.5, 0.021, 0.022, 0.02, step=0.03),
+            st("Tail13", 0.5, 0.015, 0.016, 0.015, step=0.03),
+            st("Tail14", 0.6, 0.009, 0.01, 0.009, step=0.025),
+            st("Tail_end", 0.3, 0.003, 0.003, 0.003, step=0.01),
+        ],
+        "mouth": {"from": ("Head", 0.12), "to": ("Head", 0.99), "phi": 110.0, "depth": 0.004, "width": 0.1, "band": 3.0},
+        # Small leaf-shaped teeth, set back and hidden by the lips: the front of the snout is toothless.
+        "teeth": {"from": ("Head", 0.32), "to": ("Head", 0.7), "count": 7, "length": 0.0035, "radius": 0.0022,
+                  "colour": (0.55, 0.5, 0.4)},
+        "eyes": {"at": ("Head", 0.3), "phi": 50.0, "radius": 0.016, "sunk": 0.6, "forward": 10.0, "up": 8.0,
+                 "iris": (0.42, 0.3, 0.1), "pupil": (0.01, 0.008, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.31), "phi": 30.0, "size": 0.035, "height": 0.012},
+        "nostrils": {"at": ("Head", 0.975), "phi": 30.0, "size": 0.008},
+        # The carapace (tools/dino_body.py _carapace): rows of plates from behind the head to near the tip of the tail.
+        "carapace": {
+            "from": ("Neck3", 0.75), "to": ("Tail13", 0.5),
+            # A row's length along the body at the trunk's width, less as it narrows; a seam between rows.
+            "length": 0.095, "ref": 0.36, "shrink": 0.5, "least": 0.45, "seam": 0.1,
+            # How far round from the midline the plates go (degrees round the section): over the flanks' edge.
+            "reach": [(("Neck3", 0.75), 106.0), (("Spine4", 0.6), 108.0), (("Spine3", 0.5), 112.0), (("Hips", 0.6), 112.0),
+                      (("Tail3", 0.5), 122.0), (("Tail13", 0.5), 130.0)],
+            # Across each side: the paramedian (wide, a low boss behind its middle) and the lateral (bent over the
+            # flank along a keel, its point at the back of the keel).
+            "columns": [{"v": (0.004, 0.505), "height": 0.022, "boss": (0.7, 0.45, 0.45, 0.28)},
+                        {"v": (0.515, 1.0), "height": 0.02, "keel": (0.3, 0.6), "boss": (0.72, 0.3, 0.5, 0.2)}],
+            # The laterals' points, out sideways from the bend of the plate, raked back, turned up: horns on the
+            # neck, longer row by row, the biggest pair at the shoulders; low points behind them, smaller down the
+            # tail. (length; rake back from straight out, up, curve; base across and along -- degrees, metres.)
+            "points": [
+                {"at": ("Neck3", 0.75), "length": 0.08, "rake": 30.0, "up": 12.0, "curve": 0.1, "base": (0.02, 0.035)},
+                {"at": ("Neck1", 0.5), "length": 0.24, "rake": 18.0, "up": 12.0, "curve": 0.22, "base": (0.034, 0.065)},
+                {"at": ("Spine4", 0.9), "length": 0.3, "rake": 16.0, "up": 12.0, "curve": 0.24, "base": (0.04, 0.075)},
+                {"at": ("Spine4", 0.62), "length": 0.04, "rake": 50.0, "up": 4.0, "curve": 0.05, "base": (0.02, 0.035)},
+                {"at": ("Hips", 0.5), "length": 0.035, "rake": 55.0, "up": 2.0, "curve": 0.05, "base": (0.018, 0.032)},
+                {"at": ("Tail13", 0.5), "length": 0.006, "rake": 55.0, "up": 0.0, "curve": 0.0, "base": (0.005, 0.008)},
+            ],
+            # The one pair at the shoulders, nearly half a metre each, out to the sides, curving back and a little up.
+            "peaks": [{"at": ("Spine4", 0.8), "length": 0.45, "rake": 10.0, "up": 12.0, "curve": 0.3,
+                       "base": (0.05, 0.095)}],
+            "colour": (0.15, 0.105, 0.042),
+            "rim": (0.065, 0.045, 0.02),
+            "boss_colour": (0.2, 0.15, 0.065),
+            "spike": (0.36, 0.3, 0.19),
+            "tip": (0.08, 0.065, 0.045),
+            "vary": 0.12,
+        },
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.3, 0.085, 0.15, 0.012), (0, -0.05, 0.115, 0.17, 0.02), (0, 0.3, 0.1, 0.14, 0.018),
+                             (0, 0.7, 0.07, 0.085, 0.005), (0, 0.97, 0.058, 0.064, 0.0), (1, 0.15, 0.062, 0.082, -0.012),
+                             (1, 0.45, 0.054, 0.065, -0.008), (1, 0.8, 0.044, 0.047, 0.0), (1, 0.97, 0.041, 0.043, 0.0),
+                             (2, 0.25, 0.048, 0.034, 0.0), (2, 0.9, 0.054, 0.029, 0.0)],
+                "around": 18,
+                # Broad, flat, near hoof-like claws (an aetosaur's unguals).
+                "digits": {"digits": [(-26.0, 0.07, 0.022, 0.026), (-9.0, 0.085, 0.024, 0.03), (8.0, 0.085, 0.024, 0.03),
+                                      (25.0, 0.07, 0.021, 0.026)],
+                           "flat": 0.6, "claw_curl": 0.25},
+            },
+            "fore": {
+                "stations": [(0, -0.25, 0.07, 0.1, 0.0), (0, 0.05, 0.082, 0.104, 0.008), (0, 0.45, 0.066, 0.078, 0.01),
+                             (0, 0.92, 0.052, 0.058, 0.0), (1, 0.15, 0.055, 0.064, 0.005), (1, 0.5, 0.047, 0.052, 0.002),
+                             (1, 0.95, 0.038, 0.04, 0.0), (2, 0.3, 0.045, 0.03, 0.0), (2, 0.9, 0.05, 0.026, 0.0)],
+                "around": 16,
+                "digits": {"digits": [(-34.0, 0.05, 0.016, 0.02), (-17.0, 0.058, 0.017, 0.022), (0.0, 0.06, 0.017, 0.022),
+                                      (17.0, 0.055, 0.016, 0.02), (34.0, 0.045, 0.014, 0.016)],
+                           "flat": 0.6, "claw_curl": 0.4},
+            },
+        },
+        # Small scales on its head and legs; under it square belly plates in rows (the scutes), as its kin had.
+        "skin_detail": {"scales": {"cells": 110.0, "dorsal_size": 0.6, "groove": 0.34, "groove_dark": 0.28, "tint": 0.1,
+                                   "speckle": 0.1, "relief": 0.7, "depth": 0.002},
+                        "scutes": {"size": (0.05, 0.045), "mortar": 0.08, "belly_below": -0.55, "flank_below": -0.3,
+                                   "warp": 1.0},
+                        # The plates and horns bare bone and horn: a fine grain, no scales, the bone pitted.
+                        "horn": {"grain": 70.0, "relief": 0.2, "mottle": 0.18, "streak": 0.08,
+                                 "pits": {"scale": 85.0, "size": 0.3, "depth": 0.6, "dark": 0.25}}},
+        "texture": 2048,
+        # Earthy: olive-brown skin, the plates a dull ochre, dark in their seams; the belly paler.
+        "skin": {
+            "back": (0.055, 0.038, 0.02),
+            "flank": (0.16, 0.11, 0.055),
+            "belly": (0.36, 0.28, 0.17),
+            "throat": (0.38, 0.3, 0.19),
+            "lips": (0.07, 0.055, 0.035),
+            "mouth": (0.3, 0.1, 0.08),
+            "claws": (0.06, 0.05, 0.035),
+            "mottle": 0.18,
+            "shank_dark": 0.25,
+            # A horn-dark tip to the snout, where it roots.
+            "beak": {"from": ("Head", 0.9), "colour": (0.05, 0.04, 0.028)},
+        },
+    },
+}
+
+
+# ==============================================================================
 # Velociraptor mongoliensis: a dromaeosaur of the Late Cretaceous of Mongolia (the Djadokhta) -- a turkey-sized
 # hunter, two metres long with its tail, the tail held stiff and straight by bony rods along it, a long low skull
 # with a turned-up snout, and on each foot the second toe held up off the ground carrying a great sickle claw.
@@ -2276,6 +2485,7 @@ HARPACTOGNATHUS = {
 # that is another.
 SPECIES = {"coelophysis": COELOPHYSIS, "coelophysis_alpha": COELOPHYSIS_ALPHA, "postosuchus": POSTOSUCHUS,
            "phytosaur": PHYTOSAUR, "hesperosuchus": HESPEROSUCHUS, "placerias": PLACERIAS,
+           "desmatosuchus": DESMATOSUCHUS,
            "velociraptor": RAPTOR, "velociraptor_alpha": RAPTOR_ALPHA, "tyrannosaurus": TREX,
            "pterosaur": PTEROSAUR,
            # The second map's (GAME-DESIGN 7.2, station 2).

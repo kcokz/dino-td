@@ -15,6 +15,9 @@ extends Node
 
 var actor: Node3D = null
 var actor_type: String = ""
+## The paces its own clips are drawn at, {clip: metres a second} -- a species whose strides are not a raptor's
+## (Config.DINOS.<id>.gaits: an aetosaur's walk, a stegosaur's) -- or empty, for its kind's (ANIMATIONS.gaits).
+var own_gaits: Dictionary = {}
 var animation_player: AnimationPlayer = null
 
 var current_clip: String = ""
@@ -118,7 +121,7 @@ func _play_gait() -> void:
 		_set_pace_scale(1.0)
 		_play_resolved(String(_animations().get("standing", {}).get(actor_type, "idle")))
 		return
-	var gaits: Dictionary = _animations().get("gaits", {}).get(actor_type, {})
+	var gaits: Dictionary = own_gaits if not own_gaits.is_empty() else _animations().get("gaits", {}).get(actor_type, {})
 	var best: String = _lookup_clip_for_state(current_state_name)
 	var drawn_at: float = 0.0
 	var best_miss: float = INF

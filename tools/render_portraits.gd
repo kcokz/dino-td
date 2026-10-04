@@ -32,7 +32,8 @@ const SETTLE := 8
 ## How each kind of subject is framed: the view's turn about it (yaw, degrees, from the front
 ## the game's own camera looks at), how far above it looks down (pitch), and how much room is
 ## left round it. "bust" frames the top of a figure -- head and shoulders -- between "from"
-## and "to" (shares of its height) rather than all of it.
+## and "to" (shares of its height) rather than all of it; "body" frames all of an animal, turned
+## about it as "head" is (from its side towards its front).
 const FRAMING := {
 	"hero": {"mode": "bust", "from": 0.7, "to": 1.03, "yaw": 200.0, "pitch": -4.0, "room": 1.0},
 	"building": {"mode": "whole", "yaw": 32.0, "pitch": -24.0, "room": 0.94},
@@ -51,6 +52,10 @@ const FRAMING_FOR := {
 	"dino/hesperosuchus": {"mode": "head", "centre": 0.45, "span": 0.6, "yaw": 46.0, "pitch": -8.0, "room": 1.0},
 	# A beak longer than the rest of the head: framed on the head's back half, the crest and the eye.
 	"dino/pterosaur": {"mode": "head", "centre": 0.3, "span": 0.42, "yaw": 50.0, "pitch": -6.0, "room": 1.0},
+	# The frightened chargers (v0.7): plated plant-eaters known by their armour -- the shoulder horns, the plates and
+	# the tail's spikes -- not by a small head hung low under a body that would fill the frame round it.
+	"dino/desmatosuchus": {"mode": "body", "yaw": 28.0, "pitch": -16.0, "room": 0.68},
+	"dino/stegosaurus": {"mode": "body", "yaw": 22.0, "pitch": -10.0, "room": 0.8},
 	"node/wood": {"mode": "bust", "from": 0.35, "to": 1.02, "yaw": 32.0, "pitch": -14.0, "room": 1.0},
 	# A rock is wide and low: framed round it, not round the sphere that holds it.
 	"node/stone": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 0.82},
@@ -178,10 +183,12 @@ func _render(key: String, px: int) -> Image:
 	if String(frame["mode"]) == "bust":
 		radius = region.size.y * 0.5 * 1.15
 	var yaw: float = float(frame["yaw"])
-	var head: Dictionary = _head_of(subject, float(frame.get("centre", 0.45))) if String(frame["mode"]) == "head" else {}
+	var turned: bool = String(frame["mode"]) in ["head", "body"]
+	var head: Dictionary = _head_of(subject, float(frame.get("centre", 0.45))) if turned else {}
 	if not head.is_empty():
-		target = head["centre"]
-		radius = float(head["length"]) * float(frame.get("span", 1.0))
+		if String(frame["mode"]) == "head":
+			target = head["centre"]
+			radius = float(head["length"]) * float(frame.get("span", 1.0))
 		# Round from its side towards its front: the side facing the camera's +Z.
 		var fwd: Vector3 = head["forward"]
 		fwd.y = 0.0

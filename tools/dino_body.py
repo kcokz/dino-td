@@ -98,6 +98,7 @@ def build(name, rig, arm, spec, materials):
     _eyes(body, loft, path, spec)
     _teeth(body, loft, path, spec)
     _plates(body, loft, path, spec)
+    _carapace(body, loft, path, spec)
     _tusks(body, loft, path, spec)
     _horns(body, loft, path, spec)
     _back_plates(body, loft, path, spec)
@@ -459,6 +460,143 @@ def _plates(body, loft, path, spec):
                 sc.plate(body, p, t, n, pl["length"] * k, pl["width"] * k, pl["height"] * k, pl["colour"], w,
                          square=pl.get("square", 0.0), keel=pl.get("keel", 0.55))
         s += pl["spacing"] * max(0.55, k)
+
+
+def _carapace(body, loft, path, spec):
+    """An aetosaur's armour (Desmatosuchus: Parker 2008): its neck, back and tail covered in transverse rows of thick
+    bony plates -- osteoderms -- each row a wide paramedian either side of the midline and a lateral at each edge, bent
+    down over the flank along a keel; the rows touching, a narrow seam between each plate and the next. Each plate a
+    slab lying on the skin and following it round, its edges bevelled down into it, its back edge a little higher than
+    its front (the rows step like shingles), a low boss raised on it.
+
+    A row is `length` long where the body is `ref` wide -- shorter as it narrows, by its width to the power `shrink`,
+    to no less than `least` of it -- a `seam` of it left before the next. The plates go `reach` degrees round from the
+    midline (anchors along the body, straight between). `columns`, from the midline out on each side: each one's span
+    across (`v`, fractions of the reach), its height, its boss (where along the plate and across it, its height as a
+    fraction of the plate's, its radius) and the keel it is bent along (where across it, its height as a fraction).
+    The outermost column's boss is drawn out into a point -- a lateral's spike: `points` are anchors along the body
+    (length; rake back, up, curve; base across and along), straight between, and each of `peaks` is set on the row
+    nearest it alone (the one pair of great horns at the shoulders). Each plate moves with the skin under it, each
+    point with the skin at its root; all of it bone and horn to the bake (no scales)."""
+    cp = spec.get("carapace")
+    if not cp:
+        return
+    start = len(body.v)
+    s0, s1 = sorted((path.s_of(*cp["from"]), path.s_of(*cp["to"])))
+    reach = sorted((path.s_of(*at), deg) for (at, deg) in cp["reach"])
+
+    def reach_at(s):
+        return _deg(_through(reach, s)[0])
+
+    def point_row(p):
+        return (path.s_of(*p["at"]), p["length"], p["rake"], p["up"], p["curve"], p["base"][0], p["base"][1])
+    points = sorted(point_row(p) for p in cp.get("points", []))
+    # The rows, front to back: (start, end, how much smaller than at the trunk).
+    rows = []
+    s = s0
+    while s < s1 - 0.01:
+        k = 1.0
+        for _ in range(2):
+            sec = loft.section(min(s1, s + 0.5 * cp["length"] * k))
+            k = max(cp.get("least", 0.4), min(1.0, (sec["w"] / cp["ref"]) ** cp.get("shrink", 1.0)))
+        length = cp["length"] * k
+        rows.append((s, min(s1, s + length * (1.0 - cp.get("seam", 0.1))), k))
+        s += length
+    spikes = [_through(points, 0.5 * (a + b)) if points else None for (a, b, _) in rows]
+    for p in cp.get("peaks", []):
+        at = point_row(p)
+        nearest = min(range(len(rows)), key=lambda i: abs(0.5 * (rows[i][0] + rows[i][1]) - at[0]))
+        spikes[nearest] = at[1:]
+    bevel = cp.get("bevel", 0.006)
+    sink = cp.get("sink", 0.004)
+    colour, rim = cp["colour"], cp.get("rim", cp["colour"])
+    boss_colour = cp.get("boss_colour", colour)
+    columns = cp["columns"]
+    for r, (sa, sb, k) in enumerate(rows):
+        width_k = reach_at(0.5 * (sa + sb))
+        for c, col in enumerate(columns):
+            va, vb = col["v"]
+            bu, bv, bh, br = col.get("boss", (0.5, 0.5, 0.0, 0.3))
+            kv, kh = col.get("keel", (None, 0.0))
+            height = col["height"] * k
+            outer = c == len(columns) - 1
+            for side in (1.0, -1.0):
+                def phi_of(v):
+                    phi = width_k * (va + (vb - va) * v)
+                    return phi if side > 0 else 2.0 * math.pi - phi
+
+                def s_of(u):
+                    return sa + (sb - sa) * u
+                # Its size on the skin, to bevel its edges by the same few millimetres all round.
+                p_a, _ = loft.surface(s_of(0.5), phi_of(0.0))
+                p_b, _ = loft.surface(s_of(0.5), phi_of(1.0))
+                across = max(0.005, (p_b - p_a).length)
+                along = max(0.005, sb - sa)
+                eu, ev = min(0.3, bevel / along), min(0.3, bevel / across)
+                # Its lines: the bevel all round, and through its boss and along its keel.
+                us = sorted(set([0.0, eu, bu, 1.0 - eu, 1.0]))
+                vs = sorted(set([0.0, ev, bv, 1.0 - ev, 1.0] + ([kv] if kv is not None else [])))
+                if across > 4.0 * along:
+                    # A wide plate (a paramedian) bent round the body: a line more across it, so it lies on it.
+                    vs = sorted(set(vs + [0.5 * (bv + 1.0 - ev)]))
+                # A shade of its own, so the plates read one by one.
+                c_mid, _ = loft.surface(s_of(0.5), phi_of(0.5))
+                own = cp.get("vary", 0.1) * noise.noise(c_mid * 9.0 + Vector((r * 0.37, c * 1.3, side)))
+
+                def rise(u, v):
+                    edge = min(u / eu, (1.0 - u) / eu, v / ev, (1.0 - v) / ev)
+                    edge = sc.smoothstep(0.0, 1.0, min(1.0, edge))
+                    boss = bh * math.exp(-((u - bu) / br) ** 2 - ((v - bv) / br) ** 2)
+                    keel = kh * max(0.0, 1.0 - abs(v - kv) / 0.3) * (0.4 + 0.6 * u) if kv is not None else 0.0
+                    h = height * (0.85 + 0.3 * u) * (1.0 + boss + keel)
+                    return -sink + (h + sink) * edge, edge, boss + keel
+                grid = []
+                for u in us:
+                    line = []
+                    s_u = s_of(u)
+                    w = path.weights(s_u, loft.blend)
+                    for v in vs:
+                        out, edge, lump = rise(u, v)
+                        p, n = loft.surface(s_u, phi_of(v), out=out)
+                        tone = sc.mix(rim, colour, sc.smoothstep(0.0, 1.0, edge))
+                        tone = sc.mix(tone, boss_colour, min(1.0, lump * 1.4))
+                        line.append(body.add(p, sc.shade(tone, own), w))
+                    grid.append(line)
+                for i in range(len(us) - 1):
+                    for j in range(len(vs) - 1):
+                        body.face((grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]))
+                if outer and spikes[r] is not None and spikes[r][0] > 0.004:
+                    _spike(body, loft, path, s_of(bu), phi_of(bv), rise(bu, bv)[0], spikes[r], sc.shade(colour, own),
+                           cp)
+    if spec.get("skin_detail", {}).get("horn"):
+        body.mark_horn(start, cp.get("horn", 1.0))
+
+
+def _spike(body, loft, path, s, phi, out, spike, base_colour, cp):
+    """A lateral plate's point: from the bend of the plate at `s`, `phi` (`out` above the skin), straight out to the
+    side, raked back towards the tail by `rake`, turned up by `up`, its tip curving on back -- flattened, broad along
+    the body and thin up and down, as an aetosaur's horns are. Moving with the skin at its root."""
+    length, rake, up, curve, across, along = spike
+    p, n = loft.surface(s, phi, out=out)
+    c, t, x, u = loft.frame(s)
+    out_dir = x if x.dot(p - c) >= 0.0 else -x
+    axis = (out_dir * math.cos(_deg(rake)) + t * math.sin(_deg(rake))).normalized()
+    axis = (axis * math.cos(_deg(up)) + u * math.sin(_deg(up))).normalized()
+    lie = t - axis * t.dot(axis)
+    lie = lie.normalized() if lie.length > 1e-6 else t
+    base = p - n * (across * 0.8)
+    # A big horn round and smooth; a low point a few facets.
+    big = length > 0.08
+    rings = 6 if big else 2
+    pts, radii, cols = [], [], []
+    for k in range(rings + 1):
+        f = k / rings
+        pts.append(base + axis * (length * f) + t * (curve * length * f * f))
+        radii.append(across * max(0.05, (1.0 - f) ** 0.9))
+        col = sc.mix(base_colour, cp.get("spike", base_colour), sc.smoothstep(0.0, 0.45, f))
+        cols.append(sc.mix(col, cp.get("tip", col), sc.smoothstep(0.6, 1.0, f)))
+    sc.tube(body, pts, radii, cols, path.weights(s, loft.blend), around=10 if big else 6, close_tip=True,
+            flat=along / max(1e-6, across), up=lie)
 
 
 def _tusks(body, loft, path, spec):

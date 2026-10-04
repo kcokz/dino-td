@@ -1477,7 +1477,49 @@ const DINOS: Dictionary = {
 		"drops": {"food": 1, "bone": 1},
 		"drop_chance": {"food": 0.5, "bone": 0.5},
 		"size": Vector3(1.0, 0.6, 1.0),
-	}
+	},
+	# THE FRIGHTENED CHARGERS (ChargerDino; GAME-DESIGN 3.0 -- the player: "食草恐龙也可以进攻船舱因为受到惊吓"): plant-eaters
+	# the capsule's fall frightened, come with the raids to ram the strange thing that fell into their valley. Armoured
+	# (ARMOR: an arrow goes in a quarter of itself -- what crushes is the answer), the man no matter to them unless he
+	# strikes, and afraid of fire: into a fire's light -- a campfire's or a brazier's at night, a fire pot's burning
+	# ground, his torch -- and they turn tail and run. What they leave is a big animal's meat and bone.
+	#
+	# Desmatosuchus: an aetosaur of the Chinle, four and a half metres under rows of bony plates, a great horn out of
+	# each shoulder (tools/dino_species.py DESMATOSUCHUS) -- a metre high at the hips. Station 1's, from the second day.
+	"desmatosuchus": {
+		"hours": ["day", "dusk"],
+		"name": "DINO_DESMATOSUCHUS_NAME",
+		"hp": 12.0,
+		"speed": 2.4,
+		"damage": 1.5,
+		"attack_rate": 1.2,
+		"behaviour": "charger",
+		"armored": true,
+		"drops": {"food": 3, "bone": 2},
+		"size": Vector3(1.1, 1.01, 1.1),
+		# Its strides are drawn at its own paces (tools/dino_species.py: walk 0.8, the head-down trot of a charge 2.4
+		# m/s), not a raptor's: the animator plays them at these (ActorAnimator.own_gaits).
+		"gaits": {"walk": 0.8, "run": 2.4},
+		"voice": "desmatosuchus",
+	},
+	# Stegosaurus: seven metres of plated plant-eater, spikes on its tail (the herd's model on the Morrison's valley wall,
+	# tools/dino_species.py STEGOSAURUS) -- station 2's, from the third day. Tonnes of it: only a stone-weighted log
+	# shoves it (AMMO "moves_heavy").
+	"stegosaurus": {
+		"hours": ["day", "dusk"],
+		"name": "DINO_STEGOSAURUS_NAME",
+		"hp": 30.0,
+		"speed": 1.8,
+		"damage": 2.5,
+		"attack_rate": 1.5,
+		"behaviour": "charger",
+		"armored": true,
+		"heavy": true,
+		"drops": {"food": 6, "bone": 4},
+		"size": Vector3(2.0, 3.3, 2.0),
+		"gaits": {"walk": 0.6, "run": 1.2},
+		"voice": "stegosaurus",
+	},
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
 ## A habit, and the class that implements it. Species with the same habit share a
@@ -1491,6 +1533,8 @@ const DINO_BEHAVIOURS: Dictionary = {
 	"runner": "res://scripts/entities/RunnerDino.gd",
 	# On the wing: over the walls, at the man or the cabin, a swoop and away (station 2: Harpactognathus).
 	"flyer": "res://scripts/entities/FlyerDino.gd",
+	# A frightened plant-eater: at the cabin through what is in its way, and away from a fire (GAME-DESIGN 3.0).
+	"charger": "res://scripts/entities/ChargerDino.gd",
 }
 
 ## The script a species is built from. Anything without a declared habit gets the
@@ -1877,9 +1921,11 @@ const MAPS: Dictionary = {
 	# Who raids here, and how often each, by weight: the Late Triassic's (GAME-DESIGN 7.2).
 	"raiders": {"coelophysis": 1.0},
 	# And from a day on (GameState.day_number), who raids instead: the latest begun (WaveManager._raiders_now;
-	# v0.6 round six, the player: "物种到day 4也就一种，太单调" -- chosen "快跑的黄昏鳄"). From the third day, a
-	# runner for every three of the pack.
-	"raiders_by_day": [{"from_day": 3, "raiders": {"coelophysis": 3.0, "hesperosuchus": 1.0}}],
+	# v0.6 round six, the player: "物种到day 4也就一种，太单调" -- chosen "快跑的黄昏鳄"). From the second day a
+	# frightened Desmatosuchus for every five of the pack (v0.7, GAME-DESIGN 3.0: armoured -- what arrows hardly hurt,
+	# and fire turns); from the third, a runner for every three of the pack as well.
+	"raiders_by_day": [{"from_day": 2, "raiders": {"coelophysis": 5.0, "desmatosuchus": 1.0}},
+		{"from_day": 3, "raiders": {"coelophysis": 3.0, "hesperosuchus": 1.0, "desmatosuchus": 0.8}}],
 	# The ways a raid comes in by, as the days go (v0.6 round six: "恐龙每次都是从一个地方来进攻" -- chosen "更多来
 	# 袭方向"): the nest's, and from `from_day` a party in by each of `ways` as well -- a point of the compass,
 	# the way into the valley (`entries`) that lies most that way from the cabin. A raid is shared out among the
@@ -2162,8 +2208,11 @@ const MAPS: Dictionary = {
 			"fern_leaf": Color(0.36, 0.42, 0.20)},
 		"opening_stock": {"wood": 28},
 		"raiders": {"ornitholestes": 1.0},
-		# From the second day, one in four of a raid comes on the wing (FlyerDino).
-		"raiders_by_day": [{"from_day": 2, "raiders": {"ornitholestes": 3.0, "harpactognathus": 1.0}}],
+		# From the second day, one in four of a raid comes on the wing (FlyerDino); from the third, a frightened
+		# Stegosaurus with them now and then (ChargerDino, v0.7) -- armoured and heavy: a stone-weighted log, the
+		# catapult, a fire pot's burning ground.
+		"raiders_by_day": [{"from_day": 2, "raiders": {"ornitholestes": 3.0, "harpactognathus": 1.0}},
+			{"from_day": 3, "raiders": {"ornitholestes": 3.0, "harpactognathus": 1.0, "stegosaurus": 0.5}}],
 		"guards": "ornitholestes",
 		"minor_boss": "ceratosaurus",
 		"boss": "allosaurus",
@@ -2903,6 +2952,8 @@ const BARKS: Dictionary = {
 		"raid_seen": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
 		"raid_also": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
 		"raid_boss": {"count": 2, "chance": 1.0, "again": 0.0, "urgent": true},
+		# A frightened charger come onto the field (ChargerDino): what it is, and that fire turns it -- once a raid.
+		"charger": {"count": 2, "chance": 1.0, "again": 30.0, "urgent": true},
 		"raid_over": {"count": 4, "chance": 0.8, "again": 30.0},
 		"leader": {"count": 3, "chance": 1.0, "again": 60.0, "urgent": true},
 		"boss": {"count": 3, "chance": 1.0, "again": 60.0, "urgent": true},
@@ -3028,6 +3079,18 @@ const SOUNDS: Dictionary = {
 		"hesperosuchus_bite":  {"files": ["hesperosuchus_bite"], "db": -6.0, "pitch": 1.08, "class": "bite", "unit": 4.0},
 		"hesperosuchus_hurt":  {"files": ["hesperosuchus_hurt"], "db": -7.0, "pitch": 1.08, "class": "hurt", "unit": 4.0},
 		"hesperosuchus_death": {"files": ["hesperosuchus_death"], "db": -5.0, "pitch": 1.04, "class": "death", "unit": 6.0},
+		# The frightened chargers (ChargerDino; tools/build_sounds.gd): Desmatosuchus -- a plated plant-eater's deep
+		# snorts and a bellow -- and the Stegosaurus, bigger and lower; a ram is a thud, not a bite.
+		"desmatosuchus_call":  {"files": ["desmatosuchus_call_1", "desmatosuchus_call_2"], "db": -3.0, "pitch": 1.05, "class": "call", "unit": 10.0, "reach": 90.0},
+		"desmatosuchus_alert": {"files": ["desmatosuchus_snort"], "db": -2.0, "pitch": 1.05, "class": "alert", "unit": 8.0},
+		"desmatosuchus_bite":  {"files": ["desmatosuchus_ram"], "db": -1.0, "pitch": 1.06, "class": "bite", "unit": 8.0},
+		"desmatosuchus_hurt":  {"files": ["desmatosuchus_hurt"], "db": -3.0, "pitch": 1.05, "class": "hurt", "unit": 8.0},
+		"desmatosuchus_death": {"files": ["desmatosuchus_death"], "db": 0.0, "pitch": 1.03, "class": "death", "unit": 12.0},
+		"stegosaurus_call":  {"files": ["stegosaurus_call_1", "stegosaurus_call_2"], "db": 0.0, "pitch": 1.04, "class": "call", "unit": 16.0, "reach": 140.0},
+		"stegosaurus_alert": {"files": ["stegosaurus_snort"], "db": 0.0, "pitch": 1.04, "class": "alert", "unit": 12.0},
+		"stegosaurus_bite":  {"files": ["stegosaurus_ram"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 12.0},
+		"stegosaurus_hurt":  {"files": ["stegosaurus_hurt"], "db": -1.0, "pitch": 1.04, "class": "hurt", "unit": 12.0},
+		"stegosaurus_death": {"files": ["stegosaurus_death"], "db": 2.0, "pitch": 1.02, "class": "death", "unit": 20.0, "reach": 160.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
 		# THE LATE CRETACEOUS (a custom game's age), each a voice of its own (tools/build_sounds.gd) -- they
@@ -3887,6 +3950,12 @@ const VISUALS: Dictionary = {
 	# fitted to a height it came out five times as big. Built to its true size (tools/generate_dinos.py), it is drawn so.
 	"dino/harpactognathus": {"scene": "res://assets/models/dinos/harpactognathus.gltf", "fit": "none",
 		"placeholder": "raptor", "anchor": "feet", "color": "pterosaur", "material": "skin"},
+	# The frightened chargers (ChargerDino): Desmatosuchus, built at its true size (tools/dino_species.py), and the
+	# Morrison's Stegosaurus, the herd's model.
+	"dino/desmatosuchus":   {"scene": "res://assets/models/dinos/desmatosuchus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
+	"dino/stegosaurus":     {"scene": "res://assets/models/dinos/stegosaurus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
 	# An azhdarchid, stalking on all fours with its wings folded (the wing finger up along the arm, the membrane
 	# furled between them), its head up on a long neck, a crest flushed red.
 	"dino/pterosaur":       {"scene": "res://assets/models/dinos/pterosaur.gltf", "fit": "height",

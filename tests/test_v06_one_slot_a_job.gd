@@ -76,15 +76,19 @@ func test_01_the_menu_is_one_slot_a_job_each_of_wood_alone() -> void:
 func test_02_each_step_up_adds_one_material_and_none_is_made_of_three() -> void:
 	var steps: int = 0
 	for b_type in config_node.player_building_types():
-		assert_lte(config_node.BUILDINGS[b_type]["cost"].size(), 2, "%s is made of two materials at most" % b_type)
+		if config_node.BUILDABLE_TYPES.has(b_type):
+			assert_lte(config_node.BUILDINGS[b_type]["cost"].size(), 2, "%s is made of two materials at most" % b_type)
 		for target in config_node.upgrade_targets(String(b_type)):
 			var cost: Dictionary = config_node.upgrade_cost(String(b_type), String(target))
 			assert_eq(cost.size(), 1, "%s -> %s adds one material (%s)" % [b_type, target, cost])
 			if int(config_node.tower_level(String(target))) > int(config_node.tower_level(String(b_type))):
-				# A tower's bigger store: the same tower, holding more -- more racks of its wood.
+				# A tower's level up: the same tower, holding more and hitting harder -- its second level stone over its
+				# wood, its third bone (v0.7, GAME-DESIGN 3.0: bone only off what has been killed).
 				assert_eq(String(config_node.get_building_kind(String(target))), String(config_node.get_building_kind(String(b_type))),
 					"%s is a bigger store of the same tower as %s" % [target, b_type])
-				assert_true(cost.has("wood"), "a bigger store is more racks of wood (%s -> %s)" % [b_type, target])
+				var wants: String = "stone" if int(config_node.tower_level(String(target))) == 2 else "bone"
+				assert_true(cost.has(wants), "a tower's level %d is paid in %s (%s -> %s)" % [
+					int(config_node.tower_level(String(target))), wants, b_type, target])
 			else:
 				assert_false(cost.has("wood"), "and it is not more wood: wood is the body (%s -> %s)" % [b_type, target])
 			steps += 1

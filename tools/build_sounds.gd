@@ -397,6 +397,90 @@ func _s_placerias_call_3() -> PackedFloat32Array:
 	return _space(_grunts(2, 108.0, 0.34, 0.3), 0.1, [])
 
 # ==============================================================================
+# The frightened chargers (ChargerDino, v0.7): plated plant-eaters -- snorts through the nose, a lowing bellow, the
+# thud of a ram. Desmatosuchus, a metre high; the Stegosaurus, three, and an octave under it.
+# ==============================================================================
+
+const DESMATO_FORMANTS: Array = [[300.0, 4.0, 1.0], [820.0, 4.5, 0.45], [1900.0, 5.5, 0.18]]
+const STEGO_FORMANTS: Array = [[210.0, 3.5, 1.0], [600.0, 4.0, 0.5], [1400.0, 5.0, 0.2]]
+
+## A plant-eater's low: a nasal bellow on `f0`, rough and slow to swell, with its chest under it.
+func _low(dur: float, f0: float, formants: Array, rough: float) -> PackedFloat32Array:
+	var out := _voice({"dur": dur, "f0": [[0.0, f0 * 0.94], [0.35, f0 * 1.05], [1.0, f0 * 0.82]],
+		"amp": [[0.0, 0.0], [0.2, 1.0], [0.75, 0.85], [1.0, 0.0]], "formants": formants,
+		"rough": rough, "rough_am": [17.0, 0.5], "breath": 0.3, "tilt": 1600.0, "nasal": 0.55})
+	_mix(out, _tone(dur, [[0.0, f0 * 0.5], [1.0, f0 * 0.42]], [[0.0, 0.0], [0.3, 1.0], [0.75, 0.7], [1.0, 0.0]]), 0.0, 0.4)
+	return out
+
+## A snort: air blown hard through the nose, twice, the second shorter.
+func _snorts(low: float, high: float) -> PackedFloat32Array:
+	var out := _buf(0.75)
+	for i in 2:
+		_mix(out, _hiss(0.22 - 0.06 * i, [[0.0, high], [1.0, low]], 1.4, [[0.0, 0.0], [0.08, 1.0], [1.0, 0.0]]),
+			0.02 + 0.3 * i, 1.0 - 0.25 * i)
+	return out
+
+## A ram: a heavy body driven into something -- a thump, the knock of bone on wood or metal, a grunt with it.
+func _ram(low: float, formants: Array, f0: float) -> PackedFloat32Array:
+	var out := _modes(0.5, [[low, 0.16, 1.0], [low * 1.7, 0.1, 0.6], [low * 3.4, 0.05, 0.35], [low * 8.0, 0.02, 0.2]], 0.003)
+	_mix(out, _burst(0.04, 1600.0, 1.4), 0.0, 0.5)
+	_mix(out, _voice({"dur": 0.2, "f0": [[0.0, f0 * 1.2], [1.0, f0]], "amp": [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]],
+		"formants": formants, "rough": 0.7, "breath": 0.4, "tilt": 1500.0}), 0.02, 0.45)
+	return out
+
+func _s_desmatosuchus_call_1() -> PackedFloat32Array:
+	return _space(_low(1.1, 118.0, DESMATO_FORMANTS, 0.45), 0.1, [])
+
+func _s_desmatosuchus_call_2() -> PackedFloat32Array:
+	# A grunt and a low: "hm -- hmmmh".
+	var out := _buf(1.4)
+	_mix(out, _low(0.3, 132.0, DESMATO_FORMANTS, 0.5), 0.02, 0.8)
+	_mix(out, _low(0.8, 112.0, DESMATO_FORMANTS, 0.45), 0.42, 1.0)
+	return _space(out, 0.1, [])
+
+func _s_desmatosuchus_snort() -> PackedFloat32Array:
+	# Fright: it blows hard through its nose and turns.
+	return _snorts(900.0, 1700.0)
+
+func _s_desmatosuchus_ram() -> PackedFloat32Array:
+	return _ram(96.0, DESMATO_FORMANTS, 150.0)
+
+func _s_desmatosuchus_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.5, "f0": [[0.0, 190.0], [0.25, 205.0], [1.0, 130.0]],
+		"amp": [[0.0, 0.0], [0.07, 1.0], [0.6, 0.7], [1.0, 0.0]], "formants": DESMATO_FORMANTS,
+		"rough": 0.7, "rough_am": [21.0, 0.5], "breath": 0.4, "tilt": 2000.0, "nasal": 0.4})
+
+func _s_desmatosuchus_death() -> PackedFloat32Array:
+	var out := _low(1.8, 120.0, DESMATO_FORMANTS, 0.6)
+	_mix(out, _hiss(0.9, [[0.0, 900.0], [1.0, 500.0]], 1.3, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.0, 0.35)
+	return _space(out, 0.12, [[0.4, 0.15]])
+
+func _s_stegosaurus_call_1() -> PackedFloat32Array:
+	return _space(_low(1.7, 66.0, STEGO_FORMANTS, 0.55), 0.14, [[0.45, 0.12]])
+
+func _s_stegosaurus_call_2() -> PackedFloat32Array:
+	var out := _buf(2.0)
+	_mix(out, _low(0.5, 74.0, STEGO_FORMANTS, 0.6), 0.02, 0.8)
+	_mix(out, _low(1.2, 62.0, STEGO_FORMANTS, 0.55), 0.6, 1.0)
+	return _space(out, 0.14, [[0.45, 0.12]])
+
+func _s_stegosaurus_snort() -> PackedFloat32Array:
+	return _snorts(600.0, 1200.0)
+
+func _s_stegosaurus_ram() -> PackedFloat32Array:
+	return _ram(62.0, STEGO_FORMANTS, 90.0)
+
+func _s_stegosaurus_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.8, "f0": [[0.0, 110.0], [0.25, 118.0], [1.0, 74.0]],
+		"amp": [[0.0, 0.0], [0.07, 1.0], [0.6, 0.75], [1.0, 0.0]], "formants": STEGO_FORMANTS,
+		"rough": 0.75, "rough_am": [19.0, 0.5], "breath": 0.4, "tilt": 1700.0, "nasal": 0.4})
+
+func _s_stegosaurus_death() -> PackedFloat32Array:
+	var out := _low(2.6, 70.0, STEGO_FORMANTS, 0.7)
+	_mix(out, _hiss(1.2, [[0.0, 700.0], [1.0, 400.0]], 1.3, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.4, 0.35)
+	return _space(out, 0.18, [[0.45, 0.2], [0.9, 0.1]])
+
+# ==============================================================================
 # Velociraptor: a feathered dromaeosaur -- a rattling chatter, a goose's honk, a hiss into a screech
 # ==============================================================================
 

@@ -133,6 +133,9 @@ func _run(name: String) -> void:
 			# Station 2's (the Late Jurassic, MAPS.morrison): the same lineup, by the man.
 			await _scenario_cast([["ornitholestes", -1.2], ["harpactognathus", 1.4], ["ceratosaurus", 4.6],
 				["allosaurus", 11.0]])
+		"chargers":
+			# The frightened plant-eaters (v0.7, ChargerDino) by the man and a coelophysis: Desmatosuchus, the Stegosaurus.
+			await _scenario_cast([["coelophysis", -1.2], ["desmatosuchus", 2.0], ["stegosaurus", 7.5]])
 		"gaits":
 			await _scenario_gaits()
 		"start":
@@ -2125,7 +2128,7 @@ func _scenario_gaits() -> void:
 	cam.current = true
 	var dino_script := load("res://scripts/entities/Dino.gd")
 	var species_list: Array = ["coelophysis", "coelophysis_alpha", "hesperosuchus", "phytosaur", "postosuchus",
-		"placerias", "raptor", "raptor_alpha", "big_theropod", "pterosaur"]
+		"placerias", "raptor", "raptor_alpha", "big_theropod", "pterosaur", "desmatosuchus", "stegosaurus"]
 	for species in species_list:
 		if not _only.is_empty() and not _only.has(String(species)):
 			continue

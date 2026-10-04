@@ -57,10 +57,16 @@ func test_01_no_building_waits_on_anything_but_its_materials() -> void:
 
 func test_02_a_building_is_two_materials_at_most() -> void:
 	# One material says which tier it is, and at most one more is a working part: a
-	# stone plinth with bone bolt heads is stone and bone (GAME-DESIGN 4.1 rule 2).
-	for b_type in config_node.BUILDINGS:
+	# stone plinth with bone bolt heads is stone and bone (GAME-DESIGN 4.1 rule 2). What is paid at once,
+	# that is: a building off the menu, and each step up where it stands -- a tower's second level is
+	# stone over its wood, its third bone over that (v0.7, GAME-DESIGN 3.0), one material a step.
+	for b_type in config_node.BUILDABLE_TYPES:
 		var cost: Dictionary = config_node.BUILDINGS[b_type].get("cost", {})
 		assert_lte(cost.size(), 2, "%s is built of two materials at most" % b_type)
+	for b_type in config_node.BUILDINGS:
+		for to in config_node.upgrade_targets(String(b_type)):
+			assert_lte(config_node.upgrade_cost(String(b_type), String(to)).size(), 2,
+				"%s -> %s is paid in two materials at most" % [b_type, to])
 
 func test_02b_a_rock_he_cannot_cut_says_what_it_takes() -> void:
 	# Right-clicking stone before the pick: the tool, the bench it is made at and its price,
