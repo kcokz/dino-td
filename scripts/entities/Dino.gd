@@ -1604,7 +1604,12 @@ func _is_shooter(node: Variant) -> bool:
 	var cfg = _get_config()
 	if cfg == null or not cfg.has_method("get_building_kind"):
 		return false
-	return String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["bow", "drop", "thrower"])
+	if not (String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["bow", "drop", "thrower"])):
+		return false
+	# And only with something in it to shoot (AmmoTower.has_ammo): an empty tower shoots nothing, and is no more to it
+	# than a fence -- bitten if it is in the way, else the cabin (the player, 2026-10-04: "不攻击的建筑应该没用，但我的
+	# 滚木防御会吸引仇恨（没弹药）"; GAME-DESIGN 2, "先打谁").
+	return not node.has_method("has_ammo") or bool(node.has_ammo())
 
 ## Where it is going, as opposed to what it has stopped for: the current waypoint, or the cabin.
 func _journey_goal() -> Vector3:

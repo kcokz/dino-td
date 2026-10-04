@@ -138,7 +138,12 @@ func test_06_a_pack_dinosaur_breaks_off_for_a_tower() -> void:
 	var wall = _spawn(wall_script, Vector3(1.0, 0.0, 0.0))
 	await wait_frames(1)
 
-	assert_true(dino._is_shooter(tower), "A bow tower is what shoots at it")
+	# Empty, it shoots nothing: no more to it than a fence (v0.7: "不攻击的建筑应该没用").
+	assert_false(dino._is_shooter(tower), "An empty bow tower is not what shoots at it")
+	stock_everything()
+	tower.load_from_stock()
+	assert_true(tower.has_ammo(), "(loaded now)")
+	assert_true(dino._is_shooter(tower), "A loaded bow tower is what shoots at it")
 	assert_eq(dino._find_threat_priority_target(), tower,
 		"The thing shooting at it is what it wants, even with a fence closer")
 
