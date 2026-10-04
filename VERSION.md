@@ -1604,6 +1604,12 @@
   - 设置页（`PauseMenu`）："声音"一栏，每条总线一行——名字、滑条（步长 `AUDIO.step`）、百分数；拖动马上听得到。滑条的样子在 `UiTheme`（和滚动条一样的细槽，设到哪儿就用强调色填到哪儿）。
   - 测试：新的 `test_v07_the_sound`（总线、每个声音走哪条、线性和静音、设置页的滑条、下次打开还在）；它动设置文件，跑完原样放回。
 
+- **v0.7 第五批：塔的弹药卡片重做，它管哪片地都是蓝色（玩家，2026-10-03："弹夹的界面需要更清晰和简洁，现在是一大横条的button，可以改成图片，小方块，类似人的能力"；"弹夹，装填是新系统，不能做的这么粗糙"；"能攻击的范围应该显示蓝色而不是绿色"；设计书 6.0）**：
+  - **弹夹**（`OptionPanel._add_magazine`、`_show_magazine`）：凹槽里装着的弹药图标、名字、装了多少的条和"12 / 20"，打一发跟着变；空了凹槽空、写"空的"、数字红。塔卡片上面那行不再重复"木箭：12 / 20"（`AmmoTower._panel_status` 装着东西时不说话），只在空了时说怎么办。
+  - **弹药方块**（`UiKit.slot_button`，主题 `SlotButton`、`SlotNumberLabel`/`SlotShortNumberLabel`）：每种一块，图标、右下角库存数（0 是红的）、选中的镶亮边；悬停提示名字、库存和它干什么（`TIP_AMMO_SLOT` + `UiKit.ammo_detail`）。**装填**也是方块，放在最右：人在路上时亮（`_going_to_load`）、装不了时暗，提示说为什么（`TIP_LOAD*`）。按键的数字照旧标在方块左上角（`UiKit.keycap` 认得 `SlotButton`）。
+  - **蓝色**（`Config.FEEDBACK.reach_color`、`reach_alpha`）：放塔时滚道、落点不再被染成"能放"的绿色（`Main._tint_ghost` 原来没排除滚道本身）；选中的塔：弩塔、诱饵台的圈是蓝的（`AmmoTower._get_range_indicator_color`），滚木塔的滚道、投石塔的落点选中时也显示出来（`AmmoTower.set_range_visible`、`LogTower._show_zone`、`Catapult._show_zone`）。旧的 `TRAPS.lane_color`（黄）去掉。
+  - 机器人新场景 `ammocard`：空的弩塔、派人装填、装好、滚木塔和投石塔的卡片和蓝色的地。测试：`test_v07_ammunition` test_11 改查方块和弹夹；`test_v07_the_towers` test_14 加"放塔时是蓝的"、新的 test_18（选中时蓝的）。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。

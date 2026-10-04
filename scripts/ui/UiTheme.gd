@@ -501,6 +501,27 @@ static func build() -> Theme:
 		t.set_color(c, "TileButton", Color.WHITE)
 	t.set_color("icon_disabled_color", "TileButton", tint("icon_off"))
 
+	# A square to choose among (a tower's ammunition, UiKit.slot_button), as his abilities are shown (InsetPanel): the
+	# socket, its thing's icon filling it in its own colours, brighter under the cursor; the one chosen lit round its
+	# rim in the accent -- a frame, not a shade, so it reads at a glance; one that cannot be pressed dulled, its icon
+	# greyed down, as a command in the corner is.
+	t.set_type_variation("SlotButton", "Button")
+	var chosen := _box(Color(color("bg"), 0.92), color("accent"), bw * 2, radius("s"), space("s"), space("s"))
+	_buttons(t, "SlotButton",
+		surface("socket", "plain", space("s"), space("s")), surface("socket", "hover", space("s"), space("s")),
+		chosen, surface("socket", "off", space("s"), space("s")),
+		color("text"), color("text"), color("accent"), color("text_faint"))
+	t.set_constant("icon_max_width", "SlotButton", icon_size("xl"))
+	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
+		t.set_color(c, "SlotButton", Color.WHITE)
+	t.set_color("icon_disabled_color", "SlotButton", tint("icon_off"))
+	# The figure in a square's corner, over its icon: bone on a rim of the dark, so it reads on any icon.
+	# Red where there is none of it -- in the stock, or in a tower's magazine.
+	for spec in [["SlotNumberLabel", color("text")], ["SlotShortNumberLabel", color("danger_text")]]:
+		_label(t, String(spec[0]), font("bold", true), "small", spec[1])
+		t.set_constant("outline_size", String(spec[0]), space("xs"))
+		t.set_color("font_outline_color", String(spec[0]), Color(color("bg"), 0.95))
+
 	# --- Dropdowns --------------------------------------------------------------
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		var b: StyleBox = t.get_stylebox(state, "Button")

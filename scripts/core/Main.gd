@@ -2633,7 +2633,7 @@ func _preview_ring_color(type_id: String) -> Color:
 			if cfg.RESOURCE_NODES.has(res_id):
 				return cfg.RESOURCE_NODES[res_id].get("color", Color(0.4, 0.8, 0.4))
 	if b.has("range"):
-		return Color(0.35, 0.65, 1.0)
+		return _reach_colour()
 	return Color(0.4, 0.8, 0.4)
 
 func _meshes_in(node: Node) -> Array[MeshInstance3D]:
@@ -2699,13 +2699,20 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	else:
 		_restore_neighbours()
 
-	# Tint every piece of the ghost, not just the first: a body is whatever
-	# Building.make_body() returns, and that will be a loaded scene once there is art. The lane
-	# keeps its own colour: it is where the wire goes, whether or not the trap can.
+	_tint_ghost(ok)
+
+## Tints every piece of the ghost green where it would go down and red where not (_ghost_colour), not just the first:
+## a body is whatever Building.make_body() returns, a loaded scene once there is art. What it would act on keeps its
+## own colour, the reach's (_reach_colour), whether or not it can go down: its ring, and its lane or patch -- which
+## is the mesh itself, not something holding one, and was tinted the ghost's green with the rest (the player:
+## "能攻击的范围应该显示蓝色而不是绿色").
+func _tint_ghost(ok: bool) -> void:
+	if build_preview == null or not is_instance_valid(build_preview):
+		return
 	var tint: Color = _ghost_colour(ok)
 	var lanes: Node = build_preview.find_child("LanePreview", false, false)
 	for mi in _meshes_in(build_preview):
-		if mi != build_preview_ring and (lanes == null or not lanes.is_ancestor_of(mi)):
+		if mi != build_preview_ring and mi != lanes and (lanes == null or not lanes.is_ancestor_of(mi)):
 			mi.material_override = _make_preview_material(tint)
 
 ## Lays the ghost's zone out the way the next tower will face from `snap`: the log tower's lane from its front
@@ -2764,11 +2771,15 @@ func _is_wall_kind(type_id: String) -> bool:
 func _turns(type_id: String) -> bool:
 	return _faces(type_id) or _is_wall_kind(type_id)
 
+## What a tower acts on, wherever it is shown (Config.FEEDBACK.reach_color): the lane and the patch under a ghost, as its ring.
 func _lane_colour() -> Color:
+	return _reach_colour()
+
+func _reach_colour() -> Color:
 	var cfg = _get_config()
-	if cfg and "TRAPS" in cfg:
-		return cfg.TRAPS.get("lane_color", Color(0.95, 0.8, 0.35))
-	return Color(0.95, 0.8, 0.35)
+	if cfg and "FEEDBACK" in cfg:
+		return cfg.FEEDBACK.get("reach_color", Color(0.35, 0.65, 1.0))
+	return Color(0.35, 0.65, 1.0)
 
 
 

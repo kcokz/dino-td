@@ -28,6 +28,16 @@ func zone_centre() -> Vector3:
 func zone_radius() -> float:
 	return _number("zone_radius", 2.0)
 
+## Its patch, picked (AmmoTower.set_range_visible): out where it throws.
+func _show_zone() -> bool:
+	var disc := CylinderMesh.new()
+	disc.top_radius = zone_radius()
+	disc.bottom_radius = zone_radius()
+	disc.height = 0.04
+	var zone: MeshInstance3D = _zone_mesh(disc)
+	zone.global_position = zone_centre() + Vector3(0.0, 0.05, 0.0)
+	return true
+
 ## It sees to the far side of its patch.
 func sight_radius() -> float:
 	return _number("zone_distance", 9.0) + zone_radius()

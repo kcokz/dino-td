@@ -449,6 +449,14 @@ func test_14_r_turns_a_facing_tower_in_hand_and_its_ghost_lays_out_its_ground() 
 	if patch != null:
 		assert_almost_eq(Vector2(patch.position.x, patch.position.z).length(), float(_row("catapult")["zone_distance"]), 0.001,
 			"its distance out")
+		# The ground it acts on in the reach's blue, not the ghost's go-green (the player: "能攻击的范围应该显示蓝色而不是绿色").
+		main._tint_ghost(true)
+		var reach: Color = config_node.FEEDBACK["reach_color"]
+		var lane_mat := patch.material_override as StandardMaterial3D
+		assert_true(Color(lane_mat.albedo_color, 1.0).is_equal_approx(Color(reach, 1.0)), "its patch in blue, where it can go down")
+		main._tint_ghost(false)
+		lane_mat = patch.material_override as StandardMaterial3D
+		assert_true(Color(lane_mat.albedo_color, 1.0).is_equal_approx(Color(reach, 1.0)), "and where it cannot")
 
 func test_15_a_bigger_store_keeps_its_facing() -> void:
 	var f: Array = await _field()
@@ -490,6 +498,38 @@ func test_17_he_does_not_set_off_his_own_log_tower() -> void:
 	await wait_physics_frames(6)
 	assert_false(logs.someone_in_lane(), "he is not what the lane waits for")
 	assert_eq(logs.uses_left, before, "no log let go for him")
+
+## Picked, a tower shows what it acts on in the reach's blue (Config.FEEDBACK.reach_color; the player: "能攻击的范围应该显示蓝色
+## 而不是绿色"): the bow tower its ring, the log tower its lane, the catapult its patch -- not only under the ghost.
+func test_18_picked_it_shows_what_it_acts_on_in_blue() -> void:
+	var f: Array = await _field()
+	var reach: Color = config_node.FEEDBACK["reach_color"]
+	var bow = await _tower(f[1], "bow_tower", Vector2i(-8, 0), 0, "arrow_wood")
+	var logs = await _tower(f[1], "log_tower", Vector2i(0, 0), 1, "log_round")
+	var cat = await _tower(f[1], "catapult", Vector2i(0, 8), 0, "shot_stone")
+	for t in [bow, logs, cat]:
+		t.set_range_visible(true)
+	assert_true(bow.range_indicator.visible, "the bow tower its ring")
+	var ring_mat := bow.range_indicator.material_override as StandardMaterial3D
+	assert_true(Color(ring_mat.albedo_color, 1.0).is_equal_approx(Color(reach, 1.0)), "in blue")
+	for t in [logs, cat]:
+		var zone := t.get_node_or_null("ZoneShown/Zone") as MeshInstance3D
+		assert_not_null(zone, "%s lays out the ground it acts on" % t.building_type)
+		if zone == null:
+			continue
+		assert_true(zone.is_visible_in_tree(), "shown while it is picked")
+		var mat := zone.material_override as StandardMaterial3D
+		assert_true(Color(mat.albedo_color, 1.0).is_equal_approx(Color(reach, 1.0)), "in blue")
+	var lane := logs.get_node("ZoneShown/Zone") as MeshInstance3D
+	var along: Vector3 = lane.global_position - logs.lane_origin()
+	assert_gt(along.dot(logs.forward()), 0.0, "the lane out ahead of the log tower, the way it faces")
+	assert_almost_eq((lane.mesh as PlaneMesh).size.x, float(logs.lane_width()), 0.001, "as wide as a log is long")
+	var spot := cat.get_node("ZoneShown/Zone") as MeshInstance3D
+	assert_almost_eq(Vector2(spot.global_position.x - cat.zone_centre().x, spot.global_position.z - cat.zone_centre().z).length(),
+		0.0, 0.01, "the catapult's patch where it throws")
+	for t in [bow, logs, cat]:
+		t.set_range_visible(false)
+	assert_false(logs.get_node("ZoneShown").visible, "and gone when it is not")
 
 func test_11_what_does_not_eat_meat_is_not_drawn() -> void:
 	for species in config_node.DINOS:

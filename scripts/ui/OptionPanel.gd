@@ -477,6 +477,8 @@ func _update_status_display() -> void:
 		return
 	var info: Dictionary = selected_unit.get_display_info() if selected_unit.has_method("get_display_info") else {}
 	_show_vitals(info)
+	if current_menu != "build" and selected_unit.has_method("accepts"):
+		_show_magazine(selected_unit)
 	if current_menu != "default" or _hover_detail_shown:
 		return # this line is a menu's -- the hovered entry's detail, or what to pick -- not a unit's status
 	if title_label:
@@ -1168,25 +1170,44 @@ func _building_icon(b_type: String) -> Texture2D:
 		tex = UiTheme.icon(b_type.substr(0, cut))
 	return tex
 
-## The name the tower's ammunition cards stand under (_add_ammo_choice).
+## The name the tower's ammunition squares stand under (_add_ammo_choice).
 const AMMO_KINDS_NAME := &"AmmoKinds"
-## What the tower shown was showing when its commands were made: what it is set to, whether it wants loading, and
-## the stock of each of its kinds (_update_status_display makes them again when that has changed).
+## What the tower shown was showing when its commands were made: what it is set to, whether it has any in it, whether
+## it wants loading and he is on his way to it, and the stock of each of its kinds (_update_status_display makes them
+## again when that has changed).
 var _tower_offer: Array = []
+## The magazine on the card (_add_ammo_choice): its parts, kept to be kept up to date as it shoots (_show_magazine).
+var _magazine: Dictionary = {}
 
 func _ammo_offer_of(unit: Node) -> Array:
 	if unit == null or not is_instance_valid(unit) or not unit.has_method("accepts"):
 		return []
 	var gs = _get_game_state()
-	var out: Array = [String(unit.ammo_type), bool(unit.wants_load()), bool(unit.is_constructed)]
+	var out: Array = [String(unit.ammo_type), bool(unit.has_ammo()), bool(unit.wants_load()), bool(unit.is_constructed),
+		_going_to_load(unit)]
 	for id in unit.accepts():
 		out.append(int(gs.resources.get(id, 0)) if gs else 0)
 	return out
 
-## What a tower is loaded with, on its card (AmmoTower; GAME-DESIGN 6.0): under "Ammunition", a card for each kind it
-## takes that the run can come by -- the one it is set to pressed in, each with how much of it the stock holds --
-## and Load, which sends him to fill it from the stock. Choosing a kind sets it to that (what was in it of another
-## goes back to the stock) and sends him to load it, when there is some.
+## Whether he is on his way to load `tower` (Hero.order_load: the tower is what he is sent to, and it wants loading).
+func _going_to_load(tower: Node) -> bool:
+	var hero = _get_hero()
+	return hero != null and is_instance_valid(hero) and "target_building" in hero and hero.target_building == tower \
+		and bool(tower.wants_load())
+
+## WHAT A TOWER IS LOADED WITH, on its card (AmmoTower; GAME-DESIGN 6.0), as his abilities are shown -- squares, not a
+## list of long buttons (2026-10-03, the player: "弹夹的界面需要更清晰和简洁，现在是一大横条的button，可以改成图片，小方块，类似
+## 人的能力"; "弹夹，装填是新系统，不能做的这么粗糙"). Under "Ammunition":
+##   THE MAGAZINE -- a socket with what is in it, its name beside it, and under the name a bar of how full it is with
+##     "12 / 20" at its end. Empty, the socket is bare, it says so in the danger colour, and the figure is red: empty,
+##     a tower does nothing.
+##   A SQUARE FOR EACH KIND it takes that the run can come by: its icon, how many the stock holds in its corner, the one
+##     it is set to lit round its rim. Choosing one sets it to that (what was in it of another goes back to the stock)
+##     and sends him to load it, when there is some.
+##   LOAD, last, set apart: the reload mark; it sends him to fill it from the stock -- lit while he is on his way, dull
+##     when there is nothing to load (full, or none in the stock), and its tooltip says which. He loads a tower he walks
+##     past anyway (Hero._load_in_passing): Load is for one he is not going past.
+## A square says what it is and does in its tooltip, and on the card's line under the bars while the cursor is on it.
 func _add_ammo_choice(tower: Node) -> void:
 	var cfg = _get_config()
 	var gs = _get_game_state()
@@ -1197,41 +1218,123 @@ func _add_ammo_choice(tower: Node) -> void:
 	heading.theme_type_variation = &"MutedLabel"
 	heading.text = tr("CARD_AMMO")
 	button_container.add_child(heading)
-	# One to a row: each says how much of it the stock holds, and two to a row cut that off.
-	var kinds := GridContainer.new()
-	kinds.name = AMMO_KINDS_NAME
-	kinds.columns = 1
-	button_container.add_child(kinds)
+	_add_magazine(tower)
+	var row := HBoxContainer.new()
+	row.name = AMMO_KINDS_NAME
+	row.add_theme_constant_override("separation", UiTheme.space("xs"))
+	button_container.add_child(row)
 	var set_to: String = String(tower.ammo_type) if String(tower.ammo_type) != "" else String(tower.kind_to_load())
 	for kind in tower.accepts():
 		var id: String = String(kind)
 		if not _ammo_known(id):
 			continue
 		var stock: int = int(gs.resources.get(id, 0)) if gs else 0
-		var label: String = tr("CARD_AMMO_KIND") % [tr(String(cfg.AMMO.get(id, {}).get("name", id))), stock]
-		var btn := UiKit.card_button(label, UiTheme.icon(id), func():
+		var tip: String = tr("TIP_AMMO_SLOT") % [tr(String(cfg.AMMO.get(id, {}).get("name", id))), stock] + "\n" + UiKit.ammo_detail(id)
+		var btn := UiKit.slot_button(UiTheme.icon(id), func():
 			if not is_instance_valid(tower) or not tower.set_ammo(id):
 				return
 			var hero = _get_hero()
 			if tower.wants_load() and hero and is_instance_valid(hero) and hero.has_method("order_load"):
 				hero.order_load(tower)
 			_refresh_ui()
-		)
+		, tip, str(stock))
 		btn.name = "Ammo_%s" % id
 		btn.toggle_mode = true
 		btn.set_pressed_no_signal(id == set_to)
-		kinds.add_child(btn)
+		# None of it in the stock: its figure in the danger colour -- choosing it is still allowed (it is what to load
+		# when some is made), but there is nothing to load of it now.
+		if stock <= 0:
+			(btn.get_node("Figure") as Label).theme_type_variation = &"SlotShortNumberLabel"
+		row.add_child(btn)
 		btn.mouse_entered.connect(func(): _show_ammo_detail(id))
 		btn.focus_entered.connect(func(): _show_ammo_detail(id))
 		btn.mouse_exited.connect(_clear_craft_detail)
-	var load_btn := _create_action_button(tr("CMD_LOAD"), func():
+	var gap := Control.new()
+	gap.name = "Gap"
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(gap)
+	var going: bool = _going_to_load(tower)
+	var load_btn := UiKit.slot_button(UiTheme.icon("reload"), func():
 		var hero = _get_hero()
 		if is_instance_valid(tower) and hero and is_instance_valid(hero) and hero.has_method("order_load"):
 			hero.order_load(tower)
 			action_triggered.emit("load", tower)
-	, "reload")
+			_refresh_ui()
+	, _load_tip(tower, going))
 	load_btn.name = "LoadCommand"
+	load_btn.toggle_mode = true
+	load_btn.set_pressed_no_signal(going)
 	load_btn.disabled = not tower.wants_load()
+	row.add_child(load_btn)
+
+## What Load says: what it does -- or that he is on his way, or why there is nothing to do (full; none in the stock).
+func _load_tip(tower: Node, going: bool) -> String:
+	if going:
+		return tr("TIP_LOAD_GOING")
+	if tower.wants_load():
+		return tr("TIP_LOAD")
+	if int(tower.room()) <= 0:
+		return tr("TIP_LOAD_FULL")
+	return tr("TIP_LOAD_NONE")
+
+## The magazine (_add_ammo_choice): a socket with what is in it -- or its bare mark -- and beside it its name over a bar
+## of how full it is, the figure at the bar's end.
+func _add_magazine(tower: Node) -> void:
+	var mag := HBoxContainer.new()
+	mag.name = "Magazine"
+	button_container.add_child(mag)
+	var chamber := PanelContainer.new()
+	chamber.name = "Chamber"
+	chamber.theme_type_variation = &"InsetPanel"
+	chamber.mouse_filter = Control.MOUSE_FILTER_PASS
+	mag.add_child(chamber)
+	if bool(tower.has_ammo()):
+		chamber.add_child(UiKit.icon_rect(String(tower.ammo_type), UiTheme.icon_size("xl"), "Icon"))
+	else:
+		# Not a black hole: the gilt lozenge, faint, as an empty ability slot keeps its mark (_show_abilities).
+		var blank := TextureRect.new()
+		blank.name = "Mark"
+		blank.texture = UiTheme.surface_texture("ornament")
+		blank.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		blank.custom_minimum_size = Vector2.ONE * UiTheme.icon_size("xl")
+		blank.modulate = Color(1.0, 1.0, 1.0, UiTheme.number("empty_mark_alpha"))
+		blank.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chamber.add_child(blank)
+	var col := VBoxContainer.new()
+	col.name = "Fill"
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", UiTheme.space("xs"))
+	mag.add_child(col)
+	var loaded := Label.new()
+	loaded.name = "Loaded"
+	loaded.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	col.add_child(loaded)
+	var parts: Array = UiKit.bar_row("Rounds", &"BeaconBar")
+	col.add_child(parts[0])
+	_magazine = {"loaded": loaded, "bar": parts[1], "figure": parts[2]}
+	_show_magazine(tower)
+
+## The magazine as it is now: what is in it, and how full -- kept up as it shoots (_update_status_display).
+func _show_magazine(tower: Node) -> void:
+	if _magazine.is_empty() or not is_instance_valid(_magazine["bar"]) or not is_instance_valid(tower):
+		return
+	var cfg = _get_config()
+	var rounds: int = int(tower.rounds())
+	var cap: int = maxi(1, int(tower.capacity()))
+	var full: bool = rounds > 0
+	(_magazine["bar"] as ProgressBar).value = float(rounds) / float(cap)
+	var figure := _magazine["figure"] as Label
+	figure.text = UiKit.fraction_text(rounds, cap)
+	figure.theme_type_variation = &"SmallNumberLabel" if full else &"ShortNumberLabel"
+	var loaded := _magazine["loaded"] as Label
+	if full:
+		loaded.text = tr(String(cfg.AMMO.get(String(tower.ammo_type), {}).get("name", tower.ammo_type))) if cfg else ""
+		loaded.theme_type_variation = &""
+	else:
+		loaded.text = tr("CARD_MAGAZINE_EMPTY")
+		loaded.theme_type_variation = &"ShortNumberLabel"
 
 ## Whether the run can come by `ammo_id`: it is in the stock or has been, or what it is made of has turned up.
 func _ammo_known(ammo_id: String) -> bool:

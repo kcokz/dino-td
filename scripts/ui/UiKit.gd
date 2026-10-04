@@ -149,6 +149,40 @@ static func command_button(text: String, icon: Texture2D, callback: Callable, to
 		btn.add_child(count)
 	return btn
 
+## A square to choose among (a tower's ammunition, OptionPanel), as his abilities are shown: a socket with the thing's
+## icon filling it, a figure in its corner (how many of it there are), what it is in its tooltip -- pressed in, lit
+## round its rim, when it is the one chosen (SlotButton). As big as the icon at "xl" and the socket's rim round it.
+static func slot_button(icon: Texture2D, callback: Callable, tooltip: String = "", figure: String = "") -> Button:
+	var btn := Button.new()
+	btn.theme_type_variation = &"SlotButton"
+	btn.icon = icon
+	btn.expand_icon = true
+	btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	var side: float = float(slot_side())
+	btn.custom_minimum_size = Vector2(side, side)
+	btn.tooltip_text = tooltip
+	btn.pressed.connect(callback)
+	if figure != "":
+		var count := Label.new()
+		count.name = "Figure"
+		count.theme_type_variation = &"SlotNumberLabel"
+		count.text = figure
+		count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		count.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		count.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		count.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		count.offset_right = -float(UiTheme.space("xs"))
+		count.offset_left = count.offset_right
+		count.offset_bottom = 0.0
+		count.offset_top = 0.0
+		btn.add_child(count)
+	return btn
+
+## A slot's side (slot_button): the icon at "xl" and the socket's rim round it.
+static func slot_side() -> int:
+	return UiTheme.icon_size("xl") + 2 * UiTheme.space("s")
+
 ## Appears rather than blinks on: a quick fade and a little growth (UI-POLISH T10, T14).
 static func pop_in(node: Control) -> void:
 	if node == null or not node.is_inside_tree():
@@ -210,7 +244,7 @@ static func keycap(btn: Button, key_text: String) -> Label:
 	var inset: Vector2i = UiTheme.card_inset()
 	var row: Control = btn.get_node_or_null("PriceRow") as Control
 	match btn.theme_type_variation:
-		&"TileButton":
+		&"TileButton", &"SlotButton":
 			cap.set_anchors_preset(Control.PRESET_TOP_LEFT)
 			cap.grow_horizontal = Control.GROW_DIRECTION_END
 			cap.grow_vertical = Control.GROW_DIRECTION_END

@@ -193,6 +193,54 @@ func _towers(key: String, fallback: Variant) -> Variant:
 	var cfg = _get_config()
 	return cfg.TOWERS.get(key, fallback) if (cfg and "TOWERS" in cfg) else fallback
 
+# ==============================================================================
+# What it acts on, shown while it is picked
+# ==============================================================================
+
+## Its ring (Building's coverage ring: the bow tower's reach, the bait rack's) in the colour of what a tower acts on
+## (Config.FEEDBACK.reach_color), not the brown its placeholder was drawn in -- over the grass that read green.
+func _get_range_indicator_color() -> Color:
+	var cfg = _get_config()
+	var ui: Dictionary = cfg.UI if (cfg and "UI" in cfg) else {}
+	var c: Color = ui.get("reach_color", Color(0.35, 0.65, 1.0))
+	return Color(c.r, c.g, c.b, float(ui.get("reach_alpha", 0.22)))
+
+## Picked, it shows what it acts on: its ring (Building), and -- a tower that acts ahead of it -- the ground it acts
+## on there (_show_zone): the log tower's lane, the catapult's patch. They were shown only under the ghost.
+func set_range_visible(p_visible: bool) -> void:
+	super.set_range_visible(p_visible)
+	if not p_visible:
+		if _zone_holder != null and is_instance_valid(_zone_holder):
+			_zone_holder.visible = false
+		return
+	if is_constructed and _show_zone():
+		_zone_holder.visible = true
+
+## Lays out the ground it acts on ahead of it (`_zone_mesh`); false for a tower that has none -- its ring is it.
+func _show_zone() -> bool:
+	return false
+
+## A mesh lying on the ground in the reach colour, held clear of the building's own meshes (Building._body_meshes:
+## what fades with a blueprint and flashes when bitten is the tower, not what it is showing).
+var _zone_holder: Node3D = null
+func _zone_mesh(mesh: Mesh) -> MeshInstance3D:
+	if _zone_holder == null or not is_instance_valid(_zone_holder):
+		_zone_holder = Node3D.new()
+		_zone_holder.name = "ZoneShown"
+		add_child(_zone_holder)
+		var zone := MeshInstance3D.new()
+		zone.name = "Zone"
+		zone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mat := StandardMaterial3D.new()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = _get_range_indicator_color()
+		zone.material_override = mat
+		_zone_holder.add_child(zone)
+	var shown := _zone_holder.get_node("Zone") as MeshInstance3D
+	shown.mesh = mesh
+	return shown
+
 ## A part of its model by name, or null (the art is a kit of named parts: tools/generate_props.py).
 func part(part_name: String) -> Node3D:
 	var body: Node = get_node_or_null("Body")
@@ -281,13 +329,14 @@ func strike(d: Node, row: Dictionary) -> void:
 # Presentation
 # ==============================================================================
 
-## Its line: what it is loaded with and how many of it it holds -- or empty, and what would fill it.
+## Its line under its bars: nothing while it holds some -- its card's magazine says what and how much (OptionPanel) --
+## and empty, what would fill it.
 func _panel_status() -> String:
 	if not is_constructed:
 		return ""
 	var cfg = _get_config()
 	if has_ammo():
-		return tr("STATUS_TOWER_AMMO") % [tr(String(ammo_row().get("name", ammo_type))), rounds(), capacity()]
+		return ""
 	var kind: String = kind_to_load()
 	if kind != "":
 		return tr("STATUS_TOWER_EMPTY_STOCKED")

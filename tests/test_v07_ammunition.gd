@@ -256,21 +256,52 @@ func test_11_its_card_offers_its_kinds_and_the_loading() -> void:
 	var panel = main.hud.option_panel
 	panel.select_target(bow)
 	await wait_frames(2)
-	var kinds: GridContainer = panel.button_container.get_node_or_null(String(panel.AMMO_KINDS_NAME)) as GridContainer
+	var kinds: Container = panel.button_container.get_node_or_null(String(panel.AMMO_KINDS_NAME)) as Container
 	assert_not_null(kinds, "its ammunition stands together on its card")
 	if kinds == null:
 		return
-	assert_eq(kinds.get_child_count(), config_node.ammo_accepts("bow_tower").size(), "a card for each kind it takes")
+	# Squares, as his abilities are (the player: "可以改成图片，小方块，类似人的能力").
+	var squares: Array = kinds.get_children().filter(func(c): return String(c.name).begins_with("Ammo_"))
+	assert_eq(squares.size(), config_node.ammo_accepts("bow_tower").size(), "a square for each kind it takes")
 	var wood: Button = kinds.get_node_or_null("Ammo_arrow_wood") as Button
 	assert_not_null(wood, "wooden arrows")
-	assert_true(wood.button_pressed, "set to nothing, the first the stock has is the one pressed in")
-	assert_true(wood.text.contains("6"), "each says how much the stock holds: %s" % wood.text)
-	var load_btn: Button = panel.button_container.get_node_or_null("LoadCommand") as Button
-	assert_not_null(load_btn, "and Load")
+	assert_eq(wood.theme_type_variation, &"SlotButton", "a square with its icon")
+	assert_eq(wood.custom_minimum_size.x, wood.custom_minimum_size.y, "square")
+	assert_eq(wood.text, "", "no words on it: its name is in its tooltip")
+	assert_true(wood.tooltip_text.begins_with(tr(String(config_node.AMMO["arrow_wood"]["name"]))), "named there")
+	assert_true(wood.button_pressed, "set to nothing, the first the stock has is the one lit")
+	assert_eq(String((wood.get_node("Figure") as Label).text), "6", "each says in its corner how much the stock holds")
+	var load_btn: Button = kinds.get_node_or_null("LoadCommand") as Button
+	assert_not_null(load_btn, "and Load, a square too")
 	assert_false(load_btn.disabled, "to be pressed while there is some to load")
+	assert_eq(load_btn.tooltip_text, tr("TIP_LOAD"), "saying what it does")
+	# The magazine: what is in it and how full, empty to begin with.
+	var mag: Node = panel.button_container.get_node_or_null("Magazine")
+	assert_not_null(mag, "its magazine stands over the squares")
+	var figure: Label = panel.button_container.find_child("RoundsText", true, false) as Label
+	assert_eq(figure.text, UiKit.fraction_text(0, bow.capacity()), "empty: nothing of its capacity")
+	assert_eq(String((panel.button_container.find_child("Loaded", true, false) as Label).text), tr("CARD_MAGAZINE_EMPTY"),
+		"and it says so")
 	(kinds.get_node("Ammo_arrow_bone") as Button).pressed.emit()
 	assert_eq(String(bow.ammo_type), "arrow_bone", "a kind chosen sets it to that")
 	assert_eq(main.hero.target_building, bow, "and sends him to load it")
+	await wait_frames(1)
+	panel._update_status_display()
+	var going: Button = panel.button_container.find_child("LoadCommand", true, false) as Button
+	assert_true(going.button_pressed, "Load lit while he is on his way")
+	assert_eq(going.tooltip_text, tr("TIP_LOAD_GOING"), "and says so")
+	assert_gt(bow.load_from_stock(), 0, "loaded")
+	panel._update_status_display()
+	await wait_frames(1)
+	figure = panel.button_container.find_child("RoundsText", true, false) as Label
+	assert_eq(figure.text, UiKit.fraction_text(bow.rounds(), bow.capacity()), "the magazine says how full it is")
+	var bar: ProgressBar = panel.button_container.find_child("RoundsBar", true, false) as ProgressBar
+	assert_almost_eq(bar.value, float(bow.rounds()) / float(bow.capacity()), 0.001, "and its bar shows it")
+	assert_eq(String((panel.button_container.find_child("Loaded", true, false) as Label).text),
+		tr(String(config_node.AMMO["arrow_bone"]["name"])), "what is in it named")
+	var done: Button = panel.button_container.find_child("LoadCommand", true, false) as Button
+	assert_true(done.disabled, "the stock of bone arrows used up: nothing more to load")
+	assert_eq(done.tooltip_text, tr("TIP_LOAD_NONE"), "and Load says why")
 
 func test_12_the_workbench_keeps_its_ammunition_apart() -> void:
 	var main = await _level()

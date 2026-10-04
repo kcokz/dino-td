@@ -104,6 +104,8 @@ func _run(name: String) -> void:
 			await _scenario_jump()
 		"firepot":
 			await _scenario_firepot()
+		"ammocard":
+			await _scenario_ammocard()
 		"gap":
 			await _scenario_gap()
 		"raid":
@@ -885,6 +887,62 @@ func _scenario_buildings() -> void:
 	if plain and eb:
 		eb.unit_selected.emit(plain)
 	await _shoot("upgrade_offered")
+
+## A tower's card, its ammunition (OptionPanel._add_ammo_choice; the player, 2026-10-03: "弹夹，装填是新系统，不能做的这么
+## 粗糙"): a bow tower empty with wooden arrows in the stock and no bone ones; Load pressed, he on his way; loaded; and
+## the log tower's and the catapult's cards, their ground shown in blue as they are picked.
+func _scenario_ammocard() -> void:
+	var eb := root.get_node_or_null("EventBus")
+	var gs := root.get_node("GameState")
+	_grant({"wood": 200, "stone": 200, "bone": 1})
+	var at: Vector3 = _main.current_core.global_position
+	var bow = _build_at("bow_tower", at + Vector3(-5.0, 0.0, 6.0))
+	var logs = _build_at("log_tower", at + Vector3(0.0, 0.0, 7.0), 2)
+	var cat = _build_at("catapult", at + Vector3(7.0, 0.0, 8.0), 2)
+	_grant({"arrow_wood": 34, "log_round": 40, "shot_stone": 20})
+	gs.resources["arrow_bone"] = 0
+	if gs.has_method("knows") and "known" in gs:
+		gs.known["arrow_bone"] = true
+	if logs:
+		logs.load_from_stock()
+	if cat:
+		cat.load_from_stock()
+	await _wait(6)
+	if bow and eb:
+		eb.unit_selected.emit(bow)
+	await _wait(6)
+	await _shoot("bow_empty")
+	var panel = _main.hud.option_panel
+	var load_btn: Button = panel.button_container.find_child("LoadCommand", true, false) as Button
+	if load_btn:
+		load_btn.pressed.emit()
+	await _advance(0.3)
+	await _shoot("bow_going")
+	if bow:
+		bow.load_from_stock()
+		for i in 7:
+			bow.take_use()
+	await _wait(6)
+	await _shoot("bow_loaded")
+	if logs and eb:
+		eb.unit_selected.emit(logs)
+		_look_at(logs.global_position + logs.forward() * 3.0)
+	await _wait(6)
+	await _shoot("log_tower")
+	if cat and eb:
+		eb.unit_selected.emit(cat)
+		_look_at(cat.global_position + cat.forward() * 5.0)
+	await _wait(6)
+	await _shoot("catapult")
+
+## The game's own camera turned on `at` (its rig's focus), as the player's view would be.
+func _look_at(at: Vector3) -> void:
+	var rig: Object = _main.camera_rig if "camera_rig" in _main else null
+	if rig == null:
+		return
+	rig.focus = at
+	if "camera" in _main and _main.camera != null:
+		rig.apply_to(_main.camera)
 
 ## A fire pot thrown (station 2: AMMO.fire_pot, FirePatch): a catapult south of the cabin facing south, loaded with
 ## them, a raptor walking into its patch at dusk -- the pot in the air, and the ground burning where it broke.

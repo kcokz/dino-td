@@ -38,6 +38,19 @@ func lane_origin() -> Vector3:
 func lane_width() -> float:
 	return _number("lane_width", 3.0)
 
+## Its lane, picked (AmmoTower.set_range_visible): as wide as a log is long, from its front edge as far as it runs.
+func _show_zone() -> bool:
+	_lane_m = -1.0
+	var length: float = lane_length()
+	if length <= 0.0:
+		return false
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(lane_width(), length)
+	var zone: MeshInstance3D = _zone_mesh(plane)
+	zone.global_position = lane_origin() + forward() * (length * 0.5) + Vector3(0.0, 0.04, 0.0)
+	zone.global_rotation = Vector3(0.0, facing_yaw(facing), 0.0)
+	return true
+
 ## It sees down its lane to the end.
 func sight_radius() -> float:
 	var cfg = _get_config()

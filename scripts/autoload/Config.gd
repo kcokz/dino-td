@@ -935,11 +935,8 @@ static func player_building_types() -> Array[String]:
 		todo.append_array(upgrade_targets(t))
 	return out
 
-## What the spikes and the ghosts of facing towers share (CellTrap; Main._show_zone).
+## What the spikes share (CellTrap).
 const TRAPS: Dictionary = {
-	# The ground a tower being placed will act on -- the log tower's lane, the catapult's patch -- shown in this
-	# colour under its ghost (Main._show_zone).
-	"lane_color": Color(0.95, 0.8, 0.35),
 	# The traps laid in the way (CellTrap): an animal is on one when its middle is on the cell or this far
 	# past its edge (metres) -- a foot is ahead of a middle -- and a slowing lasts this long after it steps off
 	# (seconds), so a stride across the edge does not flicker it.
@@ -2844,6 +2841,12 @@ const FEEDBACK: Dictionary = {
 	"selection_ring_margin": 0.18,    # 圈比底座向外扩出多少（米）
 	"selection_ring_thickness": 0.09, # 圈线粗细（米）
 	"selection_ring_color": Color(0.35, 1.0, 0.5, 0.9),
+	# WHAT A TOWER ACTS ON, in one colour wherever it is shown (2026-10-03, the player: "能攻击的范围应该显示蓝色而不是
+	# 绿色"): the bow tower's ring and the bait rack's, the log tower's lane, the catapult's patch -- under the ghost
+	# being placed (Main) and round the tower picked (AmmoTower). Blue, apart from the green and red that say whether
+	# a ghost can go down, and from the green of the selection; `reach_alpha` is how strongly it lies on the ground.
+	"reach_color": Color(0.35, 0.65, 1.0),
+	"reach_alpha": 0.22,
 	# 单位（现代人、恐龙）脚下的选中圈：一圈细圆环，贴着脚——细，才不像地上多出了一样东西。
 	# 建筑仍然是沿底座的方框。
 	"unit_ring_margin": 0.06,
