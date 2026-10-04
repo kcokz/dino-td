@@ -2384,8 +2384,9 @@ def _arrow_sheaf(b, base, count, spread, rng, bone=False):
 # ------------------------------------------------------------------------------ the bow tower
 
 BOW_TOWER_DECK = 2.21                # the top of its deck's planks
-# Its legs: how far out from the middle each stands at the foot and at the top, and how tall.
-_TOWER_FOOT, _TOWER_TOP, _TOWER_HEIGHT = 0.82, 0.50, 2.85
+# Its legs: how far out from the middle each stands at the foot and at the top, and how tall -- splayed
+# inside its one cell, each foot a hand in from the cell's edge.
+_TOWER_FOOT, _TOWER_TOP, _TOWER_HEIGHT = 0.42, 0.30, 2.85
 
 
 def _tower_leg(sx, sy, z):
@@ -2395,7 +2396,7 @@ def _tower_leg(sx, sy, z):
 
 
 def _tower_leg_r(z):
-    return 0.075 - 0.02 * z / _TOWER_HEIGHT
+    return 0.066 - 0.014 * z / _TOWER_HEIGHT
 
 
 def _leg_band(b, sx, sy, z, width=0.07):
@@ -2406,18 +2407,18 @@ def _leg_band(b, sx, sy, z, width=0.07):
 
 def _set_bow():
     """One of the bow tower's bows in its own frame -- the mount at the origin, forward +Y: a short
-    self bow lashed across the front of its bracket, bent, its string drawn back to the catch.
-    Returns (bow, arrow): and the arrow nocked on it."""
+    self bow, half a metre tip to tip, lashed across the front of its bracket, bent, its string drawn
+    back to the catch. Returns (bow, arrow): and the arrow nocked on it."""
     bow = Builder()
-    z = 0.036
-    tips = _stave(bow, 0.43, 0.17, 0.1, z, 0.022, 0.009, mix(BARK_LIGHT, FRESH_WOOD, 0.45), FRESH_WOOD,
+    z = 0.024
+    tips = _stave(bow, 0.24, 0.1, 0.06, z, 0.017, 0.008, mix(BARK_LIGHT, FRESH_WOOD, 0.45), FRESH_WOOD,
                   segs=6, sides=5)
-    _band(bow, Vector((0.0, 0.17, z)), X_AXIS, 0.022, 0.06)
-    nock = Vector((0.0, -0.17, 0.062))
+    _band(bow, Vector((0.0, 0.1, z)), X_AXIS, 0.017, 0.045)
+    nock = Vector((0.0, -0.1, 0.037))
     for tip in tips:
-        bow.tube([tip, nock], [0.005, 0.005], [VINE_ROPE, VINE_ROPE], 4)
+        bow.tube([tip, nock], [0.004, 0.004], [VINE_ROPE, VINE_ROPE], 4)
     arrow = Builder()
-    _arrow(arrow, nock, Y_AXIS, 0.55, sides=4)
+    _arrow(arrow, nock, Y_AXIS, 0.3, sides=4)
     return bow, arrow
 
 
@@ -2425,9 +2426,9 @@ def _bow_bracket(rng):
     """The bracket a tower bow sits on, in the bow's frame: a short stock lashed across the rail at the
     origin, and the catch its string is drawn back to at the inboard end."""
     b = Builder()
-    _timber(b, Vector((0.0, -0.27, 0.0)), Vector((0.0, 0.2, 0.0)), 0.026, 0.022, rng,
+    _timber(b, Vector((0.0, -0.16, 0.0)), Vector((0.0, 0.12, 0.0)), 0.019, 0.016, rng,
             [BARK_LIGHT, mix(BARK_LIGHT, FRESH_WOOD, 0.3)], 5, 1)
-    b.tube([Vector((0.0, -0.205, 0.0)), Vector((0.0, -0.2, 0.075))], [0.011, 0.008],
+    b.tube([Vector((0.0, -0.123, 0.0)), Vector((0.0, -0.12, 0.045))], [0.008, 0.006],
            [FRESH_WOOD, mix(FRESH_WOOD, CHAR, 0.2)], 4)
     return b
 
@@ -2450,93 +2451,99 @@ def bow_tower(seed):
     split planks at BOW_TOWER_DECK with a low rail round it, a ladder of lashed rungs up its south face
     (the side the camera sees) -- and round the deck eight short self bows set on brackets, one to each
     point of the compass, each spanned with an arrow on it. Nothing aims: what comes along a bearing
-    looses the bow that points along it.
+    looses the bow that points along it. As tall as it ever was and no wider than its one cell: a slender
+    lookout, its deck 0.8 m across, of the poles one man cuts and lashes up in a moment.
 
     Parts: Base; Bow0..Bow7 -- Bow0 north, then round by the east (NE, E, SE, S, SW, W, NW) -- each built
     round its mount on the deck's edge and turned so its own forward (Blender +Y, the game's -Z) points
     straight out along its bearing, for the game to recoil it along; Arrow0..Arrow7, the arrow on each,
     with its bow's origin and heading; Quiver, a basket of spare arrows on the deck; Store2 and Store3, a
     basket of arrows lashed to the south-west leg and one to the south-east, the two levels of
-    capacity. A 2 x 2 m footprint, 3.1 m to the spare arrows' points."""
+    capacity. A 1 x 1 m footprint, 3.1 m to the spare arrows' points."""
     rng = random.Random(seed)
     base = Builder()
     corners = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
-    # The legs, each set in a mound of earth stamped round its foot.
+    # The legs, each set in a mound of earth stamped round its foot -- heaped on its inner side, as the
+    # cell's edge is a hand beyond the leg.
     for (sx, sy) in corners:
         foot = _tower_leg(sx, sy, 0.0)
-        base.tube([foot - UP * 0.02, foot + UP * 0.07], [0.135, 0.085], [SOIL, SOIL_LIGHT], 7)
+        heap = Vector((sx * 0.395, sy * 0.395, 0.0))
+        rings = base.tube([heap - UP * 0.02, heap + UP * 0.06], [0.095, 0.074], [SOIL, SOIL_LIGHT], 7)
+        for k in range(7):
+            base.tri(rings[1][k], rings[1][(k + 1) % 7], heap + UP * 0.065, SOIL_LIGHT, SOIL_LIGHT, SOIL_LIGHT)
         cols = [jitter(c, rng, 0.04) for c in (mix(PEELED_DARK, SOIL, 0.35), PEELED_DARK, mix(PEELED, PEELED_DARK, 0.3),
                                                PEELED, mix(PEELED, PEELED_DARK, 0.15))]
-        _timber(base, _tower_leg(sx, sy, 0.0), _tower_leg(sx, sy, _TOWER_HEIGHT), _tower_leg_r(0.0),
+        _timber(base, foot, _tower_leg(sx, sy, _TOWER_HEIGHT), _tower_leg_r(0.0),
                 _tower_leg_r(_TOWER_HEIGHT), rng, cols, 7, 4)
-    # Cross-bracing: an X of poles lashed across each face, the second bowed out over the first where
-    # they cross. On the north, east and west outside the legs; on the south inside them, where the
-    # ladder is.
-    faces = [((-1.0, 1.0), (1.0, 1.0), Vector((0.0, 1.0, 0.0))), ((1.0, 1.0), (1.0, -1.0), Vector((1.0, 0.0, 0.0))),
-             ((1.0, -1.0), (-1.0, -1.0), Vector((0.0, -1.0, 0.0))), ((-1.0, -1.0), (-1.0, 1.0), Vector((-1.0, 0.0, 0.0)))]
-    lo_z, hi_z = 0.32, 1.98
-    brace_r = 0.033
-    for (c1, c2, out) in faces:
-        push = out * ((0.07 + brace_r) * (-1.0 if out.y < 0.0 else 1.0))
+    # Cross-bracing: an X of poles lashed across the inside of each face (there is no room outside the
+    # legs), the second bowed in under the first where they cross. The east and west faces' are lashed on
+    # a hand above and below the north and south faces', so where two faces' pass inside a corner, they
+    # pass clear.
+    faces = [((-1.0, 1.0), (1.0, 1.0), Vector((0.0, 1.0, 0.0)), 0.30, 1.98),
+             ((1.0, 1.0), (1.0, -1.0), Vector((1.0, 0.0, 0.0)), 0.44, 1.84),
+             ((1.0, -1.0), (-1.0, -1.0), Vector((0.0, -1.0, 0.0)), 0.30, 1.98),
+             ((-1.0, -1.0), (-1.0, 1.0), Vector((-1.0, 0.0, 0.0)), 0.44, 1.84)]
+    brace_r = 0.03
+    for (c1, c2, out, lo_z, hi_z) in faces:
         first = None
         for n, (a, b2) in enumerate(((c1, c2), (c2, c1))):
-            p0 = _tower_leg(a[0], a[1], lo_z) + push
-            p1 = _tower_leg(b2[0], b2[1], hi_z) + push
-            mid = p0.lerp(p1, 0.5) + push.normalized() * (0.066 * n)
+            p0 = _tower_leg(a[0], a[1], lo_z) - out * (_tower_leg_r(lo_z) + brace_r)
+            p1 = _tower_leg(b2[0], b2[1], hi_z) - out * (_tower_leg_r(hi_z) + brace_r)
+            mid = p0.lerp(p1, 0.5) - out * (0.064 * n)
             base.tube([p0, mid, p1], [brace_r, brace_r * 0.95, brace_r * 0.9],
                       [jitter(BRACE, rng, 0.06), jitter(mix(BRACE, BARK_LIGHT, 0.4), rng, 0.06), jitter(BRACE, rng, 0.06)], 5)
             if first is None:
                 first = (p0, p1)
             else:
-                _band(base, first[0].lerp(first[1], 0.5), first[1] - first[0], brace_r, 0.07)
+                _band(base, first[0].lerp(first[1], 0.5), first[1] - first[0], brace_r, 0.06)
         for (cc, zz) in ((c1, lo_z), (c2, hi_z), (c2, lo_z), (c1, hi_z)):
-            _leg_band(base, cc[0], cc[1], zz)
+            _leg_band(base, cc[0], cc[1], zz, 0.06)
     # The deck: two bearers along Y through the legs under it, two edge logs along X through them at the
-    # north and south, lashed at the legs; split boards laid across between the legs; the rail round it.
+    # north and south, lashed at the legs; split boards laid across between the edge logs; the rail round it.
     deck = BOW_TOWER_DECK
     for sx in (-1.0, 1.0):
-        z = deck - 0.1
+        z = deck - 0.095
         c = _tower_leg(1.0, 1.0, z).x
-        _timber(base, Vector((sx * c, -0.72, z)), Vector((sx * c, 0.72, z)), 0.055, 0.05, rng, None, 6, 2)
+        _timber(base, Vector((sx * c, -0.4, z)), Vector((sx * c, 0.4, z)), 0.048, 0.044, rng, None, 6, 2)
     for sy in (-1.0, 1.0):
         z = deck - 0.04
         c = _tower_leg(1.0, 1.0, z).y
-        _timber(base, Vector((-0.72, sy * c, z)), Vector((0.72, sy * c, z)), 0.06, 0.055, rng, None, 6, 2)
+        _timber(base, Vector((-0.42, sy * c, z)), Vector((0.42, sy * c, z)), 0.05, 0.046, rng, None, 6, 2)
     for (sx, sy) in corners:
-        _leg_band(base, sx, sy, deck - 0.07, 0.12)
-    boards = 6
+        _leg_band(base, sx, sy, deck - 0.07, 0.11)
+    boards = 4
     for i in range(boards):
-        y0 = -0.51 + 1.02 * i / boards + 0.005
-        y1 = -0.51 + 1.02 * (i + 1) / boards - 0.005
-        _deck_board(base, rng.uniform(-0.69, -0.64), rng.uniform(0.64, 0.69), y0, y1, deck - 0.045, deck, rng,
+        y0 = -0.27 + 0.54 * i / boards + 0.005
+        y1 = -0.27 + 0.54 * (i + 1) / boards - 0.005
+        _deck_board(base, rng.uniform(-0.43, -0.4), rng.uniform(0.4, 0.43), y0, y1, deck - 0.045, deck, rng,
                     jitter(mix(PLANK, PLANK_LIGHT, rng.uniform(0.1, 0.6)), rng, 0.04))
-    rail_ns, rail_ew, rail_r = 2.6, 2.645, 0.034
+    rail_ns, rail_ew, rail_r = 2.6, 2.645, 0.03
     for sy in (-1.0, 1.0):
         c = _tower_leg(1.0, 1.0, rail_ns).y
-        _pole(base, Vector((-0.66, sy * c, rail_ns)), Vector((0.66, sy * c, rail_ns)), rail_r, rng, 5, True)
+        _pole(base, Vector((-0.4, sy * c, rail_ns)), Vector((0.4, sy * c, rail_ns)), rail_r, rng, 5, True)
     for sx in (-1.0, 1.0):
         c = _tower_leg(1.0, 1.0, rail_ew).x
-        _pole(base, Vector((sx * c, -0.66, rail_ew)), Vector((sx * c, 0.66, rail_ew)), rail_r, rng, 5, True)
+        _pole(base, Vector((sx * c, -0.4, rail_ew)), Vector((sx * c, 0.4, rail_ew)), rail_r, rng, 5, True)
     for (sx, sy) in corners:
         _leg_band(base, sx, sy, (rail_ns + rail_ew) * 0.5, 0.1)
-    # The ladder up the south face, east of the middle: two peeled stiles leaned on the deck's edge log,
-    # rungs lashed across every 30 cm.
-    lad_x = (-0.07, 0.31)
+    # The ladder up the middle of the south face: two peeled stiles stood all but upright outside the legs
+    # and leaned on the deck's edge log, rungs lashed across every 30 cm.
+    lad_x = (-0.14, 0.14)
 
     def lad(x, z):
-        return Vector((x, -0.94 + 0.125 * z, z))
+        return Vector((x, -0.465 + 0.0283 * z, z))
     for x in lad_x:
-        _timber(base, lad(x, 0.005), lad(x, 2.42), 0.03, 0.026, rng, None, 6, 2)
-        _band(base, lad(x, deck - 0.04), lad(x, 3.0) - lad(x, 0.0), 0.03, 0.08)
+        _timber(base, lad(x, 0.005), lad(x, 2.42), 0.027, 0.024, rng, None, 6, 2)
+        _band(base, lad(x, deck - 0.04), lad(x, 3.0) - lad(x, 0.0), 0.027, 0.07)
     z = 0.3
     while z < 2.1:
-        _pole(base, lad(lad_x[0] + 0.02, z), lad(lad_x[1] - 0.02, z), 0.019, rng, 5, False)
+        _pole(base, lad(lad_x[0] + 0.02, z), lad(lad_x[1] - 0.02, z), 0.018, rng, 5, False)
         for x in lad_x:
-            _band(base, lad(x, z), lad(x, 3.0) - lad(x, 0.0), 0.03, 0.045, 4)
+            _band(base, lad(x, z), lad(x, 3.0) - lad(x, 0.0), 0.027, 0.04, 4)
         z += 0.3
     # The bows' brackets: N, E, S and W on the middle of the rail, the four between on the legs' cut tops.
     mounts = []
-    stock_r = 0.026
+    stock_r = 0.019
     for k in range(8):
         yaw = -math.pi * 0.25 * k
         fwd = Vector((-math.sin(yaw), math.cos(yaw), 0.0))
@@ -2558,26 +2565,34 @@ def bow_tower(seed):
         parts.append(("Bow%d" % k, bow, at, yaw))
         arrows.append(("Arrow%d" % k, arrow, at, yaw))
     parts += arrows
-    # The quiver: a basket of spare arrows standing on the deck.
+    # The quiver: a basket of spare arrows standing in the middle of the deck, clear of the bows' stocks.
     quiver = Builder()
-    spot = Vector((-0.24, 0.16, deck))
-    _basket(quiver, spot, 0.12, 0.36, rng)
-    _arrow_sheaf(quiver, spot, 9, 0.07, rng)
+    spot = Vector((0.0, 0.0, deck))
+    _basket(quiver, spot, 0.085, 0.3, rng)
+    _arrow_sheaf(quiver, spot, 8, 0.05, rng)
     parts.append(("Quiver", quiver, Vector((0.0, 0.0, 0.0))))
-    # The stores: a basket of arrows lashed to the south-west leg, and one to the south-east.
+    # The stores: a basket of arrows lashed to the south-west leg, and one to the south-east -- hung on the
+    # outside of the south face, either side of the ladder, the sheaf in it stood close so it keeps inside
+    # the cell.
     for name, sx in (("Store2", -1.0), ("Store3", 1.0)):
         store = Builder()
-        z = 0.98
-        tie = _tower_leg(sx, -1.0, z + 0.26)
-        spot = Vector((tie.x - sx * 0.11, tie.y - 0.15, z))
-        _basket(store, spot, 0.105, 0.34, rng)
-        _arrow_sheaf(store, spot, 7, 0.06, rng)
-        _band(store, tie, _tower_leg(sx, -1.0, z + 1.26) - tie, _tower_leg_r(z + 0.26), 0.06)
-        ring = [spot + Vector((math.cos(math.tau * k / 8) * 0.112, math.sin(math.tau * k / 8) * 0.112, 0.26))
+        z = 0.95
+        spot = Vector((sx * 0.245, -0.415, z))
+        _basket(store, spot, 0.065, 0.3, rng)
+        for k in range(6):
+            a = math.tau * k / 6 + rng.uniform(-0.3, 0.3)
+            rr = 0.03 * (0.3 + 0.7 * ((k * 5) % 6) / 5.0)
+            foot = spot + Vector((math.cos(a) * rr, math.sin(a) * rr, 0.02))
+            tilt = Vector((math.cos(a) * 0.035 + rng.uniform(-0.012, 0.012), math.sin(a) * 0.035 + rng.uniform(-0.012, 0.012),
+                           1.0))
+            _arrow(store, foot, tilt, ARROW_LENGTH * rng.uniform(0.95, 1.0), r=0.008, sides=4)
+        tie = _tower_leg(sx, -1.0, z + 0.22)
+        _band(store, tie, _tower_leg(sx, -1.0, z + 1.22) - tie, _tower_leg_r(z + 0.22), 0.06)
+        ring = [spot + Vector((math.cos(math.tau * k / 8) * 0.07, math.sin(math.tau * k / 8) * 0.07, 0.22))
                 for k in range(9)]
-        store.tube(ring, [0.01] * 9, [VINE_ROPE] * 9, 4)
-        near = spot + (Vector((tie.x, tie.y, 0.0)) - Vector((spot.x, spot.y, 0.0))).normalized() * 0.112 + UP * 0.26
-        store.tube([near, tie + (near - tie).normalized() * 0.06], [0.01, 0.01], [VINE_ROPE, VINE_ROPE], 4)
+        store.tube(ring, [0.009] * 9, [VINE_ROPE] * 9, 4)
+        near = spot + (Vector((tie.x, tie.y, 0.0)) - Vector((spot.x, spot.y, 0.0))).normalized() * 0.07 + UP * 0.22
+        store.tube([near, tie + (near - tie).normalized() * 0.055], [0.009, 0.009], [VINE_ROPE, VINE_ROPE], 4)
         parts.append((name, store, Vector((0.0, 0.0, 0.0))))
     return parts
 
@@ -2585,10 +2600,10 @@ def bow_tower(seed):
 # ------------------------------------------------------------------------------ the log tower and its rounds
 
 ROLL_LOG_RADIUS = 0.2
-ROLL_LOG_LENGTH = 2.9
-LOG_TOWER_FLOOR = 1.88               # the top of the cradle's bearers, where the logs lie
-_RAMP_TOP = (-0.13, 1.80)            # (y, z) of the ramp's surface where it leaves the cradle
-_RAMP_FOOT = 1.40                    # the y it meets the ground at, along the north edge
+ROLL_LOG_LENGTH = 2.4                # as long as the log tower's lane is wide
+LOG_TOWER_FLOOR = 1.3                # the top of the cradle's bearers, where the logs lie
+_RAMP_TOP = (0.303, 1.22)            # (y, z) of the ramp's surface where it leaves the cradle
+_RAMP_FOOT = 0.985                   # the y it meets the ground at, along the north edge
 
 
 def _round_log(b, centre, rng, length=ROLL_LOG_LENGTH, radius=ROLL_LOG_RADIUS, sides=10, segs=4):
@@ -2643,7 +2658,7 @@ def _bone_spike(b, base, tip, r, rng):
 
 
 def rolling_log(seed, spiked=False, stone=False):
-    """What the log tower rolls: a 2.9 m log ROLL_LOG_RADIUS round, built along X round the middle of its
+    """What the log tower rolls: a 2.4 m log ROLL_LOG_RADIUS round, built along X round the middle of its
     axis so the game can turn it as it rolls -- bark, pale cut ends ringed with its years. `spiked`: with
     sharpened splinters of bone lashed round it in five bands, their points out. `stone`: with two blocks
     of the valley's red sandstone lashed on with vine, one each side of it, to make it heavier."""
@@ -2652,7 +2667,7 @@ def rolling_log(seed, spiked=False, stone=False):
     r = ROLL_LOG_RADIUS
     _round_log(b, Vector((0.0, 0.0, 0.0)), rng)
     if spiked:
-        for i, x in enumerate((-1.12, -0.56, 0.0, 0.56, 1.12)):
+        for i, x in enumerate((-0.9, -0.45, 0.0, 0.45, 0.9)):
             _band(b, Vector((x, 0.0, 0.0)), X_AXIS, r, 0.07, 10)
             for k in range(6):
                 a = math.tau * (k + 0.5 * (i % 2)) / 6 + rng.uniform(-0.12, 0.12)
@@ -2662,7 +2677,7 @@ def rolling_log(seed, spiked=False, stone=False):
                 tip = Vector((x + lean * 0.07, 0.0, 0.0)) + out * (r + rng.uniform(0.15, 0.19))
                 _bone_spike(b, base, tip, rng.uniform(0.02, 0.026), rng)
     if stone:
-        for sx, side in ((-0.68, 1.0), (0.68, -1.0)):
+        for sx, side in ((-0.56, 1.0), (0.56, -1.0)):
             block = Builder()
             col = jitter(CHINLE_BEDS[rng.choice((0, 4))], rng, 0.05)
             # Built on top of the log, then turned under it for the second: one above and one below, so it
@@ -2722,51 +2737,64 @@ def _half_log(b, centre, axis, up, half_len, radius, rng):
 
 
 def log_tower(seed):
-    """A chute for rolling logs down onto what comes, 3 x 3 m: at the back (the south half) a frame of
-    peeled posts and beams lashed with vine holding a cradle at LOG_TOWER_FLOOR, a back wall of posts
-    rising behind it to 2.6 m; from the cradle's front a ramp of split logs laid across two stringers,
-    a side rail along each edge, sloping down to the ground at the north edge, 2.9 m wide.
+    """A chute for rolling logs down onto what comes, 2 x 2 m: at the back (the south half) a frame of four
+    peeled posts, two beams and two bearers lashed with vine holding a cradle at LOG_TOWER_FLOOR, the two
+    back posts rising behind it to 2.6 m with a rail across them; from the cradle's front a ramp laid as a
+    ladder is -- two poles, split logs across between them -- sloping down to the ground at the north
+    edge. As tall as it ever was and no deeper or wider than its four cells, of a dozen timbers one man
+    lashes up in a moment. The logs are as long as its lane is wide, so the pile stands out past the frame
+    0.2 m a side, as a pile does -- high enough to pass over a palisade or a stone wall beside it.
 
-    Parts: Base; Log0..Log3, the logs in the cradle (2.9 m, lying east-west, each round its own middle):
+    Parts: Base; Log0..Log3, the logs in the cradle (2.4 m, lying east-west, each round its own middle):
     Log0 at the front against the lever, Log1 behind it, Log2 in the hollow on top of those two, Log3
     on top at the back, held by the wall -- so whatever the game shows of them, the first n stand as a
     pile would; Lever, the release peg at the cradle's front edge, round its pivot (a pin along X): it
     tips forward, about +X by a negative angle, to let Log0 go; Store2, two more logs on sleepers on the
     ground inside the frame, and Store3, two on a rack above those -- seen from the south between the
-    back posts, under the cradle."""
+    back posts, under the cradle, cut to the frame's width."""
     rng = random.Random(seed)
     base = Builder()
     floor = LOG_TOWER_FLOOR
-    back_y, front_y = -1.355, -0.32
-    xs = (-1.3, 0.0, 1.3)
+    back_y, front_y = -0.922, 0.237
+    xs = (-0.88, 0.88)
     post_cols = [mix(PEELED_DARK, SOIL, 0.3), PEELED_DARK, PEELED, mix(PEELED, PEELED_DARK, 0.2)]
+
+    def post_r(r, z):
+        return r - r * 0.1 * (z + 0.02) / 2.62
+    # Four posts at the corners: the back two up to the top of the wall, the front two up under the front
+    # beam -- each set in a mound of earth heaped on its inner side, inside the cells.
+    beam_z, beam_r = floor - 0.25, 0.075
     for x in xs:
-        for (y, top, r) in ((back_y, 2.64, 0.077), (front_y, floor - 0.34, 0.085)):
+        for (y, top, r) in ((back_y, 2.6, 0.062), (front_y, beam_z - beam_r, 0.068)):
             foot = Vector((x, y, 0.0))
-            base.tube([foot - UP * 0.02, foot + UP * 0.07], [r + 0.045, r + 0.015], [SOIL, SOIL_LIGHT], 7)
+            heap = Vector((x * 0.965, y - math.copysign(0.03, y), 0.0))
+            rings = base.tube([heap - UP * 0.02, heap + UP * 0.06], [r + 0.032, r + 0.012], [SOIL, SOIL_LIGHT], 7)
+            for k in range(7):
+                base.tri(rings[1][k], rings[1][(k + 1) % 7], heap + UP * 0.065, SOIL_LIGHT, SOIL_LIGHT, SOIL_LIGHT)
             _timber(base, foot - UP * 0.02, Vector((x, y, top)), r, r * 0.9, rng,
                     [jitter(c, rng, 0.04) for c in post_cols], 6, 3)
-    # Beams across: one on the front posts, one lashed to the back posts' faces; the cradle's three
-    # bearers on them, running back to the wall.
-    beam_z = floor - 0.26
-    _timber(base, Vector((-1.45, front_y, beam_z)), Vector((1.45, front_y, beam_z)), 0.08, 0.08, rng, None, 6, 3)
-    _timber(base, Vector((-1.45, back_y + 0.155, beam_z)), Vector((1.45, back_y + 0.155, beam_z)), 0.075, 0.075, rng,
+    # Beams across: one on the front posts, one lashed to the back posts' faces; the cradle's two bearers
+    # laid on them, from the wall to the front beam; a rail lashed across the back posts near their tops.
+    back_beam_y = back_y + post_r(0.062, beam_z) + beam_r
+    _timber(base, Vector((-0.97, front_y, beam_z)), Vector((0.97, front_y, beam_z)), beam_r, beam_r, rng, None, 6, 3)
+    _timber(base, Vector((-0.97, back_beam_y, beam_z)), Vector((0.97, back_beam_y, beam_z)), beam_r, beam_r, rng,
             None, 6, 3)
     for x in xs:
-        _band(base, Vector((x, back_y, beam_z)), UP, 0.077, 0.18)
-        _timber(base, Vector((x, back_y + 0.08, floor - 0.09)), Vector((x, -0.25, floor - 0.09)), 0.09, 0.088, rng,
-                None, 6, 2)
-        _band(base, Vector((x, back_y, floor - 0.09)), UP, 0.077, 0.14)
-        _band(base, Vector((x, front_y, beam_z)), X_AXIS, 0.08, 0.2)
-    # Knee braces in the back wall, up under the beam, clear of the stores below; ties along the sides.
-    for x0, x1 in ((-1.3, -0.95), (0.0, -0.35), (0.0, 0.35), (1.3, 0.95)):
-        _pole(base, Vector((x0, back_y, 1.08)), Vector((x1, back_y + 0.1, beam_z - 0.02)), 0.035, rng, 5, True)
-    for sx in (-1.0, 1.0):
-        _pole(base, Vector((sx * 1.3, back_y, 1.5)), Vector((sx * 1.3, front_y, 1.5)), 0.04, rng, 5, True)
-        for y in (back_y, front_y):
-            _band(base, Vector((sx * 1.3, y, 1.5)), UP, 0.08, 0.08)
-    # The ramp: split logs laid across, flat side up, on two stringers; a rail along each edge; posts
-    # under its upper half.
+        _band(base, Vector((x, back_y, beam_z)), UP, post_r(0.062, beam_z), 0.18)
+        _band(base, Vector((x, front_y, beam_z)), X_AXIS, beam_r, 0.16)
+    for x in (-0.6, 0.6):
+        _timber(base, Vector((x, back_beam_y - 0.065, floor - 0.085)), Vector((x, front_y + 0.02, floor - 0.085)),
+                0.085, 0.082, rng, None, 6, 2)
+        for y in (back_beam_y, front_y):
+            _band(base, Vector((x, y, beam_z)), X_AXIS, beam_r, 0.16)
+    rail_z = 2.44
+    rail_y = back_y + post_r(0.062, rail_z) + 0.042
+    _pole(base, Vector((-0.97, rail_y, rail_z)), Vector((0.97, rail_y, rail_z)), 0.042, rng, 5, True)
+    for x in xs:
+        _band(base, Vector((x, back_y, rail_z)), UP, post_r(0.062, rail_z), 0.1)
+    # The ramp, laid as a ladder is: two poles from the front beam down to the ground at the north edge, and
+    # split logs across between them, flat side up, the poles' backs standing a little proud of them along
+    # its edges. Narrower than the logs are long: they ride over its edges.
     steps = 200
     pts = [_ramp_at(i / steps) for i in range(steps + 1)]
     acc = [0.0]
@@ -2778,43 +2806,35 @@ def log_tower(seed):
             if acc[i] >= s:
                 return (i - 1 + (s - acc[i - 1]) / max(1e-6, acc[i] - acc[i - 1])) / steps
         return 1.0
-    s = 0.105
+    s = 0.1
     while s < acc[-1] - 0.04:
         at, along, up = _ramp_frame(t_at(s))
-        if at.y + 0.11 > 1.475:
+        if at.y + 0.11 > 0.99:
             break                   # the last board inside the north edge
-        _half_log(base, at, X_AXIS, up, 1.38 + rng.uniform(-0.02, 0.0), 0.105 * rng.uniform(0.95, 1.05), rng)
-        s += 0.212
+        _half_log(base, at, X_AXIS, up, 0.78 + rng.uniform(-0.01, 0.0), 0.1 * rng.uniform(0.95, 1.05), rng)
+        s += 0.202
     for sx in (-1.0, 1.0):
-        rail, string = [], []
-        for i in range(9):
-            at, along, up = _ramp_frame(i / 8.0)
-            rail.append(Vector((sx * 1.40, at.y, at.z)) + up * 0.055)
-            string.append(Vector((sx * 0.95, at.y, at.z)) - up * 0.155)
-        rail[0] = rail[0] - Vector((0.0, 0.1, 0.0))
-        _timber(base, rail[0], rail[1], 0.055, 0.055, rng, None, 6, 1)
-        base.tube(rail[1:], [0.055] * 8, [jitter(mix(BRACE, BARK_LIGHT, 0.3), rng, 0.05) for _ in range(8)], 6)
-        # The stringer: from the beam on the front posts down the slope to where it beds in the ground.
-        string = [Vector((sx * 0.95, front_y, beam_z + 0.15))] + [p for p in string if p.z > 0.09]
-        base.tube(string, [0.085] * len(string), [jitter(PEELED_DARK, rng, 0.05) for _ in string], 6)
-    for t in (0.3, 0.62):
-        at, along, up = _ramp_frame(t)
-        under = at - up * 0.155          # the middle of the stringer there
-        top = under.z - 0.07
-        for sx in (-1.0, 1.0):
-            foot = Vector((sx * 0.95, under.y, 0.0))
-            _timber(base, foot - UP * 0.02, Vector((sx * 0.95, under.y, top)), 0.07, 0.065, rng, None, 6, 2)
-            _band(base, Vector((sx * 0.95, under.y, top - 0.05)), UP, 0.07, 0.08)
-        _pole(base, Vector((-1.05, under.y, top - 0.15)), Vector((1.05, under.y, top - 0.15)), 0.04, rng, 5, True)
+        # The pole: its head on the front beam, its foot bedded in the ground at the north edge.
+        pole = []
+        for i in range(25):
+            at, along, up = _ramp_frame(i / 24.0)
+            p = Vector((sx * 0.82, at.y, at.z)) - up * 0.035
+            pole.append(Vector((p.x, p.y, max(p.z, 0.0))))
+            if p.z <= 0.0:
+                break
+        rings = base.tube(pole, [0.065] * len(pole), [jitter(mix(PEELED_DARK, PEELED, 0.3), rng, 0.05) for _ in pole], 6)
+        for k in range(6):
+            base.tri(rings[0][(k + 1) % 6], rings[0][k], pole[0], FRESH_WOOD, FRESH_WOOD, mix(FRESH_WOOD, BARK_LIGHT, 0.35))
     # The lever's pivot: two cheeks on the front beam, a pin through them.
-    pivot = Vector((0.0, -0.175, floor - 0.1))
+    pivot = Vector((0.0, front_y, floor - 0.1))
     for sx in (-1.0, 1.0):
-        _deck_board(base, sx * 0.055, sx * 0.105, -0.25, -0.10, beam_z + 0.06, floor - 0.04, rng, BARK_LIGHT)
+        _deck_board(base, sx * 0.055, sx * 0.105, front_y - 0.07, front_y + 0.045, beam_z + 0.06, floor - 0.04, rng,
+                    BARK_LIGHT)
     base.tube([pivot - X_AXIS * 0.12, pivot + X_AXIS * 0.12], [0.018, 0.018], [FRESH_WOOD, FRESH_WOOD], 5)
 
     parts = [("Base", base, Vector((0.0, 0.0, 0.0)))]
     r = ROLL_LOG_RADIUS
-    y1 = -0.885
+    y1 = -0.466                     # Log1: so Log3, behind and above it, lies against the back posts
     lie = [(y1 + 0.42, floor + r), (y1, floor + r)]
     lie.append((y1 + 0.21, floor + r + math.sqrt((2 * r) ** 2 - 0.21 ** 2)))
     lie.append((y1 - 0.19, floor + r + 0.352))
@@ -2831,20 +2851,20 @@ def log_tower(seed):
     lever.tube([head + Vector((0.0, 0.03, -0.06)), head + Vector((0.02, 0.12, -0.18)), head + Vector((0.0, 0.16, -0.34))],
                [0.007, 0.007, 0.007], [VINE_ROPE] * 3, 4)
     parts.append(("Lever", lever, pivot))
-    for name, z in (("Store2", 0.0), ("Store3", 0.92)):
+    for name, z in (("Store2", 0.0), ("Store3", 0.53)):
         store = Builder()
         if z == 0.0:
-            for sx in (-0.85, 0.85):
-                _pole(store, Vector((sx, -1.26, 0.045)), Vector((sx, -0.41, 0.045)), 0.045, rng, 5, True)
-            lift = 0.09
+            for sx in (-0.6, 0.6):
+                _pole(store, Vector((sx, -0.8, 0.04)), Vector((sx, 0.08, 0.04)), 0.04, rng, 5, True)
+            lift = 0.08
         else:
-            for sx in (-1.3, 1.3):
-                _pole(store, Vector((sx, back_y, z)), Vector((sx, front_y, z)), 0.045, rng, 5, True)
-                for y in (back_y, front_y):
-                    _band(store, Vector((sx, y, z)), UP, 0.08, 0.08)
-            lift = z + 0.045
-        for y in (-1.03, -0.61):
-            _round_log(store, Vector((0.0, y + rng.uniform(-0.01, 0.01), lift + r)), rng)
+            for sx in xs:
+                _pole(store, Vector((sx, back_y, z)), Vector((sx, front_y, z)), 0.04, rng, 5, True)
+                for y, pr in ((back_y, post_r(0.062, z)), (front_y, post_r(0.068, z))):
+                    _band(store, Vector((sx, y, z)), UP, pr, 0.08)
+            lift = z + 0.04
+        for y in (-0.55, -0.13):
+            _round_log(store, Vector((0.0, y + rng.uniform(-0.01, 0.01), lift + r)), rng, length=1.9)
         parts.append((name, store, Vector((0.0, 0.0, 0.0))))
     return parts
 

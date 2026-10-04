@@ -112,7 +112,12 @@ func test_01_four_towers_each_its_own_job_size_and_ammunition() -> void:
 		assert_has(config_node.BUILDABLE_TYPES, t, "%s is on the build menu" % t)
 		var row: Dictionary = _row(t)
 		kinds[String(row["kind"])] = t
-		assert_gte(int(config_node.get_building_cells(t)), 2, "%s is bigger than a stake: a wall's multiple" % t)
+		assert_gte(int(config_node.get_building_cells(t)), 1, "%s fills whole cells: a wall's multiple" % t)
+		# What one man puts up in a moment (the player: "看着不像能一下造好的样子"): no wider than it is tall -- but the
+		# catapult, a frame of logs laid along the ground.
+		if t != "catapult":
+			assert_lte(float(config_node.get_building_cells(t)) * float(config_node.BUILD_CELL), float(row["height"]) + 0.001,
+				"%s stands on no more ground than it is tall" % t)
 		assert_eq(config_node.get_building_size(t).x, config_node.get_building_size(t).y,
 			"%s is square, so turning it never changes the cells it takes" % t)
 		assert_gt(float(row["height"]), float(config_node.HERO["height"]), "%s stands taller than him" % t)
@@ -143,7 +148,8 @@ func test_01_four_towers_each_its_own_job_size_and_ammunition() -> void:
 	assert_not_has(config_node.DINO_AI["shooter_kinds"], "bait", "nothing is shot by the bait rack")
 	# Bigger takes longer to put up than its price alone would say.
 	assert_gt(float(config_node.size_time_factor("catapult")), float(config_node.size_time_factor("bow_tower")),
-		"the catapult's four cells take longer than the bow tower's two")
+		"the catapult's %d cells take longer than the bow tower's %d" % [int(config_node.get_building_cells("catapult")),
+			int(config_node.get_building_cells("bow_tower"))])
 	# Stone only once there is a pick.
 	assert_true(_row("catapult")["cost"].has("stone"), "the catapult is built with stone")
 	for t in ["bow_tower", "log_tower", "bait_rack"]:

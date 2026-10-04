@@ -70,20 +70,43 @@ func _work_out_lane() -> float:
 	var gm: Node = get_tree().get_first_node_in_group("grid_manager") if is_inside_tree() else null
 	if gm == null or cfg == null:
 		return float(cells)
-	var size: int = int(cfg.get_building_cells(building_type))
-	var here: Vector2i = gm.world_to_build_cell(global_position)
-	var step: Vector2i = FACINGS[posmod(facing, FACINGS.size())]
-	var first: int = (size + 1) / 2
-	var out: int = 0
-	for k in range(first, first + cells):
-		var c: Vector2i = here + step * k
-		if not gm.is_build_cell_ground(c):
-			break
-		var b: Node = gm.building_in_build_cell(c)
-		if b != null and b != self and not ("building_type" in b and cfg.walk_over(String(b.building_type))):
-			break
-		out += 1
-	return float(out) * float(cfg.BUILD_CELL)
+	var rows: Array = LogTower.lane_rows(gm, global_position, float(cfg.get_building_half(building_type).y), facing,
+		int(cfg.get_building_cells(building_type)), cells)
+	return float(LogTower.lane_run(gm, cfg, rows, self)) * float(cfg.BUILD_CELL)
+
+## The cells under the middle of a log tower's lane, a row for each cell out from its front edge (`rows` of them),
+## the tower standing with its middle at `centre`, `half` metres from it to its front edge: in each row the one cell
+## in line with its middle, for a tower an odd number of cells across -- and for an even one, whose middle runs along
+## the line between two columns, the cells either side of that line: a log as long as the lane is wide rolls over
+## both, and something built in either stops it. (Its own cells by its own middle were a guess: a 2 x 2 tower's middle
+## is a corner, and the column looked down was not the one the wall was in.) Shared with the ghost (Main._show_zone).
+static func lane_rows(gm: Node, centre: Vector3, half: float, facing_index: int, size: int, rows: int) -> Array:
+	var dir: Vector3 = facing_dir(facing_index)
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	var cell: float = float(gm.build_cell_size())
+	var aside: Array = [0.0] if size % 2 == 1 else [-0.5 * cell, 0.5 * cell]
+	var out: Array = []
+	for k in range(rows):
+		var at: Vector3 = centre + dir * (half + (float(k) + 0.5) * cell)
+		var row: Array = []
+		for a in aside:
+			row.append(gm.world_to_build_cell(at + side * float(a)))
+		out.append(row)
+	return out
+
+## How many of `rows` (lane_rows) a log rolls before something stops it: ground under every cell of a row, and
+## nothing built in any of them but what is walked over (the spikes) -- or `own`, the tower itself.
+static func lane_run(gm: Node, cfg: Node, rows: Array, own: Node = null) -> int:
+	var run: int = 0
+	for row in rows:
+		for c in row:
+			if not gm.is_build_cell_ground(c):
+				return run
+			var b: Node = gm.building_in_build_cell(c)
+			if b != null and b != own and not ("building_type" in b and cfg.walk_over(String(b.building_type))):
+				return run
+		run += 1
+	return run
 
 ## Where `point` is on its lane: [metres along from its front edge, metres aside from its middle line].
 func lane_coords(point: Vector3) -> Vector2:

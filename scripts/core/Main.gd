@@ -2729,21 +2729,13 @@ func _show_zone(snap: Vector2i) -> void:
 		zone.position = dir * float(row["zone_distance"]) + Vector3(0.0, 0.05, 0.0)
 		zone.visible = true
 		return
-	var size: int = int(cfg.get_building_cells(current_build_type))
-	var step: Vector2i = AmmoTower.FACINGS[posmod(_placement_facing, AmmoTower.FACINGS.size())]
-	var first: int = (size + 1) / 2
-	var run: int = 0
-	for k in range(first, first + int(row.get("lane", 0))):
-		var c: Vector2i = snap + step * k
-		if not grid_manager.is_build_cell_ground(c):
-			break
-		var b: Node = grid_manager.building_in_build_cell(c)
-		if b != null and not ("building_type" in b and cfg.walk_over(String(b.building_type))):
-			break
-		run += 1
+	# As far as the tower's logs will roll (LogTower.lane_rows, lane_run: the same cells, worked out the same way).
+	var half: float = float(cfg.get_building_half(current_build_type).y)
+	var rows: Array = LogTower.lane_rows(grid_manager, grid_manager.footprint_centre(current_build_type, snap), half,
+		_placement_facing, int(cfg.get_building_cells(current_build_type)), int(row.get("lane", 0)))
+	var run: int = LogTower.lane_run(grid_manager, cfg, rows)
 	zone.visible = run > 0
 	var length: float = float(run) * float(cfg.BUILD_CELL)
-	var half: float = float(cfg.get_building_half(current_build_type).y)
 	(zone.mesh as PlaneMesh).size = Vector2(float(row.get("lane_width", 1.0)), maxf(0.01, length))
 	zone.rotation.y = AmmoTower.facing_yaw(_placement_facing)
 	zone.position = dir * (half + length * 0.5) + Vector3(0.0, 0.04, 0.0)

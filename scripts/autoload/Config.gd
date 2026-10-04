@@ -96,9 +96,12 @@ const BUILDINGS: Dictionary = {
 	# 戏的塔的搭配"). Four towers, each its own job, its own size and its own look (GAME-DESIGN 6.0): the bow tower
 	# shoots one at a time all round it; the log tower rolls a log down a lane ahead of it, slowing and shoving
 	# back all it rolls over; the bait rack shoots nothing and holds them at one spot, eating; the catapult (with
-	# stone) smashes a patch of ground ahead of it. Square, two to four cells a side -- a wall's multiples, so a
+	# stone) smashes a patch of ground ahead of it. Square, one to four cells a side -- a wall's multiples, so a
 	# tower stands flush in a line of wall -- so turning one never changes the cells it takes. Taller than a man,
-	# each, and taking its time to go up (get_build_time: the cells it fills).
+	# each, and taking its time to go up (get_build_time: the cells it fills). And each what one man puts up in a
+	# moment (2026-10-03, the player: "log tower太大了，可以高度一样但是横向不能那么大，看着不像能一下造好的样子"; "bow
+	# tower也显得太大，高度一样但大小小一些"): as tall as they were, on less ground -- the bow tower a slim lookout
+	# one cell across (it was two), the log tower two (it was three).
 	#
 	# AMMUNITION (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量"): a
 	# tower shoots what it is loaded with (AMMO) -- made at the workbench, and loaded by him: walking past, or sent
@@ -114,7 +117,7 @@ const BUILDINGS: Dictionary = {
 	"bow_tower": {
 		"name": "BUILDING_BOW_TOWER_NAME",
 		"kind": "bow",
-		"cells": 2,
+		"cells": 1,
 		"height": 3.1,
 		"hp": 30.0,
 		"cost": {"wood": 12},
@@ -128,7 +131,7 @@ const BUILDINGS: Dictionary = {
 	"bow_tower_2": {
 		"name": "BUILDING_BOW_TOWER_2_NAME",
 		"kind": "bow",
-		"cells": 2,
+		"cells": 1,
 		"height": 3.1,
 		"hp": 30.0,
 		"cost": {"wood": 16},
@@ -141,7 +144,7 @@ const BUILDINGS: Dictionary = {
 	"bow_tower_3": {
 		"name": "BUILDING_BOW_TOWER_3_NAME",
 		"kind": "bow",
-		"cells": 2,
+		"cells": 1,
 		"height": 3.1,
 		"hp": 30.0,
 		"cost": {"wood": 21},
@@ -155,19 +158,20 @@ const BUILDINGS: Dictionary = {
 	# 滚木（有个类似滑滑梯的坡，向下滚木）……滚木作用，减速所有范围内的恐龙单位，并有推回效果，伤害低，滚木要长一点，不然范
 	# 围太小没作用，也是通过恐龙触碰触发"): a cradle of logs up on a frame, a ramp down its front. Something walks into
 	# the lane in front of it -- `lane` cells out from its front edge, `lane_width` metres across (as long as a log
-	# is), as far as the first thing built across it -- and a log is let go down the ramp and rolls the lane at
+	# is: a little longer than the frame is wide, its ends out over the sides), as far as the first thing built
+	# across it -- and a log is let go down the ramp and rolls the lane at
 	# `roll_speed`: everything it rolls over is slowed, shoved back the way it came and hurt a little (AMMO: what
 	# the log is). A log every `roll_seconds` at most. It faces the way it was set down (R).
 	"log_tower": {
 		"name": "BUILDING_LOG_TOWER_NAME",
 		"kind": "roller",
-		"cells": 3,
+		"cells": 2,
 		"height": 2.6,
 		"hp": 40.0,
 		"faces": true,
 		"cost": {"wood": 14},
 		"lane": 6,
-		"lane_width": 3.0,
+		"lane_width": 2.4,
 		"roll_speed": 6.0,
 		"roll_seconds": 3.0,
 		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 20},
@@ -177,13 +181,13 @@ const BUILDINGS: Dictionary = {
 	"log_tower_2": {
 		"name": "BUILDING_LOG_TOWER_2_NAME",
 		"kind": "roller",
-		"cells": 3,
+		"cells": 2,
 		"height": 2.6,
 		"hp": 40.0,
 		"faces": true,
 		"cost": {"wood": 19},
 		"lane": 6,
-		"lane_width": 3.0,
+		"lane_width": 2.4,
 		"roll_speed": 6.0,
 		"roll_seconds": 3.0,
 		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 30},
@@ -193,13 +197,13 @@ const BUILDINGS: Dictionary = {
 	"log_tower_3": {
 		"name": "BUILDING_LOG_TOWER_3_NAME",
 		"kind": "roller",
-		"cells": 3,
+		"cells": 2,
 		"height": 2.6,
 		"hp": 40.0,
 		"faces": true,
 		"cost": {"wood": 25},
 		"lane": 6,
-		"lane_width": 3.0,
+		"lane_width": 2.4,
 		"roll_speed": 6.0,
 		"roll_seconds": 3.0,
 		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 40},

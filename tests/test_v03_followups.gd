@@ -88,14 +88,15 @@ func test_01_a_wall_stands_over_his_head_and_a_tower_over_the_wall() -> void:
 	# it is: a palisade is "a little bigger", over the head of the man who builds it. The trap set
 	# low on its lane went in the 2026-10-02 rebuild; what shoots now is a tower (BowTower.gd), a
 	# wall's multiple of cells -- flush in a line of wall -- standing over the palisade it is built
-	# into, and in an animal's way.
+	# into, and in an animal's way. Since 2026-10-03 one cell across (the player: "bow tower也显得太大，
+	# 高度一样但大小小一些"): a lookout, told from a stake by its height, not its ground.
 	var wall_w: float = config_node.get_building_footprint("wall")
 	var tower_w: float = config_node.get_building_footprint("bow_tower")
 	var wall_h: float = config_node.get_building_height("wall")
 	var tower_h: float = config_node.get_building_height("bow_tower")
 
 	assert_almost_eq(wall_w, float(config_node.BUILD_CELL), 0.0001, "A section of wall is one cell")
-	assert_gt(tower_w, wall_w, "A tower is more than one")
+	assert_gte(tower_w, wall_w, "A tower is at least one")
 	assert_almost_eq(tower_w / wall_w, round(tower_w / wall_w), 0.0001, "And a whole number of them: a wall's multiple")
 	assert_gt(wall_h, float(config_node.HERO["height"]), "A palisade stands over the Hero's head")
 	assert_gt(tower_h, wall_h, "A tower stands over the palisade")
@@ -213,8 +214,15 @@ func test_05_a_tower_is_drawn_inside_its_declared_size() -> void:
 		return
 	var bounds: AABB = VisualLibrary.visual_bounds(body)
 	var footprint: float = config_node.get_building_footprint("bow_tower")
-	assert_lte(bounds.size.x, footprint + 0.01, "No wider than its footprint")
-	assert_lte(bounds.size.z, footprint + 0.01, "In either direction")
+	# Its frame inside its cells; its bows, round the edge of a deck one cell across, no more than their arrows' points
+	# out over the edge (OVERHANG). Measured by its points, not its parts' boxes: a bow turned to a diagonal has a box
+	# much bigger than itself.
+	var frame: AABB = _drawn_extent(tower.part("Base"))
+	assert_lte(frame.size.x, footprint + 0.01, "Its frame no wider than its footprint")
+	assert_lte(frame.size.z, footprint + 0.01, "In either direction")
+	var whole: AABB = _drawn_extent(body)
+	assert_lte(whole.size.x, footprint + OVERHANG * 2.0, "Its bows' points no further out over its edge than a few centimetres")
+	assert_lte(whole.size.z, footprint + OVERHANG * 2.0, "In either direction")
 	assert_almost_eq(bounds.size.y, config_node.get_building_height("bow_tower"), 0.05, "As tall as declared")
 	# The trap was fitted, and fitting stands a model's lowest point exactly on the ground. A tower is not
 	# (Config.VISUALS: a kit built to its cells, left where it was modelled), and its legs stand in mounds of
@@ -223,6 +231,35 @@ func test_05_a_tower_is_drawn_inside_its_declared_size() -> void:
 	# footing (the slack test_v05_the_cabin gives the other kit, the cabin).
 	assert_lte(bounds.position.y, 0.01, "Standing on the ground, not floating over it")
 	assert_gte(bounds.position.y, -0.05, "And in it no deeper than its footing")
+
+## How far a tower's bows may reach out over the edge of its cells (test_05), metres: their arrows' points.
+const OVERHANG: float = 0.03
+
+## Where `node`'s meshes are actually drawn -- every point of them, in `node`'s own space -- not their boxes.
+func _drawn_extent(node: Node3D) -> AABB:
+	var out := AABB()
+	var first: bool = true
+	if node == null:
+		return out
+	var meshes: Array = node.find_children("*", "MeshInstance3D", true, false)
+	if node is MeshInstance3D:
+		meshes.append(node)
+	var into: Transform3D = node.global_transform.affine_inverse()
+	for m in meshes:
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var t: Transform3D = into * mi.global_transform
+		for s in mi.mesh.get_surface_count():
+			var points: PackedVector3Array = mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+			for p in points:
+				var q: Vector3 = t * p
+				if first:
+					out = AABB(q, Vector3.ZERO)
+					first = false
+				else:
+					out = out.expand(q)
+	return out
 
 func test_06_labels_and_bars_sit_above_the_building_they_belong_to() -> void:
 	# A fixed label height reads as floating over a low building and buried in a
