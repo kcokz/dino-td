@@ -78,6 +78,10 @@ var station: int = 0
 ## Set by the jump for the level it builds -- which opens on the capsule landing (StationJump.arrive), not on the
 ## start screen -- and cleared once it is down.
 var arrived_by_jump: bool = false
+## A game chosen opens on how it began: the capsule's fall into the valley (StationJump.crash; GAME-DESIGN 3.0). Set
+## when a game is chosen (play), cleared once the level has shown it (Main.open_on_the_crash) -- and by a jump, whose
+## level opens on its own landing. Not a restart's: the same run again, at once.
+var crash_landing: bool = false
 
 ## What this run is, worked out from `game` as it begins (reset_game, _settle_the_game): every setting's choice, the
 ## game's internals (tutorial, cabin, goal), its map with the settings' keys laid over it, the multipliers and the
@@ -111,6 +115,7 @@ func play(game_id: String, chosen: Dictionary = {}, seed_value: int = -1) -> voi
 	game = {"id": game_id, "settings": chosen.duplicate(), "seed": seed_value}
 	station = 0
 	arrived_by_jump = false
+	crash_landing = true
 
 ## The stations of the game being played (Config.GAMES.<id>.stations), in order -- [] for a game of one map.
 func stations() -> Array:
@@ -137,6 +142,7 @@ func jump_to_next_station() -> bool:
 		return false
 	station += 1
 	arrived_by_jump = true
+	crash_landing = false
 	launch_straight_in = true
 	return true
 

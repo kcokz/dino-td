@@ -2272,6 +2272,28 @@ const MAPS: Dictionary = {
 ##   drop_*      landing: how high up the capsule starts, how long it takes to come down
 ##   landing_*   the view over the landing: how far, how steep
 ##   settle_seconds  after it is down, before the run begins; dust, the clods thrown up at each corner, their colour
+## And THE OPENING (StationJump.crash; GAME-DESIGN 3.0: a run chosen opens on the capsule's fall into the valley):
+##   crash_distance, crash_view_tilt  where the view stands: so far from the spot, so steeply over it, on the run's
+##               bearing -- low, to look up at what is coming
+##   crash_height, crash_side  where the capsule comes from: so high over its spot, so far across the view -- inside
+##               what the cabin sees (FOG.sight.core, its half-length with it), or the mist swallows it on the way
+##   crash_pitch, crash_roll  its nose down and its roll as it comes (degrees), levelling as it nears the ground
+##   crash_fall_seconds  how long it falls; crash_look_up, how far over the hull's middle the view looks
+##   trail_*     its trail: the flames, the campfire's (FIRE.flame) times this, so many of them; the smoke's puffs,
+##               how many, how long each hangs, how big at first, its colour; let go along trail_stretch metres up and
+##               down of the hull, about what it falls in a frame by the end (or the trail is beads on a string);
+##               smoke_wind, what carries it
+##   fire_colour, crash_light(_range, _fade)  the fire's light on the land under it, and how long it takes to die
+##   crash_shake(_seconds)  the view shaken by the blow: how far, how long; crash_dust, the clods at each corner;
+##               crash_dust_puffs/_seconds/_colour, the cloud thrown up; crash_ring(_seconds), the ring of dust running out
+##               along the ground: how far, how long
+##   crash_calls(_after, _gap)  the valley's answer out of the mist: how many cry out, how long after the blow, how far
+##               apart -- no nearer than an alarm call is let be heard again (SOUNDS.classes.alert.gap)
+##   crash_hold, crash_view_seconds  before he climbs out; the view going back to the run's
+##   crash_skip_after  a press this soon after it began is the one that chose the game, not one to end it
+##   smoulder_*  the hull smoking where it lies: how many puffs, each how long, how big at first, how fast they rise,
+##               how high off the ground, their colour -- thin and pale, a column off it, not a stain on its roof; for
+##               how long
 const STATION_JUMP: Dictionary = {
 	"view_seconds": 1.6, "view_distance": 16.0, "view_tilt": 30.0,
 	"beam_seconds": 1.8, "beam_radius": 0.8, "beam_height": 60.0, "beam_colour": Color(0.55, 0.85, 1.0, 0.75),
@@ -2282,6 +2304,19 @@ const STATION_JUMP: Dictionary = {
 	"drop_height": 40.0, "drop_seconds": 1.6,
 	"landing_distance": 26.0, "landing_tilt": 38.0,
 	"settle_seconds": 0.8, "dust": 14, "dust_colour": Color(0.62, 0.52, 0.38),
+	"crash_distance": 24.0, "crash_view_tilt": 14.0,
+	"crash_height": 80.0, "crash_side": 4.0, "crash_pitch": 22.0, "crash_roll": -12.0,
+	"crash_fall_seconds": 2.4, "crash_look_up": 1.5,
+	"trail_flame": 8.0, "trail_flames": 110, "trail_puffs": 360, "trail_seconds": 4.0, "trail_puff": 1.6, "trail_stretch": 2.0,
+	"trail_colour": Color(0.2, 0.19, 0.18, 0.85), "smoke_wind": Vector3(0.25, 0.1, 0.12),
+	"fire_colour": Color(1.0, 0.55, 0.18), "crash_light": 6.0, "crash_light_range": 26.0, "crash_light_fade": 1.2,
+	"crash_shake": 0.5, "crash_shake_seconds": 0.8, "crash_dust": 24, "crash_dust_puffs": 40, "crash_dust_seconds": 3.0,
+	"crash_dust_colour": Color(0.58, 0.52, 0.45, 0.6),
+	"crash_ring": 16.0, "crash_ring_seconds": 0.9,
+	"crash_calls": 5, "crash_calls_after": 0.4, "crash_calls_gap": 0.55,
+	"crash_hold": 1.2, "crash_view_seconds": 1.4, "crash_skip_after": 0.5,
+	"smoulder_puffs": 36, "smoulder_life": 9.0, "smoulder_puff": 0.9, "smoulder_rise": 1.8, "smoulder_height": 2.6,
+	"smoulder_colour": Color(0.44, 0.42, 0.4, 0.42), "smoulder_seconds": 45.0,
 }
 
 ## ==============================================================================
@@ -3179,6 +3214,10 @@ const SOUNDS: Dictionary = {
 		"beacon_launch": {"files": ["beacon_launch"], "db": -1.0, "pitch": 1.0, "class": "event", "unit": 30.0, "reach": 200.0},
 		# The capsule come down at the next station (StationJump): a hull's weight on earth.
 		"landing": {"files": ["landing"], "db": 0.0, "pitch": 1.0, "class": "event", "unit": 30.0, "reach": 200.0},
+		# The opening (StationJump.crash): the capsule coming down burning -- air torn past a hot hull -- and its blow on
+		# the valley floor, given back off the valley's walls.
+		"crash_fall": {"files": ["crash_fall"], "db": 0.0, "pitch": 1.0, "class": "event", "unit": 40.0, "reach": 300.0},
+		"crash": {"files": ["crash"], "db": 2.0, "pitch": 1.0, "class": "event", "unit": 40.0, "reach": 300.0},
 		"ui_click": {"files": ["ui_click"], "db": -16.0, "pitch": 1.05, "class": "ui"},
 		"ambience_valley": {"files": ["ambience_valley"], "db": 0.0, "pitch": 1.0, "class": "ui"},
 		"ambience_night": {"files": ["ambience_night"], "db": 0.0, "pitch": 1.0, "class": "ui"},

@@ -109,6 +109,8 @@ func _run(name: String) -> void:
 			await _scenario_closeup()
 		"jump":
 			await _scenario_jump()
+		"crash":
+			await _scenario_crash()
 		"firepot":
 			await _scenario_firepot()
 		"ammocard":
@@ -1209,6 +1211,27 @@ func _scenario_jump() -> void:
 	await _portrait("morrison_from_above", _main.current_core.global_position, 30.0, true)
 	gs.game = {}
 	gs.station = 0
+
+## The opening (StationJump.crash; v0.7, GAME-DESIGN 3.0), beat by beat: the capsule high over its spot, burning; on
+## its way down; the blow; the dust; the valley answering; the run begun.
+func _scenario_crash() -> void:
+	_main.station_jump.crash(_main)
+	await _wait(3)
+	await _shoot("high")
+	await _advance(1.3)
+	await _shoot("falling")
+	await _advance(0.8)
+	await _shoot("nearly_down")
+	await _advance(0.35)
+	await _shoot("blow")
+	await _advance(0.5)
+	await _shoot("dust")
+	await _advance(2.0)
+	await _shoot("answer")
+	await _advance(3.5)
+	await _shoot("begun")
+	print("[playtest] the crash over: running %s, paused %s" % [str(_main.station_jump.is_running()),
+		str(root.get_node("GameState").is_paused)])
 
 ## The run's end (v0.6 T7), beat by beat: the beacon's line on a fresh landing, its bench in
 ## the cabin, repaired and waiting for the launch, charging while the final wave comes in from

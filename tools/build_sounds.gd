@@ -1099,6 +1099,28 @@ func _s_landing() -> PackedFloat32Array:
 	_mix(out, _crackle(1.4, 90.0, 1800.0), 0.75, 0.4)
 	return out
 
+func _s_crash_fall() -> PackedFloat32Array:
+	# The opening (StationJump.crash): the capsule coming down burning -- the roar of air torn past a hot hull, rising and
+	# nearing over the fall, a low howl under it, and the crackle of what burns on it.
+	var dur: float = 2.4
+	var out := _buf(dur)
+	_mix(out, _hiss(dur, [[0.0, 500.0], [0.7, 900.0], [1.0, 1400.0]], 0.9, [[0.0, 0.0], [0.5, 0.45], [0.92, 1.0], [1.0, 0.7]]), 0.0, 0.8)
+	_mix(out, _hiss(dur, [[0.0, 160.0], [1.0, 320.0]], 1.6, [[0.0, 0.0], [0.6, 0.5], [1.0, 1.0]]), 0.0, 0.7)
+	_mix(out, _tone(dur, [[0.0, 70.0], [1.0, 120.0]], [[0.0, 0.0], [0.5, 0.3], [1.0, 0.8]]), 0.0, 0.45)
+	_mix(out, _crackle(dur, 60.0, 2400.0), 0.0, 0.3)
+	return out
+
+func _s_crash() -> PackedFloat32Array:
+	# Its blow on the valley floor: a boom felt in the chest, the hull's plates ringing and buckling, earth and stones
+	# thrown up and raining back -- and the valley's walls giving the boom back.
+	var out := _buf(3.6)
+	_mix(out, _burst(0.12, 900.0, 0.8), 0.0, 0.9)
+	_mix(out, _modes(2.2, [[31.0, 1.1, 1.0], [52.0, 0.8, 0.8], [88.0, 0.5, 0.6], [150.0, 0.25, 0.4]], 0.004), 0.0, 1.0)
+	_mix(out, _modes(1.6, [[287.0, 0.5, 1.0], [733.0, 0.35, 0.6], [1291.0, 0.25, 0.45], [2210.0, 0.15, 0.3]], 0.002), 0.02, 0.45)
+	_mix(out, _hiss(0.5, [[0.0, 1800.0], [1.0, 700.0]], 3.0, [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]]), 0.05, 0.4)
+	_mix(out, _crackle(2.4, 120.0, 1500.0), 0.25, 0.45)
+	return _space(out, 0.25, [[0.5, 0.3], [1.1, 0.18], [1.8, 0.1]])
+
 func _s_ui_click() -> PackedFloat32Array:
 	# A button: a small, dry knock, like a bone toggle.
 	var out := _modes(0.06, [[1400.0, 0.012, 1.0], [2600.0, 0.008, 0.5]], 0.0008)

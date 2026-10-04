@@ -103,6 +103,7 @@ func _ready() -> void:
 	if _plays_the_players_map() and gs_start:
 		if bool(gs_start.launch_straight_in):
 			gs_start.launch_straight_in = false
+			open_on_the_crash()
 		elif hud and hud.has_method("show_start_screen"):
 			hud.show_start_screen(true)
 	# The valley under everything: wind, insects, the river (Config.SOUNDS.ambience).
@@ -132,6 +133,17 @@ func _ensure_station_jump() -> void:
 	var gs = _get_game_state()
 	if gs and bool(gs.arrived_by_jump) and _plays_the_players_map():
 		station_jump.arrive.call_deferred(self)
+
+## A game chosen opens on how it began: the capsule's fall into the valley (StationJump.crash; GAME-DESIGN 3.0) --
+## once, on the level built for it, or as the start screen closes over the one the launch built (StartScreen). Not a
+## jump's landing (its own), not a restart (the same run again), not a level a script built.
+func open_on_the_crash() -> void:
+	var gs = _get_game_state()
+	if gs == null or not bool(gs.crash_landing) or bool(gs.arrived_by_jump) or not _plays_the_players_map():
+		return
+	gs.crash_landing = false
+	if station_jump != null and is_instance_valid(station_jump):
+		station_jump.crash.call_deferred(self)
 
 ## Won with a station still to go: the jump, not the victory (HUD._on_game_won leaves it the screen).
 func _on_won_jump() -> void:

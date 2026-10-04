@@ -114,6 +114,10 @@ func play_campaign() -> void:
 		if gs.has_method("set_paused"):
 			gs.set_paused(false)
 		chosen.emit("campaign")
+		# And it opens on how it began (Main.open_on_the_crash): the capsule's fall into the valley.
+		var level: Node = get_tree().current_scene if is_inside_tree() else null
+		if level != null and level.has_method("open_on_the_crash"):
+			level.open_on_the_crash()
 		return
 	gs.play("campaign")
 	chosen.emit("campaign")
