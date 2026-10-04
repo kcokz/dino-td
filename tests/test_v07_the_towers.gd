@@ -397,8 +397,9 @@ func test_12_a_tower_still_being_built_holds_nothing_and_does_nothing() -> void:
 	await _until(func(): return _lost(d) > 0.0, float(_row("bow_tower")["fire_seconds"]) * 2.0)
 	assert_eq(_lost(d), 0.0, "and it shoots nothing")
 	bow.complete_construction()
-	bow.set_ammo("arrow_wood")
-	assert_gt(bow.load_from_stock(), 0, "finished, it is loaded")
+	# Finished, it comes loaded: a full magazine of what its price paid for (Config.ammo_comes_with).
+	assert_eq(String(bow.ammo_type), String(config_node.ammo_comes_with("bow_tower")), "finished, it comes loaded")
+	assert_eq(bow.rounds(), bow.capacity(), "full")
 	await _until(func(): return _lost(d) > 0.0, float(_row("bow_tower")["fire_seconds"]) * 2.0)
 	assert_gt(_lost(d), 0.0, "and it shoots")
 

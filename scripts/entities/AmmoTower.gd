@@ -75,6 +75,24 @@ func rounds() -> int:
 func has_ammo() -> bool:
 	return uses_left > 0 and ammo_type != ""
 
+## Built, it comes loaded (Config.ammo_comes_with): a full magazine of the kind its price paid for (the player,
+## 2026-10-04: "造好了却没实际用处"). The first time only: an upgrade is the same tower built onto (Building.upgrade),
+## and comes with nothing.
+func complete_construction() -> void:
+	var first: bool = not is_constructed
+	super.complete_construction()
+	if first:
+		_come_loaded()
+
+func _come_loaded() -> void:
+	var cfg = _get_config()
+	var kind: String = String(cfg.ammo_comes_with(building_type)) if (cfg and cfg.has_method("ammo_comes_with")) else ""
+	if kind == "" or has_ammo() or not accepts().has(kind):
+		return
+	ammo_type = kind
+	uses_left = capacity() * uses_each(kind)
+	_ammo_changed()
+
 ## Rounds it has room for.
 func room() -> int:
 	return maxi(0, capacity() - rounds())

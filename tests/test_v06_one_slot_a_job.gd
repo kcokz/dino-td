@@ -56,6 +56,11 @@ func test_01_the_menu_is_one_slot_a_job_each_of_wood_alone() -> void:
 		if String(b_type) == "catapult":
 			made_of.sort()
 			assert_eq(made_of, ["stone", "wood"], "catapult: its first form is wood, weighted with stone")
+		elif String(b_type) == "bait_rack":
+			# It comes with its first meat (Config.ammo_comes_with): meat to build it, so it is on the menu once there is
+			# meat (the player, 2026-10-04: "肉架子需要肉才能解锁，因为造就得有肉").
+			made_of.sort()
+			assert_eq(made_of, ["food", "wood"], "bait_rack: wood, and the meat it comes with")
 		else:
 			assert_eq(made_of, ["wood"], "%s: its first form is wood alone" % b_type)
 	var reached: Array = config_node.player_building_types()

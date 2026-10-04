@@ -111,7 +111,10 @@ const BUILDINGS: Dictionary = {
 	# AMMUNITION (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量"): a
 	# tower shoots what it is loaded with (AMMO) -- made at the workbench, and loaded by him: walking past, or sent
 	# to it (AmmoTower, AMMO_LOADING). `ammo.accepts` the kinds it takes, `ammo.capacity` how many it holds; empty,
-	# it does nothing.
+	# it does nothing. BUILT, IT COMES LOADED (`ammo.comes_with`; the player, 2026-10-04: "我先造防御但没有弹药，
+	# intuitively我会觉得这个已经可以用了，没想到造好了却没实际用处"): a full magazine of that kind, the price of the batch
+	# in its own -- the same as building it and making the batch, a step fewer, and it works the moment it stands. An
+	# upgrade is the same tower built onto, and comes with nothing.
 	#
 	# A LEVEL UP (<id>_2, <id>_3; `level`): the same tower, holding more and hitting harder (`damage_factor`, on what its
 	# ammunition does: AmmoTower.strike). A cost here is the whole price of that level, and a way up costs the
@@ -131,11 +134,12 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 3.5,
 		"hp": 120.0,
-		"cost": {"wood": 12},
+		# 12 for the tower and 5 for the twenty arrows it comes loaded with (RECIPES.arrow_wood).
+		"cost": {"wood": 17},
 		"range": 7.0,
 		"fire_seconds": 1.7,
 		"damage_factor": 1.0,
-		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 20},
+		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 20, "comes_with": "arrow_wood"},
 		"level": 1,
 		"upgrades_to": ["bow_tower_2"],
 	},
@@ -145,7 +149,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 3.5,
 		"hp": 120.0,
-		"cost": {"wood": 12, "stone": 4},
+		"cost": {"wood": 17, "stone": 4},
 		"range": 7.0,
 		"fire_seconds": 1.7,
 		"damage_factor": 1.25,
@@ -159,7 +163,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 3.5,
 		"hp": 120.0,
-		"cost": {"wood": 12, "stone": 4, "bone": 4},
+		"cost": {"wood": 17, "stone": 4, "bone": 4},
 		"range": 7.0,
 		"fire_seconds": 1.7,
 		"damage_factor": 1.5,
@@ -179,12 +183,13 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 3.3,
 		"hp": 160.0,
-		"cost": {"wood": 14},
+		# 14 for the tower and 5 for the twenty logs it comes loaded with (RECIPES.log_round).
+		"cost": {"wood": 19},
 		"range": 2.5,
 		"drop_seconds": 2.5,
 		"fall_seconds": 0.35,
 		"damage_factor": 1.0,
-		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 20},
+		"ammo": {"accepts": ["log_round", "log_spiked", "roller_stone"], "capacity": 20, "comes_with": "log_round"},
 		"level": 1,
 		"upgrades_to": ["drop_tower_2"],
 	},
@@ -194,7 +199,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 3.3,
 		"hp": 160.0,
-		"cost": {"wood": 14, "stone": 4},
+		"cost": {"wood": 19, "stone": 4},
 		"range": 2.5,
 		"drop_seconds": 2.5,
 		"fall_seconds": 0.35,
@@ -209,7 +214,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 3.3,
 		"hp": 160.0,
-		"cost": {"wood": 14, "stone": 4, "bone": 4},
+		"cost": {"wood": 19, "stone": 4, "bone": 4},
 		"range": 2.5,
 		"drop_seconds": 2.5,
 		"fall_seconds": 0.35,
@@ -229,9 +234,11 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 2.6,
 		"hp": 80.0,
-		"cost": {"wood": 6},
+		# 6 for the rack and the 2 pieces of meat it comes with: it takes meat to build, so it is on the menu once there
+		# is meat (GameState.knows_all; the player: "肉架子需要肉才能解锁，因为造就得有肉").
+		"cost": {"wood": 6, "food": 2},
 		"range": 3.0,
-		"ammo": {"accepts": ["food"], "capacity": 2},
+		"ammo": {"accepts": ["food"], "capacity": 2, "comes_with": "food"},
 		"level": 1,
 		"upgrades_to": ["bait_rack_2"],
 	},
@@ -241,7 +248,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 2.6,
 		"hp": 80.0,
-		"cost": {"wood": 6, "stone": 4},
+		"cost": {"wood": 6, "stone": 4, "food": 2},
 		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 3},
 		"level": 2,
@@ -253,7 +260,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 2.6,
 		"hp": 80.0,
-		"cost": {"wood": 6, "stone": 4, "bone": 4},
+		"cost": {"wood": 6, "stone": 4, "bone": 4, "food": 2},
 		"range": 3.0,
 		"ammo": {"accepts": ["food"], "capacity": 4},
 		"level": 3,
@@ -271,13 +278,14 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 2.8,
 		"hp": 200.0,
-		"cost": {"wood": 16, "stone": 6},
+		# 16 wood and 6 stone for the engine, and 5 stone for the ten shot it comes loaded with (RECIPES.shot_stone).
+		"cost": {"wood": 16, "stone": 11},
 		"range": 9.0,
 		"min_range": 3.0,
 		"flight_seconds": 1.3,
 		"throw_seconds": 6.0,
 		"damage_factor": 1.0,
-		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 10},
+		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 10, "comes_with": "shot_stone"},
 		"level": 1,
 		"upgrades_to": ["catapult_2"],
 	},
@@ -287,7 +295,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 2.8,
 		"hp": 200.0,
-		"cost": {"wood": 16, "stone": 10},
+		"cost": {"wood": 16, "stone": 15},
 		"range": 9.0,
 		"min_range": 3.0,
 		"flight_seconds": 1.3,
@@ -303,7 +311,7 @@ const BUILDINGS: Dictionary = {
 		"cells": 2,
 		"height": 2.8,
 		"hp": 200.0,
-		"cost": {"wood": 16, "stone": 10, "bone": 4},
+		"cost": {"wood": 16, "stone": 15, "bone": 4},
 		"range": 9.0,
 		"min_range": 3.0,
 		"flight_seconds": 1.3,
@@ -682,6 +690,12 @@ static func ammo_accepts(type_id: String) -> Array[String]:
 
 static func ammo_capacity(type_id: String) -> int:
 	return int(BUILDINGS.get(type_id, {}).get("ammo", {}).get("capacity", 0)) if BUILDINGS.has(type_id) else 0
+
+## What `type_id` comes loaded with, built (BUILDINGS.<id>.ammo.comes_with): a full magazine of it, its price in the
+## tower's; "" for nothing.
+static func ammo_comes_with(type_id: String) -> String:
+	var kind: String = String(BUILDINGS.get(type_id, {}).get("ammo", {}).get("comes_with", ""))
+	return kind if AMMO.has(kind) else ""
 
 ## Uses in one round of `ammo_id` -- 1, but a piece of meat on the bait rack is so many bites (AMMO "uses").
 static func ammo_uses(ammo_id: String) -> int:
