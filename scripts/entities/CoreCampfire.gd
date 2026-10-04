@@ -26,7 +26,8 @@ extends "res://scripts/entities/Building.gd"
 ##     inside, the roof and the front wall above the sill fade and the camera eases in
 ##     (Main._on_cabin_view_changed), and the benches are his, where they stand.
 ##   * THE BENCHES STAND IN IT (CraftingStation), each where the model marks it, and work while
-##     he is inside -- the world outside running all the while.
+##     he is inside -- the world outside running all the while; nothing but the healing pod while
+##     he floats in it (HealingPod).
 ##
 ## The inside is one module now; the ship is put back together a module at a time, a map at a
 ## time (GAME-DESIGN 8.2), docked at the ports the model marks at its ends ("port_west",
@@ -371,16 +372,16 @@ func recheck_hero() -> void:
 # ==============================================================================
 
 ## One CraftingStation per Config.STATIONS, standing where the module's model marks it
-## ("spot_<id>"), with its back to the back wall.
+## ("spot_<id>"), with its back to the back wall -- the healing pod one of its own (HealingPod).
 func _ensure_stations() -> void:
 	stations.clear()
 	var cfg = _get_config()
 	var ids: Array = cfg.STATIONS if (cfg and "STATIONS" in cfg) else []
-	var script = load("res://scripts/entities/CraftingStation.gd")
 	var room: Vector2 = room_half()
 	for i in range(ids.size()):
 		var id: String = String(ids[i])
 		var st: Node = find_child("Station_%s" % id, false, false)
+		var script = load("res://scripts/entities/HealingPod.gd" if id == HealingPod.STATION else "res://scripts/entities/CraftingStation.gd")
 		if st == null and script != null:
 			st = script.new(id)
 			st.name = "Station_%s" % id
@@ -416,6 +417,8 @@ func busy_stations() -> Array[Node]:
 
 ## Work goes on at the benches while he is in here and not otherwise -- the same deal an
 ## unfinished building gets: walking out keeps what is done, and nothing moves in an empty room.
+## While the healing pod has him -- floating in it, or on his way in -- it alone is worked: a rest is
+## a rest (HealingPod).
 func _process(delta: float) -> void:
 	_light_time += delta
 	CabinArt.animate(_lights, _light_time)
@@ -424,8 +427,10 @@ func _process(delta: float) -> void:
 	var gs = _get_game_state()
 	if gs and "is_game_over" in gs and gs.is_game_over:
 		return
+	var pod: Node = station(HealingPod.STATION)
+	var resting: bool = pod != null and pod.has_method("holds_him") and bool(pod.holds_him())
 	for st in stations:
-		if is_instance_valid(st) and st.has_method("work"):
+		if is_instance_valid(st) and st.has_method("work") and (not resting or st == pod):
 			st.work(delta)
 
 func _get_game_state() -> Node:

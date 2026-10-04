@@ -2,7 +2,7 @@
 # v0.6 T4: a tool makes every stroke count for more, and says so.
 #
 # GAME-DESIGN 4.6: gathering must not eat the Hero's whole day, so how fast he works has to
-# be something he can raise -- tools for good, meals for a while. And the rise has to be
+# be something he can raise -- tools, for good (the meals that did it for a while went in v0.7). And the rise has to be
 # seen: a pile brought in with the stone axe says "+2 (Stone Axe x2)", or the axe is a
 # number nobody ever notices. What a tool does is part of its recipe, so the next tool is a
 # line of Config and no code.

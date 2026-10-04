@@ -574,8 +574,9 @@ func unlock_all() -> void:
 		return
 	if "RECIPES" in cfg:
 		for recipe_id in cfg.RECIPES:
-			# Not what he wears or wields (v0.6 round three): armour, boots and a weapon open
-			# nothing, and would quietly make every test's Hero other than Config.HERO says.
+			# Not what he wears or wields (v0.6 round three; gone since v0.7): armour, boots and a
+			# weapon opened nothing, and would quietly have made every test's Hero other than
+			# Config.HERO says.
 			var row: Dictionary = cfg.RECIPES[recipe_id]
 			if row.has("max_hp") or row.has("move_speed") or row.has("damage"):
 				continue

@@ -56,11 +56,9 @@ const FRAMING_FOR := {
 	"node/stone": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 0.82},
 }
 
-## A subject drawn in another colour than its model's: a boss's cut is the haunch the game drops
-## for meat, and only its colour sets it apart -- darker and richer (Config.RESOURCE_COLORS).
-const TINT_FOR := {
-	"drop/prime_meat": Color(0.8, 0.42, 0.5),
-}
+## A subject drawn in another colour than its model's (none since v0.7: the boss's cut, the haunch
+## tinted darker, went with the meals -- GAME-DESIGN 3.0).
+const TINT_FOR := {}
 
 func _init() -> void:
 	await process_frame      # the autoloads, Config among them, join the tree first

@@ -200,7 +200,7 @@ static func icon(name: String) -> Texture2D:
 	_icons[name] = tex
 	return tex
 
-## The portrait of `key` -- a Config.VISUALS key: "hero", "building/wall", "station/kitchen"
+## The portrait of `key` -- a Config.VISUALS key: "hero", "building/wall", "station/pod"
 ## -- rendered from its model by tools/render_portraits.gd, or null where there is none.
 static func portrait(key: String) -> Texture2D:
 	var slot: String = "portrait:" + key
@@ -336,8 +336,6 @@ static func build() -> Theme:
 	_label(t, "LeadLabel", font("regular"), "body", color("text_muted"))
 	_label(t, "NumberLabel", font("bold", true), "label", color("text"))
 	_label(t, "SmallNumberLabel", font("bold", true), "small", color("text"))
-	# A figure a meal has raised, in the boost's gold (the Hero's panel).
-	_label(t, "BoostNumberLabel", font("bold", true), "small", color("boost"))
 	_label(t, "ShortNumberLabel", font("bold", true), "small", color("danger_text"))
 	_label(t, "AccentLabel", font("bold"), "small", color("accent"))
 	# Cut in capitals: a heading, a small capital label naming a card (the beacon's), a title,
@@ -551,7 +549,7 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "ProgressBar", font_size("caption"))
 	t.set_color("font_color", "ProgressBar", color("text"))
 	for pair in [["HealthBar", color("success")], ["WarnBar", color("warning")], ["DangerBar", color("danger")],
-			["BeaconBar", color("tech")], ["BoostBar", color("boost")], ["ArmorBar", color("armor")]]:
+			["BeaconBar", color("tech")]]:
 		t.set_type_variation(pair[0], "ProgressBar")
 		t.set_stylebox("background", pair[0], trough)
 		t.set_stylebox("fill", pair[0], _pigment("paint", pair[1]))

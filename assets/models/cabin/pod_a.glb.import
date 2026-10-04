@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://00d546solu1g"
-path="res://.godot/imported/kitchen_a.glb-c9ad24750b66258db3d38829a82a8292.scn"
+uid="uid://8e73lk8awh3t"
+path="res://.godot/imported/pod_a.glb-5d77235bde8f2f65bb6b75bd3bf1a683.scn"
 
 [deps]
 
-source_file="res://assets/models/cabin/kitchen_a.glb"
-dest_files=["res://.godot/imported/kitchen_a.glb-c9ad24750b66258db3d38829a82a8292.scn"]
+source_file="res://assets/models/cabin/pod_a.glb"
+dest_files=["res://.godot/imported/pod_a.glb-5d77235bde8f2f65bb6b75bd3bf1a683.scn"]
 
 [params]
 

@@ -846,12 +846,14 @@ func _s_hero_hurt() -> PackedFloat32Array:
 	_mix(out, _hiss(0.16, [[0.0, 2500.0], [1.0, 1800.0]], 2.0, [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]]), 0.01, 0.45)
 	return out
 
-func _s_eat() -> PackedFloat32Array:
-	# Chewing: three crunches, softer each time.
-	var out := _buf(1.0)
-	for i in 3:
-		_mix(out, _crackle(0.16, 260.0, 1800.0), 0.05 + 0.3 * i, 1.0 - 0.2 * i)
-		_mix(out, _modes(0.1, [[190.0, 0.03, 1.0]], 0.004), 0.05 + 0.3 * i, 0.3)
+func _s_pod() -> PackedFloat32Array:
+	# Into the healing pod (HealingPod): the hatch's hiss as it seals, and the fluid taking him -- a few slow
+	# bubbles going up, each a little higher.
+	var out := _buf(1.1)
+	_mix(out, _hiss(0.45, [[0.0, 3200.0], [1.0, 1400.0]], 1.2, [[0.0, 0.0], [0.15, 1.0], [1.0, 0.0]]), 0.0, 0.5)
+	for i in 4:
+		_mix(out, _modes(0.14, [[280.0 + 70.0 * i, 0.05, 1.0], [560.0 + 140.0 * i, 0.03, 0.3]], 0.004),
+			0.35 + 0.16 * i, 0.55 - 0.1 * i)
 	return out
 
 func _s_pickup() -> PackedFloat32Array:
@@ -965,13 +967,6 @@ func _s_hull_hit() -> PackedFloat32Array:
 	# scrape of it.
 	var out := _modes(0.7, [[412.0, 0.25, 1.0], [1127.0, 0.18, 0.55], [1873.0, 0.12, 0.4], [2951.0, 0.07, 0.25]], 0.0015)
 	_mix(out, _hiss(0.2, [[0.0, 3200.0], [1.0, 2400.0]], 3.0, [[0.0, 0.0], [0.2, 1.0], [1.0, 0.0]]), 0.02, 0.3)
-	return out
-
-func _s_cook_done() -> PackedFloat32Array:
-	# Meat off the fire: a last sizzle, and the pot set down.
-	var out := _crackle(0.6, 380.0, 3400.0)
-	_mix(out, _hiss(0.6, [[0.0, 5000.0], [1.0, 4200.0]], 1.0, [[0.0, 0.3], [0.3, 1.0], [1.0, 0.0]]), 0.0, 0.25)
-	_mix(out, _modes(0.2, [[240.0, 0.05, 1.0], [520.0, 0.03, 0.5]], 0.003), 0.45, 0.5)
 	return out
 
 func _s_craft_done() -> PackedFloat32Array:

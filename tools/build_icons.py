@@ -32,9 +32,7 @@ C = {
     "s1": "#d3d8da", "s2": "#adb4b8", "s3": "#8b9397", "s4": "#6b7378",
     "bone": "#efe6cf", "bone_shade": "#cdbf9b",
     "meat": "#c9533b", "meat_hi": "#ea8a6c", "meat_dark": "#983926",
-    "prime": "#a62e28", "marble": "#eba594", "fat": "#f2dcc6", "gold": "#f2c14e",
-    "roast": "#a65b27", "roast_hi": "#e0a25a", "roast_dark": "#6c3616", "grill": "#3e1d0b",
-    "crackling": "#e9b765", "steam": "#f4eee4",
+    "fat": "#f2dcc6", "gold": "#f2c14e",
     "water": "#4aa6e2", "water_hi": "#b1e0f8",
     "post": "#a0703f", "post_dark": "#6f4523", "char": "#2e2019", "rope": "#dcbb7c",
     "hull": "#ebe8e1", "hull_shade": "#c4c0b6", "hazard": "#f28c28", "window": "#58c7e8",
@@ -43,6 +41,8 @@ C = {
     "leaf": "#64a24c", "leaf_dark": "#3f7334", "trunk": "#6e4a2a",
     "iron": "#5a6166", "iron_dark": "#3b4145", "fire": "#f28c28", "flame": "#f7cb4c",
     "metal": "#98a3aa", "cyan": "#58c7e8", "moss": "#6b9a45",
+    # The healing pod's nutrient fluid (tools/generate_cabin.py FLUID).
+    "fluid": "#2fd6b4", "fluid_dark": "#14907f", "fluid_hi": "#9ff3e0",
     "hide": "#a8743f", "hide_dark": "#7a4f28", "hide_hi": "#cf9f64",
     "resin": "#3a2616",
     "sand": "#b0603c", "sand_hi": "#c97a50", "sand_dark": "#8a4a2e",
@@ -142,41 +142,6 @@ ICONS["food"] = item_svg(
      shape("ellipse", C["meat"], transform="rotate(-45 27 27)", cx=26, cy=25, rx=17, ry=11),
      shape("ellipse", C["meat_hi"], transform="rotate(-45 21 21)", cx=20, cy=20, rx=8, ry=4)])
 
-ICONS["prime_meat"] = item_svg(
-    [shape("path", C["prime"], d="M 11 32 C 9 20 21 11 33 12 C 47 13 55 23 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 Z"),
-     shape("polygon", C["gold"], points=star(49, 14, 10, 4.3))],
-    [shape("path", None, C["fat"], 4.2, d="M 51 31 C 51 43 41 51 29 51"),
-     shape("path", None, C["marble"], 1.8, d="M 18 27 C 24 22 29 31 36 26"),
-     shape("path", None, C["marble"], 1.8, d="M 20 39 C 27 34 33 43 42 36"),
-     shape("path", None, C["marble"], 1.8, d="M 28 18 C 32 21 36 16 41 20"),
-     shape("polygon", C["gold"], points=star(49, 14, 10, 4.3))])
-
-# A meal (Config.DISHES.<id>.icon): what comes off the fire -- browned, barred where it lay on the
-# stick, still steaming -- so what he eats is never taken for the raw meat he carries in (v0.6 round
-# four: "掉落的raw meat和roast meat图标要区分开现在有点confusing"). The leg is the raw one's shape.
-_STEAM = shape("path", None, C["steam"], 2.8, d="M 50 33 C 45 28 54 24 50 17 M 58 29 C 53 24 62 20 58 12")
-ICONS["roast"] = item_svg(
-    [shape("rect", C["bone"], transform=_HANDLE, x=36, y=40.5, width=20, height=7, rx=3.5),
-     shape("circle", C["bone"], transform=_HANDLE, cx=56, cy=40, r=5.4),
-     shape("circle", C["bone"], transform=_HANDLE, cx=56, cy=48, r=5.4),
-     shape("ellipse", C["roast"], transform="rotate(-45 27 27)", cx=27, cy=27, rx=21, ry=16)],
-    [shape("ellipse", C["roast_dark"], transform="rotate(-45 30 30)", cx=30, cy=31, rx=16, ry=9),
-     shape("ellipse", C["roast"], transform="rotate(-45 27 27)", cx=26, cy=25, rx=17, ry=11),
-     shape("ellipse", C["roast_hi"], transform="rotate(-45 21 21)", cx=20, cy=20, rx=8, ry=4),
-     shape("path", None, C["grill"], 2.6, d="M 16 30 L 23 37 M 22 22 L 30 30 M 29 16 L 36 23"),
-     _STEAM])
-
-# The prime cut, cooked: the raw one's shape and star, browned, its fat crackled gold.
-ICONS["roast_prime"] = item_svg(
-    [shape("path", C["roast"], d="M 11 32 C 9 20 21 11 33 12 C 47 13 55 23 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 Z"),
-     shape("polygon", C["gold"], points=star(49, 14, 10, 4.3))],
-    [shape("path", C["roast_dark"], d="M 53 35 C 51 47 41 55 28 54 C 17 53 12 43 11 32 C 18 44 38 49 53 35 Z"),
-     shape("path", None, C["crackling"], 4.2, d="M 51 31 C 51 43 41 51 29 51"),
-     shape("path", None, C["grill"], 2.6, d="M 17 24 L 27 34 M 24 17 L 37 30 M 33 16 L 42 25"),
-     shape("ellipse", C["roast_hi"], cx=22, cy=20, rx=5, ry=2.6, transform="rotate(-35 22 20)"),
-     shape("polygon", C["gold"], points=star(49, 14, 10, 4.3)),
-     shape("path", None, C["steam"], 2.8, d="M 9 22 C 5 17 13 14 9 7")])
-
 # A hide off an elite (v0.6 round three): a pelt stretched out to dry, its legs out at the corners.
 ICONS["hide"] = item_svg(
     [shape("path", C["hide"], d="M 32 7 C 38 7 40 12 44 13 L 55 8 L 52 20 C 55 26 55 37 52 43 L 57 54 "
@@ -246,61 +211,6 @@ ICONS["stone_axe"] = item_svg(
      shape("path", C["s3"], d="M 23 30 L 38 25 L 38.5 22 L 21 26 C 16 26.5 12 24 11 22 C 12 27 17 31 23 30 Z"),
      shape("rect", C["rope"], transform="rotate(23 38 18)", x=33, y=14, width=10, height=8, rx=2)])
 
-# The stone pick (v0.6 round three): the bone pick's shape, a ground stone head in the bone's place.
-ICONS["quarry_pick"] = item_svg(
-    [shape("path", None, C["post"], 6.5, d="M 13 55 L 44 21"),
-     shape("path", C["s2"], d="M 26 11 Q 55 3 59 38 Q 47 17 26 11 Z")],
-    [shape("path", None, C["post_dark"], 2.0, d="M 15 51 L 41 22"),
-     shape("path", None, C["s1"], 2.4, d="M 33 12 Q 50 11 55 28"),
-     shape("path", None, C["s3"], 1.6, d="M 30 14 Q 46 17 52 31"),
-     shape("rect", C["rope"], transform="rotate(-48 43 22)", x=38, y=18.5, width=10, height=7, rx=2)])
-
-# A spear: a long haft, its point lashed on -- ground stone, then a split bone ground sharp.
-def _spear(point, light, dark):
-    return item_svg(
-        [shape("path", None, C["post"], 5.5, d="M 8 59 L 45 19"),
-         shape("polygon", point, points="41,24 46,11 59,4 54,18")],
-        [shape("path", None, C["post_dark"], 1.8, d="M 10 55 L 43 19"),
-         shape("polygon", light, points="46,11 59,4 48,16"),
-         shape("polygon", dark, points="41,24 48,16 59,4 54,18"),
-         shape("rect", C["rope"], transform="rotate(-47 42 23)", x=37, y=19.5, width=10, height=7, rx=2)])
-
-ICONS["stone_spear"] = _spear(C["s2"], C["s1"], C["s3"])
-ICONS["bone_spear"] = _spear(C["bone"], "#fbf5e6", C["bone_shade"])
-
-# Armour: a vest of hide, laced up the front -- and with bone plates sewn over it in rows.
-_VEST = ("M 20 8 L 27 8 C 28 14 36 14 37 8 L 44 8 C 46 14 50 18 54 20 L 52 57 L 12 57 L 10 20 "
-         "C 14 18 18 14 20 8 Z")
-
-def _vest(plates):
-    detail = [shape("path", None, C["hide_hi"], 2.4, d="M 21 11 C 17 17 14 19 12 22"),
-              shape("path", None, C["hide_hi"], 2.4, d="M 43 11 C 47 17 50 19 52 22"),
-              shape("path", None, C["hide_dark"], 2.0, d="M 32 16 L 32 55")]
-    if plates:
-        # The thick hide armour (v0.6 round six: all hide -- it was bone lamellar): the vest under a second
-        # layer, broad panels of darker tanned hide overlapping like shingles, stitched along their tops.
-        for row, y in enumerate((20, 31, 42)):
-            for (x, w) in ((13, 17), (34, 17)):
-                detail.append(shape("rect", C["hide_dark"], x=x, y=y, width=w, height=12, rx=2.5))
-                detail.append(shape("rect", C["hide"], x=x, y=y, width=w, height=3.2, rx=1.2))
-                detail.append(shape("path", None, C["rope"], 1.3, d="M %d %d L %d %d" % (x + 2, y + 1.6, x + w - 2, y + 1.6)))
-    else:
-        for y in (22, 30, 38, 46):
-            detail.append(shape("path", None, C["rope"], 1.8, d="M 29 %d L 35 %d M 35 %d L 29 %d" % (y, y + 5, y, y + 5)))
-    return item_svg([shape("path", C["hide"], d=_VEST)], detail)
-
-ICONS["hide_vest"] = _vest(False)
-ICONS["bone_armor"] = _vest(True)
-
-# Boots: one boot of hide in profile, a cuff at the top, laced, on a darker sole.
-ICONS["hide_boots"] = item_svg(
-    [shape("path", C["hide"], d="M 19 7 L 37 7 L 37 36 C 45 38 55 41 57 49 L 57 57 L 15 57 L 15 44 "
-                                "C 17 40 19 35 19 29 Z")],
-    [shape("rect", C["hide_hi"], x=19, y=7, width=18, height=7, rx=2),
-     shape("rect", C["hide_dark"], x=15, y=52, width=42, height=5, rx=2),
-     shape("path", None, C["rope"], 1.8, d="M 24 18 L 32 22 M 32 18 L 24 22 M 24 26 L 32 30 M 32 26 L 24 30"),
-     shape("path", None, C["hide_dark"], 1.6, d="M 37 38 C 44 40 51 43 54 48")])
-
 # The day's dial and its words (HUD, GAME-DESIGN 9.3): the sun, rayed; the moon, a crescent.
 ICONS["sun"] = item_svg(
     [shape("circle", C["gold"], cx=32, cy=32, r=13)],
@@ -310,19 +220,6 @@ ICONS["sun"] = item_svg(
 ICONS["moon"] = item_svg(
     [shape("path", "#dfe6f2", d="M 38 8 A 24 24 0 1 0 56 44 A 18 18 0 1 1 38 8 Z")],
     [shape("circle", "#bfc8d8", cx=24, cy=40, r=3.2), shape("circle", "#bfc8d8", cx=33, cy=49, r=2.2)])
-
-# The stone pot: a flat stone over the fire, a piece of meat searing on it.
-ICONS["stone_pot"] = item_svg(
-    [shape("path", C["fire"], d="M 17 60 C 14 54 18 50 21 46 C 23 51 26 53 24 60 Z"),
-     shape("path", C["fire"], d="M 29 60 C 27 53 31 48 34 44 C 36 50 40 53 37 60 Z"),
-     shape("path", C["fire"], d="M 41 60 C 39 55 42 51 45 48 C 47 52 49 55 47 60 Z"),
-     shape("polygon", C["s2"], points="6,36 12,29 50,27 58,33 53,42 11,43"),
-     shape("ellipse", C["meat"], cx=32, cy=26, rx=13, ry=7)],
-    [shape("polygon", C["s1"], points="6,36 12,29 50,27 58,33"),
-     shape("polygon", C["s3"], points="6,36 58,33 53,42 11,43"),
-     shape("ellipse", C["meat"], cx=32, cy=26, rx=13, ry=7),
-     shape("ellipse", C["meat_hi"], cx=28, cy=24, rx=6, ry=2.6),
-     shape("path", C["flame"], d="M 31 60 C 30 56 32 53 34 50 C 35 54 37 56 36 60 Z")])
 
 # ------------------------------------------------------------------------------ buildings
 def _post(x0, top=22, tip=10, w=12):
@@ -507,14 +404,20 @@ ICONS["workbench"] = item_svg(
      shape("rect", C["post"], x=34.5, y=18, width=5, height=13, rx=1.5)],
     [shape("rect", C["post_dark"], x=7, y=36, width=50, height=3, rx=1)])
 
-ICONS["kitchen"] = item_svg(
-    [shape("path", C["fire"], d="M 21 60 C 18 54 22 50 25 46 C 27 51 30 53 28 60 Z"),
-     shape("path", C["fire"], d="M 30 60 C 28 53 32 48 35 44 C 37 50 41 53 38 60 Z"),
-     shape("path", C["fire"], d="M 40 60 C 38 55 41 51 44 48 C 46 52 48 55 46 60 Z"),
-     shape("path", C["iron"], d="M 14 25 L 50 25 L 47 40 C 46 44 42 46 38 46 L 26 46 C 22 46 18 44 17 40 Z"),
-     shape("rect", C["iron_dark"], x=10, y=20, width=44, height=6.5, rx=3)],
-    [shape("path", C["flame"], d="M 32 60 C 31 56 33 53 35 50 C 36 54 38 56 37 60 Z"),
-     shape("path", None, "#7d868c", 2.0, d="M 20 30 L 44 30")])
+# The healing pod (v0.7, GAME-DESIGN 3.0): the ship's regeneration tank -- a white base and cap, the fluid's
+# teal between the hatch's orange jambs, a bubble or two going up.
+ICONS["pod"] = item_svg(
+    [shape("rect", C["hull"], x=13, y=47, width=38, height=11, rx=3),
+     shape("rect", C["fluid"], x=17, y=15, width=30, height=33, rx=4),
+     shape("rect", C["hull"], x=12, y=7, width=40, height=9, rx=3)],
+    [shape("rect", C["hazard"], x=13, y=50, width=38, height=3),
+     shape("rect", C["fluid_dark"], x=38, y=15, width=9, height=33),
+     shape("rect", C["fluid_hi"], x=22, y=19, width=4, height=24, rx=2),
+     shape("rect", C["hazard"], x=17, y=15, width=3.5, height=33),
+     shape("rect", C["hazard"], x=43.5, y=15, width=3.5, height=33),
+     shape("circle", C["fluid_hi"], cx=33, cy=26, r=2.2),
+     shape("circle", C["fluid_hi"], cx=30, cy=35, r=1.6),
+     shape("rect", C["hull_shade"], x=12, y=13, width=40, height=3)])
 
 ICONS["beacon"] = item_svg(
     [shape("rect", C["iron_dark"], x=21, y=52, width=22, height=7, rx=2),
@@ -549,12 +452,6 @@ GLYPHS["lock"] = glyph_svg([shape("path", None, "#ffffff", 6.5, d="M 21 29 L 21 
                             shape("path", fill_rule="evenodd", d="M 18 27 L 46 27 C 49 27 51 29 51 32 L 51 53 C 51 56 49 58 46 58 L 18 58 C 15 58 13 56 13 53 L 13 32 C 13 29 15 27 18 27 Z M 29.5 37 A 3.5 3.5 0 1 1 34.5 37 L 34 47 L 30 47 Z")])
 GLYPHS["info"] = glyph_svg([shape("path", fill_rule="evenodd", d="M 32 6 A 26 26 0 1 1 31.99 6 Z M 28.5 27 L 35.5 27 L 35.5 47 L 28.5 47 Z M 32 15 A 4 4 0 1 1 31.99 15 Z")])
 GLYPHS["check"] = glyph_svg([shape("path", None, "#ffffff", 8, d="M 13 33 L 26 46 L 51 19")])
-GLYPHS["fed"] = glyph_svg([shape("ellipse", transform="rotate(-45 26 26)", cx=26, cy=26, rx=18, ry=13),
-                           shape("rect", transform="rotate(45 44 44)", x=36, y=41, width=18, height=6, rx=3),
-                           shape("circle", transform="rotate(45 44 44)", cx=54, cy=40.5, r=4.8),
-                           shape("circle", transform="rotate(45 44 44)", cx=54, cy=47.5, r=4.8)])
-# His stride, for the walking speed on his panel: a boot.
-GLYPHS["walk"] = glyph_svg([shape("path", d="M 22 8 L 38 8 L 38 36 L 54 44 Q 58 48 54 54 L 16 54 Q 12 54 12 50 L 12 44 Q 22 40 22 30 Z")])
 GLYPHS["close"] = glyph_svg([shape("path", None, "#ffffff", 8, d="M 17 17 L 47 47"), shape("path", None, "#ffffff", 8, d="M 47 17 L 17 47")])
 # The launch: a mast calling out, two rings each side. (The beacon's item icon, tinted flat to
 # sit on an accent button, ran its rings and mast together into one blot.)

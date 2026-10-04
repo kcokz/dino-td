@@ -10,8 +10,8 @@ extends Node
 ## doing when something went wrong, to user://bugreports/bug-<time, to the millisecond>.json, and a picture of
 ## the screen beside it (bug-<time>.png): the run and its clock; the view, and what the cursor was on; what
 ## was picked, and what was in hand to build; the Hero -- where, doing what, going where by what way; every
-## animal's mind and where it came from (Dino.debug_state); every building, node and drop; the stock, the
-## meals and the beacon; the raids, and whose each place round a building is (Dino.attack_slots); the
+## animal's mind and where it came from (Dino.debug_state); every building, node and drop; the stock and
+## the beacon; the raids, and whose each place round a building is (Dino.attack_slots); the
 ## corner's commands; the last twitches the watch wrote up (TwitchWatch); and the last things that happened,
 ## as the game said them (EventBus), with how long ago. The screen says where it went.
 ##
@@ -366,7 +366,7 @@ func snapshot() -> Dictionary:
 		out["run"] = {"map": String(gs.map_id), "seed": int(gs.run_seed), "day": int(gs.day_number()),
 			"time_of_day": snappedf(float(gs.time_of_day()), 0.1), "day_part": String(gs.day_part()),
 			"paused": bool(gs.is_paused), "game_over": bool(gs.is_game_over), "won": bool(gs.is_game_won),
-			"stock": _plain(gs.resources), "meals": _plain(gs.meals), "fed": _plain(gs.fed),
+			"stock": _plain(gs.resources),
 			"unlocks": _plain(gs.unlocks), "known": _plain(gs.known),
 			"beacon": {"steps": int(gs.beacon_steps), "charge": snappedf(float(gs.beacon_charge), 0.1),
 				"final_wave_in": snappedf(float(gs.final_wave_in), 0.1)}}

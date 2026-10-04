@@ -272,23 +272,6 @@ static func keycap(btn: Button, key_text: String) -> Label:
 			cap.offset_bottom = 0.0
 	return cap
 
-## The row along a card's foot (card_button) as one line of words instead of prices: what a
-## meal does, where a building says what it costs.
-static func fill_caption_row(btn: Button, text: String) -> void:
-	var row: HBoxContainer = btn.get_node_or_null("PriceRow")
-	if row == null:
-		return
-	for child in row.get_children():
-		row.remove_child(child)
-		child.queue_free()
-	var t := Label.new()
-	t.theme_type_variation = &"CardCaptionLabel"
-	t.text = text
-	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(t)
-
 ## A plain command: its icon before its word, full width, one height.
 static func action_button(text: String, icon: Texture2D, callback: Callable, variation: StringName = &"") -> Button:
 	var btn := Button.new()
@@ -315,16 +298,9 @@ static func work_text(label: String, ratio: float) -> String:
 static func seconds_text(seconds: float) -> String:
 	return TranslationServer.translate("TIME_SECONDS") % int(round(seconds))
 
-## A job's icon: a meal is its meat, a beacon step is the beacon, a tool is what it works on,
-## anything else is the bench's own.
+## A job's icon: a beacon step is the beacon, a tool is what it works on, the pod's rest is his
+## health, anything else is the bench's own.
 static func job_icon(station: Node, job_id: String) -> Texture2D:
-	# A dish is drawn as it comes out, cooked (Config.dish_icon): what goes in is its price row.
-	if station.has_method("is_dish") and station.is_dish(job_id):
-		var cfg_dish = _config()
-		if cfg_dish and cfg_dish.has_method("dish_icon"):
-			return UiTheme.icon(String(cfg_dish.dish_icon(job_id)))
-		for res_id in station.inputs_of(job_id):
-			return UiTheme.icon(String(res_id))
 	if station.has_method("is_beacon_job") and station.is_beacon_job(job_id):
 		return UiTheme.icon("beacon")
 	var cfg = _config()
@@ -340,9 +316,8 @@ static func job_icon(station: Node, job_id: String) -> Texture2D:
 			for res_id in cfg.RESOURCE_NODES:
 				if String(cfg.harvest_requires_unlock(String(res_id))) == String(cfg.RECIPES[job_id].get("unlocks", "")):
 					return UiTheme.icon(String(res_id))
-		for method in cfg.COOKING_METHODS:
-			if String(method.get("vessel", "")) == String(cfg.RECIPES[job_id].get("unlocks", "")):
-				return UiTheme.icon("kitchen")
+	if station is HealingPod:
+		return UiTheme.icon("heart")
 	return UiTheme.icon(String(station.station_id)) if "station_id" in station else null
 
 ## What a job at a bench costs, takes and does, for whichever entry the cursor is over: the
@@ -354,13 +329,12 @@ static func job_detail(station: Node, job_id: String) -> Array:
 		costs.append("%d %s" % [int(station.inputs_of(job_id)[res_id]), TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper())])
 	var cost_text: String = ", ".join(costs)
 	var cfg = _config()
-	var is_meal: bool = station.has_method("is_dish") and station.is_dish(job_id)
 	if cfg and "BEACON_LAUNCH" in cfg and job_id == String(cfg.BEACON_LAUNCH):
 		# The launch costs nothing; what it asks for is nerve, so it says what is coming.
 		return [launch_detail(), "warn"]
-	if is_meal and station.can_afford(job_id) and cfg and cfg.has_method("describe_meal"):
-		return [TranslationServer.translate("MEAL_DETAIL_FORMAT") % [station.recipe_name(job_id), cost_text,
-			station.time_of(job_id), cfg.describe_meal(station.meal_preview(job_id))], ""]
+	# A rest costs nothing but the time, and says what it does and that nothing else is done meanwhile.
+	if station is HealingPod:
+		return [TranslationServer.translate("POD_REST_DETAIL") % [int(ceil(station.time_of(job_id)))], ""]
 	# A batch of ammunition says how much it makes, what a round of it does, and how much of it is put by already.
 	if station.has_method("is_ammo") and station.is_ammo(job_id) and cfg:
 		var makes: Dictionary = cfg.RECIPES[job_id].get("makes", {})
@@ -404,45 +378,6 @@ static func ammo_detail(ammo_id: String) -> String:
 		"bait":
 			return TranslationServer.translate("AMMO_DETAIL_BAIT") % [title, int(row.get("uses", 1))]
 	return title
-
-## What a bench's upgrade (Config.improves_bench) changes, in one line for its block on the card, the way a
-## building's upgrade says it -- only what changes, before and after: a pot, the first meal the stove cooks
-## as it comes out now and as it would on the pot -- "Roast meat → Seared meat: heals 4 → 6 · +2 max health"
-## (an effect the meal had none of is said as it comes). "" for anything else.
-static func bench_upgrade_change(station: Node, recipe_id: String) -> String:
-	var cfg = _config()
-	var gs = _state()
-	if cfg == null or gs == null or not cfg.RECIPES.has(recipe_id) or not station.has_method("dishes"):
-		return ""
-	var dishes: Array = station.dishes()
-	var flag: String = String(cfg.RECIPES[recipe_id].get("unlocks", ""))
-	if dishes.is_empty() or flag == "":
-		return ""
-	var dish: String = String(dishes[0])
-	var owned: Dictionary = gs.unlocks if "unlocks" in gs else {}
-	var upgraded: Dictionary = owned.duplicate()
-	upgraded[flag] = true
-	var now: Dictionary = cfg.meal_of(dish, owned)
-	var then: Dictionary = cfg.meal_of(dish, upgraded)
-	var parts: PackedStringArray = []
-	# Each effect: [its key in the meal, what it is when the meal has none of it, its words for a change, its
-	# words for one that comes new].
-	for effect in [["heal", 0.0, "MEAL_STAT_HEAL", "EFFECT_HEAL"], ["max_hp", 0.0, "MEAL_STAT_MAX_HP", "EFFECT_MAX_HP"],
-			["build_speed", 1.0, "MEAL_STAT_BUILD_SPEED", "EFFECT_BUILD_SPEED"], ["move_speed", 1.0, "MEAL_STAT_MOVE_SPEED", "EFFECT_MOVE_SPEED"],
-			["fed_seconds", 0.0, "MEAL_STAT_FED_FOR", "EFFECT_FED_FOR"]]:
-		var key: String = String(effect[0])
-		var was: float = float(now.get(key, effect[1]))
-		var will: float = float(then.get(key, effect[1]))
-		if is_equal_approx(was, will):
-			continue
-		var speed: bool = key.ends_with("_speed")
-		if is_equal_approx(was, float(effect[1])):
-			var word: String = TranslationServer.translate(String(effect[3]))
-			parts.append(word % (cfg.factor_text(will) if speed else int(round(will))))
-		else:
-			parts.append(TranslationServer.translate(String(effect[2])) % [cfg.factor_text(was), cfg.factor_text(will)])
-	return TranslationServer.translate("BENCH_CHANGE") % [cfg.meal_name(dish, String(now.get("method", ""))),
-		cfg.meal_name(dish, String(then.get("method", ""))), " · ".join(parts)]
 
 ## What launching the beacon brings: how long it charges, that the whole valley comes from
 ## every side, and who comes last (GAME-DESIGN 8.3).

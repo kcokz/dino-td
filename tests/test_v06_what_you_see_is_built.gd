@@ -95,7 +95,7 @@ func test_01_he_steps_out_of_an_order_laid_on_him_and_builds_it() -> void:
 	var order = bs.place_at("wall", Vector2i(3, 3), _world, true)
 	assert_not_null(order, "The order goes down where he stands")
 	hero.order_build(order, true)
-	var seconds: float = order.build_time / maxf(0.01, float(hero.work_rate())) + 3.0
+	var seconds: float = order.build_time + 3.0
 	for i in range(int(seconds * float(Engine.physics_ticks_per_second))):
 		await wait_physics_frames(1)
 		if order.is_constructed:

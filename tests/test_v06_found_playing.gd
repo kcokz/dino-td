@@ -192,9 +192,10 @@ func test_05_a_bitten_fence_shows_its_bar_not_its_name() -> void:
 	await wait_frames(1)
 	assert_true(wall.label_3d.visible, "Picked, it says what it is")
 
-func test_06_a_meal_wearing_off_is_not_an_attack() -> void:
+func test_06_his_most_changing_is_not_an_attack() -> void:
 	# The warning came up at the start of a game nobody had touched: a meal's boost to his most ran
-	# out, and what he had came down with it.
+	# out, and what he had came down with it (v0.6). Nothing changes his most since v0.7 -- the meals
+	# went -- but what he has coming down WITH it is still no bite.
 	var main = await _level()
 	var hud = main.hud
 	var eb = tree.root.get_node("EventBus")
@@ -202,7 +203,7 @@ func test_06_a_meal_wearing_off_is_not_an_attack() -> void:
 	hud.show_hint("before")
 	eb.hero_hp_changed.emit(10.0, 10.0)
 	await wait_frames(1)
-	assert_eq(String(hud.hint_label.text), "before", "His most coming down with what he has is a meal ending, not a bite")
+	assert_eq(String(hud.hint_label.text), "before", "His most coming down with what he has is not a bite")
 
 func test_07_in_the_cabin_he_does_not_go_out_after_what_bites_its_wall() -> void:
 	var main = await _level()

@@ -986,23 +986,23 @@ func test_49_hero_level_1_menu_is_build_and_then_what_becomes_his() -> void:
 
 	panel.select_target(hero)
 	assert_eq(panel.current_menu, "default", "Starts at default level-1 menu")
-	# Stop was removed as redundant long ago. Since v0.6 round two eating is a command of his
-	# own ("吃饭也是一个图标") -- since round four, tiles of their own in the corner that never move
-	# ("最好建造和吃的两个图标不要变动位置"), none on his card; and a command comes into the corner only
-	# when it is his: Build from the first, at the right end, and each other to the left of those
-	# there as it becomes his ("Build 按钮放最右边，哪个能力先解锁放哪个在靠右，以此类推，吃一开始隐藏因为
-	# 没有食物，火把也是"; test_v06_the_hero_card 11). This is the first morning, nothing cooked.
+	# Stop was removed as redundant long ago. Since v0.6 round four his commands are tiles of their own
+	# in the corner that never move ("最好建造和吃的两个图标不要变动位置"), none on his card; and a command
+	# comes into the corner only when it is his: Build from the first, at the right end, and each other to
+	# the left of those there as it becomes his ("Build 按钮放最右边，哪个能力先解锁放哪个在靠右，以此类推，
+	# 吃一开始隐藏因为没有食物，火把也是"; test_v06_the_hero_card 11) -- Rest (v0.7, where Eat was) the first
+	# time he is hurt. This is the first morning, nothing has bitten him.
 	var tiles: Array = _shown_tiles(commands)
 	assert_eq(tiles.size(), 1, "Level 1 menu has one command at the start")
 	if tiles.size() == 1:
 		assert_eq(tiles[0].text, tr("CMD_BUILD"), "Build")
 	assert_eq(panel.button_container.get_child_count(), 0, "and none on his card")
-	game_state_node.stock_meal("meat")
+	hero.take_damage(1.0)
 	await wait_frames(1)
 	tiles = _shown_tiles(commands)
-	assert_eq(tiles.size(), 2, "A meal cooked, Eat comes")
+	assert_eq(tiles.size(), 2, "Bitten, Rest comes")
 	if tiles.size() == 2:
-		assert_eq(tiles[0].text, tr("CMD_EAT"), "to the left")
+		assert_eq(tiles[0].text, tr("CMD_REST"), "to the left")
 		assert_eq(tiles[1].text, tr("CMD_BUILD"), "of Build, at the right end")
 
 func _shown_tiles(commands: Node) -> Array:

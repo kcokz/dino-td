@@ -1,12 +1,12 @@
 # res://tests/test_v06_bosses.gd
 # v0.6 T10: bosses -- an alpha at the head of every big wave, the map's boss last of all in the
 # beacon's final wave (and in no raid before it: v0.6 round three, "中段的小boss不应该把最后的大boss
-# 形象暴露"), both announced, and both paying in prime meat.
+# 形象暴露"), both announced, and both paying in hide.
 #
 # GAME-DESIGN 7.5: every map has a boss, and a lesser one comes with the big waves the game
 # already had (WAVES.big_every) rather than on a rhythm of its own. A boss is the only thing
-# that leaves prime meat, and prime meat is the best meal there is (test_v06_kitchen) -- so
-# killing one is worth the risk. Everything here is read from Config and the run's map.
+# that leaves hide, and hide is what the map is drawn on (RECIPES hide_map) -- so killing one is
+# worth the risk. Everything here is read from Config and the run's map.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -85,15 +85,14 @@ func test_01_the_alpha_is_a_bigger_harder_one_of_its_pack() -> void:
 	assert_eq(String(alpha.get("boss", "")), "minor", "It is the lesser boss")
 
 func test_02_the_map_s_elites_leave_hide_and_only_they_do() -> void:
-	# v0.6 round three: "精英就掉落皮可以做护甲和鞋子就行了" -- an elite's hide, not a prime cut: what
-	# his armour and boots are made of (RECIPES).
+	# v0.6 round three: "精英就掉落皮可以做护甲和鞋子就行了" -- an elite's hide: what the map is drawn on
+	# (RECIPES hide_map; v0.7 -- the armour and the boots went).
 	var boss_id: String = String(_map()["boss"])
 	assert_eq(String(_row(boss_id).get("boss", "")), "major", "The map's boss is the major one")
 	for species in [String(_map()["minor_boss"]), boss_id]:
 		var drops: Dictionary = _row(species).get("drops", {})
 		assert_gt(int(drops.get("hide", 0)), 0, "%s is an elite, and pays in hide" % species)
 		assert_gt(int(drops.get("bone", 0)), 0, "%s leaves bone too" % species)
-		assert_eq(int(drops.get("prime_meat", 0)), 0, "and no prime cut")
 	for species in _map()["raiders"].keys() + [String(_map()["guards"])]:
 		assert_eq(int(_row(String(species)).get("drops", {}).get("hide", 0)), 0, "%s is not an elite, and leaves none" % species)
 
@@ -195,4 +194,4 @@ func test_07_a_dead_alpha_leaves_its_hide_on_the_ground() -> void:
 	dino.spawn_death_drops()
 	await wait_frames(1)
 	assert_eq(ground_total("hide"), int(_row(alpha_id)["drops"]["hide"]),
-		"What his armour is made of, where it fell")
+		"What his map is drawn on, where it fell")

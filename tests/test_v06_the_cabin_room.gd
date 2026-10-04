@@ -1,8 +1,8 @@
 # res://tests/test_v06_the_cabin_room.gd
 # The cabin is a room, not a menu: the crew module, outside and in (tools/generate_cabin.py
 # module), with the Hero's benches in it as models whose parts show how far the run has got --
-# the tools on the workbench's board, the pot on the fire, the beacon's mast going back up a
-# stage at a time (scripts/fx/CabinArt.gd). A bench clicked is worked where it stands: its menu
+# the tools on the workbench's board, the beacon's mast going back up a stage at a time
+# (scripts/fx/CabinArt.gd) -- and the healing pod (test_v07_the_pod). A bench clicked is worked where it stands: its menu
 # on the panel, and him sent to it (v0.6 round three; it was a dock along the bottom of a room
 # parked under the map).
 #
@@ -83,7 +83,7 @@ func test_01_the_module_and_every_bench_have_a_model() -> void:
 		assert_true(VisualLibrary.has_art("station/%s" % station_id), "The %s is a model" % station_id)
 
 func test_02_everything_a_bench_makes_for_good_has_a_part_that_shows_it() -> void:
-	# A tool, a pot, a stage of the beacon: each lasting job has a part named after it in its
+	# A tool, a stage of the beacon: each lasting job has a part named after it in its
 	# bench's model. Without one the run would move on and the room would not.
 	for recipe_id in config_node.RECIPES:
 		var row: Dictionary = config_node.RECIPES[recipe_id]
@@ -122,27 +122,6 @@ func test_03_the_benches_show_how_far_the_run_has_got() -> void:
 			var expect: bool = (not before) if _is_job(st, String(mi.name)) else true
 			assert_eq(mi.visible, expect, "All done: %s's %s" % [st.station_id, mi.name])
 
-func test_04_the_kitchen_swaps_its_spit_for_the_pot() -> void:
-	# The one upgrade that takes something away, said plainly: the kitchen's vessel recipe
-	# replaces what was over the fire before it.
-	var main = await _level()
-	var kitchen: Node = null
-	var vessel: String = ""
-	for st in main.current_core.stations:
-		for recipe_id in st.recipes():
-			if _parts(st.body).has(CabinArt.BEFORE_PREFIX + recipe_id):
-				kitchen = st
-				vessel = recipe_id
-	assert_not_null(kitchen, "A bench has something that goes when a recipe is made")
-	if kitchen == null:
-		return
-	var parts: Dictionary = _parts(kitchen.body)
-	assert_true(parts[CabinArt.BEFORE_PREFIX + vessel].visible, "Before: the old way over the fire")
-	assert_false(parts[vessel].visible, "And no %s" % vessel)
-	game_state_node.grant_unlock(String(config_node.RECIPES[vessel]["unlocks"]))
-	assert_false(parts[CabinArt.BEFORE_PREFIX + vessel].visible, "Made: the old way is gone")
-	assert_true(parts[vessel].visible, "And the %s stands in its place" % vessel)
-
 func test_05_a_bench_is_clicked_by_its_declared_size_and_drawn_inside_it() -> void:
 	var main = await _level()
 	for st in main.current_core.stations:
@@ -174,20 +153,20 @@ func test_06_the_benches_stand_where_the_module_marks_them() -> void:
 
 func test_07_a_bench_clicked_shows_its_menu_and_sends_him_to_it() -> void:
 	var main = await _level()
-	var kitchen: Node = main.current_core.station("kitchen")
-	assert_not_null(kitchen, "The kitchen is in the cabin")
+	var bench: Node = main.current_core.station("workbench")
+	assert_not_null(bench, "The workbench is in the cabin")
 	main.hero.global_position = main.cabin_door()
 	await wait_physics_frames(2)
-	event_bus_node.unit_selected.emit(kitchen)
-	main._walk_to_bench(kitchen)
-	assert_eq(main.hud.option_panel.selected_unit, kitchen, "Its menu is on the panel")
+	event_bus_node.unit_selected.emit(bench)
+	main._walk_to_bench(bench)
+	assert_eq(main.hud.option_panel.selected_unit, bench, "Its menu is on the panel")
 	var seconds: float = 12.0
 	for i in range(int(seconds * float(Engine.physics_ticks_per_second))):
 		await wait_physics_frames(1)
-		if main.current_core.is_inside(main.hero.global_position) 				and main.hero.global_position.distance_to(kitchen.global_position) < 1.2:
+		if main.current_core.is_inside(main.hero.global_position) 				and main.hero.global_position.distance_to(bench.global_position) < 1.2:
 			break
 	assert_true(main.current_core.is_inside(main.hero.global_position), "He went in, through the door")
-	assert_lt(main.hero.global_position.distance_to(kitchen.global_position), 1.2, "and stands at the kitchen")
+	assert_lt(main.hero.global_position.distance_to(bench.global_position), 1.2, "and stands at the workbench")
 
 func test_08_inside_the_roof_fades_and_outside_it_comes_back() -> void:
 	var main = await _level()
@@ -228,9 +207,10 @@ func test_09_what_glows_is_drawn_lit_and_lights_the_room() -> void:
 	assert_gt(glowing, 0, "Something in the cabin glows")
 	assert_eq(lit, lights.size(), "Every light Config names has a part to hang on")
 
-func test_10_the_fire_wavers() -> void:
-	# The light that flickers hardest is not a lamp: over one second it brightens and dims by
-	# a good part of what Config says it may (a fire at the noise's default scale barely moved).
+func test_10_the_light_that_flickers_wavers() -> void:
+	# The light that flickers hardest -- the dead radio's fault light, now the kitchen's fire is gone --
+	# is not a lamp: over one second it brightens and dims by a good part of what Config says it may
+	# (a light at the noise's default scale barely moved).
 	var main = await _level()
 	var lights: Array[OmniLight3D] = CabinArt.lights_under(main.current_core)
 	var hardest: OmniLight3D = null

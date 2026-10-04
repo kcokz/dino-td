@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://cee6v2lr7r350"
-path="res://.godot/imported/cook_done.wav-3cd762623a51dc05195721b699b142a4.sample"
+uid="uid://c7b3lxmiiir1p"
+path="res://.godot/imported/pod.wav-ef55d64c66eb1553a7c468a4eebaa7e6.sample"
 
 [deps]
 
-source_file="res://assets/audio/cook_done.wav"
-dest_files=["res://.godot/imported/cook_done.wav-3cd762623a51dc05195721b699b142a4.sample"]
+source_file="res://assets/audio/pod.wav"
+dest_files=["res://.godot/imported/pod.wav-ef55d64c66eb1553a7c468a4eebaa7e6.sample"]
 
 [params]
 

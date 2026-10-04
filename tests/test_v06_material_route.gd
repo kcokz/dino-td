@@ -113,10 +113,10 @@ func test_02d_what_a_material_is_for_and_where_it_comes_from_are_said_in_words()
 	assert_eq(String(config_node.source_hint("stone", {})), String(config_node.missing_tool_hint("stone")),
 		"Short of stone and without the pick: the pick is the answer")
 	assert_eq(String(config_node.source_hint("stone", {flag: true})), "", "With it, stone is just work")
-	# Bone: every raider leaves it. Prime meat: only a boss does (test_v06_bosses).
+	# Bone: every raider leaves it. Hide: only a boss does (test_v06_bosses).
 	assert_eq(String(config_node.source_hint("bone", {})), tr("SOURCE_DINOSAURS") % tr("RESOURCE_BONE"), "Bone: the dead leave it")
-	assert_eq(String(config_node.source_hint("prime_meat", {})), tr("SOURCE_BOSSES") % tr("RESOURCE_PRIME_MEAT"),
-		"Prime meat: only a boss does")
+	assert_eq(String(config_node.source_hint("hide", {})), tr("SOURCE_BOSSES") % tr("RESOURCE_HIDE"),
+		"Hide: only a boss does")
 
 func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	var hud = load("res://scenes/ui/HUD.tscn").instantiate()
@@ -152,12 +152,12 @@ func test_03_a_recipe_is_two_materials_at_most() -> void:
 		assert_lte(config_node.RECIPES[recipe_id]["inputs"].size(), 2,
 			"%s is made of two materials at most" % recipe_id)
 
-func test_04_every_unlock_the_cabin_makes_is_a_tool_or_a_vessel() -> void:
-	# The workbench makes tools and the kitchen makes the vessels he cooks in: nothing
-	# the cabin makes is the right to build something.
+func test_04_every_unlock_the_cabin_makes_is_a_tool() -> void:
+	# The workbench makes tools (and the towers' ammunition); the healing pod mends him (v0.7, where the
+	# kitchen stood): nothing the cabin makes is the right to build something.
 	var stations: Array = config_node.STATIONS
 	assert_has(stations, "workbench", "There is a workbench")
-	assert_has(stations, "kitchen", "And a kitchen")
+	assert_has(stations, "pod", "And the healing pod")
 	for recipe_id in config_node.RECIPES:
 		var unlock: String = String(config_node.RECIPES[recipe_id].get("unlocks", ""))
 		if unlock == "":

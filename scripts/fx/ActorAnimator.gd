@@ -93,7 +93,7 @@ func play_state(state_value: Variant) -> void:
 ## going nowhere, a raptor waiting its turn at a gap is WALKING on the spot -- and both played
 ## a walk on the spot. So while the state is a travelling one the clip comes from the pace:
 ## standing still stands, and otherwise the gait drawn nearest that speed is played at it
-## (Config.ANIMATIONS.gaits), so the stride of a fed man quickens with him.
+## (Config.ANIMATIONS.gaits).
 func update_motion(speed: float, delta: float) -> void:
 	var anim := _animations()
 	var follow: float = clampf(float(anim.get("pace_smoothing", 10.0)) * maxf(0.0, delta), 0.0, 1.0)

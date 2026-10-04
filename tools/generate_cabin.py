@@ -1,6 +1,7 @@
 # tools/generate_cabin.py
-# The cabin: the crew module the Hero lives in, outside and in, and the three benches he works
-# at inside it -- each with the pieces that appear on it as the run goes on.
+# The cabin: the crew module the Hero lives in, outside and in, and the three things that stand
+# along its back wall inside -- the workbench, the healing pod, the beacon -- each with the pieces
+# that appear on it as the run goes on.
 #
 #   "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python tools/generate_cabin.py
 #   ... -- module workbench   makes only those
@@ -15,12 +16,12 @@
 # its name (CraftingStation.refresh_parts):
 #
 #   <job id>          shown once that job is done: "stone_axe", "beacon_2", "beacon_launch"
-#   before_<job id>   shown until it is done: the roasting spit is "before_stone_pot"
+#   before_<job id>   shown until it is done: the beacon's broken mast is "before_beacon_1"
 #   anything else     always shown
 #
-# and a name ending in "_glow" is drawn lit by itself -- fire, a screen, daylight through a
-# porthole -- and lights the room round it. So a bench's upgrades are named after the jobs
-# that make them, and a new tool is a recipe in Config and a part here with its id.
+# and a name ending in "_glow" is drawn lit by itself -- the pod's fluid, a screen, the ceiling's
+# lamp -- and lights the room round it. So a bench's upgrades are named after the jobs that make
+# them, and a new tool is a recipe in Config and a part here with its id.
 #
 # The module also carries empties named "spot_<station id>": where each bench stands.
 
@@ -32,10 +33,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from generate_flora import Builder, mix, jitter, vertex_colour_material, reset, UP, PREVIEW_DIR  # noqa: E402
-from generate_props import (_boulder, _log, _bone, _pot, _rope_coil, export_objects,  # noqa: E402
-                            BARK, BARK_LIGHT, FRESH_WOOD, CHAR, VINE, VINE_DARK, ROCK_DARK, ROCK,
-                            ROCK_LIGHT, METAL, METAL_DARK, GUNMETAL, HAZARD, LENS, BONE, MEAT,
-                            MEAT_DARK, FAT, HEAT_TILE, HEAT_TILE_LIGHT, ASH)
+from generate_props import (_boulder, _log, _bone, _rope_coil, export_objects,  # noqa: E402
+                            BARK, BARK_LIGHT, FRESH_WOOD, VINE, VINE_DARK, ROCK_DARK, ROCK, ROCK_LIGHT,
+                            METAL, METAL_DARK, GUNMETAL, HAZARD, LENS, BONE, HEAT_TILE, HEAT_TILE_LIGHT)
 from mathutils import Vector  # noqa: E402
 
 REPO = r"z:\home\zkl-unix\repo\game\dino"
@@ -52,9 +52,12 @@ HIDE = (0.50, 0.36, 0.22)
 HIDE_EDGE = (0.34, 0.23, 0.13)
 # Lit by themselves (the "_glow" parts): these are the colours they are drawn at.
 LAMP = (1.00, 0.90, 0.72)
-FLAME = (1.00, 0.52, 0.10)
-FLAME_TIP = (1.00, 0.86, 0.36)
-EMBER = (0.92, 0.28, 0.05)
+# The pod's nutrient fluid: blue-green, deeper where the column is thin, paler at its surface and
+# where it bubbles.
+FLUID = (0.16, 0.86, 0.70)
+FLUID_DEEP = (0.03, 0.50, 0.50)
+FLUID_PALE = (0.62, 1.00, 0.90)
+BUBBLE = (0.88, 1.00, 0.97)
 SCREEN = (0.34, 0.84, 0.96)
 SCREEN_LINE = (0.70, 0.97, 1.00)
 OK_LIGHT = (0.40, 0.95, 0.45)
@@ -147,21 +150,6 @@ def lashing(b, centre, axis, r, rng, width=0.035):
     b.tube([centre - axis * width, centre + axis * width], [r, r], [jitter(VINE, rng, 0.03), VINE_DARK], 7)
 
 
-def flame(b, base, height, width, rng):
-    """One tongue of fire: a twisted four-sided spike, deep orange at the root and pale
-    yellow at the tip."""
-    lean = Vector((rng.uniform(-0.2, 0.2), rng.uniform(-0.2, 0.2), 1.0)).normalized()
-    tip = base + lean * height
-    mid = base + lean * height * 0.38
-    twist = rng.uniform(0.0, math.pi)
-    ring = [mid + Vector((math.cos(twist + math.tau * k / 4), math.sin(twist + math.tau * k / 4), 0.0)) * width
-            for k in range(4)]
-    for k in range(4):
-        k2 = (k + 1) % 4
-        b.tri(base, ring[k2], ring[k], EMBER, FLAME, FLAME)
-        b.tri(ring[k], ring[k2], tip, FLAME, FLAME, FLAME_TIP)
-
-
 # ==============================================================================
 # The workbench: a hull panel on log legs, and a board of tools behind it
 # ==============================================================================
@@ -247,69 +235,6 @@ def workbench(seed):
         axe.quad(stone[k] + f, stone[k2] + f2, stone[k2] + bk2, stone[k] + bk, ROCK, ROCK, dark, dark)
     lashing(axe, h + Vector((0.0, 0.0, 0.0)), UP, 0.032, rng)
 
-    # His row (v0.6 round three): what goes with him for good shows where it was made.
-    # The Stone Pick, lying on the top where it was knapped: a haft, and a head pointed both ways
-    # bound across its end.
-    quarry = Builder()
-    rod(quarry, Vector((-0.30, 0.17, top_z + 0.018)), Vector((0.13, 0.14, top_z + 0.018)), 0.018,
-        BARK_LIGHT, col1=FRESH_WOOD)
-    ys = (0.005, 0.07, 0.14, 0.21, 0.275)
-    quarry.tube([Vector((0.155, y, top_z + 0.03)) for y in ys], [0.004, 0.022, 0.03, 0.022, 0.004],
-                [ROCK_DARK, ROCK_LIGHT, ROCK, ROCK_LIGHT, ROCK_DARK], 5)
-    lashing(quarry, Vector((0.155, 0.14, top_z + 0.03)), Vector((0.0, 1.0, 0.0)), 0.034, rng, width=0.025)
-
-    # The spears lean at the ends of the bench, past the top's corners: the stone one at the
-    # right, a knapped leaf of stone bound on; the bone one at the left, a long ground bone point.
-    stone_spear = Builder()
-    tip = _spear_shaft(stone_spear, Vector((0.70, 0.02, 0.0)), Vector((0.55, 0.26, 1.42)), rng)
-    d = (tip - Vector((0.70, 0.02, 0.0))).normalized()
-    _point(stone_spear, tip - d * 0.02, tip + d * 0.15, 0.036, 0.012, ROCK, ROCK_LIGHT)
-    bone_spear = Builder()
-    tip = _spear_shaft(bone_spear, Vector((-0.70, 0.02, 0.0)), Vector((-0.56, 0.26, 1.44)), rng)
-    d = (tip - Vector((-0.70, 0.02, 0.0))).normalized()
-    bone_spear.tube([tip - d * 0.03, tip + d * 0.02], [0.02, 0.019], [BONE, BONE], 6)
-    _point(bone_spear, tip + d * 0.01, tip + d * 0.21, 0.02, 0.014, BONE, mix(BONE, ROCK_DARK, 0.25))
-
-    # The armour hangs from the middle peg: a vest of hide laced up the front; the thick hide
-    # armour (its id is still "bone_armor": ids never change) is the same vest a hair in front of
-    # it under a second layer of hide -- broad panels of darker, tanned hide overlapping downwards
-    # like shingles, stitched along their tops -- so the better one hides the lesser once both are
-    # made. It was bone slats; bone is only for what cuts now (v0.6 round six).
-    vest = Builder()
-    _vest(vest, 0.0, rng)
-    bone_armor = Builder()
-    _vest(bone_armor, 0.006, rng)
-    tanned = mix(HIDE, HIDE_EDGE, 0.55)
-    for (zc, proud) in ((0.945, 0.016), (1.025, 0.012), (1.105, 0.008)):
-        for side in (-1.0, 1.0):
-            for (x0, x1) in ((0.012, 0.078), (0.082, 0.150)):
-                xa, xb = side * x0, side * x1
-                ya = _vest_y(xa, zc, 0.006) - 0.006
-                yb = _vest_y(xb, zc, 0.006) - 0.006
-                col = jitter(tanned, rng, 0.05)
-                edge = mix(col, HIDE_EDGE, 0.65)
-                # Its lower edge stands proud of the one below, as a shingle does.
-                bone_armor.quad(Vector((xa, ya - proud, zc - 0.05)), Vector((xb, yb - proud, zc - 0.05)),
-                                Vector((xb, yb, zc + 0.036)), Vector((xa, ya, zc + 0.036)),
-                                edge, edge, col, col)
-                for k in range(4):
-                    xs = xa + (xb - xa) * (k + 0.5) / 4.0
-                    ys = _vest_y(xs, zc, 0.006) - 0.008
-                    rod(bone_armor, Vector((xs, ys, zc + 0.024)), Vector((xs, ys, zc + 0.034)), 0.0028,
-                        ROPE, sides=4)
-
-    # The boots, a pair standing on the top at the right, toes to the room.
-    boots = Builder()
-    for (x, toe_dx) in ((0.43, -0.01), (0.53, 0.02)):
-        heel = Vector((x, 0.17, top_z))
-        boots.tube([heel + UP * 0.02, heel + UP * 0.08, heel + UP * 0.13], [0.034, 0.033, 0.037],
-                   [HIDE_EDGE, HIDE, jitter(HIDE, rng, 0.04)], 8)
-        disc(boots, heel + UP * 0.125, UP, 0.033, HIDE_EDGE)
-        foot = [heel + Vector((0.0, 0.02, 0.028)), heel + Vector((toe_dx * 0.4, -0.04, 0.026)),
-                heel + Vector((toe_dx * 0.8, -0.10, 0.02)), heel + Vector((toe_dx, -0.13, 0.014))]
-        boots.tube(foot, [0.03, 0.03, 0.022, 0.006], [HIDE, jitter(HIDE, rng, 0.04), HIDE, HIDE_EDGE], 8)
-        lashing(boots, heel + UP * 0.11, UP, 0.038, rng, width=0.008)
-
     # The hand-drawn map (v0.6 round five), spread on the top at the back left where it was drawn: a hide
     # scraped thin, its edge ragged, the valley inked on it -- the river down one side, a path, a cross
     # where the cabin is.
@@ -383,175 +308,290 @@ def workbench(seed):
         mix(BONE, ROCK_DARK, 0.12))
     lashing(shovel, Vector((xc, 0.264, zn + 0.012)), UP, 0.026, rng, width=0.022)
 
-    return [("base", base), ("stone_pick", pick), ("stone_axe", axe), ("quarry_pick", quarry),
-            ("stone_spear", stone_spear), ("bone_spear", bone_spear), ("hide_vest", vest),
-            ("bone_armor", bone_armor), ("hide_boots", boots), ("hide_map", hide_map), ("bone_shovel", shovel)]
-
-
-def _spear_shaft(b, foot, top, rng):
-    """A spear's shaft from `foot` to `top`, bound at the top where the point goes on; gives the
-    top back."""
-    rod(b, foot, top, 0.014, BARK_LIGHT, col1=FRESH_WOOD)
-    lashing(b, top - (top - foot).normalized() * 0.02, top - foot, 0.02, rng, width=0.03)
-    return top
-
-
-def _point(b, base, tip, width, thick, col, col_edge, face=Vector((0.0, -1.0, 0.0))):
-    """A knapped or ground point, leaf-shaped: widest a third of the way up, its flat to `face`."""
-    d = (tip - base).normalized()
-    t = face - d * face.dot(d)
-    t.normalize()
-    s = d.cross(t).normalized()
-    w = base.lerp(tip, 0.35)
-    ring = [w + s * width, w + t * thick, w - s * width, w - t * thick]
-    cols = [col_edge, col, col_edge, col]
-    for k in range(4):
-        k2 = (k + 1) % 4
-        b.tri(base, ring[k], ring[k2], col, cols[k], cols[k2])
-        b.tri(ring[k], tip, ring[k2], cols[k], col_edge, cols[k2])
-
-
-# The vest's front, each side from its armhole in to the lacing: (height, outside x, inside x).
-# The inside edge opens into the neck's V above the chest.
-VEST_ROWS = ((0.88, 0.148, 0.004), (1.00, 0.154, 0.004), (1.11, 0.158, 0.004),
-             (1.16, 0.128, 0.006), (1.23, 0.118, 0.034), (1.30, 0.110, 0.062))
-
-
-def _vest_y(x, z, forward):
-    """How far out from the tool board the vest's front is at (x, z): a little fuller at the chest."""
-    return 0.262 - forward - 0.016 * max(0.0, 1.0 - (x / 0.18) ** 2) * (1.0 if z < 1.16 else 0.6)
-
-
-def _vest(b, forward, rng):
-    """A sleeveless vest of hide hung on the board's middle peg, laced up its front; `forward`
-    stands it that much further off the board."""
-    cols_n = 3
-    for side in (-1.0, 1.0):
-        grid = []
-        for (z, outside, inside) in VEST_ROWS:
-            row = []
-            for j in range(cols_n + 1):
-                x = side * (outside + (inside - outside) * j / cols_n)
-                row.append(Vector((x, _vest_y(x, z, forward), z)))
-            grid.append(row)
-        for i in range(len(grid) - 1):
-            for j in range(cols_n):
-                lo = HIDE_EDGE if i == 0 else jitter(HIDE, rng, 0.04)
-                hi = jitter(HIDE, rng, 0.04)
-                edge = mix(HIDE, HIDE_EDGE, 0.5)
-                b.quad(grid[i][j], grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j],
-                       lo, edge if j + 1 == cols_n else lo, edge if j + 1 == cols_n else hi, hi)
-    # The lacing: a cord crossing the opening from the hem up to the chest.
-    for k in range(5):
-        z = 0.92 + k * 0.05
-        y = _vest_y(0.0, z, forward) - 0.004
-        rod(b, Vector((-0.022, y, z)), Vector((0.022, y, z + 0.025)), 0.004, ROPE, sides=4)
-        rod(b, Vector((0.022, y, z + 0.025)), Vector((-0.022, y, z + 0.05)), 0.004, ROPE, sides=4)
+    # NOT HIS KIT any more (GAME-DESIGN 3.0, v0.7): the stone pick, the spears, the vest, the thick hide armour and
+    # the boots went from the game, and from the board with them.
+    return [("base", base), ("stone_pick", pick), ("stone_axe", axe), ("hide_map", hide_map), ("bone_shovel", shovel)]
 
 
 # ==============================================================================
-# The kitchen: a stone hearth on a heat-shield tile, under a hood
+# The healing pod: the ship's regeneration tank, where he sleeps himself whole
 # ==============================================================================
+#
+# v0.7, the player: "睡觉就能回血不错……把未来船舱的睡觉装置科幻化，有类似泡营养液式的身体完全恢复（七龙珠的泡水
+# 装置），这样就不用吃东西喝水". Eating and drinking went, and the kitchen with them; where it stood against the
+# back wall stands the module's medical tank. He steps up into it and floats in glowing fluid until he is whole.
+#
+# A bench is vertex colours and nothing see-through, so there is no glass to draw: the tank is its frame -- a
+# ring at its foot, a collar at its head, six slim ribs, the two at the front the hatch's orange jambs -- and
+# the fluid is the back of the column, lit from inside, its surface a pale line round the glass. A whole column
+# of it, or a lid of it, would hide the man inside from the camera, which looks down into the room from the
+# front: so the fluid is open towards the room and the sky, and the cap is a hub on four struts over the collar
+# rather than a lid. With the collar at 1.9 m his head shows to a camera tilted 45 degrees down, his face to 60.
+#
+# He stands on the tank's floor at its axis, facing out through the hatch (-Y): (0, 0, POD_FLOOR). The model is
+# a metre square about that axis, so fitting it to its size -- which centres it -- moves nothing. Its pipes run
+# back from the base and the cap into the wall, and its spot stands it with its back to the wall.
+#
+# PARTS: "base" (the machine, the frame, the pipes), "fluid_glow" (the fluid, its bubbles, its surface: lit by
+# itself, and it lights the room), "lights_glow" (the collar's ring of lamps and the panel's: lit by
+# themselves, too small to light anything). None is a job, so all three always show.
 
-def kitchen(seed):
-    rng = random.Random(seed)
-    base = Builder()
-    # Tiles off the heat shield, laid on the deck so the fire does not reach it.
-    for i in range(6):
-        for j in range(4):
-            x0, y0 = -0.60 + i * 0.2, -0.36 + j * 0.19
-            col = HEAT_TILE_LIGHT if (i + j) % 2 == 0 else HEAT_TILE
-            box(base, (x0 + 0.004, y0 + 0.004, 0.0), (x0 + 0.196, y0 + 0.186, 0.05), col, rng)
-    # The firebox: stones stacked in a horseshoe, open to the front.
-    ring = []
-    for k in range(7):
-        ring.append(Vector((-0.42 + k * 0.14, 0.26, 0.05)))
-    for k in range(3):
-        ring.append(Vector((-0.44, 0.12 - k * 0.15, 0.05)))
-        ring.append(Vector((0.44, 0.12 - k * 0.15, 0.05)))
-    for course, lift in enumerate((0.0, 0.13, 0.25)):
-        for p in ring:
-            if course == 2 and p.y < 0.0:
+POD_R = 0.50                     # the machine base's radius: the pod is a metre across and a metre deep
+POD_FLOOR = 0.30                 # the top of the base, the floor of the tank: where he stands
+POD_GLASS = 0.457                # where the glass would be: the ribs stand on it
+POD_FLUID = 0.44                 # the fluid's edge, inside the glass
+POD_SURFACE = 1.86               # the fluid's surface
+POD_COLLAR = (1.90, 2.02)        # the collar round the head of the tank, under and over
+POD_TOP = 2.10                   # the crown of the cap
+POD_DOOR = math.radians(30.0)    # the hatch, this far either side of the front
+POD_OPEN = math.radians(75.0)    # the fluid's back reaches round to this far either side of the front
+
+
+def _round(th, r, z):
+    """The point `r` out from the pod's axis and `z` up, `th` round from its front (-Y) towards +X."""
+    return Vector((r * math.sin(th), -r * math.cos(th), z))
+
+
+def _lathe(b, th0, th1, n, profile, cols, ends=False):
+    """Turns `profile` -- (r, z) points up the outside of a ring, across its top and down its inside -- round
+    the pod's axis from `th0` to `th1` in `n` steps: the base's drum, the frame's foot and collar, the cap's
+    hub. Segment j is coloured cols[j], a colour or a function of the step's middle angle; `ends` closes an
+    arc's two ends."""
+    for i in range(n):
+        a, c = th0 + (th1 - th0) * i / n, th0 + (th1 - th0) * (i + 1) / n
+        mid = (a + c) * 0.5
+        for j in range(len(profile) - 1):
+            (r0, z0), (r1, z1) = profile[j], profile[j + 1]
+            col = cols[j](mid) if callable(cols[j]) else cols[j]
+            if r0 < 1e-6 and r1 < 1e-6:
                 continue
-            _boulder(base, p + Vector((rng.uniform(-0.02, 0.02), rng.uniform(-0.02, 0.02), lift)),
-                     0.085 * rng.uniform(0.9, 1.1), rng, fresh=True)
-    # The fire bed: ash, and logs burnt black.
-    bed_c = Vector((0.0, 0.02, 0.055))
-    ash = [bed_c + Vector((math.cos(math.tau * k / 12) * 0.3, math.sin(math.tau * k / 12) * 0.2, 0.0)) for k in range(12)]
-    for k in range(12):
-        base.tri(ash[k], ash[(k + 1) % 12], bed_c + UP * 0.01, ASH, ASH, mix(ASH, CHAR, 0.6))
-    for a in (0.3, 1.9, 3.6):
-        d = Vector((math.cos(a), math.sin(a) * 0.6, 0.0))
-        base.tube([bed_c - d * 0.24 + UP * 0.03, bed_c + d * 0.2 + UP * 0.07], [0.035, 0.03],
-                  [CHAR, mix(CHAR, BARK, 0.4)], 6)
-    # The hood: a bent sheet of plating on two iron legs, and its pipe up through the
-    # ceiling, where the smoke goes out.
-    for x in (-0.47, 0.47):
-        rod(base, Vector((x, 0.30, 0.05)), Vector((x, 0.30, 1.10)), 0.022, METAL_DARK)
-    lo_y, hi_y = -0.20, 0.34
-    corners_lo = [Vector((-0.52, lo_y, 1.00)), Vector((0.52, lo_y, 1.00)), Vector((0.52, hi_y, 1.00)), Vector((-0.52, hi_y, 1.00))]
-    corners_hi = [Vector((-0.14, -0.02, 1.34)), Vector((0.14, -0.02, 1.34)), Vector((0.14, 0.2, 1.34)), Vector((-0.14, 0.2, 1.34))]
+            if r1 < 1e-6:
+                b.tri(_round(a, r0, z0), _round(c, r0, z0), _round(a, 0.0, z1), col, col, col)
+            elif r0 < 1e-6:
+                b.tri(_round(a, 0.0, z0), _round(c, r1, z1), _round(a, r1, z1), col, col, col)
+            else:
+                b.quad(_round(a, r0, z0), _round(c, r0, z0), _round(c, r1, z1), _round(a, r1, z1), col, col, col, col)
+    if ends:
+        for th, flip in ((th0, False), (th1, True)):
+            pts = [_round(th, r, z) for (r, z) in profile[:-1]]
+            col = cols[0](th) if callable(cols[0]) else cols[0]
+            for k in range(1, len(pts) - 1):
+                tri = (pts[0], pts[k + 1], pts[k]) if flip else (pts[0], pts[k], pts[k + 1])
+                b.tri(*tri, col, col, col)
+
+
+def _through(points, steps=4):
+    """A smooth run through `points` (Catmull-Rom), `steps` pieces between each two: a hose's spine."""
+    pts = [points[0]] + list(points) + [points[-1]]
+    out = []
+    for i in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[i - 1], pts[i], pts[i + 1], pts[i + 2]
+        for s in range(steps):
+            t = s / steps
+            out.append(0.5 * ((2.0 * p1) + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+                              + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t * t * t))
+    out.append(points[-1])
+    return out
+
+
+def _hose(b, points, r, col, col_rib):
+    """A ribbed hose through `points`, its ribs a shade apart."""
+    spine = _through(points, 3)
+    b.tube(spine, [r] * len(spine), [col_rib if i % 2 else col for i in range(len(spine))], 7)
+
+
+def _port(b, at, half_w, half_h, r):
+    """Where a pipe of radius `r` goes into the wall behind the pod, at `at`: a plate on the wall and a
+    collar round the pipe."""
+    box(b, (at.x - half_w, POD_R - 0.02, at.z - half_h), (at.x + half_w, POD_R, at.z + half_h), METAL_DARK)
+    b.tube([Vector((at.x, POD_R - 0.06, at.z)), Vector((at.x, POD_R - 0.02, at.z))], [r * 1.3, r * 1.3],
+           [GUNMETAL, GUNMETAL], 8)
+
+
+def _bead(b, c, r, col, col_top):
+    """A bubble: a little bead, paler on top."""
+    top, bottom = c + UP * r, c - UP * r
+    ring = [c + Vector((math.cos(a), math.sin(a), 0.0)) * r for a in (0.0, math.pi / 2, math.pi, 1.5 * math.pi)]
     for k in range(4):
-        k2 = (k + 1) % 4
-        base.quad(corners_lo[k], corners_lo[k2], corners_hi[k2], corners_hi[k], METAL, METAL, METAL_DARK, METAL_DARK)
-    box(base, (-0.53, lo_y - 0.012, 0.96), (0.53, lo_y + 0.005, 1.02), HAZARD)
-    base.tube([Vector((0.0, 0.09, 1.30)), Vector((0.0, 0.09, 1.9)), Vector((0.0, 0.12, 2.56))],
-              [0.085, 0.085, 0.085], [METAL_DARK, GUNMETAL, METAL_DARK], 10)
-    for z in (1.55, 2.1):
-        base.tube([Vector((0.0, 0.09, z - 0.02)), Vector((0.0, 0.09, z + 0.02))], [0.095, 0.095], [GUNMETAL, GUNMETAL], 10)
-    # Beside the fire: a water jar, a haunch hung to dry from the hood, a skin of fat.
-    _pot(base, Vector((-0.53, -0.26, 0.05)), 0.26, rng)
-    rod(base, Vector((0.36, -0.12, 1.00)), Vector((0.36, -0.12, 0.86)), 0.006, GUNMETAL)
-    haunch = Vector((0.36, -0.12, 0.74))
-    base.tube([haunch + UP * 0.12, haunch, haunch - UP * 0.1], [0.03, 0.075, 0.05], [BONE, MEAT_DARK, MEAT], 8)
+        a, d = ring[k], ring[(k + 1) % 4]
+        b.tri(a, d, top, col, col, col_top)
+        b.tri(d, a, bottom, col, col, col)
 
-    # The spit, until there is a pot: two forked sticks and a skewer with meat on it.
-    spit = Builder()
-    for x in (-0.36, 0.36):
-        f = Vector((x, 0.02, 0.05))
-        top = Vector((x, 0.02, 0.58))
-        rod(spit, f, top, 0.016, BARK_LIGHT)
-        for sy in (-1.0, 1.0):
-            rod(spit, top - UP * 0.03, top + Vector((0.0, sy * 0.05, 0.07)), 0.011, BARK_LIGHT)
-    rod(spit, Vector((-0.46, 0.02, 0.61)), Vector((0.46, 0.02, 0.61)), 0.011, FRESH_WOOD)
-    meat_c = Vector((0.0, 0.02, 0.61))
-    spit.tube([meat_c - Vector((0.12, 0.0, 0.0)), meat_c - Vector((0.04, 0.0, 0.0)), meat_c + Vector((0.05, 0.0, 0.0)),
-               meat_c + Vector((0.12, 0.0, 0.0))], [0.04, 0.075, 0.07, 0.035], [MEAT_DARK, MEAT, MEAT, MEAT_DARK], 8)
 
-    # The stone pot: a slab ground hollow, set across the firebox, searing a cut.
-    pot = Builder()
-    pc = Vector((0.0, 0.04, 0.40))
-    outer, inner, top = [], [], []
-    n = 12
+def pod(seed):
+    rng = random.Random(seed)
+    base, fluid, lamps = Builder(), Builder(), Builder()
+
+    # --- The machine: a drum of the module's white plating with an orange band, on a dark plinth, the step
+    # up into the tank cut into its front under the hatch. Its top is the tank's floor.
+    n = 24
+    step = math.tau / n
+    dark_floor = mix(GUNMETAL, METAL_DARK, 0.4)
+
+    def nosing(th):
+        # The step's front edge, striped like the door's threshold.
+        return HAZARD if int(math.floor((th + POD_DOOR) / (POD_DOOR / 4.0))) % 2 == 0 else GUNMETAL
+
+    full = [(0.47, 0.0), (0.47, 0.04), (POD_R, 0.04), (POD_R, 0.19), (POD_R, 0.225), (POD_R, 0.285),
+            (0.485, POD_FLOOR), (0.40, POD_FLOOR), (0.0, POD_FLOOR)]
+    notch = [(0.47, 0.0), (0.47, 0.04), (POD_R, 0.04), (POD_R, 0.135), (POD_R, 0.15), (0.465, 0.15),
+             (0.40, 0.15), (0.40, POD_FLOOR), (0.0, POD_FLOOR)]
     for k in range(n):
-        a = math.tau * k / n
-        d = Vector((math.cos(a) * 0.30, math.sin(a) * 0.22, 0.0))
-        outer.append(pc + d * rng.uniform(0.97, 1.03))
-        top.append(pc + d * 1.0 + UP * 0.07)
-        inner.append(pc + d * 0.72 + UP * 0.035)
-    floor_c = pc + UP * 0.03
-    for k in range(n):
-        k2 = (k + 1) % n
-        pot.quad(outer[k], outer[k2], top[k2], top[k], ROCK_DARK, ROCK_DARK, ROCK_LIGHT, ROCK_LIGHT)
-        pot.quad(top[k], top[k2], inner[k2], inner[k], ROCK_LIGHT, ROCK_LIGHT, ROCK, ROCK)
-        pot.tri(inner[k], inner[k2], floor_c, ROCK_DARK, ROCK_DARK, (0.15, 0.13, 0.12))
-        pot.tri(outer[k2], outer[k], pc - UP * 0.01, ROCK_DARK, ROCK_DARK, ROCK_DARK)
-    cut = floor_c + UP * 0.012
-    pot.tube([cut - Vector((0.1, 0.0, 0.0)), cut, cut + Vector((0.1, 0.0, 0.0))], [0.02, 0.035, 0.02],
-             [FAT, MEAT, FAT], 8)
+        a = k * step
+        signed = (a + math.pi) % math.tau - math.pi
+        white = jitter(METAL, rng, 0.012)
+        if -POD_DOOR - 1e-6 <= signed and signed + step <= POD_DOOR + 1e-6:
+            _lathe(base, signed, signed + step, 2, notch,
+                   [GUNMETAL, METAL_DARK, white, HAZARD, nosing, GUNMETAL, METAL_DARK, dark_floor])
+        else:
+            _lathe(base, a, a + step, 1, full,
+                   [GUNMETAL, METAL_DARK, white, HAZARD, white, METAL_DARK, mix(white, (1.0, 1.0, 1.0), 0.06),
+                    dark_floor])
+    # The cut's two cheeks.
+    cheek = [(0.40, 0.15), (POD_R, 0.15), (POD_R, 0.19), (POD_R, 0.225), (POD_R, 0.285), (0.485, POD_FLOOR),
+             (0.40, POD_FLOOR)]
+    for th, flip in ((-POD_DOOR, True), (POD_DOOR, False)):
+        pts = [_round(th, r, z) for (r, z) in cheek]
+        for k in range(1, len(pts) - 1):
+            tri = (pts[0], pts[k + 1], pts[k]) if flip else (pts[0], pts[k], pts[k + 1])
+            base.tri(*tri, METAL, METAL, METAL)
 
-    # The fire itself, lit.
-    fire = Builder()
-    for k in range(7):
-        a = math.tau * k / 7 + rng.uniform(-0.2, 0.2)
-        r = rng.uniform(0.02, 0.14)
-        flame(fire, bed_c + Vector((math.cos(a) * r, math.sin(a) * r * 0.6, 0.04)), rng.uniform(0.16, 0.3),
-              rng.uniform(0.035, 0.06), rng)
-    for k in range(10):
-        c = bed_c + Vector((rng.uniform(-0.22, 0.22), rng.uniform(-0.12, 0.12), 0.02))
-        fire.tri(c, c + Vector((0.03, 0.0, 0.0)), c + Vector((0.0, 0.03, 0.0)), EMBER, EMBER, FLAME)
+    def on_facet(k, u, z, lift=0.002):
+        """A point on the drum's facet k (vertex k to k + 1), `u` of the way across it, `z` up."""
+        p = _round(k * step, POD_R, z).lerp(_round((k + 1) * step, POD_R, z), u)
+        return p + _round((k + 0.5) * step, 1.0, 0.0) * lift
 
-    return [("base", base), ("before_stone_pot", spit), ("stone_pot", pot), ("fire_glow", fire)]
+    # Vents low on either side, and a panel at the front right, beside the step: its screen and buttons
+    # are lit (the lamps, below).
+    for k in (5, 18):
+        for z in (0.075, 0.11, 0.145):
+            base.quad(on_facet(k, 0.15, z), on_facet(k, 0.85, z), on_facet(k, 0.85, z + 0.018),
+                      on_facet(k, 0.15, z + 0.018), GUNMETAL, GUNMETAL, GUNMETAL, GUNMETAL)
+    panel = 3
+    base.quad(on_facet(panel, 0.08, 0.06), on_facet(panel, 0.92, 0.06), on_facet(panel, 0.92, 0.18),
+              on_facet(panel, 0.08, 0.18), LENS, LENS, LENS, LENS)
+    # The threshold: the tank floor's front edge, striped, where he steps over.
+    for s in range(4):
+        a = -POD_DOOR + 2.0 * POD_DOOR * s / 4
+        c = -POD_DOOR + 2.0 * POD_DOOR * (s + 1) / 4
+        col = HAZARD if s % 2 == 0 else GUNMETAL
+        base.quad(_round(a, 0.365, POD_FLOOR + 0.001), _round(a, 0.40, POD_FLOOR + 0.001),
+                  _round(c, 0.40, POD_FLOOR + 0.001), _round(c, 0.365, POD_FLOOR + 0.001), col, col, col, col)
+
+    # --- The frame: the foot ring the glass stands in (broken by the hatch), the collar at its head, and
+    # six slim ribs between -- the hatch's two orange jambs, two at the sides, two behind.
+    _lathe(base, POD_DOOR, math.tau - POD_DOOR, 20,
+           [(0.484, POD_FLOOR), (0.484, 0.36), (0.43, 0.36), (0.43, POD_FLOOR), (0.484, POD_FLOOR)],
+           [METAL_DARK, mix(METAL_DARK, METAL, 0.2), GUNMETAL, GUNMETAL], ends=True)
+    z0, z1 = POD_COLLAR
+
+    def lintel(th):
+        # Orange over the hatch, as round the module's own door.
+        return HAZARD if abs((th + math.pi) % math.tau - math.pi) < POD_DOOR else METAL_DARK
+    _lathe(base, 0.0, math.tau, n,
+           [(0.485, z0), (0.485, z0 + 0.025), (0.485, z0 + 0.04), (0.485, z0 + 0.072), (0.485, z1 - 0.02),
+            (0.47, z1), (0.40, z1), (0.40, z0), (0.485, z0)],
+           [lintel, METAL, GUNMETAL, METAL, mix(METAL, (1.0, 1.0, 1.0), 0.05), mix(METAL, (1.0, 1.0, 1.0), 0.08),
+            METAL_DARK, mix(METAL_DARK, (0.0, 0.0, 0.0), 0.3)])
+    for th in (-POD_DOOR, POD_DOOR, math.pi / 2, -math.pi / 2, math.pi - POD_DOOR, math.pi + POD_DOOR):
+        jamb = abs(abs(th) - POD_DOOR) < 1e-6
+        beam(base, _round(th, POD_GLASS, 0.355), _round(th, POD_GLASS, z0 + 0.005), 0.036 if jamb else 0.026,
+             0.036 if jamb else 0.03, HAZARD if jamb else METAL_DARK, up=_round(th, 1.0, 0.0))
+    # The hatch's hinges on the right jamb and its latch on the left.
+    for z in (0.56, 1.12, 1.66):
+        rod(base, _round(POD_DOOR - 0.05, 0.468, z), _round(POD_DOOR - 0.05, 0.468, z + 0.07), 0.012, GUNMETAL,
+            sides=5)
+    latch = [_round(-POD_DOOR + 0.05, 0.47, z) for z in (1.0, 1.2)]
+    out = _round(-POD_DOOR + 0.05, 0.028, 0.0)
+    for p in latch:
+        rod(base, p, p + out, 0.007, GUNMETAL, sides=4)
+    rod(base, latch[0] + out, latch[1] + out, 0.01, METAL_DARK, sides=5)
+
+    # --- The cap: a hub over the open top on four struts from the collar, a nozzle under it where the fluid
+    # comes in, and two hoses from it back into the wall over the collar.
+    _lathe(base, 0.0, math.tau, 12,
+           [(0.0, 1.985), (0.15, 1.985), (0.15, 2.02), (0.15, 2.035), (0.15, 2.06), (0.115, 2.085), (0.05, POD_TOP),
+            (0.0, POD_TOP)],
+           [METAL_DARK, METAL, HAZARD, METAL, mix(METAL, (1.0, 1.0, 1.0), 0.05), mix(METAL, (1.0, 1.0, 1.0), 0.08),
+            mix(METAL, (1.0, 1.0, 1.0), 0.1)])
+    rod(base, Vector((0.0, 0.0, 1.935)), Vector((0.0, 0.0, 1.99)), 0.042, GUNMETAL, sides=10)
+    for th in (math.pi / 4, -math.pi / 4, 3 * math.pi / 4, -3 * math.pi / 4):
+        beam(base, _round(th, 0.44, z1 + 0.017), _round(th, 0.14, 2.045), 0.04, 0.034, METAL_DARK)
+        beam(base, _round(th, 0.475, z1 + 0.006), _round(th, 0.405, z1 + 0.006), 0.062, 0.012, GUNMETAL)
+    # The hoses end inside the collars on their plates, so a hose's last ring, tilted, stays off the wall.
+    hose_r = 0.027
+    for sx in (-1.0, 1.0):
+        _hose(base, [Vector((sx * 0.05, 0.10, 2.035)), Vector((sx * 0.17, 0.2, 2.066)),
+                     Vector((sx * 0.30, 0.30, 2.068)), Vector((sx * 0.405, 0.39, 2.0)),
+                     Vector((sx * 0.43, 0.425, 1.85)), Vector((sx * 0.43, POD_R - 0.035, 1.80))],
+              hose_r, METAL_DARK, GUNMETAL)
+        _port(base, Vector((sx * 0.43, POD_R, 1.80)), 0.05, 0.06, hose_r)
+
+    # --- Under it, the feed: a thick hose out of either side of the base and back into the wall, and an
+    # orange cable along the deck beside it.
+    for sx in (-1.0, 1.0):
+        _hose(base, [_round(sx * math.radians(118), 0.47, 0.13), Vector((sx * 0.462, 0.30, 0.17)),
+                     Vector((sx * 0.46, 0.40, 0.30)), Vector((sx * 0.455, POD_R - 0.035, 0.42))],
+              0.032, GUNMETAL, METAL_DARK)
+        _port(base, Vector((sx * 0.455, POD_R, 0.42)), 0.045, 0.06, 0.032)
+        cable = _through([_round(sx * math.radians(100), 0.47, 0.05), Vector((sx * 0.488, 0.16, 0.02)),
+                          Vector((sx * 0.475, 0.40, 0.015)), Vector((sx * 0.41, POD_R - 0.02, 0.09))], 3)
+        base.tube(cable, [0.011] * len(cable), [HAZARD] * len(cable), 6)
+        box(base, (sx * 0.41 - 0.03, POD_R - 0.018, 0.06), (sx * 0.41 + 0.03, POD_R, 0.12), GUNMETAL)
+
+    # --- The fluid: the back of the column, round to POD_OPEN either side of the front -- brightest at the
+    # back, where it is deepest, and paler at the floor and up at the surface -- the surface a pale line
+    # round the glass and its edge a ring, the floor's emitter lit in rings, and bubbles rising.
+    def fluid_col(th, z):
+        s = max(0.0, 1.0 - abs(th - math.pi) / (math.pi - POD_OPEN))
+        c = mix(FLUID_DEEP, FLUID, 0.3 + 0.7 * s ** 0.7)
+        c = mix(c, FLUID_PALE, 0.35 * max(0.0, 1.0 - (z - POD_FLOOR) / 0.25))
+        return mix(c, FLUID_PALE, 0.3 * max(0.0, 1.0 - (POD_SURFACE - z) / 0.2))
+    rows = [0.33, 0.42, 0.7, 1.1, 1.5, 1.72, POD_SURFACE]
+    segs = 14
+    for i in range(segs):
+        a = POD_OPEN + (math.tau - 2.0 * POD_OPEN) * i / segs
+        c = POD_OPEN + (math.tau - 2.0 * POD_OPEN) * (i + 1) / segs
+        for j in range(len(rows) - 1):
+            za, zb = rows[j], rows[j + 1]
+            fluid.quad(_round(c, POD_FLUID, za), _round(a, POD_FLUID, za), _round(a, POD_FLUID, zb),
+                       _round(c, POD_FLUID, zb), fluid_col(c, za), fluid_col(a, za), fluid_col(a, zb), fluid_col(c, zb))
+    _lathe(fluid, 0.0, math.tau, n, [(POD_FLUID + 0.003, POD_SURFACE - 0.016), (POD_FLUID + 0.003, POD_SURFACE)],
+           [FLUID_PALE])
+    _lathe(fluid, 0.0, math.tau, n, [(POD_FLUID, POD_SURFACE), (0.405, POD_SURFACE)], [mix(FLUID, FLUID_PALE, 0.5)])
+    for (r0, r1, col) in ((0.0, 0.07, FLUID_PALE), (0.12, 0.2, mix(FLUID, FLUID_PALE, 0.6)),
+                          (0.25, 0.34, mix(FLUID, FLUID_PALE, 0.3))):
+        _lathe(fluid, 0.0, math.tau, 16, [(r1, POD_FLOOR + 0.002), (r0, POD_FLOOR + 0.002)], [col])
+    disc(fluid, Vector((0.0, 0.0, 1.933)), Vector((0.0, 0.0, -1.0)), 0.032, FLUID_PALE, 10, BUBBLE)
+    streams = [(110, 0.36), (150, 0.30), (182, 0.37), (212, 0.26), (248, 0.35), (168, 0.14), (82, 0.37), (280, 0.36)]
+    for (deg, r) in streams:
+        z = rng.uniform(0.38, 0.6)
+        while z < POD_SURFACE - 0.06:
+            size = 0.008 + 0.013 * (z - 0.35) / 1.5 + rng.uniform(-0.002, 0.003)
+            c = _round(math.radians(deg) + rng.uniform(-0.05, 0.05), r + rng.uniform(-0.02, 0.02), z)
+            _bead(fluid, c, size, FLUID_PALE, BUBBLE)
+            z += rng.uniform(0.18, 0.32)
+    for k in range(9):
+        th = math.radians(rng.uniform(95.0, 265.0))
+        at = _round(th, rng.uniform(0.15, 0.4), POD_SURFACE - rng.uniform(0.02, 0.06))
+        _bead(fluid, at, rng.uniform(0.006, 0.011), FLUID_PALE, BUBBLE)
+
+    # --- The lamps: a ring of them round the collar -- the one over the hatch green, the rest the fluid's
+    # own pale -- and the panel's screen and three buttons.
+    for k in range(12):
+        th = math.tau * k / 12
+        d = 0.017 / 0.487
+        col = OK_LIGHT if k == 0 else FLUID_PALE
+        lamps.quad(_round(th - d, 0.487, z0 + 0.044), _round(th + d, 0.487, z0 + 0.044),
+                   _round(th + d, 0.487, z0 + 0.068), _round(th - d, 0.487, z0 + 0.068), col, col, col, col)
+    lamps.quad(on_facet(panel, 0.16, 0.125, 0.004), on_facet(panel, 0.84, 0.125, 0.004),
+               on_facet(panel, 0.84, 0.165, 0.004), on_facet(panel, 0.16, 0.165, 0.004),
+               SCREEN, SCREEN, SCREEN_LINE, SCREEN_LINE)
+    for (u, col) in ((0.2, OK_LIGHT), (0.45, AMBER_LIGHT), (0.7, FLUID_PALE)):
+        lamps.quad(on_facet(panel, u, 0.075, 0.004), on_facet(panel, u + 0.12, 0.075, 0.004),
+                   on_facet(panel, u + 0.12, 0.1, 0.004), on_facet(panel, u, 0.1, 0.004), col, col, col, col)
+
+    return [("base", base), ("fluid_glow", fluid), ("lights_glow", lamps)]
 
 
 # ==============================================================================
@@ -1122,8 +1162,9 @@ def module(seed):
         _log(hull, p0, p1, 0.07, rng)
 
     # --- Where things stand -------------------------------------------------------------------
-    # Each bench with its back to the back wall (Config.CABIN.station_sizes: their depths).
-    spots = {"workbench": Vector((-1.75, y_back - 0.37, 0.0)), "kitchen": Vector((0.0, y_back - 0.44, 0.0)),
+    # Each bench with its back to the back wall (Config.CABIN.station_sizes: their depths); the pod's
+    # back right against it, where its pipes go in, between the two middle ribs.
+    spots = {"workbench": Vector((-1.75, y_back - 0.37, 0.0)), "pod": Vector((0.0, y_back - POD_R, 0.0)),
              "beacon": Vector((1.75, y_back - 0.41, 0.0)),
              "door": Vector((0.0, _wall_y(MOD_OUT, 0.0, True) - 0.6, 0.0))}
     ports = {"west": Vector((-3.5, 0.0, 1.0)), "east": Vector((3.5, 0.0, 1.0))}
@@ -1143,7 +1184,7 @@ def module(seed):
 MODELS = {
     "module": (module, 23),
     "workbench": (workbench, 11),
-    "kitchen": (kitchen, 13),
+    "pod": (pod, 13),
     "beacon": (beacon, 17),
 }
 

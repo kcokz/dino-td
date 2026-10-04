@@ -3,12 +3,12 @@ class_name CabinArt
 extends RefCounted
 
 ## The cabin's models show how far the run has got. The tools hang on the workbench's board
-## once they are made, the stone pot stands on the fire once it is made, the beacon's mast
-## goes back up a stage at a time and its screen comes alive. Each model is one file of named
-## parts (tools/generate_cabin.py), and a part's name says when it shows:
+## once they are made, the beacon's mast goes back up a stage at a time and its screen comes
+## alive. Each model is one file of named parts (tools/generate_cabin.py), and a part's name
+## says when it shows:
 ##
 ##   <job id>          once that job is done ("stone_axe", "beacon_2", "beacon_launch")
-##   before_<job id>   until it is done (the roasting spit is "before_stone_pot")
+##   before_<job id>   until it is done (the beacon's broken mast is "before_beacon_1")
 ##   anything else     always
 ##
 ## ahead of either, a tag for how it is drawn that says nothing about when: "fade_" (faded with
@@ -16,8 +16,8 @@ extends RefCounted
 ## lights of the same job) -- the cabin's roof mast is "fade_beacon_2", its lamp
 ## "lamp_beacon_2_glow".
 ##
-## A name ending "_glow" is drawn lit by itself -- fire, a screen, daylight through a
-## porthole -- and lights the room round it when Config.CABIN.glow_lights names it.
+## A name ending "_glow" is drawn lit by itself -- the pod's fluid, a screen, daylight through
+## a porthole -- and lights the room round it when Config.CABIN.glow_lights names it.
 ##
 ## So the art says which job a piece belongs to, and the game's own record of what is done
 ## -- a recipe's unlock flag, the beacon's steps -- says whether it shows. A new tool is a
@@ -49,7 +49,7 @@ static func parts(body: Node) -> Array[MeshInstance3D]:
 	return out
 
 ## The job a part's name waits on, and whether it shows BEFORE that job rather than after:
-## "before_stone_pot" -> ["stone_pot", true]; "beacon_3_glow" -> ["beacon_3", false].
+## "before_beacon_1" -> ["beacon_1", true]; "beacon_3_glow" -> ["beacon_3", false].
 static func condition(part_name: String) -> Array:
 	var n: String = part_name
 	for tag in TAGS:

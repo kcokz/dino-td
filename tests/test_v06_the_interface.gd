@@ -21,7 +21,7 @@ const UI_SCRIPTS: Array[String] = [
 
 ## The glyphs the interface draws on its buttons, toasts and cards.
 const GLYPHS: Array[String] = ["pause", "play", "menu", "build", "upgrade", "repair", "demolish",
-	"back", "clock", "warning", "lock", "info", "check", "fed", "signal"]
+	"back", "clock", "warning", "lock", "info", "check", "signal"]
 
 func before_all() -> void:
 	if tree != null and tree.root != null:

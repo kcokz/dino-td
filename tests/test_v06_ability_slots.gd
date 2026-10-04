@@ -63,7 +63,7 @@ func _tools() -> Array[String]:
 			out.append(String(recipe_id))
 	return out
 
-func test_01_his_row_is_the_best_he_has_of_each_slot() -> void:
+func test_01_his_row_is_what_he_has_of_each_slot() -> void:
 	assert_eq(config_node.abilities({}), [] as Array[String], "A new run: none")
 	var tools := _tools()
 	assert_gt(tools.size(), 1, "There are things to make")
@@ -78,13 +78,6 @@ func test_01_his_row_is_the_best_he_has_of_each_slot() -> void:
 	for i in row.size():
 		var got: Dictionary = config_node.RECIPES[row[i]]
 		assert_eq(String(got["slot"]), String(config_node.KIT_SLOTS[i]), "in the slots' order")
-		for recipe_id in tools:
-			var other: Dictionary = config_node.RECIPES[recipe_id]
-			if String(other["slot"]) == String(got["slot"]):
-				assert_gte(int(got["tier"]), int(other["tier"]), "%s: the best of its slot" % row[i])
-	for recipe_id in config_node.RECIPES:
-		if String(config_node.RECIPES[recipe_id].get("station", "")) == "kitchen":
-			assert_false(row.has(String(recipe_id)), "The kitchen's %s stays in the kitchen" % recipe_id)
 
 func test_02_his_card_has_a_row_of_empty_slots_to_begin_with() -> void:
 	var panel = _card()
@@ -119,31 +112,6 @@ func test_03_a_tool_made_is_a_square_with_its_icon_and_what_it_does() -> void:
 	assert_true(tip.contains(String(config_node.recipe_effect_text(pick))), "and what it does")
 	assert_ne(String(config_node.recipe_effect_text(pick)), "", "which is something")
 	assert_eq(_slots(panel).size(), config_node.KIT_SLOTS.size(), "It takes its slot; the row is no longer")
-
-func test_04_a_better_one_takes_its_lesser_s_place() -> void:
-	var panel = _card()
-	await wait_frames(2)
-	# Two of one slot: the lesser made first, then the better.
-	var lesser: String = ""
-	var better: String = ""
-	for a in _tools():
-		for b in _tools():
-			var ra: Dictionary = config_node.RECIPES[a]
-			var rb: Dictionary = config_node.RECIPES[b]
-			if lesser == "" and String(ra["slot"]) == String(rb["slot"]) and int(rb["tier"]) > int(ra["tier"]):
-				lesser = a
-				better = b
-	assert_ne(lesser, "", "Some slot has a better one to make")
-	game_state_node.grant_unlock(String(config_node.RECIPES[lesser]["unlocks"]))
-	panel._show_abilities(true)
-	await wait_frames(1)
-	assert_not_null(panel.find_child("Ability_" + lesser, true, false), "The lesser in its slot")
-	game_state_node.grant_unlock(String(config_node.RECIPES[better]["unlocks"]))
-	panel._show_abilities(true)
-	await wait_frames(1)
-	assert_null(panel.find_child("Ability_" + lesser, true, false), "Gone")
-	assert_not_null(panel.find_child("Ability_" + better, true, false), "the better in its place")
-	assert_eq(_slots(panel).size(), config_node.KIT_SLOTS.size(), "and the row no longer for it")
 
 func test_05_every_thing_in_his_row_has_an_icon_of_its_own() -> void:
 	for recipe_id in _tools():

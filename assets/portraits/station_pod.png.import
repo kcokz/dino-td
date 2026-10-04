@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cswbp4l6bdano"
-path="res://.godot/imported/station_kitchen.png-c4ae5daafb40ebb802485b6a1c355679.ctex"
+uid="uid://c30mrspktpbmm"
+path="res://.godot/imported/station_pod.png-e78d6a696f0211236be7eccd15bba4f5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/portraits/station_kitchen.png"
-dest_files=["res://.godot/imported/station_kitchen.png-c4ae5daafb40ebb802485b6a1c355679.ctex"]
+source_file="res://assets/portraits/station_pod.png"
+dest_files=["res://.godot/imported/station_pod.png-e78d6a696f0211236be7eccd15bba4f5.ctex"]
 
 [params]
 

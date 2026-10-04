@@ -1541,7 +1541,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var eb = _get_event_bus()
 		var panel = _get_option_panel()
-		# Then a submenu of his card (build, eat), as its Back button does -- or his card open in full.
+		# Then a submenu of his card (build), as its Back button does -- or his card open in full.
 		if panel != null and is_instance_valid(panel) and panel.has_method("in_submenu") and panel.in_submenu():
 			panel._on_back_pressed()
 			return

@@ -4,7 +4,7 @@ extends Node
 
 ## What he says (v0.6 round three: "人自己也需要有些滚动的话在移动的时候idle的时候说，做事情说做的事情等"):
 ## a line now and then, of the moment -- set off walking, left standing, at a tree, at the rock,
-## at a stake, eating, fighting, bitten, and when the raid comes, the leader or the boss shows
+## at a stake, in the healing pod, fighting, bitten, and when the raid comes, the leader or the boss shows
 ## itself, a tool comes off the bench, a stage of the beacon comes back on line.
 ##
 ## A raid on its way is his to tell: the pack's call is heard from the nest's side, and he says
@@ -118,7 +118,7 @@ func _on_state(state: int) -> void:
 				if by_kind.has(kind):
 					consider(String(by_kind[kind]))
 		6:
-			consider("eat")
+			consider("rest")
 
 ## `situation` happened: he may say something about it -- as often as its "chance" says.
 func consider(situation: String) -> bool:

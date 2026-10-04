@@ -201,21 +201,6 @@ signal material_discovered(res_id: String)
 signal cabin_view_changed(inside: bool)
 
 # ==============================================================================
-# 11. Eating (v0.6)
-# ==============================================================================
-## Emitted when the Hero eats a meal from the kitchen: what it was and what it does,
-## as Config.meal_of describes it. The Hero heals from it; GameState keeps the rest.
-signal meal_eaten(meal: Dictionary)
-
-## Emitted when the stock of cooked meals changes -- one cooked, one eaten, a new run:
-## GameState.meals, "dish/method" -> how many (v0.6 round two).
-signal meals_changed(meals: Dictionary)
-
-## Emitted when the Hero becomes fed, or stops being: GameState.fed, empty when the
-## last meal has worn off.
-signal fed_changed(fed: Dictionary)
-
-# ==============================================================================
 # 12. His voice (v0.6 round three)
 # ==============================================================================
 ## Emitted when the Hero says something (HeroVoice): the strings.csv key of the line, how long it

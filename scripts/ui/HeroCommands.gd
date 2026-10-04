@@ -3,16 +3,16 @@ class_name HeroCommands
 extends HBoxContainer
 
 ## His commands, as tiles in the bottom right corner (v0.6 round four: "最好建造和吃的两个图标不要变动位
-## 置，就在右下角原处"). What they open -- his menus -- and every other card stand above them
+## 置，就在右下角原处"). What they open -- his build menu -- and every other card stand above them
 ## (OptionPanel.stand_on), as a menu comes up off its button in the games that keep the screen clear.
 ##
 ## BUILD AT THE RIGHT, AND THE REST IN THE ORDER THEY BECOME HIS (v0.6 round four, the player: "Build 按钮
 ## 放最右边，哪个能力先解锁放哪个在靠右，以此类推，吃一开始隐藏因为没有食物，火把也是"). Build is there from the
 ## first; each other command comes in to the left of those there already when it first can be used --
-## Eat when there is first a meal to eat, Torch with the first dusk -- and stays where it came for the
-## rest of the run, greyed out while it cannot be pressed (no meal; daylight; no wood), so nothing to
-## its left ever moves. Its key is its place: the first command key Build's, the next the first to come,
-## and so on (Config.CONTROLS.command_keys).
+## Rest the first time he is hurt (v0.7: it was Eat, the first time there was a meal), Torch with the
+## first dusk -- and stays where it came for the rest of the run, greyed out while it cannot be pressed
+## (unhurt; daylight; no wood), so nothing to its left ever moves. Its key is its place: the first command
+## key Build's, the next the first to come, and so on (Config.CONTROLS.command_keys).
 ##
 ## The number keys press them while the card above has no commands on the keys of its own
 ## (set_keys_live); while it has, the keys are its, and the tiles' keycaps go, so no key is shown
@@ -20,11 +20,12 @@ extends HBoxContainer
 ## nothing here picks a colour or a size.
 
 signal build_pressed()
-signal eat_pressed()
+signal rest_pressed()
 signal torch_pressed()
 
 var build_button: Button = null
-var eat_button: Button = null
+## Home to the healing pod (HealingPod): pressed in while he floats in it, and pressed again, he climbs out.
+var rest_button: Button = null
 var torch_button: Button = null
 ## The commands there, in the order they came: "build" first, then as each became his.
 var came: Array[String] = []
@@ -38,10 +39,10 @@ func _ready() -> void:
 	build_button = UiKit.command_button(tr("CMD_BUILD"), UiTheme.icon("hammer"), func(): build_pressed.emit(), tr("TIP_CMD_BUILD"))
 	build_button.name = "BuildCommand"
 	add_child(build_button)
-	eat_button = UiKit.command_button(tr("CMD_EAT"), UiTheme.icon("roast"), func(): eat_pressed.emit(), tr("TIP_CMD_EAT"), 0)
-	eat_button.name = "EatCommand"
-	add_child(eat_button)
-	for btn in [build_button, eat_button]:
+	rest_button = UiKit.command_button(tr("CMD_REST"), UiTheme.icon("heart"), func(): rest_pressed.emit(), tr("TIP_CMD_REST"))
+	rest_button.name = "RestCommand"
+	add_child(rest_button)
+	for btn in [build_button, rest_button]:
 		btn.toggle_mode = true
 	torch_button = UiKit.command_button(tr("CMD_TORCH"), UiTheme.icon("torch"), func(): torch_pressed.emit(), _torch_tip(), 0)
 	torch_button.name = "TorchCommand"
@@ -53,8 +54,9 @@ func _ready() -> void:
 	reset()
 	var eb = get_node_or_null("/root/EventBus")
 	if eb:
-		if eb.has_signal("meals_changed"):
-			eb.meals_changed.connect(func(_meals: Dictionary): refresh())
+		# His health: Rest comes the first time he is hurt.
+		if eb.has_signal("hero_hp_changed"):
+			eb.hero_hp_changed.connect(func(_hp: float, _most: float): refresh())
 		# And at once whatever changes what a tile says: the wood in the stock, the part of the day, a
 		# torch lit or burnt out. Waiting for the next refresh, the torch's came up a few seconds after
 		# the dusk was said, and a press on it the moment the wood came in was lost (the debug-agent's
@@ -79,7 +81,7 @@ func reset() -> void:
 	came.clear()
 	came.append("build")
 	move_child(build_button, -1)
-	eat_button.visible = false
+	rest_button.visible = false
 	torch_button.visible = false
 	set_keys_live(_keys_live)
 	refresh()
@@ -96,9 +98,9 @@ func _pin() -> void:
 	offset_top = -margin
 	offset_bottom = -margin
 
-## The tile of the command `id`: "build", "eat", "torch".
+## The tile of the command `id`: "build", "rest", "torch".
 func tile(id: String) -> Button:
-	return {"build": build_button, "eat": eat_button, "torch": torch_button}.get(id, null)
+	return {"build": build_button, "rest": rest_button, "torch": torch_button}.get(id, null)
 
 ## A command become his: its tile comes in to the left of those there already -- the corner grows
 ## leftwards, so none of them moves -- and takes the next key.
@@ -133,7 +135,7 @@ func _keys() -> Array:
 func set_keys_live(live: bool) -> void:
 	_keys_live = live
 	var keys: Array = _keys()
-	for id in ["build", "eat", "torch"]:
+	for id in ["build", "rest", "torch"]:
 		var btn: Button = tile(id)
 		if btn == null:
 			continue
@@ -151,37 +153,32 @@ func set_keys_live(live: bool) -> void:
 func keys_live() -> bool:
 	return _keys_live
 
-## The tile whose menu is open stays pressed in: "build", "eat", or "" for neither.
+## The tile whose menu is open stays pressed in: "build", or "" for none.
 func mark_open(menu: String) -> void:
 	build_button.set_pressed_no_signal(menu == "build")
-	eat_button.set_pressed_no_signal(menu == "eat")
 
-## Each tile as things stand: whether a command has become his (Eat, the first meal; Torch, the first
-## dusk), and whether it can be pressed now. Not out of the tree: a level taken down but not yet freed
-## still heard the stock change, and asked for the Hero outside the tree (the debug-agent's check of
+## Each tile as things stand: whether a command has become his (Rest, the first time he is hurt; Torch,
+## the first dusk), and whether it can be pressed now. Not out of the tree: a level taken down but not yet
+## freed still heard the stock change, and asked for the Hero outside the tree (the debug-agent's check of
 ## 7dd3f34, thirty lines of it in the bot's log).
 func refresh() -> void:
-	if eat_button == null or not is_inside_tree():
+	if rest_button == null or not is_inside_tree():
 		return
-	var gs = get_node_or_null("/root/GameState")
-	var meals: int = 0
-	if gs and "meals" in gs:
-		for key in gs.meals:
-			meals += int(gs.meals[key])
-	if meals > 0:
-		_come("eat")
-	var badge: Label = eat_button.get_node_or_null("Badge") as Label
-	if badge:
-		badge.text = str(meals)
-		# None cooked: its 0 in the colour of what he is short of, as a price he cannot pay is.
-		if meals <= 0:
-			badge.add_theme_color_override("font_color", UiTheme.color("ink_short"))
-		else:
-			badge.remove_theme_color_override("font_color")
 	var hero: Node = get_tree().get_first_node_in_group("hero")
-	var eating: bool = hero != null and is_instance_valid(hero) and hero.has_method("is_eating") and bool(hero.is_eating())
-	eat_button.disabled = meals <= 0 or eating
+	_refresh_rest(hero)
 	_refresh_torch(hero)
+
+## Rest's tile: come the first time he is hurt, greyed out while he is whole; pressed in while he is in the pod
+## or on his way to it -- and pressed again, he climbs out.
+func _refresh_rest(hero: Node) -> void:
+	var alive: bool = hero != null and is_instance_valid(hero) and "current_hp" in hero and float(hero.current_hp) > 0.0
+	var hurt: bool = alive and float(hero.current_hp) < float(hero.max_hp) - 0.001
+	var pod: HealingPod = HealingPod.of(get_tree())
+	var going: bool = alive and pod != null and hero.has_method("rest_pod") and hero.rest_pod() == pod
+	if hurt:
+		_come("rest")
+	rest_button.disabled = pod == null or not (hurt or going)
+	rest_button.set_pressed_no_signal(going)
 
 ## The torch's tile: come with the first dusk, greyed out by day; while one burns pressed in, its badge the
 ## seconds it has left -- and pressed again, it is put out (v0.6 round six: "再按一下就取消").
@@ -207,8 +204,8 @@ func _refresh_torch(hero: Node) -> void:
 func _retext() -> void:
 	build_button.text = tr("CMD_BUILD")
 	build_button.tooltip_text = tr("TIP_CMD_BUILD")
-	eat_button.text = tr("CMD_EAT")
-	eat_button.tooltip_text = tr("TIP_CMD_EAT")
+	rest_button.text = tr("CMD_REST")
+	rest_button.tooltip_text = tr("TIP_CMD_REST")
 	torch_button.text = tr("CMD_TORCH")
 	torch_button.tooltip_text = _torch_tip()
 

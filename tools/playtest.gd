@@ -139,10 +139,8 @@ func _run(name: String) -> void:
 			await _scenario_start()
 		"custom":
 			await _scenario_custom()
-		"kitchen":
-			await _scenario_kitchen()
-		"eating":
-			await _scenario_eating()
+		"pod":
+			await _scenario_pod()
 		"ghost":
 			await _scenario_ghost()
 		"buildings":
@@ -189,10 +187,9 @@ func _run(name: String) -> void:
 ## player: "如果有的事情不做也可以过关，就要考虑这个是玩家可选的方向吗……如果不是，那就是没存在的必要") is what it does
 ## and what it leaves undone, so a run without one thing can be laid beside a run with it:
 ##   all          everything below (the default)
-##   bows         only bow towers -- five -- and wooden arrows: no ring of palisade, no other tower, no kit, no meals
-##   -<thing>     all but that: -ring, -log, -catapult, -bait, -kit (armour, vest, boots, spears, the stone pick),
-##                -meals (cooking and eating), -torch, -axe
-## (commas between: "play:25:-meals,-kit"). Its account is printed at the end as one line, "[report] {json}" (_report):
+##   bows         only bow towers -- five -- and wooden arrows: no ring of palisade, no other tower
+##   -<thing>     all but that: -ring, -log, -catapult, -bait, -pod (no rest in the healing pod), -torch, -axe
+## (commas between: "play:25:-pod,-axe"). Its account is printed at the end as one line, "[report] {json}" (_report):
 ## where his time went, what came in and went out, how much timber is left standing, and each raid.
 func _scenario_play(spec: String) -> void:
 	var parts: PackedStringArray = spec.split(":")
@@ -221,7 +218,6 @@ func _scenario_play(spec: String) -> void:
 	eb.dino_died.connect(func(d): note.call("a %s died" % d.dino_type))
 	eb.building_destroyed.connect(func(b): note.call("LOST a %s" % b.building_type))
 	eb.unlock_granted.connect(func(u): note.call("made: %s" % u))
-	eb.meal_eaten.connect(func(m): note.call("ate %s" % str(m.get("dish", ""))))
 	eb.hero_died.connect(func(): note.call("THE HERO DIED"))
 	eb.game_lost.connect(func(): note.call("GAME LOST"))
 	eb.game_won.connect(func(): note.call("GAME WON -- the jump home"))
@@ -290,9 +286,8 @@ func _scenario_play(spec: String) -> void:
 	note.call("wood: %d; raid in %.0fs" % [int(gs.resources.get("wood", 0)), wm.raid_timer])
 
 	# --- 4 onwards: raids come and go; between them, what a player would do next -------------
-	# In order: the beacon when its next step can be paid; a meal when there is meat and none is
-	# put by, and eating one when he is not fed; the pick, then the axe; his row once the hide comes
-	# in -- armour, boots, the bone spear, the stone pick; the towers north of the ring, the way the
+	# In order: the beacon when its next step can be paid; a rest in the healing pod when he is hurt;
+	# the pick, then the axe; the towers north of the ring, the way the
 	# nest is -- a bow tower each side, a log tower between them rolling down the way the raid comes, a
 	# catapult further out once there is stone -- each loaded with what the workbench makes for it,
 	# carried over by him; the ring mended where a raid broke it; and otherwise stone while there is
@@ -345,13 +340,16 @@ func _scenario_play(spec: String) -> void:
 					await _portrait("alpha", (d as Node3D).global_position, 4.0)
 			var home: Vector3 = cabin.door_inside()
 			# What is at the cabin he goes out to, as a player would, while he has the health for it --
-			# and eats when he has not. The cabin's gun used to finish a raid while he sheltered at the
-			# door; it has none since 2026-10-02 ("cabin的自动射击得取消了"), and a raid sat out inside
-			# brings it down.
+			# and rests in the healing pod when he has not (HealingPod). The cabin's gun used to finish a
+			# raid while he sheltered at the door; it has none since 2026-10-02 ("cabin的自动射击得取消了"),
+			# and a raid sat out inside brings it down.
 			var near: Node3D = _nearest_dino(hero, 9.0)
 			var hurt: bool = hero.current_hp < hero.max_hp * 0.35
-			if hurt and not gs.meals.is_empty() and int(hero.current_state) != 6:
-				hero.order_eat(String(gs.meals.keys()[0]))
+			var pod = cabin.station("pod")
+			if hero.rest_pod() != null:
+				pass      # in the pod, or on his way to it: it mends him, and lets him out whole
+			elif hurt and _plan_has("pod") and pod != null and pod.can_offer("rest"):
+				pod.begin("rest")
 			elif near != null and not hurt:
 				if hero.target_enemy != near:
 					hero.order_attack(near)
@@ -367,7 +365,6 @@ func _scenario_play(spec: String) -> void:
 			await _gather_drops(hero, note)
 			continue
 		var wb = cabin.station("workbench")
-		var kitchen = cabin.station("kitchen")
 		var beacon_job: String = String(gs.beacon_next_job())
 		var pick_flag: String = String(cfg.RECIPES["stone_pick"]["unlocks"])
 		if beacon_job != "" and cabin.station(String(cfg.BEACON_STATION)).can_afford(beacon_job):
@@ -382,36 +379,20 @@ func _scenario_play(spec: String) -> void:
 			_ctx = "wreck"
 			await _search_wreck(hero, wreck)
 			continue
-		var dish: String = ""
-		for job in kitchen.jobs():
-			if kitchen.is_dish(job) and kitchen.can_afford(job):
-				dish = job
-		# A meal put by, and more once the beacon is next: the last fight is fought on them.
-		var put_by: int = 0
-		for key in gs.meals:
-			put_by += int(gs.meals[key])
-		if _plan_has("meals") and dish != "" and (put_by == 0 or (put_by < 3 and beacon_job != "" and not beacon_job.begins_with("beacon_1"))):
-			await _bench_job(hero, cabin, "kitchen", dish, note)
-			continue
-		if _plan_has("meals") and not gs.meals.is_empty() and (gs.fed.is_empty() or hero.current_hp < hero.max_hp * 0.6):
-			_ctx = "eat"
-			hero.order_eat(String(gs.meals.keys()[0]))
-			await _play_until(func(): return int(hero.current_state) != 6, 10.0, "eating")
+		# Hurt, he rests in the healing pod before he goes out again (HealingPod): whole in a few seconds,
+		# nothing else done meanwhile.
+		var pod = cabin.station("pod")
+		if _plan_has("pod") and pod != null and pod.can_offer("rest") and hero.current_hp < hero.max_hp * 0.7:
+			_ctx = "rest"
+			note.call("resting in the pod (%d/%d)" % [int(hero.current_hp), int(hero.max_hp)])
+			pod.begin("rest")
+			await _play_until(func(): return hero.rest_pod() == null, float(pod.time_of("rest")) + 20.0, "resting")
 			continue
 		if not gs.has_unlock(pick_flag) and wb.can_afford("stone_pick"):
 			await _bench_job(hero, cabin, "workbench", "stone_pick", note)
 			continue
 		if _plan_has("axe") and wb.can_offer("stone_axe") and wb.can_afford("stone_axe"):
 			await _bench_job(hero, cabin, "workbench", "stone_axe", note)
-			continue
-		# His row as a player fills it (v0.6 round three): armour and boots first -- they cost what
-		# the elites and the raids leave, not the towers' wood and stone -- then the spear, the stone pick.
-		var kit_job: String = ""
-		for job in ["bone_armor", "hide_vest", "hide_boots", "bone_spear", "quarry_pick"]:
-			if _plan_has("kit") and kit_job == "" and wb.can_offer(job) and wb.can_afford(job):
-				kit_job = job
-		if kit_job != "":
-			await _bench_job(hero, cabin, "workbench", kit_job, note)
 			continue
 		var next_tower: Array = []
 		for plan in tower_plan:
@@ -484,16 +465,16 @@ func _scenario_play(spec: String) -> void:
 var _plan_words: PackedStringArray = PackedStringArray(["all"])
 
 ## Whether the plan has `thing` in it: everything but what it leaves out ("-thing"); with "bows", only the bow towers
-## and their arrows -- no ring, no other tower, no kit, no meals.
+## and their arrows -- no ring, no other tower -- and what any player does: a torch at night, the axe, a rest when hurt.
 func _plan_has(thing: String) -> bool:
 	if _plan_words.has("-" + thing):
 		return false
 	if _plan_words.has("bows"):
-		return thing in ["bow", "torch", "axe"]
+		return thing in ["bow", "torch", "axe", "pod"]
 	return true
 
 ## What he is about this moment, for the account: "gather:wood", "craft:ammo", "build", "load", "raid", "drops",
-## "wreck", "eat", "torch", "think" (the bot choosing what next).
+## "wreck", "rest", "torch", "think" (the bot choosing what next).
 var _ctx: String = "think"
 var _ctx_time: Dictionary = {}
 var _income: Dictionary = {}       # resource -> {where from -> how much}
@@ -613,13 +594,13 @@ func _timber_standing() -> int:
 			n += int(node.current_amount)
 	return n
 
-## What a job at a bench is, for the account: the beacon, a meal, ammunition (a recipe that makes some), a tool.
+## What a job at a bench is, for the account: the beacon, a rest, ammunition (a recipe that makes some), a tool.
 func _job_kind(bench_id: String, job: String) -> String:
 	var cfg := root.get_node("Config")
 	if bench_id == String(cfg.BEACON_STATION):
 		return "beacon"
-	if bench_id == "kitchen":
-		return "meal"
+	if bench_id == HealingPod.STATION:
+		return "rest"
 	if cfg.RECIPES.get(job, {}).has("makes"):
 		return "ammo"
 	return "tools"
@@ -658,14 +639,9 @@ func _can_do(what: String, cabin: Node, gs: Node) -> bool:
 			return cabin.station("workbench").can_afford("stone_pick")
 		"axe":
 			return cabin.station("workbench").can_afford("stone_axe")
-		"cook":
-			var k = cabin.station("kitchen")
-			for job in k.jobs():
-				if k.is_dish(job) and k.can_afford(job):
-					return true
-			return false
-		"eat":
-			return not gs.meals.is_empty()
+		"rest":
+			var pod = cabin.station(HealingPod.STATION)
+			return pod != null and pod.can_offer(HealingPod.REST)
 		"stone":
 			return gs.has_unlock(String(root.get_node("Config").RECIPES["stone_pick"]["unlocks"]))
 		"tower":
@@ -907,8 +883,6 @@ func _bench_job(hero: Node, cabin: Node, bench_id: String, job: String, note: Ca
 		return
 	var began: bool = bench.begin(job)
 	note.call("%s at the %s: %s" % [job, bench_id, "begun" if began else "REFUSED"])
-	if bench_id == "kitchen" and began:
-		await _shoot("cooking")
 	await _play_until(func(): return String(bench.active_recipe) == "", float(bench.time_of(job)) + 5.0, "working at the %s" % bench_id)
 
 func _unfinished() -> int:
@@ -1008,63 +982,44 @@ func _scenario_ghost() -> void:
 	await _wait(4)
 	await _portrait("cabin_side", centre + Vector3(1.0, 0.0, 0.0), 8.0, true)
 
-## Eating (v0.6 round two: "吃饭也是一个图标……吃了饭之后会有一个 boost"): his card -- his three bars,
-## his commands as icons, a count of meals on the eat command -- and the eat page with meals
-## cooked; then him eating, the meat in his hand at his mouth; then fed -- the boost gold on the
-## end of his bars, the meal and its time under them, and the ring at his feet.
-func _scenario_eating() -> void:
-	var gs := root.get_node("GameState")
+## The healing pod (GAME-DESIGN 3.0: "泡营养液式的身体完全恢复"): him hurt, his Rest command come into the corner; the
+## pod's card and its one job; him in it, floating in the fluid, the room's other benches idle; whole again, out in
+## front of it.
+func _scenario_pod() -> void:
 	var hero = _main.hero
-	var panel = _main.hud.option_panel
-	if hero == null or panel == null:
+	var core = _main.current_core
+	var eb := root.get_node_or_null("EventBus")
+	if hero == null or core == null:
 		return
 	hero.set_physics_process(true)
-	panel.select_target(hero)
-	_main.hud.toggle_hero_details()    # his sheet: his bars are on it (v0.6 round four)
-	gs.stock_meal("meat")
-	gs.stock_meal("meat")
-	gs.stock_meal("prime_meat")
-	hero.current_hp = hero.max_hp * 0.6      # hurt, so the heal is seen
-	# Two tools made, so his ability slots have something in them (round three, 4).
-	var cfg_tools := root.get_node("Config")
-	for recipe_id in cfg_tools.RECIPES.keys().slice(0, 2):
-		gs.grant_unlock(String(cfg_tools.RECIPES[recipe_id].get("unlocks", "")))
-	await _wait(6)
-	await _shoot("card")
-	panel._on_eat_pressed()
-	await _wait(4)
-	await _shoot("eat_page")
-	panel._trigger_eat(gs.meal_key("meat", String(root.get_node("Config").cooking_method(gs.unlocks).get("id", ""))))
-	await _advance(0.6)
-	await _portrait("eating", hero.global_position, 2.6, false, true)
-	await _advance(float(root.get_node("Config").EATING["eat_seconds"]))
-	await _wait(6)
-	await _shoot("fed")
-	await _portrait("fed", hero.global_position, 3.5)
-
-## The kitchen and what eating does (v0.6): its menu before the stone pot is made and
-## after -- the same meat cooked a new way -- and then, fed, the line under the top bar that
-## says how much faster he is and for how long.
-func _scenario_kitchen() -> void:
-	var gs := root.get_node_or_null("GameState")
-	var cfg := root.get_node_or_null("Config")
-	var eb := root.get_node_or_null("EventBus")
-	# Stone in hand too: the pot is on offer, in its block under the meals (v0.6 round seven).
-	_grant({"food": 2, "prime_meat": 1, "stone": 3})
+	hero.current_hp = hero.max_hp * 0.4
+	if eb:
+		eb.hero_hp_changed.emit(hero.current_hp, hero.max_hp)
+	await _wait(8)
+	await _shoot("rest_command")
 	await _walk_in()
-	var kitchen: Node = _main.current_core.station("kitchen")
-	if kitchen and eb:
-		eb.unit_selected.emit(kitchen)
-	await _shoot("menu_before_the_pot")
-	if gs and cfg:
-		gs.grant_unlock(String(cfg.COOKING_METHODS[0]["vessel"]))
-	if kitchen and eb:
-		eb.unit_selected.emit(kitchen)
-	await _shoot("menu_with_the_pot")
-	if gs:
-		gs.eat("meat")
-	await _walk_out()
-	await _shoot("fed")
+	var pod: Node = core.station(HealingPod.STATION)
+	if pod == null:
+		print("[playtest] no pod in the cabin")
+		return
+	if eb:
+		eb.unit_selected.emit(pod)
+	await _wait(8)
+	await _shoot("pod_card")
+	pod.begin(HealingPod.REST)
+	for i in range(600):
+		await physics_frame
+		if hero.is_resting():
+			break
+	await _advance(1.0)
+	await _shoot("in_the_pod")
+	await _portrait("in_the_pod_close", (pod as Node3D).global_position, 4.0, true)
+	for i in range(60 * 40):
+		await physics_frame
+		if not hero.is_resting():
+			break
+	await _advance(1.5)
+	await _shoot("whole_again")
 
 ## The buildings side by side, south of the cabin where nothing else stands: a run of a palisade, a run of bone
 ## palisade, a stone wall, and in front of the line the four towers (the 2026-10-02 rebuild), loaded, the facing
@@ -1483,7 +1438,7 @@ func _raid_minds(stakes: Array) -> String:
 ## the screen, so it is worth seeing that it fits.
 func _scenario_summary() -> void:
 	var eb := root.get_node_or_null("EventBus")
-	eb.raid_summary.emit({"wave": 12, "killed": 39, "drops": {"food": 38, "bone": 40, "prime_meat": 1},
+	eb.raid_summary.emit({"wave": 12, "killed": 39, "drops": {"food": 38, "bone": 40, "hide": 1},
 		"lost": {"wall": 6, "bow_tower": 1, "stone_wall": 2}})
 	await _shoot("raid_over")
 
@@ -1522,15 +1477,15 @@ func _scenario_ui() -> void:
 		for i in 90:
 			await process_frame
 		await _shoot("tooltip")
-	var kitchen = _main.current_core.station("kitchen")
-	eb.unit_selected.emit(kitchen)
+	var bench = _main.current_core.station("workbench")
+	eb.unit_selected.emit(bench)
 	await _wait(8)
 	var job: Control = panel.button_container.get_child(0) as Control if panel.button_container.get_child_count() > 0 else null
 	if job:
 		root.get_viewport().warp_mouse(job.get_global_rect().get_center())
 		await _wait(20)
-	await _shoot("kitchen_menu")
-	eb.raid_summary.emit({"wave": 3, "killed": 7, "drops": {"food": 6, "bone": 7, "prime_meat": 1},
+	await _shoot("bench_menu")
+	eb.raid_summary.emit({"wave": 3, "killed": 7, "drops": {"food": 6, "bone": 7, "hide": 1},
 		"lost": {"wall": 2}})
 	await _wait(8)
 	await _shoot("raid_over")
@@ -1580,8 +1535,8 @@ func _scenario_menu() -> void:
 	await _shoot("settings")
 
 ## His row (v0.6 round three): the workbench with hide known -- what it offers now -- then his
-## card with a pick, an axe, a spear, armour and boots in it, the armour's part on his bar in
-## leather, and fed on the pot's meal besides so the three parts of his bar show together.
+## card with the pick and the axe in it (v0.7: the spear, the armour and the boots went), and the
+## map made.
 func _scenario_kit() -> void:
 	var gs := root.get_node("GameState")
 	var cfg := root.get_node("Config")
@@ -1594,9 +1549,7 @@ func _scenario_kit() -> void:
 	eb.unit_selected.emit(bench)
 	await _wait(8)
 	await _shoot("workbench")
-	for recipe_id in ["quarry_pick", "bone_spear", "hide_vest", "hide_boots", "stone_pot"]:
-		gs.grant_unlock(String(cfg.RECIPES[recipe_id]["unlocks"]))
-	gs.eat("meat")
+	gs.grant_unlock(String(cfg.RECIPES["hide_map"]["unlocks"]))
 	_main.hero.current_hp = _main.hero.max_hp * 0.8
 	var panel = _main.hud.option_panel
 	panel.select_target(_main.hero)
@@ -1612,10 +1565,11 @@ func _scenario_herocard() -> void:
 	var cfg := root.get_node("Config")
 	var eb := root.get_node("EventBus")
 	gs.add_resources({"wood": 30, "stone": 8, "bone": 4, "food": 2})
-	for recipe_id in ["stone_pick", "stone_axe", "stone_pot"]:
+	for recipe_id in ["stone_pick", "stone_axe"]:
 		gs.grant_unlock(String(cfg.RECIPES[recipe_id]["unlocks"]))
-	gs.eat("meat")
-	gs.stock_meal("meat")
+	# Hurt, so his Rest command is in the corner too.
+	_main.hero.current_hp = _main.hero.max_hp * 0.7
+	eb.hero_hp_changed.emit(_main.hero.current_hp, _main.hero.max_hp)
 	var panel = _main.hud.option_panel
 	panel.select_target(_main.hero)
 	await _wait(12)
@@ -1741,7 +1695,7 @@ func _scenario_fence() -> void:
 ## The cabin (v0.6 round three: "可进入，镂空，有透明部分（窗）里面的设施也在"): the module from outside,
 ## the benches showing through its windows; him at its door, the door sliding open; inside, the
 ## roof faded and the camera in over the room -- as a new run finds it, then fitted out with every
-## tool and the pot, him at the kitchen with a meal under way.
+## tool, him floating in the healing pod.
 func _scenario_cabin() -> void:
 	var core: Node3D = _main.current_core
 	if core == null:
@@ -1769,18 +1723,17 @@ func _scenario_cabin() -> void:
 			gs.grant_unlock(String(cfg.RECIPES[recipe_id].get("unlocks", "")))
 		for job_id in cfg.beacon_jobs(gs.map_data()).slice(0, gs.beacon_stage_count()):
 			gs.finish_beacon_job(job_id)
-	_grant({"food": 3, "prime_meat": 1})
-	var kitchen: Node = core.station("kitchen")
-	if kitchen and eb:
-		eb.unit_selected.emit(kitchen)
-		_main._walk_to_bench(kitchen)
-	await _advance(3.0)
-	if kitchen:
-		for job in kitchen.jobs():
-			if kitchen.can_afford(job) and kitchen.begin(job):
-				break
-	await _advance(2.0)
-	await _shoot("inside_cooking")
+	var pod: Node = core.station(HealingPod.STATION)
+	hero.current_hp = hero.max_hp * 0.3
+	if pod and eb:
+		eb.unit_selected.emit(pod)
+		pod.begin(HealingPod.REST)
+	for i in range(600):
+		await physics_frame
+		if hero.is_resting():
+			break
+	await _advance(1.0)
+	await _shoot("inside_resting")
 	await _portrait("inside_close", core.global_position, 7.0, true)
 	await _walk_out()
 	await _advance(0.8)

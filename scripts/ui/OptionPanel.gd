@@ -7,15 +7,13 @@ extends PanelContainer
 ## Top to bottom (UI-POLISH T10, T11):
 ##   * who it is: a portrait (its icon), its name, and what kind of thing it is;
 ##   * how it is: a health bar, and a second, slanted bar for work under way -- building,
-##     upgrading, a job at a bench -- told apart by shape as well as colour. The Hero has three
-##     bars of his own instead -- health, build speed, walk speed -- with a meal's boost gold on
-##     the end of each, and what he is living on and for how long (v0.6 round two: "人的界面面板上
-##     还要有显示血量、建造速度、移动速度，分别都有一个血条……boost 要比较清楚地显示");
+##     upgrading, a job at a bench -- told apart by shape as well as colour. The Hero has his own
+##     block instead: his health, and his row of tools (v0.6 round two had three bars there, and a
+##     meal's boost gold on each; the meals went in v0.7 -- GAME-DESIGN 3.0);
 ##   * what it says: the one line only it can add (a stake's bite, what a rock needs);
-##   * what it can do: its commands -- his as icons, Build and Eat -- and on the build page one
-##     card per building with its price as icons along the bottom, red where the warehouse falls
-##     short and a lock on the card when it cannot be paid -- never colour alone; on the eat page
-##     one card per meal cooked, what it does along the bottom.
+##   * what it can do: its commands -- his as icons, Build, Rest and Torch -- and on the build page
+##     one card per building with its price as icons along the bottom, red where the warehouse
+##     falls short and a lock on the card when it cannot be paid -- never colour alone.
 ##
 ## The panel is as tall as what it holds and grows upward from the corner; it used to be a
 ## fixed box with its lower half empty. Everything is styled by UiTheme through type
@@ -25,15 +23,15 @@ extends PanelContainer
 ## 这个人到处采到处造，这个面板就一直占着游戏版面……有没有方法既方便建造有不要一直显示着这个面板？". The
 ## games that keep the screen clear show a hero's commands and bring the rest when it is asked for:
 ## Diablo IV's character sheet on C; the build menu of Age of Empires IV or StarCraft II, which
-## comes up off its button and goes once a building is in hand. His two commands, Build and Eat,
-## are tiles of their own in the corner (HeroCommands), there all the while and never moving
-## ("最好建造和吃的两个图标不要变动位置，就在右下角原处"); the card stands on them (stand_on):
-##   * "none", the rest of the time: no card. His health and his meal are on his medallion at the
-##     bottom left (HUD) all the while;
-##   * "menu": one of his menus (Build, Eat), come up off its tile -- what it offers and the line
-##     about the entry under the cursor, nothing of him. A building taken in hand puts it away;
+## comes up off its button and goes once a building is in hand. His commands are tiles of their
+## own in the corner (HeroCommands), there all the while and never moving ("最好建造和吃的两个图标
+## 不要变动位置，就在右下角原处"); the card stands on them (stand_on):
+##   * "none", the rest of the time: no card. His health is on his medallion at the bottom left
+##     (HUD) all the while;
+##   * "menu": his build menu, come up off its tile -- what it offers and the line about the entry
+##     under the cursor, nothing of him. A building taken in hand puts it away;
 ##   * "full" (details_open -- Config.CONTROLS.details_key, or his medallion): his sheet -- his
-##     portrait, his bars, his meal, his kit, what he is doing. No commands: those are below.
+##     portrait, his health, his tools, what he is doing. No commands: those are below.
 ## Anything else chosen shows its whole card, above his tiles too.
 
 signal build_option_selected(building_type: String)
@@ -43,7 +41,7 @@ signal action_triggered(action_name: String, target_node: Node)
 signal card_changed()
 
 var selected_unit: Node = null
-var current_menu: String = "default" # "default", "build" or "eat"
+var current_menu: String = "default" # "default" or "build"
 ## Whether his card is open in full (show_details), rather than his commands alone. A new subject,
 ## or the selection cleared, shuts it.
 var details_open: bool = false
@@ -74,13 +72,9 @@ var work_text: Label = null
 var status_label: Label = null
 var separator: HSeparator = null
 var button_container: GridContainer = null
-## The Hero's own block: a StatBar and its figure for each of "hp", "build" and "move", and the
-## row that says what meal he is living on.
+## The Hero's own block: a StatBar and its figure for his health ("hp"), and his row of tools.
 var hero_stats: VBoxContainer = null
 var _stat_rows: Dictionary = {}
-var boost_row: HBoxContainer = null
-var boost_text: Label = null
-var boost_bar: ProgressBar = null
 ## His abilities, a square each (Config.abilities), and which ones it shows now.
 var ability_row: HFlowContainer = null
 var _abilities_shown: Array[String] = []
@@ -112,8 +106,6 @@ func _connect_event_bus() -> void:
 			eb.resources_changed.connect(_on_resources_changed)
 		if eb.has_signal("material_discovered") and not eb.material_discovered.is_connected(_on_material_discovered):
 			eb.material_discovered.connect(_on_material_discovered)
-		if eb.has_signal("meals_changed") and not eb.meals_changed.is_connected(_on_meals_changed):
-			eb.meals_changed.connect(_on_meals_changed)
 
 func _disconnect_event_bus() -> void:
 	var eb = _get_event_bus()
@@ -128,8 +120,6 @@ func _disconnect_event_bus() -> void:
 			eb.resources_changed.disconnect(_on_resources_changed)
 		if eb.has_signal("material_discovered") and eb.material_discovered.is_connected(_on_material_discovered):
 			eb.material_discovered.disconnect(_on_material_discovered)
-		if eb.has_signal("meals_changed") and eb.meals_changed.is_connected(_on_meals_changed):
-			eb.meals_changed.disconnect(_on_meals_changed)
 
 ## Left-click is the only thing that changes what the panel shows. Right-click
 ## gives the Hero an order and deliberately leaves the panel alone, so inspecting
@@ -139,12 +129,6 @@ func _on_unit_selected(unit: Node) -> void:
 
 func _on_unit_deselected() -> void:
 	clear_selection()
-
-## A meal cooked or eaten: his commands' count, and the eat page, are made again -- only while
-## they are what is shown.
-func _on_meals_changed(_meals: Dictionary) -> void:
-	if selected_unit != null and selected_unit == _get_hero() and current_menu != "build":
-		_refresh_ui()
 
 func _on_locale_changed(_locale: String) -> void:
 	_show_abilities(true)
@@ -231,17 +215,6 @@ var current_menu_level: int:
 func _on_build_pressed() -> void:
 	show_menu("build")
 
-func _on_eat_pressed() -> void:
-	show_menu("eat")
-
-## He eats the meal `key` (Hero.order_eat), and the card goes back to his commands.
-func _trigger_eat(key: String) -> void:
-	var hero = _get_hero()
-	if hero != null and is_instance_valid(hero) and hero.has_method("order_eat"):
-		hero.order_eat(key)
-	current_menu = "default"
-	_refresh_ui()
-
 ## One step back: out of one of his menus, to his card as it stood; else his card in full, shut.
 func _on_back_pressed() -> void:
 	if current_menu != "default":
@@ -250,7 +223,7 @@ func _on_back_pressed() -> void:
 		details_open = false
 	_refresh_ui()
 
-## Whether the card has something the cancel key closes: one of his menus (build, eat), or his sheet.
+## Whether the card has something the cancel key closes: his build menu, or his sheet.
 func in_submenu() -> bool:
 	return current_menu != "default" or showing_details()
 
@@ -273,7 +246,7 @@ func show_details(open: bool) -> void:
 	current_menu = "default"
 	_refresh_ui()
 
-## One of his menus -- "build", "eat" -- come up off its tile (HUD, his commands); "default" shuts it.
+## His build menu, "build", come up off its tile (HUD, his commands); "default" shuts it.
 func show_menu(menu: String) -> void:
 	current_menu = menu
 	_refresh_ui()
@@ -485,16 +458,16 @@ func _update_status_display() -> void:
 		title_label.text = info.get("title", "")
 	_set_status(String(info.get("status", "")))
 
-## His block: a row for each of his three stats -- its icon, named in its tooltip; its bar; its
-## figure -- and the row for the meal he is living on: its name, how long it has left, and a thin
-## bar running down with it.
+## His block: his health -- its icon, named in its tooltip; its bar; its figure -- and his row of tools.
+## His build and walk speeds had bars of their own while meals and boots raised them (v0.6); since v0.7
+## nothing does, and a bar that never moves says nothing (GAME-DESIGN 3.0).
 func _build_hero_stats(into: VBoxContainer) -> void:
 	hero_stats = VBoxContainer.new()
 	hero_stats.name = "HeroStats"
 	hero_stats.visible = false
 	hero_stats.add_theme_constant_override("separation", UiTheme.space("xs"))
 	into.add_child(hero_stats)
-	for spec in [["hp", "heart", "STAT_HP_NAME"], ["build", "build", "STAT_BUILD_NAME"], ["move", "walk", "STAT_MOVE_NAME"]]:
+	for spec in [["hp", "heart", "STAT_HP_NAME"]]:
 		var row := HBoxContainer.new()
 		row.name = String(spec[0]).capitalize() + "Stat"
 		var icon := UiKit.icon_rect(String(spec[1]), UiTheme.icon_size("s"), "Icon")
@@ -513,29 +486,6 @@ func _build_hero_stats(into: VBoxContainer) -> void:
 		row.add_child(figure)
 		hero_stats.add_child(row)
 		_stat_rows[String(spec[0])] = row
-	boost_row = HBoxContainer.new()
-	boost_row.name = "BoostRow"
-	boost_row.visible = false
-	var fed := UiKit.icon_rect("fed", UiTheme.icon_size("s"), "Icon")
-	fed.modulate = UiTheme.color("boost")
-	boost_row.add_child(fed)
-	boost_text = Label.new()
-	boost_text.name = "Text"
-	boost_text.theme_type_variation = &"CaptionLabel"
-	boost_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	boost_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	boost_row.add_child(boost_text)
-	boost_bar = ProgressBar.new()
-	boost_bar.name = "Left"
-	boost_bar.theme_type_variation = &"BoostBar"
-	boost_bar.show_percentage = false
-	boost_bar.min_value = 0.0
-	boost_bar.max_value = 1.0
-	boost_bar.step = 0.0
-	boost_bar.custom_minimum_size = Vector2(UiTheme.width("figure"), UiTheme.thickness("bar"))
-	boost_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	boost_row.add_child(boost_bar)
-	hero_stats.add_child(boost_row)
 	ability_row = HFlowContainer.new()
 	ability_row.name = "Abilities"
 	ability_row.add_theme_constant_override("h_separation", UiTheme.space("xs"))
@@ -544,7 +494,7 @@ func _build_hero_stats(into: VBoxContainer) -> void:
 	_abilities_shown.clear()
 	_show_abilities(true)
 
-## His row: a square for each slot (Config.KIT_SLOTS) -- pick, axe, weapon, armour, boots --
+## His row: a square for each slot (Config.KIT_SLOTS) -- the pick, the axe --
 ## holding the best he has made of it (Config.kit): its own icon, and on hover its name and what
 ## it does (Config.recipe_effect_text). An empty one says what goes there and where it is made.
 ## Rebuilt only when what he has changes.
@@ -591,62 +541,20 @@ func _show_abilities(force: bool = false) -> void:
 			slot.tooltip_text = tr("KIT_EMPTY_" + String(slot_id).to_upper())
 		ability_row.add_child(slot)
 
-## One of his stats: his own part and the whole, as shares of its bar; its figure, gold while a
-## meal is raising it.
-func _set_stat(key: String, own: float, whole: float, variation: StringName, figure: String, boosted: bool, worn: float = -1.0) -> void:
+## One of his stats: how much of it he has, as a share of its bar, and its figure.
+func _set_stat(key: String, share: float, variation: StringName, figure: String) -> void:
 	var row: Node = _stat_rows.get(key)
 	if row == null:
 		return
-	(row.get_node("Bar") as StatBar).set_values(own, whole, variation, worn)
-	var label := row.get_node("Figure") as Label
-	label.text = figure
-	label.theme_type_variation = &"BoostNumberLabel" if boosted else &"SmallNumberLabel"
+	(row.get_node("Bar") as StatBar).set_values(share, variation)
+	(row.get_node("Figure") as Label).text = figure
 
-## His three bars and his meal, from what he reports (Hero.get_display_info). Each bar ends at
-## the most the best meal in the game would make of it (Config.best_meal), so his own part is
-## a length to be raised and the gold is how much this meal raises it.
+## His health and his tools, from what he reports (Hero.get_display_info).
 func _show_hero_stats(info: Dictionary) -> void:
-	var cfg = _get_config()
-	# Health: his own hit points in the health colour, his armour's in leather, and those the meal
-	# adds, gold.
 	var max_hp: float = maxf(0.001, float(info.get("max_hp", 1.0)))
-	var own_max: float = float(info.get("base_max_hp", max_hp))
-	var natural: float = float(info.get("natural_max_hp", own_max))
 	var hp: float = float(info.get("hp", 0.0))
-	_set_stat("hp", minf(hp, natural) / max_hp, hp / max_hp, UiTheme.health_bar(hp / max_hp),
-		UiKit.fraction_text(hp, max_hp), max_hp > own_max + 0.001, minf(hp, own_max) / max_hp)
-	# Building: his own pace is x1.
-	var best_build: float = maxf(1.0, float(cfg.best_meal("build_speed")) if cfg else 1.0)
-	var build: float = float(info.get("build_speed", 1.0))
-	_set_stat("build", 1.0 / best_build, build / best_build, &"BeaconBar",
-		tr("STAT_BUILD_VALUE") % (cfg.factor_text(build) if cfg else str(build)), build > 1.0001)
-	# Walking: his own stride, in metres a second -- boots and all -- against the best he can have.
-	var own_walk: float = maxf(0.001, float(info.get("base_move_speed", 1.0)))
-	var walk: float = float(info.get("move_speed", own_walk))
-	var best_walk: float = own_walk
-	if cfg:
-		var best_boots: float = 1.0
-		for recipe_id in cfg.RECIPES:
-			best_boots = maxf(best_boots, float(cfg.RECIPES[recipe_id].get("move_speed", 1.0)))
-		best_walk = float(cfg.HERO.get("move_speed", own_walk)) * best_boots * maxf(1.0, float(cfg.best_meal("move_speed")))
-		best_walk = maxf(best_walk, walk)
-	_set_stat("move", own_walk / best_walk, walk / best_walk, &"BeaconBar",
-		tr("STAT_MOVE_VALUE") % walk, walk > own_walk + 0.001)
-	# The meal he is living on, and how long it has left.
-	var fed: Dictionary = info.get("fed", {})
+	_set_stat("hp", hp / max_hp, UiTheme.health_bar(hp / max_hp), UiKit.fraction_text(hp, max_hp))
 	_show_abilities()
-	boost_row.visible = not fed.is_empty()
-	if not fed.is_empty():
-		var left: float = maxf(0.0, float(fed.get("seconds_left", 0.0)))
-		var secs: int = int(ceil(left))
-		boost_text.text = tr("FED_LINE") % [_meal_name(String(fed.get("dish", "")), String(fed.get("method", ""))),
-			secs / 60, secs % 60]
-		boost_bar.value = clampf(left / maxf(0.001, float(fed.get("seconds_total", 1.0))), 0.0, 1.0)
-
-## "Roast meat", "Seared prime meat": a meal named for how it was cooked (Config.meal_name).
-func _meal_name(dish_id: String, method_id: String) -> String:
-	var cfg = _get_config()
-	return String(cfg.meal_name(dish_id, method_id)) if cfg else ""
 
 ## The two bars, from what the selected thing reports about itself -- or, for the Hero, his block.
 func _show_vitals(info: Dictionary) -> void:
@@ -805,8 +713,7 @@ func _settle() -> void:
 		header.visible = how == "full"
 	if separator and button_container:
 		separator.visible = button_container.get_child_count() > 0
-	# Nothing open for him is no card at all: his commands are below, his health and his meal on his
-	# medallion.
+	# Nothing open for him is no card at all: his commands are below, his health on his medallion.
 	visible = how != "none" and not shut
 	_mark_keys()
 	_pin()
@@ -885,27 +792,10 @@ func _create_card_button(text: String, icon: Texture2D, price: Dictionary, callb
 func _fill_price_row(btn: Button, price: Dictionary, extra: String = "") -> void:
 	UiKit.fill_price_row(btn, price, extra)
 
-## His menus. His commands themselves -- Build, and Eat with the meals cooked on a badge (v0.6 round
-## two) -- are tiles of their own under the card (HeroCommands), and his sheet has none.
+## His menu. His commands themselves -- Build, Rest, Torch -- are tiles of their own under the card
+## (HeroCommands), and his sheet has none.
 func _populate_hero_buttons() -> void:
-	if current_menu == "eat":
-		# One card per meal cooked: named for how it was cooked, how many, and what it does.
-		button_container.columns = 1
-		var cfg = _get_config()
-		var gs = _get_game_state()
-		var stock: Array = gs.meals_in_stock() if (gs and gs.has_method("meals_in_stock")) else []
-		_set_status(tr("EAT_NOTHING") if stock.is_empty() else tr("EAT_HINT_PICK"))
-		for entry in stock:
-			var key: String = String(entry["key"])
-			var dish: String = String(entry["dish"])
-			var icon: Texture2D = UiTheme.icon(String(cfg.dish_icon(dish))) if cfg else null
-			var btn := _create_card_button("%s ×%d" % [_meal_name(dish, String(entry["method"])), int(entry["count"])],
-				icon, {}, func(): _trigger_eat(key))
-			UiKit.fill_caption_row(btn, cfg.describe_meal(cfg.meal_cooked(dish, String(entry["method"]))) if cfg else "")
-		var back := _create_action_button(TranslationServer.translate("CMD_BACK"), _on_back_pressed, "back", &"GhostButton")
-		back.name = BACK_NAME
-		back.custom_minimum_size = Vector2(0, UiTheme.height("card"))
-	elif current_menu == "build":
+	if current_menu == "build":
 		# Level 2: one card per buildable the run has turned up the materials for, then [ Back ]
 		button_container.columns = 2
 		var cfg = _get_config()
@@ -1361,10 +1251,8 @@ func _populate_resource_buttons() -> void:
 	pass
 
 ## One card per job this bench still has to offer. A recipe already made is not listed
-## at all -- an unlock is permanent, so a finished one is not a choice. The stove's meals
-## are one per kind of meat, always on offer, named for however his best pot will cook it.
-## What makes the bench itself better -- the stove's pot -- is not one of its jobs: it stands
-## apart under them, as its upgrade (_add_bench_upgrade).
+## at all -- an unlock is permanent, so a finished one is not a choice. The workbench's
+## ammunition stands apart under its jobs (_add_ammo_block); the pod's one job is a rest.
 ## What the bench shown offers as its commands were made: the jobs on offer, and whether it is at
 ## one (_update_status_display compares it with what it offers now).
 var _station_offer: Array = []
@@ -1386,12 +1274,7 @@ func _populate_station_buttons() -> void:
 	var jobs: Array = station.jobs() if station.has_method("jobs") else station.recipes()
 	var busy: bool = "active_recipe" in station and String(station.active_recipe) != ""
 	_station_offer = _offer_of(station)
-	# What the bench does, and -- set apart -- what makes the bench itself better (v0.6 round seven, the
-	# player: "kitchen的石锅目的是升级kitchen（应该叫灶台），roast meat是功能，这两个不应该放在一起，对于灶台的升级
-	# 应该有个不一样的layout形式").
-	var cfg = _get_config()
 	var works: Array[String] = []
-	var upgrades: Array[String] = []
 	var ammo: Array[String] = []
 	for recipe_id in jobs:
 		var job: String = String(recipe_id)
@@ -1399,16 +1282,13 @@ func _populate_station_buttons() -> void:
 			continue
 		if station.has_method("is_ammo") and station.is_ammo(job):
 			ammo.append(job)
-		elif cfg != null and cfg.improves_bench(job):
-			upgrades.append(job)
 		else:
 			works.append(job)
-	# More than a few on offer -- the workbench, with everything for his row (v0.6 round three) --
-	# and they stand two to a row, as the build menu's do: one to a row, they ran off the screen. A
-	# bench with an upgrade, or with ammunition, keeps to one: its block is as wide as the card, and the jobs
-	# above it stand two to a row in a grid of their own.
+	# More than a few on offer and they stand two to a row, as the build menu's do: one to a row, they
+	# ran off the screen. A bench with ammunition keeps to one: its block is as wide as the card, and the
+	# jobs above it stand two to a row in a grid of their own.
 	var many: bool = works.size() > int(UiTheme.number("one_column_most"))
-	var blocks: bool = not upgrades.is_empty() or not ammo.is_empty()
+	var blocks: bool = not ammo.is_empty()
 	button_container.columns = 2 if (many and not blocks) else 1
 	var into: Container = button_container
 	if many and blocks:
@@ -1434,7 +1314,9 @@ func _populate_station_buttons() -> void:
 			btn = UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), start)
 			into.add_child(btn)
 			_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
-			_pins(btn, {"kind": "job", "id": rid})
+			# A goal is something to gather for: a job that costs nothing -- the pod's rest -- is not one.
+			if not station.inputs_of(rid).is_empty():
+				_pins(btn, {"kind": "job", "id": rid})
 		btn.name = "Job_%s" % rid
 		btn.disabled = busy or not station.can_afford(rid)
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
@@ -1442,8 +1324,6 @@ func _populate_station_buttons() -> void:
 		btn.mouse_exited.connect(_clear_craft_detail)
 	if not ammo.is_empty():
 		_add_ammo_block(station, ammo, busy)
-	for rid in upgrades:
-		_add_bench_upgrade(station, rid, busy)
 
 ## The name a bench's ammunition block goes by (_add_ammo_block).
 const AMMO_BLOCK_NAME := &"AmmoBlock"
@@ -1485,58 +1365,6 @@ func _add_ammo_block(station: Node, ammo: Array[String], busy: bool) -> void:
 		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.mouse_exited.connect(_clear_craft_detail)
-
-## The name a bench's upgrade block goes by (_add_bench_upgrade).
-const BENCH_UPGRADE_NAME := &"BenchUpgrade"
-
-## A bench's upgrade, under its jobs and set apart from them: in a sunken block of its own, a heading --
-## "Upgrade the Stove" -- what it changes, before and after, in a line (UiKit.bench_upgrade_change: "Roast meat
-## → Seared meat: heals 4 → 6 · +2 max health"), and the card that makes it, its price and its time along its
-## foot and its key in the corner, as any job's.
-func _add_bench_upgrade(station: Node, rid: String, busy: bool) -> void:
-	var block := PanelContainer.new()
-	block.name = BENCH_UPGRADE_NAME
-	block.theme_type_variation = &"InsetPanel"
-	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button_container.add_child(block)
-	var column := VBoxContainer.new()
-	column.name = "Column"
-	column.add_theme_constant_override("separation", UiTheme.space("xs"))
-	block.add_child(column)
-	var heading := HBoxContainer.new()
-	heading.name = "Heading"
-	heading.add_theme_constant_override("separation", UiTheme.space("xs"))
-	column.add_child(heading)
-	var mark := UiKit.icon_rect("upgrade", UiTheme.icon_size("s"), "UpgradeIcon")
-	mark.modulate = UiTheme.color("accent")
-	heading.add_child(mark)
-	var title := Label.new()
-	title.name = "UpgradeTitle"
-	title.theme_type_variation = &"AccentLabel"
-	title.text = tr("STATION_UPGRADE") % String(station.get_localized_name())
-	heading.add_child(title)
-	var change: String = UiKit.bench_upgrade_change(station, rid)
-	if change != "":
-		var said := Label.new()
-		said.name = "UpgradeChange"
-		said.theme_type_variation = &"MutedLabel"
-		said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		said.text = change
-		column.add_child(said)
-	var btn := UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), func():
-		if is_instance_valid(station):
-			station.begin(rid)
-			_refresh_ui()
-	)
-	btn.name = "Job_%s" % rid
-	column.add_child(btn)
-	_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
-	_pins(btn, {"kind": "job", "id": rid})
-	btn.disabled = busy or not station.can_afford(rid)
-	btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
-	btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
-	btn.mouse_exited.connect(_clear_craft_detail)
 
 ## What a job costs, takes and does, for whichever entry the cursor is over (UiKit.job_detail).
 func _show_craft_detail(station: Node, recipe_id: String) -> void:

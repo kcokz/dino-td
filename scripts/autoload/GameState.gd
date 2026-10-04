@@ -50,17 +50,6 @@ var unlocks: Dictionary = {}
 ## out at once, missing pieces and all.
 var known: Dictionary = {}
 
-## The meal he is living on (v0.6, GAME-DESIGN 4.5): its boost and how long it has left --
-## {"dish", "method", "build_speed", "move_speed", "max_hp", "seconds_left", "seconds_total"}
-## -- or empty when he is not fed. One meal at a time: eating again replaces it.
-var fed: Dictionary = {}
-
-## Meals cooked and not yet eaten (v0.6 round two: "吃饭也是一个图标，点进去呢就有吃的东西"):
-## "dish/method" -> how many. The kitchen cooks into this; he eats from it, wherever he is,
-## when the player says (Hero.order_eat). A meal keeps the way it was cooked: roast meat
-## does not become seared because a pot has been made since.
-var meals: Dictionary = {}
-
 ## The run (v0.6, GAME-DESIGN 12): which map it is played on, and the seed every chance in
 ## it is drawn from. Everything in play that is left to chance draws from `rng` -- never
 ## from the engine's global randf -- so one seed replays one run: a seed can be shared,
@@ -297,7 +286,6 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_game_over:
 		return
-	wear_off(delta)
 	charge_beacon(delta)
 	_run_the_day(delta)
 	if continuous_mode:
@@ -415,8 +403,6 @@ func reset_game(p_seed: int = -1) -> void:
 	known.clear()
 	for res_id in map_data().get("opening_stock", {}):
 		known[String(res_id)] = true
-	_set_fed({})
-	_set_meals({})
 	# The whole cabin's beacon stands mended (GAMES.custom: "连信标也是修好的"); the wrecked one is mended stage by stage.
 	beacon_steps = beacon_stage_count() if String(internal("cabin", "wrecked")) == "whole" else 0
 	beacon_charge = 0.0
@@ -525,8 +511,8 @@ func add_resource(res_id: String, amount: int) -> void:
 func knows(res_id: String) -> bool:
 	return bool(known.get(res_id, false)) or int(resources.get(res_id, 0)) > 0
 
-## Whether every material `cost` takes has turned up: what shows a building, a recipe or a
-## meal on offer.
+## Whether every material `cost` takes has turned up: what shows a building or a recipe on
+## offer.
 func knows_all(cost: Dictionary) -> bool:
 	for res_id in cost:
 		if not knows(String(res_id)):
@@ -559,131 +545,17 @@ func grant_unlock(unlock_id: String) -> bool:
 	return true
 
 # ==============================================================================
-# 7c. Tools and meals (v0.6): how fast the one body works
+# 7c. Tools (v0.6): how fast the one body works
 # ==============================================================================
 ## Every rate that matters is the Hero's own -- one body holds up the whole base -- so
-## "getting better" means him working faster: tools for good, meals for a while
-## (GAME-DESIGN 4.6). These are the only places the factors are worked out; the Hero
-## multiplies by them and the UI names them.
+## "getting better" means him working faster: tools, for good (GAME-DESIGN 4.6). This is the
+## only place the factor is worked out; the Hero multiplies by it and the UI names it. The
+## meals that made him faster for a while went in v0.7 (GAME-DESIGN 3.0: the healing pod).
 
 ## How much each stroke on a `res_id` node brings in, from the tools he has made.
 func harvest_multiplier(res_id: String) -> float:
 	var cfg = _get_config()
 	return float(cfg.harvest_speed(res_id, unlocks)) if cfg and cfg.has_method("harvest_speed") else 1.0
-
-## How fast he raises and mends, from what he last ate.
-func build_multiplier() -> float:
-	return float(fed.get("build_speed", 1.0))
-
-## How fast he walks, from what he last ate.
-func move_multiplier() -> float:
-	return float(fed.get("move_speed", 1.0))
-
-## Hit points he has over his own while he is fed.
-func max_hp_bonus() -> float:
-	return float(fed.get("max_hp", 0.0))
-
-## The stock's key for `dish_id` cooked by `method`.
-static func meal_key(dish_id: String, method: String) -> String:
-	return "%s/%s" % [dish_id, method]
-
-## A meal put by, cooked the best way his vessels allow now (Config.cooking_method). Returns
-## its key.
-func stock_meal(dish_id: String) -> String:
-	var cfg = _get_config()
-	if cfg == null or not cfg.has_method("cooking_method") or not cfg.DISHES.has(dish_id):
-		return ""
-	var key: String = meal_key(dish_id, String(cfg.cooking_method(unlocks).get("id", "")))
-	var now: Dictionary = meals.duplicate()
-	now[key] = int(now.get(key, 0)) + 1
-	_set_meals(now)
-	return key
-
-## How many of the meal `key` are cooked and waiting.
-func meal_count(key: String) -> int:
-	return int(meals.get(key, 0))
-
-## What is in the stock, in the order Config lists dishes and cooking methods: one
-## {"key", "dish", "method", "count"} for each meal there is at least one of.
-func meals_in_stock() -> Array:
-	var out: Array = []
-	var cfg = _get_config()
-	if cfg == null:
-		return out
-	for dish_id in cfg.DISHES:
-		for method in cfg.COOKING_METHODS:
-			var key: String = meal_key(String(dish_id), String(method.get("id", "")))
-			if meal_count(key) > 0:
-				out.append({"key": key, "dish": String(dish_id), "method": String(method.get("id", "")),
-					"count": meal_count(key)})
-	return out
-
-## He eats one of the meal `key` from the stock. Returns what it did (as eat), or {} when there
-## is none of it.
-func eat_meal(key: String) -> Dictionary:
-	if meal_count(key) <= 0:
-		return {}
-	var parts: PackedStringArray = key.split("/")
-	if parts.size() != 2:
-		return {}
-	var now: Dictionary = meals.duplicate()
-	now[key] = meal_count(key) - 1
-	if int(now[key]) <= 0:
-		now.erase(key)
-	_set_meals(now)
-	return eat(parts[0], parts[1])
-
-func _set_meals(value: Dictionary) -> void:
-	if value == meals:
-		return
-	meals = value
-	var eb = _get_event_bus()
-	if eb and eb.has_signal("meals_changed"):
-		eb.meals_changed.emit(meals)
-
-## He eats `dish_id` -- cooked by `method`, or the best way his vessels allow when none is
-## named (Config.meal_of). Heals are the Hero's business and go out on the bus; a meal with a
-## lasting boost makes him fed, replacing whatever he was fed on before. Returns the meal, or
-## {} for an unknown dish.
-func eat(dish_id: String, method: String = "") -> Dictionary:
-	var cfg = _get_config()
-	if cfg == null or not cfg.has_method("meal_of"):
-		return {}
-	var meal: Dictionary = cfg.meal_cooked(dish_id, method) if method != "" else cfg.meal_of(dish_id, unlocks)
-	if meal.is_empty():
-		return {}
-	var seconds: float = float(meal.get("fed_seconds", 0.0))
-	if seconds > 0.0:
-		_set_fed({
-			"dish": dish_id,
-			"method": String(meal.get("method", "")),
-			"build_speed": float(meal.get("build_speed", 1.0)),
-			"move_speed": float(meal.get("move_speed", 1.0)),
-			"max_hp": float(meal.get("max_hp", 0.0)),
-			"seconds_left": seconds,
-			"seconds_total": seconds,
-		})
-	var eb = _get_event_bus()
-	if eb and eb.has_signal("meal_eaten"):
-		eb.meal_eaten.emit(meal)
-	return meal
-
-## Counts the meal down by `delta` seconds of game time, and lets it go when it is done.
-## Called every frame the game runs; public so a test can pass time without waiting.
-func wear_off(delta: float) -> void:
-	if fed.is_empty() or delta <= 0.0:
-		return
-	fed["seconds_left"] = float(fed.get("seconds_left", 0.0)) - delta
-	if float(fed["seconds_left"]) <= 0.0:
-		_set_fed({})
-
-func _set_fed(value: Dictionary) -> void:
-	if value.is_empty() and fed.is_empty():
-		return
-	fed = value
-	var eb = _get_event_bus()
-	if eb and eb.has_signal("fed_changed"):
-		eb.fed_changed.emit(fed)
 
 # ==============================================================================
 # 7d. The beacon (v0.6): the run's main line, and the only way to win it
@@ -732,8 +604,7 @@ func is_pinned(g: Dictionary) -> bool:
 		and String(g.get("id", "")) == String(goal.get("id", "")) and String(g.get("from", "")) == String(goal.get("from", ""))
 
 ## What the goal costs now: a building its price, a way up the difference (Config.upgrade_cost), a
-## job at a bench its inputs -- a step up his row at the difference (Config.recipe_price), a beacon
-## step its own. {} with none pinned.
+## job at a bench its inputs, a beacon step its own. {} with none pinned.
 func goal_price() -> Dictionary:
 	var cfg = _get_config()
 	if goal.is_empty() or cfg == null:
@@ -746,9 +617,7 @@ func goal_price() -> Dictionary:
 			return cfg.upgrade_cost(String(goal.get("from", "")), id)
 		"job":
 			if cfg.RECIPES.has(id):
-				return cfg.recipe_price(id, unlocks)
-			if "DISHES" in cfg and cfg.DISHES.has(id):
-				return cfg.DISHES[id].get("inputs", {})
+				return cfg.RECIPES[id].get("inputs", {})
 			return cfg.beacon_job(map_data(), id).get("inputs", {})
 	return {}
 
@@ -764,8 +633,6 @@ func goal_name() -> String:
 		"job":
 			if cfg.RECIPES.has(id):
 				return TranslationServer.translate(String(cfg.RECIPES[id].get("name", id)))
-			if "DISHES" in cfg and cfg.DISHES.has(id):
-				return TranslationServer.translate(String(cfg.DISHES[id].get("name", id)))
 			var row: Dictionary = cfg.beacon_job(map_data(), id)
 			var title: String = TranslationServer.translate(String(row.get("name", id)))
 			var args: Array = row.get("name_args", [])

@@ -6,8 +6,7 @@ extends CanvasLayer
 ##
 ## Laid out the way strategy games lay it out, in corners, with the middle of the screen
 ## left to the game (UI-POLISH T7-T10, T14, T15):
-##   * top left   -- the materials, an icon and a count each; under them, the meal he is
-##                   living on;
+##   * top left   -- the materials, an icon and a count each;
 ##   * top centre -- the cabin's health (lose it and the run is lost) and the Hero's, as
 ##                   bars; the cabin's pulses when it is nearly gone;
 ##   * top right  -- game speed, pause, the menu; under them the run's goal, the beacon;
@@ -48,9 +47,6 @@ var stone_label: Label = null
 var water_label: Label = null
 var food_label: Label = null
 var bone_label: Label = null
-## What he last ate and how long it has left (v0.6 T3); hidden while he is not fed.
-var fed_label: Label = null
-var fed_chip: Control = null
 ## Where the beacon has got to (v0.6 T7): stages repaired, ready, or charging. Always on
 ## screen -- it is the run's main line (GAME-DESIGN 14.3, 6: how far is the goal).
 var beacon_label: Label = null
@@ -92,7 +88,7 @@ var raid_line: Label = null
 ## The line with its mark, shown and hidden as one.
 var raid_row: Control = null
 var option_panel: Node = null
-## His two commands, Build and Eat, in the corner under the card (v0.6 round four).
+## His commands -- Build, Rest, Torch -- in the corner under the card (v0.6 round four).
 var hero_commands: HeroCommands = null
 var pause_menu: Node = null
 ## What to play (StartScreen): over the stopped valley at the launch, and again for a new game.
@@ -249,7 +245,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
 			["hero_hp_changed", _on_hero_hp_changed], ["locale_changed", _on_locale_changed],
-			["raid_warning", _on_raid_warning], ["fed_changed", _on_fed_changed],
+			["raid_warning", _on_raid_warning],
 			["boss_arrived", _on_boss_arrived],
 			["beacon_changed", _on_beacon_changed], ["beacon_launched", _on_beacon_launched],
 			["raid_summary", _on_raid_summary], ["resource_picked_up", _on_resource_picked_up],
@@ -290,7 +286,7 @@ func _on_hero_hp_changed(cur: float, max_val: float) -> void:
 	# Hurt, he says so -- once in a while, not at every bite: the player may be looking anywhere
 	# (v0.6 round three: found playing, he was bitten to death by the nest's guards at the far end
 	# of the valley with nothing on the screen to say so). Config.FEEDBACK.hero_hurt_alert_seconds.
-	# A hit, not a meal wearing off: when a boost to his most ends, what he has comes down with it.
+	# A hit: what he has came down, and his most did not.
 	if cur < _hero_hp_before - 0.001 and cur > 0.0 and absf(max_val - _hero_max_before) < 0.001:
 		var now: float = Time.get_ticks_msec() / 1000.0
 		var cfg = _get_config()
@@ -428,15 +424,9 @@ func _squeeze_chips(on: bool) -> void:
 		# The theme's own small figures (UI-POLISH T1: a size is a step on the theme's ladder).
 		lbl.theme_type_variation = &"SmallNumberLabel" if on else &"NumberLabel"
 
-## He ate, or the meal wore off. The countdown itself is _process's.
-func _on_fed_changed(_fed: Dictionary) -> void:
-	_refresh_fed_label()
-
 func _process(delta: float) -> void:
 	_place_speech()
 	_tick_raid_line()
-	if fed_label and fed_chip and fed_chip.visible:
-		_refresh_fed_label()
 	_refresh_day_dial()
 	var gs = _get_game_state()
 	if gs and gs.has_method("is_beacon_launched") and gs.is_beacon_launched():
@@ -684,22 +674,6 @@ func _draw_pips(stages: int, done: int) -> void:
 			beacon_pips.add_child(pip)
 	for i in range(beacon_pips.get_child_count()):
 		(beacon_pips.get_child(i) as Panel).theme_type_variation = &"PipOn" if i < done else &"PipOff"
-
-## "Fed: builds x1.3 · 1:25" while a meal's speeds last -- how much faster, and for how
-## long (GAME-DESIGN 4.6: make the gain visible). Nothing at all when he is not fed.
-func _refresh_fed_label() -> void:
-	if fed_label == null or not is_instance_valid(fed_label):
-		return
-	var gs = _get_game_state()
-	var cfg = _get_config()
-	var fed: Dictionary = gs.fed if (gs and "fed" in gs) else {}
-	var shown: bool = not fed.is_empty() and cfg != null and cfg.has_method("describe_meal")
-	if shown:
-		var left: int = int(ceil(maxf(0.0, float(fed.get("seconds_left", 0.0)))))
-		fed_label.text = tr("HUD_FED") % [cfg.describe_meal(fed, false), left / 60, left % 60]
-	fed_label.visible = shown
-	if fed_chip:
-		fed_chip.visible = shown
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
@@ -1158,7 +1132,6 @@ func reset_hud(new_run: bool = true) -> void:
 	var default_res: Dictionary = cfg.INITIAL_RESOURCES if (cfg and "INITIAL_RESOURCES" in cfg) else {"wood": 10}
 	var res_dict: Dictionary = gs.resources if (gs and "resources" in gs) else default_res
 	_on_resources_changed(res_dict)
-	_refresh_fed_label()
 	_refresh_beacon_label()
 	_refresh_resource_tooltips()
 	_refresh_texts()
@@ -1575,8 +1548,7 @@ func _ensure_ui_components() -> void:
 	raid_line.visible = false
 	raid_row.add_child(raid_line)
 
-	# Bottom left: the Hero's medallion -- click it to pick him -- his figures and the meal he
-	# is living on beside it.
+	# Bottom left: the Hero's medallion -- click it to pick him -- and his figures.
 	var hero_side := HBoxContainer.new()
 	hero_side.name = "HeroSide"
 	hero_side.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1595,18 +1567,6 @@ func _ensure_ui_components() -> void:
 	# its key.
 	_shoulder_keycap(hero[0], _details_key_text())
 	hero_side.add_child(hero[0])
-	fed_chip = _panel("FedChip", &"PillPanel")
-	fed_chip.size_flags_vertical = Control.SIZE_SHRINK_END
-	fed_chip.visible = false
-	hero_side.add_child(fed_chip)
-	var fed_row := HBoxContainer.new()
-	fed_row.name = "FedRow"
-	fed_chip.add_child(fed_row)
-	var fed_icon := _icon("FedIcon", "fed", UiTheme.icon_size("s"))
-	fed_icon.modulate = UiTheme.color("accent")
-	fed_row.add_child(fed_icon)
-	fed_label = _label("FedLabel", &"SmallNumberLabel", "")
-	fed_row.add_child(fed_label)
 	hero_side.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_KEEP_SIZE)
 	hero_side.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hero_side.offset_left = edge
@@ -1720,7 +1680,7 @@ func _ensure_ui_components() -> void:
 	hero_commands = HeroCommands.new()
 	root_control.add_child(hero_commands)
 	hero_commands.build_pressed.connect(func(): _open_hero_menu("build"))
-	hero_commands.eat_pressed.connect(func(): _open_hero_menu("eat"))
+	hero_commands.rest_pressed.connect(_send_him_to_rest)
 	hero_commands.torch_pressed.connect(_light_his_torch)
 	if option_panel:
 		option_panel.card_changed.connect(_on_card_changed)
@@ -1946,7 +1906,23 @@ func toggle_hero_details() -> void:
 	if panel_ok:
 		option_panel.show_details(open)
 
-## Build or Eat pressed: his menu comes up above its tile -- he is picked if he was not -- or, open
+## Rest pressed (HeroCommands): he goes home to the healing pod and climbs in (HealingPod.begin) --
+## picked, so his card says so -- or, floating in it already, climbs out.
+func _send_him_to_rest() -> void:
+	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
+	var pod: HealingPod = HealingPod.of(get_tree()) if is_inside_tree() else null
+	if hero == null or pod == null:
+		return
+	_select_hero()
+	if hero.has_method("rest_pod") and hero.rest_pod() == pod:
+		if hero.has_method("climb_out"):
+			hero.climb_out()
+		return
+	pod.begin(HealingPod.REST)
+	if hero_commands:
+		hero_commands.refresh()
+
+## Build pressed: his menu comes up above its tile -- he is picked if he was not -- or, open
 ## already, goes.
 func _open_hero_menu(menu: String) -> void:
 	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null

@@ -14,16 +14,13 @@ enum State {
 	ATTACKING = 3,
 	DEAD = 4,
 	HARVESTING = 5,
-	EATING = 6,
+	RESTING = 6,
 }
 
 # ==============================================================================
 # Configuration & Properties
 # ==============================================================================
 @export var max_hp: float = 10.0
-## His own hit points, without a meal's boost: Config.HERO.hp and his armour's (Config.kit).
-## max_hp is this and whatever the meal he is living on adds (GameState.max_hp_bonus).
-var base_max_hp: float = 10.0
 @export var current_hp: float = 10.0
 @export var speed: float = 4.0
 @export var damage: float = 1.0
@@ -34,9 +31,9 @@ var base_max_hp: float = 10.0
 var current_state: State = State.IDLE:
 	set(v):
 		if current_state != v:
-			# Anything else he is told to do puts the meal down, uneaten (order_eat).
-			if current_state == State.EATING:
-				_put_the_meal_down()
+			# Out of the pod, he is drawn on the room's floor again (_float).
+			if current_state == State.RESTING:
+				_float(false)
 			current_state = v
 			if animator != null and is_instance_valid(animator):
 				animator.play_state(current_state)
@@ -107,8 +104,7 @@ func _load_config() -> void:
 	var cfg = _get_config()
 	if cfg:
 		if "HERO" in cfg and cfg.HERO is Dictionary:
-			base_max_hp = float(cfg.HERO.get("hp", 10.0))
-			max_hp = base_max_hp
+			max_hp = float(cfg.HERO.get("hp", 10.0))
 			current_hp = max_hp
 			speed = float(cfg.HERO.get("move_speed", 4.0))
 			damage = float(cfg.HERO.get("damage", 1.0))
@@ -116,50 +112,13 @@ func _load_config() -> void:
 			attack_range = float(cfg.HERO.get("attack_range", 2.0))
 		if "TIME" in cfg and cfg.TIME is Dictionary:
 			build_range = float(cfg.TIME.get("build_range", 1.5))
-	_apply_kit()
 	current_hp = max_hp
-
-## His row (Config.kit, GAME-DESIGN 9.3): armour's hit points over his own, boots' stride, a
-## weapon's blows, on Config.HERO's and for good -- only the best of each slot. Worked out again
-## whenever he makes something; `grow` gives him the new armour whole, as a meal's hit points are.
-func _apply_kit(grow: bool = false) -> void:
-	var cfg = _get_config()
-	if cfg == null or not ("HERO" in cfg) or not cfg.has_method("kit_bonus"):
-		return
-	var gs = _get_game_state()
-	var owned: Dictionary = gs.unlocks if (gs and "unlocks" in gs) else {}
-	base_max_hp = float(cfg.HERO.get("hp", 10.0)) + float(cfg.kit_bonus(owned, "max_hp"))
-	speed = float(cfg.HERO.get("move_speed", 4.0)) * float(cfg.kit_bonus(owned, "move_speed"))
-	damage = float(cfg.HERO.get("damage", 1.0)) * float(cfg.kit_bonus(owned, "damage"))
-	var was: float = max_hp
-	max_hp = base_max_hp + (float(gs.max_hp_bonus()) if (gs and gs.has_method("max_hp_bonus")) else 0.0)
-	if grow and max_hp > was and current_state != State.DEAD:
-		current_hp += max_hp - was
-	current_hp = minf(current_hp, max_hp)
-
-func _on_unlock_granted(_unlock_id: String) -> void:
-	var was: float = max_hp
-	_apply_kit(true)
-	if not is_equal_approx(was, max_hp):
-		_refresh_health_bar()
-		var eb = _get_event_bus()
-		if eb and eb.has_signal("hero_hp_changed"):
-			eb.hero_hp_changed.emit(current_hp, max_hp)
 
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("phase_changed"):
 		if not eb.phase_changed.is_connected(_on_phase_changed):
 			eb.phase_changed.connect(_on_phase_changed)
-	if eb and eb.has_signal("meal_eaten"):
-		if not eb.meal_eaten.is_connected(_on_meal_eaten):
-			eb.meal_eaten.connect(_on_meal_eaten)
-	if eb and eb.has_signal("fed_changed"):
-		if not eb.fed_changed.is_connected(_on_fed_changed):
-			eb.fed_changed.connect(_on_fed_changed)
-	if eb and eb.has_signal("unlock_granted"):
-		if not eb.unlock_granted.is_connected(_on_unlock_granted):
-			eb.unlock_granted.connect(_on_unlock_granted)
 
 func _exit_tree() -> void:
 	if _agent.is_valid():
@@ -169,15 +128,6 @@ func _exit_tree() -> void:
 	if eb and is_instance_valid(eb) and eb.has_signal("phase_changed"):
 		if eb.phase_changed.is_connected(_on_phase_changed):
 			eb.phase_changed.disconnect(_on_phase_changed)
-	if eb and is_instance_valid(eb) and eb.has_signal("meal_eaten"):
-		if eb.meal_eaten.is_connected(_on_meal_eaten):
-			eb.meal_eaten.disconnect(_on_meal_eaten)
-	if eb and is_instance_valid(eb) and eb.has_signal("fed_changed"):
-		if eb.fed_changed.is_connected(_on_fed_changed):
-			eb.fed_changed.disconnect(_on_fed_changed)
-	if eb and is_instance_valid(eb) and eb.has_signal("unlock_granted"):
-		if eb.unlock_granted.is_connected(_on_unlock_granted):
-			eb.unlock_granted.disconnect(_on_unlock_granted)
 
 # ==============================================================================
 # State Machine & Movement
@@ -216,8 +166,8 @@ func _physics_process(delta: float) -> void:
 			_process_attacking(delta)
 		State.HARVESTING:
 			_process_harvesting(delta)
-		State.EATING:
-			_process_eating(delta)
+		State.RESTING:
+			_process_resting(delta)
 	_report_pace(was_at, delta)
 
 ## Tells the animator how far he really went this frame, so a walk is shown only while he
@@ -368,6 +318,10 @@ func _process_moving(delta: float) -> void:
 		# be planned again from where he stood, a route a hand long whose ends were both already
 		# reached, every frame: he stood "walking" for ever, and the idle watch that has him hit
 		# back at whatever bites him never came round (found playing, v0.6 round three).
+		# A walk to the healing pod ends in it (order_rest).
+		if rest_pod() != null:
+			_climb_in()
+			return
 		if target_building == null and target_resource_node == null and target_enemy == null:
 			current_state = State.IDLE
 			return
@@ -517,9 +471,8 @@ func _process_building(delta: float) -> void:
 
 	# Building and mending are the same verb -- he walks over and works on it with
 	# a hammer. Which one happens is the building's business, not the order's: an
-	# unfinished thing gets raised, a damaged one gets patched. A good meal speeds
-	# both, because they are the same work.
-	var work: float = delta * work_rate()
+	# unfinished thing gets raised, a damaged one gets patched.
+	var work: float = delta
 	# And it is heard: a knock every so often while he is at it (Config.SOUNDS.hammer_every).
 	_hammer_clock += delta
 	var every: float = _sound_number("hammer_every", 0.55)
@@ -843,8 +796,9 @@ func _plan_path_to_building(b: Node) -> void:
 	_plan_path(b_pos, b)
 
 ## A plain walk that has got him nowhere for HERO.give_up_after seconds is given up: he stops where he
-## is, rather than run on the spot for ever at whatever the route did not know was in the way. A walk
-## to work, a meal or a fight has its own ways of giving up (_abandon_unreachable_building).
+## is, rather than run on the spot for ever at whatever the route did not know was in the way -- a walk
+## to the healing pod too, which is left for him to be sent to again. A walk to work or a fight has its
+## own ways of giving up (_abandon_unreachable_building).
 func _give_up_the_walk() -> bool:
 	if target_building != null or target_resource_node != null or target_enemy != null:
 		return false
@@ -853,6 +807,7 @@ func _give_up_the_walk() -> bool:
 	if _held_for < most:
 		return false
 	_held_for = 0.0
+	_rest_pod = null
 	velocity = Vector3.ZERO
 	current_path.clear()
 	current_path_index = 0
@@ -1020,6 +975,8 @@ func _clear_orders() -> void:
 	target_enemy = null
 	target_resource_node = null
 	_resume_work = {}
+	# Sent anywhere else, he climbs out of the healing pod, or does not go to it (order_rest).
+	_rest_pod = null
 
 func move_to(dest: Vector3) -> void:
 	if current_state == State.DEAD:
@@ -1167,33 +1124,24 @@ func order_stop() -> void:
 
 func get_display_info() -> Dictionary:
 	var name_str = TranslationServer.translate("HERO_NAME")
-	var gs = _get_game_state()
 	return {
 		"title": name_str,
 		"type": "hero",
 		"hp": current_hp,
 		"max_hp": max_hp,
-		# The meal's part of it, drawn in the boost's colour on his panel; his armour's, in leather.
-		"base_max_hp": base_max_hp,
-		"natural_max_hp": _natural_max_hp(),
-		# How fast he walks and works, and how much of it is the meal's (his panel's bars).
-		"move_speed": walk_speed(),
-		"base_move_speed": speed,
-		"build_speed": work_rate(),
-		"eating": eating_left(),
-		"fed": gs.fed.duplicate() if (gs and "fed" in gs) else {},
-		# His health is the card's bar; the line under it says what he can be told to do -- or,
-		# while he eats, how long he has still to go.
-		"status": (TranslationServer.translate("HERO_EATING") % eating_left()) if is_eating() \
-			else TranslationServer.translate("HERO_HINT"),
+		"resting": is_resting(),
+		# His health is the card's bar; the line under it says what he can be told to do -- or, in the
+		# healing pod, how whole he is.
+		"status": (TranslationServer.translate("HERO_RESTING") % [int(ceil(current_hp)), int(ceil(max_hp))]) \
+			if is_resting() else TranslationServer.translate("HERO_HINT"),
 	}
 
 # ==============================================================================
 # Combat & Damage
 # ==============================================================================
 
-## Back up by `amount`, never past his full health. A meal is the only thing that
-## does this (GAME-DESIGN 4.5).
+## Back up by `amount`, never past his full health. The healing pod is the only thing that
+## does this (HealingPod; GAME-DESIGN 3.0).
 func heal(amount: float) -> void:
 	if current_state == State.DEAD or amount <= 0.0:
 		return
@@ -1203,43 +1151,83 @@ func heal(amount: float) -> void:
 	if eb and eb.has_signal("hero_hp_changed"):
 		eb.hero_hp_changed.emit(current_hp, max_hp)
 
-func _on_meal_eaten(meal: Dictionary) -> void:
-	heal(float(meal.get("heal", 0.0)))
-
 # ==============================================================================
-# Eating (v0.6 round two: "做完之后也没有吃的动作……人也没有明显吃了肉之后的状态转化效果")
+# Resting in the healing pod (HealingPod; GAME-DESIGN 3.0)
 # ==============================================================================
 
-## The meal in his hand while he eats it: its key in the stock (GameState.meals), and how long
-## he has still to go.
-var _meal_in_hand: String = ""
-var _eat_left: float = 0.0
-var _meat: Node3D = null
-var _aura: MeshInstance3D = null
+## The healing pod he is resting in, or on his way to (order_rest) -- null when neither.
+var _rest_pod: Node = null
+## How far up his body is drawn while he floats in the pod (_float): onto the tank's floor.
+var _floated_by: float = 0.0
 
-## He eats one of the meal `key` from the stock: stops where he is, takes it in his hand and eats
-## for Config.EATING.eat_seconds -- his hand to his mouth, the meat in it -- and the meal, and its
-## boost, are his when he has finished. Any other order before then puts it down uneaten. Returns
-## whether he began; he cannot eat what has not been cooked.
-func order_eat(key: String) -> bool:
-	if current_state == State.DEAD:
-		return false
-	var gs = _get_game_state()
-	if gs == null or not gs.has_method("meal_count") or int(gs.meal_count(key)) <= 0:
+## He goes to the healing pod `pod` and climbs in (HealingPod.begin), and RESTS there, mended by it, till he is
+## whole or the player sends him off -- any other order is him climbing out (_clear_orders). Returns whether he went.
+func order_rest(pod: Node) -> bool:
+	if current_state == State.DEAD or pod == null or not is_instance_valid(pod) or not (pod is Node3D):
 		return false
 	_clear_orders()
-	current_path.clear()
-	current_path_index = 0
-	velocity = Vector3.ZERO
-	current_state = State.IDLE      # whatever he was eating before is put down first
-	_meal_in_hand = key
-	_eat_left = _eating_number("eat_seconds", 2.5)
-	current_state = State.EATING
-	_sound_at("eat", global_position + Vector3(0.0, 1.0, 0.0))
-	_take_the_meal(key)
+	_rest_pod = pod
+	_plan_path((pod as Node3D).global_position)
+	current_state = State.MOVING
 	return true
 
-## Whether he is eating right now.
+## The pod he is resting in or going to, or null.
+func rest_pod() -> Node:
+	return _rest_pod if (_rest_pod != null and is_instance_valid(_rest_pod)) else null
+
+## Whether he is floating in `pod` now.
+func is_resting_in(pod: Node) -> bool:
+	return current_state == State.RESTING and pod != null and rest_pod() == pod
+
+## Whether he is floating in a pod now.
+func is_resting() -> bool:
+	return current_state == State.RESTING
+
+## At the pod: in it, on its floor at its middle, facing out through its hatch (the model's front, +Z).
+func _climb_in() -> void:
+	var pod := rest_pod() as Node3D
+	if pod == null:
+		current_state = State.IDLE
+		return
+	velocity = Vector3.ZERO
+	current_path.clear()
+	current_path_index = 0
+	global_position = Vector3(pod.global_position.x, global_position.y, pod.global_position.z)
+	var out: Vector3 = pod.global_transform.basis.z
+	out.y = 0.0
+	if out.length_squared() > 0.0001:
+		look_at(global_position + out.normalized(), Vector3.UP)
+	current_state = State.RESTING
+	_float(true)
+	_sound_at("pod", global_position + Vector3(0.0, 1.0, 0.0))
+
+## Out of the pod -- whole (HealingPod: its work done), or called off (Rest pressed again) -- a step out
+## through its hatch, into the room; on his way to it still, he stops where he is.
+func climb_out() -> void:
+	var pod := rest_pod() as Node3D
+	if pod == null:
+		return
+	var was_in: bool = current_state == State.RESTING
+	order_stop()
+	if was_in and pod.has_method("front"):
+		move_to(pod.front())
+
+func _process_resting(_delta: float) -> void:
+	velocity = Vector3.ZERO
+	if rest_pod() == null:
+		current_state = State.IDLE
+
+## His body drawn on the tank's floor while he floats, and back on the room's when he is out (Config.POD.floor): his
+## feet were inside the tank's base.
+func _float(up: bool) -> void:
+	var body: Node3D = find_child("Body", false, false) as Node3D
+	if body == null:
+		return
+	body.position.y -= _floated_by
+	var cfg = _get_config()
+	_floated_by = (float(cfg.POD.get("floor", 0.3)) if (cfg and "POD" in cfg) else 0.3) if up else 0.0
+	body.position.y += _floated_by
+
 ## What he is doing and why, for a bug report (BugReport): where, in what state, going where by what
 ## way, at what, and what is holding him -- in plain values for JSON.
 func debug_state() -> Dictionary:
@@ -1270,126 +1258,8 @@ func debug_state() -> Dictionary:
 		"velocity": [snappedf(velocity.x, 0.01), snappedf(velocity.z, 0.01)],
 		"speed": snappedf(walk_speed(), 0.01),
 		"torch_left": snappedf(torch_left, 0.1),
-		"eating": is_eating(),
+		"resting": is_resting(),
 	}
-
-func is_eating() -> bool:
-	return current_state == State.EATING
-
-## Seconds of eating left, or 0 when he is not eating.
-func eating_left() -> float:
-	return _eat_left if current_state == State.EATING else 0.0
-
-func _process_eating(delta: float) -> void:
-	_eat_left -= delta
-	if _eat_left > 0.0:
-		return
-	var key: String = _meal_in_hand
-	current_state = State.IDLE
-	var gs = _get_game_state()
-	var meal: Dictionary = gs.eat_meal(key) if (gs and gs.has_method("eat_meal")) else {}
-	if not meal.is_empty():
-		_show_the_boost(meal)
-
-## The meat in his hand: the pile the game drops of it, small, held in the hand his clip brings
-## to his mouth (Config.EATING.prop_bone).
-func _take_the_meal(key: String) -> void:
-	_put_the_meal_away()
-	var cfg = _get_config()
-	var body: Node = find_child("Body", false, false)
-	if cfg == null or body == null:
-		return
-	var skeletons: Array = body.find_children("*", "Skeleton3D", true, false)
-	var dish: String = key.get_slice("/", 0)
-	var eats: Dictionary = cfg.DISHES.get(dish, {}).get("inputs", {})
-	if skeletons.is_empty() or eats.is_empty():
-		return
-	var skeleton := skeletons[0] as Skeleton3D
-	var bone: String = String(cfg.EATING.get("prop_bone", "hand_r")) if "EATING" in cfg else "hand_r"
-	if skeleton.find_bone(bone) < 0:
-		return
-	var hold := BoneAttachment3D.new()
-	hold.name = "MealInHand"
-	hold.bone_name = bone
-	skeleton.add_child(hold)
-	var meat: Node3D = VisualLibrary.make("drop/" + String(eats.keys()[0]))
-	hold.add_child(meat)
-	# As big across as Config says, whatever the rig's own scale: the hand carries the fit the
-	# model was given to stand 1.2 m tall.
-	var across: float = maxf(0.001, VisualLibrary.visual_bounds(meat).get_longest_axis_size())
-	var inherited: float = maxf(0.001, hold.global_transform.basis.get_scale().x)
-	meat.scale = Vector3.ONE * (_eating_number("prop_size", 0.24) / (across * inherited))
-	_meat = hold
-
-func _put_the_meal_away() -> void:
-	if _meat != null and is_instance_valid(_meat):
-		_meat.queue_free()
-	_meat = null
-
-## Stopped before the end: nothing is eaten, and the meal stays in the stock.
-func _put_the_meal_down() -> void:
-	_meal_in_hand = ""
-	_eat_left = 0.0
-	_put_the_meal_away()
-
-## What the meal did, where the player is looking: a burst in the boost's colour and its effects
-## in words rising off him (Config.describe_meal), and the sound of it going in.
-func _show_the_boost(meal: Dictionary) -> void:
-	var fx = _get_fx()
-	var cfg = _get_config()
-	if fx == null:
-		return
-	var colour: Color = UiTheme.color("boost")
-	fx.debris(global_position + Vector3(0.0, 0.8, 0.0), colour)
-	if cfg and cfg.has_method("describe_meal"):
-		fx.floating_text(global_position + Vector3(0.0, 1.2, 0.0), cfg.describe_meal(meal), colour)
-	fx.play(fx.Sound.PICKUP)
-
-## The boost's hit points: over his own while he is fed, full when he eats -- and gone again,
-## with any of them he was living on, when it wears off. And the ring at his feet that says he
-## is fed.
-func _on_fed_changed(fed: Dictionary) -> void:
-	var was: float = max_hp
-	max_hp = base_max_hp + float(fed.get("max_hp", 0.0))
-	if max_hp > was and current_state != State.DEAD:
-		current_hp += max_hp - was
-	current_hp = minf(current_hp, max_hp)
-	_refresh_health_bar()
-	var eb = _get_event_bus()
-	if eb and eb.has_signal("hero_hp_changed"):
-		eb.hero_hp_changed.emit(current_hp, max_hp)
-	_show_aura(not fed.is_empty())
-
-## A ring of the boost's colour at his feet, while he is fed (Config.EATING.aura_radius).
-func _show_aura(on: bool) -> void:
-	if on and (_aura == null or not is_instance_valid(_aura)):
-		var r: float = _eating_number("aura_radius", 0.55)
-		var ring := TorusMesh.new()
-		ring.inner_radius = r * 0.88
-		ring.outer_radius = r
-		ring.rings = 32
-		ring.ring_segments = 6
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		var colour: Color = UiTheme.color("boost")
-		mat.albedo_color = Color(colour.r, colour.g, colour.b, 0.75)
-		_aura = MeshInstance3D.new()
-		_aura.name = "FedAura"
-		_aura.mesh = ring
-		_aura.material_override = mat
-		_aura.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_aura.scale = Vector3(1.0, 0.15, 1.0)          # flat on the ground
-		_aura.position = Vector3(0.0, 0.03, 0.0)
-		add_child(_aura)
-	if _aura != null and is_instance_valid(_aura):
-		_aura.visible = on
-
-func _eating_number(key: String, fallback: float) -> float:
-	var cfg = _get_config()
-	if cfg and "EATING" in cfg:
-		return float(cfg.EATING.get(key, fallback))
-	return fallback
 
 # ==============================================================================
 # The torch (GAME-DESIGN 9.3: "看得见的范围缩小，火把它撑开"; "人举着火把……火把会烧完")
@@ -1528,20 +1398,9 @@ func _fire() -> Dictionary:
 func _torch_cfg() -> Dictionary:
 	return _fire().get("torch", {})
 
-## How fast he raises and mends: 1.0, or more on a good meal (GameState.build_multiplier).
-func work_rate() -> float:
-	var gs = _get_game_state()
-	return float(gs.build_multiplier()) if gs and gs.has_method("build_multiplier") else 1.0
-
-## His hit points bare: Config.HERO's, without armour or a meal.
-func _natural_max_hp() -> float:
-	var cfg = _get_config()
-	return float(cfg.HERO.get("hp", 10.0)) if (cfg and "HERO" in cfg) else base_max_hp
-
-## Metres a second he walks: his own pace, or more on a good meal.
+## Metres a second he walks (Config.HERO.move_speed).
 func walk_speed() -> float:
-	var gs = _get_game_state()
-	return speed * (float(gs.move_multiplier()) if gs and gs.has_method("move_multiplier") else 1.0)
+	return speed
 
 ## Sound `id` in the world at `where` (Fx.play_at).
 func _sound_at(id: String, where: Vector3) -> void:
@@ -1578,8 +1437,8 @@ func take_damage(amount: float) -> void:
 ## by the nest, the guards bit him from twelve hit points to none while he went on swinging at
 ## the rock). At work, or on his way to it: sent to cut wood or to mend a fence at night, a
 ## phytosaur stood across his way and bit him from ten hit points to none while he walked on the
-## spot, never hitting back (the debug-agent's BUG-019). Not on a walk the player sent him on, at a
-## meal, or in a fight already under way -- those are the player's to change -- unless he is held
+## spot, never hitting back (the debug-agent's BUG-019). Not on a walk the player sent him on, in the
+## healing pod, or in a fight already under way -- those are the player's to change -- unless he is held
 ## there, walking on the spot for HERO.fight_when_held seconds: sent home at night past a phytosaur
 ## lying across the way at the cabin's end, biting it, he walked on the spot and was bitten to death
 ## (the debug-agent's BUG-022). A walk the player sent him on that gets him away is still his to walk.

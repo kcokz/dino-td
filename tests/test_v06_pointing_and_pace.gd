@@ -186,10 +186,10 @@ func test_06_his_stride_keeps_pace_with_his_feet() -> void:
 	hero.animator.update_motion(pace, 1.0)
 	var drawn: float = float(gaits[hero.animator.requested_clip])
 	assert_almost_eq(player.speed_scale, clampf(pace / drawn, span.x, span.y), 0.001, "The clip plays at his pace")
-	var fed: float = pace * 1.2
-	hero.animator.update_motion(fed, 1.0)
+	var quicker: float = pace * 1.2
+	hero.animator.update_motion(quicker, 1.0)
 	drawn = float(gaits[hero.animator.requested_clip])
-	assert_almost_eq(player.speed_scale, clampf(fed / drawn, span.x, span.y), 0.001, "and quicker when he is quicker")
+	assert_almost_eq(player.speed_scale, clampf(quicker / drawn, span.x, span.y), 0.001, "and quicker when he is quicker")
 	hero.current_state = hero.State.IDLE
 	assert_almost_eq(player.speed_scale, 1.0, 0.001, "Out of a travelling state it plays as drawn")
 

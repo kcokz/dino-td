@@ -6,12 +6,13 @@
 #
 # His commands are tiles in the bottom right corner, there all the while and never moving: Build from the
 # first, at the right end, and each other as it becomes his to the left of those there, on the next
-# number key -- Eat with the first meal, Torch with the first dusk ("Build 按钮放最右边，哪个能力先解锁放哪
-# 个在靠右，以此类推，吃一开始隐藏因为没有食物，火把也是"). Chosen, he has no card open. A menu comes up above its tile and goes once a building is in
-# hand (Age of Empires IV, StarCraft II); his sheet -- no commands on it -- opens on the details key or
-# his medallion, as C opens the character sheet in Diablo IV, and the cancel key shuts it. His health
-# and his meal are on his medallion all the while. Anything else chosen shows its whole card, above
-# his tiles too; the number keys are whichever has commands on them.
+# number key -- Rest the first time he is hurt (v0.7, where Eat came with the first meal), Torch with the
+# first dusk ("Build 按钮放最右边，哪个能力先解锁放哪个在靠右，以此类推，吃一开始隐藏因为没有食物，火把也是").
+# Chosen, he has no card open. A menu comes up above its tile and goes once a building is in hand (Age of
+# Empires IV, StarCraft II); his sheet -- no commands on it -- opens on the details key or his medallion,
+# as C opens the character sheet in Diablo IV, and the cancel key shuts it. His health is on his
+# medallion all the while. Anything else chosen shows its whole card, above his tiles too; the number
+# keys are whichever has commands on them.
 #
 # Everything expected is read from Config.
 extends "res://tests/test_base.gd"
@@ -107,7 +108,7 @@ func test_01_chosen_he_has_his_commands_in_the_corner_and_no_card() -> void:
 	assert_eq(panel.view(), "none", "Chosen, he has no card open")
 	assert_false(panel.visible, "none is shown")
 	assert_true(_shown(tiles.build_button), "Build")
-	assert_false(tiles.eat_button.visible, "and nothing else yet: Eat comes with the first meal")
+	assert_false(tiles.rest_button.visible, "and nothing else yet: Rest comes the first time he is hurt")
 	assert_false(tiles.torch_button.visible, "and Torch with the first dusk")
 	var corner: Vector2 = tiles.get_parent_area_size() - Vector2.ONE * float(config_node.UI["option_panel_margin"])
 	assert_almost_eq(tiles.get_rect().end.x, corner.x, 1.0, "in the bottom right corner")
@@ -116,7 +117,7 @@ func test_01_chosen_he_has_his_commands_in_the_corner_and_no_card() -> void:
 	var cap: Label = tiles.build_button.get_node_or_null("Keycap") as Label
 	assert_true(cap != null and cap.visible and cap.text == OS.get_keycode_string(int(_keys()[0])), "Build wears the first")
 	assert_true(_shown(main.hud.root_control.find_child("HeroEmblem", true, false) as Control),
-		"His health and his meal are on his medallion all the while")
+		"His health is on his medallion all the while")
 
 func test_02_his_commands_never_move_and_every_card_stands_above_them() -> void:
 	var main = await _level()
@@ -129,7 +130,6 @@ func test_02_his_commands_never_move_and_every_card_stands_above_them() -> void:
 	var wall = _fence(main)
 	var steps: Array = [
 		["his build menu", func(): panel.show_menu("build")],
-		["his meals", func(): panel.show_menu("eat")],
 		["his sheet", func(): panel.show_details(true)],
 		["a fence's card", func(): tree.root.get_node("EventBus").unit_selected.emit(wall)],
 	]
@@ -174,20 +174,24 @@ func test_03_build_comes_up_above_its_tile_and_a_building_in_hand_puts_it_away()
 	assert_eq(panel.view(), "none", "Its tile pressed again, it goes")
 	main.cancel_building_selection()
 
-func test_04_eat_brings_the_meals_and_one_eaten_puts_them_away() -> void:
+func test_04_rest_sends_him_home_to_the_pod_and_again_calls_him_off() -> void:
+	# v0.7 (GAME-DESIGN 3.0): where Eat was, Rest -- an order, not a menu: home to the healing pod.
 	var main = await _level()
-	game_state_node.stock_meal("meat")
 	var panel = main.hud.option_panel
 	var tiles = _tiles(main)
 	panel.select_target(main.hero)
-	await wait_frames(1)
+	main.hero.take_damage(2.0)
+	await wait_frames(2)
+	assert_true(_shown(tiles.rest_button), "Bitten, Rest has come")
+	var pod = HealingPod.of(tree)
+	assert_not_null(pod, "The cabin has its pod")
 	await _press(int(_keys()[1]))
-	assert_eq(panel.view(), "menu", "The second key brings the meals")
-	assert_true(tiles.eat_button.button_pressed, "its tile pressed in")
-	assert_eq(panel.status_label.text, tr("EAT_HINT_PICK"), "asking for one")
-	await _press(int(_keys()[0]))
-	assert_true(main.hero.is_eating(), "The first key eats the first")
-	assert_eq(panel.view(), "none", "and the meals go")
+	assert_eq(main.hero.rest_pod(), pod, "The second key sends him to the pod")
+	assert_true(tiles.rest_button.button_pressed, "its tile pressed in while he goes")
+	assert_eq(panel.view(), "none", "and no menu comes up: it is an order")
+	await _press(int(_keys()[1]))
+	assert_null(main.hero.rest_pod(), "Pressed again, he is called off")
+	assert_false(tiles.rest_button.button_pressed, "its tile out again")
 
 func test_05_the_details_key_opens_his_sheet_with_no_commands_on_it() -> void:
 	var main = await _level()
@@ -198,7 +202,7 @@ func test_05_the_details_key_opens_his_sheet_with_no_commands_on_it() -> void:
 	await _press(_details_key())
 	assert_eq(panel.view(), "full", "The details key opens his sheet")
 	assert_true(_shown(panel.header), "his portrait and his name")
-	assert_true(_shown(panel.hero_stats), "his bars, his meal and his kit")
+	assert_true(_shown(panel.hero_stats), "his health and his tools")
 	assert_eq(_buttons(panel).size(), 0, "and no commands: they stay below, where they always are")
 	assert_true(tiles.keys_live(), "on their keys")
 	assert_almost_eq(panel.size.x, _card_width(), 1.0, "The card's width")
@@ -311,10 +315,10 @@ func test_11_each_command_comes_in_to_the_left_as_it_becomes_his_and_stays() -> 
 	var keys: Array = _keys()
 	await wait_frames(2)
 	assert_true(_shown(tiles.build_button), "Build is there from the first")
-	assert_false(tiles.eat_button.visible, "Eat is not: nothing is cooked")
+	assert_false(tiles.rest_button.visible, "Rest is not: nothing has bitten him")
 	assert_false(tiles.torch_button.visible, "nor Torch: it is morning")
 	var build_at: Vector2 = _place(tiles.build_button)
-	# The first dusk before the first meal: Torch is the first to come.
+	# The first dusk before the first bite: Torch is the first to come.
 	_set_clock(_at("dusk") + 1.0)
 	await wait_frames(2)
 	assert_true(tiles.torch_button.visible, "The first dusk, Torch comes")
@@ -322,38 +326,38 @@ func test_11_each_command_comes_in_to_the_left_as_it_becomes_his_and_stays() -> 
 	assert_eq(_place(tiles.build_button), build_at, "Build where it was")
 	assert_eq(_key_on(tiles.torch_button), int(keys[1]), "on the second key, the first to come")
 	var torch_at: Vector2 = _place(tiles.torch_button)
-	game_state_node.stock_meal("meat")
+	main.hero.take_damage(1.0)
 	await wait_frames(2)
-	assert_true(tiles.eat_button.visible, "The first meal, Eat comes")
-	assert_lt(_place(tiles.eat_button).x, torch_at.x, "to the left of both")
+	assert_true(tiles.rest_button.visible, "The first bite, Rest comes")
+	assert_lt(_place(tiles.rest_button).x, torch_at.x, "to the left of both")
 	assert_eq([_place(tiles.build_button), _place(tiles.torch_button)], [build_at, torch_at],
 		"and neither moves")
-	assert_eq(_key_on(tiles.eat_button), int(keys[2]), "on the third key")
+	assert_eq(_key_on(tiles.rest_button), int(keys[2]), "on the third key")
 	# Come, they stay: greyed out while they cannot be pressed, so none moves.
-	var eat_at: Vector2 = _place(tiles.eat_button)
-	game_state_node._set_meals({})
+	var rest_at: Vector2 = _place(tiles.rest_button)
+	main.hero.heal(main.hero.max_hp)
 	_set_clock(_at("day") + 100.0, 2)
 	await wait_frames(2)
 	assert_true(tiles.torch_button.visible and tiles.torch_button.disabled, "By day the torch's is there, greyed out")
-	assert_true(tiles.eat_button.visible and tiles.eat_button.disabled, "and with nothing cooked, Eat's")
-	assert_eq([_place(tiles.build_button), _place(tiles.torch_button), _place(tiles.eat_button)],
-		[build_at, torch_at, eat_at], "none has moved")
+	assert_true(tiles.rest_button.visible and tiles.rest_button.disabled, "and with him whole, Rest's")
+	assert_eq([_place(tiles.build_button), _place(tiles.torch_button), _place(tiles.rest_button)],
+		[build_at, torch_at, rest_at], "none has moved")
 	# Its words put into another language, it is the same run (HUD._on_locale_changed).
 	tree.root.get_node("EventBus").locale_changed.emit(TranslationServer.get_locale())
 	await wait_frames(2)
-	assert_true(tiles.torch_button.visible and tiles.eat_button.visible, "In another language they are still there")
-	assert_eq([_key_on(tiles.torch_button), _key_on(tiles.eat_button)], [int(keys[1]), int(keys[2])], "on their keys")
-	# A new run: Build alone again -- and this time the meal first.
+	assert_true(tiles.torch_button.visible and tiles.rest_button.visible, "In another language they are still there")
+	assert_eq([_key_on(tiles.torch_button), _key_on(tiles.rest_button)], [int(keys[1]), int(keys[2])], "on their keys")
+	# A new run: Build alone again -- and this time bitten first.
 	main.restart_game()
 	await wait_frames(2)
-	assert_false(tiles.eat_button.visible or tiles.torch_button.visible, "A new run, Build alone again")
-	game_state_node.stock_meal("meat")
+	assert_false(tiles.rest_button.visible or tiles.torch_button.visible, "A new run, Build alone again")
+	main.hero.take_damage(1.0)
 	await wait_frames(2)
-	assert_eq(_key_on(tiles.eat_button), int(keys[1]), "Eat the first to come this time: the second key")
+	assert_eq(_key_on(tiles.rest_button), int(keys[1]), "Rest the first to come this time: the second key")
 	_set_clock(_at("dusk") + 1.0)
 	await wait_frames(2)
 	assert_eq(_key_on(tiles.torch_button), int(keys[2]), "and Torch the third")
-	assert_lt(_place(tiles.torch_button).x, _place(tiles.eat_button).x, "to Eat's left")
+	assert_lt(_place(tiles.torch_button).x, _place(tiles.rest_button).x, "to Rest's left")
 	assert_eq(_place(tiles.build_button), build_at, "Build where it always is")
 
 func test_12_a_command_come_is_seen_arriving_and_one_he_cannot_give_is_plainly_dull() -> void:
@@ -378,14 +382,13 @@ func test_12_a_command_come_is_seen_arriving_and_one_he_cannot_give_is_plainly_d
 	var on: Color = torch.get_theme_color("icon_normal_color")
 	assert_lt(off.v * off.a, on.v * on.a * 0.5, "A greyed command's icon is not half as bright as one to press")
 	assert_eq(torch.get_theme_color("font_disabled_color"), UiTheme.color("ink_faint"), "and its word faint")
-	# Eat with nothing cooked says 0 in the colour of what he is short of.
-	game_state_node.stock_meal("meat")
+	# Rest can be pressed while he is hurt, and not when he is whole.
+	main.hero.take_damage(1.0)
 	await wait_frames(1)
-	var badge: Label = tiles.eat_button.get_node("Badge") as Label
-	assert_ne(badge.get_theme_color("font_color"), UiTheme.color("ink_short"), "A meal cooked: its count as it is")
-	game_state_node._set_meals({})
+	assert_false(tiles.rest_button.disabled, "Hurt, Rest can be pressed")
+	main.hero.heal(main.hero.max_hp)
 	await wait_frames(1)
-	assert_eq(badge.get_theme_color("font_color"), UiTheme.color("ink_short"), "none: its 0 short")
+	assert_true(tiles.rest_button.disabled, "whole, it cannot")
 
 ## Where the corner lays `btn` out, on the screen: not where it is drawn while it grows in (UiKit.come_in),
 ## which is about its middle.

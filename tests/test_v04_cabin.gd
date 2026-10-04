@@ -105,8 +105,9 @@ func test_03_stations_only_offer_their_own_recipes() -> void:
 		# from the run's map (test_v06_beacon).
 		var steps: Array = config_node.beacon_jobs(game_state_node.map_data()) \
 			if String(station_id) == String(config_node.BEACON_STATION) else []
-		assert_gt(here.size() + config_node.dishes_at(String(station_id)).size() + steps.size(), 0,
-			"%s has something to do" % station_id)
+		# The healing pod's one job is a rest, not a recipe (HealingPod).
+		var rests: int = 1 if String(station_id) == HealingPod.STATION else 0
+		assert_gt(here.size() + steps.size() + rests, 0, "%s has something to do" % station_id)
 		for recipe_id in here:
 			assert_eq(String(config_node.RECIPES[recipe_id]["station"]), String(station_id),
 				"%s belongs to %s" % [recipe_id, station_id])
@@ -142,12 +143,13 @@ func test_05_what_cannot_be_paid_for_cannot_be_started() -> void:
 	assert_eq(bench.active_recipe, "", "And the bench is still idle")
 
 func test_06_a_bench_makes_one_thing_at_a_time() -> void:
-	var bench = _spawn(station_script.new("kitchen"))
+	var bench = _spawn(station_script.new("workbench"))
 	await wait_frames(1)
 	for res_id in config_node.RESOURCES:
 		game_state_node.resources[res_id] = 99
+	know_everything()      # its materials have turned up
 
-	var job: String = String(config_node.recipes_at("kitchen")[0])
+	var job: String = String(config_node.recipes_at("workbench")[0])
 	assert_true(bench.begin(job), "It takes the job")
 	assert_true(bench.begin(job), "Asking for the same job again is harmless")
 	assert_eq(bench.active_recipe, job, "Still the one job")

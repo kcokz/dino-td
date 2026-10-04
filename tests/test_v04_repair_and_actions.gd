@@ -28,7 +28,7 @@ func before_all() -> void:
 func before_each() -> void:
 	if game_state_node != null and game_state_node.has_method("reset_game"):
 		game_state_node.reset_game()
-	# The turret needs a blueprint from the kitchen and stone needs a pick, and the
+	# The turret once needed a blueprint from the kitchen and stone needs a pick, and the
 	# tests here that go through the real build path were silently failing to place
 	# anything without them -- place_building_at_cell() returned null and the test
 	# died on the next line, still reporting PASS because it never reached an
