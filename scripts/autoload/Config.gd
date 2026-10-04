@@ -1491,8 +1491,12 @@ const DINOS: Dictionary = {
 		"name": "DINO_DESMATOSUCHUS_NAME",
 		"hp": 12.0,
 		"speed": 2.4,
-		"damage": 1.5,
-		"attack_rate": 1.2,
+		# A point a second at the cabin, a coelophysis' worth: what makes it dangerous is that arrows hardly hurt it,
+		# not how hard it rams. Two of them left alone take the cabin's hundred in about fifty seconds -- time to go
+		# out and beat them (they do not strike back: a man is a second a point, twelve seconds each) or for the drop
+		# tower to crush them. At 1.8 a second each, two had it down in under half a minute (the v0.7 bench, day 2).
+		"damage": 1.0,
+		"attack_rate": 1.0,
 		"behaviour": "charger",
 		"armored": true,
 		"drops": {"food": 3, "bone": 2},
@@ -1510,8 +1514,9 @@ const DINOS: Dictionary = {
 		"name": "DINO_STEGOSAURUS_NAME",
 		"hp": 30.0,
 		"speed": 1.8,
-		"damage": 2.5,
-		"attack_rate": 1.5,
+		# Twice the aetosaur's ram, one at a time: alone at the cabin it takes about fifty seconds as well.
+		"damage": 2.0,
+		"attack_rate": 1.0,
 		"behaviour": "charger",
 		"armored": true,
 		"heavy": true,

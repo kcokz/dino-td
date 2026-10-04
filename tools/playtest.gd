@@ -244,6 +244,12 @@ func _scenario_play(spec: String) -> void:
 	note.call("stock: %s" % str(gs.resources))
 	await _shoot("stock_picked_up")
 
+	# --- 1b. The first tower, armed, before anything else: the opening's wood pays for one and a batch of its arrows
+	# (test_v06_the_opening). A bot that chopped wood till the first raid met it with nothing standing, and three
+	# coelophysis had the cabin down in a minute (v0.7: they come for the cabin, and the man last).
+	if _plan_has("bow"):
+		await _first_tower(hero, cabin, note, minutes)
+
 	# --- 2. A ring of palisade round the cabin, a cell out, a gate at the door -----------
 	_ctx = "build"
 	var centre: Vector2i = gm.world_to_build_cell(cabin.global_position)
@@ -293,15 +299,22 @@ func _scenario_play(spec: String) -> void:
 	# --- 4 onwards: raids come and go; between them, what a player would do next -------------
 	# In order: the beacon when its next step can be paid; a rest in the healing pod when he is hurt;
 	# the pick, then the axe; the towers north of the ring, the way the
-	# nest is -- a bow tower each side, a drop tower between them where the raid comes past, a
-	# catapult further out once there is stone -- each loaded with what the workbench makes for it,
-	# carried over by him; the ring mended where a raid broke it; and otherwise stone while there is
-	# little, and wood. Launched, he shelters till the end.
+	# nest is -- a bow tower each side, a drop tower between them where the raid comes past, a bait
+	# rack in front of it to hold what comes under it, a catapult further out once there is stone,
+	# and a campfire each side of the ring for the towers to see by at night (v0.7: they see only by
+	# firelight) -- each loaded with what the workbench makes for it, or with meat, carried over by
+	# him; the ring mended where a raid broke it; and otherwise stone while there is little, and wood.
+	# Launched, he shelters till the end.
 	var last_status: float = -100.0
 	var raids_seen: int = 0
+	# The two campfires first after the first tower: north and south of the ring, between them the cabin all in their
+	# light (FIRE light 7 m) -- what keeps the phytosaurs off it at night, and what the towers see by.
 	var tower_plan: Array = [
 		["bow_tower", centre + Vector2i(-4, -half.y - 3)],
+		["campfire", centre + Vector2i(0, -half.y - 2)],
+		["campfire", centre + Vector2i(-2, half.y + 2)],
 		["drop_tower", centre + Vector2i(0, -half.y - 4)],
+		["bait_rack", centre + Vector2i(0, -half.y - 6)],
 		["bow_tower", centre + Vector2i(3, -half.y - 3)],
 		["catapult", centre + Vector2i(-9, -half.y - 4)],
 	]
@@ -315,14 +328,17 @@ func _scenario_play(spec: String) -> void:
 			["bow_tower", centre + Vector2i(-half.x - 4, 0)],
 			["bow_tower", centre + Vector2i(0, -half.y - 7)],
 		]
-	tower_plan = tower_plan.filter(func(p): return _plan_has(String(cfg.BUILDINGS[String(p[0])].get("kind", ""))) \
-		or _plan_words.has("bows"))
+	# Left out by its kind ("-thrower", "-fire") or by itself ("-catapult", "-campfire").
+	tower_plan = tower_plan.filter(func(p): return (_plan_has(String(cfg.BUILDINGS[String(p[0])].get("kind", ""))) \
+		and _plan_has(String(p[0]))) or _plan_words.has("bows"))
 	var refused_towers: Dictionary = {}
 	var shots_taken: Dictionary = {}
 	while _play_clock < minutes * 60.0 and not gs.is_game_over:
 		# At least a frame every time round: a step that finds nothing to wait for (the raid
 		# about to set out, a job it cannot start) must not spin the loop with the game held still.
 		await _advance(0.1)
+		if not is_instance_valid(cabin):
+			break
 		_ctx = "think"
 		_tick(0.1 * Engine.time_scale)
 		if _play_clock - last_status >= 20.0:
@@ -330,7 +346,12 @@ func _scenario_play(spec: String) -> void:
 			note.call(_play_status(hero, cabin, gs, wm))
 		# Launched, the valley answers after a grace (MAPS.beacon.launch_grace): he works through
 		# it like any quiet spell -- mending, building -- and shelters only once they are out.
-		if wm.is_wave_active or wm.final_wave:
+		# Savvy, a raid that is nowhere near him he works through: it is the cabin they are after, and the man last.
+		var working_through: bool = _plan_words.has("savvy") and (wm.is_wave_active or wm.final_wave) \
+			and _nearest_dino(hero, 10.0) == null and hero.current_hp >= hero.max_hp * 0.6 \
+			and (String(gs.day_part()) == "day" or float(hero.get("torch_left")) > 0.0) \
+			and _charger_at(cabin, 10.0) == null
+		if (wm.is_wave_active or wm.final_wave) and not working_through:
 			if wm.final_wave and not shots_taken.has("final"):
 				shots_taken["final"] = true
 				await _shoot("final_wave")
@@ -343,28 +364,58 @@ func _scenario_play(spec: String) -> void:
 					shots_taken["alpha"] = true
 					note.call("the alpha is on the field")
 					await _portrait("alpha", (d as Node3D).global_position, 4.0)
+			if not is_instance_valid(cabin):
+				break
 			var home: Vector3 = cabin.door_inside()
 			# What is at the cabin he goes out to, as a player would, while he has the health for it --
 			# and rests in the healing pod when he has not (HealingPod). The cabin's gun used to finish a
 			# raid while he sheltered at the door; it has none since 2026-10-02 ("cabin的自动射击得取消了"),
 			# and a raid sat out inside brings it down.
+			# v0.7: what strikes them is what they go for first -- a man who goes out into a pack is what the pack
+			# turns on. He goes out only to one on its own, and only while he has the health for it; else he is
+			# in, out of their way (they come for the cabin, and the man last), and in the pod once hurt.
 			var near: Node3D = _nearest_dino(hero, 9.0)
-			var hurt: bool = hero.current_hp < hero.max_hp * 0.35
+			var hurt: bool = hero.current_hp < hero.max_hp * 0.6
+			# And not out into the dark to do it: what is out there at night is out for him.
+			var alone: bool = near != null and _dinos_round(near, 6.0) <= 1 \
+				and (String(gs.day_part()) == "day" or _lit(near.global_position))
 			var pod = cabin.station("pod")
+			# A frightened charger at the cabin (ChargerDino) he goes out to whatever else is there: it pays him no
+			# mind and does not strike back, arrows hardly hurt it, and it is ramming the cabin.
+			var charger: Node3D = _charger_at(cabin, 10.0)
+			if charger != null and String(gs.day_part()) != "day" and not _lit(charger.global_position):
+				charger = null
+			# Not into a pack round it, though: the pack is not so indifferent to him (the bench's seed 8 -- he went out
+			# to a Desmatosuchus with ten coelophysis about it, and was dead in six seconds).
+			if charger != null and _dinos_round(charger, 6.0) > 1:
+				charger = null
 			if hero.rest_pod() != null:
 				pass      # in the pod, or on his way to it: it mends him, and lets him out whole
 			elif hurt and _plan_has("pod") and pod != null and pod.can_offer("rest"):
 				pod.begin("rest")
-			elif near != null and not hurt:
+			elif charger != null and not hurt and _plan_has("fight"):
+				if hero.target_enemy != charger:
+					hero.order_attack(charger)
+			elif near != null and not hurt and alone and _plan_has("fight"):
 				if hero.target_enemy != near:
 					hero.order_attack(near)
-			elif hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
+			elif not cabin.hero_inside and not _sheltering:
+				_sheltering = true
+				_main.order_enter_cabin()
+			elif not cabin.hero_inside and hero.global_position.distance_to(home) > 1.5 and int(hero.current_state) != 1:
 				hero.move_to(home)
 			_ctx = "raid"
 			await _advance(1.0)
 			_tick(Engine.time_scale)
 			continue
-		if wm.current_wave > raids_seen:
+		_sheltering = false
+		# v0.7's nights (GAME-DESIGN 9.3; the towers see only by firelight): out of the fires' light he is what the
+		# phytosaurs are out for -- a bot that went on working in the dark was bitten back into the pod all night, the
+		# towers unbuilt and the cabin bitten. In the dark he works the benches inside, loads what a fire or his torch
+		# lights, puts up a campfire, and otherwise waits in the cabin for the morning.
+		var dark: bool = String(gs.day_part()) != "day"
+		var lit_hero: bool = float(hero.get("torch_left")) > 0.0
+		if wm.current_wave > raids_seen and not dark and not wm.is_wave_active:
 			raids_seen = wm.current_wave
 			_ctx = "drops"
 			await _gather_drops(hero, note)
@@ -372,13 +423,30 @@ func _scenario_play(spec: String) -> void:
 		var wb = cabin.station("workbench")
 		var beacon_job: String = String(gs.beacon_next_job())
 		var pick_flag: String = String(cfg.RECIPES["stone_pick"]["unlocks"])
+		# The defence's core before the beacon: the first tower, the two fires, the drop tower (what crushes the
+		# armoured chargers that come from the second day). The bot that paid the beacon first met the second day's
+		# raid with one bow tower, and two Desmatosuchus walked through it to the cabin.
+		var next_tower: Array = []
+		var next_index: int = -1
+		for i in tower_plan.size():
+			var plan: Array = tower_plan[i]
+			if not refused_towers.has(plan[1]) and gm.building_in_build_cell(plan[1]) == null:
+				next_tower = plan
+				next_index = i
+				break
+		var can_raise: bool = not next_tower.is_empty() and gs.knows_all(cfg.BUILDINGS[next_tower[0]]["cost"]) \
+				and gs.can_afford(cfg.BUILDINGS[next_tower[0]]["cost"]) \
+				and (not dark or String(cfg.BUILDINGS[next_tower[0]].get("kind", "")) == "fire")
+		if can_raise and next_index < 4:
+			await _raise(next_tower, refused_towers, note)
+			continue
 		if beacon_job != "" and cabin.station(String(cfg.BEACON_STATION)).can_afford(beacon_job):
 			await _bench_job(hero, cabin, String(cfg.BEACON_STATION), beacon_job, note)
 			continue
 		# The part the next stage takes, out of its wreck, once the rest of its price is in -- while
 		# nothing guards it (the battery's wreck is behind the nest, and is searched by night), and not
 		# with a raid about to set out: it set off and turned back every step till the raid came.
-		var wreck: Node = _wreck_to_search(beacon_job) if wm.raid_timer >= 6.0 else null
+		var wreck: Node = _wreck_to_search(beacon_job) if (wm.raid_timer >= 6.0 and not dark) else null
 		if wreck != null:
 			note.call("to the wreck for the %s" % String(wreck.resource_type))
 			_ctx = "wreck"
@@ -393,42 +461,43 @@ func _scenario_play(spec: String) -> void:
 			pod.begin("rest")
 			await _play_until(func(): return hero.rest_pod() == null, float(pod.time_of("rest")) + 20.0, "resting")
 			continue
+		# Tonight's wood put by before dusk: each fire takes its night's from the stock as it lights (Fire), and one
+		# that cannot burns not -- the towers blind by it, the phytosaurs at the cabin.
+		if not dark and float(gs.time_of_day()) >= float(cfg.DAY["parts"]["dusk"]) - 50.0 \
+				and int(gs.resources.get("wood", 0)) < _fuel_reserve():
+			await _chop_a_while(hero, "wood", 8.0)
+			continue
 		if not gs.has_unlock(pick_flag) and wb.can_afford("stone_pick"):
 			await _bench_job(hero, cabin, "workbench", "stone_pick", note)
 			continue
 		if _plan_has("axe") and wb.can_offer("stone_axe") and wb.can_afford("stone_axe"):
 			await _bench_job(hero, cabin, "workbench", "stone_axe", note)
 			continue
-		var next_tower: Array = []
-		for plan in tower_plan:
-			if not refused_towers.has(plan[1]) and gm.building_in_build_cell(plan[1]) == null:
-				next_tower = plan
-				break
-		if not next_tower.is_empty() and gs.knows_all(cfg.BUILDINGS[next_tower[0]]["cost"]) \
-				and gs.can_afford(cfg.BUILDINGS[next_tower[0]]["cost"]):
-			_ctx = "build"
-			_main.on_build_selected(String(next_tower[0]))
-			_main._placement_facing = 0
-			var tower_at: Vector3 = gm.build_cell_to_world(next_tower[1])
-			var b = _main.try_place_at_cell(gm.world_to_cell(tower_at), tower_at)
-			_main.cancel_building_selection()
-			note.call("%s ordered at %s: %s" % [next_tower[0], str(next_tower[1]), "yes" if b else "NO"])
-			if b == null:
-				refused_towers[next_tower[1]] = true
-			await _play_until(func(): return _unfinished() == 0, 40.0, "building a tower")
+		if can_raise:
+			await _raise(next_tower, refused_towers, note)
 			continue
 		# Ammunition a tower on the field wants, made at the workbench a batch at a time; then he takes it over.
 		var ammo_job: String = _ammo_wanted(wb)
 		if ammo_job != "":
 			await _bench_job(hero, cabin, "workbench", ammo_job, note)
 			continue
-		var empty: Node = _tower_wanting_load()
+		var empty: Node = _tower_wanting_load(dark and not lit_hero)
 		if empty != null:
 			var empty_id: int = empty.get_instance_id()
 			_ctx = "load"
 			hero.order_load(empty)
 			note.call("loading the %s" % String(empty.building_type))
 			await _play_until(func(): return not is_instance_id_valid(empty_id) or not empty.wants_load(), 30.0, "loading a tower")
+			continue
+		# Savvy, with a torch to light he works the night as the day (the phytosaurs keep out of its light).
+		if dark and _plan_words.has("savvy") and _plan_has("torch") and hero.has_method("can_light_torch") \
+				and (lit_hero or hero.can_light_torch()):
+			dark = false
+		if dark:
+			_ctx = "night"
+			if not cabin.hero_inside:
+				_main.order_enter_cabin()
+			await _play_until(func(): return String(gs.day_part()) == "day" or wm.is_wave_active, 12.0, "in the cabin, the night out")
 			continue
 		var holes: int = 0
 		_main.on_build_selected("wall")
@@ -470,12 +539,16 @@ func _scenario_play(spec: String) -> void:
 var _plan_words: PackedStringArray = PackedStringArray(["all"])
 
 ## Whether the plan has `thing` in it: everything but what it leaves out ("-thing"); with "bows", only the bow towers
-## and their arrows -- no ring, no other tower -- and what any player does: a torch at night, the axe, a rest when hurt.
+## and their arrows -- no ring, no other tower, no fire -- and what any player does: a torch at night, the axe, a rest
+## when hurt. The things: "ring" (the palisade), each tower by its kind ("bow", "drop", "thrower", "bait"), "fire" (the
+## campfires the towers see by at night), "torch", "axe", "pod", "fight" (going out to what is at the cabin). And how
+## he plays: "savvy" -- to v0.7's rules: a raid comes for the cabin and the man last, so one that is not near him he
+## works through; the torch keeps the phytosaurs off, so with one he works the night (else he waits both out inside).
 func _plan_has(thing: String) -> bool:
 	if _plan_words.has("-" + thing):
 		return false
 	if _plan_words.has("bows"):
-		return thing in ["bow", "torch", "axe", "pod"]
+		return thing in ["bow", "torch", "axe", "pod", "fight"]
 	return true
 
 ## What he is about this moment, for the account: "gather:wood", "craft:ammo", "build", "load", "raid", "drops",
@@ -669,12 +742,24 @@ func _ammo_wanted(wb: Node) -> String:
 				return String(kind)
 	return ""
 
-## A standing tower that loading would fill from the stock now, or null.
-func _tower_wanting_load() -> Node:
+## A standing tower that loading would fill from the stock now, or null -- `lit_only`, only one a fire's light is on.
+func _tower_wanting_load(lit_only: bool = false) -> Node:
 	for t in get_nodes_in_group(AmmoTower.GROUP):
-		if is_instance_valid(t) and t.wants_load():
+		if is_instance_valid(t) and t.wants_load() and (not lit_only or _lit((t as Node3D).global_position)):
 			return t
 	return null
+
+## Whether a light is on `at` (ProwlerDino.lights: a burning fire, the burning ground, his torch).
+func _lit(at: Vector3) -> bool:
+	return not ProwlerDino.light_over(self, at).is_empty()
+
+## The wood tonight's fires take from the stock as they light (Fire.fuel_cost), every standing fire's.
+func _fuel_reserve() -> int:
+	var n: int = 0
+	for b in _main.grid_manager.get_all_buildings():
+		if is_instance_valid(b) and b.has_method("fuel_cost") and bool(b.get("is_constructed")):
+			n += int(b.fuel_cost().get("wood", 0))
+	return n
 
 ## Out through the gate for what the raid left, and back.
 func _gather_drops(hero: Node, note: Callable) -> void:
@@ -753,6 +838,11 @@ func _chop_a_while(hero: Node, res_id: String, seconds: float) -> void:
 		return
 	hero.order_harvest(best)
 	var wm = _main.wave_manager
+	# Savvy, he works on through a raid till something comes near him (_scenario_play); else he stops for it.
+	if _plan_words.has("savvy"):
+		await _play_until(func(): return _nearest_dino(hero, 8.0) != null or hero.current_hp < hero.max_hp * 0.6, seconds,
+			"working %s" % res_id)
+		return
 	await _play_until(func(): return wm.is_wave_active or wm.raid_timer < 6.0, seconds, "working %s" % res_id)
 
 ## The wreck holding the part `job` (a beacon stage) still lacks, when that is all it lacks and the
@@ -774,9 +864,52 @@ func _wreck_to_search(job: String) -> Node:
 	if part == "":
 		return null
 	for n in get_nodes_in_group("resource_nodes"):
-		if is_instance_valid(n) and String(n.resource_type) == part and int(n.current_amount) > 0 and not _guarded(n):
+		if is_instance_valid(n) and String(n.resource_type) == part and int(n.current_amount) > 0 and not _guarded(n) \
+				and (_plan_words.has("guarded") or not _draws_guards(n)):
 			return n
 	return null
+
+## Whether working `n` wakes a nest's guards (Config.RESOURCE_NODES.<type>.din.draws): the battery's wreck, behind the
+## nest. The bot goes there only when its plan says "guarded": woken, they dash at him, and a bot that went was bitten
+## to death there, run after run (v0.7 bench) -- the rest of the run's account lost with him.
+func _draws_guards(n: Node) -> bool:
+	var cfg = root.get_node("Config")
+	return String(cfg.RESOURCE_NODES.get(String(n.resource_type), {}).get("din", {}).get("draws", "")) == "guards"
+
+## The first bow tower north of the cabin, its arrows made and carried over: wood chopped for it first if the stock
+## is short, and all of it before the first raid if it can be.
+func _first_tower(hero: Node, cabin: Node, note: Callable, minutes: float) -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	var gm = _main.grid_manager
+	var wm = _main.wave_manager
+	var c0: Vector2i = gm.world_to_build_cell(cabin.global_position)
+	var h0 := Vector2i((cfg.get_building_size("core") - Vector2i.ONE) / 2)
+	var at: Vector2i = c0 + Vector2i(-4, -h0.y - 3)
+	var cost: Dictionary = cfg.BUILDINGS["bow_tower"]["cost"]
+	while not gs.can_afford(cost) and _play_clock < minutes * 60.0 and not gs.is_game_over:
+		await _chop_a_while(hero, "wood", 8.0)
+		if wm.is_wave_active:
+			return
+	_ctx = "build"
+	_main.on_build_selected("bow_tower")
+	var pos: Vector3 = gm.build_cell_to_world(at)
+	var b = _main.try_place_at_cell(gm.world_to_cell(pos), pos)
+	_main.cancel_building_selection()
+	note.call("the first bow_tower ordered at %s: %s" % [str(at), "yes" if b else "NO"])
+	if b == null:
+		return
+	await _play_until(func(): return _unfinished() == 0, 40.0, "building the first tower")
+	var arrows: String = _ammo_wanted(cabin.station("workbench"))
+	if arrows != "":
+		await _bench_job(hero, cabin, "workbench", arrows, note)
+	var empty: Node = _tower_wanting_load()
+	if empty != null:
+		var id: int = empty.get_instance_id()
+		_ctx = "load"
+		hero.order_load(empty)
+		note.call("loading the first tower")
+		await _play_until(func(): return not is_instance_id_valid(id) or not empty.wants_load(), 30.0, "loading the first tower")
 
 ## Out to the wreck `node` and through it, till its part is in the stock -- or a raid is coming. What its din
 ## brings (Din) he does not stand and fight bare-handed: he goes in and waits for it to give up -- one brought
@@ -832,6 +965,45 @@ func _search_wreck_through(hero: Node, node: Node) -> void:
 
 ## The animals a wreck's din brought that the log has named.
 var _din_said: Dictionary = {}
+
+## Whether he has gone in for this raid (the raid's step of _scenario_play): ordered in once, not every second.
+var _sheltering: bool = false
+
+## Puts up `plan` ([type, build cell]) and waits for it to stand; a cell that refuses it is remembered in `refused`.
+func _raise(plan: Array, refused: Dictionary, note: Callable) -> void:
+	var gm = _main.grid_manager
+	_ctx = "build"
+	_main.on_build_selected(String(plan[0]))
+	_main._placement_facing = 0
+	var at: Vector3 = gm.build_cell_to_world(plan[1])
+	var b = _main.try_place_at_cell(gm.world_to_cell(at), at)
+	_main.cancel_building_selection()
+	note.call("%s ordered at %s: %s" % [plan[0], str(plan[1]), "yes" if b else "NO"])
+	if b == null:
+		refused[plan[1]] = true
+	await _play_until(func(): return _unfinished() == 0, 40.0, "building a tower")
+
+## The nearest living frightened charger (ChargerDino) within `radius` of the cabin, not running from a fire; or null.
+func _charger_at(cabin: Node, radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_d: float = radius
+	for d in get_nodes_in_group("dinos"):
+		if not (d is ChargerDino) or not is_instance_valid(d) or bool(d.get("is_dead")) or bool(d.get("going_home")):
+			continue
+		var dist: float = (d as Node3D).global_position.distance_to((cabin as Node3D).global_position)
+		if dist <= best_d:
+			best_d = dist
+			best = d
+	return best
+
+## How many living animals are within `radius` of `at` (it among them).
+func _dinos_round(at: Node3D, radius: float) -> int:
+	var n: int = 0
+	for d in get_nodes_in_group("dinos"):
+		if d is Node3D and is_instance_valid(d) and not bool(d.get("is_dead")) \
+				and (d as Node3D).global_position.distance_to(at.global_position) <= radius:
+			n += 1
+	return n
 
 ## A living animal a wreck's din brought (Din.GROUP_DRAWN) within `radius` of `at`, or null.
 func _drawn_near(at: Node, radius: float) -> Node:

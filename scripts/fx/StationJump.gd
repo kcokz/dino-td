@@ -369,6 +369,8 @@ func crash(main: Node) -> void:
 	var tw := create_tween()
 	_crash_tween = tw
 	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	# At its own pace, whatever speed the last run was left at (HUD.set_game_speed: Engine.time_scale outlives a level).
+	tw.set_ignore_time_scale(true)
 	tw.tween_method(_fall.bind(core, rest, high, lean, eye), 0.0, 1.0, _seconds("crash_fall_seconds", 2.4)) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_blow.bind(core, rest))
