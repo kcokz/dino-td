@@ -122,6 +122,9 @@ const BUILDINGS: Dictionary = {
 	# metres of its middle, on the ground or in the air, the bow facing it shoots, an arrow every `fire_seconds`; nothing
 	# on it turns to aim. An arrow pierces (ARMOR): into the armoured it goes a quarter of itself. Twelve wood: a tower
 	# is a decision of the opening, not a stake -- it and its first arrows are most of the opening's wood.
+	# 1.7 seconds an arrow, every level (was 1.5): an arrow killed a Coelophysis outright and bow towers alone were the
+	# bench's best defence (GAME-DESIGN 3.0) -- slower by about an eighth rather than two arrows to it (the player,
+	# 2026-10-04: "箭塔射慢一点", over the wooden arrow's 12 -> 10).
 	"bow_tower": {
 		"name": "BUILDING_BOW_TOWER_NAME",
 		"kind": "bow",
@@ -130,7 +133,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 120.0,
 		"cost": {"wood": 12},
 		"range": 7.0,
-		"fire_seconds": 1.5,
+		"fire_seconds": 1.7,
 		"damage_factor": 1.0,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 20},
 		"level": 1,
@@ -144,7 +147,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 120.0,
 		"cost": {"wood": 12, "stone": 4},
 		"range": 7.0,
-		"fire_seconds": 1.5,
+		"fire_seconds": 1.7,
 		"damage_factor": 1.25,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 30},
 		"level": 2,
@@ -158,7 +161,7 @@ const BUILDINGS: Dictionary = {
 		"hp": 120.0,
 		"cost": {"wood": 12, "stone": 4, "bone": 4},
 		"range": 7.0,
-		"fire_seconds": 1.5,
+		"fire_seconds": 1.7,
 		"damage_factor": 1.5,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 40},
 		"level": 3,
@@ -996,10 +999,10 @@ const ARMOR: Dictionary = {
 
 ## What it does to an armoured animal is ARMOR's to say.
 const AMMO: Dictionary = {
-	# A wooden arrow, its point fire-hardened: two to a Coelophysis (DINOS.coelophysis.hp 11.2). At 12 (3 before the x4
-	# scale) one killed it, and bow towers were all a defence needed against a pack -- the bench's cautious bot lasted
-	# longest on bows alone (GAME-DESIGN 3.0); the player: "12改10".
-	"arrow_wood": {"name": "RESOURCE_ARROW_WOOD", "for": "bow", "prop": "arrow_wood", "damage": 10.0},
+	# A wooden arrow, its point fire-hardened: one kills a Coelophysis (DINOS.coelophysis.hp 11.2). 10 made it two, the
+	# bow tower's work against a pack halved at a stroke; the tower shoots slower instead (BUILDINGS.bow_tower
+	# fire_seconds; the player, 2026-10-04: "箭塔射慢一点").
+	"arrow_wood": {"name": "RESOURCE_ARROW_WOOD", "for": "bow", "prop": "arrow_wood", "damage": 12.0},
 	# A bone point lashed on: deeper, and through the first into the next behind it -- the answer to a column, and
 	# over half the big boss's health in five (DINOS.postosuchus.hp 180).
 	"arrow_bone": {"name": "RESOURCE_ARROW_BONE", "for": "bow", "prop": "arrow_bone", "damage": 20.0, "pierce": 3},

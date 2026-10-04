@@ -110,14 +110,12 @@ func test_04_a_wooden_arrow_does_less_than_a_bone_tipped_one_and_more_than_a_sta
 	assert_lt(_dps("arrow_wood"), _dps("arrow_bone"), "Less to one animal than the bone-tipped arrows it gives way to")
 	assert_lte(int(_ammo("arrow_wood").get("pierce", 1)), 1, "And one animal an arrow,")
 	assert_gt(int(_ammo("arrow_bone").get("pierce", 1)), 1, "where a bone point goes on through those behind it")
-	# What holds it back is its arrows -- it shoots no more than he has loaded it with -- and how many an animal takes:
-	# two wooden arrows to one of the first raids' animals, not one (v0.7, the player: "12改10" -- one apiece, the bow
-	# tower was all a defence needed against a pack; Config.AMMO.arrow_wood).
+	# What holds it back is its arrows -- it shoots no more than he has loaded it with -- and how often it shoots, not
+	# how hard they hit: one wooden arrow kills one of the first raids' animals (Config.AMMO.arrow_wood; v0.7, the
+	# player: "箭塔射慢一点" -- the tower slower, BUILDINGS.bow_tower.fire_seconds, rather than two arrows to each).
 	for species in config_node.map_data()["raiders"]:
-		var hp: float = float(config_node.DINOS[species]["hp"])
-		var hit: float = float(_ammo("arrow_wood")["damage"])
-		assert_lt(hit, hp, "One wooden arrow does not kill a %s of the first raids" % species)
-		assert_gte(hit * 2.0, hp, "two do")
+		assert_gte(float(_ammo("arrow_wood")["damage"]), float(config_node.DINOS[species]["hp"]),
+			"One wooden arrow kills a %s of the first raids" % species)
 	assert_gt(_dps("arrow_wood"), config_node.get_contact_dps("wall"), "But it does more than a stake's spikes")
 	assert_gt(total_price_of("bow_tower"), total_price_of("wall"), "And costs more than a stake")
 
