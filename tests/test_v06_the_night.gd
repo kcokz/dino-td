@@ -153,17 +153,16 @@ func test_05_it_will_not_come_into_a_fires_light() -> void:
 	var d = _phytosaur(main, fire.global_position + out.normalized() * (light + 3.0))
 	var nearest: float = INF
 	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
-	for i in int(8.0 / dt):
+	for i in int(12.0 / dt):
 		d.advance_towards_waypoint(dt)
 		nearest = minf(nearest, _flat_gap(d.global_position, fire.global_position))
 		if i % 4 == 0:
 			await tree.physics_frame
 	assert_gt(nearest, light - float(_prowl()["flee_inside"]) - 0.3, "It never came further into the light than it stands")
-	assert_true(d.is_wary(), "It keeps to the light's edge")
-	var gap: float = _flat_gap(d.global_position, fire.global_position)
-	assert_almost_eq(gap, light - float(_prowl()["edge_inside"]), 1.2, "just inside it, dimly lit and seen")
-	main.fog._look()
-	assert_true(main.fog.sees(d.global_position), "(where it is seen)")
+	# The cabin has sides the fire does not light: it goes round the light to one (v0.7, the player: "有篝火处植龙就不会
+	# 靠近了"). Where everything it wants is lit it waits at the edge (test_06, the torch; ProwlerDino._act).
+	assert_eq(d.current_target, main.current_core, "It goes for the cabin")
+	assert_true(ProwlerDino.light_over(tree, d._engage_spot()).is_empty(), "at a side of it the fire does not light")
 
 func test_06_the_torch_drives_it_back() -> void:
 	var main = await _level()

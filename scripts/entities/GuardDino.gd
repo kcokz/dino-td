@@ -446,7 +446,7 @@ func _process_guard_attacking(delta: float) -> void:
 	if guard_attack_timer <= 0.0:
 		guard_attack_timer += _bite_interval()
 		if chase_target.has_method("take_damage"):
-			chase_target.take_damage(damage)
+			chase_target.take_damage(_through_armour(chase_target, damage))
 
 ## Home, deaf to him on the way. Home is its post; one it cannot get back to any more -- walled off
 ## from it -- becomes where it stands, rather than something to push at for ever.
@@ -547,6 +547,9 @@ func _is_threat_valid(threat: Variant) -> bool:
 	if not threat.visible:
 		return false
 	if "current_state" in threat and threat.is_in_group("hero") and int(threat.current_state) == 4: # Hero.State.DEAD
+		return false
+	# In the cabin he is nobody's (Dino._is_target_valid).
+	if threat.is_in_group("hero") and _sheltered():
 		return false
 	if "is_destroyed" in threat and threat.is_destroyed:
 		return false

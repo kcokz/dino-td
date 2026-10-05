@@ -224,7 +224,7 @@ func report_contact(delta: float) -> int:
 			if d.spikes_touch(contact_damage, contact_tick, delta):
 				hit_count += 1
 		else:
-			d.take_damage(contact_damage)
+			d.take_damage(_through_armour(d, contact_damage))
 			hit_count += 1
 	return hit_count
 

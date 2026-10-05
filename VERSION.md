@@ -1691,9 +1691,22 @@
   - 机器人：精力不到三分之一就去睡；夜里在营养舱睡，睡满了再在舱里等天亮。
   - 测试：新的 `test_v07_stamina`（掉的速度、夜里更快、掉完掉血而且不是被咬、累死的说法、舱里睡觉回血回精力、他说累了、界面显示的数）；`test_v07_the_pod` test_02、`test_v06_the_hero_card` test_11/12（满血还要精力满才不能睡）、`test_restart_hud_challenge`（显示的数）。
 
+- **v0.7 第十九批：人躲在船舱里，植龙撞船舱；护甲（玩家，2026-10-04：两份 bug 报告"人躲在cabin里它们头会伸进cabin，但没有进攻效果""这个角度不仅植龙会卡住，人还不能移动"；"植龙晚上不进攻cabin的吗？"；"可以加一个属性，护甲……目前护甲这个属性可以隐藏起来"；"如果人晚上就躲在舱内，植龙在没有篝火cover下会撞击船舱，有篝火处植龙就不会靠近了"；"船舱不能修复"；"不教玩法"）**：
+  - 人在舱里谁也咬不到（`Dino._is_target_valid`、`Dino._sheltered`；守卫 `GuardDino._is_threat_valid` 也一样）：冲着他来的走到路的尽头去撞船舱。
+  - 咬船舱时按身长站开，嘴碰到墙（`Dino.front_reach`：从模型的包围盒量，每种量一次；`_snout_spot`、`_snout_out`、`_reach_for`；`DINO_AI.snout_into` 0.1），朝最近的墙咬（`_bite_point`）。只对船舱这种有房间的建筑（`Config.is_hollow`）；栅栏、塔照旧。靠嘴够到时，嘴到墙之间要空着（`_clear_to`，按咬的高度打一条射线）：隔着木桩咬不到船舱（`test_v05_reach_is_body_to_body` test_04）。
+  - 门前留路（`CABIN.doorstep.beside` 0.5，`CoreCampfire.at_the_door`）：门前没有站位（`Dino._init_building_slots`），站在门前咬不到（`_target_in_reach`），排队的站到门两边（`queue_spot`）。
+  - 植龙挑火光照不到的站位（`Dino.would_stand_at`、`ProwlerDino.would_stand_at`，按它真正站的地方算）；站的地方后来被照到就换一个（`ProwlerDino._think`）。
+  - 护甲（`Config.ARMOR` 的 `scale`、`by_kind`、`hero`；`armour_of`、`through_armour`）：船舱 700、弓塔/落木塔/投石塔 25、人 0、恐龙 0。恐龙咬（`Dino.attack_target`、守卫、翼龙）、人砍（`Hero`）、塔（`AmmoTower.strike`、`Tower.fire_at`）、地刺（`CellTrap.stab`、`Dino.spikes_touch`）、荆棘（`Wall.report_contact`）都过护甲；火烧（`FirePatch`）不过。
+  - 设计书：支柱 6 加"只说必要的，不教玩法"；8.1 加"船舱修不了""舱里亮着灯，恐龙不进舱""电能有限（已定未做）"。
+  - 测试：新的 `test_v07_the_cabin_at_night`（护甲的大小和算法、人在舱里没人咬而植龙去撞船舱、嘴不穿墙、门前没有站位人能出门、有火时去暗的一面、量一个黑夜和一个有篝火的夜）；`test_v05_the_cabin` test_05（门前少的站位）、`test_combat_wave`（咬船舱过护甲）、`test_v06_the_night` test_05（有暗面就绕过火光去暗面）。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。
+
+- **船舱的电能**（2026-10-04，玩家："通关游戏中不能无限玩，是因为船舱电能有限，给一个电能的圈绕在船舱的血量圈外面，电能耗尽游戏就输了"）：只在过关游戏里。
+- **恐龙撞船舱的专门动作**（2026-10-04，玩家："恐龙撞击船舱的动作需要单独专门的animation"）：每种恐龙一段撞建筑的动作（`tools/dino_moves.py` 的 `ram` 改成每种都有），咬人还用原来的。
+- **"改进1"那一批**（2026-10-04）：暂停时声音也停；骨镐、骨铲悬停要说是干嘛的；左上角资源的悬停改短、改精致；信标的提示改成任务/日志，先交代前因后果（只在过关游戏里）；设置分"通用"和"按键"两页，按键能改；暂停菜单按钮的字对齐；存档。
 
 - **晚白垩世的兽群**（2026-09-30，玩家定"放到 v0.7"）：谷壁上一种晚白垩世的植食恐龙，比如和迅猛龙同一个化石产地的原角龙（新模型，走 `tools/generate_dinos.py` 一整套）。
 - **自定义游戏的规则开关和解锁**（设计书第 11 章，2026-09-30，玩家定"放到 v0.7"）：人倒下的规则（故事档在船舱里醒来）、天灾、双倍来袭这类开关；通关以后才解锁自定义。

@@ -733,6 +733,30 @@ static func get_building_kind(type_id: String) -> String:
 		return ""
 	return String(BUILDINGS[type_id].get("kind", ""))
 
+## How much armour `node` has (ARMOR): a building's -- its row's own, else its kind's -- his, an animal's by its
+## species; none for anything else.
+static func armour_of(node: Object) -> float:
+	if node == null or not is_instance_valid(node):
+		return 0.0
+	if "building_type" in node:
+		var id: String = String(node.building_type)
+		var row: Dictionary = BUILDINGS.get(id, {})
+		if row.has("armour"):
+			return maxf(0.0, float(row["armour"]))
+		return maxf(0.0, float(ARMOR.get("by_kind", {}).get(get_building_kind(id), 0.0)))
+	if "dino_type" in node:
+		return maxf(0.0, float(DINOS.get(String(node.dino_type), {}).get("armour", 0.0)))
+	if node is Node and (node as Node).is_in_group("hero"):
+		return maxf(0.0, float(ARMOR.get("hero", 0.0)))
+	return 0.0
+
+## What of a blow of `amount` gets through `node`'s armour (ARMOR): all of it through none.
+static func through_armour(node: Object, amount: float) -> float:
+	var scale: float = float(ARMOR.get("scale", 100.0))
+	if scale <= 0.0:
+		return amount
+	return amount * scale / (scale + armour_of(node))
+
 ## The longer side of `type_id`'s box, in metres: its cells. Everything fills its cells; where
 ## the two sides differ (get_building_size), what asks for a single figure gets the longer.
 static func get_building_footprint(type_id: String = "") -> float:
@@ -1006,9 +1030,40 @@ const TOWERS: Dictionary = {
 ## goes into an armoured animal (DINOS.<id>.armored: plates of bone in its skin, an aetosaur's, a stegosaur's,
 ## Postosuchus's) for only `pierce` of its damage; what crushes -- a stone, a log -- for all of it. So arrows alone do not
 ## hold the armoured: they are the catapult's and the drop tower's.
+##
+## AND HOW HARD A THING IS TO HURT (护甲; the player, 2026-10-04: "可以加一个属性，护甲，船舱的护甲比人高很多，这样恐龙撞击和
+## 啃咬攻击力差不多的情况下，护甲高的受伤少，同时，人造的塔护甲比船舱低但是比人高，恐龙也有护甲……目前护甲这个属性可以隐藏
+## 起来"): the same bite does less to the ship's hull than to a man. Of every blow -- a bite, a ram, an arrow, a log, a
+## stake's point, his spear -- what gets through is the blow times `scale` / (`scale` + the armour of what it hits):
+## armour 100 lets half through, 300 a quarter. Each point of it is worth the same, a hundredth more blows to wear the
+## thing down, however much it has already -- the way most games keep armour from ever making a thing unbreakable. So
+## the animals' bites stay what they are to him and the armour says what they are to everything else. Not shown yet
+## (Config.armour_of, through_armour).
+##   `scale`    the armour that lets half through
+##   `by_kind`  a building's, by its kind (BUILDINGS.<id>.kind) -- a row's own "armour" over it; none for a kind not here
+##   `hero`     his
+## An animal's is DINOS.<id>.armour, none without one. The plates (`armored`) are another thing: the share of an arrow
+## that gets into them at all, before the armour.
 const ARMOR: Dictionary = {
 	"pierce": 0.25,
 	"piercing": ["bow"],
+	"scale": 100.0,
+	"by_kind": {
+		# The crew module: a starship's hull, which no jaw was made for. An eighth of a bite or a ram gets through.
+		# Measured (tests/test_v07_the_cabin_at_night): a dark night with him shut in it, the four phytosaurs that come
+		# up (PROWL.most_dark) at it from dusk to dawn, is some 1,550 of bites -- a quarter let through (300) left it 10
+		# of its 400; an eighth leaves it about half. A fire by it, and half as many come (most_lit); its light kept off
+		# the side it lights. It cannot be mended (GAME-DESIGN 2: "木头不能修复未来科技的材料"), so a dark night costs
+		# for good. A raid at its walls by day does an eighth of what it did.
+		"core": 700.0,
+		# The towers: logs lashed into a crib, harder to chew than a man, far softer than the hull -- a bite at one is
+		# four fifths of itself (the player: "人造的塔护甲比船舱低但是比人高").
+		"bow": 25.0,
+		"drop": 25.0,
+		"thrower": 25.0,
+	},
+	# The man in his flight suit: a bite is all of itself to him -- what the animals' damage was set against.
+	"hero": 0.0,
 }
 
 ## What it does to an armoured animal is ARMOR's to say.
@@ -1677,6 +1732,11 @@ const DINO_AI: Dictionary = {
 	# and, waiting, it looks again for a place to bite from every this many seconds.
 	"queue_standoff": 2.8,
 	"queue_patience": 1.5,
+	# At a building with a room in it (the cabin: Config.is_hollow) it bites with its snout at the wall, its middle as
+	# far out as its body reaches ahead of it (Dino.front_reach) less this much (metres) -- touching, not through: a
+	# phytosaur's middle is three and a half metres behind its snout, and stood where a raptor stands, its head was in
+	# the room with him (the player's bug report, 2026-10-04: "人躲在cabin里它们头会伸进cabin").
+	"snout_into": 0.1,
 	# This near its place (metres), it faces what it came for, walking or waiting: facing the place
 	# while it tried for it and the target while it waited, by turns, was a head swinging each way
 	# every second (the debug-agent's BUG-008).
@@ -4369,6 +4429,12 @@ const CABIN: Dictionary = {
 	# door, and this far inside it -- clear of the frame, in the camera's sight.
 	"door_standoff": 0.8,
 	"inside_step": 0.8,
+	# HIS DOOR: nothing bites the cabin from in front of it -- straight out from the door, as wide as it and `beside`
+	# metres more either side (CoreCampfire.at_the_door): there is no place there to bite from, and from there a bite
+	# does not reach (Dino._target_in_reach). So his way out is always open. Two phytosaurs biting at the door kept him
+	# in, and when he went to come out he could not move (the player's bug report, 2026-10-04: "这个角度不仅植龙会卡住，人
+	# 还不能移动").
+	"doorstep": {"beside": 0.5},
 	# The door slides open as he comes within this many metres of it, over this long, and
 	# shuts behind him; a raid it keeps out (CoreCampfire.gd).
 	"door_open_radius": 1.6,

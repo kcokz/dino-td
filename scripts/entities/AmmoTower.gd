@@ -356,7 +356,7 @@ func strike(d: Node, row: Dictionary) -> void:
 		d.shot_by(self)
 	var cfg = _get_config()
 	var level: float = float(cfg.damage_factor(building_type)) if (cfg and cfg.has_method("damage_factor")) else 1.0
-	d.take_damage(float(row.get("damage", 0.0)) * level * AmmoTower.armour_factor(d, row))
+	d.take_damage(_through_armour(d, float(row.get("damage", 0.0)) * level * AmmoTower.armour_factor(d, row)))
 
 ## How much of `row`'s damage goes into `d` (Config.ARMOR): all of it, but what pierces (an arrow) into what is armoured.
 static func armour_factor(d: Node, row: Dictionary) -> float:

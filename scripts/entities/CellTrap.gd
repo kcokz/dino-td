@@ -63,7 +63,7 @@ func animals_on_it() -> Array:
 
 ## It is stabbed, and the spikes are the blunter for it.
 func stab(animal: Node) -> void:
-	animal.take_damage(_number("damage", 2.4))
+	animal.take_damage(_through_armour(animal, _number("damage", 2.4)))
 	var wear: float = _number("wear", 1.0)
 	if wear > 0.0:
 		take_damage(wear)

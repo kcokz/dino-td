@@ -268,6 +268,12 @@ func take_damage(amount: float) -> void:
 	if current_hp <= 0.0:
 		destroy()
 
+## What of a blow of `amount` this building deals gets through `target`'s armour (Config.ARMOR): its arrows, logs and
+## stones, its points and thorns.
+func _through_armour(target: Object, amount: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.through_armour(target, amount)) if (cfg and cfg.has_method("through_armour")) else amount
+
 ## Subclass hook triggered upon taking non-fatal or fatal damage. Feedback only:
 ## until v0.3 this was empty, so a building being chewed on gave the player nothing
 ## to see or hear.

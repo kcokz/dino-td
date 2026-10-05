@@ -587,7 +587,7 @@ func _process_attacking(delta: float) -> void:
 		provoke_timer = p_dur
 		if target_enemy.has_method("take_damage"):
 			_sound_at("strike", target_enemy.global_position + Vector3(0.0, 0.6, 0.0))
-			target_enemy.take_damage(damage)
+			target_enemy.take_damage(_through_armour(target_enemy, damage))
 
 func _process_harvesting(delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -1489,6 +1489,11 @@ func _sound_at(id: String, where: Vector3) -> void:
 	var fx = _get_fx()
 	if fx and fx.has_method("play_at"):
 		fx.play_at(id, where)
+
+## What of `amount` gets through `target`'s armour (Config.ARMOR).
+func _through_armour(target: Object, amount: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.through_armour(target, amount)) if (cfg and cfg.has_method("through_armour")) else amount
 
 func _sound_number(key: String, fallback: float) -> float:
 	var cfg = _get_config()

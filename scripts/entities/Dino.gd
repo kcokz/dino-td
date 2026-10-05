@@ -113,6 +113,13 @@ var current_multipliers: Dictionary = {}
 
 # Static building attack slots registry
 static var _building_slots: Dictionary = {}
+## How far each species' body reaches ahead of its middle (front_reach), measured from its model the first time it is
+## asked: {dino_type: metres}.
+static var _fronts: Dictionary = {}
+## Where it stands for the place round a hollow building it holds (_snout_spot), worked out once for that place: the
+## place, and the spot.
+var _snout_for: Vector3 = Vector3.INF
+var _snout_at: Vector3 = Vector3.INF
 
 # Compatibility aliases
 var has_reached_core: bool:
@@ -309,9 +316,10 @@ static func claim_attack_slot(building: Node, dino: Node) -> Vector3:
 	outer.sort_custom(near_first)
 	taken.sort_custom(near_first)
 	# Only a place it can get to (can_stand_at): the nearest as the crow flies may be behind a fence
-	# from it -- the back of a cabin walled behind -- where it would stand out of reach for ever.
+	# from it -- the back of a cabin walled behind -- where it would stand out of reach for ever. And
+	# one it would stand at (would_stand_at): a phytosaur not one a fire lights.
 	for i in inner + outer:
-		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(slots[i]["pos"])):
+		if _would_stand(dino, slots[i]["pos"], building):
 			slots[i]["dino_id"] = dino_id
 			return slots[i]["pos"]
 	# Every place it can get to is taken: it waits its turn at the crowd's edge, on its own side
@@ -337,9 +345,16 @@ static func free_inner_slot(building: Node, dino: Node) -> Vector3:
 			free.append(s["pos"])
 	free.sort_custom(func(a: Vector3, b: Vector3) -> bool: return at.distance_squared_to(a) < at.distance_squared_to(b))
 	for pos in free:
-		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(pos)):
+		if _would_stand(dino, pos, building):
 			return pos
 	return Vector3.ZERO
+
+## Whether `dino` would stand at the place `pos` round `building` to bite it (would_stand_at; can_stand_at for anything
+## that has only that).
+static func _would_stand(dino: Node, pos: Vector3, building: Node) -> bool:
+	if dino.has_method("would_stand_at"):
+		return bool(dino.would_stand_at(pos, building))
+	return not dino.has_method("can_stand_at") or bool(dino.can_stand_at(pos))
 
 ## Where it waits its turn at `building` when every place round it is taken: Config.DINO_AI
 ## .queue_standoff out from its walls, on the side this animal is coming from -- at the edge of
@@ -354,6 +369,14 @@ func queue_spot(building: Node) -> Vector3:
 	var b_type: String = String(building.building_type) if "building_type" in building else ""
 	var reach_out: float = _extent_along(cfg, b_type, out, 0.5) + _ai("queue_standoff", 2.8)
 	var spot: Vector3 = centre + out * reach_out
+	# Not in front of the cabin's door (CoreCampfire.at_the_door): beside it.
+	if building.has_method("at_the_door") and bool(building.at_the_door(spot)):
+		var cfg2 = _get_config()
+		var door: Dictionary = cfg2.CABIN.get("module", {}).get("door", {}) if (cfg2 and "CABIN" in cfg2) else {}
+		var beside: float = float(cfg2.CABIN.get("doorstep", {}).get("beside", 0.5)) if (cfg2 and "CABIN" in cfg2) else 0.5
+		var door_x: float = centre.x + float(door.get("x", 0.0))
+		var clear: float = float(door.get("width", 1.2)) * 0.5 + beside + _avoid_radius
+		spot.x = door_x + (clear if spot.x >= door_x else -clear)
 	var maps := _nav_maps()
 	if maps != null and maps.is_ready():
 		var on_mesh: Vector3 = maps.closest_point(spot, _map_kind())
@@ -423,8 +446,12 @@ static func _init_building_slots(building: Node3D) -> void:
 	var outer_out: float = float(cfg.DINO_STANDOFF_OUTER) if cfg != null else 1.6
 	var spacing: float = float(cfg.DINO_AI.get("slot_spacing", 1.0)) if (cfg != null and "DINO_AI" in cfg) else 1.0
 	var gm_slots: Node = building.get_tree().get_first_node_in_group("grid_manager") if building.is_inside_tree() else null
+	# None in front of the cabin's door (CoreCampfire.at_the_door): his way out.
+	var door_kept: bool = building.has_method("at_the_door")
 	for ring in [[inner_out, true], [outer_out, false]]:
 		for offset in ring_round(box, float(ring[0]), spacing):
+			if door_kept and bool(building.at_the_door(center + offset)):
+				continue
 			if _slot_is_standable(gm_slots, center + offset):
 				slots.append({"pos": center + offset, "dino_id": 0, "inner": bool(ring[1])})
 	_building_slots[b_id] = slots
@@ -1124,7 +1151,7 @@ func _hold_and_bite(delta: float) -> void:
 	if not _target_in_reach(current_target, _ai("reach_release", 0.35)):
 		_out_of_reach()
 		return
-	_turn_towards((current_target as Node3D).global_position - global_position, delta)
+	_turn_towards(_bite_point(current_target as Node3D) - global_position, delta)
 	_bite_clock -= delta
 	if _bite_clock <= 0.0:
 		_bite_clock += _bite_interval()
@@ -1143,7 +1170,7 @@ func _out_of_reach() -> void:
 ## when it walks about.
 func _engage_spot() -> Vector3:
 	if assigned_slot != Vector3.ZERO:
-		return assigned_slot
+		return _snout_spot(current_target, assigned_slot)
 	if current_target != null and is_instance_valid(current_target) and current_target is Node3D:
 		return (current_target as Node3D).global_position
 	return _journey_goal()
@@ -1669,8 +1696,17 @@ func _target_in_reach(target: Variant, slack: float = 0.0) -> bool:
 		return false
 	var cfg = _get_config()
 	if "building_type" in target and cfg != null and cfg.has_method("gap_to_building"):
-		return float(cfg.gap_to_building(global_position, String(target.building_type),
-			(target as Node3D).global_position)) <= attack_reach() + slack
+		# From in front of the cabin's door, nothing (Config.CABIN.doorstep): it goes on to its place.
+		if target.has_method("at_the_door") and bool(target.at_the_door(global_position)):
+			return false
+		var gap: float = float(cfg.gap_to_building(global_position, String(target.building_type),
+			(target as Node3D).global_position))
+		if gap <= attack_reach() + slack:
+			return true
+		# Further off, only by its snout at a building with a room in it (_reach_for) -- and only over open ground: a
+		# stake before the cabin is between its snout and the wall, and is what it bites (tests/test_v05_reach_is_body_to_body,
+		# "it cannot bite the cabin through a stake").
+		return gap <= _reach_for(target) + slack and _clear_to(target as Node3D)
 	var gap: float = _flat(global_position).distance_to(_flat((target as Node3D).global_position))
 	return gap <= attack_reach() + _half_width_of(target as Node) + slack
 
@@ -1693,6 +1729,114 @@ func attack_reach() -> float:
 	var cfg = _get_config()
 	var strike: float = float(cfg.DINO_STRIKE) if (cfg and "DINO_STRIKE" in cfg) else 0.35
 	return _avoid_radius + strike
+
+## How far from its middle it bites `target` from, to its outside: its strike past its body (attack_reach) -- and a
+## building with a room in it (the cabin: Config.is_hollow), which it bites with its snout at the wall (_snout_spot),
+## its strike past its snout.
+func _reach_for(target: Node) -> float:
+	var reach: float = attack_reach()
+	if _is_hollow(target):
+		var cfg = _get_config()
+		var strike: float = float(cfg.DINO_STRIKE) if (cfg and "DINO_STRIKE" in cfg) else 0.35
+		reach = maxf(reach, front_reach() - _ai("snout_into", 0.1) + strike)
+	return reach
+
+func _is_hollow(target: Variant) -> bool:
+	if target == null or not is_instance_valid(target) or not ("building_type" in target):
+		return false
+	var cfg = _get_config()
+	return cfg != null and cfg.has_method("is_hollow") and bool(cfg.is_hollow(String(target.building_type)))
+
+## How far its body reaches ahead of its middle -- its snout -- in metres: measured from its model's box the first time
+## a species is asked (its body is built round its middle, facing -Z), and never less than its own half-width.
+func front_reach() -> float:
+	if _fronts.has(dino_type):
+		return maxf(_avoid_radius, float(_fronts[dino_type]))
+	var front: float = 0.0
+	var body: Node = get_node_or_null("Body")
+	if body != null and is_inside_tree():
+		var inv: Transform3D = global_transform.affine_inverse()
+		for m in body.find_children("*", "MeshInstance3D", true, false):
+			var mi := m as MeshInstance3D
+			if mi.mesh == null or String(mi.name).begins_with("Glint"):
+				continue
+			front = maxf(front, -((inv * mi.global_transform) * mi.get_aabb()).position.z)
+		if front > 0.0:
+			_fronts[dino_type] = front
+	return maxf(_avoid_radius, front)
+
+## Where to stand for `slot` round `building`: the place itself -- but round a building with a room in it, out from the
+## wall until its snout is at it (front_reach, less DINO_AI.snout_into), the nearest of that to the wall it can stand on.
+func _snout_spot(building: Node, slot: Vector3) -> Vector3:
+	if not _is_hollow(building):
+		return slot
+	if slot == _snout_for:
+		return _snout_at
+	_snout_for = slot
+	_snout_at = slot
+	for k in [1.0, 0.66, 0.33]:
+		var spot: Vector3 = _snout_out(building, slot, k)
+		if spot == slot:
+			break
+		if can_stand_at(spot):
+			_snout_at = spot
+			break
+	return _snout_at
+
+## The spot `k` of the way from `slot` round a hollow `building` out to where its snout is at the wall -- on the ground,
+## whether it can stand there or not; `slot` itself when it is far enough out already.
+func _snout_out(building: Node, slot: Vector3, k: float = 1.0) -> Vector3:
+	var cfg = _get_config()
+	var half: Vector2 = cfg.get_building_half(String(building.building_type))
+	var c: Vector3 = (building as Node3D).global_position
+	var on_wall := Vector3(clampf(slot.x, c.x - half.x, c.x + half.x), slot.y, clampf(slot.z, c.z - half.y, c.z + half.y))
+	var out: Vector3 = _flat3(slot - on_wall)
+	var gap: float = out.length()
+	var want: float = front_reach() - _ai("snout_into", 0.1)
+	if gap < 0.01 or want <= gap:
+		return slot
+	var spot: Vector3 = on_wall + out / gap * lerpf(gap, want, k)
+	spot.y = slot.y
+	return spot
+
+## Whether nothing built stands between it and the nearest of `target`'s outside, at the height it bites at
+## (Config.DINO_PROBE_HEIGHT): its snout reaches the wall over open ground.
+func _clear_to(target: Node3D) -> bool:
+	if not is_inside_tree() or get_world_3d() == null:
+		return true
+	var cfg = _get_config()
+	var lift := Vector3(0.0, float(cfg.DINO_PROBE_HEIGHT) if (cfg and "DINO_PROBE_HEIGHT" in cfg) else 0.4, 0.0)
+	var to: Vector3 = _bite_point(target)
+	to.y = global_position.y
+	var query := PhysicsRayQueryParameters3D.create(global_position + lift, to + lift, _building_layers())
+	query.exclude = [get_rid()]
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return true
+	var by: Object = hit.get("collider")
+	return by == target or (by is Node and target.is_ancestor_of(by as Node))
+
+## Where on `target` it bites: a building's outside nearest it -- it faces the wall, not the middle of a cabin seven metres
+## long -- or the middle of anything else.
+func _bite_point(target: Node3D) -> Vector3:
+	var cfg = _get_config()
+	if "building_type" in target and cfg != null and cfg.has_method("get_building_half"):
+		var half: Vector2 = cfg.get_building_half(String(target.building_type))
+		var c: Vector3 = target.global_position
+		return Vector3(clampf(global_position.x, c.x - half.x, c.x + half.x), c.y,
+			clampf(global_position.z, c.z - half.y, c.z + half.y))
+	return target.global_position
+
+## What of `amount` gets through `target`'s armour (Config.ARMOR): the cabin's hull takes a quarter of a bite, a man all
+## of it.
+func _through_armour(target: Object, amount: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.through_armour(target, amount)) if (cfg and cfg.has_method("through_armour")) else amount
+
+## Whether it would stand at the place `spot` round `building` to bite it: whether it can get there (can_stand_at). A
+## species with places it keeps out of says no to those (ProwlerDino: a fire's light).
+func would_stand_at(spot: Vector3, _building: Node = null) -> bool:
+	return can_stand_at(spot)
 
 # ==============================================================================
 # What a species wants -- the surface a behaviour subclass overrides
@@ -1821,6 +1965,11 @@ func _is_target_valid(target: Variant) -> bool:
 		return false
 	if target.is_in_group("hero") and "current_state" in target and int(target.current_state) == 4:
 		return false
+	# IN THE CABIN HE IS NOBODY'S (the player's bug report, 2026-10-04: "人躲在cabin里它们头会伸进cabin，但没有进攻效果"):
+	# its room is lit, no animal comes into it (the player: "因为舱内有灯光……植龙不会靠近"; NavMaps.HERO_ONLY_GROUP), and
+	# a bite does not go through its walls. What came for him has the cabin itself to go at, on its road's end (_march).
+	if target.is_in_group("hero") and _sheltered():
+		return false
 	if not target.has_method("take_damage"):
 		return false
 	# IN NOBODY'S WAY, NOBODY'S TARGET: what is stepped over -- a campfire's ring, spikes, a deadfall, a snare
@@ -1828,6 +1977,13 @@ func _is_target_valid(target: Variant) -> bool:
 	if "building_type" in target and _is_walk_over(target):
 		return false
 	return true
+
+## Whether the Hero is in the cabin's room (CoreCampfire.hero_inside).
+func _sheltered() -> bool:
+	if not is_inside_tree():
+		return false
+	var cabin = get_tree().get_first_node_in_group("core")
+	return cabin != null and is_instance_valid(cabin) and "hero_inside" in cabin and bool(cabin.hero_inside)
 
 func _is_walk_over(target: Node) -> bool:
 	var cfg = _get_config()
@@ -1918,9 +2074,9 @@ func perform_attack() -> void:
 
 func attack_target(target: Node) -> void:
 	# Reach is checked here as well as in the mind, so nothing can deal damage at a distance by
-	# calling this directly.
+	# calling this directly. What gets through is the armour's to say (Config.ARMOR).
 	if _is_target_valid(target) and _target_in_reach(target, _ai("reach_release", 0.35)):
-		target.take_damage(damage)
+		target.take_damage(_through_armour(target, damage))
 		say("bite")
 
 ## How long this animal has spent against spikes; which physics frame it last heard from one; and
@@ -1954,7 +2110,7 @@ func spikes_touch(amount: float, tick: float, delta: float) -> bool:
 		return false
 	# Zeroed rather than decremented: one chip per tick, never a burst saved up from a long frame.
 	_spike_accum = 0.0
-	take_damage(amount)
+	take_damage(_through_armour(self, amount))
 	return true
 
 func take_damage(amount: float) -> void:

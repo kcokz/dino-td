@@ -349,7 +349,8 @@ func test_dino_attacks_core_campfire_emits_hp_changed() -> void:
 	else:
 		core.take_damage(float(dino.damage))
 
-	var bitten: float = core_hp() - raptor_stat("damage")
+	# A bite, through the hull's armour (Config.ARMOR).
+	var bitten: float = core_hp() - float(config_node.through_armour(core, raptor_stat("damage")))
 	assert_almost_eq(float(core.current_hp), bitten, 0.01, "Core HP reduced by one bite")
 	assert_true(hp_watcher.emitted, "core_hp_changed signal must be emitted upon attack")
 	if not hp_watcher.last_args.is_empty():

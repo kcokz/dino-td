@@ -128,7 +128,16 @@ func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 	var half: Vector2 = config_node.get_building_half("core")
 	var spacing: float = float(config_node.DINO_AI["slot_spacing"])
 	var per_ring: int = 2 * (maxi(1, int(floor(half.x * 2.0 / spacing + 0.001))) + maxi(1, int(floor(half.y * 2.0 / spacing + 0.001)))) + 4
-	assert_eq(slots.size(), per_ring * 2, "%d places to stand, two rings of %d" % [per_ring * 2, per_ring])
+	# Less those in front of the door (Config.CABIN.doorstep, v0.7: his way out is always open).
+	var at_door: Array = [0, 0]
+	for k in 2:
+		var standoff: float = float(config_node.DINO_STANDOFF_INNER) if k == 0 else float(config_node.DINO_STANDOFF_OUTER)
+		for offset in dino_script.ring_round(half, standoff, spacing):
+			if core.at_the_door(core.global_position + offset):
+				at_door[k] += 1
+	assert_gt(int(at_door[0]), 0, "(some of the inner ring would be in front of the door)")
+	assert_eq(slots.size(), per_ring * 2 - int(at_door[0]) - int(at_door[1]),
+		"%d places to stand, two rings of %d, less those at the door" % [per_ring * 2 - int(at_door[0]) - int(at_door[1]), per_ring])
 	var inside: int = 0
 	var inner: int = 0
 	var out_of_reach: int = 0
@@ -144,7 +153,7 @@ func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 			if not raptor._target_in_reach(core):
 				out_of_reach += 1
 	assert_eq(inside, 0, "None of them inside its walls, or too close to stand at")
-	assert_eq(inner, per_ring, "The whole inner ring close enough to bite from")
+	assert_eq(inner, per_ring - int(at_door[0]), "The whole inner ring close enough to bite from")
 	assert_eq(out_of_reach, 0, "And from every one of those, it can")
 	# And the corner: touching it there is touching it.
 	raptor.global_position = core.global_position + Vector3(_half().x + 0.3, 0.0, _half().y + 0.3)

@@ -214,7 +214,7 @@ func fire_at(target: Node3D) -> void:
 	# Facing it before the shot, not after: the tracer comes out of the barrels, and the
 	# barrels are pointing at what was hit.
 	aim_at(target.global_position)
-	target.take_damage(damage)
+	target.take_damage(_through_armour(target, damage))
 	_spawn_visual_bullet_effect(target.global_position)
 
 	# If target died or became invalid, clear current_target

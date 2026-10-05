@@ -7,7 +7,9 @@ extends "res://scripts/entities/Dino.gd"
 ## behaviour "prowl"; NightProwl sends them).
 ##
 ## In the dark it comes straight for the Hero when he is near (PROWL.hunts_within) and otherwise for the
-## cabin -- whose dim windows it does not mind -- biting what is in its way, as any raider does. But it
+## cabin -- whose dim windows it does not mind -- biting what is in its way, as any raider does. Him shut in the
+## cabin, it goes at the cabin (Dino._is_target_valid: the lit room it does not come into), from a side no fire
+## lights (would_stand_at) -- a campfire by the cabin keeps it off as far as its light goes. But it
 ## will not come into a fire's light, nor the light of the torch in his hand (lights): what it wants in
 ## one it waits for at the light's edge -- a little inside it, dimly lit, where it is seen -- facing in,
 ## and paces along the edge a few steps at a time, its eyes catching the light (the eye-shine). Found
@@ -105,6 +107,15 @@ func take_damage(amount: float) -> void:
 func building_interest_range() -> float:
 	return 2.0
 
+## A place to bite from that a fire lights is not one it stands at (lights): round the cabin it takes one in the dark --
+## the player: "如果人晚上就躲在舱内，植龙在没有篝火cover下会撞击船舱，有篝火处植龙就不会靠近了". Where it would stand for
+## it, that is: at the cabin, out from the wall by its snout (Dino._snout_out).
+func would_stand_at(spot: Vector3, building: Node = null) -> bool:
+	var at: Vector3 = _snout_out(building, spot) if _is_hollow(building) else spot
+	if is_inside_tree() and not ProwlerDino.light_over(get_tree(), at).is_empty():
+		return false
+	return super.would_stand_at(spot, building)
+
 # ==============================================================================
 # Keeping out of the light
 # ==============================================================================
@@ -136,6 +147,13 @@ func _think() -> void:
 	super._think()
 	var goal: Vector3 = _engage_spot() if (current_target != null and mode != Mode.MARCH) else _journey_goal()
 	var lit: Dictionary = ProwlerDino.light_over(get_tree(), goal)
+	if not lit.is_empty() and mode != Mode.MARCH and assigned_slot != Vector3.ZERO and _is_building(current_target):
+		# Its place at a building lit -- a fire made up since it took it: another round it in the dark, if there is
+		# one (would_stand_at); with none, it waits at the light's edge.
+		release_attack_slot(current_target, self)
+		assigned_slot = claim_attack_slot(current_target, self)
+		goal = _engage_spot()
+		lit = ProwlerDino.light_over(get_tree(), goal)
 	if lit.is_empty():
 		_keep_to({}, false)
 	else:

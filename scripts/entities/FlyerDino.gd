@@ -151,7 +151,7 @@ func _bite(target: Node3D) -> void:
 	_bite_clock = _bite_interval()
 	current_state = State.ATTACKING
 	if target.has_method("take_damage"):
-		target.take_damage(damage)
+		target.take_damage(_through_armour(target, damage))
 	say("bite")
 	var on: Vector3 = target.global_position - global_position
 	on.y = 0.0

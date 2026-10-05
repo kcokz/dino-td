@@ -198,6 +198,17 @@ func is_inside(pos: Vector3) -> bool:
 	var room: Vector2 = room_half()
 	return absf(local.x) <= room.x and absf(local.z) <= room.y
 
+## Whether `spot` is in front of the door: outside the south wall, straight out from the doorway and
+## Config.CABIN.doorstep.beside either side of it -- his way in and out, which nothing stands in to bite the cabin.
+func at_the_door(spot: Vector3) -> bool:
+	var local: Vector3 = spot - global_position
+	if local.z < _half().y - 0.01:
+		return false
+	var door: Dictionary = _door_spec()
+	var cfg = _get_config()
+	var beside: float = float(cfg.CABIN.get("doorstep", {}).get("beside", 0.5)) if (cfg and "CABIN" in cfg) else 0.5
+	return absf(local.x - float(door.get("x", 0.0))) <= float(door.get("width", 1.2)) * 0.5 + beside
+
 ## In front of the door, outside: where he goes to go in and is sent to come out
 ## (Config.CABIN.door_standoff).
 func door_outside() -> Vector3:
