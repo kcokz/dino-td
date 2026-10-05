@@ -2101,6 +2101,29 @@ const DINOS: Dictionary = {
 		"gaits": {"walk": 0.6, "run": 1.2},
 		"voice": "stegosaurus",
 	},
+	# Triceratops horridus (station 4, Hell Creek): eight metres and six tonnes behind a beak, three horns and a solid
+	# frill -- frightened by the capsule's fall, at the cabin with the raids from the third day. No bony plates on its
+	# body, but a hide thick and heavily scaled: counted armoured as the other chargers are (an arrow goes in a quarter of
+	# itself) -- what crushes, and fire, are the answer; heavy, a weighted log moves it. On the game's tyrannosaur's
+	# scale (2.2 m at the back, 6.3 m long: two thirds of its length, as in life); its clips' strides drawn for a walk of
+	# 0.7 m/s and a run of 2.0 at that size (tools/dino_species.py).
+	"triceratops": {
+		"hours": ["day", "dusk"],
+		"name": "DINO_TRICERATOPS_NAME",
+		# A step above the Morrison's Stegosaurus (120 hit points, a ram of 8, 1.8 m/s): the last station's charger.
+		# Untried.
+		"hp": 140.0,
+		"speed": 1.9,
+		"damage": 9.0,
+		"attack_rate": 1.0,
+		"behaviour": "charger",
+		"armored": true,
+		"heavy": true,
+		"drops": {"food": 6, "bone": 4},
+		"size": Vector3(2.0, 2.2, 2.0),
+		"gaits": {"walk": 0.7, "run": 2.0},
+		"voice": "triceratops",
+	},
 }
 const DINO_LANE_OFFSETS: Array[float] = [-0.35, 0.35, 0.0]
 ## A habit, and the class that implements it. Species with the same habit share a
@@ -2912,7 +2935,14 @@ const MAPS: Dictionary = {
 		"minor_boss": "sinocalliopteryx",
 		"boss": "yutyrannus",
 		"prowlers": {},
-		"herds": [],
+		# Psittacosaurus, the parrot-beaked little ceratopsians, in flocks on the valley's walls -- on the tyrannosaur's
+		# scale (Herds), walking at the pace its stride is drawn for at that length.
+		"herds": [
+			{"species": "psittacosaurus", "scene": "res://assets/models/dinos/psittacosaurus.gltf",
+				"count": 8, "length": 1.4, "bearing": 290.0, "distance": 46.0, "spread": 7.0, "speed": 0.45},
+			{"species": "psittacosaurus", "scene": "res://assets/models/dinos/psittacosaurus.gltf",
+				"count": 6, "length": 1.4, "bearing": 30.0, "distance": 46.0, "spread": 6.0, "speed": 0.45},
+		],
 		"day_hints": {"dawn": "HINT_DAWN_JEHOL", "dusk": "HINT_DUSK_JEHOL", "night": "HINT_NIGHT_JEHOL",
 			"dusk_first": "HINT_DUSK_FIRST_JEHOL"},
 		# The large valley's ground, as it lies; clay and bog iron along the lake's arm at the field's west edge -- the
@@ -2990,14 +3020,20 @@ const MAPS: Dictionary = {
 			"fern_leaf": Color(0.24, 0.44, 0.16)},
 		"opening_stock": {"wood": 28},
 		"raiders": {"acheroraptor": 1.0},
-		# Its own day by day -- none yet beyond its pack: without it the large valley's (Coelophysis and the Chinle's
-		# chargers) came at Hell Creek by `like`.
-		"raiders_by_day": [],
+		# Its own day by day (without it the large valley's came at Hell Creek by `like`): from the third day a frightened
+		# Triceratops with the pack now and then (ChargerDino, as the Morrison's Stegosaurus) -- fire turns it, a weighted
+		# log or the catapult moves it.
+		"raiders_by_day": [{"from_day": 3, "raiders": {"acheroraptor": 3.0, "triceratops": 0.5}}],
 		"guards": "acheroraptor",
 		"minor_boss": "dakotaraptor",
 		"boss": "big_theropod",
 		"prowlers": {},
-		"herds": [],
+		# Edmontosaurus, the duckbills, in a big herd grazing up the valley's side: as long as the tyrannosaur, as in life
+		# (Herds: the game's tyrannosaur is the ruler), walking at the pace its stride is drawn for at that length.
+		"herds": [
+			{"species": "edmontosaurus", "scene": "res://assets/models/dinos/edmontosaurus.gltf",
+				"count": 6, "length": 9.0, "bearing": 70.0, "distance": 68.0, "spread": 14.0, "speed": 0.45},
+		],
 		"day_hints": {"dawn": "HINT_DAWN_HELL_CREEK", "dusk": "HINT_DUSK_HELL_CREEK", "night": "HINT_NIGHT_HELL_CREEK",
 			"dusk_first": "HINT_DUSK_FIRST_HELL_CREEK"},
 		# ITS CLIMAX (GAME-DESIGN 7.2: "高潮：小行星。最后一天，撞击溅出的玻璃小球像雨一样落下……信标充能和撞击倒计时同时在
@@ -4067,6 +4103,16 @@ const SOUNDS: Dictionary = {
 		# glass beads it threw up landing -- a hiss and a tick.
 		"impact_boom": {"files": ["impact_boom"], "db": 4.0, "pitch": 1.0, "class": "boss", "unit": 60.0, "reach": 400.0},
 		"impact_bead": {"files": ["impact_bead_1", "impact_bead_2"], "db": -10.0, "pitch": 1.12, "class": "bite", "unit": 4.0},
+		# The later stations' plant-eaters (tools/build_sounds.gd): Triceratops, frightened at station 4 (a charger: its low,
+		# its snort, its ram); the Edmontosaurus herd's honks (station 4) and the Psittacosaurus flock's chirps (station 3),
+		# heard from the walls.
+		"triceratops_call":  {"files": ["triceratops_call_1", "triceratops_call_2"], "db": 0.0, "pitch": 1.04, "class": "call", "unit": 16.0, "reach": 140.0},
+		"triceratops_alert": {"files": ["triceratops_snort"], "db": 0.0, "pitch": 1.04, "class": "alert", "unit": 12.0},
+		"triceratops_bite":  {"files": ["triceratops_ram"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 12.0},
+		"triceratops_hurt":  {"files": ["triceratops_hurt"], "db": -1.0, "pitch": 1.04, "class": "hurt", "unit": 12.0},
+		"triceratops_death": {"files": ["triceratops_death"], "db": 2.0, "pitch": 1.02, "class": "death", "unit": 20.0, "reach": 160.0},
+		"edmontosaurus_call": {"files": ["edmontosaurus_call_1", "edmontosaurus_call_2"], "db": -1.0, "pitch": 1.05, "class": "call", "unit": 16.0, "reach": 160.0},
+		"psittacosaurus_call": {"files": ["psittacosaurus_call_1", "psittacosaurus_call_2"], "db": -4.0, "pitch": 1.08, "class": "call", "unit": 8.0, "reach": 80.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
 		# THE LATE CRETACEOUS (a custom game's age), each a voice of its own (tools/build_sounds.gd) -- they
@@ -5051,6 +5097,8 @@ const VISUALS: Dictionary = {
 	# Morrison's Stegosaurus, the herd's model.
 	"dino/desmatosuchus":   {"scene": "res://assets/models/dinos/desmatosuchus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
+	"dino/triceratops":     {"scene": "res://assets/models/dinos/triceratops.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod", "material": "skin"},
 	"dino/stegosaurus":     {"scene": "res://assets/models/dinos/stegosaurus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "postosuchus", "material": "skin"},
 	# An azhdarchid, stalking on all fours with its wings folded (the wing finger up along the arm, the membrane

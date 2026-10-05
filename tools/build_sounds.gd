@@ -891,6 +891,71 @@ func _s_impact_bead_2() -> PackedFloat32Array:
 	_mix(out, _snap(2.1, 0.1), 0.16, 0.6)
 	return out
 
+# THE LATER STATIONS' PLANT-EATERS. Triceratops (station 4): eight metres and six tonnes behind a beak and a frill -- the
+# Stegosaurus's kind of low, deeper, with a rasp, and the same snort and ram when it is frightened at the cabin.
+const TRIKE_FORMANTS: Array = [[180.0, 3.5, 1.0], [520.0, 4.0, 0.5], [1250.0, 5.0, 0.2]]
+
+func _s_triceratops_call_1() -> PackedFloat32Array:
+	return _space(_low(1.4, 82.0, TRIKE_FORMANTS, 0.55), 0.12, [])
+
+func _s_triceratops_call_2() -> PackedFloat32Array:
+	# "hunh -- hrrrmh": a grunt and a long rasping low.
+	var out := _buf(1.8)
+	_mix(out, _low(0.35, 96.0, TRIKE_FORMANTS, 0.6), 0.02, 0.8)
+	_mix(out, _low(1.1, 78.0, TRIKE_FORMANTS, 0.6), 0.5, 1.0)
+	return _space(out, 0.12, [])
+
+func _s_triceratops_snort() -> PackedFloat32Array:
+	return _snorts(700.0, 1400.0)
+
+func _s_triceratops_ram() -> PackedFloat32Array:
+	return _ram(70.0, TRIKE_FORMANTS, 120.0)
+
+func _s_triceratops_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.6, "f0": [[0.0, 150.0], [0.25, 165.0], [1.0, 100.0]],
+		"amp": [[0.0, 0.0], [0.07, 1.0], [0.6, 0.7], [1.0, 0.0]], "formants": TRIKE_FORMANTS,
+		"rough": 0.75, "rough_am": [19.0, 0.5], "breath": 0.4, "tilt": 1800.0, "nasal": 0.4})
+
+func _s_triceratops_death() -> PackedFloat32Array:
+	var out := _low(2.0, 84.0, TRIKE_FORMANTS, 0.65)
+	_mix(out, _hiss(1.0, [[0.0, 800.0], [1.0, 420.0]], 1.3, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.1, 0.35)
+	return _space(out, 0.15, [[0.45, 0.2]])
+
+# Edmontosaurus (station 4's herd): a flat-headed duckbill as long as a tyrannosaur -- the nasal honk its kin are thought to
+# have made through the long passages of the snout, carried far, a second answering.
+const EDMONTO_FORMANTS: Array = [[260.0, 3.5, 1.0], [700.0, 4.0, 0.55], [1500.0, 5.0, 0.2]]
+
+func _honk(dur: float, f0: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0 * 0.95], [0.3, f0 * 1.06], [1.0, f0 * 0.9]],
+		"amp": [[0.0, 0.0], [0.15, 1.0], [0.75, 0.85], [1.0, 0.0]], "formants": EDMONTO_FORMANTS,
+		"rough": 0.25, "breath": 0.2, "tilt": 1500.0, "nasal": 0.75})
+
+func _s_edmontosaurus_call_1() -> PackedFloat32Array:
+	return _space(_honk(1.2, 120.0), 0.2, [[0.5, 0.3], [1.0, 0.15]])
+
+func _s_edmontosaurus_call_2() -> PackedFloat32Array:
+	var out := _buf(2.2)
+	_mix(out, _honk(0.6, 132.0), 0.02, 1.0)
+	_mix(out, _honk(0.9, 112.0), 0.85, 0.7)
+	return _space(out, 0.2, [[0.5, 0.3], [1.0, 0.15]])
+
+# Psittacosaurus (station 3's herd): a parrot-beaked plant-eater the size of a dog -- quick chirping calls, a little
+# like a bird's, from the flock on the walls.
+const PSITTA_FORMANTS: Array = [[1250.0, 5.0, 1.0], [2600.0, 6.0, 0.5], [3900.0, 7.0, 0.2]]
+
+func _s_psittacosaurus_call_1() -> PackedFloat32Array:
+	var out := _buf(0.6)
+	for i in 3:
+		_mix(out, _voice({"dur": 0.08, "f0": [[0.0, 900.0 + 50.0 * i], [1.0, 1050.0 + 50.0 * i]],
+			"amp": [[0.0, 0.0], [0.2, 1.0], [1.0, 0.0]], "formants": PSITTA_FORMANTS,
+			"rough": 0.05, "breath": 0.2, "tilt": 4200.0}), 0.02 + 0.14 * i, 0.8)
+	return out
+
+func _s_psittacosaurus_call_2() -> PackedFloat32Array:
+	return _voice({"dur": 0.4, "f0": [[0.0, 1000.0], [0.5, 1150.0], [1.0, 880.0]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.7, 0.7], [1.0, 0.0]], "formants": PSITTA_FORMANTS,
+		"trill": [18.0, 0.4], "rough": 0.05, "breath": 0.25, "tilt": 4400.0})
+
 const DILONG_FORMANTS: Array = [[900.0, 4.5, 1.0], [2100.0, 5.5, 0.5], [3300.0, 6.5, 0.2]]
 
 ## The Dilong's hoot: a short, rounded note, a little breath in it.

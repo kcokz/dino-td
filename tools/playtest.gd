@@ -154,8 +154,9 @@ func _run(name: String) -> void:
 			# Station 3's (the Early Cretaceous, MAPS.jehol), by the man: Sinornithosaurus, Dilong, Sinocalliopteryx, Yutyrannus.
 			await _scenario_cast([["sinornithosaurus", -1.4], ["dilong", 0.6], ["sinocalliopteryx", 3.2], ["yutyrannus", 9.5]])
 		"cast4":
-			# Station 4's (the end of the Cretaceous, MAPS.hell_creek), by the man: Acheroraptor, Dakotaraptor, Tyrannosaurus.
-			await _scenario_cast([["acheroraptor", -1.2], ["dakotaraptor", 2.2], ["big_theropod", 9.0]])
+			# Station 4's (the end of the Cretaceous, MAPS.hell_creek), by the man: Acheroraptor, Dakotaraptor, Tyrannosaurus,
+			# and the Triceratops that charges with the raids from the third day.
+			await _scenario_cast([["acheroraptor", -1.2], ["dakotaraptor", 2.2], ["big_theropod", 9.0], ["triceratops", 18.5]])
 		"kiln":
 			await _scenario_kiln()
 		"bench3":

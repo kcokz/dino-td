@@ -839,17 +839,22 @@ def _frill(body, loft, path, spec):
         for j in run:
             ph = (cum[j] - a0) / max(1e-9, a1 - a0) * pt["count"]
             bumps[j] = (1.0 - abs(2.0 * (ph - math.floor(ph)) - 1.0)) ** pt.get("sharp", 1.0)
+    # Each point of the outline, and how far out its edge's point takes it there (on the edge alone, not drawn in
+    # with the rings -- drawn in, each point was a rib across the whole plate).
     rim_pts = []
     for j, (px, py, _) in enumerate(out):
         dx, dy = px - cx, py - cy
         d = math.hypot(dx, dy) or 1.0
         k = bumps[j] * (pt["size"] if pt else 0.0)
-        rim_pts.append((px + dx / d * k, py + dy / d * k))
+        rim_pts.append((px, py, dx / d * k, dy / d * k))
     thick, rim_t = fr.get("thick", 0.06), fr.get("rim", 0.02)
+    levels = fr.get("levels", 5)
 
-    def place(px, py, k, face):
-        # The outline's point (px, py) drawn in to `k` of the way from its middle, on its front face (1) or its back.
-        qx, qy = cx + (px - cx) * k, cy + (py - cy) * k
+    def place(px, py, bx, by, k, face):
+        # The outline's point (px, py) drawn in to `k` of the way from its middle, on its front face (1) or its back;
+        # its point (bx, by) out at the edge.
+        out_k = sc.smoothstep(1.0 - 1.0 / levels, 1.0, k)
+        qx, qy = cx + (px - cx) * k + bx * out_k, cy + (py - cy) * k + by * out_k
         a, b = qx / width, qy / height
         half_t = 0.5 * (rim_t + (thick - rim_t) * (1.0 - k) ** 0.8)
         bend = fr.get("curve", 0.0) * a * a - fr.get("cup", 0.0) * max(0.0, b) ** 2
@@ -859,17 +864,20 @@ def _frill(body, loft, path, spec):
         col = sc.mix(skin["back"], fr["colour"], sc.smoothstep(-0.1, 0.35, py / height))
         col = sc.mix(col, fr.get("edge", fr["colour"]), sc.smoothstep(0.55, 1.0, k))
         col = sc.mix(col, fr.get("point", col), min(1.0, bump * 1.5) * sc.smoothstep(0.8, 1.0, k))
-        mot = noise.noise(Vector((px * 7.0, py * 7.0, k * 3.0)))
+        # A broad mottle, where it is on the plate (the rings drawn in from its edge run close together near its
+        # middle: a fine one streaked it there).
+        qx, qy = cx + (px - cx) * k, cy + (py - cy) * k
+        mot = noise.noise(Vector((qx * 2.5, qy * 2.5, 0.37)))
         return sc.shade(col, fr.get("mottle", skin["mottle"]) * mot)
     w = {fr.get("bone", "Head"): 1.0}
-    levels = fr.get("levels", 5)
     edges = []
     for face in (1.0, -1.0):
-        mid = body.add(place(cx, cy, 0.0, face), colour(cx, cy, 0.0, 0.0), w)
+        mid = body.add(place(cx, cy, 0.0, 0.0, 0.0, face), colour(cx, cy, 0.0, 0.0), w)
         prev = None
         for lv in range(1, levels + 1):
             k = lv / levels
-            ring = [body.add(place(px, py, k, face), colour(px, py, k, bumps[j]), w) for j, (px, py) in enumerate(rim_pts)]
+            ring = [body.add(place(px, py, bx, by, k, face), colour(px, py, k, bumps[j]), w)
+                    for j, (px, py, bx, by) in enumerate(rim_pts)]
             for j in range(n):
                 j2 = (j + 1) % n
                 idx = (mid, ring[j], ring[j2]) if prev is None else (prev[j], ring[j], ring[j2], prev[j2])

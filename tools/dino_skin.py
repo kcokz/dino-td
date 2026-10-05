@@ -420,7 +420,8 @@ def _features(nt, tex, scale_height, scale_tint, ft):
     holds = _range(nt, (-1100, -1900), rnd.outputs["Red"], 1.0 - share - 0.002, 1.0 - share + 0.002, 0.0, 1.0)
     d = cells.outputs["Distance"]
     size = ft.get("size", 0.4)
-    inside = _range(nt, (-1100, -1700), d, size * 0.82, size, 1.0, 0.0, smooth=True)
+    # Its rim from `edge` of its radius out to the whole of it.
+    inside = _range(nt, (-1100, -1700), d, size * ft.get("edge", 0.82), size, 1.0, 0.0, smooth=True)
     dome = _range(nt, (-1100, -1600), d, 0.0, size, 1.0, 0.0, smooth=True)
     cone = _range(nt, (-1100, -1500), d, 0.0, size * ft.get("tip", 0.4), 1.0, 0.0)
     groove = _range(nt, (-1100, -2000), d, size, size * 1.3, 0.0, 1.0, smooth=True)

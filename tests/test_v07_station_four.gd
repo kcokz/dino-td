@@ -108,6 +108,37 @@ func test_03_the_custom_game_plays_its_age_and_its_map_and_the_day_is_told_in_it
 			var t: Translation = TranslationServer.get_translation_object(locale)
 			assert_true(t != null and String(t.get_message(String(words.get(part, "")))) != "", "its %s in %s" % [part, locale])
 
+func test_03b_a_frightened_triceratops_charges_and_the_walls_graze() -> void:
+	# The later stations' plant-eaters (GAME-DESIGN 7.2): from Hell Creek's third day a frightened Triceratops comes
+	# with the raids now and then -- a charger as the Morrison's Stegosaurus is, armoured, heavy; Edmontosaurus graze
+	# Hell Creek's walls, Psittacosaurus the Jehol's.
+	var tri: Dictionary = config_node.DINOS.get("triceratops", {})
+	assert_false(tri.is_empty(), "There is a Triceratops")
+	if tri.is_empty():
+		return
+	var coming: bool = false
+	for step in _hell_creek().get("raiders_by_day", []):
+		if (step["raiders"] as Dictionary).has("triceratops"):
+			coming = true
+			assert_gte(int(step["from_day"]), 2, "not on the first day")
+	assert_true(coming, "It comes with Hell Creek's raids")
+	assert_eq(String(tri["behaviour"]), String(config_node.DINOS["stegosaurus"]["behaviour"]), "charging, as the Stegosaurus does")
+	assert_eq(config_node.get_dino_script_path("triceratops"), config_node.get_dino_script_path("stegosaurus"), "(the same script)")
+	assert_true(bool(tri.get("armored", false)) and bool(tri.get("heavy", false)), "armoured and heavy")
+	assert_lt(float(tri["size"].y), float(config_node.DINOS["big_theropod"]["size"].y), "and shorter than the tyrannosaur")
+	for pair in [["hell_creek", "edmontosaurus"], ["jehol", "psittacosaurus"]]:
+		var herds: Array = config_node.map_data(String(pair[0])).get("herds", [])
+		var found: bool = false
+		for spec in herds:
+			if String(spec["species"]) != String(pair[1]):
+				continue
+			found = true
+			assert_true(ResourceLoader.exists(String(spec["scene"])), "%s is drawn" % pair[1])
+			for f in config_node.SOUNDS["sounds"].get(String(pair[1]) + "_call", {}).get("files", []):
+				assert_true(ResourceLoader.exists(String(config_node.SOUNDS["dir"]) + String(f) + ".wav"), "(%s is made)" % f)
+		assert_true(found, "%s graze %s's walls" % [pair[1], pair[0]])
+		assert_true(config_node.SOUNDS["sounds"].has(String(pair[1]) + "_call"), "%s are heard" % pair[1])
+
 func test_04_the_catapults_top_is_the_trebuchet_for_iron() -> void:
 	var tops: Array = config_node.upgrade_targets("catapult_3")
 	assert_has(tops, "catapult_trebuchet", "The catapult's third level becomes the trebuchet")

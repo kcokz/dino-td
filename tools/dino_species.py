@@ -3294,6 +3294,184 @@ SINORNITHOSAURUS = {
 }
 
 
+# Psittacosaurus ("parrot lizard", Osborn 1923; P. lujiatunensis and the Liaoning specimen SMF R 4970 of the Yixian,
+# Mayr et al. 2002): an early horned dinosaur two metres long at most, the commonest dinosaur of the Jehol. A short,
+# deep, boxy skull with a hooked parrot's beak (its own rostral bone) and a horn out of each cheek (the jugal horns),
+# big eyes; a short neck; it walked on its hind legs, its arms short, four fingers on each hand. Along the top of the
+# first half of its tail a row of long bristles -- quills up to 16 cm long in SMF R 4970, standing up and back like a
+# brush. Its colours are known from that specimen's melanosomes (Vinther et al. 2016): dark brown above, pale below,
+# the shading low on its flanks as a forest animal's is (diffuse light, a closed habitat); dark about its face and
+# its cheek horns. Scenery on the third map: a herd at the forest's edge by the lake (Config.MAPS herds), never fought.
+
+
+PSITTACOSAURUS = {
+    # Scenery: the herd fits it to its length and walks it at its own pace.
+    "fit": "length",
+    "length": 1.8,
+    # Its strides drawn at the herd's pace (MAPS herds "speed": 0.6), so its feet stay put.
+    "paces": {"walk": 0.6, "run": 2.4},
+    "skeleton": {
+        # The hip joints 0.43 m up (femur 0.17, tibia 0.2 -- a runner's, longer than the femur -- foot bones 0.1).
+        "hip_height": 0.44,
+        "pelvis_length": 0.08,
+        "pelvis_pitch": -4.0,
+        # The back rising a little to the shoulders, balanced over the hips.
+        "spine": [(0.14, 4.0), (0.14, 7.0), (0.13, 10.0)],
+        "neck": [(0.055, 40.0), (0.055, 26.0), (0.05, 8.0)],
+        # The short, deep skull, its beak turned down.
+        "skull": (0.17, -30.0),
+        "jaw": (0.14, 0.04, -36.0),
+        "jaw_hinge": 0.14,
+        # About half the animal, held out level behind.
+        "tail": [(0.1, 4.0), (0.1, 0.0), (0.095, -2.0), (0.09, -3.0), (0.085, -3.0), (0.08, -3.0), (0.075, -2.0),
+                 (0.07, -2.0), (0.065, -1.0), (0.06, -1.0), (0.055, 0.0), (0.05, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.17, 0.2, 0.1, 0.07],
+                     "socket": (0.05, 0.0, -0.015), "stance": (0.005, 0.04), "foot": "digitigrade",
+                     "foot_tilt": 22.0, "roll_tilt": 40.0, "bend": "forward", "splay": 4.0},
+            # The arms short, held bent before the chest, off the ground.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.085, 0.065, 0.025, 0.03], "socket": (0.04, -0.03, -0.07), "arm": True,
+                     "rest_hand": (0.03, 0.06, -0.045), "bend": "back", "splay": 14.0, "hand_angle": 35.0,
+                     "finger_angle": 60.0},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        # A light walk at the herd's slow pace.
+        "walk": {"period": 0.8, "duty": 0.6, "step": 0.04, "bob": 0.007, "sway": 0.005, "hip_yaw": 3.0,
+                 "hip_roll": 2.0, "tail_swing": 3.0, "neck_bob": 1.5, "steady": 0.7, "narrow": 0.8, "push": 0.6,
+                 "curl": 0.5, "arm_swing": 0.006},
+        "run": {"period": 0.4, "duty": 0.38, "step": 0.07, "bob": 0.014, "lean": -6.0, "crouch": 0.02,
+                "neck_pitch": -10.0, "tail_lift": 4.0, "head_pitch": 5.0, "tail_swing": 2.0, "steady": 0.8,
+                "narrow": 0.7, "push": 0.9},
+        # Cropping low plants: leaning forward over its hips, its beak at the ground; up now and then to look about.
+        "idle": {"period": 6.0, "breaths": 3, "look": 22.0, "nod": 3.0, "swell": 0.02, "tail_swing": 3.0,
+                 "graze": {"neck": -30.0, "head": -20.0, "chew": 14.0, "chews": 14, "up": (0.5, 0.8), "pitch": 16.0}},
+        "graze": {"period": 5.0},
+        # A snap of the beak.
+        "attack": {"period": 0.8, "jaw": 30.0, "lunge": 0.05, "draw": 10.0, "reach": 16.0, "head_up": 8.0,
+                   "head_down": 8.0},
+        "death": {"period": 1.3, "roll": 86.0, "pivot": 0.07, "slide": 0.04},
+    },
+    "body": {
+        "around": 40,
+        "soften": 0.02,
+        "rough": 0.01,
+        "scale": 0.15,
+        "throat": 0.3,
+        "tips": (0.002, 0.004),
+        "trunk": [
+            # The skull: a hooked beak, the face rising steeply behind it, deep and short; the cheeks flaring out to
+            # the horns under the big eyes.
+            st("Head", 1.01, 0.004, 0.008, 0.004, lift=-0.004, step=0.003),
+            st("Head", 0.97, 0.009, 0.03, 0.012, step=0.003),
+            st("Head", 0.92, 0.014, 0.048, 0.02, step=0.004),
+            st("Head", 0.85, 0.02, 0.06, 0.026, step=0.005),
+            st("Head", 0.75, 0.027, 0.068, 0.032, step=0.005),
+            st("Head", 0.62, 0.035, 0.072, 0.038, step=0.006),
+            st("Head", 0.5, 0.044, 0.072, 0.044, step=0.006),
+            st("Head", 0.38, 0.054, 0.068, 0.05, step=0.006),
+            st("Head", 0.28, 0.064, 0.062, 0.054, n_bot=2.4, step=0.006),
+            st("Head", 0.18, 0.058, 0.055, 0.054, step=0.007),
+            st("Head", 0.08, 0.046, 0.046, 0.05, step=0.008),
+            st("Head", 0.0, 0.038, 0.038, 0.045, step=0.009),
+            st("Head", -0.1, 0.033, 0.033, 0.04, step=0.01),
+            st("Neck3", 0.5, 0.031, 0.031, 0.04, step=0.01),
+            st("Neck2", 0.5, 0.034, 0.034, 0.045, step=0.012),
+            st("Neck1", 0.5, 0.042, 0.04, 0.056, step=0.014),
+            # The body: a deep chest, the hips over the thighs.
+            st("Spine3", 0.7, 0.055, 0.045, 0.075, step=0.016),
+            st("Spine3", 0.2, 0.07, 0.052, 0.11, n_bot=2.3, step=0.018),
+            st("Spine2", 0.5, 0.082, 0.058, 0.125, n_bot=2.4, step=0.018),
+            st("Spine1", 0.5, 0.085, 0.062, 0.115, n_bot=2.3, step=0.018),
+            st("Hips", 0.2, 0.08, 0.066, 0.09, step=0.018),
+            st("Hips", 0.85, 0.068, 0.062, 0.075, step=0.018),
+            # The tail: deep at its root, long and thin.
+            st("Tail1", 0.5, 0.055, 0.056, 0.066, step=0.02),
+            st("Tail2", 0.5, 0.045, 0.047, 0.054, step=0.02),
+            st("Tail3", 0.5, 0.037, 0.04, 0.044, step=0.02),
+            st("Tail4", 0.5, 0.03, 0.033, 0.036, step=0.02),
+            st("Tail5", 0.5, 0.025, 0.028, 0.029, step=0.02),
+            st("Tail6", 0.5, 0.02, 0.023, 0.023, step=0.02),
+            st("Tail7", 0.5, 0.016, 0.018, 0.018, step=0.018),
+            st("Tail8", 0.5, 0.0125, 0.014, 0.014, step=0.016),
+            st("Tail9", 0.5, 0.0095, 0.0105, 0.0105, step=0.014),
+            st("Tail10", 0.5, 0.007, 0.0075, 0.0075, step=0.012),
+            st("Tail11", 0.5, 0.005, 0.0052, 0.0052, step=0.01),
+            st("Tail12", 0.6, 0.003, 0.003, 0.003, step=0.008),
+            st("Tail_end", 0.3, 0.0012, 0.0012, 0.0012, step=0.004),
+        ],
+        # The beak's edge and the jaws behind it: the cheek teeth hidden inside.
+        "mouth": {"from": ("Head", 0.15), "to": ("Head", 1.0), "phi": 116.0, "depth": 0.002, "width": 0.1, "band": 3.0,
+                  "dark": 3.0},
+        "eyes": {"at": ("Head", 0.48), "phi": 46.0, "radius": 0.015, "sunk": 0.6, "forward": 14.0, "up": 8.0,
+                 "iris": (0.5, 0.36, 0.12), "pupil": (0.01, 0.008, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.5), "phi": 30.0, "size": 0.014, "height": 0.004},
+        "nostrils": {"at": ("Head", 0.86), "phi": 32.0, "size": 0.004},
+        # The jugal horns: out and a little down and back from the cheeks.
+        "horns": [
+            {"at": ("Head", 0.27), "phi": 104.0, "length": 0.032, "base": (0.012, 0.016), "rake": 25.0, "splay": 20.0,
+             "taper": 0.9, "colour": (0.05, 0.035, 0.025), "tip": (0.03, 0.022, 0.016), "rings": 4, "around": 8,
+             "bone": "Head"},
+        ],
+        # The bristles: one row of long quills along the top of the tail's first half, standing up and back
+        # (tools/dino_feathers.py fuzz), the skin's colour where they grow.
+        "fuzz": {
+            "seed": 5, "width": 0.07, "lie": 55.0, "droop": 0.04, "curve": 0.06, "twist": 20.0, "jitter": 0.2,
+            "askew": 0.08, "trunk": [
+                {"from": ("Tail1", 0.3), "to": ("Tail6", 0.5), "phi": (0.0, 3.0), "spacing": 0.011, "gap": 0.02,
+                 "length": [(("Tail1", 0.3), 0.06), (("Tail2", 0.5), 0.15), (("Tail4", 0.0), 0.17),
+                            (("Tail5", 0.5), 0.12), (("Tail6", 0.5), 0.05)]},
+            ],
+        },
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.3, 0.028, 0.042, 0.005), (0, -0.05, 0.044, 0.06, 0.01), (0, 0.25, 0.045, 0.057, 0.01),
+                             (0, 0.6, 0.035, 0.042, 0.005), (0, 0.95, 0.023, 0.024, 0.0), (1, 0.12, 0.024, 0.031, -0.006),
+                             (1, 0.35, 0.023, 0.03, -0.008), (1, 0.7, 0.015, 0.016, -0.002), (1, 0.97, 0.011, 0.0115, 0.0),
+                             (2, 0.15, 0.0095, 0.009, 0.0), (2, 0.95, 0.0095, 0.008, 0.0)],
+                "around": 16,
+                # Three toes forward, blunt-clawed, and the short first one.
+                "digits": {"digits": [(-16.0, 0.065, 0.0065, 0.014), (0.0, 0.075, 0.007, 0.016), (16.0, 0.062, 0.0062, 0.013)],
+                           "hallux": (150.0, 0.025, 0.004, 0.008, 0.025), "flat": 0.8, "claw_curl": 0.5},
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.013, 0.017, 0.0), (0, 0.1, 0.0145, 0.017, 0.002), (0, 0.5, 0.0115, 0.013, 0.002),
+                             (0, 0.95, 0.0085, 0.009, 0.0), (1, 0.3, 0.0085, 0.0095, 0.001), (1, 0.95, 0.0062, 0.0066, 0.0),
+                             (2, 0.95, 0.006, 0.0045, 0.0)],
+                "around": 12,
+                # Four fingers, the first three clawed.
+                "digits": {"digits": [(-20.0, 0.026, 0.0032, 0.008), (-5.0, 0.031, 0.0033, 0.009), (10.0, 0.029, 0.0031, 0.008),
+                                      (25.0, 0.019, 0.0026, 0.004)],
+                           "claw_curl": 0.8, "flat": 0.9},
+            },
+        },
+        "skin_detail": {"scales": {"cells": 150.0, "dorsal_size": 0.5, "groove": 0.3, "groove_dark": 0.25, "tint": 0.12,
+                                   "speckle": 0.1, "relief": 0.6, "depth": 0.0012}},
+        "texture": 1024,
+        # After Vinther et al. 2016: dark brown above and down the flanks, cream below; dark round the face, the
+        # cheek horns and the beak black.
+        "skin": {
+            "back": (0.08, 0.045, 0.025),
+            "flank": (0.22, 0.13, 0.07),
+            "belly": (0.62, 0.55, 0.42),
+            "throat": (0.64, 0.57, 0.45),
+            "lips": (0.06, 0.04, 0.03),
+            "mouth": (0.14, 0.06, 0.05),
+            "claws": (0.06, 0.05, 0.04),
+            "mottle": 0.14,
+            "shank_dark": 0.2,
+            "toe_dark": 0.3,
+            "horn_base": (0.04, 0.03, 0.02),
+            "beak": {"from": ("Head", 0.82), "colour": (0.035, 0.028, 0.022)},
+            "eye_stripe": {"colour": (0.04, 0.025, 0.015), "from": ("Head", 0.6), "to": ("Head", 0.12), "phi": 80.0,
+                           "width": 26.0},
+        },
+    },
+}
+
+
 # ==============================================================================
 # THE HELL CREEK'S OWN DROMAEOSAURS (the Late Cretaceous of Montana and the Dakotas, the tyrannosaur's country --
 # where the Velociraptor, a Mongolian animal, never was).
@@ -3639,6 +3817,390 @@ DAKOTARAPTOR = {
     },
 }
 
+
+# ==============================================================================
+# THE FOURTH MAP'S PLANT-EATERS (GAME-DESIGN 7.2, station 4: the Hell Creek Formation of Montana and the Dakotas, the
+# last two million years of the Cretaceous): built at their own sizes.
+# ==============================================================================
+
+# Triceratops horridus (Marsh 1889; Hatcher, Marsh and Lull 1907; the "Hatcher" composite USNM 4842, "Lane" HMNS PR
+# 2440 with its skin): eight metres of it and the commonest big animal of the Hell Creek. A skull two metres long with
+# its frill -- the frill solid bone, unpierced (the parietals and squamosals), its edge set with small bony points
+# (the epoccipitals); a long horn over each eye, a short one over the nostrils, a narrow hooked beak (the rostral and
+# the predentary), a little point out of each cheek (the epijugal). A short neck under the frill, a broad barrel of a
+# body, a short thick tail; four columns of legs, the hind longer, so its back falls to the shoulders; the forelegs
+# held under it with the elbows a little out (Fujiwara 2009; the Ceratopsipes trackways), five fingers, the first
+# three hoofed. Its skin (Lane): big polygonal scales, and bigger round ones among them each with a low cone at its
+# middle. Colour unknown: drawn a muted grey-brown. The fourth map's frightened charger: it rams the cabin as the
+# stegosaur does, its horns before it.
+
+
+TRICERATOPS = {
+    # No Config.DINOS row yet: the game shows it 2.6 m high, head and all (fitted by its height).
+    "height": 2.6,
+    # Its strides drawn at its own paces: a heavy walk, and the trot it charges at.
+    "paces": {"walk": 0.8, "run": 2.4},
+    "skeleton": {
+        # The hip joints 2.2 m up (femur 1.1, tibia 0.84, the foot bones 0.32): the back over them 2.6 m.
+        "hip_height": 2.3,
+        "pelvis_length": 0.62,
+        "pelvis_pitch": 0.0,
+        # The back from the hips forward and down to the low shoulders.
+        "spine": [(0.7, -3.0), (0.7, -6.0), (0.7, -12.0), (0.65, -22.0)],
+        # A short neck curving down under the frill; the head held low, the beak a metre off the ground.
+        "neck": [(0.26, -38.0), (0.25, -28.0), (0.24, -12.0)],
+        "skull": (1.25, -24.0),
+        "jaw": (1.05, 0.2, -22.0),
+        "jaw_hinge": 0.13,
+        # Short and thick, hanging from the hips.
+        "tail": [(0.34, -20.0), (0.32, -27.0), (0.3, -32.0), (0.28, -35.0), (0.26, -36.0), (0.24, -35.0),
+                 (0.22, -32.0), (0.2, -28.0), (0.18, -23.0), (0.15, -18.0), (0.11, -12.0)],
+        "limbs": {
+            # Columns: the knee a little bent, the foot bones near upright on a pad, four hoofed toes.
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [1.1, 0.84, 0.32, 0.22],
+                     "socket": (0.4, 0.0, -0.1), "stance": (0.0, 0.06), "foot": "digitigrade", "foot_tilt": 24.0,
+                     "roll_tilt": 30.0, "bend": "forward", "splay": 3.0},
+            # The forelegs shorter, under the chest, the elbows a little out, the hands a little wider than the feet.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.78, 0.56, 0.2, 0.14], "socket": (0.44, -0.2, -0.32), "stance": (0.14, 0.12),
+                     "foot": "digitigrade", "foot_tilt": 12.0, "roll_tilt": 25.0, "bend": "back", "splay": 14.0},
+        },
+    },
+    "moves": {
+        "plan": "quadruped",
+        # A heavy walk, each foot down most of its cycle, the body rolling a little over them.
+        "walk": {"period": 1.5, "duty": 0.7, "step": 0.12, "bob": 0.025, "snake": 1.5, "tail_swing": 3.0,
+                 "order": "walk", "steady": 0.75, "push": 0.5, "curl": 0.3, "hip_roll": 2.0},
+        # Its charge: a heavy trot, head down, the horns before it.
+        "run": {"period": 0.75, "duty": 0.45, "step": 0.17, "bob": 0.045, "snake": 1.5, "tail_swing": 2.5,
+                "order": "trot", "lean": 2.0, "steady": 0.6, "push": 0.7, "curl": 0.4, "neck_pitch": -10.0,
+                "head_pitch": -8.0},
+        # Cropping low plants with its beak, swinging its head a little; up now and then to look about.
+        "idle": {"period": 7.0, "breaths": 2, "look": 14.0, "nod": 2.5, "swell": 0.01, "tail_swing": 2.5,
+                 "heave": 0.008, "graze": {"neck": -18.0, "head": -11.0, "chew": 9.0, "chews": 14, "up": (0.55, 0.84),
+                                           "sweep": 6.0, "sweeps": 2, "pitch": 4.0}},
+        "graze": {"period": 6.0},
+        # Its blow is its horns: it gathers itself, drives in head down, and tosses its head as it meets what it hits
+        # (the game loops it while it rams).
+        "attack": {"period": 1.2, "ram": True, "lunge": 0.4, "back": 0.14, "crouch": 0.05, "dip": 0.04,
+                   "lower": 4.0, "tuck": 12.0, "head_down": 12.0, "toss": 22.0, "hook": 12.0, "roll": 5.0,
+                   "push": 0.5, "step": 0.1},
+        # Killed, it goes down on its belly, forelegs first, the frill and the horns kept clear of the ground.
+        "death": {"period": 2.0, "slump": True, "drop": 0.85, "front": 10.0, "roll": 8.0, "edge": 0.5, "splay": 0.6,
+                  "reach_fore": 0.25, "reach_hind": 0.4, "rear_neck": 6.0, "rear_head": 6.0, "limp_neck": -4.0,
+                  "limp_head": 2.0, "turn": 14.0},
+    },
+    "body": {
+        "around": 48,
+        "soften": 0.08,
+        "rough": 0.012,
+        "scale": 0.9,
+        "throat": 0.3,
+        "tips": (0.006, 0.02),
+        "trunk": [
+            # The skull: a narrow, deep, pointed beak; the face deepening and widening back to the eyes, the cheeks
+            # flaring out under them (the jugals); behind them the jaws' muscles under the root of the frill.
+            st("Head", 1.008, 0.016, 0.026, 0.012, lift=-0.016, step=0.008),
+            st("Head", 0.98, 0.032, 0.08, 0.036, lift=-0.008, step=0.012),
+            st("Head", 0.94, 0.052, 0.14, 0.06, step=0.015),
+            st("Head", 0.88, 0.075, 0.2, 0.088, step=0.02),
+            st("Head", 0.8, 0.1, 0.265, 0.115, step=0.025),
+            st("Head", 0.7, 0.135, 0.33, 0.15, step=0.025),
+            st("Head", 0.6, 0.175, 0.39, 0.185, step=0.025),
+            st("Head", 0.5, 0.225, 0.45, 0.23, step=0.025),
+            st("Head", 0.42, 0.28, 0.5, 0.27, step=0.025),
+            st("Head", 0.34, 0.37, 0.53, 0.31, step=0.025),
+            st("Head", 0.27, 0.46, 0.52, 0.35, n_bot=2.5, step=0.025),
+            st("Head", 0.19, 0.39, 0.45, 0.37, step=0.03),
+            st("Head", 0.1, 0.3, 0.37, 0.36, step=0.03),
+            st("Head", 0.0, 0.26, 0.3, 0.32, step=0.035),
+            st("Head", -0.1, 0.26, 0.28, 0.33, step=0.04),
+            # The neck: short and thick, under the frill.
+            st("Neck3", 0.5, 0.28, 0.29, 0.36, step=0.045),
+            st("Neck2", 0.5, 0.34, 0.34, 0.45, step=0.05),
+            st("Neck1", 0.5, 0.42, 0.38, 0.6, step=0.06),
+            # The body: a broad, deep barrel.
+            st("Spine4", 0.7, 0.54, 0.36, 0.78, step=0.07),
+            st("Spine4", 0.2, 0.67, 0.36, 1.0, n_bot=2.3, step=0.07),
+            st("Spine3", 0.5, 0.76, 0.34, 1.17, n_bot=2.5, step=0.08),
+            st("Spine2", 0.5, 0.8, 0.33, 1.3, n_bot=2.6, step=0.08),
+            st("Spine1", 0.5, 0.77, 0.33, 1.25, n_bot=2.5, step=0.08),
+            st("Hips", 0.15, 0.68, 0.34, 1.0, n_top=2.3, step=0.08),
+            st("Hips", 0.6, 0.56, 0.33, 0.72, n_top=2.3, step=0.08),
+            st("Hips", 1.0, 0.48, 0.33, 0.56, step=0.08),
+            # The tail: thick at its root, tapering quickly.
+            st("Tail1", 0.5, 0.4, 0.36, 0.46, step=0.07),
+            st("Tail2", 0.5, 0.32, 0.31, 0.37, step=0.07),
+            st("Tail3", 0.5, 0.255, 0.26, 0.29, step=0.06),
+            st("Tail4", 0.5, 0.205, 0.21, 0.225, step=0.06),
+            st("Tail5", 0.5, 0.165, 0.17, 0.175, step=0.05),
+            st("Tail6", 0.5, 0.13, 0.135, 0.137, step=0.05),
+            st("Tail7", 0.5, 0.1, 0.105, 0.105, step=0.045),
+            st("Tail8", 0.5, 0.075, 0.079, 0.078, step=0.04),
+            st("Tail9", 0.5, 0.053, 0.056, 0.055, step=0.035),
+            st("Tail10", 0.5, 0.034, 0.036, 0.035, step=0.03),
+            st("Tail11", 0.6, 0.018, 0.019, 0.018, step=0.02),
+            st("Tail_end", 0.3, 0.006, 0.006, 0.006, step=0.01),
+        ],
+        # The beak's edge and the jaws behind it: the cheek teeth hidden inside.
+        "mouth": {"from": ("Head", 0.15), "to": ("Head", 1.0), "phi": 118.0, "depth": 0.012, "width": 0.1, "band": 3.0,
+                  "dark": 3.0},
+        "eyes": {"at": ("Head", 0.38), "phi": 54.0, "radius": 0.034, "sunk": 0.6, "forward": 16.0, "up": 6.0,
+                 "iris": (0.36, 0.26, 0.1), "pupil": (0.01, 0.008, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.4), "phi": 36.0, "size": 0.07, "height": 0.02},
+        "nostrils": {"at": ("Head", 0.83), "phi": 58.0, "size": 0.03},
+        "horns": [
+            # Over each eye, up and forward and a little apart, nearly a metre long.
+            {"at": ("Head", 0.37), "phi": 20.0, "length": 0.95, "base": (0.085, 0.1), "rake": -35.0, "splay": 0.0,
+             "taper": 0.85, "curve": -0.06, "colour": (0.3, 0.27, 0.22), "tip": (0.12, 0.105, 0.085), "rings": 8,
+             "around": 12, "bone": "Head"},
+            # Over the nostrils, short and blunt.
+            {"at": ("Head", 0.73), "phi": 0.0, "length": 0.2, "base": (0.055, 0.085), "rake": -12.0, "taper": 0.8,
+             "colour": (0.3, 0.27, 0.22), "tip": (0.12, 0.105, 0.085), "rings": 5, "around": 10, "bone": "Head"},
+            # Out of the back of each cheek, down and out: the epijugals.
+            {"at": ("Head", 0.27), "phi": 110.0, "length": 0.14, "base": (0.06, 0.075), "rake": 12.0, "splay": 30.0,
+             "taper": 1.0, "colour": (0.3, 0.27, 0.22), "tip": (0.2, 0.18, 0.14), "rings": 4, "around": 10,
+             "bone": "Head"},
+        ],
+        # The frill (tools/dino_body.py _frill): back from behind the brow horns along the skull's roof and up over
+        # the neck, its sides curving down; the squamosals forward beside the head to the cheeks; seventeen points
+        # round its edge.
+        "frill": {"at": ("Head", 0.32), "lift": -0.04, "tilt": 78.0, "width": 0.7, "height": 1.4,
+                  "outline": [(0.0, 1.0), (0.3, 0.98), (0.56, 0.9), (0.77, 0.76), (0.92, 0.57), (1.0, 0.36),
+                              (0.99, 0.15), (0.92, -0.04), (0.8, -0.17), (0.62, -0.15), (0.45, -0.07), (0.28, -0.01),
+                              (0.0, 0.0)],
+                  "corner": 8, "centre": (0.0, 0.42), "curve": -0.5, "cup": -0.08, "thick": 0.1, "rim": 0.03,
+                  "levels": 6, "around": 160, "points": {"count": 17, "size": 0.045, "sharp": 1.0},
+                  "colour": (0.17, 0.13, 0.085), "edge": (0.07, 0.055, 0.04), "point": (0.36, 0.32, 0.25)},
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.2, 0.27, 0.44, 0.05), (0, 0.05, 0.37, 0.52, 0.07), (0, 0.35, 0.33, 0.44, 0.05),
+                             (0, 0.65, 0.26, 0.32, 0.02), (0, 0.92, 0.21, 0.23, 0.0), (1, 0.12, 0.21, 0.27, -0.035),
+                             (1, 0.4, 0.2, 0.25, -0.03), (1, 0.75, 0.17, 0.18, -0.008), (1, 0.97, 0.155, 0.155, 0.0),
+                             (2, 0.25, 0.155, 0.14, 0.0), (2, 0.9, 0.175, 0.13, -0.01)],
+                "around": 18,
+                # Four short toes, each with a broad hoof.
+                "digits": {"digits": [(-34.0, 0.13, 0.05, 0.06), (-12.0, 0.17, 0.058, 0.07), (10.0, 0.17, 0.058, 0.07),
+                                      (30.0, 0.14, 0.052, 0.06)],
+                           "flat": 0.6, "claw_curl": 0.25},
+            },
+            "fore": {
+                "stations": [(0, -0.2, 0.21, 0.29, 0.0), (0, 0.05, 0.28, 0.33, 0.03), (0, 0.45, 0.24, 0.27, 0.03),
+                             (0, 0.9, 0.18, 0.19, 0.0), (1, 0.15, 0.185, 0.21, 0.02), (1, 0.55, 0.155, 0.165, 0.005),
+                             (1, 0.95, 0.13, 0.135, 0.0), (2, 0.25, 0.135, 0.12, 0.0), (2, 0.9, 0.145, 0.11, 0.0)],
+                "around": 16,
+                # Five fingers turned a little out, the first three hoofed, the last two small.
+                "digits": {"digits": [(-28.0, 0.08, 0.04, 0.05), (-8.0, 0.1, 0.045, 0.055), (12.0, 0.1, 0.044, 0.05),
+                                      (34.0, 0.07, 0.035, 0.01), (54.0, 0.05, 0.028, 0.008)],
+                           "flat": 0.6, "claw_curl": 0.3},
+            },
+        },
+        # Its skin (Lane): polygonal scales a few centimetres across, and among them big round feature scales with a
+        # cone at the middle of each; the horns' sheaths smooth.
+        "skin_detail": {"scales": {"cells": 26.0, "dorsal_size": 0.6, "groove": 0.16, "groove_dark": 0.32, "tint": 0.1,
+                                   "speckle": 0.08, "relief": 0.75, "depth": 0.01,
+                                   "features": {"scale": 7.0, "share": 0.3, "size": 0.36, "edge": 0.9, "height": 0.7, "cone": 1.1,
+                                                "tip": 0.6, "tint": 0.05}},
+                        "horn": {"grain": 30.0, "relief": 0.12, "mottle": 0.14, "streak": 0.1}},
+        "texture": 2048,
+        # Conjectural: a muted grey-brown, darker over the back, paler below; the beak horn-dark; the frill a little
+        # warmer, darker at its edge, its points pale.
+        "skin": {
+            "back": (0.07, 0.055, 0.035),
+            "flank": (0.2, 0.15, 0.095),
+            "belly": (0.37, 0.31, 0.215),
+            "throat": (0.38, 0.33, 0.25),
+            "lips": (0.06, 0.05, 0.038),
+            "mouth": (0.1, 0.05, 0.04),
+            "claws": (0.08, 0.07, 0.055),
+            "mottle": 0.18,
+            "shank_dark": 0.3,
+            "toe_dark": 0.3,
+            "horn_base": (0.09, 0.075, 0.055),
+            "beak": {"from": ("Head", 0.86), "colour": (0.045, 0.04, 0.032)},
+            # Darker blotches over the back and down the flanks.
+            "spots": {"colour": (0.045, 0.038, 0.028), "from": ("Neck2", 0.0), "to": ("Tail8", 0.5), "scale": 1.0,
+                      "above": 0.3, "strength": 0.42},
+        },
+    },
+}
+
+
+# Edmontosaurus annectens (Marsh 1892; Campione and Evans 2011; the "mummies" AMNH 5060 and SM 4036, their skin and
+# the horny beak over the bill): a duck-billed hadrosaur twelve metres long -- a long, low skull, its front flared
+# into a broad, flat, toothless bill, a battery of grinding teeth behind it; a long neck carried in an S; a deep body
+# and a long, deep tail stiffened by bony tendons, held straight out behind; the hind legs long and strong, three
+# hoofed toes; the forelegs long and slender, the hand's middle three fingers bound in one hoofed pad -- it went on
+# all fours when it grazed, and could rise onto its hind legs. A soft, fleshy comb over the top of its head, as one
+# mummy shows (Bell et al. 2014, an E. regalis from Alberta). Scenery on the fourth map: a herd on the valley's walls,
+# grazing (Config.MAPS herds), never fought.
+
+
+EDMONTOSAURUS = {
+    # Scenery: the herd fits it to its length and walks it at its own pace.
+    "fit": "length",
+    "length": 12.0,
+    # Its strides drawn at the herd's pace (MAPS herds "speed": 0.6), so its feet stay put.
+    "paces": {"walk": 0.6, "run": 1.4},
+    "skeleton": {
+        # The hip joints 2.7 m up (femur 1.25, tibia 1.1, the foot bones 0.45): the back over them 3.3 m.
+        "hip_height": 2.8,
+        "pelvis_length": 0.55,
+        "pelvis_pitch": -4.0,
+        # The back from the hips forward and down to the shoulders, on all fours.
+        "spine": [(0.8, -8.0), (0.8, -12.0), (0.75, -15.0), (0.7, -18.0)],
+        # The neck in an S: down from the shoulders, up, and the head bent down at its end.
+        "neck": [(0.3, -18.0), (0.3, 0.0), (0.28, 22.0), (0.26, 32.0), (0.24, 20.0)],
+        "skull": (1.15, -28.0),
+        "jaw": (0.95, 0.12, -30.0),
+        "jaw_hinge": 0.1,
+        # Long and deep, held straight out behind.
+        "tail": [(0.6, -6.0), (0.58, -6.0), (0.55, -5.0), (0.52, -4.0), (0.5, -3.0), (0.47, -2.0), (0.44, -2.0),
+                 (0.41, -1.0), (0.38, -1.0), (0.35, 0.0), (0.32, 0.0), (0.29, 0.0), (0.26, 0.0), (0.23, 0.0)],
+        "limbs": {
+            # The hind legs long, the foot bones steep on a pad, three hoofed toes.
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [1.25, 1.1, 0.45, 0.32],
+                     "socket": (0.35, 0.0, -0.1), "stance": (0.0, 0.08), "foot": "digitigrade", "foot_tilt": 25.0,
+                     "roll_tilt": 30.0, "bend": "forward", "splay": 3.0},
+            # The forelegs long and slender, the hand's long bones near upright, a hoofed pad under them.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.6, 0.64, 0.32, 0.12], "socket": (0.36, -0.3, -0.6), "stance": (0.04, 0.12),
+                     "foot": "digitigrade", "foot_tilt": 10.0, "roll_tilt": 25.0, "bend": "back", "splay": 6.0},
+        },
+    },
+    "moves": {
+        "plan": "quadruped",
+        # A slow amble on all fours.
+        "walk": {"period": 1.8, "duty": 0.7, "step": 0.14, "bob": 0.03, "snake": 1.5, "tail_swing": 1.5,
+                 "order": "walk", "steady": 0.7, "push": 0.5, "curl": 0.3, "hip_roll": 1.5},
+        # Its "run": a quicker amble, on all fours still.
+        "run": {"period": 1.2, "duty": 0.6, "step": 0.18, "bob": 0.05, "snake": 1.5, "tail_swing": 1.5,
+                "order": "walk", "steady": 0.6, "push": 0.6, "curl": 0.35, "hip_roll": 1.5},
+        # Grazing: the neck swung down to the ground and swept slowly across it, the bill cropping; up now and then
+        # to look about.
+        "idle": {"period": 8.0, "breaths": 2, "look": 16.0, "nod": 2.5, "swell": 0.01, "tail_swing": 1.2,
+                 "heave": 0.01, "graze": {"neck": -52.0, "head": -4.0, "chew": 8.0, "chews": 16, "up": (0.58, 0.84),
+                                           "sweep": 12.0, "sweeps": 1, "pitch": 4.0}},
+        "graze": {"period": 7.0},
+        # It has no weapon: a shove of its shoulder.
+        "attack": {"period": 1.3, "ram": True, "lunge": 0.3, "back": 0.12, "crouch": 0.05, "dip": 0.04, "lower": 3.0,
+                   "tuck": 6.0, "head_down": 4.0, "toss": 6.0, "hook": 8.0, "roll": 4.0},
+        "death": {"period": 2.4, "roll": 80.0, "pivot": 0.85, "slide": 0.25, "limp_forward": 0.3, "limp_up": 0.3},
+    },
+    "body": {
+        "around": 48,
+        "soften": 0.1,
+        "rough": 0.015,
+        "scale": 1.2,
+        "throat": 0.3,
+        "tips": (0.005, 0.03),
+        "trunk": [
+            # The skull: long and low; the bill broad and flat at its front, narrower behind it; deepest at the back,
+            # over the jaws' hinge.
+            st("Head", 1.01, 0.095, 0.02, 0.02, n_top=3.0, n_bot=3.0, step=0.01),
+            st("Head", 0.985, 0.14, 0.04, 0.045, n_top=2.8, n_bot=2.6, step=0.015),
+            st("Head", 0.94, 0.15, 0.06, 0.065, n_top=2.6, n_bot=2.4, step=0.02),
+            st("Head", 0.86, 0.135, 0.08, 0.085, n_top=2.4, step=0.03),
+            st("Head", 0.76, 0.12, 0.1, 0.105, step=0.03),
+            st("Head", 0.64, 0.115, 0.125, 0.13, step=0.03),
+            st("Head", 0.52, 0.125, 0.15, 0.16, step=0.03),
+            st("Head", 0.4, 0.145, 0.175, 0.2, step=0.03),
+            st("Head", 0.28, 0.165, 0.2, 0.24, lift=0.005, step=0.03),
+            st("Head", 0.17, 0.18, 0.2, 0.28, step=0.03),
+            st("Head", 0.07, 0.17, 0.17, 0.27, step=0.035),
+            st("Head", -0.03, 0.16, 0.15, 0.24, step=0.04),
+            st("Head", -0.1, 0.155, 0.15, 0.22, step=0.04),
+            # The neck: deeper than wide, thickening to the shoulders.
+            st("Neck5", 0.5, 0.15, 0.15, 0.21, step=0.05),
+            st("Neck4", 0.5, 0.17, 0.17, 0.24, step=0.05),
+            st("Neck3", 0.5, 0.2, 0.2, 0.29, step=0.06),
+            st("Neck2", 0.5, 0.27, 0.26, 0.4, step=0.06),
+            st("Neck1", 0.5, 0.36, 0.34, 0.58, step=0.07),
+            # The body: deep, a little narrower than tall; the hips high.
+            st("Spine4", 0.7, 0.4, 0.34, 0.72, step=0.08),
+            st("Spine4", 0.2, 0.5, 0.36, 1.02, n_bot=2.3, step=0.08),
+            st("Spine3", 0.5, 0.56, 0.38, 1.2, n_bot=2.4, step=0.09),
+            st("Spine2", 0.5, 0.58, 0.42, 1.24, n_bot=2.4, step=0.09),
+            st("Spine1", 0.5, 0.56, 0.48, 1.12, n_bot=2.3, step=0.09),
+            st("Hips", 0.2, 0.52, 0.52, 0.85, step=0.09),
+            st("Hips", 0.8, 0.44, 0.54, 0.68, step=0.09),
+            # The tail: tall and narrow (its high spines over it, long chevrons under it), tapering all its length.
+            st("Tail1", 0.5, 0.33, 0.55, 0.62, step=0.1),
+            st("Tail2", 0.5, 0.28, 0.52, 0.58, step=0.1),
+            st("Tail3", 0.5, 0.24, 0.48, 0.52, step=0.1),
+            st("Tail4", 0.5, 0.215, 0.45, 0.48, step=0.1),
+            st("Tail5", 0.5, 0.19, 0.41, 0.43, step=0.1),
+            st("Tail6", 0.5, 0.165, 0.36, 0.38, step=0.1),
+            st("Tail7", 0.5, 0.14, 0.31, 0.32, step=0.09),
+            st("Tail8", 0.5, 0.118, 0.26, 0.27, step=0.09),
+            st("Tail9", 0.5, 0.097, 0.21, 0.215, step=0.08),
+            st("Tail10", 0.5, 0.077, 0.16, 0.165, step=0.08),
+            st("Tail11", 0.5, 0.058, 0.115, 0.118, step=0.07),
+            st("Tail12", 0.5, 0.04, 0.075, 0.076, step=0.06),
+            st("Tail13", 0.5, 0.026, 0.045, 0.046, step=0.05),
+            st("Tail14", 0.6, 0.014, 0.02, 0.02, step=0.04),
+            st("Tail_end", 0.3, 0.004, 0.004, 0.004, step=0.02),
+        ],
+        # The bill's edge and the long line of the jaws behind it: the teeth hidden in the cheeks.
+        "mouth": {"from": ("Head", 0.12), "to": ("Head", 1.0), "phi": 110.0, "depth": 0.01, "width": 0.1, "band": 3.0,
+                  "dark": 3.0},
+        "eyes": {"at": ("Head", 0.27), "phi": 50.0, "radius": 0.032, "sunk": 0.6, "forward": 12.0, "up": 8.0,
+                 "iris": (0.42, 0.3, 0.12), "pupil": (0.01, 0.008, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.29), "phi": 34.0, "size": 0.05, "height": 0.015},
+        # The long hollow round the nostril, down the side of the snout (the circumnarial fossa).
+        "fossa": {"from": ("Head", 0.55), "to": ("Head", 0.9), "phi": 55.0, "depth": 0.015, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.86), "phi": 50.0, "size": 0.025},
+        # The comb: a low, soft crest along the top of the head behind the eyes, in lobes.
+        "back_plates": {"from": ("Head", 0.38), "to": ("Head", 0.04), "count": 7, "rows": 1, "shape": "plate",
+                        "thick": 0.3, "sink": 0.3, "levels": 3,
+                        "sizes": [(0.0, 0.04, 0.14), (0.3, 0.085, 0.17), (0.65, 0.08, 0.16), (1.0, 0.04, 0.12)],
+                        "colour": (0.22, 0.095, 0.065), "rim": (0.27, 0.12, 0.085), "groove": 0.03, "groove_dark": 0.0},
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.2, 0.26, 0.48, 0.06), (0, 0.05, 0.38, 0.62, 0.09), (0, 0.35, 0.34, 0.52, 0.06),
+                             (0, 0.65, 0.25, 0.34, 0.03), (0, 0.92, 0.18, 0.22, 0.0), (1, 0.12, 0.18, 0.26, -0.05),
+                             (1, 0.4, 0.19, 0.26, -0.045), (1, 0.75, 0.14, 0.16, -0.015), (1, 0.97, 0.12, 0.125, 0.0),
+                             (2, 0.25, 0.12, 0.105, 0.0), (2, 0.9, 0.13, 0.1, 0.0)],
+                "around": 18,
+                # Three broad toes, each ending in a hoof.
+                "digits": {"digits": [(-22.0, 0.26, 0.06, 0.07), (0.0, 0.3, 0.068, 0.08), (22.0, 0.26, 0.06, 0.07)],
+                           "flat": 0.55, "claw_curl": 0.15},
+            },
+            "fore": {
+                "stations": [(0, -0.2, 0.15, 0.22, 0.0), (0, 0.05, 0.18, 0.24, 0.025), (0, 0.45, 0.14, 0.17, 0.025),
+                             (0, 0.9, 0.1, 0.105, 0.0), (1, 0.15, 0.105, 0.12, 0.015), (1, 0.55, 0.085, 0.09, 0.005),
+                             (1, 0.95, 0.065, 0.068, 0.0), (2, 0.25, 0.065, 0.06, 0.0), (2, 0.9, 0.07, 0.058, 0.0)],
+                "around": 16,
+                # The middle three fingers close together in their pad, hoofed; the little fifth apart.
+                "digits": {"digits": [(-14.0, 0.1, 0.03, 0.03), (0.0, 0.11, 0.032, 0.03), (14.0, 0.1, 0.03, 0.03),
+                                      (40.0, 0.12, 0.022, 0.01)],
+                           "flat": 0.6, "claw_curl": 0.2},
+            },
+        },
+        # Small polygonal scales all over (the mummies'), bigger ones over the back.
+        "skin_detail": {"scales": {"cells": 45.0, "dorsal_size": 0.55, "groove": 0.3, "groove_dark": 0.26, "tint": 0.1,
+                                   "speckle": 0.1, "relief": 0.6, "depth": 0.006}},
+        "texture": 2048,
+        # Conjectural: grey-olive over the back, buff down the flanks, a pale belly; faint darker bands across the
+        # back and the tail; the bill horn-dark; the comb flushed a dull red.
+        "skin": {
+            "back": (0.085, 0.07, 0.045),
+            "flank": (0.29, 0.24, 0.155),
+            "belly": (0.5, 0.45, 0.34),
+            "throat": (0.52, 0.47, 0.36),
+            "lips": (0.08, 0.07, 0.05),
+            "mouth": (0.12, 0.06, 0.05),
+            "claws": (0.09, 0.08, 0.06),
+            "mottle": 0.18,
+            "shank_dark": 0.25,
+            "toe_dark": 0.35,
+            "beak": {"from": ("Head", 0.88), "colour": (0.06, 0.055, 0.045)},
+            "bands": {"colour": (0.045, 0.036, 0.025), "from": ("Spine3", 0.0), "to": ("Tail_end", 0.5), "period": 0.85,
+                      "width": 0.24, "strength": 0.42},
+        },
+    },
+}
+
 # ==============================================================================
 
 # Each by the name its files go by (assets/models/dinos/<name>.gltf); "config" names its row in Config.DINOS where
@@ -3654,5 +4216,9 @@ SPECIES = {"coelophysis": COELOPHYSIS, "coelophysis_alpha": COELOPHYSIS_ALPHA, "
            # The third map's (GAME-DESIGN 7.2, station 3: the Jehol Biota).
            "yutyrannus": YUTYRANNUS, "dilong": DILONG, "sinocalliopteryx": SINOCALLIOPTERYX,
            "sinornithosaurus": SINORNITHOSAURUS,
+           # ... and its herd at the forest's edge.
+           "psittacosaurus": PSITTACOSAURUS,
            # The Hell Creek's own dromaeosaurs, beside the tyrannosaur.
-           "acheroraptor": ACHERORAPTOR, "dakotaraptor": DAKOTARAPTOR}
+           "acheroraptor": ACHERORAPTOR, "dakotaraptor": DAKOTARAPTOR,
+           # The Hell Creek's plant-eaters: the frightened charger, and a herd on the valley's walls.
+           "triceratops": TRICERATOPS, "edmontosaurus": EDMONTOSAURUS}

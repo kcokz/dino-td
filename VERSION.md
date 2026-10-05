@@ -1769,11 +1769,12 @@
   - 配重投石机：`BUILDINGS.catapult_trebuchet`（`catapult_3` 的升级，+3 铁；`range` 13、`min_range` 4、`throw_seconds` 7.5、×2.5、容量 25、`wound_degrees` 150）；`Catapult._wound` 认塔自己的 `wound_degrees`，`Catapult._process` 让配重箱一直竖直；模型 `trebuchet_a.glb`、图标、头像。
   - 第 4 站的高潮：小行星（第一版）。新的 `scripts/fx/ImpactRain.gd`（`begin`：天上一道光、太阳一闪、闷响 `impact_boom`、提示 `HINT_IMPACT`；之后玻璃珠一颗颗落下，越来越密，`land` 烫伤恐龙、外面的人、建筑；人在舱里没事；新的一局就没了）；`Main._on_beacon_launched_climax`（地图的 `climax` 是 "impact" 才有）；`MAPS.hell_creek.climax`；`Hero.take_damage(amount, bitten)`（被烫不还手）；声音 `impact_boom`、`impact_bead`（`tools/build_sounds.gd`）。新的测试 `test_v07_the_impact`（只有第 4 站有、落下来烫伤恐龙、人在外面挨烫在舱里不挨、新的一局就没了）。
   - 测试：新的 `test_v07_station_four`（四站、最后一站、带着铁锹、生物是自己的并且有模型有叫声、霸王龙压轴、河边有黏土沼铁、自定义游戏和天色提示、配重投石机只要铁、更远更狠更慢、长臂拉得更远）。`tools/playtest.gd` 新场景 `cast4`（第 4 站的生物和人站一排），`kiln` 场景里多一座配重投石机。
-- **v0.7 第二十八批：工作台的弹药分页；铁尖栅栏（同一晚，玩家："看看因为科技多了，界面是不是要改的更简洁""主要是科技树升级部分"）**：
+- **v0.7 第二十八批：工作台的弹药分页；铁尖栅栏；后两站的植食恐龙（同一晚，玩家："看看因为科技多了，界面是不是要改的更简洁""主要是科技树升级部分"）**：
   - 工作台的弹药多于 4 种（`UI.ammo_tabs_from`）、又不止一座塔用时分页，一座塔一页（`OptionPanel._add_ammo_block`、`ammo_tab`、`_ammo_for`、`_first_tower_of`；页签 `AMMO_TAB_BOW` / `DROP` / `THROWER`："箭""落木""投石"，图标是那座塔，悬停写塔名）；页签不带数字键。英文的弹药名改短，两栏的卡片里放得下（Wood Arrows、Iron Arrows、Spiked Logs、Heavy Logs；中文不变）。设计书 6.0 的弹药表补上铁箭。
   - 测试：`test_v07_the_build_tabs` 第 6 条（多了才分页、一页只有一座塔的、点页签换页）；`test_v06_the_interface`、`test_v07_ammunition` 先翻到那座塔的一页再找卡片。`tools/playtest.gd` 的 `bench3` 三页都拍。
   - 铁尖栅栏（设计书 5.3 栅栏那一行的"铁蒺藜"）：`BUILDINGS.iron_stake`，骨尖栅栏原地升级（`bone_stake.upgrades_to`），每格加 1 铁；扎 2.0、血 56（骨的 1.4、40）；没造过铁不出现（`within_reach`）。模型 `iron_palisade_a.glb`（`tools/generate_props.py` 的 `palisade(iron=True)`、`_iron_point`：锻出来的四棱铁尖，套在木头上，两边倒钩）、图标、头像，名字 `BUILDING_IRON_STAKE_NAME`。新的测试 `test_v07_the_iron_palisade`（原地升级、只多一样铁、更狠更结实、没铁不给、立起来按自己的数）。
   - 第 4 站的两种盗龙有了自己的叫声（原来借迅猛龙和它头领的；测试要每种动物一个声音，第二十七批的全量测试在这里红了）：阿克罗盗龙干哑的连吠，达科他盗龙喉咙里带颤的低嘎声（`tools/build_sounds.gd`；`SOUNDS.acheroraptor_*`、`dakotaraptor_*`）。`test_v07_the_impact` 第 2 条改成按时钟等玻璃珠落地（无头运行时帧不限速，数帧数不准，全量测试里偶尔红）。
+  - 后两站的植食恐龙（模型新做，`tools/dino_species.py`；为三角龙的颈盾加了 `dino_body.py` 的 `_frill`、为它的大鳞加了 `dino_skin.py` 的一段，都只在物种要的时候才用，别的物种重做一遍逐字节一样；这两处的初稿第二十七批已经带进去了，这里是定稿）：**三角龙**（`DINOS.triceratops`：第 4 站第 3 天起偶尔随来袭冲过来，冲撞的、披甲、重；140 血、撞 9、1.9 米/秒，比剑龙高一步；2.2 米高）；**埃德蒙顿龙**一大群在第 4 站谷壁上（9 米长）；**鹦鹉嘴龙**两小群在第 3 站谷壁上（1.4 米长）。都按游戏里霸王龙的比例（`Herds`：霸王龙是尺子；模型按真的比例做，放进来时缩到这个比例，走路的速度也跟着缩，脚不打滑）。叫声：三角龙低沉带沙的吼、鼻息、冲撞，埃德蒙顿龙鼻腔里的号角声，鹦鹉嘴龙的叽叽声（`tools/build_sounds.gd`）。头像 `dino_triceratops`。测试 `test_v07_station_four` 第 3b 条。
 
 ## v0.7 已定要做的（未开工）
 
