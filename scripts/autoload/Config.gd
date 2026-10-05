@@ -2523,7 +2523,7 @@ const GAMES: Dictionary = {
 	"campaign": {
 		"name": "GAME_CAMPAIGN",
 		"settings": {"map": "large"},
-		"internal": {"tutorial": true, "cabin": "wrecked", "goal": "beacon"},
+		"internal": {"tutorial": true, "cabin": "wrecked", "goal": "beacon", "story": true},
 		# Its stations, in order (GAME-DESIGN 7.2): each the settings it lays over the game's for that leg -- its map,
 		# its age -- and what the jump's card says of it (StationJump): its name, its age, its place, how long ago.
 		# The beacon's jump at the end of one lands the capsule at the next (GameState.jump_to_next_station); the
@@ -3058,6 +3058,10 @@ const UI: Dictionary = {
 	"menu_picker_width": 190,
 	# The settings page's Keys tab (PauseMenu): a key's button this wide -- "Press a key…" fits.
 	"menu_key_width": 130,
+	# The goal's card (HUD): folded to its mark, it opens on news -- a stage done, the launch, a goal given -- for
+	# this many seconds, then folds again; and the journal's panel this wide.
+	"objective_open_seconds": 8.0,
+	"journal_width": 460,
 	# The settings page's volumes (AUDIO): a level's slider as wide as a picker, and its figure ("100%") this wide
 	# after it, so the sliders line up whatever they are set to.
 	"menu_volume_figure_width": 56,
@@ -3512,6 +3516,8 @@ const CONTROLS: Dictionary = {
 	# cannot be taken back -- a demolish, the beacon's launch -- is not on a key: it is pressed by
 	# hand. Back is the cancel key's, which peels a submenu off as it does a ghost in hand.
 	"command_keys": [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9],
+	# The journal (HUD.toggle_journal): the story so far and what is to be done -- J, as the quest log is in most games.
+	"journal_key": KEY_J,
 	# His card in full -- his portrait, his bars, his kit -- and shut again, as C opens the
 	# character sheet in Diablo IV (v0.6 round four: the card stood open all the while he was
 	# chosen, which is most of the time). His medallion does the same. A letter the camera's keys
@@ -3551,6 +3557,7 @@ const KEY_BINDINGS: Array = [
 	{"name": "command_key_8", "group": "commands", "label": "KEY_COMMAND"},
 	{"name": "command_key_9", "group": "commands", "label": "KEY_COMMAND"},
 	{"name": "details_key", "group": "commands", "label": "KEY_DETAILS"},
+	{"name": "journal_key", "group": "commands", "label": "KEY_JOURNAL"},
 	{"name": "pause_key", "group": "commands", "label": "KEY_PAUSE"},
 	{"name": "trap_turn_key", "group": "commands", "label": "KEY_TRAP_TURN", "shares": "camera_reset_key"},
 ]
@@ -5362,6 +5369,21 @@ const GROUND_COVER: Dictionary = {
 	# How far a cliff keeps back from the top of the river's bank: a stretch is eight
 	# metres long, and one stood on the bank hung its end out over the water.
 	"cliff_river_clear": 4.0,
+}
+
+# ==============================================================================
+# 14b2. The story (v0.7)
+# ==============================================================================
+## THE STORY'S OPENING (the player, 2026-10-04: "Beacon右上角的提示应该不要一直显示，用专业游戏的best practice应该有个类似日志
+## 或者任务之类的显示方法，而且不要突兀的直接显示，应该有个前因后果的引入（这个是过关游戏特有，自定义没有的）"): in our own
+## game (GAMES.campaign.internal "story"), as he climbs out of the crashed capsule, he says what has happened and what
+## he must do -- `intro`, his lines in their order (HeroVoice.say_key), each up `line_seconds` at least and
+## `between_lines` apart -- and only then is the beacon his goal: the journal's first entries, its card come in
+## (HUD.tell_the_story). The journal tells the story and the goal, never how to play (GAME-DESIGN 1, pillar 6).
+const STORY: Dictionary = {
+	"intro": ["BARK_INTRO_1", "BARK_INTRO_2", "BARK_INTRO_3"],
+	"line_seconds": 3.5,
+	"between_lines": 0.4,
 }
 
 # ==============================================================================

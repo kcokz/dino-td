@@ -161,6 +161,21 @@ func speak(situation: String, args: Array = []) -> bool:
 	_say_aloud(key)
 	return true
 
+## `key`, said now, whatever else he was about to say -- a line of the story (Config.STORY), said in its order. How
+## long it is up, in seconds (0, dead).
+func say_key(key: String) -> float:
+	if _dead():
+		return 0.0
+	var seconds: float = clampf(float(tr(key).length()) * _number("seconds_per_char", 0.07),
+		_number("min_seconds", 2.2), _number("max_seconds", 5.0))
+	_busy_until = _clock + seconds
+	_last_said_at = _clock
+	var eb = _bus()
+	if eb and eb.has_signal("hero_spoke"):
+		eb.hero_spoke.emit(key, seconds, [])
+	_say_aloud(key)
+	return seconds
+
 ## The next of what he has still to say.
 func _say_next() -> void:
 	var next: Dictionary = _then.pop_front()

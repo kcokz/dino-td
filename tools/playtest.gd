@@ -162,6 +162,8 @@ func _run(name: String) -> void:
 			await _scenario_buildmenu()
 		"menu":
 			await _scenario_menu()
+		"journal":
+			await _scenario_journal()
 		"paused":
 			await _scenario_paused()
 		"kit":
@@ -1837,6 +1839,23 @@ func _scenario_menu() -> void:
 		menu.show_settings_tab("keys")
 		menu._listen("camera_rotate_left_key")
 		await _shoot("settings_keys")
+
+## The goal's card and the journal (v0.7: "Beacon右上角的提示应该不要一直显示……应该有个类似日志或者任务之类的显示方法"): the
+## card folded to its mark; opened with the news of the goal given; the journal open over the valley.
+func _scenario_journal() -> void:
+	var gs := root.get_node("GameState")
+	gs.play("campaign")
+	gs.reset_game()
+	_main.hud.reset_hud(true)
+	_main.hud.give_objective(false)
+	await _wait(6)
+	await _shoot("folded")
+	_main.hud.give_objective(true)
+	await _wait(10)
+	await _shoot("news")
+	_main.hud.toggle_journal()
+	await _wait(6)
+	await _shoot("journal")
 
 ## His row (v0.6 round three): the workbench with hide known -- what it offers now -- then his
 ## card with the pick and the axe in it (v0.7: the spear, the armour and the boots went), and the

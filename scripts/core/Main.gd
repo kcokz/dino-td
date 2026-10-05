@@ -144,6 +144,11 @@ func open_on_the_crash() -> void:
 	gs.crash_landing = false
 	if station_jump != null and is_instance_valid(station_jump):
 		station_jump.crash.call_deferred(self)
+		# The goal held back till he has said why (HUD.tell_the_story), when he is out of it.
+		if hud and is_instance_valid(hud) and hud.has_method("hold_objective"):
+			hud.hold_objective()
+			if not station_jump.crashed.is_connected(hud.tell_the_story):
+				station_jump.crashed.connect(hud.tell_the_story.bind(1.0), CONNECT_ONE_SHOT)
 
 ## Won with a station still to go: the jump, not the victory (HUD._on_game_won leaves it the screen).
 func _on_won_jump() -> void:
@@ -1530,6 +1535,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# The journal (Keys: journal_key; HUD.toggle_journal), in our own game.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == Keys.key("journal_key") \
+			and not (event.ctrl_pressed or event.meta_pressed):
+		if hud and is_instance_valid(hud) and hud.has_method("toggle_journal"):
+			hud.toggle_journal()
+		get_viewport().set_input_as_handled()
+		return
+
 	# Space key to toggle pause
 	if event is InputEventKey and event.pressed and event.keycode == pause_key:
 		var gs = _get_game_state()
@@ -1545,6 +1558,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if hud and is_instance_valid(hud) and hud.has_method("is_pause_menu_open") and hud.is_pause_menu_open():
 			hud.toggle_pause_menu()
+			return
+		# The journal open: shut first.
+		if hud and is_instance_valid(hud) and hud.has_method("is_journal_open") and hud.is_journal_open():
+			hud.toggle_journal()
 			return
 		if current_build_type != "":
 			cancel_building_selection()

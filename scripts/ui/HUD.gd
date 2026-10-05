@@ -61,6 +61,21 @@ var wave_label: Label = null
 var core_hp_label: Label = null
 var core_hp_bar: TextureProgressBar = null
 var core_vital: Control = null
+## THE GOAL'S CARD, FOLDED (the player, 2026-10-04: "Beacon右上角的提示应该不要一直显示，用专业游戏的best practice应该有个类似
+## 日志或者任务之类的显示方法"): at the top right its mark alone -- its icon, its name, a pip a stage -- and what is to be done
+## next only while there is news (Config.UI.objective_open_seconds: a stage done, the launch, the goal given), the
+## cursor is over it, or the journal is open. Given (give_objective): in our own game, once the story has said why
+## (tell_the_story); otherwise from the first. Clicked, or J (Keys), the journal (toggle_journal) -- in our own game.
+var objective_detail: VBoxContainer = null
+var _objective_given: bool = true
+var _objective_open_ms: int = 0
+var _objective_hovered: bool = false
+var journal_panel: PanelContainer = null
+var _journal_box: VBoxContainer = null
+## What the journal says, oldest first: [{title, text}], its keys' words said in the language of the moment.
+var _journal: Array = []
+## Which run the story is being told for: a run begun again while it is told is not given the goal by it.
+var _story_run: int = 0
 ## The cabin's power round its medallion (Config.POWER; _power_ring), and whether its running low has been said.
 var core_power_ring: TextureProgressBar = null
 var _power_low_said: bool = false
@@ -459,6 +474,9 @@ func _process(delta: float) -> void:
 	var gs = _get_game_state()
 	if gs and gs.has_method("is_beacon_launched") and gs.is_beacon_launched():
 		_refresh_beacon_label()
+	# The card folds again when its news is old.
+	if objective_detail != null and objective_detail.visible != (objective_open() and beacon_label != null and beacon_label.visible):
+		_fold_objective()
 	# The cabin nearly gone: its readout pulses, a warning that does not depend on colour.
 	if core_vital:
 		if _core_ratio < UiTheme.number("hp_low_ratio"):
@@ -472,6 +490,12 @@ func _process(delta: float) -> void:
 ## A stage repaired, or the launch. The charge's countdown is _process's.
 func _on_beacon_changed(steps_done: int) -> void:
 	_refresh_beacon_label()
+	# News: the card opens a while; a stage done is written in the journal.
+	var stages_gs = _get_game_state()
+	if steps_done >= 1 and stages_gs and stages_gs.has_method("beacon_stage_count") and steps_done <= int(stages_gs.beacon_stage_count()):
+		_open_objective()
+		if _tells_story():
+			_add_journal("JOURNAL_STAGE_TITLE", "JOURNAL_STAGE_TEXT", [steps_done])
 	# A stage stands: its hum is heard down the valley, and something comes of it (WaveManager).
 	var gs = _get_game_state()
 	if gs and gs.has_method("beacon_stage_count") and steps_done >= 1 and steps_done <= int(gs.beacon_stage_count()) \
@@ -532,6 +556,9 @@ func _tick_raid_line() -> void:
 ## Launched: everything in the valley is on its way, from every side (GAME-DESIGN 8.3).
 func _on_beacon_launched() -> void:
 	_refresh_beacon_label()
+	_open_objective()
+	if _tells_story():
+		_add_journal("JOURNAL_LAUNCH_TITLE", "JOURNAL_LAUNCH_TEXT")
 	# With a grace before the valley answers, the countdown says it (_on_final_wave_warning).
 	var gs = _get_game_state()
 	if gs and float(gs.map_data().get("beacon", {}).get("launch_grace", 0.0)) > 0.0:
@@ -845,7 +872,163 @@ func _refresh_objective_panel() -> void:
 		return
 	var beacon: bool = beacon_label != null and is_instance_valid(beacon_label) and beacon_label.visible
 	var goal: bool = goal_label != null and is_instance_valid(goal_label) and goal_label.visible
-	objective_panel.visible = beacon or goal or (raid_row != null and raid_row.visible)
+	var raid: bool = raid_row != null and raid_row.visible
+	# The goal not yet given (tell_the_story): only a raid's line, if one is coming.
+	objective_panel.visible = (beacon and _objective_given) or goal or raid
+	# In our own game it says where the journal is.
+	objective_panel.tooltip_text = (tr("HUD_OBJECTIVE_TIP") % Keys.text("journal_key")) if _tells_story() else ""
+	_fold_objective()
+
+## Whether the card shows what is to be done next: with news a moment ago, under the cursor, with the journal open.
+func objective_open() -> bool:
+	return _objective_hovered or Time.get_ticks_msec() < _objective_open_ms \
+		or (journal_panel != null and is_instance_valid(journal_panel) and journal_panel.visible)
+
+## Opened for a while (Config.UI.objective_open_seconds): news of the goal.
+func _open_objective() -> void:
+	_objective_open_ms = Time.get_ticks_msec() + int(float(_ui("objective_open_seconds", 8.0)) * 1000.0)
+	_fold_objective()
+
+func _fold_objective() -> void:
+	if objective_detail != null and is_instance_valid(objective_detail):
+		objective_detail.visible = objective_open() and beacon_label != null and beacon_label.visible
+
+## Clicked: the journal, in our own game.
+func _on_objective_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
+			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and _tells_story():
+		toggle_journal()
+		get_viewport().set_input_as_handled()
+
+## Whether this game tells a story (Config.GAMES.<id>.internal "story": ours): its opening, its journal.
+func _tells_story() -> bool:
+	var gs = _get_game_state()
+	return gs != null and gs.has_method("internal") and bool(gs.internal("story", false))
+
+## The goal held back: the story is about to say why (Main.open_on_the_crash).
+func hold_objective() -> void:
+	_objective_given = false
+	_refresh_objective_panel()
+
+## THE STORY'S OPENING (Config.STORY): out of the crashed capsule, he says what has happened and what he must do, a
+## line at a time; then the goal is his (give_objective). `pace` speeds the waits (a test's). Not our own game, the goal
+## at once.
+func tell_the_story(pace: float = 1.0) -> void:
+	if not _tells_story():
+		give_objective(true)
+		return
+	_story_run += 1
+	var run: int = _story_run
+	var cfg = _get_config()
+	var story: Dictionary = cfg.STORY if (cfg and "STORY" in cfg) else {}
+	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null
+	var voice: Node = hero.get_node_or_null("Voice") if hero != null else null
+	for key in story.get("intro", []):
+		var seconds: float = float(voice.say_key(String(key))) if (voice != null and voice.has_method("say_key")) else 0.0
+		seconds = maxf(seconds, float(story.get("line_seconds", 3.5))) + float(story.get("between_lines", 0.4))
+		await get_tree().create_timer(seconds * pace, true).timeout
+		if not is_inside_tree() or run != _story_run:
+			return
+	give_objective(true)
+
+## The goal his (the beacon, or holding out): its card comes in, and -- with `news` -- opens a while; in our own game the
+## journal is begun and says so.
+func give_objective(news: bool = false) -> void:
+	_objective_given = true
+	if _tells_story() and _journal.is_empty():
+		_add_journal("JOURNAL_CRASH_TITLE", "JOURNAL_CRASH_TEXT")
+		_add_journal("JOURNAL_BEACON_TITLE", "JOURNAL_BEACON_TEXT")
+	_refresh_beacon_label()
+	if not news:
+		return
+	_open_objective()
+	if objective_panel != null and objective_panel.visible:
+		objective_panel.modulate.a = 0.0
+		objective_panel.create_tween().tween_property(objective_panel, "modulate:a", 1.0, UiTheme.number("fade_seconds") * 2.0)
+	if _tells_story():
+		show_hint(tr("HUD_JOURNAL_UPDATED") % [tr("JOURNAL_BEACON_TITLE"), Keys.text("journal_key")], UiTheme.toast_seconds("read"), "beacon")
+
+func is_objective_given() -> bool:
+	return _objective_given
+
+## An entry in the journal: its title's and text's keys, and what fills their blanks.
+func _add_journal(title_key: String, text_key: String, args: Array = []) -> void:
+	_journal.append({"title": title_key, "text": text_key, "args": args})
+	_render_journal()
+
+## The journal's entries as it says them now: [[title, text]], oldest first.
+func journal_entries() -> Array:
+	var out: Array = []
+	for e in _journal:
+		var args: Array = e.get("args", [])
+		out.append([tr(String(e["title"])) % args if not args.is_empty() else tr(String(e["title"])), tr(String(e["text"]))])
+	return out
+
+## THE JOURNAL (J; the goal's card clicked): what is to be done now -- the goal, its next step, the cabin's power -- and
+## the story so far, newest first. In our own game; open, the goal's card stays open beside it. J again, or Esc, shuts it.
+func toggle_journal() -> void:
+	if not _tells_story():
+		return
+	if journal_panel == null or not is_instance_valid(journal_panel):
+		_build_journal()
+	journal_panel.visible = not journal_panel.visible
+	_render_journal()
+	_fold_objective()
+
+func is_journal_open() -> bool:
+	return journal_panel != null and is_instance_valid(journal_panel) and journal_panel.visible
+
+func _build_journal() -> void:
+	journal_panel = _panel("JournalPanel", &"TechPanel")
+	journal_panel.custom_minimum_size = Vector2(float(_ui("journal_width", 460)), 0.0)
+	journal_panel.visible = false
+	journal_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	root_control.add_child(journal_panel)
+	journal_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
+	journal_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	journal_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_journal_box = _vbox("JournalBox")
+	_journal_box.add_theme_constant_override("separation", UiTheme.space("s"))
+	journal_panel.add_child(_journal_box)
+
+func _render_journal() -> void:
+	if _journal_box == null or not is_instance_valid(_journal_box):
+		return
+	for child in _journal_box.get_children():
+		_journal_box.remove_child(child)
+		child.queue_free()
+	var head := _label("JournalTitle", &"TitleLabel", tr("JOURNAL_TITLE"))
+	head.uppercase = true
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_journal_box.add_child(head)
+	# Now: the goal and its next step, and the cabin's power.
+	var gs = _get_game_state()
+	var now := _label("JournalNow", &"TechLabel", tr("JOURNAL_NOW"))
+	_journal_box.add_child(now)
+	var status: String = String(gs.objective_status()) if (gs and gs.has_method("objective_status")) else ""
+	if status != "":
+		var line := _label("JournalStatus", &"MutedLabel", status)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_journal_box.add_child(line)
+	if gs and gs.has_method("uses_power") and bool(gs.uses_power()):
+		var days: float = float(gs.power_days_left())
+		_journal_box.add_child(_label("JournalPower", &"MutedLabel", tr("JOURNAL_POWER") % [int(round(float(gs.power_left()) * 100.0)),
+			"%.1f" % days if days < 1.0 else str(int(round(days)))]))
+	var rule := HSeparator.new()
+	rule.theme_type_variation = &"TitleRule"
+	_journal_box.add_child(rule)
+	# The story so far, newest first.
+	var entries: Array = journal_entries()
+	entries.reverse()
+	for i in entries.size():
+		var title := _label("EntryTitle%d" % i, &"TechLabel", String(entries[i][0]))
+		_journal_box.add_child(title)
+		var text := _label("EntryText%d" % i, &"MutedLabel", String(entries[i][1]))
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_journal_box.add_child(text)
+	var close := _label("JournalClose", &"CaptionLabel", tr("JOURNAL_CLOSE") % Keys.text("journal_key"))
+	close.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_journal_box.add_child(close)
 
 ## Whether the game being played teaches as it goes (GameState.internal "tutorial": ours does).
 func _teaches() -> bool:
@@ -1188,6 +1371,15 @@ func _on_restart_pressed() -> void:
 ## that had come would go until the next dusk, and come back on another key.
 func reset_hud(new_run: bool = true) -> void:
 	selected_build_type = ""
+	if new_run:
+		# A new run: its goal given from the first (a story about to be told holds it back: hold_objective), its journal
+		# empty, a story being told for the run before let go.
+		_objective_given = true
+		_objective_open_ms = 0
+		_story_run += 1
+		_journal.clear()
+		if journal_panel != null and is_instance_valid(journal_panel):
+			journal_panel.visible = false
 	if new_run and minimap != null:
 		minimap.forget()
 	_refresh_minimap()
@@ -1594,9 +1786,15 @@ func _ensure_ui_components() -> void:
 	beacon_pips.alignment = BoxContainer.ALIGNMENT_CENTER
 	beacon_pips.add_theme_constant_override("separation", UiTheme.space("hair"))
 	header.add_child(beacon_pips)
+	# What is to be done next, and the charge: shown with news, under the cursor, with the journal open (_fold_objective).
+	objective_detail = VBoxContainer.new()
+	objective_detail.name = "ObjectiveDetail"
+	objective_detail.add_theme_constant_override("separation", UiTheme.space("xs"))
+	objective_detail.visible = false
+	objective.add_child(objective_detail)
 	beacon_label = _label("BeaconLabel", &"MutedLabel", "")
 	beacon_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	objective.add_child(beacon_label)
+	objective_detail.add_child(beacon_label)
 	beacon_bar = ProgressBar.new()
 	beacon_bar.name = "BeaconBar"
 	beacon_bar.theme_type_variation = &"BeaconBar"
@@ -1605,7 +1803,12 @@ func _ensure_ui_components() -> void:
 	beacon_bar.step = 0.0
 	beacon_bar.custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
 	beacon_bar.visible = false
-	objective.add_child(beacon_bar)
+	objective_detail.add_child(beacon_bar)
+	# Over it, it opens; clicked, the journal.
+	objective_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	objective_panel.mouse_entered.connect(func(): _objective_hovered = true; _fold_objective())
+	objective_panel.mouse_exited.connect(func(): _objective_hovered = false; _fold_objective())
+	objective_panel.gui_input.connect(_on_objective_input)
 	# The hand-drawn map, once made (MiniMap): at the top left under the strip, level with the goal's panel
 	# at the right. Under that panel it was pushed down onto the cards that come up at the right as the
 	# panel grew (a goal pinned); here nothing else is. Its size is its own (MINIMAP.size).
