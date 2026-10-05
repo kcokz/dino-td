@@ -1713,6 +1713,7 @@
 - **v0.7 第二十二批："改进1"（玩家，2026-10-04）**：
   - 暂停时声音也停（"Paused的时候声音也应该pause"）：`Fx._hold_for_the_pause`——玩家暂停时环境声和正在放的界面声（`_voices`）停住，世界里的声音本来就跟着停；新的点击声照常放。开始界面和过场用 `Fx.play_through_pause` 说"我停着游戏，声音照常"（`StartScreen.open/close`、`StationJump._sound_through`），坠落开始时 `Fx.hush` 停掉之前世界里的声音。退出时暂停着的环境声也等它放开（`_exit_tree`）。测试：新的 `test_v07_the_pause_is_quiet`。
   - 工具说自己是干嘛的（"Bone pick，bone shovel hover上去的时候没有解释这是干嘛的"）：`Config.recipe_use_text`（自己的话 `RECIPES.<id>.desc`，或者"能采什么""什么 ×2"）、`recipe_opens`；工作台那一行（`UiKit.job_detail`）和人身上那一行的格子（`OptionPanel._show_abilities`）都用它。这张图上没有要开的资源，工具就不出现（`CraftingStation._of_use_here`：骨铲只在有黏土的第 2 站）。新词 `TOOL_LETS`、`RECIPE_HIDE_MAP_DESC`。测试：新的 `test_v07_what_tools_are_for`。
+  - 暂停菜单的字对齐（"resume和其他的按钮字体没对齐"）：继续按钮的三角不再是按钮自己的图标（它把字挤到右边），改成贴在按钮左端的一个小图（`PauseMenu._glyph`），四个按钮的字都在正中。测试：`test_v06_the_frames` test_99。
 
 ## v0.7 已定要做的（未开工）
 

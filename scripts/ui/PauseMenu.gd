@@ -398,12 +398,33 @@ func _make_button(existing: Button, node_name: String, cb: Callable, variation: 
 		btn = Button.new()
 		btn.name = node_name
 		btn.theme_type_variation = variation
-		btn.icon = UiTheme.icon(icon_name)
 		btn.custom_minimum_size = Vector2(0, UiTheme.height("command"))
 		page_vbox.add_child(btn)
+		_glyph(btn, icon_name)
 	if not btn.pressed.is_connected(cb):
 		btn.pressed.connect(cb)
 	return btn
+
+## A button's glyph -- Resume's play mark, Back's arrow -- set at its left end, apart from its words: as the button's own
+## icon it took its width out of the middle, and Resume's word stood off to the right of the others' (the player,
+## 2026-10-04: "resume和其他的按钮字体没对齐"). Its words are centred on the whole button, as every other's are.
+func _glyph(btn: Button, icon_name: String) -> void:
+	var tex: Texture2D = UiTheme.icon(icon_name)
+	if tex == null:
+		return
+	var glyph := TextureRect.new()
+	glyph.name = "Glyph"
+	glyph.texture = tex
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var side: float = UiTheme.icon_size("s")
+	glyph.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	glyph.offset_left = UiTheme.space("m")
+	glyph.offset_right = glyph.offset_left + side
+	glyph.offset_top = -side * 0.5
+	glyph.offset_bottom = side * 0.5
+	btn.add_child(glyph)
 
 func _menu_width() -> float:
 	var cfg = _get_config()

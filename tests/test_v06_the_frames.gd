@@ -262,3 +262,18 @@ func test_09_a_title_stands_on_a_shadow_over_a_rule_with_a_tooth() -> void:
 	assert_not_null(rule, "The menu's title has its rule")
 	if rule:
 		assert_eq(rule.theme_type_variation, &"TitleRule", "with the tooth")
+
+## The pause menu's words line up (the player, 2026-10-04: "resume和其他的按钮字体没对齐"): no button gives its words' room
+## to an icon -- Resume's play mark stands apart, at its left end (PauseMenu._glyph).
+func test_99_the_pause_menus_words_line_up() -> void:
+	var main = await fresh_level()
+	main.hud.toggle_pause_menu()
+	await wait_frames(3)
+	var menu = main.hud.pause_menu
+	for btn in [menu.resume_btn, menu.settings_btn, menu.new_game_btn, menu.quit_btn]:
+		assert_null(btn.icon, "%s's words have the whole button" % btn.name)
+		assert_eq(int(btn.alignment), int(HORIZONTAL_ALIGNMENT_CENTER), "centred")
+	assert_not_null(menu.resume_btn.get_node_or_null("Glyph"), "Resume keeps its play mark, apart")
+	main.hud.toggle_pause_menu()
+	main.queue_free()
+	await wait_frames(2)
