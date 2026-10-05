@@ -149,8 +149,11 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	hud.hint_label.visible = false
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_false(hud.hint_label.visible, "The second says nothing")
+	# On the bar, in brief (v0.7: "左上角的资源，hover上去以后会有一串非常长的解释"): what kinds of thing it is for, as far as the
+	# run has turned things up (Config.resource_tip).
 	var chip: Control = hud.resource_chips.get("bone")
-	assert_true(chip != null and chip.tooltip_text.contains(so_far), "And the bar says it on hover")
+	assert_true(chip != null and chip.tooltip_text == String(config_node.resource_tip("bone", game_state_node.map_data(), game_state_node.knows)),
+		"And the bar says it on hover, in brief")
 
 func test_03_a_recipe_is_two_materials_at_most() -> void:
 	# GAME-DESIGN 5.4 rule 5: a recipe has at most two ingredients.

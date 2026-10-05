@@ -952,6 +952,65 @@ static func uses_text(res_id: String, map: Dictionary = {}, known: Callable = Ca
 		parts.append(TranslationServer.translate("USE_BEACON"))
 	return " · ".join(parts)
 
+## A material at a glance, for its chip on the bar (the player, 2026-10-04: "左上角的资源，hover上去以后会有一串非常长的解释，
+## 我觉得界面需要更精致，根据专业游戏的best practice界面做"): its name, where it comes from, and the KINDS of thing it is
+## for -- building, tools, ammunition, fires, bait, the beacon -- not every one of them by name, which ran to a paragraph
+## (the bench and the build menu name them where they are made). Three short lines; what the run has not turned up is
+## left out (`known`, as uses_of). A part of the beacon says where its wreck is, in a line of its own.
+static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable = Callable()) -> String:
+	var tr_name: String = TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
+	var lines: PackedStringArray = []
+	var from: String = ""
+	if RESOURCE_NODES.has(res_id) and RESOURCE_NODES[res_id].has("found"):
+		lines.append(TranslationServer.translate(String(RESOURCE_NODES[res_id]["found"])) % tr_name)
+	else:
+		lines.append(tr_name)
+		if RESOURCE_NODES.has(res_id):
+			from = TranslationServer.translate("RES_FROM_GATHER")
+			var flag: String = String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
+			for recipe_id in RECIPES:
+				if flag != "" and String(RECIPES[recipe_id].get("unlocks", "")) == flag:
+					from += TranslationServer.translate("RES_FROM_NEEDS") % TranslationServer.translate(String(RECIPES[recipe_id].get("name", recipe_id)))
+					break
+		elif is_made(res_id):
+			from = TranslationServer.translate("RES_FROM_BENCH")
+		else:
+			for species in DINOS:
+				if (DINOS[species].get("drops", {}) as Dictionary).has(res_id):
+					from = TranslationServer.translate("RES_FROM_DEAD")
+					break
+		if from != "":
+			lines.append(TranslationServer.translate("RES_FROM") % from)
+	var kinds: PackedStringArray = []
+	var add := func(key: String) -> void:
+		var word: String = TranslationServer.translate(key)
+		if not kinds.has(word):
+			kinds.append(word)
+	for use in uses_of(res_id, map, known):
+		match String(use["kind"]):
+			"building":
+				add.call("USE_KIND_BUILD")
+			"recipe":
+				add.call("USE_KIND_AMMO" if makes_ammo(String(use["id"])) else "USE_KIND_TOOLS")
+			"ammo":
+				add.call("USE_KIND_BAIT")
+			"beacon":
+				add.call("USE_KIND_BEACON")
+	# Wood is what the fires burn, a night's at a time (FIRE "fuel").
+	if res_id == "wood":
+		add.call("USE_KIND_FUEL")
+	# Ammunition is what a tower is loaded with: the towers that take it, by name -- one or two.
+	if AMMO.has(res_id) and String(AMMO[res_id].get("for", "")) != "bait":
+		var towers: PackedStringArray = []
+		for b_type in player_building_types():
+			if int(BUILDINGS[b_type].get("level", 1)) == 1 and ammo_accepts(b_type).has(res_id):
+				towers.append(get_building_name(b_type))
+		if not towers.is_empty():
+			kinds.append(TranslationServer.translate("USE_KIND_LOAD") % TranslationServer.translate("LIST_SEPARATOR").join(towers))
+	if not kinds.is_empty():
+		lines.append(TranslationServer.translate("RES_FOR") % TranslationServer.translate("LIST_SEPARATOR").join(kinds))
+	return "\n".join(lines)
+
 ## Where `res_id` comes from, for someone short of it: the tool it takes when he has not
 ## made it (missing_tool_hint), or -- for what nothing on the map gives -- that the dead
 ## leave it, and which of the dead. "" when nothing stands in the way but going to get it.

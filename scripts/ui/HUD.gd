@@ -623,15 +623,18 @@ func _show_chip(res_id: String, holding: bool = false) -> void:
 		# say 1 -- and take the room the materials' counts need.
 		count.visible = chip.visible and not part
 
-## Hovering a material on the bar says what it is for (GAME-DESIGN 4.3 rule 3).
+## Hovering a material on the bar says what it is, where it comes from and what kind of thing it is for, in three short
+## lines (GAME-DESIGN 4.3 rule 3; Config.resource_tip).
 func _refresh_resource_tooltips() -> void:
+	var cfg = _get_config()
+	var gs = _get_game_state()
+	var known: Callable = gs.knows if (gs and gs.has_method("knows")) else Callable()
 	for res_id in resource_chips:
 		var chip: Control = resource_chips[res_id]
 		if chip == null or not is_instance_valid(chip):
 			continue
-		var uses: String = _uses_text(String(res_id))
-		var res_name: String = tr("RESOURCE_%s" % String(res_id).to_upper())
-		chip.tooltip_text = (tr("USES_OF") % [res_name, uses]) if uses != "" else res_name
+		chip.tooltip_text = String(cfg.resource_tip(String(res_id), _run_map(), known)) if (cfg and cfg.has_method("resource_tip")) \
+			else tr("RESOURCE_%s" % String(res_id).to_upper())
 
 ## A raid held: what it cost, said as it ends (v0.6 T8).
 func _on_raid_summary(summary: Dictionary) -> void:
