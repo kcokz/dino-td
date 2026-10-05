@@ -25,6 +25,9 @@ var _title_box: VBoxContainer = null
 var _custom_box: VBoxContainer = null
 var _title_label: Label = null
 var _subtitle_label: Label = null
+## Play on from the save (SaveGame), first and lit while there is one; under it its day and when it was saved.
+var continue_btn: Button = null
+var _continue_note: Label = null
 var campaign_btn: Button = null
 var custom_btn: Button = null
 var settings_btn: Button = null
@@ -110,6 +113,24 @@ func _show_page() -> void:
 # ==============================================================================
 # Choosing
 # ==============================================================================
+
+## Continue there while there is a save, with its day and when it was saved -- the one thing lit; our game, plain.
+func _refresh_continue() -> void:
+	if continue_btn == null:
+		return
+	var saved: Dictionary = SaveGame.read()
+	continue_btn.visible = not saved.is_empty()
+	_continue_note.visible = continue_btn.visible
+	if not saved.is_empty():
+		var stamp: String = String(saved.get("saved_at", ""))
+		_continue_note.text = tr("SAVE_CAPTION") % [int(saved.get("day", 1)), stamp.substr(5, 11) if stamp.length() >= 16 else stamp]
+	campaign_btn.theme_type_variation = &"" if continue_btn.visible else &"AccentButton"
+
+## On from the save (SaveGame.continue_game): its game, its seed, the level built afresh and the run laid over it.
+func continue_game() -> void:
+	close()
+	chosen.emit(String(SaveGame.read().get("game", {}).get("id", "campaign")))
+	SaveGame.continue_game(get_tree() if is_inside_tree() else null)
 
 ## Our game: the level under it played as it is when the launch has just built it for our game; else a fresh one.
 func play_campaign() -> void:
@@ -249,6 +270,8 @@ func _build() -> void:
 	_subtitle_label = _label("Subtitle", &"MutedLabel", _title_box)
 	_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	continue_btn = _button("ContinueBtn", continue_game, &"AccentButton", "play", _title_box)
+	_continue_note = _label("ContinueNote", &"CaptionLabel", _title_box)
 	campaign_btn = _button("CampaignBtn", play_campaign, &"AccentButton", "play", _title_box)
 	_campaign_note = _label("CampaignNote", &"CaptionLabel", _title_box)
 	_campaign_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -351,6 +374,8 @@ func _refresh_texts() -> void:
 		return
 	_title_label.text = tr("START_TITLE")
 	_subtitle_label.text = tr("START_SUBTITLE")
+	continue_btn.text = tr("MENU_CONTINUE")
+	_refresh_continue()
 	campaign_btn.text = tr("START_CAMPAIGN")
 	_campaign_note.text = tr("START_CAMPAIGN_NOTE")
 	custom_btn.text = tr("START_CUSTOM")

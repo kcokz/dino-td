@@ -118,6 +118,10 @@ func _run_all_tests() -> void:
 	# The keys as Config has them, whatever the player has set, and nothing a test sets written down (Keys).
 	Keys.saves = false
 	Keys.reset(false)
+	# A save of the tests' own, never the player's: what the start screen offers is the same whatever they have saved.
+	SaveGame.path_override = "user://tests_save.json"
+	if FileAccess.file_exists(SaveGame.path_override):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveGame.path_override))
 	# In English, without saving it (see SETTINGS_PATH).
 	var i18n := root.get_node_or_null("I18n")
 	if i18n != null and i18n.has_method("set_locale"):

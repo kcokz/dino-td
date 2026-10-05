@@ -24,6 +24,9 @@ var panel: PanelContainer = null
 var page_vbox: VBoxContainer = null
 var title_label: Label = null
 var resume_btn: Button = null
+## Save the run (SaveGame): greyed out, and said why, when it cannot be (SaveGame.why_not); under it, what was saved.
+var save_btn: Button = null
+var save_note: Label = null
 var settings_btn: Button = null
 var new_game_btn: Button = null
 var quit_btn: Button = null
@@ -126,7 +129,38 @@ func open() -> void:
 		if gs.has_method("set_paused"):
 			gs.set_paused(true)
 	_refresh_texts()
+	_refresh_save()
 	_show_page()
+
+## Whether the run can be saved now (SaveGame.why_not): Save greyed out with the reason under it -- or, open, the last
+## save said.
+func _refresh_save() -> void:
+	if save_btn == null:
+		return
+	var level: Node = get_tree().get_first_node_in_group(SaveGame.LEVEL_GROUP) if is_inside_tree() else null
+	var reason: String = SaveGame.why_not(level)
+	save_btn.disabled = reason != ""
+	save_btn.tooltip_text = tr(reason) if reason != "" else ""
+	if reason != "":
+		save_note.text = tr(reason)
+	else:
+		var last: Dictionary = SaveGame.read()
+		save_note.text = (tr("SAVE_LAST") % [int(last.get("day", 1)), _when(String(last.get("saved_at", "")))]) if not last.is_empty() else ""
+
+## Saved, and said so under the button.
+func _on_save_pressed() -> void:
+	var level: Node = get_tree().get_first_node_in_group(SaveGame.LEVEL_GROUP) if is_inside_tree() else null
+	if SaveGame.save(level):
+		var gs = _get_game_state()
+		save_note.text = tr("SAVE_DONE") % (int(gs.day_number()) if gs else 1)
+	else:
+		var reason: String = SaveGame.why_not(level)
+		save_note.text = tr(reason if reason != "" else "SAVE_FAILED")
+	_show_page()
+
+## "2026-10-04 18:30:12" as "10-04 18:30".
+static func _when(stamp: String) -> String:
+	return stamp.substr(5, 11) if stamp.length() >= 16 else stamp
 
 func close() -> void:
 	is_open = false
@@ -166,6 +200,8 @@ func back_to_root() -> void:
 func _show_page() -> void:
 	var root_page: bool = current_page == Page.ROOT
 	if resume_btn: resume_btn.visible = root_page
+	if save_btn: save_btn.visible = root_page and not _settings_only
+	if save_note: save_note.visible = root_page and not _settings_only and save_note.text != ""
 	if settings_btn: settings_btn.visible = root_page
 	if new_game_btn: new_game_btn.visible = root_page
 	if quit_btn: quit_btn.visible = root_page
@@ -302,6 +338,14 @@ func _ensure_components() -> void:
 		page_vbox.add_child(rule)
 
 	resume_btn = _make_button(resume_btn, "ResumeBtn", _on_resume_pressed, &"AccentButton", "play")
+	save_btn = _make_button(save_btn, "SaveBtn", _on_save_pressed)
+	if save_note == null:
+		save_note = Label.new()
+		save_note.name = "SaveNote"
+		save_note.theme_type_variation = &"CaptionLabel"
+		save_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		save_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		page_vbox.add_child(save_note)
 	settings_btn = _make_button(settings_btn, "SettingsBtn", _on_settings_pressed)
 	new_game_btn = _make_button(new_game_btn, "NewGameBtn", _on_new_game_pressed)
 	quit_btn = _make_button(quit_btn, "QuitBtn", _on_quit_pressed, &"DangerButton")
@@ -647,6 +691,7 @@ func _details_key_text() -> String:
 
 func _refresh_texts() -> void:
 	if resume_btn: resume_btn.text = tr("MENU_RESUME")
+	if save_btn: save_btn.text = tr("MENU_SAVE")
 	if settings_btn: settings_btn.text = tr("MENU_SETTINGS")
 	if new_game_btn: new_game_btn.text = tr("MENU_NEW_GAME")
 	if quit_btn: quit_btn.text = tr("MENU_QUIT")

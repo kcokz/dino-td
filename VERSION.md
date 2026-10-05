@@ -1717,12 +1717,13 @@
   - 资源栏的悬停变短（"左上角的资源，hover上去以后会有一串非常长的解释……根据专业游戏的best practice界面做"）：`Config.resource_tip`——名字 / 来自哪里 / 用来干哪几类事（建造、做工具、做弹药、生火、当诱饵、修信标、装进哪座塔），三行；`HUD._refresh_resource_tooltips` 用它。新词 `RES_FROM*`、`RES_FOR`、`USE_KIND_*`。测试：新的 `test_v07_the_resource_tips`；`test_v06_material_route` test_02 改成查这三行。
   - 设置页分两页、按键能改（"Settings界面还不够专业……General，Key shortcut之类的两个tab"）：`PauseMenu` 的"通用 / 按键"两个页签（`SegmentButton`，一组里选中的陷下去发亮），按键页按 `Config.KEY_BINDINGS` 一行一个键，点了等下一次按键（`_listen`、`_input`），Esc 不改，"恢复默认"（`_on_keys_reset_pressed`）；两页一样高。新的 `scripts/core/Keys.gd`：每个键现在是什么（`Config.CONTROLS` 或玩家改的）、`bind`（占了别的键就互换，`shares` 的两个可以同键）、`reset`，记在设置文件的 `[keys]`；`Main`、`HeroCommands`、`OptionPanel`、`PauseMenu`、`HUD` 都从它读，`EventBus.keys_changed` 时键位标记跟着变。`CONTROLS` 加了 WASD 四个键（方向键照旧也能用）。测试跑的时候用默认键、不写设置文件（`tests/test_runner.gd`）。测试：新的 `test_v07_the_keys`；`test_v06_command_keys` test_07、`test_v05_version_and_settings` test_05 改成新页面。
   - 信标的提示改成任务标记和日志，先交代前因后果（"Beacon右上角的提示应该不要一直显示……应该有个前因后果的引入（这个是过关游戏特有，自定义没有的）"）：`HUD` 的任务卡片收起成一行（`objective_detail` 只在有消息、鼠标停着、日志开着时显示，`Config.UI.objective_open_seconds` 8 秒）；日志（`toggle_journal`、`journal_entries`，J 键 `journal_key`，Esc 先关它）；开场（`Config.STORY`、`HUD.tell_the_story`、`HeroVoice.say_key`，`Main.open_on_the_crash` 先 `hold_objective`，坠落完了再讲）。只在 `GAMES.campaign.internal.story`。新词 `BARK_INTRO_*`、`JOURNAL_*`、`HUD_JOURNAL_UPDATED`、`HUD_OBJECTIVE_TIP`、`KEY_JOURNAL`。机器人加了 `journal` 截图。测试：新的 `test_v07_the_journal`。
+  - 存档（"需要加一个保存功能游戏的功能"）：新的 `scripts/core/SaveGame.gd`——`why_not`（来袭、外面有来犯的恐龙、结束了、过场里不能存）、`save`/`snapshot`、`read`、`continue_game`（同一局同一个种子重开，`GameState.pending_load`）、`apply`（`Main._ready` 造好关卡后铺回去：建筑用 `BuildSystem.place_at` 重新放、资源点按名字、守卫按巢和序号、迷雾 `_seen`、随机数的 `state`）。`Config.SAVE.path`；暂停菜单的"保存游戏"和它下面那行字（`PauseMenu._refresh_save`、`_on_save_pressed`）；开始界面的"继续游戏"（`StartScreen._refresh_continue`、`continue_game`）。测试用自己的存档文件，不碰玩家的（`tests/test_runner.gd`：`SaveGame.path_override`）。测试：新的 `test_v07_the_save`（什么时候能存、存了读回来都一样、开始界面的继续、暂停菜单的保存和不能存的原因、继续时直接接着玩）。
 
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。
 
-- **"改进1"那一批**（2026-10-04）：暂停时声音也停；骨镐、骨铲悬停要说是干嘛的；左上角资源的悬停改短、改精致；信标的提示改成任务/日志，先交代前因后果（只在过关游戏里）；设置分"通用"和"按键"两页，按键能改；暂停菜单按钮的字对齐；存档。
+
 
 - **晚白垩世的兽群**（2026-09-30，玩家定"放到 v0.7"）：谷壁上一种晚白垩世的植食恐龙，比如和迅猛龙同一个化石产地的原角龙（新模型，走 `tools/generate_dinos.py` 一整套）。
 - **自定义游戏的规则开关和解锁**（设计书第 11 章，2026-09-30，玩家定"放到 v0.7"）：人倒下的规则（故事档在船舱里醒来）、天灾、双倍来袭这类开关；通关以后才解锁自定义。

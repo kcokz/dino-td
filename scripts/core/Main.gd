@@ -88,6 +88,8 @@ func _pause_with_the_world(child: Node) -> void:
 		child.process_mode = Node.PROCESS_MODE_PAUSABLE
 
 func _ready() -> void:
+	# Found by what speaks for the level from outside it: the pause menu's Save (SaveGame).
+	add_to_group(SaveGame.LEVEL_GROUP)
 	_choose_the_map()
 	_init_level_coordinates()
 	_ensure_scene_dependencies()
@@ -100,7 +102,13 @@ func _ready() -> void:
 	# The game launched opens on the start screen, the valley stopped behind it -- unless it was the start screen
 	# that built this level, for the game chosen there (GameState.launch_straight_in).
 	var gs_start = _get_game_state()
-	if _plays_the_players_map() and gs_start:
+	# Continued from a save (SaveGame.continue_game): the run laid over the level built for its game, and on from there.
+	if gs_start and not (gs_start.pending_load as Dictionary).is_empty():
+		var saved: Dictionary = gs_start.pending_load
+		gs_start.pending_load = {}
+		gs_start.launch_straight_in = false
+		SaveGame.apply(self, saved)
+	elif _plays_the_players_map() and gs_start:
 		if bool(gs_start.launch_straight_in):
 			gs_start.launch_straight_in = false
 			open_on_the_crash()

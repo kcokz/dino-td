@@ -5372,6 +5372,15 @@ const GROUND_COVER: Dictionary = {
 }
 
 # ==============================================================================
+# 14b1. Saving the run (v0.7)
+# ==============================================================================
+## THE SAVE (SaveGame; the player, 2026-10-04: "需要加一个保存功能游戏的功能"): one file, the run as it was when last
+## saved from the pause menu; the start screen's Continue plays on from it. Saved in a lull only (SaveGame.why_not).
+const SAVE: Dictionary = {
+	"path": "user://save.json",
+}
+
+# ==============================================================================
 # 14b2. The story (v0.7)
 # ==============================================================================
 ## THE STORY'S OPENING (the player, 2026-10-04: "Beacon右上角的提示应该不要一直显示，用专业游戏的best practice应该有个类似日志

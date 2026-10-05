@@ -1023,6 +1023,9 @@ var nest_found: bool = false
 # ==============================================================================
 # The cabin's power (Config.POWER)
 # ==============================================================================
+## A save to lay over the next level built (SaveGame.continue_game; Main._ready): {} for none.
+var pending_load: Dictionary = {}
+
 ## Seconds of the run the cabin's power has gone on: what is left is the rest of POWER.lasts_days of DAY.length.
 var power_used: float = 0.0
 var _power_told: float = -1.0
