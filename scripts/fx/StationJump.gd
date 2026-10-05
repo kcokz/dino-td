@@ -240,6 +240,7 @@ func arrive(main: Node) -> void:
 	var gs = get_node_or_null("/root/GameState")
 	if gs and gs.has_method("set_paused"):
 		gs.set_paused(true)
+	_sound_through(true)
 	_hide_the_hud(true)
 	show_card(int(gs.station) if gs else 0)
 	_white.color.a = 1.0
@@ -296,6 +297,7 @@ func _begin() -> void:
 	var gs = get_node_or_null("/root/GameState")
 	if gs and gs.has_method("set_paused"):
 		gs.set_paused(false)
+	_sound_through(false)
 	if gs and "arrived_by_jump" in gs:
 		gs.arrived_by_jump = false
 	_hide_the_hud(false)
@@ -344,6 +346,12 @@ func crash(main: Node) -> void:
 	var gs = get_node_or_null("/root/GameState")
 	if gs and gs.has_method("set_paused"):
 		gs.set_paused(true)
+	# Heard as it is seen: its fall, its blow, the valley's cries -- the game held for it, not by the player -- and on
+	# its own: whatever the world was sounding before is stopped.
+	_sound_through(true)
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("hush"):
+		fx.hush()
 	_hide_the_hud(true)
 	var hero: Node3D = main.hero if ("hero" in main) else null
 	if hero != null and is_instance_valid(hero):
@@ -677,6 +685,7 @@ func _crash_over() -> void:
 	var gs = get_node_or_null("/root/GameState")
 	if gs and gs.has_method("set_paused"):
 		gs.set_paused(false)
+	_sound_through(false)
 	_hide_the_hud(false)
 	for n in _lit:
 		if is_instance_valid(n):
@@ -723,6 +732,13 @@ func _sound(id: String, at: Vector3) -> void:
 	var fx = get_node_or_null("/root/Fx")
 	if fx and fx.has_method("play_at"):
 		fx.play_at(id, at)
+
+## While it holds the game, its sound -- and the valley's -- goes on under it (Fx.play_through_pause): the crash was
+## seen and not heard, the world's sounds held with the pause it had put the game in.
+func _sound_through(on: bool) -> void:
+	var fx = get_node_or_null("/root/Fx")
+	if fx and fx.has_method("play_through_pause"):
+		fx.play_through_pause(self, on)
 
 ## Done at once, any of it: for a test, and for a level a script built -- the tweens' ends, without the waits (and
 ## without the crash's cries all at once).

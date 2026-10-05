@@ -78,11 +78,18 @@ func open(fresh: bool = false) -> void:
 	var gs = _autoload("GameState")
 	if gs and gs.has_method("set_paused"):
 		gs.set_paused(true)
+	# The valley's sound goes on under it: the game is held for the screen, not by the player (Fx.play_through_pause).
+	var fx = _autoload("Fx")
+	if fx and fx.has_method("play_through_pause"):
+		fx.play_through_pause(self, true)
 	_refresh_texts()
 	_show_page()
 
 func close() -> void:
 	visible = false
+	var fx = _autoload("Fx")
+	if fx and fx.has_method("play_through_pause"):
+		fx.play_through_pause(self, false)
 
 func show_custom() -> void:
 	current_page = Page.CUSTOM

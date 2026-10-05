@@ -63,8 +63,10 @@ var _debris_root: Node3D = null
 var _dice: RandomNumberGenerator = RandomNumberGenerator.new()
 
 func _ready() -> void:
-	# The interface's sounds and the valley's ambience go on while the game is paused; the world's
-	# own sounds hold where they are, mid-note, and go on with it (_build_world_players).
+	# Paused by the player, the game's sound holds where it is, mid-note -- the world's (_build_world_players), the
+	# valley's ambience, what was being said -- and the interface's own clicks go on (the player, 2026-10-04: "Paused
+	# 的时候声音也应该pause"). Under a scene that pauses the game for itself -- the start screen, a cinematic -- it all
+	# goes on (play_through_pause).
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_ensure_buses()
 	_request_sounds()
@@ -94,7 +96,8 @@ func _exit_tree() -> void:
 			v.stream = null
 	for amb in [_ambience, _ambience_night]:
 		if amb != null:
-			was_playing = was_playing or amb.playing
+			# Held by a pause, it is still in use (_hold_for_the_pause).
+			was_playing = was_playing or amb.playing or amb.stream_paused
 			amb.stop()
 			amb.stream = null
 	_streams.clear()
@@ -121,9 +124,66 @@ func _touched_audio() -> void:
 func _process(_delta: float) -> void:
 	_place_listener()
 	_take_what_is_in()
-	if _want_ambience and _ambience != null and not _ambience.playing:
+	_hold_for_the_pause()
+	if _want_ambience and _ambience != null and not _ambience.playing and not _ambience.stream_paused:
 		_start_ambience_now()
 	_fade_ambience()
+
+## Who has the game paused for a scene of its own -- the start screen, a cinematic -- under which its sound goes on
+## (play_through_pause): {instance id: true}.
+var _through: Dictionary = {}
+## Whether the game's sound is held now (paused by the player), and the voices held mid-sound with it.
+var _holding: bool = false
+var _held: Array[AudioStreamPlayer] = []
+
+## While `holder` -- the start screen, a cinematic -- has the game paused for itself, the sound goes on under it: the
+## valley's ambience, and the world's sounds it plays itself (a crash heard as it is seen). `on` false, it lets go;
+## gone, it has let go.
+func play_through_pause(holder: Object, on: bool) -> void:
+	if holder == null:
+		return
+	if on:
+		_through[holder.get_instance_id()] = true
+	else:
+		_through.erase(holder.get_instance_id())
+	_hold_for_the_pause()
+
+## Whether the game's sound is held now: paused, and not by a scene that plays through it.
+func is_holding() -> bool:
+	return _holding
+
+## Every sound in the world stopped, playing or held: a new run's opening is heard on its own -- the crash's fall was
+## not let into its class, every place in it taken by a run before's sounds held through its pause.
+func hush() -> void:
+	for p in _players:
+		if is_instance_valid(p) and (p.playing or p.has_stream_playback()):
+			p.stop()
+			_touched_audio()
+	_class_of.clear()
+
+func _hold_for_the_pause() -> void:
+	for id in _through.keys():
+		if not is_instance_id_valid(int(id)):
+			_through.erase(id)
+	if _world != null:
+		_world.process_mode = Node.PROCESS_MODE_ALWAYS if not _through.is_empty() else Node.PROCESS_MODE_PAUSABLE
+	var hold: bool = is_inside_tree() and get_tree().paused and _through.is_empty()
+	for amb in [_ambience, _ambience_night]:
+		if amb != null:
+			amb.stream_paused = hold
+	if hold == _holding:
+		return
+	_holding = hold
+	if hold:
+		for v in _voices:
+			if is_instance_valid(v) and v.playing:
+				v.stream_paused = true
+				_held.append(v)
+	else:
+		for v in _held:
+			if is_instance_valid(v):
+				v.stream_paused = false
+		_held.clear()
 
 # ==============================================================================
 # Hit flash
@@ -326,6 +386,10 @@ func play_ui(id: String) -> bool:
 	_next_voice = (_next_voice + 1) % _voices.size()
 	if not is_instance_valid(voice):
 		return true
+	# One held by the pause (_hold_for_the_pause) is let go of: what it was saying is over, and this is new.
+	if _held.has(voice):
+		_held.erase(voice)
+		voice.stream_paused = false
 	voice.stream = stream
 	voice.volume_db = _master_db() + float(spec.get("db", 0.0))
 	voice.play()

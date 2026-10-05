@@ -1710,6 +1710,9 @@
   - 游戏里：`Config.ANIMATIONS.dino_batter`；`Dino._play_strike` 在打建筑时放它，打人放原来的咬；没有这段动作的模型（有翅膀的）用咬（`aliases`）。
   - 测试：`test_v07_the_cabin_at_night` test_08（打船舱放撞、打人放咬）；`test_v06_the_sculpted_cast` test_03（走路的恐龙都有撞）。
 
+- **v0.7 第二十二批："改进1"（玩家，2026-10-04）**：
+  - 暂停时声音也停（"Paused的时候声音也应该pause"）：`Fx._hold_for_the_pause`——玩家暂停时环境声和正在放的界面声（`_voices`）停住，世界里的声音本来就跟着停；新的点击声照常放。开始界面和过场用 `Fx.play_through_pause` 说"我停着游戏，声音照常"（`StartScreen.open/close`、`StationJump._sound_through`），坠落开始时 `Fx.hush` 停掉之前世界里的声音。退出时暂停着的环境声也等它放开（`_exit_tree`）。测试：新的 `test_v07_the_pause_is_quiet`。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。
