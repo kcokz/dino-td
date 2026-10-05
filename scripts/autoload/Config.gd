@@ -3203,12 +3203,29 @@ const OPENING: Dictionary = {
 	# Him: his face this high in the pod; his head bowed this far asleep.
 	"face_height": 1.32,
 	"head_bow_degrees": 32.0,
-	# The nest's shot this far behind it, looking past its pack at the smoke. The grazers bolting, their walk this many
-	# times its pace; the armoured ones put down this far off the cabin.
+	# The nest's shot this far behind it, looking past its pack at the smoke; the armoured ones put down this far off the
+	# cabin.
 	"nest_view": 6.5,
-	"bolt_pace": 2.2,
 	"chargers_off": 20.0,
 	"seed": 7,
+	# ITS CRAFT (the player, 2026-10-05: "开场动画太粗糙了……人和恐龙动作都是直接就地取材，动态也没有就是平移" -- redone in
+	# the game; Opening):
+	# A hand holds the camera: a slow sway `handheld` metres at most, wandering `handheld_rate` times a second -- the
+	# shake on top is smooth too (a fresh random jump every frame read as a broken camera).
+	"handheld": 0.03,
+	"handheld_rate": 0.35,
+	# A move arcs up and out from the straight line, most at its middle, by this share of its length.
+	"arc": 0.12,
+	# Close shots focused on him, what is behind blurred this much; his eyes opening, all a blur this much at first.
+	"close_blur": 0.12,
+	"wake_blur": 0.3,
+	# What walks or runs in the film turns to its way at this rate (a share a second); startled, it flinches back this
+	# far off its feet, and its head comes round to the smoke over `head_turn` seconds, no further than `head_limit`
+	# degrees off its body (LookAtModifier3D).
+	"turn_rate": 7.0,
+	"flinch": 0.22,
+	"head_turn": 0.35,
+	"head_limit": 110.0,
 }
 
 const STATION_JUMP: Dictionary = {

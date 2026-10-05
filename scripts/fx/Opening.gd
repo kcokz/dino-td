@@ -56,7 +56,7 @@ var _overlay: CanvasLayer = null
 var _bars: Array[ColorRect] = []
 var _subtitle: Label = null
 var _title: Label = null
-var _lids: Array[ColorRect] = []
+var _lids: Array[Control] = []
 var _flash: ColorRect = null
 ## What it put in the world (gone after), and what it moved or set going (put back after): [node, what it was].
 var _actors: Array[Node] = []
@@ -77,6 +77,14 @@ const NECK_BONE: String = "neck_01"
 func _init() -> void:
 	name = "Opening"
 	process_mode = Node.PROCESS_MODE_ALWAYS
+
+## The film's own clock, seconds since it began: its hand-held sway and its walkers' paces go by it, not by the wall
+## clock -- a frame slow to draw, or one recorded (Movie Maker), keeps them in step with its tweens.
+var _clock: float = 0.0
+
+func _process(delta: float) -> void:
+	if _running:
+		_clock += delta
 
 ## Whether it is playing.
 func is_playing() -> bool:
@@ -101,6 +109,7 @@ func play(main: Node) -> void:
 	_fell = false
 	was_skipped = false
 	_began_at = Time.get_ticks_msec()
+	_clock = 0.0
 	_dice.seed = int(_opening("seed", 7))
 	_cabin_home = core.global_transform
 	var gs = get_node_or_null("/root/GameState")
@@ -269,6 +278,7 @@ func _shot_asleep() -> void:
 	var pod: Vector3 = _pod_at()
 	var face: Vector3 = pod + Vector3(0.0, _num("face_height", 1.32), 0.0)
 	var out: Vector3 = _pod_facing()
+	_tw.tween_callback(_focus.bind(1.4, float(_opening("close_blur", 0.12))))
 	_tw.tween_method(_look.bind(face), face + out * 2.1 + Vector3(0.35, 0.2, 0.0), face + out * 0.78 + Vector3(0.06, 0.02, 0.0), secs) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tw.parallel().tween_method(_fov, 50.0, 34.0, secs)
@@ -281,6 +291,7 @@ func _shot_asleep() -> void:
 func _shot_breakup() -> void:
 	var secs: float = _secs("breakup", 5.0)
 	_tw.tween_callback(func():
+		_focus(0.0, 0.0)
 		_alarm_on(false)
 		_hide_him()
 		_sound("film_separation")
@@ -359,7 +370,8 @@ func _shot_awake() -> void:
 	_tw.tween_callback(func():
 		_put_him_in_the_pod()
 		_alarm_on(true, 0.35)
-		_lids_at(1.0))
+		_lids_at(1.0)
+		_blur_all(1.0, 1.2))
 	# Through his eyes: the room from inside the pod, swimming into sight as they open, close, and open.
 	_tw.tween_method(_look.bind(face + out * 3.0 + Vector3(0.0, -0.25, 0.0)), face + out * 0.12, face + out * 0.18, secs)
 	_say_in("awake", secs + _secs("awake_face", 2.6))
@@ -367,9 +379,13 @@ func _shot_awake() -> void:
 	_tw.parallel().tween_method(_lids_at, 1.0, 0.55, secs * 0.35).set_delay(secs * 0.15)
 	_tw.parallel().tween_method(_lids_at, 0.55, 1.0, secs * 0.12).set_delay(secs * 0.52)
 	_tw.parallel().tween_method(_lids_at, 1.0, 0.0, secs * 0.3).set_delay(secs * 0.66)
+	# What he sees swims into focus as his eyes open, and is clear once they are.
+	_tw.parallel().tween_method(_blur_all.bind(1.2), 1.0, 0.0, secs * 0.6).set_delay(secs * 0.4)
 	# His face: lifting.
 	var face_secs: float = _secs("awake_face", 2.6)
-	_tw.tween_callback(func(): _lids_at(0.0))
+	_tw.tween_callback(func():
+		_lids_at(0.0)
+		_focus(0.9, float(_opening("close_blur", 0.12))))
 	_tw.tween_method(_look.bind(face), face + out * 0.7 + Vector3(-0.2, 0.0, 0.0), face + out * 0.62 + Vector3(0.12, 0.03, 0.0), face_secs)
 	_tw.parallel().tween_method(_fov, 30.0, 28.0, face_secs)
 	_tw.parallel().tween_method(_wake, 0.0, 1.0, face_secs * 0.6).set_delay(face_secs * 0.25).set_trans(Tween.TRANS_SINE)
@@ -378,6 +394,7 @@ func _shot_awake() -> void:
 	var inside: Vector3 = _core.door_inside() if _core.has_method("door_inside") else _core.global_position
 	var outside: Vector3 = _core.door_outside() if _core.has_method("door_outside") else _core.global_position
 	_tw.tween_callback(func():
+		_focus(0.0, 0.0)
 		_alarm_on(false)
 		_unfloat()
 		_walk_to(inside, walk)
@@ -660,24 +677,105 @@ func _wake(k: float) -> void:
 	var bow := Quaternion(Vector3.RIGHT, deg_to_rad(float(_opening("head_bow_degrees", 32.0))) * (1.0 - clampf(k, 0.0, 1.0)))
 	_sk.set_bone_pose_rotation(_head, _head_rest * bow)
 
-## Walking to `to` over `seconds`: his walk played through the pause, facing where he goes.
+## Walking to `to` over `seconds` (_travel): his walk at the pace he goes, turning as he goes.
 func _walk_to(to: Vector3, seconds: float) -> void:
 	if _hero == null or not is_instance_valid(_hero):
 		return
-	var ap: AnimationPlayer = _his_player()
+	_travel(_hero, to, seconds)
+
+## `actor` to `to` over `seconds`, setting off and slowing at the end, turning to its way as it goes -- drawn by its own
+## animator at the pace it really goes (ActorAnimator.update_motion: the gait nearest the pace, played at it), so no foot
+## slides over the ground (the player, 2026-10-05: "人和恐龙动作都是直接就地取材，动态也没有就是平移"). One with no
+## animator of its own -- a herd's -- plays its walk at the pace over `drawn_pace`, the pace its walk is drawn at.
+func _travel(actor: Node3D, to: Vector3, seconds: float, drawn_pace: float = 0.0) -> void:
+	if actor == null or not is_instance_valid(actor):
+		return
+	var from: Vector3 = actor.global_position
+	to.y = from.y
+	var anim: Object = actor.get("animator") if ("animator" in actor) else null
+	var ap: AnimationPlayer = anim.animation_player if (anim != null and "animation_player" in anim) else null
+	if ap == null:
+		var found: Array = actor.find_children("*", "AnimationPlayer", true, false)
+		ap = found[0] as AnimationPlayer if not found.is_empty() else null
 	if ap != null:
 		_go_always(ap)
-		var walk: String = "walk" if ap.has_animation("walk") else ""
-		if walk != "":
-			ap.play(walk, 0.25)
-	var flat := Vector3(to.x, _hero.global_position.y, to.z)
-	if _hero.global_position.distance_to(flat) > 0.05:
-		_hero.look_at(flat, Vector3.UP)
+	if anim != null and anim.has_method("play_state"):
+		anim.play_state("WALKING")
+	elif ap != null and ap.has_animation("walk"):
+		ap.play("walk", 0.2)
+	var last := {"at": from, "clock": _clock}
 	var tw := _tween()
-	tw.tween_property(_hero, "global_position", Vector3(to.x, _hero.global_position.y, to.z), seconds)
+	tw.tween_method(func(t: float):
+		if not is_instance_valid(actor):
+			return
+		var now: float = _clock
+		var dt: float = maxf(0.001, now - float(last["clock"]))
+		var at: Vector3 = from.lerp(to, t)
+		var way: Vector3 = at - (last["at"] as Vector3)
+		actor.global_position = at
+		var pace: float = way.length() / dt
+		if Vector2(way.x, way.z).length() > 0.0005:
+			# Its front is its -Z: turned to its way over a moment, not snapped round.
+			actor.rotation.y = lerp_angle(actor.rotation.y, atan2(-way.x, -way.z), clampf(dt * float(_opening("turn_rate", 7.0)), 0.0, 1.0))
+		if anim != null and anim.has_method("update_motion"):
+			anim.update_motion(pace, dt)
+		elif ap != null and drawn_pace > 0.0:
+			ap.speed_scale = clampf(pace / drawn_pace, 0.3, 2.6)
+		last["at"] = at
+		last["clock"] = now
+	, 0.0, 1.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_callback(func():
-		if ap != null and is_instance_valid(ap) and ap.has_animation("idle"):
+		if not is_instance_valid(actor):
+			return
+		if anim != null and anim.has_method("update_motion"):
+			anim.update_motion(0.0, 1.0)
+			anim.play_state("IDLE")
+		elif ap != null and is_instance_valid(ap) and ap.has_animation("idle"):
+			ap.speed_scale = 1.0
 			ap.play("idle", 0.3))
+
+## Turned to face `at` over `seconds`, the short way round -- not snapped.
+func _turn_to(actor: Node3D, at: Vector3, seconds: float) -> void:
+	if actor == null or not is_instance_valid(actor):
+		return
+	var to_it: Vector3 = at - actor.global_position
+	if Vector2(to_it.x, to_it.z).length() < 0.01:
+		return
+	var yaw: float = atan2(-to_it.x, -to_it.z)
+	var from: float = actor.rotation.y
+	var goal: float = from + wrapf(yaw - from, -PI, PI)
+	_tween().tween_property(actor, "rotation:y", goal, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+## `actor`'s head turned up and round to look at `at` (the engine's LookAtModifier3D on its Head bone, over its
+## animation): what a startled animal does before anything else. Gone with the film.
+func _look_with_head(actor: Node3D, at: Vector3) -> void:
+	if actor == null or not is_instance_valid(actor):
+		return
+	var found: Array = actor.find_children("*", "Skeleton3D", true, false)
+	if found.is_empty():
+		return
+	var sk := found[0] as Skeleton3D
+	if sk.find_bone(HEAD_BONE) < 0:
+		return
+	var mark := Node3D.new()
+	mark.name = "FilmLookAt"
+	_main.add_child(mark)
+	mark.global_position = at
+	_actors.append(mark)
+	var look := LookAtModifier3D.new()
+	look.name = "FilmLook"
+	look.bone_name = HEAD_BONE
+	look.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Y
+	look.duration = float(_opening("head_turn", 0.35))
+	look.transition_type = Tween.TRANS_SINE
+	look.use_angle_limitation = true
+	look.symmetry_limitation = true
+	look.primary_limit_angle = deg_to_rad(float(_opening("head_limit", 110.0)))
+	look.secondary_limit_angle = deg_to_rad(float(_opening("head_limit", 110.0)))
+	sk.add_child(look)
+	look.target_node = look.get_path_to(mark)
+	_actors.append(look)
+	_go_always(sk)
 
 ## Out in the light, he looks about him: towards the smoke, then the valley.
 func _look_around() -> void:
@@ -720,41 +818,41 @@ func _pod_facing() -> Vector3:
 # The valley's animals
 # ==============================================================================
 
-## `who`, startled: turned to the smoke, their own cry, a snap of the jaws -- played through the pause.
+## `who`, startled -- played through the pause: a flinch off the ground and back, the head up and round to the smoke
+## (_look_with_head), the body coming round after it, and its own cry.
 func _startle(who: Array, smoke: Vector3, cry: String) -> void:
+	var k: int = 0
 	for d in who:
 		if not is_instance_valid(d):
 			continue
 		_keep(d)
 		var n := d as Node3D
-		var look := Vector3(smoke.x, n.global_position.y, smoke.z)
-		if n.global_position.distance_to(look) > 0.05:
-			n.look_at(look, Vector3.UP)
 		var ap: AnimationPlayer = d.animator.animation_player if ("animator" in d and d.animator != null) else null
 		if ap != null:
 			_go_always(ap)
-			for clip in ["attack", "idle"]:
-				if ap.has_animation(clip):
-					ap.play(clip, 0.15)
-					break
+			if ap.has_animation("idle"):
+				ap.play("idle", 0.1)
+		# Not all at once: each a beat after the last.
+		var beat: float = 0.12 * float(k)
+		k += 1
+		var home: Vector3 = n.global_position
+		var back: Vector3 = home - _flat_dir(smoke - home) * float(_opening("flinch", 0.22)) + Vector3.UP * 0.06
+		var tw := _tween()
+		tw.tween_interval(beat)
+		tw.tween_callback(_look_with_head.bind(n, smoke + Vector3.UP * 2.5))
+		tw.tween_property(n, "global_position", back, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(n, "global_position", Vector3(back.x, home.y, back.z), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(_turn_to.bind(n, smoke, 0.5))
 		if d.has_method("say"):
-			d.say(cry)
+			tw.parallel().tween_callback(d.say.bind(cry))
 
-## `who` off towards the smoke: `metres` of it at a run, over `seconds`.
+## `who` off towards the smoke: `metres` of it over `seconds` -- run or walked as the pace is (_travel).
 func _set_off(who: Array, smoke: Vector3, metres: float, seconds: float) -> void:
 	for d in who:
 		if not is_instance_valid(d):
 			continue
 		var n := d as Node3D
-		var ap: AnimationPlayer = d.animator.animation_player if ("animator" in d and d.animator != null) else null
-		if ap != null:
-			for clip in ["run", "walk"]:
-				if ap.has_animation(clip):
-					ap.play(clip, 0.2)
-					break
-		var to: Vector3 = n.global_position + _flat_dir(smoke - n.global_position) * metres
-		var tw := _tween()
-		tw.tween_property(n, "global_position", to, seconds)
+		_travel(n, n.global_position + _flat_dir(smoke - n.global_position) * metres, seconds)
 
 ## A herd on the valley walls, bolting away from the smoke up the slope, at a hurried walk.
 func _bolt(herd: Array, to: Vector3) -> void:
@@ -763,25 +861,23 @@ func _bolt(herd: Array, to: Vector3) -> void:
 			continue
 		_keep(a)
 		var n := a as Node3D
-		var ap: AnimationPlayer = null
-		var found: Array = n.find_children("*", "AnimationPlayer", true, false)
-		if not found.is_empty():
-			ap = found[0] as AnimationPlayer
-		if ap != null:
-			_go_always(ap)
-			if ap.has_animation("walk"):
-				ap.play("walk", 0.15)
-				ap.speed_scale = float(_opening("bolt_pace", 2.2))
 		var mine: Vector3 = to + (n.global_position - to) * 0.3
 		mine.y = n.global_position.y
-		if n.global_position.distance_to(mine) > 0.05:
-			n.look_at(mine, Vector3.UP)
-		var tw := _tween()
-		tw.tween_property(n, "global_position", mine, _secs("valley_shot", 2.3))
+		# Its walk at the pace it hurries (_travel), the pace its herd's walk is drawn at (MAPS.<id>.herds "speed").
+		_travel(n, mine, _secs("valley_shot", 2.3), _herd_pace(String(n.get_meta(&"species", ""))))
 		var sound: String = String(n.get_meta(&"species", "")) + "_call"
 		var fx = get_node_or_null("/root/Fx")
 		if fx and fx.has_method("play_at"):
 			fx.play_at(sound, n.global_position + Vector3.UP)
+
+## The pace a herd's walk is drawn at: its row's "speed" on this map (Herds), or half a metre a second.
+func _herd_pace(species: String) -> float:
+	var gs = get_node_or_null("/root/GameState")
+	var map: Dictionary = gs.map_data() if (gs and gs.has_method("map_data")) else {}
+	for spec in map.get("herds", []):
+		if String(spec.get("species", "")) == species:
+			return float(spec.get("speed", 0.5))
+	return 0.5
 
 ## The nearest herd's animals of one kind, up to three.
 func _a_herd() -> Array:
@@ -875,10 +971,15 @@ func _use_camera() -> void:
 ## A move: from `from` looking at `at_from` to `to` looking at `at_to`, `fov_from` to `fov_to` degrees, over `seconds` --
 ## all in the set's own frame.
 func _move(from: Vector3, at_from: Vector3, to: Vector3, at_to: Vector3, seconds: float, fov_from: float, fov_to: float) -> void:
+	# Not a straight line: a move on a crane or a dolly arcs -- up and out from the line, most at its middle
+	# (OPENING.arc, of the move's length).
+	var span: float = from.distance_to(to)
+	var side: Vector3 = (to - from).cross(Vector3.UP).normalized() if span > 0.01 else Vector3.ZERO
+	var bend: Vector3 = (Vector3.UP * 0.6 + side * 0.8) * span * float(_opening("arc", 0.12))
 	_tw.tween_method(func(t: float):
 		if _set == null or _cam == null:
 			return
-		var eye: Vector3 = _set.to_global(from.lerp(to, t))
+		var eye: Vector3 = _set.to_global(from.lerp(to, t) + bend * sin(PI * t))
 		var at: Vector3 = _set.to_global(at_from.lerp(at_to, t))
 		_point(eye, at), 0.0, 1.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tw.parallel().tween_method(_fov, fov_from, fov_to, seconds)
@@ -891,19 +992,67 @@ func _look_at_him(eye: Vector3, lift: Vector3) -> void:
 	var at: Vector3 = (_hero.global_position if _hero != null and is_instance_valid(_hero) else eye + Vector3.FORWARD) + lift
 	_point(eye, at)
 
+## Smooth noise for the hand holding the camera (_point).
+var _hand: FastNoiseLite = null
+
+## The view at `eye` looking at `at`, held by a hand: a slow sway always (OPENING.handheld metres) and the shake's quick
+## judder over it (_shaken) -- both smooth noise, not a fresh jump every frame, which read as a broken camera.
 func _point(eye: Vector3, at: Vector3) -> void:
 	if _cam == null or not is_instance_valid(_cam):
 		return
-	var j := Vector3.ZERO
-	if _shake > 0.0:
-		j = Vector3(_dice.randf_range(-1.0, 1.0), _dice.randf_range(-1.0, 1.0), _dice.randf_range(-1.0, 1.0)) * _shake
-	_cam.global_position = eye + j * 0.5
+	if _hand == null:
+		_hand = FastNoiseLite.new()
+		_hand.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		_hand.frequency = 1.0
+		_hand.seed = int(_opening("seed", 7))
+	var t: float = _clock
+	var sway: float = float(_opening("handheld", 0.03))
+	var slow: float = t * float(_opening("handheld_rate", 0.35))
+	var drift := Vector3(_hand.get_noise_2d(slow, 0.0), _hand.get_noise_2d(slow, 40.0), _hand.get_noise_2d(slow, 80.0)) * sway
+	var quick: float = t * 9.0
+	var judder := Vector3(_hand.get_noise_2d(quick, 120.0), _hand.get_noise_2d(quick, 160.0), _hand.get_noise_2d(quick, 200.0)) * _shake
+	_cam.global_position = eye + drift + judder * 0.5
 	if eye.distance_to(at) > 0.01:
-		_cam.look_at(at + j, Vector3.UP)
+		_cam.look_at(at + drift * 0.6 + judder, Vector3.UP)
 
 func _fov(deg: float) -> void:
 	if _cam != null and is_instance_valid(_cam):
 		_cam.fov = deg
+
+## The camera's lens (its CameraAttributesPractical): made the first time it is asked for.
+func _lens() -> CameraAttributesPractical:
+	if _cam == null or not is_instance_valid(_cam):
+		return null
+	if not (_cam.attributes is CameraAttributesPractical):
+		_cam.attributes = CameraAttributesPractical.new()
+	return _cam.attributes as CameraAttributesPractical
+
+## Focused `distance` metres off, what is beyond it blurred by `amount` (0, none): a close shot drawn apart from what
+## stands behind it.
+func _focus(distance: float, amount: float) -> void:
+	var lens: CameraAttributesPractical = _lens()
+	if lens == null:
+		return
+	lens.dof_blur_far_enabled = amount > 0.0
+	lens.dof_blur_far_distance = maxf(0.1, distance)
+	lens.dof_blur_far_transition = maxf(0.4, distance * 0.6)
+	lens.dof_blur_near_enabled = false
+	lens.dof_blur_amount = maxf(0.0, amount)
+
+## Eyes not yet seeing, `k` of the way (1 all a blur, 0 clear): near and far both blurred, closing on a sliver at
+## `distance` -- then opening out to all of it in focus.
+func _blur_all(k: float, distance: float) -> void:
+	var lens: CameraAttributesPractical = _lens()
+	if lens == null:
+		return
+	var b: float = clampf(k, 0.0, 1.0)
+	lens.dof_blur_far_enabled = b > 0.001
+	lens.dof_blur_near_enabled = b > 0.001
+	lens.dof_blur_far_distance = lerpf(distance + 6.0, distance + 0.05, b)
+	lens.dof_blur_far_transition = lerpf(4.0, 0.3, b)
+	lens.dof_blur_near_distance = lerpf(0.05, maxf(0.05, distance - 0.05), b)
+	lens.dof_blur_near_transition = 0.3
+	lens.dof_blur_amount = float(_opening("wake_blur", 0.3)) * b
 
 func _shaken(k: float) -> void:
 	_shake = float(_opening("shake", 0.35)) * k
@@ -969,9 +1118,12 @@ func _build_overlay() -> void:
 	_lids.clear()
 	_bars.clear()
 	for k in 2:
-		var lid := ColorRect.new()
+		# Soft at its edge, as an eyelid is from inside: black to its last few hundredths, then gone to nothing.
+		var lid := TextureRect.new()
 		lid.name = "Lid%d" % k
-		lid.color = Color.BLACK
+		lid.texture = _lid_texture(k == 1)
+		lid.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		lid.stretch_mode = TextureRect.STRETCH_SCALE
 		lid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(lid)
 		_lids.append(lid)
@@ -1019,7 +1171,7 @@ func _lay_out_overlay() -> void:
 	_subtitle.position = Vector2(size.x * 0.12, size.y - bar_h - size.y * 0.11)
 	_subtitle.size = Vector2(size.x * 0.76, size.y * 0.1)
 	for k in 2:
-		_lids[k].size = Vector2(size.x, size.y * 0.5 + 2.0)
+		_lids[k].size = Vector2(size.x, size.y * 0.62)
 
 ## The letterbox in, `k` of the way (0 none, 1 the bars in).
 func _bars_at(k: float) -> void:
@@ -1033,16 +1185,30 @@ func _bars_at(k: float) -> void:
 	_bars[1].position = Vector2(0.0, size.y - h)
 	_bars[1].size = Vector2(size.x, h)
 
+## An eyelid, soft at its edge: black, fading to nothing over its last stretch -- the lower one the other way up.
+static func _lid_texture(lower: bool) -> GradientTexture2D:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.8, 1.0])
+	g.colors = PackedColorArray([Color(0, 0, 0, 1), Color(0, 0, 0, 1), Color(0, 0, 0, 0)])
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.width = 4
+	tex.height = 128
+	tex.fill_from = Vector2(0.5, 1.0) if lower else Vector2(0.5, 0.0)
+	tex.fill_to = Vector2(0.5, 0.0) if lower else Vector2(0.5, 1.0)
+	return tex
+
 ## His eyelids, `k` closed (1 shut, 0 open): the screen's top and bottom halves closing in on its middle.
 func _lids_at(k: float) -> void:
 	if _overlay == null or not is_instance_valid(_overlay) or _lids.is_empty():
 		return
 	var root: Control = _overlay.get_node("Root") as Control
 	var size: Vector2 = root.size if root.size.x > 0.0 else get_viewport().get_visible_rect().size
-	var half: float = size.y * 0.5 + 2.0
+	# Each lid a little over half the screen, its soft edge past the middle when shut, so no line is left between them.
+	var half: float = size.y * 0.62
 	var shut: float = clampf(k, 0.0, 1.0)
-	_lids[0].position = Vector2(0.0, -half + half * shut)
-	_lids[1].position = Vector2(0.0, size.y - half * shut)
+	_lids[0].position = Vector2(0.0, -half + (half + size.y * 0.06) * shut)
+	_lids[1].position = Vector2(0.0, size.y - (half + size.y * 0.06) * shut)
 
 func _title_at(a: float) -> void:
 	if _title != null and is_instance_valid(_title):

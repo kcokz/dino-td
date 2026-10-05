@@ -159,6 +159,8 @@ func _run(name: String) -> void:
 			await _scenario_cast([["acheroraptor", -1.2], ["dakotaraptor", 2.2], ["big_theropod", 9.0], ["triceratops", 18.5]])
 		"firecover":
 			await _scenario_firecover()
+		"filmrun":
+			await _scenario_filmrun()
 		"hurt":
 			await _scenario_hurt()
 		"kiln":
@@ -2515,6 +2517,22 @@ func _scenario_opening() -> void:
 	print("[playtest] opening: %d frames, %.1f s, skipped %s" % [k, (Time.get_ticks_msec() - began) / 1000.0, film.was_skipped])
 	await _wait(10)
 	await _shoot("film_after")
+
+## The opening film played through and nothing else -- for a recording of it (Godot's Movie Maker: --write-movie).
+func _scenario_filmrun() -> void:
+	var gs := root.get_node("GameState")
+	gs.play("campaign")
+	_main.hud.reset_hud(true)
+	_main.hud.hold_objective()
+	var film := Opening.new()
+	_main.add_child(film)
+	film.play(_main)
+	var frames: int = 0
+	while film.is_playing() and frames < 60 * 120:
+		await process_frame
+		frames += 1
+	await _wait(90)
+	print("[playtest] film run: %d frames" % frames)
 
 ## The work seen (Config.CONSTRUCTION; the player, 2026-10-04: "造的塔首先要有造的阶段样子……至少要有四个阶段的成型前
 ## 样子，升级也要有两个阶段"): a bow tower and a drop tower side by side, ordered, at each stage of going up, whole; then
