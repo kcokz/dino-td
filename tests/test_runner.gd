@@ -115,6 +115,9 @@ func _parse_arguments() -> void:
 func _run_all_tests() -> void:
 	# Defer execution by 1 frame to ensure root nodes and any autoloads are fully ready
 	await process_frame
+	# The keys as Config has them, whatever the player has set, and nothing a test sets written down (Keys).
+	Keys.saves = false
+	Keys.reset(false)
 	# In English, without saving it (see SETTINGS_PATH).
 	var i18n := root.get_node_or_null("I18n")
 	if i18n != null and i18n.has_method("set_locale"):
@@ -324,7 +327,8 @@ func _run_suite(suite_path: String, suite_file: String) -> void:
 		# anywhere in it is this test's crash.
 		var errors_from: int = _script_error_count()
 
-		# Test lifecycle: before_each
+		# Test lifecycle: before_each -- the keys as Config has them for each (Keys).
+		Keys.reset(false)
 		if suite_instance.has_method("before_each"):
 			await suite_instance.call("before_each")
 

@@ -72,6 +72,9 @@ func _ready() -> void:
 			eb.torch_changed.connect(func(_lit: bool): refresh())
 		if eb.has_signal("locale_changed"):
 			eb.locale_changed.connect(func(_locale: String): _retext())
+		# A key set anew on the settings page: each tile wears it (Keys).
+		if eb.has_signal("keys_changed"):
+			eb.keys_changed.connect(func(): set_keys_live(_keys_live))
 
 func _process(delta: float) -> void:
 	_clock += delta
@@ -129,9 +132,9 @@ func key_of(id: String) -> String:
 	var keys: Array = _keys()
 	return OS.get_keycode_string(int(keys[at])) if at < keys.size() else ""
 
+## The command keys as the player has them set (Keys: Config.CONTROLS.command_keys, or the settings page's).
 func _keys() -> Array:
-	var cfg = get_node_or_null("/root/Config") if is_inside_tree() else Engine.get_main_loop().root.get_node_or_null("Config")
-	return cfg.CONTROLS.get("command_keys", []) if (cfg and "CONTROLS" in cfg) else []
+	return Keys.command_keys()
 
 ## Whether the first command keys press the tiles there, each wearing its key -- in the order they
 ## came: not while the card above has commands on the keys of its own.

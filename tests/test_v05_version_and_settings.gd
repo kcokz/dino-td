@@ -111,14 +111,14 @@ func test_05_the_window_setting_is_on_the_settings_page_only() -> void:
 	menu.open()
 	await wait_frames(1)
 	assert_eq(int(menu.current_page), int(menu.Page.ROOT), "It opens on the main page")
-	assert_false(menu.window_row.visible, "Where the window setting does not belong")
-	assert_false(menu.language_row.visible, "Nor the language one")
+	assert_false(menu.window_row.is_visible_in_tree(), "Where the window setting does not belong")
+	assert_false(menu.language_row.is_visible_in_tree(), "Nor the language one")
 
 	menu._on_settings_pressed()
 	await wait_frames(1)
 	assert_eq(int(menu.current_page), int(menu.Page.SETTINGS), "Now on the settings page")
-	assert_true(menu.window_row.visible, "Where the window setting does belong")
-	assert_true(menu.language_row.visible, "Alongside the language one")
+	assert_true(menu.window_row.is_visible_in_tree(), "Where the window setting does belong -- its General tab")
+	assert_true(menu.language_row.is_visible_in_tree(), "Alongside the language one")
 
 # ==============================================================================
 # 3. Things that were declared gone

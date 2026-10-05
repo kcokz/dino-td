@@ -133,6 +133,8 @@ signal hero_hp_changed(current: float, max: float)
 signal hero_stamina_changed(current: float, max: float)
 ## What is left of the cabin's power (GameState.power_left), 1 full to 0 out: told as it goes down a thousandth.
 signal power_changed(left: float)
+## A key set anew on the settings page (Keys): what wears a key -- the card's keycaps, the medallions' -- says the new one.
+signal keys_changed()
 
 ## Emitted when Modern Hero dies, triggering game over.
 signal hero_died()

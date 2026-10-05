@@ -1411,7 +1411,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	var cfg = _get_config()
 	var controls: Dictionary = cfg.CONTROLS if (cfg and "CONTROLS" in cfg and cfg.CONTROLS is Dictionary) else {}
-	var pause_key: int = int(controls.get("pause_key", KEY_SPACE))
+	var pause_key: int = Keys.key("pause_key")
 	var cancel_key: int = int(controls.get("cancel_key", KEY_ESCAPE))
 	var move_btn: int = int(controls.get("hero_move_button", MOUSE_BUTTON_RIGHT))
 	var place_btn: int = int(controls.get("build_place_button", MOUSE_BUTTON_LEFT))
@@ -1509,21 +1509,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	# A trap or a section of wall in hand turns with R (CONTROLS.trap_turn_key) -- ahead of the
 	# camera's reset, which has the same key the rest of the time.
 	if event is InputEventKey and event.pressed and not event.echo and _turns(current_build_type) \
-			and event.keycode == int(controls.get("trap_turn_key", KEY_R)) \
+			and event.keycode == Keys.key("trap_turn_key") \
 			and not (event.ctrl_pressed or event.meta_pressed):
 		turn_placement(-1 if event.shift_pressed else 1)
 		get_viewport().set_input_as_handled()
 		return
 
 	# Back to the opening view, for when the player has turned themselves round.
-	if event is InputEventKey and event.pressed and not event.echo 			and event.keycode == int(controls.get("camera_reset_key", KEY_R)) 			and not (event.ctrl_pressed or event.meta_pressed):
+	if event is InputEventKey and event.pressed and not event.echo 			and event.keycode == Keys.key("camera_reset_key") 			and not (event.ctrl_pressed or event.meta_pressed):
 		reset_camera()
 		get_viewport().set_input_as_handled()
 		return
 
 	# His card in full, and shut again (Config.CONTROLS.details_key; HUD.toggle_hero_details).
 	if event is InputEventKey and event.pressed and not event.echo \
-			and event.keycode == int(controls.get("details_key", KEY_C)) \
+			and event.keycode == Keys.key("details_key") \
 			and not (event.ctrl_pressed or event.meta_pressed):
 		if hud and is_instance_valid(hud) and hud.has_method("toggle_hero_details"):
 			hud.toggle_hero_details()
@@ -2523,17 +2523,15 @@ func _notification(what: int) -> void:
 func _handle_camera_keys(delta: float) -> void:
 	if camera_rig == null or camera == null or not is_instance_valid(camera):
 		return
-	var cfg = _get_config()
-	var controls: Dictionary = cfg.CONTROLS if (cfg and "CONTROLS" in cfg and cfg.CONTROLS is Dictionary) else {}
-
+	# The player's keys (Keys: the settings page's), and the arrows whatever they are.
 	var pan_vec := Vector2.ZERO
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+	if Input.is_key_pressed(Keys.key("camera_left_key")) or Input.is_key_pressed(KEY_LEFT):
 		pan_vec.x -= 1.0
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+	if Input.is_key_pressed(Keys.key("camera_right_key")) or Input.is_key_pressed(KEY_RIGHT):
 		pan_vec.x += 1.0
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+	if Input.is_key_pressed(Keys.key("camera_forward_key")) or Input.is_key_pressed(KEY_UP):
 		pan_vec.y += 1.0
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+	if Input.is_key_pressed(Keys.key("camera_back_key")) or Input.is_key_pressed(KEY_DOWN):
 		pan_vec.y -= 1.0
 	# The cursor at the window's edge, as the arrow keys (CameraRig.edge_direction) -- only while
 	# it is over the window and the window has the focus.
@@ -2543,16 +2541,16 @@ func _handle_camera_keys(delta: float) -> void:
 	camera_rig.pan_keys(pan_vec, delta)
 
 	var turn: float = 0.0
-	if Input.is_key_pressed(int(controls.get("camera_rotate_left_key", KEY_Q))):
+	if Input.is_key_pressed(Keys.key("camera_rotate_left_key")):
 		turn -= 1.0
-	if Input.is_key_pressed(int(controls.get("camera_rotate_right_key", KEY_E))):
+	if Input.is_key_pressed(Keys.key("camera_rotate_right_key")):
 		turn += 1.0
 	camera_rig.rotate_keys(turn, delta)
 
 	var lean: float = 0.0
-	if Input.is_key_pressed(int(controls.get("camera_tilt_up_key", KEY_F))):
+	if Input.is_key_pressed(Keys.key("camera_tilt_up_key")):
 		lean += 1.0
-	if Input.is_key_pressed(int(controls.get("camera_tilt_down_key", KEY_V))):
+	if Input.is_key_pressed(Keys.key("camera_tilt_down_key")):
 		lean -= 1.0
 	camera_rig.tilt_keys(lean, delta)
 

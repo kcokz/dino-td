@@ -248,7 +248,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
 			["hero_hp_changed", _on_hero_hp_changed], ["hero_stamina_changed", _on_hero_stamina_changed],
-			["power_changed", _on_power_changed],
+			["power_changed", _on_power_changed], ["keys_changed", _on_keys_changed],
 			["locale_changed", _on_locale_changed],
 			["raid_warning", _on_raid_warning],
 			["boss_arrived", _on_boss_arrived],
@@ -1992,11 +1992,18 @@ func _on_cabin_emblem_input(event: InputEvent) -> void:
 		home_view_requested.emit()
 		get_viewport().set_input_as_handled()
 
-## The key that takes the view home, as the keyboard writes it (Config.CONTROLS.camera_reset_key).
+## The key that takes the view home, as the keyboard writes it (Keys: Config.CONTROLS.camera_reset_key, or the player's).
 func _home_key_text() -> String:
-	var cfg = _get_config()
-	var key: int = int(cfg.CONTROLS.get("camera_reset_key", KEY_R)) if (cfg and "CONTROLS" in cfg) else KEY_R
-	return OS.get_keycode_string(key)
+	return Keys.text("camera_reset_key")
+
+## A key set anew on the settings page (Keys): the medallions' chips say the new one, and the Hero's words.
+func _on_keys_changed() -> void:
+	for pair in [["CabinEmblem", _home_key_text()], ["HeroEmblem", _details_key_text()]]:
+		var emblem: Node = find_child(String(pair[0]), true, false)
+		var cap: Label = emblem.get_node_or_null("Disc/Keycap") as Label if emblem else null
+		if cap:
+			cap.text = String(pair[1])
+	_refresh_texts()
 
 func _on_hero_emblem_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -2047,11 +2054,9 @@ func _on_card_changed() -> void:
 	hero_commands.set_keys_live(option_panel.leaves_keys())
 	hero_commands.mark_open(String(option_panel.current_menu) if option_panel.shows_him() else "")
 
-## The details key as the keyboard writes it.
+## The details key as the keyboard writes it (Keys).
 func _details_key_text() -> String:
-	var cfg = _get_config()
-	var key: int = int(cfg.CONTROLS.get("details_key", KEY_C)) if (cfg and "CONTROLS" in cfg) else KEY_C
-	return OS.get_keycode_string(key)
+	return Keys.text("details_key")
 
 func _select_hero() -> void:
 	var hero: Node = get_tree().get_first_node_in_group("hero") if is_inside_tree() else null

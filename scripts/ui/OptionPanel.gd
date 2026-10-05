@@ -740,9 +740,8 @@ func _settle() -> void:
 func _mark_keys() -> void:
 	if button_container == null:
 		return
-	var cfg = _get_config()
-	var controls: Dictionary = cfg.CONTROLS if cfg else {}
-	var keys: Array = controls.get("command_keys", [])
+	# As the player has them set (Keys).
+	var keys: Array = Keys.command_keys()
 	var n: int = 0
 	_keyed = 0
 	for btn in command_buttons():

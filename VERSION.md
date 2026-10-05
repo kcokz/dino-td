@@ -1715,6 +1715,7 @@
   - 工具说自己是干嘛的（"Bone pick，bone shovel hover上去的时候没有解释这是干嘛的"）：`Config.recipe_use_text`（自己的话 `RECIPES.<id>.desc`，或者"能采什么""什么 ×2"）、`recipe_opens`；工作台那一行（`UiKit.job_detail`）和人身上那一行的格子（`OptionPanel._show_abilities`）都用它。这张图上没有要开的资源，工具就不出现（`CraftingStation._of_use_here`：骨铲只在有黏土的第 2 站）。新词 `TOOL_LETS`、`RECIPE_HIDE_MAP_DESC`。测试：新的 `test_v07_what_tools_are_for`。
   - 暂停菜单的字对齐（"resume和其他的按钮字体没对齐"）：继续按钮的三角不再是按钮自己的图标（它把字挤到右边），改成贴在按钮左端的一个小图（`PauseMenu._glyph`），四个按钮的字都在正中。测试：`test_v06_the_frames` test_99。
   - 资源栏的悬停变短（"左上角的资源，hover上去以后会有一串非常长的解释……根据专业游戏的best practice界面做"）：`Config.resource_tip`——名字 / 来自哪里 / 用来干哪几类事（建造、做工具、做弹药、生火、当诱饵、修信标、装进哪座塔），三行；`HUD._refresh_resource_tooltips` 用它。新词 `RES_FROM*`、`RES_FOR`、`USE_KIND_*`。测试：新的 `test_v07_the_resource_tips`；`test_v06_material_route` test_02 改成查这三行。
+  - 设置页分两页、按键能改（"Settings界面还不够专业……General，Key shortcut之类的两个tab"）：`PauseMenu` 的"通用 / 按键"两个页签（`SegmentButton`，一组里选中的陷下去发亮），按键页按 `Config.KEY_BINDINGS` 一行一个键，点了等下一次按键（`_listen`、`_input`），Esc 不改，"恢复默认"（`_on_keys_reset_pressed`）；两页一样高。新的 `scripts/core/Keys.gd`：每个键现在是什么（`Config.CONTROLS` 或玩家改的）、`bind`（占了别的键就互换，`shares` 的两个可以同键）、`reset`，记在设置文件的 `[keys]`；`Main`、`HeroCommands`、`OptionPanel`、`PauseMenu`、`HUD` 都从它读，`EventBus.keys_changed` 时键位标记跟着变。`CONTROLS` 加了 WASD 四个键（方向键照旧也能用）。测试跑的时候用默认键、不写设置文件（`tests/test_runner.gd`）。测试：新的 `test_v07_the_keys`；`test_v06_command_keys` test_07、`test_v05_version_and_settings` test_05 改成新页面。
 
 ## v0.7 已定要做的（未开工）
 
@@ -1738,7 +1739,7 @@
 >
 > 其中的昼夜、建筑与科技升级链、人的升级、建筑的升级、巢穴内部这几条，在 [GAME-DESIGN.md](GAME-DESIGN.md) 里已经有了答案或提案，以那边为准。
 
-- **[远期] 玩家自定义键位与控制设置面板**：允许玩家在设置面板自由更改走位键、建造键、暂停键、视角旋转键等快捷键绑定（已在 `Config.CONTROLS` 预留 SSoT 数据字典）。依托 v0.2 第 8 项建立的选项入口扩展。
+- **[已做 · v0.7 第二十二批] 玩家自定义键位与控制设置面板**：允许玩家在设置面板自由更改走位键、建造键、暂停键、视角旋转键等快捷键绑定（已在 `Config.CONTROLS` 预留 SSoT 数据字典）。依托 v0.2 第 8 项建立的选项入口扩展。——设置页的"按键"页，见 v0.7 第二十二批。
 - **[远期] 巢穴内部结构**：v0.1 的巢穴是不可进入的黑盒，只做外壳、出入口与外部守卫。内部（房间、蛋、孵化、巢穴核心等）留待本节设计。
 - **[远期] 现代人属性成长与装备科技树**：移动速度、建造能力（施工速度）、采集能力（采集速度）、攻击力、生命值五项核心属性。前期靠建筑防御，后期靠科技升级装备，让现代人自己也能打败恐龙。**硬规则：升级路径必须依赖建造**——属性提升来自装备，装备来自建筑。
 - **[远期] 人与塔的职责分离**：塔必须永远拥有比人强、或人完全没有的作用，避免装备起来之后塔变成摆设。现代人虽然最终能战胜恐龙，但那必须是**很后面很后面**的事。

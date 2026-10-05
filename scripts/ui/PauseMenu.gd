@@ -47,6 +47,24 @@ var volume_names: Dictionary = {}      # bus -> Label
 var volume_figures: Dictionary = {}    # bus -> Label
 var language_picker: OptionButton = null
 var version_caption: Label = null
+## THE SETTINGS PAGE IN TWO TABS (the player, 2026-10-04: "Settings界面还不够专业，camera和command应该有单独的tab？每个tab应该
+## 还能调整这些按键吧，按照专业游戏界面制作方式来，General，Key shortcut之类的两个tab"): General -- language, window, sound --
+## and Keys -- every key the player can set (Config.KEY_BINDINGS, Keys), under the camera's heading and the card's, each
+## set by clicking it and pressing the new key, and all of them back to Config's at once. One of a set, the tab chosen
+## sunk and lit (SegmentButton), as the game's speeds are.
+var tabs_row: HBoxContainer = null
+var general_tab: Button = null
+var keys_tab: Button = null
+var general_box: VBoxContainer = null
+var keys_scroll: ScrollContainer = null
+var keys_box: VBoxContainer = null
+var keys_reset_btn: Button = null
+var key_buttons: Dictionary = {}       # Keys name -> its Button
+var key_names: Dictionary = {}         # Keys name -> its Label
+## "general" or "keys": the tab shown.
+var settings_tab: String = "general"
+## The key waiting for a press (its Keys name), or "".
+var listening: String = ""
 
 var _was_paused_before_open: bool = false
 ## Opened on its settings page alone -- from the start screen (open_settings_only): its "back" closes it.
@@ -69,12 +87,19 @@ func _exit_tree() -> void:
 	if eb and is_instance_valid(eb) and eb.has_signal("locale_changed"):
 		if eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.disconnect(_on_locale_changed)
+	if eb and is_instance_valid(eb) and eb.has_signal("keys_changed"):
+		if eb.keys_changed.is_connected(_refresh_keys):
+			eb.keys_changed.disconnect(_refresh_keys)
 
 func _connect_event_bus() -> void:
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("locale_changed"):
 		if not eb.locale_changed.is_connected(_on_locale_changed):
 			eb.locale_changed.connect(_on_locale_changed)
+	# A key set anew (Keys) -- here, or anywhere: the rows say so.
+	if eb and eb.has_signal("keys_changed"):
+		if not eb.keys_changed.is_connected(_refresh_keys):
+			eb.keys_changed.connect(_refresh_keys)
 
 func _on_locale_changed(_locale: String) -> void:
 	_refresh_texts()
@@ -120,8 +145,7 @@ func close() -> void:
 func _shortcut_input(event: InputEvent) -> void:
 	if not is_open or not (event is InputEventKey):
 		return
-	var cfg = _get_config()
-	var keys: Array = cfg.CONTROLS.get("command_keys", []) if cfg else []
+	var keys: Array = Keys.command_keys()
 	if keys.has(int((event as InputEventKey).keycode)):
 		get_viewport().set_input_as_handled()
 
@@ -146,12 +170,18 @@ func _show_page() -> void:
 	if new_game_btn: new_game_btn.visible = root_page
 	if quit_btn: quit_btn.visible = root_page
 	if back_btn: back_btn.visible = not root_page
-	if language_row: language_row.visible = not root_page
-	# Settings only. Leaving it off this list is why it appeared on the main menu too --
-	# every row added to page_vbox shows on every page unless it is told otherwise.
-	if window_row: window_row.visible = not root_page
-	if sound_row: sound_row.visible = not root_page
-	if camera_row: camera_row.visible = not root_page
+	# Settings only, in its two tabs. Leaving one off this list is why a row appeared on the main menu too -- every row
+	# added to page_vbox shows on every page unless it is told otherwise.
+	if tabs_row: tabs_row.visible = not root_page
+	# The two tabs one height, the keys' list scrolling in it: the panel does not jump as the tab changes.
+	if keys_scroll and general_box:
+		keys_scroll.custom_minimum_size.y = general_box.get_combined_minimum_size().y
+	if general_box: general_box.visible = not root_page and settings_tab == "general"
+	if keys_scroll: keys_scroll.visible = not root_page and settings_tab == "keys"
+	if general_tab: general_tab.set_pressed_no_signal(settings_tab == "general")
+	if keys_tab: keys_tab.set_pressed_no_signal(settings_tab == "keys")
+	if root_page or settings_tab != "keys":
+		_stop_listening()
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if root_page else tr("MENU_SETTINGS_TITLE")
 
@@ -276,10 +306,25 @@ func _ensure_components() -> void:
 	new_game_btn = _make_button(new_game_btn, "NewGameBtn", _on_new_game_pressed)
 	quit_btn = _make_button(quit_btn, "QuitBtn", _on_quit_pressed, &"DangerButton")
 
+	if tabs_row == null:
+		tabs_row = HBoxContainer.new()
+		tabs_row.name = "SettingsTabs"
+		tabs_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		page_vbox.add_child(tabs_row)
+		var group := ButtonGroup.new()
+		general_tab = _tab("GeneralTab", group, "general")
+		keys_tab = _tab("KeysTab", group, "keys")
+
+	if general_box == null:
+		general_box = VBoxContainer.new()
+		general_box.name = "GeneralBox"
+		general_box.add_theme_constant_override("separation", UiTheme.space("m"))
+		page_vbox.add_child(general_box)
+
 	if language_row == null:
 		language_row = HBoxContainer.new()
 		language_row.name = "LanguageRow"
-		page_vbox.add_child(language_row)
+		general_box.add_child(language_row)
 
 		language_label = Label.new()
 		language_label.name = "LanguageLabel"
@@ -296,7 +341,7 @@ func _ensure_components() -> void:
 	if window_row == null:
 		window_row = HBoxContainer.new()
 		window_row.name = "WindowRow"
-		page_vbox.add_child(window_row)
+		general_box.add_child(window_row)
 
 		window_label = Label.new()
 		window_label.name = "WindowLabel"
@@ -314,7 +359,7 @@ func _ensure_components() -> void:
 		sound_row = VBoxContainer.new()
 		sound_row.name = "SoundRow"
 		sound_row.add_theme_constant_override("separation", UiTheme.space("xs"))
-		page_vbox.add_child(sound_row)
+		general_box.add_child(sound_row)
 		sound_label = Label.new()
 		sound_label.name = "SoundLabel"
 		sound_row.add_child(sound_label)
@@ -347,34 +392,28 @@ func _ensure_components() -> void:
 			volume_names[String(bus)] = bus_name
 			volume_figures[String(bus)] = figure
 
-	if camera_row == null:
-		camera_row = VBoxContainer.new()
-		camera_row.name = "CameraRow"
-		camera_row.add_theme_constant_override("separation", UiTheme.space("xs"))
-		page_vbox.add_child(camera_row)
-
-		camera_label = Label.new()
-		camera_label.name = "CameraLabel"
-		camera_row.add_child(camera_label)
-
-		# The keys themselves, which is the only place the game tells anyone the view can
-		# be turned at all. A control nobody can find is a control nobody has.
-		camera_keys_label = Label.new()
-		camera_keys_label.name = "CameraKeysLabel"
-		camera_keys_label.theme_type_variation = &"MutedLabel"
-		camera_keys_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		camera_row.add_child(camera_keys_label)
-
-		# And the card's: the number keys each command wears in its corner, and what Esc steps
-		# back out of (Config.CONTROLS.command_keys, OptionPanel._mark_keys).
-		commands_label = Label.new()
-		commands_label.name = "CommandsLabel"
-		camera_row.add_child(commands_label)
-		command_keys_label = Label.new()
-		command_keys_label.name = "CommandKeysLabel"
-		command_keys_label.theme_type_variation = &"MutedLabel"
-		command_keys_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		camera_row.add_child(command_keys_label)
+	if keys_scroll == null:
+		# The keys themselves, which is the only place the game tells anyone the view can be turned at all -- a control
+		# nobody can find is a control nobody has -- and where each is set (Keys). It scrolls in the General tab's
+		# height (_show_page), so the panel is one size whichever tab is open.
+		keys_scroll = ScrollContainer.new()
+		keys_scroll.name = "KeysScroll"
+		keys_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		keys_scroll.custom_minimum_size = Vector2(0.0, 0.0)
+		page_vbox.add_child(keys_scroll)
+		keys_box = VBoxContainer.new()
+		keys_box.name = "KeysBox"
+		keys_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		keys_box.add_theme_constant_override("separation", UiTheme.space("xs"))
+		keys_scroll.add_child(keys_box)
+		camera_row = keys_box
+		_build_key_rows()
+		keys_reset_btn = Button.new()
+		keys_reset_btn.name = "KeysResetBtn"
+		keys_reset_btn.theme_type_variation = &"GhostButton"
+		keys_reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		keys_reset_btn.pressed.connect(_on_keys_reset_pressed)
+		keys_box.add_child(keys_reset_btn)
 
 	back_btn = _make_button(back_btn, "BackBtn", _on_back_pressed, &"GhostButton", "back")
 
@@ -481,11 +520,130 @@ func _populate_languages() -> void:
 		if loc == current:
 			language_picker.select(i)
 
-## The details key as the keyboard writes it (Config.CONTROLS.details_key).
-func _details_key_text() -> String:
+## A tab of the settings page: one of a set (`group`), sunk and lit when it is the one shown.
+func _tab(node_name: String, group: ButtonGroup, which: String) -> Button:
+	var tab := Button.new()
+	tab.name = node_name
+	tab.theme_type_variation = &"SegmentButton"
+	tab.toggle_mode = true
+	tab.button_group = group
+	tab.custom_minimum_size = Vector2(_picker_width() * 0.7, UiTheme.height("command"))
+	tab.pressed.connect(func(): show_settings_tab(which))
+	tabs_row.add_child(tab)
+	return tab
+
+## The settings page's tab `which`: "general" or "keys".
+func show_settings_tab(which: String) -> void:
+	settings_tab = which
+	_show_page()
+
+## Under each heading -- the camera's, the card's -- a row a key (Config.KEY_BINDINGS): what it does, and its key on a
+## button; under each, what stays as it is (the mouse's; Esc).
+func _build_key_rows() -> void:
 	var cfg = _get_config()
-	var key: int = int(cfg.CONTROLS.get("details_key", KEY_C)) if (cfg and "CONTROLS" in cfg) else KEY_C
-	return OS.get_keycode_string(key)
+	var rows: Array = cfg.KEY_BINDINGS if (cfg and "KEY_BINDINGS" in cfg) else []
+	var heading: String = ""
+	for i in rows.size():
+		var row: Dictionary = rows[i]
+		var group: String = String(row.get("group", ""))
+		if group != heading:
+			if heading == "camera":
+				camera_keys_label = _caption("CameraKeysLabel")
+			heading = group
+			var header := Label.new()
+			header.name = "Header_" + group
+			keys_box.add_child(header)
+			if group == "camera":
+				camera_label = header
+			else:
+				commands_label = header
+		var line := HBoxContainer.new()
+		line.name = "KeyRow_" + String(row["name"])
+		keys_box.add_child(line)
+		var what := Label.new()
+		what.name = "Name"
+		what.theme_type_variation = &"MutedLabel"
+		what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(what)
+		var btn := Button.new()
+		btn.name = "Key"
+		btn.toggle_mode = true
+		btn.theme_type_variation = &"SegmentButton"
+		btn.custom_minimum_size = Vector2(_ui_number("menu_key_width", 130.0), 0.0)
+		var key_name: String = String(row["name"])
+		btn.pressed.connect(func(): _listen(key_name))
+		line.add_child(btn)
+		key_buttons[key_name] = btn
+		key_names[key_name] = what
+	if heading == "commands":
+		command_keys_label = _caption("CommandKeysLabel")
+
+func _caption(node_name: String) -> Label:
+	var cap := Label.new()
+	cap.name = node_name
+	cap.theme_type_variation = &"CaptionLabel"
+	cap.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	keys_box.add_child(cap)
+	return cap
+
+## Each row's words and key: what it does (a command its place, from 1), the key it answers to now -- or, waiting for a
+## press, saying so.
+func _refresh_keys() -> void:
+	var cfg = _get_config()
+	var rows: Array = cfg.KEY_BINDINGS if (cfg and "KEY_BINDINGS" in cfg) else []
+	for row in rows:
+		var key_name: String = String(row["name"])
+		var what: Label = key_names.get(key_name) as Label
+		if what:
+			var label: String = tr(String(row.get("label", key_name)))
+			what.text = (label % int(key_name.substr(12))) if key_name.begins_with("command_key_") else label
+		var btn: Button = key_buttons.get(key_name) as Button
+		if btn:
+			btn.text = tr("MENU_KEY_LISTEN") if listening == key_name else Keys.text(key_name)
+			btn.tooltip_text = tr("MENU_KEY_TIP")
+			btn.set_pressed_no_signal(listening == key_name)
+
+## Clicked, a key's button waits for the next press (_input): that key is its, Esc keeps the one it had.
+func _listen(key_name: String) -> void:
+	listening = key_name
+	_refresh_keys()
+	# In sight in the list: the row it is.
+	var btn: Button = key_buttons.get(key_name) as Button
+	if btn and keys_scroll and keys_scroll.is_inside_tree():
+		keys_scroll.ensure_control_visible(btn)
+
+func _stop_listening() -> void:
+	if listening != "":
+		listening = ""
+		_refresh_keys()
+
+## Waiting for a key: the press is taken, before anything else hears it -- the card's keys, the menu's Esc.
+func _input(event: InputEvent) -> void:
+	if listening == "" or not is_open or not (event is InputEventKey):
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	get_viewport().set_input_as_handled()
+	var key_name: String = listening
+	listening = ""
+	if key_event.keycode != KEY_ESCAPE:
+		Keys.bind(key_name, int(key_event.keycode))
+	_refresh_keys()
+
+## Every key back to Config's (Keys.reset), remembered.
+func _on_keys_reset_pressed() -> void:
+	listening = ""
+	Keys.reset()
+	_refresh_keys()
+
+func _ui_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.UI.get(key, fallback)) if (cfg and "UI" in cfg) else fallback
+
+## The details key as the keyboard writes it (Keys).
+func _details_key_text() -> String:
+	return Keys.text("details_key")
 
 func _refresh_texts() -> void:
 	if resume_btn: resume_btn.text = tr("MENU_RESUME")
@@ -502,7 +660,11 @@ func _refresh_texts() -> void:
 	if camera_label: camera_label.text = tr("MENU_CAMERA")
 	if camera_keys_label: camera_keys_label.text = tr("MENU_CAMERA_KEYS")
 	if commands_label: commands_label.text = tr("MENU_COMMANDS")
-	if command_keys_label: command_keys_label.text = tr("MENU_COMMAND_KEYS") % _details_key_text()
+	if command_keys_label: command_keys_label.text = tr("MENU_COMMAND_KEYS")
+	if general_tab: general_tab.text = tr("MENU_TAB_GENERAL")
+	if keys_tab: keys_tab.text = tr("MENU_TAB_KEYS")
+	if keys_reset_btn: keys_reset_btn.text = tr("MENU_KEYS_RESET")
+	_refresh_keys()
 	_populate_window_modes()
 	if title_label:
 		title_label.text = tr("MENU_TITLE") if current_page == Page.ROOT else tr("MENU_SETTINGS_TITLE")

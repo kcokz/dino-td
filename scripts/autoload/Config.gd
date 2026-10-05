@@ -3056,6 +3056,8 @@ const UI: Dictionary = {
 	"result_card_width": 560,
 	"menu_width": 400,
 	"menu_picker_width": 190,
+	# The settings page's Keys tab (PauseMenu): a key's button this wide -- "Press a key…" fits.
+	"menu_key_width": 130,
 	# The settings page's volumes (AUDIO): a level's slider as wide as a picker, and its figure ("100%") this wide
 	# after it, so the sliders line up whatever they are set to.
 	"menu_volume_figure_width": 56,
@@ -3484,6 +3486,11 @@ const CONTROLS: Dictionary = {
 	# lopsided when it was not: from one fixed bearing you see a tall building's near
 	# side and the ground behind it is hidden.
 	"camera_pan_button": MOUSE_BUTTON_MIDDLE,
+	# The view slid over the ground; the arrow keys do it as well, whatever these are set to (Main._handle_camera_keys).
+	"camera_forward_key": KEY_W,
+	"camera_back_key": KEY_S,
+	"camera_left_key": KEY_A,
+	"camera_right_key": KEY_D,
 	"camera_rotate_left_key": KEY_Q,
 	"camera_rotate_right_key": KEY_E,
 	"camera_tilt_up_key": KEY_F,                  # towards looking straight down
@@ -3518,6 +3525,35 @@ const CONTROLS: Dictionary = {
 	# crown, a man under it, a building behind him. Past this many it is the ground.
 	"pick_depth": 6,
 }
+
+## WHAT THE PLAYER CAN SET (Keys; the settings page's Keys tab, PauseMenu; the player, 2026-10-04: "每个tab应该还能调整这些按
+## 键吧"): each a key of CONTROLS -- "command_key_<n>" the n'th of command_keys -- in the order the tab lists them, under
+## its `group`'s heading, called `label`. `shares`: the one other it may stand on the same key with, the two never live
+## at once (the placement's turn takes R only while something is in hand; the rest of the time R is the view's reset).
+## The mouse's buttons and Esc are not on it: they are the same in every game.
+const KEY_BINDINGS: Array = [
+	{"name": "camera_forward_key", "group": "camera", "label": "KEY_CAMERA_FORWARD"},
+	{"name": "camera_back_key", "group": "camera", "label": "KEY_CAMERA_BACK"},
+	{"name": "camera_left_key", "group": "camera", "label": "KEY_CAMERA_LEFT"},
+	{"name": "camera_right_key", "group": "camera", "label": "KEY_CAMERA_RIGHT"},
+	{"name": "camera_rotate_left_key", "group": "camera", "label": "KEY_CAMERA_ROTATE_LEFT"},
+	{"name": "camera_rotate_right_key", "group": "camera", "label": "KEY_CAMERA_ROTATE_RIGHT"},
+	{"name": "camera_tilt_up_key", "group": "camera", "label": "KEY_CAMERA_TILT_UP"},
+	{"name": "camera_tilt_down_key", "group": "camera", "label": "KEY_CAMERA_TILT_DOWN"},
+	{"name": "camera_reset_key", "group": "camera", "label": "KEY_CAMERA_RESET"},
+	{"name": "command_key_1", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_2", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_3", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_4", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_5", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_6", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_7", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_8", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "command_key_9", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "details_key", "group": "commands", "label": "KEY_DETAILS"},
+	{"name": "pause_key", "group": "commands", "label": "KEY_PAUSE"},
+	{"name": "trap_turn_key", "group": "commands", "label": "KEY_TRAP_TURN", "shares": "camera_reset_key"},
+]
 
 # ==============================================================================
 # 10a. Dragging out a wall

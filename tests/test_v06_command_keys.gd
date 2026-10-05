@@ -171,19 +171,29 @@ func test_06_what_cannot_be_taken_back_is_on_no_key() -> void:
 	assert_null(demolish.get_node_or_null("Keycap"), "and it wears none")
 
 func test_07_the_settings_page_says_so() -> void:
-	# A control nobody can find is a control nobody has: the page that lists the camera's keys
-	# lists the card's as well.
+	# A control nobody can find is a control nobody has: the settings page's Keys tab lists the card's keys with the
+	# camera's -- each command's, and the one that shows all of him -- and what Esc steps back out of (v0.7: and each
+	# is set there, Keys).
 	var main = await _level()
 	var menu = main.hud.pause_menu
 	main.hud.toggle_pause_menu()
 	menu.open_settings()
+	menu.show_settings_tab("keys")
 	await wait_frames(1)
+	var keys: Array = config_node.CONTROLS["command_keys"]
+	for i in keys.size():
+		var row: Node = menu.find_child("KeyRow_command_key_%d" % (i + 1), true, false)
+		assert_not_null(row, "A row for command %d" % (i + 1))
+		if row:
+			assert_eq((row.get_node("Key") as Button).text, OS.get_keycode_string(int(keys[i])), "its key")
+	var details: Node = menu.find_child("KeyRow_details_key", true, false)
+	assert_not_null(details, "and the key that shows all of him")
+	if details:
+		assert_eq((details.get_node("Key") as Button).text, OS.get_keycode_string(int(config_node.CONTROLS["details_key"])), "its key")
 	var line: Label = menu.find_child("CommandKeysLabel", true, false) as Label
-	assert_not_null(line, "The settings page has a line for the card's keys")
-	if line == null:
-		return
-	assert_ne(tr("MENU_COMMAND_KEYS"), "MENU_COMMAND_KEYS", "written down")
-	assert_eq(line.text, tr("MENU_COMMAND_KEYS") % OS.get_keycode_string(int(config_node.CONTROLS["details_key"])),
-		"and shown, with the key that shows all of him")
-	assert_true(line.is_visible_in_tree(), "on the settings page")
+	assert_not_null(line, "And what Esc steps back out of")
+	if line:
+		assert_ne(tr("MENU_COMMAND_KEYS"), "MENU_COMMAND_KEYS", "written down")
+		assert_eq(line.text, tr("MENU_COMMAND_KEYS"), "and shown")
+		assert_true(line.is_visible_in_tree(), "on the Keys tab")
 	main.hud.toggle_pause_menu()

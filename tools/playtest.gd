@@ -1832,6 +1832,11 @@ func _scenario_menu() -> void:
 	if menu and menu.has_method("open_settings"):
 		menu.open_settings()
 	await _shoot("settings")
+	# Its Keys tab (v0.7), one of them waiting for a press.
+	if menu and menu.has_method("show_settings_tab"):
+		menu.show_settings_tab("keys")
+		menu._listen("camera_rotate_left_key")
+		await _shoot("settings_keys")
 
 ## His row (v0.6 round three): the workbench with hide known -- what it offers now -- then his
 ## card with the pick and the axe in it (v0.7: the spear, the armour and the boots went), and the
