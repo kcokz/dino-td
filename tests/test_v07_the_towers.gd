@@ -159,7 +159,8 @@ func test_01_four_towers_one_set_each_its_own_job() -> void:
 	for t in ["bow_tower", "drop_tower", "bait_rack"]:
 		assert_false(_row(t)["cost"].has("stone"), "%s is wood: built before there is stone" % t)
 	assert_gt(float(_row("catapult").get("min_range", 0.0)), 0.0, "the catapult cannot throw at its own foot")
-	assert_lt(float(_row("drop_tower")["range"]), float(_row("catapult")["min_range"]),
+	# All of it: no ground between the two that neither reaches (2026-10-04, the drop tower's reach 2.5 -> 3 m).
+	assert_gte(float(_row("drop_tower")["range"]), float(_row("catapult")["min_range"]),
 		"what is too near the catapult is where a drop tower reaches")
 
 # ==============================================================================
@@ -402,6 +403,33 @@ func test_12_a_tower_still_being_built_holds_nothing_and_does_nothing() -> void:
 	assert_eq(bow.rounds(), bow.capacity(), "full")
 	await _until(func(): return _lost(d) > 0.0, float(_row("bow_tower")["fire_seconds"]) * 2.0)
 	assert_gt(_lost(d), 0.0, "and it shoots")
+
+func test_12b_a_tower_being_built_onto_does_nothing_till_it_is_done() -> void:
+	# The player, 2026-10-04: "塔在升级的时候不能进攻".
+	var f: Array = await _field()
+	var bow = await _tower(f[1], "bow_tower", Vector2i(0, 0), "arrow_wood")
+	stock_everything()
+	var to: String = String(config_node.upgrade_targets("bow_tower")[0])
+	assert_true(bow.begin_upgrade(to), "(an upgrade ordered)")
+	bow.add_upgrade_progress(0.1)
+	assert_true(bow.is_upgrading(), "(and under way)")
+	var d = _animal("raptor", bow.global_position + Vector3(0.0, 0.0, -2.0))
+	await _until(func(): return _lost(d) > 0.0, float(_row("bow_tower")["fire_seconds"]) * 2.0)
+	assert_eq(_lost(d), 0.0, "Being built onto, it shoots nothing")
+	bow.add_upgrade_progress(1000.0)
+	await wait_frames(2)
+	var up: Node = null
+	for n in tree.get_nodes_in_group(AmmoTower.GROUP):
+		if is_instance_valid(n) and String(n.building_type) == to:
+			up = n
+	assert_not_null(up, "(done: the next level)")
+	if up == null:
+		return
+	if not up.has_ammo():
+		up.set_ammo("arrow_wood")
+		up.load_from_stock()
+	await _until(func(): return _lost(d) > 0.0, float(_row(to)["fire_seconds"]) * 2.0)
+	assert_gt(_lost(d), 0.0, "done, it shoots again")
 
 func test_13_a_paused_game_shoots_nothing() -> void:
 	var f: Array = await _field()

@@ -184,8 +184,11 @@ func demolish() -> void:
 # ==============================================================================
 
 ## Finished and standing.
+## Whether it acts: standing, finished and whole -- and not being built onto: an upgrade under way (Building
+## .is_upgrading), it shoots, drops and throws nothing, and a bait rack holds nothing, till the work is done (the player,
+## 2026-10-04: "塔在升级的时候不能进攻"). An upgrade is when he chooses, between raids.
 func _is_live() -> bool:
-	return not (is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion())
+	return not (is_destroyed or not is_constructed or current_hp <= 0.0 or is_queued_for_deletion() or is_upgrading())
 
 ## What on it turns to aim -- the catapult's turntable, the drop tower's collar and boom: its Turn part -- swung round
 ## to face `at`, about the vertical (its forward, the model's -Z, towards it), over `seconds` the short way round; at

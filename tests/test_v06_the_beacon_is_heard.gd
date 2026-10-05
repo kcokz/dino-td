@@ -210,18 +210,20 @@ func test_06_launched_there_is_time_before_they_come() -> void:
 	wm._process(grace)
 	assert_true(wm.final_wave, "Then the final wave")
 
-func test_07_the_countdown_is_on_the_screen() -> void:
+func test_07_the_final_wave_is_marked_not_counted() -> void:
+	# v0.7, the player: "恐龙还有几秒进攻不要写出来，这个太假了，没人能detect这个".
 	var main = await _level()
 	for i in range(int(game_state_node.beacon_stage_count()) + 1):
 		_next_step()
 	await wait_frames(1)
 	var hud = main.hud
-	assert_true(hud.raid_line.visible, "The count is up, in the goal's card")
-	var secs: int = int(ceil(float(game_state_node.final_wave_in)))
-	assert_eq(String(hud.raid_line.text), tr("HUD_FINAL_WAVE") % secs, "counting to the final wave (%s)" % hud.raid_line.text)
+	assert_true(hud.raid_mark.visible, "The final wave on its way is marked at the day's dial")
+	assert_true(hud.day_dial.tooltip_text.ends_with(tr("HUD_FINAL_WAVE")), "and the day says so (%s)" % hud.day_dial.tooltip_text)
+	assert_null(RegEx.create_from_string("\\d").search(tr("HUD_FINAL_WAVE")), "never how long")
+	assert_null(RegEx.create_from_string("\\d").search(tr("HINT_FINAL_WAVE_SOON")), "not in what is said either")
 	main.wave_manager._process(float(_beacon()["launch_grace"]) + 0.1)
 	await wait_frames(2)
-	assert_false(hud.raid_line.visible, "and gone when it sets out")
+	assert_false(hud.raid_mark.visible, "and gone when it sets out")
 
 func test_08_the_fight_after_the_grace_is_as_long_as_it_was() -> void:
 	var fight: float = float(_beacon()["charge_seconds"]) - float(_beacon()["launch_grace"])

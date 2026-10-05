@@ -1722,6 +1722,12 @@
 - **v0.7 第二十三批："改进2"（玩家，2026-10-04）**：
   - 两个截图 bug。植龙在火光外面等（"人站在火周围，植龙不敢靠近，但是箭塔就能看到植龙，所以就可以白嫖植龙"）：`PROWL.edge_inside` 0.6（光里）换成 `edge_out` 0.5（光外）；`ProwlerDino._in_the_dark`（几处火光叠着，停在所有火光外）；眼睛反光到它等着的地方都是满的。撞船舱要撞到（"撞击需要真的撞的动作，而且要贴着船舱，不然像隔山打牛"）：`CABIN.module.outline` 和 `Config.hull_outline`（船壳的轮廓）；`Dino._hull_point`、`_bite_point` 按船壳；`Dino.ram_front`、`ram_hook`、`_ram_tip`、`_bone_in`（从撞的动画的关键帧读出头伸多远、往哪边甩）；`_rams_from`（`DINO_AI.ram_into` 0.1、`ram_short` 0.08、`ram_near` 0.3，替掉 `snout_into`）；`ActorAnimator.animation_for`。`tools/playtest.gd` 新场景 `ram`（从上面看，船壳轮廓画成红线；每种撞到最远时停住拍）。
   - 测试：新的 `test_v07_the_dark_and_the_ram`（举火把时它在黑里等、夜里的塔看不见它；火光叠着时停在全部外面；撞的距离和手算蒙皮量的一样；报告里那个位置不撞、走到位再撞；撞到最远时嘴尖在船壳上）；`test_v06_the_night`、`test_v07_the_cabin_at_night`、`test_v05_the_cabin` 跟着新规矩改。
+  - 信标改成船舱旁边的表盘（"Beacon还是在右上角，界面像网页游戏"）：`HUD.objective_dial`（`_medallion`，在船舱徽章左边，和日晷对称；圈是修好的段数或充能或守住的天数，牌子 `HUD_BEACON_DIAL`、`HUD_BEACON_CHARGING_DIAL`、`HUD_RESCUE_DIAL`，悬停写 `objective_status`，肩上 J，点开日志；有消息时跳一下 `_open_objective`）；右上角的卡片拿掉，`objective_panel` 只剩钉住目标的小牌子；`UI.objective_open_seconds` 换成 `objective_nod_scale`、`objective_nod_seconds`。
+  - 来袭不倒数（"恐龙还有几秒进攻不要写出来，这个太假了"）：`HUD.raid_mark`（日晷肩上的红色恐龙标记，日晷的悬停写 `HUD_RAID_WARNING`/`HUD_FINAL_WAVE`，都不带数字）；`raid_line`、`raid_row` 拿掉；`HINT_FINAL_WAVE_SOON` 不带秒数。
+  - 跳过开场的简报（"开场故事如果玩家跳过的话……要有明确的类似tutorial的停止方式"）：新的 `scripts/ui/Briefing.gd`（暂停、四行：坠落、信标、电池几天、恐龙会来撞；日志在 J；"明白了"/回车/Esc）；`StationJump.was_skipped`；`Main._after_the_crash`（跳过了 `HUD.brief`，否则 `tell_the_story`）；`UI.briefing_width`。`tools/playtest.gd` 的 `journal` 场景拍简报、表盘、来袭标记、日志。
+  - 测试：`test_v07_the_journal`（表盘在船舱左边、和日晷对称、肩上 J、悬停写下一步；跳过开场停在简报上、读完给任务；没跳过他自己说；自定义游戏没有简报）；`test_v06_heard_not_shouted`、`test_v06_the_beacon_is_heard`（标记，不带数字）；`test_v06_beacon` test_18（表盘的圈和牌子）；`test_v06_custom_games`、`test_v06_the_card_leaves_the_goal_in_sight` 跟着改。
+  - 塔升级时不打（"塔在升级的时候不能进攻"）：`AmmoTower._is_live` 加上 `is_upgrading()`（弓塔、落木塔、投石塔、诱饵台都走它）。测试：`test_v07_the_towers` test_12b。
+  - 平衡（"落木塔和弓塔就按照你说的，调整"）：落木塔三级 `range` 2.5 → 3.0；第 1 站 `raiders_by_day` 加一段 `from_raid` 2（第一天第二次来袭起每 5 只腔骨龙 1 只链鳄），第 2 天 4 : 1，第 3 天链鳄 0.8 → 1.0；`WaveManager._raiders_now` 认 `from_raid`（按列出的顺序取最后一段已开始的）。测试：`test_v07_the_chargers` test_01 改成"从第二次来袭起"，新的 test_05b（第一次来袭没有链鳄，之后按图上的比例，第二天更多）。
 
 ## v0.7 已定要做的（未开工）
 

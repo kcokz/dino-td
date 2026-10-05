@@ -409,10 +409,10 @@ func heal(amount: float) -> void:
 # ==============================================================================
 ## The building this one is being turned into, and how far the work has got (0..1).
 ##
-## An upgrade is paid for when it is ordered -- the deal a blueprint gets -- and the old
-## building keeps working the whole time the Hero builds the new one onto it: upgrading
-## costs him time and materials, never a hole in the defence (GAME-DESIGN 6.1: a line of
-## buildings upgrades in place).
+## An upgrade is paid for when it is ordered -- the deal a blueprint gets -- and a line of
+## buildings upgrades in place (GAME-DESIGN 6.1). A wall stands meanwhile; a tower does not
+## shoot till the work is done (AmmoTower._is_live; the player, 2026-10-04: "塔在升级的时候不能
+## 进攻") -- it was never a hole in the defence, and now it is one, for as long as he takes.
 var upgrading_to: String = ""
 var upgrade_progress: float = 0.0
 

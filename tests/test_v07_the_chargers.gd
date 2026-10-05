@@ -59,6 +59,14 @@ func _raiders_from(map: Dictionary, species: String) -> int:
 			return int(step["from_day"])
 	return -1
 
+## The first raid `species` comes with on `map`: the first step of its raiders_by_day that has it, and that step's
+## `from_raid`, or the first raid of its day.
+func _from_raid(map: Dictionary, species: String) -> int:
+	for step in map.get("raiders_by_day", []):
+		if Dictionary(step.get("raiders", {})).has(species):
+			return int(step.get("from_raid", 0)) if int(step.get("from_raid", 0)) > 0 else 1000 * int(step["from_day"])
+	return -1
+
 func test_01_the_chargers_are_armoured_plant_eaters_with_the_raids() -> void:
 	for species in CHARGERS:
 		var row: Dictionary = _row(species)
@@ -70,8 +78,8 @@ func test_01_the_chargers_are_armoured_plant_eaters_with_the_raids() -> void:
 		assert_gt(int(row["drops"].get("bone", 0)), 0, "and bone")
 		assert_true(VisualLibrary.has_art("dino/%s" % species), "%s is drawn as itself" % species)
 		assert_false(Dictionary(row.get("gaits", {})).is_empty(), "%s strides at its own paces" % species)
-	assert_gt(_raiders_from(config_node.map_data("valley"), "desmatosuchus"), 1,
-		"Desmatosuchus comes with the first station's raids, from a day on")
+	assert_gt(_from_raid(config_node.map_data("valley"), "desmatosuchus"), 1,
+		"Desmatosuchus comes with the first station's raids, from the second (the first is the pack alone: supply)")
 	assert_gt(_raiders_from(config_node.map_data("morrison"), "stegosaurus"), 1,
 		"the Stegosaurus with the second's")
 	assert_true(bool(_row("stegosaurus").get("heavy", false)), "the Stegosaurus is heavy: only a weighted log shoves it")
@@ -128,6 +136,37 @@ func test_05_a_cold_campfire_does_not_turn_it() -> void:
 	var d = _animal("desmatosuchus", fire.global_position + Vector3(1.5, 0.0, 0.0))
 	d._think()
 	assert_false(d.frightened, "a cold fire frightens nothing")
+
+func test_05b_the_first_raid_is_the_pack_alone_then_the_armoured_come_more_by_the_day() -> void:
+	# The player, 2026-10-04 ("落木塔和弓塔就按照你说的，调整"): the bow tower's counter, sooner and more.
+	var main = await fresh_level()
+	_cleanup_nodes.append(main)
+	var wm = main.wave_manager
+	wm.auto_raid_enabled = false
+	var steps: Array = game_state_node.map_data().get("raiders_by_day", [])
+	var share := func(day: int, raid: int) -> float:
+		game_state_node.day_clock = float(config_node.DAY["length"]) * float(day - 1) + 10.0
+		game_state_node._run_the_day(0.0)
+		wm.current_wave = raid
+		var n: int = 0
+		for i in 400:
+			if wm._species_to_spawn() == "desmatosuchus":
+				n += 1
+		return float(n) / 400.0
+	var weight := func(day: int, raid: int) -> float:
+		var out: Dictionary = game_state_node.map_data().get("raiders", {})
+		for step in steps:
+			if int(step.get("from_day", 1)) <= day and int(step.get("from_raid", 0)) <= raid:
+				out = step["raiders"]
+		var total: float = 0.0
+		for k in out:
+			total += float(out[k])
+		return float(out.get("desmatosuchus", 0.0)) / total
+	assert_almost_eq(share.call(1, 1), 0.0, 0.0001, "The first raid is the pack alone: the run's supply")
+	assert_gt(weight.call(1, 2), 0.0, "From the second raid the armoured come")
+	assert_almost_eq(share.call(1, 2), weight.call(1, 2), 0.06, "as many as the map says (%.2f)" % weight.call(1, 2))
+	assert_gt(weight.call(2, 6), weight.call(1, 2), "and more from the second day")
+	assert_almost_eq(share.call(2, 6), weight.call(2, 6), 0.06, "(%.2f)" % weight.call(2, 6))
 
 func test_06_its_strides_are_drawn_at_its_own_pace() -> void:
 	await _field()

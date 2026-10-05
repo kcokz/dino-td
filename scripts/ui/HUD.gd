@@ -38,7 +38,7 @@ var resource_bar: Container = null
 var resource_labels: Dictionary = {}     # res_id -> the count Label
 ## The hand-drawn map at the top left, once he has made it (MiniMap; RECIPES.hide_map).
 var minimap: MiniMap = null
-## The pinned goal's line under the beacon's (GameState.goal).
+## The pinned goal's line, on its plate at the top right (GameState.goal; objective_panel).
 var goal_label: Label = null
 var resource_chips: Dictionary = {}      # res_id -> the chip (icon + count)
 # The readouts every older caller asks for by name. They are entries of resource_labels.
@@ -47,31 +47,31 @@ var stone_label: Label = null
 var water_label: Label = null
 var food_label: Label = null
 var bone_label: Label = null
-## Where the beacon has got to (v0.6 T7): stages repaired, ready, or charging. Always on
-## screen -- it is the run's main line (GAME-DESIGN 14.3, 6: how far is the goal).
-var beacon_label: Label = null
+## THE GOAL'S DIAL (GAME-DESIGN 8.2b; the player, 2026-10-04: "Beacon还是在右上角，界面像网页游戏"): beside the cabin's
+## medallion at its left, as the day's is at its right -- the beacon's stages lit round it and then its charge, or holding
+## out's days; its count on its plate; on hover what is to be done next (GameState.objective_status); in our own game the
+## journal's key at its shoulder and, clicked, the journal. No card in the corner. Up once the goal is his (give_objective).
+var objective_dial: Control = null
+var objective_ring: TextureProgressBar = null
+var objective_value: Label = null
+var _objective_keycap: Label = null
+## The pinned goal's plate at the top right (goal_label): up only while a goal is pinned.
 var objective_panel: Control = null
 ## What he says, over his head (HeroVoice, EventBus.hero_spoke).
 var speech_bubble: PanelContainer = null
 var speech_label: Label = null
 var _speech_until_ms: int = 0
-var beacon_pips: HBoxContainer = null
-var beacon_bar: ProgressBar = null
 var wave_label: Label = null
 var core_hp_label: Label = null
 var core_hp_bar: TextureProgressBar = null
 var core_vital: Control = null
-## THE GOAL'S CARD, FOLDED (the player, 2026-10-04: "Beacon右上角的提示应该不要一直显示，用专业游戏的best practice应该有个类似
-## 日志或者任务之类的显示方法"): at the top right its mark alone -- its icon, its name, a pip a stage -- and what is to be done
-## next only while there is news (Config.UI.objective_open_seconds: a stage done, the launch, the goal given), the
-## cursor is over it, or the journal is open. Given (give_objective): in our own game, once the story has said why
-## (tell_the_story); otherwise from the first. Clicked, or J (Keys), the journal (toggle_journal) -- in our own game.
-var objective_detail: VBoxContainer = null
+## The goal given (give_objective): in our own game, once the story has said why (tell_the_story); otherwise from the
+## first. J (Keys) or the dial clicked: the journal (toggle_journal) -- in our own game.
 var _objective_given: bool = true
-var _objective_open_ms: int = 0
-var _objective_hovered: bool = false
 var journal_panel: PanelContainer = null
 var _journal_box: VBoxContainer = null
+## The card the game holds on when the opening was skipped (Briefing; brief).
+var briefing: Briefing = null
 ## What the journal says, oldest first: [{title, text}], its keys' words said in the language of the moment.
 var _journal: Array = []
 ## Which run the story is being told for: a run begun again while it is told is not given the goal by it.
@@ -99,12 +99,14 @@ var pause_btn: Button = null
 var speed_btn: Button = null
 var speed_buttons: Array[Button] = []
 var menu_btn: Button = null
-## A raid on its way, said quietly in the goal's card -- "Raid in 12 s", or the final wave's count -- and
-## counted down. The alarm itself is the pack's call, heard from the nest's side, and his word on where they
-## come from (HeroVoice): a red banner across the screen was too much (v0.6 round six: "红字提醒太突兀了").
-var raid_line: Label = null
-## The line with its mark, shown and hidden as one.
-var raid_row: Control = null
+## A raid on its way: a mark at the day dial's shoulder, and the day's tooltip says so. The alarm itself is the pack's
+## call, heard from the nest's side, and his word on where they come from (HeroVoice). Never how long: nobody could tell
+## that (the player, 2026-10-04: "恐龙还有几秒进攻不要写出来，这个太假了，没人能detect这个"); a red banner across the
+## screen was too much (v0.6 round six: "红字提醒太突兀了").
+var raid_mark: TextureRect = null
+## Whether the mark is up for the final wave (the signal out) rather than a raid of the clock's; how long it has breathed.
+var _raid_final: bool = false
+var _raid_pulse: float = 0.0
 var option_panel: Node = null
 ## His commands -- Build, Rest, Torch -- in the corner under the card (v0.6 round four).
 var hero_commands: HeroCommands = null
@@ -398,7 +400,7 @@ func _refresh_goal(res: Dictionary = {}) -> void:
 	var has_goal: bool = gs != null and "goal" in gs and not (gs.goal as Dictionary).is_empty()
 	goal_label.visible = has_goal
 	if not has_goal:
-		_refresh_beacon_label()
+		_refresh_objective_panel()
 		return
 	var short: Dictionary = gs.goal_short()
 	var parts: PackedStringArray = []
@@ -436,7 +438,9 @@ func _on_goal_label_input(event: InputEvent) -> void:
 func _fit_stock() -> void:
 	if resource_bar == null or core_vital == null or not core_vital.is_inside_tree():
 		return
-	var room: float = core_vital.get_global_rect().position.x - resource_bar.get_global_rect().position.x - UiTheme.space("m")
+	# Up to the goal's dial when it is up, beside the cabin's medallion at its left.
+	var stop: Control = objective_dial if (objective_dial != null and objective_dial.visible) else core_vital
+	var room: float = stop.get_global_rect().position.x - resource_bar.get_global_rect().position.x - UiTheme.space("m")
 	for squeezed in [false, true]:
 		_squeeze_chips(squeezed)
 		for gap in [UiTheme.space("l"), UiTheme.space("s"), UiTheme.space("xs")]:
@@ -469,14 +473,18 @@ func _squeeze_chips(on: bool) -> void:
 
 func _process(delta: float) -> void:
 	_place_speech()
-	_tick_raid_line()
+	_tick_raid_mark()
 	_refresh_day_dial()
 	var gs = _get_game_state()
 	if gs and gs.has_method("is_beacon_launched") and gs.is_beacon_launched():
 		_refresh_beacon_label()
-	# The card folds again when its news is old.
-	if objective_detail != null and objective_detail.visible != (objective_open() and beacon_label != null and beacon_label.visible):
-		_fold_objective()
+	# A raid on its way: its mark breathes, slowly -- found by the eye, not shouting (UiTheme pulse_*).
+	if raid_mark != null and raid_mark.visible:
+		_raid_pulse += delta
+		var low: float = UiTheme.number("pulse_floor")
+		raid_mark.modulate.a = low + (1.0 - low) * (0.5 + 0.5 * cos(_raid_pulse * UiTheme.number("pulse_speed") * 0.5))
+	else:
+		_raid_pulse = 0.0
 	# The cabin nearly gone: its readout pulses, a warning that does not depend on colour.
 	if core_vital:
 		if _core_ratio < UiTheme.number("hp_low_ratio"):
@@ -490,7 +498,7 @@ func _process(delta: float) -> void:
 ## A stage repaired, or the launch. The charge's countdown is _process's.
 func _on_beacon_changed(steps_done: int) -> void:
 	_refresh_beacon_label()
-	# News: the card opens a while; a stage done is written in the journal.
+	# News: the dial nods; a stage done is written in the journal.
 	var stages_gs = _get_game_state()
 	if steps_done >= 1 and stages_gs and stages_gs.has_method("beacon_stage_count") and steps_done <= int(stages_gs.beacon_stage_count()):
 		_open_objective()
@@ -520,38 +528,22 @@ func _on_wreck_located(part: String) -> void:
 	var where: String = tr("DIR_" + side) if side != "" and side != "here" else ""
 	show_hint(tr("HINT_WRECK_LOCATED") % [tr("RESOURCE_%s" % part.to_upper()), where], UiTheme.toast_seconds("long"), part)
 
-## The signal is out and the valley will answer: the raid line counts down to the final wave
-## (GameState.final_wave_in, _render_final_line) and a hint says to build what he can meanwhile.
+## The signal is out and the valley will answer: said -- build what he can meanwhile -- and the raid's mark up for the
+## final wave until it sets out (GameState.final_wave_in, _tick_raid_mark). How long, nobody says.
 func _on_final_wave_warning(seconds: float) -> void:
-	show_hint(tr("HINT_FINAL_WAVE_SOON") % int(ceil(seconds)), UiTheme.toast_seconds("long"), "warning")
+	show_hint(tr("HINT_FINAL_WAVE_SOON"), UiTheme.toast_seconds("long"), "warning")
 	_raid_horn_sounded = false
+	_raid_final = true
 	_on_raid_warning(seconds)
-	_render_final_line()
 
-func _render_final_line() -> void:
-	var gs = _get_game_state()
-	if raid_line == null or gs == null or float(gs.final_wave_in) < 0.0:
+## The final wave's mark down as it sets out (GameState.final_wave_in back below nought).
+func _tick_raid_mark() -> void:
+	if not _raid_final:
 		return
-	raid_line.text = tr("HUD_FINAL_WAVE") % int(ceil(float(gs.final_wave_in)))
-
-## The raid line, second by second: to the final wave while the valley's answer is on its way
-## (GameState.final_wave_in), gone as it sets out; otherwise to the raid warned of, on the raid's own
-## clock (WaveManager.warned_raid_in) -- so a pause holds it and the game's speed runs it.
-func _tick_raid_line() -> void:
 	var gs = _get_game_state()
-	var final_in: float = float(gs.final_wave_in) if (gs != null and "final_wave_in" in gs) else -1.0
-	if raid_line != null and raid_line.visible:
-		if final_in >= 0.0:
-			_render_final_line()
-		elif _final_line_up:
-			_on_raid_warning(0.0)
-		else:
-			var waves = get_tree().get_first_node_in_group("wave_manager") if is_inside_tree() else null
-			var left: float = float(waves.warned_raid_in()) if (waves != null and waves.has_method("warned_raid_in")) else -1.0
-			if left >= 0.0:
-				_raid_seconds = int(ceil(left))
-				_render_raid_line()
-	_final_line_up = final_in >= 0.0
+	if gs == null or not ("final_wave_in" in gs) or float(gs.final_wave_in) < 0.0:
+		_raid_final = false
+		_on_raid_warning(0.0)
 
 ## Launched: everything in the valley is on its way, from every side (GAME-DESIGN 8.3).
 func _on_beacon_launched() -> void:
@@ -681,62 +673,47 @@ func raid_summary_text(summary: Dictionary) -> String:
 		", ".join(drops) if not drops.is_empty() else tr("HUD_NOTHING"),
 		", ".join(lost) if not lost.is_empty() else tr("HUD_NOTHING")]
 
-## "Beacon: 1/3 stages repaired", "... ready to launch", "Beacon charging 45% · 1:39" --
-## Config.beacon_status, which the beacon's bench says too -- with a pip per stage and, once
-## it is charging, the charge as a bar. Hidden on a map without one.
+## The goal's dial from the run (GameState.objective_status, which the beacon's bench says too): round it the beacon's
+## stages repaired of its stages, then, launched, its charge -- or the days held out of the days to hold out; on its plate
+## the count; on hover what is to be done next. Hidden on a map with no goal, and till the goal is his.
 func _refresh_beacon_label() -> void:
-	if beacon_label == null or not is_instance_valid(beacon_label):
+	if objective_dial == null or not is_instance_valid(objective_dial):
 		return
 	var gs = _get_game_state()
-	var text: String = ""
-	if gs and gs.has_method("objective_status"):
-		text = String(gs.objective_status())
-	beacon_label.text = text
-	beacon_label.visible = text != ""
-	_refresh_objective_panel()
-	if text == "" or gs == null:
+	var text: String = String(gs.objective_status()) if (gs and gs.has_method("objective_status")) else ""
+	objective_dial.visible = text != "" and _objective_given
+	if text == "":
 		return
-	var title = find_child("ObjectiveTitle", true, false) as Label
 	var rescue: bool = gs.has_method("goal_kind") and String(gs.goal_kind()) == "rescue"
-	if title:
-		title.text = tr("HUD_OBJECTIVE_RESCUE" if rescue else "HUD_OBJECTIVE_BEACON")
-	# Held out for rescue (GameState "rescue" goal): the days gone of the days to go, as the charge is drawn.
+	var face := objective_dial.find_child("Portrait", true, false) as TextureRect
+	if face:
+		face.texture = UiTheme.icon("beacon")
+	var ratio: float = 0.0
+	var plate: String = ""
 	if rescue:
-		_draw_pips(0, 0)
-		if beacon_bar:
-			beacon_bar.visible = true
-			beacon_bar.value = float(gs.rescue_ratio())
-		return
-	var stages: int = int(gs.beacon_stage_count()) if gs.has_method("beacon_stage_count") else 0
-	var done: int = int(gs.beacon_stages_done()) if gs.has_method("beacon_stages_done") else 0
-	_draw_pips(stages, done)
-	var launched: bool = gs.has_method("is_beacon_launched") and gs.is_beacon_launched()
-	if beacon_bar:
-		beacon_bar.visible = launched
-		if launched:
-			beacon_bar.value = float(gs.beacon_charge_ratio())
-
-## One pip per stage: lit when it stands repaired.
-func _draw_pips(stages: int, done: int) -> void:
-	if beacon_pips == null:
-		return
-	if beacon_pips.get_child_count() != stages:
-		for child in beacon_pips.get_children():
-			beacon_pips.remove_child(child)
-			child.queue_free()
-		for i in range(stages):
-			var pip := Panel.new()
-			pip.custom_minimum_size = Vector2(UiTheme.width("pip"), UiTheme.thickness("pip"))
-			pip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			beacon_pips.add_child(pip)
-	for i in range(beacon_pips.get_child_count()):
-		(beacon_pips.get_child(i) as Panel).theme_type_variation = &"PipOn" if i < done else &"PipOff"
+		ratio = float(gs.rescue_ratio())
+		plate = tr("HUD_RESCUE_DIAL") % int(gs.rescue_days_left())
+	elif gs.has_method("is_beacon_launched") and gs.is_beacon_launched():
+		ratio = float(gs.beacon_charge_ratio())
+		plate = tr("HUD_BEACON_CHARGING_DIAL") % int(round(ratio * 100.0))
+	else:
+		var stages: int = int(gs.beacon_stage_count()) if gs.has_method("beacon_stage_count") else 0
+		var done: int = int(gs.beacon_stages_done()) if gs.has_method("beacon_stages_done") else 0
+		ratio = float(done) / float(maxi(1, stages))
+		plate = tr("HUD_BEACON_DIAL") % [done, stages]
+	objective_ring.value = ratio
+	objective_value.text = plate
+	if _objective_keycap != null:
+		_objective_keycap.visible = _tells_story()
+	var tip: String = "%s\n%s" % [tr("HUD_OBJECTIVE_RESCUE" if rescue else "HUD_OBJECTIVE_BEACON"), text]
+	if _tells_story():
+		tip += "\n" + tr("HUD_OBJECTIVE_TIP") % Keys.text("journal_key")
+	objective_dial.tooltip_text = tip
 
 func _on_wave_started(n: int, is_big: bool) -> void:
 	if wave_label:
 		wave_label.text = tr("HUD_BIG_WAVE") % n if is_big else tr("HUD_WAVE") % n
-	_show_raid_line(false)
+	_show_raid_mark(false)
 
 ## The day's dial, from the clock (GameState.time_of_day): how far round today is, in the colour of
 ## its part; the sun, or at night the moon; the day of the run; and on hover, how long this part has
@@ -769,6 +746,8 @@ func _refresh_day_dial() -> void:
 	var left: int = int(ceil((next_at - t) * pace))
 	day_dial.tooltip_text = tr("HUD_DAY_TIP") % [int(gs.day_number()), tr("DAY_PART_" + part.to_upper()),
 		"%d:%02d" % [left / 60, left % 60]]
+	if raid_mark != null and raid_mark.visible:
+		day_dial.tooltip_text += "\n" + tr("HUD_FINAL_WAVE" if _raid_final else "HUD_RAID_WARNING")
 
 ## A part of the day begun: said, with what the raiders do in it (GAME-DESIGN 9.3). The run's first
 ## dusk says too what the dark is and what fire is for (9.2's timeline: "第一个黄昏：生火"), with the
@@ -850,48 +829,38 @@ func _on_stage_wave_started(_size: int) -> void:
 	if wave_label:
 		wave_label.text = tr("HUD_STAGE_WAVE")
 
-## The seconds the raid line gives, and whether it was counting to the final wave last frame.
-var _raid_seconds: int = 0
-var _final_line_up: bool = false
+## The raid's mark up or down (and the day's tooltip with it).
+func _show_raid_mark(on: bool) -> void:
+	if raid_mark != null:
+		raid_mark.visible = on
+	if not on:
+		_raid_final = false
+	_refresh_day_dial()
 
-func _render_raid_line() -> void:
-	if raid_line != null:
-		raid_line.text = tr("HUD_RAID_WARNING") % _raid_seconds
+## Whether a raid's mark is up: one on its way, or the final wave.
+func is_raid_marked() -> bool:
+	return raid_mark != null and raid_mark.visible
 
-## The raid line up or down, and the goal's card with it when nothing else keeps it up.
-func _show_raid_line(on: bool) -> void:
-	if raid_line != null:
-		raid_line.visible = on
-	if raid_row != null:
-		raid_row.visible = on
-	_refresh_objective_panel()
-
-## The goal's card is up while it has something to say: the beacon, a pinned goal, a raid on its way.
+## The pinned goal's plate is up while a goal is pinned.
 func _refresh_objective_panel() -> void:
 	if objective_panel == null:
 		return
-	var beacon: bool = beacon_label != null and is_instance_valid(beacon_label) and beacon_label.visible
-	var goal: bool = goal_label != null and is_instance_valid(goal_label) and goal_label.visible
-	var raid: bool = raid_row != null and raid_row.visible
-	# The goal not yet given (tell_the_story): only a raid's line, if one is coming.
-	objective_panel.visible = (beacon and _objective_given) or goal or raid
-	# In our own game it says where the journal is.
-	objective_panel.tooltip_text = (tr("HUD_OBJECTIVE_TIP") % Keys.text("journal_key")) if _tells_story() else ""
-	_fold_objective()
+	objective_panel.visible = goal_label != null and is_instance_valid(goal_label) and goal_label.visible
 
-## Whether the card shows what is to be done next: with news a moment ago, under the cursor, with the journal open.
-func objective_open() -> bool:
-	return _objective_hovered or Time.get_ticks_msec() < _objective_open_ms \
-		or (journal_panel != null and is_instance_valid(journal_panel) and journal_panel.visible)
-
-## Opened for a while (Config.UI.objective_open_seconds): news of the goal.
+## News of the goal -- given, a stage done, the launch: the dial nods (Config.UI.objective_nod_*), and is shown afresh.
 func _open_objective() -> void:
-	_objective_open_ms = Time.get_ticks_msec() + int(float(_ui("objective_open_seconds", 8.0)) * 1000.0)
-	_fold_objective()
-
-func _fold_objective() -> void:
-	if objective_detail != null and is_instance_valid(objective_detail):
-		objective_detail.visible = objective_open() and beacon_label != null and beacon_label.visible
+	_refresh_beacon_label()
+	if objective_dial == null or not objective_dial.visible or not objective_dial.is_inside_tree():
+		return
+	var disc: Control = objective_dial.get_node_or_null("Disc") as Control
+	if disc == null:
+		return
+	disc.pivot_offset = disc.size * 0.5
+	var nod: float = float(_ui("objective_nod_scale", 1.18))
+	var half: float = float(_ui("objective_nod_seconds", 0.5)) * 0.5
+	var tw := disc.create_tween()
+	tw.tween_property(disc, "scale", Vector2.ONE * nod, half).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(disc, "scale", Vector2.ONE, half).set_trans(Tween.TRANS_SINE)
 
 ## Clicked: the journal, in our own game.
 func _on_objective_input(event: InputEvent) -> void:
@@ -908,7 +877,7 @@ func _tells_story() -> bool:
 ## The goal held back: the story is about to say why (Main.open_on_the_crash).
 func hold_objective() -> void:
 	_objective_given = false
-	_refresh_objective_panel()
+	_refresh_beacon_label()
 
 ## THE STORY'S OPENING (Config.STORY): out of the crashed capsule, he says what has happened and what he must do, a
 ## line at a time; then the goal is his (give_objective). `pace` speeds the waits (a test's). Not our own game, the goal
@@ -931,8 +900,26 @@ func tell_the_story(pace: float = 1.0) -> void:
 			return
 	give_objective(true)
 
-## The goal his (the beacon, or holding out): its card comes in, and -- with `news` -- opens a while; in our own game the
-## journal is begun and says so.
+## THE BRIEFING (Briefing): the opening skipped in our own game, the game held on a card that says what has happened and
+## what he must do; read, the goal is his. Not our own game: the goal at once.
+func brief() -> void:
+	if not _tells_story():
+		give_objective(true)
+		return
+	if briefing == null or not is_instance_valid(briefing):
+		briefing = Briefing.new()
+		root_control.add_child(briefing)
+		briefing.closed.connect(_on_briefing_read)
+	briefing.open()
+
+func is_briefing_open() -> bool:
+	return briefing != null and is_instance_valid(briefing) and briefing.is_open()
+
+func _on_briefing_read() -> void:
+	give_objective(true)
+
+## The goal his (the beacon, or holding out): its dial comes in, and -- with `news` -- fades in and nods; in our own game
+## the journal is begun and says so.
 func give_objective(news: bool = false) -> void:
 	_objective_given = true
 	if _tells_story() and _journal.is_empty():
@@ -941,10 +928,10 @@ func give_objective(news: bool = false) -> void:
 	_refresh_beacon_label()
 	if not news:
 		return
+	if objective_dial != null and objective_dial.visible:
+		objective_dial.modulate.a = 0.0
+		objective_dial.create_tween().tween_property(objective_dial, "modulate:a", 1.0, UiTheme.number("fade_seconds") * 2.0)
 	_open_objective()
-	if objective_panel != null and objective_panel.visible:
-		objective_panel.modulate.a = 0.0
-		objective_panel.create_tween().tween_property(objective_panel, "modulate:a", 1.0, UiTheme.number("fade_seconds") * 2.0)
 	if _tells_story():
 		show_hint(tr("HUD_JOURNAL_UPDATED") % [tr("JOURNAL_BEACON_TITLE"), Keys.text("journal_key")], UiTheme.toast_seconds("read"), "beacon")
 
@@ -973,7 +960,6 @@ func toggle_journal() -> void:
 		_build_journal()
 	journal_panel.visible = not journal_panel.visible
 	_render_journal()
-	_fold_objective()
 
 func is_journal_open() -> bool:
 	return journal_panel != null and is_instance_valid(journal_panel) and journal_panel.visible
@@ -1064,10 +1050,10 @@ func _on_boss_arrived(dino: Node) -> void:
 ## off -- that and his word are the warning (HeroVoice) -- and the quiet line in the goal's card. Nothing
 ## flashes: time_left 0 takes the line down.
 func _on_raid_warning(time_left: float) -> void:
-	if raid_line == null:
+	if raid_mark == null:
 		return
 	if time_left <= 0.0:
-		_show_raid_line(false)
+		_show_raid_mark(false)
 		_raid_horn_sounded = false
 		return
 	if not _raid_horn_sounded:
@@ -1079,9 +1065,7 @@ func _on_raid_warning(time_left: float) -> void:
 				fx.play_at("raid_warning", nest.global_position + Vector3(0.0, 2.0, 0.0))
 			else:
 				fx.play(fx.Sound.RAID_WARNING)
-	_raid_seconds = int(ceil(time_left))
-	_render_raid_line()
-	_show_raid_line(true)
+	_show_raid_mark(true)
 
 func _on_speed_btn_pressed() -> void:
 	var cur_idx = _speeds().find(current_speed)
@@ -1375,7 +1359,6 @@ func reset_hud(new_run: bool = true) -> void:
 		# A new run: its goal given from the first (a story about to be told holds it back: hold_objective), its journal
 		# empty, a story being told for the run before let go.
 		_objective_given = true
-		_objective_open_ms = 0
 		_story_run += 1
 		_journal.clear()
 		if journal_panel != null and is_instance_valid(journal_panel):
@@ -1398,7 +1381,7 @@ func reset_hud(new_run: bool = true) -> void:
 			hero_commands.reset()
 	if game_over_panel:
 		game_over_panel.visible = false
-	_show_raid_line(false)
+	_show_raid_mark(false)
 	_update_speed_btn_label()
 	if hero_commands:
 		hero_commands.visible = true
@@ -1759,9 +1742,39 @@ func _ensure_ui_components() -> void:
 	day_dial.offset_bottom = day_dial.offset_top
 	_refresh_day_dial()
 
-	# Under the strip at its right: the goal.
-	objective_panel = _panel("ObjectivePanel", &"TechPanel")
-	objective_panel.custom_minimum_size = Vector2(_ui("objective_width", 280), 0)
+	# At the day's dial's shoulder, a raid on its way (raid_mark): the pack's mark in the alarm's red -- never a count.
+	var day_disc: Control = day_dial.get_node_or_null("Disc") as Control
+	raid_mark = _icon("RaidMark", "dino", UiTheme.icon_size("s"))
+	raid_mark.modulate = UiTheme.color("danger")
+	raid_mark.visible = false
+	if day_disc != null:
+		day_disc.add_child(raid_mark)
+		raid_mark.set_anchors_preset(Control.PRESET_TOP_LEFT, true)
+		raid_mark.size = Vector2.ONE * float(UiTheme.icon_size("s"))
+
+	# At the cabin's other side, the goal's dial (objective_dial): the beacon, or holding out.
+	var goal_dial := _medallion("ObjectiveDial", "beacon", "beacon", float(_ui("day_dial_scale", 0.55)))
+	objective_dial = goal_dial[0]
+	objective_ring = goal_dial[1]
+	objective_value = goal_dial[2]
+	objective_ring.name = "ObjectiveRing"
+	objective_value.name = "ObjectiveValue"
+	objective_ring.tint_progress = UiTheme.color("tech")
+	objective_dial.visible = false
+	root_control.add_child(objective_dial)
+	objective_dial.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_SIZE)
+	objective_dial.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	objective_dial.offset_left -= beside
+	objective_dial.offset_right -= beside
+	objective_dial.offset_top = float(_ui("emblem_top", 2))
+	objective_dial.offset_bottom = objective_dial.offset_top
+	objective_dial.mouse_filter = Control.MOUSE_FILTER_STOP
+	objective_dial.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	objective_dial.gui_input.connect(_on_objective_input)
+	_objective_keycap = _shoulder_keycap(objective_dial, Keys.text("journal_key"))
+
+	# Under the strip at its right, a goal he has pinned (GameState.goal): its plate, up only while it is pinned.
+	objective_panel = _panel("ObjectivePanel", &"PillPanel")
 	objective_panel.visible = false
 	root_control.add_child(objective_panel)
 	objective_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -1771,44 +1784,7 @@ func _ensure_ui_components() -> void:
 	objective_panel.offset_top = float(_ui("strip_height", 44)) + UiTheme.space("m")
 	objective_panel.offset_bottom = objective_panel.offset_top
 	var objective := _vbox("Objective")
-	objective.add_theme_constant_override("separation", UiTheme.space("xs") + UiTheme.space("hair"))
 	objective_panel.add_child(objective)
-	var header := HBoxContainer.new()
-	header.name = "ObjectiveHeader"
-	objective.add_child(header)
-	header.add_child(_icon("ObjectiveIcon", "beacon", UiTheme.icon_size("m")))
-	header.add_child(_label("ObjectiveTitle", &"TechLabel", ""))
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(gap)
-	beacon_pips = HBoxContainer.new()
-	beacon_pips.name = "BeaconPips"
-	beacon_pips.alignment = BoxContainer.ALIGNMENT_CENTER
-	beacon_pips.add_theme_constant_override("separation", UiTheme.space("hair"))
-	header.add_child(beacon_pips)
-	# What is to be done next, and the charge: shown with news, under the cursor, with the journal open (_fold_objective).
-	objective_detail = VBoxContainer.new()
-	objective_detail.name = "ObjectiveDetail"
-	objective_detail.add_theme_constant_override("separation", UiTheme.space("xs"))
-	objective_detail.visible = false
-	objective.add_child(objective_detail)
-	beacon_label = _label("BeaconLabel", &"MutedLabel", "")
-	beacon_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	objective_detail.add_child(beacon_label)
-	beacon_bar = ProgressBar.new()
-	beacon_bar.name = "BeaconBar"
-	beacon_bar.theme_type_variation = &"BeaconBar"
-	beacon_bar.show_percentage = false
-	beacon_bar.max_value = 1.0
-	beacon_bar.step = 0.0
-	beacon_bar.custom_minimum_size = Vector2(0, UiTheme.thickness("bar"))
-	beacon_bar.visible = false
-	objective_detail.add_child(beacon_bar)
-	# Over it, it opens; clicked, the journal.
-	objective_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	objective_panel.mouse_entered.connect(func(): _objective_hovered = true; _fold_objective())
-	objective_panel.mouse_exited.connect(func(): _objective_hovered = false; _fold_objective())
-	objective_panel.gui_input.connect(_on_objective_input)
 	# The hand-drawn map, once made (MiniMap): at the top left under the strip, level with the goal's panel
 	# at the right. Under that panel it was pushed down onto the cards that come up at the right as the
 	# panel grew (a goal pinned); here nothing else is. Its size is its own (MINIMAP.size).
@@ -1831,17 +1807,6 @@ func _ensure_ui_components() -> void:
 	goal_label.visible = false
 	goal_label.gui_input.connect(_on_goal_label_input)
 	objective.add_child(goal_label)
-	# A raid on its way, quietly, last in the card (raid_line): the words muted, the mark small -- it is
-	# heard and said first; this is only how long.
-	raid_row = HBoxContainer.new()
-	raid_row.name = "RaidRow"
-	raid_row.visible = false
-	raid_row.add_theme_constant_override("separation", UiTheme.space("xs"))
-	objective.add_child(raid_row)
-	raid_row.add_child(_icon("RaidIcon", "dino", UiTheme.icon_size("s")))
-	raid_line = _label("RaidLine", &"MutedLabel", "")
-	raid_line.visible = false
-	raid_row.add_child(raid_line)
 
 	# Bottom left: the Hero's medallion -- click it to pick him -- and his figures.
 	var hero_side := HBoxContainer.new()
@@ -2201,7 +2166,7 @@ func _home_key_text() -> String:
 
 ## A key set anew on the settings page (Keys): the medallions' chips say the new one, and the Hero's words.
 func _on_keys_changed() -> void:
-	for pair in [["CabinEmblem", _home_key_text()], ["HeroEmblem", _details_key_text()]]:
+	for pair in [["CabinEmblem", _home_key_text()], ["HeroEmblem", _details_key_text()], ["ObjectiveDial", Keys.text("journal_key")]]:
 		var emblem: Node = find_child(String(pair[0]), true, false)
 		var cap: Label = emblem.get_node_or_null("Disc/Keycap") as Label if emblem else null
 		if cap:

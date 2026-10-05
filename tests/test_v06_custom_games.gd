@@ -144,7 +144,8 @@ func test_05_the_custom_cabin_is_whole_and_its_beacon_calls() -> void:
 	for n in tree.get_nodes_in_group("resource_nodes"):
 		assert_false(bool(config_node.RESOURCE_NODES.get(String(n.resource_type), {}).get("smoke", false)),
 			"No wreck lies about: the beacon wants no part (%s)" % String(n.resource_type))
-	assert_eq(String(main.hud.find_child("ObjectiveTitle", true, false).text), tr("HUD_OBJECTIVE_RESCUE"), "Its card is the rescue's")
+	assert_true(String(main.hud.objective_dial.tooltip_text).begins_with(tr("HUD_OBJECTIVE_RESCUE")), "Its dial is the rescue's")
+	assert_eq(String(main.hud.objective_value.text), tr("HUD_RESCUE_DIAL") % int(game_state_node.rescue_days_left()), "the days to go on its plate")
 
 func test_06_held_out_the_rescue_comes() -> void:
 	_play("custom", {"map": "small", "days": "3"})

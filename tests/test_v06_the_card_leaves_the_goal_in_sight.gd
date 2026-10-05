@@ -62,17 +62,16 @@ func test_02_the_card_grows_no_further_than_the_goals_card_and_its_commands_scro
 	var main = await _level()
 	stock_everything()
 	var hud = main.hud
-	# The goal's card as tall as it gets: the beacon's line, a goal pinned, a raid's count.
+	# A goal pinned: its plate up at the top right.
 	game_state_node.pin_goal({"kind": "build", "id": "bow_tower"})
-	hud._on_raid_warning(15.0)
 	var panel = hud.option_panel
 	panel.select_target(_fence(main))
 	for i in 6:
 		await wait_frames(1)
 	var card: Rect2 = panel.get_global_rect()
 	var goal: Rect2 = hud.objective_panel.get_global_rect()
-	assert_true(hud.objective_panel.visible, "(the goal's card is up)")
-	assert_false(card.intersects(goal), "The card stays below the goal's card (%s, %s)" % [card, goal])
+	assert_true(hud.objective_panel.visible, "(the pinned goal's plate is up)")
+	assert_false(card.intersects(goal), "The card stays below the pinned goal (%s, %s)" % [card, goal])
 	var shown: float = panel.command_scroll.size.y
 	var all: float = panel.button_container.get_combined_minimum_size().y
 	if all > shown + 1.0:

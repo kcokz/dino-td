@@ -156,7 +156,7 @@ func _process(delta: float) -> void:
 		start_next_raid()
 
 ## How long until the raid warned of sets out -- the first of them, the clock's or the one a stage
-## stirred up -- or -1 with none warned of. The HUD counts it down (raid_line).
+## stirred up -- or -1 with none warned of. The HUD marks that one is coming (raid_mark), never how long.
 func warned_raid_in() -> float:
 	var left: float = maxf(0.0, raid_timer) if warning_emitted else -1.0
 	if _stirred > 0 and _stirred_warned and (left < 0.0 or _stirred_in < left):
@@ -638,16 +638,14 @@ func _species_to_spawn() -> String:
 			return String(species)
 	return String(raiders.keys().back())
 
-## Who raids now: the map's raiders, or the latest of its raiders_by_day begun (GameState.day_number) --
-## from the third day on the valley's, a runner for every three of the pack.
+## Who raids now: the map's raiders, or the latest of its raiders_by_day begun -- by the day (GameState.day_number),
+## and where a step says so by the raid as well (`from_raid`: the run's count of raids, this one among them) -- the
+## steps listed in the order they begin. From the third day on the valley's, a runner for every three of the pack.
 func _raiders_now() -> Dictionary:
 	var out: Dictionary = _map().get("raiders", {})
-	var best_day: int = -1
 	var day: int = _day_now()
 	for step in _map().get("raiders_by_day", []):
-		var from_day: int = int(step.get("from_day", 1))
-		if from_day <= day and from_day > best_day:
-			best_day = from_day
+		if int(step.get("from_day", 1)) <= day and int(step.get("from_raid", 0)) <= current_wave:
 			out = step.get("raiders", out)
 	return out
 

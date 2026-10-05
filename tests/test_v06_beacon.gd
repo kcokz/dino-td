@@ -345,31 +345,37 @@ func test_17_every_entry_is_open_ground_with_a_way_to_the_cabin() -> void:
 # ==============================================================================
 
 func test_18_where_the_beacon_has_got_to_is_always_on_screen() -> void:
+	# Its dial beside the cabin's medallion (v0.7, the player: "Beacon还是在右上角，界面像网页游戏"): the stages round it
+	# and on its plate, what is to be done next under the cursor.
 	var main = await _level()
 	var hud = main.hud
-	var label: Label = hud.beacon_label
-	assert_not_null(label, "The HUD has the beacon's line")
-	if label == null:
+	var dial: Control = hud.objective_dial
+	assert_not_null(dial, "The HUD has the beacon's dial")
+	if dial == null:
 		return
-	assert_true(label.visible, "From the first moment of the run")
-	assert_eq(label.text, String(config_node.beacon_status(_map(), 0, 0.0)), "Saying none of it is repaired")
+	var stages: int = int(game_state_node.beacon_stage_count())
+	assert_true(dial.visible, "From the first moment of the run")
+	assert_eq(hud.objective_value.text, tr("HUD_BEACON_DIAL") % [0, stages], "None of it repaired, on its plate")
+	assert_almost_eq(float(hud.objective_ring.value), 0.0, 0.001, "nor round it")
+	assert_true(dial.tooltip_text.contains(String(config_node.beacon_status(_map(), 0, 0.0))), "and under the cursor, said")
 	for res_id in config_node.beacon_job(_map(), _jobs()[0])["inputs"]:
-		assert_true(label.text.contains(tr("RESOURCE_%s" % String(res_id).to_upper())),
-			"And what the next stage takes: %s" % label.text)
-	var first: String = label.text
+		assert_true(dial.tooltip_text.contains(tr("RESOURCE_%s" % String(res_id).to_upper())),
+			"And what the next stage takes: %s" % dial.tooltip_text)
 	game_state_node.finish_beacon_job(_jobs()[0])
 	await wait_frames(1)
-	assert_ne(label.text, first, "A stage repaired changes it")
-	assert_eq(label.text, String(config_node.beacon_status(_map(), 1, 0.0)), "To one repaired")
+	assert_eq(hud.objective_value.text, tr("HUD_BEACON_DIAL") % [1, stages], "A stage repaired: one")
+	assert_almost_eq(float(hud.objective_ring.value), 1.0 / float(stages), 0.001, "a stage's share round it")
+	assert_true(dial.tooltip_text.contains(String(config_node.beacon_status(_map(), 1, 0.0))), "and said")
 
 	for i in range(_jobs().size() - 1):
 		game_state_node.finish_beacon_job(String(game_state_node.beacon_next_job()))
 	game_state_node.is_paused = true
 	game_state_node.charge_beacon(float(_beacon()["charge_seconds"]) * 0.5)
 	await wait_frames(1)
-	assert_eq(label.text, String(config_node.beacon_status(_map(), int(game_state_node.beacon_steps), float(game_state_node.beacon_charge))),
-		"Launched, it counts the charge down")
-	assert_true(label.text.contains("50"), "Half charged: %s" % label.text)
+	assert_true(dial.tooltip_text.contains(String(config_node.beacon_status(_map(), int(game_state_node.beacon_steps), float(game_state_node.beacon_charge)))),
+		"Launched, it says the charge")
+	assert_almost_eq(float(hud.objective_ring.value), 0.5, 0.01, "Half charged, half round")
+	assert_eq(hud.objective_value.text, tr("HUD_BEACON_CHARGING_DIAL") % 50, "and on its plate")
 
 func test_19_the_jump_is_the_victory_screen() -> void:
 	var main = await _level()

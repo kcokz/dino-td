@@ -1,8 +1,9 @@
 # res://tests/test_v06_heard_not_shouted.gd
 # The player, v0.6 round six: "来袭击不要直接红字提醒，要用声音加上别的一些提醒就够了，比如人说话之类的，红字提醒
 # 太突兀了". A raid on its way is heard -- the pack's call from the nest's side -- and told: he says where they come
-# from, then the other ways in, then who comes with them, a line after another (HeroVoice). How long is left is a
-# quiet line in the goal's card, counted down on the raid's own clock (HUD.raid_line). Nothing red across the top.
+# from, then the other ways in, then who comes with them, a line after another (HeroVoice). That one is on its way is
+# a small mark at the day's dial, and the day's tooltip says so (HUD.raid_mark); how long, nobody says (v0.7, the
+# player: "恐龙还有几秒进攻不要写出来，这个太假了，没人能detect这个"). Nothing red across the top.
 #
 # Everything expected is read from Config.
 extends "res://tests/test_base.gd"
@@ -63,31 +64,28 @@ func test_01_a_raid_on_its_way_is_no_banner() -> void:
 	await _warn(main)
 	var hud = main.hud
 	assert_true(main.wave_manager.warning_emitted, "(warned of)")
-	assert_true(hud.raid_line.visible, "How long is left is up")
-	assert_true(hud.objective_panel.is_ancestor_of(hud.raid_line), "in the goal's card, at the side")
-	assert_true(hud.objective_panel.visible, "(the card up with it)")
-	assert_eq(hud.raid_line.theme_type_variation, &"MutedLabel", "in its quiet letters")
-	assert_eq(String(hud.raid_line.text), tr("HUD_RAID_WARNING") % int(ceil(main.wave_manager.warned_raid_in())),
-		"-- how long (%s)" % hud.raid_line.text)
+	assert_true(hud.raid_mark.visible, "A mark says it is on its way")
+	assert_true(hud.day_dial.is_ancestor_of(hud.raid_mark), "at the day's dial")
+	assert_true(hud.day_dial.tooltip_text.ends_with(tr("HUD_RAID_WARNING")), "and the day says so (%s)" % hud.day_dial.tooltip_text)
+	assert_null(RegEx.create_from_string("\\d").search(tr("HUD_RAID_WARNING")), "never how long: nobody could tell that")
 	assert_null(hud.find_child("RaidWarning", true, false), "No banner across the top")
 	assert_false(UiTheme.get_theme().has_stylebox("panel", "BannerPanel"), "and none to be had")
 
-func test_02_it_counts_down_on_the_raids_own_clock() -> void:
+func test_02_nobody_counts_it_down_and_out_it_is_gone() -> void:
 	var main = await _level()
 	await _warn(main)
 	var wm = main.wave_manager
 	var hud = main.hud
-	# Held where it is, and three seconds taken off by hand.
+	# Held where it is, and three seconds taken off by hand: nothing on the screen moves with the raid's clock.
 	wm.auto_raid_enabled = false
-	var before: String = String(hud.raid_line.text)
 	wm.raid_timer -= 3.0
 	await wait_frames(1)
-	assert_eq(String(hud.raid_line.text), tr("HUD_RAID_WARNING") % int(ceil(wm.warned_raid_in())),
-		"Counted down with the raid's clock (%s)" % hud.raid_line.text)
-	assert_ne(String(hud.raid_line.text), before, "(it moved: %s, then %s)" % [before, hud.raid_line.text])
+	assert_true(hud.raid_mark.visible, "Still on its way")
+	assert_true(hud.day_dial.tooltip_text.ends_with(tr("HUD_RAID_WARNING")), "said the same, no count (%s)" % hud.day_dial.tooltip_text)
 	wm.start_next_raid()
 	await wait_frames(1)
-	assert_false(hud.raid_line.visible, "The raid out, the count is gone")
+	assert_false(hud.raid_mark.visible, "The raid out, the mark is gone")
+	assert_false(hud.day_dial.tooltip_text.contains(tr("HUD_RAID_WARNING")), "and the day no longer says it")
 
 func test_03_out_of_the_raiders_hours_it_is_called_off_and_warned_of_again() -> void:
 	var main = await _level()
@@ -103,14 +101,14 @@ func test_03_out_of_the_raiders_hours_it_is_called_off_and_warned_of_again() -> 
 	assert_ne(off, "", "(the first map's raiders keep hours of their own)")
 	wm._process(0.1)
 	await wait_frames(1)
-	assert_false(hud.raid_line.visible, "Their hours over, the raid is called off: no count standing still all %s" % off)
+	assert_false(hud.raid_mark.visible, "Their hours over, the raid is called off: no mark standing all %s" % off)
 	for part in config_node.DAY["parts"]:
 		_to_part(String(part))
 		if wm.raiders_out():
 			break
 	wm._process(0.1)
 	await wait_frames(1)
-	assert_true(hud.raid_line.visible, "Out again, it is warned of again")
+	assert_true(hud.raid_mark.visible, "Out again, it is warned of again")
 
 func test_04_he_tells_it_a_line_after_another() -> void:
 	var main = await _level()

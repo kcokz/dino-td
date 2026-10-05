@@ -152,11 +152,24 @@ func open_on_the_crash() -> void:
 	gs.crash_landing = false
 	if station_jump != null and is_instance_valid(station_jump):
 		station_jump.crash.call_deferred(self)
-		# The goal held back till he has said why (HUD.tell_the_story), when he is out of it.
+		# The goal held back till he has said why (HUD.tell_the_story), when he is out of it -- or the briefing has.
 		if hud and is_instance_valid(hud) and hud.has_method("hold_objective"):
 			hud.hold_objective()
-			if not station_jump.crashed.is_connected(hud.tell_the_story):
-				station_jump.crashed.connect(hud.tell_the_story.bind(1.0), CONNECT_ONE_SHOT)
+			if not station_jump.crashed.is_connected(_after_the_crash):
+				station_jump.crashed.connect(_after_the_crash, CONNECT_ONE_SHOT)
+
+## Out of the crashed capsule: watched through, he says what has happened and what he must do (HUD.tell_the_story);
+## the opening skipped, the game holds on the briefing (HUD.brief), which says it -- the beacon, the capsule's battery,
+## what will come for it (the player, 2026-10-04: "开场故事如果玩家跳过的话，在第一关我们要有明确的类似tutorial的停止方式
+## 来告诉玩家这个事情").
+func _after_the_crash() -> void:
+	if hud == null or not is_instance_valid(hud):
+		return
+	var skipped: bool = station_jump != null and is_instance_valid(station_jump) and bool(station_jump.was_skipped)
+	if skipped and hud.has_method("brief"):
+		hud.brief()
+	else:
+		hud.tell_the_story(1.0)
 
 ## Won with a station still to go: the jump, not the victory (HUD._on_game_won leaves it the screen).
 func _on_won_jump() -> void:

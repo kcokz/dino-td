@@ -3,9 +3,10 @@
 # 而且不要突兀的直接显示，应该有个前因后果的引入（这个是过关游戏特有，自定义没有的）".
 #
 # In our own game, out of the crashed capsule he says what has happened and what he must do (Config.STORY), and only
-# then is the beacon his goal: the journal begun, its card come in. The card is folded to its mark -- what is to be
-# done next only with news, under the cursor, or with the journal open. J (or a click on the card) opens the journal:
-# the goal now, the cabin's power, the story so far. A custom game has no opening and no journal.
+# then is the beacon his goal: the journal begun, its dial come in beside the cabin's medallion (v0.7, the player:
+# "Beacon还是在右上角，界面像网页游戏" -- no card in the corner). The opening skipped, the game holds on the briefing
+# instead ("开场故事如果玩家跳过的话，在第一关我们要有明确的类似tutorial的停止方式"). J (or a click on the dial) opens the
+# journal: the goal now, the cabin's power, the story so far. A custom game has no opening and no journal.
 extends "res://tests/test_base.gd"
 
 var config_node: Object = null
@@ -51,7 +52,7 @@ func test_01_out_of_the_capsule_he_says_why_and_then_the_goal_is_his() -> void:
 	var hud = main.hud
 	hud.hold_objective()
 	assert_false(hud.is_objective_given(), "The goal held back")
-	assert_false(hud.objective_panel.visible, "its card not up yet")
+	assert_false(hud.objective_dial.visible, "its dial not up yet")
 	var said: Array = []
 	var eb = tree.root.get_node("EventBus")
 	var hear := func(key: String, _s: float, _a: Array) -> void: said.append(key)
@@ -61,31 +62,30 @@ func test_01_out_of_the_capsule_he_says_why_and_then_the_goal_is_his() -> void:
 	var intro: Array = config_node.STORY["intro"]
 	assert_eq(said.slice(0, intro.size()), intro, "He says the story's lines, in their order")
 	assert_true(hud.is_objective_given(), "and then the goal is his")
-	assert_true(hud.objective_panel.visible, "its card come in")
-	assert_true(hud.objective_open(), "open a while with the news")
+	assert_true(hud.objective_dial.visible, "its dial come in")
+	assert_null(main.hud.find_child("ObjectiveHeader", true, false), "no card in the corner")
 	var titles: Array = hud.journal_entries().map(func(e): return String(e[0]))
 	assert_eq(titles, [tr("JOURNAL_CRASH_TITLE"), tr("JOURNAL_BEACON_TITLE")], "The journal begun: the crash, then the beacon")
 	assert_true(hud.hint_label.text.contains(tr("JOURNAL_BEACON_TITLE")), "and it says so: %s" % hud.hint_label.text)
 
-func test_02_the_card_is_folded_to_its_mark_but_with_news_or_under_the_cursor() -> void:
+func test_02_the_goal_is_a_dial_beside_the_cabins_medallion() -> void:
 	var main = await _ours()
 	var hud = main.hud
 	hud.give_objective(false)
-	hud._objective_open_ms = 0
-	hud._fold_objective()
-	assert_true(hud.objective_panel.visible, "The goal's card is up")
-	assert_false(hud.objective_detail.visible, "folded: what is to be done next not shown")
-	assert_true(hud.find_child("ObjectiveTitle", true, false).is_visible_in_tree(), "its name and mark are")
-	hud._objective_hovered = true
-	hud._fold_objective()
-	assert_true(hud.objective_detail.visible, "Under the cursor it opens")
-	hud._objective_hovered = false
-	hud._fold_objective()
-	assert_false(hud.objective_detail.visible, "and folds again")
+	var dial: Control = hud.objective_dial
+	assert_true(dial.visible, "The goal's dial is up")
+	var c: Rect2 = hud.core_vital.get_global_rect()
+	var d: Rect2 = dial.get_global_rect()
+	var day: Rect2 = hud.day_dial.get_global_rect()
+	assert_lt(d.get_center().x, c.get_center().x, "beside the cabin's medallion, at its left")
+	assert_almost_eq(c.get_center().x - d.get_center().x, day.get_center().x - c.get_center().x, 2.0, "as the day's is at its right")
+	assert_almost_eq(d.position.y, day.position.y, 2.0, "level with it")
+	assert_eq((dial.get_node("Disc/Keycap") as Label).text, Keys.text("journal_key"), "the journal's key at its shoulder")
+	assert_true(dial.tooltip_text.contains(String(game_state_node.objective_status())), "under the cursor, what is to be done next")
+	assert_true(dial.tooltip_text.contains(tr("HUD_OBJECTIVE_TIP") % Keys.text("journal_key")), "and where the journal is")
 	tree.root.get_node("EventBus").beacon_changed.emit(1)
-	assert_true(hud.objective_detail.visible, "News -- a stage done -- opens it")
 	var titles: Array = hud.journal_entries().map(func(e): return String(e[0]))
-	assert_true(titles.has(tr("JOURNAL_STAGE_TITLE") % 1), "and is written in the journal")
+	assert_true(titles.has(tr("JOURNAL_STAGE_TITLE") % 1), "News -- a stage done -- is written in the journal")
 
 func test_03_j_opens_the_journal_and_esc_shuts_it() -> void:
 	var main = await _ours()
@@ -97,7 +97,6 @@ func test_03_j_opens_the_journal_and_esc_shuts_it() -> void:
 	main._unhandled_input(ev)
 	await wait_frames(1)
 	assert_true(hud.is_journal_open(), "J opens the journal")
-	assert_true(hud.objective_detail.visible, "the goal's card open beside it")
 	var text: String = ""
 	for n in hud.journal_panel.find_children("*", "Label", true, false):
 		text += (n as Label).text + "\n"
@@ -110,6 +109,49 @@ func test_03_j_opens_the_journal_and_esc_shuts_it() -> void:
 	await wait_frames(1)
 	assert_false(hud.is_journal_open(), "Esc shuts it")
 	assert_false(hud.is_pause_menu_open(), "before it would open the menu")
+
+func test_03b_the_opening_skipped_the_game_holds_on_the_briefing() -> void:
+	var main = await _ours()
+	var hud = main.hud
+	hud.hold_objective()
+	game_state_node.is_paused = false
+	main.station_jump.was_skipped = true
+	main._after_the_crash()
+	await wait_frames(1)
+	assert_true(hud.is_briefing_open(), "Skipped, the briefing is up")
+	assert_true(bool(game_state_node.is_paused), "the game held while it is read")
+	assert_false(hud.is_objective_given(), "(the goal not his yet)")
+	var text: String = ""
+	for n in hud.briefing.find_children("*", "Label", true, false):
+		text += (n as Label).text + "\n"
+	var days: int = int(round(float(config_node.POWER["lasts_days"])))
+	assert_true(text.contains(tr("BRIEFING_BEACON")), "It says what he must do: the beacon")
+	assert_true(text.contains(tr("BRIEFING_POWER") % days), "that the capsule's battery runs out, in %d days" % days)
+	assert_true(text.contains(tr("BRIEFING_DINOS")), "and what will come for it")
+	assert_true(text.contains(tr("BRIEFING_JOURNAL") % Keys.text("journal_key")), "and where it is written")
+	hud.briefing.ok_btn.pressed.emit()
+	await wait_frames(1)
+	assert_false(hud.is_briefing_open(), "Got it: down")
+	assert_false(bool(game_state_node.is_paused), "the game going again")
+	assert_true(hud.is_objective_given(), "and the goal is his")
+	assert_true(hud.objective_dial.visible, "its dial come in")
+	assert_eq(hud.journal_entries().size(), 2, "the journal begun")
+
+func test_03c_watched_through_he_says_it_himself() -> void:
+	var main = await _ours()
+	var hud = main.hud
+	hud.hold_objective()
+	main.station_jump.was_skipped = false
+	var said: Array = []
+	var eb = tree.root.get_node("EventBus")
+	var hear := func(key: String, _s: float, _a: Array) -> void: said.append(key)
+	eb.hero_spoke.connect(hear)
+	main._after_the_crash()
+	await wait_frames(2)
+	eb.hero_spoke.disconnect(hear)
+	assert_false(hud.is_briefing_open(), "No briefing")
+	assert_true(said.has(String(config_node.STORY["intro"][0])), "he says what has happened")
+	hud._story_run += 1
 
 func test_04_a_custom_game_has_no_opening_and_no_journal() -> void:
 	var main = await fresh_level()
@@ -131,3 +173,6 @@ func test_04_a_custom_game_has_no_opening_and_no_journal() -> void:
 	assert_eq(hud.journal_entries().size(), 0, "and no journal")
 	hud.toggle_journal()
 	assert_false(hud.is_journal_open(), "J opens nothing")
+	assert_false((hud.objective_dial.get_node("Disc/Keycap") as Label).visible, "and the goal's dial has no key for it")
+	hud.brief()
+	assert_false(hud.is_briefing_open(), "No briefing either: the goal at once")

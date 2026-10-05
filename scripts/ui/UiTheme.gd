@@ -374,7 +374,7 @@ static func build() -> Theme:
 	_panel(t, "InsetPanel", surface("socket", "plain", space("s"), space("s")))
 	_panel(t, "InsetTechPanel", surface("socket_tech", "plain", space("s"), space("s")))
 	# A toast is a stroke of ink -- news, not an alarm; its words sit inside the stroke's ragged
-	# ends. (A raid had a banner in red ochre; now it is heard and said -- HUD.raid_line.)
+	# ends. (A raid had a banner in red ochre; now it is heard and said -- HUD.raid_mark.)
 	var brush_h: int = int(tokens().get("surfaces", {}).get("brush", {}).get("margin", Vector2i.ZERO).x)
 	_panel(t, "ToastPanel", surface("brush", "plain", brush_h, space("s") + space("xs")))
 	_panel(t, "TechPanel", surface("frame_tech", "plain", space("l") + space("xs"), space("l")))

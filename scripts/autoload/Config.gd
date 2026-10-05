@@ -185,7 +185,11 @@ const BUILDINGS: Dictionary = {
 		"hp": 160.0,
 		# 14 for the tower and 5 for the twenty logs it comes loaded with (RECIPES.log_round).
 		"cost": {"wood": 19},
-		"range": 2.5,
+		# 3 m round its middle (2.5 till 2026-10-04): the bench's drop tower killed 0.2 an animal a minute to a bow
+		# tower's 3.5, and leaving it out did the cabin no harm -- at 2.5 m it reached little past its own plinth. The
+		# player chose "够得着的距离 2.5 → 3 米" over a cheaper tower or a heavier log (a log of 12 kills a coelophysis
+		# at a blow: the breakpoint). Out to where the catapult's dead ground (3 m) ends.
+		"range": 3.0,
 		"drop_seconds": 2.5,
 		"fall_seconds": 0.35,
 		"damage_factor": 1.0,
@@ -200,7 +204,7 @@ const BUILDINGS: Dictionary = {
 		"height": 3.3,
 		"hp": 160.0,
 		"cost": {"wood": 19, "stone": 4},
-		"range": 2.5,
+		"range": 3.0,
 		"drop_seconds": 2.5,
 		"fall_seconds": 0.35,
 		"damage_factor": 1.25,
@@ -215,7 +219,7 @@ const BUILDINGS: Dictionary = {
 		"height": 3.3,
 		"hp": 160.0,
 		"cost": {"wood": 19, "stone": 4, "bone": 4},
-		"range": 2.5,
+		"range": 3.0,
 		"drop_seconds": 2.5,
 		"fall_seconds": 0.35,
 		"damage_factor": 1.5,
@@ -2134,11 +2138,17 @@ const MAPS: Dictionary = {
 	# Who raids here, and how often each, by weight: the Late Triassic's (GAME-DESIGN 7.2).
 	"raiders": {"coelophysis": 1.0},
 	# And from a day on (GameState.day_number), who raids instead: the latest begun (WaveManager._raiders_now;
-	# v0.6 round six, the player: "物种到day 4也就一种，太单调" -- chosen "快跑的黄昏鳄"). From the second day a
+	# v0.6 round six, the player: "物种到day 4也就一种，太单调" -- chosen "快跑的黄昏鳄"). From the second raid a
 	# frightened Desmatosuchus for every five of the pack (v0.7, GAME-DESIGN 3.0: armoured -- what arrows hardly hurt,
-	# and fire turns); from the third, a runner for every three of the pack as well.
-	"raiders_by_day": [{"from_day": 2, "raiders": {"coelophysis": 5.0, "desmatosuchus": 1.0}},
-		{"from_day": 3, "raiders": {"coelophysis": 3.0, "hesperosuchus": 1.0, "desmatosuchus": 0.8}}],
+	# and fire turns), from the second day one for every four; from the third, a runner for every three of the pack as
+	# well. The first raid is the pack alone: it is the run's supply (GAME-DESIGN 5.2).
+	#
+	# Sooner and more since 2026-10-04 (from the second day, one in six): the bench's bow tower was the run -- three more
+	# of them left the cabin 18 better, every other thing piled on did worse -- and the armoured one is what bows do
+	# not answer. The player chose "披甲的链鳄多来一些、早点来" over a slower or dearer bow.
+	"raiders_by_day": [{"from_day": 1, "from_raid": 2, "raiders": {"coelophysis": 5.0, "desmatosuchus": 1.0}},
+		{"from_day": 2, "raiders": {"coelophysis": 4.0, "desmatosuchus": 1.0}},
+		{"from_day": 3, "raiders": {"coelophysis": 3.0, "hesperosuchus": 1.0, "desmatosuchus": 1.0}}],
 	# The ways a raid comes in by, as the days go (v0.6 round six: "恐龙每次都是从一个地方来进攻" -- chosen "更多来
 	# 袭方向"): the nest's, and from `from_day` a party in by each of `ways` as well -- a point of the compass,
 	# the way into the valley (`entries`) that lies most that way from the cabin. A raid is shared out among the
@@ -3065,7 +3075,7 @@ const UI: Dictionary = {
 	# Squeezed (HUD._fit_stock: every material in the thousands on a map with more of them -- station 2's clay),
 	# the chips a size down: the count's box for the small figures, the icon a size smaller (UiTheme icon "s").
 	"resource_count_width_squeezed": 22,
-	"objective_width": 290,            # the beacon card, top right
+	"objective_width": 290,            # a pinned goal's plate, top right
 	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
 	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
 	# starts under the cabin's medallion and the figures under it.
@@ -3088,10 +3098,13 @@ const UI: Dictionary = {
 	"menu_picker_width": 190,
 	# The settings page's Keys tab (PauseMenu): a key's button this wide -- "Press a key…" fits.
 	"menu_key_width": 130,
-	# The goal's card (HUD): folded to its mark, it opens on news -- a stage done, the launch, a goal given -- for
-	# this many seconds, then folds again; and the journal's panel this wide.
-	"objective_open_seconds": 8.0,
+	# The goal's dial (HUD.objective_dial) nods with news -- the goal given, a stage done, the launch: this much bigger
+	# and back, over this long. And the journal's panel this wide.
+	"objective_nod_scale": 1.18,
+	"objective_nod_seconds": 0.5,
 	"journal_width": 460,
+	# The briefing (Briefing: the opening skipped, the game held on what he must know) this wide: a short line a row.
+	"briefing_width": 520,
 	# The settings page's volumes (AUDIO): a level's slider as wide as a picker, and its figure ("100%") this wide
 	# after it, so the sliders line up whatever they are set to.
 	"menu_volume_figure_width": 56,

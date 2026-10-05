@@ -319,6 +319,9 @@ var _crash_began_at: int = 0
 var _crash_tween: Tween = null
 var _lit: Array[Node3D] = []
 var _skipping: bool = false
+## Whether the player ended the last crash at once (skip): then the game holds on the briefing, which says what the
+## opening would have (Main._after_the_crash, HUD.brief).
+var was_skipped: bool = false
 var _shake_dice := RandomNumberGenerator.new()
 
 ## THE OPENING (GAME-DESIGN 3.0; the player, 2026-10-04: "可以在v0.7做一个开场动画，船舱坠落，山谷受到震动，恐龙进攻船舱
@@ -340,6 +343,7 @@ func crash(main: Node) -> void:
 		return
 	_running = true
 	_crashing = true
+	was_skipped = false
 	_main = main
 	_crash_began_at = Time.get_ticks_msec()
 	_see_round_the_spot(main)
@@ -702,6 +706,7 @@ func _crash_over() -> void:
 func skip() -> void:
 	if not _crashing or _crash_tween == null or not _crash_tween.is_valid():
 		return
+	was_skipped = true
 	_skipping = true
 	_crash_tween.custom_step(1000.0)
 	_skipping = false
