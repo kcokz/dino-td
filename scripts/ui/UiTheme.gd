@@ -369,8 +369,10 @@ static func build() -> Theme:
 	var strip := surface("strip", "plain", space("l"), space("xs"))
 	strip.content_margin_bottom = space("s") + space("hair")
 	_panel(t, "StripPanel", strip)
-	# A round socket for a material's icon on the strip.
+	# A round socket for a material's icon on the strip -- and the same, hugging its icon, when the stock is squeezed two
+	# sizes down (HUD._squeeze_chips: a station with a dozen materials).
 	_panel(t, "SocketPanel", surface("socket_round", "plain", space("xs"), space("xs")))
+	_panel(t, "SocketPanelTight", surface("socket_round", "plain", space("hair"), space("hair")))
 	_panel(t, "CardPanel", surface("hide", "hide", inset.x, inset.y))
 	# Round a portrait or a bench's icon: a socket sunk in the leather.
 	_panel(t, "InsetPanel", surface("socket", "plain", space("s"), space("s")))

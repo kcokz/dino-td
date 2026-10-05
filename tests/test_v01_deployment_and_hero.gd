@@ -596,6 +596,8 @@ func test_18_build_buttons_quote_what_a_building_costs() -> void:
 	var panel = hud.find_child("OptionPanel", true, false)
 	assert_not_null(panel, "OptionPanel must exist in the HUD")
 	panel.current_menu = "build"
+	# The palisade is on the walls' tab (v0.7: the menu in tabs).
+	panel.build_tab = String(config_node.build_tab_of("wall"))
 	panel._populate_hero_buttons()
 	var wood_icon: Texture2D = UiTheme.icon("wood")
 	var quoted: bool = false

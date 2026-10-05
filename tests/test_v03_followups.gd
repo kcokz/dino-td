@@ -179,6 +179,14 @@ func test_04b_the_ghost_is_the_same_shape_as_the_thing_it_promises() -> void:
 				tree.root.add_child(placed)
 				placed.position = Vector3(62.0, 0.0, 0.0)
 				placed.complete_construction()
+			"kiln", "furnace":
+				# The workshops out in the open (v0.7, Workshop).
+				placed = load(BuildSystem.script_for(type_id)).new()
+				placed.setup(type_id)
+				_cleanup_nodes.append(placed)
+				tree.root.add_child(placed)
+				placed.position = Vector3(102.0 if type_id == "kiln" else 110.0, 0.0, 0.0)
+				placed.complete_construction()
 			"campfire", "brazier":
 				placed = load("res://scripts/entities/Fire.gd").new()
 				placed.setup(type_id)

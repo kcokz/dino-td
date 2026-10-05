@@ -46,7 +46,8 @@ func test_01_each_tool_says_what_it_is_for() -> void:
 	var pick: String = String(config_node.recipe_use_text("stone_pick"))
 	assert_eq(pick, tr("TOOL_LETS") % _node_name("stone"), "The pick lets him gather stone")
 	var shovel: String = String(config_node.recipe_use_text("bone_shovel"))
-	assert_eq(shovel, tr("TOOL_LETS") % _node_name("clay"), "the shovel clay")
+	# Clay -- and, from the third station, bog iron (v0.7): in one line.
+	assert_eq(shovel, tr("TOOL_LETS") % tr("LIST_SEPARATOR").join([_node_name("clay"), _node_name("iron_ore")]), "the shovel clay and bog iron")
 	var axe: String = String(config_node.recipe_use_text("stone_axe"))
 	assert_true(axe.find(tr("RESOURCE_WOOD")) >= 0 and axe.find("×") >= 0, "the axe brings wood in faster (%s)" % axe)
 	assert_eq(String(config_node.recipe_use_text("hide_map")), tr("RECIPE_HIDE_MAP_DESC"), "the map in its own words")

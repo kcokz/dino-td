@@ -814,6 +814,60 @@ ICONS["bone_shovel"] = item_svg(
      shape("path", None, "#fbf5e6", 1.4, d="M 34 31 C 42 36 50 40 59 42"),
      shape("rect", C["rope"], transform="rotate(45 31 31)", x=25.5, y=27.5, width=11, height=7, rx=2)])
 
+def _tower_legs():
+    """The bow tower's lookout without its bow: splayed legs, cross-braced, the deck across their tops."""
+    body = [shape("polygon", C["post"], points="11,61 18,61 24,31 18,31"),
+            shape("polygon", C["post"], points="46,61 53,61 46,31 40,31"),
+            shape("rect", C["post"], x=7, y=26, width=50, height=7, rx=1.5)]
+    detail = [shape("path", None, C["post_dark"], 2.6, d="M 19.5 55 L 43 36.5 M 44.5 55 L 21 36.5"),
+              shape("polygon", C["post_dark"], points="15.5,61 18,61 24,31 21.5,31"),
+              shape("polygon", C["post_dark"], points="46,61 48.5,61 42.5,31 40,31"),
+              shape("rect", C["post_dark"], x=7, y=30.5, width=50, height=2.5, rx=1),
+              shape("path", None, C["post_dark"], 1.4, d="M 19 26 L 19 30.5 M 45 26 L 45 30.5")]
+    return body, detail
+
+
+# The bow tower's top, one of two (station 3, iron): the repeater -- on its deck a crossbow, a box of bolts on its stock,
+# iron-banded; and the ballista -- one great crossbow on a turntable, its long iron-headed bolt laid.
+def _repeater_tower():
+    legs, legs_detail = _tower_legs()
+    body = legs + [
+        shape("path", None, C["grain"], 4.8, d="M 12 21 Q 32 12 52 21"),
+        shape("rect", C["post"], x=29, y=8, width=6, height=19, rx=1.5),
+        shape("rect", C["post_dark"], x=25.5, y=9, width=13, height=9, rx=1.5)]
+    detail = legs_detail + [
+        shape("path", None, C["rope"], 1.5, d="M 13 21.5 L 32 25 L 51 21.5"),
+        shape("rect", C["iron"], x=25.5, y=12, width=13, height=2.2),
+        shape("path", None, C["grain"], 1.3, d="M 28 9.5 L 28 6 M 31 9.5 L 31 5.5 M 34 9.5 L 34 6 M 37 9.5 L 37 6.5"),
+        shape("polygon", C["iron_dark"], points="27,6.5 28,3.5 29,6.5"),
+        shape("polygon", C["iron_dark"], points="30,6 31,3 32,6"),
+        shape("polygon", C["iron_dark"], points="33,6.5 34,3.5 35,6.5"),
+        shape("polygon", C["iron_dark"], points="36,7 37,4 38,7"),
+        shape("rect", C["iron"], x=10.5, y=19, width=4, height=4, rx=1),
+        shape("rect", C["iron"], x=49.5, y=19, width=4, height=4, rx=1)]
+    return item_svg(body, detail)
+
+
+def _ballista_tower():
+    legs, legs_detail = _tower_legs()
+    body = legs + [
+        shape("rect", C["post_dark"], x=17, y=20, width=30, height=6, rx=2),
+        shape("path", None, C["post"], 6.5, d="M 4 13 Q 32 26 60 13"),
+        shape("rect", C["post"], x=29, y=6, width=6, height=19, rx=1.5)]
+    detail = legs_detail + [
+        shape("path", None, C["iron_dark"], 2.4, d="M 6 13.5 Q 32 26.5 58 13.5"),
+        shape("path", None, C["rope"], 1.6, d="M 5 14 L 32 21 L 59 14"),
+        shape("path", None, C["grain"], 2.6, d="M 32 22 L 32 2"),
+        shape("polygon", C["iron"], points="32,0.5 35.5,7 28.5,7"),
+        shape("rect", C["iron"], x=27, y=21.5, width=10, height=3, rx=1),
+        shape("circle", C["iron_dark"], cx=32, cy=23, r=1.6)]
+    return item_svg(body, detail)
+
+
+ICONS["bow_tower_repeater"] = _repeater_tower()
+ICONS["bow_tower_ballista"] = _ballista_tower()
+
+
 # THE LATER STATIONS' (GAME-DESIGN 5.2-5.4: 窑, 炼铁). The kiln (station 2): a beehive of fired clay on a ring of field
 # stones, its stoke-hole alight at the foot, a vent at the crown.
 _KILN_FLAME = _flame(32, 56, 11, 5)

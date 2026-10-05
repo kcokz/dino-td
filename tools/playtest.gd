@@ -143,6 +143,13 @@ func _run(name: String) -> void:
 			# Station 2's (the Late Jurassic, MAPS.morrison): the same lineup, by the man.
 			await _scenario_cast([["ornitholestes", -1.2], ["harpactognathus", 1.4], ["ceratosaurus", 4.6],
 				["allosaurus", 11.0]])
+		"cast3":
+			# Station 3's (the Early Cretaceous, MAPS.jehol), by the man: Sinornithosaurus, Dilong, Sinocalliopteryx, Yutyrannus.
+			await _scenario_cast([["sinornithosaurus", -1.4], ["dilong", 0.6], ["sinocalliopteryx", 3.2], ["yutyrannus", 9.5]])
+		"kiln":
+			await _scenario_kiln()
+		"station3":
+			await _scenario_station3()
 		"chargers":
 			# The frightened plant-eaters (v0.7, ChargerDino) by the man and a coelophysis: Desmatosuchus, the Stegosaurus.
 			await _scenario_cast([["coelophysis", -1.2], ["desmatosuchus", 2.0], ["stegosaurus", 7.5]])
@@ -1461,6 +1468,64 @@ func _scenario_firepot() -> void:
 ## The jump between our game's stations (StationJump, v0.7), beat by beat: the first station won, the view swinging
 ## in, the beacon's light, the white and the card -- then the second station's level (built here by hand: the game's
 ## own scene is built afresh by the jump) and the capsule coming down onto it, and the run begun.
+## The workshops out in the open (v0.7, Workshop): a kiln and a bloomery by the cabin, a brick wall, the bow tower's two
+## tops -- standing; then the kiln at work, him at it, its fire going, and its card.
+func _scenario_kiln() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	for res_id in cfg.RESOURCES:
+		gs.resources[res_id] = 999
+	var gm = _main.grid_manager
+	var at: Vector2i = gm.world_to_build_cell(_main.hero.global_position)
+	var placed: Dictionary = {}
+	for item in [["kiln", Vector2i(4, 3)], ["furnace", Vector2i(8, 3)], ["brick_wall", Vector2i(4, 7)], ["brick_wall", Vector2i(5, 7)],
+			["stone_wall", Vector2i(6, 7)], ["bow_tower_repeater", Vector2i(11, 3)], ["bow_tower_ballista", Vector2i(14, 3)]]:
+		var b = _main.build_system.place_at(String(item[0]), at + item[1], _main.buildings_container, false)
+		if b == null:
+			print("[playtest] could not place %s" % item[0])
+			continue
+		b.complete_construction()
+		placed[String(item[0])] = b
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	await _wait(10)
+	var kiln = placed.get("kiln")
+	if kiln != null:
+		await _portrait("workshops", (kiln as Node3D).global_position + Vector3(4.0, 0.0, 1.0), 13.0, false)
+		kiln.begin("brick")
+		await _advance(6.0)
+		await _portrait("kiln_at_work", (kiln as Node3D).global_position, 6.0, false)
+		root.get_node("EventBus").unit_selected.emit(kiln)
+		await _wait(4)
+		await _shoot("kiln_card")
+	var furnace = placed.get("furnace")
+	if furnace != null:
+		furnace.begin("iron")
+		await _advance(6.0)
+		await _portrait("furnace_at_work", (furnace as Node3D).global_position, 6.0, false)
+
+## Station 3 as it opens (v0.7: the Jehol): our game played to its third station, its level built, seen from above.
+func _scenario_station3() -> void:
+	var gs := root.get_node("GameState")
+	gs.play("campaign")
+	gs.jump_to_next_station()
+	gs.jump_to_next_station()
+	_tear_down()
+	await _fresh_level()
+	print("[playtest] station %d, map %s" % [int(gs.station), String(gs.map_id)])
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	await _wait(10)
+	await _shoot("begun")
+	await _portrait("jehol_from_above", _main.current_core.global_position + Vector3(-14.0, 0.0, 0.0), 42.0, true)
+	gs.game = {}
+
 func _scenario_jump() -> void:
 	var gs := root.get_node("GameState")
 	gs.play("campaign")

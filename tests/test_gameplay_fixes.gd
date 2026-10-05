@@ -220,9 +220,13 @@ func test_07_hud_build_buttons_carry_only_the_building_name() -> void:
 	panel._on_build_pressed()
 	assert_eq(panel.current_menu_level, 2, "Option Panel is in the build menu")
 
+	# Every tab of it (v0.7: the menu in tabs, Config.BUILD_TABS).
 	var labels: Array[String] = []
-	for btn in panel.button_container.get_children():
-		labels.append(str(btn.text))
+	for tab in panel._shown_tabs():
+		panel.show_build_tab(String(tab))
+		for btn in panel.button_container.get_children():
+			if btn is Button and not btn.is_queued_for_deletion():
+				labels.append(str(btn.text))
 	assert_gt(labels.size(), 1, "Build menu lists buildable types plus Back")
 
 	# Each build entry reads exactly as the building's name, with no cost appended.

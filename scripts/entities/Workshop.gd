@@ -38,6 +38,27 @@ func _process(delta: float) -> void:
 		_show_the_fire(burning)
 	if burning and _light != null:
 		_light.light_energy = Fire.flicker_energy(_fire_cfg(), _clock + float(get_instance_id() % 97))
+	if burning:
+		_pump()
+
+## The bellows (the bloomery's BellowsL and BellowsR, BUILDINGS.<id>.pump_*): up and down about their hinges by turns
+## while it works -- the hide bags blowing the fire.
+var _bellows_rest: Dictionary = {}
+
+func _pump() -> void:
+	var degrees: float = float(_row().get("pump_degrees", 0.0))
+	if degrees <= 0.0:
+		return
+	var period: float = maxf(0.1, float(_row().get("pump_seconds", 1.0)))
+	var k: int = 0
+	for name in ["BellowsL", "BellowsR"]:
+		var part: Node3D = find_child(name, true, false) as Node3D
+		if part != null:
+			if not _bellows_rest.has(name):
+				_bellows_rest[name] = part.rotation
+			var swing: float = deg_to_rad(degrees) * sin(TAU * _clock / period + PI * float(k))
+			part.rotation = (_bellows_rest[name] as Vector3) + Vector3(swing, 0.0, 0.0)
+		k += 1
 
 func _ensure_station() -> void:
 	if station != null:
@@ -130,9 +151,15 @@ func _make_the_fire() -> void:
 		_light.shadow_enabled = false
 		add_child(_light)
 
-## Its fire shown or not: the particles and the glow, and its model's Flame part.
+## Its fire shown or not: the particles and the glow, and its model's Flame part -- the particles and the glow where
+## that part is (the kiln's stoke-hole, the bloomery's throat), else `flame_height` up its middle.
 func _show_the_fire(on: bool) -> void:
 	_fire_shown = on
+	var at: Node3D = _flame_part()
+	if at != null and _flame != null and _flame.is_inside_tree() and at.is_inside_tree():
+		_flame.global_position = at.global_position
+		if _light != null:
+			_light.global_position = at.global_position + Vector3(0.0, float(_fire_cfg().get("light_above", 0.4)), 0.0)
 	if _flame != null:
 		_flame.emitting = on
 		_flame.visible = on
@@ -141,6 +168,13 @@ func _show_the_fire(on: bool) -> void:
 	for part in find_children("Flame*", "Node3D", true, false):
 		if part != _flame and part != _light:
 			(part as Node3D).visible = on
+
+## Its model's own fire (the part named Flame), or null for a model with none.
+func _flame_part() -> Node3D:
+	for part in find_children("Flame*", "Node3D", true, false):
+		if part != _flame and part != _light:
+			return part as Node3D
+	return null
 
 func _row() -> Dictionary:
 	var cfg = _get_config()

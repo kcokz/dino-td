@@ -517,8 +517,10 @@ class Moves:
                 rest = self.rest_feet[key]
                 foot = Vector((rest.x * g.get("tuck", 1.1), rest.y + g.get("toes_ahead", 0.05), 0.0))
                 pose.limb(key, foot, 0.0, tilt=g.get("tilt", 80.0))
+            # A biped's arms folded under its chest -- lifted (spec sleep "arm_raise", metres) where a small animal's
+            # chest comes down so near the ground that its hands would go into it.
             if self.plan == "biped":
-                self.arms_at(pose, 0.0, t, raise_=-0.04, curl=0.9)
+                self.arms_at(pose, 0.0, t, raise_=g.get("arm_raise", -0.04), curl=0.9)
             return pose
         return frames, at, True
 

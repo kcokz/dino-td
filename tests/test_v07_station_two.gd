@@ -107,7 +107,10 @@ func test_01_our_game_goes_on_to_a_second_station() -> void:
 	assert_true(game_state_node.launch_straight_in, "not on the start screen")
 	game_state_node.reset_game()
 	assert_eq(String(game_state_node.map_id), "morrison", "the second station's run is on its map")
-	assert_false(game_state_node.has_next_station(), "it is the last, for now")
+	# v0.7: a third station after it (test_v07_station_three); the last one's jump goes nowhere further.
+	assert_true(game_state_node.has_next_station(), "a station after it")
+	game_state_node.station = stations.size() - 1
+	assert_false(game_state_node.has_next_station(), "the last is the last")
 	assert_false(game_state_node.jump_to_next_station(), "and its jump goes nowhere further")
 	game_state_node.play("campaign")
 	assert_eq(int(game_state_node.station), 0, "a game chosen again begins at the first")

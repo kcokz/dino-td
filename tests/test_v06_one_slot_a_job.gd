@@ -56,6 +56,10 @@ func test_01_the_menu_is_one_slot_a_job_each_of_wood_alone() -> void:
 		if String(b_type) == "catapult":
 			made_of.sort()
 			assert_eq(made_of, ["stone", "wood"], "catapult: its first form is wood, weighted with stone")
+		elif String(config_node.get_building_kind(String(b_type))) == "workshop":
+			# The later stations' workshops (v0.7): what they are built of is the station's own -- the kiln of stone and
+			# the clay it fires, the bloomery of the kiln's bricks and a hide for its bellows -- two materials, no more.
+			assert_lte(made_of.size(), 2, "%s: two materials at most" % b_type)
 		elif String(b_type) == "bait_rack":
 			# It comes with its first meat (Config.ammo_comes_with): meat to build it, so it is on the menu once there is
 			# meat (the player, 2026-10-04: "肉架子需要肉才能解锁，因为造就得有肉").
@@ -91,7 +95,8 @@ func test_02_each_step_up_adds_one_material_and_none_is_made_of_three() -> void:
 				# wood, its third bone (v0.7, GAME-DESIGN 3.0: bone only off what has been killed).
 				assert_eq(String(config_node.get_building_kind(String(target))), String(config_node.get_building_kind(String(b_type))),
 					"%s is a bigger store of the same tower as %s" % [target, b_type])
-				var wants: String = "stone" if int(config_node.tower_level(String(target))) == 2 else "bone"
+				# And its top, one of two, iron (v0.7: the bow tower's repeater or ballista, GAME-DESIGN 6.1 rule 2).
+				var wants: String = ["", "", "stone", "bone", "iron"][clampi(int(config_node.tower_level(String(target))), 0, 4)]
 				assert_true(cost.has(wants), "a tower's level %d is paid in %s (%s -> %s)" % [
 					int(config_node.tower_level(String(target))), wants, b_type, target])
 			else:

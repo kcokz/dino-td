@@ -1746,6 +1746,16 @@
   - 图标：`tools/build_icons.py` 的窑、炼铁炉、砖墙、砖、沼铁、铁、铁箭。模型还在做（窑、炼铁炉、砖墙、沼铁现在是方块）。
   - 测试：新的 `test_v07_the_build_tabs`（每个建筑在一页里、一次一页、只有能造的页、记住那页、数字键选这一页的、Tab 换页）、`test_v07_the_workshops`（窑和炼铁炉的价钱和台子；点了付钱派人；人不在不动、在就动、做完进库存；在窑边不拿锤子；石墙改砖墙；骨铲挖沼铁、炉子炼铁；铁箭穿甲；新材料最多两个用处、悬停说从哪来）；`test_v02_followups`、`test_v03_feedback`、`test_v06_the_hero_card`、`test_v06_command_keys`（一页一页数卡片）、`test_v06_traps_in_the_way`（菜单多了两样）、`test_v06_material_route`（不解锁东西的是一批）、`test_v06_his_kit`（皮做地图和风箱，都不是防御）跟着改。
 
+- **v0.7 第二十六批：第 3 站（热河）；弩塔的最后一级二选一；拿不到的材料不给升级（同一晚，玩家："把后面几关都先做起来，主要是科技树升级部分"）**：
+  - 第 3 站：`MAPS.jehol`（像大山谷，凉爽森林的地面和灰色的凝灰岩，西边宽一些的湖湾，湖边两处黏土、三处沼铁，残骸换了位置；`kit` 带骨镐、石斧、地图、骨铲）；`GAMES.campaign.stations` 第三项（`STATION_3_NAME`、`ERA_EARLY_CRETACEOUS`、`PLACE_JEHOL`、`WHEN_STATION_3`）；自定义游戏的纪元 `early_cretaceous`、地图 `jehol`；新的物种 `DINOS.dilong`（来袭、守巢）、`sinornithosaurus`（第 2 天起，`runner`）、`sinocalliopteryx`（小首领，掉皮）、`yutyrannus`（大首领，`heavy`）；叫声 `tools/build_sounds.gd` 的 `_s_dilong_*` 等和 `SOUNDS` 的 25 条；`HINT_*_JEHOL`。模型由 `tools/dino_species.py` 新做（这一批先接上数据，模型做好再接上）。
+  - 弩塔二选一：`BUILDINGS.bow_tower_repeater`（+2 铁，`fire_seconds` 0.6、`range` 6、×1.25、容量 60）、`bow_tower_ballista`（+3 铁，`range` 10、3 秒、×3、`picks` "toughest"、`aims`、`pierce` 3、容量 30）；`bow_tower_3.upgrades_to` 两个；`BowTower`：`target_in_reach` 认 `picks`，`aims` 的先转（`TOWERS.turn_seconds`）再射、有 `Bolt` 部件的从它射出，`pierce` 取塔自己和箭里大的那个；升级卡片的悬停多说射程和射速（`STAT_RANGE`、`STAT_FIRE_SECONDS`）。
+  - 拿不到的材料不给升级：`GameState.within_reach`（见过的、这张图上采得到的、恐龙掉的才算），`OptionPanel` 的"改成……"只列这些。
+  - 顶上的资源栏多一档更紧凑的（`HUD._squeeze_chips` 0/1/2）：第 3 站材料多，原来的两档放不下。
+  - 一起修的：选中船舱时报脚本错误——船舱也有个叫 `station` 的方法，被当成了工坊（`OptionPanel._is_workshop` 认 `has_job`）。
+  - 模型（`tools/generate_props.py`，原有的 108 个道具逐点核对没变；为了共用，把箭尾、弩塔的瞭望台、投石塔的转盘抽成了函数）：窑（`kiln`：石圈上的黏土窑，窑口的火是 `Flame` 部件）、炼铁炉（`furnace`：石基砖身，炉口的火 `Flame`，两只皮风箱 `BellowsL`、`BellowsR`）、砖墙（`brick_wall`：和石墙一样大，一排墙砌成一道错缝）、沼铁（`bog_iron`、挖过的 `bog_iron_dug`、地上的 `drop_iron_ore`；旁边长的是木贼——早白垩世还没有草）、铁箭（`arrow_iron`）、连弩塔、床弩塔（`Turn` 上的 `Bolt`）、配重投石机（`trebuchet`，第 4 站用）、水车（`water_wheel`，第 4 站用）。`Workshop` 的火和火光放在模型的 `Flame` 那里，炼铁炉干活时两只风箱轮流一上一下（`BUILDINGS.furnace.pump_degrees`、`pump_seconds`）。头像（`tools/render_portraits.gd`）：窑、炼铁炉、砖墙、两座塔顶、沼铁，沼铁的资源图标从地上那一堆渲染。
+  - 恐龙模型（`tools/dino_species.py` 的 `YUTYRANNUS`、`DILONG`、`SINOCALLIOPTERYX`、`SINORNITHOSAURUS`，第 4 站的 `ACHERORAPTOR`、`DAKOTARAPTOR`；`tools/dino_feathers.py` 新的丝状羽 "fuzz"，`tools/dino_body.py` 跟着；`tools/dino_skin.py` 烘焙时丝羽不占贴图；`tools/dino_moves.py` 睡姿的 `arm_raise`（小个子的手不插进地里，默认不变））：旧物种重新生成逐字节一样；`VISUALS dino/<id>`、头像。模型比原来的重一些（羽王龙约 3.4 万顶点，霸王龙 2 万）。
+  - 测试：新的 `test_v07_the_tower_tops`（三级的两条路都只要铁、是第四级、到头了；连弩快、近，床弩远、慢、狠、穿；床弩先转再射、挑最硬的、穿三只；连弩三发；第 1 站拿不到铁就不给、有了铁才给）、`test_v07_station_three`（第 3 站接在第 2 站后面、带着全部工具、生物是自己的并且有叫声、湖边有黏土和沼铁、自定义游戏、天色提示）；`test_v07_station_two`（第 2 站后面还有一站）、`test_gameplay_fixes`、`test_v01_deployment_and_hero`、`test_v03_followups`、`test_v04_cabin`、`test_v06_layer_by_layer`、`test_v06_one_grid`、`test_v06_one_slot_a_job` 跟着建造菜单分页和工坊改。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。

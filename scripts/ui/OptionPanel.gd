@@ -560,8 +560,7 @@ func _update_status_display() -> void:
 		_refresh_ui()
 		return
 	# A workshop's too: its bench's (Workshop).
-	if current_menu != "build" and "station" in selected_unit and selected_unit.station != null \
-			and _offer_of(selected_unit.station) != _station_offer:
+	if current_menu != "build" and _is_workshop(selected_unit) and _offer_of(selected_unit.station) != _station_offer:
 		_refresh_ui()
 		return
 	# And a tower's, when what it holds or the stock of what it takes has changed (_ammo_offer_of).
@@ -1047,6 +1046,9 @@ func _amounts_text(amounts: Dictionary) -> String:
 ## with its price and how long the work is. Only what actually changes is listed.
 ## A tower's store (Config.ammo_capacity) is said as well: it is what a tower's upgrade is.
 const _UPGRADE_STATS: Array[String] = ["damage", "hp"]
+## And, said as they are (metres, seconds): how far it reaches, how often it shoots -- the bow tower's top, one way or
+## the other (the repeater quicker and nearer, the ballista slower and further).
+const _UPGRADE_STATS_PLAIN: Array[String] = ["range", "fire_seconds"]
 
 func upgrade_detail_text(unit: Node, to_type: String = "") -> String:
 	var cfg = _get_config()
@@ -1061,6 +1063,9 @@ func upgrade_detail_text(unit: Node, to_type: String = "") -> String:
 		if from.has(stat) and to.has(stat) and float(from[stat]) != float(to[stat]):
 			# Hit points and damage as the interface shows them (Config.SHOWN).
 			parts.append(tr("STAT_%s" % stat.to_upper()) % [cfg.shown_text(float(from[stat])), cfg.shown_text(float(to[stat]))])
+	for stat in _UPGRADE_STATS_PLAIN:
+		if from.has(stat) and to.has(stat) and not is_equal_approx(float(from[stat]), float(to[stat])):
+			parts.append(tr("STAT_%s" % stat.to_upper()) % [float(from[stat]), float(to[stat])])
 	if cfg.has_method("ammo_capacity"):
 		var holds: int = int(cfg.ammo_capacity(String(unit.building_type)))
 		var will_hold: int = int(cfg.ammo_capacity(to_type))
@@ -1131,7 +1136,8 @@ func _populate_building_buttons() -> void:
 	button_container.columns = 1
 	_tower_offer = _ammo_offer_of(selected_unit)
 	# A workshop out in the open (Workshop: the kiln, the bloomery): its bench's jobs first, as a bench's card has them.
-	if "station" in selected_unit and selected_unit.station != null and bool(selected_unit.is_constructed):
+	# Known by what only it does (has_job) -- the cabin has a `station` too, a method that finds its benches.
+	if _is_workshop(selected_unit) and bool(selected_unit.is_constructed):
 		_add_workshop_jobs(selected_unit)
 	if selected_unit.has_method("accepts") and "is_constructed" in selected_unit and selected_unit.is_constructed:
 		_add_ammo_choice(selected_unit)
@@ -1141,7 +1147,15 @@ func _populate_building_buttons() -> void:
 	# become (v0.6 round six, GAME-DESIGN 6.0: a fence becomes bone stakes or a stone wall), under
 	# "Make it" -- each the card the build menu has for it, its icon, its name and its price, two
 	# to a row as there (v0.6 round six, the player: "升级建筑单位图标应该跟build里面的建造图标一样").
+	# Only the ways up whose materials can be had here (GameState.within_reach): bricks and iron are not offered where
+	# nothing makes them yet.
+	var gs_ways = _get_game_state()
+	var ways_up: Array = []
 	if selected_unit.has_method("can_upgrade") and selected_unit.can_upgrade():
+		for to_type in selected_unit.upgrade_targets():
+			if gs_ways == null or not gs_ways.has_method("within_reach") or gs_ways.within_reach(selected_unit.upgrade_cost(String(to_type))):
+				ways_up.append(String(to_type))
+	if not ways_up.is_empty():
 		var unit: Node = selected_unit
 		var heading := Label.new()
 		heading.name = "UpgradeHeading"
@@ -1152,7 +1166,7 @@ func _populate_building_buttons() -> void:
 		ways.name = UPGRADES_NAME
 		ways.columns = 2
 		button_container.add_child(ways)
-		for to_type in unit.upgrade_targets():
+		for to_type in ways_up:
 			var target: String = String(to_type)
 			var up_btn := UiKit.card_button(_building_name(target), _building_icon(target), func():
 				if not is_instance_valid(unit) or not unit.begin_upgrade(target):
@@ -1467,6 +1481,10 @@ func _populate_station_buttons() -> void:
 		btn.mouse_exited.connect(_clear_craft_detail)
 	if not ammo.is_empty():
 		_add_ammo_block(station, ammo, busy)
+
+## Whether `unit` is a workshop out in the open with its bench (Workshop).
+func _is_workshop(unit: Node) -> bool:
+	return unit != null and is_instance_valid(unit) and unit.has_method("has_job") and unit.get("station") is CraftingStation
 
 ## A WORKSHOP'S JOBS (Workshop: the kiln, the bloomery -- GAME-DESIGN 5.4), on its card under a heading: a card for each
 ## job its bench offers, two to a row, its price and its time along its foot, as at the workbench; begun, it is paid

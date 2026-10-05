@@ -54,15 +54,16 @@ func _built_of(known: Array) -> Array:
 			out.append(String(b_type))
 	return out
 
-## What the Hero's build menu shows, by name.
+## What the Hero's build menu shows, by name -- every tab of it (v0.7: the menu in tabs), in the menu's own order.
 func _menu(main: Node) -> Array:
 	var panel = main.hud.option_panel
 	panel.select_target(main.hero)
 	panel._on_build_pressed()
 	var names: Array = []
-	for btn in panel.button_container.get_children():
-		if btn is Button and btn.text != tr("CMD_BACK"):
-			names.append(String(btn.text))
+	for b_type in config_node.BUILDABLE_TYPES:
+		var card: Button = panel.build_card(String(b_type))
+		if card != null:
+			names.append(String(card.text))
 	return names
 
 func _names(types: Array) -> Array:

@@ -528,6 +528,31 @@ func knows_all(cost: Dictionary) -> bool:
 			return false
 	return true
 
+## Whether every material `cost` takes can be had here by work alone: turned up already, or growing and lying on this
+## map (its nodes: the trees, the rock, the river bank's clay, the lake's bog iron), or left by the dead (bone, meat, a
+## boss's hide). What only a workshop makes is not, until some has been made: bricks and iron are no next step at a
+## station with no kiln or bloomery to make them -- a building's way up that takes them is not offered till then
+## (OptionPanel; GAME-DESIGN 4.3 rule 1: "不知道能干什么的东西，不许出现在玩家面前").
+func within_reach(cost: Dictionary) -> bool:
+	var cfg = _get_config()
+	if cfg == null:
+		return true
+	var here: Dictionary = {}
+	for row in map_data().get("default_resource_nodes", []):
+		here[String(row.get("type", ""))] = true
+	for res_id in cost:
+		var id: String = String(res_id)
+		if knows(id) or here.has(id):
+			continue
+		var dropped: bool = false
+		for species in cfg.DINOS:
+			if (cfg.DINOS[species].get("drops", {}) as Dictionary).has(id):
+				dropped = true
+				break
+		if not dropped:
+			return false
+	return true
+
 # ==============================================================================
 # 7b. Unlocks (v0.4): what the Hero has made at the cabin
 # ==============================================================================

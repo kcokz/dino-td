@@ -434,29 +434,39 @@ func _on_goal_label_input(event: InputEvent) -> void:
 ## The stock's gaps close up when it would reach the cabin's medallion -- a map with more
 ## materials, counts in the thousands, a narrow window -- rather than running under it; and when even
 ## the closest gaps are not enough, its chips go a size down (_squeeze_chips): smaller icons, smaller
-## figures. Back to full size as soon as it fits again.
+## figures -- and, at a station with many materials (the third's clay, bog iron, bricks and iron besides the
+## first's), a second size down. Back to full size as soon as it fits again.
 func _fit_stock() -> void:
 	if resource_bar == null or core_vital == null or not core_vital.is_inside_tree():
 		return
 	# Up to the goal's dial when it is up, beside the cabin's medallion at its left.
 	var stop: Control = objective_dial if (objective_dial != null and objective_dial.visible) else core_vital
 	var room: float = stop.get_global_rect().position.x - resource_bar.get_global_rect().position.x - UiTheme.space("m")
-	for squeezed in [false, true]:
+	for squeezed in [0, 1, 2]:
 		_squeeze_chips(squeezed)
 		for gap in [UiTheme.space("l"), UiTheme.space("s"), UiTheme.space("xs")]:
 			resource_bar.add_theme_constant_override("separation", gap)
 			if resource_bar.get_combined_minimum_size().x <= room:
 				return
 
-## Whether the stock's chips are a size down (_fit_stock).
-var _chips_squeezed: bool = false
+## How far the stock's chips are squeezed (_fit_stock): 0 their own size, 1 a size down, 2 two sizes down.
+var _chips_squeezed: int = 0
 
-func _squeeze_chips(on: bool) -> void:
-	if on == _chips_squeezed:
+func _squeeze_chips(level: int) -> void:
+	if level == _chips_squeezed:
 		return
-	_chips_squeezed = on
-	var px: int = UiTheme.icon_size("s" if on else "m")
-	var width: float = float(_ui("resource_count_width_squeezed" if on else "resource_count_width", 30))
+	_chips_squeezed = level
+	var on: bool = level > 0
+	var px: int = UiTheme.icon_size(["m", "s", "xs"][clampi(level, 0, 2)])
+	var width: float = float(_ui(["resource_count_width", "resource_count_width_squeezed", "resource_count_width_tight"][clampi(level, 0, 2)], 30))
+	# Two sizes down, the chip closes up on itself too: its icon right against its count, its socket hugging the icon.
+	for res_id in resource_chips:
+		var c: Control = resource_chips[res_id]
+		if c != null and is_instance_valid(c):
+			c.add_theme_constant_override("separation", UiTheme.space("hair" if level >= 2 else "s"))
+			var socket: Control = c.get_node_or_null("%sSocket" % String(res_id).to_pascal_case()) as Control
+			if socket != null:
+				socket.theme_type_variation = &"SocketPanelTight" if level >= 2 else &"SocketPanel"
 	for res_id in resource_chips:
 		var chip: Control = resource_chips[res_id]
 		if chip == null or not is_instance_valid(chip):

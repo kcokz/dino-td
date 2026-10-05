@@ -694,6 +694,15 @@ func _s_pterosaur_death() -> PackedFloat32Array:
 #                  than the tyrannosaur's -- a smaller animal -- with a growl worked into it.
 #   Harpactognathus  a rhamphorhynchid, two and a half metres across: shrill squawks and a screech -- a gull's
 #                  harshness through a toothed bill, far above the azhdarchid's croak.
+#
+# STATION 3 (the Early Cretaceous Jehol, MAPS.jehol) -- all of them feathered, all of them on the birds' side of the
+# family, so nothing roars with an open mouth; the big one booms as its kin are thought to:
+#   Dilong         a two-metre early tyrannosaur: a hooting double note and a dry chitter, between the Ornitholestes'
+#                  yelps and the Ceratosaurus's honk.
+#   Sinornithosaurus  a metre-long dromaeosaur: high, bird-like -- quick peeps and a thin shriek.
+#   Sinocalliopteryx  a two-and-a-half-metre compsognathid: a rough, reedy honk, a fifth under the Dilong's.
+#   Yutyrannus     nine metres: a closed-mouth boom between the Allosaurus's and the tyrannosaur's, a breathy rasp in
+#                  it -- its coming heard over the valley.
 
 const ORNI_FORMANTS: Array = [[1350.0, 5.0, 1.0], [2800.0, 6.0, 0.5], [4000.0, 7.0, 0.2]]
 
@@ -862,6 +871,174 @@ func _s_harpactognathus_death() -> PackedFloat32Array:
 	var out := _squawk(0.8, 820.0, 300.0)
 	_mix(out, _hiss(0.5, [[0.0, 1800.0], [1.0, 1000.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.5, 0.25)
 	return out
+
+const DILONG_FORMANTS: Array = [[900.0, 4.5, 1.0], [2100.0, 5.5, 0.5], [3300.0, 6.5, 0.2]]
+
+## The Dilong's hoot: a short, rounded note, a little breath in it.
+func _hoot(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0 * 0.92], [0.35, f0 * 1.06], [1.0, f0 * 0.88]],
+		"amp": [[0.0, 0.0], [0.15, 1.0], [0.65, 0.75], [1.0, 0.0]], "formants": DILONG_FORMANTS,
+		"rough": 0.15, "breath": 0.3, "tilt": 2600.0, "jitter": 0.02, "nasal": 0.2})
+
+func _s_dilong_call_1() -> PackedFloat32Array:
+	# "hoo-hu": two hoots, the second lower.
+	var out := _buf(0.8)
+	_mix(out, _hoot(420.0, 0.22), 0.02, 1.0)
+	_mix(out, _hoot(360.0, 0.3), 0.32, 0.9)
+	return out
+
+func _s_dilong_call_2() -> PackedFloat32Array:
+	# A dry chitter, falling.
+	var out := _buf(0.7)
+	for i in 5:
+		_mix(out, _voice({"dur": 0.07, "f0": [[0.0, 700.0 - 30.0 * i], [1.0, 620.0 - 30.0 * i]],
+			"amp": [[0.0, 0.0], [0.2, 1.0], [1.0, 0.0]], "formants": DILONG_FORMANTS,
+			"rough": 0.35, "breath": 0.3, "tilt": 3000.0}), 0.02 + 0.11 * i, 0.85)
+	return out
+
+func _s_dilong_alert() -> PackedFloat32Array:
+	# A hiss, and a sharp hoot over it.
+	var out := _hiss(0.45, [[0.0, 2400.0], [1.0, 2900.0]], 2.0, [[0.0, 0.0], [0.25, 1.0], [1.0, 0.0]])
+	_mix(out, _hoot(520.0, 0.2), 0.12, 0.9)
+	return out
+
+func _s_dilong_bite() -> PackedFloat32Array:
+	return _snap(1.1, 0.1)
+
+func _s_dilong_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.3, "f0": [[0.0, 640.0], [0.2, 700.0], [1.0, 460.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": DILONG_FORMANTS, "rough": 0.4, "breath": 0.35, "tilt": 2800.0})
+
+func _s_dilong_death() -> PackedFloat32Array:
+	var out := _voice({"dur": 0.8, "f0": [[0.0, 560.0], [0.3, 480.0], [1.0, 200.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.6], [1.0, 0.0]], "formants": DILONG_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.85]], "rough": 0.3, "breath": 0.4, "tilt": 2500.0})
+	_mix(out, _hiss(0.3, [[0.0, 1800.0], [1.0, 1200.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.5, 0.25)
+	return out
+
+const SINORNITHO_FORMANTS: Array = [[1700.0, 5.0, 1.0], [3300.0, 6.0, 0.5], [4700.0, 7.0, 0.2]]
+
+## A quick, high peep.
+func _peep(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0], [0.4, f0 * 1.2], [1.0, f0 * 1.05]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.6, 0.6], [1.0, 0.0]], "formants": SINORNITHO_FORMANTS,
+		"rough": 0.05, "breath": 0.15, "tilt": 5200.0, "jitter": 0.015})
+
+func _s_sinornithosaurus_call_1() -> PackedFloat32Array:
+	# "pip-pip-pip": quick peeps.
+	var out := _buf(0.55)
+	for i in 3:
+		_mix(out, _peep(1500.0 + 60.0 * i, 0.07), 0.02 + 0.12 * i, 0.9)
+	return out
+
+func _s_sinornithosaurus_call_2() -> PackedFloat32Array:
+	# A thin rising whistle.
+	return _voice({"dur": 0.45, "f0": [[0.0, 1300.0], [0.7, 1750.0], [1.0, 1600.0]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.8, 0.7], [1.0, 0.0]], "formants": SINORNITHO_FORMANTS,
+		"rough": 0.04, "breath": 0.2, "tilt": 5600.0})
+
+func _s_sinornithosaurus_alert() -> PackedFloat32Array:
+	# A thin shriek with a hiss in it.
+	var out := _voice({"dur": 0.4, "f0": [[0.0, 1900.0], [0.3, 2300.0], [1.0, 1700.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.7, 0.8], [1.0, 0.0]], "formants": SINORNITHO_FORMANTS,
+		"rough": 0.35, "breath": 0.4, "tilt": 6000.0})
+	_mix(out, _hiss(0.3, [[0.0, 3800.0], [1.0, 4400.0]], 2.6, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.05, 0.4)
+	return out
+
+func _s_sinornithosaurus_bite() -> PackedFloat32Array:
+	return _snap(1.5, 0.0)
+
+func _s_sinornithosaurus_hurt() -> PackedFloat32Array:
+	return _peep(2100.0, 0.18)
+
+func _s_sinornithosaurus_death() -> PackedFloat32Array:
+	return _voice({"dur": 0.55, "f0": [[0.0, 2000.0], [0.3, 1700.0], [1.0, 700.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.6], [1.0, 0.0]], "formants": SINORNITHO_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.85]], "rough": 0.15, "breath": 0.35, "tilt": 5000.0})
+
+const SINOCALLI_FORMANTS: Array = [[620.0, 4.5, 1.0], [1550.0, 5.5, 0.5], [2600.0, 6.5, 0.2]]
+
+## The Sinocalliopteryx's honk: reedy and rough.
+func _reed_honk(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0], [0.3, f0 * 1.12], [1.0, f0 * 0.85]],
+		"amp": [[0.0, 0.0], [0.12, 1.0], [0.7, 0.8], [1.0, 0.0]], "formants": SINOCALLI_FORMANTS,
+		"rough": 0.45, "rough_am": [14.0, 0.35], "breath": 0.2, "tilt": 2200.0, "nasal": 0.45})
+
+func _s_sinocalliopteryx_call_1() -> PackedFloat32Array:
+	return _space(_reed_honk(260.0, 0.7), 0.1, [])
+
+func _s_sinocalliopteryx_call_2() -> PackedFloat32Array:
+	var out := _buf(0.9)
+	_mix(out, _reed_honk(280.0, 0.3), 0.02, 1.0)
+	_mix(out, _reed_honk(240.0, 0.4), 0.4, 0.9)
+	return _space(out, 0.1, [])
+
+func _s_sinocalliopteryx_alert() -> PackedFloat32Array:
+	# Its coming at the head of a big raid: a rasping hiss into a long honk.
+	var out := _buf(1.2)
+	_mix(out, _hiss(0.45, [[0.0, 1800.0], [1.0, 2300.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.3]]), 0.0, 0.6)
+	_mix(out, _reed_honk(250.0, 0.8), 0.35, 1.0)
+	return _space(out, 0.12, [[0.4, 0.25]])
+
+func _s_sinocalliopteryx_bite() -> PackedFloat32Array:
+	return _snap(0.9, 0.3)
+
+func _s_sinocalliopteryx_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.4, "f0": [[0.0, 380.0], [0.2, 420.0], [1.0, 260.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": SINOCALLI_FORMANTS,
+		"rough": 0.6, "breath": 0.3, "tilt": 2400.0, "nasal": 0.35})
+
+func _s_sinocalliopteryx_death() -> PackedFloat32Array:
+	var out := _voice({"dur": 1.1, "f0": [[0.0, 340.0], [0.3, 300.0], [1.0, 120.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.7], [1.0, 0.0]], "formants": SINOCALLI_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.8]], "rough": 0.55, "breath": 0.35, "tilt": 2100.0, "nasal": 0.35})
+	return _space(out, 0.12, [])
+
+const YUTY_FORMANTS: Array = [[250.0, 3.0, 1.0], [620.0, 3.5, 0.45], [1250.0, 4.0, 0.15]]
+
+## A closed-mouth boom between the Allosaurus's and the tyrannosaur's, a breathy rasp worked into it.
+func _yuty_boom(dur: float, f0_from: float, f0_to: float) -> PackedFloat32Array:
+	var out := _voice({"dur": dur, "f0": [[0.0, f0_from], [0.25, f0_from * 1.08], [1.0, f0_to]],
+		"amp": [[0.0, 0.0], [0.2, 1.0], [0.65, 0.9], [1.0, 0.0]], "formants": YUTY_FORMANTS,
+		"rough": 0.35, "rough_am": [8.0, 0.4], "breath": 0.25, "tilt": 850.0, "jitter": 0.03, "nasal": 0.15})
+	_mix(out, _tone(dur, [[0.0, f0_from * 0.5], [1.0, f0_to * 0.5]], [[0.0, 0.0], [0.3, 1.0], [0.7, 0.8], [1.0, 0.0]]), 0.0, 0.65)
+	return out
+
+func _s_yutyrannus_call_1() -> PackedFloat32Array:
+	return _space(_yuty_boom(1.9, 62.0, 50.0), 0.15, [])
+
+func _s_yutyrannus_call_2() -> PackedFloat32Array:
+	var out := _buf(2.5)
+	_mix(out, _yuty_boom(0.8, 66.0, 58.0), 0.0, 0.85)
+	_mix(out, _yuty_boom(1.4, 58.0, 47.0), 0.85, 1.0)
+	return _space(out, 0.15, [])
+
+func _s_yutyrannus_roar() -> PackedFloat32Array:
+	# Its coming, heard over the valley: a long boom, a rasp breathed through the end of it, the walls throwing it back.
+	var dry := _yuty_boom(3.2, 56.0, 42.0)
+	_mix(dry, _hiss(1.6, [[0.0, 700.0], [0.5, 900.0], [1.0, 500.0]], 1.0, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.4, 0.45)
+	return _space(dry, 0.3, [[0.45, 0.45], [0.9, 0.3], [1.4, 0.15]])
+
+func _s_yutyrannus_alert() -> PackedFloat32Array:
+	var out := _hiss(0.9, [[0.0, 850.0], [0.3, 1100.0], [1.0, 600.0]], 1.1, [[0.0, 0.0], [0.08, 1.0], [0.5, 0.6], [1.0, 0.0]])
+	_mix(out, _yuty_boom(1.0, 62.0, 56.0), 0.05, 0.6)
+	return out
+
+func _s_yutyrannus_bite() -> PackedFloat32Array:
+	var out := _modes(0.55, [[64.0, 0.18, 1.0], [118.0, 0.11, 0.7], [220.0, 0.07, 0.4], [520.0, 0.03, 0.25]], 0.005)
+	_mix(out, _burst(0.06, 1900.0, 1.1), 0.0, 0.6)
+	_mix(out, _snap(0.5, 0.1), 0.01, 0.5)
+	return out
+
+func _s_yutyrannus_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.75, "f0": [[0.0, 120.0], [0.2, 132.0], [1.0, 84.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.6, 0.8], [1.0, 0.0]], "formants": YUTY_FORMANTS,
+		"fshift": [[0.0, 1.4], [1.0, 1.1]], "rough": 0.7, "rough_am": [18.0, 0.5], "breath": 0.35, "tilt": 1800.0})
+
+func _s_yutyrannus_death() -> PackedFloat32Array:
+	var out := _yuty_boom(2.6, 64.0, 30.0)
+	_mix(out, _hiss(1.3, [[0.0, 950.0], [1.0, 450.0]], 1.2, [[0.0, 0.0], [0.4, 1.0], [1.0, 0.0]]), 1.3, 0.45)
+	return _space(out, 0.15, [[0.45, 0.2]])
 
 # ==============================================================================
 # His work: an axe in wood, a pick on stone, a mallet on a stake

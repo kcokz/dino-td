@@ -108,9 +108,15 @@ def build(name, rig, arm, spec, materials):
     dino_feathers.wings(body, sk, rig, spec, skin)
     dino_feathers.tail_fan(body, loft, path, spec)
     dino_feathers.plumes(body, loft, path, spec)
+    tufts_from = len(body.v)
+    dino_feathers.fuzz(body, sk, rig, loft, path, spec, paint)
+    tufts_to = len(body.v)
     dino_feathers.coat(body, path, spec, trunk_count, limb_count, spec.get("coat", {}).get("bones", ()))
     body.mask = masks(body, path, spec, trunk_count, limb_count)
-    return body.make(name + "_body", arm, materials)
+    parts = body.make(name + "_body", arm, materials)
+    if tufts_to > tufts_from:
+        dino_feathers.mark_tufts(parts[0], body, tufts_from, tufts_to)
+    return parts
 
 
 def masks(body, path, spec, trunk_count, limb_count):

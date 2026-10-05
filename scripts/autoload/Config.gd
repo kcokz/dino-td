@@ -180,6 +180,45 @@ const BUILDINGS: Dictionary = {
 		"damage_factor": 1.5,
 		"ammo": {"accepts": ["arrow_wood", "arrow_bone", "arrow_iron"], "capacity": 40},
 		"level": 3,
+		# Its last step, one way or the other and for good, once there is iron (station 3).
+		"upgrades_to": ["bow_tower_repeater", "bow_tower_ballista"],
+	},
+	# THE BOW TOWER'S TOP, ONE OF TWO (station 3; GAME-DESIGN 6.1 rule 2: "每条线的最后一级分叉，二选一。比如弩塔最后分成连弩和
+	# 床弩。同一张图、同样的材料，两局能造出不一样的基地"): iron fittings on the third level's tower.
+	# 连弩 THE REPEATER: eight repeating crossbows in the bows' places, a box of bolts on each (the Chinese zhuge nu) --
+	# lighter bolts, a shorter reach, three times as quick: the answer to a swarm, and to what flies.
+	"bow_tower_repeater": {
+		"name": "BUILDING_BOW_TOWER_REPEATER_NAME",
+		"kind": "bow",
+		"cells": 2,
+		"height": 3.5,
+		"hp": 120.0,
+		"cost": {"wood": 17, "stone": 4, "bone": 4, "iron": 2},
+		"range": 6.0,
+		"fire_seconds": 0.6,
+		"damage_factor": 1.25,
+		"ammo": {"accepts": ["arrow_wood", "arrow_bone", "arrow_iron"], "capacity": 60},
+		"level": 4,
+		"upgrades_to": "",
+	},
+	# 床弩 THE BALLISTA: one great crossbow on a turntable on the deck. It turns to the toughest thing in its long reach
+	# (`picks`, `aims`: TOWERS.turn_seconds) and drives a bolt through it and on into the next two behind (`pierce`) --
+	# slow, far and heavy: the answer to the big and the plated.
+	"bow_tower_ballista": {
+		"name": "BUILDING_BOW_TOWER_BALLISTA_NAME",
+		"kind": "bow",
+		"cells": 2,
+		"height": 3.5,
+		"hp": 120.0,
+		"cost": {"wood": 17, "stone": 4, "bone": 4, "iron": 3},
+		"range": 10.0,
+		"fire_seconds": 3.0,
+		"damage_factor": 3.0,
+		"picks": "toughest",
+		"aims": true,
+		"pierce": 3,
+		"ammo": {"accepts": ["arrow_wood", "arrow_bone", "arrow_iron"], "capacity": 30},
+		"level": 4,
 		"upgrades_to": "",
 	},
 	# 落木塔 THE DROP TOWER (GAME-DESIGN 3.0, in the log tower's place -- the player: "投石干脆和滚木都做成一个圈内
@@ -552,6 +591,10 @@ const BUILDINGS: Dictionary = {
 		"flame_height": 1.6,
 		"flame_size": 0.6,
 		"light": 3.5,
+		# Its bellows (BellowsL, BellowsR) pumped while it works, by turns: this far each way about their hinges (more
+		# and the split hide bag gapes), a stroke this long.
+		"pump_degrees": 6.0,
+		"pump_seconds": 1.1,
 		"upgrades_to": "",
 	},
 }
@@ -922,10 +965,21 @@ static func recipe_effect_text(recipe_id: String) -> String:
 		# the axe said "Wood x2" with a letter x, the spear "hits ×2").
 		parts.append(TranslationServer.translate("EFFECT_HARVEST_SPEED") % [TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper()),
 			factor_text(float(speeds[res_id]))])
-	for res_id in RESOURCE_NODES:
-		if flag != "" and String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
-			parts.append(TranslationServer.translate("TOOL_OPENS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
+	var opens: PackedStringArray = _opened_names(flag)
+	if not opens.is_empty():
+		parts.append(TranslationServer.translate("TOOL_OPENS") % TranslationServer.translate("LIST_SEPARATOR").join(opens))
 	return " · ".join(parts)
+
+## The names of what the unlock `flag` lets him gather (RESOURCE_NODES.<id>.requires_unlock), in their order: the bone
+## shovel's clay and bog iron, said together in one line.
+static func _opened_names(flag: String) -> PackedStringArray:
+	var out: PackedStringArray = []
+	if flag == "":
+		return out
+	for res_id in RESOURCE_NODES:
+		if String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
+			out.append(TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
+	return out
 
 ## What having made `recipe_id` lets him do, in words -- for the bench's line as the cursor is over it and the tool's
 ## place in his kit (the player, 2026-10-04: "Bone pick，bone shovel hover上去的时候没有解释这是干嘛的"): its own words
@@ -943,9 +997,9 @@ static func recipe_use_text(recipe_id: String) -> String:
 	for res_id in speeds:
 		parts.append(TranslationServer.translate("EFFECT_HARVEST_SPEED") % [TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper()),
 			factor_text(float(speeds[res_id]))])
-	for res_id in RESOURCE_NODES:
-		if flag != "" and String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
-			parts.append(TranslationServer.translate("TOOL_LETS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
+	var opens: PackedStringArray = _opened_names(flag)
+	if not opens.is_empty():
+		parts.append(TranslationServer.translate("TOOL_LETS") % TranslationServer.translate("LIST_SEPARATOR").join(opens))
 	return " · ".join(parts)
 
 ## Every resource `recipe_id` lets him gather at all: the bone shovel digs the river's clay (station 2) and the lake's
@@ -1119,7 +1173,10 @@ static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable =
 				if makes_ammo(rid):
 					add.call("USE_KIND_AMMO")
 				elif makes_batch(rid):
-					# Fired or smelted into something else at a workshop: "firing bricks", "smelting iron".
+					# Fired or smelted into something else at a workshop: "firing bricks", "smelting iron" -- said of what
+					# goes into the fire, not of the wood it burns (wood says "fires", below).
+					if res_id == "wood":
+						continue
 					for made in RECIPES[rid]["makes"]:
 						var word: String = TranslationServer.translate("USE_KIND_AT_%s" % String(RECIPES[rid].get("station", "")).to_upper()) \
 							% TranslationServer.translate("RESOURCE_%s" % String(made).to_upper())
@@ -1814,6 +1871,70 @@ const DINOS: Dictionary = {
 		"drops": {"food": 1, "bone": 1},
 		"drop_chance": {"food": 0.5, "bone": 0.5},
 		"size": Vector3(1.0, 0.6, 1.0),
+	},
+	# STATION 3'S (GAME-DESIGN 7.2: 早白垩世 · 热河生物群, the Yixian Formation of Liaoning, ~125 million years ago --
+	# "长羽毛的恐龙……全游戏最能展示现代古生物学的一张图"). Every one of them feathered, as the volcanic ash that buried them
+	# kept (tools/dino_species.py).
+	#
+	# Dilong paradoxus: a small early tyrannosauroid, two metres of it, slender and long-legged, a coat of simple
+	# filaments -- the first tyrannosaur found with feathers. The station's pack: its raiders and the nest's guards,
+	# as the Coelophysis are the first station's (the same numbers: one wooden arrow is one of them).
+	"dilong": {
+		"hours": ["day"],
+		"name": "DINO_DILONG_NAME",
+		"hp": 11.2,
+		"speed": 4.2,
+		"burst": "dash",
+		"damage": 3.6,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"drops": {"food": 1, "bone": 1},
+		"drop_chance": {"food": 0.5, "bone": 0.5},
+		"size": Vector3(0.8, 0.75, 0.8),
+	},
+	# Sinornithosaurus millenii: a dromaeosaur a metre long, its arms long-feathered like wings -- quick and brittle, it
+	# runs past the towers for the man (RunnerDino), as Hesperosuchus does at the first station.
+	"sinornithosaurus": {
+		"hours": ["day"],
+		"name": "DINO_SINORNITHOSAURUS_NAME",
+		"hp": 6.4,
+		"speed": 6.5,
+		"damage": 2.4,
+		"attack_rate": 1.4,
+		"behaviour": "runner",
+		"drops": {"food": 1, "bone": 1},
+		"drop_chance": {"food": 0.5, "bone": 0.5},
+		"size": Vector3(0.6, 0.45, 0.6),
+	},
+	# Sinocalliopteryx gigas: a compsognathid two and a half metres long -- a Sinornithosaurus's legs have been found in
+	# one's gut -- at the head of the big raids (the minor boss). What it leaves is its skin and its bones: a feathered
+	# hide is a hide (feathers have no use yet, GAME-DESIGN 13 item 10) -- and the bloomery's bellows want one.
+	"sinocalliopteryx": {
+		"hours": ["day"],
+		"name": "DINO_SINOCALLIOPTERYX_NAME",
+		"hp": 56.0,
+		"speed": 4.2,
+		"burst": "dash",
+		"damage": 8.0,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"boss": "minor",
+		"drops": {"hide": 2, "bone": 3},
+		"size": Vector3(0.9, 1.1, 0.9),
+	},
+	# Yutyrannus huali: nine metres of early tyrannosaur under a coat of long filaments, the biggest feathered animal
+	# known -- found three together, perhaps hunting as a group. The great boss, last of all, in the beacon's final wave.
+	"yutyrannus": {
+		"name": "DINO_YUTYRANNUS_NAME",
+		"hp": 200.0,
+		"speed": 2.2,
+		"damage": 14.0,
+		"attack_rate": 0.8,
+		"behaviour": "siege",
+		"boss": "major",
+		"heavy": true,
+		"drops": {"food": 4, "bone": 4},
+		"size": Vector3(1.6, 2.3, 1.6),
 	},
 	# THE FRIGHTENED CHARGERS (ChargerDino; GAME-DESIGN 3.0 -- the player: "食草恐龙也可以进攻船舱因为受到惊吓"): plant-eaters
 	# the capsule's fall frightened, come with the raids to ram the strange thing that fell into their valley. Armoured
@@ -2621,6 +2742,94 @@ const MAPS: Dictionary = {
 			{"type": "board", "cell": Vector2i(15, 16)},
 		],
 	},
+	# STATION 3 · THE EARLY CRETACEOUS · THE JEHOL BIOTA (GAME-DESIGN 7.2: "凉爽的温带……湖泊和森林，火山活动频繁"): the large
+	# valley's lie of the land (`like`) under a cooler sky -- dark conifer litter on the floor, grey volcanic tuff in the
+	# crags -- and the water at its west a lake's arm, wide and still, its margins boggy: bog iron there (RESOURCE_NODES
+	# .iron_ore), the river bank's clay along it. First version: no herds on the walls yet (Psittacosaurus to come), no
+	# gliders, insects or ash.
+	"jehol": {
+		"like": "valley_large",
+		"name": "MAP_JEHOL_NAME",
+		"terrain": {
+			"field_half": 44.0,
+			# A temperate forest's floor, darker and greener than the Morrison's; the rock the grey of ash turned to stone.
+			"ground_colour": Color(0.15, 0.21, 0.11),
+			"rock_colour": Color(0.42, 0.42, 0.40),
+			# The large valley's water, as it runs past the field's west edge -- wider and slower along the field: a
+			# lake's arm.
+			"river": {"course": [
+				{"at": Vector2(-130.0, -96.0), "half_width": 1.4, "bank": 1.2},
+				{"at": Vector2(-108.0, -90.0), "half_width": 1.6, "bank": 1.2},
+				{"at": Vector2(-88.0, -82.0), "half_width": 1.8, "bank": 1.2},
+				{"at": Vector2(-72.0, -72.0), "half_width": 2.0, "bank": 1.3},
+				{"at": Vector2(-63.0, -61.0), "half_width": 2.2, "bank": 1.4},
+				{"at": Vector2(-57.0, -50.0), "half_width": 2.6, "bank": 1.3},
+				{"at": Vector2(-54.0, -40.0), "half_width": 3.0, "bank": 1.1},
+				{"at": Vector2(-52.0, -30.0), "half_width": 3.4, "bank": 0.9},
+				{"at": Vector2(-51.5, -18.0), "half_width": 3.6, "bank": 0.8},
+				{"at": Vector2(-51.0, -8.0), "half_width": 3.6, "bank": 0.8},
+				{"at": Vector2(-51.5, 2.0), "half_width": 3.6, "bank": 0.8},
+				{"at": Vector2(-52.5, 12.0), "half_width": 3.4, "bank": 0.8},
+				{"at": Vector2(-55.0, 20.0), "half_width": 3.0, "bank": 1.0},
+				{"at": Vector2(-59.0, 27.0), "half_width": 2.6, "bank": 1.6},
+				{"at": Vector2(-64.0, 34.0), "half_width": 2.3, "bank": 2.4},
+				{"at": Vector2(-68.0, 44.0), "half_width": 2.1, "bank": 2.8},
+				{"at": Vector2(-71.0, 58.0), "half_width": 2.0, "bank": 2.6},
+				{"at": Vector2(-73.0, 76.0), "half_width": 2.0, "bank": 2.2},
+				{"at": Vector2(-75.0, 96.0), "half_width": 2.0, "bank": 1.8},
+				{"at": Vector2(-76.0, 114.0), "half_width": 2.0, "bank": 1.8},
+			]},
+		},
+		# What he lands with (GAME-DESIGN 9.2): the tools of the first two stations -- the bone pick, the stone axe, the
+		# hide map, the bone shovel (its flag harvest_clay) -- the stock and the base left where they were built.
+		"kit": ["harvest_stone", "stone_axe", "hide_map", "harvest_clay"],
+		# A cool forest's floor: the sedge green and thick, the ferns dark.
+		"ground_cover": {"grass_count": 1800, "grass_base": Color(0.12, 0.18, 0.08), "grass_tip": Color(0.34, 0.44, 0.20),
+			"fern_leaf": Color(0.22, 0.38, 0.16)},
+		"opening_stock": {"wood": 28},
+		"raiders": {"dilong": 1.0},
+		# From the second day, one in four runs past the towers for the man (RunnerDino: Sinornithosaurus).
+		"raiders_by_day": [{"from_day": 2, "raiders": {"dilong": 3.0, "sinornithosaurus": 1.0}}],
+		"guards": "dilong",
+		"minor_boss": "sinocalliopteryx",
+		"boss": "yutyrannus",
+		"prowlers": {},
+		"herds": [],
+		"day_hints": {"dawn": "HINT_DAWN_JEHOL", "dusk": "HINT_DUSK_JEHOL", "night": "HINT_NIGHT_JEHOL",
+			"dusk_first": "HINT_DUSK_FIRST_JEHOL"},
+		# The large valley's ground, as it lies; clay and bog iron along the lake's arm at the field's west edge -- the
+		# bone shovel's; the wrecks fallen elsewhere than at the last two stations.
+		"default_resource_nodes": [
+			{"type": "wood", "cell": Vector2i(-4, -2)},
+			{"type": "wood", "cell": Vector2i(4, -2)},
+			{"type": "wood", "cell": Vector2i(6, 3)},
+			{"type": "stone", "cell": Vector2i(-6, 3)},
+			{"type": "stone", "cell": Vector2i(-4, -16)},
+			{"type": "stone", "cell": Vector2i(4, -16)},
+			{"type": "stone", "cell": Vector2i(14, -12)},
+			{"type": "stone", "cell": Vector2i(14, -11)},
+			{"type": "stone", "cell": Vector2i(15, -13)},
+			{"type": "wood", "cell": Vector2i(-12, 6)},
+			{"type": "wood", "cell": Vector2i(-14, 8)},
+			{"type": "wood", "cell": Vector2i(-11, 9)},
+			{"type": "wood", "cell": Vector2i(-15, 5)},
+			{"type": "wood", "cell": Vector2i(-13, 11)},
+			{"type": "wood", "cell": Vector2i(16, 3)},
+			{"type": "wood", "cell": Vector2i(18, 7)},
+			{"type": "wood", "cell": Vector2i(3, 14)},
+			{"type": "wood", "cell": Vector2i(-2, 17)},
+			{"type": "stone", "cell": Vector2i(-6, 15)},
+			{"type": "clay", "cell": Vector2i(-21, -12)},
+			{"type": "clay", "cell": Vector2i(-20, 9)},
+			{"type": "iron_ore", "cell": Vector2i(-21, -6)},
+			{"type": "iron_ore", "cell": Vector2i(-21, 1)},
+			{"type": "iron_ore", "cell": Vector2i(-20, 14)},
+			{"type": "water", "cell": Vector2i(-22, -2)},
+			{"type": "antenna", "cell": Vector2i(17, -6)},
+			{"type": "battery", "cell": Vector2i(-8, -20)},
+			{"type": "board", "cell": Vector2i(9, 18)},
+		],
+	},
 }
 
 ## THE JUMP BETWEEN STATIONS (StationJump; GAME-DESIGN 8.3): its timings (seconds) and sizes (metres).
@@ -2758,6 +2967,9 @@ const GAMES: Dictionary = {
 				"when": "WHEN_STATION_1", "settings": {}},
 			{"id": "morrison", "name": "STATION_2_NAME", "age": "ERA_LATE_JURASSIC", "place": "PLACE_MORRISON",
 				"when": "WHEN_STATION_2", "settings": {"map": "morrison", "era": "late_jurassic"}},
+			# The Early Cretaceous of Liaoning: the feathered dinosaurs, bog iron at the lake, the bloomery (v0.7).
+			{"id": "jehol", "name": "STATION_3_NAME", "age": "ERA_EARLY_CRETACEOUS", "place": "PLACE_JEHOL",
+				"when": "WHEN_STATION_3", "settings": {"map": "jehol", "era": "early_cretaceous"}},
 		],
 	},
 	# The player's own: whatever they choose; the whole cabin, its beacon calling for rescue.
@@ -2805,6 +3017,9 @@ const CUSTOM_GAME: Dictionary = {
 			# Harpactognathus on the wing from the second day, Ceratosaurus and Allosaurus; nothing in the river; the
 			# sauropods and the stegosaurs on the walls -- and the Morrison's words for the day's turns.
 			{"id": "late_jurassic", "name": "ERA_LATE_JURASSIC", "note": "ERA_LATE_JURASSIC_NOTE", "cast_of": "morrison"},
+			# The Early Cretaceous is station 3's age, MAPS.jehol's own cast: Dilong packs, Sinornithosaurus running for the
+			# man from the second day, Sinocalliopteryx and Yutyrannus; nothing in the lake by night.
+			{"id": "early_cretaceous", "name": "ERA_EARLY_CRETACEOUS", "note": "ERA_EARLY_CRETACEOUS_NOTE", "cast_of": "jehol"},
 		]},
 		# How hard (the player: "难度高的恐龙巢穴多，波次厉害"): more nests the harder -- the raid shared out among
 		# them, each with its guards (MAPS.<id>.nest_cells, in the order they are opened) -- and the raids bigger,
@@ -2828,6 +3043,8 @@ const CUSTOM_GAME: Dictionary = {
 			{"id": "large", "name": "MENU_MAP_LARGE", "note": "MAP_LARGE_NOTE", "map_id": "valley_large"},
 			# Station 2's (MAPS.morrison): the Late Jurassic's dry valley, as big as the large one.
 			{"id": "morrison", "name": "MENU_MAP_MORRISON", "note": "MAP_MORRISON_NOTE", "map_id": "morrison"},
+			# Station 3's (MAPS.jehol): the Early Cretaceous lake country, as big as the large one.
+			{"id": "jehol", "name": "MENU_MAP_JEHOL", "note": "MAP_JEHOL_NOTE", "map_id": "jehol"},
 		]},
 		# How long the beacon's rescue takes to come: the days to hold out (a day is DAY.length, six minutes).
 		{"id": "days", "name": "CUSTOM_DAYS", "default": "5", "choices": [
@@ -3289,6 +3506,9 @@ const UI: Dictionary = {
 	# Squeezed (HUD._fit_stock: every material in the thousands on a map with more of them -- station 2's clay),
 	# the chips a size down: the count's box for the small figures, the icon a size smaller (UiTheme icon "s").
 	"resource_count_width_squeezed": 22,
+	# Two sizes down (station 3: clay, bog iron, bricks and iron besides the first station's -- a dozen chips with the
+	# beacon's parts), the count's box at its narrowest: four small figures, no more.
+	"resource_count_width_tight": 20,
 	"objective_width": 290,            # a pinned goal's plate, top right
 	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
 	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
@@ -3640,6 +3860,30 @@ const SOUNDS: Dictionary = {
 		"harpactognathus_bite":  {"files": ["harpactognathus_bite"], "db": -5.0, "pitch": 1.08, "class": "bite", "unit": 5.0},
 		"harpactognathus_hurt":  {"files": ["harpactognathus_hurt"], "db": -5.0, "pitch": 1.06, "class": "hurt", "unit": 5.0},
 		"harpactognathus_death": {"files": ["harpactognathus_death"], "db": -3.0, "pitch": 1.04, "class": "death", "unit": 8.0},
+		# STATION 3 (the Early Cretaceous, MAPS.jehol), each its own (tools/build_sounds.gd): the Dilong's hoots and chitter,
+		# the Sinornithosaurus's peeps, the Sinocalliopteryx's reedy honk (its coming heard as the minor boss's), the
+		# Yutyrannus's boom (its coming heard over the valley).
+		"dilong_call":  {"files": ["dilong_call_1", "dilong_call_2"], "db": -5.0, "pitch": 1.08, "class": "call"},
+		"dilong_alert": {"files": ["dilong_alert"], "db": -3.0, "pitch": 1.08, "class": "alert"},
+		"dilong_bite":  {"files": ["dilong_bite"], "db": -4.0, "pitch": 1.08, "class": "bite"},
+		"dilong_hurt":  {"files": ["dilong_hurt"], "db": -4.0, "pitch": 1.08, "class": "hurt"},
+		"dilong_death": {"files": ["dilong_death"], "db": -2.0, "pitch": 1.06, "class": "death"},
+		"sinornithosaurus_call":  {"files": ["sinornithosaurus_call_1", "sinornithosaurus_call_2"], "db": -7.0, "pitch": 1.06, "class": "call", "unit": 5.0, "reach": 40.0},
+		"sinornithosaurus_alert": {"files": ["sinornithosaurus_alert"], "db": -6.0, "pitch": 1.06, "class": "alert", "unit": 5.0},
+		"sinornithosaurus_bite":  {"files": ["sinornithosaurus_bite"], "db": -6.0, "pitch": 1.08, "class": "bite", "unit": 4.0},
+		"sinornithosaurus_hurt":  {"files": ["sinornithosaurus_hurt"], "db": -7.0, "pitch": 1.08, "class": "hurt", "unit": 4.0},
+		"sinornithosaurus_death": {"files": ["sinornithosaurus_death"], "db": -5.0, "pitch": 1.04, "class": "death", "unit": 6.0},
+		"sinocalliopteryx_call":  {"files": ["sinocalliopteryx_call_1", "sinocalliopteryx_call_2"], "db": -3.0, "pitch": 1.05, "class": "call", "unit": 10.0},
+		"sinocalliopteryx_alert": {"files": ["sinocalliopteryx_alert"], "db": 0.0, "pitch": 1.03, "class": "boss", "unit": 22.0, "reach": 140.0},
+		"sinocalliopteryx_bite":  {"files": ["sinocalliopteryx_bite"], "db": -3.0, "pitch": 1.06, "class": "bite"},
+		"sinocalliopteryx_hurt":  {"files": ["sinocalliopteryx_hurt"], "db": -3.0, "pitch": 1.05, "class": "hurt"},
+		"sinocalliopteryx_death": {"files": ["sinocalliopteryx_death"], "db": 0.0, "pitch": 1.03, "class": "death", "unit": 12.0},
+		"yutyrannus_call":  {"files": ["yutyrannus_call_1", "yutyrannus_call_2"], "db": 1.0, "pitch": 1.04, "class": "call", "unit": 16.0, "reach": 120.0},
+		"yutyrannus_alert": {"files": ["yutyrannus_alert"], "db": -1.0, "pitch": 1.04, "class": "alert", "unit": 12.0},
+		"yutyrannus_roar":  {"files": ["yutyrannus_roar"], "db": 3.0, "pitch": 1.0, "class": "boss", "unit": 45.0, "reach": 220.0},
+		"yutyrannus_bite":  {"files": ["yutyrannus_bite"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
+		"yutyrannus_hurt":  {"files": ["yutyrannus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
+		"yutyrannus_death": {"files": ["yutyrannus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
 		# His work.
 		"chop":     {"files": ["chop_1", "chop_2", "chop_3"], "db": -7.0, "pitch": 1.06, "class": "work"},
 		"quarry":   {"files": ["quarry_1", "quarry_2", "quarry_3"], "db": -9.0, "pitch": 1.06, "class": "work"},
@@ -4513,6 +4757,15 @@ const VISUALS: Dictionary = {
 		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha", "material": "skin"},
 	"dino/allosaurus":      {"scene": "res://assets/models/dinos/allosaurus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod", "material": "skin"},
+	# Station 3's (the Early Cretaceous Jehol; tools/dino_species.py): every one feathered.
+	"dino/dilong":          {"scene": "res://assets/models/dinos/dilong.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor", "material": "skin"},
+	"dino/sinornithosaurus": {"scene": "res://assets/models/dinos/sinornithosaurus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor", "material": "skin"},
+	"dino/sinocalliopteryx": {"scene": "res://assets/models/dinos/sinocalliopteryx.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha", "material": "skin"},
+	"dino/yutyrannus":      {"scene": "res://assets/models/dinos/yutyrannus.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod", "material": "skin"},
 	# The flyer is not fitted by its height: wings spread flat it is a hand high and two and a half metres across, and
 	# fitted to a height it came out five times as big. Built to its true size (tools/generate_dinos.py), it is drawn so.
 	"dino/harpactognathus": {"scene": "res://assets/models/dinos/harpactognathus.gltf", "fit": "none",
@@ -4567,6 +4820,11 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/bait_rack_3": {"scene": "res://assets/models/props/bait_rack_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
+	# The bow tower's top, one of two (tools/generate_props.py bow_tower_repeater, bow_tower_ballista).
+	"building/bow_tower_repeater": {"scene": "res://assets/models/props/bow_tower_repeater_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
+	"building/bow_tower_ballista": {"scene": "res://assets/models/props/bow_tower_ballista_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/catapult":    {"scene": "res://assets/models/props/catapult_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/catapult_2":  {"scene": "res://assets/models/props/catapult_a.glb", "fit": "none",
@@ -4578,6 +4836,8 @@ const VISUALS: Dictionary = {
 	"prop/arrow_wood":      {"scene": "res://assets/models/props/arrow_wood_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
 	"prop/arrow_bone":      {"scene": "res://assets/models/props/arrow_bone_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
+	"prop/arrow_iron":      {"scene": "res://assets/models/props/arrow_iron_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
 	"prop/drop_log":        {"scene": "res://assets/models/props/drop_log_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "center", "color": "tower"},
@@ -4618,14 +4878,17 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
 	"building/brazier":     {"scene": "res://assets/models/props/brazier_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
-	# The brick wall: courses of fired brick on the stone wall's footing (tools/generate_props.py brick_wall).
-	"building/brick_wall":  {"scene": "",
+	# The brick wall: courses of fired brick in a running bond on the stone wall's footing, the bond running on from cell
+	# to cell (tools/generate_props.py brick_wall).
+	"building/brick_wall":  {"scene": "res://assets/models/props/brick_wall_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "brick"},
-	# The workshops out in the open (tools/generate_props.py kiln, furnace): their fire a part of its own (Flame), shown
-	# while they work (Workshop).
-	"building/kiln":        {"scene": "",
+	# The workshops out in the open (tools/generate_props.py kiln, furnace), built to size on a tower's plot: the kiln a
+	# beehive of clay on its ring of stones, its stoke-hole at the front; the bloomery a brick shaft on a stone footing,
+	# its leather bellows beside it (BellowsL, BellowsR, pumped while it works). Their fire a part of its own (Flame),
+	# shown while they work (Workshop).
+	"building/kiln":        {"scene": "res://assets/models/props/kiln_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "brick"},
-	"building/furnace":     {"scene": "",
+	"building/furnace":     {"scene": "res://assets/models/props/furnace_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "brick"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
@@ -4661,7 +4924,8 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	# Station 3's bog iron at the lake's edge (tools/generate_props.py bog_iron): rusty mud and limonite in the peat; dug,
 	# a wet pit.
-	"node/iron_ore":        {"scene": "",
+	"node/iron_ore":        {"scene": "res://assets/models/props/bog_iron_a.glb", "fit": "none",
+		"scene_depleted": "res://assets/models/props/bog_iron_dug_a.glb",
 		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	# The ship's wrecks (WRECKS; tools/generate_props.py wreck): a torn piece of the hull, the white
 	# plating and orange markings the cabin wears, scorched, half in a burnt furrow, plates spilled
@@ -4694,7 +4958,7 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/clay":            {"scene": "res://assets/models/props/drop_clay_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
-	"drop/iron_ore":        {"scene": "",
+	"drop/iron_ore":        {"scene": "res://assets/models/props/drop_iron_ore_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/bone":            {"scene": "res://assets/models/props/drop_bone_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},

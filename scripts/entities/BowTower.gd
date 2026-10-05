@@ -12,6 +12,10 @@ extends "res://scripts/entities/AmmoTower.gd"
 
 ## Seconds before it can shoot again.
 var cooldown: float = 0.0
+## A tower that turns to aim (BUILDINGS.<id>.aims: the ballista on its turntable): what it is turning to, by its id,
+## and how long it has still to turn (TOWERS.turn_seconds) before it shoots. 0 with nothing chosen.
+var _aiming_at: int = 0
+var _aim_left: float = 0.0
 ## Seconds each bow has still to show without its arrow, after it has shot (Config.TOWERS.renock_seconds).
 var _renock: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
@@ -38,31 +42,71 @@ func _physics_process(delta: float) -> void:
 				var arrow: Node3D = part("Arrow%d" % i)
 				if arrow != null:
 					arrow.visible = has_ammo()
+				var bolt: Node3D = part("Bolt") if i == 0 else null
+				if bolt != null:
+					bolt.visible = has_ammo()
 	if not _is_live():
 		return
 	cooldown = maxf(0.0, cooldown - delta)
+	# Turning to what it chose (the ballista): it shoots once it faces it, if it is still there to shoot.
+	if _aiming_at != 0:
+		_aim_left -= delta
+		if _aim_left > 0.0:
+			return
+		var chosen: Object = instance_from_id(_aiming_at)
+		_aiming_at = 0
+		if AmmoTower.is_quarry(chosen) and _in_reach(chosen as Node3D):
+			loose_at(chosen as Node3D)
+		return
 	if cooldown > 0.0 or not has_ammo():
 		return
 	var t: Node3D = target_in_reach()
-	if t != null:
-		loose_at(t)
+	if t == null:
+		return
+	if bool(_row_value("aims", false)):
+		_aiming_at = t.get_instance_id()
+		_aim_left = float(_towers("turn_seconds", 0.35))
+		turn_to(t.global_position, _aim_left)
+		return
+	loose_at(t)
 
-## The nearest animal within its reach (flat, from its middle), on the ground or in the air -- or null.
+## The nearest animal within its reach (flat, from its middle), on the ground or in the air -- or null. A tower that
+## picks the toughest (BUILDINGS.<id>.picks "toughest": the ballista) takes the one with the most health left in its
+## reach, the nearer of two alike.
 func target_in_reach() -> Node3D:
 	if not is_inside_tree():
 		return null
+	var toughest: bool = String(_row_value("picks", "")) == "toughest"
 	var best: Node3D = null
 	var best_d: float = reach()
+	var best_hp: float = -1.0
 	var here := Vector2(global_position.x, global_position.z)
 	for d in get_tree().get_nodes_in_group("dinos"):
 		if not AmmoTower.is_quarry(d) or not can_see(d):
 			continue
 		var at: Vector3 = (d as Node3D).global_position
 		var gap: float = here.distance_to(Vector2(at.x, at.z))
-		if gap <= best_d:
+		if gap > reach():
+			continue
+		if toughest:
+			var hp: float = float(d.current_hp) if "current_hp" in d else 0.0
+			if hp > best_hp or (is_equal_approx(hp, best_hp) and gap < best_d):
+				best_hp = hp
+				best_d = gap
+				best = d as Node3D
+		elif gap <= best_d:
 			best_d = gap
 			best = d as Node3D
 	return best
+
+## Whether `d` is within its reach now (flat, from its middle).
+func _in_reach(d: Node3D) -> bool:
+	return Vector2(global_position.x, global_position.z).distance_to(Vector2(d.global_position.x, d.global_position.z)) <= reach()
+
+## A value of its own row (Config.BUILDINGS), or `fallback`.
+func _row_value(key: String, fallback: Variant) -> Variant:
+	var cfg = _get_config()
+	return cfg.BUILDINGS.get(building_type, {}).get(key, fallback) if (cfg and "BUILDINGS" in cfg) else fallback
 
 ## Which of its eight bows faces `point`: 0 north, round by east.
 func bow_facing(point: Vector3) -> int:
@@ -80,9 +124,19 @@ func loose_at(target: Node3D) -> bool:
 		model.free()
 		return false
 	cooldown = _row_number("fire_seconds", 1.5)
+	# What drives the shot: its own pierce, when it drives a bolt on through (the ballista), over the arrow's.
+	if int(_row_value("pierce", 1)) > int(row.get("pierce", 1)):
+		row = row.duplicate()
+		row["pierce"] = int(_row_value("pierce", 1))
 	var i: int = bow_facing(target.global_position)
 	var bow: Node3D = part("Bow%d" % i)
 	var arrow: Node3D = part("Arrow%d" % i)
+	# One great bow on a turntable (the ballista): its Bolt is what flies, and it is laid again after.
+	var bolt: Node3D = part("Bolt")
+	if bolt != null:
+		turn_to(target.global_position)
+		arrow = bolt
+		i = 0
 	var from: Vector3 = (arrow.global_position if arrow != null else (bow.global_position if bow != null
 		else global_position + Vector3(0.0, _building_height() * 0.8, 0.0)))
 	if arrow != null:
@@ -145,11 +199,14 @@ func _recoil(bow: Node3D) -> void:
 	tw.tween_property(bow, "scale", rest * Vector3(1.0, 1.0, 0.9), float(_towers("renock_seconds", 0.6)) * 0.1)
 	tw.tween_property(bow, "scale", rest, float(_towers("renock_seconds", 0.6)) * 0.4)
 
-## Arrows on it: the quiver shows while it has any, and each bow's arrow nocked.
+## Arrows on it: the quiver shows while it has any, and each bow's arrow nocked -- the ballista's bolt laid.
 func _show_ammo() -> void:
 	var quiver: Node3D = part("Quiver")
 	if quiver != null:
 		quiver.visible = has_ammo()
+	var bolt: Node3D = part("Bolt")
+	if bolt != null and _renock[0] <= 0.0:
+		bolt.visible = has_ammo()
 	for i in 8:
 		var arrow: Node3D = part("Arrow%d" % i)
 		if arrow != null and _renock[i] <= 0.0:

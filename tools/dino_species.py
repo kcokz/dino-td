@@ -2479,6 +2479,1166 @@ HARPACTOGNATHUS = {
     },
 }
 
+
+# ==============================================================================
+# THE THIRD MAP'S CAST (GAME-DESIGN 7.2, station 3: the Early Cretaceous of north-east China, the Jehol Biota -- the
+# Yixian Formation of western Liaoning, about 125 million years ago: cool and temperate, lakes among conifer forests,
+# volcanoes whose ash fell on the lakes and kept the feathers of what died in them). Built at their own sizes; the
+# game shows each at its "height", head and all.
+# ==============================================================================
+
+# Yutyrannus huali ("beautiful feathered tyrant", Xu et al. 2012; the holotype ZCDM V5000 and two smaller ones from
+# Batu Yingzi): a basal tyrannosauroid nine metres long and a tonne and a half -- the biggest animal known with
+# direct evidence of feathers: long simple filaments over the body, 15 cm by the hips, 16 cm on the upper arm, 20 cm
+# on the neck. A skull of 0.9 m, longer, lower and narrower behind than a tyrannosaurid's, a low rugose crest along
+# the middle of the snout (the premaxillae and nasals, pitted with air spaces); arms longer than a tyrannosaurid's,
+# with three working fingers; long legs without a tyrannosaurid's pinched foot; a lighter build. Derived from the
+# Tyrannosaurus: its skull's length from Xu et al. 2012 (905 mm), the rest proportioned as a big basal
+# tyrannosauroid's. The third map's boss.
+
+
+YUTYRANNUS = {
+    "height": 2.3,
+    # Skull 0.9 m, femur 0.86, tibia 0.82, the long foot bone 0.42 (not pinched); the arm 0.67 m to the wrist, the
+    # hand and its three fingers 0.28 more; the tail half the animal.
+    "skeleton": {
+        "hip_height": 1.92,
+        "pelvis_length": 0.62,
+        "pelvis_pitch": -6.0,
+        "spine": [(0.56, 3.0), (0.56, 0.0), (0.53, -4.0), (0.48, -8.0)],
+        "neck": [(0.25, 50.0), (0.24, 40.0), (0.22, 20.0), (0.2, -4.0)],
+        "skull": (0.9, -10.0),
+        "jaw": (0.84, 0.14, -14.0),
+        "jaw_hinge": 0.06,
+        "tail": [(0.46, 5.0), (0.45, 1.0), (0.43, -1.0), (0.41, -2.0), (0.39, -2.0), (0.37, -1.0), (0.34, -1.0),
+                 (0.31, 0.0), (0.28, 0.0), (0.25, 0.0), (0.22, 0.0), (0.19, 0.0), (0.16, 0.0), (0.13, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.86, 0.82, 0.42, 0.27],
+                     "socket": (0.22, 0.0, -0.07), "stance": (0.05, 0.16), "foot": "digitigrade",
+                     "foot_tilt": 24.0, "roll_tilt": 35.0, "bend": "forward", "splay": 3.0},
+            # The arms held bent before the chest, longer than a tyrannosaurid's: the forearm down and forward, the
+            # three fingers hooked.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.4, 0.27, 0.11, 0.17], "socket": (0.22, -0.07, -0.4), "arm": True,
+                     "rest_hand": (0.07, 0.34, -0.3), "bend": "back", "splay": 14.0, "hand_angle": 42.0,
+                     "finger_angle": 76.0},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        # A heavy walk, lighter on its feet than a tyrannosaurid's.
+        "walk": {"period": 1.15, "duty": 0.62, "step": 0.13, "bob": 0.034, "sway": 0.026, "hip_yaw": 3.0,
+                 "hip_roll": 2.5, "tail_swing": 3.0, "neck_bob": 2.0, "steady": 0.8, "narrow": 0.9, "push": 0.5,
+                 "curl": 0.4, "arm_swing": 0.012},
+        "run": {"period": 0.82, "duty": 0.44, "step": 0.2, "bob": 0.055, "lean": -4.0, "crouch": 0.055,
+                "neck_pitch": -8.0, "tail_lift": 3.0, "head_pitch": 3.0, "tail_swing": 2.0, "steady": 0.85,
+                "narrow": 0.85, "push": 0.8},
+        "idle": {"period": 5.0, "breaths": 2, "look": 20.0, "nod": 3.0, "swell": 0.02, "tail_swing": 3.0},
+        # A bite from above, as the tyrannosaur's: drawn up and back, then driven down and forward.
+        "attack": {"period": 1.05, "jaw": 42.0, "lunge": 0.3, "draw": 14.0, "reach": 18.0, "head_up": 10.0,
+                   "head_down": 14.0},
+        "death": {"period": 1.7, "roll": 84.0, "pivot": 0.48, "slide": 0.18},
+    },
+    "body": {
+        "around": 44,
+        "soften": 0.05,
+        "rough": 0.02,
+        "scale": 0.85,
+        "throat": 0.34,
+        "trunk": [
+            # The skull: deep, the snout broad and blunt at its tip (a tyrannosauroid's U-shaped snout), narrower
+            # behind the eyes than a tyrannosaurid's -- they look out to the sides more than forward.
+            st("Head", 1.012, 0.026, 0.03, 0.028, step=0.012),
+            st("Head", 0.985, 0.052, 0.08, 0.076, step=0.018),
+            st("Head", 0.93, 0.064, 0.114, 0.11, step=0.03),
+            st("Head", 0.84, 0.071, 0.134, 0.13, step=0.035),
+            st("Head", 0.7, 0.08, 0.148, 0.148, step=0.04),
+            st("Head", 0.56, 0.092, 0.158, 0.164, step=0.04),
+            st("Head", 0.42, 0.109, 0.166, 0.18, step=0.04),
+            st("Head", 0.3, 0.13, 0.172, 0.196, lift=0.01, step=0.04),
+            st("Head", 0.18, 0.158, 0.166, 0.212, step=0.04),
+            st("Head", 0.06, 0.168, 0.15, 0.222, step=0.05),
+            st("Head", -0.05, 0.152, 0.136, 0.216, step=0.05),
+            st("Head", -0.12, 0.138, 0.128, 0.206, step=0.05),
+            # The neck: a strong S, under its mane.
+            st("Neck4", 0.5, 0.134, 0.134, 0.198, step=0.06),
+            st("Neck3", 0.5, 0.148, 0.146, 0.22, step=0.06),
+            st("Neck2", 0.5, 0.17, 0.163, 0.246, step=0.07),
+            st("Neck1", 0.5, 0.208, 0.188, 0.288, step=0.07),
+            # The body: deep in the chest, lighter than a tyrannosaurid's.
+            st("Spine4", 0.6, 0.248, 0.208, 0.35, step=0.08),
+            st("Spine4", 0.1, 0.3, 0.26, 0.6, n_bot=2.3, step=0.08),
+            st("Spine3", 0.5, 0.348, 0.29, 0.7, n_bot=2.4, step=0.08),
+            st("Spine2", 0.5, 0.358, 0.31, 0.66, n_bot=2.3, step=0.08),
+            st("Spine1", 0.5, 0.348, 0.318, 0.52, step=0.08),
+            # The hips broad over the thighs, which come out of them.
+            st("Hips", 0.3, 0.358, 0.31, 0.36, keel=0.014, step=0.08),
+            st("Hips", 0.9, 0.29, 0.29, 0.3, keel=0.014, step=0.08),
+            st("Tail1", 0.5, 0.214, 0.272, 0.29, step=0.09),
+            st("Tail2", 0.5, 0.18, 0.238, 0.248, step=0.09),
+            st("Tail3", 0.5, 0.151, 0.204, 0.209, step=0.09),
+            st("Tail4", 0.5, 0.126, 0.175, 0.175, step=0.09),
+            st("Tail5", 0.5, 0.105, 0.146, 0.146, step=0.09),
+            st("Tail6", 0.5, 0.087, 0.121, 0.118, step=0.09),
+            st("Tail7", 0.5, 0.072, 0.1, 0.097, step=0.08),
+            st("Tail8", 0.5, 0.058, 0.081, 0.078, step=0.08),
+            st("Tail9", 0.5, 0.046, 0.064, 0.061, step=0.07),
+            st("Tail10", 0.5, 0.035, 0.048, 0.046, step=0.07),
+            st("Tail11", 0.5, 0.025, 0.035, 0.033, step=0.06),
+            st("Tail12", 0.5, 0.017, 0.023, 0.022, step=0.05),
+            st("Tail13", 0.5, 0.011, 0.014, 0.013, step=0.04),
+            st("Tail14", 0.6, 0.006, 0.007, 0.007, step=0.03),
+            st("Tail_end", 0.3, 0.0025, 0.0025, 0.0025, step=0.015),
+        ],
+        "mouth": {"from": ("Head", 0.06), "to": ("Head", 1.0), "phi": 106.0, "depth": 0.014, "width": 0.1, "band": 3.0},
+        # Blade-like teeth, the front ones (the premaxilla's) D-shaped and small, as a tyrannosauroid's.
+        "teeth": {"from": ("Head", 0.28), "to": ("Head", 0.97), "count": 15, "length": 0.055, "radius": 0.012,
+                  "colour": (0.78, 0.73, 0.6)},
+        "lower_teeth": {"from": ("Head", 0.28), "to": ("Head", 0.93), "count": 14, "length": 0.045, "radius": 0.0105},
+        "eyes": {"at": ("Head", 0.27), "phi": 42.0, "radius": 0.028, "sunk": 0.6, "forward": 16.0, "up": 10.0,
+                 "iris": (0.7, 0.52, 0.16), "pupil": (0.008, 0.006, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.29), "phi": 26.0, "size": 0.06, "height": 0.02},
+        "fossa": {"from": ("Head", 0.4), "to": ("Head", 0.64), "phi": 66.0, "depth": 0.016, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.93), "phi": 40.0, "size": 0.016},
+        # The crest: low and long down the middle of the snout, from the premaxillae back along the nasals --
+        # rugose bone under a horny sheath, darker and redder than the skin.
+        "horns": [
+            {"at": ("Head", t), "phi": 0.0, "length": h, "base": (0.01, 0.075), "rake": 0.0, "taper": 0.22,
+             "colour": (0.15, 0.055, 0.03), "tip": (0.2, 0.1, 0.06), "bone": "Head", "rings": 4, "around": 10}
+            for (t, h) in ((0.5, 0.02), (0.57, 0.032), (0.64, 0.04), (0.71, 0.044), (0.78, 0.042), (0.85, 0.034),
+                           (0.91, 0.022))
+        ],
+        "limbs": {
+            "hind": {
+                # Its top inside the hips, so the thigh comes out of the flank.
+                "stations": [(0, -0.28, 0.135, 0.27, 0.03), (0, -0.05, 0.225, 0.355, 0.043), (0, 0.25, 0.248, 0.34, 0.043),
+                             (0, 0.55, 0.196, 0.258, 0.024), (0, 0.85, 0.134, 0.162, 0.006), (0, 0.98, 0.115, 0.13, 0.0),
+                             (1, 0.1, 0.132, 0.182, -0.033), (1, 0.3, 0.126, 0.182, -0.046), (1, 0.6, 0.094, 0.113, -0.019),
+                             (1, 0.95, 0.065, 0.065, 0.0), (2, 0.1, 0.061, 0.055, 0.0), (2, 0.95, 0.055, 0.045, 0.0)],
+                "around": 18,
+                "digits": {
+                    "digits": [(-18.0, 0.25, 0.036, 0.075), (0.0, 0.29, 0.039, 0.085), (18.0, 0.25, 0.036, 0.075)],
+                    "hallux": (150.0, 0.1, 0.018, 0.04, 0.12),
+                    "flat": 0.8,
+                    "claw_curl": 0.6,
+                },
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.075, 0.094, 0.0), (0, 0.1, 0.082, 0.092, 0.011), (0, 0.5, 0.064, 0.071, 0.01),
+                             (0, 0.95, 0.046, 0.049, 0.0), (1, 0.3, 0.047, 0.052, 0.003), (1, 0.95, 0.035, 0.037, 0.0),
+                             (2, 0.6, 0.034, 0.025, 0.0)],
+                "around": 12,
+                # Three fingers, the first short with a big hooked claw, the third slender.
+                "digits": {
+                    "digits": [(-16.0, 0.1, 0.016, 0.085), (0.0, 0.16, 0.015, 0.07), (16.0, 0.13, 0.012, 0.05)],
+                    "claw_curl": 1.3,
+                    "flat": 0.9,
+                },
+            },
+        },
+        # Its coat (tools/dino_feathers.py): long filaments in tufts over the body from behind the eyes to the tip of
+        # the tail -- longest on the neck, a mane -- along the arms to the wrists and down the thighs; the face, the
+        # shins, the feet and the fingers in scales. The skin under it drawn as plumage in the bake.
+        "fuzz": {
+            "seed": 11, "width": 0.26, "lie": 9.0, "droop": 0.3, "curve": 0.1, "twist": 25.0, "jitter": 0.4,
+            "askew": 0.3, "trunk": [
+                {"from": ("Head", 0.16), "to": ("Tail_end", 0.0), "phi": (26.0, 174.0), "spacing": 0.075, "gap": 0.07,
+                 "length": [(("Head", 0.16), 0.05), (("Head", -0.12), 0.12), (("Neck3", 0.5), 0.18),
+                            (("Neck1", 0.5), 0.2), (("Spine4", 0.5), 0.17), (("Spine2", 0.5), 0.15),
+                            (("Tail3", 0.5), 0.15), (("Tail8", 0.5), 0.12), (("Tail12", 0.5), 0.07),
+                            (("Tail_end", 0.0), 0.035)],
+                 "around": [(26.0, 0.9), (90.0, 0.75), (150.0, 0.9), (174.0, 1.0)]},
+                {"from": ("Head", 0.16), "to": ("Tail_end", 0.0), "phi": (0.0, 26.0), "spacing": 0.07, "gap": 0.06,
+                 "lie": 22.0, "droop": 0.12, "curve": 0.06,
+                 "length": [(("Head", 0.16), 0.06), (("Head", -0.12), 0.16), (("Neck3", 0.5), 0.23),
+                            (("Neck1", 0.5), 0.24), (("Spine4", 0.5), 0.2), (("Spine2", 0.5), 0.17),
+                            (("Tail3", 0.5), 0.16), (("Tail8", 0.5), 0.12), (("Tail12", 0.5), 0.07),
+                            (("Tail_end", 0.0), 0.035)]},
+            ],
+            "limbs": [
+                {"limb": "fore", "from": (0, 0.05), "to": (1, 0.95), "around": (0.0, 360.0), "length": (0.16, 0.09),
+                 "spacing": 0.055, "gap": 0.06},
+                {"limb": "hind", "from": (0, -0.1), "to": (1, 0.2), "around": (-150.0, 150.0), "length": (0.15, 0.07),
+                 "spacing": 0.07, "gap": 0.07},
+            ],
+        },
+        "coat": {"bones": ("Thigh", "UpperArm", "Forearm", "Hand"), "face": ("Head", 0.16), "bare": ("Head", 0.3)},
+        "skin_detail": {"scales": {"cells": 50.0, "dorsal_size": 0.5, "groove": 0.36, "groove_dark": 0.28, "tint": 0.1,
+                                   "speckle": 0.1, "relief": 0.8, "depth": 0.009},
+                        "feathers": {"coat_cells": 26.0, "coat_stretch": 0.3, "coat_groove": 0.4, "coat_tint": 0.14,
+                                     "streak": 0.22},
+                        "horn": {"grain": 80.0, "relief": 0.14, "mottle": 0.14, "streak": 0.06}},
+        "texture": 2048,
+        # Conjectural (nothing of its colour is known): charcoal over the back, dun grey-brown flanks, a paler belly --
+        # a thick grey coat for the Yixian's cold winters (mean yearly temperatures about 10 C, Amiot et al. 2011)
+        # and its conifer woods; faint darker saddles down the back, closing into rings round the tail; the crest and
+        # the face about it flushed dull red, what it shows off with. Greyer than the tyrannosaur's olive-brown.
+        "skin": {
+            "back": (0.024, 0.021, 0.018),
+            "flank": (0.12, 0.1, 0.08),
+            "belly": (0.38, 0.35, 0.3),
+            "throat": (0.44, 0.4, 0.34),
+            "lips": (0.08, 0.06, 0.05),
+            "mouth": (0.32, 0.08, 0.06),
+            "claws": (0.04, 0.035, 0.03),
+            "mottle": 0.16,
+            "shank_dark": 0.35,
+            "bands": {"colour": (0.014, 0.012, 0.01), "from": ("Spine4", 0.0), "to": ("Tail_end", 0.5),
+                      "period": 0.5, "width": 0.28, "strength": 0.55},
+            "flush": {"colour": (0.36, 0.11, 0.06), "from": ("Head", 1.0), "to": ("Head", 0.3), "strength": 0.3},
+        },
+    },
+}
+
+
+# Dilong paradoxus ("the emperor dragon", Xu et al. 2004; IVPP V14243 from the Lujiatun beds): a small basal
+# tyrannosauroid, the first of its line found with feathers -- the holotype a metre and sixty, not full grown;
+# slender and long-legged, a long low skull with a crest along its top (the fused nasals' ridge, forking in a Y back
+# over the eyes), long arms for a tyrannosauroid with three fingers; a coat of simple filaments, about 2 cm long,
+# kept by the jaw and along the tail. Derived from the Ornitholestes, its proportions after Xu et al. 2004. The third
+# map's pack -- the raiders, and the nest's guards.
+
+
+DILONG = {
+    "height": 0.75,
+    # Skull 0.19 m, femur 0.175, tibia 0.21, the long foot bone 0.115; the arm 0.15 m to the wrist, the hand and its
+    # fingers 0.085 more; the tail more than half the animal.
+    "skeleton": {
+        "hip_height": 0.44,
+        "pelvis_length": 0.085,
+        "pelvis_pitch": -6.0,
+        "spine": [(0.12, 5.0), (0.12, 8.0), (0.1, 4.0)],
+        "neck": [(0.065, 60.0), (0.062, 50.0), (0.058, 30.0), (0.054, 4.0)],
+        "skull": (0.19, -12.0),
+        "jaw": (0.175, 0.02, -16.0),
+        "jaw_hinge": 0.08,
+        "tail": [(0.09, 7.0), (0.09, 3.0), (0.085, 0.0), (0.08, -1.0), (0.08, -1.0), (0.075, -1.0), (0.07, 0.0),
+                 (0.065, 0.0), (0.06, 0.0), (0.055, 0.0), (0.05, 0.0), (0.045, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.175, 0.21, 0.115, 0.06],
+                     "socket": (0.04, 0.0, -0.008), "stance": (0.006, 0.05), "foot": "digitigrade",
+                     "foot_tilt": 22.0, "roll_tilt": 40.0, "bend": "forward", "splay": 4.0},
+            # The arms folded before the chest, the hands hanging, palms in.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.085, 0.065, 0.035, 0.05], "socket": (0.032, -0.012, -0.052), "arm": True,
+                     "rest_hand": (0.022, 0.06, -0.065), "bend": "back", "splay": 12.0, "hand_angle": 52.0,
+                     "finger_angle": 88.0},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        "walk": {"period": 0.46, "duty": 0.6, "step": 0.05, "bob": 0.008, "sway": 0.006, "hip_yaw": 3.0,
+                 "hip_roll": 2.0, "tail_swing": 3.0, "neck_bob": 1.5, "steady": 0.7, "narrow": 0.8, "push": 0.6,
+                 "curl": 0.5, "arm_swing": 0.007},
+        "run": {"period": 0.34, "duty": 0.35, "step": 0.085, "bob": 0.013, "lean": -6.0, "crouch": 0.018,
+                "neck_pitch": -16.0, "tail_lift": 6.0, "head_pitch": 6.0, "tail_swing": 2.0, "steady": 0.8,
+                "narrow": 0.7, "push": 0.9},
+        "idle": {"period": 3.6, "breaths": 2, "look": 30.0, "nod": 4.0, "swell": 0.025, "tail_swing": 3.0},
+        "attack": {"period": 0.7, "jaw": 44.0, "lunge": 0.08, "draw": 18.0, "reach": 26.0, "head_up": 12.0,
+                   "head_down": 6.0},
+        "death": {"period": 1.2, "roll": 86.0, "pivot": 0.06, "slide": 0.05},
+        # Asleep, belly down, its neck laid forward and down and turned a little aside, the head on the ground.
+        "sleep": {"period": 3.2, "drop": 0.33, "neck": [(-61.0, 8.0), (-7.0, 10.0), (10.0, 10.0), (35.0, 5.0)],
+                  "head": (30.0, 10.0, 0.0), "tail": [(-14.0, 6.0), (4.0, 9.0)] + [(1.5, 9.0)] * 10, "tilt": 82.0,
+                  "arm_raise": 0.045},
+    },
+    "body": {
+        "around": 40,
+        "soften": 0.03,
+        "rough": 0.008,
+        "scale": 0.12,
+        "throat": 0.3,
+        "tips": (0.004, 0.01),
+        "trunk": [
+            # The skull: long and low, the snout narrow and its top straight under the crest; big orbits; the jaw
+            # muscles swelling it behind them.
+            st("Head", 1.012, 0.006, 0.007, 0.006, step=0.003),
+            st("Head", 0.99, 0.0095, 0.0115, 0.0105, step=0.004),
+            st("Head", 0.95, 0.0115, 0.0145, 0.0135, step=0.005),
+            st("Head", 0.88, 0.0128, 0.0165, 0.0152, step=0.006),
+            st("Head", 0.78, 0.0138, 0.0178, 0.0168, step=0.007),
+            st("Head", 0.66, 0.0152, 0.0192, 0.0186, step=0.008),
+            st("Head", 0.54, 0.0172, 0.021, 0.0205, step=0.008),
+            st("Head", 0.42, 0.0205, 0.0232, 0.0228, step=0.008),
+            st("Head", 0.3, 0.025, 0.0252, 0.0252, lift=0.0015, step=0.008),
+            st("Head", 0.18, 0.0285, 0.0255, 0.0275, step=0.008),
+            st("Head", 0.06, 0.0282, 0.0235, 0.0285, step=0.01),
+            st("Head", -0.08, 0.0232, 0.0205, 0.0265, step=0.012),
+            # The neck: a slender S.
+            st("Neck4", 0.5, 0.02, 0.021, 0.0265, step=0.012),
+            st("Neck3", 0.5, 0.0222, 0.0228, 0.029, step=0.013),
+            st("Neck2", 0.5, 0.0248, 0.0252, 0.0325, step=0.014),
+            st("Neck1", 0.5, 0.03, 0.029, 0.0395, step=0.015),
+            # The body: slim, a deep chest over the arms, the hips broad over the thighs.
+            st("Spine3", 0.7, 0.0377, 0.032, 0.053, step=0.017),
+            st("Spine3", 0.15, 0.049, 0.039, 0.086, n_bot=2.3, step=0.018),
+            st("Spine2", 0.5, 0.056, 0.046, 0.099, n_bot=2.4, step=0.018),
+            st("Spine1", 0.6, 0.054, 0.048, 0.083, n_bot=2.2, step=0.018),
+            st("Spine1", 0.15, 0.054, 0.052, 0.07, step=0.018),
+            st("Hips", 0.3, 0.061, 0.056, 0.063, keel=0.0035, step=0.018),
+            st("Hips", 0.9, 0.05, 0.051, 0.056, keel=0.0035, step=0.018),
+            # The tail: deep at its root, then long and slender.
+            st("Tail1", 0.5, 0.035, 0.04, 0.045, step=0.02),
+            st("Tail2", 0.5, 0.028, 0.032, 0.0345, step=0.02),
+            st("Tail3", 0.5, 0.022, 0.0255, 0.026, step=0.024),
+            st("Tail4", 0.5, 0.0176, 0.02, 0.02, step=0.024),
+            st("Tail5", 0.5, 0.0143, 0.0162, 0.016, step=0.024),
+            st("Tail6", 0.5, 0.0116, 0.0133, 0.013, step=0.024),
+            st("Tail7", 0.5, 0.0094, 0.0108, 0.0105, step=0.024),
+            st("Tail8", 0.5, 0.0075, 0.0087, 0.0084, step=0.024),
+            st("Tail9", 0.5, 0.006, 0.0068, 0.0066, step=0.024),
+            st("Tail10", 0.5, 0.0047, 0.0052, 0.0051, step=0.024),
+            st("Tail11", 0.5, 0.0035, 0.0039, 0.0038, step=0.02),
+            st("Tail12", 0.6, 0.0025, 0.0026, 0.0026, step=0.016),
+            st("Tail_end", 0.3, 0.0011, 0.0011, 0.0011, step=0.008),
+        ],
+        "mouth": {"from": ("Head", 0.1), "to": ("Head", 1.0), "phi": 104.0, "depth": 0.0018, "width": 0.1, "band": 3.0},
+        # Small teeth, the front ones (the premaxilla's) D-shaped in section, a tyrannosauroid's mark.
+        "teeth": {"from": ("Head", 0.3), "to": ("Head", 0.97), "count": 15, "length": 0.0055, "radius": 0.0015,
+                  "colour": (0.8, 0.76, 0.66)},
+        "lower_teeth": {"from": ("Head", 0.3), "to": ("Head", 0.93), "count": 14, "length": 0.0045, "radius": 0.0013},
+        "eyes": {"at": ("Head", 0.3), "phi": 52.0, "radius": 0.0095, "sunk": 0.6, "forward": 16.0, "up": 8.0,
+                 "iris": (0.62, 0.46, 0.08), "pupil": (0.008, 0.006, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.32), "phi": 34.0, "size": 0.01, "height": 0.003},
+        "fossa": {"from": ("Head", 0.42), "to": ("Head", 0.66), "phi": 68.0, "depth": 0.0024, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.93), "phi": 46.0, "size": 0.0026},
+        # The crest: a low ridge down the middle of the snout (the fused nasals), forking behind into two that run
+        # back over the eyes -- a Y seen from above.
+        "horns": [
+            {"at": ("Head", t), "phi": 0.0, "length": h, "base": (0.0012, 0.012), "rake": 0.0, "taper": 0.25,
+             "colour": (0.24, 0.12, 0.05), "tip": (0.3, 0.18, 0.09), "bone": "Head", "rings": 4, "around": 8}
+            for (t, h) in ((0.6, 0.0035), (0.65, 0.0048), (0.7, 0.0056), (0.75, 0.0058), (0.8, 0.0055), (0.85, 0.0045),
+                           (0.9, 0.003))
+        ] + [
+            {"at": ("Head", t), "phi": phi, "length": h, "base": (0.0011, 0.011), "rake": 0.0, "splay": 10.0,
+             "taper": 0.25, "colour": (0.24, 0.12, 0.05), "tip": (0.3, 0.18, 0.09), "bone": "Head", "rings": 4,
+             "around": 8}
+            for (t, phi, h) in ((0.56, 7.0, 0.0038), (0.51, 11.0, 0.0042), (0.46, 15.0, 0.0042), (0.41, 19.0, 0.0038),
+                                (0.36, 23.0, 0.003))
+        ],
+        "limbs": {
+            "hind": {
+                # Its top inside the hips, so the thigh comes out of the flank rather than standing on it.
+                "stations": [(0, -0.3, 0.0123, 0.028, 0.0037), (0, -0.06, 0.0242, 0.052, 0.0074),
+                             (0, 0.2, 0.0307, 0.0538, 0.0084), (0, 0.5, 0.028, 0.0426, 0.0056), (0, 0.8, 0.019, 0.0255, 0.0018),
+                             (0, 0.97, 0.0158, 0.018, 0.0), (1, 0.1, 0.0158, 0.0224, -0.004),
+                             (1, 0.3, 0.015, 0.0224, -0.0066), (1, 0.6, 0.0108, 0.0133, -0.0033),
+                             (1, 0.95, 0.0075, 0.0083, 0.0), (2, 0.1, 0.0066, 0.0066, 0.0), (2, 0.95, 0.006, 0.0056, 0.0)],
+                "around": 16,
+                "digits": {
+                    "digits": [(0.0, 0.06, 0.0046, 0.013), (-18.0, 0.047, 0.0043, 0.012), (18.0, 0.043, 0.0042, 0.0115)],
+                    "hallux": (150.0, 0.018, 0.0027, 0.0075, 0.022),
+                    "flat": 0.85,
+                },
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.012, 0.017, 0.0), (0, 0.1, 0.014, 0.017, 0.0017), (0, 0.45, 0.0115, 0.0136, 0.0025),
+                             (0, 0.95, 0.008, 0.009, 0.0), (1, 0.3, 0.0087, 0.0098, 0.0008), (1, 0.95, 0.0061, 0.0066, 0.0),
+                             (2, 0.5, 0.0058, 0.0044, 0.0), (2, 0.95, 0.0052, 0.0038, 0.0)],
+                "around": 12,
+                # Three fingers, the first the shortest with the biggest claw.
+                "digits": {
+                    "digits": [(-14.0, 0.034, 0.0032, 0.016), (0.0, 0.048, 0.003, 0.014), (14.0, 0.04, 0.0027, 0.011)],
+                    "claw_curl": 1.3,
+                    "flat": 0.9,
+                },
+            },
+        },
+        # Its coat (tools/dino_feathers.py): short filaments in tufts from behind the eyes to the tip of the tail, a
+        # little longer down the back and the neck; along the arms and down the thighs. The face, the shins, the feet
+        # and the hands in scales.
+        "fuzz": {
+            "seed": 5, "width": 0.3, "lie": 12.0, "droop": 0.25, "curve": 0.1, "twist": 25.0, "jitter": 0.35,
+            "askew": 0.3, "trunk": [
+                {"from": ("Head", 0.2), "to": ("Tail_end", 0.0), "phi": (24.0, 172.0), "spacing": 0.019, "gap": 0.018,
+                 "length": [(("Head", 0.2), 0.01), (("Head", -0.08), 0.018), (("Neck2", 0.5), 0.024),
+                            (("Spine2", 0.5), 0.022), (("Tail3", 0.5), 0.022), (("Tail9", 0.5), 0.017),
+                            (("Tail_end", 0.0), 0.01)]},
+                {"from": ("Head", 0.2), "to": ("Tail_end", 0.0), "phi": (0.0, 24.0), "spacing": 0.017, "gap": 0.014,
+                 "lie": 24.0, "droop": 0.1,
+                 "length": [(("Head", 0.2), 0.012), (("Head", -0.08), 0.022), (("Neck2", 0.5), 0.03),
+                            (("Spine2", 0.5), 0.026), (("Tail3", 0.5), 0.024), (("Tail9", 0.5), 0.018),
+                            (("Tail_end", 0.0), 0.01)]},
+            ],
+            "limbs": [
+                {"limb": "fore", "from": (0, 0.05), "to": (1, 0.95), "around": (0.0, 360.0), "length": (0.02, 0.015),
+                 "spacing": 0.014, "gap": 0.016},
+                {"limb": "hind", "from": (0, -0.1), "to": (1, 0.2), "around": (-150.0, 150.0), "length": (0.022, 0.014),
+                 "spacing": 0.016, "gap": 0.018},
+            ],
+        },
+        "coat": {"bones": ("Thigh", "UpperArm", "Forearm"), "face": ("Head", 0.2), "bare": ("Head", 0.34)},
+        "skin_detail": {"scales": {"cells": 220.0, "dorsal_size": 0.5, "groove": 0.38, "groove_dark": 0.28, "tint": 0.14,
+                                   "speckle": 0.1, "relief": 0.7, "depth": 0.001},
+                        "feathers": {"coat_cells": 130.0, "coat_stretch": 0.35, "coat_groove": 0.35, "coat_tint": 0.12,
+                                     "streak": 0.18},
+                        "horn": {"grain": 300.0, "relief": 0.1, "mottle": 0.12, "streak": 0.05}},
+        "texture": 2048,
+        # Conjectural (nothing of its colour is known): a woodland coat for the Lujiatun's forest floor -- dark
+        # olive-umber over the back, dappled darker, olive-khaki flanks, a pale buff throat and belly; a dark stripe
+        # from the snout back through the eye; dark rings round the far half of the tail; the crest a dull rust.
+        "skin": {
+            "back": (0.022, 0.02, 0.008),
+            "flank": (0.08, 0.072, 0.03),
+            "belly": (0.32, 0.3, 0.2),
+            "throat": (0.4, 0.37, 0.26),
+            "lips": (0.12, 0.09, 0.05),
+            "mouth": (0.3, 0.07, 0.06),
+            "claws": (0.06, 0.05, 0.04),
+            "mottle": 0.16,
+            "shank_dark": 0.35,
+            "spots": {"colour": (0.02, 0.019, 0.01), "from": ("Neck3", 0.0), "to": ("Tail6", 0.5), "scale": 15.0,
+                      "above": 0.18, "strength": 0.85},
+            "bands": {"colour": (0.025, 0.022, 0.012), "from": ("Tail4", 0.0), "to": ("Tail_end", 0.5),
+                      "period": 0.07, "width": 0.32, "strength": 0.7},
+            "eye_stripe": {"colour": (0.022, 0.02, 0.01), "from": ("Head", 0.97), "to": ("Neck4", 0.6),
+                           "phi": 60.0, "width": 14.0},
+        },
+    },
+}
+
+
+# Sinocalliopteryx gigas ("the giant Chinese beautiful feather", Ji et al. 2007; JMP-V-05-8-01 from the Jianshangou
+# beds): the biggest compsognathid -- 2.4 metres, most of it tail; a long low skull, long legs, short arms with big
+# hands, the first finger's claw the biggest; clothed in simple filaments up to 10 cm long, the longest over the hips
+# and down the legs (its "feathered drumsticks"). What it ate is still inside two of them (Xing et al. 2012): the
+# bird Confuciusornis, and a dromaeosaur's leg -- a Sinornithosaurus. Derived from the Ornitholestes. The third map's
+# minor boss: at the head of the big raids.
+
+
+SINOCALLIOPTERYX = {
+    "height": 1.1,
+    # After Ji et al. 2007: skull 0.22 m, femur 0.23, tibia 0.27, the long foot bone 0.16; the arm 0.17 m to the
+    # wrist, the hand and its fingers 0.12 more; the tail sixty per cent of the animal.
+    "skeleton": {
+        "hip_height": 0.585,
+        "pelvis_length": 0.1,
+        "pelvis_pitch": -6.0,
+        "spine": [(0.14, 5.0), (0.14, 8.0), (0.12, 4.0)],
+        "neck": [(0.08, 60.0), (0.075, 50.0), (0.07, 30.0), (0.065, 4.0)],
+        "skull": (0.22, -12.0),
+        "jaw": (0.203, 0.024, -16.0),
+        "jaw_hinge": 0.08,
+        "tail": [(0.13, 7.0), (0.13, 3.0), (0.125, 0.0), (0.12, -1.0), (0.12, -1.0), (0.115, -1.0), (0.11, 0.0),
+                 (0.105, 0.0), (0.1, 0.0), (0.095, 0.0), (0.09, 0.0), (0.08, 0.0), (0.07, 0.0), (0.06, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.23, 0.27, 0.16, 0.08],
+                     "socket": (0.05, 0.0, -0.012), "stance": (0.008, 0.065), "foot": "digitigrade",
+                     "foot_tilt": 22.0, "roll_tilt": 40.0, "bend": "forward", "splay": 4.0},
+            # The arms folded before the chest, the big hands hanging, palms in.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.1, 0.07, 0.045, 0.075], "socket": (0.045, -0.015, -0.07), "arm": True,
+                     "rest_hand": (0.03, 0.07, -0.075), "bend": "back", "splay": 12.0, "hand_angle": 55.0,
+                     "finger_angle": 90.0},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        "walk": {"period": 0.5, "duty": 0.6, "step": 0.06, "bob": 0.01, "sway": 0.008, "hip_yaw": 3.0,
+                 "hip_roll": 2.0, "tail_swing": 3.0, "neck_bob": 1.5, "steady": 0.7, "narrow": 0.8, "push": 0.6,
+                 "curl": 0.5, "arm_swing": 0.008},
+        "run": {"period": 0.38, "duty": 0.35, "step": 0.1, "bob": 0.016, "lean": -6.0, "crouch": 0.022,
+                "neck_pitch": -16.0, "tail_lift": 6.0, "head_pitch": 6.0, "tail_swing": 2.0, "steady": 0.8,
+                "narrow": 0.7, "push": 0.9},
+        "idle": {"period": 3.8, "breaths": 2, "look": 30.0, "nod": 4.0, "swell": 0.025, "tail_swing": 3.0},
+        "attack": {"period": 0.72, "jaw": 46.0, "lunge": 0.1, "draw": 18.0, "reach": 26.0, "head_up": 12.0,
+                   "head_down": 6.0},
+        "death": {"period": 1.25, "roll": 86.0, "pivot": 0.08, "slide": 0.06},
+        # Asleep, belly down, its neck laid forward and down and turned a little aside, the long tail round beside it.
+        "sleep": {"period": 3.4, "drop": 0.44, "neck": [(-61.0, 8.0), (-7.0, 10.0), (10.0, 10.0), (35.0, 5.0)],
+                  "head": (30.0, 10.0, 0.0), "tail": [(-14.0, 6.0), (4.0, 8.0)] + [(1.5, 8.0)] * 12, "tilt": 82.0,
+                  "arm_raise": 0.04},
+    },
+    "body": {
+        "around": 40,
+        "soften": 0.03,
+        "rough": 0.008,
+        "scale": 0.15,
+        "throat": 0.3,
+        "tips": (0.004, 0.012),
+        "trunk": [
+            # The skull: long, low and pointed, as a compsognathid's; big orbits; the jaw muscles swelling it behind.
+            st("Head", 1.012, 0.0055, 0.0065, 0.0055, step=0.003),
+            st("Head", 0.99, 0.0095, 0.012, 0.0105, step=0.004),
+            st("Head", 0.95, 0.0118, 0.0155, 0.0138, step=0.005),
+            st("Head", 0.88, 0.0132, 0.0178, 0.0158, step=0.006),
+            st("Head", 0.78, 0.0145, 0.0195, 0.0178, step=0.007),
+            st("Head", 0.66, 0.0162, 0.0214, 0.0198, step=0.008),
+            st("Head", 0.54, 0.0186, 0.0236, 0.022, step=0.008),
+            st("Head", 0.42, 0.0222, 0.0262, 0.0248, step=0.008),
+            st("Head", 0.3, 0.0272, 0.0285, 0.0276, lift=0.0018, step=0.008),
+            st("Head", 0.18, 0.031, 0.029, 0.0305, step=0.008),
+            st("Head", 0.06, 0.0305, 0.0268, 0.0318, step=0.01),
+            st("Head", -0.08, 0.026, 0.0232, 0.03, step=0.012),
+            # The neck: a long S.
+            st("Neck4", 0.5, 0.0245, 0.0255, 0.032, step=0.014),
+            st("Neck3", 0.5, 0.027, 0.0278, 0.0352, step=0.015),
+            st("Neck2", 0.5, 0.0302, 0.0306, 0.0395, step=0.016),
+            st("Neck1", 0.5, 0.0365, 0.0355, 0.048, step=0.018),
+            # The body: slim, a deep chest over the arms, the hips broad over the thighs.
+            st("Spine3", 0.7, 0.047, 0.04, 0.066, step=0.02),
+            st("Spine3", 0.15, 0.062, 0.05, 0.108, n_bot=2.3, step=0.022),
+            st("Spine2", 0.5, 0.07, 0.058, 0.124, n_bot=2.4, step=0.022),
+            st("Spine1", 0.6, 0.068, 0.06, 0.104, n_bot=2.2, step=0.022),
+            st("Spine1", 0.15, 0.068, 0.065, 0.088, step=0.022),
+            st("Hips", 0.3, 0.076, 0.07, 0.079, keel=0.004, step=0.022),
+            st("Hips", 0.9, 0.063, 0.064, 0.07, keel=0.004, step=0.022),
+            # The tail: deep at its root, then very long and slender.
+            st("Tail1", 0.5, 0.045, 0.051, 0.057, step=0.025),
+            st("Tail2", 0.5, 0.037, 0.042, 0.045, step=0.025),
+            st("Tail3", 0.5, 0.03, 0.034, 0.035, step=0.03),
+            st("Tail4", 0.5, 0.0245, 0.028, 0.028, step=0.03),
+            st("Tail5", 0.5, 0.0205, 0.0232, 0.0232, step=0.03),
+            st("Tail6", 0.5, 0.0172, 0.0195, 0.0193, step=0.03),
+            st("Tail7", 0.5, 0.0144, 0.0164, 0.016, step=0.03),
+            st("Tail8", 0.5, 0.012, 0.0137, 0.0133, step=0.03),
+            st("Tail9", 0.5, 0.0099, 0.0113, 0.011, step=0.03),
+            st("Tail10", 0.5, 0.008, 0.0092, 0.009, step=0.03),
+            st("Tail11", 0.5, 0.0064, 0.0073, 0.0071, step=0.03),
+            st("Tail12", 0.5, 0.0049, 0.0056, 0.0055, step=0.025),
+            st("Tail13", 0.5, 0.0036, 0.004, 0.004, step=0.02),
+            st("Tail14", 0.6, 0.0025, 0.0027, 0.0027, step=0.02),
+            st("Tail_end", 0.3, 0.0012, 0.0012, 0.0012, step=0.01),
+        ],
+        "mouth": {"from": ("Head", 0.1), "to": ("Head", 1.0), "phi": 105.0, "depth": 0.002, "width": 0.1, "band": 3.0},
+        "teeth": {"from": ("Head", 0.3), "to": ("Head", 0.97), "count": 15, "length": 0.0075, "radius": 0.0018,
+                  "colour": (0.8, 0.76, 0.66)},
+        "lower_teeth": {"from": ("Head", 0.3), "to": ("Head", 0.93), "count": 14, "length": 0.006, "radius": 0.0016},
+        "eyes": {"at": ("Head", 0.3), "phi": 52.0, "radius": 0.0105, "sunk": 0.6, "forward": 16.0, "up": 8.0,
+                 "iris": (0.66, 0.36, 0.06), "pupil": (0.008, 0.006, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.32), "phi": 34.0, "size": 0.012, "height": 0.0035},
+        "fossa": {"from": ("Head", 0.42), "to": ("Head", 0.66), "phi": 68.0, "depth": 0.0028, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.94), "phi": 46.0, "size": 0.003},
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.3, 0.0143, 0.033, 0.0044), (0, -0.06, 0.0286, 0.0616, 0.0088),
+                             (0, 0.2, 0.0363, 0.0638, 0.0099), (0, 0.5, 0.033, 0.0506, 0.0066),
+                             (0, 0.8, 0.0242, 0.0319, 0.0022), (0, 0.97, 0.0209, 0.0242, 0.0),
+                             (1, 0.1, 0.0209, 0.0297, -0.0055), (1, 0.3, 0.0198, 0.0297, -0.0088),
+                             (1, 0.6, 0.0143, 0.0176, -0.0044), (1, 0.95, 0.0099, 0.011, 0.0),
+                             (2, 0.1, 0.0088, 0.0088, 0.0), (2, 0.95, 0.0079, 0.0075, 0.0)],
+                "around": 16,
+                "digits": {
+                    "digits": [(0.0, 0.08, 0.006, 0.018), (-18.0, 0.062, 0.0056, 0.016), (18.0, 0.056, 0.0055, 0.015)],
+                    "hallux": (150.0, 0.025, 0.0035, 0.01, 0.03),
+                    "flat": 0.85,
+                },
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.014, 0.02, 0.0), (0, 0.1, 0.0165, 0.02, 0.002), (0, 0.45, 0.0135, 0.016, 0.003),
+                             (0, 0.95, 0.0095, 0.0105, 0.0), (1, 0.3, 0.0102, 0.0115, 0.001), (1, 0.95, 0.0078, 0.0082, 0.0),
+                             (2, 0.5, 0.0092, 0.0068, 0.0), (2, 0.95, 0.0088, 0.0062, 0.0)],
+                "around": 12,
+                # Big hands: three fingers, the first stout with the biggest claw.
+                "digits": {
+                    "digits": [(-16.0, 0.052, 0.006, 0.036), (0.0, 0.07, 0.0052, 0.028), (16.0, 0.052, 0.0042, 0.019)],
+                    "claw_curl": 1.35,
+                    "flat": 0.9,
+                },
+            },
+        },
+        # Its coat (tools/dino_feathers.py): filaments in tufts from behind the eyes to the tip of the tail, the
+        # longest over the hips and the root of the tail; long ones down the thighs and the shins, shorter down the
+        # back of the long foot bone -- the feathered drumsticks; along the arms to the wrists. The face, the toes
+        # and the hands in scales.
+        "fuzz": {
+            "seed": 23, "width": 0.28, "lie": 11.0, "droop": 0.3, "curve": 0.1, "twist": 25.0, "jitter": 0.35,
+            "askew": 0.3, "trunk": [
+                {"from": ("Head", 0.22), "to": ("Tail_end", 0.0), "phi": (24.0, 172.0), "spacing": 0.022, "gap": 0.02,
+                 "length": [(("Head", 0.22), 0.012), (("Head", -0.08), 0.025), (("Neck2", 0.5), 0.035),
+                            (("Spine2", 0.5), 0.04), (("Hips", 0.5), 0.055), (("Tail2", 0.5), 0.06),
+                            (("Tail6", 0.5), 0.04), (("Tail11", 0.5), 0.025), (("Tail_end", 0.0), 0.012)]},
+                {"from": ("Head", 0.22), "to": ("Tail_end", 0.0), "phi": (0.0, 24.0), "spacing": 0.02, "gap": 0.016,
+                 "lie": 22.0, "droop": 0.12,
+                 "length": [(("Head", 0.22), 0.014), (("Head", -0.08), 0.03), (("Neck2", 0.5), 0.045),
+                            (("Spine2", 0.5), 0.05), (("Hips", 0.5), 0.075), (("Tail2", 0.5), 0.07),
+                            (("Tail6", 0.5), 0.045), (("Tail11", 0.5), 0.025), (("Tail_end", 0.0), 0.012)]},
+            ],
+            "limbs": [
+                {"limb": "fore", "from": (0, 0.05), "to": (1, 0.95), "around": (0.0, 360.0), "length": (0.035, 0.025),
+                 "spacing": 0.016, "gap": 0.018},
+                {"limb": "hind", "from": (0, -0.1), "to": (1, 0.95), "around": (-150.0, 150.0), "length": (0.07, 0.04),
+                 "spacing": 0.02, "gap": 0.02, "droop": 0.4},
+                {"limb": "hind", "from": (2, 0.0), "to": (2, 0.75), "around": (-160.0, -20.0), "length": (0.03, 0.018),
+                 "spacing": 0.016, "gap": 0.014, "droop": 0.45},
+            ],
+        },
+        "coat": {"bones": ("Thigh", "Shin", "UpperArm", "Forearm"), "face": ("Head", 0.22), "bare": ("Head", 0.36)},
+        "skin_detail": {"scales": {"cells": 200.0, "dorsal_size": 0.5, "groove": 0.38, "groove_dark": 0.28, "tint": 0.14,
+                                   "speckle": 0.1, "relief": 0.7, "depth": 0.001},
+                        "feathers": {"coat_cells": 110.0, "coat_stretch": 0.35, "coat_groove": 0.35, "coat_tint": 0.12,
+                                     "streak": 0.18}},
+        "texture": 2048,
+        # Its marks after its relative Sinosauropteryx, whose colours are known (Zhang et al. 2010; Smithwick et al.
+        # 2017): countershaded -- dark above, pale below -- a dark mask through the eye, and a tail ringed dark and
+        # pale. The rest conjectural: a golden tawny spotted dark brown over the back and flanks (an ambush hunter's
+        # in a forest's broken light), a cream belly; the shanks dark.
+        "skin": {
+            "back": (0.1, 0.058, 0.02),
+            "flank": (0.3, 0.19, 0.075),
+            "belly": (0.52, 0.45, 0.32),
+            "throat": (0.58, 0.5, 0.36),
+            "lips": (0.12, 0.08, 0.05),
+            "mouth": (0.3, 0.07, 0.06),
+            "claws": (0.06, 0.05, 0.04),
+            "mottle": 0.14,
+            "shank_dark": 0.45,
+            "spots": {"colour": (0.03, 0.018, 0.008), "from": ("Neck3", 0.0), "to": ("Tail5", 0.5), "scale": 7.0,
+                      "above": 0.14, "strength": 0.9},
+            "bands": {"colour": (0.025, 0.016, 0.008), "from": ("Tail3", 0.0), "to": ("Tail_end", 0.5),
+                      "period": 0.11, "width": 0.36, "strength": 0.9},
+            "eye_stripe": {"colour": (0.015, 0.01, 0.006), "from": ("Head", 0.97), "to": ("Neck4", 0.6),
+                           "phi": 58.0, "width": 20.0},
+        },
+    },
+}
+
+
+# Sinornithosaurus millenii ("the Chinese bird-lizard", Xu, Wang & Wu 1999; IVPP V12811 from the Jianshangou beds):
+# a microraptorine dromaeosaur about a metre long -- a long low skull with a big opening before the eye and long
+# grooved teeth halfway along the upper jaw (fangs, Gong et al. 2010 thought for venom; most since have not); arms
+# long for its size, with wing feathers on them; feathered legs; a stiff tail with a fan; its sickle claw. Its body
+# feathers were downy, branched tufts (Xu et al. 2001). Derived from the Velociraptor. The third map's quick
+# raider -- past the defences, for the man.
+
+
+SINORNITHOSAURUS = {
+    "height": 0.45,
+    # After Xu et al. 1999: skull 0.13 m, femur 0.12, tibia 0.155, the long foot bone 0.068; the arm 0.19 m to the
+    # wrist, the hand and its fingers 0.105 more -- near the length of the leg; the tail half the animal.
+    "skeleton": {
+        "hip_height": 0.31,
+        "pelvis_length": 0.05,
+        "pelvis_pitch": -8.0,
+        "spine": [(0.08, 2.0), (0.08, 4.0), (0.07, 2.0)],
+        "neck": [(0.035, 50.0), (0.035, 38.0), (0.032, 18.0), (0.03, -8.0)],
+        "skull": (0.13, -10.0),
+        "jaw": (0.12, 0.014, -14.0),
+        "jaw_hinge": 0.08,
+        # Stiff and straight: the bony rods along it let it swing only at its root.
+        "tail": [(0.065, 6.0), (0.065, 2.0), (0.06, 0.0), (0.06, 0.0), (0.055, 0.0), (0.055, 0.0), (0.05, 0.0),
+                 (0.05, 0.0), (0.045, 0.0), (0.04, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.12, 0.155, 0.068, 0.04],
+                     "socket": (0.026, 0.0, -0.006), "stance": (0.003, 0.03), "foot": "digitigrade",
+                     "foot_tilt": 20.0, "roll_tilt": 40.0, "bend": "forward", "splay": 4.0},
+            # The arms folded as a bird's wings fold: the upper arm back, the forearm forward to the wrist by the
+            # chest, the hand back along the flank.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.1, 0.09, 0.045, 0.06], "socket": (0.023, -0.009, -0.035), "arm": True,
+                     "rest_hand": (0.04, 0.04, 0.0), "bend": "back", "splay": 10.0, "hand_angle": 172.0,
+                     "finger_angle": 178.0, "hand_out": 0.1},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        # Quick short steps -- the game's walk (1.6 m/s) a brisk one for an animal with hips a third of a metre up.
+        "walk": {"period": 0.3, "duty": 0.6, "step": 0.035, "bob": 0.006, "sway": 0.004, "hip_yaw": 2.5,
+                 "hip_roll": 2.0, "tail_swing": 1.5, "neck_bob": 1.5, "steady": 0.8, "narrow": 0.8, "push": 0.6,
+                 "curl": 0.5, "arm_swing": 0.003},
+        # A run: level, the head low and forward, the stiff tail out behind; long bounds.
+        "run": {"period": 0.22, "duty": 0.34, "step": 0.06, "bob": 0.01, "lean": -5.0, "crouch": 0.014,
+                "neck_pitch": -12.0, "tail_lift": 4.0, "head_pitch": 4.0, "tail_swing": 1.0, "steady": 0.85,
+                "narrow": 0.7, "push": 0.9},
+        "idle": {"period": 3.0, "breaths": 2, "look": 32.0, "nod": 4.0, "swell": 0.025, "tail_swing": 2.0},
+        "attack": {"period": 0.6, "jaw": 44.0, "lunge": 0.06, "draw": 16.0, "reach": 24.0, "head_up": 12.0,
+                   "head_down": 6.0},
+        "death": {"period": 1.1, "roll": 86.0, "pivot": 0.045, "slide": 0.035},
+        # Asleep, belly down, its neck laid forward and down and turned a little aside, the head on the ground.
+        "sleep": {"period": 3.0, "drop": 0.215, "neck": [(-55.0, 8.0), (2.0, 10.0), (15.0, 10.0), (31.0, 5.0)],
+                  "head": (12.0, 10.0, 0.0), "tail": [(-10.0, 4.0), (3.0, 6.0)] + [(1.0, 6.0)] * 8, "tilt": 82.0,
+                  "arm_raise": 0.0},
+    },
+    "body": {
+        "around": 40,
+        "soften": 0.02,
+        "rough": 0.006,
+        "scale": 0.08,
+        "throat": 0.3,
+        # The snout's point just past its last ring.
+        "tips": (0.003, 0.008),
+        "trunk": [
+            # The skull: long and low, its snout straighter and deeper than a Velociraptor's, the big opening before
+            # the eye.
+            st("Head", 1.012, 0.004, 0.0045, 0.004, step=0.002),
+            st("Head", 0.99, 0.0068, 0.0086, 0.008, step=0.003),
+            st("Head", 0.95, 0.0078, 0.0102, 0.0095, step=0.004),
+            st("Head", 0.88, 0.0086, 0.011, 0.0105, step=0.005),
+            st("Head", 0.78, 0.0092, 0.0108, 0.0108, step=0.005),
+            st("Head", 0.64, 0.0108, 0.0118, 0.0124, step=0.005),
+            st("Head", 0.5, 0.0125, 0.013, 0.0138, step=0.005),
+            st("Head", 0.36, 0.0158, 0.0162, 0.0168, lift=0.0011, step=0.005),
+            st("Head", 0.22, 0.0196, 0.0198, 0.0218, step=0.005),
+            st("Head", 0.08, 0.0198, 0.0198, 0.0245, step=0.006),
+            st("Head", -0.06, 0.0172, 0.0178, 0.0232, step=0.007),
+            # The neck: a feathered S, short and thick.
+            st("Neck4", 0.5, 0.0154, 0.017, 0.021, step=0.008),
+            st("Neck3", 0.5, 0.0187, 0.0198, 0.0242, step=0.009),
+            st("Neck2", 0.5, 0.021, 0.022, 0.0275, step=0.01),
+            st("Neck1", 0.5, 0.0242, 0.0248, 0.033, step=0.011),
+            st("Spine3", 0.7, 0.032, 0.0286, 0.048, step=0.012),
+            st("Spine3", 0.15, 0.04, 0.034, 0.069, n_bot=2.3, step=0.014),
+            st("Spine2", 0.5, 0.044, 0.0374, 0.077, n_bot=2.4, step=0.014),
+            st("Spine1", 0.6, 0.043, 0.04, 0.067, n_bot=2.2, step=0.014),
+            st("Spine1", 0.15, 0.04, 0.042, 0.055, step=0.014),
+            st("Hips", 0.3, 0.042, 0.044, 0.048, keel=0.0022, step=0.014),
+            st("Hips", 0.9, 0.035, 0.039, 0.042, keel=0.0022, step=0.014),
+            st("Tail1", 0.5, 0.0253, 0.0297, 0.032, step=0.016),
+            st("Tail2", 0.5, 0.0198, 0.023, 0.0242, step=0.016),
+            st("Tail3", 0.5, 0.0154, 0.018, 0.0187, step=0.016),
+            st("Tail4", 0.5, 0.0121, 0.0143, 0.0143, step=0.016),
+            st("Tail5", 0.5, 0.0099, 0.0115, 0.0115, step=0.016),
+            st("Tail6", 0.5, 0.0083, 0.0094, 0.0094, step=0.016),
+            st("Tail7", 0.5, 0.0066, 0.0077, 0.0077, step=0.016),
+            st("Tail8", 0.5, 0.0055, 0.006, 0.006, step=0.016),
+            st("Tail9", 0.5, 0.0044, 0.005, 0.005, step=0.016),
+            st("Tail10", 0.6, 0.0033, 0.0033, 0.0033, step=0.016),
+            st("Tail_end", 0.3, 0.0017, 0.0017, 0.0017, step=0.006),
+        ],
+        "mouth": {"from": ("Head", 0.1), "to": ("Head", 1.0), "phi": 104.0, "depth": 0.0016, "width": 0.1, "band": 3.0},
+        # The fangs: the teeth halfway along the upper jaw the longest.
+        "teeth": {"from": ("Head", 0.3), "to": ("Head", 0.97), "count": 12, "length": 0.0055, "radius": 0.0013,
+                  "rosette": 0.62, "rosette_width": 0.07, "colour": (0.8, 0.76, 0.66)},
+        "lower_teeth": {"from": ("Head", 0.3), "to": ("Head", 0.93), "count": 11, "length": 0.0038, "radius": 0.0011},
+        "eyes": {"at": ("Head", 0.3), "phi": 52.0, "radius": 0.0075, "sunk": 0.6, "forward": 18.0, "up": 8.0,
+                 "iris": (0.72, 0.38, 0.06), "pupil": (0.008, 0.006, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.32), "phi": 34.0, "size": 0.009, "height": 0.0025},
+        "fossa": {"from": ("Head", 0.4), "to": ("Head", 0.66), "phi": 68.0, "depth": 0.0022, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.92), "phi": 46.0, "size": 0.0018},
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.35, 0.0168, 0.0322, 0.0028), (0, -0.08, 0.0266, 0.0462, 0.0063),
+                             (0, 0.2, 0.0294, 0.0462, 0.007), (0, 0.5, 0.0252, 0.0364, 0.0049),
+                             (0, 0.8, 0.0182, 0.0238, 0.0014), (0, 0.97, 0.0147, 0.0175, 0.0),
+                             (1, 0.1, 0.0161, 0.0224, -0.0042), (1, 0.3, 0.0154, 0.0224, -0.0063),
+                             (1, 0.6, 0.0112, 0.0133, -0.0028), (1, 0.95, 0.0074, 0.008, 0.0),
+                             (2, 0.1, 0.0066, 0.0066, 0.0), (2, 0.95, 0.006, 0.0056, 0.0)],
+                "around": 16,
+                "digits": {
+                    # Two toes forward, the second held up with its sickle claw, the small first one behind.
+                    "digits": [(-2.0, 0.048, 0.0042, 0.01), (18.0, 0.042, 0.0039, 0.0085)],
+                    "sickle": (-16.0, 0.026, 0.0042, 0.036, 38.0, 2.3),
+                    "hallux": (150.0, 0.014, 0.0023, 0.006, 0.016),
+                    "flat": 0.85,
+                },
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.0108, 0.0158, 0.0), (0, 0.1, 0.013, 0.0158, 0.0014), (0, 0.45, 0.0108, 0.013, 0.0022),
+                             (0, 0.95, 0.0072, 0.0079, 0.0), (1, 0.3, 0.0079, 0.0086, 0.0007), (1, 0.95, 0.0054, 0.0058, 0.0),
+                             (2, 0.5, 0.0047, 0.0036, 0.0), (2, 0.95, 0.0042, 0.0032, 0.0)],
+                "around": 12,
+                "digits": {
+                    "digits": [(0.0, 0.058, 0.0026, 0.013), (-14.0, 0.046, 0.0025, 0.012), (14.0, 0.038, 0.0022, 0.01)],
+                    "claw_curl": 1.3,
+                    "flat": 0.9,
+                },
+            },
+        },
+        # Its feathers (tools/dino_feathers.py): wing feathers along the forearm and the hand, longer for its size
+        # than a Velociraptor's; a fan down the tail's far half; downy tufts over the body and the neck; feathers
+        # round the thighs and down the backs of the shins. The feet, the face and the fingers' ends in scales.
+        "wings": {"forearm": 7, "hand": 7, "secondaries": (0.07, 0.1), "primaries": (0.11, 0.15), "width": 0.26,
+                  "droop": 0.12, "splay": 0.18, "lift": 0.008, "curve": 0.1, "colour": (0.03, 0.027, 0.025),
+                  "tip": (0.2, 0.18, 0.17)},
+        "tail_fan": {"from": ("Tail4", 0.0), "length": (0.04, 0.09), "spread": (46.0, 12.0), "spacing": 0.013,
+                     "width": 0.34, "droop": 0.05, "colour": (0.16, 0.06, 0.025), "tip": (0.015, 0.013, 0.012)},
+        "fuzz": {
+            "seed": 31, "width": 0.32, "lie": 12.0, "droop": 0.25, "curve": 0.1, "twist": 25.0, "jitter": 0.35,
+            "askew": 0.3, "trunk": [
+                {"from": ("Head", 0.3), "to": ("Tail4", 0.2), "phi": (24.0, 172.0), "spacing": 0.012, "gap": 0.011,
+                 "length": [(("Head", 0.3), 0.008), (("Head", -0.06), 0.016), (("Neck2", 0.5), 0.022),
+                            (("Spine2", 0.5), 0.026), (("Hips", 0.5), 0.028), (("Tail2", 0.5), 0.022),
+                            (("Tail4", 0.2), 0.014)]},
+                {"from": ("Head", 0.3), "to": ("Tail4", 0.2), "phi": (0.0, 24.0), "spacing": 0.011, "gap": 0.009,
+                 "lie": 20.0, "droop": 0.1,
+                 "length": [(("Head", 0.3), 0.009), (("Head", -0.06), 0.02), (("Neck2", 0.5), 0.026),
+                            (("Spine2", 0.5), 0.028), (("Hips", 0.5), 0.03), (("Tail2", 0.5), 0.024),
+                            (("Tail4", 0.2), 0.014)]},
+            ],
+            "limbs": [
+                {"limb": "hind", "from": (0, -0.1), "to": (0, 1.0), "around": (-160.0, 150.0), "length": (0.03, 0.026),
+                 "spacing": 0.011, "gap": 0.011, "droop": 0.35, "width": 0.36},
+                {"limb": "hind", "from": (1, 0.0), "to": (1, 0.85), "around": (-165.0, -25.0), "length": (0.03, 0.02),
+                 "spacing": 0.011, "gap": 0.01, "droop": 0.4, "width": 0.36},
+                {"limb": "fore", "from": (0, 0.05), "to": (0, 0.95), "around": (0.0, 360.0), "length": (0.018, 0.014),
+                 "spacing": 0.011, "gap": 0.011},
+            ],
+        },
+        "coat": {"bones": ("Thigh", "Shin", "UpperArm", "Forearm"), "face": ("Head", 0.34), "bare": ("Head", 0.5)},
+        "skin_detail": {"scales": {"cells": 300.0, "dorsal_size": 0.5, "groove": 0.38, "groove_dark": 0.28, "tint": 0.14,
+                                   "speckle": 0.1, "relief": 0.7, "depth": 0.0007},
+                        "feathers": {"coat_cells": 170.0, "coat_stretch": 0.4, "coat_groove": 0.35, "coat_tint": 0.12,
+                                     "streak": 0.14, "barbs": 45.0, "slant": 0.7, "bars": 4.0, "bar_strength": 0.6,
+                                     "bar_width": 0.4, "shaft": 0.08, "shaft_light": 0.4}},
+        "texture": 2048,
+        # After its melanosomes (Zhang et al. 2010: both eumelanin's, black and grey, and phaeomelanin's, reddish-
+        # brown, in different parts of it) -- the parts here conjectural: a chestnut red-brown body, darker over the
+        # back, a grey-buff belly; slate-black wing feathers tipped grey; the tail ringed dark to its tip, its fan
+        # red-brown tipped black and barred dark; a dark mask through the eye.
+        "skin": {
+            "back": (0.075, 0.028, 0.013),
+            "flank": (0.2, 0.078, 0.032),
+            "belly": (0.34, 0.29, 0.25),
+            "throat": (0.4, 0.34, 0.29),
+            "lips": (0.1, 0.06, 0.04),
+            "mouth": (0.3, 0.07, 0.06),
+            "claws": (0.04, 0.035, 0.03),
+            "mottle": 0.14,
+            "shank_dark": 0.35,
+            "bands": {"colour": (0.012, 0.01, 0.01), "from": ("Tail2", 0.0), "to": ("Tail_end", 0.5),
+                      "period": 0.06, "width": 0.34, "strength": 0.85},
+            "eye_stripe": {"colour": (0.015, 0.01, 0.008), "from": ("Head", 0.97), "to": ("Neck4", 0.5),
+                           "phi": 60.0, "width": 16.0},
+        },
+    },
+}
+
+
+# ==============================================================================
+# THE HELL CREEK'S OWN DROMAEOSAURS (the Late Cretaceous of Montana and the Dakotas, the tyrannosaur's country --
+# where the Velociraptor, a Mongolian animal, never was).
+# ==============================================================================
+
+# Acheroraptor temeertyorum ("the thief from the underworld river", Evans, Larson & Currie 2013; a maxilla and a
+# dentary from the Hell Creek of Montana): a velociraptorine, closer to the Asian ones than to any other North
+# American -- two and a half to three metres long, a Velociraptor's build grown a third bigger; its snout's maxilla
+# long and low, its teeth ridged along their crowns. Known from its jaws alone: the rest after the Velociraptor, from
+# which it is derived, its snout straighter (the Velociraptor's dished one is its own) and its body a little stouter.
+
+
+ACHERORAPTOR = {
+    "height": 0.9,
+    # The Velociraptor's proportions a third over: skull 0.32 m, femur 0.23, tibia 0.32, the long foot bone 0.12;
+    # the tail half the animal.
+    "skeleton": {
+        "hip_height": 0.594,
+        "pelvis_length": 0.12,
+        "pelvis_pitch": -8.0,
+        "spine": [(0.2, 2.0), (0.2, 4.0), (0.175, 2.0)],
+        "neck": [(0.074, 50.0), (0.074, 38.0), (0.068, 18.0), (0.068, -8.0)],
+        "skull": (0.32, -11.0),
+        "jaw": (0.297, 0.034, -14.0),
+        "jaw_hinge": 0.08,
+        # Stiff and straight: the bony rods along it let it swing only at its root.
+        "tail": [(0.162, 6.0), (0.162, 2.0), (0.149, 0.0), (0.135, 0.0), (0.135, 0.0), (0.122, 0.0), (0.122, 0.0),
+                 (0.108, 0.0), (0.108, 0.0), (0.095, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.23, 0.317, 0.122, 0.081],
+                     "socket": (0.061, 0.0, -0.0135), "stance": (0.007, 0.068), "foot": "digitigrade",
+                     "foot_tilt": 20.0, "roll_tilt": 40.0, "bend": "forward", "splay": 4.0},
+            # The arms folded as a bird's wings fold, the hand back along the flank.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.162, 0.149, 0.081, 0.095], "socket": (0.054, -0.02, -0.081), "arm": True,
+                     "rest_hand": (0.068, 0.068, 0.0), "bend": "back", "splay": 10.0, "hand_angle": 172.0,
+                     "finger_angle": 178.0, "hand_out": 0.1},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        "walk": {"period": 0.58, "duty": 0.6, "step": 0.068, "bob": 0.011, "sway": 0.008, "hip_yaw": 2.5,
+                 "hip_roll": 2.0, "tail_swing": 1.5, "neck_bob": 1.5, "steady": 0.8, "narrow": 0.8, "push": 0.6,
+                 "curl": 0.5, "arm_swing": 0.007},
+        "run": {"period": 0.42, "duty": 0.35, "step": 0.12, "bob": 0.019, "lean": -5.0, "crouch": 0.027,
+                "neck_pitch": -12.0, "tail_lift": 4.0, "head_pitch": 4.0, "tail_swing": 1.0, "steady": 0.85,
+                "narrow": 0.7, "push": 0.9},
+        "idle": {"period": 3.8, "breaths": 2, "look": 30.0, "nod": 4.0, "swell": 0.025, "tail_swing": 2.0},
+        "attack": {"period": 0.75, "jaw": 44.0, "lunge": 0.135, "draw": 16.0, "reach": 24.0, "head_up": 12.0,
+                   "head_down": 6.0},
+        "death": {"period": 1.3, "roll": 86.0, "pivot": 0.095, "slide": 0.068},
+        "sleep": {"period": 3.4, "drop": 0.405, "neck": [(-55.0, 8.0), (2.0, 10.0), (15.0, 10.0), (31.0, 5.0)],
+                  "head": (12.0, 10.0, 0.0), "tail": [(-10.0, 4.0), (3.0, 6.0)] + [(1.0, 6.0)] * 8, "tilt": 82.0},
+    },
+    "body": {
+        "around": 40,
+        "soften": 0.04,
+        "rough": 0.008,
+        "scale": 0.2,
+        "throat": 0.3,
+        # The snout's point just past its last ring.
+        "tips": (0.006, 0.02),
+        "trunk": [
+            # The skull: long and low, its snout's top straight (no dish), the maxilla long and low.
+            st("Head", 1.012, 0.0095, 0.0108, 0.0095, step=0.004),
+            st("Head", 1.0, 0.0142, 0.0158, 0.0142, step=0.005),
+            st("Head", 0.96, 0.0169, 0.0192, 0.0172, step=0.008),
+            st("Head", 0.88, 0.0196, 0.0206, 0.0204, step=0.011),
+            st("Head", 0.78, 0.0215, 0.0218, 0.0236, step=0.0135),
+            st("Head", 0.64, 0.0263, 0.0246, 0.029, step=0.0135),
+            st("Head", 0.5, 0.0292, 0.0292, 0.0328, step=0.0135),
+            st("Head", 0.36, 0.0392, 0.0419, 0.0432, lift=0.0027, step=0.0135),
+            st("Head", 0.22, 0.05, 0.0527, 0.0567, step=0.0135),
+            st("Head", 0.08, 0.05, 0.0513, 0.0635, step=0.016),
+            st("Head", -0.06, 0.0432, 0.0459, 0.0594, step=0.019),
+            # The neck: a feathered S, short and thick.
+            st("Neck4", 0.5, 0.0378, 0.0419, 0.0513, step=0.0216),
+            st("Neck3", 0.5, 0.0459, 0.0486, 0.0594, step=0.0243),
+            st("Neck2", 0.5, 0.0513, 0.054, 0.0675, step=0.027),
+            st("Neck1", 0.5, 0.0612, 0.0625, 0.0834, step=0.027),
+            # The body a little stouter than the Velociraptor's.
+            st("Spine3", 0.7, 0.0806, 0.0723, 0.1224, step=0.0297),
+            st("Spine3", 0.15, 0.1021, 0.0862, 0.1739, n_bot=2.3, step=0.0338),
+            st("Spine2", 0.5, 0.1134, 0.0946, 0.1947, n_bot=2.4, step=0.0338),
+            st("Spine1", 0.6, 0.1106, 0.1001, 0.1696, n_bot=2.2, step=0.0338),
+            st("Spine1", 0.15, 0.1034, 0.1057, 0.139, step=0.0338),
+            st("Hips", 0.3, 0.1077, 0.1112, 0.1224, keel=0.0054, step=0.0338),
+            st("Hips", 0.9, 0.0907, 0.0988, 0.1057, keel=0.0054, step=0.0338),
+            st("Tail1", 0.5, 0.064, 0.0751, 0.0806, step=0.0405),
+            st("Tail2", 0.5, 0.05, 0.0584, 0.0612, step=0.0405),
+            st("Tail3", 0.5, 0.0389, 0.0459, 0.0473, step=0.0405),
+            st("Tail4", 0.5, 0.0306, 0.0362, 0.0362, step=0.0405),
+            st("Tail5", 0.5, 0.025, 0.0292, 0.0292, step=0.0405),
+            st("Tail6", 0.5, 0.0209, 0.0237, 0.0237, step=0.0405),
+            st("Tail7", 0.5, 0.0167, 0.0195, 0.0195, step=0.0405),
+            st("Tail8", 0.5, 0.0139, 0.0153, 0.0153, step=0.0405),
+            st("Tail9", 0.5, 0.0111, 0.0125, 0.0125, step=0.0405),
+            st("Tail10", 0.6, 0.0083, 0.0083, 0.0083, step=0.0405),
+            st("Tail_end", 0.3, 0.0041, 0.0041, 0.0041, step=0.0135),
+        ],
+        "mouth": {"from": ("Head", 0.1), "to": ("Head", 1.0), "phi": 104.0, "depth": 0.004, "width": 0.1, "band": 3.0},
+        "teeth": {"from": ("Head", 0.3), "to": ("Head", 0.97), "count": 15, "length": 0.0115, "radius": 0.0027,
+                  "colour": (0.78, 0.74, 0.64)},
+        "lower_teeth": {"from": ("Head", 0.3), "to": ("Head", 0.93), "count": 14, "length": 0.0085, "radius": 0.0022},
+        "eyes": {"at": ("Head", 0.3), "phi": 52.0, "radius": 0.0168, "sunk": 0.6, "forward": 18.0, "up": 8.0,
+                 "iris": (0.74, 0.56, 0.12), "pupil": (0.008, 0.006, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.32), "phi": 34.0, "size": 0.0216, "height": 0.0068},
+        "fossa": {"from": ("Head", 0.42), "to": ("Head", 0.62), "phi": 70.0, "depth": 0.0054, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.93), "phi": 48.0, "size": 0.0047},
+        "limbs": {
+            "hind": {
+                "stations": [(0, -0.35, 0.0324, 0.0621, 0.0054), (0, -0.08, 0.0513, 0.0891, 0.0121),
+                             (0, 0.2, 0.0567, 0.0891, 0.0135), (0, 0.5, 0.0486, 0.0702, 0.0095),
+                             (0, 0.8, 0.0351, 0.0459, 0.0027), (0, 0.97, 0.0284, 0.0338, 0.0),
+                             (1, 0.1, 0.0311, 0.0432, -0.0081), (1, 0.3, 0.0297, 0.0432, -0.0121),
+                             (1, 0.6, 0.0216, 0.0257, -0.0054), (1, 0.95, 0.0142, 0.0155, 0.0),
+                             (2, 0.1, 0.0128, 0.0128, 0.0), (2, 0.95, 0.0115, 0.0108, 0.0)],
+                "around": 16,
+                "digits": {
+                    # Two toes forward, the second held up with its sickle claw, the small first one behind.
+                    "digits": [(-2.0, 0.1013, 0.0088, 0.0203), (18.0, 0.0878, 0.0081, 0.0175)],
+                    "sickle": (-16.0, 0.054, 0.0088, 0.0783, 38.0, 2.3),
+                    "hallux": (150.0, 0.0297, 0.0047, 0.0121, 0.0338),
+                    "flat": 0.85,
+                },
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.0203, 0.0297, 0.0), (0, 0.1, 0.0243, 0.0297, 0.0027), (0, 0.45, 0.0203, 0.0243, 0.0041),
+                             (0, 0.95, 0.0135, 0.0149, 0.0), (1, 0.3, 0.0149, 0.0162, 0.0014), (1, 0.95, 0.0101, 0.0108, 0.0),
+                             (2, 0.6, 0.0088, 0.0068, 0.0)],
+                "around": 12,
+                "digits": {
+                    "digits": [(0.0, 0.0945, 0.0049, 0.0243), (-14.0, 0.0743, 0.0046, 0.0216), (14.0, 0.0607, 0.0041, 0.0189)],
+                    "claw_curl": 1.3,
+                    "flat": 0.9,
+                },
+            },
+        },
+        # Its feathers (tools/dino_feathers.py), as the Velociraptor's: wing feathers along the forearm and the hand,
+        # a fan down the tail's far half, a coat over the body and the upper legs and arms; the feet and the face
+        # scaled.
+        "wings": {"forearm": 7, "hand": 7, "secondaries": (0.12, 0.175), "primaries": (0.19, 0.255), "width": 0.26,
+                  "droop": 0.12, "splay": 0.18, "lift": 0.016, "curve": 0.1, "colour": (0.02, 0.02, 0.022),
+                  "tip": (0.55, 0.53, 0.5)},
+        "tail_fan": {"from": ("Tail4", 0.0), "length": (0.095, 0.215), "spread": (46.0, 12.0), "spacing": 0.027,
+                     "width": 0.34, "droop": 0.05, "colour": (0.03, 0.03, 0.032), "tip": (0.55, 0.53, 0.5)},
+        "coat": {"bones": ("Thigh", "Shin", "UpperArm", "Forearm"), "face": ("Head", 0.36), "bare": ("Head", 0.52)},
+        "skin_detail": {"scales": {"cells": 126.0, "dorsal_size": 0.5, "groove": 0.38, "groove_dark": 0.28, "tint": 0.14,
+                                   "speckle": 0.1, "relief": 0.7, "depth": 0.0016},
+                        "feathers": {"coat_cells": 70.0, "coat_stretch": 0.4, "coat_groove": 0.35, "coat_tint": 0.12,
+                                     "streak": 0.14, "barbs": 45.0, "slant": 0.7, "bars": 5.0, "bar_strength": 0.5,
+                                     "bar_width": 0.35, "shaft": 0.08, "shaft_light": 0.4}},
+        "texture": 2048,
+        # Conjectural (nothing of its colour is known): slate grey over the back, flecked pale, grey flanks, a white
+        # throat and belly; a dark stripe through the eye; slate wing and tail feathers tipped white and barred dark,
+        # dark rings down the tail. Apart from the Velociraptor's sand and its alpha's black and rust.
+        "skin": {
+            "back": (0.035, 0.035, 0.038),
+            "flank": (0.11, 0.105, 0.1),
+            "belly": (0.5, 0.48, 0.45),
+            "throat": (0.56, 0.54, 0.5),
+            "lips": (0.08, 0.07, 0.065),
+            "mouth": (0.3, 0.07, 0.06),
+            "claws": (0.04, 0.04, 0.04),
+            "mottle": 0.12,
+            "shank_dark": 0.3,
+            "spots": {"colour": (0.46, 0.45, 0.42), "from": ("Neck2", 0.0), "to": ("Tail6", 0.5), "scale": 70.0,
+                      "above": 0.34, "strength": 0.45},
+            "bands": {"colour": (0.015, 0.015, 0.016), "from": ("Tail3", 0.0), "to": ("Tail_end", 0.5),
+                      "period": 0.12, "width": 0.3, "strength": 0.6},
+            "eye_stripe": {"colour": (0.012, 0.012, 0.014), "from": ("Head", 1.0), "to": ("Neck4", 0.5),
+                           "phi": 60.0, "width": 16.0},
+        },
+    },
+}
+
+
+# Dakotaraptor steini (DePalma et al. 2015; from the Hell Creek of South Dakota): a giant dromaeosaur, four and a
+# half to six metres long -- the big ones' size, but built for running, its legs long; a great sickle claw on each
+# foot; and on its ulna a row of quill knobs, where the wing feathers were anchored -- feathered arms on an animal far
+# too big to fly. Its skull unknown:
+# drawn after its kin's (Utahraptor's, Dromaeosaurus's) -- deeper in the snout than a Velociraptor's. Derived from the
+# Velociraptor.
+
+
+DAKOTARAPTOR = {
+    "height": 1.5,
+    # After DePalma et al. 2015: femur 0.5 m, tibia 0.58, the long foot bone 0.26; the arm 0.57 to the wrist, the
+    # hand and its fingers 0.31 more; the skull (unknown) 0.5 m; the tail half the animal.
+    "skeleton": {
+        "hip_height": 1.2,
+        "pelvis_length": 0.22,
+        "pelvis_pitch": -8.0,
+        "spine": [(0.37, 2.0), (0.37, 4.0), (0.32, 2.0)],
+        "neck": [(0.15, 50.0), (0.15, 38.0), (0.135, 18.0), (0.13, -8.0)],
+        "skull": (0.5, -12.0),
+        "jaw": (0.465, 0.055, -15.0),
+        "jaw_hinge": 0.08,
+        # Stiff and straight: the bony rods along it let it swing only at its root.
+        "tail": [(0.29, 6.0), (0.29, 2.0), (0.27, 0.0), (0.245, 0.0), (0.245, 0.0), (0.22, 0.0), (0.22, 0.0),
+                 (0.195, 0.0), (0.195, 0.0), (0.17, 0.0)],
+        "limbs": {
+            "hind": {"from": "hips", "bones": ["Thigh", "Shin", "Foot", "Toes"], "lengths": [0.5, 0.58, 0.26, 0.17],
+                     "socket": (0.12, 0.0, -0.03), "stance": (0.015, 0.14), "foot": "digitigrade",
+                     "foot_tilt": 20.0, "roll_tilt": 38.0, "bend": "forward", "splay": 4.0},
+            # The arms folded as a bird's wings fold, the hand back along the flank.
+            "fore": {"from": "chest", "bones": ["UpperArm", "Forearm", "Hand", "Fingers"],
+                     "lengths": [0.3, 0.27, 0.14, 0.17], "socket": (0.1, -0.04, -0.15), "arm": True,
+                     "rest_hand": (0.12, 0.12, 0.0), "bend": "back", "splay": 10.0, "hand_angle": 172.0,
+                     "finger_angle": 178.0, "hand_out": 0.1},
+        },
+    },
+    "moves": {
+        "plan": "biped",
+        "walk": {"period": 0.75, "duty": 0.6, "step": 0.12, "bob": 0.02, "sway": 0.015, "hip_yaw": 2.5,
+                 "hip_roll": 2.0, "tail_swing": 1.5, "neck_bob": 1.5, "steady": 0.8, "narrow": 0.85, "push": 0.6,
+                 "curl": 0.5, "arm_swing": 0.012},
+        # A run: level, long strides, the head low and forward, the stiff tail out behind.
+        "run": {"period": 0.56, "duty": 0.36, "step": 0.22, "bob": 0.034, "lean": -5.0, "crouch": 0.049,
+                "neck_pitch": -12.0, "tail_lift": 4.0, "head_pitch": 4.0, "tail_swing": 1.0, "steady": 0.85,
+                "narrow": 0.75, "push": 0.9},
+        "idle": {"period": 4.4, "breaths": 2, "look": 26.0, "nod": 3.0, "swell": 0.022, "tail_swing": 2.0},
+        "attack": {"period": 0.9, "jaw": 44.0, "lunge": 0.24, "draw": 16.0, "reach": 22.0, "head_up": 12.0,
+                   "head_down": 8.0},
+        "death": {"period": 1.5, "roll": 86.0, "pivot": 0.17, "slide": 0.12},
+        "sleep": {"period": 3.8, "drop": 0.82, "neck": [(-55.0, 8.0), (2.0, 10.0), (15.0, 10.0), (31.0, 5.0)],
+                  "head": (12.0, 10.0, 0.0), "tail": [(-10.0, 4.0), (3.0, 6.0)] + [(1.0, 6.0)] * 8, "tilt": 82.0},
+    },
+    "body": {
+        "around": 40,
+        "soften": 0.05,
+        "rough": 0.01,
+        "scale": 0.36,
+        "throat": 0.3,
+        # The snout's point just past its last ring.
+        "tips": (0.01, 0.03),
+        "trunk": [
+            # The skull: a big dromaeosaur's -- deeper in the snout than a Velociraptor's, its top straight.
+            st("Head", 1.012, 0.0146, 0.0175, 0.0155, step=0.008),
+            st("Head", 1.0, 0.0225, 0.0265, 0.024, step=0.01),
+            st("Head", 0.96, 0.027, 0.032, 0.03, step=0.014),
+            st("Head", 0.88, 0.031, 0.036, 0.035, step=0.02),
+            st("Head", 0.78, 0.034, 0.039, 0.04, step=0.024),
+            st("Head", 0.64, 0.041, 0.044, 0.049, step=0.024),
+            st("Head", 0.5, 0.046, 0.051, 0.056, step=0.024),
+            st("Head", 0.36, 0.0603, 0.0645, 0.0666, lift=0.0042, step=0.024),
+            st("Head", 0.22, 0.077, 0.0811, 0.0874, step=0.024),
+            st("Head", 0.08, 0.077, 0.079, 0.0978, step=0.028),
+            st("Head", -0.06, 0.0666, 0.0707, 0.0915, step=0.033),
+            # The neck: a feathered S, short and thick.
+            st("Neck4", 0.5, 0.0672, 0.0744, 0.0912, step=0.0384),
+            st("Neck3", 0.5, 0.0816, 0.0864, 0.1056, step=0.0432),
+            st("Neck2", 0.5, 0.0912, 0.096, 0.12, step=0.048),
+            st("Neck1", 0.5, 0.108, 0.11, 0.147, step=0.048),
+            st("Spine3", 0.7, 0.146, 0.131, 0.222, step=0.0528),
+            st("Spine3", 0.15, 0.181, 0.156, 0.315, n_bot=2.3, step=0.06),
+            st("Spine2", 0.5, 0.2, 0.171, 0.353, n_bot=2.4, step=0.06),
+            st("Spine1", 0.6, 0.195, 0.181, 0.307, n_bot=2.2, step=0.06),
+            st("Spine1", 0.15, 0.183, 0.191, 0.252, step=0.06),
+            st("Hips", 0.3, 0.19, 0.2, 0.22, keel=0.0096, step=0.06),
+            st("Hips", 0.9, 0.16, 0.177, 0.19, keel=0.0096, step=0.06),
+            st("Tail1", 0.5, 0.1135, 0.133, 0.143, step=0.072),
+            st("Tail2", 0.5, 0.0888, 0.1035, 0.1085, step=0.072),
+            st("Tail3", 0.5, 0.069, 0.0813, 0.0838, step=0.072),
+            st("Tail4", 0.5, 0.0542, 0.0641, 0.0641, step=0.072),
+            st("Tail5", 0.5, 0.0444, 0.0518, 0.0518, step=0.072),
+            st("Tail6", 0.5, 0.037, 0.0419, 0.0419, step=0.072),
+            st("Tail7", 0.5, 0.0296, 0.0345, 0.0345, step=0.072),
+            st("Tail8", 0.5, 0.0247, 0.0271, 0.0271, step=0.072),
+            st("Tail9", 0.5, 0.0197, 0.0222, 0.0222, step=0.072),
+            st("Tail10", 0.6, 0.0148, 0.0148, 0.0148, step=0.072),
+            st("Tail_end", 0.3, 0.0074, 0.0074, 0.0074, step=0.024),
+        ],
+        "mouth": {"from": ("Head", 0.1), "to": ("Head", 1.0), "phi": 104.0, "depth": 0.006, "width": 0.1, "band": 3.0},
+        "teeth": {"from": ("Head", 0.3), "to": ("Head", 0.97), "count": 15, "length": 0.02, "radius": 0.0045,
+                  "colour": (0.78, 0.74, 0.64)},
+        "lower_teeth": {"from": ("Head", 0.3), "to": ("Head", 0.93), "count": 14, "length": 0.015, "radius": 0.0038},
+        "eyes": {"at": ("Head", 0.3), "phi": 50.0, "radius": 0.024, "sunk": 0.6, "forward": 18.0, "up": 8.0,
+                 "iris": (0.76, 0.62, 0.1), "pupil": (0.008, 0.006, 0.005), "slit": 0.0},
+        "brow": {"at": ("Head", 0.32), "phi": 32.0, "size": 0.034, "height": 0.011},
+        "fossa": {"from": ("Head", 0.42), "to": ("Head", 0.64), "phi": 68.0, "depth": 0.008, "width": 0.3},
+        "nostrils": {"at": ("Head", 0.93), "phi": 46.0, "size": 0.0075},
+        "limbs": {
+            "hind": {
+                # Long, a runner's: the thigh's muscle long, the shank slender.
+                "stations": [(0, -0.35, 0.068, 0.13, 0.011), (0, -0.08, 0.108, 0.187, 0.025),
+                             (0, 0.2, 0.119, 0.187, 0.028), (0, 0.5, 0.102, 0.147, 0.02),
+                             (0, 0.8, 0.074, 0.096, 0.0057), (0, 0.97, 0.06, 0.071, 0.0),
+                             (1, 0.1, 0.06, 0.084, -0.016), (1, 0.3, 0.058, 0.084, -0.024),
+                             (1, 0.6, 0.04, 0.048, -0.01), (1, 0.95, 0.026, 0.029, 0.0),
+                             (2, 0.1, 0.024, 0.024, 0.0), (2, 0.95, 0.021, 0.02, 0.0)],
+                "around": 16,
+                "digits": {
+                    # Two toes forward, the second held up with its great sickle claw, the small first one behind.
+                    "digits": [(-2.0, 0.18, 0.0156, 0.036), (18.0, 0.156, 0.0144, 0.0312)],
+                    "sickle": (-16.0, 0.1, 0.017, 0.19, 38.0, 2.3),
+                    "hallux": (150.0, 0.0528, 0.0084, 0.0216, 0.06),
+                    "flat": 0.85,
+                },
+            },
+            "fore": {
+                "stations": [(0, -0.15, 0.04, 0.058, 0.0), (0, 0.1, 0.048, 0.058, 0.005), (0, 0.45, 0.04, 0.048, 0.008),
+                             (0, 0.95, 0.027, 0.029, 0.0), (1, 0.3, 0.029, 0.032, 0.0026), (1, 0.95, 0.02, 0.021, 0.0),
+                             (2, 0.6, 0.017, 0.013, 0.0)],
+                "around": 12,
+                "digits": {
+                    "digits": [(0.0, 0.168, 0.0092, 0.046), (-14.0, 0.132, 0.0088, 0.041), (14.0, 0.108, 0.0078, 0.036)],
+                    "claw_curl": 1.3,
+                    "flat": 0.9,
+                },
+            },
+        },
+        # Its feathers (tools/dino_feathers.py): wing feathers along the forearm (its quill knobs) and the hand, a fan
+        # down the tail's far half, a coat over the body and the upper legs and arms; the feet and the face scaled.
+        "wings": {"forearm": 8, "hand": 7, "secondaries": (0.25, 0.36), "primaries": (0.38, 0.5), "width": 0.26,
+                  "droop": 0.12, "splay": 0.18, "lift": 0.028, "curve": 0.1, "colour": (0.025, 0.017, 0.012),
+                  "tip": (0.36, 0.32, 0.26)},
+        "tail_fan": {"from": ("Tail4", 0.0), "length": (0.17, 0.38), "spread": (46.0, 12.0), "spacing": 0.048,
+                     "width": 0.34, "droop": 0.05, "colour": (0.03, 0.02, 0.014), "tip": (0.6, 0.58, 0.53)},
+        "coat": {"bones": ("Thigh", "Shin", "UpperArm", "Forearm"), "face": ("Head", 0.36), "bare": ("Head", 0.52)},
+        "skin_detail": {"scales": {"cells": 70.0, "dorsal_size": 0.5, "groove": 0.38, "groove_dark": 0.28, "tint": 0.14,
+                                   "speckle": 0.1, "relief": 0.7, "depth": 0.003},
+                        "feathers": {"coat_cells": 40.0, "coat_stretch": 0.4, "coat_groove": 0.35, "coat_tint": 0.12,
+                                     "streak": 0.14, "barbs": 45.0, "slant": 0.7, "bars": 5.0, "bar_strength": 0.45,
+                                     "bar_width": 0.35, "shaft": 0.08, "shaft_light": 0.4}},
+        "texture": 2048,
+        # Conjectural (nothing of its colour is known): dark umber above and down the flanks, sharply white below and
+        # up the throat -- an osprey's countershading -- the dark running forward through the eye; dark wing feathers
+        # tipped buff, the tail's fan dark with a white end.
+        "skin": {
+            "back": (0.03, 0.02, 0.013),
+            "flank": (0.055, 0.037, 0.024),
+            "belly": (0.6, 0.57, 0.52),
+            "throat": (0.64, 0.61, 0.56),
+            "lips": (0.07, 0.05, 0.035),
+            "mouth": (0.3, 0.07, 0.06),
+            "claws": (0.03, 0.025, 0.02),
+            "mottle": 0.12,
+            "shank_dark": 0.3,
+            "eye_stripe": {"colour": (0.012, 0.009, 0.007), "from": ("Head", 1.0), "to": ("Neck4", 0.5),
+                           "phi": 64.0, "width": 18.0},
+        },
+    },
+}
+
 # ==============================================================================
 
 # Each by the name its files go by (assets/models/dinos/<name>.gltf); "config" names its row in Config.DINOS where
@@ -2490,4 +3650,9 @@ SPECIES = {"coelophysis": COELOPHYSIS, "coelophysis_alpha": COELOPHYSIS_ALPHA, "
            "pterosaur": PTEROSAUR,
            # The second map's (GAME-DESIGN 7.2, station 2).
            "ornitholestes": ORNITHOLESTES, "ceratosaurus": CERATOSAURUS, "allosaurus": ALLOSAURUS,
-           "stegosaurus": STEGOSAURUS, "diplodocus": DIPLODOCUS, "harpactognathus": HARPACTOGNATHUS}
+           "stegosaurus": STEGOSAURUS, "diplodocus": DIPLODOCUS, "harpactognathus": HARPACTOGNATHUS,
+           # The third map's (GAME-DESIGN 7.2, station 3: the Jehol Biota).
+           "yutyrannus": YUTYRANNUS, "dilong": DILONG, "sinocalliopteryx": SINOCALLIOPTERYX,
+           "sinornithosaurus": SINORNITHOSAURUS,
+           # The Hell Creek's own dromaeosaurs, beside the tyrannosaur.
+           "acheroraptor": ACHERORAPTOR, "dakotaraptor": DAKOTARAPTOR}

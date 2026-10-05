@@ -18,20 +18,95 @@
 
 import math
 
+import bmesh
 import bpy
+from mathutils import Vector, geometry
+from mathutils.bvhtree import BVHTree
 
 
-def unwrap(obj):
-    """Its surface opened out flat: islands at the angles where it bends most, packed into the square."""
+def unwrap(obj, tufts=()):
+    """Its surface opened out flat: islands at the angles where it bends most, packed into the square. A coat's
+    tufts (`tufts`, their faces) are left out -- thousands of tiny islands of their own took four fifths of the
+    square -- and laid on the skin once it is baked (_tufts_on_skin): until then they have none of it."""
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
+    if tufts:
+        skip = set(tufts)
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.index_update()
+        for f in bm.faces:
+            if f.index in skip:
+                f.select_set(False)
+        bmesh.update_edit_mesh(obj.data)
     bpy.ops.uv.smart_project(angle_limit=math.radians(66.0), island_margin=0.004, area_weight=0.0,
                              correct_aspect=True, scale_to_bounds=False)
     bpy.ops.uv.pack_islands(margin=0.004)
     bpy.ops.object.mode_set(mode='OBJECT')
+    if tufts:
+        uv = obj.data.uv_layers.active.data
+        for i in tufts:
+            for li in obj.data.polygons[i].loop_indices:
+                uv[li].uv = (0.0, 0.0)
+
+
+def tuft_faces(obj):
+    """The faces of a coat's tufts (the "Tuft" attribute, tools/dino_feathers.py): none, for most animals."""
+    attr = obj.data.attributes.get("Tuft")
+    if attr is None:
+        return []
+    marked = [a.value > 0.0 for a in attr.data]
+    return [p.index for p in obj.data.polygons if marked[p.vertices[0]]]
+
+
+def _uv_at(me, uv, face, point):
+    """The skin's UV at `point` on `face`: through the corners of the nearest of the triangles it fans into."""
+    loops = list(face.loop_indices)
+    best = None
+    for k in range(1, len(loops) - 1):
+        tri = (loops[0], loops[k], loops[k + 1])
+        a, b, c = (me.vertices[me.loops[li].vertex_index].co for li in tri)
+        q = geometry.closest_point_on_tri(point, a, b, c)
+        d = (q - point).length
+        if best is None or d < best[0]:
+            best = (d, q, (a, b, c), tri)
+    _, q, (a, b, c), tri = best
+    ua, ub, uc = (Vector((uv[li].uv[0], uv[li].uv[1], 0.0)) for li in tri)
+    return geometry.barycentric_transform(q, a, b, c, ua, ub, uc)
+
+
+def _tufts_on_skin(obj, tufts):
+    """Each tuft laid on the baked skin where it grows: its corners in a speck of the texture -- under a pixel --
+    at the point of the skin nearest its root, so it wears the colour (and the marks) of the skin it grows from;
+    a speck, not a point, so its relief has a direction to be lit by."""
+    me = obj.data
+    skip = set(tufts)
+    skin = [p for p in me.polygons if p.index not in skip]
+    tree = BVHTree.FromPolygons([v.co for v in me.vertices], [tuple(p.vertices) for p in skin], all_triangles=False)
+    uv = me.uv_layers.active.data
+    which = me.attributes["Tuft"].data
+    groups = {}
+    for i in tufts:
+        p = me.polygons[i]
+        groups.setdefault(which[p.vertices[0]].value, []).append(p)
+    speck = 0.0002
+    # A tuft's corners in the order they were made (tools/dino_feathers.py tuft): its root's two, its middle's two,
+    # its tip.
+    lay = [(-1.0, 0.0), (1.0, 0.0), (-0.8, 1.0), (0.8, 1.0), (0.0, 2.0)]
+    for polys in groups.values():
+        vs = sorted({v for p in polys for v in p.vertices})
+        root = (me.vertices[vs[0]].co + me.vertices[vs[1]].co) * 0.5
+        loc, _, idx, _ = tree.find_nearest(root)
+        if idx is None:
+            continue
+        at = _uv_at(me, uv, skin[idx], loc)
+        where = {v: lay[min(k, len(lay) - 1)] for k, v in enumerate(vs)}
+        for p in polys:
+            for li in p.loop_indices:
+                du, dv = where[me.loops[li].vertex_index]
+                uv[li].uv = (at.x + du * speck, at.y + dv * speck)
 
 
 def _node(nt, kind, loc, **inputs):
@@ -408,7 +483,8 @@ def bake(obj, spec, size=2048, name="skin", normal_size=None):
     scene.cycles.device = 'CPU'
     scene.cycles.samples = 4
     scene.render.bake.margin = 8
-    unwrap(obj)
+    tufts = tuft_faces(obj)
+    unwrap(obj, tufts)
     bake_mat = bake_material(spec)
     final = obj.data.materials[0]
     obj.data.materials[0] = bake_mat
@@ -426,6 +502,8 @@ def bake(obj, spec, size=2048, name="skin", normal_size=None):
     bpy.ops.object.bake(type='NORMAL', normal_space='TANGENT', use_clear=True)
     if normal_size and normal_size != size:
         normal.scale(normal_size, normal_size)
+    if tufts:
+        _tufts_on_skin(obj, tufts)
     # Saved as files of their kinds, so the exporter keeps each as it is (a JPEG colour, a PNG relief).
     import os
     import tempfile
@@ -453,4 +531,7 @@ def bake(obj, spec, size=2048, name="skin", normal_size=None):
         a = obj.data.color_attributes.get(attr_name)
         if a is not None:
             obj.data.color_attributes.remove(a)
+    t = obj.data.attributes.get("Tuft")
+    if t is not None:
+        obj.data.attributes.remove(t)
     return colour, normal

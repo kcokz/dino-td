@@ -98,7 +98,8 @@ func test_01_everything_fills_whole_cells_of_one_grid() -> void:
 	for type_id in config_node.BUILDABLE_TYPES:
 		var size: Vector2i = config_node.get_building_size(String(type_id))
 		assert_eq(size.x, size.y, "What the player builds is square (%s)" % type_id)
-		if int(config_node.ammo_capacity(String(type_id))) <= 0:
+		# A workshop out in the open stands on a tower's plot (v0.7: the kiln, the bloomery -- Workshop).
+		if int(config_node.ammo_capacity(String(type_id))) <= 0 and String(config_node.get_building_kind(String(type_id))) != "workshop":
 			assert_eq(size.x, 1, "What the player builds that is not a tower is one cell (%s)" % type_id)
 
 func test_02_its_collider_is_its_cells() -> void:
