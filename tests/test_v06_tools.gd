@@ -82,17 +82,17 @@ func test_02_bare_hands_bring_in_one_a_stroke_and_say_nothing_more() -> void:
 	assert_eq(pile.pickup_text(), "+1", "So the number is all it says")
 
 func test_02b_a_tool_says_what_it_does_when_it_is_made() -> void:
-	# GAME-DESIGN 14.2 path 4: making the axe says "Wood ×2", making the pick says stone can
-	# be gathered now -- from the recipes, not from anything written for them.
+	# GAME-DESIGN 14.2 path 4: making the axe says what it does -- in its own plain words since 2026-10-05 ("砍树快
+	# 一倍"; the player: "stone axe也没有解释有什么用") -- and making the pick says stone can be gathered now.
 	var hud = load("res://scenes/ui/HUD.tscn").instantiate()
 	tree.root.add_child(hud)
 	await wait_frames(1)
 	var axe: String = _axe()
 	game_state_node.grant_unlock(String(config_node.RECIPES[axe]["unlocks"]))
-	var factor: String = String(config_node.factor_text(float(config_node.RECIPES[axe]["harvest_speed"]["wood"])))
 	assert_true(hud.hint_label.visible and hud.hint_label.text.contains(tr(String(config_node.RECIPES[axe]["name"]))),
 		"Making the axe is said: %s" % hud.hint_label.text)
-	assert_true(hud.hint_label.text.contains("×%s" % factor), "With what it does, with the times sign: %s" % hud.hint_label.text)
+	assert_true(hud.hint_label.text.contains(String(config_node.recipe_effect_text(axe))) and String(config_node.recipe_effect_text(axe)) != "",
+		"With what it does, in plain words: %s" % hud.hint_label.text)
 	var opener: String = String(config_node.harvest_requires_unlock("stone"))
 	game_state_node.grant_unlock(opener)
 	assert_true(hud.hint_label.text.contains(tr("RESOURCE_STONE")), "The pick says stone can be gathered now: %s" % hud.hint_label.text)
