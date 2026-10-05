@@ -50,14 +50,55 @@ func _init() -> void:
 ## settings back to what they were -- a moment after the last suite, not the frame it ends: its
 ## level stopped the valley's sound as it went, and a stop is only asked of the audio thread,
 ## which lets the sound go on its next mix. Quit before it, and the sound was still held at exit
-## (debug-agent BUG-003: "1 resources still in use at exit").
+## (debug-agent BUG-003: "1 resources still in use at exit"). And with every script's base held to
+## the very end (_held_to_the_end).
 func _finish(code: int) -> void:
 	if _script_errors != null:
 		OS.remove_logger(_script_errors)
 		_script_errors = null
 	_restore_settings()
+	_hold_the_bases()
 	await create_timer(0.25).timeout
 	quit(code)
+
+## EVERY SCRIPT ANOTHER ONE EXTENDS IS HELD TO THE END, by this one. At exit the engine clears the
+## scripts still loaded one at a time, newest first, letting go of each before it goes on to the next
+## (GDScriptLanguage::finish, Godot 4.7.1). A script freed as it is let go frees its base with it -- and
+## if that base was the next to be cleared, the engine has lost its place and stops there: every older
+## script is left as it was, and all it keeps -- every model VisualLibrary holds, every font UiTheme made
+## -- is still in use at exit. Which script stands next to its base is only the order they were first
+## loaded in: the beacon suite run on its own made a bench (CraftingStation) before its command card
+## loaded HealingPod, and left 811 objects and 421 resources at exit with not one node of its own behind.
+## This script is the run's oldest, so the engine clears it last: until then no base goes with the script
+## that extends it, and then they all go together, which the engine is safe against.
+static var _held_to_the_end: Array[Script] = []
+
+func _hold_the_bases() -> void:
+	_held_to_the_end.clear()
+	# Itself too: nothing else holds this script once the run is over, and it has to be there to be cleared last.
+	_held_to_the_end.append(get_script())
+	for path in _scripts_under("res://"):
+		if not ResourceLoader.has_cached(path):
+			continue
+		var script := ResourceLoader.get_cached_ref(path) as Script
+		var base: Script = script.get_base_script() if script != null else null
+		if base != null and not _held_to_the_end.has(base):
+			_held_to_the_end.append(base)
+
+## Every script file under `dir_path`, in the folders Godot counts as the project's: not a hidden one
+## (.godot), nor one marked .gdignore (debug-agent/runs, every run's frames: twenty times the walk).
+func _scripts_under(dir_path: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var dir := DirAccess.open(dir_path)
+	if dir == null or dir.file_exists(".gdignore"):
+		return out
+	for sub in dir.get_directories():
+		if not sub.begins_with("."):
+			out.append_array(_scripts_under(dir_path.path_join(sub)))
+	for file in dir.get_files():
+		if file.get_extension() == "gd":
+			out.append(dir_path.path_join(file))
+	return out
 
 func _restore_settings() -> void:
 	if _had_settings:
