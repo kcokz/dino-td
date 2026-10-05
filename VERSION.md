@@ -1775,6 +1775,9 @@
   - 铁尖栅栏（设计书 5.3 栅栏那一行的"铁蒺藜"）：`BUILDINGS.iron_stake`，骨尖栅栏原地升级（`bone_stake.upgrades_to`），每格加 1 铁；扎 2.0、血 56（骨的 1.4、40）；没造过铁不出现（`within_reach`）。模型 `iron_palisade_a.glb`（`tools/generate_props.py` 的 `palisade(iron=True)`、`_iron_point`：锻出来的四棱铁尖，套在木头上，两边倒钩）、图标、头像，名字 `BUILDING_IRON_STAKE_NAME`。新的测试 `test_v07_the_iron_palisade`（原地升级、只多一样铁、更狠更结实、没铁不给、立起来按自己的数）。
   - 第 4 站的两种盗龙有了自己的叫声（原来借迅猛龙和它头领的；测试要每种动物一个声音，第二十七批的全量测试在这里红了）：阿克罗盗龙干哑的连吠，达科他盗龙喉咙里带颤的低嘎声（`tools/build_sounds.gd`；`SOUNDS.acheroraptor_*`、`dakotaraptor_*`）。`test_v07_the_impact` 第 2 条改成按时钟等玻璃珠落地（无头运行时帧不限速，数帧数不准，全量测试里偶尔红）。
   - 后两站的植食恐龙（模型新做，`tools/dino_species.py`；为三角龙的颈盾加了 `dino_body.py` 的 `_frill`、为它的大鳞加了 `dino_skin.py` 的一段，都只在物种要的时候才用，别的物种重做一遍逐字节一样；这两处的初稿第二十七批已经带进去了，这里是定稿）：**三角龙**（`DINOS.triceratops`：第 4 站第 3 天起偶尔随来袭冲过来，冲撞的、披甲、重；140 血、撞 9、1.9 米/秒，比剑龙高一步；2.2 米高）；**埃德蒙顿龙**一大群在第 4 站谷壁上（9 米长）；**鹦鹉嘴龙**两小群在第 3 站谷壁上（1.4 米长）。都按游戏里霸王龙的比例（`Herds`：霸王龙是尺子；模型按真的比例做，放进来时缩到这个比例，走路的速度也跟着缩，脚不打滑）。叫声：三角龙低沉带沙的吼、鼻息、冲撞，埃德蒙顿龙鼻腔里的号角声，鹦鹉嘴龙的叽叽声（`tools/build_sounds.gd`）。头像 `dino_triceratops`。测试 `test_v07_station_four` 第 3b 条。
+- **v0.7 第二十九批：玩家的 bug 报告（2026-10-05 上午）**：
+  - 篝火护住的地方显出来（玩家："campfire控制的区域可以用蓝色显示出来，包括cover的建筑，还是说campfire不需要cover？"）：放篝火和选中篝火时，每堆火夜里照得到的地面显出蓝色（塔射程的蓝），四面都照得到的建筑描蓝边。新的 `scripts/fx/FireCover.gd`；`Fire.night_reach`、它的圈是夜里的光（`_get_display_range`），选中任何一堆火所有火的圈都亮；`Main._fire_in_hand`，鬼影的圈是光（`_preview_range_for`）；`FEEDBACK.cover_outline_alpha`。测试 `test_v07_what_a_fire_covers`；`tools/playtest.gd` 场景 `firecover`。
+  - 船舱挨了咬，头上不再出血条：它的血已经在顶上的大圈里（玩家："掉血的cabin不需要一直显示血条，因为血条在大圈里已经显示了"；`FEEDBACK.health_bar_not_over`，`Building._update_status_bar`）。墙、塔照旧。测试 `test_v06_the_status_bar` 第 2b 条。
 
 ## v0.7 已定要做的（未开工）
 

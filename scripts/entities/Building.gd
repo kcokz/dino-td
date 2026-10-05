@@ -805,6 +805,10 @@ func _update_status_bar() -> void:
 	var cfg = _get_config()
 	if cfg and "FEEDBACK" in cfg:
 		hide_full = bool(cfg.FEEDBACK.get("health_bar_hide_at_full", true))
+		# Its health shown elsewhere -- the cabin's, round its medallion (FEEDBACK.health_bar_not_over).
+		if (cfg.FEEDBACK.get("health_bar_not_over", []) as Array).has(building_type):
+			status_bar.visible = false
+			return
 	status_bar.visible = not (hide_full and ratio >= 0.999)
 	status_bar.set_ratio(ratio, Color(0.85, 0.3, 0.25, 0.95) if ratio < 0.35 else Color(0.3, 0.85, 0.35, 0.95))
 

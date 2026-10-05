@@ -3870,6 +3870,10 @@ const FEEDBACK: Dictionary = {
 	# stakes writes "Wooden Stakes" twenty times across the middle of the screen.
 	"name_label_hide_when_idle": true,
 	"health_bar_hide_at_full": true,  # 满血时隐藏，避免画面嘈杂
+	# Buildings whose health is shown elsewhere, with no bar over them: the cabin's is the ring round its medallion at
+	# the top of the screen (HUD), and a bar over the cabin as well said it twice (the player's bug report, 2026-10-05:
+	# "掉血的cabin不需要一直显示血条，因为血条在大圈里已经显示了").
+	"health_bar_not_over": ["core"],
 	# 树和石头头上的"木材 150/150"：只在选中它、或者刚采过它的这几秒里显示（v0.6 第三轮：满地的字就是网页游戏）。
 	"node_label_seconds": 3.0,
 	# 人挨咬时顶部提示一次"人在挨打"，之后这么多秒内不再重复（真实时间）。
@@ -3889,6 +3893,10 @@ const FEEDBACK: Dictionary = {
 	# a ghost can go down, and from the green of the selection; `reach_alpha` is how strongly it lies on the ground.
 	"reach_color": Color(0.35, 0.65, 1.0),
 	"reach_alpha": 0.22,
+	# What the fires cover, while one is put down or picked (FireCover; the player, 2026-10-05: "campfire控制的区域可以
+	# 用蓝色显示出来，包括cover的建筑"): each building lit all round outlined in the reach's blue, this opaque -- a frame
+	# round its base, as the picked one's is, in another colour.
+	"cover_outline_alpha": 0.85,
 	# 单位（现代人、恐龙）脚下的选中圈：一圈细圆环，贴着脚——细，才不像地上多出了一样东西。
 	# 建筑仍然是沿底座的方框。
 	"unit_ring_margin": 0.06,

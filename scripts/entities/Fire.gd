@@ -116,6 +116,31 @@ func _set_lit(on: bool) -> void:
 func light_radius() -> float:
 	return float(_row().get("light", 0.0)) if lit else 0.0
 
+## How far its light reaches at night, burning or not now (BUILDINGS.<id>.light): what it covers (FireCover).
+func night_reach() -> float:
+	return float(_row().get("light", 0.0))
+
+# ==============================================================================
+# What it covers, shown while it is picked (FireCover)
+# ==============================================================================
+
+## Its ring is its light at night, burning or not: the ground a prowler will not stand on to bite (FireCover).
+func _get_display_range() -> float:
+	return night_reach()
+
+## In the reach's blue (Config.FEEDBACK.reach_color), as a tower's is: the player, 2026-10-05: "campfire控制的区域可以用
+## 蓝色显示出来".
+func _get_range_indicator_color() -> Color:
+	var cfg = _get_config()
+	var fb: Dictionary = cfg.FEEDBACK if (cfg and "FEEDBACK" in cfg) else {}
+	var c: Color = fb.get("reach_color", Color(0.35, 0.65, 1.0))
+	return Color(c.r, c.g, c.b, float(fb.get("reach_alpha", 0.22)))
+
+## Any fire picked, every fire's ring shows: what the fires cover together is what is covered (FireCover).
+func _on_unit_selected(unit: Node) -> void:
+	set_range_visible(unit is Fire)
+	set_selected_visual(unit == self)
+
 func destroy() -> void:
 	_set_lit(false)
 	super.destroy()
@@ -156,6 +181,12 @@ func _after_upgrade() -> void:
 	_light = null
 	_make_the_flame()
 	_show_the_flame()
+	# Its ring drawn again to the brazier's reach.
+	if range_indicator != null and is_instance_valid(range_indicator):
+		remove_child(range_indicator)
+		range_indicator.queue_free()
+	range_indicator = null
+	_create_range_indicator()
 
 func _make_the_flame() -> void:
 	var fire: Dictionary = _fire_cfg()

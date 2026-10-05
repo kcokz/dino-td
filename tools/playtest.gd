@@ -157,6 +157,8 @@ func _run(name: String) -> void:
 			# Station 4's (the end of the Cretaceous, MAPS.hell_creek), by the man: Acheroraptor, Dakotaraptor, Tyrannosaurus,
 			# and the Triceratops that charges with the raids from the third day.
 			await _scenario_cast([["acheroraptor", -1.2], ["dakotaraptor", 2.2], ["big_theropod", 9.0], ["triceratops", 18.5]])
+		"firecover":
+			await _scenario_firecover()
 		"kiln":
 			await _scenario_kiln()
 		"bench3":
@@ -1527,6 +1529,37 @@ func _scenario_kiln() -> void:
 	var bone = placed.get("bone_stake")
 	if bone != null:
 		await _portrait("palisades", (bone as Node3D).global_position, 4.5, false)
+
+## What the fires cover (v0.7, FireCover): two campfires by the cabin and a run of fence, a fire picked -- every fire's
+## ground in blue, what is lit all round outlined; then a third in hand.
+func _scenario_firecover() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	for res_id in cfg.RESOURCES:
+		gs.resources[res_id] = 99
+	var door: Vector3 = _main.current_core.door_outside()
+	var gm = _main.grid_manager
+	var fires: Array = []
+	for off in [Vector3(-2.0, 0.0, 2.0), Vector3(5.0, 0.0, -1.0)]:
+		var f = _main.build_system.place_at("campfire", gm.world_to_build_cell(door + off), _main.buildings_container, false)
+		if f != null:
+			f.complete_construction()
+			fires.append(f)
+	for k in range(-4, 7):
+		var w = _main.build_system.place_at("wall", gm.world_to_build_cell(door + Vector3(float(k), 0.0, 5.0)), _main.buildings_container, false)
+		if w != null:
+			w.complete_construction()
+	await _wait(6)
+	if not fires.is_empty():
+		root.get_node("EventBus").unit_selected.emit(fires[0])
+		await _wait(4)
+		await _portrait("fire_picked", door + Vector3(1.0, 0.0, 2.0), 16.0, true)
+		root.get_node("EventBus").unit_deselected.emit()
+	_main.current_build_type = "campfire"
+	_main._fire_in_hand(door + Vector3(-6.0, 0.0, -1.0))
+	await _wait(4)
+	await _portrait("fire_in_hand", door + Vector3(0.0, 0.0, 2.0), 18.0, true)
+	_main._fire_in_hand(null)
 
 ## Station 4's climax (v0.7, ImpactRain): Hell Creek's beacon launched -- the streak across the sky, then the glass
 ## coming down round him.

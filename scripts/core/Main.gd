@@ -99,6 +99,7 @@ func _ready() -> void:
 	_warm_the_cast()
 	_add_bug_report()
 	_ensure_station_jump()
+	_ensure_fire_cover()
 	# The game launched opens on the start screen, the valley stopped behind it -- unless it was the start screen
 	# that built this level, for the game chosen there (GameState.launch_straight_in).
 	var gs_start = _get_game_state()
@@ -126,6 +127,14 @@ func _exit_tree() -> void:
 	var eb = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("game_won") and eb.game_won.is_connected(_on_won_jump):
 		eb.game_won.disconnect(_on_won_jump)
+
+## What the fires cover, shown while one is put down or picked (FireCover).
+var fire_cover: FireCover = null
+
+func _ensure_fire_cover() -> void:
+	if fire_cover == null or not is_instance_valid(fire_cover):
+		fire_cover = FireCover.new()
+		add_child(fire_cover)
 
 ## The jump between our game's stations (StationJump; GAME-DESIGN 8.3): the beacon charged with a station still ahead
 ## sends the capsule on, and a level built by the jump opens on its landing.
@@ -2686,6 +2695,9 @@ func _preview_range_for(type_id: String) -> float:
 		return float(b["harvest_range"])
 	if b.has("range"):
 		return float(b["range"])
+	# A fire: as far as it lights at night (FireCover).
+	if b.has("light"):
+		return float(b["light"])
 	return 0.0
 
 func _preview_ring_color(type_id: String) -> Color:
@@ -2697,7 +2709,7 @@ func _preview_ring_color(type_id: String) -> Color:
 		for res_id in b["produces_per_sec"]:
 			if cfg.RESOURCE_NODES.has(res_id):
 				return cfg.RESOURCE_NODES[res_id].get("color", Color(0.4, 0.8, 0.4))
-	if b.has("range"):
+	if b.has("range") or b.has("light"):
 		return _reach_colour()
 	return Color(0.4, 0.8, 0.4)
 
@@ -2733,6 +2745,7 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 		build_preview.visible = false
 		_preview_cell = Vector2i(999999, 999999)
 		_restore_neighbours()
+		_fire_in_hand(null)
 		return
 
 	# Everything snaps to the building grid (Config.BUILD_CELL): the ghost stands in the cell the
@@ -2744,6 +2757,7 @@ func _update_build_preview(screen_pos: Vector2) -> void:
 	_preview_cell = snap
 	_reach_asked.clear()
 	build_preview.global_position = grid_manager.footprint_centre(current_build_type, snap)
+	_fire_in_hand(build_preview.global_position)
 	var ghost: Node = build_preview.find_child("Body", false, false)
 	if ghost is Node3D:
 		_dress_ghost(ghost as Node3D, snap)
@@ -2805,7 +2819,20 @@ func _reach_colour() -> Color:
 
 
 
+## A fire in hand where the ghost stands (`at`; null, none): what it and the fires already burning would cover, shown
+## (FireCover) -- the player, 2026-10-05: "campfire控制的区域可以用蓝色显示出来，包括cover的建筑".
+func _fire_in_hand(at: Variant) -> void:
+	if fire_cover == null or not is_instance_valid(fire_cover):
+		return
+	var cfg = _get_config()
+	var row: Dictionary = cfg.BUILDINGS.get(current_build_type, {}) if (cfg and at is Vector3) else {}
+	if String(row.get("kind", "")) == "fire":
+		fire_cover.placing(at, float(row.get("light", 0.0)))
+	elif fire_cover.showing() and fire_cover._ghost_at != null:
+		fire_cover.placing(null)
+
 func _clear_build_preview() -> void:
+	_fire_in_hand(null)
 	_restore_neighbours()
 	if build_preview and is_instance_valid(build_preview):
 		build_preview.queue_free()

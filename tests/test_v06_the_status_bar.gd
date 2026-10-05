@@ -89,6 +89,28 @@ func test_02_the_cabins_medallion_hangs_from_its_middle_and_rings_its_health() -
 	if face:
 		assert_eq(face.texture, UiTheme.portrait("building/core"), "its own portrait")
 
+func test_02b_the_cabins_health_is_its_medallions_alone() -> void:
+	# The player's bug report, 2026-10-05: "掉血的cabin不需要一直显示血条，因为血条在大圈里已经显示了".
+	var main = await _level()
+	var core = main.current_core
+	assert_has(config_node.FEEDBACK.get("health_bar_not_over", []), "core", "The cabin's health is shown elsewhere")
+	core.take_damage(float(core.max_hp) * 0.3)
+	await wait_frames(1)
+	assert_lt(float(core.current_hp), float(core.max_hp), "(the cabin hurt)")
+	assert_true(core.status_bar == null or not core.status_bar.visible, "No bar over it: the ring round its medallion says it")
+	assert_lt(main.hud.core_hp_bar.value, 1.0, "which does")
+	stock_everything()
+	var door: Vector3 = core.door_outside()
+	var wall = main.build_system.place_at("wall", main.grid_manager.world_to_build_cell(door + Vector3(-3.0, 0.0, 3.0)),
+		main.buildings_container)
+	assert_not_null(wall, "(a fence)")
+	if wall == null:
+		return
+	wall.complete_construction()
+	wall.take_damage(float(wall.max_hp) * 0.5)
+	await wait_frames(1)
+	assert_true(wall.status_bar != null and wall.status_bar.visible, "A fence hurt still shows its bar over it")
+
 func test_03_the_engineers_medallion_stands_at_the_bottom_left_and_picks_him() -> void:
 	var main = await _level()
 	var hud = main.hud
