@@ -1060,6 +1060,98 @@ func _s_yutyrannus_death() -> PackedFloat32Array:
 	return _space(out, 0.15, [[0.45, 0.2]])
 
 # ==============================================================================
+# Station 4's raptors (Hell Creek): Acheroraptor, a dry barking chatter; Dakotaraptor, its giant kin, a croaking rattle
+# ==============================================================================
+
+const ACHERO_FORMANTS: Array = [[1250.0, 5.0, 1.0], [2700.0, 6.0, 0.5], [4000.0, 7.0, 0.2]]
+
+## Acheroraptor's bark: short and dry, a click at its front.
+func _kek(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0 * 1.1], [0.3, f0], [1.0, f0 * 0.85]],
+		"amp": [[0.0, 0.0], [0.08, 1.0], [0.5, 0.6], [1.0, 0.0]], "formants": ACHERO_FORMANTS,
+		"rough": 0.55, "breath": 0.25, "tilt": 4200.0, "jitter": 0.03})
+
+func _s_acheroraptor_call_1() -> PackedFloat32Array:
+	# "kek-kek-kek": three dry barks, each a little lower.
+	var out := _buf(0.6)
+	for i in 3:
+		_mix(out, _kek(640.0 - 25.0 * i, 0.09), 0.02 + 0.15 * i, 1.0 - 0.08 * i)
+	return out
+
+func _s_acheroraptor_call_2() -> PackedFloat32Array:
+	# A clicking rattle, rising and falling.
+	return _voice({"dur": 0.5, "f0": [[0.0, 560.0], [0.4, 680.0], [1.0, 520.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.75, 0.8], [1.0, 0.0]], "formants": ACHERO_FORMANTS,
+		"trill": [42.0, 0.9], "rough": 0.4, "breath": 0.3, "tilt": 3800.0, "jitter": 0.03})
+
+func _s_acheroraptor_alert() -> PackedFloat32Array:
+	# A hiss, and a run of sharp barks over it.
+	var out := _hiss(0.6, [[0.0, 3000.0], [1.0, 3600.0]], 2.4, [[0.0, 0.0], [0.25, 1.0], [1.0, 0.2]])
+	for i in 3:
+		_mix(out, _kek(760.0 + 30.0 * i, 0.08), 0.18 + 0.12 * i, 0.9)
+	return out
+
+func _s_acheroraptor_bite() -> PackedFloat32Array:
+	return _snap(1.25, 0.1)
+
+func _s_acheroraptor_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.26, "f0": [[0.0, 900.0], [0.2, 1000.0], [1.0, 600.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": ACHERO_FORMANTS,
+		"rough": 0.55, "breath": 0.3, "tilt": 4200.0})
+
+func _s_acheroraptor_death() -> PackedFloat32Array:
+	var out := _buf(0.9)
+	_mix(out, _voice({"dur": 0.7, "f0": [[0.0, 760.0], [0.3, 640.0], [1.0, 240.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.6], [1.0, 0.0]], "formants": ACHERO_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.82]], "trill": [30.0, 0.4], "rough": 0.5, "breath": 0.35, "tilt": 3400.0}), 0.0, 1.0)
+	_mix(out, _hiss(0.35, [[0.0, 2000.0], [1.0, 1300.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.5, 0.25)
+	return out
+
+const DAKOTA_FORMANTS: Array = [[560.0, 4.5, 1.0], [1350.0, 5.5, 0.55], [2350.0, 6.5, 0.25]]
+
+## Dakotaraptor's croak: low for a raptor, a rattle in the throat.
+func _dakota_croak(f0: float, dur: float) -> PackedFloat32Array:
+	return _voice({"dur": dur, "f0": [[0.0, f0 * 0.95], [0.3, f0 * 1.08], [1.0, f0 * 0.85]],
+		"amp": [[0.0, 0.0], [0.1, 1.0], [0.7, 0.85], [1.0, 0.0]], "formants": DAKOTA_FORMANTS,
+		"rough": 0.6, "rough_am": [18.0, 0.45], "breath": 0.22, "tilt": 2000.0, "jitter": 0.025, "nasal": 0.2})
+
+func _s_dakotaraptor_call_1() -> PackedFloat32Array:
+	return _space(_dakota_croak(210.0, 0.8), 0.1, [])
+
+func _s_dakotaraptor_call_2() -> PackedFloat32Array:
+	# "krr-ok -- krrrr": a croak and a long rattle.
+	var out := _buf(1.2)
+	_mix(out, _dakota_croak(230.0, 0.3), 0.02, 1.0)
+	_mix(out, _voice({"dur": 0.6, "f0": [[0.0, 220.0], [1.0, 180.0]], "amp": [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]],
+		"formants": DAKOTA_FORMANTS, "trill": [24.0, 0.85], "rough": 0.55, "breath": 0.25, "tilt": 2200.0}), 0.42, 0.9)
+	return _space(out, 0.1, [])
+
+func _s_dakotaraptor_alert() -> PackedFloat32Array:
+	# At the head of a big raid: a long hiss into a croaking screech that carries.
+	var out := _buf(1.2)
+	_mix(out, _hiss(0.45, [[0.0, 2000.0], [1.0, 2700.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.2]]), 0.0, 0.6)
+	_mix(out, _voice({"dur": 0.8, "f0": [[0.0, 300.0], [0.3, 470.0], [1.0, 340.0]],
+		"amp": [[0.0, 0.0], [0.06, 1.0], [0.7, 0.9], [1.0, 0.0]], "formants": DAKOTA_FORMANTS,
+		"trill": [22.0, 0.45], "rough": 0.6, "breath": 0.3, "tilt": 2800.0}), 0.3, 1.0)
+	return _space(out, 0.12, [[0.4, 0.2]])
+
+func _s_dakotaraptor_bite() -> PackedFloat32Array:
+	return _snap(0.8, 0.4)
+
+func _s_dakotaraptor_hurt() -> PackedFloat32Array:
+	return _voice({"dur": 0.4, "f0": [[0.0, 480.0], [0.2, 540.0], [1.0, 300.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [1.0, 0.0]], "formants": DAKOTA_FORMANTS,
+		"rough": 0.65, "trill": [22.0, 0.4], "breath": 0.3, "tilt": 2800.0})
+
+func _s_dakotaraptor_death() -> PackedFloat32Array:
+	var out := _buf(1.4)
+	_mix(out, _voice({"dur": 1.1, "f0": [[0.0, 420.0], [0.3, 360.0], [1.0, 120.0]],
+		"amp": [[0.0, 0.0], [0.05, 1.0], [0.5, 0.75], [1.0, 0.0]], "formants": DAKOTA_FORMANTS,
+		"fshift": [[0.0, 1.0], [1.0, 0.8]], "trill": [18.0, 0.5], "rough": 0.65, "breath": 0.35, "tilt": 2200.0}), 0.0, 1.0)
+	_mix(out, _hiss(0.5, [[0.0, 1300.0], [1.0, 800.0]], 2.0, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.8, 0.3)
+	return _space(out, 0.1, [])
+
+# ==============================================================================
 # His work: an axe in wood, a pick on stone, a mallet on a stake
 # ==============================================================================
 

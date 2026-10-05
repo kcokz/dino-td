@@ -90,10 +90,11 @@ func test_02_launched_at_hell_creek_the_glass_comes_down() -> void:
 		return
 	var d = _animal(main, main.current_core.global_position + Vector3(8.0, 0.0, 6.0))
 	rain.drop_at(d.global_position)
-	var spent: float = 0.0
-	while float(d.current_hp) >= 999.0 and spent < float(_climax()["fall_seconds"]) + 1.0:
+	# By the clock: a headless run's frames are uncapped, so a count of them is no measure of the bead's fall.
+	var start: int = Time.get_ticks_msec()
+	var limit_ms: int = int((float(_climax()["fall_seconds"]) + 1.0) * 1000.0)
+	while float(d.current_hp) >= 999.0 and Time.get_ticks_msec() - start < limit_ms:
 		await tree.process_frame
-		spent += 1.0 / 60.0
 	assert_almost_eq(999.0 - float(d.current_hp), float(_climax()["damage"]), 0.01, "A bead let go over it comes down and scalds it")
 
 func test_03_the_man_is_scalded_in_the_open_and_not_in_the_cabin() -> void:

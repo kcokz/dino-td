@@ -142,13 +142,36 @@ PALISADE_HEIGHT = 1.25
 RAIL = (0.36, 0.26, 0.16)
 
 
-def _palisade_log(b, base, height, radius, rng, bone=False):
+def _iron_point(b, foot, axis, length, radius):
+    """A forged iron point socketed on the end of a log or a stake, from `foot` along `axis`, `length` long: a collar
+    round the wood, four ground faces to the point, and a pair of barbs swept back from it -- black-grey, its edges
+    ground bright."""
+    d = axis.normalized()
+    pts = [foot + d * (length * t) for t in (0.0, 0.3, 0.75, 1.0)]
+    b.tube(pts, [radius * 0.5, radius * 0.42, radius * 0.18, 0.003], [IRON, IRON_EDGE, IRON, IRON_EDGE], 4)
+    b.tube([foot - d * 0.035, foot + d * 0.03], [radius * 0.62, radius * 0.6], [IRON, IRON_EDGE], 6)
+    side = d.cross(UP)
+    if side.length < 1e-4:
+        side = Vector((1.0, 0.0, 0.0))
+    side.normalize()
+    at = foot + d * (length * 0.5)
+    for s in (-1.0, 1.0):
+        root_hi = at + d * (length * 0.1)
+        root_lo = at - d * (length * 0.04)
+        barb = at + side * (s * radius * 0.75) - d * (length * 0.14)
+        b.tri(root_hi, root_lo, barb, IRON, IRON, IRON_EDGE)
+        b.tri(root_lo, root_hi, barb, IRON, IRON, IRON_EDGE)
+
+
+def _palisade_log(b, base, height, radius, rng, bone=False, iron=False):
     """One sharpened log of a palisade: ridged bark, a lip where the cut begins, and axe-cut
     facets of pale fresh wood darkening to a charred point -- or, with a bone to carry, cut
-    down to a short wedge with a bone point lashed upright on it, up to the same height."""
+    down to a short wedge with a bone point lashed upright on it, up to the same height; or with
+    a forged iron point socketed on the wedge instead (_iron_point)."""
+    capped = bone or iron
     lean = Vector((rng.uniform(-0.015, 0.015), rng.uniform(-0.015, 0.015), 0.0))
     sides = 7
-    shaft_top = height - (0.16 if bone else 0.26)
+    shaft_top = height - (0.16 if capped else 0.26)
     n = 4
     spine = [base + UP * (shaft_top * i / n) + lean * (i / n) for i in range(n + 1)]
     radii = [radius * (1.0 - 0.1 * i / n) for i in range(n + 1)]
@@ -156,12 +179,15 @@ def _palisade_log(b, base, height, radius, rng, bone=False):
     ridges = [rng.uniform(0.88, 1.08) for _ in range(sides)]
     rings = b.tube(spine, radii, cols, sides, radial=lambda i, k: ridges[k])
     top = spine[-1]
-    tip_col = FRESH_WOOD if bone else CHAR
-    tip = top + UP * (0.06 if bone else 0.26) + Vector((rng.uniform(-0.02, 0.02), rng.uniform(-0.02, 0.02), 0.0))
+    tip_col = FRESH_WOOD if capped else CHAR
+    tip = top + UP * (0.06 if capped else 0.26) + Vector((rng.uniform(-0.02, 0.02), rng.uniform(-0.02, 0.02), 0.0))
     for k in range(sides):
         k2 = (k + 1) % sides
         b.tri(rings[-1][k], rings[-1][k2], tip, FRESH_WOOD, FRESH_WOOD, tip_col)
-    if bone:
+    if iron:
+        _iron_point(b, top - UP * 0.03, UP + Vector((rng.uniform(-0.02, 0.02), rng.uniform(-0.02, 0.02), 0.0)),
+                    height - top.z + 0.05, radius)
+    elif bone:
         length = height - top.z + 0.02
         bend = Vector((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 0.0)).normalized() * 0.02
         foot = top - UP * 0.03
@@ -173,23 +199,27 @@ def _palisade_log(b, base, height, radius, rng, bone=False):
     return spine
 
 
-def _spike(b, base, tip, radius, rng, bone=False):
+def _spike(b, base, tip, radius, rng, bone=False, iron=False):
     """A sharpened stake set slanting out of the earth towards whatever comes: bark up to where
     the cut begins, then facets of fresh wood to a charred point -- or, on a bone palisade, a
-    bone point lashed on where the cut would be."""
+    bone point lashed on where the cut would be; on an iron one, a forged point (_iron_point)."""
+    capped = bone or iron
     axis = tip - base
-    cut = 0.6 if not bone else 0.72
+    cut = 0.6 if not capped else 0.72
     sides = 5
     spine = [base + axis * (cut * i / 3) for i in range(4)]
     radii = [radius * (1.0 - 0.12 * i / 3) for i in range(4)]
     cols = [mix(BARK, BARK_LIGHT, 0.4 if i % 2 else 0.1) for i in range(4)]
     rings = b.tube(spine, radii, cols, sides)
-    point = tip if not bone else base + axis * (cut + 0.06)
-    tip_col = CHAR if not bone else FRESH_WOOD
+    point = tip if not capped else base + axis * (cut + 0.06)
+    tip_col = CHAR if not capped else FRESH_WOOD
     for k in range(sides):
         k2 = (k + 1) % sides
         b.tri(rings[-1][k], rings[-1][k2], point, FRESH_WOOD, FRESH_WOOD, tip_col)
-    if bone:
+    if iron:
+        foot = base + axis * (cut - 0.04)
+        _iron_point(b, foot, tip - foot, (tip - foot).length * 1.05, radius)
+    elif bone:
         foot = base + axis * (cut - 0.04)
         ts = [0.0, 0.5, 1.0]
         stained = mix(BONE, (0.45, 0.36, 0.20), 0.35)
@@ -228,7 +258,7 @@ def _earth_strip(b, x0, x1, width, rng):
         b.quad(ridge_a, ridge_c, pc, pd, SOIL_LIGHT, SOIL_LIGHT, SOIL, SOIL)
 
 
-def _palisade_run(seed, bone, turn):
+def _palisade_run(seed, bone, turn, iron=False):
     """The run of a palisade section from its post out to the edge of its cell, eastward, then
     turned `turn` radians about the vertical: two logs, the rail they are lashed to, turned
     earth under the whole width of the cell, and sharpened stakes slanting out of it to both
@@ -243,13 +273,13 @@ def _palisade_run(seed, bone, turn):
             base = Vector((along, side * 0.1, 0.03))
             tip = Vector((along + rng.uniform(-0.04, 0.04), side * SPIKE_REACH * rng.uniform(0.96, 1.0),
                           SPIKE_TIP_HEIGHT * rng.uniform(0.9, 1.05)))
-            _spike(b, base, tip, rng.uniform(0.036, 0.044), rng, bone)
+            _spike(b, base, tip, rng.uniform(0.036, 0.044), rng, bone, iron)
     rail_z = 0.62
     for x in (0.25, 0.42):
         base = Vector((x, rng.uniform(-0.02, 0.02), 0.0))
         radius = rng.uniform(0.08, 0.092)
         height = PALISADE_HEIGHT * rng.uniform(0.92, 1.0)
-        _palisade_log(b, base, height, radius, rng, bone)
+        _palisade_log(b, base, height, radius, rng, bone, iron)
         _lashing(b, base + UP * rail_z, radius, rng)
     b.tube([Vector((0.06, 0.0, rail_z)), Vector((0.5, 0.0, rail_z + rng.uniform(-0.02, 0.02)))],
            [0.028, 0.026], [RAIL, mix(RAIL, BARK_LIGHT, 0.4)], 5)
@@ -258,8 +288,8 @@ def _palisade_run(seed, bone, turn):
     return b
 
 
-def palisade(seed, bone=False):
-    """A metre of palisade (Config.BUILDINGS.wall / bone_stake) as a kit the game dresses by what
+def palisade(seed, bone=False, iron=False):
+    """A metre of palisade (Config.BUILDINGS.wall / bone_stake / iron_stake) as a kit the game dresses by what
     is beside it (Wall.dress): Post, the stout log in the middle of the cell on its mound, and
     Run_E / Run_W / Run_N / Run_S, the logs from the post out to each side. With every part
     shown it is a block of stakes as big as the cell, which is how a section stands alone."""
@@ -274,7 +304,7 @@ def palisade(seed, bone=False):
         k2 = (k + 1) % 10
         post.quad(rim[k], rim[k2], crown[k2], crown[k], SOIL, SOIL, SOIL_LIGHT, SOIL_LIGHT)
         post.tri(crown[k], crown[k2], UP * 0.07, SOIL_LIGHT, SOIL_LIGHT, SOIL)
-    _palisade_log(post, Vector((0.0, 0.0, 0.0)), PALISADE_HEIGHT * 1.04, 0.105, rng, bone)
+    _palisade_log(post, Vector((0.0, 0.0, 0.0)), PALISADE_HEIGHT * 1.04, 0.105, rng, bone, iron)
     _lashing(post, UP * 0.62, 0.105, rng)
     # Out to the corners of the cell, which no run reaches: a section at a corner or alone is
     # points all round.
@@ -283,10 +313,10 @@ def palisade(seed, bone=False):
         d = Vector((math.cos(a), math.sin(a), 0.0))
         corner = SPIKE_REACH * math.sqrt(2.0) * 0.92
         _spike(post, d * 0.14 + UP * 0.03, d * corner + UP * SPIKE_TIP_HEIGHT * rng.uniform(0.9, 1.05),
-               rng.uniform(0.036, 0.044), rng, bone)
+               rng.uniform(0.036, 0.044), rng, bone, iron)
     parts = [("Post", post, Vector((0.0, 0.0, 0.0)))]
     for name, turn, s2 in (("Run_E", 0.0, 1), ("Run_N", math.pi * 0.5, 2), ("Run_W", math.pi, 3), ("Run_S", -math.pi * 0.5, 4)):
-        parts.append((name, _palisade_run(seed * 10 + s2, bone, turn), Vector((0.0, 0.0, 0.0))))
+        parts.append((name, _palisade_run(seed * 10 + s2, bone, turn, iron), Vector((0.0, 0.0, 0.0))))
     return parts
 
 
@@ -5130,6 +5160,8 @@ PROPS = {
 KITS = {
     "palisade": (lambda s: palisade(s), [3]),
     "bone_palisade": (lambda s: palisade(s, bone=True), [3]),
+    # Station 3's iron on the bone palisade's logs and stakes, forged points with barbs (Config.BUILDINGS.iron_stake).
+    "iron_palisade": (lambda s: palisade(s, iron=True), [3]),
     "gate": (lambda s: gate(s), [5]),
     "rock_palisade": (lambda s: rock_palisade(s), [3]),
     # The towers and engines (v0.6 round eight; one set on one plinth since 2026-10-03, _tower_plinth).

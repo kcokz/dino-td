@@ -37,6 +37,9 @@ var _scenario: String = ""
 var _only: PackedStringArray = []
 ## The run's seed ("seed:N"), or -1 for a new one each run.
 var _seed: int = -1
+## The station of our game each scenario is played at ("station:3"), its first 1; 0 for a level of no game. A map alone
+## ("map:jehol") is that map with the first station's animals: a run of no game takes the campaign's first age.
+var _station: int = 0
 
 func _init() -> void:
 	# Rule 1. Without this the whole HUD renders untranslated.
@@ -61,6 +64,10 @@ func _init() -> void:
 		# so two plans played on it are told apart by the plan, not by luck.
 		if String(w).begins_with("seed:"):
 			_seed = int(String(w).substr(5))
+			continue
+		# "station:3" plays our game's third station -- its map and its age's animals, landed fresh from the capsule.
+		if String(w).begins_with("station:"):
+			_station = int(String(w).substr(8))
 			continue
 		# "map:valley_large" plays on that map; the default is the small valley.
 		if String(w).begins_with("map:"):
@@ -1487,7 +1494,8 @@ func _scenario_kiln() -> void:
 	var placed: Dictionary = {}
 	for item in [["kiln", Vector2i(4, 3)], ["furnace", Vector2i(8, 3)], ["brick_wall", Vector2i(4, 7)], ["brick_wall", Vector2i(5, 7)],
 			["stone_wall", Vector2i(6, 7)], ["bow_tower_repeater", Vector2i(11, 3)], ["bow_tower_ballista", Vector2i(14, 3)],
-			["catapult_trebuchet", Vector2i(10, 8)]]:
+			["catapult_trebuchet", Vector2i(10, 8)], ["wall", Vector2i(3, 11)], ["bone_stake", Vector2i(4, 11)],
+			["iron_stake", Vector2i(5, 11)]]:
 		var b = _main.build_system.place_at(String(item[0]), at + item[1], _main.buildings_container, false)
 		if b == null:
 			print("[playtest] could not place %s" % item[0])
@@ -1514,6 +1522,10 @@ func _scenario_kiln() -> void:
 		furnace.begin("iron")
 		await _advance(6.0)
 		await _portrait("furnace_at_work", (furnace as Node3D).global_position, 6.0, false)
+	# The palisade's three: wood, bone points, iron points (v0.7: the iron palisade).
+	var bone = placed.get("bone_stake")
+	if bone != null:
+		await _portrait("palisades", (bone as Node3D).global_position, 4.5, false)
 
 ## Station 4's climax (v0.7, ImpactRain): Hell Creek's beacon launched -- the streak across the sky, then the glass
 ## coming down round him.
@@ -3124,6 +3136,9 @@ func _fresh_level() -> void:
 	# Each scenario is a run of its own: what one granted, made or repaired is not the next
 	# one's starting point (the cabin's shots repair the beacon the beacon's shots start from).
 	var gs := root.get_node_or_null("GameState")
+	if gs and _station > 0:
+		gs.play("campaign")
+		gs.station = _station - 1
 	if gs and gs.has_method("reset_game"):
 		gs.reset_game(_seed)
 	_main = load("res://scenes/Main.tscn").instantiate()

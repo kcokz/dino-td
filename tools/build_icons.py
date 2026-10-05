@@ -249,6 +249,23 @@ ICONS["bone_stake"] = item_svg(
         shape("polygon", C["bone_shade"], points="%d,25 %d,6 %d,25" % (x - 1, x + 6, x + 6)))]
     + [shape("rect", C["rope"], x=7, y=36, width=50, height=5.5, rx=2)])
 
+# The palisade with forged iron points socketed on (tools/generate_props.py iron_palisade): the same three posts,
+# each capped with a collar and a dark barbed point.
+def _iron_tip(x):
+    return "%d,26 %.1f,17 %d,19 %d,4 %d,19 %.1f,17 %d,26" % (x + 1, x - 1.5, x + 3, x + 6, x + 9, x + 13.5, x + 11)
+
+
+ICONS["iron_stake"] = item_svg(
+    [shape("rect", C["post"], x=x, y=24, width=12, height=34) for x in (10, 26, 42)]
+    + [shape("polygon", C["iron"], points=_iron_tip(x)) for x in (10, 26, 42)]
+    + [shape("rect", C["iron_dark"], x=x - 1, y=23, width=14, height=4, rx=1) for x in (10, 26, 42)]
+    + [shape("rect", C["rope"], x=7, y=36, width=50, height=5.5, rx=2)],
+    [s for x in (10, 26, 42) for s in (
+        shape("rect", C["post_dark"], x=x, y=27, width=4, height=31),
+        shape("polygon", C["iron_dark"], points="%d,19 %d,4 %d,19" % (x + 3, x + 6, x + 6)))]
+    + [shape("rect", C["iron_dark"], x=x - 1, y=23, width=14, height=4, rx=1) for x in (10, 26, 42)]
+    + [shape("rect", C["rope"], x=7, y=36, width=50, height=5.5, rx=2)])
+
 _STONES = [(6, 44, 18, 13, "s2"), (25, 44, 16, 13, "s3"), (42, 44, 16, 13, "s1"),
            (9, 31, 15, 12, "s1"), (25, 31, 19, 12, "s2"), (45, 31, 12, 12, "s3"),
            (12, 19, 17, 11, "s3"), (30, 19, 16, 11, "s1"), (47, 21, 8, 9, "s2")]

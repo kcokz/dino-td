@@ -483,6 +483,22 @@ const BUILDINGS: Dictionary = {
 		"contact_damage": 1.4,
 		"contact_tick": 0.5,
 		"cost": {"wood": 1, "bone": 1},
+		# Once there is iron (station 3's furnace): its points forged.
+		"upgrades_to": ["iron_stake"],
+	},
+	# 铁尖栅栏 THE IRON PALISADE (GAME-DESIGN 5.3's fence line, "木栅栏 → 骨尖栅栏 → 铁蒺藜（铁 + 木，4）"): the bone
+	# palisade's points forged in iron, socketed on and barbed -- one iron a metre, as an upgrade where it stands, where a
+	# pack presses hardest. It bites two fifths harder than bone (1.4 -> 2.0 a tick: a dilong pressing on it is down in
+	# three seconds, not four) and lasts two fifths longer (40 -> 56). Untried.
+	"iron_stake": {
+		"name": "BUILDING_IRON_STAKE_NAME",
+		"kind": "wall",
+		"cells": 1,
+		"hp": 56.0,
+		"height": 1.25,
+		"contact_damage": 2.0,
+		"contact_tick": 0.5,
+		"cost": {"wood": 1, "bone": 1, "iron": 1},
 		"upgrades_to": "",
 	},
 	# Courses of unmortared stone, capstones on top (GAME-DESIGN 6.2: only blocks, many hit
@@ -1992,7 +2008,8 @@ const DINOS: Dictionary = {
 	# 刻"). The tyrannosaur is the big theropod (DINOS.big_theropod), its great boss.
 	#
 	# Acheroraptor temeertyorum: a dromaeosaur two and a half metres long, Velociraptor's North American kin -- the pack
-	# that raids and guards the nest, with the raptors' numbers and their voice (SOUNDS velociraptor).
+	# that raids and guards the nest, with the raptors' numbers, in a voice of its own: a dry barking chatter (SOUNDS
+	# acheroraptor).
 	"acheroraptor": {
 		"hours": ["day"],
 		"name": "DINO_ACHERORAPTOR_NAME",
@@ -2005,10 +2022,10 @@ const DINOS: Dictionary = {
 		"drops": {"food": 1, "bone": 1},
 		"drop_chance": {"food": 0.5, "bone": 0.5},
 		"size": Vector3(0.8, 0.9, 0.8),
-		"voice": "velociraptor",
+		"voice": "acheroraptor",
 	},
 	# Dakotaraptor steini: a giant dromaeosaur five metres long, quill knobs on its forearm -- at the head of the big raids
-	# (the minor boss), in its pack-leader's voice (SOUNDS velociraptor_alpha).
+	# (the minor boss), croaking, a rattle in its throat, low for a raptor (SOUNDS dakotaraptor).
 	"dakotaraptor": {
 		"hours": ["day"],
 		"name": "DINO_DAKOTARAPTOR_NAME",
@@ -2021,7 +2038,7 @@ const DINOS: Dictionary = {
 		"boss": "minor",
 		"drops": {"hide": 2, "bone": 3},
 		"size": Vector3(1.0, 1.5, 1.0),
-		"voice": "velociraptor_alpha",
+		"voice": "dakotaraptor",
 	},
 	# Yutyrannus huali: nine metres of early tyrannosaur under a coat of long filaments, the biggest feathered animal
 	# known -- found three together, perhaps hunting as a group. The great boss, last of all, in the beacon's final wave.
@@ -4127,6 +4144,18 @@ const SOUNDS: Dictionary = {
 		"yutyrannus_bite":  {"files": ["yutyrannus_bite"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 10.0},
 		"yutyrannus_hurt":  {"files": ["yutyrannus_hurt"], "db": -1.0, "pitch": 1.05, "class": "hurt", "unit": 10.0},
 		"yutyrannus_death": {"files": ["yutyrannus_death"], "db": 2.0, "pitch": 1.0, "class": "death", "unit": 20.0, "reach": 160.0},
+		# Station 4's raptors (tools/build_sounds.gd): Acheroraptor's dry barking chatter, the pack's; Dakotaraptor's
+		# croaking rattle, at the head of the big raids -- heard as far as the Velociraptor and its leader are.
+		"acheroraptor_call":  {"files": ["acheroraptor_call_1", "acheroraptor_call_2"], "db": -5.0, "pitch": 1.08, "class": "call"},
+		"acheroraptor_alert": {"files": ["acheroraptor_alert"], "db": -3.0, "pitch": 1.08, "class": "alert"},
+		"acheroraptor_bite":  {"files": ["acheroraptor_bite"], "db": -4.0, "pitch": 1.1, "class": "bite"},
+		"acheroraptor_hurt":  {"files": ["acheroraptor_hurt"], "db": -4.0, "pitch": 1.08, "class": "hurt"},
+		"acheroraptor_death": {"files": ["acheroraptor_death"], "db": -2.0, "pitch": 1.06, "class": "death"},
+		"dakotaraptor_call":  {"files": ["dakotaraptor_call_1", "dakotaraptor_call_2"], "db": -3.0, "pitch": 1.05, "class": "call", "unit": 10.0},
+		"dakotaraptor_alert": {"files": ["dakotaraptor_alert"], "db": 0.0, "pitch": 1.03, "class": "boss", "unit": 22.0, "reach": 140.0},
+		"dakotaraptor_bite":  {"files": ["dakotaraptor_bite"], "db": -3.0, "pitch": 1.06, "class": "bite"},
+		"dakotaraptor_hurt":  {"files": ["dakotaraptor_hurt"], "db": -3.0, "pitch": 1.05, "class": "hurt"},
+		"dakotaraptor_death": {"files": ["dakotaraptor_death"], "db": 0.0, "pitch": 1.03, "class": "death", "unit": 12.0},
 		# His work.
 		"chop":     {"files": ["chop_1", "chop_2", "chop_3"], "db": -7.0, "pitch": 1.06, "class": "work"},
 		"quarry":   {"files": ["quarry_1", "quarry_2", "quarry_3"], "db": -9.0, "pitch": 1.06, "class": "work"},
@@ -5115,6 +5144,9 @@ const VISUALS: Dictionary = {
 	# The same palisade with bone points lashed to its logs (palisade bone=True): what it is
 	# made of, readable from the camera.
 	"building/bone_stake":  {"scene": "res://assets/models/props/bone_palisade_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
+	# The same palisade with forged iron points socketed on its logs and stakes, barbed (palisade iron=True).
+	"building/iron_stake":  {"scene": "res://assets/models/props/iron_palisade_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wall"},
 	# Courses of unmortared stone filling the cell, capstones on top (tools/generate_props.py
 	# stone_wall).
