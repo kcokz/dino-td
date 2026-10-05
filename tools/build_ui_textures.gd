@@ -749,6 +749,32 @@ func _draw_medallion(spec: Dictionary) -> Image:
 				img.set_pixel(x, y, Color(col.r * a / total, col.g * a / total, col.b * a / total, total))
 	return img
 
+## The cabin's power round its medallion (HUD): the groove it runs in, outside the rim -- dark, sunk, its far wall
+## catching the light -- what shows of the power used.
+func _draw_power_track(spec: Dictionary) -> Image:
+	var g: Array = _geo(spec)
+	var w: int = g[0]
+	var h: int = g[1]
+	var k: float = float(_k)
+	var c := Vector2(float(w), float(h)) * 0.5
+	var ring: Vector2 = Vector2(spec.get("ring", Vector2(47.0, 51.5))) * float(k)
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var off: Vector2 = Vector2(float(x) + 0.5, float(y) + 0.5) - c
+			var r: float = off.length()
+			var a: float = clampf(r - ring.x + 0.5, 0.0, 1.0) * clampf(ring.y - r + 0.5, 0.0, 1.0)
+			if a <= 0.0:
+				continue
+			var u: Vector2 = off / maxf(r, 0.001)
+			var col: Color = _lit(HOLLOW.darkened(0.1), _round_light(u, r, ring.x, ring.y, true), 1.3)
+			img.set_pixel(x, y, Color(col.r, col.g, col.b, 0.85 * a))
+	return img
+
+## The light in the cabin's power groove: pigment like the health ring's, its own radii, to be tinted "power".
+func _draw_power_fill(spec: Dictionary) -> Image:
+	return _draw_ring_fill(spec)
+
 ## The ring of pigment that lies in a medallion's channel: pale, to be tinted the colour of what
 ## is left; rounded in section like a wet stroke.
 func _draw_ring_fill(spec: Dictionary) -> Image:

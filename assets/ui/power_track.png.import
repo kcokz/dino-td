@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://cs3875bjarn2i"
+path="res://.godot/imported/power_track.png-f538e1f4e4dcee040b783be6b161c1b9.image"
+
+[deps]
+
+source_file="res://assets/ui/power_track.png"
+dest_files=["res://.godot/imported/power_track.png-f538e1f4e4dcee040b783be6b161c1b9.image"]
+
+[params]
+

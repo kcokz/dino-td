@@ -131,6 +131,8 @@ signal pause_toggled(is_paused: bool)
 signal hero_hp_changed(current: float, max: float)
 ## His stamina changed by as much as the interface shows (Hero._tire, Hero.rest_stamina; Config.STAMINA, SHOWN).
 signal hero_stamina_changed(current: float, max: float)
+## What is left of the cabin's power (GameState.power_left), 1 full to 0 out: told as it goes down a thousandth.
+signal power_changed(left: float)
 
 ## Emitted when Modern Hero dies, triggering game over.
 signal hero_died()

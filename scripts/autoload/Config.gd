@@ -2715,6 +2715,8 @@ const THEME: Dictionary = {
 		"day_night": Color(0.42, 0.55, 0.92),
 		# His stamina's bar (STAMINA): the night's blue, a little paler -- sleep.
 		"stamina": Color(0.5, 0.58, 0.93),
+		# The cabin's power (POWER): the ship's own cyan light ("tech"), brighter -- it is lit.
+		"power": Color(0.45, 0.85, 0.96),
 		# Ink: text on a card's hide -- a card's name and price, a tooltip. Since v0.6 round three
 		# the hide is dark vellum, so the ink is pale; "ink_short" is a count he is short of, as
 		# danger_text is on stone.
@@ -2880,6 +2882,12 @@ const THEME: Dictionary = {
 			"rim": 4.5, "ring": Vector2(33.0, 40.0), "socket": 31.0},
 		"ring_fill": {"image": "res://assets/ui/ring_fill.png", "size": Vector2i(104, 104), "margin": Vector2i(0, 0), "pad": 6,
 			"ring": Vector2(33.0, 40.0)},
+		# The cabin's power (POWER), round the outside of its medallion's rim: the groove it runs in ("power_track",
+		# the share used) and the light in it ("power_fill", tinted "power"), on the medallion's own canvas.
+		"power_track": {"image": "res://assets/ui/power_track.png", "size": Vector2i(104, 104), "margin": Vector2i(0, 0), "pad": 0,
+			"ring": Vector2(47.0, 51.5)},
+		"power_fill": {"image": "res://assets/ui/power_fill.png", "size": Vector2i(104, 104), "margin": Vector2i(0, 0), "pad": 0,
+			"ring": Vector2(47.8, 50.7)},
 	},
 }
 
@@ -5225,6 +5233,23 @@ const GROUND_COVER: Dictionary = {
 	# How far a cliff keeps back from the top of the river's bank: a stretch is eight
 	# metres long, and one stood on the bank hung its end out over the water.
 	"cliff_river_clear": 4.0,
+}
+
+# ==============================================================================
+# 14c. The cabin's power (v0.7)
+# ==============================================================================
+## THE CABIN'S POWER (电能; the player, 2026-10-04: "通关游戏中不能无限玩，是因为船舱电能有限，给一个电能的圈绕在船舱的血量圈外面，
+## 电能耗尽游戏就输了"; GAME-DESIGN 8.1): the lifeboat's battery -- what keeps its lights and its benches going -- runs
+## down as the run goes, the same every second whatever he does; run out, the cabin is dead and the run is lost. In our
+## own game only (GameState.uses_power): a custom game ends as its settings say. A ring of the ship's light round the
+## cabin's medallion shows what is left (HUD).
+const POWER: Dictionary = {
+	# Days it lasts from the landing (DAY.length a day): a map is to take forty or fifty minutes (GAME-DESIGN 9.3), and a
+	# run that has not got the beacon off by then has run out. Eight days is forty-eight minutes of play.
+	"lasts_days": 8.0,
+	# Under this share left the ring is drawn red, and the first time it is said (HINT_POWER_LOW): a run lost to it must
+	# not come as a surprise.
+	"low_below": 0.2,
 }
 
 # ==============================================================================

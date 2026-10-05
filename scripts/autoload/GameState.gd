@@ -294,6 +294,7 @@ func _process(delta: float) -> void:
 		return
 	charge_beacon(delta)
 	_run_the_day(delta)
+	_use_power(delta)
 	if continuous_mode:
 		return
 	if current_phase == Phase.DEPLOY:
@@ -373,6 +374,8 @@ func reset_game(p_seed: int = -1) -> void:
 	is_game_won = false
 	lost_to = ""
 	hero_killer = {}
+	power_used = 0.0
+	_power_told = -1.0
 	var cfg_run = _get_config()
 	map_id = chosen_map_id if chosen_map_id != "" else (String(cfg_run.DEFAULT_MAP_ID) if (cfg_run and "DEFAULT_MAP_ID" in cfg_run) else "")
 	# The game it is (its own map, if it says one) and everything its settings make of it.
@@ -1016,6 +1019,48 @@ func _run_the_day(delta: float) -> void:
 
 ## Whether the nest has been found (FogOfWar: it came into sight): its raids are seen setting out.
 var nest_found: bool = false
+
+# ==============================================================================
+# The cabin's power (Config.POWER)
+# ==============================================================================
+## Seconds of the run the cabin's power has gone on: what is left is the rest of POWER.lasts_days of DAY.length.
+var power_used: float = 0.0
+var _power_told: float = -1.0
+
+## Whether this run's cabin runs on its battery: our own game ("通关游戏中不能无限玩"), and a level a script built; a
+## custom game ends as its settings say.
+func uses_power() -> bool:
+	return game_id() != "custom"
+
+## What is left of the cabin's power: 1 full, 0 out.
+func power_left() -> float:
+	var whole: float = _power_seconds()
+	return clampf(1.0 - power_used / whole, 0.0, 1.0) if whole > 0.0 else 1.0
+
+## The days of it left, at the rate it goes.
+func power_days_left() -> float:
+	return power_left() * _power_seconds() / maxf(1.0, float(_day().get("length", 360.0)))
+
+func _power_seconds() -> float:
+	var cfg = _get_config()
+	var days: float = float(cfg.POWER.get("lasts_days", 8.0)) if (cfg and "POWER" in cfg) else 8.0
+	return days * float(_day().get("length", 360.0))
+
+## `delta` seconds more of it gone (paused, nothing goes: this is the run's own clock): told as it goes down
+## (EventBus.power_changed); out, the run is lost (lost_to "power").
+func _use_power(delta: float) -> void:
+	if not uses_power() or is_game_over or delta <= 0.0:
+		return
+	power_used += delta
+	var left: float = power_left()
+	if _power_told < 0.0 or _power_told - left >= 0.001 or left <= 0.0:
+		_power_told = left
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("power_changed"):
+			eb.power_changed.emit(left)
+	if left <= 0.0 and not is_game_over:
+		lost_to = "power"
+		_emit_game_lost()
 
 ## Whether the raid out is one a repaired beacon stage stirred up (EventBus.stage_wave_started).
 var _stage_raid: bool = false

@@ -61,6 +61,9 @@ var wave_label: Label = null
 var core_hp_label: Label = null
 var core_hp_bar: TextureProgressBar = null
 var core_vital: Control = null
+## The cabin's power round its medallion (Config.POWER; _power_ring), and whether its running low has been said.
+var core_power_ring: TextureProgressBar = null
+var _power_low_said: bool = false
 ## The day (_refresh_day_dial): its dial, the ring going round it, and the plate with the day on it.
 var day_dial: Control = null
 var day_ring: TextureProgressBar = null
@@ -245,6 +248,7 @@ func _bus_handlers(eb: Node) -> Array:
 			["game_won", _on_game_won], ["game_lost", _on_game_lost],
 			["deploy_time_changed", _on_deploy_time_changed], ["pause_toggled", _on_pause_toggled],
 			["hero_hp_changed", _on_hero_hp_changed], ["hero_stamina_changed", _on_hero_stamina_changed],
+			["power_changed", _on_power_changed],
 			["locale_changed", _on_locale_changed],
 			["raid_warning", _on_raid_warning],
 			["boss_arrived", _on_boss_arrived],
@@ -922,6 +926,53 @@ func _speeds() -> Array:
 		return cfg.UI["game_speeds"]
 	return SPEEDS
 
+## The cabin's power round `medallion`'s rim (Config.THEME.surfaces "power_track", "power_fill"): the groove, and the light
+## in it, filling clockwise from the top as the health ring does, the ship's cyan ("power") -- red when it runs low.
+func _power_ring(medallion: Control) -> TextureProgressBar:
+	var face: Control = medallion.get_node_or_null("Disc/Face") as Control
+	if face == null:
+		return null
+	var ring := TextureProgressBar.new()
+	ring.name = "PowerRing"
+	ring.texture_under = UiTheme.surface_texture("power_track")
+	ring.texture_progress = UiTheme.surface_texture("power_fill")
+	ring.fill_mode = TextureProgressBar.FILL_CLOCKWISE
+	ring.min_value = 0.0
+	ring.max_value = 1.0
+	ring.step = 0.0
+	ring.value = 1.0
+	ring.tint_progress = UiTheme.color("power")
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.size = face.size
+	face.add_child(ring)
+	return ring
+
+## What is left of the cabin's power (EventBus.power_changed): the ring, the words under the cabin's medallion -- and,
+## the first time it is under POWER.low_below, said.
+func _on_power_changed(left: float) -> void:
+	var gs = _get_game_state()
+	var cfg = _get_config()
+	var low: float = float(cfg.POWER.get("low_below", 0.2)) if (cfg and "POWER" in cfg) else 0.2
+	if core_power_ring:
+		core_power_ring.visible = gs == null or not gs.has_method("uses_power") or bool(gs.uses_power())
+		core_power_ring.value = clampf(left, 0.0, 1.0)
+		core_power_ring.tint_progress = UiTheme.color("danger") if left < low else UiTheme.color("power")
+	_retip_cabin()
+	if left < low and left > 0.0 and not _power_low_said:
+		_power_low_said = true
+		show_hint(tr("HINT_POWER_LOW"), UiTheme.toast_seconds("read"), "warning")
+
+## The cabin's medallion's words: what it is, and -- running on its battery -- how much of its power is left.
+func _retip_cabin() -> void:
+	if core_vital == null:
+		return
+	var tip: String = tr("HUD_CABIN_TIP")
+	var gs = _get_game_state()
+	if gs != null and gs.has_method("uses_power") and bool(gs.uses_power()):
+		var days: float = float(gs.power_days_left())
+		tip += "\n" + tr("TIP_CABIN_POWER") % [int(round(float(gs.power_left()) * 100.0)), "%.1f" % days if days < 1.0 else str(int(round(days)))]
+	core_vital.tooltip_text = tip
+
 func _on_core_hp_changed(cur: float, max_val: float) -> void:
 	if core_hp_label:
 		core_hp_label.text = String(_get_config().shown_pair(cur, max_val))
@@ -981,6 +1032,8 @@ func _defeat_text(gs: Node) -> String:
 	var to: String = String(gs.lost_to) if (gs != null and "lost_to" in gs) else ""
 	if to == "cabin":
 		return tr("GAME_DEFEAT_CABIN")
+	if to == "power":
+		return tr("GAME_DEFEAT_POWER")
 	if to != "hero":
 		return tr("GAME_DEFEAT_DESC")
 	var killer: Dictionary = gs.hero_killer if "hero_killer" in gs else {}
@@ -1141,6 +1194,8 @@ func reset_hud(new_run: bool = true) -> void:
 		_starved_said_night = -1
 		# His stamina told afresh (_on_hero_stamina_changed): rested, not spent, the tired hint yet to come.
 		_tired_told = false
+		# The cabin's power, full, its running low yet to be said.
+		_power_low_said = false
 		_hero_spent = false
 		if hero_stamina_bar:
 			hero_stamina_bar.set_values(1.0, &"StaminaBar")
@@ -1173,6 +1228,7 @@ func reset_hud(new_run: bool = true) -> void:
 	var core_cfg: Dictionary = cfg.BUILDINGS.get("core", {}) if (cfg and "BUILDINGS" in cfg) else {}
 	var c_hp: float = float(core_cfg.get("hp", 400.0))
 	_on_core_hp_changed(c_hp, c_hp)
+	_on_power_changed(float(gs.power_left()) if (gs and gs.has_method("power_left")) else 1.0)
 
 	var p_val: int = int(gs.current_phase) if (gs and "current_phase" in gs) else 0
 	_on_phase_changed(p_val)
@@ -1202,7 +1258,7 @@ func _refresh_texts() -> void:
 	if menu_btn:
 		menu_btn.tooltip_text = tr("HUD_MENU_TIP")
 	if core_vital:
-		core_vital.tooltip_text = tr("HUD_CABIN_TIP")
+		_retip_cabin()
 	var hero_emblem = find_child("HeroEmblem", true, false)
 	if hero_emblem:
 		hero_emblem.tooltip_text = tr("HUD_HERO_TIP") % _details_key_text()
@@ -1485,6 +1541,8 @@ func _ensure_ui_components() -> void:
 	core_vital.mouse_filter = Control.MOUSE_FILTER_STOP
 	core_vital.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	core_vital.gui_input.connect(_on_cabin_emblem_input)
+	# Round it, the cabin's power (Config.POWER; the player: "给一个电能的圈绕在船舱的血量圈外面").
+	core_power_ring = _power_ring(core_vital)
 	_shoulder_keycap(core_vital, _home_key_text())
 	root_control.resized.connect(_fit_stock, CONNECT_DEFERRED)
 
