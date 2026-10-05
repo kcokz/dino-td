@@ -109,8 +109,8 @@ func test_03_a_tool_made_is_a_square_with_its_icon_and_what_it_does() -> void:
 	assert_not_null(UiTheme.icon(pick), "which exists")
 	var tip: String = (slot as Control).tooltip_text
 	assert_true(tip.contains(tr(String(config_node.RECIPES[pick]["name"]))), "Hovered, it says what it is")
-	assert_true(tip.contains(String(config_node.recipe_effect_text(pick))), "and what it does")
-	assert_ne(String(config_node.recipe_effect_text(pick)), "", "which is something")
+	assert_true(tip.contains(String(config_node.recipe_use_text(pick))), "and what it does")
+	assert_ne(String(config_node.recipe_use_text(pick)), "", "which is something")
 	assert_eq(_slots(panel).size(), config_node.KIT_SLOTS.size(), "It takes its slot; the row is no longer")
 
 func test_05_every_thing_in_his_row_has_an_icon_of_its_own() -> void:

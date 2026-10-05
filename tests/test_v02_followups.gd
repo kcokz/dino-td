@@ -620,10 +620,10 @@ func test_35_menu_has_three_entries_and_a_language_picker() -> void:
 	for btn in [menu.resume_btn, menu.settings_btn, menu.quit_btn]:
 		assert_not_null(btn, "Root menu entry exists")
 		assert_true(btn.visible, "Root menu entry is shown: %s" % btn.name)
-	assert_false(menu.language_row.visible, "Language lives on the settings page, not the root menu")
+	assert_false(menu.language_row.is_visible_in_tree(), "Language lives on the settings page, not the root menu")
 
 	menu.open_settings()
-	assert_true(menu.language_row.visible, "Settings shows the language picker")
+	assert_true(menu.language_row.is_visible_in_tree(), "Settings shows the language picker")
 	assert_true(menu.back_btn.visible, "Settings offers a way back")
 	assert_false(menu.resume_btn.visible, "Root entries are hidden on the settings page")
 	assert_gte(menu.language_picker.item_count, 2, "Both supported locales are offered")

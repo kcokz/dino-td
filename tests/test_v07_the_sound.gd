@@ -112,10 +112,10 @@ func test_04_the_settings_page_has_a_slider_to_each() -> void:
 	assert_not_null(menu, "the menu")
 	if menu == null:
 		return
-	assert_false(menu.sound_row.visible, "not on the menu's first page")
+	assert_false(menu.sound_row.is_visible_in_tree(), "not on the menu's first page")
 	menu.open_settings()
 	await wait_frames(1)
-	assert_true(menu.sound_row.visible, "on the settings page")
+	assert_true(menu.sound_row.is_visible_in_tree(), "on the settings page")
 	var i18n = tree.root.get_node_or_null("I18n")
 	for bus in _buses():
 		var slider: HSlider = menu.volume_sliders.get(bus, null)

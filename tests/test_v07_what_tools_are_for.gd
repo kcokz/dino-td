@@ -20,6 +20,8 @@ func before_each() -> void:
 		game_state_node.reset_game()
 
 func after_each() -> void:
+	if game_state_node != null:
+		game_state_node.chosen_map_id = ""
 	for n in _cleanup_nodes:
 		if is_instance_valid(n):
 			if n.is_inside_tree():
@@ -69,12 +71,12 @@ func test_03_a_tool_with_nothing_to_do_here_is_not_offered() -> void:
 	assert_false(clay_here, "(this valley has no clay)")
 	assert_false(wb.can_offer("bone_shovel"), "The shovel is not offered where there is no clay to dig")
 	assert_true(wb.can_offer("stone_pick"), "the pick, with stone about, is")
-	# Clay on the map: the shovel is of use, and offered.
-	var bank = load("res://scripts/entities/ResourceNode.gd").new()
-	bank.resource_type = "clay"
-	_cleanup_nodes.append(bank)
-	main.add_child(bank)
-	assert_true(wb.can_offer("bone_shovel"), "With clay about, it is")
+	# On a map with clay -- the second station's -- the shovel is of use, and offered.
+	game_state_node.chosen_map_id = "morrison"
+	game_state_node.reset_game()
+	stock_everything()
+	assert_true(wb.can_offer("bone_shovel"), "On a map with clay (Morrison), it is")
+	game_state_node.chosen_map_id = ""
 
 func test_04_in_his_kit_the_tool_says_it_too() -> void:
 	var main = await _level()
