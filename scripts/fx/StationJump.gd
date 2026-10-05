@@ -378,6 +378,18 @@ func crash(main: Node, film: Object = null) -> void:
 	var eye: Vector3 = spot + Vector3(sin(yaw) * cos(low), sin(low), cos(yaw) * cos(low)) * away
 	var across := Vector3(cos(yaw), 0.0, -sin(yaw))
 	var high: Vector3 = across * float(_jump("crash_side", 4.0)) + Vector3.UP * float(_jump("crash_height", 80.0))
+	var fall_seconds: float = _seconds("crash_fall_seconds", 2.4)
+	# The film's fall: from higher, on a long slant across the valley, shot after it and then from the ground
+	# (_film_eye) -- its own camera, free of the run's rig.
+	if _film != null:
+		high = across * float(_jump("crash_film_side", 70.0)) + Vector3.UP * float(_jump("crash_film_height", 150.0))
+		fall_seconds = _seconds("crash_film_seconds", 3.6)
+		_crash_cam = Camera3D.new()
+		_crash_cam.name = "CrashCamera"
+		_crash_cam.far = 2000.0
+		_crash_cam.process_mode = Node.PROCESS_MODE_ALWAYS
+		main.add_child(_crash_cam)
+		_crash_cam.current = true
 	var lean := Vector3(deg_to_rad(float(_jump("crash_pitch", 22.0))), 0.0, deg_to_rad(float(_jump("crash_roll", -12.0))))
 	_light_the_trail(core)
 	_fall(0.0, core, rest, high, lean, eye)
@@ -387,7 +399,7 @@ func crash(main: Node, film: Object = null) -> void:
 	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	# At its own pace, whatever speed the last run was left at (HUD.set_game_speed: Engine.time_scale outlives a level).
 	tw.set_ignore_time_scale(true)
-	tw.tween_method(_fall.bind(core, rest, high, lean, eye), 0.0, 1.0, _seconds("crash_fall_seconds", 2.4)) \
+	tw.tween_method(_fall.bind(core, rest, high, lean, eye), 0.0, 1.0, fall_seconds) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_blow.bind(core, rest))
 	tw.tween_method(_shaken.bind(eye, spot), 1.0, 0.0, _seconds("crash_shake_seconds", 0.8))
@@ -432,7 +444,83 @@ func _fall(t: float, core: Node3D, rest: Transform3D, high: Vector3, lean: Vecto
 		return
 	var at: Vector3 = rest.origin + high * (1.0 - t)
 	core.global_transform = Transform3D(rest.basis * Basis.from_euler(lean * (1.0 - t)), at)
+	if _crash_cam != null and is_instance_valid(_crash_cam):
+		_film_eye(t, at, rest.origin, high, eye, rest.basis)
+		return
 	_look_from(eye, at + Vector3.UP * float(_jump("crash_look_up", 1.5)))
+
+## THE FILM'S FALL (Opening; the player, 2026-10-05: "开场动画太粗糙了"), `t` of the way: not a speck seen from the far
+## end of the valley -- after it, close behind and above as it burns down its slant, the valley coming up under it
+## (for `crash_film_chase` of the fall); then from the ground off where it comes down, low, looking up as it comes in.
+## The view jolts more as it nears.
+var _crash_cam: Camera3D = null
+var _jolt_noise: FastNoiseLite = null
+
+func _film_eye(t: float, at: Vector3, spot: Vector3, high: Vector3, eye: Vector3, hull: Basis = Basis.IDENTITY) -> void:
+	var down: Vector3 = -high.normalized()
+	# Off its flank, not its end: the hull broadside, its band and its door -- on the side the ground shot stands, so
+	# it keeps its way across the picture from one shot to the next.
+	var side: Vector3 = _flat(hull.z)
+	if side.length() < 0.01:
+		side = down.cross(Vector3.UP).normalized() if down.cross(Vector3.UP).length() > 0.01 else Vector3.RIGHT
+	if side.dot(eye - spot) < 0.0:
+		side = -side
+	var j: Vector3 = _jolt(float(_jump("crash_film_shake", 0.25)) * t)
+	if t < float(_jump("crash_film_chase", 0.62)):
+		# Beside its way and a little behind, keeping pace with it: its flames stream off across the picture, not into
+		# the lens, and the valley is under it -- the haze thinned meanwhile (_thin_the_haze).
+		_thin_the_haze(true)
+		var beside: Vector3 = at + side * float(_jump("crash_film_beside", 13.0)) - down * float(_jump("crash_film_behind", 4.0))
+		_crash_cam.fov = float(_jump("crash_film_fov_chase", 58.0))
+		_crash_cam.global_position = beside + j
+		# On the hull itself, a little ahead of it: it holds the middle of the picture as it falls.
+		_crash_cam.look_at(at + Vector3.UP * 1.2 + down * 0.6 + j * 2.0, Vector3.UP)
+		return
+	_thin_the_haze(false)
+	_crash_cam.fov = float(_jump("crash_film_fov_ground", 52.0))
+	_crash_cam.global_position = _ground_eye(spot, eye) + j * 0.6
+	_crash_cam.look_at(at + Vector3.UP * 1.5 + j, Vector3.UP)
+
+## The valley's haze thinned while the film's fall is seen from high up (STATION_JUMP.crash_film_haze of it), the way
+## down to it seen -- and put back as it was.
+var _haze_was: Dictionary = {}
+
+func _thin_the_haze(thin: bool) -> void:
+	var we: WorldEnvironment = _main.get_node_or_null("WorldEnvironment") as WorldEnvironment if (_main != null and is_instance_valid(_main)) else null
+	if we == null or we.environment == null:
+		return
+	var env: Environment = we.environment
+	if thin and _haze_was.is_empty():
+		_haze_was = {"fog": env.fog_density, "volumetric": env.volumetric_fog_density}
+		var k: float = float(_jump("crash_film_haze", 0.3))
+		env.fog_density = env.fog_density * k
+		env.volumetric_fog_density = env.volumetric_fog_density * k
+	elif not thin and not _haze_was.is_empty():
+		env.fog_density = float(_haze_was["fog"])
+		env.volumetric_fog_density = float(_haze_was["volumetric"])
+		_haze_was = {}
+
+## Where the film's ground shot stands: off the spot towards where the run's own view would, low over the grass.
+func _ground_eye(spot: Vector3, eye: Vector3) -> Vector3:
+	var off: Vector3 = _flat(eye - spot)
+	if off.length() < 0.01:
+		off = Vector3.BACK
+	return spot + off * float(_jump("crash_film_ground_off", 16.0)) + Vector3.UP * float(_jump("crash_film_ground_up", 1.4))
+
+## A jolt of the view `amp` metres at most: smooth, as a hand is shaken, not a fresh jump every frame.
+func _jolt(amp: float) -> Vector3:
+	if amp <= 0.0:
+		return Vector3.ZERO
+	if _jolt_noise == null:
+		_jolt_noise = FastNoiseLite.new()
+		_jolt_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		_jolt_noise.frequency = 1.0
+	var s: float = float(Time.get_ticks_msec() - _crash_began_at) / 1000.0 * 11.0
+	return Vector3(_jolt_noise.get_noise_2d(s, 0.0), _jolt_noise.get_noise_2d(s, 50.0), _jolt_noise.get_noise_2d(s, 100.0)) * amp
+
+static func _flat(v: Vector3) -> Vector3:
+	var f := Vector3(v.x, 0.0, v.z)
+	return f.normalized() if f.length() > 0.0001 else Vector3.ZERO
 
 ## The view standing at `eye` and looking at `at`: the camera rig's focus, bearing, tilt and distance so (CameraRig.offset).
 func _look_from(eye: Vector3, at: Vector3) -> void:
@@ -545,7 +633,7 @@ func _over_the_mist(p: GPUParticles3D) -> void:
 	var quad := p.draw_pass_1 as PrimitiveMesh
 	if quad != null and quad.material is BaseMaterial3D:
 		(quad.material as BaseMaterial3D).render_priority = Material.RENDER_PRIORITY_MAX
-	var reach: float = float(_jump("crash_height", 80.0)) + 30.0
+	var reach: float = maxf(float(_jump("crash_height", 80.0)), float(_jump("crash_film_height", 150.0))) + 30.0
 	p.visibility_aabb = AABB(Vector3(-reach, -reach, -reach), Vector3.ONE * reach * 2.0)
 
 ## The blow: the hull on its spot, level; its flames out, the smoke it trailed left hanging and its own rising off it;
@@ -645,6 +733,12 @@ func _ring(core: Node3D, dust: Color) -> void:
 
 ## The view shaken by the blow, `k` of its strength left.
 func _shaken(k: float, eye: Vector3, spot: Vector3) -> void:
+	# The film's: from its ground shot, hard.
+	if _crash_cam != null and is_instance_valid(_crash_cam):
+		var jolt: Vector3 = _jolt(float(_jump("crash_film_blow_shake", 0.6)) * k)
+		_crash_cam.global_position = _ground_eye(spot, eye) + jolt * 0.5
+		_crash_cam.look_at(spot + Vector3.UP * 2.0 + jolt, Vector3.UP)
+		return
 	var amp: float = float(_jump("crash_shake", 0.5)) * k
 	var j := Vector3(_shake_dice.randf_range(-1.0, 1.0), _shake_dice.randf_range(-1.0, 1.0), _shake_dice.randf_range(-1.0, 1.0)) * amp
 	_look_from(eye + j * 0.4, spot + Vector3.UP * float(_jump("crash_look_up", 1.5)) + j)
@@ -689,6 +783,7 @@ func _cry(who: Node) -> void:
 ## The blow struck and the view shaken: the film goes on from here (Opening.after_the_blow) -- the crash's own clicks
 ## end it no longer; the film's do.
 func _film_goes_on() -> void:
+	_drop_the_crash_camera()
 	_crashing = false
 	_crash_tween = null
 	var film: Object = _film
@@ -710,6 +805,7 @@ func _climb_out(hero: Node3D) -> void:
 ## Over: the game let go, the HUD back, and what happened said once as a hint; the hull smokes on a while, with the
 ## world's clock now.
 func _crash_over() -> void:
+	_drop_the_crash_camera()
 	var gs = get_node_or_null("/root/GameState")
 	if gs and gs.has_method("set_paused"):
 		gs.set_paused(false)
@@ -725,6 +821,14 @@ func _crash_over() -> void:
 	if _main != null and is_instance_valid(_main) and _main.has_method("_hint"):
 		_main._hint("HINT_CRASHED")
 	crashed.emit()
+
+## The film's fall camera gone: the film's own, or the run's, is the one drawn after it.
+func _drop_the_crash_camera() -> void:
+	_thin_the_haze(false)
+	if _crash_cam != null and is_instance_valid(_crash_cam):
+		_crash_cam.current = false
+		_crash_cam.queue_free()
+	_crash_cam = null
 
 ## The crash ended at once: the capsule down, the view the run's, the run begun -- what was still to cry out, not.
 func skip() -> void:

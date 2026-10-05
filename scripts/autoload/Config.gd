@@ -3249,6 +3249,15 @@ const STATION_JUMP: Dictionary = {
 	"crash_ring": 16.0, "crash_ring_seconds": 0.9,
 	"crash_calls": 5, "crash_calls_after": 0.4, "crash_calls_gap": 0.55,
 	"crash_hold": 1.2, "crash_view_seconds": 1.4, "crash_skip_after": 0.5,
+	# THE FILM'S FALL (Opening; the player, 2026-10-05: "开场动画太粗糙了"): from `crash_film_height` up and
+	# `crash_film_side` across, over `crash_film_seconds` -- shot keeping pace with it, `crash_film_beside` metres off its
+	# way and `crash_film_behind` back up it (fov `crash_film_fov_chase`), the haze thinned to `crash_film_haze` of itself
+	# so the valley shows under it, for `crash_film_chase` of the fall; then from the ground,
+	# `crash_film_ground_off` metres off the spot and `crash_film_ground_up` up (fov `crash_film_fov_ground`). The view
+	# jolts up to `crash_film_shake` metres as it nears, `crash_film_blow_shake` at the blow.
+	"crash_film_height": 150.0, "crash_film_side": 70.0, "crash_film_seconds": 3.6, "crash_film_chase": 0.62,
+	"crash_film_behind": 4.0, "crash_film_beside": 13.0, "crash_film_haze": 0.3, "crash_film_fov_chase": 58.0, "crash_film_ground_off": 16.0, "crash_film_ground_up": 1.4,
+	"crash_film_fov_ground": 52.0, "crash_film_shake": 0.25, "crash_film_blow_shake": 0.6,
 	"smoulder_puffs": 36, "smoulder_life": 9.0, "smoulder_puff": 0.9, "smoulder_rise": 1.8, "smoulder_height": 2.6,
 	"smoulder_colour": Color(0.44, 0.42, 0.4, 0.42), "smoulder_seconds": 45.0,
 }
