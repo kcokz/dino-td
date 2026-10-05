@@ -322,7 +322,7 @@ func test_13_it_paces_only_where_it_can_stand() -> void:
 	var to_cabin: Vector3 = main.current_core.global_position - fire.global_position
 	var into_cabin: float = atan2(to_cabin.z, to_cabin.x)
 	# The edge's point towards the cabin is inside it only if the light reaches past its walls.
-	var edge: float = float(fire.light_radius()) - float(_prowl()["edge_inside"])
+	var edge: float = float(fire.light_radius()) + float(_prowl()["edge_out"])
 	var spot: Vector3 = fire.global_position + Vector3(cos(into_cabin), 0.0, sin(into_cabin)) * edge
 	var half: Vector2 = config_node.get_building_half("core")
 	var local: Vector3 = spot - main.current_core.global_position
@@ -374,10 +374,10 @@ func test_14b_in_the_light_at_his_feet_its_eyes_are_eyes_not_lamps() -> void:
 	d._shine()
 	assert_almost_eq(float(d.eye_shine), 0.0, 0.001, "At his feet in the torchlight its eyes do not shine: it is lit, and seen")
 	assert_false(d.glints[0].visible, "(no glints)")
-	d.global_position = hero.global_position + Vector3(-(torch - float(_prowl()["edge_inside"])), 0.0, 0.0)
+	d.global_position = hero.global_position + Vector3(-(torch + float(_prowl()["edge_out"])), 0.0, 0.0)
 	d._face_now(hero.global_position)
 	d._shine()
-	assert_almost_eq(float(d.eye_shine), 1.0, 0.01, "Where it paces, at the light's edge, they do")
+	assert_almost_eq(float(d.eye_shine), 1.0, 0.01, "Where it waits, in the dark just outside the light's edge, they do")
 
 func test_14c_its_eyes_shine_back_only_the_way_it_looks() -> void:
 	var main = await _level()
@@ -426,7 +426,7 @@ func test_15b_set_on_the_cabin_it_turns_to_the_man_in_the_dark() -> void:
 	var out: Vector3 = (fire.global_position - main.current_core.global_position)
 	out.y = 0.0
 	out = out.normalized()
-	var d = _phytosaur(main, fire.global_position + out * (light - float(_prowl()["edge_inside"])))
+	var d = _phytosaur(main, fire.global_position + out * (light + float(_prowl()["edge_out"])))
 	d._take(main.current_core, d.Mode.ENGAGE)
 	assert_eq(d.current_target, main.current_core, "(set on the cabin, at the light's edge)")
 	# Him out in the dark beside it, at work.
@@ -451,7 +451,7 @@ func test_15c_struck_from_the_light_it_strikes_back_then_backs_out() -> void:
 	var out: Vector3 = (fire.global_position - main.current_core.global_position)
 	out.y = 0.0
 	out = out.normalized()
-	var d = _phytosaur(main, fire.global_position + out * (light - float(_prowl()["edge_inside"])))
+	var d = _phytosaur(main, fire.global_position + out * (light + float(_prowl()["edge_out"])))
 	d._take(main.current_core, d.Mode.ENGAGE)
 	main.hero.global_position = d.global_position - out * 1.5
 	assert_false(ProwlerDino.light_over(tree, main.hero.global_position).is_empty(), "(he stands in the light)")

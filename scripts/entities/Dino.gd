@@ -116,6 +116,11 @@ static var _building_slots: Dictionary = {}
 ## How far each species' body reaches ahead of its middle (front_reach), measured from its model the first time it is
 ## asked: {dino_type: metres}.
 static var _fronts: Dictionary = {}
+## How far its snout reaches ahead of its middle at the height of its ram (ram_front), and how far round to one side the
+## blow carries it (ram_hook), read off the clip the first time a species is asked: {dino_type: metres}, {dino_type:
+## radians}.
+static var _rams: Dictionary = {}
+static var _hooks: Dictionary = {}
 ## Where it stands for the place round a hollow building it holds (_snout_spot), worked out once for that place: the
 ## place, and the spot.
 var _snout_for: Vector3 = Vector3.INF
@@ -1164,7 +1169,12 @@ func _hold_and_bite(delta: float) -> void:
 	if not _target_in_reach(current_target, _ai("reach_release", 0.35)):
 		_out_of_reach()
 		return
-	_turn_towards(_bite_point(current_target as Node3D) - global_position, delta)
+	var at: Vector3 = _bite_point(current_target as Node3D) - global_position
+	# Ramming the cabin, turned so the blow lands where it is aimed: an aetosaur's ram swings its head to one side as it
+	# drives in, and at the hull's rounded corner the tip of its head went past it (ram_hook).
+	if _is_hollow(current_target):
+		at = at.rotated(Vector3.UP, -ram_hook())
+	_turn_towards(at, delta)
 	_bite_clock -= delta
 	if _bite_clock <= 0.0:
 		_bite_clock += _bite_interval()
@@ -1712,14 +1722,14 @@ func _target_in_reach(target: Variant, slack: float = 0.0) -> bool:
 		# From in front of the cabin's door, nothing (Config.CABIN.doorstep): it goes on to its place.
 		if target.has_method("at_the_door") and bool(target.at_the_door(global_position)):
 			return false
+		# A building with a room in it, it rams with its head from where the blow lands on the hull (_rams_from) -- and
+		# only over open ground: a stake before the cabin is between its snout and the wall, and is what it bites
+		# (tests/test_v05_reach_is_body_to_body, "it cannot bite the cabin through a stake").
+		if _is_hollow(target):
+			return _rams_from(target as Node3D, slack) and _clear_to(target as Node3D)
 		var gap: float = float(cfg.gap_to_building(global_position, String(target.building_type),
 			(target as Node3D).global_position))
-		if gap <= attack_reach() + slack:
-			return true
-		# Further off, only by its snout at a building with a room in it (_reach_for) -- and only over open ground: a
-		# stake before the cabin is between its snout and the wall, and is what it bites (tests/test_v05_reach_is_body_to_body,
-		# "it cannot bite the cabin through a stake").
-		return gap <= _reach_for(target) + slack and _clear_to(target as Node3D)
+		return gap <= attack_reach() + slack
 	var gap: float = _flat(global_position).distance_to(_flat((target as Node3D).global_position))
 	return gap <= attack_reach() + _half_width_of(target as Node) + slack
 
@@ -1743,16 +1753,105 @@ func attack_reach() -> float:
 	var strike: float = float(cfg.DINO_STRIKE) if (cfg and "DINO_STRIKE" in cfg) else 0.35
 	return _avoid_radius + strike
 
-## How far from its middle it bites `target` from, to its outside: its strike past its body (attack_reach) -- and a
-## building with a room in it (the cabin: Config.is_hollow), which it bites with its snout at the wall (_snout_spot),
-## its strike past its snout.
-func _reach_for(target: Node) -> float:
-	var reach: float = attack_reach()
-	if _is_hollow(target):
-		var cfg = _get_config()
-		var strike: float = float(cfg.DINO_STRIKE) if (cfg and "DINO_STRIKE" in cfg) else 0.35
-		reach = maxf(reach, front_reach() - _ai("snout_into", 0.1) + strike)
-	return reach
+## Whether it rams `target` -- a building with a room in it -- from where it stands: its middle out from the hull
+## (_hull_point) as far as it stands to ram (_ram_stand), no more than Config.DINO_AI.ram_short (and `slack`, for letting
+## go) short of that, nor ram_near nearer.
+func _rams_from(target: Node3D, slack: float = 0.0) -> bool:
+	var off: float = _flat(global_position).distance_to(_flat(_hull_point(target, global_position))) - _ram_stand()
+	return off <= _ai("ram_short", 0.12) + slack and off >= -_ai("ram_near", 0.3)
+
+## How far out from the hull its middle stands to ram it: as far as its snout reaches at the height of its ram
+## (ram_front), less Config.DINO_AI.ram_into -- the blow lands on the hull.
+func _ram_stand() -> float:
+	return ram_front() - _ai("ram_into", 0.05)
+
+## How far its snout reaches ahead of its middle at the height of its ram (Config.ANIMATIONS.dino_batter), in metres: its
+## body's reach at rest (front_reach) and as much further as the clip carries the tip of its head -- read off the clip's
+## own keys the first time a species is asked. What rams the cabin stands where the blow lands, not where its snout rests
+## (the player's bug report, 2026-10-04: "撞击需要真的撞的动作，而且要贴着船舱").
+func ram_front() -> float:
+	if not _rams.has(dino_type) and not _read_ram():
+		return front_reach()
+	return float(_rams[dino_type])
+
+## How far round to one side its ram carries the tip of its head, at the height of the blow (radians, about its middle;
+## to its left more than nought): an aetosaur's ram hooks its head into what it hits (tools/dino_moves.py ram).
+func ram_hook() -> float:
+	if not _hooks.has(dino_type) and not _read_ram():
+		return 0.0
+	return float(_hooks[dino_type])
+
+## Reads its ram off the clip (ram_front, ram_hook) -- whether it could: not with no body yet.
+func _read_ram() -> bool:
+	var tip_at: Vector2 = _ram_tip()
+	if tip_at.x < 0.0:
+		return false
+	_rams[dino_type] = front_reach() + tip_at.x
+	_hooks[dino_type] = tip_at.y
+	return true
+
+## At the height of its ram -- the furthest ahead of its middle it carries the tip of its head -- how much further ahead
+## that is than it rests (metres), and how far round to one side (radians, to its left more than nought): from the clip's
+## keys, each bone's rest where it has none. (0, 0) with no ram or no head to read; x below nought with no body yet.
+func _ram_tip() -> Vector2:
+	var body: Node = get_node_or_null("Body")
+	if body == null or not is_inside_tree() or animator == null or not is_instance_valid(animator):
+		return Vector2(-1.0, 0.0)
+	var cfg = _get_config()
+	var clip: String = String(cfg.ANIMATIONS.get("dino_batter", "")) if (cfg and "ANIMATIONS" in cfg) else ""
+	var anim: Animation = animator.animation_for(clip) if clip != "" else null
+	var skeletons: Array = body.find_children("*", "Skeleton3D", true, false)
+	if anim == null or skeletons.is_empty():
+		return Vector2.ZERO
+	var sk := skeletons[0] as Skeleton3D
+	var tip: int = sk.find_bone("Head_end")
+	if tip < 0:
+		tip = sk.find_bone("Head")
+	if tip < 0:
+		return Vector2.ZERO
+	# The clip's keys for each bone, by kind: {bone: {track type: track}}.
+	var keys: Dictionary = {}
+	for t in anim.get_track_count():
+		var path: NodePath = anim.track_get_path(t)
+		if path.get_subname_count() == 0:
+			continue
+		var bone: int = sk.find_bone(String(path.get_subname(0)))
+		if bone >= 0:
+			if not keys.has(bone):
+				keys[bone] = {}
+			keys[bone][anim.track_get_type(t)] = t
+	var to_me: Transform3D = global_transform.affine_inverse() * sk.global_transform
+	var rest: float = -(to_me * sk.get_bone_global_rest(tip).origin).z
+	var further: float = 0.0
+	var hook: float = 0.0
+	var steps: int = 24
+	for k in steps + 1:
+		var at: Vector3 = to_me * _bone_in(anim, sk, keys, tip, anim.length * float(k) / float(steps)).origin
+		if -at.z - rest > further:
+			further = -at.z - rest
+			hook = atan2(-at.x, -at.z)
+	return Vector2(further, hook)
+
+## Where `bone` is in its skeleton's space `at` seconds into `anim`: it and every bone above it posed by the clip's
+## keys, by their rests where the clip has none.
+static func _bone_in(anim: Animation, sk: Skeleton3D, keys: Dictionary, bone: int, at: float) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var b: int = bone
+	while b >= 0:
+		var rest: Transform3D = sk.get_bone_rest(b)
+		var pos: Vector3 = rest.origin
+		var rot: Quaternion = rest.basis.get_rotation_quaternion()
+		var size: Vector3 = rest.basis.get_scale()
+		var own: Dictionary = keys.get(b, {})
+		if own.has(Animation.TYPE_POSITION_3D):
+			pos = anim.position_track_interpolate(int(own[Animation.TYPE_POSITION_3D]), at)
+		if own.has(Animation.TYPE_ROTATION_3D):
+			rot = anim.rotation_track_interpolate(int(own[Animation.TYPE_ROTATION_3D]), at)
+		if own.has(Animation.TYPE_SCALE_3D):
+			size = anim.scale_track_interpolate(int(own[Animation.TYPE_SCALE_3D]), at)
+		xf = Transform3D(Basis(rot) * Basis.from_scale(size), pos) * xf
+		b = sk.get_bone_parent(b)
+	return xf
 
 func _is_hollow(target: Variant) -> bool:
 	if target == null or not is_instance_valid(target) or not ("building_type" in target):
@@ -1779,7 +1878,7 @@ func front_reach() -> float:
 	return maxf(_avoid_radius, front)
 
 ## Where to stand for `slot` round `building`: the place itself -- but round a building with a room in it, out from the
-## wall until its snout is at it (front_reach, less DINO_AI.snout_into), the nearest of that to the wall it can stand on.
+## hull until its ram lands on it (_ram_stand), the nearest of that to the hull it can stand on.
 func _snout_spot(building: Node, slot: Vector3) -> Vector3:
 	if not _is_hollow(building):
 		return slot
@@ -1796,16 +1895,14 @@ func _snout_spot(building: Node, slot: Vector3) -> Vector3:
 			break
 	return _snout_at
 
-## The spot `k` of the way from `slot` round a hollow `building` out to where its snout is at the wall -- on the ground,
-## whether it can stand there or not; `slot` itself when it is far enough out already.
+## The spot `k` of the way from `slot` round a hollow `building` out to where its ram lands on the hull (_ram_stand),
+## straight out from the nearest of the hull -- on the ground, whether it can stand there or not; `slot` itself when it
+## is as far out already (the outer ring, where it waits).
 func _snout_out(building: Node, slot: Vector3, k: float = 1.0) -> Vector3:
-	var cfg = _get_config()
-	var half: Vector2 = cfg.get_building_half(String(building.building_type))
-	var c: Vector3 = (building as Node3D).global_position
-	var on_wall := Vector3(clampf(slot.x, c.x - half.x, c.x + half.x), slot.y, clampf(slot.z, c.z - half.y, c.z + half.y))
+	var on_wall: Vector3 = _hull_point(building as Node3D, slot)
 	var out: Vector3 = _flat3(slot - on_wall)
 	var gap: float = out.length()
-	var want: float = front_reach() - _ai("snout_into", 0.1)
+	var want: float = _ram_stand()
 	if gap < 0.01 or want <= gap:
 		return slot
 	var spot: Vector3 = on_wall + out / gap * lerpf(gap, want, k)
@@ -1830,15 +1927,34 @@ func _clear_to(target: Node3D) -> bool:
 	return by == target or (by is Node and target.is_ancestor_of(by as Node))
 
 ## Where on `target` it bites: a building's outside nearest it -- it faces the wall, not the middle of a cabin seven metres
-## long -- or the middle of anything else.
+## long; the cabin's hull, not its box -- or the middle of anything else.
 func _bite_point(target: Node3D) -> Vector3:
 	var cfg = _get_config()
 	if "building_type" in target and cfg != null and cfg.has_method("get_building_half"):
-		var half: Vector2 = cfg.get_building_half(String(target.building_type))
-		var c: Vector3 = target.global_position
-		return Vector3(clampf(global_position.x, c.x - half.x, c.x + half.x), c.y,
-			clampf(global_position.z, c.z - half.y, c.z + half.y))
+		var on: Vector3 = _hull_point(target, global_position)
+		return Vector3(on.x, target.global_position.y, on.z)
 	return target.global_position
+
+## The nearest of `building`'s outside to `from`, on the ground at `from`'s height: its hull where it has one
+## (Config.hull_outline: the cabin's, rounded off at its ends -- the corners of its box are air), else its box.
+func _hull_point(building: Node3D, from: Vector3) -> Vector3:
+	var cfg = _get_config()
+	var c: Vector3 = building.global_position
+	var b_type: String = String(building.building_type)
+	var outline: PackedVector2Array = cfg.hull_outline(b_type) if cfg.has_method("hull_outline") else PackedVector2Array()
+	if outline.size() < 3:
+		var half: Vector2 = cfg.get_building_half(b_type)
+		return Vector3(clampf(from.x, c.x - half.x, c.x + half.x), from.y, clampf(from.z, c.z - half.y, c.z + half.y))
+	var p := Vector2(from.x - c.x, from.z - c.z)
+	var best: Vector2 = p
+	var best_gap: float = INF
+	for i in outline.size():
+		var on: Vector2 = Geometry2D.get_closest_point_to_segment(p, outline[i], outline[(i + 1) % outline.size()])
+		var gap: float = p.distance_squared_to(on)
+		if gap < best_gap:
+			best_gap = gap
+			best = on
+	return Vector3(c.x + best.x, from.y, c.z + best.y)
 
 ## What of `amount` gets through `target`'s armour (Config.ARMOR): the cabin's hull takes a quarter of a bite, a man all
 ## of it.

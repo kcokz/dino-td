@@ -11,8 +11,9 @@ extends "res://scripts/entities/Dino.gd"
 ## cabin, it goes at the cabin (Dino._is_target_valid: the lit room it does not come into), from a side no fire
 ## lights (would_stand_at) -- a campfire by the cabin keeps it off as far as its light goes. But it
 ## will not come into a fire's light, nor the light of the torch in his hand (lights): what it wants in
-## one it waits for at the light's edge -- a little inside it, dimly lit, where it is seen -- facing in,
-## and paces along the edge a few steps at a time, its eyes catching the light (the eye-shine). Found
+## one it waits for just outside the light's edge, in the dark (PROWL.edge_out) -- what sees only by firelight
+## does not see it there, a tower at night -- facing in, and paces along the edge a few steps at a time, its
+## eyes catching the light (the eye-shine): they are what is seen of it. Found
 ## deeper in, as the torch comes at it, it backs out to the edge -- the nearest part of it it can reach,
 ## round the light where straight back is the field's end or a wall -- and with nowhere left to go it
 ## turns at bay on the one who cornered it for a while (PROWL.at_bay_seconds), then tries again. At
@@ -142,7 +143,7 @@ func _think() -> void:
 	var inside: Dictionary = ProwlerDino.light_over(get_tree(), global_position, -_prowl("flee_inside", 1.6))
 	if not inside.is_empty():
 		_keep_to(inside, true)
-		_escape = _way_out(inside["at"], maxf(0.5, float(inside["radius"]) - _prowl("edge_inside", 0.6)))
+		_escape = _way_out(inside["at"], float(inside["radius"]) + _prowl("edge_out", 0.5))
 		return
 	super._think()
 	var goal: Vector3 = _engage_spot() if (current_target != null and mode != Mode.MARCH) else _journey_goal()
@@ -197,7 +198,7 @@ func _act(delta: float) -> void:
 	if mode == Mode.ATTACK:
 		_set_mode(Mode.ENGAGE if current_target != null else Mode.MARCH)
 	var centre: Vector3 = _wary["at"]
-	var edge: float = maxf(0.5, float(_wary["radius"]) - _prowl("edge_inside", 0.6))
+	var edge: float = float(_wary["radius"]) + _prowl("edge_out", 0.5)
 	if _backing_out:
 		# Getting any further out? Cornered -- straight back the field's end, round the edge nothing it
 		# can reach, or no further out for a while -- it turns at bay (the debug-agent's BUG-018: backed
@@ -219,11 +220,12 @@ func _act(delta: float) -> void:
 		_edge_angle = atan2(from.z, from.x)
 		_edge_clock = _pause()
 	_edge_clock -= delta
-	var at_the_edge: bool = absf(_flat(global_position).distance_to(_flat(centre)) - edge) <= 1.0
+	var spot: Vector3 = _in_the_dark(centre + Vector3(cos(_edge_angle), 0.0, sin(_edge_angle)) * edge)
+	var at_the_edge: bool = absf(_flat(global_position).distance_to(_flat(centre)) - _flat(spot).distance_to(_flat(centre))) <= 1.0
 	if _edge_clock <= 0.0 and at_the_edge:
 		_edge_angle = _next_edge_angle()
 		_edge_clock = _pause()
-	var spot: Vector3 = centre + Vector3(cos(_edge_angle), 0.0, sin(_edge_angle)) * edge
+		spot = _in_the_dark(centre + Vector3(cos(_edge_angle), 0.0, sin(_edge_angle)) * edge)
 	spot.y = global_position.y
 	if _flat(global_position).distance_to(_flat(spot)) > _ai("spot_slack", 0.4):
 		# Along the edge, a wary step; to it from further off, its own pace.
@@ -246,7 +248,7 @@ func _way_out(centre: Vector3, edge: float) -> Vector3:
 	for k in steps:
 		# Straight out first, then a step either side, and so on round.
 		var turn: float = TAU / float(steps) * float((k + 1) / 2) * (1.0 if k % 2 == 1 else -1.0)
-		var spot: Vector3 = centre + Vector3(cos(a0 + turn), 0.0, sin(a0 + turn)) * edge
+		var spot: Vector3 = _in_the_dark(centre + Vector3(cos(a0 + turn), 0.0, sin(a0 + turn)) * edge)
 		spot.y = global_position.y
 		if maps == null or not maps.is_ready():
 			return spot
@@ -300,10 +302,29 @@ func _can_stand_on_the_edge(angle: float) -> bool:
 	var maps := _nav_maps()
 	if maps == null or not maps.is_ready():
 		return true
-	var edge: float = maxf(0.5, float(_wary["radius"]) - _prowl("edge_inside", 0.6))
-	var spot: Vector3 = (_wary["at"] as Vector3) + Vector3(cos(angle), 0.0, sin(angle)) * edge
+	var edge: float = float(_wary["radius"]) + _prowl("edge_out", 0.5)
+	var spot: Vector3 = _in_the_dark((_wary["at"] as Vector3) + Vector3(cos(angle), 0.0, sin(angle)) * edge)
 	var ground: Vector3 = maps.closest_point(spot, _map_kind())
 	return _flat(ground).distance_to(_flat(spot)) <= _prowl("way_out_slack", 0.6)
+
+## `spot` out of every light it is in: pushed straight out from each one's middle to its edge and PROWL.edge_out more,
+## a few times over, for lights that overlap -- his torch by the campfire. Where it waits is in the dark.
+func _in_the_dark(spot: Vector3) -> Vector3:
+	if not is_inside_tree():
+		return spot
+	var out: float = _prowl("edge_out", 0.5)
+	for i in 3:
+		var lit: Dictionary = ProwlerDino.light_over(get_tree(), spot, out - 0.01)
+		if lit.is_empty():
+			break
+		var at: Vector3 = lit["at"]
+		var from := Vector3(spot.x - at.x, 0.0, spot.z - at.z)
+		if from.length() < 0.01:
+			from = Vector3(1.0, 0.0, 0.0)
+		var y: float = spot.y
+		spot = at + from.normalized() * (float(lit["radius"]) + out)
+		spot.y = y
+	return spot
 
 ## Seconds it waits where it is before pacing on (PROWL.pace_every, between the two).
 func _pause() -> float:
@@ -321,7 +342,7 @@ func _next_step_towards(goal: Vector3) -> Vector3:
 	var to: Vector2 = _flat(step)
 	for light in ProwlerDino.lights(get_tree()):
 		var c: Vector2 = _flat(light["at"])
-		var rim: float = maxf(0.5, float(light["radius"]) - _prowl("edge_inside", 0.6))
+		var rim: float = float(light["radius"]) + _prowl("edge_out", 0.5)
 		var from_c: float = here.distance_to(c)
 		if from_c < rim - 0.3:
 			continue            # inside it: backing out is its own business (_act)
@@ -496,8 +517,8 @@ func _make_glints(mesh_node: MeshInstance3D, surface: int) -> void:
 		glints.append(g)
 
 ## How bright its eyes are. A light is what an eye shines back, and the shine is seen in the dark at the
-## light's edge: full there, dimming over PROWL.eye_reach metres further out, dark with no light near. In
-## the light itself, past where it paces (eye_lit_from), it fades over eye_lit_over metres: lit, it is
+## light's edge: full there and out to where it waits (PROWL.edge_out), dimming over PROWL.eye_reach metres
+## further out, dark with no light near. In the light itself, past eye_lit_from, it fades over eye_lit_over metres: lit, it is
 ## seen, eyes and all -- at his feet in his torchlight its eyes burned full, two lamps (v0.6 round six, the
 ## player: "植龙晚上进攻眼睛还是像灯泡"). And the shine goes back the way the light came: looking at the
 ## light, full; side on, less (eye_side); looking away, none.
@@ -505,6 +526,7 @@ func _shine() -> void:
 	var best: float = 0.0
 	if is_inside_tree() and not is_dead:
 		var reach: float = maxf(0.1, _prowl("eye_reach", 3.0))
+		var waits: float = _prowl("edge_out", 0.5)
 		var lit_from: float = _prowl("eye_lit_from", 1.0)
 		var lit_over: float = maxf(0.1, _prowl("eye_lit_over", 1.5))
 		var ahead: Vector3 = -global_transform.basis.z
@@ -513,7 +535,7 @@ func _shine() -> void:
 			var at: Vector3 = light["at"]
 			var to_light := Vector2(at.x - global_position.x, at.z - global_position.z)
 			var gap: float = to_light.length() - float(light["radius"])
-			var edge: float = clampf(1.0 - gap / reach, 0.0, 1.0) if gap >= 0.0 \
+			var edge: float = clampf(1.0 - maxf(0.0, gap - waits) / reach, 0.0, 1.0) if gap >= 0.0 \
 				else clampf(1.0 - (-gap - lit_from) / lit_over, 0.0, 1.0)
 			var toward: float = looking.dot(to_light.normalized()) if to_light.length() > 0.01 else 1.0
 			best = maxf(best, edge * _looking_at_it(toward))

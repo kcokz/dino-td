@@ -125,6 +125,8 @@ func _run(name: String) -> void:
 			await _scenario_wreck()
 		"snug":
 			await _scenario_snug()
+		"ram":
+			await _scenario_ram()
 		"showcase":
 			await _scenario_showcase()
 		"scale":
@@ -2298,6 +2300,114 @@ func _scenario_snug() -> void:
 		rig.reset()
 		rig.apply_to(_main.camera)
 		await _wait(2)
+
+## Ramming the cabin (the player's bug report, 2026-10-04: "有个恐龙离船舱很远，但有进攻动作……撞击需要真的撞的动作，
+## 而且要贴着船舱，不然像隔山打牛"): one of each raider set on the cabin from round it -- the long walls, both ends, the
+## corners -- let come to it and ram. Shot from straight above, the hull's outline (Config.hull_outline) drawn on the
+## ground in red, and from beside it. Printed: each one's middle from the hull against where it stands to ram.
+func _scenario_ram() -> void:
+	var cfg := root.get_node_or_null("Config")
+	var core: Node3D = _main.current_core
+	var c: Vector3 = core.global_position
+	if _main.hero:
+		_main.hero.global_position = c + Vector3(0.0, 0.0, 16.0)
+	_main.wave_manager.auto_raid_enabled = false
+	var cast: Array = [["desmatosuchus", Vector3(9.0, 0.0, -5.0)], ["coelophysis", Vector3(-1.0, 0.0, -9.0)],
+		["postosuchus", Vector3(11.0, 0.0, 0.5)], ["raptor", Vector3(-10.0, 0.0, 0.5)],
+		["allosaurus", Vector3(3.0, 0.0, -13.0)], ["desmatosuchus", Vector3(-8.0, 0.0, -6.0)],
+		["hesperosuchus", Vector3(-3.0, 0.0, 9.0)]]
+	var dinos: Array = []
+	for row in cast:
+		var d = load(String(cfg.get_dino_script_path(String(row[0])))).new()
+		_main.dinos_container.add_child(d)
+		d.setup(String(row[0]))
+		d.max_hp = 9999.0
+		d.current_hp = 9999.0
+		d.global_position = c + (row[1] as Vector3)
+		d.set_waypoints([d.global_position, c])
+		dinos.append(d)
+	await _advance(14.0)
+	for d in dinos:
+		var on: Vector3 = d._hull_point(core, d.global_position)
+		var gap: float = Vector2(d.global_position.x - on.x, d.global_position.z - on.z).length()
+		print("[playtest] ram: %-14s %-7s middle %.2f m from the hull, stands to ram at %.2f (%+.2f)  ram_front %.2f" % [
+			d.dino_type, Dino.Mode.keys()[int(d.mode)], gap, d._ram_stand(), gap - d._ram_stand(), d.ram_front()])
+	# The hull's outline on the ground, a red ribbon a few centimetres wide.
+	var ribbon := ImmediateMesh.new()
+	var outline: PackedVector2Array = cfg.hull_outline("core")
+	ribbon.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in outline.size():
+		var a := Vector3(outline[i].x, 0.06, outline[i].y)
+		var b := Vector3(outline[(i + 1) % outline.size()].x, 0.06, outline[(i + 1) % outline.size()].y)
+		var side: Vector3 = (b - a).cross(Vector3.UP).normalized() * 0.03
+		for p in [a - side, b - side, b + side, a - side, b + side, a + side]:
+			ribbon.surface_add_vertex(p)
+	ribbon.surface_end()
+	var mark := MeshInstance3D.new()
+	mark.mesh = ribbon
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.1, 0.1)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mark.material_override = mat
+	_main.add_child(mark)
+	mark.global_position = c
+	var top := Camera3D.new()
+	_main.add_child(top)
+	top.projection = Camera3D.PROJECTION_ORTHOGONAL
+	top.size = 13.0
+	top.global_position = c + Vector3(0.0, 30.0, 0.0)
+	top.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	top.current = true
+	for k in 3:
+		await _advance(0.37)
+		await _shoot("ram_plan_%d" % k)
+	top.current = false
+	top.queue_free()
+	await _portrait("ram_east_end", c + Vector3(3.5, 0.0, -0.5), 7.0)
+	await _portrait("ram_north_wall", c + Vector3(0.0, 0.0, -2.0), 8.0, false, true)
+	# Each at the height of its ram -- the clip's drive, about 0.57 of it (tools/dino_moves.py ram) -- the game stopped
+	# there for the picture: its head at the hull.
+	for k in [0, 1, 4]:
+		var d = dinos[k]
+		var ap: AnimationPlayer = d.animator.animation_player if d.animator else null
+		for i in 240:
+			if ap != null and ap.current_animation_length > 0.0:
+				var f: float = ap.current_animation_position / ap.current_animation_length
+				if f >= 0.55 and f <= 0.6:
+					break
+			await physics_frame
+		Engine.time_scale = 0.0
+		var head: Vector3 = d.global_position - d.global_transform.basis.z.normalized() * float(d.ram_front())
+		# Where the tip of its head is now, and how far from the hull (inside it, less than nought).
+		var sk: Skeleton3D = d.find_child("Body", false, false).find_children("*", "Skeleton3D", true, false)[0]
+		var tip_bone: int = sk.find_bone("Head_end")
+		var tip: Vector3 = sk.global_transform * sk.get_bone_global_pose(tip_bone).origin
+		var on: Vector3 = d._hull_point(core, tip)
+		var inside: bool = Geometry2D.is_point_in_polygon(Vector2(tip.x - c.x, tip.z - c.z), cfg.hull_outline("core"))
+		var gap: float = Vector2(tip.x - on.x, tip.z - on.z).length() * (-1.0 if inside else 1.0)
+		var ahead: Vector3 = -d.global_transform.basis.z.normalized()
+		var rel: Vector3 = tip - d.global_position
+		print("[playtest] ram peak: %-14s at %.2f of its clip, tip of its head %.2f m from the hull (%.2f up), %.2f ahead, %.2f aside" % [
+			d.dino_type, ap.current_animation_position / ap.current_animation_length, gap, tip.y,
+			rel.dot(ahead), rel.dot(ahead.cross(Vector3.UP))])
+		var above := Camera3D.new()
+		_main.add_child(above)
+		above.projection = Camera3D.PROJECTION_ORTHOGONAL
+		above.size = 4.0
+		above.global_position = head + Vector3(0.0, 30.0, 0.0)
+		above.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+		above.current = true
+		await _shoot("ram_peak_%s" % d.dino_type)
+		above.current = false
+		above.queue_free()
+		Engine.time_scale = 1.0
 
 ## The valley as somebody standing in it would see it: low, looking across the field to
 ## the forest edge and the monkey-puzzles on the skyline.

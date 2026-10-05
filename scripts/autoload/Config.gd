@@ -670,6 +670,22 @@ static func gap_to_building(point: Vector3, type_id: String, centre: Vector3) ->
 	var dz: float = absf(point.z - centre.z)
 	return Vector2(maxf(dx - half.x, 0.0), maxf(dz - half.y, 0.0)).length()
 
+## What a ram lands on at a `type_id` with a room in it (is_hollow: the cabin), on the ground about its middle (x east,
+## y south): its hull's outline (CABIN.module.outline, the north half given and mirrored south). Empty for anything
+## else, which is its box.
+static func hull_outline(type_id: String) -> PackedVector2Array:
+	if not is_hollow(type_id):
+		return PackedVector2Array()
+	if _outline.is_empty():
+		var half: Array = CABIN.get("module", {}).get("outline", [])
+		for p in half:
+			_outline.append(p)
+		for i in range(half.size() - 2, 0, -1):
+			_outline.append(Vector2((half[i] as Vector2).x, -(half[i] as Vector2).y))
+	return _outline
+
+static var _outline := PackedVector2Array()
+
 ## How far from `type_id`'s centre its outside is, heading along `dir` (flat, unit): where the
 ## ray leaves its box.
 static func building_extent_along(type_id: String, dir: Vector3) -> float:
@@ -1248,12 +1264,17 @@ const PROWL: Dictionary = {
 	# 8 m, and a man out in the dark was left be. Lit -- a torch in his hand, a fire's light on him -- it will
 	# not come in (lights).
 	"hunts_within": 28.0,
-	# How it keeps out of a light (FIRE; the torch): it stands `edge_inside` metres inside the light's
-	# edge -- dimly lit there, and seen -- and backs out, at `back_out_pace` of its speed, when it finds
-	# itself further in than `flee_inside`. Along the edge it paces: `pace_step_degrees` round at a time,
-	# every `pace_every` seconds (between the two), at `wary_pace` of its speed, and now and then turns
-	# back (`turn_back_chance`).
-	"edge_inside": 0.6,
+	# How it keeps out of a light (FIRE; the torch): it waits `edge_out` metres outside the light's edge -- in the
+	# dark there, its eyes catching the light (the eye-shine) -- and backs out, at `back_out_pace` of its speed, when
+	# it finds itself further in than `flee_inside`. Along the edge it paces: `pace_step_degrees` round at a time,
+	# every `pace_every` seconds (between the two), at `wary_pace` of its speed, and now and then turns back
+	# (`turn_back_chance`). Where lights overlap -- his torch by the campfire -- it waits out of them all.
+	#
+	# It stood 0.6 m inside the edge, dimly lit, to be seen -- and what sees only by firelight saw it there: a tower
+	# at night (TOWERS.dark_parts) shot them one after another where they stood, while he stood by the fire (the
+	# player's bug report, 2026-10-04: "人站在火周围，植龙不敢靠近，但是箭塔就能看到植龙，所以就可以白嫖植龙，一个个点杀，
+	# 这个是个漏洞"). Its eyes are what is seen of it.
+	"edge_out": 0.5,
 	"flee_inside": 1.6,
 	"back_out_pace": 1.3,
 	# Backing out, it goes to the nearest part of the edge it can stand on and reach -- tried this many
@@ -1270,7 +1291,8 @@ const PROWL: Dictionary = {
 	"wary_pace": 0.5,
 	"turn_back_chance": 0.3,
 	# The eye-shine ("火光照到的黑暗边上能看见眼睛反光"): its eyes glow this colour, this bright at a light's
-	# edge or in it, dimming over `eye_reach` metres further out -- a light is what an eye shines back.
+	# edge, out to where it waits (edge_out) or in it, dimming over `eye_reach` metres further out -- a light is
+	# what an eye shines back.
 	# The eyes on `eye_bone` are a few centimetres, lost from the game's camera: over each a glint
 	# `glint_size` metres across, `glint_energy` times its colour at the brightest, so it glows without
 	# burning out to white (the debug-agent's TASK-021: "两个白色的小点……默认镜头下看不出来").
@@ -1281,8 +1303,8 @@ const PROWL: Dictionary = {
 	# off (the debug-agent's TASK-027: "20 米就找不到了……建议在这次和上次中间取一个值"). Now halfway
 	# between the two: about 0.16 m at the game's distance, bright enough to find at a fire's edge.
 	#
-	# In the light itself the shine fades: full as far in as it paces (edge_inside) and a little more
-	# (`eye_lit_from` metres), out by `eye_lit_over` further -- lit, it is seen; at his feet in his torchlight
+	# In the light itself the shine fades: full `eye_lit_from` metres in, out by `eye_lit_over` further -- lit, it is
+	# seen; at his feet in his torchlight
 	# its eyes burned full (v0.6 round six, the player: "植龙晚上进攻眼睛还是像灯泡"). And it is seen looking at the
 	# light: `eye_side` of it side on, none looking away. A little dimmer at the same time.
 	"eye_color": Color(1.0, 0.5, 0.18),
@@ -1823,11 +1845,19 @@ const DINO_AI: Dictionary = {
 	# and, waiting, it looks again for a place to bite from every this many seconds.
 	"queue_standoff": 2.8,
 	"queue_patience": 1.5,
-	# At a building with a room in it (the cabin: Config.is_hollow) it bites with its snout at the wall, its middle as
-	# far out as its body reaches ahead of it (Dino.front_reach) less this much (metres) -- touching, not through: a
-	# phytosaur's middle is three and a half metres behind its snout, and stood where a raptor stands, its head was in
-	# the room with him (the player's bug report, 2026-10-04: "人躲在cabin里它们头会伸进cabin").
-	"snout_into": 0.1,
+	# AT THE CABIN IT RAMS FROM WHERE THE BLOW LANDS. A building with a room in it (the cabin: Config.is_hollow) it rams
+	# with its head: its middle stands out from the hull (Config.hull_outline) as far as its snout reaches at the height
+	# of its ram (Dino.ram_front) less `ram_into` metres -- the blow lands on the hull, a hand's breadth into it, the
+	# jolt of it seen; it draws back from there and comes again (ANIMATIONS.dino_batter) -- and it rams
+	# from no more than `ram_short` short of there, nor `ram_near` nearer. Nearer, its head is through the wall, in the
+	# room with him: a phytosaur's middle is three and a half metres behind its snout (the player's bug report,
+	# 2026-10-04: "人躲在cabin里它们头会伸进cabin"). Further off it rammed the air: it began where its snout at rest
+	# and a strike past it reached the box -- and at the box's corner, the hull rounded off inside it, it stood half a
+	# metre clear (the player's bug report, 2026-10-04: "有个恐龙离船舱很远，但有进攻动作……撞击需要真的撞的动作，而且
+	# 要贴着船舱，不然像隔山打牛").
+	"ram_into": 0.1,
+	"ram_short": 0.08,
+	"ram_near": 0.3,
 	# This near its place (metres), it faces what it came for, walking or waiting: facing the place
 	# while it tried for it and the target while it waited, by turns, was a head swinging each way
 	# every second (the debug-agent's BUG-008).
@@ -4562,10 +4592,17 @@ const CABIN: Dictionary = {
 	#   door       the hatch in the south wall: its middle (x), how wide and high it is -- a hand
 	#              wider than him either side, and the navigation mesh's own margin
 	#              (NAV.agent_radius) leaves him a way through
+	#   outline    the hull on the ground, what a ram lands on (Dino.ram_front): its north half from
+	#              the nozzle's mouth round to the heat shield's tip, the south the same mirrored
+	#              (Config.hull_outline) -- the nozzle and the engine's service ring east, the long
+	#              walls (MOD_OUT), the shield's dome west. The box's corners are air.
 	"module": {
 		"room": Vector2(2.8, 1.3),
 		"wall": 0.2,
 		"door": {"x": 0.0, "width": 1.2, "height": 1.8},
+		"outline": [Vector2(3.45, 0.0), Vector2(3.45, -0.3), Vector2(3.18, -0.6), Vector2(3.18, -1.34),
+			Vector2(3.02, -1.38), Vector2(2.92, -1.42), Vector2(-2.92, -1.42), Vector2(-3.08, -1.32),
+			Vector2(-3.22, -1.08), Vector2(-3.32, -0.71), Vector2(-3.37, -0.31), Vector2(-3.4, 0.0)],
 	},
 	# Where he stands to go in and where he is left when he steps out: this far in front of the
 	# door, and this far inside it -- clear of the frame, in the camera's sight.

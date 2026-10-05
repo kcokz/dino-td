@@ -123,7 +123,11 @@ func test_01_armour_the_hull_most_the_towers_some_him_none() -> void:
 	# A bite, then, at the cabin: what gets through its armour is what it loses.
 	_set_clock(_at("night") + 10.0)
 	_shut_in(main)
-	d.global_position = cabin.global_position + Vector3(-float(config_node.get_building_half("core").x) - float(d.front_reach()) + 0.2, 0.0, 0.0)
+	# Out from the heat shield's tip where its blow lands (Dino._ram_stand).
+	var tip_x: float = 0.0
+	for p in config_node.hull_outline("core"):
+		tip_x = minf(tip_x, p.x)
+	d.global_position = cabin.global_position + Vector3(tip_x - float(d._ram_stand()), 0.0, 0.0)
 	d.current_target = cabin
 	var hp: float = cabin.current_hp
 	d.attack_target(cabin)
@@ -157,14 +161,16 @@ func test_03_it_bites_the_cabin_with_its_snout_at_the_wall_not_through_it() -> v
 	var d = _phytosaur(main, cabin.global_position + Vector3(-14.0, 0.0, 2.0))
 	await _drive(d, 14.0)
 	assert_eq(int(d.mode), int(Dino.Mode.ATTACK), "It is biting the cabin")
-	var front: float = float(d.front_reach())
+	var front: float = float(d.ram_front())
 	assert_gt(front, float(d._avoid_radius) + 1.0, "(its snout is far ahead of its middle)")
-	var gap: float = float(config_node.gap_to_building(d.global_position, "core", cabin.global_position))
-	assert_gt(gap, front - float(config_node.DINO_AI["snout_into"]) - 0.6, "Its middle stands out from the wall by its snout")
-	# Its snout, the way it faces, is at the wall: not in the room.
+	var on: Vector3 = d._hull_point(cabin, d.global_position)
+	var gap: float = _flat_gap(d.global_position, on)
+	var ai: Dictionary = config_node.DINO_AI
+	assert_gt(gap, front - float(ai["ram_into"]) - float(ai["ram_near"]) - 0.01, "Its middle stands out from the hull by its snout")
+	# Its snout, the way it faces, at the height of its ram: at the wall, not in the room.
 	var nose: Vector3 = d.global_position - d.global_transform.basis.z.normalized() * front
 	assert_false(cabin.is_inside(nose), "its head is not in the room with him")
-	assert_lt(float(config_node.gap_to_building(nose, "core", cabin.global_position)), 0.8, "but at its wall")
+	assert_lt(float(config_node.gap_to_building(nose, "core", cabin.global_position)), 0.5, "but at its wall")
 
 func test_04_nothing_bites_from_in_front_of_the_door_and_he_can_come_out() -> void:
 	var main = await _level()

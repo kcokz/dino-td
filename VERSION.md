@@ -1719,6 +1719,10 @@
   - 信标的提示改成任务标记和日志，先交代前因后果（"Beacon右上角的提示应该不要一直显示……应该有个前因后果的引入（这个是过关游戏特有，自定义没有的）"）：`HUD` 的任务卡片收起成一行（`objective_detail` 只在有消息、鼠标停着、日志开着时显示，`Config.UI.objective_open_seconds` 8 秒）；日志（`toggle_journal`、`journal_entries`，J 键 `journal_key`，Esc 先关它）；开场（`Config.STORY`、`HUD.tell_the_story`、`HeroVoice.say_key`，`Main.open_on_the_crash` 先 `hold_objective`，坠落完了再讲）。只在 `GAMES.campaign.internal.story`。新词 `BARK_INTRO_*`、`JOURNAL_*`、`HUD_JOURNAL_UPDATED`、`HUD_OBJECTIVE_TIP`、`KEY_JOURNAL`。机器人加了 `journal` 截图。测试：新的 `test_v07_the_journal`。
   - 存档（"需要加一个保存功能游戏的功能"）：新的 `scripts/core/SaveGame.gd`——`why_not`（来袭、外面有来犯的恐龙、结束了、过场里不能存）、`save`/`snapshot`、`read`、`continue_game`（同一局同一个种子重开，`GameState.pending_load`）、`apply`（`Main._ready` 造好关卡后铺回去：建筑用 `BuildSystem.place_at` 重新放、资源点按名字、守卫按巢和序号、迷雾 `_seen`、随机数的 `state`）。`Config.SAVE.path`；暂停菜单的"保存游戏"和它下面那行字（`PauseMenu._refresh_save`、`_on_save_pressed`）；开始界面的"继续游戏"（`StartScreen._refresh_continue`、`continue_game`）。测试用自己的存档文件，不碰玩家的（`tests/test_runner.gd`：`SaveGame.path_override`）。测试：新的 `test_v07_the_save`（什么时候能存、存了读回来都一样、开始界面的继续、暂停菜单的保存和不能存的原因、继续时直接接着玩）。
 
+- **v0.7 第二十三批："改进2"（玩家，2026-10-04）**：
+  - 两个截图 bug。植龙在火光外面等（"人站在火周围，植龙不敢靠近，但是箭塔就能看到植龙，所以就可以白嫖植龙"）：`PROWL.edge_inside` 0.6（光里）换成 `edge_out` 0.5（光外）；`ProwlerDino._in_the_dark`（几处火光叠着，停在所有火光外）；眼睛反光到它等着的地方都是满的。撞船舱要撞到（"撞击需要真的撞的动作，而且要贴着船舱，不然像隔山打牛"）：`CABIN.module.outline` 和 `Config.hull_outline`（船壳的轮廓）；`Dino._hull_point`、`_bite_point` 按船壳；`Dino.ram_front`、`ram_hook`、`_ram_tip`、`_bone_in`（从撞的动画的关键帧读出头伸多远、往哪边甩）；`_rams_from`（`DINO_AI.ram_into` 0.1、`ram_short` 0.08、`ram_near` 0.3，替掉 `snout_into`）；`ActorAnimator.animation_for`。`tools/playtest.gd` 新场景 `ram`（从上面看，船壳轮廓画成红线；每种撞到最远时停住拍）。
+  - 测试：新的 `test_v07_the_dark_and_the_ram`（举火把时它在黑里等、夜里的塔看不见它；火光叠着时停在全部外面；撞的距离和手算蒙皮量的一样；报告里那个位置不撞、走到位再撞；撞到最远时嘴尖在船壳上）；`test_v06_the_night`、`test_v07_the_cabin_at_night`、`test_v05_the_cabin` 跟着新规矩改。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。

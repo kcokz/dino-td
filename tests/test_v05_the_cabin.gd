@@ -149,15 +149,21 @@ func test_05_a_raptor_can_bite_it_from_every_side() -> void:
 		# The inner ring is where they stand to bite; the outer one is where they wait.
 		if gap < float(config_node.DINO_STANDOFF_INNER) + 0.01:
 			inner += 1
-			raptor.global_position = at
+			# It rams the cabin from out where the blow lands on the hull (Dino._snout_spot; v0.7, the player's bug
+			# report: "撞击需要真的撞的动作，而且要贴着船舱").
+			raptor.global_position = raptor._snout_spot(core, at)
 			if not raptor._target_in_reach(core):
 				out_of_reach += 1
 	assert_eq(inside, 0, "None of them inside its walls, or too close to stand at")
 	assert_eq(inner, per_ring - int(at_door[0]), "The whole inner ring close enough to bite from")
-	assert_eq(out_of_reach, 0, "And from every one of those, it can")
-	# And the corner: touching it there is touching it.
-	raptor.global_position = core.global_position + Vector3(_half().x + 0.3, 0.0, _half().y + 0.3)
-	assert_true(raptor._target_in_reach(core), "Standing at its corner, it can bite")
+	assert_eq(out_of_reach, 0, "And for every one of those, it can -- from out where its blow lands on the hull")
+	# And the corner, where the hull is rounded off inside the box: off it, it rams the hull; stood at the box's corner,
+	# its head would be in the hull.
+	var corner: Vector3 = core.global_position + Vector3(_half().x + 0.3, 0.0, _half().y + 0.3)
+	raptor.global_position = raptor._snout_spot(core, corner)
+	assert_true(raptor._target_in_reach(core), "Off its corner, it can ram it")
+	raptor.global_position = corner
+	assert_false(raptor._target_in_reach(core), "not from the box's corner, its head in the hull")
 
 func test_06_he_gets_in_from_any_side_by_the_door() -> void:
 	# From every side of it there is a way in -- round to the door, the only way in.

@@ -196,6 +196,16 @@ func play_clip(clip_name: String) -> void:
 		_loop_if_it_should(best, clip_name)
 		animation_player.play(best, _get_blend_time())
 
+## The clip `clip_name` stands for in this actor's player, found as play_clip finds it (aliases and all), or null:
+## for what is read off a clip rather than played (Dino.ram_front).
+func animation_for(clip_name: String) -> Animation:
+	if animation_player == null or not is_instance_valid(animation_player):
+		refresh_animation_player()
+	if animation_player == null or not is_instance_valid(animation_player):
+		return null
+	var best: String = _find_best_clip(clip_name)
+	return animation_player.get_animation(best) if best != "" else null
+
 func stop() -> void:
 	current_clip = ""
 	if animation_player and is_instance_valid(animation_player):
