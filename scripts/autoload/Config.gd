@@ -817,6 +817,38 @@ static func recipe_effect_text(recipe_id: String) -> String:
 			parts.append(TranslationServer.translate("TOOL_OPENS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
 	return " · ".join(parts)
 
+## What having made `recipe_id` lets him do, in words -- for the bench's line as the cursor is over it and the tool's
+## place in his kit (the player, 2026-10-04: "Bone pick，bone shovel hover上去的时候没有解释这是干嘛的"): its own words
+## (RECIPES "desc"), else the resources it brings in faster ("Wood ×2") and the one it lets him gather at all ("lets
+## him gather Stone"). "" for anything else.
+static func recipe_use_text(recipe_id: String) -> String:
+	if not RECIPES.has(recipe_id):
+		return ""
+	var row: Dictionary = RECIPES[recipe_id]
+	if row.has("desc"):
+		return TranslationServer.translate(String(row["desc"]))
+	var flag: String = String(row.get("unlocks", ""))
+	var parts: PackedStringArray = []
+	var speeds: Dictionary = row.get("harvest_speed", {})
+	for res_id in speeds:
+		parts.append(TranslationServer.translate("EFFECT_HARVEST_SPEED") % [TranslationServer.translate("RESOURCE_%s" % String(res_id).to_upper()),
+			factor_text(float(speeds[res_id]))])
+	for res_id in RESOURCE_NODES:
+		if flag != "" and String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
+			parts.append(TranslationServer.translate("TOOL_LETS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
+	return " · ".join(parts)
+
+## The resource `recipe_id` lets him gather at all (RESOURCE_NODES.<id>.requires_unlock), or "" for one that opens
+## none: what it is of no use without, on a map that has none (CraftingStation._of_use_here).
+static func recipe_opens(recipe_id: String) -> String:
+	var flag: String = String(RECIPES.get(recipe_id, {}).get("unlocks", ""))
+	if flag == "":
+		return ""
+	for res_id in RESOURCE_NODES:
+		if String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
+			return String(res_id)
+	return ""
+
 ## Why `res_id` cannot be cut yet, in words: the tool it takes, where that is made and what
 ## it costs -- "Stone takes a Bone Pick: make one at the Workbench (1 Bone, 4 Wood)". Said
 ## where the player meets the wall, right-clicking the rock, so the chain is never a
@@ -4546,6 +4578,8 @@ const RECIPES: Dictionary = {
 		"inputs": {"hide": 1},
 		"time": 10.0,
 		"unlocks": "hide_map",
+		# What it is for, in its own words (recipe_use_text): it opens no resource and speeds none.
+		"desc": "RECIPE_HIDE_MAP_DESC",
 	},
 	# The bone shovel (station 2; GAME-DESIGN 5.2: "骨铲……新石器时代用牛肩胛骨做铲"): a big animal's shoulder blade on a
 	# short haft -- what digs the river bank's clay (RESOURCE_NODES.clay). Bone alone, named for what it is made of

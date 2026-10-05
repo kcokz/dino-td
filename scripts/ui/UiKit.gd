@@ -349,10 +349,14 @@ static func job_detail(station: Node, job_id: String) -> Array:
 				station.time_of(job_id)] + " " + made, ""]
 		return [TranslationServer.translate("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(job_id), cost_text]
 			+ sources_text(station.inputs_of(job_id)), "short"]
+	# A tool says what it is for (Config.recipe_use_text): "Bone Pick -- 6 Bone · 3.0 s · lets him gather Stone".
+	var use: String = String(cfg.recipe_use_text(job_id)) if (cfg and cfg.has_method("recipe_use_text")) else ""
+	var for_what: String = ("  ·  " + use) if use != "" else ""
 	if station.can_afford(job_id):
-		return [TranslationServer.translate("CRAFT_DETAIL_FORMAT") % [station.recipe_name(job_id), cost_text, station.time_of(job_id)], ""]
+		return [TranslationServer.translate("CRAFT_DETAIL_FORMAT") % [station.recipe_name(job_id), cost_text, station.time_of(job_id)]
+			+ for_what, ""]
 	return [TranslationServer.translate("CRAFT_DETAIL_UNAFFORDABLE") % [station.recipe_name(job_id), cost_text]
-		+ sources_text(station.inputs_of(job_id)), "short"]
+		+ for_what + sources_text(station.inputs_of(job_id)), "short"]
 
 ## What a round of `ammo_id` does (Config.AMMO), in words and its own numbers: for the tower's card and the
 ## workbench's. "" for what is not ammunition.

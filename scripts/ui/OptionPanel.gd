@@ -523,7 +523,7 @@ func _show_abilities(force: bool = false) -> void:
 			var recipe_id: String = String(held[slot_id])
 			slot.name = "Ability_" + recipe_id
 			slot.add_child(UiKit.icon_rect(recipe_id, UiTheme.icon_size("l"), "Icon"))
-			var effect: String = String(cfg.recipe_effect_text(recipe_id))
+			var effect: String = String(cfg.recipe_use_text(recipe_id))
 			var name_text: String = tr(String(cfg.RECIPES[recipe_id].get("name", recipe_id)))
 			slot.tooltip_text = (tr("ABILITY_TIP") % [name_text, effect]) if effect != "" else name_text
 		else:

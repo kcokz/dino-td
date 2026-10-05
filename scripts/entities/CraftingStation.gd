@@ -111,7 +111,20 @@ func _still_to_do(recipe_id: String) -> bool:
 		return gs != null and gs.has_method("beacon_next_job") and String(gs.beacon_next_job()) == recipe_id
 	if gs and gs.has_method("has_unlock") and gs.has_unlock(String(data.get("unlocks", ""))):
 		return false
-	return true
+	return _of_use_here(recipe_id)
+
+## Whether a tool that opens a resource (Config.recipe_opens) has any of it to open on this map: the bone shovel digs
+## clay, and the first valley has none -- offered there, it was a bench's line that did nothing (the player, 2026-10-04,
+## the shovel: "hover上去的时候没有解释这是干嘛的"; "如果某个选项完全不做的效果好于做……需要加强或者去除").
+func _of_use_here(recipe_id: String) -> bool:
+	var cfg = _get_config()
+	var opens: String = String(cfg.recipe_opens(recipe_id)) if (cfg and cfg.has_method("recipe_opens")) else ""
+	if opens == "" or not is_inside_tree():
+		return true
+	for n in get_tree().get_nodes_in_group("resource_nodes"):
+		if is_instance_valid(n) and "resource_type" in n and String(n.resource_type) == opens:
+			return true
+	return false
 
 ## Whether every material `recipe_id` takes has turned up in this run (GameState.knows):
 ## until then it is not on offer -- the pick is not shown before the bone (v0.6). The
