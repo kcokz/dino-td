@@ -370,6 +370,9 @@ static func armour_factor(d: Node, row: Dictionary) -> float:
 		return 1.0
 	if not Array(cfg.ARMOR.get("piercing", [])).has(String(row.get("for", ""))):
 		return 1.0
+	# A round of its own that goes deeper (AMMO.arrow_iron "through_armour"): its own share.
+	if row.has("through_armour"):
+		return float(row["through_armour"])
 	return float(cfg.ARMOR.get("pierce", 0.25))
 
 ## Whether it can see `d` to act on it (GAME-DESIGN 3.0, rule 3): always by day and at dusk; in the dark

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="4" y="9" width="56" height="38" rx="2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="3" y="46" width="58" height="12" rx="3" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="4" y="9" width="56" height="38" rx="2" fill="#c9b9a0"/>
+  <rect x="3" y="46" width="58" height="12" rx="3" fill="#8b9397"/>
+  <rect x="5" y="10.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="16" y="10.5" width="10.5" height="7.5" rx="1" fill="#b4553a"/>
+  <rect x="28" y="10.5" width="10.5" height="7.5" rx="1" fill="#d27a55"/>
+  <rect x="40" y="10.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="52" y="10.5" width="7" height="7.5" rx="1" fill="#b4553a"/>
+  <rect x="5" y="19.5" width="10.5" height="7.5" rx="1" fill="#d27a55"/>
+  <rect x="10" y="19.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="22" y="19.5" width="10.5" height="7.5" rx="1" fill="#b4553a"/>
+  <rect x="34" y="19.5" width="10.5" height="7.5" rx="1" fill="#d27a55"/>
+  <rect x="46" y="19.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="5" y="28.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="16" y="28.5" width="10.5" height="7.5" rx="1" fill="#b4553a"/>
+  <rect x="28" y="28.5" width="10.5" height="7.5" rx="1" fill="#d27a55"/>
+  <rect x="40" y="28.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="52" y="28.5" width="7" height="7.5" rx="1" fill="#b4553a"/>
+  <rect x="5" y="37.5" width="10.5" height="7.5" rx="1" fill="#d27a55"/>
+  <rect x="10" y="37.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="22" y="37.5" width="10.5" height="7.5" rx="1" fill="#b4553a"/>
+  <rect x="34" y="37.5" width="10.5" height="7.5" rx="1" fill="#d27a55"/>
+  <rect x="46" y="37.5" width="10.5" height="7.5" rx="1" fill="#7e3423"/>
+  <rect x="5" y="47.5" width="11" height="9" rx="2.5" fill="#adb4b8"/>
+  <rect x="18" y="47.5" width="11" height="9" rx="2.5" fill="#adb4b8"/>
+  <rect x="31" y="47.5" width="11" height="9" rx="2.5" fill="#adb4b8"/>
+  <rect x="44" y="47.5" width="11" height="9" rx="2.5" fill="#adb4b8"/>
+  <rect x="4" y="8" width="56" height="3.5" rx="1.5" fill="#7e3423"/>
+</svg>

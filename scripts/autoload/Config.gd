@@ -20,13 +20,19 @@ extends Node
 const RESOURCES: Array[String] = ["wood", "stone", "water", "bone", "food", "hide",
 	# Station 2's (GAME-DESIGN 5.2: "2 制陶 | 挖、烧 | 骨铲……| 黏土"): dug from the river bank with the bone shovel.
 	"clay",
+	# Station 3's ore (5.3: "铁矿，从水里来……沼铁……用骨铲挖"): bog iron, dug from under the peat at the lake's edge with
+	# the same shovel.
+	"iron_ore",
+	# What the workshops out in the open make (Workshop; 5.4): bricks fired in the kiln (station 2), iron smelted in the
+	# bloomery (station 3) -- kept in the stock as wood is, and built with.
+	"brick", "iron",
 	# The beacon's parts, one out of each of the ship's wrecks (WRECKS): the stock holds them as it
 	# holds wood, so a stage's price, what is missing from it and where to get that are said the way
 	# every price is.
 	"antenna", "battery", "board",
 	# What the towers shoot (AMMO), made at the workbench and kept in the stock until he loads a tower with it: a
 	# price, a missing amount and where it comes from are said as for anything else.
-	"arrow_wood", "arrow_bone", "log_round", "log_spiked", "roller_stone", "shot_stone", "fire_pot"]
+	"arrow_wood", "arrow_bone", "arrow_iron", "log_round", "log_spiked", "roller_stone", "shot_stone", "fire_pot"]
 ## The player starts with nothing banked. The opening stock is real wood lying by
 ## the cabin (the map's opening_stock, Config.MAPS) and has to be walked over like anything
 ## else -- the first thing the game teaches is that resources are carried, not
@@ -39,11 +45,15 @@ const INITIAL_RESOURCES: Dictionary = {
 	"food": 0,
 	"hide": 0,
 	"clay": 0,
+	"iron_ore": 0,
+	"brick": 0,
+	"iron": 0,
 	"antenna": 0,
 	"battery": 0,
 	"board": 0,
 	"arrow_wood": 0,
 	"arrow_bone": 0,
+	"arrow_iron": 0,
 	"log_round": 0,
 	"log_spiked": 0,
 	"roller_stone": 0,
@@ -130,6 +140,7 @@ const BUILDINGS: Dictionary = {
 	# 2026-10-04: "箭塔射慢一点", over the wooden arrow's 12 -> 10).
 	"bow_tower": {
 		"name": "BUILDING_BOW_TOWER_NAME",
+		"tab": "towers",            # its tab in his build menu (BUILD_TABS)
 		"kind": "bow",
 		"cells": 2,
 		"height": 3.5,
@@ -139,7 +150,7 @@ const BUILDINGS: Dictionary = {
 		"range": 7.0,
 		"fire_seconds": 1.7,
 		"damage_factor": 1.0,
-		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 20, "comes_with": "arrow_wood"},
+		"ammo": {"accepts": ["arrow_wood", "arrow_bone", "arrow_iron"], "capacity": 20, "comes_with": "arrow_wood"},
 		"level": 1,
 		"upgrades_to": ["bow_tower_2"],
 	},
@@ -153,7 +164,7 @@ const BUILDINGS: Dictionary = {
 		"range": 7.0,
 		"fire_seconds": 1.7,
 		"damage_factor": 1.25,
-		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 30},
+		"ammo": {"accepts": ["arrow_wood", "arrow_bone", "arrow_iron"], "capacity": 30},
 		"level": 2,
 		"upgrades_to": ["bow_tower_3"],
 	},
@@ -167,7 +178,7 @@ const BUILDINGS: Dictionary = {
 		"range": 7.0,
 		"fire_seconds": 1.7,
 		"damage_factor": 1.5,
-		"ammo": {"accepts": ["arrow_wood", "arrow_bone"], "capacity": 40},
+		"ammo": {"accepts": ["arrow_wood", "arrow_bone", "arrow_iron"], "capacity": 40},
 		"level": 3,
 		"upgrades_to": "",
 	},
@@ -179,6 +190,7 @@ const BUILDINGS: Dictionary = {
 	# by a stone-weighted log. What it holds at its foot the bow and the catapult can get at.
 	"drop_tower": {
 		"name": "BUILDING_DROP_TOWER_NAME",
+		"tab": "towers",            # its tab in his build menu (BUILD_TABS)
 		"kind": "drop",
 		"cells": 2,
 		"height": 3.3,
@@ -234,6 +246,7 @@ const BUILDINGS: Dictionary = {
 	# shoots nothing. Loaded with raw meat from the stock: what the raids leave.
 	"bait_rack": {
 		"name": "BUILDING_BAIT_RACK_NAME",
+		"tab": "towers",            # its tab in his build menu (BUILD_TABS)
 		"kind": "bait",
 		"cells": 2,
 		"height": 2.6,
@@ -278,6 +291,7 @@ const BUILDINGS: Dictionary = {
 	# there is a pick.
 	"catapult": {
 		"name": "BUILDING_CATAPULT_NAME",
+		"tab": "towers",            # its tab in his build menu (BUILD_TABS)
 		"kind": "thrower",
 		"cells": 2,
 		"height": 2.8,
@@ -337,6 +351,7 @@ const BUILDINGS: Dictionary = {
 	# what is too quick for a bow's re-arming.
 	"ground_spikes": {
 		"name": "BUILDING_GROUND_SPIKES_NAME",
+		"tab": "walls",            # its tab in his build menu (BUILD_TABS)
 		"kind": "spikes",
 		"cells": 1,
 		"walk_over": true,
@@ -375,6 +390,7 @@ const BUILDINGS: Dictionary = {
 	# is one wood -- a ring round the cabin was forty wood of stakes, and is a dozen now.
 	"wall": {
 		"name": "BUILDING_WALL_NAME",
+		"tab": "walls",            # its tab in his build menu (BUILD_TABS)
 		"kind": "wall",
 		"cells": 1,
 		"hp": 32.0,
@@ -419,6 +435,20 @@ const BUILDINGS: Dictionary = {
 		"hp": 80.0,
 		"height": 1.2,
 		"cost": {"stone": 1},
+		# Once the kiln has fired bricks (station 2): coursed in brick on its own footing (GAME-DESIGN 6.2: "石墙 → 砖墙").
+		"upgrades_to": ["brick_wall"],
+	},
+	# 砖墙 THE BRICK WALL (station 2; GAME-DESIGN 6.2: "墙 | 只拦，一段一格，血厚 | 石墙（每格 1 石）→ 砖墙（砖）"): fired bricks
+	# laid in courses with clay mortar on the stone wall's footing -- what the stone wall becomes once the kiln has fired
+	# bricks (two to the cell): the same cell, the same height, and a raid's jaws take three fifths as long again to break
+	# it (80 -> 128): it answers the heavy ones that break stone -- the boss, the frightened grazers that ram (3.0).
+	"brick_wall": {
+		"name": "BUILDING_BRICK_WALL_NAME",
+		"kind": "wall",
+		"cells": 1,
+		"hp": 128.0,
+		"height": 1.2,
+		"cost": {"stone": 1, "brick": 2},
 		"upgrades_to": "",
 	},
 	# A gate: a section of wall the Hero walks through and nothing else does. Now that a wall
@@ -427,6 +457,7 @@ const BUILDINGS: Dictionary = {
 	# swings open as he comes up to it (Gate.gd; tools/generate_props.py gate).
 	"gate": {
 		"name": "BUILDING_GATE_NAME",
+		"tab": "walls",            # its tab in his build menu (BUILD_TABS)
 		"kind": "wall",
 		"cells": 1,
 		"hp": 48.0,
@@ -447,6 +478,7 @@ const BUILDINGS: Dictionary = {
 	# hands and wood by the first dusk (GAME-DESIGN 9.2's timeline: "约 6:00 第一个黄昏：生火").
 	"campfire": {
 		"name": "BUILDING_CAMPFIRE_NAME",
+		"tab": "camp",            # its tab in his build menu (BUILD_TABS)
 		"kind": "fire",
 		"cells": 1,
 		# In nobody's way (Building: walk_over): a ring of stones and ash a hand high, stepped over --
@@ -479,6 +511,47 @@ const BUILDINGS: Dictionary = {
 		"fuel": 3,
 		"flame_height": 0.66,
 		"flame_size": 1.2,
+		"upgrades_to": "",
+	},
+	# THE WORKSHOPS OUT IN THE OPEN (Workshop; GAME-DESIGN 5.4: "火大的加工在船舱外面：窑、炼铁炉、水车。窑火和炉烟不适合放进
+	# 船舱；放在外面，它们就是要守的建筑，被拆了就得重造"): a building he raises on a 2 x 2 plot like a tower's, and a bench he works
+	# at -- `station`, the id its jobs stand at (RECIPES "station"). A job is paid for when it is begun, and goes on only
+	# while he stands at it working (5.4 rule 3: "加工要人在场才推进"); its fire shows while it does (its model's Flame
+	# part, a fire's flame `flame_height` up, and a glow `light` metres round).
+	#
+	# 窑 THE KILN (station 2; 5.2 "3 窑 | 砌 | 窑（石 + 黏土）| 砖"): an updraft kiln, a beehive of clay on a ring of stones,
+	# that fires the river's clay into bricks -- the stone wall's next step and the bloomery's body. Stone and clay, its
+	# price on its face: the footing and the dome.
+	"kiln": {
+		"name": "BUILDING_KILN_NAME",
+		"tab": "camp",            # its tab in his build menu (BUILD_TABS)
+		"kind": "workshop",
+		"station": "kiln",
+		"cells": 2,
+		"height": 1.6,
+		"hp": 96.0,
+		"cost": {"stone": 8, "clay": 6},
+		"flame_height": 0.25,
+		"flame_size": 0.7,
+		"light": 3.0,
+		"upgrades_to": "",
+	},
+	# 炼铁炉 THE BLOOMERY (station 3; 5.3: "石头垒底、砖砌炉身。炼的时候人要守在炉边拉风箱"): a shaft of fired brick on a stone
+	# footing, the bellows of hide that blow it beside it -- bricks and a hide, its price on its face (4.1 rule 2: the body
+	# and the one part that works it; the hide in no defence, only in the furnace's lungs). Its job smelts bog iron into
+	# iron, the wood its charcoal; he works the bellows the while.
+	"furnace": {
+		"name": "BUILDING_FURNACE_NAME",
+		"tab": "camp",            # its tab in his build menu (BUILD_TABS)
+		"kind": "workshop",
+		"station": "furnace",
+		"cells": 2,
+		"height": 1.8,
+		"hp": 112.0,
+		"cost": {"brick": 10, "hide": 1},
+		"flame_height": 1.6,
+		"flame_size": 0.6,
+		"light": 3.5,
 		"upgrades_to": "",
 	},
 }
@@ -738,7 +811,24 @@ static func takes_bait(species: String) -> bool:
 
 ## Whether `recipe_id` makes ammunition (RECIPES "makes"): made as often as there is the stuff, a batch at a time.
 static func makes_ammo(recipe_id: String) -> bool:
+	if not makes_batch(recipe_id):
+		return false
+	for made in RECIPES[recipe_id]["makes"]:
+		if not AMMO.has(String(made)):
+			return false
+	return true
+
+## Whether `recipe_id` makes a batch of something into the stock (RECIPES "makes") -- ammunition, or the bricks and
+## the iron the workshops make -- as often as there is the stuff for it, rather than a tool made once for good.
+static func makes_batch(recipe_id: String) -> bool:
 	return RECIPES.has(recipe_id) and not RECIPES[recipe_id].get("makes", {}).is_empty()
+
+## The bench `res_id` is made at (RECIPES "makes" -> "station"), or "" for what is not made.
+static func made_at(res_id: String) -> String:
+	for recipe_id in RECIPES:
+		if (RECIPES[recipe_id].get("makes", {}) as Dictionary).has(res_id):
+			return String(RECIPES[recipe_id].get("station", ""))
+	return ""
 
 ## Whether `res_id` is made at a bench (RECIPES "makes"): the towers' ammunition, kept in the stock and loaded into
 ## them -- never found, never lying on the ground, so it has no pile (VISUALS "drop/<id>").
@@ -857,6 +947,18 @@ static func recipe_use_text(recipe_id: String) -> String:
 		if flag != "" and String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
 			parts.append(TranslationServer.translate("TOOL_LETS") % TranslationServer.translate(String(RESOURCE_NODES[res_id].get("name", res_id))))
 	return " · ".join(parts)
+
+## Every resource `recipe_id` lets him gather at all: the bone shovel digs the river's clay (station 2) and the lake's
+## bog iron (station 3). A tool is of use on a map with any of them (CraftingStation._of_use_here).
+static func recipe_opens_all(recipe_id: String) -> Array:
+	var out: Array = []
+	var flag: String = String(RECIPES.get(recipe_id, {}).get("unlocks", ""))
+	if flag == "":
+		return out
+	for res_id in RESOURCE_NODES:
+		if String(RESOURCE_NODES[res_id].get("requires_unlock", "")) == flag:
+			out.append(String(res_id))
+	return out
 
 ## The resource `recipe_id` lets him gather at all (RESOURCE_NODES.<id>.requires_unlock), or "" for one that opens
 ## none: what it is of no use without, on a map that has none (CraftingStation._of_use_here).
@@ -993,7 +1095,9 @@ static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable =
 					from += TranslationServer.translate("RES_FROM_NEEDS") % TranslationServer.translate(String(RECIPES[recipe_id].get("name", recipe_id)))
 					break
 		elif is_made(res_id):
-			from = TranslationServer.translate("RES_FROM_BENCH")
+			var at: String = made_at(res_id)
+			from = TranslationServer.translate("RES_FROM_BENCH") if at in ["", "workbench"] \
+				else TranslationServer.translate("RES_FROM_STATION") % TranslationServer.translate("STATION_%s_NAME" % at.to_upper())
 		else:
 			for species in DINOS:
 				if (DINOS[species].get("drops", {}) as Dictionary).has(res_id):
@@ -1011,7 +1115,18 @@ static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable =
 			"building":
 				add.call("USE_KIND_BUILD")
 			"recipe":
-				add.call("USE_KIND_AMMO" if makes_ammo(String(use["id"])) else "USE_KIND_TOOLS")
+				var rid: String = String(use["id"])
+				if makes_ammo(rid):
+					add.call("USE_KIND_AMMO")
+				elif makes_batch(rid):
+					# Fired or smelted into something else at a workshop: "firing bricks", "smelting iron".
+					for made in RECIPES[rid]["makes"]:
+						var word: String = TranslationServer.translate("USE_KIND_AT_%s" % String(RECIPES[rid].get("station", "")).to_upper()) \
+							% TranslationServer.translate("RESOURCE_%s" % String(made).to_upper())
+						if not kinds.has(word):
+							kinds.append(word)
+				else:
+					add.call("USE_KIND_TOOLS")
 			"ammo":
 				add.call("USE_KIND_BAIT")
 			"beacon":
@@ -1063,7 +1178,26 @@ static func source_hint(res_id: String, owned: Dictionary, known: Callable = Cal
 ## wall off the fence, the brazier off the campfire, a tower's bigger racks) or what a tower is loaded with
 ## (AMMO). Buildings absent here exist in BUILDINGS but are not placed from the menu ("core" is spawned by the
 ## level; the rest are what these become).
-const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "ground_spikes", "campfire", "bow_tower", "drop_tower", "bait_rack", "catapult"]
+const BUILDABLE_TYPES: Array[String] = ["wall", "gate", "ground_spikes", "campfire", "bow_tower", "drop_tower", "bait_rack", "catapult",
+	# The later stations' workshops (GAME-DESIGN 5.4), offered once what they are built of has turned up: the kiln with the
+	# clay (station 2), the bloomery with the bricks and a hide (station 3).
+	"kiln", "furnace"]
+
+## HIS BUILD MENU'S TABS, in the order they stand (GAME-DESIGN 6.0; the player, 2026-10-05: "看看因为科技多了，界面是不是要改的
+## 更简洁，比如建造栏可以造的如果太多就会很confusing"): what he can build sorted by what it is for -- the towers, which shoot,
+## throw and hold; the walls and what is laid in the way; the camp's fires, and the workshops of the later stations -- one
+## tab at a time, each named and drawn by its first (OptionPanel). Every buildable says which is its own
+## (BUILDINGS.<id>.tab); a tab shows while something in it can be built.
+const BUILD_TABS: Array = [
+	{"id": "towers", "name": "BUILD_TAB_TOWERS", "icon": "bow_tower"},
+	{"id": "walls", "name": "BUILD_TAB_WALLS", "icon": "wall"},
+	{"id": "camp", "name": "BUILD_TAB_CAMP", "icon": "campfire"},
+]
+
+## Which of his build menu's tabs `type_id` stands in (BUILDINGS.<id>.tab; the first tab when it says none).
+static func build_tab_of(type_id: String) -> String:
+	var tab: String = String(BUILDINGS.get(type_id, {}).get("tab", ""))
+	return tab if tab != "" else String(BUILD_TABS[0]["id"])
 
 ## Everything the player can have standing: what the menu offers and all it becomes where it stands,
 ## however many steps up. What a material is for is worked out over these (uses_of).
@@ -1186,6 +1320,10 @@ const AMMO: Dictionary = {
 	# A bone point lashed on: deeper, and through the first into the next behind it -- the answer to a column, and
 	# over half the big boss's health in five (DINOS.postosuchus.hp 180).
 	"arrow_bone": {"name": "RESOURCE_ARROW_BONE", "for": "bow", "prop": "arrow_bone", "damage": 20.0, "pierce": 3},
+	# An iron head (station 3): a narrow forged point that goes where a wooden or a bone one glances -- three quarters of it
+	# through an armoured hide (`through_armour`; every other arrow a quarter, ARMOR.pierce) and a little deeper in what
+	# has none. The answer to the plated grazers and the boss's hide; not to a column, which the bone arrow goes through.
+	"arrow_iron": {"name": "RESOURCE_ARROW_IRON", "for": "bow", "prop": "arrow_iron", "damage": 24.0, "through_armour": 0.75},
 	# What the drop tower lets fall (DropTower; GAME-DESIGN 3.0 -- they were the log tower's rolling logs, and keep
 	# their ids). A short heavy log: it crushes what is under it -- the armoured take all of it -- knocks it flat
 	# `knockdown` seconds and shoves it `push` metres off the tower, everything within `splash` of where it falls.
@@ -2019,6 +2157,7 @@ const COLORS: Dictionary = {
 	"tower": Color(0.58, 0.42, 0.24),
 	"wall": Color(0.5, 0.35, 0.2),
 	"stone_wall": Color(0.55, 0.53, 0.49),
+	"brick": Color(0.62, 0.33, 0.22),      # fired clay: the brick wall, the kiln, the bloomery
 	"fire": Color(0.45, 0.4, 0.36),
 	"raptor": Color(0.47, 0.38, 0.26),          # sand and dust: a predator that hunts here
 	"big_theropod": Color(0.35, 0.29, 0.24),    # darker and heavier than the pack
@@ -3648,6 +3787,9 @@ const CONTROLS: Dictionary = {
 	# cannot be taken back -- a demolish, the beacon's launch -- is not on a key: it is pressed by
 	# hand. Back is the cancel key's, which peels a submenu off as it does a ghost in hand.
 	"command_keys": [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9],
+	# His build menu's tabs, round and round while it is open (with Shift, back the other way) -- the key that goes
+	# round a set of tabs in most programs (OptionPanel.next_build_tab).
+	"build_tab_key": KEY_TAB,
 	# The journal (HUD.toggle_journal): the story so far and what is to be done -- J, as the quest log is in most games.
 	"journal_key": KEY_J,
 	# His card in full -- his portrait, his bars, his kit -- and shut again, as C opens the
@@ -3688,6 +3830,7 @@ const KEY_BINDINGS: Array = [
 	{"name": "command_key_7", "group": "commands", "label": "KEY_COMMAND"},
 	{"name": "command_key_8", "group": "commands", "label": "KEY_COMMAND"},
 	{"name": "command_key_9", "group": "commands", "label": "KEY_COMMAND"},
+	{"name": "build_tab_key", "group": "commands", "label": "KEY_BUILD_TAB"},
 	{"name": "details_key", "group": "commands", "label": "KEY_DETAILS"},
 	{"name": "journal_key", "group": "commands", "label": "KEY_JOURNAL"},
 	{"name": "pause_key", "group": "commands", "label": "KEY_PAUSE"},
@@ -4193,6 +4336,20 @@ const RESOURCE_NODES: Dictionary = {
 		"depleted_color": Color(0.3, 0.3, 0.3),
 		"size": Vector3(1.6, 0.6, 1.6),
 	},
+	# BOG IRON (station 3; GAME-DESIGN 5.3: "铁矿，从水里来……沼铁（沼泽和河床底下，铁细菌沉积出来的褐铁矿）……用骨铲挖。……所以
+	# 铁矿总在水边……想要铁，就得冒险"): rusty limonite under the peat of the lake's edge, dug with the bone shovel. Slow,
+	# wet work, and not much of it to a bog: what a furnace eats three at a time (RECIPES.iron).
+	"iron_ore": {
+		"name": "RESOURCE_IRON_ORE",
+		"icon": "iron_ore",
+		"capacity": 30,
+		"harvest_rate": 0.4,
+		# The bone shovel's flag -- named for what it dug first (ids never change, GAME-DESIGN 12.6).
+		"requires_unlock": "harvest_clay",
+		"color": Color(0.45, 0.28, 0.16),
+		"depleted_color": Color(0.3, 0.3, 0.3),
+		"size": Vector3(1.6, 0.5, 1.6),
+	},
 	"water": {
 		"name": "RESOURCE_WATER",
 		"icon": "water",
@@ -4461,6 +4618,15 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
 	"building/brazier":     {"scene": "res://assets/models/props/brazier_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
+	# The brick wall: courses of fired brick on the stone wall's footing (tools/generate_props.py brick_wall).
+	"building/brick_wall":  {"scene": "",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "brick"},
+	# The workshops out in the open (tools/generate_props.py kiln, furnace): their fire a part of its own (Flame), shown
+	# while they work (Workshop).
+	"building/kiln":        {"scene": "",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "brick"},
+	"building/furnace":     {"scene": "",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "brick"},
 	# A tree is a trunk, a rock is a lump: the cylinder is a stand-in for both until the
 	# models land, and "center" is wrong for both of them, so both anchor at the feet.
 	#
@@ -4493,6 +4659,10 @@ const VISUALS: Dictionary = {
 	"node/clay":            {"scene": "res://assets/models/props/clay_bank_a.glb", "fit": "none",
 		"scene_depleted": "res://assets/models/props/clay_bank_dug_a.glb",
 		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
+	# Station 3's bog iron at the lake's edge (tools/generate_props.py bog_iron): rusty mud and limonite in the peat; dug,
+	# a wet pit.
+	"node/iron_ore":        {"scene": "",
+		"material": "vertex", "placeholder": "outcrop", "anchor": "feet", "color": ""},
 	# The ship's wrecks (WRECKS; tools/generate_props.py wreck): a torn piece of the hull, the white
 	# plating and orange markings the cabin wears, scorched, half in a burnt furrow, plates spilled
 	# round it -- and what the part was fitted in: a bent mast, a battery bay, a console. Searched,
@@ -4523,6 +4693,8 @@ const VISUALS: Dictionary = {
 	"drop/stone":           {"scene": "res://assets/models/props/drop_stone_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/clay":            {"scene": "res://assets/models/props/drop_clay_a.glb",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
+	"drop/iron_ore":        {"scene": "",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	"drop/bone":            {"scene": "res://assets/models/props/drop_bone_a.glb",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
@@ -4894,6 +5066,33 @@ const RECIPES: Dictionary = {
 		"inputs": {"clay": 2, "wood": 2},
 		"time": 10.0,
 		"makes": {"fire_pot": 5},
+	},
+	# Iron-tipped arrows (station 3): shafts of wood, a head forged from the bloomery's iron -- ten to a bar.
+	"arrow_iron": {
+		"name": "RESOURCE_ARROW_IRON",
+		"station": "workbench",
+		"inputs": {"wood": 2, "iron": 1},
+		"time": 10.0,
+		"makes": {"arrow_iron": 10},
+	},
+	# WHAT THE WORKSHOPS OUT IN THE OPEN MAKE (Workshop; GAME-DESIGN 5.4 rule 5: "一个配方最多两种原料，外加燃料：砖 = 黏土，烧
+	# 木头；铁 = 铁矿，烧木头"), into the stock a batch at a time, while he works at them.
+	# Bricks, fired in the kiln (station 2): four of the river's clay moulded and stacked in it, two of wood its fire.
+	"brick": {
+		"name": "RESOURCE_BRICK",
+		"station": "kiln",
+		"inputs": {"clay": 4, "wood": 2},
+		"time": 12.0,
+		"makes": {"brick": 4},
+	},
+	# Iron, smelted in the bloomery (station 3; 5.3: "铁很贵：木头烧得多，铁出得少。这正好让铁做的建筑稀有、值得守"): three of
+	# bog iron and four of wood burnt to charcoal in it -- one bloom, hammered into a bar.
+	"iron": {
+		"name": "RESOURCE_IRON",
+		"station": "furnace",
+		"inputs": {"iron_ore": 3, "wood": 4},
+		"time": 18.0,
+		"makes": {"iron": 1},
 	},
 }
 

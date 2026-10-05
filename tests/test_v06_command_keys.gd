@@ -107,7 +107,7 @@ func test_03_a_key_picks_a_card_in_the_build_menu() -> void:
 	panel._on_build_pressed()
 	await wait_frames(1)
 	var second: Button = _buttons(panel)[1]
-	var wanted: String = String(panel._shown_buildables()[1])
+	var wanted: String = String(panel._menu_types[1])
 	assert_false(second.disabled, "Stocked, the second card can be taken")
 	await _press(int(_keys()[1]))
 	assert_eq(String(main.current_build_type), wanted, "The second key puts the second card's building in hand")

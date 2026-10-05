@@ -22,6 +22,9 @@ extends StaticBody3D
 const GROUP: String = "stations"
 
 @export var station_id: String = "workbench"
+## A bench out in the open, part of a building (Workshop: the kiln, the bloomery): no body and no click of its own --
+## the building is what is seen and chosen -- and worked while he works at that building, not while he is in the cabin.
+var bare: bool = false
 
 var active_recipe: String = ""
 var progress: float = 0.0          # seconds of work done on active_recipe
@@ -76,10 +79,11 @@ func recipes() -> Array[String]:
 func is_beacon_job(job_id: String) -> bool:
 	return not _beacon_row(job_id).is_empty()
 
-## Whether `job_id` makes ammunition (Config.makes_ammo): a batch into the stock, as often as wanted.
+## Whether `job_id` makes a batch into the stock, as often as wanted (Config.makes_batch): the workbench's ammunition,
+## the kiln's bricks, the bloomery's iron -- not a tool made once for good.
 func is_ammo(job_id: String) -> bool:
 	var cfg = _get_config()
-	return cfg != null and cfg.has_method("makes_ammo") and cfg.makes_ammo(job_id)
+	return cfg != null and cfg.has_method("makes_batch") and cfg.makes_batch(job_id)
 
 ## Everything this bench does, in the order the cabin panel lists it: its recipes and --
 ## at the beacon's bench -- the beacon's next step. One step at a time and in order, so the
@@ -119,13 +123,13 @@ func _still_to_do(recipe_id: String) -> bool:
 ## "hover上去的时候没有解释这是干嘛的"; "如果某个选项完全不做的效果好于做……需要加强或者去除").
 func _of_use_here(recipe_id: String) -> bool:
 	var cfg = _get_config()
-	var opens: String = String(cfg.recipe_opens(recipe_id)) if (cfg and cfg.has_method("recipe_opens")) else ""
-	if opens == "":
+	var opens: Array = cfg.recipe_opens_all(recipe_id) if (cfg and cfg.has_method("recipe_opens_all")) else []
+	if opens.is_empty():
 		return true
 	var gs = _get_game_state()
 	var map: Dictionary = gs.map_data() if (gs and gs.has_method("map_data")) else {}
 	for row in map.get("default_resource_nodes", []):
-		if String(row.get("type", "")) == opens:
+		if opens.has(String(row.get("type", ""))):
 			return true
 	return false
 
@@ -290,7 +294,7 @@ func get_display_info() -> Dictionary:
 	if active_recipe != "":
 		info["work"] = ratio()
 		info["work_label"] = recipe_name(active_recipe)
-		info["status"] = "" if _he_is_here() else TranslationServer.translate("STATION_ONLY_WITH_HIM")
+		info["status"] = "" if _he_is_here() else TranslationServer.translate("STATION_ONLY_BESIDE_HIM" if bare else "STATION_ONLY_WITH_HIM")
 	return info
 
 ## What the bench is for, or that it has nothing to make -- yet, when new materials would bring
@@ -301,9 +305,11 @@ func _purpose() -> String:
 			return TranslationServer.translate("STATION_%s_DESC" % station_id.to_upper())
 	return TranslationServer.translate("STATION_NOTHING_YET" if waiting_on_materials() else "STATION_NOTHING")
 
-## Whether the Hero is in the cabin this bench stands in.
+## Whether the Hero is in the cabin this bench stands in -- or, out in the open, at the workshop it is part of.
 func _he_is_here() -> bool:
 	var cabin: Node = get_parent()
+	if cabin != null and cabin.has_method("is_tended"):
+		return bool(cabin.is_tended())
 	return cabin != null and "hero_inside" in cabin and bool(cabin.hero_inside)
 
 ## Which parts of the bench's model show: the tools made hang on the board, the beacon's
@@ -341,6 +347,10 @@ func set_selected_visual(on: bool) -> void:
 # ==============================================================================
 
 func _ensure_components() -> void:
+	if bare:
+		collision_layer = 0
+		collision_mask = 0
+		return
 	collision_layer = 2      # same layer as buildings, so the same click raycast finds it
 	collision_mask = 0
 

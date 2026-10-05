@@ -106,10 +106,16 @@ func test_03_build_menu_is_driven_by_config_buildable_types() -> void:
 	panel.select_target(hero)
 	panel._on_build_pressed()
 
-	# One button per buildable type, plus Back.
-	var expected: int = config_node.BUILDABLE_TYPES.size() + 1
-	assert_eq(panel.button_container.get_child_count(), expected,
-		"Build menu shows %d buttons (one per BUILDABLE_TYPES entry plus Back)" % expected)
+	# One button per buildable type, plus Back -- a tab at a time (v0.7: the menu in tabs, Config.BUILD_TABS), every
+	# buildable in one of them.
+	var offered: int = 0
+	for tab in panel._shown_tabs():
+		panel.show_build_tab(String(tab))
+		var expected: int = panel._tab_buildables(String(tab)).size() + 1
+		assert_eq(panel.button_container.get_child_count(), expected,
+			"The %s tab shows %d buttons (one per buildable in it plus Back)" % [tab, expected])
+		offered += expected - 1
+	assert_eq(offered, config_node.BUILDABLE_TYPES.size(), "Between them the tabs offer every buildable")
 
 	# v0.4: buildings are defence and nothing else, so the menu is stakes and a
 	# tower. Anything offered has to be buildable. (v0.6 round six: one slot a job, its first form --
@@ -677,21 +683,13 @@ func test_37_unaffordable_entries_are_disabled_not_just_labelled() -> void:
 	var pair = await _build_menu()
 	var panel = pair[0]
 
-	var seen: Dictionary = {}
-	var idx: int = 0
-	for b_type in config_node.BUILDABLE_TYPES:
-		var btn = panel.button_container.get_child(idx)
-		seen[b_type] = btn
-		idx += 1
-
-	assert_false(seen["wall"].disabled, "A stake is affordable, so its entry is live")
-	assert_true(seen["bow_tower"].disabled, "A tower is out of reach, so its entry is greyed out")
+	assert_false(panel.build_card("wall").disabled, "A stake is affordable, so its entry is live")
+	assert_true(panel.build_card("bow_tower").disabled, "A tower is out of reach, so its entry is greyed out")
 
 	# Paying for it lights the entry back up.
 	pay_for(["bow_tower"])
 	panel._refresh_ui()
-	assert_false(panel.button_container.get_child(config_node.BUILDABLE_TYPES.find("bow_tower")).disabled,
-		"The tower's entry lights up once affordable")
+	assert_false(panel.build_card("bow_tower").disabled, "The tower's entry lights up once affordable")
 
 func test_38_detail_line_reports_cost_and_build_time() -> void:
 	pay_for(["bow_tower"], 999)

@@ -599,9 +599,8 @@ func test_26_build_entries_light_up_when_the_wood_arrives() -> void:
 	panel.select_target(hero)
 	panel._on_build_pressed()
 
-	var idx: int = config_node.BUILDABLE_TYPES.find("bow_tower")
-	assert_gte(idx, 0, "The tower is in the build menu")
-	var btn = panel.button_container.get_child(idx)
+	var btn = panel.build_card("bow_tower")
+	assert_not_null(btn, "The tower is in the build menu")
 	assert_true(btn.disabled, "One %s short, so the entry is greyed out" % short)
 
 	# Earning the last of it must light the entry without reopening the menu.

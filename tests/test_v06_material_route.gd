@@ -170,9 +170,9 @@ func test_04_every_unlock_the_cabin_makes_is_a_tool() -> void:
 	for recipe_id in config_node.RECIPES:
 		var unlock: String = String(config_node.RECIPES[recipe_id].get("unlocks", ""))
 		if unlock == "":
-			# What unlocks nothing is a batch of ammunition (2026-10-02): made as often as there is the
-			# stuff for it, and a right to nothing.
-			assert_true(config_node.makes_ammo(String(recipe_id)), "%s unlocks nothing: it makes ammunition" % recipe_id)
+			# What unlocks nothing is a batch (2026-10-02): the towers' ammunition -- or, out in the open, the kiln's
+			# bricks and the bloomery's iron (v0.7) -- made as often as there is the stuff for it, and a right to nothing.
+			assert_true(config_node.makes_batch(String(recipe_id)), "%s unlocks nothing: it makes a batch" % recipe_id)
 			continue
 		for b_type in config_node.BUILDINGS:
 			for key in config_node.BUILDINGS[b_type]:

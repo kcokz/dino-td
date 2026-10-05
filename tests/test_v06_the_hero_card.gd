@@ -159,7 +159,7 @@ func test_03_build_comes_up_above_its_tile_and_a_building_in_hand_puts_it_away()
 	for btn in _buttons(panel):
 		if String(btn.theme_type_variation) == "CardButton":
 			cards += 1
-	assert_eq(cards, panel._shown_buildables().size(), "A card for each thing he can build")
+	assert_eq(cards, panel._menu_types.size(), "A card for each thing he can build in the tab open (v0.7: in tabs)")
 	assert_false(tiles.keys_live(), "The number keys are the menu's now")
 	assert_false((tiles.build_button.get_node("Keycap") as Control).visible, "and no key is shown twice")
 	await _press(int(_keys()[0]))

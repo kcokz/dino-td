@@ -50,6 +50,10 @@ C = {
     # The second map's clay (blue-grey, ochre-bedded) and its fired pots.
     "clay": "#7c8a90", "clay_hi": "#a6b3b7", "clay_dark": "#55636a", "ochre": "#c99543",
     "pot": "#b8693b", "pot_hi": "#d9915f", "pot_dark": "#7c3f20",
+    # Fired brick, and the mortar of clay between the courses (stations 2 and 3).
+    "brick": "#b4553a", "brick_hi": "#d27a55", "brick_dark": "#7e3423", "mortar": "#c9b9a0",
+    # Bog iron: limonite, rust-brown and pitted; and the iron smelted out of it.
+    "rust": "#9c4f22", "rust_hi": "#c8743a", "rust_dark": "#5e2f17", "peat": "#3b2a1c",
 }
 
 
@@ -638,26 +642,32 @@ for _lvl in (1, 2, 3):
 _FAN = [((9, 57), (37, 5)), ((12, 59), (50, 11)), ((15, 61), (59, 24))]
 
 
-def _arrows(bone=False):
+def _arrows(bone=False, iron=False):
     """A sheaf of three arrows tied at the middle: points whittled and fire-hardened, their tips charred --
-    or points of split bone lashed on."""
+    or points of split bone lashed on, or small forged iron heads (station 3)."""
     body, detail = [], []
     for (tx, ty), (hx, hy) in _FAN:
         dx, dy = hx - tx, hy - ty
         n = math.hypot(dx, dy)
         ux, uy = dx / n, dy / n
         px, py = -uy, ux
-        w, length = (3.7, 13.0) if bone else (2.5, 9.0)
+        w, length = (3.7, 13.0) if bone else ((4.2, 11.0) if iron else (2.5, 9.0))
         base = (hx - ux * length, hy - uy * length)
         mid = (base[0] + ux * length * 0.35, base[1] + uy * length * 0.35)
         head = "%g,%g %g,%g %g,%g %g,%g" % (base[0], base[1], mid[0] + px * w, mid[1] + py * w, hx, hy,
                                             mid[0] - px * w, mid[1] - py * w)
         shaft = shape("path", None, C["grain"], 3.2, d="M %g %g L %g %g" % (tx, ty, base[0], base[1]))
-        point = shape("polygon", C["bone"] if bone else C["ring"], points=head)
+        point = shape("polygon", C["bone"] if bone else (C["iron"] if iron else C["ring"]), points=head)
         body += [shaft, point]
         detail.append(shape("path", None, C["post_dark"], 1.6, d="M %g %g L %g %g" % (
             tx + px * 1.1, ty + py * 1.1, tx + px * 1.1 + ux * 3, ty + py * 1.1 + uy * 3)))
-        if bone:
+        if iron:
+            # The forged head: dark, a bright edge down one side where it was ground.
+            detail.append(shape("polygon", C["iron_dark"], points="%g,%g %g,%g %g,%g" % (
+                base[0], base[1], mid[0] - px * w, mid[1] - py * w, hx, hy)))
+            detail.append(shape("path", None, C["metal"], 1.2, d="M %g %g L %g %g" % (
+                mid[0] + px * w * 0.8, mid[1] + py * w * 0.8, hx, hy)))
+        elif bone:
             detail.append(shape("polygon", C["bone_shade"], points="%g,%g %g,%g %g,%g" % (
                 base[0], base[1], mid[0] - px * w, mid[1] - py * w, hx, hy)))
             detail.append(shape("path", None, C["rope"], 2.6, d="M %g %g L %g %g" % (
@@ -672,6 +682,7 @@ def _arrows(bone=False):
 
 ICONS["arrow_wood"] = _arrows()
 ICONS["arrow_bone"] = _arrows(bone=True)
+ICONS["arrow_iron"] = _arrows(iron=True)
 
 
 # A log for the log tower, lying slanted, its near end cut and ringed -- and dressed: plain, with bone
@@ -802,6 +813,84 @@ ICONS["bone_shovel"] = item_svg(
      shape("path", None, C["bone_shade"], 3.0, d="M 33 33 C 41 39 49 43 59 45"),
      shape("path", None, "#fbf5e6", 1.4, d="M 34 31 C 42 36 50 40 59 42"),
      shape("rect", C["rope"], transform="rotate(45 31 31)", x=25.5, y=27.5, width=11, height=7, rx=2)])
+
+# THE LATER STATIONS' (GAME-DESIGN 5.2-5.4: 窑, 炼铁). The kiln (station 2): a beehive of fired clay on a ring of field
+# stones, its stoke-hole alight at the foot, a vent at the crown.
+_KILN_FLAME = _flame(32, 56, 11, 5)
+_KILN_STONES = [(8, 56, "s2"), (19, 59, "s3"), (32, 60, "s1"), (45, 59, "s3"), (56, 56, "s2")]
+ICONS["kiln"] = item_svg(
+    [shape("path", C["brick"], d="M 11 55 C 9 35 19 16 32 15 C 45 16 55 35 53 55 Z"),
+     shape("rect", C["brick_dark"], x=27, y=9, width=10, height=8, rx=2)]
+    + [shape("ellipse", C[c], cx=x, cy=y, rx=6.5, ry=4.5) for (x, y, c) in _KILN_STONES],
+    [shape("path", C["brick_dark"], d="M 53 55 C 55 35 45 16 32 15 C 41 22 46 36 45 55 Z"),
+     shape("path", C["brick_hi"], d="M 15 46 C 15 33 21 23 29 19 C 24 27 21 37 21 48 Z"),
+     shape("path", None, C["brick_dark"], 1.6, d="M 22 30 L 27 33 M 38 26 L 42 31 M 35 39 L 40 41"),
+     shape("path", C["char"], d="M 24 56 L 24 47 C 24 40 40 40 40 47 L 40 56 Z"),
+     _KILN_FLAME[0], _KILN_FLAME[1],
+     shape("rect", C["char"], x=29, y=10, width=6, height=3, rx=1)]
+    + [shape("ellipse", C[c], cx=x, cy=y, rx=6.5, ry=4.5) for (x, y, c) in _KILN_STONES])
+
+# The bloomery (station 3): a tapering shaft of fired brick, the charge glowing at its mouth, the tapping arch alight at
+# its foot -- and the leather bellows that blow it lying against its side, a pipe into it: brick and hide, its price.
+_BLOOM_GLOW = _flame(36, 13, 9, 6)
+ICONS["furnace"] = item_svg(
+    [shape("polygon", C["brick"], points="24,58 48,58 43,13 29,13"),
+     shape("path", C["hide"], d="M 3 53 C 4 43 11 39 19 42 L 23 46 L 21 54 C 14 58 6 58 3 53 Z"),
+     _BLOOM_GLOW[0]],
+    [shape("polygon", C["brick_dark"], points="40,58 48,58 43,13 38,13"),
+     shape("path", None, C["mortar"], 1.3, d="M 28 22 L 44 22 M 27 31 L 45 31 M 26 40 L 46 40 M 25 49 L 47 49"),
+     shape("path", None, C["mortar"], 1.3, d="M 35 13 L 35 22 M 32 22 L 32 31 M 38 31 L 38 40 M 33 40 L 33 49 "
+                                            "M 40 49 L 40 58"),
+     shape("path", C["char"], d="M 30 58 L 30 52 C 30 47 39 47 39 52 L 39 58 Z"),
+     shape("ellipse", C["flame"], cx=34.5, cy=55, rx=3, ry=2.5),
+     _BLOOM_GLOW[1],
+     shape("path", C["hide_dark"], d="M 3 53 C 6 57 14 58 21 54 L 22 51 C 15 54 8 54 3 50 Z"),
+     shape("path", None, C["post"], 2.6, d="M 4 42 L 20 41 M 8 59 L 22 56"),
+     shape("path", None, C["clay_dark"], 3.2, d="M 21 49 L 28 51")])
+
+# The brick wall (station 2): courses of fired brick laid in a running bond on the stone wall's footing, mortar between.
+_BRICK_ROWS = [(10, 0), (19, 6), (28, 0), (37, 6)]
+_BRICKS = [(x, y) for (y, off) in _BRICK_ROWS for x in range(4 - off, 60, 12)]
+ICONS["brick_wall"] = item_svg(
+    [shape("rect", C["mortar"], x=4, y=9, width=56, height=38, rx=2),
+     shape("rect", C["s3"], x=3, y=46, width=58, height=12, rx=3)],
+    [shape("rect", C["brick_hi"] if (x // 12 + y) % 3 == 0 else (C["brick_dark"] if (x // 12 + y) % 3 == 1 else C["brick"]),
+           x=max(5, x), y=y + 0.5, width=min(10.5, 59 - max(5, x)), height=7.5, rx=1)
+     for (x, y) in _BRICKS if min(10.5, 59 - max(5, x)) > 2]
+    + [shape("rect", C["s2"], x=x, y=47.5, width=11, height=9, rx=2.5) for x in (5, 18, 31, 44)]
+    + [shape("rect", C["brick_dark"], x=4, y=8, width=56, height=3.5, rx=1.5)])
+
+# Bricks (station 2), fired in the kiln: two side by side and one across them.
+ICONS["brick"] = item_svg(
+    [shape("polygon", C["brick"], points="6,40 30,32 58,42 34,52"),
+     shape("polygon", C["brick_dark"], points="6,40 34,52 34,60 6,48"),
+     shape("polygon", C["brick"], points="34,52 58,42 58,50 34,60"),
+     shape("polygon", C["brick_hi"], points="14,26 38,18 52,24 28,33"),
+     shape("polygon", C["brick_dark"], points="14,26 28,33 28,40 14,33"),
+     shape("polygon", C["brick"], points="28,33 52,24 52,31 28,40")],
+    [shape("path", None, C["brick_dark"], 1.4, d="M 20 45 L 44 37"),
+     shape("path", None, C["brick_hi"], 1.4, d="M 8 41 L 30 33.5 M 16 27 L 38 19.5"),
+     shape("circle", C["brick_dark"], cx=46, cy=45, r=1.2), shape("circle", C["brick_dark"], cx=24, cy=28, r=1.1)])
+
+# Bog iron (station 3): lumps of limonite dug from under the peat at the lake's edge -- rust-brown, pitted.
+ICONS["iron_ore"] = item_svg(
+    [shape("path", C["rust"], d="M 8 46 C 6 38 12 30 21 30 C 28 29 33 34 33 41 C 34 50 26 55 18 54 C 12 53 9 50 8 46 Z"),
+     shape("path", C["rust"], d="M 28 30 C 28 21 35 14 44 15 C 53 16 58 24 56 33 C 54 41 46 44 38 42 C 31 40 28 36 28 30 Z"),
+     shape("path", C["rust_dark"], d="M 33 50 C 34 45 40 42 46 44 C 53 46 56 51 53 56 C 49 60 38 60 34 56 Z")],
+    [shape("path", C["rust_hi"], d="M 12 41 C 13 36 17 33 22 33 C 20 37 18 41 17 46 Z"),
+     shape("path", C["rust_hi"], d="M 33 27 C 34 21 39 18 45 18 C 41 22 38 26 37 31 Z"),
+     shape("path", C["rust_dark"], d="M 56 33 C 54 41 46 44 38 42 C 45 39 51 35 54 28 Z")]
+    + [shape("circle", C["peat"], cx=x, cy=y, r=r) for (x, y, r) in
+       [(19, 44, 1.6), (25, 39, 1.2), (14, 47, 1.0), (42, 26, 1.5), (49, 30, 1.2), (46, 22, 1.0), (40, 51, 1.3), (47, 53, 1.0)]])
+
+# Iron (station 3): the bloom out of the furnace, hammered into a bar -- dark, its forged faces catching the light.
+ICONS["iron"] = item_svg(
+    [shape("polygon", C["iron"], points="6,42 34,30 58,38 30,52"),
+     shape("polygon", C["iron_dark"], points="6,42 30,52 30,59 6,49"),
+     shape("polygon", C["iron"], points="30,52 58,38 58,45 30,59")],
+    [shape("polygon", C["metal"], points="12,41 34,32 46,36 24,46"),
+     shape("path", None, C["iron_dark"], 1.4, d="M 20 41 L 38 34 M 28 45 L 46 38"),
+     shape("path", None, "#d5dde2", 1.6, d="M 10 42 L 32 32.5")])
 
 # Load ammunition: a turning arrow round an arrow.
 GLYPHS["reload"] = glyph_svg(

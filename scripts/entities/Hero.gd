@@ -478,6 +478,17 @@ func _process_building(delta: float) -> void:
 		return
 	_load_timer = 0.0
 
+	# A job begun at a workshop out in the open (Workshop: the kiln, the bloomery) goes on while he stands at it working
+	# it -- tending a fire, not hammering: the hammer is put away (GAME-DESIGN 5.4 rule 3: "加工要人在场才推进").
+	if target_building.has_method("has_job") and target_building.has_job() and not target_building.is_upgrading():
+		_hold_the_hammer(false)
+		if target_building.work(delta):
+			target_building = null
+			_continue_to_next_pending_building_or_idle()
+		return
+	if not has_hammer_out():
+		_hold_the_hammer(true)
+
 	# Building and mending are the same verb -- he walks over and works on it with
 	# a hammer. Which one happens is the building's business, not the order's: an
 	# unfinished thing gets raised, a damaged one gets patched.
@@ -835,6 +846,9 @@ func _in_the_cabin(pos: Vector3) -> bool:
 ## Work that is paid for and waiting on him: a blueprint, or an upgrade under way.
 func _is_unfinished_work(b: Node) -> bool:
 	if "is_constructed" in b and not b.is_constructed:
+		return true
+	# A job begun at a workshop out in the open waits on him there as a building does (Workshop).
+	if b.has_method("has_job") and b.has_job():
 		return true
 	return b.has_method("is_upgrading") and b.is_upgrading()
 

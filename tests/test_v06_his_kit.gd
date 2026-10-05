@@ -110,10 +110,17 @@ func test_06_hide_comes_off_the_map_s_elites_and_is_for_the_map() -> void:
 		assert_gt(int(config_node.DINOS[species]["drops"].get("hide", 0)), 0, "%s leaves hide" % species)
 	assert_eq(String(config_node.source_hint("hide", {})), tr("SOURCE_BOSSES") % tr("RESOURCE_HIDE"),
 		"Short of it, he is told where it comes from")
-	var uses: Array = config_node.uses_of("hide")
-	assert_eq(uses.size(), 1, "Hide is for one thing")
-	if uses.size() == 1:
-		assert_eq(String(uses[0]["id"]), "hide_map", "the map")
+	# For the map -- and, from station 3, the bloomery's bellows (v0.7; GAME-DESIGN 4.2: "第 3 站的风箱"): never a defence
+	# (2026-10-02, the player: "皮不要用来防御").
+	var ids: Array = []
+	for use in config_node.uses_of("hide"):
+		ids.append(String(use["id"]))
+		if String(use["kind"]) == "building":
+			assert_eq(String(config_node.get_building_kind(String(use["id"]))), "workshop",
+				"Hide goes into no defence: %s is a workshop" % use["id"])
+	assert_has(ids, "hide_map", "Hide is for the map")
+	assert_has(ids, "furnace", "and the bloomery's bellows")
+	assert_eq(ids.size(), 2, "and nothing else")
 
 func test_07_what_went_is_gone() -> void:
 	# Ids never change and are never reused (GAME-DESIGN 12.6): these are not in the game any more.

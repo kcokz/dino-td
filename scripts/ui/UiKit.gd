@@ -373,6 +373,9 @@ static func ammo_detail(ammo_id: String) -> String:
 		"bow":
 			if int(row.get("pierce", 1)) > 1:
 				return TranslationServer.translate("AMMO_DETAIL_BOW_PIERCE") % [title, hit, int(row["pierce"])]
+			if row.has("through_armour"):
+				return TranslationServer.translate("AMMO_DETAIL_BOW_ARMOUR") % [title, hit,
+					int(round(float(row["through_armour"]) * 100.0))]
 			return TranslationServer.translate("AMMO_DETAIL_BOW") % [title, hit]
 		"drop":
 			var key: String = "AMMO_DETAIL_DROP_HEAVY" if bool(row.get("moves_heavy", false)) else "AMMO_DETAIL_DROP"

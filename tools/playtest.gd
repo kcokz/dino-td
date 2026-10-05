@@ -1833,6 +1833,12 @@ func _scenario_buildmenu() -> void:
 	await _shoot("cards")
 	gs.add_resources({"stone": 3})
 	await _shoot("all_known")
+	# Its tabs (v0.7): each one open in turn -- the camp's with the kiln once there is clay.
+	gs.add_resources({"clay": 6})
+	if panel:
+		for tab in panel._shown_tabs():
+			panel.show_build_tab(String(tab))
+			await _shoot("tab_" + String(tab))
 
 ## The pause menu and its settings page (UI-POLISH T16).
 func _scenario_menu() -> void:

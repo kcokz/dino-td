@@ -17,6 +17,8 @@ const SCRIPT_PATHS: Dictionary = {
 	"drop": "res://scripts/entities/DropTower.gd",
 	"thrower": "res://scripts/entities/Catapult.gd",
 	"bait": "res://scripts/entities/BaitRack.gd",
+	# The workshops out in the open (GAME-DESIGN 5.4): the kiln, the bloomery.
+	"workshop": "res://scripts/entities/Workshop.gd",
 	"base": "res://scripts/entities/Building.gd"
 }
 

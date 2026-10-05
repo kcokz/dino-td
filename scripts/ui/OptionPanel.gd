@@ -13,7 +13,8 @@ extends PanelContainer
 ##   * what it says: the one line only it can add (a stake's bite, what a rock needs);
 ##   * what it can do: its commands -- his as icons, Build, Rest and Torch -- and on the build page
 ##     one card per building with its price as icons along the bottom, red where the warehouse
-##     falls short and a lock on the card when it cannot be paid -- never colour alone.
+##     falls short and a lock on the card when it cannot be paid -- never colour alone; the
+##     cards in tabs by what they are for (Config.BUILD_TABS), one tab at a time.
 ##
 ## The panel is as tall as what it holds and grows upward from the corner; it used to be a
 ## fixed box with its lower half empty. Everything is styled by UiTheme through type
@@ -72,6 +73,14 @@ var work_text: Label = null
 var status_label: Label = null
 var separator: HSeparator = null
 var button_container: GridContainer = null
+## HIS BUILD MENU IN TABS (GAME-DESIGN 6.0; the player, 2026-10-05: "因为科技多了，界面是不是要改的更简洁，比如建造栏可以造的如
+## 果太多就会很confusing"): what he can build sorted by what it is for -- the towers; the walls and what is laid in the way;
+## the camp's fires and workshops (Config.BUILD_TABS, BUILDINGS.<id>.tab) -- one tab shown at a time, as They Are
+## Billions and Age of Empires sort theirs; a tab only while something in it can be built. The tab shown is kept for the
+## run (build_tab): the menu opens where he last built from. The tab key goes round them (Config.CONTROLS.build_tab_key).
+var build_tabs_row: HBoxContainer = null
+var build_tab: String = ""
+var _tab_group: ButtonGroup = null
 ## The Hero's own block: a StatBar and its figure for his health ("hp"), and his row of tools.
 var hero_stats: VBoxContainer = null
 var _stat_rows: Dictionary = {}
@@ -143,11 +152,12 @@ func _on_resources_changed(_res: Dictionary) -> void:
 ## A material has turned up: what is built of it joins the menu, if the menu is open and
 ## now shows more -- rebuilt only then, so an entry the cursor is on is not thrown away.
 func _on_material_discovered(_res_id: String) -> void:
-	if current_menu == "build" and _shown_buildables() != _menu_types:
+	if current_menu == "build" and _shown_buildables() != _menu_all:
 		_refresh_ui()
 
-## What the build menu shows now, in order.
+## What the build menu shows now, in order: the open tab's cards; and everything it offers, in every tab.
 var _menu_types: Array = []
+var _menu_all: Array = []
 
 ## What the build menu offers: every buildable whose materials the run has turned up
 ## (GameState.knows_all) -- stakes and the bow tower from the first minute, bone stakes
@@ -166,16 +176,112 @@ func refresh_build_affordability() -> void:
 	if current_menu != "build" or button_container == null:
 		return
 	var cfg = _get_config()
-	var buildable: Array = _shown_buildables()
 	var children: Array = button_container.get_children()
-	for i in range(buildable.size()):
+	for i in range(_menu_types.size()):
 		if i >= children.size():
 			break
 		var btn = children[i]
 		if btn is Button:
-			var b_type: String = String(buildable[i])
+			var b_type: String = String(_menu_types[i])
 			btn.disabled = not _can_afford(b_type)
 			_fill_price_row(btn, cfg.BUILDINGS[b_type].get("cost", {}))
+
+## The build menu's tabs with something in them now, in their order (Config.BUILD_TABS).
+func _shown_tabs() -> Array:
+	var cfg = _get_config()
+	var shown: Array = _shown_buildables()
+	var out: Array = []
+	for tab in (cfg.BUILD_TABS if (cfg and "BUILD_TABS" in cfg) else []):
+		for b_type in shown:
+			if cfg.build_tab_of(String(b_type)) == String(tab["id"]):
+				out.append(String(tab["id"]))
+				break
+	return out
+
+## What the build menu offers in the tab `tab_id`, in the menu's order.
+func _tab_buildables(tab_id: String) -> Array:
+	var cfg = _get_config()
+	var out: Array = []
+	for b_type in _shown_buildables():
+		if cfg == null or not cfg.has_method("build_tab_of") or cfg.build_tab_of(String(b_type)) == tab_id:
+			out.append(b_type)
+	return out
+
+## The card of `b_type` in his build menu, its tab opened -- or null when the menu is shut or does not offer it.
+func build_card(b_type: String) -> Button:
+	if not showing_menu("build"):
+		return null
+	var cfg = _get_config()
+	if cfg != null and cfg.has_method("build_tab_of") and _shown_tabs().size() > 1:
+		show_build_tab(cfg.build_tab_of(b_type))
+	var i: int = _menu_types.find(b_type)
+	if i < 0 or button_container == null or i >= button_container.get_child_count():
+		return null
+	return button_container.get_child(i) as Button
+
+## The tab `tab_id` of his build menu, open (a click on it, the tab key).
+func show_build_tab(tab_id: String) -> void:
+	if tab_id == build_tab and showing_menu("build"):
+		return
+	build_tab = tab_id
+	if showing_menu("build"):
+		_refresh_ui()
+
+## The next tab with something in it (`step` 1), or the one before (-1), round and round.
+func next_build_tab(step: int = 1) -> void:
+	var tabs: Array = _shown_tabs()
+	if tabs.size() < 2:
+		return
+	var at: int = tabs.find(build_tab)
+	show_build_tab(String(tabs[posmod(at + step, tabs.size())]))
+
+## The tab key goes round the tabs while his build menu is open -- before the controls take it to move the focus.
+func _input(event: InputEvent) -> void:
+	if not visible or not showing_menu("build"):
+		return
+	var k := event as InputEventKey
+	if k != null and k.pressed and not k.echo and k.keycode == Keys.key("build_tab_key"):
+		next_build_tab(-1 if k.shift_pressed else 1)
+		get_viewport().set_input_as_handled()
+
+## The tabs' row: one sunk-and-lit button a tab with something in it (SegmentButton, as the settings page's), its icon and
+## its name; none while everything fits one.
+func _fill_build_tabs(tabs: Array) -> void:
+	if build_tabs_row == null:
+		return
+	for child in build_tabs_row.get_children():
+		build_tabs_row.remove_child(child)
+		child.queue_free()
+	build_tabs_row.visible = tabs.size() > 1
+	if tabs.size() < 2:
+		return
+	var cfg = _get_config()
+	for tab in cfg.BUILD_TABS:
+		var id: String = String(tab["id"])
+		if not tabs.has(id):
+			continue
+		var btn := Button.new()
+		btn.name = "Tab_" + id
+		btn.text = tr(String(tab["name"]))
+		btn.icon = UiTheme.icon(String(tab["icon"]))
+		btn.theme_type_variation = &"SegmentButton"
+		btn.toggle_mode = true
+		btn.button_group = _tab_group
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.custom_minimum_size = Vector2(0, UiTheme.height("command"))
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.set_pressed_no_signal(id == build_tab)
+		btn.pressed.connect(func(): show_build_tab(id))
+		build_tabs_row.add_child(btn)
+	# The key that goes round them, at the row's end -- as each card wears its own, but clear of the tabs' names.
+	var cap := Label.new()
+	cap.name = "Keycap"
+	cap.theme_type_variation = &"KeycapLabel"
+	cap.text = Keys.text("build_tab_key")
+	cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	build_tabs_row.add_child(cap)
 
 func set_selected_unit(unit: Node) -> void:
 	if unit != selected_unit:
@@ -380,6 +486,15 @@ func _ensure_components() -> void:
 		subtitle_label.theme_type_variation = &"CaptionLabel"
 		names.add_child(subtitle_label)
 
+	if build_tabs_row == null:
+		build_tabs_row = HBoxContainer.new()
+		build_tabs_row.name = "BuildTabs"
+		build_tabs_row.visible = false
+		build_tabs_row.add_theme_constant_override("separation", UiTheme.space("xs"))
+		main_vbox.add_child(build_tabs_row)
+		main_vbox.move_child(build_tabs_row, header.get_index() + 1)
+		_tab_group = ButtonGroup.new()
+
 	if hp_row == null:
 		var bars := UiKit.bar_row("Hp")
 		bars[0].visible = false
@@ -442,6 +557,11 @@ func _update_status_display() -> void:
 	# a stage of the beacon repaired, the beacon launched (debug-agent BUG-002: the launch stayed
 	# on the card after the launch, until the bench was chosen again).
 	if current_menu != "build" and selected_unit.has_method("can_offer") and _offer_of(selected_unit) != _station_offer:
+		_refresh_ui()
+		return
+	# A workshop's too: its bench's (Workshop).
+	if current_menu != "build" and "station" in selected_unit and selected_unit.station != null \
+			and _offer_of(selected_unit.station) != _station_offer:
 		_refresh_ui()
 		return
 	# And a tower's, when what it holds or the stock of what it takes has changed (_ammo_offer_of).
@@ -628,6 +748,8 @@ func _refresh_ui() -> void:
 	_set_status(String(info.get("status", "")))
 
 	_clear_buttons()
+	if build_tabs_row != null:
+		build_tabs_row.visible = false
 	match unit_type:
 		"hero":
 			_populate_hero_buttons()
@@ -802,11 +924,17 @@ func _fill_price_row(btn: Button, price: Dictionary, extra: String = "") -> void
 ## (HeroCommands), and his sheet has none.
 func _populate_hero_buttons() -> void:
 	if current_menu == "build":
-		# Level 2: one card per buildable the run has turned up the materials for, then [ Back ]
+		# Level 2: the tabs, and one card per buildable in the open one the run has turned up the materials for, then
+		# [ Back ].
 		button_container.columns = 2
 		var cfg = _get_config()
-		var buildable: Array = _shown_buildables()
+		var tabs: Array = _shown_tabs()
+		if not tabs.has(build_tab) and not tabs.is_empty():
+			build_tab = String(tabs[0])
+		_fill_build_tabs(tabs)
+		var buildable: Array = _tab_buildables(build_tab) if tabs.size() > 1 else _shown_buildables()
 		_menu_types = buildable
+		_menu_all = _shown_buildables()
 		_clear_build_detail()
 		# The card carries the name and the price; the cost in words and the build time go
 		# in the detail line, shown for whichever card the cursor is over.
@@ -854,6 +982,10 @@ func _show_build_detail(b_type: String) -> void:
 			# What a fire does is light the night, and what it costs is wood every night (Fire.gd).
 			_set_status(tr("BUILD_DETAIL_FORMAT_FIRE") % [b_name, _cost_text(b_type), secs,
 				float(row.get("light", 0.0)), int(row.get("fuel", 0))])
+		elif String(row.get("kind", "")) == "workshop":
+			# A workshop says what it makes (Workshop; its bench's own words).
+			_set_status(tr("BUILD_DETAIL_FORMAT_WORKSHOP") % [b_name, _cost_text(b_type), secs,
+				tr("STATION_%s_DESC" % String(row.get("station", b_type)).to_upper())])
 		elif dps > 0.0:
 			_set_status(tr("BUILD_DETAIL_FORMAT_DAMAGE") % [b_name, _cost_text(b_type), secs, cfg.shown(dps)])
 		else:
@@ -998,6 +1130,9 @@ func _can_afford(b_type: String) -> bool:
 func _populate_building_buttons() -> void:
 	button_container.columns = 1
 	_tower_offer = _ammo_offer_of(selected_unit)
+	# A workshop out in the open (Workshop: the kiln, the bloomery): its bench's jobs first, as a bench's card has them.
+	if "station" in selected_unit and selected_unit.station != null and bool(selected_unit.is_constructed):
+		_add_workshop_jobs(selected_unit)
 	if selected_unit.has_method("accepts") and "is_constructed" in selected_unit and selected_unit.is_constructed:
 		_add_ammo_choice(selected_unit)
 	# Upgrading where it stands (v0.6): the price on the card, and on hover the numbers
@@ -1332,6 +1467,42 @@ func _populate_station_buttons() -> void:
 		btn.mouse_exited.connect(_clear_craft_detail)
 	if not ammo.is_empty():
 		_add_ammo_block(station, ammo, busy)
+
+## A WORKSHOP'S JOBS (Workshop: the kiln, the bloomery -- GAME-DESIGN 5.4), on its card under a heading: a card for each
+## job its bench offers, two to a row, its price and its time along its foot, as at the workbench; begun, it is paid
+## for and he is sent to it (Workshop.begin). Greyed while one is under way, or short of its price.
+func _add_workshop_jobs(workshop: Node) -> void:
+	var station: Node = workshop.station
+	_station_offer = _offer_of(station)
+	var jobs: Array = []
+	for job in station.jobs():
+		if station.can_offer(String(job)):
+			jobs.append(String(job))
+	if jobs.is_empty():
+		return
+	var busy: bool = String(station.active_recipe) != ""
+	var heading := Label.new()
+	heading.name = "WorkHeading"
+	heading.theme_type_variation = &"MutedLabel"
+	heading.text = tr("CARD_WORK_IT")
+	button_container.add_child(heading)
+	var grid := GridContainer.new()
+	grid.name = "Works"
+	grid.columns = 2
+	button_container.add_child(grid)
+	for rid in jobs:
+		var btn := UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), func():
+			if is_instance_valid(workshop) and workshop.begin(rid):
+				_refresh_ui()
+		)
+		btn.name = "Job_%s" % rid
+		grid.add_child(btn)
+		_fill_price_row(btn, station.inputs_of(rid), UiKit.seconds_text(station.time_of(rid)))
+		_pins(btn, {"kind": "job", "id": rid})
+		btn.disabled = busy or not station.can_afford(rid)
+		btn.mouse_entered.connect(func(): _show_craft_detail(station, rid))
+		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
+		btn.mouse_exited.connect(_clear_craft_detail)
 
 ## The name a bench's ammunition block goes by (_add_ammo_block).
 const AMMO_BLOCK_NAME := &"AmmoBlock"

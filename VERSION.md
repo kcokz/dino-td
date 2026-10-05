@@ -1736,6 +1736,16 @@
   - 平衡（"落木塔和弓塔就按照你说的，调整"）：落木塔三级 `range` 2.5 → 3.0；第 1 站 `raiders_by_day` 加一段 `from_raid` 2（第一天第二次来袭起每 5 只腔骨龙 1 只链鳄），第 2 天 4 : 1，第 3 天链鳄 0.8 → 1.0；`WaveManager._raiders_now` 认 `from_raid`（按列出的顺序取最后一段已开始的）。测试：`test_v07_the_chargers` test_01 改成"从第二次来袭起"，新的 test_05b（第一次来袭没有链鳄，之后按图上的比例，第二天更多）。
   - **信标那组测试单独跑，退出时不再漏东西**（`--suite=test_v06_beacon`：811 个对象、421 个资源，外加一串 TextServer 和渲染器的 RID；672f05c 起就有）。漏的一个节点都没有——没有关卡、补间或计时器留下，测试自己的清理没错——是 26 个脚本的静态数据没放：`VisualLibrary` 留着的每个模型、`UiTheme` 做的字体和框、`TerrainBuilder` 的噪声。Godot 4.7.1 退出时从新到旧一个个清理还在的脚本，清完一个放开再往下走（`GDScriptLanguage::finish`）；放开时被释放的脚本会连它的基类脚本一起释放，这个基类要是正好排在下一个，清理就断在那里，更早的脚本全都没清。谁挨着自己的基类只看第一次加载的先后：这组测试 test_04 先造了工作台（`CraftingStation`），test_08 的命令卡才经 `UiKit` 加载继承它的 `HealingPod`——光按这个顺序加载这两个脚本就会漏，反过来就不漏；三个脚本的空项目也一样。439c13c 起运行器一开头先加载 `SaveGame`，它从更早处抓着 `CraftingStation`，碰巧盖住了（去掉那几行又是 812 个）。现在运行器退出前把每个已加载脚本的基类连同它自己都抓到最后（`tests/test_runner.gd` 的 `_held_to_the_end`）：它是这次运行最早的脚本、最后才清理，在那之前没有基类会跟着继承它的脚本一起走。只走 Godot 算作项目的文件夹（跳过 `.godot` 和带 `.gdignore` 的 `debug-agent/runs`），退出只多 0.2 秒。
 
+- **v0.7 第二十五批：建造菜单分页；窑、砖、砖墙；沼铁、炼铁炉、铁、铁箭（玩家，2026-10-05 睡前："你看看有什么还没做的活，或者还没完全修好的bug，没有的话把后面几关都先做起来，主要是科技树升级部分，看看因为科技多了，界面是不是要改的更简洁，比如建造栏可以造的如果太多就会很confusing"）**：
+  - 查了没做完的：debug-agent 报告里标着 open 的 BUG-005、009、021、023、024、025、029 都有修它们的提交（3e03d83、be68484、92456b0、22743e4、d384a8d、6e12ea6），只是它 9 月 30 日以后没再复测；5441f33 的全套测试 1427 条全过。
+  - 建造菜单分页（"建造栏可以造的如果太多就会很confusing"）：`OptionPanel` 顶上一排页签（`build_tabs_row`、`SegmentButton`）——塔、墙、营地（`Config.BUILD_TABS`，每个建筑的 `tab`、`build_tab_of`）；一次一页（`_shown_tabs`、`_tab_buildables`、`show_build_tab`、`build_card`），只有能造的页才出现，记住上次那页；Tab / Shift+Tab 换页（`CONTROLS.build_tab_key`，设置页能改：`KEY_BINDINGS` 加一行），键帽在页签那一行最右边。
+  - 室外工坊（设计书 5.4）：新的 `scripts/entities/Workshop.gd`（`kind` "workshop"：建筑 + 一个光的台子 `CraftingStation.bare`；`begin` 付钱、派人过去，`work` 人在旁边才推进，`is_tended`、`is_working`；干活时火和火光、模型的 Flame 部件）；`Hero._process_building` 在工坊边干活不拿锤子，`_is_unfinished_work` 认工坊里没做完的活；`OptionPanel._add_workshop_jobs`（卡片上列活，"在这里做"）；建造菜单那一行说它做什么（`BUILD_DETAIL_FORMAT_WORKSHOP`）。
+  - 窑、砖、砖墙（第 2 站）：`BUILDINGS.kiln`（8 石 + 6 黏土）、`RECIPES.brick`（窑：4 黏土 + 2 木，12 秒，4 块）、`BUILDINGS.brick_wall`（石墙的升级，加 2 砖，血 128）。
+  - 沼铁、炼铁炉、铁、铁箭（第 3 站用；地图还没做）：`RESOURCE_NODES.iron_ore`（骨铲挖，`recipe_opens_all`：骨铲说它能挖黏土和沼铁）、`BUILDINGS.furnace`（10 砖 + 1 皮）、`RECIPES.iron`（3 沼铁 + 4 木，18 秒，1 铁）、`RECIPES.arrow_iron`（2 木 + 1 铁，10 支）、`AMMO.arrow_iron`（伤 24，披甲的进 75%，`through_armour`；`AmmoTower.armour_factor` 认它），弩塔三级都能装。
+  - 批量做的（弹药、砖、铁）都进库存：`Config.makes_batch`（`CraftingStation.is_ammo` 用它），`makes_ammo` 只认真的弹药；资源悬停写"来自：窑"（`made_at`、`RES_FROM_STATION`）和"用来：……烧砖 / 炼铁"（`USE_KIND_AT_<台子>`）。
+  - 图标：`tools/build_icons.py` 的窑、炼铁炉、砖墙、砖、沼铁、铁、铁箭。模型还在做（窑、炼铁炉、砖墙、沼铁现在是方块）。
+  - 测试：新的 `test_v07_the_build_tabs`（每个建筑在一页里、一次一页、只有能造的页、记住那页、数字键选这一页的、Tab 换页）、`test_v07_the_workshops`（窑和炼铁炉的价钱和台子；点了付钱派人；人不在不动、在就动、做完进库存；在窑边不拿锤子；石墙改砖墙；骨铲挖沼铁、炉子炼铁；铁箭穿甲；新材料最多两个用处、悬停说从哪来）；`test_v02_followups`、`test_v03_feedback`、`test_v06_the_hero_card`、`test_v06_command_keys`（一页一页数卡片）、`test_v06_traps_in_the_way`（菜单多了两样）、`test_v06_material_route`（不解锁东西的是一批）、`test_v06_his_kit`（皮做地图和风箱，都不是防御）跟着改。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。
