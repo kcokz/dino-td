@@ -5473,8 +5473,11 @@ static func get_resource_color(res_id: String) -> Color:
 ## fee, and a set crossbow -- expensive, and worth keeping where it stands -- is the
 ## thing repair is really for.
 ##
-## It is one transaction, charged when the work finishes: walking away costs the
-## time spent and nothing else, and there is no half-paid state to reason about.
+## Mended as he works, paid as it goes (Building.repair_step; the player, 2026-10-05: "维修掉血建筑不是应该毫无变化，
+## 而是修多少恢复多少血，比如每秒花多少材料来修，而不是修完之前血量都一样，修好突然就好"): its health comes back as he
+## hammers, a unit of its price -- in what it was built of, each in its share -- paid out of the stock before each
+## unit's worth of health, one every `seconds_per_unit`. Walking away keeps what is mended; a stock run dry stops it.
+## (It was one transaction at the end, the health the same till it was done and then whole at once.)
 const REPAIR: Dictionary = {
 	"seconds_per_unit": 1.2,  # 每一点修理费对应的施工秒数
 }

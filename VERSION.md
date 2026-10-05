@@ -1781,6 +1781,7 @@
   - **没装满的塔头上有小标**（玩家："没装填满的建筑需要在建筑上有小的提示（根据行业标准）"）：塔顶上方它装的弹药的图标加一根条；自己装的时候条是蓝的；空了、库存也没有，图标变红；满了不显示（`AmmoTower._show_badge`，`FEEDBACK.ammo_bar_color` 等）。
   - 测试：`test_v07_ammunition` 第 3～6 条重写（空了自己装、没满时停下来才补、库存没有就空着等、头上的小标），第 11 条没有装填按钮了；`test_v07_the_towers` 第 2 条把库存清空再看空塔。
   - **每样材料、每样工具一句简单的介绍**（玩家："stone axe也没有解释有什么用，所有的材料或者新的物品，都需要有解释这个是干什么的，而且就是用比较简单的介绍就行了"；"不用把所有功能都写在屏幕上，根本搞不清楚而且给玩家压力"）：第一次捡到时、资源栏悬停时说一句它是什么（`RESOURCE_<ID>_DESC`，`Config.resource_intro`；悬停三行：名字、介绍、来自哪），不再列"用来：建造、做弹药……"；石斧"砍树快一倍"（`RECIPES.stone_axe.desc`，做好时的提示也用它）。测试 `test_v07_the_resource_tips` 第 3 条、`test_v06_material_route` 第 2e 条、`test_v07_what_tools_are_for` 第 1 条。
+  - **修多少回多少血**（玩家："维修掉血建筑不是应该毫无变化，而是修多少恢复多少血，比如每秒花多少材料来修……"）：修的时候血一点点长回来，材料边修边扣（每份价钱 1.2 秒，先扣再修，造它的几样材料按比例轮着扣），走开留着修好的，没料了就停（`Building.repair_step`、`repair_hp_per_second`、`repair_affordable`；`finish_repair` 拿掉；卡片上的维修按钮只要付得起下一份就能按）。测试 `test_v04_repair_and_actions` 第 5、5b、6 条重写。
   - 船舱挨了咬，头上不再出血条：它的血已经在顶上的大圈里（玩家："掉血的cabin不需要一直显示血条，因为血条在大圈里已经显示了"；`FEEDBACK.health_bar_not_over`，`Building._update_status_bar`）。墙、塔照旧。测试 `test_v06_the_status_bar` 第 2b 条。
 
 ## v0.7 已定要做的（未开工）

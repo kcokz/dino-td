@@ -127,23 +127,35 @@ func test_04_a_scratch_costs_the_minimum_not_a_flat_fee() -> void:
 	assert_lt(turret.repair_price_total(), total_price_of("catapult"),
 		"Which is far less than rebuilding it")
 
-func test_05_the_bill_is_charged_once_at_the_end() -> void:
-	# One transaction: walking away costs the time spent and nothing else, so there
-	# is never a half-paid building to explain.
+func test_05_mended_as_he_works_paid_as_it_goes() -> void:
+	# The player, 2026-10-05: "维修掉血建筑不是应该毫无变化，而是修多少恢复多少血，比如每秒花多少材料来修，而不是修完之前
+	# 血量都一样，修好突然就好".
 	var turret = _catapult()
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp * 0.5)
 	pay_for(["catapult"], 99)
 	var owed: Dictionary = turret.repair_cost()
 	var before: Dictionary = {}
-	for res_id in owed:
+	for res_id in config_node.RESOURCES:
 		before[res_id] = int(game_state_node.resources.get(res_id, 0))
-
-	assert_true(turret.finish_repair(), "The job completes")
-	for res_id in owed:
-		assert_eq(int(game_state_node.resources.get(res_id, 0)), before[res_id] - int(owed[res_id]),
-			"Exactly the quoted %s left the warehouse" % res_id)
-	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "And it is whole again")
+	var hp0: float = turret.current_hp
+	var whole: float = turret.repair_seconds()
+	assert_true(turret.repair_step(whole * 0.25), "A quarter of the work, and it goes on")
+	assert_almost_eq(turret.current_hp - hp0, turret.repair_hp_per_second() * whole * 0.25, 0.01,
+		"its health coming back as he works")
+	assert_gt(turret.current_hp, hp0, "(not the same till it is done)")
+	var spent: int = 0
+	for res_id in before:
+		spent += before[res_id] - int(game_state_node.resources.get(res_id, 0))
+	assert_gt(spent, 0, "paid for as it goes")
+	assert_lt(spent, turret.repair_price_total(), "not all of it at once")
+	var guard: int = 0
+	while turret.repair_step(0.25) and guard < 1000:
+		guard += 1
+	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "Done, it is whole again")
+	for res_id in before:
+		var left: int = before[res_id] - int(game_state_node.resources.get(res_id, 0))
+		assert_lte(left, int(owed.get(res_id, 0)), "never more %s than the quoted bill" % res_id)
 
 func test_05b_an_unpayable_bill_mends_nothing() -> void:
 	var turret = _catapult()
@@ -153,7 +165,8 @@ func test_05b_an_unpayable_bill_mends_nothing() -> void:
 		game_state_node.resources[res_id] = 0
 
 	var hp_before: float = turret.current_hp
-	assert_false(turret.finish_repair(), "With nothing to spend there is no repair")
+	assert_false(turret.repair_affordable(), "With nothing to spend there is no step of it to pay for")
+	assert_false(turret.repair_step(1.0), "and no repair")
 	assert_almost_eq(turret.current_hp, hp_before, 0.001, "And nothing was mended for free")
 
 func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
@@ -165,8 +178,7 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 	var turret = _catapult(Vector3(float(config_node.get_building_half("catapult").x) + 0.5, 0.0, 0.0))
 	await wait_frames(1)
 	turret.take_damage(turret.max_hp - 1.0)
-	# A catapult is mended with wood and stone -- and the stock holds nothing to load it with, or he would load
-	# it before mending it (Hero._process_building).
+	# A catapult is mended with wood and stone.
 	pay_for(["catapult"])
 
 	hero.order_repair(turret)
@@ -175,8 +187,12 @@ func test_06_the_hero_mends_with_the_same_order_that_builds() -> void:
 	var hp_before: float = turret.current_hp
 	var needed: float = turret.repair_seconds()
 	hero._physics_process(needed * 0.5)
-	assert_almost_eq(turret.current_hp, hp_before, 0.001, "Half the work mends nothing yet")
-	hero._physics_process(needed * 0.5 + 0.01)
+	assert_gt(turret.current_hp, hp_before + 0.001, "Half the work mends half of it")
+	assert_lt(turret.current_hp, turret.max_hp - 0.001, "(not all)")
+	var guard: int = 0
+	while turret.current_hp < turret.max_hp - 0.001 and guard < 400:
+		hero._physics_process(0.1)
+		guard += 1
 	assert_almost_eq(turret.current_hp, turret.max_hp, 0.001, "Finishing it puts the building back up")
 
 # ==============================================================================

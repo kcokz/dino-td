@@ -49,7 +49,6 @@ var target_enemy: Node3D = null
 var target_resource_node: Node = null
 var attack_cooldown: float = 0.0
 var harvest_timer: float = 0.0
-var repair_timer: float = 0.0
 
 var current_path: Array[Vector3] = []
 var current_path_index: int = 0
@@ -534,24 +533,13 @@ func _step_out_of(b: Node, delta: float) -> void:
 	look_at(global_position + out, Vector3.UP)
 	move_and_collide(velocity * delta)
 
-## Mending: he stands there for as long as the job is worth, and the bill is paid
-## when the work is done. Walking away costs the time spent and nothing else --
-## there is never a half-paid building to explain.
+## Mending: the building's health comes back as he works at it, paid out of the stock a unit at a time as it goes
+## (Building.repair_step; the player, 2026-10-05: "修多少恢复多少血"). Whole -- or nothing left in the stock to mend it
+## with -- he goes on to what is next.
 func _work_on_repair(delta: float) -> void:
-	if not target_building.has_method("needs_repair") or not target_building.needs_repair():
+	if not target_building.has_method("repair_step") or not target_building.repair_step(delta):
 		target_building = null
-		repair_timer = 0.0
 		_continue_to_next_pending_building_or_idle()
-		return
-	repair_timer += delta
-	var needed: float = float(target_building.repair_seconds()) if target_building.has_method("repair_seconds") else 1.0
-	if repair_timer < needed:
-		return
-	repair_timer = 0.0
-	if target_building.has_method("finish_repair"):
-		target_building.finish_repair()
-	target_building = null
-	_continue_to_next_pending_building_or_idle()
 
 func _process_attacking(delta: float) -> void:
 	velocity = Vector3.ZERO
@@ -1022,7 +1010,6 @@ func order_build(building: Node, force: bool = false) -> void:
 ## as raising a blueprint -- one verb, and the building decides what the hammer is
 ## for.
 func order_repair(building: Node) -> void:
-	repair_timer = 0.0
 	order_build(building, true)
 
 ## Sends the Hero to build an upgrade onto a building: the same order again, because

@@ -489,38 +489,91 @@ func repair_price_total() -> int:
 		sum += int(repair_cost()[res_id])
 	return sum
 
-## How long the Hero has to stand there. Derived from the size of the bill, so
+## How long the Hero has to stand there for all of it. Derived from the size of the bill, so
 ## patching a scratch is quick and rebuilding most of a turret is not.
 func repair_seconds() -> float:
-	var cfg = _get_config()
-	var per: float = 1.2
-	if cfg and "REPAIR" in cfg:
-		per = float(cfg.REPAIR.get("seconds_per_unit", per))
-	return maxf(0.1, per * float(repair_price_total()))
+	return maxf(0.1, _repair_per_unit() * float(repair_price_total()))
 
-## Pays the bill and puts the building back to full. One transaction at the end of
-## the work: walking away costs the time spent and nothing else, so there is never
-## a half-paid building to reason about.
-##
-## The bill is worked out again here rather than trusted from when the job started,
-## so damage taken during the repair is charged for rather than mended free.
-func finish_repair() -> bool:
+func _repair_per_unit() -> float:
+	var cfg = _get_config()
+	return float(cfg.REPAIR.get("seconds_per_unit", 1.2)) if (cfg and "REPAIR" in cfg) else 1.2
+
+# ------------------------------------------------------------------------------
+# Mended as he works, paid as it goes (Config.REPAIR)
+# ------------------------------------------------------------------------------
+
+## Health paid for and not yet mended; units of each material paid since it was last whole.
+var _repair_paid_hp: float = 0.0
+var _repair_paid: Dictionary = {}
+
+## Its price in units, all of it (BUILDINGS.<id>.cost added up): a unit of it mends max_hp / this.
+func _price_units() -> int:
+	var cfg = _get_config()
+	var sum: int = 0
+	if cfg and "BUILDINGS" in cfg:
+		var cost: Dictionary = cfg.BUILDINGS.get(building_type, {}).get("cost", {})
+		for res_id in cost:
+			sum += int(cost[res_id])
+	return sum
+
+## Health it gets back a second while he works at it: a unit of its price's worth every REPAIR.seconds_per_unit --
+## so the whole of it, from nothing, takes as long as before (repair_seconds).
+func repair_hp_per_second() -> float:
+	var units: int = _price_units()
+	return 0.0 if units <= 0 else max_hp / (float(units) * _repair_per_unit())
+
+## The material due next: the one furthest behind its share of the price -- a catapult is mended in wood and stone,
+## each in its share, as it was built.
+func _repair_due() -> String:
+	var cfg = _get_config()
+	if cfg == null or not ("BUILDINGS" in cfg):
+		return ""
+	var cost: Dictionary = cfg.BUILDINGS.get(building_type, {}).get("cost", {})
+	var best: String = ""
+	var best_share: float = INF
+	for res_id in cost:
+		if int(cost[res_id]) <= 0:
+			continue
+		var share: float = float(_repair_paid.get(res_id, 0)) / float(cost[res_id])
+		if share < best_share:
+			best_share = share
+			best = String(res_id)
+	return best
+
+## Whether a step of mending can be paid for: some health already paid for, or a unit of what is due next in the
+## stock (the card's Repair).
+func repair_affordable() -> bool:
 	if not needs_repair():
 		return false
-	var owed: Dictionary = repair_cost()
+	if _repair_paid_hp > 0.0:
+		return true
+	var due: String = _repair_due()
 	var gs = _get_game_state()
-	if gs == null or owed.is_empty():
+	return due != "" and gs != null and int(gs.resources.get(due, 0)) >= 1
+
+## `delta` seconds of his mending (the player, 2026-10-05: "维修掉血建筑不是应该毫无变化，而是修多少恢复多少血，比如每秒花
+## 多少材料来修，而不是修完之前血量都一样，修好突然就好"): its health back at repair_hp_per_second, a unit of its price
+## paid out of the stock before each unit's worth is mended -- the material due next (_repair_due). False once it is
+## whole, or nothing more can be paid: what was paid for is mended, and no more.
+func repair_step(delta: float) -> bool:
+	if not needs_repair():
 		return false
-	if gs.has_method("spend_resources"):
-		if not gs.spend_resources(owed):
+	var want: float = minf(repair_hp_per_second() * maxf(0.0, delta), max_hp - current_hp)
+	var gs = _get_game_state()
+	while _repair_paid_hp < want:
+		var due: String = _repair_due()
+		if due == "" or gs == null or not gs.has_method("spend_resources") or not gs.spend_resources({due: 1}):
+			if _repair_paid_hp > 0.0:
+				heal(_repair_paid_hp)
+				_repair_paid_hp = 0.0
 			return false
-	elif "resources" in gs:
-		for res_id in owed:
-			if int(gs.resources.get(res_id, 0)) < int(owed[res_id]):
-				return false
-		for res_id in owed:
-			gs.resources[res_id] = int(gs.resources[res_id]) - int(owed[res_id])
-	heal(max_hp - current_hp)
+		_repair_paid[due] = int(_repair_paid.get(due, 0)) + 1
+		_repair_paid_hp += max_hp / float(maxi(1, _price_units()))
+	heal(want)
+	_repair_paid_hp -= want
+	if not needs_repair():
+		_repair_paid.clear()
+		return false
 	return true
 
 func heal(amount: float) -> void:

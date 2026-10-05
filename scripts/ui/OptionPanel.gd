@@ -1613,19 +1613,12 @@ func _clear_craft_detail() -> void:
 		_set_status(tr("CABIN_HINT_PICK_STATION"))
 	status_label.modulate = Color.WHITE
 
-## The whole bill has to be payable: repair is one transaction, so there is no
-## point starting a job the warehouse cannot finish.
+## A step of it payable: it is paid as it goes (Building.repair_step), so a stock short of the whole bill still mends
+## as much as it pays for.
 func _can_pay_a_repair_step() -> bool:
-	var gs = _get_game_state()
-	if gs == null or not ("resources" in gs) or selected_unit == null or not is_instance_valid(selected_unit):
+	if selected_unit == null or not is_instance_valid(selected_unit) or not selected_unit.has_method("repair_affordable"):
 		return false
-	if not selected_unit.has_method("repair_cost"):
-		return false
-	var owed: Dictionary = selected_unit.repair_cost()
-	for res_id in owed:
-		if int(gs.resources.get(res_id, 0)) < int(owed[res_id]):
-			return false
-	return not owed.is_empty()
+	return bool(selected_unit.repair_affordable())
 
 func _resource_name(res_id: String) -> String:
 	return TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
