@@ -1230,12 +1230,24 @@ func _say_in(shot: String, shot_secs: float) -> void:
 	var at: float = float(line.get("at", 0.5))
 	var hold: float = minf(float(line.get("hold", 3.5)), maxf(0.5, shot_secs - at))
 	_tw.parallel().tween_callback(func():
-		_sound(String(line.get("sound", "")))
+		_sound(_in_his_language(String(line.get("sound", ""))))
 		_subtitle.text = tr(String(line.get("text", "")))
 		var tw := _tween()
 		tw.tween_property(_subtitle, "modulate:a", 1.0, 0.25)
 		tw.tween_interval(hold)
 		tw.tween_property(_subtitle, "modulate:a", 0.0, 0.35)).set_delay(at)
+
+## A line's sound in the player's language: `<sound>_<language>` where there is one (Config.SOUNDS: the Chinese,
+## tools/make_ship_voice.py), else the English.
+func _in_his_language(sound: String) -> String:
+	var lang: String = TranslationServer.get_locale().get_slice("_", 0)
+	if sound == "" or lang == "en":
+		return sound
+	var cfg = get_node_or_null("/root/Config")
+	var local: String = "%s_%s" % [sound, lang]
+	if cfg and "SOUNDS" in cfg and (cfg.SOUNDS.get("sounds", {}) as Dictionary).has(local):
+		return local
+	return sound
 
 # ==============================================================================
 # Light, fire and sound

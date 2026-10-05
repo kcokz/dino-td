@@ -3174,8 +3174,9 @@ const OPENING: Dictionary = {
 	"seconds": {"fade_in": 1.4, "bars_in": 0.8, "jump": 6.5, "failure": 4.5, "asleep": 6.0, "breakup": 5.0, "valley_shot": 2.3,
 		"awake_eyes": 3.2, "awake_face": 2.6, "awake_walk": 2.4, "awake_out": 1.6, "awake_crane": 4.2, "skip_after": 0.6},
 	# The ship's voice, by shot: its words (translations/strings.csv), its sound (SOUNDS: the files are made by
-	# tools/make_ship_voice.py, the ship's computer in English, heard in either language), when in the shot it speaks
-	# and how long its words stay up.
+	# tools/make_ship_voice.py with Microsoft's neural voices -- the player, 2026-10-05: "配音完全机械声" -- in English,
+	# and in Chinese as <sound>_zh, the one in the player's language played: Opening._in_his_language), when in the shot
+	# it speaks and how long its words stay up.
 	"lines": {
 		"jump": {"text": "FILM_LINE_JUMP", "sound": "voice_ship_jump", "at": 1.4, "hold": 4.0},
 		"failure": {"text": "FILM_LINE_FAILURE", "sound": "voice_ship_failure", "at": 0.6, "hold": 3.1},
@@ -4314,6 +4315,11 @@ const SOUNDS: Dictionary = {
 		"voice_ship_failure": {"files": ["voice_ship_failure"], "db": 0.0, "pitch": 1.0, "class": "ui"},
 		"voice_ship_breach": {"files": ["voice_ship_breach"], "db": 0.0, "pitch": 1.0, "class": "ui"},
 		"voice_ship_down": {"files": ["voice_ship_down"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		# And in Chinese (tools/make_ship_voice.py, zh-CN-XiaoxiaoNeural): played where the game is played in Chinese.
+		"voice_ship_jump_zh": {"files": ["voice_ship_jump_zh"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_failure_zh": {"files": ["voice_ship_failure_zh"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_breach_zh": {"files": ["voice_ship_breach_zh"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_down_zh": {"files": ["voice_ship_down_zh"], "db": 0.0, "pitch": 1.0, "class": "ui"},
 		"crash": {"files": ["crash"], "db": 2.0, "pitch": 1.0, "class": "event", "unit": 40.0, "reach": 300.0},
 		"ui_click": {"files": ["ui_click"], "db": -16.0, "pitch": 1.05, "class": "ui"},
 		"ambience_valley": {"files": ["ambience_valley"], "db": 0.0, "pitch": 1.0, "class": "ui"},

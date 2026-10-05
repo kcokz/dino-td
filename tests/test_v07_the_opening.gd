@@ -211,3 +211,21 @@ func test_05_the_ship_speaks_its_lines_in_its_voice_and_its_words_are_said_in_bo
 		assert_has(config_node.SOUNDS["sounds"], id, "%s is a sound" % id)
 		assert_true(ResourceLoader.exists("res://assets/audio/%s.wav" % id), "%s's file is there" % id)
 	assert_true(ResourceLoader.exists(String(config_node.VISUALS["film/ship"]["scene"])), "the ship is drawn")
+
+func test_06_the_ship_speaks_in_the_players_language() -> void:
+	# The player, 2026-10-05: "配音完全机械声" -- neural voices (tools/make_ship_voice.py), English and Chinese, the one in
+	# the player's language played (Opening._in_his_language).
+	var film := Opening.new()
+	_cleanup_nodes.append(film)
+	tree.root.add_child(film)
+	var was: String = TranslationServer.get_locale()
+	for shot in config_node.OPENING["lines"]:
+		var sound: String = String(config_node.OPENING["lines"][shot]["sound"])
+		assert_has(config_node.SOUNDS["sounds"], sound + "_zh", "%s is said in Chinese too" % shot)
+		for f in config_node.SOUNDS["sounds"].get(sound + "_zh", {}).get("files", []):
+			assert_true(ResourceLoader.exists("res://assets/audio/%s.wav" % String(f)), "(%s is made)" % String(f))
+		TranslationServer.set_locale("zh_CN")
+		assert_eq(film._in_his_language(sound), sound + "_zh", "In Chinese, the Chinese")
+		TranslationServer.set_locale("en")
+		assert_eq(film._in_his_language(sound), sound, "in English, the English")
+	TranslationServer.set_locale(was)
