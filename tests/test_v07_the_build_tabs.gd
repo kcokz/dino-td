@@ -176,3 +176,53 @@ func test_05_the_tab_key_goes_round_and_with_shift_back() -> void:
 	await _press(key)
 	assert_eq(String(panel.build_tab), was, "With the menu shut the tab key does nothing to it")
 	assert_has(Keys.names(), "build_tab_key", "and it is one of the keys the settings page sets")
+
+func test_06_the_workbenchs_ammunition_is_in_tabs_by_the_tower_it_is_for_once_there_are_many() -> void:
+	var main = await _level()
+	stock_everything()
+	know_everything()
+	var bench = main.current_core.station("workbench")
+	tree.root.get_node("EventBus").unit_selected.emit(bench)
+	await wait_frames(1)
+	var panel = main.hud.option_panel
+	var block: Node = panel.button_container.find_child("AmmoBlock", true, false)
+	assert_not_null(block, "The workbench's ammunition block")
+	if block == null:
+		return
+	var offered: Array = []
+	for rid in bench.jobs():
+		if bench.can_offer(String(rid)) and config_node.makes_ammo(String(rid)):
+			offered.append(String(rid))
+	assert_gt(offered.size(), int(config_node.UI["ammo_tabs_from"]), "(every kind known: more than a glance takes in)")
+	var tabs: Node = block.find_child("AmmoTabs", true, false)
+	assert_not_null(tabs, "In tabs")
+	if tabs == null:
+		return
+	var kinds: Dictionary = {}
+	for rid in offered:
+		kinds[panel._ammo_for(rid)] = true
+	assert_eq(tabs.get_child_count(), kinds.size(), "a tab a tower it has ammunition for")
+	var names: Array = []
+	for tab in tabs.get_children():
+		names.append(String(tab.name))
+	for tab_name in names:
+		var kind: String = String(tab_name).trim_prefix("AmmoTab_")
+		block = panel.button_container.find_child("AmmoBlock", true, false)
+		var tab: Button = block.find_child(String(tab_name), true, false) as Button
+		assert_not_null(tab, "(the %s tab)" % kind)
+		if tab == null:
+			continue
+		tab.pressed.emit()
+		await wait_frames(1)
+		block = panel.button_container.find_child("AmmoBlock", true, false)
+		var shown: Array = []
+		for btn in block.find_children("Job_*", "Button", true, false):
+			if not btn.is_queued_for_deletion():
+				shown.append(String(btn.name).trim_prefix("Job_"))
+		assert_gt(shown.size(), 0, "The %s tab shows its own" % kind)
+		for rid in shown:
+			assert_eq(panel._ammo_for(rid), kind, "%s is for the %s" % [rid, kind])
+		var cap_on_tab: bool = false
+		for t in block.find_children("AmmoTab_*", "Button", true, false):
+			cap_on_tab = cap_on_tab or t.get_node_or_null("Keycap") != null
+		assert_false(cap_on_tab, "and no number key sits on a tab")

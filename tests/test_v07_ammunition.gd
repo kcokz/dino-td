@@ -319,7 +319,13 @@ func test_12_the_workbench_keeps_its_ammunition_apart() -> void:
 	assert_not_null(block, "its ammunition in a block of its own")
 	if block == null:
 		return
+	# By the tower it is for, a tab each once there are many (v0.7, OptionPanel._add_ammo_block): each in its tower's tab.
 	for rid in _ammo_recipes():
-		assert_not_null(block.find_child("Job_%s" % rid, true, false), "%s in it" % rid)
+		if panel.ammo_tab != panel._ammo_for(rid):
+			panel.ammo_tab = panel._ammo_for(rid)
+			panel._refresh_ui()
+			await wait_frames(1)
+			block = panel.button_container.get_node_or_null(String(panel.AMMO_BLOCK_NAME))
+		assert_not_null(block.find_child("Job_%s" % rid, true, false) if block else null, "%s in it" % rid)
 	var detail: String = String(UiKit.job_detail(bench, "arrow_wood")[0])
 	assert_true(detail.contains(str(int(config_node.RECIPES["arrow_wood"]["makes"]["arrow_wood"]))), "on hover, how many a batch makes: %s" % detail)

@@ -1761,6 +1761,9 @@
   - 配重投石机：`BUILDINGS.catapult_trebuchet`（`catapult_3` 的升级，+3 铁；`range` 13、`min_range` 4、`throw_seconds` 7.5、×2.5、容量 25、`wound_degrees` 150）；`Catapult._wound` 认塔自己的 `wound_degrees`，`Catapult._process` 让配重箱一直竖直；模型 `trebuchet_a.glb`、图标、头像。
   - 第 4 站的高潮：小行星（第一版）。新的 `scripts/fx/ImpactRain.gd`（`begin`：天上一道光、太阳一闪、闷响 `impact_boom`、提示 `HINT_IMPACT`；之后玻璃珠一颗颗落下，越来越密，`land` 烫伤恐龙、外面的人、建筑；人在舱里没事；新的一局就没了）；`Main._on_beacon_launched_climax`（地图的 `climax` 是 "impact" 才有）；`MAPS.hell_creek.climax`；`Hero.take_damage(amount, bitten)`（被烫不还手）；声音 `impact_boom`、`impact_bead`（`tools/build_sounds.gd`）。新的测试 `test_v07_the_impact`（只有第 4 站有、落下来烫伤恐龙、人在外面挨烫在舱里不挨、新的一局就没了）。
   - 测试：新的 `test_v07_station_four`（四站、最后一站、带着铁锹、生物是自己的并且有模型有叫声、霸王龙压轴、河边有黏土沼铁、自定义游戏和天色提示、配重投石机只要铁、更远更狠更慢、长臂拉得更远）。`tools/playtest.gd` 新场景 `cast4`（第 4 站的生物和人站一排），`kiln` 场景里多一座配重投石机。
+- **v0.7 第二十八批：工作台的弹药分页（同一晚，玩家："看看因为科技多了，界面是不是要改的更简洁"）**：
+  - 工作台的弹药多于 4 种（`UI.ammo_tabs_from`）、又不止一座塔用时分页，一座塔一页（`OptionPanel._add_ammo_block`、`ammo_tab`、`_ammo_for`、`_first_tower_of`；页签 `AMMO_TAB_BOW` / `DROP` / `THROWER`："箭""落木""投石"，图标是那座塔，悬停写塔名）；页签不带数字键。英文的弹药名改短，两栏的卡片里放得下（Wood Arrows、Iron Arrows、Spiked Logs、Heavy Logs；中文不变）。设计书 6.0 的弹药表补上铁箭。
+  - 测试：`test_v07_the_build_tabs` 第 6 条（多了才分页、一页只有一座塔的、点页签换页）；`test_v06_the_interface`、`test_v07_ammunition` 先翻到那座塔的一页再找卡片。`tools/playtest.gd` 的 `bench3` 三页都拍。
 
 ## v0.7 已定要做的（未开工）
 

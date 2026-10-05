@@ -869,7 +869,7 @@ func _mark_keys() -> void:
 		if btn.name == BACK_NAME:
 			UiKit.keycap(btn, tr("KEY_CANCEL"))
 			continue
-		if btn.theme_type_variation in [&"DangerButton", &"AccentButton"]:
+		if btn.theme_type_variation in [&"DangerButton", &"AccentButton", &"SegmentButton"]:
 			continue
 		if n < keys.size():
 			UiKit.key_shortcut(btn, int(keys[n]))
@@ -1522,6 +1522,32 @@ func _add_workshop_jobs(workshop: Node) -> void:
 		btn.focus_entered.connect(func(): _show_craft_detail(station, rid))
 		btn.mouse_exited.connect(_clear_craft_detail)
 
+## The tower whose ammunition the workbench's block shows, when it is in tabs (_add_ammo_block): its kind, "bow",
+## "drop", "thrower".
+var ammo_tab: String = ""
+
+## The tower kind a batch is for (Config.AMMO "for" of what it makes), or "" for one that is no ammunition.
+func _ammo_for(recipe_id: String) -> String:
+	var cfg = _get_config()
+	if cfg == null or not cfg.RECIPES.has(recipe_id):
+		return ""
+	for made in cfg.RECIPES[recipe_id].get("makes", {}):
+		return String(cfg.AMMO.get(String(made), {}).get("for", ""))
+	return ""
+
+## The first tower on his build menu of the kind `kind` (a tab's name and icon): the bow tower for "bow".
+func _first_tower_of(kind: String) -> String:
+	var cfg = _get_config()
+	for b_type in (cfg.BUILDABLE_TYPES if cfg else []):
+		if cfg.get_building_kind(String(b_type)) == kind:
+			return String(b_type)
+	return kind
+
+## A number of Config.UI, or `fallback`.
+func _ui_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.UI.get(key, fallback)) if (cfg and "UI" in cfg) else fallback
+
 ## The name a bench's ammunition block goes by (_add_ammo_block).
 const AMMO_BLOCK_NAME := &"AmmoBlock"
 
@@ -1544,11 +1570,52 @@ func _add_ammo_block(station: Node, ammo: Array[String], busy: bool) -> void:
 	title.theme_type_variation = &"AccentLabel"
 	title.text = tr("STATION_AMMO")
 	column.add_child(title)
+	# BY THE TOWER IT IS FOR, a tab each (the later stations bring eight kinds -- the player, 2026-10-05: "因为科技多了，界面
+	# 是不是要改的更简洁"): more than Config.UI.ammo_tabs_from kinds for more than one tower, and the block shows one
+	# tower's at a time under its tab (the tower's icon and name), the tab kept as he left it -- as his build menu does.
+	var by_tower: Dictionary = {}
+	var towers: Array = []
+	for rid in ammo:
+		var kind: String = _ammo_for(rid)
+		if not by_tower.has(kind):
+			by_tower[kind] = []
+			towers.append(kind)
+		by_tower[kind].append(rid)
+	var shown: Array = ammo
+	if towers.size() > 1 and ammo.size() > int(_ui_number("ammo_tabs_from", 4)):
+		if not towers.has(ammo_tab):
+			ammo_tab = String(towers[0])
+		shown = by_tower[ammo_tab]
+		var tabs := HBoxContainer.new()
+		tabs.name = "AmmoTabs"
+		tabs.add_theme_constant_override("separation", UiTheme.space("xs"))
+		column.add_child(tabs)
+		var group := ButtonGroup.new()
+		for kind in towers:
+			var tower: String = _first_tower_of(String(kind))
+			var tab := Button.new()
+			tab.name = "AmmoTab_" + String(kind)
+			# Named short for what it holds -- arrows, logs, shot -- under the tower's own icon, the tower named on hover.
+			tab.text = tr("AMMO_TAB_%s" % String(kind).to_upper())
+			tab.tooltip_text = _building_name(tower)
+			tab.icon = UiTheme.icon(tower)
+			tab.theme_type_variation = &"SegmentButton"
+			tab.toggle_mode = true
+			tab.button_group = group
+			tab.focus_mode = Control.FOCUS_NONE
+			tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			tab.set_pressed_no_signal(String(kind) == ammo_tab)
+			var k: String = String(kind)
+			tab.pressed.connect(func():
+				ammo_tab = k
+				_refresh_ui()
+			)
+			tabs.add_child(tab)
 	var grid := GridContainer.new()
 	grid.name = "AmmoJobs"
 	grid.columns = 2
 	column.add_child(grid)
-	for rid in ammo:
+	for rid in shown:
 		var btn := UiKit.card_button(station.recipe_name(rid), UiKit.job_icon(station, rid), func():
 			if is_instance_valid(station):
 				station.begin(rid)

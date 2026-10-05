@@ -154,6 +154,11 @@ func test_07_every_bench_chosen_offers_its_jobs_on_the_card() -> void:
 		for job_id in station.jobs():
 			if not station.can_offer(String(job_id)):
 				continue
+			# Its ammunition in tabs by the tower it is for (v0.7): that tower's tab open.
+			if panel._ammo_for(String(job_id)) != "" and panel.ammo_tab != panel._ammo_for(String(job_id)):
+				panel.ammo_tab = panel._ammo_for(String(job_id))
+				panel._refresh_ui()
+				await wait_frames(1)
 			var btn: Button = panel.button_container.find_child("Job_%s" % job_id, true, false) as Button
 			assert_not_null(btn, "%s offers %s" % [station_id, job_id])
 			if btn:

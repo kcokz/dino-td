@@ -1551,6 +1551,14 @@ func _scenario_bench3() -> void:
 	root.get_node("EventBus").unit_selected.emit(bench)
 	await _wait(6)
 	await _shoot("workbench_all")
+	# Each ammunition tab in turn (OptionPanel.ammo_tab), its cards at their width.
+	var panel = _main.hud.option_panel
+	for kind in ["drop", "thrower"]:
+		panel.ammo_tab = kind
+		panel._refresh_ui()
+		await _wait(4)
+		await _shoot("workbench_" + kind)
+	panel.ammo_tab = ""
 
 ## Station 3 as it opens (v0.7: the Jehol): our game played to its third station, its level built, seen from above.
 func _scenario_station3() -> void:

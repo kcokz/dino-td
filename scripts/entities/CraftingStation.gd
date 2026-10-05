@@ -260,7 +260,7 @@ func recipe_name(recipe_id: String) -> String:
 	var args: Array = recipe_data(recipe_id).get("name_args", [])
 	if not args.is_empty() and "%" in title:
 		return title % args
-	# A batch of ammunition is named for what it makes and how many: "Wooden Arrows ×20".
+	# A batch of ammunition is named for what it makes and how many: "Wood Arrows ×20".
 	if is_ammo(recipe_id):
 		var makes: Dictionary = recipe_data(recipe_id).get("makes", {})
 		for ammo_id in makes:

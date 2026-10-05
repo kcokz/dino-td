@@ -3703,6 +3703,9 @@ const UI: Dictionary = {
 	# Two sizes down (station 3: clay, bog iron, bricks and iron besides the first station's -- a dozen chips with the
 	# beacon's parts), the count's box at its narrowest: four small figures, no more.
 	"resource_count_width_tight": 20,
+	# The workbench's ammunition goes into tabs, one a tower (OptionPanel._add_ammo_block), once it offers more kinds than
+	# this -- for more than one tower: four is two rows of two, taken in at a glance; the third station's eight are not.
+	"ammo_tabs_from": 4,
 	"objective_width": 290,            # a pinned goal's plate, top right
 	# The status bar: the strip along the top edge; the cabin's medallion hung from its middle,
 	# its top this far down; the Hero's at the bottom left, drawn this much smaller; a toast
