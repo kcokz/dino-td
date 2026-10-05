@@ -56,8 +56,9 @@ func _opening_level() -> Node:
 	return main
 
 ## What the run is left at, to be found again after the film: where the cabin stands, the guards and the grazers, the
-## sky's light, the dinosaurs out.
+## sky's light, the dinosaurs out. Taken with the game held, as the film holds it: nothing wanders off meanwhile.
 func _snapshot(main: Node) -> Dictionary:
+	game_state_node.set_paused(true)
 	var guards: Dictionary = {}
 	for g in tree.get_nodes_in_group("guard_dinos"):
 		guards[g.get_instance_id()] = (g as Node3D).global_position
@@ -84,14 +85,17 @@ func _as_it_was(main: Node, before: Dictionary) -> void:
 	var sun: DirectionalLight3D = main.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun != null:
 		assert_almost_eq(sun.light_energy, float(before["sun"]), 0.001, "and its own sun")
+	# Within a stride: the game going again, they go about their business (a guard's roaming, a grazer's amble) from the
+	# frame the film ends -- wherever they were run off to in it, they were put back.
+	var stride: float = 0.3
 	for g in tree.get_nodes_in_group("guard_dinos"):
 		if before["guards"].has(g.get_instance_id()):
-			assert_true((g as Node3D).global_position.is_equal_approx(before["guards"][g.get_instance_id()]), "the nest's guards back at their posts")
+			assert_lt((g as Node3D).global_position.distance_to(before["guards"][g.get_instance_id()]), stride, "the nest's guards back at their posts")
 	var h: Node = main.get_node_or_null("Herds")
 	if h != null:
 		for a in h.get_children():
 			if before["herds"].has(a.get_instance_id()):
-				assert_true((a as Node3D).global_position.is_equal_approx(before["herds"][a.get_instance_id()]), "the grazers back where they grazed")
+				assert_lt((a as Node3D).global_position.distance_to(before["herds"][a.get_instance_id()]), stride, "the grazers back where they grazed")
 	await wait_frames(2)
 	assert_eq(tree.get_nodes_in_group("dinos").size(), int(before["dinos"]), "nothing the film put down left in the valley")
 	assert_false(bool(game_state_node.is_paused), "the game going")
