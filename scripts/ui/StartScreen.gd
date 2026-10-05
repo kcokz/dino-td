@@ -411,12 +411,31 @@ func _button(node_name: String, cb: Callable, variation: StringName, icon_name: 
 	var b := Button.new()
 	b.name = node_name
 	b.theme_type_variation = variation
-	if icon_name != "":
-		b.icon = UiTheme.icon(icon_name)
 	b.custom_minimum_size = Vector2(0, UiTheme.height("command"))
 	b.pressed.connect(cb)
 	parent.add_child(b)
+	_glyph(b, icon_name)
 	return b
+
+## A button's glyph set at its left end, apart from its words, which stay centred on the whole button with the others'
+## (as the pause menu's: PauseMenu._glyph; the player, 2026-10-04: "resume和其他的按钮字体没对齐").
+func _glyph(btn: Button, icon_name: String) -> void:
+	var tex: Texture2D = UiTheme.icon(icon_name) if icon_name != "" else null
+	if tex == null:
+		return
+	var glyph := TextureRect.new()
+	glyph.name = "Glyph"
+	glyph.texture = tex
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var side: float = UiTheme.icon_size("s")
+	glyph.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	glyph.offset_left = UiTheme.space("m")
+	glyph.offset_right = glyph.offset_left + side
+	glyph.offset_top = -side * 0.5
+	glyph.offset_bottom = side * 0.5
+	btn.add_child(glyph)
 
 func _ui(key: String, fallback: float) -> float:
 	var cfg = _autoload("Config")
