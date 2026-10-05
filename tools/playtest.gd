@@ -181,20 +181,25 @@ func _run(name: String) -> void:
 # ==============================================================================
 
 ## A run played the way a player plays it, through the same orders a click gives -- nothing
-## granted, nothing placed by hand: pick up the opening wood, ring the cabin with palisade and a
+## granted, nothing placed by hand: pick up the opening wood, the first bow tower, ring the cabin with palisade and a
 ## gate at its door, chop trees until the raid, stand inside the ring while it comes, gather what
-## it leaves, go in and make the pick, cook and eat, then quarry stone; towers north of the ring, loaded with what
-## the workbench makes for them (the 2026-10-02 rebuild). A line of what is happening every ten seconds of game time,
-## and a frame at each beat.
+## it leaves, go in and make the pick, then quarry stone; towers north of the ring, loaded with what
+## the workbench makes for them (the 2026-10-02 rebuild), a strip of spikes before them, the towers raised a level and
+## the ring's north side turned to stone as there is the stuff. A line of what is happening every ten seconds of game
+## time, and a frame at each beat.
 ##
 ## `play:<minutes>` plays that long (default 8), at the game's own 3x.
 ## "play:<minutes>[:<plan>]" -- a run played as a player would, for `minutes` of game time. THE PLAN (2026-10-04, the
 ## player: "如果有的事情不做也可以过关，就要考虑这个是玩家可选的方向吗……如果不是，那就是没存在的必要") is what it does
 ## and what it leaves undone, so a run without one thing can be laid beside a run with it:
 ##   all          everything below (the default)
+##   -<thing>     all but that one (_plan_has): -ring, -bow, -drop, -thrower, -bait, -spikes, -fire, -torch, -axe, -pod,
+##                -fight, -upgrade, -wallup
+##   +<kind>      all, and three more towers of that kind round the cabin: +bow, +drop, +thrower -- what piling on one
+##                thing buys against the rest ("如果某个选项做的多了明显比别的选项要效果好太多……")
 ##   bows         only bow towers -- five -- and wooden arrows: no ring of palisade, no other tower
-##   -<thing>     all but that: -ring, -log, -catapult, -bait, -pod (no rest in the healing pod), -torch, -axe
-## (commas between: "play:25:-pod,-axe"). Its account is printed at the end as one line, "[report] {json}" (_report):
+##   savvy        how he plays, not what: a raid not near him he works through; with a torch, the night as the day
+## (commas between: "play:25:-pod,savvy"). Its account is printed at the end as one line, "[report] {json}" (_report):
 ## where his time went, what came in and went out, how much timber is left standing, and each raid.
 func _scenario_play(spec: String) -> void:
 	var parts: PackedStringArray = spec.split(":")
@@ -317,7 +322,21 @@ func _scenario_play(spec: String) -> void:
 		["bait_rack", centre + Vector2i(0, -half.y - 6)],
 		["bow_tower", centre + Vector2i(3, -half.y - 3)],
 		["catapult", centre + Vector2i(-9, -half.y - 4)],
+		# A strip of spikes across the way the raids come, before the bait rack (CellTrap; re-laid as they wear out).
+		["ground_spikes", centre + Vector2i(-2, -half.y - 9)],
+		["ground_spikes", centre + Vector2i(-1, -half.y - 9)],
+		["ground_spikes", centre + Vector2i(0, -half.y - 9)],
+		["ground_spikes", centre + Vector2i(1, -half.y - 9)],
+		["ground_spikes", centre + Vector2i(2, -half.y - 9)],
 	]
+	# Three more of a kind (+bow, +drop, +thrower): round the cabin's east, west and north-east, after the rest.
+	for word in _plan_words:
+		if String(word).begins_with("+"):
+			var kind_id: String = {"bow": "bow_tower", "drop": "drop_tower", "thrower": "catapult"}.get(String(word).substr(1), "")
+			if kind_id != "":
+				tower_plan.append([kind_id, centre + Vector2i(half.x + 4, -1)])
+				tower_plan.append([kind_id, centre + Vector2i(-half.x - 4, -1)])
+				tower_plan.append([kind_id, centre + Vector2i(6, -half.y - 7)])
 	# Only bow towers (the player's run, 2026-10-03: "我就靠造了5个bow tower，加不停地做木箭装填就行了"): five, round the
 	# cabin's north, east and west, the way raids come.
 	if _plan_words.has("bows"):
@@ -328,7 +347,7 @@ func _scenario_play(spec: String) -> void:
 			["bow_tower", centre + Vector2i(-half.x - 4, 0)],
 			["bow_tower", centre + Vector2i(0, -half.y - 7)],
 		]
-	# Left out by its kind ("-thrower", "-fire") or by itself ("-catapult", "-campfire").
+	# Left out by its kind ("-thrower", "-fire", "-spikes") or by itself ("-catapult", "-campfire").
 	tower_plan = tower_plan.filter(func(p): return (_plan_has(String(cfg.BUILDINGS[String(p[0])].get("kind", ""))) \
 		and _plan_has(String(p[0]))) or _plan_words.has("bows"))
 	var refused_towers: Dictionary = {}
@@ -426,17 +445,24 @@ func _scenario_play(spec: String) -> void:
 		# The defence's core before the beacon: the first tower, the two fires, the drop tower (what crushes the
 		# armoured chargers that come from the second day). The bot that paid the beacon first met the second day's
 		# raid with one bow tower, and two Desmatosuchus walked through it to the cabin.
+		# The first of the plan not up that can be paid for now, in the plan's order -- one waiting on stone does not
+		# hold up the rest (the bench's first run of +bow: the catapult's eleven stone kept the strip of spikes and the
+		# three more bow towers unbuilt to the end) -- and the first not up at all, what the stone is quarried for.
 		var next_tower: Array = []
 		var next_index: int = -1
+		var wanted_tower: Array = []
 		for i in tower_plan.size():
 			var plan: Array = tower_plan[i]
-			if not refused_towers.has(plan[1]) and gm.building_in_build_cell(plan[1]) == null:
+			if refused_towers.has(plan[1]) or gm.building_in_build_cell(plan[1]) != null:
+				continue
+			if wanted_tower.is_empty():
+				wanted_tower = plan
+			var cost: Dictionary = cfg.BUILDINGS[plan[0]]["cost"]
+			if gs.knows_all(cost) and gs.can_afford(cost) and (not dark or String(cfg.BUILDINGS[plan[0]].get("kind", "")) == "fire"):
 				next_tower = plan
 				next_index = i
 				break
-		var can_raise: bool = not next_tower.is_empty() and gs.knows_all(cfg.BUILDINGS[next_tower[0]]["cost"]) \
-				and gs.can_afford(cfg.BUILDINGS[next_tower[0]]["cost"]) \
-				and (not dark or String(cfg.BUILDINGS[next_tower[0]].get("kind", "")) == "fire")
+		var can_raise: bool = not next_tower.is_empty()
 		if can_raise and next_index < 4:
 			await _raise(next_tower, refused_towers, note)
 			continue
@@ -491,6 +517,21 @@ func _scenario_play(spec: String) -> void:
 			note.call("loading the %s" % String(empty.building_type))
 			await _play_until(func(): return not is_instance_id_valid(empty_id) or not empty.wants_load(), 30.0, "loading a tower")
 			continue
+		# The line up -- all of the plan built, the three more of a kind among it -- by day: a tower raised a level
+		# (Building.begin_upgrade) when it can be paid with tonight's wood still put by -- the first that can, so they go
+		# up in turn.
+		if not dark and _plan_has("upgrade") and wanted_tower.is_empty():
+			var up: Node = _tower_to_raise()
+			if up != null:
+				await _upgrade(hero, up, String(up.upgrade_target()), note)
+				continue
+		# And the ring's north side -- the way the raids come -- turned to stone, a section at a time, while there is
+		# stone to spare (the pick's: Config.BUILDINGS.stone_wall).
+		if not dark and _plan_has("wallup") and _plan_has("ring") and wanted_tower.is_empty():
+			var section: Node = _wall_to_stone(ring)
+			if section != null:
+				await _upgrade(hero, section, "stone_wall", note)
+				continue
 		# Savvy, with a torch to light he works the night as the day (the phytosaurs keep out of its light).
 		if dark and _plan_words.has("savvy") and _plan_has("torch") and hero.has_method("can_light_torch") \
 				and (lit_hero or hero.can_light_torch()):
@@ -528,7 +569,7 @@ func _scenario_play(spec: String) -> void:
 		# it as fast as it comes, and a bot that only quarried let the ring fall for want of a stake.
 		if int(gs.resources.get("wood", 0)) < 8:
 			await _chop_a_while(hero, "wood", 8.0)
-		elif gs.has_unlock(pick_flag) and int(gs.resources.get("stone", 0)) < 8:
+		elif gs.has_unlock(pick_flag) and int(gs.resources.get("stone", 0)) < maxi(8, int(cfg.BUILDINGS[wanted_tower[0]]["cost"].get("stone", 0)) if not wanted_tower.is_empty() else 8):
 			await _chop_a_while(hero, "stone", 12.0)
 		else:
 			await _chop_a_while(hero, "wood", 8.0)
@@ -551,16 +592,64 @@ var _plan_words: PackedStringArray = PackedStringArray(["all"])
 
 ## Whether the plan has `thing` in it: everything but what it leaves out ("-thing"); with "bows", only the bow towers
 ## and their arrows -- no ring, no other tower, no fire -- and what any player does: a torch at night, the axe, a rest
-## when hurt. The things: "ring" (the palisade), each tower by its kind ("bow", "drop", "thrower", "bait"), "fire" (the
-## campfires the towers see by at night), "torch", "axe", "pod", "fight" (going out to what is at the cabin). And how
-## he plays: "savvy" -- to v0.7's rules: a raid comes for the cabin and the man last, so one that is not near him he
-## works through; the torch keeps the phytosaurs off, so with one he works the night (else he waits both out inside).
+## when hurt. The things -- every option a player has (GAME-DESIGN 3.0, 6.0): "ring" (the palisade), each tower by its
+## kind ("bow", "drop", "thrower", "bait"), "spikes" (a strip of them before the line), "fire" (the campfires the towers
+## see by at night), "torch", "axe", "pod", "fight" (going out to what is at the cabin), "upgrade" (the towers raised a
+## level), "wallup" (the ring's north side turned to stone). And how he plays: "savvy" -- to v0.7's rules: a raid
+## comes for the cabin and the man last, so one that is not near him he works through; the torch keeps the
+## phytosaurs off, so with one he works the night (else he waits both out inside).
 func _plan_has(thing: String) -> bool:
 	if _plan_words.has("-" + thing):
 		return false
 	if _plan_words.has("bows"):
 		return thing in ["bow", "torch", "axe", "pod", "fight"]
 	return true
+
+## The first tower standing that can be raised a level now (Building.can_upgrade) and paid for with the night's wood
+## still put by (_fuel_reserve), or null.
+func _tower_to_raise() -> Node:
+	var gs := root.get_node("GameState")
+	for t in get_nodes_in_group(AmmoTower.GROUP):
+		if not is_instance_valid(t) or not t.is_constructed or not t.can_upgrade():
+			continue
+		var cost: Dictionary = t.upgrade_cost()
+		if cost.is_empty() or not gs.knows_all(cost) or not gs.can_afford(cost):
+			continue
+		if int(gs.resources.get("wood", 0)) - int(cost.get("wood", 0)) < _fuel_reserve():
+			continue
+		return t
+	return null
+
+## The first section of the ring's north side (`ring`'s first row: the way the raids come) still timber that can be
+## turned to stone with stone to spare -- some kept for the catapult's shot -- or null.
+func _wall_to_stone(ring: Array[Vector2i]) -> Node:
+	var gs := root.get_node("GameState")
+	var gm = _main.grid_manager
+	if ring.is_empty():
+		return null
+	var north: int = ring[0].y
+	for cell in ring:
+		if cell.y != north:
+			continue
+		var b = gm.building_in_build_cell(cell)
+		if b == null or not is_instance_valid(b) or String(b.building_type) != "wall" or not b.can_upgrade("stone_wall"):
+			continue
+		var cost: Dictionary = b.upgrade_cost("stone_wall")
+		if not gs.can_afford(cost) or int(gs.resources.get("stone", 0)) - int(cost.get("stone", 0)) < 6:
+			return null
+		return b
+	return null
+
+## `b` turned into `target` where it stands: paid for, and built onto by him (Hero.order_upgrade), the old building at
+## work the while.
+func _upgrade(hero: Node, b: Node, target: String, note: Callable) -> void:
+	_ctx = "build"
+	if not b.begin_upgrade(target):
+		return
+	note.call("raising the %s to a %s" % [String(b.building_type), target])
+	var id: int = b.get_instance_id()
+	hero.order_upgrade(b)
+	await _play_until(func(): return not is_instance_id_valid(id) or not b.is_upgrading(), 60.0, "building an upgrade")
 
 ## What he is about this moment, for the account: "gather:wood", "craft:ammo", "build", "load", "raid", "drops",
 ## "wreck", "rest", "torch", "think" (the bot choosing what next).
@@ -1092,7 +1181,7 @@ func _play_status(hero: Node, cabin: Variant, gs: Node, wm: Node) -> String:
 		if is_instance_valid(b) and "building_type" in b and String(b.building_type) != "core":
 			walls += 1
 	return "hero %s hp %.1f/%.0f at %s | cabin %.0f/%.0f | %d buildings | %d dinos | %s | next raid %.0fs" % [
-		["idle", "moving", "building", "attacking", "DEAD", "harvesting", "eating"][int(hero.current_state)],
+		["idle", "moving", "building", "attacking", "DEAD", "harvesting", "resting"][int(hero.current_state)],
 		hero.current_hp, hero.max_hp, _cellstr(hero.global_position, _main.grid_manager),
 		cabin.current_hp, cabin.max_hp, walls, dinos, str(gs.resources), wm.raid_timer]
 
