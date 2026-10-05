@@ -78,14 +78,22 @@ func test_03_the_game_the_player_chose_opens_on_it_once() -> void:
 	tree.current_scene = main
 	main.open_on_the_crash()
 	await wait_frames(2)
-	assert_true(main.station_jump.is_crashing(), "the game the player chose opens on it")
+	# Our own game opens on its film, the crash a shot of it (Opening; test_v07_the_opening).
+	var film: bool = main.opening != null and main.opening.is_playing()
+	assert_true(main.station_jump.is_crashing() or film, "the game the player chose opens on it")
 	assert_false(game_state_node.crash_landing, "shown once")
-	main.station_jump.finish_now()
-	await wait_frames(2)
+	if film:
+		main.opening.skip()
+	else:
+		main.station_jump.finish_now()
+	await wait_frames(4)
+	if main.hud.is_briefing_open():
+		main.hud.briefing.close()
 	main.restart_game()
 	main.open_on_the_crash()
 	await wait_frames(2)
 	assert_false(main.station_jump.is_running(), "a restart is the same run again, at once")
+	assert_true(main.opening == null or not main.opening.is_playing(), "no film either")
 	tree.current_scene = null
 
 func test_04_it_falls_burning_onto_its_spot_and_he_climbs_out() -> void:

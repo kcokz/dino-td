@@ -331,6 +331,8 @@ static func build() -> Theme:
 	# Text standing on the world rather than on a panel needs an edge, or it vanishes on
 	# the pale bits of the valley floor.
 	_label(t, "HudLabel", font("bold"), "label", color("text"), 6)
+	# The words under a film's voice (Opening): larger, on the dark of its bars or over the world, edged.
+	_label(t, "SubtitleLabel", font("medium"), "heading", color("text"), 7)
 	_label(t, "MutedLabel", font("regular"), "small", color("text_muted"))
 	_label(t, "CaptionLabel", font("medium"), "caption", color("text_faint"))
 	_label(t, "LeadLabel", font("regular"), "body", color("text_muted"))

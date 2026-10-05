@@ -317,6 +317,9 @@ func _begin() -> void:
 var _crashing: bool = false
 var _crash_began_at: int = 0
 var _crash_tween: Tween = null
+## The opening film the crash is a shot of (Opening): given, the valley is handed back to it once the blow has shaken
+## it (Opening.after_the_blow), and it ends the crash when it is done (end_crash).
+var _film: Object = null
 var _lit: Array[Node3D] = []
 var _skipping: bool = false
 ## Whether the player ended the last crash at once (skip): then the game holds on the briefing, which says what the
@@ -335,9 +338,10 @@ var _shake_dice := RandomNumberGenerator.new()
 ## The game is held still meanwhile, as for a landing, and the mist is not lifted: the capsule comes down steeply,
 ## inside what the cabin sees (Config.FOG.sight) -- seen before it goes up -- so the mist does not swallow it; its
 ## flames and smoke are drawn over the mist, as a wreck's smoke is. Heard and not seen, the nest stays unfound.
-func crash(main: Node) -> void:
+func crash(main: Node, film: Object = null) -> void:
 	if _running or main == null or not is_instance_valid(main):
 		return
+	_film = film
 	var core: Node3D = main.current_core if ("current_core" in main) else null
 	if core == null or not is_instance_valid(core) or not core.is_inside_tree():
 		return
@@ -387,6 +391,10 @@ func crash(main: Node) -> void:
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_blow.bind(core, rest))
 	tw.tween_method(_shaken.bind(eye, spot), 1.0, 0.0, _seconds("crash_shake_seconds", 0.8))
+	# A shot of the opening film: the valley's its from here.
+	if _film != null:
+		tw.tween_callback(_film_goes_on)
+		return
 	tw.tween_interval(_seconds("crash_calls_after", 0.4))
 	for crier in _criers(main, spot):
 		tw.tween_callback(_cry.bind(crier))
@@ -677,6 +685,22 @@ func _cry(who: Node) -> void:
 		who.say("alert")
 	else:
 		_sound(String(who.get_meta(&"species", "")) + "_call", (who as Node3D).global_position + Vector3.UP)
+
+## The blow struck and the view shaken: the film goes on from here (Opening.after_the_blow) -- the crash's own clicks
+## end it no longer; the film's do.
+func _film_goes_on() -> void:
+	_crashing = false
+	_crash_tween = null
+	var film: Object = _film
+	if film != null and is_instance_valid(film) and film.has_method("after_the_blow"):
+		film.after_the_blow()
+
+## The film done: him out, the game let go, the HUD back (_crash_over).
+func end_crash() -> void:
+	var hero: Node3D = _main.hero if (_main != null and is_instance_valid(_main) and "hero" in _main) else null
+	_climb_out(hero)
+	_film = null
+	_crash_over()
 
 ## He climbs out of it.
 func _climb_out(hero: Node3D) -> void:

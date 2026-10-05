@@ -139,14 +139,19 @@ func test_05_a_cold_campfire_does_not_turn_it() -> void:
 
 func test_05b_the_first_raid_is_the_pack_alone_then_the_armoured_come_more_by_the_day() -> void:
 	# The player, 2026-10-04 ("落木塔和弓塔就按照你说的，调整"): the bow tower's counter, sooner and more.
+	# Our own game, whatever an earlier test left the run's settings at (a custom game's longer day).
+	game_state_node.game = {}
+	game_state_node.reset_game()
 	var main = await fresh_level()
 	_cleanup_nodes.append(main)
 	var wm = main.wave_manager
 	wm.auto_raid_enabled = false
 	var steps: Array = game_state_node.map_data().get("raiders_by_day", [])
 	var share := func(day: int, raid: int) -> float:
-		game_state_node.day_clock = float(config_node.DAY["length"]) * float(day - 1) + 10.0
+		var length: float = float(config_node.DAY["length"]) * float(game_state_node.run_scale("day_length"))
+		game_state_node.day_clock = length * float(day - 1) + 10.0
 		game_state_node._run_the_day(0.0)
+		assert_eq(int(game_state_node.day_number()), day, "(the clock on day %d)" % day)
 		wm.current_wave = raid
 		var n: int = 0
 		for i in 400:

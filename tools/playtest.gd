@@ -131,6 +131,8 @@ func _run(name: String) -> void:
 			await _scenario_hammer()
 		"stages":
 			await _scenario_stages()
+		"opening":
+			await _scenario_opening()
 		"showcase":
 			await _scenario_showcase()
 		"scale":
@@ -2310,6 +2312,29 @@ func _scenario_snug() -> void:
 		rig.reset()
 		rig.apply_to(_main.camera)
 		await _wait(2)
+
+## The opening film (Opening; the player, 2026-10-04: "开场动画还要精致化一点……这个开场动画要有大片感"), a frame every
+## so often from its first shot to the run's first moment.
+func _scenario_opening() -> void:
+	var gs := root.get_node("GameState")
+	gs.play("campaign")
+	_main.hud.reset_hud(true)
+	_main.hud.hold_objective()
+	var film := Opening.new()
+	_main.add_child(film)
+	var began: int = Time.get_ticks_msec()
+	film.play(_main)
+	var every: float = 1.5
+	var k: int = 0
+	while film.is_playing() and k < 48:
+		var due: float = every * float(k) + 0.6
+		while (Time.get_ticks_msec() - began) / 1000.0 < due and film.is_playing():
+			await process_frame
+		await _shoot("film_%02d" % k)
+		k += 1
+	print("[playtest] opening: %d frames, %.1f s, skipped %s" % [k, (Time.get_ticks_msec() - began) / 1000.0, film.was_skipped])
+	await _wait(10)
+	await _shoot("film_after")
 
 ## The work seen (Config.CONSTRUCTION; the player, 2026-10-04: "造的塔首先要有造的阶段样子……至少要有四个阶段的成型前
 ## 样子，升级也要有两个阶段"): a bow tower and a drop tower side by side, ordered, at each stage of going up, whole; then

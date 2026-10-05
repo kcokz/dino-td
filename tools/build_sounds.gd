@@ -1121,6 +1121,86 @@ func _s_crash() -> PackedFloat32Array:
 	_mix(out, _crackle(2.4, 120.0, 1500.0), 0.25, 0.45)
 	return _space(out, 0.25, [[0.5, 0.3], [1.1, 0.18], [1.8, 0.1]])
 
+# ==============================================================================
+# The opening film (scripts/fx/Opening.gd)
+# ==============================================================================
+
+func _s_film_fault() -> PackedFloat32Array:
+	# The time drive failing: a hum that had held steady stumbling, its pitch falling away under it, and the crackle
+	# and spit of a coil arcing -- power going where it should not.
+	var dur: float = 2.6
+	var out := _buf(dur)
+	_mix(out, _tone(dur, [[0.0, 220.0], [0.3, 230.0], [1.0, 70.0]], [[0.0, 0.9], [0.6, 0.6], [1.0, 0.0]]), 0.0, 0.5)
+	_mix(out, _tone(dur, [[0.0, 330.0], [1.0, 104.0]], [[0.0, 0.5], [0.7, 0.3], [1.0, 0.0]]), 0.0, 0.3)
+	for k in 9:
+		var at: float = _rng.randf_range(0.0, dur - 0.3)
+		_mix(out, _burst(_rng.randf_range(0.04, 0.12), _rng.randf_range(2200.0, 5200.0), 1.2), at, _rng.randf_range(0.4, 0.9))
+	_mix(out, _crackle(dur, 140.0, 3400.0), 0.0, 0.5)
+	return _space(out, 0.2, [])
+
+func _s_film_alarm() -> PackedFloat32Array:
+	# The ship's alarm: a two-note klaxon, hard-edged, three calls of it.
+	var calls: int = 3
+	var each: float = 0.7
+	var out := _buf(calls * each)
+	for c in calls:
+		var n: int = int(each * RATE)
+		var seg := PackedFloat32Array()
+		seg.resize(n)
+		var phase: float = 0.0
+		for i in n:
+			var u: float = float(i) / float(n)
+			var hz: float = 660.0 if u < 0.5 else 520.0
+			phase += hz / float(RATE)
+			var sq: float = 1.0 if fmod(phase, 1.0) < 0.5 else -1.0
+			var env: float = minf(1.0, u * 40.0) * minf(1.0, (1.0 - u) * 30.0)
+			seg[i] = (sq * 0.6 + sin(TAU * phase) * 0.4) * env
+		_lowpass(seg, 2600.0)
+		_mix(out, seg, c * each, 0.8)
+	return out
+
+func _s_film_separation() -> PackedFloat32Array:
+	# The module blown free: four explosive bolts going one after another, sharp and dry; air venting in a long hiss;
+	# the collar's metal groaning as it lets go.
+	var out := _buf(2.4)
+	for k in 4:
+		var at: float = 0.05 + k * 0.11 + _rng.randf_range(-0.02, 0.02)
+		_mix(out, _burst(0.07, 1500.0, 0.9), at, 1.0)
+		_mix(out, _modes(0.5, [[180.0, 0.12, 1.0], [470.0, 0.08, 0.6]], 0.002), at, 0.6)
+	_mix(out, _hiss(1.8, [[0.0, 4200.0], [1.0, 1600.0]], 0.8, [[0.0, 0.0], [0.1, 1.0], [1.0, 0.0]]), 0.4, 0.45)
+	_mix(out, _tone(1.6, [[0.0, 90.0], [1.0, 55.0]], [[0.0, 0.0], [0.3, 0.7], [1.0, 0.0]]), 0.5, 0.5)
+	return _space(out, 0.3, [])
+
+func _s_film_breakup() -> PackedFloat32Array:
+	# The ship coming apart: the drive's ring bursting -- a deep boom with a bright crack at its front -- metal groaning
+	# and tearing, and the pieces' rattle and spit as they go.
+	var out := _buf(4.2)
+	_mix(out, _burst(0.1, 2600.0, 0.7), 0.0, 1.0)
+	_mix(out, _modes(3.0, [[34.0, 1.3, 1.0], [57.0, 0.9, 0.8], [96.0, 0.6, 0.6], [161.0, 0.3, 0.4]], 0.006), 0.0, 1.0)
+	_mix(out, _tone(2.4, [[0.0, 140.0], [0.5, 96.0], [1.0, 60.0]], [[0.0, 0.0], [0.2, 0.6], [1.0, 0.0]]), 0.6, 0.5)
+	_mix(out, _modes(2.0, [[312.0, 0.6, 1.0], [811.0, 0.4, 0.6], [1443.0, 0.25, 0.4]], 0.002), 0.25, 0.4)
+	_mix(out, _crackle(3.4, 90.0, 2000.0), 0.15, 0.55)
+	return _space(out, 0.35, [[0.6, 0.25], [1.3, 0.12]])
+
+func _s_film_pod_open() -> PackedFloat32Array:
+	# The pod letting him go: the fluid draining with a gurgle, a seal's sigh, and a soft chime from its panel.
+	var out := _buf(2.2)
+	_mix(out, _hiss(1.4, [[0.0, 900.0], [1.0, 500.0]], 1.2, [[0.0, 0.0], [0.15, 1.0], [1.0, 0.0]]), 0.0, 0.5)
+	for b in 26:
+		var at: float = _rng.randf_range(0.0, 1.6)
+		_mix(out, _tone(0.05, [[0.0, _rng.randf_range(300.0, 700.0)], [1.0, _rng.randf_range(700.0, 1100.0)]],
+			[[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), at, 0.25)
+	_mix(out, _bell(1.2, 1046.0, 1.5), 0.9, 0.25)
+	return out
+
+func _s_film_door() -> PackedFloat32Array:
+	# The hatch sliding open: a latch's knock, a servo's whine rising, the door's run along its rail.
+	var out := _buf(1.2)
+	_mix(out, _modes(0.3, [[520.0, 0.05, 1.0], [1310.0, 0.03, 0.5]], 0.001), 0.0, 0.8)
+	_mix(out, _tone(0.8, [[0.0, 300.0], [1.0, 520.0]], [[0.0, 0.0], [0.2, 0.5], [0.8, 0.5], [1.0, 0.0]]), 0.08, 0.35)
+	_mix(out, _hiss(0.8, [[0.0, 1200.0], [1.0, 1400.0]], 1.5, [[0.0, 0.0], [0.2, 0.6], [1.0, 0.0]]), 0.08, 0.3)
+	return out
+
 func _s_ui_click() -> PackedFloat32Array:
 	# A button: a small, dry knock, like a bone toggle.
 	var out := _modes(0.06, [[1400.0, 0.012, 1.0], [2600.0, 0.008, 0.5]], 0.0008)

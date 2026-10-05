@@ -130,6 +130,8 @@ func _exit_tree() -> void:
 ## The jump between our game's stations (StationJump; GAME-DESIGN 8.3): the beacon charged with a station still ahead
 ## sends the capsule on, and a level built by the jump opens on its landing.
 var station_jump: StationJump = null
+## Our own game's opening film (Opening), while there is one.
+var opening: Opening = null
 
 func _ensure_station_jump() -> void:
 	if station_jump == null or not is_instance_valid(station_jump):
@@ -150,6 +152,17 @@ func open_on_the_crash() -> void:
 	if gs == null or not bool(gs.crash_landing) or bool(gs.arrived_by_jump) or not _plays_the_players_map():
 		return
 	gs.crash_landing = false
+	# Our own game opens on its film (Opening), the crash a shot of it; another, on the crash alone.
+	if gs.has_method("internal") and bool(gs.internal("story", false)) and station_jump != null and is_instance_valid(station_jump):
+		if opening == null or not is_instance_valid(opening):
+			opening = Opening.new()
+			add_child(opening)
+		if hud and is_instance_valid(hud) and hud.has_method("hold_objective"):
+			hud.hold_objective()
+		if not opening.finished.is_connected(_after_the_crash):
+			opening.finished.connect(_after_the_crash, CONNECT_ONE_SHOT)
+		opening.play.call_deferred(self)
+		return
 	if station_jump != null and is_instance_valid(station_jump):
 		station_jump.crash.call_deferred(self)
 		# The goal held back till he has said why (HUD.tell_the_story), when he is out of it -- or the briefing has.
@@ -165,7 +178,8 @@ func open_on_the_crash() -> void:
 func _after_the_crash() -> void:
 	if hud == null or not is_instance_valid(hud):
 		return
-	var skipped: bool = station_jump != null and is_instance_valid(station_jump) and bool(station_jump.was_skipped)
+	var skipped: bool = (station_jump != null and is_instance_valid(station_jump) and bool(station_jump.was_skipped)) \
+		or (opening != null and is_instance_valid(opening) and bool(opening.was_skipped))
 	if skipped and hud.has_method("brief"):
 		hud.brief()
 	else:

@@ -2517,6 +2517,52 @@ const MAPS: Dictionary = {
 ##   smoulder_*  the hull smoking where it lies: how many puffs, each how long, how big at first, how fast they rise,
 ##               how high off the ground, their colour -- thin and pale, a column off it, not a stain on its roof; for
 ##               how long
+## THE OPENING FILM (scripts/fx/Opening.gd; the player, 2026-10-04: "开场动画还要精致化一点，甚至你可以做一个完整飞船穿越，出现
+## 故障，人在船舱中睡眠，然后船舱解体，掉落，震动山谷，把各个被惊吓得恐龙刻画出来，它们躁动不安，追寻着烟去了，人惊醒，打开舱门，
+## 从船舱爬出来（人脸可以有特写），然后开始……配音你可以想办法"). Our own game's first station opens on it.
+const OPENING: Dictionary = {
+	# Each shot's length (seconds): the jump, the failure, him asleep, the break-up; the valley's startled animals (each
+	# of three shots); awake -- his eyes opening, his face, the walk to the hatch, out of it, the view drawn back.
+	"seconds": {"fade_in": 1.4, "bars_in": 0.8, "jump": 6.5, "failure": 4.5, "asleep": 6.0, "breakup": 5.0, "valley_shot": 2.3,
+		"awake_eyes": 3.2, "awake_face": 2.6, "awake_walk": 2.4, "awake_out": 1.6, "awake_crane": 4.2, "skip_after": 0.6},
+	# The ship's voice, by shot: its words (translations/strings.csv), its sound (SOUNDS: the files are made by
+	# tools/make_ship_voice.py, the ship's computer in English, heard in either language), when in the shot it speaks
+	# and how long its words stay up.
+	"lines": {
+		"jump": {"text": "FILM_LINE_JUMP", "sound": "voice_ship_jump", "at": 1.4, "hold": 4.0},
+		"failure": {"text": "FILM_LINE_FAILURE", "sound": "voice_ship_failure", "at": 0.6, "hold": 3.1},
+		"asleep": {"text": "FILM_LINE_BREACH", "sound": "voice_ship_breach", "at": 1.2, "hold": 3.4},
+		"awake": {"text": "FILM_LINE_DOWN", "sound": "voice_ship_down", "at": 0.3, "hold": 5.4},
+	},
+	# Where the shots above the world are set: this high over the valley, out of its sight.
+	"set_at": Vector3(0.0, 4000.0, 0.0),
+	# The tunnel: a tube this wide and long round the ship's way. The world below: this big, this far under the set.
+	"tunnel_radius": 34.0,
+	"tunnel_length": 520.0,
+	"world_radius": 900.0,
+	"world_at": Vector3(-300.0, -1250.0, -600.0),
+	"camera_far": 3000.0,
+	# Space's sun; the drive's glow (its brightest); the view shaken at its worst (metres).
+	"space_sun": 2.2,
+	"glow_energy": 3.0,
+	"shake": 0.35,
+	# The black bars' share of the screen's height, top and bottom; the film's title (the game's name).
+	"letterbox": 0.11,
+	"title": "START_TITLE",
+	# The module's alarm: a red light this bright at its brightest, this far, pulsing.
+	"alarm_energy": 6.0,
+	"alarm_range": 7.5,
+	# Him: his face this high in the pod; his head bowed this far asleep.
+	"face_height": 1.32,
+	"head_bow_degrees": 32.0,
+	# The nest's shot this far behind it, looking past its pack at the smoke. The grazers bolting, their walk this many
+	# times its pace; the armoured ones put down this far off the cabin.
+	"nest_view": 6.5,
+	"bolt_pace": 2.2,
+	"chargers_off": 20.0,
+	"seed": 7,
+}
+
 const STATION_JUMP: Dictionary = {
 	"view_seconds": 1.6, "view_distance": 16.0, "view_tilt": 30.0,
 	"beam_seconds": 1.8, "beam_radius": 0.8, "beam_height": 60.0, "beam_colour": Color(0.55, 0.85, 1.0, 0.75),
@@ -3493,6 +3539,18 @@ const SOUNDS: Dictionary = {
 		# The opening (StationJump.crash): the capsule coming down burning -- air torn past a hot hull -- and its blow on
 		# the valley floor, given back off the valley's walls.
 		"crash_fall": {"files": ["crash_fall"], "db": 0.0, "pitch": 1.0, "class": "event", "unit": 40.0, "reach": 300.0},
+		# The opening film (Opening): the drive failing, the ship's alarm, the module blown free, the ship coming apart,
+		# the pod opening, the hatch -- heard everywhere, as a film is; and the ship's computer's voice.
+		"film_fault": {"files": ["film_fault"], "db": -2.0, "pitch": 1.0, "class": "ui"},
+		"film_alarm": {"files": ["film_alarm"], "db": -8.0, "pitch": 1.0, "class": "ui"},
+		"film_separation": {"files": ["film_separation"], "db": -1.0, "pitch": 1.0, "class": "ui"},
+		"film_breakup": {"files": ["film_breakup"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"film_pod_open": {"files": ["film_pod_open"], "db": -5.0, "pitch": 1.0, "class": "ui"},
+		"film_door": {"files": ["film_door"], "db": -6.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_jump": {"files": ["voice_ship_jump"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_failure": {"files": ["voice_ship_failure"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_breach": {"files": ["voice_ship_breach"], "db": 0.0, "pitch": 1.0, "class": "ui"},
+		"voice_ship_down": {"files": ["voice_ship_down"], "db": 0.0, "pitch": 1.0, "class": "ui"},
 		"crash": {"files": ["crash"], "db": 2.0, "pitch": 1.0, "class": "event", "unit": 40.0, "reach": 300.0},
 		"ui_click": {"files": ["ui_click"], "db": -16.0, "pitch": 1.05, "class": "ui"},
 		"ambience_valley": {"files": ["ambience_valley"], "db": 0.0, "pitch": 1.0, "class": "ui"},
@@ -4479,6 +4537,10 @@ const VISUALS: Dictionary = {
 	# Built with its grip at the origin; held there (Hero.light_torch), its flame the game's.
 	# His hammer (tools/generate_props.py hammer): a stone lashed to a stick, its grip at the origin; held in his hand
 	# while he builds and mends (Hero._hold_the_hammer, HERO.hammer).
+	# The ship he came in, but for its crew module -- the cabin itself, docked at its nose (tools/generate_ship.py): the
+	# opening film's (Opening). Its "_glow" parts are lit by the film itself.
+	"film/ship":            {"scene": "res://assets/models/cabin/ship_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "metal"},
 	"prop/hammer":          {"scene": "res://assets/models/props/hammer_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wood"},
 	"prop/torch":           {"scene": "res://assets/models/props/torch_a.glb", "fit": "none",
