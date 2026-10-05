@@ -995,6 +995,9 @@ static func recipe_effect_text(recipe_id: String) -> String:
 	if not RECIPES.has(recipe_id):
 		return ""
 	var row: Dictionary = RECIPES[recipe_id]
+	# In its own plain words, where it has them (RECIPES "desc": the axe's "砍树快一倍").
+	if row.has("desc"):
+		return TranslationServer.translate(String(row["desc"]))
 	var flag: String = String(row.get("unlocks", ""))
 	var parts: PackedStringArray = []
 	var speeds: Dictionary = row.get("harvest_speed", {})
@@ -1175,10 +1178,14 @@ static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable =
 	var tr_name: String = TranslationServer.translate("RESOURCE_%s" % res_id.to_upper())
 	var lines: PackedStringArray = []
 	var from: String = ""
+	# What it is, in one plain line, where it has one (resource_intro): said in place of the kinds of thing it is for.
+	var intro: String = resource_intro(res_id)
 	if RESOURCE_NODES.has(res_id) and RESOURCE_NODES[res_id].has("found"):
 		lines.append(TranslationServer.translate(String(RESOURCE_NODES[res_id]["found"])) % tr_name)
 	else:
 		lines.append(tr_name)
+		if intro != "":
+			lines.append(intro)
 		if RESOURCE_NODES.has(res_id):
 			from = TranslationServer.translate("RES_FROM_GATHER")
 			var flag: String = String(RESOURCE_NODES[res_id].get("requires_unlock", ""))
@@ -1197,6 +1204,8 @@ static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable =
 					break
 		if from != "":
 			lines.append(TranslationServer.translate("RES_FROM") % from)
+	if intro != "":
+		return "\n".join(lines)
 	var kinds: PackedStringArray = []
 	var add := func(key: String) -> void:
 		var word: String = TranslationServer.translate(key)
@@ -1240,6 +1249,14 @@ static func resource_tip(res_id: String, map: Dictionary = {}, known: Callable =
 	if not kinds.is_empty():
 		lines.append(TranslationServer.translate("RES_FOR") % TranslationServer.translate("LIST_SEPARATOR").join(kinds))
 	return "\n".join(lines)
+
+## What `res_id` is, in one plain line (RESOURCE_<ID>_DESC; the player, 2026-10-05: "像新的采集的石头，也可以就简单介绍
+## 一下，不用把所有功能都写在屏幕上，根本搞不清楚而且给玩家压力"): "比木头结实：造更硬的墙和塔" -- not every use of it by name.
+## "" for one with no line of its own (the ammunition says which tower it goes into).
+static func resource_intro(res_id: String) -> String:
+	var key: String = "RESOURCE_%s_DESC" % res_id.to_upper()
+	var said: String = TranslationServer.translate(key)
+	return "" if said == key else said
 
 ## Where `res_id` comes from, for someone short of it: the tool it takes when he has not
 ## made it (missing_tool_hint), or -- for what nothing on the map gives -- that the dead
@@ -5597,8 +5614,10 @@ const RECIPES: Dictionary = {
 		"unlocks": "stone_axe",
 		"slot": "axe",
 		# What a tool does is part of its recipe, so a new tool is a line here and no code
-		# (GAME-DESIGN 14.1): every stroke on a tree brings down twice as much.
+		# (GAME-DESIGN 14.1): every stroke on a tree brings down twice as much -- in its own plain words ("desc": "砍树快
+		# 一倍"; the player, 2026-10-05: "stone axe也没有解释有什么用"), which say twice: change the one, change the other.
 		"harvest_speed": {"wood": 2.0},
+		"desc": "RECIPE_STONE_AXE_DESC",
 	},
 	# NOT HIS KIT (GAME-DESIGN 3.0 -- the player, 2026-10-04: "人的装备更加没意义……如果只是鸡肋，那也需要trim"):
 	# the second pick, the spears, the vest, the armour and the boots went. A man with a spear does not hold the line

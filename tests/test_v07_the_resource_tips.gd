@@ -29,10 +29,13 @@ func test_02_where_it_comes_from() -> void:
 	assert_true(_tip("bone").contains(tr("RES_FROM_DEAD")), "bone is the dead's")
 	assert_true(_tip("arrow_wood").contains(tr("RES_FROM_BENCH")), "arrows are made at the workbench")
 
-func test_03_what_kinds_of_thing_it_is_for_not_each_by_name() -> void:
+func test_03_what_it_is_in_one_plain_line_not_each_use_by_name() -> void:
+	# The player, 2026-10-05: "像新的采集的石头，也可以就简单介绍一下，不用把所有功能都写在屏幕上，根本搞不清楚而且给玩家压力".
+	for res_id in ["wood", "stone", "bone", "food", "hide", "clay", "iron_ore", "brick", "iron"]:
+		var intro: String = String(config_node.resource_intro(res_id))
+		assert_ne(intro, "", "%s says what it is" % res_id)
+		assert_true(_tip(res_id).contains(intro), "%s's tip says it" % res_id)
+		assert_false(_tip(res_id).contains(tr("RES_FOR") % ""), "%s's tip lists no uses" % res_id)
 	var wood: String = _tip("wood")
-	for kind in ["USE_KIND_BUILD", "USE_KIND_AMMO", "USE_KIND_FUEL"]:
-		assert_true(wood.contains(tr(kind)), "Wood is for %s" % tr(kind))
-	assert_false(wood.contains(String(config_node.get_building_name("bow_tower"))), "and does not name every building")
-	assert_true(_tip("food").contains(tr("USE_KIND_BAIT")), "meat is bait")
+	assert_false(wood.contains(String(config_node.get_building_name("bow_tower"))), "and names no building")
 	assert_true(_tip("arrow_wood").contains(String(config_node.get_building_name("bow_tower"))), "arrows go into the bow tower, named")

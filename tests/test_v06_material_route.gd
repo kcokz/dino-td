@@ -134,10 +134,8 @@ func test_02e_the_first_of_each_material_says_what_it_is_for_once() -> void:
 	game_state_node.add_resource("bone", 1)
 	bus.resource_picked_up.emit("bone", 1, null)
 	assert_true(hud.hint_label.visible, "The first bone says something")
-	# What it is for as far as the run has turned things up (v0.6): not what takes a material still
-	# to come as well.
-	var so_far: String = String(config_node.uses_text("bone", game_state_node.map_data(), game_state_node.knows))
-	assert_true(hud.hint_label.text.contains(so_far), "What bone is for: %s" % hud.hint_label.text)
+	# What it is, in one plain line (2026-10-05: "不用把所有功能都写在屏幕上"): not every use of it by name.
+	assert_true(hud.hint_label.text.contains(String(config_node.resource_intro("bone"))), "What bone is: %s" % hud.hint_label.text)
 	for b_type in config_node.player_building_types():
 		var cost: Dictionary = config_node.BUILDINGS[b_type].get("cost", {})
 		var waits: bool = false

@@ -1780,6 +1780,7 @@
   - **塔自己从仓库装弹药**（玩家试玩时发现的大 bug："如果恐龙在进攻cabin……恐龙卡着去这个建筑加弹药的路的话，人没法去加弹药了，加弹药的逻辑太复杂，能不能设计的更方便加？"，选了"塔自己从仓库补"）：空了马上装，没满时 4 秒没出手就补满，装一次 3 秒、装的时候不打（`AMMO_LOADING` 换成 `seconds`、`lull_seconds`；`AmmoTower._tick_reload`，四座塔每一步先问它）。人路过装、派人去装、卡片上的"装填"、右键装填都拿掉了（`Hero._load_in_passing`、`order_load`；`TIP_LOAD*`）。新字 `STATUS_TOWER_RELOADING`；`HINT_TOWER_NEEDS_*` 改成"它会自己从库存装上"。机器人不再派人去装。
   - **没装满的塔头上有小标**（玩家："没装填满的建筑需要在建筑上有小的提示（根据行业标准）"）：塔顶上方它装的弹药的图标加一根条；自己装的时候条是蓝的；空了、库存也没有，图标变红；满了不显示（`AmmoTower._show_badge`，`FEEDBACK.ammo_bar_color` 等）。
   - 测试：`test_v07_ammunition` 第 3～6 条重写（空了自己装、没满时停下来才补、库存没有就空着等、头上的小标），第 11 条没有装填按钮了；`test_v07_the_towers` 第 2 条把库存清空再看空塔。
+  - **每样材料、每样工具一句简单的介绍**（玩家："stone axe也没有解释有什么用，所有的材料或者新的物品，都需要有解释这个是干什么的，而且就是用比较简单的介绍就行了"；"不用把所有功能都写在屏幕上，根本搞不清楚而且给玩家压力"）：第一次捡到时、资源栏悬停时说一句它是什么（`RESOURCE_<ID>_DESC`，`Config.resource_intro`；悬停三行：名字、介绍、来自哪），不再列"用来：建造、做弹药……"；石斧"砍树快一倍"（`RECIPES.stone_axe.desc`，做好时的提示也用它）。测试 `test_v07_the_resource_tips` 第 3 条、`test_v06_material_route` 第 2e 条、`test_v07_what_tools_are_for` 第 1 条。
   - 船舱挨了咬，头上不再出血条：它的血已经在顶上的大圈里（玩家："掉血的cabin不需要一直显示血条，因为血条在大圈里已经显示了"；`FEEDBACK.health_bar_not_over`，`Building._update_status_bar`）。墙、塔照旧。测试 `test_v06_the_status_bar` 第 2b 条。
 
 ## v0.7 已定要做的（未开工）

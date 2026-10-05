@@ -199,8 +199,9 @@ func test_08_each_new_material_is_for_one_or_two_things_and_says_where_it_is_mad
 		assert_lte(kinds.size(), 2, "%s is for at most two things (4.1 rule 7): %s" % [res_id, kinds.keys()])
 	var tip: String = String(config_node.resource_tip("brick"))
 	assert_true(tip.contains(tr("STATION_KILN_NAME")), "Bricks come from the kiln, the bar says: %s" % tip)
+	# Clay says what it is in its own plain line (2026-10-05: "不用把所有功能都写在屏幕上") -- that, fired, it makes bricks.
 	var clay_tip: String = String(config_node.resource_tip("clay"))
-	assert_true(clay_tip.contains(tr("USE_KIND_AT_KILN") % tr("RESOURCE_BRICK")), "and clay is for firing bricks: %s" % clay_tip)
+	assert_true(clay_tip.contains(String(config_node.resource_intro("clay"))), "and clay says what it is: %s" % clay_tip)
 	for word in ["BUILDING_KILN_NAME", "BUILDING_FURNACE_NAME", "BUILDING_BRICK_WALL_NAME", "RESOURCE_BRICK", "RESOURCE_IRON",
 			"RESOURCE_IRON_ORE", "RESOURCE_ARROW_IRON", "STATION_KILN_DESC", "STATION_FURNACE_DESC", "STATION_ONLY_BESIDE_HIM"]:
 		for locale in ["en", "zh_CN"]:

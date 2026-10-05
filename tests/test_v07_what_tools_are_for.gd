@@ -49,7 +49,10 @@ func test_01_each_tool_says_what_it_is_for() -> void:
 	# Clay -- and, from the third station, bog iron (v0.7): in one line.
 	assert_eq(shovel, tr("TOOL_LETS") % tr("LIST_SEPARATOR").join([_node_name("clay"), _node_name("iron_ore")]), "the shovel clay and bog iron")
 	var axe: String = String(config_node.recipe_use_text("stone_axe"))
-	assert_true(axe.find(tr("RESOURCE_WOOD")) >= 0 and axe.find("×") >= 0, "the axe brings wood in faster (%s)" % axe)
+	# In plain words (2026-10-05: "stone axe也没有解释有什么用"): "砍树快一倍" -- twice, as its harvest_speed says.
+	assert_eq(axe, tr("RECIPE_STONE_AXE_DESC"), "the axe chops trees twice as fast")
+	assert_almost_eq(float(config_node.RECIPES["stone_axe"]["harvest_speed"]["wood"]), 2.0, 0.001, "(twice, as it says)")
+	assert_eq(String(config_node.recipe_effect_text("stone_axe")), axe, "and says so when it is made")
 	assert_eq(String(config_node.recipe_use_text("hide_map")), tr("RECIPE_HIDE_MAP_DESC"), "the map in its own words")
 	assert_eq(String(config_node.recipe_opens("bone_shovel")), "clay", "(what the shovel opens)")
 	assert_eq(String(config_node.recipe_opens("stone_axe")), "", "(the axe opens nothing: it speeds wood)")

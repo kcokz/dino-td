@@ -588,7 +588,11 @@ func _on_resource_picked_up(res_id: String, _amount: int, _by: Node) -> void:
 		show_hint(tr("HINT_FOUND_PART") % [tr("RESOURCE_%s" % res_id.to_upper()), _stage_taking(res_id)],
 			UiTheme.toast_seconds("long"), res_id)
 		return
-	var uses: String = _uses_text(res_id)
+	# What it is in one plain line (Config.resource_intro) -- not every use of it by name, which put too much on the
+	# screen at once (the player, 2026-10-05: "不用把所有功能都写在屏幕上，根本搞不清楚而且给玩家压力").
+	var uses: String = String(cfg.resource_intro(res_id)) if (cfg and cfg.has_method("resource_intro")) else ""
+	if uses == "":
+		uses = _uses_text(res_id)
 	if uses != "":
 		show_hint(tr("HINT_NEW_MATERIAL") % [tr("RESOURCE_%s" % res_id.to_upper()), uses], UiTheme.toast_seconds("long"), res_id)
 
