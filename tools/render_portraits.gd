@@ -56,6 +56,9 @@ const FRAMING_FOR := {
 	# the tail's spikes -- not by a small head hung low under a body that would fill the frame round it.
 	"dino/desmatosuchus": {"mode": "body", "yaw": 28.0, "pitch": -16.0, "room": 0.68},
 	"dino/stegosaurus": {"mode": "body", "yaw": 22.0, "pitch": -10.0, "room": 0.8},
+	# And the Triceratops (station 4), known by its horns and frill: its whole body, seen from nearer its front, so the
+	# frill and the horns are the near end of it -- framed by its head, the frill alone filled the picture.
+	"dino/triceratops": {"mode": "body", "yaw": 40.0, "pitch": -12.0, "room": 0.82},
 	"node/wood": {"mode": "bust", "from": 0.35, "to": 1.02, "yaw": 32.0, "pitch": -14.0, "room": 1.0},
 	# A rock is wide and low: framed round it, not round the sphere that holds it.
 	"node/stone": {"mode": "whole", "yaw": 32.0, "pitch": -20.0, "room": 0.82},
