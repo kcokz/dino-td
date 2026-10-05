@@ -1777,6 +1777,9 @@
   - 后两站的植食恐龙（模型新做，`tools/dino_species.py`；为三角龙的颈盾加了 `dino_body.py` 的 `_frill`、为它的大鳞加了 `dino_skin.py` 的一段，都只在物种要的时候才用，别的物种重做一遍逐字节一样；这两处的初稿第二十七批已经带进去了，这里是定稿）：**三角龙**（`DINOS.triceratops`：第 4 站第 3 天起偶尔随来袭冲过来，冲撞的、披甲、重；140 血、撞 9、1.9 米/秒，比剑龙高一步；2.2 米高）；**埃德蒙顿龙**一大群在第 4 站谷壁上（9 米长）；**鹦鹉嘴龙**两小群在第 3 站谷壁上（1.4 米长）。都按游戏里霸王龙的比例（`Herds`：霸王龙是尺子；模型按真的比例做，放进来时缩到这个比例，走路的速度也跟着缩，脚不打滑）。叫声：三角龙低沉带沙的吼、鼻息、冲撞，埃德蒙顿龙鼻腔里的号角声，鹦鹉嘴龙的叽叽声（`tools/build_sounds.gd`）。头像 `dino_triceratops`。测试 `test_v07_station_four` 第 3b 条。
 - **v0.7 第二十九批：玩家的 bug 报告（2026-10-05 上午）**：
   - 篝火护住的地方显出来（玩家："campfire控制的区域可以用蓝色显示出来，包括cover的建筑，还是说campfire不需要cover？"）：放篝火和选中篝火时，每堆火夜里照得到的地面显出蓝色（塔射程的蓝），四面都照得到的建筑描蓝边。新的 `scripts/fx/FireCover.gd`；`Fire.night_reach`、它的圈是夜里的光（`_get_display_range`），选中任何一堆火所有火的圈都亮；`Main._fire_in_hand`，鬼影的圈是光（`_preview_range_for`）；`FEEDBACK.cover_outline_alpha`。测试 `test_v07_what_a_fire_covers`；`tools/playtest.gd` 场景 `firecover`。
+  - **塔自己从仓库装弹药**（玩家试玩时发现的大 bug："如果恐龙在进攻cabin……恐龙卡着去这个建筑加弹药的路的话，人没法去加弹药了，加弹药的逻辑太复杂，能不能设计的更方便加？"，选了"塔自己从仓库补"）：空了马上装，没满时 4 秒没出手就补满，装一次 3 秒、装的时候不打（`AMMO_LOADING` 换成 `seconds`、`lull_seconds`；`AmmoTower._tick_reload`，四座塔每一步先问它）。人路过装、派人去装、卡片上的"装填"、右键装填都拿掉了（`Hero._load_in_passing`、`order_load`；`TIP_LOAD*`）。新字 `STATUS_TOWER_RELOADING`；`HINT_TOWER_NEEDS_*` 改成"它会自己从库存装上"。机器人不再派人去装。
+  - **没装满的塔头上有小标**（玩家："没装填满的建筑需要在建筑上有小的提示（根据行业标准）"）：塔顶上方它装的弹药的图标加一根条；自己装的时候条是蓝的；空了、库存也没有，图标变红；满了不显示（`AmmoTower._show_badge`，`FEEDBACK.ammo_bar_color` 等）。
+  - 测试：`test_v07_ammunition` 第 3～6 条重写（空了自己装、没满时停下来才补、库存没有就空着等、头上的小标），第 11 条没有装填按钮了；`test_v07_the_towers` 第 2 条把库存清空再看空塔。
   - 船舱挨了咬，头上不再出血条：它的血已经在顶上的大圈里（玩家："掉血的cabin不需要一直显示血条，因为血条在大圈里已经显示了"；`FEEDBACK.health_bar_not_over`，`Building._update_status_bar`）。墙、塔照旧。测试 `test_v06_the_status_bar` 第 2b 条。
 
 ## v0.7 已定要做的（未开工）

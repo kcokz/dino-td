@@ -538,18 +538,11 @@ func _scenario_play(spec: String) -> void:
 		if can_raise:
 			await _raise(next_tower, refused_towers, note)
 			continue
-		# Ammunition a tower on the field wants, made at the workbench a batch at a time; then he takes it over.
+		# Ammunition a tower on the field wants, made at the workbench a batch at a time: the tower loads itself from the
+		# stock (AmmoTower._tick_reload).
 		var ammo_job: String = _ammo_wanted(wb)
 		if ammo_job != "":
 			await _bench_job(hero, cabin, "workbench", ammo_job, note)
-			continue
-		var empty: Node = _tower_wanting_load(dark and not lit_hero)
-		if empty != null:
-			var empty_id: int = empty.get_instance_id()
-			_ctx = "load"
-			hero.order_load(empty)
-			note.call("loading the %s" % String(empty.building_type))
-			await _play_until(func(): return not is_instance_id_valid(empty_id) or not empty.wants_load(), 30.0, "loading a tower")
 			continue
 		# The line up -- all of the plan built, the three more of a kind among it -- by day: a tower raised a level
 		# (Building.begin_upgrade) when it can be paid with tonight's wood still put by -- the first that can, so they go
@@ -876,13 +869,6 @@ func _ammo_wanted(wb: Node) -> String:
 				return String(kind)
 	return ""
 
-## A standing tower that loading would fill from the stock now, or null -- `lit_only`, only one a fire's light is on.
-func _tower_wanting_load(lit_only: bool = false) -> Node:
-	for t in get_nodes_in_group(AmmoTower.GROUP):
-		if is_instance_valid(t) and t.wants_load() and (not lit_only or _lit((t as Node3D).global_position)):
-			return t
-	return null
-
 ## Whether a light is on `at` (ProwlerDino.lights: a burning fire, the burning ground, his torch).
 func _lit(at: Vector3) -> bool:
 	return not ProwlerDino.light_over(self, at).is_empty()
@@ -1037,13 +1023,6 @@ func _first_tower(hero: Node, cabin: Node, note: Callable, minutes: float) -> vo
 	var arrows: String = _ammo_wanted(cabin.station("workbench"))
 	if arrows != "":
 		await _bench_job(hero, cabin, "workbench", arrows, note)
-	var empty: Node = _tower_wanting_load()
-	if empty != null:
-		var id: int = empty.get_instance_id()
-		_ctx = "load"
-		hero.order_load(empty)
-		note.call("loading the first tower")
-		await _play_until(func(): return not is_instance_id_valid(id) or not empty.wants_load(), 30.0, "loading the first tower")
 
 ## Out to the wreck `node` and through it, till its part is in the stock -- or a raid is coming. What its din
 ## brings (Din) he does not stand and fight bare-handed: he goes in and waits for it to give up -- one brought
@@ -1400,12 +1379,9 @@ func _scenario_ammocard() -> void:
 		eb.unit_selected.emit(bow)
 	await _wait(6)
 	await _shoot("bow_empty")
-	var panel = _main.hud.option_panel
-	var load_btn: Button = panel.button_container.find_child("LoadCommand", true, false) as Button
-	if load_btn:
-		load_btn.pressed.emit()
-	await _advance(0.3)
-	await _shoot("bow_going")
+	# It loads itself from the stock (AmmoTower._tick_reload): its badge says so meanwhile.
+	await _advance(1.0)
+	await _shoot("bow_loading")
 	if bow:
 		bow.load_from_stock()
 		for i in 7:

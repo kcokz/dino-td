@@ -1284,8 +1284,7 @@ func scatter_opening_stock() -> void:
 # ==============================================================================
 
 ## The first tower finished with nothing in it, the run is told -- once -- what fills it (AmmoTower): what it takes,
-## made at the workbench (or the meat in the stock), and that he loads it walking past. A tower nobody loads does
-## nothing, and nothing else on the screen says so before the raid comes.
+## made at the workbench (or the meat in the stock); it loads itself from the stock.
 var _told_to_load: bool = false
 
 func _on_tower_finished(b: Node) -> void:
@@ -1318,11 +1317,6 @@ func right_click_building(b: Node, at: Vector3) -> void:
 	# right-click on it means.
 	if ("is_constructed" in b and not b.is_constructed) or (b.has_method("is_upgrading") and b.is_upgrading()):
 		hero.order_build(b, true)
-		return
-	# A tower that wants loading, and the stock has what it takes: loading it (AmmoTower) -- nothing spent that
-	# is not put into it.
-	if b.has_method("wants_load") and b.wants_load() and hero.has_method("order_load"):
-		hero.order_load(b)
 		return
 	hero.move_to(at if at != Vector3.ZERO else b.global_position)
 

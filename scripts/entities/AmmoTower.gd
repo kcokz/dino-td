@@ -8,12 +8,13 @@ extends "res://scripts/entities/Building.gd"
 ## does with what it is loaded with is its kind's (BowTower, DropTower, Catapult, BaitRack). None of them faces a way:
 ## each acts all round it, within a circle.
 ##
-## LOADED BY HIM (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量"; and
-## why it is loaded at all: "现在已经有的小机关其实也是自动化的……它就自己能自己重新trigger了，似乎有点自欺欺人了"). A
-## tower holds rounds of one kind of ammunition at a time (Config.AMMO), made at the workbench and kept in the stock
-## until he loads it -- walking past it, or sent to it (Hero; Config.AMMO_LOADING). Empty, it does nothing. Which
-## kind is the player's to choose on its card; it keeps to that kind, and the first time takes the first of its
-## kinds the stock has. A bigger store is an upgrade (BUILDINGS <id>_2, _3: the same tower, its `level`).
+## LOADED FROM THE STOCK (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量").
+## A tower holds rounds of one kind of ammunition at a time (Config.AMMO), made at the workbench and kept in the stock,
+## and loads itself from the stock -- empty at once, not full in a lull, taking a few seconds over it (_tick_reload;
+## Config.AMMO_LOADING; the player, 2026-10-05, chose "塔自己从仓库补": he had carried it, and a raid at the cabin
+## stood in his way). Empty, it does nothing. Which kind is the player's to choose on its card; it keeps to that kind,
+## and the first time takes the first of its kinds the stock has. A bigger store is an upgrade (BUILDINGS <id>_2, _3:
+## the same tower, its `level`). Not full, it says so over itself (_show_badge).
 ##
 ## A meat on the bait rack is several bites (Config.AMMO "uses"): what it holds is counted in uses, and shown in
 ## rounds -- a piece of meat half eaten is still a piece on the rack.
@@ -83,6 +84,7 @@ func complete_construction() -> void:
 	super.complete_construction()
 	if first:
 		_come_loaded()
+	_show_badge()
 
 func _come_loaded() -> void:
 	var cfg = _get_config()
@@ -159,15 +161,110 @@ func take_use() -> bool:
 	if uses_left <= 0:
 		return false
 	uses_left -= 1
+	_since_use = 0.0
 	_ammo_changed()
 	return true
 
 func _ammo_changed() -> void:
 	_show_ammo()
+	_show_badge()
 	_update_info_label()
 	var eb = _get_event_bus()
 	if eb and eb.has_signal("tower_ammo_changed"):
 		eb.tower_ammo_changed.emit(self)
+
+# ==============================================================================
+# Loading itself from the stock (Config.AMMO_LOADING)
+# ==============================================================================
+
+## Seconds left of the load under way; below nought, none.
+var _reload_left: float = -1.0
+## Seconds since it last loosed, dropped, threw or fed: past AMMO_LOADING.lull_seconds, a lull, and it tops itself up.
+var _since_use: float = 0.0
+
+## Whether it is loading itself now: it acts on nothing while it is.
+func is_reloading() -> bool:
+	return _reload_left >= 0.0
+
+## Seconds a load takes it: its own (BUILDINGS.<id>.ammo.reload_seconds), or every tower's (AMMO_LOADING.seconds).
+func reload_seconds() -> float:
+	var cfg = _get_config()
+	var own: float = float(cfg.BUILDINGS.get(building_type, {}).get("ammo", {}).get("reload_seconds", -1.0)) \
+		if (cfg and "BUILDINGS" in cfg) else -1.0
+	return own if own >= 0.0 else _loading("seconds", 3.0)
+
+func _loading(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.AMMO_LOADING.get(key, fallback)) if (cfg and "AMMO_LOADING" in cfg) else fallback
+
+## A step of its loading itself, from its kind's _physics_process once it is standing and whole (_is_live): false while
+## a load is under way -- it acts on nothing then. Empty, a load begins at once; not full, in a lull; done, it fills
+## with what the stock has of its kind (load_from_stock).
+func _tick_reload(delta: float) -> bool:
+	_since_use += delta
+	if is_reloading():
+		_reload_left -= delta
+		if _reload_left <= 0.0:
+			_reload_left = -1.0
+			if load_from_stock() <= 0:
+				_ammo_changed()
+		return false
+	if wants_load() and (not has_ammo() or _since_use >= _loading("lull_seconds", 4.0)):
+		_reload_left = reload_seconds()
+		_ammo_changed()
+		return false
+	return true
+
+# ==============================================================================
+# Not full, it says so over itself
+# ==============================================================================
+
+## The badge over it (_show_badge): a bar of how full it is, the icon of what it takes beside it.
+var _badge: StatusBar3D = null
+var _badge_icon: Sprite3D = null
+
+## Not full -- shooting it down, loading itself, or empty -- a small badge over it says so: the icon of what it takes
+## beside a bar of how full it is, the bar in the loading colour while it loads, and empty with none in the stock the
+## icon red (Config.FEEDBACK.ammo_*; the player, 2026-10-05: "没装填满的建筑需要在建筑上有小的提示（根据行业标准）").
+## Full, or not standing, nothing.
+func _show_badge() -> void:
+	var cap: int = capacity()
+	var show: bool = is_inside_tree() and is_constructed and not is_destroyed and cap > 0 \
+		and (rounds() < cap or is_reloading())
+	if not show:
+		if _badge != null and is_instance_valid(_badge):
+			_badge.visible = false
+		return
+	var cfg = _get_config()
+	var fb: Dictionary = cfg.FEEDBACK if (cfg and "FEEDBACK" in cfg) else {}
+	if _badge == null or not is_instance_valid(_badge):
+		_badge = StatusBar3D.new()
+		_badge.name = "AmmoBadge"
+		_badge.size_scale = 1.0
+		_badge.position = Vector3(0.0, _building_height() + float(fb.get("ammo_badge_above", 1.05)), 0.0)
+		add_child(_badge)
+		_badge_icon = Sprite3D.new()
+		_badge_icon.name = "Icon"
+		_badge_icon.shaded = false
+		_badge_icon.no_depth_test = true
+		_badge_icon.render_priority = 2
+		_badge_icon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_badge.add_child(_badge_icon)
+	var kind: String = ammo_type if ammo_type != "" else kind_to_load()
+	if kind == "" and not accepts().is_empty():
+		kind = accepts()[0]
+	var tex: Texture2D = UiTheme.icon(kind) if kind != "" else null
+	_badge_icon.texture = tex
+	var across: float = float(fb.get("ammo_badge_icon", 0.42))
+	if tex != null and tex.get_width() > 0:
+		_badge_icon.pixel_size = across / float(tex.get_width())
+	_badge_icon.position = Vector3(-0.5 * 1.1 * _badge.size_scale - across * 0.6, 0.0, 0.01)
+	var out: bool = not has_ammo() and not is_reloading() and _stock_of(kind_to_load()) <= 0
+	_badge_icon.modulate = fb.get("ammo_out_tint", Color(1.0, 0.3, 0.25)) if out else Color.WHITE
+	var colour: Color = fb.get("ammo_bar_loading_color", Color(0.45, 0.75, 1.0, 0.95)) if is_reloading() \
+		else fb.get("ammo_bar_color", Color(0.95, 0.82, 0.4, 0.95))
+	_badge.visible = true
+	_badge.set_ratio(float(rounds()) / float(cap), colour)
 
 ## Taken down: what is loaded in it goes back to the stock with him -- he takes it out as he takes it apart.
 func demolish() -> void:
@@ -311,6 +408,11 @@ func _rebuild_body(old_type: String) -> void:
 func _after_upgrade() -> void:
 	super._after_upgrade()
 	_dress()
+	# Its badge over its new top, as full as it is of its bigger store.
+	if _badge != null and is_instance_valid(_badge):
+		_badge.queue_free()
+	_badge = null
+	_show_badge()
 
 ## What one round of what it is loaded with is seen going as (Config.AMMO "prop"; VISUALS "prop/<prop>"), made fresh.
 func _flying_model() -> Node3D:
@@ -401,11 +503,13 @@ func _panel_status() -> String:
 	if not is_constructed:
 		return ""
 	var cfg = _get_config()
+	if is_reloading():
+		return tr("STATUS_TOWER_RELOADING")
 	if has_ammo():
 		return ""
 	var kind: String = kind_to_load()
-	if kind != "":
-		return tr("STATUS_TOWER_EMPTY_STOCKED")
+	if kind != "" or is_reloading():
+		return tr("STATUS_TOWER_RELOADING")
 	var first: String = accepts()[0] if not accepts().is_empty() else ""
 	var kind_name: String = tr(String(cfg.AMMO.get(first, {}).get("name", first))) if (cfg and first != "") else ""
 	# What is made at the workbench says so; what is not -- the meat -- says only what it takes.

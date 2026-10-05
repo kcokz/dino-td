@@ -31,7 +31,9 @@ func has_meat() -> bool:
 	return _is_live() and has_ammo()
 
 ## Each step: what eats meat and has not, within its reach, stops and eats -- a bite of its meat each.
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	if not _is_live() or not _tick_reload(delta):
+		return
 	if not has_meat() or not is_inside_tree():
 		return
 	var here := Vector2(global_position.x, global_position.z)

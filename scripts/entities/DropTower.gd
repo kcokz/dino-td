@@ -53,7 +53,7 @@ func target_in_reach() -> Node3D:
 	return best
 
 func _physics_process(delta: float) -> void:
-	if not _is_live():
+	if not _is_live() or not _tick_reload(delta):
 		return
 	cooldown = maxf(0.0, cooldown - delta)
 	# Swinging round to what it chose: it lets go once it faces it.

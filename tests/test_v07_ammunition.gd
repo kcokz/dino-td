@@ -5,9 +5,10 @@
 # 也许是一个方向".
 #
 # AMMUNITION is made at the workbench, a batch at a time, as often as there is the stuff for it -- each kind once its
-# materials have turned up -- and kept in the stock. A tower holds one kind at a time, as much as its store takes;
-# he loads it walking past or sent to it; a bigger store is an upgrade; what was in it goes back to the stock when
-# it is set to another kind or taken down. Its card offers its kinds and the loading.
+# materials have turned up -- and kept in the stock. A tower holds one kind at a time, as much as its store takes,
+# and loads itself from the stock (the player, 2026-10-05, chose "塔自己从仓库补": empty at once, not full in a lull);
+# not full, it says so over itself; a bigger store is an upgrade; what was in it goes back to the stock when it is
+# set to another kind or taken down. Its card offers its kinds.
 #
 # Everything expected is read from Config.
 extends "res://tests/test_base.gd"
@@ -128,60 +129,99 @@ func test_02_each_kind_waits_on_its_materials() -> void:
 # 2. Loaded by him
 # ==============================================================================
 
-func test_03_he_loads_a_tower_walking_past_it() -> void:
+## Empties `tower` (what was in it gone, not back to the stock) and holds its own steps, so a test steps it by hand.
+func _emptied(tower: Node) -> Node:
+	tower.set_physics_process(false)
+	tower.uses_left = 0
+	tower._ammo_changed()
+	return tower
+
+## Steps `tower`'s loading itself `seconds` on, a tenth at a time: whether it may act at the last step.
+func _step(tower: Node, seconds: float) -> bool:
+	var free: bool = true
+	var t: float = 0.0
+	while t < seconds - 0.0001:
+		free = tower._tick_reload(0.1)
+		t += 0.1
+	return free
+
+func test_03_empty_it_loads_itself_from_the_stock() -> void:
+	# The player, 2026-10-05: "加弹药的逻辑太复杂，能不能设计的更方便加？" -- chose "塔自己从仓库补".
+	var main = await _level()
+	var bow = _emptied(_tower_by_door(main, "bow_tower"))
+	var cap: int = int(config_node.ammo_capacity("bow_tower"))
+	_set_stock("arrow_wood", cap + 5)
+	assert_false(bow._tick_reload(0.1), "Empty, with arrows in the stock, it begins a load at once")
+	assert_true(bow.is_reloading(), "(loading itself)")
+	assert_eq(bow.rounds(), 0, "which takes it a while")
+	_step(bow, float(config_node.AMMO_LOADING["seconds"]) + 0.2)
+	assert_false(bow.is_reloading(), "done")
+	assert_eq(bow.rounds(), cap, "as full as it holds")
+	assert_eq(_stock("arrow_wood"), 5, "out of the stock")
+	assert_eq(String(bow.ammo_type), "arrow_wood", "with what the stock had")
+	assert_true(bow._tick_reload(0.1), "and it acts again")
+
+func test_04_not_full_it_tops_itself_up_in_a_lull_not_while_shooting() -> void:
+	var main = await _level()
+	var bow = _emptied(_tower_by_door(main, "bow_tower"))
+	var cap: int = int(config_node.ammo_capacity("bow_tower"))
+	_set_stock("arrow_wood", cap + 5)
+	bow._tick_reload(0.1)
+	_step(bow, float(config_node.AMMO_LOADING["seconds"]) + 0.2)
+	assert_eq(bow.rounds(), cap, "(full)")
+	bow.take_use()
+	bow.take_use()
+	var lull: float = float(config_node.AMMO_LOADING["lull_seconds"])
+	assert_true(_step(bow, lull * 0.5), "Shooting, a few short, it goes on shooting")
+	assert_eq(bow.rounds(), cap - 2, "(no load)")
+	_step(bow, lull * 0.6)
+	assert_true(bow.is_reloading(), "In a lull, it tops itself up")
+	_step(bow, float(config_node.AMMO_LOADING["seconds"]) + 0.2)
+	assert_eq(bow.rounds(), cap, "full again")
+
+func test_05_with_none_in_the_stock_it_stays_empty_and_he_has_no_errand() -> void:
+	var main = await _level()
+	var bow = _emptied(_tower_by_door(main, "bow_tower"))
+	assert_true(bow._tick_reload(1.0), "Nothing in the stock: no load begun")
+	assert_false(bow.is_reloading(), "(it waits)")
+	assert_eq(String(bow._panel_status()), tr("STATUS_TOWER_EMPTY") % tr(String(config_node.AMMO["arrow_wood"]["name"])),
+		"its card says to make arrows at the workbench")
+	assert_false(main.hero.has_method("order_load"), "and there is no errand of his to load it: it loads itself")
+	_set_stock("arrow_wood", 4)
+	bow._tick_reload(0.1)
+	assert_eq(String(bow._panel_status()), tr("STATUS_TOWER_RELOADING"), "Some made: it says it is loading itself")
+	_step(bow, float(config_node.AMMO_LOADING["seconds"]) + 0.2)
+	assert_eq(bow.rounds(), 4, "and takes it")
+
+func test_06_not_full_it_says_so_over_itself() -> void:
+	# The player, 2026-10-05: "没装填满的建筑需要在建筑上有小的提示（根据行业标准）".
 	var main = await _level()
 	var bow = _tower_by_door(main, "bow_tower")
 	var cap: int = int(config_node.ammo_capacity("bow_tower"))
-	_set_stock("arrow_wood", cap + 5)
-	var hero = main.hero
-	hero.global_position = bow.global_position + Vector3(float(config_node.get_building_half("bow_tower").x) + 0.6, 0.0, 0.0)
-	hero.current_state = hero.State.IDLE
-	await wait_physics_frames(3)
-	assert_eq(bow.rounds(), cap, "standing by it, he loads it as full as it holds")
-	assert_eq(_stock("arrow_wood"), 5, "out of the stock")
-	assert_eq(String(bow.ammo_type), "arrow_wood", "with what the stock had")
-
-func test_04_not_while_he_is_at_other_work() -> void:
-	var main = await _level()
-	var bow = _tower_by_door(main, "bow_tower")
-	_set_stock("arrow_wood", 10)
-	var hero = main.hero
-	hero.process_mode = Node.PROCESS_MODE_DISABLED
-	hero.global_position = bow.global_position + Vector3(float(config_node.get_building_half("bow_tower").x) + 0.6, 0.0, 0.0)
-	hero.current_state = hero.State.HARVESTING
-	hero._load_in_passing(1.0)
-	assert_eq(bow.rounds(), 0, "at other work he does not stop to load it")
-	hero.current_state = hero.State.IDLE
-	hero._load_in_passing(1.0)
-	assert_eq(bow.rounds(), 10, "about nothing else, he does")
-	assert_eq(_stock("arrow_wood"), 0, "all the stock had")
-
-func test_05_sent_to_it_he_walks_over_and_loads_it() -> void:
-	var main = await _level()
-	var bow = _tower_by_door(main, "bow_tower", 8.0)
-	_set_stock("arrow_wood", 7)
-	var hero = main.hero
-	hero.global_position = main.current_core.door_outside() + Vector3(0.0, 0.0, 1.0)
-	assert_true(bow.wants_load(), "it wants loading, and the stock has some")
-	hero.order_load(bow)
-	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
-	var t: float = 0.0
-	while t < 20.0 and bow.rounds() == 0:
-		await tree.physics_frame
-		t += dt
-	assert_eq(bow.rounds(), 7, "he went over and loaded it")
-	assert_eq(_stock("arrow_wood"), 0, "out of the stock")
-	assert_gte(t, float(config_node.AMMO_LOADING["order_seconds"]), "and it took him a moment")
-
-func test_06_a_right_click_on_a_tower_wanting_loading_loads_it() -> void:
-	var main = await _level()
-	var bow = _tower_by_door(main, "bow_tower", 8.0)
-	_set_stock("arrow_wood", 3)
-	main.hero.global_position = main.current_core.door_outside() + Vector3(0.0, 0.0, 1.0)
-	main.right_click_building(bow, bow.global_position)
-	assert_eq(main.hero.target_building, bow, "a right-click sends him to it")
-	await wait_seconds(8.0)
-	assert_eq(bow.rounds(), 3, "and he loads it")
+	bow.set_physics_process(false)
+	_set_stock("arrow_wood", cap)
+	bow.load_from_stock()
+	assert_eq(bow.rounds(), cap, "(full)")
+	var badge: Node3D = bow.find_child("AmmoBadge", true, false) as Node3D
+	assert_true(badge == null or not badge.visible, "Full: no badge")
+	bow.take_use()
+	badge = bow.find_child("AmmoBadge", true, false) as Node3D
+	assert_not_null(badge, "A shot short: a badge over it")
+	if badge == null:
+		return
+	assert_true(badge.visible, "shown")
+	assert_almost_eq(float(badge._last_ratio), float(cap - 1) / float(cap), 0.01, "its bar as full as the tower")
+	var icon: Sprite3D = badge.get_node_or_null("Icon") as Sprite3D
+	assert_not_null(icon, "beside the icon of what it takes")
+	assert_eq(icon.texture, UiTheme.icon("arrow_wood"), "(wooden arrows)")
+	assert_gt(badge.global_position.y, bow.global_position.y + float(bow._building_height()), "over its top")
+	_emptied(bow)
+	assert_eq(icon.modulate, config_node.FEEDBACK["ammo_out_tint"], "Empty with none in the stock: its icon in the danger colour")
+	_set_stock("arrow_wood", cap)
+	bow._tick_reload(0.1)
+	assert_eq(icon.modulate, Color.WHITE, "Loading itself: not")
+	_step(bow, float(config_node.AMMO_LOADING["seconds"]) + 0.2)
+	assert_false(badge.visible, "Full again: gone")
 
 # ==============================================================================
 # 3. One kind at a time; a bigger store; taken down
@@ -271,10 +311,7 @@ func test_11_its_card_offers_its_kinds_and_the_loading() -> void:
 	assert_true(wood.tooltip_text.begins_with(tr(String(config_node.AMMO["arrow_wood"]["name"]))), "named there")
 	assert_true(wood.button_pressed, "set to nothing, the first the stock has is the one lit")
 	assert_eq(String((wood.get_node("Figure") as Label).text), "6", "each says in its corner how much the stock holds")
-	var load_btn: Button = kinds.get_node_or_null("LoadCommand") as Button
-	assert_not_null(load_btn, "and Load, a square too")
-	assert_false(load_btn.disabled, "to be pressed while there is some to load")
-	assert_eq(load_btn.tooltip_text, tr("TIP_LOAD"), "saying what it does")
+	assert_null(kinds.get_node_or_null("LoadCommand"), "and no Load: it loads itself")
 	# The magazine: what is in it and how full, empty to begin with.
 	var mag: Node = panel.button_container.get_node_or_null("Magazine")
 	assert_not_null(mag, "its magazine stands over the squares")
@@ -284,12 +321,7 @@ func test_11_its_card_offers_its_kinds_and_the_loading() -> void:
 		"and it says so")
 	(kinds.get_node("Ammo_arrow_bone") as Button).pressed.emit()
 	assert_eq(String(bow.ammo_type), "arrow_bone", "a kind chosen sets it to that")
-	assert_eq(main.hero.target_building, bow, "and sends him to load it")
-	await wait_frames(1)
-	panel._update_status_display()
-	var going: Button = panel.button_container.find_child("LoadCommand", true, false) as Button
-	assert_true(going.button_pressed, "Load lit while he is on his way")
-	assert_eq(going.tooltip_text, tr("TIP_LOAD_GOING"), "and says so")
+	assert_ne(main.hero.target_building, bow, "and sends nobody: it loads itself")
 	assert_gt(bow.load_from_stock(), 0, "loaded")
 	panel._update_status_display()
 	await wait_frames(1)
@@ -299,9 +331,6 @@ func test_11_its_card_offers_its_kinds_and_the_loading() -> void:
 	assert_almost_eq(bar.value, float(bow.rounds()) / float(bow.capacity()), 0.001, "and its bar shows it")
 	assert_eq(String((panel.button_container.find_child("Loaded", true, false) as Label).text),
 		tr(String(config_node.AMMO["arrow_bone"]["name"])), "what is in it named")
-	var done: Button = panel.button_container.find_child("LoadCommand", true, false) as Button
-	assert_true(done.disabled, "the stock of bone arrows used up: nothing more to load")
-	assert_eq(done.tooltip_text, tr("TIP_LOAD_NONE"), "and Load says why")
 
 func test_12_the_workbench_keeps_its_ammunition_apart() -> void:
 	var main = await _level()

@@ -93,7 +93,7 @@ func aim_point() -> Vector3:
 	return best
 
 func _physics_process(delta: float) -> void:
-	if not _is_live():
+	if not _is_live() or not _tick_reload(delta):
 		return
 	cooldown = maxf(0.0, cooldown - delta)
 	# Turning to what it chose (TOWERS.turn_seconds): it throws once it faces it.

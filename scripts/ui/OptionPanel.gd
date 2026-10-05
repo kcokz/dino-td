@@ -1231,16 +1231,10 @@ func _ammo_offer_of(unit: Node) -> Array:
 		return []
 	var gs = _get_game_state()
 	var out: Array = [String(unit.ammo_type), bool(unit.has_ammo()), bool(unit.wants_load()), bool(unit.is_constructed),
-		_going_to_load(unit)]
+		bool(unit.is_reloading())]
 	for id in unit.accepts():
 		out.append(int(gs.resources.get(id, 0)) if gs else 0)
 	return out
-
-## Whether he is on his way to load `tower` (Hero.order_load: the tower is what he is sent to, and it wants loading).
-func _going_to_load(tower: Node) -> bool:
-	var hero = _get_hero()
-	return hero != null and is_instance_valid(hero) and "target_building" in hero and hero.target_building == tower \
-		and bool(tower.wants_load())
 
 ## WHAT A TOWER IS LOADED WITH, on its card (AmmoTower; GAME-DESIGN 6.0), as his abilities are shown -- squares, not a
 ## list of long buttons (2026-10-03, the player: "弹夹的界面需要更清晰和简洁，现在是一大横条的button，可以改成图片，小方块，类似
@@ -1249,11 +1243,8 @@ func _going_to_load(tower: Node) -> bool:
 ##     "12 / 20" at its end. Empty, the socket is bare, it says so in the danger colour, and the figure is red: empty,
 ##     a tower does nothing.
 ##   A SQUARE FOR EACH KIND it takes that the run can come by: its icon, how many the stock holds in its corner, the one
-##     it is set to lit round its rim. Choosing one sets it to that (what was in it of another goes back to the stock)
-##     and sends him to load it, when there is some.
-##   LOAD, last, set apart: the reload mark; it sends him to fill it from the stock -- lit while he is on his way, dull
-##     when there is nothing to load (full, or none in the stock), and its tooltip says which. He loads a tower he walks
-##     past anyway (Hero._load_in_passing): Load is for one he is not going past.
+##     it is set to lit round its rim. Choosing one sets it to that (what was in it of another goes back to the stock),
+##     and it loads itself with it from the stock (AmmoTower._tick_reload).
 ## A square says what it is and does in its tooltip, and on the card's line under the bars while the cursor is on it.
 func _add_ammo_choice(tower: Node) -> void:
 	var cfg = _get_config()
@@ -1280,9 +1271,6 @@ func _add_ammo_choice(tower: Node) -> void:
 		var btn := UiKit.slot_button(UiTheme.icon(id), func():
 			if not is_instance_valid(tower) or not tower.set_ammo(id):
 				return
-			var hero = _get_hero()
-			if tower.wants_load() and hero and is_instance_valid(hero) and hero.has_method("order_load"):
-				hero.order_load(tower)
 			_refresh_ui()
 		, tip, str(stock))
 		btn.name = "Ammo_%s" % id
@@ -1296,34 +1284,6 @@ func _add_ammo_choice(tower: Node) -> void:
 		btn.mouse_entered.connect(func(): _show_ammo_detail(id))
 		btn.focus_entered.connect(func(): _show_ammo_detail(id))
 		btn.mouse_exited.connect(_clear_craft_detail)
-	var gap := Control.new()
-	gap.name = "Gap"
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(gap)
-	var going: bool = _going_to_load(tower)
-	var load_btn := UiKit.slot_button(UiTheme.icon("reload"), func():
-		var hero = _get_hero()
-		if is_instance_valid(tower) and hero and is_instance_valid(hero) and hero.has_method("order_load"):
-			hero.order_load(tower)
-			action_triggered.emit("load", tower)
-			_refresh_ui()
-	, _load_tip(tower, going))
-	load_btn.name = "LoadCommand"
-	load_btn.toggle_mode = true
-	load_btn.set_pressed_no_signal(going)
-	load_btn.disabled = not tower.wants_load()
-	row.add_child(load_btn)
-
-## What Load says: what it does -- or that he is on his way, or why there is nothing to do (full; none in the stock).
-func _load_tip(tower: Node, going: bool) -> String:
-	if going:
-		return tr("TIP_LOAD_GOING")
-	if tower.wants_load():
-		return tr("TIP_LOAD")
-	if int(tower.room()) <= 0:
-		return tr("TIP_LOAD_FULL")
-	return tr("TIP_LOAD_NONE")
 
 ## The magazine (_add_ammo_choice): a socket with what is in it -- or its bare mark -- and beside it its name over a bar
 ## of how full it is, the figure at the bar's end.

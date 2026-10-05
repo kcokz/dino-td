@@ -119,8 +119,8 @@ const BUILDINGS: Dictionary = {
 	# drop tower crush.
 	#
 	# AMMUNITION (the player: "工作台做，专门的弹药系统，每个塔都可以放不同的弹药，不同的数量，还能升级扩张数量"): a
-	# tower shoots what it is loaded with (AMMO) -- made at the workbench, and loaded by him: walking past, or sent
-	# to it (AmmoTower, AMMO_LOADING). `ammo.accepts` the kinds it takes, `ammo.capacity` how many it holds; empty,
+	# tower shoots what it is loaded with (AMMO) -- made at the workbench, and loaded by itself from the stock
+	# (AmmoTower, AMMO_LOADING). `ammo.accepts` the kinds it takes, `ammo.capacity` how many it holds; empty,
 	# it does nothing. BUILT, IT COMES LOADED (`ammo.comes_with`; the player, 2026-10-04: "我先造防御但没有弹药，
 	# intuitively我会觉得这个已经可以用了，没想到造好了却没实际用处"): a full magazine of that kind, the price of the batch
 	# in its own -- the same as building it and making the batch, a step fewer, and it works the moment it stands. An
@@ -1444,14 +1444,16 @@ const AMMO: Dictionary = {
 	"food": {"name": "RESOURCE_FOOD", "for": "bait", "uses": 12},
 }
 
-## Loading a tower (AmmoTower): he loads it walking past, within `reach` metres of its box, while walking or
-## standing about -- not at other work, nor fighting -- one tower every `every` seconds at most; sent to it, he
-## takes `order_seconds` over it, as any work. What is loaded is the kind the tower is set to (it remembers;
-## the first time, the first of its kinds the stock has), as much as the stock has and the tower holds.
+## A TOWER LOADS ITSELF FROM THE STOCK (AmmoTower._tick_reload; the player, 2026-10-05: "如果恐龙在进攻cabin……恐龙卡着
+## 去这个建筑加弹药的路的话，人没法去加弹药了，加弹药的逻辑太复杂，能不能设计的更方便加？" -- chose "塔自己从仓库补"): he
+## makes the ammunition at the workbench, and that is all he does for it. Empty, a tower begins a load at once; not
+## full, in a lull -- `lull_seconds` with nothing loosed, dropped, thrown or eaten. A load takes `seconds` (a tower's
+## own ammo.reload_seconds, if it says one), the tower acting on nothing meanwhile, and fills it with what the stock
+## has of the kind it is set to (it remembers; the first time, the first of its kinds the stock has). It was his to
+## carry, walking past or sent to it: a raid at the cabin stood in his way to an empty tower, and none was loaded.
 const AMMO_LOADING: Dictionary = {
-	"reach": 1.4,
-	"every": 0.25,
-	"order_seconds": 1.0,
+	"seconds": 3.0,
+	"lull_seconds": 4.0,
 }
 
 ## A PATCH OF GROUND ON FIRE where a fire pot broke (FirePatch; AMMO.fire_pot.burn says how long, how wide, how hot):
@@ -3893,6 +3895,15 @@ const FEEDBACK: Dictionary = {
 	# a ghost can go down, and from the green of the selection; `reach_alpha` is how strongly it lies on the ground.
 	"reach_color": Color(0.35, 0.65, 1.0),
 	"reach_alpha": 0.22,
+	# A tower not full says so over itself (AmmoTower's badge; the player, 2026-10-05: "没装填满的建筑需要在建筑上有小的提示
+	# （根据行业标准）"): the icon of what it takes beside a bar of how full it is -- this colour, the bar while it loads
+	# itself the other, and with none left and none in the stock the icon in `ammo_out_tint` -- `ammo_badge_above`
+	# metres over its top, the icon `ammo_badge_icon` metres across. Full, nothing.
+	"ammo_bar_color": Color(0.95, 0.82, 0.4, 0.95),
+	"ammo_bar_loading_color": Color(0.45, 0.75, 1.0, 0.95),
+	"ammo_out_tint": Color(1.0, 0.3, 0.25, 1.0),
+	"ammo_badge_above": 1.6,
+	"ammo_badge_icon": 0.75,
 	# What the fires cover, while one is put down or picked (FireCover; the player, 2026-10-05: "campfire控制的区域可以
 	# 用蓝色显示出来，包括cover的建筑"): each building lit all round outlined in the reach's blue, this opaque -- a frame
 	# round its base, as the picked one's is, in another colour.

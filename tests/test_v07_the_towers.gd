@@ -170,6 +170,9 @@ func test_01_four_towers_one_set_each_its_own_job() -> void:
 func test_02_empty_a_tower_does_nothing() -> void:
 	var f: Array = await _field()
 	var bow = await _tower(f[1], "bow_tower", Vector2i(0, 0))
+	# None in the stock to load itself with (AmmoTower._tick_reload).
+	for id in bow.accepts():
+		game_state_node.resources[String(id)] = 0
 	var d = _animal("raptor", bow.global_position + Vector3(0.0, 0.0, -2.0))
 	assert_false(bow.has_ammo(), "built, it holds nothing")
 	await _until(func(): return _lost(d) > 0.0, float(_row("bow_tower")["fire_seconds"]) * 3.0)

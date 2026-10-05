@@ -45,7 +45,7 @@ func _physics_process(delta: float) -> void:
 				var bolt: Node3D = part("Bolt") if i == 0 else null
 				if bolt != null:
 					bolt.visible = has_ammo()
-	if not _is_live():
+	if not _is_live() or not _tick_reload(delta):
 		return
 	cooldown = maxf(0.0, cooldown - delta)
 	# Turning to what it chose (the ballista): it shoots once it faces it, if it is still there to shoot.
