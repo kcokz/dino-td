@@ -978,8 +978,9 @@ func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
 		_drive(Vector3.ZERO, delta, Vector3.INF)
 		return
 	if held_left > 0.0:
-		# In a snare's noose: it strains towards where it was going, and goes nowhere.
-		_drive(Vector3.ZERO, delta, goal, true)
+		# Held: it strains towards where it was going, and goes nowhere -- eating, it faces the meat. Held to eat as a snare
+		# holds, it turned to the meat and straight back to its way, and ate with its back to it (the twitch watch: shake).
+		_drive(Vector3.ZERO, delta, _eating_at if _eating_at != Vector3.INF else goal, true)
 		return
 	pace *= trap_pace
 	var step: Vector3 = _next_step_towards(goal)
@@ -2129,10 +2130,14 @@ var held_left: float = 0.0
 # ==============================================================================
 # The bait (BaitRack; Config.BAIT): passing a rack, it stops and eats a while
 # ==============================================================================
-## Stops where it is and eats for `seconds` (BaitRack.feed), facing the meat at `rack_at`: held as a snare holds it,
-## and then on its way.
+## Where the meat it is eating hangs (eat_for), INF when it is not eating.
+var _eating_at: Vector3 = Vector3.INF
+
+## Stops where it is and eats for `seconds` (BaitRack.feed), facing the meat at `rack_at` as long as it eats: held as a
+## snare holds it, and then on its way.
 func eat_for(seconds: float, rack_at: Vector3) -> void:
 	hold_for(seconds)
+	_eating_at = rack_at
 	_face_now(rack_at)
 	say("bite")
 
@@ -2189,6 +2194,8 @@ func _tick_traps(delta: float) -> void:
 		if _slow_left <= 0.0:
 			trap_pace = 1.0
 	held_left = maxf(0.0, held_left - delta)
+	if held_left <= 0.0:
+		_eating_at = Vector3.INF
 
 func perform_attack() -> void:
 	if not _is_target_valid(current_target):

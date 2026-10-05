@@ -1511,6 +1511,48 @@ const PROWL: Dictionary = {
 	"pace_every": [3.0, 5.0],
 	"wary_pace": 0.5,
 	"turn_back_chance": 0.3,
+	# A LIGHT THAT MOVES (the twitch watch on the bot's first nights once the cabin stopped shooting, 2026-10-02 -- the
+	# debug-agent's TASK-037: "火把边 idle↔walk 的 flicker"，"栅栏边 BREACH 的 shake/mill"). His torch goes where he goes
+	# and burns down, and each thought it was a light a little way off from the last: its place at the edge jumped with
+	# it, a step and a stop every quarter of a second while he worked at a bench by the door -- drawn walking, standing,
+	# walking. It holds its ground now while it is in the dark and no more than `edge_hold` metres further out than where
+	# it waits (edge_out), and once the light is on it, or its place is further off, it goes to it, all the way.
+	"edge_hold": 0.8,
+	# The light come onto it -- a man stepping at it with his torch -- it gives ground `give_ground` metres further than
+	# where it waits, and holds its ground there: given back no further than where it waits, it was in his light again at
+	# his next step, out and in at every one. Less than edge_hold, so where it has given ground to is still near enough.
+	"give_ground": 0.7,
+	# Come to a stand at the edge, it stands at least `stand_at_least` seconds before it goes after its place again -- in
+	# the dark it is in no hurry; the light come onto it, it goes at once. A man working his way along a fence a step at
+	# a time moved its place a little at every step, and it walked half a second and stood half a second by turns.
+	"stand_at_least": 2.0,
+	# On its way to its place at the edge and getting no further for `stalled_seconds` -- its place inside a tree or a rock,
+	# the route there ending short of it -- it is as near as it gets, and stands there: about as long as it takes to be
+	# drawn standing (ANIMATIONS.pace_smoothing), so it is a stand, not a push into the rock.
+	"stalled_seconds": 0.25,
+	# And a light moving on -- burning down, carried off a step at a time as he works along a fence -- it keeps after at
+	# the light's own pace rather than catching it up and standing, a walk and a stand for every step of his: which way
+	# and how fast the light is going is reckoned over the last `follow_seconds`, so a man stepping to and fro on the
+	# spot comes to nothing (ProwlerDino._watch_the_light). Two seconds evens out a step of a metre and back every half
+	# second (a third of a walk's pace is left) and keeps up with a step a second the one way.
+	"follow_seconds": 2.0,
+	# And a light's edge with a margin: what it goes for -- a place round the cabin or a fence to bite from, the man -- is
+	# taken in the dark (would_stand_at), and given up only once a light is on it by more than `lit_margin` metres;
+	# waiting at a light's edge for it, it goes for it again only once it is out of every light. Without one, the places
+	# round the cabin at the edge of the torch in it were lit and dark by turns as he stepped about inside, and it went
+	# from one to the other at every thought. Less than flee_inside: a place it keeps is never one it would back out of.
+	"lit_margin": 1.0,
+	# Its way across a light, it goes round it, one way -- the shorter to where it is going, chosen once -- from place to
+	# place round the edge, each `round_step_degrees` further round (ProwlerDino._next_step_towards): a light's width
+	# goes round in four or five, so it turns a little every second or so, never so far out from the edge that the way
+	# round is a long one, and never cutting into it between. It stepped round a fifth of a right angle at a time from
+	# where it stood, towards where its way ran on; with the way straight across the light's middle that was no step at
+	# all, and it stood at the edge for as long as the way lay so, moving a hand's breadth whenever the torch did.
+	"round_step_degrees": 40.0,
+	# A way round shut -- the field's end, a hill, a fence running on round the light -- is one where the ground nearest
+	# where it would go is less than `round_shut_degrees` further round than where it stands: it turns back for the
+	# other way, once. Something standing in the way is no shut way; the route goes round it.
+	"round_shut_degrees": 3.0,
 	# The eye-shine ("火光照到的黑暗边上能看见眼睛反光"): its eyes glow this colour, this bright at a light's
 	# edge, out to where it waits (edge_out) or in it, dimming over `eye_reach` metres further out -- a light is
 	# what an eye shines back.

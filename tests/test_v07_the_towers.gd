@@ -375,6 +375,33 @@ func test_10_meat_holds_what_passes_a_few_seconds_once() -> void:
 	assert_eq(rack.uses_left, before - 1, "and it stops once: it does not stop for meat again")
 	assert_almost_eq(_lost(d), 0.0, 0.001, "eating hurt nothing")
 
+func test_10b_eating_it_faces_the_meat_not_its_way() -> void:
+	# The twitch watch on the bot's nights (2026-10-04): a phytosaur passing a rack turned to the meat at once, and turned
+	# straight back to where it had been going while it ate -- held as a snare holds it, it strained towards its way --
+	# and its head swung there and back.
+	var f: Array = await _field()
+	var rack = await _tower(f[1], "bait_rack", Vector2i(0, 0), "food")
+	var eater: String = _eater()
+	var reach: float = float(_row("bait_rack")["range"])
+	# Its way past the rack nearly side on: the meat well off the way it is going when it smells it.
+	var from: Vector3 = rack.global_position + Vector3(-reach - 3.0, 0.0, reach * 0.9)
+	var d = _animal(eater, from)
+	d.waypoints = [from, rack.global_position + Vector3(reach + 3.0, 0.0, reach * 0.9)] as Array[Vector3]
+	d.set_physics_process(true)
+	var worst: Array = [0.0]
+	var ate: Array = [false]
+	await _until(func():
+		if float(d.held_left) > 0.0:
+			ate[0] = true
+			var ahead: Vector3 = -d.global_transform.basis.z
+			var to_meat: Vector3 = rack.global_position - d.global_position
+			worst[0] = maxf(worst[0], rad_to_deg(absf(Vector2(ahead.x, ahead.z).angle_to(Vector2(to_meat.x, to_meat.z)))))
+		return ate[0] and float(d.held_left) <= 0.0, (reach * 2.0 + 6.0) / float(config_node.DINOS[eater]["speed"]) + float(config_node.BAIT["eat_seconds"]) + 1.0)
+	assert_true(ate[0], "(the %s passing stopped to eat)" % eater)
+	# Off the meat by no more than a swing of its head the twitch watch would count either way (TWITCH.swing_min_deg).
+	assert_lt(worst[0], float(config_node.TWITCH["swing_min_deg"]) * 2.0,
+		"It faced the meat as long as it ate it, not the way it was going (at worst %.0f degrees off)" % worst[0])
+
 func test_11_what_does_not_eat_meat_does_not_stop() -> void:
 	for species in config_node.DINOS:
 		var habit: String = String(config_node.DINOS[species].get("behaviour", ""))
