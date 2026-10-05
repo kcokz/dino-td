@@ -264,3 +264,24 @@ func test_07_a_fire_before_it_halves_the_night() -> void:
 	var dark_most: float = _through(cabin, float(config_node.DINOS[_species()]["damage"]) * float(config_node.DINOS[_species()]["attack_rate"])) \
 		* float(config_node.PROWL["most_dark"]) * (float(config_node.DAY["length"]) - _at("night"))
 	assert_lt(lost, dark_most * 0.5, "and it lost less than half of what four could do in the dark")
+
+## Battering the cabin it is seen to throw its weight at it -- its own clip (Config.ANIMATIONS.dino_batter; the player:
+## "恐龙撞击船舱的动作需要单独专门的animation") -- and at the man, its bite.
+func test_08_at_the_cabin_it_batters_at_the_man_it_bites() -> void:
+	var main = await _level()
+	_set_clock(_at("night") + 10.0)
+	var cabin = main.current_core
+	_shut_in(main)
+	var d = _phytosaur(main, cabin.global_position + Vector3(-14.0, 0.0, 2.0))
+	await _drive(d, 14.0)
+	assert_eq(int(d.mode), int(Dino.Mode.ATTACK), "(it is at the cabin)")
+	var batter: String = String(config_node.ANIMATIONS["dino_batter"])
+	assert_true(d.animator.animation_player.has_animation(batter), "Its model has a clip for battering")
+	assert_eq(String(d.animator.current_clip), batter, "and it plays it at the cabin")
+	# Out in the dark beside it, the man: its bite.
+	main.hero.process_mode = Node.PROCESS_MODE_INHERIT
+	main.hero.global_position = d.global_position - d.global_transform.basis.z.normalized() * (float(d.attack_reach()) + 0.2)
+	cabin.recheck_hero()
+	d._take(main.hero, Dino.Mode.ENGAGE)
+	d._begin_attack()
+	assert_eq(String(d.animator.current_clip), String(config_node.ANIMATIONS["dino"]["ATTACKING"]), "At the man, its bite")

@@ -128,6 +128,10 @@ func test_03_every_clip_is_still_there() -> void:
 		var player := players[0] as AnimationPlayer
 		for clip in wanted:
 			assert_true(player.has_animation(clip), "%s plays %s" % [species, clip])
+		# And what walks has its own clip for battering a building (Config.ANIMATIONS.dino_batter; v0.7): what has wings
+		# (its wingbeat, "fly") strikes from the air, and batters with its bite.
+		if not player.has_animation("fly"):
+			assert_true(player.has_animation(String(config_node.ANIMATIONS["dino_batter"])), "%s batters a building" % species)
 
 func test_04_they_are_drawn_round_not_faceted() -> void:
 	# The stretched Quaternius animals were a few thousand flat facets; these are smooth, and many times that.

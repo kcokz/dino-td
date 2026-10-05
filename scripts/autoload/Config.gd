@@ -5407,7 +5407,12 @@ const ANIMATIONS: Dictionary = {
 	# dying, a jump -- plays once and holds its last frame. Decided here, for every model,
 	# rather than in each file's import settings: it is the game's rule, not the asset's,
 	# and a clip that played once and froze mid-stride was what every model did before.
-	"looping": ["idle", "walk", "run", "attack", "build", "harvest", "sleep"],
+	"looping": ["idle", "walk", "run", "attack", "batter", "build", "harvest", "sleep"],
+
+	# What a dinosaur strikes a building with -- the cabin, a stake, a tower: its weight thrown against it, not a bite
+	# (tools/dino_moves.py batter; the player, 2026-10-04: "恐龙撞击船舱的动作需要单独专门的animation"). Played in place of
+	# its ATTACKING clip while what it strikes is built (Dino._play_strike); a model without one batters with its bite.
+	"dino_batter": "batter",
 
 	# Hero states (corresponds to Hero.State enum keys)
 	"hero": {
@@ -5467,6 +5472,8 @@ const ANIMATIONS: Dictionary = {
 		"walk": ["run", "walking", "Walk", "Run", "Armature|Walk", "Armature|Run"],
 		"run": ["walk", "Run", "Walk", "Armature|Run", "Armature|Walk"],
 		"attack": ["bite", "Attack", "Bite", "Armature|Attack", "Armature|Bite"],
+		# A model made before it had one (a flyer's: it strikes from the air) batters with its bite.
+		"batter": ["attack", "bite", "Attack"],
 		"idle": ["Idle", "breathing", "Armature|Idle"],
 		"death": ["die", "dead", "Death", "Die", "Armature|Death"],
 		"build": ["craft", "hammer", "Build", "interact"],

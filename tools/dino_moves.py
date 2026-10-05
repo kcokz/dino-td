@@ -13,6 +13,9 @@
 #           trot's diagonal pairs, the head steady; a sprawler's body and tail bending side to side, a wave
 #           down it, its feet wide.
 #   attack  drawn back, the jaws open, a lunge and a bite, back to where it began (the game loops it).
+#   batter  at a building, not a bite at flesh: its weight thrown against something that does not give -- drawn back
+#           and down, driven in head and shoulder first, a jolt and the jaws snapping where it meets it (the game
+#           loops it while it batters the cabin, a stake, a tower).
 #   death   a stagger, the legs going, down onto its side, the head last; it lies as it fell.
 #   sleep   belly down, legs folded under it, the head laid on the ground, the tail round beside it,
 #           breathing slowly.
@@ -313,7 +316,27 @@ class Moves:
             return pose
         return frames, at, True
 
-    def ram(self):
+    def batter(self):
+        """Throwing itself at a building -- the cabin's hull, a stake, a tower (the player, 2026-10-04: "恐龙撞击船舱的动作
+        需要单独专门的animation"): not a bite at flesh but its weight against something that does not give. Gathered back
+        and down, it drives in off its planted feet, head low and a shoulder turned into it, the jaws snapping as it meets
+        it -- a jolt, the head tossed -- and draws back to go again (the game loops it while it batters). An armoured
+        grazer's is the ram it has (spec attack "ram"); one whose blow is its tail swings that (spec attack "swipe"). Any
+        other is worked out from its bite -- further, slower, lower, a biped's arms clawing at it -- with its own spec
+        "batter" laid over that."""
+        attack = self.spec["attack"]
+        if "ram" in attack:
+            return self.ram()
+        if "swipe" in attack:
+            return self.swipe()
+        g = {"period": attack["period"] * 1.3, "lunge": max(0.12, attack.get("lunge", 0.15) * 1.6), "back": 0.1,
+             "crouch": 0.04, "dip": 0.03, "lower": 7.0, "tuck": attack.get("reach", 18.0) * 0.8, "head_down": 10.0,
+             "toss": 10.0, "hook": 7.0, "roll": 4.0, "push": 0.5, "step": 0.05, "jaw": attack.get("jaw", 30.0) * 0.8,
+             "tail_up": 4.0}
+        g.update(self.spec.get("batter", {}))
+        return self.ram(g, claws=self.plan == "biped")
+
+    def ram(self, g=None, claws=False):
         """A butt, in place of a bite: an armoured grazer's blow is its body (an aetosaur's, its shoulder horns). It
         gathers itself -- weight back, crouched, head and shoulders dropping -- then drives forward off its planted
         feet, its head tucked down, the front of it swung to one side and rolled into what it hits so the horn on that
@@ -322,7 +345,7 @@ class Moves:
         `step` high -- `back` how far it draws back first, `crouch` and `dip` how far it sinks, `lower` the front let
         down about the hips (degrees), `tuck` the neck bent down, `head_down`, `toss`, `hook` the turn into the blow,
         `roll` the shoulder dipped into it, `push` the hind heels lifting as it drives off them."""
-        g = self.spec["attack"]
+        g = g if g is not None else self.spec["attack"]
         frames = int(round(g["period"] * FPS))
         s = self.skel
         n_neck = len(s.chains["neck"])
@@ -358,6 +381,9 @@ class Moves:
                     pose.limb(key, foot, 0.5 * stepping, curl=0.4 * stepping)
                 else:
                     pose.limb(key, rest, g.get("push", 0.5) * drive)
+            # A biped's arms up and clawing at what it drives into (batter).
+            if claws:
+                self.arms_at(pose, 0.0, t, raise_=0.06 * drive, curl=0.9 * drive)
             return pose
         return frames, at, True
 
@@ -736,6 +762,7 @@ class Moves:
         attack = self.spec["attack"]
         out = {"idle": self.idle(), "walk": self.gait("walk"), "run": self.gait("run"),
                "attack": self.swipe() if "swipe" in attack else self.ram() if "ram" in attack else self.attack(),
+               "batter": self.batter(),
                "death": self.slump() if "slump" in self.spec["death"] else self.death()}
         if "sleep" in self.spec:
             out["sleep"] = self.sleep()

@@ -893,9 +893,22 @@ func _begin_attack() -> void:
 	# before it bit, again and again.
 	_bite_clock = 0.0 if _end_burst_in_a_bite() else _bite_interval() * 0.5
 	velocity = Vector3.ZERO
+	_play_strike()
 
 func _bite_interval() -> float:
 	return 1.0 / maxf(0.1, attack_rate)
+
+## What it is seen to strike with: at a building, its weight thrown against it (Config.ANIMATIONS.dino_batter); at the
+## man or an animal, its bite -- its ATTACKING state's clip.
+func _play_strike() -> void:
+	if animator == null or not is_instance_valid(animator):
+		return
+	var cfg = _get_config()
+	var batter: String = String(cfg.ANIMATIONS.get("dino_batter", "")) if (cfg and "ANIMATIONS" in cfg) else ""
+	if batter != "" and _is_building(current_target):
+		animator.play_clip(batter)
+	else:
+		animator.play_state(current_state)
 
 # ==============================================================================
 # The body
