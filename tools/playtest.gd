@@ -159,6 +159,8 @@ func _run(name: String) -> void:
 			await _scenario_cast([["acheroraptor", -1.2], ["dakotaraptor", 2.2], ["big_theropod", 9.0], ["triceratops", 18.5]])
 		"firecover":
 			await _scenario_firecover()
+		"hurt":
+			await _scenario_hurt()
 		"kiln":
 			await _scenario_kiln()
 		"bench3":
@@ -1505,6 +1507,38 @@ func _scenario_kiln() -> void:
 	var bone = placed.get("bone_stake")
 	if bone != null:
 		await _portrait("palisades", (bone as Node3D).global_position, 4.5, false)
+
+## A building hurt looks it (v0.7, Building._show_damage; the cabin's three stages, CabinArt "damage_<n>"): the cabin at
+## each stage, and a fence, a bow tower and a catapult each hurt more than the last, beside it.
+func _scenario_hurt() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	for res_id in cfg.RESOURCES:
+		gs.resources[res_id] = 99
+	var door: Vector3 = _main.current_core.door_outside()
+	var gm = _main.grid_manager
+	var hurt_of: Array = [["wall", Vector3(-3.0, 0.0, 3.0), 0.3], ["wall", Vector3(-2.0, 0.0, 3.0), 0.6],
+		["bow_tower", Vector3(1.5, 0.0, 4.0), 0.55], ["catapult", Vector3(5.0, 0.0, 4.0), 0.85]]
+	for spec in hurt_of:
+		var b = _main.build_system.place_at(String(spec[0]), gm.world_to_build_cell(door + spec[1]), _main.buildings_container, false)
+		if b != null:
+			b.complete_construction()
+			b.set_physics_process(false)
+			b.take_damage(float(b.max_hp) * float(spec[2]))
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	await _wait(8)
+	await _portrait("buildings_hurt", door + Vector3(1.0, 0.0, 3.5), 9.0, false)
+	var core = _main.current_core
+	for share in [0.7, 0.45, 0.2]:
+		core.current_hp = float(core.max_hp) * share
+		core._show_damage()
+		await _wait(6)
+		await _portrait("cabin_at_%d" % int(share * 100.0), core.global_position + Vector3(0.0, 0.0, 0.5), 9.5, false)
+		await _portrait("cabin_back_at_%d" % int(share * 100.0), core.global_position, 9.5, false, true)
 
 ## What the fires cover (v0.7, FireCover): two campfires by the cabin and a run of fence, a fire picked -- every fire's
 ## ground in blue, what is lit all round outlined; then a third in hand.

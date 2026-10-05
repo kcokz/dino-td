@@ -389,6 +389,7 @@ func take_damage(amount: float) -> void:
 	current_hp = maxf(0.0, current_hp - amount)
 	_on_damaged(amount)
 	_update_info_label()
+	_show_damage()
 	
 	if current_hp <= 0.0:
 		destroy()
@@ -581,6 +582,108 @@ func heal(amount: float) -> void:
 		return
 	current_hp = minf(max_hp, current_hp + amount)
 	_update_info_label()
+	_show_damage()
+
+# ==============================================================================
+# Hurt, it looks it (Config.DAMAGE_LOOK)
+# ==============================================================================
+
+const SCARS_SHADER: String = "res://assets/shaders/damage_overlay.gdshader"
+## The soot and cracks drawn over its body -- its own, so how hurt it looks is its own -- and the smoke out of its top.
+var _scars: ShaderMaterial = null
+var _hurt_smoke: GPUParticles3D = null
+
+## How hurt it is, 0 whole .. 1 gone: what its looks follow. Nothing while it is still going up.
+func hurt() -> float:
+	if not is_constructed or max_hp <= 0.0:
+		return 0.0
+	return clampf(1.0 - current_hp / max_hp, 0.0, 1.0)
+
+func _damage_look() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.DAMAGE_LOOK if (cfg and "DAMAGE_LOOK" in cfg) else {}
+
+## As hurt as it is, it looks it (the player, 2026-10-05: "掉血的建筑应该有损坏的样子"): past DAMAGE_LOOK.from, soot and
+## cracks over its body -- each mesh's overlay, under what fades while he is in the cabin -- and past smoke_from, smoke
+## out of its top. Mended, it all goes as it came.
+func _show_damage() -> void:
+	var look: Dictionary = _damage_look()
+	var h: float = hurt()
+	var scarred: bool = h > float(look.get("from", 0.1)) and not is_destroyed
+	if scarred and _scars == null:
+		var shader: Shader = load(SCARS_SHADER) as Shader
+		if shader != null:
+			_scars = ShaderMaterial.new()
+			_scars.shader = shader
+			_scars.set_shader_parameter("seed", float(get_instance_id() % 997) * 0.37)
+			_scars.set_shader_parameter("cracks_from", float(look.get("cracks_from", 0.35)))
+	if _scars != null:
+		_scars.set_shader_parameter("damage", h)
+	for mi in _body_meshes():
+		# What fades with the cabin's roof while he is inside is not drawn over: soot over a faded roof would hang in the air.
+		if String(mi.name).begins_with("fade_"):
+			continue
+		mi.material_overlay = _scars if scarred else null
+	_show_hurt_smoke(h, look)
+
+## Smoke out of its top past DAMAGE_LOOK.smoke_from, thicker as it is hurt more; none below.
+func _show_hurt_smoke(h: float, look: Dictionary) -> void:
+	var from: float = float(look.get("smoke_from", 0.5))
+	if h < from or is_destroyed:
+		if _hurt_smoke != null and is_instance_valid(_hurt_smoke):
+			_hurt_smoke.emitting = false
+		return
+	if _hurt_smoke == null or not is_instance_valid(_hurt_smoke):
+		_hurt_smoke = _make_hurt_smoke(look)
+		add_child(_hurt_smoke)
+		_hurt_smoke.position = Vector3(0.0, _building_height() * 0.8, 0.0)
+	_hurt_smoke.amount_ratio = 0.35 + 0.65 * clampf((h - from) / maxf(0.01, 1.0 - from), 0.0, 1.0)
+	_hurt_smoke.emitting = true
+
+## A wisp of dark smoke rising off it: soft puffs that grow and thin as they go up, the wind taking them a little.
+func _make_hurt_smoke(look: Dictionary) -> GPUParticles3D:
+	var size: float = float(look.get("smoke_size", 0.7))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = maxf(0.15, _footprint() * 0.25)
+	pm.direction = Vector3.UP
+	pm.spread = 12.0
+	pm.initial_velocity_min = float(look.get("smoke_rise", 0.8)) * 0.7
+	pm.initial_velocity_max = float(look.get("smoke_rise", 0.8)) * 1.2
+	pm.gravity = Vector3(0.08, 0.05, 0.03)
+	pm.scale_min = size * 0.6
+	pm.scale_max = size
+	var grow := Curve.new()
+	grow.add_point(Vector2(0.0, 0.4))
+	grow.add_point(Vector2(1.0, 1.0))
+	var grow_tex := CurveTexture.new()
+	grow_tex.curve = grow
+	pm.scale_curve = grow_tex
+	var c: Color = look.get("smoke_colour", Color(0.22, 0.2, 0.19, 0.7))
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.15, 1.0])
+	ramp.colors = PackedColorArray([Color(c, 0.0), c, Color(c, 0.0)])
+	var ramp_tex := GradientTexture1D.new()
+	ramp_tex.gradient = ramp
+	pm.color_ramp = ramp_tex
+	var puff := StandardMaterial3D.new()
+	puff.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	puff.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	puff.vertex_color_use_as_albedo = true
+	puff.albedo_texture = Fire._soft_disc()
+	puff.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	puff.billboard_keep_scale = true
+	var quad := QuadMesh.new()
+	quad.material = puff
+	var p := GPUParticles3D.new()
+	p.name = "HurtSmoke"
+	p.process_material = pm
+	p.draw_pass_1 = quad
+	p.amount = int(look.get("smoke_amount", 14))
+	p.lifetime = float(look.get("smoke_seconds", 2.6))
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.emitting = false
+	return p
 
 # ==============================================================================
 # Upgrading where it stands (v0.6)
@@ -672,6 +775,7 @@ func _finish_upgrade() -> void:
 	_rebuild_body(was)
 	_update_visuals_progress()
 	_after_upgrade()
+	_show_damage()
 	_sound("build_done")
 	_update_info_label()
 	var eb = _get_event_bus()

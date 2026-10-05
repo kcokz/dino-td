@@ -799,6 +799,205 @@ def _in_hole(side_front, x0, x1, z0, z1):
     return False
 
 
+# ------------------------------------------------------------------------------
+# Its hurt, in three stages (CabinArt "damage_<n>"; Config.CABIN.damage_stages; the player, 2026-10-05: "cabin也需要有
+# 三个损坏阶段的样子"): drawn just proud of the hull's outside, each stage's its own part -- shown from its stage on --
+# and what is on the roof or the front above the sill a "fade_" part, faded with the roof while he is inside.
+#   damage_1   scorched and clawed: soot blotches, three-line claw rakes, a dented panel
+#   damage_2   its plates torn: panels peeled out on their top edges, the dark inside and a rib behind them
+#   damage_3   holed through: jagged holes, their rims bent out, a cable hanging from one; and "damage_3_spark",
+#              a speck in the back wall's hole that the game strikes sparks from (CoreCampfire)
+# ------------------------------------------------------------------------------
+
+HOLE_DARK = (0.045, 0.042, 0.04)
+SOOT = (0.11, 0.095, 0.085)
+CLAW = (0.20, 0.19, 0.18)
+DENT = (0.30, 0.29, 0.27)
+CABLE = (0.06, 0.06, 0.07)
+COPPER = (0.72, 0.42, 0.20)
+
+
+def _hull_plate():
+    return mix(METAL, (0.52, 0.50, 0.46), 0.35)
+
+
+def _wall_pt(x, z, front, off):
+    """A point on the outside of the front (or back) wall at (x, z), `off` metres proud of it."""
+    y = _wall_y(MOD_OUT, z, front)
+    return Vector((x, y - off if front else y + off, z))
+
+
+def _end_pt(west, y, z, off):
+    """A point on the outside of an end bulkhead, `off` proud of it."""
+    return Vector((-(MOD_X_OUT + off) if west else MOD_X_OUT + off, y, z))
+
+
+def _fan(b, centre, rim, col, col_rim):
+    """A jagged disc: the centre and its rim, both ways round so it shows from either side."""
+    n = len(rim)
+    for k in range(n):
+        p0, p1 = rim[k], rim[(k + 1) % n]
+        b.tri(centre, p0, p1, col, col_rim, col_rim)
+        b.tri(centre, p1, p0, col, col_rim, col_rim)
+
+
+def _blotch_wall(b, x, z, front, r, col, rng, off=0.012, n=11, edge=None):
+    rim = []
+    for k in range(n):
+        a = math.tau * k / n
+        rr = r * rng.uniform(0.5, 1.0)
+        rim.append(_wall_pt(x + math.cos(a) * rr, z + math.sin(a) * rr * 0.8, front, off))
+    _fan(b, _wall_pt(x, z, front, off), rim, col, edge if edge is not None else mix(col, _hull_plate(), 0.45))
+
+
+def _blotch_end(b, west, y, z, r, col, rng, off=0.012, n=11):
+    rim = []
+    for k in range(n):
+        a = math.tau * k / n
+        rr = r * rng.uniform(0.5, 1.0)
+        rim.append(_end_pt(west, y + math.cos(a) * rr, z + math.sin(a) * rr * 0.8, off))
+    _fan(b, _end_pt(west, y, z, off), rim, col, mix(col, _hull_plate(), 0.45))
+
+
+def _blotch_roof(b, x, y, r, col, rng, off=0.012, n=11):
+    top = MOD_OUT[2] + MOD_OUT[1]
+    rim = []
+    for k in range(n):
+        a = math.tau * k / n
+        rr = r * rng.uniform(0.5, 1.0)
+        rim.append(Vector((x + math.cos(a) * rr, y + math.sin(a) * rr * 0.8, top + off)))
+    _fan(b, Vector((x, y, top + off)), rim, col, mix(col, _hull_plate(), 0.45))
+
+
+def _rake(b, x, z, front, angle, rng, off=0.016, length=0.42):
+    """Three claw marks raked across the wall at `angle` (radians, in the wall's own x-z)."""
+    d = Vector((math.cos(angle), 0.0, math.sin(angle)))
+    across = Vector((-math.sin(angle), 0.0, math.cos(angle)))
+    for k in (-1, 0, 1):
+        c = Vector((x, 0.0, z)) + across * (0.055 * k)
+        half = length * rng.uniform(0.75, 1.0) * 0.5
+        a_, b_ = c - d * half, c + d * half
+        w = across * 0.011
+        q = [a_ - w, b_ - w * 0.3, b_ + w * 0.3, a_ + w]
+        pts = [_wall_pt(p.x, p.z, front, off) for p in q]
+        b.quad(pts[0], pts[1], pts[2], pts[3], CLAW, CLAW, CLAW, CLAW)
+        b.quad(pts[3], pts[2], pts[1], pts[0], CLAW, CLAW, CLAW, CLAW)
+
+
+def _torn_plate(b, x0, x1, z0, z1, front, swing_deg, rng):
+    """A panel torn loose on its top edge and swung out `swing_deg`: the dark inside behind it, a rib across it. Kept
+    within a hand's breadth of the hull: the model is placed by its bounds (VisualLibrary.place), and a part sticking
+    out would move the whole cabin off its box."""
+    off = 0.008
+    hole = [_wall_pt(x0, z0, front, off), _wall_pt(x1, z0, front, off), _wall_pt(x1, z1, front, off), _wall_pt(x0, z1, front, off)]
+    b.quad(hole[0], hole[1], hole[2], hole[3], HOLE_DARK, HOLE_DARK, HOLE_DARK, HOLE_DARK)
+    b.quad(hole[3], hole[2], hole[1], hole[0], HOLE_DARK, HOLE_DARK, HOLE_DARK, HOLE_DARK)
+    # The rib behind, across its middle.
+    zm = (z0 + z1) * 0.5
+    r0, r1 = _wall_pt(x0 - 0.02, zm - 0.03, front, 0.012), _wall_pt(x1 + 0.02, zm - 0.03, front, 0.012)
+    r2, r3 = _wall_pt(x1 + 0.02, zm + 0.03, front, 0.012), _wall_pt(x0 - 0.02, zm + 0.03, front, 0.012)
+    b.quad(r0, r1, r2, r3, GUNMETAL, GUNMETAL, METAL_DARK, METAL_DARK)
+    b.quad(r3, r2, r1, r0, GUNMETAL, GUNMETAL, METAL_DARK, METAL_DARK)
+    # The plate, hinged on its top edge, swung out and a little twisted.
+    s = math.radians(swing_deg)
+    h = z1 - z0
+    out = 1.0 if not front else -1.0
+    twist = rng.uniform(-0.04, 0.04)
+    top0, top1 = _wall_pt(x0, z1, front, 0.012), _wall_pt(x1, z1, front, 0.012)
+    low0 = top0 + Vector((0.0, out * h * math.sin(s), -h * math.cos(s) + twist))
+    low1 = top1 + Vector((0.0, out * h * math.sin(s) * rng.uniform(0.8, 1.1), -h * math.cos(s) - twist))
+    face = jitter(mix(_hull_plate(), SCORCH, 0.35), rng, 0.03)
+    back = mix(PANEL, SOOT, 0.4)
+    b.quad(low0, low1, top1, top0, face, face, face, face)
+    b.quad(top0, top1, low1, low0, back, back, back, back)
+
+
+def _hole_wall(b, x, z, front, r, rng, n=13):
+    """A hole torn through the wall round (x, z): its jagged dark mouth and the plate round it bent out in petals."""
+    rim = []
+    for k in range(n):
+        a = math.tau * k / n
+        rr = r * (rng.uniform(0.55, 1.0) if k % 2 else rng.uniform(0.85, 1.15))
+        rim.append((x + math.cos(a) * rr, z + math.sin(a) * rr * 0.85))
+    pts = [_wall_pt(px, pz, front, 0.01) for (px, pz) in rim]
+    _fan(b, _wall_pt(x, z, front, 0.01), pts, HOLE_DARK, HOLE_DARK)
+    out = Vector((0.0, -1.0 if front else 1.0, 0.0))
+    for k in range(n):
+        if k % 2:
+            continue
+        p0, p1 = pts[k], pts[(k + 1) % n]
+        mid = (p0 + p1) * 0.5
+        bent = mid + (mid - _wall_pt(x, z, front, 0.01)).normalized() * r * 0.22 + out * r * rng.uniform(0.06, 0.12)
+        col = jitter(mix(_hull_plate(), SCORCH, 0.55), rng, 0.04)
+        b.tri(p0, p1, bent, col, col, mix(col, (0.85, 0.82, 0.78), 0.3))
+        b.tri(p1, p0, bent, col, col, mix(col, (0.85, 0.82, 0.78), 0.3))
+
+
+def _hole_end(b, west, y, z, r, rng, n=13):
+    rim = []
+    for k in range(n):
+        a = math.tau * k / n
+        rr = r * (rng.uniform(0.55, 1.0) if k % 2 else rng.uniform(0.85, 1.15))
+        rim.append(_end_pt(west, y + math.cos(a) * rr, z + math.sin(a) * rr * 0.85, 0.01))
+    _fan(b, _end_pt(west, y, z, 0.01), rim, HOLE_DARK, HOLE_DARK)
+    out = Vector((-1.0 if west else 1.0, 0.0, 0.0))
+    for k in range(0, n, 2):
+        p0, p1 = rim[k], rim[(k + 1) % n]
+        mid = (p0 + p1) * 0.5
+        bent = mid + (mid - _end_pt(west, y, z, 0.01)).normalized() * r * 0.22 + out * r * rng.uniform(0.06, 0.12)
+        col = jitter(mix(_hull_plate(), SCORCH, 0.55), rng, 0.04)
+        b.tri(p0, p1, bent, col, col, col)
+        b.tri(p1, p0, bent, col, col, col)
+
+
+def _hanging_cable(b, x, z, front, rng):
+    """A cable come loose from inside the hole at (x, z), sagging out and down, its bared end copper."""
+    p0 = _wall_pt(x, z, front, -0.05)
+    out = Vector((0.0, -1.0 if front else 1.0, 0.0))
+    p1 = p0 + out * 0.08 + Vector((rng.uniform(-0.05, 0.05), 0.0, -0.12))
+    p2 = p1 + out * 0.01 + Vector((rng.uniform(-0.06, 0.06), 0.0, -0.3))
+    p3 = p2 + Vector((rng.uniform(-0.04, 0.04), 0.0, -0.08))
+    b.tube([p0, p1, p2], [0.016, 0.016, 0.015], [CABLE, CABLE, CABLE], 6)
+    b.tube([p2, p3], [0.012, 0.004], [COPPER, COPPER], 5)
+
+
+def _cabin_damage(rng):
+    """The cabin's hurt, three stages, each its part and its part on the roof: [(name, builder)]."""
+    d1, d2, d3, f1, f2, f3, spark = (Builder() for _ in range(7))
+    # Stage 1: scorched and clawed.
+    _blotch_wall(d1, -1.9, 0.75, False, 0.34, SOOT, rng)
+    _blotch_wall(d1, 0.35, 0.45, False, 0.26, SOOT, rng)
+    _blotch_wall(d1, -2.25, 0.42, True, 0.28, SOOT, rng)
+    _blotch_wall(d1, 1.75, 0.35, True, 0.22, SOOT, rng)
+    _blotch_end(d1, True, 0.25, 0.85, 0.3, SOOT, rng)
+    _rake(d1, -1.25, 0.55, True, math.radians(28), rng)
+    _rake(d1, 2.25, 0.95, False, math.radians(-22), rng)
+    _blotch_wall(d1, 1.1, 1.25, False, 0.2, DENT, rng, off=0.01)
+    _blotch_roof(f1, 1.0, 0.1, 0.38, SOOT, rng)
+    _blotch_wall(f1, -1.7, 1.35, True, 0.22, SOOT, rng)
+    # Stage 2: its plates torn, the dark inside and a rib behind.
+    _torn_plate(d2, -1.15, -0.62, 1.05, 1.35, False, 13, rng)
+    _torn_plate(d2, 1.95, 2.42, 0.3, 0.6, True, 13, rng)
+    _blotch_wall(d2, -0.2, 1.0, False, 0.4, SOOT, rng, off=0.011)
+    _blotch_end(d2, False, -0.35, 0.6, 0.28, DENT, rng)
+    _rake(d2, 0.9, 0.55, True, math.radians(-15), rng)
+    _blotch_roof(f2, -1.6, -0.2, 0.42, SOOT, rng)
+    _torn_plate(f2, -2.2, -1.75, 1.2, 1.5, True, 13, rng)
+    # Stage 3: holed through, its rims bent out, a cable hanging.
+    _hole_wall(d3, 1.62, 0.85, False, 0.36, rng)
+    _hanging_cable(d3, 1.62, 0.7, False, rng)
+    _hole_end(d3, True, 0.42, 0.95, 0.32, rng)
+    _hole_wall(d3, -2.35, 0.42, True, 0.26, rng)
+    _blotch_wall(d3, 0.8, 0.5, False, 0.45, SOOT, rng, off=0.0115)
+    _blotch_roof(f3, 0.2, 0.0, 0.5, HOLE_DARK, rng, off=0.014)
+    # Where its sparks are struck: a speck in the back wall's hole.
+    c = _wall_pt(1.62, 0.85, False, 0.012)
+    spark.quad(c + Vector((-0.02, 0.0, -0.02)), c + Vector((0.02, 0.0, -0.02)), c + Vector((0.02, 0.0, 0.02)), c + Vector((-0.02, 0.0, 0.02)),
+               HOLE_DARK, HOLE_DARK, HOLE_DARK, HOLE_DARK)
+    return [("damage_1", d1), ("damage_2", d2), ("damage_3", d3),
+            ("fade_damage_1", f1), ("fade_damage_2", f2), ("fade_damage_3", f3), ("damage_3_spark", spark)]
+
+
 def module(seed):
     rng = random.Random(seed)
     hull, fade, fade_glass, glass, lamp, door = Builder(), Builder(), Builder(), Builder(), Builder(), Builder()
@@ -1174,6 +1373,7 @@ def module(seed):
              ("fade_before_beacon_1", wreck), ("fade_beacon_1", s1), ("fade_beacon_2", s2), ("fade_beacon_3", s3),
              ("lamp_beacon_1_glow", g1), ("lamp_beacon_2_glow", g2), ("lamp_beacon_3_glow", g3),
              ("lamp_beacon_launch_glow", g_launch)]
+    parts += _cabin_damage(random.Random(seed * 31 + 7))
     return parts, spots, {"ports": ports, "head": (head, pivot, muzzle)}
 
 

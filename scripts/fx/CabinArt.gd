@@ -9,6 +9,8 @@ extends RefCounted
 ##
 ##   <job id>          once that job is done ("stone_axe", "beacon_2", "beacon_launch")
 ##   before_<job id>   until it is done (the beacon's broken mast is "before_beacon_1")
+##   damage_<n>        once the cabin is hurt to its nth stage or worse (Config.CABIN.damage_stages; the player,
+##                     2026-10-05: "cabin也需要有三个损坏阶段的样子") -- scorch, torn plates, holes
 ##   anything else     always
 ##
 ## ahead of either, a tag for how it is drawn that says nothing about when: "fade_" (faded with
@@ -61,11 +63,25 @@ static func condition(part_name: String) -> Array:
 		return [n.substr(BEFORE_PREFIX.length()), true]
 	return [n, false]
 
+const DAMAGE_PREFIX: String = "damage_"
+
+## The stage of hurt a part's name waits on ("fade_damage_2" -> 2), or 0 for a part that is not one of them.
+static func damage_stage_of(part_name: String) -> int:
+	var c: Array = condition(part_name)
+	var n: String = String(c[0])
+	if not n.begins_with(DAMAGE_PREFIX):
+		return 0
+	return maxi(0, n.substr(DAMAGE_PREFIX.length()).to_int())
+
 ## Shows and hides the parts of `body` by how far the run has got. `is_job` says whether a
 ## name is a job at all (a part called "base" is not, and always shows); `is_done` whether
-## that job is done.
-static func show_parts(body: Node, is_job: Callable, is_done: Callable) -> void:
+## that job is done; `hurt_stage` how hurt the cabin is (a "damage_<n>" part shows from its n).
+static func show_parts(body: Node, is_job: Callable, is_done: Callable, hurt_stage: int = 0) -> void:
 	for mi in parts(body):
+		var stage: int = damage_stage_of(String(mi.name))
+		if stage > 0:
+			mi.visible = hurt_stage >= stage
+			continue
 		var c: Array = condition(String(mi.name))
 		if not bool(is_job.call(String(c[0]))):
 			mi.visible = true

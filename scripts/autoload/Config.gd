@@ -5482,6 +5482,22 @@ const REPAIR: Dictionary = {
 	"seconds_per_unit": 1.2,  # 每一点修理费对应的施工秒数
 }
 
+## A BUILDING HURT LOOKS IT (Building._show_damage; the player, 2026-10-05: "掉血的建筑应该有损坏的样子，cabin也需要有
+## 三个损坏阶段的样子"): past `from` of its health gone, soot over its body in patches that spread as it is hurt more,
+## and from `cracks_from` cracks across it (assets/shaders/damage_overlay.gdshader); past `smoke_from`, smoke out of
+## its top, thicker as it is hurt more -- `smoke_amount` puffs at worst, each `smoke_size` metres across, rising
+## `smoke_rise` metres a second for `smoke_seconds`. The cabin shows its own three stages besides (CABIN.damage_stages).
+const DAMAGE_LOOK: Dictionary = {
+	"from": 0.1,
+	"cracks_from": 0.35,
+	"smoke_from": 0.5,
+	"smoke_amount": 14,
+	"smoke_size": 0.7,
+	"smoke_rise": 0.8,
+	"smoke_seconds": 2.6,
+	"smoke_colour": Color(0.22, 0.2, 0.19, 0.7),
+}
+
 # ==============================================================================
 # 14. The cabin workshop (v0.4)
 # ==============================================================================
@@ -5500,6 +5516,10 @@ const REPAIR: Dictionary = {
 ## world keeps running while the player is inside -- which is the point: crafting
 ## costs real seconds, and while he is at the bench nobody is holding the line.
 const CABIN: Dictionary = {
+	# Its three stages of hurt (CabinArt "damage_<n>", tools/generate_cabin.py; the player, 2026-10-05: "cabin也需要有三个
+	# 损坏阶段的样子"): the share of its health at or below which each shows -- scorched and clawed; its plates torn
+	# off, ribs showing; holed through, a cable hanging out.
+	"damage_stages": [0.75, 0.5, 0.25],
 	# THE CREW MODULE (v0.6 round three), in metres about its middle, x east and z south -- the
 	# model's measures (tools/generate_cabin.py module), so what stops a body is where the hull
 	# is drawn. Its box is BUILDINGS.core.size; inside it:

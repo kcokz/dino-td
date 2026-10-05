@@ -89,8 +89,9 @@ func show_the_beacon() -> void:
 		return
 	var steps: Array = cfg.beacon_jobs(gs.map_data())
 	var done: int = int(gs.beacon_steps)
+	_shown_stage = hurt_stage()
 	CabinArt.show_parts(body, func(job: String) -> bool: return steps.has(job),
-		func(job: String) -> bool: return steps.find(job) < done)
+		func(job: String) -> bool: return steps.find(job) < done, _shown_stage)
 	# The dead gun on the engine end is not drawn (it does not shoot: the class's head) -- a gun on the
 	# roof that never fired would say it guards the cabin. After the parts: they show all that is not a job.
 	var gun := body.find_child("Head", true, false) as Node3D
@@ -109,6 +110,84 @@ func _on_damaged(_amount: float) -> void:
 	_emit_core_hp_changed()
 	# Heard, not flashed: the whole hull going white at every bite would be all the finale is.
 	_sound_hit()
+
+## The stage of hurt its parts show (CabinArt "damage_<n>"), as last shown.
+var _shown_stage: int = 0
+
+## How hurt it is in stages (Config.CABIN.damage_stages: the share of its health at or below which each shows; the
+## player, 2026-10-05: "cabin也需要有三个损坏阶段的样子"): 0 whole, up to 3 -- scorched and clawed, its plates torn, holed.
+func hurt_stage() -> int:
+	var cfg = _get_config()
+	var stages: Array = cfg.CABIN.get("damage_stages", [0.75, 0.5, 0.25]) if (cfg and "CABIN" in cfg) else [0.75, 0.5, 0.25]
+	var share: float = (current_hp / max_hp) if max_hp > 0.0 else 1.0
+	var n: int = 0
+	for k in stages.size():
+		if share <= float(stages[k]):
+			n = k + 1
+	return n
+
+## Its looks as hurt as it is: the soot over it (Building) and its stages of hurt (CabinArt), shown again as it
+## passes from one to the next.
+func _show_damage() -> void:
+	super._show_damage()
+	if hurt_stage() != _shown_stage and _body() != null:
+		show_the_beacon()
+	_strike_sparks(hurt_stage() >= 3)
+
+## Sparks struck now and then from the hole in its back wall at its last stage (the part "damage_3_spark" marks it).
+var _sparks: GPUParticles3D = null
+
+func _strike_sparks(on: bool) -> void:
+	if not on:
+		if _sparks != null and is_instance_valid(_sparks):
+			_sparks.emitting = false
+		return
+	if _sparks == null or not is_instance_valid(_sparks):
+		var mark: MeshInstance3D = null
+		var body: Node = _body()
+		if body != null:
+			mark = body.find_child("damage_3_spark", true, false) as MeshInstance3D
+		if mark == null:
+			return
+		_sparks = _make_sparks()
+		mark.add_child(_sparks)
+		_sparks.position = mark.get_aabb().get_center()
+	_sparks.emitting = true
+
+## A burst of sparks every second or so: bright specks thrown out of the hole, falling and going out.
+func _make_sparks() -> GPUParticles3D:
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3(0.0, 0.3, 1.0)
+	pm.spread = 50.0
+	pm.initial_velocity_min = 1.2
+	pm.initial_velocity_max = 2.6
+	pm.gravity = Vector3(0.0, -6.0, 0.0)
+	pm.scale_min = 0.03
+	pm.scale_max = 0.06
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	ramp.colors = PackedColorArray([Color(1.0, 0.95, 0.7, 1.0), Color(1.0, 0.6, 0.15, 1.0), Color(0.8, 0.2, 0.05, 0.0)])
+	var ramp_tex := GradientTexture1D.new()
+	ramp_tex.gradient = ramp
+	pm.color_ramp = ramp_tex
+	var spark := StandardMaterial3D.new()
+	spark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	spark.vertex_color_use_as_albedo = true
+	spark.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	spark.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	# Their own size, not a metre-wide card each: a billboard keeps a particle's scale only when told to.
+	spark.billboard_keep_scale = true
+	var quad := QuadMesh.new()
+	quad.material = spark
+	var p := GPUParticles3D.new()
+	p.name = "Sparks"
+	p.process_material = pm
+	p.draw_pass_1 = quad
+	p.amount = 10
+	p.lifetime = 1.3
+	p.explosiveness = 0.85
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return p
 
 func _on_before_destroy() -> void:
 	super._on_before_destroy()
