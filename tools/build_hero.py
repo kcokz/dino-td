@@ -50,7 +50,7 @@ CLIPS = {
     "Walk_Loop": "walk",
     "Jog_Fwd_Loop": "run",
     "Punch_Jab": "attack",
-    "Fixing_Kneeling": "build",      # down on one knee, working at the thing in front of him
+    # "build" is made here (author_hammer): the library's working clip had him down on one knee.
     "Interact": "harvest",
     "Death01": "death",
     "Hit_Chest": "hit",
@@ -421,6 +421,84 @@ def author_eat(arm):
         bpy.data.actions.remove(moved)
 
 
+# HAMMERING (v0.7, the player, 2026-10-04: "人在造塔的时候要有敲打的动作，而不是跪下来，维修也是"). The library's one
+# working clip had him down on one knee; this one he stands for: his idle, his right hand raising the hammer beside his
+# head and bringing it down on what is in front of him at his waist, HAMMER_BLOWS a loop of the idle, his left hand
+# on the work, steadying it. An IK chain on each arm reaching for a target that moves (the right) or holds (the
+# left), baked to keys as the eating is. In the rig's own space before he is turned round (he faces -Y, his right
+# hand at -X), at the kit's own size.
+HAMMER_UP = (-0.27, -0.14, 1.66)       # raised beside his head, a little forward
+HAMMER_DOWN = (-0.13, -0.50, 0.95)     # the blow: in front of him at his waist, on the work
+HAMMER_POLE = (-0.75, 0.30, 1.10)      # the elbow out to the side and back
+HAMMER_HOLD = (0.12, -0.44, 1.00)      # the left hand on the work
+HAMMER_HOLD_POLE = (0.75, 0.30, 1.05)
+HAMMER_BLOWS = 4                       # a loop of the idle (2.5 s): a blow each 0.625 s (Config.SOUNDS.hammer_every)
+# Through a blow, where the hand is: held up, brought down fast, a moment on the work, raised again. It lands at
+# 0.62 of the blow (Config.SOUNDS.hammer_lands: the knock heard).
+HAMMER_KEYS = ((0.0, HAMMER_UP), (0.42, HAMMER_UP), (0.62, HAMMER_DOWN), (0.72, HAMMER_DOWN), (1.0, HAMMER_UP))
+
+
+def author_hammer(arm):
+    """Makes the "build" clip: the idle, over its own length so it loops as the idle does, with the right arm
+    hammering HAMMER_BLOWS times and the left on the work."""
+    idle = bpy.data.actions.get("idle")
+    if idle is None:
+        print("[WARN] no idle clip to hammer over")
+        return
+    scene = bpy.context.scene
+    start, end = int(idle.frame_range[0]), int(idle.frame_range[1])
+    scene.frame_start, scene.frame_end = start, end
+    play(arm, idle)
+
+    made = []
+    for name in ("HammerTarget", "HammerPole", "HoldTarget", "HoldPole"):
+        o = bpy.data.objects.new(name, None)
+        scene.collection.objects.link(o)
+        made.append(o)
+    target, pole, hold, hold_pole = made
+    pole.location = HAMMER_POLE
+    hold.location = HAMMER_HOLD
+    hold_pole.location = HAMMER_HOLD_POLE
+    cycle = float(end - start) / float(HAMMER_BLOWS)
+    for k in range(HAMMER_BLOWS):
+        f0 = start + cycle * k
+        for (t, where) in HAMMER_KEYS:
+            target.location = where
+            target.keyframe_insert("location", frame=f0 + cycle * t)
+    # Brought down fast, raised slowly: the keys' own curves, not the default ease in and out, between the up and the
+    # blow -- linear from the top of the swing to the work.
+    if target.animation_data and target.animation_data.action:
+        for bag in channel_sets(target.animation_data.action):
+            for fc in bag.fcurves:
+                for kp in fc.keyframe_points:
+                    kp.interpolation = "BEZIER"
+
+    for (bone_name, goal, its_pole) in (("lowerarm_r", target, pole), ("lowerarm_l", hold, hold_pole)):
+        ik = arm.pose.bones[bone_name].constraints.new("IK")
+        ik.target = goal
+        ik.pole_target = its_pole
+        ik.pole_angle = -math.pi * 0.5
+        ik.chain_count = 2
+
+    bpy.ops.object.select_all(action="DESELECT")
+    arm.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="POSE")
+    bpy.ops.pose.select_all(action="SELECT")
+    bpy.ops.nla.bake(frame_start=start, frame_end=end, only_selected=False, visual_keying=True,
+                     clear_constraints=True, use_current_action=False, bake_types={"POSE"})
+    bpy.ops.object.mode_set(mode="OBJECT")
+    build = arm.animation_data.action
+    build.name = "build"
+    build.use_fake_user = True
+    arm.animation_data.action = None
+    moved = target.animation_data.action if target.animation_data else None
+    for o in made:
+        bpy.data.objects.remove(o, do_unlink=True)
+    if moved is not None:
+        bpy.data.actions.remove(moved)
+
+
 def main():
     reset()
     body = import_gltf(BODY)
@@ -466,6 +544,7 @@ def main():
     arm.animation_data_create()
     arm.animation_data.action = None
     author_eat(arm)
+    author_hammer(arm)
 
     # TURNED to face the game's -Z (Blender +Y), as the dinosaurs are
     # (tools/convert_quaternius.py): everything in the game turns with look_at, which points

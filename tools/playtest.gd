@@ -127,6 +127,10 @@ func _run(name: String) -> void:
 			await _scenario_snug()
 		"ram":
 			await _scenario_ram()
+		"hammer":
+			await _scenario_hammer()
+		"stages":
+			await _scenario_stages()
 		"showcase":
 			await _scenario_showcase()
 		"scale":
@@ -2306,6 +2310,66 @@ func _scenario_snug() -> void:
 		rig.reset()
 		rig.apply_to(_main.camera)
 		await _wait(2)
+
+## The work seen (Config.CONSTRUCTION; the player, 2026-10-04: "造的塔首先要有造的阶段样子……至少要有四个阶段的成型前
+## 样子，升级也要有两个阶段"): a bow tower and a drop tower side by side, ordered, at each stage of going up, whole; then
+## the bow tower built onto, at each of its two stages.
+func _scenario_stages() -> void:
+	_grant({"wood": 400, "stone": 100, "bone": 100})
+	var core: Vector3 = _main.current_core.global_position
+	var at: Vector3 = core + Vector3(0.0, 0.0, 9.0)
+	var towers: Array = []
+	for row in [["bow_tower", Vector3(-1.6, 0.0, 0.0)], ["drop_tower", Vector3(1.6, 0.0, 0.0)]]:
+		var b = _main.build_system.place_at(String(row[0]), _main.grid_manager.world_to_build_cell(at + (row[1] as Vector3)),
+			_main.buildings_container, true)
+		if b != null:
+			towers.append(b)
+	if _main.hero:
+		_main.hero.global_position = core + Vector3(6.0, 0.0, 14.0)
+	await _wait(6)
+	for p in [0.0, 0.1, 0.35, 0.6, 0.85]:
+		for b in towers:
+			b.build_progress = p
+			b._update_visuals_progress()
+		await _wait(4)
+		await _portrait("stage_%02d" % int(p * 100), at, 7.0)
+	for b in towers:
+		b.complete_construction()
+	await _wait(4)
+	await _portrait("stage_done", at, 7.0)
+	var bow = towers[0] if not towers.is_empty() else null
+	if bow != null:
+		var cfg := root.get_node_or_null("Config")
+		var to: String = String(cfg.upgrade_targets(String(bow.building_type))[0])
+		bow.begin_upgrade(to)
+		await _wait(4)
+		await _portrait("upgrade_1", at, 7.0)
+		bow.add_upgrade_progress(float(cfg.get_upgrade_time(String(bow.building_type), to)) * 0.6)
+		await _wait(4)
+		await _portrait("upgrade_2", at, 7.0)
+
+## His hammering (the player, 2026-10-04: "人在造塔的时候要有敲打的动作，而不是跪下来，维修也是"): at work, the hammer in
+## his right hand; stopped at points through a blow -- held up, coming down, on the work, rising -- close, from his side
+## and from in front.
+func _scenario_hammer() -> void:
+	var hero = _main.hero
+	if hero == null:
+		return
+	hero.set_physics_process(false)
+	hero.global_position = _main.current_core.global_position + Vector3(0.0, 0.0, 9.0)
+	hero.rotation.y = 0.0
+	hero.current_state = Hero.State.BUILDING
+	await _wait(30)
+	var ap: AnimationPlayer = hero.animator.animation_player
+	var cfg := root.get_node_or_null("Config")
+	var blow: float = float(cfg.SOUNDS.get("hammer_every", 0.625))
+	print("[playtest] hammer: out %s, clip %s %.2fs" % [hero.has_hammer_out(), ap.current_animation, ap.current_animation_length])
+	for f in [0.2, 0.45, 0.55, 0.62, 0.8]:
+		ap.seek(blow * f, true)
+		Engine.time_scale = 0.0
+		await _portrait("hammer_side_%02d" % int(f * 100), hero.global_position, 2.4)
+		await _portrait("hammer_front_%02d" % int(f * 100), hero.global_position, 2.4, false, true)
+		Engine.time_scale = 1.0
 
 ## Ramming the cabin (the player's bug report, 2026-10-04: "有个恐龙离船舱很远，但有进攻动作……撞击需要真的撞的动作，
 ## 而且要贴着船舱，不然像隔山打牛"): one of each raider set on the cabin from round it -- the long walls, both ends, the

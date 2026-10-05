@@ -560,12 +560,15 @@ func test_25_a_blueprint_shows_progress_and_no_health() -> void:
 	assert_almost_eq(stake.status_bar._last_ratio, 0.5, 0.05, "Progress, not the untouched health")
 	assert_false(str(stake.label_3d.text).contains("HP"), "And the label quotes percent, not hit points")
 
-	# And it is drawn see-through while it is pending, which is the other half of
-	# "this is not finished yet".
+	# And it is drawn as not finished while it is pending, which is the other half of "this is not finished yet": since
+	# v0.7 (the player: "造的塔首先要有造的阶段样子，不能直接就成型"), as far up as its stage, nothing above
+	# (Config.CONSTRUCTION; Building._dress_for_the_work).
+	var height: float = float(config_node.get_building_height(String(stake.building_type)))
 	for mesh in stake._body_meshes():
-		var mat: StandardMaterial3D = mesh.material_override as StandardMaterial3D
-		assert_not_null(mat, "Each piece of the body carries a material")
-		assert_lt(mat.albedo_color.a, 1.0, "Pending work is translucent")
+		var mat: ShaderMaterial = mesh.material_override as ShaderMaterial
+		assert_not_null(mat, "Each piece of the body is drawn for the work")
+		if mat != null:
+			assert_lt(float(mat.get_shader_parameter("cut")) - stake.global_position.y, height, "Pending work stands only part way up")
 
 	stake.complete_construction()
 	stake._update_info_label()

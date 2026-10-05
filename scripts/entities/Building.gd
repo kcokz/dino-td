@@ -239,22 +239,147 @@ func _update_avoidance() -> void:
 		add_child(obstacle)
 	obstacle.avoidance_enabled = is_constructed and not is_destroyed
 
-## A blueprint is drawn translucent and fills in as it goes up.
+## HOW THE WORK ON IT LOOKS (Config.CONSTRUCTION; the player, 2026-10-04: "造的塔首先要有造的阶段样子，不能直接就成型，至少
+## 要有四个阶段的成型前样子，升级也要有两个阶段"). Ordered and not begun: its ghost, see-through. Going up: in stages, each a
+## share of the work, as much more of it standing from the ground up and nothing above (CONSTRUCTION.stages: its
+## footing, its plinth, its frame, its top) -- inside scaffolding as high as the work, if it is tall -- and whole when
+## done. Being built onto (an upgrade): its scaffolding round it, half way up and then to the top.
 ##
-## This walks the body rather than only the direct children: every visible mesh
-## lives inside the "Body" node make_body() returns, so looking one level deep meant
-## no building has actually faded since make_body was introduced -- blueprints were
-## indistinguishable from finished work.
+## This walks the body rather than only the direct children: every visible mesh lives inside the "Body" node
+## make_body() returns -- looking one level deep, no building faded at all.
 func _update_visuals_progress() -> void:
+	var spec: Dictionary = _construction()
+	var height: float = _building_height()
+	var stage: int = work_stage()
+	var ghost: bool = not is_constructed and stage == 0
+	var cut: float = INF
+	var scaffold: float = 0.0
+	var rails: Array[float] = []
+	var over: float = float(spec.get("pole_over", 0.35))
+	if not is_constructed and stage > 0:
+		var stages: Array = spec.get("stages", [0.15, 0.4, 0.65, 0.88])
+		cut = height * float(stages[stage - 1])
+		scaffold = cut + over
+		for j in range(stage - 1):
+			rails.append(height * float(stages[j]))
+	elif is_constructed and stage > 0:
+		var n: int = maxi(1, int(spec.get("upgrade_stages", 2)))
+		scaffold = height * float(stage) / float(n) + over
+		for j in range(1, stage):
+			rails.append(height * float(j) / float(n))
 	for child in _body_meshes():
-		var mat = child.material_override
-		if mat is StandardMaterial3D and not CabinArt.owns(mat):
-			if is_constructed:
-				mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-				mat.albedo_color.a = 1.0
-			else:
-				mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-				mat.albedo_color.a = 0.4 + 0.5 * build_progress
+		_dress_for_the_work(child, ghost, cut)
+	_raise_scaffold(scaffold if height >= float(spec.get("scaffold_from_height", 1.5)) else 0.0, rails)
+
+## Which stage the work on it is at: going up, 1 up to the count of CONSTRUCTION.stages (0 ordered and not begun); being
+## built onto, 1 up to upgrade_stages; 0 with no work on it.
+func work_stage() -> int:
+	var spec: Dictionary = _construction()
+	if not is_constructed:
+		if build_progress <= 0.0:
+			return 0
+		var n: int = maxi(1, (spec.get("stages", [0.15, 0.4, 0.65, 0.88]) as Array).size())
+		return clampi(int(floor(build_progress * float(n))) + 1, 1, n)
+	if is_upgrading():
+		var u: int = maxi(1, int(spec.get("upgrade_stages", 2)))
+		return clampi(int(floor(upgrade_progress * float(u))) + 1, 1, u)
+	return 0
+
+func _construction() -> Dictionary:
+	var cfg = _get_config()
+	return cfg.CONSTRUCTION if (cfg and "CONSTRUCTION" in cfg) else {}
+
+## One mesh of it for the work: cut at `cut` metres up (its own vertex colours, assets/shaders/build_cut.gdshader) while
+## it goes up; its ghost before; its own material, whole, otherwise. A material drawn otherwise -- textured, the cabin's
+## -- fades in as it goes up instead, as every building once did.
+func _dress_for_the_work(mi: MeshInstance3D, ghost: bool, cut: float) -> void:
+	var own: Material = mi.get_meta("own_material") if mi.has_meta("own_material") else mi.material_override
+	var cuts: bool = cut < INF and own is StandardMaterial3D and (own as StandardMaterial3D).vertex_color_use_as_albedo \
+		and not CabinArt.owns(own)
+	if cuts:
+		if not mi.has_meta("own_material"):
+			mi.set_meta("own_material", own)
+		var sm := mi.material_override as ShaderMaterial
+		if sm == null or sm.shader != _cut_shader():
+			sm = ShaderMaterial.new()
+			sm.shader = _cut_shader()
+			mi.material_override = sm
+		sm.set_shader_parameter("cut", global_position.y + cut)
+		sm.set_shader_parameter("albedo", (own as StandardMaterial3D).albedo_color)
+		return
+	if mi.has_meta("own_material"):
+		mi.material_override = mi.get_meta("own_material")
+		mi.remove_meta("own_material")
+	var mat = mi.material_override
+	if mat is StandardMaterial3D and not CabinArt.owns(mat):
+		if is_constructed:
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+			mat.albedo_color.a = 1.0
+		else:
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.albedo_color.a = float(_construction().get("ghost_alpha", 0.35)) if ghost else 0.4 + 0.5 * build_progress
+
+static var _cut: Shader = null
+
+static func _cut_shader() -> Shader:
+	if _cut == null:
+		_cut = load("res://assets/shaders/build_cut.gdshader") as Shader
+	return _cut
+
+## Scaffolding round it `top` metres high -- a pole off each corner of its box, and a rail round it at each height of
+## `rails` -- or none at 0 (Config.CONSTRUCTION).
+func _raise_scaffold(top: float, rails: Array[float]) -> void:
+	var old: Node = get_node_or_null("Scaffold")
+	var key: String = "%.2f|%s" % [top, str(rails)]
+	if old != null and String(old.get_meta("key", "")) == key:
+		return
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	if top <= 0.0:
+		return
+	var spec: Dictionary = _construction()
+	var cfg = _get_config()
+	var out: float = float(spec.get("pole_out", 0.15))
+	var half: Vector2 = (cfg.get_building_half(building_type) if (cfg and cfg.has_method("get_building_half")) else Vector2.ONE * 0.5) \
+		+ Vector2.ONE * out
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = spec.get("wood_color", Color(0.36, 0.25, 0.15))
+	wood.roughness = 1.0
+	var frame := Node3D.new()
+	frame.name = "Scaffold"
+	frame.set_meta("key", key)
+	add_child(frame)
+	var r: float = float(spec.get("pole_radius", 0.035))
+	for corner in [Vector2(1.0, 1.0), Vector2(1.0, -1.0), Vector2(-1.0, 1.0), Vector2(-1.0, -1.0)]:
+		var pole := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = r
+		cyl.bottom_radius = r * 1.2
+		cyl.height = top
+		cyl.radial_segments = 6
+		cyl.rings = 1
+		pole.mesh = cyl
+		pole.material_override = wood
+		pole.position = Vector3(corner.x * half.x, top * 0.5, corner.y * half.y)
+		frame.add_child(pole)
+	var rr: float = float(spec.get("rail_radius", 0.025))
+	for h in rails:
+		for side in [Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, -1.0), Vector3(1.0, 0.0, 0.0), Vector3(-1.0, 0.0, 0.0)]:
+			var rail := MeshInstance3D.new()
+			var bar := CylinderMesh.new()
+			bar.top_radius = rr
+			bar.bottom_radius = rr
+			bar.radial_segments = 5
+			bar.rings = 1
+			# Along x on the north and south sides, along z on the east and west.
+			var along_x: bool = side.x == 0.0
+			bar.height = (half.x if along_x else half.y) * 2.0
+			rail.mesh = bar
+			rail.material_override = wood
+			rail.position = Vector3(side.x * half.x, h, side.z * half.y)
+			rail.rotation = Vector3(0.0, 0.0, PI * 0.5) if along_x else Vector3(PI * 0.5, 0.0, 0.0)
+			frame.add_child(rail)
 
 ## Deducts damage from current_hp. Destroys entity if HP reaches <= 0.
 func take_damage(amount: float) -> void:
@@ -460,6 +585,7 @@ func begin_upgrade(target: String = "") -> bool:
 	upgrading_to = target
 	upgrade_progress = 0.0
 	_update_info_label()
+	_update_visuals_progress()
 	return true
 
 ## Advances the upgrade by `delta` seconds of the Hero's work. True once it is done -- or
@@ -474,6 +600,7 @@ func add_upgrade_progress(delta: float) -> bool:
 		_finish_upgrade()
 		return true
 	_update_info_label()
+	_update_visuals_progress()
 	return false
 
 ## Becomes the new building: its numbers (a tower's rate and range come with setup), as
@@ -490,6 +617,7 @@ func _finish_upgrade() -> void:
 	setup(to, cell_pos)
 	current_hp = max_hp * health
 	_rebuild_body(was)
+	_update_visuals_progress()
 	_after_upgrade()
 	_sound("build_done")
 	_update_info_label()

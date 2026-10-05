@@ -1727,6 +1727,9 @@
   - 跳过开场的简报（"开场故事如果玩家跳过的话……要有明确的类似tutorial的停止方式"）：新的 `scripts/ui/Briefing.gd`（暂停、四行：坠落、信标、电池几天、恐龙会来撞；日志在 J；"明白了"/回车/Esc）；`StationJump.was_skipped`；`Main._after_the_crash`（跳过了 `HUD.brief`，否则 `tell_the_story`）；`UI.briefing_width`。`tools/playtest.gd` 的 `journal` 场景拍简报、表盘、来袭标记、日志。
   - 测试：`test_v07_the_journal`（表盘在船舱左边、和日晷对称、肩上 J、悬停写下一步；跳过开场停在简报上、读完给任务；没跳过他自己说；自定义游戏没有简报）；`test_v06_heard_not_shouted`、`test_v06_the_beacon_is_heard`（标记，不带数字）；`test_v06_beacon` test_18（表盘的圈和牌子）；`test_v06_custom_games`、`test_v06_the_card_leaves_the_goal_in_sight` 跟着改。
   - 塔升级时不打（"塔在升级的时候不能进攻"）：`AmmoTower._is_live` 加上 `is_upgrading()`（弓塔、落木塔、投石塔、诱饵台都走它）。测试：`test_v07_the_towers` test_12b。
+  - 造塔分阶段（"至少要有四个阶段的成型前样子，升级也要有两个阶段"）：`Config.CONSTRUCTION`（`stages` 0.15/0.4/0.65/0.88、`upgrade_stages` 2、脚手架的尺寸和颜色、`scaffold_from_height` 1.5、`ghost_alpha`）；新的 `assets/shaders/build_cut.gdshader`（按世界高度切掉上面，顶点色照旧）；`Building._update_visuals_progress` 重写、`work_stage`、`_dress_for_the_work`、`_raise_scaffold`；升级开始、进展、完成时都刷新。`tools/playtest.gd` 新场景 `stages`。
+  - 人站着抡锤子（"人在造塔的时候要有敲打的动作，而不是跪下来，维修也是"）：`tools/build_hero.py` 的 `author_hammer`（在待机上用 IK 烘出来：右手举锤砸四下、左手扶着，代替素材库的 Fixing_Kneeling）；`tools/generate_props.py` 的 `hammer`（石锤）；`VISUALS "prop/hammer"`、`HERO.hammer`（骨头 hand_r）；`Hero._hold_the_hammer`（进入 BUILDING 拿出来，出来收起）、`has_hammer_out`；`SOUNDS.hammer_every` 0.55 → 0.625、新的 `hammer_lands` 0.62（敲击声落在砸下去那一下）。`tools/playtest.gd` 新场景 `hammer`。
+  - 测试：新的 `test_v07_the_work_seen`（塔分四步立起来、脚手架跟着长、造完拆掉；升级两步；木桩不搭脚手架；人站着干活、锤子在手、敲击声对着砸的那一下）。
   - 平衡（"落木塔和弓塔就按照你说的，调整"）：落木塔三级 `range` 2.5 → 3.0；第 1 站 `raiders_by_day` 加一段 `from_raid` 2（第一天第二次来袭起每 5 只腔骨龙 1 只链鳄），第 2 天 4 : 1，第 3 天链鳄 0.8 → 1.0；`WaveManager._raiders_now` 认 `from_raid`（按列出的顺序取最后一段已开始的）。测试：`test_v07_the_chargers` test_01 改成"从第二次来袭起"，新的 test_05b（第一次来袭没有链鳄，之后按图上的比例，第二天更多）。
 
 ## v0.7 已定要做的（未开工）

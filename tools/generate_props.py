@@ -1967,6 +1967,23 @@ def torch(seed):
 
 
 
+def hammer(seed):
+    """His hammer, out while he builds and mends (Hero): a lump of stone lashed crosswise to the end of a stick with
+    vine -- what a man makes with what is to hand. Held at the origin, the haft's bottom end in his fist and the haft up
+    (+Z), the stone across its head (along X)."""
+    rng = random.Random(seed)
+    b = Builder()
+    # A mallet's size, a heavy lump on a long haft: seen in his hand from the game's camera, and the blow seen.
+    shaft = [Vector((0.0, 0.0, z)) for z in (-0.05, 0.0, 0.2, 0.38)]
+    b.tube(shaft, [0.016, 0.018, 0.019, 0.019], [BARK, mix(BARK, BARK_LIGHT, 0.5), BARK_LIGHT, BARK_LIGHT], 6)
+    head = [Vector((x, 0.0, 0.38)) for x in (-0.11, -0.08, 0.0, 0.08, 0.1)]
+    b.tube(head, [0.03, 0.048, 0.056, 0.05, 0.032], [ROCK_DARK, ROCK, ROCK_LIGHT, ROCK, ROCK_DARK], 7,
+           radial=lambda i, k: rng.uniform(0.85, 1.15))
+    _wrap(b, Vector((0.0, 0.0, 0.38)), Vector((0.0, 0.0, 1.0)), 0.024, turns=2)
+    _wrap(b, Vector((0.0, 0.0, 0.38)), Vector((1.0, 0.0, 0.0)), 0.042, turns=1)
+    return b
+
+
 # ==============================================================================
 # The ship's wrecks (GAME-DESIGN 9.3, "信标变成冒险"): torn pieces of the time-travel ship lying where
 # they came down, each holding one of the beacon's parts. Plated as the cabin is -- the white plating,
@@ -3527,6 +3544,8 @@ PROPS = {
     "campfire": (lambda s: campfire(s), [31]),
     "brazier": (lambda s: brazier(s), [37]),
     "torch": (lambda s: torch(s), [43]),
+    # His hammer, out while he builds and mends (Hero).
+    "hammer": (lambda s: hammer(s), [47]),
     # The traps laid in the way that do not move: always set (CellTrap).
     "ground_spikes": (lambda s: ground_spikes(s), [13]),
     "bone_spikes": (lambda s: ground_spikes(s, bone=True), [13]),

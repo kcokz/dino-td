@@ -2736,7 +2736,36 @@ const TIME: Dictionary = {
 	"allow_pause": true,
 }
 
+## THE WORK SEEN (Building._update_visuals_progress; the player, 2026-10-04: "造的塔首先要有造的阶段样子，不能直接就成型，
+## 至少要有四个阶段的成型前样子，升级也要有两个阶段"): a building going up is drawn in stages, not faded in whole -- each
+## stage a share of the work, as much more of it standing from the ground up, nothing above it (assets/shaders/
+## build_cut.gdshader), inside scaffolding as high as the work; ordered and not begun, its ghost. Being built onto (an
+## upgrade, when a tower does nothing: AmmoTower._is_live), its scaffolding round it, in stages of its own.
+const CONSTRUCTION: Dictionary = {
+	# How much of its height stands at each stage of the work, in turn -- an equal share of the work each: its
+	# footing, its plinth, its frame, its top. Then it is whole.
+	"stages": [0.15, 0.4, 0.65, 0.88],
+	# An upgrade's stages: its scaffolding half way up, then to its top.
+	"upgrade_stages": 2,
+	# Ordered and not begun: its ghost, this see-through.
+	"ghost_alpha": 0.35,
+	# THE SCAFFOLDING, round anything this tall or taller (a tower; not a stake): a pole off each corner of its box,
+	# `pole_out` metres out, as high as the work and `pole_over` more; a rail round at each stage done. Rough poles,
+	# lashed: the plinth's wood.
+	"scaffold_from_height": 1.5,
+	"pole_radius": 0.035,
+	"pole_out": 0.15,
+	"pole_over": 0.35,
+	"rail_radius": 0.025,
+	"wood_color": Color(0.36, 0.25, 0.15),
+}
+
 const HERO: Dictionary = {
+	# HIS HAMMER (the player, 2026-10-04: "人在造塔的时候要有敲打的动作，而不是跪下来，维修也是"): out in `bone` while he
+	# builds and mends (Hero._hold_the_hammer; VISUALS "prop/hammer"), the grip `grip` metres along the bone and turned
+	# `turn_degrees` from it, so the haft runs out of his fist and the stone comes down head first. He stands to it
+	# (tools/build_hero.py author_hammer), no longer down on one knee.
+	"hammer": {"bone": "hand_r", "grip": Vector3(0.0, 0.0, 0.0), "turn_degrees": Vector3(0.0, 0.0, 0.0)},
 	# Walking and getting nowhere this many seconds with something biting him, he turns on it whatever
 	# he was sent to do (Hero._hit_back; the debug-agent's BUG-022: held at the cabin's end by a
 	# phytosaur on his way home, he walked on the spot and was bitten to death). Long enough that a
@@ -3305,10 +3334,12 @@ const SOUNDS: Dictionary = {
 	"hurt_every": 0.7,
 	# A herd animal calls when it sets off to amble, this often: now and then, from far off.
 	"herd_call_chance": 0.3,
-	# His work: a stroke on a node is the sound of what it is; building and mending, a knock
-	# this often.
+	# His work: a stroke on a node is the sound of what it is; building and mending, a knock a blow of his hammer --
+	# `hammer_every` seconds, `hammer_lands` of the way into each: his build clip is four blows to its 2.5 s
+	# (tools/build_hero.py HAMMER_BLOWS, HAMMER_KEYS), and the knock is heard as the stone lands.
 	"harvest": {"wood": "chop", "stone": "quarry", "antenna": "salvage", "battery": "salvage", "board": "salvage"},
-	"hammer_every": 0.55,
+	"hammer_every": 0.625,
+	"hammer_lands": 0.62,
 	# A building bitten sounds of what it is made of; the cabin is plate metal.
 	"hit_by_building": {"stone_wall": "stone_hit", "core": "hull_hit"},
 	"hit_default": "wood_hit",
@@ -4446,6 +4477,10 @@ const VISUALS: Dictionary = {
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": ""},
 	# The torch in his hand (tools/generate_props.py torch): a stick, its head wrapped in resinous bark.
 	# Built with its grip at the origin; held there (Hero.light_torch), its flame the game's.
+	# His hammer (tools/generate_props.py hammer): a stone lashed to a stick, its grip at the origin; held in his hand
+	# while he builds and mends (Hero._hold_the_hammer, HERO.hammer).
+	"prop/hammer":          {"scene": "res://assets/models/props/hammer_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "wood"},
 	"prop/torch":           {"scene": "res://assets/models/props/torch_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "fire"},
 	# Inside the cabin (tools/generate_cabin.py): the workbench the Hero fitted the module out

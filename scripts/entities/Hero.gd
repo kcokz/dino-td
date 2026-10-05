@@ -37,6 +37,10 @@ var current_state: State = State.IDLE:
 			current_state = v
 			if animator != null and is_instance_valid(animator):
 				animator.play_state(current_state)
+			# Building and mending: the hammer out, its first knock on its first blow.
+			_hold_the_hammer(current_state == State.BUILDING)
+			if current_state == State.BUILDING:
+				_hammer_clock = _sound_number("hammer_every", 0.625) * (1.0 - _sound_number("hammer_lands", 0.62))
 
 var animator: ActorAnimator = null
 var target_destination: Vector3 = Vector3.ZERO
@@ -478,9 +482,9 @@ func _process_building(delta: float) -> void:
 	# a hammer. Which one happens is the building's business, not the order's: an
 	# unfinished thing gets raised, a damaged one gets patched.
 	var work: float = delta
-	# And it is heard: a knock every so often while he is at it (Config.SOUNDS.hammer_every).
+	# And it is heard: a knock a blow, as the stone lands (Config.SOUNDS.hammer_every, hammer_lands).
 	_hammer_clock += delta
-	var every: float = _sound_number("hammer_every", 0.55)
+	var every: float = _sound_number("hammer_every", 0.625)
 	if _hammer_clock >= every:
 		_hammer_clock -= every
 		_sound_at("hammer", (target_building as Node3D).global_position)
@@ -1349,6 +1353,8 @@ func debug_state() -> Dictionary:
 
 ## Seconds the torch in his hand has left to burn; none in it at 0.
 var torch_left: float = 0.0
+## His hammer, in his hand while he builds and mends (_hold_the_hammer), or null.
+var _hammer_hand: BoneAttachment3D = null
 var _torch_hand: BoneAttachment3D = null
 var _torch: Node3D = null
 var _torch_light: OmniLight3D = null
@@ -1412,6 +1418,38 @@ func _burn_the_torch(delta: float) -> void:
 			eb.torch_changed.emit(false)
 		return
 	_carry_the_torch(delta)
+
+## The hammer out in his hand (Config.HERO.hammer, VISUALS "prop/hammer"), or put away: out while he builds and mends,
+## following his hand through each blow (the player, 2026-10-04: "人在造塔的时候要有敲打的动作").
+func _hold_the_hammer(out: bool) -> void:
+	if not out:
+		if _hammer_hand != null and is_instance_valid(_hammer_hand):
+			_hammer_hand.queue_free()
+		_hammer_hand = null
+		return
+	if _hammer_hand != null and is_instance_valid(_hammer_hand):
+		return
+	var cfg = _get_config()
+	var spec: Dictionary = cfg.HERO.get("hammer", {}) if (cfg and "HERO" in cfg) else {}
+	var body: Node = find_child("Body", false, false)
+	var skeletons: Array = body.find_children("*", "Skeleton3D", true, false) if body != null else []
+	var bone: String = String(spec.get("bone", "hand_r"))
+	if skeletons.is_empty() or (skeletons[0] as Skeleton3D).find_bone(bone) < 0:
+		return
+	_hammer_hand = BoneAttachment3D.new()
+	_hammer_hand.name = "HammerHand"
+	_hammer_hand.bone_name = bone
+	(skeletons[0] as Skeleton3D).add_child(_hammer_hand)
+	var hammer: Node3D = VisualLibrary.make("prop/hammer")
+	hammer.name = "Hammer"
+	var turn: Vector3 = spec.get("turn_degrees", Vector3.ZERO)
+	hammer.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(turn.x), deg_to_rad(turn.y), deg_to_rad(turn.z))),
+		spec.get("grip", Vector3.ZERO))
+	_hammer_hand.add_child(hammer)
+
+## Whether his hammer is out (building or mending).
+func has_hammer_out() -> bool:
+	return _hammer_hand != null and is_instance_valid(_hammer_hand) and _hammer_hand.is_inside_tree()
 
 ## The torch in his hand (Config.VISUALS "prop/torch", FIRE.torch.bone): where his hand is, but kept
 ## upright, a little tilted -- a torch is held up whatever the arm is doing -- with the fire's own
