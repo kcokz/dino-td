@@ -1554,7 +1554,9 @@ func _sound_number(key: String, fallback: float) -> float:
 ## How far into the next knock of his hammer he is (Config.SOUNDS.hammer_every).
 var _hammer_clock: float = 0.0
 
-func take_damage(amount: float) -> void:
+## Hurt by `amount`: bitten (`bitten`, the usual), he may turn on what bit him (_hit_back); scalded by what falls from
+## the sky (ImpactRain), he does not.
+func take_damage(amount: float, bitten: bool = true) -> void:
 	if current_state == State.DEAD or amount <= 0.0:
 		return
 	current_hp = maxf(0.0, current_hp - amount)
@@ -1570,7 +1572,8 @@ func take_damage(amount: float) -> void:
 	if current_hp <= 0.0:
 		die()
 		return
-	_hit_back()
+	if bitten:
+		_hit_back()
 
 ## Bitten at his work, he turns on what is biting him (found playing, v0.6 round three: quarrying
 ## by the nest, the guards bit him from twelve hit points to none while he went on swinging at

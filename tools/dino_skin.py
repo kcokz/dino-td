@@ -203,6 +203,9 @@ def bake_material(spec):
     nt.links.new(small_col.outputs["Color"], sep_c.inputs["Color"])
     nt.links.new(sep_c.outputs["Red"], jitter.inputs["Value"])
     tint_out = jitter.outputs["Result"]
+    # Feature scales among them, where it had them (a Triceratops's): big round scales, a point raised in each.
+    if sk.get("features"):
+        height_out, tint_out = _features(nt, tex, height_out, tint_out, sk["features"])
     # Feathers where it had them (tools/dino_feathers.py): the coat, and each feather's vane.
     if spec.get("feathers"):
         height_out, tint_out = _plumage(nt, tex, height_out, tint_out, spec["feathers"])
@@ -395,6 +398,40 @@ def _horn(nt, tex, scale_height, scale_tint, hn):
         t = _math(nt, 'MULTIPLY', (-1100, 1150), t, _range(nt, (-1100, 1000), out_of, 0.0, 1.0, 1.0 - pits.get("dark", 0.25), 1.0))
     return (_mixf(nt, (-900, 1500), k.outputs["Red"], scale_height, h),
             _mixf(nt, (-900, 1300), k.outputs["Red"], scale_tint, t))
+
+
+def _features(nt, tex, scale_height, scale_tint, ft):
+    """Feature scales among the small ones (spec scales "features"; a Triceratops's -- the skin of the "Lane"
+    specimen, HMNS PR 2440: big round scales scattered among smaller polygonal ones, a low cone raised in the middle
+    of each, "nipple-like"): a cell pattern of `scale` cells to a metre, `share` of the cells holding one -- its
+    radius `size` of a cell, a dome `height` over the small scales' and a point `cone` higher at its middle (its foot
+    `tip` of the radius out), the small scales round it sunk into a groove; one shade all over, `tint` apart from the
+    skin's (lighter if more than nought). Returns the height and the tint, the small scales' between them."""
+    cells = _node(nt, "ShaderNodeTexVoronoi", (-1500, -1800))
+    cells.voronoi_dimensions = '3D'
+    cells.feature = 'F1'
+    cells.inputs["Scale"].default_value = ft.get("scale", 10.0)
+    cells.inputs["Randomness"].default_value = ft.get("randomness", 0.85)
+    nt.links.new(tex.outputs["Object"], cells.inputs["Vector"])
+    rnd = _node(nt, "ShaderNodeSeparateColor", (-1300, -1900))
+    nt.links.new(cells.outputs["Color"], rnd.inputs["Color"])
+    share = ft.get("share", 0.3)
+    # Whether its cell holds one: the cell's own chance, over 1 - `share`.
+    holds = _range(nt, (-1100, -1900), rnd.outputs["Red"], 1.0 - share - 0.002, 1.0 - share + 0.002, 0.0, 1.0)
+    d = cells.outputs["Distance"]
+    size = ft.get("size", 0.4)
+    inside = _range(nt, (-1100, -1700), d, size * 0.82, size, 1.0, 0.0, smooth=True)
+    dome = _range(nt, (-1100, -1600), d, 0.0, size, 1.0, 0.0, smooth=True)
+    cone = _range(nt, (-1100, -1500), d, 0.0, size * ft.get("tip", 0.4), 1.0, 0.0)
+    groove = _range(nt, (-1100, -2000), d, size, size * 1.3, 0.0, 1.0, smooth=True)
+    k = _math(nt, 'MULTIPLY', (-900, -1800), inside, holds)
+    own = _math(nt, 'MULTIPLY_ADD', (-900, -1600), dome, ft.get("height", 1.0),
+                _math(nt, 'MULTIPLY', (-900, -1500), cone, ft.get("cone", 0.8)))
+    sunk = _math(nt, 'SUBTRACT', (-900, -2000), 1.0,
+                 _math(nt, 'MULTIPLY', (-1000, -2050), holds, _math(nt, 'SUBTRACT', (-1050, -2100), 1.0, groove)))
+    height = _mixf(nt, (-500, -1800), k, _math(nt, 'MULTIPLY', (-700, -2000), scale_height, sunk), own)
+    tint = _mixf(nt, (-500, -1600), k, scale_tint, _math(nt, 'ADD', (-700, -1600), 1.0 + ft.get("tint", 0.0), 0.0))
+    return height, tint
 
 
 def _scutes(nt, tex, normal_xyz, pebbles, sc, where):

@@ -503,6 +503,16 @@ func _wire_signals() -> void:
 		eb.wreck_located.connect(_on_wreck_located)
 	if eb and eb.has_signal("building_completed") and not eb.building_completed.is_connected(_on_tower_finished):
 		eb.building_completed.connect(_on_tower_finished)
+	if eb and eb.has_signal("beacon_launched") and not eb.beacon_launched.is_connected(_on_beacon_launched_climax):
+		eb.beacon_launched.connect(_on_beacon_launched_climax)
+
+## The beacon launched on a map whose climax is an impact (MAPS.<id>.climax; GAME-DESIGN 7.2, station 4: "信标充能和撞击
+## 倒计时同时在走"): the sky rains molten glass till the jump (ImpactRain).
+func _on_beacon_launched_climax() -> void:
+	var gs = _get_game_state()
+	var climax: Dictionary = gs.map_data().get("climax", {}) if (gs and gs.has_method("map_data")) else {}
+	if String(climax.get("kind", "")) == "impact" and find_child("ImpactRain", false, false) == null:
+		ImpactRain.begin(self, climax)
 
 ## A stage mended has heard where the wreck holding `part` lies (Config.WRECKS): its smoke goes up -- seen
 ## rising -- and the mist round it becomes seen ground, so the place shows by night too. Nothing for a wreck

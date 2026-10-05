@@ -868,6 +868,30 @@ ICONS["bow_tower_repeater"] = _repeater_tower()
 ICONS["bow_tower_ballista"] = _ballista_tower()
 
 
+# The catapult's top (station 4, iron): the counterweight trebuchet -- an A-frame on its turntable, the long arm on an
+# iron axle drawn down to load, a box of stone hanging from its short end, the shot in the sling at the long end.
+def _trebuchet():
+    body = [shape("polygon", C["post"], points="6,56 58,56 58,62 6,62"),
+            shape("polygon", C["post"], points="14,56 20,56 33,22 29,22"),
+            shape("polygon", C["post"], points="44,56 50,56 35,22 31,22"),
+            shape("path", None, C["grain"], 5.0, d="M 8 50 L 50 12"),
+            shape("rect", C["s3"], x=40, y=12, width=14, height=12, rx=1.5),
+            shape("circle", C["sand"], cx=9, cy=52, r=4.5)]
+    detail = [shape("polygon", C["post_dark"], points="6,59.5 58,59.5 58,62 6,62"),
+              shape("path", None, C["post_dark"], 2.2, d="M 21 43 L 43 43"),
+              shape("rect", C["s2"], x=41.5, y=13.5, width=5, height=4, rx=1),
+              shape("rect", C["s4"], x=47.5, y=18, width=5, height=4.5, rx=1),
+              shape("path", None, C["iron_dark"], 1.6, d="M 40 12 L 54 12 M 40 24 L 54 24"),
+              shape("circle", C["iron"], cx=32, cy=26, r=3.2),
+              shape("circle", C["iron_dark"], cx=32, cy=26, r=1.4),
+              shape("path", None, C["rope"], 1.4, d="M 8 50 Q 5 52 9 56.5"),
+              shape("circle", C["sand_hi"], cx=7.5, cy=50.5, r=1.4)]
+    return item_svg(body, detail)
+
+
+ICONS["catapult_trebuchet"] = _trebuchet()
+
+
 # THE LATER STATIONS' (GAME-DESIGN 5.2-5.4: 窑, 炼铁). The kiln (station 2): a beehive of fired clay on a ring of field
 # stones, its stoke-hole alight at the foot, a vent at the crown.
 _KILN_FLAME = _flame(32, 56, 11, 5)

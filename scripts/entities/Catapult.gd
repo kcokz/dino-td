@@ -171,7 +171,28 @@ func _stop() -> Vector3:
 	return _arm_rest if _arm_rest != Vector3.INF else Vector3.ZERO
 
 func _wound() -> Vector3:
-	return _stop() + Vector3(deg_to_rad(float(_towers("catapult_wound_degrees", 60.0))), 0.0, 0.0)
+	# Its own, a trebuchet's long arm drawn right round (BUILDINGS.<id>.wound_degrees), else the catapult's.
+	return _stop() + Vector3(deg_to_rad(_number("wound_degrees", float(_towers("catapult_wound_degrees", 60.0)))), 0.0, 0.0)
+
+## A trebuchet's counterweight (its Weight, hung from the arm) hangs plumb however the arm is turned: turned back by
+## what the arm is turned from its stop.
+var _weight_rest: Vector3 = Vector3.INF
+
+## Upgraded to another model (the catapult's top, the trebuchet): its arm's stop and its weight's rest are the new
+## model's, read again.
+func _rebuild_body(old_type: String) -> void:
+	_arm_rest = Vector3.INF
+	_weight_rest = Vector3.INF
+	super._rebuild_body(old_type)
+
+func _process(_delta: float) -> void:
+	var weight: Node3D = part("Weight")
+	var arm: Node3D = part("Arm")
+	if weight == null or arm == null:
+		return
+	if _weight_rest == Vector3.INF:
+		_weight_rest = weight.rotation
+	weight.rotation = _weight_rest - Vector3(arm.rotation.x - _stop().x, 0.0, 0.0)
 
 ## Where the shot leaves the cup, in the world: the stone's place in the cup with the arm at its stop, where a throw
 ## ends. Worked out from the stop, so it is the same whether or not the swing is drawn.

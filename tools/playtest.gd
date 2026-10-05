@@ -146,8 +146,15 @@ func _run(name: String) -> void:
 		"cast3":
 			# Station 3's (the Early Cretaceous, MAPS.jehol), by the man: Sinornithosaurus, Dilong, Sinocalliopteryx, Yutyrannus.
 			await _scenario_cast([["sinornithosaurus", -1.4], ["dilong", 0.6], ["sinocalliopteryx", 3.2], ["yutyrannus", 9.5]])
+		"cast4":
+			# Station 4's (the end of the Cretaceous, MAPS.hell_creek), by the man: Acheroraptor, Dakotaraptor, Tyrannosaurus.
+			await _scenario_cast([["acheroraptor", -1.2], ["dakotaraptor", 2.2], ["big_theropod", 9.0]])
 		"kiln":
 			await _scenario_kiln()
+		"bench3":
+			await _scenario_bench3()
+		"impact":
+			await _scenario_impact()
 		"station3":
 			await _scenario_station3()
 		"chargers":
@@ -1479,7 +1486,8 @@ func _scenario_kiln() -> void:
 	var at: Vector2i = gm.world_to_build_cell(_main.hero.global_position)
 	var placed: Dictionary = {}
 	for item in [["kiln", Vector2i(4, 3)], ["furnace", Vector2i(8, 3)], ["brick_wall", Vector2i(4, 7)], ["brick_wall", Vector2i(5, 7)],
-			["stone_wall", Vector2i(6, 7)], ["bow_tower_repeater", Vector2i(11, 3)], ["bow_tower_ballista", Vector2i(14, 3)]]:
+			["stone_wall", Vector2i(6, 7)], ["bow_tower_repeater", Vector2i(11, 3)], ["bow_tower_ballista", Vector2i(14, 3)],
+			["catapult_trebuchet", Vector2i(10, 8)]]:
 		var b = _main.build_system.place_at(String(item[0]), at + item[1], _main.buildings_container, false)
 		if b == null:
 			print("[playtest] could not place %s" % item[0])
@@ -1506,6 +1514,43 @@ func _scenario_kiln() -> void:
 		furnace.begin("iron")
 		await _advance(6.0)
 		await _portrait("furnace_at_work", (furnace as Node3D).global_position, 6.0, false)
+
+## Station 4's climax (v0.7, ImpactRain): Hell Creek's beacon launched -- the streak across the sky, then the glass
+## coming down round him.
+func _scenario_impact() -> void:
+	var gs := root.get_node("GameState")
+	gs.chosen_map_id = "hell_creek"
+	gs.reset_game()
+	_tear_down()
+	await _fresh_level()
+	_main.wave_manager.auto_raid_enabled = false
+	var fog = _main.get("fog")
+	if fog != null and is_instance_valid(fog):
+		fog.revealed = true
+		fog._paint(1.0)
+		fog._hide_the_unseen()
+	var spent: int = 0
+	while not gs.is_beacon_launched() and spent < 10:
+		gs.finish_beacon_job(String(gs.beacon_next_job()))
+		spent += 1
+	await _advance(1.0)
+	await _shoot("streak")
+	await _advance(12.0)
+	await _shoot("glass_falling")
+	await _portrait("glass_round_him", _main.hero.global_position, 9.0, false)
+	gs.chosen_map_id = ""
+
+## The workbench's card with every material known (v0.7: the later stations' iron-tipped arrows among the ammunition).
+func _scenario_bench3() -> void:
+	var gs := root.get_node("GameState")
+	var cfg := root.get_node("Config")
+	for res_id in cfg.RESOURCES:
+		gs.resources[res_id] = 30
+		gs.known[String(res_id)] = true
+	var bench = _main.current_core.station("workbench")
+	root.get_node("EventBus").unit_selected.emit(bench)
+	await _wait(6)
+	await _shoot("workbench_all")
 
 ## Station 3 as it opens (v0.7: the Jehol): our game played to its third station, its level built, seen from above.
 func _scenario_station3() -> void:

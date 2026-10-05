@@ -376,6 +376,28 @@ const BUILDINGS: Dictionary = {
 		"damage_factor": 1.5,
 		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 20},
 		"level": 3,
+		# Its last step, for iron (station 4: the counterweight trebuchet).
+		"upgrades_to": ["catapult_trebuchet"],
+	},
+	# 配重投石机 THE COUNTERWEIGHT TREBUCHET (station 4; GAME-DESIGN 5.2: "第 4 站……把铁用到底：连弩、弩炮、配重投石机、水车";
+	# 6.2: "投石塔……→ 配重投石机（铁 + 木，4）"): the catapult's top -- a long arm on an iron axle, a box of stone for its
+	# counterweight, on the same turntable: it throws further and harder, and slower; its foot is further out too.
+	"catapult_trebuchet": {
+		"name": "BUILDING_CATAPULT_TREBUCHET_NAME",
+		"kind": "thrower",
+		"cells": 2,
+		"height": 3.4,
+		"hp": 200.0,
+		"cost": {"wood": 16, "stone": 15, "bone": 4, "iron": 3},
+		"range": 13.0,
+		"min_range": 4.0,
+		"flight_seconds": 1.7,
+		"throw_seconds": 7.5,
+		"damage_factor": 2.5,
+		# Its long arm drawn right round to load (about its axle; the catapult's is TOWERS.catapult_wound_degrees).
+		"wound_degrees": 150.0,
+		"ammo": {"accepts": ["shot_stone", "fire_pot"], "capacity": 25},
+		"level": 4,
 		"upgrades_to": "",
 	},
 	# THE SPIKES LAID IN THE WAY (GAME-DESIGN 6.0; v0.6 round six; kept in the 2026-10-02 rebuild -- the player: "地刺：
@@ -1671,9 +1693,11 @@ const DINOS: Dictionary = {
 	# not an answer on their own -- it is what the stone wall is for (6.3).
 	"big_theropod": {
 		"name": "DINO_BIG_THEROPOD_NAME",
-		"hp": 180.0,
+		# The last station's last boss (v0.7, Hell Creek): a fifth harder than it was (180, 12) -- it stood below the
+		# Allosaurus and the Yutyrannus it comes after, with iron against it. A step, not a guess at the end (untried).
+		"hp": 216.0,
 		"speed": 2.0,
-		"damage": 12.0,
+		"damage": 14.0,
 		"attack_rate": 0.8,
 		"behaviour": "siege",
 		"boss": "major",
@@ -1921,6 +1945,41 @@ const DINOS: Dictionary = {
 		"boss": "minor",
 		"drops": {"hide": 2, "bone": 3},
 		"size": Vector3(0.9, 1.1, 0.9),
+	},
+	# STATION 4'S (GAME-DESIGN 7.2: 白垩纪末 · 地狱溪组, Montana and the Dakotas, ~66 million years ago -- "恐龙时代的最后一
+	# 刻"). The tyrannosaur is the big theropod (DINOS.big_theropod), its great boss.
+	#
+	# Acheroraptor temeertyorum: a dromaeosaur two and a half metres long, Velociraptor's North American kin -- the pack
+	# that raids and guards the nest, with the raptors' numbers and their voice (SOUNDS velociraptor).
+	"acheroraptor": {
+		"hours": ["day"],
+		"name": "DINO_ACHERORAPTOR_NAME",
+		"hp": 11.2,
+		"speed": 4.2,
+		"burst": "dash",
+		"damage": 3.6,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"drops": {"food": 1, "bone": 1},
+		"drop_chance": {"food": 0.5, "bone": 0.5},
+		"size": Vector3(0.8, 0.9, 0.8),
+		"voice": "velociraptor",
+	},
+	# Dakotaraptor steini: a giant dromaeosaur five metres long, quill knobs on its forearm -- at the head of the big raids
+	# (the minor boss), in its pack-leader's voice (SOUNDS velociraptor_alpha).
+	"dakotaraptor": {
+		"hours": ["day"],
+		"name": "DINO_DAKOTARAPTOR_NAME",
+		"hp": 64.0,
+		"speed": 4.4,
+		"burst": "dash",
+		"damage": 9.0,
+		"attack_rate": 1.0,
+		"behaviour": "pack",
+		"boss": "minor",
+		"drops": {"hide": 2, "bone": 3},
+		"size": Vector3(1.0, 1.5, 1.0),
+		"voice": "velociraptor_alpha",
 	},
 	# Yutyrannus huali: nine metres of early tyrannosaur under a coat of long filaments, the biggest feathered animal
 	# known -- found three together, perhaps hunting as a group. The great boss, last of all, in the beacon's final wave.
@@ -2830,6 +2889,133 @@ const MAPS: Dictionary = {
 			{"type": "board", "cell": Vector2i(9, 18)},
 		],
 	},
+	# STATION 4 · THE END OF THE CRETACEOUS · THE HELL CREEK FORMATION (GAME-DESIGN 7.2: "湿热的亚热带海岸平原，河流和开花
+	# 植物的森林"): the large valley's lie of the land under a warm, wet sky -- a rich green floor, pale sandstone in the
+	# crags -- and its river broad and slow past the field's west edge, its backwaters swampy: bog iron there again, clay
+	# on the bank. First version: no herds yet (Edmontosaurus, Triceratops to come), nothing in the river by night (its
+	# crocodiles to come), no asteroid yet.
+	"hell_creek": {
+		"like": "valley_large",
+		"name": "MAP_HELL_CREEK_NAME",
+		"terrain": {
+			"field_half": 44.0,
+			# A warm forest's floor, lush; the rock the pale buff of the formation's sandstones.
+			"ground_colour": Color(0.14, 0.25, 0.10),
+			"rock_colour": Color(0.52, 0.47, 0.37),
+			"river": {"course": [
+				{"at": Vector2(-130.0, -96.0), "half_width": 1.6, "bank": 1.2},
+				{"at": Vector2(-108.0, -90.0), "half_width": 1.8, "bank": 1.2},
+				{"at": Vector2(-88.0, -82.0), "half_width": 2.0, "bank": 1.2},
+				{"at": Vector2(-72.0, -72.0), "half_width": 2.2, "bank": 1.3},
+				{"at": Vector2(-63.0, -61.0), "half_width": 2.4, "bank": 1.4},
+				{"at": Vector2(-57.0, -50.0), "half_width": 2.6, "bank": 1.3},
+				{"at": Vector2(-53.5, -40.0), "half_width": 2.8, "bank": 1.1},
+				{"at": Vector2(-51.0, -30.0), "half_width": 3.0, "bank": 0.9},
+				{"at": Vector2(-50.0, -18.0), "half_width": 3.0, "bank": 0.9},
+				{"at": Vector2(-49.5, -8.0), "half_width": 3.0, "bank": 0.9},
+				{"at": Vector2(-50.0, 2.0), "half_width": 3.0, "bank": 0.9},
+				{"at": Vector2(-51.5, 12.0), "half_width": 3.0, "bank": 0.9},
+				{"at": Vector2(-54.0, 20.0), "half_width": 2.8, "bank": 1.0},
+				{"at": Vector2(-58.0, 27.0), "half_width": 2.5, "bank": 1.6},
+				{"at": Vector2(-64.0, 34.0), "half_width": 2.3, "bank": 2.4},
+				{"at": Vector2(-68.0, 44.0), "half_width": 2.1, "bank": 2.8},
+				{"at": Vector2(-71.0, 58.0), "half_width": 2.0, "bank": 2.6},
+				{"at": Vector2(-73.0, 76.0), "half_width": 2.0, "bank": 2.2},
+				{"at": Vector2(-75.0, 96.0), "half_width": 2.0, "bank": 1.8},
+				{"at": Vector2(-76.0, 114.0), "half_width": 2.0, "bank": 1.8},
+			]},
+		},
+		# Every tool he has made, as at the third station.
+		"kit": ["harvest_stone", "stone_axe", "hide_map", "harvest_clay"],
+		"ground_cover": {"grass_count": 2000, "grass_base": Color(0.11, 0.21, 0.07), "grass_tip": Color(0.38, 0.52, 0.20),
+			"fern_leaf": Color(0.24, 0.44, 0.16)},
+		"opening_stock": {"wood": 28},
+		"raiders": {"acheroraptor": 1.0},
+		# Its own day by day -- none yet beyond its pack: without it the large valley's (Coelophysis and the Chinle's
+		# chargers) came at Hell Creek by `like`.
+		"raiders_by_day": [],
+		"guards": "acheroraptor",
+		"minor_boss": "dakotaraptor",
+		"boss": "big_theropod",
+		"prowlers": {},
+		"herds": [],
+		"day_hints": {"dawn": "HINT_DAWN_HELL_CREEK", "dusk": "HINT_DUSK_HELL_CREEK", "night": "HINT_NIGHT_HELL_CREEK",
+			"dusk_first": "HINT_DUSK_FIRST_HELL_CREEK"},
+		# ITS CLIMAX (GAME-DESIGN 7.2: "高潮：小行星。最后一天，撞击溅出的玻璃小球像雨一样落下……信标充能和撞击倒计时同时在
+		# 走"; ImpactRain): launched, the beacon is answered by the impact far off -- a streak across the sky, a flash, a boom
+		# and the ground shaking -- and `delay` seconds later the glass it threw up rains on the valley till the jump,
+		# `rate_from` beads a second at the start of the charge thickening to `rate_to` at its end; `near_man_share` of
+		# them within `near_man` metres of the man, the rest anywhere within `field_half` of the cabin. Each falls
+		# `fall_height` metres in `fall_seconds`, slanting (`slant`), and scalds what is within `radius` of where it lands
+		# -- `damage` to a dinosaur or to the man out in the open (two hundred and some seconds of charge; in the cabin
+		# he is out of it), `building_damage` to a building; `heard_share` of them heard landing.
+		"climax": {
+			"kind": "impact",
+			"delay": 8.0,
+			"rate_from": 1.5,
+			"rate_to": 6.0,
+			"near_man_share": 0.3,
+			"near_man": 6.0,
+			"field_half": 40.0,
+			"fall_height": 45.0,
+			"fall_seconds": 0.9,
+			"slant": 0.35,
+			"radius": 0.8,
+			"damage": 2.0,
+			"building_damage": 1.0,
+			# Drawn as the eye sees one falling: a streak `streak_length` long, `bead_size` thick at its head, and a flash
+			# `flash_range` metres round where it lands, gone in `flash_seconds`, and the bead left glowing there for
+			# `ember_seconds`. The impact's own streak, high in the sky ahead of the view (`streak_far` metres on, `streak_high`
+			# up), fades in `streak_seconds`.
+			"bead_size": 0.09,
+			"streak_length": 2.4,
+			"ember_seconds": 2.5,
+			"flash_range": 2.5,
+			"flash_energy": 3.0,
+			"flash_seconds": 0.35,
+			"colour": Color(1.0, 0.55, 0.15),
+			"streak_seconds": 4.0,
+			"streak_far": 150.0,
+			"streak_high": 60.0,
+			# The game's view sees no sky: the impact's light fills the screen this colour, fading in `flash_screen_seconds`,
+			# and the view shakes `shake` metres at worst for `shake_seconds`.
+			"flash_colour": Color(1.0, 0.86, 0.66, 0.75),
+			"flash_screen_seconds": 1.6,
+			"shake": 0.35,
+			"shake_seconds": 1.6,
+			"heard_share": 0.35,
+		},
+		"default_resource_nodes": [
+			{"type": "wood", "cell": Vector2i(-4, -2)},
+			{"type": "wood", "cell": Vector2i(4, -2)},
+			{"type": "wood", "cell": Vector2i(6, 3)},
+			{"type": "stone", "cell": Vector2i(-6, 3)},
+			{"type": "stone", "cell": Vector2i(-4, -16)},
+			{"type": "stone", "cell": Vector2i(4, -16)},
+			{"type": "stone", "cell": Vector2i(14, -12)},
+			{"type": "stone", "cell": Vector2i(14, -11)},
+			{"type": "stone", "cell": Vector2i(15, -13)},
+			{"type": "wood", "cell": Vector2i(-12, 6)},
+			{"type": "wood", "cell": Vector2i(-14, 8)},
+			{"type": "wood", "cell": Vector2i(-11, 9)},
+			{"type": "wood", "cell": Vector2i(-15, 5)},
+			{"type": "wood", "cell": Vector2i(-13, 11)},
+			{"type": "wood", "cell": Vector2i(16, 3)},
+			{"type": "wood", "cell": Vector2i(18, 7)},
+			{"type": "wood", "cell": Vector2i(3, 14)},
+			{"type": "wood", "cell": Vector2i(-2, 17)},
+			{"type": "stone", "cell": Vector2i(-6, 15)},
+			{"type": "clay", "cell": Vector2i(-21, -9)},
+			{"type": "clay", "cell": Vector2i(-20, 11)},
+			{"type": "iron_ore", "cell": Vector2i(-21, -2)},
+			{"type": "iron_ore", "cell": Vector2i(-21, 4)},
+			{"type": "iron_ore", "cell": Vector2i(-20, -15)},
+			{"type": "water", "cell": Vector2i(-22, 0)},
+			{"type": "antenna", "cell": Vector2i(-10, 18)},
+			{"type": "battery", "cell": Vector2i(18, -14)},
+			{"type": "board", "cell": Vector2i(6, -21)},
+		],
+	},
 }
 
 ## THE JUMP BETWEEN STATIONS (StationJump; GAME-DESIGN 8.3): its timings (seconds) and sizes (metres).
@@ -2970,6 +3156,9 @@ const GAMES: Dictionary = {
 			# The Early Cretaceous of Liaoning: the feathered dinosaurs, bog iron at the lake, the bloomery (v0.7).
 			{"id": "jehol", "name": "STATION_3_NAME", "age": "ERA_EARLY_CRETACEOUS", "place": "PLACE_JEHOL",
 				"when": "WHEN_STATION_3", "settings": {"map": "jehol", "era": "early_cretaceous"}},
+			# The end of the Cretaceous at Hell Creek: Tyrannosaurus last of all; iron used to the full (v0.7).
+			{"id": "hell_creek", "name": "STATION_4_NAME", "age": "ERA_END_CRETACEOUS", "place": "PLACE_HELL_CREEK",
+				"when": "WHEN_STATION_4", "settings": {"map": "hell_creek", "era": "end_cretaceous"}},
 		],
 	},
 	# The player's own: whatever they choose; the whole cabin, its beacon calling for rescue.
@@ -3020,6 +3209,9 @@ const CUSTOM_GAME: Dictionary = {
 			# The Early Cretaceous is station 3's age, MAPS.jehol's own cast: Dilong packs, Sinornithosaurus running for the
 			# man from the second day, Sinocalliopteryx and Yutyrannus; nothing in the lake by night.
 			{"id": "early_cretaceous", "name": "ERA_EARLY_CRETACEOUS", "note": "ERA_EARLY_CRETACEOUS_NOTE", "cast_of": "jehol"},
+			# The end of the Cretaceous is station 4's age, MAPS.hell_creek's own cast: Acheroraptor packs, Dakotaraptor,
+			# Tyrannosaurus.
+			{"id": "end_cretaceous", "name": "ERA_END_CRETACEOUS", "note": "ERA_END_CRETACEOUS_NOTE", "cast_of": "hell_creek"},
 		]},
 		# How hard (the player: "难度高的恐龙巢穴多，波次厉害"): more nests the harder -- the raid shared out among
 		# them, each with its guards (MAPS.<id>.nest_cells, in the order they are opened) -- and the raids bigger,
@@ -3045,6 +3237,8 @@ const CUSTOM_GAME: Dictionary = {
 			{"id": "morrison", "name": "MENU_MAP_MORRISON", "note": "MAP_MORRISON_NOTE", "map_id": "morrison"},
 			# Station 3's (MAPS.jehol): the Early Cretaceous lake country, as big as the large one.
 			{"id": "jehol", "name": "MENU_MAP_JEHOL", "note": "MAP_JEHOL_NOTE", "map_id": "jehol"},
+			# Station 4's (MAPS.hell_creek): the end of the Cretaceous on a warm coastal plain, as big as the large one.
+			{"id": "hell_creek", "name": "MENU_MAP_HELL_CREEK", "note": "MAP_HELL_CREEK_NOTE", "map_id": "hell_creek"},
 		]},
 		# How long the beacon's rescue takes to come: the days to hold out (a day is DAY.length, six minutes).
 		{"id": "days", "name": "CUSTOM_DAYS", "default": "5", "choices": [
@@ -3807,6 +4001,10 @@ const SOUNDS: Dictionary = {
 		"stegosaurus_bite":  {"files": ["stegosaurus_ram"], "db": 1.0, "pitch": 1.05, "class": "bite", "unit": 12.0},
 		"stegosaurus_hurt":  {"files": ["stegosaurus_hurt"], "db": -1.0, "pitch": 1.04, "class": "hurt", "unit": 12.0},
 		"stegosaurus_death": {"files": ["stegosaurus_death"], "db": 2.0, "pitch": 1.02, "class": "death", "unit": 20.0, "reach": 160.0},
+		# The impact at the end of the Cretaceous (station 4's climax, ImpactRain): its boom rolling over the valley, and the
+		# glass beads it threw up landing -- a hiss and a tick.
+		"impact_boom": {"files": ["impact_boom"], "db": 4.0, "pitch": 1.0, "class": "boss", "unit": 60.0, "reach": 400.0},
+		"impact_bead": {"files": ["impact_bead_1", "impact_bead_2"], "db": -10.0, "pitch": 1.12, "class": "bite", "unit": 4.0},
 		# Placerias: a tonne of beaked plant-eater grazing on the valley walls -- nasal grunts, far off.
 		"placerias_call": {"files": ["placerias_call_1", "placerias_call_2", "placerias_call_3"], "db": -2.0, "pitch": 1.08, "class": "call", "unit": 12.0, "reach": 110.0},
 		# THE LATE CRETACEOUS (a custom game's age), each a voice of its own (tools/build_sounds.gd) -- they
@@ -4766,6 +4964,11 @@ const VISUALS: Dictionary = {
 		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha", "material": "skin"},
 	"dino/yutyrannus":      {"scene": "res://assets/models/dinos/yutyrannus.gltf", "fit": "height",
 		"placeholder": "raptor", "anchor": "feet", "color": "big_theropod", "material": "skin"},
+	# Station 4's (Hell Creek; tools/dino_species.py): the two dromaeosaurs; the tyrannosaur is dino/big_theropod.
+	"dino/acheroraptor":    {"scene": "res://assets/models/dinos/acheroraptor.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor", "material": "skin"},
+	"dino/dakotaraptor":    {"scene": "res://assets/models/dinos/dakotaraptor.gltf", "fit": "height",
+		"placeholder": "raptor", "anchor": "feet", "color": "raptor_alpha", "material": "skin"},
 	# The flyer is not fitted by its height: wings spread flat it is a hand high and two and a half metres across, and
 	# fitted to a height it came out five times as big. Built to its true size (tools/generate_dinos.py), it is drawn so.
 	"dino/harpactognathus": {"scene": "res://assets/models/dinos/harpactognathus.gltf", "fit": "none",
@@ -4824,6 +5027,10 @@ const VISUALS: Dictionary = {
 	"building/bow_tower_repeater": {"scene": "res://assets/models/props/bow_tower_repeater_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/bow_tower_ballista": {"scene": "res://assets/models/props/bow_tower_ballista_a.glb", "fit": "none",
+		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
+	# The catapult's top (tools/generate_props.py trebuchet): the catapult's turntable, a long arm on an iron axle, a box
+	# of stone its counterweight (Weight, hung from the arm), the shot in a sling at the arm's end.
+	"building/catapult_trebuchet": {"scene": "res://assets/models/props/trebuchet_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},
 	"building/catapult":    {"scene": "res://assets/models/props/catapult_a.glb", "fit": "none",
 		"material": "vertex", "placeholder": "box", "anchor": "feet", "color": "tower"},

@@ -102,6 +102,7 @@ def build(name, rig, arm, spec, materials):
     _tusks(body, loft, path, spec)
     _horns(body, loft, path, spec)
     _back_plates(body, loft, path, spec)
+    _frill(body, loft, path, spec)
     _patagia(body, sk, rig, spec)
     _tail_vane(body, loft, path, spec)
     # Feathers, where the species had them (tools/dino_feathers.py).
@@ -761,6 +762,126 @@ def _back_plates(body, loft, path, spec):
             put((mid, prev[-1], prev[0]))
         if spec.get("skin_detail", {}).get("horn"):
             body.mark_horn(start, bp.get("horn", 1.0))
+
+
+def _frill(body, loft, path, spec):
+    """A ceratopsian's frill (spec "frill"; Triceratops: the parietals and the squamosals one solid shield, unpierced,
+    Hatcher et al. 1907; its edge set with small bony points, the epoccipitals): a broad plate up and back from the
+    back of the skull, over the neck. Its base across the skull's roof at `at`, raised `lift` off it (sunk, if less
+    than nought); leant back from the skull's up by `tilt` degrees; `width` either side of the midline at its
+    broadest and `height` from its base to its top edge, as its `outline` says -- (across, up) fractions of those,
+    its right half from the top of the midline round to the bottom of it, the left the same mirrored; below its base
+    its sides run down beside the skull towards the cheeks (the squamosals). Its sides bent forward round the head by
+    `curve` (metres, at its edge) and its top edge back by `cup`; `thick` thick in its middle and `rim` at its edge --
+    a blunt edge, not a blade. Along its edge, from the outline's `corner` point on one side round the top to the
+    other, `points` stand: small bony points (`count` of them, `size` high). One piece with the skull, moving with it
+    (`bone`); its colour from the skin's at its root to `colour`, its edge `edge`, its points `point`, flecked by
+    `mottle`."""
+    fr = spec.get("frill")
+    if not fr:
+        return
+    skin = spec["skin"]
+    s = path.s_of(*fr["at"])
+    c, t, x, u = loft.frame(s)
+    top, _ = loft.surface(s, 0.0)
+    tilt = _deg(fr["tilt"])
+    # Its own axes: up it (leant back towards the tail, the way `t` runs), across it (the animal's right), and out
+    # of its front face, forward over the head.
+    up = (u * math.cos(tilt) + t * math.sin(tilt)).normalized()
+    across = x
+    front = up.cross(across).normalized()
+    if front.dot(t) > 0.0:
+        front = -front
+    width, height = fr["width"], fr["height"]
+    root = top + u * fr.get("lift", 0.0)
+    # The outline, closed: from the bottom of the midline out along the right side's foot, up round the top and down
+    # the left side -- each point marked where it is the edge the points stand along.
+    half = [tuple(p) for p in fr["outline"]]
+    corner = fr.get("corner", len(half) - 1)
+    right = [(a, b, i <= corner) for i, (a, b) in enumerate(half)]
+    loop = list(reversed(right)) + [(-a, b, e) for (a, b, e) in right[1:-1]]
+    # Rounded (each corner cut, twice), then spaced evenly round it by length (metres).
+    for _ in range(2):
+        cut = []
+        for i in range(len(loop)):
+            p, q = loop[i], loop[(i + 1) % len(loop)]
+            e = p[2] and q[2]
+            cut.append((p[0] * 0.75 + q[0] * 0.25, p[1] * 0.75 + q[1] * 0.25, e))
+            cut.append((p[0] * 0.25 + q[0] * 0.75, p[1] * 0.25 + q[1] * 0.75, e))
+        loop = cut
+    pts = [(a * width, b * height) for (a, b, _) in loop]
+    flags = [e for (_, _, e) in loop]
+    seg = [math.hypot(pts[(i + 1) % len(pts)][0] - pts[i][0], pts[(i + 1) % len(pts)][1] - pts[i][1])
+           for i in range(len(pts))]
+    total = sum(seg)
+    n = fr.get("around", 120)
+    out = []
+    i, acc = 0, 0.0
+    for j in range(n):
+        want = total * j / n
+        while acc + seg[i] < want and i < len(seg) - 1:
+            acc += seg[i]
+            i += 1
+        f = (want - acc) / max(1e-9, seg[i])
+        p, q = pts[i], pts[(i + 1) % len(pts)]
+        out.append((p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, flags[i] and flags[(i + 1) % len(pts)]))
+    # The points along its edge: each a low peak, pushed out from the plate's middle.
+    ca, cb = fr.get("centre", (0.0, 0.45))
+    cx, cy = ca * width, cb * height
+    cum = [0.0]
+    for j in range(1, n):
+        cum.append(cum[-1] + math.hypot(out[j][0] - out[j - 1][0], out[j][1] - out[j - 1][1]))
+    run = [j for j in range(n) if out[j][2]]
+    pt = fr.get("points")
+    bumps = [0.0] * n
+    if pt and run:
+        a0, a1 = cum[run[0]], cum[run[-1]]
+        for j in run:
+            ph = (cum[j] - a0) / max(1e-9, a1 - a0) * pt["count"]
+            bumps[j] = (1.0 - abs(2.0 * (ph - math.floor(ph)) - 1.0)) ** pt.get("sharp", 1.0)
+    rim_pts = []
+    for j, (px, py, _) in enumerate(out):
+        dx, dy = px - cx, py - cy
+        d = math.hypot(dx, dy) or 1.0
+        k = bumps[j] * (pt["size"] if pt else 0.0)
+        rim_pts.append((px + dx / d * k, py + dy / d * k))
+    thick, rim_t = fr.get("thick", 0.06), fr.get("rim", 0.02)
+
+    def place(px, py, k, face):
+        # The outline's point (px, py) drawn in to `k` of the way from its middle, on its front face (1) or its back.
+        qx, qy = cx + (px - cx) * k, cy + (py - cy) * k
+        a, b = qx / width, qy / height
+        half_t = 0.5 * (rim_t + (thick - rim_t) * (1.0 - k) ** 0.8)
+        bend = fr.get("curve", 0.0) * a * a - fr.get("cup", 0.0) * max(0.0, b) ** 2
+        return root + across * qx + up * qy + front * (bend + half_t * face)
+
+    def colour(px, py, k, bump):
+        col = sc.mix(skin["back"], fr["colour"], sc.smoothstep(-0.1, 0.35, py / height))
+        col = sc.mix(col, fr.get("edge", fr["colour"]), sc.smoothstep(0.55, 1.0, k))
+        col = sc.mix(col, fr.get("point", col), min(1.0, bump * 1.5) * sc.smoothstep(0.8, 1.0, k))
+        mot = noise.noise(Vector((px * 7.0, py * 7.0, k * 3.0)))
+        return sc.shade(col, fr.get("mottle", skin["mottle"]) * mot)
+    w = {fr.get("bone", "Head"): 1.0}
+    levels = fr.get("levels", 5)
+    edges = []
+    for face in (1.0, -1.0):
+        mid = body.add(place(cx, cy, 0.0, face), colour(cx, cy, 0.0, 0.0), w)
+        prev = None
+        for lv in range(1, levels + 1):
+            k = lv / levels
+            ring = [body.add(place(px, py, k, face), colour(px, py, k, bumps[j]), w) for j, (px, py) in enumerate(rim_pts)]
+            for j in range(n):
+                j2 = (j + 1) % n
+                idx = (mid, ring[j], ring[j2]) if prev is None else (prev[j], ring[j], ring[j2], prev[j2])
+                # Wound so each face's normal looks out of the side it is on (the outline runs clockwise seen from in
+                # front).
+                body.face(tuple(reversed(idx)) if face > 0 else idx)
+            prev = ring
+        edges.append(prev)
+    # Its edge: the two faces' outermost rings joined, a narrow band round it.
+    for j in range(n):
+        j2 = (j + 1) % n
+        body.face((edges[0][j], edges[0][j2], edges[1][j2], edges[1][j]))
 
 
 # ==============================================================================

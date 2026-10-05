@@ -1756,6 +1756,12 @@
   - 恐龙模型（`tools/dino_species.py` 的 `YUTYRANNUS`、`DILONG`、`SINOCALLIOPTERYX`、`SINORNITHOSAURUS`，第 4 站的 `ACHERORAPTOR`、`DAKOTARAPTOR`；`tools/dino_feathers.py` 新的丝状羽 "fuzz"，`tools/dino_body.py` 跟着；`tools/dino_skin.py` 烘焙时丝羽不占贴图；`tools/dino_moves.py` 睡姿的 `arm_raise`（小个子的手不插进地里，默认不变））：旧物种重新生成逐字节一样；`VISUALS dino/<id>`、头像。模型比原来的重一些（羽王龙约 3.4 万顶点，霸王龙 2 万）。
   - 测试：新的 `test_v07_the_tower_tops`（三级的两条路都只要铁、是第四级、到头了；连弩快、近，床弩远、慢、狠、穿；床弩先转再射、挑最硬的、穿三只；连弩三发；第 1 站拿不到铁就不给、有了铁才给）、`test_v07_station_three`（第 3 站接在第 2 站后面、带着全部工具、生物是自己的并且有叫声、湖边有黏土和沼铁、自定义游戏、天色提示）；`test_v07_station_two`（第 2 站后面还有一站）、`test_gameplay_fixes`、`test_v01_deployment_and_hero`、`test_v03_followups`、`test_v04_cabin`、`test_v06_layer_by_layer`、`test_v06_one_grid`、`test_v06_one_slot_a_job` 跟着建造菜单分页和工坊改。
 
+- **v0.7 第二十七批：第 4 站（地狱溪），最后一站；配重投石机（同一晚）**：
+  - 第 4 站：`MAPS.hell_creek`（像大山谷，温暖湿润的绿地、浅黄砂岩，西边宽而慢的河，河边两处黏土、三处沼铁，残骸换了位置，`kit` 带全部工具）；`GAMES.campaign.stations` 第四项（`STATION_4_NAME`、`ERA_END_CRETACEOUS`、`PLACE_HELL_CREEK`、`WHEN_STATION_4`），过关游戏到这里是最后一站；自定义游戏的纪元 `end_cretaceous`、地图 `hell_creek`；新物种 `DINOS.acheroraptor`（来袭、守巢，叫声用迅猛龙的）、`dakotaraptor`（小首领，掉皮，叫声用迅猛龙头领的）；大首领 `big_theropod`，名字改成"霸王龙 / Tyrannosaurus"（原来"大型兽脚类"，它本来就是霸王龙的模型），血 180 → 216、咬 12 → 14（各加两成：它是最后一站的最后一个首领，原来比前面的异特龙、羽王龙还弱；没实测）；`HINT_*_HELL_CREEK`。
+  - 配重投石机：`BUILDINGS.catapult_trebuchet`（`catapult_3` 的升级，+3 铁；`range` 13、`min_range` 4、`throw_seconds` 7.5、×2.5、容量 25、`wound_degrees` 150）；`Catapult._wound` 认塔自己的 `wound_degrees`，`Catapult._process` 让配重箱一直竖直；模型 `trebuchet_a.glb`、图标、头像。
+  - 第 4 站的高潮：小行星（第一版）。新的 `scripts/fx/ImpactRain.gd`（`begin`：天上一道光、太阳一闪、闷响 `impact_boom`、提示 `HINT_IMPACT`；之后玻璃珠一颗颗落下，越来越密，`land` 烫伤恐龙、外面的人、建筑；人在舱里没事；新的一局就没了）；`Main._on_beacon_launched_climax`（地图的 `climax` 是 "impact" 才有）；`MAPS.hell_creek.climax`；`Hero.take_damage(amount, bitten)`（被烫不还手）；声音 `impact_boom`、`impact_bead`（`tools/build_sounds.gd`）。新的测试 `test_v07_the_impact`（只有第 4 站有、落下来烫伤恐龙、人在外面挨烫在舱里不挨、新的一局就没了）。
+  - 测试：新的 `test_v07_station_four`（四站、最后一站、带着铁锹、生物是自己的并且有模型有叫声、霸王龙压轴、河边有黏土沼铁、自定义游戏和天色提示、配重投石机只要铁、更远更狠更慢、长臂拉得更远）。`tools/playtest.gd` 新场景 `cast4`（第 4 站的生物和人站一排），`kiln` 场景里多一座配重投石机。
+
 ## v0.7 已定要做的（未开工）
 
 > 玩家在 v0.6 里说"放到 v0.7"的，集中记在这里。

@@ -872,6 +872,25 @@ func _s_harpactognathus_death() -> PackedFloat32Array:
 	_mix(out, _hiss(0.5, [[0.0, 1800.0], [1.0, 1000.0]], 1.8, [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]), 0.5, 0.25)
 	return out
 
+# THE IMPACT (station 4's climax, ImpactRain): thousands of kilometres off, heard as a long, deep boom rolling over the
+# valley, the ground rumbling under it -- and the glass beads it threw up coming down: a short hiss through the air and
+# a tick as one lands.
+func _s_impact_boom() -> PackedFloat32Array:
+	var out := _modes(4.5, [[34.0, 1.6, 1.0], [52.0, 1.2, 0.7], [77.0, 0.9, 0.5], [118.0, 0.6, 0.3]], 0.02)
+	_mix(out, _burst(0.35, 600.0, 0.6), 0.0, 0.7)
+	_mix(out, _hiss(3.5, [[0.0, 260.0], [1.0, 120.0]], 0.8, [[0.0, 0.0], [0.15, 1.0], [0.6, 0.6], [1.0, 0.0]]), 0.2, 0.5)
+	return _space(out, 0.4, [[0.6, 0.45], [1.3, 0.3], [2.1, 0.15]])
+
+func _s_impact_bead_1() -> PackedFloat32Array:
+	var out := _hiss(0.22, [[0.0, 5200.0], [1.0, 2600.0]], 3.0, [[0.0, 0.0], [0.6, 1.0], [1.0, 0.0]])
+	_mix(out, _snap(1.8, 0.0), 0.2, 0.7)
+	return out
+
+func _s_impact_bead_2() -> PackedFloat32Array:
+	var out := _hiss(0.18, [[0.0, 4600.0], [1.0, 2300.0]], 3.0, [[0.0, 0.0], [0.5, 1.0], [1.0, 0.0]])
+	_mix(out, _snap(2.1, 0.1), 0.16, 0.6)
+	return out
+
 const DILONG_FORMANTS: Array = [[900.0, 4.5, 1.0], [2100.0, 5.5, 0.5], [3300.0, 6.5, 0.2]]
 
 ## The Dilong's hoot: a short, rounded note, a little breath in it.
