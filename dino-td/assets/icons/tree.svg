@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="28.5" y="28" width="7" height="31" rx="2.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="50" cy="26" rx="18" ry="5.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-160 32 26)"/>
+  <ellipse cx="49" cy="26" rx="17" ry="5.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-125 32 26)"/>
+  <ellipse cx="48" cy="26" rx="16" ry="5.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-90 32 26)"/>
+  <ellipse cx="49" cy="26" rx="17" ry="5.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-55 32 26)"/>
+  <ellipse cx="50" cy="26" rx="18" ry="5.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-20 32 26)"/>
+  <rect x="28.5" y="28" width="7" height="31" rx="2.5" fill="#6e4a2a"/>
+  <ellipse cx="50" cy="26" rx="18" ry="5.2" fill="#64a24c" transform="rotate(-160 32 26)"/>
+  <ellipse cx="49" cy="26" rx="17" ry="5.2" fill="#64a24c" transform="rotate(-125 32 26)"/>
+  <ellipse cx="48" cy="26" rx="16" ry="5.2" fill="#64a24c" transform="rotate(-90 32 26)"/>
+  <ellipse cx="49" cy="26" rx="17" ry="5.2" fill="#64a24c" transform="rotate(-55 32 26)"/>
+  <ellipse cx="50" cy="26" rx="18" ry="5.2" fill="#64a24c" transform="rotate(-20 32 26)"/>
+  <path d="M 33 26 L 65 26" fill="none" stroke="#3f7334" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-160 32 26)"/>
+  <path d="M 33 26 L 63 26" fill="none" stroke="#3f7334" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-125 32 26)"/>
+  <path d="M 33 26 L 61 26" fill="none" stroke="#3f7334" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-90 32 26)"/>
+  <path d="M 33 26 L 63 26" fill="none" stroke="#3f7334" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-55 32 26)"/>
+  <path d="M 33 26 L 65 26" fill="none" stroke="#3f7334" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-20 32 26)"/>
+</svg>

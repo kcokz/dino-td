@@ -1,6 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
-/android/
+*/android/
 
 # Exported builds
 build/
@@ -34,8 +34,12 @@ screenshots/
 # Whole faces the shipped ones are cut from (tools/subset_fonts.py): 25 MB of Chinese for
 # the few hundred characters the game says. The cut is in assets/fonts; the source says
 # where to get it again.
-tools/font_sources/
+**/tools/font_sources/
 
 # Python bytecode from running the tools/ generators
 __pycache__/
 *.pyc
+
+# A game's copy of common/ (tools/sync_common.py writes it). The original is common/ at the
+# repository root; edit there and sync, never in the copy.
+dino-raid/common/

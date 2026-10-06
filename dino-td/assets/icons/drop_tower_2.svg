@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="6" y="51" width="52" height="9" rx="2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="29" y="15" width="6.5" height="38" rx="1.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 9 24 L 57 13" fill="none" stroke="#16110c" stroke-width="15.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="54" cy="15" r="5.2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 12 23.5 L 12 30" fill="none" stroke="#16110c" stroke-width="12.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="12" cy="37" r="7.6" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="6" y="51" width="52" height="9" rx="2" fill="#7b4a27"/>
+  <rect x="29" y="15" width="6.5" height="38" rx="1.2" fill="#a0703f"/>
+  <path d="M 9 24 L 57 13" fill="none" stroke="#a0703f" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="54" cy="15" r="5.2" fill="#adb4b8"/>
+  <path d="M 12 23.5 L 12 30" fill="none" stroke="#dcbb7c" stroke-width="2.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="12" cy="37" r="7.6" fill="#7b4a27"/>
+  <rect x="29" y="15" width="2.4" height="38" rx="1" fill="#6f4523"/>
+  <rect x="6" y="56" width="52" height="4" rx="1.5" fill="#6f4523"/>
+  <path d="M 10 51 L 10 56 M 22 51 L 22 56 M 42 51 L 42 56 M 54 51 L 54 56" fill="none" stroke="#6f4523" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="32.2" cy="18.6" r="3.0" fill="#dcbb7c"/>
+  <circle cx="52.5" cy="13.5" r="1.8" fill="#d3d8da"/>
+  <circle cx="12" cy="37" r="5.3" fill="#dca466"/>
+  <circle cx="12" cy="37" r="2.9" fill="none" stroke="#b87b42" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="12" cy="37" r="1.1" fill="#b87b42"/>
+  <circle cx="9" cy="55" r="6.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="9" cy="55" r="6.5" fill="#7b4a27"/>
+  <circle cx="9" cy="55" r="4.4" fill="#dca466"/>
+  <circle cx="9" cy="55" r="1.4" fill="#b87b42"/>
+</svg>

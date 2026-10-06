@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://v7va313amy8a"
+path="res://.godot/imported/power_fill.png-226ee83033d0269bc569fe1387af2061.image"
+
+[deps]
+
+source_file="res://common/assets/ui/power_fill.png"
+dest_files=["res://.godot/imported/power_fill.png-226ee83033d0269bc569fe1387af2061.image"]
+
+[params]
+

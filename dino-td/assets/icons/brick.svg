@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <polygon points="6,40 30,32 58,42 34,52" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="6,40 34,52 34,60 6,48" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="34,52 58,42 58,50 34,60" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="14,26 38,18 52,24 28,33" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="14,26 28,33 28,40 14,33" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="28,33 52,24 52,31 28,40" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="6,40 30,32 58,42 34,52" fill="#b4553a"/>
+  <polygon points="6,40 34,52 34,60 6,48" fill="#7e3423"/>
+  <polygon points="34,52 58,42 58,50 34,60" fill="#b4553a"/>
+  <polygon points="14,26 38,18 52,24 28,33" fill="#d27a55"/>
+  <polygon points="14,26 28,33 28,40 14,33" fill="#7e3423"/>
+  <polygon points="28,33 52,24 52,31 28,40" fill="#b4553a"/>
+  <path d="M 20 45 L 44 37" fill="none" stroke="#7e3423" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 8 41 L 30 33.5 M 16 27 L 38 19.5" fill="none" stroke="#d27a55" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="46" cy="45" r="1.2" fill="#7e3423"/>
+  <circle cx="24" cy="28" r="1.1" fill="#7e3423"/>
+</svg>

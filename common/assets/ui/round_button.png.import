@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://c1lvhd1o35x6q"
+path="res://.godot/imported/round_button.png-b68f2437d365db2ce6e7dc76d7b7392b.image"
+
+[deps]
+
+source_file="res://common/assets/ui/round_button.png"
+dest_files=["res://.godot/imported/round_button.png-b68f2437d365db2ce6e7dc76d7b7392b.image"]
+
+[params]
+

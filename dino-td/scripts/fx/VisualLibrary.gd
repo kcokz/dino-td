@@ -1,0 +1,410 @@
+# res://scripts/fx/VisualLibrary.gd
+class_name VisualLibrary
+
+## The one place that answers "what does this thing look like?", so that no entity
+## has geometry in it any more.
+##
+## Before this, every entity built its own body out of primitives inside
+## `_ensure_components()` -- a box for the Hero, a box for a dinosaur, a cylinder for
+## a tree, a box for the nest. Each of those was a place that would have to be opened
+## and rewritten when a model arrived, and each carried naked numbers that contradicted
+## what Config declared. `Config.DINOS.big_theropod.size` said 1.6 metres and had said
+## so for versions; the code drew it at 0.8 and nobody could see the difference,
+## because the number was never read.
+##
+## Two jobs here, and the second is the one that makes buying art possible:
+##
+##   1. Hand back the art Config declares for a key, or a placeholder primitive while
+##      there is no art. A model arriving is one line of Config -- no logic moves.
+##   2. FIT that art to the size Config declares, whatever scale and origin the file
+##      happens to use.
+##
+## Job 2 is the point. Bought models arrive at arbitrary scale with arbitrary origins:
+## one centred, the next with its feet at zero, the next authored in centimetres. Doing
+## that reconciliation once, here, is the difference between dropping a model in and
+## fighting every model. It also keeps the promise the rest of this codebase keeps
+## being bitten by: the size Config declares is the size that collides AND the size you
+## see, so art can never quietly grow wider than the thing that stops a raptor.
+##
+## What this deliberately does NOT do is produce collision. Collision is gameplay -- it
+## decides who can walk where and what a bite can reach -- so it is built from the same
+## declared size, by the entity, and never from the art. Art that disagrees with its
+## collider is the bug this project has spent three versions fixing.
+
+# ==============================================================================
+# The public surface
+# ==============================================================================
+
+## The visible body for `key`, as a node the caller parents wherever it likes.
+##
+## `variant` is passed through to the placeholder for keys whose shape depends on
+## something: a fence's arrangement ("x" / "z" / "both"), a resource node's state
+## ("full" / "depleted"). Art scenes ignore it until there is art with variants.
+static func make(key: String, variant: String = "") -> Node3D:
+	var holder := Node3D.new()
+	holder.name = "Body"
+
+	var packed: PackedScene = scene_at(declared_scene(key))
+	# A variant with art of its own -- a felled tree's stump. Fitted with the FULL art's
+	# factor rather than to the box on its own: it is the stump of that tree, and a
+	# sixty-centimetre stump fitted to a tree-sized box would be stretched to a tree.
+	var var_packed: PackedScene = scene_at(declared_variant_scene(key, variant))
+	if packed != null and var_packed != null:
+		var full: Node = packed.instantiate()
+		var factor: float = fit_factor(full as Node3D, declared_size(key), declared_fit(key)) if full is Node3D else 1.0
+		full.free()
+		var piece: Node = var_packed.instantiate()
+		if piece is Node3D:
+			holder.add_child(piece)
+			place(piece as Node3D, factor, declared_anchor(key))
+			_dress(piece, key)
+			return holder
+		piece.free()
+
+	if packed != null:
+		var art: Node = packed.instantiate()
+		if art is Node3D:
+			holder.add_child(art)
+			fit(art as Node3D, declared_size(key), declared_anchor(key), declared_fit(key))
+			_dress(art, key)
+			return holder
+		# A scene that is not 3D is a mistake worth seeing rather than hiding, but
+		# not worth crashing the game over: fall through to the placeholder.
+		art.free()
+
+	_build_placeholder(holder, key, variant)
+	return holder
+
+## Whether `key` is being drawn by real art rather than by a placeholder. The build
+## preview and the tests ask this so neither has to guess.
+static func has_art(key: String) -> bool:
+	return scene_at(declared_scene(key)) != null
+
+## The scene at `path`, loaded once and kept for the life of the game -- or null when
+## there is no scene there.
+##
+## The engine keeps a loaded resource only while something holds it, and nothing held a
+## model's scene once its instance was made: every dinosaur spawned in a wave, and every
+## level built, read its model from disk again. On the drive this project lives on -- a
+## WSL share, where opening a file costs some 20 ms however small it is -- the Hero, one
+## scene and thirteen textures, was a third of a second per level, and every dinosaur
+## spawned was 20 ms -- more than a frame -- spent reading a file already in memory. The
+## models are few and a game draws every one of them sooner or later, so keeping them
+## costs nothing worth counting.
+static var _scenes: Dictionary = {}
+## The scenes asked for ahead (warm), loading on the engine's own threads until they are taken in.
+static var _coming: Dictionary = {}
+
+static func scene_at(path: String) -> PackedScene:
+	if path == "":
+		return null
+	var kept: PackedScene = _scenes.get(path)
+	if kept != null:
+		return kept
+	# Asked for ahead: the engine's thread has it, or is still at it -- then this waits only for the rest.
+	if _coming.has(path):
+		_coming.erase(path)
+		var warmed := ResourceLoader.load_threaded_get(path) as PackedScene
+		if warmed != null:
+			_scenes[path] = warmed
+			return warmed
+	if not ResourceLoader.exists(path):
+		return null
+	var packed := load(path) as PackedScene
+	if packed != null:
+		_scenes[path] = packed
+	return packed
+
+## Starts reading the art for `keys` on the engine's loading threads (ResourceLoader.load_threaded_request),
+## so the first thing made from it does not wait on the disk. A dinosaur is a model and its skin -- four files
+## -- and the first of a species to come out of the nest stalled the game a seventh of a second reading them
+## (on the WSL share every file opened costs some 20 ms). Asked for when a level is built, for the animals its
+## run can field (Main._warm_the_cast).
+static func warm(keys: Array) -> void:
+	for key in keys:
+		var path: String = declared_scene(String(key))
+		if path == "" or _scenes.has(path) or _coming.has(path) or not ResourceLoader.exists(path):
+			continue
+		if ResourceLoader.load_threaded_request(path, "PackedScene") == OK:
+			_coming[path] = true
+
+## Takes in what the loading threads have finished, so nothing is left with them: a load asked for and never
+## taken is held by the loader to the end. Called every frame while any is coming (Main._process).
+static func take_warmed() -> void:
+	if _coming.is_empty():
+		return
+	for path in _coming.keys():
+		var status: int = ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			continue
+		_coming.erase(path)
+		# Finished, or failed: either way taken off the loader's hands (a failed one is loaded again, plainly,
+		# when it is wanted). One the loader has no word of is nothing to take.
+		if status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			continue
+		var warmed: PackedScene = ResourceLoader.load_threaded_get(path) as PackedScene
+		if warmed != null:
+			_scenes[path] = warmed
+
+## Whether any art asked for ahead is still on its way.
+static func warming() -> bool:
+	return not _coming.is_empty()
+
+## Scales and shifts `art` so that it occupies exactly `size` metres and sits on the
+## ground the way `anchor` says.
+##
+## One uniform scale factor, never three: a non-uniform fit would squash a bought
+## model to fit a box it was not drawn for, which looks worse than a model that is
+## slightly the wrong size. The factor is chosen so the model fits INSIDE the declared
+## box on every axis -- so a declared size is a bound rather than a stretch target.
+static func fit(art: Node3D, size: Vector3, anchor: String = "feet", mode: String = "box") -> void:
+	# "none": built to scale about its own origin, and left there -- the cabin, whose walls are
+	# colliders at the measures it was modelled to (Config.CABIN.module), and whose solar panel
+	# and gun stand above its declared height. Centring it by its bounds moved it off them.
+	if mode == "none":
+		art.scale = Vector3.ONE
+		art.position = Vector3.ZERO
+		return
+	var factor: float = fit_factor(art, size, mode)
+	if factor <= 0.0:
+		return    # nothing measurable; leave the author's own transform alone
+	place(art, factor, anchor)
+
+## The uniform scale that fits `art` inside `size`, or 0 when it has nothing to measure.
+##
+## `mode` "height" matches the height alone. For a rigged character whose rest pose is
+## not how it stands -- a T-pose, arms straight out, as wide as it is tall -- the box is
+## the wrong thing to fit, and fitting it shrank the Hero to half his height. The height
+## of a T-pose is the height of the person standing in it.
+static func fit_factor(art: Node3D, size: Vector3, mode: String = "box") -> float:
+	var bounds: AABB = visual_bounds(art)
+	if bounds.size.x <= 0.0001 or bounds.size.y <= 0.0001 or bounds.size.z <= 0.0001:
+		return 0.0
+	var factor: float = minf(size.x / bounds.size.x, minf(size.y / bounds.size.y, size.z / bounds.size.z))
+	if mode == "none":
+		factor = 1.0
+	if mode == "height":
+		factor = size.y / bounds.size.y
+	if factor <= 0.0 or is_inf(factor) or is_nan(factor):
+		return 0.0
+	return factor
+
+## Scales `art` by `factor` and stands it on the origin by `anchor`.
+static func place(art: Node3D, factor: float, anchor: String = "feet") -> void:
+	var bounds: AABB = visual_bounds(art)
+	if factor <= 0.0:
+		return
+	art.scale = Vector3.ONE * factor
+
+	# Where the scaled model actually sits, so it can be pushed back to the origin.
+	# `visual_bounds` deliberately excludes the node's own transform, so the bounds
+	# measured above are pre-scale and scaling them here is the whole correction.
+	var offset: Vector3 = bounds.position * factor
+	var extent: Vector3 = bounds.size * factor
+	var centre: Vector3 = offset + extent * 0.5
+	if anchor == "center":
+		art.position = -centre
+	else:
+		# Centred horizontally, standing on the ground vertically.
+		art.position = Vector3(-centre.x, -offset.y, -centre.z)
+
+## The bounding box of everything visible under `node`, in `node`'s own space and
+## ignoring its own transform, so it can be measured before being placed.
+static func visual_bounds(node: Node3D) -> AABB:
+	var out := AABB()
+	var first: bool = true
+	# Geometry only: a light's box is its reach -- the cabin's lamp measured it ten metres across.
+	for child in node.find_children("*", "GeometryInstance3D", true, false):
+		var vis := child as VisualInstance3D
+		if vis == null:
+			continue
+		var box: AABB = vis.get_aabb()
+		# Up to `node`'s space, but without `node`'s own transform: the caller is about
+		# to set that transform, so including it would measure the previous fit.
+		var t: Transform3D = Transform3D.IDENTITY
+		if node.is_inside_tree() and vis.is_inside_tree():
+			t = node.global_transform.affine_inverse() * vis.global_transform
+		else:
+			var curr: Node = vis
+			while curr != null and curr != node:
+				if curr is Node3D:
+					t = (curr as Node3D).transform * t
+				curr = curr.get_parent()
+		box = t * box
+		if first:
+			out = box
+			first = false
+		else:
+			out = out.merge(box)
+	return out
+
+# ==============================================================================
+# What Config declares
+# ==============================================================================
+
+## Path to the art for `key`, or "" while there is none.
+static func declared_scene(key: String) -> String:
+	var entry: Dictionary = _entry(key)
+	return String(entry.get("scene", ""))
+
+## Puts the material Config names for `key` on every mesh of its art.
+##
+## THE FLORA IS COLOURED BY ITS VERTICES, and a GLB brought in as a scene keeps the
+## material the importer gave it -- which does not use vertex colour as albedo. So the
+## tree fern that is the choppable wood node stood white in the middle of a green forest
+## of the very same model, because the forest is drawn through MultiMesh with
+## GroundCover.flora_material and the node was not. Declared per key rather than applied
+## to everything: the hero, the wreck and the dinosaurs bring textured materials of
+## their own that must be left alone.
+static func _dress(art: Node, key: String) -> void:
+	var which: String = String(_entry(key).get("material", ""))
+	var mat: StandardMaterial3D = null
+	match which:
+		"flora":
+			mat = GroundCover.flora_material()      # plants: backlit, two-sided
+		"vertex":
+			mat = GroundCover.cover_material()      # props: vertex-coloured, matte
+		"skin":
+			read_vertex_colours(art)
+			return
+		_:
+			return
+	# ONE MATERIAL PER PIECE OF ART, never shared: a blueprint fades by changing its own
+	# material's alpha (Building._update_visuals_progress), and a shared one would fade
+	# every stake on the map at once. That fade also only works on material_override at
+	# all -- an imported model without one never went translucent as a blueprint.
+	for mi in art.find_children("*", "MeshInstance3D", true, false):
+		if not glows(mi as MeshInstance3D):
+			(mi as MeshInstance3D).material_override = mat
+	if art is MeshInstance3D and not glows(art as MeshInstance3D):
+		(art as MeshInstance3D).material_override = mat
+
+## A PART THE ART MADE TO GLOW keeps its own lit material: the burning rag in a fire pot's neck (station 2;
+## tools/generate_props.py fire_pot) is drawn with an emissive material of its own, and the matte vertex colour
+## every prop is dressed in would put it out -- a pot flying at night with no fire on it.
+static func glows(mi: MeshInstance3D) -> bool:
+	if mi == null or mi.mesh == null:
+		return false
+	for i in mi.mesh.get_surface_count():
+		var sm := mi.mesh.surface_get_material(i) as BaseMaterial3D
+		if sm != null and sm.emission_enabled:
+			return true
+	return false
+
+## THE ANIMALS' EYES ARE COLOURED BY THEIR VERTICES (tools/dino_body.py) -- their skins are baked to images
+## (tools/dino_skin.py) -- and keep the materials they came with ("Eye", which the eye-shine finds by name,
+## ProwlerDino), each surface that has colours only told to read them. The same materials every copy of the model
+## shares: told once, told for all.
+static func read_vertex_colours(art: Node) -> void:
+	var meshes: Array = art.find_children("*", "MeshInstance3D", true, false)
+	if art is MeshInstance3D:
+		meshes.append(art)
+	for m in meshes:
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			if (mi.mesh.surface_get_format(i) & Mesh.ARRAY_FORMAT_COLOR) == 0:
+				continue
+			var sm := mi.mesh.surface_get_material(i) as StandardMaterial3D
+			if sm != null and not sm.vertex_color_use_as_albedo:
+				sm.vertex_color_use_as_albedo = true
+
+## Path to the art `key` wears in `variant` -- "depleted", say -- or "" when that variant
+## has none of its own and simply wears the main art.
+static func declared_variant_scene(key: String, variant: String) -> String:
+	if variant == "":
+		return ""
+	var entry: Dictionary = _entry(key)
+	return String(entry.get("scene_" + variant, ""))
+
+## How the art is fitted to its declared size: "box" (inside it on every axis, the
+## default) or "height" (see fit_factor).
+static func declared_fit(key: String) -> String:
+	return String(_entry(key).get("fit", "box"))
+
+## "feet" puts the model's lowest point on the ground -- almost every character and
+## building asset. "center" puts its middle there, which is what a half-buried boulder
+## wants.
+static func declared_anchor(key: String) -> String:
+	var entry: Dictionary = _entry(key)
+	return String(entry.get("anchor", "feet"))
+
+## How many metres `key` occupies. Resolved from wherever that thing already declares
+## its dimensions, so this introduces no second source for a size.
+static func declared_size(key: String) -> Vector3:
+	var cfg: Node = _config()
+	if cfg == null:
+		return Vector3.ONE
+	return cfg.get_visual_size(key)
+
+static func declared_color(key: String) -> Color:
+	var cfg: Node = _config()
+	var entry: Dictionary = _entry(key)
+	var name: String = String(entry.get("color", ""))
+	if cfg and "COLORS" in cfg and cfg.COLORS.has(name):
+		return cfg.COLORS[name]
+	return Color(0.6, 0.6, 0.6)
+
+## Which primitive stands in until art arrives.
+static func declared_placeholder(key: String) -> String:
+	var entry: Dictionary = _entry(key)
+	return String(entry.get("placeholder", "box"))
+
+static func _entry(key: String) -> Dictionary:
+	var cfg: Node = _config()
+	if cfg and "VISUALS" in cfg and cfg.VISUALS.has(key):
+		return cfg.VISUALS[key]
+	return {}
+
+static func _config() -> Node:
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("Config")
+	return null
+
+# ==============================================================================
+# Placeholders
+# ==============================================================================
+
+## Primitives at exactly the declared size -- no fitting, because they are built to
+## measure. They are all one material, so a hit flash or a blueprint's transparency
+## reaches the whole body at once.
+static func _build_placeholder(holder: Node3D, key: String, variant: String) -> void:
+	var size: Vector3 = declared_size(key)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = declared_color(key)
+
+	# A named model first. These are built to the declared size like the primitives are,
+	# so swapping one in changes nothing about what the thing occupies -- which is the
+	# whole reason this seam exists. An unknown name falls through to a primitive rather
+	# than to nothing, so a typo makes a box and not an invisible building.
+	var model: Node3D = ModelLibrary.build(declared_placeholder(key), size, declared_color(key), variant)
+	if model != null:
+		holder.add_child(model)
+		return
+
+	match declared_placeholder(key):
+		"cylinder":
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = size.x * 0.4
+			cyl.bottom_radius = size.x * 0.5
+			cyl.height = size.y
+			_add_mesh(holder, cyl, Vector3(0.0, size.y * 0.5, 0.0), mat)
+		"cone":
+			var cone := CylinderMesh.new()
+			cone.top_radius = 0.0
+			cone.bottom_radius = size.x * 0.5
+			cone.height = size.y
+			cone.radial_segments = 8
+			_add_mesh(holder, cone, Vector3(0.0, size.y * 0.5, 0.0), mat)
+		_:
+			var box := BoxMesh.new()
+			box.size = size
+			_add_mesh(holder, box, Vector3(0.0, size.y * 0.5, 0.0), mat)
+
+static func _add_mesh(holder: Node3D, mesh: Mesh, at: Vector3, mat: StandardMaterial3D) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.position = at
+	mi.material_override = mat
+	holder.add_child(mi)

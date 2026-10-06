@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://cmww3tx5gbxqy"
+path="res://.godot/imported/hatch.png-5bfbdb229c991a9afcbca176d5a4af2e.image"
+
+[deps]
+
+source_file="res://common/assets/ui/hatch.png"
+dest_files=["res://.godot/imported/hatch.png-5bfbdb229c991a9afcbca176d5a4af2e.image"]
+
+[params]
+

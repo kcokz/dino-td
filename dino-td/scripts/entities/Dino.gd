@@ -1,0 +1,2769 @@
+# res://scripts/entities/Dino.gd
+class_name Dino
+extends CharacterBody3D
+
+## A dinosaur: a body that walks and bites, and a mind that decides where.
+##
+## v0.6 round two: "恐龙攻击还是有问题……有的会卡在一些防御不动了，或者直接在防御的周围抽搐，我需要更
+## 专业的恐龙进攻逻辑，永远不要抽搐或者傻掉".
+##
+## The one it replaces moved by adding to its position every frame, with nothing physical to
+## stop it, and was held in the world by five hand-written corrections -- snapped back onto the
+## walking mesh, shoved out of other dinosaurs, slid off hillsides, stopped by a grid line check
+## that disagreed with the mesh, turned by look_at every frame -- each pulling its own way, which
+## from outside is a twitch; and where two of them cancelled out it stood still for ever. Rule 8
+## in AGENT-TASKS.md, once more: those were the price of not using what the engine has.
+##
+## So now it is what the engine gives a walker, and a small mind on top:
+##   * the WAY is the navigation server's route on a baked mesh (NavMaps), and the steering
+##     round the others is its avoidance (an RVO agent on the world's map);
+##   * the BODY is a round collider moved by the engine's collision (move_and_collide, sliding
+##     along what it meets), so nothing overlaps anything and nothing walks through a wall
+##     (Config.DINO_AI.collides_with);
+##   * the MIND is one state machine (Mode) with a margin on every change of mind: it takes hold
+##     at its reach and lets go only past it (reach_release), it thinks a few times a second
+##     rather than every frame, it turns at a turning speed rather than snapping -- so nothing
+##     can flip back and forth from one frame to the next;
+##   * and it WATCHES ITS OWN HEADWAY: a dinosaur that has made none for a while looks at what is
+##     holding it. A building in its way is bitten -- at once if it is not a wall, and a wall once
+##     going round has failed twice -- and a crowd is waited out. It cannot stand still for ever,
+##     which is the "傻掉" this replaces.
+##
+## What a species WANTS -- a trap, the Hero, the nearest wall -- is the one thing a behaviour
+## subclass overrides (_preferred_target and the interest ranges): PackDino, SiegeDino.
+## GuardDino is the nest's guards: a different mind on the same body.
+
+enum State {
+	WALKING = 0,
+	ATTACKING = 1,
+	DEAD = 2,
+	# Lying down, out of its hours (GuardDino): its own clip, "sleep" (Config.ANIMATIONS).
+	SLEEPING = 3
+}
+
+## What it is doing, as opposed to what it looks like it is doing (State, which the animator
+## reads):
+##   MARCH   on the way to the cabin, by its waypoints
+##   ENGAGE  going for something worth biting on the way -- a trap shooting at it, the Hero
+##   ATTACK  standing at it and biting
+##   BREACH  the way to the cabin is shut, and it is going for the building that shuts it
+enum Mode {
+	MARCH = 0,
+	ENGAGE = 1,
+	ATTACK = 2,
+	BREACH = 3,
+}
+
+# ==============================================================================
+# Configuration & Properties
+# ==============================================================================
+@export var dino_type: String = "raptor"
+@export var max_hp: float = 3.0
+@export var current_hp: float = 3.0
+@export var speed: float = 4.0
+@export var damage: float = 1.0
+@export var attack_rate: float = 1.0
+@export var arrival_threshold: float = 0.3
+@export var lane_offset: float = 0.0
+
+# Compatibility aliases
+var move_speed: float:
+	get: return speed
+	set(v): speed = v
+
+var attack_damage: float:
+	get: return damage
+	set(v): damage = v
+
+var current_state: State = State.WALKING:
+	set(v):
+		if current_state != v:
+			current_state = v
+			if animator != null and is_instance_valid(animator):
+				animator.play_state(current_state)
+
+var animator: ActorAnimator = null
+var state: State:
+	get: return current_state
+	set(v): current_state = v
+
+var mode: Mode = Mode.MARCH
+
+var waypoints: Array[Vector3] = []
+var current_waypoint_index: int = 0
+
+## Where it came from, for the bug report (BugReport; the debug-agent's TASK-027: "每只恐龙从哪出来的（巢 / 哪个边缘
+## 入口）"): "nest", "behind the nest", "edge E" -- the way into the valley, by the compass from the cabin
+## (WaveManager.origin_name) -- "river" or "guard", with "din: " before it when a wreck's din brought it (Din). Set
+## by what put it down; and where that was.
+var came_from: String = ""
+var came_in_at: Vector3 = Vector3.INF
+
+var current_target: Node = null
+var target_building: Node:
+	get: return current_target
+	set(v): current_target = v
+
+var assigned_slot: Vector3 = Vector3.ZERO
+var is_dead: bool = false
+var is_blocked: bool = false
+var is_initialized: bool = false
+var has_reached_destination: bool = false
+var current_multipliers: Dictionary = {}
+
+# Static building attack slots registry
+static var _building_slots: Dictionary = {}
+## How far each species' body reaches ahead of its middle (front_reach), measured from its model the first time it is
+## asked: {dino_type: metres}.
+static var _fronts: Dictionary = {}
+## How far its snout reaches ahead of its middle at the height of its ram (ram_front), and how far round to one side the
+## blow carries it (ram_hook), read off the clip the first time a species is asked: {dino_type: metres}, {dino_type:
+## radians}.
+static var _rams: Dictionary = {}
+static var _hooks: Dictionary = {}
+## Where it stands for the place round a hollow building it holds (_snout_spot), worked out once for that place: the
+## place, and the spot.
+var _snout_for: Vector3 = Vector3.INF
+var _snout_at: Vector3 = Vector3.INF
+
+# Compatibility aliases
+var has_reached_core: bool:
+	get: return has_reached_destination
+	set(v): has_reached_destination = v
+
+var _stats_configured: bool:
+	get: return is_initialized
+	set(v): is_initialized = v
+
+var _applied_multipliers: Dictionary:
+	get: return current_multipliers
+	set(v): current_multipliers = v
+
+## The steering round the others: the navigation server's avoidance agent, on the world's map,
+## where every dinosaur's is -- so they all steer round each other, whichever mesh each walks.
+##
+## A raw agent rather than a NavigationAgent3D node: the node never handed the velocity asked of
+## it to the server (the server's agent stood at zero, and so did every answer -- measured, a
+## raptor that moved one frame and stopped), while an agent set up here answers at once.
+var _agent: RID = RID()
+## Half its declared width: what it steers round others with, and how far its body reaches.
+var _avoid_radius: float = 0.4
+## The avoidance solver's last answer, and the requests made and answered. The solver answers
+## on the navigation server's own step, so an answer trails its request by a frame -- and only
+## by a frame. A test stepping an animal by hand, with no physics running, would otherwise be
+## handed an answer from long ago and stand still; a request with no answer moves at what it
+## asked for.
+var _safe_velocity: Vector3 = Vector3.ZERO
+var _requests: int = 0
+var _answered: int = -1
+## The route it is following, asked of the navigation server (NavMaps.path): its corners, the one
+## it is heading for, and the goal it was asked for -- a new route costs a query, so only a goal
+## that has really moved asks for one (Config.DINO_AI.regoal_distance).
+var _route: PackedVector3Array = PackedVector3Array()
+var _route_index: int = 0
+var _nav_goal: Vector3 = Vector3.INF
+## The spot it has come to rest on, or Vector3.INF: there, a nudge short of Config.DINO_AI.spot_slack
+## does not send it back.
+var _settled_on: Vector3 = Vector3.INF
+
+## Its clocks. Thinking a few times a second rather than every frame is half of what keeps a
+## mind from flickering; each animal starts at its own phase, so a raid does not all think on
+## one frame.
+var _think_clock: float = 0.0
+var _route_clock: float = 0.0
+var _bite_clock: float = 0.0
+## The last answer to "is the way to the cabin shut", and the building shutting it.
+var _way_sealed: bool = false
+var _blocked_by: Node = null
+## A building it has decided to go THROUGH because it could not get round it (_unstick): kept
+## until it falls, whatever the route says -- or it would take hold and let go by turns.
+var _stubborn: Node = null
+## "Is what it wants shut away from it" (_shut_away), remembered for each thing it has asked
+## about: instance id -> [asked at, by _mind_clock; the answer; the wall between].
+var _shut_known: Dictionary = {}
+## Seconds this animal has been thinking: what _shut_known's answers are dated by.
+var _mind_clock: float = 0.0
+## Headway: where it stood when the window opened, how long the window has run, and how many
+## windows in a row it has made none.
+var _headway_from: Vector3 = Vector3.INF
+var _headway_clock: float = 0.0
+var _stuck_count: int = 0
+## Waiting its turn in a crowd: while this runs it stands rather than shoving (_unstick).
+var _patience: float = 0.0
+## Its own dice for when it next thinks, seeded once from the run's (GameState.rng), so a raid
+## drifts out of step without every thought drawing on the run's dice.
+var _mind_dice: RandomNumberGenerator = null
+
+var collision_shape: CollisionShape3D = null
+var mesh_instance: MeshInstance3D = null
+var status_bar: Node3D = null
+var selection_ring: Node3D = null
+
+# ==============================================================================
+# Lifecycle & Initialization
+# ==============================================================================
+
+func _init(p_type: String = "raptor") -> void:
+	dino_type = p_type
+
+func _ready() -> void:
+	add_to_group("dinos")
+	if came_in_at == Vector3.INF:
+		came_in_at = global_position
+	_apply_collision_configuration()
+	_ensure_components()
+	_connect_event_bus()
+	if not is_initialized:
+		_load_config_stats()
+	_mind_dice = RandomNumberGenerator.new()
+	_mind_dice.seed = _dice().randi()
+	# Its first thought is at once -- an animal put down beside the Hero goes for him on the frame
+	# it lands -- and after that each thinks at its own moments (_next_think).
+	_think_clock = 0.0
+	_route_clock = 0.0
+	# Not all on the same beat: the first call anywhere in its first stretch (SOUNDS.call_every).
+	_call_clock = _next_call() * _voice_dice.randf()
+
+func _connect_event_bus() -> void:
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("building_destroyed"):
+		if not eb.building_destroyed.is_connected(_on_building_destroyed):
+			eb.building_destroyed.connect(_on_building_destroyed)
+	# Something went up: the route it is on may run through it now. Asked again on the next step,
+	# which is after the meshes are baked again (NavMaps rebakes on the same signal, in _process).
+	if eb and eb.has_signal("building_completed"):
+		if not eb.building_completed.is_connected(_on_world_changed):
+			eb.building_completed.connect(_on_world_changed)
+	if eb and eb.has_signal("boss_arrived"):
+		if not eb.boss_arrived.is_connected(_on_boss_arrived):
+			eb.boss_arrived.connect(_on_boss_arrived)
+
+func _exit_tree() -> void:
+	if _agent.is_valid():
+		NavigationServer3D.free_rid(_agent)
+		_agent = RID()
+	var eb = _get_event_bus()
+	if eb and is_instance_valid(eb) and eb.has_signal("building_destroyed"):
+		if eb.building_destroyed.is_connected(_on_building_destroyed):
+			eb.building_destroyed.disconnect(_on_building_destroyed)
+	if eb and is_instance_valid(eb) and eb.has_signal("building_completed"):
+		if eb.building_completed.is_connected(_on_world_changed):
+			eb.building_completed.disconnect(_on_world_changed)
+	if eb and is_instance_valid(eb) and eb.has_signal("boss_arrived"):
+		if eb.boss_arrived.is_connected(_on_boss_arrived):
+			eb.boss_arrived.disconnect(_on_boss_arrived)
+	if current_target != null:
+		release_attack_slot(current_target, self)
+	assigned_slot = Vector3.ZERO
+
+func _on_world_changed(_building: Node = null) -> void:
+	_nav_goal = Vector3.INF
+	_route_clock = _rebake_grace()
+
+## How long after the world changes shape it asks again whether the way is shut: long enough for
+## the meshes to be baked again (NavMaps does it in the frame's _process, after this animal's
+## physics step) -- asked sooner, it gets the old answer and keeps it for a whole recheck.
+func _rebake_grace() -> float:
+	return _ai("rebake_grace", 0.1)
+
+## Whatever came down, it looks again at once rather than at its next thought: a fence that falls
+## is the moment a raid pours through.
+func _on_building_destroyed(building: Node) -> void:
+	if building == null:
+		return
+	release_all_building_slots(building)
+	if current_target == building:
+		_let_go()
+	if _blocked_by == building:
+		_blocked_by = null
+	if _stubborn == building:
+		_stubborn = null
+	_route_clock = _rebake_grace()
+	_think_clock = _rebake_grace()
+	_nav_goal = Vector3.INF
+
+# ==============================================================================
+# Attack Slot System
+# ==============================================================================
+## Places round a building to stand while biting it, so a raid rings a building rather than
+## piling onto the one face nearest the path. A place, not a promise: reaching the building
+## from it is still asked of _target_in_reach.
+
+static func claim_attack_slot(building: Node, dino: Node) -> Vector3:
+	if building == null or not is_instance_valid(building) or not (building is Node3D):
+		return Vector3.ZERO
+	var b_id: int = building.get_instance_id()
+	if not _building_slots.has(b_id):
+		_init_building_slots(building as Node3D)
+	var slots: Array = _building_slots[b_id]
+	var dino_id: int = dino.get_instance_id()
+
+	# Check if this dino already holds a claimed slot
+	for s in slots:
+		if s.get("dino_id", 0) == dino_id:
+			return s["pos"]
+
+	var dino_pos: Vector3 = (dino as Node3D).global_position
+	var near_first := func(a: int, b: int) -> bool:
+		return dino_pos.distance_squared_to(slots[a]["pos"]) < dino_pos.distance_squared_to(slots[b]["pos"])
+	# The free places, the inner ring before the outer, the nearest first in each; then the taken.
+	var inner: Array = []
+	var outer: Array = []
+	var taken: Array = []
+	for i in range(slots.size()):
+		if slots[i].get("dino_id", 0) != 0:
+			taken.append(i)
+		elif bool(slots[i].get("inner", false)):
+			inner.append(i)
+		else:
+			outer.append(i)
+	inner.sort_custom(near_first)
+	outer.sort_custom(near_first)
+	taken.sort_custom(near_first)
+	# Only a place it can get to (can_stand_at): the nearest as the crow flies may be behind a fence
+	# from it -- the back of a cabin walled behind -- where it would stand out of reach for ever. And
+	# one it would stand at (would_stand_at): a phytosaur not one a fire lights.
+	for i in inner + outer:
+		if _would_stand(dino, slots[i]["pos"], building):
+			slots[i]["dino_id"] = dino_id
+			return slots[i]["pos"]
+	# Every place it can get to is taken: it waits its turn at the crowd's edge, on its own side
+	# (queue_spot) -- it went for the nearest of those places, shared, and pushed into the crowd
+	# at it (the twitch watch, BUG-005). With none it can get to, the building itself.
+	for i in taken:
+		if not dino.has_method("can_stand_at") or bool(dino.can_stand_at(slots[i]["pos"])):
+			return dino.queue_spot(building) if dino.has_method("queue_spot") else slots[i]["pos"]
+	return (building as Node3D).global_position
+
+## The nearest place in `building`'s inner ring -- one to bite it from -- that is free and that
+## `dino` can get to, or Vector3.ZERO.
+static func free_inner_slot(building: Node, dino: Node) -> Vector3:
+	if building == null or not is_instance_valid(building) or not (building is Node3D):
+		return Vector3.ZERO
+	var b_id: int = building.get_instance_id()
+	if not _building_slots.has(b_id):
+		_init_building_slots(building as Node3D)
+	var at: Vector3 = (dino as Node3D).global_position
+	var free: Array = []
+	for s in _building_slots[b_id]:
+		if bool(s.get("inner", false)) and (int(s.get("dino_id", 0)) == 0 or int(s.get("dino_id", 0)) == dino.get_instance_id()):
+			free.append(s["pos"])
+	free.sort_custom(func(a: Vector3, b: Vector3) -> bool: return at.distance_squared_to(a) < at.distance_squared_to(b))
+	for pos in free:
+		if _would_stand(dino, pos, building):
+			return pos
+	return Vector3.ZERO
+
+## Whether `dino` would stand at the place `pos` round `building` to bite it (would_stand_at; can_stand_at for anything
+## that has only that).
+static func _would_stand(dino: Node, pos: Vector3, building: Node) -> bool:
+	if dino.has_method("would_stand_at"):
+		return bool(dino.would_stand_at(pos, building))
+	return not dino.has_method("can_stand_at") or bool(dino.can_stand_at(pos))
+
+## Where it waits its turn at `building` when every place round it is taken: Config.DINO_AI
+## .queue_standoff out from its walls, on the side this animal is coming from -- at the edge of
+## the crowd, not in it -- on ground it can stand on.
+func queue_spot(building: Node) -> Vector3:
+	var centre: Vector3 = (building as Node3D).global_position
+	var out: Vector3 = _flat3(global_position - centre)
+	if out.length() < 0.01:
+		out = Vector3(0.0, 0.0, -1.0)
+	out = out.normalized()
+	var cfg = _get_config()
+	var b_type: String = String(building.building_type) if "building_type" in building else ""
+	var reach_out: float = _extent_along(cfg, b_type, out, 0.5) + _ai("queue_standoff", 2.8)
+	var spot: Vector3 = centre + out * reach_out
+	# Not in front of the cabin's door (CoreCampfire.at_the_door): beside it.
+	if building.has_method("at_the_door") and bool(building.at_the_door(spot)):
+		var cfg2 = _get_config()
+		var door: Dictionary = cfg2.CABIN.get("module", {}).get("door", {}) if (cfg2 and "CABIN" in cfg2) else {}
+		var beside: float = float(cfg2.CABIN.get("doorstep", {}).get("beside", 0.5)) if (cfg2 and "CABIN" in cfg2) else 0.5
+		var door_x: float = centre.x + float(door.get("x", 0.0))
+		var clear: float = float(door.get("width", 1.2)) * 0.5 + beside + _avoid_radius
+		spot.x = door_x + (clear if spot.x >= door_x else -clear)
+	var maps := _nav_maps()
+	if maps != null and maps.is_ready():
+		var on_mesh: Vector3 = maps.closest_point(spot, _map_kind())
+		spot = Vector3(on_mesh.x, centre.y, on_mesh.z)
+	return spot
+
+## Whether `dino` holds one of the places round `building` -- as against waiting at the crowd's edge;
+## `to_bite_from`, one in the inner ring, where it can bite, as against the outer, where it waits.
+static func holds_attack_slot(building: Node, dino: Node, to_bite_from: bool = false) -> bool:
+	if building == null or not is_instance_valid(building) or dino == null:
+		return false
+	for s in _building_slots.get(building.get_instance_id(), []):
+		if int(s.get("dino_id", 0)) == dino.get_instance_id():
+			return bool(s.get("inner", false)) or not to_bite_from
+	return false
+
+static func release_attack_slot(building: Node, dino: Node) -> void:
+	if building == null or not is_instance_valid(building):
+		return
+	var b_id: int = building.get_instance_id()
+	if not _building_slots.has(b_id):
+		return
+	var dino_id: int = dino.get_instance_id()
+	var slots: Array = _building_slots[b_id]
+	for s in slots:
+		if s.get("dino_id", 0) == dino_id:
+			s["dino_id"] = 0
+			break
+
+static func release_all_building_slots(building: Node) -> void:
+	if building == null:
+		return
+	var b_id: int = building.get_instance_id()
+	_building_slots.erase(b_id)
+
+static func clear_all_attack_slots() -> void:
+	_building_slots.clear()
+
+## Every building's places to bite it from and wait at, and whose each is: {building id: [{pos, inner,
+## dino_id}]} -- for the bug report to read (BugReport); written here only.
+static func attack_slots() -> Dictionary:
+	return _building_slots
+
+## Places a dinosaur can stand while chewing on a building, in two rings measured from its FACES --
+## the inner to bite from (Config.DINO_STANDOFF_INNER), the outer to wait in (_OUTER): along each
+## face one every Config.DINO_AI.slot_spacing, a body's width and a little, and one off each corner.
+## A long wall has a place for every body that fits along it. It was eight places round any
+## building, by angle -- one on the cabin's seven-metre south face -- and a raid on a cabin fenced
+## at its back and east end had three places left to bite from, and waited behind the fence for
+## them (the debug-agent's BUG-005: "来袭实际攻击效果很差"). A stake is as it was: a place off each
+## face and each corner. Any that lands in a hill or a fence is dropped: a slot inside something is
+## a dinosaur standing in it.
+static func _init_building_slots(building: Node3D) -> void:
+	var b_id: int = building.get_instance_id()
+	var slots: Array = []
+	var center: Vector3 = building.global_position
+	var cfg: Node = null
+	if building.is_inside_tree():
+		cfg = building.get_node_or_null("/root/Config")
+	elif Engine.get_main_loop() is SceneTree:
+		cfg = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Config")
+	var b_type: String = String(building.building_type) if ("building_type" in building) else ""
+	var box := Vector2(0.5, 0.5)
+	if cfg != null and cfg.has_method("get_building_half") and b_type != "":
+		box = cfg.get_building_half(b_type)
+	var inner_out: float = float(cfg.DINO_STANDOFF_INNER) if cfg != null else 0.5
+	var outer_out: float = float(cfg.DINO_STANDOFF_OUTER) if cfg != null else 1.6
+	var spacing: float = float(cfg.DINO_AI.get("slot_spacing", 1.0)) if (cfg != null and "DINO_AI" in cfg) else 1.0
+	var gm_slots: Node = building.get_tree().get_first_node_in_group("grid_manager") if building.is_inside_tree() else null
+	# None in front of the cabin's door (CoreCampfire.at_the_door): his way out.
+	var door_kept: bool = building.has_method("at_the_door")
+	for ring in [[inner_out, true], [outer_out, false]]:
+		for offset in ring_round(box, float(ring[0]), spacing):
+			if door_kept and bool(building.at_the_door(center + offset)):
+				continue
+			if _slot_is_standable(gm_slots, center + offset):
+				slots.append({"pos": center + offset, "dino_id": 0, "inner": bool(ring[1])})
+	_building_slots[b_id] = slots
+
+## Places `standoff` out from the faces of a box `half` wide either way (x, z): along each face one
+## every `spacing` or less, centred on it, and one off each corner, out along the corner.
+static func ring_round(half: Vector2, standoff: float, spacing: float) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for face in [Vector2(1.0, 0.0), Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2(0.0, -1.0)]:
+		var runs_along_z: bool = face.x != 0.0
+		var length: float = (half.y if runs_along_z else half.x) * 2.0
+		var n: int = maxi(1, int(floor(length / maxf(0.1, spacing) + 0.001)))
+		for k in range(n):
+			var t: float = -length * 0.5 + (float(k) + 0.5) * length / float(n)
+			if runs_along_z:
+				out.append(Vector3(face.x * (half.x + standoff), 0.0, t))
+			else:
+				out.append(Vector3(t, 0.0, face.y * (half.y + standoff)))
+	var diagonal: float = standoff * sqrt(0.5)
+	for corner in [Vector2(1.0, 1.0), Vector2(1.0, -1.0), Vector2(-1.0, 1.0), Vector2(-1.0, -1.0)]:
+		out.append(Vector3(corner.x * (half.x + diagonal), 0.0, corner.y * (half.y + diagonal)))
+	return out
+
+## How far a building's outside is from its middle, heading along `dir`.
+static func _extent_along(cfg: Node, b_type: String, dir: Vector3, half: float) -> float:
+	if cfg != null and cfg.has_method("building_extent_along") and b_type != "":
+		return float(cfg.building_extent_along(b_type, dir))
+	return half
+
+static func _slot_is_standable(gm: Node, at: Vector3) -> bool:
+	if gm == null or not is_instance_valid(gm) or not gm.has_method("is_cell_blocked"):
+		return true
+	return not gm.is_cell_blocked(gm.world_to_cell(at))
+
+static func _safe_float(val: Variant, default_val: float = 1.0) -> float:
+	if val == null:
+		return default_val
+	if val is float or val is int:
+		var f: float = float(val)
+		if is_nan(f) or is_inf(f):
+			return default_val
+		return f
+	if val is String and (val as String).is_valid_float():
+		var f: float = (val as String).to_float()
+		if is_nan(f) or is_inf(f):
+			return default_val
+		return f
+	return default_val
+
+## Configures stats from Config and applies GameState multipliers.
+func setup(type_id: String = "raptor", stat_multipliers: Dictionary = {}) -> void:
+	dino_type = type_id
+	is_initialized = true
+	current_multipliers = stat_multipliers.duplicate()
+
+	var mult_hp: float = _safe_float(stat_multipliers.get("hp"), 1.0)
+	var mult_dmg: float = _safe_float(stat_multipliers.get("damage"), 1.0)
+	var mult_spd: float = _safe_float(stat_multipliers.get("speed"), 1.0)
+
+	var cfg = _get_config()
+	if cfg and "DINOS" in cfg and cfg.DINOS.has(type_id):
+		var data: Dictionary = cfg.DINOS[type_id]
+		max_hp = float(data.get("hp", 12.0)) * mult_hp
+		current_hp = max_hp
+		damage = float(data.get("damage", 4.0)) * mult_dmg
+		speed = float(data.get("speed", 4.0)) * mult_spd
+		attack_rate = float(data.get("attack_rate", 1.0))
+	else:
+		max_hp = 12.0 * mult_hp
+		current_hp = max_hp
+		damage = 4.0 * mult_dmg
+		speed = 4.0 * mult_spd
+		attack_rate = 1.0
+
+	# The species is only known here, and how big it is comes with it: the body, the collider
+	# and the walker are refitted -- otherwise every species keeps the default's size, which is
+	# how the big theropod spent four versions being small.
+	_refresh_walker()
+	if animator != null:
+		animator.own_gaits = _own_gaits()
+	if is_inside_tree():
+		_refit_to_size()
+
+## Its own strides' paces, where they are not a raptor's (Config.DINOS.<id>.gaits) -- or empty, for its kind's.
+func _own_gaits() -> Dictionary:
+	var cfg = _get_config()
+	if cfg and "DINOS" in cfg:
+		return cfg.DINOS.get(dino_type, {}).get("gaits", {})
+	return {}
+
+func set_waypoints(wps: Array) -> void:
+	waypoints.clear()
+	for p in wps:
+		if p is Vector3:
+			waypoints.append(p)
+	current_waypoint_index = 0
+	has_reached_destination = false
+	_face_now(_journey_goal())
+
+# ==============================================================================
+# Physics Processing: the mind, then the body
+# ==============================================================================
+
+func _physics_process(delta: float) -> void:
+	if is_dead or current_state == State.DEAD:
+		return
+	var was_at: Vector3 = global_position
+	_keep_hurrying()
+	advance_towards_waypoint(delta)
+	_report_pace(was_at, delta)
+	_call_clock -= delta
+	if _call_clock <= 0.0:
+		_call_clock = _next_call()
+		say("call")
+
+## Tells the animator how far it really went this frame: a raptor held up at a gap stands
+## rather than running on the spot (ActorAnimator.update_motion).
+func _report_pace(was_at: Vector3, delta: float) -> void:
+	if animator == null or not is_instance_valid(animator) or delta <= 0.0:
+		return
+	var moved := global_position - was_at
+	moved.y = 0.0
+	animator.update_motion(moved.length() / delta, delta)
+
+## One step of the whole animal: think if it is time to, then act on it. Public, and under its
+## old name, so a test can drive a dinosaur a frame at a time.
+func advance_towards_waypoint(delta: float) -> void:
+	if is_dead or current_state == State.DEAD:
+		return
+	if _shoved(delta):
+		return
+	_think_clock -= delta
+	_route_clock -= delta
+	_mind_clock += delta
+	_tick_traps(delta)
+	_tick_burst(delta)
+	if _think_clock <= 0.0:
+		_think_clock = _next_think()
+		_think()
+		_consider_burst()
+	_act(delta)
+
+## Seconds to its next thought: the declared interval, give or take a fifth, so a raid that
+## spawned together drifts out of step.
+func _next_think() -> float:
+	var every: float = _ai("think_seconds", 0.25)
+	if _mind_dice == null:
+		return every
+	return every * _mind_dice.randf_range(0.8, 1.2)
+
+# ==============================================================================
+# The mind
+# ==============================================================================
+
+## WHY THEY COME, AND FOR WHAT FIRST (2026-10-03, the player: "恐龙进攻船舱是出于对不明物体的恐惧，它们智商高，懂得
+## 撞击船舱损坏它……对人，优先级低一些，优先攻击攻击它们的"; GAME-DESIGN 1): the cabin fell out of the sky into their
+## valley, and they are afraid of it -- clever enough to know that ramming it breaks it. So it is the cabin they come
+## for. What attacks them on the way they answer first: a tower shooting at one (shot_by), the man who has just struck
+## at one of them (_provoker). The man on his own is the least of it: bitten when he is in the way, not hunted.
+## (The night's hunters up out of the river are the other thing -- hungry, and the man in the dark is their meal:
+## ProwlerDino.)
+##
+## What to do next. Called a few times a second (Config.DINO_AI.think_seconds).
+##
+## In this order, each step only if the one before left it free:
+##   1. what it is going for is still worth it, or it lets go;
+##   2. something nearby outranks what it has (a trap shooting at it outranks a stake), or it
+##      keeps what it has -- a mind that chose afresh on every thought would swap between two
+##      equal targets on every one;
+##   3. with nothing to bite on the way: is the way to the cabin shut? Then the building
+##      shutting it is what to go for (BREACH). Otherwise, on to the cabin.
+func _think() -> void:
+	_unstack()
+	# Going home, its hours over: nothing to stop for on the way (go_home).
+	if going_home:
+		return
+	if current_target != null and not _still_wanted(current_target):
+		_let_go()
+	var want: Node = _find_threat_priority_target()
+	if want != null and want != current_target and _outranks(want, current_target):
+		_take(want, Mode.BREACH if _is_wall(want) else Mode.ENGAGE)
+	if current_target == null:
+		var blocker: Node = _building_in_the_way()
+		if blocker != null:
+			_take(blocker, Mode.BREACH)
+		else:
+			_set_mode(Mode.MARCH)
+
+## Carries out the current mode for one frame.
+func _act(delta: float) -> void:
+	match mode:
+		Mode.ATTACK:
+			_hold_and_bite(delta)
+		Mode.ENGAGE, Mode.BREACH:
+			if not _is_target_valid(current_target):
+				_let_go()
+				_march(delta)
+			elif _target_in_reach(current_target):
+				# At the cabin, it says so once (dino_reached_core).
+				if current_target == _cabin():
+					_reach_destination()
+				else:
+					_begin_attack()
+			else:
+				_travel(_engage_spot(), delta)
+		_:
+			_march(delta)
+	_watch_headway(delta)
+	_watch_for_a_jam(delta)
+
+## JAMMED (Config.DINO_AI.jam_seconds). How far it has got is how much nearer its goal it is along
+## its way (_way_left), not how far it has walked: in a jam it walks plenty -- shoved on, backing
+## off, back again -- and gets nowhere. Getting nowhere that long, up against a wall between it and
+## where it is going, it goes through the wall (_stubborn), in a crowd or not: the crowd is what is
+## in the way, and the wall is what is between it and where it is going.
+var _jam_clock: float = 0.0
+var _jam_best: float = INF
+var _jam_goal: Vector3 = Vector3.INF
+## What it was going for when the clock began: its target, or null on its road.
+var _jam_for: Object = null
+
+func _watch_for_a_jam(delta: float) -> void:
+	if mode == Mode.ATTACK or going_home or held_left > 0.0:
+		_jam_clock = 0.0
+		_jam_best = INF
+		_jam_for = null
+		return
+	# Something else to go for is measured on its own way from where it stands -- but the clock runs on:
+	# getting nowhere is getting nowhere, whatever it is going for. A raid crowded outside the one breach in
+	# a ring of fence went from one trap inside to another and back, and every change put the clock back:
+	# ten stood at the gap half a minute and none bit a way in of its own (the debug-agent's BUG-005, walled-in
+	# traps; the player's choice: "堵住了就另咬一个口子"). Nor does the same thing's place moving -- its turn at
+	# the cabin handed from one place round it to another, the queue's end moving -- or a fresh route asked
+	# for after getting nowhere (_unstick drops the old one): both kept the clock under two seconds while a
+	# queue stood in a corridor seventy seconds (the debug-agent's BUG-025).
+	if current_target != _jam_for:
+		_jam_for = current_target
+		_jam_goal = Vector3.INF          # measured afresh on its new way, below -- the clock running on
+	if _nav_goal != Vector3.INF:
+		var progress: float = _ai("jam_progress", 0.5)
+		if _jam_goal == Vector3.INF or _flat(_jam_goal).distance_to(_flat(_nav_goal)) > progress * 2.0:
+			# The same thing, a new place at it: measured on the new way from where it stands.
+			_jam_goal = _nav_goal
+			_jam_best = _way_left()
+		var left: float = _way_left()
+		if left < _jam_best - progress:
+			_jam_best = left
+			_jam_clock = 0.0
+			return
+	_jam_clock += delta
+	if _jam_clock < _ai("jam_seconds", 6.0):
+		return
+	_jam_clock = 0.0
+	_jam_best = INF
+	var wall: Node = _wall_in_the_way()
+	if wall == null or wall == current_target:
+		return
+	_stubborn = wall
+	_take(wall, Mode.BREACH)
+
+## The wall in its way to what it is going for -- the thing itself, not its place at it, which is handed
+## about -- or to its road's next point: within DINO_AI.jam_reach of its body, on its side of the way
+## there (_wall_is_between), the nearest and most squarely ahead; or null. Not only one it is up against:
+## a queue waits a body's length behind the one ahead of it, not at the fence (BUG-025).
+func _wall_in_the_way() -> Node:
+	if not is_inside_tree() or get_world_3d() == null:
+		return null
+	# Its way asked afresh just now (_unstick), the last place it was making for says which way.
+	var toward: Vector3 = (current_target as Node3D).global_position \
+		if (current_target is Node3D and is_instance_valid(current_target)) \
+		else (_nav_goal if _nav_goal != Vector3.INF else (_jam_goal if _jam_goal != Vector3.INF else _journey_goal()))
+	if toward == Vector3.INF:
+		return null
+	var query := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = _avoid_radius + _ai("jam_reach", 1.0)
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3(0.0, _probe_height(), 0.0))
+	query.collision_mask = _building_layers()
+	var ahead: Vector3 = _flat3(toward - global_position).normalized()
+	var best: Node = null
+	var best_score: float = -INF
+	for hit in get_world_3d().direct_space_state.intersect_shape(query, 16):
+		var b: Node = _building_of(hit.get("collider"))
+		if b == null or not _is_wall(b) or not _is_target_valid(b) or not _wall_is_between(b, toward):
+			continue
+		var to: Vector3 = _flat3((b as Node3D).global_position - global_position)
+		var score: float = to.normalized().dot(ahead) - to.length() * 0.5
+		if score > best_score:
+			best_score = score
+			best = b
+	return best
+
+## Whether `wall` stands between it and `goal`: on its side of the way there, not beside or behind.
+func _wall_is_between(wall: Node, goal: Vector3) -> bool:
+	var to_goal: Vector3 = _flat3(goal - global_position)
+	var to_wall: Vector3 = _flat3((wall as Node3D).global_position - global_position)
+	if to_goal.length() < 0.01 or to_wall.length() < 0.01:
+		return false
+	return to_wall.normalized().dot(to_goal.normalized()) > 0.3
+
+## How far it still has to go, in metres: along its route -- to the corner it is making for and on
+## from there -- or, with none, straight to where it is going.
+func _way_left() -> float:
+	if _route.is_empty() or _route_index <= 0 or _route_index >= _route.size():
+		return _flat(global_position).distance_to(_flat(_nav_goal)) if _nav_goal != Vector3.INF else 0.0
+	var left: float = _flat(global_position).distance_to(_flat(_route[_route_index]))
+	for i in range(_route_index + 1, _route.size()):
+		left += _flat(_route[i - 1]).distance_to(_flat(_route[i]))
+	return left
+
+## Still worth going for? Gone, or no longer what made it interesting -- the Hero walked off, a
+## wall stopped being in the way -- and it is let go.
+func _still_wanted(target: Node) -> bool:
+	if not _is_target_valid(target):
+		return false
+	if target == _stubborn:
+		return true
+	if not _should_bite(target):
+		return false
+	# Shut away from where it stands: let go -- what it wants is got at through the wall between,
+	# found again on this thought (_find_threat_priority_target).
+	if _shut_away(target):
+		return false
+	# The Hero is chased only while he stays near, or loud (PackDino.hero_interest_range).
+	if target.is_in_group("hero"):
+		var keep: float = hero_interest_range() + _ai("chase_slack", 2.0)
+		return _hero_is_provoking() or global_position.distance_to((target as Node3D).global_position) <= keep
+	return true
+
+## Whether `want` is worth dropping `have` for: always, for nothing; otherwise only for
+## something ranked higher (_rank) -- never for its equal, which is what keeps a raptor between
+## two stakes from swapping on every thought.
+func _outranks(want: Node, have: Node) -> bool:
+	if have == null or not _is_target_valid(have):
+		return true
+	return _rank(want) > _rank(have)
+
+## How much it cares about a thing, for _outranks: the Hero when he is loud, then what is
+## shooting at it -- or the wall it has set out to go through (_stubborn), which is its way to what is
+## beyond: a trap behind a ring of fence shot at the raptor biting its way in, and it let go of the wall
+## for the trap, went back to the crowd at the breach, and was held up again, by turns (the player's
+## choice: "堵住了就另咬一个口子") -- then any building.
+func _rank(node: Node) -> int:
+	if node == null:
+		return 0
+	if node.is_in_group("hero"):
+		return 3 if _hero_is_provoking() else 1
+	if _is_shooter(node) or node == _stubborn:
+		return 2
+	return 1
+
+## Two put down on the very same spot: the engine recovers a body from inside another along the
+## way out, and from dead centre there is none -- the pair stays one inside the other (measured:
+## 0.000 m apart a second later). A nudge along a heading of its own breaks the tie, and the
+## engine's recovery does the rest. Anything short of dead centre is the engine's already.
+func _unstack() -> void:
+	if not is_inside_tree():
+		return
+	var within: float = _ai("stacked_within", 0.05)
+	for other in get_tree().get_nodes_in_group("dinos"):
+		if other == self or not (other is Node3D) or ("is_dead" in other and other.is_dead):
+			continue
+		if _flat(global_position).distance_to(_flat((other as Node3D).global_position)) <= within:
+			var heading: float = float(get_instance_id() % 628) * 0.01
+			_move_body(Vector3(cos(heading), 0.0, sin(heading)) * _avoid_radius)
+			return
+
+## Commits to `target`: a place to stand at it, and the mode.
+func _take(target: Node, new_mode: Mode) -> void:
+	if current_target != null and current_target != target:
+		release_attack_slot(current_target, self)
+	if target != current_target and target != null:
+		_alert()
+	current_target = target
+	assigned_slot = claim_attack_slot(target, self) if _is_building(target) else Vector3.ZERO
+	_set_mode(new_mode)
+	# A trap with every place round it taken is no place to wait -- it is shooting at the queue.
+	# Ten raptors went for the one crossbow nearest the nest, which two could bite, and the rest
+	# milled at the fence corner under its fire (the debug-agent's BUG-009). It leaves that one be a
+	# while and chooses again: another trap with room, or the wall in its way. A place in the ring
+	# round it where the others wait is no better -- the same fire, and they milled there too.
+	if _is_shooter(target) and not holds_attack_slot(target, self, true):
+		_mark_crowded(target)
+		_let_go()
+
+## Drops what it was going for, and goes on to the cabin.
+func _let_go() -> void:
+	if current_target != null:
+		release_attack_slot(current_target, self)
+	if current_target == _stubborn:
+		_stubborn = null
+	current_target = null
+	assigned_slot = Vector3.ZERO
+	is_blocked = false
+	_set_mode(Mode.MARCH)
+
+func _set_mode(new_mode: Mode) -> void:
+	if mode == new_mode:
+		return
+	if new_mode == Mode.MARCH:
+		_rejoin_the_road()
+	mode = new_mode
+	current_state = State.ATTACKING if new_mode == Mode.ATTACK else State.WALKING
+	# A new mind is a new window for headway: it has not been failing at THIS yet.
+	_headway_clock = 0.0
+	_headway_from = global_position
+	if new_mode != Mode.ATTACK:
+		_stuck_count = 0
+
+## Back on its road after going for something else: at the leg of it it is nearest, heading for that
+## leg's far end -- not for the bend it had set out for. Gone for something from its first thought, a
+## raider never came within reach of that bend (_skip_reached_waypoints), and let go of it further on
+## marched all the way back to it: to the nest, or the edge it came in from (found in the large
+## valley's final wave, v0.6 round four: from the north edge, twelve metres south and back again).
+func _rejoin_the_road() -> void:
+	if waypoints.size() < 2 or current_waypoint_index >= waypoints.size():
+		return
+	var here: Vector2 = _flat(global_position)
+	var best: int = current_waypoint_index
+	var best_gap: float = INF
+	for i in range(maxi(0, current_waypoint_index - 1), waypoints.size() - 1):
+		var a: Vector2 = _flat(_lane_point(i))
+		var b: Vector2 = _flat(_lane_point(i + 1))
+		var ab: Vector2 = b - a
+		var t: float = clampf((here - a).dot(ab) / maxf(0.0001, ab.length_squared()), 0.0, 1.0)
+		var gap: float = here.distance_to(a + ab * t)
+		if gap < best_gap:
+			best_gap = gap
+			best = i + 1
+	current_waypoint_index = maxi(current_waypoint_index, best)
+
+## Standing at what it bites, biting it.
+func _begin_attack() -> void:
+	is_blocked = true
+	_set_mode(Mode.ATTACK)
+	# Half an interval to the first bite: quick, but not on the frame it arrives -- unless it got to him on a
+	# burst, which ends in the bite (DINO_AI.bursts): it would reach him, stop, and see him walk out of reach
+	# before it bit, again and again.
+	_bite_clock = 0.0 if _end_burst_in_a_bite() else _bite_interval() * 0.5
+	velocity = Vector3.ZERO
+	_play_strike()
+
+func _bite_interval() -> float:
+	return 1.0 / maxf(0.1, attack_rate)
+
+## What it is seen to strike with: at a building, its weight thrown against it (Config.ANIMATIONS.dino_batter); at the
+## man or an animal, its bite -- its ATTACKING state's clip.
+func _play_strike() -> void:
+	if animator == null or not is_instance_valid(animator):
+		return
+	var cfg = _get_config()
+	var batter: String = String(cfg.ANIMATIONS.get("dino_batter", "")) if (cfg and "ANIMATIONS" in cfg) else ""
+	if batter != "" and _is_building(current_target):
+		animator.play_clip(batter)
+	else:
+		animator.play_state(current_state)
+
+# ==============================================================================
+# The body
+# ==============================================================================
+
+## On the way to the cabin, by its waypoints. The last waypoint is the cabin: when the cabin is
+## in reach it is bitten, and the first time says so on the bus (dino_reached_core).
+func _march(delta: float) -> void:
+	if going_home:
+		_walk_home(delta)
+		return
+	var cabin: Node = _cabin()
+	if cabin != null and _target_in_reach(cabin):
+		_reach_destination()
+		return
+	_skip_reached_waypoints()
+	# The last leg is the cabin: gone for as the thing to bite, from a place round it there is a way
+	# to (claim_attack_slot) -- not as the end of the road, which the mesh brought it as near to as
+	# it could get: behind a fence at the cabin's back, out of reach, where a raid milled for the
+	# whole of it (v0.6 round three: "大多数都在后面转来转去，而且还是有抽搐的情况，判断路径不聪明").
+	if cabin != null and current_waypoint_index >= waypoints.size() - 1:
+		_take(cabin, Mode.ENGAGE)
+		return
+	# No cabin to bite (a bare fixture): the end of the road is the destination, reached when it is
+	# stood on (arrival_threshold) -- and passed, as far as the count of waypoints goes.
+	if cabin == null and not waypoints.is_empty() and current_waypoint_index >= waypoints.size() - 1:
+		if current_waypoint_index >= waypoints.size() \
+				or _flat(global_position).distance_to(_flat(waypoints[waypoints.size() - 1])) <= arrival_threshold:
+			current_waypoint_index = waypoints.size()
+			_reach_destination()
+			_drive(Vector3.ZERO, delta, Vector3.INF)
+			return
+	_travel(_journey_goal(), delta)
+
+## Walks past the waypoints it has reached: an intermediate one counts as reached from a little
+## way off (Config.DINO_AI.waypoint_reach) -- a crowd cannot all stand on one point, and the ones
+## that could not would otherwise mill round it.
+func _skip_reached_waypoints() -> void:
+	var reach: float = _ai("waypoint_reach", 1.0)
+	while current_waypoint_index < waypoints.size() - 1:
+		var point: Vector3 = _lane_point(current_waypoint_index)
+		if _flat(global_position).distance_to(_flat(point)) > reach and not _on_the_doorstep(point):
+			return
+		current_waypoint_index += 1
+
+## Whether `point` is on the cabin's doorstep (Config.DINO_AI.cabin_approach, from its walls): a
+## bend in the road there is no place to go -- the cabin is, and a place round it to bite from
+## (claim_attack_slot). The road's last bend on the first map is a metre behind the cabin's back:
+## fenced there, it was where the raid waiting its turn stood, and one marching for it never got
+## within reach of it, and paced up and down the fence (found by the twitch watch, BUG-005).
+func _on_the_doorstep(point: Vector3) -> bool:
+	var cabin: Node = _cabin()
+	var cfg = _get_config()
+	if cabin == null or cfg == null or not cfg.has_method("gap_to_building") or not ("building_type" in cabin):
+		return false
+	return float(cfg.gap_to_building(point, String(cabin.building_type), (cabin as Node3D).global_position)) \
+		<= _ai("cabin_approach", 3.0)
+
+## Heads for `goal`, along the agent's route, at `pace` of its speed.
+func _travel(goal: Vector3, delta: float, pace: float = 1.0) -> void:
+	if goal == Vector3.INF:
+		_drive(Vector3.ZERO, delta, Vector3.INF)
+		return
+	if held_left > 0.0:
+		# Held: it strains towards where it was going, and goes nowhere -- eating, it faces the meat. Held to eat as a snare
+		# holds, it turned to the meat and straight back to its way, and ate with its back to it (the twitch watch: shake).
+		_drive(Vector3.ZERO, delta, _eating_at if _eating_at != Vector3.INF else goal, true)
+		return
+	pace *= trap_pace
+	var step: Vector3 = _next_step_towards(goal)
+	var to: Vector3 = step - global_position
+	to.y = 0.0
+	var desired := Vector3.ZERO
+	# Come to rest on its spot, it stays unless shoved well off it (Config.DINO_AI.spot_slack): waiting
+	# in a crowd, it stepped back onto its spot at every nudge, turned to each step and back, and stood
+	# there swinging its head (the debug-agent's BUG-008).
+	var slack: float = 0.05
+	if _settled_on != Vector3.INF and _flat(_settled_on).distance_to(_flat(goal)) < 0.05:
+		slack = _ai("spot_slack", 0.4)
+	else:
+		_settled_on = Vector3.INF
+	if to.length() > slack and _patience <= 0.0:
+		# No further in a frame than there is to go (found by the twitch watch, v0.6 round four): at
+		# its full speed a raptor went 6.7 cm a frame at a spot it had to be within 5 cm of -- past it,
+		# turned, past it the other way, its head swinging each time, for as long as it was sent there
+		# (the debug-agent's BUG-005: a raid waiting at the cabin's fenced back, "原地打转").
+		desired = to.normalized() * minf(speed * pace * hurry * _burst_pace(), to.length() / maxf(delta, 0.0001))
+	elif to.length() <= 0.05:
+		_settled_on = goal
+	# Near its place, it faces what it came for -- walking the last steps or waiting there -- not the
+	# spot it stands on, a hand's breadth off, which it turned right round to look at. It faced the
+	# spot while it tried for it and the cabin while it waited, by turns: stood still 22 seconds,
+	# swinging its head 22 degrees each way every second (the debug-agent's BUG-008). So too held up at
+	# the crowd's edge short of its place (_stuck_count, within DINO_AI.queue_standoff of it): it faced
+	# the cabin while it waited and the way in while it tried, by turns, 25 to 50 degrees a second
+	# (the debug-agent's BUG-010).
+	var look: Vector3 = goal
+	var to_goal: float = _flat(goal).distance_to(_flat(global_position))
+	var held_at_the_edge: bool = _stuck_count > 0 \
+		and to_goal <= _ai("queue_standoff", 2.8) + _ai("spot_slack", 0.4)
+	var facing_it: bool = current_target is Node3D and is_instance_valid(current_target) \
+		and (desired == Vector3.ZERO or held_at_the_edge or to_goal <= _ai("face_target_within", 2.0))
+	if facing_it:
+		look = (current_target as Node3D).global_position
+	_drive(desired, delta, look, facing_it)
+
+## The next corner of the route to `goal` -- or `goal` itself, when there is no mesh to ask.
+##
+## The route is the navigation server's (NavMaps.path, funnelled: the corners a person would
+## draw), asked again only when the goal has moved (Config.DINO_AI.regoal_distance) or the animal
+## has been pushed off it (path_max_distance). Where the route stops short of the goal -- the goal
+## is inside something, or shut away -- it heads for the route's end, the nearest it can stand:
+## there it gets nowhere, and what is holding it is dealt with (_unstick).
+func _next_step_towards(goal: Vector3) -> Vector3:
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready():
+		return goal
+	if _nav_goal == Vector3.INF or _flat(_nav_goal).distance_to(_flat(goal)) > _ai("regoal_distance", 0.3) \
+			or _route.is_empty() or _off_route():
+		_nav_goal = goal
+		_route = maps.path(global_position, goal, _map_kind())
+		_route_index = 1
+	var near: float = _ai("path_desired_distance", 0.5)
+	while _route_index < _route.size() and _flat(global_position).distance_to(_flat(_route[_route_index])) <= near:
+		_route_index += 1
+	if _route_index < _route.size():
+		return _route[_route_index]
+	if _route.is_empty():
+		return goal
+	var end: Vector3 = _route[_route.size() - 1]
+	return goal if _flat(end).distance_to(_flat(goal)) <= near else end
+
+## Whether it has been pushed further off the leg of its route it is on than
+## Config.DINO_AI.path_max_distance -- by the others, or round a corner -- and should ask again.
+func _off_route() -> bool:
+	if _route_index <= 0 or _route_index >= _route.size():
+		return false
+	var a: Vector2 = _flat(_route[_route_index - 1])
+	var b: Vector2 = _flat(_route[_route_index])
+	var p: Vector2 = _flat(global_position)
+	var ab: Vector2 = b - a
+	var t: float = clampf((p - a).dot(ab) / maxf(0.0001, ab.length_squared()), 0.0, 1.0)
+	return p.distance_to(a + ab * t) > _ai("path_max_distance", 2.0)
+
+## Moves the body at `desired` (flat, metres a second), after the solver has had its say, and
+## turns it -- to where it is going, or, when it is not going anywhere or `facing_only`, to
+## `look_at_point`.
+func _drive(desired: Vector3, delta: float, look_at_point: Vector3, facing_only: bool = false) -> void:
+	_patience = maxf(0.0, _patience - delta)
+	var v: Vector3 = _avoid(desired)
+	# No faster than it asks THIS frame. The solver's answer is to last frame's asking, a frame
+	# behind: arriving, it asked to stop and was sent on a step past its spot; asked to come back
+	# and was held; came back and was sent past it again -- three places, six frames round, for as
+	# long as it waited there (found by the twitch watch in the debug-agent's BUG-005, a raid
+	# waiting at the cabin's fenced end). The solver may slow it or turn it, never carry it on.
+	if v.length() > desired.length():
+		v = v.normalized() * desired.length() if desired.length() > 0.0001 else Vector3.ZERO
+	velocity = Vector3(v.x, 0.0, v.z)
+	var y: float = global_position.y
+	var from: Vector3 = global_position
+	if is_inside_tree() and get_world_3d() != null:
+		_move_body(velocity * delta)
+	else:
+		global_position += velocity * delta
+	global_position.y = y
+	# It turns to the way it went, and only when that is the way it was sent. The solver steers round
+	# the others and knows nothing of fences: crowded against the cabin's fenced back it sent a raptor
+	# into the fence, where it went nowhere, and it turned to the fence and back each frame the solver
+	# changed its mind (found by the twitch watch, the debug-agent's BUG-005). Shoved back or aside by
+	# the others it does not turn either -- it is not walking that way.
+	var went: Vector3 = (global_position - from) / maxf(delta, 0.0001)
+	went.y = 0.0
+	var turn_min: float = _ai("turn_min_speed", 0.3)
+	var moving: Vector3 = went if (not facing_only and went.length() > turn_min and velocity.length() > turn_min
+		and went.dot(velocity) > 0.0) else Vector3.ZERO
+	if moving != Vector3.ZERO:
+		_turn_towards(moving, delta)
+	elif look_at_point != Vector3.INF:
+		_turn_towards(look_at_point - global_position, delta)
+
+## Moves the body by `motion`, sliding along what it meets: the engine's collision
+## (move_and_collide), up to Config.DINO_AI.slide_steps times, so a body grazing a wall or a
+## neighbour keeps going along it. By the frame's own delta rather than move_and_slide's physics
+## step, so an animal driven by hand goes as far as the game would take it.
+func _move_body(motion: Vector3) -> void:
+	var left: Vector3 = motion
+	for i in range(int(_ai("slide_steps", 4))):
+		# Even standing still it is moved once: moving is where the engine recovers a body from
+		# inside another -- two put down on one spot are pushed apart by standing there.
+		if i > 0 and left.length_squared() < 0.00000001:
+			return
+		var hit: KinematicCollision3D = move_and_collide(left)
+		if hit == null:
+			return
+		var normal: Vector3 = hit.get_normal()
+		normal.y = 0.0
+		if normal.length_squared() < 0.000001:
+			return
+		left = hit.get_remainder().slide(normal.normalized())
+		left.y = 0.0
+
+## The solver's safe version of `wanted`: steered round the others (the engine's RVO) -- and no
+## faster than `wanted`. At the agent's full speed the solver shoved an ambling guard past its spot
+## at twice its pace, and it turned about to come back, its head swinging five times in a second
+## and a half (found by the twitch watch, v0.6 round four). Now it steers round the others at the
+## pace it asked for; standing, it is not shoved at all, and they go round it.
+func _avoid(wanted: Vector3) -> Vector3:
+	if not _agent.is_valid():
+		return wanted
+	NavigationServer3D.agent_set_position(_agent, global_position)
+	NavigationServer3D.agent_set_max_speed(_agent, maxf(0.01, wanted.length()))
+	NavigationServer3D.agent_set_velocity(_agent, wanted)
+	_requests += 1
+	if _requests - _answered > 1:
+		return wanted          # no fresh answer: the first frame, or nothing is ticking
+	return _safe_velocity
+
+func _on_velocity_computed(safe_velocity: Vector3) -> void:
+	_safe_velocity = Vector3(safe_velocity.x, 0.0, safe_velocity.z)
+	_answered = _requests
+
+## Turns towards `dir` at its turning speed (Config.DINO_AI.turn_speed). Never a snap: an animal
+## whose heading was set outright, every frame, to a velocity the solver nudges about turned
+## with every nudge -- which is the twitch.
+func _turn_towards(dir: Vector3, delta: float) -> void:
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		return
+	var want: float = atan2(-dir.x, -dir.z)
+	var step: float = deg_to_rad(_ai("turn_speed", 540.0)) * maxf(0.0, delta)
+	rotation.y = rotation.y + clampf(wrapf(want - rotation.y, -PI, PI), -step, step)
+
+## Faces `point` at once, for the moment it is put down somewhere.
+func _face_now(point: Vector3) -> void:
+	if point == Vector3.INF or not is_inside_tree():
+		return
+	var dir: Vector3 = point - global_position
+	dir.y = 0.0
+	if dir.length_squared() > 0.0001:
+		rotation.y = atan2(-dir.x, -dir.z)
+
+## Standing at what it bites: facing it, biting on the clock, and letting go only when it is gone
+## or has moved PAST its reach by a margin (Config.DINO_AI.reach_release). One step back from the
+## Hero is not an escape; and a raptor that let go at the very reach it took hold at would let go
+## and take hold on alternate frames.
+func _hold_and_bite(delta: float) -> void:
+	velocity = Vector3.ZERO
+	# Standing, and the solver told so: it went on steering the others round the way it was walking
+	# when it stopped, for as long as it bit.
+	_avoid(Vector3.ZERO)
+	if not _is_target_valid(current_target):
+		_let_go()
+		return
+	if not _target_in_reach(current_target, _ai("reach_release", 0.35)):
+		_out_of_reach()
+		return
+	var at: Vector3 = _bite_point(current_target as Node3D) - global_position
+	# Ramming the cabin, turned so the blow lands where it is aimed: an aetosaur's ram swings its head to one side as it
+	# drives in, and at the hull's rounded corner the tip of its head went past it (ram_hook).
+	if _is_hollow(current_target):
+		at = at.rotated(Vector3.UP, -ram_hook())
+	_turn_towards(at, delta)
+	_bite_clock -= delta
+	if _bite_clock <= 0.0:
+		_bite_clock += _bite_interval()
+		perform_attack()
+
+## What it was biting is past its reach: after it, if it is still worth it (_still_wanted) --
+## the Hero stepping back is still the Hero -- and otherwise let go. Nothing is bitten from across
+## the map, and nothing is followed there.
+func _out_of_reach() -> void:
+	if _still_wanted(current_target):
+		_set_mode(Mode.BREACH if _is_wall(current_target) else Mode.ENGAGE)
+	else:
+		_let_go()
+
+## Where to stand to bite what it is going for: its slot round a building, or the thing itself
+## when it walks about.
+func _engage_spot() -> Vector3:
+	if assigned_slot != Vector3.ZERO:
+		return _snout_spot(current_target, assigned_slot)
+	if current_target != null and is_instance_valid(current_target) and current_target is Node3D:
+		return (current_target as Node3D).global_position
+	return _journey_goal()
+
+## HEADWAY. Every window (Config.DINO_AI.stuck_window) a travelling animal is asked how far it
+## got, and one that got nowhere is looked at (_unstick). One biting, or waiting on purpose, is
+## not travelling.
+func _watch_headway(delta: float) -> void:
+	# Held in a snare is not held up by anything to bite or go round.
+	if mode == Mode.ATTACK or _patience > 0.0 or held_left > 0.0:
+		_headway_clock = 0.0
+		_headway_from = global_position
+		return
+	if _headway_from == Vector3.INF:
+		_headway_from = global_position
+	_headway_clock += delta
+	if _headway_clock < _ai("stuck_window", 1.2):
+		return
+	var moved: float = _flat(global_position).distance_to(_flat(_headway_from))
+	_headway_clock = 0.0
+	_headway_from = global_position
+	if moved >= _ai("stuck_distance", 0.25):
+		_stuck_count = 0
+		return
+	_stuck_count += 1
+	_unstick()
+
+## Whether it is on its way back to the nest, its hours over (go_home).
+var going_home: bool = false
+
+## How many times its own pace it goes. Come in from the valley's edge (WaveManager), it hurries while
+## nobody sees it and it is far from the cabin (Config.RAIDS.edge_hurry, edge_hurry_until) -- then its
+## own pace, for good: the walk in is the valley's size, not the raid's, and nobody watches it run
+## like that (v0.6 round four: "从边界出来的你可以先加速后正常速度"). 1 is its own pace.
+var hurry: float = 1.0
+
+func hurry_in(times: float) -> void:
+	hurry = maxf(1.0, times)
+
+## A burst at the man (Config.DINO_AI.bursts, DINOS.<id>.burst; the player, 2026-10-02: "恐龙追不上人"): the
+## seconds left of it, and then of being winded. Its own pace (`speed`) is never changed: the burst is a
+## pace it goes at (_travel), as hurrying in is.
+var _burst_left: float = 0.0
+var _rest_left: float = 0.0
+
+## Its species' burst, {within, pace, seconds, rest, winded_pace}; empty for one that has none.
+func _burst() -> Dictionary:
+	var cfg = _get_config()
+	if cfg == null or not ("DINO_AI" in cfg) or not ("DINOS" in cfg):
+		return {}
+	var kind: String = String(cfg.DINOS.get(dino_type, {}).get("burst", ""))
+	return cfg.DINO_AI.get("bursts", {}).get(kind, {}) if kind != "" else {}
+
+## Whether what it is after is the man.
+func _after_the_man() -> bool:
+	return current_target is Node3D and is_instance_valid(current_target) and (current_target as Node).is_in_group("hero")
+
+## Whether it is bursting at the man now.
+func bursting() -> bool:
+	return _burst_left > 0.0 and _after_the_man()
+
+## Times its own pace the burst has it going: its pace in the burst, winded after it, 1 otherwise -- and 1
+## whenever it is not after him.
+func _burst_pace() -> float:
+	if not _after_the_man():
+		return 1.0
+	if _burst_left > 0.0:
+		return float(_burst().get("pace", 1.0))
+	if _rest_left > 0.0:
+		return float(_burst().get("winded_pace", 1.0))
+	return 1.0
+
+func _tick_burst(delta: float) -> void:
+	if _burst_left > 0.0:
+		_burst_left -= delta
+		if _burst_left <= 0.0:
+			_burst_left = 0.0
+			_rest_left = float(_burst().get("rest", 0.0))
+	elif _rest_left > 0.0:
+		_rest_left = maxf(0.0, _rest_left - delta)
+
+## On a thought: after the man, close, not yet at him, its wind in it -- it bursts, with its call (the cue).
+func _consider_burst() -> void:
+	if _burst_left > 0.0 or _rest_left > 0.0 or going_home or is_dead or held_left > 0.0 \
+			or not _after_the_man() or not _may_burst():
+		return
+	var b: Dictionary = _burst()
+	if b.is_empty():
+		return
+	var him := current_target as Node3D
+	if _flat(global_position).distance_to(_flat(him.global_position)) > float(b.get("within", 0.0)) \
+			or _target_in_reach(him):
+		return
+	_burst_left = float(b.get("seconds", 0.0))
+	_alert()
+
+## Whether how it is going lets it burst: a raider set on him.
+func _may_burst() -> bool:
+	return mode == Mode.ENGAGE
+
+## Got to him on a burst: the burst is over, in the bite -- winded from now. True when it was bursting.
+func _end_burst_in_a_bite() -> bool:
+	if not bursting():
+		return false
+	_burst_left = 0.0
+	_rest_left = float(_burst().get("rest", 0.0))
+	return true
+
+## The burst dropped, its wind left as it was: gone home, stood down, held back by a light.
+func _drop_burst() -> void:
+	_burst_left = 0.0
+
+## Hurrying in from the edge: no longer once it is in sight (FogOfWar.is_in_sight) or near the cabin.
+func _keep_hurrying() -> void:
+	if hurry <= 1.0 or not is_inside_tree():
+		return
+	var cfg = _get_config()
+	var near: float = float(cfg.RAIDS.get("edge_hurry_until", 20.0)) if (cfg and "RAIDS" in cfg) else 20.0
+	var cabin: Node = _cabin()
+	var fog: Node = get_tree().get_first_node_in_group(FogOfWar.GROUP)
+	if (cabin is Node3D and _flat(global_position).distance_to(_flat((cabin as Node3D).global_position)) <= near) \
+			or (fog != null and fog.sees(global_position)):
+		hurry = 1.0
+
+## The trap that last shot at it, and when (by _mind_clock): the one a pack goes for (PackDino).
+var _shot_by: Node = null
+var _shot_at: float = -INF
+## Buildings it found every place round taken, and until when (by _mind_clock) it leaves them be:
+## instance id -> the time.
+var _crowded: Dictionary = {}
+
+## Shot at by `source` (a trap): remembered -- it goes for what is hurting it, not for the nearest
+## trap to it (the debug-agent's BUG-009).
+func shot_by(source: Node) -> void:
+	_shot_by = source
+	_shot_at = _mind_clock
+
+## The trap that shot at it lately (Config.DINO_AI.shot_memory), still there and not crowded -- or
+## null.
+func _shot_lately() -> Node:
+	if _shot_by == null or not is_instance_valid(_shot_by) or not _is_target_valid(_shot_by):
+		return null
+	if _mind_clock - _shot_at > _ai("shot_memory", 4.0) or _is_crowded(_shot_by):
+		return null
+	return _shot_by
+
+## Whether every place round `building` to bite it from was taken when it last tried for one
+## (Config.DINO_AI.crowded_memory ago or less): it leaves it be meanwhile.
+func _is_crowded(building: Node) -> bool:
+	if building == null or not is_instance_valid(building):
+		return false
+	return _mind_clock < float(_crowded.get(building.get_instance_id(), -INF))
+
+func _mark_crowded(building: Node) -> void:
+	if building != null and is_instance_valid(building):
+		_crowded[building.get_instance_id()] = _mind_clock + _ai("crowded_memory", 3.0)
+
+## Its hours are over (Config.DINOS.<id>.hours, GAME-DESIGN 9.3): it lets go of what it was at and
+## goes back to the nest, and is gone there -- not killed, nothing left behind.
+func go_home(nest: Vector3) -> void:
+	if is_dead or going_home:
+		return
+	_let_go()
+	going_home = true
+	set_waypoints([nest])
+	_nav_goal = Vector3.INF
+
+## On its way home: along its route to the nest, and gone once there (EventBus.dino_went_home).
+func _walk_home(delta: float) -> void:
+	if waypoints.is_empty():
+		return
+	var nest: Vector3 = waypoints[waypoints.size() - 1]
+	if _flat(global_position).distance_to(_flat(nest)) <= _ai("home_reach", 2.0):
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("dino_went_home"):
+			eb.dino_went_home.emit(self)
+		queue_free()
+		return
+	_travel(nest, delta)
+
+## It has got nowhere. What is holding it?
+##   * a building it is pressed against: bitten -- at once if it is not a wall (a target, and
+##     right there), a wall once going round has failed twice, and at once by anything that does
+##     not go round walls at all. It keeps at it until the building falls (_stubborn);
+##   * nothing built -- the others, in a crowd at a gap: it waits its turn a moment
+##     (Config.DINO_AI.patience) rather than shoving, which in a jam is a shuffle; and then a
+##     fresh route, in case the old one went stale.
+func _unstick() -> void:
+	# Going home it bites nothing: it only asks its way again.
+	if going_home:
+		_nav_goal = Vector3.INF
+		return
+	var holder: Node = _building_pressed_against()
+	var crowd: int = _bodies_pressed_against()
+	if holder != null and holder != current_target:
+		# A wall it could go round is bitten only when the WALL is what stops it -- nobody else
+		# pressed against it, and still nowhere after several tries. A raptor in a crowd at a
+		# fence is held up by the crowd, and chewing the fence would be the "stops at a fence it
+		# could walk round" this was written against.
+		var wall_holds_it: bool = _is_wall(holder) and walks_round_walls()
+		if not wall_holds_it or (crowd == 0 and _stuck_count >= int(_ai("wall_patience", 3))):
+			_stubborn = holder
+			_take(holder, Mode.BREACH)
+			return
+	if holder != null and holder == current_target and not _target_in_reach(holder):
+		# Pressed against what it is going for and still out of reach: its slot is on the far
+		# side. The face it is at is as good as any.
+		release_attack_slot(holder, self)
+		assigned_slot = Vector3.ZERO
+	elif current_target != null and _is_building(current_target) and not _target_in_reach(current_target):
+		# Going for a building, out of its reach and getting nowhere: waiting its turn. It moves in when
+		# a place in the inner ring it can get to is free (free_inner_slot) -- it stood in the outer
+		# ring to the end of the raid before (found playing, v0.6 round three) -- and otherwise waits
+		# where it is. It chose again whatever was free, and paced from one end of the cabin to the
+		# other and back, the place it went for taken each time it got there (the twitch watch,
+		# BUG-005: "是同伴就排队等").
+		if free_inner_slot(current_target, self) != Vector3.ZERO:
+			release_attack_slot(current_target, self)
+			assigned_slot = claim_attack_slot(current_target, self)
+		elif _is_shooter(current_target):
+			# Not waiting its turn under a trap's fire: something else (BUG-009).
+			_mark_crowded(current_target)
+			_let_go()
+		else:
+			_patience = _ai("queue_patience", 1.5)
+	# Held up by the Hero himself, standing in its way, time and again: he is what is in the way,
+	# and what is in the way is bitten -- whether or not this species came for him.
+	var man: Node = _hero_pressed_against()
+	if man != null and man != current_target and _stuck_count >= 2 and _is_target_valid(man):
+		_take(man, Mode.ENGAGE)
+		return
+	if crowd > 0:
+		_patience = maxf(_patience, _ai("patience", 0.8))
+	_nav_goal = Vector3.INF
+
+## The building its body is up against, favouring the one ahead of it, or null. Asked of the
+## physics space, which is what is actually stopping it.
+func _building_pressed_against() -> Node:
+	if not is_inside_tree() or get_world_3d() == null:
+		return null
+	var query := _touch_query(_building_layers())
+	var goal: Vector3 = _engage_spot() if current_target != null else _journey_goal()
+	var ahead: Vector3 = _flat3(goal - global_position).normalized() if goal != Vector3.INF else Vector3.ZERO
+	var best: Node = null
+	var best_score: float = -INF
+	for hit in get_world_3d().direct_space_state.intersect_shape(query, 16):
+		var b: Node = _building_of(hit.get("collider"))
+		if b == null or not _is_target_valid(b):
+			continue
+		var to: Vector3 = _flat3((b as Node3D).global_position - global_position)
+		var score: float = -to.length() + (to.normalized().dot(ahead) if to.length() > 0.001 else 0.0)
+		if score > best_score:
+			best_score = score
+			best = b
+	return best
+
+## The Hero, if its body is up against him, or null.
+func _hero_pressed_against() -> Node:
+	if not is_inside_tree() or get_world_3d() == null:
+		return null
+	for hit in get_world_3d().direct_space_state.intersect_shape(_touch_query(_cfg_int("LAYER_HERO", 4)), 4):
+		var body: Node = hit.get("collider") as Node
+		if body != null and body.is_in_group("hero"):
+			return body
+	return null
+
+## How many other walkers its body is up against.
+func _bodies_pressed_against() -> int:
+	if not is_inside_tree() or get_world_3d() == null:
+		return 0
+	var query := _touch_query(_cfg_int("LAYER_DINO", 8) | _cfg_int("LAYER_HERO", 4))
+	return get_world_3d().direct_space_state.intersect_shape(query, 8).size()
+
+## A ball a little bigger than its body, at its middle, looking at `mask`.
+func _touch_query(mask: int) -> PhysicsShapeQueryParameters3D:
+	var query := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = _avoid_radius + _ai("press_reach", 0.3)
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3(0.0, _probe_height(), 0.0))
+	query.collision_mask = mask
+	query.exclude = [get_rid()]
+	return query
+
+## The building a collider belongs to, if it is one.
+func _building_of(collider: Variant) -> Node:
+	var node: Node = collider as Node
+	for i in range(3):
+		if node == null:
+			return null
+		if node.is_in_group("buildings") or node.is_in_group("core"):
+			return node
+		node = node.get_parent()
+	return null
+
+## What it is up against, for callers that ask. The physics' answer.
+func check_obstacle() -> Node:
+	return _building_pressed_against()
+
+# ==============================================================================
+# The way to the cabin, and what shuts it
+# ==============================================================================
+
+## Whether there is no way to the cabin at all. The question a wall is judged by: a wall with a
+## way round it is a funnel and is walked round; only a wall that shuts the way is bitten.
+##
+## Asked of the mesh the animal walks, and no more than every Config.DINO_AI.route_check_seconds:
+## the answer costs a route, and a fence coming down half a second late is not something anyone
+## can see.
+func _way_is_sealed() -> bool:
+	if _route_clock > 0.0:
+		return _way_sealed
+	_route_clock = _ai("route_check_seconds", 1.0)
+	_way_sealed = false
+	var goal: Vector3 = _cabin_goal()
+	if goal == Vector3.INF:
+		return false
+	_way_sealed = not _there_is_a_way_round(goal)
+	if not _way_sealed:
+		_blocked_by = null
+	return _way_sealed
+
+## The building to go through when the way is shut, or null when it is open.
+##
+## THE WALL IN THE WAY IS THE FIRST ONE ON THE ROUTE THAT IGNORES WALLS. The siege mesh
+## (NavMaps.For.SIEGE) is baked with walls left out, so its route to the cabin runs straight
+## through them -- and the first wall that route crosses is the one between this animal and the
+## cabin. A hillside is never the answer: it cannot be bitten, and the siege mesh goes round it.
+func _building_in_the_way() -> Node:
+	if not walks_round_walls() or not _way_is_sealed():
+		return null
+	if _blocked_by != null and is_instance_valid(_blocked_by) and _is_target_valid(_blocked_by):
+		return _blocked_by
+	_blocked_by = _first_wall_on_the_way(_cabin_goal())
+	return _blocked_by
+
+## Whether sent to `spot` it would get there: the end of its route to it is the spot itself, near
+## enough (Config.DINO_AI.slot_stand_slack) -- not the nearest it could get, the far side of a
+## fence from it. With no mesh to ask, it can.
+func can_stand_at(spot: Vector3) -> bool:
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready() or not is_inside_tree():
+		return true
+	var route: PackedVector3Array = maps.path(global_position, spot, _map_kind())
+	if route.is_empty():
+		return false
+	return _flat(route[route.size() - 1]).distance_to(_flat(spot)) <= _ai("slot_stand_slack", 0.5)
+
+## Whether there is any route to `goal` on this animal's own mesh.
+func _there_is_a_way_round(goal: Vector3) -> bool:
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready():
+		return true    # nothing to ask, so nothing is sealed
+	return maps.is_reachable(global_position, goal, _map_kind())
+
+## The first building the wall-less route to `goal` passes through.
+func _first_wall_on_the_way(goal: Vector3) -> Node:
+	var maps := _nav_maps()
+	if maps == null or not maps.is_ready() or not is_inside_tree() or goal == Vector3.INF:
+		return null
+	var route: PackedVector3Array = maps.path(global_position, goal, NavMaps.For.SIEGE)
+	if route.size() < 2:
+		route = PackedVector3Array([global_position, goal])
+	var space := get_world_3d().direct_space_state
+	var lift := Vector3(0.0, _probe_height(), 0.0)
+	for i in range(route.size() - 1):
+		var query := PhysicsRayQueryParameters3D.create(route[i] + lift, route[i + 1] + lift, _building_layers())
+		query.exclude = [get_rid()]
+		var hit: Dictionary = space.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		var b: Node = _building_of(hit.get("collider"))
+		if b != null and _is_target_valid(b):
+			return b
+	return null
+
+## Which mesh this animal walks: round walls, or -- a siege animal -- through them.
+func _map_kind() -> int:
+	return NavMaps.For.RAID if walks_round_walls() else NavMaps.For.SIEGE
+
+## Whether stopping to bite this is the right thing to do.
+##
+## A WALL IS ONLY WORTH BITING WHEN IT IS ACTUALLY IN THE WAY. If there is a way round it, go
+## round -- that is what makes a fence a funnel that decides where the raid arrives, rather than
+## a sack of hit points every raid chews through in the same place. Anything else -- a trap, the
+## wreck -- is attacked on its own merits: those are targets, not obstacles.
+func _should_bite(node: Variant) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if not _is_wall(node):
+		return true
+	if not walks_round_walls():
+		return true
+	# The wall between it and something it wants that is shut away (_shut_away) is in the way as
+	# surely as one that shuts the way to the cabin.
+	return _way_is_sealed() or _is_the_way_through(node)
+
+## Whether what it wants -- a trap shooting at it from inside a sealed ring, the Hero behind a
+## fence -- has no way round to it on the mesh this animal walks; and so (_wall_before) the wall
+## to go through: the first the route that ignores walls passes (_first_wall_on_the_way). Found
+## playing (v0.6 round three, "摆成这样的时候，恐龙进攻又会傻站着不攻击了"): a raid went for the traps in
+## a yard inside the ring, stood at the fence nearest them -- in a crowd, which never bites a fence
+## it might go round (_unstick) -- and was shot where it stood. Asked of the mesh no more than every
+## Config.DINO_AI.route_check_seconds for the same target.
+func _shut_away(target: Variant) -> bool:
+	if target == null or not is_instance_valid(target) or not (target is Node3D) or not walks_round_walls():
+		return false
+	if _is_wall(target) or not is_inside_tree():
+		return false
+	var id: int = (target as Node).get_instance_id()
+	var known: Array = _shut_known.get(id, [])
+	if not known.is_empty() and _mind_clock - float(known[0]) < _ai("route_check_seconds", 1.0) \
+			and (not bool(known[1]) or _is_target_valid(known[2])):
+		return bool(known[1])
+	var goal: Vector3 = (target as Node3D).global_position
+	var shut: bool = not _there_is_a_way_round(goal)
+	if _shut_known.size() >= 8:
+		_shut_known.clear()
+	_shut_known[id] = [_mind_clock, shut, _first_wall_on_the_way(goal) if shut else null]
+	return shut
+
+## The wall between it and `target`, as _shut_away last found it, or null.
+func _wall_before(target: Node) -> Node:
+	var known: Array = _shut_known.get(target.get_instance_id(), [])
+	var wall: Variant = known[2] if (not known.is_empty() and bool(known[1])) else null
+	return wall if _is_target_valid(wall) else null
+
+## Whether `wall` is what stands between it and something it wants that was, when last asked,
+## shut away -- so going through it is going somewhere.
+func _is_the_way_through(wall: Node) -> bool:
+	for id in _shut_known:
+		var known: Array = _shut_known[id]
+		if bool(known[1]) and known[2] == wall:
+			return true
+	return false
+
+## Whether this species goes round a wall when it could. A siege dinosaur says no: walking
+## THROUGH the defence instead of around it is the whole of its design.
+func walks_round_walls() -> bool:
+	return true
+
+func _is_wall(node: Variant) -> bool:
+	if node == null or not is_instance_valid(node) or not ("building_type" in node):
+		return false
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_building_kind"):
+		return false
+	return String(cfg.get_building_kind(String(node.building_type))) == "wall"
+
+func _is_building(node: Variant) -> bool:
+	return node != null and is_instance_valid(node) and (node.is_in_group("buildings") or node.is_in_group("core"))
+
+## Whether `node` is something that shoots -- what a pack leaves its path for
+## (Config.DINO_AI.shooter_kinds).
+func _is_shooter(node: Variant) -> bool:
+	if node == null or not is_instance_valid(node) or not ("building_type" in node):
+		return false
+	var cfg = _get_config()
+	if cfg == null or not cfg.has_method("get_building_kind"):
+		return false
+	if not (String(cfg.get_building_kind(String(node.building_type))) in _ai_list("shooter_kinds", ["bow", "drop", "thrower"])):
+		return false
+	# And only with something in it to shoot (AmmoTower.has_ammo): an empty tower shoots nothing, and is no more to it
+	# than a fence -- bitten if it is in the way, else the cabin (the player, 2026-10-04: "不攻击的建筑应该没用，但我的
+	# 滚木防御会吸引仇恨（没弹药）"; GAME-DESIGN 2, "先打谁").
+	return not node.has_method("has_ammo") or bool(node.has_ammo())
+
+## Where it is going, as opposed to what it has stopped for: the current waypoint, or the cabin.
+func _journey_goal() -> Vector3:
+	if waypoints.is_empty():
+		return _cabin_goal()
+	return _lane_point(clampi(current_waypoint_index, 0, waypoints.size() - 1))
+
+## A waypoint moved sideways by this animal's lane -- so a raid comes down a road abreast rather
+## than single file -- except the last, which is the cabin itself.
+func _lane_point(index: int) -> Vector3:
+	var base_pos: Vector3 = waypoints[index]
+	if index >= waypoints.size() - 1 or absf(lane_offset) <= 0.001 or waypoints.size() < 2:
+		return base_pos
+	var seg: Vector3 = waypoints[mini(index + 1, waypoints.size() - 1)] - waypoints[maxi(index - 1, 0)]
+	seg.y = 0.0
+	if seg.length_squared() < 0.001:
+		return base_pos
+	return base_pos + seg.normalized().cross(Vector3.UP).normalized() * lane_offset
+
+## The cabin's middle, or where the waypoints end without one.
+func _cabin_goal() -> Vector3:
+	var cabin: Node = _cabin()
+	if cabin != null:
+		return (cabin as Node3D).global_position
+	if not waypoints.is_empty():
+		return waypoints[waypoints.size() - 1]
+	return Vector3.INF
+
+func _cabin() -> Node:
+	if not is_inside_tree():
+		return null
+	var core = get_tree().get_first_node_in_group("core")
+	return core if _is_target_valid(core) else null
+
+## At the cabin: says so once, and bites it.
+func _reach_destination() -> void:
+	velocity = Vector3.ZERO
+	if not has_reached_destination:
+		has_reached_destination = true
+		var eb = _get_event_bus()
+		if eb and eb.has_signal("dino_reached_core"):
+			eb.dino_reached_core.emit(self)
+	var cabin: Node = _cabin()
+	if cabin != null:
+		_take(cabin, Mode.ENGAGE)
+		if _target_in_reach(cabin):
+			_begin_attack()
+
+## Whether `target` is close enough to bite: body to body, a building measured to its own walls
+## (Config.gap_to_building) -- a circle of half its footprint sits inside a square's corners, and
+## against the cabin a raptor at a corner could not bite what it stood against. `slack` is added
+## past the reach, for letting go (reach_release).
+##
+## STOPPING TO BITE AND BEING ABLE TO BITE ARE ONE QUESTION, asked here and nowhere else.
+func _target_in_reach(target: Variant, slack: float = 0.0) -> bool:
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return false
+	var cfg = _get_config()
+	if "building_type" in target and cfg != null and cfg.has_method("gap_to_building"):
+		# From in front of the cabin's door, nothing (Config.CABIN.doorstep): it goes on to its place.
+		if target.has_method("at_the_door") and bool(target.at_the_door(global_position)):
+			return false
+		# A building with a room in it, it rams with its head from where the blow lands on the hull (_rams_from) -- and
+		# only over open ground: a stake before the cabin is between its snout and the wall, and is what it bites
+		# (tests/test_v05_reach_is_body_to_body, "it cannot bite the cabin through a stake").
+		if _is_hollow(target):
+			return _rams_from(target as Node3D, slack) and _clear_to(target as Node3D)
+		var gap: float = float(cfg.gap_to_building(global_position, String(target.building_type),
+			(target as Node3D).global_position))
+		return gap <= attack_reach() + slack
+	var gap: float = _flat(global_position).distance_to(_flat((target as Node3D).global_position))
+	return gap <= attack_reach() + _half_width_of(target as Node) + slack
+
+## Half the width of whatever is being bitten, so that reach is measured body to body.
+func _half_width_of(target: Node) -> float:
+	var cfg = _get_config()
+	if cfg == null:
+		return 0.5
+	if "building_type" in target and cfg.has_method("get_building_footprint"):
+		return float(cfg.get_building_footprint(String(target.building_type))) * 0.5
+	if target.is_in_group("hero"):
+		return float(cfg.HERO.get("width", 0.8)) * 0.5
+	if "dino_type" in target and cfg.has_method("get_visual_size"):
+		return float(cfg.get_visual_size("dino/" + String(target.dino_type)).x) * 0.5
+	return 0.5
+
+## How far past its own middle this dinosaur can strike: its own half-width and the strike past
+## its nose (Config.DINO_STRIKE). Overridable, so a big one reaches further.
+func attack_reach() -> float:
+	var cfg = _get_config()
+	var strike: float = float(cfg.DINO_STRIKE) if (cfg and "DINO_STRIKE" in cfg) else 0.35
+	return _avoid_radius + strike
+
+## Whether it rams `target` -- a building with a room in it -- from where it stands: its middle out from the hull
+## (_hull_point) as far as it stands to ram (_ram_stand), no more than Config.DINO_AI.ram_short (and `slack`, for letting
+## go) short of that, nor ram_near nearer.
+func _rams_from(target: Node3D, slack: float = 0.0) -> bool:
+	var off: float = _flat(global_position).distance_to(_flat(_hull_point(target, global_position))) - _ram_stand()
+	return off <= _ai("ram_short", 0.12) + slack and off >= -_ai("ram_near", 0.3)
+
+## How far out from the hull its middle stands to ram it: as far as its snout reaches at the height of its ram
+## (ram_front), less Config.DINO_AI.ram_into -- the blow lands on the hull.
+func _ram_stand() -> float:
+	return ram_front() - _ai("ram_into", 0.05)
+
+## How far its snout reaches ahead of its middle at the height of its ram (Config.ANIMATIONS.dino_batter), in metres: its
+## body's reach at rest (front_reach) and as much further as the clip carries the tip of its head -- read off the clip's
+## own keys the first time a species is asked. What rams the cabin stands where the blow lands, not where its snout rests
+## (the player's bug report, 2026-10-04: "撞击需要真的撞的动作，而且要贴着船舱").
+func ram_front() -> float:
+	if not _rams.has(dino_type) and not _read_ram():
+		return front_reach()
+	return float(_rams[dino_type])
+
+## How far round to one side its ram carries the tip of its head, at the height of the blow (radians, about its middle;
+## to its left more than nought): an aetosaur's ram hooks its head into what it hits (tools/dino_moves.py ram).
+func ram_hook() -> float:
+	if not _hooks.has(dino_type) and not _read_ram():
+		return 0.0
+	return float(_hooks[dino_type])
+
+## Reads its ram off the clip (ram_front, ram_hook) -- whether it could: not with no body yet.
+func _read_ram() -> bool:
+	var tip_at: Vector2 = _ram_tip()
+	if tip_at.x < 0.0:
+		return false
+	_rams[dino_type] = front_reach() + tip_at.x
+	_hooks[dino_type] = tip_at.y
+	return true
+
+## At the height of its ram -- the furthest ahead of its middle it carries the tip of its head -- how much further ahead
+## that is than it rests (metres), and how far round to one side (radians, to its left more than nought): from the clip's
+## keys, each bone's rest where it has none. (0, 0) with no ram or no head to read; x below nought with no body yet.
+func _ram_tip() -> Vector2:
+	var body: Node = get_node_or_null("Body")
+	if body == null or not is_inside_tree() or animator == null or not is_instance_valid(animator):
+		return Vector2(-1.0, 0.0)
+	var cfg = _get_config()
+	var clip: String = String(cfg.ANIMATIONS.get("dino_batter", "")) if (cfg and "ANIMATIONS" in cfg) else ""
+	var anim: Animation = animator.animation_for(clip) if clip != "" else null
+	var skeletons: Array = body.find_children("*", "Skeleton3D", true, false)
+	if anim == null or skeletons.is_empty():
+		return Vector2.ZERO
+	var sk := skeletons[0] as Skeleton3D
+	var tip: int = sk.find_bone("Head_end")
+	if tip < 0:
+		tip = sk.find_bone("Head")
+	if tip < 0:
+		return Vector2.ZERO
+	# The clip's keys for each bone, by kind: {bone: {track type: track}}.
+	var keys: Dictionary = {}
+	for t in anim.get_track_count():
+		var path: NodePath = anim.track_get_path(t)
+		if path.get_subname_count() == 0:
+			continue
+		var bone: int = sk.find_bone(String(path.get_subname(0)))
+		if bone >= 0:
+			if not keys.has(bone):
+				keys[bone] = {}
+			keys[bone][anim.track_get_type(t)] = t
+	var to_me: Transform3D = global_transform.affine_inverse() * sk.global_transform
+	var rest: float = -(to_me * sk.get_bone_global_rest(tip).origin).z
+	var further: float = 0.0
+	var hook: float = 0.0
+	var steps: int = 24
+	for k in steps + 1:
+		var at: Vector3 = to_me * _bone_in(anim, sk, keys, tip, anim.length * float(k) / float(steps)).origin
+		if -at.z - rest > further:
+			further = -at.z - rest
+			hook = atan2(-at.x, -at.z)
+	return Vector2(further, hook)
+
+## Where `bone` is in its skeleton's space `at` seconds into `anim`: it and every bone above it posed by the clip's
+## keys, by their rests where the clip has none.
+static func _bone_in(anim: Animation, sk: Skeleton3D, keys: Dictionary, bone: int, at: float) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var b: int = bone
+	while b >= 0:
+		var rest: Transform3D = sk.get_bone_rest(b)
+		var pos: Vector3 = rest.origin
+		var rot: Quaternion = rest.basis.get_rotation_quaternion()
+		var size: Vector3 = rest.basis.get_scale()
+		var own: Dictionary = keys.get(b, {})
+		if own.has(Animation.TYPE_POSITION_3D):
+			pos = anim.position_track_interpolate(int(own[Animation.TYPE_POSITION_3D]), at)
+		if own.has(Animation.TYPE_ROTATION_3D):
+			rot = anim.rotation_track_interpolate(int(own[Animation.TYPE_ROTATION_3D]), at)
+		if own.has(Animation.TYPE_SCALE_3D):
+			size = anim.scale_track_interpolate(int(own[Animation.TYPE_SCALE_3D]), at)
+		xf = Transform3D(Basis(rot) * Basis.from_scale(size), pos) * xf
+		b = sk.get_bone_parent(b)
+	return xf
+
+func _is_hollow(target: Variant) -> bool:
+	if target == null or not is_instance_valid(target) or not ("building_type" in target):
+		return false
+	var cfg = _get_config()
+	return cfg != null and cfg.has_method("is_hollow") and bool(cfg.is_hollow(String(target.building_type)))
+
+## How far its body reaches ahead of its middle -- its snout -- in metres: measured from its model's box the first time
+## a species is asked (its body is built round its middle, facing -Z), and never less than its own half-width.
+func front_reach() -> float:
+	if _fronts.has(dino_type):
+		return maxf(_avoid_radius, float(_fronts[dino_type]))
+	var front: float = 0.0
+	var body: Node = get_node_or_null("Body")
+	if body != null and is_inside_tree():
+		var inv: Transform3D = global_transform.affine_inverse()
+		for m in body.find_children("*", "MeshInstance3D", true, false):
+			var mi := m as MeshInstance3D
+			if mi.mesh == null or String(mi.name).begins_with("Glint"):
+				continue
+			front = maxf(front, -((inv * mi.global_transform) * mi.get_aabb()).position.z)
+		if front > 0.0:
+			_fronts[dino_type] = front
+	return maxf(_avoid_radius, front)
+
+## Where to stand for `slot` round `building`: the place itself -- but round a building with a room in it, out from the
+## hull until its ram lands on it (_ram_stand), the nearest of that to the hull it can stand on.
+func _snout_spot(building: Node, slot: Vector3) -> Vector3:
+	if not _is_hollow(building):
+		return slot
+	if slot == _snout_for:
+		return _snout_at
+	_snout_for = slot
+	_snout_at = slot
+	for k in [1.0, 0.66, 0.33]:
+		var spot: Vector3 = _snout_out(building, slot, k)
+		if spot == slot:
+			break
+		if can_stand_at(spot):
+			_snout_at = spot
+			break
+	return _snout_at
+
+## The spot `k` of the way from `slot` round a hollow `building` out to where its ram lands on the hull (_ram_stand),
+## straight out from the nearest of the hull -- on the ground, whether it can stand there or not; `slot` itself when it
+## is as far out already (the outer ring, where it waits).
+func _snout_out(building: Node, slot: Vector3, k: float = 1.0) -> Vector3:
+	var on_wall: Vector3 = _hull_point(building as Node3D, slot)
+	var out: Vector3 = _flat3(slot - on_wall)
+	var gap: float = out.length()
+	var want: float = _ram_stand()
+	if gap < 0.01 or want <= gap:
+		return slot
+	var spot: Vector3 = on_wall + out / gap * lerpf(gap, want, k)
+	spot.y = slot.y
+	return spot
+
+## Whether nothing built stands between it and the nearest of `target`'s outside, at the height it bites at
+## (Config.DINO_PROBE_HEIGHT): its snout reaches the wall over open ground.
+func _clear_to(target: Node3D) -> bool:
+	if not is_inside_tree() or get_world_3d() == null:
+		return true
+	var cfg = _get_config()
+	var lift := Vector3(0.0, float(cfg.DINO_PROBE_HEIGHT) if (cfg and "DINO_PROBE_HEIGHT" in cfg) else 0.4, 0.0)
+	var to: Vector3 = _bite_point(target)
+	to.y = global_position.y
+	var query := PhysicsRayQueryParameters3D.create(global_position + lift, to + lift, _building_layers())
+	query.exclude = [get_rid()]
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return true
+	var by: Object = hit.get("collider")
+	return by == target or (by is Node and target.is_ancestor_of(by as Node))
+
+## Where on `target` it bites: a building's outside nearest it -- it faces the wall, not the middle of a cabin seven metres
+## long; the cabin's hull, not its box -- or the middle of anything else.
+func _bite_point(target: Node3D) -> Vector3:
+	var cfg = _get_config()
+	if "building_type" in target and cfg != null and cfg.has_method("get_building_half"):
+		var on: Vector3 = _hull_point(target, global_position)
+		return Vector3(on.x, target.global_position.y, on.z)
+	return target.global_position
+
+## The nearest of `building`'s outside to `from`, on the ground at `from`'s height: its hull where it has one
+## (Config.hull_outline: the cabin's, rounded off at its ends -- the corners of its box are air), else its box.
+func _hull_point(building: Node3D, from: Vector3) -> Vector3:
+	var cfg = _get_config()
+	var c: Vector3 = building.global_position
+	var b_type: String = String(building.building_type)
+	var outline: PackedVector2Array = cfg.hull_outline(b_type) if cfg.has_method("hull_outline") else PackedVector2Array()
+	if outline.size() < 3:
+		var half: Vector2 = cfg.get_building_half(b_type)
+		return Vector3(clampf(from.x, c.x - half.x, c.x + half.x), from.y, clampf(from.z, c.z - half.y, c.z + half.y))
+	var p := Vector2(from.x - c.x, from.z - c.z)
+	var best: Vector2 = p
+	var best_gap: float = INF
+	for i in outline.size():
+		var on: Vector2 = Geometry2D.get_closest_point_to_segment(p, outline[i], outline[(i + 1) % outline.size()])
+		var gap: float = p.distance_squared_to(on)
+		if gap < best_gap:
+			best_gap = gap
+			best = on
+	return Vector3(c.x + best.x, from.y, c.z + best.y)
+
+## What of `amount` gets through `target`'s armour (Config.ARMOR): the cabin's hull takes a quarter of a bite, a man all
+## of it.
+func _through_armour(target: Object, amount: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.through_armour(target, amount)) if (cfg and cfg.has_method("through_armour")) else amount
+
+## Whether it would stand at the place `spot` round `building` to bite it: whether it can get there (can_stand_at). A
+## species with places it keeps out of says no to those (ProwlerDino: a fire's light).
+func would_stand_at(spot: Vector3, _building: Node = null) -> bool:
+	return can_stand_at(spot)
+
+# ==============================================================================
+# What a species wants -- the surface a behaviour subclass overrides
+# ==============================================================================
+
+## What this dinosaur will actually stop for, or null.
+##
+## DO NOT OVERRIDE THIS. Override _preferred_target instead -- this method exists to put the rule
+## about walls somewhere a species cannot get past.
+func _find_threat_priority_target() -> Node:
+	if not is_inside_tree():
+		return null
+	var want: Node = _preferred_target()
+	if not _should_bite(want):
+		return null
+	# Shut away behind a wall: the wall is what to go for -- and with nothing built between, only
+	# the lie of the land, it is not to be had at all.
+	if _shut_away(want):
+		return _wall_before(want)
+	return want
+
+## What this species WANTS to stop for, before the rule is applied.
+func _preferred_target() -> Node:
+	return _nearest_building_within(building_interest_range())
+
+## How far off its path this kind of dinosaur will look for a building to bite.
+func building_interest_range() -> float:
+	return 2.0
+
+## How far it will look for the Hero, and whether it cares at all.
+func hero_interest_range() -> float:
+	return 0.0
+
+## Whether a trap -- what shoots at it -- is worth a detour, and from how far.
+func trap_interest_range() -> float:
+	return 0.0
+
+## The nearest finished building within `radius` -- only shooters with `only_kind` "shooter", only
+## one type with a type id -- measured to its walls, so a big building is as near as its face.
+func _nearest_building_within(radius: float, only_kind: String = "") -> Node:
+	if radius <= 0.0 or not is_inside_tree():
+		return null
+	var cfg = _get_config()
+	var best: Node = null
+	var best_dist: float = radius
+	for b in get_tree().get_nodes_in_group("buildings"):
+		if not is_instance_valid(b) or not _is_target_valid(b):
+			continue
+		if only_kind == "shooter" and not _is_shooter(b):
+			continue
+		if _is_crowded(b):
+			continue
+		if only_kind != "" and only_kind != "shooter":
+			if not ("building_type" in b) or String(b.building_type) != only_kind:
+				continue
+		var dist: float = global_position.distance_to(b.global_position)
+		if cfg != null and cfg.has_method("gap_to_building") and "building_type" in b:
+			dist = float(cfg.gap_to_building(global_position, String(b.building_type), b.global_position))
+		if dist <= best_dist:
+			best_dist = dist
+			best = b
+	return best
+
+func _hero_within(radius: float) -> Node:
+	if radius <= 0.0 or not is_inside_tree():
+		return null
+	var hero = get_tree().get_first_node_in_group("hero")
+	if hero == null or not is_instance_valid(hero) or not _is_target_valid(hero):
+		return null
+	return hero if global_position.distance_to(hero.global_position) <= radius else null
+
+## The man, if he has just struck at it or at one of its kind beside it (Hero.has_provoked_dinos, HERO.provoke_radius) --
+## what attacks them they answer first -- or null: on his own he is the least of what it came for.
+func _provoker() -> Node:
+	if not _hero_is_provoking():
+		return null
+	return get_tree().get_first_node_in_group("hero")
+
+## Whether the Hero has just made himself the loudest thing on the field.
+func _hero_is_provoking() -> bool:
+	if not is_inside_tree():
+		return false
+	var hero = get_tree().get_first_node_in_group("hero")
+	if hero == null or not is_instance_valid(hero):
+		return false
+	if not ("has_provoked_dinos" in hero) or not bool(hero.has_provoked_dinos):
+		return false
+	var radius: float = 4.0
+	var cfg = _get_config()
+	if cfg and "HERO" in cfg:
+		radius = float(cfg.HERO.get("provoke_radius", radius))
+	return global_position.distance_to(hero.global_position) <= radius
+
+# ==============================================================================
+# Biting
+# ==============================================================================
+
+## Takes `obstacle` as what it bites, now. For callers that decide it for the animal.
+func on_obstacle_detected(obstacle: Node) -> void:
+	if obstacle == null or not is_instance_valid(obstacle):
+		return
+	_take(obstacle, Mode.ENGAGE)
+	_face_now((obstacle as Node3D).global_position if obstacle is Node3D else Vector3.INF)
+	_begin_attack()
+
+func on_obstacle_cleared() -> void:
+	_let_go()
+
+## One attack-state step, for callers that drive it by hand.
+func _process_attacking(delta: float) -> void:
+	_hold_and_bite(delta)
+
+func _is_target_valid(target: Variant) -> bool:
+	if target == null or typeof(target) != TYPE_OBJECT or not is_instance_valid(target):
+		return false
+	if not (target is Node):
+		return false
+	if target.is_queued_for_deletion():
+		return false
+	if "is_destroyed" in target and target.is_destroyed:
+		return false
+	# ORDERING A FENCE IS NOT HAVING ONE: a blueprint is nobody's target (Config.LAYER_BLUEPRINT).
+	if "is_constructed" in target and not target.is_constructed:
+		return false
+	if "current_hp" in target and target.current_hp <= 0.0:
+		return false
+	if target.is_in_group("hero") and "current_state" in target and int(target.current_state) == 4:
+		return false
+	# IN THE CABIN HE IS NOBODY'S (the player's bug report, 2026-10-04: "人躲在cabin里它们头会伸进cabin，但没有进攻效果"):
+	# its room is lit, no animal comes into it (the player: "因为舱内有灯光……植龙不会靠近"; NavMaps.HERO_ONLY_GROUP), and
+	# a bite does not go through its walls. What came for him has the cabin itself to go at, on its road's end (_march).
+	if target.is_in_group("hero") and _sheltered():
+		return false
+	if not target.has_method("take_damage"):
+		return false
+	# IN NOBODY'S WAY, NOBODY'S TARGET: what is stepped over -- a campfire's ring, spikes, a deadfall, a snare
+	# (Config.walk_over) -- is not something an animal sees to bite.
+	if "building_type" in target and _is_walk_over(target):
+		return false
+	return true
+
+## Whether the Hero is in the cabin's room (CoreCampfire.hero_inside).
+func _sheltered() -> bool:
+	if not is_inside_tree():
+		return false
+	var cabin = get_tree().get_first_node_in_group("core")
+	return cabin != null and is_instance_valid(cabin) and "hero_inside" in cabin and bool(cabin.hero_inside)
+
+func _is_walk_over(target: Node) -> bool:
+	var cfg = _get_config()
+	return cfg != null and cfg.has_method("walk_over") and bool(cfg.walk_over(String(target.building_type)))
+
+# ==============================================================================
+# The traps laid in the way (CellTrap): slowed on spikes, held by a snare
+# ==============================================================================
+## How much of its pace it goes, on spikes, and for how long more; how long a snare holds it still.
+var trap_pace: float = 1.0
+var _slow_left: float = 0.0
+var held_left: float = 0.0
+
+# ==============================================================================
+# The bait (BaitRack; Config.BAIT): passing a rack, it stops and eats a while
+# ==============================================================================
+## Where the meat it is eating hangs (eat_for), INF when it is not eating.
+var _eating_at: Vector3 = Vector3.INF
+
+## Stops where it is and eats for `seconds` (BaitRack.feed), facing the meat at `rack_at` as long as it eats: held as a
+## snare holds it, and then on its way.
+func eat_for(seconds: float, rack_at: Vector3) -> void:
+	hold_for(seconds)
+	_eating_at = rack_at
+	_face_now(rack_at)
+	say("bite")
+
+# ==============================================================================
+# Shoved (DropTower): carried off a moment by what hit it, and nothing else meanwhile
+# ==============================================================================
+var _shove: Vector3 = Vector3.ZERO
+var _shove_left: float = 0.0
+
+## Shoved `by` (metres, flat) over `seconds`: carried that way, sliding along what it meets (_move_body), whatever it
+## was doing -- a bite let go, a dash dropped -- and then about its business again.
+func knock_back(by: Vector3, seconds: float) -> void:
+	if is_dead:
+		return
+	_shove_left = maxf(0.05, seconds)
+	_shove = Vector3(by.x, 0.0, by.z) / _shove_left
+	_drop_burst()
+	if mode == Mode.ATTACK:
+		_set_mode(Mode.ENGAGE if current_target != null else Mode.MARCH)
+
+## Whether it is being shoved now.
+func is_shoved() -> bool:
+	return _shove_left > 0.0
+
+## A frame of being shoved, if it is: true while it is, and nothing else is done that frame.
+func _shoved(delta: float) -> bool:
+	if _shove_left <= 0.0:
+		return false
+	_shove_left -= delta
+	_tick_traps(delta)
+	if is_inside_tree() and get_world_3d() != null:
+		var y: float = global_position.y
+		_move_body(_shove * delta)
+		global_position.y = y
+	else:
+		global_position += _shove * delta
+	velocity = _shove
+	return true
+
+## Slowed to `factor` of its pace for `seconds` -- the slowest of what is slowing it.
+func slow_for(factor: float, seconds: float) -> void:
+	trap_pace = minf(trap_pace, clampf(factor, 0.0, 1.0)) if _slow_left > 0.0 else clampf(factor, 0.0, 1.0)
+	_slow_left = maxf(_slow_left, seconds)
+
+## Held where it stands `seconds` -- a snare's noose on it: it turns and bites what is in its reach, and
+## goes nowhere.
+func hold_for(seconds: float) -> void:
+	held_left = maxf(held_left, seconds)
+	velocity = Vector3.ZERO
+
+func _tick_traps(delta: float) -> void:
+	if _slow_left > 0.0:
+		_slow_left = maxf(0.0, _slow_left - delta)
+		if _slow_left <= 0.0:
+			trap_pace = 1.0
+	held_left = maxf(0.0, held_left - delta)
+	if held_left <= 0.0:
+		_eating_at = Vector3.INF
+
+func perform_attack() -> void:
+	if not _is_target_valid(current_target):
+		_let_go()
+		return
+	if not _target_in_reach(current_target, _ai("reach_release", 0.35)):
+		_out_of_reach()
+		return
+	attack_target(current_target)
+	if not _is_target_valid(current_target):
+		_let_go()
+
+func attack_target(target: Node) -> void:
+	# Reach is checked here as well as in the mind, so nothing can deal damage at a distance by
+	# calling this directly. What gets through is the armour's to say (Config.ARMOR).
+	if _is_target_valid(target) and _target_in_reach(target, _ai("reach_release", 0.35)):
+		target.take_damage(_through_armour(target, damage))
+		say("bite")
+
+## How long this animal has spent against spikes; which physics frame it last heard from one; and
+## the longest stretch reported in that frame.
+var _spike_accum: float = 0.0
+var _spike_frame: int = -1
+var _spike_frame_delta: float = 0.0
+
+## Spikes have been against this animal for `delta` of simulated time.
+##
+## A FENCE IS ONE SITUATION, NOT THREE, AND IT KEEPS ONE CLOCK. Every stake reports; the animal
+## counts, once, however many are reporting: a denser fence is harder to get THROUGH, not a
+## bigger multiplier. The clock runs on simulated time, so it scales with Engine.time_scale (the
+## HUD's speed) like everything else.
+func spikes_touch(amount: float, tick: float, delta: float) -> bool:
+	if is_dead or current_state == State.DEAD:
+		return false
+	var frame: int = Engine.get_physics_frames()
+	var reported: float = maxf(0.0, delta)
+	if frame == _spike_frame:
+		# Several stakes, one moment: the LONGEST of them counts and the rest count for nothing.
+		if reported <= _spike_frame_delta:
+			return false
+		_spike_accum += reported - _spike_frame_delta
+		_spike_frame_delta = reported
+	else:
+		_spike_frame = frame
+		_spike_frame_delta = reported
+		_spike_accum += reported
+	if _spike_accum < maxf(0.01, tick):
+		return false
+	# Zeroed rather than decremented: one chip per tick, never a burst saved up from a long frame.
+	_spike_accum = 0.0
+	take_damage(_through_armour(self, amount))
+	return true
+
+func take_damage(amount: float) -> void:
+	if is_dead or current_state == State.DEAD:
+		return
+	if is_nan(amount) or is_inf(amount) or amount <= 0.0:
+		return
+	current_hp = maxf(0.0, current_hp - amount)
+	_on_hit_fx()
+	if is_nan(current_hp) or is_inf(current_hp) or current_hp <= 0.0:
+		die()
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _hurt_said_at >= int(_sound_number("hurt_every", 0.7) * 1000.0):
+		_hurt_said_at = now
+		say("hurt")
+
+## Executes fatal death sequence.
+func die() -> void:
+	if is_dead or current_state == State.DEAD:
+		return
+	if current_target != null:
+		release_attack_slot(current_target, self)
+	assigned_slot = Vector3.ZERO
+	is_dead = true
+	current_state = State.DEAD
+	set_physics_process(false)
+	velocity = Vector3.ZERO
+	# Out of everybody's way at once: a body that has fallen is not something to walk round.
+	collision_layer = 0
+	collision_mask = 0
+	if _agent.is_valid():
+		NavigationServer3D.agent_set_avoidance_enabled(_agent, false)
+
+	_on_death_fx()
+	spawn_death_drops()
+	_leave_body()
+
+	var eb = _get_event_bus()
+	if eb and eb.has_signal("dino_died"):
+		eb.dino_died.emit(self)
+
+	queue_free()
+
+## Its body falls where it died -- the death clip, begun as it died (current_state) -- and lies a while
+## before it sinks away (Fx.lay_down). The dinosaur itself goes now, as it always did.
+func _leave_body() -> void:
+	var body: Node3D = find_child("Body", false, false) as Node3D
+	var fx = _get_fx()
+	if body == null or fx == null or not fx.has_method("lay_down"):
+		return
+	var fall: float = 0.0
+	var player: AnimationPlayer = animator.animation_player if (animator != null and is_instance_valid(animator)) else null
+	if player != null and is_instance_valid(player) and player.current_animation != "":
+		fall = player.current_animation_length - player.current_animation_position
+	if fx.lay_down(body, fall, _declared_size().y) != null:
+		mesh_instance = null
+
+## Leaves meat where it fell. This is the only source of food in the game, and the reason a raid
+## is worth walking out to after it is over rather than just surviving. What is left is declared
+## in Config.DINOS[type].drops.
+func spawn_death_drops() -> Array:
+	var made: Array = []
+	if not is_inside_tree():
+		return made
+	var cfg = _get_config()
+	if cfg == null or not ("DINOS" in cfg) or not cfg.DINOS.has(dino_type):
+		return made
+	var drops: Dictionary = cfg.DINOS[dino_type].get("drops", {})
+	var chances: Dictionary = cfg.DINOS[dino_type].get("drop_chance", {})
+	var gs = _get_game_state()
+	for res_id in drops:
+		var n: int = int(drops[res_id])
+		# The rank and file leave each thing only by chance (drop_chance, GameState.roll_drop).
+		if chances.has(res_id) and gs and gs.has_method("roll_drop"):
+			var fell: int = 0
+			for i in n:
+				if gs.roll_drop(String(res_id), float(chances[res_id])):
+					fell += 1
+			n = fell
+		if n <= 0:
+			continue
+		for pile in DropItem.spawn_scattered(self, global_position, String(res_id), n, n):
+			made.append(pile)
+	return made
+
+# ==============================================================================
+# The walker: body, collider, agent
+# ==============================================================================
+
+## A dinosaur's own layer, and everything it bumps into: the ground's obstacles, buildings, walls,
+## gates, the Hero and the others (Config.DINO_AI.collides_with).
+func _apply_collision_configuration() -> void:
+	collision_layer = _cfg_int("LAYER_DINO", 8)
+	var mask: int = 0
+	for layer in _ai_list("collides_with", []):
+		mask |= _cfg_int(String(layer), 0)
+	collision_mask = mask
+	# Seen from above, sliding along what it meets: no floor, no gravity, nothing to climb.
+	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
+	wall_min_slide_angle = 0.0
+
+func _building_layers() -> int:
+	return _cfg_int("LAYER_BUILDING", 2) | _cfg_int("LAYER_WALL", 32) | _cfg_int("LAYER_GATE", 0)
+
+func _load_config_stats() -> void:
+	if not current_multipliers.is_empty():
+		setup(dino_type, current_multipliers)
+	else:
+		var gs = _get_game_state()
+		var mults = gs.dino_stat_multipliers if (gs and "dino_stat_multipliers" in gs) else {}
+		setup(dino_type, mults)
+
+## How big this species is, as Config declares it.
+func _declared_size() -> Vector3:
+	var cfg = _get_config()
+	if cfg and cfg.has_method("get_visual_size"):
+		return cfg.get_visual_size("dino/" + (dino_type if dino_type != "" else "raptor"))
+	return Vector3.ONE * 0.8
+
+## (Re)builds the visible body and points `mesh_instance` at it.
+func _ensure_body() -> void:
+	var existing := find_child("Body", false, false)
+	if existing != null:
+		remove_child(existing)
+		existing.queue_free()
+	var body: Node3D = VisualLibrary.make("dino/" + (dino_type if dino_type != "" else "raptor"))
+	add_child(body)
+	mesh_instance = null
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		mesh_instance = node as MeshInstance3D
+		break
+	if animator != null and is_instance_valid(animator):
+		animator.refresh_animation_player()
+		animator.play_state(current_state)
+
+## The collider follows the declared size, so a bigger species really is bigger to everything that
+## touches it.
+func _refit_to_size() -> void:
+	if collision_shape != null:
+		collision_shape.shape = _body_shape()
+		collision_shape.position = _body_offset()
+	_refresh_walker()
+	_ensure_body()
+
+## Its body: ROUND, as wide and as tall as Config declares. A box's corners caught in gaps its
+## sides fitted through -- a 0.8 m box is 1.13 m corner to corner -- and on a body that slides
+## along what it meets, a corner is a snag. Lifted off the ground a hair
+## (Config.DINO_AI.ground_clearance), so the ground it stands on is never something it is pressed
+## against.
+func _body_shape() -> CylinderShape3D:
+	var size: Vector3 = _declared_size()
+	var round_body := CylinderShape3D.new()
+	round_body.radius = size.x * 0.5
+	round_body.height = size.y
+	return round_body
+
+func _body_offset() -> Vector3:
+	return Vector3(0.0, _ai("ground_clearance", 0.08) + _declared_size().y * 0.5, 0.0)
+
+## How high it looks for what it is pressed against: below the top of the lowest thing that stops
+## it (Config.DINO_PROBE_HEIGHT).
+func _probe_height() -> float:
+	var cfg = _get_config()
+	var cap: float = float(cfg.DINO_PROBE_HEIGHT) if (cfg and "DINO_PROBE_HEIGHT" in cfg) else 0.4
+	return minf(_declared_size().y * 0.5, cap)
+
+func _ensure_components() -> void:
+	for child in get_children():
+		if child is CollisionShape3D:
+			collision_shape = child
+			break
+	if collision_shape == null:
+		collision_shape = CollisionShape3D.new()
+		collision_shape.name = "CollisionShape3D"
+		add_child(collision_shape)
+	collision_shape.shape = _body_shape()
+	collision_shape.position = _body_offset()
+
+	if animator == null:
+		animator = ActorAnimator.new()
+		animator.name = "ActorAnimator"
+		add_child(animator)
+		animator.setup(self, "dino")
+		animator.own_gaits = _own_gaits()
+	else:
+		animator.refresh_animation_player()
+
+	# The body, from the one place that knows what things look like. The collider above is built
+	# from the SAME declared size rather than from the art, because collision is gameplay -- it
+	# decides what a bite can reach -- and art that disagrees with its collider is the bug this
+	# project keeps having to fix.
+	_ensure_body()
+	_ensure_walker()
+
+## The agent that steers it round the others. Everything it needs is declared in Config, and its
+## radius is the dinosaur's own.
+func _ensure_walker() -> void:
+	if _agent.is_valid() or not is_inside_tree():
+		_refresh_walker()
+		return
+	_agent = NavigationServer3D.agent_create()
+	NavigationServer3D.agent_set_avoidance_enabled(_agent, true)
+	NavigationServer3D.agent_set_avoidance_callback(_agent, Callable(self, "_on_velocity_computed"))
+	var cfg = _get_config()
+	NavigationServer3D.agent_set_max_neighbors(_agent,
+		int(cfg.DINO_AVOID_MAX_NEIGHBOURS) if (cfg and "DINO_AVOID_MAX_NEIGHBOURS" in cfg) else 10)
+	NavigationServer3D.agent_set_neighbor_distance(_agent,
+		float(cfg.DINO_AVOID_NEIGHBOURS) if (cfg and "DINO_AVOID_NEIGHBOURS" in cfg) else 4.0)
+	NavigationServer3D.agent_set_time_horizon_agents(_agent,
+		float(cfg.DINO_AVOID_TIME_HORIZON) if (cfg and "DINO_AVOID_TIME_HORIZON" in cfg) else 1.2)
+	# And buildings' outlines (Building._update_avoidance), this far ahead.
+	NavigationServer3D.agent_set_time_horizon_obstacles(_agent, _ai("obstacle_horizon", 0.4))
+	# Below the Hero's (Config.DINO_AI.avoidance_priority): they steer round him, he does not
+	# steer round them.
+	NavigationServer3D.agent_set_avoidance_priority(_agent, _ai("avoidance_priority", 0.5))
+	_refresh_walker()
+
+## Size, speed and map for the agent, once the species is known. The map is the world's own,
+## which every dinosaur's agent is on whatever mesh it walks, so all of them steer round each
+## other.
+func _refresh_walker() -> void:
+	var cfg = _get_config()
+	_avoid_radius = 0.4
+	if cfg and cfg.has_method("get_visual_size"):
+		_avoid_radius = maxf(0.2, float(cfg.get_visual_size("dino/" + dino_type).x) * 0.5)
+	_nav_goal = Vector3.INF
+	if not _agent.is_valid():
+		return
+	# A little wider to the solver than its body (Config.DINO_AI.avoid_margin): steering that aims
+	# to pass a neighbour at exactly body-to-body has nothing left when they meet, and gives out --
+	# measured, a raptor sliding past the Hero slowed to a stop at his shoulder and stood there.
+	NavigationServer3D.agent_set_radius(_agent, _avoid_radius + _ai("avoid_margin", 0.1))
+	NavigationServer3D.agent_set_height(_agent, _declared_size().y)
+	NavigationServer3D.agent_set_max_speed(_agent, maxf(0.1, speed))
+	# The others, and buildings (Building._update_avoidance) -- not for a siege animal, which goes
+	# through them.
+	var buildings: int = int(_ai("building_avoidance_layers", 0)) if walks_round_walls() else 0
+	NavigationServer3D.agent_set_avoidance_mask(_agent, 1 | buildings)
+	if is_inside_tree() and get_world_3d() != null:
+		NavigationServer3D.agent_set_map(_agent, get_world_3d().navigation_map)
+		NavigationServer3D.agent_set_position(_agent, global_position)
+
+func _nav_maps() -> Node:
+	if not is_inside_tree():
+		return null
+	return get_tree().get_first_node_in_group(NavMaps.GROUP)
+
+# ==============================================================================
+# What it is doing and why, for a report (TwitchWatch)
+# ==============================================================================
+
+## Its mind, what it is going for and where it means to stand, its route and how far along it is,
+## and what is holding it -- what a report on it says (TwitchWatch), in plain values for JSON.
+func debug_state() -> Dictionary:
+	var target: Node = current_target if is_instance_valid(current_target) else null
+	var route: Array = []
+	for i in range(mini(_route.size(), 12)):
+		route.append(_xz(_route[i]))
+	return {
+		"id": get_instance_id(),
+		"name": String(name),
+		"species": dino_type,
+		"came_from": came_from,
+		"came_in_at": _xz(came_in_at) if came_in_at != Vector3.INF else null,
+		"pos": [snappedf(global_position.x, 0.01), snappedf(global_position.y, 0.01), snappedf(global_position.z, 0.01)],
+		"heading": snappedf(rad_to_deg(rotation.y), 0.1),
+		"velocity": _xz(velocity),
+		"safe_velocity": _xz(_safe_velocity),
+		"speed": snappedf(speed, 0.01),
+		"burst": snappedf(_burst_left, 0.01),
+		"shoved": snappedf(_shove_left, 0.01),
+		"ate_at_rack": has_meta(BaitRack.EATEN_META),
+		"winded": snappedf(_rest_left, 0.01),
+		"mode": String(Mode.keys()[mode]),
+		"state": String(State.keys()[current_state]),
+		"target": _describe(target),
+		"in_reach": target != null and _target_in_reach(target),
+		"slot": _xz(assigned_slot) if assigned_slot != Vector3.ZERO else null,
+		"waypoint": [current_waypoint_index, waypoints.size()],
+		"route": route,
+		"route_index": _route_index,
+		"nav_goal": _xz(_nav_goal) if _nav_goal != Vector3.INF else null,
+		"way_sealed": _way_sealed,
+		"blocked_by": _describe(_blocked_by),
+		"stubborn": _describe(_stubborn),
+		"stuck": _stuck_count,
+		"jammed_for": snappedf(_jam_clock, 0.01),
+		"patience": snappedf(_patience, 0.01),
+		"going_home": going_home,
+		"pressed": {"building": _describe(_building_pressed_against()), "bodies": _bodies_pressed_against(),
+			"hero": _hero_pressed_against() != null},
+		"in_sight": visible,
+		"clip": String(animator.current_clip) if (animator != null and is_instance_valid(animator)) else "",
+		"pace": snappedf(float(animator.pace), 0.01) if (animator != null and is_instance_valid(animator)) else 0.0,
+	}
+
+## A thing as a report names it: what it is, where, and how far from this animal -- or null.
+func _describe(node: Variant) -> Variant:
+	if node == null or not is_instance_valid(node) or not (node is Node3D):
+		return null
+	var n := node as Node3D
+	var kind: String = n.get_class()
+	for group in ["hero", "core", "dinos", "buildings"]:
+		if n.is_in_group(group):
+			kind = group
+			break
+	var out: Dictionary = {"kind": kind, "id": n.get_instance_id(), "pos": _xz(n.global_position),
+		"dist": snappedf(_flat(n.global_position).distance_to(_flat(global_position)), 0.01)}
+	if "building_type" in n:
+		out["type"] = String(n.building_type)
+	elif "dino_type" in n:
+		out["type"] = String(n.dino_type)
+	return out
+
+static func _xz(v: Vector3) -> Array:
+	return [snappedf(v.x, 0.01), snappedf(v.z, 0.01)]
+
+# ==============================================================================
+# Resolvers
+# ==============================================================================
+
+func _ai(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	if cfg and "DINO_AI" in cfg:
+		return float(cfg.DINO_AI.get(key, fallback))
+	return fallback
+
+func _ai_list(key: String, fallback: Array) -> Array:
+	var cfg = _get_config()
+	if cfg and "DINO_AI" in cfg:
+		return cfg.DINO_AI.get(key, fallback)
+	return fallback
+
+func _cfg_int(key: String, fallback: int) -> int:
+	var cfg = _get_config()
+	if cfg and key in cfg:
+		return int(cfg.get(key))
+	return fallback
+
+static func _flat(p: Vector3) -> Vector2:
+	return Vector2(p.x, p.z)
+
+static func _flat3(p: Vector3) -> Vector3:
+	return Vector3(p.x, 0.0, p.z)
+
+## The run's dice (GameState.rng), or a throwaway set outside a run.
+func _dice() -> RandomNumberGenerator:
+	var gs = _get_game_state()
+	if gs != null and "rng" in gs and gs.rng is RandomNumberGenerator:
+		return gs.rng
+	return RandomNumberGenerator.new()
+
+func _get_config() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/Config")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("Config")
+	return null
+
+func _get_event_bus() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/EventBus")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("EventBus")
+	return null
+
+func _get_game_state() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/GameState")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("GameState")
+	return null
+
+func _get_grid_manager() -> Node:
+	if not is_inside_tree():
+		return null
+	return get_tree().get_first_node_in_group("grid_manager")
+
+# ==============================================================================
+# Its voice (v0.6 round three: "恐龙音效不同恐龙尽量不同，这样有区分度")
+# ==============================================================================
+
+## Seconds to its next call on the march or at its post (Config.SOUNDS.call_every), counted in
+## the game's own time, so a paused raid is a quiet one.
+var _call_clock: float = -1.0
+var _alert_said_at: int = -100000
+var _hurt_said_at: int = -100000
+## Its own dice for when it calls: decoration, never the run's (GameState.rng).
+var _voice_dice: RandomNumberGenerator = null
+
+## What its sounds are called: Config.DINOS[..].voice, or its own name -- the voice's sounds are
+## "<voice>_call", "_alert", "_bite", "_hurt", "_death" and, for a boss, "_roar" (Config.SOUNDS).
+func voice() -> String:
+	var cfg = _get_config()
+	if cfg and "DINOS" in cfg and cfg.DINOS.has(dino_type):
+		return String(cfg.DINOS[dino_type].get("voice", dino_type))
+	return dino_type
+
+## Says `kind` from where its head is: heard from its side of the screen, fainter the further off
+## (Fx.play_at). False if not -- no such sound for it, or its kind are all talking already.
+func say(kind: String) -> bool:
+	var fx = _get_fx()
+	if fx == null or not fx.has_method("play_at") or not is_inside_tree():
+		return false
+	return fx.play_at(voice() + "_" + kind, global_position + Vector3(0.0, _declared_size().y * 0.7, 0.0))
+
+## Calls out as it goes for something new -- not again for a while (SOUNDS.alert_every).
+func _alert() -> void:
+	var now: int = Time.get_ticks_msec()
+	if now - _alert_said_at < int(_sound_number("alert_every", 8.0) * 1000.0):
+		return
+	_alert_said_at = now
+	say("alert")
+
+func _next_call() -> float:
+	if _voice_dice == null:
+		_voice_dice = RandomNumberGenerator.new()
+		_voice_dice.randomize()
+	var every: Vector2 = Vector2(6.0, 15.0)
+	var cfg = _get_config()
+	if cfg and "SOUNDS" in cfg:
+		every = cfg.SOUNDS.get("call_every", every)
+	return _voice_dice.randf_range(every.x, every.y)
+
+## A boss taking the field is heard across the valley: its roar, or its alert if it has none.
+func _on_boss_arrived(dino: Node) -> void:
+	if dino != self or is_dead:
+		return
+	if not say("roar"):
+		say("alert")
+
+func _sound_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.SOUNDS.get(key, fallback)) if (cfg and "SOUNDS" in cfg) else fallback
+
+# ==============================================================================
+# Feedback hooks (v0.3)
+# ==============================================================================
+
+## A dinosaur taking fire used to look identical to one that was not.
+func _on_hit_fx() -> void:
+	_ensure_feedback_nodes(_declared_size().y + _feedback_number("health_bar_lift", 0.2), false)
+	_refresh_health_bar()
+	var fx = _get_fx()
+	if fx:
+		fx.flash(mesh_instance)
+
+## Dinosaurs used to simply vanish on death.
+func _on_death_fx() -> void:
+	var fx = _get_fx()
+	if fx == null or not is_inside_tree():
+		return
+	var colour := Color(0.9, 0.15, 0.15)
+	var cfg = _get_config()
+	if cfg and "COLORS" in cfg and cfg.COLORS.has(dino_type):
+		colour = cfg.COLORS[dino_type]
+	fx.debris(global_position, colour)
+	say("death")
+
+func _get_fx() -> Node:
+	if is_inside_tree():
+		return get_node_or_null("/root/Fx")
+	if Engine.get_main_loop() is SceneTree and Engine.get_main_loop().root:
+		return Engine.get_main_loop().root.get_node_or_null("Fx")
+	return null
+
+func _ensure_feedback_nodes(bar_height: float, want_ring: bool) -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		status_bar = find_child("StatusBar", true, false)
+	if status_bar == null:
+		var bar_script = load("res://scripts/fx/StatusBar3D.gd")
+		if bar_script:
+			status_bar = bar_script.new()
+			status_bar.name = "StatusBar"
+			status_bar.position = Vector3(0.0, bar_height, 0.0)
+			status_bar.size_scale = boss_bar_scale()
+			add_child(status_bar)
+	if want_ring and (selection_ring == null or not is_instance_valid(selection_ring)):
+		selection_ring = find_child("SelectionRing", true, false)
+		if selection_ring == null:
+			var ring_script = load("res://scripts/fx/SelectionRing3D.gd")
+			if ring_script:
+				selection_ring = ring_script.new()
+				selection_ring.name = "SelectionRing"
+				add_child(selection_ring)
+
+## How much longer than an ordinary animal's its bar is drawn: a boss's stands out over it
+## (Config.FEEDBACK.boss_bar_scale, by DINOS[..].boss), where a bar across the screen would not
+## belong in a game that looks like the world.
+func boss_bar_scale() -> float:
+	var cfg = _get_config()
+	if cfg == null or not cfg.DINOS.has(dino_type):
+		return 1.0
+	var rank: String = String(cfg.DINOS[dino_type].get("boss", ""))
+	return float(cfg.FEEDBACK.get("boss_bar_scale", {}).get(rank, 1.0)) if rank != "" else 1.0
+
+func _feedback_number(key: String, fallback: float) -> float:
+	var cfg = _get_config()
+	return float(cfg.FEEDBACK.get(key, fallback)) if (cfg and "FEEDBACK" in cfg) else fallback
+
+func _refresh_health_bar() -> void:
+	if status_bar == null or not is_instance_valid(status_bar):
+		return
+	var ratio: float = (current_hp / max_hp) if max_hp > 0.0 else 0.0
+	var hide_full: bool = true
+	var cfg = _get_config()
+	if cfg and "FEEDBACK" in cfg:
+		hide_full = bool(cfg.FEEDBACK.get("health_bar_hide_at_full", true))
+	status_bar.visible = not (hide_full and ratio >= 0.999)
+	status_bar.set_ratio(ratio, Color(0.85, 0.3, 0.25, 0.95) if ratio < 0.35 else Color(0.3, 0.85, 0.35, 0.95))
+
+func set_selected_visual(on: bool) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("set_shown"):
+		selection_ring.set_shown(on)
+
+## A thin circle at its feet: a unit, not a building (Config.FEEDBACK.unit_ring_*).
+func _configure_selection_ring(base_size: float) -> void:
+	if selection_ring and is_instance_valid(selection_ring) and selection_ring.has_method("configure"):
+		selection_ring.configure(SelectionRing3D.Shape.ROUND, base_size)

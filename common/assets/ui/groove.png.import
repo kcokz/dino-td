@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://dirdgowmf4reu"
+path="res://.godot/imported/groove.png-2efce3b8f3987219af6f564d0e02d2d8.image"
+
+[deps]
+
+source_file="res://common/assets/ui/groove.png"
+dest_files=["res://.godot/imported/groove.png-2efce3b8f3987219af6f564d0e02d2d8.image"]
+
+[params]
+

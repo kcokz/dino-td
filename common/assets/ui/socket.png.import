@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://dek8hrdkeynu2"
+path="res://.godot/imported/socket.png-30eeb94ecc7c40486d22a3a63c3bdf94.image"
+
+[deps]
+
+source_file="res://common/assets/ui/socket.png"
+dest_files=["res://.godot/imported/socket.png-30eeb94ecc7c40486d22a3a63c3bdf94.image"]
+
+[params]
+

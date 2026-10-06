@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://bc8jipil67iad"
+path="res://.godot/imported/medallion.png-ef9b07cc0fb0cd31ad2d1abbc1fc09e2.image"
+
+[deps]
+
+source_file="res://common/assets/ui/medallion.png"
+dest_files=["res://.godot/imported/medallion.png-ef9b07cc0fb0cd31ad2d1abbc1fc09e2.image"]
+
+[params]
+

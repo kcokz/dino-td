@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://cdnmo581o1up2"
+path="res://.godot/imported/socket_tech.png-2551ca80f8acbb6fb53eb75746e0ff19.image"
+
+[deps]
+
+source_file="res://common/assets/ui/socket_tech.png"
+dest_files=["res://.godot/imported/socket_tech.png-2551ca80f8acbb6fb53eb75746e0ff19.image"]
+
+[params]
+

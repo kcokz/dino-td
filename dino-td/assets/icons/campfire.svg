@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M 14 56 L 30 26" fill="none" stroke="#16110c" stroke-width="16.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 50 56 L 34 26" fill="none" stroke="#16110c" stroke-width="16.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21 50 C 18.8 34.7 29.8 29.6 32 16 C 35.3 31.3 45.75 34.7 43 50 Z" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="8" cy="56" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="20" cy="59" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="32" cy="60" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="44" cy="59" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="56" cy="56" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 14 56 L 30 26" fill="none" stroke="#a0703f" stroke-width="6.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 50 56 L 34 26" fill="none" stroke="#a0703f" stroke-width="6.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21 50 C 18.8 34.7 29.8 29.6 32 16 C 35.3 31.3 45.75 34.7 43 50 Z" fill="#f28c28"/>
+  <ellipse cx="8" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+  <ellipse cx="20" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="32" cy="60" rx="6.5" ry="4.5" fill="#d3d8da"/>
+  <ellipse cx="44" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="56" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+  <path d="M 26.5 50 C 24.85 39.8 30.9 36.4 32.55 28.92 C 34.2 38.1 39.7 39.8 37.5 50 Z" fill="#f7cb4c"/>
+  <path d="M 25 36 L 30 26 M 39 36 L 34 26" fill="none" stroke="#2e2019" stroke-width="3.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="8" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+  <ellipse cx="20" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="32" cy="60" rx="6.5" ry="4.5" fill="#d3d8da"/>
+  <ellipse cx="44" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="56" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+</svg>

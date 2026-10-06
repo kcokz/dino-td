@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://bst8bw868uf4v"
+path="res://.godot/imported/trough.png-dd442fe53f376c58ed8e48ae452537a8.image"
+
+[deps]
+
+source_file="res://common/assets/ui/trough.png"
+dest_files=["res://.godot/imported/trough.png-dd442fe53f376c58ed8e48ae452537a8.image"]
+
+[params]
+

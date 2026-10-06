@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M 11 55 C 9 35 19 16 32 15 C 45 16 55 35 53 55 Z" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="27" y="9" width="10" height="8" rx="2" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="8" cy="56" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="19" cy="59" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="32" cy="60" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="45" cy="59" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="56" cy="56" rx="6.5" ry="4.5" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 11 55 C 9 35 19 16 32 15 C 45 16 55 35 53 55 Z" fill="#b4553a"/>
+  <rect x="27" y="9" width="10" height="8" rx="2" fill="#7e3423"/>
+  <ellipse cx="8" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+  <ellipse cx="19" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="32" cy="60" rx="6.5" ry="4.5" fill="#d3d8da"/>
+  <ellipse cx="45" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="56" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+  <path d="M 53 55 C 55 35 45 16 32 15 C 41 22 46 36 45 55 Z" fill="#7e3423"/>
+  <path d="M 15 46 C 15 33 21 23 29 19 C 24 27 21 37 21 48 Z" fill="#d27a55"/>
+  <path d="M 22 30 L 27 33 M 38 26 L 42 31 M 35 39 L 40 41" fill="none" stroke="#7e3423" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 24 56 L 24 47 C 24 40 40 40 40 47 L 40 56 Z" fill="#2e2019"/>
+  <path d="M 27 56 C 26 51.05 31 49.4 32 45 C 33.5 49.95 38.25 51.05 37 56 Z" fill="#f28c28"/>
+  <path d="M 29.5 56 C 28.75 52.7 31.5 51.6 32.25 49.18 C 33 52.15 35.5 52.7 34.5 56 Z" fill="#f7cb4c"/>
+  <rect x="29" y="10" width="6" height="3" rx="1" fill="#2e2019"/>
+  <ellipse cx="8" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+  <ellipse cx="19" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="32" cy="60" rx="6.5" ry="4.5" fill="#d3d8da"/>
+  <ellipse cx="45" cy="59" rx="6.5" ry="4.5" fill="#8b9397"/>
+  <ellipse cx="56" cy="56" rx="6.5" ry="4.5" fill="#adb4b8"/>
+</svg>

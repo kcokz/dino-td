@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M 9 57 L 31.7849 14.6852" fill="none" stroke="#16110c" stroke-width="13.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="31.7849,14.6852 37.3082,13.2866 37,5 29.9122,9.30415" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 12 59 L 43.1723 19.6245" fill="none" stroke="#16110c" stroke-width="13.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="43.1723,19.6245 48.855,19.2129 50,11 42.269,13.999" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 15 61 L 50.581 31.0796" fill="none" stroke="#16110c" stroke-width="13.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="50.581,31.0796 56.2308,31.8163 59,24 50.8245,25.3872" fill="#16110c" stroke="#16110c" stroke-width="10.0" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 9 57 L 31.7849 14.6852" fill="none" stroke="#dca466" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="31.7849,14.6852 37.3082,13.2866 37,5 29.9122,9.30415" fill="#5a6166"/>
+  <path d="M 12 59 L 43.1723 19.6245" fill="none" stroke="#dca466" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="43.1723,19.6245 48.855,19.2129 50,11 42.269,13.999" fill="#5a6166"/>
+  <path d="M 15 61 L 50.581 31.0796" fill="none" stroke="#dca466" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="50.581,31.0796 56.2308,31.8163 59,24 50.8245,25.3872" fill="#5a6166"/>
+  <path d="M 9.96852 57.5215 L 11.3908 54.8801" fill="none" stroke="#6f4523" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="31.7849,14.6852 29.9122,9.30415 37,5" fill="#3b4145"/>
+  <path d="M 36.5686 12.8883 L 37 5" fill="none" stroke="#98a3aa" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 12.8625 59.6828 L 14.7246 57.3306" fill="none" stroke="#6f4523" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="43.1723,19.6245 42.269,13.999 50,11" fill="#3b4145"/>
+  <path d="M 48.1964 18.6915 L 50 11" fill="none" stroke="#98a3aa" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 15.708 61.8419 L 18.004 59.9111" fill="none" stroke="#6f4523" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="50.581,31.0796 50.8245,25.3872 59,24" fill="#3b4145"/>
+  <path d="M 55.6902 31.1734 L 59 24" fill="none" stroke="#98a3aa" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="18" y="33.5" width="14" height="7" rx="2" fill="#dcbb7c" transform="rotate(-48 25 37)"/>
+</svg>
