@@ -41,27 +41,10 @@ func _ready() -> void:
 ## Scales the model to the given height (0: as built), stands its feet on the ground, returns its
 ## unscaled bounds.
 func _fit(model: Node3D, height: float) -> AABB:
-	var box := _bounds(model, Transform3D.IDENTITY)
+	var box := Geo.bounds(model)
 	if height > 0.0 and box.size.y > 0.0:
 		model.scale = Vector3.ONE * (height / box.size.y)
 	model.position.y = -box.position.y * model.scale.y
-	return box
-
-
-func _bounds(node: Node, xf: Transform3D) -> AABB:
-	var box := AABB()
-	var first := true
-	if node is Node3D:
-		xf = xf * (node as Node3D).transform
-	if node is VisualInstance3D:
-		box = xf * (node as VisualInstance3D).get_aabb()
-		first = false
-	for child in node.get_children():
-		var b := _bounds(child, xf)
-		if b.size == Vector3.ZERO:
-			continue
-		box = b if first else box.merge(b)
-		first = false
 	return box
 
 
