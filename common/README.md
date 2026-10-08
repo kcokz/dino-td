@@ -11,7 +11,7 @@
 | `assets/portraits/` | 恐龙头像（不含 dino-td 的建筑头像） | 会 |
 | `assets/source/` | Quaternius 原始模型 | 会 |
 | `assets/CREDITS.md` | 素材来源和授权。**发布前必须带上** | 会 |
-| `scripts/` | 改造好、能直接用的代码（现在还是空的） | 会 |
+| `scripts/` | 改造好、能直接用的代码：`ArtDress.gd`（给植物、道具、恐龙眼睛上对材质） | 会 |
 | `scripts-draft/` | 从 dino-td 抄来的、以后可能共用的代码。它们都还离不开 dino-td 的 `Config` 等，**不能直接用**；改造到不依赖 dino-td 后挪进 `scripts/` | 不会 |
 | `tools/` | Blender 建模脚本（恐龙、主角、植物、道具）、图标/字体/配音生成脚本。输出写进 `common/assets/` | 不会 |
 

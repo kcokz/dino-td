@@ -40,6 +40,6 @@ screenshots/
 __pycache__/
 *.pyc
 
-# A game's copy of common/ (tools/sync_common.py writes it). The original is common/ at the
+# A game's copy of common/ (common/sync.py writes it). The original is common/ at the
 # repository root; edit there and sync, never in the copy.
 dino-raid/common/
