@@ -1,318 +1,504 @@
 class_name Hud
 extends CanvasLayer
-## What the player sees over the field: the cards in hand; the three cards on offer every so often, while the
-## battle waits; what a nest or a building is doing, under the mouse. It shows; Battle decides.
+## What the player holds and sees over the battle (GAME-DESIGN 9): the hand of cards fanned at the bottom, the
+## energy in an amber stone, the draw and discard piles, the button that ends the turn; the turn and the waves
+## still to come along the top; what the cursor points at; and between levels, the cards to win, to upgrade and
+## to take out. It shows; Battle decides.
 
-const CARD := Vector2(112, 150)
-const BIG := Vector2(180, 236)
+const HAND_SCALE := 0.84
+const HOVER_SCALE := 1.18
 
 var battle: Battle
-var _hand: Array[Button] = []
-var _bar: ProgressBar
-var _panel: PanelContainer
-var _title: Label
-var _offers: Array[Button] = []
+var _root: Control
+var _hand: Control
+var _cards: Array = []           # CardView, in hand order
+var _hovered: CardView
+var _energy: Control
+var _draw: Label
+var _discard: Label
+var _end: Button
+var _turn: Label
+var _waves: HBoxContainer
+var _level: Label
 var _info: PanelContainer
 var _info_text: Label
-var _end: PanelContainer
-var _end_label: Label
-var _end_note: Label
-var _chosen := -1            # with a full hand: the offer kept, waiting for the hand card it is to replace
-var _shown_hand: Array = []
-var _shown_offer: Array = []
+var _banner: VBoxContainer
+var _banner_title: Label
+var _banner_sub: Label
+var _overlay: Control
 
 
 func setup(p_battle: Battle) -> void:
 	battle = p_battle
-	process_mode = Node.PROCESS_MODE_ALWAYS  # the offer is chosen while the battle waits
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_root)
 
-	var bottom := VBoxContainer.new()
-	bottom.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bottom.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	bottom.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	bottom.position.y -= 12
-	bottom.alignment = BoxContainer.ALIGNMENT_END
-	bottom.add_theme_constant_override("separation", 6)
-	root.add_child(bottom)
+	_hand = Control.new()
+	_hand.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hand.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_hand)
 
-	var timer := HBoxContainer.new()
-	timer.alignment = BoxContainer.ALIGNMENT_CENTER
-	timer.add_theme_constant_override("separation", 8)
-	bottom.add_child(timer)
-	timer.add_child(_label("下次挑牌", 14))
-	_bar = ProgressBar.new()
-	_bar.custom_minimum_size = Vector2(320, 12)
-	_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_bar.max_value = 1.0
-	_bar.show_percentage = false
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(0.92, 0.75, 0.4)
-	_bar.add_theme_stylebox_override("fill", fill)
-	timer.add_child(_bar)
+	_energy = Control.new()
+	_energy.custom_minimum_size = Vector2(120, 120)
+	_energy.size = Vector2(120, 120)
+	_energy.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_energy.position = Vector2(22, -196)
+	_energy.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_energy.draw.connect(_draw_energy)
+	_root.add_child(_energy)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	bottom.add_child(row)
-	for i in Battle.HAND:
-		var b := _card(CARD, 15, 11)
-		b.toggle_mode = true
-		var key := _label(str(i + 1), 11)
-		key.position = Vector2(8, 4)
-		key.modulate.a = 0.6
-		b.add_child(key)
-		b.pressed.connect(_on_hand.bind(i))
-		row.add_child(b)
-		_hand.append(b)
+	_draw = _pile("抽牌堆", Control.PRESET_BOTTOM_LEFT, Vector2(30, -62))
+	_discard = _pile("弃牌堆", Control.PRESET_BOTTOM_RIGHT, Vector2(-112, -62))
 
-	# The offer: three cards in the middle of the screen, while the battle waits.
-	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_panel.add_theme_stylebox_override("panel", _box(Color(0, 0, 0, 0), 0, 0.82, 22))
-	_panel.visible = false
-	root.add_child(_panel)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	_panel.add_child(box)
-	_title = _label("", 22)
-	box.add_child(_title)
-	var three := HBoxContainer.new()
-	three.alignment = BoxContainer.ALIGNMENT_CENTER
-	three.add_theme_constant_override("separation", 16)
-	box.add_child(three)
-	for i in 3:
-		var b := _card(BIG, 22, 15)
-		b.toggle_mode = true
-		var key := _label(str(i + 1), 13)
-		key.position = Vector2(10, 6)
-		key.modulate.a = 0.6
-		b.add_child(key)
-		b.pressed.connect(_on_offer.bind(i))
-		three.add_child(b)
-		_offers.append(b)
-	var skip := Button.new()
-	skip.text = "都不要"
-	skip.focus_mode = Control.FOCUS_NONE
-	skip.add_theme_font_size_override("font_size", 16)
-	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	skip.pressed.connect(func() -> void: battle.act(0, "choose", {"offer": -1}))
-	box.add_child(skip)
+	_end = Button.new()
+	_end.text = "结束回合"
+	_end.focus_mode = Control.FOCUS_NONE
+	_end.add_theme_font_override("font", Fonts.serif(800))
+	_end.add_theme_font_size_override("font_size", 24)
+	_end.add_theme_color_override("font_color", Color(0.18, 0.11, 0.05))
+	_end.add_theme_color_override("font_hover_color", Color(0.1, 0.06, 0.02))
+	_end.add_theme_color_override("font_disabled_color", Color(0.35, 0.3, 0.25))
+	_end.add_theme_stylebox_override("normal", _plate(Color(0.95, 0.72, 0.34), Color(0.45, 0.28, 0.12)))
+	_end.add_theme_stylebox_override("hover", _plate(Color(1.0, 0.8, 0.42), Color(0.55, 0.34, 0.14)))
+	_end.add_theme_stylebox_override("pressed", _plate(Color(0.85, 0.62, 0.28), Color(0.45, 0.28, 0.12)))
+	_end.add_theme_stylebox_override("disabled", _plate(Color(0.42, 0.38, 0.33), Color(0.25, 0.22, 0.2)))
+	_end.custom_minimum_size = Vector2(188, 64)
+	_end.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_end.position = Vector2(-214, -150)
+	_end.pressed.connect(func() -> void: battle.act(0, "end", {}))
+	_root.add_child(_end)
 
-	# What is under the mouse.
+	var corner := VBoxContainer.new()
+	corner.position = Vector2(20, 12)
+	corner.add_theme_constant_override("separation", 0)
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(corner)
+	_level = _label("", 17, Fonts.serif(700), Color(0.98, 0.92, 0.8))
+	_level.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	corner.add_child(_level)
+	_turn = _label("", 30, Fonts.serif(900), Color(1.0, 0.95, 0.85))
+	_turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	corner.add_child(_turn)
+
+	var waves := VBoxContainer.new()
+	waves.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	waves.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	waves.position = Vector2(-18, 12)
+	waves.alignment = BoxContainer.ALIGNMENT_BEGIN
+	waves.add_theme_constant_override("separation", 6)
+	waves.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(waves)
+	var heading := _label("机器人要来", 15, Fonts.serif(700), Color(0.75, 0.93, 1.0))
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	waves.add_child(heading)
+	_waves = HBoxContainer.new()
+	_waves.alignment = BoxContainer.ALIGNMENT_END
+	_waves.add_theme_constant_override("separation", 6)
+	waves.add_child(_waves)
+
 	_info = PanelContainer.new()
-	_info.add_theme_stylebox_override("panel", _box(Color(0, 0, 0, 0), 0, 0.78, 10))
+	_info.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.88), Color(0.72, 0.55, 0.32), 12))
+	_info.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	_info.position = Vector2(18, -60)
+	_info.custom_minimum_size = Vector2(260, 0)
 	_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_info.visible = false
-	root.add_child(_info)
-	_info_text = _label("", 15)
+	_root.add_child(_info)
+	_info_text = _label("", 15, Fonts.serif(500), Color(0.96, 0.92, 0.84))
 	_info_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_info_text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_info_text.custom_minimum_size = Vector2(236, 0)
 	_info.add_child(_info_text)
 
-	_end = PanelContainer.new()
-	_end.set_anchors_preset(Control.PRESET_CENTER)
-	_end.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_end.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_end.add_theme_stylebox_override("panel", _box(Color(0, 0, 0, 0), 0, 0.82, 26))
-	_end.visible = false
-	root.add_child(_end)
-	var end_box := VBoxContainer.new()
-	end_box.add_theme_constant_override("separation", 14)
-	_end.add_child(end_box)
-	_end_label = _label("", 30)
-	end_box.add_child(_end_label)
-	_end_note = _label("", 17)
-	end_box.add_child(_end_note)
-	var again := Button.new()
-	again.text = "再来一局"
-	again.focus_mode = Control.FOCUS_NONE
-	again.add_theme_font_size_override("font_size", 20)
-	again.pressed.connect(func() -> void: battle.get_tree().reload_current_scene())
-	end_box.add_child(again)
+	_banner = VBoxContainer.new()
+	_banner.set_anchors_preset(Control.PRESET_CENTER)
+	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_banner.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_banner.position.y = -90
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_banner.modulate.a = 0.0
+	_root.add_child(_banner)
+	_banner_title = _label("", 34, Fonts.serif(900), Color(1.0, 0.95, 0.82))
+	_banner.add_child(_banner_title)
+	_banner_sub = _label("", 18, Fonts.serif(600), Color(0.95, 0.88, 0.75))
+	_banner.add_child(_banner_sub)
+
+	_overlay = Control.new()
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.visible = false
+	_root.add_child(_overlay)
 
 
 func _process(_delta: float) -> void:
-	if _shown_hand != battle.hand:
-		_shown_hand = battle.hand.duplicate()
-		for i in _hand.size():
-			_dress(_hand[i], battle.hand[i] if i < battle.hand.size() else "")
-	var choosing := not battle.offer.is_empty()
-	for i in _hand.size():
-		var b := _hand[i]
-		var held := i < battle.hand.size()
-		b.disabled = not held or (choosing and _chosen < 0)
-		b.set_pressed_no_signal(not choosing and battle.placing == i)
-		b.modulate = Color(1.0, 0.72, 0.66) if choosing and _chosen >= 0 and held else Color.WHITE
-	_bar.value = 1.0 - battle.offer_in() / Battle.OFFER_EVERY
-	if not choosing:
-		_panel.visible = false
-		_chosen = -1
-		return
-	if not _panel.visible or _shown_offer != battle.offer:
-		_shown_offer = battle.offer.duplicate()
-		_chosen = -1
-		for i in _offers.size():
-			_dress(_offers[i], battle.offer[i])
-		_panel.visible = true
-		_info.visible = false
-	for i in _offers.size():
-		_offers[i].set_pressed_no_signal(i == _chosen)
-	if battle.hand.size() < Battle.HAND:
-		_title.text = "挑一张牌"
-	elif _chosen < 0:
-		_title.text = "手里满了：挑一张，再点下面一张手牌换掉"
-	else:
-		_title.text = "点下面一张手牌，换成「%s」" % Cards.ALL[battle.offer[_chosen]].name
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if battle.offer.is_empty() or not event is InputEventKey or not event.pressed or event.echo:
-		return
-	var k := (event as InputEventKey).physical_keycode
-	if _chosen >= 0 and k >= KEY_1 and k < KEY_1 + Battle.HAND:
-		_on_hand(k - KEY_1)
-	elif k >= KEY_1 and k < KEY_1 + _offers.size():
-		_on_offer(k - KEY_1)
-	elif k == KEY_ESCAPE:
-		_chosen = -1
-	else:
-		return
-	get_viewport().set_input_as_handled()
-
-
-func _on_hand(i: int) -> void:
-	if not battle.offer.is_empty():
-		if _chosen >= 0:
-			battle.act(0, "choose", {"offer": _chosen, "replace": i})
-		return
-	battle.pick(i)
-
-
-func _on_offer(i: int) -> void:
-	if battle.hand.size() < Battle.HAND:
-		battle.act(0, "choose", {"offer": i})
-	else:
-		_chosen = -1 if _chosen == i else i
-
-
-## What a nest or building under the mouse is doing ("" for nothing there).
-func show_info(text: String) -> void:
-	if text == "" or not battle.offer.is_empty():
-		_info.visible = false
-		return
-	if _info_text.text != text:
-		_info_text.text = text
+	_layout()
+	var tip := ""
+	if battle.planning and _hovered == null:
+		tip = battle.describe(battle.hover)
+	_info.visible = tip != ""
+	if tip != "" and _info_text.text != tip:
+		_info_text.text = tip
 		_info.reset_size()
-	var m := get_viewport().get_mouse_position() + Vector2(18, 18)
-	var view := get_viewport().get_visible_rect().size
-	_info.position = Vector2(minf(m.x, view.x - _info.size.x - 4), minf(m.y, view.y - _info.size.y - 4))
-	_info.visible = true
 
 
-func show_end(won: bool, note: String) -> void:
-	_panel.visible = false
-	_info.visible = false
-	_end_label.text = "机器人基地被打爆了！" if won else "恐龙蛋窝全被毁了……"
-	_end_note.text = note
-	_end.visible = true
+## The cards of `hand`, as cards (those already shown kept, so they do not jump).
+func deal(hand: Array) -> void:
+	var keep := {}
+	for v in _cards:
+		keep[v] = true
+	var out: Array = []
+	var free: Array = _cards.duplicate()
+	for ci in hand:
+		var found: CardView = null
+		for v in free:
+			if v.ci == ci:
+				found = v
+				break
+		if found:
+			free.erase(found)
+			out.append(found)
+		else:
+			var v := CardView.new()
+			_hand.add_child(v)
+			v.setup(ci, battle.card_picture(ci.id))
+			v.position = Vector2(60, _root.size.y)
+			v.scale = Vector2.ONE * 0.3
+			v.clicked.connect(_on_card)
+			v.hovered.connect(_on_hover)
+			out.append(v)
+	for v in free:
+		_fly_off(v, Vector2(_root.size.x - 90, _root.size.y))
+	_cards = out
+	refresh()
 
 
-# -- Cards -------------------------------------------------------------------------------------------------
-
-## A card: its picture (or a drawn mark for help), its name, and what it does.
-func _card(size: Vector2, name_px: int, text_px: int) -> Button:
-	var b := Button.new()
-	b.custom_minimum_size = size
-	b.focus_mode = Control.FOCUS_NONE
-	b.clip_contents = true
-	var box := VBoxContainer.new()
-	box.name = "Box"
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 6
-	box.offset_top = 8
-	box.offset_right = -6
-	box.offset_bottom = -6
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_theme_constant_override("separation", 2)
-	b.add_child(box)
-	var pic := TextureRect.new()
-	pic.name = "Pic"
-	pic.custom_minimum_size = Vector2(0, size.y * 0.48)
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(pic)
-	var mark := Emblem.new()
-	mark.name = "Mark"
-	mark.custom_minimum_size = Vector2(0, size.y * 0.48)
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(mark)
-	var title := _label("", name_px)
-	title.name = "Name"
-	box.add_child(title)
-	var text := _label("", text_px)
-	text.name = "Text"
-	text.modulate = Color(1, 1, 1, 0.82)
-	box.add_child(text)
-	_skin(b, Color(0.5, 0.5, 0.5))
-	return b
+## The turn ends: what is left in hand goes to the discard pile.
+func discard() -> void:
+	for v in _cards:
+		_fly_off(v, Vector2(_root.size.x - 90, _root.size.y))
+	_cards = []
+	_hovered = null
+	refresh()
 
 
-func _dress(b: Button, card: String) -> void:
-	var pic := b.get_node("Box/Pic") as TextureRect
-	var mark := b.get_node("Box/Mark") as Emblem
-	var title := b.get_node("Box/Name") as Label
-	var text := b.get_node("Box/Text") as Label
-	if card == "":
-		pic.texture = null
-		pic.visible = true
-		mark.visible = false
-		title.text = ""
-		text.text = ""
-		_skin(b, Color(0.4, 0.4, 0.4))
+func _fly_off(v: CardView, to: Vector2) -> void:
+	var tw := v.create_tween()
+	tw.set_parallel()
+	tw.tween_property(v, "position", to - v.pivot_offset, 0.3).set_ease(Tween.EASE_IN)
+	tw.tween_property(v, "scale", Vector2.ONE * 0.25, 0.3)
+	tw.tween_property(v, "rotation", 0.6, 0.3)
+	tw.chain().tween_callback(v.queue_free)
+
+
+func refresh() -> void:
+	var s: BattleState = battle.state
+	for i in _cards.size():
+		var v: CardView = _cards[i]
+		var c := Rules.card(v.ci)
+		v.set_state(s.energy >= int(c.cost) and battle.planning, battle.held == i)
+	_draw.text = "%d" % s.draw.size()
+	_discard.text = "%d" % s.discard.size()
+	_end.disabled = not battle.planning
+	_energy.queue_redraw()
+	_turn.text = "第 %d 回合" % s.turn
+	_level.text = "第 %d 关 · %s" % [s.level + 1, Rules.LEVELS[s.level].name]
+	for ch in _waves.get_children():
+		ch.queue_free()
+	var shown := 0
+	for t in range(s.turn + 1, s.turn + 8):
+		var wave := Rules.wave(s.level, t)
+		if wave.is_empty():
+			continue
+		_waves.add_child(_wave_chip(t - s.turn, wave))
+		shown += 1
+		if shown >= 3:
+			break
+
+
+func _wave_chip(after: int, wave: Array) -> Control:
+	var chip := PanelContainer.new()
+	chip.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.1, 0.13, 0.88), Color(0.35, 0.85, 1.0, 0.8), 6))
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	chip.add_child(row)
+	row.add_child(_label("下回合" if after == 1 else "%d 回合后" % after, 15, Fonts.serif(700), Color(0.75, 0.93, 1.0)))
+	var counts := {}
+	for k in wave:
+		counts[k] = counts.get(k, 0) + 1
+	for k in counts:
+		var pic := TextureRect.new()
+		pic.texture = battle.robot_picture(k)
+		pic.custom_minimum_size = Vector2(30, 30)
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(pic)
+		row.add_child(_label("×%d" % counts[k], 17, Fonts.numbers(), Color(1, 1, 1)))
+	return chip
+
+
+## The cards fanned along the bottom; the one under the cursor lifted and larger, the one held raised.
+func _layout() -> void:
+	var n := _cards.size()
+	if n == 0:
 		return
-	var c: Dictionary = Cards.ALL[card]
-	var tex: Texture2D = battle.card_picture(card)
-	pic.texture = tex
-	pic.visible = tex != null
-	mark.visible = tex == null
-	mark.kind = card
-	mark.queue_redraw()
-	title.text = c.name
-	text.text = c.text
-	_skin(b, Cards.EDGE[c.type])
+	var w := _root.size.x
+	var h := _root.size.y
+	var gap := 128.0
+	for i in n:
+		var v: CardView = _cards[i]
+		var off := i - (n - 1) * 0.5
+		var x := w * 0.5 + off * gap
+		var y := h + 52.0 + absf(off) * absf(off) * 5.0
+		var rot := deg_to_rad(off * 3.5)
+		var k := HAND_SCALE
+		if v == _hovered:
+			y -= 96.0
+			rot = 0.0
+			k = HOVER_SCALE
+		elif battle.held == i:
+			y -= 40.0
+			rot = 0.0
+		var to := Vector2(x, y) - v.pivot_offset
+		v.position = v.position.lerp(to, 0.3)
+		v.rotation = lerpf(v.rotation, rot, 0.3)
+		v.scale = v.scale.lerp(Vector2.ONE * k, 0.3)
+		v.z_index = 10 if v == _hovered else i
 
 
-func _skin(b: Button, edge: Color) -> void:
-	var lit := Color(1.0, 0.95, 0.7)
-	b.add_theme_stylebox_override("normal", _box(edge, 2, 0.86))
-	b.add_theme_stylebox_override("hover", _box(edge.lightened(0.25), 3, 0.92))
-	b.add_theme_stylebox_override("pressed", _box(lit, 4, 0.95))
-	b.add_theme_stylebox_override("hover_pressed", _box(lit, 4, 0.95))
-	b.add_theme_stylebox_override("disabled", _box(edge.darkened(0.45), 2, 0.7))
+func _on_card(v: CardView) -> void:
+	var i := _cards.find(v)
+	if i >= 0:
+		battle.hold(i)
+		refresh()
 
 
-func _box(edge: Color, width: int, alpha: float, pad := 0) -> StyleBoxFlat:
+func _on_hover(v: CardView, on: bool) -> void:
+	if on:
+		_hovered = v
+	elif _hovered == v:
+		_hovered = null
+
+
+## A word across the middle of the screen, fading.
+func banner(title: String, sub := "") -> void:
+	_banner_title.text = title
+	_banner_sub.text = sub
+	_banner_sub.visible = sub != ""
+	var tw := _banner.create_tween()
+	tw.tween_property(_banner, "modulate:a", 1.0, 0.2)
+	tw.tween_interval(1.1)
+	tw.tween_property(_banner, "modulate:a", 0.0, 0.5)
+
+
+# -- Between levels ----------------------------------------------------------------------------------------------
+
+## The battle is over: on to the cards won, or back to the start.
+func finish(won: bool) -> void:
+	var run: RunState = battle.run
+	if not won:
+		_screen("恐龙蛋窝全被毁了……", "这一局到这里了", [], [["重新开始", func() -> void: _new_run()]])
+		return
+	if run.last_level():
+		_screen("全部打通了！", "时光机一个不剩", [], [["再玩一遍", func() -> void: _new_run()]])
+		return
+	_pick_card()
+
+
+func _pick_card() -> void:
+	var run: RunState = battle.run
+	var offer := run.offer()
+	var cards: Array = []
+	for id in offer:
+		cards.append({"id": id, "up": false})
+	_screen("过关了！", "挑一张新牌放进牌堆", cards, [["不要了", func() -> void: _upgrade()]], func(ci: Dictionary) -> void:
+		run.deck.append(ci.duplicate())
+		_upgrade())
+
+
+func _upgrade() -> void:
+	var run: RunState = battle.run
+	var can: Array = run.deck.filter(func(ci: Dictionary) -> bool: return not ci.get("up", false))
+	if can.is_empty():
+		_remove()
+		return
+	_screen("升级一张牌", "点一张，它就变成 +", run.deck, [["不升级", func() -> void: _remove()]], func(ci: Dictionary) -> void:
+		if not ci.get("up", false):
+			ci.up = true
+			_remove())
+
+
+func _remove() -> void:
+	var run: RunState = battle.run
+	_screen("去掉一张牌？", "牌少了，好牌转得快。也可以不去", run.deck, [["不去掉", func() -> void: _next()]],
+		func(ci: Dictionary) -> void:
+			if run.deck.size() > 5:
+				run.deck.erase(ci)
+			_next())
+
+
+func _next() -> void:
+	battle.run.level += 1
+	battle.get_tree().reload_current_scene()
+
+
+func _new_run() -> void:
+	RunState.current = null
+	battle.get_tree().reload_current_scene()
+
+
+## A screen over the battle: a title, cards to click (on_card), buttons.
+func _screen(title: String, sub: String, cards: Array, buttons: Array, on_card := Callable()) -> void:
+	for ch in _overlay.get_children():
+		ch.queue_free()
+	_overlay.visible = true
+	_hand.visible = false
+	var shade := ColorRect.new()
+	shade.color = Color(0.02, 0.02, 0.02, 0.72)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.add_child(shade)
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 16)
+	_overlay.add_child(box)
+	box.add_child(_label(title, 44, Fonts.serif(900), Color(1.0, 0.92, 0.72)))
+	box.add_child(_label(sub, 19, Fonts.serif(600), Color(0.92, 0.86, 0.74)))
+	if not cards.is_empty():
+		var grid := GridContainer.new()
+		grid.columns = mini(cards.size(), 7)
+		grid.add_theme_constant_override("h_separation", 12)
+		grid.add_theme_constant_override("v_separation", 12)
+		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		box.add_child(grid)
+		var k := 1.0 if cards.size() <= 3 else 0.72
+		for ci in cards:
+			var slot := Control.new()
+			slot.custom_minimum_size = CardView.SIZE * k
+			grid.add_child(slot)
+			var v := CardView.new()
+			slot.add_child(v)
+			v.setup(ci, battle.card_picture(ci.id))
+			v.pivot_offset = Vector2.ZERO
+			v.scale = Vector2.ONE * k
+			var upgrading := title.begins_with("升级")
+			v.set_state(not (upgrading and ci.get("up", false)), false)
+			if on_card.is_valid():
+				v.clicked.connect(func(_v: CardView) -> void: on_card.call(ci))
+			if upgrading and not ci.get("up", false):
+				# Pointed at, it shows what it would become.
+				v.hovered.connect(func(view: CardView, on: bool) -> void:
+					view.ci = {"id": ci.id, "up": on}
+					view.c = Rules.card(view.ci)
+					view.queue_redraw())
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 20)
+	box.add_child(row)
+	for b in buttons:
+		var button := Button.new()
+		button.text = b[0]
+		button.focus_mode = Control.FOCUS_NONE
+		button.custom_minimum_size = Vector2(170, 52)
+		button.add_theme_font_override("font", Fonts.serif(800))
+		button.add_theme_font_size_override("font_size", 20)
+		button.add_theme_color_override("font_color", Color(0.18, 0.11, 0.05))
+		button.add_theme_stylebox_override("normal", _plate(Color(0.95, 0.72, 0.34), Color(0.45, 0.28, 0.12)))
+		button.add_theme_stylebox_override("hover", _plate(Color(1.0, 0.8, 0.42), Color(0.55, 0.34, 0.14)))
+		button.add_theme_stylebox_override("pressed", _plate(Color(0.85, 0.62, 0.28), Color(0.45, 0.28, 0.12)))
+		button.pressed.connect(b[1])
+		row.add_child(button)
+
+
+# -- Pieces ------------------------------------------------------------------------------------------------------
+
+## The energy: an amber stone, filled as far as there is energy, the number on it.
+func _draw_energy() -> void:
+	var s: BattleState = battle.state
+	var c := Vector2(60, 60)
+	_energy.draw_circle(c, 56.0, Color(0.06, 0.05, 0.04, 0.92))
+	_energy.draw_arc(c, 56.0, 0.0, TAU, 48, Color(0.72, 0.53, 0.3), 3.0, true)
+	var frac := float(s.energy) / Rules.ENERGY_MAX
+	var fill := Color(1.0, 0.68, 0.22)
+	_energy.draw_arc(c, 47.0, -PI * 0.5, -PI * 0.5 + TAU * frac, 48, fill, 9.0, true)
+	_energy.draw_circle(c, 38.0, Color(0.16, 0.1, 0.05))
+	var f := Fonts.numbers()
+	var text := "%d" % s.energy
+	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 42).x
+	_energy.draw_string_outline(f, c + Vector2(-w * 0.5, 13), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 42, 5, Color(0, 0, 0, 0.9))
+	_energy.draw_string(f, c + Vector2(-w * 0.5, 13), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 42, fill)
+	var cap := "/ %d" % Rules.ENERGY_MAX
+	var cw := f.get_string_size(cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	_energy.draw_string(f, c + Vector2(-cw * 0.5, 33), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 0.9, 0.7, 0.8))
+	var lf := Fonts.serif(700)
+	var lw := lf.get_string_size("力气", HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	_energy.draw_string_outline(lf, Vector2(60 - lw * 0.5, 128), "力气", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 4, Color(0, 0, 0, 0.9))
+	_energy.draw_string(lf, Vector2(60 - lw * 0.5, 128), "力气", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 0.9, 0.7))
+
+
+## A pile of cards: a little stack and how many are in it.
+func _pile(name: String, preset: int, at: Vector2) -> Label:
+	var box := HBoxContainer.new()
+	box.set_anchors_preset(preset)
+	box.position = at
+	box.add_theme_constant_override("separation", 6)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(box)
+	var stack := Control.new()
+	stack.custom_minimum_size = Vector2(26, 34)
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.draw.connect(func() -> void:
+		for k in 3:
+			var r := Rect2(Vector2(k * 2.0, 6.0 - k * 3.0), Vector2(20, 28))
+			stack.draw_rect(r, Color(0.2, 0.15, 0.1))
+			stack.draw_rect(r, Color(0.72, 0.53, 0.3), false, 1.5))
+	box.add_child(stack)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", -4)
+	box.add_child(col)
+	var count := _label("0", 22, Fonts.numbers(), Color(1, 0.95, 0.85))
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(count)
+	var label := _label(name, 12, Fonts.serif(600), Color(0.9, 0.82, 0.68))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(label)
+	return count
+
+
+func _label(text: String, size_px: int, f: Font, c: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", size_px)
+	l.add_theme_color_override("font_color", c)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", maxi(4, size_px / 5))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+func _panel(bg: Color, edge: Color, pad: int) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.09, 0.09, 0.08, alpha)
+	sb.bg_color = bg
 	sb.border_color = edge
-	sb.set_border_width_all(width)
+	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(8)
 	sb.set_content_margin_all(pad)
 	return sb
 
 
-func _label(text: String, size: int) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	l.add_theme_constant_override("outline_size", 4)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return l
+func _plate(face: Color, edge: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = face
+	sb.border_color = edge
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(10)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 6
+	sb.shadow_offset = Vector2(0, 3)
+	sb.set_content_margin_all(10)
+	return sb
