@@ -1,13 +1,13 @@
 extends SceneTree
-## Whole runs played by the rules alone, no screen, many at once -- to see how hard the levels are (GAME-DESIGN 12).
+## Whole runs played by the rules alone, no screen, many at once -- to see how hard the levels are (GAME-DESIGN 14).
 ##
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random] [runs] [first seed] [measure|limit]
 ##
-## random and smart play as tools/Policy.gd says. Both take the first card offered and upgrade the first they can. Prints, for each run, how far it got and the homeland's health at
-## each level's end; then how many held each level. "measure": also, each round, how many greys (at the level's
-## power) the army just made ready could beat -- how strong a wave would have to be to stop it. "limit": no one
-## comes, every battle is won, everything goes to growing; prints, round by round, the most strength any run had
-## in its yard -- Content.LIMIT, to paste in after changing what can be built or made.
+## random and smart play as tools/Policy.gd says; both take the first card offered and upgrade the first they can.
+## Prints, for each run, how far it got and the homeland's health at each level's end, what it built; then how many
+## held each level. "measure": also, each round, the army's strength against the wave's. "limit": no one comes, every
+## battle is won, everything goes to growing; prints, round by round, the most strength any run's army had --
+## Content.LIMIT, to paste in after changing what can be built or made.
 
 var policy := "smart"
 var measure := false
@@ -32,22 +32,25 @@ func _init() -> void:
 		var run := Run.new(seed)
 		run.calm = limit
 		var line := "seed %3d:" % seed
-		var g := 0
 		var losses := 0
+		var g := 0
 		while not run.over:
 			run.start_round()
 			if policy == "smart":
 				_smart(run)
 			else:
 				_random(run)
-			if measure:
-				print("  %s r%2d: %2d units, beats %3d greys; the wave is %s" % [Content.LEVELS[run.level].name, run.round,
-					run.home.units.size(), _beats(run), _count(run.wave())])
 			g += 1
 			if limit:
 				while best.size() < g:
 					best.append(0.0)
 				best[g - 1] = maxf(best[g - 1], run.strength())
+			if measure:
+				var wave_strength := 0.0
+				for kind in run.wave():
+					wave_strength += Content.enemy_strength(kind, run.power())
+				print("  %s r%2d: army of %2d, strength %4d; the wave %4d (%d of them)" % [Content.LEVELS[run.level].name,
+					run.round, run.home.army().size(), roundi(run.strength()), roundi(wave_strength), run.wave().size()])
 			var f := run.fight()
 			f.run()
 			var out := run.finish(f)
@@ -73,72 +76,40 @@ func _init() -> void:
 				run.next_level()
 			elif out.result == "won":
 				run.take(run.offer()[0])
-		var army := {}
-		for u in run.home.units:
-			var key := "%s%d" % [u.kind, u.star]
-			army[key] = army.get(key, 0) + 1
 		var built := {}
 		for p in run.home.buildings:
 			var b: Dictionary = run.home.buildings[p]
-			var key := "%s%d" % [b.kind, b.level]
+			var key := "%s%d%s" % [b.kind, b.level, "+" + "+".join(b.affixes) if not b.affixes.is_empty() else ""]
 			built[key] = built.get(key, 0) + 1
-		print(line, "  | army ", army, " | built ", built, " | deck ", run.deck().map(func(ci: Dictionary) -> String:
-			return ci.id + ("+" if ci.up else "")))
+		print(line, "  | built ", built)
 	print("%s: %d runs; held level 1: %d, level 2: %d, level 3: %d; battles lost %d of %d" % [policy, runs, held[0], held[1],
 		held[2], lost_battles, battles])
 	if limit:
-		var line := "const LIMIT := ["
+		var out := "const LIMIT := ["
 		var top := 0.0
 		for i in best.size():
 			top = maxf(top, best[i])     # never less than the round before
-			line += "%d%s" % [roundi(top), ", " if i < best.size() - 1 else "]"]
-		print(line)
+			out += "%d%s" % [roundi(top), ", " if i < best.size() - 1 else "]"]
+		print(out)
 	quit()
-
-
-## The most greys at the level's power the army (with this round's buffs) beats.
-func _beats(run: Run) -> int:
-	var lo := 0
-	var hi := 1
-	while hi < 400 and _wins(run, hi):
-		lo = hi
-		hi *= 2
-	while hi - lo > 1:
-		var mid := (lo + hi) / 2
-		if _wins(run, mid):
-			lo = mid
-		else:
-			hi = mid
-	return lo
-
-
-func _wins(run: Run, n: int) -> bool:
-	var wave: Array = []
-	for i in n:
-		wave.append("grey")
-	var f := Fight.make(run.home, wave, run.power())
-	f.run()
-	return f.result == "won"
-
-
-func _count(wave: Array) -> Dictionary:
-	var out := {}
-	for k in wave:
-		out[k] = out.get(k, 0) + 1
-	return out
 
 
 func _random(run: Run) -> void:
 	for guard in 20:
 		var play := Policy.any_play(run.home, rng)
 		if play.is_empty():
-			return
+			break
 		run.home.play(play[0], play[1])
+	if not run.home.potions.is_empty() and rng.randf() < 0.3:
+		run.home.use_potion(rng.randi() % run.home.potions.size())
 
 
 func _smart(run: Run) -> void:
 	for guard in 12:
 		var play := Policy.best_play(run, run.home)
 		if play.is_empty():
-			return
+			break
 		run.home.play(play[0], play[1])
+	var k := Policy.best_potion(run, run.home)
+	if k >= 0:
+		run.home.use_potion(k)

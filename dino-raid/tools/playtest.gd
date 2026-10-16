@@ -1,20 +1,20 @@
 extends SceneTree
-## A run played by a script, with pictures -- for seeing a change at work without playing (GAME-DESIGN 12).
+## A run played by a script, with pictures -- for seeing a change at work without playing (GAME-DESIGN 14).
 ##
 ##   Godot --path dino-raid --script res://tools/playtest.gd -- <folder for frames> [bot [rounds] [seed] [smart]]
 ##
-## Without "bot": the first rounds slowly -- the nests making, the hand, a card held over where it goes with the
-## forecast it brings, cards played, a battle fought, the card won -- then a homeland built up by hand, its
-## battle, and the screens after a level; a frame at each step.
-## "bot": plays rounds the simple way (every card it can afford, on a target picked at random), takes the first
-## card offered and upgrades the first it can, fast, until the run ends or the rounds run out; prints an
-## account. For finding what breaks, not for balance. "smart": each card where the forecast says it does the most
-## good, then what builds the homeland up -- to see whether a level can be held at all.
+## Without "bot": the first rounds slowly -- the round's army hatching, the hand, each card held over where it goes
+## with what it would change and the forecast it brings, a potion pointed at, cards played, a battle fought, the card
+## won -- then a homeland built up by hand (every kind of building, levels, affixes, a flier), its battle, and the
+## screens after a level with the new row of land; a frame at each step.
+## "bot": plays rounds the simple way (tools/Policy.gd, random -- or smart), fast, until the run ends or the rounds
+## run out; checks every forecast against the battle fought; prints an account. For finding what breaks.
 
 var game: Game
 var out := ""
 var smart := false
 var _n := 0
+var rng := RandomNumberGenerator.new()
 
 
 func _init() -> void:
@@ -23,7 +23,9 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(out)
 	var bot := args.size() > 1 and args[1] == "bot"
 	smart = args.size() > 4 and args[4] == "smart"
-	Run.current = Run.new(int(args[3]) if args.size() > 3 else 5)
+	var seed := int(args[3]) if args.size() > 3 else 5
+	rng.seed = seed
+	Run.current = Run.new(seed)
 	game = load("res://scenes/Game.tscn").instantiate()
 	root.add_child(game)
 	if bot:
@@ -33,82 +35,122 @@ func _init() -> void:
 
 
 func _scripted() -> void:
+	while game.hud == null or game.hud.screen == "":
+		await process_frame
+	await _frames(10)
+	await _shot("deck_start")
+	game.hud.chosen.emit("开始")
 	await _until_plan()
 	await _shot("plan_r1")
 	_check_pointing()
-	# The panel on the red nest, a card looked at closely.
-	game.hover = {"plot": Content.FIRST.pos, "unit": -1}
+	game.hover = {"plot": Content.FIRST[0].pos, "unit": ""}
 	game.refresh()
 	await _frames(4)
 	await _shot("info_nest")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": -1}
+	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
 	game.hud._hovered = game.hud._cards[1]
 	await _frames(14)
 	await _shot("card_close")
 	game.hud._hovered = null
-	# Each card held over the first place it may go: what it lights, and the forecast with it.
-	var home := game.home
-	for i in home.hand.size():
-		var fits := home.targets(i)
-		if fits.is_empty():
-			continue
-		game.hold(i)
-		var at: Variant = fits[fits.size() / 2]
-		game.hover = {"plot": at if at is Vector2i else HomeView.NOWHERE, "unit": at if at is int else -1}
-		game.refresh()
-		await _frames(8)
-		await _shot("aim_%s" % home.hand[i].id)
-		game.held = -1
-		game.refresh()
+	await _aim_each("r1")
+	game.aim_potion(0)
+	await _frames(6)
+	game.hud._potion_hover = 0
+	await _frames(4)
+	await _shot("aim_potion")
+	game.hud._potion_hover = -1
+	game.aim_potion(-1)
 	for r in 3:
-		_play_all(false)
-		await _frames(30)
+		_play_all()
+		await _frames(40)
 		await _shot("played_r%d" % game.run.round)
+		if r == 1:
+			for which in ["discard", "draw"]:
+				game.hud.view_pile(which)
+				await _frames(10)
+				await _shot("view_%s" % which)
+				game.hud.chosen.emit("关闭")
+				await _frames(4)
 		await _fight_shots("r%d" % game.run.round)
 		await _until_plan_or_screen()
 		if game.hud.screen != "":
 			await _shot("reward_r%d" % game.run.round)
-			game.hud.chosen.emit({"id": "b_green", "up": false})
+			game.hud.chosen.emit({"id": "b_pool", "up": false})
 			await _until_plan()
-	# A homeland built up by hand: every kind of building, a yard of units, some of them starred.
 	await _rich()
 	_account()
 	quit()
 
 
+## Each card in hand held over a place it may go (an empty plot first): what it lights, what it changes, the forecast.
+func _aim_each(label: String) -> void:
+	var home := game.home
+	for i in home.hand.size():
+		var fits := home.targets(i)
+		if fits.is_empty():
+			continue
+		var empty := fits.filter(func(t: Variant) -> bool: return not t is Vector2i or not home.buildings.has(t))
+		var near := fits.filter(func(t: Variant) -> bool: return t is Vector2i and home.around(t).any(
+			func(q: Vector2i) -> bool: return home.buildings.has(q)))
+		var at: Variant = (empty.filter(func(t: Variant) -> bool: return t in near) + empty + fits)[0]
+		game.hold(i)
+		game.hover = {"plot": at if at is Vector2i else HomeView.NOWHERE, "unit": ""}
+		game.refresh()
+		await _frames(8)
+		await _shot("aim_%s_%s" % [label, home.hand[i].id])
+		game.held = -1
+		game.refresh()
+
+
 func _rich() -> void:
 	var h := game.home
-	var kinds := ["hatch_blue", "hatch_green", "hatch_gold", "hatch_white", "pen", "pen", "farm", "nursery", "gym", "wall"]
-	var free: Array = h._plots_all().filter(func(p: Vector2i) -> bool: return not h.buildings.has(p))
-	for k in kinds.size():
-		h.build(free[k], kinds[k])
-		if k % 3 == 0:
-			h.buildings[free[k]].level = 2 + k % 2
-	var mix := ["red", "red", "blue", "blue", "green", "gold", "white", "red", "green", "blue", "gold"]
-	h.units.clear()
-	for k in mix.size():
-		var star := 1
-		if k % 4 == 0:
-			star += 1
-		if k == 8:
-			star += 1
-		h.units.append({"id": 900 + k, "kind": mix[k], "star": star, "bonus_hp": 0, "bonus_atk": 0})
+	h.open_row()
+	game.home_view.open_rows()
+	var plan := [[Vector2i(1, 2), "nest_red", 3, ["shell"]], [Vector2i(2, 2), "nest_red", 2, []], [Vector2i(3, 2), "nest_red", 1, []],
+		[Vector2i(2, 1), "gym", 2, []], [Vector2i(1, 1), "pool", 3, []], [Vector2i(0, 2), "stabilizer", 1, []],
+		[Vector2i(4, 1), "nest_blue", 2, ["acid"]], [Vector2i(5, 1), "sampler", 2, []], [Vector2i(4, 2), "nest_gold", 1, ["plasma"]],
+		[Vector2i(5, 2), "power", 1, []], [Vector2i(0, 3), "nest_white", 2, []], [Vector2i(0, 4), "lab", 1, []],
+		[Vector2i(4, 3), "store", 1, []], [Vector2i(5, 4), "wall", 2, []], [Vector2i(4, 4), "wall", 1, []],
+		[Vector2i(5, 3), "nest_green", 3, ["wings", "blade"]], [Vector2i(1, 4), "pool", 2, []]]
+	for step in plan:
+		h.build(step[0], step[1])
+		h.buildings[step[0]].level = step[2]
+		h.buildings[step[0]].affixes = step[3].duplicate()
 	h.energy = 10
+	h.biomass = 40
+	h.genes = 8
+	h.alien = 2
 	game.home_view.refresh_buildings(false)
-	game.home_view.settle()
 	game._version += 1
+	game.home_view.sync_army(h.army())
 	game.refresh()
-	await _frames(40)
+	await _frames(60)
 	await _shot("rich_home")
-	game.hover = {"plot": free[0], "unit": -1}
-	game.refresh()
-	await _frames(4)
-	await _shot("rich_info_blue")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": 908}
+	for look in [[Vector2i(1, 2), "rich_info_red"], [Vector2i(5, 3), "rich_info_green"]]:
+		game.hover = {"plot": look[0], "unit": ""}
+		game.refresh()
+		await _frames(4)
+		await _shot(look[1])
+	var any_unit: String = h.army()[0].id
+	game.hover = {"plot": HomeView.NOWHERE, "unit": any_unit}
 	game.refresh()
 	await _frames(4)
 	await _shot("rich_info_unit")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": -1}
+	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
+	h.hand = [{"id": "b_red", "up": false}, {"id": "raise", "up": false}, {"id": "b_pool", "up": false},
+		{"id": "a_shell", "up": false}, {"id": "b_gym", "up": false}]
+	game.hud.deal(h.hand)
+	game.refresh()
+	await _frames(20)
+	for aim in [[0, Vector2i(3, 3), "rich_aim_cluster"], [2, Vector2i(3, 1), "rich_aim_pool"], [0, Vector2i(5, 1), "rich_aim_swap"],
+			[1, Vector2i(2, 2), "rich_aim_raise"]]:
+		game.hold(aim[0])
+		game.hover = {"plot": aim[1], "unit": ""}
+		game.refresh()
+		await _frames(8)
+		await _shot(aim[2])
+		game.held = -1
+	game.refresh()
 	game.run.round = game.run.rounds()
 	game.refresh()
 	await _fight_shots("rich")
@@ -124,8 +166,9 @@ func _rich() -> void:
 		elif game.hud.screen.begins_with("去掉"):
 			game.hud.chosen.emit("不去掉")
 		else:
-			game.hud.chosen.emit({"id": "b_gold", "up": false})
+			game.hud.chosen.emit({"id": "a_wings", "up": false})
 	await _until_plan()
+	await _frames(40)
 	await _shot("level_2_start")
 
 
@@ -147,7 +190,7 @@ func _fight_shots(label: String) -> void:
 	await _shot("fight_%s_home" % label)
 
 
-## The cursor test: each plot's middle, and each unit, found again from where it is on screen.
+## The cursor test: each open plot's middle, and each unit, found again from where it is on screen.
 func _check_pointing() -> void:
 	var bad := 0
 	for y in Home.ROWS:
@@ -158,13 +201,17 @@ func _check_pointing() -> void:
 			if got.plot != p:
 				bad += 1
 				print("pointing: plot %s found as %s" % [p, got.plot])
-	for u in game.home.units:
+	for u in game.home.army():
 		var n := game.home_view.unit_node(u.id)
+		if n == null:
+			bad += 1
+			print("pointing: no block for unit %s" % u.id)
+			continue
 		var sp := game.camera.unproject_position(n.position + Vector3.UP * 0.4)
 		var got: Dictionary = game.home_view.pick(game.camera, sp, "unit")
 		if got.unit != u.id:
 			bad += 1
-			print("pointing: unit %d found as %d" % [u.id, got.unit])
+			print("pointing: unit %s found as %s" % [u.id, got.unit])
 	print("pointing: %s" % ("all found" if bad == 0 else "%d missed" % bad))
 
 
@@ -186,17 +233,25 @@ func _bot(rounds: int) -> void:
 			if game.hud.screen.begins_with("升级"):
 				game.hud.chosen.emit(deck.filter(func(ci: Dictionary) -> bool: return not ci.up).front())
 			elif game.hud.screen.begins_with("去掉"):
-				game.hud.chosen.emit(deck[0])
+				game.hud.chosen.emit("不去掉")
 			else:
 				game.hud.chosen.emit({"id": game.run.offer()[0], "up": false})
 			await _frames(3)
 			continue
 		if smart:
-			_play_smart()
+			for guard in 12:
+				var play := Policy.best_play(game.run, game.home)
+				if play.is_empty():
+					break
+				game.act("play", {"slot": play[0], "at": play[1]})
+			var k := Policy.best_potion(game.run, game.home)
+			if k >= 0:
+				game.act("potion", {"slot": k})
 		else:
-			_play_all(true)
+			_play_all()
+		await _frames(4)
 		if game.run.round % 5 == 0:
-			await _frames(10)
+			await _frames(30)
 			await _shot("bot_l%d_r%d" % [game.run.level, game.run.round])
 		var before := game.home.hp
 		var f := game.forecast.duplicate()
@@ -213,29 +268,15 @@ func _bot(rounds: int) -> void:
 	quit()
 
 
-## The best play it can see (tools/Policy.gd), again and again, while one does more good than keeping the energy.
-func _play_smart() -> void:
-	for guard in 12:
-		var play := Policy.best_play(game.run, game.home)
+## Plays the careless way (tools/Policy.gd any_play), and now and then a potion.
+func _play_all() -> void:
+	for guard in 20:
+		var play := Policy.any_play(game.home, rng)
 		if play.is_empty():
-			return
+			break
 		game.act("play", {"slot": play[0], "at": play[1]})
-
-
-## Every card it can afford, each on a target it may go on.
-func _play_all(random: bool) -> void:
-	var h := game.home
-	var tries := 0
-	var i := 0
-	while i < h.hand.size() and tries < 20:
-		tries += 1
-		var fits := h.targets(i)
-		if fits.is_empty():
-			i += 1
-			continue
-		var at: Variant = fits[randi() % fits.size()] if random else fits[0]
-		if not game.act("play", {"slot": i, "at": at}):
-			i += 1
+	if not game.home.potions.is_empty() and rng.randf() < 0.3:
+		game.act("potion", {"slot": 0})
 
 
 func _until_plan() -> void:
@@ -262,16 +303,13 @@ func _wait(secs: float) -> void:
 func _account() -> void:
 	var r := game.run
 	var h := game.home
-	var units := {}
-	for u in h.units:
-		var key := "%s%d" % [u.kind, u.star]
-		units[key] = units.get(key, 0) + 1
 	var built := {}
 	for p in h.buildings:
 		var b: Dictionary = h.buildings[p]
-		built[b.kind] = built.get(b.kind, 0) + 1
-	print("level %d round %d hp %d/%d energy %d deck %d | units %s | buildings %s" % [r.level + 1, r.round, h.hp, h.hp_max(),
-		h.energy, r.deck().size(), units, built])
+		var key := "%s%d" % [b.kind, b.level]
+		built[key] = built.get(key, 0) + 1
+	print("level %d round %d hp %d/%d energy %d biomass %d genes %d alien %d potions %d army %d | %s" % [r.level + 1,
+		r.round, h.hp, h.hp_max(), h.energy, h.biomass, h.genes, h.alien, h.potions.size(), h.army().size(), built])
 
 
 func _shot(label: String) -> void:

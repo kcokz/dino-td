@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 14) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -9,15 +9,17 @@ var passed := 0
 
 func _init() -> void:
 	_first_round()
-	_producers()
-	_beside()
-	_room_and_merge()
+	_making()
+	_neighbours()
+	_affixes()
 	_cards()
+	_potions()
+	_land_and_walls()
 	_fights()
 	_run_flow()
-	_full_yard()
 	_deck_changes()
 	_clone()
+	_waves()
 	_texts()
 	print("%d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)
@@ -44,138 +46,224 @@ func deck() -> Array:
 	return d
 
 
+## A homeland with nothing built, plenty of everything.
+func bare() -> Home:
+	var h := Home.new([], rng())
+	h.buildings.clear()
+	h.energy = 10
+	h.biomass = 20
+	h.genes = 10
+	h.alien = 5
+	h.potions.clear()
+	return h
+
+
 func _first_round() -> void:
 	var h := Home.new(deck(), rng())
-	check("starts with the red nest", h.buildings.has(Vector2i(2, 1)) and h.buildings[Vector2i(2, 1)].kind == "hatch_red")
+	check("starts with a red nest and a pool", h.buildings.size() == 2 and h.buildings[Vector2i(2, 3)].kind == "nest_red"
+		and h.buildings[Vector2i(3, 3)].kind == "pool")
 	var ev := h.start_round(rng())
-	check("it makes a red at once", h.units.size() == 1 and h.units[0].kind == "red", h.units)
-	check("energy 3", h.energy == 3, h.energy)
+	check("income: 3 energy, 3 biomass", h.energy == 3 and h.biomass == 3 + 3, [h.energy, h.biomass])
 	check("hand of 5", h.hand.size() == 5, h.hand.size())
-	check("made event", ev.filter(func(e: Dictionary) -> bool: return e.t == "made").size() == 1, ev)
+	check("income event", ev.any(func(e: Dictionary) -> bool: return e.t == "income"))
+	var a := h.army()
+	check("one red this round", a.size() == 1 and a[0].kind == "red", a)
+	check("the pool beside makes it hardier", is_equal_approx(float(a[0].hp_mult), 1.25), a[0].hp_mult)
+	check("a potion to start", h.potions == ["rage"], h.potions)
+	h.energy = 10
+	var i := 0
+	var played := 0
+	while i < h.hand.size() and played < 2:
+		if h.play(i, h.targets(i)[0] if not h.targets(i).is_empty() else true).is_empty():
+			i += 1
+		else:
+			played += 1
+	var left: Array = h.hand.duplicate()
+	h.start_round(rng(4))
+	check("the hand is kept, filled up to 5", h.hand.size() == Home.HAND and h.hand.slice(0, left.size()) == left,
+		[left.size(), h.hand.size()])
 
 
-func _producers() -> void:
-	var h := Home.new([], rng())
-	h.buildings.clear()
-	h.build(Vector2i(0, 0), "hatch_blue")
-	var made := []
-	for r in 5:
-		made.append(h.start_round(rng()).filter(func(e: Dictionary) -> bool: return e.t == "made").size())
-	check("blue: made in rounds 1, 3, 5", made == [1, 0, 1, 0, 1], made)
-	check("and the three became one of two stars", h.units.size() == 1 and h.units[0].star == 2, h.units)
+func _making() -> void:
+	var h := bare()
+	h.build(Vector2i(0, 4), "nest_red")
+	check("level 1: one", h.army().size() == 1)
+	h.buildings[Vector2i(0, 4)].level = 2
+	check("level 2: two", h.army().size() == 2)
+	h.buildings[Vector2i(0, 4)].level = 5
+	var a := h.army()
+	check("level 5: three, half again as strong", a.size() == 3 and is_equal_approx(float(a[0].atk_mult), 1.5), a.size())
+	h.biomass = 2
+	check("biomass short: as many as it pays for", h.army().size() == 2, h.army().size())
+	check("they eat 2", h.army_food() == 2, h.army_food())
+	var made := h.produce()
+	check("produce pays", made.size() == 2 and h.biomass == 0, [made.size(), h.biomass])
+	check("next time none", h.army().is_empty())
+	h.biomass = 10
+	h.build(Vector2i(5, 4), "nest_gold")
+	var golds := h.army().filter(func(u: Dictionary) -> bool: return u.kind == "gold")
+	check("a gold eats 2", golds.size() == 1 and h.army_food() == 3 + 2, [golds.size(), h.army_food()])
+	check("ids stay the same", h.army()[0].id == h.army()[0].id and str(h.army()[0].id).contains(":"))
 
 
-func _beside() -> void:
-	var h := Home.new([], rng())
-	h.buildings.clear()
-	h.build(Vector2i(1, 1), "hatch_blue")
-	h.build(Vector2i(2, 1), "nursery")
-	h.build(Vector2i(0, 1), "gym")
-	check("a nursery beside: every round", h.every(Vector2i(1, 1)) == 1, h.every(Vector2i(1, 1)))
-	h.start_round(rng())
-	h.start_round(rng())
-	check("two in two rounds", h.units.size() == 2, h.units.size())
-	check("drilled +1 atk", h.units[0].bonus_atk == 1, h.units[0])
-	h.build(Vector2i(5, 3), "farm")
-	check("income 4 with a farm", h.income() == 4, h.income())
-	h.build(Vector2i(5, 2), "wall")
-	check("wall: hp max 35, hp follows", h.hp_max() == 35 and h.hp == 35, [h.hp_max(), h.hp])
-	check("blocks 1", h.harmed(3) == 2 and h.hp == 33, h.hp)
+func _neighbours() -> void:
+	var h := bare()
+	h.build(Vector2i(1, 4), "nest_red")
+	h.build(Vector2i(2, 4), "nest_red")
+	check("two reds side by side: no more yet", h.army().size() == 2, h.army().size())
+	h.build(Vector2i(0, 4), "nest_red")
+	check("three in a row: the middle one makes one more", h.army().size() == 4 and h.count(Vector2i(1, 4)) == 2, h.army().size())
+	h.build(Vector2i(1, 3), "nest_red")
+	check("never more than one more", h.count(Vector2i(1, 4)) == 2, h.count(Vector2i(1, 4)))
+	var g := bare()
+	g.build(Vector2i(2, 3), "nest_blue")
+	g.build(Vector2i(1, 3), "gym")
+	g.build(Vector2i(3, 3), "pool")
+	g.build(Vector2i(2, 2), "power")
+	var s := g.spec_of(Vector2i(2, 3))
+	check("gym: +1 attack", int(s.atk_bonus) == 1, s.atk_bonus)
+	check("pool +25%, power -15%: hp x1.10", is_equal_approx(float(s.hp_mult), 1.10), s.hp_mult)
+	g.build(Vector2i(4, 3), "sampler")
+	check("sampler beside a pool: 2 genes", g.income_genes() == 2, g.income_genes())
+	check("power station: 4 energy", g.income_energy() == 4, g.income_energy())
+	g.build(Vector2i(2, 4), "stabilizer")
+	check("stabilizer: two places", g.slots(Vector2i(2, 3)) == 2, g.slots(Vector2i(2, 3)))
+	g.build(Vector2i(0, 2), "nest_red")
+	check("diagonal is not beside", g.slots(Vector2i(1, 3)) == 1)
 
 
-func _room_and_merge() -> void:
-	var h := Home.new([], rng())
-	for i in 2:
-		h.start_round(rng())
-	check("two reds", h.units.size() == 2)
-	h.start_round(rng())
-	check("three reds merge to one of two stars", h.units.size() == 1 and h.units[0].star == 2, h.units)
-	var full := Home.new([], rng())
-	full.buildings.clear()
-	full.build(Vector2i(0, 0), "hatch_red")
-	full.buildings[Vector2i(0, 0)].level = 2
-	full.build(Vector2i(3, 0), "hatch_blue")
-	full.buildings[Vector2i(3, 0)].level = 2
-	var evs: Array = []
-	for i in 6:
-		evs.append_array(full.start_round(rng()))
-	check("never more than room", full.units.size() <= full.room(), [full.units.size(), full.room()])
-	check("a full event when it was", evs.filter(func(e: Dictionary) -> bool: return e.t == "full").size() > 0)
+func _affixes() -> void:
+	var h := bare()
+	h.build(Vector2i(2, 4), "nest_red")
+	h.hand = [{"id": "a_shell", "up": false}, {"id": "a_acid", "up": false}, {"id": "a_wings", "up": false}]
+	check("affix goes on a nest", h.targets(0) == [Vector2i(2, 4)], h.targets(0))
+	h.play(0, Vector2i(2, 4))
+	check("paid 2 energy, 2 genes", h.energy == 8 and h.genes == 8, [h.energy, h.genes])
+	check("shell: armor 1", int(h.army()[0].armor) == 1)
+	check("one place only", h.targets(0).is_empty(), h.targets(0))
+	h.build(Vector2i(2, 3), "stabilizer")
+	h.play(0, Vector2i(2, 4))
+	var st := Content.unit_stats(h.army()[0])
+	check("acid: reach 5, alien paid", float(st.range) == 5.0 and h.alien == 4, [st.range, h.alien])
+	h.alien = 0
+	check("no alien genes: no wings", h.targets(0).is_empty())
+	var f := bare()
+	f.build(Vector2i(0, 4), "nest_red")
+	f.buildings[Vector2i(0, 4)].affixes = ["wings"]
+	var fight := Fight.make(f.army(), {}, ["grey", "purple"], 1.0)
+	var flier: Dictionary = fight.units[0]
+	check("a flier goes for the one furthest back", fight._foe_of(flier).kind == "purple", fight._foe_of(flier).kind)
 
 
 func _cards() -> void:
-	var h := Home.new([], rng())
-	h.energy = 10
-	h.hand = [{"id": "b_gym", "up": false}, {"id": "expand", "up": false}, {"id": "overtime", "up": false},
-		{"id": "rally", "up": false}, {"id": "mend", "up": false}]
-	check("build: plots are the empty ones", h.targets(0).size() == Home.COLS * Home.ROWS - 1)
-	check("cannot build on a building", h.play(0, Vector2i(2, 1)).is_empty())
-	check("build the gym", not h.play(0, Vector2i(3, 1)).is_empty() and h.buildings[Vector2i(3, 1)].kind == "gym")
-	check("energy 7", h.energy == 7, h.energy)
-	check("expand the nest", not h.play(0, Vector2i(2, 1)).is_empty() and h.buildings[Vector2i(2, 1)].level == 2)
-	var ev := h.play(0, Vector2i(2, 1))
-	check("overtime makes two now (level 2), drilled", h.units.size() == 2 and h.units[0].bonus_atk == 1, [h.units, ev])
-	check("rally played", not h.play(0, true).is_empty())
-	check("battle atk is 2", h.buffs.get("atk", 0) == 2, h.buffs)
-	h.hp = 20
-	h.energy = 10
+	var h := bare()
+	h.build(Vector2i(2, 4), "pool")
+	h.hand = [{"id": "b_red", "up": false}, {"id": "raise", "up": false}, {"id": "sample", "up": false},
+		{"id": "b_pool", "up": false}]
+	var tiles := h.targets(0)
+	check("build: every open plot", tiles.size() == Home.COLS * Home.OPEN, tiles.size())
+	h.play(0, Vector2i(2, 4))
+	check("over a pool: pulled down, half back", h.buildings[Vector2i(2, 4)].kind == "nest_red" and h.energy == 10 - 3 + 1,
+		[h.buildings[Vector2i(2, 4)].kind, h.energy])
+	h.hand.append({"id": "b_red", "up": false})
+	check("not over the same kind", not Vector2i(2, 4) in h.targets(3), h.targets(3))
+	h.hand.pop_back()
+	h.buildings[Vector2i(2, 4)].level = 4
+	check("raise: up to 5", h.targets(0) == [Vector2i(2, 4)], h.targets(0))
+	h.play(0, Vector2i(2, 4))
+	check("level 5", int(h.buildings[Vector2i(2, 4)].level) == 5)
+	h.hand = [{"id": "raise", "up": false}]
+	check("no further", h.targets(0).is_empty())
+	h.hand = [{"id": "sample", "up": false}, {"id": "culture", "up": true}]
+	h.genes = 0
+	h.biomass = 0
 	h.play(0, true)
-	check("mend +5", h.hp == 25, h.hp)
-	check("hand used up", h.hand.is_empty())
-	h.energy = 10
-	h.hand = [{"id": "train", "up": true}, {"id": "star", "up": false}]
-	var id: int = h.units[0].id
-	h.play(0, id)
-	check("train+: +6 hp +2 atk", h.unit(id).bonus_hp == 6 and h.unit(id).bonus_atk == 3, h.unit(id))
-	h.play(0, id)
-	check("star: two stars", h.unit(id).star == 2, h.unit(id))
-	h.energy = 0
-	h.hand = [{"id": "b_red", "up": false}]
-	check("no energy: no targets", h.targets(0).is_empty())
+	h.play(0, true)
+	check("gains", h.genes == 3 and h.biomass == 10, [h.genes, h.biomass])
+	check("closed rows take nothing", not Vector2i(0, 0) in h._plots_open())
+	h.genes = 9
+	h.hand = [{"id": "sample", "up": false}]
+	h.play(0, true)
+	check("genes kept to the store", h.genes == Home.GENES_MAX, h.genes)
+	h.build(Vector2i(0, 4), "store")
+	check("a store keeps more", h.genes_max() == Home.GENES_MAX + 5 and h.biomass_max() == Home.BIOMASS_MAX + 10)
+
+
+func _potions() -> void:
+	var h := bare()
+	h.build(Vector2i(0, 4), "nest_red")
+	h.build(Vector2i(2, 4), "nest_blue")
+	h.potions = ["breed", "rage", "gel"]
+	check("full: no more", not h.add_potion("rush"))
+	h.use_potion(0)
+	check("breed: each nest one more", h.army().size() == 4, h.army().size())
+	check("those eat nothing", h.army_food() == 2, h.army_food())
+	h.use_potion(0)
+	var f := Fight.make(h.army(), h.buffs, ["grey"], 1.0)
+	check("rage: +2 attack", int(f.units[0].atk) == 3 + 2, f.units[0].atk)
+	h.hp = 20
+	h.use_potion(0)
+	check("gel mends 6", h.hp == 26 and h.potions.is_empty(), h.hp)
+	var lab := bare()
+	lab.build(Vector2i(0, 4), "lab")
+	var brewed := 0
+	for r in 6:
+		brewed += lab.start_round(rng(r)).filter(func(e: Dictionary) -> bool: return e.t == "brewed").size()
+	check("a lab brews every 3 rounds", brewed == 2 and lab.potions.size() == 2, [brewed, lab.potions])
+
+
+func _land_and_walls() -> void:
+	var h := bare()
+	check("three rows open", h._plots_open().size() == Home.COLS * 3)
+	h.open_row()
+	h.open_row()
+	check("five at most", not h.open_row() and h._plots_open().size() == Home.COLS * Home.ROWS)
+	var w := bare()
+	w.build(Vector2i(0, 4), "wall")
+	check("wall: hp 35", w.hp_max() == 35 and w.hp == 35, [w.hp_max(), w.hp])
+	w.build(Vector2i(1, 4), "wall")
+	check("walls side by side block more", w.block() == 1 + 1 + 2 * Content.WALL_CHAIN, w.block())
+	check("harm less block", w.harmed(5) == 1, w.hp)
 
 
 func _fights() -> void:
-	var a := Home.new([], rng())
-	a.units = [{"id": 90, "kind": "red", "star": 1, "bonus_hp": 0, "bonus_atk": 0},
-		{"id": 91, "kind": "red", "star": 1, "bonus_hp": 0, "bonus_atk": 0},
-		{"id": 92, "kind": "blue", "star": 1, "bonus_hp": 0, "bonus_atk": 0}]
-	var f1 := Fight.make(a, ["grey", "grey"], 1.0)
+	var h := bare()
+	h.build(Vector2i(0, 4), "nest_red")
+	h.buildings[Vector2i(0, 4)].level = 4
+	var f1 := Fight.make(h.army(), {}, ["grey", "grey", "purple"], 1.0)
+	var f2 := Fight.make(h.army(), {}, ["grey", "grey", "purple"], 1.0)
 	var e1 := f1.run()
-	var f2 := Fight.make(a, ["grey", "grey"], 1.0)
-	var e2 := f2.run()
-	check("the same armies end the same way", str(e1) == str(e2) and f1.result == f2.result, [f1.result, f2.result])
-	check("2 red 1 blue beat 2 grey", f1.result == "won", [f1.result, f1.time])
-	var b := Home.new([], rng())
-	b.units = [{"id": 95, "kind": "red", "star": 1, "bonus_hp": 0, "bonus_atk": 0}]
-	var f3 := Fight.make(b, ["black", "black", "black"], 1.0)
-	f3.run()
-	check("one red loses to three black", f3.result == "lost", f3.result)
-	check("harm 6", f3.harm() == 6, f3.harm())
-	check("the red fell", f3.fallen() == [95], f3.fallen())
-	var c := Home.new([], rng())
-	c.units = [{"id": 96, "kind": "green", "star": 1, "bonus_hp": 0, "bonus_atk": 0},
-		{"id": 97, "kind": "white", "star": 1, "bonus_hp": 0, "bonus_atk": 0}]
-	var f4 := Fight.make(c, ["grey", "grey"], 1.0)
-	var e4 := f4.run()
-	check("the white heals", e4.filter(func(e: Dictionary) -> bool: return e.t == "heal").size() > 0)
-	var d := Home.new([], rng())
-	d.units = [{"id": 98, "kind": "gold", "star": 1, "bonus_hp": 0, "bonus_atk": 0}]
-	var f5 := Fight.make(d, ["grey", "grey", "grey"], 1.0)
-	var e5 := f5.run()
-	var first_hits := e5.filter(func(e: Dictionary) -> bool: return e.t == "hit" and e.from == 1)
-	check("gold splashes", first_hits.size() >= 2, first_hits.size())
+	f2.run()
+	check("the same each time", f1.result == f2.result and f1.time == f2.time and e1.size() > 0)
+	check("an end", f1.result in ["won", "lost", "time"], f1.result)
+	var lone := Fight.make([], {}, ["grey"], 1.0)
+	lone.run()
+	check("no army: lost", lone.result == "lost" and lone.harm() == 1, lone.result)
+	var g := bare()
+	g.build(Vector2i(0, 4), "nest_gold")
+	var f3 := Fight.make(g.army(), {}, ["grey", "grey", "grey"], 1.0)
+	var e3 := f3.run()
+	check("gold splashes", e3.filter(func(e: Dictionary) -> bool: return e.t == "hit" and e.from == 1).size() >= 2)
+	var w := bare()
+	w.build(Vector2i(0, 4), "nest_green")
+	w.build(Vector2i(2, 4), "nest_white")
+	var f4 := Fight.make(w.army(), {}, ["grey", "grey"], 1.0)
+	check("strength adds up", f4.strength("ours") > 20.0 and f4.strength("theirs") > 19.0, [f4.strength("ours"), f4.strength("theirs")])
+	check("the white heals", f4.run().any(func(e: Dictionary) -> bool: return e.t == "heal"))
 
 
 func _run_flow() -> void:
 	var r := Run.new(9)
 	r.start_round()
+	var food := r.home.army_food()
 	var f := r.fight()
 	f.run()
 	var out := r.finish(f)
-	check("round 1 against 2 grey with 1 red: a result", out.result in ["won", "lost", "time"], out)
-	check("the fallen come back", r.home.units.size() == f.alive("ours").size() + f.fallen().size() or not Run.FALLEN_COME_BACK,
-		[r.home.units.size(), f.fallen()])
-	check("round goes on unless over", r.round == 2 or r.over or out.level_won, r.round)
+	check("round 1: a result", out.result in ["won", "lost", "time"], out)
+	check("biomass paid", r.home.biomass == 3 + 3 - food, r.home.biomass)
+	if out.result == "won":
+		check("won: loot", r.home.alien == 1 and out.alien == 1, [r.home.alien, out])
+	check("round goes on", r.round == 2 or r.over)
 	var g := Run.new(4)
 	g.round = 10
 	g.start_round()
@@ -183,46 +271,31 @@ func _run_flow() -> void:
 	w.run()
 	var o := g.finish(w)
 	check("round 10 ends the level or the run", o.level_won or g.over, [o, g.home.hp])
+	g.over = false
+	g.next_level()
+	check("next level: a row more", g.home.open_rows == Home.OPEN + 1 and g.level == 1 and g.round == 1)
 	check("offer of 3 different", g.offer().size() == 3)
-	check("deck is all the cards", g.deck().size() == Content.START_DECK.size(), g.deck().size())
-
-
-func _full_yard() -> void:
-	var h := Home.new([], rng())
-	h.units.clear()
-	for k in ["red", "red", "blue", "blue", "green"]:
-		h.units.append({"id": h._id(), "kind": k, "star": 1, "bonus_hp": 0, "bonus_atk": 0})
-	var ev := h.make(Content.FIRST.pos)
-	check("full yard: a third red is still made, and three become one",
-		ev.any(func(e: Dictionary) -> bool: return e.t == "made") and ev.any(func(e: Dictionary) -> bool: return e.t == "merged")
-		and h.units.size() == 4, [ev.map(func(e: Dictionary) -> String: return e.t), h.units.size()])
-	h.build(Vector2i(0, 0), "hatch_green")
-	h.units.append({"id": h._id(), "kind": "white", "star": 1, "bonus_hp": 0, "bonus_atk": 0})
-	h.units.append({"id": h._id(), "kind": "gold", "star": 1, "bonus_hp": 0, "bonus_atk": 0})
-	var before := h.units.size()
-	var ev2 := h.make(Vector2i(0, 0))
-	check("full yard: a green that makes no three is not", ev2.size() == 1 and ev2[0].t == "full" and h.units.size() == before,
-		[ev2, h.units.size()])
+	var first := Run.new(5)
+	var late := 0
+	for k in 30:
+		for id in first.offer():
+			if int(Content.CARDS[id].get("from", 0)) > 0:
+				late += 1
+	check("level 1 offers no later card", late == 0, late)
 
 
 func _deck_changes() -> void:
 	var r := Run.new(5)
 	r.start_round()
 	r.take("b_gold")
-	check("a card won is in the deck", r.deck().size() == Content.START_DECK.size() + 1 and
-		r.home.draw.any(func(ci: Dictionary) -> bool: return ci.id == "b_gold"), r.deck().size())
+	check("a card won is in the deck", r.deck().size() == Content.START_DECK.size() + 1)
 	var one: Dictionary = r.deck()[0]
 	r.upgrade(one)
 	check("upgraded where it lies", r.deck().filter(func(ci: Dictionary) -> bool: return ci.up).size() == 1)
 	check("removed", r.remove(one) and r.deck().size() == Content.START_DECK.size())
 	while r.deck().size() > Home.HAND:
 		r.remove(r.deck()[0])
-	check("never fewer than a hand", not r.remove(r.deck()[0]) and r.deck().size() == Home.HAND, r.deck().size())
-	var s := Run.new(6)
-	s.start_round()
-	s.next_level()
-	check("next level: all cards to draw", s.home.draw.size() == Content.START_DECK.size() and s.home.hand.is_empty()
-		and s.home.discard.is_empty() and s.level == 1 and s.round == 1, [s.home.draw.size(), s.level, s.round])
+	check("never fewer than a hand", not r.remove(r.deck()[0]) and r.deck().size() == Home.HAND)
 
 
 func _clone() -> void:
@@ -230,17 +303,30 @@ func _clone() -> void:
 	h.start_round(rng())
 	h.energy = 10
 	var c := h.clone()
-	c.play(c.hand.find(c.hand.filter(func(ci: Dictionary) -> bool: return ci.id == "rally").front()) if
-		c.hand.any(func(ci: Dictionary) -> bool: return ci.id == "rally") else 0, true)
-	c.units[0].bonus_atk = 9
-	c.build(Vector2i(0, 0), "farm")
-	check("the copy changes alone", h.units[0].bonus_atk == 0 and not h.buildings.has(Vector2i(0, 0)) and h.energy == 10
-		and h.hand.size() == 5, [h.units[0], h.energy, h.hand.size()])
-	var f1 := Fight.make(h, ["grey", "grey"], 1.0)
-	var f2 := Fight.make(h.clone(), ["grey", "grey"], 1.0)
+	c.build(Vector2i(0, 4), "nest_red")
+	c.buildings[Vector2i(2, 3)].affixes.append("shell")
+	c.use_potion(0)
+	check("the copy changes alone", not h.buildings.has(Vector2i(0, 4)) and h.buildings[Vector2i(2, 3)].affixes.is_empty()
+		and h.potions.size() == 1 and h.buffs.is_empty())
+	var f1 := Fight.make(h.army(), h.buffs, ["grey", "grey"], 1.0)
+	var f2 := Fight.make(h.clone().army(), h.buffs, ["grey", "grey"], 1.0)
 	f1.run()
 	f2.run()
-	check("a copy fights the same", f1.result == f2.result and f1.time == f2.time and f1.fallen() == f2.fallen())
+	check("a copy fights the same", f1.result == f2.result and f1.time == f2.time)
+
+
+func _waves() -> void:
+	for level in Content.LEVELS.size():
+		for r in range(1, 11):
+			check("wave %d/%d" % [level, r], not Content.wave(level, r).is_empty())
+	var calm := 0.0
+	for k in Content.wave(0, 4):
+		calm += Content.enemy_strength(k)
+	var big := 0.0
+	for k in Content.wave(0, 5):
+		big += Content.enemy_strength(k)
+	check("round 5 is a big wave", big > calm * 1.2, [calm, big])
+	check("the last round has the boss", "boss" in Content.wave(0, 10))
 
 
 func _texts() -> void:
@@ -250,8 +336,5 @@ func _texts() -> void:
 		var u := Content.card({"id": id, "up": true})
 		check("upgraded name for " + id, u.name.ends_with("+"), u.name)
 	for kind in Content.BUILDINGS:
-		for l in [1, 2, 3]:
+		for l in range(1, Content.LEVEL_MAX + 1):
 			check("building text %s %d" % [kind, l], Content.building_text(kind, l) != "")
-	for level in Content.LEVELS.size():
-		for r in range(1, 11):
-			check("wave %d/%d" % [level, r], not Content.wave(level, r).is_empty())

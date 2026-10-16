@@ -1,26 +1,26 @@
 extends SceneTree
-## Checks the strength numbers (Content.strength) against the battles themselves (GAME-DESIGN 12):
+## Checks the strength numbers (Content.strength) against the battles themselves (GAME-DESIGN 14):
 ##
 ##   Godot --headless --path dino-raid --script res://tools/strength_check.gd
 ##
-## 1. Each kind alone: a band of it against greys (ours) or reds (theirs) -- how many it beats, against what its
-##    strength says it should (ratio 1.00 is right).
-## 2. Mixed sides: random armies against random waves of a given strength ratio -- how often the army wins.
-##    At 1.0 it should be about half.
+## 1. Each kind alone: a band of it against greys (ours) or of greys against it (theirs) -- how many it beats, against
+##    what its strength says it should (ratio 1.00 is right).
+## 2. Mixed sides: random armies (some with affixes) against random waves of a given strength ratio -- how often the
+##    army wins. At 1.0 it should be about half.
 
 var rng := RandomNumberGenerator.new()
 
 
 func _init() -> void:
 	rng.seed = 7
-	print("-- each kind, a band of about 80 strength, against greys (ours) or reds (theirs)")
+	print("-- each kind, a band of about 80 strength, against greys")
 	for kind in Content.UNITS:
-		for star in [1, 2, 3]:
-			if star > 1 and kind != "red" and kind != "blue":
-				continue
-			_alone("ours", kind, star)
+		_alone(kind, [])
+	for affix in Content.AFFIXES:
+		_alone("red", [affix])
+	print("-- each enemy, a band of about 80 strength, against reds")
 	for kind in Content.ENEMIES:
-		_alone("theirs", kind, 1)
+		_enemy(kind)
 	print("-- mixed: random armies against random waves (wins of 60 at each ratio of wave to army)")
 	for ratio in [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.4]:
 		var wins := 0
@@ -31,58 +31,104 @@ func _init() -> void:
 	quit()
 
 
-func _alone(side: String, kind: String, star: int) -> void:
-	var one := Content.unit_strength(side, kind, star)
+func _spec(kind: String, affixes: Array) -> Dictionary:
+	var h := Home.new([], rng)
+	h.buildings.clear()
+	h.build(Vector2i(0, 4), "nest_" + kind)
+	h.buildings[Vector2i(0, 4)].affixes = affixes
+	return h.spec_of(Vector2i(0, 4))
+
+
+func _alone(kind: String, affixes: Array) -> void:
+	var spec := _spec(kind, affixes)
+	var one := Content.strength(Content.unit_stats(spec))
 	var n := maxi(1, roundi(80.0 / one))
-	var foe := "grey" if side == "ours" else "red"
 	var lo := 0
 	var hi := 1
-	while hi < 300 and _beats(side, kind, star, n, foe, hi):
+	while hi < 300 and _beats(spec, n, hi):
 		lo = hi
 		hi *= 2
 	while hi - lo > 1:
 		var mid := (lo + hi) / 2
-		if _beats(side, kind, star, n, foe, mid):
+		if _beats(spec, n, mid):
 			lo = mid
 		else:
 			hi = mid
-	var foe_strength := Content.unit_strength("theirs" if side == "ours" else "ours", foe)
-	print("  %-6s %d* strength %5.1f: %2d of them beat %3d %s -> ratio %.2f" % [kind, star, one, n, lo, foe,
-		lo * foe_strength / (n * one)])
+	print("  %-6s %-8s strength %5.1f: %2d of them beat %3d grey -> ratio %.2f" % [kind, ",".join(affixes), one, n, lo,
+		lo * 10.0 / (n * one)])
 
 
-func _beats(side: String, kind: String, star: int, n: int, foe: String, m: int) -> bool:
-	var f := Fight.new()
+func _beats(spec: Dictionary, n: int, m: int) -> bool:
+	var army: Array = []
 	for i in n:
-		f._add(side, kind, star, 0, 0, 0, 0, 1.0, 0)
+		var u := spec.duplicate()
+		u.id = "x:%d" % i
+		army.append(u)
+	var wave: Array = []
 	for i in m:
-		f._add("theirs" if side == "ours" else "ours", foe, 1, 0, 0, 0, 0, 1.0, 0)
-	f._form("ours")
-	f._form("theirs")
+		wave.append("grey")
+	var f := Fight.make(army, {}, wave, 1.0)
 	f.run()
-	return f.result == "won" if side == "ours" else f.result != "won"
+	return f.result == "won"
+
+
+func _enemy(kind: String) -> void:
+	var one := Content.enemy_strength(kind)
+	var n := maxi(1, roundi(80.0 / one))
+	var red := _spec("red", [])
+	red.hp_mult = 1.0
+	var red_strength := Content.strength(Content.unit_stats(red))
+	var lo := 0
+	var hi := 1
+	while hi < 300 and not _red_band_wins(red, hi, kind, n):
+		lo = hi
+		hi *= 2
+	while hi - lo > 1:
+		var mid := (lo + hi) / 2
+		if _red_band_wins(red, mid, kind, n):
+			hi = mid
+		else:
+			lo = mid
+	print("  %-6s strength %5.1f: %2d of them beat %3d red -> ratio %.2f" % [kind, one, n, lo, lo * red_strength / (n * one)])
+
+
+func _red_band_wins(red: Dictionary, reds: int, kind: String, n: int) -> bool:
+	var army: Array = []
+	for i in reds:
+		var u := red.duplicate()
+		u.id = "r:%d" % i
+		army.append(u)
+	var wave: Array = []
+	for i in n:
+		wave.append(kind)
+	var f := Fight.make(army, {}, wave, 1.0)
+	f.run()
+	return f.result == "won"
 
 
 ## A random army of about 100 strength against a random wave of `ratio` times that.
 func _mixed(ratio: float) -> bool:
-	var f := Fight.new()
+	var army: Array = []
 	var ours := 0.0
 	var kinds := Content.UNITS.keys()
+	var affixes := Content.AFFIXES.keys()
 	while ours < 100.0:
 		var k: String = kinds[rng.randi() % kinds.size()]
-		var star := 1 + (1 if rng.randf() < 0.3 else 0)
-		f._add("ours", k, star, 0, 0, 0, 0, 1.0, 0)
-		ours += Content.unit_strength("ours", k, star)
+		var a: Array = [affixes[rng.randi() % affixes.size()]] if rng.randf() < 0.3 else []
+		var u := _spec(k, a)
+		u.id = "m:%d" % army.size()
+		army.append(u)
+		ours += Content.strength(Content.unit_stats(u))
+	var wave: Array = []
 	var theirs := 0.0
 	var foes := ["grey", "grey", "purple", "black"]
 	if ratio >= 1.0 and rng.randf() < 0.3:
-		f._add("theirs", "boss", 1, 0, 0, 0, 0, 1.0, 0)
-		theirs += Content.unit_strength("theirs", "boss")
+		wave.append("boss")
+		theirs += Content.enemy_strength("boss")
 	while theirs < ours * ratio - 5.0:
 		var k: String = foes[rng.randi() % foes.size()]
-		f._add("theirs", k, 1, 0, 0, 0, 0, 1.0, 0)
-		theirs += Content.unit_strength("theirs", k)
-	f._form("ours")
-	f._form("theirs")
+		wave.append(k)
+		theirs += Content.enemy_strength(k)
+	var f := Fight.make(army, {}, wave, 1.0)
 	f.run()
 	return f.result == "won"
