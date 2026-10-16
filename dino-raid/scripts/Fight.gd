@@ -1,12 +1,13 @@
 class_name Fight
 extends RefCounted
-## One battle outside the homeland, fought by itself (GAME-DESIGN 12): our units against a wave, each going for
-## the nearest foe and hitting it once it is in reach, until one side is gone or the time is up. Worked out in
-## fixed steps with nothing random, so the same two armies always end the same way.
+## One battle outside the homeland, fought by itself (GAME-DESIGN 14): this round's army against a wave, each going
+## for the nearest foe -- a flier for the one furthest back -- and hitting it once it is in reach, until one side is
+## gone or the time is up. Worked out in fixed steps with nothing random, so the same two sides always end the same
+## way; every blow struck in a step lands at its end, so no side strikes first.
 ##
 ## Plain data and rules, nothing on screen. A fighter:
-##   {id, side "ours"|"theirs", kind, star, roster (the homeland unit's id, ours only), pos: Vector2 (x, z),
-##    hp, max, atk, armor, every, range, speed, size, splash, heal, harm, cool}
+##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z),
+##    hp, max, atk, armor, every, range, speed, size, splash, heal, dive, harm, cool}
 ## Events of a step: hit {from, to, dmg}, heal {from, to, amount}, die {id}.
 
 const STEP := 0.1
@@ -22,22 +23,19 @@ var result := ""                  # "won", "lost", or "time" (lost on time)
 var _next := 1
 
 
-## Our units from the homeland, with its battle buffs, against `wave` at `power`.
-static func make(home: Home, wave: Array, power: float) -> Fight:
+## `army` (Home.army's units) with this battle's `buffs`, against `wave` at `power`.
+static func make(army: Array, buffs: Dictionary, wave: Array, power: float) -> Fight:
 	var f := Fight.new()
-	var b := home.buffs
-	for u in home.units:
-		f._add("ours", u.kind, int(u.star), int(u.bonus_hp), int(u.bonus_atk) + int(b.get("atk", 0)),
-			int(b.get("armor", 0)), int(b.get("haste", 0)), 1.0, int(u.id))
+	for u in army:
+		f._add("ours", u.kind, Content.unit_stats(u, buffs), str(u.id), u.get("affixes", []))
 	for k in wave:
-		f._add("theirs", k, 1, 0, 0, 0, 0, power, 0)
+		f._add("theirs", k, Content.enemy_stats(k, power), "", [])
 	f._form("ours")
 	f._form("theirs")
 	return f
 
 
-## A step of the battle. Its events. Every blow struck in a step lands at its end, all together: no side strikes
-## first, and one struck down in a step still strikes in it.
+## A step of the battle. Its events.
 func step() -> Array:
 	var ev: Array = []
 	if over:
@@ -56,7 +54,7 @@ func step() -> Array:
 				u.cool = float(u.every)
 				ev.append({"t": "heal", "from": u.id, "to": hurt.id, "amount": amount})
 				continue
-		var foe: Variant = _nearest_foe(u)
+		var foe: Variant = _foe_of(u)
 		if foe == null:
 			continue
 		var gap: float = (foe.pos as Vector2).distance_to(u.pos) - (float(u.size) + float(foe.size)) * 0.5
@@ -83,7 +81,7 @@ func step() -> Array:
 	return ev
 
 
-## The whole battle at once (for tests and the bot): all its events.
+## The whole battle at once (for tests, the forecast and the bot): all its events.
 func run() -> Array:
 	var ev: Array = []
 	while not over:
@@ -112,10 +110,9 @@ func strength(side: String) -> float:
 	return n
 
 
-## The homeland units that fell.
-func fallen() -> Array:
-	return units.filter(func(u: Dictionary) -> bool: return u.side == "ours" and int(u.hp) <= 0).map(
-		func(u: Dictionary) -> int: return int(u.roster))
+## How many of ours fell.
+func fallen() -> int:
+	return units.filter(func(u: Dictionary) -> bool: return u.side == "ours" and int(u.hp) <= 0).size()
 
 
 func unit(id: int) -> Variant:
@@ -131,7 +128,7 @@ func _strike(u: Dictionary, foe: Dictionary, blows: Array) -> void:
 	if float(u.splash) > 0.0:
 		for o in units:
 			if o.side == foe.side and o.id != foe.id and int(o.hp) > 0 and (o.pos as Vector2).distance_to(foe.pos) <= float(u.splash):
-				blows.append([u, o, int(u.atk) / 2])
+				blows.append([u, o, ceili(int(u.atk) / 2.0)])
 
 
 func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array) -> void:
@@ -143,14 +140,16 @@ func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array) -> void:
 		ev.append({"t": "die", "id": foe.id})
 
 
-## The nearest foe standing: nearest, then weakest, then the first made -- never a doubt which.
-func _nearest_foe(u: Dictionary) -> Variant:
+## Whom u goes for: the nearest foe standing (nearest, then weakest, then the first made -- never a doubt which);
+## a flier, the one furthest back on the other side.
+func _foe_of(u: Dictionary) -> Variant:
 	var best: Variant = null
 	var best_d := INF
+	var forward := 1.0 if u.side == "ours" else -1.0
 	for o in units:
 		if o.side == u.side or int(o.hp) <= 0:
 			continue
-		var d: float = (o.pos as Vector2).distance_to(u.pos)
+		var d: float = -(o.pos as Vector2).x * forward if u.dive else (o.pos as Vector2).distance_to(u.pos)
 		if d < best_d - 0.001 or absf(d - best_d) <= 0.001 and best != null and int(o.hp) < int(best.hp):
 			best = o
 			best_d = d
@@ -187,19 +186,16 @@ func _spread() -> void:
 			b.pos = (b.pos as Vector2) + dir * push
 
 
-func _add(side: String, kind: String, star: int, bonus_hp: int, bonus_atk: int, armor: int, haste: int,
-		power: float, roster: int) -> void:
-	var s := Content.stats(side, kind, star, bonus_hp, bonus_atk, power)
-	units.append({"id": _next, "side": side, "kind": kind, "star": star, "roster": roster, "pos": Vector2.ZERO,
-		"hp": s.hp, "max": s.hp, "atk": s.atk, "armor": int(s.armor) + armor,
-		"every": float(s.every) * 100.0 / (100.0 + haste), "range": float(s.range), "speed": float(s.speed),
-		"size": float(s.size), "splash": float(s.splash), "heal": int(s.heal), "harm": int(s.get("harm", 0)),
-		"cool": 0.0})
+func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Array) -> void:
+	units.append({"id": _next, "side": side, "kind": kind, "roster": roster, "affixes": affixes, "pos": Vector2.ZERO,
+		"hp": int(s.hp), "max": int(s.hp), "atk": int(s.atk), "armor": int(s.armor), "every": float(s.every),
+		"range": float(s.range), "speed": float(s.speed), "size": float(s.size), "splash": float(s.splash),
+		"heal": int(s.heal), "dive": bool(s.get("dive", false)), "harm": int(s.get("harm", 0)), "cool": 0.0})
 	_next += 1
 
 
-## The ranks a side starts in: the short-reach ones in front, the long-reach behind, each rank spread along
-## the line, more ranks behind when a rank is full.
+## The ranks a side starts in: the short-reach ones in front, the long-reach behind, each rank spread along the line,
+## more ranks behind when a rank is full.
 func _form(side: String) -> void:
 	var sign := -1.0 if side == "ours" else 1.0
 	var list := units.filter(func(u: Dictionary) -> bool: return u.side == side)

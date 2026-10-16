@@ -1,12 +1,11 @@
 class_name Run
 extends RefCounted
-## A run (GAME-DESIGN 12): one homeland carried through the levels, each level a number of rounds -- build up,
-## then fight a wave -- and the deck growing between levels. Over when the homeland's hit points are gone.
+## A run (GAME-DESIGN 14): one homeland carried through the levels, each level a number of rounds -- build up, then
+## this round's army fights a wave -- and the deck growing between levels. Over when the homeland's hit points are
+## gone.
 
 const WEIGHT := [6, 3, 1]         # how often a common, uncommon and rare card is offered, one against another
-## The fallen come home hurt but alive, as in an auto-battler: a battle lost costs the homeland, never the units.
-## (false: the fallen are gone for good.)
-const FALLEN_COME_BACK := true
+const LOOT := 1                   # a battle won: this many potions and alien genes; a big round's or a boss's, double
 
 ## The run being played: kept here while the scene is reloaded.
 static var current: Run
@@ -17,6 +16,7 @@ var home: Home
 var rng := RandomNumberGenerator.new()
 var over := false
 var calm := false                 # no one comes (tools/sim_runs.gd measuring how strong a homeland can grow)
+var shown := false                # the deck has been laid out at the start
 
 
 func _init(seed := 0) -> void:
@@ -43,31 +43,43 @@ func wave(ahead := 0) -> Array:
 	return [] if calm else Content.wave(level, round + ahead)
 
 
-## The strength of the homeland's units all told (Content.strength), without this battle's buffs.
-func strength() -> float:
-	var n := 0.0
-	for u in home.units:
-		n += Content.unit_strength("ours", u.kind, int(u.star), int(u.bonus_hp), int(u.bonus_atk))
-	return n
+func big(ahead := 0) -> bool:
+	return round + ahead in Content.BIG_ROUNDS
 
 
 func start_round() -> Array:
 	return home.start_round(rng)
 
 
+## The army goes out (its biomass paid) against this round's wave.
 func fight() -> Fight:
-	return Fight.make(home, wave(), power())
+	return Fight.make(home.produce(), home.buffs, wave(), power())
 
 
-## After the battle: the battle's buffs spent; lost, the homeland is harmed (and the fallen gone, if they do
-## not come back). {result, fallen, took, level_won}
+## The strength of the army the homeland would send now (Content.strength), with this round's buffs.
+func strength() -> float:
+	var n := 0.0
+	for u in home.army():
+		n += Content.strength(Content.unit_stats(u, home.buffs))
+	return n
+
+
+## After the battle: this round's buffs spent; won, potions and alien genes found; lost, the homeland is harmed.
+## {result, fallen, took, loot: [potion ids], alien, level_won}
 func finish(f: Fight) -> Dictionary:
-	var fallen := f.fallen()
-	if not FALLEN_COME_BACK:
-		home.units = home.units.filter(func(u: Dictionary) -> bool: return not int(u.id) in fallen)
 	home.buffs.clear()
-	var took := 0 if f.result == "won" else home.harmed(f.harm())
-	var out := {"result": f.result, "fallen": fallen.size(), "took": took, "level_won": false}
+	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "loot": [], "alien": 0, "level_won": false}
+	if f.result == "won":
+		var n := LOOT * (2 if big() or round >= rounds() else 1)
+		home.alien += n
+		out.alien = n
+		for i in n:
+			var kinds: Array = Content.POTIONS.keys()
+			var k: String = kinds[rng.randi() % kinds.size()]
+			if home.add_potion(k):
+				out.loot.append(k)
+	else:
+		out.took = home.harmed(f.harm())
 	if home.hp <= 0:
 		over = true
 	elif round >= rounds():
@@ -81,10 +93,11 @@ func last_level() -> bool:
 	return level >= Content.LEVELS.size() - 1
 
 
-## On to the next level: the whole deck gathered and shuffled, as at the start.
+## On to the next level: a row more of land, the whole deck gathered and shuffled as at the start.
 func next_level() -> void:
 	level += 1
 	round = 1
+	home.open_row()
 	home.draw = deck()
 	home.hand = []
 	home.discard = []
@@ -117,11 +130,14 @@ func remove(ci: Dictionary) -> bool:
 	return false
 
 
-## Three different cards to choose one of, the rarer the seldomer.
+## Three different cards to choose one of, the rarer the seldomer -- only those this level has opened.
 func offer() -> Array:
 	var pool: Array = []
 	for id in Content.CARDS:
-		for i in WEIGHT[int(Content.CARDS[id].rarity)]:
+		var c: Dictionary = Content.CARDS[id]
+		if int(c.get("from", 0)) > level:
+			continue
+		for i in WEIGHT[int(c.rarity)]:
 			pool.append(id)
 	Home.shuffle(pool, rng)
 	var out: Array = []
