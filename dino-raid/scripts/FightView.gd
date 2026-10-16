@@ -1,8 +1,8 @@
 class_name FightView
 extends Node3D
-## A battle on screen (GAME-DESIGN 12): a block for every fighter where Fight has it, facing the other side. A blow
-## flashes what it hits and its number flies off; a long reach draws its shot; a heal glows green; the fallen tip
-## over and shrink away.
+## A battle on screen (GAME-DESIGN 14): a block for every fighter where Fight has it, facing the other side, with what
+## its affixes grew on it; a flier flies. A blow flashes what it hits and its number flies off; a long reach draws its
+## shot; a heal glows green; the fallen tip over and shrink away.
 
 const OUR_SHOT := Color(1.0, 0.92, 0.55)
 const THEIR_SHOT := Color(0.85, 0.45, 1.0)
@@ -18,7 +18,7 @@ func setup(f: Fight) -> void:
 	fight = f
 	for u in f.units:
 		var c: Color = (Content.UNITS if u.side == "ours" else Content.ENEMIES)[u.kind].color
-		var n := Blocks.creature(float(u.size), c, u.side == "theirs")
+		var n := Blocks.creature(float(u.size), c, u.side == "theirs", u.affixes)
 		n.rotation.y = PI * 0.5 if u.side == "ours" else -PI * 0.5
 		n.position = place(u)
 		add_child(n)
@@ -33,10 +33,10 @@ func clear() -> void:
 	fight = null
 
 
-## Where a fighter stands in the world.
+## Where a fighter stands in the world (a flier, in the air).
 static func place(u: Dictionary) -> Vector3:
 	var p: Vector2 = u.pos
-	return World.ARENA + Vector3(p.x, World.GROUND_TOP, p.y)
+	return World.ARENA + Vector3(p.x, World.GROUND_TOP + (1.4 if u.dive else 0.0), p.y)
 
 
 func node(id: int) -> Node3D:
@@ -67,7 +67,7 @@ func show_events(ev: Array) -> void:
 				var nb: Node3D = _nodes.get(e.to)
 				if a == null or b == null or na == null or nb == null:
 					continue
-				_flash(nb, Color.WHITE, 0.9)
+				_flash(nb, Color.WHITE, 0.6)
 				if tags:
 					var c := Color(1.0, 0.4, 0.32) if b.side == "ours" else Color(1.0, 0.96, 0.86)
 					tags.float_text(nb.position + Vector3.UP * (float(b.size) + 0.5), "-%d" % e.dmg, c, 18)
@@ -131,12 +131,17 @@ func _shot(na: Node3D, nb: Node3D, c: Color) -> void:
 	tw.tween_callback(streak.queue_free)
 
 
+## A short glow -- at most every half second, so a block struck by many still shows its colour.
 func _flash(n: Node3D, c: Color, strength: float) -> void:
+	var now := Time.get_ticks_msec()
+	if now - int(n.get_meta("flashed", -1000)) < 500:
+		return
+	n.set_meta("flashed", now)
 	var m := Blocks.body_of(n).material_override as StandardMaterial3D
 	m.emission = c
 	m.emission_energy_multiplier = strength
 	var tw := n.create_tween()
-	tw.tween_property(m, "emission_energy_multiplier", 0.0, 0.16)
+	tw.tween_property(m, "emission_energy_multiplier", 0.0, 0.12)
 
 
 func _fall(n: Node3D) -> void:

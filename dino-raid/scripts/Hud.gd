@@ -1,10 +1,10 @@
 class_name Hud
 extends CanvasLayer
-## What the player holds and reads (GAME-DESIGN 12): the hand fanned along the bottom, the energy, the draw and
-## discard piles, the button that sends the units out; the level, the round, the homeland's health and the yard at
-## the top left; who comes this battle and the next, and how this battle will go as things stand, at the top
-## right; what the cursor points at; a battle's count and clock; and the cards to win between battles. It shows;
-## Game decides.
+## What the player holds and reads (GAME-DESIGN 14): the hand fanned along the bottom, the energy, the potions, the
+## draw and discard piles, the button that sends the army out; the level, the round, the homeland's health, the
+## biomass and genes, this round's army at the top left; who comes this battle and the next, and how this battle will
+## go as things stand, at the top right; what the cursor points at; a battle's count and clock; and the cards to win
+## between battles. It shows; Game decides.
 
 signal chosen(value: Variant)
 
@@ -25,8 +25,11 @@ var _discard: Label
 var _go: Button
 var _title: Label
 var _hp: Control
-var _yard: Label
+var _res: Label
+var _army: Label
 var _buffs: Label
+var _potions: Array = []         # the potion places, Controls
+var _potion_hover := -1
 var _waves: VBoxContainer
 var _waves_for := ""
 var _forecast: PanelContainer
@@ -44,6 +47,7 @@ var _battle: PanelContainer
 var _battle_text: Label
 var _speed: Button
 var _overlay: Control
+var _stowed := false             # the hand put away below the screen (in a battle)
 var screen := ""                 # the title of the screen up between battles, "" when none (for tools)
 
 
@@ -69,9 +73,12 @@ func setup(p_game: Game) -> void:
 	_hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp.draw.connect(_draw_hp)
 	corner.add_child(_hp)
-	_yard = _label("", 16, Fonts.serif(700), Color(0.92, 0.86, 0.74))
-	_yard.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	corner.add_child(_yard)
+	_res = _label("", 16, Fonts.serif(700), Color(0.92, 0.9, 0.8))
+	_res.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	corner.add_child(_res)
+	_army = _label("", 16, Fonts.serif(700), Color(0.92, 0.86, 0.74))
+	_army.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	corner.add_child(_army)
 	_buffs = _label("", 16, Fonts.serif(700), Color(1.0, 0.8, 0.45))
 	_buffs.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	corner.add_child(_buffs)
@@ -109,8 +116,8 @@ func setup(p_game: Game) -> void:
 	# Middle left: what the cursor points at.
 	_info = PanelContainer.new()
 	_info.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.9), Color(0.72, 0.55, 0.32), 12))
-	_info.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	_info.position = Vector2(18, -70)
+	_info.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_info.position = Vector2(18, 178)
 	_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_info.visible = false
 	_root.add_child(_info)
@@ -133,8 +140,28 @@ func setup(p_game: Game) -> void:
 	_energy.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_energy.draw.connect(_draw_energy)
 	_root.add_child(_energy)
-	_draw = _pile("抽牌堆", Control.PRESET_BOTTOM_LEFT, Vector2(30, -62))
-	_discard = _pile("弃牌堆", Control.PRESET_BOTTOM_RIGHT, Vector2(-112, -62))
+	for k in Content.POTION_SLOTS:
+		var slot := Control.new()
+		slot.custom_minimum_size = Vector2(46, 46)
+		slot.size = Vector2(46, 46)
+		slot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		slot.position = Vector2(150 + k * 54, -128)
+		slot.mouse_filter = Control.MOUSE_FILTER_STOP
+		slot.draw.connect(_draw_potion.bind(k))
+		slot.mouse_entered.connect(func() -> void:
+			_potion_hover = k
+			game.aim_potion(k))
+		slot.mouse_exited.connect(func() -> void:
+			if _potion_hover == k:
+				_potion_hover = -1
+				game.aim_potion(-1))
+		slot.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				game.act("potion", {"slot": k}))
+		_root.add_child(slot)
+		_potions.append(slot)
+	_draw = _pile("抽牌堆", Control.PRESET_BOTTOM_LEFT, Vector2(30, -62), "draw")
+	_discard = _pile("弃牌堆", Control.PRESET_BOTTOM_RIGHT, Vector2(-170, -62), "discard")
 	_go = _button("出战！", Vector2(188, 64), 26)
 	_go.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_go.position = Vector2(-214, -150)
@@ -187,6 +214,14 @@ func setup(p_game: Game) -> void:
 func _process(_delta: float) -> void:
 	_layout()
 	var tip := game.describe() if _hovered == null and not _overlay.visible else ""
+	if _potion_hover >= 0 and not _overlay.visible:
+		var home: Home = game.home
+		tip = ""
+		if _potion_hover < home.potions.size():
+			var pt: Dictionary = Content.POTIONS[home.potions[_potion_hover]]
+			tip = "%s
+%s
+点一下就用（不花能量）" % [pt.name, pt.says]
 	_info.visible = tip != ""
 	if tip != "" and _info_text.text != tip:
 		_info_text.text = tip
@@ -197,8 +232,9 @@ func _process(_delta: float) -> void:
 			ceili(maxf(0.0, Fight.LIMIT - f.time))]
 
 
-## The cards of `hand`, as cards (those already shown kept, so they do not jump).
+## The cards of `hand`, as cards (those already shown kept, so they do not jump; brought back up if put away).
 func deal(hand: Array) -> void:
+	_stowed = false
 	var out: Array = []
 	var free: Array = _cards.duplicate()
 	for ci in hand:
@@ -227,11 +263,9 @@ func deal(hand: Array) -> void:
 	refresh()
 
 
-## Everyone goes out: what is left in hand goes to the discard pile.
-func send_off() -> void:
-	for v in _cards:
-		_fly_off(v)
-	_cards = []
+## Everyone goes out: the hand is put away below the screen -- it is kept for the next round.
+func stow() -> void:
+	_stowed = true
 	_hovered = null
 	refresh()
 
@@ -264,9 +298,14 @@ func refresh() -> void:
 	_energy.queue_redraw()
 	_hp.queue_redraw()
 	_title.text = "%s · 第 %d / %d 轮" % [Content.LEVELS[run.level].name, run.round, run.rounds()]
-	var full := home.units.size() >= home.room()
-	_yard.text = "院子：%d / %d 个兵%s" % [home.units.size(), home.room(), "（满了）" if full else ""]
-	_yard.add_theme_color_override("font_color", Color(1.0, 0.6, 0.38) if full else Color(0.92, 0.86, 0.74))
+	_res.text = "生物质 %d/%d（+%d）  基因 %d/%d（+%d）  外星基因 %d" % [home.biomass, home.biomass_max(),
+		home.income_biomass(), home.genes, home.genes_max(), home.income_genes(), home.alien]
+	var army := home.army()
+	_army.text = "这一轮出战 %d 只，吃 %d 生物质" % [army.size(), home.army_food()] if not fighting else ""
+	_army.visible = not fighting
+	for slot in _potions:
+		slot.queue_redraw()
+		slot.visible = not fighting
 	_buffs.text = _buff_text(home.buffs)
 	_buffs.visible = _buffs.text != ""
 	_battle.visible = fighting and not game.at_home
@@ -283,7 +322,9 @@ func _buff_text(b: Dictionary) -> String:
 		parts.append("护甲 +%d" % b.armor)
 	if int(b.get("haste", 0)) > 0:
 		parts.append("快 %d%%" % b.haste)
-	return ("这一仗：" + "，".join(parts)) if not parts.is_empty() else ""
+	if int(b.get("breed", 0)) > 0:
+		parts.append("每个巢多孵 %d 只" % b.breed)
+	return ("这一轮：" + "，".join(parts)) if not parts.is_empty() else ""
 
 
 func _refresh_waves() -> void:
@@ -294,9 +335,9 @@ func _refresh_waves() -> void:
 	_waves_for = key
 	for ch in _waves.get_children():
 		ch.queue_free()
-	_waves.add_child(_wave_chip("这一仗", run.wave(), true))
+	_waves.add_child(_wave_chip("这一仗" + ("（大波）" if run.big() else ""), run.wave(), true))
 	if run.round < run.rounds():
-		_waves.add_child(_wave_chip("下一仗", run.wave(1), false))
+		_waves.add_child(_wave_chip("下一仗" + ("（大波）" if run.big(1) else ""), run.wave(1), false))
 
 
 func _wave_chip(name: String, wave: Array, now: bool) -> Control:
@@ -356,7 +397,7 @@ func _layout() -> void:
 		var v: CardView = _cards[i]
 		var off := i - (n - 1) * 0.5
 		var x := w * 0.5 + off * gap
-		var y := h + 52.0 + absf(off) * absf(off) * 5.0
+		var y := h + 52.0 + absf(off) * absf(off) * 5.0 + (260.0 if _stowed else 0.0)
 		var rot := deg_to_rad(off * 3.5)
 		var k := HAND_SCALE
 		if v == _hovered:
@@ -401,10 +442,10 @@ func banner(title: String, sub := "") -> void:
 
 # -- Screens between battles ------------------------------------------------------------------------------------
 
-## A screen over everything: a title, cards to click, buttons. What was clicked: the card (its dictionary) or
-## the button's words.
-func choose(title: String, sub: String, cards: Array, buttons: Array, upgrading := false) -> Variant:
-	_screen(title, sub, cards, buttons, upgrading)
+## A screen over everything: a title, cards (to click, when `pick`), buttons. What was clicked: the card (its
+## dictionary) or the button's words.
+func choose(title: String, sub: String, cards: Array, buttons: Array, upgrading := false, pick := true) -> Variant:
+	_screen(title, sub, cards, buttons, upgrading, pick)
 	var v: Variant = await chosen
 	screen = ""
 	for ch in _overlay.get_children():
@@ -414,7 +455,48 @@ func choose(title: String, sub: String, cards: Array, buttons: Array, upgrading 
 	return v
 
 
-func _screen(title: String, sub: String, cards: Array, buttons: Array, upgrading: bool) -> void:
+## A pile looked at (the draw pile, sorted so as not to give away what comes next; the discard pile; or every card),
+## any time but in a battle.
+func view_pile(which: String) -> void:
+	if screen != "" or game.phase == Game.Phase.FIGHT:
+		return
+	var home: Home = game.home
+	var cards: Array = []
+	var title := ""
+	var sub := ""
+	match which:
+		"draw":
+			cards = _sorted(home.draw)
+			title = "抽牌堆（%d 张）" % cards.size()
+			sub = "按种类排的，不是抽到的顺序。抽完了，弃牌堆洗回来再抽"
+		"discard":
+			cards = home.discard.duplicate()
+			title = "弃牌堆（%d 张）" % cards.size()
+			sub = "打出去的牌在这里。抽牌堆抽完了，它们洗回去"
+		_:
+			cards = _sorted(game.run.deck())
+			title = "全部的牌（%d 张）" % cards.size()
+			sub = "手里 %d 张，抽牌堆 %d 张，弃牌堆 %d 张。每轮手牌补到 %d 张，没打的留着" % [home.hand.size(), home.draw.size(),
+				home.discard.size(), Home.HAND]
+	var buttons: Array = ["关闭"] if which == "deck" else ["关闭", "看全部的牌"]
+	var v: Variant = await choose(title, sub, cards, buttons, false, false)
+	if v == "看全部的牌":
+		view_pile("deck")
+
+
+static func _sorted(cards: Array) -> Array:
+	var out := cards.duplicate()
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ca := Content.card(a)
+		var cb := Content.card(b)
+		var order := ["build", "raise", "affix", "gain"]
+		if ca.type != cb.type:
+			return order.find(ca.type) < order.find(cb.type)
+		return str(ca.name) < str(cb.name))
+	return out
+
+
+func _screen(title: String, sub: String, cards: Array, buttons: Array, upgrading: bool, pick := true) -> void:
 	for ch in _overlay.get_children():
 		ch.queue_free()
 	screen = title
@@ -435,12 +517,12 @@ func _screen(title: String, sub: String, cards: Array, buttons: Array, upgrading
 	box.add_child(_label(sub, 19, Fonts.serif(600), Color(0.92, 0.86, 0.74)))
 	if not cards.is_empty():
 		var grid := GridContainer.new()
-		grid.columns = mini(cards.size(), 8)
+		grid.columns = mini(cards.size(), 10 if cards.size() > 16 else 8)
 		grid.add_theme_constant_override("h_separation", 12)
 		grid.add_theme_constant_override("v_separation", 12)
 		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		box.add_child(grid)
-		var k := 1.0 if cards.size() <= 3 else (0.72 if cards.size() <= 16 else 0.6)
+		var k := 1.0 if cards.size() <= 3 else (0.72 if cards.size() <= 16 else (0.6 if cards.size() <= 30 else 0.5))
 		for ci in cards:
 			var slot := Control.new()
 			slot.custom_minimum_size = CardView.SIZE * k
@@ -452,7 +534,7 @@ func _screen(title: String, sub: String, cards: Array, buttons: Array, upgrading
 			v.scale = Vector2.ONE * k
 			var done: bool = upgrading and ci.get("up", false)
 			v.set_state(not done, false)
-			if not done:
+			if not done and pick:
 				v.clicked.connect(func(_v: CardView) -> void: chosen.emit(ci))
 			if upgrading and not done:
 				# Pointed at, it shows what it would become.
@@ -489,10 +571,26 @@ func _draw_energy() -> void:
 	var cw := f.get_string_size(cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 	_energy.draw_string(f, c + Vector2(-cw * 0.5, 33), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 0.9, 0.7, 0.8))
 	var lf := Fonts.serif(700)
-	var label := "力气 · 每轮 +%d" % home.income()
+	var label := "能量 · 每轮 +%d" % home.income_energy()
 	var lw := lf.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 	_energy.draw_string_outline(lf, Vector2(60 - lw * 0.5, 132), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.9))
 	_energy.draw_string(lf, Vector2(60 - lw * 0.5, 132), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.9, 0.7))
+
+
+## A potion place: an empty ring, or a flask of the potion's colour.
+func _draw_potion(k: int) -> void:
+	var slot: Control = _potions[k]
+	var home: Home = game.home
+	var c := Vector2(23, 23)
+	slot.draw_circle(c, 22.0, Color(0.06, 0.05, 0.04, 0.9))
+	slot.draw_arc(c, 22.0, 0.0, TAU, 32, Color(0.72, 0.53, 0.3) if k != _potion_hover else Color(1.0, 0.85, 0.45), 2.5, true)
+	if k >= home.potions.size():
+		return
+	var col: Color = Content.POTIONS[home.potions[k]].color
+	slot.draw_circle(c + Vector2(0, 4), 12.0, col)
+	slot.draw_circle(c + Vector2(-4, 0), 3.5, Color(1, 1, 1, 0.5))
+	slot.draw_rect(Rect2(c + Vector2(-4, -15), Vector2(8, 9)), col.darkened(0.2))
+	slot.draw_rect(Rect2(c + Vector2(-5, -17), Vector2(10, 3)), Color(0.55, 0.4, 0.25))
 
 
 ## The homeland's health: a bar, red when low.
@@ -510,13 +608,17 @@ func _draw_hp() -> void:
 	_hp.draw_string(f, Vector2(r.get_center().x - w * 0.5, 21), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 
 
-## A pile of cards: a little stack and how many are in it.
-func _pile(name: String, preset: int, at: Vector2) -> Label:
+## A pile of cards: a little stack and how many are in it -- clicked, the cards in it.
+func _pile(name: String, preset: int, at: Vector2, which: String) -> Label:
 	var box := HBoxContainer.new()
 	box.set_anchors_preset(preset)
 	box.position = at
 	box.add_theme_constant_override("separation", 6)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	box.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			view_pile(which))
 	_root.add_child(box)
 	var stack := Control.new()
 	stack.custom_minimum_size = Vector2(26, 34)
@@ -533,7 +635,7 @@ func _pile(name: String, preset: int, at: Vector2) -> Label:
 	var count := _label("0", 22, Fonts.numbers(), Color(1, 0.95, 0.85))
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	col.add_child(count)
-	var label := _label(name, 12, Fonts.serif(600), Color(0.9, 0.82, 0.68))
+	var label := _label(name + "（点开看）", 12, Fonts.serif(600), Color(0.9, 0.82, 0.68))
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	col.add_child(label)
 	return count

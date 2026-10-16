@@ -1,8 +1,8 @@
 class_name CardView
 extends Control
-## A card, drawn (GAME-DESIGN 12): a dark frame edged in its rarity's metal, a picture of what it builds or
-## does (blocks for now), its cost in an amber stone, its name on a band and what it does on a parchment slip.
-## Upgraded, its name ends in + and shows green.
+## A card, drawn (GAME-DESIGN 14): a dark frame edged in its rarity's metal, a picture of what it builds or does (blocks
+## for now), its energy cost in an amber stone and what else it costs (genes, alien genes) beside it, its name on a
+## band and what it does on a parchment slip. Upgraded, its name ends in + and shows green.
 
 signal clicked(view: CardView)
 signal hovered(view: CardView, on: bool)
@@ -12,10 +12,14 @@ const METAL := [Color(0.72, 0.53, 0.3), Color(0.8, 0.83, 0.88), Color(1.0, 0.82,
 const RARITY := ["普通", "少见", "稀有"]
 const GROUND := {
 	"build": [Color(0.66, 0.8, 0.58), Color(0.2, 0.3, 0.16)],
-	"buff": [Color(0.98, 0.78, 0.5), Color(0.5, 0.33, 0.2)],
-	"upgrade": [Color(0.5, 0.58, 0.9), Color(0.14, 0.15, 0.3)],
+	"raise": [Color(0.5, 0.58, 0.9), Color(0.14, 0.15, 0.3)],
+	"affix": [Color(0.75, 0.55, 0.95), Color(0.22, 0.12, 0.3)],
+	"gain": [Color(0.98, 0.78, 0.5), Color(0.5, 0.33, 0.2)],
 }
-const TYPE := {"build": Color(0.55, 0.8, 0.42), "buff": Color(0.95, 0.68, 0.32), "upgrade": Color(0.62, 0.7, 1.0)}
+const TYPE := {"build": Color(0.55, 0.8, 0.42), "raise": Color(0.62, 0.7, 1.0), "affix": Color(0.8, 0.6, 1.0),
+	"gain": Color(0.95, 0.68, 0.32)}
+const GENES := Color(0.3, 0.85, 0.75)
+const ALIEN := Color(0.75, 0.4, 0.95)
 
 static var _grounds := {}
 
@@ -113,52 +117,108 @@ func _draw() -> void:
 	draw_circle(gem + Vector2(-4.5, -5.0), 3.5, Color(1, 1, 1, 0.45))
 	_text(gem + Vector2(0, 7.5), "%d" % c.cost, 22, Color.WHITE if affordable else Color(1.0, 0.45, 0.4),
 		Fonts.numbers(), HORIZONTAL_ALIGNMENT_CENTER, 4)
+	var x := SIZE.x - 10.0
+	for extra in [["alien", "外星", ALIEN], ["genes", "基因", GENES]]:
+		var n := int(c.get(extra[0], 0))
+		if n <= 0:
+			continue
+		var label := "%s %d" % [extra[1], n]
+		var w := Fonts.serif(800).get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 10.0
+		var pill := Rect2(x - w, 8, w, 17)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(extra[2], 0.9)
+		sb.set_corner_radius_all(8)
+		sb.draw(get_canvas_item(), pill)
+		_text(Vector2(pill.get_center().x, 21), label, 11, Color(0.05, 0.05, 0.08), Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
+		x -= w + 4.0
 	if not affordable:
 		draw_rect(full.grow(-3), Color(0, 0, 0, 0.35))
 
 
-## The picture: a building as a block of its colour; a unit's card as its unit; a buff or upgrade as a sign.
+## The picture: a building as blocks of its colour; a raise as a block with an arrow; an affix as what it grows; a
+## gain as what it gives.
 func _picture(r: Rect2) -> void:
 	var mid := r.get_center()
-	if c.type == "build":
-		var b: Dictionary = Content.BUILDINGS[c.builds]
-		_block(mid + Vector2(0, 8), 30.0, 36.0, b.color)
-		var l: Dictionary = b.levels[0]
-		if l.has("makes"):
-			_block(mid + Vector2(40, 22), 12.0, 12.0, Content.UNITS[l.makes].color)
-		return
 	var gold := Color(1.0, 0.86, 0.45)
-	if c.has("battle"):
-		var b: Dictionary = c.battle
-		if b.has("atk"):
-			_arrow(mid, gold)
-		elif b.has("armor"):
-			_shield(mid, Color(0.82, 0.86, 0.92))
-		else:
-			_bolt(mid, gold)
-	elif c.has("mend"):
-		draw_circle(mid + Vector2(-9, -4), 12.0, Color(0.9, 0.25, 0.25))
-		draw_circle(mid + Vector2(9, -4), 12.0, Color(0.9, 0.25, 0.25))
-		draw_colored_polygon(PackedVector2Array([mid + Vector2(-20, 1), mid + Vector2(20, 1), mid + Vector2(0, 24)]),
-			Color(0.9, 0.25, 0.25))
-	elif c.has("unit"):
-		_block(mid + Vector2(-10, 8), 20.0, 20.0, Content.UNITS.red.color)
-		_arrow(mid + Vector2(22, 0), gold)
-	elif c.has("level_up"):
-		_block(mid + Vector2(-14, 12), 26.0, 18.0, Color(0.6, 0.6, 0.62))
-		_block(mid + Vector2(-14, -8), 26.0, 18.0, Color(0.8, 0.8, 0.82))
-		_arrow(mid + Vector2(26, 0), gold)
-	elif c.has("star_up"):
-		_star(mid, 26.0, gold)
-	elif c.has("make_now"):
-		_block(mid + Vector2(-12, 8), 28.0, 28.0, Content.BUILDINGS.hatch_red.color)
-		for k in 2:
-			_block(mid + Vector2(16 + k * 14, 22), 10.0, 10.0, Content.UNITS.red.color)
+	match c.type:
+		"build":
+			var b: Dictionary = Content.BUILDINGS[c.builds]
+			var col: Color = b.color
+			if b.has("nest"):
+				_block(mid + Vector2(0, 8), 30.0, 34.0, col)
+				_block(mid + Vector2(38, 22), 12.0, 12.0, Content.UNITS[b.nest].color)
+			else:
+				match c.builds:
+					"pool":
+						_block(mid + Vector2(0, 14), 52.0, 14.0, col.darkened(0.4))
+						draw_rect(Rect2(mid + Vector2(-24, 2), Vector2(48, 6)), col.lightened(0.2))
+					"sampler":
+						_block(mid + Vector2(0, 20), 26.0, 12.0, col.darkened(0.3))
+						draw_rect(Rect2(mid + Vector2(-5, -22), Vector2(10, 36)), col)
+						draw_circle(mid + Vector2(0, -24), 13.0, col.lightened(0.3))
+					"power":
+						_block(mid + Vector2(0, 12), 36.0, 26.0, Color(0.32, 0.32, 0.34))
+						draw_circle(mid + Vector2(0, -12), 11.0, col)
+					"gym":
+						_block(mid + Vector2(0, 22), 50.0, 8.0, col)
+						draw_rect(Rect2(mid + Vector2(-22, -18), Vector2(6, 36)), col.darkened(0.3))
+						draw_rect(Rect2(mid + Vector2(16, -18), Vector2(6, 36)), col.darkened(0.3))
+						draw_rect(Rect2(mid + Vector2(-24, -20), Vector2(48, 5)), col.lightened(0.3))
+					"stabilizer":
+						draw_rect(Rect2(mid + Vector2(-5, -26), Vector2(10, 50)), col.darkened(0.2))
+						for k in 2:
+							draw_rect(Rect2(mid + Vector2(-20, -12 + k * 16), Vector2(40, 4)), col.lightened(0.2))
+					"lab":
+						draw_circle(mid + Vector2(0, 16), 24.0, col)
+						draw_rect(Rect2(mid + Vector2(-30, 16), Vector2(60, 16)), Color(0, 0, 0, 0))
+						draw_rect(Rect2(mid + Vector2(14, -14), Vector2(6, 18)), col.darkened(0.4))
+					"store":
+						_block(mid + Vector2(0, 10), 50.0, 28.0, col)
+					"wall":
+						_block(mid + Vector2(0, 10), 56.0, 24.0, col)
+						for k in 4:
+							draw_rect(Rect2(mid + Vector2(-26 + k * 14, -10), Vector2(8, 8)), col.darkened(0.2))
+		"raise":
+			_block(mid + Vector2(-14, 12), 26.0, 18.0, Color(0.6, 0.6, 0.62))
+			_block(mid + Vector2(-14, -8), 26.0, 18.0, Color(0.8, 0.8, 0.82))
+			_arrow(mid + Vector2(26, 0), gold)
+		"affix":
+			var a: Dictionary = Content.AFFIXES[c.affix]
+			var col: Color = a.color
+			_block(mid + Vector2(0, 12), 30.0, 28.0, Color(0.9, 0.24, 0.2))
+			match c.affix:
+				"shell":
+					_block(mid + Vector2(0, -6), 40.0, 8.0, col)
+				"blade":
+					for sx in [-1.0, 1.0]:
+						draw_colored_polygon(PackedVector2Array([mid + Vector2(sx * 18, 0), mid + Vector2(sx * 30, -24),
+							mid + Vector2(sx * 24, 4)]), col)
+				"acid":
+					draw_circle(mid + Vector2(-20, -6), 10.0, col)
+					draw_circle(mid + Vector2(24, -14), 4.0, col)
+					draw_circle(mid + Vector2(32, -8), 3.0, col)
+				"wings":
+					for sx in [-1.0, 1.0]:
+						draw_colored_polygon(PackedVector2Array([mid + Vector2(sx * 14, -4), mid + Vector2(sx * 46, -24),
+							mid + Vector2(sx * 40, 4)]), col)
+				"plasma":
+					draw_circle(mid + Vector2(0, -16), 12.0, Color(col, 0.35))
+					draw_circle(mid + Vector2(0, -16), 7.0, col)
+		"gain":
+			if c.has("gain_genes"):
+				for k in 3:
+					var y := -22.0 + k * 18.0
+					draw_line(mid + Vector2(-16, y), mid + Vector2(16, y + 12), GENES, 4.0, true)
+					draw_line(mid + Vector2(16, y), mid + Vector2(-16, y + 12), GENES.darkened(0.3), 4.0, true)
+			else:
+				draw_circle(mid + Vector2(-10, 6), 16.0, Color(0.35, 0.75, 0.4))
+				draw_circle(mid + Vector2(12, 0), 13.0, Color(0.45, 0.85, 0.45))
+				draw_circle(mid + Vector2(2, -14), 10.0, Color(0.55, 0.9, 0.5))
 
 
 ## A block seen from a little above: front face, lit top, edge.
 func _block(at: Vector2, w: float, h: float, col: Color) -> void:
-	var top := w * 0.35
+	var top := minf(w, h) * 0.35
 	var front := Rect2(at.x - w * 0.5, at.y - h * 0.5, w, h)
 	draw_rect(front, col.darkened(0.15))
 	draw_colored_polygon(PackedVector2Array([front.position, front.position + Vector2(top * 0.5, -top),
@@ -171,25 +231,6 @@ func _block(at: Vector2, w: float, h: float, col: Color) -> void:
 func _arrow(at: Vector2, col: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([at + Vector2(0, -26), at + Vector2(18, -4), at + Vector2(7, -4),
 		at + Vector2(7, 22), at + Vector2(-7, 22), at + Vector2(-7, -4), at + Vector2(-18, -4)]), col)
-
-
-func _shield(at: Vector2, col: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([at + Vector2(-20, -22), at + Vector2(20, -22), at + Vector2(20, 2),
-		at + Vector2(0, 26), at + Vector2(-20, 2)]), col)
-	draw_line(at + Vector2(0, -20), at + Vector2(0, 22), col.darkened(0.3), 3.0)
-
-
-func _bolt(at: Vector2, col: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([at + Vector2(4, -28), at + Vector2(-14, 4), at + Vector2(-1, 4),
-		at + Vector2(-6, 28), at + Vector2(14, -6), at + Vector2(1, -6)]), col)
-
-
-func _star(at: Vector2, r: float, col: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 10:
-		var a := -PI * 0.5 + TAU * i / 10.0
-		pts.append(at + Vector2(cos(a), sin(a)) * (r if i % 2 == 0 else r * 0.45))
-	draw_colored_polygon(pts, col)
 
 
 func _text(at: Vector2, text: String, size_px: int, col: Color, f: Font, align: int, outline := 0) -> void:
