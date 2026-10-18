@@ -16,11 +16,8 @@ const GROUND := {
 	"build": [Color(0.66, 0.8, 0.58), Color(0.2, 0.3, 0.16)],
 	"raise": [Color(0.5, 0.58, 0.9), Color(0.14, 0.15, 0.3)],
 	"affix": [Color(0.75, 0.55, 0.95), Color(0.22, 0.12, 0.3)],
-	"gain": [Color(0.98, 0.78, 0.5), Color(0.5, 0.33, 0.2)],
-	"potion": [Color(0.95, 0.7, 0.85), Color(0.35, 0.15, 0.3)],
 }
-const TYPE := {"build": Color(0.55, 0.8, 0.42), "raise": Color(0.62, 0.7, 1.0), "affix": Color(0.8, 0.6, 1.0),
-	"gain": Color(0.95, 0.68, 0.32), "potion": Color(1.0, 0.6, 0.85)}
+const TYPE := {"build": Color(0.55, 0.8, 0.42), "raise": Color(0.62, 0.7, 1.0), "affix": Color(0.8, 0.6, 1.0)}
 const GENES := Color(0.3, 0.85, 0.75)
 const ALIEN := Color(0.75, 0.4, 0.95)
 
@@ -189,8 +186,7 @@ func _extras(full: Rect2) -> void:
 		draw_rect(full.grow(-3), Color(0, 0, 0, 0.35))
 
 
-## The picture: a building as blocks of its colour; a raise as a block with an arrow; an affix as what it grows; a
-## gain as what it gives.
+## The picture: a building as blocks of its colour; a raise as a block with an arrow; an affix as what it grows.
 func _picture(r: Rect2) -> void:
 	var mid := r.get_center()
 	var gold := Color(1.0, 0.86, 0.45)
@@ -240,12 +236,6 @@ func _picture(r: Rect2) -> void:
 						draw_rect(Rect2(mid + Vector2(-5, -26), Vector2(10, 50)), col.darkened(0.2))
 						for k in 2:
 							draw_rect(Rect2(mid + Vector2(-20, -12 + k * 16), Vector2(40, 4)), col.lightened(0.2))
-					"lab":
-						draw_circle(mid + Vector2(0, 16), 24.0, col)
-						draw_rect(Rect2(mid + Vector2(-30, 16), Vector2(60, 16)), Color(0, 0, 0, 0))
-						draw_rect(Rect2(mid + Vector2(14, -14), Vector2(6, 18)), col.darkened(0.4))
-					"store":
-						_block(mid + Vector2(0, 10), 50.0, 28.0, col)
 					"wall":
 						_block(mid + Vector2(0, 10), 56.0, 24.0, col)
 						for k in 4:
@@ -283,22 +273,6 @@ func _picture(r: Rect2) -> void:
 					draw_colored_polygon(PackedVector2Array([mid + Vector2(-12, -2), mid + Vector2(0, -34), mid + Vector2(12, -2)]), col)
 					draw_colored_polygon(PackedVector2Array([mid + Vector2(-6, -2), mid + Vector2(0, -20), mid + Vector2(6, -2)]),
 						Color(1.0, 0.85, 0.3))
-		"potion":
-			var col: Color = Content.POTIONS[c.potion].color
-			draw_circle(mid + Vector2(0, 10), 22.0, col)
-			draw_circle(mid + Vector2(-8, 2), 6.0, Color(1, 1, 1, 0.45))
-			draw_rect(Rect2(mid + Vector2(-7, -26), Vector2(14, 16)), col.darkened(0.2))
-			draw_rect(Rect2(mid + Vector2(-9, -30), Vector2(18, 5)), Color(0.55, 0.4, 0.25))
-		"gain":
-			if c.has("gain_genes"):
-				for k in 3:
-					var y := -22.0 + k * 18.0
-					draw_line(mid + Vector2(-16, y), mid + Vector2(16, y + 12), GENES, 4.0, true)
-					draw_line(mid + Vector2(16, y), mid + Vector2(-16, y + 12), GENES.darkened(0.3), 4.0, true)
-			else:
-				draw_circle(mid + Vector2(-10, 6), 16.0, Color(0.35, 0.75, 0.4))
-				draw_circle(mid + Vector2(12, 0), 13.0, Color(0.45, 0.85, 0.45))
-				draw_circle(mid + Vector2(2, -14), 10.0, Color(0.55, 0.9, 0.5))
 
 
 ## A block seen from a little above: front face, lit top, edge.

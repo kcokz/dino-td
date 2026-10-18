@@ -273,20 +273,6 @@ func _building(kind: String, lv: int, affixes: Array) -> Node3D:
 					ring.material_override = Blocks.glow(c, 0.9)
 					root.add_child(ring)
 				height = tall
-			"lab":
-				var r := 1.05 + 0.1 * lv
-				root.add_child(Blocks.dome(r, c, Vector3.ZERO))
-				root.add_child(Blocks.cylinder(0.18, 1.0, c.darkened(0.4), Vector3(0.6, r * 0.6 + 0.3, -0.4)))
-				var window := Blocks.box(Vector3(0.7, 0.4, 0.1), c.lightened(0.4), Vector3(0, 0.45, r - 0.12))
-				window.material_override = Blocks.glow(c.lightened(0.4), 0.8)
-				root.add_child(window)
-				height = r
-			"store":
-				var h := 1.0 + 0.15 * lv
-				root.add_child(Blocks.box(Vector3(3.0, h, 2.2), c, Vector3(0, h * 0.5, 0)))
-				root.add_child(Blocks.box(Vector3(3.2, 0.2, 2.5), c.darkened(0.35), Vector3(0, h + 0.1, 0)))
-				root.add_child(Blocks.box(Vector3(1.0, 0.8, 0.08), c.darkened(0.55), Vector3(0, 0.4, 1.12)))
-				height = h + 0.2
 			"wall", "vine_wall":
 				var h := 0.9 + 0.3 * lv
 				root.add_child(Blocks.box(Vector3(3.4, h, 1.2), c, Vector3(0, h * 0.5, 0)))

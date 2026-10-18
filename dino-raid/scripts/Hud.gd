@@ -1,8 +1,8 @@
 class_name Hud
 extends CanvasLayer
-## What the player holds and reads (GAME-DESIGN 17), all over the homeland on one screen: the shop's shelf along the
-## bottom; the stash -- the goods kept for later -- above the gold at the bottom left, with a place to keep the offer
-## taken up; the gold, the potions, the button that restocks the shelf, the button that sends the army out; the place,
+## What the player holds and reads (GAME-DESIGN 17, 18), all over the homeland on one screen: the shop's shelf along
+## the bottom; the stash -- the goods kept for later -- above the gold at the bottom left, with a place to keep the offer
+## taken up; the gold, the button that restocks the shelf, the button that sends the army out; the place,
 ## its rule, the round, the homeland's health, the biomass and genes, this round's army and the relics at the top left;
 ## who comes this battle and the next, how this battle will go as things stand, and what the cursor points at, at the
 ## top right; a battle's count and clock; when a place is held, the relic to choose and what the ark carries on (and
@@ -38,12 +38,11 @@ var _rule: Label
 var _hp: Control
 var _res: Label
 var _army: Label
-var _buffs: Label
+
 var _relics: HBoxContainer
 var _relics_shown := -1
 var _relic_hover := ""
-var _potions: Array = []         # the potion places, Controls
-var _potion_hover := -1
+
 var _right: VBoxContainer
 var _waves: VBoxContainer
 var _waves_for := ""
@@ -79,7 +78,7 @@ func setup(p_game: Game) -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	# Top left: where we are and its rule, the homeland, the resources, this round's army and buffs; the relics beside.
+	# Top left: where we are and its rule, the homeland, the resources, this round's army; the relics beside.
 	_corner = VBoxContainer.new()
 	_corner.position = Vector2(18, 10)
 	_corner.add_theme_constant_override("separation", 4)
@@ -102,9 +101,6 @@ func setup(p_game: Game) -> void:
 	_army = _label("", 16, Fonts.serif(700), Color(0.92, 0.86, 0.74))
 	_army.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_corner.add_child(_army)
-	_buffs = _label("", 16, Fonts.serif(700), Color(1.0, 0.8, 0.45))
-	_buffs.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_corner.add_child(_buffs)
 	_relics = HBoxContainer.new()
 	_relics.position = Vector2(300, 10)
 	_relics.add_theme_constant_override("separation", 6)
@@ -170,7 +166,7 @@ func setup(p_game: Game) -> void:
 	_store_slot.visible = false
 	_root.add_child(_store_slot)
 
-	# Bottom: the shelf, the gold, the potions, the buttons.
+	# Bottom: the shelf, the gold, the buttons.
 	_hand = Control.new()
 	_hand.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_hand.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -183,26 +179,6 @@ func setup(p_game: Game) -> void:
 	_gold.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_gold.draw.connect(_draw_gold)
 	_root.add_child(_gold)
-	for k in Content.POTION_SLOTS:
-		var slot := Control.new()
-		slot.custom_minimum_size = Vector2(46, 46)
-		slot.size = Vector2(46, 46)
-		slot.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		slot.position = Vector2(-206 + k * 60, -282)
-		slot.mouse_filter = Control.MOUSE_FILTER_STOP
-		slot.draw.connect(_draw_potion.bind(k))
-		slot.mouse_entered.connect(func() -> void:
-			_potion_hover = k
-			game.aim_potion(k))
-		slot.mouse_exited.connect(func() -> void:
-			if _potion_hover == k:
-				_potion_hover = -1
-				game.aim_potion(-1))
-		slot.gui_input.connect(func(event: InputEvent) -> void:
-			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-				game.act("potion", {"slot": k}))
-		_root.add_child(slot)
-		_potions.append(slot)
 	_reroll = _button("刷新", Vector2(188, 50), 19)
 	_reroll.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_reroll.position = Vector2(-214, -218)
@@ -286,13 +262,7 @@ func _process(_delta: float) -> void:
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
 	var tip := game.describe() if _hovered == null and not _overlay.visible else ""
 	if not _overlay.visible:
-		var home: Home = game.home
-		if _potion_hover >= 0:
-			tip = ""
-			if _potion_hover < home.potions.size():
-				var pt: Dictionary = Content.POTIONS[home.potions[_potion_hover]]
-				tip = "%s\n%s\n点一下就用（不要钱）" % [pt.name, pt.says]
-		elif _relic_hover != "":
+		if _relic_hover != "":
 			var r: Dictionary = Content.RELICS[_relic_hover]
 			tip = "%s（%s）\n%s" % [r.name, "首领遗物" if r.get("boss", false) else "化石遗物", r.says]
 	_info.visible = tip != ""
@@ -417,11 +387,6 @@ func refresh() -> void:
 	var army := home.army()
 	_army.text = "这一轮出战 %d 只，吃 %d 生物质" % [army.size(), home.army_food()] if not fighting else ""
 	_army.visible = not away and not packing
-	for slot in _potions:
-		slot.queue_redraw()
-		slot.visible = not away and not packing
-	_buffs.text = _buff_text(home.buffs)
-	_buffs.visible = _buffs.text != ""
 	_battle.visible = fighting and not game.at_home
 	var taking: int = game.pack_plots.size() + game.pack_kept.size()
 	_kept_label.text = ("带走 %d / %d" % [taking, home.stash_size()]) if packing else ("存货 %d / %d" % [home.stash.size(), home.stash_size()])
@@ -444,18 +409,6 @@ func refresh() -> void:
 	_refresh_waves()
 	_refresh_forecast()
 
-
-func _buff_text(b: Dictionary) -> String:
-	var parts: Array = []
-	if int(b.get("atk", 0)) > 0:
-		parts.append("攻击 +%d" % b.atk)
-	if int(b.get("armor", 0)) > 0:
-		parts.append("护甲 +%d" % b.armor)
-	if int(b.get("haste", 0)) > 0:
-		parts.append("快 %d%%" % b.haste)
-	if int(b.get("breed", 0)) > 0:
-		parts.append("每个巢多孵 %d 只" % b.breed)
-	return ("这一轮：" + "，".join(parts)) if not parts.is_empty() else ""
 
 
 ## The relics held, as little fossils by the place's name (a boss's ringed red); pointed at, the panel says what each
@@ -811,21 +764,6 @@ func _draw_store_slot() -> void:
 			4, Color(0, 0, 0, 0.9))
 		_store_slot.draw_string(f, Vector2((r.size.x - lw) * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, line[2], edge)
 
-
-## A potion place: an empty ring, or a flask of the potion's colour.
-func _draw_potion(k: int) -> void:
-	var slot: Control = _potions[k]
-	var home: Home = game.home
-	var c := Vector2(23, 23)
-	slot.draw_circle(c, 22.0, Color(0.06, 0.05, 0.04, 0.9))
-	slot.draw_arc(c, 22.0, 0.0, TAU, 32, Color(0.72, 0.53, 0.3) if k != _potion_hover else Color(1.0, 0.85, 0.45), 2.5, true)
-	if k >= home.potions.size():
-		return
-	var col: Color = Content.POTIONS[home.potions[k]].color
-	slot.draw_circle(c + Vector2(0, 4), 12.0, col)
-	slot.draw_circle(c + Vector2(-4, 0), 3.5, Color(1, 1, 1, 0.5))
-	slot.draw_rect(Rect2(c + Vector2(-4, -15), Vector2(8, 9)), col.darkened(0.2))
-	slot.draw_rect(Rect2(c + Vector2(-5, -17), Vector2(10, 3)), Color(0.55, 0.4, 0.25))
 
 
 ## The homeland's health: a bar, red when low.

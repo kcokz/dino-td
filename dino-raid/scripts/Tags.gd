@@ -76,7 +76,7 @@ func _home(cam: Camera3D) -> void:
 				Fonts.serif(900))
 			continue
 		if Content.is_nest(b.kind):
-			var want := home.count(p) + int(home.buffs.get("breed", 0))
+			var want := home.count(p)
 			var got := int(made.get(p, 0))
 			var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
 			var col: Color = GOLD if sp.used.is_empty() else (Content.UNITS[sp.kind].color as Color).lightened(0.45)

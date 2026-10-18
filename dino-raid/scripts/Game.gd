@@ -1,15 +1,14 @@
 class_name Game
 extends Node3D
-## The game (GAME-DESIGN 17): the homeland built from the shop, and the battles its army fights by itself, on one
+## The game (GAME-DESIGN 17, 18): the homeland built from the shop, and the battles its army fights by itself, on one
 ## screen. A run starts with an ark to choose and lands in the rainforest. A round: the place has its way, the
 ## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army; the player
-## buys -- buildings, raises, gene affixes, potions -- or keeps what is bought for later, puts down what was kept, and
-## takes potions, watching the army change; then sends it out; the battle fights itself, and the army is gone with it.
-## Won: gold, alien genes, a potion; lost: the homeland is hurt; either way, interest on the gold kept, and one of
-## three offers, free. Five rounds hold a place, the last against its boss; a place held brings a relic, and the ark
-## moves on -- carrying all the gold and what the player packs, no more than the stash holds -- to the volcano. How
-## the battle will end is worked out and shown before it is fought, and again with the offer, the good or the potion
-## pointed at.
+## buys -- buildings, raises, gene affixes -- or keeps what is bought for later, and puts down what was kept, watching
+## the army change; then sends it out; the battle fights itself, and the army is gone with it. Won: gold and alien
+## genes; lost: the homeland is hurt; either way, interest on the gold kept, and one of three offers, free. Five
+## rounds hold a place, the last against its boss; a place held brings a relic, and the ark moves on -- carrying all
+## the gold and what the player packs, no more than the stash holds -- to the volcano. How the battle will end is
+## worked out and shown before it is fought, and again with the offer or the good pointed at.
 ##
 ## Every player action goes through act(what, data). Coloured blocks stand in for what will be.
 
@@ -45,7 +44,7 @@ var fight: Fight                  # the battle being fought, or null
 var speed := 1.0
 var at_home := true               # the camera is over the homeland (not the battle field)
 var forecast := {}                # this round's battle as things stand: {result, left, total, harm}
-var preview := {}                 # the same with what is taken up (or the potion pointed at) used; {} when none
+var preview := {}                 # the same with what is taken up used; {} when none
 var effects := {}                 # plot -> [short lines]: what that would change there (for Tags)
 var pack_plots := {}              # packing: plot -> true, the buildings the ark takes
 var pack_kept := {}               # packing: stash place -> true, the goods kept that it takes
@@ -61,7 +60,6 @@ var _forecast_at := -1
 var _preview_key := ""
 var _preview := {}
 var _effects := {}
-var _potion := -1                 # the potion pointed at, or -1
 
 
 func _ready() -> void:
@@ -112,8 +110,8 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "buy" {slot, at}, "store" {slot}, "place" {slot, at}, "reroll", "potion"
-## {slot}, "fight"; while packing, "pack" {at} or {kept} and "depart". Whether it happened.
+## The one door for a player's action: "buy" {slot, at}, "store" {slot}, "place" {slot, at}, "reroll", "fight";
+## while packing, "pack" {at} or {kept} and "depart". Whether it happened.
 func act(what: String, data := {}) -> bool:
 	if phase == Phase.PACK:
 		match what:
@@ -157,25 +155,15 @@ func act(what: String, data := {}) -> bool:
 			hud.deal(home.shelf)
 			refresh()
 			return true
-		"potion":
-			var ev := home.use_potion(int(data.get("slot", -1)))
-			if ev.is_empty():
-				return false
-			_potion = -1
-			_changed(ev)
-			return true
 		"fight":
 			_fight()
 			return true
 	return false
 
 
-## The offer at shelf place i taken up (again: put down -- or, for one used at once, bought).
+## The offer at shelf place i taken up (again: put down).
 func hold(i: int) -> void:
 	if phase != Phase.PLAN or i < 0 or i >= home.shelf.size() or home.shelf[i] == null:
-		return
-	if held == i and Content.offer(home.shelf[i]).target == "none" and not home.targets(i).is_empty():
-		act("buy", {"slot": i, "at": true})
 		return
 	held = -1 if held == i else i
 	held_k = -1
@@ -190,11 +178,6 @@ func hold_kept(k: int) -> void:
 	held = -1
 	refresh()
 
-
-## The potion place k pointed at (its forecast shown), or -1.
-func aim_potion(k: int) -> void:
-	_potion = k if phase == Phase.PLAN and k < home.potions.size() else -1
-	refresh()
 
 
 func _changed(ev: Array) -> void:
@@ -213,14 +196,6 @@ func _changed(ev: Array) -> void:
 							(Content.UNITS[sp.kind].color as Color).lightened(0.3), 28)
 			"stored":
 				tags.float_text(Vector3(-8, 3.0, HomeView.YARD_Z - 2.0), "存起来了", Color(0.6, 1.0, 0.55), 22)
-			"gained":
-				var what := ("基因 +%d" % e.genes) if int(e.genes) > 0 else ("生物质 +%d" % e.biomass)
-				tags.float_text(Vector3(0, 3.0, HomeView.YARD_Z - 2.0), what, Color(0.6, 1.0, 0.8), 24)
-			"potion", "potion_got":
-				tags.float_text(Vector3(0, 3.0, HomeView.YARD_Z - 2.0), ("买到 " if e.t == "potion_got" else "") +
-					Content.POTIONS[e.potion].name, Content.POTIONS[e.potion].color, 26)
-			"mended":
-				tags.float_text(Vector3(0, 3.0, 0), "家园 +%d" % e.amount, Color(0.5, 1.0, 0.5), 28)
 	home_view.sync_army(home.army())
 	refresh()
 
@@ -309,10 +284,8 @@ func _want() -> String:
 	return "any"
 
 
-## What the good taken up would go on, under the cursor: a plot, true for one used at once, or null.
-func _aim(c: Dictionary) -> Variant:
-	if c.target == "none":
-		return true
+## What the good taken up would go on, under the cursor: a plot, or null.
+func _aim(_c: Dictionary) -> Variant:
 	return hover.plot if hover.plot != HomeView.NOWHERE else null
 
 
@@ -422,9 +395,6 @@ func refresh() -> void:
 					_try("place%d|%s" % [k, str(at)], func(h: Home) -> void: h.place(k, at))
 			elif at is Vector2i and home.is_open(at):
 				tints[at] = BAD_TINT
-		elif _potion >= 0 and _potion < home.potions.size():
-			var k := _potion
-			_try("potion%d" % k, func(h: Home) -> void: h.use_potion(k))
 		elif hover.plot != HomeView.NOWHERE and home.is_open(hover.plot):
 			tints[hover.plot] = LOOK_TINT
 	elif phase == Phase.PACK:
@@ -452,7 +422,7 @@ func _try(key: String, what: Callable) -> void:
 
 ## How this round's battle ends if fought by `h` -- the same rules, so the same end.
 func _work_out(h: Home) -> Dictionary:
-	var f := Fight.make(h.army(), h.buffs, run.wave(), run.power())
+	var f := Fight.make(h.army(), run.wave(), run.power())
 	var total := f.alive("ours").size()
 	f.run()
 	return {"result": f.result, "left": f.alive("ours").size(), "total": total,
@@ -560,8 +530,6 @@ func hint() -> String:
 				say = "点一座建筑升一级（最多 %d 级；几级升上去，就要几加 %d 金）" % [Content.LEVEL_MAX, Content.RAISE]
 		"nest":
 			say = "点一个还有空词条位的巢（%d 金）" % home.price(held)
-		_:
-			say = "再点一下就买（%d 金）" % home.price(held)
 	if home.can_store(held):
 		say += "；或点左下的空格存起来"
 	return say + " · 右键放下"
@@ -593,7 +561,7 @@ func describe() -> String:
 
 
 func _unit_text(u: Dictionary) -> String:
-	var s := Content.unit_stats(u, home.buffs)
+	var s := Content.unit_stats(u)
 	var nest: Dictionary = home.buildings.get(u.nest, {})
 	var lines: Array = ["%s（%s %d 级孵的）" % [s.name, Content.BUILDINGS[nest.kind].name if not nest.is_empty() else "",
 		int(nest.get("level", 1))], "血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米" % [s.hp, s.atk, _num(s.every), _num(s.range)]]
@@ -613,7 +581,7 @@ func _unit_text(u: Dictionary) -> String:
 	if not more.is_empty():
 		lines.append(" · ".join(more))
 	lines.append(Content.UNITS[u.kind].role)
-	lines.append("吃 %d 生物质，只活这一仗" % int(Content.UNITS[u.kind].food) if not u.free else "只活这一仗（药剂或遗物孵的，不吃生物质）")
+	lines.append("吃 %d 生物质，只活这一仗" % int(Content.UNITS[u.kind].food) if not u.free else "只活这一仗（恐龙蛋化石多孵的，不吃生物质）")
 	return "\n".join(lines)
 
 
@@ -628,7 +596,7 @@ func _building_text(p: Vector2i) -> String:
 			lines.append("进化了：孵的是%s（%s）" % [Content.UNITS[s.kind].name, "+".join(sp.used.map(func(a: String) -> String:
 				return Content.AFFIXES[a].name))])
 		var made := int(_made(home).get(p, 0))
-		var want := home.count(p) + int(home.buffs.get("breed", 0))
+		var want := home.count(p)
 		lines.append("这一轮孵 %d 只%s" % [made, ("（生物质不够，少 %d）" % (want - made)) if made < want else ""])
 		var given: Array = []
 		var hp := roundi((float(s.hp_mult) / float(Content.level(b.kind, int(b.level)).quality) - 1.0) * 100.0)
@@ -678,7 +646,6 @@ func _start_round() -> void:
 	phase = Phase.BUSY
 	held = -1
 	held_k = -1
-	_potion = -1
 	refresh()
 	var sub := "进账，商店换货，孵兵"
 	if run.round == 1 and run.level > 0:
@@ -707,9 +674,6 @@ func _start_round() -> void:
 				tags.float_text(Vector3(0, 4.0, 0), "火山灰：家园 −%d" % e.amount, Color(1.0, 0.55, 0.4), 24)
 			"mended":
 				tags.float_text(Vector3(0, 3.0, 0), "藤蔓：家园 +%d" % e.amount, Color(0.5, 1.0, 0.5), 24)
-			"brewed":
-				tags.float_text(home_view.top(e.at) + Vector3.UP, "配好：" + Content.POTIONS[e.potion].name,
-					Content.POTIONS[e.potion].color, 20)
 	_version += 1
 	home_view.sync_army(home.army())
 	await get_tree().create_timer(0.5).timeout
@@ -724,7 +688,6 @@ func _fight() -> void:
 	phase = Phase.FIGHT
 	held = -1
 	held_k = -1
-	_potion = -1
 	refresh()
 	hud.stow()
 	fight = run.fight()
@@ -747,8 +710,6 @@ func _after_fight() -> void:
 	match result:
 		"won":
 			var got: Array = ["金币 +%d" % out.gold, "外星基因 +%d" % out.alien]
-			for k in out.loot:
-				got.append(Content.POTIONS[k].name)
 			if int(out.interest) > 0:
 				got.append("利息 +%d" % out.interest)
 			hud.banner("赢了！", "得到：" + "，".join(got))
@@ -786,7 +747,7 @@ func _after_fight() -> void:
 	_start_round()
 
 
-## After each round: one of three offers, free -- into the stash (or, for one used at once, used).
+## After each round: one of three offers, free -- into the stash.
 func _gift() -> void:
 	var gifts := run.gift_offer()
 	if gifts.is_empty():
@@ -795,11 +756,8 @@ func _gift() -> void:
 	var sub := "不要钱。放进左下的存货，什么时候放下都行" + ("（存货满了，最早的一样会被挤掉）" if full else "")
 	var v: Variant = await hud.choose("挑一样，送你", sub, gifts, ["不要"])
 	if v is Dictionary:
-		var ev := run.take_gift(v)
-		if not ev.is_empty():
-			_changed(ev)
-		else:
-			refresh()
+		run.take_gift(v)
+		refresh()
 
 
 ## A place held: a relic to choose, then the move -- what to carry picked on the homeland, the ark down to load it, on
