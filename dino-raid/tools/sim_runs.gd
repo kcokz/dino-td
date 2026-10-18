@@ -1,9 +1,9 @@
 extends SceneTree
-## Whole runs played by the rules alone, no screen, many at once -- to see how hard the levels are (GAME-DESIGN 14).
+## Whole runs played by the rules alone, no screen, many at once -- to see how hard the levels are (GAME-DESIGN 15).
 ##
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random] [runs] [first seed] [measure|limit]
 ##
-## random and smart play as tools/Policy.gd says; both take the first card offered and upgrade the first they can.
+## random and smart play as tools/Policy.gd says; at each level's end both take the first relic offered.
 ## Prints, for each run, how far it got and the homeland's health at each level's end, what it built; then how many
 ## held each level. "measure": also, each round, the army's strength against the wave's. "limit": no one comes, every
 ## battle is won, everything goes to growing; prints, round by round, the most strength any run's army had --
@@ -61,6 +61,9 @@ func _init() -> void:
 			if run.over:
 				line += "  died in %s round %d" % [Content.LEVELS[run.level].name, run.round]
 				break
+			var gifts := run.gift_offer()
+			if not gifts.is_empty():
+				run.take_gift(gifts[Policy.best_gift(run, run.home, gifts) if policy == "smart" else 0])
 			if out.level_won:
 				held[run.level] += 1
 				line += "  %s hp %d/%d (lost %d)" % [Content.LEVELS[run.level].name, run.home.hp, run.home.hp_max(), losses]
@@ -68,14 +71,8 @@ func _init() -> void:
 				if run.last_level():
 					line += "  ALL HELD"
 					break
-				run.take(run.offer()[0])
-				for ci in run.deck():
-					if not ci.up:
-						run.upgrade(ci)
-						break
+				run.take_relic(run.relic_offer()[0])
 				run.next_level()
-			elif out.result == "won":
-				run.take(run.offer()[0])
 		var built := {}
 		for p in run.home.buildings:
 			var b: Dictionary = run.home.buildings[p]
@@ -99,17 +96,23 @@ func _random(run: Run) -> void:
 		var play := Policy.any_play(run.home, rng)
 		if play.is_empty():
 			break
-		run.home.play(play[0], play[1])
+		run.home.buy(play[0], play[1])
 	if not run.home.potions.is_empty() and rng.randf() < 0.3:
 		run.home.use_potion(rng.randi() % run.home.potions.size())
 
 
 func _smart(run: Run) -> void:
-	for guard in 12:
+	var restocked := 0
+	for guard in 16:
 		var play := Policy.best_play(run, run.home)
 		if play.is_empty():
+			# Nothing worth it on the shelf: restock it, if that leaves enough to buy with.
+			if restocked < 2 and run.home.gold >= run.home.reroll_price() + 4:
+				run.reroll()
+				restocked += 1
+				continue
 			break
-		run.home.play(play[0], play[1])
+		run.home.buy(play[0], play[1])
 	var k := Policy.best_potion(run, run.home)
 	if k >= 0:
 		run.home.use_potion(k)

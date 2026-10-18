@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the strength numbers (Content.strength) against the battles themselves (GAME-DESIGN 14):
+## Checks the strength numbers (Content.strength) against the battles themselves (GAME-DESIGN 15):
 ##
 ##   Godot --headless --path dino-raid --script res://tools/strength_check.gd
 ##
@@ -32,7 +32,7 @@ func _init() -> void:
 
 
 func _spec(kind: String, affixes: Array) -> Dictionary:
-	var h := Home.new([], rng)
+	var h := Home.new(rng)
 	h.buildings.clear()
 	h.build(Vector2i(0, 4), "nest_" + kind)
 	h.buildings[Vector2i(0, 4)].affixes = affixes

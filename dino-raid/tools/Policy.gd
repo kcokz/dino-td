@@ -1,17 +1,17 @@
 class_name Policy
-## How the tools play (GAME-DESIGN 14), shared by playtest.gd and sim_runs.gd. Not part of the game.
+## How the tools play (GAME-DESIGN 15), shared by playtest.gd and sim_runs.gd. Not part of the game.
 ##
-## random: any card it can afford, on a target picked at random; now and then a potion.
-## smart: the play that does the most good for its cost -- this round's battle worked out after it (the forecast the
-## player sees), and what the homeland comes to: the army its nests make (as far as the biomass coming in feeds it),
-## what comes in each round, what is kept. A potion only when it turns a lost battle.
+## random: buys anything it can afford, put anywhere it may go (but building only on empty land, pulling nothing
+## down); now and then a potion. smart: the buy that does the most good for its price -- this round's battle worked out
+## after it (the forecast the player sees), and what the homeland comes to: the army its nests make (as far as the
+## biomass coming in feeds it), what comes in each round, what is kept (gold earns interest); restocks the shelf when
+## nothing on it is worth buying; a potion only when it turns a lost battle.
 
 
-## A random play: [hand index, target], or [] when none can be played. A careless player, not a wrecker: it builds
-## on empty plots while there are any, and pulls nothing down.
+## A random buy: [shelf index, target], or [] when there is none.
 static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 	var can: Array = []
-	for i in h.hand.size():
+	for i in h.shelf.size():
 		if not _careless(h, i).is_empty():
 			can.append(i)
 	if can.is_empty():
@@ -23,26 +23,46 @@ static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 
 static func _careless(h: Home, i: int) -> Array:
 	var fits := h.targets(i)
-	if Content.card(h.hand[i]).type == "build":
+	if not fits.is_empty() and Content.offer(h.shelf[i]).type == "build":
 		fits = fits.filter(func(p: Vector2i) -> bool: return not h.buildings.has(p))
 	return fits
 
 
-## The best play for its cost: [hand index, target], or [] when nothing beats keeping the energy.
+## The best buy for its price: [shelf index, target], or [] when nothing beats keeping the gold.
 static func best_play(run: Run, h: Home) -> Array:
 	var base := score(run, h)
 	var best_gain := 0.01
 	var best: Array = []
-	for i in h.hand.size():
-		var c := Content.card(h.hand[i])
-		var cost := maxf(1.0, float(c.cost) + 0.5 * float(c.get("genes", 0)) + 2.0 * float(c.get("alien", 0)))
+	for i in h.shelf.size():
 		for at in h.targets(i):
+			var o := Content.offer(h.shelf[i])
+			var cost := 1.0 if h.shelf[i].get("gift", false) else \
+				maxf(1.0, float(h.price(i, at)) + 0.5 * float(o.get("genes", 0)) + 2.0 * float(o.get("alien", 0)))
 			var t := h.clone()
-			t.play(i, at)
+			t.buy(i, at)
 			var gain := (score(run, t) - base) / cost
 			if gain > best_gain:
 				best_gain = gain
 				best = [i, at]
+	return best
+
+
+## The gift that does the most good where it goes best: its index in `gifts`.
+static func best_gift(run: Run, h: Home, gifts: Array) -> int:
+	var best := 0
+	var best_score := -INF
+	for k in gifts.size():
+		var t := h.clone()
+		var g: Dictionary = gifts[k].duplicate()
+		g.gift = true
+		t.shelf.insert(0, g)
+		for at in t.targets(0):
+			var u := t.clone()
+			u.buy(0, at)
+			var s := score(run, u)
+			if s > best_score:
+				best_score = s
+				best = k
 	return best
 
 
@@ -71,16 +91,15 @@ static func score(run: Run, h: Home) -> float:
 	# The army the nests can make, as far as what comes in feeds it.
 	var full := h.clone()
 	full.biomass = 999
-	var army := full.army()
 	var food := 0
 	var strength := 0.0
-	for u in army:
+	for u in full.army():
 		food += int(Content.UNITS[u.kind].food)
 		strength += Content.strength(Content.unit_stats(u))
 	var fed := minf(1.0, (float(h.income_biomass()) + 1.0) / maxf(1.0, float(food)))
 	s += strength * (0.4 + 0.6 * fed) * 1.5
-	s += 10.0 * h.income_energy() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
-	s += 0.5 * h.biomass + 1.0 * h.genes + 3.0 * h.alien + 2.0 * h.energy + 8.0 * h.potions.size()
+	s += 10.0 * h.income_gold() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
+	s += 0.5 * h.biomass + 1.0 * h.genes + 3.0 * h.alien + 2.0 * h.gold + 4.0 * h.interest() + 8.0 * h.potions.size()
 	s += 5.0 * h.block() + 0.5 * h.hp_max()
 	return s
 
