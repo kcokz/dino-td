@@ -1,8 +1,9 @@
 class_name CardView
 extends Control
-## A card, drawn (GAME-DESIGN 14): a dark frame edged in its rarity's metal, a picture of what it builds or does (blocks
-## for now), its energy cost in an amber stone and what else it costs (genes, alien genes) beside it, its name on a
-## band and what it does on a parchment slip. Upgraded, its name ends in + and shows green.
+## An offer on the shop's shelf, drawn as a card (GAME-DESIGN 15): a dark frame edged in its rarity's metal, a picture
+## of what it builds or does (blocks for now), its price on a gold coin and what else it costs (genes, alien genes)
+## beside it, its name on a band and what it does on a parchment slip. A place on the shelf already bought from shows
+## an empty frame.
 
 signal clicked(view: CardView)
 signal hovered(view: CardView, on: bool)
@@ -15,9 +16,10 @@ const GROUND := {
 	"raise": [Color(0.5, 0.58, 0.9), Color(0.14, 0.15, 0.3)],
 	"affix": [Color(0.75, 0.55, 0.95), Color(0.22, 0.12, 0.3)],
 	"gain": [Color(0.98, 0.78, 0.5), Color(0.5, 0.33, 0.2)],
+	"potion": [Color(0.95, 0.7, 0.85), Color(0.35, 0.15, 0.3)],
 }
 const TYPE := {"build": Color(0.55, 0.8, 0.42), "raise": Color(0.62, 0.7, 1.0), "affix": Color(0.8, 0.6, 1.0),
-	"gain": Color(0.95, 0.68, 0.32)}
+	"gain": Color(0.95, 0.68, 0.32), "potion": Color(1.0, 0.6, 0.85)}
 const GENES := Color(0.3, 0.85, 0.75)
 const ALIEN := Color(0.75, 0.4, 0.95)
 
@@ -25,6 +27,7 @@ static var _grounds := {}
 
 var ci: Dictionary = {}
 var c: Dictionary = {}
+var sold := false
 var affordable := true
 var chosen := false
 var _hover := false
@@ -32,7 +35,18 @@ var _hover := false
 
 func setup(p_ci: Dictionary) -> void:
 	ci = p_ci
-	c = Content.card(ci)
+	c = Content.offer(ci)
+	_frame()
+
+
+## A place on the shelf already bought from.
+func setup_sold() -> void:
+	sold = true
+	_frame()
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _frame() -> void:
 	custom_minimum_size = SIZE
 	size = SIZE
 	pivot_offset = Vector2(SIZE.x * 0.5, SIZE.y)
@@ -51,7 +65,7 @@ func setup(p_ci: Dictionary) -> void:
 ## Shows `p_ci` instead (an upgrade looked at), drawn again.
 func show_as(p_ci: Dictionary) -> void:
 	ci = p_ci
-	c = Content.card(ci)
+	c = Content.offer(ci)
 	queue_redraw()
 
 
@@ -69,6 +83,15 @@ func set_state(p_affordable: bool, p_chosen: bool) -> void:
 
 
 func _draw() -> void:
+	if sold:
+		var empty := StyleBoxFlat.new()
+		empty.bg_color = Color(0.08, 0.07, 0.06, 0.55)
+		empty.border_color = Color(0.45, 0.38, 0.3, 0.6)
+		empty.set_border_width_all(2)
+		empty.set_corner_radius_all(11)
+		empty.draw(get_canvas_item(), Rect2(Vector2.ZERO, SIZE))
+		_text(Vector2(SIZE.x * 0.5, 70), "已买", 22, Color(0.75, 0.68, 0.58), Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
+		return
 	if c.is_empty():
 		return
 	var metal: Color = METAL[int(c.rarity)]
@@ -105,20 +128,36 @@ func _draw() -> void:
 	paper.bg_color = Color(0.9, 0.85, 0.72)
 	paper.set_corner_radius_all(4)
 	paper.draw(get_canvas_item(), slip)
-	draw_multiline_string(Fonts.serif(500), slip.position + Vector2(5, 13), Content.text(c), HORIZONTAL_ALIGNMENT_LEFT,
+	draw_multiline_string(Fonts.serif(500), slip.position + Vector2(5, 13), Content.offer_text(c), HORIZONTAL_ALIGNMENT_LEFT,
 		slip.size.x - 10, 11, 4, Color(0.2, 0.14, 0.08))
 	_text(Vector2(SIZE.x * 0.5, SIZE.y - 6), "%s · %s" % [Content.TYPES[c.type], RARITY[int(c.rarity)]], 10,
 		Color(metal, 0.9), Fonts.serif(600), HORIZONTAL_ALIGNMENT_CENTER)
-	var gem := Vector2(17, 17)
-	var amber := Color(1.0, 0.68, 0.22) if affordable else Color(0.45, 0.42, 0.4)
-	draw_circle(gem, 16.5, Color(0.08, 0.06, 0.04))
-	draw_circle(gem, 14.0, amber.darkened(0.35))
-	draw_circle(gem + Vector2(-1.5, -1.5), 11.5, amber)
-	draw_circle(gem + Vector2(-4.5, -5.0), 3.5, Color(1, 1, 1, 0.45))
-	_text(gem + Vector2(0, 7.5), "%d" % c.cost, 22, Color.WHITE if affordable else Color(1.0, 0.45, 0.4),
-		Fonts.numbers(), HORIZONTAL_ALIGNMENT_CENTER, 4)
+	var coin := Vector2(18, 18)
+	if ci.get("gift", false):
+		# A gift: a green token, free.
+		draw_circle(coin, 17.0, Color(0.05, 0.1, 0.04))
+		draw_circle(coin, 14.5, Color(0.45, 0.85, 0.4) if affordable else Color(0.4, 0.45, 0.4))
+		_text(coin + Vector2(0, 6.5), "送", 17, Color(0.08, 0.2, 0.05), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER)
+		_extras(full)
+		return
+	var gold := Color(1.0, 0.82, 0.25) if affordable else Color(0.5, 0.47, 0.42)
+	draw_circle(coin, 17.0, Color(0.1, 0.07, 0.02))
+	draw_circle(coin, 15.0, gold.darkened(0.3))
+	draw_circle(coin, 12.0, gold)
+	draw_arc(coin, 9.5, 0.0, TAU, 24, gold.darkened(0.25), 1.5, true)
+	var price_text := ("%d+" % c.price) if c.type == "raise" else ("%d" % c.price)
+	_text(coin + Vector2(0, 7.5), price_text, 20 if price_text.length() < 2 else 17, Color(0.25, 0.15, 0.0) if affordable
+		else Color(0.9, 0.35, 0.3), Fonts.numbers(), HORIZONTAL_ALIGNMENT_CENTER)
+	_extras(full)
+
+
+## What else it costs (genes, alien genes) beside the price -- not for a gift, which costs nothing -- and the shade
+## over a card that cannot be bought now.
+func _extras(full: Rect2) -> void:
 	var x := SIZE.x - 10.0
 	for extra in [["alien", "外星", ALIEN], ["genes", "基因", GENES]]:
+		if ci.get("gift", false):
+			break
 		var n := int(c.get(extra[0], 0))
 		if n <= 0:
 			continue
@@ -156,7 +195,7 @@ func _picture(r: Rect2) -> void:
 						_block(mid + Vector2(0, 20), 26.0, 12.0, col.darkened(0.3))
 						draw_rect(Rect2(mid + Vector2(-5, -22), Vector2(10, 36)), col)
 						draw_circle(mid + Vector2(0, -24), 13.0, col.lightened(0.3))
-					"power":
+					"mine":
 						_block(mid + Vector2(0, 12), 36.0, 26.0, Color(0.32, 0.32, 0.34))
 						draw_circle(mid + Vector2(0, -12), 11.0, col)
 					"gym":
@@ -204,6 +243,12 @@ func _picture(r: Rect2) -> void:
 				"plasma":
 					draw_circle(mid + Vector2(0, -16), 12.0, Color(col, 0.35))
 					draw_circle(mid + Vector2(0, -16), 7.0, col)
+		"potion":
+			var col: Color = Content.POTIONS[c.potion].color
+			draw_circle(mid + Vector2(0, 10), 22.0, col)
+			draw_circle(mid + Vector2(-8, 2), 6.0, Color(1, 1, 1, 0.45))
+			draw_rect(Rect2(mid + Vector2(-7, -26), Vector2(14, 16)), col.darkened(0.2))
+			draw_rect(Rect2(mid + Vector2(-9, -30), Vector2(18, 5)), Color(0.55, 0.4, 0.25))
 		"gain":
 			if c.has("gain_genes"):
 				for k in 3:

@@ -1,11 +1,12 @@
 class_name Game
 extends Node3D
-## The game (GAME-DESIGN 14): the homeland built with cards, and the battles its army fights by itself. A round: the
-## buildings bring in energy, biomass and genes, and the nests hatch this round's army; the player plays cards --
-## builds, raises, gene affixes -- and potions, watching the army change; then sends it out; the battle fights itself,
-## and the army is gone with it. Won: alien genes, a potion, a card; lost: the homeland is hurt; ten rounds hold a
-## level, and a level held opens a row of land. How the battle will end is worked out and shown before it is fought,
-## and again with the card or potion pointed at.
+## The game (GAME-DESIGN 15): the homeland built from the shop, and the battles its army fights by itself, on one
+## screen. A round: the buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this
+## round's army; the player buys -- buildings, raises, gene affixes, potions -- and takes potions, watching the army
+## change; then sends it out; the battle fights itself, and the army is gone with it. Won: gold, alien genes, a potion;
+## lost: the homeland is hurt; either way, interest on the gold kept, and an offer to choose, free. Five rounds hold a
+## level, the last against its boss; a level held brings a fossil relic and opens a row of land. How the battle will end is worked out and shown before it is fought, and again
+## with the offer or potion pointed at.
 ##
 ## Every player action goes through act(what, data). Coloured blocks stand in for what will be.
 
@@ -30,14 +31,14 @@ var fight_view: FightView
 var tags: Tags
 var hud: Hud
 var phase := Phase.BUSY
-var held := -1                    # the hand card taken up, or -1
+var held := -1                    # the shelf place taken up, or -1
 var hover := {"plot": HomeView.NOWHERE, "unit": ""}
 var fight: Fight                  # the battle being fought, or null
 var speed := 1.0
 var at_home := true               # the camera is over the homeland (not the battle field)
 var forecast := {}                # this round's battle as things stand: {result, left, total, harm}
-var preview := {}                 # the same with the held card (or the potion pointed at) used; {} when none
-var effects := {}                 # plot -> [short lines]: what the held card would change there (for Tags)
+var preview := {}                 # the same with the offer taken up (or the potion pointed at) used; {} when none
+var effects := {}                 # plot -> [short lines]: what the offer taken up would change there (for Tags)
 
 var _cam_at := HOME_AT
 var _cam_dist := HOME_DIST
@@ -81,16 +82,6 @@ func _ready() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
-	_begin()
-
-
-## A run's first round begins with the deck laid out, to see what there is to play with.
-func _begin() -> void:
-	if run.level == 0 and run.round == 1 and not run.shown:
-		run.shown = true
-		await get_tree().process_frame
-		await hud.choose("你的牌", "一开始有这 %d 张。每轮手牌补到 %d 张，没打的牌留在手里。抽牌堆、弃牌堆随时点开看" % [run.deck().size(),
-			Home.HAND], Hud._sorted(run.deck()), ["开始"], false, false)
 	_start_round()
 
 
@@ -110,18 +101,26 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "play" {slot, at}, "potion" {slot}, "fight". Whether it happened.
+## The one door for a player's action: "buy" {slot, at}, "reroll", "potion" {slot}, "fight". Whether it happened.
 func act(what: String, data := {}) -> bool:
 	if phase != Phase.PLAN:
 		return false
 	match what:
-		"play":
-			var ev := home.play(int(data.get("slot", -1)), data.get("at", true))
+		"buy":
+			var ev := home.buy(int(data.get("slot", -1)), data.get("at", true))
 			if ev.is_empty():
 				return false
 			held = -1
 			_changed(ev)
-			hud.deal(home.hand)
+			hud.deal(home.shelf)
+			return true
+		"reroll":
+			if not run.reroll():
+				return false
+			held = -1
+			_version += 1
+			hud.deal(home.shelf)
+			refresh()
 			return true
 		"potion":
 			var ev := home.use_potion(int(data.get("slot", -1)))
@@ -136,12 +135,12 @@ func act(what: String, data := {}) -> bool:
 	return false
 
 
-## The hand card i taken up (again: put down -- or, for a card that needs no target, played).
+## The offer at shelf place i taken up (again: put down -- or, for one used at once, bought).
 func hold(i: int) -> void:
-	if phase != Phase.PLAN or i < 0 or i >= home.hand.size():
+	if phase != Phase.PLAN or i < 0 or i >= home.shelf.size() or home.shelf[i] == null:
 		return
-	if held == i and Content.card(home.hand[i]).target == "none" and not home.targets(i).is_empty():
-		act("play", {"slot": i, "at": true})
+	if held == i and Content.offer(home.shelf[i]).target == "none" and not home.targets(i).is_empty():
+		act("buy", {"slot": i, "at": true})
 		return
 	held = -1 if held == i else i
 	refresh()
@@ -164,9 +163,9 @@ func _changed(ev: Array) -> void:
 			"gained":
 				var what := ("基因 +%d" % e.genes) if int(e.genes) > 0 else ("生物质 +%d" % e.biomass)
 				tags.float_text(Vector3(0, 3.0, HomeView.YARD_Z - 2.0), what, Color(0.6, 1.0, 0.8), 24)
-			"potion":
-				tags.float_text(Vector3(0, 3.0, HomeView.YARD_Z - 2.0), Content.POTIONS[e.potion].name,
-					Content.POTIONS[e.potion].color, 26)
+			"potion", "potion_got":
+				tags.float_text(Vector3(0, 3.0, HomeView.YARD_Z - 2.0), ("买到 " if e.t == "potion_got" else "") +
+					Content.POTIONS[e.potion].name, Content.POTIONS[e.potion].color, 26)
 			"mended":
 				tags.float_text(Vector3(0, 3.0, 0), "家园 +%d" % e.amount, Color(0.5, 1.0, 0.5), 28)
 	home_view.sync_army(home.army())
@@ -196,7 +195,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drag = false
 	elif event is InputEventKey and event.pressed and not event.echo:
 		var k: int = event.physical_keycode
-		if k >= KEY_1 and k < KEY_1 + Home.HAND:
+		if k >= KEY_1 and k < KEY_1 + home.shelf.size():
 			hold(k - KEY_1)
 		elif k == KEY_ESCAPE and held >= 0:
 			held = -1
@@ -206,11 +205,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _click() -> void:
-	if phase != Phase.PLAN or held < 0 or held >= home.hand.size():
+	if phase != Phase.PLAN or held < 0 or held >= home.shelf.size() or home.shelf[held] == null:
 		return
-	var at: Variant = _aim(Content.card(home.hand[held]))
+	var at: Variant = _aim(Content.offer(home.shelf[held]))
 	if at != null:
-		act("play", {"slot": held, "at": at})
+		act("buy", {"slot": held, "at": at})
 
 
 func _hover_at(pos: Vector2) -> void:
@@ -222,11 +221,11 @@ func _hover_at(pos: Vector2) -> void:
 		refresh()
 
 
-## What the cursor should find, for the card held.
+## What the cursor should find, for the offer taken up.
 func _want() -> String:
-	if phase != Phase.PLAN or held < 0 or held >= home.hand.size():
+	if phase != Phase.PLAN or held < 0 or held >= home.shelf.size() or home.shelf[held] == null:
 		return "any"
-	match Content.card(home.hand[held]).target:
+	match Content.offer(home.shelf[held]).target:
 		"tile":
 			return "tile"
 		"building", "nest":
@@ -234,7 +233,7 @@ func _want() -> String:
 	return "any"
 
 
-## What the held card would go on, under the cursor: a plot, true for a card that needs no target, or null.
+## What the offer taken up would go on, under the cursor: a plot, true for one used at once, or null.
 func _aim(c: Dictionary) -> Variant:
 	if c.target == "none":
 		return true
@@ -243,8 +242,8 @@ func _aim(c: Dictionary) -> Variant:
 
 # -- What is shown --------------------------------------------------------------------------------------------
 
-## The forecast worked out again where the homeland changed; the plots the held card can go on lit (orange where it
-## would pull a building down), the one it points at brighter, and the forecast and what changes with it played
+## The forecast worked out again where the homeland changed; the plots the offer taken up can go on lit (orange where
+## it would pull a building down), the one it points at brighter, and the forecast and what changes with it bought
 ## there; the HUD brought up to date.
 func refresh() -> void:
 	var tints := {}
@@ -254,8 +253,8 @@ func refresh() -> void:
 		if _forecast_at != _version:
 			forecast = _work_out(home)
 			_forecast_at = _version
-		if held >= 0 and held < home.hand.size():
-			var c := Content.card(home.hand[held])
+		if held >= 0 and held < home.shelf.size() and home.shelf[held] != null:
+			var c := Content.offer(home.shelf[held])
 			var fits := home.targets(held)
 			for t in fits:
 				if t is Vector2i:
@@ -264,7 +263,7 @@ func refresh() -> void:
 			if at != null and at in fits:
 				if at is Vector2i:
 					tints[at] = HOT_TINT
-				_try("card%d|%s" % [held, str(at)], func(h: Home) -> void: h.play(held, at))
+				_try("buy%d|%s" % [held, str(at)], func(h: Home) -> void: h.buy(held, at))
 			elif at is Vector2i and home.is_open(at):
 				tints[at] = BAD_TINT
 		elif _potion >= 0 and _potion < home.potions.size():
@@ -332,7 +331,7 @@ func _changes(a: Home, b: Home) -> Dictionary:
 		if a.buildings.has(p) and a.buildings[p].kind == b.buildings[p].kind and a.buildings[p].level == b.buildings[p].level:
 			continue
 		var lines: Array = out.get(p, [])
-		for pair in [["能量", b.income_energy() - a.income_energy(), "/轮"], ["生物质", b.income_biomass() - a.income_biomass(), "/轮"],
+		for pair in [["金币", b.income_gold() - a.income_gold(), "/轮"], ["生物质", b.income_biomass() - a.income_biomass(), "/轮"],
 				["基因", b.income_genes() - a.income_genes(), "/轮"], ["挡", b.block() - a.block(), ""],
 				["家园血", b.hp_max() - a.hp_max(), ""]]:
 			if int(pair[1]) != 0:
@@ -349,34 +348,39 @@ func _made(h: Home) -> Dictionary:
 	return out
 
 
-## What to do with the card held, said over the hand: "" when none is held.
+## What to do with the offer taken up, said over the shelf: "" when none is.
 func hint() -> String:
-	if phase != Phase.PLAN or held < 0 or held >= home.hand.size():
+	if phase != Phase.PLAN or held < 0 or held >= home.shelf.size() or home.shelf[held] == null:
 		return ""
-	var c := Content.card(home.hand[held])
-	if home.energy < int(c.cost):
-		return "能量不够（要 %d 点）" % c.cost
+	var c := Content.offer(home.shelf[held])
 	if home.genes < int(c.get("genes", 0)):
 		return "基因不够（要 %d）" % c.genes
 	if home.alien < int(c.get("alien", 0)):
 		return "外星基因不够（要 %d，打赢了才有）" % c.alien
+	var p: Vector2i = hover.plot
+	if c.type != "raise" and home.gold < home.price(held):
+		return "金币不够（要 %d）" % home.price(held)
 	if home.targets(held).is_empty():
-		return "现在没有地方用得上"
+		return "现在没有地方用得上" if c.type != "raise" else "金币不够升任何一座（升几级的，就要几加 %d）" % Content.RAISE
 	var say := ""
 	match c.target:
 		"tile":
-			var p: Vector2i = hover.plot
 			if p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds:
 				var was: String = home.buildings[p].kind
-				say = "拆掉%s换成这个（退 %d 能量）" % [Content.BUILDINGS[was].name, int(Content.BUILDINGS[was].cost) / 2]
+				say = "拆掉%s换成%s（%d 金，退 %d 金）" % [Content.BUILDINGS[was].name, c.name, home.price(held),
+					int(Content.BUILDINGS[was].cost) / 2]
 			else:
-				say = "点一块空地（点一座别的建筑，就拆了换成这个）"
+				say = "点一块空地造%s（%d 金）；点一座别的建筑，就拆了换成它" % [c.name, home.price(held)]
 		"building":
-			say = "点一座建筑，升一级（最多 %d 级）" % Content.LEVEL_MAX
+			if p != HomeView.NOWHERE and home.buildings.has(p) and int(home.buildings[p].level) < Content.LEVEL_MAX:
+				say = "%s升到 %d 级（%d 金）" % [Content.BUILDINGS[home.buildings[p].kind].name, int(home.buildings[p].level) + 1,
+					home.price(held, p)]
+			else:
+				say = "点一座建筑升一级（几级升上去，就要几加 %d 金）" % Content.RAISE
 		"nest":
-			say = "点一个还有空词条位的巢"
+			say = "点一个还有空词条位的巢（%d 金）" % home.price(held)
 		_:
-			say = "再点一下这张牌，或点一下地面，就打出"
+			say = "再点一下就买（%d 金）" % home.price(held)
 	return say + " · 右键放下"
 
 
@@ -458,14 +462,14 @@ func _start_round() -> void:
 	held = -1
 	_potion = -1
 	refresh()
-	var sub := "敌人更强了，家园多了一排地" if run.round == 1 and run.level > 0 else ("大波要来了" if run.big() else "收资源，孵兵")
+	var sub := "敌人更强了，家园多了一排地" if run.round == 1 and run.level > 0 else ("大波要来了" if run.big() else "进账，商店换货，孵兵")
 	hud.banner("%s · 第 %d 轮" % [Content.LEVELS[run.level].name, run.round], sub)
 	await get_tree().create_timer(0.6).timeout
 	var ev := run.start_round()
 	for e in ev:
 		match e.t:
 			"income":
-				var said: Array = []
+				var said: Array = ["金币 +%d" % e.gold]
 				if int(e.biomass) > 0:
 					said.append("生物质 +%d" % e.biomass)
 				if int(e.genes) > 0:
@@ -480,7 +484,7 @@ func _start_round() -> void:
 	await get_tree().create_timer(0.5).timeout
 	phase = Phase.PLAN
 	held = -1
-	hud.deal(home.hand)
+	hud.deal(home.shelf)
 	refresh()
 
 
@@ -509,14 +513,16 @@ func _after_fight() -> void:
 	var out := run.finish(fight)
 	match result:
 		"won":
-			var got: Array = ["外星基因 +%d" % out.alien]
+			var got: Array = ["金币 +%d" % out.gold, "外星基因 +%d" % out.alien]
 			for k in out.loot:
 				got.append(Content.POTIONS[k].name)
+			if int(out.interest) > 0:
+				got.append("利息 +%d" % out.interest)
 			hud.banner("赢了！", "得到：" + "，".join(got))
 		"time":
-			hud.banner("拖到时间，算输", "家园 −%d" % out.took)
+			hud.banner("拖到时间，算输", "家园 −%d%s" % [out.took, ("，利息 +%d" % out.interest) if int(out.interest) > 0 else ""])
 		_:
-			hud.banner("输了", "家园 −%d" % out.took)
+			hud.banner("输了", "家园 −%d%s" % [out.took, ("，利息 +%d" % out.interest) if int(out.interest) > 0 else ""])
 	await get_tree().create_timer(1.6).timeout
 	await _fly(HOME_AT, HOME_DIST, 1.0)
 	at_home = true
@@ -534,37 +540,30 @@ func _after_fight() -> void:
 		await hud.choose("家园被毁了……", "撑到了%s第 %d 轮" % [Content.LEVELS[run.level].name, run.round], [], ["重新开始"])
 		_new_run()
 		return
+	if out.level_won and run.last_level():
+		phase = Phase.DONE
+		refresh()
+		await hud.choose("全部守住了！", "三关都撑过来了", [], ["再玩一遍"])
+		_new_run()
+		return
+	await _gift()
 	if out.level_won:
-		if run.last_level():
-			phase = Phase.DONE
-			refresh()
-			await hud.choose("全部守住了！", "三关都撑过来了", [], ["再玩一遍"])
-			_new_run()
-			return
-		await _level_rewards()
-	elif result == "won":
-		await _card_reward("这一仗赢了")
+		await _level_end()
 	_start_round()
 
 
-func _card_reward(title: String) -> void:
-	var offer: Array = run.offer().map(func(id: String) -> Dictionary: return {"id": id, "up": false})
-	var v: Variant = await hud.choose(title, "挑一张牌放进牌堆", offer, ["不要"])
+## After each round: one of three offers, free, to the front of the shelf.
+func _gift() -> void:
+	var v: Variant = await hud.choose("挑一样，送你", "不要钱。放在商店最左边，什么时候用都行（最多存 %d 样）" % Run.GIFTS,
+		run.gift_offer(), ["不要"])
 	if v is Dictionary:
-		run.take(v.id)
+		run.take_gift(v)
 
 
-## A level held: a card to take, one to upgrade, one to take out; then on to the next level, a row more of land.
-func _level_rewards() -> void:
-	await _card_reward("%s守住了！" % Content.LEVELS[run.level].name)
-	if run.deck().any(func(ci: Dictionary) -> bool: return not ci.up):
-		var up: Variant = await hud.choose("升级一张牌", "点一张，它就变成 +（指着它，看它会变成什么样）", run.deck(), ["不升级"], true)
-		if up is Dictionary and not up.up:
-			run.upgrade(up)
-	if run.deck().size() > Home.HAND:
-		var out: Variant = await hud.choose("去掉一张牌？", "牌少了，好牌来得勤。也可以不去", run.deck(), ["不去掉"])
-		if out is Dictionary:
-			run.remove(out)
+## A level held: a fossil relic to choose, then on to the next level, a row more of land.
+func _level_end() -> void:
+	var id := await hud.choose_relic(run.relic_offer())
+	run.take_relic(id)
 	run.next_level()
 	home_view.open_rows()
 
