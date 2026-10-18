@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the strength numbers (Content.strength) against the battles themselves (GAME-DESIGN 15):
+## Checks the strength numbers (Content.strength) against the battles themselves (GAME-DESIGN 15, 17):
 ##
 ##   Godot --headless --path dino-raid --script res://tools/strength_check.gd
 ##
@@ -31,12 +31,16 @@ func _init() -> void:
 	quit()
 
 
+## What a nest of `kind` with `affixes` gives its units, standing alone; an evolved kind (no nest of its own), plain.
 func _spec(kind: String, affixes: Array) -> Dictionary:
+	if not Content.BUILDINGS.has("nest_" + kind):
+		return {"kind": kind, "nest": Vector2i.ZERO, "hp_mult": 1.0, "atk_mult": 1.0, "atk_bonus": 0, "affixes": []}
 	var h := Home.new(rng)
 	h.buildings.clear()
-	h.build(Vector2i(0, 4), "nest_" + kind)
-	h.buildings[Vector2i(0, 4)].affixes = affixes
-	return h.spec_of(Vector2i(0, 4))
+	h.terrain.clear()
+	h.build(Vector2i(0, 3), "nest_" + kind)
+	h.buildings[Vector2i(0, 3)].affixes = affixes
+	return h.spec_of(Vector2i(0, 3))
 
 
 func _alone(kind: String, affixes: Array) -> void:
@@ -121,10 +125,11 @@ func _mixed(ratio: float) -> bool:
 		ours += Content.strength(Content.unit_stats(u))
 	var wave: Array = []
 	var theirs := 0.0
-	var foes := ["grey", "grey", "purple", "black"]
+	var foes := ["grey", "grey", "purple", "black", "spore", "beetle", "salamander"]
 	if ratio >= 1.0 and rng.randf() < 0.3:
-		wave.append("boss")
-		theirs += Content.enemy_strength("boss")
+		var boss: String = ["boss_rain", "boss_lava"][rng.randi() % 2]
+		wave.append(boss)
+		theirs += Content.enemy_strength(boss)
 	while theirs < ours * ratio - 5.0:
 		var k: String = foes[rng.randi() % foes.size()]
 		wave.append(k)

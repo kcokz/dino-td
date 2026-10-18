@@ -1,13 +1,14 @@
 extends SceneTree
-## Whole runs played by the rules alone, no screen, many at once -- to see how hard the levels are (GAME-DESIGN 15).
+## Whole runs played by the rules alone, no screen, many at once -- to see how hard the places are (GAME-DESIGN 17).
 ##
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random] [runs] [first seed] [measure|limit]
 ##
-## random and smart play as tools/Policy.gd says; at each level's end both take the first relic offered.
-## Prints, for each run, how far it got and the homeland's health at each level's end, what it built; then how many
-## held each level. "measure": also, each round, the army's strength against the wave's. "limit": no one comes, every
-## battle is won, everything goes to growing; prints, round by round, the most strength any run's army had --
-## Content.LIMIT, to paste in after changing what can be built or made.
+## random and smart play as tools/Policy.gd says, each run with the next ark (Content.ARKS) in turn; both carry on what
+## cost the most, as the packing screen picks to begin with (random takes any relic). Prints, for each
+## run, how far it got, the homeland's health at each place's end and how many goods it carried on, what it built; then
+## how many held each place. "measure": also, each round, the army's strength against the wave's. "limit": no one
+## comes, every battle is won, everything goes to growing; prints, round by round, the most strength any run's army had
+## -- Content.LIMIT, to paste in after changing what can be built or made.
 
 var policy := "smart"
 var measure := false
@@ -23,15 +24,19 @@ func _init() -> void:
 	var first := int(args[2]) if args.size() > 2 else 1
 	measure = args.size() > 3 and args[3] == "measure"
 	limit = args.size() > 3 and args[3] == "limit"
-	var held := [0, 0, 0]
+	var held: Array = []
+	for l in Content.LEVELS:
+		held.append(0)
 	var lost_battles := 0
 	var battles := 0
+	var arks: Array = Content.ARKS.keys()
 	for k in runs:
 		var seed := first + k
 		rng.seed = seed
 		var run := Run.new(seed)
 		run.calm = limit
-		var line := "seed %3d:" % seed
+		run.choose_ark(arks[k % arks.size()])
+		var line := "seed %3d %-5s:" % [seed, run.ark]
 		var losses := 0
 		var g := 0
 		while not run.over:
@@ -49,7 +54,7 @@ func _init() -> void:
 				var wave_strength := 0.0
 				for kind in run.wave():
 					wave_strength += Content.enemy_strength(kind, run.power())
-				print("  %s r%2d: army of %2d, strength %4d; the wave %4d (%d of them)" % [Content.LEVELS[run.level].name,
+				print("  %s r%d: army of %2d, strength %4d; the wave %4d (%d of them)" % [Content.LEVELS[run.level].name,
 					run.round, run.home.army().size(), roundi(run.strength()), roundi(wave_strength), run.wave().size()])
 			var f := run.fight()
 			f.run()
@@ -71,16 +76,21 @@ func _init() -> void:
 				if run.last_level():
 					line += "  ALL HELD"
 					break
-				run.take_relic(run.relic_offer()[0])
-				run.next_level()
+				var offer := run.relic_offer()
+				run.take_relic(Policy.best_relic(run, run.home, offer) if policy == "smart" else offer[rng.randi() % offer.size()])
+				var goods := Policy.best_goods(run)
+				line += " carried %d" % mini(goods.size(), run.home.stash_size())
+				run.move_on(goods)
 		var built := {}
 		for p in run.home.buildings:
 			var b: Dictionary = run.home.buildings[p]
 			var key := "%s%d%s" % [b.kind, b.level, "+" + "+".join(b.affixes) if not b.affixes.is_empty() else ""]
 			built[key] = built.get(key, 0) + 1
-		print(line, "  | built ", built)
-	print("%s: %d runs; held level 1: %d, level 2: %d, level 3: %d; battles lost %d of %d" % [policy, runs, held[0], held[1],
-		held[2], lost_battles, battles])
+		print(line, "  | relics ", run.home.relics, " built ", built)
+	var said: Array = []
+	for i in held.size():
+		said.append("%s %d" % [Content.LEVELS[i].name, held[i]])
+	print("%s: %d runs; held %s; battles lost %d of %d" % [policy, runs, ", ".join(said), lost_battles, battles])
 	if limit:
 		var out := "const LIMIT := ["
 		var top := 0.0
@@ -96,7 +106,7 @@ func _random(run: Run) -> void:
 		var play := Policy.any_play(run.home, rng)
 		if play.is_empty():
 			break
-		run.home.buy(play[0], play[1])
+		Policy.play(run.home, play)
 	if not run.home.potions.is_empty() and rng.randf() < 0.3:
 		run.home.use_potion(rng.randi() % run.home.potions.size())
 
@@ -112,7 +122,7 @@ func _smart(run: Run) -> void:
 				restocked += 1
 				continue
 			break
-		run.home.buy(play[0], play[1])
+		Policy.play(run.home, play)
 	var k := Policy.best_potion(run, run.home)
 	if k >= 0:
 		run.home.use_potion(k)

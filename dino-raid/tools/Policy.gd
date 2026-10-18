@@ -1,34 +1,45 @@
 class_name Policy
-## How the tools play (GAME-DESIGN 15), shared by playtest.gd and sim_runs.gd. Not part of the game.
+## How the tools play (GAME-DESIGN 17), shared by playtest.gd and sim_runs.gd. Not part of the game.
 ##
 ## random: buys anything it can afford, put anywhere it may go (but building only on empty land, pulling nothing
-## down); now and then a potion. smart: the buy that does the most good for its price -- this round's battle worked out
-## after it (the forecast the player sees), and what the homeland comes to: the army its nests make (as far as the
-## biomass coming in feeds it), what comes in each round, what is kept (gold earns interest); restocks the shelf when
-## nothing on it is worth buying; a potion only when it turns a lost battle.
+## down), and puts down what it keeps the same way; now and then a potion; carries on whatever comes first. smart: the
+## buy or the putting down that does the most good for its price -- this round's battle worked out after it (the
+## forecast the player sees), and what the homeland comes to: the army its nests make (as far as the biomass coming in
+## feeds it), what comes in each round, what is kept (gold earns interest); restocks the shelf when nothing on it is
+## worth buying; a potion only when it turns a lost battle; the gift and the relic that do the most good; carries on
+## what cost the most.
 
 
-## A random buy: [shelf index, target], or [] when there is none.
+## A random play: ["buy" or "place", index, target], or [] when there is none.
 static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 	var can: Array = []
 	for i in h.shelf.size():
-		if not _careless(h, i).is_empty():
-			can.append(i)
+		var fits := _careless(h, h.targets(i), h.shelf[i])
+		if not fits.is_empty():
+			can.append(["buy", i, fits])
+	for k in h.stash.size():
+		var fits := _careless(h, h.stash_targets(k), h.stash[k])
+		if not fits.is_empty():
+			can.append(["place", k, fits])
 	if can.is_empty():
 		return []
-	var i: int = can[rng.randi() % can.size()]
-	var fits := _careless(h, i)
-	return [i, fits[rng.randi() % fits.size()]]
+	var c: Array = can[rng.randi() % can.size()]
+	return [c[0], c[1], c[2][rng.randi() % c[2].size()]]
 
 
-static func _careless(h: Home, i: int) -> Array:
-	var fits := h.targets(i)
-	if not fits.is_empty() and Content.offer(h.shelf[i]).type == "build":
-		fits = fits.filter(func(p: Vector2i) -> bool: return not h.buildings.has(p))
+static func _careless(h: Home, fits: Array, oi: Variant) -> Array:
+	if not fits.is_empty() and Content.offer(oi).type == "build":
+		return fits.filter(func(p: Vector2i) -> bool: return not h.buildings.has(p))
 	return fits
 
 
-## The best buy for its price: [shelf index, target], or [] when nothing beats keeping the gold.
+## Does a play (["buy" or "place", index, target]) to `h`. Its events.
+static func play(h: Home, p: Array) -> Array:
+	return h.buy(p[1], p[2]) if p[0] == "buy" else h.place(p[1], p[2])
+
+
+## The best play for its price -- a buy, or putting down what was kept (paid for already): ["buy" or "place", index,
+## target], or [] when nothing beats keeping the gold.
 static func best_play(run: Run, h: Home) -> Array:
 	var base := score(run, h)
 	var best_gain := 0.01
@@ -36,14 +47,21 @@ static func best_play(run: Run, h: Home) -> Array:
 	for i in h.shelf.size():
 		for at in h.targets(i):
 			var o := Content.offer(h.shelf[i])
-			var cost := 1.0 if h.shelf[i].get("gift", false) else \
-				maxf(1.0, float(h.price(i, at)) + 0.5 * float(o.get("genes", 0)) + 2.0 * float(o.get("alien", 0)))
+			var cost := maxf(1.0, float(h.price(i, at)) + 0.5 * float(o.get("genes", 0)) + 2.0 * float(o.get("alien", 0)))
 			var t := h.clone()
 			t.buy(i, at)
 			var gain := (score(run, t) - base) / cost
 			if gain > best_gain:
 				best_gain = gain
-				best = [i, at]
+				best = ["buy", i, at]
+	for k in h.stash.size():
+		for at in h.stash_targets(k):
+			var t := h.clone()
+			t.place(k, at)
+			var gain := score(run, t) - base
+			if gain > best_gain:
+				best_gain = gain
+				best = ["place", k, at]
 	return best
 
 
@@ -53,17 +71,35 @@ static func best_gift(run: Run, h: Home, gifts: Array) -> int:
 	var best_score := -INF
 	for k in gifts.size():
 		var t := h.clone()
-		var g: Dictionary = gifts[k].duplicate()
-		g.gift = true
-		t.shelf.insert(0, g)
-		for at in t.targets(0):
+		t.stash.append(gifts[k].duplicate())
+		var last := t.stash.size() - 1
+		for at in t.stash_targets(last):
 			var u := t.clone()
-			u.buy(0, at)
+			u.place(last, at)
 			var s := score(run, u)
 			if s > best_score:
 				best_score = s
 				best = k
 	return best
+
+
+## The relic that does the most good now: one of `ids`.
+static func best_relic(run: Run, h: Home, ids: Array) -> String:
+	var best: String = ids[0]
+	var best_score := -INF
+	for id in ids:
+		var t := h.clone()
+		t.relics.append(id)
+		var s := score(run, t)
+		if s > best_score:
+			best_score = s
+			best = id
+	return best
+
+
+## What to carry on to the next place: the goods that cost the most (Run.default_goods), as the packing screen picks.
+static func best_goods(run: Run) -> Array:
+	return run.default_goods()
 
 
 ## The potion that turns this round's battle (won where it was lost, or less harm), or -1.
