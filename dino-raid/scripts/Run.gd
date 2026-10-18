@@ -5,7 +5,7 @@ extends RefCounted
 ## A place held: a relic chosen, then the ark moves on, taking its gold and what it can carry. Over when the homeland's
 ## hit points are gone.
 
-const LOOT := 1                   # a battle won: this many potions and alien genes; a big round's or a boss's, double
+const LOOT := 1                   # a battle won: this many alien genes; a big round's or a boss's, double
 const GIFTS := 3                  # the free pick after each round: one of this many
 
 ## The run being played: kept here while the scene is reloaded.
@@ -65,32 +65,26 @@ func reroll() -> bool:
 
 ## The army goes out (its biomass paid) against this round's wave.
 func fight() -> Fight:
-	return Fight.make(home.produce(), home.buffs, wave(), power())
+	return Fight.make(home.produce(), wave(), power())
 
 
-## The strength of the army the homeland would send now (Content.strength), with this round's buffs.
+## The strength of the army the homeland would send now (Content.strength).
 func strength() -> float:
 	var n := 0.0
 	for u in home.army():
-		n += Content.strength(Content.unit_stats(u, home.buffs))
+		n += Content.strength(Content.unit_stats(u))
 	return n
 
 
-## After the battle: this round's buffs spent; won, gold, potions and alien genes found; lost, the homeland harmed;
-## either way the interest on the gold kept. {result, fallen, took, loot: [potion ids], alien, gold, interest,
-## level_won}
+## After the battle: won, gold and alien genes found; lost, the homeland harmed; either way the interest on the gold
+## kept. {result, fallen, took, alien, gold, interest, level_won}
 func finish(f: Fight) -> Dictionary:
-	home.buffs.clear()
-	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "loot": [], "alien": 0, "gold": 0, "interest": 0,
+	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "alien": 0, "gold": 0, "interest": 0,
 		"level_won": false}
 	if f.result == "won":
 		var n := LOOT * (2 if big() or round >= rounds() else 1)
 		home.alien += n
 		out.alien = n
-		for i in n:
-			var k := home._any_potion(rng)
-			if home.add_potion(k):
-				out.loot.append(k)
 		home.gold += Content.WIN_GOLD
 		out.gold = Content.WIN_GOLD
 	else:
@@ -125,23 +119,17 @@ func gift_offer() -> Array:
 		if id in ids:
 			continue
 		ids.append(id)
-		out.append({"id": id, "potion": home._any_potion(rng), "gift": true} if id == "potion" else {"id": id, "gift": true})
+		out.append({"id": id, "gift": true})
 		if out.size() == want:
 			break
 	return out
 
 
-## A gift taken: a potion to the potions (if there is room), anything else into the stash (the oldest there goes if it
-## is full) -- or used at once, if it is used at once.
-func take_gift(oi: Dictionary) -> Array:
+## A gift taken: into the stash (the oldest there goes if it is full). Whether one went.
+func take_gift(oi: Dictionary) -> bool:
 	var g := oi.duplicate()
 	g.gift = true
-	var o := Content.offer(g)
-	if o.target == "none":
-		home.stash.append(g)
-		return home.place(home.stash.size() - 1, true)
-	home.keep(g)
-	return []
+	return home.keep(g)
 
 
 ## Three different relics not yet held, to choose one of: two fossils and a boss's.

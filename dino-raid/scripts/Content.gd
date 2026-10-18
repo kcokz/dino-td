@@ -73,9 +73,8 @@ const WALL_CHAIN := 1             # each wall blocks this much more for each wal
 
 ## Buildings. A nest makes `nest` units. Each level may give: biomass, genes, gold: that much more each round;
 ## drill: units of nests beside it hit this much harder; haste: they hit this % faster; slots: nests beside it can carry
-## this many more affixes; brew: a potion every so many rounds; store, store_genes: that much more biomass and genes can
-## be kept; wall: the homeland's hit points this much higher; block: each lost battle harms it this much less; mend:
-## hit points back each round. cost: its price, in gold. region: only found in that place (LEVELS).
+## this many more affixes; wall: the homeland's hit points this much higher; block: each lost battle harms it this much
+## less; mend: hit points back each round. cost: its price, in gold. region: only found in that place (LEVELS).
 const BUILDINGS := {
 	"nest_red": {"name": "红巢", "color": Color(0.9, 0.24, 0.2), "nest": "red", "cost": 3},
 	"nest_blue": {"name": "蓝巢", "color": Color(0.24, 0.5, 0.96), "nest": "blue", "cost": 3},
@@ -92,10 +91,6 @@ const BUILDINGS := {
 		"levels": [{"drill": 1}, {"drill": 2}, {"drill": 3}]},
 	"stabilizer": {"name": "稳定器", "color": Color(0.55, 0.72, 0.95), "cost": 3,
 		"levels": [{"slots": 1}, {"slots": 1}, {"slots": 2}]},
-	"lab": {"name": "药剂房", "color": Color(0.95, 0.5, 0.7), "cost": 4,
-		"levels": [{"brew": 3}, {"brew": 2}, {"brew": 1}]},
-	"store": {"name": "仓库", "color": Color(0.62, 0.47, 0.32), "cost": 2,
-		"levels": [{"store": 10, "store_genes": 5}, {"store": 20, "store_genes": 10}, {"store": 30, "store_genes": 15}]},
 	"wall": {"name": "防护墙", "color": Color(0.5, 0.5, 0.48), "cost": 3,
 		"levels": [{"wall": 5, "block": 1}, {"wall": 10, "block": 2}, {"wall": 15, "block": 3}]},
 	"spore_pool": {"name": "孢子池", "color": Color(0.55, 0.7, 0.3), "cost": 3, "region": 0,
@@ -119,15 +114,6 @@ const AFFIXES := {
 	"flame": {"name": "火焰", "color": Color(1.0, 0.45, 0.1), "atk": 1, "splash": 1.2, "says": "攻击 +1，一打一片（1.2 米）"},
 }
 
-## Potions: one battle's help, at most POTION_SLOTS kept; used whenever, for nothing.
-const POTIONS := {
-	"rage": {"name": "狂暴激素", "color": Color(1.0, 0.42, 0.22), "battle": {"atk": 2}, "says": "这一仗所有兵攻击 +2"},
-	"harden": {"name": "硬化剂", "color": Color(0.6, 0.68, 0.8), "battle": {"armor": 1}, "says": "这一仗所有兵护甲 +1"},
-	"breed": {"name": "催产素", "color": Color(1.0, 0.55, 0.8), "breed": 1, "says": "这一轮每个巢多孵 1 只，不吃生物质"},
-	"gel": {"name": "修复凝胶", "color": Color(0.45, 0.95, 0.5), "mend": 6, "says": "家园回 6 血"},
-	"rush": {"name": "加速剂", "color": Color(1.0, 0.9, 0.3), "battle": {"haste": 30}, "says": "这一仗所有兵快 30%"},
-}
-const POTION_SLOTS := 3
 
 ## Strength (战力): how strong a fighter is, as one number the player never sees -- for balancing. The square root of
 ## what it can take times what it deals a second, so that a side's strength is the sum of its fighters' and two sides
@@ -141,12 +127,11 @@ const HEAL_WORTH := 0.6                 # a hit point healed, against one dealt
 const SPLIT_WORTH := 0.45               # what it breaks into, against standing there from the start
 const BURST_WORTH := 0.25               # a burst, against a hit a second
 
-## What the shop can offer (GAME-DESIGN 17). type "build": a building, on an open plot -- an empty one, or one with
-## another building, pulled down for half its price back; "raise": a building one level up, for RAISE gold more than
-## its level; "affix": a gene affix on a nest with a free place; "gain": genes or biomass at once; "potion": a potion
-## (which one is picked when the shelf is stocked). price: in gold (a building's is its own); genes, alien: what else it
-## costs. from: the place (0-based) from which the shop can offer it; region: only in that place. rarity: 0 often, 1
-## sometimes, 2 seldom.
+## What the shop can offer (GAME-DESIGN 18) -- only what lasts, nothing used up at once. type "build": a building, on
+## an open plot -- an empty one, or one with another building, pulled down for half its price back; "raise": a
+## building one level up, for RAISE gold more than its level; "affix": a gene affix on a nest with a free place. price:
+## in gold (a building's is its own); genes, alien: what else it costs. from: the place (0-based) from which the shop
+## can offer it; region: only in that place. rarity: 0 often, 1 sometimes, 2 seldom.
 const OFFERS := {
 	"b_red": {"type": "build", "rarity": 0, "builds": "nest_red"},
 	"b_blue": {"type": "build", "rarity": 0, "builds": "nest_blue"},
@@ -158,8 +143,7 @@ const OFFERS := {
 	"b_mine": {"type": "build", "rarity": 1, "builds": "mine"},
 	"b_gym": {"type": "build", "rarity": 0, "builds": "gym"},
 	"b_stab": {"type": "build", "rarity": 1, "builds": "stabilizer"},
-	"b_lab": {"type": "build", "rarity": 1, "builds": "lab"},
-	"b_store": {"type": "build", "rarity": 1, "builds": "store"},
+
 	"b_wall": {"type": "build", "rarity": 1, "builds": "wall"},
 	"b_spore": {"type": "build", "rarity": 0, "builds": "spore_pool", "region": 0},
 	"b_vine": {"type": "build", "rarity": 1, "builds": "vine_wall", "region": 0},
@@ -173,9 +157,6 @@ const OFFERS := {
 	"a_plasma": {"type": "affix", "price": 3, "genes": 3, "alien": 1, "rarity": 2, "affix": "plasma", "from": 1},
 	"a_poison": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "poison", "region": 0},
 	"a_flame": {"type": "affix", "price": 3, "genes": 2, "alien": 1, "rarity": 1, "affix": "flame", "region": 1},
-	"sample": {"type": "gain", "name": "采样", "price": 1, "rarity": 0, "gain_genes": 3},
-	"culture": {"type": "gain", "name": "培养", "price": 1, "rarity": 0, "gain_biomass": 6},
-	"potion": {"type": "potion", "price": 3, "rarity": 1},
 }
 const SHOP := 5                   # offers on the shelf each round
 const STASH := 4                  # goods kept (bought or given or packed) at most
@@ -183,9 +164,9 @@ const REROLL := 1                 # gold to stock the shelf again; one more each
 const RAISE := 2                  # a raise costs this much more than the building's level
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...
 const INTEREST_MAX := 2           # ...up to this much
-const WIN_GOLD := 1               # gold for a battle won
+const WIN_GOLD := 2               # gold for a battle won
 
-const TYPES := {"build": "建筑", "raise": "升级", "affix": "基因词条", "gain": "资源", "potion": "药剂"}
+const TYPES := {"build": "建筑", "raise": "升级", "affix": "基因词条"}
 
 ## Relics: when a place is held, one of three is chosen (two fossils and a boss's); each helps for the rest of the run.
 ## A boss's is strong but costs something too.
@@ -215,16 +196,16 @@ const ARKS := {
 }
 ## What the ark itself sets down wherever it lands, besides what was packed.
 const LANDING := [["nest_red", 1], ["pool", 1]]
-const FIRST_STOCK := {"gold": 0, "biomass": 3, "genes": 2, "potions": ["rage"]}
+const FIRST_STOCK := {"gold": 0, "biomass": 3, "genes": 2}
 
 ## The places a run's ark lands in, in order -- each a big level of `rounds` small ones, the last against its `boss`.
 ## Each wave is `share` of LIMIT strong; `power` times as strong one by one; `mix`: which kinds come, [kind, share, from
 ## which round]. rule: what is different there (RULES). terrain: how many of each special plot (TERRAIN) lie about.
 const LEVELS := [
-	{"name": "雨林", "rounds": 5, "power": 1.0, "share": 0.45, "boss": "boss_rain", "rule": "damp",
+	{"name": "雨林", "rounds": 5, "power": 1.0, "share": 0.42, "boss": "boss_rain", "rule": "damp",
 		"terrain": {"pond": 3, "tree": 2}, "ground": Color(0.42, 0.36, 0.26), "grass": Color(0.24, 0.42, 0.2),
 		"mix": [["grey", 0.3, 1], ["spore", 0.45, 1], ["purple", 0.25, 2]]},
-	{"name": "火山", "rounds": 5, "power": 1.25, "share": 0.6, "boss": "boss_lava", "rule": "ash",
+	{"name": "火山", "rounds": 5, "power": 1.25, "share": 0.54, "boss": "boss_lava", "rule": "ash",
 		"terrain": {"ore": 3, "lava": 2}, "ground": Color(0.36, 0.3, 0.27), "grass": Color(0.32, 0.28, 0.24),
 		"mix": [["grey", 0.2, 1], ["beetle", 0.45, 1], ["salamander", 0.35, 1]]},
 ]
@@ -245,12 +226,12 @@ const LAVA_ATK := 1
 ## The most strength a player's army can have at each round of the run (the places one after another): no one coming,
 ## every battle won, everything spent on growing -- the best of five runs, measured by tools/sim_runs.gd (limit).
 ## Measure again after changing what can be built or made.
-const LIMIT := [38, 55, 83, 110, 128, 171, 200, 238, 322, 350]
+const LIMIT := [46, 67, 110, 150, 183, 222, 341, 378, 450, 464]
 const BIG_ROUNDS := [5]                 # a big wave, with the place's boss: BIG times as strong as the round would be
 const BIG := 1.25
 
 
-## An offer's numbers (oi: a shelf's or stash's {id, potion, gift, packed}): its name, price, type and what it goes
+## An offer's numbers (oi: a shelf's or stash's {id, gift, packed}): its name, price, type and what it goes
 ## on. A raise's price is RAISE more than the level of what it raises (Home.price); here, the least it can be. A packed
 ## building keeps its level and affixes (level, affixes).
 static func offer(oi: Dictionary) -> Dictionary:
@@ -271,9 +252,6 @@ static func offer(oi: Dictionary) -> Dictionary:
 			o.price = RAISE + 1
 		"affix":
 			o.name = AFFIXES[o.affix].name
-		"potion":
-			o.potion = oi.get("potion", "rage")
-			o.name = POTIONS[o.potion].name
 	return o
 
 
@@ -346,10 +324,7 @@ static func building_text(kind: String, lv: int) -> String:
 			return "旁边的巢孵的兵打得快 %d%%" % l.haste
 		"stabilizer":
 			return "旁边的巢能多贴 %d 个词条" % l.slots
-		"lab":
-			return "每 %d 轮配一瓶药剂（药剂最多存 %d 瓶）" % [l.brew, POTION_SLOTS]
-		"store":
-			return "生物质能多存 %d，基因能多存 %d" % [l.store, l.store_genes]
+
 		"wall":
 			return "家园血 +%d，输一仗少掉 %d。旁边每有一段墙，再少掉 %d" % [l.wall, l.block, WALL_CHAIN]
 		"vine_wall":
@@ -390,29 +365,23 @@ static func offer_text(o: Dictionary) -> String:
 				if o.affix in r.affixes:
 					also = "有的词条凑在一起，会进化出新物种。"
 			return "给一个巢贴上%s：它孵的兵%s。%s" % [a.name, a.says, also]
-		"gain":
-			if o.has("gain_genes"):
-				return "马上得到 %d 基因。" % o.gain_genes
-			return "马上得到 %d 生物质。" % o.gain_biomass
-		"potion":
-			return POTIONS[o.potion].says + "。放进药剂栏，布置时用。"
 	return ""
 
 
 ## One of our units' numbers, from what the nest gives it (Home.army's spec: kind, hp_mult, atk_mult, atk_bonus, armor,
-## range, splash, dive, pierce, haste) and this battle's buffs (atk, armor, haste).
-static func unit_stats(spec: Dictionary, buffs := {}) -> Dictionary:
+## range, splash, dive, pierce, haste).
+static func unit_stats(spec: Dictionary) -> Dictionary:
 	var base: Dictionary = UNITS[spec.kind]
 	var s := base.duplicate()
 	s.hp = maxi(1, roundi(float(base.hp) * float(spec.get("hp_mult", 1.0))))
-	s.atk = roundi(float(base.atk) * float(spec.get("atk_mult", 1.0))) + int(spec.get("atk_bonus", 0)) + int(buffs.get("atk", 0))
-	s.armor = int(base.get("armor", 0)) + int(spec.get("armor", 0)) + int(buffs.get("armor", 0))
+	s.atk = roundi(float(base.atk) * float(spec.get("atk_mult", 1.0))) + int(spec.get("atk_bonus", 0))
+	s.armor = int(base.get("armor", 0)) + int(spec.get("armor", 0))
 	s.range = maxf(float(base.range), float(spec.get("range", 0.0)))
 	s.splash = float(base.get("splash", 0.0)) + float(spec.get("splash", 0.0))
 	s.heal = roundi(float(base.get("heal", 0)) * float(spec.get("atk_mult", 1.0)))
 	s.pierce = int(base.get("pierce", 0)) + int(spec.get("pierce", 0))
 	s.burst = int(base.get("burst", 0))
-	s.every = float(base.every) * 100.0 / (100.0 + float(buffs.get("haste", 0)) + float(spec.get("haste", 0)))
+	s.every = float(base.every) * 100.0 / (100.0 + float(spec.get("haste", 0)))
 	s.dive = bool(base.get("dive", false)) or bool(spec.get("dive", false))
 	s.size = float(base.size) * (1.0 + 0.3 * (float(spec.get("atk_mult", 1.0)) - 1.0))
 	s.harm = 0

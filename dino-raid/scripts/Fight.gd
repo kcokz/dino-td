@@ -25,11 +25,11 @@ var result := ""                  # "won", "lost", or "time" (lost on time)
 var _next := 1
 
 
-## `army` (Home.army's units) with this battle's `buffs`, against `wave` at `power`.
-static func make(army: Array, buffs: Dictionary, wave: Array, power: float) -> Fight:
+## `army` (Home.army's units) against `wave` at `power`.
+static func make(army: Array, wave: Array, power: float) -> Fight:
 	var f := Fight.new()
 	for u in army:
-		f._add("ours", u.kind, Content.unit_stats(u, buffs), str(u.id), u.get("affixes", []), 1.0)
+		f._add("ours", u.kind, Content.unit_stats(u), str(u.id), u.get("affixes", []), 1.0)
 	for k in wave:
 		f._add("theirs", k, Content.enemy_stats(k, power), "", [], power)
 	f._form("ours")
@@ -121,7 +121,7 @@ func harm() -> int:
 	return n
 
 
-## A side's strength all told (Content.strength of each fighter at full health, with the battle's buffs).
+## A side's strength all told (Content.strength of each fighter at full health).
 func strength(side: String) -> float:
 	var n := 0.0
 	for u in units:

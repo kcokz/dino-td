@@ -1,28 +1,27 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17): wherever the ark has landed, a grid of plots -- some of them special ground -- with
-## buildings in them, the gold and the other resources, the shop's shelf, the goods kept for later (the stash), the
-## potions and the relics, and the homeland's own hit points. One round here: the buildings bring in gold, biomass and
-## genes and the shelf is stocked (start_round); the player buys -- buildings, raises, affixes -- and puts goods down
-## from the stash, and takes potions; then the nests make this round's army, paying biomass (produce), and it goes out
-## to fight (Fight). The army lives for that battle only. Gold kept to the round's end earns interest. When a place is
-## held, the ark moves on (land): the buildings stay behind but for those packed into the stash.
+## The homeland (GAME-DESIGN 17, 18): wherever the ark has landed, a grid of plots -- some of them special ground --
+## with buildings in them, the gold and the other resources, the shop's shelf, the goods kept for later (the stash),
+## the relics, and the homeland's own hit points. One round here: the buildings bring in gold, biomass and genes and the
+## shelf is stocked (start_round); the player buys -- buildings, raises, affixes -- and puts goods down from the stash;
+## then the nests make this round's army, paying biomass (produce), and it goes out to fight (Fight). The army lives for
+## that battle only. Gold kept to the round's end earns interest. When a place is held, the ark moves on (land): the
+## buildings stay behind but for those packed into the stash.
 ##
 ## Neighbours are the four plots up, down, left and right. Plain data and rules, nothing on screen: the same rules for
 ## the game and for its tests.
 ##
-## A building: {id, kind, level, wait, affixes: [ids]}  -- wait: rounds until a lab next brews.
-## A good (shelf or stash): {id, potion, gift, packed: {level, affixes}} (Content.offer), or null on the shelf where one
-##   was bought.
+## A building: {id, kind, level, affixes: [ids]}.
+## A good (shelf or stash): {id, gift, packed: {level, affixes}} (Content.offer), or null on the shelf where one was
+##   bought.
 ## A unit (army): {id: "nest id:n", kind, nest: plot, hp_mult, atk_mult, atk_bonus, armor, range, splash, dive, pierce,
-##   haste, affixes, free} -- free: made by a potion or a relic, eating nothing.
+##   haste, affixes, free} -- free: made by a relic, eating nothing.
 ## Events (for the screen): bought {offer}, stored {offer}, placed {offer}, built {at}, replaced {at, was, back},
-## raised {at}, affixed {at, affix}, gained {genes, biomass}, potion_got {potion}, income {gold, biomass, genes},
-## rotted {amount}, ash {amount}, mended {amount}, brewed {at, potion}, potion {potion}.
+## raised {at}, affixed {at, affix}, income {gold, biomass, genes}, rotted {amount}, ash {amount}, mended {amount}.
 
 const COLS := 6
 const ROWS := 4
-const INCOME := 3                 # gold each round
+const INCOME := 5                 # gold each round
 const BIOMASS_MAX := 20
 const GENES_MAX := 10
 const HP := 30
@@ -38,12 +37,10 @@ var biomass := 0
 var genes := 0
 var alien := 0
 var hp := HP
-var potions: Array = []           # potion ids
 var relics: Array = []            # relic ids
 var shelf: Array = []             # offers, or null where bought
 var stash: Array = []             # goods kept for later
 var rerolls := 0                  # times the shelf was stocked again this round
-var buffs := {}                   # for this round only: atk, armor, haste, breed
 var next_id := 1
 
 
@@ -51,7 +48,6 @@ func _init(rng: RandomNumberGenerator) -> void:
 	gold = int(Content.FIRST_STOCK.gold)
 	biomass = int(Content.FIRST_STOCK.biomass)
 	genes = int(Content.FIRST_STOCK.genes)
-	potions = Content.FIRST_STOCK.potions.duplicate()
 	land(0, rng, Content.LANDING)
 
 
@@ -90,7 +86,7 @@ func _free_landing() -> Vector2i:
 # -- A round ----------------------------------------------------------------------------------------------
 
 ## The place has its way (damp: stored biomass rots; ash falls); the buildings bring in what they make; vines mend;
-## the labs brew; the shelf is stocked afresh.
+## the shelf is stocked afresh.
 func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 	var ev: Array = []
 	if rule() == "damp" and biomass > 0:
@@ -114,17 +110,6 @@ func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 		var before := hp
 		hp = mini(hp_max(), hp + mend)
 		ev.append({"t": "mended", "amount": hp - before})
-	for p in _plots():
-		var bd: Dictionary = buildings[p]
-		if bd.kind != "lab":
-			continue
-		bd.wait = int(bd.wait) - 1
-		if int(bd.wait) <= 0:
-			bd.wait = int(_level(bd).brew)
-			if potions.size() < Content.POTION_SLOTS:
-				var k := _any_potion(rng)
-				potions.append(k)
-				ev.append({"t": "brewed", "at": p, "potion": k})
 	rerolls = 0
 	stock(rng, level)
 	return ev
@@ -135,8 +120,8 @@ func rule() -> String:
 
 
 ## Stocks the shelf: buildings by how much land is free (more when there is much; one when there is none, to pull
-## something down for), then raises, affixes, gains and potions -- only those that can be used now and are found here,
-## none twice, and no more than one that costs more gold than there is.
+## something down for), then raises and affixes -- only those that can be used now and are found here, none twice, and
+## no more than one that costs more gold than there is.
 func stock(rng: RandomNumberGenerator, level: int) -> void:
 	var free := _plots_all().filter(func(p: Vector2i) -> bool: return buildable(p) and not buildings.has(p)).size()
 	var builds := clampi(ceili(free / 3.0), 1, 3)
@@ -164,7 +149,7 @@ func stock(rng: RandomNumberGenerator, level: int) -> void:
 					continue
 				dear -= 1
 			taken.append(id)
-			shelf.append({"id": id, "potion": _any_potion(rng)} if id == "potion" else {"id": id})
+			shelf.append({"id": id})
 			want -= 1
 	# Not enough that could be used: fill with what is left.
 	for pool in [build_pool, other_pool]:
@@ -173,7 +158,7 @@ func stock(rng: RandomNumberGenerator, level: int) -> void:
 				break
 			if not id in taken:
 				taken.append(id)
-				shelf.append({"id": id, "potion": _any_potion(rng)} if id == "potion" else {"id": id})
+				shelf.append({"id": id})
 
 
 ## The offers this place's shop deals in, of use now: none from a later place, none of another place's own.
@@ -201,9 +186,14 @@ func _raise_price(level: int) -> int:
 	return maxi(1, Content.RAISE + level - (1 if rule() == "ash" else 0))
 
 
-## Whether an offer could be used now.
+## Whether an offer could be used now -- a stabilizer only once a nest has as many affixes as it has places.
 func _useful(id: String) -> bool:
 	match Content.OFFERS[id].type:
+		"build":
+			if Content.OFFERS[id].builds == "stabilizer":
+				return _plots().any(func(p: Vector2i) -> bool:
+					var b: Dictionary = buildings[p]
+					return Content.is_nest(b.kind) and not b.affixes.is_empty() and b.affixes.size() >= slots(p))
 		"raise":
 			return _plots().any(func(p: Vector2i) -> bool: return int(buildings[p].level) < Content.LEVEL_MAX)
 		"affix":
@@ -211,8 +201,6 @@ func _useful(id: String) -> bool:
 			return _plots().any(func(p: Vector2i) -> bool:
 				var b: Dictionary = buildings[p]
 				return Content.is_nest(b.kind) and not a in b.affixes and b.affixes.size() < slots(p))
-		"potion":
-			return potions.size() < Content.POTION_SLOTS
 	return true
 
 
@@ -252,8 +240,8 @@ func interest_max() -> int:
 # -- This round's army ------------------------------------------------------------------------------------
 
 ## This round's army as things stand: each nest, in reading order, makes its count (one more beside nests of its kind,
-## one more for each breed potion taken, one more for the first with the egg relic, one more each with the core), each
-## unit paid for in biomass as far as the biomass goes -- the ones a potion or a relic makes eat nothing.
+## one more for the first with the egg relic, one more each with the core), each unit paid for in biomass as far as the
+## biomass goes -- the one the egg makes eats nothing.
 func army() -> Array:
 	var out: Array = []
 	var food := biomass
@@ -265,7 +253,7 @@ func army() -> Array:
 		var spec := spec_of(p)
 		var cost := int(Content.UNITS[spec.kind].food)
 		var paid := count(p)
-		var extra := int(buffs.get("breed", 0)) + (1 if first and "egg" in relics else 0)
+		var extra := 1 if first and "egg" in relics else 0
 		first = false
 		for i in paid + extra:
 			var free := i >= paid
@@ -296,7 +284,7 @@ func produce() -> Array:
 	return out
 
 
-## How many the nest at p makes a round (before biomass, potions and relics): its level's count, one more with CLUSTER
+## How many the nest at p makes a round (before biomass and the egg): its level's count, one more with CLUSTER
 ## neighbours of its kind, one more with the core.
 func count(p: Vector2i) -> int:
 	var b: Dictionary = buildings[p]
@@ -387,8 +375,7 @@ func affordable(i: int) -> bool:
 	return gold >= (_least_price(o.id) if o.type == "raise" else price(i))
 
 
-## Where shelf[i] can go and be paid for: plots (Vector2i) for build, raise and affix; [true] for one used at once. []
-## when it cannot be bought now.
+## Where shelf[i] can go and be paid for: plots (Vector2i) for build, raise and affix. [] when it cannot be bought now.
 func targets(i: int) -> Array:
 	if not affordable(i):
 		return []
@@ -411,7 +398,7 @@ func can_store(i: int) -> bool:
 	return affordable(i) and stash.size() < stash_size() and Content.offer(shelf[i]).type in ["build", "affix"]
 
 
-## Where a good can go, whoever pays: plots for build, raise and affix; [true] for one used at once; [] for none.
+## Where a good can go, whoever pays: plots for build, raise and affix; [] for none.
 func _fits(oi: Dictionary) -> Array:
 	var o := Content.offer(oi)
 	match o.target:
@@ -424,19 +411,15 @@ func _fits(oi: Dictionary) -> Array:
 			return _plots().filter(func(p: Vector2i) -> bool:
 				var b: Dictionary = buildings[p]
 				return Content.is_nest(b.kind) and not o.affix in b.affixes and b.affixes.size() < slots(p))
-	if o.type == "potion" and potions.size() >= Content.POTION_SLOTS:
-		return []
-	return [true]
+	return []
 
 
-## Buys shelf[i] for `at` (a plot, or anything for one used at once). Its events; [] if it could not be bought.
+## Buys shelf[i] for `at` (a plot). Its events; [] if it could not be bought.
 func buy(i: int, at: Variant) -> Array:
 	var fits := targets(i)
-	if fits.is_empty():
+	if fits.is_empty() or not at in fits:
 		return []
 	var o := Content.offer(shelf[i])
-	if o.target != "none" and not at in fits:
-		return []
 	_pay(i, at)
 	var oi: Dictionary = shelf[i]
 	shelf[i] = null
@@ -457,12 +440,10 @@ func store(i: int) -> Array:
 ## Puts stash[k] down at `at`. Its events; [] if it could not go there.
 func place(k: int, at: Variant) -> Array:
 	var fits := stash_targets(k)
-	if fits.is_empty():
+	if fits.is_empty() or not at in fits:
 		return []
 	var oi: Dictionary = stash[k]
 	var o := Content.offer(oi)
-	if o.target != "none" and not at in fits:
-		return []
 	stash.remove_at(k)
 	return [{"t": "placed", "offer": o.id}] + _apply(oi, at)
 
@@ -511,15 +492,6 @@ func _apply(oi: Dictionary, at: Variant) -> Array:
 		"affix":
 			buildings[at].affixes.append(o.affix)
 			ev.append({"t": "affixed", "at": at, "affix": o.affix})
-		"gain":
-			var g := int(o.get("gain_genes", 0))
-			var bm := int(o.get("gain_biomass", 0))
-			genes = mini(genes_max(), genes + g)
-			biomass = mini(biomass_max(), biomass + bm)
-			ev.append({"t": "gained", "genes": g, "biomass": bm})
-		"potion":
-			potions.append(o.potion)
-			ev.append({"t": "potion_got", "potion": o.potion})
 	return ev
 
 
@@ -532,50 +504,15 @@ func packed(p: Vector2i) -> Dictionary:
 	return {}
 
 
-## Takes potion k (an index into potions). Its events; [] if there is none there.
-func use_potion(k: int) -> Array:
-	if k < 0 or k >= potions.size():
-		return []
-	var id: String = potions[k]
-	potions.remove_at(k)
-	var pt: Dictionary = Content.POTIONS[id]
-	var ev: Array = [{"t": "potion", "potion": id}]
-	if pt.has("battle"):
-		for key in pt.battle:
-			buffs[key] = int(buffs.get(key, 0)) + int(pt.battle[key])
-	if pt.has("breed"):
-		buffs.breed = int(buffs.get("breed", 0)) + int(pt.breed)
-	if pt.has("mend"):
-		var before := hp
-		hp = mini(hp_max(), hp + int(pt.mend))
-		ev.append({"t": "mended", "amount": hp - before})
-	return ev
-
-
-## A potion found: kept if there is a free place.
-func add_potion(id: String) -> bool:
-	if potions.size() >= Content.POTION_SLOTS:
-		return false
-	potions.append(id)
-	return true
-
-
-func _any_potion(rng: RandomNumberGenerator) -> String:
-	var kinds: Array = Content.POTIONS.keys()
-	return kinds[rng.randi() % kinds.size()]
-
-
 ## A building put up at p (whatever was there pulled down), at level 1. The homeland's hit points follow its walls.
 func build(p: Vector2i, kind: String) -> void:
 	var max_was := hp_max()
-	var b := {"id": _id(), "kind": kind, "level": 1, "wait": 0, "affixes": []}
-	if kind == "lab":
-		b.wait = int(Content.level(kind, 1).brew)
+	var b := {"id": _id(), "kind": kind, "level": 1, "affixes": []}
 	buildings[p] = b
 	hp = mini(hp_max(), hp + maxi(0, hp_max() - max_was))
 
 
-## A copy to try a good or a potion on (the forecast): the same homeland, nothing shared.
+## A copy to try a good on (the forecast): the same homeland, nothing shared.
 func clone() -> Home:
 	var h := Home.new(RandomNumberGenerator.new())
 	h.region = region
@@ -586,12 +523,10 @@ func clone() -> Home:
 	h.genes = genes
 	h.alien = alien
 	h.hp = hp
-	h.potions = potions.duplicate()
 	h.relics = relics.duplicate()
 	h.shelf = shelf.duplicate(true)
 	h.stash = stash.duplicate(true)
 	h.rerolls = rerolls
-	h.buffs = buffs.duplicate(true)
 	h.next_id = next_id
 	return h
 
@@ -639,11 +574,11 @@ func income_genes() -> int:
 
 
 func biomass_max() -> int:
-	return BIOMASS_MAX + _sum("store")
+	return BIOMASS_MAX
 
 
 func genes_max() -> int:
-	return GENES_MAX + _sum("store_genes")
+	return GENES_MAX
 
 
 func hp_max() -> int:
