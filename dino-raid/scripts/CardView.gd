@@ -1,9 +1,10 @@
 class_name CardView
 extends Control
-## An offer on the shop's shelf, drawn as a card (GAME-DESIGN 15): a dark frame edged in its rarity's metal, a picture
-## of what it builds or does (blocks for now), its price on a gold coin and what else it costs (genes, alien genes)
-## beside it, its name on a band and what it does on a parchment slip. A place on the shelf already bought from shows
-## an empty frame.
+## An offer on the shop's shelf, drawn as a card (GAME-DESIGN 15, 17): a dark frame edged in its rarity's metal, a
+## picture of what it builds or does (blocks for now), its price on a gold coin and what else it costs (genes, alien
+## genes) beside it, its name on a band and what it does on a parchment slip. A good already had -- kept in the stash,
+## given, or carried from the last place -- shows a green token instead of a price: 存, 送, 带. A place on the shelf
+## already bought from shows an empty frame.
 
 signal clicked(view: CardView)
 signal hovered(view: CardView, on: bool)
@@ -28,15 +29,26 @@ static var _grounds := {}
 var ci: Dictionary = {}
 var c: Dictionary = {}
 var sold := false
+var kept := false                 # had already (in the stash): no price
 var affordable := true
 var chosen := false
 var _hover := false
 
 
-func setup(p_ci: Dictionary) -> void:
+func setup(p_ci: Dictionary, p_kept := false) -> void:
 	ci = p_ci
+	kept = p_kept
 	c = Content.offer(ci)
 	_frame()
+
+
+## The token a good already had shows instead of a price: "" for one still to buy.
+func token() -> String:
+	if ci.has("packed"):
+		return "带"
+	if ci.get("gift", false):
+		return "送"
+	return "存" if kept else ""
 
 
 ## A place on the shelf already bought from.
@@ -121,8 +133,11 @@ func _draw() -> void:
 	var band := Rect2(6, 116, SIZE.x - 12, 24)
 	draw_rect(band, Color(0.05, 0.045, 0.04))
 	draw_line(band.position, Vector2(band.end.x, band.position.y), Color(metal, 0.7), 1.0)
-	var name_col := Color(0.72, 1.0, 0.62) if ci.get("up", false) else Color(0.97, 0.93, 0.84)
-	_text(Vector2(SIZE.x * 0.5, band.position.y + 18), c.name, 16, name_col, Fonts.serif(700), HORIZONTAL_ALIGNMENT_CENTER)
+	var name_size := 16
+	while name_size > 10 and Fonts.serif(700).get_string_size(c.name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > band.size.x - 6:
+		name_size -= 1
+	_text(Vector2(SIZE.x * 0.5, band.position.y + 17), c.name, name_size, Color(0.97, 0.93, 0.84), Fonts.serif(700),
+		HORIZONTAL_ALIGNMENT_CENTER)
 	var slip := Rect2(10, 144, SIZE.x - 20, 50)
 	var paper := StyleBoxFlat.new()
 	paper.bg_color = Color(0.9, 0.85, 0.72)
@@ -133,11 +148,11 @@ func _draw() -> void:
 	_text(Vector2(SIZE.x * 0.5, SIZE.y - 6), "%s · %s" % [Content.TYPES[c.type], RARITY[int(c.rarity)]], 10,
 		Color(metal, 0.9), Fonts.serif(600), HORIZONTAL_ALIGNMENT_CENTER)
 	var coin := Vector2(18, 18)
-	if ci.get("gift", false):
-		# A gift: a green token, free.
+	if token() != "":
+		# Had already: a green token, nothing to pay.
 		draw_circle(coin, 17.0, Color(0.05, 0.1, 0.04))
 		draw_circle(coin, 14.5, Color(0.45, 0.85, 0.4) if affordable else Color(0.4, 0.45, 0.4))
-		_text(coin + Vector2(0, 6.5), "送", 17, Color(0.08, 0.2, 0.05), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER)
+		_text(coin + Vector2(0, 6.5), token(), 17, Color(0.08, 0.2, 0.05), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER)
 		_extras(full)
 		return
 	var gold := Color(1.0, 0.82, 0.25) if affordable else Color(0.5, 0.47, 0.42)
@@ -156,7 +171,7 @@ func _draw() -> void:
 func _extras(full: Rect2) -> void:
 	var x := SIZE.x - 10.0
 	for extra in [["alien", "外星", ALIEN], ["genes", "基因", GENES]]:
-		if ci.get("gift", false):
+		if token() != "":
 			break
 		var n := int(c.get(extra[0], 0))
 		if n <= 0:
@@ -184,13 +199,31 @@ func _picture(r: Rect2) -> void:
 			var b: Dictionary = Content.BUILDINGS[c.builds]
 			var col: Color = b.color
 			if b.has("nest"):
+				var sp := Content.species(b.nest, c.get("affixes", []))
 				_block(mid + Vector2(0, 8), 30.0, 34.0, col)
-				_block(mid + Vector2(38, 22), 12.0, 12.0, Content.UNITS[b.nest].color)
+				_block(mid + Vector2(38, 22), 12.0, 12.0, Content.UNITS[sp.kind].color)
+				for k in c.get("affixes", []).size():
+					draw_circle(mid + Vector2(-34, 24 - k * 13), 5.5, Content.AFFIXES[c.affixes[k]].color)
+					draw_arc(mid + Vector2(-34, 24 - k * 13), 5.5, 0.0, TAU, 16, Color(0, 0, 0, 0.6), 1.0, true)
 			else:
 				match c.builds:
-					"pool":
+					"pool", "spore_pool", "hot_spring":
 						_block(mid + Vector2(0, 14), 52.0, 14.0, col.darkened(0.4))
 						draw_rect(Rect2(mid + Vector2(-24, 2), Vector2(48, 6)), col.lightened(0.2))
+						if c.builds == "spore_pool":
+							for k in 3:
+								draw_circle(mid + Vector2(-14 + k * 14, -4 - (k % 2) * 6), 6.0, Color(0.78, 0.82, 0.38))
+						elif c.builds == "hot_spring":
+							for k in 3:
+								draw_circle(mid + Vector2(-12 + k * 12, -12 - k * 8), 6.0 + k, Color(1, 1, 1, 0.55))
+					"forge":
+						_block(mid + Vector2(-4, 12), 40.0, 28.0, Color(0.3, 0.26, 0.24))
+						draw_rect(Rect2(mid + Vector2(-12, 12), Vector2(14, 10)), Color(1.0, 0.55, 0.15))
+						draw_rect(Rect2(mid + Vector2(8, -24), Vector2(9, 24)), col.darkened(0.3))
+					"vine_wall":
+						_block(mid + Vector2(0, 10), 56.0, 24.0, col)
+						for k in 5:
+							draw_circle(mid + Vector2(-24 + k * 12, 4 + (k % 2) * 8), 5.0, Color(0.35, 0.68, 0.28))
 					"sampler":
 						_block(mid + Vector2(0, 20), 26.0, 12.0, col.darkened(0.3))
 						draw_rect(Rect2(mid + Vector2(-5, -22), Vector2(10, 36)), col)
@@ -243,6 +276,13 @@ func _picture(r: Rect2) -> void:
 				"plasma":
 					draw_circle(mid + Vector2(0, -16), 12.0, Color(col, 0.35))
 					draw_circle(mid + Vector2(0, -16), 7.0, col)
+				"poison":
+					draw_colored_polygon(PackedVector2Array([mid + Vector2(14, 0), mid + Vector2(40, -26), mid + Vector2(22, 4)]), col)
+					draw_circle(mid + Vector2(40, -26), 3.5, col.darkened(0.3))
+				"flame":
+					draw_colored_polygon(PackedVector2Array([mid + Vector2(-12, -2), mid + Vector2(0, -34), mid + Vector2(12, -2)]), col)
+					draw_colored_polygon(PackedVector2Array([mid + Vector2(-6, -2), mid + Vector2(0, -20), mid + Vector2(6, -2)]),
+						Color(1.0, 0.85, 0.3))
 		"potion":
 			var col: Color = Content.POTIONS[c.potion].color
 			draw_circle(mid + Vector2(0, 10), 22.0, col)

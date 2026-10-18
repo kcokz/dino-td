@@ -1,59 +1,49 @@
 class_name HomeView
 extends Node3D
-## The homeland on screen (GAME-DESIGN 14): its plots -- the rows not yet opened still wild -- a block for each
-## building, taller or bigger for each level, its affixes shown as little blocks on a nest's roof; and to the south
-## the yard, where this round's army stands: each unit hatched from its nest's door, gone with the battle.
+## The homeland on screen (GAME-DESIGN 17): its plots on the ground of the place the ark has landed in -- the special
+## ones (a pond, an old tree, a vein of ore, a pool of lava) as they are -- a block for each building, taller or bigger
+## for each level, its affixes as little blocks on a nest's roof and a crest of the new species' colour when they make
+## one; to the south the yard, where this round's army stands: each unit hatched from its nest's door, gone with the
+## battle. When a place is held the ark comes down: what is packed rises into it, the rest is left; in the next place
+## it sets down what it brings.
 
 const TILE := 4.0
 const PLOT := 3.6
 const PLOT_TOP := 0.15
-const YARD_Z := 12.5
+const YARD_Z := 11.0
 const SLOT := 1.6
 const PER_ROW := 12
 const NOWHERE := Vector2i(-1, -1)
-const PLOT_COLOUR := Color(0.62, 0.53, 0.39)
-const WILD_COLOUR := Color(0.29, 0.37, 0.22)
+const ARK_AT := Vector3(0, 8.5, 2.0)    # where the ark hangs over the homeland while it loads and unloads
 
 var home: Home
 var tags: Tags
-var tints := {}                   # plot -> Color, lit by Game (where a held card can go)
+var tints := {}                   # plot -> Color, lit by Game (where a good taken up can go)
 var _plot_mats := {}              # plot -> StandardMaterial3D
-var _wild := {}                   # plot -> Node3D: the brush on a plot not yet opened
+var _ground := {}                 # plot -> Node3D: what stands on special ground
 var _buildings := {}              # plot -> {node, look}
 var _units := {}                  # army unit id -> Node3D
 var _order: Array = []            # army unit ids, as they stand in the yard
+var _ark: Node3D
 
 
 func setup(p_home: Home) -> void:
 	home = p_home
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 5
 	for y in Home.ROWS:
 		for x in Home.COLS:
 			var p := Vector2i(x, y)
-			var slab := Blocks.box(Vector3(PLOT, 0.1, PLOT), PLOT_COLOUR, plot_pos(p) + Vector3(0, PLOT_TOP - 0.05, 0))
+			var slab := Blocks.box(Vector3(PLOT, 0.1, PLOT), Color.WHITE, plot_pos(p) + Vector3(0, PLOT_TOP - 0.05, 0))
 			var m := StandardMaterial3D.new()
 			m.roughness = 0.9
 			slab.material_override = m
 			_plot_mats[p] = m
 			add_child(slab)
-			if not home.is_open(p):
-				m.albedo_color = WILD_COLOUR
-				var brush := Node3D.new()
-				for k in 3:
-					var h := rng.randf_range(0.4, 1.1)
-					var bush := Blocks.box(Vector3(rng.randf_range(0.6, 1.2), h, rng.randf_range(0.6, 1.2)),
-						Color(0.2, 0.33, 0.17).lerp(Color(0.32, 0.42, 0.22), rng.randf()),
-						Vector3(rng.randf_range(-1.1, 1.1), PLOT_TOP + h * 0.5, rng.randf_range(-1.1, 1.1)))
-					bush.rotation.y = rng.randf() * TAU
-					brush.add_child(bush)
-				brush.position = plot_pos(p)
-				add_child(brush)
-				_wild[p] = brush
-			else:
-				m.albedo_color = PLOT_COLOUR
 	# A fence along the yard's north side.
 	add_child(Blocks.box(Vector3(PER_ROW * SLOT + 1.0, 0.5, 0.12), Color(0.45, 0.33, 0.2), Vector3(0, 0.3, YARD_Z - SLOT * 0.5 - 0.5)))
+	_ark = _make_ark()
+	_ark.visible = false
+	add_child(_ark)
+	lay_ground()
 	refresh_buildings(false)
 
 
@@ -76,11 +66,13 @@ static func plot_at(w: Vector3) -> Vector2i:
 	return Vector2i(x, y)
 
 
-## The top of the building at p (where words go over it).
+## The top of the building at p (where words go over it) -- or of the tree standing there.
 func top(p: Vector2i) -> Vector3:
 	var h := 0.6
 	if _buildings.has(p):
 		h = float(_buildings[p].node.get_meta("height", 1.5))
+	elif home.terrain.get(p, "") == "tree":
+		h = 5.0
 	return plot_pos(p) + Vector3(0, PLOT_TOP + h, 0)
 
 
@@ -88,21 +80,79 @@ func unit_node(id: String) -> Node3D:
 	return _units.get(id)
 
 
-# -- Land ------------------------------------------------------------------------------------------------------
+# -- The ground -------------------------------------------------------------------------------------------------
 
-## Rows opened since: their brush cleared, their ground turned.
-func open_rows() -> void:
-	for p in _wild.keys():
-		if not home.is_open(p):
+## A plot's own colour: its special ground's, or the place's tilled earth.
+func plot_colour(p: Vector2i) -> Color:
+	var t: String = home.terrain.get(p, "")
+	if t != "":
+		return Content.TERRAIN[t].color
+	return (Content.LEVELS[home.region].ground as Color).lightened(0.22)
+
+
+## The ground laid for the place the ark is in: each plot its colour, the special ones dressed -- water and stones in
+## a pond, a great tree, nuggets in a vein of ore, a crust on the lava.
+func lay_ground() -> void:
+	for n in _ground.values():
+		n.queue_free()
+	_ground.clear()
+	for p in _plot_mats:
+		var t: String = home.terrain.get(p, "")
+		if t == "":
 			continue
-		var brush: Node3D = _wild[p]
-		_wild.erase(p)
-		var tw := brush.create_tween()
-		tw.tween_property(brush, "scale", Vector3(1, 0.02, 1), 0.5).set_ease(Tween.EASE_IN)
-		tw.tween_callback(brush.queue_free)
+		var node := Node3D.new()
+		node.position = plot_pos(p) + Vector3(0, PLOT_TOP, 0)
+		var col: Color = Content.TERRAIN[t].color
+		var k: int = p.x * 7 + p.y * 3
+		match t:
+			"pond":
+				var water := Blocks.box(Vector3(2.7, 0.04, 2.7), col, Vector3(0, 0.02, 0))
+				water.material_override = Blocks.glow(col, 0.3)
+				node.add_child(water)
+				for i in 6:
+					var a: float = TAU * i / 6.0 + k
+					node.add_child(Blocks.box(Vector3(0.45, 0.22, 0.4), Color(0.55, 0.55, 0.52), Vector3(cos(a) * 1.65, 0.1, sin(a) * 1.65)))
+			"tree":
+				node.add_child(Blocks.box(Vector3(0.75, 3.4, 0.75), Color(0.36, 0.25, 0.16), Vector3(0, 1.7, 0)))
+				var top1 := Blocks.box(Vector3(3.2, 1.4, 3.2), Color(0.17, 0.38, 0.16), Vector3(0, 3.7, 0))
+				top1.rotation.y = 0.3 + k
+				node.add_child(top1)
+				var top2 := Blocks.box(Vector3(2.1, 1.0, 2.1), Color(0.24, 0.48, 0.2), Vector3(0.2, 4.8, -0.1))
+				top2.rotation.y = 0.8 + k
+				node.add_child(top2)
+				for side in [-1.0, 1.0]:
+					var foot := Blocks.box(Vector3(1.0, 0.3, 0.3), Color(0.36, 0.25, 0.16), Vector3(side * 0.6, 0.15, 0.2 * side))
+					foot.rotation.y = side * 0.6
+					node.add_child(foot)
+			"ore":
+				for i in 5:
+					var a: float = TAU * i / 5.0 + k * 0.7
+					var r := 0.7 + 0.5 * float((k + i) % 3) / 2.0
+					var nug := Blocks.box(Vector3(0.38, 0.3, 0.32), Color(1.0, 0.78, 0.25), Vector3(cos(a) * r, 0.1, sin(a) * r))
+					nug.material_override = Blocks.glow(Color(1.0, 0.78, 0.25), 0.5)
+					nug.rotation.y = a
+					node.add_child(nug)
+				node.add_child(Blocks.box(Vector3(0.9, 0.4, 0.7), Color(0.3, 0.26, 0.22), Vector3(-0.9, 0.18, 0.9)))
+			"lava":
+				for i in 3:
+					var crust := Blocks.box(Vector3(0.9, 0.12, 0.7), Color(0.16, 0.12, 0.1), Vector3(-1.0 + i * 1.0, 0.06, (i - 1) * 0.8 * (1 if k % 2 == 0 else -1)))
+					crust.rotation.y = i + k
+					node.add_child(crust)
+		add_child(node)
+		_ground[p] = node
+	paint()
+
+
+## Lights the plots in tints; the rest their own colour (lava glows of itself).
+func paint() -> void:
+	for p in _plot_mats:
 		var m: StandardMaterial3D = _plot_mats[p]
-		var turn := create_tween()
-		turn.tween_property(m, "albedo_color", PLOT_COLOUR, 0.8)
+		var base := plot_colour(p)
+		var lit := tints.has(p)
+		m.albedo_color = tints[p] if lit else base
+		m.emission_enabled = lit or home.terrain.get(p, "") == "lava"
+		m.emission = (tints[p] as Color) * 0.35 if lit else base
+		m.emission_energy_multiplier = 1.0 if lit else 0.55
 
 
 # -- Buildings -------------------------------------------------------------------------------------------------
@@ -138,9 +188,8 @@ func _building(kind: String, lv: int, affixes: Array) -> Node3D:
 	var c: Color = info.color
 	var height := 0.0
 	if info.has("nest"):
-		# Tiers: one, two from level 3, three at level 5; a door; its affixes on the roof.
-		var tiers := 1 + (1 if lv >= 3 else 0) + (1 if lv >= 5 else 0)
-		for i in tiers:
+		# A tier for each level; a door; its affixes on the roof; a crest when they make a new species.
+		for i in lv:
 			var w := 3.0 - i * 0.6
 			var h := 1.1 if i == 0 else 0.7
 			root.add_child(Blocks.box(Vector3(w, h, w), c.lightened(i * 0.08), Vector3(0, height + h * 0.5, 0)))
@@ -149,21 +198,41 @@ func _building(kind: String, lv: int, affixes: Array) -> Node3D:
 		root.add_child(Blocks.box(Vector3(0.9, 0.8, 0.08), Color(0.12, 0.09, 0.07), Vector3(0, 0.4, 1.52)))
 		for i in affixes.size():
 			var ac: Color = Content.AFFIXES[affixes[i]].color
-			var cube := Blocks.box(Vector3(0.42, 0.42, 0.42), ac, Vector3(-0.55 + i * 0.55, height + 0.21, 0.4))
-			if affixes[i] == "plasma":
+			var cube := Blocks.box(Vector3(0.42, 0.42, 0.42), ac, Vector3(-0.55 + (i % 3) * 0.55, height + 0.21, 0.4 - (i / 3) * 0.55))
+			if affixes[i] in ["plasma", "flame"]:
 				cube.material_override = Blocks.glow(ac)
 			root.add_child(cube)
 		if not affixes.is_empty():
 			height += 0.42
+		var sp := Content.species(info.nest, affixes)
+		if not sp.used.is_empty():
+			var sc: Color = Content.UNITS[sp.kind].color
+			root.add_child(Blocks.box(Vector3(0.12, 0.9, 0.12), Color(0.2, 0.16, 0.12), Vector3(0.95, height + 0.45, -0.7)))
+			var crest := Blocks.ball(0.42, sc, Vector3(0.95, height + 1.1, -0.7))
+			crest.material_override = Blocks.glow(sc, 1.1)
+			root.add_child(crest)
+			height += 0.6
 	else:
 		match kind:
-			"pool":
+			"pool", "spore_pool", "hot_spring":
 				var rim := 0.35 + 0.08 * lv
 				root.add_child(Blocks.box(Vector3(3.2, rim, 3.2), c.darkened(0.45), Vector3(0, rim * 0.5, 0)))
 				var water := Blocks.box(Vector3(2.8, 0.06, 2.8), c, Vector3(0, rim + 0.01, 0))
 				water.material_override = Blocks.glow(c, 0.35)
 				root.add_child(water)
 				height = rim
+				if kind == "spore_pool":
+					for k in 2 + lv:
+						root.add_child(Blocks.ball(0.32, Color(0.78, 0.82, 0.38), Vector3(-0.9 + k * 1.8 / (1 + lv), rim + 0.2,
+							0.5 if k % 2 == 0 else -0.5)))
+					height = rim + 0.5
+				elif kind == "hot_spring":
+					for k in 1 + lv:
+						var puff := Blocks.box(Vector3(0.5, 0.5, 0.5), Color(0.95, 0.93, 0.9), Vector3(-0.7 + k * 0.7, rim + 0.5 + k * 0.45, 0.2 * k))
+						puff.material_override = Blocks.glow(Color(0.95, 0.93, 0.9), 0.4)
+						puff.rotation.y = k
+						root.add_child(puff)
+					height = rim + 1.0 + lv * 0.45
 			"sampler":
 				var tall := 1.6 + 0.3 * lv
 				root.add_child(Blocks.box(Vector3(1.8, 0.5, 1.8), c.darkened(0.3), Vector3(0, 0.25, 0)))
@@ -172,13 +241,22 @@ func _building(kind: String, lv: int, affixes: Array) -> Node3D:
 				dish.rotation.x = 0.5
 				root.add_child(dish)
 				height = tall + 0.4
-			"power":
+			"mine":
 				var h := 1.0 + 0.2 * lv
 				root.add_child(Blocks.box(Vector3(2.4, h, 2.4), Color(0.3, 0.3, 0.32), Vector3(0, h * 0.5, 0)))
 				var core := Blocks.cylinder(0.55, 0.8, c, Vector3(0, h + 0.4, 0))
 				core.material_override = Blocks.glow(c, 1.4)
 				root.add_child(core)
 				height = h + 0.8
+			"forge":
+				var h := 1.2 + 0.2 * lv
+				root.add_child(Blocks.box(Vector3(2.6, h, 2.2), Color(0.28, 0.24, 0.22), Vector3(0, h * 0.5, 0)))
+				var mouth := Blocks.box(Vector3(1.0, 0.6, 0.08), Color(1.0, 0.5, 0.15), Vector3(0, 0.45, 1.12))
+				mouth.material_override = Blocks.glow(Color(1.0, 0.5, 0.15), 2.0)
+				root.add_child(mouth)
+				var chimney := 1.0 + 0.3 * lv
+				root.add_child(Blocks.box(Vector3(0.6, chimney, 0.6), c.darkened(0.3), Vector3(0.8, h + chimney * 0.5, -0.5)))
+				height = h + chimney
 			"gym":
 				var post := 1.3 + 0.2 * lv
 				root.add_child(Blocks.box(Vector3(3.0, 0.3, 3.0), c, Vector3(0, 0.15, 0)))
@@ -209,14 +287,98 @@ func _building(kind: String, lv: int, affixes: Array) -> Node3D:
 				root.add_child(Blocks.box(Vector3(3.2, 0.2, 2.5), c.darkened(0.35), Vector3(0, h + 0.1, 0)))
 				root.add_child(Blocks.box(Vector3(1.0, 0.8, 0.08), c.darkened(0.55), Vector3(0, 0.4, 1.12)))
 				height = h + 0.2
-			"wall":
+			"wall", "vine_wall":
 				var h := 0.9 + 0.3 * lv
 				root.add_child(Blocks.box(Vector3(3.4, h, 1.2), c, Vector3(0, h * 0.5, 0)))
 				for i in 4:
 					root.add_child(Blocks.box(Vector3(0.5, 0.4, 1.2), c.darkened(0.2), Vector3(-1.2 + i * 0.8, h + 0.2, 0)))
+				if kind == "vine_wall":
+					for i in 3 + lv:
+						var leaf := Blocks.box(Vector3(0.55, 0.45, 0.22), Color(0.3, 0.62, 0.25),
+							Vector3(-1.35 + i * 2.7 / (2 + lv), 0.35 + fmod(i * 0.37, 1.0) * (h - 0.3), 0.64))
+						leaf.rotation.z = i * 0.7
+						root.add_child(leaf)
 				height = h + 0.4
 	root.set_meta("height", height)
 	return root
+
+
+# -- The ark --------------------------------------------------------------------------------------------------------
+
+## The gene ark: a long hull, a band of light, the vault on top, an engine at each end.
+func _make_ark() -> Node3D:
+	var ark := Node3D.new()
+	ark.add_child(Blocks.box(Vector3(12, 2.2, 5), Color(0.55, 0.58, 0.62), Vector3.ZERO))
+	ark.add_child(Blocks.box(Vector3(9, 1.2, 4), Color(0.42, 0.45, 0.5), Vector3(0, 1.6, 0)))
+	var band := Blocks.box(Vector3(12.1, 0.25, 5.1), Color(0.4, 0.95, 0.8), Vector3(0, -0.3, 0))
+	band.material_override = Blocks.glow(Color(0.4, 0.95, 0.8), 1.5)
+	ark.add_child(band)
+	var vault := Blocks.dome(1.6, Color(0.5, 0.9, 0.8), Vector3(0, 2.2, 0))
+	vault.material_override = Blocks.glow(Color(0.5, 0.9, 0.8), 0.6)
+	ark.add_child(vault)
+	for sx in [-1.0, 1.0]:
+		ark.add_child(Blocks.cylinder(0.8, 1.2, Color(0.3, 0.3, 0.33), Vector3(sx * 4.5, -1.6, 0)))
+		var jet := Blocks.cylinder(0.6, 1.0, Color(0.5, 0.85, 1.0), Vector3(sx * 4.5, -2.6, 0), 0.0)
+		jet.rotation.x = PI
+		jet.material_override = Blocks.glow(Color(0.5, 0.85, 1.0), 2.5)
+		ark.add_child(jet)
+	return ark
+
+
+## The ark comes down over the homeland.
+func ark_down() -> void:
+	_ark.visible = true
+	_ark.position = Vector3(0, 60, -20)
+	var tw := create_tween()
+	tw.tween_property(_ark, "position", ARK_AT, 1.4).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	await tw.finished
+
+
+## The ark goes up and away.
+func ark_up() -> void:
+	var tw := create_tween()
+	tw.tween_property(_ark, "position", Vector3(0, 70, -40), 1.3).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	await tw.finished
+	_ark.visible = false
+
+
+## Loading up: the buildings at `taken` rise into the ark; the rest are left behind -- they sink away.
+func load_up(taken: Array) -> void:
+	if _buildings.is_empty():
+		return
+	var tw := create_tween().set_parallel()
+	var k := 0
+	for p in _buildings:
+		var node: Node3D = _buildings[p].node
+		if p in taken:
+			tw.tween_property(node, "position", _ark.position + Vector3(0, -1.0, 0), 0.9).set_delay(k * 0.15) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+			tw.tween_property(node, "scale", Vector3.ONE * 0.15, 0.9).set_delay(k * 0.15)
+			k += 1
+		else:
+			tw.tween_property(node, "scale", Vector3(1, 0.04, 1), 1.0).set_delay(0.4)
+	await tw.finished
+	for p in _buildings:
+		_buildings[p].node.queue_free()
+	_buildings.clear()
+
+
+## Setting down: each building there is now drops from the ark to its plot.
+func set_down() -> void:
+	refresh_buildings(false)
+	if _buildings.is_empty():
+		return
+	var tw := create_tween().set_parallel()
+	var k := 0
+	for p in _buildings:
+		var node: Node3D = _buildings[p].node
+		var to := node.position
+		node.position = _ark.position + Vector3(0, -1.0, 0)
+		node.scale = Vector3.ONE * 0.15
+		tw.tween_property(node, "position", to, 0.8).set_delay(k * 0.25).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(node, "scale", Vector3.ONE, 0.5).set_delay(k * 0.25)
+		k += 1
+	await tw.finished
 
 
 # -- The yard ------------------------------------------------------------------------------------------------------
@@ -283,7 +445,7 @@ func _look(u: Dictionary) -> String:
 
 func _new_unit(u: Dictionary, look: String) -> Node3D:
 	var s := Content.unit_stats(u)
-	var n := Blocks.creature(float(s.size), Content.UNITS[u.kind].color, false, u.affixes)
+	var n := Blocks.creature(float(s.size), Content.UNITS[u.kind].color, false, u.affixes, u.kind)
 	n.set_meta("look", look)
 	add_child(n)
 	_units[u.id] = n
@@ -312,18 +474,6 @@ func _flash(n: Node3D) -> void:
 	m.emission_energy_multiplier = 1.2
 	var tw := n.create_tween()
 	tw.tween_property(m, "emission_energy_multiplier", 0.0, 0.5)
-
-
-## Lights the plots in tints; the rest as they are (the wild ones never lit).
-func paint() -> void:
-	for p in _plot_mats:
-		if not home.is_open(p) or _wild.has(p):
-			continue
-		var m: StandardMaterial3D = _plot_mats[p]
-		var c: Color = tints.get(p, PLOT_COLOUR)
-		m.albedo_color = c
-		m.emission_enabled = tints.has(p)
-		m.emission = c * 0.35
 
 
 # -- Pointing ------------------------------------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 class_name Tags
 extends Control
-## Words and marks drawn over the blocks each frame (GAME-DESIGN 14): over each building its level as dots, over a nest
-## how many it hatches this round (and how many the biomass could not pay for); while a card is held over a plot,
-## what it would change for each building -- "+1 只", "血 +25%"; in a battle each fighter's health; numbers that
+## Words and marks drawn over the blocks each frame (GAME-DESIGN 14, 17): over each building its level as dots, over a
+## nest how many it hatches this round -- and of what species, when it has evolved -- (and how many the biomass could
+## not pay for); while a good is held over a plot, what it would change for each building -- "+1 只", "血 +25%";
+## while packing, whether the ark takes each building or leaves it; in a battle each fighter's health; numbers that
 ## rise off what was hit. What a building is and does, the panel says when it is pointed at.
 
 const OURS := Color(0.47, 0.86, 0.36)
@@ -52,12 +53,15 @@ func _draw() -> void:
 
 
 func _home(cam: Camera3D) -> void:
+	if game.phase == Game.Phase.MOVE:
+		return
 	var home: Home = game.home
 	var hv: HomeView = game.home_view
 	var made := {}
 	for u in home.army():
 		made[u.nest] = int(made.get(u.nest, 0)) + 1
 	var effects: Dictionary = game.effects
+	var packing: bool = game.phase == Game.Phase.PACK
 	for p in home.buildings:
 		var b: Dictionary = home.buildings[p]
 		var at3 := hv.top(p) + Vector3.UP * 0.25
@@ -66,13 +70,20 @@ func _home(cam: Camera3D) -> void:
 		var at := cam.unproject_position(at3)
 		_dots(at + Vector2(0, -6), int(b.level))
 		var y := -22.0
+		if packing:
+			var taken: bool = game.pack_plots.has(p)
+			_text(at + Vector2(0, y), "带走" if taken else "留下", GOLD if taken else Color(0.72, 0.7, 0.66), 18 if taken else 14,
+				Fonts.serif(900))
+			continue
 		if Content.is_nest(b.kind):
 			var want := home.count(p) + int(home.buffs.get("breed", 0))
 			var got := int(made.get(p, 0))
-			_text(at + Vector2(0, y), "孵 %d" % got, GOLD, 15, Fonts.serif(800))
+			var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
+			var col: Color = GOLD if sp.used.is_empty() else (Content.UNITS[sp.kind].color as Color).lightened(0.45)
+			_text(at + Vector2(0, y), "孵 %d" % got, col, 15, Fonts.serif(900))
 			y -= 17.0
 			if got < want:
-				_text(at + Vector2(0, y), "缺生物质，少 %d" % (want - got), BAD, 13, Fonts.serif(800))
+				_text(at + Vector2(0, y), "少孵 %d" % (want - got), BAD, 14, Fonts.serif(900))
 				y -= 16.0
 		for line in effects.get(p, []):
 			var s: String = line

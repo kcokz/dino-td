@@ -1,8 +1,9 @@
 class_name FightView
 extends Node3D
-## A battle on screen (GAME-DESIGN 14): a block for every fighter where Fight has it, facing the other side, with what
-## its affixes grew on it; a flier flies. A blow flashes what it hits and its number flies off; a long reach draws its
-## shot; a heal glows green; the fallen tip over and shrink away.
+## A battle on screen (GAME-DESIGN 14, 17): a block for every fighter where Fight has it, facing the other side, with
+## what its affixes grew on it and what marks its kind; a flier flies. A blow flashes what it hits and its number flies
+## off; a long reach draws its shot; a heal glows green; the fallen tip over and shrink away -- one that bursts throws
+## out a ball of fire, one that breaks lets out the smaller ones it held.
 
 const OUR_SHOT := Color(1.0, 0.92, 0.55)
 const THEIR_SHOT := Color(0.85, 0.45, 1.0)
@@ -17,12 +18,17 @@ func setup(f: Fight) -> void:
 	clear()
 	fight = f
 	for u in f.units:
-		var c: Color = (Content.UNITS if u.side == "ours" else Content.ENEMIES)[u.kind].color
-		var n := Blocks.creature(float(u.size), c, u.side == "theirs", u.affixes)
-		n.rotation.y = PI * 0.5 if u.side == "ours" else -PI * 0.5
-		n.position = place(u)
-		add_child(n)
-		_nodes[u.id] = n
+		_add(u)
+
+
+func _add(u: Dictionary) -> Node3D:
+	var c: Color = (Content.UNITS if u.side == "ours" else Content.ENEMIES)[u.kind].color
+	var n := Blocks.creature(float(u.size), c, u.side == "theirs", u.affixes, u.kind)
+	n.rotation.y = PI * 0.5 if u.side == "ours" else -PI * 0.5
+	n.position = place(u)
+	add_child(n)
+	_nodes[u.id] = n
+	return n
 
 
 func clear() -> void:
@@ -91,6 +97,32 @@ func show_events(ev: Array) -> void:
 				var n: Node3D = _nodes.get(e.id)
 				if n:
 					_fall(n)
+			"burst":
+				_burst(World.ARENA + Vector3((e.at as Vector2).x, World.GROUND_TOP + 0.6, (e.at as Vector2).y), float(e.radius))
+			"spawn":
+				var n := _add(e.unit)
+				n.scale = Vector3.ONE * 0.2
+				var tw := n.create_tween()
+				tw.tween_property(n, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## A burst: a ball of fire swelling to its reach and gone.
+func _burst(at: Vector3, radius: float) -> void:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(1.0, 0.55, 0.15, 0.75)
+	var ball := Blocks.ball(1.0, Color.WHITE, at)
+	ball.material_override = m
+	ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ball.scale = Vector3.ONE * 0.2
+	add_child(ball)
+	var tw := ball.create_tween().set_parallel()
+	tw.tween_property(ball, "scale", Vector3.ONE * radius, 0.3).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.45)
+	tw.chain().tween_callback(ball.queue_free)
+	if tags:
+		tags.float_text(at + Vector3.UP * 1.5, "炸！", Color(1.0, 0.6, 0.2), 22)
 
 
 ## A short-reach blow: the body jumps at the foe and back.
