@@ -1,14 +1,16 @@
 class_name Fight
 extends RefCounted
-## One battle outside the homeland, fought by itself (GAME-DESIGN 14): this round's army against a wave, each going
+## One battle outside the homeland, fought by itself (GAME-DESIGN 17): this round's army against a wave, each going
 ## for the nearest foe -- a flier for the one furthest back -- and hitting it once it is in reach, until one side is
-## gone or the time is up. Worked out in fixed steps with nothing random, so the same two sides always end the same
-## way; every blow struck in a step lands at its end, so no side strikes first.
+## gone or the time is up. Some fall hard: they burst, harming the other side round them, or break into smaller ones.
+## Worked out in fixed steps with nothing random, so the same two sides always end the same way; every blow struck in
+## a step lands at its end, so no side strikes first.
 ##
 ## Plain data and rules, nothing on screen. A fighter:
-##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z),
-##    hp, max, atk, armor, every, range, speed, size, splash, heal, dive, harm, cool}
-## Events of a step: hit {from, to, dmg}, heal {from, to, amount}, die {id}.
+##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z), hp, max,
+##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, harm, cool}
+## Events of a step: hit {from, to, dmg}, heal {from, to, amount}, die {id}, burst {id, at, radius},
+## spawn {unit: the new fighter}.
 
 const STEP := 0.1
 const LIMIT := 45.0               # seconds; the battle is lost if theirs still stand then
@@ -27,9 +29,9 @@ var _next := 1
 static func make(army: Array, buffs: Dictionary, wave: Array, power: float) -> Fight:
 	var f := Fight.new()
 	for u in army:
-		f._add("ours", u.kind, Content.unit_stats(u, buffs), str(u.id), u.get("affixes", []))
+		f._add("ours", u.kind, Content.unit_stats(u, buffs), str(u.id), u.get("affixes", []), 1.0)
 	for k in wave:
-		f._add("theirs", k, Content.enemy_stats(k, power), "", [])
+		f._add("theirs", k, Content.enemy_stats(k, power), "", [], power)
 	f._form("ours")
 	f._form("theirs")
 	return f
@@ -64,8 +66,26 @@ func step() -> Array:
 		elif float(u.cool) <= 0.0:
 			_strike(u, foe, blows)
 			u.cool = float(u.every)
+	var fell: Array = []
 	for b in blows:
-		_harm(b[0], b[1], b[2], ev)
+		_harm(b[0], b[1], b[2], ev, fell)
+	# Those that fell this step burst and break -- and what a burst fells, in turn.
+	var k := 0
+	while k < fell.size():
+		var d: Dictionary = fell[k]
+		k += 1
+		if int(d.burst) > 0:
+			ev.append({"t": "burst", "id": d.id, "at": d.pos, "radius": Content.BURST_RADIUS})
+			for o in units.duplicate():
+				if o.side != d.side and int(o.hp) > 0 and (o.pos as Vector2).distance_to(d.pos) <= Content.BURST_RADIUS:
+					_harm(d, o, int(d.burst), ev, fell)
+		if str(d.get("split", "")) != "":
+			for i in int(d.splits):
+				var s := Content.enemy_stats(d.split, float(d.power))
+				var child := _add(d.side, d.split, s, "", [], float(d.power))
+				child.pos = (d.pos as Vector2) + Vector2(0.0, (i - (int(d.splits) - 1) * 0.5) * 0.9)
+				child.cool = 0.5
+				ev.append({"t": "spawn", "unit": child.duplicate()})
 	_spread()
 	var ours := alive("ours").size()
 	var theirs := alive("theirs").size()
@@ -105,8 +125,8 @@ func harm() -> int:
 func strength(side: String) -> float:
 	var n := 0.0
 	for u in units:
-		if u.side == side:
-			n += Content.strength(u)
+		if u.side == side and not u.get("spawned", false):
+			n += Content.strength(u, float(u.power))
 	return n
 
 
@@ -131,13 +151,15 @@ func _strike(u: Dictionary, foe: Dictionary, blows: Array) -> void:
 				blows.append([u, o, ceili(int(u.atk) / 2.0)])
 
 
-func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array) -> void:
+## A blow lands: less the armour (at least 1), and the striker's pierce on top. One it fells joins `fell`.
+func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array, fell: Array) -> void:
 	var was := int(foe.hp)
-	var dmg := maxi(1, atk - int(foe.armor))
+	var dmg := maxi(1, atk - int(foe.armor)) + int(u.get("pierce", 0))
 	foe.hp = was - dmg
 	ev.append({"t": "hit", "from": u.id, "to": foe.id, "dmg": dmg})
 	if was > 0 and int(foe.hp) <= 0:
 		ev.append({"t": "die", "id": foe.id})
+		fell.append(foe)
 
 
 ## Whom u goes for: the nearest foe standing (nearest, then weakest, then the first made -- never a doubt which);
@@ -186,12 +208,16 @@ func _spread() -> void:
 			b.pos = (b.pos as Vector2) + dir * push
 
 
-func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Array) -> void:
-	units.append({"id": _next, "side": side, "kind": kind, "roster": roster, "affixes": affixes, "pos": Vector2.ZERO,
+func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Array, power: float) -> Dictionary:
+	var u := {"id": _next, "side": side, "kind": kind, "roster": roster, "affixes": affixes, "pos": Vector2.ZERO,
 		"hp": int(s.hp), "max": int(s.hp), "atk": int(s.atk), "armor": int(s.armor), "every": float(s.every),
 		"range": float(s.range), "speed": float(s.speed), "size": float(s.size), "splash": float(s.splash),
-		"heal": int(s.heal), "dive": bool(s.get("dive", false)), "harm": int(s.get("harm", 0)), "cool": 0.0})
+		"heal": int(s.heal), "pierce": int(s.get("pierce", 0)), "burst": int(s.get("burst", 0)),
+		"split": str(s.get("split", "")), "splits": int(s.get("splits", 0)), "power": power,
+		"dive": bool(s.get("dive", false)), "harm": int(s.get("harm", 0)), "cool": 0.0, "spawned": time > 0.0}
+	units.append(u)
 	_next += 1
+	return u
 
 
 ## The ranks a side starts in: the short-reach ones in front, the long-reach behind, each rank spread along the line,
