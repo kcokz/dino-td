@@ -1,11 +1,11 @@
 class_name Run
 extends RefCounted
-## A run (GAME-DESIGN 14): one homeland carried through the levels, each level a number of rounds -- build up, then
-## this round's army fights a wave -- and the deck growing between levels. Over when the homeland's hit points are
-## gone.
+## A run (GAME-DESIGN 15): one homeland carried through the levels, each level a number of rounds -- buy and build,
+## then this round's army fights a wave -- and a fossil relic chosen when a level is held. Over when the homeland's
+## hit points are gone.
 
-const WEIGHT := [6, 3, 1]         # how often a common, uncommon and rare card is offered, one against another
 const LOOT := 1                   # a battle won: this many potions and alien genes; a big round's or a boss's, double
+const GIFTS := 3                  # gifts kept on the shelf at most
 
 ## The run being played: kept here while the scene is reloaded.
 static var current: Run
@@ -16,7 +16,6 @@ var home: Home
 var rng := RandomNumberGenerator.new()
 var over := false
 var calm := false                 # no one comes (tools/sim_runs.gd measuring how strong a homeland can grow)
-var shown := false                # the deck has been laid out at the start
 
 
 func _init(seed := 0) -> void:
@@ -24,10 +23,7 @@ func _init(seed := 0) -> void:
 		rng.randomize()
 	else:
 		rng.seed = seed
-	var deck: Array = []
-	for id in Content.START_DECK:
-		deck.append({"id": id, "up": false})
-	home = Home.new(deck, rng)
+	home = Home.new(rng)
 
 
 func rounds() -> int:
@@ -48,7 +44,11 @@ func big(ahead := 0) -> bool:
 
 
 func start_round() -> Array:
-	return home.start_round(rng)
+	return home.start_round(rng, level)
+
+
+func reroll() -> bool:
+	return home.reroll(rng, level)
 
 
 ## The army goes out (its biomass paid) against this round's wave.
@@ -64,22 +64,27 @@ func strength() -> float:
 	return n
 
 
-## After the battle: this round's buffs spent; won, potions and alien genes found; lost, the homeland is harmed.
-## {result, fallen, took, loot: [potion ids], alien, level_won}
+## After the battle: this round's buffs spent; won, gold, potions and alien genes found; lost, the homeland harmed;
+## either way the interest on the gold kept. {result, fallen, took, loot: [potion ids], alien, gold, interest,
+## level_won}
 func finish(f: Fight) -> Dictionary:
 	home.buffs.clear()
-	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "loot": [], "alien": 0, "level_won": false}
+	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "loot": [], "alien": 0, "gold": 0, "interest": 0,
+		"level_won": false}
 	if f.result == "won":
 		var n := LOOT * (2 if big() or round >= rounds() else 1)
 		home.alien += n
 		out.alien = n
 		for i in n:
-			var kinds: Array = Content.POTIONS.keys()
-			var k: String = kinds[rng.randi() % kinds.size()]
+			var k := home._any_potion(rng)
 			if home.add_potion(k):
 				out.loot.append(k)
+		home.gold += Content.WIN_GOLD
+		out.gold = Content.WIN_GOLD
 	else:
 		out.took = home.harmed(f.harm())
+	out.interest = home.interest()
+	home.gold += int(out.interest)
 	if home.hp <= 0:
 		over = true
 	elif round >= rounds():
@@ -93,57 +98,53 @@ func last_level() -> bool:
 	return level >= Content.LEVELS.size() - 1
 
 
-## On to the next level: a row more of land, the whole deck gathered and shuffled as at the start.
+## On to the next level: a row more of land.
 func next_level() -> void:
 	level += 1
 	round = 1
 	home.open_row()
-	home.draw = deck()
-	home.hand = []
-	home.discard = []
-	Home.shuffle(home.draw, rng)
 
 
-## Every card the player owns, wherever it is now.
-func deck() -> Array:
-	return home.draw + home.hand + home.discard
-
-
-## A card won: shuffled in among those still to be drawn.
-func take(id: String) -> void:
-	home.draw.insert(rng.randi_range(0, home.draw.size()), {"id": id, "up": false})
-
-
-## A card of the deck (one of deck()'s, itself) made its + kind.
-func upgrade(ci: Dictionary) -> void:
-	ci.up = true
-
-
-## A card taken out of the deck, wherever it is -- never down to fewer than a hand.
-func remove(ci: Dictionary) -> bool:
-	if deck().size() <= Home.HAND:
-		return false
-	for pile in [home.draw, home.hand, home.discard]:
-		if ci in pile:
-			pile.erase(ci)
-			return true
-	return false
-
-
-## Three different cards to choose one of, the rarer the seldomer -- only those this level has opened.
-func offer() -> Array:
+## Three offers to choose one of, free, after each round: from what the shop could sell now that is of use, the rarer
+## more often than on the shelf.
+func gift_offer() -> Array:
 	var pool: Array = []
-	for id in Content.CARDS:
-		var c: Dictionary = Content.CARDS[id]
-		if int(c.get("from", 0)) > level:
+	for id in Content.OFFERS:
+		var o: Dictionary = Content.OFFERS[id]
+		if int(o.get("from", 0)) > level or not home._useful(id):
 			continue
-		for i in WEIGHT[int(c.rarity)]:
+		for k in [3, 3, 2][int(o.rarity)]:
 			pool.append(id)
 	Home.shuffle(pool, rng)
 	var out: Array = []
+	var ids: Array = []
 	for id in pool:
-		if not id in out:
-			out.append(id)
-			if out.size() == 3:
-				break
+		if id in ids:
+			continue
+		ids.append(id)
+		out.append({"id": id, "potion": home._any_potion(rng), "gift": true} if id == "potion" else {"id": id, "gift": true})
+		if out.size() == 3:
+			break
 	return out
+
+
+## A gift taken: to the front of the shelf (no more than GIFTS kept; the oldest goes).
+func take_gift(oi: Dictionary) -> void:
+	var g := oi.duplicate()
+	g.gift = true
+	home.shelf.insert(0, g)
+	var gifts := home.shelf.filter(func(o: Variant) -> bool: return o != null and o.get("gift", false))
+	if gifts.size() > GIFTS:
+		home.shelf.erase(gifts[-1])
+
+
+## Three different relics not yet held, to choose one of.
+func relic_offer() -> Array:
+	var pool: Array = Content.RELICS.keys().filter(func(id: String) -> bool: return not id in home.relics)
+	Home.shuffle(pool, rng)
+	return pool.slice(0, 3)
+
+
+func take_relic(id: String) -> void:
+	if not id in home.relics:
+		home.relics.append(id)
