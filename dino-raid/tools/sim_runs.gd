@@ -1,5 +1,5 @@
 extends SceneTree
-## Whole runs played by the rules alone, no screen, many at once -- to see how hard the places are (GAME-DESIGN 17).
+## Whole runs played by the rules alone, no screen, many at once -- to see how hard the places are (GAME-DESIGN 17, 18).
 ##
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random] [runs] [first seed] [measure|limit]
 ##
@@ -107,8 +107,6 @@ func _random(run: Run) -> void:
 		if play.is_empty():
 			break
 		Policy.play(run.home, play)
-	if not run.home.potions.is_empty() and rng.randf() < 0.3:
-		run.home.use_potion(rng.randi() % run.home.potions.size())
 
 
 func _smart(run: Run) -> void:
@@ -123,6 +121,3 @@ func _smart(run: Run) -> void:
 				continue
 			break
 		Policy.play(run.home, play)
-	var k := Policy.best_potion(run, run.home)
-	if k >= 0:
-		run.home.use_potion(k)

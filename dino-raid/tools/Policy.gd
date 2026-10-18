@@ -1,13 +1,12 @@
 class_name Policy
-## How the tools play (GAME-DESIGN 17), shared by playtest.gd and sim_runs.gd. Not part of the game.
+## How the tools play (GAME-DESIGN 17, 18), shared by playtest.gd and sim_runs.gd. Not part of the game.
 ##
 ## random: buys anything it can afford, put anywhere it may go (but building only on empty land, pulling nothing
-## down), and puts down what it keeps the same way; now and then a potion; carries on whatever comes first. smart: the
-## buy or the putting down that does the most good for its price -- this round's battle worked out after it (the
-## forecast the player sees), and what the homeland comes to: the army its nests make (as far as the biomass coming in
-## feeds it), what comes in each round, what is kept (gold earns interest); restocks the shelf when nothing on it is
-## worth buying; a potion only when it turns a lost battle; the gift and the relic that do the most good; carries on
-## what cost the most.
+## down), and puts down what it keeps the same way. smart: the buy or the putting down that does the most good for its
+## price -- this round's battle worked out after it (the forecast the player sees), and what the homeland comes to: the
+## army its nests make (as far as the biomass coming in feeds it), what comes in each round, what is kept (gold earns
+## interest); restocks the shelf when nothing on it is worth buying; the gift and the relic that do the most good.
+## Both carry on what the packing screen picks to begin with (Run.default_goods).
 
 
 ## A random play: ["buy" or "place", index, target], or [] when there is none.
@@ -102,24 +101,6 @@ static func best_goods(run: Run) -> Array:
 	return run.default_goods()
 
 
-## The potion that turns this round's battle (won where it was lost, or less harm), or -1.
-static func best_potion(run: Run, h: Home) -> int:
-	var now := _battle(run, h)
-	if now.won:
-		return -1
-	var best := -1
-	var best_harm := int(now.harm)
-	for k in h.potions.size():
-		var t := h.clone()
-		t.use_potion(k)
-		var then := _battle(run, t)
-		if then.won:
-			return k
-		if int(then.harm) < best_harm:
-			best_harm = int(then.harm)
-			best = k
-	return best
-
 
 static func score(run: Run, h: Home) -> float:
 	var b := _battle(run, h)
@@ -135,12 +116,12 @@ static func score(run: Run, h: Home) -> float:
 	var fed := minf(1.0, (float(h.income_biomass()) + 1.0) / maxf(1.0, float(food)))
 	s += strength * (0.4 + 0.6 * fed) * 1.5
 	s += 10.0 * h.income_gold() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
-	s += 0.5 * h.biomass + 1.0 * h.genes + 3.0 * h.alien + 2.0 * h.gold + 4.0 * h.interest() + 8.0 * h.potions.size()
+	s += 0.5 * h.biomass + 1.0 * h.genes + 3.0 * h.alien + 2.0 * h.gold + 4.0 * h.interest()
 	s += 5.0 * h.block() + 0.5 * h.hp_max()
 	return s
 
 
 static func _battle(run: Run, h: Home) -> Dictionary:
-	var f := Fight.make(h.army(), h.buffs, run.wave(), run.power())
+	var f := Fight.make(h.army(), run.wave(), run.power())
 	f.run()
 	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm() - h.block())}

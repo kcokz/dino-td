@@ -1,11 +1,11 @@
 extends SceneTree
-## A run played by a script, with pictures -- for seeing a change at work without playing (GAME-DESIGN 17).
+## A run played by a script, with pictures -- for seeing a change at work without playing (GAME-DESIGN 17, 18).
 ##
 ##   Godot --path dino-raid --script res://tools/playtest.gd -- <folder for frames> [bot [rounds] [seed] [smart]]
 ##
 ## Without "bot": the ark chosen and the rainforest arrived in; the first rounds slowly -- the round's army hatching,
 ## the shelf, special ground and a nest pointed at, each offer taken up over where it goes with what it would change
-## and the forecast it brings, a potion pointed at, an offer kept in the stash and put down again, the shelf
+## and the forecast it brings, an offer kept in the stash and put down again, a nest evolved, the shelf
 ## restocked, buys, battles fought, the free pick after them -- then a homeland built up by hand (every kind of
 ## building, levels, the four evolved species, relics), its boss battle (the mother breaking into spores), the relic
 ## to choose, the packing and the ark's flight, the volcano arrived in, the goods carried put down, and a battle there
@@ -72,12 +72,6 @@ func _scripted() -> void:
 	await _shot("offer_close")
 	game.hud._hovered = null
 	await _aim_each("r1")
-	game.aim_potion(0)
-	game.hud._potion_hover = 0
-	await _frames(6)
-	await _shot("aim_potion")
-	game.hud._potion_hover = -1
-	game.aim_potion(-1)
 	await _keep_and_put()
 	await _evolve()
 	game.home.gold += 5
@@ -212,10 +206,10 @@ func _rich() -> void:
 	var plan := [[Vector2i(0, 0), "pool", 3, []], [Vector2i(1, 0), "spore_pool", 2, []], [Vector2i(2, 0), "nest_red", 3, ["acid", "poison"]],
 		[Vector2i(3, 0), "stabilizer", 2, []], [Vector2i(4, 0), "nest_blue", 2, ["blade", "wings"]], [Vector2i(5, 0), "mine", 1, []],
 		[Vector2i(0, 1), "gym", 2, []], [Vector2i(1, 1), "nest_red", 1, []], [Vector2i(2, 1), "nest_green", 2, ["shell", "plasma"]],
-		[Vector2i(3, 1), "hot_spring", 1, []], [Vector2i(4, 1), "forge", 1, []], [Vector2i(5, 1), "lab", 1, []],
+		[Vector2i(3, 1), "hot_spring", 1, []], [Vector2i(4, 1), "forge", 1, []], [Vector2i(5, 1), "pool", 1, []],
 		[Vector2i(0, 2), "vine_wall", 2, []], [Vector2i(1, 2), "wall", 1, []], [Vector2i(2, 2), "stabilizer", 1, []],
 		[Vector2i(3, 2), "nest_red", 2, ["flame", "blade"]], [Vector2i(4, 2), "nest_white", 1, []],
-		[Vector2i(1, 3), "store", 1, []], [Vector2i(2, 3), "sampler", 1, []], [Vector2i(3, 3), "nest_gold", 1, []],
+		[Vector2i(1, 3), "spore_pool", 1, []], [Vector2i(2, 3), "sampler", 1, []], [Vector2i(3, 3), "nest_gold", 1, []],
 		[Vector2i(4, 3), "nest_red", 1, ["shell"]]]
 	for step in plan:
 		h.build(step[0], step[1])
@@ -413,9 +407,6 @@ func _bot(rounds: int) -> void:
 						continue
 					break
 				game.act(play[0], {"slot": play[1], "at": play[2]})
-			var k := Policy.best_potion(game.run, game.home)
-			if k >= 0:
-				game.act("potion", {"slot": k})
 		else:
 			_play_all()
 		await _frames(4)
@@ -437,15 +428,13 @@ func _bot(rounds: int) -> void:
 	quit()
 
 
-## Buys and puts down the careless way (tools/Policy.gd any_play), and now and then a potion.
+## Buys and puts down the careless way (tools/Policy.gd any_play).
 func _play_all() -> void:
 	for guard in 20:
 		var play := Policy.any_play(game.home, rng)
 		if play.is_empty():
 			break
 		game.act(play[0], {"slot": play[1], "at": play[2]})
-	if not game.home.potions.is_empty() and rng.randf() < 0.3:
-		game.act("potion", {"slot": 0})
 
 
 func _until_plan() -> void:
@@ -483,9 +472,9 @@ func _account() -> void:
 		var b: Dictionary = h.buildings[p]
 		var key := "%s%d" % [b.kind, b.level]
 		built[key] = built.get(key, 0) + 1
-	print("%s round %d hp %d/%d gold %d biomass %d genes %d alien %d potions %d stash %d relics %s army %d | %s" % [
-		Content.LEVELS[r.level].name, r.round, h.hp, h.hp_max(), h.gold, h.biomass, h.genes, h.alien, h.potions.size(),
-		h.stash.size(), h.relics, h.army().size(), built])
+	print("%s round %d hp %d/%d gold %d biomass %d genes %d alien %d stash %d relics %s army %d | %s" % [
+		Content.LEVELS[r.level].name, r.round, h.hp, h.hp_max(), h.gold, h.biomass, h.genes, h.alien, h.stash.size(),
+		h.relics, h.army().size(), built])
 
 
 func _shot(label: String) -> void:

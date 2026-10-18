@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17, 18) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -22,7 +22,7 @@ func _init() -> void:
 	_relics()
 	_arks()
 	_moving_on()
-	_potions()
+	_economy()
 	_walls()
 	_fights()
 	_falling_hard()
@@ -58,12 +58,11 @@ func bare(region := 0) -> Home:
 	h.biomass = 20
 	h.genes = 10
 	h.alien = 5
-	h.potions.clear()
 	return h
 
 
 func shelf(h: Home, ids: Array) -> void:
-	h.shelf = ids.map(func(id: String) -> Dictionary: return {"id": id, "potion": "gel"} if id == "potion" else {"id": id})
+	h.shelf = ids.map(func(id: String) -> Dictionary: return {"id": id})
 
 
 func _first_round() -> void:
@@ -72,7 +71,8 @@ func _first_round() -> void:
 		and h.buildings[Vector2i(3, 2)].kind == "pool", h.buildings.keys())
 	check("special ground lies about", h.terrain.size() == 5 and not h.terrain.has(Vector2i(2, 2)), h.terrain)
 	var ev := h.start_round(rng(), 0)
-	check("income: 3 gold; damp: 3 biomass is 4", h.gold == 3 and h.biomass == 2 + 4, [h.gold, h.biomass])
+	check("income: 5 gold; damp: 3 biomass is 4", h.gold == Home.INCOME and Home.INCOME == 5 and h.biomass == 2 + 4,
+		[h.gold, h.biomass])
 	check("the stored biomass rotted by half", ev.any(func(e: Dictionary) -> bool: return e.t == "rotted" and e.amount == 1))
 	check("a shelf of 5", h.shelf.size() == Content.SHOP, h.shelf.size())
 	var a := h.army()
@@ -110,10 +110,10 @@ func _neighbours() -> void:
 	check("pool +25%, mine -15%: hp x1.10", is_equal_approx(float(s.hp_mult), 1.10), s.hp_mult)
 	g.build(Vector2i(2, 3), "hot_spring")
 	check("hot spring: 20% faster", int(g.spec_of(Vector2i(2, 2)).haste) == 20)
-	var f := Fight.make(g.army(), {}, ["grey"], 1.0)
+	var f := Fight.make(g.army(), ["grey"], 1.0)
 	check("faster hits", is_equal_approx(float(f.units[0].every), 1.0 / 1.2), f.units[0].every)
 	g.build(Vector2i(1, 2), "forge")
-	check("forge beside: +1 attack, and gold", int(g.spec_of(Vector2i(2, 2)).atk_bonus) == 1 and g.income_gold() == 3 + 1 + 1)
+	check("forge beside: +1 attack, and gold", int(g.spec_of(Vector2i(2, 2)).atk_bonus) == 1 and g.income_gold() == Home.INCOME + 1 + 1)
 
 
 func _terrain() -> void:
@@ -123,7 +123,7 @@ func _terrain() -> void:
 	h.build(Vector2i(1, 1), "pool")
 	check("pond: a pool on it makes double", h.income_biomass() == (6 + 3) * 3 / 2, h.income_biomass())
 	h.build(Vector2i(4, 0), "mine")
-	check("ore: a mine on it, 2 gold more", h.income_gold() == 3 + 1 + 2, h.income_gold())
+	check("ore: a mine on it, 2 gold more", h.income_gold() == Home.INCOME + 1 + 2, h.income_gold())
 	check("trees and lava: nothing built there", not h.buildable(Vector2i(2, 0)) and not h.buildable(Vector2i(5, 1)))
 	h.build(Vector2i(2, 1), "nest_red")
 	check("a tree and a pool beside: +15% and +25% hp", is_equal_approx(float(h.spec_of(Vector2i(2, 1)).hp_mult), 1.40),
@@ -180,23 +180,20 @@ func _affixes_and_recipes() -> void:
 	check("blade + wings: a falcon, flying, not blade twice", f.army()[0].kind == "falcon" and fl.dive
 		and int(fl.atk) == int(Content.UNITS.falcon.atk),
 		[f.army()[0].kind, fl.atk])
-	var fight := Fight.make(f.army(), {}, ["grey", "purple"], 1.0)
+	var fight := Fight.make(f.army(), ["grey", "purple"], 1.0)
 	check("a flier goes for the one furthest back", fight._foe_of(fight.units[0]).kind == "purple")
 
 
 func _buying() -> void:
 	var h := bare()
 	h.build(Vector2i(2, 3), "pool")
-	shelf(h, ["b_red", "raise", "sample", "b_pool", "culture"])
+	shelf(h, ["b_red", "raise", "b_pool"])
 	h.buy(0, Vector2i(2, 3))
 	check("over a pool: pulled down, half back", h.buildings[Vector2i(2, 3)].kind == "nest_red" and h.gold == 20 - 3 + 1)
 	check("raise from level 1 costs 3", h.price(1, Vector2i(2, 3)) == Content.RAISE + 1)
 	h.buildings[Vector2i(2, 3)].level = 2
 	h.buy(1, Vector2i(2, 3))
 	check("level 3 at most, 4 paid", int(h.buildings[Vector2i(2, 3)].level) == 3 and h.gold == 18 - 4, h.gold)
-	h.genes = 9
-	h.buy(2, true)
-	check("genes kept to the store", h.genes == Home.GENES_MAX, h.genes)
 	h.gold = 1
 	shelf(h, ["b_gold"])
 	check("not enough gold: nowhere", h.targets(0).is_empty())
@@ -205,9 +202,9 @@ func _buying() -> void:
 func _stash() -> void:
 	var h := bare()
 	h.build(Vector2i(2, 3), "nest_red")
-	shelf(h, ["b_red", "a_shell", "raise", "sample", "potion"])
+	shelf(h, ["b_red", "a_shell", "raise"])
 	check("buildings and affixes can be kept", h.can_store(0) and h.can_store(1))
-	check("raises, gains and potions cannot", not h.can_store(2) and not h.can_store(3) and not h.can_store(4))
+	check("raises cannot", not h.can_store(2))
 	h.store(0)
 	h.store(1)
 	check("kept: paid, gone from the shelf", h.stash.size() == 2 and h.gold == 20 - 3 - 2 and h.genes == 8 and h.shelf[0] == null)
@@ -236,7 +233,12 @@ func _stash() -> void:
 func _shelf() -> void:
 	var h := bare()
 	h.stock(rng(1), 0)
-	check("bare land: 3 buildings and 2 others", h.shelf.size() == 5 and h.shelf.filter(func(oi: Dictionary) -> bool:
+	check("bare land: nothing to raise or stick affixes on, so all buildings", h.shelf.size() == 5
+		and h.shelf.all(func(oi: Dictionary) -> bool: return Content.OFFERS[oi.id].type == "build"))
+	var n := bare()
+	n.build(Vector2i(0, 3), "nest_red")
+	n.stock(rng(1), 0)
+	check("a nest standing: 3 buildings and 2 others", n.shelf.size() == 5 and n.shelf.filter(func(oi: Dictionary) -> bool:
 		return Content.OFFERS[oi.id].type == "build").size() == 3)
 	var ids: Array = h.shelf.map(func(oi: Dictionary) -> String: return oi.id)
 	var distinct := {}
@@ -269,6 +271,18 @@ func _shelf() -> void:
 		h.stock(rng(k), 1)
 		worst = maxi(worst, h.shelf.filter(func(oi: Dictionary) -> bool: return h._least_price(oi.id) > h.gold).size())
 	check("no more than one that costs more than there is", worst <= 1, worst)
+	var st := bare()
+	st.build(Vector2i(0, 3), "nest_red")
+	var stab := 0
+	for k in 40:
+		st.stock(rng(k), 0)
+		stab += st.shelf.filter(func(oi: Dictionary) -> bool: return oi.id == "b_stab").size()
+	check("no stabilizer while no nest wants more affixes", stab == 0, stab)
+	st.buildings[Vector2i(0, 3)].affixes = ["shell"]
+	for k in 40:
+		st.stock(rng(k), 0)
+		stab += st.shelf.filter(func(oi: Dictionary) -> bool: return oi.id == "b_stab").size()
+	check("a stabilizer once a nest is full", stab > 0, stab)
 
 
 func _reroll_and_interest() -> void:
@@ -295,9 +309,14 @@ func _gifts() -> void:
 	check("three gifts, all different", gifts.size() == 3 and gifts[0].id != gifts[1].id and gifts[1].id != gifts[2].id)
 	r.take_gift({"id": "a_shell"})
 	check("a gift goes into the stash", r.home.stash.size() == 1 and r.home.stash[0].get("gift", false))
-	var genes := r.home.genes
-	r.take_gift({"id": "sample"})
-	check("a gain is had at once", r.home.genes == mini(r.home.genes_max(), genes + 3) and r.home.stash.size() == 1)
+	var used_up := 0
+	for s in 30:
+		var g := Run.new(s + 1)
+		g.start_round()
+		for oi in g.gift_offer():
+			if not Content.OFFERS[oi.id].type in ["build", "raise", "affix"]:
+				used_up += 1
+	check("gifts are all things that last", used_up == 0, used_up)
 	r.home.relics.append("sac")
 	check("the sac: two to choose from", r.gift_offer().size() == 2)
 
@@ -319,7 +338,7 @@ func _relics() -> void:
 	b.relics = ["core", "heart", "crystal", "sac"]
 	check("core: one more each", b.army().size() == 2)
 	check("heart: +2 attack", int(b.army()[0].atk_bonus) == 2)
-	check("crystal: 4 gold more, a shelf of 4", b.income_gold() == 3 + 4 and b.shelf_size() == Content.SHOP - 1)
+	check("crystal: 4 gold more, a shelf of 4", b.income_gold() == Home.INCOME + 4 and b.shelf_size() == Content.SHOP - 1)
 	check("sac: the stash holds 2 more", b.stash_size() == Content.STASH + 2)
 	b.hp = 20
 	b.start_round(rng(), 1)
@@ -392,26 +411,31 @@ func _moving_on() -> void:
 	check("no more carried than the stash holds", many.home.stash.size() == Content.STASH)
 
 
-func _potions() -> void:
-	var h := bare()
-	h.build(Vector2i(0, 3), "nest_red")
-	h.build(Vector2i(2, 3), "nest_blue")
-	h.potions = ["breed", "rage", "gel"]
-	check("full: no more", not h.add_potion("rush"))
-	h.use_potion(0)
-	check("breed: each nest one more", h.army().size() == 4, h.army().size())
-	h.use_potion(0)
-	var f := Fight.make(h.army(), h.buffs, ["grey"], 1.0)
-	check("rage: +2 attack", int(f.units[0].atk) == 3 + 2, f.units[0].atk)
-	h.hp = 20
-	h.use_potion(0)
-	check("gel mends 6", h.hp == 26 and h.potions.is_empty(), h.hp)
-	var lab := bare()
-	lab.build(Vector2i(0, 3), "lab")
-	var brewed := 0
-	for r in 6:
-		brewed += lab.start_round(rng(r), 0).filter(func(e: Dictionary) -> bool: return e.t == "brewed").size()
-	check("a lab brews every 3 rounds", brewed == 2, brewed)
+func _economy() -> void:
+	check("only what lasts on sale", Content.OFFERS.values().all(func(o: Dictionary) -> bool:
+		return o.type in ["build", "raise", "affix"]))
+	check("no lab, no store", not Content.BUILDINGS.has("lab") and not Content.BUILDINGS.has("store"))
+	var r := Run.new(12)
+	r.choose_ark("war")
+	r.start_round()
+	check("round 1: 5 gold", r.home.gold == 5, r.home.gold)
+	r.home.gold = 0
+	var f := r.fight()
+	f.run()
+	var alien := r.home.alien
+	var out := r.finish(f)
+	check("a battle won: 2 gold and an alien gene", f.result != "won" or (out.gold == 2 and r.home.alien == alien + 1
+		and r.home.gold == 2), [f.result, out])
+	var boss := Run.new(13)
+	boss.round = 5
+	boss.home.build(Vector2i(0, 0), "nest_gold")
+	boss.home.buildings[Vector2i(0, 0)].level = 3
+	boss.home.biomass = 20
+	var fb := boss.fight()
+	fb.run()
+	var before := boss.home.alien
+	boss.finish(fb)
+	check("the boss's round: two alien genes", fb.result != "won" or boss.home.alien == before + 2, [fb.result, boss.home.alien])
 
 
 func _walls() -> void:
@@ -430,18 +454,18 @@ func _fights() -> void:
 	var h := bare()
 	h.build(Vector2i(0, 3), "nest_red")
 	h.buildings[Vector2i(0, 3)].level = 3
-	var f1 := Fight.make(h.army(), {}, ["grey", "grey", "purple"], 1.0)
-	var f2 := Fight.make(h.army(), {}, ["grey", "grey", "purple"], 1.0)
+	var f1 := Fight.make(h.army(), ["grey", "grey", "purple"], 1.0)
+	var f2 := Fight.make(h.army(), ["grey", "grey", "purple"], 1.0)
 	var e1 := f1.run()
 	f2.run()
 	check("the same each time", f1.result == f2.result and f1.time == f2.time and e1.size() > 0)
-	var lone := Fight.make([], {}, ["grey"], 1.0)
+	var lone := Fight.make([], ["grey"], 1.0)
 	lone.run()
 	check("no army: lost", lone.result == "lost" and lone.harm() == 1)
 	var w := bare()
 	w.build(Vector2i(0, 3), "nest_green")
 	w.build(Vector2i(2, 3), "nest_white")
-	check("the white heals", Fight.make(w.army(), {}, ["grey", "grey"], 1.0).run().any(func(e: Dictionary) -> bool:
+	check("the white heals", Fight.make(w.army(), ["grey", "grey"], 1.0).run().any(func(e: Dictionary) -> bool:
 		return e.t == "heal"))
 
 
@@ -449,20 +473,20 @@ func _falling_hard() -> void:
 	var h := bare()
 	h.build(Vector2i(0, 3), "nest_red")
 	h.buildings[Vector2i(0, 3)].level = 3
-	var f := Fight.make(h.army(), {}, ["spore"], 1.0)
+	var f := Fight.make(h.army(), ["spore"], 1.0)
 	var ev := f.run()
 	var spawned := ev.filter(func(e: Dictionary) -> bool: return e.t == "spawn")
 	check("a spore breaks into two mites", spawned.size() == 2 and spawned[0].unit.kind == "mite", spawned.size())
 	check("and they are fought too", f.result == "won" and f.units.size() == 3 + 3, [f.result, f.units.size()])
 	var b := bare()
 	b.build(Vector2i(0, 3), "nest_red")
-	var g := Fight.make(b.army(), {}, ["beetle"], 1.0)
+	var g := Fight.make(b.army(), ["beetle"], 1.0)
 	var eb := g.run()
 	check("a beetle bursts when it falls", eb.any(func(e: Dictionary) -> bool: return e.t == "burst") or g.result != "won")
 	var p := bare()
 	p.build(Vector2i(0, 3), "nest_red")
 	p.buildings[Vector2i(0, 3)].affixes = ["poison"]
-	var fp := Fight.make(p.army(), {}, ["beetle"], 1.0)
+	var fp := Fight.make(p.army(), ["beetle"], 1.0)
 	var hit: Dictionary = fp.run().filter(func(e: Dictionary) -> bool: return e.t == "hit" and e.from == 1).front()
 	check("poison: 2 more through armour 2", int(hit.dmg) == maxi(1, 3 - 2) + 2, hit.dmg)
 	check("strength counts what it breaks into", Content.enemy_strength("spore") > Content.strength(Content.enemy_stats("spore")) - 0.01
@@ -498,14 +522,18 @@ func _clone() -> void:
 	h.stash = [{"id": "b_red"}]
 	var c := h.clone()
 	c.build(Vector2i(0, 3), "nest_red")
-	c.use_potion(0)
-	c.buy(0, c.targets(0)[0] if not c.targets(0).is_empty() else true)
+	var bought := -1
+	for i in c.shelf.size():
+		if not c.targets(i).is_empty():
+			c.buy(i, c.targets(i)[0])
+			bought = i
+			break
 	c.stash.clear()
 	c.relics.append("tooth")
-	check("the copy changes alone", not h.buildings.has(Vector2i(0, 3)) and h.potions.size() == 1 and h.buffs.is_empty()
-		and h.shelf[0] != null and h.relics.is_empty() and h.stash.size() == 1 and h.terrain == c.terrain)
-	var f1 := Fight.make(h.army(), h.buffs, ["grey", "grey"], 1.0)
-	var f2 := Fight.make(h.clone().army(), h.buffs, ["grey", "grey"], 1.0)
+	check("the copy changes alone", not h.buildings.has(Vector2i(0, 3)) and (bought < 0 or h.shelf[bought] != null)
+		and h.relics.is_empty() and h.stash.size() == 1 and h.terrain == c.terrain)
+	var f1 := Fight.make(h.army(), ["grey", "grey"], 1.0)
+	var f2 := Fight.make(h.clone().army(), ["grey", "grey"], 1.0)
 	f1.run()
 	f2.run()
 	check("a copy fights the same", f1.result == f2.result and f1.time == f2.time)
@@ -522,7 +550,7 @@ func _waves() -> void:
 
 func _texts() -> void:
 	for id in Content.OFFERS:
-		var o := Content.offer({"id": id, "potion": "rage"})
+		var o := Content.offer({"id": id})
 		check("text for " + id, Content.offer_text(o).length() > 3 and str(o.name) != "", Content.offer_text(o))
 	check("a packed building says its level", Content.offer({"id": "b_red", "packed": {"level": 2, "affixes": ["shell"]}}).name.contains("2 级"))
 	for kind in Content.BUILDINGS:

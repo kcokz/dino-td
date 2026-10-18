@@ -71,7 +71,7 @@ func _beats(spec: Dictionary, n: int, m: int) -> bool:
 	var wave: Array = []
 	for i in m:
 		wave.append("grey")
-	var f := Fight.make(army, {}, wave, 1.0)
+	var f := Fight.make(army, wave, 1.0)
 	f.run()
 	return f.result == "won"
 
@@ -105,7 +105,7 @@ func _red_band_wins(red: Dictionary, reds: int, kind: String, n: int) -> bool:
 	var wave: Array = []
 	for i in n:
 		wave.append(kind)
-	var f := Fight.make(army, {}, wave, 1.0)
+	var f := Fight.make(army, wave, 1.0)
 	f.run()
 	return f.result == "won"
 
@@ -134,6 +134,6 @@ func _mixed(ratio: float) -> bool:
 		var k: String = foes[rng.randi() % foes.size()]
 		wave.append(k)
 		theirs += Content.enemy_strength(k)
-	var f := Fight.make(army, {}, wave, 1.0)
+	var f := Fight.make(army, wave, 1.0)
 	f.run()
 	return f.result == "won"
