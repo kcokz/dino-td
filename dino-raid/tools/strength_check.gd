@@ -40,7 +40,9 @@ func _spec(kind: String, affixes: Array) -> Dictionary:
 	h.terrain.clear()
 	h.build(Vector2i(0, 3), "nest_" + kind)
 	h.buildings[Vector2i(0, 3)].affixes = affixes
-	return h.spec_of(Vector2i(0, 3))
+	var s := h.spec_of(Vector2i(0, 3))
+	s.erase("row")                  # a band forms by reach, not on a battle line
+	return s
 
 
 func _alone(kind: String, affixes: Array) -> void:

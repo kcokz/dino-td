@@ -168,12 +168,13 @@ func _evolve() -> void:
 			break
 	var spot := HomeView.NOWHERE
 	if nest != HomeView.NOWHERE:
-		for q in home.around(nest):
+		for y in range(Content.FRONT_ROWS, Home.ROWS):
+			var q := Vector2i(nest.x, y)
 			if home.buildable(q) and not home.buildings.has(q):
 				spot = q
 				break
 	if spot == HomeView.NOWHERE:
-		print("evolve: no nest with room beside it")
+		print("evolve: no nest with room behind it")
 		return
 	home.build(spot, "stabilizer")
 	home.stash = [{"id": "a_acid", "gift": true}, {"id": "a_poison", "gift": true}]
@@ -197,31 +198,42 @@ func _evolve() -> void:
 	game.refresh()
 
 
-## A homeland built up by hand -- every kind of building, the four new species -- its boss battle, the relic, the
+## A homeland built up by hand -- the battle line full of nests (the four new species, elites), behind it every school's
+## buildings -- a kind taken out of the shop, a nest raised elite, the wonder built, its boss battle, the relic, the
 ## packing, the flight, the volcano.
 func _rich() -> void:
 	var h := game.home
-	h.terrain = {Vector2i(0, 0): "pond", Vector2i(5, 2): "tree", Vector2i(0, 3): "tree", Vector2i(5, 3): "pond"}
+	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree", Vector2i(3, 3): "pond"}
 	h.buildings.clear()
-	var plan := [[Vector2i(0, 0), "pool", 3, []], [Vector2i(1, 0), "spore_pool", 2, []], [Vector2i(2, 0), "nest_red", 3, ["acid", "poison"]],
-		[Vector2i(3, 0), "stabilizer", 2, []], [Vector2i(4, 0), "nest_blue", 2, ["blade", "wings"]], [Vector2i(5, 0), "mine", 1, []],
-		[Vector2i(0, 1), "gym", 2, []], [Vector2i(1, 1), "nest_red", 1, []], [Vector2i(2, 1), "nest_green", 2, ["shell", "plasma"]],
-		[Vector2i(3, 1), "hot_spring", 1, []], [Vector2i(4, 1), "forge", 1, []], [Vector2i(5, 1), "pool", 1, []],
-		[Vector2i(0, 2), "vine_wall", 2, []], [Vector2i(1, 2), "wall", 1, []], [Vector2i(2, 2), "stabilizer", 1, []],
-		[Vector2i(3, 2), "nest_red", 2, ["flame", "blade"]], [Vector2i(4, 2), "nest_white", 1, []],
-		[Vector2i(1, 3), "spore_pool", 1, []], [Vector2i(2, 3), "sampler", 1, []], [Vector2i(3, 3), "nest_gold", 1, []],
-		[Vector2i(4, 3), "nest_red", 1, ["shell"]]]
+	# [plot, kind, nest's choices (or a level), affixes]
+	var plan := [[Vector2i(0, 0), "nest_green", ["count", "elite"], ["shell", "plasma"]],
+		[Vector2i(1, 0), "nest_red", ["elite"], ["horn", "hide"]], [Vector2i(2, 0), "nest_red", ["count", "count"], ["flame", "blade"]],
+		[Vector2i(3, 0), "nest_red", [], []], [Vector2i(4, 0), "nest_green", [], ["shell"]], [Vector2i(5, 0), "nest_gold", ["elite"], []],
+		[Vector2i(0, 1), "nest_blue", ["count"], ["blade", "wings"]], [Vector2i(1, 1), "nest_red", ["count", "elite"], ["acid", "poison"]],
+		[Vector2i(2, 1), "nest_white", [], []], [Vector2i(3, 1), "nest_blue", ["count"], ["haste"]], [Vector2i(5, 1), "nest_blue", [], []],
+		[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "stabilizer", 1, []], [Vector2i(2, 2), "stabilizer", 1, []],
+		[Vector2i(3, 2), "horde_totem", 1, []], [Vector2i(4, 2), "champion_hall", 1, []], [Vector2i(5, 2), "watchtower", 1, []],
+		[Vector2i(0, 3), "stabilizer", 1, []], [Vector2i(1, 3), "sampler", 2, []], [Vector2i(2, 3), "vanguard", 1, []],
+		[Vector2i(3, 3), "spore_pool", 2, []], [Vector2i(4, 3), "vault", 1, []]]
 	for step in plan:
 		h.build(step[0], step[1])
-		h.buildings[step[0]].level = step[2]
-		h.buildings[step[0]].affixes = step[3].duplicate()
+		var b: Dictionary = h.buildings[step[0]]
+		if step[2] is Array:
+			b.path = step[2].duplicate()
+			b.level = 1 + b.path.size()
+		else:
+			b.level = step[2]
+		b.affixes = step[3].duplicate()
 	h.relics = ["tooth", "egg"]
-	h.gold = 14
+	h.wonders = ["titan", "brood"]
+	h.wonder = ""
+	h.gold = 30
 	h.biomass = 40
 	h.genes = 8
 	h.alien = 2
 	h.hp = h.hp_max()
 	h.stock(game.run.rng, 0)
+	h.removes = Content.REMOVES
 	game.home_view.lay_ground()
 	game.home_view.refresh_buildings(false)
 	game._version += 1
@@ -234,7 +246,38 @@ func _rich() -> void:
 	await _frames(4)
 	await _shot("rich_relic")
 	game.hud._relic_hover = ""
-	for look in [[Vector2i(2, 0), "rich_info_miasma"], [Vector2i(4, 0), "rich_info_falcon"], [Vector2i(1, 0), "rich_info_spore_pool"]]:
+	game.toggle_removing()
+	await _frames(10)
+	await _shot("remove_mode")
+	game.hold(0)
+	await _frames(20)
+	await _shot("removed")
+	h.stash = [{"id": "raise", "gift": true}]
+	game.refresh()
+	await _frames(10)
+	game.hold_kept(0)
+	game.hover = {"plot": Vector2i(3, 0), "unit": ""}
+	game._click()
+	await _frames(10)
+	await _shot("raise_choice")
+	game.aim("elite")
+	await _frames(6)
+	await _shot("raise_choice_elite")
+	game.act("choose", {"choice": "elite"})
+	game.hover = {"plot": Vector2i(3, 0), "unit": ""}
+	game.refresh()
+	await _frames(20)
+	await _shot("raised_elite")
+	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
+	game.hud._wonder_hover = "titan"
+	game.aim("titan")
+	await _frames(6)
+	await _shot("wonder_aim")
+	game.hud._wonder_hover = ""
+	game.act("wonder", {"id": "titan"})
+	await _frames(50)
+	await _shot("wonder_built")
+	for look in [[Vector2i(1, 1), "rich_info_miasma"], [Vector2i(0, 1), "rich_info_falcon"], [Vector2i(3, 2), "rich_info_totem"]]:
 		game.hover = {"plot": look[0], "unit": ""}
 		game.refresh()
 		await _frames(4)
@@ -406,7 +449,7 @@ func _bot(rounds: int) -> void:
 						restocked += 1
 						continue
 					break
-				game.act(play[0], {"slot": play[1], "at": play[2]})
+				_do(play)
 		else:
 			_play_all()
 		await _frames(4)
@@ -434,7 +477,15 @@ func _play_all() -> void:
 		var play := Policy.any_play(game.home, rng)
 		if play.is_empty():
 			break
-		game.act(play[0], {"slot": play[1], "at": play[2]})
+		_do(play)
+
+
+## A Policy play done through the game's one door.
+func _do(play: Array) -> void:
+	if play[0] == "wonder":
+		game.act("wonder", {"id": play[1]})
+	else:
+		game.act(play[0], {"slot": play[1], "at": play[2], "choice": play[3] if play.size() > 3 else "count"})
 
 
 func _until_plan() -> void:
