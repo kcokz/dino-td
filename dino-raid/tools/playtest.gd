@@ -3,7 +3,8 @@ extends SceneTree
 ##
 ##   Godot --path dino-raid --script res://tools/playtest.gd -- <folder for frames> [bot [rounds] [seed] [smart]]
 ##
-## Without "bot": the ark chosen and the rainforest arrived in; the first rounds slowly -- the round's army hatching,
+## Without "bot": the title and its settings, then the ark chosen and the rainforest arrived in, the pause menu; the
+## first rounds slowly -- the round's army hatching,
 ## the shelf, special ground and a nest pointed at, each offer taken up over where it goes with what it would change
 ## and the forecast it brings, an offer kept in the stash and put down again, a nest evolved, the shelf
 ## restocked, buys, battles fought, the free pick after them -- then a homeland built up by hand (every kind of
@@ -30,6 +31,7 @@ func _init() -> void:
 	seed = int(args[3]) if args.size() > 3 else 5
 	rng.seed = seed
 	Run.current = Run.new(seed)
+	Game.show_title = not bot
 	game = load("res://scenes/Game.tscn").instantiate()
 	root.add_child(game)
 	if bot:
@@ -39,8 +41,18 @@ func _init() -> void:
 
 
 func _scripted() -> void:
-	await _until_screen("选一艘方舟")
+	while game.menu == null or game.menu.screen != "title":
+		await process_frame
+	await _wait(3.6)
+	await _shot("title")
+	game.menu._picked.emit("settings")
+	await _wait(0.5)
+	await _shot("title_settings")
+	game.menu._settings_closed.emit()
 	await _frames(10)
+	game.menu._picked.emit("new")
+	await _until_screen("选一艘方舟")
+	await _wait(0.6)
 	await _shot("ark_choice")
 	game.hud.chosen.emit("war")
 	await _until_screen("到了")
@@ -49,6 +61,11 @@ func _scripted() -> void:
 	game.hud.chosen.emit("开始")
 	await _until_plan()
 	await _shot("plan_r1")
+	game.pause()
+	await _wait(0.5)
+	await _shot("pause")
+	game.menu._picked.emit("resume")
+	await _frames(10)
 	_check_pointing()
 	var home := game.home
 	for t in ["pond", "tree"]:
@@ -205,12 +222,15 @@ func _rich() -> void:
 	var h := game.home
 	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree", Vector2i(3, 3): "pond"}
 	h.buildings.clear()
-	# [plot, kind, nest's choices (or a level), affixes]
-	var plan := [[Vector2i(0, 0), "nest_green", ["count", "elite"], ["shell", "plasma"]],
-		[Vector2i(1, 0), "nest_red", ["elite"], ["horn", "hide"]], [Vector2i(2, 0), "nest_red", ["count", "count"], ["flame", "blade"]],
-		[Vector2i(3, 0), "nest_red", [], []], [Vector2i(4, 0), "nest_green", [], ["shell"]], [Vector2i(5, 0), "nest_gold", ["elite"], []],
-		[Vector2i(0, 1), "nest_blue", ["count"], ["blade", "wings"]], [Vector2i(1, 1), "nest_red", ["count", "elite"], ["acid", "poison"]],
-		[Vector2i(2, 1), "nest_white", [], []], [Vector2i(3, 1), "nest_blue", ["count"], ["haste"]], [Vector2i(5, 1), "nest_blue", [], []],
+	# [plot, kind, nest's choices (or a level), affixes] -- the battle line laid out for the nests' gifts: two greens
+	# guarding (a white caring behind one, scavengers behind the other), four reds swarming, a gold alone at the edge, a
+	# blue with no cover yet (nothing in front of it), a mutant with two affixes.
+	var plan := [[Vector2i(0, 0), "nest_green", ["count"], ["shell"]],
+		[Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]], [Vector2i(2, 0), "nest_red", ["count", "count"], ["flame", "blade"]],
+		[Vector2i(3, 0), "nest_green", [], []], [Vector2i(5, 0), "nest_gold", ["elite"], []],
+		[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", ["count"], ["hide"]],
+		[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_scav", ["count"], []],
+		[Vector2i(4, 1), "nest_blue", ["count"], []], [Vector2i(5, 1), "nest_mutant", ["count"], ["acid", "poison"]],
 		[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "stabilizer", 1, []], [Vector2i(2, 2), "stabilizer", 1, []],
 		[Vector2i(3, 2), "horde_totem", 1, []], [Vector2i(4, 2), "champion_hall", 1, []], [Vector2i(5, 2), "watchtower", 1, []],
 		[Vector2i(0, 3), "stabilizer", 1, []], [Vector2i(1, 3), "sampler", 2, []], [Vector2i(2, 3), "vanguard", 1, []],
@@ -277,17 +297,30 @@ func _rich() -> void:
 	game.act("wonder", {"id": "titan"})
 	await _frames(50)
 	await _shot("wonder_built")
-	for look in [[Vector2i(1, 1), "rich_info_miasma"], [Vector2i(0, 1), "rich_info_falcon"], [Vector2i(3, 2), "rich_info_totem"]]:
+	# A green taken up over the gap in front of the blue: the blue would be under cover, the gold no longer alone.
+	h.shelf[1] = {"id": "b_green"}
+	game.hud.deal(h.shelf)
+	game.refresh()
+	await _frames(20)
+	game.hold(1)
+	game.hover = {"plot": Vector2i(4, 0), "unit": ""}
+	game.refresh()
+	await _frames(10)
+	await _shot("aim_gift_tradeoff")
+	game._let_go()
+	for look in [[Vector2i(5, 1), "rich_info_miasma"], [Vector2i(1, 0), "rich_info_falcon"], [Vector2i(3, 2), "rich_info_totem"],
+			[Vector2i(0, 0), "rich_info_guard"], [Vector2i(4, 1), "rich_info_cover_off"], [Vector2i(5, 0), "rich_info_alone"],
+			[Vector2i(3, 1), "rich_info_scav"]]:
 		game.hover = {"plot": look[0], "unit": ""}
 		game.refresh()
 		await _frames(4)
 		await _shot(look[1])
 	for u in h.army():
-		if u.kind == "thunder":
+		if u.kind == "scav":
 			game.hover = {"plot": HomeView.NOWHERE, "unit": u.id}
 			game.refresh()
 			await _frames(4)
-			await _shot("rich_info_thunder_unit")
+			await _shot("rich_info_scav_unit")
 			break
 	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
 	game.refresh()

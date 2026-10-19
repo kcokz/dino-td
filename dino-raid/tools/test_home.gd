@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-19) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-20) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -12,6 +12,7 @@ func _init() -> void:
 	_zones()
 	_making()
 	_neighbours()
+	_nest_gifts()
 	_terrain()
 	_rules()
 	_affixes_and_recipes()
@@ -132,7 +133,14 @@ func _neighbours() -> void:
 	h.build(Vector2i(1, 0), "nest_red")
 	h.build(Vector2i(2, 0), "nest_red")
 	h.build(Vector2i(0, 0), "nest_red")
-	check("three in a row: the middle one makes one more", h.army().size() == 4 and h.count(Vector2i(1, 0)) == 2)
+	check("three reds in a row: the middle one swarms, one more", h.army().size() == 4 and h.count(Vector2i(1, 0)) == 2
+		and h.trait_on(Vector2i(1, 0)) and not h.trait_on(Vector2i(0, 0)))
+	check("an end one is one red short", h.trait_need(Vector2i(0, 0)) == "还差 1 个红巢挨着", h.trait_need(Vector2i(0, 0)))
+	var bl := bare()
+	bl.build(Vector2i(1, 0), "nest_blue")
+	bl.build(Vector2i(2, 0), "nest_blue")
+	bl.build(Vector2i(0, 0), "nest_blue")
+	check("three blues in a row: no one more -- swarming is the red's", bl.army().size() == 3)
 	var g := bare()
 	g.build(Vector2i(1, 1), "nest_blue")
 	g.build(Vector2i(1, 2), "pool")
@@ -149,6 +157,99 @@ func _neighbours() -> void:
 	s.build(Vector2i(4, 3), "stabilizer")
 	s.build(Vector2i(5, 2), "stabilizer")
 	check("a stabilizer helps the nests of its column only", s.slots(Vector2i(4, 0)) == 2, s.slots(Vector2i(4, 0)))
+
+
+## Each nest's gift, where it stands (GAME-DESIGN 20).
+func _nest_gifts() -> void:
+	# Guarding: a green in front keeps theirs off the one behind it in its column while it stands.
+	var g := bare()
+	g.build(Vector2i(0, 0), "nest_green")
+	g.build(Vector2i(0, 1), "nest_red")
+	g.build(Vector2i(1, 1), "nest_green")
+	check("a green in front guards; in the second row it does not", g.spec_of(Vector2i(0, 0)).guard
+		and not g.spec_of(Vector2i(1, 1)).guard and g.trait_need(Vector2i(1, 1)) == "要站第一排")
+	var gf := Fight.make(g.army(), ["grey", "grey", "grey", "grey", "purple"], 1.0)
+	var bad := 0
+	var on_guard := 0
+	while not gf.over:
+		var up := gf.alive("ours").any(func(u: Dictionary) -> bool: return u.get("guard", false))
+		for e in gf.step():
+			if e.t == "hit":
+				var to: Dictionary = gf.unit(e.to)
+				if to.side == "ours" and int(to.row) == 1 and float(to.lane) == 0.0 and up:
+					bad += 1
+				if to.side == "ours" and to.get("guard", false):
+					on_guard += 1
+	check("while the green stands, the red behind it is not hit; the green is", bad == 0 and on_guard > 0, [bad, on_guard])
+	# Cover: a blue in the second row with a nest in front of it reaches further and hits through armour.
+	var c := bare()
+	c.build(Vector2i(1, 0), "nest_red")
+	c.build(Vector2i(1, 1), "nest_blue")
+	c.build(Vector2i(2, 1), "nest_blue")
+	c.build(Vector2i(3, 0), "nest_blue")
+	var cs := Content.unit_stats(c.spec_of(Vector2i(1, 1)))
+	var bare_blue := Content.unit_stats(c.spec_of(Vector2i(2, 1)))
+	check("a blue under cover: 2 m further, 1 more each hit", is_equal_approx(float(cs.range), 8.0) and int(cs.pierce) == 1
+		and is_equal_approx(float(bare_blue.range), 6.0) and int(bare_blue.pierce) == 0, [cs.range, cs.pierce, bare_blue.range])
+	check("no cover: nothing in front; in front: not the second row", c.trait_need(Vector2i(2, 1)) == "身前同一列还没有巢"
+		and c.trait_need(Vector2i(3, 0)) == "要站第二排", [c.trait_need(Vector2i(2, 1)), c.trait_need(Vector2i(3, 0))])
+	c.buildings[Vector2i(1, 1)].affixes = ["blade", "wings"]
+	check("a blue nest hatching fliers: no cover for those that do not reach far",
+		is_equal_approx(float(Content.unit_stats(c.spec_of(Vector2i(1, 1))).range), float(Content.UNITS.falcon.range)))
+	# Alone: a gold with no nest left or right of it is bigger and stronger.
+	var a := bare()
+	a.build(Vector2i(2, 0), "nest_gold")
+	a.build(Vector2i(2, 1), "nest_red")
+	var lone := a.spec_of(Vector2i(2, 0))
+	check("a gold alone (one behind it does not count): +30% hit points and attack, bigger",
+		is_equal_approx(float(lone.hp_mult), Content.ALONE) and is_equal_approx(float(lone.atk_mult), Content.ALONE)
+		and is_equal_approx(float(lone.size_mult), Content.ALONE_SIZE))
+	a.build(Vector2i(3, 0), "nest_red")
+	check("with a nest beside it, no more", is_equal_approx(float(a.spec_of(Vector2i(2, 0)).hp_mult), 1.0)
+		and a.trait_need(Vector2i(2, 0)) == "左右有巢挨着")
+	# Care: a white heals twice as much, only its own column.
+	var w := bare()
+	w.build(Vector2i(0, 0), "nest_green")
+	w.build(Vector2i(0, 1), "nest_white")
+	w.build(Vector2i(1, 0), "nest_red")
+	w.build(Vector2i(1, 1), "nest_red")
+	check("a white heals 3 x 2", int(Content.unit_stats(w.spec_of(Vector2i(0, 1))).heal) == 3 * Content.CARE)
+	var wf := Fight.make(w.army(), ["grey", "grey", "grey", "grey", "grey"], 1.0)
+	var heals := 0
+	var astray := 0
+	for e in wf.run():
+		if e.t == "heal":
+			heals += 1
+			if not is_equal_approx(float(wf.unit(e.to).lane), 0.0):
+				astray += 1
+	check("it heals only its own column", heals > 0 and astray == 0, [heals, astray])
+	# Scavenging: those standing at the end bring back gold.
+	var s := bare()
+	s.build(Vector2i(2, 1), "nest_scav")
+	s.buildings[Vector2i(2, 1)].path = ["count"]
+	s.build(Vector2i(2, 0), "nest_green")
+	var sf := Fight.make(s.army(), ["mite"], 1.0)
+	sf.run()
+	check("two scavengers standing: 2 gold each", sf.result == "won" and sf.scavenged() == 2 * Content.SCAVENGE,
+		[sf.result, sf.scavenged()])
+	var r := Run.new(5)
+	r.choose_ark("war")
+	r.home.buildings.clear()
+	r.home.build(Vector2i(2, 1), "nest_scav")
+	r.home.build(Vector2i(2, 0), "nest_green")
+	var before := r.home.gold
+	var rf := Fight.make(r.home.army(), [], 1.0)
+	rf.run()
+	var out := r.finish(rf)
+	check("and the run gets it", int(out.scavenged) == Content.SCAVENGE
+		and r.home.gold == before + Content.WIN_GOLD + Content.SCAVENGE + int(out.interest), [out, r.home.gold - before])
+	# Mutant: one more affix place.
+	var m := bare()
+	m.build(Vector2i(0, 0), "nest_mutant")
+	m.build(Vector2i(1, 0), "nest_red")
+	check("a mutant nest carries two affixes, a red one", m.slots(Vector2i(0, 0)) == 2 and m.slots(Vector2i(1, 0)) == 1)
+	check("the cards say each gift", Content.building_text("nest_blue", 1).contains("掩护射击")
+		and Content.building_text("nest_mutant", 1).contains("变异"))
 
 
 func _terrain() -> void:

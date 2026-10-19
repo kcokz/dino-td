@@ -59,16 +59,13 @@ static func play(h: Home, p: Array) -> Array:
 	return []
 
 
-## Which school a good is for: its building's; a nest's by what it makes (blue the ranged, green and white the front,
-## red the horde, gold the elite); an affix's genes; a raise's by its choice.
+## Which school a good is for: its building's -- a nest's none, its gift fitting several (GAME-DESIGN 20); an affix's
+## genes; a raise's by its choice.
 static func school_of(oi: Dictionary, choice := "count") -> String:
 	var o := Content.offer(oi)
 	match o.type:
 		"build":
-			var b: Dictionary = Content.BUILDINGS[o.builds]
-			if b.has("nest"):
-				return {"blue": "ranged", "green": "front", "white": "front", "red": "horde", "gold": "elite"}.get(b.nest, "")
-			return str(b.get("school", ""))
+			return str(Content.BUILDINGS[o.builds].get("school", ""))
 		"affix":
 			return "genes"
 		"raise":
@@ -193,12 +190,13 @@ static func best_goods(run: Run) -> Array:
 	return run.default_goods()
 
 
-## How good a homeland looks: this round's battle; the army its nests can make, as far as what comes in feeds it; what
-## comes in and what is kept -- for the gold school, saving and the most interest count more; for any school, its own
-## buildings (up to a few levels of them); for the genes school, nests halfway to a new species.
+## How good a homeland looks: this round's battle (and what scavengers bring back); the army its nests can make, as far
+## as what comes in feeds it; what comes in and what is kept -- for the gold school, saving and the most interest count
+## more; for any school, its own buildings (up to a few levels of them); for the genes school, nests halfway to a new
+## species.
 static func score(run: Run, h: Home, school := "") -> float:
 	var b := _battle(run, h)
-	var s := 300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0
+	var s := (300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0) + 10.0 * float(b.loot)
 	var full := h.clone()
 	full.biomass = 999
 	var food := 0
@@ -236,4 +234,4 @@ static func _halfway(h: Home) -> int:
 static func _battle(run: Run, h: Home) -> Dictionary:
 	var f := Fight.make(h.army(), run.wave(), run.power())
 	f.run()
-	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm())}
+	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm()), "loot": f.scavenged()}
