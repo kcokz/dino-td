@@ -146,8 +146,9 @@ static func creature(edge: float, c: Color, theirs := false, affixes: Array = []
 	return root
 
 
-## What marks a kind: our evolved species (a beak and crest, glowing spikes, a poison haze, cracks of fire) and the
-## monsters of each place (spore sacs, a beetle's plate and horn, a salamander's tail, the bosses').
+## What marks a kind: our evolved species (a beak and crest, glowing spikes, a poison haze, cracks of fire), the
+## scavenger's sack, the mutant's third eye, and the monsters of each place (spore sacs, a beetle's plate and horn, a
+## salamander's tail, the bosses').
 static func _marks(body: MeshInstance3D, edge: float, c: Color, kind: String) -> void:
 	match kind:
 		"falcon":
@@ -178,6 +179,18 @@ static func _marks(body: MeshInstance3D, edge: float, c: Color, kind: String) ->
 					var horn := box(Vector3(0.18, edge * 0.4, 0.18), Color(0.2, 0.15, 0.12), Vector3(side * edge * 0.32, edge * 0.7, edge * 0.3))
 					horn.rotation.x = 0.4
 					body.add_child(horn)
+		"scav":
+			# A sack of what it picked up, on its back.
+			body.add_child(ball(edge * 0.34, Color(0.58, 0.46, 0.3), Vector3(0, edge * 0.5, -edge * 0.42)))
+			body.add_child(box(Vector3(edge * 0.5, 0.06, 0.06), Color(0.35, 0.26, 0.16), Vector3(0, edge * 0.62, -edge * 0.1)))
+		"mutant":
+			# A third eye, and lumps where it keeps changing.
+			var third := ball(edge * 0.12, Color(0.65, 1.0, 0.45), Vector3(0, edge * 0.34, edge * 0.5))
+			third.material_override = glow(Color(0.65, 1.0, 0.45), 1.4)
+			body.add_child(third)
+			for i in 3:
+				body.add_child(ball(edge * (0.15 + i * 0.04), c.lightened(0.3), Vector3(edge * (0.48 - i * 0.42),
+					edge * (0.48 - i * 0.12), edge * (-0.3 + i * 0.22))))
 		"titan":
 			body.add_child(box(Vector3(edge * 1.08, edge * 0.22, edge * 1.08), c.darkened(0.4), Vector3(0, edge * 0.55, 0)))
 			for side in [-1.0, 1.0]:

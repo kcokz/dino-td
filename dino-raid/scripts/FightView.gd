@@ -49,6 +49,17 @@ func node(id: int) -> Node3D:
 	return _nodes.get(id)
 
 
+## The scavengers standing at the end, each with the gold it brings back over it.
+func show_loot() -> void:
+	if fight == null:
+		return
+	for u in fight.alive("ours"):
+		var n: Node3D = _nodes.get(u.id)
+		if u.get("scavenge", false) and n:
+			tags.float_text(n.position + Vector3.UP * (float(u.size) + 0.8), "+%d 金" % Content.SCAVENGE,
+				Color(1.0, 0.82, 0.3), 22)
+
+
 func _process(delta: float) -> void:
 	if fight == null:
 		return

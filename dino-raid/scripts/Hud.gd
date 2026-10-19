@@ -6,19 +6,19 @@ extends CanvasLayer
 ## its rule, the round, the homeland's health, the biomass and genes, this round's army and the relics at the top left;
 ## who comes this battle and the next, how this battle will go as things stand, and what the cursor points at, at the
 ## top right; a battle's count and clock; when a place is held, the relic to choose and what the ark carries on (and
-## what the homeland will eat and make with it); when the ark lands, the new place's rule and ground. It shows; Game
-## decides.
+## what the homeland will eat and make with it); when the ark lands, the new place's rule and ground. All in the one
+## look (Style, GAME-DESIGN 21). It shows; Game decides.
 
 signal chosen(value: Variant)
 
 const SHELF_SCALE := 0.84
 const HOVER_SCALE := 1.15
 const KEPT_SCALE := 0.42
-const WIN := Color(0.55, 1.0, 0.5)
-const LOSE := Color(1.0, 0.48, 0.4)
-const CREAM := Color(0.98, 0.93, 0.82)
-const GOLD := Color(1.0, 0.82, 0.25)
-const BOSS := Color(0.95, 0.4, 0.3)
+const WIN := Style.JADE
+const LOSE := Style.CORAL
+const CREAM := Style.PARCHMENT
+const GOLD := Style.GOLD_BRIGHT
+const BOSS := Style.CORAL
 
 var game: Game
 var _root: Control
@@ -33,6 +33,9 @@ var _gold: Control
 var _reroll: Button
 var _go: Button
 var _corner: VBoxContainer
+var _corner_frame: PanelContainer
+var _menu: Button
+var _banner_rule: Control
 var _title: Label
 var _rule: Label
 var _hp: Control
@@ -55,11 +58,12 @@ var _waves_for := ""
 var _forecast: PanelContainer
 var _fc_head: Label
 var _fc_line: Label
+var _fc_loot: Label
 var _fc_more: Label
 var _info: PanelContainer
 var _info_text: Label
 var _hint: Label
-var _banner: VBoxContainer
+var _banner: PanelContainer
 var _banner_title: Label
 var _banner_sub: Label
 var _banner_tween: Tween
@@ -82,18 +86,44 @@ func setup(p_game: Game) -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.theme = Style.theme()
 	add_child(_root)
+	var edges := ColorRect.new()
+	edges.set_anchors_preset(Control.PRESET_FULL_RECT)
+	edges.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var em := ShaderMaterial.new()
+	em.shader = Style.edge_shader()
+	edges.material = em
+	_root.add_child(edges)
 
-	# Top left: where we are and its rule, the homeland, the resources, this round's army; the relics beside.
+	# Top left, on a panel of ink: where we are and its rule, the homeland, the resources, this round's army; the
+	# relics beside.
+	_corner_frame = PanelContainer.new()
+	var frame := Style.panel(14.0)
+	frame.top = Color(0.045, 0.06, 0.065, 0.74)
+	frame.bottom = Color(0.03, 0.04, 0.045, 0.6)
+	frame.shade = 0.25
+	_corner_frame.add_theme_stylebox_override("panel", frame)
+	_corner_frame.position = Vector2(12, 8)
+	_corner_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_corner_frame)
 	_corner = VBoxContainer.new()
-	_corner.position = Vector2(18, 10)
 	_corner.add_theme_constant_override("separation", 4)
 	_corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_corner)
-	_title = _label("", 24, Fonts.serif(900), CREAM)
+	_corner_frame.add_child(_corner)
+	_title = _label("", 24, Fonts.serif(900), Style.GOLD_BRIGHT)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_corner.add_child(_title)
-	_rule = _label("", 14, Fonts.serif(700), Color(0.95, 0.78, 0.55))
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 14)
+	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_row.add_child(_title)
+	_relics = HBoxContainer.new()
+	_relics.add_theme_constant_override("separation", 6)
+	_relics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_relics.alignment = BoxContainer.ALIGNMENT_END
+	title_row.add_child(_relics)
+	_corner.add_child(title_row)
+	_rule = _label("", 14, Fonts.serif(700), Color(0.93, 0.8, 0.6))
 	_rule.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_corner.add_child(_rule)
 	_hp = Control.new()
@@ -107,7 +137,7 @@ func setup(p_game: Game) -> void:
 	_army = _label("", 16, Fonts.serif(700), Color(0.92, 0.86, 0.74))
 	_army.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_corner.add_child(_army)
-	_bonus = _label("", 15, Fonts.serif(800), Color(1.0, 0.75, 0.4))
+	_bonus = _label("", 15, Fonts.serif(800), Style.AMBER)
 	_bonus.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_bonus.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	_bonus.custom_minimum_size = Vector2(340, 0)
@@ -117,7 +147,7 @@ func setup(p_game: Game) -> void:
 	_wonder_box = VBoxContainer.new()
 	_wonder_box.add_theme_constant_override("separation", 6)
 	_root.add_child(_wonder_box)
-	_wonder_title = _label("奇观（一局只能造一座）", 15, Fonts.serif(800), Color(1.0, 0.88, 0.6))
+	_wonder_title = _label("奇观（一局只能造一座）", 15, Fonts.serif(800), Style.GOLD_BRIGHT)
 	_wonder_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_wonder_box.add_child(_wonder_title)
 	var wonder_row := HBoxContainer.new()
@@ -126,8 +156,7 @@ func setup(p_game: Game) -> void:
 	for id in game.home.wonders:
 		var w: Dictionary = Content.WONDERS[id]
 		var b := _button("%s · %d 金" % [w.name, w.price], Vector2(160, 38), 16)
-		b.add_theme_stylebox_override("normal", _plate((w.color as Color).lightened(0.2), (w.color as Color).darkened(0.4)))
-		b.add_theme_stylebox_override("hover", _plate((w.color as Color).lightened(0.35), (w.color as Color).darkened(0.4)))
+		b.add_theme_color_override("font_color", (w.color as Color).lerp(Style.PARCHMENT, 0.55))
 		b.mouse_entered.connect(func() -> void:
 			_wonder_hover = id
 			game.aim(id))
@@ -138,10 +167,7 @@ func setup(p_game: Game) -> void:
 		b.pressed.connect(func() -> void: game.act("wonder", {"id": id}))
 		wonder_row.add_child(b)
 		_wonder_buttons[id] = b
-	_relics = HBoxContainer.new()
-	_relics.position = Vector2(300, 10)
-	_relics.add_theme_constant_override("separation", 6)
-	_root.add_child(_relics)
+
 
 	# Top right: who comes, and how it will go; under them, what the cursor points at.
 	_right = VBoxContainer.new()
@@ -157,39 +183,42 @@ func setup(p_game: Game) -> void:
 	_waves.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right.add_child(_waves)
 	_forecast = PanelContainer.new()
-	_forecast.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.9), Color(0.72, 0.55, 0.32), 10))
+	_forecast.add_theme_stylebox_override("panel", Style.panel(14.0))
 	_forecast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_forecast.custom_minimum_size = Vector2(250, 0)
 	right.add_child(_forecast)
 	var fc := VBoxContainer.new()
 	fc.add_theme_constant_override("separation", 2)
 	_forecast.add_child(fc)
-	_fc_head = _label("", 14, Fonts.serif(600), Color(0.9, 0.84, 0.72))
+	_fc_head = _label("", 14, Fonts.serif(600), Style.PARCHMENT_DIM)
 	_fc_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	fc.add_child(_fc_head)
 	_fc_line = _label("", 24, Fonts.serif(900), WIN)
 	_fc_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	fc.add_child(_fc_line)
-	_fc_more = _label("", 14, Fonts.serif(600), Color(0.85, 0.8, 0.7))
+	_fc_loot = _label("", 16, Fonts.serif(800), Style.AMBER)
+	_fc_loot.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fc.add_child(_fc_loot)
+	_fc_more = _label("", 14, Fonts.serif(600), Style.PARCHMENT_DIM)
 	_fc_more.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	fc.add_child(_fc_more)
 
 	# What the cursor points at.
 	_info = PanelContainer.new()
-	_info.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.9), Color(0.72, 0.55, 0.32), 12))
+	_info.add_theme_stylebox_override("panel", Style.panel(14.0))
 	_info.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_info.position = Vector2(18, 190)
 	_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_info.visible = false
 	_root.add_child(_info)
-	_info_text = _label("", 15, Fonts.serif(500), Color(0.96, 0.92, 0.84))
+	_info_text = _label("", 15, Fonts.serif(500), Style.PARCHMENT)
 	_info_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_info_text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	_info_text.custom_minimum_size = Vector2(300, 0)
 	_info.add_child(_info_text)
 
 	# Bottom left: the stash's count, and the place to keep the offer taken up (the stash's cards go in under the shelf).
-	_kept_label = _label("", 15, Fonts.serif(800), Color(0.85, 0.95, 0.8))
+	_kept_label = _label("", 15, Fonts.serif(800), Style.PARCHMENT)
 	_kept_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_root.add_child(_kept_label)
 	_store_slot = Control.new()
@@ -226,12 +255,19 @@ func setup(p_game: Game) -> void:
 	_remove.position = Vector2(-214, -272)
 	_remove.pressed.connect(func() -> void: game.toggle_removing())
 	_root.add_child(_remove)
-	_go = _button("出战！", Vector2(188, 64), 26)
+	_go = _button("出战！", Vector2(188, 64), 26, true)
 	_go.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_go.position = Vector2(-214, -150)
 	_go.pressed.connect(func() -> void: game.act("depart" if game.phase == Game.Phase.PACK else "fight"))
 	_root.add_child(_go)
-	_hint = _label("", 17, Fonts.serif(700), Color(1.0, 0.93, 0.75))
+	# Bottom left, under the gold: the pause menu (Esc does the same).
+	_menu = _button("菜单", Vector2(96, 34), 15)
+	_menu.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_menu.position = Vector2(24, -50)
+	_menu.pressed.connect(func() -> void: game.pause())
+	_root.add_child(_menu)
+	_hint = _label("", 17, Fonts.serif(700), Style.GOLD_BRIGHT)
+	_hint.add_theme_stylebox_override("normal", Style.Streak.new(8.0))
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_hint.position = Vector2(-60, -236)
@@ -239,7 +275,7 @@ func setup(p_game: Game) -> void:
 
 	# A battle: the count and the clock, and the speed.
 	_battle = PanelContainer.new()
-	_battle.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.88), Color(0.72, 0.55, 0.32), 10))
+	_battle.add_theme_stylebox_override("panel", Style.panel(14.0))
 	_battle.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_battle.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_battle.position = Vector2(0, 12)
@@ -258,7 +294,7 @@ func setup(p_game: Game) -> void:
 
 	# A nest's raise: one more, or elite.
 	_choice = PanelContainer.new()
-	_choice.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.94), HomeView.ELITE_GOLD, 12))
+	_choice.add_theme_stylebox_override("panel", Style.panel(14.0, true))
 	_choice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_choice.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -282,7 +318,7 @@ func setup(p_game: Game) -> void:
 
 	# Packing: what the ark carries on.
 	_pack = PanelContainer.new()
-	_pack.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.92), Color(0.95, 0.75, 0.35), 14))
+	_pack.add_theme_stylebox_override("panel", Style.panel(16.0, true))
 	_pack.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_pack.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_pack.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -298,7 +334,8 @@ func setup(p_game: Game) -> void:
 	_pack_food = _label("", 17, Fonts.serif(800), WIN)
 	pack_box.add_child(_pack_food)
 
-	_banner = VBoxContainer.new()
+	_banner = PanelContainer.new()
+	_banner.add_theme_stylebox_override("panel", Style.Streak.new(14.0))
 	_banner.set_anchors_preset(Control.PRESET_CENTER)
 	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_banner.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -306,10 +343,21 @@ func setup(p_game: Game) -> void:
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_banner.modulate.a = 0.0
 	_root.add_child(_banner)
-	_banner_title = _label("", 40, Fonts.serif(900), Color(1.0, 0.95, 0.82))
-	_banner.add_child(_banner_title)
-	_banner_sub = _label("", 19, Fonts.serif(600), Color(0.95, 0.88, 0.75))
-	_banner.add_child(_banner_sub)
+	var banner_box := VBoxContainer.new()
+	banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_box.add_theme_constant_override("separation", 2)
+	_banner.add_child(banner_box)
+	_banner_title = _label("", 46, Fonts.serif(900), Style.GOLD_BRIGHT)
+	_banner_title.add_theme_constant_override("outline_size", 10)
+	banner_box.add_child(_banner_title)
+	_banner_rule = Control.new()
+	_banner_rule.custom_minimum_size = Vector2(460, 14)
+	_banner_rule.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_banner_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_banner_rule.draw.connect(func() -> void: Style.rule(_banner_rule, Vector2(230, 7), 460.0))
+	banner_box.add_child(_banner_rule)
+	_banner_sub = _label("", 20, Fonts.serif(700), Style.PARCHMENT)
+	banner_box.add_child(_banner_sub)
 
 	_overlay = Control.new()
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -326,7 +374,7 @@ func setup(p_game: Game) -> void:
 func _process(_delta: float) -> void:
 	_layout()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
-	_wonder_box.position = Vector2(18.0, _corner.position.y + _corner.size.y + 12.0)
+	_wonder_box.position = Vector2(18.0, _corner_frame.position.y + _corner_frame.size.y + 10.0)
 	var tip := game.describe() if _hovered == null and not _overlay.visible else ""
 	if not _overlay.visible:
 		if _relic_hover != "":
@@ -339,6 +387,12 @@ func _process(_delta: float) -> void:
 	_info.visible = tip != ""
 	if tip != "" and _info_text.text != tip:
 		_info_text.text = tip
+		# Smaller type when it would run down into the buttons at the bottom right.
+		var room := _root.size.y - 290.0 - _info.position.y - 24.0
+		for px in [15, 14, 13]:
+			_info_text.add_theme_font_size_override("font_size", px)
+			if _info_text.get_line_count() * _info_text.get_line_height() <= room:
+				break
 		_info.reset_size()
 	if _battle.visible and game.fight != null:
 		var f: Fight = game.fight
@@ -449,6 +503,7 @@ func refresh() -> void:
 	_reroll.text = "刷新（%s）" % ("免费" if price == 0 else "%d 金" % price)
 	_reroll.disabled = not planning or home.gold < price
 	_reroll.visible = not away and not packing
+	_menu.visible = not fighting
 	_gold.visible = not fighting
 	_gold.queue_redraw()
 	_hp.queue_redraw()
@@ -490,6 +545,7 @@ func refresh() -> void:
 			"——不够吃" if int(food[0]) > int(food[1]) else ""]
 		_pack_food.add_theme_color_override("font_color", LOSE if int(food[0]) > int(food[1]) else WIN)
 	_hint.text = game.hint()
+	_hint.visible = _hint.text != ""
 	_refresh_relics()
 	_refresh_waves()
 	_refresh_forecast()
@@ -511,12 +567,17 @@ func _refresh_relics() -> void:
 		icon.custom_minimum_size = Vector2(34, 34)
 		icon.mouse_filter = Control.MOUSE_FILTER_STOP
 		icon.draw.connect(func() -> void:
-			icon.draw_circle(Vector2(17, 17), 16.0, BOSS if r.get("boss", false) else Color(0.08, 0.07, 0.06, 0.9))
-			icon.draw_circle(Vector2(17, 17), 13.0, r.color)
+			# A medallion: a dark rim ringed in gold (coral for a boss's), the fossil's colour in it, its first word.
+			var c := Vector2(17, 17)
+			icon.draw_circle(c + Vector2(0, 2), 16.5, Color(0, 0, 0, 0.45))
+			icon.draw_circle(c, 16.5, Style.INK_DEEP)
+			icon.draw_arc(c, 15.0, 0.0, TAU, 40, BOSS if r.get("boss", false) else Style.GOLD, 1.8, true)
+			icon.draw_circle(c, 12.0, (r.color as Color).darkened(0.15))
+			icon.draw_circle(c + Vector2(-3, -4), 5.0, Color(1, 1, 1, 0.16))
 			var f := Fonts.serif(900)
 			var ch: String = r.name.left(1)
-			var w := f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-			icon.draw_string(f, Vector2(17 - w * 0.5, 23), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.12, 0.08, 0.04)))
+			var w := f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			icon.draw_string(f, Vector2(17 - w * 0.5, 22.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Style.INK_DEEP))
 		icon.mouse_entered.connect(func() -> void: _relic_hover = id)
 		icon.mouse_exited.connect(func() -> void:
 			if _relic_hover == id:
@@ -545,24 +606,29 @@ func _big(run: Run, ahead: int) -> String:
 
 func _wave_chip(name: String, wave: Array, now: bool) -> Control:
 	var chip := PanelContainer.new()
-	var edge := Color(1.0, 0.45, 0.35, 0.9) if now else Color(0.7, 0.62, 0.55, 0.7)
-	chip.add_theme_stylebox_override("panel", _panel(Color(0.09, 0.06, 0.06, 0.9), edge, 7))
+	var box := Style.panel(9.0)
+	box.cut = 6.0
+	box.edge = Style.CORAL if now else Style.GOLD_DIM
+	box.rule = Color(box.edge, 0.3)
+	box.studs = now
+	chip.add_theme_stylebox_override("panel", box)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.size_flags_horizontal = Control.SIZE_SHRINK_END
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 5)
 	chip.add_child(row)
-	row.add_child(_label(name, 15, Fonts.serif(800), Color(1.0, 0.82, 0.72) if now else Color(0.85, 0.8, 0.74)))
+	row.add_child(_label(name, 15, Fonts.serif(800), Color(1.0, 0.8, 0.7) if now else Style.PARCHMENT_DIM))
 	var counts := {}
 	for k in wave:
 		counts[k] = counts.get(k, 0) + 1
 	for k in counts:
-		var square := ColorRect.new()
-		square.color = Content.ENEMIES[k].color
-		square.custom_minimum_size = Vector2(18, 18)
-		square.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(square)
-		row.add_child(_label("%s×%d" % [Content.ENEMIES[k].name, counts[k]], 15, Fonts.serif(700), Color(1, 1, 1)))
+		var mark := Control.new()
+		mark.custom_minimum_size = Vector2(16, 16)
+		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var mc: Color = Content.ENEMIES[k].color
+		mark.draw.connect(func() -> void: Style.diamond(mark.get_canvas_item(), Vector2(8, 8), 7.5, mc, Color(0, 0, 0, 0.35)))
+		row.add_child(mark)
+		row.add_child(_label("%s×%d" % [Content.ENEMIES[k].name, counts[k]], 15, Fonts.serif(700), Style.PARCHMENT))
 	return chip
 
 
@@ -576,6 +642,10 @@ func _refresh_forecast() -> void:
 	_fc_head.text = "这样以后，这一仗会：" if not p.is_empty() else "照现在这样，这一仗会："
 	_fc_line.text = _verdict(shown)
 	_fc_line.add_theme_color_override("font_color", WIN if shown.result == "won" else LOSE)
+	var loot := int(shown.get("loot", 0))
+	var was := int(f.get("loot", 0))
+	_fc_loot.visible = loot > 0 or was > 0
+	_fc_loot.text = "拾荒兽带回 %d 金%s" % [loot, ("（现在 %d）" % was) if not p.is_empty() and was != loot else ""]
 	_fc_more.text = ("现在是：" + _verdict(f)) if not p.is_empty() else "（每一仗都照规矩打，结果算得出来）"
 
 
@@ -686,11 +756,11 @@ func choose_ark() -> String:
 	offered = Content.ARKS.keys()
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 20)
+	row.add_theme_constant_override("separation", 22)
 	box.add_child(row)
 	for id in Content.ARKS:
 		var a: Dictionary = Content.ARKS[id]
-		var b := _button("%s\n%s" % [a.name, a.says.replace("。", "\n")], Vector2(260, 130), 18)
+		var b := _tile(a.name, a.says.replace("。", "\n"), Style.AMBER, Vector2(272, 190))
 		b.pressed.connect(func() -> void: chosen.emit(id))
 		row.add_child(b)
 	var v: Variant = await chosen
@@ -709,8 +779,15 @@ func arrive(level: int) -> void:
 	var lines: Array = ["%s：%s" % [rule.name, rule.says]] + ground
 	if level == 0:
 		lines.push_front("阵地：家园最上面两排只能造巢。兵打仗时就站在巢的位置，最上面一排在最前")
-	box.add_child(_label("\n".join(lines), 19, Fonts.serif(700), Color(0.98, 0.9, 0.72)))
-	var b := _button("开始", Vector2(170, 52), 20)
+	var sheet := PanelContainer.new()
+	sheet.add_theme_stylebox_override("panel", Style.panel(26.0))
+	sheet.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(sheet)
+	var text := _label("\n".join(lines), 19, Fonts.serif(600), Style.PARCHMENT)
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	text.add_theme_constant_override("line_spacing", 8)
+	sheet.add_child(text)
+	var b := _button("开始", Vector2(190, 54), 21, true)
 	b.pressed.connect(func() -> void: chosen.emit("开始"))
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(b)
@@ -729,9 +806,8 @@ func choose_relic(ids: Array) -> String:
 	for id in ids:
 		var r: Dictionary = Content.RELICS[id]
 		var boss: bool = r.get("boss", false)
-		var b := _button("%s%s\n%s" % ["首领遗物 · " if boss else "", r.name, r.says.replace("；", "\n")], Vector2(240, 120), 18)
-		b.add_theme_stylebox_override("normal", _plate(r.color.lightened(0.25), BOSS if boss else r.color.darkened(0.4), 6 if boss else 3))
-		b.add_theme_stylebox_override("hover", _plate(r.color.lightened(0.4), BOSS if boss else r.color.darkened(0.4), 6 if boss else 3))
+		var b := _tile(r.name, ("首领遗物\n" if boss else "化石遗物\n") + r.says.replace("；", "\n"), r.color, Vector2(250, 190),
+			BOSS if boss else Style.GOLD)
 		b.pressed.connect(func() -> void: chosen.emit(id))
 		row.add_child(b)
 	var v: Variant = await chosen
@@ -767,8 +843,9 @@ func choose(title: String, sub: String, cards: Array, buttons: Array, pick := tr
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 20)
 	box.add_child(row)
-	for b in buttons:
-		var button := _button(b, Vector2(170, 52), 20)
+	for k in buttons.size():
+		var b: String = buttons[k]
+		var button := _button(b, Vector2(180, 52), 20, k == 0 and cards.is_empty())
 		button.pressed.connect(func() -> void: chosen.emit(b))
 		row.add_child(button)
 	var v: Variant = await chosen
@@ -784,19 +861,69 @@ func _open(title: String, sub: String) -> VBoxContainer:
 	_overlay.visible = true
 	_hand.visible = false
 	var shade := ColorRect.new()
-	shade.color = Color(0.02, 0.02, 0.02, 0.74)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var m := ShaderMaterial.new()
+	m.shader = Style.blur_shader()
+	shade.material = m
 	_overlay.add_child(shade)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_CENTER)
 	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	box.grow_vertical = Control.GROW_DIRECTION_BOTH
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 16)
+	box.add_theme_constant_override("separation", 18)
 	_overlay.add_child(box)
-	box.add_child(_label(title, 44, Fonts.serif(900), Color(1.0, 0.92, 0.72)))
-	box.add_child(_label(sub, 19, Fonts.serif(600), Color(0.92, 0.86, 0.74)))
+	var head := Style.heading(title, 42)
+	head.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(head)
+	box.add_child(_label(sub, 19, Fonts.serif(600), Style.PARCHMENT_DIM))
+	box.modulate.a = 0.0
+	box.create_tween().tween_property(box, "modulate:a", 1.0, 0.25)
 	return box
+
+
+## A choice drawn as a tile: a diamond of its colour, its name over a rule, then what it does -- a button, lit when
+## pointed at (its edge `edge`: coral for a boss's).
+func _tile(name: String, says: String, accent: Color, size: Vector2, edge := Style.GOLD) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = size
+	b.focus_mode = Control.FOCUS_NONE
+	for s in ["normal", "hover", "pressed"]:
+		var box := Style.button(s)
+		box.cut = 12.0
+		box.inset = 5.0
+		if edge != Style.GOLD:
+			box.edge = edge.lightened(0.2) if s == "hover" else edge
+			box.rule = Color(edge, 0.45)
+			box.glow = Color(edge, 0.35) if s == "hover" else box.glow
+		b.add_theme_stylebox_override(s, box)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 6)
+	b.add_child(col)
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.offset_left = 16
+	col.offset_right = -16
+	col.offset_top = 14
+	col.offset_bottom = -14
+	var gem := Control.new()
+	gem.custom_minimum_size = Vector2(0, 18)
+	gem.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gem.draw.connect(func() -> void: Style.diamond(gem.get_canvas_item(), Vector2(gem.size.x * 0.5, 9), 8.0, accent, Style.INK_DEEP))
+	col.add_child(gem)
+	var title := _label(name, 23, Fonts.serif(900), Style.GOLD_BRIGHT)
+	col.add_child(title)
+	var line := Control.new()
+	line.custom_minimum_size = Vector2(0, 10)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.draw.connect(func() -> void: Style.rule(line, Vector2(line.size.x * 0.5, 5), line.size.x * 0.8, Color(edge, 0.8)))
+	col.add_child(line)
+	var text := _label(says, 16, Fonts.serif(600), Style.PARCHMENT)
+	text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	text.add_theme_constant_override("line_spacing", 4)
+	col.add_child(text)
+	return b
 
 
 func _close() -> void:
@@ -810,24 +937,32 @@ func _close() -> void:
 
 # -- Pieces -----------------------------------------------------------------------------------------------------
 
-## The gold: a big coin with the gold on it; under it, what comes in each round and the interest on what is kept.
+## The gold: a big coin, struck with a ring and four diamonds, the gold on it in Roman figures; under it, what comes in
+## each round and the interest on what is kept.
 func _draw_gold() -> void:
 	var home: Home = game.home
 	var c := Vector2(60, 58)
-	_gold.draw_circle(c, 54.0, Color(0.1, 0.07, 0.02, 0.95))
-	_gold.draw_circle(c, 50.0, GOLD.darkened(0.35))
-	_gold.draw_circle(c, 44.0, GOLD)
-	_gold.draw_arc(c, 37.0, 0.0, TAU, 48, GOLD.darkened(0.25), 2.0, true)
-	_gold.draw_circle(c + Vector2(-16, -18), 7.0, Color(1, 1, 1, 0.35))
-	var f := Fonts.numbers()
+	_gold.draw_circle(c + Vector2(0, 4), 53.0, Color(0, 0, 0, 0.4))
+	_gold.draw_circle(c, 53.0, Color(0.15, 0.1, 0.04))
+	_gold.draw_circle(c, 50.5, Color(0.58, 0.41, 0.14))
+	for i in 9:
+		_gold.draw_circle(c + Vector2(-0.6, -0.8) * i, 47.0 - i * 4.4, Color(0.74, 0.54, 0.2).lerp(Color(1.0, 0.86, 0.5), i / 8.0))
+	_gold.draw_arc(c, 40.0, 0.0, TAU, 64, Color(0.5, 0.33, 0.1, 0.85), 1.6, true)
+	_gold.draw_arc(c, 43.0, 0.0, TAU, 64, Color(1.0, 0.93, 0.7, 0.35), 1.0, true)
+	for k in 4:
+		Style.diamond(_gold.get_canvas_item(), c + Vector2.from_angle(PI * 0.25 + k * PI * 0.5) * 40.0, 3.2, Color(0.5, 0.33, 0.1))
+	_gold.draw_arc(c, 46.0, PI * 1.05, PI * 1.45, 16, Color(1, 1, 1, 0.4), 3.0, true)
+	var f := Fonts.display(900)
 	var text := "%d" % home.gold
-	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 40).x
-	_gold.draw_string(f, c + Vector2(-w * 0.5, 14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(0.3, 0.18, 0.0))
+	var size_px := 38 if text.length() < 3 else 30
+	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+	_gold.draw_string(f, c + Vector2(-w * 0.5, 14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, Color(1.0, 0.95, 0.75, 0.55))
+	_gold.draw_string(f, c + Vector2(-w * 0.5, 12.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, Color(0.3, 0.17, 0.02))
 	var lf := Fonts.serif(700)
 	for line in [["金币 · 每轮 +%d" % home.income_gold(), 128.0], ["存着，利息 +%d" % home.interest(), 146.0]]:
 		var lw := lf.get_string_size(line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 		_gold.draw_string_outline(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.9))
-		_gold.draw_string(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.9, 0.6))
+		_gold.draw_string(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Style.GOLD_BRIGHT)
 
 
 ## The place to keep the offer taken up: a dashed frame, "存起来" and its price.
@@ -854,14 +989,17 @@ func _draw_store_slot() -> void:
 
 
 
-## The homeland's health: a bar, red when low.
+## The homeland's health: a bar in a gold-ruled groove, jade -- coral when low.
 func _draw_hp() -> void:
 	var home: Home = game.home
-	var r := Rect2(Vector2(0, 3), Vector2(250, 24))
-	_hp.draw_rect(r.grow(2.0), Color(0.05, 0.04, 0.03, 0.9))
+	var r := Rect2(Vector2(2, 4), Vector2(250, 22))
+	var ci := _hp.get_canvas_item()
+	Style.fill(ci, r.grow(2.0), 5.0, Color(0.02, 0.025, 0.03, 0.95), Color(0.06, 0.07, 0.07, 0.95))
 	var frac := clampf(float(home.hp) / maxf(1.0, home.hp_max()), 0.0, 1.0)
-	var col := Color(0.86, 0.3, 0.25) if frac < 0.35 else Color(0.42, 0.78, 0.36)
-	_hp.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), col)
+	var col := Style.CORAL if frac < 0.35 else Color(0.36, 0.72, 0.48)
+	if frac > 0.0:
+		Style.fill(ci, Rect2(r.position, Vector2(maxf(8.0, r.size.x * frac), r.size.y)), 4.0, col.lightened(0.18), col.darkened(0.3))
+	Style.ring(ci, r.grow(2.0), 5.0, Style.GOLD, 1.2)
 	var f := Fonts.serif(800)
 	var text := "家园 %d / %d" % [home.hp, home.hp_max()]
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
@@ -869,21 +1007,15 @@ func _draw_hp() -> void:
 	_hp.draw_string(f, Vector2(r.get_center().x - w * 0.5, 21), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 
 
-func _button(text: String, min_size: Vector2, size_px: int) -> Button:
+## A button in the house style (Style.theme) -- `primary` amber, for what sends things on.
+func _button(text: String, min_size: Vector2, size_px: int, primary := false) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = min_size
-	b.add_theme_font_override("font", Fonts.serif(800))
+	if primary:
+		b.theme_type_variation = "Primary"
 	b.add_theme_font_size_override("font_size", size_px)
-	b.add_theme_color_override("font_color", Color(0.18, 0.11, 0.05))
-	b.add_theme_color_override("font_hover_color", Color(0.1, 0.06, 0.02))
-	b.add_theme_color_override("font_pressed_color", Color(0.1, 0.06, 0.02))
-	b.add_theme_color_override("font_disabled_color", Color(0.35, 0.3, 0.25))
-	b.add_theme_stylebox_override("normal", _plate(Color(0.95, 0.72, 0.34), Color(0.45, 0.28, 0.12)))
-	b.add_theme_stylebox_override("hover", _plate(Color(1.0, 0.8, 0.42), Color(0.55, 0.34, 0.14)))
-	b.add_theme_stylebox_override("pressed", _plate(Color(0.85, 0.62, 0.28), Color(0.45, 0.28, 0.12)))
-	b.add_theme_stylebox_override("disabled", _plate(Color(0.42, 0.38, 0.33), Color(0.25, 0.22, 0.2)))
 	return b
 
 
@@ -900,24 +1032,4 @@ func _label(text: String, size_px: int, f: Font, c: Color) -> Label:
 	return l
 
 
-func _panel(bg: Color, edge: Color, pad: int) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.border_color = edge
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(8)
-	sb.set_content_margin_all(pad)
-	return sb
 
-
-func _plate(face: Color, edge: Color, width := 3) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = face
-	sb.border_color = edge
-	sb.set_border_width_all(width)
-	sb.set_corner_radius_all(10)
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = 6
-	sb.shadow_offset = Vector2(0, 3)
-	sb.set_content_margin_all(10)
-	return sb

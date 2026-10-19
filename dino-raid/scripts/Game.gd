@@ -1,7 +1,8 @@
 class_name Game
 extends Node3D
-## The game (GAME-DESIGN 17-19): the homeland built from the shop, and the battles its army fights by itself, on one
-## screen. A run starts with an ark to choose and lands in the rainforest. A round: the place has its way, the
+## The game (GAME-DESIGN 17-21): the homeland built from the shop, and the battles its army fights by itself, on one
+## screen. It opens on the title (Menu) over a homeland at dusk; Esc pauses. A run starts with an ark to choose and
+## lands in the rainforest. A round: the place has its way, the
 ## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army -- standing
 ## in the yard as it will stand in battle, where their nests stand on the battle line; the player buys -- buildings,
 ## raises (a nest's as a choice: one more, or elite), gene affixes -- or keeps what is bought for later, puts down what
@@ -16,7 +17,7 @@ extends Node3D
 
 signal departed
 
-enum Phase { BUSY, PLAN, FIGHT, PACK, MOVE, DONE }
+enum Phase { BUSY, PLAN, FIGHT, PACK, MOVE, DONE, TITLE }
 
 const HOME_AT := Vector3(0, 0, 4.0)
 const HOME_DIST := 44.0
@@ -45,7 +46,7 @@ var hover := {"plot": HomeView.NOWHERE, "unit": ""}
 var fight: Fight                  # the battle being fought, or null
 var speed := 1.0
 var at_home := true               # the camera is over the homeland (not the battle field)
-var forecast := {}                # this round's battle as things stand: {result, left, total, harm}
+var forecast := {}                # this round's battle as things stand: {result, left, total, harm, loot}
 var preview := {}                 # the same with what is taken up used; {} when none
 var effects := {}                 # plot -> [short lines]: what that would change there (for Tags)
 var pack_plots := {}              # packing: plot -> true, the buildings the ark takes
@@ -54,6 +55,14 @@ var pending := {}                 # a nest's raise waiting for its choice: {from
 var removing := false             # the next offer clicked on the shelf has its kind taken out of the shop
 var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice, or a wonder
 
+var menu: Menu
+
+## Whether the scene opens on the title (the game starting, or "回主菜单") or straight into a new run ("重新开始").
+static var show_title := true
+
+var _tags_layer: CanvasLayer
+var _showcase: HomeView           # the homeland to look at under the title
+var _orbit := 0.6                 # the title's camera, going slowly round
 var _cam_at := HOME_AT
 var _cam_dist := HOME_DIST
 var _drag := false
@@ -68,6 +77,10 @@ var _effects := {}
 
 
 func _ready() -> void:
+	Settings.load_all()
+	speed = 3.0 if Settings.fast else 1.0
+	add_child(Sound.new())
+	add_child(Portraits.new())
 	if Run.current == null:
 		Run.current = Run.new()
 	run = Run.current
@@ -83,6 +96,7 @@ func _ready() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 1
 	add_child(layer)
+	_tags_layer = layer
 	tags = Tags.new()
 	tags.game = self
 	layer.add_child(tags)
@@ -96,10 +110,24 @@ func _ready() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
-	_begin()
+	menu = Menu.new()
+	add_child(menu)
+	menu.setup(self)
+	Portraits.warm()
+	if show_title:
+		_title()
+	else:
+		Sound.air(true)
+		_begin()
 
 
 func _process(delta: float) -> void:
+	if phase == Phase.TITLE:
+		_orbit += delta * 0.035
+		var target := Vector3(0, 1.0, 6.0)
+		camera.position = target + Vector3(sin(_orbit) * 46.0, 18.0 + sin(_orbit * 2.0) * 1.2, cos(_orbit) * 46.0)
+		camera.look_at(target + Vector3(0, 2.5, 0), Vector3.UP)
+		return
 	if _fighting:
 		_acc += delta * speed
 		while _acc >= Fight.STEP and not fight.over:
@@ -269,6 +297,8 @@ func _changed(ev: Array) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if phase == Phase.TITLE:
+		return
 	if event is InputEventMouseMotion:
 		if _drag:
 			_cam_at += Vector3(-event.relative.x, 0, -event.relative.y) * _cam_dist * 0.0016
@@ -292,7 +322,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if k >= KEY_1 and k < KEY_1 + home.shelf.size():
 			hold(k - KEY_1)
 		elif k == KEY_ESCAPE:
-			_let_go()
+			if held >= 0 or held_k >= 0 or not pending.is_empty() or removing:
+				_let_go()
+			else:
+				pause()
 		elif k == KEY_SPACE or k == KEY_ENTER:
 			act("depart" if phase == Phase.PACK else "fight")
 
@@ -509,7 +542,7 @@ func _work_out(h: Home) -> Dictionary:
 	var total := f.alive("ours").size()
 	f.run()
 	return {"result": f.result, "left": f.alive("ours").size(), "total": total,
-		"harm": 0 if f.result == "won" else maxi(0, f.harm())}
+		"harm": 0 if f.result == "won" else maxi(0, f.harm()), "loot": f.scavenged()}
 
 
 ## What differs between two homelands, building by building, as short lines: more or fewer hatched, a new species,
@@ -526,6 +559,11 @@ func _changes(a: Home, b: Home) -> Dictionary:
 			var d := int(made_b.get(p, 0)) - int(made_a.get(p, 0))
 			if d != 0:
 				lines.append("%+d 只" % d)
+			var gift := b.trait_of(p)
+			if gift in ["swarm", "guard", "cover", "alone"]:
+				var was: bool = a.buildings.has(p) and a.buildings[p].kind == kind and a.trait_on(p)
+				if b.trait_on(p) != was:
+					lines.append("%s本事「%s」" % ["+" if b.trait_on(p) else "−", Content.TRAITS[gift].name])
 			if a.buildings.has(p) and a.buildings[p].kind == kind:
 				var sa := a.spec_of(p)
 				var sb := b.spec_of(p)
@@ -673,6 +711,15 @@ func _unit_text(u: Dictionary) -> String:
 		more.append("会飞，打后排")
 	if s.charge:
 		more.append("开战第一下双倍")
+	if u.get("guard", false):
+		more.append("护住身后同一列")
+	var ahead := Vector2i(int(u.lane), 0)
+	if int(u.get("row", 0)) == 1 and home.trait_of(ahead) == "guard" and home.trait_on(ahead):
+		more.append("身前有绿兵护着")
+	if u.get("care", false):
+		more.append("只给同一列回血")
+	if u.get("scavenge", false):
+		more.append("打完还站着，带回 %d 金" % Content.SCAVENGE)
 	if not more.is_empty():
 		lines.append(" · ".join(more))
 	lines.append(Content.UNITS[u.kind].role)
@@ -683,13 +730,22 @@ func _unit_text(u: Dictionary) -> String:
 func _building_text(p: Vector2i) -> String:
 	var b: Dictionary = home.buildings[p]
 	var info: Dictionary = Content.BUILDINGS[b.kind]
-	var lines: Array = ["%s · %d 级" % [info.name, b.level], Content.building_text(b.kind, int(b.level))]
-	if Content.is_nest(b.kind):
+	var lines: Array = ["%s · %d 级" % [info.name, b.level]]
+	if not Content.is_nest(b.kind):
+		lines.append(Content.building_text(b.kind, int(b.level)))
+	else:
 		var s := home.spec_of(p)
 		if s.evolved:
 			var sp := Content.species(info.nest, b.affixes)
 			lines.append("进化了：孵的是%s（%s）" % [Content.UNITS[s.kind].name, "+".join(sp.used.map(func(a: String) -> String:
 				return Content.AFFIXES[a].name))])
+		else:
+			var unit: Dictionary = Content.UNITS[info.nest]
+			lines.append("孵%s：%s（每只吃 %d 生物质）" % [unit.name, unit.role, unit.food])
+		var t: Dictionary = Content.TRAITS[info.trait]
+		var need := home.trait_need(p)
+		var state := "" if t.when == "" else ("生效" if need == "" else "没生效（%s）" % need)
+		lines.append("本事「%s」%s：%s" % [t.name, state, t.does])
 		var made := int(_made(home).get(p, 0))
 		var want := home.count(p)
 		lines.append("这一轮孵 %d 只%s，打仗时站%s" % [made, ("（生物质不够，少 %d）" % (want - made)) if made < want else "",
@@ -713,7 +769,8 @@ func _building_text(p: Vector2i) -> String:
 			for pair in Content.could_become(b.affixes):
 				lines.append("再贴上%s，会进化成%s" % [Content.AFFIXES[pair[0]].name, Content.UNITS[pair[1]].name])
 	if int(b.level) < Content.LEVEL_MAX:
-		lines.append("升到 %d 级：%s" % [int(b.level) + 1, Content.level_text(b.kind, int(b.level) + 1)])
+		lines.append("升到 %d 级：%s" % [int(b.level) + 1, "多孵 1 只，或者变精英" if Content.is_nest(b.kind)
+			else Content.level_text(b.kind, int(b.level) + 1)])
 	return "\n".join(lines)
 
 
@@ -826,18 +883,21 @@ func _fight() -> void:
 
 func _after_fight() -> void:
 	var result := fight.result
+	fight_view.show_loot()
 	await get_tree().create_timer(0.7).timeout
 	var out := run.finish(fight)
+	var also: Array = []
+	if int(out.scavenged) > 0:
+		also.append("拾荒 +%d 金" % out.scavenged)
+	if int(out.interest) > 0:
+		also.append("利息 +%d" % out.interest)
 	match result:
 		"won":
-			var got: Array = ["金币 +%d" % out.gold, "外星基因 +%d" % out.alien]
-			if int(out.interest) > 0:
-				got.append("利息 +%d" % out.interest)
-			hud.banner("赢了！", "得到：" + "，".join(got))
+			hud.banner("赢了！", "得到：" + "，".join(["金币 +%d" % out.gold, "外星基因 +%d" % out.alien] + also))
 		"time":
-			hud.banner("拖到时间，算输", "家园 −%d%s" % [out.took, ("，利息 +%d" % out.interest) if int(out.interest) > 0 else ""])
+			hud.banner("拖到时间，算输", "，".join(["家园 −%d" % out.took] + also))
 		_:
-			hud.banner("输了", "家园 −%d%s" % [out.took, ("，利息 +%d" % out.interest) if int(out.interest) > 0 else ""])
+			hud.banner("输了", "，".join(["家园 −%d" % out.took] + also))
 	await get_tree().create_timer(1.6).timeout
 	await _fly(HOME_AT, HOME_DIST, 1.0)
 	at_home = true
@@ -852,15 +912,17 @@ func _after_fight() -> void:
 	if run.over:
 		phase = Phase.DONE
 		refresh()
-		await hud.choose("家园被毁了……", "撑到了%s第 %d 轮" % [Content.LEVELS[run.level].name, run.round], [], ["重新开始"])
-		_new_run()
+		var again: Variant = await hud.choose("家园被毁了……", "撑到了%s第 %d 轮" % [Content.LEVELS[run.level].name, run.round],
+			[], ["再来一局", "回主菜单"])
+		_new_run(again == "回主菜单")
 		return
 	if out.level_won and run.last_level():
 		phase = Phase.DONE
 		refresh()
 		var names: Array = Content.LEVELS.map(func(l: Dictionary) -> String: return l.name)
-		await hud.choose("全部守住了！", "%s都撑过来了，家园还剩 %d 血" % ["和".join(names), home.hp], [], ["再玩一遍"])
-		_new_run()
+		var again: Variant = await hud.choose("全部守住了！", "%s都撑过来了，家园还剩 %d 血" % ["和".join(names), home.hp], [],
+			["再玩一遍", "回主菜单"])
+		_new_run(again == "回主菜单")
 		return
 	await _gift()
 	if out.level_won:
@@ -891,9 +953,94 @@ func _level_end() -> void:
 	await hud.arrive(run.level)
 
 
-func _new_run() -> void:
+## A new run: straight in, or (`to_title`) by way of the title.
+func _new_run(to_title := false) -> void:
+	show_title = to_title
 	Run.current = null
+	get_tree().paused = false
 	get_tree().reload_current_scene()
+
+
+# -- The title and the pause menu ------------------------------------------------------------------------------
+
+## The title over a homeland at dusk, the camera going slowly round it; then the run begins, or the game ends.
+func _title() -> void:
+	phase = Phase.TITLE
+	hud.visible = false
+	_tags_layer.visible = false
+	home_view.visible = false
+	_showcase = HomeView.new()
+	add_child(_showcase)
+	_showcase.setup(showcase())
+	_showcase.sync_army(_showcase.home.army(), false)
+	world.dusk(true)
+	world.motes(true)
+	Sound.air(true, 3.0)
+	menu.black()
+	menu.fade(false, 1.8)
+	var what := await menu.title()
+	if what == "quit":
+		get_tree().quit()
+		return
+	await menu.fade(true, 0.7)
+	_showcase.queue_free()
+	_showcase = null
+	world.motes(false)
+	world.dusk(false)
+	home_view.visible = true
+	hud.visible = true
+	_tags_layer.visible = true
+	phase = Phase.BUSY
+	show_title = false
+	_place_camera()
+	menu.fade(false, 0.7)
+	_begin()
+
+
+## The game stopped under the pause menu; then on again, or a new run, or the title, or the end.
+func pause() -> void:
+	if phase == Phase.TITLE or menu.screen != "":
+		return
+	_let_go()
+	get_tree().paused = true
+	var what := await menu.pause()
+	get_tree().paused = false
+	match what:
+		"restart":
+			_new_run()
+		"menu":
+			_new_run(true)
+		"quit":
+			get_tree().quit()
+
+
+## A homeland to look at under the title: the battle line laid out for the nests' gifts -- greens guarding, reds
+## swarming, a gold alone, a blue under cover -- the rows behind built up, a pond, an old tree.
+static func showcase() -> Home:
+	var h := Home.new(RandomNumberGenerator.new())
+	h.buildings.clear()
+	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree"}
+	# [plot, kind, nest's choices or a level, affixes]
+	for step in [[Vector2i(0, 0), "nest_green", ["count"], ["shell"]], [Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]],
+			[Vector2i(2, 0), "nest_red", ["count", "count"], ["flame", "blade"]], [Vector2i(3, 0), "nest_green", ["count"], []],
+			[Vector2i(4, 0), "nest_red", [], []], [Vector2i(5, 0), "nest_gold", ["elite"], []],
+			[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", ["count"], ["hide"]],
+			[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_blue", ["count"], ["acid"]],
+			[Vector2i(4, 1), "nest_scav", ["count"], []], [Vector2i(5, 1), "nest_mutant", ["count"], ["acid", "poison"]],
+			[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "sampler", 2, []], [Vector2i(2, 2), "horde_totem", 1, []],
+			[Vector2i(3, 2), "watchtower", 2, []], [Vector2i(4, 2), "mine", 2, []], [Vector2i(5, 2), "champion_hall", 1, []],
+			[Vector2i(0, 3), "spore_pool", 2, []], [Vector2i(1, 3), "vault", 1, []], [Vector2i(2, 3), "stabilizer", 1, []],
+			[Vector2i(3, 3), "market", 1, []], [Vector2i(4, 3), "vanguard", 2, []]]:
+		h.build(step[0], step[1])
+		var b: Dictionary = h.buildings[step[0]]
+		if step[2] is Array:
+			b.path = step[2].duplicate()
+			b.level = 1 + b.path.size()
+		else:
+			b.level = step[2]
+		b.affixes = step[3].duplicate()
+	h.biomass = 80
+	return h
 
 
 # -- The camera ---------------------------------------------------------------------------------------------------

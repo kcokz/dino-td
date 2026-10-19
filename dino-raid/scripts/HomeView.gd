@@ -18,6 +18,7 @@ const YARD_SPREAD := 1.05         # between a nest's units side by side
 const NOWHERE := Vector2i(-1, -1)
 const WONDER_AT := Vector3(-17.0, 0.0, 2.0)  # beside the homeland, west of the rows behind the battle line
 const ELITE_GOLD := Color(1.0, 0.8, 0.25)
+const PENNANT := Color(1.0, 0.93, 0.72)  # flown over a nest whose gift works where it stands
 const ARK_AT := Vector3(0, 8.5, 2.0)    # where the ark hangs over the homeland while it loads and unloads
 
 var home: Home
@@ -180,14 +181,15 @@ func refresh_buildings(pop := true) -> void:
 			_buildings.erase(p)
 	for p in home.buildings:
 		var b: Dictionary = home.buildings[p]
-		var look := "%s/%d/%s/%s" % [b.kind, b.level, ",".join(b.affixes), ",".join(b.path)]
+		var lit := home.trait_on(p) and home.trait_of(p) in ["swarm", "guard", "cover", "alone"]
+		var look := "%s/%d/%s/%s/%s" % [b.kind, b.level, ",".join(b.affixes), ",".join(b.path), lit]
 		if _buildings.has(p) and _buildings[p].look == look:
 			continue
 		var grow := 0.05
 		if _buildings.has(p):
 			grow = 0.6 if _buildings[p].look.get_slice("/", 0) == b.kind else 0.05
 			_buildings[p].node.queue_free()
-		var node := _building(b)
+		var node := _building(b, lit)
 		node.position = plot_pos(p) + Vector3(0, PLOT_TOP, 0)
 		add_child(node)
 		_buildings[p] = {"node": node, "look": look}
@@ -197,7 +199,8 @@ func refresh_buildings(pop := true) -> void:
 			tw.tween_property(node, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-func _building(b: Dictionary) -> Node3D:
+## A building as blocks -- a nest whose gift works where it stands (`lit`) flying a pennant.
+static func _building(b: Dictionary, lit := false) -> Node3D:
 	var kind: String = b.kind
 	var lv := int(b.level)
 	var affixes: Array = b.affixes
@@ -239,6 +242,11 @@ func _building(b: Dictionary) -> Node3D:
 			crest.material_override = Blocks.glow(sc, 1.1)
 			root.add_child(crest)
 			height += 0.6
+		if lit:
+			root.add_child(Blocks.box(Vector3(0.09, 1.9, 0.09), Color(0.3, 0.22, 0.15), Vector3(-1.15, 2.05, -1.15)))
+			var pennant := Blocks.box(Vector3(0.7, 0.42, 0.05), PENNANT, Vector3(-0.78, 2.75, -1.15))
+			pennant.material_override = Blocks.glow(PENNANT, 0.5)
+			root.add_child(pennant)
 	else:
 		match kind:
 			"pool", "spore_pool":
@@ -361,10 +369,23 @@ func show_wonder(pop := true) -> void:
 		_wonder = null
 	if home.wonder == "":
 		return
-	var c: Color = Content.WONDERS[home.wonder].color
+	var root := wonder_node(home.wonder)
+	root.position = WONDER_AT
+	add_child(root)
+	_wonder = root
+	if pop:
+		root.scale = Vector3(1, 0.05, 1)
+		var tw := root.create_tween()
+		tw.tween_property(root, "scale", Vector3.ONE, 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## A wonder as blocks on its plinth: the brood's domes, the gold city's towers, the tower of evolution's glowing rings,
+## the banner on its pole, the titan's cage.
+static func wonder_node(id: String) -> Node3D:
+	var c: Color = Content.WONDERS[id].color
 	var root := Node3D.new()
 	root.add_child(Blocks.box(Vector3(6.0, 0.4, 6.0), Color(0.55, 0.52, 0.48), Vector3(0, 0.2, 0)))
-	match home.wonder:
+	match id:
 		"brood":
 			root.add_child(Blocks.dome(2.6, c, Vector3(0, 0.4, 0)))
 			for k in 3:
@@ -389,13 +410,7 @@ func show_wonder(pop := true) -> void:
 					root.add_child(Blocks.box(Vector3(0.3, 4.2, 0.3), Color(0.3, 0.28, 0.28), Vector3(sx, 2.5, sz)))
 			root.add_child(Blocks.box(Vector3(5.1, 0.3, 5.1), Color(0.3, 0.28, 0.28), Vector3(0, 4.6, 0)))
 			root.add_child(Blocks.box(Vector3(2.6, 2.6, 2.6), c, Vector3(0, 1.7, 0)))
-	root.position = WONDER_AT
-	add_child(root)
-	_wonder = root
-	if pop:
-		root.scale = Vector3(1, 0.05, 1)
-		var tw := root.create_tween()
-		tw.tween_property(root, "scale", Vector3.ONE, 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	return root
 
 
 # -- The ark --------------------------------------------------------------------------------------------------------
