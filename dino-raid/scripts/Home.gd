@@ -1,6 +1,6 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17, 18, 19): wherever the ark has landed, a grid of plots -- the top rows the battle line,
+## The homeland (GAME-DESIGN 17-20): wherever the ark has landed, a grid of plots -- the top rows the battle line,
 ## for nests only, where each nest's units will stand in battle; the rows behind for everything else, special ground
 ## among them -- with the gold and the other resources, the shop's shelf, the goods kept for later (the stash), the
 ## relics, the wonder, and the homeland's own hit points. One round here: the buildings bring in gold, biomass and
@@ -17,8 +17,9 @@ extends RefCounted
 ## A good (shelf or stash): {id, gift, packed: {level, path, affixes}} (Content.offer), or null on the shelf where one
 ##   was bought or its kind taken out.
 ## A unit (army): {id: "nest id:n", kind, nest: plot, row, lane, slot, of, hp_mult, atk_mult, atk_bonus, armor, range,
-##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, free} -- row, lane: where it stands in battle (row
-##   0 in front; lane its column); slot, of: which of its nest's it is, of how many; free: eating nothing.
+##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, guard, care, scavenge, free} -- row, lane: where it
+##   stands in battle (row 0 in front; lane its column); slot, of: which of its nest's it is, of how many; guard, care,
+##   scavenge: its nest's gift, where it works in battle (Content.TRAITS, Fight); free: eating nothing.
 ## Events (for the screen): bought {offer}, stored {offer}, placed {offer}, built {at}, replaced {at, was, back},
 ## raised {at, choice}, affixed {at, affix}, wonder {id}, income {gold, biomass, genes}, rotted {amount}, ash {amount},
 ## mended {amount}.
@@ -279,7 +280,7 @@ func interest_max() -> int:
 
 # -- This round's army ------------------------------------------------------------------------------------
 
-## This round's army as things stand: each nest, in reading order, makes its count (one more beside nests of its kind,
+## This round's army as things stand: each nest, in reading order, makes its count (one more for a red nest swarming,
 ## one more for the first with the egg relic, one more each with the core and the brood wonder), each unit paid for in
 ## biomass as far as the biomass goes -- the one the egg makes eats nothing; the titan, with its wonder, in the middle
 ## of the front row; and then, with horde totems, every unit hits harder for how many there are.
@@ -349,21 +350,68 @@ func produce() -> Array:
 
 
 ## How many the nest at p makes a round (before biomass and the egg): one, one more for each raise chosen so, one more
-## with CLUSTER neighbours of its kind, one more with the core, one more with the brood wonder.
+## for a red nest swarming (its gift: CLUSTER red nests beside it), one more with the core, one more with the brood
+## wonder.
 func count(p: Vector2i) -> int:
 	var b: Dictionary = buildings[p]
-	var same := 0
-	for q in around(p):
-		if buildings.has(q) and buildings[q].kind == b.kind:
-			same += 1
-	return 1 + b.path.count("count") + (1 if same >= Content.CLUSTER else 0) + (1 if "core" in relics else 0) \
-		+ (1 if wonder == "brood" else 0)
+	return 1 + b.path.count("count") + (1 if trait_of(p) == "swarm" and trait_on(p) else 0) \
+		+ (1 if "core" in relics else 0) + (1 if wonder == "brood" else 0)
+
+
+## The gift (Content.TRAITS) of the nest at p, or "".
+func trait_of(p: Vector2i) -> String:
+	if not buildings.has(p) or not Content.is_nest(buildings[p].kind):
+		return ""
+	return str(Content.BUILDINGS[buildings[p].kind].trait)
+
+
+## Whether the nest at p stands where its gift works: swarming with CLUSTER of its kind beside it; guarding in the
+## front row; under cover in the second row with a nest in front of it; alone with no nest left or right of it. The
+## others work anywhere.
+func trait_on(p: Vector2i) -> bool:
+	match trait_of(p):
+		"":
+			return false
+		"swarm":
+			return _beside(p, around(p)) >= Content.CLUSTER
+		"guard":
+			return p.y == 0
+		"cover":
+			return p.y == 1 and buildings.has(Vector2i(p.x, 0))
+		"alone":
+			return _beside(p, [p + Vector2i.LEFT, p + Vector2i.RIGHT], true) == 0
+	return true
+
+
+## What the nest at p lacks for its gift to work, in the player's words ("" when it works).
+func trait_need(p: Vector2i) -> String:
+	if trait_on(p) or trait_of(p) == "":
+		return ""
+	match trait_of(p):
+		"swarm":
+			return "还差 %d 个红巢挨着" % (Content.CLUSTER - _beside(p, around(p)))
+		"guard":
+			return "要站第一排"
+		"cover":
+			return "要站第二排" if p.y == 0 else "身前同一列还没有巢"
+		"alone":
+			return "左右有巢挨着"
+	return ""
+
+
+## How many of `plots` hold a nest of the same kind as p's -- or, with `any`, any nest.
+func _beside(p: Vector2i, plots: Array, any := false) -> int:
+	var n := 0
+	for q in plots:
+		if buildings.has(q) and (Content.is_nest(buildings[q].kind) if any else buildings[q].kind == buildings[p].kind):
+			n += 1
+	return n
 
 
 ## What the nest at p gives each unit it makes: the species its affixes make of it, where it stands, how elite it is,
-## its other affixes -- the only things that make a unit itself stronger -- and what the homeland's schools give units
-## of its kind: the champion halls elites, the vanguard camps the front row, the watchtowers those that reach far, the
-## banner wonder all.
+## its other affixes -- the only things that make a unit itself stronger -- its gift where it works, and what the
+## homeland's schools give units of its kind: the champion halls elites, the vanguard camps the front row, the
+## watchtowers those that reach far, the banner wonder all.
 func spec_of(p: Vector2i) -> Dictionary:
 	var b: Dictionary = buildings[p]
 	var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
@@ -371,7 +419,8 @@ func spec_of(p: Vector2i) -> Dictionary:
 	var s := {"kind": sp.kind, "nest": p, "row": p.y, "lane": float(p.x), "hp_mult": pow(Content.ELITE_HP, e),
 		"atk_mult": pow(Content.ELITE_ATK, e), "atk_bonus": 0, "armor": 0, "range": 0.0, "splash": 0.0, "dive": false,
 		"pierce": 0, "haste": 0, "charge": false, "size_mult": pow(Content.ELITE_SIZE, e), "elite": e,
-		"affixes": b.affixes.duplicate(), "evolved": sp.kind != Content.BUILDINGS[b.kind].nest}
+		"affixes": b.affixes.duplicate(), "evolved": sp.kind != Content.BUILDINGS[b.kind].nest,
+		"guard": false, "care": false, "scavenge": false}
 	for a in b.affixes:
 		if a in sp.used:
 			continue
@@ -385,6 +434,19 @@ func spec_of(p: Vector2i) -> Dictionary:
 		s.haste = int(s.haste) + int(af.get("haste", 0))
 		s.charge = bool(s.charge) or bool(af.get("charge", false))
 		s.hp_mult = float(s.hp_mult) * (1.0 + float(af.get("hp", 0)) / 100.0)
+	var gift := trait_of(p)
+	var on := trait_on(p)
+	s.guard = gift == "guard" and on
+	s.care = gift == "care"
+	s.scavenge = gift == "scavenge"
+	var reach := maxf(float(Content.UNITS[sp.kind].range), float(s.range))
+	if gift == "cover" and on and reach >= 3.0:
+		s.range = reach + Content.COVER_RANGE
+		s.pierce = int(s.pierce) + Content.COVER_PIERCE
+	if gift == "alone" and on:
+		s.hp_mult = float(s.hp_mult) * Content.ALONE
+		s.atk_mult = float(s.atk_mult) * Content.ALONE
+		s.size_mult = float(s.size_mult) * Content.ALONE_SIZE
 	if e > 0:
 		var more := 1.0 + _sum("elite") / 100.0
 		s.hp_mult = float(s.hp_mult) * more
@@ -400,9 +462,10 @@ func spec_of(p: Vector2i) -> Dictionary:
 
 
 ## How many affixes the nest at p can carry: one, more for each stabilizer in its column, one more with the heart and
-## with the tower of evolution.
+## with the tower of evolution, more for a mutant nest.
 func slots(p: Vector2i) -> int:
-	var n := 1 + (1 if "heart" in relics else 0) + (1 if wonder == "evo_tower" else 0)
+	var n := 1 + (1 if "heart" in relics else 0) + (1 if wonder == "evo_tower" else 0) \
+		+ (Content.MUTANT_SLOTS if trait_of(p) == "mutant" else 0)
 	for y in ROWS:
 		var q := Vector2i(p.x, y)
 		if buildings.has(q) and buildings[q].kind == "stabilizer":

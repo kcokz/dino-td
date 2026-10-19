@@ -79,11 +79,11 @@ func strength() -> float:
 	return n
 
 
-## After the battle: won, gold and alien genes found; lost, the homeland harmed; either way the interest on the gold
-## kept. {result, fallen, took, alien, gold, interest, level_won}
+## After the battle: won, gold and alien genes found; lost, the homeland harmed; either way what the scavengers bring
+## back, and the interest on the gold kept. {result, fallen, took, alien, gold, scavenged, interest, level_won}
 func finish(f: Fight) -> Dictionary:
-	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "alien": 0, "gold": 0, "interest": 0,
-		"level_won": false}
+	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "alien": 0, "gold": 0, "scavenged": 0,
+		"interest": 0, "level_won": false}
 	if f.result == "won":
 		var n := LOOT * (2 if big() or round >= rounds() else 1)
 		home.alien += n
@@ -92,6 +92,8 @@ func finish(f: Fight) -> Dictionary:
 		out.gold = Content.WIN_GOLD
 	else:
 		out.took = home.harmed(f.harm())
+	out.scavenged = f.scavenged()
+	home.gold += int(out.scavenged)
 	out.interest = home.interest()
 	home.gold += int(out.interest)
 	if home.hp <= 0:

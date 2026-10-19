@@ -1,16 +1,18 @@
 class_name Fight
 extends RefCounted
-## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19): this round's army -- standing where its
+## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19, 20): this round's army -- standing where its
 ## nests stand on the homeland's battle line -- against a wave, each going for the nearest foe -- a flier for the one
 ## furthest back -- and hitting it once it is in reach, until one side is gone or the time is up. One with a charging
 ## horn strikes its first blow twice as hard. Some fall hard: they burst, harming the other side round them, or break
-## into smaller ones. Worked out in fixed steps with nothing random, so the same two sides always end the same way;
-## every blow struck in a step lands at its end, so no side strikes first.
+## into smaller ones. The nests' gifts: while one guarding a column stands, theirs cannot go for ours in its lane's
+## second row; one caring heals only its own lane; scavengers standing at the end bring back gold. Worked out in fixed
+## steps with nothing random, so the same two sides always end the same way; every blow struck in a step lands at its
+## end, so no side strikes first.
 ##
 ## Plain data and rules, nothing on screen. A fighter:
 ##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z), hp, max,
 ##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, charge, harm, cool;
-##    ours also row, lane, slot, of (Home.army)}
+##    ours also row, lane, slot, of, guard, care, scavenge (Home.army)}
 ## Events of a step: hit {from, to, dmg, charge}, heal {from, to, amount}, die {id}, burst {id, at, radius},
 ## spawn {unit: the new fighter}.
 
@@ -28,6 +30,7 @@ var time := 0.0
 var over := false
 var result := ""                  # "won", "lost", or "time" (lost on time)
 var _next := 1
+var _guarded := {}                # lanes (of ours) where one guarding still stands, this step
 
 
 ## `army` (Home.army's units) against `wave` at `power`.
@@ -36,6 +39,9 @@ static func make(army: Array, wave: Array, power: float) -> Fight:
 	for u in army:
 		var fu := f._add("ours", u.kind, Content.unit_stats(u), str(u.id), u.get("affixes", []), 1.0)
 		fu.elite = int(u.get("elite", 0))
+		fu.guard = bool(u.get("guard", false))
+		fu.care = bool(u.get("care", false))
+		fu.scavenge = bool(u.get("scavenge", false))
 		if u.has("row"):
 			fu.row = int(u.row)
 			fu.lane = float(u.lane)
@@ -54,6 +60,10 @@ func step() -> Array:
 	if over:
 		return ev
 	time += STEP
+	_guarded.clear()
+	for u in units:
+		if u.get("guard", false) and int(u.hp) > 0:
+			_guarded[float(u.lane)] = true
 	var blows: Array = []            # [striker, struck, attack]
 	for u in units:
 		if int(u.hp) <= 0:
@@ -141,6 +151,11 @@ func strength(side: String) -> float:
 	return n
 
 
+## The gold ours bring back: Content.SCAVENGE for each scavenger standing.
+func scavenged() -> int:
+	return alive("ours").filter(func(u: Dictionary) -> bool: return u.get("scavenge", false)).size() * Content.SCAVENGE
+
+
 ## How many of ours fell.
 func fallen() -> int:
 	return units.filter(func(u: Dictionary) -> bool: return u.side == "ours" and int(u.hp) <= 0).size()
@@ -180,13 +195,15 @@ func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array, fell: Array, cha
 
 
 ## Whom u goes for: the nearest foe standing (nearest, then weakest, then the first made -- never a doubt which);
-## a flier, the one furthest back on the other side.
+## a flier, the one furthest back on the other side; none of ours guarded (behind one guarding its lane).
 func _foe_of(u: Dictionary) -> Variant:
 	var best: Variant = null
 	var best_d := INF
 	var forward := 1.0 if u.side == "ours" else -1.0
 	for o in units:
 		if o.side == u.side or int(o.hp) <= 0:
+			continue
+		if int(o.get("row", 0)) == 1 and _guarded.has(float(o.get("lane", -1.0))):
 			continue
 		var d: float = -(o.pos as Vector2).x * forward if u.dive else (o.pos as Vector2).distance_to(u.pos)
 		if d < best_d - 0.001 or absf(d - best_d) <= 0.001 and best != null and int(o.hp) < int(best.hp):
@@ -195,10 +212,13 @@ func _foe_of(u: Dictionary) -> Variant:
 	return best
 
 
+## The friend u heals: the most hurt in its reach -- with care, of its own lane.
 func _most_hurt_friend(u: Dictionary) -> Variant:
 	var best: Variant = null
 	for o in units:
 		if o.side != u.side or int(o.hp) <= 0 or int(o.hp) >= int(o.max):
+			continue
+		if u.get("care", false) and float(o.get("lane", -1.0)) != float(u.lane):
 			continue
 		if (o.pos as Vector2).distance_to(u.pos) > float(u.range) + 1.0:
 			continue

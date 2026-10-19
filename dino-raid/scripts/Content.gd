@@ -1,5 +1,5 @@
 class_name Content
-## What there is to build, make and fight (GAME-DESIGN 19) -- coloured blocks standing in for the gene ark's creatures
+## What there is to build, make and fight (GAME-DESIGN 19, 20) -- coloured blocks standing in for the gene ark's creatures
 ## and the alien monsters of each place it lands. The systems (Home, Fight, Run) read only this: change what is here
 ## and they follow.
 
@@ -7,8 +7,8 @@ class_name Content
 ## metres a second; armor: taken off each hit it takes; splash: metres round its mark that also take half; heal: hit
 ## points it gives the most hurt friend in reach (instead of hitting); pierce: damage more each hit, armour or not;
 ## burst: damage to the other side round it (BURST_RADIUS) when it falls; dive: flies over the front for the back;
-## size: the block's edge; food: biomass it takes to make. Four are species a nest evolves into (RECIPES); the titan
-## comes with a wonder.
+## size: the block's edge; food: biomass it takes to make. One for each kind of nest (its gift, TRAITS, is the nest's);
+## four are species a nest evolves into (RECIPES); the titan comes with a wonder.
 const UNITS := {
 	"red": {"name": "红兵", "color": Color(0.9, 0.24, 0.2), "hp": 10, "atk": 3, "every": 1.0, "range": 1.4,
 		"speed": 3.2, "size": 0.9, "food": 1, "role": "前排，打得快"},
@@ -20,6 +20,10 @@ const UNITS := {
 		"speed": 2.6, "size": 1.3, "splash": 1.8, "food": 2, "role": "重击，一打一片"},
 	"white": {"name": "白兵", "color": Color(0.93, 0.93, 0.9), "hp": 8, "atk": 1, "every": 1.0, "range": 5.0,
 		"speed": 2.4, "size": 0.8, "heal": 3, "food": 1, "role": "给受伤的同伴回血"},
+	"scav": {"name": "拾荒兽", "color": Color(0.78, 0.66, 0.42), "hp": 8, "atk": 2, "every": 1.0, "range": 4.0,
+		"speed": 2.6, "size": 0.8, "food": 1, "role": "远处扔石头，打得弱"},
+	"mutant": {"name": "变异兽", "color": Color(0.92, 0.45, 0.75), "hp": 9, "atk": 2, "every": 1.0, "range": 1.4,
+		"speed": 2.8, "size": 0.85, "food": 1, "role": "底子弱，好贴词条"},
 	"falcon": {"name": "猎鹰兽", "color": Color(0.95, 0.5, 0.2), "hp": 22, "atk": 7, "every": 0.9, "range": 1.4,
 		"speed": 4.0, "size": 1.0, "dive": true, "food": 2, "role": "进化来的：飞过前排，专咬后排"},
 	"thunder": {"name": "雷甲兽", "color": Color(0.35, 0.6, 0.95), "hp": 34, "atk": 4, "every": 1.3, "range": 1.6,
@@ -76,24 +80,50 @@ const LEVEL_MAX := 3
 const ELITE_HP := 1.5
 const ELITE_ATK := 1.25
 const ELITE_SIZE := 1.2
-const CLUSTER := 2                # a nest with at least this many neighbours of its kind makes one more
+const CLUSTER := 2                # a red nest with at least this many red neighbours makes one more (its gift)
 const SAMPLER_POOL := 1           # genes more a round for each culture pool beside a sampler
 const TREE_GENES := 1             # genes more a round for a sampler beside an old tree
 const LAVA_GOLD := 1              # gold more a round for a mine or forge beside lava
 
-## Buildings. A nest makes `nest` units. Each level of the others may give: biomass, genes, gold: that much more each
-## round; slots: nests of its column can carry this many more affixes; gene_off: each affix this many genes cheaper;
-## interest: the most interest this much more; rerolls: restocks of the shelf free each round; shelf: offers more on
-## it; per: every this many units in an army, all of them +1 attack; elite: elite units' hit points and attack this %
-## more; ranged: units reaching 3 m or more this much more damage each hit, armour or not (pierce); front: the front
-## row's units this % more hit points. cost: its price, in gold. region: only found in that place (LEVELS). school:
-## the way of playing it is for (SCHOOLS).
+## Each nest's gift (本事), the same for whatever it hatches -- most of them only where the nest stands: in front or
+## behind, its column, its neighbours. Not tied to a school: what it does fits several ways of playing. when: where it
+## works ("" anywhere); does: what it does there; says: both in short, for a card. The numbers they say are these:
+const TRAITS := {
+	"swarm": {"name": "成群", "when": "上下左右挨着 2 个红巢", "does": "多孵 1 只", "says": "挨着 2 个红巢，多孵 1 只"},
+	"guard": {"name": "护住一列", "when": "站第一排", "does": "怪要先打倒它，才打得着它身后同一列的兵",
+		"says": "站第一排，护住身后同一列的兵"},
+	"cover": {"name": "掩护射击", "when": "站第二排、身前同一列有巢", "does": "远程的兵射得远 2 米，每下多 1，不管护甲",
+		"says": "站第二排、身前有巢挡着：射得更远，每下多 1"},
+	"alone": {"name": "独当一面", "when": "同一排左右都没有巢", "does": "大一号，血和攻击 +30%",
+		"says": "左右都没有巢：大一号，血和攻击 +30%"},
+	"care": {"name": "照料", "when": "", "does": "只给同一列的兵回血，回得多一倍", "says": "只给同一列的兵回血，回得多一倍"},
+	"scavenge": {"name": "拾荒", "when": "", "does": "打完仗还站着的，每只带回 2 金（输了也算）",
+		"says": "打完仗还站着的，每只带回 2 金"},
+	"mutant": {"name": "变异", "when": "", "does": "多 1 个词条位，好凑配方进化", "says": "多 1 个词条位"},
+}
+const COVER_RANGE := 2.0          # metres more for a unit reaching 3 m or more, under cover
+const COVER_PIERCE := 1           # and damage more each hit, armour or not
+const ALONE := 1.3                # alone: hit points and attack this many times
+const ALONE_SIZE := 1.15          # and this much bigger
+const CARE := 2                   # caring: heals this many times as much, only its own column
+const SCAVENGE := 2               # gold each scavenger standing at a battle's end brings back
+const MUTANT_SLOTS := 1           # affix places more on a mutant nest
+
+## Buildings. A nest makes `nest` units and has a gift (`trait`, TRAITS). Each level of the others may give: biomass,
+## genes, gold: that much more each round; slots: nests of its column can carry this many more affixes; gene_off: each
+## affix this many genes cheaper; interest: the most interest this much more; rerolls: restocks of the shelf free each
+## round; shelf: offers more on it; per: every this many units in an army, all of them +1 attack; elite: elite units'
+## hit points and attack this % more; ranged: units reaching 3 m or more this much more damage each hit, armour or not
+## (pierce); front: the front row's units this % more hit points. cost: its price, in gold. region: only found in that
+## place (LEVELS). school: the way of playing it is for (SCHOOLS) -- a nest is for none, its gift for several.
 const BUILDINGS := {
-	"nest_red": {"name": "红巢", "color": Color(0.9, 0.24, 0.2), "nest": "red", "cost": 3},
-	"nest_blue": {"name": "蓝巢", "color": Color(0.24, 0.5, 0.96), "nest": "blue", "cost": 3},
-	"nest_green": {"name": "绿巢", "color": Color(0.3, 0.74, 0.3), "nest": "green", "cost": 4},
-	"nest_gold": {"name": "金巢", "color": Color(0.96, 0.74, 0.18), "nest": "gold", "cost": 6},
-	"nest_white": {"name": "白巢", "color": Color(0.93, 0.93, 0.9), "nest": "white", "cost": 4},
+	"nest_red": {"name": "红巢", "color": Color(0.9, 0.24, 0.2), "nest": "red", "cost": 3, "trait": "swarm"},
+	"nest_blue": {"name": "蓝巢", "color": Color(0.24, 0.5, 0.96), "nest": "blue", "cost": 3, "trait": "cover"},
+	"nest_green": {"name": "绿巢", "color": Color(0.3, 0.74, 0.3), "nest": "green", "cost": 4, "trait": "guard"},
+	"nest_gold": {"name": "金巢", "color": Color(0.96, 0.74, 0.18), "nest": "gold", "cost": 6, "trait": "alone"},
+	"nest_white": {"name": "白巢", "color": Color(0.93, 0.93, 0.9), "nest": "white", "cost": 4, "trait": "care"},
+	"nest_scav": {"name": "拾荒巢", "color": Color(0.78, 0.66, 0.42), "nest": "scav", "cost": 4, "trait": "scavenge"},
+	"nest_mutant": {"name": "变异巢", "color": Color(0.92, 0.45, 0.75), "nest": "mutant", "cost": 3, "trait": "mutant"},
 	"pool": {"name": "培养池", "color": Color(0.32, 0.72, 0.58), "cost": 2, "school": "horde",
 		"levels": [{"biomass": 3}, {"biomass": 5}, {"biomass": 8}]},
 	"spore_pool": {"name": "孢子池", "color": Color(0.55, 0.7, 0.3), "cost": 3, "region": 0, "school": "horde",
@@ -183,6 +213,8 @@ const OFFERS := {
 	"b_green": {"type": "build", "rarity": 1, "builds": "nest_green"},
 	"b_gold": {"type": "build", "rarity": 2, "builds": "nest_gold", "from": 1},
 	"b_white": {"type": "build", "rarity": 1, "builds": "nest_white"},
+	"b_scav": {"type": "build", "rarity": 1, "builds": "nest_scav"},
+	"b_mutant": {"type": "build", "rarity": 1, "builds": "nest_mutant"},
 	"b_pool": {"type": "build", "rarity": 0, "builds": "pool"},
 	"b_spore": {"type": "build", "rarity": 0, "builds": "spore_pool", "region": 0},
 	"b_totem": {"type": "build", "rarity": 1, "builds": "horde_totem"},
@@ -357,9 +389,7 @@ static func could_become(affixes: Array) -> Array:
 static func building_text(kind: String, lv: int) -> String:
 	var b: Dictionary = BUILDINGS[kind]
 	if b.has("nest"):
-		var u: Dictionary = UNITS[b.nest]
-		return "每轮孵 1 只%s（每只吃 %d 生物质），只能造在阵地上：它的兵打仗时就站在这里。旁边有 %d 个%s，多孵 1 只" % [
-			u.name, u.food, CLUSTER, b.name]
+		return "孵%s。本事「%s」：%s" % [UNITS[b.nest].name, TRAITS[b.trait].name, TRAITS[b.trait].says]
 	var l := level(kind, lv)
 	match kind:
 		"pool", "spore_pool":
@@ -398,29 +428,29 @@ static func _num(x: float) -> String:
 	return ("%d" % x) if is_equal_approx(x, roundf(x)) else str(snappedf(x, 0.01))
 
 
-## What an offer does, in the player's words.
+## What an offer does, in the player's words -- short, for a card's slip (its name is on the card already; a nest's
+## gift's name over its picture).
 static func offer_text(o: Dictionary) -> String:
 	match o.type:
 		"build":
 			var lv := int(o.get("level", 1))
-			var text: String = BUILDINGS[o.builds].name + "：" + building_text(o.builds, lv) + "。"
+			var b: Dictionary = BUILDINGS[o.builds]
+			var text := ("孵%s。%s。" % [UNITS[b.nest].name, TRAITS[b.trait].says]) if b.has("nest") else building_text(o.builds, lv) + "。"
 			if o.has("level"):
-				var sp := species(BUILDINGS[o.builds].get("nest", ""), o.affixes)
-				text = "%d 级%s：%s。" % [lv, BUILDINGS[o.builds].name, building_text(o.builds, lv)]
+				var sp := species(b.get("nest", ""), o.affixes)
+				text = "%d 级。" % lv + ("孵%s。" % UNITS[sp.kind].name if b.has("nest") else building_text(o.builds, lv) + "。")
 				if not o.affixes.is_empty():
 					text += "贴着" + "、".join(o.affixes.map(func(a: String) -> String: return AFFIXES[a].name)) + "。"
-				if sp.used.size() > 0:
-					text += "孵的是%s。" % UNITS[sp.kind].name
 			return text
 		"raise":
-			return "一座建筑升一级（最多 %d 级）。巢升级时二选一：多孵 1 只，或者变精英。几级升上去，就多花几金币。" % LEVEL_MAX
+			return "一座建筑升一级（最多 %d 级）。巢升级二选一：多孵 1 只，或变精英。" % LEVEL_MAX
 		"affix":
 			var a: Dictionary = AFFIXES[o.affix]
 			var also := ""
 			for r in RECIPES:
 				if o.affix in r.affixes:
-					also = "有的词条凑在一起，会进化出新物种。"
-			return "给一个巢贴上%s：它孵的兵%s。%s" % [a.name, a.says, also]
+					also = "能凑配方。"
+			return "孵的兵%s。%s" % [a.says, also]
 	return ""
 
 
@@ -434,7 +464,7 @@ static func unit_stats(spec: Dictionary) -> Dictionary:
 	s.armor = int(base.get("armor", 0)) + int(spec.get("armor", 0))
 	s.range = maxf(float(base.range), float(spec.get("range", 0.0)))
 	s.splash = float(base.get("splash", 0.0)) + float(spec.get("splash", 0.0))
-	s.heal = roundi(float(base.get("heal", 0)) * float(spec.get("atk_mult", 1.0)))
+	s.heal = roundi(float(base.get("heal", 0)) * float(spec.get("atk_mult", 1.0))) * (CARE if spec.get("care", false) else 1)
 	s.pierce = int(base.get("pierce", 0)) + int(spec.get("pierce", 0))
 	s.burst = int(base.get("burst", 0))
 	s.every = float(base.every) * 100.0 / (100.0 + float(spec.get("haste", 0)))
