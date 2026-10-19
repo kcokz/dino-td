@@ -1,15 +1,17 @@
 class_name Fight
 extends RefCounted
-## One battle outside the homeland, fought by itself (GAME-DESIGN 17): this round's army against a wave, each going
-## for the nearest foe -- a flier for the one furthest back -- and hitting it once it is in reach, until one side is
-## gone or the time is up. Some fall hard: they burst, harming the other side round them, or break into smaller ones.
-## Worked out in fixed steps with nothing random, so the same two sides always end the same way; every blow struck in
-## a step lands at its end, so no side strikes first.
+## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19): this round's army -- standing where its
+## nests stand on the homeland's battle line -- against a wave, each going for the nearest foe -- a flier for the one
+## furthest back -- and hitting it once it is in reach, until one side is gone or the time is up. One with a charging
+## horn strikes its first blow twice as hard. Some fall hard: they burst, harming the other side round them, or break
+## into smaller ones. Worked out in fixed steps with nothing random, so the same two sides always end the same way;
+## every blow struck in a step lands at its end, so no side strikes first.
 ##
 ## Plain data and rules, nothing on screen. A fighter:
 ##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z), hp, max,
-##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, harm, cool}
-## Events of a step: hit {from, to, dmg}, heal {from, to, amount}, die {id}, burst {id, at, radius},
+##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, charge, harm, cool;
+##    ours also row, lane, slot, of (Home.army)}
+## Events of a step: hit {from, to, dmg, charge}, heal {from, to, amount}, die {id}, burst {id, at, radius},
 ## spawn {unit: the new fighter}.
 
 const STEP := 0.1
@@ -17,6 +19,9 @@ const LIMIT := 45.0               # seconds; the battle is lost if theirs still 
 const FRONT := 5.0                # metres either side of the middle where the front ranks start
 const BACK := 10.0
 const SPACING := 1.8
+const OUR_FRONT := 4.0            # metres from the middle where our front row stands...
+const ROW_GAP := 3.0              # ...and the row behind it, this much further back
+const LANE_GAP := 2.6             # metres between lanes (the homeland's columns)
 
 var units: Array = []
 var time := 0.0
@@ -29,7 +34,13 @@ var _next := 1
 static func make(army: Array, wave: Array, power: float) -> Fight:
 	var f := Fight.new()
 	for u in army:
-		f._add("ours", u.kind, Content.unit_stats(u), str(u.id), u.get("affixes", []), 1.0)
+		var fu := f._add("ours", u.kind, Content.unit_stats(u), str(u.id), u.get("affixes", []), 1.0)
+		fu.elite = int(u.get("elite", 0))
+		if u.has("row"):
+			fu.row = int(u.row)
+			fu.lane = float(u.lane)
+			fu.slot = int(u.get("slot", 0))
+			fu.of = int(u.get("of", 1))
 	for k in wave:
 		f._add("theirs", k, Content.enemy_stats(k, power), "", [], power)
 	f._form("ours")
@@ -68,7 +79,7 @@ func step() -> Array:
 			u.cool = float(u.every)
 	var fell: Array = []
 	for b in blows:
-		_harm(b[0], b[1], b[2], ev, fell)
+		_harm(b[0], b[1], b[2], ev, fell, b[3])
 	# Those that fell this step burst and break -- and what a burst fells, in turn.
 	var k := 0
 	while k < fell.size():
@@ -142,21 +153,27 @@ func unit(id: int) -> Variant:
 	return null
 
 
-## u strikes the foe -- and, with splash, everyone of the foe's side near it for half; to land at the step's end.
+## u strikes the foe -- its first blow twice as hard with a charging horn -- and, with splash, everyone of the foe's
+## side near it for half; to land at the step's end.
 func _strike(u: Dictionary, foe: Dictionary, blows: Array) -> void:
-	blows.append([u, foe, int(u.atk)])
+	var atk := int(u.atk)
+	var charged: bool = u.get("charge", false)
+	if charged:
+		atk *= 2
+		u.charge = false
+	blows.append([u, foe, atk, charged])
 	if float(u.splash) > 0.0:
 		for o in units:
 			if o.side == foe.side and o.id != foe.id and int(o.hp) > 0 and (o.pos as Vector2).distance_to(foe.pos) <= float(u.splash):
-				blows.append([u, o, ceili(int(u.atk) / 2.0)])
+				blows.append([u, o, ceili(atk / 2.0), false])
 
 
 ## A blow lands: less the armour (at least 1), and the striker's pierce on top. One it fells joins `fell`.
-func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array, fell: Array) -> void:
+func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array, fell: Array, charged := false) -> void:
 	var was := int(foe.hp)
 	var dmg := maxi(1, atk - int(foe.armor)) + int(u.get("pierce", 0))
 	foe.hp = was - dmg
-	ev.append({"t": "hit", "from": u.id, "to": foe.id, "dmg": dmg})
+	ev.append({"t": "hit", "from": u.id, "to": foe.id, "dmg": dmg, "charge": charged})
 	if was > 0 and int(foe.hp) <= 0:
 		ev.append({"t": "die", "id": foe.id})
 		fell.append(foe)
@@ -214,17 +231,26 @@ func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Ar
 		"range": float(s.range), "speed": float(s.speed), "size": float(s.size), "splash": float(s.splash),
 		"heal": int(s.heal), "pierce": int(s.get("pierce", 0)), "burst": int(s.get("burst", 0)),
 		"split": str(s.get("split", "")), "splits": int(s.get("splits", 0)), "power": power,
-		"dive": bool(s.get("dive", false)), "harm": int(s.get("harm", 0)), "cool": 0.0, "spawned": time > 0.0}
+		"dive": bool(s.get("dive", false)), "charge": bool(s.get("charge", false)), "harm": int(s.get("harm", 0)),
+		"cool": 0.0, "spawned": time > 0.0}
 	units.append(u)
 	_next += 1
 	return u
 
 
-## The ranks a side starts in: the short-reach ones in front, the long-reach behind, each rank spread along the line,
-## more ranks behind when a rank is full.
+## The ranks a side starts in. Ours stand where their nests stand on the homeland's battle line (Home): its top row in
+## front, each column a lane -- the homeland turned to face the enemy -- a nest's units side by side in their place,
+## more behind them when there are many. Theirs (and any of ours from no nest) by reach: the short-reach ones in front,
+## the long-reach behind, each rank spread along the line, more ranks behind when a rank is full.
 func _form(side: String) -> void:
 	var sign := -1.0 if side == "ours" else 1.0
 	var list := units.filter(func(u: Dictionary) -> bool: return u.side == side)
+	for u in list.filter(func(u: Dictionary) -> bool: return u.has("row")):
+		var n := mini(int(u.of), 3)
+		var depth: float = OUR_FRONT + float(u.row) * ROW_GAP + (int(u.slot) / 3) * 0.8
+		var across: float = (float(u.lane) - (Home.COLS - 1) * 0.5) * LANE_GAP + ((int(u.slot) % 3) - (n - 1) * 0.5) * 0.85
+		u.pos = Vector2(sign * depth, across)
+	list = list.filter(func(u: Dictionary) -> bool: return not u.has("row"))
 	var front := list.filter(func(u: Dictionary) -> bool: return float(u.range) < 3.0)
 	var back := list.filter(func(u: Dictionary) -> bool: return float(u.range) >= 3.0)
 	for pair in [[front, FRONT], [back, BACK]]:

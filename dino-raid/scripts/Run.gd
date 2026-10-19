@@ -26,6 +26,9 @@ func _init(seed := 0) -> void:
 	else:
 		rng.seed = seed
 	home = Home.new(rng)
+	var ids: Array = Content.WONDERS.keys()
+	Home.shuffle(ids, rng)
+	home.wonders = ids.slice(0, Content.WONDERS_OFFERED)
 
 
 ## The ark the run starts with: what it sets down in the first place, the gold and relic it brings.
@@ -195,26 +198,30 @@ func default_goods() -> Array:
 	return pick
 
 
-## What a building of `kind` at `lv` with `affixes` eats and makes each round: [biomass its units eat, biomass it
-## makes] -- at its level, before neighbours, ground and the place's rule.
-static func food(kind: String, lv: int, affixes: Array) -> Array:
-	var l := Content.level(kind, lv)
+## What a building of `kind` at `lv` (a nest with the choices `path`) with `affixes` eats and makes each round:
+## [biomass its units eat, biomass it makes] -- before neighbours, ground and the place's rule.
+static func food(kind: String, lv: int, path: Array, affixes: Array) -> Array:
 	if Content.is_nest(kind):
-		return [int(l.count) * int(Content.UNITS[Content.species(Content.BUILDINGS[kind].nest, affixes).kind].food), 0]
-	return [0, int(l.get("biomass", 0))]
+		var n := 1 + path.count("count")
+		return [n * int(Content.UNITS[Content.species(Content.BUILDINGS[kind].nest, affixes).kind].food), 0]
+	return [0, int(Content.level(kind, lv).get("biomass", 0))]
 
 
 static func food_of_good(g: Dictionary) -> Array:
 	var o := Content.offer(g)
-	return food(o.builds, int(o.get("level", 1)), o.get("affixes", [])) if o.type == "build" else [0, 0]
+	return food(o.builds, int(o.get("level", 1)), o.get("path", []), o.get("affixes", [])) if o.type == "build" else [0, 0]
 
 
 ## What the homeland in the next place would eat and make each round, with `goods` put down and what the ark sets down
-## of itself (Content.LANDING): [eat, make].
+## of itself (Content.LANDING, its nests' levels each one more a round): [eat, make].
 static func food_of(goods: Array) -> Array:
 	var eat := 0
 	var make := 0
-	var all: Array = Content.LANDING.map(func(item: Array) -> Array: return food(item[0], int(item[1]), []))
+	var all: Array = Content.LANDING.map(func(item: Array) -> Array:
+		var path: Array = []
+		for k in int(item[1]) - 1:
+			path.append("count")
+		return food(item[0], int(item[1]), path, []))
 	for g in goods:
 		all.append(food_of_good(g))
 	for f in all:
