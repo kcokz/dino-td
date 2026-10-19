@@ -1,14 +1,16 @@
 class_name Game
 extends Node3D
-## The game (GAME-DESIGN 17, 18): the homeland built from the shop, and the battles its army fights by itself, on one
+## The game (GAME-DESIGN 17-19): the homeland built from the shop, and the battles its army fights by itself, on one
 ## screen. A run starts with an ark to choose and lands in the rainforest. A round: the place has its way, the
-## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army; the player
-## buys -- buildings, raises, gene affixes -- or keeps what is bought for later, and puts down what was kept, watching
-## the army change; then sends it out; the battle fights itself, and the army is gone with it. Won: gold and alien
-## genes; lost: the homeland is hurt; either way, interest on the gold kept, and one of three offers, free. Five
-## rounds hold a place, the last against its boss; a place held brings a relic, and the ark moves on -- carrying all
-## the gold and what the player packs, no more than the stash holds -- to the volcano. How the battle will end is
-## worked out and shown before it is fought, and again with the offer or the good pointed at.
+## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army -- standing
+## in the yard as it will stand in battle, where their nests stand on the battle line; the player buys -- buildings,
+## raises (a nest's as a choice: one more, or elite), gene affixes -- or keeps what is bought for later, puts down what
+## was kept, takes a kind out of the shop, builds the wonder, watching the army change; then sends it out; the battle
+## fights itself, and the army is gone with it. Won: gold and alien genes; lost: the homeland is hurt; either way,
+## interest on the gold kept, and one of three offers, free. Five rounds hold a place, the last against its boss; a
+## place held brings a relic, and the ark moves on -- carrying all the gold, the wonder and what the player packs, no
+## more than the stash holds -- to the volcano. How the battle will end is worked out and shown before it is fought,
+## and again with the offer, the good, the choice or the wonder pointed at.
 ##
 ## Every player action goes through act(what, data). Coloured blocks stand in for what will be.
 
@@ -48,6 +50,9 @@ var preview := {}                 # the same with what is taken up used; {} when
 var effects := {}                 # plot -> [short lines]: what that would change there (for Tags)
 var pack_plots := {}              # packing: plot -> true, the buildings the ark takes
 var pack_kept := {}               # packing: stash place -> true, the goods kept that it takes
+var pending := {}                 # a nest's raise waiting for its choice: {from: "buy" or "place", slot, at}; {} if none
+var removing := false             # the next offer clicked on the shelf has its kind taken out of the shop
+var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice, or a wonder
 
 var _cam_at := HOME_AT
 var _cam_dist := HOME_DIST
@@ -110,8 +115,9 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "buy" {slot, at}, "store" {slot}, "place" {slot, at}, "reroll", "fight";
-## while packing, "pack" {at} or {kept} and "depart". Whether it happened.
+## The one door for a player's action: "buy" {slot, at, choice}, "store" {slot}, "place" {slot, at, choice},
+## "choose" {choice} (for the raise waiting), "remove" {slot}, "wonder" {id}, "reroll", "fight"; while packing, "pack"
+## {at} or {kept} and "depart". Whether it happened.
 func act(what: String, data := {}) -> bool:
 	if phase == Phase.PACK:
 		match what:
@@ -125,12 +131,37 @@ func act(what: String, data := {}) -> bool:
 		return false
 	match what:
 		"buy":
-			var ev := home.buy(int(data.get("slot", -1)), data.get("at", true))
+			var ev := home.buy(int(data.get("slot", -1)), data.get("at", true), str(data.get("choice", "count")))
 			if ev.is_empty():
 				return false
 			held = -1
+			pending = {}
 			_changed(ev)
 			hud.deal(home.shelf)
+			return true
+		"choose":
+			if pending.is_empty():
+				return false
+			var p := pending
+			pending = {}
+			aimed = ""
+			return act(p.from, {"slot": p.slot, "at": p.at, "choice": data.get("choice", "count")})
+		"remove":
+			if not home.remove_kind(int(data.get("slot", -1))):
+				return false
+			removing = false
+			held = -1
+			_version += 1
+			hud.deal(home.shelf)
+			refresh()
+			return true
+		"wonder":
+			var ev := home.build_wonder(str(data.get("id", "")))
+			if ev.is_empty():
+				return false
+			aimed = ""
+			home_view.show_wonder(true)
+			_changed(ev)
 			return true
 		"store":
 			var ev := home.store(int(data.get("slot", -1)))
@@ -141,10 +172,11 @@ func act(what: String, data := {}) -> bool:
 			hud.deal(home.shelf)
 			return true
 		"place":
-			var ev := home.place(int(data.get("slot", -1)), data.get("at", true))
+			var ev := home.place(int(data.get("slot", -1)), data.get("at", true), str(data.get("choice", "count")))
 			if ev.is_empty():
 				return false
 			held_k = -1
+			pending = {}
 			_changed(ev)
 			return true
 		"reroll":
@@ -161,12 +193,41 @@ func act(what: String, data := {}) -> bool:
 	return false
 
 
-## The offer at shelf place i taken up (again: put down).
+## The offer at shelf place i taken up (again: put down) -- or, taking a kind out, taken out.
 func hold(i: int) -> void:
 	if phase != Phase.PLAN or i < 0 or i >= home.shelf.size() or home.shelf[i] == null:
 		return
+	if removing:
+		act("remove", {"slot": i})
+		return
 	held = -1 if held == i else i
 	held_k = -1
+	pending = {}
+	refresh()
+
+
+## Taking a kind out of the shop: the next offer clicked goes (or, again, not).
+func toggle_removing() -> void:
+	removing = not removing and phase == Phase.PLAN and home.removes > 0
+	held = -1
+	held_k = -1
+	pending = {}
+	refresh()
+
+
+## What the HUD points at, to show what it would do: "count" or "elite" (the raise waiting), a wonder's id, or "".
+func aim(what: String) -> void:
+	aimed = what
+	refresh()
+
+
+## Lets go of whatever is taken up, waiting or pointed at.
+func _let_go() -> void:
+	held = -1
+	held_k = -1
+	pending = {}
+	removing = false
+	aimed = ""
 	refresh()
 
 
@@ -176,6 +237,8 @@ func hold_kept(k: int) -> void:
 		return
 	held_k = -1 if held_k == k else k
 	held = -1
+	pending = {}
+	removing = false
 	refresh()
 
 
@@ -188,6 +251,8 @@ func _changed(ev: Array) -> void:
 				home_view.refresh_buildings()
 				if e.t == "replaced":
 					tags.float_text(HomeView.plot_pos(e.at) + Vector3.UP * 3.0, "退 %d 金" % e.back, Color(1.0, 0.8, 0.4))
+				if e.t == "raised" and e.get("choice", "") == "elite":
+					tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, "精英！", HomeView.ELITE_GOLD, 28)
 				if e.t == "affixed":
 					var b: Dictionary = home.buildings[e.at]
 					var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
@@ -196,6 +261,9 @@ func _changed(ev: Array) -> void:
 							(Content.UNITS[sp.kind].color as Color).lightened(0.3), 28)
 			"stored":
 				tags.float_text(Vector3(-8, 3.0, HomeView.YARD_Z - 2.0), "存起来了", Color(0.6, 1.0, 0.55), 22)
+			"wonder":
+				tags.float_text(HomeView.WONDER_AT + Vector3(0.0, 3.0, 3.0), "%s 造好了！" % Content.WONDERS[e.id].name,
+					Content.WONDERS[e.id].color, 30)
 	home_view.sync_army(home.army())
 	refresh()
 
@@ -210,10 +278,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_LEFT:
 				_click()
 			MOUSE_BUTTON_RIGHT:
-				if held >= 0 or held_k >= 0:
-					held = -1
-					held_k = -1
-					refresh()
+				_let_go()
 			MOUSE_BUTTON_WHEEL_UP:
 				_cam_dist = maxf(18.0, _cam_dist * 0.9)
 			MOUSE_BUTTON_WHEEL_DOWN:
@@ -226,10 +291,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k: int = event.physical_keycode
 		if k >= KEY_1 and k < KEY_1 + home.shelf.size():
 			hold(k - KEY_1)
-		elif k == KEY_ESCAPE and (held >= 0 or held_k >= 0):
-			held = -1
-			held_k = -1
-			refresh()
+		elif k == KEY_ESCAPE:
+			_let_go()
 		elif k == KEY_SPACE or k == KEY_ENTER:
 			act("depart" if phase == Phase.PACK else "fight")
 
@@ -244,6 +307,12 @@ func _click() -> void:
 		return
 	var at: Variant = _aim(Content.offer(good))
 	if at == null:
+		return
+	var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
+	if Content.offer(good).type == "raise" and at in fits and Content.is_nest(home.buildings[at].kind):
+		# A nest's raise: one more, or elite -- the HUD asks which.
+		pending = {"from": "buy" if held >= 0 else "place", "slot": held if held >= 0 else held_k, "at": at}
+		refresh()
 		return
 	if held >= 0:
 		act("buy", {"slot": held, "at": at})
@@ -377,7 +446,21 @@ func refresh() -> void:
 			forecast = _work_out(home)
 			_forecast_at = _version
 		var good := _taken()
-		if not good.is_empty():
+		if not pending.is_empty():
+			tints[pending.at] = HOT_TINT
+			if aimed in ["count", "elite"]:
+				var p := pending
+				var choice := aimed
+				var buy_it: bool = p.from == "buy"
+				_try("%s%d|%s|%s" % [p.from, p.slot, str(p.at), choice], func(h: Home) -> void:
+					if buy_it:
+						h.buy(p.slot, p.at, choice)
+					else:
+						h.place(p.slot, p.at, choice))
+		elif Content.WONDERS.has(aimed):
+			var id := aimed
+			_try("wonder" + id, func(h: Home) -> void: h.build_wonder(id))
+		elif not good.is_empty():
 			var c := Content.offer(good)
 			var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
 			for t in fits:
@@ -426,12 +509,12 @@ func _work_out(h: Home) -> Dictionary:
 	var total := f.alive("ours").size()
 	f.run()
 	return {"result": f.result, "left": f.alive("ours").size(), "total": total,
-		"harm": 0 if f.result == "won" else maxi(0, f.harm() - h.block())}
+		"harm": 0 if f.result == "won" else maxi(0, f.harm())}
 
 
 ## What differs between two homelands, building by building, as short lines: more or fewer hatched, a new species,
-## hardier, harder hitting, faster, an affix, more affix places; and at the plot of a building that brings something
-## in, what it brings.
+## elite, hardier, harder hitting, faster, an affix, more affix places; and at the plot of a building that brings
+## something in, what it brings.
 func _changes(a: Home, b: Home) -> Dictionary:
 	var out := {}
 	var made_a := _made(a)
@@ -448,8 +531,9 @@ func _changes(a: Home, b: Home) -> Dictionary:
 				var sb := b.spec_of(p)
 				if sb.kind != sa.kind:
 					lines.append("进化：" + Content.UNITS[sb.kind].name)
-				var q := float(Content.level(kind, int(b.buildings[p].level)).quality)
-				var hp := roundi((float(sb.hp_mult) - float(sa.hp_mult)) / q * 100.0)
+				if int(sb.elite) > int(sa.elite):
+					lines.append("精英")
+				var hp := roundi((float(sb.hp_mult) / float(sa.hp_mult) - 1.0) * 100.0)
 				if hp != 0:
 					lines.append("血 %+d%%" % hp)
 				if int(sb.atk_bonus) != int(sa.atk_bonus):
@@ -468,7 +552,7 @@ func _changes(a: Home, b: Home) -> Dictionary:
 			continue
 		var lines: Array = out.get(p, [])
 		for pair in [["金币", b.income_gold() - a.income_gold(), "/轮"], ["生物质", b.income_biomass() - a.income_biomass(), "/轮"],
-				["基因", b.income_genes() - a.income_genes(), "/轮"], ["挡", b.block() - a.block(), ""],
+				["基因", b.income_genes() - a.income_genes(), "/轮"], ["利息上限", b.interest_max() - a.interest_max(), ""],
 				["家园血", b.hp_max() - a.hp_max(), ""]]:
 			if int(pair[1]) != 0:
 				lines.append("%s %+d%s" % [pair[0], pair[1], pair[2]])
@@ -486,10 +570,14 @@ func _made(h: Home) -> Dictionary:
 
 ## What to do with the good taken up, said over the shelf: "" when none is.
 func hint() -> String:
-	if phase == Phase.PACK:
+	if phase != Phase.PLAN:
 		return ""
+	if removing:
+		return "点一样货：这一局商店和送货里都不会再有它（这一轮还能去掉 %d 种）· 右键算了" % home.removes
+	if not pending.is_empty():
+		return "选一样：多孵 1 只，还是变精英 · 右键算了"
 	var good := _taken()
-	if phase != Phase.PLAN or good.is_empty():
+	if good.is_empty():
 		return ""
 	var c := Content.offer(good)
 	var p: Vector2i = hover.plot
@@ -505,8 +593,8 @@ func hint() -> String:
 			"nest":
 				return "点一个还有空词条位的巢贴上%s（不要钱）· 右键放回去" % c.name
 		return ""
-	if home.genes < int(c.get("genes", 0)):
-		return "基因不够（要 %d）" % c.genes
+	if home.genes < home.genes_cost(c):
+		return "基因不够（要 %d）" % home.genes_cost(c)
 	if home.alien < int(c.get("alien", 0)):
 		return "外星基因不够（要 %d，打赢了才有）" % c.alien
 	if c.type != "raise" and home.gold < home.price(held):
@@ -524,8 +612,9 @@ func hint() -> String:
 				say = "点一块空地造%s（%d 金）；点一座别的建筑，就拆了换成它" % [c.name, home.price(held)]
 		"building":
 			if p != HomeView.NOWHERE and home.buildings.has(p) and int(home.buildings[p].level) < Content.LEVEL_MAX:
-				say = "%s升到 %d 级（%d 金）" % [Content.BUILDINGS[home.buildings[p].kind].name, int(home.buildings[p].level) + 1,
-					home.price(held, p)]
+				var b: Dictionary = home.buildings[p]
+				say = "%s升到 %d 级（%d 金）%s" % [Content.BUILDINGS[b.kind].name, int(b.level) + 1, home.price(held, p),
+					"，点了再选多孵还是精英" if Content.is_nest(b.kind) else ""]
 			else:
 				say = "点一座建筑升一级（最多 %d 级；几级升上去，就要几加 %d 金）" % [Content.LEVEL_MAX, Content.RAISE]
 		"nest":
@@ -551,7 +640,9 @@ func describe() -> String:
 	if not home.buildings.has(p):
 		if ground != "":
 			return "%s\n%s" % [Content.TERRAIN[ground].name, Content.TERRAIN[ground].says]
-		return "空地：建筑可以造在这里"
+		if Home.front(p):
+			return "阵地（%s）：只能造巢。巢造在这里，它孵的兵打仗时就站在这里" % ("前排" if p.y == 0 else "后排")
+		return "后方：巢以外的建筑造在这里"
 	var text := _building_text(p)
 	if ground != "":
 		text += "\n建在%s上：%s" % [Content.TERRAIN[ground].name, Content.TERRAIN[ground].says]
@@ -563,8 +654,10 @@ func describe() -> String:
 func _unit_text(u: Dictionary) -> String:
 	var s := Content.unit_stats(u)
 	var nest: Dictionary = home.buildings.get(u.nest, {})
-	var lines: Array = ["%s（%s %d 级孵的）" % [s.name, Content.BUILDINGS[nest.kind].name if not nest.is_empty() else "",
-		int(nest.get("level", 1))], "血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米" % [s.hp, s.atk, _num(s.every), _num(s.range)]]
+	var from := "巨兽笼放出来的" if nest.is_empty() else "%s %d 级孵的" % [Content.BUILDINGS[nest.kind].name, int(nest.level)]
+	var lines: Array = ["%s%s（%s，站%s）" % ["精英" if int(u.get("elite", 0)) > 0 else "", s.name, from,
+		"前排" if int(u.get("row", 0)) == 0 else "后排"],
+		"血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米" % [s.hp, s.atk, _num(s.every), _num(s.range)]]
 	var more: Array = []
 	if int(s.armor) > 0:
 		more.append("护甲 %d" % s.armor)
@@ -578,6 +671,8 @@ func _unit_text(u: Dictionary) -> String:
 		more.append("倒下时炸一圈（%d）" % s.burst)
 	if s.dive:
 		more.append("会飞，打后排")
+	if s.charge:
+		more.append("开战第一下双倍")
 	if not more.is_empty():
 		lines.append(" · ".join(more))
 	lines.append(Content.UNITS[u.kind].role)
@@ -597,21 +692,21 @@ func _building_text(p: Vector2i) -> String:
 				return Content.AFFIXES[a].name))])
 		var made := int(_made(home).get(p, 0))
 		var want := home.count(p)
-		lines.append("这一轮孵 %d 只%s" % [made, ("（生物质不够，少 %d）" % (want - made)) if made < want else ""])
+		lines.append("这一轮孵 %d 只%s，打仗时站%s" % [made, ("（生物质不够，少 %d）" % (want - made)) if made < want else "",
+			"前排" if p.y == 0 else "后排"])
+		var e := int(s.elite)
+		if e > 0:
+			lines.append("精英%s：血 ×%s、攻击 ×%s、大一号" % ["×%d" % e if e > 1 else "", Content._num(pow(Content.ELITE_HP, e)),
+				Content._num(pow(Content.ELITE_ATK, e))])
 		var given: Array = []
-		var hp := roundi((float(s.hp_mult) / float(Content.level(b.kind, int(b.level)).quality) - 1.0) * 100.0)
-		if hp != 0:
-			given.append("血 %+d%%" % hp)
-		var drill := int(s.atk_bonus)
-		for af in b.affixes:
-			if not af in Content.species(info.nest, b.affixes).used:
-				drill -= int(Content.AFFIXES[af].get("atk", 0))
-		if drill != 0:
-			given.append("攻击 %+d" % drill)
-		if int(s.haste) != 0:
-			given.append("快 %d%%" % s.haste)
+		if e > 0 and home._sum("elite") > 0:
+			given.append("冠军殿：精英再 +%d%%" % home._sum("elite"))
+		if p.y == 0 and home._sum("front") > 0:
+			given.append("前锋营：前排血 +%d%%" % home._sum("front"))
+		if maxf(float(Content.UNITS[s.kind].range), float(s.range)) >= 3.0 and home._sum("ranged") > 0:
+			given.append("瞭望塔：每下多 %d，不管护甲" % home._sum("ranged"))
 		if not given.is_empty():
-			lines.append("旁边给它：" + "，".join(given))
+			lines.append("，".join(given))
 		var names: Array = b.affixes.map(func(a: String) -> String: return Content.AFFIXES[a].name)
 		lines.append("词条：%s（还能贴 %d 个）" % ["、".join(names) if not names.is_empty() else "没有", home.slots(p) - b.affixes.size()])
 		if not s.evolved:
@@ -624,6 +719,29 @@ func _building_text(p: Vector2i) -> String:
 
 static func _num(x: float) -> String:
 	return ("%d" % x) if is_equal_approx(x, roundf(x)) else ("%.1f" % x)
+
+
+## What the schools do for this round's army as a whole, said plainly (for the HUD): "" when nothing.
+func bonuses() -> String:
+	var parts: Array = []
+	var n := home.army().size()
+	var more := 0
+	for p in home.buildings:
+		if home.buildings[p].kind == "horde_totem":
+			var each := int(home.level_of(p).per)
+			more = each - n % each if more == 0 else mini(more, each - n % each)
+	if more > 0:
+		parts.append("兽群：出战 %d 只，全体攻击 +%d；再多 %d 只 +%d" % [n, home.horde_bonus(n), more,
+			home.horde_bonus(n + more) - home.horde_bonus(n)])
+	if home._sum("elite") > 0:
+		parts.append("冠军殿：精英 +%d%%" % home._sum("elite"))
+	if home._sum("ranged") > 0:
+		parts.append("瞭望塔：远程每下多 %d，不管护甲" % home._sum("ranged"))
+	if home._sum("front") > 0:
+		parts.append("前锋营：前排血 +%d%%" % home._sum("front"))
+	if home.wonder == "banner":
+		parts.append("万兽战旗：全体攻击 +2、血 +25%")
+	return "\n".join(parts)
 
 
 # -- The run ----------------------------------------------------------------------------------------------------
@@ -646,6 +764,9 @@ func _start_round() -> void:
 	phase = Phase.BUSY
 	held = -1
 	held_k = -1
+	pending = {}
+	removing = false
+	aimed = ""
 	refresh()
 	var sub := "进账，商店换货，孵兵"
 	if run.round == 1 and run.level > 0:
@@ -673,7 +794,7 @@ func _start_round() -> void:
 			"ash":
 				tags.float_text(Vector3(0, 4.0, 0), "火山灰：家园 −%d" % e.amount, Color(1.0, 0.55, 0.4), 24)
 			"mended":
-				tags.float_text(Vector3(0, 3.0, 0), "藤蔓：家园 +%d" % e.amount, Color(0.5, 1.0, 0.5), 24)
+				tags.float_text(Vector3(0, 3.0, 0), "颈盾：家园 +%d" % e.amount, Color(0.5, 1.0, 0.5), 24)
 	_version += 1
 	home_view.sync_army(home.army())
 	await get_tree().create_timer(0.5).timeout

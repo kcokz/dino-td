@@ -64,10 +64,11 @@ static func dome(radius: float, c: Color, at := Vector3.ZERO) -> MeshInstance3D:
 
 
 ## A creature as a block: a body of its colour, two eyes on the face that looks along +z, what its gene affixes grow
-## on it -- a shell plate, blades, an acid sac, wings, a plasma orb, a stinger, a flame -- and what marks its kind (an
-## evolved species of ours, or one of theirs: Content.UNITS, Content.ENEMIES). The body has its own material (it
-## flashes when hit) and is the root's child, to lunge and hop while the root keeps its place.
-static func creature(edge: float, c: Color, theirs := false, affixes: Array = [], kind := "") -> Node3D:
+## on it -- a shell plate, blades, an acid sac, wings, a plasma orb, a stinger, a flame, fins of speed, thick hide, a
+## charging horn -- a gold band for each time its nest was made elite, and what marks its kind (an evolved species of
+## ours, the titan, or one of theirs: Content.UNITS, Content.ENEMIES). The body has its own material (it flashes when
+## hit) and is the root's child, to lunge and hop while the root keeps its place.
+static func creature(edge: float, c: Color, theirs := false, affixes: Array = [], kind := "", elite := 0) -> Node3D:
 	var root := Node3D.new()
 	root.set_meta("edge", edge)
 	var mesh := BoxMesh.new()
@@ -124,6 +125,23 @@ static func creature(edge: float, c: Color, theirs := false, affixes: Array = []
 				var fire := cylinder(edge * 0.2, edge * 0.45, ac, Vector3(0, edge * 0.74, edge * 0.15), 0.0)
 				fire.material_override = glow(ac, 2.4)
 				body.add_child(fire)
+			"haste":
+				for side in [-1.0, 1.0]:
+					var fin := box(Vector3(0.06, edge * 0.4, edge * 0.45), ac, Vector3(side * edge * 0.53, edge * 0.1, -edge * 0.35))
+					fin.rotation.x = 0.6
+					fin.material_override = glow(ac, 0.9)
+					body.add_child(fin)
+			"hide":
+				for side in [-1.0, 1.0]:
+					body.add_child(box(Vector3(edge * 0.12, edge * 0.72, edge * 0.82), ac, Vector3(side * edge * 0.55, -edge * 0.02, 0)))
+			"horn":
+				var horn := cylinder(edge * 0.14, edge * 0.5, ac, Vector3(0, edge * 0.22, edge * 0.7), 0.0)
+				horn.rotation.x = PI * 0.5
+				body.add_child(horn)
+	for step in elite:
+		var band := box(Vector3(edge * 1.07, edge * 0.08, edge * 1.07), Color(1.0, 0.8, 0.25), Vector3(0, edge * (0.36 - step * 0.14), 0))
+		band.material_override = glow(Color(1.0, 0.8, 0.25), 0.7)
+		body.add_child(band)
 	_marks(body, edge, c, kind)
 	return root
 
@@ -160,6 +178,12 @@ static func _marks(body: MeshInstance3D, edge: float, c: Color, kind: String) ->
 					var horn := box(Vector3(0.18, edge * 0.4, 0.18), Color(0.2, 0.15, 0.12), Vector3(side * edge * 0.32, edge * 0.7, edge * 0.3))
 					horn.rotation.x = 0.4
 					body.add_child(horn)
+		"titan":
+			body.add_child(box(Vector3(edge * 1.08, edge * 0.22, edge * 1.08), c.darkened(0.4), Vector3(0, edge * 0.55, 0)))
+			for side in [-1.0, 1.0]:
+				var horn := cylinder(edge * 0.1, edge * 0.5, Color(0.9, 0.86, 0.75), Vector3(side * edge * 0.35, edge * 0.75, edge * 0.2), 0.0)
+				horn.rotation.z = -side * 0.4
+				body.add_child(horn)
 		"spore", "boss_rain":
 			var sacs := 3 if kind == "spore" else 7
 			for i in sacs:

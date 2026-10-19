@@ -38,7 +38,13 @@ var _rule: Label
 var _hp: Control
 var _res: Label
 var _army: Label
-
+var _bonus: Label
+var _remove: Button
+var _choice: PanelContainer
+var _wonder_box: VBoxContainer
+var _wonder_title: Label
+var _wonder_buttons := {}        # wonder id -> Button
+var _wonder_hover := ""
 var _relics: HBoxContainer
 var _relics_shown := -1
 var _relic_hover := ""
@@ -101,6 +107,37 @@ func setup(p_game: Game) -> void:
 	_army = _label("", 16, Fonts.serif(700), Color(0.92, 0.86, 0.74))
 	_army.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_corner.add_child(_army)
+	_bonus = _label("", 15, Fonts.serif(800), Color(1.0, 0.75, 0.4))
+	_bonus.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_bonus.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_bonus.custom_minimum_size = Vector2(340, 0)
+	_corner.add_child(_bonus)
+
+	# Under it: the wonders on offer this run -- one can be built.
+	_wonder_box = VBoxContainer.new()
+	_wonder_box.add_theme_constant_override("separation", 6)
+	_root.add_child(_wonder_box)
+	_wonder_title = _label("奇观（一局只能造一座）", 15, Fonts.serif(800), Color(1.0, 0.88, 0.6))
+	_wonder_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_wonder_box.add_child(_wonder_title)
+	var wonder_row := HBoxContainer.new()
+	wonder_row.add_theme_constant_override("separation", 8)
+	_wonder_box.add_child(wonder_row)
+	for id in game.home.wonders:
+		var w: Dictionary = Content.WONDERS[id]
+		var b := _button("%s · %d 金" % [w.name, w.price], Vector2(160, 38), 16)
+		b.add_theme_stylebox_override("normal", _plate((w.color as Color).lightened(0.2), (w.color as Color).darkened(0.4)))
+		b.add_theme_stylebox_override("hover", _plate((w.color as Color).lightened(0.35), (w.color as Color).darkened(0.4)))
+		b.mouse_entered.connect(func() -> void:
+			_wonder_hover = id
+			game.aim(id))
+		b.mouse_exited.connect(func() -> void:
+			if _wonder_hover == id:
+				_wonder_hover = ""
+				game.aim(""))
+		b.pressed.connect(func() -> void: game.act("wonder", {"id": id}))
+		wonder_row.add_child(b)
+		_wonder_buttons[id] = b
 	_relics = HBoxContainer.new()
 	_relics.position = Vector2(300, 10)
 	_relics.add_theme_constant_override("separation", 6)
@@ -184,6 +221,11 @@ func setup(p_game: Game) -> void:
 	_reroll.position = Vector2(-214, -218)
 	_reroll.pressed.connect(func() -> void: game.act("reroll"))
 	_root.add_child(_reroll)
+	_remove = _button("去掉一种", Vector2(188, 44), 17)
+	_remove.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_remove.position = Vector2(-214, -272)
+	_remove.pressed.connect(func() -> void: game.toggle_removing())
+	_root.add_child(_remove)
 	_go = _button("出战！", Vector2(188, 64), 26)
 	_go.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_go.position = Vector2(-214, -150)
@@ -213,6 +255,30 @@ func setup(p_game: Game) -> void:
 		game.speed = 3.0 if game.speed < 2.0 else 1.0
 		_speed.text = "正常" if game.speed > 1.0 else "快进")
 	row.add_child(_speed)
+
+	# A nest's raise: one more, or elite.
+	_choice = PanelContainer.new()
+	_choice.add_theme_stylebox_override("panel", _panel(Color(0.07, 0.065, 0.06, 0.94), HomeView.ELITE_GOLD, 12))
+	_choice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_choice.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_choice.position = Vector2(-40, -262)
+	_choice.visible = false
+	_root.add_child(_choice)
+	var choice_row := HBoxContainer.new()
+	choice_row.add_theme_constant_override("separation", 14)
+	_choice.add_child(choice_row)
+	choice_row.add_child(_label("这个巢升级：", 18, Fonts.serif(800), CREAM))
+	for pair in [["count", "多孵 1 只"], ["elite", "变精英（血 ×%s、攻击 ×%s、大一号）" % [Content._num(Content.ELITE_HP),
+			Content._num(Content.ELITE_ATK)]]]:
+		var b := _button(pair[1], Vector2(150, 46), 17)
+		var choice: String = pair[0]
+		b.mouse_entered.connect(func() -> void: game.aim(choice))
+		b.mouse_exited.connect(func() -> void:
+			if game.aimed == choice:
+				game.aim(""))
+		b.pressed.connect(func() -> void: game.act("choose", {"choice": choice}))
+		choice_row.add_child(b)
 
 	# Packing: what the ark carries on.
 	_pack = PanelContainer.new()
@@ -260,11 +326,16 @@ func setup(p_game: Game) -> void:
 func _process(_delta: float) -> void:
 	_layout()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
+	_wonder_box.position = Vector2(18.0, _corner.position.y + _corner.size.y + 12.0)
 	var tip := game.describe() if _hovered == null and not _overlay.visible else ""
 	if not _overlay.visible:
 		if _relic_hover != "":
 			var r: Dictionary = Content.RELICS[_relic_hover]
 			tip = "%s（%s）\n%s" % [r.name, "首领遗物" if r.get("boss", false) else "化石遗物", r.says]
+		elif _wonder_hover != "":
+			var w: Dictionary = Content.WONDERS[_wonder_hover]
+			tip = "%s（奇观）\n%s\n%d 金。一局只能造一座，搬家也带着%s" % [w.name, w.says, w.price,
+				"" if game.home.gold >= int(w.price) else "（还差 %d 金）" % (int(w.price) - game.home.gold)]
 	_info.visible = tip != ""
 	if tip != "" and _info_text.text != tip:
 		_info_text.text = tip
@@ -289,7 +360,7 @@ func deal(shelf: Array) -> void:
 		var v := CardView.new()
 		_hand.add_child(v)
 		if oi == null:
-			v.setup_sold()
+			v.setup_sold("去掉了" if game.home.struck.has(i) else "已买")
 		else:
 			v.setup(oi)
 			v.clicked.connect(_on_card)
@@ -362,7 +433,9 @@ func refresh() -> void:
 	for i in _cards.size():
 		var v: CardView = _cards[i]
 		if not v.sold:
-			v.set_state(planning and not home.targets(i).is_empty(), game.held == i)
+			v.genes_shown = home.genes_cost(v.c)
+			v.set_state(planning and (game.removing or not home.targets(i).is_empty()), game.held == i)
+			v.set_marked(planning and game.removing)
 	for k in _kept.size():
 		var v: CardView = _kept[k]
 		if packing:
@@ -387,6 +460,18 @@ func refresh() -> void:
 	var army := home.army()
 	_army.text = "这一轮出战 %d 只，吃 %d 生物质" % [army.size(), home.army_food()] if not fighting else ""
 	_army.visible = not away and not packing
+	_bonus.text = game.bonuses()
+	_bonus.visible = _bonus.text != "" and not away and not packing
+	_remove.visible = not away and not packing
+	_remove.disabled = not planning or home.removes <= 0 and not game.removing
+	_remove.text = "算了，不去掉" if game.removing else "去掉一种货（%d）" % home.removes
+	_choice.visible = planning and not game.pending.is_empty()
+	_wonder_box.visible = not away and not packing and not home.wonders.is_empty()
+	_wonder_title.text = ("奇观：%s（已造）" % Content.WONDERS[home.wonder].name) if home.wonder != "" else "奇观（一局只能造一座）"
+	for id in _wonder_buttons:
+		var b: Button = _wonder_buttons[id]
+		b.visible = home.wonder == ""
+		b.disabled = not planning or not home.can_build_wonder(id)
 	_battle.visible = fighting and not game.at_home
 	var taking: int = game.pack_plots.size() + game.pack_kept.size()
 	_kept_label.text = ("带走 %d / %d" % [taking, home.stash_size()]) if packing else ("存货 %d / %d" % [home.stash.size(), home.stash_size()])
@@ -621,7 +706,10 @@ func arrive(level: int) -> void:
 	for t in lv.terrain:
 		ground.append("%s：%s" % [Content.TERRAIN[t].name, Content.TERRAIN[t].says])
 	var box := _open("到了%s！" % lv.name, "撑过 %d 轮，最后一轮是首领" % int(lv.rounds))
-	box.add_child(_label("%s：%s\n%s" % [rule.name, rule.says, "\n".join(ground)], 19, Fonts.serif(700), Color(0.98, 0.9, 0.72)))
+	var lines: Array = ["%s：%s" % [rule.name, rule.says]] + ground
+	if level == 0:
+		lines.push_front("阵地：家园最上面两排只能造巢。兵打仗时就站在巢的位置，最上面一排在最前")
+	box.add_child(_label("\n".join(lines), 19, Fonts.serif(700), Color(0.98, 0.9, 0.72)))
 	var b := _button("开始", Vector2(170, 52), 20)
 	b.pressed.connect(func() -> void: chosen.emit("开始"))
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER

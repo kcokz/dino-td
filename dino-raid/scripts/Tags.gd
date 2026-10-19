@@ -80,7 +80,8 @@ func _home(cam: Camera3D) -> void:
 			var got := int(made.get(p, 0))
 			var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
 			var col: Color = GOLD if sp.used.is_empty() else (Content.UNITS[sp.kind].color as Color).lightened(0.45)
-			_text(at + Vector2(0, y), "孵 %d" % got, col, 15, Fonts.serif(900))
+			var stars: int = b.path.count("elite")
+			_text(at + Vector2(0, y), "孵 %d%s" % [got, (" " + "★".repeat(stars)) if stars > 0 else ""], col, 15, Fonts.serif(900))
 			y -= 17.0
 			if got < want:
 				_text(at + Vector2(0, y), "少孵 %d" % (want - got), BAD, 14, Fonts.serif(900))

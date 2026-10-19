@@ -26,9 +26,12 @@ static var _grounds := {}
 var ci: Dictionary = {}
 var c: Dictionary = {}
 var sold := false
+var sold_label := "已买"
 var kept := false                 # had already (in the stash): no price
 var affordable := true
 var chosen := false
+var marked := false               # its kind is about to be taken out of the shop: ringed red
+var genes_shown := -1             # the genes it costs here (Home.genes_cost), or -1 for what it says
 var _hover := false
 
 
@@ -48,9 +51,10 @@ func token() -> String:
 	return "存" if kept else ""
 
 
-## A place on the shelf already bought from.
-func setup_sold() -> void:
+## A place on the shelf already bought from (or its kind taken out of the shop: `label`).
+func setup_sold(label := "已买") -> void:
 	sold = true
+	sold_label = label
 	_frame()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -91,6 +95,12 @@ func set_state(p_affordable: bool, p_chosen: bool) -> void:
 		queue_redraw()
 
 
+func set_marked(on: bool) -> void:
+	if marked != on:
+		marked = on
+		queue_redraw()
+
+
 func _draw() -> void:
 	if sold:
 		var empty := StyleBoxFlat.new()
@@ -99,7 +109,7 @@ func _draw() -> void:
 		empty.set_border_width_all(2)
 		empty.set_corner_radius_all(11)
 		empty.draw(get_canvas_item(), Rect2(Vector2.ZERO, SIZE))
-		_text(Vector2(SIZE.x * 0.5, 70), "已买", 22, Color(0.75, 0.68, 0.58), Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
+		_text(Vector2(SIZE.x * 0.5, 70), sold_label, 22, Color(0.75, 0.68, 0.58), Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
 		return
 	if c.is_empty():
 		return
@@ -142,8 +152,15 @@ func _draw() -> void:
 	paper.draw(get_canvas_item(), slip)
 	draw_multiline_string(Fonts.serif(500), slip.position + Vector2(5, 13), Content.offer_text(c), HORIZONTAL_ALIGNMENT_LEFT,
 		slip.size.x - 10, 11, 4, Color(0.2, 0.14, 0.08))
-	_text(Vector2(SIZE.x * 0.5, SIZE.y - 6), "%s · %s" % [Content.TYPES[c.type], RARITY[int(c.rarity)]], 10,
-		Color(metal, 0.9), Fonts.serif(600), HORIZONTAL_ALIGNMENT_CENTER)
+	_text(Vector2(SIZE.x * 0.5, SIZE.y - 6), footer(), 10, Color(metal, 0.9), Fonts.serif(600), HORIZONTAL_ALIGNMENT_CENTER)
+	if marked:
+		var ring := StyleBoxFlat.new()
+		ring.bg_color = Color(0.5, 0.05, 0.03, 0.35)
+		ring.border_color = Color(1.0, 0.35, 0.3)
+		ring.set_border_width_all(4)
+		ring.set_corner_radius_all(11)
+		ring.draw(get_canvas_item(), full)
+		_text(Vector2(SIZE.x * 0.5, 96), "去掉", 26, Color(1.0, 0.85, 0.8), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER, 6)
 	var coin := Vector2(18, 18)
 	if token() != "":
 		# Had already: a green token, nothing to pay.
@@ -163,14 +180,26 @@ func _draw() -> void:
 	_extras(full)
 
 
-## What else it costs (genes, alien genes) beside the price -- not for a gift, which costs nothing -- and the shade
-## over a card that cannot be bought now.
+## What kind of good it is, said at its foot: a building's part of the homeland and its school, how rare it is.
+func footer() -> String:
+	var bits: Array = [Content.TYPES[c.type]]
+	if c.type == "build":
+		var b: Dictionary = Content.BUILDINGS[c.builds]
+		bits = ["巢 · 阵地"] if b.has("nest") else ["后方"]
+		if b.has("school"):
+			bits.append(Content.SCHOOLS[b.school].name)
+	bits.append(RARITY[int(c.rarity)])
+	return " · ".join(bits)
+
+
+## What else it costs (genes -- as many as it costs here -- and alien genes) beside the price -- not for a good had
+## already -- and the shade over a card that cannot be bought now.
 func _extras(full: Rect2) -> void:
 	var x := SIZE.x - 10.0
 	for extra in [["alien", "外星", ALIEN], ["genes", "基因", GENES]]:
 		if token() != "":
 			break
-		var n := int(c.get(extra[0], 0))
+		var n := genes_shown if extra[0] == "genes" and genes_shown >= 0 else int(c.get(extra[0], 0))
 		if n <= 0:
 			continue
 		var label := "%s %d" % [extra[1], n]
@@ -203,23 +232,52 @@ func _picture(r: Rect2) -> void:
 					draw_arc(mid + Vector2(-34, 24 - k * 13), 5.5, 0.0, TAU, 16, Color(0, 0, 0, 0.6), 1.0, true)
 			else:
 				match c.builds:
-					"pool", "spore_pool", "hot_spring":
+					"pool", "spore_pool":
 						_block(mid + Vector2(0, 14), 52.0, 14.0, col.darkened(0.4))
 						draw_rect(Rect2(mid + Vector2(-24, 2), Vector2(48, 6)), col.lightened(0.2))
 						if c.builds == "spore_pool":
 							for k in 3:
 								draw_circle(mid + Vector2(-14 + k * 14, -4 - (k % 2) * 6), 6.0, Color(0.78, 0.82, 0.38))
-						elif c.builds == "hot_spring":
-							for k in 3:
-								draw_circle(mid + Vector2(-12 + k * 12, -12 - k * 8), 6.0 + k, Color(1, 1, 1, 0.55))
+					"horde_totem":
+						draw_rect(Rect2(mid + Vector2(-4, -30), Vector2(8, 58)), Color(0.35, 0.25, 0.18))
+						for k in 3:
+							_block(mid + Vector2(0, 16 - k * 14), 16.0, 11.0, Color(0.9, 0.85, 0.75))
+						draw_rect(Rect2(mid + Vector2(4, -30), Vector2(20, 14)), col)
+					"gene_bank":
+						_block(mid + Vector2(0, 24), 40.0, 8.0, col.darkened(0.45))
+						draw_rect(Rect2(mid + Vector2(-14, -26), Vector2(28, 46)), Color(col, 0.75))
+						for k in 4:
+							draw_circle(mid + Vector2(-8 + (k % 2) * 16, -18 + k * 11), 3.5, Color(1, 1, 1))
+					"vault":
+						_block(mid + Vector2(0, 10), 50.0, 30.0, Color(0.42, 0.4, 0.38))
+						draw_circle(mid + Vector2(0, 10), 10.0, col)
+						draw_circle(mid + Vector2(0, 10), 4.0, col.darkened(0.4))
+					"market":
+						_block(mid + Vector2(0, 18), 46.0, 14.0, Color(0.5, 0.36, 0.22))
+						for k in 4:
+							draw_rect(Rect2(mid + Vector2(-26 + k * 13, -22), Vector2(13, 10)), col if k % 2 == 0 else Color(0.95, 0.92, 0.85))
+						for sx in [-24.0, 22.0]:
+							draw_rect(Rect2(mid + Vector2(sx, -12), Vector2(3, 24)), Color(0.4, 0.3, 0.2))
+					"champion_hall":
+						_block(mid + Vector2(0, 22), 52.0, 8.0, Color(0.85, 0.82, 0.78))
+						for k in 4:
+							draw_rect(Rect2(mid + Vector2(-22 + k * 13, -8), Vector2(5, 26)), Color(0.92, 0.9, 0.86))
+						_block(mid + Vector2(0, -12), 54.0, 7.0, col)
+						draw_colored_polygon(PackedVector2Array([mid + Vector2(-10, -18), mid + Vector2(-10, -30), mid + Vector2(-4, -24),
+							mid + Vector2(0, -32), mid + Vector2(4, -24), mid + Vector2(10, -30), mid + Vector2(10, -18)]), HomeView.ELITE_GOLD)
+					"watchtower":
+						draw_rect(Rect2(mid + Vector2(-6, -14), Vector2(12, 42)), Color(0.45, 0.4, 0.36))
+						_block(mid + Vector2(0, -18), 22.0, 12.0, col)
+						draw_colored_polygon(PackedVector2Array([mid + Vector2(-14, -24), mid + Vector2(0, -36), mid + Vector2(14, -24)]),
+							col.darkened(0.3))
+					"vanguard":
+						draw_colored_polygon(PackedVector2Array([mid + Vector2(-26, 24), mid + Vector2(0, -28), mid + Vector2(26, 24)]), col)
+						for k in 3:
+							draw_rect(Rect2(mid + Vector2(-18 + k * 13, 12), Vector2(9, 13)), Color(0.62, 0.64, 0.7))
 					"forge":
 						_block(mid + Vector2(-4, 12), 40.0, 28.0, Color(0.3, 0.26, 0.24))
 						draw_rect(Rect2(mid + Vector2(-12, 12), Vector2(14, 10)), Color(1.0, 0.55, 0.15))
 						draw_rect(Rect2(mid + Vector2(8, -24), Vector2(9, 24)), col.darkened(0.3))
-					"vine_wall":
-						_block(mid + Vector2(0, 10), 56.0, 24.0, col)
-						for k in 5:
-							draw_circle(mid + Vector2(-24 + k * 12, 4 + (k % 2) * 8), 5.0, Color(0.35, 0.68, 0.28))
 					"sampler":
 						_block(mid + Vector2(0, 20), 26.0, 12.0, col.darkened(0.3))
 						draw_rect(Rect2(mid + Vector2(-5, -22), Vector2(10, 36)), col)
@@ -227,19 +285,10 @@ func _picture(r: Rect2) -> void:
 					"mine":
 						_block(mid + Vector2(0, 12), 36.0, 26.0, Color(0.32, 0.32, 0.34))
 						draw_circle(mid + Vector2(0, -12), 11.0, col)
-					"gym":
-						_block(mid + Vector2(0, 22), 50.0, 8.0, col)
-						draw_rect(Rect2(mid + Vector2(-22, -18), Vector2(6, 36)), col.darkened(0.3))
-						draw_rect(Rect2(mid + Vector2(16, -18), Vector2(6, 36)), col.darkened(0.3))
-						draw_rect(Rect2(mid + Vector2(-24, -20), Vector2(48, 5)), col.lightened(0.3))
 					"stabilizer":
 						draw_rect(Rect2(mid + Vector2(-5, -26), Vector2(10, 50)), col.darkened(0.2))
 						for k in 2:
 							draw_rect(Rect2(mid + Vector2(-20, -12 + k * 16), Vector2(40, 4)), col.lightened(0.2))
-					"wall":
-						_block(mid + Vector2(0, 10), 56.0, 24.0, col)
-						for k in 4:
-							draw_rect(Rect2(mid + Vector2(-26 + k * 14, -10), Vector2(8, 8)), col.darkened(0.2))
 		"raise":
 			_block(mid + Vector2(-14, 12), 26.0, 18.0, Color(0.6, 0.6, 0.62))
 			_block(mid + Vector2(-14, -8), 26.0, 18.0, Color(0.8, 0.8, 0.82))
@@ -273,6 +322,17 @@ func _picture(r: Rect2) -> void:
 					draw_colored_polygon(PackedVector2Array([mid + Vector2(-12, -2), mid + Vector2(0, -34), mid + Vector2(12, -2)]), col)
 					draw_colored_polygon(PackedVector2Array([mid + Vector2(-6, -2), mid + Vector2(0, -20), mid + Vector2(6, -2)]),
 						Color(1.0, 0.85, 0.3))
+				"haste":
+					for sx in [-1.0, 1.0]:
+						draw_colored_polygon(PackedVector2Array([mid + Vector2(sx * 15, 4), mid + Vector2(sx * 34, -10),
+							mid + Vector2(sx * 15, 16)]), col)
+					for k in 3:
+						draw_line(mid + Vector2(-40, -18 + k * 8), mid + Vector2(-24, -18 + k * 8), Color(col, 0.8), 2.0)
+				"hide":
+					for sx in [-1.0, 1.0]:
+						draw_rect(Rect2(mid + Vector2(sx * 17 - 4, -4), Vector2(8, 30)), col)
+				"horn":
+					draw_colored_polygon(PackedVector2Array([mid + Vector2(10, 0), mid + Vector2(38, -6), mid + Vector2(10, 10)]), col)
 
 
 ## A block seen from a little above: front face, lit top, edge.

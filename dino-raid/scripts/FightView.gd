@@ -23,7 +23,7 @@ func setup(f: Fight) -> void:
 
 func _add(u: Dictionary) -> Node3D:
 	var c: Color = (Content.UNITS if u.side == "ours" else Content.ENEMIES)[u.kind].color
-	var n := Blocks.creature(float(u.size), c, u.side == "theirs", u.affixes, u.kind)
+	var n := Blocks.creature(float(u.size), c, u.side == "theirs", u.affixes, u.kind, int(u.get("elite", 0)))
 	n.rotation.y = PI * 0.5 if u.side == "ours" else -PI * 0.5
 	n.position = place(u)
 	add_child(n)
@@ -77,6 +77,8 @@ func show_events(ev: Array) -> void:
 				if tags:
 					var c := Color(1.0, 0.4, 0.32) if b.side == "ours" else Color(1.0, 0.96, 0.86)
 					tags.float_text(nb.position + Vector3.UP * (float(b.size) + 0.5), "-%d" % e.dmg, c, 18)
+					if e.get("charge", false):
+						tags.float_text(na.position + Vector3.UP * (float(a.size) + 1.2), "冲锋！", Color(1.0, 0.85, 0.4), 20)
 				if struck.has(e.from):
 					continue
 				struck[e.from] = true
