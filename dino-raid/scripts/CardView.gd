@@ -113,17 +113,22 @@ func _draw() -> void:
 	if c.is_empty():
 		return
 	var metal: Color = METAL[int(c.rarity)]
+	# Its frame a made one (UiArt, tools/ui_art.py): bronze with garnets, silver with sapphires, gold with amber -- a
+	# window left open for the picture, a band for the name, a slip of parchment, a bezel for the price's coin.
+	var made: String = ["card_bronze", "card_silver", "card_gold"][clampi(int(c.rarity), 0, 2)]
+	var framed := UiArt.tex(made) != null
 	if chosen or _hover:
 		for i in 4:
 			var g := 2.0 + i * 2.6
 			Style.ring(rid, full.grow(g), 12.0 + g * 0.6, Color(Style.GOLD_BRIGHT, (0.55 if chosen else 0.3) * (1.0 - i / 4.0)), 2.6)
-	Style.fill(rid, full, 12.0, Color(0, 0, 0, 0.5), Color(0, 0, 0, 0.5), Vector2(0, 4))
-	Style.fill(rid, full, 12.0, Color(0.1, 0.12, 0.125), Color(0.035, 0.045, 0.05))
-	Style.ring(rid, full.grow(-1.0), 12.0, metal, 2.0)
-	Style.ring(rid, full.grow(-5.5), 9.0, Color(metal, 0.4), 1.0)
-	for corner in [Vector2(6, 6), Vector2(SIZE.x - 6, 6), Vector2(SIZE.x - 6, SIZE.y - 6), Vector2(6, SIZE.y - 6)]:
-		Style.diamond(rid, corner, 2.6, metal.lightened(0.2))
-	# The window and its picture.
+	if not framed:
+		Style.fill(rid, full, 12.0, Color(0, 0, 0, 0.5), Color(0, 0, 0, 0.5), Vector2(0, 4))
+		Style.fill(rid, full, 12.0, Color(0.1, 0.12, 0.125), Color(0.035, 0.045, 0.05))
+		Style.ring(rid, full.grow(-1.0), 12.0, metal, 2.0)
+		Style.ring(rid, full.grow(-5.5), 9.0, Color(metal, 0.4), 1.0)
+		for corner in [Vector2(6, 6), Vector2(SIZE.x - 6, 6), Vector2(SIZE.x - 6, SIZE.y - 6), Vector2(6, SIZE.y - 6)]:
+			Style.diamond(rid, corner, 2.6, metal.lightened(0.2))
+	# The window and its picture (under the made frame).
 	var art := Rect2(12, 30, SIZE.x - 24, 80)
 	Style.fill(rid, art, 6.0, (GROUND[c.type][0] as Color).darkened(0.45), (GROUND[c.type][1] as Color).darkened(0.35))
 	var tex := Portraits.of_offer(c, func(_t: Texture2D) -> void:
@@ -137,21 +142,28 @@ func _draw() -> void:
 			_arrow(art.get_center() + Vector2(36, 8), Style.GOLD_BRIGHT)
 	else:
 		_picture(art)
-	Style.ring(rid, art, 6.0, Color(metal, 0.8), 1.2)
+	if framed:
+		UiArt.whole(self, made, full)
+	else:
+		Style.ring(rid, art, 6.0, Color(metal, 0.8), 1.2)
 	if c.type == "build" and Content.is_nest(c.builds):
-		# Its gift's name on a little tab across the window's top edge.
+		# Its gift's name on a little plate across the window's top edge.
 		var gift: String = Lang.t(Content.TRAITS[Content.BUILDINGS[c.builds].trait].name)
 		var gw := Fonts.serif(800).get_string_size(gift, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-		var tab := Rect2(art.get_center().x - gw * 0.5 - 10, art.position.y - 9, gw + 20, 18)
-		Style.fill(rid, tab, 5.0, Color(0.09, 0.11, 0.115), Color(0.03, 0.04, 0.045))
-		Style.ring(rid, tab, 5.0, Color(metal, 0.9), 1.0)
-		_text(Vector2(tab.get_center().x, tab.position.y + 13.5), gift, 12, Style.GOLD_BRIGHT, Fonts.serif(800),
+		var tab := Rect2(art.get_center().x - gw * 0.5 - 14 + (8.0 if framed else 0.0), art.position.y - 10, gw + 28, 20)
+		if framed:
+			HudParts.plate(self, tab)
+		else:
+			Style.fill(rid, tab, 5.0, Color(0.09, 0.11, 0.115), Color(0.03, 0.04, 0.045))
+			Style.ring(rid, tab, 5.0, Color(metal, 0.9), 1.0)
+		_text(Vector2(tab.get_center().x, tab.position.y + 14.5), gift, 12, Style.GOLD_BRIGHT, Fonts.serif(800),
 			HORIZONTAL_ALIGNMENT_CENTER)
-	# The name on its ribbon.
+	# The name on its band.
 	var band := Rect2(8, 114, SIZE.x - 16, 24)
-	Style.fill(rid, band, 4.0, Color(0.06, 0.07, 0.075), Color(0.025, 0.03, 0.035))
-	for y in [band.position.y, band.end.y]:
-		draw_line(Vector2(band.position.x + 6, y), Vector2(band.end.x - 6, y), Color(metal, 0.75), 1.0, true)
+	if not framed:
+		Style.fill(rid, band, 4.0, Color(0.06, 0.07, 0.075), Color(0.025, 0.03, 0.035))
+		for y in [band.position.y, band.end.y]:
+			draw_line(Vector2(band.position.x + 6, y), Vector2(band.end.x - 6, y), Color(metal, 0.75), 1.0, true)
 	var name_size := 16
 	while name_size > 10 and Fonts.serif(800).get_string_size(c.name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > band.size.x - 8:
 		name_size -= 1
@@ -159,11 +171,13 @@ func _draw() -> void:
 		Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
 	# What it does, on parchment.
 	var slip := Rect2(11, 142, SIZE.x - 22, 52)
-	Style.fill(rid, slip, 4.0, Color(0.95, 0.9, 0.78), Color(0.85, 0.79, 0.66))
-	Style.ring(rid, slip, 4.0, Color(0.42, 0.31, 0.18, 0.55), 1.0)
-	draw_multiline_string(Fonts.serif(600), slip.position + Vector2(6, 15), Content.offer_text(c), HORIZONTAL_ALIGNMENT_LEFT,
-		slip.size.x - 12, 11, 3, Color(0.22, 0.14, 0.07))
-	_text(Vector2(SIZE.x * 0.5, SIZE.y - 6), footer(), 10, Color(metal, 0.95), Fonts.serif(700), HORIZONTAL_ALIGNMENT_CENTER)
+	if not framed:
+		Style.fill(rid, slip, 4.0, Color(0.95, 0.9, 0.78), Color(0.85, 0.79, 0.66))
+		Style.ring(rid, slip, 4.0, Color(0.42, 0.31, 0.18, 0.55), 1.0)
+	draw_multiline_string(Fonts.serif(600), slip.position + Vector2(7, 16), Content.offer_text(c), HORIZONTAL_ALIGNMENT_LEFT,
+		slip.size.x - 14, 11, 3, Color(0.2, 0.12, 0.05))
+	_text(Vector2(SIZE.x * 0.5, SIZE.y - (8.5 if framed else 6.0)), footer(), 10, Color(metal, 0.95), Fonts.serif(700),
+		HORIZONTAL_ALIGNMENT_CENTER)
 	if marked:
 		Style.fill(rid, full, 12.0, Color(0.45, 0.05, 0.03, 0.42), Color(0.3, 0.02, 0.02, 0.5))
 		Style.ring(rid, full.grow(-1.0), 12.0, Style.CORAL, 3.0)
@@ -187,7 +201,7 @@ func _price(at: Vector2) -> void:
 		f, HORIZONTAL_ALIGNMENT_CENTER)
 	if purse.has("gold"):
 		var short := int(c.price) > int(purse.gold)
-		_text(at + Vector2(20, 6), "/%d" % int(purse.gold), 15, Style.CORAL if short else Style.PARCHMENT,
+		_text(at + Vector2(20, -2), "/%d" % int(purse.gold), 15, Style.CORAL if short else Style.PARCHMENT,
 			Fonts.display(800), HORIZONTAL_ALIGNMENT_LEFT, 4)
 
 
