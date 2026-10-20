@@ -644,7 +644,7 @@ func hint() -> String:
 		"nest":
 			say = "点一个还有空词条位的巢（%d 金）" % home.price(held)
 	if home.can_store(held):
-		say += "；或点左下的空格存起来"
+		say += "；或点左下的空格存起来（%d 金）" % home.store_price(held)
 	return say + " · 右键放下"
 
 

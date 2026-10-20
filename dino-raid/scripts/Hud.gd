@@ -1210,7 +1210,7 @@ func _draw_store_slot() -> void:
 		_store_slot.draw_line(Vector2(r.size.x, r.size.y * t0), Vector2(r.size.x, r.size.y * t1), edge, 2.0)
 	var home: Home = game.home
 	var i := game.held
-	var price := home.price(i) if i >= 0 and i < home.shelf.size() and home.shelf[i] != null else 0
+	var price := home.store_price(i) if i >= 0 and i < home.shelf.size() and home.shelf[i] != null else 0
 	var f := Fonts.serif(800)
 	for line in [["存起来", 36.0, 15], ["%d 金" % price, 58.0, 14]]:
 		var lw := f.get_string_size(line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, line[2]).x

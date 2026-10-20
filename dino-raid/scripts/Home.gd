@@ -544,9 +544,16 @@ func stash_targets(k: int) -> Array:
 	return _fits(stash[k])
 
 
-## Whether shelf[i] can be bought into the stash: a building or an affix (what is put somewhere), paid for, and room.
+## Whether shelf[i] can be bought into the stash: a building or an affix (what is put somewhere), paid for (a gold
+## more than putting it down now: store_price), and room.
 func can_store(i: int) -> bool:
-	return affordable(i) and stash.size() < stash_size() and Content.offer(shelf[i]).type in ["build", "affix"]
+	return affordable(i) and stash.size() < stash_size() and Content.offer(shelf[i]).type in ["build", "affix"] \
+		and gold >= store_price(i)
+
+
+## What keeping shelf[i] for later costs: its price and Content.STORE_EXTRA more.
+func store_price(i: int) -> int:
+	return price(i) + Content.STORE_EXTRA
 
 
 ## Where a good can go, whoever pays: a building on a plot of its part of the homeland (a nest on the battle line,
@@ -586,6 +593,7 @@ func store(i: int) -> Array:
 		return []
 	var o := Content.offer(shelf[i])
 	_pay(i, null)
+	gold -= Content.STORE_EXTRA
 	stash.append(shelf[i])
 	shelf[i] = null
 	return [{"t": "stored", "offer": o.id}]

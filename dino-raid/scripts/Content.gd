@@ -308,6 +308,7 @@ const UPGRADE := 3
 const PLUS_RAISE := 2             # gold off an upgraded raise
 const SHOP := 5                   # offers on the shelf each round
 const STASH := 4                  # goods kept (bought or packed) at most
+const STORE_EXTRA := 1            # keeping a good for later costs this much more gold than putting it down now
 const REROLL := 1                 # gold to stock the shelf again; one more each time in a round
 const RAISE := 2                  # a raise costs this much more than the building's level
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...

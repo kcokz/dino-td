@@ -442,9 +442,15 @@ func _stash() -> void:
 	shelf(h, ["b_red", "a_shell", "raise"])
 	check("buildings and affixes can be kept", h.can_store(0) and h.can_store(1))
 	check("raises cannot", not h.can_store(2))
+	check("keeping costs a gold more than putting it down now", h.store_price(0) == h.price(0) + Content.STORE_EXTRA)
 	h.store(0)
 	h.store(1)
-	check("kept: paid, gone from the shelf", h.stash.size() == 2 and h.gold == 20 - 3 - 2 and h.genes == 8 and h.shelf[0] == null)
+	check("kept: paid a gold more each, gone from the shelf", h.stash.size() == 2 and h.gold == 20 - 4 - 3 and h.genes == 8
+		and h.shelf[0] == null, h.gold)
+	var poor := bare()
+	poor.gold = 3
+	shelf(poor, ["b_red"])
+	check("the gold to put it down but not to keep it", not poor.targets(0).is_empty() and not poor.can_store(0))
 	h.gold = 0
 	h.genes = 0
 	check("put down for nothing", Vector2i(0, 0) in h.stash_targets(0) and h.stash_targets(1) == [Vector2i(2, 0)])
