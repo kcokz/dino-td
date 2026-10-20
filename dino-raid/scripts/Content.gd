@@ -350,11 +350,13 @@ const FIRST_STOCK := {"gold": 0, "biomass": 3, "genes": 2}
 
 ## A run (GAME-DESIGN 22): TIERS big levels of ROUNDS rounds each (half an hour or so). The first is always the
 ## rainforest; for each after it the map offers two places (Run.map), one to pick. A level's monsters are as strong as
-## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier.
+## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier -- the second level's the
+## smallest: there the calm curve (LIMIT) outruns the armies of runs that fight the most (by mid-level they stand at
+## about three quarters of it, where in the first and the third they stand at nine tenths and more).
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.7, 0.68, 0.66]
+const SHARE := [0.66, 0.43, 0.46]
 
 ## The places the ark can land in -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. rule: what is different there (RULES).
@@ -430,18 +432,18 @@ const TERRAIN := {
 ## The strength a player's army comes to at each round of the run (the levels one after another) when no one comes,
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
-## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low: the
-## ark sets down only what it carried, and the pools it brings feed nothing until the next round. Measure again after
-## changing what can be built or made.
-const LIMIT := [37, 56, 76, 96, 116, 142, 167, 197, 236, 262, 294, 321,
-	58, 229, 288, 330, 357, 375, 392, 420, 456, 479, 497, 519,
-	106, 383, 452, 488, 520, 546, 576, 591, 630, 670, 702, 725]
+## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts lower:
+## the ark sets down only what it carried (the biomass kept feeds the first army). Measure again after changing what can
+## be built or made.
+const LIMIT := [37, 56, 76, 96, 121, 151, 184, 222, 269, 315, 375, 433,
+	224, 304, 413, 493, 594, 703, 815, 885, 965, 1012, 1055, 1080,
+	401, 612, 748, 888, 996, 1067, 1133, 1154, 1198, 1242, 1251, 1260]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
 ## How dangerous a wave looks to the player (GAME-DESIGN 22), by its strength: one skull below the first of these, one
 ## more past each -- a feel for it, not whether it will be won (that is worked out only for the tools and F3).
-const DANGER := [30.0, 55.0, 90.0, 160.0, 270.0]
+const DANGER := [45.0, 90.0, 175.0, 320.0, 560.0]
 
 
 ## An offer's numbers (oi: a shelf's or stash's {id, plus, packed}): its name, price, type and what it goes on. A
