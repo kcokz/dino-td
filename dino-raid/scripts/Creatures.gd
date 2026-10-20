@@ -1,17 +1,17 @@
 class_name Creatures
-## Creatures on screen (GAME-DESIGN 23): ours as the shared library's dinosaurs (common/assets/models/dinos) -- each kind
-## a species, scaled to its size nose to tail, turned to look along +z as the blocks do, its nest's colour painted along
-## its back in gene stripes and an elite's edges glowing gold -- moving as it moves: standing, running, biting, struck,
-## falling. Theirs are still blocks (Blocks.creature) until they have models of their own. Whatever builds or moves a
-## creature asks here, so a block and a model are told apart in one place.
+## Creatures on screen (GAME-DESIGN 23): ours as Nintendo-style dinosaurs (assets/models/toon, tools/toon_dinos.py) --
+## each kind a species in its nest's colours, scaled to its size by its height, turned to look along +z as the blocks
+## do, lit in soft steps with a bright rim (toon shading), an elite's edges glowing gold -- moving as it moves:
+## standing, running, biting, struck, falling. Theirs are still blocks (Blocks.creature) until they have models of
+## their own. Whatever builds or moves a creature asks here, so a block and a model are told apart in one place.
 
-const DINOS := "res://common/assets/models/dinos/"
-## Each of our kinds: its species, and how long it is nose to tail for each metre of its size.
+const DINOS := "res://assets/models/toon/"
+## Each of our kinds: its species, and how tall it stands for each metre of its size.
 const MODELS := {
-	"red": ["velociraptor", 3.2], "blue": ["coelophysis", 3.3], "green": ["desmatosuchus", 3.0],
-	"gold": ["allosaurus", 3.2], "white": ["psittacosaurus", 2.9], "scav": ["dilong", 3.0],
-	"mutant": ["sinornithosaurus", 2.8], "falcon": ["pterosaur", 2.4], "thunder": ["stegosaurus", 3.0],
-	"miasma": ["sinocalliopteryx", 3.3], "magma": ["ceratosaurus", 3.2], "titan": ["tyrannosaurus", 3.2],
+	"red": ["velociraptor", 1.3], "blue": ["coelophysis", 1.35], "green": ["desmatosuchus", 1.0],
+	"gold": ["allosaurus", 1.3], "white": ["psittacosaurus", 1.3], "scav": ["dilong", 1.3],
+	"mutant": ["sinornithosaurus", 1.3], "falcon": ["pterosaur", 1.3], "thunder": ["stegosaurus", 1.1],
+	"miasma": ["sinocalliopteryx", 1.3], "magma": ["ceratosaurus", 1.3], "titan": ["tyrannosaurus", 1.2],
 }
 ## A picture's turn for a model: side on, its head to the right and a little toward the camera.
 const PORTRAIT_TURN := 1.45
@@ -52,6 +52,8 @@ void fragment() {
 }
 """
 
+const TOON_TONE := 0.72            # a creature's colours, under the toon light
+
 static var _scenes := {}           # species -> PackedScene
 static var _shader: Shader
 
@@ -70,7 +72,7 @@ static func make(edge: float, color: Color, theirs: bool, affixes: Array, kind: 
 	var model := _scene(MODELS[kind][0]).instantiate() as Node3D
 	body.add_child(model)
 	var box := Geo.bounds(model)
-	var s := edge * float(MODELS[kind][1]) / maxf(0.01, box.size.z)
+	var s := edge * float(MODELS[kind][1]) / maxf(0.01, box.size.y)
 	model.scale = Vector3.ONE * s
 	model.rotation.y = PI
 	model.position = Vector3(0, -box.position.y * s, (box.position.z + box.size.z * 0.5) * s)
@@ -78,6 +80,7 @@ static func make(edge: float, color: Color, theirs: bool, affixes: Array, kind: 
 	var paint := ShaderMaterial.new()
 	paint.shader = _overlay()
 	paint.set_shader_parameter("mark_color", color)
+	paint.set_shader_parameter("mark_amount", 0.0)
 	paint.set_shader_parameter("body_len", box.size.z)
 	paint.set_shader_parameter("elite", 1.0 if elite > 0 else 0.0)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
@@ -330,8 +333,36 @@ static func _glow(c: Color, strength: float) -> StandardMaterial3D:
 
 static func _scene(species: String) -> PackedScene:
 	if not _scenes.has(species):
-		_scenes[species] = load(DINOS + species + ".gltf")
+		var scene := load(DINOS + species + ".gltf") as PackedScene
+		_toon(scene)
+		_scenes[species] = scene
 	return _scenes[species]
+
+
+## A species' materials (shared by every one of it) lit as a cartoon is: light and shade in soft steps, a bright rim on
+## the skin, a hard glint in the eyes. Its colours are the mesh's own (Godot leaves them unused on import).
+static func _toon(scene: PackedScene) -> void:
+	var probe := scene.instantiate()
+	for mi in probe.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (mi as MeshInstance3D).mesh
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i) as StandardMaterial3D
+			if m == null:
+				continue
+			m.vertex_color_use_as_albedo = true
+			m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+			m.specular_mode = BaseMaterial3D.SPECULAR_TOON
+			if m.resource_name == "Eye":
+				continue
+			# Its sunny side whole and bright, so its colours a little under: as they are, the sun and the sky's light
+			# together put a yellow past white.
+			m.albedo_color = Color(TOON_TONE, TOON_TONE, TOON_TONE)
+			m.roughness = 0.45
+			m.metallic_specular = 0.3
+			m.rim_enabled = true
+			m.rim = 0.25
+			m.rim_tint = 0.5
+	probe.free()
 
 
 static func _overlay() -> Shader:
