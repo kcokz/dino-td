@@ -32,6 +32,7 @@ func setup(p_game: Game) -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.theme = Style.theme()
+	_root.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS    # the made frames shown at half their size
 	add_child(_root)
 	_fade = ColorRect.new()
 	_fade.color = Color(0.0, 0.0, 0.0)

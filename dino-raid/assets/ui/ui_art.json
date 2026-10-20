@@ -1,0 +1,166 @@
+{
+ "bar": {
+  "band": 10,
+  "h": 104,
+  "margin_x": 52.0,
+  "margin_y": 0,
+  "pad": 16,
+  "w": 256
+ },
+ "bar_small": {
+  "band": 8,
+  "h": 84,
+  "margin_x": 42.0,
+  "margin_y": 0,
+  "pad": 14,
+  "w": 192
+ },
+ "button": {
+  "band": 13,
+  "cut": 15,
+  "h": 128,
+  "margin": 32.8,
+  "pad": 10,
+  "w": 128
+ },
+ "button_bright": {
+  "band": 13,
+  "cut": 15,
+  "h": 128,
+  "margin": 32.8,
+  "pad": 10,
+  "w": 128
+ },
+ "button_dim": {
+  "band": 13,
+  "cut": 15,
+  "h": 128,
+  "margin": 32.8,
+  "pad": 10,
+  "w": 128
+ },
+ "card_bronze": {
+  "h": 456,
+  "pad": 16,
+  "w": 332
+ },
+ "card_gold": {
+  "h": 456,
+  "pad": 16,
+  "w": 332
+ },
+ "card_silver": {
+  "h": 456,
+  "pad": 16,
+  "w": 332
+ },
+ "coin": {
+  "h": 128,
+  "inner": 43.2,
+  "pad": 10,
+  "radius": 54.0,
+  "w": 128
+ },
+ "crest": {
+  "h": 64,
+  "pad": 8,
+  "w": 64
+ },
+ "frame": {
+  "band": 22,
+  "cut": 26,
+  "h": 224,
+  "margin": 55.2,
+  "pad": 16,
+  "w": 224
+ },
+ "frame_dim": {
+  "band": 22,
+  "cut": 26,
+  "h": 224,
+  "margin": 55.2,
+  "pad": 16,
+  "w": 224
+ },
+ "frame_red": {
+  "band": 22,
+  "cut": 26,
+  "h": 224,
+  "margin": 55.2,
+  "pad": 16,
+  "w": 224
+ },
+ "gem_amber": {
+  "h": 64,
+  "pad": 6,
+  "radius": 26.0,
+  "w": 64
+ },
+ "gem_ivory": {
+  "h": 64,
+  "pad": 6,
+  "radius": 26.0,
+  "w": 64
+ },
+ "gem_jade": {
+  "h": 64,
+  "pad": 6,
+  "radius": 26.0,
+  "w": 64
+ },
+ "medallion": {
+  "h": 160,
+  "inner": 52.0,
+  "pad": 14,
+  "radius": 66.0,
+  "w": 160
+ },
+ "plate": {
+  "band": 12,
+  "h": 120,
+  "margin_x": 66,
+  "margin_y": 0,
+  "pad": 16,
+  "w": 256
+ },
+ "plate_small": {
+  "band": 8,
+  "h": 72,
+  "margin_x": 42,
+  "margin_y": 0,
+  "pad": 12,
+  "w": 192
+ },
+ "plate_small_red": {
+  "band": 8,
+  "h": 72,
+  "margin_x": 42,
+  "margin_y": 0,
+  "pad": 12,
+  "w": 192
+ },
+ "ring": {
+  "h": 160,
+  "inner": 52.0,
+  "pad": 14,
+  "radius": 66.0,
+  "w": 160
+ },
+ "seal": {
+  "h": 256,
+  "inner": 77.38,
+  "pad": 22,
+  "radius": 106.0,
+  "w": 256
+ },
+ "shield_green": {
+  "h": 120,
+  "pad": 12,
+  "w": 104
+ },
+ "shield_red": {
+  "h": 120,
+  "pad": 12,
+  "w": 104
+ }
+}

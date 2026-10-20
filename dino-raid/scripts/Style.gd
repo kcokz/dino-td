@@ -25,9 +25,12 @@ static var _edges: Shader
 static var _grain: Texture2D
 
 
-## A panel or a plate: a cut-cornered shape filled top to bottom, ringed by a gold rule with a finer one inside it,
-## a diamond on each cut corner; a soft shadow under it, and a glow round it when lit.
+## A panel or a plate: a cut-cornered shape filled top to bottom (lacquer with a faint grain), framed by a made frame
+## (UiArt: a moulding of old gold with amber stones over its cut corners -- copper where its edge is coral, dark bronze
+## where its edge is dim; a finer one on a button or a small panel); a soft shadow under it, and a glow round it when
+## lit. Without the frames' pictures, a gold rule with a finer one inside it and a diamond on each cut corner.
 class Ornate extends StyleBox:
+	var art := ""                 # which made frame rims it (UiArt) -- "" chosen by its size and its edge, "none" none
 	var top := Color(0.085, 0.11, 0.115, 0.95)
 	var bottom := Color(0.028, 0.036, 0.042, 0.95)
 	var edge := GOLD
@@ -51,6 +54,10 @@ class Ornate extends StyleBox:
 		content_margin_bottom = margin * 0.75
 
 	func _draw(ci: RID, rect: Rect2) -> void:
+		var made := _art(rect)
+		if made != "" and UiArt.tex(made) != null:
+			_draw_made(ci, rect, made)
+			return
 		if shade > 0.0:
 			for i in 6:
 				var g := 0.5 + i * 1.8
@@ -80,6 +87,54 @@ class Ornate extends StyleBox:
 			Style.diamond(ci, Vector2(rect.get_center().x, rect.position.y), 6.5, edge.lightened(0.25), INK_DEEP)
 			for side in [-1.0, 1.0]:
 				Style.diamond(ci, Vector2(rect.get_center().x + side * 11.0, rect.position.y), 2.4, edge.lightened(0.1))
+
+	## Which made frame rims it: a button's (finer) on anything small, a panel's otherwise; dark bronze where its edge
+	## is dim (or it cannot be pressed), copper where it is coral, bright gold on a lit button.
+	func _art(rect: Rect2) -> String:
+		if art != "":
+			return "" if art == "none" else art
+		if edge.a <= 0.01:
+			return ""
+		var dim := edge.s < 0.22 or edge.v < 0.6
+		var small := minf(rect.size.x, rect.size.y) < 76.0
+		if small:
+			if dim:
+				return "button_dim"
+			return "button_bright" if edge.v > 0.97 else "button"
+		if dim:
+			return "frame_dim"
+		if (edge.h < 0.05 or edge.h > 0.95) and edge.s > 0.35:
+			return "frame_red"
+		return "frame"
+
+	## Drawn with a made frame: the shadow, the glow, the lacquer running in under the frame (none of it past the
+	## frame's corners), a pressed button's shade at its top, the frame over it all, the heading's jewel.
+	func _draw_made(ci: RID, rect: Rect2, made: String) -> void:
+		var c := maxf(UiArt.cut(made), 2.0)
+		var b := UiArt.band(made)
+		var inside := rect.grow(-b * 0.5)
+		var ic := maxf(1.0, c - b * 0.5 * UiArt.SQ)
+		if shade > 0.0:
+			for i in 6:
+				var g := 0.5 + i * 1.8
+				Style.fill(ci, rect.grow(g), c + g * 0.7, Color(0, 0, 0, shade * 0.08 * (1.0 - i / 6.0)),
+					Color(0, 0, 0, shade * 0.14 * (1.0 - i / 6.0)), Vector2(0, 3.0 + i * 0.7))
+		if glow.a > 0.0:
+			for i in 7:
+				var g := 2.0 + i * 2.0
+				Style.ring(ci, rect.grow(g), c + g * 0.6, Color(glow, glow.a * pow(1.0 - i / 7.0, 1.6)), 2.4)
+		Style.fill(ci, inside, ic, top, bottom)
+		if grain > 0.0:
+			Style.grain(ci, inside, ic, grain)
+		if sheen > 0.0:
+			Style.sheen(ci, inside, ic, sheen)
+		if gloss > 0.0:
+			Style.gloss(ci, inside.grow(-b * 0.5), maxf(1.0, ic - b * 0.3), gloss)
+		if sunk:
+			Style.bevel(ci, rect.grow(-b), maxf(1.0, c - b * UiArt.SQ), Color(0, 0, 0, 0.45), Color(1, 1, 1, 0.05), 2.2)
+		UiArt.frame(ci, made, rect, Color(0.8, 0.8, 0.8) if sunk else Color.WHITE)
+		if crest:
+			UiArt.jewel(ci, Vector2(rect.get_center().x, rect.position.y + b * 0.4), 22.0)
 
 
 ## A line of words to pick (the title screen's, the pause menu's): nothing at rest; lit, a band of light fading to

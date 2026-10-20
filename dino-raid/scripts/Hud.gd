@@ -86,6 +86,7 @@ func setup(p_game: Game) -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.theme = Style.theme()
+	_root.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS    # the made frames shown at half their size
 	add_child(_root)
 	var edges := ColorRect.new()
 	edges.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1203,16 +1204,20 @@ func _close() -> void:
 func _draw_gold() -> void:
 	var home: Home = game.home
 	var c := Vector2(60, 58)
-	_gold.draw_circle(c + Vector2(0, 4), 53.0, Color(0, 0, 0, 0.4))
-	_gold.draw_circle(c, 53.0, Color(0.15, 0.1, 0.04))
-	_gold.draw_circle(c, 50.5, Color(0.58, 0.41, 0.14))
-	for i in 9:
-		_gold.draw_circle(c + Vector2(-0.6, -0.8) * i, 47.0 - i * 4.4, Color(0.74, 0.54, 0.2).lerp(Color(1.0, 0.86, 0.5), i / 8.0))
-	_gold.draw_arc(c, 40.0, 0.0, TAU, 64, Color(0.5, 0.33, 0.1, 0.85), 1.6, true)
-	_gold.draw_arc(c, 43.0, 0.0, TAU, 64, Color(1.0, 0.93, 0.7, 0.35), 1.0, true)
-	for k in 4:
-		Style.diamond(_gold.get_canvas_item(), c + Vector2.from_angle(PI * 0.25 + k * PI * 0.5) * 40.0, 3.2, Color(0.5, 0.33, 0.1))
-	_gold.draw_arc(c, 46.0, PI * 1.05, PI * 1.45, 16, Color(1, 1, 1, 0.4), 3.0, true)
+	if UiArt.tex("coin") != null:
+		# The coin a made one (UiArt "coin": a rim, a field, a fine ring).
+		UiArt.disc(_gold, "coin", c, 53.0)
+	else:
+		_gold.draw_circle(c + Vector2(0, 4), 53.0, Color(0, 0, 0, 0.4))
+		_gold.draw_circle(c, 53.0, Color(0.15, 0.1, 0.04))
+		_gold.draw_circle(c, 50.5, Color(0.58, 0.41, 0.14))
+		for i in 9:
+			_gold.draw_circle(c + Vector2(-0.6, -0.8) * i, 47.0 - i * 4.4, Color(0.74, 0.54, 0.2).lerp(Color(1.0, 0.86, 0.5), i / 8.0))
+		_gold.draw_arc(c, 40.0, 0.0, TAU, 64, Color(0.5, 0.33, 0.1, 0.85), 1.6, true)
+		_gold.draw_arc(c, 43.0, 0.0, TAU, 64, Color(1.0, 0.93, 0.7, 0.35), 1.0, true)
+		for k in 4:
+			Style.diamond(_gold.get_canvas_item(), c + Vector2.from_angle(PI * 0.25 + k * PI * 0.5) * 40.0, 3.2, Color(0.5, 0.33, 0.1))
+		_gold.draw_arc(c, 46.0, PI * 1.05, PI * 1.45, 16, Color(1, 1, 1, 0.4), 3.0, true)
 	var f := Fonts.display(900)
 	var text := "%d" % home.gold
 	var size_px := 38 if text.length() < 3 else 30

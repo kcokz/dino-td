@@ -4,7 +4,8 @@ class_name HudParts
 ## with its rounds ringed round it; a bar of sockets for what the homeland has; round buttons with their pictures; a
 ## great seal to send the army out; the wave to come as the monsters' own faces; the battle's count between two
 ## shields. What each is, or what a figure means, is told when it is pointed at (the HUD's panel), so the screen shows
-## pictures and numbers, not sentences. All in the house style (Style): ink, old gold, parchment.
+## pictures and numbers, not sentences. Their rims, plates, bars, seal, stones and shields are made things (UiArt:
+## modelled and rendered, tools/ui_art.py); the words and pictures on them are drawn here.
 
 const FACE_TOP := Color(0.13, 0.16, 0.165)
 const FACE_BOTTOM := Color(0.025, 0.033, 0.038)
@@ -16,74 +17,57 @@ const PLATE_BOTTOM := Color(0.03, 0.04, 0.045, 0.96)
 
 # -- Shapes ---------------------------------------------------------------------------------------------------------
 
-## A round plate: a soft shadow under it, its face shaded from `top` (lit from the upper left) to `bottom`, a fine rule
-## inside its rim, a rim of old gold -- bright where the light falls, darker below it.
-static func disc(item: CanvasItem, c: Vector2, r: float, top: Color, bottom: Color, rim := Style.GOLD, width := -1.0,
-		shadow := true) -> void:
-	if width < 0.0:
-		width = clampf(r * 0.085, 1.6, 4.0)
-	if shadow:
-		for i in 6:
-			item.draw_circle(c + Vector2(0, 1.5 + i * 0.7), r + width + i * 1.3, Color(0, 0, 0, 0.1 * (1.0 - i / 6.0)), true, -1.0, true)
-	item.draw_circle(c, r + width * 0.5 + 1.0, Color(0, 0, 0, 0.8), true, -1.0, true)
+## A round plate of slate in a gold rim (UiArt "medallion"), `r` its outside; `modulate` lights or dims it.
+static func medallion(item: CanvasItem, c: Vector2, r: float, modulate := Color.WHITE) -> void:
+	UiArt.disc(item, "medallion", c, r, modulate)
+
+
+## A round face shaded from `top` (lit from the upper left) to `bottom`, in a gold rim (UiArt "ring"), `r` its outside.
+static func disc(item: CanvasItem, c: Vector2, r: float, top: Color, bottom: Color, _rim := Style.GOLD, _width := -1.0,
+		_shadow := true) -> void:
+	var face := r * 0.84
 	for i in 10:
 		var k := i / 9.0
-		item.draw_circle(c + Vector2(-0.16, -0.22) * r * k, r * (1.0 - 0.62 * k), bottom.lerp(top, k), true, -1.0, true)
-	item.draw_arc(c, r * 0.84, 0.0, TAU, 72, Color(rim, 0.32), 1.0, true)
-	item.draw_arc(c, r, 0.0, TAU, 72, rim.darkened(0.35), width, true)
-	item.draw_arc(c, r, PI * 0.7, PI * 1.8, 48, rim.lightened(0.3), width * 0.75, true)
-	item.draw_arc(c, r + width * 0.45, PI * 0.95, PI * 1.45, 24, Color(1, 1, 1, 0.3), 1.0, true)
+		item.draw_circle(c + Vector2(-0.16, -0.22) * face * k, face * (1.0 - 0.62 * k), bottom.lerp(top, k), true, -1.0, true)
+	UiArt.disc(item, "ring", c, r)
 
 
-## A plate pointed at both ends (a nameplate): a soft shadow, its face shaded top to bottom with light on its upper half,
-## a gold edge with a finer rule inside it.
-static func plate(item: CanvasItem, r: Rect2, top := PLATE_TOP, bottom := PLATE_BOTTOM, edge := Style.GOLD, tip := -1.0) -> void:
-	if tip < 0.0:
-		tip = r.size.y * 0.42
-	_shaped(item, _plate_points(r, tip), r, top, bottom, edge)
-	var inner := r.grow(-4.0)
-	if inner.size.y > 6.0:
-		var rule := _plate_points(inner, maxf(1.0, tip - 2.5))
-		rule.append(rule[0])
-		item.draw_polyline(rule, Color(edge, 0.3), 1.0, true)
+## A nameplate of slate pointed at both ends in a gold rim (UiArt "plate", "plate_small" -- red enamel where `top` is
+## red) over `r`.
+static func plate(item: CanvasItem, r: Rect2, top := PLATE_TOP, _bottom := PLATE_BOTTOM, _edge := Style.GOLD, _tip := -1.0) -> void:
+	var red := top.r > 0.3 and top.r > top.g * 2.0
+	var made := "plate_small_red" if red else ("plate" if r.size.y >= 34.0 else "plate_small")
+	UiArt.frame(item.get_canvas_item(), made, r)
 
 
-## A bar with round ends (a capsule): the same, its ends round.
-static func capsule(item: CanvasItem, r: Rect2, top := PLATE_TOP, bottom := PLATE_BOTTOM, edge := Style.GOLD) -> void:
-	_shaped(item, _capsule_points(r), r, top, bottom, edge)
-	var inner := r.grow(-3.5)
-	if inner.size.y > 6.0:
-		var rule := _capsule_points(inner)
-		rule.append(rule[0])
-		item.draw_polyline(rule, Color(edge, 0.28), 1.0, true)
+## A bar of slate with round ends in a gold rim (UiArt "bar", "bar_small") over `r`.
+static func capsule(item: CanvasItem, r: Rect2, _top := PLATE_TOP, _bottom := PLATE_BOTTOM, _edge := Style.GOLD) -> void:
+	UiArt.frame(item.get_canvas_item(), "bar" if r.size.y >= 32.0 else "bar_small", r)
 
 
-## A panel with cut corners (the house panel, Style.Ornate), drawn straight onto `item`.
-static func panel(item: CanvasItem, r: Rect2, edge := Style.GOLD, cut := 8.0) -> void:
-	var ci := item.get_canvas_item()
-	for i in 5:
-		var g := 0.5 + i * 1.8
-		Style.fill(ci, r.grow(g), cut + g * 0.7, Color(0, 0, 0, 0.05 * (1.0 - i / 5.0)), Color(0, 0, 0, 0.08 * (1.0 - i / 5.0)),
-			Vector2(0, 2.5 + i * 0.6))
-	Style.fill(ci, r, cut, PLATE_TOP, PLATE_BOTTOM)
-	Style.grain(ci, r, cut, 0.03)
-	Style.sheen(ci, r, cut, 0.05)
-	Style.ring(ci, r.grow(1.2), cut + 0.5, Color(0, 0, 0, 0.7), 1.2)
-	Style.metal(ci, r, cut, edge, 1.6)
-	Style.ring(ci, r.grow(-4.0), maxf(1.0, cut - 2.4), Color(edge, 0.3), 1.0)
-	Style.flourishes(ci, r, cut, edge)
+## A panel (Style.Ornate's look: lacquer in a made frame, copper where `edge` is coral, dark bronze where dim) over `r`.
+static func panel(item: CanvasItem, r: Rect2, edge := Style.GOLD, _cut := 8.0) -> void:
+	var box := Style.panel()
+	box.edge = edge
+	box.draw(item.get_canvas_item(), r)
 
 
-## A small round badge with `text` in it (a count, a price) -- a pill when the text is too wide for a circle.
+## A small badge with `text` on it (a count, a price): a stone in a gold bezel (UiArt "gem_amber", "gem_jade",
+## "gem_ivory", by `fill`) -- a bar, the words in `fill`'s colour, when the text is too wide for a stone.
 static func badge(item: CanvasItem, c: Vector2, text: String, fill: Color, px := 13, ink := Style.INK_DEEP) -> void:
 	var f := Fonts.numbers() if text.is_valid_int() else Fonts.serif(900)
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-	var r := px * 0.82
-	if w * 0.5 + 4.0 > r:
-		capsule(item, Rect2(c - Vector2(w * 0.5 + 7.0, r), Vector2(w + 14.0, r * 2.0)), fill.lightened(0.2), fill.darkened(0.3),
-			Style.GOLD_BRIGHT)
-	else:
-		disc(item, c, r, fill.lightened(0.25), fill.darkened(0.3), Style.GOLD_BRIGHT, 1.4, false)
+	var r := px * 0.92
+	if w * 0.5 + 3.0 > r * 0.8:
+		capsule(item, Rect2(c - Vector2(w * 0.5 + 9.0, px * 0.85), Vector2(w + 18.0, px * 1.7)))
+		words(item, c, text, px, fill.lightened(0.15), f, 0, 3)
+		return
+	var stone := "gem_ivory"
+	if fill.g > fill.r and fill.g > fill.b:
+		stone = "gem_jade"
+	elif fill.r > 0.85 and fill.b < 0.45:
+		stone = "gem_amber"
+	UiArt.disc(item, stone, c, r)
 	words(item, c, text, px, ink, f, 0, 0)
 
 
@@ -149,8 +133,15 @@ static func crown(item: CanvasItem, at: Vector2, s: float, col: Color) -> void:
 	item.draw_polyline(outline, Style.INK_DEEP, 1.2, true)
 
 
-## A shield `w` wide and `h` tall, its middle at `c`, its face `col`.
-static func shield(item: CanvasItem, c: Vector2, w: float, h: float, col: Color) -> void:
+## A shield `h` tall, its middle at `c`, enamelled green or red as `col` is (UiArt "shield_green", "shield_red").
+static func shield(item: CanvasItem, c: Vector2, _w: float, h: float, col: Color) -> void:
+	if UiArt.tex("shield_green") != null:
+		UiArt.piece(item, "shield_green" if col.g > col.r else "shield_red", c, h)
+		return
+	_drawn_shield(item, c, _w, h, col)
+
+
+static func _drawn_shield(item: CanvasItem, c: Vector2, w: float, h: float, col: Color) -> void:
 	var pts := PackedVector2Array()
 	var top := c.y - h * 0.5
 	pts.append(Vector2(c.x - w * 0.5, top))
@@ -253,23 +244,26 @@ class Crest extends Control:
 		for i in rounds:
 			var a0 := -PI * 0.5 + TAU * i / rounds + gap * 0.5
 			var a1 := -PI * 0.5 + TAU * (i + 1) / rounds - gap * 0.5
-			var col := Color(0.19, 0.21, 0.21)
+			var col := Color(0.16, 0.17, 0.17)
 			if i + 1 < round:
-				col = Style.AMBER.darkened(0.08)
+				col = Style.AMBER.darkened(0.12)
 			elif i + 1 == round:
 				col = Style.GOLD_BRIGHT
-			draw_arc(SEAL, ring, a0, a1, 10, Color(0, 0, 0, 0.75), 8.0, true)
-			draw_arc(SEAL, ring, a0, a1, 10, col, 5.2, true)
+			draw_arc(SEAL, ring, a0, a1, 10, Color(0, 0, 0, 0.8), 8.5, true)
+			draw_arc(SEAL, ring, a0, a1, 10, col, 5.6, true)
+			# A gleam along its upper edge, as a gem's.
+			if i + 1 <= round:
+				draw_arc(SEAL, ring + 1.4, a0, a1, 10, Color(1, 1, 1, 0.28), 1.2, true)
 			if i + 1 == round:
-				draw_arc(SEAL, ring, a0, a1, 10, Color(Style.GOLD_BRIGHT, 0.35), 10.0, true)
+				draw_arc(SEAL, ring, a0, a1, 10, Color(Style.GOLD_BRIGHT, 0.35), 11.0, true)
 		for m in minis:
 			var a := -PI * 0.5 + TAU * (float(m) - 0.5) / rounds
 			Style.diamond(get_canvas_item(), SEAL + Vector2.from_angle(a) * (ring + 9.0), 4.2, Style.CORAL, Style.INK_DEEP)
 		var top := -PI * 0.5 + TAU * (rounds - 0.5) / rounds
 		HudParts.crown(self, SEAL + Vector2.from_angle(top) * (ring + 9.5), 12.0, Style.CORAL)
-		HudParts.disc(self, SEAL, R, HudParts.FACE_TOP, HudParts.FACE_BOTTOM, Style.GOLD)
+		HudParts.medallion(self, SEAL, R + 2.0)
 		if glyph != "":
-			Icons.draw(self, glyph, SEAL, R * 1.3)
+			Icons.draw(self, glyph, SEAL, R * 1.2)
 
 
 ## What the homeland has (under the crest): its health, its biomass, its research points -- each a picture in a socket,
@@ -309,8 +303,8 @@ class Purse extends Control:
 			if i > 0:
 				draw_line(Vector2(x + 2, 13), Vector2(x + 2, 35), Color(Style.GOLD, 0.25), 1.0, true)
 			var c := Vector2(x + 26, 24)
-			HudParts.disc(self, c, 17.0, HudParts.FACE_TOP, HudParts.FACE_BOTTOM, Style.GOLD, 2.0, false)
-			Icons.draw(self, [Icons.HEALTH, Icons.BIOMASS, Icons.RESEARCH][i], c, 25.0)
+			HudParts.medallion(self, c, 19.0)
+			Icons.draw(self, [Icons.HEALTH, Icons.BIOMASS, Icons.RESEARCH][i], c, 23.0)
 			var nf := Fonts.numbers()
 			if i == 0:
 				var low := float(hp) / maxf(1.0, hp_max) < 0.35
@@ -382,11 +376,19 @@ class RoundButton extends BaseButton:
 		var rim := Style.GOLD_BRIGHT if primary else Style.GOLD
 		if disabled:
 			rim = Style.GOLD_DIM
-		HudParts.disc(self, c, radius, top, bottom, rim)
+		# The made plate: the seal, or a round plate of slate -- lit when pointed at, darker pressed, grey disabled.
+		var tint := Color.WHITE
+		if disabled:
+			tint = Color(0.5, 0.5, 0.5)
+		elif down:
+			tint = Color(0.82, 0.82, 0.82)
+		elif hot:
+			tint = Color(1.12, 1.1, 1.06)
 		if primary:
-			for k in 16:
-				Style.diamond(get_canvas_item(), c + Vector2.from_angle(TAU * k / 16.0) * radius * 0.9, 1.6, Color(rim, 0.7))
-		Icons.draw(self, glyph, c, radius * (1.15 if primary else 1.2), not disabled)
+			UiArt.disc(self, "seal", c, radius + 4.0, tint)
+		else:
+			HudParts.medallion(self, c, radius + 2.0, tint)
+		Icons.draw(self, glyph, c, radius * (1.0 if primary else 1.15), not disabled)
 		if caption != "":
 			var px := 22 if primary else 15
 			var f := Fonts.serif(900)
@@ -459,7 +461,7 @@ class WaveCard extends Control:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		var rows := maxi(1, ceili(kinds.size() / float(PER_ROW)))
 		var cols := mini(kinds.size(), PER_ROW)
-		custom_minimum_size = Vector2(maxf(250.0, cols * _pitch() + 28.0), 44.0 + rows * _pitch() + 8.0)
+		custom_minimum_size = Vector2(maxf(250.0, cols * _pitch() + 44.0), 50.0 + rows * _pitch() + 16.0)
 		size = custom_minimum_size
 		for pair in kinds:
 			var kind: String = pair[0]
@@ -478,8 +480,8 @@ class WaveCard extends Control:
 
 	func _centre(i: int) -> Vector2:
 		var cols := mini(kinds.size(), PER_ROW)
-		var x0 := size.x - 14.0 - cols * _pitch()
-		return Vector2(x0 + (i % PER_ROW + 0.5) * _pitch(), 44.0 + (i / PER_ROW + 0.5) * _pitch())
+		var x0 := size.x - 22.0 - cols * _pitch()
+		return Vector2(x0 + (i % PER_ROW + 0.5) * _pitch(), 50.0 + (i / PER_ROW + 0.5) * _pitch())
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion:
@@ -502,8 +504,8 @@ class WaveCard extends Control:
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
 		HudParts.panel(self, r, Style.CORAL if now else Style.GOLD_DIM, 8.0)
-		var head := 22.0
-		var x := 14.0
+		var head := 26.0
+		var x := 24.0
 		x += HudParts.words(self, Vector2(x, head), title, 17 if now else 15, Style.PARCHMENT if now else Style.PARCHMENT_DIM,
 			Fonts.serif(900), -1) + 8.0
 		if tag != "":
@@ -514,8 +516,8 @@ class WaveCard extends Control:
 			HudParts.words(self, chip.get_center(), tag, 13, Style.GOLD_BRIGHT, f, 0, 3)
 		var sc := Style.CORAL if now else Color(Style.CORAL, 0.65)
 		for i in danger:
-			HudParts.skull(self, Vector2(size.x - 18.0 - i * 17.0, head), sc)
-		draw_line(Vector2(12, 38), Vector2(size.x - 12, 38), Color(Style.GOLD, 0.22), 1.0, true)
+			HudParts.skull(self, Vector2(size.x - 28.0 - i * 17.0, head), sc)
+		draw_line(Vector2(22, 44), Vector2(size.x - 22, 44), Color(Style.GOLD, 0.25), 1.0, true)
 		for i in kinds.size():
 			var kind: String = kinds[i][0]
 			var c := _centre(i)
@@ -555,17 +557,16 @@ class WonderTile extends BaseButton:
 		var frame := Rect2(7, 4, 64, 64)
 		var ci := get_canvas_item()
 		var c: Color = Content.WONDERS[id].color
-		Style.fill(ci, frame, 6.0, c.darkened(0.55), c.darkened(0.82))
+		Style.fill(ci, frame.grow(-4.0), 4.0, c.darkened(0.55), c.darkened(0.82))
 		if _pic != null:
 			var ts := _pic.get_size()
 			var side := minf(ts.x, ts.y)
-			draw_texture_rect_region(_pic, frame.grow(-3.0), Rect2((ts.x - side) * 0.5, (ts.y - side) * 0.5, side, side),
+			draw_texture_rect_region(_pic, frame.grow(-5.0), Rect2((ts.x - side) * 0.5, (ts.y - side) * 0.5, side, side),
 				Color.WHITE if not disabled or built else Color(0.6, 0.6, 0.6))
 		if hot:
-			Style.ring(ci, frame.grow(3.0), 8.0, Color(Style.AMBER, 0.6), 2.0)
-		Style.ring(ci, frame.grow(1.2), 6.5, Color(0, 0, 0, 0.7), 1.2)
-		Style.metal(ci, frame, 6.0, Style.GOLD_BRIGHT if built else Style.GOLD, 2.0 if built else 1.6)
-		Style.flourishes(ci, frame, 6.0, Style.GOLD)
+			for i in 5:
+				Style.ring(ci, frame.grow(3.0 + i * 1.8), 8.0 + i, Color(Style.AMBER, 0.5 * (1.0 - i / 5.0)), 2.2)
+		UiArt.frame(ci, "button_bright" if built or hot else ("button_dim" if disabled else "button"), frame)
 		if built:
 			HudParts.badge(self, Vector2(39, 76), Lang.t("已造"), Style.GOLD, 12)
 		else:
@@ -618,15 +619,16 @@ class Versus extends Control:
 
 	func _draw() -> void:
 		var mid := Vector2(size.x * 0.5, 36)
-		HudParts.plate(self, Rect2(22, 16, size.x - 44.0, 40))
+		HudParts.plate(self, Rect2(22, 15, size.x - 44.0, 42))
 		var nf := Fonts.numbers()
 		HudParts.shield(self, Vector2(64, 36), 36, 42, Color(0.3, 0.62, 0.42))
 		HudParts.words(self, Vector2(64, 34), str(ours), 20, Color.WHITE, nf, 0, 4)
 		HudParts.shield(self, Vector2(size.x - 64.0, 36), 36, 42, Color(0.72, 0.26, 0.2))
 		HudParts.words(self, Vector2(size.x - 64.0, 34), str(theirs), 20, Color.WHITE, nf, 0, 4)
-		HudParts.disc(self, mid, 28.0, HudParts.FACE_TOP, HudParts.FACE_BOTTOM, Style.GOLD)
+		HudParts.medallion(self, mid, 31.0)
 		var k := clampf(left / maxf(0.01, limit), 0.0, 1.0)
-		draw_arc(mid, 22.0, -PI * 0.5, -PI * 0.5 + TAU * k, 48, Style.AMBER if k > 0.25 else Style.CORAL, 3.0, true)
+		draw_arc(mid, 20.0, -PI * 0.5, -PI * 0.5 + TAU * k, 48, Color(0, 0, 0, 0.6), 4.5, true)
+		draw_arc(mid, 20.0, -PI * 0.5, -PI * 0.5 + TAU * k, 48, Style.AMBER if k > 0.25 else Style.CORAL, 3.0, true)
 		HudParts.words(self, mid, str(ceili(left)), 20, Style.GOLD_BRIGHT, nf, 0, 4)
 		HudParts.words(self, Vector2(94, 36), Lang.t("我方"), 16, Style.JADE, Fonts.serif(900), -1, 3)
 		HudParts.words(self, Vector2(size.x - 94.0, 36), Lang.t("敌方"), 16, Style.CORAL, Fonts.serif(900), 1, 3)
