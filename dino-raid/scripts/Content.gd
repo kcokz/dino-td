@@ -132,7 +132,7 @@ const LEVEL_MAX := 3
 const ELITE_HP := 1.5
 const ELITE_ATK := 1.25
 const ELITE_SIZE := 1.2
-const CLUSTER := 2                # a red nest with at least this many red neighbours makes one more (its gift)
+const CLUSTER := 1                # a red nest with at least this many red neighbours makes one more (its gift)
 const SAMPLER_POOL := 1           # genes more a round for each culture pool beside a sampler
 const TREE_GENES := 1             # genes more a round for a sampler beside an old tree
 const LAVA_GOLD := 1              # gold more a round for a mine or forge beside lava
@@ -141,7 +141,7 @@ const LAVA_GOLD := 1              # gold more a round for a mine or forge beside
 ## behind, its column, its neighbours. Not tied to a school: what it does fits several ways of playing. when: where it
 ## works ("" anywhere); does: what it does there; says: both in short, for a card. The numbers they say are these:
 const TRAITS := {
-	"swarm": {"name": "成群", "when": "上下左右挨着 2 个红巢", "does": "多孵 1 只", "says": "挨着 2 个红巢，多孵 1 只"},
+	"swarm": {"name": "成群", "when": "上下左右挨着红巢", "does": "多孵 1 只", "says": "挨着红巢，多孵 1 只"},
 	"guard": {"name": "护住一列", "when": "站第一排", "does": "怪要先打倒它，才打得着它身后同一列的兵",
 		"says": "站第一排，护住身后同一列的兵"},
 	"cover": {"name": "掩护射击", "when": "站第二排、身前同一列有巢", "does": "远程的兵射得远 2 米，每下多 1，不管护甲",

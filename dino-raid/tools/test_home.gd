@@ -132,10 +132,18 @@ func _neighbours() -> void:
 	var h := bare()
 	h.build(Vector2i(1, 0), "nest_red")
 	h.build(Vector2i(2, 0), "nest_red")
-	h.build(Vector2i(0, 0), "nest_red")
-	check("three reds in a row: the middle one swarms, one more", h.army().size() == 4 and h.count(Vector2i(1, 0)) == 2
-		and h.trait_on(Vector2i(1, 0)) and not h.trait_on(Vector2i(0, 0)))
-	check("an end one is one red short", h.trait_need(Vector2i(0, 0)) == "还差 1 个红巢挨着", h.trait_need(Vector2i(0, 0)))
+	check("two reds side by side: both swarm, one more each", h.army().size() == 4 and h.count(Vector2i(1, 0)) == 2
+		and h.trait_on(Vector2i(1, 0)) and h.trait_on(Vector2i(2, 0)))
+	h.build(Vector2i(4, 1), "nest_red")
+	check("a red with no red beside it is one red short", not h.trait_on(Vector2i(4, 1))
+		and h.trait_need(Vector2i(4, 1)) == "还差 1 个红巢挨着", h.trait_need(Vector2i(4, 1)))
+	h.build(Vector2i(4, 0), "nest_red")
+	check("one in front of it does as well: up and down count as left and right do", h.trait_on(Vector2i(4, 1))
+		and h.trait_on(Vector2i(4, 0)) and h.army().size() == 8)
+	var corner := bare()
+	corner.build(Vector2i(1, 0), "nest_red")
+	corner.build(Vector2i(2, 1), "nest_red")
+	check("corner to corner is not beside", not corner.trait_on(Vector2i(1, 0)) and not corner.trait_on(Vector2i(2, 1)))
 	var bl := bare()
 	bl.build(Vector2i(1, 0), "nest_blue")
 	bl.build(Vector2i(2, 0), "nest_blue")
@@ -212,7 +220,7 @@ func _nest_gifts() -> void:
 	w.build(Vector2i(0, 0), "nest_green")
 	w.build(Vector2i(0, 1), "nest_white")
 	w.build(Vector2i(1, 0), "nest_red")
-	w.build(Vector2i(1, 1), "nest_red")
+	w.build(Vector2i(3, 1), "nest_red")
 	check("a white heals 3 x 2", int(Content.unit_stats(w.spec_of(Vector2i(0, 1))).heal) == 3 * Content.CARE)
 	var wf := Fight.make(w.army(), ["grey", "grey", "grey", "grey", "grey"], 1.0)
 	var heals := 0
@@ -380,12 +388,12 @@ func _affixes_and_recipes() -> void:
 
 func _schools() -> void:
 	var h := bare()
-	for x in Home.COLS:
+	for x in 5:
 		h.build(Vector2i(x, 0), "nest_red")
 	h.build(Vector2i(0, 3), "horde_totem")
 	var a := h.army()
-	check("ten out (the middle four make two): the totem gives all +1", a.size() == 10 and a.all(func(u: Dictionary) -> bool:
-		return int(u.atk_bonus) == 1), [a.size(), a[0].atk_bonus])
+	check("ten out (five reds in a row, all swarming): the totem gives all +1", a.size() == 10
+		and a.all(func(u: Dictionary) -> bool: return int(u.atk_bonus) == 1), [a.size(), a[0].atk_bonus])
 	h.build(Vector2i(1, 3), "horde_totem")
 	check("two totems: +2", int(h.army()[0].atk_bonus) == 2)
 	h.buildings[Vector2i(1, 3)].level = 3
