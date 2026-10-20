@@ -108,7 +108,7 @@ static func height(n: Node3D) -> float:
 
 ## Plays a clip on a creature that has them (blending from what it was doing); `speed` scales it.
 static func play(n: Node3D, clip: String, speed := 1.0, blend := 0.18) -> void:
-	var player: AnimationPlayer = n.get_meta("player", null)
+	var player: AnimationPlayer = n.get_meta("player") if n.has_meta("player") else null
 	if player == null or not player.has_animation(clip):
 		return
 	if player.current_animation == clip and player.is_playing():
@@ -120,13 +120,13 @@ static func play(n: Node3D, clip: String, speed := 1.0, blend := 0.18) -> void:
 
 ## The clip a creature is playing ("" for a block).
 static func clip(n: Node3D) -> String:
-	var player: AnimationPlayer = n.get_meta("player", null)
+	var player: AnimationPlayer = n.get_meta("player") if n.has_meta("player") else null
 	return player.current_animation if player != null else ""
 
 
 ## How long a clip runs, in seconds (0 if the creature has none such).
 static func length(n: Node3D, clip_name: String) -> float:
-	var player: AnimationPlayer = n.get_meta("player", null)
+	var player: AnimationPlayer = n.get_meta("player") if n.has_meta("player") else null
 	if player == null or not player.has_animation(clip_name):
 		return 0.0
 	return player.get_animation(clip_name).length
