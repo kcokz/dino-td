@@ -7,10 +7,11 @@ extends SceneTree
 ## first rounds slowly -- the round's army hatching,
 ## the shelf, special ground and a nest pointed at, each offer taken up over where it goes with what it would change
 ## and the forecast it brings, an offer kept in the stash and put down again, a nest evolved, the shelf
-## restocked, buys, battles fought, the free pick after them -- then a homeland built up by hand (every kind of
-## building, levels, the four evolved species, relics), its boss battle (the mother breaking into spores), the relic
-## to choose, the packing and the ark's flight, the volcano arrived in, the goods carried put down, and a battle there
-## (beetles bursting); a frame at each step.
+## restocked, buys, battles fought, the card picked after each and the deck -- then a homeland built up by hand (every
+## kind of building, levels, the four evolved species, relics), the deck worked on (a card picked, upgraded, cut), its
+## boss battle (the mother breaking into spores), the relic to choose, the map and the next place picked on it, the
+## packing and the ark's flight, the place arrived in, the goods carried put down, and a battle there; a frame at each
+## step.
 ## "bot": plays rounds the simple way (tools/Policy.gd, random -- or smart), fast, until the run ends or the rounds
 ## run out; checks every forecast against the battle fought; prints an account. For finding what breaks.
 
@@ -103,7 +104,11 @@ func _scripted() -> void:
 		await _screens("r%d" % game.run.round)
 		await _until_plan()
 		if r == 0:
-			await _shot("gift_in_stash")
+			game.hud.show_deck()
+			await _frames(20)
+			await _shot("deck_view")
+			game.hud.chosen.emit("关闭")
+			await _frames(6)
 	await _rich()
 	_account()
 	quit()
@@ -139,7 +144,6 @@ func _keep_and_put() -> void:
 	var home := game.home
 	home.gold += 10
 	home.genes += 4
-	home.alien += 1
 	game.refresh()
 	var i := -1
 	for k in home.shelf.size():
@@ -194,7 +198,7 @@ func _evolve() -> void:
 		print("evolve: no nest with room behind it")
 		return
 	home.build(spot, "stabilizer")
-	home.stash = [{"id": "a_acid", "gift": true}, {"id": "a_poison", "gift": true}]
+	home.stash = [{"id": "a_acid"}, {"id": "a_poison"}]
 	game.home_view.refresh_buildings()
 	game._version += 1
 	game.refresh()
@@ -216,8 +220,8 @@ func _evolve() -> void:
 
 
 ## A homeland built up by hand -- the battle line full of nests (the four new species, elites), behind it every school's
-## buildings -- a kind taken out of the shop, a nest raised elite, the wonder built, its boss battle, the relic, the
-## packing, the flight, the volcano.
+## buildings -- a nest raised elite, the wonder built, the deck worked on, its boss battle, the relic, the map, the
+## packing, the flight, the next place.
 func _rich() -> void:
 	var h := game.home
 	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree", Vector2i(3, 3): "pond"}
@@ -250,10 +254,10 @@ func _rich() -> void:
 	h.gold = 30
 	h.biomass = 40
 	h.genes = 8
-	h.alien = 2
 	h.hp = h.hp_max()
+	h.deck.append_array([{"id": "b_green", "plus": false}, {"id": "b_white", "plus": true}, {"id": "a_acid", "plus": false},
+		{"id": "b_stab", "plus": false}, {"id": "raise", "plus": true}])
 	h.stock(game.run.rng, 0)
-	h.removes = Content.REMOVES
 	game.home_view.lay_ground()
 	game.home_view.refresh_buildings(false)
 	game._version += 1
@@ -266,13 +270,7 @@ func _rich() -> void:
 	await _frames(4)
 	await _shot("rich_relic")
 	game.hud._relic_hover = ""
-	game.toggle_removing()
-	await _frames(10)
-	await _shot("remove_mode")
-	game.hold(0)
-	await _frames(20)
-	await _shot("removed")
-	h.stash = [{"id": "raise", "gift": true}]
+	h.stash = [{"id": "raise"}]
 	game.refresh()
 	await _frames(10)
 	game.hold_kept(0)
@@ -297,6 +295,7 @@ func _rich() -> void:
 	game.act("wonder", {"id": "titan"})
 	await _frames(50)
 	await _shot("wonder_built")
+	await _deck_work()
 	# A green taken up over the gap in front of the blue: the blue would be under cover, the gold no longer alone.
 	h.shelf[1] = {"id": "b_green"}
 	game.hud.deal(h.shelf)
@@ -332,6 +331,7 @@ func _rich() -> void:
 	await _fight_shots("boss")
 	await _screens("boss")
 	await _screens("boss")
+	await _screens("boss")
 	while game.phase != Game.Phase.PACK:
 		await process_frame
 	await _frames(30)
@@ -351,10 +351,10 @@ func _rich() -> void:
 	await _shot("ark_loading")
 	await _until_screen("到了")
 	await _frames(20)
-	await _shot("arrive_volcano")
+	await _shot("arrive_next")
 	game.hud.chosen.emit("开始")
 	await _until_plan()
-	await _shot("volcano_r1")
+	await _shot("next_r1")
 	for k in range(game.home.stash.size() - 1, -1, -1):
 		var fits := game.home.stash_targets(k)
 		if fits.is_empty():
@@ -363,32 +363,99 @@ func _rich() -> void:
 		game.act("place", {"slot": k, "at": (free + fits)[0]})
 		await _frames(10)
 	await _frames(30)
-	await _shot("volcano_placed")
+	await _shot("next_placed")
 	game.hud._hovered = game.hud._cards[0]
 	await _frames(14)
-	await _shot("volcano_offer")
+	await _shot("next_offer")
 	game.hud._hovered = null
 	_play_all()
 	await _frames(30)
-	await _fight_shots("volcano")
-	await _screens("volcano")
+	await _fight_shots("next")
+	await _screens("next")
 	await _until_plan()
-	await _shot("volcano_r2")
+	await _shot("next_r2")
 
 
-## The screen after a battle (the free pick, or the relic), shot and answered.
+## The deck worked on, as after a mini-boss: laid out, a card picked, the upgrade pointed at (the card shown upgraded),
+## upgraded; another picked and cut; done.
+func _deck_work() -> void:
+	game.home.gold += 10
+	game._workshop()
+	await _until_screen("整理牌库")
+	await _frames(20)
+	await _shot("workshop")
+	var cards := _deck_cards()
+	var pick: CardView = cards[4]
+	pick.clicked.emit(pick)
+	await _frames(6)
+	await _shot("workshop_picked")
+	var up: Button = _button_saying("强化")
+	if up != null and not up.disabled:
+		up.mouse_entered.emit()
+		await _frames(6)
+		await _shot("workshop_upgrade_aim")
+		up.mouse_exited.emit()
+		up.pressed.emit()
+	await _frames(10)
+	await _until_screen("整理牌库")
+	await _frames(10)
+	await _shot("workshop_upgraded")
+	cards = _deck_cards()
+	(cards[0] as CardView).clicked.emit(cards[0])
+	await _frames(4)
+	var cut: Button = _button_saying("删掉")
+	if cut != null and not cut.disabled:
+		cut.pressed.emit()
+	await _frames(10)
+	await _until_screen("整理牌库")
+	await _frames(10)
+	await _shot("workshop_cut")
+	game.hud.chosen.emit("完成")
+	await _frames(10)
+	game.home.gold = 30
+	game.refresh()
+
+
+## The deck's cards laid out on the screen up (the last of the HUD's cards: the shelf's come before them).
+func _deck_cards() -> Array:
+	var all := game.hud.find_children("*", "CardView", true, false)
+	return all.slice(all.size() - game.home.deck.size())
+
+
+## The button up on the screen whose words begin with `words`, or null.
+func _button_saying(words: String) -> Button:
+	for b in game.hud.find_children("*", "Button", true, false):
+		if (b as Button).text.begins_with(words) and (b as Button).is_visible_in_tree():
+			return b
+	return null
+
+
+## The screen after a battle (the card to pick, the deck to work on, the relic, the map), shot and answered -- the map
+## with a place picked on it first.
 func _screens(label: String) -> void:
 	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.PACK, Game.Phase.DONE]:
 		await process_frame
 	if game.hud.screen == "":
 		return
 	await _frames(10)
-	await _shot(("gift_" if game.hud.screen.begins_with("挑一样") else "screen_") + label)
+	var s: String = game.hud.screen
+	if s.begins_with("下一站"):
+		await _shot("map_" + label)
+		for b in game.hud.find_children("*", "Button", true, false):
+			if (b as Button).flat and (b as Button).custom_minimum_size == Vector2(84, 84):
+				(b as Button).mouse_entered.emit()
+				(b as Button).pressed.emit()
+				break
+		await _frames(6)
+		await _shot("map_picked_" + label)
+	else:
+		await _shot(("reward_" if s.begins_with("挑一张") else "screen_") + label)
 	_answer()
 	await _frames(4)
 
 
-## Answers the screen up: an ark (the seed's), the arrival, a gift, a relic (smart: the best; else the first).
+## Answers the screen up: an ark (the seed's), the arrival, a card (smart: the best, or the gold), the deck (smart: as
+## tools/Policy.gd works it; else left as it is), a relic (smart: the best; else the first), the next place.
 func _answer() -> void:
 	var s: String = game.hud.screen
 	var offered: Array = game.hud.offered
@@ -396,11 +463,19 @@ func _answer() -> void:
 		game.hud.chosen.emit(offered[seed % offered.size()])
 	elif s.begins_with("到了"):
 		game.hud.chosen.emit("开始")
-	elif s.begins_with("挑一样"):
-		if offered.is_empty():
-			game.hud.chosen.emit("不要")
+	elif s.begins_with("挑一张"):
+		var k := Policy.best_reward(game.run, game.home, offered) if smart else 0
+		if k >= 0 and k < offered.size():
+			game.hud.chosen.emit(offered[k])
 		else:
-			game.hud.chosen.emit(offered[Policy.best_gift(game.run, game.home, offered) if smart else 0])
+			game.hud.chosen.emit("不要牌，拿 %d 金" % Content.REWARD_GOLD)
+	elif s.begins_with("整理牌库"):
+		var step := Policy.workshop_step(game.run, game.home) if smart else {}
+		game.hud.chosen.emit(step if not step.is_empty() else "完成")
+	elif s.begins_with("牌库"):
+		game.hud.chosen.emit("关闭")
+	elif s.begins_with("下一站"):
+		game.hud.chosen.emit(Policy.best_place(game.run))
 	elif s.ends_with("守住了！"):
 		game.hud.chosen.emit(Policy.best_relic(game.run, game.home, offered) if smart else offered[0])
 
@@ -556,9 +631,10 @@ func _account() -> void:
 		var b: Dictionary = h.buildings[p]
 		var key := "%s%d" % [b.kind, b.level]
 		built[key] = built.get(key, 0) + 1
-	print("%s round %d hp %d/%d gold %d biomass %d genes %d alien %d stash %d relics %s army %d | %s" % [
-		Content.LEVELS[r.level].name, r.round, h.hp, h.hp_max(), h.gold, h.biomass, h.genes, h.alien, h.stash.size(),
-		h.relics, h.army().size(), built])
+	var plus := h.deck.filter(func(c: Dictionary) -> bool: return c.plus).size()
+	print("%s (level %d) round %d hp %d/%d gold %d biomass %d research %d deck %d (+%d) stash %d relics %s army %d | %s" % [
+		Content.LEVELS[r.place].name, r.level + 1, r.round, h.hp, h.hp_max(), h.gold, h.biomass, h.genes, h.deck.size(), plus,
+		h.stash.size(), h.relics, h.army().size(), built])
 
 
 func _shot(label: String) -> void:

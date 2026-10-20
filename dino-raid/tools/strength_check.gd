@@ -34,7 +34,7 @@ func _init() -> void:
 ## What a nest of `kind` with `affixes` gives its units, standing alone; an evolved kind (no nest of its own), plain.
 func _spec(kind: String, affixes: Array) -> Dictionary:
 	if not Content.BUILDINGS.has("nest_" + kind):
-		return {"kind": kind, "nest": Vector2i.ZERO, "hp_mult": 1.0, "atk_mult": 1.0, "atk_bonus": 0, "affixes": []}
+		return {"kind": kind, "nest": Vector2i.ZERO, "lane": 0.0, "hp_mult": 1.0, "atk_mult": 1.0, "atk_bonus": 0, "affixes": []}
 	var h := Home.new(rng)
 	h.buildings.clear()
 	h.terrain.clear()

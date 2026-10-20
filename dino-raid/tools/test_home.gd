@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-20) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-22) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -20,13 +20,14 @@ func _init() -> void:
 	_buying()
 	_stash()
 	_shelf()
-	_taking_out()
+	_deck()
 	_reroll_and_interest()
-	_gifts()
+	_rewards()
 	_relics()
 	_wonders()
 	_arks()
 	_moving_on()
+	_map()
 	_formation()
 	_fights()
 	_falling_hard()
@@ -62,7 +63,6 @@ func bare(region := 0) -> Home:
 	h.gold = 20
 	h.biomass = 20
 	h.genes = 10
-	h.alien = 5
 	return h
 
 
@@ -266,6 +266,16 @@ func _terrain() -> void:
 	check("trees and lava: nothing built there", not h.buildable(Vector2i(2, 3)) and not h.buildable(Vector2i(5, 3)))
 	shelf(h, ["b_sampler"])
 	check("buildings only where they can stand", not Vector2i(2, 3) in h.targets(0) and Vector2i(1, 3) in h.targets(0))
+	var t := bare()
+	t.terrain = {Vector2i(0, 2): "mire", Vector2i(2, 3): "toadstool", Vector2i(4, 2): "ice_ore", Vector2i(5, 3): "wreck"}
+	t.build(Vector2i(0, 2), "pool")
+	t.build(Vector2i(4, 2), "mine")
+	t.build(Vector2i(5, 2), "mine")
+	t.build(Vector2i(2, 2), "sampler")
+	check("each place's ground works one of four ways: a mire as a pond, toadstools as a tree, ice ore as ore, a wreck as lava",
+		t.income_biomass() == 6 * 3 / 2 and t.income_genes() == 1 + Content.TREE_GENES
+		and t.income_gold() == Home.INCOME + (1 + 2) + (1 + 1), [t.income_biomass(), t.income_genes(), t.income_gold()])
+	check("toadstools and wrecks: nothing built there", not t.buildable(Vector2i(2, 3)) and not t.buildable(Vector2i(5, 3)))
 
 
 func _rules() -> void:
@@ -284,6 +294,40 @@ func _rules() -> void:
 	a.hp = 1
 	a.start_round(rng(), 1)
 	check("ash never kills", a.hp == 1)
+	var bog := bare(2)
+	bog.build(Vector2i(0, 0), "nest_red")
+	bog.build(Vector2i(0, 2), "pool")
+	check("bog: biomass half as much again, our units a fifth less hp", bog.income_biomass() == 3 * 3 / 2
+		and is_equal_approx(float(bog.spec_of(Vector2i(0, 0)).hp_mult), Content.BOG_HP), bog.income_biomass())
+	var cold := bare(3)
+	cold.build(Vector2i(0, 0), "nest_red")
+	check("cold: 2 gold more a round, our units slower", cold.income_gold() == Home.INCOME + Content.COLD_GOLD
+		and int(cold.spec_of(Vector2i(0, 0)).haste) == Content.COLD_HASTE, cold.income_gold())
+	var slow := Content.unit_stats(cold.army()[0])
+	var warm := bare(0)
+	warm.build(Vector2i(0, 0), "nest_red")
+	check("cold: a hit every 1.15 times as long", float(slow.every) > float(Content.unit_stats(warm.army()[0]).every) * 1.1,
+		[slow.every])
+	var dry := bare(4)
+	dry.build(Vector2i(0, 2), "pool")
+	dry.build(Vector2i(1, 2), "pool")
+	check("drought: 2 research points more, biomass three tenths less", dry.income_genes() == Content.DROUGHT_GENES
+		and dry.income_biomass() == int(6 * Content.DROUGHT_BIOMASS), [dry.income_genes(), dry.income_biomass()])
+	var r := Run.new(31)
+	r.move_on([], 5)
+	r.home.buildings.clear()
+	r.home.terrain.clear()
+	r.home.build(Vector2i(0, 2), "mine")
+	r.home.build(Vector2i(0, 3), "mine")
+	r.home.gold = 0
+	var ev := r.start_round()
+	check("tide: round 1 at low tide, 3 gold found on the beach", not r.home.flood and r.home.gold == Home.INCOME + 2 + Content.EBB_GOLD
+		and ev.any(func(e: Dictionary) -> bool: return e.t == "ebb"), r.home.gold)
+	r.round = 2
+	r.home.gold = 0
+	r.start_round()
+	check("tide: round 2 at high tide, the last row brings in nothing", r.home.flood and r.home.gold == Home.INCOME + 1,
+		r.home.gold)
 
 
 func _affixes_and_recipes() -> void:
@@ -351,8 +395,8 @@ func _schools() -> void:
 	e.buildings[Vector2i(0, 1)].path = ["elite"]
 	e.build(Vector2i(1, 1), "nest_red")
 	e.build(Vector2i(5, 3), "champion_hall")
-	check("champion hall: elites 30% more, the rest nothing", is_equal_approx(float(e.spec_of(Vector2i(0, 1)).hp_mult),
-		Content.ELITE_HP * 1.3) and is_equal_approx(float(e.spec_of(Vector2i(1, 1)).hp_mult), 1.0))
+	check("champion hall: elites 15% more, the rest nothing", is_equal_approx(float(e.spec_of(Vector2i(0, 1)).hp_mult),
+		Content.ELITE_HP * 1.15) and is_equal_approx(float(e.spec_of(Vector2i(1, 1)).hp_mult), 1.0))
 	var r := bare()
 	r.build(Vector2i(0, 1), "nest_blue")
 	r.build(Vector2i(1, 1), "nest_red")
@@ -435,11 +479,8 @@ func _shelf() -> void:
 	n.stock(rng(1), 0)
 	check("a nest standing: 3 buildings and 2 others", n.shelf.size() == 5 and n.shelf.filter(func(oi: Dictionary) -> bool:
 		return Content.OFFERS[oi.id].type == "build").size() == 3)
-	var ids: Array = n.shelf.map(func(oi: Dictionary) -> String: return oi.id)
-	var distinct := {}
-	for id in ids:
-		distinct[id] = true
-	check("none twice", distinct.size() == ids.size(), ids)
+	n.deck.append_array([{"id": "b_gold", "plus": false}, {"id": "a_wings", "plus": false}, {"id": "b_forge", "plus": false},
+		{"id": "a_flame", "plus": false}])
 	var later := 0
 	var elsewhere := 0
 	for s in 40:
@@ -452,22 +493,27 @@ func _shelf() -> void:
 	check("the rainforest offers nothing from later, nothing of the volcano's", later == 0 and elsewhere == 0, [later, elsewhere])
 	var v := bare(1)
 	v.build(Vector2i(0, 0), "nest_red")
+	v.deck.append({"id": "b_forge", "plus": false})
 	var forge := 0
+	var theirs := 0
 	for s in 40:
 		v.stock(rng(s), 1)
 		for oi in v.shelf:
-			check("the volcano offers nothing of the rainforest's", int(Content.OFFERS[oi.id].get("region", 1)) == 1, oi.id)
+			if int(Content.OFFERS[oi.id].get("region", 1)) != 1:
+				theirs += 1
 			if oi.id == "b_forge":
 				forge += 1
-	check("the volcano's own forge turns up", forge > 0)
+	check("the volcano offers nothing of the rainforest's (its spores and poison stay in the deck)", theirs == 0, theirs)
+	check("the volcano's own forge, once in the deck, turns up", forge > 0)
 	n.gold = 3
 	var worst := 0
 	for k in 30:
 		n.stock(rng(k), 1)
-		worst = maxi(worst, n.shelf.filter(func(oi: Dictionary) -> bool: return n._least_price(oi.id) > n.gold).size())
+		worst = maxi(worst, n.shelf.filter(func(oi: Dictionary) -> bool: return n._least_price(oi) > n.gold).size())
 	check("no more than one that costs more than there is", worst <= 1, worst)
 	var st := bare()
 	st.build(Vector2i(0, 0), "nest_red")
+	st.deck.append({"id": "b_stab", "plus": false})
 	var stab := 0
 	for k in 40:
 		st.stock(rng(k), 0)
@@ -478,31 +524,74 @@ func _shelf() -> void:
 		st.stock(rng(k), 0)
 		stab += st.shelf.filter(func(oi: Dictionary) -> bool: return oi.id == "b_stab").size()
 	check("a stabilizer once a nest is full", stab > 0, stab)
+	var few := bare()
+	few.deck = [{"id": "b_red", "plus": false}, {"id": "b_red", "plus": false}, {"id": "raise", "plus": false}]
+	few.build(Vector2i(0, 0), "nest_red")
+	few.stock(rng(), 0)
+	check("a deck of three: a shelf of three, both reds", few.shelf.size() == 3
+		and few.shelf.filter(func(oi: Dictionary) -> bool: return oi.id == "b_red").size() == 2, few.shelf)
 
 
-func _taking_out() -> void:
+## The deck the shop draws from, cut and upgraded after a mini-boss (GAME-DESIGN 22).
+func _deck() -> void:
 	var h := bare()
+	check("the run starts with the deck, nothing upgraded", h.deck.size() == Content.DECK.size()
+		and h.deck.all(func(c: Dictionary) -> bool: return not c.plus))
 	h.build(Vector2i(2, 0), "nest_red")
-	h.start_round(rng(), 0)
-	var id: String = h.shelf[0].id
-	check("a kind taken out of the shop", h.remove_kind(0) and h.shelf[0] == null and h.struck.has(0) and id in h.removed)
-	check("one a round", not h.remove_kind(1))
-	var seen := 0
-	for s in 40:
+	var have := {}
+	for c in h.deck:
+		have[c.id] = int(have.get(c.id, 0)) + 1
+	var over := 0
+	for s in 30:
 		h.stock(rng(s), 0)
-		seen += h.shelf.filter(func(oi: Dictionary) -> bool: return oi.id == id).size()
-	check("never on the shelf again", seen == 0, seen)
-	h.start_round(rng(5), 0)
-	check("next round, another", h.remove_kind(0))
-	var r := Run.new(14)
-	r.start_round()
-	r.home.removed = ["b_red", "b_blue", "b_pool", "a_shell", "a_blade", "raise"]
-	var gifted := 0
-	for k in 20:
-		for oi in r.gift_offer():
-			if oi.id in r.home.removed:
-				gifted += 1
-	check("nor among the gifts", gifted == 0, gifted)
+		var seen := {}
+		for oi in h.shelf:
+			seen[oi.id] = int(seen.get(oi.id, 0)) + 1
+		for id in seen:
+			if int(seen[id]) > int(have.get(id, 0)):
+				over += 1
+	check("the shelf: only what is in the deck, each card at most once", over == 0, over)
+	var n := h.deck.size()
+	h.gold = 20
+	check("cut: 3 gold", h.cut(0) and h.gold == 17 and h.deck.size() == n - 1)
+	check("then 4, then 5", h.cut_price() == 4 and h.cut(0) and h.gold == 13 and h.cut_price() == 5)
+	h.gold = 4
+	check("not the gold: none cut", not h.cut(0) and h.deck.size() == n - 2)
+	var mine := -1
+	for k in h.deck.size():
+		if h.deck[k].id == "b_mine":
+			mine = k
+	h.gold = 20
+	h.cut(mine)
+	var mines := 0
+	for s in 30:
+		h.stock(rng(s), 0)
+		mines += h.shelf.filter(func(oi: Dictionary) -> bool: return oi.id == "b_mine").size()
+	check("a card cut never comes again", mines == 0, mines)
+	var u := bare()
+	check("upgrade: 3 research points", u.upgrade(0) and u.genes == 7 and u.deck[0].plus)
+	check("once", not u.can_upgrade(0) and not u.upgrade(0) and u.genes == 7)
+	u.genes = 2
+	check("not the research points: none", not u.can_upgrade(1))
+	var p := bare()
+	p.deck = [{"id": "b_red", "plus": true}]
+	p.stock(rng(), 0)
+	check("an upgraded card comes on the shelf upgraded", p.shelf.size() == 1 and p.shelf[0].get("plus", false)
+		and str(Content.offer(p.shelf[0]).name).ends_with("+"), p.shelf)
+	p.buy(0, Vector2i(1, 0), "elite")
+	check("an upgraded nest goes down at level 2, its first choice made", int(p.buildings[Vector2i(1, 0)].level) == 2
+		and p.buildings[Vector2i(1, 0)].path == ["elite"] and p.gold == 20 - 3)
+	p.shelf = [{"id": "b_pool", "plus": true}, {"id": "raise", "plus": true}, {"id": "a_shell", "plus": true}]
+	p.buy(0, Vector2i(1, 2))
+	check("an upgraded building too", int(p.buildings[Vector2i(1, 2)].level) == 2)
+	check("an upgraded raise: 2 gold less", p.price(1, Vector2i(1, 2)) == Content.RAISE + 2 - Content.PLUS_RAISE)
+	check("an upgraded affix: no research points", p.genes_cost(Content.offer(p.shelf[2])) == 0)
+	var s := bare()
+	s.shelf = [{"id": "b_blue", "plus": true}]
+	s.store(0)
+	s.place(0, Vector2i(3, 0), "count")
+	check("kept in the stash, still upgraded", int(s.buildings[Vector2i(3, 0)].level) == 2
+		and s.buildings[Vector2i(3, 0)].path == ["count"])
 
 
 func _reroll_and_interest() -> void:
@@ -522,23 +611,48 @@ func _reroll_and_interest() -> void:
 	check("ammonite: up to 4", h.interest() == Content.INTEREST_MAX + 2)
 
 
-func _gifts() -> void:
+## A card after each round, to add to the deck -- or gold (GAME-DESIGN 22).
+func _rewards() -> void:
 	var r := Run.new(7)
 	r.start_round()
-	var gifts := r.gift_offer()
-	check("three gifts, all different", gifts.size() == 3 and gifts[0].id != gifts[1].id and gifts[1].id != gifts[2].id)
-	r.take_gift({"id": "a_shell"})
-	check("a gift goes into the stash", r.home.stash.size() == 1 and r.home.stash[0].get("gift", false))
-	var used_up := 0
-	for s in 30:
+	var cards := r.reward_offer()
+	check("three cards, all different", cards.size() == Content.REWARDS and cards[0].id != cards[1].id
+		and cards[1].id != cards[2].id and cards[0].id != cards[2].id, cards)
+	var n := r.home.deck.size()
+	r.take_reward("b_green")
+	check("the one taken goes into the deck, not the stash", r.home.deck.size() == n + 1 and r.home.deck[-1].id == "b_green"
+		and not r.home.deck[-1].plus and r.home.stash.is_empty())
+	var gold := r.home.gold
+	r.take_reward_gold()
+	check("or 3 gold", r.home.gold == gold + Content.REWARD_GOLD)
+	var later := 0
+	var uncommon := 0
+	var rare := 0
+	for s in 40:
 		var g := Run.new(s + 1)
-		g.start_round()
-		for oi in g.gift_offer():
-			if not Content.OFFERS[oi.id].type in ["build", "raise", "affix"]:
-				used_up += 1
-	check("gifts are all things that last", used_up == 0, used_up)
+		for oi in g.reward_offer():
+			var o: Dictionary = Content.OFFERS[oi.id]
+			if int(o.get("from", 0)) > 0 or int(o.get("region", 0)) != 0:
+				later += 1
+			if int(o.rarity) == 1:
+				uncommon += 1
+		g.move_on([], 1)
+		for oi in g.reward_offer():
+			if int(Content.OFFERS[oi.id].rarity) == 2:
+				rare += 1
+	check("only cards found here and now", later == 0, later)
+	check("the uncommon and the rare come too", uncommon > 0 and rare > 0, [uncommon, rare])
 	r.home.relics.append("sac")
-	check("the sac: two to choose from", r.gift_offer().size() == 2)
+	check("the sac: two to choose from", r.reward_offer().size() == 2)
+	var m := Run.new(2)
+	m.round = 4
+	m.start_round()
+	var f := m.fight()
+	f.run()
+	m.finish(f)
+	check("round 4 was a mini-boss's: the deck worked on after it", m.over or (m.round == 5 and m.was_mini()), m.round)
+	m.round = 7
+	check("round 6 not", not m.was_mini())
 
 
 func _relics() -> void:
@@ -635,9 +749,9 @@ func _moving_on() -> void:
 	check("every building can be packed, and the stash comes too", goods.size() == h.buildings.size() + 1)
 	var blue: Dictionary = goods.filter(func(g: Dictionary) -> bool: return g.id == "b_blue").front()
 	r.level = 0
-	r.round = 5
-	r.move_on([blue, {"id": "a_blade"}])
-	check("on to the volcano", r.level == 1 and r.round == 1 and h.region == 1)
+	r.round = Content.ROUNDS
+	r.move_on([blue, {"id": "a_blade"}], 1)
+	check("on to the volcano", r.level == 1 and r.place == 1 and r.round == 1 and h.region == 1 and r.path == [0, 1])
 	check("the ark lands its nest and pool", h.buildings.size() == 2 and h.buildings.values().all(func(b: Dictionary) -> bool:
 		return int(b.level) == 1 and b.kind in ["nest_red", "pool"]))
 	check("the volcano's ground, behind the line", h.terrain.values().all(func(t: String) -> bool: return t in ["ore", "lava"])
@@ -669,6 +783,32 @@ func _moving_on() -> void:
 		lots.append({"id": "b_pool"})
 	many.move_on(lots)
 	check("no more carried than the stash holds", many.home.stash.size() == Content.STASH)
+
+
+## The map: the rainforest, then two places to pick one of for each level after it, none twice (GAME-DESIGN 22).
+func _map() -> void:
+	var bad := 0
+	for s in 30:
+		var m := Run.new(s + 1)
+		var later: Array = m.map[1] + m.map[2]
+		var distinct := {}
+		for p in later:
+			distinct[p] = true
+		if m.map.size() != Content.TIERS or m.map[0] != [0] or later.size() != 4 or distinct.size() != 4 or 0 in later:
+			bad += 1
+	check("the rainforest, then two to pick from, twice, none twice", bad == 0, bad)
+	var r := Run.new(8)
+	check("first the second level's two", r.next_places() == r.map[1] and not r.last_level())
+	var to: int = r.map[1][1]
+	r.move_on([], to)
+	check("on to the one picked", r.place == to and r.home.region == to and r.level == 1 and r.path == [0, to])
+	check("its own ground", r.home.terrain.values().all(func(t: String) -> bool: return Content.LEVELS[to].terrain.has(t)))
+	r.round = 3
+	check("its own wave, as strong as the second level", r.wave() == Content.wave(to, 1, 3)
+		and is_equal_approx(r.power(), Content.TIER_POWER[1]))
+	check("then the third level's two", r.next_places() == r.map[2])
+	r.move_on([], int(r.map[2][0]))
+	check("the third level the last", r.last_level() and r.next_places().is_empty() and r.path.size() == 3)
 
 
 func _formation() -> void:
@@ -752,13 +892,14 @@ func _run_flow() -> void:
 	check("biomass paid", r.home.biomass == biomass - food, [biomass, food, r.home.biomass])
 	check("gold: kept, won, interest", r.home.gold == gold + int(out.gold) + int(out.interest))
 	var g := Run.new(4)
-	g.round = 5
+	g.round = Content.ROUNDS
 	g.start_round()
 	var w := g.fight()
 	w.run()
 	var o := g.finish(w)
-	check("round 5 ends the place or the run", o.level_won or g.over, [o, g.home.hp])
-	check("two places in a run", Content.LEVELS.size() == 2 and not Run.new(1).last_level())
+	check("the last round ends the place or the run", o.level_won or g.over, [o, g.home.hp])
+	check("a run: three levels of 12 rounds, out of six places", Content.TIERS == 3 and Content.ROUNDS == 12
+		and Content.LEVELS.size() == 6)
 
 
 func _economy() -> void:
@@ -776,10 +917,10 @@ func _economy() -> void:
 	r.home.gold = 0
 	var f := r.fight()
 	f.run()
-	var alien := r.home.alien
+	var research := r.home.genes
 	var out := r.finish(f)
-	check("a battle won: 2 gold and an alien gene", f.result != "won" or (out.gold == 2 and r.home.alien == alien + 1
-		and r.home.gold == 2), [f.result, out])
+	check("a battle won: 2 gold and a research point", f.result != "won" or (out.gold == 2
+		and r.home.genes == mini(research + 1, r.home.genes_max()) and r.home.gold == 2), [f.result, out])
 
 
 func _clone() -> void:
@@ -798,12 +939,14 @@ func _clone() -> void:
 			break
 	c.stash.clear()
 	c.relics.append("tooth")
-	c.remove_kind(4)
 	c.gold = 40
+	c.cut(0)
+	c.genes = 10
+	c.upgrade(0)
 	c.build_wonder("brood")
 	check("the copy changes alone", not h.buildings.has(Vector2i(0, 0)) and (bought < 0 or h.shelf[bought] != null)
-		and h.relics.is_empty() and h.stash.size() == 1 and h.terrain == c.terrain and h.removed.is_empty()
-		and h.wonder == "" and c.wonder == "brood")
+		and h.relics.is_empty() and h.stash.size() == 1 and h.terrain == c.terrain and h.deck.size() == Content.DECK.size()
+		and h.cuts == 0 and not h.deck[0].plus and h.wonder == "" and c.wonder == "brood")
 	var f1 := Fight.make(h.army(), ["grey", "grey"], 1.0)
 	var f2 := Fight.make(h.clone().army(), ["grey", "grey"], 1.0)
 	f1.run()
@@ -811,13 +954,54 @@ func _clone() -> void:
 	check("a copy fights the same", f1.result == f2.result and f1.time == f2.time)
 
 
+## The waves (GAME-DESIGN 22): every place at every level, the mini-bosses in rounds 4 and 8, the boss in the last.
 func _waves() -> void:
-	for level in Content.LEVELS.size():
-		for r in range(1, int(Content.LEVELS[level].rounds) + 1):
-			check("wave %d/%d" % [level, r], not Content.wave(level, r).is_empty())
-	check("the last round has the place's boss", "boss_rain" in Content.wave(0, 5) and "boss_lava" in Content.wave(1, 5))
-	check("each place its own kinds", Content.wave(0, 3).any(func(k: String) -> bool: return k == "spore")
-		and Content.wave(1, 3).any(func(k: String) -> bool: return k == "beetle" or k == "salamander"))
+	var empty := 0
+	var bosses := 0
+	var minis := 0
+	var stray := 0
+	for place in Content.LEVELS.size():
+		var lv: Dictionary = Content.LEVELS[place]
+		for tier in Content.TIERS:
+			for r in range(1, Content.ROUNDS + 1):
+				var w := Content.wave(place, tier, r)
+				if w.is_empty():
+					empty += 1
+				if r == Content.ROUNDS:
+					bosses += 1 if lv.boss in w else 0
+				elif r in Content.MINI_ROUNDS:
+					minis += 1 if lv.minis[Content.MINI_ROUNDS.find(r)] in w else 0
+				else:
+					stray += w.filter(func(k: String) -> bool: return k == lv.boss or k in lv.minis).size()
+	var n := Content.LEVELS.size() * Content.TIERS
+	check("a wave every round, every place, every level", empty == 0, empty)
+	check("the last round: the place's boss", bosses == n, bosses)
+	check("rounds 4 and 8: its two mini-bosses", minis == n * Content.MINI_ROUNDS.size(), minis)
+	check("no mini-boss or boss in the other rounds", stray == 0, stray)
+	check("each place its own kinds", Content.wave(0, 0, 6).any(func(k: String) -> bool: return k == "spore")
+		and Content.wave(1, 0, 6).any(func(k: String) -> bool: return k == "beetle" or k == "salamander"))
+	var own := 0
+	for place in range(2, Content.LEVELS.size()):
+		var kinds: Array = Content.LEVELS[place].mix.map(func(m: Array) -> String: return m[0])
+		if Content.wave(place, 1, 6).any(func(k: String) -> bool: return k != "grey" and k in kinds):
+			own += 1
+	check("the four new places their own monsters", own == 4, own)
+	var weaker := 0
+	for place in Content.LEVELS.size():
+		for r in range(1, Content.ROUNDS + 1):
+			if _strength(Content.wave(place, 1, r), 1) <= _strength(Content.wave(place, 0, r), 0):
+				weaker += 1
+	check("the second level comes stronger, round for round", weaker == 0, weaker)
+	var first := Content.danger(Content.wave(0, 0, 1))
+	var last := Content.danger(Content.wave(0, 2, Content.ROUNDS), Content.TIER_POWER[2])
+	check("danger: a skull or two at first, five or six at the end", first <= 2 and last >= 5 and last <= 6, [first, last])
+
+
+func _strength(kinds: Array, tier: int) -> float:
+	var s := 0.0
+	for k in kinds:
+		s += Content.enemy_strength(k, Content.TIER_POWER[tier])
+	return s
 
 
 func _texts() -> void:
@@ -837,5 +1021,12 @@ func _texts() -> void:
 		check("wonder " + id, Content.WONDERS[id].says != "" and int(Content.WONDERS[id].price) > 10)
 	for id in Content.TERRAIN:
 		check("terrain " + id, Content.TERRAIN[id].says != "")
+	for id in Content.OFFERS:
+		var p := Content.offer({"id": id, "plus": true})
+		check("upgraded text for " + id, str(p.name).ends_with("+") and Content.offer_text(p).length() > 3, Content.offer_text(p))
 	for l in Content.LEVELS:
 		check("rule of " + l.name, Content.RULES.has(l.rule))
+		check("ground of " + l.name, l.terrain.keys().all(func(t: String) -> bool: return Content.TERRAIN.has(t)))
+		check("foes of " + l.name, Content.ENEMIES.has(l.boss) and l.minis.size() == 2
+			and l.minis.all(func(k: String) -> bool: return Content.ENEMIES.has(k))
+			and l.mix.all(func(m: Array) -> bool: return Content.ENEMIES.has(m[0])))

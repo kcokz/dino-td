@@ -1,18 +1,21 @@
 extends SceneTree
 ## Whole runs played by the rules alone, no screen, many at once -- to see how hard the places are, and how each way of
-## playing does (GAME-DESIGN 17-19).
+## playing does (GAME-DESIGN 17-22).
 ##
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit]
 ##
 ## random, smart and school play as tools/Policy.gd says, each run with the next ark (Content.ARKS) in turn; school is
-## smart keeping to the next school (Content.SCHOOLS) in turn, taking another school's kind out of the shop each round
-## (its ark turns once all the schools have had a run, starting from the first seed's).
+## smart keeping to the next school (Content.SCHOOLS) in turn, cutting another school's own buildings from the deck after
+## each mini-boss (its ark turns once all the schools have had a run, starting from the first seed's). After each round
+## random takes a card (or the gold) at random, the others the best (Policy.best_reward); after a mini-boss they work
+## on the deck (Policy.workshop); on the map, the first of the two.
 ## All carry on what the packing screen picks to begin with. Prints, for each run, how far it got, the homeland's
-## health at each place's end and how many goods it carried on, what it built; then how many held each place -- and,
+## health at each level's end and how many goods it carried on, what it built; then how many held each level -- and,
 ## for school, how each school did. "measure": also, each round, the army's strength against the wave's. "limit": no
-## one comes, every battle is won, everything goes to growing; prints, round by round, the strength the runs' armies
-## had on average -- Content.LIMIT, to paste in after changing what can be built or made (run it with school, so that
-## every way of playing counts) -- and the most any had.
+## one comes, every battle is won, everything goes to growing; prints each run's strength round by round ("# curve") --
+## tools/limit.py makes Content.LIMIT from them (run it with school, so that every way of playing counts) -- and, round
+## by round, the strength the runs' armies had on average (never less than the round before within a level; each level
+## starting again from what the ark set down), the most any had, and the plain average.
 
 var policy := "smart"
 var measure := false
@@ -31,7 +34,7 @@ func _init() -> void:
 	measure = args.size() > 3 and args[3] == "measure"
 	limit = args.size() > 3 and args[3] == "limit"
 	var held: Array = []
-	for l in Content.LEVELS:
+	for t in Content.TIERS:
 		held.append(0)
 	var lost_battles := 0
 	var battles := 0
@@ -51,6 +54,7 @@ func _init() -> void:
 		var lost_here := 0
 		var g := 0
 		var all_held := false
+		var curve: Array = []             # limit: this run's strength, round by round
 		while not run.over:
 			run.start_round()
 			if policy == "random":
@@ -64,13 +68,14 @@ func _init() -> void:
 					total.append(0.0)
 					seen.append(0)
 				best[g - 1] = maxf(best[g - 1], run.strength())
+				curve.append(roundi(run.strength()))
 				total[g - 1] += run.strength()
 				seen[g - 1] += 1
 			if measure:
 				var wave_strength := 0.0
 				for kind in run.wave():
 					wave_strength += Content.enemy_strength(kind, run.power())
-				print("  %s r%d: army of %2d, strength %4d; the wave %4d (%d of them)" % [Content.LEVELS[run.level].name,
+				print("  %s r%d: army of %2d, strength %4d; the wave %4d (%d of them)" % [Content.LEVELS[run.place].name,
 					run.round, run.home.army().size(), roundi(run.strength()), roundi(wave_strength), run.wave().size()])
 			var f := run.fight()
 			f.run()
@@ -81,14 +86,20 @@ func _init() -> void:
 				lost_here += 1
 				lost_battles += 1
 			if run.over:
-				line += "  died in %s round %d" % [Content.LEVELS[run.level].name, run.round]
+				line += "  died in %s (level %d) round %d" % [Content.LEVELS[run.place].name, run.level + 1, run.round]
 				break
-			var gifts := run.gift_offer()
-			if not gifts.is_empty():
-				run.take_gift(gifts[Policy.best_gift(run, run.home, gifts) if policy != "random" else 0])
+			var cards := run.reward_offer()
+			if not cards.is_empty():
+				var pick := Policy.best_reward(run, run.home, cards, school) if policy != "random" else rng.randi_range(-1, cards.size() - 1)
+				if pick >= 0:
+					run.take_reward(cards[pick].id)
+				else:
+					run.take_reward_gold()
+			if run.was_mini() and policy != "random":
+				Policy.workshop(run, run.home, school)
 			if out.level_won:
 				held[run.level] += 1
-				line += "  %s hp %d/%d (lost %d)" % [Content.LEVELS[run.level].name, run.home.hp, run.home.hp_max(), losses]
+				line += "  %s hp %d/%d (lost %d)" % [Content.LEVELS[run.place].name, run.home.hp, run.home.hp_max(), losses]
 				losses = 0
 				if run.last_level():
 					line += "  ALL HELD"
@@ -98,7 +109,7 @@ func _init() -> void:
 				run.take_relic(Policy.best_relic(run, run.home, offer) if policy != "random" else offer[rng.randi() % offer.size()])
 				var goods := Policy.best_goods(run)
 				line += " carried %d" % mini(goods.size(), run.home.stash_size())
-				run.move_on(goods)
+				run.move_on(goods, Policy.best_place(run))
 		if school != "":
 			var sc: Array = by_school.get(school, [0, 0, 0, 0])
 			sc[0] += 1
@@ -113,9 +124,11 @@ func _init() -> void:
 				"+" + "+".join(b.affixes) if not b.affixes.is_empty() else ""]
 			built[key] = built.get(key, 0) + 1
 		print(line, "  | wonder ", run.home.wonder, " relics ", run.home.relics, " built ", built)
+		if limit:
+			print("# curve %s: %s" % [school if school != "" else "-", curve])
 	var said: Array = []
 	for i in held.size():
-		said.append("%s %d" % [Content.LEVELS[i].name, held[i]])
+		said.append("level %d: %d" % [i + 1, held[i]])
 	print("%s: %d runs; held %s; battles lost %d of %d" % [policy, runs, ", ".join(said), lost_battles, battles])
 	for s in by_school:
 		var sc: Array = by_school[s]
@@ -123,13 +136,19 @@ func _init() -> void:
 	if limit:
 		var out := "const LIMIT := ["
 		var most := "# the most: ["
+		var mean := "# the average, round by round: ["
 		var top := 0.0
 		for i in best.size():
-			top = maxf(top, total[i] / maxf(1.0, seen[i]))     # never less than the round before
-			out += "%d%s" % [roundi(top), ", " if i < best.size() - 1 else "]"]
-			most += "%d%s" % [roundi(best[i]), ", " if i < best.size() - 1 else "]"]
+			if i % Content.ROUNDS == 0:
+				top = 0.0                                       # a new level: the ark starts again from what it carried
+			top = maxf(top, total[i] / maxf(1.0, seen[i]))     # never less than the round before, within a level
+			var end := ", " if i < best.size() - 1 else "]"
+			out += "%d%s" % [roundi(top), end]
+			most += "%d%s" % [roundi(best[i]), end]
+			mean += "%d%s" % [roundi(total[i] / maxf(1.0, seen[i])), end]
 		print(out)
 		print(most)
+		print(mean)
 	quit()
 
 
@@ -148,14 +167,8 @@ func _smart(run: Run, school: String) -> void:
 		if play.is_empty():
 			# Nothing worth it on the shelf: restock it, if that leaves enough to buy with.
 			if restocked < 2 and run.home.gold >= run.home.reroll_price() + 4:
-				var k := Policy.best_removal(run.home, school)
-				if k >= 0:
-					run.home.remove_kind(k)
 				run.reroll()
 				restocked += 1
 				continue
 			break
 		Policy.play(run.home, play)
-	var k := Policy.best_removal(run.home, school)
-	if k >= 0:
-		run.home.remove_kind(k)

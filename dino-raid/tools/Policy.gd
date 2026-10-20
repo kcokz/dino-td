@@ -1,16 +1,16 @@
 class_name Policy
-## How the tools play (GAME-DESIGN 17-19), shared by playtest.gd and sim_runs.gd. Not part of the game.
+## How the tools play (GAME-DESIGN 17-22), shared by playtest.gd and sim_runs.gd. Not part of the game.
 ##
 ## random: buys anything it can afford, put anywhere it may go (but building only on empty land, pulling nothing
 ## down), raising nests either way, and puts down what it keeps the same way; builds a wonder when it can. smart: the
 ## play that does the most good for its price -- a buy (a nest's raise tried both ways), putting down what was kept,
-## the wonder -- this round's battle worked out after it (the forecast the player sees), and what the homeland comes
-## to: the army its nests make (as far as the biomass coming in feeds it), what comes in each round, what is kept (gold
-## earns interest); restocks the shelf when nothing on it is worth buying; the gift and the relic that do the most
-## good. A smart one may keep to a school (Content.SCHOOLS): it leans to that school's goods, never builds another
-## school's own buildings (those that are not just for biomass, genes or gold) and takes one of them out of the shop
-## each round, and -- for gold -- saves. All carry on what the packing screen picks to begin with
-## (Run.default_goods).
+## the wonder -- this round's battle worked out after it, and what the homeland comes to: the army its nests make (as
+## far as the biomass coming in feeds it), what comes in each round, what is kept (gold earns interest); restocks the
+## shelf when nothing on it is worth buying; the reward card (or the gold), the relic that do the most good; after a
+## mini-boss cuts the deck's dead cards and upgrades raises and nests; the first place the map offers. A smart one may
+## keep to a school (Content.SCHOOLS): it leans to that school's goods, never builds another school's own buildings
+## (those that are not just for biomass, research or gold) and cuts them from its deck, and -- for gold -- saves. All
+## carry on what the packing screen picks to begin with (Run.default_goods).
 
 const LEAN := 1.6                 # a school's own goods look this much better to one keeping to it...
 const SHUN := 0.8                 # ...and another school's this much worse
@@ -97,9 +97,13 @@ static func _own(kind: String) -> String:
 	return "" if first.has("biomass") or first.has("genes") or first.has("gold") else str(b.school)
 
 
-## The choices a good on `at` can be put down with: both for a nest's raise.
+## The choices a good on `at` can be put down with: both for a nest's raise, and for an upgraded nest (put down at
+## level 2).
 static func _choices(h: Home, oi: Dictionary, at: Variant) -> Array:
-	if Content.offer(oi).type == "raise" and at is Vector2i and h.buildings.has(at) and Content.is_nest(h.buildings[at].kind):
+	var o := Content.offer(oi)
+	if o.type == "raise" and at is Vector2i and h.buildings.has(at) and Content.is_nest(h.buildings[at].kind):
+		return ["count", "elite"]
+	if o.type == "build" and o.plus and Content.is_nest(o.builds) and not oi.has("packed"):
 		return ["count", "elite"]
 	return ["count"]
 
@@ -113,7 +117,7 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 	for i in h.shelf.size():
 		for at in h.targets(i):
 			var o := Content.offer(h.shelf[i])
-			var cost := maxf(1.0, float(h.price(i, at)) + 0.5 * float(h.genes_cost(o)) + 2.0 * float(o.get("alien", 0)))
+			var cost := maxf(1.0, float(h.price(i, at)) + 0.5 * float(h.genes_cost(o)))
 			for choice in _choices(h, h.shelf[i], at):
 				var t := h.clone()
 				t.buy(i, at, choice)
@@ -141,34 +145,67 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 	return best
 
 
-## The kind a player keeping to `school` takes out of the shop this round: the first of another school's own
-## buildings left on the shelf (-1 for none, or with no school).
-static func best_removal(h: Home, school: String) -> int:
-	if school == "" or h.removes <= 0:
-		return -1
-	for i in h.shelf.size():
-		if h.shelf[i] != null and _others(h.shelf[i], school):
-			return i
-	return -1
-
-
-## The gift that does the most good where it goes best: its index in `gifts`.
-static func best_gift(run: Run, h: Home, gifts: Array) -> int:
-	var best := 0
-	var best_score := -INF
-	for k in gifts.size():
-		var t := h.clone()
-		t.stash.append(gifts[k].duplicate())
-		var last := t.stash.size() - 1
-		for at in t.stash_targets(last):
-			for choice in _choices(t, t.stash[last], at):
-				var u := t.clone()
-				u.place(last, at, choice)
-				var s := score(run, u)
-				if s > best_score:
-					best_score = s
+## The reward to take after a round: the card that would do the most good bought now, where it fits best (leaning to
+## the school; a few places tried for a building) -- its index in `cards` -- or -1 for the gold, when none would do
+## more than the gold is worth.
+static func best_reward(run: Run, h: Home, cards: Array, school := "") -> int:
+	var t := h.clone()
+	t.gold += 30
+	t.genes += 10
+	var base := score(run, t, school)
+	var best := -1
+	var best_gain := 2.0 * Content.REWARD_GOLD
+	for k in cards.size():
+		var u := t.clone()
+		u.shelf = [cards[k].duplicate()]
+		for at in u.targets(0).slice(0, 8):
+			for choice in _choices(u, u.shelf[0], at):
+				var v := u.clone()
+				v.buy(0, at, choice)
+				var gain := (score(run, v, school) - base) * _lean(cards[k], choice, school)
+				if gain > best_gain:
+					best_gain = gain
 					best = k
 	return best
+
+
+## After a mini-boss, the next thing to do to the deck: {cut: k} -- a card that can never come here again (another
+## place's own) or, keeping to a school, another school's own building -- while there is gold to spare; then {upgrade:
+## k} -- a raise first, then nests, then the rest -- while there are research points to spare; {} when done.
+static func workshop_step(run: Run, h: Home, school := "") -> Dictionary:
+	if h.gold >= h.cut_price() + 4:
+		for k in h.deck.size():
+			var o: Dictionary = Content.OFFERS[h.deck[k].id]
+			var gone: bool = o.has("region") and int(o.region) != h.region
+			if gone or school != "" and _others(h.deck[k], school):
+				return {"cut": k}
+	if h.genes >= Content.UPGRADE + 2:
+		for kind in ["raise", "nest", "build", "affix"]:
+			for k in h.deck.size():
+				if not h.can_upgrade(k):
+					continue
+				var o := Content.offer(h.deck[k])
+				var fits: bool = o.type == kind or kind == "nest" and o.type == "build" and Content.is_nest(o.builds)
+				if fits and (school == "" or school_of(h.deck[k]) in ["", school] or o.type != "build"):
+					return {"upgrade": k}
+	return {}
+
+
+## Works on the deck after a mini-boss until there is nothing more to do (workshop_step).
+static func workshop(run: Run, h: Home, school := "") -> void:
+	for guard in 30:
+		var step := workshop_step(run, h, school)
+		if step.has("cut"):
+			h.cut(int(step.cut))
+		elif step.has("upgrade"):
+			h.upgrade(int(step.upgrade))
+		else:
+			return
+
+
+## The next place on the map: the first of the two (the map is shuffled already).
+static func best_place(run: Run) -> int:
+	return int(run.next_places()[0])
 
 
 ## The relic that does the most good now: one of `ids`.
@@ -207,7 +244,7 @@ static func score(run: Run, h: Home, school := "") -> float:
 	var fed := minf(1.0, (float(h.income_biomass()) + 1.0) / maxf(1.0, float(food)))
 	s += strength * (0.4 + 0.6 * fed) * 1.5
 	s += 10.0 * h.income_gold() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
-	s += 0.5 * h.biomass + 1.0 * h.genes + 3.0 * h.alien + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max()
+	s += 0.5 * h.biomass + 1.0 * h.genes + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max()
 	if school == "gold":
 		s += 3.0 * h.interest_max() + 2.0 * h.gold
 	if school != "":
