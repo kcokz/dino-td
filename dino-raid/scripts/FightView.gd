@@ -58,7 +58,7 @@ func show_loot() -> void:
 	for u in fight.alive("ours"):
 		var n: Node3D = _nodes.get(u.id)
 		if u.get("scavenge", false) and n:
-			tags.float_text(n.position + Vector3.UP * (float(u.size) + 0.8), "+%d 金" % Content.SCAVENGE,
+			tags.float_text(n.position + Vector3.UP * (float(u.size) + 0.8), Lang.t("+%d 金") % Content.SCAVENGE,
 				Color(1.0, 0.82, 0.3), 22)
 
 
@@ -107,7 +107,7 @@ func show_events(ev: Array) -> void:
 					var c := Color(1.0, 0.4, 0.32) if b.side == "ours" else Color(1.0, 0.96, 0.86)
 					tags.float_text(nb.position + Vector3.UP * (float(b.size) + 0.5), "-%d" % e.dmg, c, 18)
 					if e.get("charge", false):
-						tags.float_text(na.position + Vector3.UP * (float(a.size) + 1.2), "冲锋！", Color(1.0, 0.85, 0.4), 20)
+						tags.float_text(na.position + Vector3.UP * (float(a.size) + 1.2), Lang.t("冲锋！"), Color(1.0, 0.85, 0.4), 20)
 				if struck.has(e.from):
 					continue
 				struck[e.from] = true
@@ -155,7 +155,7 @@ func _burst(at: Vector3, radius: float) -> void:
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.45)
 	tw.chain().tween_callback(ball.queue_free)
 	if tags:
-		tags.float_text(at + Vector3.UP * 1.5, "炸！", Color(1.0, 0.6, 0.2), 22)
+		tags.float_text(at + Vector3.UP * 1.5, Lang.t("炸！"), Color(1.0, 0.6, 0.2), 22)
 
 
 ## A long-reach blow (or a heal): a streak from one to the other, gone at once.

@@ -467,6 +467,11 @@ static func knob(lit: bool) -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
+## How words wrap at a box's edge: anywhere for Chinese, between words for English.
+static func wrap() -> TextServer.AutowrapMode:
+	return TextServer.AUTOWRAP_WORD_SMART if Lang.english() else TextServer.AUTOWRAP_ARBITRARY
+
+
 ## A label in the house style: a face and size, a colour (parchment by default), an outline to stand out over the land.
 static func label(text: String, size_px := 16, weight := 600, col := PARCHMENT) -> Label:
 	var l := Label.new()

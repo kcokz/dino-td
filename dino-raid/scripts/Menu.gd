@@ -188,6 +188,11 @@ func settings() -> void:
 		Settings.fast = on
 		if game != null:
 			game.speed = 3.0 if on else 1.0))
+	_setting_row(grid, "语言", _choices(Lang.LOCALES, Settings.language, func(code: String) -> void:
+		Settings.language = code
+		Settings.apply()
+		if game != null:
+			game.relanguage()))
 	box.add_child(_gap(6))
 	var back := Button.new()
 	back.text = "返回"
@@ -323,6 +328,27 @@ func _setting_row(grid: GridContainer, name: String, control: Control) -> void:
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	grid.add_child(l)
 	grid.add_child(control)
+
+
+## A button for each of `options` ({value: words, shown as they are}), the one for `now` lit; the one pressed said to
+## `changed`.
+func _choices(options: Dictionary, now: String, changed: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var group := ButtonGroup.new()
+	for value in options:
+		var b := Button.new()
+		b.text = options[value]
+		b.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+		b.toggle_mode = true
+		b.button_group = group
+		b.theme_type_variation = "Toggle"
+		b.custom_minimum_size = Vector2(110, 40)
+		b.button_pressed = value == now
+		var v: String = value
+		b.pressed.connect(func() -> void: changed.call(v))
+		row.add_child(b)
+	return row
 
 
 ## Two buttons, 开 and 关, one lit: `on` the first time, then whichever was pressed (said to `changed`).
@@ -502,7 +528,7 @@ func codex() -> void:
 	var line := _ornament(300)
 	dbox.add_child(line)
 	var text := Style.label("", 16, 500, Style.PARCHMENT)
-	text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	text.autowrap_mode = Style.wrap()
 	text.custom_minimum_size = Vector2(336, 0)
 	text.add_theme_constant_override("line_spacing", 6)
 	dbox.add_child(text)
@@ -630,16 +656,16 @@ func _units_page() -> Array:
 		var gift := ""
 		for b in Content.BUILDINGS:
 			if Content.BUILDINGS[b].get("nest", "") == kind:
-				from = "%s孵的" % Content.BUILDINGS[b].name
+				from = Lang.t("%s孵的") % Lang.t(Content.BUILDINGS[b].name)
 				var t: Dictionary = Content.TRAITS[Content.BUILDINGS[b].trait]
-				gift = "\n巢的本事「%s」：%s%s" % [t.name, t.does, ("（%s）" % t.when) if t.when != "" else ""]
+				gift = Lang.t("\n巢的本事「%s」：%s%s") % [Lang.t(t.name), Lang.t(t.does), (Lang.t("（%s）") % Lang.t(t.when)) if t.when != "" else ""]
 		for r in Content.RECIPES:
 			if r.makes == kind:
-				from = "进化来的：%s + %s" % [Content.AFFIXES[r.affixes[0]].name, Content.AFFIXES[r.affixes[1]].name]
+				from = Lang.t("进化来的：%s + %s") % [Lang.t(Content.AFFIXES[r.affixes[0]].name), Lang.t(Content.AFFIXES[r.affixes[1]].name)]
 		if kind == "titan":
-			from = "奇观巨兽笼放出来的"
-		out.append({"key": "u:" + kind, "name": u.name, "kind": from, "text": "%s\n%s\n%s%s" % [u.role, _stats(u),
-			"不吃生物质" if int(u.food) == 0 else "每只吃 %d 生物质" % u.food, gift]})
+			from = Lang.t("奇观巨兽笼放出来的")
+		out.append({"key": "u:" + kind, "name": u.name, "kind": from, "text": "%s\n%s\n%s%s" % [Lang.t(u.role), _stats(u),
+			Lang.t("不吃生物质") if int(u.food) == 0 else Lang.t("每只吃 %d 生物质") % u.food, gift]})
 	return out
 
 
@@ -647,22 +673,22 @@ func _buildings_page() -> Array:
 	var out: Array = []
 	for kind in Content.BUILDINGS:
 		var b: Dictionary = Content.BUILDINGS[kind]
-		var where := "巢 · 阵地" if b.has("nest") else "后方"
+		var where := Lang.t("巢 · 阵地") if b.has("nest") else Lang.t("后方")
 		if b.has("school"):
-			where += " · " + Content.SCHOOLS[b.school].name
+			where += " · " + Lang.t(Content.SCHOOLS[b.school].name)
 		if b.has("region"):
-			where += " · 只在" + Content.LEVELS[int(b.region)].name
+			where += Lang.t(" · 只在") + Lang.t(Content.LEVELS[int(b.region)].name)
 		var text := ""
 		if b.has("nest"):
 			var t: Dictionary = Content.TRAITS[b.trait]
-			text = "孵%s。\n本事「%s」：%s%s\n升级：多孵 1 只，或者变精英" % [Content.UNITS[b.nest].name, t.name, t.does,
-				("（%s）" % t.when) if t.when != "" else ""]
+			text = Lang.t("孵%s。\n本事「%s」：%s%s\n升级：多孵 1 只，或者变精英") % [Lang.t(Content.UNITS[b.nest].name), Lang.t(t.name), Lang.t(t.does),
+				(Lang.t("（%s）") % Lang.t(t.when)) if t.when != "" else ""]
 		else:
 			var lines: Array = []
 			for lv in range(1, Content.LEVEL_MAX + 1):
-				lines.append("%d 级：%s" % [lv, Content.building_text(kind, lv)])
+				lines.append(Lang.t("%d 级：%s") % [lv, Content.building_text(kind, lv)])
 			text = "\n".join(lines)
-		out.append({"key": "b:%s:1::" % kind, "name": b.name, "kind": "%s · %d 金" % [where, int(b.cost)], "text": text})
+		out.append({"key": "b:%s:1::" % kind, "name": b.name, "kind": Lang.t("%s · %d 金") % [where, int(b.cost)], "text": text})
 	return out
 
 
@@ -674,10 +700,10 @@ func _affixes_page() -> Array:
 		for r in Content.RECIPES:
 			if a in r.affixes:
 				var other: String = r.affixes[1] if r.affixes[0] == a else r.affixes[0]
-				with.append("和%s凑在一个巢上：进化成%s" % [Content.AFFIXES[other].name, Content.UNITS[r.makes].name])
+				with.append(Lang.t("和%s凑在一个巢上：进化成%s") % [Lang.t(Content.AFFIXES[other].name), Lang.t(Content.UNITS[r.makes].name)])
 		var offer: Dictionary = Content.OFFERS.get("a_" + a, {})
-		var cost := "%d 金 · %d 研究点数" % [int(offer.get("price", 0)), int(offer.get("genes", 0))]
-		out.append({"key": "a:" + a, "name": af.name, "kind": "基因词条 · " + cost, "text": "贴上的巢，孵的兵%s。%s" % [af.says,
+		var cost := Lang.t("%d 金 · %d 研究点数") % [int(offer.get("price", 0)), int(offer.get("genes", 0))]
+		out.append({"key": "a:" + a, "name": af.name, "kind": Lang.t("基因词条 · ") + cost, "text": Lang.t("贴上的巢，孵的兵%s。%s") % [Lang.t(af.says),
 			("\n" + "\n".join(with)) if not with.is_empty() else ""]})
 	return out
 
@@ -688,7 +714,8 @@ func _relics_page() -> Array:
 		var r: Dictionary = Content.RELICS[id]
 		var boss: bool = r.get("boss", false)
 		out.append({"medal": {"color": r.color, "boss": boss, "word": r.name.left(1)}, "name": r.name,
-			"kind": "首领遗物：很强，但有代价" if boss else "化石遗物", "text": r.says.replace("；", "\n")})
+			"kind": Lang.t("首领遗物：很强，但有代价") if boss else Lang.t("化石遗物"),
+			"text": Lang.t(r.says).replace("；", "\n").replace("; ", "\n")})
 	return out
 
 
@@ -699,20 +726,20 @@ func _monsters_page() -> Array:
 		var where: Array = []
 		for lv in Content.LEVELS:
 			if lv.get("boss", "") == kind:
-				where.append("%s的首领" % lv.name)
+				where.append(Lang.t("%s的首领") % Lang.t(lv.name))
 			if kind in lv.get("minis", []):
-				where.append("%s的小首领" % lv.name)
+				where.append(Lang.t("%s的小首领") % Lang.t(lv.name))
 			for mix in lv.mix:
 				if mix[0] == kind:
 					where.append(lv.name)
 		for other in Content.ENEMIES:
 			if Content.ENEMIES[other].get("split", "") == kind:
-				where.append("%s倒下时裂出来" % Content.ENEMIES[other].name)
+				where.append(Lang.t("%s倒下时裂出来") % Lang.t(Content.ENEMIES[other].name))
 		var more: Array = [_stats(m)]
 		if m.has("split"):
-			more.append("倒下时裂成 %d 只%s" % [int(m.splits), Content.ENEMIES[m.split].name])
-		more.append("打输时，每只还站着的让家园掉 %d 血" % int(m.harm))
-		out.append({"key": "e:" + kind, "name": m.name, "kind": "、".join(where) if not where.is_empty() else "异星虫群",
+			more.append(Lang.t("倒下时裂成 %d 只%s") % [int(m.splits), Lang.t(Content.ENEMIES[m.split].name)])
+		more.append(Lang.t("打输时，每只还站着的让家园掉 %d 血") % int(m.harm))
+		out.append({"key": "e:" + kind, "name": m.name, "kind": Lang.t("、").join(where) if not where.is_empty() else Lang.t("异星虫群"),
 			"text": "\n".join(more)})
 	return out
 
@@ -721,26 +748,26 @@ func _wonders_page() -> Array:
 	var out: Array = []
 	for id in Content.WONDERS:
 		var w: Dictionary = Content.WONDERS[id]
-		out.append({"key": "w:" + id, "name": w.name, "kind": "奇观 · %d 金 · 一局只能造一座" % int(w.price), "text": w.says})
+		out.append({"key": "w:" + id, "name": w.name, "kind": Lang.t("奇观 · %d 金 · 一局只能造一座") % int(w.price), "text": w.says})
 	return out
 
 
 ## A fighter's numbers, said plainly.
 func _stats(s: Dictionary) -> String:
-	var bits: Array = ["血 %d" % int(s.hp), "攻击 %d" % int(s.atk), "%s 秒打一下" % _n(float(s.every)),
-		"够得着 %s 米" % _n(float(s.range))]
+	var bits: Array = [Lang.t("血 %d") % int(s.hp), Lang.t("攻击 %d") % int(s.atk), Lang.t("%s 秒打一下") % _n(float(s.every)),
+		Lang.t("够得着 %s 米") % _n(float(s.range))]
 	if int(s.get("armor", 0)) > 0:
-		bits.append("护甲 %d" % int(s.armor))
+		bits.append(Lang.t("护甲 %d") % int(s.armor))
 	if float(s.get("splash", 0.0)) > 0.0:
-		bits.append("一打一片（%s 米）" % _n(float(s.splash)))
+		bits.append(Lang.t("一打一片（%s 米）") % _n(float(s.splash)))
 	if int(s.get("heal", 0)) > 0:
-		bits.append("每下回血 %d" % int(s.heal))
+		bits.append(Lang.t("每下回血 %d") % int(s.heal))
 	if int(s.get("pierce", 0)) > 0:
-		bits.append("每下多 %d，不管护甲" % int(s.pierce))
+		bits.append(Lang.t("每下多 %d，不管护甲") % int(s.pierce))
 	if int(s.get("burst", 0)) > 0:
-		bits.append("倒下时炸一圈（%d）" % int(s.burst))
+		bits.append(Lang.t("倒下时炸一圈（%d）") % int(s.burst))
 	if s.get("dive", false):
-		bits.append("会飞，打后排")
+		bits.append(Lang.t("会飞，打后排"))
 	return " · ".join(bits)
 
 

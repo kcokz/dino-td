@@ -266,19 +266,19 @@ func _changed(ev: Array) -> void:
 			"built", "replaced", "raised", "affixed":
 				home_view.refresh_buildings()
 				if e.t == "replaced":
-					tags.float_text(HomeView.plot_pos(e.at) + Vector3.UP * 3.0, "退 %d 金" % e.back, Color(1.0, 0.8, 0.4))
+					tags.float_text(HomeView.plot_pos(e.at) + Vector3.UP * 3.0, Lang.t("退 %d 金") % e.back, Color(1.0, 0.8, 0.4))
 				if e.t == "raised" and e.get("choice", "") == "elite":
-					tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, "精英！", HomeView.ELITE_GOLD, 28)
+					tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, Lang.t("精英！"), HomeView.ELITE_GOLD, 28)
 				if e.t == "affixed":
 					var b: Dictionary = home.buildings[e.at]
 					var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
 					if e.affix in sp.used:
-						tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, "进化！%s" % Content.UNITS[sp.kind].name,
+						tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, Lang.t("进化！%s") % Lang.t(Content.UNITS[sp.kind].name),
 							(Content.UNITS[sp.kind].color as Color).lightened(0.3), 28)
 			"stored":
-				tags.float_text(Vector3(-8, 3.0, HomeView.YARD_Z - 2.0), "存起来了", Color(0.6, 1.0, 0.55), 22)
+				tags.float_text(Vector3(-8, 3.0, HomeView.YARD_Z - 2.0), Lang.t("存起来了"), Color(0.6, 1.0, 0.55), 22)
 			"wonder":
-				tags.float_text(HomeView.WONDER_AT + Vector3(0.0, 3.0, 3.0), "%s 造好了！" % Content.WONDERS[e.id].name,
+				tags.float_text(HomeView.WONDER_AT + Vector3(0.0, 3.0, 3.0), Lang.t("%s 造好了！") % Lang.t(Content.WONDERS[e.id].name),
 					Content.WONDERS[e.id].color, 30)
 	home_view.sync_army(home.army())
 	refresh()
@@ -397,7 +397,7 @@ func _toggle_pack(data: Dictionary) -> bool:
 	if list.has(key):
 		list.erase(key)
 	elif pack_plots.size() + pack_kept.size() >= home.stash_size():
-		tags.float_text(Vector3(0, 4.0, 0), "装满了：最多 %d 样，先放下一样" % home.stash_size(), Color(1.0, 0.6, 0.4), 22)
+		tags.float_text(Vector3(0, 4.0, 0), Lang.t("装满了：最多 %d 样，先放下一样") % home.stash_size(), Color(1.0, 0.6, 0.4), 22)
 		return false
 	else:
 		list[key] = true
@@ -464,6 +464,12 @@ func _depart() -> void:
 ## The forecast worked out again where the homeland changed; the plots the good taken up can go on lit (orange where
 ## it would pull a building down), the one it points at brighter, and the forecast and what changes with it there;
 ## while packing, the buildings the ark takes lit gold; the HUD brought up to date.
+## The language changed (Settings): the screen's words made again.
+func relanguage() -> void:
+	hud.relanguage()
+	refresh()
+
+
 func refresh() -> void:
 	var tints := {}
 	preview = {}
@@ -552,40 +558,40 @@ func _changes(a: Home, b: Home) -> Dictionary:
 		if Content.is_nest(kind):
 			var d := int(made_b.get(p, 0)) - int(made_a.get(p, 0))
 			if d != 0:
-				lines.append("%+d 只" % d)
+				lines.append(Lang.t("%+d 只") % d)
 			var gift := b.trait_of(p)
 			if gift in ["swarm", "guard", "cover", "alone"]:
 				var was: bool = a.buildings.has(p) and a.buildings[p].kind == kind and a.trait_on(p)
 				if b.trait_on(p) != was:
-					lines.append("%s本事「%s」" % ["+" if b.trait_on(p) else "−", Content.TRAITS[gift].name])
+					lines.append(Lang.t("%s本事「%s」") % ["+" if b.trait_on(p) else "−", Lang.t(Content.TRAITS[gift].name)])
 			if a.buildings.has(p) and a.buildings[p].kind == kind:
 				var sa := a.spec_of(p)
 				var sb := b.spec_of(p)
 				if sb.kind != sa.kind:
-					lines.append("进化：" + Content.UNITS[sb.kind].name)
+					lines.append(Lang.t("进化：") + Lang.t(Content.UNITS[sb.kind].name))
 				if int(sb.elite) > int(sa.elite):
-					lines.append("精英")
+					lines.append(Lang.t("精英"))
 				var hp := roundi((float(sb.hp_mult) / float(sa.hp_mult) - 1.0) * 100.0)
 				if hp != 0:
-					lines.append("血 %+d%%" % hp)
+					lines.append(Lang.t("血 %+d%%") % hp)
 				if int(sb.atk_bonus) != int(sa.atk_bonus):
-					lines.append("攻击 %+d" % (int(sb.atk_bonus) - int(sa.atk_bonus)))
+					lines.append(Lang.t("攻击 %+d") % (int(sb.atk_bonus) - int(sa.atk_bonus)))
 				if int(sb.haste) != int(sa.haste):
-					lines.append("快 %+d%%" % (int(sb.haste) - int(sa.haste)))
+					lines.append(Lang.t("快 %+d%%") % (int(sb.haste) - int(sa.haste)))
 				for af in sb.affixes:
 					if not af in sa.affixes:
-						lines.append("+" + Content.AFFIXES[af].name)
+						lines.append("+" + Lang.t(Content.AFFIXES[af].name))
 				if b.slots(p) != a.slots(p):
-					lines.append("词条位 %+d" % (b.slots(p) - a.slots(p)))
+					lines.append(Lang.t("词条位 %+d") % (b.slots(p) - a.slots(p)))
 		if not lines.is_empty():
 			out[p] = lines
 	for p in b.buildings:
 		if a.buildings.has(p) and a.buildings[p].kind == b.buildings[p].kind and a.buildings[p].level == b.buildings[p].level:
 			continue
 		var lines: Array = out.get(p, [])
-		for pair in [["金币", b.income_gold() - a.income_gold(), "/轮"], ["生物质", b.income_biomass() - a.income_biomass(), "/轮"],
-				["研究点数", b.income_genes() - a.income_genes(), "/轮"], ["利息上限", b.interest_max() - a.interest_max(), ""],
-				["家园血", b.hp_max() - a.hp_max(), ""]]:
+		for pair in [[Lang.t("金币"), b.income_gold() - a.income_gold(), Lang.t("/轮")], [Lang.t("生物质"), b.income_biomass() - a.income_biomass(), Lang.t("/轮")],
+				[Lang.t("研究点数"), b.income_genes() - a.income_genes(), Lang.t("/轮")], [Lang.t("利息上限"), b.interest_max() - a.interest_max(), ""],
+				[Lang.t("家园血"), b.hp_max() - a.hp_max(), ""]]:
 			if int(pair[1]) != 0:
 				lines.append("%s %+d%s" % [pair[0], pair[1], pair[2]])
 		if not lines.is_empty():
@@ -605,7 +611,7 @@ func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
 	if not pending.is_empty():
-		return "选一样：多孵 1 只，还是变精英 · 右键算了"
+		return Lang.t("选一样：多孵 1 只，还是变精英 · 右键算了")
 	var good := _taken()
 	if good.is_empty():
 		return ""
@@ -613,43 +619,43 @@ func hint() -> String:
 	var p: Vector2i = hover.plot
 	if held_k >= 0:
 		if home.stash_targets(held_k).is_empty():
-			return "现在没有地方放得下"
+			return Lang.t("现在没有地方放得下")
 		match c.target:
 			"tile":
 				if p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds:
-					return "拆掉%s，放下%s（退 %d 金）· 右键放回去" % [Content.BUILDINGS[home.buildings[p].kind].name, c.name,
+					return Lang.t("拆掉%s，放下%s（退 %d 金）· 右键放回去") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name), c.name,
 						int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
-				return "点一块地放下%s（已经是你的，不要钱）· 右键放回去" % c.name
+				return Lang.t("点一块地放下%s（已经是你的，不要钱）· 右键放回去") % c.name
 			"nest":
-				return "点一个还有空词条位的巢贴上%s（不要钱）· 右键放回去" % c.name
+				return Lang.t("点一个还有空词条位的巢贴上%s（不要钱）· 右键放回去") % c.name
 		return ""
 	if home.genes < home.genes_cost(c):
-		return "研究点数不够（要 %d）" % home.genes_cost(c)
+		return Lang.t("研究点数不够（要 %d）") % home.genes_cost(c)
 	if c.type != "raise" and home.gold < home.price(held):
-		return "金币不够（要 %d）" % home.price(held)
+		return Lang.t("金币不够（要 %d）") % home.price(held)
 	if home.targets(held).is_empty():
-		return "现在没有地方用得上" if c.type != "raise" else "金币不够升任何一座（升几级的，就要几加 %d）" % Content.RAISE
+		return Lang.t("现在没有地方用得上") if c.type != "raise" else Lang.t("金币不够升任何一座（升几级的，就要几加 %d）") % Content.RAISE
 	var say := ""
 	match c.target:
 		"tile":
 			if p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds:
 				var was: String = home.buildings[p].kind
-				say = "拆掉%s换成%s（%d 金，退 %d 金）" % [Content.BUILDINGS[was].name, c.name, home.price(held),
+				say = Lang.t("拆掉%s换成%s（%d 金，退 %d 金）") % [Lang.t(Content.BUILDINGS[was].name), c.name, home.price(held),
 					int(Content.BUILDINGS[was].cost) / 2]
 			else:
-				say = "点一块空地造%s（%d 金）；点一座别的建筑，就拆了换成它" % [c.name, home.price(held)]
+				say = Lang.t("点一块空地造%s（%d 金）；点一座别的建筑，就拆了换成它") % [c.name, home.price(held)]
 		"building":
 			if p != HomeView.NOWHERE and home.buildings.has(p) and int(home.buildings[p].level) < Content.LEVEL_MAX:
 				var b: Dictionary = home.buildings[p]
-				say = "%s升到 %d 级（%d 金）%s" % [Content.BUILDINGS[b.kind].name, int(b.level) + 1, home.price(held, p),
-					"，点了再选多孵还是精英" if Content.is_nest(b.kind) else ""]
+				say = Lang.t("%s升到 %d 级（%d 金）%s") % [Lang.t(Content.BUILDINGS[b.kind].name), int(b.level) + 1, home.price(held, p),
+					Lang.t("，点了再选多孵还是精英") if Content.is_nest(b.kind) else ""]
 			else:
-				say = "点一座建筑升一级（最多 %d 级；几级升上去，就要几加 %d 金）" % [Content.LEVEL_MAX, Content.RAISE]
+				say = Lang.t("点一座建筑升一级（最多 %d 级；几级升上去，就要几加 %d 金）") % [Content.LEVEL_MAX, Content.RAISE]
 		"nest":
-			say = "点一个还有空词条位的巢（%d 金）" % home.price(held)
+			say = Lang.t("点一个还有空词条位的巢（%d 金）") % home.price(held)
 	if home.can_store(held):
-		say += "；或点左下的空格存起来（%d 金）" % home.store_price(held)
-	return say + " · 右键放下"
+		say += Lang.t("；或点左下的空格存起来（%d 金）") % home.store_price(held)
+	return say + Lang.t(" · 右键放下")
 
 
 ## What the cursor points at, for the panel: "" for nothing.
@@ -667,99 +673,99 @@ func describe() -> String:
 	var ground: String = home.terrain.get(p, "")
 	if not home.buildings.has(p):
 		if ground != "":
-			return "%s\n%s" % [Content.TERRAIN[ground].name, Content.TERRAIN[ground].says]
+			return "%s\n%s" % [Lang.t(Content.TERRAIN[ground].name), Lang.t(Content.TERRAIN[ground].says)]
 		if Home.front(p):
-			return "阵地（%s）：只能造巢。巢造在这里，它孵的兵打仗时就站在这里" % ("前排" if p.y == 0 else "后排")
-		return "后方：巢以外的建筑造在这里"
+			return Lang.t("阵地（%s）：只能造巢。巢造在这里，它孵的兵打仗时就站在这里") % (Lang.t("前排") if p.y == 0 else Lang.t("后排"))
+		return Lang.t("后方：巢以外的建筑造在这里")
 	var text := _building_text(p)
 	if ground != "":
-		text += "\n建在%s上：%s" % [Content.TERRAIN[ground].name, Content.TERRAIN[ground].says]
+		text += Lang.t("\n建在%s上：%s") % [Lang.t(Content.TERRAIN[ground].name), Lang.t(Content.TERRAIN[ground].says)]
 	if phase == Phase.PACK:
-		text = ("点一下：留下，不带走\n" if pack_plots.has(p) else "点一下：带走\n") + text
+		text = (Lang.t("点一下：留下，不带走\n") if pack_plots.has(p) else Lang.t("点一下：带走\n")) + text
 	return text
 
 
 func _unit_text(u: Dictionary) -> String:
 	var s := Content.unit_stats(u)
 	var nest: Dictionary = home.buildings.get(u.nest, {})
-	var from := "巨兽笼放出来的" if nest.is_empty() else "%s %d 级孵的" % [Content.BUILDINGS[nest.kind].name, int(nest.level)]
-	var lines: Array = ["%s%s（%s，站%s）" % ["精英" if int(u.get("elite", 0)) > 0 else "", s.name, from,
-		"前排" if int(u.get("row", 0)) == 0 else "后排"],
-		"血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米" % [s.hp, s.atk, _num(s.every), _num(s.range)]]
+	var from := Lang.t("巨兽笼放出来的") if nest.is_empty() else Lang.t("%s %d 级孵的") % [Lang.t(Content.BUILDINGS[nest.kind].name), int(nest.level)]
+	var lines: Array = [Lang.t("%s%s（%s，站%s）") % [Lang.t("精英") if int(u.get("elite", 0)) > 0 else "", Lang.t(s.name), from,
+		Lang.t("前排") if int(u.get("row", 0)) == 0 else Lang.t("后排")],
+		Lang.t("血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米") % [s.hp, s.atk, _num(s.every), _num(s.range)]]
 	var more: Array = []
 	if int(s.armor) > 0:
-		more.append("护甲 %d" % s.armor)
+		more.append(Lang.t("护甲 %d") % s.armor)
 	if int(s.pierce) > 0:
-		more.append("每下多 %d，不管护甲" % s.pierce)
+		more.append(Lang.t("每下多 %d，不管护甲") % s.pierce)
 	if float(s.splash) > 0.0:
-		more.append("一打一片（%s 米）" % _num(s.splash))
+		more.append(Lang.t("一打一片（%s 米）") % _num(s.splash))
 	if int(s.heal) > 0:
-		more.append("每下回血 %d" % s.heal)
+		more.append(Lang.t("每下回血 %d") % s.heal)
 	if int(s.burst) > 0:
-		more.append("倒下时炸一圈（%d）" % s.burst)
+		more.append(Lang.t("倒下时炸一圈（%d）") % s.burst)
 	if s.dive:
-		more.append("会飞，打后排")
+		more.append(Lang.t("会飞，打后排"))
 	if s.charge:
-		more.append("开战第一下双倍")
+		more.append(Lang.t("开战第一下双倍"))
 	if u.get("guard", false):
-		more.append("护住身后同一列")
+		more.append(Lang.t("护住身后同一列"))
 	var ahead := Vector2i(int(u.lane), 0)
 	if int(u.get("row", 0)) == 1 and home.trait_of(ahead) == "guard" and home.trait_on(ahead):
-		more.append("身前有绿兵护着")
+		more.append(Lang.t("身前有绿兵护着"))
 	if u.get("care", false):
-		more.append("只给同一列回血")
+		more.append(Lang.t("只给同一列回血"))
 	if u.get("scavenge", false):
-		more.append("打完还站着，带回 %d 金" % Content.SCAVENGE)
+		more.append(Lang.t("打完还站着，带回 %d 金") % Content.SCAVENGE)
 	if not more.is_empty():
 		lines.append(" · ".join(more))
-	lines.append(Content.UNITS[u.kind].role)
-	lines.append("吃 %d 生物质，只活这一仗" % int(Content.UNITS[u.kind].food) if not u.free else "只活这一仗（恐龙蛋化石多孵的，不吃生物质）")
+	lines.append(Lang.t(Content.UNITS[u.kind].role))
+	lines.append(Lang.t("吃 %d 生物质，只活这一仗") % int(Content.UNITS[u.kind].food) if not u.free else Lang.t("只活这一仗（恐龙蛋化石多孵的，不吃生物质）"))
 	return "\n".join(lines)
 
 
 func _building_text(p: Vector2i) -> String:
 	var b: Dictionary = home.buildings[p]
 	var info: Dictionary = Content.BUILDINGS[b.kind]
-	var lines: Array = ["%s · %d 级" % [info.name, b.level]]
+	var lines: Array = [Lang.t("%s · %d 级") % [Lang.t(info.name), b.level]]
 	if not Content.is_nest(b.kind):
 		lines.append(Content.building_text(b.kind, int(b.level)))
 	else:
 		var s := home.spec_of(p)
 		if s.evolved:
 			var sp := Content.species(info.nest, b.affixes)
-			lines.append("进化了：孵的是%s（%s）" % [Content.UNITS[s.kind].name, "+".join(sp.used.map(func(a: String) -> String:
-				return Content.AFFIXES[a].name))])
+			lines.append(Lang.t("进化了：孵的是%s（%s）") % [Lang.t(Content.UNITS[s.kind].name), "+".join(sp.used.map(func(a: String) -> String:
+				return Lang.t(Content.AFFIXES[a].name)))])
 		else:
 			var unit: Dictionary = Content.UNITS[info.nest]
-			lines.append("孵%s：%s（每只吃 %d 生物质）" % [unit.name, unit.role, unit.food])
+			lines.append(Lang.t("孵%s：%s（每只吃 %d 生物质）") % [Lang.t(unit.name), Lang.t(unit.role), unit.food])
 		var t: Dictionary = Content.TRAITS[info.trait]
 		var need := home.trait_need(p)
-		var state := "" if t.when == "" else ("生效" if need == "" else "没生效（%s）" % need)
-		lines.append("本事「%s」%s：%s" % [t.name, state, t.does])
+		var state := "" if t.when == "" else (Lang.t("生效") if need == "" else Lang.t("没生效（%s）") % need)
+		lines.append(Lang.t("本事「%s」%s：%s") % [Lang.t(t.name), state, Lang.t(t.does)])
 		var made := int(_made(home).get(p, 0))
 		var want := home.count(p)
-		lines.append("这一轮孵 %d 只%s，打仗时站%s" % [made, ("（生物质不够，少 %d）" % (want - made)) if made < want else "",
-			"前排" if p.y == 0 else "后排"])
+		lines.append(Lang.t("这一轮孵 %d 只%s，打仗时站%s") % [made, (Lang.t("（生物质不够，少 %d）") % (want - made)) if made < want else "",
+			Lang.t("前排") if p.y == 0 else Lang.t("后排")])
 		var e := int(s.elite)
 		if e > 0:
-			lines.append("精英%s：血 ×%s、攻击 ×%s、大一号" % ["×%d" % e if e > 1 else "", Content._num(pow(Content.ELITE_HP, e)),
+			lines.append(Lang.t("精英%s：血 ×%s、攻击 ×%s、大一号") % ["×%d" % e if e > 1 else "", Content._num(pow(Content.ELITE_HP, e)),
 				Content._num(pow(Content.ELITE_ATK, e))])
 		var given: Array = []
 		if e > 0 and home._sum("elite") > 0:
-			given.append("冠军殿：精英再 +%d%%" % home._sum("elite"))
+			given.append(Lang.t("冠军殿：精英再 +%d%%") % home._sum("elite"))
 		if p.y == 0 and home._sum("front") > 0:
-			given.append("前锋营：前排血 +%d%%" % home._sum("front"))
+			given.append(Lang.t("前锋营：前排血 +%d%%") % home._sum("front"))
 		if maxf(float(Content.UNITS[s.kind].range), float(s.range)) >= 3.0 and home._sum("ranged") > 0:
-			given.append("瞭望塔：每下多 %d，不管护甲" % home._sum("ranged"))
+			given.append(Lang.t("瞭望塔：每下多 %d，不管护甲") % home._sum("ranged"))
 		if not given.is_empty():
-			lines.append("，".join(given))
-		var names: Array = b.affixes.map(func(a: String) -> String: return Content.AFFIXES[a].name)
-		lines.append("词条：%s（还能贴 %d 个）" % ["、".join(names) if not names.is_empty() else "没有", home.slots(p) - b.affixes.size()])
+			lines.append(Lang.t("，").join(given))
+		var names: Array = b.affixes.map(func(a: String) -> String: return Lang.t(Content.AFFIXES[a].name))
+		lines.append(Lang.t("词条：%s（还能贴 %d 个）") % [Lang.t("、").join(names) if not names.is_empty() else Lang.t("没有"), home.slots(p) - b.affixes.size()])
 		if not s.evolved:
 			for pair in Content.could_become(b.affixes):
-				lines.append("再贴上%s，会进化成%s" % [Content.AFFIXES[pair[0]].name, Content.UNITS[pair[1]].name])
+				lines.append(Lang.t("再贴上%s，会进化成%s") % [Lang.t(Content.AFFIXES[pair[0]].name), Lang.t(Content.UNITS[pair[1]].name)])
 	if int(b.level) < Content.LEVEL_MAX:
-		lines.append("升到 %d 级：%s" % [int(b.level) + 1, "多孵 1 只，或者变精英" if Content.is_nest(b.kind)
+		lines.append(Lang.t("升到 %d 级：%s") % [int(b.level) + 1, Lang.t("多孵 1 只，或者变精英") if Content.is_nest(b.kind)
 			else Content.level_text(b.kind, int(b.level) + 1)])
 	return "\n".join(lines)
 
@@ -778,16 +784,16 @@ func bonuses() -> String:
 			var each := int(home.level_of(p).per)
 			more = each - n % each if more == 0 else mini(more, each - n % each)
 	if more > 0:
-		parts.append("兽群：出战 %d 只，全体攻击 +%d；再多 %d 只 +%d" % [n, home.horde_bonus(n), more,
+		parts.append(Lang.t("兽群：出战 %d 只，全体攻击 +%d；再多 %d 只 +%d") % [n, home.horde_bonus(n), more,
 			home.horde_bonus(n + more) - home.horde_bonus(n)])
 	if home._sum("elite") > 0:
-		parts.append("冠军殿：精英 +%d%%" % home._sum("elite"))
+		parts.append(Lang.t("冠军殿：精英 +%d%%") % home._sum("elite"))
 	if home._sum("ranged") > 0:
-		parts.append("瞭望塔：远程每下多 %d，不管护甲" % home._sum("ranged"))
+		parts.append(Lang.t("瞭望塔：远程每下多 %d，不管护甲") % home._sum("ranged"))
 	if home._sum("front") > 0:
-		parts.append("前锋营：前排血 +%d%%" % home._sum("front"))
+		parts.append(Lang.t("前锋营：前排血 +%d%%") % home._sum("front"))
 	if home.wonder == "banner":
-		parts.append("万兽战旗：全体攻击 +2、血 +25%")
+		parts.append(Lang.t("万兽战旗：全体攻击 +2、血 +25%"))
 	return "\n".join(parts)
 
 
@@ -814,35 +820,35 @@ func _start_round() -> void:
 	pending = {}
 	aimed = ""
 	refresh()
-	var sub := "进账，商店换货，孵兵"
+	var sub := Lang.t("进账，商店换货，孵兵")
 	if run.round == 1 and run.level > 0:
-		sub = "新地方。带来的东西在左下，点它放下；新放的池子下一轮才产生物质"
+		sub = Lang.t("新地方。带来的东西在左下，点它放下；新放的池子下一轮才产生物质")
 	elif run.round >= run.rounds():
-		sub = "首领来了"
+		sub = Lang.t("首领来了")
 	elif run.round in Content.MINI_ROUNDS:
-		sub = "小首领来了。打完可以整理牌库"
+		sub = Lang.t("小首领来了。打完可以整理牌库")
 	elif run.big():
-		sub = "大波要来了"
-	hud.banner("%s · 第 %d 轮" % [Content.LEVELS[run.place].name, run.round], sub)
+		sub = Lang.t("大波要来了")
+	hud.banner(Lang.t("%s · 第 %d 轮") % [Lang.t(Content.LEVELS[run.place].name), run.round], sub)
 	await get_tree().create_timer(0.6).timeout
 	var ev := run.start_round()
 	var said_at := Vector3(0, 2.5, HomeView.YARD_Z - 2.0)
 	for e in ev:
 		match e.t:
 			"income":
-				var said: Array = ["金币 +%d" % e.gold]
+				var said: Array = [Lang.t("金币 +%d") % e.gold]
 				if int(e.biomass) > 0:
-					said.append("生物质 +%d" % e.biomass)
+					said.append(Lang.t("生物质 +%d") % e.biomass)
 				if int(e.genes) > 0:
-					said.append("研究点数 +%d" % e.genes)
+					said.append(Lang.t("研究点数 +%d") % e.genes)
 				tags.float_text(said_at, "  ".join(said), Color(0.6, 1.0, 0.8), 22)
 			"rotted":
 				if int(e.amount) > 0:
-					tags.float_text(said_at + Vector3(0, 1.5, 0), "潮湿：生物质烂了 %d" % e.amount, Color(0.75, 0.85, 0.5), 20)
+					tags.float_text(said_at + Vector3(0, 1.5, 0), Lang.t("潮湿：生物质烂了 %d") % e.amount, Color(0.75, 0.85, 0.5), 20)
 			"ash":
-				tags.float_text(Vector3(0, 4.0, 0), "火山灰：家园 −%d" % e.amount, Color(1.0, 0.55, 0.4), 24)
+				tags.float_text(Vector3(0, 4.0, 0), Lang.t("火山灰：家园 −%d") % e.amount, Color(1.0, 0.55, 0.4), 24)
 			"mended":
-				tags.float_text(Vector3(0, 3.0, 0), "颈盾：家园 +%d" % e.amount, Color(0.5, 1.0, 0.5), 24)
+				tags.float_text(Vector3(0, 3.0, 0), Lang.t("颈盾：家园 +%d") % e.amount, Color(0.5, 1.0, 0.5), 24)
 	_version += 1
 	home_view.sync_army(home.army())
 	await get_tree().create_timer(0.5).timeout
@@ -866,7 +872,7 @@ func _fight() -> void:
 	await _fly(FIGHT_AT, FIGHT_DIST, 1.0)
 	at_home = false
 	hud.refresh()
-	hud.banner("开战", "我方 %d 只，敌方 %d 只" % [fight.alive("ours").size(), fight.alive("theirs").size()])
+	hud.banner(Lang.t("开战"), Lang.t("我方 %d 只，敌方 %d 只") % [fight.alive("ours").size(), fight.alive("theirs").size()])
 	await get_tree().create_timer(0.7).timeout
 	_acc = 0.0
 	_fighting = true
@@ -879,19 +885,19 @@ func _after_fight() -> void:
 	var out := run.finish(fight)
 	var also: Array = []
 	if int(out.scavenged) > 0:
-		also.append("拾荒 +%d 金" % out.scavenged)
+		also.append(Lang.t("拾荒 +%d 金") % out.scavenged)
 	if int(out.interest) > 0:
-		also.append("利息 +%d" % out.interest)
+		also.append(Lang.t("利息 +%d") % out.interest)
 	match result:
 		"won":
-			var won: Array = ["金币 +%d" % out.gold]
+			var won: Array = [Lang.t("金币 +%d") % out.gold]
 			if int(out.research) > 0:
-				won.append("研究点数 +%d" % out.research)
-			hud.banner("赢了！", "得到：" + "，".join(won + also))
+				won.append(Lang.t("研究点数 +%d") % out.research)
+			hud.banner(Lang.t("赢了！"), Lang.t("得到：") + Lang.t("，").join(won + also))
 		"time":
-			hud.banner("拖到时间，算输", "，".join(["家园 −%d" % out.took] + also))
+			hud.banner(Lang.t("拖到时间，算输"), Lang.t("，").join([Lang.t("家园 −%d") % out.took] + also))
 		_:
-			hud.banner("输了", "，".join(["家园 −%d" % out.took] + also))
+			hud.banner(Lang.t("输了"), Lang.t("，").join([Lang.t("家园 −%d") % out.took] + also))
 	await get_tree().create_timer(1.6).timeout
 	await _fly(HOME_AT, HOME_DIST, 1.0)
 	at_home = true
@@ -901,20 +907,20 @@ func _after_fight() -> void:
 	hud.refresh()
 	if int(out.took) > 0:
 		_shake = 1.0
-		tags.float_text(Vector3(0, 4.0, 0), "家园 −%d" % out.took, Color(1.0, 0.42, 0.34), 34)
+		tags.float_text(Vector3(0, 4.0, 0), Lang.t("家园 −%d") % out.took, Color(1.0, 0.42, 0.34), 34)
 		await get_tree().create_timer(1.0).timeout
 	if run.over:
 		phase = Phase.DONE
 		refresh()
-		var again: Variant = await hud.choose("家园被毁了……", "撑到了%s第 %d 轮" % [Content.LEVELS[run.place].name, run.round],
+		var again: Variant = await hud.choose("家园被毁了……", Lang.t("撑到了%s第 %d 轮") % [Lang.t(Content.LEVELS[run.place].name), run.round],
 			[], ["再来一局", "回主菜单"])
 		_new_run(again == "回主菜单")
 		return
 	if out.level_won and run.last_level():
 		phase = Phase.DONE
 		refresh()
-		var names: Array = run.path.map(func(p: int) -> String: return Content.LEVELS[p].name)
-		var again: Variant = await hud.choose("全部守住了！", "%s都撑过来了，家园还剩 %d 血" % ["、".join(names), home.hp], [],
+		var names: Array = run.path.map(func(p: int) -> String: return Lang.t(Content.LEVELS[p].name))
+		var again: Variant = await hud.choose("全部守住了！", Lang.t("%s都撑过来了，家园还剩 %d 血") % [Lang.t("、").join(names), home.hp], [],
 			["再玩一遍", "回主菜单"])
 		_new_run(again == "回主菜单")
 		return
@@ -932,7 +938,7 @@ func _reward() -> void:
 	if cards.is_empty():
 		return
 	var v: Variant = await hud.choose("挑一张，加进牌库", "以后商店会从牌库里拿出来卖，照原价买", cards,
-		["不要牌，拿 %d 金" % Content.REWARD_GOLD])
+		[Lang.t("不要牌，拿 %d 金") % Content.REWARD_GOLD])
 	if v is Dictionary:
 		run.take_reward(v.id)
 	else:

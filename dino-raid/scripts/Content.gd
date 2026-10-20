@@ -454,22 +454,23 @@ static func offer(oi: Dictionary) -> Dictionary:
 	o.target = {"build": "tile", "raise": "building", "affix": "nest"}.get(o.type, "none")
 	match o.type:
 		"build":
-			o.name = BUILDINGS[o.builds].name
+			o.name = Lang.t(BUILDINGS[o.builds].name)
 			o.price = int(BUILDINGS[o.builds].cost)
 			if oi.has("packed"):
 				var pk: Dictionary = oi.packed
 				o.level = int(pk.level)
 				o.path = pk.get("path", []).duplicate()
 				o.affixes = pk.affixes.duplicate()
-				var bits: Array = ["%d 级" % pk.level]
+				var bits: Array = [Lang.t("%d 级") % pk.level]
 				if o.path.count("elite") > 0:
-					bits.append("精英" + ("×%d" % o.path.count("elite") if o.path.count("elite") > 1 else ""))
-				bits.append_array(pk.affixes.map(func(a: String) -> String: return AFFIXES[a].name))
-				o.name += "（%s）" % "，".join(bits)
+					bits.append(Lang.t("精英") + ("×%d" % o.path.count("elite") if o.path.count("elite") > 1 else ""))
+				bits.append_array(pk.affixes.map(func(a: String) -> String: return Lang.t(AFFIXES[a].name)))
+				o.name += Lang.t("（%s）") % Lang.t("，").join(bits)
 		"raise":
 			o.price = RAISE + 1
+			o.name = Lang.t(str(o.name))
 		"affix":
-			o.name = AFFIXES[o.affix].name
+			o.name = Lang.t(AFFIXES[o.affix].name)
 	if o.plus:
 		o.name += "+"
 		match o.type:
@@ -527,38 +528,39 @@ static func could_become(affixes: Array) -> Array:
 static func building_text(kind: String, lv: int) -> String:
 	var b: Dictionary = BUILDINGS[kind]
 	if b.has("nest"):
-		return "孵%s。本事「%s」：%s" % [UNITS[b.nest].name, TRAITS[b.trait].name, TRAITS[b.trait].says]
+		return Lang.t("孵%s。本事「%s」：%s") % [Lang.t(UNITS[b.nest].name), Lang.t(TRAITS[b.trait].name), Lang.t(TRAITS[b.trait].says)]
 	var l := level(kind, lv)
 	match kind:
 		"pool", "spore_pool":
-			return "每轮产 %d 生物质" % l.biomass
+			return Lang.t("每轮产 %d 生物质") % l.biomass
 		"horde_totem":
-			return "出战的兵每满 %d 只，所有兵攻击 +1" % l.per
+			return Lang.t("出战的兵每满 %d 只，所有兵攻击 +1") % l.per
 		"sampler":
-			return "每轮产 %d 研究点数。旁边每有一个培养池，再多 %d" % [l.genes, SAMPLER_POOL]
+			return Lang.t("每轮产 %d 研究点数。旁边每有一个培养池，再多 %d") % [l.genes, SAMPLER_POOL]
 		"stabilizer":
-			return "同一列的巢能多贴 %d 个词条" % l.slots
+			return Lang.t("同一列的巢能多贴 %d 个词条") % l.slots
 		"gene_bank":
-			return "贴词条少花 %d 研究点数" % l.gene_off
+			return Lang.t("贴词条少花 %d 研究点数") % l.gene_off
 		"mine", "forge":
-			return "每轮多 %d 金币" % l.gold
+			return Lang.t("每轮多 %d 金币") % l.gold
 		"vault":
-			return "利息最多多 %d（每存 %d 金，利息 +1）" % [l.interest, INTEREST_STEP]
+			return Lang.t("利息最多多 %d（每存 %d 金，利息 +1）") % [l.interest, INTEREST_STEP]
 		"market":
-			return ("每轮头两次刷新不要钱" if int(l.rerolls) > 1 else "每轮第一次刷新不要钱") + ("，商店多摆 1 样" if l.has("shelf") else "")
+			return Lang.t("每轮头两次刷新不要钱" if int(l.rerolls) > 1 else "每轮第一次刷新不要钱") \
+				+ (Lang.t("，商店多摆 1 样") if l.has("shelf") else "")
 		"champion_hall":
-			return "所有精英兵的血和攻击再 +%d%%" % l.elite
+			return Lang.t("所有精英兵的血和攻击再 +%d%%") % l.elite
 		"watchtower":
-			return "所有远程兵（够得着 3 米以上）每下多 %d 点伤害，不管护甲" % l.ranged
+			return Lang.t("所有远程兵（够得着 3 米以上）每下多 %d 点伤害，不管护甲") % l.ranged
 		"vanguard":
-			return "前排的兵血 +%d%%" % l.front
+			return Lang.t("前排的兵血 +%d%%") % l.front
 	return ""
 
 
 ## What a building does at a level, in short -- what changes when it is raised: for a nest, the choice.
 static func level_text(kind: String, lv: int) -> String:
 	if BUILDINGS[kind].has("nest"):
-		return "二选一：多孵 1 只，或者变精英（血 ×%s、攻击 ×%s、大一号）" % [_num(ELITE_HP), _num(ELITE_ATK)]
+		return Lang.t("二选一：多孵 1 只，或者变精英（血 ×%s、攻击 ×%s、大一号）") % [_num(ELITE_HP), _num(ELITE_ATK)]
 	return building_text(kind, lv)
 
 
@@ -573,24 +575,28 @@ static func offer_text(o: Dictionary) -> String:
 		"build":
 			var lv := int(o.get("level", 1))
 			var b: Dictionary = BUILDINGS[o.builds]
-			var text := ("孵%s。%s。" % [UNITS[b.nest].name, TRAITS[b.trait].says]) if b.has("nest") else building_text(o.builds, lv) + "。"
+			var stop := Lang.t("。")
+			var text := (Lang.t("孵%s。%s。") % [Lang.t(UNITS[b.nest].name), Lang.t(TRAITS[b.trait].says)]) if b.has("nest") \
+				else building_text(o.builds, lv) + stop
 			if o.plus:
-				text = ("放下就是 2 级（多孵或精英，二选一）。" if b.has("nest") else "放下就是 2 级。") + text
+				text = Lang.t("放下就是 2 级（多孵或精英，二选一）。" if b.has("nest") else "放下就是 2 级。") + text
 			if o.has("level"):
 				var sp := species(b.get("nest", ""), o.affixes)
-				text = "%d 级。" % lv + ("孵%s。" % UNITS[sp.kind].name if b.has("nest") else building_text(o.builds, lv) + "。")
+				text = Lang.t("%d 级。") % lv + (Lang.t("孵%s。") % Lang.t(UNITS[sp.kind].name) if b.has("nest") \
+					else building_text(o.builds, lv) + stop)
 				if not o.affixes.is_empty():
-					text += "贴着" + "、".join(o.affixes.map(func(a: String) -> String: return AFFIXES[a].name)) + "。"
+					text += Lang.t("贴着") + Lang.t("、").join(o.affixes.map(func(a: String) -> String: return Lang.t(AFFIXES[a].name))) + stop
 			return text
 		"raise":
-			return ("便宜 %d 金。" % PLUS_RAISE if o.plus else "") + "一座建筑升一级（最多 %d 级）。巢升级二选一：多孵 1 只，或变精英。" % LEVEL_MAX
+			return (Lang.t("便宜 %d 金。") % PLUS_RAISE if o.plus else "") \
+				+ Lang.t("一座建筑升一级（最多 %d 级）。巢升级二选一：多孵 1 只，或变精英。") % LEVEL_MAX
 		"affix":
 			var a: Dictionary = AFFIXES[o.affix]
 			var also := ""
 			for r in RECIPES:
 				if o.affix in r.affixes:
-					also = "能凑配方。"
-			return ("不花研究点数。" if o.plus else "") + "孵的兵%s。%s" % [a.says, also]
+					also = Lang.t("能凑配方。")
+			return (Lang.t("不花研究点数。") if o.plus else "") + Lang.t("孵的兵%s。%s") % [Lang.t(a.says), also]
 	return ""
 
 

@@ -108,7 +108,7 @@ func _draw() -> void:
 		Style.fill(rid, full, 12.0, Color(0.03, 0.04, 0.045, 0.5), Color(0.02, 0.025, 0.03, 0.5))
 		Style.ring(rid, full.grow(-1.0), 12.0, Color(Style.GOLD_DIM, 0.55), 1.2)
 		Style.ring(rid, full.grow(-6.0), 9.0, Color(Style.GOLD_DIM, 0.25), 1.0)
-		_text(Vector2(SIZE.x * 0.5, 108), sold_label, 20, Style.PARCHMENT_DIM, Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER, 4)
+		_text(Vector2(SIZE.x * 0.5, 108), Lang.t(sold_label), 20, Style.PARCHMENT_DIM, Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER, 4)
 		return
 	if c.is_empty():
 		return
@@ -140,7 +140,7 @@ func _draw() -> void:
 	Style.ring(rid, art, 6.0, Color(metal, 0.8), 1.2)
 	if c.type == "build" and Content.is_nest(c.builds):
 		# Its gift's name on a little tab across the window's top edge.
-		var gift: String = Content.TRAITS[Content.BUILDINGS[c.builds].trait].name
+		var gift: String = Lang.t(Content.TRAITS[Content.BUILDINGS[c.builds].trait].name)
 		var gw := Fonts.serif(800).get_string_size(gift, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 		var tab := Rect2(art.get_center().x - gw * 0.5 - 10, art.position.y - 9, gw + 20, 18)
 		Style.fill(rid, tab, 5.0, Color(0.09, 0.11, 0.115), Color(0.03, 0.04, 0.045))
@@ -167,9 +167,9 @@ func _draw() -> void:
 	if marked:
 		Style.fill(rid, full, 12.0, Color(0.45, 0.05, 0.03, 0.42), Color(0.3, 0.02, 0.02, 0.5))
 		Style.ring(rid, full.grow(-1.0), 12.0, Style.CORAL, 3.0)
-		_text(Vector2(SIZE.x * 0.5, 98), "去掉", 28, Color(1.0, 0.88, 0.82), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER, 7)
+		_text(Vector2(SIZE.x * 0.5, 98), Lang.t("去掉"), 28, Color(1.0, 0.88, 0.82), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER, 7)
 	if token() != "":
-		_gem(Vector2(21, 21), token(), Style.JADE, Fonts.serif(900), 16, true)
+		_gem(Vector2(21, 21), Lang.t(token()), Style.JADE, Fonts.serif(900), 16 if not Lang.english() else 12, true)
 	else:
 		_price(Vector2(21, 21))
 	_extras(full)
@@ -219,13 +219,13 @@ func _gem(at: Vector2, text: String, col: Color, f: Font, size_px: int, lit: boo
 
 ## What kind of good it is, said at its foot: a building's part of the homeland and its school, how rare it is.
 func footer() -> String:
-	var bits: Array = [Content.TYPES[c.type]]
+	var bits: Array = [Lang.t(Content.TYPES[c.type])]
 	if c.type == "build":
 		var b: Dictionary = Content.BUILDINGS[c.builds]
-		bits = ["巢 · 阵地"] if b.has("nest") else ["后方"]
+		bits = [Lang.t("巢 · 阵地" if b.has("nest") else "后方")]
 		if b.has("school"):
-			bits.append(Content.SCHOOLS[b.school].name)
-	bits.append(RARITY[int(c.rarity)])
+			bits.append(Lang.t(Content.SCHOOLS[b.school].name))
+	bits.append(Lang.t(RARITY[int(c.rarity)]))
 	return " · ".join(bits)
 
 
@@ -272,7 +272,7 @@ func _picture(r: Rect2) -> void:
 					draw_circle(mid + Vector2(-34, 24 - k * 13), 5.5, Content.AFFIXES[c.affixes[k]].color)
 					draw_arc(mid + Vector2(-34, 24 - k * 13), 5.5, 0.0, TAU, 16, Color(0, 0, 0, 0.6), 1.0, true)
 				# Its gift's name, flown over it.
-				_text(Vector2(mid.x, r.position.y + 15), "「%s」" % Content.TRAITS[b.trait].name, 13, Color(1.0, 0.93, 0.72),
+				_text(Vector2(mid.x, r.position.y + 15), Lang.t("「%s」") % Lang.t(Content.TRAITS[b.trait].name), 13, Color(1.0, 0.93, 0.72),
 					Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER, 4)
 			else:
 				match c.builds:

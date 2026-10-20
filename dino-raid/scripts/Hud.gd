@@ -165,7 +165,7 @@ func setup(p_game: Game) -> void:
 	_corner.add_child(_army)
 	_bonus = _label("", 15, Fonts.serif(800), Style.AMBER)
 	_bonus.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_bonus.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_bonus.autowrap_mode = Style.wrap()
 	_bonus.custom_minimum_size = Vector2(340, 0)
 	_corner.add_child(_bonus)
 
@@ -181,7 +181,7 @@ func setup(p_game: Game) -> void:
 	_wonder_box.add_child(wonder_row)
 	for id in game.home.wonders:
 		var w: Dictionary = Content.WONDERS[id]
-		var b := _button("%s · %d 金" % [w.name, w.price], Vector2(160, 38), 16)
+		var b := _button(Lang.t("%s · %d 金") % [Lang.t(w.name), w.price], Vector2(160, 38), 16)
 		b.add_theme_color_override("font_color", (w.color as Color).lerp(Style.PARCHMENT, 0.55))
 		b.mouse_entered.connect(func() -> void:
 			_wonder_hover = id
@@ -239,7 +239,7 @@ func setup(p_game: Game) -> void:
 	_root.add_child(_info)
 	_info_text = _label("", 15, Fonts.serif(500), Style.PARCHMENT)
 	_info_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_info_text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_info_text.autowrap_mode = Style.wrap()
 	_info_text.custom_minimum_size = Vector2(300, 0)
 	_info.add_child(_info_text)
 
@@ -296,6 +296,9 @@ func setup(p_game: Game) -> void:
 	_hint.add_theme_stylebox_override("normal", Style.Streak.new(8.0))
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hint.autowrap_mode = Style.wrap()
+	_hint.custom_minimum_size = Vector2(780, 0)
 	_hint.position = Vector2(-60, -236)
 	_root.add_child(_hint)
 
@@ -331,7 +334,7 @@ func setup(p_game: Game) -> void:
 	choice_row.add_theme_constant_override("separation", 14)
 	_choice.add_child(choice_row)
 	choice_row.add_child(_label("这个巢升级：", 18, Fonts.serif(800), CREAM))
-	for pair in [["count", "多孵 1 只"], ["elite", "变精英（血 ×%s、攻击 ×%s、大一号）" % [Content._num(Content.ELITE_HP),
+	for pair in [["count", "多孵 1 只"], ["elite", Lang.t("变精英（血 ×%s、攻击 ×%s、大一号）") % [Content._num(Content.ELITE_HP),
 			Content._num(Content.ELITE_ATK)]]]:
 		var b := _button(pair[1], Vector2(150, 46), 17)
 		var choice: String = pair[0]
@@ -405,11 +408,11 @@ func _process(_delta: float) -> void:
 	if not _overlay.visible:
 		if _relic_hover != "":
 			var r: Dictionary = Content.RELICS[_relic_hover]
-			tip = "%s（%s）\n%s" % [r.name, "首领遗物" if r.get("boss", false) else "化石遗物", r.says]
+			tip = Lang.t("%s（%s）\n%s") % [Lang.t(r.name), Lang.t("首领遗物" if r.get("boss", false) else "化石遗物"), Lang.t(r.says)]
 		elif _wonder_hover != "":
 			var w: Dictionary = Content.WONDERS[_wonder_hover]
-			tip = "%s（奇观）\n%s\n%d 金。一局只能造一座，搬家也带着%s" % [w.name, w.says, w.price,
-				"" if game.home.gold >= int(w.price) else "（还差 %d 金）" % (int(w.price) - game.home.gold)]
+			tip = Lang.t("%s（奇观）\n%s\n%d 金。一局只能造一座，搬家也带着%s") % [Lang.t(w.name), Lang.t(w.says), w.price,
+				"" if game.home.gold >= int(w.price) else Lang.t("（还差 %d 金）") % (int(w.price) - game.home.gold)]
 	_info.visible = tip != ""
 	if tip != "" and _info_text.text != tip:
 		_info_text.text = tip
@@ -422,12 +425,31 @@ func _process(_delta: float) -> void:
 		_info.reset_size()
 	if _battle.visible and game.fight != null:
 		var f: Fight = game.fight
-		_battle_text.text = "我方 %d  对  敌方 %d   ·   还剩 %d 秒" % [f.alive("ours").size(), f.alive("theirs").size(),
+		_battle_text.text = Lang.t("我方 %d  对  敌方 %d   ·   还剩 %d 秒") % [f.alive("ours").size(), f.alive("theirs").size(),
 			ceili(maxf(0.0, Fight.LIMIT - f.time))]
 
 
 ## The shelf, as cards: a place still showing what it showed keeps its card (so nothing jumps); a place bought from
 ## shows an empty frame; a restocked one, the new offer. Brought back up if it was put away.
+## The language changed: what was put together in words made again -- the cards, the wonders, the waves -- the rest
+## follows by itself (words shown as they are change with the language).
+func relanguage() -> void:
+	for v in _cards + _kept:
+		if not is_instance_valid(v):
+			continue
+		var card := v as CardView
+		if not card.sold and not card.ci.is_empty():
+			card.setup(card.ci, card.kept)
+		card.queue_redraw()
+	for id in _wonder_buttons:
+		var w: Dictionary = Content.WONDERS[id]
+		(_wonder_buttons[id] as Button).text = Lang.t("%s · %d 金") % [Lang.t(w.name), w.price]
+	for l in [_hint, _bonus, _info_text]:
+		(l as Label).autowrap_mode = Style.wrap()
+	_waves_for = ""
+	refresh()
+
+
 func deal(shelf: Array) -> void:
 	_stowed = false
 	var out: Array = []
@@ -526,22 +548,22 @@ func refresh() -> void:
 	_go.visible = not away
 	_go.text = "出发！" if packing else "出战！"
 	var price := home.reroll_price()
-	_reroll.text = "刷新（%s）" % ("免费" if price == 0 else "%d 金" % price)
+	_reroll.text = Lang.t("刷新（%s）") % (Lang.t("免费") if price == 0 else Lang.t("%d 金") % price)
 	_reroll.disabled = not planning or home.gold < price
 	_reroll.visible = not away and not packing
 	_menu.visible = not fighting
 	_gold.visible = not fighting
 	_gold.queue_redraw()
 	_hp.queue_redraw()
-	_title.text = "%s · 第 %d / %d 轮" % [Content.LEVELS[run.place].name, run.round, run.rounds()]
+	_title.text = Lang.t("%s · 第 %d / %d 轮") % [Lang.t(Content.LEVELS[run.place].name), run.round, run.rounds()]
 	var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
-	_rule.text = "%s：%s" % [rule.name, rule.says]
-	_biomass.text = "%d（+%d）" % [home.biomass, home.income_biomass()]
-	_research.text = "%d（+%d）" % [home.genes, home.income_genes()]
+	_rule.text = Lang.t("%s：%s") % [Lang.t(rule.name), Lang.t(rule.says)]
+	_biomass.text = Lang.t("%d（+%d）") % [home.biomass, home.income_biomass()]
+	_research.text = Lang.t("%d（+%d）") % [home.genes, home.income_genes()]
 	var army := home.army()
 	_army.clear()
 	if not fighting:
-		_army.append_text("这一轮出战 %d 只，吃 " % army.size())
+		_army.append_text(Lang.t("这一轮出战 %d 只，吃 ") % army.size())
 		_army.add_image(Icons.of(Icons.BIOMASS, 18), 18, 18)
 		_army.append_text(" %d" % home.army_food())
 	_army.visible = not away and not packing
@@ -549,17 +571,19 @@ func refresh() -> void:
 	_bonus.visible = _bonus.text != "" and not away and not packing
 	_deck_button.visible = not away and not packing
 	_deck_button.disabled = not planning
-	_deck_button.text = "牌库（%d 张）" % home.deck.size()
+	_deck_button.text = Lang.t("牌库（%d 张）") % home.deck.size()
 	_choice.visible = planning and not game.pending.is_empty()
 	_wonder_box.visible = not away and not packing and not home.wonders.is_empty()
-	_wonder_title.text = ("奇观：%s（已造）" % Content.WONDERS[home.wonder].name) if home.wonder != "" else "奇观（一局只能造一座）"
+	_wonder_title.text = (Lang.t("奇观：%s（已造）") % Lang.t(Content.WONDERS[home.wonder].name)) if home.wonder != "" \
+		else "奇观（一局只能造一座）"
 	for id in _wonder_buttons:
 		var b: Button = _wonder_buttons[id]
 		b.visible = home.wonder == ""
 		b.disabled = not planning or not home.can_build_wonder(id)
 	_battle.visible = fighting and not game.at_home
 	var taking: int = game.pack_plots.size() + game.pack_kept.size()
-	_kept_label.text = ("带走 %d / %d" % [taking, home.stash_size()]) if packing else ("存货 %d / %d" % [home.stash.size(), home.stash_size()])
+	_kept_label.text = (Lang.t("带走 %d / %d") % [taking, home.stash_size()]) if packing \
+		else (Lang.t("存货 %d / %d") % [home.stash.size(), home.stash_size()])
 	_kept_label.visible = not away
 	for v in _kept:
 		v.visible = not away
@@ -568,11 +592,11 @@ func refresh() -> void:
 	_waves.visible = not away and not packing
 	_pack.visible = packing
 	if packing:
-		_pack_text.text = "搬家去%s！点建筑和存货，选要带走的（最多 %d 样，已选 %d）\n金币、生物质、研究点数、牌库全带上，没选的留在这里。选好了点「出发！」" % [
-			Content.LEVELS[maxi(0, game.going)].name, home.stash_size(), taking]
+		_pack_text.text = Lang.t("搬家去%s！点建筑和存货，选要带走的（最多 %d 样，已选 %d）\n金币、生物质、研究点数、牌库全带上，没选的留在这里。选好了点「出发！」") % [
+			Lang.t(Content.LEVELS[maxi(0, game.going)].name), home.stash_size(), taking]
 		var food: Array = game.pack_food()
-		_pack_food.text = "到了那边（算上方舟自带的红巢和培养池）：兵每轮要吃 %d 生物质，池子每轮产 %d%s" % [food[0], food[1],
-			"——不够吃" if int(food[0]) > int(food[1]) else ""]
+		_pack_food.text = Lang.t("到了那边（算上方舟自带的红巢和培养池）：兵每轮要吃 %d 生物质，池子每轮产 %d%s") % [food[0], food[1],
+			Lang.t("——不够吃") if int(food[0]) > int(food[1]) else ""]
 		_pack_food.add_theme_color_override("font_color", LOSE if int(food[0]) > int(food[1]) else WIN)
 	_hint.text = game.hint()
 	_hint.visible = _hint.text != ""
@@ -623,17 +647,17 @@ func _refresh_waves() -> void:
 	_waves_for = key
 	for ch in _waves.get_children():
 		ch.queue_free()
-	_waves.add_child(_wave_chip("这一仗" + _big(run, 0), run.wave(), true))
+	_waves.add_child(_wave_chip(Lang.t("这一仗") + _big(run, 0), run.wave(), true))
 	if run.round < run.rounds():
-		_waves.add_child(_wave_chip("下一仗" + _big(run, 1), run.wave(1), false))
+		_waves.add_child(_wave_chip(Lang.t("下一仗") + _big(run, 1), run.wave(1), false))
 
 
 func _big(run: Run, ahead: int) -> String:
 	if run.round + ahead >= run.rounds():
-		return "（首领）"
+		return Lang.t("（首领）")
 	if run.round + ahead in Content.MINI_ROUNDS:
-		return "（小首领）"
-	return "（大波）" if run.big(ahead) else ""
+		return Lang.t("（小首领）")
+	return Lang.t("（大波）") if run.big(ahead) else ""
 
 
 func _wave_chip(name: String, wave: Array, now: bool) -> Control:
@@ -670,7 +694,7 @@ func _wave_chip(name: String, wave: Array, now: bool) -> Control:
 		var mc: Color = Content.ENEMIES[k].color
 		mark.draw.connect(func() -> void: Style.diamond(mark.get_canvas_item(), Vector2(8, 8), 7.5, mc, Color(0, 0, 0, 0.35)))
 		row.add_child(mark)
-		row.add_child(_label("%s×%d" % [Content.ENEMIES[k].name, counts[k]], 15, Fonts.serif(700), Style.PARCHMENT))
+		row.add_child(_label("%s×%d" % [Lang.t(Content.ENEMIES[k].name), counts[k]], 15, Fonts.serif(700), Style.PARCHMENT))
 	return chip
 
 
@@ -687,18 +711,18 @@ func _refresh_forecast() -> void:
 	var loot := int(shown.get("loot", 0))
 	var was := int(f.get("loot", 0))
 	_fc_loot.visible = loot > 0 or was > 0
-	_fc_loot.text = "拾荒兽带回 %d 金%s" % [loot, ("（现在 %d）" % was) if not p.is_empty() and was != loot else ""]
-	_fc_more.text = ("现在是：" + _verdict(f)) if not p.is_empty() else "（每一仗都照规矩打，结果算得出来）"
+	_fc_loot.text = Lang.t("拾荒兽带回 %d 金%s") % [loot, (Lang.t("（现在 %d）") % was) if not p.is_empty() and was != loot else ""]
+	_fc_more.text = (Lang.t("现在是：") + _verdict(f)) if not p.is_empty() else "（每一仗都照规矩打，结果算得出来）"
 
 
 func _verdict(f: Dictionary) -> String:
 	if f.result == "won":
-		return "赢，站着的还有 %d / %d 个" % [f.left, f.total]
+		return Lang.t("赢，站着的还有 %d / %d 个") % [f.left, f.total]
 	if int(f.total) == 0:
-		return "没有兵出战，家园 −%d" % f.harm
+		return Lang.t("没有兵出战，家园 −%d") % f.harm
 	if f.result == "time":
-		return "拖到时间算输，家园 −%d" % f.harm
-	return "输，家园 −%d" % f.harm
+		return Lang.t("拖到时间算输，家园 −%d") % f.harm
+	return Lang.t("输，家园 −%d") % f.harm
 
 
 ## Where the stash's k-th card stands (its bottom middle).
@@ -802,7 +826,7 @@ func choose_ark() -> String:
 	box.add_child(row)
 	for id in Content.ARKS:
 		var a: Dictionary = Content.ARKS[id]
-		var b := _tile(a.name, a.says.replace("。", "\n"), Style.AMBER, Vector2(272, 190))
+		var b := _tile(a.name, Lang.t(a.says).replace("。", "\n"), Style.AMBER, Vector2(272, 190))
 		b.pressed.connect(func() -> void: chosen.emit(id))
 		row.add_child(b)
 	var v: Variant = await chosen
@@ -816,12 +840,12 @@ func arrive(level: int) -> void:
 	var rule: Dictionary = Content.RULES[lv.rule]
 	var ground: Array = []
 	for t in lv.terrain:
-		ground.append("%s：%s" % [Content.TERRAIN[t].name, Content.TERRAIN[t].says])
-	var box := _open("到了%s！" % lv.name, "撑过 %d 轮：第 %s 轮来小首领，最后一轮是首领" % [Content.ROUNDS,
-		"、".join(Content.MINI_ROUNDS.map(func(r: int) -> String: return str(r)))])
-	var lines: Array = ["%s：%s" % [rule.name, rule.says]] + ground
+		ground.append(Lang.t("%s：%s") % [Lang.t(Content.TERRAIN[t].name), Lang.t(Content.TERRAIN[t].says)])
+	var box := _open(Lang.t("到了%s！") % Lang.t(lv.name), Lang.t("撑过 %d 轮：第 %s 轮来小首领，最后一轮是首领") % [Content.ROUNDS,
+		Lang.t("、").join(Content.MINI_ROUNDS.map(func(r: int) -> String: return str(r)))])
+	var lines: Array = [Lang.t("%s：%s") % [Lang.t(rule.name), Lang.t(rule.says)]] + ground
 	if level == 0:
-		lines.push_front("阵地：家园最上面两排只能造巢。兵打仗时就站在巢的位置，最上面一排在最前")
+		lines.push_front(Lang.t("阵地：家园最上面两排只能造巢。兵打仗时就站在巢的位置，最上面一排在最前"))
 	var sheet := PanelContainer.new()
 	sheet.add_theme_stylebox_override("panel", Style.panel(26.0))
 	sheet.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -840,7 +864,7 @@ func arrive(level: int) -> void:
 
 ## The relics offered when a place is held, one to choose -- a boss's ringed red, with what it costs: its id.
 func choose_relic(ids: Array) -> String:
-	var box := _open("%s守住了！" % Content.LEVELS[game.run.place].name, "选一件遗物，整局都有用。红边的是首领留下的：很强，但有代价")
+	var box := _open(Lang.t("%s守住了！") % Lang.t(Content.LEVELS[game.run.place].name), "选一件遗物，整局都有用。红边的是首领留下的：很强，但有代价")
 	offered = ids.duplicate()
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -849,7 +873,7 @@ func choose_relic(ids: Array) -> String:
 	for id in ids:
 		var r: Dictionary = Content.RELICS[id]
 		var boss: bool = r.get("boss", false)
-		var b := _tile(r.name, ("首领遗物\n" if boss else "化石遗物\n") + r.says.replace("；", "\n"), r.color, Vector2(250, 190),
+		var b := _tile(r.name, Lang.t("首领遗物\n" if boss else "化石遗物\n") + Lang.t(r.says).replace("；", "\n").replace("; ", "\n"), r.color, Vector2(250, 190),
 			BOSS if boss else Style.GOLD)
 		b.pressed.connect(func() -> void: chosen.emit(id))
 		row.add_child(b)
@@ -875,7 +899,7 @@ func show_deck() -> void:
 		return
 	var home: Home = game.home
 	var cards: Array = home.deck.map(func(card: Dictionary) -> Dictionary: return Home._good(card))
-	await choose("牌库（%d 张）" % cards.size(), "商店每轮从这里抽货。每轮打完可以加一张；小首领打完可以删、可以强化", cards, ["关闭"], false)
+	await choose(Lang.t("牌库（%d 张）") % cards.size(), "商店每轮从这里抽货。每轮打完可以加一张；小首领打完可以删、可以强化", cards, ["关闭"], false)
 
 
 ## After a place's mini-boss: the deck laid out to work on -- a card picked, then cut (gold, dearer each time) or
@@ -883,7 +907,7 @@ func show_deck() -> void:
 ## "完成".
 func workshop() -> Variant:
 	var home: Home = game.home
-	var box := _open("整理牌库", "删一张 %d 金（每删一张，下一张贵 %d 金）；强化一张 %d 研究点数。现在有 %d 金、%d 研究点数" % [
+	var box := _open("整理牌库", Lang.t("删一张 %d 金（每删一张，下一张贵 %d 金）；强化一张 %d 研究点数。现在有 %d 金、%d 研究点数") % [
 		home.cut_price(), Content.CUT_STEP, Content.UPGRADE, home.gold, home.genes])
 	offered = home.deck.duplicate(true)
 	var grid := GridContainer.new()
@@ -898,8 +922,8 @@ func workshop() -> Variant:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 20)
-	var cut := _button("删掉这张（%d 金）" % home.cut_price(), Vector2(210, 50), 18)
-	var up := _button("强化这张（%d 研究点数）" % Content.UPGRADE, Vector2(250, 50), 18)
+	var cut := _button(Lang.t("删掉这张（%d 金）") % home.cut_price(), Vector2(210, 50), 18)
+	var up := _button(Lang.t("强化这张（%d 研究点数）") % Content.UPGRADE, Vector2(250, 50), 18)
 	var done := _button("完成", Vector2(170, 50), 19, true)
 	var update := func() -> void:
 		var p: int = picked.k
@@ -967,7 +991,7 @@ func choose_place(run: Run) -> int:
 	dbox.add_child(heading)
 	var text := _label("", 16, Fonts.serif(500), Style.PARCHMENT)
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	text.autowrap_mode = Style.wrap()
 	text.custom_minimum_size = Vector2(300, 0)
 	text.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	text.add_theme_constant_override("line_spacing", 6)
@@ -989,7 +1013,7 @@ func choose_place(run: Run) -> int:
 	map.draw.connect(func() -> void:
 		var f := Fonts.serif(800)
 		for t in run.map.size():
-			var head := "第 %d 关" % (t + 1)
+			var head := Lang.t("第 %d 关") % (t + 1)
 			var w := f.get_string_size(head, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
 			map.draw_string(f, Vector2(cols[t] - w * 0.5, 26), head, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Style.PARCHMENT_DIM)
 			for k in t + 1:
@@ -1023,12 +1047,12 @@ func choose_place(run: Run) -> int:
 				map.draw_circle(c, 36.0, Style.INK_DEEP)
 				map.draw_arc(c, 34.0, 0.0, TAU, 56, Style.GOLD if been or next else Style.GOLD_DIM, 2.0, true)
 				map.draw_circle(c, 29.0, col)
-				var word: String = Content.LEVELS[p].name
+				var word: String = Lang.t(Content.LEVELS[p].name)
 				var ww := f.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
 				map.draw_string_outline(f, c + Vector2(-ww * 0.5, 8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, 5, Color(0, 0, 0, 0.8))
 				map.draw_string(f, c + Vector2(-ww * 0.5, 8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Style.PARCHMENT)
 				if been and t == run.level:
-					var tag := "方舟在这里"
+					var tag := Lang.t("方舟在这里")
 					var tw := f.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 					map.draw_string(f, c + Vector2(-tw * 0.5, 58), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Style.GOLD_BRIGHT))
 	# The next level's places, to point at and pick.
@@ -1054,7 +1078,7 @@ func choose_place(run: Run) -> int:
 		b.pressed.connect(func() -> void:
 			pick.place = place
 			go.disabled = false
-			go.text = "去%s" % Content.LEVELS[place].name
+			go.text = Lang.t("去%s") % Lang.t(Content.LEVELS[place].name)
 			show.call(place)
 			map.queue_redraw())
 		map.add_child(b)
@@ -1070,11 +1094,11 @@ func _place_text(p: int) -> String:
 	var rule: Dictionary = Content.RULES[lv.rule]
 	var ground: Array = []
 	for t in lv.terrain:
-		ground.append("%s：%s" % [Content.TERRAIN[t].name, Content.TERRAIN[t].says])
-	var foes: Array = lv.mix.map(func(m: Array) -> String: return Content.ENEMIES[m[0]].name)
-	var minis: Array = lv.minis.map(func(k: String) -> String: return Content.ENEMIES[k].name)
-	return "%s：%s\n\n%s\n\n会来：%s\n小首领：%s\n首领：%s" % [rule.name, rule.says, "\n".join(ground), "、".join(foes),
-		"、".join(minis), Content.ENEMIES[lv.boss].name]
+		ground.append(Lang.t("%s：%s") % [Lang.t(Content.TERRAIN[t].name), Lang.t(Content.TERRAIN[t].says)])
+	var foes: Array = lv.mix.map(func(m: Array) -> String: return Lang.t(Content.ENEMIES[m[0]].name))
+	var minis: Array = lv.minis.map(func(k: String) -> String: return Lang.t(Content.ENEMIES[k].name))
+	return Lang.t("%s：%s\n\n%s\n\n会来：%s\n小首领：%s\n首领：%s") % [Lang.t(rule.name), Lang.t(rule.says), "\n".join(ground),
+		Lang.t("、").join(foes), Lang.t("、").join(minis), Lang.t(Content.ENEMIES[lv.boss].name)]
 
 
 ## A screen over everything: a title, cards (to click, when `pick`), buttons. What was clicked: the card's offer or
@@ -1189,7 +1213,7 @@ func _tile(name: String, says: String, accent: Color, size: Vector2, edge := Sty
 	line.draw.connect(func() -> void: Style.rule(line, Vector2(line.size.x * 0.5, 5), line.size.x * 0.8, Color(edge, 0.8)))
 	col.add_child(line)
 	var text := _label(says, 16, Fonts.serif(600), Style.PARCHMENT)
-	text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	text.autowrap_mode = Style.wrap()
 	text.add_theme_constant_override("line_spacing", 4)
 	col.add_child(text)
 	return b
@@ -1228,7 +1252,7 @@ func _draw_gold() -> void:
 	_gold.draw_string(f, c + Vector2(-w * 0.5, 14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, Color(1.0, 0.95, 0.75, 0.55))
 	_gold.draw_string(f, c + Vector2(-w * 0.5, 12.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, Color(0.3, 0.17, 0.02))
 	var lf := Fonts.serif(700)
-	for line in [["金币 · 每轮 +%d" % home.income_gold(), 128.0], ["存着，利息 +%d" % home.interest(), 146.0]]:
+	for line in [[Lang.t("金币 · 每轮 +%d") % home.income_gold(), 128.0], [Lang.t("存着，利息 +%d") % home.interest(), 146.0]]:
 		var lw := lf.get_string_size(line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 		_gold.draw_string_outline(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.9))
 		_gold.draw_string(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Style.GOLD_BRIGHT)
@@ -1250,7 +1274,7 @@ func _draw_store_slot() -> void:
 	var i := game.held
 	var price := home.store_price(i) if i >= 0 and i < home.shelf.size() and home.shelf[i] != null else 0
 	var f := Fonts.serif(800)
-	for line in [["存起来", 36.0, 15], ["%d 金" % price, 58.0, 14]]:
+	for line in [[Lang.t("存起来"), 36.0, 15], [Lang.t("%d 金") % price, 58.0, 14]]:
 		var lw := f.get_string_size(line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, line[2]).x
 		_store_slot.draw_string_outline(f, Vector2((r.size.x - lw) * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, line[2],
 			4, Color(0, 0, 0, 0.9))
@@ -1270,7 +1294,7 @@ func _draw_hp() -> void:
 		Style.fill(ci, Rect2(r.position, Vector2(maxf(8.0, r.size.x * frac), r.size.y)), 4.0, col.lightened(0.18), col.darkened(0.3))
 	Style.ring(ci, r.grow(2.0), 5.0, Style.GOLD, 1.2)
 	var f := Fonts.serif(800)
-	var text := "家园 %d / %d" % [home.hp, home.hp_max()]
+	var text := Lang.t("家园 %d / %d") % [home.hp, home.hp_max()]
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 	_hp.draw_string_outline(f, Vector2(r.get_center().x - w * 0.5, 21), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 4, Color(0, 0, 0, 0.9))
 	_hp.draw_string(f, Vector2(r.get_center().x - w * 0.5, 21), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)

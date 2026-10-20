@@ -404,13 +404,13 @@ func trait_need(p: Vector2i) -> String:
 		return ""
 	match trait_of(p):
 		"swarm":
-			return "还差 %d 个红巢挨着" % (Content.CLUSTER - _beside(p, around(p)))
+			return Lang.t("还差 %d 个红巢挨着") % (Content.CLUSTER - _beside(p, around(p)))
 		"guard":
-			return "要站第一排"
+			return Lang.t("要站第一排")
 		"cover":
-			return "要站第二排" if p.y == 0 else "身前同一列还没有巢"
+			return Lang.t("要站第二排" if p.y == 0 else "身前同一列还没有巢")
 		"alone":
-			return "左右有巢挨着"
+			return Lang.t("左右有巢挨着")
 	return ""
 
 
