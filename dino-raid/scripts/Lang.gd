@@ -245,18 +245,21 @@ const EN := {
 	"语言": "Language",
 }
 
-static var _ready := false
+static var _english: Translation
 
 
-## Registers English with Godot and puts the game into `code` ("zh" or "en").
+## Puts the game into `code` ("zh" or "en"). The English table is with Godot only while the game is in English: Godot
+## falls back to English for a language it has no table for, so Chinese would come out in English.
 static func use(code: String) -> void:
-	if not _ready:
-		var t := Translation.new()
-		t.locale = "en"
+	if _english == null:
+		_english = Translation.new()
+		_english.locale = "en"
 		for k in EN:
-			t.add_message(k, EN[k])
-		TranslationServer.add_translation(t)
-		_ready = true
+			_english.add_message(k, EN[k])
+	if code == "en":
+		TranslationServer.add_translation(_english)
+	else:
+		TranslationServer.remove_translation(_english)
 	TranslationServer.set_locale(code if LOCALES.has(code) else "zh")
 
 

@@ -24,11 +24,14 @@ static func load_all() -> void:
 		fast = bool(cf.get_value("play", "fast", false))
 		language = str(cf.get_value("play", "language", ""))
 	if not Lang.LOCALES.has(language):
-		language = "zh" if OS.get_locale_language() == "zh" else "en"
+		language = "zh"
 	apply()
 
 
+## Kept for next time -- not by a tool (playtest.gd, a screenshot), whose settings are its own.
 static func save() -> void:
+	if "--script" in OS.get_cmdline_args():
+		return
 	var cf := ConfigFile.new()
 	cf.set_value("screen", "fullscreen", fullscreen)
 	cf.set_value("sound", "volume", volume)
