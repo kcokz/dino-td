@@ -3,9 +3,10 @@ extends Control
 ## An offer on the shop's shelf, drawn as a card (GAME-DESIGN 15, 17, 21): ink with cut corners, edged in its rarity's
 ## metal (bronze, silver, gold) with a finer rule inside and a diamond at each corner; a window with its picture taken
 ## from the model (Portraits) -- drawn flat until the picture is ready; its price set in amber and what else it costs
-## (genes, alien genes) beside it; its name on a dark ribbon, what it does on a parchment slip, what kind it is at its
-## foot. A good already had -- kept in the stash, given, or carried from the last place -- shows a jade token instead of
-## a price: 存, 送, 带. A place on the shelf already bought from shows an empty frame.
+## (research points) beside it; its name on a dark ribbon -- jade, with a +, when upgraded -- what it does on a
+## parchment slip, what kind it is at its
+## foot. A good already had -- kept in the stash or carried from the last place -- shows a jade token instead of
+## a price: 存, 带. A place on the shelf already bought from shows an empty frame.
 
 signal clicked(view: CardView)
 signal hovered(view: CardView, on: bool)
@@ -20,7 +21,6 @@ const GROUND := {
 }
 const TYPE := {"build": Color(0.55, 0.8, 0.42), "raise": Color(0.62, 0.7, 1.0), "affix": Color(0.8, 0.6, 1.0)}
 const GENES := Color(0.3, 0.85, 0.75)
-const ALIEN := Color(0.75, 0.4, 0.95)
 
 static var _grounds := {}
 
@@ -47,8 +47,6 @@ func setup(p_ci: Dictionary, p_kept := false) -> void:
 func token() -> String:
 	if ci.has("packed"):
 		return "带"
-	if ci.get("gift", false):
-		return "送"
 	return "存" if kept else ""
 
 
@@ -156,8 +154,8 @@ func _draw() -> void:
 	var name_size := 16
 	while name_size > 10 and Fonts.serif(800).get_string_size(c.name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > band.size.x - 8:
 		name_size -= 1
-	_text(Vector2(SIZE.x * 0.5, band.position.y + 17.5), c.name, name_size, Style.PARCHMENT, Fonts.serif(800),
-		HORIZONTAL_ALIGNMENT_CENTER)
+	_text(Vector2(SIZE.x * 0.5, band.position.y + 17.5), c.name, name_size, Style.JADE if c.plus else Style.PARCHMENT,
+		Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
 	# What it does, on parchment.
 	var slip := Rect2(11, 142, SIZE.x - 22, 52)
 	Style.fill(rid, slip, 4.0, Color(0.95, 0.9, 0.78), Color(0.85, 0.79, 0.66))
@@ -215,12 +213,12 @@ func footer() -> String:
 	return " · ".join(bits)
 
 
-## What else it costs (genes -- as many as it costs here -- and alien genes) beside the price -- not for a good had
+## What else it costs (research points -- as many as it costs here) beside the price -- not for a good had
 ## already -- and the shade over a card that cannot be bought now.
 func _extras(full: Rect2) -> void:
 	var x := SIZE.x - 10.0
 	var rid := get_canvas_item()
-	for extra in [["alien", "外星", ALIEN], ["genes", "基因", GENES]]:
+	for extra in [["genes", "研究", GENES]]:
 		if token() != "":
 			break
 		var n := genes_shown if extra[0] == "genes" and genes_shown >= 0 else int(c.get(extra[0], 0))

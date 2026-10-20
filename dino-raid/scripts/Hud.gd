@@ -42,7 +42,7 @@ var _hp: Control
 var _res: Label
 var _army: Label
 var _bonus: Label
-var _remove: Button
+var _deck_button: Button
 var _choice: PanelContainer
 var _wonder_box: VBoxContainer
 var _wonder_title: Label
@@ -250,11 +250,11 @@ func setup(p_game: Game) -> void:
 	_reroll.position = Vector2(-214, -218)
 	_reroll.pressed.connect(func() -> void: game.act("reroll"))
 	_root.add_child(_reroll)
-	_remove = _button("去掉一种", Vector2(188, 44), 17)
-	_remove.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_remove.position = Vector2(-214, -272)
-	_remove.pressed.connect(func() -> void: game.toggle_removing())
-	_root.add_child(_remove)
+	_deck_button = _button("牌库", Vector2(188, 44), 17)
+	_deck_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_deck_button.position = Vector2(-214, -272)
+	_deck_button.pressed.connect(func() -> void: show_deck())
+	_root.add_child(_deck_button)
 	_go = _button("出战！", Vector2(188, 64), 26, true)
 	_go.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_go.position = Vector2(-214, -150)
@@ -414,7 +414,7 @@ func deal(shelf: Array) -> void:
 		var v := CardView.new()
 		_hand.add_child(v)
 		if oi == null:
-			v.setup_sold("去掉了" if game.home.struck.has(i) else "已买")
+			v.setup_sold("已买")
 		else:
 			v.setup(oi)
 			v.clicked.connect(_on_card)
@@ -488,8 +488,7 @@ func refresh() -> void:
 		var v: CardView = _cards[i]
 		if not v.sold:
 			v.genes_shown = home.genes_cost(v.c)
-			v.set_state(planning and (game.removing or not home.targets(i).is_empty()), game.held == i)
-			v.set_marked(planning and game.removing)
+			v.set_state(planning and not home.targets(i).is_empty(), game.held == i)
 	for k in _kept.size():
 		var v: CardView = _kept[k]
 		if packing:
@@ -507,19 +506,19 @@ func refresh() -> void:
 	_gold.visible = not fighting
 	_gold.queue_redraw()
 	_hp.queue_redraw()
-	_title.text = "%s · 第 %d / %d 轮" % [Content.LEVELS[run.level].name, run.round, run.rounds()]
-	var rule: Dictionary = Content.RULES[Content.LEVELS[run.level].rule]
+	_title.text = "%s · 第 %d / %d 轮" % [Content.LEVELS[run.place].name, run.round, run.rounds()]
+	var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
 	_rule.text = "%s：%s" % [rule.name, rule.says]
-	_res.text = "生物质 %d/%d（+%d）  基因 %d/%d（+%d）  外星基因 %d" % [home.biomass, home.biomass_max(),
-		home.income_biomass(), home.genes, home.genes_max(), home.income_genes(), home.alien]
+	_res.text = "生物质 %d/%d（+%d）  研究点数 %d/%d（+%d）" % [home.biomass, home.biomass_max(),
+		home.income_biomass(), home.genes, home.genes_max(), home.income_genes()]
 	var army := home.army()
 	_army.text = "这一轮出战 %d 只，吃 %d 生物质" % [army.size(), home.army_food()] if not fighting else ""
 	_army.visible = not away and not packing
 	_bonus.text = game.bonuses()
 	_bonus.visible = _bonus.text != "" and not away and not packing
-	_remove.visible = not away and not packing
-	_remove.disabled = not planning or home.removes <= 0 and not game.removing
-	_remove.text = "算了，不去掉" if game.removing else "去掉一种货（%d）" % home.removes
+	_deck_button.visible = not away and not packing
+	_deck_button.disabled = not planning
+	_deck_button.text = "牌库（%d 张）" % home.deck.size()
 	_choice.visible = planning and not game.pending.is_empty()
 	_wonder_box.visible = not away and not packing and not home.wonders.is_empty()
 	_wonder_title.text = ("奇观：%s（已造）" % Content.WONDERS[home.wonder].name) if home.wonder != "" else "奇观（一局只能造一座）"
@@ -538,8 +537,8 @@ func refresh() -> void:
 	_waves.visible = not away and not packing
 	_pack.visible = packing
 	if packing:
-		_pack_text.text = "搬家！点建筑和存货，选要带走的（最多 %d 样，已选 %d）\n金币、生物质、基因全带上，没选的留在这里。选好了点「出发！」" % [
-			home.stash_size(), taking]
+		_pack_text.text = "搬家去%s！点建筑和存货，选要带走的（最多 %d 样，已选 %d）\n金币、生物质、研究点数、牌库全带上，没选的留在这里。选好了点「出发！」" % [
+			Content.LEVELS[maxi(0, game.going)].name, home.stash_size(), taking]
 		var food: Array = game.pack_food()
 		_pack_food.text = "到了那边（算上方舟自带的红巢和培养池）：兵每轮要吃 %d 生物质，池子每轮产 %d%s" % [food[0], food[1],
 			"——不够吃" if int(food[0]) > int(food[1]) else ""]
@@ -601,6 +600,8 @@ func _refresh_waves() -> void:
 func _big(run: Run, ahead: int) -> String:
 	if run.round + ahead >= run.rounds():
 		return "（首领）"
+	if run.round + ahead in Content.MINI_ROUNDS:
+		return "（小首领）"
 	return "（大波）" if run.big(ahead) else ""
 
 
@@ -618,6 +619,16 @@ func _wave_chip(name: String, wave: Array, now: bool) -> Control:
 	row.add_theme_constant_override("separation", 5)
 	chip.add_child(row)
 	row.add_child(_label(name, 15, Fonts.serif(800), Color(1.0, 0.8, 0.7) if now else Style.PARCHMENT_DIM))
+	# How dangerous it looks: skulls (Content.danger) -- not whether it will be won.
+	var n := Content.danger(wave, game.run.power())
+	var skulls := Control.new()
+	skulls.custom_minimum_size = Vector2(n * 17 + 2, 18)
+	skulls.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var sc := Style.CORAL if now else Color(Style.CORAL, 0.6)
+	skulls.draw.connect(func() -> void:
+		for i in n:
+			_skull(skulls, Vector2(9 + i * 17, 9), sc))
+	row.add_child(skulls)
 	var counts := {}
 	for k in wave:
 		counts[k] = counts.get(k, 0) + 1
@@ -635,7 +646,7 @@ func _wave_chip(name: String, wave: Array, now: bool) -> Control:
 func _refresh_forecast() -> void:
 	var f: Dictionary = game.forecast
 	var p: Dictionary = game.preview
-	_forecast.visible = game.phase == Game.Phase.PLAN and not f.is_empty()
+	_forecast.visible = Game.debug and game.phase == Game.Phase.PLAN and not f.is_empty()
 	if not _forecast.visible:
 		return
 	var shown := p if not p.is_empty() else f
@@ -775,7 +786,8 @@ func arrive(level: int) -> void:
 	var ground: Array = []
 	for t in lv.terrain:
 		ground.append("%s：%s" % [Content.TERRAIN[t].name, Content.TERRAIN[t].says])
-	var box := _open("到了%s！" % lv.name, "撑过 %d 轮，最后一轮是首领" % int(lv.rounds))
+	var box := _open("到了%s！" % lv.name, "撑过 %d 轮：第 %s 轮来小首领，最后一轮是首领" % [Content.ROUNDS,
+		"、".join(Content.MINI_ROUNDS.map(func(r: int) -> String: return str(r)))])
 	var lines: Array = ["%s：%s" % [rule.name, rule.says]] + ground
 	if level == 0:
 		lines.push_front("阵地：家园最上面两排只能造巢。兵打仗时就站在巢的位置，最上面一排在最前")
@@ -797,7 +809,7 @@ func arrive(level: int) -> void:
 
 ## The relics offered when a place is held, one to choose -- a boss's ringed red, with what it costs: its id.
 func choose_relic(ids: Array) -> String:
-	var box := _open("%s守住了！" % Content.LEVELS[game.run.level].name, "选一件遗物，整局都有用。红边的是首领留下的：很强，但有代价")
+	var box := _open("%s守住了！" % Content.LEVELS[game.run.place].name, "选一件遗物，整局都有用。红边的是首领留下的：很强，但有代价")
 	offered = ids.duplicate()
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -813,6 +825,225 @@ func choose_relic(ids: Array) -> String:
 	var v: Variant = await chosen
 	_close()
 	return str(v)
+
+
+## A skull, `at` its middle: how dangerous a wave looks.
+func _skull(c: Control, at: Vector2, col: Color) -> void:
+	c.draw_circle(at + Vector2(0, -1.5), 6.5, col)
+	c.draw_rect(Rect2(at + Vector2(-4, 2), Vector2(8, 5)), col)
+	for sx in [-2.6, 2.6]:
+		c.draw_circle(at + Vector2(sx, -1.5), 1.9, Style.INK_DEEP)
+	c.draw_colored_polygon(PackedVector2Array([at + Vector2(0, 0.8), at + Vector2(-1.2, 2.8), at + Vector2(1.2, 2.8)]), Style.INK_DEEP)
+	for tx in [-2.0, 0.0, 2.0]:
+		c.draw_line(at + Vector2(tx, 4.6), at + Vector2(tx, 7.0), Style.INK_DEEP, 1.0)
+
+
+## The deck the shop draws from, laid out to look at (while planning) -- upgraded cards marked +.
+func show_deck() -> void:
+	if screen != "":
+		return
+	var home: Home = game.home
+	var cards: Array = home.deck.map(func(card: Dictionary) -> Dictionary: return Home._good(card))
+	await choose("牌库（%d 张）" % cards.size(), "商店每轮从这里抽货。每轮打完可以加一张；小首领打完可以删、可以强化", cards, ["关闭"], false)
+
+
+## After a place's mini-boss: the deck laid out to work on -- a card picked, then cut (gold, dearer each time) or
+## upgraded (research points); or done. What was asked: {cut: k} or {upgrade: k} (k: the card's place in the deck), or
+## "完成".
+func workshop() -> Variant:
+	var home: Home = game.home
+	var box := _open("整理牌库", "删一张 %d 金（每删一张，下一张贵 %d 金）；强化一张 %d 研究点数。现在有 %d 金、%d 研究点数" % [
+		home.cut_price(), Content.CUT_STEP, Content.UPGRADE, home.gold, home.genes])
+	offered = home.deck.duplicate(true)
+	var grid := GridContainer.new()
+	grid.columns = mini(home.deck.size(), 9)
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(grid)
+	var k := 0.66 if home.deck.size() <= 18 else 0.56
+	var views: Array = []
+	var picked := {"k": -1}
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 20)
+	var cut := _button("删掉这张（%d 金）" % home.cut_price(), Vector2(210, 50), 18)
+	var up := _button("强化这张（%d 研究点数）" % Content.UPGRADE, Vector2(250, 50), 18)
+	var done := _button("完成", Vector2(170, 50), 19, true)
+	var update := func() -> void:
+		var p: int = picked.k
+		cut.disabled = p < 0 or home.gold < home.cut_price()
+		up.disabled = p < 0 or not home.can_upgrade(p)
+		for i in views.size():
+			(views[i] as CardView).set_state(true, i == p)
+	for i in home.deck.size():
+		var slot := Control.new()
+		slot.custom_minimum_size = CardView.SIZE * k
+		grid.add_child(slot)
+		var v := CardView.new()
+		slot.add_child(v)
+		v.setup(Home._good(home.deck[i]))
+		v.pivot_offset = Vector2.ZERO
+		v.scale = Vector2.ONE * k
+		var at := i
+		v.clicked.connect(func(_v: CardView) -> void:
+			picked.k = at
+			update.call())
+		views.append(v)
+	# Pointed at, the upgrade shows the card picked as it would be.
+	up.mouse_entered.connect(func() -> void:
+		if picked.k >= 0 and not up.disabled:
+			(views[picked.k] as CardView).show_as({"id": home.deck[picked.k].id, "plus": true}))
+	up.mouse_exited.connect(func() -> void:
+		if picked.k >= 0:
+			(views[picked.k] as CardView).show_as(Home._good(home.deck[picked.k])))
+	cut.pressed.connect(func() -> void: chosen.emit({"cut": picked.k}))
+	up.pressed.connect(func() -> void: chosen.emit({"upgrade": picked.k}))
+	done.pressed.connect(func() -> void: chosen.emit("完成"))
+	row.add_child(cut)
+	row.add_child(up)
+	row.add_child(done)
+	box.add_child(row)
+	update.call()
+	var answer: Variant = await chosen
+	_close()
+	return answer
+
+
+## The map, after a place is held: the run's levels in three columns -- the places come to lit, the roads on from here
+## gold -- and the next level's two places to pick one of: pointed at or clicked, what it is like is shown beside it;
+## "去这里" goes. The place picked (Content.LEVELS).
+func choose_place(run: Run) -> int:
+	var box := _open("下一站去哪？", "越往右越难。选好了，再回家园挑要带走的东西")
+	offered = run.next_places()
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 18)
+	box.add_child(body)
+	var frame := PanelContainer.new()
+	frame.add_theme_stylebox_override("panel", Style.panel(18.0))
+	body.add_child(frame)
+	var map := Control.new()
+	map.custom_minimum_size = Vector2(620, 360)
+	frame.add_child(map)
+	var detail := PanelContainer.new()
+	detail.add_theme_stylebox_override("panel", Style.panel(20.0, true))
+	detail.custom_minimum_size = Vector2(340, 0)
+	body.add_child(detail)
+	var dbox := VBoxContainer.new()
+	dbox.add_theme_constant_override("separation", 8)
+	detail.add_child(dbox)
+	var heading := _label("指着一处看看", 26, Fonts.serif(900), Style.GOLD_BRIGHT)
+	dbox.add_child(heading)
+	var text := _label("", 16, Fonts.serif(500), Style.PARCHMENT)
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	text.custom_minimum_size = Vector2(300, 0)
+	text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	text.add_theme_constant_override("line_spacing", 6)
+	dbox.add_child(text)
+	var go := _button("去这里", Vector2(220, 52), 21, true)
+	go.disabled = true
+	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	dbox.add_child(go)
+	var pick := {"place": -1, "near": -1}
+	var cols := [90.0, 310.0, 530.0]
+	var at := {}
+	for t in run.map.size():
+		var places: Array = run.map[t]
+		for i in places.size():
+			at[places[i]] = Vector2(cols[t], 190.0 if places.size() == 1 else 120.0 + i * 150.0)
+	var show := func(p: int) -> void:
+		heading.text = Content.LEVELS[p].name
+		text.text = _place_text(p)
+	map.draw.connect(func() -> void:
+		var f := Fonts.serif(800)
+		for t in run.map.size():
+			var head := "第 %d 关" % (t + 1)
+			var w := f.get_string_size(head, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
+			map.draw_string(f, Vector2(cols[t] - w * 0.5, 26), head, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Style.PARCHMENT_DIM)
+			for k in t + 1:
+				_skull(map, Vector2(cols[t] - t * 8.5 + k * 17, 46), Color(Style.CORAL, 0.75))
+		# The roads: gold on from where the ark is, faint beyond.
+		for t in run.map.size() - 1:
+			for a in run.map[t]:
+				for b in run.map[t + 1]:
+					var from: Vector2 = at[a]
+					var to: Vector2 = at[b]
+					var on: bool = t == run.level and a == run.place
+					var lit: bool = on and (b == pick.place or b == pick.near)
+					var col := Style.GOLD_BRIGHT if lit else (Color(Style.GOLD, 0.8) if on else Color(Style.GOLD_DIM, 0.35))
+					var n := int(from.distance_to(to) / 12.0)
+					for s in n:
+						if s % 2 == 0:
+							map.draw_line(from.lerp(to, float(s) / n), from.lerp(to, float(s + 1) / n), col, 3.0 if lit else 2.0, true)
+		# The places: a medallion each -- lit where the ark has been, dim where it can no longer go.
+		for t in run.map.size():
+			for p in run.map[t]:
+				var c: Vector2 = at[p]
+				var been: bool = t < run.path.size() and run.path[t] == p
+				var next: bool = t == run.level + 1
+				var col: Color = Content.LEVELS[p].color
+				if not been and not next:
+					col = col.lerp(Color(0.2, 0.2, 0.2), 0.55)
+				if p == pick.place or p == pick.near:
+					for g in 4:
+						map.draw_arc(c, 38.0 + g * 3.0, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT, 0.35 * (1.0 - g / 4.0)), 3.0, true)
+				map.draw_circle(c + Vector2(0, 3), 36.0, Color(0, 0, 0, 0.45))
+				map.draw_circle(c, 36.0, Style.INK_DEEP)
+				map.draw_arc(c, 34.0, 0.0, TAU, 56, Style.GOLD if been or next else Style.GOLD_DIM, 2.0, true)
+				map.draw_circle(c, 29.0, col)
+				var word: String = Content.LEVELS[p].name
+				var ww := f.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+				map.draw_string_outline(f, c + Vector2(-ww * 0.5, 8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, 5, Color(0, 0, 0, 0.8))
+				map.draw_string(f, c + Vector2(-ww * 0.5, 8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Style.PARCHMENT)
+				if been and t == run.level:
+					var tag := "方舟在这里"
+					var tw := f.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+					map.draw_string(f, c + Vector2(-tw * 0.5, 58), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Style.GOLD_BRIGHT))
+	# The next level's places, to point at and pick.
+	for p in run.next_places():
+		var b := Button.new()
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(84, 84)
+		b.size = Vector2(84, 84)
+		b.position = (at[p] as Vector2) - Vector2(42, 42)
+		for s in ["normal", "hover", "pressed", "focus"]:
+			b.add_theme_stylebox_override(s, StyleBoxEmpty.new())
+		var place: int = p
+		b.mouse_entered.connect(func() -> void:
+			pick.near = place
+			show.call(place)
+			map.queue_redraw())
+		b.mouse_exited.connect(func() -> void:
+			pick.near = -1
+			if pick.place >= 0:
+				show.call(pick.place)
+			map.queue_redraw())
+		b.pressed.connect(func() -> void:
+			pick.place = place
+			go.disabled = false
+			go.text = "去%s" % Content.LEVELS[place].name
+			show.call(place)
+			map.queue_redraw())
+		map.add_child(b)
+	go.pressed.connect(func() -> void: chosen.emit(pick.place))
+	var v: Variant = await chosen
+	_close()
+	return int(v)
+
+
+## What a place is like, for the map: its rule, its special ground, who comes there.
+func _place_text(p: int) -> String:
+	var lv: Dictionary = Content.LEVELS[p]
+	var rule: Dictionary = Content.RULES[lv.rule]
+	var ground: Array = []
+	for t in lv.terrain:
+		ground.append("%s：%s" % [Content.TERRAIN[t].name, Content.TERRAIN[t].says])
+	var foes: Array = lv.mix.map(func(m: Array) -> String: return Content.ENEMIES[m[0]].name)
+	var minis: Array = lv.minis.map(func(k: String) -> String: return Content.ENEMIES[k].name)
+	return "%s：%s\n\n%s\n\n会来：%s\n小首领：%s\n首领：%s" % [rule.name, rule.says, "\n".join(ground), "、".join(foes),
+		"、".join(minis), Content.ENEMIES[lv.boss].name]
 
 
 ## A screen over everything: a title, cards (to click, when `pick`), buttons. What was clicked: the card's offer or

@@ -1,14 +1,16 @@
 class_name Game
 extends Node3D
-## The game (GAME-DESIGN 17-21): the homeland built from the shop, and the battles its army fights by itself, on one
+## The game (GAME-DESIGN 17-22): the homeland built from the shop, and the battles its army fights by itself, on one
 ## screen. It opens on the title (Menu) over a homeland at dusk; Esc pauses. A run starts with an ark to choose and
 ## lands in the rainforest. A round: the place has its way, the
 ## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army -- standing
 ## in the yard as it will stand in battle, where their nests stand on the battle line; the player buys -- buildings,
 ## raises (a nest's as a choice: one more, or elite), gene affixes -- or keeps what is bought for later, puts down what
 ## was kept, takes a kind out of the shop, builds the wonder, watching the army change; then sends it out; the battle
-## fights itself, and the army is gone with it. Won: gold and alien genes; lost: the homeland is hurt; either way,
-## interest on the gold kept, and one of three offers, free. Five rounds hold a place, the last against its boss; a
+## fights itself, and the army is gone with it. Won: gold and research points; lost: the homeland is hurt; either way,
+## interest on the gold kept, and one of three cards for the deck the shop draws from -- or gold instead. Round 3 is
+## against the place's mini-boss, and after it the deck can be cut and upgraded. Five rounds hold a place, the last
+## against its boss; a
 ## place held brings a relic, and the ark moves on -- carrying all the gold, the wonder and what the player packs, no
 ## more than the stash holds -- to the volcano. How the battle will end is worked out and shown before it is fought,
 ## and again with the offer, the good, the choice or the wonder pointed at.
@@ -52,10 +54,14 @@ var effects := {}                 # plot -> [short lines]: what that would chang
 var pack_plots := {}              # packing: plot -> true, the buildings the ark takes
 var pack_kept := {}               # packing: stash place -> true, the goods kept that it takes
 var pending := {}                 # a nest's raise waiting for its choice: {from: "buy" or "place", slot, at}; {} if none
-var removing := false             # the next offer clicked on the shelf has its kind taken out of the shop
+
 var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice, or a wonder
 
 var menu: Menu
+var going := -1                   # the place picked on the map to move on to
+
+## How the battle will end, shown (the forecast) -- for finding what breaks, not for playing: F3.
+static var debug := false
 
 ## Whether the scene opens on the title (the game starting, or "回主菜单") or straight into a new run ("重新开始").
 static var show_title := true
@@ -174,15 +180,7 @@ func act(what: String, data := {}) -> bool:
 			pending = {}
 			aimed = ""
 			return act(p.from, {"slot": p.slot, "at": p.at, "choice": data.get("choice", "count")})
-		"remove":
-			if not home.remove_kind(int(data.get("slot", -1))):
-				return false
-			removing = false
-			held = -1
-			_version += 1
-			hud.deal(home.shelf)
-			refresh()
-			return true
+
 		"wonder":
 			var ev := home.build_wonder(str(data.get("id", "")))
 			if ev.is_empty():
@@ -221,23 +219,11 @@ func act(what: String, data := {}) -> bool:
 	return false
 
 
-## The offer at shelf place i taken up (again: put down) -- or, taking a kind out, taken out.
+## The offer at shelf place i taken up (again: put down).
 func hold(i: int) -> void:
 	if phase != Phase.PLAN or i < 0 or i >= home.shelf.size() or home.shelf[i] == null:
 		return
-	if removing:
-		act("remove", {"slot": i})
-		return
 	held = -1 if held == i else i
-	held_k = -1
-	pending = {}
-	refresh()
-
-
-## Taking a kind out of the shop: the next offer clicked goes (or, again, not).
-func toggle_removing() -> void:
-	removing = not removing and phase == Phase.PLAN and home.removes > 0
-	held = -1
 	held_k = -1
 	pending = {}
 	refresh()
@@ -254,7 +240,6 @@ func _let_go() -> void:
 	held = -1
 	held_k = -1
 	pending = {}
-	removing = false
 	aimed = ""
 	refresh()
 
@@ -266,7 +251,6 @@ func hold_kept(k: int) -> void:
 	held_k = -1 if held_k == k else k
 	held = -1
 	pending = {}
-	removing = false
 	refresh()
 
 
@@ -322,10 +306,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if k >= KEY_1 and k < KEY_1 + home.shelf.size():
 			hold(k - KEY_1)
 		elif k == KEY_ESCAPE:
-			if held >= 0 or held_k >= 0 or not pending.is_empty() or removing:
+			if held >= 0 or held_k >= 0 or not pending.is_empty():
 				_let_go()
 			else:
 				pause()
+		elif k == KEY_F3:
+			debug = not debug
+			refresh()
 		elif k == KEY_SPACE or k == KEY_ENTER:
 			act("depart" if phase == Phase.PACK else "fight")
 
@@ -342,8 +329,11 @@ func _click() -> void:
 	if at == null:
 		return
 	var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
-	if Content.offer(good).type == "raise" and at in fits and Content.is_nest(home.buildings[at].kind):
-		# A nest's raise: one more, or elite -- the HUD asks which.
+	var c := Content.offer(good)
+	var raise_nest: bool = c.type == "raise" and at in fits and Content.is_nest(home.buildings[at].kind)
+	var plus_nest: bool = c.type == "build" and c.plus and Content.is_nest(c.builds) and at in fits and not good.has("packed")
+	if raise_nest or plus_nest:
+		# A nest's raise (an upgraded nest's, put down at level 2, too): one more, or elite -- the HUD asks which.
 		pending = {"from": "buy" if held >= 0 else "place", "slot": held if held >= 0 else held_k, "at": at}
 		refresh()
 		return
@@ -451,10 +441,10 @@ func _depart() -> void:
 	await home_view.load_up(pack_plots.keys())
 	await home_view.ark_up()
 	await hud.fade(true)
-	run.move_on(goods)
+	run.move_on(goods, going)
 	pack_plots.clear()
 	pack_kept.clear()
-	world.dress(run.level)
+	world.dress(run.place)
 	home_view.lay_ground()
 	_version += 1
 	refresh()
@@ -590,7 +580,7 @@ func _changes(a: Home, b: Home) -> Dictionary:
 			continue
 		var lines: Array = out.get(p, [])
 		for pair in [["金币", b.income_gold() - a.income_gold(), "/轮"], ["生物质", b.income_biomass() - a.income_biomass(), "/轮"],
-				["基因", b.income_genes() - a.income_genes(), "/轮"], ["利息上限", b.interest_max() - a.interest_max(), ""],
+				["研究点数", b.income_genes() - a.income_genes(), "/轮"], ["利息上限", b.interest_max() - a.interest_max(), ""],
 				["家园血", b.hp_max() - a.hp_max(), ""]]:
 			if int(pair[1]) != 0:
 				lines.append("%s %+d%s" % [pair[0], pair[1], pair[2]])
@@ -610,8 +600,6 @@ func _made(h: Home) -> Dictionary:
 func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
-	if removing:
-		return "点一样货：这一局商店和送货里都不会再有它（这一轮还能去掉 %d 种）· 右键算了" % home.removes
 	if not pending.is_empty():
 		return "选一样：多孵 1 只，还是变精英 · 右键算了"
 	var good := _taken()
@@ -632,9 +620,7 @@ func hint() -> String:
 				return "点一个还有空词条位的巢贴上%s（不要钱）· 右键放回去" % c.name
 		return ""
 	if home.genes < home.genes_cost(c):
-		return "基因不够（要 %d）" % home.genes_cost(c)
-	if home.alien < int(c.get("alien", 0)):
-		return "外星基因不够（要 %d，打赢了才有）" % c.alien
+		return "研究点数不够（要 %d）" % home.genes_cost(c)
 	if c.type != "raise" and home.gold < home.price(held):
 		return "金币不够（要 %d）" % home.price(held)
 	if home.targets(held).is_empty():
@@ -813,7 +799,7 @@ func _begin() -> void:
 		home_view.refresh_buildings(true)
 		_version += 1
 		refresh()
-	await hud.arrive(run.level)
+	await hud.arrive(run.place)
 	_start_round()
 
 
@@ -822,17 +808,18 @@ func _start_round() -> void:
 	held = -1
 	held_k = -1
 	pending = {}
-	removing = false
 	aimed = ""
 	refresh()
 	var sub := "进账，商店换货，孵兵"
 	if run.round == 1 and run.level > 0:
-		sub = "新地方，敌人更强了。带来的东西在左下，点它放下"
+		sub = "新地方。带来的东西在左下，点它放下；新放的池子下一轮才产生物质"
 	elif run.round >= run.rounds():
 		sub = "首领来了"
+	elif run.round in Content.MINI_ROUNDS:
+		sub = "小首领来了。打完可以整理牌库"
 	elif run.big():
 		sub = "大波要来了"
-	hud.banner("%s · 第 %d 轮" % [Content.LEVELS[run.level].name, run.round], sub)
+	hud.banner("%s · 第 %d 轮" % [Content.LEVELS[run.place].name, run.round], sub)
 	await get_tree().create_timer(0.6).timeout
 	var ev := run.start_round()
 	var said_at := Vector3(0, 2.5, HomeView.YARD_Z - 2.0)
@@ -843,7 +830,7 @@ func _start_round() -> void:
 				if int(e.biomass) > 0:
 					said.append("生物质 +%d" % e.biomass)
 				if int(e.genes) > 0:
-					said.append("基因 +%d" % e.genes)
+					said.append("研究点数 +%d" % e.genes)
 				tags.float_text(said_at, "  ".join(said), Color(0.6, 1.0, 0.8), 22)
 			"rotted":
 				if int(e.amount) > 0:
@@ -893,7 +880,10 @@ func _after_fight() -> void:
 		also.append("利息 +%d" % out.interest)
 	match result:
 		"won":
-			hud.banner("赢了！", "得到：" + "，".join(["金币 +%d" % out.gold, "外星基因 +%d" % out.alien] + also))
+			var won: Array = ["金币 +%d" % out.gold]
+			if int(out.research) > 0:
+				won.append("研究点数 +%d" % out.research)
+			hud.banner("赢了！", "得到：" + "，".join(won + also))
 		"time":
 			hud.banner("拖到时间，算输", "，".join(["家园 −%d" % out.took] + also))
 		_:
@@ -912,34 +902,51 @@ func _after_fight() -> void:
 	if run.over:
 		phase = Phase.DONE
 		refresh()
-		var again: Variant = await hud.choose("家园被毁了……", "撑到了%s第 %d 轮" % [Content.LEVELS[run.level].name, run.round],
+		var again: Variant = await hud.choose("家园被毁了……", "撑到了%s第 %d 轮" % [Content.LEVELS[run.place].name, run.round],
 			[], ["再来一局", "回主菜单"])
 		_new_run(again == "回主菜单")
 		return
 	if out.level_won and run.last_level():
 		phase = Phase.DONE
 		refresh()
-		var names: Array = Content.LEVELS.map(func(l: Dictionary) -> String: return l.name)
-		var again: Variant = await hud.choose("全部守住了！", "%s都撑过来了，家园还剩 %d 血" % ["和".join(names), home.hp], [],
+		var names: Array = run.path.map(func(p: int) -> String: return Content.LEVELS[p].name)
+		var again: Variant = await hud.choose("全部守住了！", "%s都撑过来了，家园还剩 %d 血" % ["、".join(names), home.hp], [],
 			["再玩一遍", "回主菜单"])
 		_new_run(again == "回主菜单")
 		return
-	await _gift()
+	await _reward()
+	if run.was_mini():
+		await _workshop()
 	if out.level_won:
 		await _level_end()
 	_start_round()
 
 
-## After each round: one of three offers, free -- into the stash.
-func _gift() -> void:
-	var gifts := run.gift_offer()
-	if gifts.is_empty():
+## After each round: one of three cards into the deck (the shop will offer it, at its price) -- or gold instead.
+func _reward() -> void:
+	var cards := run.reward_offer()
+	if cards.is_empty():
 		return
-	var full := home.stash.size() >= home.stash_size()
-	var sub := "不要钱。放进左下的存货，什么时候放下都行" + ("（存货满了，最早的一样会被挤掉）" if full else "")
-	var v: Variant = await hud.choose("挑一样，送你", sub, gifts, ["不要"])
+	var v: Variant = await hud.choose("挑一张，加进牌库", "以后商店会从牌库里拿出来卖，照原价买", cards,
+		["不要牌，拿 %d 金" % Content.REWARD_GOLD])
 	if v is Dictionary:
-		run.take_gift(v)
+		run.take_reward(v.id)
+	else:
+		run.take_reward_gold()
+	refresh()
+
+
+## After a place's mini-boss: the deck laid out, to cut cards from (gold, dearer each time) and upgrade (research
+## points) until done.
+func _workshop() -> void:
+	while true:
+		var v: Variant = await hud.workshop()
+		if not v is Dictionary:
+			break
+		if v.has("cut"):
+			home.cut(int(v.cut))
+		elif v.has("upgrade"):
+			home.upgrade(int(v.upgrade))
 		refresh()
 
 
@@ -949,8 +956,9 @@ func _level_end() -> void:
 	var id := await hud.choose_relic(run.relic_offer())
 	run.take_relic(id)
 	refresh()
+	going = await hud.choose_place(run)
 	await _pack()
-	await hud.arrive(run.level)
+	await hud.arrive(run.place)
 
 
 ## A new run: straight in, or (`to_title`) by way of the title.

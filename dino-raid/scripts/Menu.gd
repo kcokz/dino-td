@@ -8,7 +8,7 @@ signal _picked(what: String)
 signal _settings_closed
 signal _codex_closed
 
-const VERSION := "v0.12"
+const VERSION := "v0.13"
 const NAME := "DINO RAID"
 const SUBTITLE := "基因方舟　·　异星虫群"
 
@@ -676,8 +676,7 @@ func _affixes_page() -> Array:
 				var other: String = r.affixes[1] if r.affixes[0] == a else r.affixes[0]
 				with.append("和%s凑在一个巢上：进化成%s" % [Content.AFFIXES[other].name, Content.UNITS[r.makes].name])
 		var offer: Dictionary = Content.OFFERS.get("a_" + a, {})
-		var cost := "%d 金 · %d 基因%s" % [int(offer.get("price", 0)), int(offer.get("genes", 0)),
-			(" · %d 外星基因" % int(offer.alien)) if offer.has("alien") else ""]
+		var cost := "%d 金 · %d 研究点数" % [int(offer.get("price", 0)), int(offer.get("genes", 0))]
 		out.append({"key": "a:" + a, "name": af.name, "kind": "基因词条 · " + cost, "text": "贴上的巢，孵的兵%s。%s" % [af.says,
 			("\n" + "\n".join(with)) if not with.is_empty() else ""]})
 	return out
@@ -701,6 +700,8 @@ func _monsters_page() -> Array:
 		for lv in Content.LEVELS:
 			if lv.get("boss", "") == kind:
 				where.append("%s的首领" % lv.name)
+			if kind in lv.get("minis", []):
+				where.append("%s的小首领" % lv.name)
 			for mix in lv.mix:
 				if mix[0] == kind:
 					where.append(lv.name)
