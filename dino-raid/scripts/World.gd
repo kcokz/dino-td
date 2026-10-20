@@ -2,7 +2,8 @@ class_name World
 extends Node3D
 ## Where it all stands (GAME-DESIGN 12, 17): the ground all round, the homeland's bare ground, a road north out of it,
 ## and at the road's end the field where battles are fought -- dressed for the place the ark has landed in: tall green
-## and water in the rainforest, ash, rock and glowing cracks at the volcano. Flat colours for now.
+## and water in the rainforest, ash, rock and glowing cracks at the volcano, dead trees and reeds in the swamp, ice and
+## pines on the ice fields, dunes and cacti in the desert, rocks and palms by the sea. Flat colours for now.
 
 const ARENA := Vector3(0, 0, -80)       # the battle field's middle; Fight's (x, z) are measured from here
 const FIELD := Vector2(36, 20)
@@ -43,7 +44,7 @@ func _ready() -> void:
 			var flag := Color(0.85, 0.3, 0.25) if sx > 0 else Color(0.3, 0.55, 0.9)
 			add_child(Blocks.box(Vector3(0.05, 0.7, 1.0), flag, post + Vector3(0, 2.1, 0.55 * -sz)))
 	var run: Run = Run.current
-	dress(run.level if run != null else 0)
+	dress(run.place if run != null else 0)
 
 
 ## Dusk over the place -- the title's light: a low warm sun, a deepening sky, a haze -- or its own day again.
@@ -153,16 +154,10 @@ func dress(r: int) -> void:
 	_home_ground.albedo_color = ground
 	_road.albedo_color = ground.lightened(0.12)
 	_field.albedo_color = ground.lightened(0.2)
-	if r == 1:
-		_sky.sky_top_color = Color(0.42, 0.4, 0.44)
-		_sky.sky_horizon_color = Color(0.82, 0.62, 0.48)
-		_sky.ground_horizon_color = Color(0.82, 0.62, 0.48)
-		_sun.light_color = Color(1.0, 0.86, 0.7)
-	else:
-		_sky.sky_top_color = Color(0.36, 0.55, 0.82)
-		_sky.sky_horizon_color = Color(0.74, 0.82, 0.88)
-		_sky.ground_horizon_color = Color(0.74, 0.82, 0.88)
-		_sun.light_color = Color(1.0, 0.96, 0.88)
+	_sky.sky_top_color = lv.sky[0]
+	_sky.sky_horizon_color = lv.sky[1]
+	_sky.ground_horizon_color = lv.sky[1]
+	_sun.light_color = Color(1.0, 0.86, 0.7) if r == 1 else Color(1.0, 0.96, 0.88)
 	_sky.ground_bottom_color = grass.darkened(0.2)
 	_light()
 	if _decor:
@@ -179,10 +174,105 @@ func dress(r: int) -> void:
 			continue
 		if absf(at.x) < 4:
 			continue
-		if r == 1:
-			_volcanic(at, rng)
-		else:
-			_lush(at, rng)
+		match r:
+			1:
+				_volcanic(at, rng)
+			2:
+				_swamp(at, rng)
+			3:
+				_frozen(at, rng)
+			4:
+				_desert(at, rng)
+			5:
+				_coast(at, rng)
+			_:
+				_lush(at, rng)
+
+
+## The swamp: dead trees leaning, reeds, dark pools.
+func _swamp(at: Vector3, rng: RandomNumberGenerator) -> void:
+	var roll := rng.randf()
+	if roll < 0.4:
+		var h := rng.randf_range(2.5, 5.0)
+		var trunk := Blocks.box(Vector3(0.45, h, 0.45), Color(0.24, 0.2, 0.15), at + Vector3(0, h * 0.5, 0))
+		trunk.rotation.z = rng.randf_range(-0.25, 0.25)
+		_decor.add_child(trunk)
+		var arm := Blocks.box(Vector3(1.6, 0.2, 0.2), Color(0.24, 0.2, 0.15), at + Vector3(0.5, h * 0.7, 0))
+		arm.rotation.z = rng.randf_range(0.3, 0.8)
+		_decor.add_child(arm)
+	elif roll < 0.75:
+		for i in 6:
+			_decor.add_child(Blocks.box(Vector3(0.08, rng.randf_range(0.7, 1.4), 0.08), Color(0.4, 0.46, 0.22),
+				at + Vector3(rng.randf_range(-0.8, 0.8), 0.5, rng.randf_range(-0.8, 0.8))))
+	else:
+		var pool := Blocks.box(Vector3(rng.randf_range(3, 6), 0.06, rng.randf_range(2, 4)), Color(0.2, 0.26, 0.18), at + Vector3(0, 0.03, 0))
+		pool.material_override = Blocks.glow(Color(0.2, 0.26, 0.18), 0.1)
+		_decor.add_child(pool)
+
+
+## The ice fields: blocks of ice, snowy pines, drifts.
+func _frozen(at: Vector3, rng: RandomNumberGenerator) -> void:
+	var roll := rng.randf()
+	if roll < 0.4:
+		var h := rng.randf_range(2.5, 4.5)
+		_decor.add_child(Blocks.box(Vector3(0.35, h * 0.5, 0.35), Color(0.3, 0.22, 0.16), at + Vector3(0, h * 0.25, 0)))
+		for i in 3:
+			var w := 2.0 - i * 0.55
+			_decor.add_child(Blocks.box(Vector3(w, 0.8, w), Color(0.2, 0.36, 0.3).lerp(Color(0.92, 0.95, 0.98), 0.35 + i * 0.2),
+				at + Vector3(0, h * 0.4 + i * 0.75, 0)))
+	elif roll < 0.75:
+		var w := rng.randf_range(1.2, 3.0)
+		var ice := Blocks.box(Vector3(w, rng.randf_range(0.8, 2.2), w * 0.8), Color(0.72, 0.85, 0.95), at + Vector3(0, 0.6, 0))
+		ice.material_override = Blocks.glow(Color(0.72, 0.85, 0.95), 0.15)
+		ice.rotation.y = rng.randf() * TAU
+		_decor.add_child(ice)
+	else:
+		var drift := Blocks.box(Vector3(rng.randf_range(2, 4), 0.4, rng.randf_range(1.5, 3)), Color(0.94, 0.96, 0.98), at + Vector3(0, 0.2, 0))
+		drift.rotation.y = rng.randf() * TAU
+		_decor.add_child(drift)
+
+
+## The desert: dunes, cacti, red rocks.
+func _desert(at: Vector3, rng: RandomNumberGenerator) -> void:
+	var roll := rng.randf()
+	if roll < 0.4:
+		var dune := Blocks.box(Vector3(rng.randf_range(4, 8), rng.randf_range(0.6, 1.4), rng.randf_range(2, 4)), Color(0.86, 0.72, 0.48),
+			at + Vector3(0, 0.4, 0))
+		dune.rotation.y = rng.randf() * TAU
+		_decor.add_child(dune)
+	elif roll < 0.7:
+		var h := rng.randf_range(1.6, 3.0)
+		_decor.add_child(Blocks.box(Vector3(0.5, h, 0.5), Color(0.32, 0.5, 0.26), at + Vector3(0, h * 0.5, 0)))
+		for side in [-1.0, 1.0]:
+			_decor.add_child(Blocks.box(Vector3(0.35, 0.8, 0.35), Color(0.32, 0.5, 0.26), at + Vector3(side * 0.55, h * 0.6, 0)))
+	else:
+		var rock := Blocks.box(Vector3(rng.randf_range(1.2, 3.0), rng.randf_range(1.0, 2.6), rng.randf_range(1.2, 2.4)),
+			Color(0.66, 0.4, 0.28), at + Vector3(0, 0.8, 0))
+		rock.rotation.y = rng.randf() * TAU
+		_decor.add_child(rock)
+
+
+## The coast: grey rocks, palms, sandbars in the shallows.
+func _coast(at: Vector3, rng: RandomNumberGenerator) -> void:
+	var roll := rng.randf()
+	if roll < 0.35:
+		var h := rng.randf_range(3.0, 5.0)
+		var trunk := Blocks.box(Vector3(0.35, h, 0.35), Color(0.5, 0.38, 0.24), at + Vector3(0, h * 0.5, 0))
+		trunk.rotation.z = rng.randf_range(-0.2, 0.2)
+		_decor.add_child(trunk)
+		for i in 5:
+			var frond := Blocks.box(Vector3(2.0, 0.1, 0.5), Color(0.24, 0.5, 0.22), at + Vector3(0, h, 0))
+			frond.rotation = Vector3(0.35, i * TAU / 5.0, 0.0)
+			_decor.add_child(frond)
+	elif roll < 0.7:
+		var rock := Blocks.box(Vector3(rng.randf_range(1.0, 2.6), rng.randf_range(0.6, 1.8), rng.randf_range(1.0, 2.2)),
+			Color(0.5, 0.5, 0.48), at + Vector3(0, 0.5, 0))
+		rock.rotation.y = rng.randf() * TAU
+		_decor.add_child(rock)
+	else:
+		var bar := Blocks.box(Vector3(rng.randf_range(3, 6), 0.08, rng.randf_range(1.5, 3)), Color(0.86, 0.8, 0.62), at + Vector3(0, 0.04, 0))
+		bar.rotation.y = rng.randf() * TAU
+		_decor.add_child(bar)
 
 
 ## The rainforest: tall trees with broad tops, ferns, still water.

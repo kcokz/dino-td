@@ -86,8 +86,8 @@ func top(p: Vector2i) -> Vector3:
 	var h := 0.6
 	if _buildings.has(p):
 		h = float(_buildings[p].node.get_meta("height", 1.5))
-	elif home.terrain.get(p, "") == "tree":
-		h = 5.0
+	else:
+		h = {"tree": 5.0, "toadstool": 2.4, "glacier": 2.2, "ruin": 2.6, "wreck": 1.6}.get(home.terrain.get(p, ""), h)
 	return plot_pos(p) + Vector3(0, PLOT_TOP + h, 0)
 
 
@@ -107,7 +107,8 @@ func plot_colour(p: Vector2i) -> Color:
 
 
 ## The ground laid for the place the ark is in: each plot its colour, the special ones dressed -- water and stones in
-## a pond, a great tree, nuggets in a vein of ore, a crust on the lava.
+## a pond (reeds in a mire, a palm by an oasis, shells in a tide pool), a great tree, toadstools, a fossil in the ice,
+## broken pillars; nuggets in a vein of ore, crystals in one of ice; a crust on the lava, a wreck's ribs.
 func lay_ground() -> void:
 	for n in _ground.values():
 		n.queue_free()
@@ -121,13 +122,62 @@ func lay_ground() -> void:
 		var col: Color = Content.TERRAIN[t].color
 		var k: int = p.x * 7 + p.y * 3
 		match t:
-			"pond":
+			"pond", "mire", "oasis", "tidepool":
 				var water := Blocks.box(Vector3(2.7, 0.04, 2.7), col, Vector3(0, 0.02, 0))
 				water.material_override = Blocks.glow(col, 0.3)
 				node.add_child(water)
+				var stone := {"pond": Color(0.55, 0.55, 0.52), "mire": Color(0.28, 0.26, 0.2), "oasis": Color(0.8, 0.7, 0.5),
+					"tidepool": Color(0.92, 0.88, 0.8)}[t] as Color
 				for i in 6:
 					var a: float = TAU * i / 6.0 + k
-					node.add_child(Blocks.box(Vector3(0.45, 0.22, 0.4), Color(0.55, 0.55, 0.52), Vector3(cos(a) * 1.65, 0.1, sin(a) * 1.65)))
+					node.add_child(Blocks.box(Vector3(0.45, 0.22, 0.4), stone, Vector3(cos(a) * 1.65, 0.1, sin(a) * 1.65)))
+				if t == "mire":
+					for i in 5:
+						var a: float = TAU * i / 5.0 + k * 0.4
+						node.add_child(Blocks.box(Vector3(0.08, 0.9 + (i % 3) * 0.3, 0.08), Color(0.42, 0.46, 0.22),
+							Vector3(cos(a) * 1.2, 0.5, sin(a) * 1.2)))
+				elif t == "oasis":
+					node.add_child(Blocks.box(Vector3(0.3, 2.6, 0.3), Color(0.5, 0.36, 0.2), Vector3(1.3, 1.3, -1.3)))
+					for i in 4:
+						var frond := Blocks.box(Vector3(1.4, 0.08, 0.4), Color(0.25, 0.55, 0.22), Vector3(1.3, 2.6, -1.3))
+						frond.rotation = Vector3(0.3, i * PI * 0.5 + 0.4, 0.0)
+						node.add_child(frond)
+				elif t == "tidepool":
+					for i in 3:
+						node.add_child(Blocks.ball(0.18, Color(1.0, 0.75, 0.7), Vector3(-0.8 + i * 0.8, 0.08, 0.4 * (i % 2))))
+			"toadstool":
+				for i in 3:
+					var at := Vector3(-0.9 + i * 0.9, 0, (i % 2) * 0.7 - 0.3)
+					var tall := 0.8 + 0.5 * float((k + i) % 3)
+					node.add_child(Blocks.box(Vector3(0.22, tall, 0.22), Color(0.92, 0.88, 0.8), at + Vector3(0, tall * 0.5, 0)))
+					node.add_child(Blocks.dome(0.55 + i * 0.12, col, at + Vector3(0, tall, 0)))
+			"glacier":
+				var ice := Blocks.box(Vector3(2.6, 1.8, 2.2), col, Vector3(0, 0.9, 0))
+				ice.material_override = Blocks.glow(col, 0.25)
+				node.add_child(ice)
+				node.add_child(Blocks.box(Vector3(1.4, 0.2, 0.3), Color(0.92, 0.9, 0.84), Vector3(0, 1.0, 1.12)))
+				node.add_child(Blocks.box(Vector3(0.25, 0.6, 0.3), Color(0.92, 0.9, 0.84), Vector3(-0.5, 1.0, 1.12)))
+			"ruin":
+				for sx in [-0.9, 0.9]:
+					var tall := 2.2 if sx < 0 else 1.4
+					node.add_child(Blocks.box(Vector3(0.6, tall, 0.6), col, Vector3(sx, tall * 0.5, 0)))
+				var lintel := Blocks.box(Vector3(2.4, 0.4, 0.7), col.darkened(0.1), Vector3(0.2, 0.2, 0.9))
+				lintel.rotation.y = 0.3
+				node.add_child(lintel)
+			"ice_ore":
+				for i in 5:
+					var a: float = TAU * i / 5.0 + k * 0.7
+					var shard := Blocks.box(Vector3(0.28, 0.7 + (i % 2) * 0.4, 0.28), Color(0.7, 0.88, 1.0), Vector3(cos(a) * 0.9, 0.4, sin(a) * 0.9))
+					shard.material_override = Blocks.glow(Color(0.7, 0.88, 1.0), 0.6)
+					shard.rotation.z = 0.25 * (1 if i % 2 == 0 else -1)
+					node.add_child(shard)
+			"wreck":
+				for i in 4:
+					var rib := Blocks.box(Vector3(0.2, 1.1, 0.25), col, Vector3(-1.0 + i * 0.66, 0.5, 0.0))
+					rib.rotation.z = 0.35 if i % 2 == 0 else -0.35
+					node.add_child(rib)
+				node.add_child(Blocks.box(Vector3(2.6, 0.25, 0.7), col.darkened(0.2), Vector3(0, 0.12, 0.6)))
+				node.add_child(Blocks.box(Vector3(0.18, 1.6, 0.18), col.darkened(0.3), Vector3(0.3, 0.8, -0.6)))
 			"tree":
 				node.add_child(Blocks.box(Vector3(0.75, 3.4, 0.75), Color(0.36, 0.25, 0.16), Vector3(0, 1.7, 0)))
 				var top1 := Blocks.box(Vector3(3.2, 1.4, 3.2), Color(0.17, 0.38, 0.16), Vector3(0, 3.7, 0))

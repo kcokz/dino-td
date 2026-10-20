@@ -148,7 +148,9 @@ static func creature(edge: float, c: Color, theirs := false, affixes: Array = []
 
 ## What marks a kind: our evolved species (a beak and crest, glowing spikes, a poison haze, cracks of fire), the
 ## scavenger's sack, the mutant's third eye, and the monsters of each place (spore sacs, a beetle's plate and horn, a
-## salamander's tail, the bosses').
+## salamander's tail; a leech's rings and mouth, a moth's wings, a frog's eyes, a toad's poison sacs; fangs and frost,
+## ice crystals; a sandworm's teeth, a scorpion's tail and pincers; a crab's claws, a jellyfish's bell, a sea serpent's
+## fin; the bosses').
 static func _marks(body: MeshInstance3D, edge: float, c: Color, kind: String) -> void:
 	match kind:
 		"falcon":
@@ -214,6 +216,116 @@ static func _marks(body: MeshInstance3D, edge: float, c: Color, kind: String) ->
 				var spot := box(Vector3(0.12, 0.05, 0.12), Color(1.0, 0.85, 0.3), Vector3(-0.15 + i * 0.3, edge * 0.51, -edge * 0.1))
 				spot.material_override = glow(Color(1.0, 0.85, 0.3), 1.4)
 				body.add_child(spot)
+		"leech", "boss_bog":
+			# A ringed body and a round sucking mouth; the swamp's mother carries her young on her back.
+			for i in 3:
+				body.add_child(box(Vector3(edge * 1.04, edge * 1.04, edge * 0.07), c.darkened(0.35), Vector3(0, 0, -edge * 0.3 + i * edge * 0.25)))
+			var mouth := cylinder(edge * 0.18, 0.05, Color(0.3, 0.08, 0.08), Vector3(0, -edge * 0.2, edge * 0.52))
+			mouth.rotation.x = PI * 0.5
+			body.add_child(mouth)
+			if kind == "boss_bog":
+				for i in 3:
+					body.add_child(ball(edge * 0.14, c.lightened(0.25), Vector3(-edge * 0.3 + i * edge * 0.3, edge * 0.56, -edge * 0.1)))
+		"moth":
+			# Broad dusty wings, a pale eye on each, and feelers.
+			for side in [-1.0, 1.0]:
+				var w := box(Vector3(edge * 1.1, 0.04, edge * 0.9), c.lightened(0.15), Vector3(side * edge * 0.95, edge * 0.35, -edge * 0.05))
+				w.rotation.z = side * 0.3
+				var spot := box(Vector3(edge * 0.3, 0.02, edge * 0.3), Color(0.95, 0.9, 0.6), Vector3(side * edge * 0.12, 0.03, 0))
+				spot.material_override = glow(Color(0.95, 0.9, 0.6), 0.8)
+				w.add_child(spot)
+				body.add_child(w)
+				var feeler := box(Vector3(0.04, 0.04, edge * 0.5), c.darkened(0.4), Vector3(side * edge * 0.15, edge * 0.55, edge * 0.55))
+				feeler.rotation.x = -0.6
+				body.add_child(feeler)
+		"mini_bog":
+			# A frog's eyes up on top, a wide mouth.
+			for side in [-1.0, 1.0]:
+				body.add_child(ball(edge * 0.17, c.lightened(0.2), Vector3(side * edge * 0.28, edge * 0.55, edge * 0.25)))
+				var pupil := ball(edge * 0.08, Color(1.0, 0.7, 0.1), Vector3(side * edge * 0.28, edge * 0.6, edge * 0.38))
+				pupil.material_override = glow(Color(1.0, 0.7, 0.1), 1.2)
+				body.add_child(pupil)
+			body.add_child(box(Vector3(edge * 0.8, 0.05, 0.05), Color(0.15, 0.1, 0.08), Vector3(0, -edge * 0.12, edge * 0.51)))
+		"mini_bog2":
+			# Poison sacs on its sides and back -- they burst when it falls.
+			for i in 4:
+				var sac := ball(edge * 0.18, Color(0.7, 0.95, 0.2), Vector3((-1.0 if i % 2 == 0 else 1.0) * edge * 0.5,
+					edge * (0.1 + 0.25 * (i / 2)), edge * (0.1 - 0.3 * (i / 2))))
+				sac.material_override = glow(Color(0.7, 0.95, 0.2), 0.9)
+				body.add_child(sac)
+		"frostfang", "mini_ice2":
+			# Long white fangs, a ridge of frost along the back -- and a shaggy coat on the big one.
+			for side in [-1.0, 1.0]:
+				body.add_child(box(Vector3(0.07, edge * 0.32, 0.07), Color(0.95, 0.97, 1.0), Vector3(side * edge * 0.18, -edge * 0.38, edge * 0.5)))
+			for i in 3:
+				var spike := box(Vector3(0.1, edge * 0.25, 0.1), Color(0.8, 0.92, 1.0), Vector3(0, edge * 0.6, edge * (0.25 - i * 0.28)))
+				spike.material_override = glow(Color(0.8, 0.92, 1.0), 0.7)
+				body.add_child(spike)
+			if kind == "mini_ice2":
+				for side in [-1.0, 1.0]:
+					body.add_child(box(Vector3(edge * 0.14, edge * 0.85, edge * 0.95), Color(0.95, 0.95, 0.97), Vector3(side * edge * 0.55, -edge * 0.05, 0)))
+		"shard", "mini_ice", "boss_ice":
+			# Crystals of ice growing out of it -- a crown of them on the queen; a plate of ice on the armoured one.
+			var ice := Color(0.7, 0.9, 1.0)
+			if kind == "mini_ice":
+				body.add_child(box(Vector3(edge * 1.08, edge * 0.2, edge * 1.08), Color(0.6, 0.72, 0.85), Vector3(0, edge * 0.5, 0)))
+			var n: int = {"shard": 3, "mini_ice": 4, "boss_ice": 7}[kind]
+			for i in n:
+				var a := TAU * i / n
+				var crystal := box(Vector3(0.12, edge * 0.35, 0.12), ice, Vector3(cos(a) * edge * 0.3, edge * 0.62, sin(a) * edge * 0.3))
+				crystal.rotation = Vector3(sin(a) * 0.4, 0, -cos(a) * 0.4)
+				crystal.material_override = glow(ice, 1.2)
+				body.add_child(crystal)
+		"sandworm", "mini_sand":
+			# A ringed body, a round mouth ringed with teeth.
+			for i in 3:
+				body.add_child(box(Vector3(edge * 1.04, edge * 1.04, edge * 0.07), c.darkened(0.25), Vector3(0, 0, -edge * 0.35 + i * edge * 0.25)))
+			var maw := cylinder(edge * 0.2, 0.05, Color(0.3, 0.12, 0.1), Vector3(0, -edge * 0.2, edge * 0.52))
+			maw.rotation.x = PI * 0.5
+			body.add_child(maw)
+			for i in 6:
+				var a := TAU * i / 6
+				body.add_child(box(Vector3(0.05, 0.05, edge * 0.12), Color(0.95, 0.92, 0.82),
+					Vector3(cos(a) * edge * 0.15, -edge * 0.2 + sin(a) * edge * 0.15, edge * 0.56)))
+		"scorpion", "mini_sand2":
+			# A tail curled up over its back with a glowing sting, and two pincers.
+			var tail := box(Vector3(edge * 0.18, edge * 0.7, edge * 0.18), c.darkened(0.15), Vector3(0, edge * 0.6, -edge * 0.45))
+			tail.rotation.x = 0.5
+			body.add_child(tail)
+			var sting := box(Vector3(edge * 0.14, edge * 0.14, edge * 0.3), Color(0.9, 0.3, 0.6), Vector3(0, edge * 0.98, -edge * 0.2))
+			sting.material_override = glow(Color(0.9, 0.3, 0.6), 1.3)
+			body.add_child(sting)
+			for side in [-1.0, 1.0]:
+				body.add_child(box(Vector3(edge * 0.22, edge * 0.2, edge * 0.42), c.darkened(0.1), Vector3(side * edge * 0.45, -edge * 0.25, edge * 0.62)))
+		"boss_sand":
+			# A crust of sandstone, a mane of spines.
+			body.add_child(box(Vector3(edge * 1.08, edge * 0.2, edge * 1.08), c.darkened(0.35), Vector3(0, edge * 0.55, 0)))
+			for i in 5:
+				var spine := box(Vector3(0.14, edge * 0.35, 0.14), Color(0.9, 0.78, 0.5), Vector3(-edge * 0.4 + i * edge * 0.2, edge * 0.78, -edge * 0.2))
+				spine.rotation.x = -0.3
+				body.add_child(spine)
+		"crab", "mini_sea":
+			# Two big claws in front, a shell flat and wide.
+			body.add_child(box(Vector3(edge * 1.3, edge * 0.14, edge * 1.1), c.darkened(0.2), Vector3(0, edge * 0.5, -edge * 0.05)))
+			for side in [-1.0, 1.0]:
+				var claw := box(Vector3(edge * 0.32, edge * 0.28, edge * 0.45), c.lightened(0.1), Vector3(side * edge * 0.62, -edge * 0.1, edge * 0.55))
+				claw.rotation.y = -side * 0.35
+				body.add_child(claw)
+		"jelly", "boss_sea":
+			# A glowing bell on top, tentacles hanging round it.
+			var bell := dome(edge * 0.62, c.lightened(0.3), Vector3(0, edge * 0.5, 0))
+			bell.material_override = glow(c.lightened(0.3), 0.8)
+			body.add_child(bell)
+			var arms := 6 if kind == "jelly" else 10
+			for i in arms:
+				var a := TAU * i / arms
+				body.add_child(box(Vector3(0.05, edge * 0.6, 0.05), c.lightened(0.15), Vector3(cos(a) * edge * 0.55, -edge * 0.15, sin(a) * edge * 0.55)))
+		"mini_sea2":
+			# A fin all along its back, gills on its neck.
+			body.add_child(box(Vector3(0.06, edge * 0.4, edge * 1.0), Color(0.3, 0.75, 0.7), Vector3(0, edge * 0.7, 0)))
+			for side in [-1.0, 1.0]:
+				for i in 3:
+					body.add_child(box(Vector3(0.04, edge * 0.2, 0.05), c.darkened(0.4), Vector3(side * edge * 0.51, edge * 0.05, edge * (0.3 - i * 0.1))))
 
 
 ## The body of a creature made by creature().
