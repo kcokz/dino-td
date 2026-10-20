@@ -25,10 +25,6 @@ I18n="*res://scripts/autoload/I18n.gd"
 Fx="*res://scripts/autoload/Fx.gd"
 WindowMode="*res://scripts/autoload/WindowMode.gd"
 
-[internationalization]
-
-locale/fallback="en"
-
 [display]
 
 window/size/viewport_width=1280
