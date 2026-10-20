@@ -243,6 +243,10 @@ const EN := {
 	"孵 %d%s": "Hatch %d%s", "少孵 %d": "%d fewer",
 	# Language.
 	"语言": "Language",
+	# The HUD's pieces (HudParts).
+	"首领": "Boss", "小首领": "Mini-boss", "大波": "Big wave", "第 %d / %d 轮": "Round %d / %d", "已造": "Built",
+	"我方": "Ours", "敌方": "Theirs", "这一轮出战 %d 只，吃 %d 生物质": "%d go out this round, eating %d biomass",
+	"每轮 +%d · 利息 +%d": "+%d a round · interest +%d",
 }
 
 static var _english: Translation

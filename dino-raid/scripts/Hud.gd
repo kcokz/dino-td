@@ -26,29 +26,24 @@ var _hand: Control
 var _cards: Array = []           # CardView, one for each place on the shelf
 var _kept: Array = []            # CardView, one for each good in the stash
 var _kept_for := ""
-var _kept_label: Label
+var _kept_label: HudParts.Tag
 var _store_slot: Control
 var _hovered: CardView
 var _gold: Control
-var _reroll: Button
-var _go: Button
-var _corner: VBoxContainer
-var _corner_frame: PanelContainer
-var _menu: Button
+var _reroll: HudParts.RoundButton
+var _go: HudParts.RoundButton
+var _left: VBoxContainer           # top left: the crest, the purse, the relics and the schools' gifts, the wonders
+var _crest: HudParts.Crest
+var _purse: HudParts.Purse
+var _menu: HudParts.RoundButton
 var _banner_rule: Control
-var _title: Label
-var _rule: Label
-var _hp: Control
-var _res: HBoxContainer          # biomass and research points: a picture each, what there is and what comes in
-var _biomass: Label
-var _research: Label
-var _army: RichTextLabel
-var _bonus: Label
-var _deck_button: Button
+var _army: HudParts.ArmyTag
+var _bonus: HudParts.Tag
+var _deck_button: HudParts.RoundButton
 var _choice: PanelContainer
 var _wonder_box: VBoxContainer
 var _wonder_title: Label
-var _wonder_buttons := {}        # wonder id -> Button
+var _wonder_tiles := {}          # wonder id -> HudParts.WonderTile
 var _wonder_hover := ""
 var _relics: HBoxContainer
 var _relics_shown := -1
@@ -69,9 +64,11 @@ var _banner: PanelContainer
 var _banner_title: Label
 var _banner_sub: Label
 var _banner_tween: Tween
-var _battle: PanelContainer
-var _battle_text: Label
-var _speed: Button
+var _battle: HBoxContainer
+var _versus: HudParts.Versus
+var _speed: HudParts.RoundButton
+var _point := ""                 # what of the HUD's own the cursor points at (_point_tip), "" nothing
+var _point_count := 0            # ...a monster of a wave: how many of it
 var _pack: PanelContainer
 var _pack_text: Label
 var _pack_food: Label
@@ -98,101 +95,50 @@ func setup(p_game: Game) -> void:
 	edges.material = em
 	_root.add_child(edges)
 
-	# Top left, on a panel of ink: where we are and its rule, the homeland, the resources, this round's army; the
-	# relics beside.
-	_corner_frame = PanelContainer.new()
-	var frame := Style.panel(14.0)
-	frame.top = Color(0.045, 0.06, 0.065, 0.74)
-	frame.bottom = Color(0.03, 0.04, 0.045, 0.6)
-	frame.shade = 0.25
-	_corner_frame.add_theme_stylebox_override("panel", frame)
-	_corner_frame.position = Vector2(12, 8)
-	_corner_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_corner_frame)
-	_corner = VBoxContainer.new()
-	_corner.add_theme_constant_override("separation", 4)
-	_corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_corner_frame.add_child(_corner)
-	_title = _label("", 24, Fonts.serif(900), Style.GOLD_BRIGHT)
-	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 14)
-	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_row.add_child(_title)
+	# Top left: the place's crest, the homeland's purse, the relics and what its schools give, the wonders to build.
+	_left = VBoxContainer.new()
+	_left.position = Vector2(10, 6)
+	_left.add_theme_constant_override("separation", 4)
+	_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_left)
+	_crest = HudParts.Crest.new()
+	_crest.mouse_entered.connect(func() -> void: _point = "rule")
+	_crest.mouse_exited.connect(func() -> void: _point = "")
+	_left.add_child(_crest)
+	_purse = HudParts.Purse.new()
+	_purse.pointed.connect(func(which: String) -> void: _point = which)
+	_left.add_child(_purse)
+	var extras := HBoxContainer.new()
+	extras.add_theme_constant_override("separation", 8)
+	extras.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_left.add_child(extras)
 	_relics = HBoxContainer.new()
 	_relics.add_theme_constant_override("separation", 6)
-	_relics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_relics.alignment = BoxContainer.ALIGNMENT_END
-	title_row.add_child(_relics)
-	_corner.add_child(title_row)
-	_rule = _label("", 14, Fonts.serif(700), Color(0.93, 0.8, 0.6))
-	_rule.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_corner.add_child(_rule)
-	_hp = Control.new()
-	_hp.custom_minimum_size = Vector2(250, 30)
-	_hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hp.draw.connect(_draw_hp)
-	_corner.add_child(_hp)
-	_res = HBoxContainer.new()
-	_res.add_theme_constant_override("separation", 6)
-	_res.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for part in [[Icons.BIOMASS, "生物质：每轮产多少，出战的兵要吃"], [Icons.RESEARCH, "研究点数：贴词条、强化牌要花"]]:
-		var icon := Icons.rect(part[0], 22)
-		icon.mouse_filter = Control.MOUSE_FILTER_PASS
-		icon.tooltip_text = part[1]
-		_res.add_child(icon)
-		var amount := _label("", 17, Fonts.serif(800), Color(0.95, 0.93, 0.84))
-		amount.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		amount.custom_minimum_size = Vector2(92, 0)
-		_res.add_child(amount)
-		if part[0] == Icons.BIOMASS:
-			_biomass = amount
-		else:
-			_research = amount
-	_corner.add_child(_res)
-	_army = RichTextLabel.new()
-	_army.bbcode_enabled = false
-	_army.fit_content = true
-	_army.scroll_active = false
-	_army.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_army.custom_minimum_size = Vector2(320, 0)
-	_army.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_army.add_theme_font_override("normal_font", Fonts.serif(700))
-	_army.add_theme_font_size_override("normal_font_size", 16)
-	_army.add_theme_color_override("default_color", Color(0.92, 0.86, 0.74))
-	_army.add_theme_constant_override("outline_size", 4)
-	_army.add_theme_color_override("font_outline_color", Style.OUTLINE)
-	_corner.add_child(_army)
-	_bonus = _label("", 15, Fonts.serif(800), Style.AMBER)
-	_bonus.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_bonus.autowrap_mode = Style.wrap()
-	_bonus.custom_minimum_size = Vector2(340, 0)
-	_corner.add_child(_bonus)
-
-	# Under it: the wonders on offer this run -- one can be built.
+	extras.add_child(_relics)
+	_bonus = HudParts.Tag.new("", Style.AMBER, 14)
+	_bonus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	extras.add_child(_bonus)
 	_wonder_box = VBoxContainer.new()
-	_wonder_box.add_theme_constant_override("separation", 6)
-	_root.add_child(_wonder_box)
-	_wonder_title = _label("奇观（一局只能造一座）", 15, Fonts.serif(800), Style.GOLD_BRIGHT)
+	_wonder_box.add_theme_constant_override("separation", 2)
+	_left.add_child(_wonder_box)
+	_wonder_title = _label("奇观（一局只能造一座）", 14, Fonts.serif(800), Style.GOLD_BRIGHT)
 	_wonder_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_wonder_box.add_child(_wonder_title)
 	var wonder_row := HBoxContainer.new()
-	wonder_row.add_theme_constant_override("separation", 8)
+	wonder_row.add_theme_constant_override("separation", 6)
 	_wonder_box.add_child(wonder_row)
 	for id in game.home.wonders:
-		var w: Dictionary = Content.WONDERS[id]
-		var b := _button(Lang.t("%s · %d 金") % [Lang.t(w.name), w.price], Vector2(160, 38), 16)
-		b.add_theme_color_override("font_color", (w.color as Color).lerp(Style.PARCHMENT, 0.55))
-		b.mouse_entered.connect(func() -> void:
+		var tile := HudParts.WonderTile.new(id)
+		tile.mouse_entered.connect(func() -> void:
 			_wonder_hover = id
 			game.aim(id))
-		b.mouse_exited.connect(func() -> void:
+		tile.mouse_exited.connect(func() -> void:
 			if _wonder_hover == id:
 				_wonder_hover = ""
 				game.aim(""))
-		b.pressed.connect(func() -> void: game.act("wonder", {"id": id}))
-		wonder_row.add_child(b)
-		_wonder_buttons[id] = b
+		tile.pressed.connect(func() -> void: game.act("wonder", {"id": id}))
+		wonder_row.add_child(tile)
+		_wonder_tiles[id] = tile
 
 
 	# Top right: who comes, and how it will go; under them, what the cursor points at.
@@ -244,8 +190,7 @@ func setup(p_game: Game) -> void:
 	_info.add_child(_info_text)
 
 	# Bottom left: the stash's count, and the place to keep the offer taken up (the stash's cards go in under the shelf).
-	_kept_label = _label("", 15, Fonts.serif(800), Style.PARCHMENT)
-	_kept_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_kept_label = HudParts.Tag.new(Icons.STASH)
 	_root.add_child(_kept_label)
 	_store_slot = Control.new()
 	_store_slot.custom_minimum_size = CardView.SIZE * KEPT_SCALE
@@ -268,28 +213,28 @@ func setup(p_game: Game) -> void:
 	_gold.size = Vector2(120, 150)
 	_gold.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_gold.position = Vector2(22, -232)
-	_gold.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gold.mouse_filter = Control.MOUSE_FILTER_PASS
+	_gold.mouse_entered.connect(func() -> void: _point = "gold")
+	_gold.mouse_exited.connect(func() -> void: _point = "")
 	_gold.draw.connect(_draw_gold)
 	_root.add_child(_gold)
-	_reroll = _button("刷新", Vector2(188, 50), 19)
-	_reroll.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_reroll.position = Vector2(-214, -218)
-	_reroll.pressed.connect(func() -> void: game.act("reroll"))
-	_root.add_child(_reroll)
-	_deck_button = _button("牌库", Vector2(188, 44), 17)
-	_deck_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_deck_button.position = Vector2(-214, -272)
+	# Bottom right: the deck and a fresh shelf, round buttons; the great seal that sends the army out, the army over it.
+	_deck_button = _round(HudParts.RoundButton.new(Icons.DECK, "牌库", 26.0), Vector2(-265, -230), "deck")
 	_deck_button.pressed.connect(func() -> void: show_deck())
-	_root.add_child(_deck_button)
-	_go = _button("出战！", Vector2(188, 64), 26, true)
-	_go.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_go.position = Vector2(-214, -150)
+	_reroll = _round(HudParts.RoundButton.new(Icons.REFRESH, "刷新", 26.0), Vector2(-265, -138), "reroll")
+	_reroll.pressed.connect(func() -> void: game.act("reroll"))
+	_go = _round(HudParts.RoundButton.new(Icons.BATTLE, "出战！", 50.0, true), Vector2(-172, -184), "")
 	_go.pressed.connect(func() -> void: game.act("depart" if game.phase == Game.Phase.PACK else "fight"))
-	_root.add_child(_go)
+	_army = HudParts.ArmyTag.new()
+	_army.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_army.position = Vector2(-180, -222)
+	_army.mouse_entered.connect(func() -> void: _point = "army")
+	_army.mouse_exited.connect(func() -> void: _point = "")
+	_root.add_child(_army)
 	# Bottom left, under the gold: the pause menu (Esc does the same).
-	_menu = _button("菜单", Vector2(96, 34), 15)
+	_menu = HudParts.RoundButton.new(Icons.MENU, "菜单", 17.0)
 	_menu.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_menu.position = Vector2(24, -50)
+	_menu.position = Vector2(46, -70)
 	_menu.pressed.connect(func() -> void: game.pause())
 	_root.add_child(_menu)
 	_hint = _label("", 17, Fonts.serif(700), Style.GOLD_BRIGHT)
@@ -302,24 +247,24 @@ func setup(p_game: Game) -> void:
 	_hint.position = Vector2(-60, -236)
 	_root.add_child(_hint)
 
-	# A battle: the count and the clock, and the speed.
-	_battle = PanelContainer.new()
-	_battle.add_theme_stylebox_override("panel", Style.panel(14.0))
+	# A battle: our side and theirs either side of the clock, and the speed.
+	_battle = HBoxContainer.new()
 	_battle.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_battle.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_battle.position = Vector2(0, 12)
+	_battle.position = Vector2(0, 6)
+	_battle.alignment = BoxContainer.ALIGNMENT_CENTER
+	_battle.add_theme_constant_override("separation", 2)
 	_battle.visible = false
 	_root.add_child(_battle)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
-	_battle.add_child(row)
-	_battle_text = _label("", 22, Fonts.serif(800), CREAM)
-	row.add_child(_battle_text)
-	_speed = _button("快进", Vector2(96, 40), 17)
+	_versus = HudParts.Versus.new()
+	_battle.add_child(_versus)
+	_speed = HudParts.RoundButton.new(Icons.SPEED, "快进", 18.0)
+	_speed.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_speed.pressed.connect(func() -> void:
 		game.speed = 3.0 if game.speed < 2.0 else 1.0
-		_speed.text = "正常" if game.speed > 1.0 else "快进")
-	row.add_child(_speed)
+		_speed.caption = "正常" if game.speed > 1.0 else "快进"
+		_speed.queue_redraw())
+	_battle.add_child(_speed)
 
 	# A nest's raise: one more, or elite.
 	_choice = PanelContainer.new()
@@ -403,7 +348,6 @@ func setup(p_game: Game) -> void:
 func _process(_delta: float) -> void:
 	_layout()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
-	_wonder_box.position = Vector2(18.0, _corner_frame.position.y + _corner_frame.size.y + 10.0)
 	var tip := game.describe() if _hovered == null and not _overlay.visible else ""
 	if not _overlay.visible:
 		if _relic_hover != "":
@@ -413,6 +357,8 @@ func _process(_delta: float) -> void:
 			var w: Dictionary = Content.WONDERS[_wonder_hover]
 			tip = Lang.t("%s（奇观）\n%s\n%d 金。一局只能造一座，搬家也带着%s") % [Lang.t(w.name), Lang.t(w.says), w.price,
 				"" if game.home.gold >= int(w.price) else Lang.t("（还差 %d 金）") % (int(w.price) - game.home.gold)]
+		elif _point != "":
+			tip = _point_tip()
 	_info.visible = tip != ""
 	if tip != "" and _info_text.text != tip:
 		_info_text.text = tip
@@ -425,8 +371,11 @@ func _process(_delta: float) -> void:
 		_info.reset_size()
 	if _battle.visible and game.fight != null:
 		var f: Fight = game.fight
-		_battle_text.text = Lang.t("我方 %d  对  敌方 %d   ·   还剩 %d 秒") % [f.alive("ours").size(), f.alive("theirs").size(),
-			ceili(maxf(0.0, Fight.LIMIT - f.time))]
+		_versus.ours = f.alive("ours").size()
+		_versus.theirs = f.alive("theirs").size()
+		_versus.left = maxf(0.0, Fight.LIMIT - f.time)
+		_versus.limit = Fight.LIMIT
+		_versus.queue_redraw()
 
 
 ## The shelf, as cards: a place still showing what it showed keeps its card (so nothing jumps); a place bought from
@@ -441,10 +390,7 @@ func relanguage() -> void:
 		if not card.sold and not card.ci.is_empty():
 			card.setup(card.ci, card.kept)
 		card.queue_redraw()
-	for id in _wonder_buttons:
-		var w: Dictionary = Content.WONDERS[id]
-		(_wonder_buttons[id] as Button).text = Lang.t("%s · %d 金") % [Lang.t(w.name), w.price]
-	for l in [_hint, _bonus, _info_text]:
+	for l in [_hint, _info_text]:
 		(l as Label).autowrap_mode = Style.wrap()
 	_waves_for = ""
 	refresh()
@@ -546,44 +492,56 @@ func refresh() -> void:
 			v.set_state(planning and not home.stash_targets(k).is_empty(), game.held_k == k)
 	_go.disabled = not (planning or packing)
 	_go.visible = not away
-	_go.text = "出发！" if packing else "出战！"
+	_go.caption = "出发！" if packing else "出战！"
+	_go.queue_redraw()
 	var price := home.reroll_price()
-	_reroll.text = Lang.t("刷新（%s）") % (Lang.t("免费") if price == 0 else Lang.t("%d 金") % price)
+	_reroll.cost = price
+	_reroll.enough = home.gold >= price
 	_reroll.disabled = not planning or home.gold < price
 	_reroll.visible = not away and not packing
+	_reroll.queue_redraw()
 	_menu.visible = not fighting
 	_gold.visible = not fighting
 	_gold.queue_redraw()
-	_hp.queue_redraw()
-	_title.text = Lang.t("%s · 第 %d / %d 轮") % [Lang.t(Content.LEVELS[run.place].name), run.round, run.rounds()]
-	var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
-	_rule.text = Lang.t("%s：%s") % [Lang.t(rule.name), Lang.t(rule.says)]
-	_biomass.text = Lang.t("%d（+%d）") % [home.biomass, home.income_biomass()]
-	_research.text = Lang.t("%d（+%d）") % [home.genes, home.income_genes()]
-	var army := home.army()
-	_army.clear()
-	if not fighting:
-		_army.append_text(Lang.t("这一轮出战 %d 只，吃 ") % army.size())
-		_army.add_image(Icons.of(Icons.BIOMASS, 18), 18, 18)
-		_army.append_text(" %d" % home.army_food())
+	var lv: Dictionary = Content.LEVELS[run.place]
+	_crest.place_name = Lang.t(lv.name)
+	_crest.glyph = Icons.PLACES[run.place] if run.place < Icons.PLACES.size() else ""
+	_crest.round = run.round
+	_crest.rounds = run.rounds()
+	_crest.minis = Content.MINI_ROUNDS
+	_crest.rule_name = Lang.t(Content.RULES[lv.rule].name)
+	_crest.queue_redraw()
+	_purse.hp = home.hp
+	_purse.hp_max = home.hp_max()
+	_purse.biomass = home.biomass
+	_purse.biomass_in = home.income_biomass()
+	_purse.research = home.genes
+	_purse.research_in = home.income_genes()
+	_purse.queue_redraw()
+	_army.count = home.army().size()
+	_army.food = home.army_food()
 	_army.visible = not away and not packing
-	_bonus.text = game.bonuses()
+	_army.queue_redraw()
+	_bonus.set_text(game.bonuses())
 	_bonus.visible = _bonus.text != "" and not away and not packing
 	_deck_button.visible = not away and not packing
 	_deck_button.disabled = not planning
-	_deck_button.text = Lang.t("牌库（%d 张）") % home.deck.size()
+	_deck_button.count = str(home.deck.size())
+	_deck_button.queue_redraw()
 	_choice.visible = planning and not game.pending.is_empty()
 	_wonder_box.visible = not away and not packing and not home.wonders.is_empty()
-	_wonder_title.text = (Lang.t("奇观：%s（已造）") % Lang.t(Content.WONDERS[home.wonder].name)) if home.wonder != "" \
-		else "奇观（一局只能造一座）"
-	for id in _wonder_buttons:
-		var b: Button = _wonder_buttons[id]
-		b.visible = home.wonder == ""
-		b.disabled = not planning or not home.can_build_wonder(id)
+	_wonder_title.text = "奇观" if home.wonder != "" else "奇观（一局只能造一座）"
+	for id in _wonder_tiles:
+		var tile: HudParts.WonderTile = _wonder_tiles[id]
+		tile.built = home.wonder == id
+		tile.visible = home.wonder == "" or home.wonder == id
+		tile.disabled = not planning or not home.can_build_wonder(id)
+		tile.enough = home.gold >= tile.cost
+		tile.queue_redraw()
 	_battle.visible = fighting and not game.at_home
 	var taking: int = game.pack_plots.size() + game.pack_kept.size()
-	_kept_label.text = (Lang.t("带走 %d / %d") % [taking, home.stash_size()]) if packing \
-		else (Lang.t("存货 %d / %d") % [home.stash.size(), home.stash_size()])
+	_kept_label.set_text((Lang.t("带走 %d / %d") % [taking, home.stash_size()]) if packing
+		else (Lang.t("存货 %d / %d") % [home.stash.size(), home.stash_size()]))
 	_kept_label.visible = not away
 	for v in _kept:
 		v.visible = not away
@@ -647,55 +605,71 @@ func _refresh_waves() -> void:
 	_waves_for = key
 	for ch in _waves.get_children():
 		ch.queue_free()
-	_waves.add_child(_wave_chip(Lang.t("这一仗") + _big(run, 0), run.wave(), true))
+	_waves.add_child(_wave_card(Lang.t("这一仗"), _big(run, 0), run.wave(), true))
 	if run.round < run.rounds():
-		_waves.add_child(_wave_chip(Lang.t("下一仗") + _big(run, 1), run.wave(1), false))
+		_waves.add_child(_wave_card(Lang.t("下一仗"), _big(run, 1), run.wave(1), false))
 
 
+## What a wave is, if more than any other: a boss's, a mini-boss's, a big one ("" none).
 func _big(run: Run, ahead: int) -> String:
 	if run.round + ahead >= run.rounds():
-		return Lang.t("（首领）")
+		return Lang.t("首领")
 	if run.round + ahead in Content.MINI_ROUNDS:
-		return Lang.t("（小首领）")
-	return Lang.t("（大波）") if run.big(ahead) else ""
+		return Lang.t("小首领")
+	return Lang.t("大波") if run.big(ahead) else ""
 
 
-func _wave_chip(name: String, wave: Array, now: bool) -> Control:
-	var chip := PanelContainer.new()
-	var box := Style.panel(9.0)
-	box.cut = 6.0
-	box.edge = Style.CORAL if now else Style.GOLD_DIM
-	box.rule = Color(box.edge, 0.3)
-	box.studs = now
-	chip.add_theme_stylebox_override("panel", box)
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.size_flags_horizontal = Control.SIZE_SHRINK_END
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 5)
-	chip.add_child(row)
-	row.add_child(_label(name, 15, Fonts.serif(800), Color(1.0, 0.8, 0.7) if now else Style.PARCHMENT_DIM))
-	# How dangerous it looks: skulls (Content.danger) -- not whether it will be won.
-	var n := Content.danger(wave, game.run.power())
-	var skulls := Control.new()
-	skulls.custom_minimum_size = Vector2(n * 17 + 2, 18)
-	skulls.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var sc := Style.CORAL if now else Color(Style.CORAL, 0.6)
-	skulls.draw.connect(func() -> void:
-		for i in n:
-			_skull(skulls, Vector2(9 + i * 17, 9), sc))
-	row.add_child(skulls)
-	var counts := {}
-	for k in wave:
-		counts[k] = counts.get(k, 0) + 1
-	for k in counts:
-		var mark := Control.new()
-		mark.custom_minimum_size = Vector2(16, 16)
-		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		var mc: Color = Content.ENEMIES[k].color
-		mark.draw.connect(func() -> void: Style.diamond(mark.get_canvas_item(), Vector2(8, 8), 7.5, mc, Color(0, 0, 0, 0.35)))
-		row.add_child(mark)
-		row.add_child(_label("%s×%d" % [Lang.t(Content.ENEMIES[k].name), counts[k]], 15, Fonts.serif(700), Style.PARCHMENT))
-	return chip
+## A wave as a card (HudParts.WaveCard): pointed at, a monster in it is told about.
+func _wave_card(title: String, tag: String, wave: Array, now: bool) -> Control:
+	var card := HudParts.WaveCard.new()
+	card.setup(title, tag, Content.danger(wave, game.run.power()), now, wave)
+	card.size_flags_horizontal = Control.SIZE_SHRINK_END
+	card.pointed.connect(func(kind: String) -> void:
+		_point = ("e:" + kind) if kind != "" else ""
+		for pair in card.kinds:
+			if pair[0] == kind:
+				_point_count = int(pair[1]))
+	return card
+
+
+## What the HUD's own figure pointed at is (_point).
+func _point_tip() -> String:
+	var home: Home = game.home
+	var run: Run = game.run
+	if _point.begins_with("e:"):
+		var e: Dictionary = Content.ENEMIES[_point.substr(2)]
+		return Lang.t("%s ×%d") % [Lang.t(e.name), _point_count]
+	match _point:
+		"rule":
+			var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
+			return Lang.t("%s：%s") % [Lang.t(rule.name), Lang.t(rule.says)]
+		"hp":
+			return Lang.t("家园 %d / %d") % [home.hp, home.hp_max()]
+		"biomass":
+			return Lang.t("生物质：每轮产多少，出战的兵要吃")
+		"research":
+			return Lang.t("研究点数：贴词条、强化牌要花")
+		"gold":
+			return Lang.t("金币 · 每轮 +%d") % home.income_gold() + "\n" + Lang.t("存着，利息 +%d") % home.interest()
+		"army":
+			return Lang.t("这一轮出战 %d 只，吃 %d 生物质") % [home.army().size(), home.army_food()]
+		"deck":
+			return Lang.t("牌库（%d 张）") % home.deck.size()
+		"reroll":
+			var price := home.reroll_price()
+			return Lang.t("刷新（%s）") % (Lang.t("免费") if price == 0 else Lang.t("%d 金") % price)
+	return ""
+
+
+## A round button put at `at` from the bottom right corner; pointed at, `point` is told about.
+func _round(b: HudParts.RoundButton, at: Vector2, point: String) -> HudParts.RoundButton:
+	b.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	b.position = at
+	if point != "":
+		b.mouse_entered.connect(func() -> void: _point = point)
+		b.mouse_exited.connect(func() -> void: _point = "")
+	_root.add_child(b)
+	return b
 
 
 func _refresh_forecast() -> void:
@@ -884,13 +858,7 @@ func choose_relic(ids: Array) -> String:
 
 ## A skull, `at` its middle: how dangerous a wave looks.
 func _skull(c: Control, at: Vector2, col: Color) -> void:
-	c.draw_circle(at + Vector2(0, -1.5), 6.5, col)
-	c.draw_rect(Rect2(at + Vector2(-4, 2), Vector2(8, 5)), col)
-	for sx in [-2.6, 2.6]:
-		c.draw_circle(at + Vector2(sx, -1.5), 1.9, Style.INK_DEEP)
-	c.draw_colored_polygon(PackedVector2Array([at + Vector2(0, 0.8), at + Vector2(-1.2, 2.8), at + Vector2(1.2, 2.8)]), Style.INK_DEEP)
-	for tx in [-2.0, 0.0, 2.0]:
-		c.draw_line(at + Vector2(tx, 4.6), at + Vector2(tx, 7.0), Style.INK_DEEP, 1.0)
+	HudParts.skull(c, at, col)
 
 
 ## The deck the shop draws from, laid out to look at (while planning) -- upgraded cards marked +.
@@ -1251,11 +1219,13 @@ func _draw_gold() -> void:
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
 	_gold.draw_string(f, c + Vector2(-w * 0.5, 14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, Color(1.0, 0.95, 0.75, 0.55))
 	_gold.draw_string(f, c + Vector2(-w * 0.5, 12.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, Color(0.3, 0.17, 0.02))
-	var lf := Fonts.serif(700)
-	for line in [[Lang.t("金币 · 每轮 +%d") % home.income_gold(), 128.0], [Lang.t("存着，利息 +%d") % home.interest(), 146.0]]:
-		var lw := lf.get_string_size(line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		_gold.draw_string_outline(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.9))
-		_gold.draw_string(lf, Vector2(60 - lw * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Style.GOLD_BRIGHT)
+	# Under it, on a bar: what comes in each round, and the interest on what is kept.
+	var lf := Fonts.serif(800)
+	var line := Lang.t("每轮 +%d · 利息 +%d") % [home.income_gold(), home.interest()]
+	var lw := lf.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+	var mid := maxf(60.0, lw * 0.5 + 13.0 - 14.0)          # under the coin, but not off the screen's edge
+	HudParts.capsule(_gold, Rect2(mid - lw * 0.5 - 13.0, 119.0, lw + 26.0, 26.0))
+	HudParts.words(_gold, Vector2(mid, 132), line, 14, Style.GOLD_BRIGHT, lf, 0, 3)
 
 
 ## The place to keep the offer taken up: a dashed frame, "存起来" and its price.
@@ -1280,24 +1250,6 @@ func _draw_store_slot() -> void:
 			4, Color(0, 0, 0, 0.9))
 		_store_slot.draw_string(f, Vector2((r.size.x - lw) * 0.5, line[1]), line[0], HORIZONTAL_ALIGNMENT_LEFT, -1, line[2], edge)
 
-
-
-## The homeland's health: a bar in a gold-ruled groove, jade -- coral when low.
-func _draw_hp() -> void:
-	var home: Home = game.home
-	var r := Rect2(Vector2(2, 4), Vector2(250, 22))
-	var ci := _hp.get_canvas_item()
-	Style.fill(ci, r.grow(2.0), 5.0, Color(0.02, 0.025, 0.03, 0.95), Color(0.06, 0.07, 0.07, 0.95))
-	var frac := clampf(float(home.hp) / maxf(1.0, home.hp_max()), 0.0, 1.0)
-	var col := Style.CORAL if frac < 0.35 else Color(0.36, 0.72, 0.48)
-	if frac > 0.0:
-		Style.fill(ci, Rect2(r.position, Vector2(maxf(8.0, r.size.x * frac), r.size.y)), 4.0, col.lightened(0.18), col.darkened(0.3))
-	Style.ring(ci, r.grow(2.0), 5.0, Style.GOLD, 1.2)
-	var f := Fonts.serif(800)
-	var text := Lang.t("家园 %d / %d") % [home.hp, home.hp_max()]
-	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-	_hp.draw_string_outline(f, Vector2(r.get_center().x - w * 0.5, 21), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 4, Color(0, 0, 0, 0.9))
-	_hp.draw_string(f, Vector2(r.get_center().x - w * 0.5, 21), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 
 
 ## A button in the house style (Style.theme) -- `primary` amber, for what sends things on.
