@@ -39,8 +39,10 @@ var _banner_rule: Control
 var _title: Label
 var _rule: Label
 var _hp: Control
-var _res: Label
-var _army: Label
+var _res: HBoxContainer          # biomass and research points: a picture each, what there is and what comes in
+var _biomass: Label
+var _research: Label
+var _army: RichTextLabel
 var _bonus: Label
 var _deck_button: Button
 var _choice: PanelContainer
@@ -131,11 +133,35 @@ func setup(p_game: Game) -> void:
 	_hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp.draw.connect(_draw_hp)
 	_corner.add_child(_hp)
-	_res = _label("", 16, Fonts.serif(700), Color(0.92, 0.9, 0.8))
-	_res.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_res = HBoxContainer.new()
+	_res.add_theme_constant_override("separation", 6)
+	_res.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for part in [[Icons.BIOMASS, "生物质：每轮产多少，出战的兵要吃"], [Icons.RESEARCH, "研究点数：贴词条、强化牌要花"]]:
+		var icon := Icons.rect(part[0], 22)
+		icon.mouse_filter = Control.MOUSE_FILTER_PASS
+		icon.tooltip_text = part[1]
+		_res.add_child(icon)
+		var amount := _label("", 17, Fonts.serif(800), Color(0.95, 0.93, 0.84))
+		amount.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		amount.custom_minimum_size = Vector2(92, 0)
+		_res.add_child(amount)
+		if part[0] == Icons.BIOMASS:
+			_biomass = amount
+		else:
+			_research = amount
 	_corner.add_child(_res)
-	_army = _label("", 16, Fonts.serif(700), Color(0.92, 0.86, 0.74))
-	_army.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_army = RichTextLabel.new()
+	_army.bbcode_enabled = false
+	_army.fit_content = true
+	_army.scroll_active = false
+	_army.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_army.custom_minimum_size = Vector2(320, 0)
+	_army.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_army.add_theme_font_override("normal_font", Fonts.serif(700))
+	_army.add_theme_font_size_override("normal_font_size", 16)
+	_army.add_theme_color_override("default_color", Color(0.92, 0.86, 0.74))
+	_army.add_theme_constant_override("outline_size", 4)
+	_army.add_theme_color_override("font_outline_color", Style.OUTLINE)
 	_corner.add_child(_army)
 	_bonus = _label("", 15, Fonts.serif(800), Style.AMBER)
 	_bonus.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -488,6 +514,7 @@ func refresh() -> void:
 		var v: CardView = _cards[i]
 		if not v.sold:
 			v.genes_shown = home.genes_cost(v.c)
+			v.purse = {"gold": home.gold, "genes": home.genes}
 			v.set_state(planning and not home.targets(i).is_empty(), game.held == i)
 	for k in _kept.size():
 		var v: CardView = _kept[k]
@@ -509,9 +536,14 @@ func refresh() -> void:
 	_title.text = "%s · 第 %d / %d 轮" % [Content.LEVELS[run.place].name, run.round, run.rounds()]
 	var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
 	_rule.text = "%s：%s" % [rule.name, rule.says]
-	_res.text = "生物质 %d（+%d）  研究点数 %d（+%d）" % [home.biomass, home.income_biomass(), home.genes, home.income_genes()]
+	_biomass.text = "%d（+%d）" % [home.biomass, home.income_biomass()]
+	_research.text = "%d（+%d）" % [home.genes, home.income_genes()]
 	var army := home.army()
-	_army.text = "这一轮出战 %d 只，吃 %d 生物质" % [army.size(), home.army_food()] if not fighting else ""
+	_army.clear()
+	if not fighting:
+		_army.append_text("这一轮出战 %d 只，吃 " % army.size())
+		_army.add_image(Icons.of(Icons.BIOMASS, 18), 18, 18)
+		_army.append_text(" %d" % home.army_food())
 	_army.visible = not away and not packing
 	_bonus.text = game.bonuses()
 	_bonus.visible = _bonus.text != "" and not away and not packing

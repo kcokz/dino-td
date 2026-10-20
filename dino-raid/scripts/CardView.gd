@@ -33,6 +33,7 @@ var affordable := true
 var chosen := false
 var marked := false               # its kind is about to be taken out of the shop: ringed red
 var genes_shown := -1             # the genes it costs here (Home.genes_cost), or -1 for what it says
+var purse := {}                   # what the homeland has ({gold, genes}), to show beside each cost; {} for none
 var _hover := false
 
 
@@ -170,9 +171,24 @@ func _draw() -> void:
 	if token() != "":
 		_gem(Vector2(21, 21), token(), Style.JADE, Fonts.serif(900), 16, true)
 	else:
-		var price_text := ("%d+" % c.price) if c.type == "raise" else ("%d" % c.price)
-		_gem(Vector2(21, 21), price_text, Style.AMBER, Fonts.display(900), 19 if price_text.length() < 2 else 15, affordable)
+		_price(Vector2(21, 21))
 	_extras(full)
+
+
+## The price on a gold coin at the top left -- and, when what there is is known, "/ what there is" beside it (coral
+## when it is not enough).
+func _price(at: Vector2) -> void:
+	var price_text := ("%d+" % c.price) if c.type == "raise" else ("%d" % c.price)
+	Icons.draw(self, Icons.GOLD, at, 38.0, affordable)
+	var f := Fonts.display(900)
+	var size_px := 18 if price_text.length() < 2 else 15
+	_text(at + Vector2(0, size_px * 0.36 + 1.0), price_text, size_px, Color(1.0, 0.95, 0.78, 0.6), f, HORIZONTAL_ALIGNMENT_CENTER)
+	_text(at + Vector2(0, size_px * 0.36), price_text, size_px, Color(0.26, 0.14, 0.02) if affordable else Color(0.2, 0.18, 0.16),
+		f, HORIZONTAL_ALIGNMENT_CENTER)
+	if purse.has("gold"):
+		var short := int(c.price) > int(purse.gold)
+		_text(at + Vector2(20, 6), "/%d" % int(purse.gold), 15, Style.CORAL if short else Style.PARCHMENT,
+			Fonts.display(800), HORIZONTAL_ALIGNMENT_LEFT, 4)
 
 
 ## A cut stone in a dark setting, ringed in gold, with its figure on it: amber for a price, jade for a good had already
@@ -218,18 +234,23 @@ func footer() -> String:
 func _extras(full: Rect2) -> void:
 	var x := SIZE.x - 10.0
 	var rid := get_canvas_item()
-	for extra in [["genes", "研究", GENES]]:
+	for extra in [["genes", Icons.RESEARCH, GENES]]:
 		if token() != "":
 			break
 		var n := genes_shown if extra[0] == "genes" and genes_shown >= 0 else int(c.get(extra[0], 0))
 		if n <= 0:
 			continue
-		var label := "%s %d" % [extra[1], n]
-		var w := Fonts.serif(800).get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 12.0
-		var pill := Rect2(x - w, 9, w, 17)
-		Style.fill(rid, pill, 4.0, (extra[2] as Color).lightened(0.15), (extra[2] as Color).darkened(0.25))
-		Style.ring(rid, pill, 4.0, Color(0, 0, 0, 0.55), 1.0)
-		_text(Vector2(pill.get_center().x, 21.5), label, 11, Color(0.04, 0.05, 0.07), Fonts.serif(800), HORIZONTAL_ALIGNMENT_CENTER)
+		var label := "%d" % n
+		if purse.has(extra[0]):
+			label += "/%d" % int(purse[extra[0]])
+		var short: bool = purse.has(extra[0]) and n > int(purse[extra[0]])
+		var w := Fonts.display(800).get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 30.0
+		var pill := Rect2(x - w, 8, w, 20)
+		Style.fill(rid, pill, 5.0, Color(0.05, 0.12, 0.11, 0.95), Color(0.02, 0.06, 0.055, 0.95))
+		Style.ring(rid, pill, 5.0, Color(extra[2], 0.85), 1.2)
+		Icons.draw(self, extra[1], Vector2(pill.position.x + 11.0, pill.get_center().y), 17.0)
+		_text(Vector2(pill.position.x + 21.0, pill.position.y + 15.5), label, 14, Style.CORAL if short else Color(0.85, 1.0, 0.95),
+			Fonts.display(800), HORIZONTAL_ALIGNMENT_LEFT, 3)
 		x -= w + 4.0
 	if not affordable:
 		Style.fill(rid, full.grow(-2.0), 11.0, Color(0, 0, 0, 0.42), Color(0, 0, 0, 0.42))
