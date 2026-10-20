@@ -54,7 +54,7 @@ void fragment() {
 }
 """
 
-const TOON_TONE := 0.72            # a creature's colours, under the toon light
+const TOON_TONE := 0.86            # a creature's colours, under the soft light
 
 static var _scenes := {}           # file (species, or species_e1 / _e2) -> PackedScene
 static var _boxes := {}            # species -> its plain one's bounds, as it stands at rest
@@ -377,8 +377,9 @@ static func _lend_clips(model: Node3D, species: String) -> void:
 	model.add_child(player)
 
 
-## A species' materials (shared by every one of it) lit as a cartoon is: light and shade in soft steps, a bright rim on
-## the skin, a hard glint in the eyes. Its colours are the mesh's own (Godot leaves them unused on import).
+## A species' materials (shared by every one of it): its colours are the mesh's own (Godot leaves them unused on
+## import), lit softly -- light falling off smoothly round the body, a faint rim where it turns away, a glint in the
+## eyes -- in the world's own light (World), so it sits in the scene rather than on it.
 static func _toon(scene: PackedScene) -> void:
 	var probe := scene.instantiate()
 	for mi in probe.find_children("*", "MeshInstance3D", true, false):
@@ -388,18 +389,16 @@ static func _toon(scene: PackedScene) -> void:
 			if m == null:
 				continue
 			m.vertex_color_use_as_albedo = true
-			m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
-			m.specular_mode = BaseMaterial3D.SPECULAR_TOON
 			if m.resource_name == "Eye":
 				continue
-			# Its sunny side whole and bright, so its colours a little under: as they are, the sun and the sky's light
-			# together put a yellow past white.
+			# Its colours a little under what they are painted: the sun and the sky's light together put a bright
+			# yellow past white.
 			m.albedo_color = Color(TOON_TONE, TOON_TONE, TOON_TONE)
-			m.roughness = 0.45
-			m.metallic_specular = 0.3
+			m.roughness = 0.62
+			m.metallic_specular = 0.35
 			m.rim_enabled = true
-			m.rim = 0.25
-			m.rim_tint = 0.5
+			m.rim = 0.18
+			m.rim_tint = 0.6
 	probe.free()
 
 

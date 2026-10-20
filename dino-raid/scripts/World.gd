@@ -22,15 +22,28 @@ var _level := 0
 var _dusk := false
 
 
+## The light, as dino-td's (the player, 2026-10-19: "光影色彩之前你在做dino td的时候做的就不错，要有那种光影色彩效果"): a
+## warm sun a little low, raking across the ground and throwing long soft shadows; the sky's light filling the shadows;
+## a haze in the air that catches the sun and softens the distance into the sky; AgX tone, so nothing bright blows out
+## to white and the colours stay soft.
+const SUN_ANGLE := Vector3(-36, 40, 0)
+const SUN_COLOR := Color(1.0, 0.93, 0.8)
+const SUN_ENERGY := 1.4
+
+
 func _ready() -> void:
 	_environment()
 	_sun = DirectionalLight3D.new()
-	_sun.rotation_degrees = Vector3(-52, -30, 0)
-	_sun.light_energy = 1.3
-	_sun.light_color = Color(1.0, 0.96, 0.88)
+	_sun.rotation_degrees = SUN_ANGLE
+	_sun.light_energy = SUN_ENERGY
+	_sun.light_color = SUN_COLOR
 	_sun.shadow_enabled = true
-	_sun.shadow_blur = 1.5
-	_sun.directional_shadow_max_distance = 110.0
+	_sun.shadow_bias = 0.03
+	_sun.shadow_normal_bias = 1.2
+	_sun.shadow_blur = 1.2
+	_sun.light_angular_distance = 1.2
+	_sun.light_volumetric_fog_energy = 1.6
+	_sun.directional_shadow_max_distance = 90.0
 	add_child(_sun)
 	_grass = _own(Blocks.box(Vector3(600, 0.2, 600), Color.WHITE, Vector3(0, -0.1, -40)))
 	_home_ground = _own(Blocks.box(Vector3(27, 0.1, 27), Color.WHITE, Vector3(0, 0, 3)))
@@ -61,16 +74,17 @@ func _light() -> void:
 		_sky.sky_top_color = Color(0.15, 0.19, 0.34)
 		_sky.sky_horizon_color = Color(0.98, 0.64, 0.42)
 		_sky.ground_horizon_color = Color(0.86, 0.56, 0.4)
-		_env.fog_enabled = true
-		_env.fog_light_color = Color(0.62, 0.5, 0.48)
-		_env.fog_density = 0.0016
-		_env.fog_sky_affect = 0.15
-		_env.ambient_light_energy = 0.4
-	else:
-		_sun.rotation_degrees = Vector3(-52, -30, 0)
-		_sun.light_energy = 1.3
-		_env.fog_enabled = false
+		_env.fog_light_color = Color(0.7, 0.54, 0.5)
+		_env.volumetric_fog_albedo = Color(0.95, 0.82, 0.74)
 		_env.ambient_light_energy = 0.45
+	else:
+		var lv: Dictionary = Content.LEVELS[_level]
+		_sun.rotation_degrees = SUN_ANGLE
+		_sun.light_energy = SUN_ENERGY
+		# The haze the colour of the place's own horizon, a little greyed: humid air.
+		_env.fog_light_color = (lv.sky[1] as Color).lerp(Color(0.78, 0.8, 0.76), 0.35)
+		_env.volumetric_fog_albedo = (lv.sky[1] as Color).lerp(Color(0.92, 0.94, 0.9), 0.6)
+		_env.ambient_light_energy = 0.55
 
 
 ## Motes of light drifting up over the homeland (the title's), or none.
@@ -154,9 +168,10 @@ func dress(r: int) -> void:
 	_home_ground.albedo_color = ground
 	_road.albedo_color = ground.lightened(0.12)
 	_field.albedo_color = ground.lightened(0.2)
-	_sky.sky_top_color = lv.sky[0]
-	_sky.sky_horizon_color = lv.sky[1]
-	_sky.ground_horizon_color = lv.sky[1]
+	# Each place's own sky, drawn toward a humid one (dino-td's): a deep teal overhead, a warm white haze at the horizon.
+	_sky.sky_top_color = (lv.sky[0] as Color).lerp(Color(0.28, 0.46, 0.62), 0.4)
+	_sky.sky_horizon_color = (lv.sky[1] as Color).lerp(Color(0.84, 0.82, 0.7), 0.5)
+	_sky.ground_horizon_color = (lv.sky[1] as Color).lerp(Color(0.52, 0.56, 0.44), 0.5)
 	_sun.light_color = Color(1.0, 0.86, 0.7) if r == 1 else Color(1.0, 0.96, 0.88)
 	_sky.ground_bottom_color = grass.darkened(0.2)
 	_light()
@@ -327,21 +342,51 @@ func _environment() -> void:
 	_env = env
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
+	_sky.sun_angle_max = 30.0
+	_sky.sun_curve = 0.15
+	# AgX: bright things roll off softly instead of going to chalk; the colours stay gentle.
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.0
+	# The sky's light in the shadows, so a shadow is cool and soft, not black.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.45
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.1
+	env.ambient_light_color = Color(0.85, 0.9, 0.95)
+	env.ambient_light_energy = 0.55
+	env.ambient_light_sky_contribution = 0.55
+	# Feet, walls and roots set down onto the ground.
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6
-	# A soft bloom on what glows, and the colours drawn a little together (GAME-DESIGN 21).
+	env.ssao_radius = 1.5
+	env.ssao_intensity = 1.8
+	env.ssao_power = 1.5
+	env.ssao_detail = 0.5
+	# A restrained bloom, laid on softly: what glows glows, nothing turns to neon.
 	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_bloom = 0.04
-	env.glow_hdr_threshold = 1.1
+	env.glow_intensity = 0.3
+	env.glow_bloom = 0.08
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	# Haze in the distance only: where the game is played stays clear, what lies beyond fades into the sky.
+	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_light_color = Color(0.76, 0.8, 0.74)
+	env.fog_light_energy = 0.85
+	env.fog_density = 0.45
+	env.fog_aerial_perspective = 0.4
+	env.fog_sky_affect = 0.15
+	env.fog_depth_begin = 80.0
+	env.fog_depth_end = 170.0
+	env.fog_depth_curve = 1.0
+	# The air itself: a little haze that catches the sun.
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.0025
+	env.volumetric_fog_albedo = Color(0.9, 0.94, 0.9)
+	env.volumetric_fog_anisotropy = 0.6
+	env.volumetric_fog_length = 80.0
+	env.volumetric_fog_detail_spread = 2.0
+	env.volumetric_fog_ambient_inject = 0.25
+	env.volumetric_fog_sky_affect = 0.12
+	# A touch more contrast and colour (GAME-DESIGN 21).
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.04
+	env.adjustment_contrast = 1.07
+	env.adjustment_saturation = 1.18
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)

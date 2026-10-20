@@ -9,7 +9,7 @@ class_name Aliens
 ## Creatures moves it as it moves a dinosaur (meta "model", "player", "height"; a "Body" that lunges). A blow flashes
 ## it by wearing one bright material for a moment.
 
-const TONE := 0.8                          # their colours under the toon light (Creatures.TOON_TONE: ours)
+const TONE := 0.88                         # their colours under the light (Creatures.TOON_TONE: ours)
 ## How big one looks (the larger of its length and its width, in metres): its size (Content.ENEMIES) times FOOT -- but
 ## an ordinary one never bigger than PLAIN_MAX, a mini-boss or a boss never smaller than ELITE_MIN (the player, 2026-10-19:
 ## "基础怪大小要有个上限a，精英怪大小有个下限b，b>a"), so which are the strong ones reads at a glance whatever their shape.
@@ -1063,19 +1063,17 @@ static func _mesh(shape: String) -> Mesh:
 
 # -- Materials --------------------------------------------------------------------------------------------------------------
 
-## Skin of colour `c`, lit as a cartoon is (as our dinosaurs: Creatures._toon).
+## Skin of colour `c`, softly lit, a faint rim (as our dinosaurs: Creatures._toon).
 static func _skin(c: Color) -> StandardMaterial3D:
 	var key := "s" + c.to_html()
 	if not _mats.has(key):
 		var m := StandardMaterial3D.new()
 		m.albedo_color = Color(c.r * TONE, c.g * TONE, c.b * TONE)
-		m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
-		m.specular_mode = BaseMaterial3D.SPECULAR_TOON
-		m.roughness = 0.5
-		m.metallic_specular = 0.3
+		m.roughness = 0.55
+		m.metallic_specular = 0.4
 		m.rim_enabled = true
-		m.rim = 0.25
-		m.rim_tint = 0.5
+		m.rim = 0.18
+		m.rim_tint = 0.6
 		_mats[key] = m
 	return _mats[key]
 

@@ -10,7 +10,11 @@ static func mat(c: Color) -> StandardMaterial3D:
 	if not _mats.has(key):
 		var m := StandardMaterial3D.new()
 		m.albedo_color = c
-		m.roughness = 0.82
+		m.roughness = 0.8
+		m.metallic_specular = 0.3
+		m.rim_enabled = true
+		m.rim = 0.1
+		m.rim_tint = 0.6
 		_mats[key] = m
 	return _mats[key]
 
