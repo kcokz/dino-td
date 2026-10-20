@@ -13,8 +13,9 @@ const TILE := 4.0
 const PLOT := 3.6
 const PLOT_TOP := 0.15
 const YARD_Z := 11.0              # where the yard's front row stands...
-const YARD_ROW := 1.7             # ...and the row behind it, this much further south
+const YARD_ROW := 2.4             # ...and the row behind it, this much further south
 const YARD_SPREAD := 1.05         # between a nest's units side by side
+const YARD_TURN := 0.75           # a dinosaur in the yard looks south-east: at the camera, its side showing
 const NOWHERE := Vector2i(-1, -1)
 const WONDER_AT := Vector3(-17.0, 0.0, 2.0)  # beside the homeland, west of the rows behind the battle line
 const ELITE_GOLD := Color(1.0, 0.8, 0.25)
@@ -593,6 +594,9 @@ func go_out() -> void:
 			continue
 		var tw := n.create_tween()
 		tw.tween_interval(k * 0.03)
+		tw.tween_callback(func() -> void:
+			n.rotation.y = PI
+			Creatures.play(n, "run", 1.4))
 		tw.tween_property(n, "position", n.position + Vector3(0, 0, -3.0), 0.3)
 		tw.parallel().tween_property(n, "scale", Vector3.ONE * 0.05, 0.3)
 		tw.tween_callback(n.queue_free)
@@ -607,7 +611,9 @@ func _look(u: Dictionary) -> String:
 
 func _new_unit(u: Dictionary, look: String) -> Node3D:
 	var s := Content.unit_stats(u)
-	var n := Blocks.creature(float(s.size), Content.UNITS[u.kind].color, false, u.affixes, u.kind, int(u.get("elite", 0)))
+	var n := Creatures.make(float(s.size), Content.UNITS[u.kind].color, false, u.affixes, u.kind, int(u.get("elite", 0)))
+	if Creatures.is_model(n):
+		n.rotation.y = YARD_TURN
 	n.set_meta("look", look)
 	add_child(n)
 	_units[u.id] = n
@@ -631,11 +637,7 @@ func _door(p: Vector2i) -> Vector3:
 
 
 func _flash(n: Node3D) -> void:
-	var m := Blocks.body_of(n).material_override as StandardMaterial3D
-	m.emission = Color(1.0, 0.9, 0.5)
-	m.emission_energy_multiplier = 1.2
-	var tw := n.create_tween()
-	tw.tween_property(m, "emission_energy_multiplier", 0.0, 0.5)
+	Creatures.flash(n, Color(1.0, 0.9, 0.5), 1.2)
 
 
 # -- Pointing ------------------------------------------------------------------------------------------------------

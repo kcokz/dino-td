@@ -24,7 +24,7 @@ enum Phase { BUSY, PLAN, FIGHT, PACK, MOVE, DONE, TITLE }
 const HOME_AT := Vector3(0, 0, 4.0)
 const HOME_DIST := 44.0
 const FIGHT_AT := Vector3(0, 0, -79.0)
-const FIGHT_DIST := 25.0
+const FIGHT_DIST := 18.0
 const PITCH := 54.0
 const OK_TINT := Color(0.42, 0.86, 0.4)
 const SWAP_TINT := Color(0.95, 0.65, 0.3)
@@ -135,6 +135,7 @@ func _process(delta: float) -> void:
 		camera.look_at(target + Vector3(0, 2.5, 0), Vector3.UP)
 		return
 	if _fighting:
+		fight_view.pace = speed
 		_acc += delta * speed
 		while _acc >= Fight.STEP and not fight.over:
 			_acc -= Fight.STEP

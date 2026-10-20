@@ -148,8 +148,8 @@ func _model(key: String) -> Node3D:
 		var kind := key.substr(2)
 		var theirs := key.begins_with("e:")
 		var info: Dictionary = (Content.ENEMIES if theirs else Content.UNITS)[kind]
-		var n := Blocks.creature(float(info.size), info.color, theirs, [], kind, 0)
-		n.rotation.y = 0.9
+		var n := Creatures.make(float(info.size), info.color, theirs, [], kind, 0)
+		n.rotation.y = Creatures.PORTRAIT_TURN if Creatures.is_model(n) else 0.9
 		root.add_child(n)
 		return root
 	if key.begins_with("w:"):
@@ -158,9 +158,11 @@ func _model(key: String) -> Node3D:
 	if key.begins_with("a:"):
 		var a := key.substr(2)
 		var red: Dictionary = Content.UNITS.red
-		var n := Blocks.creature(1.0, red.color, false, [a], "red", 0)
-		n.rotation.y = 1.0
+		var n := Creatures.make(1.0, red.color, false, [a], "red", 0, 1.7)
+		n.rotation.y = Creatures.PORTRAIT_TURN if Creatures.is_model(n) else 1.0
 		root.add_child(n)
+		if Creatures.is_model(n):
+			root.set_meta("crop_tail", 0.4 if a != "poison" else 0.0)
 		return root
 	var bits := key.substr(2).split(":")
 	var kind := bits[0]
@@ -176,10 +178,10 @@ func _model(key: String) -> Node3D:
 		var sp := Content.species(info.nest, affixes)
 		var u: Dictionary = Content.UNITS[sp.kind]
 		var edge := float(u.size) * pow(Content.ELITE_SIZE, path.count("elite"))
-		var n := Blocks.creature(edge, u.color, false, affixes.filter(func(x: String) -> bool: return not x in sp.used),
+		var n := Creatures.make(edge, u.color, false, affixes.filter(func(x: String) -> bool: return not x in sp.used),
 			sp.kind, path.count("elite"))
 		n.position = Vector3(1.3, 0.0, 2.3)
-		n.rotation.y = 0.75
+		n.rotation.y = Creatures.PORTRAIT_TURN if Creatures.is_model(n) else 0.75
 		root.add_child(n)
 	return root
 
@@ -193,6 +195,10 @@ func _frame(node: Node3D) -> void:
 		var b := m.global_transform * m.get_aabb()
 		box = b if first else box.merge(b)
 		first = false
+	# An affix's picture: the tail (off to the left) left out, so the creature is bigger and what it wears shows.
+	var cut := box.size.x * float(node.get_meta("crop_tail", 0.0))
+	box.position.x += cut
+	box.size.x -= cut
 	var center := box.get_center()
 	var radius := maxf(0.5, box.size.length() * 0.5)
 	var dir := Vector3(0.5, 0.55, 1.0).normalized()
