@@ -138,8 +138,9 @@ static func fly(parent: Node3D, from: Vector3, to: Vector3, look: String, time: 
 		trail.initial_velocity_max = 0.2
 		trail.spread = 180.0
 		trail.gravity = Vector3.ZERO
-		trail.scale_amount_min = float(s.size) * 1.1
-		trail.scale_amount_max = float(s.size) * 1.4
+		# Each dot wide enough to reach the next: one frame's flight apart, they run together into a streak.
+		trail.scale_amount_min = float(s.size) * 2.2
+		trail.scale_amount_max = float(s.size) * 2.6
 		trail.scale_amount_curve = _fade_curve()
 		trail.color_ramp = _ramp([c, Color(c.r, c.g, c.b, 0.0)], [0.0, 1.0])
 		shot.add_child(trail)
