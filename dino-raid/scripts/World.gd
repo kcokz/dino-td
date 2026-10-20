@@ -208,41 +208,37 @@ func dress(r: int) -> void:
 func _swamp(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.4:
-		var h := rng.randf_range(2.5, 5.0)
-		var trunk := Blocks.box(Vector3(0.45, h, 0.45), Color(0.24, 0.2, 0.15), at + Vector3(0, h * 0.5, 0))
-		trunk.rotation.z = rng.randf_range(-0.25, 0.25)
-		_decor.add_child(trunk)
-		var arm := Blocks.box(Vector3(1.6, 0.2, 0.2), Color(0.24, 0.2, 0.15), at + Vector3(0.5, h * 0.7, 0))
-		arm.rotation.z = rng.randf_range(0.3, 0.8)
-		_decor.add_child(arm)
+		var dead := Blocks.dead_tree(rng.randf_range(2.5, 5.0), Color(0.26, 0.21, 0.16), rng.randi())
+		dead.position = at
+		dead.rotation.y = rng.randf() * TAU
+		_decor.add_child(dead)
 	elif roll < 0.75:
-		for i in 6:
-			_decor.add_child(Blocks.box(Vector3(0.08, rng.randf_range(0.7, 1.4), 0.08), Color(0.4, 0.46, 0.22),
-				at + Vector3(rng.randf_range(-0.8, 0.8), 0.5, rng.randf_range(-0.8, 0.8))))
+		for i in 7:
+			var reed := Blocks.cone(0.14, rng.randf_range(0.9, 1.7), Color(0.4, 0.46, 0.22).lerp(Color(0.55, 0.52, 0.3), rng.randf()),
+				at + Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8)))
+			reed.rotation.z = rng.randf_range(-0.12, 0.12)
+			_decor.add_child(reed)
 	else:
 		var pool := Blocks.box(Vector3(rng.randf_range(3, 6), 0.06, rng.randf_range(2, 4)), Color(0.2, 0.26, 0.18), at + Vector3(0, 0.03, 0))
 		pool.material_override = Blocks.glow(Color(0.2, 0.26, 0.18), 0.1)
 		_decor.add_child(pool)
 
 
-## The ice fields: blocks of ice, snowy pines, drifts.
+## The ice fields: snowy pines, clusters of ice crystals, drifts.
 func _frozen(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.4:
-		var h := rng.randf_range(2.5, 4.5)
-		_decor.add_child(Blocks.box(Vector3(0.35, h * 0.5, 0.35), Color(0.3, 0.22, 0.16), at + Vector3(0, h * 0.25, 0)))
-		for i in 3:
-			var w := 2.0 - i * 0.55
-			_decor.add_child(Blocks.box(Vector3(w, 0.8, w), Color(0.2, 0.36, 0.3).lerp(Color(0.92, 0.95, 0.98), 0.35 + i * 0.2),
-				at + Vector3(0, h * 0.4 + i * 0.75, 0)))
+		var pine := Blocks.pine(rng.randf_range(3.0, 5.0), Color(0.18, 0.36, 0.3), rng.randf_range(0.4, 0.8))
+		pine.position = at
+		_decor.add_child(pine)
 	elif roll < 0.75:
-		var w := rng.randf_range(1.2, 3.0)
-		var ice := Blocks.box(Vector3(w, rng.randf_range(0.8, 2.2), w * 0.8), Color(0.72, 0.85, 0.95), at + Vector3(0, 0.6, 0))
-		ice.material_override = Blocks.glow(Color(0.72, 0.85, 0.95), 0.15)
-		ice.rotation.y = rng.randf() * TAU
-		_decor.add_child(ice)
+		var w := rng.randf_range(0.6, 1.2)
+		for i in 4:
+			var lean := Vector2(rng.randf_range(-0.35, 0.35), rng.randf_range(-0.35, 0.35))
+			_decor.add_child(Blocks.crystal(w * rng.randf_range(0.5, 1.0), w * rng.randf_range(1.6, 3.2), Color(0.72, 0.86, 0.96),
+				at + Vector3(rng.randf_range(-0.6, 0.6), 0, rng.randf_range(-0.6, 0.6)), lean, 0.2))
 	else:
-		var drift := Blocks.box(Vector3(rng.randf_range(2, 4), 0.4, rng.randf_range(1.5, 3)), Color(0.94, 0.96, 0.98), at + Vector3(0, 0.2, 0))
+		var drift := Blocks.blob(Vector3(rng.randf_range(2, 4), 0.7, rng.randf_range(1.5, 3)), Color(0.94, 0.96, 0.98), at)
 		drift.rotation.y = rng.randf() * TAU
 		_decor.add_child(drift)
 
@@ -251,39 +247,30 @@ func _frozen(at: Vector3, rng: RandomNumberGenerator) -> void:
 func _desert(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.4:
-		var dune := Blocks.box(Vector3(rng.randf_range(4, 8), rng.randf_range(0.6, 1.4), rng.randf_range(2, 4)), Color(0.86, 0.72, 0.48),
-			at + Vector3(0, 0.4, 0))
+		var dune := Blocks.blob(Vector3(rng.randf_range(5, 9), rng.randf_range(1.2, 2.6), rng.randf_range(3, 5)), Color(0.86, 0.72, 0.48), at)
 		dune.rotation.y = rng.randf() * TAU
 		_decor.add_child(dune)
 	elif roll < 0.7:
-		var h := rng.randf_range(1.6, 3.0)
-		_decor.add_child(Blocks.box(Vector3(0.5, h, 0.5), Color(0.32, 0.5, 0.26), at + Vector3(0, h * 0.5, 0)))
-		for side in [-1.0, 1.0]:
-			_decor.add_child(Blocks.box(Vector3(0.35, 0.8, 0.35), Color(0.32, 0.5, 0.26), at + Vector3(side * 0.55, h * 0.6, 0)))
+		var cactus := Blocks.cactus(rng.randf_range(1.8, 3.2), Color(0.32, 0.52, 0.26))
+		cactus.position = at
+		cactus.rotation.y = rng.randf() * TAU
+		_decor.add_child(cactus)
 	else:
-		var rock := Blocks.box(Vector3(rng.randf_range(1.2, 3.0), rng.randf_range(1.0, 2.6), rng.randf_range(1.2, 2.4)),
-			Color(0.66, 0.4, 0.28), at + Vector3(0, 0.8, 0))
-		rock.rotation.y = rng.randf() * TAU
-		_decor.add_child(rock)
+		_decor.add_child(Blocks.rock(Vector3(rng.randf_range(1.4, 3.2), rng.randf_range(1.2, 2.8), rng.randf_range(1.4, 2.6)),
+			Color(0.68, 0.42, 0.3), at, rng.randf() * TAU))
 
 
 ## The coast: grey rocks, palms, sandbars in the shallows.
 func _coast(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.35:
-		var h := rng.randf_range(3.0, 5.0)
-		var trunk := Blocks.box(Vector3(0.35, h, 0.35), Color(0.5, 0.38, 0.24), at + Vector3(0, h * 0.5, 0))
-		trunk.rotation.z = rng.randf_range(-0.2, 0.2)
-		_decor.add_child(trunk)
-		for i in 5:
-			var frond := Blocks.box(Vector3(2.0, 0.1, 0.5), Color(0.24, 0.5, 0.22), at + Vector3(0, h, 0))
-			frond.rotation = Vector3(0.35, i * TAU / 5.0, 0.0)
-			_decor.add_child(frond)
+		var palm := Blocks.palm(rng.randf_range(3.5, 5.5), Color(0.52, 0.4, 0.26), Color(0.26, 0.54, 0.24),
+			rng.randf_range(0.4, 1.2), rng.randf() * TAU)
+		palm.position = at
+		_decor.add_child(palm)
 	elif roll < 0.7:
-		var rock := Blocks.box(Vector3(rng.randf_range(1.0, 2.6), rng.randf_range(0.6, 1.8), rng.randf_range(1.0, 2.2)),
-			Color(0.5, 0.5, 0.48), at + Vector3(0, 0.5, 0))
-		rock.rotation.y = rng.randf() * TAU
-		_decor.add_child(rock)
+		_decor.add_child(Blocks.rock(Vector3(rng.randf_range(1.2, 2.8), rng.randf_range(0.8, 2.0), rng.randf_range(1.2, 2.4)),
+			Color(0.52, 0.52, 0.5), at, rng.randf() * TAU))
 	else:
 		var bar := Blocks.box(Vector3(rng.randf_range(3, 6), 0.08, rng.randf_range(1.5, 3)), Color(0.86, 0.8, 0.62), at + Vector3(0, 0.04, 0))
 		bar.rotation.y = rng.randf() * TAU
@@ -294,17 +281,19 @@ func _coast(at: Vector3, rng: RandomNumberGenerator) -> void:
 func _lush(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.6:
-		var h := rng.randf_range(3.0, 6.5)
-		_decor.add_child(Blocks.box(Vector3(0.6, h, 0.6), Color(0.33, 0.24, 0.16), at + Vector3(0, h * 0.5, 0)))
-		var w := rng.randf_range(2.4, 3.8)
-		var top := Blocks.box(Vector3(w, 1.2, w), Color(0.17, 0.36, 0.17).lerp(Color(0.26, 0.46, 0.2), rng.randf()),
-			at + Vector3(0, h + 0.4, 0))
-		top.rotation.y = rng.randf() * TAU
-		_decor.add_child(top)
+		var tree := Blocks.tree(rng.randf_range(3.0, 6.0), rng.randf_range(2.6, 4.0), Color(0.36, 0.26, 0.17),
+			Color(0.17, 0.38, 0.17).lerp(Color(0.27, 0.5, 0.2), rng.randf()), rng.randi())
+		tree.position = at
+		tree.rotation.y = rng.randf() * TAU
+		_decor.add_child(tree)
 	elif roll < 0.85:
-		var f := Blocks.box(Vector3(1.4, 0.7, 1.4), Color(0.22, 0.48, 0.2), at + Vector3(0, 0.35, 0))
-		f.rotation.y = rng.randf() * TAU
-		_decor.add_child(f)
+		# A fern: a few broad leaves fanned out from the ground.
+		for i in 5:
+			var a := TAU * i / 5.0 + rng.randf()
+			var leaf := Blocks.blob(Vector3(1.3, 0.16, 0.45), Color(0.22, 0.5, 0.2).lerp(Color(0.3, 0.58, 0.24), rng.randf()),
+				at + Vector3(cos(a) * 0.55, 0.3, sin(a) * 0.55))
+			leaf.rotation = Vector3(0.0, -a, 0.45)
+			_decor.add_child(leaf)
 	else:
 		var water := Blocks.box(Vector3(rng.randf_range(3, 6), 0.06, rng.randf_range(2, 4)), Color(0.3, 0.5, 0.62), at + Vector3(0, 0.03, 0))
 		water.material_override = Blocks.glow(Color(0.3, 0.5, 0.62), 0.15)
@@ -315,23 +304,19 @@ func _lush(at: Vector3, rng: RandomNumberGenerator) -> void:
 func _volcanic(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.55:
-		var h := rng.randf_range(0.8, 2.6)
-		var w := rng.randf_range(1.4, 3.2)
-		var rock := Blocks.box(Vector3(w, h, w * rng.randf_range(0.7, 1.2)), Color(0.22, 0.2, 0.2).lerp(Color(0.34, 0.3, 0.28), rng.randf()),
-			at + Vector3(0, h * 0.5, 0))
-		rock.rotation.y = rng.randf() * TAU
-		_decor.add_child(rock)
+		var w := rng.randf_range(1.6, 3.4)
+		_decor.add_child(Blocks.rock(Vector3(w, rng.randf_range(1.0, 2.8), w * rng.randf_range(0.7, 1.2)),
+			Color(0.22, 0.2, 0.2).lerp(Color(0.34, 0.3, 0.28), rng.randf()), at, rng.randf() * TAU))
 	elif roll < 0.8:
 		var crack := Blocks.box(Vector3(rng.randf_range(2.5, 6), 0.05, rng.randf_range(0.3, 0.7)), Color(0.9, 0.22, 0.04), at + Vector3(0, 0.03, 0))
 		crack.material_override = Blocks.glow(Color(0.9, 0.22, 0.04), 0.9)
 		crack.rotation.y = rng.randf() * TAU
 		_decor.add_child(crack)
 	else:
-		var h := rng.randf_range(2.0, 4.0)
-		_decor.add_child(Blocks.box(Vector3(0.4, h, 0.4), Color(0.18, 0.14, 0.12), at + Vector3(0, h * 0.5, 0)))
-		var arm := Blocks.box(Vector3(1.4, 0.25, 0.25), Color(0.18, 0.14, 0.12), at + Vector3(0.4, h * 0.75, 0))
-		arm.rotation.z = 0.5
-		_decor.add_child(arm)
+		var dead := Blocks.dead_tree(rng.randf_range(2.0, 4.0), Color(0.18, 0.14, 0.12), rng.randi())
+		dead.position = at
+		dead.rotation.y = rng.randf() * TAU
+		_decor.add_child(dead)
 
 
 func _environment() -> void:

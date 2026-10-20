@@ -1,7 +1,13 @@
 class_name Blocks
-## Coloured blocks: the framework's stand-ins for what will be modelled (GAME-DESIGN 14).
+## Coloured blocks, the homeland's buildings and the world's things built of them (GAME-DESIGN 14, 23): each box's
+## edges rounded off a little, everything lit as the creatures are -- softly, a faint rim -- so the homeland and what
+## lives on it read as one world.
+
+const BEVEL := 0.16                # a box's edges rounded by this much of its smallest side...
+const BEVEL_MAX := 0.14            # ...but never more than this (metres)
 
 static var _mats := {}
+static var _rounds := {}           # a box's size -> its rounded mesh
 
 
 ## A plain material of one colour, shared by everything of that colour.
@@ -33,9 +39,77 @@ static func glow(c: Color, strength := 1.6) -> StandardMaterial3D:
 
 
 static func box(size: Vector3, c: Color, at := Vector3.ZERO) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	return _put(mesh, c, at)
+	return _put(rounded(size), c, at)
+
+
+## A box `size` across with its edges and corners rounded (BEVEL), one mesh for each size there is.
+static func rounded(size: Vector3) -> Mesh:
+	var key := "%.3f/%.3f/%.3f" % [size.x, size.y, size.z]
+	if not _rounds.has(key):
+		var r := minf(minf(size.x, minf(size.y, size.z)) * BEVEL, BEVEL_MAX)
+		if r < 0.008:
+			var plain := BoxMesh.new()
+			plain.size = size
+			_rounds[key] = plain
+		else:
+			_rounds[key] = _bevelled(size * 0.5, r)
+	return _rounds[key]
+
+
+## A rounded box: each face a grid that is flat in the middle and, near its edges, bent round onto a quarter-circle of
+## radius `r` (each point pushed out from the box shrunk by `r` along the way it points from it).
+static func _bevelled(half: Vector3, r: float) -> ArrayMesh:
+	var inner := half - Vector3.ONE * r
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var idx := PackedInt32Array()
+	for axis in 3:
+		for s in [-1.0, 1.0]:
+			var u := (axis + 1) % 3
+			var v := (axis + 2) % 3
+			var us := _ticks(half[u], inner[u], r)
+			var vs := _ticks(half[v], inner[v], r)
+			var base := verts.size()
+			for a in us.size():
+				for b in vs.size():
+					var p := Vector3.ZERO
+					p[axis] = s * half[axis]
+					p[u] = us[a]
+					p[v] = vs[b]
+					var q := p.clamp(-inner, inner)
+					var n := (p - q).normalized()
+					verts.append(q + n * r)
+					norms.append(n)
+			var out := Vector3.ZERO
+			out[axis] = s
+			var w := vs.size()
+			for a in us.size() - 1:
+				for b in w - 1:
+					var i0 := base + a * w + b
+					_tri(idx, verts, i0, i0 + 1, i0 + w, out)
+					_tri(idx, verts, i0 + 1, i0 + w + 1, i0 + w, out)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Where a face's grid lines fall along one side `half` long: three across each rounded edge, none in the flat middle.
+static func _ticks(half: float, inner: float, r: float) -> PackedFloat32Array:
+	return PackedFloat32Array([-half, -inner - r * 0.72, -inner - r * 0.38, -inner, inner, inner + r * 0.38,
+		inner + r * 0.72, half])
+
+
+## A triangle, wound so its front faces `out` (Godot's front: clockwise as seen from it).
+static func _tri(idx: PackedInt32Array, verts: PackedVector3Array, a: int, b: int, c: int, out: Vector3) -> void:
+	if (verts[b] - verts[a]).cross(verts[c] - verts[a]).dot(out) > 0.0:
+		idx.append_array(PackedInt32Array([a, c, b]))
+	else:
+		idx.append_array(PackedInt32Array([a, b, c]))
 
 
 static func cylinder(radius: float, height: float, c: Color, at := Vector3.ZERO, top := -1.0) -> MeshInstance3D:
@@ -343,3 +417,176 @@ static func _put(mesh: Mesh, c: Color, at: Vector3) -> MeshInstance3D:
 	mi.material_override = mat(c)
 	mi.position = at
 	return mi
+
+
+# -- Scenery, drawn as a cartoon draws it ------------------------------------------------------------------------------
+# Round where nature is round: trees of clumped balls on trunks that narrow, rocks of a few broad facets, crystals of
+# six sides, pines of stacked cones under snow. Each made of a few shared shapes, scaled (a round one: `size` across).
+
+static var _unit := {}
+
+
+## A round shape `size` across each way (a ball squashed or stretched), its middle at `at`.
+static func blob(size: Vector3, c: Color, at := Vector3.ZERO) -> MeshInstance3D:
+	var mi := _put(_unit_mesh("ball"), c, at)
+	mi.scale = size
+	return mi
+
+
+## A rock: a ball of a few broad facets, `size` across, turned `turn` about its upright.
+static func rock(size: Vector3, c: Color, at := Vector3.ZERO, turn := 0.0) -> MeshInstance3D:
+	var mi := _put(_unit_mesh("rock"), c, at + Vector3(0, size.y * 0.32, 0))
+	mi.scale = size
+	mi.rotation.y = turn
+	return mi
+
+
+## A cone standing on `at`, `height` tall and `width` across at its foot.
+static func cone(width: float, height: float, c: Color, at := Vector3.ZERO) -> MeshInstance3D:
+	var mi := _put(_unit_mesh("cone"), c, at + Vector3(0, height * 0.5, 0))
+	mi.scale = Vector3(width, height, width)
+	return mi
+
+
+## A crystal: six-sided, narrowing to a point, `height` tall, leaning by `lean` (radians, about its x and z).
+static func crystal(width: float, height: float, c: Color, at: Vector3, lean := Vector2.ZERO, strength := 0.5) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = _unit_mesh("crystal")
+	mi.material_override = glow(c, strength)
+	mi.scale = Vector3(width, height, width)
+	mi.rotation = Vector3(lean.x, 0.0, lean.y)
+	mi.position = at + Basis.from_euler(mi.rotation) * Vector3(0, height * 0.5, 0)
+	return mi
+
+
+## A tree: a trunk narrowing as it rises, a crown of clumped balls, the upper ones paler where the sun is.
+static func tree(height: float, crown: float, trunk: Color, leaves: Color, rng_seed: int) -> Node3D:
+	var r := RandomNumberGenerator.new()
+	r.seed = rng_seed
+	var root := Node3D.new()
+	root.add_child(cylinder(crown * 0.1, height, trunk, Vector3(0, height * 0.5, 0), crown * 0.06))
+	var top := height + crown * 0.15
+	root.add_child(blob(Vector3(crown, crown * 0.78, crown), leaves, Vector3(0, top, 0)))
+	var clumps := 4 + r.randi() % 2
+	for i in clumps:
+		var a := TAU * i / clumps + r.randf_range(-0.3, 0.3)
+		var s := crown * r.randf_range(0.5, 0.66)
+		var lift := r.randf_range(-0.12, 0.22) * crown
+		root.add_child(blob(Vector3(s, s * 0.85, s), leaves.lightened(0.06) if lift > 0.0 else leaves.darkened(0.08),
+			Vector3(cos(a) * crown * 0.36, top + lift, sin(a) * crown * 0.36)))
+	root.add_child(blob(Vector3.ONE * crown * 0.55, leaves.lightened(0.12), Vector3(r.randf_range(-0.1, 0.1) * crown,
+		top + crown * 0.32, r.randf_range(-0.1, 0.1) * crown)))
+	return root
+
+
+## A pine: a short trunk, three cones stacked, snow on each.
+static func pine(height: float, leaves: Color, snow: float) -> Node3D:
+	var root := Node3D.new()
+	root.add_child(cylinder(height * 0.06, height * 0.3, Color(0.3, 0.22, 0.16), Vector3(0, height * 0.15, 0)))
+	for i in 3:
+		var w := height * (0.62 - i * 0.15)
+		var h := height * (0.42 - i * 0.06)
+		var y := height * (0.2 + i * 0.22)
+		root.add_child(cone(w, h, leaves.lerp(Color(0.95, 0.97, 1.0), snow * (0.3 + i * 0.25)), Vector3(0, y, 0)))
+		if snow > 0.0:
+			root.add_child(cone(w * 0.45, h * 0.42, Color(0.95, 0.97, 1.0), Vector3(0, y + h * 0.58, 0)))
+	return root
+
+
+## A palm: a trunk bending as it rises, drooping fronds at the top.
+static func palm(height: float, trunk: Color, leaves: Color, lean: float, turn: float) -> Node3D:
+	var root := Node3D.new()
+	root.rotation.y = turn
+	var at := Vector3.ZERO
+	var segs := 5
+	for i in segs:
+		var f := float(i) / segs
+		var step := Vector3(lean * (0.06 + 0.12 * f) * height, height / segs, 0)
+		var piece := cylinder(0.2 - f * 0.06, step.length() * 1.08, trunk.darkened(0.08 * (i % 2)), at + step * 0.5,
+			0.19 - f * 0.06)
+		piece.rotation.z = -atan2(step.x, step.y)
+		root.add_child(piece)
+		at += step
+	for i in 6:
+		var a := TAU * i / 6.0
+		var frond := blob(Vector3(2.0, 0.12, 0.55), leaves.darkened(0.06 * (i % 2)), at + Vector3(cos(a), -0.25, sin(a)) * 0.85)
+		frond.rotation = Vector3(0.0, -a, -0.4)
+		root.add_child(frond)
+	root.add_child(blob(Vector3.ONE * 0.45, trunk.darkened(0.2), at))
+	return root
+
+
+## A cactus: a rounded column, an arm either side bending up.
+static func cactus(height: float, c: Color) -> Node3D:
+	var root := Node3D.new()
+	root.add_child(cylinder(0.3, height - 0.3, c, Vector3(0, (height - 0.3) * 0.5, 0)))
+	root.add_child(blob(Vector3(0.6, 0.6, 0.6), c, Vector3(0, height - 0.3, 0)))
+	for side in [-1.0, 1.0]:
+		var y: float = height * (0.45 + 0.1 * side)
+		root.add_child(blob(Vector3(0.65, 0.34, 0.34), c, Vector3(side * 0.4, y, 0)))
+		root.add_child(cylinder(0.17, 0.7, c, Vector3(side * 0.62, y + 0.35, 0)))
+		root.add_child(blob(Vector3.ONE * 0.34, c, Vector3(side * 0.62, y + 0.7, 0)))
+	return root
+
+
+## A dead tree: a bare trunk narrowing, a crooked branch or two.
+static func dead_tree(height: float, c: Color, rng_seed: int) -> Node3D:
+	var r := RandomNumberGenerator.new()
+	r.seed = rng_seed
+	var root := Node3D.new()
+	var trunk := cylinder(0.26, height, c, Vector3(0, height * 0.5, 0), 0.08)
+	trunk.rotation.z = r.randf_range(-0.15, 0.15)
+	root.add_child(trunk)
+	for i in 2:
+		var y := height * r.randf_range(0.45, 0.75)
+		var branch := cylinder(0.1, height * 0.38, c, Vector3(0, y, 0), 0.03)
+		var side := -1.0 if i == 0 else 1.0
+		branch.rotation.z = side * r.randf_range(0.6, 1.0)
+		branch.position += Vector3(-sin(branch.rotation.z), cos(branch.rotation.z), 0) * height * 0.19
+		root.add_child(branch)
+	return root
+
+
+static func _unit_mesh(shape: String) -> Mesh:
+	if not _unit.has(shape):
+		match shape:
+			"ball":
+				var m := SphereMesh.new()
+				m.radius = 0.5
+				m.height = 1.0
+				m.radial_segments = 18
+				m.rings = 9
+				_unit[shape] = m
+			"rock":
+				# A coarse ball with each face flat: broad facets catching the light.
+				var ball := SphereMesh.new()
+				ball.radius = 0.5
+				ball.height = 1.0
+				ball.radial_segments = 7
+				ball.rings = 4
+				var arr := ball.get_mesh_arrays()
+				var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+				var st := SurfaceTool.new()
+				st.begin(Mesh.PRIMITIVE_TRIANGLES)
+				st.set_smooth_group(-1)
+				for i: int in arr[Mesh.ARRAY_INDEX]:
+					st.add_vertex(verts[i])
+				st.generate_normals()
+				_unit[shape] = st.commit()
+			"crystal":
+				var m := CylinderMesh.new()
+				m.top_radius = 0.12
+				m.bottom_radius = 0.5
+				m.height = 1.0
+				m.radial_segments = 6
+				m.rings = 1
+				_unit[shape] = m
+			_:
+				var m := CylinderMesh.new()
+				m.top_radius = 0.0
+				m.bottom_radius = 0.5
+				m.height = 1.0
+				m.radial_segments = 14
+				m.rings = 1
+				_unit[shape] = m
+	return _unit[shape]

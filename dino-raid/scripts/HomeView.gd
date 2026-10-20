@@ -131,18 +131,16 @@ func lay_ground() -> void:
 					"tidepool": Color(0.92, 0.88, 0.8)}[t] as Color
 				for i in 6:
 					var a: float = TAU * i / 6.0 + k
-					node.add_child(Blocks.box(Vector3(0.45, 0.22, 0.4), stone, Vector3(cos(a) * 1.65, 0.1, sin(a) * 1.65)))
+					node.add_child(Blocks.rock(Vector3(0.6, 0.36, 0.5), stone, Vector3(cos(a) * 1.65, -0.04, sin(a) * 1.65), a))
 				if t == "mire":
-					for i in 5:
-						var a: float = TAU * i / 5.0 + k * 0.4
-						node.add_child(Blocks.box(Vector3(0.08, 0.9 + (i % 3) * 0.3, 0.08), Color(0.42, 0.46, 0.22),
-							Vector3(cos(a) * 1.2, 0.5, sin(a) * 1.2)))
+					for i in 7:
+						var a: float = TAU * i / 7.0 + k * 0.4
+						node.add_child(Blocks.cone(0.14, 0.9 + (i % 3) * 0.35, Color(0.42, 0.46, 0.22), Vector3(cos(a) * 1.2, 0, sin(a) * 1.2)))
 				elif t == "oasis":
-					node.add_child(Blocks.box(Vector3(0.3, 2.6, 0.3), Color(0.5, 0.36, 0.2), Vector3(1.3, 1.3, -1.3)))
-					for i in 4:
-						var frond := Blocks.box(Vector3(1.4, 0.08, 0.4), Color(0.25, 0.55, 0.22), Vector3(1.3, 2.6, -1.3))
-						frond.rotation = Vector3(0.3, i * PI * 0.5 + 0.4, 0.0)
-						node.add_child(frond)
+					var palm := Blocks.palm(2.8, Color(0.5, 0.36, 0.2), Color(0.25, 0.55, 0.22), 0.6, 2.3)
+					palm.position = Vector3(1.3, 0, -1.3)
+					palm.scale = Vector3.ONE * 0.8
+					node.add_child(palm)
 				elif t == "tidepool":
 					for i in 3:
 						node.add_child(Blocks.ball(0.18, Color(1.0, 0.75, 0.7), Vector3(-0.8 + i * 0.8, 0.08, 0.4 * (i % 2))))
@@ -153,25 +151,29 @@ func lay_ground() -> void:
 					node.add_child(Blocks.box(Vector3(0.22, tall, 0.22), Color(0.92, 0.88, 0.8), at + Vector3(0, tall * 0.5, 0)))
 					node.add_child(Blocks.dome(0.55 + i * 0.12, col, at + Vector3(0, tall, 0)))
 			"glacier":
+				# A great block of ice, crystals about it, the bones of something frozen in its face.
 				var ice := Blocks.box(Vector3(2.6, 1.8, 2.2), col, Vector3(0, 0.9, 0))
 				ice.material_override = Blocks.glow(col, 0.25)
 				node.add_child(ice)
+				for i in 4:
+					var a: float = TAU * i / 4.0 + 0.6 + k
+					node.add_child(Blocks.crystal(0.5, 1.2 + (i % 2) * 0.6, col.lightened(0.2), Vector3(cos(a) * 1.25, 0, sin(a) * 1.05),
+						Vector2(sin(a) * 0.3, -cos(a) * 0.3), 0.3))
 				node.add_child(Blocks.box(Vector3(1.4, 0.2, 0.3), Color(0.92, 0.9, 0.84), Vector3(0, 1.0, 1.12)))
 				node.add_child(Blocks.box(Vector3(0.25, 0.6, 0.3), Color(0.92, 0.9, 0.84), Vector3(-0.5, 1.0, 1.12)))
 			"ruin":
 				for sx in [-0.9, 0.9]:
 					var tall := 2.2 if sx < 0 else 1.4
-					node.add_child(Blocks.box(Vector3(0.6, tall, 0.6), col, Vector3(sx, tall * 0.5, 0)))
+					node.add_child(Blocks.cylinder(0.32, tall, col, Vector3(sx, tall * 0.5, 0)))
+					node.add_child(Blocks.box(Vector3(0.8, 0.2, 0.8), col.darkened(0.1), Vector3(sx, 0.1, 0)))
 				var lintel := Blocks.box(Vector3(2.4, 0.4, 0.7), col.darkened(0.1), Vector3(0.2, 0.2, 0.9))
 				lintel.rotation.y = 0.3
 				node.add_child(lintel)
 			"ice_ore":
-				for i in 5:
-					var a: float = TAU * i / 5.0 + k * 0.7
-					var shard := Blocks.box(Vector3(0.28, 0.7 + (i % 2) * 0.4, 0.28), Color(0.7, 0.88, 1.0), Vector3(cos(a) * 0.9, 0.4, sin(a) * 0.9))
-					shard.material_override = Blocks.glow(Color(0.7, 0.88, 1.0), 0.6)
-					shard.rotation.z = 0.25 * (1 if i % 2 == 0 else -1)
-					node.add_child(shard)
+				for i in 6:
+					var a: float = TAU * i / 6.0 + k * 0.7
+					node.add_child(Blocks.crystal(0.34, 0.8 + (i % 3) * 0.35, Color(0.7, 0.88, 1.0), Vector3(cos(a) * 0.85, 0, sin(a) * 0.85),
+						Vector2(sin(a) * 0.35, -cos(a) * 0.35), 0.6))
 			"wreck":
 				for i in 4:
 					var rib := Blocks.box(Vector3(0.2, 1.1, 0.25), col, Vector3(-1.0 + i * 0.66, 0.5, 0.0))
@@ -180,26 +182,23 @@ func lay_ground() -> void:
 				node.add_child(Blocks.box(Vector3(2.6, 0.25, 0.7), col.darkened(0.2), Vector3(0, 0.12, 0.6)))
 				node.add_child(Blocks.box(Vector3(0.18, 1.6, 0.18), col.darkened(0.3), Vector3(0.3, 0.8, -0.6)))
 			"tree":
-				node.add_child(Blocks.box(Vector3(0.75, 3.4, 0.75), Color(0.36, 0.25, 0.16), Vector3(0, 1.7, 0)))
-				var top1 := Blocks.box(Vector3(3.2, 1.4, 3.2), Color(0.17, 0.38, 0.16), Vector3(0, 3.7, 0))
-				top1.rotation.y = 0.3 + k
-				node.add_child(top1)
-				var top2 := Blocks.box(Vector3(2.1, 1.0, 2.1), Color(0.24, 0.48, 0.2), Vector3(0.2, 4.8, -0.1))
-				top2.rotation.y = 0.8 + k
-				node.add_child(top2)
-				for side in [-1.0, 1.0]:
-					var foot := Blocks.box(Vector3(1.0, 0.3, 0.3), Color(0.36, 0.25, 0.16), Vector3(side * 0.6, 0.15, 0.2 * side))
-					foot.rotation.y = side * 0.6
-					node.add_child(foot)
+				# An old tree: a broad crown on a thick trunk, its roots spread over the plot.
+				var old := Blocks.tree(3.4, 3.6, Color(0.36, 0.25, 0.16), Color(0.2, 0.42, 0.18), 7 + k)
+				old.rotation.y = 0.3 + k
+				node.add_child(old)
+				for i in 3:
+					var a: float = TAU * i / 3.0 + 0.4 + k
+					var root_arm := Blocks.blob(Vector3(1.1, 0.3, 0.36), Color(0.36, 0.25, 0.16), Vector3(cos(a) * 0.55, 0.06, sin(a) * 0.55))
+					root_arm.rotation.y = -a
+					node.add_child(root_arm)
 			"ore":
 				for i in 5:
 					var a: float = TAU * i / 5.0 + k * 0.7
 					var r := 0.7 + 0.5 * float((k + i) % 3) / 2.0
-					var nug := Blocks.box(Vector3(0.38, 0.3, 0.32), Color(1.0, 0.78, 0.25), Vector3(cos(a) * r, 0.1, sin(a) * r))
+					var nug := Blocks.rock(Vector3(0.44, 0.36, 0.38), Color(1.0, 0.78, 0.25), Vector3(cos(a) * r, -0.02, sin(a) * r), a)
 					nug.material_override = Blocks.glow(Color(1.0, 0.78, 0.25), 0.5)
-					nug.rotation.y = a
 					node.add_child(nug)
-				node.add_child(Blocks.box(Vector3(0.9, 0.4, 0.7), Color(0.3, 0.26, 0.22), Vector3(-0.9, 0.18, 0.9)))
+				node.add_child(Blocks.rock(Vector3(1.1, 0.6, 0.9), Color(0.3, 0.26, 0.22), Vector3(-0.9, 0, 0.9), 0.7))
 			"lava":
 				for i in 3:
 					var crust := Blocks.box(Vector3(0.9, 0.12, 0.7), Color(0.16, 0.12, 0.1), Vector3(-1.0 + i * 1.0, 0.06, (i - 1) * 0.8 * (1 if k % 2 == 0 else -1)))
