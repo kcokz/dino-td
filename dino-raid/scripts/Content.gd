@@ -433,9 +433,9 @@ const TERRAIN := {
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low: the
 ## ark sets down only what it carried, and the pools it brings feed nothing until the next round. Measure again after
 ## changing what can be built or made.
-const LIMIT := [26, 36, 51, 62, 82, 107, 138, 176, 217, 255, 284, 308,
-	59, 225, 277, 318, 363, 383, 407, 413, 436, 463, 486, 499,
-	85, 357, 413, 468, 502, 519, 538, 558, 574, 584, 601, 614]
+const LIMIT := [37, 56, 76, 96, 116, 142, 167, 197, 236, 262, 294, 321,
+	58, 229, 288, 330, 357, 375, 392, 420, 456, 479, 497, 519,
+	106, 383, 452, 488, 520, 546, 576, 591, 630, 670, 702, 725]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
