@@ -2,8 +2,10 @@ class_name Creatures
 ## Creatures on screen (GAME-DESIGN 23): ours as Nintendo-style dinosaurs (assets/models/toon, tools/toon_dinos.py) --
 ## each kind a species in its nest's colours, scaled to its size by its height, turned to look along +z as the blocks
 ## do, lit in soft steps with a bright rim (toon shading), an elite's edges glowing gold -- moving as it moves:
-## standing, running, biting, struck, falling. Theirs are still blocks (Blocks.creature) until they have models of
-## their own. Whatever builds or moves a creature asks here, so a block and a model are told apart in one place.
+## standing, running, biting, struck, falling. An elite is its species evolved (<species>_e1, _e2): spines down its
+## back, horns behind its eyes, a deeper back, a heavier build, gold the second time -- on the same skeleton, moving
+## with the plain one's clips. Theirs are still blocks (Blocks.creature) until they have models of their own.
+## Whatever builds or moves a creature asks here, so a block and a model are told apart in one place.
 
 const DINOS := "res://assets/models/toon/"
 ## Each of our kinds: its species, and how tall it stands for each metre of its size.
@@ -54,7 +56,9 @@ void fragment() {
 
 const TOON_TONE := 0.72            # a creature's colours, under the toon light
 
-static var _scenes := {}           # species -> PackedScene
+static var _scenes := {}           # file (species, or species_e1 / _e2) -> PackedScene
+static var _boxes := {}            # species -> its plain one's bounds, as it stands at rest
+static var _clips := {}            # species -> its plain one's clips (AnimationLibrary)
 static var _shader: Shader
 
 
@@ -69,20 +73,26 @@ static func make(edge: float, color: Color, theirs: bool, affixes: Array, kind: 
 	var body := Node3D.new()
 	body.name = "Body"
 	root.add_child(body)
-	var model := _scene(MODELS[kind][0]).instantiate() as Node3D
+	var species: String = MODELS[kind][0]
+	var level := clampi(elite, 0, 2)
+	var model := _scene(species + ("_e%d" % level if level > 0 else "")).instantiate() as Node3D
 	body.add_child(model)
-	var box := Geo.bounds(model)
+	# Sized by the plain one, so an elite's body is as big as its size says and its spines and horns stand above it.
+	var box := _plain_box(species)
 	var s := edge * float(MODELS[kind][1]) / maxf(0.01, box.size.y)
 	model.scale = Vector3.ONE * s
 	model.rotation.y = PI
 	model.position = Vector3(0, -box.position.y * s, (box.position.z + box.size.z * 0.5) * s)
-	root.set_meta("height", box.size.y * s)
+	var own := Geo.bounds(model) if level > 0 else box
+	root.set_meta("height", (own.end.y - box.position.y) * s)
+	if level > 0:
+		_lend_clips(model, species)
 	var paint := ShaderMaterial.new()
 	paint.shader = _overlay()
 	paint.set_shader_parameter("mark_color", color)
 	paint.set_shader_parameter("mark_amount", 0.0)
 	paint.set_shader_parameter("body_len", box.size.z)
-	paint.set_shader_parameter("elite", 1.0 if elite > 0 else 0.0)
+	paint.set_shader_parameter("elite", [0.0, 0.6, 0.9][level])
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).material_overlay = paint
 	root.set_meta("paint", paint)
@@ -331,12 +341,35 @@ static func _glow(c: Color, strength: float) -> StandardMaterial3D:
 	return m
 
 
-static func _scene(species: String) -> PackedScene:
-	if not _scenes.has(species):
-		var scene := load(DINOS + species + ".gltf") as PackedScene
+static func _scene(file: String) -> PackedScene:
+	if not _scenes.has(file):
+		var scene := load(DINOS + file + ".gltf") as PackedScene
 		_toon(scene)
-		_scenes[species] = scene
-	return _scenes[species]
+		_scenes[file] = scene
+	return _scenes[file]
+
+
+## The plain one's bounds, as it stands at rest.
+static func _plain_box(species: String) -> AABB:
+	if not _boxes.has(species):
+		var probe := _scene(species).instantiate() as Node3D
+		_boxes[species] = Geo.bounds(probe)
+		var players := probe.find_children("*", "AnimationPlayer", true, false)
+		if not players.is_empty():
+			_clips[species] = (players[0] as AnimationPlayer).get_animation_library("")
+		probe.free()
+	return _boxes[species]
+
+
+## An elite has no clips of its own: on the plain one's skeleton (its bones named the same), the plain one's move it.
+static func _lend_clips(model: Node3D, species: String) -> void:
+	_plain_box(species)
+	if not _clips.has(species) or not model.find_children("*", "AnimationPlayer", true, false).is_empty():
+		return
+	var player := AnimationPlayer.new()
+	player.name = "AnimationPlayer"
+	player.add_animation_library("", _clips[species])
+	model.add_child(player)
 
 
 ## A species' materials (shared by every one of it) lit as a cartoon is: light and shade in soft steps, a bright rim on

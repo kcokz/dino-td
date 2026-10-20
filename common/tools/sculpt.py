@@ -437,7 +437,8 @@ class Loft:
         r = 0.0
         for (a, b, ph, depth, width) in self.dents:
             if a <= s <= b:
-                k = math.sin(math.pi * (s - a) / (b - a)) ** 0.5
+                # (Never under nought: at a groove's very end the sine can round to a hair below it.)
+                k = max(0.0, math.sin(math.pi * (s - a) / (b - a))) ** 0.5
                 for side in (ph, 2.0 * math.pi - ph):
                     d = (phi - side + math.pi) % (2.0 * math.pi) - math.pi
                     r -= depth * k * math.exp(-(d / width) ** 2)
