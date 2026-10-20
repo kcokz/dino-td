@@ -1,6 +1,6 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17-20): wherever the ark has landed, a grid of plots -- the top rows the battle line,
+## The homeland (GAME-DESIGN 17-22): wherever the ark has landed, a grid of plots -- the top rows the battle line,
 ## for nests only, where each nest's units will stand in battle; the rows behind for everything else, special ground
 ## among them -- with the gold and the other resources, the shop's shelf, the goods kept for later (the stash), the
 ## relics, the wonder, and the homeland's own hit points. One round here: the buildings bring in gold, biomass and
@@ -14,8 +14,8 @@ extends RefCounted
 ## rules, nothing on screen: the same rules for the game and for its tests.
 ##
 ## A building: {id, kind, level, path, affixes: [ids]} -- path: a nest's raises, each "count" or "elite".
-## A good (shelf or stash): {id, gift, packed: {level, path, affixes}} (Content.offer), or null on the shelf where one
-##   was bought or its kind taken out.
+## A good (shelf or stash): {id, plus, packed: {level, path, affixes}} (Content.offer), or null on the shelf where one
+##   was bought. A card of the deck (牌库) the shelf is drawn from: {id, plus} -- plus: upgraded.
 ## A unit (army): {id: "nest id:n", kind, nest: plot, row, lane, slot, of, hp_mult, atk_mult, atk_bonus, armor, range,
 ##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, guard, care, scavenge, free} -- row, lane: where it
 ##   stands in battle (row 0 in front; lane its column); slot, of: which of its nest's it is, of how many; guard, care,
@@ -42,18 +42,17 @@ var buildings := {}               # Vector2i -> building
 var terrain := {}                 # Vector2i -> special ground (Content.TERRAIN)
 var gold := 0
 var biomass := 0
-var genes := 0
-var alien := 0
+var genes := 0                    # research points (研究点数): for affixes and upgrading cards
 var hp := HP
 var relics: Array = []            # relic ids
-var shelf: Array = []             # offers, or null where bought or taken out
-var struck := {}                  # shelf places whose kind was taken out of the shop: i -> true
+var deck: Array = []              # the cards the shop draws from: {id, plus}
+var cuts := 0                     # cards cut from the deck so far (each costs more)
+var shelf: Array = []             # offers, or null where bought
 var stash: Array = []             # goods kept for later
 var rerolls := 0                  # times the shelf was stocked again this round
-var removed: Array = []           # offer ids taken out of the shop for the rest of the run
-var removes := 0                  # kinds that can still be taken out this round
 var wonders: Array = []           # the wonders on offer this run (Content.WONDERS ids)
 var wonder := ""                  # the one built, "" until then
+var flood := false                # the coast at high tide this round: the last row brings in nothing
 var next_id := 1
 
 
@@ -61,6 +60,7 @@ func _init(rng: RandomNumberGenerator) -> void:
 	gold = int(Content.FIRST_STOCK.gold)
 	biomass = int(Content.FIRST_STOCK.biomass)
 	genes = int(Content.FIRST_STOCK.genes)
+	deck = Content.DECK.map(func(id: String) -> Dictionary: return {"id": id, "plus": false})
 	land(0, rng, Content.LANDING)
 
 
@@ -85,7 +85,6 @@ func land(r: int, rng: RandomNumberGenerator, kit: Array) -> void:
 			_set_level(p, int(item[1]))
 	hp = mini(hp, hp_max())
 	shelf = []
-	struck = {}
 
 
 func _free_landing(kind: String) -> Vector2i:
@@ -109,7 +108,7 @@ func _set_level(p: Vector2i, lv: int) -> void:
 # -- A round ----------------------------------------------------------------------------------------------
 
 ## The place has its way (damp: stored biomass rots; ash falls); the buildings bring in what they make; the frill
-## mends; a kind can be taken out of the shop again; the shelf is stocked afresh.
+## mends; the shelf is stocked afresh from the deck.
 func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 	var ev: Array = []
 	if rule() == "damp" and biomass > 0:
@@ -133,7 +132,6 @@ func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 		hp = mini(hp_max(), hp + 1)
 		ev.append({"t": "mended", "amount": hp - before})
 	rerolls = 0
-	removes = Content.REMOVES
 	stock(rng, level)
 	return ev
 
@@ -142,69 +140,99 @@ func rule() -> String:
 	return str(Content.LEVELS[region].get("rule", ""))
 
 
-## Stocks the shelf: buildings by how much land is free (more when there is much; one when there is none, to pull
-## something down for), then raises and affixes -- only those that can be used now, are found here and were not taken
-## out, none twice, and no more than one that costs more gold than there is.
+## Stocks the shelf from the deck: buildings by how much land is free (more when there is much; one when there is
+## none, to pull something down for), then raises and affixes -- each card at most once, only those that can be used
+## now and are found here, no more than one that costs more gold than there is.
 func stock(rng: RandomNumberGenerator, level: int) -> void:
 	var free := _plots_all().filter(func(p: Vector2i) -> bool: return buildable(p) and not buildings.has(p)).size()
 	var builds := clampi(ceili(free / 3.0), 1, 3)
 	var size := shelf_size()
-	var build_pool: Array = []
+	var build_pool: Array = []    # indices into the deck
 	var other_pool: Array = []
-	for id in pool_ids(level):
-		var o: Dictionary = Content.OFFERS[id]
-		for k in [6, 3, 1][int(o.rarity)]:
-			(build_pool if o.type == "build" else other_pool).append(id)
+	for k in deck.size():
+		if _here(deck[k].id, level):
+			(build_pool if Content.OFFERS[deck[k].id].type == "build" else other_pool).append(k)
 	shelf = []
-	struck = {}
-	var taken: Array = []
+	var taken := {}
 	var dear := 1                 # how many more that cost more than there is may go up
 	for pool in [[build_pool, builds], [other_pool, size - builds]]:
-		var ids: Array = pool[0]
-		shuffle(ids, rng)
+		var cards: Array = pool[0]
+		shuffle(cards, rng)
 		var want: int = pool[1]
-		for id in ids:
+		for k in cards:
 			if want <= 0:
 				break
-			if id in taken:
-				continue
-			if _least_price(id) > gold:
+			if _least_price(deck[k]) > gold:
 				if dear <= 0:
 					continue
 				dear -= 1
-			taken.append(id)
-			shelf.append({"id": id})
+			taken[k] = true
+			shelf.append(_good(deck[k]))
 			want -= 1
 	# Not enough that could be used: fill with what is left.
 	for pool in [build_pool, other_pool]:
-		for id in pool:
+		for k in pool:
 			if shelf.size() >= size:
 				break
-			if not id in taken:
-				taken.append(id)
-				shelf.append({"id": id})
+			if not taken.has(k):
+				taken[k] = true
+				shelf.append(_good(deck[k]))
 
 
-## The offers this place's shop deals in, of use now: none from a later place, none of another place's own, none taken
-## out.
-func pool_ids(level: int) -> Array:
-	return Content.OFFERS.keys().filter(func(id: String) -> bool:
-		var o: Dictionary = Content.OFFERS[id]
-		return int(o.get("from", 0)) <= level and int(o.get("region", region)) == region and not id in removed and _useful(id))
+## A card of the deck as a good on the shelf.
+static func _good(card: Dictionary) -> Dictionary:
+	return {"id": card.id, "plus": true} if card.get("plus", false) else {"id": card.id}
 
 
-## The least an offer can cost now (a raise: on the lowest building).
-func _least_price(id: String) -> int:
+## Whether the shop can offer card `id` here and now: not from a later place, not another place's own, of use now.
+func _here(id: String, level: int) -> bool:
 	var o: Dictionary = Content.OFFERS[id]
+	return int(o.get("from", 0)) <= level and int(o.get("region", region)) == region and _useful(id)
+
+
+## The least a good can cost now (a raise: on the lowest building).
+func _least_price(oi: Dictionary) -> int:
+	var o := Content.offer(oi)
 	match o.type:
 		"build":
-			return maxi(1, int(Content.BUILDINGS[o.builds].cost) - _discount())
+			return maxi(1, int(o.price) - _discount())
 		"raise":
 			var lv := Content.LEVEL_MAX
 			for p in _plots():
 				lv = mini(lv, int(buildings[p].level))
-			return _raise_price(lv)
+			return maxi(1, _raise_price(lv) - (Content.PLUS_RAISE if o.plus else 0))
 	return int(o.price)
+
+
+# -- The deck ----------------------------------------------------------------------------------------------------
+
+## What cutting a card from the deck costs now: CUT gold, CUT_STEP more for each cut before.
+func cut_price() -> int:
+	return Content.CUT + cuts * Content.CUT_STEP
+
+
+## Cuts deck[k], paying for it. Whether it was.
+func cut(k: int) -> bool:
+	if k < 0 or k >= deck.size() or gold < cut_price():
+		return false
+	gold -= cut_price()
+	deck.remove_at(k)
+	cuts += 1
+	return true
+
+
+## Whether deck[k] can be upgraded: not yet, and the research points for it.
+func can_upgrade(k: int) -> bool:
+	return k >= 0 and k < deck.size() and not deck[k].get("plus", false) and genes >= Content.UPGRADE
+
+
+## Upgrades deck[k] (+), paying research points. Whether it was.
+func upgrade(k: int) -> bool:
+	if not can_upgrade(k):
+		return false
+	genes -= Content.UPGRADE
+	deck[k].plus = true
+	return true
 
 
 func _raise_price(level: int) -> int:
@@ -254,18 +282,6 @@ func reroll(rng: RandomNumberGenerator, level: int) -> bool:
 	gold -= p
 	rerolls += 1
 	stock(rng, level)
-	return true
-
-
-## Takes the kind of offer at shelf[i] out of the shop -- the shelf and the gifts -- for the rest of the run, as many
-## kinds a round as Content.REMOVES. Whether it was.
-func remove_kind(i: int) -> bool:
-	if removes <= 0 or i < 0 or i >= shelf.size() or shelf[i] == null:
-		return false
-	removed.append(shelf[i].id)
-	shelf[i] = null
-	struck[i] = true
-	removes -= 1
 	return true
 
 
@@ -458,6 +474,11 @@ func spec_of(p: Vector2i) -> Dictionary:
 	if wonder == "banner":
 		s.atk_bonus = int(s.atk_bonus) + 2
 		s.hp_mult = float(s.hp_mult) * 1.25
+	match rule():
+		"bog":
+			s.hp_mult = float(s.hp_mult) * Content.BOG_HP
+		"cold":
+			s.haste = int(s.haste) + Content.COLD_HASTE
 	return s
 
 
@@ -483,25 +504,26 @@ func price(i: int, at: Variant = null) -> int:
 			return maxi(1, int(o.price) - _discount())
 		"raise":
 			var lv := int(buildings[at].level) if at is Vector2i and buildings.has(at) else 1
-			return _raise_price(lv)
+			return maxi(1, _raise_price(lv) - (Content.PLUS_RAISE if o.plus else 0))
 	return int(o.price)
 
 
-## The genes an offer costs here: an affix's, less the gene banks' and the tooth's -- none with the tower of evolution.
+## The research points an offer costs here: an affix's (none upgraded), less the gene banks' and the tooth's -- none
+## with the tower of evolution.
 func genes_cost(o: Dictionary) -> int:
 	if o.type != "affix" or wonder == "evo_tower":
 		return 0
 	return maxi(0, int(o.get("genes", 0)) - _sum("gene_off") - (1 if "tooth" in relics else 0))
 
 
-## Whether shelf[i] can be paid for (genes and alien genes too; for a raise, on the cheapest building).
+## Whether shelf[i] can be paid for (research points too; for a raise, on the cheapest building).
 func affordable(i: int) -> bool:
 	if i < 0 or i >= shelf.size() or shelf[i] == null:
 		return false
 	var o := Content.offer(shelf[i])
-	if genes < genes_cost(o) or alien < int(o.get("alien", 0)):
+	if genes < genes_cost(o):
 		return false
-	return gold >= (_least_price(o.id) if o.type == "raise" else price(i))
+	return gold >= (_least_price(shelf[i]) if o.type == "raise" else price(i))
 
 
 ## Where shelf[i] can go and be paid for: plots (Vector2i) for build, raise and affix. [] when it cannot be bought now.
@@ -593,7 +615,6 @@ func _pay(i: int, at: Variant) -> void:
 	var o := Content.offer(shelf[i])
 	gold -= price(i, at)
 	genes -= genes_cost(o)
-	alien -= int(o.get("alien", 0))
 
 
 func _apply(oi: Dictionary, at: Variant, choice: String) -> Array:
@@ -614,6 +635,10 @@ func _apply(oi: Dictionary, at: Variant, choice: String) -> Array:
 				buildings[at].level = int(oi.packed.level)
 				buildings[at].path = oi.packed.get("path", []).duplicate()
 				buildings[at].affixes = oi.packed.affixes.duplicate()
+			elif o.plus:
+				buildings[at].level = 2
+				if Content.is_nest(o.builds):
+					buildings[at].path = ["elite" if choice == "elite" else "count"]
 		"raise":
 			var b: Dictionary = buildings[at]
 			if Content.is_nest(b.kind):
@@ -663,15 +688,14 @@ func clone() -> Home:
 	h.gold = gold
 	h.biomass = biomass
 	h.genes = genes
-	h.alien = alien
 	h.hp = hp
 	h.relics = relics.duplicate()
+	h.deck = deck.duplicate(true)
+	h.cuts = cuts
+	h.flood = flood
 	h.shelf = shelf.duplicate(true)
-	h.struck = struck.duplicate()
 	h.stash = stash.duplicate(true)
 	h.rerolls = rerolls
-	h.removed = removed.duplicate()
-	h.removes = removes
 	h.wonders = wonders.duplicate()
 	h.wonder = wonder
 	h.next_id = next_id
@@ -695,41 +719,55 @@ func buildable(p: Vector2i) -> bool:
 # -- What the homeland comes to ---------------------------------------------------------------------------
 
 func income_gold() -> int:
-	var n := INCOME + (4 if "crystal" in relics else 0) + (6 if wonder == "gold_city" else 0)
-	for p in buildings:
+	var n := INCOME + (4 if "crystal" in relics else 0) + (6 if wonder == "gold_city" else 0) \
+		+ (Content.COLD_GOLD if rule() == "cold" else 0)
+	for p in _working():
 		var g := int(_level(buildings[p]).get("gold", 0))
 		if g <= 0:
 			continue
-		n += g + (2 if terrain.get(p, "") == "ore" else 0)
+		n += g + (2 if _like(p) == "ore" else 0)
 		for q in around(p):
-			if terrain.get(q, "") == "lava":
+			if _like(q) == "lava":
 				n += Content.LAVA_GOLD
 	return n
 
 
 func income_biomass() -> int:
 	var n := 0
-	for p in buildings:
+	for p in _working():
 		var b := int(_level(buildings[p]).get("biomass", 0))
-		n += b * (2 if terrain.get(p, "") == "pond" else 1)
+		n += b * (2 if _like(p) == "pond" else 1)
 	n += 3 if "coprolite" in relics else 0
-	if rule() == "damp":
+	if rule() in ["damp", "bog"]:
 		n = n * 3 / 2
+	elif rule() == "drought":
+		n = int(n * Content.DROUGHT_BIOMASS)
 	if "core" in relics:
 		n = n * 7 / 10
 	return n
 
 
 func income_genes() -> int:
-	var n := _sum("genes")
-	for p in buildings:
+	var n := Content.DROUGHT_GENES if rule() == "drought" else 0
+	for p in _working():
+		n += int(_level(buildings[p]).get("genes", 0))
 		if buildings[p].kind == "sampler":
 			for q in around(p):
 				if buildings.has(q) and buildings[q].kind == "pool":
 					n += Content.SAMPLER_POOL
-				if terrain.get(q, "") == "tree":
+				if _like(q) == "tree":
 					n += Content.TREE_GENES
 	return n
+
+
+## The plots whose buildings bring in what they make this round -- all but the last row at the coast's high tide.
+func _working() -> Array:
+	return buildings.keys().filter(func(p: Vector2i) -> bool: return not (flood and p.y == ROWS - 1))
+
+
+## Which of the four ways the special ground at p works (Content.TERRAIN like), or "".
+func _like(p: Vector2i) -> String:
+	return str(Content.TERRAIN[terrain[p]].get("like", terrain[p])) if terrain.has(p) else ""
 
 
 func biomass_max() -> int:
