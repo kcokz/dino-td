@@ -36,19 +36,43 @@ var _wonder: Node3D
 
 func setup(p_home: Home) -> void:
 	home = p_home
+	# Each plot a bed of earth, grained as the ground is, a rim of small stones round it.
+	var rim: Array[Transform3D] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 404
 	for y in Home.ROWS:
 		for x in Home.COLS:
 			var p := Vector2i(x, y)
-			var slab := Blocks.box(Vector3(PLOT, 0.1, PLOT), Color.WHITE, plot_pos(p) + Vector3(0, PLOT_TOP - 0.05, 0))
-			var m := StandardMaterial3D.new()
-			m.roughness = 0.9
+			var slab := MeshInstance3D.new()
+			slab.mesh = Blocks.rounded(Vector3(PLOT, 0.2, PLOT))
+			slab.position = plot_pos(p) + Vector3(0, PLOT_TOP - 0.1, 0)
+			var m := Ground.earth_material(Color.WHITE)
 			slab.material_override = m
 			_plot_mats[p] = m
 			add_child(slab)
-	# A fence along the yard's north side; a low strip where the battle line ends.
-	add_child(Blocks.box(Vector3(Home.COLS * TILE + 1.0, 0.5, 0.12), Color(0.45, 0.33, 0.2), Vector3(0, 0.3, YARD_Z - 1.3)))
+			var c := plot_pos(p)
+			for side in 4:
+				for k in 6:
+					var f := (k + 0.5) / 6.0 - 0.5
+					var along := Vector3(f * PLOT, 0, PLOT * 0.5 + 0.06)
+					var at: Vector3 = along.rotated(Vector3.UP, side * PI * 0.5)
+					var s := rng.randf_range(0.2, 0.3)
+					rim.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s * 1.3, s * 0.7, s)),
+						c + at + Vector3(0, PLOT_TOP - 0.06, 0)))
+	add_child(Ground.stones(rim, Color(0.56, 0.53, 0.48), 405))
+	# A post-and-rail fence along the yard's north side; a log lying where the battle line ends.
+	var fence_z := YARD_Z - 1.3
+	var span := Home.COLS * TILE + 1.0
+	var wood := Color(0.42, 0.31, 0.2)
+	for i in int(span / 2.0) + 1:
+		var x := -span * 0.5 + i * 2.0
+		add_child(Blocks.cylinder(0.08, 0.7, wood.darkened(0.1), Vector3(x, 0.35, fence_z), 0.07))
+	for h in [0.28, 0.55]:
+		add_child(Blocks.box(Vector3(span, 0.07, 0.07), wood, Vector3(0, h, fence_z)))
 	var line_z := plot_pos(Vector2i(0, Content.FRONT_ROWS)).z - TILE * 0.5
-	add_child(Blocks.box(Vector3(Home.COLS * TILE, 0.12, 0.3), Color(0.24, 0.18, 0.13), Vector3(0, PLOT_TOP + 0.02, line_z)))
+	var log_piece := Blocks.cylinder(0.14, Home.COLS * TILE, Color(0.36, 0.26, 0.17), Vector3(0, PLOT_TOP + 0.04, line_z), 0.13)
+	log_piece.rotation.z = PI * 0.5
+	add_child(log_piece)
 	_ark = _make_ark()
 	_ark.visible = false
 	add_child(_ark)

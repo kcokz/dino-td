@@ -1,18 +1,18 @@
 class_name World
 extends Node3D
 ## Where it all stands (GAME-DESIGN 12, 17): the ground all round, the homeland's bare ground, a road north out of it,
-## and at the road's end the field where battles are fought -- dressed for the place the ark has landed in: tall green
-## and water in the rainforest, ash, rock and glowing cracks at the volcano, dead trees and reeds in the swamp, ice and
-## pines on the ice fields, dunes and cacti in the desert, rocks and palms by the sea. Flat colours for now.
+## and at the road's end the field where battles are fought -- the ground itself Ground's (patchy, grained, grown over) --
+## dressed for the place the ark has landed in: tall green and water in the rainforest, ash, rock and glowing cracks at
+## the volcano, dead trees and reeds in the swamp, ice and pines on the ice fields, dunes and cacti in the desert, rocks
+## and palms by the sea.
 
 const ARENA := Vector3(0, 0, -80)       # the battle field's middle; Fight's (x, z) are measured from here
 const FIELD := Vector2(36, 20)
 const GROUND_TOP := 0.05                # the homeland's ground and the field stand this high
 
-var _grass: StandardMaterial3D
-var _home_ground: StandardMaterial3D
-var _road: StandardMaterial3D
-var _field: StandardMaterial3D
+var _grass: StandardMaterial3D          # the far ground, out to the horizon
+var _ground: Node3D                     # the place's own ground (Ground)...
+var _ground_for := -1                   # ...of this place (kept while only the light changes)
 var _sky: ProceduralSkyMaterial
 var _sun: DirectionalLight3D
 var _decor: Node3D
@@ -45,17 +45,14 @@ func _ready() -> void:
 	_sun.light_volumetric_fog_energy = 1.6
 	_sun.directional_shadow_max_distance = 90.0
 	add_child(_sun)
-	_grass = _own(Blocks.box(Vector3(600, 0.2, 600), Color.WHITE, Vector3(0, -0.1, -40)))
-	_home_ground = _own(Blocks.box(Vector3(27, 0.1, 27), Color.WHITE, Vector3(0, 0, 3)))
-	_road = _own(Blocks.box(Vector3(4, 0.06, 60), Color.WHITE, Vector3(0, 0, -40)))
-	_field = _own(Blocks.box(Vector3(FIELD.x, 0.1, FIELD.y), Color.WHITE, ARENA))
-	add_child(Blocks.box(Vector3(0.24, 0.12, FIELD.y), Color(0.42, 0.35, 0.25), ARENA))
+	_grass = _own(Blocks.box(Vector3(600, 0.2, 600), Color.WHITE, Vector3(0, -0.12, -40)))
+	# The field's corners: a stake each, a banner of the side that stands there.
 	for sx in [-1.0, 1.0]:
 		for sz in [-1.0, 1.0]:
 			var post := ARENA + Vector3(sx * FIELD.x * 0.5, 0, sz * FIELD.y * 0.5)
-			add_child(Blocks.box(Vector3(0.6, 2.4, 0.6), Color(0.45, 0.36, 0.26), post + Vector3(0, 1.2, 0)))
-			var flag := Color(0.85, 0.3, 0.25) if sx > 0 else Color(0.3, 0.55, 0.9)
-			add_child(Blocks.box(Vector3(0.05, 0.7, 1.0), flag, post + Vector3(0, 2.1, 0.55 * -sz)))
+			add_child(Blocks.cylinder(0.16, 2.6, Color(0.42, 0.33, 0.24), post + Vector3(0, 1.3, 0), 0.12))
+			var flag := Color(0.78, 0.32, 0.26) if sx > 0 else Color(0.3, 0.5, 0.82)
+			add_child(Blocks.box(Vector3(0.05, 0.75, 1.0), flag, post + Vector3(0, 2.15, 0.55 * -sz)))
 	var run: Run = Run.current
 	dress(run.place if run != null else 0)
 
@@ -164,10 +161,13 @@ func dress(r: int) -> void:
 	var lv: Dictionary = Content.LEVELS[r]
 	var grass: Color = lv.grass
 	var ground: Color = lv.ground
-	_grass.albedo_color = grass
-	_home_ground.albedo_color = ground
-	_road.albedo_color = ground.lightened(0.12)
-	_field.albedo_color = ground.lightened(0.2)
+	_grass.albedo_color = grass.darkened(0.04)
+	if _ground_for != r:
+		if _ground:
+			_ground.queue_free()
+		_ground = Ground.make(r)
+		_ground_for = r
+		add_child(_ground)
 	# Each place's own sky, drawn toward a humid one (dino-td's): a deep teal overhead, a warm white haze at the horizon.
 	_sky.sky_top_color = (lv.sky[0] as Color).lerp(Color(0.28, 0.46, 0.62), 0.4)
 	_sky.sky_horizon_color = (lv.sky[1] as Color).lerp(Color(0.84, 0.82, 0.7), 0.5)
@@ -189,6 +189,7 @@ func dress(r: int) -> void:
 			continue
 		if absf(at.x) < 4:
 			continue
+		at.y = Ground.height_at(at.x, at.z)
 		match r:
 			1:
 				_volcanic(at, rng)
