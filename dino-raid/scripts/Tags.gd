@@ -113,21 +113,23 @@ func _dots(at: Vector2, level: int) -> void:
 		draw_circle(c, 2.6, GOLD if i < level else Color(0.35, 0.33, 0.3))
 
 
+## Each hurt fighter's health, a short bar just over its head (one at full health shows none: the field stays clear,
+## and a bar is there only where something is happening).
 func _battle(cam: Camera3D) -> void:
 	var f: Fight = game.fight
 	for u in f.units:
-		if int(u.hp) <= 0:
+		if int(u.hp) <= 0 or int(u.hp) >= int(u.max):
 			continue
 		var n: Node3D = game.fight_view.node(u.id)
 		if n == null:
 			continue
-		var at3 := n.position + Vector3.UP * (float(u.size) + 0.35)
+		var at3 := n.global_position + Vector3.UP * (Creatures.height(n) + 0.18)
 		if cam.is_position_behind(at3):
 			continue
 		var at := cam.unproject_position(at3)
-		var w := clampf(16.0 + float(u.max) * 0.55, 22.0, 64.0)
-		var r := Rect2(at - Vector2(w * 0.5, 3.0), Vector2(w, 6.0))
-		draw_rect(r.grow(1.5), Color(0.04, 0.04, 0.04, 0.85))
+		var w := clampf(14.0 + float(u.max) * 0.4, 18.0, 46.0)
+		var r := Rect2(at - Vector2(w * 0.5, 2.5), Vector2(w, 5.0))
+		draw_rect(r.grow(1.2), Color(0.05, 0.04, 0.04, 0.8))
 		var frac := clampf(float(u.hp) / float(u.max), 0.0, 1.0)
 		draw_rect(Rect2(r.position, Vector2(w * frac, r.size.y)), OURS if u.side == "ours" else THEIRS)
 
