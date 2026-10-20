@@ -509,8 +509,7 @@ func refresh() -> void:
 	_title.text = "%s · 第 %d / %d 轮" % [Content.LEVELS[run.place].name, run.round, run.rounds()]
 	var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
 	_rule.text = "%s：%s" % [rule.name, rule.says]
-	_res.text = "生物质 %d/%d（+%d）  研究点数 %d/%d（+%d）" % [home.biomass, home.biomass_max(),
-		home.income_biomass(), home.genes, home.genes_max(), home.income_genes()]
+	_res.text = "生物质 %d（+%d）  研究点数 %d（+%d）" % [home.biomass, home.income_biomass(), home.genes, home.income_genes()]
 	var army := home.army()
 	_army.text = "这一轮出战 %d 只，吃 %d 生物质" % [army.size(), home.army_food()] if not fighting else ""
 	_army.visible = not away and not packing

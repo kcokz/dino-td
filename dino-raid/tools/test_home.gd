@@ -934,7 +934,15 @@ func _economy() -> void:
 	var research := r.home.genes
 	var out := r.finish(f)
 	check("a battle won: 2 gold and a research point", f.result != "won" or (out.gold == 2
-		and r.home.genes == mini(research + 1, r.home.genes_max()) and r.home.gold == 2), [f.result, out])
+		and r.home.genes == research + 1 and r.home.gold == 2), [f.result, out])
+	var piles := bare()
+	piles.build(Vector2i(0, 2), "pool")
+	piles.build(Vector2i(1, 2), "sampler")
+	piles.biomass = 40
+	piles.genes = 30
+	piles.start_round(rng(), 0)
+	check("no cap on what is kept: biomass and research points pile up (damp still rots half)", piles.biomass == 20 + 4
+		and piles.genes == 30 + 1 + Content.SAMPLER_POOL, [piles.biomass, piles.genes])
 
 
 func _clone() -> void:

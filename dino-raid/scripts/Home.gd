@@ -27,8 +27,7 @@ extends RefCounted
 const COLS := 6
 const ROWS := 4
 const INCOME := 5                 # gold each round
-const BIOMASS_MAX := 20
-const GENES_MAX := 10
+
 const HP := 30
 const NOWHERE := Vector2i(-1, -1)
 ## Where the ark sets things down, first to last: its nests in the middle of the battle line, the rest just behind it.
@@ -124,8 +123,8 @@ func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 	var b := income_biomass()
 	var n := income_genes()
 	gold += g
-	biomass = mini(biomass_max(), biomass + b)
-	genes = mini(genes_max(), genes + n)
+	biomass += b
+	genes += n
 	ev.append({"t": "income", "gold": g, "biomass": b, "genes": n})
 	if "frill" in relics and hp < hp_max():
 		var before := hp
@@ -777,13 +776,6 @@ func _working() -> Array:
 func _like(p: Vector2i) -> String:
 	return str(Content.TERRAIN[terrain[p]].get("like", terrain[p])) if terrain.has(p) else ""
 
-
-func biomass_max() -> int:
-	return BIOMASS_MAX
-
-
-func genes_max() -> int:
-	return GENES_MAX
 
 
 func hp_max() -> int:

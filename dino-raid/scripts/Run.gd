@@ -104,7 +104,7 @@ func finish(f: Fight) -> Dictionary:
 		"interest": 0, "level_won": false}
 	if f.result == "won":
 		var n := LOOT * (2 if big() or round >= rounds() else 1)
-		out.research = mini(n, home.genes_max() - home.genes)
+		out.research = n
 		home.genes += int(out.research)
 		home.gold += Content.WIN_GOLD
 		out.gold = Content.WIN_GOLD
