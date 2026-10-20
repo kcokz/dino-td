@@ -1107,8 +1107,15 @@ func _open(title: String, sub: String) -> VBoxContainer:
 	head.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(head)
 	box.add_child(_label(sub, 19, Fonts.serif(600), Style.PARCHMENT_DIM))
+	# It comes up out of the blur: fading in, growing the last little way to its size.
 	box.modulate.a = 0.0
-	box.create_tween().tween_property(box, "modulate:a", 1.0, 0.25)
+	box.scale = Vector2.ONE * 0.965
+	box.resized.connect(func() -> void: box.pivot_offset = box.size * 0.5)
+	var tw := box.create_tween().set_parallel()
+	tw.tween_property(box, "modulate:a", 1.0, 0.22)
+	tw.tween_property(box, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	shade.modulate.a = 0.0
+	tw.tween_property(shade, "modulate:a", 1.0, 0.2)
 	return box
 
 

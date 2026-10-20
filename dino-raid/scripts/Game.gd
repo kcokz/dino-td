@@ -83,6 +83,9 @@ var _effects := {}
 
 
 func _ready() -> void:
+	get_tree().node_added.connect(func(n: Node) -> void:
+		if n is BaseButton:
+			Style.juice(n))
 	Settings.load_all()
 	speed = 3.0 if Settings.fast else 1.0
 	add_child(Sound.new())
