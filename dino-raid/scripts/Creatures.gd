@@ -4,8 +4,8 @@ class_name Creatures
 ## do, lit in soft steps with a bright rim (toon shading), an elite's edges glowing gold -- moving as it moves:
 ## standing, running, biting, struck, falling. An elite is its species evolved (<species>_e1, _e2): spines down its
 ## back, horns behind its eyes, a deeper back, a heavier build, gold the second time -- on the same skeleton, moving
-## with the plain one's clips. Theirs are still blocks (Blocks.creature) until they have models of their own.
-## Whatever builds or moves a creature asks here, so a block and a model are told apart in one place.
+## with the plain one's clips. Theirs are cartoon aliens (Aliens), moved the same way; anything else is a block
+## (Blocks.creature). Whatever builds or moves a creature asks here, so a block and a model are told apart in one place.
 
 const DINOS := "res://assets/models/toon/"
 ## Each of our kinds: its species, and how tall it stands for each metre of its size.
@@ -65,6 +65,8 @@ static var _shader: Shader
 ## A creature: one of ours as its dinosaur, anything else as a block (Blocks.creature). Its root stands at its feet and
 ## looks along +z; meta "edge" is its size. `boost` makes what its affixes grow bigger (a card's picture of one).
 static func make(edge: float, color: Color, theirs: bool, affixes: Array, kind: String, elite := 0, boost := 1.0) -> Node3D:
+	if theirs and Aliens.has(kind):
+		return Aliens.make(edge, kind)
 	if theirs or not MODELS.has(kind):
 		return Blocks.creature(edge, color, theirs, affixes, kind, elite)
 	var root := Node3D.new()
@@ -151,6 +153,9 @@ static func flash(n: Node3D, c: Color, strength: float) -> void:
 	if now - int(n.get_meta("flashed", -1000)) < 500:
 		return
 	n.set_meta("flashed", now)
+	if n.has_meta("alien"):
+		Aliens.flash(n, c, strength)
+		return
 	if is_model(n):
 		var paint: ShaderMaterial = n.get_meta("paint")
 		paint.set_shader_parameter("flash_color", c)
