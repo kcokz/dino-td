@@ -10,6 +10,12 @@ class_name Aliens
 ## it by wearing one bright material for a moment.
 
 const TONE := 0.8                          # their colours under the toon light (Creatures.TOON_TONE: ours)
+## How big one looks (the larger of its length and its width, in metres): its size (Content.ENEMIES) times FOOT -- but
+## an ordinary one never bigger than PLAIN_MAX, a mini-boss or a boss never smaller than ELITE_MIN (the player, 2026-10-19:
+## "基础怪大小要有个上限a，精英怪大小有个下限b，b>a"), so which are the strong ones reads at a glance whatever their shape.
+const FOOT := 1.1
+const PLAIN_MAX := 1.3
+const ELITE_MIN := 2.0
 const EYE := Color(1.0, 0.34, 0.14)
 const BONE := Color(0.93, 0.88, 0.74)
 const ICE := Color(0.72, 0.9, 1.0)
@@ -60,7 +66,8 @@ const KINDS := {
 }
 
 static var _scenes := {}           # kind -> PackedScene, built the first time it is wanted
-static var _heights := {}          # kind -> how tall it stands at size 1
+static var _heights := {}          # kind -> how tall it stands, as built
+static var _feet := {}             # kind -> the larger of its length and width, as built
 static var _mats := {}             # a material for each colour (and look)
 static var _shapes := {}           # "ball", "cone", "ring" -> mesh
 
@@ -80,14 +87,23 @@ static func make(edge: float, kind: String) -> Node3D:
 	body.name = "Body"
 	root.add_child(body)
 	var model := _scene(kind).instantiate() as Node3D
-	model.scale = Vector3.ONE * edge
+	var s := looks(edge, kind) / float(_feet[kind])
+	model.scale = Vector3.ONE * s
 	body.add_child(model)
-	root.set_meta("height", float(_heights[kind]) * edge)
+	root.set_meta("height", float(_heights[kind]) * s)
 	var player := model.get_node("AnimationPlayer") as AnimationPlayer
 	root.set_meta("player", player)
 	player.play("idle")
 	player.seek(randf() * player.current_animation_length, true)
 	return root
+
+
+## How big one of `kind` and size `edge` looks (FOOT, PLAIN_MAX, ELITE_MIN).
+static func looks(edge: float, kind: String) -> float:
+	var foot := edge * FOOT
+	if kind.begins_with("mini_") or kind.begins_with("boss_"):
+		return maxf(foot, ELITE_MIN)
+	return minf(foot, PLAIN_MAX)
 
 
 ## A short glow of `c` over the whole of one: each of its shapes wears it for a moment.
@@ -136,7 +152,6 @@ static func _scene(kind: String) -> PackedScene:
 			pivots.append(n)
 	for p in pivots:
 		_merge(p)
-	_heights[kind] = Geo.bounds(model).end.y
 	var lib := AnimationLibrary.new()
 	for clip_name in clips:
 		lib.add_animation(clip_name, clips[clip_name])
@@ -144,6 +159,12 @@ static func _scene(kind: String) -> PackedScene:
 	player.name = "AnimationPlayer"
 	model.add_child(player)
 	player.add_animation_library("", lib)
+	# Measured standing as it stands (a frog's tongue in, a moth's wings up), not as it was built.
+	player.play("idle")
+	player.seek(0.0, true)
+	var box := Geo.bounds(model)
+	_heights[kind] = box.end.y
+	_feet[kind] = maxf(box.size.x, box.size.z)
 	for n in model.find_children("*", "", true, false):
 		n.owner = model
 	var scene := PackedScene.new()
