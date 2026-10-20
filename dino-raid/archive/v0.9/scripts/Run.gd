@@ -1,0 +1,238 @@
+class_name Run
+extends RefCounted
+## A run (GAME-DESIGN 17): the gene ark, its homeland and what it carries, through the places it lands in -- each a
+## big level of a few rounds (buy and build, then this round's army fights a wave), the last against the place's boss.
+## A place held: a relic chosen, then the ark moves on, taking its gold and what it can carry. Over when the homeland's
+## hit points are gone.
+
+const LOOT := 1                   # a battle won: this many alien genes; a big round's or a boss's, double
+const GIFTS := 3                  # the free pick after each round: one of this many
+
+## The run being played: kept here while the scene is reloaded.
+static var current: Run
+
+var level := 0                    # the place (Content.LEVELS) the ark is in
+var round := 1
+var home: Home
+var ark := ""                     # the ark chosen at the start (Content.ARKS), "" until then
+var rng := RandomNumberGenerator.new()
+var over := false
+var calm := false                 # no one comes (tools/sim_runs.gd measuring how strong a homeland can grow)
+
+
+func _init(seed := 0) -> void:
+	if seed == 0:
+		rng.randomize()
+	else:
+		rng.seed = seed
+	home = Home.new(rng)
+
+
+## The ark the run starts with: what it sets down in the first place, the gold and relic it brings.
+func choose_ark(id: String) -> void:
+	var a: Dictionary = Content.ARKS[id]
+	ark = id
+	home.land(0, rng, a.buildings)
+	home.gold += int(a.gold)
+	if not a.relic in home.relics:
+		home.relics.append(a.relic)
+
+
+func rounds() -> int:
+	return int(Content.LEVELS[level].rounds)
+
+
+func power() -> float:
+	return float(Content.LEVELS[level].power)
+
+
+## Who comes this round (or `ahead` rounds on).
+func wave(ahead := 0) -> Array:
+	return [] if calm else Content.wave(level, round + ahead)
+
+
+func big(ahead := 0) -> bool:
+	return round + ahead in Content.BIG_ROUNDS
+
+
+func start_round() -> Array:
+	return home.start_round(rng, level)
+
+
+func reroll() -> bool:
+	return home.reroll(rng, level)
+
+
+## The army goes out (its biomass paid) against this round's wave.
+func fight() -> Fight:
+	return Fight.make(home.produce(), wave(), power())
+
+
+## The strength of the army the homeland would send now (Content.strength).
+func strength() -> float:
+	var n := 0.0
+	for u in home.army():
+		n += Content.strength(Content.unit_stats(u))
+	return n
+
+
+## After the battle: won, gold and alien genes found; lost, the homeland harmed; either way the interest on the gold
+## kept. {result, fallen, took, alien, gold, interest, level_won}
+func finish(f: Fight) -> Dictionary:
+	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "alien": 0, "gold": 0, "interest": 0,
+		"level_won": false}
+	if f.result == "won":
+		var n := LOOT * (2 if big() or round >= rounds() else 1)
+		home.alien += n
+		out.alien = n
+		home.gold += Content.WIN_GOLD
+		out.gold = Content.WIN_GOLD
+	else:
+		out.took = home.harmed(f.harm())
+	out.interest = home.interest()
+	home.gold += int(out.interest)
+	if home.hp <= 0:
+		over = true
+	elif round >= rounds():
+		out.level_won = true
+	else:
+		round += 1
+	return out
+
+
+func last_level() -> bool:
+	return level >= Content.LEVELS.size() - 1
+
+
+## Offers to choose one of, free, after each round (GIFTS of them; two with the sac): from what the shop here could
+## sell now that is of use, the rarer more often than on the shelf.
+func gift_offer() -> Array:
+	var pool: Array = []
+	for id in home.pool_ids(level):
+		for k in [3, 3, 2][int(Content.OFFERS[id].rarity)]:
+			pool.append(id)
+	Home.shuffle(pool, rng)
+	var want := GIFTS - (1 if "sac" in home.relics else 0)
+	var out: Array = []
+	var ids: Array = []
+	for id in pool:
+		if id in ids:
+			continue
+		ids.append(id)
+		out.append({"id": id, "gift": true})
+		if out.size() == want:
+			break
+	return out
+
+
+## A gift taken: into the stash (the oldest there goes if it is full). Whether one went.
+func take_gift(oi: Dictionary) -> bool:
+	var g := oi.duplicate()
+	g.gift = true
+	return home.keep(g)
+
+
+## Three different relics not yet held, to choose one of: two fossils and a boss's.
+func relic_offer() -> Array:
+	var fossils: Array = Content.RELICS.keys().filter(func(id: String) -> bool:
+		return not id in home.relics and not Content.RELICS[id].get("boss", false))
+	var bosses: Array = Content.RELICS.keys().filter(func(id: String) -> bool:
+		return not id in home.relics and Content.RELICS[id].get("boss", false))
+	Home.shuffle(fossils, rng)
+	Home.shuffle(bosses, rng)
+	return fossils.slice(0, 2) + bosses.slice(0, 1)
+
+
+func take_relic(id: String) -> void:
+	if not id in home.relics:
+		home.relics.append(id)
+
+
+## What the ark could carry on: each building packed (with its level and affixes; from: its plot), and what is in the
+## stash now (kept: its place there).
+func packable() -> Array:
+	var out: Array = []
+	for p in home._plots():
+		var g := home.packed(p)
+		if not g.is_empty():
+			g.from = p
+			out.append(g)
+	for k in home.stash.size():
+		var g: Dictionary = home.stash[k].duplicate(true)
+		g.kept = k
+		out.append(g)
+	return out
+
+
+## What the ark carries on unless the player says otherwise: the goods that cost the most (Content.worth), as many as
+## the stash holds -- the stash's own first where they are worth the same -- but fed: while the nests taken would eat
+## more than the pools taken make (food_of), the least worth nest is left for the pool that makes most.
+func default_goods() -> Array:
+	var goods := packable()
+	goods.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var wa := Content.worth(a) + (0.01 if a.has("kept") else 0.0)
+		var wb := Content.worth(b) + (0.01 if b.has("kept") else 0.0)
+		return wa > wb)
+	var pick := goods.slice(0, home.stash_size())
+	var rest := goods.slice(home.stash_size())
+	while true:
+		var f := food_of(pick)
+		if int(f[0]) <= int(f[1]):
+			break
+		var pool := -1
+		for i in rest.size():
+			if int(food_of_good(rest[i])[1]) > (int(food_of_good(rest[pool])[1]) if pool >= 0 else 0):
+				pool = i
+		var nest := -1
+		for i in range(pick.size() - 1, -1, -1):
+			if int(food_of_good(pick[i])[0]) > 0:
+				nest = i
+				break
+		if pool < 0 or nest < 0:
+			break
+		pick[nest] = rest[pool]
+		rest.remove_at(pool)
+	return pick
+
+
+## What a building of `kind` at `lv` with `affixes` eats and makes each round: [biomass its units eat, biomass it
+## makes] -- at its level, before neighbours, ground and the place's rule.
+static func food(kind: String, lv: int, affixes: Array) -> Array:
+	var l := Content.level(kind, lv)
+	if Content.is_nest(kind):
+		return [int(l.count) * int(Content.UNITS[Content.species(Content.BUILDINGS[kind].nest, affixes).kind].food), 0]
+	return [0, int(l.get("biomass", 0))]
+
+
+static func food_of_good(g: Dictionary) -> Array:
+	var o := Content.offer(g)
+	return food(o.builds, int(o.get("level", 1)), o.get("affixes", [])) if o.type == "build" else [0, 0]
+
+
+## What the homeland in the next place would eat and make each round, with `goods` put down and what the ark sets down
+## of itself (Content.LANDING): [eat, make].
+static func food_of(goods: Array) -> Array:
+	var eat := 0
+	var make := 0
+	var all: Array = Content.LANDING.map(func(item: Array) -> Array: return food(item[0], int(item[1]), []))
+	for g in goods:
+		all.append(food_of_good(g))
+	for f in all:
+		eat += int(f[0])
+		make += int(f[1])
+	return [eat, make]
+
+
+## On to the next place, carrying `goods` (no more than the stash holds) and all the gold: the buildings left behind,
+## the ark landing in the middle of new ground.
+func move_on(goods: Array) -> void:
+	level += 1
+	round = 1
+	var carried: Array = []
+	for g in goods.slice(0, home.stash_size()):
+		var c: Dictionary = g.duplicate(true)
+		c.erase("from")
+		c.erase("kept")
+		carried.append(c)
+	home.stash = carried
+	home.land(level, rng, Content.LANDING)
