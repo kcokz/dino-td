@@ -10,9 +10,6 @@ extends CanvasLayer
 
 signal chosen(value: Variant)
 
-const SHELF_SCALE := 0.84
-const HOVER_SCALE := 1.15
-const KEPT_SCALE := 0.42
 const WIN := Style.JADE
 const LOSE := Style.CORAL
 const CREAM := Style.PARCHMENT
@@ -21,13 +18,15 @@ const BOSS := Style.CORAL
 
 var game: Game
 var _root: Control
-var _hand: Control
-var _cards: Array = []           # CardView, one for each place on the shelf
-var _kept: Array = []            # CardView, one for each good in the stash
-var _kept_for := ""
-var _hovered: CardView
+var _bar: PanelContainer           # the build bar (GAME-DESIGN 27): the blueprints had, by group, and the star on offer
+var _bar_groups := {}             # group (Content.GROUPS, and "star") -> its row of things
+var _bar_for := ""                # what the bar was made for: the blueprints had, the star on offer, the language
+var _plans: Array = []            # HudParts.Plan, one for each blueprint had (game.home.plans' order)
+var _star_plan: HudParts.Plan     # the star dinosaur on offer (null: none)
+var _bar_hot := ""                # what of the bar the cursor points at: "p<i>" (plans[i]), "star", or ""
+var _bar_tip: PanelContainer      # a word over the bar on what is pointed at
+var _bar_tip_text: Label
 var _gold: Control
-var _reroll: HudParts.RoundButton
 var _go: HudParts.RoundButton
 var _left: VBoxContainer           # top left: the crest, the purse, the relics and the schools' gifts, the wonders
 var _crest: HudParts.Crest
@@ -35,10 +34,10 @@ var _purse: HudParts.Purse
 var _menu: HudParts.RoundButton
 var _banner_rule: Control
 var _army: HudParts.ArmyTag
-var _deck_button: HudParts.RoundButton
-var _choice: PanelContainer
+var _choice: PanelContainer        # a building clicked: how it can be raised
+var _choice_box: VBoxContainer
+var _choice_for := ""
 var _track: HudParts.Track         # the round's parts, at the top
-var _choice_buttons := {}         # "count", "elite" -> its button
 
 var _right: VBoxContainer
 var _waves: VBoxContainer
@@ -60,10 +59,9 @@ var _versus: HudParts.Versus
 var _speed: HudParts.RoundButton
 var _point := ""                 # what of the HUD's own the cursor points at (_point_tip), "" nothing
 var _point_count := 0            # ...a monster of a wave: how many of it
-var _star_card: CardView         # the star dinosaur on offer, after the shelf (null: none)
 var _overlay: Control
 var _shade: ColorRect
-var _stowed := false             # the shelf put away below the screen (in a battle)
+var _stowed := false             # the build bar put away (in a battle)
 var screen := ""                 # the title of the screen up, "" when none (for tools)
 var offered: Array = []          # what the screen up offers to choose from: offers, star or place ids (for tools)
 
@@ -148,11 +146,38 @@ func setup(p_game: Game) -> void:
 	_info_text.custom_minimum_size = Vector2(300, 0)
 	_info.add_child(_info_text)
 
-	# Bottom: the shelf, the gold, the buttons.
-	_hand = Control.new()
-	_hand.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_hand.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_hand)
+	# Bottom: the build bar, the gold, the buttons.
+	_bar = PanelContainer.new()
+	_bar.add_theme_stylebox_override("panel", Style.panel(16.0))
+	_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_bar.position = Vector2(-40, -14)
+	_root.add_child(_bar)
+	var groups := HBoxContainer.new()
+	groups.add_theme_constant_override("separation", 22)
+	_bar.add_child(groups)
+	for g in Content.GROUPS.keys() + ["star"]:
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 2)
+		groups.add_child(col)
+		var head := _label(Content.GROUPS[g] if g != "star" else "明星", 13, Fonts.serif(800), Style.PARCHMENT_DIM)
+		head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(head)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 2)
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		col.add_child(row)
+		_bar_groups[g] = {"col": col, "row": row}
+	_bar_tip = PanelContainer.new()
+	_bar_tip.add_theme_stylebox_override("panel", Style.panel(10.0))
+	_bar_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bar_tip.visible = false
+	_root.add_child(_bar_tip)
+	_bar_tip_text = _label("", 14, Fonts.serif(600), Style.PARCHMENT)
+	_bar_tip_text.autowrap_mode = Style.wrap()
+	_bar_tip_text.custom_minimum_size = Vector2(260, 0)
+	_bar_tip.add_child(_bar_tip_text)
 	_gold = Control.new()
 	_gold.custom_minimum_size = Vector2(130, 56)
 	_gold.size = Vector2(130, 56)
@@ -163,11 +188,7 @@ func setup(p_game: Game) -> void:
 	_gold.mouse_exited.connect(func() -> void: _point = "")
 	_gold.draw.connect(_draw_gold)
 	_root.add_child(_gold)
-	# Bottom right: the deck and a fresh shelf, round buttons; the great seal that sends the army out, the army over it.
-	_deck_button = _round(HudParts.RoundButton.new(Icons.DECK, "牌库", 26.0), Vector2(-265, -230), "deck")
-	_deck_button.pressed.connect(func() -> void: show_deck())
-	_reroll = _round(HudParts.RoundButton.new(Icons.REFRESH, "刷新", 26.0), Vector2(-265, -138), "reroll")
-	_reroll.pressed.connect(func() -> void: game.act("reroll"))
+	# Bottom right: the great seal that sends the army out, the army over it.
 	_go = _round(HudParts.RoundButton.new(Icons.BATTLE, "出战！", 50.0, true), Vector2(-172, -184), "")
 	_go.pressed.connect(func() -> void: game.act("fight"))
 	_army = HudParts.ArmyTag.new()
@@ -218,28 +239,18 @@ func setup(p_game: Game) -> void:
 		_speed.queue_redraw())
 	_battle.add_child(_speed)
 
-	# A nest's raise: one more, or elite.
+	# A building clicked: how it can be raised (made for each building, _refresh_choice).
 	_choice = PanelContainer.new()
 	_choice.add_theme_stylebox_override("panel", Style.panel(14.0, true))
 	_choice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_choice.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_choice.position = Vector2(-40, -262)
+	_choice.position = Vector2(-40, -150)
 	_choice.visible = false
 	_root.add_child(_choice)
-	var choice_row := HBoxContainer.new()
-	choice_row.add_theme_constant_override("separation", 14)
-	_choice.add_child(choice_row)
-	for pair in [["count", "多孵 1 只"], ["elite", "变精英"]]:
-		var b := _button(pair[1], Vector2(150, 46), 17)
-		var choice: String = pair[0]
-		_choice_buttons[choice] = b
-		b.mouse_entered.connect(func() -> void: game.aim(choice))
-		b.mouse_exited.connect(func() -> void:
-			if game.aimed == choice:
-				game.aim(""))
-		b.pressed.connect(func() -> void: game.act("choose", {"choice": choice}))
-		choice_row.add_child(b)
+	_choice_box = VBoxContainer.new()
+	_choice_box.add_theme_constant_override("separation", 8)
+	_choice.add_child(_choice_box)
 
 	_banner = PanelContainer.new()
 	_banner.add_theme_stylebox_override("panel", Style.Streak.new(14.0))
@@ -279,9 +290,9 @@ func setup(p_game: Game) -> void:
 
 
 func _process(_delta: float) -> void:
-	_layout()
+	_place_bar_tip()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
-	var tip := game.describe() if _hovered == null and not _overlay.visible else ""
+	var tip := game.describe() if _bar_hot == "" and not _overlay.visible else ""
 	if not _overlay.visible:
 		if _point != "":
 			tip = _point_tip()
@@ -304,124 +315,194 @@ func _process(_delta: float) -> void:
 		_versus.queue_redraw()
 
 
-## The shelf, as cards: a place still showing what it showed keeps its card (so nothing jumps); a place bought from
-## shows an empty frame; a restocked one, the new offer. Brought back up if it was put away.
 ## The language changed: what was put together in words made again -- the cards, the wonders, the waves -- the rest
 ## follows by itself (words shown as they are change with the language).
 func relanguage() -> void:
-	for v in _cards + _kept + ([_star_card] if _star_card != null else []):
-		if not is_instance_valid(v):
-			continue
-		var card := v as CardView
-		if card.star != "":
-			card.setup_star(card.star)
-		elif not card.sold and not card.ci.is_empty():
-			card.setup(card.ci, card.kept)
-		card.queue_redraw()
-	for l in [_hint, _info_text]:
+	_bar_for = ""
+	_choice_for = ""
+	for g in _bar_groups:
+		var head: Label = _bar_groups[g].col.get_child(0)
+		head.text = Lang.t(Content.GROUPS[g] if g != "star" else "明星")
+	for l in [_hint, _info_text, _bar_tip_text]:
 		(l as Label).autowrap_mode = Style.wrap()
 	_waves_for = ""
 	refresh()
 
 
-func deal(shelf: Array) -> void:
-	_stowed = false
-	var out: Array = []
-	var dealt := 0                 # new cards so far: each flies from the deck a little after the one before
-	for i in shelf.size():
-		var oi: Variant = shelf[i]
-		var old: CardView = _cards[i] if i < _cards.size() else null
-		if old != null and ((oi == null and old.sold) or (oi != null and not old.sold and old.ci == oi)):
-			out.append(old)
-			continue
-		var v := CardView.new()
-		_hand.add_child(v)
-		if oi == null:
-			v.setup_sold("已买")
-		else:
-			v.setup(oi)
-			v.clicked.connect(_on_card)
-			v.hovered.connect(_on_hover)
-		if old != null:
-			v.position = old.position
-			v.scale = old.scale
-			_fly_off(old, oi == null)
-		else:
-			# Dealt from the deck (its pile at the bottom right): face down, small, turned aside; it waits its turn,
-			# flies to its place and turns over as it lands.
-			var deck := _deck_button.global_position + Vector2(_deck_button.size.x * 0.5, 30.0) - _hand.global_position
-			v.position = deck - v.pivot_offset
-			v.scale = Vector2.ONE * 0.24
-			v.rotation = -0.7
-			v.set_meta("deal_at", Time.get_ticks_msec() + dealt * 85)
-			v.turn_over(0.16 + dealt * 0.085, 0.3)
-			dealt += 1
-		out.append(v)
-	for i in range(shelf.size(), _cards.size()):
-		_fly_off(_cards[i], false)
-	_cards = out
-	# The star dinosaur on offer, after the shelf: dealt like the rest; bought, it rises off; restocked, it drops.
-	var star: String = game.home.star_offer
-	if _star_card != null and _star_card.star != star:
-		_fly_off(_star_card, star == "")
-		_star_card = null
-	if _star_card == null and star != "":
-		var v := CardView.new()
-		_hand.add_child(v)
-		v.setup_star(star)
-		v.clicked.connect(_on_card)
-		v.hovered.connect(_on_hover)
-		var deck := _deck_button.global_position + Vector2(_deck_button.size.x * 0.5, 30.0) - _hand.global_position
-		v.position = deck - v.pivot_offset
-		v.scale = Vector2.ONE * 0.24
-		v.rotation = -0.7
-		v.set_meta("deal_at", Time.get_ticks_msec() + dealt * 85)
-		v.turn_over(0.16 + dealt * 0.085, 0.3)
-		_star_card = v
-	if _hovered and not _hovered in _cards and not _hovered in _kept and _hovered != _star_card:
-		_hovered = null
-	refresh()
-
-
-## The stash, as small cards (in under the shelf's): made again whenever what is in it changes.
-func _refresh_kept() -> void:
+## The build bar made again when what is on it changes -- the blueprints had, the star on offer: each a round picture,
+## in its group (Content.group_of), the star after them; groups with nothing in them hidden.
+func _refresh_bar() -> void:
 	var home: Home = game.home
-	var key := str(home.stash)
-	if key == _kept_for:
+	var key := "%s|%s|%s" % [str(home.plans), home.star_offer, Lang.english()]
+	if key != _bar_for:
+		_bar_for = key
+		for g in _bar_groups:
+			for c in _bar_groups[g].row.get_children():
+				c.queue_free()
+		_plans = []
+		_star_plan = null
+		_bar_hot = ""
+		for i in home.plans.size():
+			var o := Content.offer({"id": home.plans[i]})
+			var b := HudParts.Plan.new()
+			b.key = ("b_" + str(o.builds)) if o.type == "build" else ("a_" + str(o.affix))
+			b.rarity = int(o.rarity)
+			b.glyph = str(o.name).left(1)
+			var at := i
+			b.pressed.connect(func() -> void: game.hold(at))
+			b.mouse_entered.connect(func() -> void: _bar_hot = "p%d" % at)
+			b.mouse_exited.connect(func() -> void:
+				if _bar_hot == "p%d" % at:
+					_bar_hot = "")
+			_bar_groups[Content.group_of(home.plans[i])].row.add_child(b)
+			_plans.append(b)
+		if home.star_offer != "":
+			var s: Dictionary = Content.STARS[home.star_offer]
+			_star_plan = HudParts.Plan.new()
+			_star_plan.key = "s_" + home.star_offer
+			_star_plan.rarity = int(s.rarity)
+			_star_plan.glyph = Lang.t(s.name).left(1)
+			_star_plan.pressed.connect(func() -> void: game.act("star"))
+			_star_plan.mouse_entered.connect(func() -> void: _bar_hot = "star")
+			_star_plan.mouse_exited.connect(func() -> void:
+				if _bar_hot == "star":
+					_bar_hot = "")
+			_bar_groups.star.row.add_child(_star_plan)
+		for g in _bar_groups:
+			var n: int = _bar_groups[g].row.get_child_count()
+			_bar_groups[g].col.visible = n > 0 and not (g == "star" and home.star_offer == "")
+	var planning := game.phase == Game.Phase.PLAN
+	for i in _plans.size():
+		var b: HudParts.Plan = _plans[i]
+		var o := Content.offer({"id": home.plans[i]})
+		b.price = int(o.price)
+		b.genes = home.genes_cost(o)
+		b.pop = Content.pop_of(o)
+		b.lit = planning and not game.fits_of(i).is_empty()
+		b.held = game.held == i
+		b.queue_redraw()
+	if _star_plan != null:
+		_star_plan.price = int(Content.STARS[home.star_offer].price)
+		_star_plan.pop = home.star_need(home.star_offer)
+		_star_plan.lit = planning and home.can_buy_star()
+		_star_plan.queue_redraw()
+
+
+## The word over the bar on what it points at, placed over it -- or hidden.
+func _place_bar_tip() -> void:
+	var b: HudParts.Plan = null
+	var said := ""
+	if _bar.visible and not _overlay.visible:
+		if _bar_hot == "star" and _star_plan != null:
+			b = _star_plan
+			said = _star_tip()
+		elif _bar_hot.begins_with("p"):
+			var i := int(_bar_hot.substr(1))
+			if i < _plans.size():
+				b = _plans[i]
+				said = _plan_tip(i)
+	_bar_tip.visible = b != null and said != ""
+	if not _bar_tip.visible:
 		return
-	_kept_for = key
-	for v in _kept:
-		if v == _hovered:
-			_hovered = null
-		v.queue_free()
-	_kept = []
-	for k in home.stash.size():
-		var v := CardView.new()
-		_root.add_child(v)
-		_root.move_child(v, _hand.get_index())
-		v.setup(home.stash[k], true)
-		v.clicked.connect(_on_card)
-		v.hovered.connect(_on_hover)
-		v.scale = Vector2.ONE * KEPT_SCALE
-		v.position = _kept_at(k, false) - v.pivot_offset
-		_kept.append(v)
+	if _bar_tip_text.text != said:
+		_bar_tip_text.text = said
+		_bar_tip.reset_size()
+	var at := b.global_position - _root.global_position
+	var top := _bar.global_position.y - _root.global_position.y
+	_bar_tip.position = Vector2(clampf(at.x + b.size.x * 0.5 - _bar_tip.size.x * 0.5, 12.0, _root.size.x - _bar_tip.size.x - 12.0),
+		top - _bar_tip.size.y - 10.0)
 
 
-## Everyone goes out: the shelf is put away below the screen.
+## What the blueprint plans[i] is, what it asks, and -- when it cannot be built now -- why.
+func _plan_tip(i: int) -> String:
+	var home: Home = game.home
+	var id: String = home.plans[i]
+	var o := Content.offer({"id": id})
+	var asks: Array = [Lang.t("%d 金") % int(o.price)]
+	if home.genes_cost(o) > 0:
+		asks.append(Lang.t("%d 研究点数") % home.genes_cost(o))
+	var need := Content.pop_of(o)
+	if need > 0:
+		asks.append(Lang.t("%d 人口") % need)
+	elif need < 0:
+		asks.append(Lang.t("人口上限 +%d") % -need)
+	var lines: Array = [str(o.name), Content.offer_text(o), Lang.t("、").join(asks)]
+	if game.phase == Game.Phase.PLAN and game.fits_of(i).is_empty():
+		if home.gold < int(o.price):
+			lines.append(Lang.t("金币不够（你有 %d）") % home.gold)
+		elif home.genes < home.genes_cost(o):
+			lines.append(Lang.t("研究点数不够（你有 %d）") % home.genes)
+		elif home.pop_blocks({"id": id}):
+			lines.append(Lang.t("人口不够（现在 %d/%d）") % [home.pop_used(), home.pop_cap()])
+		else:
+			lines.append(Lang.t("现在没有地方造"))
+	return "\n".join(lines)
+
+
+## What the star on offer is, what it asks, and why it cannot be had now.
+func _star_tip() -> String:
+	var home: Home = game.home
+	var s: Dictionary = Content.STARS[home.star_offer]
+	var lines: Array = [Lang.t("%s（%s，%s）") % [Lang.t(s.name), Lang.t(s.kind), Lang.t(Content.DIETS[s.diet])], Lang.t(s.says),
+		Lang.t("%d 金、%d 人口") % [int(s.price), home.star_need(home.star_offer)]]
+	if game.phase == Game.Phase.PLAN and not home.can_buy_star():
+		if home.stars.size() >= Content.PENS:
+			lines.append(Lang.t("围栏满了"))
+		elif home.gold < int(s.price):
+			lines.append(Lang.t("金币不够（你有 %d）") % home.gold)
+		else:
+			lines.append(Lang.t("人口不够（现在 %d/%d）") % [home.pop_used(), home.pop_cap()])
+	return "\n".join(lines)
+
+
+## The building clicked (game.pending): its name and level, and a button for each way it can be raised, with its
+## price -- pointed at, the forecast shows what it would do; the ways it cannot be raised greyed.
+func _refresh_choice() -> void:
+	var home: Home = game.home
+	var at: Variant = game.pending.get("at")
+	_choice.visible = game.phase == Game.Phase.PLAN and at != null and home.buildings.has(at)
+	if not _choice.visible:
+		_choice_for = ""
+		return
+	var b: Dictionary = home.buildings[at]
+	var key := "%s|%d|%d|%d|%d" % [str(at), int(b.level), home.gold, home.pop_used(), home.pop_cap()]
+	if key == _choice_for:
+		return
+	_choice_for = key
+	for c in _choice_box.get_children():
+		c.queue_free()
+	var top := int(b.level) >= Content.LEVEL_MAX
+	var title := Lang.t("%s，%d 级") % [Lang.t(Content.BUILDINGS[b.kind].name), int(b.level)] if top \
+		else Lang.t("%s：%d 级 → %d 级（%d 金）") % [Lang.t(Content.BUILDINGS[b.kind].name), int(b.level), int(b.level) + 1,
+			home.raise_price(at)]
+	var head := _label(title, 16, Fonts.serif(800), Style.GOLD_BRIGHT)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_choice_box.add_child(head)
+	if top:
+		return
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	_choice_box.add_child(row)
+	var ways: Array = [["count", "多孵 1 只"], ["elite", "变精英"]] if Content.is_nest(b.kind) \
+		else [["count", Lang.t("升到 %d 级") % (int(b.level) + 1)]]
+	for pair in ways:
+		var choice: String = pair[0]
+		var button := _button(pair[1], Vector2(150, 46), 17)
+		button.disabled = not game.raise_fits(choice)
+		button.mouse_entered.connect(func() -> void: game.aim(choice))
+		button.mouse_exited.connect(func() -> void:
+			if game.aimed == choice:
+				game.aim(""))
+		button.pressed.connect(func() -> void: game.act("choose", {"choice": choice}))
+		row.add_child(button)
+
+
+## Everyone goes out: the build bar put away.
 func stow() -> void:
 	_stowed = true
-	_hovered = null
+	_bar_hot = ""
 	refresh()
-
-
-## A card leaving the shelf: bought, it rises and fades; restocked away, it drops.
-func _fly_off(v: CardView, bought: bool) -> void:
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tw := v.create_tween()
-	tw.set_parallel()
-	tw.tween_property(v, "position", v.position + Vector2(0, -160 if bought else 220), 0.3).set_ease(Tween.EASE_IN)
-	tw.tween_property(v, "modulate:a", 0.0, 0.3)
-	tw.chain().tween_callback(v.queue_free)
 
 
 func refresh() -> void:
@@ -430,35 +511,15 @@ func refresh() -> void:
 	var planning := game.phase == Game.Phase.PLAN
 	var fighting := game.phase == Game.Phase.FIGHT
 	var away := fighting or game.phase == Game.Phase.MOVE     # the army out, or on the way to the next place
-	_refresh_kept()
+	if planning:
+		_stowed = false
 	var used := home.pop_used()
 	var cap := home.pop_cap()
-	for i in _cards.size():
-		var v: CardView = _cards[i]
-		if not v.sold:
-			v.genes_shown = home.genes_cost(v.c)
-			v.pop_need = Content.pop_of(v.c)
-			v.purse = {"gold": home.gold, "genes": home.genes, "used": used, "cap": cap}
-			v.set_state(planning and not game.fits_of(i).is_empty(), game.held == i)
-	for k in _kept.size():
-		var v: CardView = _kept[k]
-		v.pop_need = Content.pop_of(v.c)
-		v.purse = {"used": used, "cap": cap}
-		v.set_state(planning and not game.fits_of(k, true).is_empty(), game.held_k == k)
-	if _star_card != null:
-		_star_card.purse = {"gold": home.gold, "used": used, "cap": cap}
-		if _star_card.star != "":
-			_star_card.pop_need = home.star_need(_star_card.star)
-		_star_card.set_state(planning and home.can_buy_star(), false)
+	_refresh_bar()
+	_bar.visible = not away and not _stowed and game.phase != Game.Phase.DONE
 	_go.disabled = not planning
 	_go.visible = not away
 	_go.queue_redraw()
-	var price := home.reroll_price()
-	_reroll.cost = price
-	_reroll.enough = home.gold >= price
-	_reroll.disabled = not planning or home.gold < price
-	_reroll.visible = not away
-	_reroll.queue_redraw()
 	_menu.visible = not fighting
 	_gold.visible = not fighting
 	_gold.queue_redraw()
@@ -479,19 +540,11 @@ func refresh() -> void:
 	_army.food = Home.food_of(game.army_now())
 	_army.visible = not away
 	_army.queue_redraw()
-	_deck_button.visible = not away
-	_deck_button.disabled = not planning
-	_deck_button.count = str(home.deck.size())
-	_deck_button.queue_redraw()
-	_choice.visible = planning and not game.pending.is_empty()
+	_refresh_choice()
 	_track.part = game.part
 	_track.visible = not away and game.phase != Game.Phase.DONE
 	_track.queue_redraw()
-	if _choice.visible:
-		_choice_buttons.count.disabled = not game.count_fits()
 	_battle.visible = fighting and not game.at_home
-	for k in _kept.size():
-		_kept[k].visible = not away and planning
 	_waves.visible = not away
 	_hint.text = game.hint()
 	_hint.visible = _hint.text != ""
@@ -560,11 +613,6 @@ func _point_tip() -> String:
 				Home.food_of(game.ahead().fighters)]
 			var more := game.bonuses()
 			return said + ("\n" + more if more != "" else "")
-		"deck":
-			return Lang.t("牌库（%d 张）") % home.deck.size()
-		"reroll":
-			var price := home.reroll_price()
-			return Lang.t("刷新（%s）") % (Lang.t("免费") if price == 0 else Lang.t("%d 金") % price)
 	return ""
 
 
@@ -604,84 +652,6 @@ func _verdict(f: Dictionary) -> String:
 	if f.result == "time":
 		return Lang.t("拖到时间算输，家园 −%d") % f.harm
 	return Lang.t("输，家园 −%d") % f.harm
-
-
-## Where the stash's k-th card stands (its bottom middle): in a row leftward from over the buttons.
-func _kept_at(k: int, lifted: bool) -> Vector2:
-	var w := CardView.SIZE.x * KEPT_SCALE
-	return Vector2(_root.size.x - 330.0 - k * (w + 8.0), _root.size.y - 250.0 - (14.0 if lifted else 0.0))
-
-
-## The shelf laid out flat along the bottom, between the gold and the buttons, the star on offer after it; the stash
-## in a row over the buttons; the card pointed at lifted and larger, the one taken up raised.
-func _layout() -> void:
-	var w := _root.size.x
-	var h := _root.size.y
-	var n := _cards.size()
-	var all := n + (1 if _star_card != null else 0)
-	var gap := minf(150.0, (w - 640.0) / maxf(1.0, all - 1))
-	var shelf := _cards.duplicate()
-	if _star_card != null:
-		shelf.append(_star_card)
-	for i in shelf.size():
-		var v: CardView = shelf[i]
-		if v.modulate.a < 0.99 and v.mouse_filter == Control.MOUSE_FILTER_IGNORE and not v.sold:
-			continue
-		if v.has_meta("deal_at") and Time.get_ticks_msec() < int(v.get_meta("deal_at")):
-			continue
-		var off := i - (all - 1) * 0.5
-		var x := w * 0.5 - 70.0 + off * gap + (16.0 if v == _star_card else 0.0)
-		var y := h + 40.0 + (260.0 if _stowed else 0.0)
-		var k := SHELF_SCALE
-		var tilt := 0.0
-		if v == _hovered:
-			y -= 110.0
-			k = HOVER_SCALE
-			# Leaning a little toward where the cursor is on it.
-			var local := (_root.get_local_mouse_position().x - x) / (CardView.SIZE.x * k)
-			tilt = clampf(local, -0.5, 0.5) * 0.09
-		elif game.held == i:
-			y -= 44.0
-		else:
-			# At rest, the cards drift a hair up and down, each in its own time.
-			y += sin(Time.get_ticks_msec() * 0.0016 + i * 1.3) * 2.0
-		_move(v, Vector2(x, y), k, 10 if v == _hovered else i, tilt)
-	for k in _kept.size():
-		var v: CardView = _kept[k]
-		var at := _kept_at(k, game.held_k == k)
-		var s := KEPT_SCALE
-		if v == _hovered:
-			s = SHELF_SCALE
-			at.x = maxf(at.x, 18.0 + CardView.SIZE.x * s * 0.5)
-		_move(v, at, s, 20 if v == _hovered else 0)
-
-
-func _move(v: CardView, to_bottom: Vector2, k: float, z: int, tilt := 0.0) -> void:
-	var to := to_bottom - v.pivot_offset
-	v.position = v.position.lerp(to, 0.3)
-	v.rotation = lerpf(v.rotation, tilt, 0.25)
-	v.scale = v.scale.lerp(Vector2.ONE * k, 0.3)
-	v.z_index = z
-
-
-func _on_card(v: CardView) -> void:
-	if v == _star_card:
-		game.act("star")
-		return
-	var i := _cards.find(v)
-	if i >= 0:
-		game.hold(i)
-		return
-	var k := _kept.find(v)
-	if k >= 0:
-		game.hold_kept(k)
-
-
-func _on_hover(v: CardView, on: bool) -> void:
-	if on:
-		_hovered = v
-	elif _hovered == v:
-		_hovered = null
 
 
 ## A word across the middle of the screen, fading.
@@ -796,78 +766,6 @@ func pen_menu(k: int) -> String:
 ## A skull, `at` its middle: how dangerous a wave looks.
 func _skull(c: Control, at: Vector2, col: Color) -> void:
 	HudParts.skull(c, at, col)
-
-
-## The deck the shop draws from, laid out to look at (while planning) -- upgraded cards marked +.
-func show_deck() -> void:
-	if screen != "":
-		return
-	var home: Home = game.home
-	var cards: Array = home.deck.map(func(card: Dictionary) -> Dictionary: return Home._good(card))
-	await choose(Lang.t("牌库（%d 张）") % cards.size(), "商店每轮从这里抽货。每轮打完可以加一张；小首领打完可以删、可以强化", cards, ["关闭"], false)
-
-
-## After a place's mini-boss: the deck laid out to work on -- a card picked, then cut (gold, dearer each time) or
-## upgraded (research points); or done. What was asked: {cut: k} or {upgrade: k} (k: the card's place in the deck), or
-## "完成".
-func workshop() -> Variant:
-	var home: Home = game.home
-	var box := _open("整理牌库", Lang.t("删一张 %d 金（每删一张，下一张贵 %d 金）；强化一张 %d 研究点数。现在有 %d 金、%d 研究点数") % [
-		home.cut_price(), Content.CUT_STEP, Content.UPGRADE, home.gold, home.genes])
-	offered = home.deck.duplicate(true)
-	var grid := GridContainer.new()
-	grid.columns = mini(home.deck.size(), 9)
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	box.add_child(grid)
-	var k := 0.66 if home.deck.size() <= 18 else 0.56
-	var views: Array = []
-	var picked := {"k": -1}
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 20)
-	var cut := _button(Lang.t("删掉这张（%d 金）") % home.cut_price(), Vector2(210, 50), 18)
-	var up := _button(Lang.t("强化这张（%d 研究点数）") % Content.UPGRADE, Vector2(250, 50), 18)
-	var done := _button("完成", Vector2(170, 50), 19, true)
-	var update := func() -> void:
-		var p: int = picked.k
-		cut.disabled = p < 0 or home.gold < home.cut_price()
-		up.disabled = p < 0 or not home.can_upgrade(p)
-		for i in views.size():
-			(views[i] as CardView).set_state(true, i == p)
-	for i in home.deck.size():
-		var slot := Control.new()
-		slot.custom_minimum_size = CardView.SIZE * k
-		grid.add_child(slot)
-		var v := CardView.new()
-		slot.add_child(v)
-		v.setup(Home._good(home.deck[i]))
-		v.pivot_offset = Vector2.ZERO
-		v.scale = Vector2.ONE * k
-		var at := i
-		v.clicked.connect(func(_v: CardView) -> void:
-			picked.k = at
-			update.call())
-		views.append(v)
-	# Pointed at, the upgrade shows the card picked as it would be.
-	up.mouse_entered.connect(func() -> void:
-		if picked.k >= 0 and not up.disabled:
-			(views[picked.k] as CardView).show_as({"id": home.deck[picked.k].id, "plus": true}))
-	up.mouse_exited.connect(func() -> void:
-		if picked.k >= 0:
-			(views[picked.k] as CardView).show_as(Home._good(home.deck[picked.k])))
-	cut.pressed.connect(func() -> void: chosen.emit({"cut": picked.k}))
-	up.pressed.connect(func() -> void: chosen.emit({"upgrade": picked.k}))
-	done.pressed.connect(func() -> void: chosen.emit("完成"))
-	row.add_child(cut)
-	row.add_child(up)
-	row.add_child(done)
-	box.add_child(row)
-	update.call()
-	var answer: Variant = await chosen
-	_close()
-	return answer
 
 
 ## The map, after a place is held: the run's levels in three columns -- the places come to lit, the roads on from here
@@ -1101,8 +999,7 @@ func _fly_in(node: Control, to: Vector2, i: int, n: int) -> void:
 ## right, the coin up from below, the buttons in from the right -- one after another.
 func enter() -> void:
 	var parts: Array = [[_left, Vector2(-420, 0), 0.0], [_right, Vector2(380, 0), 0.08], [_gold, Vector2(0, 260), 0.14],
-		[_army, Vector2(320, 0), 0.2], [_deck_button, Vector2(320, 0), 0.24], [_reroll, Vector2(320, 0), 0.28],
-		[_go, Vector2(340, 0), 0.32], [_menu, Vector2(0, 160), 0.22]]
+		[_army, Vector2(320, 0), 0.2], [_bar, Vector2(0, 220), 0.26], [_go, Vector2(340, 0), 0.32], [_menu, Vector2(0, 160), 0.22]]
 	for part in parts:
 		var c: Control = part[0]
 		var at := c.position
@@ -1119,7 +1016,7 @@ func _open(title: String, sub: String) -> VBoxContainer:
 		ch.queue_free()
 	screen = title
 	_overlay.visible = true
-	_hand.visible = false
+	_bar.visible = false
 	var shade := ColorRect.new()
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var m := ShaderMaterial.new()
@@ -1155,7 +1052,7 @@ func _close() -> void:
 	for ch in _overlay.get_children():
 		ch.queue_free()
 	_overlay.visible = false
-	_hand.visible = true
+	refresh()
 
 
 # -- Pieces -----------------------------------------------------------------------------------------------------

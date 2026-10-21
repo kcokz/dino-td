@@ -3,14 +3,14 @@ extends Node3D
 ## The game (GAME-DESIGN 17-22): the homeland built from the shop, and the battles its army fights by itself, on one
 ## screen. It opens on the title (Menu) over a homeland at dusk; Esc pauses. A run lands in the rainforest. A round goes
 ## in parts (GAME-DESIGN 26, Content.PHASES), each said as it comes. The start: the round's pay and the interest on the
-## gold kept come in, the shelf is stocked. The player's: the player buys -- buildings, raises (a nest's as a choice:
-## one more, or elite), gene affixes, a star dinosaur for a pen (GAME-DESIGN 24) -- or keeps what is bought for later
-## with the hoarder, puts down what was kept, sells a star, watching the forecast change; then is done. The making, by
+## gold kept come in, a star dinosaur comes to be had. The player's: the player builds from the blueprints had (the
+## build bar; GAME-DESIGN 27), raises buildings (clicked: a nest's raise a choice, one more or elite), sticks gene
+## affixes on nests, buys the star for a pen (GAME-DESIGN 24), sells one -- watching the forecast change; then is done. The making, by
 ## itself: the buildings and the stars bring in biomass, research points and gold, and the nests hatch this round's
 ## young -- each out of its nest to stand in the yard as it will stand in battle. The eating, by itself: the stars and
 ## the young eat. The battle, by itself: the young go out and fight, and are gone with it; won, gold and research
-## points; lost, the homeland is hurt. Then one of three cards for the deck the shop draws from -- or gold instead.
-## Rounds 4 and 8 are against the place's mini-bosses, and after each the deck can be cut and upgraded. Twelve rounds
+## points; lost, the homeland is hurt. Then one of three blueprints more -- or gold instead; after rounds 4 and 8,
+## against the place's mini-bosses, an uncommon or rare one. Twelve rounds
 ## hold a place, the last against its boss; then the run goes on to the next place picked on the map, where the
 ## homeland is made afresh, carrying nothing. How the battle will end is worked out and shown before it is fought, and
 ## again with the offer, the good or the choice pointed at.
@@ -44,7 +44,6 @@ var tags: Tags
 var hud: Hud
 var phase := Phase.BUSY
 var held := -1                    # the shelf place taken up, or -1
-var held_k := -1                  # the stash place taken up, or -1
 var hover := {"plot": HomeView.NOWHERE, "unit": "", "pen": -1}     # pen: a star dinosaur's pen (HomeView)
 var fight: Fight                  # the battle being fought, or null
 var speed := 1.0
@@ -52,7 +51,7 @@ var at_home := true               # the camera is over the homeland (not the bat
 var forecast := {}                # this round's battle as things stand: {result, left, total, harm, loot}
 var preview := {}                 # the same with what is taken up used; {} when none
 var effects := {}                 # plot -> [short lines]: what that would change there (for Tags)
-var pending := {}                 # a nest's raise waiting for its choice: {from: "buy" or "place", slot, at}; {} if none
+var pending := {}                 # a building clicked, to be raised: {at}; {} if none
 
 var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice
 
@@ -158,67 +157,49 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "buy" {slot, at, choice}, "store" {slot}, "place" {slot, at, choice},
-## "choose" {choice} (for the raise waiting), "star" (the star on offer bought), "sell" {pen}, "reroll", "fight".
-## Whether it happened.
+## The one door for a player's action: "build" {plan, at} (the blueprint plans[plan] built on `at`), "raise" {at,
+## choice} (the building at `at` a level up), "choose" {choice} (the building clicked raised so), "star" (the star on
+## offer bought), "sell" {pen}, "fight". Whether it happened.
 func act(what: String, data := {}) -> bool:
 	if phase != Phase.PLAN:
 		return false
 	match what:
-		"buy":
-			var ev := home.buy(int(data.get("slot", -1)), data.get("at", true), str(data.get("choice", "count")))
+		"build":
+			var i := int(data.get("plan", -1))
+			if i < 0 or i >= home.plans.size():
+				return false
+			var ev := home.build_plan(home.plans[i], data.get("at", HomeView.NOWHERE))
 			if ev.is_empty():
 				return false
-			held = -1
-			pending = {}
 			_changed(ev)
-			hud.deal(home.shelf)
+			# Still taken up while there is somewhere more for it.
+			if fits_of(i).is_empty():
+				held = -1
+				refresh()
+			return true
+		"raise":
+			var ev := home.raise(data.get("at", HomeView.NOWHERE), str(data.get("choice", "count")))
+			if ev.is_empty():
+				return false
+			pending = {}
+			aimed = ""
+			_changed(ev)
 			return true
 		"choose":
 			if pending.is_empty():
 				return false
-			var p := pending
-			pending = {}
-			aimed = ""
-			return act(p.from, {"slot": p.slot, "at": p.at, "choice": data.get("choice", "count")})
-
+			return act("raise", {"at": pending.at, "choice": data.get("choice", "count")})
 		"star":
 			var ev := home.buy_star()
 			if ev.is_empty():
 				return false
 			_changed(ev)
-			hud.deal(home.shelf)
 			return true
 		"sell":
 			var ev := home.sell_star(int(data.get("pen", -1)))
 			if ev.is_empty():
 				return false
-			held_k = -1
 			_changed(ev)
-			return true
-		"store":
-			var ev := home.store(int(data.get("slot", -1)))
-			if ev.is_empty():
-				return false
-			held = -1
-			_changed(ev)
-			hud.deal(home.shelf)
-			return true
-		"place":
-			var ev := home.place(int(data.get("slot", -1)), data.get("at", true), str(data.get("choice", "count")))
-			if ev.is_empty():
-				return false
-			held_k = -1
-			pending = {}
-			_changed(ev)
-			return true
-		"reroll":
-			if not run.reroll():
-				return false
-			held = -1
-			_version += 1
-			hud.deal(home.shelf)
-			refresh()
 			return true
 		"fight":
 			player_done.emit()
@@ -226,12 +207,11 @@ func act(what: String, data := {}) -> bool:
 	return false
 
 
-## The offer at shelf place i taken up (again: put down).
+## The blueprint plans[i] taken up from the build bar (again: put down).
 func hold(i: int) -> void:
-	if phase != Phase.PLAN or i < 0 or i >= home.shelf.size() or home.shelf[i] == null:
+	if phase != Phase.PLAN or i < 0 or i >= home.plans.size():
 		return
 	held = -1 if held == i else i
-	held_k = -1
 	pending = {}
 	refresh()
 
@@ -245,19 +225,8 @@ func aim(what: String) -> void:
 ## Lets go of whatever is taken up, waiting or pointed at.
 func _let_go() -> void:
 	held = -1
-	held_k = -1
 	pending = {}
 	aimed = ""
-	refresh()
-
-
-## The good at stash place k taken up (again: put down).
-func hold_kept(k: int) -> void:
-	if phase != Phase.PLAN or k < 0 or k >= home.stash.size():
-		return
-	held_k = -1 if held_k == k else k
-	held = -1
-	pending = {}
 	refresh()
 
 
@@ -314,10 +283,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drag = false
 	elif event is InputEventKey and event.pressed and not event.echo:
 		var k: int = event.physical_keycode
-		if k >= KEY_1 and k < KEY_1 + home.shelf.size():
+		if k >= KEY_1 and k < KEY_1 + mini(home.plans.size(), 9):
 			hold(k - KEY_1)
 		elif k == KEY_ESCAPE:
-			if held >= 0 or held_k >= 0 or not pending.is_empty():
+			if held >= 0 or not pending.is_empty():
 				_let_go()
 			else:
 				pause()
@@ -331,42 +300,26 @@ func _unhandled_input(event: InputEvent) -> void:
 func _click() -> void:
 	var pen := int(hover.get("pen", -1))
 	if pen >= 0:
-		# A pen: the hoarder's takes the good taken up to keep, if it can; a star's own screen otherwise (to sell it).
-		if phase != Phase.PLAN or pen >= home.stars.size():
-			return
-		if held >= 0 and Content.STARS[home.stars[pen].id].has("keep") and home.can_store(held):
-			act("store", {"slot": held})
-		else:
+		# A star's pen: its own screen (to sell it).
+		if phase == Phase.PLAN and pen < home.stars.size():
 			_pen_screen(pen)
 		return
-	var good := _taken()
-	if phase != Phase.PLAN or good.is_empty():
+	if phase != Phase.PLAN:
 		return
-	var at: Variant = _aim(Content.offer(good))
-	if at == null:
-		return
-	var fits := fits_of(held) if held >= 0 else fits_of(held_k, true)
-	var c := Content.offer(good)
-	var raise_nest: bool = c.type == "raise" and at in fits and Content.is_nest(home.buildings[at].kind)
-	var plus_nest: bool = c.type == "build" and c.plus and Content.is_nest(c.builds) and at in fits
-	if raise_nest or plus_nest:
-		# A nest's raise (an upgraded nest's, put down at level 2, too): one more, or elite -- the HUD asks which.
-		pending = {"from": "buy" if held >= 0 else "place", "slot": held if held >= 0 else held_k, "at": at}
-		refresh()
-		return
+	var at: Variant = _aim()
 	if held >= 0:
-		act("buy", {"slot": held, "at": at})
-	else:
-		act("place", {"slot": held_k, "at": at})
+		if at != null:
+			act("build", {"plan": held, "at": at})
+		return
+	# Nothing taken up: a building clicked is to be raised -- the HUD asks how, a nest's either way (GAME-DESIGN 27).
+	pending = {"at": at} if at != null and home.buildings.has(at) and pending.get("at") != at else {}
+	aimed = ""
+	refresh()
 
 
-## The good taken up -- from the shelf or the stash -- or {} when none is.
+## The blueprint taken up, as a card ({id}), or {} when none is.
 func _taken() -> Dictionary:
-	if held >= 0 and held < home.shelf.size() and home.shelf[held] != null:
-		return home.shelf[held]
-	if held_k >= 0 and held_k < home.stash.size():
-		return home.stash[held_k]
-	return {}
+	return {"id": home.plans[held]} if held >= 0 and held < home.plans.size() else {}
 
 
 func _hover_at(pos: Vector2) -> void:
@@ -404,16 +357,11 @@ func _want() -> String:
 	var good := _taken()
 	if phase != Phase.PLAN or good.is_empty():
 		return "any"
-	match Content.offer(good).target:
-		"tile":
-			return "tile"
-		"building", "nest":
-			return "building"
-	return "any"
+	return "tile" if Content.offer(good).target == "tile" else "building"
 
 
-## What the good taken up would go on, under the cursor: a plot, or null.
-func _aim(_c: Dictionary) -> Variant:
+## What the blueprint taken up would go on (or the building clicked to raise), under the cursor: a plot, or null.
+func _aim() -> Variant:
 	return hover.plot if hover.plot != HomeView.NOWHERE else null
 
 
@@ -424,7 +372,6 @@ func _aim(_c: Dictionary) -> Variant:
 func _move() -> void:
 	phase = Phase.MOVE
 	held = -1
-	held_k = -1
 	refresh()
 	await hud.fade(true)
 	run.move_on(going)
@@ -460,37 +407,26 @@ func refresh() -> void:
 		if not pending.is_empty():
 			tints[pending.at] = HOT_TINT
 			if aimed in ["count", "elite"]:
-				var p := pending
+				var at: Vector2i = pending.at
 				var choice := aimed
-				var buy_it: bool = p.from == "buy"
-				_try("%s%d|%s|%s" % [p.from, p.slot, str(p.at), choice], func(h: Home) -> void:
-					if buy_it:
-						h.buy(p.slot, p.at, choice)
-					else:
-						h.place(p.slot, p.at, choice))
+				_try("raise|%s|%s" % [str(at), choice], func(h: Home) -> void: h.raise(at, choice))
 		elif not good.is_empty():
 			var c := Content.offer(good)
-			var fits := fits_of(held) if held >= 0 else fits_of(held_k, true)
+			var fits := fits_of(held)
 			for t in fits:
-				if t is Vector2i:
-					tints[t] = SWAP_TINT if c.type == "build" and home.buildings.has(t) else OK_TINT
-			var at: Variant = _aim(c)
+				tints[t] = SWAP_TINT if c.type == "build" and home.buildings.has(t) else OK_TINT
+			var at: Variant = _aim()
 			if at != null and at in fits:
-				if at is Vector2i:
-					tints[at] = HOT_TINT
-				if held >= 0:
-					var i := held
-					_try("buy%d|%s" % [i, str(at)], func(h: Home) -> void: h.buy(i, at))
-				else:
-					var k := held_k
-					_try("place%d|%s" % [k, str(at)], func(h: Home) -> void: h.place(k, at))
+				tints[at] = HOT_TINT
+				var id: String = good.id
+				_try("build%s|%s" % [id, str(at)], func(h: Home) -> void: h.build_plan(id, at))
 			elif at is Vector2i and home.is_open(at):
 				tints[at] = BAD_TINT
 		elif hover.plot != HomeView.NOWHERE and home.is_open(hover.plot):
 			tints[hover.plot] = LOOK_TINT
 	home_view.tints = tints
 	home_view.paint()
-	home_view.refresh_pens(phase == Phase.PLAN and held >= 0 and home.can_store(held))
+	home_view.refresh_pens()
 	hud.refresh()
 
 
@@ -579,40 +515,37 @@ func _made(h: Home) -> Dictionary:
 
 
 ## What to do with the good taken up, said over the shelf: "" when none is.
-## A word at the screen's foot while a good is taken up -- only what the lit plots do not show already (the player,
-## 2026-10-20: "数字，文字都尽量去除"): why it cannot go anywhere, what a swap would knock down, what a raise makes.
+## A word at the screen's foot while a blueprint is taken up or a building is to be raised -- only what the lit plots
+## do not show already (the player, 2026-10-20: "数字，文字都尽量去除"): why it cannot go anywhere, what a swap would
+## knock down; how a building clicked can be raised.
 func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
 	if not pending.is_empty():
-		return Lang.t("多孵 1 只，还是变精英？") if count_fits() else Lang.t("人口不够多孵，只能变精英")
+		var at: Vector2i = pending.at
+		var b: Dictionary = home.buildings[at]
+		if int(b.level) >= Content.LEVEL_MAX:
+			return Lang.t("已经是最高级")
+		if home.gold < home.raise_price(at):
+			return Lang.t("金币不够")
+		if Content.is_nest(b.kind) and not home.can_raise(at, "count"):
+			return Lang.t("人口不够多孵，只能变精英")
+		return ""
 	var good := _taken()
 	if good.is_empty():
 		return ""
 	var c := Content.offer(good)
 	var p: Vector2i = hover.plot
 	var swap: bool = c.target == "tile" and p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds
-	if held_k >= 0:
-		if fits_of(held_k, true).is_empty():
-			return Lang.t("人口不够") if home.pop_blocks(good) else Lang.t("现在没有地方放得下")
-		if swap:
-			return Lang.t("换掉%s（退 %d 金）") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name),
-				int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
-		return ""
 	if home.genes < home.genes_cost(c):
 		return Lang.t("研究点数不够")
-	if c.type != "raise" and home.gold < home.price(held):
+	if home.gold < int(c.price):
 		return Lang.t("金币不够")
 	if fits_of(held).is_empty():
-		if home.pop_blocks(good):
-			return Lang.t("人口不够")
-		return Lang.t("现在没有地方用得上") if c.type != "raise" else Lang.t("金币不够")
+		return Lang.t("人口不够") if home.pop_blocks(good) else Lang.t("现在没有地方用得上")
 	if swap:
 		return Lang.t("换掉%s（退 %d 金）") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name),
 			int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
-	if c.target == "building" and p != HomeView.NOWHERE and home.buildings.has(p) and int(home.buildings[p].level) < Content.LEVEL_MAX:
-		var b: Dictionary = home.buildings[p]
-		return Lang.t("%s → %d 级（%d 金）") % [Lang.t(Content.BUILDINGS[b.kind].name), int(b.level) + 1, home.price(held, p)]
 	return ""
 
 
@@ -648,7 +581,7 @@ func describe() -> String:
 ## empty.
 func _pen_text(pen: int) -> String:
 	if pen >= home.stars.size():
-		return Lang.t("空围栏：能养一只明星恐龙（商店最后一格有卖，打败首领也能带一只回家）")
+		return Lang.t("空围栏：能养一只明星恐龙（每轮来一只，在建造栏最右边）")
 	var s: Dictionary = Content.STARS[home.stars[pen].id]
 	var lines: Array = [Lang.t("%s（%s，%s）") % [Lang.t(s.name), Lang.t(s.kind), Lang.t(Content.DIETS[s.diet])], Lang.t(s.says)]
 	if s.has("grow_boss") or s.has("grow_round"):
@@ -657,8 +590,6 @@ func _pen_text(pen: int) -> String:
 		lines.append(Lang.t("这一轮没吃饱，本事没起作用"))
 	elif int(s.eat) > 0:
 		lines.append(Lang.t("每轮吃 %d 生物质") % int(s.eat))
-	if s.has("keep"):
-		lines.append(Lang.t("留着的牌 %d / %d；拿着一张牌点它，就存起来") % [home.stash.size(), home.stash_size()])
 	lines.append(Lang.t("点一下：看看，或者卖掉"))
 	return "\n".join(lines)
 
@@ -745,6 +676,7 @@ func _building_text(p: Vector2i) -> String:
 	if int(b.level) < Content.LEVEL_MAX:
 		lines.append(Lang.t("升到 %d 级：%s") % [int(b.level) + 1, Lang.t("多孵 1 只，或者变精英") if Content.is_nest(b.kind)
 			else Content.level_text(b.kind, int(b.level) + 1)])
+		lines.append(Lang.t("点一下升级（%d 金）") % home.raise_price(p))
 	return "\n".join(lines)
 
 
@@ -820,7 +752,6 @@ func _start_round() -> void:
 	phase = Phase.BUSY
 	part = "start"
 	held = -1
-	held_k = -1
 	pending = {}
 	aimed = ""
 	refresh()
@@ -850,8 +781,6 @@ func _player_part() -> void:
 	phase = Phase.PLAN
 	part = "play"
 	held = -1
-	held_k = -1
-	hud.deal(home.shelf)
 	refresh()
 	await player_done
 
@@ -876,24 +805,19 @@ func army_now() -> Array:
 	return home.fighters if not home.fighters.is_empty() else home.brood
 
 
-## Where shelf[i] -- or, `kept`, stash[i] -- can go (Home.targets, stash_targets), worked out once while the homeland
-## stays as it is.
-func fits_of(i: int, kept := false) -> Array:
+## Where the blueprint plans[i] can go (Home.targets), worked out once while the homeland stays as it is.
+func fits_of(i: int) -> Array:
 	if _fits_at != _version:
 		_fits = {}
 		_fits_at = _version
-	var key := ("k%d" if kept else "s%d") % i
-	if not _fits.has(key):
-		_fits[key] = home.stash_targets(i) if kept else home.targets(i)
-	return _fits[key]
+	if not _fits.has(i):
+		_fits[i] = home.targets(home.plans[i]) if i >= 0 and i < home.plans.size() else []
+	return _fits[i]
 
 
-## Whether the nest's raise waiting for its choice can hatch one more: the population allowing.
-func count_fits() -> bool:
-	if pending.is_empty():
-		return true
-	var oi: Variant = home.shelf[pending.slot] if pending.from == "buy" else home.stash[pending.slot]
-	return oi != null and home.pop_fits(oi, pending.at, "count")
+## Whether the building clicked can be raised as `choice` (gold, the top level, and one more hatched the population).
+func raise_fits(choice: String) -> bool:
+	return not pending.is_empty() and home.can_raise(pending.at, choice)
 
 
 ## The making (GAME-DESIGN 26): what the buildings and the stars bring in, said over the homeland; then the nests hatch
@@ -902,7 +826,6 @@ func _make() -> void:
 	phase = Phase.BUSY
 	part = "make"
 	held = -1
-	held_k = -1
 	pending = {}
 	aimed = ""
 	hud.stow()
@@ -961,7 +884,6 @@ func _fight() -> void:
 	phase = Phase.FIGHT
 	part = "fight"
 	held = -1
-	held_k = -1
 	refresh()
 	hud.stow()
 	fight = run.fight()
@@ -979,8 +901,8 @@ func _fight() -> void:
 
 
 ## After the battle, its part of the round still: what it brought (won, gold and research points; lost, the homeland
-## hurt; what the scavengers bring back). Then the run's end, or a card for the deck, the workshop after a mini-boss,
-## the next place after a boss. Whether the run goes on.
+## hurt; what the scavengers bring back). Then the run's end, or a blueprint more (after a mini-boss an uncommon or
+## rare one), the next place after a boss. Whether the run goes on.
 func _after_fight() -> bool:
 	var result := fight.result
 	fight_view.show_loot()
@@ -1027,40 +949,35 @@ func _after_fight() -> bool:
 		return false
 	part = ""
 	refresh()
-	await _reward()
 	if run.was_mini():
-		await _workshop()
+		await _rare()
+	else:
+		await _reward()
 	if out.level_won:
 		await _level_end()
 	return true
 
 
-## After each round: one of three cards into the deck (the shop will offer it, at its price) -- or gold instead.
+## After each round: a blueprint more for this place, one of three -- or gold instead (GAME-DESIGN 27).
 func _reward() -> void:
-	var cards := run.reward_offer()
+	await _pick(run.reward_offer(), "选一张新图纸")
+
+
+## After a place's mini-boss: an uncommon or rare blueprint, one of three -- or gold instead.
+func _rare() -> void:
+	await _pick(run.rare_offer(), "小首领打完了：选一张少见的图纸")
+
+
+func _pick(cards: Array, title: String) -> void:
 	if cards.is_empty():
 		return
-	var v: Variant = await hud.choose("挑一张，加进牌库", "以后商店会从牌库里拿出来卖，照原价买", cards,
-		[Lang.t("不要牌，拿 %d 金") % Content.REWARD_GOLD])
+	var v: Variant = await hud.choose(title, "选了以后，这个地方一直能造", cards, [Lang.t("不要，拿 %d 金") % Content.REWARD_GOLD])
 	if v is Dictionary:
 		run.take_reward(v.id)
 	else:
 		run.take_reward_gold()
+	_version += 1
 	refresh()
-
-
-## After a place's mini-boss: the deck laid out, to cut cards from (gold, dearer each time) and upgrade (research
-## points) until done.
-func _workshop() -> void:
-	while true:
-		var v: Variant = await hud.workshop()
-		if not v is Dictionary:
-			break
-		if v.has("cut"):
-			home.cut(int(v.cut))
-		elif v.has("upgrade"):
-			home.upgrade(int(v.upgrade))
-		refresh()
 
 
 ## A place held: the next place picked on the map and gone to -- the homeland made afresh there, carrying nothing --

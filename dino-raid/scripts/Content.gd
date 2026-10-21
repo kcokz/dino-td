@@ -194,8 +194,6 @@ const BUILDINGS := {
 		"levels": [{"gold": 2}, {"gold": 3}, {"gold": 5}]},
 	"vault": {"name": "金库", "color": Color(0.85, 0.7, 0.25), "cost": 3, "school": "gold",
 		"levels": [{"interest": 2}, {"interest": 4}, {"interest": 6}]},
-	"market": {"name": "商栈", "color": Color(0.85, 0.5, 0.3), "cost": 3, "school": "gold",
-		"levels": [{"rerolls": 1}, {"rerolls": 1, "shelf": 1}, {"rerolls": 2, "shelf": 1}]},
 	"champion_hall": {"name": "冠军殿", "color": Color(0.8, 0.65, 0.95), "cost": 4, "school": "elite",
 		"levels": [{"elite": 15}, {"elite": 25}, {"elite": 40}]},
 	"watchtower": {"name": "瞭望塔", "color": Color(0.5, 0.65, 0.85), "cost": 3, "school": "ranged",
@@ -245,14 +243,8 @@ const AFFIXES := {
 ##   one for each mini-boss or boss beaten / each round, and gives that much attack to all / biomass a round.
 ## model: the species it is shown as (the shared dinosaur library), with its colours (back, belly).
 const STARS := {
-	"hoarder": {"name": "囤囤", "kind": "偷蛋龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "keep": 3,
-		"model": "ornitholestes", "back": Color(0.95, 0.55, 0.2), "belly": Color(0.98, 0.9, 0.7), "says": "替你留 3 张牌，买下来先不用"},
 	"mother": {"name": "慈母", "kind": "慈母龙", "diet": "plant", "rarity": 0, "price": 4, "eat": 1, "first_free": 1,
 		"model": "edmontosaurus", "back": Color(0.55, 0.72, 0.42), "belly": Color(0.96, 0.92, 0.75), "says": "每轮第一个巢多孵 1 只，这只不吃生物质"},
-	"trader": {"name": "飞飞", "kind": "翼龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "shelf": 1,
-		"model": "harpactognathus", "back": Color(0.3, 0.6, 0.85), "belly": Color(0.95, 0.92, 0.8), "says": "飞去远处进货：商店每轮多摆 1 样"},
-	"scout": {"name": "快腿", "kind": "盗龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "rerolls": 1,
-		"model": "dakotaraptor", "back": Color(0.45, 0.55, 0.3), "belly": Color(0.9, 0.86, 0.66), "says": "每轮第一次刷新商店不要钱"},
 	"doctor": {"name": "博士", "kind": "伤齿龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "gene_off": 1,
 		"model": "velociraptor_alpha", "back": Color(0.4, 0.45, 0.7), "belly": Color(0.9, 0.9, 0.95), "says": "贴词条少花 1 研究点数"},
 	"shield": {"name": "铁背", "kind": "甲龙", "diet": "plant", "rarity": 0, "price": 4, "eat": 1, "hp": 10, "mend": 1,
@@ -282,8 +274,6 @@ const STARS := {
 		"model": "diplodocus", "back": Color(0.6, 0.55, 0.4), "belly": Color(0.95, 0.9, 0.78), "says": "每过一轮，每轮生物质多 1（最多 +8；它自己吃树叶）"},
 	"queen": {"name": "巢母", "kind": "巢母龙", "diet": "plant", "rarity": 3, "price": 16, "eat": 4, "count": 1, "weak": 10,
 		"model": "edmontosaurus", "back": Color(0.6, 0.35, 0.6), "belly": Color(0.98, 0.85, 0.6), "says": "每个巢每轮多孵 1 只；但所有兵血少一成"},
-	"goldcrown": {"name": "金冠", "kind": "冠龙", "diet": "meat", "rarity": 3, "price": 14, "eat": 3, "gold": 6, "shelf": -1,
-		"model": "dilong", "back": Color(0.95, 0.75, 0.25), "belly": Color(1.0, 0.95, 0.75), "says": "每轮多 6 金；但商店少摆 1 样"},
 	"firstbird": {"name": "始祖", "kind": "始祖鸟", "diet": "meat", "rarity": 3, "price": 16, "eat": 4, "slots": 1, "free_affix": 1,
 		"model": "sinornithosaurus", "back": Color(0.3, 0.75, 0.7), "belly": Color(0.95, 0.95, 0.85), "says": "每个巢多 1 个词条位；贴词条不花研究点数"},
 	"warlord": {"name": "霸主", "kind": "霸王龙", "diet": "meat", "rarity": 3, "price": 20, "eat": 6, "atk": 2, "hp_pct": 25,
@@ -310,14 +300,15 @@ const SPLIT_WORTH := 0.45               # what it breaks into, against standing 
 const BURST_WORTH := 0.25               # a burst, against a hit a second
 const CHARGE_WORTH := 0.1               # a first blow twice as hard, against a hit a second
 
-## What the shop can offer (GAME-DESIGN 18, 19, 22) -- only what lasts, nothing used up at once -- as cards of the
-## player's deck (DECK). type "build": a building, on an open plot of its part of the homeland -- an empty one, or one
-## with another building, pulled down for half its price back; "raise": a building one level up, for RAISE gold more
-## than its level (a nest's raise is a choice); "affix": a gene affix on a nest with a free place. price: in gold (a
-## building's is its own); genes: the research points (研究点数) it costs too. from: the place (0-based) from which the
-## shop can offer it; region: only in that place. rarity: 0 common, 1 uncommon, 2 rare -- how often it comes as a
-## reward. A card upgraded (+): a building put down at level 2 (a nest choosing its raise); a raise PLUS_RAISE gold
-## cheaper; an affix costing no research points.
+## The blueprints (图纸, GAME-DESIGN 27): what can be built or stuck on -- only what lasts, nothing used up at once. A
+## place starts with FIRST_PLANS; after each round one of REWARDS more is had (Home.plan_offer), or REWARD_GOLD taken
+## instead; after a mini-boss, one of the uncommon and the rare. A blueprint had can be built as often as there is gold,
+## room and population for it. type "build": a building, on an open plot of its part of the homeland -- an empty one, or
+## one with another building, pulled down for half its price back; "affix": a gene affix on a nest with a free place.
+## price: in gold (a building's is its own); genes: the research points (研究点数) it costs too. from: the place
+## (0-based) from which it can be had; region: only in that place. rarity: 0 common, 1 uncommon, 2 rare -- how often it
+## comes to choose. Raising a building a level is no blueprint: any building can be, for RAISE gold more than its level
+## (a nest's raise a choice: one more hatched, or elite).
 const OFFERS := {
 	"b_red": {"type": "build", "rarity": 0, "builds": "nest_red"},
 	"b_blue": {"type": "build", "rarity": 0, "builds": "nest_blue"},
@@ -335,11 +326,9 @@ const OFFERS := {
 	"b_mine": {"type": "build", "rarity": 0, "builds": "mine"},
 	"b_forge": {"type": "build", "rarity": 1, "builds": "forge", "region": 1},
 	"b_vault": {"type": "build", "rarity": 1, "builds": "vault"},
-	"b_market": {"type": "build", "rarity": 1, "builds": "market"},
 	"b_hall": {"type": "build", "rarity": 1, "builds": "champion_hall"},
 	"b_tower": {"type": "build", "rarity": 1, "builds": "watchtower"},
 	"b_vanguard": {"type": "build", "rarity": 1, "builds": "vanguard"},
-	"raise": {"type": "raise", "name": "扩建", "rarity": 0},
 	"a_shell": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "shell"},
 	"a_blade": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "blade"},
 	"a_haste": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "haste"},
@@ -351,20 +340,14 @@ const OFFERS := {
 	"a_poison": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "poison", "region": 0},
 	"a_flame": {"type": "affix", "price": 3, "genes": 3, "rarity": 1, "affix": "flame", "region": 1},
 }
-## The deck (牌库) a run starts with -- the common goods, the plainest twice; the shop draws its shelf from it. Rarer
-## cards come only as rewards: after each round, one of REWARDS added, or REWARD_GOLD taken instead. After a place's
-## mini-boss the deck can be cut -- CUT gold a card, CUT_STEP more each time -- and cards upgraded, UPGRADE research
-## points each.
-const DECK := ["b_red", "b_red", "b_blue", "b_pool", "b_pool", "b_spore", "b_sampler", "b_mine", "raise", "raise",
-	"a_shell", "a_blade", "a_haste", "a_hide", "a_poison"]
+## The blueprints every place starts with: what its homeland is set down with.
+const FIRST_PLANS := ["b_red", "b_pool"]
+## The build bar's groups, by what the blueprints do (the player, 2026-10-21: "以能力归类"): nests hatch; the
+## resources' buildings bring in biomass, research points and gold; the battle's make the army stronger as a whole;
+## the genes' are affixes, and the buildings that help with them.
+const GROUPS := {"nest": "巢", "resource": "资源", "battle": "战斗", "gene": "基因"}
 const REWARDS := 3
 const REWARD_GOLD := 3
-const CUT := 3
-const CUT_STEP := 1
-const UPGRADE := 3
-const PLUS_RAISE := 2             # gold off an upgraded raise
-const SHOP := 5                   # offers on the shelf each round (and a star dinosaur after them)
-const REROLL := 1                 # gold to stock the shelf again; one more each time in a round
 const RAISE := 2                  # a raise costs this much more than the building's level
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...
 const INTEREST_MAX := 2           # ...up to this much
@@ -384,8 +367,8 @@ const LANDING := [["nest_red", 1], ["pool", 1]]
 ## A round's parts, in turn (GAME-DESIGN 26), from the start again after the battle; more can come between them (the
 ## player, 2026-10-21: "阶段是可扩展的"). Each thing a card does happens in one of them (PHASE_OF).
 const PHASES := {
-	"start": {"name": "开始", "says": "每轮的 5 金和利息到手，商店进货"},
-	"play": {"name": "玩家", "says": "买、造、升级、贴词条"},
+	"start": {"name": "开始", "says": "每轮的 5 金和利息到手"},
+	"play": {"name": "玩家", "says": "造、升级、贴词条、买明星恐龙"},
 	"make": {"name": "生产", "says": "建筑和明星恐龙产生物质、研究点数、金币，巢里孵出这一轮的兵"},
 	"eat": {"name": "消耗", "says": "明星恐龙和兵吃生物质"},
 	"fight": {"name": "战斗", "says": "兵出去打仗，打赢拿金币和研究点数"},
@@ -393,10 +376,10 @@ const PHASES := {
 ## The part of the round each thing a card does happens in ("每个牌的效果都要落在某个阶段"): the keys of the buildings'
 ## levels and of the stars, a nest's gift (TRAITS), a nest's raise ("count" or "elite"), an affix ("affix").
 const PHASE_OF := {
-	# The start: the round's pay, the shop stocked.
-	"interest": "start", "shelf": "start",
+	# The start: the round's pay.
+	"interest": "start",
 	# The player's part: what buying and putting down cost, what can be had and kept.
-	"rerolls": "play", "gene_off": "play", "free_affix": "play", "slots": "play", "mutant": "play", "keep": "play",
+	"gene_off": "play", "free_affix": "play", "slots": "play", "mutant": "play",
 	# The making: what comes in, the young hatched.
 	"biomass": "make", "genes": "make", "gold": "make", "pool": "make", "grow_round": "make", "mend": "make",
 	"count": "make", "first_free": "make", "titan": "make", "swarm": "make",
@@ -412,7 +395,7 @@ const PHASE_OF := {
 const STAR_FACTS := ["name", "kind", "diet", "rarity", "price", "model", "back", "belly", "says", "grow_max"]
 
 
-## The population an offer takes, as its card shows it (where it goes it can take more: Home.pop_need): a nest, what
+## The population a blueprint takes, as the bar shows it (where it goes it can take more: Home.pop_need): a nest, what
 ## the young it hatches at first eat; a culture pool, what it feeds, as less than nothing; anything else none.
 static func pop_of(o: Dictionary) -> int:
 	if o.type != "build":
@@ -420,7 +403,7 @@ static func pop_of(o: Dictionary) -> int:
 	var b: Dictionary = BUILDINGS[o.builds]
 	if b.has("nest"):
 		return int(UNITS[b.nest].food)
-	return -int(b.levels[1 if o.plus else 0].get("biomass", 0))
+	return -int(b.levels[0].get("biomass", 0))
 
 ## A run (GAME-DESIGN 22): TIERS big levels of ROUNDS rounds each (half an hour or so). The first is always the
 ## rainforest; for each after it the map offers two places (Run.map), one to pick. A level's monsters are as strong as
@@ -507,30 +490,33 @@ const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bo
 const DANGER := [45.0, 90.0, 175.0, 320.0, 560.0]
 
 
-## An offer's numbers (oi: a shelf's or stash's {id, plus}): its name, price, type and what it goes on. A raise's price
-## is RAISE more than the level of what it raises (Home.price); here, the least it can be.
+## A blueprint's numbers (oi: {id}): its name, price, type and what it goes on.
 static func offer(oi: Dictionary) -> Dictionary:
 	var o: Dictionary = OFFERS[oi.id].duplicate(true)
 	o.id = oi.id
-	o.plus = bool(oi.get("plus", false))
-	o.target = {"build": "tile", "raise": "building", "affix": "nest"}.get(o.type, "none")
+	o.target = {"build": "tile", "affix": "nest"}.get(o.type, "none")
 	match o.type:
 		"build":
 			o.name = Lang.t(BUILDINGS[o.builds].name)
 			o.price = int(BUILDINGS[o.builds].cost)
-		"raise":
-			o.price = RAISE + 1
-			o.name = Lang.t(str(o.name))
 		"affix":
 			o.name = Lang.t(AFFIXES[o.affix].name)
-	if o.plus:
-		o.name += "+"
-		match o.type:
-			"raise":
-				o.price = maxi(1, int(o.price) - PLUS_RAISE)
-			"affix":
-				o.genes = 0
 	return o
+
+
+## The build bar's group of blueprint `id` (GROUPS).
+static func group_of(id: String) -> String:
+	var o: Dictionary = OFFERS[id]
+	if o.type == "affix":
+		return "gene"
+	var b: Dictionary = BUILDINGS[o.builds]
+	if b.has("nest"):
+		return "nest"
+	if b.get("school", "") == "genes" and o.builds != "sampler":
+		return "gene"
+	if o.builds in ["horde_totem", "champion_hall", "watchtower", "vanguard"]:
+		return "battle"
+	return "resource"
 
 
 
@@ -618,8 +604,6 @@ static func offer_text(o: Dictionary) -> String:
 			var stop := Lang.t("。")
 			var text := (Lang.t("孵%s。%s。") % [Lang.t(UNITS[b.nest].name), Lang.t(TRAITS[b.trait].says)]) if b.has("nest") \
 				else building_text(o.builds, lv) + stop
-			if o.plus:
-				text = Lang.t("放下就是 2 级（多孵或精英，二选一）。" if b.has("nest") else "放下就是 2 级。") + text
 			if o.has("level"):
 				var sp := species(b.get("nest", ""), o.affixes)
 				text = Lang.t("%d 级。") % lv + (Lang.t("孵%s。") % Lang.t(UNITS[sp.kind].name) if b.has("nest") \
@@ -627,16 +611,13 @@ static func offer_text(o: Dictionary) -> String:
 				if not o.affixes.is_empty():
 					text += Lang.t("贴着") + Lang.t("、").join(o.affixes.map(func(a: String) -> String: return Lang.t(AFFIXES[a].name))) + stop
 			return text
-		"raise":
-			return (Lang.t("便宜 %d 金。") % PLUS_RAISE if o.plus else "") \
-				+ Lang.t("一座建筑升一级（最多 %d 级）。巢升级二选一：多孵 1 只，或变精英。") % LEVEL_MAX
 		"affix":
 			var a: Dictionary = AFFIXES[o.affix]
 			var also := ""
 			for r in RECIPES:
 				if o.affix in r.affixes:
 					also = Lang.t("能凑配方。")
-			return (Lang.t("不花研究点数。") if o.plus else "") + Lang.t("孵的兵%s。%s") % [Lang.t(a.says), also]
+			return Lang.t("孵的兵%s。%s") % [Lang.t(a.says), also]
 	return ""
 
 

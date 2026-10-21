@@ -72,10 +72,6 @@ func eat() -> Array:
 	return home.eat()
 
 
-func reroll() -> bool:
-	return home.reroll(rng, level)
-
-
 ## The young fed go out against this round's wave.
 func fight() -> Fight:
 	return Fight.make(home.fighters, wave(), power())
@@ -120,36 +116,23 @@ func last_level() -> bool:
 	return level >= Content.TIERS - 1
 
 
-## Cards to choose one of after each round, to add to the deck (Content.REWARDS of them) -- or Content.REWARD_GOLD
-## instead: different cards the shop could sell here, the uncommon and the rare about as often as the common (they come
-## no other way).
+## Blueprints to choose one of after each round (Content.REWARDS of them, as cards {id}) -- or Content.REWARD_GOLD
+## instead (Home.plan_offer).
 func reward_offer() -> Array:
-	var pool: Array = []
-	for id in Content.OFFERS:
-		var o: Dictionary = Content.OFFERS[id]
-		if int(o.get("from", 0)) <= level and int(o.get("region", home.region)) == home.region:
-			for k in [3, 3, 2][int(o.rarity)]:
-				pool.append(id)
-	Home.shuffle(pool, rng)
-	var want := Content.REWARDS
-	var out: Array = []
-	var ids: Array = []
-	for id in pool:
-		if id in ids:
-			continue
-		ids.append(id)
-		out.append({"id": id})
-		if out.size() == want:
-			break
-	return out
+	return home.plan_offer(rng, level, Content.REWARDS).map(func(id: String) -> Dictionary: return {"id": id})
 
 
-## A card taken into the deck.
+## After a mini-boss: blueprints of the uncommon and the rare, to choose one of.
+func rare_offer() -> Array:
+	return home.plan_offer(rng, level, Content.REWARDS, true).map(func(id: String) -> Dictionary: return {"id": id})
+
+
+## A blueprint chosen: had from now on, in this place.
 func take_reward(id: String) -> void:
-	home.deck.append({"id": id, "plus": false})
+	home.unlock(id)
 
 
-## Gold taken instead of a card.
+## Gold taken instead of a blueprint.
 func take_reward_gold() -> void:
 	home.gold += Content.REWARD_GOLD
 

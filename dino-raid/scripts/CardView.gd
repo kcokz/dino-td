@@ -239,7 +239,7 @@ func _draw_face() -> void:
 	var name_text: String = c.name
 	while name_size > 11 and nf.get_string_size(name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > SIZE.x - 16:
 		name_size -= 1
-	_text(Vector2(SIZE.x * 0.5, 150), name_text, name_size, Style.JADE if c.plus else Style.PARCHMENT, nf, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	_text(Vector2(SIZE.x * 0.5, 150), name_text, name_size, Style.PARCHMENT, nf, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	Style.hairline(rid, Vector2(14, 160), Vector2(SIZE.x - 14, 160), Color(metal, 0.75))
 	Style.diamond(rid, Vector2(SIZE.x * 0.5, 160), 3.0, metal)
 	# What it does -- pointed at or taken up; else only what kind it is.

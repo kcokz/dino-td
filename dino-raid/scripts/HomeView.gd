@@ -24,16 +24,15 @@ const PEN_AT := [Vector3(-18.5, 0.0, -4.0), Vector3(-18.5, 0.0, 0.2), Vector3(-1
 	Vector3(-18.5, 0.0, 12.8)]
 const PEN := 3.4                  # a pen's side
 ## How long each star stands in its pen (metres, nose to tail): the small ones small, the great ones filling it.
-const STAR_LENGTH := {"hoarder": 1.6, "mother": 2.3, "trader": 2.0, "scout": 1.9, "doctor": 1.7, "shield": 1.8,
-	"saver": 1.6, "belly": 3.0, "tri": 2.4, "scar": 2.0, "fisher": 2.4, "bounty": 2.3, "horn": 2.3, "spitter": 1.9,
-	"oldking": 2.7, "sickle": 2.2, "neck": 3.1, "queen": 2.7, "goldcrown": 2.0, "firstbird": 1.7, "warlord": 3.0,
-	"titan": 3.2}
+const STAR_LENGTH := {"mother": 2.3, "doctor": 1.7, "shield": 1.8, "saver": 1.6, "belly": 3.0, "tri": 2.4, "scar": 2.0,
+	"fisher": 2.4, "bounty": 2.3, "horn": 2.3, "spitter": 1.9, "oldking": 2.7, "sickle": 2.2, "neck": 3.1, "queen": 2.7,
+	"firstbird": 1.7, "warlord": 3.0, "titan": 3.2}
 ## Until each star has a model of its own (the shared library's species made Nintendo-style), the one of ours it
 ## looks most like stands in for it, banded in its own colours.
-const STAND_IN := {"hoarder": "scav", "mother": "white", "trader": "falcon", "scout": "red", "doctor": "mutant",
-	"shield": "green", "saver": "white", "belly": "thunder", "tri": "green", "scar": "red", "fisher": "green",
-	"bounty": "gold", "horn": "white", "spitter": "blue", "oldking": "titan", "sickle": "miasma", "neck": "thunder",
-	"queen": "white", "goldcrown": "gold", "firstbird": "mutant", "warlord": "titan", "titan": "thunder"}
+const STAND_IN := {"mother": "white", "doctor": "mutant", "shield": "green", "saver": "white", "belly": "thunder",
+	"tri": "green", "scar": "red", "fisher": "green", "bounty": "gold", "horn": "white", "spitter": "blue",
+	"oldking": "titan", "sickle": "miasma", "neck": "thunder", "queen": "white", "firstbird": "mutant", "warlord": "titan",
+	"titan": "thunder"}
 
 var home: Home
 var tags: Tags
@@ -45,7 +44,6 @@ var _units := {}                  # army unit id -> Node3D
 var _order: Array = []            # army unit ids, as they stand in the yard
 var _pens: Array = []             # Node3D, a pen each (its star under it, named "Star")
 var _pens_for := ""
-var _hoard_light: OmniLight3D     # the hoarder's pen glowing, when the good taken up could be kept
 
 
 func setup(p_home: Home) -> void:
@@ -95,11 +93,6 @@ func setup(p_home: Home) -> void:
 		pen.position = PEN_AT[k]
 		add_child(pen)
 		_pens.append(pen)
-	_hoard_light = OmniLight3D.new()
-	_hoard_light.light_color = Color(1.0, 0.72, 0.35)
-	_hoard_light.light_energy = 0.0
-	_hoard_light.omni_range = 4.5
-	add_child(_hoard_light)
 	lay_ground()
 	refresh_buildings(false)
 	refresh_pens()
@@ -339,9 +332,8 @@ static func _building(b: Dictionary, lit := false) -> Node3D:
 
 # -- The star dinosaurs' pens ----------------------------------------------------------------------------------------
 
-## The stars in their pens made again when who is where (or who went without) changes; the hoarder's pen glowing while
-## `storable` (the good taken up could be kept by it).
-func refresh_pens(storable := false) -> void:
+## The stars in their pens made again when who is where (or who went without) changes.
+func refresh_pens() -> void:
 	var key := str(home.stars) + str(home.hungry)
 	if key != _pens_for:
 		_pens_for = key
@@ -359,19 +351,6 @@ func refresh_pens(storable := false) -> void:
 				pen.add_child(star)
 				if k in home.hungry and Creatures.is_model(star):
 					Creatures.play(star, "sleep")
-	var hoarder := -1
-	for k in home.stars.size():
-		if Content.STARS[home.stars[k].id].has("keep"):
-			hoarder = k
-	_hoard_light.set_meta("on", storable and hoarder >= 0)
-	if hoarder >= 0:
-		_hoard_light.position = PEN_AT[hoarder] + Vector3(0, 1.6, 0)
-
-
-func _process(_delta: float) -> void:
-	var on := bool(_hoard_light.get_meta("on", false))
-	var want := (1.6 + 0.8 * sin(Time.get_ticks_msec() * 0.006)) if on else 0.0
-	_hoard_light.light_energy = lerpf(_hoard_light.light_energy, want, 0.15)
 
 
 ## Which pen the cursor is on, or -1.

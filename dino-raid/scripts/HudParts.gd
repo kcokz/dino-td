@@ -486,6 +486,78 @@ class Tag extends Control:
 
 ## A battle's count (top middle): our side's small green shield and how many stand, the seconds left in a hairline
 ## ring (running down round it), theirs on a red shield.
+## One thing on the build bar (GAME-DESIGN 27): a blueprint had -- or the star dinosaur on offer -- as its painting in
+## a round window, its rarity's metal round it; under it its price in gold; at its shoulders the research points it
+## costs and the population it takes (green, +: what it feeds more). Lit when it can be built (or bought) now, all of
+## it grey when not (the player, 2026-10-21: "灰不能造的或者用的，亮能造的用的"); taken up, raised and ringed bright;
+## pointed at, a little larger.
+class Plan extends BaseButton:
+	const R := 24.0
+	const GREY := """shader_type canvas_item;
+uniform float grey = 0.0;
+void fragment() {
+	float g = dot(COLOR.rgb, vec3(0.3, 0.59, 0.11));
+	COLOR.rgb = mix(COLOR.rgb, vec3(g) * 0.75, grey);
+}
+"""
+	static var _grey: Shader
+	var key := ""                 # its painting's (Art: "b_nest_red", "a_shell", "s_queen")
+	var glyph := ""               # its first word, while there is no painting
+	var price := 0
+	var genes := 0
+	var pop := 0
+	var rarity := 0
+	var lit := true
+	var held := false
+	var _tex: Texture2D
+	var _looked := false
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(R * 2.0 + 18.0, R * 2.0 + 30.0)
+		size = custom_minimum_size
+		focus_mode = Control.FOCUS_NONE
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		if _grey == null:
+			_grey = Shader.new()
+			_grey.code = GREY
+		material = ShaderMaterial.new()
+		material.shader = _grey
+
+	func _draw() -> void:
+		(material as ShaderMaterial).set_shader_parameter("grey", 0.0 if lit else 1.0)
+		if not _looked:
+			_looked = true
+			_tex = Art.of(key)
+		var hot := get_draw_mode() in [DRAW_HOVER, DRAW_HOVER_PRESSED]
+		var c := Vector2(size.x * 0.5, R + 6.0 - (6.0 if held else 0.0))
+		var r := R * (1.1 if hot else 1.0)
+		var metal: Color = CardView.METAL[clampi(rarity, 0, CardView.METAL.size() - 1)]
+		if held or hot:
+			draw_circle(c, r + 7.0, Color(Style.GOLD_BRIGHT, 0.16 if hot and not held else 0.28), true, -1.0, true)
+		draw_circle(c + Vector2(0, 2), r + 2.0, Color(0, 0, 0, 0.5), true, -1.0, true)
+		if _tex != null:
+			HudParts.window(self, c, r, _tex, 1.2, Vector2(0.5, 0.48), Color.WHITE if lit else Color(0.75, 0.75, 0.75))
+		else:
+			draw_circle(c, r, Color(0.16, 0.19, 0.17), true, -1.0, true)
+			HudParts.words(self, c + Vector2(0, 7), glyph, 20, Style.PARCHMENT, Fonts.serif(900), 0, 3)
+		draw_arc(c, r, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT if held else metal, 0.95), 2.2 if held else 1.3, true)
+		var low := size.y - 11.0
+		Icons.draw(self, Icons.GOLD, Vector2(c.x - 9.0, low), 17.0, lit)
+		HudParts.words(self, Vector2(c.x + 1.0, low), str(price), 14, Style.PARCHMENT, Fonts.numbers(), -1, 3)
+		if genes > 0:
+			var at := c + Vector2(-r * 0.78, -r * 0.62)
+			draw_circle(at, 9.0, Color(0.02, 0.06, 0.06, 0.92), true, -1.0, true)
+			draw_arc(at, 9.0, 0.0, TAU, 32, Color(CardView.GENES, 0.9), 1.0, true)
+			HudParts.words(self, at + Vector2(0, 4.5), str(genes), 12, Color(0.85, 1.0, 0.95), Fonts.numbers(), 0, 3)
+		if pop != 0:
+			var at := c + Vector2(r * 0.78, -r * 0.62)
+			draw_circle(at, 9.0, Color(0.03, 0.07, 0.03, 0.92), true, -1.0, true)
+			draw_arc(at, 9.0, 0.0, TAU, 32, Color(CardView.FOOD, 0.9), 1.0, true)
+			var said := ("+%d" % -pop) if pop < 0 else str(pop)
+			HudParts.words(self, at + Vector2(0, 4.5), said, 12, Color(0.6, 1.0, 0.5) if pop < 0 else Color(0.9, 1.0, 0.85),
+				Fonts.numbers(), 0, 3)
+
+
 ## The round's parts in a row at the top (Content.PHASES): the one it is in lit gold, those done dim, those to come
 ## dimmer, a small diamond between each two.
 class Track extends Control:

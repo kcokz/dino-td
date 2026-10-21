@@ -5,9 +5,8 @@ extends SceneTree
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit]
 ##
 ## random, smart and school play as tools/Policy.gd says; school is smart keeping to the next school (Content.SCHOOLS)
-## in turn, cutting another school's own buildings from the deck after each mini-boss. After each round random takes a
-## card (or the gold) at random, the others the best (Policy.best_reward); after a mini-boss they work on the deck
-## (Policy.workshop); on the map, the first of the two. Prints,
+## in turn. After each round random takes a blueprint (or the gold) at random, the others the best (Policy.best_reward)
+## -- after a mini-boss, of the uncommon and the rare; on the map, the first of the two. Prints,
 ## for each run, how far it got, the homeland's health at each level's end, its stars and what it built; then how many
 ## held each level -- and,
 ## for school, how each school did. "measure": also, each round, the army's strength against the wave's. "limit": no
@@ -86,15 +85,13 @@ func _init() -> void:
 			if run.over:
 				line += "  died in %s (level %d) round %d" % [Content.LEVELS[run.place].name, run.level + 1, run.round]
 				break
-			var cards := run.reward_offer()
+			var cards := run.rare_offer() if run.was_mini() else run.reward_offer()
 			if not cards.is_empty():
 				var pick := Policy.best_reward(run, run.home, cards, school) if policy != "random" else rng.randi_range(-1, cards.size() - 1)
 				if pick >= 0:
 					run.take_reward(cards[pick].id)
 				else:
 					run.take_reward_gold()
-			if run.was_mini() and policy != "random":
-				Policy.workshop(run, run.home, school)
 			if out.level_won:
 				held[run.level] += 1
 				line += "  %s hp %d/%d (lost %d)" % [Content.LEVELS[run.place].name, run.home.hp, run.home.hp_max(), losses]
@@ -155,14 +152,8 @@ func _random(run: Run) -> void:
 
 
 func _smart(run: Run, school: String) -> void:
-	var restocked := 0
 	for guard in 16:
 		var play := Policy.best_play(run, run.home, school)
 		if play.is_empty():
-			# Nothing worth it on the shelf: restock it, if that leaves enough to buy with.
-			if restocked < 2 and run.home.gold >= run.home.reroll_price() + 4:
-				run.reroll()
-				restocked += 1
-				continue
 			break
 		Policy.play(run.home, play)
