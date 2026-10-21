@@ -1,17 +1,17 @@
 # tools/paint_cards.py
 # THE CARDS' PICTURES, PAINTED (GAME-DESIGN 23; the player, 2026-10-20: "每个牌的图片应该作成2D的美工画，而不是还是3D
 # 的，而且美工画要有艺术感，然后3D在这个2D美工化的基础上，画出3D模型，类似pokeymon的卡"). Each card's picture -- each
-# building, the raise, each affix -- each creature of ours, each monster, each wonder, each ark: a hand-painted
+# building, the raise, each affix -- each creature of ours, each monster, each star dinosaur, each place: a hand-painted
 # illustration made with Stable Diffusion XL on this machine's GPU, in one style for all of them. A creature is painted
 # over its own 3D model (tools/paint_sources.gd renders them; ControlNet keeps the painting to the model's outline), so
-# the painting and the model in the game are the same animal. A building and a wonder are painted from their description
-# alone: the paintings lead, and the 3D buildings follow them. A relic or an ark is an object cut out of its painting; an
-# affix's thing is cut out the same way and set on one plate (an empty mossy altar).
+# the painting and the model in the game are the same animal. A building and a star dinosaur are painted from their
+# description alone: the paintings lead, and the 3D models follow them. An affix's thing is an object cut out of its
+# painting and set on one plate (an empty mossy altar).
 #
 #   C:/Users/jobzk/ai/sd/Scripts/python.exe dino-raid/tools/paint_cards.py [--src DIR] [--force] [keys...]
 #   (a picture already there is kept unless --force, or unless it is named)
 #
-# Writes dino-raid/assets/art/<key>.jpg (an ark or a relic: <key>.png, cut out). Needs: torch (CUDA), diffusers,
+# Writes dino-raid/assets/art/<key>.jpg. Needs: torch (CUDA), diffusers,
 # opencv, rembg; the models stabilityai/stable-diffusion-xl-base-1.0, diffusers/controlnet-canny-sdxl-1.0 and
 # madebyollin/sdxl-vae-fp16-fix (the decoder that stays in half precision: twice as quick on a 12 GB card).
 
@@ -43,9 +43,6 @@ NEG = ("human, person, people, rider, text, watermark, signature, logo, photo, 3
 
 # More to keep out of one picture (a colour the place would otherwise lend it, what its words would otherwise bring in).
 MORE_NEG = {"u_white": "green skin, green scales, green dinosaur",
-            "w_banner": "dragon, people, human, creature, army", "w_titan": "people, human, lion, open field",
-            "relic_tooth": "jaw, mouth, monster, row of teeth", "relic_egg": "many eggs, pile, group, nest",
-            "relic_core": "card, frame, border, rectangle, panel, plaque",
             "b_nest_scav": "bird, magpie, jay, crow", "b_horde_totem": "dinosaur, creature, animal",
             "b_stabilizer": "creature, animal, bird, dragon", "b_mine": "path, road, stairs, bridge",
             "b_vanguard": "path, stairs, tree house, single tent"}
@@ -184,45 +181,39 @@ PLACE_ART = {
     "sand": "a golden desert of dunes and red rock arches under a blazing sun",
     "sea": "a sunny rocky coast with crashing waves, tide pools and palm trees",
 }
-WONDERS = {
-    "brood": "the Brood, a giant organic hive dome with smaller domes and glowing eggs, monumental",
-    "gold_city": "the Gold City, three tall golden towers with domed roofs gleaming in the sun, monumental",
-    "evo_tower": "the Tower of Evolution, a tall spiralling tower of stacked glowing green rings, monumental",
-    "banner": "the Banner of All Beasts, a colossal red war banner with a golden dinosaur emblem on a tall carved pole on a "
-              "hill, monumental",
-    "titan": "the Titan Cage, a giant iron cage with thick bars and chains, a colossal beast's glowing eyes in the dark "
-             "inside, monumental",
+# The star dinosaurs (Content.STARS): each a character of its own, doing what it does, in the park's jungle.
+STARS = {
+    "hoarder": "a cute orange oviraptor dinosaur hugging a big pile of glowing cards and eggs, mischievous grin",
+    "mother": "a gentle green duck-billed maiasaura dinosaur mother curled round a nest of eggs, warm smile",
+    "trader": "a cute blue pterosaur merchant flying with a bulging travel bag of goods",
+    "scout": "a cute olive-green raptor dinosaur scout running fast with a little brass spyglass",
+    "doctor": "a cute clever blue troodon dinosaur scientist wearing round spectacles, holding a glowing flask",
+    "shield": "a cute stout grey ankylosaurus dinosaur with a club tail and an armoured back, standing guard",
+    "saver": "a cute sandy protoceratops dinosaur counting a stack of gold coins on an abacus",
+    "belly": "a cute round-bellied green diplodocus dinosaur happily munching leaves, very long neck",
+    "tri": "a cute brave orange-brown triceratops dinosaur with a big frill and three horns",
+    "scar": "a cute tough dark red velociraptor with a scar over one eye, confident grin",
+    "fisher": "a cute teal crocodile-like phytosaur fishing in a pond, a fish in its jaws",
+    "bounty": "a cute brown postosuchus reptile wearing a bandana, a pouch of gold coins at its side",
+    "horn": "a cute pink parasaurolophus dinosaur trumpeting a loud call through its long head crest, music notes",
+    "spitter": "a cute teal dilophosaurus dinosaur with two head crests spitting a glowing glob",
+    "oldking": "a grand old feathered yutyrannus tyrant dinosaur king with grey feathers and a battered crown",
+    "sickle": "a cute fluffy therizinosaurus dinosaur with huge sickle claws and a gentle face",
+    "neck": "a cute tall brachiosaurus dinosaur reaching the high treetops, very long neck",
+    "queen": "a majestic purple duck-billed dinosaur queen with a golden crown on a huge glowing nest of eggs",
+    "goldcrown": "a golden guanlong dinosaur with a tall glowing golden head crest, sparkling gold coins",
+    "firstbird": "a glowing archaeopteryx, the first bird, with rainbow feathered wings and gene light",
+    "warlord": "a mighty golden-red tyrannosaurus rex warlord roaring, battle scars, a war banner behind it",
+    "titan": "a colossal argentinosaurus sauropod titan towering over the jungle, tiny trees at its feet",
 }
-# Each relic, an object to hold (cut out, like the arks').
-RELICS = {
-    "amber": "a glowing golden amber gem with an ancient insect trapped inside",
-    "tooth": "a single loose curved ivory fang tooth, polished, with a worn root",
-    "frill": "a fan-shaped fossil bone shield plate with a scalloped edge and ridges",
-    "ammonite": "a spiral ammonite fossil shell, polished and iridescent",
-    "coprolite": "a glossy brown fossilized dinosaur dung stone, comical",
-    "wood": "a chunk of petrified wood log with colourful crystal rings",
-    "trilobite": "a trilobite fossil, segmented, grey and bronze",
-    "egg": "a single cracked cream and brown fossil dinosaur egg",
-    "core": "a glowing green alien brood core, a pulsing organic orb with veins",
-    "heart": "a glowing molten lava heart of black rock with cracks of fire",
-    "crystal": "an ancient glowing purple crystal cluster",
-    "sac": "a translucent alien egg sac pod full of glowing eggs",
-}
-# Each ark shown by what it carries (its relic, Content.ARKS): the war ark a tyrannosaurus's fang, the brood ark a fossil
-# egg, the caravan ark a piece of amber.
-ARKS = {
-    "war": "a single huge curved ivory fang tooth bound with gold bands and red leather straps, a red jewel set in the gold",
-    "brood": "a huge glowing jade-green fossil dinosaur egg with golden cracks, resting in a woven straw nest",
-    "trade": "a big glowing amber crystal with an ancient insect inside, resting on a heap of gold coins",
-}
-# An object to cut out (a relic, an ark, an affix's thing): its own look, without the card painting's scenery.
+# An object to cut out (an affix's thing): its own look, without the card painting's scenery.
 ICON = "painterly fantasy game item icon, hand-painted, rich brush strokes, vibrant colours, golden rim light"
 ICON_TAIL = "single object, whole object in view, centred, plain flat grey background"
 
 
 def jobs():
     """Every picture: its key, its prompt, its guide (a 3D render's file, or None), and how it is cut ("card": a
-    painting; "cutout": an object, its background taken away; "item": an object set on the affix plate)."""
+    painting; "item": an object cut out and set on the affix plate)."""
     out = []
     for kind, says in UNITS.items():
         out.append(("u_" + kind, CUTE + says + ", " + PLACES[UNIT_PLACE[kind]], "u_" + kind, "card"))
@@ -233,14 +224,10 @@ def jobs():
     out.append(("raise", RAISE + ", " + HOME, None, "card"))
     for a, says in AFFIXES.items():
         out.append(("a_" + a, says, None, "item"))
-    for w, says in WONDERS.items():
-        out.append(("w_" + w, says + ", " + PLACES["rain"], None, "card"))
+    for s, says in STARS.items():
+        out.append(("s_" + s, CUTE + says + ", " + PLACES["rain"], None, "card"))
     for place, says in PLACE_ART.items():
         out.append(("place_" + place, "wide landscape, " + says + ", no creatures, epic vista", None, "card"))
-    for relic, says in RELICS.items():
-        out.append(("relic_" + relic, says, None, "cutout"))
-    for ark, says in ARKS.items():
-        out.append(("ark_" + ark, says, None, "cutout"))
     return out
 
 
