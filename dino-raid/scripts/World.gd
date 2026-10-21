@@ -169,8 +169,8 @@ func dress(r: int) -> void:
 		_ground_for = r
 		add_child(_ground)
 	# Each place's own sky, drawn toward a humid one (dino-td's): a deep teal overhead, a warm white haze at the horizon.
-	_sky.sky_top_color = (lv.sky[0] as Color).lerp(Color(0.28, 0.46, 0.62), 0.4)
-	_sky.sky_horizon_color = (lv.sky[1] as Color).lerp(Color(0.84, 0.82, 0.7), 0.5)
+	_sky.sky_top_color = (lv.sky[0] as Color).lerp(Color(0.24, 0.48, 0.82), 0.4)
+	_sky.sky_horizon_color = (lv.sky[1] as Color).lerp(Color(0.86, 0.9, 0.92), 0.5)
 	_sky.ground_horizon_color = (lv.sky[1] as Color).lerp(Color(0.52, 0.56, 0.44), 0.5)
 	_sun.light_color = Color(1.0, 0.86, 0.7) if r == 1 else Color(1.0, 0.96, 0.88)
 	_sky.ground_bottom_color = grass.darkened(0.2)
@@ -187,7 +187,7 @@ func dress(r: int) -> void:
 			continue
 		if absf(at.x - ARENA.x) < FIELD.x * 0.5 + 3 and absf(at.z - ARENA.z) < FIELD.y * 0.5 + 3:
 			continue
-		if absf(at.x) < 4:
+		if absf(at.x) < 4 or not _open_for_trees(Vector2(at.x, at.z)):
 			continue
 		at.y = Ground.height_at(at.x, at.z)
 		match r:
@@ -203,6 +203,78 @@ func dress(r: int) -> void:
 				_coast(at, rng)
 			_:
 				_lush(at, rng)
+	if r == 0:
+		_forest(rng)
+
+
+## The jungle closing about the homeland's clearing (GAME-DESIGN 24; the player chose a Zelda-like homeland,
+## 2026-10-20): broadleaf trees thick at the clearing's edge and thinning outward, on every side but the road north and
+## the pens' side, bushes at their feet -- a few kinds of tree (Kit), each drawn many times at once, swaying a little.
+func _forest(rng: RandomNumberGenerator) -> void:
+	var home := Vector2(0.0, 4.0)
+	var kinds := 6
+	var trees: Array = []
+	for k in kinds:
+		trees.append([] as Array[Transform3D])
+	var bushes: Array[Transform3D] = []
+	var tries := 0
+	var placed := 0
+	while placed < 240 and tries < 6000:
+		tries += 1
+		var p := Vector2(rng.randf_range(-80.0, 80.0), rng.randf_range(-58.0, 60.0))
+		var d := p.distance_to(home)
+		if d < 25.0 or d > 72.0 or not _open_for_trees(p):
+			continue
+		if rng.randf() > 1.2 - (d - 25.0) / 45.0:
+			continue
+		var s := rng.randf_range(0.8, 1.4)
+		(trees[rng.randi() % kinds] as Array[Transform3D]).append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s),
+			Vector3(p.x, Ground.height_at(p.x, p.y) - 0.05, p.y)))
+		placed += 1
+	tries = 0
+	while bushes.size() < 140 and tries < 4000:
+		tries += 1
+		var p := Vector2(rng.randf_range(-60.0, 60.0), rng.randf_range(-50.0, 50.0))
+		var d := p.distance_to(home)
+		if d < 20.5 or d > 34.0 or not _open_for_trees(p):
+			continue
+		var s := rng.randf_range(0.7, 1.5)
+		bushes.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s),
+			Vector3(p.x, Ground.height_at(p.x, p.y) - 0.05, p.y)))
+	var greens := [Color(0.2, 0.42, 0.17), Color(0.26, 0.5, 0.2), Color(0.3, 0.54, 0.2), Color(0.22, 0.46, 0.26),
+		Color(0.34, 0.52, 0.18), Color(0.24, 0.44, 0.22)]
+	for k in kinds:
+		var mesh := Kit.tree_mesh(500 + k, rng.randf_range(3.6, 5.6), rng.randf_range(2.4, 3.4), greens[k],
+			Color(0.4, 0.3, 0.2).lerp(Color(0.5, 0.42, 0.32), rng.randf()))
+		_decor.add_child(_many(mesh, trees[k], rng))
+	_decor.add_child(_many(Kit.bush_mesh(77, 1.8, Color(0.26, 0.5, 0.2)), bushes, rng))
+
+
+## Whether a tree may stand at p (x, z): not on the road north, not by the pens, not on the battle field.
+func _open_for_trees(p: Vector2) -> bool:
+	if absf(p.x) < 8.0 and p.y < -6.0:
+		return false
+	if p.x < -13.0 and p.x > -27.0 and p.y > -12.0 and p.y < 22.0:
+		return false
+	if absf(p.x - ARENA.x) < FIELD.x * 0.5 + 8.0 and absf(p.y - ARENA.z) < FIELD.y * 0.5 + 8.0:
+		return false
+	return true
+
+
+## `mesh` drawn at each of `at` (casting shadows), each a little lighter or darker than the next.
+func _many(mesh: Mesh, at: Array[Transform3D], rng: RandomNumberGenerator) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	mm.instance_count = at.size()
+	for i in at.size():
+		mm.set_instance_transform(i, at[i])
+		var k := rng.randf_range(0.88, 1.08)
+		mm.set_instance_color(i, Color(k, k, k))
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = mm
+	return node
 
 
 ## The swamp: dead trees leaning, reeds, dark pools.
@@ -282,11 +354,7 @@ func _coast(at: Vector3, rng: RandomNumberGenerator) -> void:
 func _lush(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	if roll < 0.6:
-		var tree := Blocks.tree(rng.randf_range(3.0, 6.0), rng.randf_range(2.6, 4.0), Color(0.36, 0.26, 0.17),
-			Color(0.17, 0.38, 0.17).lerp(Color(0.27, 0.5, 0.2), rng.randf()), rng.randi())
-		tree.position = at
-		tree.rotation.y = rng.randf() * TAU
-		_decor.add_child(tree)
+		return                            # the trees are the forest's (_forest)
 	elif roll < 0.85:
 		# A fern: a few broad leaves fanned out from the ground.
 		for i in 5:
@@ -352,7 +420,7 @@ func _environment() -> void:
 	# Haze in the distance only: where the game is played stays clear, what lies beyond fades into the sky.
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = Color(0.76, 0.8, 0.74)
+	env.fog_light_color = Color(0.74, 0.82, 0.9)
 	env.fog_light_energy = 0.85
 	env.fog_density = 0.45
 	env.fog_aerial_perspective = 0.4

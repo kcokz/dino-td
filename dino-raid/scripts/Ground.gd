@@ -26,6 +26,30 @@ const COVER := {
 	5: [Color(0.36, 0.44, 0.26), Color(0.7, 0.72, 0.44), 4000, [Color(0.95, 0.95, 0.9)], Color(0.7, 0.68, 0.62)],
 }
 
+## Grass and flowers stirring in the wind (GAME-DESIGN 24): each blade bends from its root, the more toward its tip, in
+## slow waves rolling over the meadow and now and then a stronger gust; the colours as the eye takes them (sRGB), as
+## the plain material had them; lit from above and a little through the blades.
+const SWAY := """
+shader_type spatial;
+render_mode cull_disabled;
+uniform float sway = 0.8;
+void vertex() {
+	COLOR.rgb = mix(pow((COLOR.rgb + vec3(0.055)) * (1.0 / 1.055), vec3(2.4)), COLOR.rgb * (1.0 / 12.92),
+		lessThan(COLOR.rgb, vec3(0.04045)));
+	vec3 root = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	float wave = sin(root.x * 0.32 + TIME * 1.6) * 0.6 + sin(root.z * 0.23 - TIME * 1.1) * 0.4;
+	float gust = smoothstep(0.25, 1.0, sin(root.x * 0.04 + root.z * 0.03 + TIME * 0.45) * 0.5 + 0.5);
+	float bend = VERTEX.y * VERTEX.y * sway * (0.45 + gust) * (0.6 + 0.4 * wave);
+	VERTEX += inverse(mat3(MODEL_MATRIX)) * (vec3(1.0, 0.0, 0.45) * bend);
+}
+void fragment() {
+	ALBEDO = COLOR.rgb;
+	ROUGHNESS = 0.95;
+	SPECULAR = 0.2;
+	BACKLIGHT = ALBEDO * 0.35;
+}
+"""
+
 static var _noise: FastNoiseLite
 static var _material: StandardMaterial3D
 static var _grain: NoiseTexture2D
@@ -117,9 +141,14 @@ static func _colour(lv: Dictionary, x: float, z: float) -> Color:
 	var road := 1.0 - smoothstep(ROAD_HALF - 0.6, ROAD_HALF + 0.6, absf(x) + wiggle)
 	road *= smoothstep(ROAD.x - 1.0, ROAD.x + 1.0, z) * (1.0 - smoothstep(ROAD.y - 1.0, ROAD.y + 1.0, z))
 	c = c.lerp(earth.lightened(0.22).lerp(earth.lightened(0.32), 1.0 - absf(x) / ROAD_HALF), clampf(road, 0.0, 1.0))
-	# The homeland's terrace: bare earth, a little darker where the ground is damp.
+	# The homeland's terrace: a close-cropped lawn the beds stand in (the player chose a Zelda-like homeland,
+	# 2026-10-20), trodden to earth where the army stands in the yard, a little darker where the ground is damp.
 	var soil := earth.lightened(0.14).lerp(earth.darkened(0.08), smoothstep(-0.2, 0.5, small))
-	c = c.lerp(soil, _home_mask(x, z))
+	var lawn := grass.lightened(0.14).lerp(Color(0.6, 0.66, 0.3), 0.14)
+	lawn = lawn.lerp(lawn.darkened(0.12), smoothstep(-0.3, 0.6, big))
+	var yard_mid := HomeView.YARD_Z + HomeView.YARD_ROW * 0.5
+	var yard := 1.0 - smoothstep(2.2, 3.4, absf(z - yard_mid) + 0.6 * n.get_noise_2d(x * 1.7, z * 1.7))
+	c = c.lerp(lawn.lerp(soil, yard), _home_mask(x, z))
 	return c
 
 
@@ -273,7 +302,7 @@ static func _cover(root: Node3D, r: int, lv: Dictionary) -> void:
 			Vector3(p.x, height_at(p.x, p.y) - 0.02, p.y))
 		tufts.append(xf)
 		tuft_cols.append(Color.WHITE.lerp(Color(0.85, 0.9, 0.75), rng.randf()))
-	root.add_child(_many(_tuft_mesh(look[0], look[1]), tufts, tuft_cols, false))
+	root.add_child(_many(_tuft_mesh(look[0], look[1]), tufts, tuft_cols, false, 0.8))
 	var flowers: Array = look[3]
 	if not flowers.is_empty():
 		var at: Array[Transform3D] = []
@@ -285,7 +314,7 @@ static func _cover(root: Node3D, r: int, lv: Dictionary) -> void:
 			var s := rng.randf_range(0.8, 1.2)
 			at.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, height_at(p.x, p.y), p.y)))
 			cols.append(flowers[rng.randi() % flowers.size()])
-		root.add_child(_many(_flower_mesh(), at, cols, false))
+		root.add_child(_many(_flower_mesh(), at, cols, false, 0.5))
 	var stones: Array[Transform3D] = []
 	var stone_cols: Array[Color] = []
 	for i in 420:
@@ -314,7 +343,8 @@ static func _growth(x: float, z: float) -> float:
 	return clampf(g, 0.0, 1.0)
 
 
-static func _many(mesh: Mesh, at: Array[Transform3D], cols: Array[Color], shadows: bool) -> MultiMeshInstance3D:
+## `mesh` drawn at each of `at`, coloured by `cols`; swaying in the wind by `sway` (grass, flowers), or standing still.
+static func _many(mesh: Mesh, at: Array[Transform3D], cols: Array[Color], shadows: bool, sway := 0.0) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -325,14 +355,30 @@ static func _many(mesh: Mesh, at: Array[Transform3D], cols: Array[Color], shadow
 		mm.set_instance_color(i, cols[i])
 	var node := MultiMeshInstance3D.new()
 	node.multimesh = mm
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.vertex_color_is_srgb = true
-	m.roughness = 0.95
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	node.material_override = m
+	if sway > 0.0:
+		var sm := ShaderMaterial.new()
+		sm.shader = _sway_shader()
+		sm.set_shader_parameter("sway", sway)
+		node.material_override = sm
+	else:
+		var m := StandardMaterial3D.new()
+		m.vertex_color_use_as_albedo = true
+		m.vertex_color_is_srgb = true
+		m.roughness = 0.95
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		node.material_override = m
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return node
+
+
+static var _sway: Shader
+
+
+static func _sway_shader() -> Shader:
+	if _sway == null:
+		_sway = Shader.new()
+		_sway.code = SWAY
+	return _sway
 
 
 ## A tuft: blades in a clump, each a tapering strip bent outward, darker at the root (as dino-td's: crossed strips

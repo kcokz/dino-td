@@ -1,12 +1,13 @@
 class_name HomeView
 extends Node3D
-## The homeland on screen (GAME-DESIGN 17, 19): its plots on the ground of the place the ark has landed in -- the
-## battle line's two rows on top, their earth warmer, a low strip between them and the rest; the special ground behind
-## (a pond, an old tree, a vein of ore, a pool of lava) as it is -- a block for each building, taller or bigger for each
-## level, a nest's affixes as little blocks on its roof, a crest of the new species' colour when they make one, a gold
-## band for each time it was made elite. To the south the yard, laid out as the battle line: this round's army stands
-## there as it will stand in battle, each unit hatched from its nest's door, gone with the battle. West of it all the
-## star dinosaurs' pens (GAME-DESIGN 24), each star standing in its own -- asleep while it goes without.
+## The homeland on screen (GAME-DESIGN 17, 19, 24): its plots on the ground of the place it stands in -- the battle
+## line's two rows on top, their earth warmer, a low strip between them and the rest; the special ground behind (a pond,
+## an old tree, a vein of ore, a pool of lava) as it is -- each building made after its card's painting (Kit), bigger
+## and more to it at each level, a nest's affixes as glowing samples before it, a crest of the new species' colour when
+## they make one, a gold ring for each time it was made elite. To the south the yard, laid out as the battle line: this
+## round's army stands there as it will stand in battle, each unit hatched from its nest's door, gone with the battle.
+## West of it all the star dinosaurs' pens (GAME-DESIGN 24), each star standing in its own -- asleep while it goes
+## without.
 
 const TILE := 4.0
 const PLOT := 3.6
@@ -44,15 +45,17 @@ var _hoard_light: OmniLight3D     # the hoarder's pen glowing, when the good tak
 
 func setup(p_home: Home) -> void:
 	home = p_home
-	# Each plot a bed of earth, grained as the ground is, a rim of small stones round it.
-	var rim: Array[Transform3D] = []
+	# Each plot a raised bed (the player chose a Zelda-like homeland, 2026-10-20): a frame of planks, a post at each
+	# corner, earth inside it, grained as the ground is -- the frames all one mesh.
+	var frames := Kit.Maker.new()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 404
+	var plank := Color(0.56, 0.4, 0.26)
 	for y in Home.ROWS:
 		for x in Home.COLS:
 			var p := Vector2i(x, y)
 			var slab := MeshInstance3D.new()
-			slab.mesh = Blocks.rounded(Vector3(PLOT, 0.2, PLOT))
+			slab.mesh = Blocks.rounded(Vector3(PLOT - 0.2, 0.2, PLOT - 0.2))
 			slab.position = plot_pos(p) + Vector3(0, PLOT_TOP - 0.1, 0)
 			var m := Ground.earth_material(Color.WHITE)
 			slab.material_override = m
@@ -60,14 +63,15 @@ func setup(p_home: Home) -> void:
 			add_child(slab)
 			var c := plot_pos(p)
 			for side in 4:
-				for k in 6:
-					var f := (k + 0.5) / 6.0 - 0.5
-					var along := Vector3(f * PLOT, 0, PLOT * 0.5 + 0.06)
-					var at: Vector3 = along.rotated(Vector3.UP, side * PI * 0.5)
-					var s := rng.randf_range(0.2, 0.3)
-					rim.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s * 1.3, s * 0.7, s)),
-						c + at + Vector3(0, PLOT_TOP - 0.06, 0)))
-	add_child(Ground.stones(rim, Color(0.56, 0.53, 0.48), 405))
+				var turn := side * PI * 0.5
+				var shade := plank.lerp(Color(0.46, 0.34, 0.22), rng.randf())
+				frames.put(Kit.box(Vector3(PLOT, 0.2, 0.14)), Transform3D(Basis(Vector3.UP, turn),
+					c + Vector3(0, PLOT_TOP - 0.02, PLOT * 0.5 - 0.05).rotated(Vector3.UP, turn)), Kit.paint(), shade)
+				frames.put(Kit.box(Vector3(0.2, 0.3, 0.2)), Transform3D(Basis(Vector3.UP, turn),
+					c + Vector3(PLOT * 0.5 - 0.06, PLOT_TOP + 0.02, PLOT * 0.5 - 0.06).rotated(Vector3.UP, turn)), Kit.paint(), shade.darkened(0.12))
+	var frame_node := MeshInstance3D.new()
+	frame_node.mesh = frames.mesh()
+	add_child(frame_node)
 	# A post-and-rail fence along the yard's north side; a log lying where the battle line ends.
 	var fence_z := YARD_Z - 1.3
 	var span := Home.COLS * TILE + 1.0
@@ -288,163 +292,42 @@ func refresh_buildings(pop := true) -> void:
 			tw.tween_property(node, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-## A building as blocks -- a nest whose gift works where it stands (`lit`) flying a pennant.
+## A building as its card's painting shows it (Kit), and on a nest what is its own: a gold ring round its foot for
+## each time it was made elite; its affixes as glowing samples on little brass stands at its front corner; when they
+## make a new species, a brass post with a globe of that species' colour; a pale pennant when its gift works where it
+## stands (`lit`).
 static func _building(b: Dictionary, lit := false) -> Node3D:
 	var kind: String = b.kind
-	var lv := int(b.level)
-	var affixes: Array = b.affixes
-	var root := Node3D.new()
+	var root := Kit.building(kind, int(b.level))
+	var height := float(root.get_meta("height", 1.5))
 	var info: Dictionary = Content.BUILDINGS[kind]
-	var c: Color = info.color
-	var height := 0.0
 	if info.has("nest"):
-		# A tier for each level; a door; a gold band at its front corner for each time it was made elite; its affixes
-		# on the roof; a crest when they make a new species.
-		for i in lv:
-			var w := 3.0 - i * 0.6
-			var h := 1.1 if i == 0 else 0.7
-			root.add_child(Blocks.box(Vector3(w, h, w), c.lightened(i * 0.08), Vector3(0, height + h * 0.5, 0)))
-			root.add_child(Blocks.box(Vector3(w + 0.04, 0.08, w + 0.04), c.darkened(0.35), Vector3(0, height + h - 0.04, 0)))
-			height += h
-		root.add_child(Blocks.box(Vector3(0.9, 0.8, 0.08), Color(0.12, 0.09, 0.07), Vector3(0, 0.4, 1.52)))
 		for k in b.path.count("elite"):
-			var band := Blocks.cylinder(0.42, 0.2, ELITE_GOLD, Vector3(-1.05, 1.2 + k * 0.32, 1.05))
-			band.material_override = Blocks.glow(ELITE_GOLD, 0.6)
-			root.add_child(band)
-			for s in 4:
-				var a := TAU * s / 4.0 + 0.4
-				root.add_child(Blocks.box(Vector3(0.1, 0.22, 0.1), ELITE_GOLD, Vector3(-1.05 + cos(a) * 0.36, 1.4 + k * 0.32,
-					1.05 + sin(a) * 0.36)))
+			var ring := MeshInstance3D.new()
+			ring.mesh = Kit.ring(1.58, 0.09, 40)
+			ring.material_override = Blocks.glow(ELITE_GOLD, 0.6)
+			ring.position = Vector3(0, 0.08 + 0.16 * k, 0)
+			root.add_child(ring)
+		var affixes: Array = b.affixes
 		for i in affixes.size():
 			var ac: Color = Content.AFFIXES[affixes[i]].color
-			var cube := Blocks.box(Vector3(0.42, 0.42, 0.42), ac, Vector3(-0.55 + (i % 3) * 0.55, height + 0.21, 0.4 - (i / 3) * 0.55))
-			if affixes[i] in ["plasma", "flame"]:
-				cube.material_override = Blocks.glow(ac)
-			root.add_child(cube)
-		if not affixes.is_empty():
-			height += 0.42
+			var at := Vector3(-1.25 + i * 0.38, 0.0, 1.3)
+			root.add_child(Blocks.cylinder(0.05, 0.42, Color(0.85, 0.65, 0.3), at + Vector3(0, 0.21, 0)))
+			var orb := Blocks.ball(0.15, ac, at + Vector3(0, 0.55, 0))
+			orb.material_override = Blocks.glow(ac, 0.9)
+			root.add_child(orb)
 		var sp := Content.species(info.nest, affixes)
 		if not sp.used.is_empty():
 			var sc: Color = Content.UNITS[sp.kind].color
-			root.add_child(Blocks.box(Vector3(0.12, 0.9, 0.12), Color(0.2, 0.16, 0.12), Vector3(0.95, height + 0.45, -0.7)))
-			var crest := Blocks.ball(0.42, sc, Vector3(0.95, height + 1.1, -0.7))
+			root.add_child(Blocks.cylinder(0.06, 1.4, Color(0.85, 0.65, 0.3), Vector3(1.3, 0.7, -1.2)))
+			var crest := Blocks.ball(0.32, sc, Vector3(1.3, 1.55, -1.2))
 			crest.material_override = Blocks.glow(sc, 1.1)
 			root.add_child(crest)
-			height += 0.6
 		if lit:
-			root.add_child(Blocks.box(Vector3(0.09, 1.9, 0.09), Color(0.3, 0.22, 0.15), Vector3(-1.15, 2.05, -1.15)))
-			var pennant := Blocks.box(Vector3(0.7, 0.42, 0.05), PENNANT, Vector3(-0.78, 2.75, -1.15))
+			root.add_child(Blocks.cylinder(0.04, 2.0, Color(0.45, 0.32, 0.2), Vector3(-1.35, 1.0, -1.3)))
+			var pennant := Blocks.box(Vector3(0.62, 0.38, 0.04), PENNANT, Vector3(-1.02, 1.78, -1.3))
 			pennant.material_override = Blocks.glow(PENNANT, 0.5)
 			root.add_child(pennant)
-	else:
-		match kind:
-			"pool", "spore_pool":
-				var rim := 0.35 + 0.08 * lv
-				root.add_child(Blocks.box(Vector3(3.2, rim, 3.2), c.darkened(0.45), Vector3(0, rim * 0.5, 0)))
-				var water := Blocks.box(Vector3(2.8, 0.06, 2.8), c, Vector3(0, rim + 0.01, 0))
-				water.material_override = Blocks.glow(c, 0.35)
-				root.add_child(water)
-				height = rim
-				if kind == "spore_pool":
-					for k in 2 + lv:
-						root.add_child(Blocks.ball(0.32, Color(0.78, 0.82, 0.38), Vector3(-0.9 + k * 1.8 / (1 + lv), rim + 0.2,
-							0.5 if k % 2 == 0 else -0.5)))
-					height = rim + 0.5
-			"horde_totem":
-				var tall := 2.2 + 0.4 * lv
-				root.add_child(Blocks.box(Vector3(1.6, 0.3, 1.6), c.darkened(0.45), Vector3(0, 0.15, 0)))
-				root.add_child(Blocks.box(Vector3(0.35, tall, 0.35), Color(0.35, 0.25, 0.18), Vector3(0, tall * 0.5, 0)))
-				for k in 1 + lv:
-					root.add_child(Blocks.box(Vector3(0.6, 0.45, 0.55), Color(0.9, 0.85, 0.75), Vector3(0, 0.7 + k * 0.62, 0.05)))
-				root.add_child(Blocks.box(Vector3(1.0, 0.7, 0.06), c, Vector3(0.55, tall - 0.4, 0)))
-				height = tall
-			"gene_bank":
-				var tall := 1.5 + 0.3 * lv
-				root.add_child(Blocks.box(Vector3(2.0, 0.35, 2.0), c.darkened(0.45), Vector3(0, 0.175, 0)))
-				var glass := Blocks.cylinder(0.75, tall, c, Vector3(0, 0.35 + tall * 0.5, 0))
-				glass.material_override = Blocks.glow(c, 0.5)
-				root.add_child(glass)
-				for k in 3 + 2 * lv:
-					root.add_child(Blocks.ball(0.13, Color(0.95, 1.0, 0.95), Vector3(cos(k * 1.3) * 0.82, 0.6 + k * 0.28, sin(k * 1.3) * 0.82)))
-				height = 0.35 + tall
-			"vault":
-				var h := 1.1 + 0.15 * lv
-				root.add_child(Blocks.box(Vector3(2.6, h, 2.2), Color(0.4, 0.38, 0.36), Vector3(0, h * 0.5, 0)))
-				var door := Blocks.cylinder(0.55, 0.1, c, Vector3(0, h * 0.5, 1.12))
-				door.rotation.x = PI * 0.5
-				door.material_override = Blocks.glow(c, 0.6)
-				root.add_child(door)
-				for k in lv:
-					root.add_child(Blocks.cylinder(0.3, 0.12, c, Vector3(-0.6 + k * 0.6, h + 0.06, 0)))
-				height = h + 0.2
-			"market":
-				root.add_child(Blocks.box(Vector3(2.6, 0.8, 1.4), Color(0.5, 0.36, 0.22), Vector3(0, 0.4, 0.2)))
-				for sx in [-1.2, 1.2]:
-					for sz in [-0.5, 0.9]:
-						root.add_child(Blocks.box(Vector3(0.12, 1.9, 0.12), Color(0.4, 0.3, 0.2), Vector3(sx, 0.95, sz)))
-				for k in 4:
-					root.add_child(Blocks.box(Vector3(0.7, 0.12, 1.8), c if k % 2 == 0 else Color(0.95, 0.92, 0.85),
-						Vector3(-1.05 + k * 0.7, 1.95 + 0.1 * lv, 0.2)))
-				for k in lv + 1:
-					root.add_child(Blocks.box(Vector3(0.35, 0.3, 0.35), [Color(0.9, 0.3, 0.3), Color(0.3, 0.6, 0.9),
-						Color(0.95, 0.8, 0.3)][k % 3], Vector3(-0.8 + k * 0.55, 0.95, 0.2)))
-				height = 2.2
-			"champion_hall":
-				var h := 1.2 + 0.2 * lv
-				root.add_child(Blocks.box(Vector3(2.8, 0.25, 2.4), Color(0.85, 0.82, 0.78), Vector3(0, 0.125, 0)))
-				for sx in [-1.1, -0.37, 0.37, 1.1]:
-					root.add_child(Blocks.cylinder(0.16, h, Color(0.92, 0.9, 0.86), Vector3(sx, 0.25 + h * 0.5, 0.9)))
-				root.add_child(Blocks.box(Vector3(2.8, h, 1.4), c.darkened(0.2), Vector3(0, 0.25 + h * 0.5, -0.4)))
-				root.add_child(Blocks.box(Vector3(3.0, 0.3, 2.6), c, Vector3(0, 0.25 + h + 0.15, 0)))
-				var crown := Blocks.cylinder(0.45, 0.3, ELITE_GOLD, Vector3(0, 0.25 + h + 0.45, 0))
-				crown.material_override = Blocks.glow(ELITE_GOLD, 0.7)
-				root.add_child(crown)
-				height = 0.25 + h + 0.7
-			"watchtower":
-				var tall := 2.6 + 0.5 * lv
-				root.add_child(Blocks.box(Vector3(0.9, tall, 0.9), Color(0.45, 0.4, 0.36), Vector3(0, tall * 0.5, 0)))
-				root.add_child(Blocks.box(Vector3(1.5, 0.7, 1.5), c, Vector3(0, tall + 0.35, 0)))
-				root.add_child(Blocks.cylinder(1.0, 0.6, c.darkened(0.3), Vector3(0, tall + 1.0, 0), 0.0))
-				height = tall + 1.3
-			"vanguard":
-				var h := 1.4 + 0.25 * lv
-				root.add_child(Blocks.cylinder(1.35, h, c, Vector3(0, h * 0.5, 0), 0.0))
-				for k in 1 + lv:
-					root.add_child(Blocks.box(Vector3(0.5, 0.7, 0.08), Color(0.62, 0.64, 0.7), Vector3(-0.75 + k * 0.5, 0.4, 1.25)))
-				height = h
-			"sampler":
-				var tall := 1.6 + 0.3 * lv
-				root.add_child(Blocks.box(Vector3(1.8, 0.5, 1.8), c.darkened(0.3), Vector3(0, 0.25, 0)))
-				root.add_child(Blocks.cylinder(0.32, tall, c, Vector3(0, tall * 0.5, 0)))
-				var dish := Blocks.cylinder(0.85, 0.1, c.lightened(0.3), Vector3(0, tall + 0.1, 0.1))
-				dish.rotation.x = 0.5
-				root.add_child(dish)
-				height = tall + 0.4
-			"mine":
-				var h := 1.0 + 0.2 * lv
-				root.add_child(Blocks.box(Vector3(2.4, h, 2.4), Color(0.3, 0.3, 0.32), Vector3(0, h * 0.5, 0)))
-				var core := Blocks.cylinder(0.55, 0.8, c, Vector3(0, h + 0.4, 0))
-				core.material_override = Blocks.glow(c, 1.4)
-				root.add_child(core)
-				height = h + 0.8
-			"forge":
-				var h := 1.2 + 0.2 * lv
-				root.add_child(Blocks.box(Vector3(2.6, h, 2.2), Color(0.28, 0.24, 0.22), Vector3(0, h * 0.5, 0)))
-				var mouth := Blocks.box(Vector3(1.0, 0.6, 0.08), Color(1.0, 0.5, 0.15), Vector3(0, 0.45, 1.12))
-				mouth.material_override = Blocks.glow(Color(1.0, 0.5, 0.15), 2.0)
-				root.add_child(mouth)
-				var chimney := 1.0 + 0.3 * lv
-				root.add_child(Blocks.box(Vector3(0.6, chimney, 0.6), c.darkened(0.3), Vector3(0.8, h + chimney * 0.5, -0.5)))
-				height = h + chimney
-			"stabilizer":
-				var tall := 1.8 + 0.25 * lv
-				root.add_child(Blocks.box(Vector3(1.4, 0.4, 1.4), c.darkened(0.4), Vector3(0, 0.2, 0)))
-				root.add_child(Blocks.cylinder(0.28, tall, c.darkened(0.15), Vector3(0, tall * 0.5, 0)))
-				for k in 2:
-					var ring := Blocks.cylinder(0.8, 0.08, c, Vector3(0, tall * (0.55 + 0.3 * k), 0))
-					ring.material_override = Blocks.glow(c, 0.9)
-					root.add_child(ring)
-				height = tall
 	root.set_meta("height", height)
 	return root
 
