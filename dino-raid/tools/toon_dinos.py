@@ -89,7 +89,7 @@ STARS = {
 # What a star needs besides its species made friendly: the longneck and the titan hold their necks up and look about
 # rather than graze (the belly grazes: it eats all day); the triceratops's head less swollen, clear of its frill.
 STAR_TUNE = {"neck": {"neck_rise": 30.0, "no_graze": True}, "titan": {"neck_rise": 22.0, "no_graze": True},
-             "tri": {"head": 1.3}}
+             "tri": {"head": 1.3}, "queen": {"no_graze": True}, "horn": {"no_graze": True}}
 
 # How each part's size changes, toward a friendlier creature: a short, round, blunt head; a short thick neck; a
 # short plump body; a short tail thick to near its tip; short stout legs; bigger arms; big eyes.

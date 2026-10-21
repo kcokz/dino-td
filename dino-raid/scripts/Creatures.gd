@@ -19,6 +19,8 @@ const MODELS := {
 const PORTRAIT_TURN := 1.45
 const LOOPS := ["idle", "run", "walk", "sleep", "graze"]
 const ELITE_GLOW := Color(1.0, 0.8, 0.32)
+## The star dinosaurs that wear something their portraits show (_dress_star).
+const WORN := ["queen", "doctor", "scar", "fisher", "horn", "spitter", "sickle", "shield", "firstbird"]
 
 ## The gene stripes and the glows, laid over the skin: the nest's colour in bands across the back, a golden edge for an
 ## elite, a flash when struck.
@@ -59,6 +61,7 @@ const TOON_TONE := 0.86            # a creature's colours, under the soft light
 static var _scenes := {}           # file (species, or species_e1 / _e2) -> PackedScene
 static var _boxes := {}            # species -> its plain one's bounds, as it stands at rest
 static var _clips := {}            # species -> its plain one's clips (AnimationLibrary)
+static var _heads := {}            # star -> its head's shape, to fit what it wears to (_head)
 static var _shader: Shader
 
 
@@ -133,6 +136,8 @@ static func star(id: String, length: float) -> Node3D:
 	model.position = Vector3(0, -box.position.y * s, (box.position.z + box.size.z * 0.5) * s)
 	root.set_meta("edge", box.size.y * s)
 	root.set_meta("height", box.size.y * s)
+	_dress_star(model, id)
+	_lay_by_star(body, id, length)
 	var players := model.find_children("*", "AnimationPlayer", true, false)
 	if not players.is_empty():
 		var player := players[0] as AnimationPlayer
@@ -144,6 +149,382 @@ static func star(id: String, length: float) -> Node3D:
 		if player.current_animation != "":
 			player.seek(randf() * player.current_animation_length, true)
 	return root
+
+
+## What a star wears, as its portrait shows it (assets/art/s_<id>.jpg): the queen's gold crown; the doctor's hat, bow
+## tie and flask; a scar over the scarface's eye; the horn's fan of a crest and the spitter's two spiky ones; a fish
+## across the fisher's jaws; the sickle's long claws; the shield's spiked back and club tail; the first bird's rainbow
+## crest and tail. Each held by its bone, so it moves with it, and fitted to its skin as it stands at rest (_head).
+static func _dress_star(model: Node3D, id: String) -> void:
+	if not WORN.has(id):
+		return
+	var found := model.find_children("*", "Skeleton3D", true, false)
+	if found.is_empty() or (found[0] as Skeleton3D).find_bone("Head_end") < 0:
+		return
+	var skel := found[0] as Skeleton3D
+	var head := _head(model, skel, id)
+	var at: Vector3 = head.at
+	var ax: Vector3 = head.ax
+	var sup: Vector3 = head.sup
+	var side: Vector3 = head.side
+	var fwd: Vector3 = head.fwd
+	var right := fwd.cross(Vector3.UP).normalized()
+	var w: float = head.wide
+	var brow: float = head.brow
+	var hl: float = head.bone * 2.4
+	var gold := _mat(Color(1.0, 0.78, 0.26), 0.8, 0.3)
+	match id:
+		"queen":
+			# A gold crown set with red stones: its band flaring, five points each with a ball on it.
+			var r := w * 0.62
+			var foot := _top_at(head, brow - head.len * 0.08) - sup * r * 0.12
+			var band := _mat(Color(1.0, 0.78, 0.26), 0.8, 0.3)
+			band.cull_mode = BaseMaterial3D.CULL_DISABLED
+			_put(skel, "Head", foot + sup * r * 0.2, _aim(sup), _band(r, r * 0.42), band)
+			for k in 5:
+				var out := ax * cos(TAU * k / 5.0) + side * sin(TAU * k / 5.0)
+				_put(skel, "Head", foot + out * r * 0.97 + sup * r * 0.62, _aim(sup + out * 0.15), _cone(r * 0.2, r * 0.45), gold)
+				_put(skel, "Head", foot + out * r * 1.0 + sup * r * 0.88, Basis(), _ball(r * 0.08, 1.0), gold)
+			var ruby := _glow(Color(0.9, 0.1, 0.16), 0.5)
+			for k in 3:
+				var out := ax * cos(k - 1.0) + side * sin(k - 1.0)
+				_put(skel, "Head", foot + out * r * 1.02 + sup * r * 0.2, Basis(), _ball(r * 0.11, 1.0), ruby)
+		"doctor":
+			# A grey hat with a dark band; an orange bow tie at its throat; a green flask in the hand it shows.
+			var r := w * 0.7
+			var foot := _top_at(head, brow - head.len * 0.12) - sup * r * 0.1
+			var felt := _mat(Color(0.52, 0.53, 0.56), 0.0, 0.85)
+			_put(skel, "Head", foot, _aim(sup), _cylinder(r * 1.35, r * 0.07), felt)
+			_put(skel, "Head", foot + sup * r * 0.4, _aim(sup), _cylinder(r * 0.82, r * 0.8), felt)
+			_put(skel, "Head", foot + sup * r * 0.14, _aim(sup), _cylinder(r * 0.86, r * 0.24), _mat(Color(0.16, 0.13, 0.12), 0.0, 0.7))
+			var out := (fwd - Vector3.UP * 0.8).normalized()
+			var knot := _furthest(model, skel, ["Neck1", "Neck2"], out)
+			var tie := _mat(Color(0.98, 0.5, 0.1), 0.0, 0.6)
+			for s in [-1.0, 1.0]:
+				_put(skel, "Neck1", knot + side * s * w * 0.46 + out * w * 0.1, _blade(-side * s, out, 0.4), _cone(w * 0.4, w * 0.9), tie)
+			_put(skel, "Neck1", knot + out * w * 0.14, Basis(), _ball(w * 0.2, 1.0), tie)
+			var hand := _shown_hand(skel, side, at)
+			if hand != "":
+				var p := skel.get_bone_global_rest(skel.find_bone(hand)).origin + fwd * w * 0.3
+				var glass := _glow(Color(0.35, 0.95, 0.45), 0.6)
+				_put(skel, hand, p, Basis(), _ball(w * 0.55, 1.0), glass)
+				_put(skel, hand, p + Vector3.UP * w * 0.62, Basis(), _cylinder(w * 0.18, w * 0.4), glass)
+				_put(skel, hand, p + Vector3.UP * w * 0.88, Basis(), _cylinder(w * 0.21, w * 0.18), _mat(Color(0.6, 0.42, 0.25), 0.0, 0.9))
+		"scar":
+			# A pale scar down over the eye it shows.
+			var eye: Vector3 = head.eyes[1]
+			var r: float = head.eye
+			_put(skel, "Head", eye + side * r * 1.15, _blade(sup + ax * 0.35, side, 0.3), _cylinder(r * 0.2, r * 3.4),
+				_mat(Color(0.96, 0.76, 0.76), 0.0, 0.6))
+		"fisher":
+			# An orange fish held across its jaws: its forked tail out on the side it shows, its head out the other.
+			var along: float = head.tip - head.len * 0.3
+			var cut := _section(head, along)
+			var mouth: Vector3 = at + ax * along + sup * (cut.x + cut.y) * 0.5
+			var long := w * 2.4
+			var dir := (side * 0.8 - ax * 0.6).normalized()
+			var flank := dir.cross(sup)
+			if flank.dot(side + ax) < 0.0:
+				flank = -flank
+			_put(skel, "Head", mouth, _blade(dir, flank, 0.18, 0.34), _ball(long * 0.5, 1.0), _mat(Color(1.0, 0.52, 0.12), 0.1, 0.45))
+			var fin := _mat(Color(1.0, 0.74, 0.32), 0.0, 0.5)
+			for s in [-1.0, 1.0]:
+				var spread: Vector3 = (dir * 0.8 + sup * s * 0.6).normalized()
+				_put(skel, "Head", mouth + dir * long * 0.46 + spread * long * 0.13, _blade(-spread, flank, 0.2), _cone(long * 0.09, long * 0.28), fin)
+			_put(skel, "Head", mouth - dir * long * 0.36 + flank * long * 0.05 + sup * long * 0.03, Basis(), _ball(long * 0.04, 1.0),
+				_mat(Color(0.08, 0.06, 0.06), 0.0, 0.3))
+		"horn":
+			# A pink fan of a crest on the top of its head: spines with a skin between.
+			var foot := _top_at(head, brow - head.len * 0.15) - sup * w * 0.12
+			_put(skel, "Head", foot + sup * w * 0.2 - ax * w * 0.25, _blade(sup, side, 0.12), _ball(w * 0.62, 1.0), _mat(Color(0.98, 0.58, 0.74), 0.0, 0.6))
+			for k in 5:
+				var t := -0.2 + k * 0.3
+				var dir := sup * cos(t) - ax * sin(t)
+				var long := w * (1.3 + 0.35 * sin(PI * k / 4.0))
+				_put(skel, "Head", foot + dir * long * 0.5, _blade(dir, side, 0.35), _cone(w * 0.2, long), _mat(Color(0.8, 0.2, 0.45), 0.0, 0.55))
+		"spitter":
+			# Its two crests: red spikes in two rows along the top of its head, a little apart.
+			var red := _mat(Color(0.92, 0.26, 0.14), 0.0, 0.55)
+			for s in [-1.0, 1.0]:
+				var dir: Vector3 = (sup - ax * 0.35 + side * s * 0.2).normalized()
+				for k in 4:
+					var long := w * (0.75 + 0.2 * sin(PI * (k + 0.5) / 4.0))
+					var foot: Vector3 = _top_at(head, brow + head.len * (0.12 - k * 0.14)) - sup * w * 0.12 + side * s * w * 0.2
+					_put(skel, "Head", foot + dir * long * 0.5, _blade(dir, side, 0.3), _cone(w * 0.22, long), red)
+		"sickle":
+			# Long claws on its hands.
+			var ivory := _mat(Color(0.96, 0.92, 0.8), 0.0, 0.5)
+			for hand in ["Hand.L", "Hand.R"]:
+				for k in 3:
+					_grow(skel, hand, fwd * 0.1 * hl + right * (k - 1) * 0.05 * hl, _aim(fwd - Vector3.UP * 0.6), _cone(0.035 * hl, 0.5 * hl), ivory)
+		"shield":
+			# Spikes along its back; a club at its tail's end.
+			if skel.find_bone("Tail_end") >= 0:
+				_grow(skel, "Tail_end", Vector3.ZERO, Basis(), _ball(0.3 * hl, 0.75), _mat(Color(0.42, 0.42, 0.45), 0.0, 0.7))
+			var spike := _mat(Color(0.95, 0.86, 0.55), 0.0, 0.5)
+			for bone in ["Spine1", "Spine2", "Spine3", "Spine4", "Hips"]:
+				for s in [-1.0, 1.0]:
+					_grow(skel, bone, Vector3.UP * 0.35 * hl + right * s * 0.25 * hl, _aim(Vector3.UP + right * s * 0.6), _cone(0.07 * hl, 0.16 * hl), spike)
+		"firstbird":
+			# Rainbow feathers: a crest swept back from its head, a fan spread at its tail's end.
+			var rainbow := [Color(1.0, 0.3, 0.3), Color(1.0, 0.62, 0.2), Color(1.0, 0.9, 0.3), Color(0.35, 0.9, 0.4),
+				Color(0.3, 0.6, 1.0), Color(0.7, 0.35, 1.0)]
+			var foot := _top_at(head, brow - head.len * 0.2) - sup * w * 0.25
+			for k in 4:
+				var dir := (sup * (0.9 - k * 0.15) - ax * (0.5 + k * 0.25)).normalized()
+				var long := w * (1.0 + k * 0.15)
+				_put(skel, "Head", foot + dir * long * 0.42, _blade(dir, side, 0.25, 0.35), _ball(long * 0.5, 1.0), _glow(rainbow[k], 0.4))
+			var tail := skel.find_bone("Tail_end")
+			if tail >= 0:
+				var end := skel.get_bone_global_rest(tail).origin
+				var back := (end - skel.get_bone_global_rest(skel.get_bone_parent(tail)).origin).normalized()
+				var long := hl * 1.2
+				for k in 6:
+					var t := (k - 2.5) * 0.22
+					var dir := back * cos(t) + side * sin(t)
+					_put(skel, "Tail_end", end + dir * long * 0.45, _blade(dir, Vector3.UP, 0.15, 0.3), _ball(long * 0.5, 1.0), _glow(rainbow[k], 0.5))
+
+
+## What a star has by it, as its portrait shows it, laid on the ground (`ground`: its body, `length` how long it
+## stands) on the side it shows in its pen (its left, HomeView.YARD_TURN), by its head: the mother's nest of eggs, the
+## hoarder's eggs, the trader's satchel, the saver's coins heaped on a stump.
+static func _lay_by_star(ground: Node3D, id: String, length: float) -> void:
+	var gold := _mat(Color(1.0, 0.78, 0.26), 0.8, 0.3)
+	var spot := Vector3(-0.4, 0.0, 0.22) * length
+	match id:
+		"mother":
+			# Her nest of eggs.
+			var twigs := _mat(Color(0.62, 0.46, 0.28), 0.0, 0.95)
+			_lay(ground, spot + Vector3(0.0, 0.03, 0.0) * length, Basis(), _ball(0.15 * length, 0.25), twigs)
+			_lay(ground, spot + Vector3(0.0, 0.045, 0.0) * length, Basis(), _torus(0.15 * length, 0.07 * length), twigs)
+			var shells := [Color(0.62, 0.86, 0.92), Color(0.98, 0.66, 0.32), Color(0.96, 0.95, 0.88)]
+			for k in 3:
+				var a := TAU * k / 3.0 + 0.4
+				_lay(ground, spot + Vector3(cos(a) * 0.055, 0.085, sin(a) * 0.055) * length, Basis(), _ball(0.045 * length, 1.3), _mat(shells[k], 0.0, 0.45))
+		"hoarder":
+			# Two eggs it keeps.
+			_lay(ground, spot + Vector3(0.0, 0.075, 0.0) * length, Basis(), _ball(0.06 * length, 1.3), _mat(Color(0.98, 0.55, 0.15), 0.0, 0.45))
+			_lay(ground, spot + Vector3(0.1, 0.06, 0.13) * length, Basis(), _ball(0.048 * length, 1.3), _mat(Color(0.3, 0.75, 0.78), 0.0, 0.45))
+		"trader":
+			# Its leather satchel, the flap buckled, a handle on top.
+			var u := length * 0.75
+			var leather := _mat(Color(0.5, 0.31, 0.17), 0.0, 0.8)
+			var bag := Vector3(0.09, 0.13, 0.14) * u
+			_lay(ground, spot + Vector3(0.0, bag.y * 0.5, 0.0), Basis(), _box(bag), leather)
+			var flap := _mat(Color(0.42, 0.25, 0.13), 0.0, 0.8)
+			_lay(ground, spot + Vector3(-bag.x * 0.5 - 0.005 * u, bag.y * 0.72, 0.0), Basis(), _box(Vector3(0.01, 0.075, 0.145) * u), flap)
+			_lay(ground, spot + Vector3(0.0, bag.y + 0.005 * u, 0.0), Basis(), _box(Vector3(0.095, 0.01, 0.145) * u), flap)
+			_lay(ground, spot + Vector3(-bag.x * 0.5 - 0.012 * u, bag.y * 0.62, 0.0), Basis(), _box(Vector3(0.008, 0.025, 0.03) * u), gold)
+			_lay(ground, spot + Vector3(0.0, bag.y, 0.0), _aim(Vector3.RIGHT), _torus(0.05 * u, 0.012 * u), leather)
+		"saver":
+			# Its coins heaped on a stump, and a few dropped by it.
+			var stump := 0.08 * length
+			_lay(ground, spot + Vector3(0.0, stump * 0.5, 0.0), Basis(), _cylinder(0.1 * length, stump), _mat(Color(0.45, 0.3, 0.18), 0.0, 0.95))
+			_lay(ground, spot + Vector3(0.0, stump + 0.002 * length, 0.0), Basis(), _cylinder(0.095 * length, 0.004 * length), _mat(Color(0.82, 0.66, 0.45), 0.0, 0.9))
+			var coin := _cylinder(0.026 * length, 0.007 * length)
+			for layer in [[8, 0.055, 0.0], [5, 0.03, 0.012], [2, 0.01, 0.024]]:
+				for k in layer[0]:
+					var a: float = TAU * k / layer[0] + layer[1] * 20.0
+					var p := Vector3(cos(a) * layer[1], 0.0, sin(a) * layer[1]) * length + Vector3(0.0, stump + (0.008 + layer[2]) * length, 0.0)
+					_lay(ground, spot + p, Basis(Vector3(-sin(a), 0.0, cos(a)), 0.35 if layer[1] > 0.02 else 0.1), coin, gold)
+			for k in 3:
+				_lay(ground, spot + Vector3(-0.06 + k * 0.05, 0.004, 0.13 + k * 0.02) * length, Basis(), coin, gold)
+
+
+## A star's head as its skin has it at rest, in its skeleton's space, to fit what it wears to (_dress_star): its Head
+## bone's place (at) and the skull's own frame (ax along it to the snout, sup its top, side the side it shows in its
+## pen, fwd ax made level); its skin's points round it (pts: how far along ax, up sup and out side from `at`); its
+## eyes' middles (eyes: the one away from side, then the one toward it), their size (eye) and how far along the skull
+## they are (brow); its half-width (wide), its length (len) and where its snout ends (tip, along ax); its bone's length
+## (bone). Measured once for each star.
+static func _head(model: Node3D, skel: Skeleton3D, id: String) -> Dictionary:
+	if _heads.has(id):
+		return _heads[id]
+	var h := skel.get_bone_global_rest(skel.find_bone("Head")).origin
+	var e := skel.get_bone_global_rest(skel.find_bone("Head_end")).origin
+	var ax := (e - h).normalized()
+	var sup := (Vector3.UP - ax * ax.dot(Vector3.UP)).normalized()
+	var side := ax.cross(sup).normalized()
+	var pts := PackedVector3Array()
+	var eye_pts := [PackedVector3Array(), PackedVector3Array()]
+	for m in model.find_children("*", "MeshInstance3D", true, false):
+		var mat := (m as MeshInstance3D).get_active_material(0)
+		var is_eye := mat != null and mat.resource_name == "Eye"
+		for p in _skin_points(skel, m, ["Head", "Jaw"]):
+			var d := p - h
+			var q := Vector3(d.dot(ax), d.dot(sup), d.dot(side))
+			if is_eye:
+				eye_pts[1 if q.z > 0.0 else 0].append(p)
+			else:
+				pts.append(q)
+	var bone := h.distance_to(e)
+	var shape := {"at": h, "ax": ax, "sup": sup, "side": side, "fwd": Vector3(ax.x, 0.0, ax.z).normalized(), "pts": pts,
+		"bone": bone, "wide": bone * 0.6, "len": bone * 2.4, "tip": bone * 1.5, "eyes": [h, h], "eye": bone * 0.2,
+		"brow": bone * 0.5}
+	if not pts.is_empty():
+		var wide := 0.0
+		var lo := INF
+		var hi := -INF
+		for q: Vector3 in pts:
+			wide = maxf(wide, absf(q.z))
+			lo = minf(lo, q.x)
+			hi = maxf(hi, q.x)
+		shape.wide = wide
+		shape.tip = hi
+		shape.len = hi - lo
+	for k in 2:
+		var eye: PackedVector3Array = eye_pts[k]
+		if eye.is_empty():
+			continue
+		var middle := Vector3.ZERO
+		for p: Vector3 in eye:
+			middle += p
+		middle /= eye.size()
+		var r := 0.0
+		for p: Vector3 in eye:
+			r = maxf(r, p.distance_to(middle))
+		shape.eyes[k] = middle
+		shape.eye = r
+		shape.brow = (middle - h).dot(ax)
+	_heads[id] = shape
+	return shape
+
+
+## The top of a star's head (shape: _head) `along` its skull from its Head bone, near its middle line: a point in its
+## skeleton's space.
+static func _top_at(shape: Dictionary, along: float) -> Vector3:
+	var half: float = shape.len * 0.06
+	var wide: float = shape.wide
+	var best := -INF
+	for q: Vector3 in shape.pts:
+		if absf(q.x - along) < half and absf(q.z) < wide * 0.4:
+			best = maxf(best, q.y)
+	if best == -INF:
+		best = shape.bone * 0.5
+	return shape.at + shape.ax * along + shape.sup * best
+
+
+## A star's head cut across `along` its skull (shape: _head): its lowest and highest there (up its skull from its Head
+## bone), and its half-width.
+static func _section(shape: Dictionary, along: float) -> Vector3:
+	var half: float = shape.len * 0.06
+	var cut := Vector3(INF, -INF, 0.0)
+	for q: Vector3 in shape.pts:
+		if absf(q.x - along) < half:
+			cut = Vector3(minf(cut.x, q.y), maxf(cut.y, q.y), maxf(cut.z, absf(q.z)))
+	if cut.x == INF:
+		return Vector3(-0.3, 0.3, 0.3) * shape.bone
+	return cut
+
+
+## The point of a star's skin held by `bones` furthest toward `dir`, in its skeleton's space as it stands at rest.
+static func _furthest(model: Node3D, skel: Skeleton3D, bones: Array, dir: Vector3) -> Vector3:
+	var best := -INF
+	var at := Vector3.ZERO
+	for m in model.find_children("*", "MeshInstance3D", true, false):
+		for p in _skin_points(skel, m, bones):
+			if p.dot(dir) > best:
+				best = p.dot(dir)
+				at = p
+	return at
+
+
+## The points of mesh `m`'s skin held mostly (over half) by bones `names` of `skel`, where they are at rest in the
+## skeleton's space.
+static func _skin_points(skel: Skeleton3D, m: MeshInstance3D, names: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if m.skin == null or m.mesh == null:
+		return out
+	var poses := {}
+	for b in m.skin.get_bind_count():
+		var bone := skel.find_bone(m.skin.get_bind_name(b))
+		if bone >= 0 and skel.get_bone_name(bone) in names:
+			poses[b] = skel.get_bone_global_rest(bone) * m.skin.get_bind_pose(b)
+	if poses.is_empty():
+		return out
+	for s in m.mesh.get_surface_count():
+		var arrays := m.mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var bones = arrays[Mesh.ARRAY_BONES]
+		var weights = arrays[Mesh.ARRAY_WEIGHTS]
+		var per := int(bones.size() / maxi(1, verts.size()))
+		for v in verts.size():
+			var held := 0.0
+			var pose := Transform3D()
+			for k in per:
+				var b := int(bones[v * per + k])
+				if poses.has(b):
+					held += float(weights[v * per + k])
+					pose = poses[b]
+			if held > 0.5:
+				out.append(pose * verts[v])
+	return out
+
+
+## Its hand (its Fingers bone) on the side it shows in its pen; "" if it has none.
+static func _shown_hand(skel: Skeleton3D, side: Vector3, head: Vector3) -> String:
+	for hand in ["Fingers.L", "Fingers.R"]:
+		var i := skel.find_bone(hand)
+		if i >= 0 and (skel.get_bone_global_rest(i).origin - head).dot(side) > 0.0:
+			return hand
+	return ""
+
+
+## `mesh` held by `bone`, at `at` in the skeleton's space as it stands at rest, turned by `turn`.
+static func _put(skel: Skeleton3D, bone: String, at: Vector3, turn: Basis, mesh: Mesh, mat: Material) -> void:
+	var i := skel.find_bone(bone)
+	if i >= 0:
+		_grow(skel, bone, at - skel.get_bone_global_rest(i).origin, turn, mesh, mat)
+
+
+## `mesh` laid on the ground by a star (`ground`: its body), at `at`, turned by `turn`.
+static func _lay(ground: Node3D, at: Vector3, turn: Basis, mesh: Mesh, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.transform = Transform3D(turn, at)
+	ground.add_child(mi)
+
+
+## A basis whose up points along `dir`, made thin (by `thin`) toward `flat`, and `wide` across both.
+static func _blade(dir: Vector3, flat: Vector3, thin: float, wide := 1.0) -> Basis:
+	var y := dir.normalized()
+	var x := (flat - y * flat.dot(y)).normalized()
+	return Basis(x * thin, y, x.cross(y) * wide)
+
+
+## A crown's band: a short open tube, a little narrower at its foot.
+static func _band(radius: float, height: float) -> CylinderMesh:
+	var m := _cylinder(radius, height)
+	m.bottom_radius = radius * 0.9
+	m.cap_top = false
+	m.cap_bottom = false
+	return m
+
+
+static func _torus(r: float, thick: float) -> TorusMesh:
+	var m := TorusMesh.new()
+	m.inner_radius = r - thick * 0.5
+	m.outer_radius = r + thick * 0.5
+	m.rings = 24
+	m.ring_segments = 8
+	return m
+
+
+static func _cylinder(radius: float, height: float) -> CylinderMesh:
+	var m := CylinderMesh.new()
+	m.top_radius = radius
+	m.bottom_radius = radius
+	m.height = height
+	m.radial_segments = 12
+	m.rings = 1
+	return m
+
+
+static func _box(size: Vector3) -> BoxMesh:
+	var m := BoxMesh.new()
+	m.size = size
+	return m
 
 
 static func is_model(n: Node3D) -> bool:
