@@ -424,18 +424,13 @@ static func pop_of(o: Dictionary) -> int:
 
 ## A run (GAME-DESIGN 22): TIERS big levels of ROUNDS rounds each (half an hour or so). The first is always the
 ## rainforest; for each after it the map offers two places (Run.map), one to pick. A level's monsters are as strong as
-## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier -- the second level's the
-## smallest: there the calm curve (LIMIT) outruns the armies of runs that fight the most (by mid-level they stand at
-## about three quarters of it, where in the first and the third they stand at nine tenths and more). A later level's
-## first rounds come weaker still (EASE): its homeland starts again from a red nest and a pool, where the calm runs that
-## LIMIT was measured from had kept all their biomass. (2026-10-21, 48 runs by school each time: with the first SHARE
-## at 0.66 and no EASE 26 held all three, most falling in the first rainforest's last rounds and in the first rounds of
-## the levels after it; as now 38, none in the rainforest, most of the rest in the third level's third and fourth.)
+## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier. Every level is begun from
+## nothing (Home.fresh), the calm runs that measure LIMIT too, so each level's own curve tells how strong the armies
+## there grow.
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.6, 0.43, 0.46]
-const EASE := [0.8, 0.85, 0.9, 0.95]   # a later level's rounds 1 to 4, of what SHARE would make them
+const SHARE := [0.6, 0.66, 0.72]
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
@@ -498,13 +493,12 @@ const TERRAIN := {
 ## The strength a player's army comes to at each round of the run (the levels one after another) when no one comes,
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
-## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts lower:
-## the homeland starts again from a red nest and a pool (the biomass kept and the stars help the first armies). Measured
-## again 2026-10-20 with the stars, no ark, nothing carried and no places' rules (GAME-DESIGN 24). Measure again after
-## changing what can be built or made.
-const LIMIT := [32, 47, 74, 94, 126, 153, 197, 240, 311, 380, 455, 522,
-	142, 202, 301, 363, 433, 554, 632, 699, 784, 856, 916, 960,
-	250, 426, 554, 696, 826, 902, 1004, 1083, 1226, 1313, 1444, 1685]
+## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low
+## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-21 with the round's parts, the
+## population and nothing carried (GAME-DESIGN 26). Measure again after changing what can be built or made.
+const LIMIT := [22, 51, 82, 103, 134, 164, 206, 265, 304, 377, 454, 533,
+	26, 55, 83, 119, 149, 194, 266, 324, 418, 532, 654, 755,
+	29, 58, 92, 114, 161, 212, 263, 320, 374, 440, 541, 616]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
@@ -710,8 +704,6 @@ static func wave(place: int, tier: int, r: int) -> Array:
 	var g := tier * ROUNDS + r
 	var power := float(TIER_POWER[tier])
 	var budget := float(LIMIT[clampi(g, 1, LIMIT.size()) - 1]) * float(SHARE[tier]) * (BIG if r in BIG_ROUNDS else 1.0)
-	if tier > 0 and r <= EASE.size():
-		budget *= float(EASE[r - 1])
 	var out: Array = []
 	if r >= ROUNDS and lv.has("boss"):
 		out.append(lv.boss)
