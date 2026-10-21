@@ -384,11 +384,16 @@ const FIRST_STOCK := {"gold": 0, "biomass": 3, "genes": 2}
 ## rainforest; for each after it the map offers two places (Run.map), one to pick. A level's monsters are as strong as
 ## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier -- the second level's the
 ## smallest: there the calm curve (LIMIT) outruns the armies of runs that fight the most (by mid-level they stand at
-## about three quarters of it, where in the first and the third they stand at nine tenths and more).
+## about three quarters of it, where in the first and the third they stand at nine tenths and more). A later level's
+## first rounds come weaker still (EASE): its homeland starts again from a red nest and a pool, where the calm runs that
+## LIMIT was measured from had kept all their biomass. (2026-10-21, 48 runs by school each time: with the first SHARE
+## at 0.66 and no EASE 26 held all three, most falling in the first rainforest's last rounds and in the first rounds of
+## the levels after it; as now 38, none in the rainforest, most of the rest in the third level's third and fourth.)
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.66, 0.43, 0.46]
+const SHARE := [0.6, 0.43, 0.46]
+const EASE := [0.8, 0.85, 0.9, 0.95]   # a later level's rounds 1 to 4, of what SHARE would make them
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
@@ -663,6 +668,8 @@ static func wave(place: int, tier: int, r: int) -> Array:
 	var g := tier * ROUNDS + r
 	var power := float(TIER_POWER[tier])
 	var budget := float(LIMIT[clampi(g, 1, LIMIT.size()) - 1]) * float(SHARE[tier]) * (BIG if r in BIG_ROUNDS else 1.0)
+	if tier > 0 and r <= EASE.size():
+		budget *= float(EASE[r - 1])
 	var out: Array = []
 	if r >= ROUNDS and lv.has("boss"):
 		out.append(lv.boss)
