@@ -353,7 +353,7 @@ const INTEREST_STEP := 5          # each this much gold kept to a round's end br
 const INTEREST_MAX := 2           # ...up to this much
 const WIN_GOLD := 2               # gold for a battle won
 
-const TYPES := {"build": "建筑", "raise": "升级", "affix": "基因词条"}
+const TYPES := {"build": "建筑", "affix": "基因词条"}
 const DIETS := {"plant": "草食", "meat": "肉食"}
 const RARITY_NAMES := ["普通", "少见", "稀有", "传说"]
 
@@ -571,9 +571,6 @@ static func building_text(kind: String, lv: int) -> String:
 			return Lang.t("每轮多 %d 金币") % l.gold
 		"vault":
 			return Lang.t("利息最多多 %d（每存 %d 金，利息 +1）") % [l.interest, INTEREST_STEP]
-		"market":
-			return Lang.t("每轮头两次刷新不要钱" if int(l.rerolls) > 1 else "每轮第一次刷新不要钱") \
-				+ (Lang.t("，商店多摆 1 样") if l.has("shelf") else "")
 		"champion_hall":
 			return Lang.t("所有精英兵的血和攻击再 +%d%%") % l.elite
 		"watchtower":

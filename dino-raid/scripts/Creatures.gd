@@ -287,7 +287,7 @@ static func _dress_star(model: Node3D, id: String) -> void:
 
 ## What a star has by it, as its portrait shows it, laid on the ground (`ground`: its body, `length` how long it
 ## stands) on the side it shows in its pen (its left, HomeView.YARD_TURN), by its head: the mother's nest of eggs, the
-## hoarder's eggs, the trader's satchel, the saver's coins heaped on a stump.
+## saver's coins heaped on a stump.
 static func _lay_by_star(ground: Node3D, id: String, length: float) -> void:
 	var gold := _mat(Color(1.0, 0.78, 0.26), 0.8, 0.3)
 	var spot := Vector3(-0.4, 0.0, 0.22) * length
@@ -301,21 +301,6 @@ static func _lay_by_star(ground: Node3D, id: String, length: float) -> void:
 			for k in 3:
 				var a := TAU * k / 3.0 + 0.4
 				_lay(ground, spot + Vector3(cos(a) * 0.055, 0.085, sin(a) * 0.055) * length, Basis(), _ball(0.045 * length, 1.3), _mat(shells[k], 0.0, 0.45))
-		"hoarder":
-			# Two eggs it keeps.
-			_lay(ground, spot + Vector3(0.0, 0.075, 0.0) * length, Basis(), _ball(0.06 * length, 1.3), _mat(Color(0.98, 0.55, 0.15), 0.0, 0.45))
-			_lay(ground, spot + Vector3(0.1, 0.06, 0.13) * length, Basis(), _ball(0.048 * length, 1.3), _mat(Color(0.3, 0.75, 0.78), 0.0, 0.45))
-		"trader":
-			# Its leather satchel, the flap buckled, a handle on top.
-			var u := length * 0.75
-			var leather := _mat(Color(0.5, 0.31, 0.17), 0.0, 0.8)
-			var bag := Vector3(0.09, 0.13, 0.14) * u
-			_lay(ground, spot + Vector3(0.0, bag.y * 0.5, 0.0), Basis(), _box(bag), leather)
-			var flap := _mat(Color(0.42, 0.25, 0.13), 0.0, 0.8)
-			_lay(ground, spot + Vector3(-bag.x * 0.5 - 0.005 * u, bag.y * 0.72, 0.0), Basis(), _box(Vector3(0.01, 0.075, 0.145) * u), flap)
-			_lay(ground, spot + Vector3(0.0, bag.y + 0.005 * u, 0.0), Basis(), _box(Vector3(0.095, 0.01, 0.145) * u), flap)
-			_lay(ground, spot + Vector3(-bag.x * 0.5 - 0.012 * u, bag.y * 0.62, 0.0), Basis(), _box(Vector3(0.008, 0.025, 0.03) * u), gold)
-			_lay(ground, spot + Vector3(0.0, bag.y, 0.0), _aim(Vector3.RIGHT), _torus(0.05 * u, 0.012 * u), leather)
 		"saver":
 			# Its coins heaped on a stump, and a few dropped by it.
 			var stump := 0.08 * length
