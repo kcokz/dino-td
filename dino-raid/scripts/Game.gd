@@ -1066,7 +1066,7 @@ static func showcase() -> Home:
 			[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "sampler", 2, []], [Vector2i(2, 2), "horde_totem", 1, []],
 			[Vector2i(3, 2), "watchtower", 2, []], [Vector2i(4, 2), "mine", 2, []], [Vector2i(5, 2), "champion_hall", 1, []],
 			[Vector2i(0, 3), "spore_pool", 2, []], [Vector2i(1, 3), "vault", 1, []], [Vector2i(2, 3), "stabilizer", 1, []],
-			[Vector2i(3, 3), "market", 1, []], [Vector2i(4, 3), "vanguard", 2, []]]:
+			[Vector2i(3, 3), "gene_bank", 1, []], [Vector2i(4, 3), "vanguard", 2, []]]:
 		h.build(step[0], step[1])
 		var b: Dictionary = h.buildings[step[0]]
 		if step[2] is Array:
