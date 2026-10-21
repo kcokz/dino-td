@@ -37,6 +37,8 @@ var _banner_rule: Control
 var _army: HudParts.ArmyTag
 var _deck_button: HudParts.RoundButton
 var _choice: PanelContainer
+var _track: HudParts.Track         # the round's parts, at the top
+var _choice_buttons := {}         # "count", "elite" -> its button
 
 var _right: VBoxContainer
 var _waves: VBoxContainer
@@ -190,6 +192,13 @@ func setup(p_game: Game) -> void:
 	_hint.position = Vector2(-60, -236)
 	_root.add_child(_hint)
 
+	# The round's parts, the one it is in lit (at home; the battle has its own bar there).
+	_track = HudParts.Track.new()
+	_track.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_track.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_track.position = Vector2(-_track.size.x * 0.5, 8)
+	_root.add_child(_track)
+
 	# A battle: our side and theirs either side of the clock, and the speed.
 	_battle = HBoxContainer.new()
 	_battle.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -224,6 +233,7 @@ func setup(p_game: Game) -> void:
 	for pair in [["count", "多孵 1 只"], ["elite", "变精英"]]:
 		var b := _button(pair[1], Vector2(150, 46), 17)
 		var choice: String = pair[0]
+		_choice_buttons[choice] = b
 		b.mouse_entered.connect(func() -> void: game.aim(choice))
 		b.mouse_exited.connect(func() -> void:
 			if game.aimed == choice:
@@ -421,17 +431,24 @@ func refresh() -> void:
 	var fighting := game.phase == Game.Phase.FIGHT
 	var away := fighting or game.phase == Game.Phase.MOVE     # the army out, or on the way to the next place
 	_refresh_kept()
+	var used := home.pop_used()
+	var cap := home.pop_cap()
 	for i in _cards.size():
 		var v: CardView = _cards[i]
 		if not v.sold:
 			v.genes_shown = home.genes_cost(v.c)
-			v.purse = {"gold": home.gold, "genes": home.genes}
-			v.set_state(planning and not home.targets(i).is_empty(), game.held == i)
+			v.pop_need = Content.pop_of(v.c)
+			v.purse = {"gold": home.gold, "genes": home.genes, "used": used, "cap": cap}
+			v.set_state(planning and not game.fits_of(i).is_empty(), game.held == i)
 	for k in _kept.size():
 		var v: CardView = _kept[k]
-		v.set_state(planning and not home.stash_targets(k).is_empty(), game.held_k == k)
+		v.pop_need = Content.pop_of(v.c)
+		v.purse = {"used": used, "cap": cap}
+		v.set_state(planning and not game.fits_of(k, true).is_empty(), game.held_k == k)
 	if _star_card != null:
-		_star_card.purse = {"gold": home.gold}
+		_star_card.purse = {"gold": home.gold, "used": used, "cap": cap}
+		if _star_card.star != "":
+			_star_card.pop_need = home.star_need(_star_card.star)
 		_star_card.set_state(planning and home.can_buy_star(), false)
 	_go.disabled = not planning
 	_go.visible = not away
@@ -454,13 +471,12 @@ func refresh() -> void:
 	_crest.queue_redraw()
 	_purse.hp = home.hp
 	_purse.hp_max = home.hp_max()
-	_purse.biomass = home.biomass
-	_purse.biomass_in = home.income_biomass()
+	_purse.pop_used = used
+	_purse.pop_cap = cap
 	_purse.research = home.genes
-	_purse.research_in = home.income_genes()
 	_purse.queue_redraw()
-	_army.count = home.army().size()
-	_army.food = home.army_food()
+	_army.count = game.army_now().size()
+	_army.food = Home.food_of(game.army_now())
 	_army.visible = not away
 	_army.queue_redraw()
 	_deck_button.visible = not away
@@ -468,6 +484,11 @@ func refresh() -> void:
 	_deck_button.count = str(home.deck.size())
 	_deck_button.queue_redraw()
 	_choice.visible = planning and not game.pending.is_empty()
+	_track.part = game.part
+	_track.visible = not away and game.phase != Game.Phase.DONE
+	_track.queue_redraw()
+	if _choice.visible:
+		_choice_buttons.count.disabled = not game.count_fits()
 	_battle.visible = fighting and not game.at_home
 	for k in _kept.size():
 		_kept[k].visible = not away and planning
@@ -526,15 +547,17 @@ func _point_tip() -> String:
 			return "%s\n%s" % [Lang.t(Content.LEVELS[run.place].name), _ground_text(run.place)]
 		"hp":
 			return Lang.t("家园 %d / %d\n打输了会掉，掉光这一局就输了") % [home.hp, home.hp_max()]
-		"biomass":
-			return Lang.t("生物质 %d\n每轮产 %d；明星恐龙每轮吃 %d，出战的兵吃 %d") % [home.biomass, home.income_biomass(),
-				home.star_food(), home.army_food()]
+		"pop":
+			return Lang.t("人口 %d / %d\n每轮产的生物质养得活这么多：兵吃 %d，明星恐龙吃 %d") % [home.pop_used(), home.pop_cap(),
+				home.pop_used() - home.star_food(), home.star_food()]
 		"research":
-			return Lang.t("研究点数 %d\n每轮产 %d；贴词条、强化牌要花") % [home.genes, home.income_genes()]
+			return Lang.t("研究点数 %d\n生产时 +%d；贴词条、强化牌要花") % [home.genes, home.income_genes()]
 		"gold":
-			return Lang.t("金币 %d\n每轮 +%d；存着的利息 +%d") % [home.gold, home.income_gold(), home.interest()]
+			return Lang.t("金币 %d\n开始时 +%d，利息 +%d；生产时 +%d") % [home.gold, Home.INCOME, home.interest(),
+				home.income_gold()]
 		"army":
-			var said := Lang.t("这一轮出战 %d 只，吃 %d 生物质") % [home.army().size(), home.army_food()]
+			var said := Lang.t("这一轮出战 %d 只，吃 %d 生物质") % [game.ahead().fighters.size(),
+				Home.food_of(game.ahead().fighters)]
 			var more := game.bonuses()
 			return said + ("\n" + more if more != "" else "")
 		"deck":
@@ -741,63 +764,16 @@ func _star_item(id: String, note := "") -> HudParts.Showcase:
 	return item
 
 
-## A place's boss beaten: three star dinosaurs, one to take home -- or none. Its id, or "".
-func choose_star(ids: Array) -> String:
-	var box := _open(Lang.t("%s守住了！") % Lang.t(Content.LEVELS[game.run.place].name), "带一只明星恐龙回家（红字的是传说的）")
-	offered = ids.duplicate()
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 24)
-	box.add_child(row)
-	var i := 0
-	for id in ids:
-		var item := _star_item(id)
-		item.pressed.connect(func() -> void: chosen.emit(id))
-		row.add_child(_held(item))
-		_fly_in(item, Vector2.ZERO, i, ids.size())
-		i += 1
-	var skip := _button("都不要", Vector2(150, 44), 18)
-	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	skip.pressed.connect(func() -> void: chosen.emit(""))
-	box.add_child(skip)
-	var v: Variant = await chosen
-	_close()
-	return str(v)
-
-
-## The pens are full and a new star is coming: which to let go (sold, for half its price) -- or none, and the new one
-## stays away. The pen's index, or -1.
-func release_star(coming: String) -> int:
-	var home: Home = game.home
-	var box := _open("围栏满了", Lang.t("放走哪一只，给%s腾地方？") % Lang.t(Content.STARS[coming].name))
-	offered = home.stars.map(func(s: Dictionary) -> String: return s.id)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	box.add_child(row)
-	for k in home.stars.size():
-		var item := _star_item(home.stars[k].id, Lang.t("卖 +%d 金") % home.sell_price(k))
-		item.custom_minimum_size = Vector2(200, 330)
-		item.size = item.custom_minimum_size
-		var pen := k
-		item.pressed.connect(func() -> void: chosen.emit(pen))
-		row.add_child(_held(item))
-		_fly_in(item, Vector2.ZERO, k, home.stars.size())
-	var skip := _button("算了，不要新的", Vector2(190, 44), 18)
-	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	skip.pressed.connect(func() -> void: chosen.emit(-1))
-	box.add_child(skip)
-	var v: Variant = await chosen
-	_close()
-	return int(v)
-
-
-## A star dinosaur's own screen (its pen clicked): it, and whether to sell it. "sell", or "".
+## A star's pen pointed at and clicked: the star's own page, to sell it or keep it. "sell" or "".
 func pen_menu(k: int) -> String:
 	var home: Home = game.home
 	var id: String = home.stars[k].id
 	var hungry := k in home.hungry
-	var box := _open(Lang.t(Content.STARS[id].name), Lang.t("这一轮没吃饱，本事没起作用") if hungry else "")
+	var can_sell := home.can_sell_star(k)
+	var note := Lang.t("这一轮没吃饱，本事没起作用") if hungry else ""
+	if not can_sell:
+		note = Lang.t("它产的生物质养着别的，卖了人口就不够了")
+	var box := _open(Lang.t(Content.STARS[id].name), note)
 	var item := _star_item(id)
 	item.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(_held(item))
@@ -806,6 +782,7 @@ func pen_menu(k: int) -> String:
 	row.add_theme_constant_override("separation", 16)
 	box.add_child(row)
 	var sell := _button(Lang.t("卖掉（+%d 金）") % home.sell_price(k), Vector2(190, 46), 18)
+	sell.disabled = not can_sell
 	sell.pressed.connect(func() -> void: chosen.emit("sell"))
 	row.add_child(sell)
 	var keep := _button("留着", Vector2(150, 46), 18, true)

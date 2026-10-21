@@ -3,12 +3,13 @@ extends Control
 ## An offer on the shop's shelf, drawn as a card (GAME-DESIGN 15, 17, 21, 23): its painting (tools/paint_cards.py; the
 ## model's portrait, Portraits, until there is one) filling the most of it; its name under it on the dark of the card,
 ## a hairline in its rarity's metal (bronze, silver, gold) with a diamond on it under the name; its price on a coin
-## laid over the painting's corner, what else it costs (research points) on the other. What it does is told only when
-## it is pointed at or taken up (the player, 2026-10-20: "数字，文字都尽量去除……具体信息基本上都靠hover"); at rest its
-## foot says only what kind it is. A good already had -- kept in the stash -- shows a jade token instead of a price: 存.
-## A place on the shelf already bought from shows an empty outline. A star dinosaur on offer (after the shelf) is a
-## card too: its painting (or a medallion of its colour), what it eats a round on the other corner. Dealt, it comes
-## face down and turns over.
+## laid over the painting's corner, what else it costs (research points) under it, the population it takes on the
+## other corner (GAME-DESIGN 26; green, what it feeds more). Each of these can be pointed at, and lights, with a word
+## over the card on what it asks and what there is. What it does is told only when it is pointed at or taken up (the
+## player, 2026-10-20: "数字，文字都尽量去除……具体信息基本上都靠hover"); at rest its foot says only what kind it is. A
+## good already had -- kept in the stash -- shows a jade token instead of a price: 存. A place on the shelf already
+## bought from shows an empty outline. A star dinosaur on offer (after the shelf) is a card too: its painting (or a
+## medallion of its colour), the population it takes on the other corner. Dealt, it comes face down and turns over.
 
 signal clicked(view: CardView)
 signal hovered(view: CardView, on: bool)
@@ -19,6 +20,9 @@ const RARITY := ["普通", "少见", "稀有", "传说"]
 const FOOD := Color(0.55, 0.85, 0.35)
 const GENES := Color(0.3, 0.85, 0.75)
 const ART := Rect2(5, 5, 140, 128)        # where the painting shows
+const PRICE_AT := Vector2(22, 22)         # the corners' figures: the price...
+const GENES_AT := Vector2(22, 56)         # ...the research points under it...
+const POP_AT := Vector2(SIZE.x - 20.0, 20.0)   # ...the population, at the other corner
 const BODY_TOP := Color(0.075, 0.085, 0.09)
 const BODY_BOTTOM := Color(0.03, 0.035, 0.04)
 
@@ -31,7 +35,9 @@ var affordable := true
 var chosen := false
 var marked := false               # its kind is about to be taken out of the shop: veiled red
 var genes_shown := -1             # the genes it costs here (Home.genes_cost), or -1 for what it says
-var purse := {}                   # what the homeland has ({gold, genes}); {} for none
+var purse := {}                   # what the homeland has ({gold, genes, used, cap}); {} for none
+var pop_need := 0                 # the population it takes (Content.pop_of, Home.star_need); less than 0, it feeds more
+var hot := ""                     # the corner's figure pointed at: "price", "genes", "pop" or ""
 var turn := 1.0                   # which way it faces: 1 its face, -1 its back; between, turning over
 var star := ""                    # a star dinosaur on offer (Content.STARS) instead of a good
 var _hover := false
@@ -82,6 +88,7 @@ func _frame() -> void:
 		queue_redraw())
 	mouse_exited.connect(func() -> void:
 		_hover = false
+		hot = ""
 		hovered.emit(self, false)
 		queue_redraw())
 	queue_redraw()
@@ -98,6 +105,44 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		clicked.emit(self)
 		accept_event()
+	elif event is InputEventMouseMotion:
+		var part := ""
+		for p in _parts():
+			if (event as InputEventMouseMotion).position.distance_to(p[1]) <= 16.0:
+				part = p[0]
+		if part != hot:
+			hot = part
+			queue_redraw()
+
+
+## Its corners' figures shown, and where: [part, middle].
+func _parts() -> Array:
+	var out: Array = []
+	if token() == "":
+		out.append(["price", PRICE_AT])
+	if _genes_n() > 0:
+		out.append(["genes", GENES_AT])
+	if pop_need != 0:
+		out.append(["pop", POP_AT])
+	return out
+
+
+## A word on the corner's figure pointed at: what it asks, and what there is.
+func part_tip() -> String:
+	var used := int(purse.get("used", 0))
+	var cap := int(purse.get("cap", 0))
+	match hot:
+		"price":
+			if c.type == "raise":
+				return Lang.t("升级 %d 金起，越高级越贵；你有 %d") % [int(c.price), int(purse.get("gold", 0))]
+			return Lang.t("要 %d 金，你有 %d") % [int(c.price), int(purse.get("gold", 0))]
+		"genes":
+			return Lang.t("要 %d 研究点数，你有 %d") % [_genes_n(), int(purse.get("genes", 0))]
+		"pop":
+			if pop_need < 0:
+				return Lang.t("人口上限 +%d，现在 %d/%d") % [-pop_need, used, cap]
+			return Lang.t("要 %d 人口，现在 %d/%d") % [pop_need, used, cap]
+	return ""
 
 
 func set_state(p_affordable: bool, p_chosen: bool) -> void:
@@ -209,15 +254,33 @@ func _draw_face() -> void:
 		Style.fill(rid, full, 8.0, Color(0.45, 0.05, 0.03, 0.45), Color(0.3, 0.02, 0.02, 0.55))
 		_text(Vector2(SIZE.x * 0.5, 98), Lang.t("去掉"), 28, Color(1.0, 0.88, 0.82), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER, 7)
 	if token() != "":
-		_token(Vector2(22, 22), Lang.t(token()))
+		_token(PRICE_AT, Lang.t(token()))
 	else:
-		_price(Vector2(22, 22))
-	if star != "":
-		_food()
-	else:
-		_genes()
+		_price(PRICE_AT)
+	_genes()
+	_pop()
 	if not affordable:
 		Style.fill(rid, full.grow(-1.0), 8.0, Color(0, 0, 0, 0.45), Color(0, 0, 0, 0.5))
+	if hot != "":
+		_tell()
+
+
+## The corner's figure pointed at, lit, and over the card a word on it (part_tip).
+func _tell() -> void:
+	var rid := get_canvas_item()
+	for p in _parts():
+		if p[0] == hot:
+			draw_arc(p[1], 17.0, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT, 0.95), 1.6, true)
+			draw_arc(p[1], 20.0, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT, 0.3), 3.0, true)
+	var says := part_tip()
+	if says == "":
+		return
+	var f := Fonts.serif(700)
+	var w := f.get_string_size(says, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 20.0
+	var box := Rect2(Vector2((SIZE.x - w) * 0.5, -36.0), Vector2(w, 28.0))
+	Style.fill(rid, box, 6.0, Color(0.06, 0.07, 0.08, 0.94), Color(0.02, 0.025, 0.03, 0.96))
+	Style.hairline_rect(rid, box, Color(Style.GOLD_BRIGHT, 0.35), Color(Style.GOLD_BRIGHT, 0.8), 6.0)
+	_text(box.position + Vector2(w * 0.5, 19.0), says, 13, Style.PARCHMENT, f, HORIZONTAL_ALIGNMENT_CENTER)
 
 
 ## The card's body: its dark, shaded top to bottom, its corners rounded; a soft shadow under it.
@@ -303,16 +366,20 @@ func _token(at: Vector2, text: String) -> void:
 	_text(at + Vector2(0, px * 0.36), text, px, Color(0.04, 0.12, 0.08), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER)
 
 
-## What else it costs (research points, as many as it costs here) at the painting's top right: a flask and how many --
-## not for a good had already.
+## The research points it costs here (none for a good had already, or a star).
+func _genes_n() -> int:
+	if token() != "" or star != "":
+		return 0
+	return genes_shown if genes_shown >= 0 else int(c.get("genes", 0))
+
+
+## What else it costs (research points, as many as it costs here) under the price: a flask and how many.
 func _genes() -> void:
-	if token() != "":
-		return
-	var n := genes_shown if genes_shown >= 0 else int(c.get("genes", 0))
+	var n := _genes_n()
 	if n <= 0:
 		return
 	var short: bool = purse.has("genes") and n > int(purse.genes)
-	var at := Vector2(SIZE.x - 20.0, 20.0)
+	var at := GENES_AT
 	draw_circle(at + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.5), true, -1.0, true)
 	draw_circle(at, 12.0, Color(0.02, 0.06, 0.06, 0.85), true, -1.0, true)
 	draw_arc(at, 12.0, 0.0, TAU, 40, Color(GENES, 0.8), 1.0, true)
@@ -321,17 +388,20 @@ func _genes() -> void:
 		HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 
-## What a star eats a round, at the painting's top right: a green drop and how much (none: nothing shown).
-func _food() -> void:
-	var n := int(Content.STARS[star].eat)
-	if n <= 0:
+## The population it takes, at the painting's top right: a green drop and how much -- red when there is not room for
+## it; what it feeds more, as +, greener (none: nothing shown).
+func _pop() -> void:
+	if pop_need == 0:
 		return
-	var at := Vector2(SIZE.x - 20.0, 20.0)
+	var short: bool = purse.has("cap") and pop_need > int(purse.cap) - int(purse.get("used", 0))
+	var at := POP_AT
 	draw_circle(at + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.5), true, -1.0, true)
 	draw_circle(at, 12.0, Color(0.03, 0.07, 0.03, 0.85), true, -1.0, true)
 	draw_arc(at, 12.0, 0.0, TAU, 40, Color(FOOD, 0.8), 1.0, true)
 	Icons.draw(self, Icons.BIOMASS, at + Vector2(0, -1), 18.0)
-	_text(at + Vector2(9, 13), str(n), 13, Color(0.9, 1.0, 0.85), Fonts.numbers(), HORIZONTAL_ALIGNMENT_CENTER, 3)
+	var said := ("+%d" % -pop_need) if pop_need < 0 else str(pop_need)
+	var col := Color(0.6, 1.0, 0.5) if pop_need < 0 else (Style.CORAL if short else Color(0.9, 1.0, 0.85))
+	_text(at + Vector2(9, 13), said, 13, col, Fonts.numbers(), HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 
 ## What kind of good it is, said at its foot: a building's part of the homeland and its school, how rare it is.

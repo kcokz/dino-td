@@ -153,10 +153,9 @@ class Purse extends Control:
 	const CELL := 92.0
 	var hp := 0
 	var hp_max := 1
-	var biomass := 0
-	var biomass_in := 0
+	var pop_used := 0             # the population taken...
+	var pop_cap := 0              # ...of what the biomass made a round feeds
 	var research := 0
-	var research_in := 0
 	var hover := ""
 
 	func _init() -> void:
@@ -165,7 +164,7 @@ class Purse extends Control:
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion:
-			var which: String = ["hp", "biomass", "research"][clampi(int((event as InputEventMouseMotion).position.x / CELL), 0, 2)]
+			var which: String = ["hp", "pop", "research"][clampi(int((event as InputEventMouseMotion).position.x / CELL), 0, 2)]
 			if which != hover:
 				hover = which
 				queue_redraw()
@@ -181,11 +180,13 @@ class Purse extends Control:
 		HudParts.veil(self, Rect2(-6, -2, size.x + 6.0, size.y + 4.0), 0.5, 16.0)
 		var nf := Fonts.numbers()
 		var low := float(hp) / maxf(1.0, hp_max) < 0.35
+		var full := pop_used >= pop_cap
 		var cells := [[Icons.HEALTH, str(hp), Style.CORAL if low else Style.PARCHMENT],
-			[Icons.BIOMASS, str(biomass), Style.PARCHMENT], [Icons.RESEARCH, str(research), Style.PARCHMENT]]
+			[Icons.BIOMASS, "%d/%d" % [pop_used, pop_cap], Style.AMBER if full else Style.PARCHMENT],
+			[Icons.RESEARCH, str(research), Style.PARCHMENT]]
 		for i in 3:
 			var x := i * CELL
-			var lit: bool = hover == ["hp", "biomass", "research"][i]
+			var lit: bool = hover == ["hp", "pop", "research"][i]
 			Icons.draw(self, cells[i][0], Vector2(x + 16, 19), 24.0 if lit else 22.0)
 			HudParts.words(self, Vector2(x + 33, 19), cells[i][1], 22, cells[i][2], nf, -1, 4)
 
@@ -485,6 +486,30 @@ class Tag extends Control:
 
 ## A battle's count (top middle): our side's small green shield and how many stand, the seconds left in a hairline
 ## ring (running down round it), theirs on a red shield.
+## The round's parts in a row at the top (Content.PHASES): the one it is in lit gold, those done dim, those to come
+## dimmer, a small diamond between each two.
+class Track extends Control:
+	var part := ""
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(360, 30)
+		size = custom_minimum_size
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var ids: Array = Content.PHASES.keys()
+		var now := ids.find(part)
+		var step := size.x / ids.size()
+		HudParts.veil(self, Rect2(0, 0, size.x, size.y), 0.45, 16.0)
+		for i in ids.size():
+			var lit := i == now
+			var col := Style.GOLD_BRIGHT if lit else Color(Style.PARCHMENT, 0.62 if i < now else 0.36)
+			HudParts.words(self, Vector2(step * (i + 0.5), 15), Lang.t(Content.PHASES[ids[i]].name), 15 if lit else 13, col,
+				Fonts.serif(800 if lit else 600), 0, 3)
+			if i > 0:
+				Style.diamond(get_canvas_item(), Vector2(step * i, 15), 2.5, Color(Style.GOLD_BRIGHT, 0.45))
+
+
 class Versus extends Control:
 	var ours := 0
 	var theirs := 0
