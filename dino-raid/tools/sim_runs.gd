@@ -7,7 +7,7 @@ extends SceneTree
 ## random, smart and school play as tools/Policy.gd says; school is smart keeping to the next school (Content.SCHOOLS)
 ## in turn, cutting another school's own buildings from the deck after each mini-boss. After each round random takes a
 ## card (or the gold) at random, the others the best (Policy.best_reward); after a mini-boss they work on the deck
-## (Policy.workshop); after a boss, a star (Policy.best_star; random: any); on the map, the first of the two. Prints,
+## (Policy.workshop); on the map, the first of the two. Prints,
 ## for each run, how far it got, the homeland's health at each level's end, its stars and what it built; then how many
 ## held each level -- and,
 ## for school, how each school did. "measure": also, each round, the army's strength against the wave's. "limit": no
@@ -57,6 +57,8 @@ func _init() -> void:
 				_random(run)
 			else:
 				_smart(run, school)
+			run.make()
+			run.eat()
 			g += 1
 			if limit:
 				while best.size() < g:
@@ -72,7 +74,7 @@ func _init() -> void:
 				for kind in run.wave():
 					wave_strength += Content.enemy_strength(kind, run.power())
 				print("  %s r%d: army of %2d, strength %4d; the wave %4d (%d of them)" % [Content.LEVELS[run.place].name,
-					run.round, run.home.army().size(), roundi(run.strength()), roundi(wave_strength), run.wave().size()])
+					run.round, run.home.fighters.size(), roundi(run.strength()), roundi(wave_strength), run.wave().size()])
 			var f := run.fight()
 			f.run()
 			var out := run.finish(f)
@@ -101,12 +103,6 @@ func _init() -> void:
 					line += "  ALL HELD"
 					all_held = true
 					break
-				var offer := run.star_choice()
-				var pick := Policy.best_star(run, run.home, offer) if policy != "random" else {"id": offer[rng.randi() % offer.size()], "release": -1}
-				if pick.release >= 0:
-					run.home.sell_star(pick.release)
-				if pick.id != "":
-					run.home.take_star(pick.id)
 				run.move_on(Policy.best_place(run))
 		if school != "":
 			var sc: Array = by_school.get(school, [0, 0, 0, 0])

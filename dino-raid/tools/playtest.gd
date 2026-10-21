@@ -17,7 +17,6 @@ extends SceneTree
 var game: Game
 var out := ""
 var smart := false
-var _star_pick := {}              # the star chosen after a boss, and the pen to let go for it (Policy.best_star)
 var seed := 5
 var _n := 0
 var rng := RandomNumberGenerator.new()
@@ -438,8 +437,7 @@ func _screens(label: String) -> void:
 
 
 ## Answers the screen up: the arrival, a card (smart: the best, or the gold), the deck (smart: as tools/Policy.gd works
-## it; else left as it is), a star after a boss (smart: the best, letting one go for it if that is better; else the
-## first, letting none go), the next place.
+## it; else left as it is), the next place.
 func _answer() -> void:
 	var s: String = game.hud.screen
 	var offered: Array = game.hud.offered
@@ -458,11 +456,6 @@ func _answer() -> void:
 		game.hud.chosen.emit("关闭")
 	elif s.begins_with("下一站"):
 		game.hud.chosen.emit(Policy.best_place(game.run))
-	elif s.ends_with("守住了！"):
-		_star_pick = Policy.best_star(game.run, game.home, offered) if smart else {"id": offered[0], "release": -1}
-		game.hud.chosen.emit(_star_pick.id)
-	elif s.begins_with("围栏满了"):
-		game.hud.chosen.emit(int(_star_pick.get("release", -1)))
 
 
 ## The battle: when it starts, in the thick of it, at its end, and back home.
@@ -496,7 +489,7 @@ func _check_pointing() -> void:
 			if got.plot != p:
 				bad += 1
 				print("pointing: plot %s found as %s" % [p, got.plot])
-	for u in game.home.army():
+	for u in game.home.brood:
 		var n := game.home_view.unit_node(u.id)
 		if n == null:
 			bad += 1
@@ -611,9 +604,9 @@ func _account() -> void:
 		built[key] = built.get(key, 0) + 1
 	var plus := h.deck.filter(func(c: Dictionary) -> bool: return c.plus).size()
 	var stars: Array = h.stars.map(func(s: Dictionary) -> String: return s.id + ("(%d)" % int(s.grow) if int(s.grow) > 0 else ""))
-	print("%s (level %d) round %d hp %d/%d gold %d biomass %d research %d deck %d (+%d) stash %d stars %s hungry %d army %d | %s" % [
-		Content.LEVELS[r.place].name, r.level + 1, r.round, h.hp, h.hp_max(), h.gold, h.biomass, h.genes, h.deck.size(), plus,
-		h.stash.size(), stars, h.hungry.size(), h.army().size(), built])
+	print("%s (level %d) round %d hp %d/%d gold %d population %d/%d research %d deck %d (+%d) stash %d stars %s hungry %d army %d | %s" % [
+		Content.LEVELS[r.place].name, r.level + 1, r.round, h.hp, h.hp_max(), h.gold, h.pop_used(), h.pop_cap(), h.genes, h.deck.size(),
+		plus, h.stash.size(), stars, h.hungry.size(), h.settled().fighters.size(), built])
 
 
 func _shot(label: String) -> void:

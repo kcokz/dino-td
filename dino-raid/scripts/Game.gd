@@ -1,23 +1,25 @@
 class_name Game
 extends Node3D
 ## The game (GAME-DESIGN 17-22): the homeland built from the shop, and the battles its army fights by itself, on one
-## screen. It opens on the title (Menu) over a homeland at dusk; Esc pauses. A run starts with an ark to choose and
-## lands in the rainforest. A round: the place has its way, the
-## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army -- standing
-## in the yard as it will stand in battle, where their nests stand on the battle line; the player buys -- buildings,
-## raises (a nest's as a choice: one more, or elite), gene affixes, a star dinosaur for a pen (GAME-DESIGN 24) -- or
-## keeps what is bought for later with the hoarder, puts down what was kept, sells a star, watching the army change;
-## then sends it out; the battle fights itself, and the army is gone with it. Won: gold and research points; lost: the
-## homeland is hurt; either way, interest on the gold kept, and one of three cards for the deck the shop draws from --
-## or gold instead. Rounds 4 and 8 are against the place's mini-bosses, and after each the deck can be cut and upgraded.
-## Twelve rounds hold a place, the last against its boss; a place held brings a star dinosaur to choose, and the run
-## goes on to the next place picked on the map, where the homeland is made afresh -- the stars, the gold, the deck and
-## the research points going on with it. How the battle will end is worked out and shown before it is fought, and again
-## with the offer, the good or the choice pointed at.
+## screen. It opens on the title (Menu) over a homeland at dusk; Esc pauses. A run lands in the rainforest. A round goes
+## in parts (GAME-DESIGN 26, Content.PHASES), each said as it comes. The start: the round's pay and the interest on the
+## gold kept come in, the shelf is stocked. The player's: the player buys -- buildings, raises (a nest's as a choice:
+## one more, or elite), gene affixes, a star dinosaur for a pen (GAME-DESIGN 24) -- or keeps what is bought for later
+## with the hoarder, puts down what was kept, sells a star, watching the forecast change; then is done. The making, by
+## itself: the buildings and the stars bring in biomass, research points and gold, and the nests hatch this round's
+## young -- each out of its nest to stand in the yard as it will stand in battle. The eating, by itself: the stars and
+## the young eat. The battle, by itself: the young go out and fight, and are gone with it; won, gold and research
+## points; lost, the homeland is hurt. Then one of three cards for the deck the shop draws from -- or gold instead.
+## Rounds 4 and 8 are against the place's mini-bosses, and after each the deck can be cut and upgraded. Twelve rounds
+## hold a place, the last against its boss; then the run goes on to the next place picked on the map, where the
+## homeland is made afresh, carrying nothing. How the battle will end is worked out and shown before it is fought, and
+## again with the offer, the good or the choice pointed at.
 ##
 ## Every player action goes through act(what, data). Coloured blocks stand in for what will be.
 
 signal departed
+signal player_done                # the player's part of the round over ("fight")
+signal fight_over                 # the battle fought to its end
 
 enum Phase { BUSY, PLAN, FIGHT, MOVE, DONE, TITLE }
 
@@ -73,6 +75,11 @@ var _acc := 0.0
 var _fighting := false
 var _shake := 0.0
 var _version := 0                 # goes up whenever the homeland changes
+var part := ""                    # the part of the round it is in (Content.PHASES); "" between rounds
+var _ahead: Home                  # the homeland as this round's making and eating will leave it (ahead), as of _ahead_at
+var _ahead_at := -1
+var _fits := {}                   # where each good can go (fits_of), as of _fits_at
+var _fits_at := -1
 var _forecast_at := -1
 var _preview_key := ""
 var _preview := {}
@@ -143,7 +150,7 @@ func _process(delta: float) -> void:
 			fight_view.show_events(fight.step())
 		if fight.over:
 			_fighting = false
-			_after_fight()
+			fight_over.emit()
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 1.8)
 	_place_camera()
@@ -214,7 +221,7 @@ func act(what: String, data := {}) -> bool:
 			refresh()
 			return true
 		"fight":
-			_fight()
+			player_done.emit()
 			return true
 	return false
 
@@ -281,7 +288,6 @@ func _changed(ev: Array) -> void:
 				home_view.refresh_pens()
 				tags.float_text(HomeView.PEN_AT[0] + Vector3(0, 3.2, 4.0), Lang.t("%s走了，+%d 金") % [Lang.t(Content.STARS[e.id].name),
 					e.gold], Color(1.0, 0.8, 0.4), 24)
-	home_view.sync_army(home.army())
 	refresh()
 
 
@@ -339,7 +345,7 @@ func _click() -> void:
 	var at: Variant = _aim(Content.offer(good))
 	if at == null:
 		return
-	var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
+	var fits := fits_of(held) if held >= 0 else fits_of(held_k, true)
 	var c := Content.offer(good)
 	var raise_nest: bool = c.type == "raise" and at in fits and Content.is_nest(home.buildings[at].kind)
 	var plus_nest: bool = c.type == "build" and c.plus and Content.is_nest(c.builds) and at in fits
@@ -425,7 +431,7 @@ func _move() -> void:
 	world.dress(run.place)
 	home_view.lay_ground()
 	home_view.rebuild()
-	home_view.sync_army(home.army(), false)
+	home_view.refresh_pens()
 	_version += 1
 	refresh()
 	await hud.fade(false)
@@ -464,7 +470,7 @@ func refresh() -> void:
 						h.place(p.slot, p.at, choice))
 		elif not good.is_empty():
 			var c := Content.offer(good)
-			var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
+			var fits := fits_of(held) if held >= 0 else fits_of(held_k, true)
 			for t in fits:
 				if t is Vector2i:
 					tints[t] = SWAP_TINT if c.type == "build" and home.buildings.has(t) else OK_TINT
@@ -501,9 +507,9 @@ func _try(key: String, what: Callable) -> void:
 	effects = _effects
 
 
-## How this round's battle ends if fought by `h` -- the same rules, so the same end.
+## How this round's battle ends if fought by `h` once its round is made and eaten -- the same rules, so the same end.
 func _work_out(h: Home) -> Dictionary:
-	var f := Fight.make(h.army(), run.wave(), run.power())
+	var f := Fight.make(h.settled().fighters, run.wave(), run.power())
 	var total := f.alive("ours").size()
 	f.run()
 	return {"result": f.result, "left": f.alive("ours").size(), "total": total,
@@ -564,9 +570,10 @@ func _changes(a: Home, b: Home) -> Dictionary:
 	return out
 
 
+## How many each nest of `h` will send to fight this round.
 func _made(h: Home) -> Dictionary:
 	var out := {}
-	for u in h.army():
+	for u in h.settled().fighters:
 		out[u.nest] = int(out.get(u.nest, 0)) + 1
 	return out
 
@@ -578,7 +585,7 @@ func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
 	if not pending.is_empty():
-		return Lang.t("多孵 1 只，还是变精英？")
+		return Lang.t("多孵 1 只，还是变精英？") if count_fits() else Lang.t("人口不够多孵，只能变精英")
 	var good := _taken()
 	if good.is_empty():
 		return ""
@@ -586,8 +593,8 @@ func hint() -> String:
 	var p: Vector2i = hover.plot
 	var swap: bool = c.target == "tile" and p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds
 	if held_k >= 0:
-		if home.stash_targets(held_k).is_empty():
-			return Lang.t("现在没有地方放得下")
+		if fits_of(held_k, true).is_empty():
+			return Lang.t("人口不够") if home.pop_blocks(good) else Lang.t("现在没有地方放得下")
 		if swap:
 			return Lang.t("换掉%s（退 %d 金）") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name),
 				int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
@@ -596,7 +603,9 @@ func hint() -> String:
 		return Lang.t("研究点数不够")
 	if c.type != "raise" and home.gold < home.price(held):
 		return Lang.t("金币不够")
-	if home.targets(held).is_empty():
+	if fits_of(held).is_empty():
+		if home.pop_blocks(good):
+			return Lang.t("人口不够")
 		return Lang.t("现在没有地方用得上") if c.type != "raise" else Lang.t("金币不够")
 	if swap:
 		return Lang.t("换掉%s（退 %d 金）") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name),
@@ -615,7 +624,7 @@ func describe() -> String:
 	if pen >= 0:
 		return _pen_text(pen)
 	if hover.unit != "":
-		for u in home.army():
+		for u in home.brood:
 			if u.id == hover.unit:
 				return _unit_text(u)
 		return ""
@@ -746,7 +755,7 @@ static func _num(x: float) -> String:
 ## What the schools do for this round's army as a whole, said plainly (for the HUD): "" when nothing.
 func bonuses() -> String:
 	var parts: Array = []
-	var n := home.army().size()
+	var n := ahead().fighters.size()
 	var more := 0
 	for p in home.buildings:
 		if home.buildings[p].kind == "horde_totem":
@@ -777,15 +786,39 @@ func bonuses() -> String:
 
 # -- The run ----------------------------------------------------------------------------------------------------
 
-## The run's start: the ark chosen (when it has not been), the place it lands in, the first round.
+## The run's start: the place it lands in, then its rounds.
 func _begin() -> void:
 	refresh()
 	await hud.arrive(run.place)
-	_start_round()
+	_play()
 
 
+## The run's rounds, one after another, each its parts in turn (Content.PHASES; more parts can come between them); after
+## the battle, what it brings -- a card for the deck, the workshop after a mini-boss, the next place after a boss -- till
+## the run is over.
+func _play() -> void:
+	while true:
+		for part in Content.PHASES:
+			match part:
+				"start":
+					await _start_round()
+				"play":
+					await _player_part()
+				"make":
+					await _make()
+				"eat":
+					await _eat()
+				"fight":
+					await _fight()
+		if not await _after_fight():
+			return
+
+
+## The start of a round (GAME-DESIGN 26): its number said, the round's pay and the interest on the gold kept said over
+## the homeland, the shelf stocked.
 func _start_round() -> void:
 	phase = Phase.BUSY
+	part = "start"
 	held = -1
 	held_k = -1
 	pending = {}
@@ -793,7 +826,7 @@ func _start_round() -> void:
 	refresh()
 	var sub := ""
 	if run.round == 1 and run.level > 0:
-		sub = Lang.t("新地方，家园重新建")
+		sub = Lang.t("新地方，家园从头建")
 	elif run.round >= run.rounds():
 		sub = Lang.t("首领来了")
 	elif run.round in Content.MINI_ROUNDS:
@@ -802,17 +835,106 @@ func _start_round() -> void:
 		sub = Lang.t("大波要来了")
 	hud.banner(Lang.t("第 %d 轮") % run.round, sub)
 	await get_tree().create_timer(0.6).timeout
-	var ev := run.start_round()
-	var said_at := Vector3(0, 2.5, HomeView.YARD_Z - 2.0)
-	for e in ev:
+	for e in run.start_round():
+		if e.t == "pay":
+			var said: Array = [Lang.t("金币 +%d") % e.gold]
+			if int(e.interest) > 0:
+				said.append(Lang.t("利息 +%d") % e.interest)
+			tags.float_text(Vector3(0, 2.5, HomeView.YARD_Z - 2.0), "  ".join(said), Color(1.0, 0.85, 0.45), 22)
+	_version += 1
+	refresh()
+
+
+## The player's part (GAME-DESIGN 26): the shelf dealt; buying and building till the player is done ("fight").
+func _player_part() -> void:
+	phase = Phase.PLAN
+	part = "play"
+	held = -1
+	held_k = -1
+	hud.deal(home.shelf)
+	refresh()
+	await player_done
+
+
+## The homeland as this round's making and eating will leave it (Home.settled) while the player is at it: the young
+## that will fight, what the stars will have eaten -- for the forecast and what is said of the army. Else the homeland
+## itself.
+func ahead() -> Home:
+	if phase != Phase.PLAN:
+		return home
+	if _ahead_at != _version:
+		_ahead = home.settled()
+		_ahead_at = _version
+	return _ahead
+
+
+## This round's young: in the player's part, those that will fight (ahead); after the making, those hatched, till the
+## eating has fed them; then those fed.
+func army_now() -> Array:
+	if phase == Phase.PLAN:
+		return ahead().fighters
+	return home.fighters if not home.fighters.is_empty() else home.brood
+
+
+## Where shelf[i] -- or, `kept`, stash[i] -- can go (Home.targets, stash_targets), worked out once while the homeland
+## stays as it is.
+func fits_of(i: int, kept := false) -> Array:
+	if _fits_at != _version:
+		_fits = {}
+		_fits_at = _version
+	var key := ("k%d" if kept else "s%d") % i
+	if not _fits.has(key):
+		_fits[key] = home.stash_targets(i) if kept else home.targets(i)
+	return _fits[key]
+
+
+## Whether the nest's raise waiting for its choice can hatch one more: the population allowing.
+func count_fits() -> bool:
+	if pending.is_empty():
+		return true
+	var oi: Variant = home.shelf[pending.slot] if pending.from == "buy" else home.stash[pending.slot]
+	return oi != null and home.pop_fits(oi, pending.at, "count")
+
+
+## The making (GAME-DESIGN 26): what the buildings and the stars bring in, said over the homeland; then the nests hatch
+## this round's young, each out of its nest to its place in the yard.
+func _make() -> void:
+	phase = Phase.BUSY
+	part = "make"
+	held = -1
+	held_k = -1
+	pending = {}
+	aimed = ""
+	hud.stow()
+	refresh()
+	hud.banner(Lang.t("生产"))
+	await get_tree().create_timer(0.5).timeout
+	for e in run.make():
 		match e.t:
 			"income":
-				var said: Array = [Lang.t("金币 +%d") % e.gold]
-				if int(e.biomass) > 0:
-					said.append(Lang.t("生物质 +%d") % e.biomass)
+				var said: Array = [Lang.t("生物质 %d") % e.biomass]
 				if int(e.genes) > 0:
 					said.append(Lang.t("研究点数 +%d") % e.genes)
-				tags.float_text(said_at, "  ".join(said), Color(0.6, 1.0, 0.8), 22)
+				if int(e.gold) > 0:
+					said.append(Lang.t("金币 +%d") % e.gold)
+				tags.float_text(Vector3(0, 2.5, HomeView.YARD_Z - 2.0), "  ".join(said), Color(0.6, 1.0, 0.8), 22)
+			"mended":
+				tags.float_text(Vector3(0, 3.0, 0), Lang.t("铁背：家园 +%d") % e.amount, Color(0.5, 1.0, 0.5), 24)
+	_version += 1
+	refresh()
+	home_view.sync_army(home.brood)
+	await get_tree().create_timer(1.2).timeout
+
+
+## The eating (GAME-DESIGN 26): what the stars and the young eat, said over the homeland; any young not fed go back
+## into their nests.
+func _eat() -> void:
+	part = "eat"
+	refresh()
+	hud.banner(Lang.t("消耗"))
+	await get_tree().create_timer(0.5).timeout
+	for e in run.eat():
+		match e.t:
 			"fed":
 				var fed_at := HomeView.PEN_AT[2] + Vector3(0, 3.0, 0)
 				if int(e.ate) > 0:
@@ -821,22 +943,23 @@ func _start_round() -> void:
 					var names: Array = e.hungry.map(func(id: String) -> String: return Lang.t(Content.STARS[id].name))
 					tags.float_text(fed_at + Vector3(0, 1.4, 0), Lang.t("%s没吃饱，这一轮不干活") % Lang.t("、").join(names),
 						Color(1.0, 0.6, 0.45), 20)
+			"young":
+				var said := Lang.t("兵吃了 %d 生物质") % e.ate
+				if int(e.behind) > 0:
+					said += Lang.t("，%d 只没吃上，回巢") % e.behind
+				tags.float_text(Vector3(0, 2.5, HomeView.YARD_Z - 2.0), said, Color(0.7, 1.0, 0.6), 20)
 			"ash":
 				tags.float_text(Vector3(0, 4.0, 0), Lang.t("镰刀：家园 −%d") % e.amount, Color(1.0, 0.55, 0.4), 24)
-			"mended":
-				tags.float_text(Vector3(0, 3.0, 0), Lang.t("铁背：家园 +%d") % e.amount, Color(0.5, 1.0, 0.5), 24)
 	_version += 1
-	home_view.sync_army(home.army())
-	await get_tree().create_timer(0.5).timeout
-	phase = Phase.PLAN
-	held = -1
-	held_k = -1
-	hud.deal(home.shelf)
 	refresh()
+	home_view.sync_army(home.fighters)
+	await get_tree().create_timer(0.9).timeout
 
 
+## The battle (GAME-DESIGN 26): the young fed go out and fight, till it is fought to its end.
 func _fight() -> void:
 	phase = Phase.FIGHT
+	part = "fight"
 	held = -1
 	held_k = -1
 	refresh()
@@ -852,9 +975,13 @@ func _fight() -> void:
 	await get_tree().create_timer(0.7).timeout
 	_acc = 0.0
 	_fighting = true
+	await fight_over
 
 
-func _after_fight() -> void:
+## After the battle, its part of the round still: what it brought (won, gold and research points; lost, the homeland
+## hurt; what the scavengers bring back). Then the run's end, or a card for the deck, the workshop after a mini-boss,
+## the next place after a boss. Whether the run goes on.
+func _after_fight() -> bool:
 	var result := fight.result
 	fight_view.show_loot()
 	await get_tree().create_timer(0.7).timeout
@@ -862,8 +989,6 @@ func _after_fight() -> void:
 	var also: Array = []
 	if int(out.scavenged) > 0:
 		also.append(Lang.t("拾荒 +%d 金") % out.scavenged)
-	if int(out.interest) > 0:
-		also.append(Lang.t("利息 +%d") % out.interest)
 	match result:
 		"won":
 			var won: Array = [Lang.t("金币 +%d") % out.gold]
@@ -891,7 +1016,7 @@ func _after_fight() -> void:
 		var again: Variant = await hud.choose("家园被毁了……", Lang.t("撑到了%s第 %d 轮") % [Lang.t(Content.LEVELS[run.place].name), run.round],
 			[], ["再来一局", "回主菜单"])
 		_new_run(again == "回主菜单")
-		return
+		return false
 	if out.level_won and run.last_level():
 		phase = Phase.DONE
 		refresh()
@@ -899,13 +1024,15 @@ func _after_fight() -> void:
 		var again: Variant = await hud.choose("全部守住了！", Lang.t("%s都撑过来了，家园还剩 %d 血") % [Lang.t("、").join(names), home.hp], [],
 			["再玩一遍", "回主菜单"])
 		_new_run(again == "回主菜单")
-		return
+		return false
+	part = ""
+	refresh()
 	await _reward()
 	if run.was_mini():
 		await _workshop()
 	if out.level_won:
 		await _level_end()
-	_start_round()
+	return true
 
 
 ## After each round: one of three cards into the deck (the shop will offer it, at its price) -- or gold instead.
@@ -936,18 +1063,9 @@ func _workshop() -> void:
 		refresh()
 
 
-## A place held: a star dinosaur to choose (and, the pens full, one to let go for it), then the next place picked on
-## the map and gone to -- the homeland made afresh there -- and its painting and ground.
+## A place held: the next place picked on the map and gone to -- the homeland made afresh there, carrying nothing --
+## and its painting and ground.
 func _level_end() -> void:
-	var id := await hud.choose_star(run.star_choice())
-	if id != "" and home.stars.size() >= Content.PENS:
-		var pen := await hud.release_star(id)
-		if pen >= 0:
-			home.sell_star(pen)
-		else:
-			id = ""
-	if id != "":
-		_changed(home.take_star(id))
 	refresh()
 	going = await hud.choose_place(run)
 	await _move()

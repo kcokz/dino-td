@@ -3,12 +3,14 @@ extends RefCounted
 ## The homeland (GAME-DESIGN 17-24): wherever the ark has landed, a grid of plots -- the top rows the battle line,
 ## for nests only, where each nest's units will stand in battle; the rows behind for everything else, special ground
 ## among them -- with the gold and the other resources, the shop's shelf, the star dinosaurs in their pens (and the
-## goods the hoarder keeps for later, the stash), and the homeland's own hit points. One round here: the buildings
-## bring in biomass, the stars eat, gold and genes come in, and the shelf is stocked (start_round); the player buys --
-## buildings, raises, affixes, a star -- puts goods down from the stash, takes a kind out of the shop; then the nests
-## make this round's army, paying biomass (produce), and it goes out to fight (Fight). The army lives for that battle
-## only. Gold kept to the round's end earns interest. When a place is held, the ark moves on (land): the buildings stay
-## behind but for those it carries, which it sets down in the new place; the stars go with it.
+## goods the hoarder keeps for later, the stash), and the homeland's own hit points. A round here goes in parts
+## (GAME-DESIGN 26, Content.PHASES). The start (start_round): the round's pay and the interest on the gold kept come in,
+## the shelf is stocked. The player's: the player buys -- buildings, raises, affixes, a star -- puts goods down from the
+## stash, takes a kind out of the shop. The making (make): the buildings and the stars bring in the round's biomass,
+## research points and gold, and the nests hatch the round's young (brood). The eating (eat): the stars eat, the young
+## eat -- those fed go out to fight (fighters). The battle (Fight): the young live for it only. The biomass is not kept:
+## it feeds the population (人口, pop_cap), and no card is played that would take more than it feeds. When a place is
+## held, the homeland is made afresh in the next, carrying nothing (fresh).
 ##
 ## Neighbours are the four plots up, down, left and right; a column, the plots one above another. Plain data and
 ## rules, nothing on screen: the same rules for the game and for its tests.
@@ -27,7 +29,8 @@ extends RefCounted
 
 const COLS := 6
 const ROWS := 4
-const INCOME := 5                 # gold each round
+const INCOME := 5                 # gold each round, at its start
+const ALL := 1 << 20              # biomass enough for every young (army)
 
 const HP := 30
 const NOWHERE := Vector2i(-1, -1)
@@ -41,7 +44,7 @@ var region := 0                   # the place (Content.LEVELS) the ark has lande
 var buildings := {}               # Vector2i -> building
 var terrain := {}                 # Vector2i -> special ground (Content.TERRAIN)
 var gold := 0
-var biomass := 0
+var biomass := 0                  # this round's, from its making to its eating; what is left goes to waste
 var genes := 0                    # research points (研究点数): for affixes and upgrading cards
 var hp := HP
 var stars: Array = []             # the star dinosaurs, a pen each, in order: {id, grow}
@@ -52,24 +55,41 @@ var cuts := 0                     # cards cut from the deck so far (each costs m
 var shelf: Array = []             # offers, or null where bought
 var stash: Array = []             # goods kept for later (by the hoarder)
 var rerolls := 0                  # times the shelf was stocked again this round
+var brood: Array = []             # this round's young, hatched in its making (make), till its battle
+var fighters: Array = []          # those of them fed in its eating (eat), to fight
 var next_id := 1
 
 
+## The homeland at the run's start, in the rainforest -- or, with no `rng`, nothing yet (clone fills it in).
 func _init(rng: RandomNumberGenerator) -> void:
-	gold = int(Content.FIRST_STOCK.gold)
-	biomass = int(Content.FIRST_STOCK.biomass)
-	genes = int(Content.FIRST_STOCK.genes)
+	if rng != null:
+		fresh(0, rng)
+
+
+## The homeland made afresh in place `r`, carrying nothing from the last (the player, 2026-10-21: "什么都不带"): no
+## gold, research points or stars, nothing kept, the deck as it is at a run's start, the hit points whole.
+func fresh(r: int, rng: RandomNumberGenerator) -> void:
+	gold = 0
+	genes = 0
+	stars = []
+	hungry = []
+	stash = []
+	star_offer = ""
 	deck = Content.DECK.map(func(id: String) -> Dictionary: return {"id": id, "plus": false})
-	land(0, rng, Content.LANDING)
+	cuts = 0
+	hp = HP
+	land(r, rng, Content.LANDING)
 
 
-## The homeland made in place `r`: the old buildings are left behind, the special ground of the new place lies about
-## behind the battle line, and `kit` ([kind, level] each) is set down -- nests in the middle of the battle line, the
-## rest just behind it. The stars come along, and what the hoarder keeps.
+## The homeland laid out in place `r`: no buildings, the special ground of the place lying about behind the battle
+## line, and `kit` ([kind, level] each) set down -- nests in the middle of the battle line, the rest just behind it.
 func land(r: int, rng: RandomNumberGenerator, kit: Array) -> void:
 	region = r
 	buildings.clear()
 	terrain.clear()
+	biomass = 0
+	brood = []
+	fighters = []
 	var plots := _plots_all().filter(func(p: Vector2i) -> bool: return not front(p) and not p in LANDING_BACK.slice(0, 3))
 	shuffle(plots, rng)
 	hungry = []
@@ -107,35 +127,108 @@ func _set_level(p: Vector2i, lv: int) -> void:
 
 # -- A round ----------------------------------------------------------------------------------------------
 
-## The buildings bring in biomass; the stars eat (feed) and grow; gold and genes come in -- what the fed stars bring
-## with them; the sickle costs the homeland a hit point; the shield mends; the shelf is stocked afresh from the deck, a
-## star after it.
+## The start of a round (GAME-DESIGN 26): the round's pay (INCOME) comes in, and the interest on the gold kept; the
+## shelf is stocked afresh from the deck, a star after it; the restocks count from none, no young are out yet. Its
+## events: pay {gold, interest}.
 func start_round(rng: RandomNumberGenerator, level: int) -> Array:
+	var more := interest()
+	gold += INCOME + more
+	rerolls = 0
+	brood = []
+	fighters = []
+	stock(rng, level)
+	return [{"t": "pay", "gold": INCOME, "interest": more}]
+
+
+## The making, the player done (GAME-DESIGN 26): the round's biomass, made afresh (what was left of the last is gone);
+## research points and gold come in -- the buildings', and the stars' that ate last time; the stars that grow grow; the
+## shield mends; and the nests hatch this round's young, every one they make (brood). Its events: income {gold,
+## biomass, genes}, mended {amount}.
+func make() -> Array:
 	var ev: Array = []
-	var b := income_biomass()
-	biomass += b
-	ev.append_array(feed())
+	biomass = income_biomass()
+	var n := income_genes()
+	var g := income_gold()
+	genes += n
+	gold += g
+	ev.append({"t": "income", "gold": g, "biomass": biomass, "genes": n})
 	for k in stars.size():
 		var info: Dictionary = Content.STARS[stars[k].id]
 		if not k in hungry and info.has("grow_round"):
 			stars[k].grow = mini(int(info.grow_max), int(stars[k].grow) + int(info.grow_round))
-	var g := income_gold()
-	var n := income_genes()
-	gold += g
-	genes += n
-	ev.append({"t": "income", "gold": g, "biomass": b, "genes": n})
+	if _star("mend") > 0 and hp < hp_max():
+		var before := hp
+		hp = mini(hp_max(), hp + _star("mend"))
+		ev.append({"t": "mended", "amount": hp - before})
+	brood = army(ALL)
+	return ev
+
+
+## The eating, after the making (GAME-DESIGN 26): the stars eat first, pen by pen (feed); then the young, nest by nest,
+## each what it eats. The population kept within what the biomass feeds (pop_room), there is enough for all; should
+## there not be, those it does not reach stay behind. The young fed go out to fight (fighters). The sickle costs the
+## homeland a hit point. Its events: fed {ate, hungry}, young {ate, behind}, ash {amount}.
+func eat() -> Array:
+	var ev := feed()
+	fighters = army()
+	var ate := food_of(fighters)
+	biomass -= ate
+	ev.append({"t": "young", "ate": ate, "behind": maxi(0, brood.size() - fighters.size())})
 	var ash := _star("ash")
 	if ash > 0:
 		var before := hp
 		hp = maxi(1, hp - ash)
 		ev.append({"t": "ash", "amount": before - hp})
-	if _star("mend") > 0 and hp < hp_max():
-		var before := hp
-		hp = mini(hp_max(), hp + _star("mend"))
-		ev.append({"t": "mended", "amount": hp - before})
-	rerolls = 0
-	stock(rng, level)
 	return ev
+
+
+## The homeland as this round's making and eating will leave it (on a copy): what the player's part leads to -- the
+## young that will fight (fighters), which stars will have eaten.
+func settled() -> Home:
+	var h := clone()
+	h.make()
+	h.eat()
+	return h
+
+
+# -- The population -------------------------------------------------------------------------------------------------
+
+## The population (人口, GAME-DESIGN 26): as many as the biomass made a round feeds.
+func pop_cap() -> int:
+	return income_biomass()
+
+
+## The population taken: what every young the nests hatch a round eats (the free eat nothing), and every star.
+func pop_used() -> int:
+	var n := food_of(army(ALL))
+	for s in stars:
+		n += int(Content.STARS[s.id].eat)
+	return n
+
+
+## The population free: what more the biomass would feed (below 0: more is eaten than it feeds).
+func pop_room() -> int:
+	return pop_cap() - pop_used()
+
+
+## Whether `h` -- this homeland with something done to it -- keeps within what its biomass feeds, or no further over it
+## than this one is.
+func _pop_fits(h: Home) -> bool:
+	return h.pop_room() >= mini(0, pop_room())
+
+
+## Whether `oi` put on `at` as `choice` keeps the population within the biomass (_pop_fits).
+func pop_fits(oi: Dictionary, at: Variant, choice := "count") -> bool:
+	var h := clone()
+	h._apply(oi, at, choice)
+	return _pop_fits(h)
+
+
+## The population `oi` takes on `at` as `choice` (less than 0: it feeds more than it takes).
+func pop_need(oi: Dictionary, at: Variant, choice := "count") -> int:
+	var h := clone()
+	h._apply(oi, at, choice)
+	return pop_room() - h.pop_room()
 
 
 ## Stocks the shelf from the deck: buildings by how much land is free (more when there is much; one when there is
@@ -282,7 +375,7 @@ func reroll(rng: RandomNumberGenerator, level: int) -> bool:
 	return true
 
 
-## The interest on the gold kept to the round's end (Run.finish pays it).
+## The interest on the gold kept from the last round (paid at the round's start).
 func interest() -> int:
 	return mini(interest_max(), gold / Content.INTEREST_STEP)
 
@@ -294,12 +387,13 @@ func interest_max() -> int:
 # -- This round's army ------------------------------------------------------------------------------------
 
 ## This round's army as things stand: each nest, in reading order, makes its count (one more for a red nest swarming,
-## one more with the brood queen), each unit paid for in biomass as far as the biomass goes; the first nest one more
-## with the mother, eating nothing; the titan, with its star, in the middle of the front row; and then, with horde
-## totems, every unit hits harder for how many there are.
-func army() -> Array:
+## one more with the brood queen), each unit paid for in biomass as far as the biomass (or `food`, if given: ALL for as
+## many as the nests make) goes; the first nest one more with the mother, eating nothing; the titan, with its star, in
+## the middle of the front row; and then, with horde totems, every unit hits harder for how many there are.
+func army(food := -1) -> Array:
 	var out: Array = []
-	var food := biomass
+	if food < 0:
+		food = biomass
 	var first := true
 	for p in _plots():
 		var b: Dictionary = buildings[p]
@@ -348,18 +442,16 @@ func horde_bonus(n: int) -> int:
 
 ## The biomass this round's army eats.
 func army_food() -> int:
+	return food_of(army())
+
+
+## What `units` eat (the free nothing).
+static func food_of(units: Array) -> int:
 	var n := 0
-	for u in army():
+	for u in units:
 		if not u.free:
 			n += int(Content.UNITS[u.kind].food)
 	return n
-
-
-## The army goes out: its biomass is paid. The army.
-func produce() -> Array:
-	var out := army()
-	biomass -= army_food()
-	return out
 
 
 ## How many the nest at p makes a round (before biomass and the mother): one, one more for each raise chosen so, one
@@ -552,9 +644,10 @@ func store_price(i: int) -> int:
 	return price(i)
 
 
-## Where a good can go, whoever pays: a building on a plot of its part of the homeland (a nest on the battle line,
-## anything else behind it); a raise on a building below the top level; an affix on a nest with a place for it.
-func _fits(oi: Dictionary) -> Array:
+## Where a good could go, whoever pays, the population aside: a building on a plot of its part of the homeland (a
+## nest on the battle line, anything else behind it); a raise on a building below the top level; an affix on a nest
+## with a place for it.
+func _places(oi: Dictionary) -> Array:
 	var o := Content.offer(oi)
 	match o.target:
 		"tile":
@@ -570,11 +663,28 @@ func _fits(oi: Dictionary) -> Array:
 	return []
 
 
+## Where a good can go: where it could (_places), the population kept within what the biomass feeds, done its
+## least-eating way -- a nest's raise as elite, which hatches no more (so a raise always can); a building put on bare
+## ground, not a nest, takes none.
+func _fits(oi: Dictionary) -> Array:
+	var o := Content.offer(oi)
+	var out := _places(oi)
+	if o.type == "raise":
+		return out
+	return out.filter(func(p: Vector2i) -> bool:
+		return (o.type == "build" and not Content.is_nest(o.builds) and not buildings.has(p)) or pop_fits(oi, p, "elite"))
+
+
+## Whether only the population keeps `oi` from going anywhere.
+func pop_blocks(oi: Dictionary) -> bool:
+	return _fits(oi).is_empty() and not _places(oi).is_empty()
+
+
 ## Buys shelf[i] for plot `at` -- a nest's raise as `choice`, "count" or "elite". Its events; [] if it could not be
 ## bought.
 func buy(i: int, at: Variant, choice := "count") -> Array:
 	var fits := targets(i)
-	if fits.is_empty() or not at in fits:
+	if fits.is_empty() or not at in fits or not pop_fits(shelf[i], at, choice):
 		return []
 	var o := Content.offer(shelf[i])
 	_pay(i, at)
@@ -597,7 +707,7 @@ func store(i: int) -> Array:
 ## Puts stash[k] down at `at` (a nest's raise as `choice`). Its events; [] if it could not go there.
 func place(k: int, at: Variant, choice := "count") -> Array:
 	var fits := stash_targets(k)
-	if fits.is_empty() or not at in fits:
+	if fits.is_empty() or not at in fits or not pop_fits(stash[k], at, choice):
 		return []
 	var oi: Dictionary = stash[k]
 	var o := Content.offer(oi)
@@ -704,7 +814,32 @@ func diet_count(diet: String) -> int:
 
 ## Whether the star on offer can be bought now: there is one, the gold for it, and a pen free.
 func can_buy_star() -> bool:
-	return star_offer != "" and stars.size() < Content.PENS and gold >= int(Content.STARS[star_offer].price)
+	return star_offer != "" and stars.size() < Content.PENS and gold >= int(Content.STARS[star_offer].price) \
+		and star_fits(star_offer)
+
+
+## Whether star `id` in a pen keeps the population within what the biomass feeds (it eats, and some hatch more).
+func star_fits(id: String) -> bool:
+	var h := clone()
+	h.take_star(id)
+	return _pop_fits(h)
+
+
+## The population star `id` takes, in a pen here.
+func star_need(id: String) -> int:
+	var h := clone()
+	h.take_star(id)
+	return pop_room() - h.pop_room()
+
+
+## Whether the star in pen k can be sold: not when the biomass it brings in feeds what eats.
+func can_sell_star(k: int) -> bool:
+	if k < 0 or k >= stars.size():
+		return false
+	var h := clone()
+	h.stars.remove_at(k)
+	h.hungry = []
+	return _pop_fits(h)
 
 
 ## Buys the star on offer into the next pen. Its events; [] if it could not be.
@@ -734,7 +869,7 @@ func sell_price(k: int) -> int:
 ## The star in pen k sold: its pen free, the pens after it closing up -- and with the hoarder, what it kept gone. Its
 ## events.
 func sell_star(k: int) -> Array:
-	if k < 0 or k >= stars.size():
+	if not can_sell_star(k):
 		return []
 	var id: String = stars[k].id
 	var back := sell_price(k)
@@ -768,7 +903,7 @@ func _draw_star(rng: RandomNumberGenerator, level: int) -> String:
 
 ## A copy to try a good on (the forecast): the same homeland, nothing shared.
 func clone() -> Home:
-	var h := Home.new(RandomNumberGenerator.new())
+	var h: Home = get_script().new(null)
 	h.region = region
 	h.buildings = buildings.duplicate(true)
 	h.terrain = terrain.duplicate()
@@ -785,6 +920,8 @@ func clone() -> Home:
 	h.shelf = shelf.duplicate(true)
 	h.stash = stash.duplicate(true)
 	h.rerolls = rerolls
+	h.brood = brood.duplicate(true)
+	h.fighters = fighters.duplicate(true)
 	h.next_id = next_id
 	return h
 
@@ -805,8 +942,9 @@ func buildable(p: Vector2i) -> bool:
 
 # -- What the homeland comes to ---------------------------------------------------------------------------
 
+## The gold the buildings and the stars bring in a round, in its making (the round's pay, INCOME, comes at its start).
 func income_gold() -> int:
-	var n := INCOME + _star("gold")
+	var n := _star("gold")
 	for p in _working():
 		var g := int(_level(buildings[p]).get("gold", 0))
 		if g <= 0:

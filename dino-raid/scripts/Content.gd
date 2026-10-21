@@ -376,9 +376,51 @@ const RARITY_NAMES := ["普通", "少见", "稀有", "传说"]
 
 ## What every place's homeland starts with ([kind, level]): the same for everyone, the run's start too (the player,
 ## 2026-10-20: "先不选"); nothing else is carried from place to place but the stars, the gold, the deck and the
-## research points ("先不要带任何东西，往少了做").
+## research points ("先不要带任何东西，往少了做"); since 2026-10-21 nothing at all ("什么都不带", Home.fresh). Nothing is
+## in store at the start either: the biomass and the research points there are, are what the buildings make ("初始就是
+## 总的建筑生产的"); the gold, the round's pay at its start.
 const LANDING := [["nest_red", 1], ["pool", 1]]
-const FIRST_STOCK := {"gold": 0, "biomass": 3, "genes": 2}
+
+## A round's parts, in turn (GAME-DESIGN 26), from the start again after the battle; more can come between them (the
+## player, 2026-10-21: "阶段是可扩展的"). Each thing a card does happens in one of them (PHASE_OF).
+const PHASES := {
+	"start": {"name": "开始", "says": "每轮的 5 金和利息到手，商店进货"},
+	"play": {"name": "玩家", "says": "买、造、升级、贴词条"},
+	"make": {"name": "生产", "says": "建筑和明星恐龙产生物质、研究点数、金币，巢里孵出这一轮的兵"},
+	"eat": {"name": "消耗", "says": "明星恐龙和兵吃生物质"},
+	"fight": {"name": "战斗", "says": "兵出去打仗，打赢拿金币和研究点数"},
+}
+## The part of the round each thing a card does happens in ("每个牌的效果都要落在某个阶段"): the keys of the buildings'
+## levels and of the stars, a nest's gift (TRAITS), a nest's raise ("count" or "elite"), an affix ("affix").
+const PHASE_OF := {
+	# The start: the round's pay, the shop stocked.
+	"interest": "start", "shelf": "start",
+	# The player's part: what buying and putting down cost, what can be had and kept.
+	"rerolls": "play", "gene_off": "play", "free_affix": "play", "slots": "play", "mutant": "play", "keep": "play",
+	# The making: what comes in, the young hatched.
+	"biomass": "make", "genes": "make", "gold": "make", "pool": "make", "grow_round": "make", "mend": "make",
+	"count": "make", "first_free": "make", "titan": "make", "swarm": "make",
+	# The eating.
+	"eat": "eat", "ash": "eat",
+	# The battle, and what it brings.
+	"atk": "fight", "hp_pct": "fight", "front_armor": "fight", "red_atk": "fight", "haste": "fight", "reach": "fight",
+	"weak": "fight", "grow_boss": "fight", "win_gold": "fight", "hp": "fight", "elite": "fight", "per": "fight",
+	"ranged": "fight", "front": "fight", "guard": "fight", "cover": "fight", "alone": "fight", "care": "fight",
+	"scavenge": "fight", "affix": "fight",
+}
+## What a star's entry holds besides what it does.
+const STAR_FACTS := ["name", "kind", "diet", "rarity", "price", "model", "back", "belly", "says", "grow_max"]
+
+
+## The population an offer takes, as its card shows it (where it goes it can take more: Home.pop_need): a nest, what
+## the young it hatches at first eat; a culture pool, what it feeds, as less than nothing; anything else none.
+static func pop_of(o: Dictionary) -> int:
+	if o.type != "build":
+		return 0
+	var b: Dictionary = BUILDINGS[o.builds]
+	if b.has("nest"):
+		return int(UNITS[b.nest].food)
+	return -int(b.levels[1 if o.plus else 0].get("biomass", 0))
 
 ## A run (GAME-DESIGN 22): TIERS big levels of ROUNDS rounds each (half an hour or so). The first is always the
 ## rainforest; for each after it the map offers two places (Run.map), one to pick. A level's monsters are as strong as

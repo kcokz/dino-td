@@ -57,7 +57,7 @@ func _home(cam: Camera3D) -> void:
 	var home: Home = game.home
 	var hv: HomeView = game.home_view
 	var made := {}
-	for u in home.army():
+	for u in game.ahead().fighters:
 		made[u.nest] = int(made.get(u.nest, 0)) + 1
 	var effects: Dictionary = game.effects
 	for p in home.buildings:
@@ -67,13 +67,13 @@ func _home(cam: Camera3D) -> void:
 			continue
 		var at := cam.unproject_position(at3)
 		var y := -10.0
-		# Over a nest, only what wants seeing to: that it hatches fewer than it would (biomass short). How many it
+		# Over a nest, only what wants seeing to: that some of its young will not eat (biomass short). How many it
 		# hatches, its level, are told when it is pointed at.
-		if Content.is_nest(b.kind):
+		if Content.is_nest(b.kind) and game.phase == Game.Phase.PLAN:
 			var want := home.count(p)
 			var got := int(made.get(p, 0))
 			if got < want:
-				_text(at + Vector2(0, y), Lang.t("少孵 %d") % (want - got), BAD, 14, Fonts.serif(900))
+				_text(at + Vector2(0, y), Lang.t("饿着 %d") % (want - got), BAD, 14, Fonts.serif(900))
 				y -= 16.0
 		for line in effects.get(p, []):
 			var s: String = line

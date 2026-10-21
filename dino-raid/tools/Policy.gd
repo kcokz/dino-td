@@ -206,25 +206,6 @@ static func best_place(run: Run) -> int:
 	return int(run.next_places()[0])
 
 
-## The star to take after a boss, of `ids`, that does the most good -- with the pens full, the one to let go for it
-## (or none taken, when letting any go would do less good): {id, release} ("" and -1 for none).
-static func best_star(run: Run, h: Home, ids: Array) -> Dictionary:
-	var best := {"id": "", "release": -1}
-	var best_score := score(run, h)
-	for id in ids:
-		var lets: Array = [-1] if h.stars.size() < Content.PENS else range(h.stars.size())
-		for k in lets:
-			var t := h.clone()
-			if k >= 0:
-				t.sell_star(k)
-			t.take_star(id)
-			var s := score(run, t)
-			if s > best_score:
-				best_score = s
-				best = {"id": id, "release": k}
-	return best
-
-
 ## How good a homeland looks: this round's battle (and what scavengers bring back); the army its nests can make, as far
 ## as what comes in feeds it; what comes in and what is kept -- for the gold school, saving and the most interest count
 ## more; for any school, its own buildings (up to a few levels of them); for the genes school, nests halfway to a new
@@ -242,7 +223,7 @@ static func score(run: Run, h: Home, school := "") -> float:
 	var fed := minf(1.0, (float(h.income_biomass() - h.star_food()) + 1.0) / maxf(1.0, float(food)))
 	s += strength * (0.4 + 0.6 * fed) * 1.5
 	s += 10.0 * h.income_gold() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
-	s += 0.5 * h.biomass + 1.0 * h.genes + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max()
+	s += 1.0 * h.genes + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max() + 2.0 * mini(h.pop_room(), 4)
 	if school == "gold":
 		s += 3.0 * h.interest_max() + 2.0 * h.gold
 	if school != "":
@@ -267,6 +248,6 @@ static func _halfway(h: Home) -> int:
 
 
 static func _battle(run: Run, h: Home) -> Dictionary:
-	var f := Fight.make(h.army(), run.wave(), run.power())
+	var f := Fight.make(h.settled().fighters, run.wave(), run.power())
 	f.run()
 	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm()), "loot": f.scavenged()}

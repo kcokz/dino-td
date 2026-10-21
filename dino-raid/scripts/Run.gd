@@ -1,9 +1,9 @@
 class_name Run
 extends RefCounted
-## A run (GAME-DESIGN 17, 24): the dinosaur park's homeland, through the places it goes to -- each a big level of a
-## few rounds (buy and build, then this round's army fights a wave), the last against the place's boss. A place held:
-## a star dinosaur chosen, then on to the next place, where the homeland is made afresh -- only the stars, the gold,
-## the deck and the research points going on. Over when the homeland's hit points are gone.
+## A run (GAME-DESIGN 17, 24, 26): the dinosaur park's homeland, through the places it goes to -- each a big level of
+## a few rounds (Content.PHASES: the round's pay, buying and building, the making, the eating, the battle), the last
+## against the place's boss. A place held, on to the next, where the homeland is made afresh carrying nothing. Over
+## when the homeland's hit points are gone.
 
 const LOOT := 1                   # a battle won: this many research points; a big round's (the bosses') double
 
@@ -57,33 +57,44 @@ func big(ahead := 0) -> bool:
 	return round + ahead in Content.BIG_ROUNDS
 
 
+## The start of the round (Home.start_round): the round's pay and the interest, the shelf stocked.
 func start_round() -> Array:
 	return home.start_round(rng, level)
+
+
+## The making, the player done (Home.make): what comes in, the young hatched.
+func make() -> Array:
+	return home.make()
+
+
+## The eating (Home.eat): the stars and the young fed, those fed to fight.
+func eat() -> Array:
+	return home.eat()
 
 
 func reroll() -> bool:
 	return home.reroll(rng, level)
 
 
-## The army goes out (its biomass paid) against this round's wave.
+## The young fed go out against this round's wave.
 func fight() -> Fight:
-	return Fight.make(home.produce(), wave(), power())
+	return Fight.make(home.fighters, wave(), power())
 
 
-## The strength of the army the homeland would send now (Content.strength).
+## The strength of the young fed this round, to fight (Content.strength).
 func strength() -> float:
 	var n := 0.0
-	for u in home.army():
+	for u in home.fighters:
 		n += Content.strength(Content.unit_stats(u))
 	return n
 
 
-## After the battle: won, gold and research points found (the bounty hunter's gold too), a mini-boss or boss beaten
-## growing the stars that grow so; lost, the homeland harmed; either way what the scavengers bring back, and the
-## interest on the gold kept. {result, fallen, took, research, gold, scavenged, interest, level_won}
+## After the battle, still its part of the round: won, gold and research points found (the bounty hunter's gold too),
+## a mini-boss or boss beaten growing the stars that grow so; lost, the homeland harmed; either way what the
+## scavengers bring back. {result, fallen, took, research, gold, scavenged, level_won}
 func finish(f: Fight) -> Dictionary:
 	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "research": 0, "gold": 0, "scavenged": 0,
-		"interest": 0, "level_won": false}
+		"level_won": false}
 	if f.result == "won":
 		var n := LOOT * (2 if big() or round >= rounds() else 1)
 		out.research = n
@@ -96,8 +107,6 @@ func finish(f: Fight) -> Dictionary:
 		out.took = home.harmed(f.harm())
 	out.scavenged = f.scavenged()
 	home.gold += int(out.scavenged)
-	out.interest = home.interest()
-	home.gold += int(out.interest)
 	if home.hp <= 0:
 		over = true
 	elif round >= rounds():
@@ -150,24 +159,11 @@ func was_mini() -> bool:
 	return round - 1 in Content.MINI_ROUNDS
 
 
-## A place's boss beaten: three star dinosaurs not in the pens, to choose one of -- two uncommon or rare, one
-## legendary.
-func star_choice() -> Array:
-	var some: Array = Content.STARS.keys().filter(func(id: String) -> bool:
-		return not home.has_star(id) and int(Content.STARS[id].rarity) in [1, 2])
-	var great: Array = Content.STARS.keys().filter(func(id: String) -> bool:
-		return not home.has_star(id) and int(Content.STARS[id].rarity) == 3)
-	Home.shuffle(some, rng)
-	Home.shuffle(great, rng)
-	return some.slice(0, 2) + great.slice(0, 1)
-
-
-## On to place `to` (by default the map's first for the next level): the homeland made afresh there -- the buildings
-## left behind, what every place starts with set down -- the stars, the gold, the deck, the research points and what
-## the hoarder keeps going on.
+## On to place `to` (by default the map's first for the next level): the homeland made afresh there, carrying nothing
+## (Home.fresh).
 func move_on(to := -1) -> void:
 	level += 1
 	place = to if to >= 0 else int(map[level][0])
 	path.append(place)
 	round = 1
-	home.land(place, rng, Content.LANDING)
+	home.fresh(place, rng)
