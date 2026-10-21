@@ -112,6 +112,40 @@ static func make(edge: float, color: Color, theirs: bool, affixes: Array, kind: 
 	return root
 
 
+## A star dinosaur (Content.STARS) as its own model (toon/star_<id>.gltf, tools/toon_dinos.py), `length` from its nose
+## to its tail's tip (or its width, if more): its root at its feet, looking along +z, standing idle. null while it has
+## no model of its own.
+static func star(id: String, length: float) -> Node3D:
+	var file := "star_" + id
+	if not ResourceLoader.exists(DINOS + file + ".gltf"):
+		return null
+	var root := Node3D.new()
+	root.set_meta("model", true)
+	var body := Node3D.new()
+	body.name = "Body"
+	root.add_child(body)
+	var model := _scene(file).instantiate() as Node3D
+	body.add_child(model)
+	var box := _plain_box(file)
+	var s := length / maxf(0.01, maxf(box.size.z, box.size.x))
+	model.scale = Vector3.ONE * s
+	model.rotation.y = PI
+	model.position = Vector3(0, -box.position.y * s, (box.position.z + box.size.z * 0.5) * s)
+	root.set_meta("edge", box.size.y * s)
+	root.set_meta("height", box.size.y * s)
+	var players := model.find_children("*", "AnimationPlayer", true, false)
+	if not players.is_empty():
+		var player := players[0] as AnimationPlayer
+		for clip in LOOPS:
+			if player.has_animation(clip):
+				player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
+		root.set_meta("player", player)
+		play(root, "idle")
+		if player.current_animation != "":
+			player.seek(randf() * player.current_animation_length, true)
+	return root
+
+
 static func is_model(n: Node3D) -> bool:
 	return n.has_meta("model")
 

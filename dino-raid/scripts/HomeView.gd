@@ -23,6 +23,11 @@ const PENNANT := Color(1.0, 0.93, 0.72)  # flown over a nest whose gift works wh
 const PEN_AT := [Vector3(-18.5, 0.0, -4.0), Vector3(-18.5, 0.0, 0.2), Vector3(-18.5, 0.0, 4.4), Vector3(-18.5, 0.0, 8.6),
 	Vector3(-18.5, 0.0, 12.8)]
 const PEN := 3.4                  # a pen's side
+## How long each star stands in its pen (metres, nose to tail): the small ones small, the great ones filling it.
+const STAR_LENGTH := {"hoarder": 1.6, "mother": 2.3, "trader": 2.0, "scout": 1.9, "doctor": 1.7, "shield": 1.8,
+	"saver": 1.6, "belly": 3.0, "tri": 2.4, "scar": 2.0, "fisher": 2.4, "bounty": 2.3, "horn": 2.3, "spitter": 1.9,
+	"oldking": 2.7, "sickle": 2.2, "neck": 3.1, "queen": 2.7, "goldcrown": 2.0, "firstbird": 1.7, "warlord": 3.0,
+	"titan": 3.2}
 ## Until each star has a model of its own (the shared library's species made Nintendo-style), the one of ours it
 ## looks most like stands in for it, banded in its own colours.
 const STAND_IN := {"hoarder": "scav", "mother": "white", "trader": "falcon", "scout": "red", "doctor": "mutant",
@@ -377,9 +382,12 @@ func pen_at(cam: Camera3D, at: Vector2) -> int:
 	return -1
 
 
-## Star dinosaur `id` as it stands in its pen: for now the one of ours it looks most like (STAND_IN), banded in its
-## own colours, a little bigger.
+## Star dinosaur `id` as it stands in its pen: its own model (Creatures.star), as long as its kind is big (STAR_LENGTH);
+## until it has one, the one of ours it looks most like (STAND_IN), banded in its own colours, a little bigger.
 static func star_model(id: String) -> Node3D:
+	var own := Creatures.star(id, float(STAR_LENGTH.get(id, 2.0)))
+	if own != null:
+		return own
 	var s: Dictionary = Content.STARS[id]
 	var n := Creatures.make(1.25, s.back, false, [], str(STAND_IN.get(id, "white")))
 	if n.has_meta("paint"):

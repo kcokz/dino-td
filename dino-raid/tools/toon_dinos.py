@@ -11,10 +11,11 @@
 #   "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python dino-raid/tools/toon_dinos.py
 #   ... -- velociraptor         only that one
 #   ... -- --plain              only the plain ones (--elite: only the elites)
+#   ... -- --stars              only the star dinosaurs (STARS; name one to make only it: -- --stars hoarder)
 #   ... -- --preview            also renders each (side, three-quarter, head; and the clips) to PREVIEW_DIR
 #
 # Writes dino-raid/assets/models/toon/<species>.gltf (+ .bin), and <species>_e1, <species>_e2 (no clips: the game
-# gives them the plain one's, Creatures.gd).
+# gives them the plain one's, Creatures.gd); and star_<id>.gltf for each star dinosaur, with its clips.
 
 import copy
 import os
@@ -55,6 +56,40 @@ LOOKS = {
                      "horn": (0.24, 0.16, 0.12)},
     "tyrannosaurus": {"back": (0.45, 0.33, 0.22), "flank": (0.62, 0.48, 0.32), "belly": (0.94, 0.86, 0.7)},
 }
+
+# The star dinosaurs (Content.STARS, GAME-DESIGN 24; the user, 2026-10-21: "恐龙模型可以继续精做"): each the shared
+# library's species it is, made friendly as ours are, in the colours of its portrait (tools/paint_cards.py) -- back,
+# flank, belly; horns, plates and frills where it has them -- so two stars of one species are told apart.
+STARS = {
+    "hoarder": ("ornitholestes", {"back": (0.93, 0.5, 0.16), "flank": (0.98, 0.68, 0.34), "belly": (0.99, 0.92, 0.74)}),
+    "mother": ("edmontosaurus", {"back": (0.16, 0.56, 0.54), "flank": (0.34, 0.72, 0.66), "belly": (0.98, 0.9, 0.6)}),
+    "trader": ("harpactognathus", {"back": (0.24, 0.5, 0.86), "flank": (0.96, 0.72, 0.3), "belly": (0.97, 0.94, 0.82)}),
+    "scout": ("dakotaraptor", {"back": (0.36, 0.6, 0.22), "flank": (0.56, 0.76, 0.34), "belly": (0.92, 0.94, 0.66)}),
+    "doctor": ("velociraptor_alpha", {"back": (0.92, 0.72, 0.22), "flank": (0.98, 0.84, 0.42), "belly": (0.99, 0.95, 0.8)}),
+    "shield": ("placerias", {"back": (0.5, 0.52, 0.56), "flank": (0.66, 0.68, 0.7), "belly": (0.88, 0.86, 0.8),
+                             "horn": (0.95, 0.9, 0.78)}),
+    "saver": ("hesperosuchus", {"back": (0.9, 0.62, 0.26), "flank": (0.97, 0.78, 0.44), "belly": (0.99, 0.93, 0.76)}),
+    "belly": ("diplodocus", {"back": (0.4, 0.66, 0.28), "flank": (0.58, 0.8, 0.4), "belly": (0.93, 0.95, 0.74)}),
+    "tri": ("triceratops", {"back": (0.86, 0.46, 0.2), "flank": (0.95, 0.64, 0.36), "belly": (0.98, 0.88, 0.7),
+                            "horn": (0.97, 0.92, 0.8)}),
+    "scar": ("acheroraptor", {"back": (0.62, 0.13, 0.11), "flank": (0.82, 0.3, 0.24), "belly": (0.96, 0.86, 0.76)}),
+    "fisher": ("phytosaur", {"back": (0.18, 0.56, 0.52), "flank": (0.36, 0.72, 0.62), "belly": (0.96, 0.9, 0.52)}),
+    "bounty": ("postosuchus", {"back": (0.66, 0.46, 0.2), "flank": (0.82, 0.62, 0.32), "belly": (0.96, 0.88, 0.64)}),
+    "horn": ("edmontosaurus", {"back": (0.94, 0.42, 0.62), "flank": (0.98, 0.6, 0.74), "belly": (1.0, 0.9, 0.6)}),
+    "spitter": ("coelophysis_alpha", {"back": (0.16, 0.58, 0.62), "flank": (0.34, 0.74, 0.74), "belly": (0.98, 0.86, 0.5)}),
+    "oldking": ("yutyrannus", {"back": (0.42, 0.47, 0.58), "flank": (0.6, 0.64, 0.72), "belly": (0.88, 0.86, 0.8)}),
+    "sickle": ("sinocalliopteryx", {"back": (0.72, 0.7, 0.26), "flank": (0.86, 0.84, 0.44), "belly": (0.96, 0.93, 0.72)}),
+    "neck": ("diplodocus", {"back": (0.78, 0.52, 0.26), "flank": (0.9, 0.68, 0.4), "belly": (0.98, 0.9, 0.7)}),
+    "queen": ("edmontosaurus", {"back": (0.52, 0.28, 0.68), "flank": (0.7, 0.46, 0.82), "belly": (0.99, 0.86, 0.5)}),
+    "goldcrown": ("dilong", {"back": (0.94, 0.72, 0.18), "flank": (0.99, 0.84, 0.38), "belly": (1.0, 0.96, 0.76)}),
+    "firstbird": ("sinornithosaurus", {"back": (0.95, 0.42, 0.18), "flank": (0.3, 0.6, 0.96), "belly": (0.98, 0.94, 0.78)}),
+    "warlord": ("tyrannosaurus", {"back": (0.8, 0.2, 0.13), "flank": (0.92, 0.38, 0.24), "belly": (0.98, 0.86, 0.6)}),
+    "titan": ("diplodocus", {"back": (0.62, 0.5, 0.3), "flank": (0.76, 0.64, 0.42), "belly": (0.9, 0.84, 0.66)}),
+}
+# What a star needs besides its species made friendly: the longneck and the titan hold their necks up and look about
+# rather than graze (the belly grazes: it eats all day); the triceratops's head less swollen, clear of its frill.
+STAR_TUNE = {"neck": {"neck_rise": 30.0, "no_graze": True}, "titan": {"neck_rise": 22.0, "no_graze": True},
+             "tri": {"head": 1.3}}
 
 # How each part's size changes, toward a friendlier creature: a short, round, blunt head; a short thick neck; a
 # short plump body; a short tail thick to near its tip; short stout legs; bigger arms; big eyes.
@@ -115,7 +150,7 @@ def _linear(c):
     return tuple(x ** 2.2 for x in c)
 
 
-def toonify(name, spec, level=0):
+def toonify(name, spec, level=0, colours=None):
     s = copy.deepcopy(spec)
     sk = s["skeleton"]
     length, pitch = sk["skull"]
@@ -180,7 +215,7 @@ def toonify(name, spec, level=0):
             return THIGH_FAT if i == 0 else LIMB_FAT
         limb["stations"] = [(i, t, w * fat(i), dd * fat(i), f) for (i, t, w, dd, f) in limb["stations"]]
     body.pop("skin_detail", None)
-    look = dict(LOOKS.get(name, {}))
+    look = dict(colours if colours is not None else LOOKS.get(name, {}))
     if level:
         look["back"] = tuple(c * EVOLVE[level]["deep"] for c in look["back"])
     look = {k: _linear(v) for (k, v) in look.items()}
@@ -311,8 +346,35 @@ def _feathers(name, body, sk, look):
                           "width": crest["width"], "colour": colour, "tip": tip}
 
 
-def make(name, level=0):
-    spec = toonify(name, gd.described(name), level)
+def _tune(s, tune):
+    """A star's own changes (STAR_TUNE) over its species made friendly."""
+    sk = s["skeleton"]
+    if "neck_rise" in tune:
+        n = len(sk["neck"])
+        rise = tune["neck_rise"]
+        sk["neck"] = [(l, a + rise * (1.0 - i / max(1, n - 1))) for i, (l, a) in enumerate(sk["neck"])]
+        length, pitch = sk["skull"]
+        sk["skull"] = (length, pitch - rise * 0.5)
+    if tune.get("no_graze"):
+        s["moves"]["idle"].pop("graze", None)
+        s["moves"].pop("graze", None)
+    if "head" in tune:
+        trunk = []
+        for (bone, t, d) in s["body"]["trunk"]:
+            if bone in ("Head", "Head_end"):
+                d = dict(d)
+                for key in ("w", "top", "bot"):
+                    d[key] = d[key] * tune["head"] / HEAD
+            trunk.append((bone, t, d))
+        s["body"]["trunk"] = trunk
+
+
+def make(name, level=0, colours=None, tune=None, clips=None):
+    """`name` made friendly (and evolved `level` times), its rig, armature and parts; at level 0 with its clips -- all
+    of them, or only those named in `clips`."""
+    spec = toonify(name, gd.described(name), level, colours)
+    if tune:
+        _tune(spec, tune)
     gd.reset()
     rig = dino_rig.Skeleton(spec["skeleton"])
     # Named as the plain one is, so the plain one's clips find its bones.
@@ -325,7 +387,8 @@ def make(name, level=0):
         paces.update(spec.get("paces", {}))
         moves = dino_moves.Moves(rig, spec["moves"], {w: v / k for (w, v) in paces.items()})
         for clip, (frames, at, loop) in moves.all().items():
-            dino_rig.key_clip(rig, clip, frames, at, loop)
+            if clips is None or clip in clips:
+                dino_rig.key_clip(rig, clip, frames, at, loop)
     return rig, arm, parts
 
 
@@ -348,6 +411,18 @@ def main():
     only = [a for a in args if not a.startswith("--")]
     levels = [0] if "--plain" in args else [1, 2] if "--elite" in args else [0, 1, 2]
     os.makedirs(OUT, exist_ok=True)
+    if "--stars" in args:
+        for star, (species, colours) in STARS.items():
+            if only and star not in only:
+                continue
+            # A star does not fight: it stands about (or grazes) in its pen, so only those clips go with it.
+            rig, arm, parts = make(species, 0, colours, STAR_TUNE.get(star), ("idle", "graze"))
+            label = "star_" + star
+            export(arm, parts, os.path.join(OUT, label + ".gltf"), True)
+            print("[OK] %s (%s): %d verts" % (label, species, sum(len(m.data.vertices) for m in parts)))
+            if "--preview" in args:
+                gd.preview(label, arm, parts, clips="--stills" not in args)
+        return
     for name in LOOKS:
         if only and name not in only:
             continue
