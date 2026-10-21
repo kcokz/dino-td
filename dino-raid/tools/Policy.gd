@@ -2,15 +2,15 @@ class_name Policy
 ## How the tools play (GAME-DESIGN 17-22), shared by playtest.gd and sim_runs.gd. Not part of the game.
 ##
 ## random: buys anything it can afford, put anywhere it may go (but building only on empty land, pulling nothing
-## down), raising nests either way, and puts down what it keeps the same way; builds a wonder when it can. smart: the
-## play that does the most good for its price -- a buy (a nest's raise tried both ways), putting down what was kept,
-## the wonder -- this round's battle worked out after it, and what the homeland comes to: the army its nests make (as
-## far as the biomass coming in feeds it), what comes in each round, what is kept (gold earns interest); restocks the
-## shelf when nothing on it is worth buying; the reward card (or the gold), the relic that do the most good; after a
+## down), raising nests either way, and puts down what it keeps the same way; buys the star on offer when it can.
+## smart: the play that does the most good for its price -- a buy (a nest's raise tried both ways), putting down what
+## was kept, the star on offer -- this round's battle worked out after it, and what the homeland comes to: the army its
+## nests make (as far as the biomass coming in, less what the stars eat, feeds it), what comes in each round, what is
+## kept (gold earns interest); restocks the shelf when nothing on it is worth buying; the reward card (or the gold), the
+## star after a boss that do the most good (letting the least go when the pens are full, if that is better); after a
 ## mini-boss cuts the deck's dead cards and upgrades raises and nests; the first place the map offers. A smart one may
 ## keep to a school (Content.SCHOOLS): it leans to that school's goods, never builds another school's own buildings
-## (those that are not just for biomass, research or gold) and cuts them from its deck, and -- for gold -- saves. All
-## carry on what the packing screen picks to begin with (Run.default_goods).
+## (those that are not just for biomass, research or gold) and cuts them from its deck, and -- for gold -- saves.
 
 const LEAN := 1.6                 # a school's own goods look this much better to one keeping to it...
 const SHUN := 0.8                 # ...and another school's this much worse
@@ -19,7 +19,7 @@ const COMMIT_UPTO := 4            # (what a school's own buildings do may only s
 const HOPE := 25.0                # to the genes school, a nest halfway to a new species, with room for the other half
 
 
-## A random play: ["buy" or "place", index, target, choice], ["wonder", id], or [] when there is none.
+## A random play: ["buy" or "place", index, target, choice], ["star"], or [] when there is none.
 static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 	var can: Array = []
 	for i in h.shelf.size():
@@ -30,14 +30,13 @@ static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 		var fits := _careless(h, h.stash_targets(k), h.stash[k])
 		if not fits.is_empty():
 			can.append(["place", k, fits])
-	for id in h.wonders:
-		if h.can_build_wonder(id):
-			can.append(["wonder", id, []])
+	if h.can_buy_star():
+		can.append(["star", 0, []])
 	if can.is_empty():
 		return []
 	var c: Array = can[rng.randi() % can.size()]
-	if c[0] == "wonder":
-		return ["wonder", c[1]]
+	if c[0] == "star":
+		return ["star"]
 	return [c[0], c[1], c[2][rng.randi() % c[2].size()], "elite" if rng.randf() < 0.5 else "count"]
 
 
@@ -54,8 +53,8 @@ static func play(h: Home, p: Array) -> Array:
 			return h.buy(p[1], p[2], p[3] if p.size() > 3 else "count")
 		"place":
 			return h.place(p[1], p[2], p[3] if p.size() > 3 else "count")
-		"wonder":
-			return h.build_wonder(p[1])
+		"star":
+			return h.buy_star()
 	return []
 
 
@@ -103,13 +102,13 @@ static func _choices(h: Home, oi: Dictionary, at: Variant) -> Array:
 	var o := Content.offer(oi)
 	if o.type == "raise" and at is Vector2i and h.buildings.has(at) and Content.is_nest(h.buildings[at].kind):
 		return ["count", "elite"]
-	if o.type == "build" and o.plus and Content.is_nest(o.builds) and not oi.has("packed"):
+	if o.type == "build" and o.plus and Content.is_nest(o.builds):
 		return ["count", "elite"]
 	return ["count"]
 
 
-## The best play for its price -- a buy, putting down what was kept (paid for already), the wonder: ["buy" or "place",
-## index, target, choice] or ["wonder", id], or [] when nothing beats keeping the gold.
+## The best play for its price -- a buy, putting down what was kept (paid for already), the star on offer: ["buy" or
+## "place", index, target, choice] or ["star"], or [] when nothing beats keeping the gold.
 static func best_play(run: Run, h: Home, school := "") -> Array:
 	var base := score(run, h, school)
 	var best_gain := 0.01
@@ -134,14 +133,13 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 				if gain > best_gain:
 					best_gain = gain
 					best = ["place", k, at, choice]
-	for id in h.wonders:
-		if h.can_build_wonder(id):
-			var t := h.clone()
-			t.build_wonder(id)
-			var gain := (score(run, t, school) - base) / float(Content.WONDERS[id].price) * (LEAN if school == "gold" else 1.0)
-			if gain > best_gain:
-				best_gain = gain
-				best = ["wonder", id]
+	if h.can_buy_star():
+		var t := h.clone()
+		t.buy_star()
+		var gain := (score(run, t, school) - base) / float(Content.STARS[h.star_offer].price)
+		if gain > best_gain:
+			best_gain = gain
+			best = ["star"]
 	return best
 
 
@@ -208,23 +206,23 @@ static func best_place(run: Run) -> int:
 	return int(run.next_places()[0])
 
 
-## The relic that does the most good now: one of `ids`.
-static func best_relic(run: Run, h: Home, ids: Array) -> String:
-	var best: String = ids[0]
-	var best_score := -INF
+## The star to take after a boss, of `ids`, that does the most good -- with the pens full, the one to let go for it
+## (or none taken, when letting any go would do less good): {id, release} ("" and -1 for none).
+static func best_star(run: Run, h: Home, ids: Array) -> Dictionary:
+	var best := {"id": "", "release": -1}
+	var best_score := score(run, h)
 	for id in ids:
-		var t := h.clone()
-		t.relics.append(id)
-		var s := score(run, t)
-		if s > best_score:
-			best_score = s
-			best = id
+		var lets: Array = [-1] if h.stars.size() < Content.PENS else range(h.stars.size())
+		for k in lets:
+			var t := h.clone()
+			if k >= 0:
+				t.sell_star(k)
+			t.take_star(id)
+			var s := score(run, t)
+			if s > best_score:
+				best_score = s
+				best = {"id": id, "release": k}
 	return best
-
-
-## What to carry on to the next place: the goods that cost the most (Run.default_goods), as the packing screen picks.
-static func best_goods(run: Run) -> Array:
-	return run.default_goods()
 
 
 ## How good a homeland looks: this round's battle (and what scavengers bring back); the army its nests can make, as far
@@ -241,7 +239,7 @@ static func score(run: Run, h: Home, school := "") -> float:
 	for u in full.army():
 		food += int(Content.UNITS[u.kind].food)
 		strength += Content.strength(Content.unit_stats(u))
-	var fed := minf(1.0, (float(h.income_biomass()) + 1.0) / maxf(1.0, float(food)))
+	var fed := minf(1.0, (float(h.income_biomass() - h.star_food()) + 1.0) / maxf(1.0, float(food)))
 	s += strength * (0.4 + 0.6 * fed) * 1.5
 	s += 10.0 * h.income_gold() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
 	s += 0.5 * h.biomass + 1.0 * h.genes + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max()

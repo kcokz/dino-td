@@ -97,8 +97,6 @@ static func warm() -> void:
 		me._ask("u:" + kind, Callable())
 	for kind in Content.ENEMIES:
 		me._ask("e:" + kind, Callable())
-	for id in Content.WONDERS:
-		me._ask("w:" + id, Callable())
 
 
 func _ask(key: String, done: Callable) -> void:
@@ -152,9 +150,6 @@ func _model(key: String) -> Node3D:
 		# A dinosaur side on; an alien (meta "turn") three-quarters, its face showing.
 		n.rotation.y = float(n.get_meta("turn")) if n.has_meta("turn") else (Creatures.PORTRAIT_TURN if Creatures.is_model(n) else 0.9)
 		root.add_child(n)
-		return root
-	if key.begins_with("w:"):
-		root.add_child(HomeView.wonder_node(key.substr(2)))
 		return root
 	if key.begins_with("a:"):
 		var a := key.substr(2)

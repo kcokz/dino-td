@@ -3,21 +3,21 @@ extends SceneTree
 ##
 ##   Godot --path dino-raid --script res://tools/playtest.gd -- <folder for frames> [bot [rounds] [seed] [smart]]
 ##
-## Without "bot": the title and its settings, then the ark chosen and the rainforest arrived in, the pause menu; the
-## first rounds slowly -- the round's army hatching,
-## the shelf, special ground and a nest pointed at, each offer taken up over where it goes with what it would change
-## and the forecast it brings, an offer kept in the stash and put down again, a nest evolved, the shelf
-## restocked, buys, battles fought, the card picked after each and the deck -- then a homeland built up by hand (every
-## kind of building, levels, the four evolved species, relics), the deck worked on (a card picked, upgraded, cut), its
-## boss battle (the mother breaking into spores), the relic to choose, the map and the next place picked on it, the
-## packing and the ark's flight, the place arrived in, the goods carried put down, and a battle there; a frame at each
-## step.
+## Without "bot": the title and its settings, then the rainforest arrived in, the pause menu; the first rounds slowly --
+## the round's army hatching, the shelf, special ground and a nest pointed at, each offer taken up over where it goes
+## with what it would change and the forecast it brings, the hoarder bought and an offer kept by it and put down again,
+## a nest evolved, the shelf restocked, buys, battles fought, the card picked after each and the deck -- then a
+## homeland built up by hand (every kind of building, levels, the four evolved species, stars in their pens), a pen
+## pointed at and its star's own screen, the deck worked on (a card picked, upgraded, cut), its boss battle (the mother
+## breaking into spores), the star to choose, the map and the next place picked on it, the place arrived in -- the
+## homeland made afresh -- and a battle there; a frame at each step.
 ## "bot": plays rounds the simple way (tools/Policy.gd, random -- or smart), fast, until the run ends or the rounds
 ## run out; checks every forecast against the battle fought; prints an account. For finding what breaks.
 
 var game: Game
 var out := ""
 var smart := false
+var _star_pick := {}              # the star chosen after a boss, and the pen to let go for it (Policy.best_star)
 var seed := 5
 var _n := 0
 var rng := RandomNumberGenerator.new()
@@ -52,10 +52,6 @@ func _scripted() -> void:
 	game.menu._settings_closed.emit()
 	await _frames(10)
 	game.menu._picked.emit("new")
-	await _until_screen("选一艘方舟")
-	await _wait(0.6)
-	await _shot("ark_choice")
-	game.hud.chosen.emit("war")
 	await _until_screen("到了")
 	await _frames(30)
 	await _shot("arrive_rainforest")
@@ -139,12 +135,25 @@ func _aim_each(label: String) -> void:
 	game.refresh()
 
 
-## An offer kept in the stash and put down again: the place to keep it lit, the stash, where it can go.
+## The hoarder bought from the shop, and an offer kept by it and put down again: its pen lit, the stash, where it can
+## go.
 func _keep_and_put() -> void:
 	var home := game.home
-	home.gold += 10
+	home.gold += 14
 	home.genes += 4
+	home.star_offer = "hoarder"
+	game.hud.deal(home.shelf)
 	game.refresh()
+	await _frames(20)
+	game.hud._hovered = game.hud._star_card
+	await _frames(14)
+	await _shot("star_offer")
+	game.hud._hovered = null
+	if not game.act("star"):
+		print("keep: could not buy the hoarder")
+		return
+	await _frames(30)
+	await _shot("star_bought")
 	var i := -1
 	for k in home.shelf.size():
 		if home.can_store(k):
@@ -220,8 +229,8 @@ func _evolve() -> void:
 
 
 ## A homeland built up by hand -- the battle line full of nests (the four new species, elites), behind it every school's
-## buildings -- a nest raised elite, the wonder built, the deck worked on, its boss battle, the relic, the map, the
-## packing, the flight, the next place.
+## buildings, stars in their pens -- a pen pointed at, a star's own screen, a nest raised elite, the deck worked on,
+## its boss battle, the star to choose, the map, the next place.
 func _rich() -> void:
 	var h := game.home
 	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree", Vector2i(3, 3): "pond"}
@@ -248,9 +257,10 @@ func _rich() -> void:
 		else:
 			b.level = step[2]
 		b.affixes = step[3].duplicate()
-	h.relics = ["tooth", "egg"]
-	h.wonders = ["titan", "brood"]
-	h.wonder = ""
+	h.stars = [{"id": "hoarder", "grow": 0}, {"id": "scar", "grow": 0}, {"id": "tri", "grow": 0}, {"id": "oldking", "grow": 2},
+		{"id": "belly", "grow": 0}]
+	h.hungry = [2]
+	h.star_offer = "neck"
 	h.gold = 30
 	h.biomass = 40
 	h.genes = 8
@@ -266,11 +276,16 @@ func _rich() -> void:
 	game.refresh()
 	await _frames(60)
 	await _shot("rich_home")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": "relics"}
+	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "pen": 3}
 	game.refresh()
 	await _frames(4)
-	await _shot("rich_relic")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}
+	await _shot("rich_pen")
+	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "pen": -1}
+	game._pen_screen(1)
+	await _frames(30)
+	await _shot("pen_screen")
+	game.hud.chosen.emit("")
+	await _frames(10)
 	h.stash = [{"id": "raise"}]
 	game.refresh()
 	await _frames(10)
@@ -288,14 +303,6 @@ func _rich() -> void:
 	await _frames(20)
 	await _shot("raised_elite")
 	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
-	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": "wonder"}
-	game.aim("titan")
-	await _frames(6)
-	await _shot("wonder_aim")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}
-	game.act("wonder", {"id": "titan"})
-	await _frames(50)
-	await _shot("wonder_built")
 	await _deck_work()
 	# A green taken up over the gap in front of the blue: the blue would be under cover, the gold no longer alone.
 	h.shelf[1] = {"id": "b_green"}
@@ -333,38 +340,13 @@ func _rich() -> void:
 	await _screens("boss")
 	await _screens("boss")
 	await _screens("boss")
-	while game.phase != Game.Phase.PACK:
-		await process_frame
-	await _frames(30)
-	await _shot("pack")
-	var off: Vector2i = game.pack_plots.keys()[0]
-	game.act("pack", {"at": off})
-	game.hover = {"plot": off, "unit": ""}
-	game.refresh()
-	await _frames(10)
-	await _shot("pack_changed")
-	game.act("pack", {"at": off})
-	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
-	game.act("depart")
-	await _wait(1.5)
-	await _shot("ark_down")
-	await _wait(1.0)
-	await _shot("ark_loading")
+	await _screens("boss")
 	await _until_screen("到了")
 	await _frames(20)
 	await _shot("arrive_next")
 	game.hud.chosen.emit("开始")
 	await _until_plan()
 	await _shot("next_r1")
-	for k in range(game.home.stash.size() - 1, -1, -1):
-		var fits := game.home.stash_targets(k)
-		if fits.is_empty():
-			continue
-		var free := fits.filter(func(p: Variant) -> bool: return not game.home.buildings.has(p))
-		game.act("place", {"slot": k, "at": (free + fits)[0]})
-		await _frames(10)
-	await _frames(30)
-	await _shot("next_placed")
 	game.hud._hovered = game.hud._cards[0]
 	await _frames(14)
 	await _shot("next_offer")
@@ -431,10 +413,10 @@ func _button_saying(words: String) -> Button:
 	return null
 
 
-## The screen after a battle (the card to pick, the deck to work on, the relic, the map), shot and answered -- the map
+## The screen after a battle (the card to pick, the deck to work on, the star, the map), shot and answered -- the map
 ## with a place picked on it first.
 func _screens(label: String) -> void:
-	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.PACK, Game.Phase.DONE]:
+	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.DONE]:
 		await process_frame
 	if game.hud.screen == "":
 		return
@@ -455,14 +437,13 @@ func _screens(label: String) -> void:
 	await _frames(4)
 
 
-## Answers the screen up: an ark (the seed's), the arrival, a card (smart: the best, or the gold), the deck (smart: as
-## tools/Policy.gd works it; else left as it is), a relic (smart: the best; else the first), the next place.
+## Answers the screen up: the arrival, a card (smart: the best, or the gold), the deck (smart: as tools/Policy.gd works
+## it; else left as it is), a star after a boss (smart: the best, letting one go for it if that is better; else the
+## first, letting none go), the next place.
 func _answer() -> void:
 	var s: String = game.hud.screen
 	var offered: Array = game.hud.offered
-	if s.begins_with("选一艘方舟"):
-		game.hud.chosen.emit(offered[seed % offered.size()])
-	elif s.begins_with("到了"):
+	if s.begins_with("到了"):
 		game.hud.chosen.emit("开始")
 	elif s.begins_with("挑一张"):
 		var k := Policy.best_reward(game.run, game.home, offered) if smart else 0
@@ -478,7 +459,10 @@ func _answer() -> void:
 	elif s.begins_with("下一站"):
 		game.hud.chosen.emit(Policy.best_place(game.run))
 	elif s.ends_with("守住了！"):
-		game.hud.chosen.emit(Policy.best_relic(game.run, game.home, offered) if smart else offered[0])
+		_star_pick = Policy.best_star(game.run, game.home, offered) if smart else {"id": offered[0], "release": -1}
+		game.hud.chosen.emit(_star_pick.id)
+	elif s.begins_with("围栏满了"):
+		game.hud.chosen.emit(int(_star_pick.get("release", -1)))
 
 
 ## The battle: when it starts, in the thick of it, at its end, and back home.
@@ -541,13 +525,6 @@ func _bot(rounds: int) -> void:
 			_answer()
 			await _frames(3)
 			continue
-		if game.phase == Game.Phase.PACK:
-			await _frames(10)
-			print("packing: %s" % [game.packed_goods().map(func(g: Dictionary) -> String: return Content.offer(g).name)])
-			await _shot("bot_pack_l%d" % game.run.level)
-			game.act("depart")
-			await _frames(3)
-			continue
 		if smart:
 			var restocked := 0
 			for guard in 16:
@@ -591,8 +568,8 @@ func _play_all() -> void:
 
 ## A Policy play done through the game's one door.
 func _do(play: Array) -> void:
-	if play[0] == "wonder":
-		game.act("wonder", {"id": play[1]})
+	if play[0] == "star":
+		game.act("star")
 	else:
 		game.act(play[0], {"slot": play[1], "at": play[2], "choice": play[3] if play.size() > 3 else "count"})
 
@@ -608,9 +585,9 @@ func _until_screen(prefix: String) -> void:
 		await process_frame
 
 
-## Until the player has something to do: plan, a screen to answer, packing -- or the run is over.
+## Until the player has something to do: plan, a screen to answer -- or the run is over.
 func _until_turn() -> void:
-	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.PACK, Game.Phase.DONE]:
+	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.DONE]:
 		await process_frame
 	await _frames(20)
 
@@ -633,9 +610,10 @@ func _account() -> void:
 		var key := "%s%d" % [b.kind, b.level]
 		built[key] = built.get(key, 0) + 1
 	var plus := h.deck.filter(func(c: Dictionary) -> bool: return c.plus).size()
-	print("%s (level %d) round %d hp %d/%d gold %d biomass %d research %d deck %d (+%d) stash %d relics %s army %d | %s" % [
+	var stars: Array = h.stars.map(func(s: Dictionary) -> String: return s.id + ("(%d)" % int(s.grow) if int(s.grow) > 0 else ""))
+	print("%s (level %d) round %d hp %d/%d gold %d biomass %d research %d deck %d (+%d) stash %d stars %s hungry %d army %d | %s" % [
 		Content.LEVELS[r.place].name, r.level + 1, r.round, h.hp, h.hp_max(), h.gold, h.biomass, h.genes, h.deck.size(), plus,
-		h.stash.size(), h.relics, h.army().size(), built])
+		h.stash.size(), stars, h.hungry.size(), h.army().size(), built])
 
 
 func _shot(label: String) -> void:

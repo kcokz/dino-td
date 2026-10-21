@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-22) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-24) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -14,7 +14,6 @@ func _init() -> void:
 	_neighbours()
 	_nest_gifts()
 	_terrain()
-	_rules()
 	_affixes_and_recipes()
 	_schools()
 	_buying()
@@ -23,9 +22,8 @@ func _init() -> void:
 	_deck()
 	_reroll_and_interest()
 	_rewards()
-	_relics()
-	_wonders()
-	_arks()
+	_stars()
+	_star_kinds()
 	_moving_on()
 	_map()
 	_formation()
@@ -66,6 +64,13 @@ func bare(region := 0) -> Home:
 	return h
 
 
+func _with(stars: Array) -> Home:
+	var h := bare()
+	for id in stars:
+		h.take_star(id)
+	return h
+
+
 func shelf(h: Home, ids: Array) -> void:
 	h.shelf = ids.map(func(id: String) -> Dictionary: return {"id": id})
 
@@ -77,10 +82,9 @@ func _first_round() -> void:
 	check("special ground lies behind the battle line", h.terrain.size() == 5
 		and h.terrain.keys().all(func(p: Vector2i) -> bool: return p.y >= Content.FRONT_ROWS) and not h.terrain.has(Vector2i(2, 2)),
 		h.terrain)
-	var ev := h.start_round(rng(), 0)
-	check("income: 5 gold; damp: 3 biomass is 4", h.gold == 5 and h.biomass == 2 + 4, [h.gold, h.biomass])
-	check("the stored biomass rotted by half", ev.any(func(e: Dictionary) -> bool: return e.t == "rotted" and e.amount == 1))
-	check("a shelf of 5", h.shelf.size() == Content.SHOP, h.shelf.size())
+	h.start_round(rng(), 0)
+	check("income: 5 gold, 3 biomass", h.gold == 5 and h.biomass == 3 + 3, [h.gold, h.biomass])
+	check("a shelf of 5, a star after it", h.shelf.size() == Content.SHOP and h.star_offer != "", [h.shelf.size(), h.star_offer])
 	var a := h.army()
 	check("one red this round, in the front row, its column its lane", a.size() == 1 and a[0].kind == "red"
 		and int(a[0].row) == 0 and is_equal_approx(float(a[0].lane), 2.0), a)
@@ -93,8 +97,8 @@ func _zones() -> void:
 		and h.targets(0).all(func(p: Vector2i) -> bool: return Home.front(p)), h.targets(0))
 	check("anything else only behind it", h.targets(1).size() == Home.COLS * (Home.ROWS - Content.FRONT_ROWS)
 		and h.targets(1).all(func(p: Vector2i) -> bool: return not Home.front(p)), h.targets(1))
-	h.stash = [{"id": "b_blue", "packed": {"level": 2, "path": ["elite"], "affixes": []}}]
-	check("a packed nest too", h.stash_targets(0).all(func(p: Vector2i) -> bool: return Home.front(p)))
+	h.stash = [{"id": "b_blue"}]
+	check("a kept nest too", h.stash_targets(0).all(func(p: Vector2i) -> bool: return Home.front(p)))
 
 
 func _making() -> void:
@@ -241,7 +245,6 @@ func _nest_gifts() -> void:
 	check("two scavengers standing: 2 gold each", sf.result == "won" and sf.scavenged() == 2 * Content.SCAVENGE,
 		[sf.result, sf.scavenged()])
 	var r := Run.new(5)
-	r.choose_ark("war")
 	r.home.buildings.clear()
 	r.home.build(Vector2i(2, 1), "nest_scav")
 	r.home.build(Vector2i(2, 0), "nest_green")
@@ -264,7 +267,7 @@ func _terrain() -> void:
 	var h := bare()
 	h.terrain = {Vector2i(0, 2): "pond", Vector2i(2, 3): "tree", Vector2i(4, 2): "ore", Vector2i(5, 3): "lava"}
 	h.build(Vector2i(0, 2), "pool")
-	check("pond: a pool on it makes double", h.income_biomass() == 6 * 3 / 2, h.income_biomass())
+	check("pond: a pool on it makes double", h.income_biomass() == 6, h.income_biomass())
 	h.build(Vector2i(4, 2), "mine")
 	h.build(Vector2i(5, 2), "mine")
 	check("ore: a mine on it 2 more; lava: a mine beside it 1 more", h.income_gold() == Home.INCOME + (1 + 2) + (1 + 1),
@@ -281,61 +284,9 @@ func _terrain() -> void:
 	t.build(Vector2i(5, 2), "mine")
 	t.build(Vector2i(2, 2), "sampler")
 	check("each place's ground works one of four ways: a mire as a pond, toadstools as a tree, ice ore as ore, a wreck as lava",
-		t.income_biomass() == 6 * 3 / 2 and t.income_genes() == 1 + Content.TREE_GENES
+		t.income_biomass() == 6 and t.income_genes() == 1 + Content.TREE_GENES
 		and t.income_gold() == Home.INCOME + (1 + 2) + (1 + 1), [t.income_biomass(), t.income_genes(), t.income_gold()])
 	check("toadstools and wrecks: nothing built there", not t.buildable(Vector2i(2, 3)) and not t.buildable(Vector2i(5, 3)))
-
-
-func _rules() -> void:
-	var d := bare(0)
-	d.build(Vector2i(0, 3), "pool")
-	d.biomass = 10
-	d.start_round(rng(), 0)
-	check("damp: half of 10 rots, 3 grows to 4", d.biomass == 5 + 4, d.biomass)
-	var a := bare(1)
-	a.build(Vector2i(0, 0), "nest_red")
-	a.hp = 20
-	a.start_round(rng(), 1)
-	check("ash: 1 hp a round", a.hp == 19, a.hp)
-	shelf(a, ["raise"])
-	check("ash: raising a gold cheaper", a.price(0, Vector2i(0, 0)) == Content.RAISE + 1 - 1)
-	a.hp = 1
-	a.start_round(rng(), 1)
-	check("ash never kills", a.hp == 1)
-	var bog := bare(2)
-	bog.build(Vector2i(0, 0), "nest_red")
-	bog.build(Vector2i(0, 2), "pool")
-	check("bog: biomass half as much again, our units a fifth less hp", bog.income_biomass() == 3 * 3 / 2
-		and is_equal_approx(float(bog.spec_of(Vector2i(0, 0)).hp_mult), Content.BOG_HP), bog.income_biomass())
-	var cold := bare(3)
-	cold.build(Vector2i(0, 0), "nest_red")
-	check("cold: 2 gold more a round, our units slower", cold.income_gold() == Home.INCOME + Content.COLD_GOLD
-		and int(cold.spec_of(Vector2i(0, 0)).haste) == Content.COLD_HASTE, cold.income_gold())
-	var slow := Content.unit_stats(cold.army()[0])
-	var warm := bare(0)
-	warm.build(Vector2i(0, 0), "nest_red")
-	check("cold: a hit every 1.15 times as long", float(slow.every) > float(Content.unit_stats(warm.army()[0]).every) * 1.1,
-		[slow.every])
-	var dry := bare(4)
-	dry.build(Vector2i(0, 2), "pool")
-	dry.build(Vector2i(1, 2), "pool")
-	check("drought: 2 research points more, biomass three tenths less", dry.income_genes() == Content.DROUGHT_GENES
-		and dry.income_biomass() == int(6 * Content.DROUGHT_BIOMASS), [dry.income_genes(), dry.income_biomass()])
-	var r := Run.new(31)
-	r.move_on([], 5)
-	r.home.buildings.clear()
-	r.home.terrain.clear()
-	r.home.build(Vector2i(0, 2), "mine")
-	r.home.build(Vector2i(0, 3), "mine")
-	r.home.gold = 0
-	var ev := r.start_round()
-	check("tide: round 1 at low tide, 3 gold found on the beach", not r.home.flood and r.home.gold == Home.INCOME + 2 + Content.EBB_GOLD
-		and ev.any(func(e: Dictionary) -> bool: return e.t == "ebb"), r.home.gold)
-	r.round = 2
-	r.home.gold = 0
-	r.start_round()
-	check("tide: round 2 at high tide, the last row brings in nothing", r.home.flood and r.home.gold == Home.INCOME + 1,
-		r.home.gold)
 
 
 func _affixes_and_recipes() -> void:
@@ -382,8 +333,8 @@ func _affixes_and_recipes() -> void:
 	check("an affix costs its genes", c.genes_cost(Content.offer(c.shelf[0])) == 2)
 	c.build(Vector2i(5, 3), "gene_bank")
 	check("a gene bank: one less", c.genes_cost(Content.offer(c.shelf[0])) == 1)
-	c.relics.append("tooth")
-	check("and the tooth: none", c.genes_cost(Content.offer(c.shelf[0])) == 0)
+	c.take_star("doctor")
+	check("and the doctor: none", c.genes_cost(Content.offer(c.shelf[0])) == 0)
 
 
 func _schools() -> void:
@@ -448,17 +399,16 @@ func _stash() -> void:
 	var h := bare()
 	h.build(Vector2i(2, 0), "nest_red")
 	shelf(h, ["b_red", "a_shell", "raise"])
+	check("no hoarder: nothing kept", not h.can_store(0) and h.stash_size() == 0)
+	h.take_star("hoarder")
+	check("the hoarder keeps three", h.stash_size() == 3)
 	check("buildings and affixes can be kept", h.can_store(0) and h.can_store(1))
 	check("raises cannot", not h.can_store(2))
-	check("keeping costs a gold more than putting it down now", h.store_price(0) == h.price(0) + Content.STORE_EXTRA)
+	check("keeping costs what putting it down costs", h.store_price(0) == h.price(0))
 	h.store(0)
 	h.store(1)
-	check("kept: paid a gold more each, gone from the shelf", h.stash.size() == 2 and h.gold == 20 - 4 - 3 and h.genes == 8
+	check("kept: paid, gone from the shelf", h.stash.size() == 2 and h.gold == 20 - 3 - 2 and h.genes == 8
 		and h.shelf[0] == null, h.gold)
-	var poor := bare()
-	poor.gold = 3
-	shelf(poor, ["b_red"])
-	check("the gold to put it down but not to keep it", not poor.targets(0).is_empty() and not poor.can_store(0))
 	h.gold = 0
 	h.genes = 0
 	check("put down for nothing", Vector2i(0, 0) in h.stash_targets(0) and h.stash_targets(1) == [Vector2i(2, 0)])
@@ -466,22 +416,17 @@ func _stash() -> void:
 	check("the affix is on", "shell" in h.buildings[Vector2i(2, 0)].affixes and h.stash.size() == 1)
 	h.place(0, Vector2i(0, 0))
 	check("the nest is up", h.buildings[Vector2i(0, 0)].kind == "nest_red" and h.stash.is_empty())
-	h.buildings[Vector2i(2, 0)].level = 3
-	h.buildings[Vector2i(2, 0)].path = ["count", "elite"]
-	var g := h.packed(Vector2i(2, 0))
-	check("a nest packed keeps its level, its choices, its affixes", g.id == "b_red" and int(g.packed.level) == 3
-		and g.packed.path == ["count", "elite"] and g.packed.affixes == ["shell"], g)
-	h.stash = [g]
-	h.place(0, Vector2i(5, 1))
-	var b: Dictionary = h.buildings[Vector2i(5, 1)]
-	check("and has them when put down", int(b.level) == 3 and b.path == ["count", "elite"] and b.affixes == ["shell"])
-	for k in Content.STASH + 2:
-		h.keep({"id": "b_pool"})
-	check("no more than the stash holds", h.stash.size() == Content.STASH)
+	h.stash = [{"id": "b_pool"}, {"id": "b_pool"}, {"id": "b_pool"}]
 	h.gold = 20
 	shelf(h, ["b_red"])
 	check("full: nothing more kept", not h.can_store(0))
-
+	h.hungry = [0]
+	h.stash = [{"id": "b_pool"}]
+	check("the hoarder hungry: nothing more kept, what it keeps still there", not h.can_store(0) and h.stash.size() == 1
+		and not h.stash_targets(0).is_empty())
+	h.hungry = []
+	h.sell_star(0)
+	check("the hoarder sold: what it kept gone", h.stash.is_empty() and h.stars.is_empty())
 
 func _shelf() -> void:
 	var h := bare()
@@ -601,6 +546,7 @@ func _deck() -> void:
 	check("an upgraded raise: 2 gold less", p.price(1, Vector2i(1, 2)) == Content.RAISE + 2 - Content.PLUS_RAISE)
 	check("an upgraded affix: no research points", p.genes_cost(Content.offer(p.shelf[2])) == 0)
 	var s := bare()
+	s.take_star("hoarder")
 	s.shelf = [{"id": "b_blue", "plus": true}]
 	s.store(0)
 	s.place(0, Vector2i(3, 0), "count")
@@ -615,14 +561,14 @@ func _reroll_and_interest() -> void:
 	h.reroll(rng(2), 0)
 	h.reroll(rng(3), 0)
 	check("restocks: 1, then 2", h.gold == 7, h.gold)
-	h.relics.append("trilobite")
+	h.take_star("scout")
 	h.rerolls = 0
-	check("trilobite: the first is free", h.reroll_price() == 0)
+	check("the scout: the first is free", h.reroll_price() == 0)
 	h.gold = 12
 	check("interest: 2 for 12", h.interest() == 2)
-	h.relics.append("ammonite")
+	h.take_star("saver")
 	h.gold = 40
-	check("ammonite: up to 4", h.interest() == Content.INTEREST_MAX + 2)
+	check("the saver: up to 4", h.interest() == Content.INTEREST_MAX + 2)
 
 
 ## A card after each round, to add to the deck -- or gold (GAME-DESIGN 22).
@@ -650,14 +596,12 @@ func _rewards() -> void:
 				later += 1
 			if int(o.rarity) == 1:
 				uncommon += 1
-		g.move_on([], 1)
+		g.move_on(1)
 		for oi in g.reward_offer():
 			if int(Content.OFFERS[oi.id].rarity) == 2:
 				rare += 1
 	check("only cards found here and now", later == 0, later)
 	check("the uncommon and the rare come too", uncommon > 0 and rare > 0, [uncommon, rare])
-	r.home.relics.append("sac")
-	check("the sac: two to choose from", r.reward_offer().size() == 2)
 	var m := Run.new(2)
 	m.round = 4
 	m.start_round()
@@ -669,82 +613,158 @@ func _rewards() -> void:
 	check("round 6 not", not m.was_mini())
 
 
-func _relics() -> void:
+## The star dinosaurs (GAME-DESIGN 24): on offer after the shelf, bought into a pen, fed each round, sold.
+func _stars() -> void:
 	var h := bare()
-	h.build(Vector2i(0, 0), "nest_red")
-	h.build(Vector2i(4, 0), "nest_blue")
-	h.relics = ["frill", "egg", "coprolite", "wood"]
-	var a := h.army()
-	check("no relic makes units stronger", is_equal_approx(float(a[0].hp_mult), 1.0) and int(a[0].atk_bonus) == 0)
-	check("egg: the first nest one more, free", a.size() == 3 and a[1].free)
-	check("coprolite: +3 biomass, damp makes it 4", h.income_biomass() == 4)
-	check("frill: the homeland 10 more", h.hp_max() == Home.HP + 10)
-	h.hp = 20
-	h.start_round(rng(), 0)
-	check("frill: mends 1 a round", h.hp == 21, h.hp)
-	shelf(h, ["b_red"])
-	check("wood: buildings a gold less", h.price(0) == 2)
-	var b := bare(1)
-	b.build(Vector2i(0, 0), "nest_red")
-	b.relics = ["core", "heart", "crystal", "sac"]
-	check("core: one more each", b.army().size() == 2)
-	check("heart: an affix place more", b.slots(Vector2i(0, 0)) == 2)
-	check("crystal: 4 gold more, a shelf of 4", b.income_gold() == Home.INCOME + 4 and b.shelf_size() == Content.SHOP - 1)
-	check("sac: the stash holds 2 more", b.stash_size() == Content.STASH + 2)
-	b.hp = 20
-	b.start_round(rng(), 1)
-	check("heart and ash: 2 hp a round", b.hp == 18, b.hp)
-	var r := Run.new(3)
-	var offer := r.relic_offer()
-	check("relics offered: two fossils and a boss's", offer.size() == 3 and not Content.RELICS[offer[0]].get("boss", false)
-		and Content.RELICS[offer[2]].get("boss", false), offer)
-
-
-func _wonders() -> void:
-	var r := Run.new(21)
-	check("two wonders on offer, different", r.home.wonders.size() == Content.WONDERS_OFFERED
-		and r.home.wonders[0] != r.home.wonders[1], r.home.wonders)
-	var h := bare()
-	h.wonders = ["brood", "titan"]
-	h.build(Vector2i(2, 0), "nest_red")
+	h.stock(rng(4), 0)
+	check("a star on offer after the shelf, none legendary", h.star_offer != ""
+		and int(Content.STARS[h.star_offer].rarity) <= int(Content.STARS_FROM[0]), h.star_offer)
+	var odd := 0
+	for s in 60:
+		var g := bare()
+		g.take_star("hoarder")
+		g.stock(rng(s + 10), 0)
+		if g.star_offer == "hoarder" or int(Content.STARS[g.star_offer].rarity) > 1:
+			odd += 1
+	check("never one already in a pen, nothing rare in the first place", odd == 0, odd)
+	h.star_offer = "trader"
+	h.gold = 3
+	check("not without the gold", not h.can_buy_star())
 	h.gold = 10
-	check("not without the gold", not h.can_build_wonder("brood"))
-	h.gold = 40
-	check("only one on offer", not h.can_build_wonder("banner"))
-	h.build_wonder("brood")
-	check("the brood: built, paid, every nest one more", h.wonder == "brood" and h.gold == 40 - 18 and h.army().size() == 2)
-	check("only one wonder a run", not h.can_build_wonder("titan"))
-	var g := bare()
-	g.wonder = "gold_city"
-	check("city of gold: 6 more a round", g.income_gold() == Home.INCOME + 6)
-	var t := bare()
+	h.buy_star()
+	check("bought: paid, in the first pen, gone from the shelf", h.stars.size() == 1 and h.stars[0].id == "trader"
+		and h.gold == 6 and h.star_offer == "", [h.gold, h.stars])
+	check("the trader: a shelf of 6", h.shelf_size() == Content.SHOP + 1)
+	for id in ["mother", "scout", "doctor", "shield"]:
+		h.take_star(id)
+	h.star_offer = "saver"
+	check("five pens full: no more", h.stars.size() == Content.PENS and not h.can_buy_star() and h.take_star("saver").is_empty())
+	check("no star twice", bare().take_star("tri").size() == 1 and _with(["tri"]).take_star("tri").is_empty())
+	# Fed in pen order: 5 biomass for five stars eating 1 each, but the first round's 3 only reach three.
+	h.biomass = 3
+	var ev := h.feed()
+	check("three fed, the last two without", h.hungry == [3, 4] and h.biomass == 0
+		and ev[0].hungry == ["doctor", "shield"], [h.hungry, ev])
+	shelf(h, ["a_shell"])
+	check("the doctor without: affixes cost as ever", h.genes_cost(Content.offer(h.shelf[0])) == 2)
+	check("the shield without: no hit points more", h.hp_max() == Home.HP)
+	check("the trader fed: still a shelf of 6", h.shelf_size() == Content.SHOP + 1)
+	check("what they eat, all told", h.star_food() == 5)
+	h.biomass = 10
+	h.feed()
+	check("fed again next round: all", h.hungry.is_empty() and h.biomass == 5 and h.hp_max() == Home.HP + 10)
+	h.hungry = [1]
+	var back := h.sell_price(0)
+	h.sell_star(0)
+	check("sold: half its price back, the pens closing up, the hungry one still hungry", back == 2 and h.gold == 6 + 2
+		and h.stars[0].id == "mother" and h.hungry == [0], [h.gold, h.hungry])
+	var r := Run.new(3)
+	var offer := r.star_choice()
+	check("after a boss: three, two uncommon or rare, one legendary", offer.size() == 3
+		and int(Content.STARS[offer[0]].rarity) in [1, 2] and int(Content.STARS[offer[1]].rarity) in [1, 2]
+		and int(Content.STARS[offer[2]].rarity) == 3 and offer[0] != offer[1], offer)
+	r.home.take_star(offer[2])
+	check("none in the pens offered again", not offer[2] in r.star_choice())
+
+## Each star's own ability (Content.STARS).
+func _star_kinds() -> void:
+	var m := _with(["mother"])
+	m.build(Vector2i(0, 0), "nest_red")
+	m.build(Vector2i(4, 0), "nest_blue")
+	var a := m.army()
+	check("the mother: the first nest one more, free", a.size() == 3 and a[1].free and not a[2].free)
+	var b := _with(["belly", "fisher"])
+	b.build(Vector2i(0, 2), "pool")
+	b.biomass = 0
+	b.start_round(rng(), 0)
+	check("the belly: 4 more a round, the fisher a pool one more; neither eats", b.income_biomass() == 4 + 3 + 1
+		and b.biomass == 8 and b.hungry.is_empty(), [b.income_biomass(), b.biomass])
+	var sh := _with(["shield"])
+	sh.hp = 20
+	sh.biomass = 5
+	sh.start_round(rng(), 0)
+	check("the shield: 10 more hit points, one back a round", sh.hp_max() == Home.HP + 10 and sh.hp == 21, sh.hp)
+	var t := _with(["tri"])
 	t.build(Vector2i(0, 0), "nest_red")
-	t.wonder = "evo_tower"
-	shelf(t, ["a_shell"])
-	check("tower of evolution: an affix place more, affixes for no genes", t.slots(Vector2i(0, 0)) == 2
-		and t.genes_cost(Content.offer(t.shelf[0])) == 0)
-	t.wonder = "banner"
-	var s := t.spec_of(Vector2i(0, 0))
-	check("banner: +2 attack, a quarter more hp", int(s.atk_bonus) == 2 and is_equal_approx(float(s.hp_mult), 1.25))
-	t.wonder = "titan"
-	var titan: Array = t.army().filter(func(u: Dictionary) -> bool: return u.kind == "titan")
-	check("titan cage: a titan, free, in the middle of the front row", titan.size() == 1 and titan[0].free
+	t.build(Vector2i(0, 1), "nest_red")
+	check("the triceratops: the front row armour 1, not the second", int(t.spec_of(Vector2i(0, 0)).armor) == 1
+		and int(t.spec_of(Vector2i(0, 1)).armor) == 0)
+	for id in ["mother", "shield"]:
+		t.take_star(id)
+	check("three plant-eaters: armour 2", int(t.spec_of(Vector2i(0, 0)).armor) == 2)
+	var sc := _with(["scar"])
+	sc.build(Vector2i(0, 0), "nest_red")
+	sc.build(Vector2i(1, 0), "nest_blue")
+	check("scar: red units +1, not blue", int(sc.spec_of(Vector2i(0, 0)).atk_bonus) == 1 and int(sc.spec_of(Vector2i(1, 0)).atk_bonus) == 0)
+	for id in ["trader", "scout"]:
+		sc.take_star(id)
+	check("three meat-eaters: +2", int(sc.spec_of(Vector2i(0, 0)).atk_bonus) == 2)
+	var ho := _with(["horn"])
+	ho.build(Vector2i(0, 0), "nest_red")
+	check("the horn: 15% quicker", int(ho.spec_of(Vector2i(0, 0)).haste) == 15)
+	var sp := _with(["spitter"])
+	sp.build(Vector2i(0, 0), "nest_blue")
+	sp.build(Vector2i(1, 0), "nest_red")
+	var far := sp.spec_of(Vector2i(0, 0))
+	check("the spitter: the far-reaching a metre further, a point through armour; the near ones not",
+		float(far.range) == float(Content.UNITS.blue.range) + 1.0 and int(far.pierce) == 1
+		and int(sp.spec_of(Vector2i(1, 0)).pierce) == 0, [far.range, far.pierce])
+	var ok := _with(["oldking"])
+	ok.build(Vector2i(0, 0), "nest_red")
+	for k in 6:
+		ok.boss_beaten()
+	check("the old king: +1 a boss beaten, up to 4", int(ok.stars[0].grow) == 4 and int(ok.spec_of(Vector2i(0, 0)).atk_bonus) == 4)
+	ok.hungry = [0]
+	check("hungry: not growing, not giving", int(ok.spec_of(Vector2i(0, 0)).atk_bonus) == 0)
+	var nk := _with(["neck"])
+	for k in 3:
+		nk.start_round(rng(), 0)
+	check("the neck: a biomass more each round it has been here", nk.income_biomass() == 3, nk.income_biomass())
+	var si := _with(["sickle"])
+	si.build(Vector2i(0, 0), "nest_red")
+	si.hp = 20
+	si.biomass = 5
+	si.start_round(rng(), 0)
+	check("the sickle: an affix place more, a hit point a round", si.slots(Vector2i(0, 0)) == 2 and si.hp == 19, si.hp)
+	si.hp = 1
+	si.start_round(rng(), 0)
+	check("never kills", si.hp == 1)
+	var q := _with(["queen"])
+	q.build(Vector2i(0, 0), "nest_red")
+	check("the queen: every nest one more, a tenth less hit points", q.army().size() == 2
+		and is_equal_approx(float(q.spec_of(Vector2i(0, 0)).hp_mult), 0.9))
+	var gc := _with(["goldcrown"])
+	check("the gold crown: 6 more a round, a shelf of 4", gc.income_gold() == Home.INCOME + 6 and gc.shelf_size() == Content.SHOP - 1)
+	var fb := _with(["firstbird"])
+	fb.build(Vector2i(0, 0), "nest_red")
+	shelf(fb, ["a_shell"])
+	check("the first bird: an affix place more, affixes for no research", fb.slots(Vector2i(0, 0)) == 2
+		and fb.genes_cost(Content.offer(fb.shelf[0])) == 0)
+	var w := _with(["warlord"])
+	w.build(Vector2i(0, 0), "nest_red")
+	var s := w.spec_of(Vector2i(0, 0))
+	check("the warlord: +2 attack, a quarter more hit points", int(s.atk_bonus) == 2 and is_equal_approx(float(s.hp_mult), 1.25))
+	var ti := _with(["titan"])
+	ti.build(Vector2i(0, 0), "nest_red")
+	var titan: Array = ti.army().filter(func(u: Dictionary) -> bool: return u.kind == "titan")
+	check("the titan: a titan, free, in the middle of the front row", titan.size() == 1 and titan[0].free
 		and int(titan[0].row) == 0 and is_equal_approx(float(titan[0].lane), (Home.COLS - 1) * 0.5))
+	var r := Run.new(5)
+	r.home.take_star("bounty")
+	r.home.buildings.clear()
+	var before := r.home.gold
+	var f := Fight.make([], [], 1.0)
+	f.run()
+	var out := r.finish(f)
+	check("the bounty hunter: 2 gold more for a battle won", f.result != "won" or int(out.gold) == Content.WIN_GOLD + 2, out)
+	var gr := Run.new(5)
+	gr.home.take_star("oldking")
+	gr.round = 4
+	var gf := Fight.make([], [], 1.0)
+	gf.run()
+	gr.finish(gf)
+	check("a mini-boss beaten grows the old king", gf.result != "won" or int(gr.home.stars[0].grow) == 1, gr.home.stars)
 
-
-func _arks() -> void:
-	for id in Content.ARKS:
-		var r := Run.new(5)
-		r.choose_ark(id)
-		var a: Dictionary = Content.ARKS[id]
-		check("ark %s: its buildings" % id, r.home.buildings.size() == a.buildings.size(), r.home.buildings.size())
-		check("ark %s: its relic and gold" % id, a.relic in r.home.relics and r.home.gold == int(a.gold))
-		check("ark %s: nests on the battle line" % id, r.home.buildings.keys().all(func(p: Vector2i) -> bool:
-			return Home.front(p) == Content.is_nest(r.home.buildings[p].kind)))
-	var w := Run.new(5)
-	w.choose_ark("war")
-	check("the war ark's nest at level 2, making two", w.home.buildings.values().any(func(b: Dictionary) -> bool:
-		return b.kind == "nest_red" and int(b.level) == 2 and b.path == ["count"]))
 
 
 func _moving_on() -> void:
@@ -752,52 +772,23 @@ func _moving_on() -> void:
 	r.start_round()
 	var h := r.home
 	h.build(Vector2i(0, 1), "nest_blue")
-	h.buildings[Vector2i(0, 1)].level = 3
-	h.buildings[Vector2i(0, 1)].path = ["count", "elite"]
-	h.buildings[Vector2i(0, 1)].affixes = ["shell"]
+	h.take_star("hoarder")
+	h.take_star("neck")
+	h.stars[1].grow = 3
 	h.stash = [{"id": "a_blade"}]
 	h.gold = 17
-	h.relics.append("amber")
-	h.wonder = "gold_city"
-	var goods := r.packable()
-	check("every building can be packed, and the stash comes too", goods.size() == h.buildings.size() + 1)
-	var blue: Dictionary = goods.filter(func(g: Dictionary) -> bool: return g.id == "b_blue").front()
-	r.level = 0
+	h.genes = 9
+	var deck := h.deck.size()
 	r.round = Content.ROUNDS
-	r.move_on([blue, {"id": "a_blade"}], 1)
+	r.move_on(1)
 	check("on to the volcano", r.level == 1 and r.place == 1 and r.round == 1 and h.region == 1 and r.path == [0, 1])
-	check("the ark lands its nest and pool", h.buildings.size() == 2 and h.buildings.values().all(func(b: Dictionary) -> bool:
-		return int(b.level) == 1 and b.kind in ["nest_red", "pool"]))
+	check("the homeland made afresh: a red nest and a pool", h.buildings.size() == 2 and h.buildings.values().all(
+		func(b: Dictionary) -> bool: return int(b.level) == 1 and b.kind in ["nest_red", "pool"]))
 	check("the volcano's ground, behind the line", h.terrain.values().all(func(t: String) -> bool: return t in ["ore", "lava"])
 		and h.terrain.size() == 5 and h.terrain.keys().all(func(p: Vector2i) -> bool: return not Home.front(p)))
-	check("gold, relics and the wonder kept", h.gold == 17 and "amber" in h.relics and h.wonder == "gold_city")
-	check("the goods carried", h.stash.size() == 2 and h.stash[0].id == "b_blue" and not h.stash[0].has("from")
-		and not h.stash[1].has("kept"))
-	var p: Vector2i = h.stash_targets(0)[0]
-	h.place(0, p)
-	check("the blue nest, level 3, its choices and its shell, set down again", int(h.buildings[p].level) == 3
-		and h.buildings[p].path == ["count", "elite"] and h.buildings[p].affixes == ["shell"])
-	var fed := Run.new(10)
-	fed.home.buildings.clear()
-	fed.home.terrain.clear()
-	for x in 5:
-		fed.home.build(Vector2i(x, 0), "nest_red")
-		fed.home.buildings[Vector2i(x, 0)].level = 3
-		fed.home.buildings[Vector2i(x, 0)].path = ["count", "count"]
-	fed.home.build(Vector2i(0, 2), "pool")
-	fed.home.buildings[Vector2i(0, 2)].level = 3
-	var load := fed.default_goods()
-	check("five red nests at 3 and a pool at 3: the pool goes in place of a nest, so they are fed",
-		load.size() == 4 and load.any(func(g: Dictionary) -> bool: return g.id == "b_pool"), load.map(func(g: Dictionary) -> String:
-			return g.id))
-	check("fed: 3 nests and the ark's red eat 10, the pools make 11", Run.food_of(load) == [10, 11], Run.food_of(load))
-	var many := Run.new(8)
-	var lots: Array = []
-	for k in 9:
-		lots.append({"id": "b_pool"})
-	many.move_on(lots)
-	check("no more carried than the stash holds", many.home.stash.size() == Content.STASH)
-
+	check("the stars come along, grown as they were; gold, research, the deck and what the hoarder keeps too",
+		h.stars.size() == 2 and int(h.stars[1].grow) == 3 and h.gold == 17 and h.genes == 9 and h.deck.size() == deck
+		and h.stash.size() == 1)
 
 ## The map: the rainforest, then two places to pick one of for each level after it, none twice (GAME-DESIGN 22).
 func _map() -> void:
@@ -814,14 +805,14 @@ func _map() -> void:
 	var r := Run.new(8)
 	check("first the second level's two", r.next_places() == r.map[1] and not r.last_level())
 	var to: int = r.map[1][1]
-	r.move_on([], to)
+	r.move_on(to)
 	check("on to the one picked", r.place == to and r.home.region == to and r.level == 1 and r.path == [0, to])
 	check("its own ground", r.home.terrain.values().all(func(t: String) -> bool: return Content.LEVELS[to].terrain.has(t)))
 	r.round = 3
 	check("its own wave, as strong as the second level", r.wave() == Content.wave(to, 1, 3)
 		and is_equal_approx(r.power(), Content.TIER_POWER[1]))
 	check("then the third level's two", r.next_places() == r.map[2])
-	r.move_on([], int(r.map[2][0]))
+	r.move_on(int(r.map[2][0]))
 	check("the third level the last", r.last_level() and r.next_places().is_empty() and r.path.size() == 3)
 
 
@@ -925,7 +916,6 @@ func _economy() -> void:
 		return b.has("nest") or b.levels.all(func(l: Dictionary) -> bool:
 			return not l.has("drill") and not l.has("haste") and not l.has("hp"))))
 	var r := Run.new(12)
-	r.choose_ark("war")
 	r.start_round()
 	check("round 1: 5 gold", r.home.gold == 5, r.home.gold)
 	r.home.gold = 0
@@ -941,7 +931,7 @@ func _economy() -> void:
 	piles.biomass = 40
 	piles.genes = 30
 	piles.start_round(rng(), 0)
-	check("no cap on what is kept: biomass and research points pile up (damp still rots half)", piles.biomass == 20 + 4
+	check("no cap on what is kept: biomass and research points pile up", piles.biomass == 40 + 3
 		and piles.genes == 30 + 1 + Content.SAMPLER_POOL, [piles.biomass, piles.genes])
 
 
@@ -950,7 +940,6 @@ func _clone() -> void:
 	h.start_round(rng(), 0)
 	h.gold = 20
 	h.stash = [{"id": "b_red"}]
-	h.wonders = ["brood", "banner"]
 	var c := h.clone()
 	c.build(Vector2i(0, 0), "nest_red")
 	var bought := -1
@@ -960,15 +949,15 @@ func _clone() -> void:
 			bought = i
 			break
 	c.stash.clear()
-	c.relics.append("tooth")
+	c.take_star("doctor")
+	c.hungry = [0]
 	c.gold = 40
 	c.cut(0)
 	c.genes = 10
 	c.upgrade(0)
-	c.build_wonder("brood")
 	check("the copy changes alone", not h.buildings.has(Vector2i(0, 0)) and (bought < 0 or h.shelf[bought] != null)
-		and h.relics.is_empty() and h.stash.size() == 1 and h.terrain == c.terrain and h.deck.size() == Content.DECK.size()
-		and h.cuts == 0 and not h.deck[0].plus and h.wonder == "" and c.wonder == "brood")
+		and h.stars.is_empty() and h.hungry.is_empty() and h.stash.size() == 1 and h.terrain == c.terrain
+		and h.deck.size() == Content.DECK.size() and h.cuts == 0 and not h.deck[0].plus)
 	var f1 := Fight.make(h.army(), ["grey", "grey"], 1.0)
 	var f2 := Fight.make(h.clone().army(), ["grey", "grey"], 1.0)
 	f1.run()
@@ -1030,24 +1019,23 @@ func _texts() -> void:
 	for id in Content.OFFERS:
 		var o := Content.offer({"id": id})
 		check("text for " + id, Content.offer_text(o).length() > 3 and str(o.name) != "", Content.offer_text(o))
-	check("a packed nest says its level and that it is elite", Content.offer({"id": "b_red", "packed": {"level": 2,
-		"path": ["elite"], "affixes": ["shell"]}}).name.contains("精英"))
 	for kind in Content.BUILDINGS:
 		for l in range(1, Content.LEVEL_MAX + 1):
 			check("building text %s %d" % [kind, l], Content.building_text(kind, l) != "" and Content.level_text(kind, l) != "")
 		var b: Dictionary = Content.BUILDINGS[kind]
 		check("a school for " + kind, b.has("nest") or Content.SCHOOLS.has(b.get("school", "")))
-	for id in Content.RELICS:
-		check("relic " + id, Content.RELICS[id].says != "")
-	for id in Content.WONDERS:
-		check("wonder " + id, Content.WONDERS[id].says != "" and int(Content.WONDERS[id].price) > 10)
+	for id in Content.STARS:
+		var s: Dictionary = Content.STARS[id]
+		check("star " + id, s.says != "" and s.name != "" and Content.DIETS.has(s.diet) and int(s.price) > 0
+			and int(s.eat) >= 0 and int(s.rarity) in [0, 1, 2, 3])
+	check("the legendary ones dear, the common cheap", Content.STARS.values().all(func(s: Dictionary) -> bool:
+		return int(s.price) >= 14 if int(s.rarity) == 3 else int(s.price) <= 9))
 	for id in Content.TERRAIN:
 		check("terrain " + id, Content.TERRAIN[id].says != "")
 	for id in Content.OFFERS:
 		var p := Content.offer({"id": id, "plus": true})
 		check("upgraded text for " + id, str(p.name).ends_with("+") and Content.offer_text(p).length() > 3, Content.offer_text(p))
 	for l in Content.LEVELS:
-		check("rule of " + l.name, Content.RULES.has(l.rule))
 		check("ground of " + l.name, l.terrain.keys().all(func(t: String) -> bool: return Content.TERRAIN.has(t)))
 		check("foes of " + l.name, Content.ENEMIES.has(l.boss) and l.minis.size() == 2
 			and l.minis.all(func(k: String) -> bool: return Content.ENEMIES.has(k))

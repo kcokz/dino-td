@@ -4,18 +4,17 @@ extends SceneTree
 ##
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit]
 ##
-## random, smart and school play as tools/Policy.gd says, each run with the next ark (Content.ARKS) in turn; school is
-## smart keeping to the next school (Content.SCHOOLS) in turn, cutting another school's own buildings from the deck after
-## each mini-boss (its ark turns once all the schools have had a run, starting from the first seed's). After each round
-## random takes a card (or the gold) at random, the others the best (Policy.best_reward); after a mini-boss they work
-## on the deck (Policy.workshop); on the map, the first of the two.
-## All carry on what the packing screen picks to begin with. Prints, for each run, how far it got, the homeland's
-## health at each level's end and how many goods it carried on, what it built; then how many held each level -- and,
+## random, smart and school play as tools/Policy.gd says; school is smart keeping to the next school (Content.SCHOOLS)
+## in turn, cutting another school's own buildings from the deck after each mini-boss. After each round random takes a
+## card (or the gold) at random, the others the best (Policy.best_reward); after a mini-boss they work on the deck
+## (Policy.workshop); after a boss, a star (Policy.best_star; random: any); on the map, the first of the two. Prints,
+## for each run, how far it got, the homeland's health at each level's end, its stars and what it built; then how many
+## held each level -- and,
 ## for school, how each school did. "measure": also, each round, the army's strength against the wave's. "limit": no
 ## one comes, every battle is won, everything goes to growing; prints each run's strength round by round ("# curve") --
 ## tools/limit.py makes Content.LIMIT from them (run it with school, so that every way of playing counts) -- and, round
 ## by round, the strength the runs' armies had on average (never less than the round before within a level; each level
-## starting again from what the ark set down), the most any had, and the plain average.
+## starting again from what every place starts with), the most any had, and the plain average.
 
 var policy := "smart"
 var measure := false
@@ -38,7 +37,6 @@ func _init() -> void:
 		held.append(0)
 	var lost_battles := 0
 	var battles := 0
-	var arks: Array = Content.ARKS.keys()
 	var schools: Array = Content.SCHOOLS.keys()
 	var by_school := {}                # school -> [runs, held all, battles lost, hp left]
 	for k in runs:
@@ -47,9 +45,7 @@ func _init() -> void:
 		var run := Run.new(seed)
 		run.calm = limit
 		var school: String = schools[k % schools.size()] if policy == "school" else ""
-		# Each school in turn; for school, the ark turns once a round of schools, so no school always has the same one.
-		run.choose_ark(arks[(k / schools.size() + first) % arks.size()] if school != "" else arks[k % arks.size()])
-		var line := "seed %3d %-5s %-6s:" % [seed, run.ark, school]
+		var line := "seed %3d %-6s:" % [seed, school]
 		var losses := 0
 		var lost_here := 0
 		var g := 0
@@ -105,11 +101,13 @@ func _init() -> void:
 					line += "  ALL HELD"
 					all_held = true
 					break
-				var offer := run.relic_offer()
-				run.take_relic(Policy.best_relic(run, run.home, offer) if policy != "random" else offer[rng.randi() % offer.size()])
-				var goods := Policy.best_goods(run)
-				line += " carried %d" % mini(goods.size(), run.home.stash_size())
-				run.move_on(goods, Policy.best_place(run))
+				var offer := run.star_choice()
+				var pick := Policy.best_star(run, run.home, offer) if policy != "random" else {"id": offer[rng.randi() % offer.size()], "release": -1}
+				if pick.release >= 0:
+					run.home.sell_star(pick.release)
+				if pick.id != "":
+					run.home.take_star(pick.id)
+				run.move_on(Policy.best_place(run))
 		if school != "":
 			var sc: Array = by_school.get(school, [0, 0, 0, 0])
 			sc[0] += 1
@@ -123,7 +121,7 @@ func _init() -> void:
 			var key := "%s%d%s%s" % [b.kind, b.level, "*" + "*".join(b.path) if b.path.count("elite") > 0 else "",
 				"+" + "+".join(b.affixes) if not b.affixes.is_empty() else ""]
 			built[key] = built.get(key, 0) + 1
-		print(line, "  | wonder ", run.home.wonder, " relics ", run.home.relics, " built ", built)
+		print(line, "  | stars ", run.home.stars.map(func(s: Dictionary) -> String: return s.id), " built ", built)
 		if limit:
 			print("# curve %s: %s" % [school if school != "" else "-", curve])
 	var said: Array = []
@@ -140,7 +138,7 @@ func _init() -> void:
 		var top := 0.0
 		for i in best.size():
 			if i % Content.ROUNDS == 0:
-				top = 0.0                                       # a new level: the ark starts again from what it carried
+				top = 0.0                                       # a new level: the homeland starts again
 			top = maxf(top, total[i] / maxf(1.0, seen[i]))     # never less than the round before, within a level
 			var end := ", " if i < best.size() - 1 else "]"
 			out += "%d%s" % [roundi(top), end]

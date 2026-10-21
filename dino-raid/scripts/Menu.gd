@@ -10,7 +10,7 @@ signal _codex_closed
 
 const VERSION := "v0.13"
 const NAME := "DINO RAID"
-const SUBTITLE := "基因方舟　·　异星虫群"
+const SUBTITLE := "恐龙园　·　异星虫群"
 
 var game: Game
 var screen := ""                  # what is up: "title", "pause", "" (for Game and the tools)
@@ -463,8 +463,9 @@ func _blur() -> Shader:
 
 # -- The codex -------------------------------------------------------------------------------------------------
 
-## The codex: all there is, by kind -- our creatures, nests and buildings, gene affixes, relics, the monsters, the
-## wonders -- each with its picture taken from the model, what it is, and its numbers. Pointed at or clicked, an entry
+## The codex: all there is, by kind -- our creatures, nests and buildings, gene affixes, the star dinosaurs, the
+## monsters -- each with its picture (painted, or taken from the model), what it is, and its numbers. Pointed at or
+## clicked, an entry
 ## is shown large beside the shelf. Until closed.
 func codex() -> void:
 	_codex = Control.new()
@@ -553,7 +554,7 @@ func codex() -> void:
 						pic.texture = t)
 	medal.draw.connect(func() -> void: _medal(medal, medal.get_meta("medal", {}), 78.0))
 	var pages := [["我们的兵", _units_page()], ["巢和建筑", _buildings_page()], ["基因词条", _affixes_page()],
-		["遗物", _relics_page()], ["怪物", _monsters_page()], ["奇观", _wonders_page()]]
+		["明星恐龙", _stars_page()], ["怪物", _monsters_page()]]
 	var tab_buttons: Array = []
 	var open_page := func(k: int) -> void:
 		for ch in grid.get_children():
@@ -634,8 +635,8 @@ func _codex_tile(e: Dictionary, show: Callable) -> Button:
 	return b
 
 
-## A relic's medallion, `r` across its middle: a dark rim ringed in gold (coral for a boss's), the fossil's colour, its
-## first word.
+## A star dinosaur's medallion (until it is painted), `r` across its middle: a dark rim ringed in gold (coral for a
+## legendary one), its colour, its first word.
 func _medal(c: Control, m: Dictionary, r: float) -> void:
 	if m.is_empty():
 		return
@@ -668,7 +669,7 @@ func _units_page() -> Array:
 			if r.makes == kind:
 				from = Lang.t("进化来的：%s + %s") % [Lang.t(Content.AFFIXES[r.affixes[0]].name), Lang.t(Content.AFFIXES[r.affixes[1]].name)]
 		if kind == "titan":
-			from = Lang.t("奇观巨兽笼放出来的")
+			from = Lang.t("明星恐龙泰坦带来的")
 		out.append({"key": "u:" + kind, "name": u.name, "kind": from, "text": "%s\n%s\n%s%s" % [Lang.t(u.role), _stats(u),
 			Lang.t("不吃生物质") if int(u.food) == 0 else Lang.t("每只吃 %d 生物质") % u.food, gift]})
 	return out
@@ -713,14 +714,19 @@ func _affixes_page() -> Array:
 	return out
 
 
-func _relics_page() -> Array:
+func _stars_page() -> Array:
 	var out: Array = []
-	for id in Content.RELICS:
-		var r: Dictionary = Content.RELICS[id]
-		var boss: bool = r.get("boss", false)
-		out.append({"medal": {"color": r.color, "boss": boss, "word": r.name.left(1)}, "name": r.name,
-			"kind": Lang.t("首领遗物：很强，但有代价") if boss else Lang.t("化石遗物"),
-			"text": Lang.t(r.says).replace("；", "\n").replace("; ", "\n")})
+	for id in Content.STARS:
+		var s: Dictionary = Content.STARS[id]
+		var e := {"name": s.name, "kind": Lang.t("%s · %s · %s · %d 金") % [Lang.t(s.kind), Lang.t(Content.DIETS[s.diet]),
+			Lang.t(Content.RARITY_NAMES[int(s.rarity)]), int(s.price)],
+			"text": Lang.t(s.says).replace("；", "\n").replace("; ", "\n") + "\n" + (Lang.t("每轮吃 %d 生物质") % int(s.eat)
+				if int(s.eat) > 0 else Lang.t("不吃生物质"))}
+		if Art.of("s_" + id) != null:
+			e.key = "s:" + id
+		else:
+			e.medal = {"color": s.back, "boss": int(s.rarity) == 3, "word": Lang.t(s.name).left(1)}
+		out.append(e)
 	return out
 
 
@@ -748,13 +754,6 @@ func _monsters_page() -> Array:
 			"text": "\n".join(more)})
 	return out
 
-
-func _wonders_page() -> Array:
-	var out: Array = []
-	for id in Content.WONDERS:
-		var w: Dictionary = Content.WONDERS[id]
-		out.append({"key": "w:" + id, "name": w.name, "kind": Lang.t("奇观 · %d 金 · 一局只能造一座") % int(w.price), "text": w.says})
-	return out
 
 
 ## A fighter's numbers, said plainly.

@@ -5,16 +5,18 @@ extends Control
 ## a hairline in its rarity's metal (bronze, silver, gold) with a diamond on it under the name; its price on a coin
 ## laid over the painting's corner, what else it costs (research points) on the other. What it does is told only when
 ## it is pointed at or taken up (the player, 2026-10-20: "数字，文字都尽量去除……具体信息基本上都靠hover"); at rest its
-## foot says only what kind it is. A good already had -- kept in the stash, or carried from the last place -- shows a
-## jade token instead of a price: 存, 带. A place on the shelf already bought from shows an empty outline. Dealt, it
-## comes face down and turns over.
+## foot says only what kind it is. A good already had -- kept in the stash -- shows a jade token instead of a price: 存.
+## A place on the shelf already bought from shows an empty outline. A star dinosaur on offer (after the shelf) is a
+## card too: its painting (or a medallion of its colour), what it eats a round on the other corner. Dealt, it comes
+## face down and turns over.
 
 signal clicked(view: CardView)
 signal hovered(view: CardView, on: bool)
 
 const SIZE := Vector2(150, 212)
-const METAL := [Color(0.76, 0.55, 0.33), Color(0.82, 0.85, 0.9), Color(1.0, 0.82, 0.38)]
-const RARITY := ["普通", "少见", "稀有"]
+const METAL := [Color(0.76, 0.55, 0.33), Color(0.82, 0.85, 0.9), Color(1.0, 0.82, 0.38), Color(0.85, 0.55, 1.0)]
+const RARITY := ["普通", "少见", "稀有", "传说"]
+const FOOD := Color(0.55, 0.85, 0.35)
 const GENES := Color(0.3, 0.85, 0.75)
 const ART := Rect2(5, 5, 140, 128)        # where the painting shows
 const BODY_TOP := Color(0.075, 0.085, 0.09)
@@ -31,7 +33,9 @@ var marked := false               # its kind is about to be taken out of the sho
 var genes_shown := -1             # the genes it costs here (Home.genes_cost), or -1 for what it says
 var purse := {}                   # what the homeland has ({gold, genes}); {} for none
 var turn := 1.0                   # which way it faces: 1 its face, -1 its back; between, turning over
+var star := ""                    # a star dinosaur on offer (Content.STARS) instead of a good
 var _hover := false
+var _framed := false
 
 static var _arts := {}            # painting key -> Texture2D (or null: there is none)
 
@@ -43,10 +47,18 @@ func setup(p_ci: Dictionary, p_kept := false) -> void:
 	_frame()
 
 
+## A star dinosaur on offer: its card.
+func setup_star(id: String) -> void:
+	star = id
+	var s: Dictionary = Content.STARS[id]
+	c = {"name": Lang.t(s.name), "rarity": int(s.rarity), "price": int(s.price), "type": "star", "plus": false}
+	if not _framed:
+		_frame()
+	queue_redraw()
+
+
 ## The token a good already had shows instead of a price: "" for one still to buy.
 func token() -> String:
-	if ci.has("packed"):
-		return "带"
 	return "存" if kept else ""
 
 
@@ -59,6 +71,7 @@ func setup_sold(label := "已买") -> void:
 
 
 func _frame() -> void:
+	_framed = true
 	custom_minimum_size = SIZE
 	size = SIZE
 	pivot_offset = Vector2(SIZE.x * 0.5, SIZE.y)
@@ -159,7 +172,7 @@ func _draw_sold() -> void:
 func _draw_face() -> void:
 	var rid := get_canvas_item()
 	var full := Rect2(Vector2.ZERO, SIZE)
-	var metal: Color = METAL[clampi(int(c.rarity), 0, 2)]
+	var metal: Color = METAL[clampi(int(c.rarity), 0, METAL.size() - 1)]
 	if chosen or _hover:
 		Style.veil(rid, full.grow(14.0), Color(Style.GOLD_BRIGHT, 0.32 if chosen else 0.2), Color(Style.AMBER, 0.2 if chosen else 0.12), 16.0)
 	_body(full)
@@ -167,6 +180,11 @@ func _draw_face() -> void:
 	var tex := _art()
 	if tex != null:
 		_rounded_texture(tex, ART, 6.0)
+	elif star != "":
+		# No painting yet: its colours, its first word.
+		var s: Dictionary = Content.STARS[star]
+		Style.fill(rid, ART, 6.0, (s.back as Color).lightened(0.1), (s.back as Color).darkened(0.35))
+		_text(ART.get_center() + Vector2(0, 22), str(c.name).left(1), 60, s.belly, Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER, 6)
 	else:
 		Style.fill(rid, ART, 6.0, Color(0.2, 0.24, 0.2), Color(0.08, 0.1, 0.09))
 	Style.veil(rid, Rect2(ART.position.x, ART.end.y - 26.0, ART.size.x, 34.0), Color(BODY_TOP, 0.0), Color(BODY_TOP, 0.95), 1.0)
@@ -181,7 +199,8 @@ func _draw_face() -> void:
 	Style.diamond(rid, Vector2(SIZE.x * 0.5, 160), 3.0, metal)
 	# What it does -- pointed at or taken up; else only what kind it is.
 	if _hover or chosen:
-		draw_multiline_string(Fonts.serif(600), Vector2(10, 176), Content.offer_text(c), HORIZONTAL_ALIGNMENT_CENTER,
+		var says := Lang.t(Content.STARS[star].says) if star != "" else Content.offer_text(c)
+		draw_multiline_string(Fonts.serif(600), Vector2(10, 176), says, HORIZONTAL_ALIGNMENT_CENTER,
 			SIZE.x - 20, 11, 3, Color(Style.PARCHMENT, 0.92))
 	else:
 		_text(Vector2(SIZE.x * 0.5, 184), footer(), 10, Color(metal, 0.8), Fonts.serif(700), HORIZONTAL_ALIGNMENT_CENTER)
@@ -193,7 +212,10 @@ func _draw_face() -> void:
 		_token(Vector2(22, 22), Lang.t(token()))
 	else:
 		_price(Vector2(22, 22))
-	_genes()
+	if star != "":
+		_food()
+	else:
+		_genes()
 	if not affordable:
 		Style.fill(rid, full.grow(-1.0), 8.0, Color(0, 0, 0, 0.45), Color(0, 0, 0, 0.5))
 
@@ -217,12 +239,16 @@ func _art() -> Texture2D:
 			key = "a_" + str(c.affix)
 		"raise":
 			key = "raise"
+		"star":
+			key = "s_" + star
 	if key != "" and not _arts.has(key):
 		_arts[key] = Art.of(key)
 		# A texture loaded while drawing is not ready to show until the next frames: drawn again then.
 		_redraw_soon()
 	if _arts.get(key) != null:
 		return _arts[key]
+	if star != "":
+		return null
 	return Portraits.of_offer(c, func(_t: Texture2D) -> void:
 		if is_instance_valid(self):
 			queue_redraw())
@@ -295,8 +321,24 @@ func _genes() -> void:
 		HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 
+## What a star eats a round, at the painting's top right: a green drop and how much (none: nothing shown).
+func _food() -> void:
+	var n := int(Content.STARS[star].eat)
+	if n <= 0:
+		return
+	var at := Vector2(SIZE.x - 20.0, 20.0)
+	draw_circle(at + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.5), true, -1.0, true)
+	draw_circle(at, 12.0, Color(0.03, 0.07, 0.03, 0.85), true, -1.0, true)
+	draw_arc(at, 12.0, 0.0, TAU, 40, Color(FOOD, 0.8), 1.0, true)
+	Icons.draw(self, Icons.BIOMASS, at + Vector2(0, -1), 18.0)
+	_text(at + Vector2(9, 13), str(n), 13, Color(0.9, 1.0, 0.85), Fonts.numbers(), HORIZONTAL_ALIGNMENT_CENTER, 3)
+
+
 ## What kind of good it is, said at its foot: a building's part of the homeland and its school, how rare it is.
 func footer() -> String:
+	if star != "":
+		var s: Dictionary = Content.STARS[star]
+		return " · ".join([Lang.t("明星恐龙"), Lang.t(Content.DIETS[s.diet]), Lang.t(RARITY[int(s.rarity)])])
 	var bits: Array = [Lang.t(Content.TYPES[c.type])]
 	if c.type == "build":
 		var b: Dictionary = Content.BUILDINGS[c.builds]

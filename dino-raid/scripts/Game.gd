@@ -5,21 +5,21 @@ extends Node3D
 ## lands in the rainforest. A round: the place has its way, the
 ## buildings bring in gold, biomass and genes, the shelf is stocked and the nests hatch this round's army -- standing
 ## in the yard as it will stand in battle, where their nests stand on the battle line; the player buys -- buildings,
-## raises (a nest's as a choice: one more, or elite), gene affixes -- or keeps what is bought for later, puts down what
-## was kept, takes a kind out of the shop, builds the wonder, watching the army change; then sends it out; the battle
-## fights itself, and the army is gone with it. Won: gold and research points; lost: the homeland is hurt; either way,
-## interest on the gold kept, and one of three cards for the deck the shop draws from -- or gold instead. Round 3 is
-## against the place's mini-boss, and after it the deck can be cut and upgraded. Five rounds hold a place, the last
-## against its boss; a
-## place held brings a relic, and the ark moves on -- carrying all the gold, the wonder and what the player packs, no
-## more than the stash holds -- to the volcano. How the battle will end is worked out and shown before it is fought,
-## and again with the offer, the good, the choice or the wonder pointed at.
+## raises (a nest's as a choice: one more, or elite), gene affixes, a star dinosaur for a pen (GAME-DESIGN 24) -- or
+## keeps what is bought for later with the hoarder, puts down what was kept, sells a star, watching the army change;
+## then sends it out; the battle fights itself, and the army is gone with it. Won: gold and research points; lost: the
+## homeland is hurt; either way, interest on the gold kept, and one of three cards for the deck the shop draws from --
+## or gold instead. Rounds 4 and 8 are against the place's mini-bosses, and after each the deck can be cut and upgraded.
+## Twelve rounds hold a place, the last against its boss; a place held brings a star dinosaur to choose, and the run
+## goes on to the next place picked on the map, where the homeland is made afresh -- the stars, the gold, the deck and
+## the research points going on with it. How the battle will end is worked out and shown before it is fought, and again
+## with the offer, the good or the choice pointed at.
 ##
 ## Every player action goes through act(what, data). Coloured blocks stand in for what will be.
 
 signal departed
 
-enum Phase { BUSY, PLAN, FIGHT, PACK, MOVE, DONE, TITLE }
+enum Phase { BUSY, PLAN, FIGHT, MOVE, DONE, TITLE }
 
 const HOME_AT := Vector3(0, 0, 4.0)
 const HOME_DIST := 44.0
@@ -31,7 +31,6 @@ const SWAP_TINT := Color(0.95, 0.65, 0.3)
 const HOT_TINT := Color(0.8, 1.0, 0.55)
 const BAD_TINT := Color(0.95, 0.42, 0.34)
 const LOOK_TINT := Color(0.86, 0.79, 0.64)
-const PACK_TINT := Color(1.0, 0.8, 0.3)
 
 var run: Run
 var home: Home
@@ -44,18 +43,16 @@ var hud: Hud
 var phase := Phase.BUSY
 var held := -1                    # the shelf place taken up, or -1
 var held_k := -1                  # the stash place taken up, or -1
-var hover := {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}   # thing: "stash", "relics", "wonder" (HomeView)
+var hover := {"plot": HomeView.NOWHERE, "unit": "", "pen": -1}     # pen: a star dinosaur's pen (HomeView)
 var fight: Fight                  # the battle being fought, or null
 var speed := 1.0
 var at_home := true               # the camera is over the homeland (not the battle field)
 var forecast := {}                # this round's battle as things stand: {result, left, total, harm, loot}
 var preview := {}                 # the same with what is taken up used; {} when none
 var effects := {}                 # plot -> [short lines]: what that would change there (for Tags)
-var pack_plots := {}              # packing: plot -> true, the buildings the ark takes
-var pack_kept := {}               # packing: stash place -> true, the goods kept that it takes
 var pending := {}                 # a nest's raise waiting for its choice: {from: "buy" or "place", slot, at}; {} if none
 
-var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice, or a wonder
+var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice
 
 var menu: Menu
 var going := -1                   # the place picked on the map to move on to
@@ -155,17 +152,9 @@ func _process(delta: float) -> void:
 # -- What the player does --------------------------------------------------------------------------------------
 
 ## The one door for a player's action: "buy" {slot, at, choice}, "store" {slot}, "place" {slot, at, choice},
-## "choose" {choice} (for the raise waiting), "remove" {slot}, "wonder" {id}, "reroll", "fight"; while packing, "pack"
-## {at} or {kept} and "depart". Whether it happened.
+## "choose" {choice} (for the raise waiting), "star" (the star on offer bought), "sell" {pen}, "reroll", "fight".
+## Whether it happened.
 func act(what: String, data := {}) -> bool:
-	if phase == Phase.PACK:
-		match what:
-			"pack":
-				return _toggle_pack(data)
-			"depart":
-				_depart()
-				return true
-		return false
 	if phase != Phase.PLAN:
 		return false
 	match what:
@@ -186,12 +175,18 @@ func act(what: String, data := {}) -> bool:
 			aimed = ""
 			return act(p.from, {"slot": p.slot, "at": p.at, "choice": data.get("choice", "count")})
 
-		"wonder":
-			var ev := home.build_wonder(str(data.get("id", "")))
+		"star":
+			var ev := home.buy_star()
 			if ev.is_empty():
 				return false
-			aimed = ""
-			home_view.show_wonder(true)
+			_changed(ev)
+			hud.deal(home.shelf)
+			return true
+		"sell":
+			var ev := home.sell_star(int(data.get("pen", -1)))
+			if ev.is_empty():
+				return false
+			held_k = -1
 			_changed(ev)
 			return true
 		"store":
@@ -234,7 +229,7 @@ func hold(i: int) -> void:
 	refresh()
 
 
-## What the HUD points at, to show what it would do: "count" or "elite" (the raise waiting), a wonder's id, or "".
+## What the HUD points at, to show what it would do: "count" or "elite" (the raise waiting), or "".
 func aim(what: String) -> void:
 	aimed = what
 	refresh()
@@ -277,10 +272,15 @@ func _changed(ev: Array) -> void:
 						tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, Lang.t("进化！%s") % Lang.t(Content.UNITS[sp.kind].name),
 							(Content.UNITS[sp.kind].color as Color).lightened(0.3), 28)
 			"stored":
-				tags.float_text(Vector3(-8, 3.0, HomeView.YARD_Z - 2.0), Lang.t("存起来了"), Color(0.6, 1.0, 0.55), 22)
-			"wonder":
-				tags.float_text(HomeView.WONDER_AT + Vector3(0.0, 3.0, 3.0), Lang.t("%s 造好了！") % Lang.t(Content.WONDERS[e.id].name),
-					Content.WONDERS[e.id].color, 30)
+				tags.float_text(_pen_of("keep") + Vector3(0, 3.0, 0), Lang.t("囤囤收好了"), Color(0.6, 1.0, 0.55), 22)
+			"star":
+				home_view.refresh_pens()
+				tags.float_text(HomeView.PEN_AT[home.stars.size() - 1] + Vector3(0, 3.2, 0),
+					Lang.t("%s来了！") % Lang.t(Content.STARS[e.id].name), (Content.STARS[e.id].back as Color).lightened(0.4), 26)
+			"sold":
+				home_view.refresh_pens()
+				tags.float_text(HomeView.PEN_AT[0] + Vector3(0, 3.2, 4.0), Lang.t("%s走了，+%d 金") % [Lang.t(Content.STARS[e.id].name),
+					e.gold], Color(1.0, 0.8, 0.4), 24)
 	home_view.sync_army(home.army())
 	refresh()
 
@@ -319,28 +319,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			debug = not debug
 			refresh()
 		elif k == KEY_SPACE or k == KEY_ENTER:
-			act("depart" if phase == Phase.PACK else "fight")
+			act("fight")
 
 
 func _click() -> void:
-	match str(hover.get("thing", "")):
-		"stash":
-			# The card box: the good taken up kept in it, if it can be; else it opens (or shuts).
-			if phase == Phase.PLAN and held >= 0 and home.can_store(held):
-				act("store", {"slot": held})
-			elif phase == Phase.PLAN:
-				hud.stash_open = not hud.stash_open
-				refresh()
+	var pen := int(hover.get("pen", -1))
+	if pen >= 0:
+		# A pen: the hoarder's takes the good taken up to keep, if it can; a star's own screen otherwise (to sell it).
+		if phase != Phase.PLAN or pen >= home.stars.size():
 			return
-		"wonder":
-			if phase == Phase.PLAN and home.wonder == "":
-				_choose_wonder()
-			return
-		"relics":
-			return
-	if phase == Phase.PACK:
-		if hover.plot != HomeView.NOWHERE and home.buildings.has(hover.plot):
-			act("pack", {"at": hover.plot})
+		if held >= 0 and Content.STARS[home.stars[pen].id].has("keep") and home.can_store(held):
+			act("store", {"slot": held})
+		else:
+			_pen_screen(pen)
 		return
 	var good := _taken()
 	if phase != Phase.PLAN or good.is_empty():
@@ -351,7 +342,7 @@ func _click() -> void:
 	var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
 	var c := Content.offer(good)
 	var raise_nest: bool = c.type == "raise" and at in fits and Content.is_nest(home.buildings[at].kind)
-	var plus_nest: bool = c.type == "build" and c.plus and Content.is_nest(c.builds) and at in fits and not good.has("packed")
+	var plus_nest: bool = c.type == "build" and c.plus and Content.is_nest(c.builds) and at in fits
 	if raise_nest or plus_nest:
 		# A nest's raise (an upgraded nest's, put down at level 2, too): one more, or elite -- the HUD asks which.
 		pending = {"from": "buy" if held >= 0 else "place", "slot": held if held >= 0 else held_k, "at": at}
@@ -373,32 +364,37 @@ func _taken() -> Dictionary:
 
 
 func _hover_at(pos: Vector2) -> void:
-	var h := {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}
+	var h := {"plot": HomeView.NOWHERE, "unit": "", "pen": -1}
 	if at_home:
-		var thing := home_view.thing_at(camera, pos) if phase in [Phase.PLAN, Phase.PACK] else ""
-		if thing != "":
-			h.thing = thing
+		var pen := home_view.pen_at(camera, pos) if phase == Phase.PLAN else -1
+		if pen >= 0:
+			h.pen = pen
 		else:
 			h = home_view.pick(camera, pos, _want())
-			h.thing = ""
-	if h.plot != hover.plot or h.unit != hover.unit or h.thing != str(hover.get("thing", "")):
+			h.pen = -1
+	if h.plot != hover.plot or h.unit != hover.unit or h.pen != int(hover.get("pen", -1)):
 		hover = h
 		refresh()
 
 
-## The wonders on offer, shown to choose from (the wonder's ground beside the homeland clicked): one built, or none.
-func _choose_wonder() -> void:
-	var id: String = await hud.choose_wonder(home.wonders)
-	aimed = ""
-	if id != "":
-		act("wonder", {"id": id})
+## A star dinosaur's own screen (its pen clicked): sold, or kept.
+func _pen_screen(pen: int) -> void:
+	_let_go()
+	if await hud.pen_menu(pen) == "sell":
+		act("sell", {"pen": pen})
 	refresh()
+
+
+## Where the pen of the star that does `key` (Content.STARS) stands; the first pen's place if there is none.
+func _pen_of(key: String) -> Vector3:
+	for k in home.stars.size():
+		if Content.STARS[home.stars[k].id].has(key):
+			return HomeView.PEN_AT[k]
+	return HomeView.PEN_AT[0]
 
 
 ## What the cursor should find, for the good taken up.
 func _want() -> String:
-	if phase == Phase.PACK:
-		return "building"
 	var good := _taken()
 	if phase != Phase.PLAN or good.is_empty():
 		return "any"
@@ -415,85 +411,31 @@ func _aim(_c: Dictionary) -> Variant:
 	return hover.plot if hover.plot != HomeView.NOWHERE else null
 
 
-# -- Packing and moving on --------------------------------------------------------------------------------------
+# -- Moving on --------------------------------------------------------------------------------------------------
 
-## A building or a kept good put in the ark or taken out again -- no more than the stash holds.
-func _toggle_pack(data: Dictionary) -> bool:
-	var plot := data.has("at")
-	var key: Variant = data.get("at") if plot else int(data.get("kept", -1))
-	var list := pack_plots if plot else pack_kept
-	if plot and not home.buildings.has(key) or not plot and (int(key) < 0 or int(key) >= home.stash.size()):
-		return false
-	if list.has(key):
-		list.erase(key)
-	elif pack_plots.size() + pack_kept.size() >= home.stash_size():
-		tags.float_text(Vector3(0, 4.0, 0), Lang.t("装满了：最多 %d 样，先放下一样") % home.stash_size(), Color(1.0, 0.6, 0.4), 22)
-		return false
-	else:
-		list[key] = true
-	refresh()
-	return true
-
-
-## The goods the ark takes as things stand.
-func packed_goods() -> Array:
-	return run.packable().filter(func(g: Dictionary) -> bool:
-		return g.has("from") and pack_plots.has(g.from) or g.has("kept") and pack_kept.has(int(g.kept)))
-
-
-## What the homeland in the next place would eat and make each round, with what the ark takes and what it sets down
-## of itself: [biomass its nests' units eat, biomass its pools make] -- at their levels, before neighbours and ground.
-func pack_food() -> Array:
-	return Run.food_of(packed_goods())
-
-
-## Packing on the homeland: the ark's load picked -- to begin with, what is worth most, fed (Run.default_goods) -- until
-## the player sets out.
-func _pack() -> void:
-	phase = Phase.PACK
+## On to the place picked on the map: the screen goes dark, the homeland is made afresh there, the screen comes up on
+## it.
+func _move() -> void:
+	phase = Phase.MOVE
 	held = -1
 	held_k = -1
-	pack_plots.clear()
-	pack_kept.clear()
-	for g in run.default_goods():
-		if g.has("from"):
-			pack_plots[g.from] = true
-		else:
-			pack_kept[int(g.kept)] = true
-	hud.stow()
 	refresh()
-	await departed
-
-
-## Setting out: the ark comes down and takes what was packed, the rest is left; it flies to the next place and sets
-## down what the ark itself brings there -- the packed goods wait in the stash.
-func _depart() -> void:
-	var goods := packed_goods()
-	phase = Phase.MOVE
-	refresh()
-	await home_view.ark_down()
-	await home_view.load_up(pack_plots.keys())
-	await home_view.ark_up()
 	await hud.fade(true)
-	run.move_on(goods, going)
-	pack_plots.clear()
-	pack_kept.clear()
+	run.move_on(going)
 	world.dress(run.place)
 	home_view.lay_ground()
+	home_view.rebuild()
+	home_view.sync_army(home.army(), false)
 	_version += 1
 	refresh()
 	await hud.fade(false)
-	await home_view.ark_down()
-	await home_view.set_down()
-	await home_view.ark_up()
-	departed.emit()
 
 
 # -- What is shown --------------------------------------------------------------------------------------------
 
 ## The forecast worked out again where the homeland changed; the plots the good taken up can go on lit (orange where
-## it would pull a building down), the one it points at brighter, and the forecast and what changes with it there;
-## while packing, the buildings the ark takes lit gold; the HUD brought up to date.
+## it would pull a building down), the one it points at brighter, and the forecast and what changes with it there; the
+## HUD brought up to date.
 ## The language changed (Settings): the screen's words made again.
 func relanguage() -> void:
 	hud.relanguage()
@@ -520,9 +462,6 @@ func refresh() -> void:
 						h.buy(p.slot, p.at, choice)
 					else:
 						h.place(p.slot, p.at, choice))
-		elif Content.WONDERS.has(aimed):
-			var id := aimed
-			_try("wonder" + id, func(h: Home) -> void: h.build_wonder(id))
 		elif not good.is_empty():
 			var c := Content.offer(good)
 			var fits := home.targets(held) if held >= 0 else home.stash_targets(held_k)
@@ -543,14 +482,9 @@ func refresh() -> void:
 				tints[at] = BAD_TINT
 		elif hover.plot != HomeView.NOWHERE and home.is_open(hover.plot):
 			tints[hover.plot] = LOOK_TINT
-	elif phase == Phase.PACK:
-		for p in pack_plots:
-			tints[p] = PACK_TINT
-		if hover.plot != HomeView.NOWHERE and home.buildings.has(hover.plot) and not pack_plots.has(hover.plot):
-			tints[hover.plot] = LOOK_TINT
 	home_view.tints = tints
 	home_view.paint()
-	home_view.refresh_things(phase == Phase.PLAN and held >= 0 and home.can_store(held))
+	home_view.refresh_pens(phase == Phase.PLAN and held >= 0 and home.can_store(held))
 	hud.refresh()
 
 
@@ -677,25 +611,9 @@ func hint() -> String:
 func describe() -> String:
 	if not at_home or phase == Phase.DONE or phase == Phase.MOVE:
 		return ""
-	match str(hover.get("thing", "")):
-		"stash":
-			if phase == Phase.PLAN and held >= 0 and home.can_store(held):
-				return Lang.t("存起来：%d 金") % home.store_price(held)
-			var kept: Array = home.stash.map(func(g: Dictionary) -> String: return str(Content.offer(g).name))
-			return Lang.t("存货 %d / %d") % [home.stash.size(), home.stash_size()] + \
-				(("\n" + Lang.t("、").join(kept) + "\n" + Lang.t("点开看看")) if not kept.is_empty() else "")
-		"relics":
-			var lines: Array = []
-			for id in home.relics:
-				var r: Dictionary = Content.RELICS[id]
-				lines.append(Lang.t("%s：%s") % [Lang.t(r.name), Lang.t(r.says)])
-			return Lang.t("遗物") + ("\n" + "\n".join(lines) if not lines.is_empty() else "")
-		"wonder":
-			var lines: Array = [Lang.t("奇观（一局只能造一座）")]
-			for id in home.wonders:
-				var w: Dictionary = Content.WONDERS[id]
-				lines.append(Lang.t("%s · %d 金：%s") % [Lang.t(w.name), w.price, Lang.t(w.says)])
-			return "\n".join(lines)
+	var pen := int(hover.get("pen", -1))
+	if pen >= 0:
+		return _pen_text(pen)
 	if hover.unit != "":
 		for u in home.army():
 			if u.id == hover.unit:
@@ -714,15 +632,32 @@ func describe() -> String:
 	var text := _building_text(p)
 	if ground != "":
 		text += Lang.t("\n建在%s上：%s") % [Lang.t(Content.TERRAIN[ground].name), Lang.t(Content.TERRAIN[ground].says)]
-	if phase == Phase.PACK:
-		text = (Lang.t("点一下：留下，不带走\n") if pack_plots.has(p) else Lang.t("点一下：带走\n")) + text
 	return text
+
+
+## A pen pointed at: its star -- what it is, what it does, what it eats and whether it went without -- or that it is
+## empty.
+func _pen_text(pen: int) -> String:
+	if pen >= home.stars.size():
+		return Lang.t("空围栏：能养一只明星恐龙（商店最后一格有卖，打败首领也能带一只回家）")
+	var s: Dictionary = Content.STARS[home.stars[pen].id]
+	var lines: Array = [Lang.t("%s（%s，%s）") % [Lang.t(s.name), Lang.t(s.kind), Lang.t(Content.DIETS[s.diet])], Lang.t(s.says)]
+	if s.has("grow_boss") or s.has("grow_round"):
+		lines.append(Lang.t("现在长到 +%d") % int(home.stars[pen].grow))
+	if pen in home.hungry:
+		lines.append(Lang.t("这一轮没吃饱，本事没起作用"))
+	elif int(s.eat) > 0:
+		lines.append(Lang.t("每轮吃 %d 生物质") % int(s.eat))
+	if s.has("keep"):
+		lines.append(Lang.t("留着的牌 %d / %d；拿着一张牌点它，就存起来") % [home.stash.size(), home.stash_size()])
+	lines.append(Lang.t("点一下：看看，或者卖掉"))
+	return "\n".join(lines)
 
 
 func _unit_text(u: Dictionary) -> String:
 	var s := Content.unit_stats(u)
 	var nest: Dictionary = home.buildings.get(u.nest, {})
-	var from := Lang.t("巨兽笼放出来的") if nest.is_empty() else Lang.t("%s %d 级孵的") % [Lang.t(Content.BUILDINGS[nest.kind].name), int(nest.level)]
+	var from := Lang.t("泰坦带来的") if nest.is_empty() else Lang.t("%s %d 级孵的") % [Lang.t(Content.BUILDINGS[nest.kind].name), int(nest.level)]
 	var lines: Array = [Lang.t("%s%s（%s，站%s）") % [Lang.t("精英") if int(u.get("elite", 0)) > 0 else "", Lang.t(s.name), from,
 		Lang.t("前排") if int(u.get("row", 0)) == 0 else Lang.t("后排")],
 		Lang.t("血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米") % [s.hp, s.atk, _num(s.every), _num(s.range)]]
@@ -753,7 +688,7 @@ func _unit_text(u: Dictionary) -> String:
 	if not more.is_empty():
 		lines.append(" · ".join(more))
 	lines.append(Lang.t(Content.UNITS[u.kind].role))
-	lines.append(Lang.t("吃 %d 生物质，只活这一仗") % int(Content.UNITS[u.kind].food) if not u.free else Lang.t("只活这一仗（恐龙蛋化石多孵的，不吃生物质）"))
+	lines.append(Lang.t("吃 %d 生物质，只活这一仗") % int(Content.UNITS[u.kind].food) if not u.free else Lang.t("只活这一仗（慈母多孵的，不吃生物质）"))
 	return "\n".join(lines)
 
 
@@ -826,8 +761,17 @@ func bonuses() -> String:
 		parts.append(Lang.t("瞭望塔：远程每下多 %d，不管护甲") % home._sum("ranged"))
 	if home._sum("front") > 0:
 		parts.append(Lang.t("前锋营：前排血 +%d%%") % home._sum("front"))
-	if home.wonder == "banner":
-		parts.append(Lang.t("万兽战旗：全体攻击 +2、血 +25%"))
+	# What the fed stars do for the army.
+	for k in home.stars.size():
+		if k in home.hungry:
+			continue
+		var s: Dictionary = Content.STARS[home.stars[k].id]
+		if s.has("grow_boss"):
+			if int(home.stars[k].grow) > 0:
+				parts.append(Lang.t("%s：全体攻击 +%d") % [Lang.t(s.name), int(home.stars[k].grow)])
+		elif s.has("front_armor") or s.has("red_atk") or s.has("haste") or s.has("reach") or s.has("atk") or s.has("weak") \
+				or s.has("count") or s.has("titan"):
+			parts.append(Lang.t("%s：%s") % [Lang.t(s.name), Lang.t(s.says)])
 	return "\n".join(parts)
 
 
@@ -836,13 +780,6 @@ func bonuses() -> String:
 ## The run's start: the ark chosen (when it has not been), the place it lands in, the first round.
 func _begin() -> void:
 	refresh()
-	if run.ark == "":
-		var id := await hud.choose_ark()
-		run.choose_ark(id)
-		home_view.lay_ground()
-		home_view.refresh_buildings(true)
-		_version += 1
-		refresh()
 	await hud.arrive(run.place)
 	_start_round()
 
@@ -856,7 +793,7 @@ func _start_round() -> void:
 	refresh()
 	var sub := ""
 	if run.round == 1 and run.level > 0:
-		sub = Lang.t("新地方。带来的东西在左下，点它放下；新放的池子下一轮才产生物质")
+		sub = Lang.t("新地方，家园重新建")
 	elif run.round >= run.rounds():
 		sub = Lang.t("首领来了")
 	elif run.round in Content.MINI_ROUNDS:
@@ -876,13 +813,18 @@ func _start_round() -> void:
 				if int(e.genes) > 0:
 					said.append(Lang.t("研究点数 +%d") % e.genes)
 				tags.float_text(said_at, "  ".join(said), Color(0.6, 1.0, 0.8), 22)
-			"rotted":
-				if int(e.amount) > 0:
-					tags.float_text(said_at + Vector3(0, 1.5, 0), Lang.t("潮湿：生物质烂了 %d") % e.amount, Color(0.75, 0.85, 0.5), 20)
+			"fed":
+				var fed_at := HomeView.PEN_AT[2] + Vector3(0, 3.0, 0)
+				if int(e.ate) > 0:
+					tags.float_text(fed_at, Lang.t("明星恐龙吃了 %d 生物质") % e.ate, Color(0.7, 1.0, 0.6), 20)
+				if not (e.hungry as Array).is_empty():
+					var names: Array = e.hungry.map(func(id: String) -> String: return Lang.t(Content.STARS[id].name))
+					tags.float_text(fed_at + Vector3(0, 1.4, 0), Lang.t("%s没吃饱，这一轮不干活") % Lang.t("、").join(names),
+						Color(1.0, 0.6, 0.45), 20)
 			"ash":
-				tags.float_text(Vector3(0, 4.0, 0), Lang.t("火山灰：家园 −%d") % e.amount, Color(1.0, 0.55, 0.4), 24)
+				tags.float_text(Vector3(0, 4.0, 0), Lang.t("镰刀：家园 −%d") % e.amount, Color(1.0, 0.55, 0.4), 24)
 			"mended":
-				tags.float_text(Vector3(0, 3.0, 0), Lang.t("颈盾：家园 +%d") % e.amount, Color(0.5, 1.0, 0.5), 24)
+				tags.float_text(Vector3(0, 3.0, 0), Lang.t("铁背：家园 +%d") % e.amount, Color(0.5, 1.0, 0.5), 24)
 	_version += 1
 	home_view.sync_army(home.army())
 	await get_tree().create_timer(0.5).timeout
@@ -994,14 +936,21 @@ func _workshop() -> void:
 		refresh()
 
 
-## A place held: a relic to choose, then the move -- what to carry picked on the homeland, the ark down to load it, on
-## to the next place, the ark setting down what it brings -- and the new place's rule and ground.
+## A place held: a star dinosaur to choose (and, the pens full, one to let go for it), then the next place picked on
+## the map and gone to -- the homeland made afresh there -- and its painting and ground.
 func _level_end() -> void:
-	var id := await hud.choose_relic(run.relic_offer())
-	run.take_relic(id)
+	var id := await hud.choose_star(run.star_choice())
+	if id != "" and home.stars.size() >= Content.PENS:
+		var pen := await hud.release_star(id)
+		if pen >= 0:
+			home.sell_star(pen)
+		else:
+			id = ""
+	if id != "":
+		_changed(home.take_star(id))
 	refresh()
 	going = await hud.choose_place(run)
-	await _pack()
+	await _move()
 	await hud.arrive(run.place)
 
 

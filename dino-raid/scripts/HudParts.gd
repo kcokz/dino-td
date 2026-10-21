@@ -369,9 +369,10 @@ class WaveCard extends Control:
 				Color(Style.PARCHMENT, dim), Fonts.numbers(), 0, 4)
 
 
-## A thing to choose, shown as itself (the ark's relic, a wonder): its picture -- a cut-out object floating over a soft
-## glow of light, or a painting in a soft-edged window -- its name under it in small type, a note under that (a price);
-## pointed at, it rises a little and brightens and what it does is told under it. Bobbing gently while it waits.
+## A thing to choose, shown as itself (a star dinosaur): its picture -- a cut-out object floating over a soft glow of
+## light, or a painting in a soft-edged window; with no picture yet, a medallion of its colour with its first word --
+## its name under it in small type, a note under that (a price); pointed at, it rises a little and brightens and what it
+## does is told under it. Bobbing gently while it waits.
 class Showcase extends BaseButton:
 	var tex: Texture2D
 	var title := ""
@@ -379,6 +380,8 @@ class Showcase extends BaseButton:
 	var note_short := false         # the note in coral (a price that cannot be paid)
 	var says := ""
 	var cutout := true
+	var tint := Color(0.5, 0.5, 0.5)   # the medallion's colour, with no picture
+	var glyph := ""                 # ...and its word
 	var _t := 0.0
 	var _rise := 0.0
 
@@ -426,6 +429,13 @@ class Showcase extends BaseButton:
 				draw_texture_rect_region(tex, r, Rect2((ts - shown) * 0.5, shown), dim.lightened(0.1 * _rise))
 				Style.veil(get_canvas_item(), r.grow(2.0), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.0), 1.0)
 				Style.hairline_rect(get_canvas_item(), r, Color(Style.GOLD, 0.45 + 0.4 * _rise), Color(Style.GOLD_BRIGHT, 0.9), 10.0)
+		elif glyph != "":
+			var rad := 74.0 * (1.0 + 0.05 * _rise)
+			draw_circle(c + Vector2(0, 6), rad * 1.06, Color(0, 0, 0, 0.4), true, -1.0, true)
+			draw_circle(c, rad, tint.darkened(0.1) * dim, true, -1.0, true)
+			draw_circle(c + Vector2(-rad * 0.25, -rad * 0.3), rad * 0.35, Color(1, 1, 1, 0.12), true, -1.0, true)
+			draw_arc(c, rad, 0.0, TAU, 72, Color(Style.GOLD_BRIGHT, 0.85), 2.0, true)
+			HudParts.words(self, c + Vector2(0, 22), glyph, 64, Style.INK_DEEP, Fonts.serif(900), 0, 0)
 		var y := pic.end.y + 22.0
 		HudParts.words(self, Vector2(w * 0.5, y), title, 21, Style.GOLD_BRIGHT if _rise > 0.5 else Style.PARCHMENT,
 			Fonts.serif(800), 0, 5)

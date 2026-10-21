@@ -1,10 +1,9 @@
 class_name Tags
 extends Control
-## Words and marks drawn over the blocks each frame (GAME-DESIGN 14, 17): over each building its level as dots, over a
-## nest how many it hatches this round -- and of what species, when it has evolved -- (and how many the biomass could
-## not pay for); while a good is held over a plot, what it would change for each building -- "+1 只", "血 +25%";
-## while packing, whether the ark takes each building or leaves it; in a battle each fighter's health; numbers that
-## rise off what was hit. What a building is and does, the panel says when it is pointed at.
+## Words and marks drawn over the blocks each frame (GAME-DESIGN 14, 17): over a nest how many the biomass could not
+## pay for; while a good is held over a plot, what it would change for each building -- "+1 只", "血 +25%"; in a
+## battle each fighter's health; numbers that rise off what was hit. What a building is and does, the panel says when
+## it is pointed at.
 
 const OURS := Color(0.47, 0.86, 0.36)
 const THEIRS := Color(0.96, 0.36, 0.26)
@@ -61,7 +60,6 @@ func _home(cam: Camera3D) -> void:
 	for u in home.army():
 		made[u.nest] = int(made.get(u.nest, 0)) + 1
 	var effects: Dictionary = game.effects
-	var packing: bool = game.phase == Game.Phase.PACK
 	for p in home.buildings:
 		var b: Dictionary = home.buildings[p]
 		var at3 := hv.top(p) + Vector3.UP * 0.25
@@ -69,11 +67,6 @@ func _home(cam: Camera3D) -> void:
 			continue
 		var at := cam.unproject_position(at3)
 		var y := -10.0
-		if packing:
-			var taken: bool = game.pack_plots.has(p)
-			_text(at + Vector2(0, y), Lang.t("带走" if taken else "留下"), GOLD if taken else Color(0.72, 0.7, 0.66), 18 if taken else 14,
-				Fonts.serif(900))
-			continue
 		# Over a nest, only what wants seeing to: that it hatches fewer than it would (biomass short). How many it
 		# hatches, its level, are told when it is pointed at.
 		if Content.is_nest(b.kind):

@@ -1,6 +1,6 @@
 class_name Art
-## The paintings (GAME-DESIGN 23; tools/paint_cards.py: assets/art): each card's, each creature's and monster's, each
-## wonder's, each place's; each ark and relic cut out as an object. Loaded in the background when the game starts
+## The paintings (GAME-DESIGN 23, 24; tools/paint_cards.py: assets/art): each card's, each creature's and monster's,
+## each star dinosaur's, each place's. Loaded in the background when the game starts
 ## (warm), so none is first drawn the frame it loads (a texture is not ready to show until the frames after); kept once
 ## loaded. A picture with no painting yet falls back on the model's portrait (Portraits).
 
@@ -17,7 +17,7 @@ static func warm() -> void:
 		ResourceLoader.load_threaded_request(DIR + f)
 
 
-## The painting `key` (a file's name without its extension: "u_red", "ark_war"), or null when there is none.
+## The painting `key` (a file's name without its extension: "u_red", "s_hoarder"), or null when there is none.
 static func of(key: String, ext := "jpg") -> Texture2D:
 	var f := key + "." + ext
 	if _tex.has(f):
@@ -28,7 +28,7 @@ static func of(key: String, ext := "jpg") -> Texture2D:
 	return t
 
 
-## The painting for a portrait's key (Portraits: "u:red", "e:grey", "a:shell", "w:brood", "b:nest_red:1::", "raise"),
+## The painting for a portrait's key (Portraits: "u:red", "e:grey", "a:shell", "s:hoarder", "b:nest_red:1::", "raise"),
 ## or null.
 static func of_portrait(key: String) -> Texture2D:
 	if key == "raise":

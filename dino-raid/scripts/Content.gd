@@ -8,7 +8,7 @@ class_name Content
 ## points it gives the most hurt friend in reach (instead of hitting); pierce: damage more each hit, armour or not;
 ## burst: damage to the other side round it (BURST_RADIUS) when it falls; dive: flies over the front for the back;
 ## size: the block's edge; food: biomass it takes to make. One for each kind of nest (its gift, TRAITS, is the nest's);
-## four are species a nest evolves into (RECIPES); the titan comes with a wonder.
+## four are species a nest evolves into (RECIPES); the titan comes with the star of that name (STARS).
 const UNITS := {
 	"red": {"name": "红兵", "color": Color(0.9, 0.24, 0.2), "hp": 10, "atk": 3, "every": 1.0, "range": 1.4,
 		"speed": 3.2, "size": 0.9, "food": 1, "role": "前排，打得快"},
@@ -33,7 +33,7 @@ const UNITS := {
 	"magma": {"name": "熔岩兽", "color": Color(0.92, 0.32, 0.12), "hp": 30, "atk": 8, "every": 1.3, "range": 1.6,
 		"speed": 2.4, "size": 1.25, "burst": 8, "food": 2, "role": "进化来的：重击，倒下时炸一圈"},
 	"titan": {"name": "巨兽", "color": Color(0.55, 0.42, 0.3), "hp": 70, "atk": 9, "every": 1.6, "range": 1.8,
-		"speed": 2.0, "size": 2.0, "armor": 1, "splash": 1.5, "food": 0, "role": "巨兽笼里放出来的：又大又狠"},
+		"speed": 2.0, "size": 2.0, "armor": 1, "splash": 1.5, "food": 0, "role": "泰坦带来的：又大又狠"},
 }
 
 ## Gene recipes: a nest carrying both affixes hatches the species instead -- the two affixes go into it (its other
@@ -228,16 +228,73 @@ const AFFIXES := {
 	"horn": {"name": "冲锋角", "color": Color(0.95, 0.92, 0.8), "charge": true, "says": "开战第一下打双倍"},
 }
 
-## Wonders (奇观): WONDERS_OFFERED of them on offer from a run's start, to be seen all along; one can be built, for
-## much gold -- where saving gold leads. It goes with the ark from place to place.
-const WONDERS := {
-	"brood": {"name": "母巢", "price": 18, "color": Color(0.85, 0.35, 0.35), "says": "每个巢每轮多孵 1 只"},
-	"gold_city": {"name": "黄金城", "price": 14, "color": Color(1.0, 0.82, 0.3), "says": "每轮多 6 金币"},
-	"evo_tower": {"name": "进化之塔", "price": 16, "color": Color(0.45, 0.9, 0.8), "says": "每个巢多 1 个词条位；贴词条不花研究点数"},
-	"banner": {"name": "万兽战旗", "price": 20, "color": Color(0.85, 0.3, 0.6), "says": "所有兵攻击 +2，血 +25%"},
-	"titan": {"name": "巨兽笼", "price": 20, "color": Color(0.55, 0.42, 0.3), "says": "每轮多一只巨兽出战，站前排正中"},
+## The star dinosaurs (明星恐龙, GAME-DESIGN 24; the player, 2026-10-20: "把奇观，存货，遗物统一一下……可以加成的系统，但又
+##有权衡的，互相还能配合的"): the park's own dinosaurs, which do not fight. Each its name, what it is (kind), what it eats
+## (diet: "plant" or "meat" -- some count those of a diet), how rare (0 common, 1 uncommon, 2 rare, 3 legendary: these
+## only after a boss), its price in gold, its appetite (biomass it eats each round, eat), and what it does: the keys Home
+## reads, all of them only while it is fed --
+##   keep: goods it keeps for the player (the stash); first_free: the first nest makes one more, eating nothing;
+##   shelf: offers on the shelf more (fewer); rerolls: free restocks a round; gene_off: research points off an affix;
+##   free_affix: affixes cost no research points; hp: the homeland's hit points more; mend: hit points back a round;
+##   interest: the interest's cap more; biomass, gold: more each round; pool: biomass more from each culture pool;
+##   front_armor: armour for the front row (one more with STARS_COUNT plant-eaters); red_atk: attack for red units (one
+##   more with STARS_COUNT meat-eaters); haste: quicker strikes (%) for all; reach: range and armour-piercing for those
+##   that reach far; atk, hp_pct: attack and hit points (%) for all; weak: hit points (%) less for all; count: one more
+##   from every nest; slots: affix places more on every nest; ash: the homeland's hit points lost a round; win_gold:
+##   gold more for a battle won; titan: a titan fights in every battle; grow_boss / grow_round (with grow_max): grows
+##   one for each mini-boss or boss beaten / each round, and gives that much attack to all / biomass a round.
+## model: the species it is shown as (the shared dinosaur library), with its colours (back, belly).
+const STARS := {
+	"hoarder": {"name": "囤囤", "kind": "偷蛋龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "keep": 3,
+		"model": "ornitholestes", "back": Color(0.95, 0.55, 0.2), "belly": Color(0.98, 0.9, 0.7), "says": "替你留 3 张牌，买下来先不用"},
+	"mother": {"name": "慈母", "kind": "慈母龙", "diet": "plant", "rarity": 0, "price": 4, "eat": 1, "first_free": 1,
+		"model": "edmontosaurus", "back": Color(0.55, 0.72, 0.42), "belly": Color(0.96, 0.92, 0.75), "says": "每轮第一个巢多孵 1 只，这只不吃生物质"},
+	"trader": {"name": "飞飞", "kind": "翼龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "shelf": 1,
+		"model": "harpactognathus", "back": Color(0.3, 0.6, 0.85), "belly": Color(0.95, 0.92, 0.8), "says": "飞去远处进货：商店每轮多摆 1 样"},
+	"scout": {"name": "快腿", "kind": "盗龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "rerolls": 1,
+		"model": "dakotaraptor", "back": Color(0.45, 0.55, 0.3), "belly": Color(0.9, 0.86, 0.66), "says": "每轮第一次刷新商店不要钱"},
+	"doctor": {"name": "博士", "kind": "伤齿龙", "diet": "meat", "rarity": 0, "price": 4, "eat": 1, "gene_off": 1,
+		"model": "velociraptor_alpha", "back": Color(0.4, 0.45, 0.7), "belly": Color(0.9, 0.9, 0.95), "says": "贴词条少花 1 研究点数"},
+	"shield": {"name": "铁背", "kind": "甲龙", "diet": "plant", "rarity": 0, "price": 4, "eat": 1, "hp": 10, "mend": 1,
+		"model": "placerias", "back": Color(0.5, 0.45, 0.4), "belly": Color(0.85, 0.8, 0.7), "says": "家园血 +10，每轮回 1 血"},
+	"saver": {"name": "算盘", "kind": "原角龙", "diet": "plant", "rarity": 0, "price": 4, "eat": 1, "interest": 2,
+		"model": "hesperosuchus", "back": Color(0.8, 0.7, 0.4), "belly": Color(0.98, 0.94, 0.8), "says": "利息最多多 2"},
+	"belly": {"name": "大肚", "kind": "梁龙", "diet": "plant", "rarity": 0, "price": 5, "eat": 0, "biomass": 4,
+		"model": "diplodocus", "back": Color(0.5, 0.62, 0.55), "belly": Color(0.9, 0.9, 0.8), "says": "每轮生物质 +4（它自己吃草）"},
+	"tri": {"name": "三角", "kind": "三角龙", "diet": "plant", "rarity": 1, "price": 6, "eat": 2, "front_armor": 1,
+		"model": "triceratops", "back": Color(0.7, 0.45, 0.3), "belly": Color(0.95, 0.85, 0.7), "says": "前排的兵护甲 +1；草食明星有 3 只以上时，再 +1"},
+	"scar": {"name": "疤脸", "kind": "迅猛龙", "diet": "meat", "rarity": 1, "price": 6, "eat": 2, "red_atk": 1,
+		"model": "acheroraptor", "back": Color(0.6, 0.2, 0.18), "belly": Color(0.95, 0.85, 0.75), "says": "红兵攻击 +1；肉食明星有 3 只以上时，再 +1"},
+	"fisher": {"name": "渔夫", "kind": "植龙", "diet": "meat", "rarity": 1, "price": 6, "eat": 0, "pool": 1,
+		"model": "phytosaur", "back": Color(0.35, 0.5, 0.45), "belly": Color(0.85, 0.85, 0.7), "says": "每座培养池多产 1 生物质（它自己捕鱼）"},
+	"bounty": {"name": "赏金", "kind": "波斯特鳄", "diet": "meat", "rarity": 1, "price": 6, "eat": 1, "win_gold": 2,
+		"model": "postosuchus", "back": Color(0.55, 0.4, 0.3), "belly": Color(0.9, 0.8, 0.6), "says": "每打赢一仗，多拿 2 金"},
+	"horn": {"name": "号角", "kind": "副栉龙", "diet": "plant", "rarity": 1, "price": 6, "eat": 2, "haste": 15,
+		"model": "edmontosaurus", "back": Color(0.75, 0.4, 0.55), "belly": Color(0.97, 0.88, 0.8), "says": "它一叫，所有兵打得快 15%"},
+	"spitter": {"name": "双冠", "kind": "双冠龙", "diet": "meat", "rarity": 1, "price": 6, "eat": 2, "reach": 1,
+		"model": "coelophysis_alpha", "back": Color(0.3, 0.55, 0.5), "belly": Color(0.95, 0.9, 0.6), "says": "够得着远处的兵：射程 +1，每下多 1，不管护甲"},
+	"oldking": {"name": "老羽王", "kind": "羽王龙", "diet": "meat", "rarity": 2, "price": 9, "eat": 3, "grow_boss": 1,
+		"grow_max": 4, "model": "yutyrannus", "back": Color(0.6, 0.55, 0.5), "belly": Color(0.95, 0.92, 0.85),
+		"says": "每打败一个小首领或首领，所有兵攻击 +1，一直留着（最多 +4）"},
+	"sickle": {"name": "镰刀", "kind": "镰刀龙", "diet": "plant", "rarity": 2, "price": 9, "eat": 2, "slots": 1, "ash": 1,
+		"model": "sinocalliopteryx", "back": Color(0.55, 0.5, 0.35), "belly": Color(0.9, 0.85, 0.7), "says": "每个巢多 1 个词条位；但家园每轮掉 1 血"},
+	"neck": {"name": "长颈", "kind": "腕龙", "diet": "plant", "rarity": 2, "price": 9, "eat": 0, "grow_round": 1, "grow_max": 8,
+		"model": "diplodocus", "back": Color(0.6, 0.55, 0.4), "belly": Color(0.95, 0.9, 0.78), "says": "每过一轮，每轮生物质多 1（最多 +8；它自己吃树叶）"},
+	"queen": {"name": "巢母", "kind": "巢母龙", "diet": "plant", "rarity": 3, "price": 16, "eat": 4, "count": 1, "weak": 10,
+		"model": "edmontosaurus", "back": Color(0.6, 0.35, 0.6), "belly": Color(0.98, 0.85, 0.6), "says": "每个巢每轮多孵 1 只；但所有兵血少一成"},
+	"goldcrown": {"name": "金冠", "kind": "冠龙", "diet": "meat", "rarity": 3, "price": 14, "eat": 3, "gold": 6, "shelf": -1,
+		"model": "dilong", "back": Color(0.95, 0.75, 0.25), "belly": Color(1.0, 0.95, 0.75), "says": "每轮多 6 金；但商店少摆 1 样"},
+	"firstbird": {"name": "始祖", "kind": "始祖鸟", "diet": "meat", "rarity": 3, "price": 16, "eat": 4, "slots": 1, "free_affix": 1,
+		"model": "sinornithosaurus", "back": Color(0.3, 0.75, 0.7), "belly": Color(0.95, 0.95, 0.85), "says": "每个巢多 1 个词条位；贴词条不花研究点数"},
+	"warlord": {"name": "霸主", "kind": "霸王龙", "diet": "meat", "rarity": 3, "price": 20, "eat": 6, "atk": 2, "hp_pct": 25,
+		"model": "tyrannosaurus", "back": Color(0.75, 0.25, 0.2), "belly": Color(0.98, 0.85, 0.6), "says": "所有兵攻击 +2，血 +25%"},
+	"titan": {"name": "泰坦", "kind": "阿根廷龙", "diet": "plant", "rarity": 3, "price": 20, "eat": 5, "titan": 1,
+		"model": "diplodocus", "back": Color(0.5, 0.45, 0.4), "belly": Color(0.85, 0.8, 0.7), "says": "每仗多一只巨兽出战，站在前排正中"},
 }
-const WONDERS_OFFERED := 2
+const PENS := 5                   # star dinosaurs kept at most, one a pen
+const STARS_COUNT := 3            # a star that counts its diet's does more with this many of them
+const STAR_ODDS := [3, 2, 1]      # how often the shop offers a common, an uncommon, a rare star (legendary: never)
+const STARS_FROM := [1, 2, 2]     # the rarest the shop offers in each of the run's levels
 
 
 ## Strength (战力): how strong a fighter is, as one number the player never sees -- for balancing. The square root of
@@ -306,9 +363,7 @@ const CUT := 3
 const CUT_STEP := 1
 const UPGRADE := 3
 const PLUS_RAISE := 2             # gold off an upgraded raise
-const SHOP := 5                   # offers on the shelf each round
-const STASH := 4                  # goods kept (bought or packed) at most
-const STORE_EXTRA := 1            # keeping a good for later costs this much more gold than putting it down now
+const SHOP := 5                   # offers on the shelf each round (and a star dinosaur after them)
 const REROLL := 1                 # gold to stock the shelf again; one more each time in a round
 const RAISE := 2                  # a raise costs this much more than the building's level
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...
@@ -316,35 +371,12 @@ const INTEREST_MAX := 2           # ...up to this much
 const WIN_GOLD := 2               # gold for a battle won
 
 const TYPES := {"build": "建筑", "raise": "升级", "affix": "基因词条"}
+const DIETS := {"plant": "草食", "meat": "肉食"}
+const RARITY_NAMES := ["普通", "少见", "稀有", "传说"]
 
-## Relics: when a place is held, one of three is chosen (two fossils and a boss's); each helps for the rest of the run.
-## A boss's is strong but costs something too.
-const RELICS := {
-	"amber": {"name": "琥珀", "color": Color(0.95, 0.65, 0.2), "says": "商店每轮多摆 1 样"},
-	"tooth": {"name": "霸王龙的牙", "color": Color(0.95, 0.92, 0.85), "says": "贴词条少花 1 研究点数"},
-	"frill": {"name": "三角龙的颈盾", "color": Color(0.75, 0.6, 0.45), "says": "家园血 +10，每轮回 1 血"},
-	"ammonite": {"name": "菊石", "color": Color(0.85, 0.7, 0.5), "says": "利息最多多 2"},
-	"coprolite": {"name": "粪化石", "color": Color(0.5, 0.4, 0.3), "says": "每轮生物质 +3"},
-	"wood": {"name": "硅化木", "color": Color(0.7, 0.55, 0.4), "says": "造建筑便宜 1 金币"},
-	"trilobite": {"name": "三叶虫", "color": Color(0.55, 0.6, 0.65), "says": "每轮第一次刷新商店不要钱"},
-	"egg": {"name": "恐龙蛋化石", "color": Color(0.9, 0.85, 0.75), "says": "每轮第一个巢多孵 1 只，不吃生物质"},
-	"core": {"name": "母虫的核", "color": Color(0.4, 0.55, 0.2), "boss": true, "says": "每个巢多孵 1 只；但生物质产量少三成"},
-	"heart": {"name": "熔岩之心", "color": Color(0.85, 0.25, 0.1), "boss": true, "says": "每个巢多 1 个词条位；但家园每轮掉 1 血"},
-	"crystal": {"name": "古老的晶簇", "color": Color(0.6, 0.45, 0.85), "boss": true, "says": "每轮多 4 金币；但商店少摆 1 样"},
-	"sac": {"name": "虫后的卵囊", "color": Color(0.85, 0.75, 0.6), "boss": true, "says": "存货多 2 格；但每轮的牌只剩二选一"},
-}
-
-## The arks a run can start with: what stands in the first place ([kind, level] -- a nest's levels each one more a
-## round), what it carries.
-const ARKS := {
-	"war": {"name": "战斗方舟", "says": "开局：2 级红巢、培养池。带着霸王龙的牙（贴词条少花 1 研究点数）", "relic": "tooth",
-		"gold": 0, "buildings": [["nest_red", 2], ["pool", 1]]},
-	"brood": {"name": "繁殖方舟", "says": "开局：红巢、两座培养池。带着恐龙蛋化石", "relic": "egg", "gold": 0,
-		"buildings": [["nest_red", 1], ["pool", 1], ["pool", 1]]},
-	"trade": {"name": "商队方舟", "says": "开局：红巢、培养池、矿场，多 5 金币。带着琥珀", "relic": "amber", "gold": 5,
-		"buildings": [["nest_red", 1], ["pool", 1], ["mine", 1]]},
-}
-## What the ark itself sets down wherever it lands, besides what was packed.
+## What every place's homeland starts with ([kind, level]): the same for everyone, the run's start too (the player,
+## 2026-10-20: "先不选"); nothing else is carried from place to place but the stars, the gold, the deck and the
+## research points ("先不要带任何东西，往少了做").
 const LANDING := [["nest_red", 1], ["pool", 1]]
 const FIRST_STOCK := {"gold": 0, "biomass": 3, "genes": 2}
 
@@ -358,50 +390,37 @@ const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
 const SHARE := [0.66, 0.43, 0.46]
 
-## The places the ark can land in -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
-## against its `boss`. mix: which kinds come, [kind, share, from which round]. rule: what is different there (RULES).
-## terrain: how many of each special plot (TERRAIN) lie about, behind the battle line. ground, grass: the homeland's
+## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
+## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
+## (TERRAIN) lie about, behind the battle line -- what makes one place's homeland unlike another's (the player,
+## 2026-10-20: "先只用地形differenciate"; the places' rules, damp, ash and the rest, are gone). ground, grass: the homeland's
 ## earth and the land round it; sky: [top, horizon]; color: on the map.
 const LEVELS := [
-	{"name": "雨林", "boss": "boss_rain", "minis": ["mini_rain", "mini_rain2"], "rule": "damp",
+	{"name": "雨林", "boss": "boss_rain", "minis": ["mini_rain", "mini_rain2"],
 		"terrain": {"pond": 3, "tree": 2}, "ground": Color(0.42, 0.36, 0.26), "grass": Color(0.24, 0.42, 0.2),
 		"sky": [Color(0.36, 0.55, 0.82), Color(0.74, 0.82, 0.88)], "color": Color(0.36, 0.62, 0.32),
 		"mix": [["grey", 0.3, 1], ["spore", 0.45, 1], ["purple", 0.25, 2]]},
-	{"name": "火山", "boss": "boss_lava", "minis": ["mini_lava", "mini_lava2"], "rule": "ash",
+	{"name": "火山", "boss": "boss_lava", "minis": ["mini_lava", "mini_lava2"],
 		"terrain": {"ore": 3, "lava": 2}, "ground": Color(0.36, 0.3, 0.27), "grass": Color(0.32, 0.28, 0.24),
 		"sky": [Color(0.42, 0.4, 0.44), Color(0.82, 0.62, 0.48)], "color": Color(0.85, 0.36, 0.18),
 		"mix": [["grey", 0.2, 1], ["beetle", 0.45, 1], ["salamander", 0.35, 1]]},
-	{"name": "沼泽", "boss": "boss_bog", "minis": ["mini_bog", "mini_bog2"], "rule": "bog",
+	{"name": "沼泽", "boss": "boss_bog", "minis": ["mini_bog", "mini_bog2"],
 		"terrain": {"mire": 3, "toadstool": 2}, "ground": Color(0.32, 0.29, 0.21), "grass": Color(0.22, 0.29, 0.17),
 		"sky": [Color(0.38, 0.44, 0.4), Color(0.66, 0.7, 0.58)], "color": Color(0.46, 0.52, 0.3),
 		"mix": [["grey", 0.2, 1], ["leech", 0.45, 1], ["moth", 0.35, 2]]},
-	{"name": "冰原", "boss": "boss_ice", "minis": ["mini_ice", "mini_ice2"], "rule": "cold",
+	{"name": "冰原", "boss": "boss_ice", "minis": ["mini_ice", "mini_ice2"],
 		"terrain": {"ice_ore": 3, "glacier": 2}, "ground": Color(0.3, 0.34, 0.42), "grass": Color(0.7, 0.75, 0.81),
 		"sky": [Color(0.46, 0.57, 0.74), Color(0.74, 0.8, 0.86)], "color": Color(0.6, 0.78, 0.95),
 		"mix": [["grey", 0.2, 1], ["frostfang", 0.45, 1], ["shard", 0.35, 2]]},
-	{"name": "荒漠", "boss": "boss_sand", "minis": ["mini_sand", "mini_sand2"], "rule": "drought",
+	{"name": "荒漠", "boss": "boss_sand", "minis": ["mini_sand", "mini_sand2"],
 		"terrain": {"oasis": 3, "ruin": 2}, "ground": Color(0.6, 0.48, 0.32), "grass": Color(0.8, 0.68, 0.46),
 		"sky": [Color(0.42, 0.6, 0.85), Color(0.95, 0.85, 0.66)], "color": Color(0.9, 0.72, 0.4),
 		"mix": [["grey", 0.2, 1], ["sandworm", 0.45, 1], ["scorpion", 0.35, 2]]},
-	{"name": "海岸", "boss": "boss_sea", "minis": ["mini_sea", "mini_sea2"], "rule": "tide",
+	{"name": "海岸", "boss": "boss_sea", "minis": ["mini_sea", "mini_sea2"],
 		"terrain": {"tidepool": 3, "wreck": 2}, "ground": Color(0.58, 0.52, 0.4), "grass": Color(0.2, 0.42, 0.52),
 		"sky": [Color(0.34, 0.56, 0.84), Color(0.78, 0.88, 0.92)], "color": Color(0.3, 0.6, 0.78),
 		"mix": [["grey", 0.2, 1], ["crab", 0.45, 1], ["jelly", 0.35, 2]]},
 ]
-const RULES := {
-	"damp": {"name": "潮湿", "says": "生物质产量多五成，但存着的生物质每轮烂掉一半"},
-	"ash": {"name": "火山灰", "says": "升级便宜 1 金币，但家园每轮掉 1 血"},
-	"bog": {"name": "瘴气", "says": "生物质产量多五成，但兵中了瘴气，出战时血少一成半"},
-	"cold": {"name": "严寒", "says": "金币每轮多 2，但兵冻得打得慢一成半"},
-	"drought": {"name": "干旱", "says": "研究点数每轮多 2，但缺水，生物质产量少三成"},
-	"tide": {"name": "潮汐", "says": "单数轮退潮，海滩上捡到 3 金；双数轮涨潮，最后一排的建筑那一轮不产东西"},
-}
-const BOG_HP := 0.85              # the swamp: our units' hit points in battle
-const COLD_HASTE := -13           # the ice fields: our units this much slower to strike (a hit every 1.15 times as long)
-const COLD_GOLD := 2
-const DROUGHT_GENES := 2
-const DROUGHT_BIOMASS := 0.7
-const EBB_GOLD := 3               # the coast: gold found on the beach at low tide (odd rounds)
 ## Special plots, all behind the battle line: build: whether a building can go on it; like: which of the four ways it
 ## works (a pond's, an old tree's, a vein of ore's, a lava pool's) -- each place has its own two.
 const TERRAIN := {
@@ -433,11 +452,12 @@ const TERRAIN := {
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts lower:
-## the ark sets down only what it carried (the biomass kept feeds the first army). Measure again after changing what can
-## be built or made.
-const LIMIT := [37, 56, 76, 96, 121, 151, 184, 222, 269, 315, 375, 433,
-	224, 304, 413, 493, 594, 703, 815, 885, 965, 1012, 1055, 1080,
-	401, 612, 748, 888, 996, 1067, 1133, 1154, 1198, 1242, 1251, 1260]
+## the homeland starts again from a red nest and a pool (the biomass kept and the stars help the first armies). Measured
+## again 2026-10-20 with the stars, no ark, nothing carried and no places' rules (GAME-DESIGN 24). Measure again after
+## changing what can be built or made.
+const LIMIT := [32, 47, 74, 94, 126, 153, 197, 240, 311, 380, 455, 522,
+	142, 202, 301, 363, 433, 554, 632, 699, 784, 856, 916, 960,
+	250, 426, 554, 696, 826, 902, 1004, 1083, 1226, 1313, 1444, 1685]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
@@ -446,9 +466,8 @@ const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bo
 const DANGER := [45.0, 90.0, 175.0, 320.0, 560.0]
 
 
-## An offer's numbers (oi: a shelf's or stash's {id, plus, packed}): its name, price, type and what it goes on. A
-## raise's price is RAISE more than the level of what it raises (Home.price); here, the least it can be. A packed
-## building keeps its level, its nest's choices and its affixes (level, path, affixes).
+## An offer's numbers (oi: a shelf's or stash's {id, plus}): its name, price, type and what it goes on. A raise's price
+## is RAISE more than the level of what it raises (Home.price); here, the least it can be.
 static func offer(oi: Dictionary) -> Dictionary:
 	var o: Dictionary = OFFERS[oi.id].duplicate(true)
 	o.id = oi.id
@@ -458,16 +477,6 @@ static func offer(oi: Dictionary) -> Dictionary:
 		"build":
 			o.name = Lang.t(BUILDINGS[o.builds].name)
 			o.price = int(BUILDINGS[o.builds].cost)
-			if oi.has("packed"):
-				var pk: Dictionary = oi.packed
-				o.level = int(pk.level)
-				o.path = pk.get("path", []).duplicate()
-				o.affixes = pk.affixes.duplicate()
-				var bits: Array = [Lang.t("%d 级") % pk.level]
-				if o.path.count("elite") > 0:
-					bits.append(Lang.t("精英") + ("×%d" % o.path.count("elite") if o.path.count("elite") > 1 else ""))
-				bits.append_array(pk.affixes.map(func(a: String) -> String: return Lang.t(AFFIXES[a].name)))
-				o.name += Lang.t("（%s）") % Lang.t("，").join(bits)
 		"raise":
 			o.price = RAISE + 1
 			o.name = Lang.t(str(o.name))
@@ -482,18 +491,6 @@ static func offer(oi: Dictionary) -> Dictionary:
 				o.genes = 0
 	return o
 
-
-## What a good cost, all told: its price (and half its research points, in gold); for a packed building, its raises
-## and its affixes too. The goods worth most are what the ark carries on unless the player says otherwise.
-static func worth(oi: Dictionary) -> float:
-	var o := offer(oi)
-	var n := float(o.get("price", 0)) + 0.5 * float(o.get("genes", 0))
-	if oi.has("packed"):
-		for lv in range(1, int(oi.packed.level)):
-			n += RAISE + lv
-		for a in oi.packed.affixes:
-			n += worth({"id": "a_" + a})
-	return n
 
 
 static func is_nest(kind: String) -> bool:

@@ -4,10 +4,9 @@ extends Node3D
 ## battle line's two rows on top, their earth warmer, a low strip between them and the rest; the special ground behind
 ## (a pond, an old tree, a vein of ore, a pool of lava) as it is -- a block for each building, taller or bigger for each
 ## level, a nest's affixes as little blocks on its roof, a crest of the new species' colour when they make one, a gold
-## band for each time it was made elite; the wonder, once built, beside the homeland. To the south the yard, laid out
-## as the battle line: this round's army stands there as it will stand in battle, each unit hatched from its nest's door,
-## gone with the battle. When a place is held the ark comes down: what is packed rises into it, the rest is left; in the
-## next place it sets down what it brings.
+## band for each time it was made elite. To the south the yard, laid out as the battle line: this round's army stands
+## there as it will stand in battle, each unit hatched from its nest's door, gone with the battle. West of it all the
+## star dinosaurs' pens (GAME-DESIGN 24), each star standing in its own -- asleep while it goes without.
 
 const TILE := 4.0
 const PLOT := 3.6
@@ -17,15 +16,18 @@ const YARD_ROW := 2.4             # ...and the row behind it, this much further 
 const YARD_SPREAD := 1.05         # between a nest's units side by side
 const YARD_TURN := 0.75           # a dinosaur in the yard looks south-east: at the camera, its side showing
 const NOWHERE := Vector2i(-1, -1)
-const WONDER_AT := Vector3(-17.0, 0.0, 2.0)  # beside the homeland, west of the rows behind the battle line
 const ELITE_GOLD := Color(1.0, 0.8, 0.25)
 const PENNANT := Color(1.0, 0.93, 0.72)  # flown over a nest whose gift works where it stands
-const ARK_AT := Vector3(0, 8.5, 2.0)    # where the ark hangs over the homeland while it loads and unloads
-## Things that stand beside the homeland rather than on the HUD (the player, 2026-10-20: "存货可以直接做成一个精致的牌盒摆
-## 在建筑侧面……遗物做成一个什么也放在建筑旁边，奇观也先想办法不要就简单摆在界面上"): the stash's card box east of the
-## yard, the relics on a stone shrine west of it, and -- until one is built -- the ground waiting for a wonder.
-const STASH_AT := Vector3(15.6, 0.0, 8.6)
-const RELICS_AT := Vector3(-15.4, 0.0, 9.0)
+## The star dinosaurs' pens, a column west of the homeland (Content.PENS of them), the first nearest the battle line.
+const PEN_AT := [Vector3(-18.5, 0.0, -4.0), Vector3(-18.5, 0.0, 0.2), Vector3(-18.5, 0.0, 4.4), Vector3(-18.5, 0.0, 8.6),
+	Vector3(-18.5, 0.0, 12.8)]
+const PEN := 3.4                  # a pen's side
+## Until each star has a model of its own (the shared library's species made Nintendo-style), the one of ours it
+## looks most like stands in for it, banded in its own colours.
+const STAND_IN := {"hoarder": "scav", "mother": "white", "trader": "falcon", "scout": "red", "doctor": "mutant",
+	"shield": "green", "saver": "white", "belly": "thunder", "tri": "green", "scar": "red", "fisher": "green",
+	"bounty": "gold", "horn": "white", "spitter": "blue", "oldking": "titan", "sickle": "miasma", "neck": "thunder",
+	"queen": "white", "goldcrown": "gold", "firstbird": "mutant", "warlord": "titan", "titan": "thunder"}
 
 var home: Home
 var tags: Tags
@@ -35,13 +37,9 @@ var _ground := {}                 # plot -> Node3D: what stands on special groun
 var _buildings := {}              # plot -> {node, look}
 var _units := {}                  # army unit id -> Node3D
 var _order: Array = []            # army unit ids, as they stand in the yard
-var _ark: Node3D
-var _wonder: Node3D
-var _stash_box: Node3D            # the stash's card box (its cards: how many are kept)
-var _stash_light: OmniLight3D     # ...its glow, when the good taken up could be kept
-var _shrine: Node3D               # the relics' shrine
-var _site: Node3D                 # the ground waiting for a wonder
-var _things_for := ""
+var _pens: Array = []             # Node3D, a pen each (its star under it, named "Star")
+var _pens_for := ""
+var _hoard_light: OmniLight3D     # the hoarder's pen glowing, when the good taken up could be kept
 
 
 func setup(p_home: Home) -> void:
@@ -83,16 +81,19 @@ func setup(p_home: Home) -> void:
 	var log_piece := Blocks.cylinder(0.14, Home.COLS * TILE, Color(0.36, 0.26, 0.17), Vector3(0, PLOT_TOP + 0.04, line_z), 0.13)
 	log_piece.rotation.z = PI * 0.5
 	add_child(log_piece)
-	_ark = _make_ark()
-	_ark.visible = false
-	add_child(_ark)
-	_site = _make_site()
-	_site.position = WONDER_AT
-	add_child(_site)
+	for k in Content.PENS:
+		var pen := _make_pen()
+		pen.position = PEN_AT[k]
+		add_child(pen)
+		_pens.append(pen)
+	_hoard_light = OmniLight3D.new()
+	_hoard_light.light_color = Color(1.0, 0.72, 0.35)
+	_hoard_light.light_energy = 0.0
+	_hoard_light.omni_range = 4.5
+	add_child(_hoard_light)
 	lay_ground()
 	refresh_buildings(false)
-	show_wonder(false)
-	refresh_things()
+	refresh_pens()
 
 
 static func plot_pos(p: Vector2i) -> Vector3:
@@ -448,270 +449,103 @@ static func _building(b: Dictionary, lit := false) -> Node3D:
 	return root
 
 
-# -- The things beside the homeland ----------------------------------------------------------------------------------
+# -- The star dinosaurs' pens ----------------------------------------------------------------------------------------
 
-## The card box and the shrine made again when what they hold changes; the wonder's ground there only while none is
-## built; the box glowing while `storable` (the good taken up could be kept in it).
-func refresh_things(storable := false) -> void:
-	var key := "%s/%s/%s" % [home.stash.size(), ",".join(home.relics), home.wonder]
-	if key != _things_for:
-		_things_for = key
-		if _stash_box:
-			_stash_box.queue_free()
-		_stash_box = _make_stash_box(home.stash.size())
-		_stash_box.position = STASH_AT
-		_stash_box.rotation.y = -0.5
-		add_child(_stash_box)
-		_stash_light = _stash_box.get_node("Glow") as OmniLight3D
-		if _shrine:
-			_shrine.queue_free()
-		_shrine = _make_shrine(home.relics)
-		_shrine.position = RELICS_AT
-		_shrine.rotation.y = 0.45
-		add_child(_shrine)
-		_site.visible = home.wonder == "" and not home.wonders.is_empty()
-	_stash_light.set_meta("on", storable)
+## The stars in their pens made again when who is where (or who went without) changes; the hoarder's pen glowing while
+## `storable` (the good taken up could be kept by it).
+func refresh_pens(storable := false) -> void:
+	var key := str(home.stars) + str(home.hungry)
+	if key != _pens_for:
+		_pens_for = key
+		for k in _pens.size():
+			var pen: Node3D = _pens[k]
+			var old := pen.get_node_or_null("Star")
+			if old != null:
+				old.name = "Gone"
+				old.queue_free()
+			if k < home.stars.size():
+				var star := star_model(home.stars[k].id)
+				star.name = "Star"
+				star.position = Vector3(0.1, 0.1, 0.2)
+				star.rotation.y = YARD_TURN
+				pen.add_child(star)
+				if k in home.hungry and Creatures.is_model(star):
+					Creatures.play(star, "sleep")
+	var hoarder := -1
+	for k in home.stars.size():
+		if Content.STARS[home.stars[k].id].has("keep"):
+			hoarder = k
+	_hoard_light.set_meta("on", storable and hoarder >= 0)
+	if hoarder >= 0:
+		_hoard_light.position = PEN_AT[hoarder] + Vector3(0, 1.6, 0)
 
 
 func _process(_delta: float) -> void:
-	if _stash_light != null and is_instance_valid(_stash_light):
-		var on := bool(_stash_light.get_meta("on", false))
-		var want := (1.6 + 0.8 * sin(Time.get_ticks_msec() * 0.006)) if on else 0.0
-		_stash_light.light_energy = lerpf(_stash_light.light_energy, want, 0.15)
+	var on := bool(_hoard_light.get_meta("on", false))
+	var want := (1.6 + 0.8 * sin(Time.get_ticks_msec() * 0.006)) if on else 0.0
+	_hoard_light.light_energy = lerpf(_hoard_light.light_energy, want, 0.15)
 
 
-## Which of the things beside the homeland the cursor is on: "stash", "relics", "wonder", or "".
-func thing_at(cam: Camera3D, at: Vector2) -> String:
-	for pair in [["stash", _stash_box], ["relics", _shrine], ["wonder", _site]]:
-		var node: Node3D = pair[1]
-		if node != null and node.visible and _screen_rect(cam, node).grow(6.0).has_point(at):
-			return pair[0]
-	return ""
+## Which pen the cursor is on, or -1.
+func pen_at(cam: Camera3D, at: Vector2) -> int:
+	for k in _pens.size():
+		if _screen_rect(cam, _pens[k]).grow(4.0).has_point(at):
+			return k
+	return -1
 
 
-## The stash's card box: a casket of dark wood bound in brass, its lid open, an amber clasp; in it the cards kept,
-## standing, their backs dark and edged in gold -- as many as there are; a warm light in it when one could go in.
-static func _make_stash_box(cards: int) -> Node3D:
+## Star dinosaur `id` as it stands in its pen: for now the one of ours it looks most like (STAND_IN), banded in its
+## own colours, a little bigger.
+static func star_model(id: String) -> Node3D:
+	var s: Dictionary = Content.STARS[id]
+	var n := Creatures.make(1.25, s.back, false, [], str(STAND_IN.get(id, "white")))
+	if n.has_meta("paint"):
+		var paint := n.get_meta("paint") as ShaderMaterial
+		paint.set_shader_parameter("mark_color", s.back)
+		paint.set_shader_parameter("mark_amount", 0.9)
+		paint.set_shader_parameter("bands", 4.0)
+	return n
+
+
+## A pen: a square of low post-and-rail fence open at the front, a patch of fresh grass inside, a trough at its back.
+static func _make_pen() -> Node3D:
 	var root := Node3D.new()
-	var wood := Color(0.3, 0.18, 0.1)
-	var brass := Color(0.82, 0.62, 0.28)
-	root.add_child(Blocks.box(Vector3(2.3, 0.95, 1.5), wood, Vector3(0, 0.48, 0)))
-	root.add_child(Blocks.box(Vector3(2.12, 0.08, 1.32), wood.darkened(0.45), Vector3(0, 0.96, 0)))
-	for x in [-0.82, 0.82]:
-		root.add_child(Blocks.box(Vector3(0.14, 0.99, 1.54), brass, Vector3(x, 0.49, 0)))
-	for x in [-1.12, 1.12]:
-		for z in [-0.72, 0.72]:
-			root.add_child(Blocks.box(Vector3(0.14, 0.99, 0.14), brass.darkened(0.1), Vector3(x, 0.49, z)))
-	# The lid, open back over its hinge.
-	var lid := Node3D.new()
-	lid.position = Vector3(0, 0.98, -0.74)
-	lid.rotation.x = -1.15
-	lid.add_child(Blocks.box(Vector3(2.3, 0.14, 1.5), wood.lightened(0.05), Vector3(0, 0.07, 0.75)))
-	for x in [-0.82, 0.82]:
-		lid.add_child(Blocks.box(Vector3(0.14, 0.16, 1.54), brass, Vector3(x, 0.08, 0.75)))
-	root.add_child(lid)
-	root.add_child(Blocks.box(Vector3(0.34, 0.3, 0.08), brass, Vector3(0, 0.78, 0.78)))
-	var gem := Blocks.ball(0.09, Color(1.0, 0.55, 0.12), Vector3(0, 0.78, 0.83))
-	gem.material_override = Blocks.glow(Color(1.0, 0.55, 0.12), 1.2)
-	root.add_child(gem)
-	# The cards kept, standing in it.
-	for k in mini(cards, 8):
-		var z := -0.42 + k * 0.13
-		root.add_child(Blocks.box(Vector3(1.5, 1.0, 0.035), Color(0.08, 0.09, 0.1), Vector3(0, 1.05 + (k % 2) * 0.04, z)))
-		root.add_child(Blocks.box(Vector3(1.52, 0.04, 0.045), Color(0.9, 0.72, 0.36), Vector3(0, 1.55 + (k % 2) * 0.04, z)))
-	var glow := OmniLight3D.new()
-	glow.name = "Glow"
-	glow.light_color = Color(1.0, 0.72, 0.35)
-	glow.light_energy = 0.0
-	glow.omni_range = 4.0
-	glow.position = Vector3(0, 1.4, 0)
-	root.add_child(glow)
+	var wood := Color(0.48, 0.35, 0.22)
+	var half := PEN * 0.5
+	var turf := MeshInstance3D.new()
+	turf.mesh = Blocks.rounded(Vector3(PEN - 0.2, 0.08, PEN - 0.2))
+	turf.material_override = Ground.earth_material(Color(0.36, 0.52, 0.24))
+	turf.position = Vector3(0, 0.04, 0)
+	root.add_child(turf)
+	for side in 4:
+		var turn := side * PI * 0.5
+		for i in 4:
+			var f := -half + i * PEN / 3.0
+			if side == 0 and i in [1, 2]:
+				continue                      # the way in, at the front
+			var at: Vector3 = Vector3(f, 0, half).rotated(Vector3.UP, turn)
+			root.add_child(Blocks.cylinder(0.07, 0.75, wood.darkened(0.1), at + Vector3(0, 0.37, 0), 0.06))
+		for h in [0.32, 0.6]:
+			if side == 0:
+				for x in [-half + PEN / 6.0, half - PEN / 6.0]:
+					var rail := Blocks.box(Vector3(PEN / 3.0, 0.06, 0.06), wood, Vector3(x, h, half).rotated(Vector3.UP, turn))
+					rail.rotation.y = turn
+					root.add_child(rail)
+			else:
+				var rail := Blocks.box(Vector3(PEN, 0.06, 0.06), wood, Vector3(0, h, half).rotated(Vector3.UP, turn))
+				rail.rotation.y = turn
+				root.add_child(rail)
+	root.add_child(Blocks.box(Vector3(1.1, 0.28, 0.42), wood.lightened(0.1), Vector3(0.6, 0.14, -half + 0.45)))
+	root.add_child(Blocks.box(Vector3(0.9, 0.06, 0.26), Color(0.5, 0.7, 0.3), Vector3(0.6, 0.29, -half + 0.45)))
 	return root
 
 
-## The relics' shrine: a low plinth of pale stone, a step before it; on it each relic held, a small glowing piece of
-## its colour on a ring of gold.
-static func _make_shrine(relics: Array) -> Node3D:
-	var root := Node3D.new()
-	var stone := Color(0.62, 0.58, 0.52)
-	root.add_child(Blocks.box(Vector3(3.2, 0.32, 1.7), stone.darkened(0.12), Vector3(0, 0.16, 0)))
-	root.add_child(Blocks.box(Vector3(2.8, 0.55, 1.2), stone, Vector3(0, 0.6, -0.1)))
-	root.add_child(Blocks.box(Vector3(3.0, 0.1, 1.36), stone.lightened(0.1), Vector3(0, 0.92, -0.1)))
-	var n := relics.size()
-	for i in n:
-		var r: Dictionary = Content.RELICS[relics[i]]
-		var x := (i - (n - 1) * 0.5) * minf(0.62, 2.4 / maxf(1.0, n))
-		var at := Vector3(x, 0.97, -0.1)
-		var ring := TorusMesh.new()
-		ring.inner_radius = 0.17
-		ring.outer_radius = 0.22
-		var stand := MeshInstance3D.new()
-		stand.mesh = ring
-		stand.material_override = Blocks.mat(Color(0.86, 0.66, 0.3))
-		stand.position = at + Vector3(0, 0.03, 0)
-		root.add_child(stand)
-		var piece := Blocks.blob(Vector3(0.3, 0.38, 0.3) if relics[i] != "tooth" else Vector3(0.16, 0.46, 0.16), r.color,
-			at + Vector3(0, 0.21, 0))
-		piece.material_override = Blocks.glow(r.color, 0.45)
-		root.add_child(piece)
-	return root
-
-
-## The ground waiting for a wonder: a round foundation of pale stone, a faint ring of gold laid in it, four squared
-## stones at its rim and a pair of scaffold poles, rope between.
-static func _make_site() -> Node3D:
-	var root := Node3D.new()
-	var stone := Color(0.6, 0.57, 0.52)
-	root.add_child(Blocks.cylinder(2.7, 0.28, stone.darkened(0.08), Vector3(0, 0.14, 0)))
-	root.add_child(Blocks.cylinder(2.4, 0.06, stone.lightened(0.06), Vector3(0, 0.3, 0)))
-	var ring := TorusMesh.new()
-	ring.inner_radius = 1.6
-	ring.outer_radius = 1.68
-	var line := MeshInstance3D.new()
-	line.mesh = ring
-	line.material_override = Blocks.glow(Color(1.0, 0.8, 0.4), 0.6)
-	line.position = Vector3(0, 0.34, 0)
-	line.scale = Vector3(1, 0.3, 1)
-	root.add_child(line)
-	for k in 4:
-		var a := TAU * k / 4.0 + 0.4
-		root.add_child(Blocks.box(Vector3(0.6, 0.5, 0.6), stone, Vector3(cos(a) * 2.3, 0.45, sin(a) * 2.3)))
-	for x in [-1.2, 1.2]:
-		root.add_child(Blocks.cylinder(0.06, 2.4, Color(0.45, 0.32, 0.2), Vector3(x, 1.5, -1.6)))
-	root.add_child(Blocks.cylinder(0.05, 2.4, Color(0.45, 0.32, 0.2), Vector3(0, 2.6, -1.6)))
-	root.get_child(root.get_child_count() - 1).rotation.z = PI * 0.5
-	return root
-
-
-# -- The wonder -----------------------------------------------------------------------------------------------------
-
-## The wonder built, standing beside the homeland (rising up when just built).
-func show_wonder(pop := true) -> void:
-	if _wonder:
-		_wonder.queue_free()
-		_wonder = null
-	if home.wonder == "":
-		return
-	var root := wonder_node(home.wonder)
-	root.position = WONDER_AT
-	add_child(root)
-	_wonder = root
-	if pop:
-		root.scale = Vector3(1, 0.05, 1)
-		var tw := root.create_tween()
-		tw.tween_property(root, "scale", Vector3.ONE, 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-
-## A wonder as blocks on its plinth: the brood's domes, the gold city's towers, the tower of evolution's glowing rings,
-## the banner on its pole, the titan's cage.
-static func wonder_node(id: String) -> Node3D:
-	var c: Color = Content.WONDERS[id].color
-	var root := Node3D.new()
-	root.add_child(Blocks.box(Vector3(6.0, 0.4, 6.0), Color(0.55, 0.52, 0.48), Vector3(0, 0.2, 0)))
-	match id:
-		"brood":
-			root.add_child(Blocks.dome(2.6, c, Vector3(0, 0.4, 0)))
-			for k in 3:
-				root.add_child(Blocks.dome(0.9, c.lightened(0.2), Vector3(cos(k * 2.1) * 2.3, 0.4, sin(k * 2.1) * 2.3)))
-		"gold_city":
-			for k in 3:
-				var h: float = [4.0, 5.5, 3.5][k]
-				var tower := Blocks.box(Vector3(1.4, h, 1.4), c, Vector3(-1.8 + k * 1.8, 0.4 + h * 0.5, 0))
-				root.add_child(tower)
-				root.add_child(Blocks.cylinder(0.9, 1.0, c.lightened(0.2), Vector3(-1.8 + k * 1.8, 0.4 + h + 0.5, 0), 0.0))
-		"evo_tower":
-			for k in 6:
-				var ring := Blocks.cylinder(1.4 - k * 0.15, 0.9, c if k % 2 == 0 else c.darkened(0.3), Vector3(0, 0.85 + k * 0.9, 0))
-				ring.material_override = Blocks.glow(c, 0.4 + 0.15 * k) if k % 2 == 0 else Blocks.mat(c.darkened(0.3))
-				root.add_child(ring)
-		"banner":
-			root.add_child(Blocks.box(Vector3(0.35, 7.0, 0.35), Color(0.35, 0.28, 0.2), Vector3(0, 3.9, 0)))
-			root.add_child(Blocks.box(Vector3(3.0, 2.0, 0.08), c, Vector3(1.65, 6.2, 0)))
-		"titan":
-			for sx in [-2.4, 2.4]:
-				for sz in [-2.4, 2.4]:
-					root.add_child(Blocks.box(Vector3(0.3, 4.2, 0.3), Color(0.3, 0.28, 0.28), Vector3(sx, 2.5, sz)))
-			root.add_child(Blocks.box(Vector3(5.1, 0.3, 5.1), Color(0.3, 0.28, 0.28), Vector3(0, 4.6, 0)))
-			root.add_child(Blocks.box(Vector3(2.6, 2.6, 2.6), c, Vector3(0, 1.7, 0)))
-	return root
-
-
-# -- The ark --------------------------------------------------------------------------------------------------------
-
-## The gene ark: a long hull, a band of light, the vault on top, an engine at each end.
-func _make_ark() -> Node3D:
-	var ark := Node3D.new()
-	ark.add_child(Blocks.box(Vector3(12, 2.2, 5), Color(0.55, 0.58, 0.62), Vector3.ZERO))
-	ark.add_child(Blocks.box(Vector3(9, 1.2, 4), Color(0.42, 0.45, 0.5), Vector3(0, 1.6, 0)))
-	var band := Blocks.box(Vector3(12.1, 0.25, 5.1), Color(0.4, 0.95, 0.8), Vector3(0, -0.3, 0))
-	band.material_override = Blocks.glow(Color(0.4, 0.95, 0.8), 1.5)
-	ark.add_child(band)
-	var vault := Blocks.dome(1.6, Color(0.5, 0.9, 0.8), Vector3(0, 2.2, 0))
-	vault.material_override = Blocks.glow(Color(0.5, 0.9, 0.8), 0.6)
-	ark.add_child(vault)
-	for sx in [-1.0, 1.0]:
-		ark.add_child(Blocks.cylinder(0.8, 1.2, Color(0.3, 0.3, 0.33), Vector3(sx * 4.5, -1.6, 0)))
-		var jet := Blocks.cylinder(0.6, 1.0, Color(0.5, 0.85, 1.0), Vector3(sx * 4.5, -2.6, 0), 0.0)
-		jet.rotation.x = PI
-		jet.material_override = Blocks.glow(Color(0.5, 0.85, 1.0), 2.5)
-		ark.add_child(jet)
-	return ark
-
-
-## The ark comes down over the homeland.
-func ark_down() -> void:
-	_ark.visible = true
-	_ark.position = Vector3(0, 60, -20)
-	var tw := create_tween()
-	tw.tween_property(_ark, "position", ARK_AT, 1.4).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
-	await tw.finished
-
-
-## The ark goes up and away.
-func ark_up() -> void:
-	var tw := create_tween()
-	tw.tween_property(_ark, "position", Vector3(0, 70, -40), 1.3).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
-	await tw.finished
-	_ark.visible = false
-
-
-## Loading up: the buildings at `taken` rise into the ark; the rest are left behind -- they sink away.
-func load_up(taken: Array) -> void:
-	if _buildings.is_empty():
-		return
-	var tw := create_tween().set_parallel()
-	var k := 0
-	for p in _buildings:
-		var node: Node3D = _buildings[p].node
-		if p in taken:
-			tw.tween_property(node, "position", _ark.position + Vector3(0, -1.0, 0), 0.9).set_delay(k * 0.15) \
-				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-			tw.tween_property(node, "scale", Vector3.ONE * 0.15, 0.9).set_delay(k * 0.15)
-			k += 1
-		else:
-			tw.tween_property(node, "scale", Vector3(1, 0.04, 1), 1.0).set_delay(0.4)
-	await tw.finished
+## The homeland made afresh (a new place): every building as it now is, at once.
+func rebuild() -> void:
 	for p in _buildings:
 		_buildings[p].node.queue_free()
 	_buildings.clear()
-
-
-## Setting down: each building there is now drops from the ark to its plot.
-func set_down() -> void:
 	refresh_buildings(false)
-	if _buildings.is_empty():
-		return
-	var tw := create_tween().set_parallel()
-	var k := 0
-	for p in _buildings:
-		var node: Node3D = _buildings[p].node
-		var to := node.position
-		node.position = _ark.position + Vector3(0, -1.0, 0)
-		node.scale = Vector3.ONE * 0.15
-		tw.tween_property(node, "position", to, 0.8).set_delay(k * 0.25).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-		tw.tween_property(node, "scale", Vector3.ONE, 0.5).set_delay(k * 0.25)
-		k += 1
-	await tw.finished
 
 
 # -- The yard ------------------------------------------------------------------------------------------------------

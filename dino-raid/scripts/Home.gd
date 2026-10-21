@@ -1,28 +1,29 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17-22): wherever the ark has landed, a grid of plots -- the top rows the battle line,
+## The homeland (GAME-DESIGN 17-24): wherever the ark has landed, a grid of plots -- the top rows the battle line,
 ## for nests only, where each nest's units will stand in battle; the rows behind for everything else, special ground
-## among them -- with the gold and the other resources, the shop's shelf, the goods kept for later (the stash), the
-## relics, the wonder, and the homeland's own hit points. One round here: the buildings bring in gold, biomass and
-## genes and the shelf is stocked (start_round); the player buys -- buildings, raises, affixes -- puts goods down from
-## the stash, takes a kind out of the shop, builds the wonder; then the nests make this round's army, paying biomass
-## (produce), and it goes out to fight (Fight). The army lives for that battle only. Gold kept to the round's end earns
-## interest. When a place is held, the ark moves on (land): the buildings stay behind but for those packed into the
-## stash.
+## among them -- with the gold and the other resources, the shop's shelf, the star dinosaurs in their pens (and the
+## goods the hoarder keeps for later, the stash), and the homeland's own hit points. One round here: the buildings
+## bring in biomass, the stars eat, gold and genes come in, and the shelf is stocked (start_round); the player buys --
+## buildings, raises, affixes, a star -- puts goods down from the stash, takes a kind out of the shop; then the nests
+## make this round's army, paying biomass (produce), and it goes out to fight (Fight). The army lives for that battle
+## only. Gold kept to the round's end earns interest. When a place is held, the ark moves on (land): the buildings stay
+## behind but for those it carries, which it sets down in the new place; the stars go with it.
 ##
 ## Neighbours are the four plots up, down, left and right; a column, the plots one above another. Plain data and
 ## rules, nothing on screen: the same rules for the game and for its tests.
 ##
 ## A building: {id, kind, level, path, affixes: [ids]} -- path: a nest's raises, each "count" or "elite".
-## A good (shelf or stash): {id, plus, packed: {level, path, affixes}} (Content.offer), or null on the shelf where one
+## A good (shelf or stash): {id, plus} (Content.offer), or null on the shelf where one
 ##   was bought. A card of the deck (牌库) the shelf is drawn from: {id, plus} -- plus: upgraded.
 ## A unit (army): {id: "nest id:n", kind, nest: plot, row, lane, slot, of, hp_mult, atk_mult, atk_bonus, armor, range,
 ##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, guard, care, scavenge, free} -- row, lane: where it
 ##   stands in battle (row 0 in front; lane its column); slot, of: which of its nest's it is, of how many; guard, care,
 ##   scavenge: its nest's gift, where it works in battle (Content.TRAITS, Fight); free: eating nothing.
 ## Events (for the screen): bought {offer}, stored {offer}, placed {offer}, built {at}, replaced {at, was, back},
-## raised {at, choice}, affixed {at, affix}, wonder {id}, income {gold, biomass, genes}, rotted {amount}, ash {amount},
-## mended {amount}.
+## raised {at, choice}, affixed {at, affix}, star {id}, sold {id, gold}, fed {ate, hungry: [ids]}, income {gold,
+## biomass, genes}, ash {amount}, mended {amount}.
+## A star dinosaur (in a pen): {id, grow} -- grow: what it has grown to (Content.STARS grow_boss, grow_round).
 
 const COLS := 6
 const ROWS := 4
@@ -43,15 +44,14 @@ var gold := 0
 var biomass := 0
 var genes := 0                    # research points (研究点数): for affixes and upgrading cards
 var hp := HP
-var relics: Array = []            # relic ids
+var stars: Array = []             # the star dinosaurs, a pen each, in order: {id, grow}
+var hungry: Array = []            # the pens whose stars went without this round (doing nothing till the next)
+var star_offer := ""              # the star dinosaur on offer after the shelf, "" when none (or bought)
 var deck: Array = []              # the cards the shop draws from: {id, plus}
 var cuts := 0                     # cards cut from the deck so far (each costs more)
 var shelf: Array = []             # offers, or null where bought
-var stash: Array = []             # goods kept for later
+var stash: Array = []             # goods kept for later (by the hoarder)
 var rerolls := 0                  # times the shelf was stocked again this round
-var wonders: Array = []           # the wonders on offer this run (Content.WONDERS ids)
-var wonder := ""                  # the one built, "" until then
-var flood := false                # the coast at high tide this round: the last row brings in nothing
 var next_id := 1
 
 
@@ -63,15 +63,16 @@ func _init(rng: RandomNumberGenerator) -> void:
 	land(0, rng, Content.LANDING)
 
 
-## The ark lands in place `r`: the old buildings are left behind, the special ground of the new place lies about
-## behind the battle line, and the ark sets down `kit` ([kind, level] each) -- nests in the middle of the battle line,
-## the rest just behind it. What is in the stash comes along, and the wonder.
+## The homeland made in place `r`: the old buildings are left behind, the special ground of the new place lies about
+## behind the battle line, and `kit` ([kind, level] each) is set down -- nests in the middle of the battle line, the
+## rest just behind it. The stars come along, and what the hoarder keeps.
 func land(r: int, rng: RandomNumberGenerator, kit: Array) -> void:
 	region = r
 	buildings.clear()
 	terrain.clear()
 	var plots := _plots_all().filter(func(p: Vector2i) -> bool: return not front(p) and not p in LANDING_BACK.slice(0, 3))
 	shuffle(plots, rng)
+	hungry = []
 	var lie: Dictionary = Content.LEVELS[r].terrain
 	for kind in lie:
 		for k in int(lie[kind]):
@@ -106,42 +107,40 @@ func _set_level(p: Vector2i, lv: int) -> void:
 
 # -- A round ----------------------------------------------------------------------------------------------
 
-## The place has its way (damp: stored biomass rots; ash falls); the buildings bring in what they make; the frill
-## mends; the shelf is stocked afresh from the deck.
+## The buildings bring in biomass; the stars eat (feed) and grow; gold and genes come in -- what the fed stars bring
+## with them; the sickle costs the homeland a hit point; the shield mends; the shelf is stocked afresh from the deck, a
+## star after it.
 func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 	var ev: Array = []
-	if rule() == "damp" and biomass > 0:
-		var rot := biomass / 2
-		biomass -= rot
-		ev.append({"t": "rotted", "amount": rot})
-	var ash := (1 if rule() == "ash" else 0) + (1 if "heart" in relics else 0)
+	var b := income_biomass()
+	biomass += b
+	ev.append_array(feed())
+	for k in stars.size():
+		var info: Dictionary = Content.STARS[stars[k].id]
+		if not k in hungry and info.has("grow_round"):
+			stars[k].grow = mini(int(info.grow_max), int(stars[k].grow) + int(info.grow_round))
+	var g := income_gold()
+	var n := income_genes()
+	gold += g
+	genes += n
+	ev.append({"t": "income", "gold": g, "biomass": b, "genes": n})
+	var ash := _star("ash")
 	if ash > 0:
 		var before := hp
 		hp = maxi(1, hp - ash)
 		ev.append({"t": "ash", "amount": before - hp})
-	var g := income_gold()
-	var b := income_biomass()
-	var n := income_genes()
-	gold += g
-	biomass += b
-	genes += n
-	ev.append({"t": "income", "gold": g, "biomass": b, "genes": n})
-	if "frill" in relics and hp < hp_max():
+	if _star("mend") > 0 and hp < hp_max():
 		var before := hp
-		hp = mini(hp_max(), hp + 1)
+		hp = mini(hp_max(), hp + _star("mend"))
 		ev.append({"t": "mended", "amount": hp - before})
 	rerolls = 0
 	stock(rng, level)
 	return ev
 
 
-func rule() -> String:
-	return str(Content.LEVELS[region].get("rule", ""))
-
-
 ## Stocks the shelf from the deck: buildings by how much land is free (more when there is much; one when there is
 ## none, to pull something down for), then raises and affixes -- each card at most once, only those that can be used
-## now and are found here, no more than one that costs more gold than there is.
+## now and are found here, no more than one that costs more gold than there is -- and a star dinosaur after them.
 func stock(rng: RandomNumberGenerator, level: int) -> void:
 	var free := _plots_all().filter(func(p: Vector2i) -> bool: return buildable(p) and not buildings.has(p)).size()
 	var builds := clampi(ceili(free / 3.0), 1, 3)
@@ -176,6 +175,7 @@ func stock(rng: RandomNumberGenerator, level: int) -> void:
 			if not taken.has(k):
 				taken[k] = true
 				shelf.append(_good(deck[k]))
+	star_offer = _draw_star(rng, level)
 
 
 ## A card of the deck as a good on the shelf.
@@ -194,7 +194,7 @@ func _least_price(oi: Dictionary) -> int:
 	var o := Content.offer(oi)
 	match o.type:
 		"build":
-			return maxi(1, int(o.price) - _discount())
+			return int(o.price)
 		"raise":
 			var lv := Content.LEVEL_MAX
 			for p in _plots():
@@ -235,11 +235,8 @@ func upgrade(k: int) -> bool:
 
 
 func _raise_price(level: int) -> int:
-	return maxi(1, Content.RAISE + level - (1 if rule() == "ash" else 0))
+	return maxi(1, Content.RAISE + level)
 
-
-func _discount() -> int:
-	return 1 if "wood" in relics else 0
 
 
 ## Whether an offer could be used now -- a stabilizer only once a nest has as many affixes as it has places.
@@ -261,15 +258,16 @@ func _useful(id: String) -> bool:
 
 
 func shelf_size() -> int:
-	return Content.SHOP + (1 if "amber" in relics else 0) + _sum("shelf") - (1 if "crystal" in relics else 0)
+	return maxi(1, Content.SHOP + _sum("shelf") + _star("shelf"))
 
 
+## How many goods can be kept for later: as many as the hoarder keeps, while it is fed.
 func stash_size() -> int:
-	return Content.STASH + (2 if "sac" in relics else 0)
+	return _star("keep")
 
 
 func reroll_price() -> int:
-	var free := (1 if "trilobite" in relics else 0) + _sum("rerolls")
+	var free := _star("rerolls") + _sum("rerolls")
 	return 0 if rerolls < free else Content.REROLL + rerolls - free
 
 
@@ -290,15 +288,15 @@ func interest() -> int:
 
 
 func interest_max() -> int:
-	return Content.INTEREST_MAX + (2 if "ammonite" in relics else 0) + _sum("interest")
+	return Content.INTEREST_MAX + _star("interest") + _sum("interest")
 
 
 # -- This round's army ------------------------------------------------------------------------------------
 
 ## This round's army as things stand: each nest, in reading order, makes its count (one more for a red nest swarming,
-## one more for the first with the egg relic, one more each with the core and the brood wonder), each unit paid for in
-## biomass as far as the biomass goes -- the one the egg makes eats nothing; the titan, with its wonder, in the middle
-## of the front row; and then, with horde totems, every unit hits harder for how many there are.
+## one more with the brood queen), each unit paid for in biomass as far as the biomass goes; the first nest one more
+## with the mother, eating nothing; the titan, with its star, in the middle of the front row; and then, with horde
+## totems, every unit hits harder for how many there are.
 func army() -> Array:
 	var out: Array = []
 	var food := biomass
@@ -310,7 +308,7 @@ func army() -> Array:
 		var spec := spec_of(p)
 		var cost := int(Content.UNITS[spec.kind].food)
 		var paid := count(p)
-		var extra := 1 if first and "egg" in relics else 0
+		var extra := _star("first_free") if first else 0
 		first = false
 		var made: Array = []
 		for i in paid + extra:
@@ -327,7 +325,7 @@ func army() -> Array:
 			made[k].slot = k
 			made[k].of = made.size()
 		out.append_array(made)
-	if wonder == "titan":
+	if _star("titan") > 0:
 		out.append({"id": "titan:0", "kind": "titan", "nest": NOWHERE, "row": 0, "lane": (COLS - 1) * 0.5, "slot": 0,
 			"of": 1, "hp_mult": 1.0, "atk_mult": 1.0, "atk_bonus": 0, "armor": 0, "range": 0.0, "splash": 0.0,
 			"dive": false, "pierce": 0, "haste": 0, "charge": false, "size_mult": 1.0, "elite": 0, "affixes": [],
@@ -364,13 +362,11 @@ func produce() -> Array:
 	return out
 
 
-## How many the nest at p makes a round (before biomass and the egg): one, one more for each raise chosen so, one more
-## for a red nest swarming (its gift: CLUSTER red nests beside it), one more with the core, one more with the brood
-## wonder.
+## How many the nest at p makes a round (before biomass and the mother): one, one more for each raise chosen so, one
+## more for a red nest swarming (its gift: CLUSTER red nests beside it), one more with the brood queen.
 func count(p: Vector2i) -> int:
 	var b: Dictionary = buildings[p]
-	return 1 + b.path.count("count") + (1 if trait_of(p) == "swarm" and trait_on(p) else 0) \
-		+ (1 if "core" in relics else 0) + (1 if wonder == "brood" else 0)
+	return 1 + b.path.count("count") + (1 if trait_of(p) == "swarm" and trait_on(p) else 0) + _star("count")
 
 
 ## The gift (Content.TRAITS) of the nest at p, or "".
@@ -424,9 +420,10 @@ func _beside(p: Vector2i, plots: Array, any := false) -> int:
 
 
 ## What the nest at p gives each unit it makes: the species its affixes make of it, where it stands, how elite it is,
-## its other affixes -- the only things that make a unit itself stronger -- its gift where it works, and what the
-## homeland's schools give units of its kind: the champion halls elites, the vanguard camps the front row, the
-## watchtowers those that reach far, the banner wonder all.
+## its other affixes -- the only things that make a unit itself stronger -- its gift where it works, what the
+## homeland's schools give units of its kind (the champion halls elites, the vanguard camps the front row, the
+## watchtowers those that reach far), and what the fed stars give: the front row's armour, red units' attack, quicker
+## strikes, reach, attack and hit points for all (less with the brood queen), what the old king has grown to.
 func spec_of(p: Vector2i) -> Dictionary:
 	var b: Dictionary = buildings[p]
 	var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
@@ -468,24 +465,24 @@ func spec_of(p: Vector2i) -> Dictionary:
 		s.atk_mult = float(s.atk_mult) * more
 	if p.y == 0:
 		s.hp_mult = float(s.hp_mult) * (1.0 + _sum("front") / 100.0)
-	if maxf(float(Content.UNITS[sp.kind].range), float(s.range)) >= 3.0:
-		s.pierce = int(s.pierce) + _sum("ranged")
-	if wonder == "banner":
-		s.atk_bonus = int(s.atk_bonus) + 2
-		s.hp_mult = float(s.hp_mult) * 1.25
-	match rule():
-		"bog":
-			s.hp_mult = float(s.hp_mult) * Content.BOG_HP
-		"cold":
-			s.haste = int(s.haste) + Content.COLD_HASTE
+	var far := maxf(float(Content.UNITS[sp.kind].range), float(s.range)) >= 3.0
+	if far:
+		s.pierce = int(s.pierce) + _sum("ranged") + _star("reach")
+		s.range = maxf(float(Content.UNITS[sp.kind].range), float(s.range)) + _star("reach")
+	if p.y == 0 and _star("front_armor") > 0:
+		s.armor = int(s.armor) + _star("front_armor") + (1 if diet_count("plant") >= Content.STARS_COUNT else 0)
+	if sp.kind == "red" and _star("red_atk") > 0:
+		s.atk_bonus = int(s.atk_bonus) + _star("red_atk") + (1 if diet_count("meat") >= Content.STARS_COUNT else 0)
+	s.haste = int(s.haste) + _star("haste")
+	s.atk_bonus = int(s.atk_bonus) + _star("atk") + grown("grow_boss")
+	s.hp_mult = float(s.hp_mult) * (1.0 + (_star("hp_pct") - _star("weak")) / 100.0)
 	return s
 
 
-## How many affixes the nest at p can carry: one, more for each stabilizer in its column, one more with the heart and
-## with the tower of evolution, more for a mutant nest.
+## How many affixes the nest at p can carry: one, more for each stabilizer in its column, more with the sickle and the
+## first bird, more for a mutant nest.
 func slots(p: Vector2i) -> int:
-	var n := 1 + (1 if "heart" in relics else 0) + (1 if wonder == "evo_tower" else 0) \
-		+ (Content.MUTANT_SLOTS if trait_of(p) == "mutant" else 0)
+	var n := 1 + _star("slots") + (Content.MUTANT_SLOTS if trait_of(p) == "mutant" else 0)
 	for y in ROWS:
 		var q := Vector2i(p.x, y)
 		if buildings.has(q) and buildings[q].kind == "stabilizer":
@@ -500,19 +497,19 @@ func price(i: int, at: Variant = null) -> int:
 	var o := Content.offer(shelf[i])
 	match o.type:
 		"build":
-			return maxi(1, int(o.price) - _discount())
+			return int(o.price)
 		"raise":
 			var lv := int(buildings[at].level) if at is Vector2i and buildings.has(at) else 1
 			return maxi(1, _raise_price(lv) - (Content.PLUS_RAISE if o.plus else 0))
 	return int(o.price)
 
 
-## The research points an offer costs here: an affix's (none upgraded), less the gene banks' and the tooth's -- none
-## with the tower of evolution.
+## The research points an offer costs here: an affix's (none upgraded), less the gene banks' and the doctor's -- none
+## with the first bird.
 func genes_cost(o: Dictionary) -> int:
-	if o.type != "affix" or wonder == "evo_tower":
+	if o.type != "affix" or _star("free_affix") > 0:
 		return 0
-	return maxi(0, int(o.get("genes", 0)) - _sum("gene_off") - (1 if "tooth" in relics else 0))
+	return maxi(0, int(o.get("genes", 0)) - _sum("gene_off") - _star("gene_off"))
 
 
 ## Whether shelf[i] can be paid for (research points too; for a raise, on the cheapest building).
@@ -543,16 +540,16 @@ func stash_targets(k: int) -> Array:
 	return _fits(stash[k])
 
 
-## Whether shelf[i] can be bought into the stash: a building or an affix (what is put somewhere), paid for (a gold
-## more than putting it down now: store_price), and room.
+## Whether shelf[i] can be bought into the stash: a building or an affix (what is put somewhere), paid for, and room
+## with the hoarder.
 func can_store(i: int) -> bool:
 	return affordable(i) and stash.size() < stash_size() and Content.offer(shelf[i]).type in ["build", "affix"] \
 		and gold >= store_price(i)
 
 
-## What keeping shelf[i] for later costs: its price and Content.STORE_EXTRA more.
+## What keeping shelf[i] for later costs: its price.
 func store_price(i: int) -> int:
-	return price(i) + Content.STORE_EXTRA
+	return price(i)
 
 
 ## Where a good can go, whoever pays: a building on a plot of its part of the homeland (a nest on the battle line,
@@ -563,7 +560,7 @@ func _fits(oi: Dictionary) -> Array:
 		"tile":
 			var nest := Content.is_nest(o.builds)
 			return _plots_all().filter(func(p: Vector2i) -> bool:
-				return buildable(p) and front(p) == nest and (not buildings.has(p) or buildings[p].kind != o.builds or oi.has("packed")))
+				return buildable(p) and front(p) == nest and (not buildings.has(p) or buildings[p].kind != o.builds))
 		"building":
 			return _plots().filter(func(p: Vector2i) -> bool: return int(buildings[p].level) < Content.LEVEL_MAX)
 		"nest":
@@ -592,7 +589,6 @@ func store(i: int) -> Array:
 		return []
 	var o := Content.offer(shelf[i])
 	_pay(i, null)
-	gold -= Content.STORE_EXTRA
 	stash.append(shelf[i])
 	shelf[i] = null
 	return [{"t": "stored", "offer": o.id}]
@@ -608,14 +604,6 @@ func place(k: int, at: Variant, choice := "count") -> Array:
 	stash.remove_at(k)
 	return [{"t": "placed", "offer": o.id}] + _apply(oi, at, choice)
 
-
-## A good kept, at the end of the stash -- the oldest one going if there is no room. Whether one went.
-func keep(oi: Dictionary) -> bool:
-	stash.append(oi)
-	if stash.size() > stash_size():
-		stash.pop_front()
-		return true
-	return false
 
 
 func _pay(i: int, at: Variant) -> void:
@@ -638,11 +626,7 @@ func _apply(oi: Dictionary, at: Variant, choice: String) -> Array:
 			else:
 				build(at, o.builds)
 				ev.append({"t": "built", "at": at})
-			if oi.has("packed"):
-				buildings[at].level = int(oi.packed.level)
-				buildings[at].path = oi.packed.get("path", []).duplicate()
-				buildings[at].affixes = oi.packed.affixes.duplicate()
-			elif o.plus:
+			if o.plus:
 				buildings[at].level = 2
 				if Content.is_nest(o.builds):
 					buildings[at].path = ["elite" if choice == "elite" else "count"]
@@ -658,32 +642,128 @@ func _apply(oi: Dictionary, at: Variant, choice: String) -> Array:
 	return ev
 
 
-## The building at p as a good to carry: its offer, with its level, its nest's choices and its affixes.
-func packed(p: Vector2i) -> Dictionary:
-	var b: Dictionary = buildings[p]
-	for id in Content.OFFERS:
-		if Content.OFFERS[id].get("builds", "") == b.kind:
-			return {"id": id, "packed": {"level": int(b.level), "path": b.path.duplicate(), "affixes": b.affixes.duplicate()}}
-	return {}
-
-
 ## A building put up at p (whatever was there pulled down), at level 1.
 func build(p: Vector2i, kind: String) -> void:
 	buildings[p] = {"id": _id(), "kind": kind, "level": 1, "path": [], "affixes": []}
 
 
-## Whether wonder `id` can be built now: one of those on offer, none built yet, and the gold for it.
-func can_build_wonder(id: String) -> bool:
-	return wonder == "" and id in wonders and gold >= int(Content.WONDERS[id].price)
+# -- The star dinosaurs -----------------------------------------------------------------------------------------
+
+## The stars eat, pen by pen: each what it eats, while the biomass lasts; one it does not reach goes without, and does
+## nothing this round. Its events.
+func feed() -> Array:
+	hungry = []
+	var ate := 0
+	var without: Array = []
+	for k in stars.size():
+		var eat := int(Content.STARS[stars[k].id].eat)
+		if biomass >= eat:
+			biomass -= eat
+			ate += eat
+		else:
+			hungry.append(k)
+			without.append(stars[k].id)
+	return [{"t": "fed", "ate": ate, "hungry": without}] if not stars.is_empty() else []
 
 
-## Builds wonder `id`. Its events; [] if it could not be.
-func build_wonder(id: String) -> Array:
-	if not can_build_wonder(id):
+## What the stars eat a round, all told.
+func star_food() -> int:
+	var n := 0
+	for s in stars:
+		n += int(Content.STARS[s.id].eat)
+	return n
+
+
+## What the fed stars give of `key` (Content.STARS) all told.
+func _star(key: String) -> int:
+	var n := 0
+	for k in stars.size():
+		if not k in hungry:
+			n += int(Content.STARS[stars[k].id].get(key, 0))
+	return n
+
+
+## What the fed stars that grow by `how` ("grow_boss", "grow_round") have grown to, all told.
+func grown(how: String) -> int:
+	var n := 0
+	for k in stars.size():
+		if not k in hungry and Content.STARS[stars[k].id].has(how):
+			n += int(stars[k].grow)
+	return n
+
+
+## A star `id` in the pens (fed or not).
+func has_star(id: String) -> bool:
+	return stars.any(func(s: Dictionary) -> bool: return s.id == id)
+
+
+## How many stars of `diet` ("plant", "meat") are in the pens.
+func diet_count(diet: String) -> int:
+	return stars.filter(func(s: Dictionary) -> bool: return Content.STARS[s.id].diet == diet).size()
+
+
+## Whether the star on offer can be bought now: there is one, the gold for it, and a pen free.
+func can_buy_star() -> bool:
+	return star_offer != "" and stars.size() < Content.PENS and gold >= int(Content.STARS[star_offer].price)
+
+
+## Buys the star on offer into the next pen. Its events; [] if it could not be.
+func buy_star() -> Array:
+	if not can_buy_star():
 		return []
-	gold -= int(Content.WONDERS[id].price)
-	wonder = id
-	return [{"t": "wonder", "id": id}]
+	var id := star_offer
+	gold -= int(Content.STARS[id].price)
+	star_offer = ""
+	return take_star(id)
+
+
+## Star `id` into the next pen (from the shop, the ark, a boss beaten): fed from the start. Its events; [] if there was
+## no pen free or it is there already.
+func take_star(id: String) -> Array:
+	if stars.size() >= Content.PENS or has_star(id):
+		return []
+	stars.append({"id": id, "grow": 0})
+	return [{"t": "star", "id": id}]
+
+
+## What selling the star in pen k brings back: half its price.
+func sell_price(k: int) -> int:
+	return int(Content.STARS[stars[k].id].price) / 2 if k >= 0 and k < stars.size() else 0
+
+
+## The star in pen k sold: its pen free, the pens after it closing up -- and with the hoarder, what it kept gone. Its
+## events.
+func sell_star(k: int) -> Array:
+	if k < 0 or k >= stars.size():
+		return []
+	var id: String = stars[k].id
+	var back := sell_price(k)
+	gold += back
+	stars.remove_at(k)
+	hungry = hungry.filter(func(j: int) -> bool: return j != k).map(func(j: int) -> int: return j - 1 if j > k else j)
+	if Content.STARS[id].has("keep") and not stars.any(func(s: Dictionary) -> bool: return Content.STARS[s.id].has("keep")):
+		stash.clear()
+	return [{"t": "sold", "id": id, "gold": back}]
+
+
+## A boss or mini-boss beaten: the stars that grow so grow.
+func boss_beaten() -> void:
+	for k in stars.size():
+		var info: Dictionary = Content.STARS[stars[k].id]
+		if not k in hungry and info.has("grow_boss"):
+			stars[k].grow = mini(int(info.grow_max), int(stars[k].grow) + int(info.grow_boss))
+
+
+## A star for the shop to offer after its shelf, none of those in the pens: commons the likeliest, then uncommons, then
+## rares -- none rarer than the run's level allows (Content.STARS_FROM), no legendary.
+func _draw_star(rng: RandomNumberGenerator, level: int) -> String:
+	var pool: Array = []
+	for id in Content.STARS:
+		var r := int(Content.STARS[id].rarity)
+		if r <= int(Content.STARS_FROM[clampi(level, 0, Content.STARS_FROM.size() - 1)]) and not has_star(id):
+			for k in int(Content.STAR_ODDS[r]):
+				pool.append(id)
+	return pool[rng.randi() % pool.size()] if not pool.is_empty() else ""
 
 
 ## A copy to try a good on (the forecast): the same homeland, nothing shared.
@@ -696,15 +776,15 @@ func clone() -> Home:
 	h.biomass = biomass
 	h.genes = genes
 	h.hp = hp
-	h.relics = relics.duplicate()
+	h.stars = stars.duplicate(true)
+	h.hungry = hungry.duplicate()
+	h.star_offer = star_offer
 	h.deck = deck.duplicate(true)
 	h.cuts = cuts
-	h.flood = flood
+
 	h.shelf = shelf.duplicate(true)
 	h.stash = stash.duplicate(true)
 	h.rerolls = rerolls
-	h.wonders = wonders.duplicate()
-	h.wonder = wonder
 	h.next_id = next_id
 	return h
 
@@ -726,8 +806,7 @@ func buildable(p: Vector2i) -> bool:
 # -- What the homeland comes to ---------------------------------------------------------------------------
 
 func income_gold() -> int:
-	var n := INCOME + (4 if "crystal" in relics else 0) + (6 if wonder == "gold_city" else 0) \
-		+ (Content.COLD_GOLD if rule() == "cold" else 0)
+	var n := INCOME + _star("gold")
 	for p in _working():
 		var g := int(_level(buildings[p]).get("gold", 0))
 		if g <= 0:
@@ -739,23 +818,21 @@ func income_gold() -> int:
 	return n
 
 
+## The biomass the buildings bring in a round (the fisher's more from each culture pool), and the stars that bring it
+## in themselves (the belly, the neck as far as it has grown) -- these eat nothing, so are never without.
 func income_biomass() -> int:
 	var n := 0
 	for p in _working():
 		var b := int(_level(buildings[p]).get("biomass", 0))
+		if b > 0 and buildings[p].kind == "pool":
+			b += _star("pool")
 		n += b * (2 if _like(p) == "pond" else 1)
-	n += 3 if "coprolite" in relics else 0
-	if rule() in ["damp", "bog"]:
-		n = n * 3 / 2
-	elif rule() == "drought":
-		n = int(n * Content.DROUGHT_BIOMASS)
-	if "core" in relics:
-		n = n * 7 / 10
+	n += _star("biomass") + grown("grow_round")
 	return n
 
 
 func income_genes() -> int:
-	var n := Content.DROUGHT_GENES if rule() == "drought" else 0
+	var n := 0
 	for p in _working():
 		n += int(_level(buildings[p]).get("genes", 0))
 		if buildings[p].kind == "sampler":
@@ -767,9 +844,9 @@ func income_genes() -> int:
 	return n
 
 
-## The plots whose buildings bring in what they make this round -- all but the last row at the coast's high tide.
+## The plots whose buildings bring in what they make this round.
 func _working() -> Array:
-	return buildings.keys().filter(func(p: Vector2i) -> bool: return not (flood and p.y == ROWS - 1))
+	return buildings.keys()
 
 
 ## Which of the four ways the special ground at p works (Content.TERRAIN like), or "".
@@ -779,7 +856,7 @@ func _like(p: Vector2i) -> String:
 
 
 func hp_max() -> int:
-	return HP + (10 if "frill" in relics else 0)
+	return HP + _star("hp")
 
 
 ## The battle's lost: the homeland takes the harm. What it took.

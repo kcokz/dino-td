@@ -1,13 +1,12 @@
 class_name Hud
 extends CanvasLayer
-## What the player holds and reads (GAME-DESIGN 17, 18), all over the homeland on one screen: the shop's shelf along
-## the bottom; the stash -- the goods kept for later -- above the gold at the bottom left, with a place to keep the offer
-## taken up; the gold, the button that restocks the shelf, the button that sends the army out; the place,
-## its rule, the round, the homeland's health, the biomass and genes, this round's army and the relics at the top left;
-## who comes this battle and the next, how this battle will go as things stand, and what the cursor points at, at the
-## top right; a battle's count and clock; when a place is held, the relic to choose and what the ark carries on (and
-## what the homeland will eat and make with it); when the ark lands, the new place's rule and ground. All in the one
-## look (Style, GAME-DESIGN 21). It shows; Game decides.
+## What the player holds and reads (GAME-DESIGN 17, 18, 24), all over the homeland on one screen: the shop's shelf
+## along the bottom, a star dinosaur on offer after it; the goods the hoarder keeps for later in a row over the
+## buttons; the gold, the button that restocks the shelf, the button that sends the army out; the place, the round, the
+## homeland's health, the biomass and genes at the top left; who comes this battle and the next, how this battle will
+## go as things stand, and what the cursor points at, at the top right; a battle's count and clock; a star dinosaur's
+## own screen (to sell it); when a place is held, the star to choose and the map; at a new place, its painting and its
+## ground. All in the one look (Style, GAME-DESIGN 21). It shows; Game decides.
 
 signal chosen(value: Variant)
 
@@ -59,16 +58,12 @@ var _versus: HudParts.Versus
 var _speed: HudParts.RoundButton
 var _point := ""                 # what of the HUD's own the cursor points at (_point_tip), "" nothing
 var _point_count := 0            # ...a monster of a wave: how many of it
-var _pack: PanelContainer
-var _pack_text: Label
-var _pack_food: Label
+var _star_card: CardView         # the star dinosaur on offer, after the shelf (null: none)
 var _overlay: Control
 var _shade: ColorRect
-var _stowed := false             # the shelf put away below the screen (in a battle, or while packing)
-var stash_open := false           # the stash's cards up (its box in the world clicked)
-var _stash_shown := false
+var _stowed := false             # the shelf put away below the screen (in a battle)
 var screen := ""                 # the title of the screen up, "" when none (for tools)
-var offered: Array = []          # what the screen up offers to choose from: offers, relic or ark ids (for tools)
+var offered: Array = []          # what the screen up offers to choose from: offers, star or place ids (for tools)
 
 
 func setup(p_game: Game) -> void:
@@ -88,15 +83,14 @@ func setup(p_game: Game) -> void:
 	edges.material = em
 	_root.add_child(edges)
 
-	# Top left: where we are, and what the homeland has. (Its relics, its stash and the wonder it may build stand in the
-	# world beside it: HomeView.)
+	# Top left: where we are, and what the homeland has. (Its star dinosaurs stand in their pens beside it: HomeView.)
 	_left = VBoxContainer.new()
 	_left.position = Vector2(16, 12)
 	_left.add_theme_constant_override("separation", 6)
 	_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_left)
 	_crest = HudParts.Crest.new()
-	_crest.mouse_entered.connect(func() -> void: _point = "rule")
+	_crest.mouse_entered.connect(func() -> void: _point = "place")
 	_crest.mouse_exited.connect(func() -> void: _point = "")
 	_left.add_child(_crest)
 	_purse = HudParts.Purse.new()
@@ -173,7 +167,7 @@ func setup(p_game: Game) -> void:
 	_reroll = _round(HudParts.RoundButton.new(Icons.REFRESH, "刷新", 26.0), Vector2(-265, -138), "reroll")
 	_reroll.pressed.connect(func() -> void: game.act("reroll"))
 	_go = _round(HudParts.RoundButton.new(Icons.BATTLE, "出战！", 50.0, true), Vector2(-172, -184), "")
-	_go.pressed.connect(func() -> void: game.act("depart" if game.phase == Game.Phase.PACK else "fight"))
+	_go.pressed.connect(func() -> void: game.act("fight"))
 	_army = HudParts.ArmyTag.new()
 	_army.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_army.position = Vector2(-180, -222)
@@ -236,24 +230,6 @@ func setup(p_game: Game) -> void:
 				game.aim(""))
 		b.pressed.connect(func() -> void: game.act("choose", {"choice": choice}))
 		choice_row.add_child(b)
-
-	# Packing: what the ark carries on.
-	_pack = PanelContainer.new()
-	_pack.add_theme_stylebox_override("panel", Style.panel(16.0, true))
-	_pack.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_pack.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_pack.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_pack.position = Vector2(-40, -36)
-	_pack.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pack.visible = false
-	_root.add_child(_pack)
-	var pack_box := VBoxContainer.new()
-	pack_box.add_theme_constant_override("separation", 4)
-	_pack.add_child(pack_box)
-	_pack_text = _label("", 18, Fonts.serif(700), CREAM)
-	pack_box.add_child(_pack_text)
-	_pack_food = _label("", 17, Fonts.serif(800), WIN)
-	pack_box.add_child(_pack_food)
 
 	_banner = PanelContainer.new()
 	_banner.add_theme_stylebox_override("panel", Style.Streak.new(14.0))
@@ -323,11 +299,13 @@ func _process(_delta: float) -> void:
 ## The language changed: what was put together in words made again -- the cards, the wonders, the waves -- the rest
 ## follows by itself (words shown as they are change with the language).
 func relanguage() -> void:
-	for v in _cards + _kept:
+	for v in _cards + _kept + ([_star_card] if _star_card != null else []):
 		if not is_instance_valid(v):
 			continue
 		var card := v as CardView
-		if not card.sold and not card.ci.is_empty():
+		if card.star != "":
+			card.setup_star(card.star)
+		elif not card.sold and not card.ci.is_empty():
 			card.setup(card.ci, card.kept)
 		card.queue_redraw()
 	for l in [_hint, _info_text]:
@@ -372,7 +350,25 @@ func deal(shelf: Array) -> void:
 	for i in range(shelf.size(), _cards.size()):
 		_fly_off(_cards[i], false)
 	_cards = out
-	if _hovered and not _hovered in _cards and not _hovered in _kept:
+	# The star dinosaur on offer, after the shelf: dealt like the rest; bought, it rises off; restocked, it drops.
+	var star: String = game.home.star_offer
+	if _star_card != null and _star_card.star != star:
+		_fly_off(_star_card, star == "")
+		_star_card = null
+	if _star_card == null and star != "":
+		var v := CardView.new()
+		_hand.add_child(v)
+		v.setup_star(star)
+		v.clicked.connect(_on_card)
+		v.hovered.connect(_on_hover)
+		var deck := _deck_button.global_position + Vector2(_deck_button.size.x * 0.5, 30.0) - _hand.global_position
+		v.position = deck - v.pivot_offset
+		v.scale = Vector2.ONE * 0.24
+		v.rotation = -0.7
+		v.set_meta("deal_at", Time.get_ticks_msec() + dealt * 85)
+		v.turn_over(0.16 + dealt * 0.085, 0.3)
+		_star_card = v
+	if _hovered and not _hovered in _cards and not _hovered in _kept and _hovered != _star_card:
 		_hovered = null
 	refresh()
 
@@ -401,7 +397,7 @@ func _refresh_kept() -> void:
 		_kept.append(v)
 
 
-## Everyone goes out (or the ark is packing): the shelf is put away below the screen.
+## Everyone goes out: the shelf is put away below the screen.
 func stow() -> void:
 	_stowed = true
 	_hovered = null
@@ -423,8 +419,7 @@ func refresh() -> void:
 	var home: Home = game.home
 	var planning := game.phase == Game.Phase.PLAN
 	var fighting := game.phase == Game.Phase.FIGHT
-	var packing := game.phase == Game.Phase.PACK
-	var away := fighting or game.phase == Game.Phase.MOVE     # the army out, or the ark in the air
+	var away := fighting or game.phase == Game.Phase.MOVE     # the army out, or on the way to the next place
 	_refresh_kept()
 	for i in _cards.size():
 		var v: CardView = _cards[i]
@@ -434,19 +429,18 @@ func refresh() -> void:
 			v.set_state(planning and not home.targets(i).is_empty(), game.held == i)
 	for k in _kept.size():
 		var v: CardView = _kept[k]
-		if packing:
-			v.set_state(game.pack_kept.has(k), game.pack_kept.has(k))
-		else:
-			v.set_state(planning and not home.stash_targets(k).is_empty(), game.held_k == k)
-	_go.disabled = not (planning or packing)
+		v.set_state(planning and not home.stash_targets(k).is_empty(), game.held_k == k)
+	if _star_card != null:
+		_star_card.purse = {"gold": home.gold}
+		_star_card.set_state(planning and home.can_buy_star(), false)
+	_go.disabled = not planning
 	_go.visible = not away
-	_go.caption = "出发！" if packing else "出战！"
 	_go.queue_redraw()
 	var price := home.reroll_price()
 	_reroll.cost = price
 	_reroll.enough = home.gold >= price
 	_reroll.disabled = not planning or home.gold < price
-	_reroll.visible = not away and not packing
+	_reroll.visible = not away
 	_reroll.queue_redraw()
 	_menu.visible = not fighting
 	_gold.visible = not fighting
@@ -457,7 +451,6 @@ func refresh() -> void:
 	_crest.round = run.round
 	_crest.rounds = run.rounds()
 	_crest.minis = Content.MINI_ROUNDS
-	_crest.rule_name = Lang.t(Content.RULES[lv.rule].name)
 	_crest.queue_redraw()
 	_purse.hp = home.hp
 	_purse.hp_max = home.hp_max()
@@ -468,35 +461,17 @@ func refresh() -> void:
 	_purse.queue_redraw()
 	_army.count = home.army().size()
 	_army.food = home.army_food()
-	_army.visible = not away and not packing
+	_army.visible = not away
 	_army.queue_redraw()
-	_deck_button.visible = not away and not packing
+	_deck_button.visible = not away
 	_deck_button.disabled = not planning
 	_deck_button.count = str(home.deck.size())
 	_deck_button.queue_redraw()
 	_choice.visible = planning and not game.pending.is_empty()
 	_battle.visible = fighting and not game.at_home
-	if away or not (planning or packing):
-		stash_open = false
-	if (stash_open or packing) and not _stash_shown:
-		# Opened: its cards rise out of the box beside the homeland.
-		var from := game.camera.unproject_position(HomeView.STASH_AT + Vector3.UP * 1.2) if game.camera != null else Vector2.ZERO
-		for v in _kept:
-			v.position = from - v.pivot_offset
-			v.scale = Vector2.ONE * 0.1
-	_stash_shown = stash_open or packing
 	for k in _kept.size():
-		_kept[k].visible = not away and (stash_open or packing or game.held_k == k)
-	_waves.visible = not away and not packing
-	_pack.visible = packing
-	if packing:
-		var taking: int = game.pack_plots.size() + game.pack_kept.size()
-		# Short: where to, how many taken of how many; and whether the pools there will feed the army.
-		_pack_text.text = Lang.t("搬家去%s · 带走 %d / %d") % [Lang.t(Content.LEVELS[maxi(0, game.going)].name), taking,
-			home.stash_size()]
-		var food: Array = game.pack_food()
-		_pack_food.text = Lang.t("到那边：兵吃 %d，池子产 %d") % [food[0], food[1]]
-		_pack_food.add_theme_color_override("font_color", LOSE if int(food[0]) > int(food[1]) else WIN)
+		_kept[k].visible = not away and planning
+	_waves.visible = not away
 	_hint.text = game.hint()
 	_hint.visible = _hint.text != ""
 	_refresh_waves()
@@ -547,13 +522,13 @@ func _point_tip() -> String:
 		var e: Dictionary = Content.ENEMIES[_point.substr(2)]
 		return Lang.t("%s ×%d") % [Lang.t(e.name), _point_count]
 	match _point:
-		"rule":
-			var rule: Dictionary = Content.RULES[Content.LEVELS[run.place].rule]
-			return Lang.t("%s：%s") % [Lang.t(rule.name), Lang.t(rule.says)]
+		"place":
+			return "%s\n%s" % [Lang.t(Content.LEVELS[run.place].name), _ground_text(run.place)]
 		"hp":
 			return Lang.t("家园 %d / %d\n打输了会掉，掉光这一局就输了") % [home.hp, home.hp_max()]
 		"biomass":
-			return Lang.t("生物质 %d\n每轮产 %d；出战的兵每轮吃 %d") % [home.biomass, home.income_biomass(), home.army_food()]
+			return Lang.t("生物质 %d\n每轮产 %d；明星恐龙每轮吃 %d，出战的兵吃 %d") % [home.biomass, home.income_biomass(),
+				home.star_food(), home.army_food()]
 		"research":
 			return Lang.t("研究点数 %d\n每轮产 %d；贴词条、强化牌要花") % [home.genes, home.income_genes()]
 		"gold":
@@ -608,27 +583,31 @@ func _verdict(f: Dictionary) -> String:
 	return Lang.t("输，家园 −%d") % f.harm
 
 
-## Where the stash's k-th card stands when it is up (its bottom middle): in a row leftward from over its box.
+## Where the stash's k-th card stands (its bottom middle): in a row leftward from over the buttons.
 func _kept_at(k: int, lifted: bool) -> Vector2:
 	var w := CardView.SIZE.x * KEPT_SCALE
 	return Vector2(_root.size.x - 330.0 - k * (w + 8.0), _root.size.y - 250.0 - (14.0 if lifted else 0.0))
 
 
-## The shelf laid out flat along the bottom, between the gold and the buttons; the stash in a row above the gold; the
-## card pointed at lifted and larger, the one taken up raised.
+## The shelf laid out flat along the bottom, between the gold and the buttons, the star on offer after it; the stash
+## in a row over the buttons; the card pointed at lifted and larger, the one taken up raised.
 func _layout() -> void:
 	var w := _root.size.x
 	var h := _root.size.y
 	var n := _cards.size()
-	var gap := minf(150.0, (w - 600.0) / maxf(1.0, n - 1))
-	for i in n:
-		var v: CardView = _cards[i]
+	var all := n + (1 if _star_card != null else 0)
+	var gap := minf(150.0, (w - 640.0) / maxf(1.0, all - 1))
+	var shelf := _cards.duplicate()
+	if _star_card != null:
+		shelf.append(_star_card)
+	for i in shelf.size():
+		var v: CardView = shelf[i]
 		if v.modulate.a < 0.99 and v.mouse_filter == Control.MOUSE_FILTER_IGNORE and not v.sold:
 			continue
 		if v.has_meta("deal_at") and Time.get_ticks_msec() < int(v.get_meta("deal_at")):
 			continue
-		var off := i - (n - 1) * 0.5
-		var x := w * 0.5 - 40.0 + off * gap
+		var off := i - (all - 1) * 0.5
+		var x := w * 0.5 - 70.0 + off * gap + (16.0 if v == _star_card else 0.0)
 		var y := h + 40.0 + (260.0 if _stowed else 0.0)
 		var k := SHELF_SCALE
 		var tilt := 0.0
@@ -646,7 +625,7 @@ func _layout() -> void:
 		_move(v, Vector2(x, y), k, 10 if v == _hovered else i, tilt)
 	for k in _kept.size():
 		var v: CardView = _kept[k]
-		var at := _kept_at(k, game.held_k == k or game.phase == Game.Phase.PACK and game.pack_kept.has(k))
+		var at := _kept_at(k, game.held_k == k)
 		var s := KEPT_SCALE
 		if v == _hovered:
 			s = SHELF_SCALE
@@ -663,16 +642,16 @@ func _move(v: CardView, to_bottom: Vector2, k: float, z: int, tilt := 0.0) -> vo
 
 
 func _on_card(v: CardView) -> void:
+	if v == _star_card:
+		game.act("star")
+		return
 	var i := _cards.find(v)
 	if i >= 0:
 		game.hold(i)
 		return
 	var k := _kept.find(v)
 	if k >= 0:
-		if game.phase == Game.Phase.PACK:
-			game.act("pack", {"kept": k})
-		else:
-			game.hold_kept(k)
+		game.hold_kept(k)
 
 
 func _on_hover(v: CardView, on: bool) -> void:
@@ -695,7 +674,7 @@ func banner(title: String, sub := "") -> void:
 	_banner_tween.tween_property(_banner, "modulate:a", 0.0, 0.5)
 
 
-## The screen going dark (or light again), while the ark is between places.
+## The screen going dark (or light again), on the way between places.
 func fade(dark: bool, time := 0.7) -> void:
 	_shade.mouse_filter = Control.MOUSE_FILTER_STOP if dark else Control.MOUSE_FILTER_IGNORE
 	var tw := _shade.create_tween()
@@ -705,74 +684,17 @@ func fade(dark: bool, time := 0.7) -> void:
 
 # -- Screens ---------------------------------------------------------------------------------------------------
 
-## The arks a run can start with, one to choose: its id.
-## The arks to choose from, each shown by what it carries (its relic, painted: tools/paint_cards.py) floating over a
-## soft light, its name under it; what it brings told when it is pointed at (the player, 2026-10-20: "应该不是三个
-## button，而是三个物件的图标（精致的），然后hover上去才有介绍").
-func choose_ark() -> String:
-	var box := _open("选一艘方舟", "")
-	offered = Content.ARKS.keys()
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 46)
-	box.add_child(row)
-	var i := 0
-	for id in Content.ARKS:
-		var a: Dictionary = Content.ARKS[id]
-		var item := HudParts.Showcase.new(_art("ark_" + id, "png"), Lang.t(a.name), "", Lang.t(a.says).replace("。", "\n"), true)
-		item.pressed.connect(func() -> void: chosen.emit(id))
-		row.add_child(_held(item))
-		_fly_in(item, Vector2.ZERO, i, 3)
-		i += 1
-	var v: Variant = await chosen
-	_close()
-	return str(v)
-
-
-## The wonders on offer (the wonder's ground beside the homeland clicked): each its painting, its name, its price; what
-## it does when pointed at; one to build, or none: its id, or "".
-func choose_wonder(ids: Array) -> String:
-	var box := _open("奇观", "一局只能造一座")
-	offered = ids.duplicate()
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 40)
-	box.add_child(row)
-	var i := 0
-	for id in ids:
-		var w: Dictionary = Content.WONDERS[id]
-		var item := HudParts.Showcase.new(_art("w_" + id), Lang.t(w.name), Lang.t("%d 金") % w.price, Lang.t(w.says), false)
-		item.note_short = game.home.gold < int(w.price)
-		item.disabled = not game.home.can_build_wonder(id)
-		item.mouse_entered.connect(func() -> void: game.aim(id))
-		item.mouse_exited.connect(func() -> void:
-			if game.aimed == id:
-				game.aim(""))
-		item.pressed.connect(func() -> void: chosen.emit(id))
-		row.add_child(_held(item))
-		_fly_in(item, Vector2.ZERO, i, ids.size())
-		i += 1
-	var cancel := _button("算了", Vector2(150, 44), 18)
-	cancel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	cancel.pressed.connect(func() -> void: chosen.emit(""))
-	box.add_child(cancel)
-	var v: Variant = await chosen
-	_close()
-	return str(v)
-
-
 ## A painting (tools/paint_cards.py: assets/art/<key>.<ext>), or null when there is none yet.
 static func _art(key: String, ext := "jpg") -> Texture2D:
 	return Art.of(key, ext)
 
 
-## The place the ark has landed in: its name, its rule, its special ground; dismissed with a button.
+## The place come to: its painting, its special ground in a line; dismissed with a button.
 func arrive(level: int) -> void:
 	var lv: Dictionary = Content.LEVELS[level]
-	var rule: Dictionary = Content.RULES[lv.rule]
 	var box := _open(Lang.t("到了%s！") % Lang.t(lv.name), "")
-	# The place painted (tools/paint_cards.py), in a hairline frame; under it its rule in one line. Its special
-	# ground, how its rounds go, are there to be seen (the plots, the crest) and told when pointed at.
+	# The place painted (tools/paint_cards.py), in a hairline frame; under it what special ground lies about -- what
+	# makes its homeland unlike another's. How its rounds go is there to be seen (the crest).
 	var view := Control.new()
 	view.custom_minimum_size = Vector2(640, 330)
 	view.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -786,7 +708,7 @@ func arrive(level: int) -> void:
 			view.draw_texture_rect_region(pic, r, Rect2((ts - shown) * 0.5, shown))
 		Style.hairline_rect(view.get_canvas_item(), r, Color(Style.GOLD, 0.5), Color(Style.GOLD_BRIGHT, 0.95), 12.0))
 	box.add_child(view)
-	var says := _label(Lang.t("%s：%s") % [Lang.t(rule.name), Lang.t(rule.says)], 18, Fonts.serif(700), Style.PARCHMENT)
+	var says := _label(_ground_text(level), 18, Fonts.serif(700), Style.PARCHMENT)
 	box.add_child(says)
 	var b := _button("开始", Vector2(190, 54), 21, true)
 	b.pressed.connect(func() -> void: chosen.emit("开始"))
@@ -797,27 +719,98 @@ func arrive(level: int) -> void:
 	enter()
 
 
-## The relics offered when a place is held, one to choose -- a boss's ringed red, with what it costs: its id.
-func choose_relic(ids: Array) -> String:
-	var box := _open(Lang.t("%s守住了！") % Lang.t(Content.LEVELS[game.run.place].name), "选一件遗物，整局都有用。红边的是首领留下的：很强，但有代价")
+## The special ground of place `level`, in a line: what lies about there.
+func _ground_text(level: int) -> String:
+	var names: Array = []
+	for t in Content.LEVELS[level].terrain:
+		names.append(Lang.t(Content.TERRAIN[t].name))
+	return Lang.t("这里有：%s") % Lang.t("、").join(names)
+
+
+## A star dinosaur shown to choose (HudParts.Showcase): its painting, or a medallion of its colour; its name, what it
+## eats under it; what it does when pointed at.
+func _star_item(id: String, note := "") -> HudParts.Showcase:
+	var s: Dictionary = Content.STARS[id]
+	var eats := Lang.t("每轮吃 %d") % int(s.eat) if int(s.eat) > 0 else Lang.t("不吃生物质")
+	var item := HudParts.Showcase.new(_art("s_" + id), Lang.t(s.name), note if note != "" else eats,
+		Lang.t("%s · %s · %s") % [Lang.t(s.kind), Lang.t(Content.DIETS[s.diet]), Lang.t(CardView.RARITY[int(s.rarity)])] + "\n" +
+		Lang.t(s.says).replace("；", "\n").replace("; ", "\n"), false, Vector2(230, 330))
+	item.tint = s.back
+	item.glyph = Lang.t(s.name).left(1)
+	item.note_short = int(s.rarity) == 3
+	return item
+
+
+## A place's boss beaten: three star dinosaurs, one to take home -- or none. Its id, or "".
+func choose_star(ids: Array) -> String:
+	var box := _open(Lang.t("%s守住了！") % Lang.t(Content.LEVELS[game.run.place].name), "带一只明星恐龙回家（红字的是传说的）")
 	offered = ids.duplicate()
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 20)
+	row.add_theme_constant_override("separation", 24)
 	box.add_child(row)
 	var i := 0
 	for id in ids:
-		# Each relic itself, painted (tools/paint_cards.py), floating; what it does told when it is pointed at -- a
-		# boss's under a coral word: it costs something too.
-		var r: Dictionary = Content.RELICS[id]
-		var boss: bool = r.get("boss", false)
-		var item := HudParts.Showcase.new(_art("relic_" + id, "png"), Lang.t(r.name), Lang.t("首领遗物") if boss else "",
-			Lang.t(r.says).replace("；", "\n").replace("; ", "\n"), true, Vector2(230, 320))
-		item.note_short = boss
+		var item := _star_item(id)
 		item.pressed.connect(func() -> void: chosen.emit(id))
 		row.add_child(_held(item))
 		_fly_in(item, Vector2.ZERO, i, ids.size())
 		i += 1
+	var skip := _button("都不要", Vector2(150, 44), 18)
+	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	skip.pressed.connect(func() -> void: chosen.emit(""))
+	box.add_child(skip)
+	var v: Variant = await chosen
+	_close()
+	return str(v)
+
+
+## The pens are full and a new star is coming: which to let go (sold, for half its price) -- or none, and the new one
+## stays away. The pen's index, or -1.
+func release_star(coming: String) -> int:
+	var home: Home = game.home
+	var box := _open("围栏满了", Lang.t("放走哪一只，给%s腾地方？") % Lang.t(Content.STARS[coming].name))
+	offered = home.stars.map(func(s: Dictionary) -> String: return s.id)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	for k in home.stars.size():
+		var item := _star_item(home.stars[k].id, Lang.t("卖 +%d 金") % home.sell_price(k))
+		item.custom_minimum_size = Vector2(200, 330)
+		item.size = item.custom_minimum_size
+		var pen := k
+		item.pressed.connect(func() -> void: chosen.emit(pen))
+		row.add_child(_held(item))
+		_fly_in(item, Vector2.ZERO, k, home.stars.size())
+	var skip := _button("算了，不要新的", Vector2(190, 44), 18)
+	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	skip.pressed.connect(func() -> void: chosen.emit(-1))
+	box.add_child(skip)
+	var v: Variant = await chosen
+	_close()
+	return int(v)
+
+
+## A star dinosaur's own screen (its pen clicked): it, and whether to sell it. "sell", or "".
+func pen_menu(k: int) -> String:
+	var home: Home = game.home
+	var id: String = home.stars[k].id
+	var hungry := k in home.hungry
+	var box := _open(Lang.t(Content.STARS[id].name), Lang.t("这一轮没吃饱，本事没起作用") if hungry else "")
+	var item := _star_item(id)
+	item.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(_held(item))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	box.add_child(row)
+	var sell := _button(Lang.t("卖掉（+%d 金）") % home.sell_price(k), Vector2(190, 46), 18)
+	sell.pressed.connect(func() -> void: chosen.emit("sell"))
+	row.add_child(sell)
+	var keep := _button("留着", Vector2(150, 46), 18, true)
+	keep.pressed.connect(func() -> void: chosen.emit(""))
+	row.add_child(keep)
 	var v: Variant = await chosen
 	_close()
 	return str(v)
@@ -904,7 +897,7 @@ func workshop() -> Variant:
 ## gold -- and the next level's two places to pick one of: pointed at or clicked, what it is like is shown beside it;
 ## "去这里" goes. The place picked (Content.LEVELS).
 func choose_place(run: Run) -> int:
-	var box := _open("下一站去哪？", "越往右越难。选好了，再回家园挑要带走的东西")
+	var box := _open("下一站去哪？", "越往右越难。到了那里，家园重新建")
 	offered = run.next_places()
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 18)
@@ -1008,7 +1001,7 @@ func choose_place(run: Run) -> int:
 				map.draw_string_outline(f, c + Vector2(-ww * 0.5, 8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, 5, Color(0, 0, 0, 0.8))
 				map.draw_string(f, c + Vector2(-ww * 0.5, 8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Style.PARCHMENT)
 				if been and t == run.level:
-					var tag := Lang.t("方舟在这里")
+					var tag := Lang.t("我们在这里")
 					var tw := f.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 					map.draw_string(f, c + Vector2(-tw * 0.5, 58), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Style.GOLD_BRIGHT))
 	# The next level's places, to point at and pick.
@@ -1048,17 +1041,16 @@ func choose_place(run: Run) -> int:
 const PLACE_KEYS := ["rain", "lava", "bog", "ice", "sand", "sea"]
 
 
-## What a place is like, for the map: its rule, its special ground, who comes there.
+## What a place is like, for the map: its special ground, who comes there.
 func _place_text(p: int) -> String:
 	var lv: Dictionary = Content.LEVELS[p]
-	var rule: Dictionary = Content.RULES[lv.rule]
 	var ground: Array = []
 	for t in lv.terrain:
 		ground.append(Lang.t("%s：%s") % [Lang.t(Content.TERRAIN[t].name), Lang.t(Content.TERRAIN[t].says)])
 	var foes: Array = lv.mix.map(func(m: Array) -> String: return Lang.t(Content.ENEMIES[m[0]].name))
 	var minis: Array = lv.minis.map(func(k: String) -> String: return Lang.t(Content.ENEMIES[k].name))
-	return Lang.t("%s：%s\n\n%s\n\n会来：%s\n小首领：%s\n首领：%s") % [Lang.t(rule.name), Lang.t(rule.says), "\n".join(ground),
-		Lang.t("、").join(foes), Lang.t("、").join(minis), Lang.t(Content.ENEMIES[lv.boss].name)]
+	return Lang.t("%s\n\n会来：%s\n小首领：%s\n首领：%s") % ["\n".join(ground), Lang.t("、").join(foes),
+		Lang.t("、").join(minis), Lang.t(Content.ENEMIES[lv.boss].name)]
 
 
 ## A screen over everything: a title, cards (to click, when `pick`), buttons. What was clicked: the card's offer or
