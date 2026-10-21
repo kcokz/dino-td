@@ -44,7 +44,7 @@ var hud: Hud
 var phase := Phase.BUSY
 var held := -1                    # the shelf place taken up, or -1
 var held_k := -1                  # the stash place taken up, or -1
-var hover := {"plot": HomeView.NOWHERE, "unit": ""}
+var hover := {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}   # thing: "stash", "relics", "wonder" (HomeView)
 var fight: Fight                  # the battle being fought, or null
 var speed := 1.0
 var at_home := true               # the camera is over the homeland (not the battle field)
@@ -123,6 +123,7 @@ func _ready() -> void:
 	add_child(menu)
 	menu.setup(self)
 	Portraits.warm()
+	Art.warm()
 	if show_title:
 		_title()
 	else:
@@ -322,6 +323,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _click() -> void:
+	match str(hover.get("thing", "")):
+		"stash":
+			# The card box: the good taken up kept in it, if it can be; else it opens (or shuts).
+			if phase == Phase.PLAN and held >= 0 and home.can_store(held):
+				act("store", {"slot": held})
+			elif phase == Phase.PLAN:
+				hud.stash_open = not hud.stash_open
+				refresh()
+			return
+		"wonder":
+			if phase == Phase.PLAN and home.wonder == "":
+				_choose_wonder()
+			return
+		"relics":
+			return
 	if phase == Phase.PACK:
 		if hover.plot != HomeView.NOWHERE and home.buildings.has(hover.plot):
 			act("pack", {"at": hover.plot})
@@ -357,12 +373,26 @@ func _taken() -> Dictionary:
 
 
 func _hover_at(pos: Vector2) -> void:
-	var h := {"plot": HomeView.NOWHERE, "unit": ""}
+	var h := {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}
 	if at_home:
-		h = home_view.pick(camera, pos, _want())
-	if h.plot != hover.plot or h.unit != hover.unit:
+		var thing := home_view.thing_at(camera, pos) if phase in [Phase.PLAN, Phase.PACK] else ""
+		if thing != "":
+			h.thing = thing
+		else:
+			h = home_view.pick(camera, pos, _want())
+			h.thing = ""
+	if h.plot != hover.plot or h.unit != hover.unit or h.thing != str(hover.get("thing", "")):
 		hover = h
 		refresh()
+
+
+## The wonders on offer, shown to choose from (the wonder's ground beside the homeland clicked): one built, or none.
+func _choose_wonder() -> void:
+	var id: String = await hud.choose_wonder(home.wonders)
+	aimed = ""
+	if id != "":
+		act("wonder", {"id": id})
+	refresh()
 
 
 ## What the cursor should find, for the good taken up.
@@ -520,6 +550,7 @@ func refresh() -> void:
 			tints[hover.plot] = LOOK_TINT
 	home_view.tints = tints
 	home_view.paint()
+	home_view.refresh_things(phase == Phase.PLAN and held >= 0 and home.can_store(held))
 	hud.refresh()
 
 
@@ -607,61 +638,64 @@ func _made(h: Home) -> Dictionary:
 
 
 ## What to do with the good taken up, said over the shelf: "" when none is.
+## A word at the screen's foot while a good is taken up -- only what the lit plots do not show already (the player,
+## 2026-10-20: "数字，文字都尽量去除"): why it cannot go anywhere, what a swap would knock down, what a raise makes.
 func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
 	if not pending.is_empty():
-		return Lang.t("选一样：多孵 1 只，还是变精英 · 右键算了")
+		return Lang.t("多孵 1 只，还是变精英？")
 	var good := _taken()
 	if good.is_empty():
 		return ""
 	var c := Content.offer(good)
 	var p: Vector2i = hover.plot
+	var swap: bool = c.target == "tile" and p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds
 	if held_k >= 0:
 		if home.stash_targets(held_k).is_empty():
 			return Lang.t("现在没有地方放得下")
-		match c.target:
-			"tile":
-				if p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds:
-					return Lang.t("拆掉%s，放下%s（退 %d 金）· 右键放回去") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name), c.name,
-						int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
-				return Lang.t("点一块地放下%s（已经是你的，不要钱）· 右键放回去") % c.name
-			"nest":
-				return Lang.t("点一个还有空词条位的巢贴上%s（不要钱）· 右键放回去") % c.name
+		if swap:
+			return Lang.t("换掉%s（退 %d 金）") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name),
+				int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
 		return ""
 	if home.genes < home.genes_cost(c):
-		return Lang.t("研究点数不够（要 %d）") % home.genes_cost(c)
+		return Lang.t("研究点数不够")
 	if c.type != "raise" and home.gold < home.price(held):
-		return Lang.t("金币不够（要 %d）") % home.price(held)
+		return Lang.t("金币不够")
 	if home.targets(held).is_empty():
-		return Lang.t("现在没有地方用得上") if c.type != "raise" else Lang.t("金币不够升任何一座（升几级的，就要几加 %d）") % Content.RAISE
-	var say := ""
-	match c.target:
-		"tile":
-			if p != HomeView.NOWHERE and home.buildings.has(p) and home.buildings[p].kind != c.builds:
-				var was: String = home.buildings[p].kind
-				say = Lang.t("拆掉%s换成%s（%d 金，退 %d 金）") % [Lang.t(Content.BUILDINGS[was].name), c.name, home.price(held),
-					int(Content.BUILDINGS[was].cost) / 2]
-			else:
-				say = Lang.t("点一块空地造%s（%d 金）；点一座别的建筑，就拆了换成它") % [c.name, home.price(held)]
-		"building":
-			if p != HomeView.NOWHERE and home.buildings.has(p) and int(home.buildings[p].level) < Content.LEVEL_MAX:
-				var b: Dictionary = home.buildings[p]
-				say = Lang.t("%s升到 %d 级（%d 金）%s") % [Lang.t(Content.BUILDINGS[b.kind].name), int(b.level) + 1, home.price(held, p),
-					Lang.t("，点了再选多孵还是精英") if Content.is_nest(b.kind) else ""]
-			else:
-				say = Lang.t("点一座建筑升一级（最多 %d 级；几级升上去，就要几加 %d 金）") % [Content.LEVEL_MAX, Content.RAISE]
-		"nest":
-			say = Lang.t("点一个还有空词条位的巢（%d 金）") % home.price(held)
-	if home.can_store(held):
-		say += Lang.t("；或点左下的空格存起来（%d 金）") % home.store_price(held)
-	return say + Lang.t(" · 右键放下")
+		return Lang.t("现在没有地方用得上") if c.type != "raise" else Lang.t("金币不够")
+	if swap:
+		return Lang.t("换掉%s（退 %d 金）") % [Lang.t(Content.BUILDINGS[home.buildings[p].kind].name),
+			int(Content.BUILDINGS[home.buildings[p].kind].cost) / 2]
+	if c.target == "building" and p != HomeView.NOWHERE and home.buildings.has(p) and int(home.buildings[p].level) < Content.LEVEL_MAX:
+		var b: Dictionary = home.buildings[p]
+		return Lang.t("%s → %d 级（%d 金）") % [Lang.t(Content.BUILDINGS[b.kind].name), int(b.level) + 1, home.price(held, p)]
+	return ""
 
 
 ## What the cursor points at, for the panel: "" for nothing.
 func describe() -> String:
 	if not at_home or phase == Phase.DONE or phase == Phase.MOVE:
 		return ""
+	match str(hover.get("thing", "")):
+		"stash":
+			if phase == Phase.PLAN and held >= 0 and home.can_store(held):
+				return Lang.t("存起来：%d 金") % home.store_price(held)
+			var kept: Array = home.stash.map(func(g: Dictionary) -> String: return str(Content.offer(g).name))
+			return Lang.t("存货 %d / %d") % [home.stash.size(), home.stash_size()] + \
+				(("\n" + Lang.t("、").join(kept) + "\n" + Lang.t("点开看看")) if not kept.is_empty() else "")
+		"relics":
+			var lines: Array = []
+			for id in home.relics:
+				var r: Dictionary = Content.RELICS[id]
+				lines.append(Lang.t("%s：%s") % [Lang.t(r.name), Lang.t(r.says)])
+			return Lang.t("遗物") + ("\n" + "\n".join(lines) if not lines.is_empty() else "")
+		"wonder":
+			var lines: Array = [Lang.t("奇观（一局只能造一座）")]
+			for id in home.wonders:
+				var w: Dictionary = Content.WONDERS[id]
+				lines.append(Lang.t("%s · %d 金：%s") % [Lang.t(w.name), w.price, Lang.t(w.says)])
+			return "\n".join(lines)
 	if hover.unit != "":
 		for u in home.army():
 			if u.id == hover.unit:
@@ -820,7 +854,7 @@ func _start_round() -> void:
 	pending = {}
 	aimed = ""
 	refresh()
-	var sub := Lang.t("进账，商店换货，孵兵")
+	var sub := ""
 	if run.round == 1 and run.level > 0:
 		sub = Lang.t("新地方。带来的东西在左下，点它放下；新放的池子下一轮才产生物质")
 	elif run.round >= run.rounds():
@@ -829,7 +863,7 @@ func _start_round() -> void:
 		sub = Lang.t("小首领来了。打完可以整理牌库")
 	elif run.big():
 		sub = Lang.t("大波要来了")
-	hud.banner(Lang.t("%s · 第 %d 轮") % [Lang.t(Content.LEVELS[run.place].name), run.round], sub)
+	hud.banner(Lang.t("第 %d 轮") % run.round, sub)
 	await get_tree().create_timer(0.6).timeout
 	var ev := run.start_round()
 	var said_at := Vector3(0, 2.5, HomeView.YARD_Z - 2.0)

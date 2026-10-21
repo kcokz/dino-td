@@ -266,10 +266,11 @@ func _rich() -> void:
 	game.refresh()
 	await _frames(60)
 	await _shot("rich_home")
-	game.hud._relic_hover = "egg"
+	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": "relics"}
+	game.refresh()
 	await _frames(4)
 	await _shot("rich_relic")
-	game.hud._relic_hover = ""
+	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}
 	h.stash = [{"id": "raise"}]
 	game.refresh()
 	await _frames(10)
@@ -287,11 +288,11 @@ func _rich() -> void:
 	await _frames(20)
 	await _shot("raised_elite")
 	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
-	game.hud._wonder_hover = "titan"
+	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": "wonder"}
 	game.aim("titan")
 	await _frames(6)
 	await _shot("wonder_aim")
-	game.hud._wonder_hover = ""
+	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "thing": ""}
 	game.act("wonder", {"id": "titan"})
 	await _frames(50)
 	await _shot("wonder_built")

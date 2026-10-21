@@ -68,21 +68,17 @@ func _home(cam: Camera3D) -> void:
 		if cam.is_position_behind(at3):
 			continue
 		var at := cam.unproject_position(at3)
-		_dots(at + Vector2(0, -6), int(b.level))
-		var y := -22.0
+		var y := -10.0
 		if packing:
 			var taken: bool = game.pack_plots.has(p)
 			_text(at + Vector2(0, y), Lang.t("带走" if taken else "留下"), GOLD if taken else Color(0.72, 0.7, 0.66), 18 if taken else 14,
 				Fonts.serif(900))
 			continue
+		# Over a nest, only what wants seeing to: that it hatches fewer than it would (biomass short). How many it
+		# hatches, its level, are told when it is pointed at.
 		if Content.is_nest(b.kind):
 			var want := home.count(p)
 			var got := int(made.get(p, 0))
-			var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
-			var col: Color = GOLD if sp.used.is_empty() else (Content.UNITS[sp.kind].color as Color).lightened(0.45)
-			var stars: int = b.path.count("elite")
-			_text(at + Vector2(0, y), Lang.t("孵 %d%s") % [got, (" " + "★".repeat(stars)) if stars > 0 else ""], col, 15, Fonts.serif(900))
-			y -= 17.0
 			if got < want:
 				_text(at + Vector2(0, y), Lang.t("少孵 %d") % (want - got), BAD, 14, Fonts.serif(900))
 				y -= 16.0
@@ -102,15 +98,6 @@ func _home(cam: Camera3D) -> void:
 			_text(cam.unproject_position(at3) + Vector2(0, y), s, BAD if s.contains("-") or s.contains("−") else GOOD, 15,
 				Fonts.serif(900))
 			y -= 17.0
-
-
-## The level as dots: filled up to it, of the most there can be.
-func _dots(at: Vector2, level: int) -> void:
-	var n := Content.LEVEL_MAX
-	for i in n:
-		var c := at + Vector2((i - (n - 1) * 0.5) * 9.0, 0)
-		draw_circle(c, 3.6, Color(0, 0, 0, 0.75))
-		draw_circle(c, 2.6, GOLD if i < level else Color(0.35, 0.33, 0.3))
 
 
 ## Each hurt fighter's health, a short bar just over its head (one at full health shows none: the field stays clear,

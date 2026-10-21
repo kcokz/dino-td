@@ -21,6 +21,11 @@ const WONDER_AT := Vector3(-17.0, 0.0, 2.0)  # beside the homeland, west of the 
 const ELITE_GOLD := Color(1.0, 0.8, 0.25)
 const PENNANT := Color(1.0, 0.93, 0.72)  # flown over a nest whose gift works where it stands
 const ARK_AT := Vector3(0, 8.5, 2.0)    # where the ark hangs over the homeland while it loads and unloads
+## Things that stand beside the homeland rather than on the HUD (the player, 2026-10-20: "存货可以直接做成一个精致的牌盒摆
+## 在建筑侧面……遗物做成一个什么也放在建筑旁边，奇观也先想办法不要就简单摆在界面上"): the stash's card box east of the
+## yard, the relics on a stone shrine west of it, and -- until one is built -- the ground waiting for a wonder.
+const STASH_AT := Vector3(15.6, 0.0, 8.6)
+const RELICS_AT := Vector3(-15.4, 0.0, 9.0)
 
 var home: Home
 var tags: Tags
@@ -32,6 +37,11 @@ var _units := {}                  # army unit id -> Node3D
 var _order: Array = []            # army unit ids, as they stand in the yard
 var _ark: Node3D
 var _wonder: Node3D
+var _stash_box: Node3D            # the stash's card box (its cards: how many are kept)
+var _stash_light: OmniLight3D     # ...its glow, when the good taken up could be kept
+var _shrine: Node3D               # the relics' shrine
+var _site: Node3D                 # the ground waiting for a wonder
+var _things_for := ""
 
 
 func setup(p_home: Home) -> void:
@@ -76,9 +86,13 @@ func setup(p_home: Home) -> void:
 	_ark = _make_ark()
 	_ark.visible = false
 	add_child(_ark)
+	_site = _make_site()
+	_site.position = WONDER_AT
+	add_child(_site)
 	lay_ground()
 	refresh_buildings(false)
 	show_wonder(false)
+	refresh_things()
 
 
 static func plot_pos(p: Vector2i) -> Vector3:
@@ -431,6 +445,141 @@ static func _building(b: Dictionary, lit := false) -> Node3D:
 					root.add_child(ring)
 				height = tall
 	root.set_meta("height", height)
+	return root
+
+
+# -- The things beside the homeland ----------------------------------------------------------------------------------
+
+## The card box and the shrine made again when what they hold changes; the wonder's ground there only while none is
+## built; the box glowing while `storable` (the good taken up could be kept in it).
+func refresh_things(storable := false) -> void:
+	var key := "%s/%s/%s" % [home.stash.size(), ",".join(home.relics), home.wonder]
+	if key != _things_for:
+		_things_for = key
+		if _stash_box:
+			_stash_box.queue_free()
+		_stash_box = _make_stash_box(home.stash.size())
+		_stash_box.position = STASH_AT
+		_stash_box.rotation.y = -0.5
+		add_child(_stash_box)
+		_stash_light = _stash_box.get_node("Glow") as OmniLight3D
+		if _shrine:
+			_shrine.queue_free()
+		_shrine = _make_shrine(home.relics)
+		_shrine.position = RELICS_AT
+		_shrine.rotation.y = 0.45
+		add_child(_shrine)
+		_site.visible = home.wonder == "" and not home.wonders.is_empty()
+	_stash_light.set_meta("on", storable)
+
+
+func _process(_delta: float) -> void:
+	if _stash_light != null and is_instance_valid(_stash_light):
+		var on := bool(_stash_light.get_meta("on", false))
+		var want := (1.6 + 0.8 * sin(Time.get_ticks_msec() * 0.006)) if on else 0.0
+		_stash_light.light_energy = lerpf(_stash_light.light_energy, want, 0.15)
+
+
+## Which of the things beside the homeland the cursor is on: "stash", "relics", "wonder", or "".
+func thing_at(cam: Camera3D, at: Vector2) -> String:
+	for pair in [["stash", _stash_box], ["relics", _shrine], ["wonder", _site]]:
+		var node: Node3D = pair[1]
+		if node != null and node.visible and _screen_rect(cam, node).grow(6.0).has_point(at):
+			return pair[0]
+	return ""
+
+
+## The stash's card box: a casket of dark wood bound in brass, its lid open, an amber clasp; in it the cards kept,
+## standing, their backs dark and edged in gold -- as many as there are; a warm light in it when one could go in.
+static func _make_stash_box(cards: int) -> Node3D:
+	var root := Node3D.new()
+	var wood := Color(0.3, 0.18, 0.1)
+	var brass := Color(0.82, 0.62, 0.28)
+	root.add_child(Blocks.box(Vector3(2.3, 0.95, 1.5), wood, Vector3(0, 0.48, 0)))
+	root.add_child(Blocks.box(Vector3(2.12, 0.08, 1.32), wood.darkened(0.45), Vector3(0, 0.96, 0)))
+	for x in [-0.82, 0.82]:
+		root.add_child(Blocks.box(Vector3(0.14, 0.99, 1.54), brass, Vector3(x, 0.49, 0)))
+	for x in [-1.12, 1.12]:
+		for z in [-0.72, 0.72]:
+			root.add_child(Blocks.box(Vector3(0.14, 0.99, 0.14), brass.darkened(0.1), Vector3(x, 0.49, z)))
+	# The lid, open back over its hinge.
+	var lid := Node3D.new()
+	lid.position = Vector3(0, 0.98, -0.74)
+	lid.rotation.x = -1.15
+	lid.add_child(Blocks.box(Vector3(2.3, 0.14, 1.5), wood.lightened(0.05), Vector3(0, 0.07, 0.75)))
+	for x in [-0.82, 0.82]:
+		lid.add_child(Blocks.box(Vector3(0.14, 0.16, 1.54), brass, Vector3(x, 0.08, 0.75)))
+	root.add_child(lid)
+	root.add_child(Blocks.box(Vector3(0.34, 0.3, 0.08), brass, Vector3(0, 0.78, 0.78)))
+	var gem := Blocks.ball(0.09, Color(1.0, 0.55, 0.12), Vector3(0, 0.78, 0.83))
+	gem.material_override = Blocks.glow(Color(1.0, 0.55, 0.12), 1.2)
+	root.add_child(gem)
+	# The cards kept, standing in it.
+	for k in mini(cards, 8):
+		var z := -0.42 + k * 0.13
+		root.add_child(Blocks.box(Vector3(1.5, 1.0, 0.035), Color(0.08, 0.09, 0.1), Vector3(0, 1.05 + (k % 2) * 0.04, z)))
+		root.add_child(Blocks.box(Vector3(1.52, 0.04, 0.045), Color(0.9, 0.72, 0.36), Vector3(0, 1.55 + (k % 2) * 0.04, z)))
+	var glow := OmniLight3D.new()
+	glow.name = "Glow"
+	glow.light_color = Color(1.0, 0.72, 0.35)
+	glow.light_energy = 0.0
+	glow.omni_range = 4.0
+	glow.position = Vector3(0, 1.4, 0)
+	root.add_child(glow)
+	return root
+
+
+## The relics' shrine: a low plinth of pale stone, a step before it; on it each relic held, a small glowing piece of
+## its colour on a ring of gold.
+static func _make_shrine(relics: Array) -> Node3D:
+	var root := Node3D.new()
+	var stone := Color(0.62, 0.58, 0.52)
+	root.add_child(Blocks.box(Vector3(3.2, 0.32, 1.7), stone.darkened(0.12), Vector3(0, 0.16, 0)))
+	root.add_child(Blocks.box(Vector3(2.8, 0.55, 1.2), stone, Vector3(0, 0.6, -0.1)))
+	root.add_child(Blocks.box(Vector3(3.0, 0.1, 1.36), stone.lightened(0.1), Vector3(0, 0.92, -0.1)))
+	var n := relics.size()
+	for i in n:
+		var r: Dictionary = Content.RELICS[relics[i]]
+		var x := (i - (n - 1) * 0.5) * minf(0.62, 2.4 / maxf(1.0, n))
+		var at := Vector3(x, 0.97, -0.1)
+		var ring := TorusMesh.new()
+		ring.inner_radius = 0.17
+		ring.outer_radius = 0.22
+		var stand := MeshInstance3D.new()
+		stand.mesh = ring
+		stand.material_override = Blocks.mat(Color(0.86, 0.66, 0.3))
+		stand.position = at + Vector3(0, 0.03, 0)
+		root.add_child(stand)
+		var piece := Blocks.blob(Vector3(0.3, 0.38, 0.3) if relics[i] != "tooth" else Vector3(0.16, 0.46, 0.16), r.color,
+			at + Vector3(0, 0.21, 0))
+		piece.material_override = Blocks.glow(r.color, 0.45)
+		root.add_child(piece)
+	return root
+
+
+## The ground waiting for a wonder: a round foundation of pale stone, a faint ring of gold laid in it, four squared
+## stones at its rim and a pair of scaffold poles, rope between.
+static func _make_site() -> Node3D:
+	var root := Node3D.new()
+	var stone := Color(0.6, 0.57, 0.52)
+	root.add_child(Blocks.cylinder(2.7, 0.28, stone.darkened(0.08), Vector3(0, 0.14, 0)))
+	root.add_child(Blocks.cylinder(2.4, 0.06, stone.lightened(0.06), Vector3(0, 0.3, 0)))
+	var ring := TorusMesh.new()
+	ring.inner_radius = 1.6
+	ring.outer_radius = 1.68
+	var line := MeshInstance3D.new()
+	line.mesh = ring
+	line.material_override = Blocks.glow(Color(1.0, 0.8, 0.4), 0.6)
+	line.position = Vector3(0, 0.34, 0)
+	line.scale = Vector3(1, 0.3, 1)
+	root.add_child(line)
+	for k in 4:
+		var a := TAU * k / 4.0 + 0.4
+		root.add_child(Blocks.box(Vector3(0.6, 0.5, 0.6), stone, Vector3(cos(a) * 2.3, 0.45, sin(a) * 2.3)))
+	for x in [-1.2, 1.2]:
+		root.add_child(Blocks.cylinder(0.06, 2.4, Color(0.45, 0.32, 0.2), Vector3(x, 1.5, -1.6)))
+	root.add_child(Blocks.cylinder(0.05, 2.4, Color(0.45, 0.32, 0.2), Vector3(0, 2.6, -1.6)))
+	root.get_child(root.get_child_count() - 1).rotation.z = PI * 0.5
 	return root
 
 

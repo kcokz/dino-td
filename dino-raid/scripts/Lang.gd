@@ -247,6 +247,23 @@ const EN := {
 	"首领": "Boss", "小首领": "Mini-boss", "大波": "Big wave", "第 %d / %d 轮": "Round %d / %d", "已造": "Built",
 	"我方": "Ours", "敌方": "Theirs", "这一轮出战 %d 只，吃 %d 生物质": "%d go out this round, eating %d biomass",
 	"每轮 +%d · 利息 +%d": "+%d a round · interest +%d",
+	# Restraint: the short words (2026-10-20).
+	"多孵 1 只，还是变精英？": "One more, or elite?",
+	"换掉%s（退 %d 金）": "Replace the %s (%d gold back)",
+	"研究点数不够": "Not enough research",
+	"金币不够": "Not enough gold",
+	"%s → %d 级（%d 金）": "%s to level %d (%d gold)",
+	"存起来：%d 金": "Keep it: %d gold",
+	"点开看看": "Click to look inside",
+	"%s · %d 金：%s": "%s · %d gold: %s",
+	"第 %d 轮": "Round %d",
+	"家园 %d / %d\n打输了会掉，掉光这一局就输了": "Homeland %d / %d\nLost battles take it away; at nothing, the run is lost",
+	"生物质 %d\n每轮产 %d；出战的兵每轮吃 %d": "Biomass %d\n+%d a round; the army eats %d a round",
+	"研究点数 %d\n每轮产 %d；贴词条、强化牌要花": "Research %d\n+%d a round; spent on affixes and upgrades",
+	"金币 %d\n每轮 +%d；存着的利息 +%d": "Gold %d\n+%d a round; interest on what is kept +%d",
+	"一局只能造一座": "One a run",
+	"搬家去%s · 带走 %d / %d": "Moving to %s · taking %d / %d", "到那边：兵吃 %d，池子产 %d": "There: the army eats %d, pools make %d",
+	"变精英": "Elite",
 }
 
 static var _english: Translation

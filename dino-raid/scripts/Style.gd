@@ -25,27 +25,17 @@ static var _edges: Shader
 static var _grain: Texture2D
 
 
-## A panel or a plate: a cut-cornered shape filled top to bottom (lacquer with a faint grain), framed by a made frame
-## (UiArt: a moulding of old gold with amber stones over its cut corners -- copper where its edge is coral, dark bronze
-## where its edge is dim; a finer one on a button or a small panel); a soft shadow under it, and a glow round it when
-## lit. Without the frames' pictures, a gold rule with a finer one inside it and a diamond on each cut corner.
+## A panel or a button, drawn with restraint (the player, 2026-10-20: "粗框还不如没有，请借鉴埃尔登环的界面框……什么是精致
+## 感，就是不突兀，简明扼要"): no frame to speak of -- a dark veil, shaded top to bottom, its edges fading to nothing; a
+## hairline of old gold round it, a little brighter in short ticks at its corners; a small diamond on the top line's
+## middle for a heading's panel; a soft warm light round it when lit (a button pointed at); pressed, a little darker.
 class Ornate extends StyleBox:
-	var art := ""                 # which made frame rims it (UiArt) -- "" chosen by its size and its edge, "none" none
-	var top := Color(0.085, 0.11, 0.115, 0.95)
-	var bottom := Color(0.028, 0.036, 0.042, 0.95)
-	var edge := GOLD
-	var rule := Color(GOLD, 0.34)
-	var cut := 9.0
-	var inset := 4.0
-	var studs := true
-	var crest := false            # a bigger diamond on the top edge's middle (a heading's panel)
-	var glow := Color(0, 0, 0, 0)
-	var shade := 0.45
-	var edge_width := 1.8
-	var sheen := 0.05             # the light from above on the fill's upper middle
-	var grain := 0.035            # how much the lacquer's grain shows
-	var gloss := 0.0              # a button's shine over its upper half
-	var sunk := false             # pressed in: the bevel turned over
+	var top := Color(0.03, 0.04, 0.045, 0.82)      # the veil's colour at its top...
+	var bottom := Color(0.015, 0.02, 0.025, 0.86)  # ...and at its foot
+	var edge := Color(GOLD, 0.75)                  # the hairline's
+	var crest := false            # a diamond on the top line's middle (a heading's panel)
+	var glow := Color(0, 0, 0, 0) # a soft light round it (a button pointed at)
+	var sunk := false             # pressed: a little darker
 
 	func _init(margin := 12.0) -> void:
 		content_margin_left = margin
@@ -54,87 +44,21 @@ class Ornate extends StyleBox:
 		content_margin_bottom = margin * 0.75
 
 	func _draw(ci: RID, rect: Rect2) -> void:
-		var made := _art(rect)
-		if made != "" and UiArt.tex(made) != null:
-			_draw_made(ci, rect, made)
-			return
-		if shade > 0.0:
-			for i in 6:
-				var g := 0.5 + i * 1.8
-				Style.fill(ci, rect.grow(g), cut + g * 0.7, Color(0, 0, 0, shade * 0.1 * (1.0 - i / 6.0)),
-					Color(0, 0, 0, shade * 0.16 * (1.0 - i / 6.0)), Vector2(0, 2.5 + i * 0.6))
+		var feather := clampf(minf(rect.size.x, rect.size.y) * 0.16, 3.0, 12.0)
 		if glow.a > 0.0:
-			for i in 6:
-				var g := 1.0 + i * 1.9
-				Style.ring(ci, rect.grow(g), cut + g * 0.6, Color(glow, glow.a * pow(1.0 - i / 6.0, 1.6)), 2.2)
-		Style.fill(ci, rect, cut, top, bottom)
-		if grain > 0.0:
-			Style.grain(ci, rect, cut, grain)
-		if sheen > 0.0:
-			Style.sheen(ci, rect, cut, sheen)
-		if gloss > 0.0:
-			Style.gloss(ci, rect.grow(-edge_width), maxf(1.0, cut - edge_width * 0.5), gloss)
-		var lit := Color(1, 1, 1, 0.09)
-		var dark := Color(0, 0, 0, 0.42)
-		Style.bevel(ci, rect.grow(-edge_width * 0.5 - 1.0), maxf(1.0, cut - edge_width * 0.5), dark if sunk else lit, lit if sunk else dark, 1.6)
-		Style.ring(ci, rect.grow(1.2), cut + 0.5, Color(0, 0, 0, 0.7), 1.2)
-		Style.metal(ci, rect, cut, edge, edge_width)
-		if inset > 0.0 and rule.a > 0.0:
-			Style.ring(ci, rect.grow(-inset), maxf(1.0, cut - inset * 0.6), rule, 1.0)
-		if studs:
-			Style.flourishes(ci, rect, cut, edge)
-		if crest:
-			Style.diamond(ci, Vector2(rect.get_center().x, rect.position.y), 6.5, edge.lightened(0.25), INK_DEEP)
-			for side in [-1.0, 1.0]:
-				Style.diamond(ci, Vector2(rect.get_center().x + side * 11.0, rect.position.y), 2.4, edge.lightened(0.1))
-
-	## Which made frame rims it: a button's (finer) on anything small, a panel's otherwise; dark bronze where its edge
-	## is dim (or it cannot be pressed), copper where it is coral, bright gold on a lit button.
-	func _art(rect: Rect2) -> String:
-		if art != "":
-			return "" if art == "none" else art
-		if edge.a <= 0.01:
-			return ""
-		var dim := edge.s < 0.22 or edge.v < 0.6
-		var small := minf(rect.size.x, rect.size.y) < 76.0
-		if small:
-			if dim:
-				return "button_dim"
-			return "button_bright" if edge.v > 0.97 else "button"
-		if dim:
-			return "frame_dim"
-		if (edge.h < 0.05 or edge.h > 0.95) and edge.s > 0.35:
-			return "frame_red"
-		return "frame"
-
-	## Drawn with a made frame: the shadow, the glow, the lacquer running in under the frame (none of it past the
-	## frame's corners), a pressed button's shade at its top, the frame over it all, the heading's jewel.
-	func _draw_made(ci: RID, rect: Rect2, made: String) -> void:
-		var c := maxf(UiArt.cut(made), 2.0)
-		var b := UiArt.band(made)
-		var inside := rect.grow(-b * 0.5)
-		var ic := maxf(1.0, c - b * 0.5 * UiArt.SQ)
-		if shade > 0.0:
-			for i in 6:
-				var g := 0.5 + i * 1.8
-				Style.fill(ci, rect.grow(g), c + g * 0.7, Color(0, 0, 0, shade * 0.08 * (1.0 - i / 6.0)),
-					Color(0, 0, 0, shade * 0.14 * (1.0 - i / 6.0)), Vector2(0, 3.0 + i * 0.7))
-		if glow.a > 0.0:
-			for i in 7:
-				var g := 2.0 + i * 2.0
-				Style.ring(ci, rect.grow(g), c + g * 0.6, Color(glow, glow.a * pow(1.0 - i / 7.0, 1.6)), 2.4)
-		Style.fill(ci, inside, ic, top, bottom)
-		if grain > 0.0:
-			Style.grain(ci, inside, ic, grain)
-		if sheen > 0.0:
-			Style.sheen(ci, inside, ic, sheen)
-		if gloss > 0.0:
-			Style.gloss(ci, inside.grow(-b * 0.5), maxf(1.0, ic - b * 0.3), gloss)
+			Style.veil(ci, rect.grow(12.0), Color(glow, glow.a * 0.45), Color(glow, glow.a * 0.3), 16.0)
+		var t := top
+		var b := bottom
 		if sunk:
-			Style.bevel(ci, rect.grow(-b), maxf(1.0, c - b * UiArt.SQ), Color(0, 0, 0, 0.45), Color(1, 1, 1, 0.05), 2.2)
-		UiArt.frame(ci, made, rect, Color(0.8, 0.8, 0.8) if sunk else Color.WHITE)
+			t = t.darkened(0.3)
+			b = b.darkened(0.3)
+		Style.veil(ci, rect.grow(feather * 0.6), t, b, feather)
+		if edge.a > 0.0:
+			Style.hairline_rect(ci, rect.grow(-0.5), Color(edge, edge.a * (0.32 if sunk else 0.5)), Color(edge, edge.a * 0.95),
+				minf(8.0, minf(rect.size.x, rect.size.y) * 0.22))
 		if crest:
-			UiArt.jewel(ci, Vector2(rect.get_center().x, rect.position.y + b * 0.4), 22.0)
+			Style.diamond(ci, Vector2(rect.get_center().x, rect.position.y - 0.5), 4.5, edge.lightened(0.2), INK_DEEP)
+
 
 
 ## A line of words to pick (the title screen's, the pause menu's): nothing at rest; lit, a band of light fading to
@@ -204,6 +128,47 @@ class Groove extends StyleBox:
 
 
 # -- Drawing ---------------------------------------------------------------------------------------------------
+
+## A rectangle shaded from `top` to `bottom`, its edges fading to nothing over `feather` (a veil, not a box).
+static func veil(ci: RID, r: Rect2, top: Color, bottom: Color, feather: float) -> void:
+	var f := clampf(feather, 0.5, minf(r.size.x, r.size.y) * 0.5 - 0.01)
+	var xs := [r.position.x, r.position.x + f, r.end.x - f, r.end.x]
+	var ys := [r.position.y, r.position.y + f, r.end.y - f, r.end.y]
+	for i in 3:
+		for j in 3:
+			var pts := PackedVector2Array([Vector2(xs[i], ys[j]), Vector2(xs[i + 1], ys[j]), Vector2(xs[i + 1], ys[j + 1]),
+				Vector2(xs[i], ys[j + 1])])
+			var cols := PackedColorArray()
+			for k in 4:
+				var p := pts[k]
+				var c := top.lerp(bottom, clampf((p.y - r.position.y) / maxf(1.0, r.size.y), 0.0, 1.0))
+				var inside := p.x > r.position.x + 0.01 and p.x < r.end.x - 0.01 and p.y > r.position.y + 0.01 and p.y < r.end.y - 0.01
+				if not inside:
+					c.a = 0.0
+				cols.append(c)
+			RenderingServer.canvas_item_add_polygon(ci, pts, cols)
+
+
+## A hairline round `r` in `line`, brighter (`tick`) in short strokes `tick_len` long at its four corners.
+static func hairline_rect(ci: RID, r: Rect2, line: Color, tick: Color, tick_len := 7.0) -> void:
+	var a := r.position
+	var b := Vector2(r.end.x, r.position.y)
+	var c := r.end
+	var d := Vector2(r.position.x, r.end.y)
+	RenderingServer.canvas_item_add_polyline(ci, PackedVector2Array([a, b, c, d, a]), PackedColorArray([line]), 1.0, true)
+	var t := minf(tick_len, minf(r.size.x, r.size.y) * 0.4)
+	for corner in [[a, Vector2.RIGHT, Vector2.DOWN], [b, Vector2.LEFT, Vector2.DOWN], [c, Vector2.LEFT, Vector2.UP],
+			[d, Vector2.RIGHT, Vector2.UP]]:
+		var p: Vector2 = corner[0]
+		RenderingServer.canvas_item_add_polyline(ci, PackedVector2Array([p + (corner[1] as Vector2) * t, p, p + (corner[2] as Vector2) * t]),
+			PackedColorArray([tick]), 1.4, true)
+
+
+## A hairline from `a` to `b` in `col`, fading out toward both ends.
+static func hairline(ci: RID, a: Vector2, b: Vector2, col: Color, width := 1.0) -> void:
+	var mid := (a + b) * 0.5
+	var clear := Color(col, 0.0)
+	RenderingServer.canvas_item_add_polyline(ci, PackedVector2Array([a, mid, b]), PackedColorArray([clear, col, clear]), width, true)
 
 ## The eight corners of `r` with corners cut by `c`.
 static func octagon(r: Rect2, c: float) -> PackedVector2Array:
@@ -369,53 +334,38 @@ static func rule(item: CanvasItem, at: Vector2, width: float, col := GOLD) -> vo
 static func panel(margin := 14.0, crested := false) -> Ornate:
 	var b := Ornate.new(margin)
 	b.crest = crested
+	b.top = Color(0.03, 0.04, 0.045, 0.82)
+	b.bottom = Color(0.015, 0.02, 0.025, 0.86)
+	b.edge = Color(GOLD, 0.75)
 	return b
 
 
 ## A button's look for one state -- `primary` amber, for what sends the round on.
 static func button(state: String, primary := false) -> Ornate:
 	var b := Ornate.new(10.0)
-	b.cut = 7.0
-	b.shade = 0.35
-	b.top = Color(0.12, 0.145, 0.15, 0.97)
-	b.bottom = Color(0.035, 0.045, 0.05, 0.97)
-	b.gloss = 0.07
-	b.sheen = 0.0
-	b.grain = 0.025
+	b.top = Color(0.05, 0.06, 0.065, 0.62)
+	b.bottom = Color(0.02, 0.025, 0.03, 0.7)
+	b.edge = Color(GOLD, 0.8)
 	if primary:
-		b.top = Color(0.66, 0.4, 0.14, 0.98)
-		b.bottom = Color(0.3, 0.15, 0.045, 0.98)
+		b.top = Color(0.3, 0.17, 0.05, 0.72)
+		b.bottom = Color(0.14, 0.07, 0.02, 0.78)
 		b.edge = GOLD_BRIGHT
-		b.rule = Color(GOLD_BRIGHT, 0.45)
-		b.gloss = 0.13
 	match state:
 		"hover":
-			b.top = b.top.lightened(0.12)
-			b.bottom = b.bottom.lightened(0.08)
+			b.top = b.top.lightened(0.08)
 			b.edge = GOLD_BRIGHT
-			b.glow = Color(AMBER if primary else GOLD_BRIGHT, 0.36)
-			b.gloss *= 1.4
+			b.glow = Color(AMBER if primary else GOLD_BRIGHT, 0.3)
 		"pressed":
-			b.top = b.bottom.darkened(0.15)
-			b.bottom = b.bottom.darkened(0.05)
-			b.shade = 0.1
-			b.gloss = 0.0
 			b.sunk = true
 		"disabled":
-			b.top = Color(0.09, 0.09, 0.09, 0.8)
-			b.bottom = Color(0.05, 0.05, 0.05, 0.8)
-			b.edge = Color(0.35, 0.33, 0.3)
-			b.rule = Color(0.35, 0.33, 0.3, 0.3)
-			b.studs = false
+			b.top = Color(0.05, 0.05, 0.05, 0.4)
+			b.bottom = Color(0.03, 0.03, 0.03, 0.45)
+			b.edge = Color(0.45, 0.42, 0.38, 0.5)
 		"focus":
 			var f := Ornate.new(10.0)
 			f.top = Color(0, 0, 0, 0)
 			f.bottom = Color(0, 0, 0, 0)
 			f.edge = Color(GOLD_BRIGHT, 0.0)
-			f.rule = Color(0, 0, 0, 0)
-			f.studs = false
-			f.shade = 0.0
-			f.cut = 7.0
 			f.glow = Color(GOLD_BRIGHT, 0.45)
 			return f
 	return b

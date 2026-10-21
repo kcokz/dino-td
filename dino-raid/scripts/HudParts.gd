@@ -1,113 +1,54 @@
 class_name HudParts
-## The HUD's own pieces, in the game's shapes rather than boxes of lines (GAME-DESIGN 23; the player, 2026-10-20:
-## "出战的框，左上角介绍的框都显得像网页游戏……我需要契合游戏，又美观精致的专业游戏的框和表达"): a crest for the place
-## with its rounds ringed round it; a bar of sockets for what the homeland has; round buttons with their pictures; a
-## great seal to send the army out; the wave to come as the monsters' own faces; the battle's count between two
-## shields. What each is, or what a figure means, is told when it is pointed at (the HUD's panel), so the screen shows
-## pictures and numbers, not sentences. Their rims, plates, bars, seal, stones and shields are made things (UiArt:
-## modelled and rendered, tools/ui_art.py); the words and pictures on them are drawn here.
+## The HUD's pieces, drawn with restraint (GAME-DESIGN 23; the player, 2026-10-20: "粗框还不如没有，请借鉴埃尔登环的界面框
+## 怎么做的，什么是精致感，就是不突兀，简明扼要"; "数字，文字都尽量去除，界面只要简单的图标，具体信息基本上都靠hover";
+## "应该突出需要知道的东西，淡化不需要知道的东西，清晰很重要"). No boxes: a picture and, where it must be, a figure, on a
+## soft dark veil that fades into the land; hairlines of old gold where a line is wanted at all. What a picture means,
+## and every number behind it, is told when it is pointed at (the HUD's panel).
 
-const FACE_TOP := Color(0.13, 0.16, 0.165)
-const FACE_BOTTOM := Color(0.025, 0.033, 0.038)
-const WAR_TOP := Color(0.6, 0.2, 0.1)         # the great seal's face
-const WAR_BOTTOM := Color(0.2, 0.045, 0.025)
-const PLATE_TOP := Color(0.12, 0.15, 0.155, 0.96)
-const PLATE_BOTTOM := Color(0.03, 0.04, 0.045, 0.96)
+const INK := Color(0.0, 0.0, 0.0, 0.0)
+const VEIL := Color(0.02, 0.025, 0.03, 0.6)
+const LINE := Color(0.84, 0.69, 0.42, 0.55)         # a hairline of old gold
+const FAINT := Color(0.84, 0.69, 0.42, 0.25)
 
 
-# -- Shapes ---------------------------------------------------------------------------------------------------------
+# -- Drawing ------------------------------------------------------------------------------------------------------
 
-## A round plate of slate in a gold rim (UiArt "medallion"), `r` its outside; `modulate` lights or dims it.
-static func medallion(item: CanvasItem, c: Vector2, r: float, modulate := Color.WHITE) -> void:
-	UiArt.disc(item, "medallion", c, r, modulate)
-
-
-## A round face shaded from `top` (lit from the upper left) to `bottom`, in a gold rim (UiArt "ring"), `r` its outside.
-static func disc(item: CanvasItem, c: Vector2, r: float, top: Color, bottom: Color, _rim := Style.GOLD, _width := -1.0,
-		_shadow := true) -> void:
-	var face := r * 0.84
-	for i in 10:
-		var k := i / 9.0
-		item.draw_circle(c + Vector2(-0.16, -0.22) * face * k, face * (1.0 - 0.62 * k), bottom.lerp(top, k), true, -1.0, true)
-	UiArt.disc(item, "ring", c, r)
+## A soft dark veil over `r`, fading out at its edges (behind words or pictures on the land).
+static func veil(item: CanvasItem, r: Rect2, alpha := 0.6, feather := 14.0) -> void:
+	Style.veil(item.get_canvas_item(), r, Color(VEIL, alpha), Color(VEIL, alpha * 0.9), feather)
 
 
-## A nameplate of slate pointed at both ends in a gold rim (UiArt "plate", "plate_small" -- red enamel where `top` is
-## red) over `r`.
-static func plate(item: CanvasItem, r: Rect2, top := PLATE_TOP, _bottom := PLATE_BOTTOM, _edge := Style.GOLD, _tip := -1.0) -> void:
-	var red := top.r > 0.3 and top.r > top.g * 2.0
-	var made := "plate_small_red" if red else ("plate" if r.size.y >= 34.0 else "plate_small")
-	UiArt.frame(item.get_canvas_item(), made, r)
-
-
-## A bar of slate with round ends in a gold rim (UiArt "bar", "bar_small") over `r`.
-static func capsule(item: CanvasItem, r: Rect2, _top := PLATE_TOP, _bottom := PLATE_BOTTOM, _edge := Style.GOLD) -> void:
-	UiArt.frame(item.get_canvas_item(), "bar" if r.size.y >= 32.0 else "bar_small", r)
-
-
-## A panel (Style.Ornate's look: lacquer in a made frame, copper where `edge` is coral, dark bronze where dim) over `r`.
-static func panel(item: CanvasItem, r: Rect2, edge := Style.GOLD, _cut := 8.0) -> void:
-	var box := Style.panel()
-	box.edge = edge
-	box.draw(item.get_canvas_item(), r)
-
-
-## A small badge with `text` on it (a count, a price): a stone in a gold bezel (UiArt "gem_amber", "gem_jade",
-## "gem_ivory", by `fill`) -- a bar, the words in `fill`'s colour, when the text is too wide for a stone.
-static func badge(item: CanvasItem, c: Vector2, text: String, fill: Color, px := 13, ink := Style.INK_DEEP) -> void:
-	var f := Fonts.numbers() if text.is_valid_int() else Fonts.serif(900)
-	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-	var r := px * 0.92
-	if w * 0.5 + 3.0 > r * 0.8:
-		capsule(item, Rect2(c - Vector2(w * 0.5 + 9.0, px * 0.85), Vector2(w + 18.0, px * 1.7)))
-		words(item, c, text, px, fill.lightened(0.15), f, 0, 3)
-		return
-	var stone := "gem_ivory"
-	if fill.g > fill.r and fill.g > fill.b:
-		stone = "gem_jade"
-	elif fill.r > 0.85 and fill.b < 0.45:
-		stone = "gem_amber"
-	UiArt.disc(item, stone, c, r)
-	words(item, c, text, px, ink, f, 0, 0)
-
-
-## A price: a coin and how much -- the figure coral when there is not enough.
-static func price(item: CanvasItem, c: Vector2, amount: int, enough := true, px := 14) -> void:
-	var text := str(amount)
-	var f := Fonts.numbers()
-	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-	var coin := px + 4.0
-	var r := Rect2(c - Vector2((coin + w) * 0.5 + 8.0, px * 0.82), Vector2(coin + w + 16.0, px * 1.64))
-	capsule(item, r, Color(0.16, 0.13, 0.08), Color(0.05, 0.04, 0.025), Style.GOLD)
-	Icons.draw(item, Icons.GOLD, Vector2(r.position.x + 6.0 + coin * 0.5, c.y), coin)
-	words(item, Vector2(r.position.x + 9.0 + coin, c.y), text, px, Style.GOLD_BRIGHT if enough else Style.CORAL, f, -1, 3)
+## A thin ring of `col` round `c`.
+static func ring(item: CanvasItem, c: Vector2, r: float, col := LINE, width := 1.0) -> void:
+	item.draw_arc(c, r, 0.0, TAU, maxi(32, int(r * 2.0)), col, width, true)
 
 
 ## `text` centred on `at.y`, its middle (`align` 0), its left (-1) or its right (1) at `at.x`; its width.
 static func words(item: CanvasItem, at: Vector2, text: String, px: int, col: Color, f: Font = null, align := 0,
 		outline := 4) -> float:
 	if f == null:
-		f = Fonts.serif(800)
+		f = Fonts.serif(700)
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
 	var x := at.x - w * 0.5 if align == 0 else (at.x if align < 0 else at.x - w)
 	var y := at.y + (f.get_ascent(px) - f.get_descent(px)) * 0.5
 	if outline > 0:
-		item.draw_string_outline(f, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, px, outline, Color(0, 0, 0, 0.85 * col.a))
+		item.draw_string_outline(f, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, px, outline, Color(0, 0, 0, 0.8 * col.a))
 	item.draw_string(f, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, px, col)
 	return w
 
 
 ## A picture seen through a round window `r` across its middle (the texture's height filling it, `zoom` closer).
-static func window(item: CanvasItem, c: Vector2, r: float, tex: Texture2D, zoom := 1.0, focus := Vector2(0.5, 0.5)) -> void:
+static func window(item: CanvasItem, c: Vector2, r: float, tex: Texture2D, zoom := 1.0, focus := Vector2(0.5, 0.5),
+		modulate := Color.WHITE) -> void:
 	var ts := tex.get_size()
 	var s := 2.0 * r * zoom / ts.y
 	var pts := PackedVector2Array()
 	var uvs := PackedVector2Array()
-	for i in 40:
-		var d := Vector2.from_angle(TAU * i / 40.0) * r
+	for i in 48:
+		var d := Vector2.from_angle(TAU * i / 48.0) * r
 		pts.append(c + d)
 		uvs.append(focus + Vector2(d.x / (ts.x * s), d.y / (ts.y * s)))
-	item.draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, tex)
+	item.draw_polygon(pts, PackedColorArray([modulate]), uvs, tex)
 
 
 ## A skull `k` times the size of the waves' (how dangerous a wave looks).
@@ -127,95 +68,45 @@ static func crown(item: CanvasItem, at: Vector2, s: float, col: Color) -> void:
 	var h := s * 0.62
 	var pts := PackedVector2Array([at + Vector2(-s * 0.5, h * 0.5), at + Vector2(-s * 0.5, -h * 0.3), at + Vector2(-s * 0.25, h * 0.05),
 		at + Vector2(0, -h * 0.55), at + Vector2(s * 0.25, h * 0.05), at + Vector2(s * 0.5, -h * 0.3), at + Vector2(s * 0.5, h * 0.5)])
-	var outline := pts.duplicate()
-	outline.append(pts[0])
 	item.draw_colored_polygon(pts, col)
-	item.draw_polyline(outline, Style.INK_DEEP, 1.2, true)
 
 
-## A shield `h` tall, its middle at `c`, enamelled green or red as `col` is (UiArt "shield_green", "shield_red").
-static func shield(item: CanvasItem, c: Vector2, _w: float, h: float, col: Color) -> void:
-	if UiArt.tex("shield_green") != null:
-		UiArt.piece(item, "shield_green" if col.g > col.r else "shield_red", c, h)
-		return
-	_drawn_shield(item, c, _w, h, col)
-
-
-static func _drawn_shield(item: CanvasItem, c: Vector2, w: float, h: float, col: Color) -> void:
+## A small shield `h` tall, its middle at `c`, its face `col`, a hairline round it.
+static func shield(item: CanvasItem, c: Vector2, w: float, h: float, col: Color) -> void:
 	var pts := PackedVector2Array()
 	var top := c.y - h * 0.5
 	pts.append(Vector2(c.x - w * 0.5, top))
-	pts.append(Vector2(c.x, top + h * 0.06))
 	pts.append(Vector2(c.x + w * 0.5, top))
 	for i in 9:
 		var t := i / 8.0
-		# Down the right side, rounding in to the point at the bottom.
-		pts.append(Vector2(c.x + w * 0.5 * (1.0 - t * t), top + h * (0.22 + 0.78 * t)))
+		pts.append(Vector2(c.x + w * 0.5 * (1.0 - t * t), top + h * (0.2 + 0.8 * t)))
 	for i in range(7, -1, -1):
 		var t := i / 8.0
-		pts.append(Vector2(c.x - w * 0.5 * (1.0 - t * t), top + h * (0.22 + 0.78 * t)))
+		pts.append(Vector2(c.x - w * 0.5 * (1.0 - t * t), top + h * (0.2 + 0.8 * t)))
 	var cols := PackedColorArray()
 	for p in pts:
-		cols.append(col.lightened(0.25).lerp(col.darkened(0.35), (p.y - top) / h))
-	var shadow := PackedVector2Array()
-	for p in pts:
-		shadow.append(p + Vector2(0, 3))
-	item.draw_colored_polygon(shadow, Color(0, 0, 0, 0.35))
+		cols.append(col.lightened(0.15).lerp(col.darkened(0.35), (p.y - top) / h))
 	item.draw_polygon(pts, cols)
 	var loop := pts.duplicate()
 	loop.append(pts[0])
-	item.draw_polyline(loop, Color(0, 0, 0, 0.75), 3.0, true)
-	item.draw_polyline(loop, Style.GOLD, 1.5, true)
+	item.draw_polyline(loop, LINE, 1.0, true)
 
 
-static func _shaped(item: CanvasItem, pts: PackedVector2Array, r: Rect2, top: Color, bottom: Color, edge: Color) -> void:
-	for i in 4:
-		var shade := PackedVector2Array()
-		for p in pts:
-			shade.append(r.get_center() + (p - r.get_center()) * (1.0 + i * 0.012) + Vector2(0, 2.0 + i * 0.8))
-		item.draw_colored_polygon(shade, Color(0, 0, 0, 0.12 * (1.0 - i / 4.0)))
-	var cols := PackedColorArray()
-	for p in pts:
-		cols.append(top.lerp(bottom, clampf((p.y - r.position.y) / maxf(1.0, r.size.y), 0.0, 1.0)))
-	item.draw_polygon(pts, cols)
-	# The light on its upper half.
-	var lit := PackedColorArray()
-	for p in pts:
-		var k := clampf((p.y - r.position.y) / maxf(1.0, r.size.y), 0.0, 1.0)
-		lit.append(Color(1, 1, 1, 0.07 * maxf(0.0, 1.0 - k * 2.0)))
-	item.draw_polygon(pts, lit)
-	var loop := pts.duplicate()
-	loop.append(pts[0])
-	item.draw_polyline(loop, Color(0, 0, 0, 0.75), 3.2, true)
-	item.draw_polyline(loop, edge, 1.6, true)
+## The painting of what `key` names ("e_grey", "u_red"...: tools/paint_cards.py), or else its 3D portrait; null while
+## neither is to hand -- `done` told when the portrait is.
+static func picture(key: String, portrait: String, done: Callable) -> Texture2D:
+	var painted := Art.of(key)
+	if painted != null:
+		return painted
+	return Portraits.picture(portrait, done)
 
 
-static func _plate_points(r: Rect2, tip: float) -> PackedVector2Array:
-	var y := r.get_center().y
-	return PackedVector2Array([Vector2(r.position.x + tip, r.position.y), Vector2(r.end.x - tip, r.position.y), Vector2(r.end.x, y),
-		Vector2(r.end.x - tip, r.end.y), Vector2(r.position.x + tip, r.end.y), Vector2(r.position.x, y)])
+# -- Pieces -------------------------------------------------------------------------------------------------------
 
-
-static func _capsule_points(r: Rect2, n := 12) -> PackedVector2Array:
-	var rad := r.size.y * 0.5
-	var lc := Vector2(r.position.x + rad, r.get_center().y)
-	var rc := Vector2(r.end.x - rad, r.get_center().y)
-	var out := PackedVector2Array()
-	for i in n + 1:
-		out.append(rc + Vector2.from_angle(-PI * 0.5 + PI * i / n) * rad)
-	for i in n + 1:
-		out.append(lc + Vector2.from_angle(PI * 0.5 + PI * i / n) * rad)
-	return out
-
-
-# -- Pieces ----------------------------------------------------------------------------------------------------------
-
-## The place's crest (top left): a round seal with the place's own picture, its rounds ringed round it -- those done
-## lit amber, this one bright, those to come dark; a mini-boss's marked with a coral diamond, the boss's with a crown --
-## its name on a nameplate beside it; under that the round, and the place's rule by name (pointed at: told in full).
+## Where we are (top left): the place's own picture in a hairline ring, its name beside it, and under the name the
+## rounds as small marks -- those done amber, this one bright, those to come faint, a mini-boss's ringed coral, the
+## boss's a crown. Pointed at, the panel tells its rule and the round.
 class Crest extends Control:
-	const SEAL := Vector2(54, 62)
-	const R := 34.0
 	var place_name := ""
 	var glyph := ""
 	var round := 1
@@ -224,54 +115,42 @@ class Crest extends Control:
 	var rule_name := ""
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(336, 116)
+		custom_minimum_size = Vector2(300, 74)
 		mouse_filter = Control.MOUSE_FILTER_PASS
 
 	func _draw() -> void:
-		var plate := Rect2(76, 30, 244, 44)
-		HudParts.plate(self, plate)
-		HudParts.words(self, Vector2(108, plate.get_center().y), place_name, 27, Style.GOLD_BRIGHT, Fonts.serif(900), -1)
-		var w := HudParts.words(self, Vector2(102, 92), Lang.t("第 %d / %d 轮") % [round, rounds], 16, Style.PARCHMENT, Fonts.serif(800), -1)
-		if rule_name != "":
-			var rf := Fonts.serif(800)
-			var rw := rf.get_string_size(rule_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-			var chip := Rect2(Vector2(102 + w + 12, 92 - 11), Vector2(rw + 22, 22))
-			HudParts.capsule(self, chip, Color(0.22, 0.14, 0.07), Color(0.07, 0.045, 0.02), Style.AMBER.darkened(0.15))
-			HudParts.words(self, chip.get_center(), rule_name, 14, Style.AMBER, rf, 0, 3)
-		# The rounds, round the seal, from the top clockwise; the last ends at the top again: the boss's crown there.
-		var ring := R + 9.5
-		var gap := 0.075
+		HudParts.veil(self, Rect2(-6, -2, 300, 76), 0.55, 22.0)
+		var c := Vector2(34, 36)
+		if glyph != "":
+			Icons.draw(self, glyph, c, 40.0)
+		HudParts.ring(self, c, 27.0, HudParts.LINE, 1.0)
+		HudParts.words(self, Vector2(70, 26), place_name, 26, Style.PARCHMENT, Fonts.serif(800), -1, 5)
+		# The rounds.
 		for i in rounds:
-			var a0 := -PI * 0.5 + TAU * i / rounds + gap * 0.5
-			var a1 := -PI * 0.5 + TAU * (i + 1) / rounds - gap * 0.5
-			var col := Color(0.16, 0.17, 0.17)
+			var at := Vector2(74 + i * 15.0, 54)
+			var col := Color(1, 1, 1, 0.18)
 			if i + 1 < round:
-				col = Style.AMBER.darkened(0.12)
+				col = Color(Style.AMBER, 0.85)
 			elif i + 1 == round:
 				col = Style.GOLD_BRIGHT
-			draw_arc(SEAL, ring, a0, a1, 10, Color(0, 0, 0, 0.8), 8.5, true)
-			draw_arc(SEAL, ring, a0, a1, 10, col, 5.6, true)
-			# A gleam along its upper edge, as a gem's.
-			if i + 1 <= round:
-				draw_arc(SEAL, ring + 1.4, a0, a1, 10, Color(1, 1, 1, 0.28), 1.2, true)
+			if i + 1 == rounds:
+				HudParts.crown(self, at + Vector2(0, -1), 11.0, Style.CORAL if i + 1 > round else col)
+				continue
 			if i + 1 == round:
-				draw_arc(SEAL, ring, a0, a1, 10, Color(Style.GOLD_BRIGHT, 0.35), 11.0, true)
-		for m in minis:
-			var a := -PI * 0.5 + TAU * (float(m) - 0.5) / rounds
-			Style.diamond(get_canvas_item(), SEAL + Vector2.from_angle(a) * (ring + 9.0), 4.2, Style.CORAL, Style.INK_DEEP)
-		var top := -PI * 0.5 + TAU * (rounds - 0.5) / rounds
-		HudParts.crown(self, SEAL + Vector2.from_angle(top) * (ring + 9.5), 12.0, Style.CORAL)
-		HudParts.medallion(self, SEAL, R + 2.0)
-		if glyph != "":
-			Icons.draw(self, glyph, SEAL, R * 1.2)
+				draw_circle(at, 7.0, Color(Style.GOLD_BRIGHT, 0.18), true, -1.0, true)
+			Style.diamond(get_canvas_item(), at, 3.6, col)
+			if i + 1 in minis:
+				Style.diamond(get_canvas_item(), at, 5.6, Color(Style.CORAL, 0.0))
+				draw_polyline(PackedVector2Array([at + Vector2(0, -5.6), at + Vector2(5.6, 0), at + Vector2(0, 5.6),
+					at + Vector2(-5.6, 0), at + Vector2(0, -5.6)]), Style.CORAL, 1.0, true)
 
 
-## What the homeland has (under the crest): its health, its biomass, its research points -- each a picture in a socket,
-## how much there is and (biomass, research) what comes in each round -- on a bar with round ends. `hover` names the
-## one pointed at ("hp", "biomass", "research"; "" none).
+## What the homeland has (under the crest): its health, its biomass, its research -- each a picture and how much there
+## is, no more (what comes in each round, and what each is for, are told when it is pointed at). `hover` names the one
+## pointed at ("hp", "biomass", "research"; "" none).
 class Purse extends Control:
 	signal pointed(which: String)
-	const CELL := 122.0
+	const CELL := 92.0
 	var hp := 0
 	var hp_max := 1
 	var biomass := 0
@@ -281,7 +160,7 @@ class Purse extends Control:
 	var hover := ""
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(CELL * 3.0 + 6.0, 48)
+		custom_minimum_size = Vector2(CELL * 3.0, 38)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 
 	func _gui_input(event: InputEvent) -> void:
@@ -289,45 +168,31 @@ class Purse extends Control:
 			var which: String = ["hp", "biomass", "research"][clampi(int((event as InputEventMouseMotion).position.x / CELL), 0, 2)]
 			if which != hover:
 				hover = which
+				queue_redraw()
 				pointed.emit(hover)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_MOUSE_EXIT and hover != "":
 			hover = ""
+			queue_redraw()
 			pointed.emit(hover)
 
 	func _draw() -> void:
-		HudParts.capsule(self, Rect2(2, 6, size.x - 4.0, 36))
+		HudParts.veil(self, Rect2(-6, -2, size.x + 6.0, size.y + 4.0), 0.5, 16.0)
+		var nf := Fonts.numbers()
+		var low := float(hp) / maxf(1.0, hp_max) < 0.35
+		var cells := [[Icons.HEALTH, str(hp), Style.CORAL if low else Style.PARCHMENT],
+			[Icons.BIOMASS, str(biomass), Style.PARCHMENT], [Icons.RESEARCH, str(research), Style.PARCHMENT]]
 		for i in 3:
 			var x := i * CELL
-			if i > 0:
-				draw_line(Vector2(x + 2, 13), Vector2(x + 2, 35), Color(Style.GOLD, 0.25), 1.0, true)
-			var c := Vector2(x + 26, 24)
-			HudParts.medallion(self, c, 19.0)
-			Icons.draw(self, [Icons.HEALTH, Icons.BIOMASS, Icons.RESEARCH][i], c, 23.0)
-			var nf := Fonts.numbers()
-			if i == 0:
-				var low := float(hp) / maxf(1.0, hp_max) < 0.35
-				var w := HudParts.words(self, Vector2(x + 50, 21), str(hp), 21, Style.CORAL if low else Style.PARCHMENT, nf, -1, 4)
-				HudParts.words(self, Vector2(x + 52 + w, 23), "/%d" % hp_max, 14, Style.PARCHMENT_DIM, nf, -1, 3)
-				# A thin bar under the figure: how much is left.
-				var bar := Rect2(x + 50, 33, 62, 4)
-				draw_rect(bar.grow(1.0), Color(0, 0, 0, 0.7))
-				draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(float(hp) / maxf(1.0, hp_max), 0.0, 1.0), bar.size.y)),
-					Style.CORAL if low else Color(0.42, 0.78, 0.5))
-			else:
-				var have := biomass if i == 1 else research
-				var comes := biomass_in if i == 1 else research_in
-				var w := HudParts.words(self, Vector2(x + 50, 24), str(have), 21, Style.PARCHMENT, nf, -1, 4)
-				HudParts.words(self, Vector2(x + 54 + w, 25), "+%d" % comes, 14, Style.JADE, nf, -1, 3)
-		if hover != "":
-			var i := ["hp", "biomass", "research"].find(hover)
-			draw_arc(Vector2(i * CELL + 26, 24), 20.0, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT, 0.55), 1.5, true)
+			var lit: bool = hover == ["hp", "biomass", "research"][i]
+			Icons.draw(self, cells[i][0], Vector2(x + 16, 19), 24.0 if lit else 22.0)
+			HudParts.words(self, Vector2(x + 33, 19), cells[i][1], 22, cells[i][2], nf, -1, 4)
 
 
-## A round button: a plate with its picture, a word on a little nameplate under it, a count in a badge at its shoulder
-## or a price -- `primary` the great seal that sends the army out: bigger, red-bronze, its glow breathing while it can
-## be pressed.
+## A round button: its picture in a hairline ring on a dark disc, a word under it in small type; a count or a price
+## in small figures at its shoulder. `primary`: the one that sends the army out -- larger, its ring gold and a warm
+## light breathing round it while it can be pressed.
 class RoundButton extends BaseButton:
 	var glyph := ""
 	var caption := ""
@@ -345,7 +210,7 @@ class RoundButton extends BaseButton:
 		primary = p_primary
 		focus_mode = Control.FOCUS_NONE
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		custom_minimum_size = Vector2(maxf(radius * 2.0 + 30.0, 96.0 if primary else 72.0), radius * 2.0 + (34.0 if p_caption != "" else 12.0))
+		custom_minimum_size = Vector2(maxf(radius * 2.0 + 30.0, 72.0), radius * 2.0 + (30.0 if p_caption != "" else 12.0))
 		size = custom_minimum_size
 
 	func _process(delta: float) -> void:
@@ -355,87 +220,55 @@ class RoundButton extends BaseButton:
 
 	func _draw() -> void:
 		var mode := get_draw_mode()
-		var hot := mode == DRAW_HOVER or mode == DRAW_HOVER_PRESSED
+		var hot := (mode == DRAW_HOVER or mode == DRAW_HOVER_PRESSED) and not disabled
 		var down := mode == DRAW_PRESSED or mode == DRAW_HOVER_PRESSED
-		var c := Vector2(size.x * 0.5, radius + 6.0 + (1.5 if down else 0.0))
-		var top := HudParts.WAR_TOP if primary else HudParts.FACE_TOP
-		var bottom := HudParts.WAR_BOTTOM if primary else HudParts.FACE_BOTTOM
-		if hot and not disabled:
-			top = top.lightened(0.14)
-		if down:
-			top = top.darkened(0.2)
-		if disabled:
-			top = top.lerp(Color(0.14, 0.14, 0.14), 0.75)
-			bottom = bottom.lerp(Color(0.05, 0.05, 0.05), 0.75)
+		var c := Vector2(size.x * 0.5, radius + 6.0 + (1.0 if down else 0.0))
 		var glow := 0.0
 		if not disabled:
-			glow = 0.6 if hot else (0.3 + 0.22 * sin(_t * 2.6) if primary else 0.0)
+			glow = 0.55 if hot else (0.22 + 0.14 * sin(_t * 2.4) if primary else 0.0)
 		if glow > 0.0:
-			for i in 7:
-				draw_arc(c, radius + 5.0 + i * 2.3, 0.0, TAU, 64, Color(Style.AMBER, glow * 0.2 * (1.0 - i / 7.0)), 2.6, true)
-		var rim := Style.GOLD_BRIGHT if primary else Style.GOLD
-		if disabled:
-			rim = Style.GOLD_DIM
-		# The made plate: the seal, or a round plate of slate -- lit when pointed at, darker pressed, grey disabled.
-		var tint := Color.WHITE
-		if disabled:
-			tint = Color(0.5, 0.5, 0.5)
-		elif down:
-			tint = Color(0.82, 0.82, 0.82)
-		elif hot:
-			tint = Color(1.12, 1.1, 1.06)
+			for i in 8:
+				draw_circle(c, radius + 3.0 + i * 2.6, Color(Style.AMBER, glow * 0.05 * (1.0 - i / 8.0)), true, -1.0, true)
+		draw_circle(c, radius, Color(0.015, 0.02, 0.025, 0.72 if not down else 0.85), true, -1.0, true)
+		var rim := Style.GOLD_BRIGHT if (primary or hot) else Style.GOLD
+		HudParts.ring(self, c, radius, Color(rim, 0.35 if disabled else 0.85), 1.4 if primary else 1.0)
 		if primary:
-			UiArt.disc(self, "seal", c, radius + 4.0, tint)
-		else:
-			HudParts.medallion(self, c, radius + 2.0, tint)
-		Icons.draw(self, glyph, c, radius * (1.0 if primary else 1.15), not disabled)
+			HudParts.ring(self, c, radius - 4.0, Color(rim, 0.3), 1.0)
+		Icons.draw(self, glyph, c, radius * (1.05 if primary else 1.1), not disabled)
 		if caption != "":
-			var px := 22 if primary else 15
-			var f := Fonts.serif(900)
-			var said := Lang.t(caption)
-			var w := f.get_string_size(said, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-			var h := px + 10.0
-			var r := Rect2(Vector2(c.x - w * 0.5 - 16.0, c.y + radius - h * 0.35), Vector2(w + 32.0, h))
-			if primary:
-				HudParts.plate(self, r, Color(0.5, 0.12, 0.06), Color(0.2, 0.04, 0.02), rim)
-			else:
-				HudParts.plate(self, r)
-			HudParts.words(self, r.get_center() + Vector2(0, 0.5), said, px,
-				Style.PARCHMENT_DIM if disabled else (Style.GOLD_BRIGHT if primary else Style.PARCHMENT), f, 0, 4)
-		var shoulder := c + Vector2(radius * 0.78, -radius * 0.74)
-		if cost >= 0:
-			if cost == 0:
-				HudParts.badge(self, shoulder + Vector2(4, 0), Lang.t("免费"), Style.JADE, 12)
-			else:
-				HudParts.price(self, shoulder + Vector2(6, 0), cost, enough, 13)
+			var px := 18 if primary else 13
+			HudParts.words(self, Vector2(c.x, c.y + radius + px * 0.75), Lang.t(caption), px,
+				Color(Style.PARCHMENT, 0.45) if disabled else (Style.GOLD_BRIGHT if primary else Color(Style.PARCHMENT, 0.85)),
+				Fonts.serif(800), 0, 4)
+		var shoulder := c + Vector2(radius * 0.86, -radius * 0.7)
+		var nf := Fonts.numbers()
+		if cost > 0:
+			Icons.draw(self, Icons.GOLD, shoulder + Vector2(-2, 0), 15.0)
+			HudParts.words(self, shoulder + Vector2(7, 0), str(cost), 14, Style.GOLD_BRIGHT if enough else Style.CORAL, nf, -1, 3)
 		elif count != "":
-			HudParts.badge(self, shoulder, count, Style.AMBER, 13)
+			HudParts.words(self, shoulder + Vector2(2, 0), count, 14, Style.PARCHMENT, nf, -1, 3)
 
 
-## The army that goes out this round (over the seal): a raptor's head and how many, a drop and how much biomass they
-## eat -- coral when there is not that much.
+## The army that goes out this round (over the seal): a raptor's head and how many (what they eat, when pointed at).
 class ArmyTag extends Control:
 	var count := 0
 	var food := 0
 	var short := false
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(150, 34)
+		custom_minimum_size = Vector2(76, 30)
 		size = custom_minimum_size
 		mouse_filter = Control.MOUSE_FILTER_PASS
 
 	func _draw() -> void:
-		HudParts.capsule(self, Rect2(2, 3, size.x - 4.0, 28))
-		var nf := Fonts.numbers()
-		Icons.draw(self, Icons.ARMY, Vector2(22, 17), 26.0)
-		HudParts.words(self, Vector2(38, 17), str(count), 18, Style.PARCHMENT, nf, -1, 4)
-		Icons.draw(self, Icons.BIOMASS, Vector2(90, 17), 20.0)
-		HudParts.words(self, Vector2(102, 17), "−%d" % food, 18, Style.CORAL if short else Style.PARCHMENT, nf, -1, 4)
+		HudParts.veil(self, Rect2(0, 0, size.x, size.y), 0.5, 12.0)
+		Icons.draw(self, Icons.ARMY, Vector2(22, 15), 24.0)
+		HudParts.words(self, Vector2(38, 15), str(count), 19, Style.CORAL if short else Style.PARCHMENT, Fonts.numbers(), -1, 4)
 
 
-## A wave to come (top right): which (this round's or the next; a mini-boss's, a boss's), how dangerous it looks
-## (skulls), and the monsters in it -- each one's own face in a round window, how many in a badge. `hover` the kind
-## pointed at.
+## A wave to come (top right): which (this round's or the next; its kind -- boss, mini-boss, big -- in small coral
+## type), how dangerous it looks (skulls), and the monsters in it -- each its own picture, large and clear in a hairline
+## ring, how many under it. Pointed at, a monster is named.
 class WaveCard extends Control:
 	signal pointed(kind: String)
 	const PER_ROW := 5
@@ -461,27 +294,35 @@ class WaveCard extends Control:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		var rows := maxi(1, ceili(kinds.size() / float(PER_ROW)))
 		var cols := mini(kinds.size(), PER_ROW)
-		custom_minimum_size = Vector2(maxf(250.0, cols * _pitch() + 44.0), 50.0 + rows * _pitch() + 16.0)
+		custom_minimum_size = Vector2(maxf(220.0, cols * _pitch() + 12.0), 30.0 + rows * (_pitch() + 10.0))
 		size = custom_minimum_size
 		for pair in kinds:
 			var kind: String = pair[0]
-			var tex := Portraits.picture("e:" + kind, func(t: Texture2D) -> void:
+			var tex := HudParts.picture("e_" + kind, "e:" + kind, func(t: Texture2D) -> void:
 				_pics[kind] = t
 				if is_instance_valid(self):
 					queue_redraw())
 			if tex != null:
 				_pics[kind] = tex
+		_redraw_soon()
+
+	## A texture loaded while drawing is not ready to show until the next frames: drawn again then.
+	func _redraw_soon() -> void:
+		await Engine.get_main_loop().process_frame
+		await Engine.get_main_loop().process_frame
+		if is_instance_valid(self):
+			queue_redraw()
 
 	func _r() -> float:
-		return 21.0 if now else 15.0
+		return 25.0 if now else 18.0
 
 	func _pitch() -> float:
-		return _r() * 2.0 + 12.0
+		return _r() * 2.0 + 10.0
 
 	func _centre(i: int) -> Vector2:
 		var cols := mini(kinds.size(), PER_ROW)
-		var x0 := size.x - 22.0 - cols * _pitch()
-		return Vector2(x0 + (i % PER_ROW + 0.5) * _pitch(), 50.0 + (i / PER_ROW + 0.5) * _pitch())
+		var x0 := size.x - 6.0 - cols * _pitch()
+		return Vector2(x0 + (i % PER_ROW + 0.5) * _pitch(), 30.0 + (i / PER_ROW) * (_pitch() + 10.0) + _r() + 4.0)
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion:
@@ -502,78 +343,106 @@ class WaveCard extends Control:
 			pointed.emit("")
 
 	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		HudParts.panel(self, r, Style.CORAL if now else Style.GOLD_DIM, 8.0)
-		var head := 26.0
-		var x := 24.0
-		x += HudParts.words(self, Vector2(x, head), title, 17 if now else 15, Style.PARCHMENT if now else Style.PARCHMENT_DIM,
-			Fonts.serif(900), -1) + 8.0
-		if tag != "":
-			var f := Fonts.serif(900)
-			var tw := f.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-			var chip := Rect2(Vector2(x, head - 10.0), Vector2(tw + 20.0, 20.0))
-			HudParts.plate(self, chip, Color(0.5, 0.12, 0.08), Color(0.2, 0.04, 0.03), Style.CORAL)
-			HudParts.words(self, chip.get_center(), tag, 13, Style.GOLD_BRIGHT, f, 0, 3)
-		var sc := Style.CORAL if now else Color(Style.CORAL, 0.65)
+		var dim := 1.0 if now else 0.72
+		HudParts.veil(self, Rect2(Vector2(-10, -4), size + Vector2(16, 8)), 0.5 if now else 0.35, 22.0)
+		var head := 12.0
+		var x := size.x - 6.0
+		var sc := Color(Style.CORAL, dim)
 		for i in danger:
-			HudParts.skull(self, Vector2(size.x - 28.0 - i * 17.0, head), sc)
-		draw_line(Vector2(22, 44), Vector2(size.x - 22, 44), Color(Style.GOLD, 0.25), 1.0, true)
+			HudParts.skull(self, Vector2(x - 7.0 - i * 15.0, head), sc, 0.85)
+		x -= danger * 15.0 + 8.0
+		if tag != "":
+			x -= HudParts.words(self, Vector2(x, head), tag, 13, Color(Style.CORAL, dim), Fonts.serif(800), 1, 3) + 8.0
+		HudParts.words(self, Vector2(x, head), title, 15, Color(Style.PARCHMENT, 0.9 * dim), Fonts.serif(700), 1, 3)
 		for i in kinds.size():
 			var kind: String = kinds[i][0]
 			var c := _centre(i)
-			var col: Color = Content.ENEMIES[kind].color
 			var boss := kind.begins_with("boss_") or kind.begins_with("mini_")
-			HudParts.disc(self, c, _r(), col.darkened(0.45), col.darkened(0.8), Style.CORAL if boss else Style.GOLD, 2.0, false)
+			draw_circle(c + Vector2(0, 2), _r() + 1.0, Color(0, 0, 0, 0.45), true, -1.0, true)
 			if _pics.has(kind) and _pics[kind] != null:
-				HudParts.window(self, c, _r() - 2.0, _pics[kind], 1.25, Vector2(0.5, 0.52))
-			if kind == hover:
-				draw_arc(c, _r() + 2.5, 0.0, TAU, 48, Style.GOLD_BRIGHT, 2.0, true)
-			HudParts.badge(self, c + Vector2(_r() * 0.72, _r() * 0.72), str(kinds[i][1]), Style.PARCHMENT, 12 if now else 11)
+				HudParts.window(self, c, _r(), _pics[kind], 1.15, Vector2(0.5, 0.5), Color(1, 1, 1, dim))
+			else:
+				draw_circle(c, _r(), (Content.ENEMIES[kind].color as Color).darkened(0.4), true, -1.0, true)
+			var rim := Style.CORAL if boss else Style.GOLD
+			HudParts.ring(self, c, _r(), Color(rim, (0.95 if kind == hover else 0.55) * dim), 1.6 if kind == hover else 1.0)
+			HudParts.words(self, c + Vector2(_r() * 0.72, _r() * 0.78), "%d" % int(kinds[i][1]), 15 if now else 13,
+				Color(Style.PARCHMENT, dim), Fonts.numbers(), 0, 4)
 
 
-## A wonder on offer: its picture in a square frame, its price at its foot; built, ringed in gold with no price.
-class WonderTile extends BaseButton:
-	var id := ""
-	var cost := 0
-	var enough := true
-	var built := false
-	var _pic: Texture2D
+## A thing to choose, shown as itself (the ark's relic, a wonder): its picture -- a cut-out object floating over a soft
+## glow of light, or a painting in a soft-edged window -- its name under it in small type, a note under that (a price);
+## pointed at, it rises a little and brightens and what it does is told under it. Bobbing gently while it waits.
+class Showcase extends BaseButton:
+	var tex: Texture2D
+	var title := ""
+	var note := ""
+	var note_short := false         # the note in coral (a price that cannot be paid)
+	var says := ""
+	var cutout := true
+	var _t := 0.0
+	var _rise := 0.0
 
-	func _init(p_id: String) -> void:
-		id = p_id
-		cost = int(Content.WONDERS[id].price)
+	func _init(p_tex: Texture2D, p_title: String, p_note: String, p_says: String, p_cutout: bool, p_size := Vector2(250, 330)) -> void:
+		tex = p_tex
+		title = p_title
+		note = p_note
+		says = p_says
+		cutout = p_cutout
+		_t = randf() * TAU
 		focus_mode = Control.FOCUS_NONE
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		custom_minimum_size = Vector2(78, 88)
-		size = custom_minimum_size
-		_pic = Portraits.picture("w:" + id, func(t: Texture2D) -> void:
-			_pic = t
-			if is_instance_valid(self):
-				queue_redraw())
+		custom_minimum_size = p_size
+		size = p_size
+
+	func _process(delta: float) -> void:
+		if not is_visible_in_tree():
+			return
+		_t += delta
+		_rise = lerpf(_rise, 1.0 if is_hovered() and not disabled else 0.0, 1.0 - exp(-delta * 10.0))
+		queue_redraw()
 
 	func _draw() -> void:
-		var mode := get_draw_mode()
-		var hot := (mode == DRAW_HOVER or mode == DRAW_HOVER_PRESSED) and not disabled
-		var frame := Rect2(7, 4, 64, 64)
-		var ci := get_canvas_item()
-		var c: Color = Content.WONDERS[id].color
-		Style.fill(ci, frame.grow(-4.0), 4.0, c.darkened(0.55), c.darkened(0.82))
-		if _pic != null:
-			var ts := _pic.get_size()
-			var side := minf(ts.x, ts.y)
-			draw_texture_rect_region(_pic, frame.grow(-5.0), Rect2((ts.x - side) * 0.5, (ts.y - side) * 0.5, side, side),
-				Color.WHITE if not disabled or built else Color(0.6, 0.6, 0.6))
-		if hot:
-			for i in 5:
-				Style.ring(ci, frame.grow(3.0 + i * 1.8), 8.0 + i, Color(Style.AMBER, 0.5 * (1.0 - i / 5.0)), 2.2)
-		UiArt.frame(ci, "button_bright" if built or hot else ("button_dim" if disabled else "button"), frame)
-		if built:
-			HudParts.badge(self, Vector2(39, 76), Lang.t("已造"), Style.GOLD, 12)
-		else:
-			HudParts.price(self, Vector2(39, 76), cost, enough, 13)
+		var w := size.x
+		var pic := Rect2(10, 6, w - 20, 214)
+		var lift := -12.0 * _rise + sin(_t * 1.5) * 4.0 * (1.0 - _rise)
+		var c := pic.get_center() + Vector2(0, lift)
+		var dim := Color(0.55, 0.55, 0.55) if disabled else Color(1, 1, 1)
+		# The light under it.
+		for i in 8:
+			var k := 1.0 - i / 8.0
+			draw_set_transform(Vector2(c.x, pic.end.y - 10.0), 0.0, Vector2(1.0, 0.32))
+			draw_circle(Vector2.ZERO, 30.0 + i * 12.0, Color(Style.AMBER, (0.05 + 0.06 * _rise) * k), true, -1.0, true)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if tex != null:
+			var ts := tex.get_size()
+			if cutout:
+				var k := minf(pic.size.x / ts.x, pic.size.y / ts.y) * (1.0 + 0.05 * _rise)
+				var s := ts * k
+				draw_texture_rect(tex, Rect2(c - s * 0.5, s), false, dim.lightened(0.12 * _rise))
+			else:
+				var r := Rect2(c - Vector2(pic.size.x, pic.size.y * 0.8) * 0.5, Vector2(pic.size.x, pic.size.y * 0.8))
+				var k := maxf(r.size.x / ts.x, r.size.y / ts.y)
+				var shown := r.size / k
+				draw_texture_rect_region(tex, r, Rect2((ts - shown) * 0.5, shown), dim.lightened(0.1 * _rise))
+				Style.veil(get_canvas_item(), r.grow(2.0), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.0), 1.0)
+				Style.hairline_rect(get_canvas_item(), r, Color(Style.GOLD, 0.45 + 0.4 * _rise), Color(Style.GOLD_BRIGHT, 0.9), 10.0)
+		var y := pic.end.y + 22.0
+		HudParts.words(self, Vector2(w * 0.5, y), title, 21, Style.GOLD_BRIGHT if _rise > 0.5 else Style.PARCHMENT,
+			Fonts.serif(800), 0, 5)
+		Style.hairline(get_canvas_item(), Vector2(w * 0.2, y + 18.0), Vector2(w * 0.8, y + 18.0), Color(Style.GOLD, 0.5 + 0.4 * _rise))
+		if note != "":
+			HudParts.words(self, Vector2(w * 0.5, y + 34.0), note, 15, Style.CORAL if note_short else Style.GOLD_BRIGHT,
+				Fonts.serif(800), 0, 4)
+		if says != "" and _rise > 0.05:
+			var f := Fonts.serif(600)
+			var top := y + (52.0 if note != "" else 34.0)
+			draw_multiline_string_outline(f, Vector2(4, top), says, HORIZONTAL_ALIGNMENT_CENTER, w - 8, 14, -1, 4,
+				Color(0, 0, 0, 0.8 * _rise))
+			draw_multiline_string(f, Vector2(4, top), says, HORIZONTAL_ALIGNMENT_CENTER, w - 8, 14, -1,
+				Color(Style.PARCHMENT, _rise))
 
 
-## A small bar of words (the stash's count, what the homeland's schools give): a picture, the words.
+## A small line of words with a picture (a passing note): no box, a veil behind it.
 class Tag extends Control:
 	var text := ""
 	var glyph := ""
@@ -588,24 +457,24 @@ class Tag extends Control:
 
 	func set_text(t: String) -> void:
 		text = t
-		var f := Fonts.serif(800)
-		custom_minimum_size = Vector2(f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + (44.0 if glyph != "" else 26.0), px + 14.0)
+		var f := Fonts.serif(700)
+		custom_minimum_size = Vector2(f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + (34.0 if glyph != "" else 14.0), px + 12.0)
 		size = custom_minimum_size
 		queue_redraw()
 
 	func _draw() -> void:
 		if text == "":
 			return
-		HudParts.capsule(self, Rect2(Vector2(1, 1), size - Vector2(2, 2)))
-		var x := 13.0
+		HudParts.veil(self, Rect2(Vector2.ZERO, size), 0.5, 10.0)
+		var x := 6.0
 		if glyph != "":
-			Icons.draw(self, glyph, Vector2(x + 8.0, size.y * 0.5), px + 5.0)
-			x += 20.0
-		HudParts.words(self, Vector2(x, size.y * 0.5), text, px, colour, Fonts.serif(800), -1, 3)
+			Icons.draw(self, glyph, Vector2(x + 9.0, size.y * 0.5), px + 4.0)
+			x += 22.0
+		HudParts.words(self, Vector2(x, size.y * 0.5), text, px, colour, Fonts.serif(700), -1, 3)
 
 
-## A battle's count (top middle): our side's shield and how many stand, a clock in the middle and how long is left
-## (its ring running down), theirs.
+## A battle's count (top middle): our side's small green shield and how many stand, the seconds left in a hairline
+## ring (running down round it), theirs on a red shield.
 class Versus extends Control:
 	var ours := 0
 	var theirs := 0
@@ -613,22 +482,19 @@ class Versus extends Control:
 	var limit := 1.0
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(400, 74)
+		custom_minimum_size = Vector2(240, 64)
 		size = custom_minimum_size
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
-		var mid := Vector2(size.x * 0.5, 36)
-		HudParts.plate(self, Rect2(22, 15, size.x - 44.0, 42))
+		var mid := Vector2(size.x * 0.5, 30)
+		HudParts.veil(self, Rect2(0, 0, size.x, size.y), 0.55, 22.0)
 		var nf := Fonts.numbers()
-		HudParts.shield(self, Vector2(64, 36), 36, 42, Color(0.3, 0.62, 0.42))
-		HudParts.words(self, Vector2(64, 34), str(ours), 20, Color.WHITE, nf, 0, 4)
-		HudParts.shield(self, Vector2(size.x - 64.0, 36), 36, 42, Color(0.72, 0.26, 0.2))
-		HudParts.words(self, Vector2(size.x - 64.0, 34), str(theirs), 20, Color.WHITE, nf, 0, 4)
-		HudParts.medallion(self, mid, 31.0)
+		HudParts.shield(self, Vector2(mid.x - 66, 30), 22, 26, Color(0.3, 0.62, 0.42))
+		HudParts.words(self, Vector2(mid.x - 48, 30), str(ours), 22, Style.PARCHMENT, nf, -1, 4)
+		HudParts.shield(self, Vector2(mid.x + 66, 30), 22, 26, Color(0.72, 0.26, 0.2))
+		HudParts.words(self, Vector2(mid.x + 48, 30), str(theirs), 22, Style.PARCHMENT, nf, 1, 4)
 		var k := clampf(left / maxf(0.01, limit), 0.0, 1.0)
-		draw_arc(mid, 20.0, -PI * 0.5, -PI * 0.5 + TAU * k, 48, Color(0, 0, 0, 0.6), 4.5, true)
-		draw_arc(mid, 20.0, -PI * 0.5, -PI * 0.5 + TAU * k, 48, Style.AMBER if k > 0.25 else Style.CORAL, 3.0, true)
-		HudParts.words(self, mid, str(ceili(left)), 20, Style.GOLD_BRIGHT, nf, 0, 4)
-		HudParts.words(self, Vector2(94, 36), Lang.t("我方"), 16, Style.JADE, Fonts.serif(900), -1, 3)
-		HudParts.words(self, Vector2(size.x - 94.0, 36), Lang.t("敌方"), 16, Style.CORAL, Fonts.serif(900), 1, 3)
+		HudParts.ring(self, mid, 19.0, HudParts.FAINT, 1.0)
+		draw_arc(mid, 19.0, -PI * 0.5, -PI * 0.5 + TAU * k, 48, Style.AMBER if k > 0.25 else Style.CORAL, 2.0, true)
+		HudParts.words(self, mid, str(ceili(left)), 17, Style.GOLD_BRIGHT, nf, 0, 4)
