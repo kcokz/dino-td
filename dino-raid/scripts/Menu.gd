@@ -546,9 +546,11 @@ func codex() -> void:
 			medal.set_meta("medal", e.medal)
 			medal.queue_redraw()
 		else:
-			pic.texture = Portraits.picture(e.key, func(t: Texture2D) -> void:
-				if is_instance_valid(pic) and shown.entry == e:
-					pic.texture = t)
+			pic.texture = Art.of_portrait(e.key)
+			if pic.texture == null:
+				pic.texture = Portraits.picture(e.key, func(t: Texture2D) -> void:
+					if is_instance_valid(pic) and shown.entry == e:
+						pic.texture = t)
 	medal.draw.connect(func() -> void: _medal(medal, medal.get_meta("medal", {}), 78.0))
 	var pages := [["我们的兵", _units_page()], ["巢和建筑", _buildings_page()], ["基因词条", _affixes_page()],
 		["遗物", _relics_page()], ["怪物", _monsters_page()], ["奇观", _wonders_page()]]
@@ -618,9 +620,11 @@ func _codex_tile(e: Dictionary, show: Callable) -> Button:
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		t.texture = Portraits.picture(e.key, func(tex: Texture2D) -> void:
-			if is_instance_valid(t):
-				t.texture = tex)
+		t.texture = Art.of_portrait(e.key)
+		if t.texture == null:
+			t.texture = Portraits.picture(e.key, func(tex: Texture2D) -> void:
+				if is_instance_valid(t):
+					t.texture = tex)
 		col.add_child(t)
 	var l := Style.label(e.name, 15, 800, Style.PARCHMENT)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
