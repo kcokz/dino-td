@@ -933,12 +933,15 @@ func _waves() -> void:
 		if Content.wave(place, 1, 6).any(func(k: String) -> bool: return k != "grey" and k in kinds):
 			own += 1
 	check("the four new places their own monsters", own == 4, own)
+	# Every level being begun from nothing (GAME-DESIGN 26), the second comes about as strong as the first, round for
+	# round, and stronger later on as its own curve rises -- never weaker but for what one monster more or less makes
+	# of it (a tenth at most, past the first two rounds, where a wave is two or three).
 	var weaker := 0
 	for place in Content.LEVELS.size():
-		for r in range(1, Content.ROUNDS + 1):
-			if _strength(Content.wave(place, 1, r), 1) <= _strength(Content.wave(place, 0, r), 0):
+		for r in range(3, Content.ROUNDS + 1):
+			if _strength(Content.wave(place, 1, r), 1) < 0.9 * _strength(Content.wave(place, 0, r), 0):
 				weaker += 1
-	check("the second level comes stronger, round for round", weaker == 0, weaker)
+	check("the second level never weaker, round for round past its first two", weaker == 0, weaker)
 	var first := Content.danger(Content.wave(0, 0, 1))
 	var last := Content.danger(Content.wave(0, 2, Content.ROUNDS), Content.TIER_POWER[2])
 	check("danger: a skull or two at first, five or six at the end", first <= 2 and last >= 5 and last <= 6, [first, last])

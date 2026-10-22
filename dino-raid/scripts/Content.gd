@@ -409,11 +409,12 @@ static func pop_of(o: Dictionary) -> int:
 ## rainforest; for each after it the map offers two places (Run.map), one to pick. A level's monsters are as strong as
 ## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier. Every level is begun from
 ## nothing (Home.fresh), the calm runs that measure LIMIT too, so each level's own curve tells how strong the armies
-## there grow.
+## there grow. (2026-10-21, 48 runs by school: at 0.6, 0.66, 0.72 23 held all three, the schools far apart; all at 0.6,
+## 44 -- every school 6 to 8 of 8.)
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.6, 0.66, 0.72]
+const SHARE := [0.6, 0.6, 0.6]
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
@@ -478,10 +479,12 @@ const TERRAIN := {
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low
 ## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-21 with the round's parts, the
-## population and nothing carried (GAME-DESIGN 26). Measure again after changing what can be built or made.
-const LIMIT := [22, 51, 82, 103, 134, 164, 206, 265, 304, 377, 454, 533,
-	26, 55, 83, 119, 149, 194, 266, 324, 418, 532, 654, 755,
-	29, 58, 92, 114, 161, 212, 263, 320, 374, 440, 541, 616]
+## population, nothing carried (GAME-DESIGN 26) and the blueprints (27); a level's curve never below the one before
+## it, round for round (every level being begun from nothing, they come out much alike). Measure again after changing
+## what can be built or made.
+const LIMIT := [42, 65, 108, 148, 193, 244, 268, 301, 355, 414, 464, 508,
+	42, 65, 108, 148, 194, 247, 296, 341, 391, 428, 474, 524,
+	42, 65, 108, 148, 194, 247, 296, 341, 397, 456, 546, 614]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
