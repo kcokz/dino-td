@@ -90,8 +90,26 @@ static func _own(kind: String) -> String:
 
 
 ## The best play for its price -- a blueprint built, a building raised, the star on offer: ["build", id, target],
-## ["raise", target, choice] or ["star"], or [] when nothing beats keeping the gold.
+## ["raise", target, choice] or ["star"], or [] when nothing beats keeping the gold. With no nest built yet, a nest
+## first, wherever it does the most good: one nest may lose the battle all the same, so that no one battle shows
+## what it is worth, and keeping the gold would look better (the interest) for ever.
 static func best_play(run: Run, h: Home, school := "") -> Array:
+	if not h.buildings.values().any(func(b: Dictionary) -> bool: return Content.is_nest(b.kind)):
+		var top := -INF
+		var first: Array = []
+		for id in h.plans:
+			var o: Dictionary = Content.OFFERS[id]
+			if o.type != "build" or not Content.is_nest(o.builds):
+				continue
+			for at in h.targets(id):
+				var t := h.clone()
+				t.build_plan(id, at)
+				var s := score(run, t, school)
+				if s > top:
+					top = s
+					first = ["build", id, at]
+		if not first.is_empty():
+			return first
 	var base := score(run, h, school)
 	var best_gain := 0.01
 	var best: Array = []
@@ -130,8 +148,8 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 
 
 ## A place's first nest (`cards`: {id} each): the one that does the most good built with the round's pay, where it
-## fits best -- its index in `cards`.
-static func best_first(run: Run, h: Home, cards: Array, school := "") -> int:
+## fits best, whatever the school (the gold school would take the cheapest) -- its index in `cards`.
+static func best_first(run: Run, h: Home, cards: Array, _school := "") -> int:
 	var best := 0
 	var best_score := -INF
 	for k in cards.size():
@@ -142,7 +160,7 @@ static func best_first(run: Run, h: Home, cards: Array, school := "") -> int:
 		for at in u.targets(id):
 			var v := u.clone()
 			v.build_plan(id, at)
-			var s := score(run, v, school)
+			var s := score(run, v)
 			if s > best_score:
 				best_score = s
 				best = k
