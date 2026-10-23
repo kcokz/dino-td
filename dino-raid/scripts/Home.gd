@@ -341,7 +341,7 @@ func army(food := -1) -> Array:
 func horde_bonus(n: int, p: Vector2i) -> int:
 	var k := 0
 	for q in buildings:
-		if buildings[q].kind == "horde_totem" and p in reach("horde_totem", q):
+		if buildings[q].kind == "horde_totem" and reaches("horde_totem", q, p):
 			k += n / int(_level(buildings[q]).per)
 	return k
 
@@ -517,13 +517,24 @@ static func reach(kind: String, p: Vector2i) -> Array:
 	return out.filter(func(q: Vector2i) -> bool: return q != p and q.x >= 0 and q.x < COLS and q.y >= 0 and q.y < ROWS)
 
 
+## Whether the building of `kind` standing at q works on p (reach, worked out without the list: this is asked for
+## every unit made).
+static func reaches(kind: String, q: Vector2i, p: Vector2i) -> bool:
+	match str(Content.BUILDINGS[kind].get("reach", "")):
+		"near":
+			return absi(p.x - q.x) + absi(p.y - q.y) == 1
+		"lanes":
+			return front(p) and absi(p.x - q.x) <= 1
+	return p in reach(kind, q)
+
+
 ## What the buildings whose reach takes in the nest at p give it of `key` (their levels' Content.BUILDINGS) all told.
 func _given(key: String, p: Vector2i) -> int:
 	var n := 0
 	for q in buildings:
 		var b: Dictionary = buildings[q]
 		var k := int(_level(b).get(key, 0))
-		if k != 0 and not Content.is_nest(b.kind) and p in reach(b.kind, q):
+		if k != 0 and not Content.is_nest(b.kind) and reaches(b.kind, q, p):
 			n += k
 	return n
 

@@ -293,6 +293,16 @@ func _reach() -> void:
 		and Home.reach("nest_mutant", Vector2i(1, 0)).is_empty())
 	check("every building but a nest has its reach", Content.BUILDINGS.keys().all(func(k: String) -> bool:
 		return Content.is_nest(k) or Content.REACH.has(Content.BUILDINGS[k].get("reach", ""))))
+	var odd := 0
+	for kind in Content.BUILDINGS:
+		for q in [Vector2i(0, 0), Vector2i(2, 1), Vector2i(5, 2), Vector2i(3, 3)]:
+			var r := Home.reach(kind, q)
+			for y in Home.ROWS:
+				for x in Home.COLS:
+					var p := Vector2i(x, y)
+					if p != q and Home.reaches(kind, q, p) != (p in r):
+						odd += 1
+	check("reaches says what reach lists", odd == 0, odd)
 
 
 ## Each nest's gift, where it stands (GAME-DESIGN 20).
