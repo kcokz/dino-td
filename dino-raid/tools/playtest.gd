@@ -283,8 +283,11 @@ func _rich() -> void:
 	await _frames(10)
 	await _shot("boss_plan")
 	await _fight_shots("boss")
-	await _screens("boss")            # a blueprint to unlock
-	await _screens("boss")            # the map
+	# A blueprint to unlock (none, every one being had here), then the map -- till the next place is come to.
+	for k in 3:
+		await _screens("boss")
+		if game.hud.screen.begins_with("到了"):
+			break
 	await _until_screen("到了")
 	await _frames(20)
 	await _shot("arrive_next")
@@ -312,12 +315,12 @@ func _button_saying(words: String) -> Button:
 	return null
 
 
-## The screen after a battle (the card to pick, the deck to work on, the star, the map), shot and answered -- the map
-## with a place picked on it first.
+## The screen after a battle (a blueprint to unlock, the map) or at a place's start (its first nest), shot and answered
+## -- the map with a place picked on it first. A place come to is left to the caller.
 func _screens(label: String) -> void:
 	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.DONE]:
 		await process_frame
-	if game.hud.screen == "":
+	if game.hud.screen == "" or game.hud.screen.begins_with("到了"):
 		return
 	await _frames(10)
 	var s: String = game.hud.screen
