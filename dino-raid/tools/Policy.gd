@@ -171,12 +171,14 @@ static func best_first(run: Run, h: Home, cards: Array, _school := "") -> int:
 
 ## The tech to research now (Home.research): of those open that there are research points for, the one that would do
 ## the most good built now (gold aside; a few places tried), for its research points, leaning to the school -- "" when
-## none would do enough good for them. (What it opens further down its line is not counted: a school's own buildings
-## count for themselves, score's COMMIT.)
+## none would do enough good for them. Weighed without this round's battle (score's `fought` false): it is asked of
+## every open tech at every place it could go, each round, and a battle worked out each time made the runs too slow.
+## (What it opens further down its line is not counted: a school's own buildings count for themselves, score's
+## COMMIT.)
 static func best_research(run: Run, h: Home, school := "") -> String:
 	var t := h.clone()
 	t.gold += 30
-	var base := score(run, t, school)
+	var base := score(run, t, school, false)
 	var best := ""
 	var best_gain := RESEARCH_WORTH
 	for id in Content.OFFERS:
@@ -191,7 +193,7 @@ static func best_research(run: Run, h: Home, school := "") -> String:
 		for at in u.targets(id).slice(0, 8):
 			var v := u.clone()
 			v.build_plan(id, at)
-			top = maxf(top, score(run, v, school) - base)
+			top = maxf(top, score(run, v, school, false) - base)
 		var gain := top * lean / float(Home.tech_cost(id))
 		if gain > best_gain:
 			best_gain = gain
@@ -210,15 +212,18 @@ static func best_place(run: Run) -> int:
 	return int(run.next_places()[0])
 
 
-## How good a homeland looks: this round's battle (and what scavengers bring back); the army its nests can make, as far
+## How good a homeland looks: this round's battle (and what scavengers bring back; not when `fought` is false); the
+## army its nests can make, as far
 ## as the population allows; a little room in the population; the gold and research points that come in and are kept
 ## -- for the gold school, saving and the most interest count more; for any school, its own buildings (up to a few
 ## levels of them); for the genes school, nests halfway to a new species. The population is a bound, not something
 ## had (GAME-DESIGN 28): it counts as far as the nests can use it and a few more (ROOM) for what comes next -- more is
 ## worth nothing.
-static func score(run: Run, h: Home, school := "") -> float:
-	var b := _battle(run, h)
-	var s := (300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0) + 10.0 * float(b.loot)
+static func score(run: Run, h: Home, school := "", fought := true) -> float:
+	var s := 0.0
+	if fought:
+		var b := _battle(run, h)
+		s = (300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0) + 10.0 * float(b.loot)
 	var full := h.clone()
 	full.biomass = 999
 	var food := 0
