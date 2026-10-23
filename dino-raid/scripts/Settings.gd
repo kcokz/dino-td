@@ -1,10 +1,11 @@
 class_name Settings
-## What the player set (GAME-DESIGN 21), kept between runs in user://settings.cfg: full screen, the volume, the
-## buttons' click, battles starting at the faster speed, the language (Lang).
+## What the player set (GAME-DESIGN 21), kept between runs in user://settings.cfg: full screen (from the first time
+## on, as a game opens; F11 or Alt+Enter switches it, Menu), the volume, the buttons' click, battles starting at the
+## faster speed, the language (Lang).
 
 const PATH := "user://settings.cfg"
 
-static var fullscreen := false
+static var fullscreen := true
 static var volume := 80                 # 0 to 100
 static var clicks := true
 static var fast := false                # a battle starts at the faster speed
@@ -18,7 +19,7 @@ static func load_all() -> void:
 	_loaded = true
 	var cf := ConfigFile.new()
 	if cf.load(PATH) == OK:
-		fullscreen = bool(cf.get_value("screen", "fullscreen", false))
+		fullscreen = bool(cf.get_value("screen", "fullscreen", true))
 		volume = clampi(int(cf.get_value("sound", "volume", 80)), 0, 100)
 		clicks = bool(cf.get_value("sound", "clicks", true))
 		fast = bool(cf.get_value("play", "fast", false))
@@ -41,13 +42,23 @@ static func save() -> void:
 	cf.save(PATH)
 
 
-## The settings put into effect -- the window left alone under a tool (playtest.gd) that sets its own.
+## The settings put into effect -- the window left alone under a tool (playtest.gd) that sets its own, and when the
+## game is run inside the editor's own panel (its window is the editor's: run on its own, it goes full screen).
 static func apply() -> void:
 	AudioServer.set_bus_volume_db(0, linear_to_db(volume / 100.0) if volume > 0 else -80.0)
 	if "--script" in OS.get_cmdline_args():
 		Lang.use("zh")
 		return
 	Lang.use(language)
+	if "--wid" in OS.get_cmdline_args():
+		return
 	var mode := DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
 	if DisplayServer.window_get_mode() != mode:
 		DisplayServer.window_set_mode(mode)
+
+
+## Full screen switched (F11, Alt+Enter), and kept.
+static func toggle_fullscreen() -> void:
+	fullscreen = not fullscreen
+	apply()
+	save()

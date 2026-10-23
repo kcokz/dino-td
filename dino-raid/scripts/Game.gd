@@ -293,7 +293,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif k == KEY_F3:
 			debug = not debug
 			refresh()
-		elif k == KEY_SPACE or k == KEY_ENTER:
+		elif k == KEY_SPACE or (k == KEY_ENTER and not event.alt_pressed):
 			act("fight")
 
 

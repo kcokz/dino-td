@@ -43,7 +43,14 @@ func setup(p_game: Game) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE):
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	# Full screen, from anywhere (the menu hears keys while the game is paused too).
+	if event.physical_keycode == KEY_F11 or (event.physical_keycode == KEY_ENTER and event.alt_pressed):
+		Settings.toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+		return
+	if event.physical_keycode != KEY_ESCAPE:
 		return
 	if _confirm != null:
 		_picked.emit("no")
