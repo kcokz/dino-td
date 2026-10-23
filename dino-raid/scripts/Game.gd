@@ -625,11 +625,11 @@ func _unit_text(u: Dictionary) -> String:
 		Lang.t("血 %d · 攻击 %d · %s 秒打一下 · 够得着 %s 米") % [s.hp, s.atk, _num(s.every), _num(s.range)]]
 	var more: Array = []
 	if int(s.armor) > 0:
-		more.append(Lang.t("护甲 %d") % s.armor)
+		more.append(Lang.t("护甲 %d（每挨一下少掉 %d）") % [s.armor, s.armor])
 	if int(s.pierce) > 0:
 		more.append(Lang.t("每下多 %d，不管护甲") % s.pierce)
 	if float(s.splash) > 0.0:
-		more.append(Lang.t("一打一片（%s 米）") % _num(s.splash))
+		more.append(Lang.t("一打一片（旁边 %s 米挨一半）") % _num(s.splash))
 	if int(s.heal) > 0:
 		more.append(Lang.t("每下回血 %d") % s.heal)
 	if int(s.burst) > 0:

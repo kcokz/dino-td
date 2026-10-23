@@ -560,10 +560,10 @@ func codex() -> void:
 					if is_instance_valid(pic) and shown.entry == e:
 						pic.texture = t)
 	medal.draw.connect(func() -> void: _medal(medal, medal.get_meta("medal", {}), 78.0))
-	var pages := [["我们的兵", _units_page()], ["巢和建筑", _buildings_page()], ["基因词条", _affixes_page()],
+	var pages := [["我们的兵", _units_page()], ["属性", _stats_page()], ["巢和建筑", _buildings_page()], ["基因词条", _affixes_page()],
 		["明星恐龙", _stars_page()], ["怪物", _monsters_page()]]
 	if not Content.STARS_ON:
-		pages.remove_at(3)
+		pages.remove_at(4)
 	var tab_buttons: Array = []
 	var open_page := func(k: int) -> void:
 		for ch in grid.get_children():
@@ -684,6 +684,20 @@ func _units_page() -> Array:
 	return out
 
 
+## What each of a fighter's numbers means (Content.STATS), with an example: a medal with its first word for each.
+func _stats_page() -> Array:
+	var out: Array = []
+	var hue := 0.0
+	for key in Content.STATS:
+		var s: Dictionary = Content.STATS[key]
+		var text: String = Lang.t(s.says) + ("\n" + Lang.t("例：") + Lang.t(s.eg) if s.eg != "" else "")
+		var word: String = Lang.t(s.name).left(1) if Lang.english() else str(s.word)
+		out.append({"medal": {"color": Color.from_hsv(hue, 0.35, 0.85), "boss": false, "word": word},
+			"name": s.name, "kind": Lang.t("属性"), "text": text})
+		hue = fmod(hue + 0.13, 1.0)
+	return out
+
+
 func _buildings_page() -> Array:
 	var out: Array = []
 	for kind in Content.BUILDINGS:
@@ -770,9 +784,9 @@ func _stats(s: Dictionary) -> String:
 	var bits: Array = [Lang.t("血 %d") % int(s.hp), Lang.t("攻击 %d") % int(s.atk), Lang.t("%s 秒打一下") % _n(float(s.every)),
 		Lang.t("够得着 %s 米") % _n(float(s.range))]
 	if int(s.get("armor", 0)) > 0:
-		bits.append(Lang.t("护甲 %d") % int(s.armor))
+		bits.append(Lang.t("护甲 %d（每挨一下少掉 %d）") % [int(s.armor), int(s.armor)])
 	if float(s.get("splash", 0.0)) > 0.0:
-		bits.append(Lang.t("一打一片（%s 米）") % _n(float(s.splash)))
+		bits.append(Lang.t("一打一片（旁边 %s 米挨一半）") % _n(float(s.splash)))
 	if int(s.get("heal", 0)) > 0:
 		bits.append(Lang.t("每下回血 %d") % int(s.heal))
 	if int(s.get("pierce", 0)) > 0:

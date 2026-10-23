@@ -221,16 +221,37 @@ const SCHOOLS := {
 
 ## Gene affixes, stuck on a nest: every unit it makes carries them -- the only way a unit itself grows stronger.
 const AFFIXES := {
-	"shell": {"name": "甲壳", "color": Color(0.35, 0.38, 0.42), "armor": 1, "says": "护甲 +1"},
+	"shell": {"name": "甲壳", "color": Color(0.35, 0.38, 0.42), "armor": 1, "says": "护甲 +1（每挨一下少掉 1）"},
 	"blade": {"name": "刀锋", "color": Color(0.85, 0.88, 0.92), "atk": 2, "says": "攻击 +2"},
 	"acid": {"name": "酸液腺", "color": Color(0.55, 0.95, 0.25), "range": 5.0, "says": "变成远程，够得着 5 米"},
 	"wings": {"name": "翅膀", "color": Color(0.85, 0.75, 0.55), "dive": true, "says": "会飞，越过前排去打后排"},
 	"plasma": {"name": "电浆囊", "color": Color(0.3, 0.9, 1.0), "splash": 1.5, "says": "一打一片（旁边 1.5 米挨一半）"},
 	"poison": {"name": "毒刺", "color": Color(0.62, 0.92, 0.2), "pierce": 2, "says": "每下多 2 点伤害，不管护甲"},
-	"flame": {"name": "火焰", "color": Color(1.0, 0.45, 0.1), "atk": 1, "splash": 1.2, "says": "攻击 +1，一打一片（1.2 米）"},
+	"flame": {"name": "火焰", "color": Color(1.0, 0.45, 0.1), "atk": 1, "splash": 1.2, "says": "攻击 +1，一打一片（旁边 1.2 米挨一半）"},
 	"haste": {"name": "急速腺", "color": Color(1.0, 0.85, 0.25), "haste": 30, "says": "打得快 30%"},
-	"hide": {"name": "厚皮", "color": Color(0.55, 0.45, 0.35), "hp": 40, "says": "血多 40%"},
+	"hide": {"name": "厚皮", "color": Color(0.55, 0.45, 0.35), "hp": 40, "says": "血 +40%"},
 	"horn": {"name": "冲锋角", "color": Color(0.95, 0.92, 0.8), "charge": true, "says": "开战第一下打双倍"},
+}
+
+## What a fighter's numbers mean, in the player's words -- the codex's 属性 page (the player, 2026-10-23: "恐龙每个属性
+## 需要明确，可以查看"). word: its mark; name; says: what it is; eg: an example (or ""). In the order a fighter's numbers
+## are shown.
+const STATS := {
+	"hp": {"word": "血", "name": "血", "says": "能挨多少伤害，掉到 0 就倒下。", "eg": "厚皮：血 +40%，红兵 10 血变 14 血。"},
+	"atk": {"word": "攻", "name": "攻击", "says": "每打一下的伤害。先减掉对方的护甲，最少也掉 1。", "eg": "刀锋：攻击 +2。"},
+	"every": {"word": "快", "name": "几秒打一下", "says": "出手的快慢，越小越快。", "eg": "急速腺：打得快 30%，1 秒一下变 0.77 秒一下。"},
+	"range": {"word": "远", "name": "够得着", "says": "离多远能打到。够得着 3 米以上的算远程，站在后面打。",
+		"eg": "酸液腺：变成远程，够得着 5 米。"},
+	"armor": {"word": "甲", "name": "护甲", "says": "每挨一下，伤害先减掉护甲这么多，最少还是掉 1。专挡一群小打击，挡不住重击。",
+		"eg": "甲壳：护甲 +1。被每下打 2 的紫怪打，伤害减半；被每下打 8 的首领打，只少八分之一。"},
+	"pierce": {"word": "穿", "name": "不管护甲", "says": "每下多打几点，这几点护甲挡不住。", "eg": "毒刺：每下多 2，不管护甲。"},
+	"splash": {"word": "溅", "name": "一打一片", "says": "打中一个，它旁边这么多米里的敌人也挨一半伤害。", "eg": "电浆囊：旁边 1.5 米挨一半。"},
+	"heal": {"word": "疗", "name": "回血", "says": "不打敌人，每下给够得着的、最受伤的同伴回这么多血。", "eg": "白兵。"},
+	"burst": {"word": "爆", "name": "倒下时炸一圈", "says": "倒下时，周围 2 米的敌人挨这么多伤害。", "eg": "熔岩兽、熔岩甲虫。"},
+	"dive": {"word": "飞", "name": "会飞", "says": "飞过前排，先咬后排。", "eg": "翅膀、猎鹰兽。"},
+	"charge": {"word": "冲", "name": "冲锋", "says": "开战第一下打双倍。", "eg": "冲锋角。"},
+	"speed": {"word": "跑", "name": "跑多快", "says": "每秒跑几米。跑得快的先碰上敌人。", "eg": ""},
+	"elite": {"word": "精", "name": "精英", "says": "巢升级时选变精英：血 ×1.5、攻击 ×1.25、大一号；一个巢最多变两次。", "eg": ""},
 }
 
 ## The star dinosaurs (明星恐龙, GAME-DESIGN 24; the player, 2026-10-20: "把奇观，存货，遗物统一一下……可以加成的系统，但又
