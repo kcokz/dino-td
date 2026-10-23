@@ -349,8 +349,9 @@ const OFFERS := {
 	"a_flame": {"type": "affix", "price": 4, "rarity": 1, "affix": "flame", "region": 1},
 }
 ## The nests a place's first is picked from (the player, 2026-10-22: "开场什么建筑都没有，先三选一一个巢穴"): those
-## the round's pay builds that can hold the first round by themselves (not the healers, not the gold).
-const FIRST_NESTS := ["b_red", "b_blue", "b_green", "b_scav", "b_mutant"]
+## the round's pay builds that can hold the first rounds by themselves -- not the healers, not the gold, not the
+## mutants (weak but for their affixes: of 48 runs, every one that a mutant began fell in the first place).
+const FIRST_NESTS := ["b_red", "b_blue", "b_green", "b_scav"]
 ## The build bar's groups, by what the blueprints do (the player, 2026-10-21: "以能力归类"): nests hatch; the
 ## resources' buildings bring in population, research points and gold; the battle's make the nests in front of them
 ## stronger; the genes' are affixes, and the buildings that help with them.
@@ -491,19 +492,20 @@ const TERRAIN := {
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low
-## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-21 with the round's parts, the
-## population, nothing carried (GAME-DESIGN 26) and the blueprints (27); a level's curve never below the one before
-## it, round for round (every level being begun from nothing, they come out much alike). Measure again after changing
-## what can be built or made.
-const LIMIT := [42, 65, 108, 148, 193, 244, 268, 301, 355, 414, 464, 508,
-	42, 65, 108, 148, 194, 247, 296, 341, 391, 428, 474, 524,
-	42, 65, 108, 148, 194, 247, 296, 341, 397, 456, 546, 614]
+## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-22, every place begun with one nest
+## picked, the population a bound, research points for blueprints, the buildings' reach (GAME-DESIGN 28) -- 48 calm
+## runs, 8 a school, the scavengers' loot not counted (with no one coming they all stand, Policy._battle), the
+## population counted only as far as the nests use it (Policy.score); a level's curve never below the one before it,
+## round for round. Measure again after changing what can be built or made.
+const LIMIT := [12, 35, 75, 114, 150, 195, 230, 260, 290, 322, 351, 385,
+	12, 35, 75, 114, 150, 195, 230, 260, 290, 322, 351, 385,
+	12, 35, 75, 114, 150, 195, 230, 270, 325, 380, 416, 460]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
 ## How dangerous a wave looks to the player (GAME-DESIGN 22), by its strength: one skull below the first of these, one
 ## more past each -- a feel for it, not whether it will be won (that is worked out only for the tools and F3).
-const DANGER := [45.0, 90.0, 175.0, 320.0, 560.0]
+const DANGER := [30.0, 60.0, 120.0, 215.0, 380.0]
 
 
 ## A blueprint's numbers (oi: {id}): its name, price, type and what it goes on.
