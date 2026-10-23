@@ -127,21 +127,24 @@ func _aim_each(label: String) -> void:
 
 
 ## A nest evolved: a stabilizer behind it for a second affix, acid and poison had and stuck on it -- what the second
-## shows before it goes on, and the new species.
+## shows before it goes on, and the new species. (A red nest put down for it first, where there is none bare yet.)
 func _evolve() -> void:
 	var home := game.home
 	var nest := HomeView.NOWHERE
+	var spot := HomeView.NOWHERE
 	for p in home.buildings:
-		if Content.is_nest(home.buildings[p].kind) and home.buildings[p].affixes.is_empty():
+		if Content.is_nest(home.buildings[p].kind) and home.buildings[p].affixes.is_empty() and _behind(p) != HomeView.NOWHERE:
 			nest = p
 			break
-	var spot := HomeView.NOWHERE
-	if nest != HomeView.NOWHERE:
-		for y in range(Content.FRONT_ROWS, Home.ROWS):
-			var q := Vector2i(nest.x, y)
-			if home.buildable(q) and not home.buildings.has(q):
-				spot = q
+	if nest == HomeView.NOWHERE:
+		for x in Home.COLS:
+			var p := Vector2i(x, 0)
+			if not home.buildings.has(p) and _behind(p) != HomeView.NOWHERE:
+				home.build(p, "nest_red")
+				nest = p
 				break
+	if nest != HomeView.NOWHERE:
+		spot = _behind(nest)
 	if spot == HomeView.NOWHERE:
 		print("evolve: no nest with room behind it")
 		return
@@ -169,6 +172,15 @@ func _evolve() -> void:
 	await _shot("evolved")
 	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
 	game.refresh()
+
+
+## A free plot behind the battle line in p's column, or NOWHERE.
+func _behind(p: Vector2i) -> Vector2i:
+	for y in range(Content.FRONT_ROWS, Home.ROWS):
+		var q := Vector2i(p.x, y)
+		if game.home.buildable(q) and not game.home.buildings.has(q):
+			return q
+	return HomeView.NOWHERE
 
 
 ## A homeland built up by hand -- the battle line full of nests (the four new species, elites), behind it every school's
