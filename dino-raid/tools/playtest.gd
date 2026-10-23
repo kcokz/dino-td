@@ -271,10 +271,8 @@ func _rich() -> void:
 	await _frames(10)
 	await _shot("boss_plan")
 	await _fight_shots("boss")
-	await _screens("boss")
-	await _screens("boss")
-	await _screens("boss")
-	await _screens("boss")
+	await _screens("boss")            # a blueprint to unlock
+	await _screens("boss")            # the map
 	await _until_screen("到了")
 	await _frames(20)
 	await _shot("arrive_next")
