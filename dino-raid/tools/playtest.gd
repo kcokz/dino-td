@@ -422,6 +422,9 @@ func _bot(rounds: int) -> void:
 		var before := game.home.hp
 		var f := game.forecast.duplicate()
 		game.act("fight")
+		# The making comes first (and the eating), then the battle: till it is fought and what it brought is had.
+		while game.phase != Game.Phase.FIGHT and game.phase != Game.Phase.DONE and game.hud.screen == "":
+			await process_frame
 		while game.phase == Game.Phase.FIGHT and game.hud.screen == "":
 			await process_frame
 		var took := before - game.home.hp

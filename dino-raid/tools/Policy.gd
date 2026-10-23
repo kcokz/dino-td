@@ -221,7 +221,11 @@ static func _halfway(h: Home) -> int:
 	return n
 
 
+## This round's battle as `h` would fight it. With no one coming (a calm run, measuring how strong a homeland grows)
+## every scavenger would stand at its end: what they bring back is not counted then, or what is measured would be
+## scavengers, not strength.
 static func _battle(run: Run, h: Home) -> Dictionary:
 	var f := Fight.make(h.settled().fighters, run.wave(), run.power())
 	f.run()
-	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm()), "loot": f.scavenged()}
+	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm()),
+		"loot": 0 if run.calm else f.scavenged()}
