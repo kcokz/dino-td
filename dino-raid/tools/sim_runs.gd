@@ -2,10 +2,10 @@ extends SceneTree
 ## Whole runs played by the rules alone, no screen, many at once -- to see how hard the places are, and how each way of
 ## playing does (GAME-DESIGN 17-22).
 ##
-##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit]
+##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit|-] [school]
 ##
 ## random, smart and school play as tools/Policy.gd says; school is smart keeping to the next school (Content.SCHOOLS)
-## in turn. Each place's first nest: random takes one at random, the others the best (Policy.best_first). After each
+## in turn -- or, named, to that one only. Each place's first nest: random takes one at random, the others the best (Policy.best_first). After each
 ## round random takes a blueprint (or the gold) at random -- the gold when it has not the research points -- the others
 ## the best (Policy.best_reward) -- after a mini-boss, of the uncommon and the rare; on the map, the first of the two.
 ## Prints,
@@ -33,6 +33,7 @@ func _init() -> void:
 	var first := int(args[2]) if args.size() > 2 else 1
 	measure = args.size() > 3 and args[3] == "measure"
 	limit = args.size() > 3 and args[3] == "limit"
+	var only := args[4] if args.size() > 4 else ""      # school: keep every run to this one school
 	var held: Array = []
 	for t in Content.TIERS:
 		held.append(0)
@@ -45,7 +46,7 @@ func _init() -> void:
 		rng.seed = seed
 		var run := Run.new(seed)
 		run.calm = limit
-		var school: String = schools[k % schools.size()] if policy == "school" else ""
+		var school: String = (only if only != "" else schools[k % schools.size()]) if policy == "school" else ""
 		var line := "seed %3d %-6s:" % [seed, school]
 		var losses := 0
 		var lost_here := 0
