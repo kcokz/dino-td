@@ -1,20 +1,21 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17-27): a grid of plots in the place it is in -- the top rows the battle line, for nests
+## The homeland (GAME-DESIGN 17-28): a grid of plots in the place it is in -- the top rows the battle line, for nests
 ## only, where each nest's units will stand in battle; the rows behind for everything else, special ground among them
-## -- with the gold and the other resources, the blueprints had (plans: what can be built), the star dinosaurs in their
-## pens and the one on offer, and the homeland's own hit points. A round here goes in parts (GAME-DESIGN 26,
-## Content.PHASES). The start (start_round): the round's pay and the interest on the gold kept come in, a star comes to
-## be had. The player's: the player builds from the blueprints had (build_plan), raises buildings (raise), sticks
-## affixes on nests, buys the star. The making (make): the buildings and the stars bring in the round's biomass,
-## research points and gold, and the nests hatch the round's young (brood). The eating (eat): the stars eat, the young
-## eat -- those fed go out to fight (fighters). The battle (Fight): the young live for it only. After it, a blueprint
-## more (plan_offer, unlock). The biomass is not kept: it feeds the population (人口, pop_cap), and nothing is built
-## that would take more than it feeds. When a place is held, the homeland is made afresh in the next, carrying nothing
-## (fresh).
+## -- with the gold and the research points, the blueprints had (plans: what can be built), the star dinosaurs in their
+## pens and the one on offer (put away for now: Content.STARS_ON), and the homeland's own hit points. A place begins
+## with nothing built and no blueprint: first a nest is picked (first_offer, unlock). A round here goes in parts
+## (GAME-DESIGN 26, Content.PHASES). The start (start_round): the round's pay and the interest on the gold kept come
+## in. The player's: the player builds from the blueprints had (build_plan), raises buildings (raise), sticks affixes
+## on nests. The making (make): the buildings bring in research points and gold, and the nests hatch the round's young
+## (brood). The eating (eat): those fed go out to fight (fighters). The battle (Fight): the young live for it only.
+## After it, a blueprint more, for research points (plan_offer, buy_plan). The population (人口, pop_cap) is a bound,
+## not a store: what the homeland feeds of itself and what its pools feed (in the rules, the round's biomass), nothing
+## built that would take more. When a place is held, the homeland is made afresh in the next, carrying nothing (fresh).
 ##
-## Neighbours are the four plots up, down, left and right; a column, the plots one above another. Plain data and
-## rules, nothing on screen: the same rules for the game and for its tests.
+## Neighbours are the four plots up, down, left and right; a column, the plots one above another. What a building does
+## for nests, it does for those in its reach only (reach, Content.REACH). Plain data and rules, nothing on screen: the
+## same rules for the game and for its tests.
 ##
 ## A building: {id, kind, level, path, affixes: [ids]} -- path: a nest's raises, each "count" or "elite".
 ## A blueprint (图纸): an id of Content.OFFERS -- as a card, {id} (Content.offer).
@@ -34,18 +35,13 @@ const ALL := 1 << 20              # biomass enough for every young (army)
 
 const HP := 30
 const NOWHERE := Vector2i(-1, -1)
-## Where the ark sets things down, first to last: its nests in the middle of the battle line, the rest just behind it.
-const LANDING_FRONT := [Vector2i(2, 0), Vector2i(3, 0), Vector2i(2, 1), Vector2i(3, 1), Vector2i(1, 0), Vector2i(4, 0),
-	Vector2i(1, 1), Vector2i(4, 1), Vector2i(0, 0), Vector2i(5, 0), Vector2i(0, 1), Vector2i(5, 1)]
-const LANDING_BACK := [Vector2i(2, 2), Vector2i(3, 2), Vector2i(1, 2), Vector2i(4, 2), Vector2i(2, 3), Vector2i(3, 3),
-	Vector2i(1, 3), Vector2i(4, 3), Vector2i(0, 2), Vector2i(5, 2), Vector2i(0, 3), Vector2i(5, 3)]
 
 var region := 0                   # the place (Content.LEVELS) the ark has landed in
 var buildings := {}               # Vector2i -> building
 var terrain := {}                 # Vector2i -> special ground (Content.TERRAIN)
 var gold := 0
 var biomass := 0                  # this round's, from its making to its eating; what is left goes to waste
-var genes := 0                    # research points (研究点数): for affixes and upgrading cards
+var genes := 0                    # research points (研究点数): for unlocking blueprints, nothing else
 var hp := HP
 var stars: Array = []             # the star dinosaurs, a pen each, in order: {id, grow}
 var hungry: Array = []            # the pens whose stars went without this round (doing nothing till the next)
@@ -63,28 +59,28 @@ func _init(rng: RandomNumberGenerator) -> void:
 
 
 ## The homeland made afresh in place `r`, carrying nothing from the last (the player, 2026-10-21: "什么都不带"): no
-## gold, research points or stars; the blueprints only those every place starts with; the hit points whole.
+## gold, research points or stars, no blueprint -- the first, a nest, is picked (first_offer; the player, 2026-10-22:
+## "开场什么建筑都没有，先三选一一个巢穴") -- the hit points whole.
 func fresh(r: int, rng: RandomNumberGenerator) -> void:
 	gold = 0
 	genes = 0
 	stars = []
 	hungry = []
 	star_offer = ""
-	plans = Content.FIRST_PLANS.duplicate()
+	plans = []
 	hp = HP
-	land(r, rng, Content.LANDING)
+	land(r, rng)
 
 
-## The homeland laid out in place `r`: no buildings, the special ground of the place lying about behind the battle
-## line, and `kit` ([kind, level] each) set down -- nests in the middle of the battle line, the rest just behind it.
-func land(r: int, rng: RandomNumberGenerator, kit: Array) -> void:
+## The homeland laid out in place `r`: no buildings, the special ground of the place lying about behind the battle line.
+func land(r: int, rng: RandomNumberGenerator) -> void:
 	region = r
 	buildings.clear()
 	terrain.clear()
 	biomass = 0
 	brood = []
 	fighters = []
-	var plots := _plots_all().filter(func(p: Vector2i) -> bool: return not front(p) and not p in LANDING_BACK.slice(0, 3))
+	var plots := _plots_all().filter(func(p: Vector2i) -> bool: return not front(p))
 	shuffle(plots, rng)
 	hungry = []
 	var lie: Dictionary = Content.LEVELS[r].terrain
@@ -92,42 +88,20 @@ func land(r: int, rng: RandomNumberGenerator, kit: Array) -> void:
 		for k in int(lie[kind]):
 			if not plots.is_empty():
 				terrain[plots.pop_back()] = kind
-	for item in kit:
-		var p := _free_landing(item[0])
-		if p != NOWHERE:
-			build(p, item[0])
-			_set_level(p, int(item[1]))
 	hp = mini(hp, hp_max())
-
-
-func _free_landing(kind: String) -> Vector2i:
-	var order: Array = LANDING_FRONT if Content.is_nest(kind) else LANDING_BACK
-	for p in order:
-		if buildable(p) and not buildings.has(p):
-			return p
-	return NOWHERE
-
-
-## The building at p made level `lv` at once -- a nest by making one more a round at each level.
-func _set_level(p: Vector2i, lv: int) -> void:
-	var b: Dictionary = buildings[p]
-	b.level = clampi(lv, 1, Content.LEVEL_MAX)
-	b.path = []
-	if Content.is_nest(b.kind):
-		for k in int(b.level) - 1:
-			b.path.append("count")
 
 
 # -- A round ----------------------------------------------------------------------------------------------
 
 ## The start of a round (GAME-DESIGN 26): the round's pay (INCOME) comes in, and the interest on the gold kept; a star
-## dinosaur comes to be had (while a pen is free); no young are out yet. Its events: pay {gold, interest}.
+## dinosaur comes to be had (while a pen is free, and the stars are out: Content.STARS_ON); no young are out yet. Its
+## events: pay {gold, interest}.
 func start_round(rng: RandomNumberGenerator, level: int) -> Array:
 	var more := interest()
 	gold += INCOME + more
 	brood = []
 	fighters = []
-	star_offer = _draw_star(rng, level) if stars.size() < Content.PENS else ""
+	star_offer = _draw_star(rng, level) if Content.STARS_ON and stars.size() < Content.PENS else ""
 	return [{"t": "pay", "gold": INCOME, "interest": more}]
 
 
@@ -184,7 +158,8 @@ func settled() -> Home:
 
 # -- The population -------------------------------------------------------------------------------------------------
 
-## The population (人口, GAME-DESIGN 26): as many as the biomass made a round feeds.
+## The population (人口, GAME-DESIGN 26, 28): as many as the homeland feeds of itself (Content.HOME_POP) and its pools
+## feed -- the biomass made a round.
 func pop_cap() -> int:
 	return income_biomass()
 
@@ -224,9 +199,19 @@ func pop_need(oi: Dictionary, at: Variant) -> int:
 
 # -- The blueprints ---------------------------------------------------------------------------------------------------
 
+## The nests a place's first is picked from (Content.FIRST_NESTS): `n` of those found here and now.
+func first_offer(rng: RandomNumberGenerator, level: int, n: int) -> Array:
+	var pool: Array = Content.FIRST_NESTS.filter(func(id: String) -> bool:
+		var o: Dictionary = Content.OFFERS[id]
+		return int(o.get("from", 0)) <= level and int(o.get("region", region)) == region)
+	shuffle(pool, rng)
+	return pool.slice(0, n)
+
+
 ## The blueprints (图纸, GAME-DESIGN 27) to choose one of after a round: `n` not had yet, found here and now (none from a
 ## later place, none another place's own), the common more often than the uncommon, the uncommon than the rare -- or,
-## `rare` (after a mini-boss), only the uncommon and the rare. Fewer when fewer are left.
+## `rare` (after a mini-boss), only the uncommon and the rare. While nothing had feeds more of the population, one that
+## does always comes (else the homeland would stay as small as it starts). Fewer when fewer are left.
 func plan_offer(rng: RandomNumberGenerator, level: int, n: int, rare := false) -> Array:
 	var pool: Array = []
 	for id in Content.OFFERS:
@@ -239,12 +224,23 @@ func plan_offer(rng: RandomNumberGenerator, level: int, n: int, rare := false) -
 			pool.append(id)
 	shuffle(pool, rng)
 	var out: Array = []
+	if not rare and not plans.any(func(id: String) -> bool: return _feeds(id)):
+		for id in pool:
+			if _feeds(id):
+				out.append(id)
+				break
 	for id in pool:
 		if out.size() >= n:
 			break
 		if not id in out:
 			out.append(id)
+	shuffle(out, rng)
 	return out
+
+
+## Whether blueprint `id` feeds more of the population (a pool).
+static func _feeds(id: String) -> bool:
+	return Content.pop_of(Content.offer({"id": id})) < 0
 
 
 ## Blueprint `id` had: from now on, in this place, it can be built (or stuck on). Whether it was new.
@@ -253,6 +249,21 @@ func unlock(id: String) -> bool:
 		return false
 	plans.append(id)
 	return true
+
+
+## The research points blueprint `id` is unlocked for (Content.UNLOCK, by its rarity).
+static func unlock_price(id: String) -> int:
+	var u: Array = Content.UNLOCK
+	return int(u[clampi(int(Content.OFFERS[id].rarity), 0, u.size() - 1)])
+
+
+## Blueprint `id` unlocked for its research points (after a round). Whether it was: not if it is had already, or the
+## research points are short.
+func buy_plan(id: String) -> bool:
+	if id in plans or not Content.OFFERS.has(id) or genes < unlock_price(id):
+		return false
+	genes -= unlock_price(id)
+	return unlock(id)
 
 
 func _raise_price(level: int) -> int:
@@ -265,8 +276,17 @@ func interest() -> int:
 	return mini(interest_max(), gold / Content.INTEREST_STEP)
 
 
+## The most interest a round: Content.INTEREST_MAX, the saver's more, each vault's -- more for each mine or forge beside
+## it (Content.VAULT_MINE).
 func interest_max() -> int:
-	return Content.INTEREST_MAX + _star("interest") + _sum("interest")
+	var n := Content.INTEREST_MAX + _star("interest")
+	for p in buildings:
+		if buildings[p].kind == "vault":
+			n += int(_level(buildings[p]).interest)
+			for q in around(p):
+				if buildings.has(q) and buildings[q].kind in ["mine", "forge"]:
+					n += Content.VAULT_MINE
+	return n
 
 
 # -- This round's army ------------------------------------------------------------------------------------
@@ -274,7 +294,8 @@ func interest_max() -> int:
 ## This round's army as things stand: each nest, in reading order, makes its count (one more for a red nest swarming,
 ## one more with the brood queen), each unit paid for in biomass as far as the biomass (or `food`, if given: ALL for as
 ## many as the nests make) goes; the first nest one more with the mother, eating nothing; the titan, with its star, in
-## the middle of the front row; and then, with horde totems, every unit hits harder for how many there are.
+## the middle of the front row; and then the units of the nests in a horde totem's reach hit harder for how many there
+## are.
 func army(food := -1) -> Array:
 	var out: Array = []
 	if food < 0:
@@ -309,19 +330,19 @@ func army(food := -1) -> Array:
 			"of": 1, "hp_mult": 1.0, "atk_mult": 1.0, "atk_bonus": 0, "armor": 0, "range": 0.0, "splash": 0.0,
 			"dive": false, "pierce": 0, "haste": 0, "charge": false, "size_mult": 1.0, "elite": 0, "affixes": [],
 			"evolved": false, "free": true})
-	var horde := horde_bonus(out.size())
-	if horde > 0:
-		for u in out:
-			u.atk_bonus = int(u.atk_bonus) + horde
+	var n := out.size()
+	for u in out:
+		u.atk_bonus = int(u.atk_bonus) + horde_bonus(n, u.nest)
 	return out
 
 
-## The attack every unit gets with an army of n: +1 for every so many units, for each horde totem.
-func horde_bonus(n: int) -> int:
+## The attack the units of the nest at p get with an army of n: +1 for every so many units, for each horde totem whose
+## reach takes it in.
+func horde_bonus(n: int, p: Vector2i) -> int:
 	var k := 0
-	for p in buildings:
-		if buildings[p].kind == "horde_totem":
-			k += n / int(_level(buildings[p]).per)
+	for q in buildings:
+		if buildings[q].kind == "horde_totem" and p in reach("horde_totem", q):
+			k += n / int(_level(buildings[q]).per)
 	return k
 
 
@@ -397,10 +418,10 @@ func _beside(p: Vector2i, plots: Array, any := false) -> int:
 
 
 ## What the nest at p gives each unit it makes: the species its affixes make of it, where it stands, how elite it is,
-## its other affixes -- the only things that make a unit itself stronger -- its gift where it works, what the
-## homeland's schools give units of its kind (the champion halls elites, the vanguard camps the front row, the
-## watchtowers those that reach far), and what the fed stars give: the front row's armour, red units' attack, quicker
-## strikes, reach, attack and hit points for all (less with the brood queen), what the old king has grown to.
+## its other affixes -- the only things that make a unit itself stronger -- its gift where it works, what the schools'
+## buildings whose reach takes it in give units of its kind (the champion halls elites, the vanguard camps the front
+## row, the watchtowers those that reach far), and what the fed stars give: the front row's armour, red units' attack,
+## quicker strikes, reach, attack and hit points for all (less with the brood queen), what the old king has grown to.
 func spec_of(p: Vector2i) -> Dictionary:
 	var b: Dictionary = buildings[p]
 	var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
@@ -437,14 +458,14 @@ func spec_of(p: Vector2i) -> Dictionary:
 		s.atk_mult = float(s.atk_mult) * Content.ALONE
 		s.size_mult = float(s.size_mult) * Content.ALONE_SIZE
 	if e > 0:
-		var more := 1.0 + _sum("elite") / 100.0
+		var more := 1.0 + _given("elite", p) / 100.0
 		s.hp_mult = float(s.hp_mult) * more
 		s.atk_mult = float(s.atk_mult) * more
 	if p.y == 0:
-		s.hp_mult = float(s.hp_mult) * (1.0 + _sum("front") / 100.0)
+		s.hp_mult = float(s.hp_mult) * (1.0 + _given("front", p) / 100.0)
 	var far := maxf(float(Content.UNITS[sp.kind].range), float(s.range)) >= 3.0
 	if far:
-		s.pierce = int(s.pierce) + _sum("ranged") + _star("reach")
+		s.pierce = int(s.pierce) + _given("ranged", p) + _star("reach")
 		s.range = maxf(float(Content.UNITS[sp.kind].range), float(s.range)) + _star("reach")
 	if p.y == 0 and _star("front_armor") > 0:
 		s.armor = int(s.armor) + _star("front_armor") + (1 if diet_count("plant") >= Content.STARS_COUNT else 0)
@@ -456,38 +477,79 @@ func spec_of(p: Vector2i) -> Dictionary:
 	return s
 
 
-## How many affixes the nest at p can carry: one, more for each stabilizer in its column, more with the sickle and the
-## first bird, more for a mutant nest.
+## How many affixes the nest at p can carry: one, more for each stabilizer whose reach takes it in, more with the
+## sickle and the first bird, more for a mutant nest.
 func slots(p: Vector2i) -> int:
-	var n := 1 + _star("slots") + (Content.MUTANT_SLOTS if trait_of(p) == "mutant" else 0)
-	for y in ROWS:
-		var q := Vector2i(p.x, y)
-		if buildings.has(q) and buildings[q].kind == "stabilizer":
-			n += int(_level(buildings[q]).slots)
+	return 1 + _star("slots") + (Content.MUTANT_SLOTS if trait_of(p) == "mutant" else 0) + _given("slots", p)
+
+
+## Where the building of `kind` standing at p works (its 作用范围, Content.REACH; GAME-DESIGN 28) -- lit blue while it
+## is placed or pointed at: "near", the four plots beside it; "lanes", the battle line in its column and the columns
+## either side. A nest, where its gift looks (Content.TRAITS): a red's neighbours (more reds), the plot behind a green in
+## front (whom it guards), the plot in front of a blue in the second row (its cover), the plots either side of a gold
+## (to be empty), the other plot of a white's column (whom it heals). [] for nowhere.
+static func reach(kind: String, p: Vector2i) -> Array:
+	var b: Dictionary = Content.BUILDINGS[kind]
+	var r := str(b.get("reach", ""))
+	var out: Array = []
+	if b.has("nest"):
+		match str(b.trait):
+			"swarm":
+				r = "near"
+			"guard":
+				if p.y == 0:
+					out.append(Vector2i(p.x, 1))
+			"cover":
+				if p.y == 1:
+					out.append(Vector2i(p.x, 0))
+			"alone":
+				out = [p + Vector2i.LEFT, p + Vector2i.RIGHT]
+			"care":
+				if front(p):
+					out.append(Vector2i(p.x, 1 - p.y))
+	match r:
+		"near":
+			out = [p + Vector2i.UP, p + Vector2i.DOWN, p + Vector2i.LEFT, p + Vector2i.RIGHT]
+		"lanes":
+			for y in Content.FRONT_ROWS:
+				for x in range(p.x - 1, p.x + 2):
+					out.append(Vector2i(x, y))
+	return out.filter(func(q: Vector2i) -> bool: return q != p and q.x >= 0 and q.x < COLS and q.y >= 0 and q.y < ROWS)
+
+
+## What the buildings whose reach takes in the nest at p give it of `key` (their levels' Content.BUILDINGS) all told.
+func _given(key: String, p: Vector2i) -> int:
+	var n := 0
+	for q in buildings:
+		var b: Dictionary = buildings[q]
+		var k := int(_level(b).get(key, 0))
+		if k != 0 and not Content.is_nest(b.kind) and p in reach(b.kind, q):
+			n += k
 	return n
 
 
 # -- Building, raising ----------------------------------------------------------------------------------------------
 
-## The research points a blueprint costs here: an affix's, less the gene banks' and the doctor's -- none with the first
-## bird.
-func genes_cost(o: Dictionary) -> int:
-	if o.type != "affix" or _star("free_affix") > 0:
-		return 0
-	return maxi(0, int(o.get("genes", 0)) - _sum("gene_off") - _star("gene_off"))
+## What blueprint `o` (Content.offer) costs put on `at`, in gold: its price -- an affix's less what the gene banks whose
+## reach takes in the nest there give, at least 1.
+func price_at(o: Dictionary, at: Variant) -> int:
+	if o.type != "affix" or not at is Vector2i:
+		return int(o.price)
+	return maxi(1, int(o.price) - _given("affix_off", at))
 
 
-## Whether blueprint `id` can be paid for now: its gold and research points.
+## Whether blueprint `id` could be paid for somewhere: the gold for it where it costs least.
 func affordable(id: String) -> bool:
 	var o := Content.offer({"id": id})
-	return gold >= int(o.price) and genes >= genes_cost(o)
+	return gold >= (1 if o.type == "affix" and _sum("affix_off") > 0 else int(o.price))
 
 
-## Where blueprint `id` can go now and be paid for: plots (Vector2i). [] when it is not had, or cannot be paid for.
+## Where blueprint `id` can go now and be paid for there: plots (Vector2i). [] when it is not had, or cannot be paid for.
 func targets(id: String) -> Array:
 	if not id in plans or not affordable(id):
 		return []
-	return _fits({"id": id})
+	var o := Content.offer({"id": id})
+	return _fits({"id": id}).filter(func(p: Vector2i) -> bool: return gold >= price_at(o, p))
 
 
 ## Where a blueprint could go, the population aside: a building on a plot of its part of the homeland (a nest on the
@@ -524,9 +586,7 @@ func pop_blocks(oi: Dictionary) -> bool:
 func build_plan(id: String, at: Vector2i) -> Array:
 	if not at in targets(id):
 		return []
-	var o := Content.offer({"id": id})
-	gold -= int(o.price)
-	genes -= genes_cost(o)
+	gold -= price_at(Content.offer({"id": id}), at)
 	return [{"t": "bought", "offer": id}] + _apply({"id": id}, at)
 
 
@@ -784,10 +844,11 @@ func income_gold() -> int:
 	return n
 
 
-## The biomass the buildings bring in a round (the fisher's more from each culture pool), and the stars that bring it
-## in themselves (the belly, the neck as far as it has grown) -- these eat nothing, so are never without.
+## The biomass a round -- the population fed: the homeland's own (Content.HOME_POP), what the buildings bring in (the
+## fisher's more from each culture pool), and the stars that bring it in themselves (the belly, the neck as far as it
+## has grown) -- these eat nothing, so are never without.
 func income_biomass() -> int:
-	var n := 0
+	var n := Content.HOME_POP
 	for p in _working():
 		var b := int(_level(buildings[p]).get("biomass", 0))
 		if b > 0 and buildings[p].kind == "pool":
@@ -803,7 +864,7 @@ func income_genes() -> int:
 		n += int(_level(buildings[p]).get("genes", 0))
 		if buildings[p].kind == "sampler":
 			for q in around(p):
-				if buildings.has(q) and buildings[q].kind == "pool":
+				if buildings.has(q) and buildings[q].kind in ["pool", "spore_pool"]:
 					n += Content.SAMPLER_POOL
 				if _like(q) == "tree":
 					n += Content.TREE_GENES

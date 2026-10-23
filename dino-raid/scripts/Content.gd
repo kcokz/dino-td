@@ -7,7 +7,7 @@ class_name Content
 ## metres a second; armor: taken off each hit it takes; splash: metres round its mark that also take half; heal: hit
 ## points it gives the most hurt friend in reach (instead of hitting); pierce: damage more each hit, armour or not;
 ## burst: damage to the other side round it (BURST_RADIUS) when it falls; dive: flies over the front for the back;
-## size: the block's edge; food: biomass it takes to make. One for each kind of nest (its gift, TRAITS, is the nest's);
+## size: the block's edge; food: the population (人口) it takes. One for each kind of nest (its gift, TRAITS, is the nest's);
 ## four are species a nest evolves into (RECIPES); the titan comes with the star of that name (STARS).
 const UNITS := {
 	"red": {"name": "红兵", "color": Color(0.9, 0.24, 0.2), "hp": 10, "atk": 3, "every": 1.0, "range": 1.4,
@@ -133,9 +133,10 @@ const ELITE_HP := 1.5
 const ELITE_ATK := 1.25
 const ELITE_SIZE := 1.2
 const CLUSTER := 1                # a red nest with at least this many red neighbours makes one more (its gift)
-const SAMPLER_POOL := 1           # genes more a round for each culture pool beside a sampler
-const TREE_GENES := 1             # genes more a round for a sampler beside an old tree
+const SAMPLER_POOL := 1           # research points more a round for each culture or spore pool beside a sampler
+const TREE_GENES := 1             # research points more a round for a sampler beside an old tree
 const LAVA_GOLD := 1              # gold more a round for a mine or forge beside lava
+const VAULT_MINE := 1             # the interest's cap more for each mine or forge beside a vault
 
 ## Each nest's gift (本事), the same for whatever it hatches -- most of them only where the nest stands: in front or
 ## behind, its column, its neighbours. Not tied to a school: what it does fits several ways of playing. when: where it
@@ -161,13 +162,15 @@ const CARE := 2                   # caring: heals this many times as much, only 
 const SCAVENGE := 2               # gold each scavenger standing at a battle's end brings back
 const MUTANT_SLOTS := 1           # affix places more on a mutant nest
 
-## Buildings. A nest makes `nest` units and has a gift (`trait`, TRAITS). Each level of the others may give: biomass,
-## genes, gold: that much more each round; slots: nests of its column can carry this many more affixes; gene_off: each
-## affix this many genes cheaper; interest: the most interest this much more; rerolls: restocks of the shelf free each
-## round; shelf: offers more on it; per: every this many units in an army, all of them +1 attack; elite: elite units'
-## hit points and attack this % more; ranged: units reaching 3 m or more this much more damage each hit, armour or not
-## (pierce); front: the front row's units this % more hit points. cost: its price, in gold. region: only found in that
-## place (LEVELS). school: the way of playing it is for (SCHOOLS) -- a nest is for none, its gift for several.
+## Buildings. A nest makes `nest` units and has a gift (`trait`, TRAITS). Each level of the others may give: biomass:
+## the population (人口) more it feeds; genes (research points), gold: that much more each round; interest: the most
+## interest this much more; and for the nests in its reach -- slots: this many more affixes; affix_off: each affix this
+## much gold cheaper; per: every this many units in the army, +1 attack; elite: elite units' hit points and attack this
+## % more; ranged: units reaching 3 m or more this much more damage each hit, armour or not (pierce); front: the front
+## row's units this % more hit points. reach: where it works (REACH) -- a building that makes something, what its
+## neighbours add to it; one that does something for nests, the nests it does it for. cost: its price, in gold. region:
+## only found in that place (LEVELS). school: the way of playing it is for (SCHOOLS) -- a nest is for none, its gift for
+## several.
 const BUILDINGS := {
 	"nest_red": {"name": "红巢", "color": Color(0.9, 0.24, 0.2), "nest": "red", "cost": 3, "trait": "swarm"},
 	"nest_blue": {"name": "蓝巢", "color": Color(0.24, 0.5, 0.96), "nest": "blue", "cost": 3, "trait": "cover"},
@@ -176,37 +179,41 @@ const BUILDINGS := {
 	"nest_white": {"name": "白巢", "color": Color(0.93, 0.93, 0.9), "nest": "white", "cost": 4, "trait": "care"},
 	"nest_scav": {"name": "拾荒巢", "color": Color(0.78, 0.66, 0.42), "nest": "scav", "cost": 4, "trait": "scavenge"},
 	"nest_mutant": {"name": "变异巢", "color": Color(0.92, 0.45, 0.75), "nest": "mutant", "cost": 3, "trait": "mutant"},
-	"pool": {"name": "培养池", "color": Color(0.32, 0.72, 0.58), "cost": 2, "school": "horde",
+	"pool": {"name": "培养池", "color": Color(0.32, 0.72, 0.58), "cost": 2, "school": "horde", "reach": "near",
 		"levels": [{"biomass": 3}, {"biomass": 5}, {"biomass": 8}]},
-	"spore_pool": {"name": "孢子池", "color": Color(0.55, 0.7, 0.3), "cost": 3, "region": 0, "school": "horde",
+	"spore_pool": {"name": "孢子池", "color": Color(0.55, 0.7, 0.3), "cost": 3, "region": 0, "school": "horde", "reach": "near",
 		"levels": [{"biomass": 5}, {"biomass": 7}, {"biomass": 10}]},
-	"horde_totem": {"name": "兽群图腾", "color": Color(0.7, 0.3, 0.25), "cost": 4, "school": "horde",
+	"horde_totem": {"name": "兽群图腾", "color": Color(0.7, 0.3, 0.25), "cost": 4, "school": "horde", "reach": "lanes",
 		"levels": [{"per": 6}, {"per": 5}, {"per": 4}]},
-	"sampler": {"name": "采样站", "color": Color(0.72, 0.84, 0.95), "cost": 2, "school": "genes",
+	"sampler": {"name": "采样站", "color": Color(0.72, 0.84, 0.95), "cost": 2, "school": "genes", "reach": "near",
 		"levels": [{"genes": 1}, {"genes": 2}, {"genes": 3}]},
-	"stabilizer": {"name": "稳定器", "color": Color(0.55, 0.72, 0.95), "cost": 3, "school": "genes",
+	"stabilizer": {"name": "稳定器", "color": Color(0.55, 0.72, 0.95), "cost": 3, "school": "genes", "reach": "lanes",
 		"levels": [{"slots": 1}, {"slots": 1}, {"slots": 2}]},
-	"gene_bank": {"name": "基因库", "color": Color(0.45, 0.85, 0.75), "cost": 3, "school": "genes",
-		"levels": [{"gene_off": 1}, {"gene_off": 2}, {"gene_off": 3}]},
-	"mine": {"name": "矿场", "color": Color(0.96, 0.84, 0.3), "cost": 3, "school": "gold",
+	"gene_bank": {"name": "基因库", "color": Color(0.45, 0.85, 0.75), "cost": 3, "school": "genes", "reach": "lanes",
+		"levels": [{"affix_off": 1}, {"affix_off": 2}, {"affix_off": 3}]},
+	"mine": {"name": "矿场", "color": Color(0.96, 0.84, 0.3), "cost": 3, "school": "gold", "reach": "near",
 		"levels": [{"gold": 1}, {"gold": 2}, {"gold": 3}]},
-	"forge": {"name": "熔炉", "color": Color(0.75, 0.35, 0.15), "cost": 4, "region": 1, "school": "gold",
+	"forge": {"name": "熔炉", "color": Color(0.75, 0.35, 0.15), "cost": 4, "region": 1, "school": "gold", "reach": "near",
 		"levels": [{"gold": 2}, {"gold": 3}, {"gold": 5}]},
-	"vault": {"name": "金库", "color": Color(0.85, 0.7, 0.25), "cost": 3, "school": "gold",
-		"levels": [{"interest": 2}, {"interest": 4}, {"interest": 6}]},
-	"champion_hall": {"name": "冠军殿", "color": Color(0.8, 0.65, 0.95), "cost": 4, "school": "elite",
+	"vault": {"name": "金库", "color": Color(0.85, 0.7, 0.25), "cost": 3, "school": "gold", "reach": "near",
+		"levels": [{"interest": 1}, {"interest": 2}, {"interest": 3}]},
+	"champion_hall": {"name": "冠军殿", "color": Color(0.8, 0.65, 0.95), "cost": 4, "school": "elite", "reach": "lanes",
 		"levels": [{"elite": 15}, {"elite": 25}, {"elite": 40}]},
-	"watchtower": {"name": "瞭望塔", "color": Color(0.5, 0.65, 0.85), "cost": 3, "school": "ranged",
+	"watchtower": {"name": "瞭望塔", "color": Color(0.5, 0.65, 0.85), "cost": 3, "school": "ranged", "reach": "lanes",
 		"levels": [{"ranged": 1}, {"ranged": 2}, {"ranged": 3}]},
-	"vanguard": {"name": "前锋营", "color": Color(0.7, 0.55, 0.4), "cost": 3, "school": "front",
+	"vanguard": {"name": "前锋营", "color": Color(0.7, 0.55, 0.4), "cost": 3, "school": "front", "reach": "lanes",
 		"levels": [{"front": 30}, {"front": 60}, {"front": 100}]},
 }
+## Where a building works (its 作用范围, GAME-DESIGN 28; lit blue on the homeland while it is being placed or pointed
+## at -- the player, 2026-10-22: "邻居互相加成,摆放的时候要有蓝色的hover来表示建筑作用范围"): "near", the four plots
+## beside it, up, down, left and right; "lanes", the battle line's nests in its column and the columns either side.
+const REACH := {"near": "挨着的四块", "lanes": "前面三列的巢"}
 
 ## The ways of playing a run (流派), each with what it builds on and what it comes to late.
 const SCHOOLS := {
-	"gold": {"name": "攒钱流", "says": "金币多、利息多、刷新便宜；攒够了造奇观"},
-	"genes": {"name": "进化流", "says": "研究点数多、词条位多、词条便宜；凑配方进化"},
-	"horde": {"name": "兽群流", "says": "生物质多，兵多；兵越多，全体越狠"},
+	"gold": {"name": "攒钱流", "says": "金币多、利息多；矿场围着金库"},
+	"genes": {"name": "进化流", "says": "词条位多、词条便宜；凑配方进化"},
+	"horde": {"name": "兽群流", "says": "人口多，兵多；兵越多，图腾前面的兵越狠"},
 	"elite": {"name": "精英流", "says": "巢升级选精英；精英越来越强"},
 	"ranged": {"name": "远程流", "says": "蓝兵、酸液腺；远程的兵越打越狠"},
 	"front": {"name": "前锋流", "says": "前排放肉；前排的兵越来越厚"},
@@ -300,15 +307,16 @@ const SPLIT_WORTH := 0.45               # what it breaks into, against standing 
 const BURST_WORTH := 0.25               # a burst, against a hit a second
 const CHARGE_WORTH := 0.1               # a first blow twice as hard, against a hit a second
 
-## The blueprints (图纸, GAME-DESIGN 27): what can be built or stuck on -- only what lasts, nothing used up at once. A
-## place starts with FIRST_PLANS; after each round one of REWARDS more is had (Home.plan_offer), or REWARD_GOLD taken
+## The blueprints (图纸, GAME-DESIGN 27, 28): what can be built or stuck on -- only what lasts, nothing used up at once.
+## A place starts with none: first one of the nests of FIRST_NESTS is picked (free); after each round one of REWARDS
+## more can be unlocked (Home.plan_offer) for its research points (研究点数, UNLOCK by its rarity), or REWARD_GOLD taken
 ## instead; after a mini-boss, one of the uncommon and the rare. A blueprint had can be built as often as there is gold,
 ## room and population for it. type "build": a building, on an open plot of its part of the homeland -- an empty one, or
 ## one with another building, pulled down for half its price back; "affix": a gene affix on a nest with a free place.
-## price: in gold (a building's is its own); genes: the research points (研究点数) it costs too. from: the place
-## (0-based) from which it can be had; region: only in that place. rarity: 0 common, 1 uncommon, 2 rare -- how often it
-## comes to choose. Raising a building a level is no blueprint: any building can be, for RAISE gold more than its level
-## (a nest's raise a choice: one more hatched, or elite).
+## price: in gold (a building's is its own) -- research points buy blueprints, nothing else (the player, 2026-10-22:
+## "各管一件事"). from: the place (0-based) from which it can be had; region: only in that place. rarity: 0 common, 1
+## uncommon, 2 rare -- how often it comes to choose. Raising a building a level is no blueprint: any building can be,
+## for RAISE gold more than its level (a nest's raise a choice: one more hatched, or elite).
 const OFFERS := {
 	"b_red": {"type": "build", "rarity": 0, "builds": "nest_red"},
 	"b_blue": {"type": "build", "rarity": 0, "builds": "nest_blue"},
@@ -329,48 +337,47 @@ const OFFERS := {
 	"b_hall": {"type": "build", "rarity": 1, "builds": "champion_hall"},
 	"b_tower": {"type": "build", "rarity": 1, "builds": "watchtower"},
 	"b_vanguard": {"type": "build", "rarity": 1, "builds": "vanguard"},
-	"a_shell": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "shell"},
-	"a_blade": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "blade"},
-	"a_haste": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "haste"},
-	"a_hide": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "hide"},
-	"a_horn": {"type": "affix", "price": 2, "genes": 2, "rarity": 1, "affix": "horn"},
-	"a_acid": {"type": "affix", "price": 3, "genes": 3, "rarity": 1, "affix": "acid"},
-	"a_wings": {"type": "affix", "price": 3, "genes": 3, "rarity": 2, "affix": "wings", "from": 1},
-	"a_plasma": {"type": "affix", "price": 3, "genes": 4, "rarity": 2, "affix": "plasma", "from": 1},
-	"a_poison": {"type": "affix", "price": 2, "genes": 2, "rarity": 0, "affix": "poison", "region": 0},
-	"a_flame": {"type": "affix", "price": 3, "genes": 3, "rarity": 1, "affix": "flame", "region": 1},
+	"a_shell": {"type": "affix", "price": 3, "rarity": 0, "affix": "shell"},
+	"a_blade": {"type": "affix", "price": 3, "rarity": 0, "affix": "blade"},
+	"a_haste": {"type": "affix", "price": 3, "rarity": 0, "affix": "haste"},
+	"a_hide": {"type": "affix", "price": 3, "rarity": 0, "affix": "hide"},
+	"a_horn": {"type": "affix", "price": 3, "rarity": 1, "affix": "horn"},
+	"a_acid": {"type": "affix", "price": 4, "rarity": 1, "affix": "acid"},
+	"a_wings": {"type": "affix", "price": 4, "rarity": 2, "affix": "wings", "from": 1},
+	"a_plasma": {"type": "affix", "price": 4, "rarity": 2, "affix": "plasma", "from": 1},
+	"a_poison": {"type": "affix", "price": 3, "rarity": 0, "affix": "poison", "region": 0},
+	"a_flame": {"type": "affix", "price": 4, "rarity": 1, "affix": "flame", "region": 1},
 }
-## The blueprints every place starts with: what its homeland is set down with.
-const FIRST_PLANS := ["b_red", "b_pool"]
+## The nests a place's first is picked from (the player, 2026-10-22: "开场什么建筑都没有，先三选一一个巢穴"): those
+## the round's pay builds that can hold the first round by themselves (not the healers, not the gold).
+const FIRST_NESTS := ["b_red", "b_blue", "b_green", "b_scav", "b_mutant"]
 ## The build bar's groups, by what the blueprints do (the player, 2026-10-21: "以能力归类"): nests hatch; the
-## resources' buildings bring in biomass, research points and gold; the battle's make the army stronger as a whole;
-## the genes' are affixes, and the buildings that help with them.
+## resources' buildings bring in population, research points and gold; the battle's make the nests in front of them
+## stronger; the genes' are affixes, and the buildings that help with them.
 const GROUPS := {"nest": "巢", "resource": "资源", "battle": "战斗", "gene": "基因"}
 const REWARDS := 3
 const REWARD_GOLD := 3
 const RAISE := 2                  # a raise costs this much more than the building's level
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...
-const INTEREST_MAX := 2           # ...up to this much
+const INTEREST_MAX := 5           # ...up to this much
 const WIN_GOLD := 2               # gold for a battle won
+const UNLOCK := [1, 2, 3]         # research points a blueprint is unlocked for: a common, an uncommon, a rare
+const HOME_POP := 2               # the population the homeland feeds of itself, before any pool (the player: 家园自带)
+## The star dinosaurs (STARS, GAME-DESIGN 24) put away for now (the player, 2026-10-22: "暂时把明星恐龙去掉"): none
+## comes to be had, the pens are not shown, the round has no eating. Everything of theirs is kept, to come back.
+const STARS_ON := false
 
 const TYPES := {"build": "建筑", "affix": "基因词条"}
 const DIETS := {"plant": "草食", "meat": "肉食"}
 const RARITY_NAMES := ["普通", "少见", "稀有", "传说"]
 
-## What every place's homeland starts with ([kind, level]): the same for everyone, the run's start too (the player,
-## 2026-10-20: "先不选"); nothing else is carried from place to place but the stars, the gold, the deck and the
-## research points ("先不要带任何东西，往少了做"); since 2026-10-21 nothing at all ("什么都不带", Home.fresh). Nothing is
-## in store at the start either: the biomass and the research points there are, are what the buildings make ("初始就是
-## 总的建筑生产的"); the gold, the round's pay at its start.
-const LANDING := [["nest_red", 1], ["pool", 1]]
-
 ## A round's parts, in turn (GAME-DESIGN 26), from the start again after the battle; more can come between them (the
 ## player, 2026-10-21: "阶段是可扩展的"). Each thing a card does happens in one of them (PHASE_OF).
 const PHASES := {
 	"start": {"name": "开始", "says": "每轮的 5 金和利息到手"},
-	"play": {"name": "玩家", "says": "造、升级、贴词条、买明星恐龙"},
-	"make": {"name": "生产", "says": "建筑和明星恐龙产生物质、研究点数、金币，巢里孵出这一轮的兵"},
-	"eat": {"name": "消耗", "says": "明星恐龙和兵吃生物质"},
+	"play": {"name": "玩家", "says": "造、升级、贴词条"},
+	"make": {"name": "生产", "says": "建筑产研究点数、金币，巢里孵出这一轮的兵"},
+	"eat": {"name": "消耗", "says": "明星恐龙吃东西（明星恐龙先去掉了，这一步跳过）", "stars": true},
 	"fight": {"name": "战斗", "says": "兵出去打仗，打赢拿金币和研究点数"},
 }
 ## The part of the round each thing a card does happens in ("每个牌的效果都要落在某个阶段"): the keys of the buildings'
@@ -379,7 +386,7 @@ const PHASE_OF := {
 	# The start: the round's pay.
 	"interest": "start",
 	# The player's part: what buying and putting down cost, what can be had and kept.
-	"gene_off": "play", "free_affix": "play", "slots": "play", "mutant": "play",
+	"gene_off": "play", "free_affix": "play", "slots": "play", "mutant": "play", "affix_off": "play",
 	# The making: what comes in, the young hatched.
 	"biomass": "make", "genes": "make", "gold": "make", "pool": "make", "grow_round": "make", "mend": "make",
 	"count": "make", "first_free": "make", "titan": "make", "swarm": "make",
@@ -393,6 +400,12 @@ const PHASE_OF := {
 }
 ## What a star's entry holds besides what it does.
 const STAR_FACTS := ["name", "kind", "diet", "rarity", "price", "model", "back", "belly", "says", "grow_max"]
+
+
+## The round's parts as they are played now: all of PHASES but those only the star dinosaurs have, while they are put
+## away (STARS_ON).
+static func phases() -> Array:
+	return PHASES.keys().filter(func(k: String) -> bool: return STARS_ON or not PHASES[k].get("stars", false))
 
 
 ## The population a blueprint takes, as the bar shows it (where it goes it can take more: Home.pop_need): a nest, what
@@ -451,25 +464,25 @@ const LEVELS := [
 ## works (a pond's, an old tree's, a vein of ore's, a lava pool's) -- each place has its own two.
 const TERRAIN := {
 	"pond": {"name": "水塘", "build": true, "like": "pond", "color": Color(0.3, 0.55, 0.75),
-		"says": "培养池、孢子池造在这里，生物质翻倍"},
+		"says": "培养池、孢子池造在这里，人口翻倍"},
 	"tree": {"name": "古树", "build": false, "like": "tree", "color": Color(0.2, 0.36, 0.15),
 		"says": "不能造。旁边的采样站每轮多 1 研究点数"},
 	"ore": {"name": "矿脉", "build": true, "like": "ore", "color": Color(0.4, 0.37, 0.34), "says": "矿场、熔炉造在这里，金币 +2"},
 	"lava": {"name": "岩浆", "build": false, "like": "lava", "color": Color(0.85, 0.3, 0.08),
 		"says": "不能造。旁边的矿场、熔炉每轮多 1 金币"},
 	"mire": {"name": "泥塘", "build": true, "like": "pond", "color": Color(0.3, 0.34, 0.22),
-		"says": "培养池、孢子池造在这里，生物质翻倍"},
+		"says": "培养池、孢子池造在这里，人口翻倍"},
 	"toadstool": {"name": "毒菇林", "build": false, "like": "tree", "color": Color(0.58, 0.36, 0.52),
 		"says": "不能造。旁边的采样站每轮多 1 研究点数"},
 	"ice_ore": {"name": "冰矿", "build": true, "like": "ore", "color": Color(0.62, 0.74, 0.84), "says": "矿场、熔炉造在这里，金币 +2"},
 	"glacier": {"name": "冰封遗骸", "build": false, "like": "tree", "color": Color(0.8, 0.88, 0.94),
 		"says": "不能造。旁边的采样站每轮多 1 研究点数"},
 	"oasis": {"name": "绿洲", "build": true, "like": "pond", "color": Color(0.28, 0.6, 0.55),
-		"says": "培养池、孢子池造在这里，生物质翻倍"},
+		"says": "培养池、孢子池造在这里，人口翻倍"},
 	"ruin": {"name": "遗迹", "build": false, "like": "tree", "color": Color(0.7, 0.62, 0.46),
 		"says": "不能造。旁边的采样站每轮多 1 研究点数"},
 	"tidepool": {"name": "潮池", "build": true, "like": "pond", "color": Color(0.24, 0.5, 0.64),
-		"says": "培养池、孢子池造在这里，生物质翻倍"},
+		"says": "培养池、孢子池造在这里，人口翻倍"},
 	"wreck": {"name": "沉船", "build": false, "like": "lava", "color": Color(0.42, 0.33, 0.24),
 		"says": "不能造。旁边的矿场、熔炉每轮多 1 金币"},
 }
@@ -561,25 +574,25 @@ static func building_text(kind: String, lv: int) -> String:
 	var l := level(kind, lv)
 	match kind:
 		"pool", "spore_pool":
-			return Lang.t("每轮产 %d 生物质") % l.biomass
+			return Lang.t("人口上限 +%d。挨着的采样站每轮多 %d 研究点数") % [l.biomass, SAMPLER_POOL]
 		"horde_totem":
-			return Lang.t("出战的兵每满 %d 只，所有兵攻击 +1") % l.per
+			return Lang.t("前面三列的兵：出战的兵每满 %d 只，攻击 +1") % l.per
 		"sampler":
-			return Lang.t("每轮产 %d 研究点数。旁边每有一个培养池，再多 %d") % [l.genes, SAMPLER_POOL]
+			return Lang.t("每轮产 %d 研究点数（解锁图纸用）。挨着的每个培养池、孢子池，再多 %d") % [l.genes, SAMPLER_POOL]
 		"stabilizer":
-			return Lang.t("同一列的巢能多贴 %d 个词条") % l.slots
+			return Lang.t("前面三列的巢，能多贴 %d 个词条") % l.slots
 		"gene_bank":
-			return Lang.t("贴词条少花 %d 研究点数") % l.gene_off
+			return Lang.t("前面三列的巢，贴词条便宜 %d 金") % l.affix_off
 		"mine", "forge":
-			return Lang.t("每轮多 %d 金币") % l.gold
+			return Lang.t("每轮多 %d 金币。挨着的金库，利息上限多 %d") % [l.gold, VAULT_MINE]
 		"vault":
-			return Lang.t("利息最多多 %d（每存 %d 金，利息 +1）") % [l.interest, INTEREST_STEP]
+			return Lang.t("利息上限多 %d。挨着的每座矿场、熔炉，再多 %d") % [l.interest, VAULT_MINE]
 		"champion_hall":
-			return Lang.t("所有精英兵的血和攻击再 +%d%%") % l.elite
+			return Lang.t("前面三列的精英兵，血和攻击再 +%d%%") % l.elite
 		"watchtower":
-			return Lang.t("所有远程兵（够得着 3 米以上）每下多 %d 点伤害，不管护甲") % l.ranged
+			return Lang.t("前面三列的远程兵（够得着 3 米以上），每下多 %d 点伤害，不管护甲") % l.ranged
 		"vanguard":
-			return Lang.t("前排的兵血 +%d%%") % l.front
+			return Lang.t("前面三列站第一排的兵，血 +%d%%") % l.front
 	return ""
 
 

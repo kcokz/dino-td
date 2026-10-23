@@ -1,12 +1,13 @@
 class_name Policy
-## How the tools play (GAME-DESIGN 17-27), shared by playtest.gd and sim_runs.gd. Not part of the game.
+## How the tools play (GAME-DESIGN 17-28), shared by playtest.gd and sim_runs.gd. Not part of the game.
 ##
 ## random: builds anything had that it can pay for, anywhere it may go (but only on empty land, pulling nothing down),
 ## raises buildings (a nest either way), buys the star on offer when it can.
 ## smart: the play that does the most good for its price -- a blueprint built, a building raised (a nest's both ways),
 ## the star on offer -- this round's battle worked out after it, and what the homeland comes to: the army its nests
 ## make (as far as the biomass coming in, less what the stars eat, feeds it), what comes in each round, what is kept
-## (gold earns interest); after each round the blueprint (or the gold) that does the most good; the first place the
+## (gold earns interest); a place's first nest, the one that does the most good built with the round's pay; after
+## each round the blueprint it has the research points for (or the gold) that does the most good; the first place the
 ## map offers. A smart one may keep to a school (Content.SCHOOLS): it leans to that school's blueprints and raises,
 ## never builds another school's own buildings (those that are not just for biomass, research or gold), and -- for
 ## gold -- saves.
@@ -96,14 +97,13 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 	var best: Array = []
 	for id in h.plans:
 		var o := Content.offer({"id": id})
-		var cost := maxf(1.0, float(o.price) + 0.5 * float(h.genes_cost(o)))
 		var lean := _lean(school_of(id), school, _others(id, school))
 		if lean <= 0.0:
 			continue
 		for at in h.targets(id):
 			var t := h.clone()
 			t.build_plan(id, at)
-			var gain := (score(run, t, school) - base) / cost * lean
+			var gain := (score(run, t, school) - base) / maxf(1.0, float(h.price_at(o, at))) * lean
 			if gain > best_gain:
 				best_gain = gain
 				best = ["build", id, at]
@@ -129,18 +129,39 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 	return best
 
 
-## The blueprint to take after a round (`cards`: {id} each): the one that would do the most good built now, where it
-## fits best (leaning to the school; a few places tried) -- its index in `cards` -- or -1 for the gold, when none
-## would do more than the gold is worth.
+## A place's first nest (`cards`: {id} each): the one that does the most good built with the round's pay, where it
+## fits best -- its index in `cards`.
+static func best_first(run: Run, h: Home, cards: Array, school := "") -> int:
+	var best := 0
+	var best_score := -INF
+	for k in cards.size():
+		var id: String = cards[k].id
+		var u := h.clone()
+		u.unlock(id)
+		u.gold += Home.INCOME
+		for at in u.targets(id):
+			var v := u.clone()
+			v.build_plan(id, at)
+			var s := score(run, v, school)
+			if s > best_score:
+				best_score = s
+				best = k
+	return best
+
+
+## The blueprint to take after a round (`cards`: {id} each): of those it has the research points for, the one that
+## would do the most good built now, where it fits best (leaning to the school; a few places tried) -- its index in
+## `cards` -- or -1 for the gold, when none would do more than the gold is worth.
 static func best_reward(run: Run, h: Home, cards: Array, school := "") -> int:
 	var t := h.clone()
 	t.gold += 30
-	t.genes += 10
 	var base := score(run, t, school)
 	var best := -1
 	var best_gain := 2.0 * Content.REWARD_GOLD
 	for k in cards.size():
 		var id: String = cards[k].id
+		if h.genes < Home.unlock_price(id):
+			continue
 		var lean := _lean(school_of(id), school, _others(id, school))
 		var u := t.clone()
 		u.unlock(id)

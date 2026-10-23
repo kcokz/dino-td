@@ -1,11 +1,11 @@
 class_name Run
 extends RefCounted
-## A run (GAME-DESIGN 17, 24, 26): the dinosaur park's homeland, through the places it goes to -- each a big level of
-## a few rounds (Content.PHASES: the round's pay, buying and building, the making, the eating, the battle), the last
-## against the place's boss. A place held, on to the next, where the homeland is made afresh carrying nothing. Over
-## when the homeland's hit points are gone.
+## A run (GAME-DESIGN 17, 24, 26, 28): the dinosaur park's homeland, through the places it goes to -- each a big level
+## of a few rounds (Content.PHASES: the round's pay, building, the making, the battle), the last against the place's
+## boss, begun with a nest picked from three. A place held, on to the next, where the homeland is made afresh carrying
+## nothing. Over when the homeland's hit points are gone.
 
-const LOOT := 1                   # a battle won: this many research points; a big round's (the bosses') double
+const LOOT := 1                   # a battle fought, won or lost: this many research points; a big round's double
 
 ## The run being played: kept here while the scene is reloaded.
 static var current: Run
@@ -85,16 +85,16 @@ func strength() -> float:
 	return n
 
 
-## After the battle, still its part of the round: won, gold and research points found (the bounty hunter's gold too),
-## a mini-boss or boss beaten growing the stars that grow so; lost, the homeland harmed; either way what the
-## scavengers bring back. {result, fallen, took, research, gold, scavenged, level_won}
+## After the battle, still its part of the round: research points, won or lost (what was learnt of them -- so that a
+## homeland losing still unlocks blueprints, GAME-DESIGN 28); won, gold (the bounty hunter's too), a mini-boss or boss
+## beaten growing the stars that grow so; lost, the homeland harmed; either way what the scavengers bring back.
+## {result, fallen, took, research, gold, scavenged, level_won}
 func finish(f: Fight) -> Dictionary:
 	var out := {"result": f.result, "fallen": f.fallen(), "took": 0, "research": 0, "gold": 0, "scavenged": 0,
 		"level_won": false}
+	out.research = LOOT * (2 if big() or round >= rounds() else 1)
+	home.genes += int(out.research)
 	if f.result == "won":
-		var n := LOOT * (2 if big() or round >= rounds() else 1)
-		out.research = n
-		home.genes += int(out.research)
 		out.gold = Content.WIN_GOLD + home._star("win_gold")
 		home.gold += int(out.gold)
 		if round in Content.MINI_ROUNDS or round >= rounds():
@@ -116,8 +116,18 @@ func last_level() -> bool:
 	return level >= Content.TIERS - 1
 
 
-## Blueprints to choose one of after each round (Content.REWARDS of them, as cards {id}) -- or Content.REWARD_GOLD
-## instead (Home.plan_offer).
+## The nests to pick a place's first from (Content.REWARDS of them, as cards {id}; Home.first_offer).
+func nest_offer() -> Array:
+	return home.first_offer(rng, level, Content.REWARDS).map(func(id: String) -> Dictionary: return {"id": id})
+
+
+## A place's first nest picked: had at once, for nothing.
+func take_first(id: String) -> void:
+	home.unlock(id)
+
+
+## Blueprints to choose one of after each round (Content.REWARDS of them, as cards {id}) -- each for its research
+## points (Home.unlock_price) -- or Content.REWARD_GOLD instead (Home.plan_offer).
 func reward_offer() -> Array:
 	return home.plan_offer(rng, level, Content.REWARDS).map(func(id: String) -> Dictionary: return {"id": id})
 
@@ -127,9 +137,9 @@ func rare_offer() -> Array:
 	return home.plan_offer(rng, level, Content.REWARDS, true).map(func(id: String) -> Dictionary: return {"id": id})
 
 
-## A blueprint chosen: had from now on, in this place.
-func take_reward(id: String) -> void:
-	home.unlock(id)
+## A blueprint chosen: had from now on, in this place, for its research points. Whether it could be.
+func take_reward(id: String) -> bool:
+	return home.buy_plan(id)
 
 
 ## Gold taken instead of a blueprint.

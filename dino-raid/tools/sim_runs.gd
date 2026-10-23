@@ -5,8 +5,10 @@ extends SceneTree
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit]
 ##
 ## random, smart and school play as tools/Policy.gd says; school is smart keeping to the next school (Content.SCHOOLS)
-## in turn. After each round random takes a blueprint (or the gold) at random, the others the best (Policy.best_reward)
-## -- after a mini-boss, of the uncommon and the rare; on the map, the first of the two. Prints,
+## in turn. Each place's first nest: random takes one at random, the others the best (Policy.best_first). After each
+## round random takes a blueprint (or the gold) at random -- the gold when it has not the research points -- the others
+## the best (Policy.best_reward) -- after a mini-boss, of the uncommon and the rare; on the map, the first of the two.
+## Prints,
 ## for each run, how far it got, the homeland's health at each level's end, its stars and what it built; then how many
 ## held each level -- and,
 ## for school, how each school did. "measure": also, each round, the army's strength against the wave's. "limit": no
@@ -50,6 +52,7 @@ func _init() -> void:
 		var g := 0
 		var all_held := false
 		var curve: Array = []             # limit: this run's strength, round by round
+		_first(run, school)
 		while not run.over:
 			run.start_round()
 			if policy == "random":
@@ -88,9 +91,7 @@ func _init() -> void:
 			var cards := run.rare_offer() if run.was_mini() else run.reward_offer()
 			if not cards.is_empty():
 				var pick := Policy.best_reward(run, run.home, cards, school) if policy != "random" else rng.randi_range(-1, cards.size() - 1)
-				if pick >= 0:
-					run.take_reward(cards[pick].id)
-				else:
+				if pick < 0 or not run.take_reward(cards[pick].id):
 					run.take_reward_gold()
 			if out.level_won:
 				held[run.level] += 1
@@ -101,6 +102,7 @@ func _init() -> void:
 					all_held = true
 					break
 				run.move_on(Policy.best_place(run))
+				_first(run, school)
 		if school != "":
 			var sc: Array = by_school.get(school, [0, 0, 0, 0])
 			sc[0] += 1
@@ -141,6 +143,15 @@ func _init() -> void:
 		print(most)
 		print(mean)
 	quit()
+
+
+## A place's first nest picked: at random, or the best (Policy.best_first).
+func _first(run: Run, school: String) -> void:
+	var cards := run.nest_offer()
+	if cards.is_empty():
+		return
+	var k := rng.randi_range(0, cards.size() - 1) if policy == "random" else Policy.best_first(run, run.home, cards, school)
+	run.take_first(cards[k].id)
 
 
 func _random(run: Run) -> void:
