@@ -3,7 +3,8 @@ extends SceneTree
 ##
 ##   Godot --path dino-raid --script res://tools/playtest.gd -- <folder for frames> [bot [rounds] [seed] [smart]]
 ##
-## Without "bot": the title and its settings, then the rainforest arrived in, the pause menu; the first rounds slowly --
+## Without "bot": the title and its settings, then the rainforest arrived in, its first nest picked, the pause menu;
+## the first rounds slowly --
 ## special ground and a nest pointed at, the build bar and a blueprint on it pointed at, each blueprint taken up over
 ## where it goes with what it would change and the forecast it brings, a nest evolved, buys, battles fought, the
 ## blueprint picked after each -- then a homeland built up by hand (every kind of building, levels, the four evolved
@@ -54,6 +55,7 @@ func _scripted() -> void:
 	await _frames(30)
 	await _shot("arrive_rainforest")
 	game.hud.chosen.emit("开始")
+	await _screens("first")
 	await _until_plan()
 	await _shot("plan_r1")
 	game.pause()
@@ -198,10 +200,11 @@ func _rich() -> void:
 		else:
 			b.level = step[2]
 		b.affixes = step[3].duplicate()
-	h.stars = [{"id": "doctor", "grow": 0}, {"id": "scar", "grow": 0}, {"id": "tri", "grow": 0}, {"id": "oldking", "grow": 2},
-		{"id": "belly", "grow": 0}]
-	h.hungry = [2]
-	h.star_offer = "neck"
+	if Content.STARS_ON:
+		h.stars = [{"id": "doctor", "grow": 0}, {"id": "scar", "grow": 0}, {"id": "tri", "grow": 0}, {"id": "oldking", "grow": 2},
+			{"id": "belly", "grow": 0}]
+		h.hungry = [2]
+		h.star_offer = "neck"
 	h.gold = 30
 	h.biomass = 40
 	h.genes = 8
@@ -215,16 +218,17 @@ func _rich() -> void:
 	game.refresh()
 	await _frames(60)
 	await _shot("rich_home")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "pen": 3}
-	game.refresh()
-	await _frames(4)
-	await _shot("rich_pen")
-	game.hover = {"plot": HomeView.NOWHERE, "unit": "", "pen": -1}
-	game._pen_screen(1)
-	await _frames(30)
-	await _shot("pen_screen")
-	game.hud.chosen.emit("")
-	await _frames(10)
+	if Content.STARS_ON:
+		game.hover = {"plot": HomeView.NOWHERE, "unit": "", "pen": 3}
+		game.refresh()
+		await _frames(4)
+		await _shot("rich_pen")
+		game.hover = {"plot": HomeView.NOWHERE, "unit": "", "pen": -1}
+		game._pen_screen(1)
+		await _frames(30)
+		await _shot("pen_screen")
+		game.hud.chosen.emit("")
+		await _frames(10)
 	game.hover = {"plot": Vector2i(3, 0), "unit": ""}
 	game._click()
 	await _frames(10)
@@ -275,6 +279,7 @@ func _rich() -> void:
 	await _frames(20)
 	await _shot("arrive_next")
 	game.hud.chosen.emit("开始")
+	await _screens("next_first")
 	await _until_plan()
 	await _shot("next_r1")
 	game.hud._bar_hot = "p0"
@@ -316,23 +321,28 @@ func _screens(label: String) -> void:
 		await _frames(6)
 		await _shot("map_picked_" + label)
 	else:
-		await _shot(("plan_pick_" if s.begins_with("选一张") or s.begins_with("小首领") else "screen_") + label)
+		await _shot(("plan_pick_" if s.begins_with("解锁") or s.begins_with("小首领") or s.begins_with("选第一个巢")
+			else "screen_") + label)
 	_answer()
 	await _frames(4)
 
 
-## Answers the screen up: the arrival, a blueprint (smart: the best, or the gold), the next place.
+## Answers the screen up: the arrival, the first nest (smart: the best), a blueprint (smart: the best; else the first
+## it has the research points for -- or the gold), the next place.
 func _answer() -> void:
 	var s: String = game.hud.screen
 	var offered: Array = game.hud.offered
 	if s.begins_with("到了"):
 		game.hud.chosen.emit("开始")
-	elif s.begins_with("选一张") or s.begins_with("小首领"):
-		var k := Policy.best_reward(game.run, game.home, offered) if smart else 0
+	elif s.begins_with("选第一个巢"):
+		game.hud.chosen.emit(offered[Policy.best_first(game.run, game.home, offered) if smart else 0])
+	elif s.begins_with("解锁") or s.begins_with("小首领"):
+		var k := Policy.best_reward(game.run, game.home, offered) if smart else \
+			offered.find_custom(func(c: Dictionary) -> bool: return game.home.genes >= Home.unlock_price(c.id))
 		if k >= 0 and k < offered.size():
 			game.hud.chosen.emit(offered[k])
 		else:
-			game.hud.chosen.emit(Lang.t("不要，拿 %d 金") % Content.REWARD_GOLD)
+			game.hud.chosen.emit("gold")
 	elif s.begins_with("下一站"):
 		game.hud.chosen.emit(Policy.best_place(game.run))
 
