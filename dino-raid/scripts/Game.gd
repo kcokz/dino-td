@@ -836,7 +836,8 @@ func raise_fits(choice: String) -> bool:
 
 
 ## The making (GAME-DESIGN 26): what the buildings bring in, said over the homeland; then the nests hatch this round's
-## young, each out of its nest to its place in the yard.
+## young, each out of its nest to its place in the yard. With no eating part to the round (the stars put away,
+## Content.phases), the young are fed here all the same -- those fed are the ones that fight.
 func _make() -> void:
 	phase = Phase.BUSY
 	part = "make"
@@ -859,6 +860,8 @@ func _make() -> void:
 					tags.float_text(Vector3(0, 2.5, HomeView.YARD_Z - 2.0), "  ".join(said), Color(0.6, 1.0, 0.8), 22)
 			"mended":
 				tags.float_text(Vector3(0, 3.0, 0), Lang.t("铁背：家园 +%d") % e.amount, Color(0.5, 1.0, 0.5), 24)
+	if not "eat" in Content.phases():
+		run.eat()
 	_version += 1
 	refresh()
 	home_view.sync_army(home.brood)
