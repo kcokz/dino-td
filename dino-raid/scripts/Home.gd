@@ -1,15 +1,15 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17-28): a grid of plots in the place it is in -- the top rows the battle line, for nests
+## The homeland (GAME-DESIGN 17-29): a grid of plots in the place it is in -- the top rows the battle line, for nests
 ## only, where each nest's units will stand in battle; the rows behind for everything else, special ground among them
 ## -- with the gold and the research points, the blueprints had (plans: what can be built), the star dinosaurs in their
 ## pens and the one on offer (put away for now: Content.STARS_ON), and the homeland's own hit points. A place begins
 ## with nothing built and no blueprint: first a nest is picked (first_offer, unlock). A round here goes in parts
 ## (GAME-DESIGN 26, Content.PHASES). The start (start_round): the round's pay and the interest on the gold kept come
-## in. The player's: the player builds from the blueprints had (build_plan), raises buildings (raise), sticks affixes
-## on nests. The making (make): the buildings bring in research points and gold, and the nests hatch the round's young
-## (brood). The eating (eat): those fed go out to fight (fighters). The battle (Fight): the young live for it only.
-## After it, a blueprint more, for research points (plan_offer, buy_plan). The population (人口, pop_cap) is a bound,
+## in. The player's: the player researches techs for research points (research; the tech tree, GAME-DESIGN 29), builds
+## from the blueprints had (build_plan), raises buildings (raise), sticks affixes on nests. The making (make): the
+## buildings bring in research points and gold, and the nests hatch the round's young (brood). The eating (eat): those
+## fed go out to fight (fighters). The battle (Fight): the young live for it only. The population (人口, pop_cap) is a bound,
 ## not a store: what the homeland feeds of itself and what its pools feed (in the rules, the round's biomass), nothing
 ## built that would take more. When a place is held, the homeland is made afresh in the next, carrying nothing (fresh).
 ##
@@ -199,48 +199,11 @@ func pop_need(oi: Dictionary, at: Variant) -> int:
 
 # -- The blueprints ---------------------------------------------------------------------------------------------------
 
-## The nests a place's first is picked from (Content.FIRST_NESTS): `n` of those found here and now.
-func first_offer(rng: RandomNumberGenerator, level: int, n: int) -> Array:
-	var pool: Array = Content.FIRST_NESTS.filter(func(id: String) -> bool:
-		var o: Dictionary = Content.OFFERS[id]
-		return int(o.get("from", 0)) <= level and int(o.get("region", region)) == region)
+## The nests a place's first is picked from (Content.FIRST_NESTS): `n` of those found here.
+func first_offer(rng: RandomNumberGenerator, n: int) -> Array:
+	var pool: Array = Content.FIRST_NESTS.filter(func(id: String) -> bool: return tech_here(id))
 	shuffle(pool, rng)
 	return pool.slice(0, n)
-
-
-## The blueprints (图纸, GAME-DESIGN 27) to choose one of after a round: `n` not had yet, found here and now (none from a
-## later place, none another place's own), the common more often than the uncommon, the uncommon than the rare -- or,
-## `rare` (after a mini-boss), only the uncommon and the rare. While nothing had feeds more of the population, one that
-## does always comes (else the homeland would stay as small as it starts). Fewer when fewer are left.
-func plan_offer(rng: RandomNumberGenerator, level: int, n: int, rare := false) -> Array:
-	var pool: Array = []
-	for id in Content.OFFERS:
-		var o: Dictionary = Content.OFFERS[id]
-		if id in plans or int(o.get("from", 0)) > level or int(o.get("region", region)) != region:
-			continue
-		if rare and int(o.rarity) == 0:
-			continue
-		for k in [3, 2, 1][int(o.rarity)]:
-			pool.append(id)
-	shuffle(pool, rng)
-	var out: Array = []
-	if not rare and not plans.any(func(id: String) -> bool: return _feeds(id)):
-		for id in pool:
-			if _feeds(id):
-				out.append(id)
-				break
-	for id in pool:
-		if out.size() >= n:
-			break
-		if not id in out:
-			out.append(id)
-	shuffle(out, rng)
-	return out
-
-
-## Whether blueprint `id` feeds more of the population (a pool).
-static func _feeds(id: String) -> bool:
-	return Content.pop_of(Content.offer({"id": id})) < 0
 
 
 ## Blueprint `id` had: from now on, in this place, it can be built (or stuck on). Whether it was new.
@@ -251,18 +214,38 @@ func unlock(id: String) -> bool:
 	return true
 
 
-## The research points blueprint `id` is unlocked for (Content.UNLOCK, by its rarity).
-static func unlock_price(id: String) -> int:
-	var u: Array = Content.UNLOCK
-	return int(u[clampi(int(Content.OFFERS[id].rarity), 0, u.size() - 1)])
+# -- The tech tree (科技树, GAME-DESIGN 29) ---------------------------------------------------------------------------
+
+## The research points tech `id` costs.
+static func tech_cost(id: String) -> int:
+	return int(Content.OFFERS[id].get("cost", 1))
 
 
-## Blueprint `id` unlocked for its research points (after a round). Whether it was: not if it is had already, or the
-## research points are short.
-func buy_plan(id: String) -> bool:
-	if id in plans or not Content.OFFERS.has(id) or genes < unlock_price(id):
+## The tech tech `id` needs had first ("" for none).
+static func tech_needs(id: String) -> String:
+	return str(Content.OFFERS[id].get("needs", ""))
+
+
+## Whether tech `id` is found here at all (none another place's own).
+func tech_here(id: String) -> bool:
+	return int(Content.OFFERS[id].get("region", region)) == region
+
+
+## Whether tech `id` can be researched, the research points aside: found here, not had yet, what it needs had.
+func tech_open(id: String) -> bool:
+	return tech_here(id) and not id in plans and (tech_needs(id) == "" or tech_needs(id) in plans)
+
+
+## Whether tech `id` can be researched now: open, and the research points for it.
+func can_research(id: String) -> bool:
+	return tech_open(id) and genes >= tech_cost(id)
+
+
+## Tech `id` researched: its research points paid, its blueprint had. Whether it could be.
+func research(id: String) -> bool:
+	if not can_research(id):
 		return false
-	genes -= unlock_price(id)
+	genes -= tech_cost(id)
 	return unlock(id)
 
 

@@ -1,8 +1,8 @@
 class_name Run
 extends RefCounted
-## A run (GAME-DESIGN 17, 24, 26, 28): the dinosaur park's homeland, through the places it goes to -- each a big level
-## of a few rounds (Content.PHASES: the round's pay, building, the making, the battle), the last against the place's
-## boss, begun with a nest picked from three. A place held, on to the next, where the homeland is made afresh carrying
+## A run (GAME-DESIGN 17, 24, 26, 28, 29): the dinosaur park's homeland, through the places it goes to -- each a big
+## level of a few rounds (Content.PHASES: the round's pay, researching and building, the making, the battle), the last
+## against the place's boss, begun with a nest picked from three. A place held, on to the next, where the homeland is made afresh carrying
 ## nothing. Over when the homeland's hit points are gone.
 
 const LOOT := 1                   # a battle fought, won or lost: this many research points; a big round's double
@@ -116,40 +116,14 @@ func last_level() -> bool:
 	return level >= Content.TIERS - 1
 
 
-## The nests to pick a place's first from (Content.REWARDS of them, as cards {id}; Home.first_offer).
+## The nests to pick a place's first from (Content.FIRST_CHOICE of them, as cards {id}; Home.first_offer).
 func nest_offer() -> Array:
-	return home.first_offer(rng, level, Content.REWARDS).map(func(id: String) -> Dictionary: return {"id": id})
+	return home.first_offer(rng, Content.FIRST_CHOICE).map(func(id: String) -> Dictionary: return {"id": id})
 
 
 ## A place's first nest picked: had at once, for nothing.
 func take_first(id: String) -> void:
 	home.unlock(id)
-
-
-## Blueprints to choose one of after each round (Content.REWARDS of them, as cards {id}) -- each for its research
-## points (Home.unlock_price) -- or Content.REWARD_GOLD instead (Home.plan_offer).
-func reward_offer() -> Array:
-	return home.plan_offer(rng, level, Content.REWARDS).map(func(id: String) -> Dictionary: return {"id": id})
-
-
-## After a mini-boss: blueprints of the uncommon and the rare, to choose one of.
-func rare_offer() -> Array:
-	return home.plan_offer(rng, level, Content.REWARDS, true).map(func(id: String) -> Dictionary: return {"id": id})
-
-
-## A blueprint chosen: had from now on, in this place, for its research points. Whether it could be.
-func take_reward(id: String) -> bool:
-	return home.buy_plan(id)
-
-
-## Gold taken instead of a blueprint.
-func take_reward_gold() -> void:
-	home.gold += Content.REWARD_GOLD
-
-
-## Whether the round just fought (finish has moved on from it) was against the place's mini-boss.
-func was_mini() -> bool:
-	return round - 1 in Content.MINI_ROUNDS
 
 
 ## On to place `to` (by default the map's first for the next level): the homeland made afresh there, carrying nothing

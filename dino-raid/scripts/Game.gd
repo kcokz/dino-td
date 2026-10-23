@@ -4,15 +4,15 @@ extends Node3D
 ## screen. It opens on the title (Menu) over a homeland at dusk; Esc pauses. A run lands in the rainforest; each place
 ## is begun with nothing built, a nest picked from three. A round goes in parts (GAME-DESIGN 26, Content.phases), each
 ## said as it comes. The start: the round's pay and the interest on the gold kept come in. The player's: the player
-## builds from the blueprints had (the build bar; GAME-DESIGN 27), raises buildings (clicked: a nest's raise a choice,
-## one more or elite), sticks gene affixes on nests -- where a building works lit blue as it is placed (GAME-DESIGN 28)
-## -- then is done. The making, by itself: the buildings bring in research points and gold, and the nests hatch this
-## round's young -- each out of its nest to stand in the yard as it will stand in battle. The battle, by itself: the
-## young go out and fight, and are gone with it; won, gold and research points; lost, the homeland is hurt. Then one of
-## three blueprints unlocked for research points -- or gold instead; after rounds 4 and 8, against the place's
-## mini-bosses, an uncommon or rare one. Twelve rounds hold a place, the last against its boss; then the run goes on to
-## the next place picked on the map, where the homeland is made afresh, carrying nothing. How the battle will end is
-## worked out (for the tools and F3) before it is fought, and again with the good or the choice pointed at.
+## researches techs for research points (the tech tree, GAME-DESIGN 29), builds from the blueprints had (the build bar;
+## GAME-DESIGN 27), raises buildings (clicked: a nest's raise a choice, one more or elite), sticks gene affixes on nests
+## -- where a building works lit blue as it is placed (GAME-DESIGN 28) -- then is done. The making, by itself: the
+## buildings bring in research points and gold, and the nests hatch this round's young -- each out of its nest to stand
+## in the yard as it will stand in battle. The battle, by itself: the young go out and fight, and are gone with it;
+## research points, won or lost; won, gold; lost, the homeland is hurt. Twelve rounds hold a place, the last against its
+## boss; then the run goes on to the next place picked on the map, where the homeland is made afresh, carrying nothing.
+## How the battle will end is worked out (for the tools and F3) before it is fought, and again with the good or the
+## choice pointed at.
 ##
 ## Every player action goes through act(what, data). Coloured blocks stand in for what will be.
 
@@ -156,13 +156,18 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "build" {plan, at} (the blueprint plans[plan] built on `at`), "raise" {at,
-## choice} (the building at `at` a level up), "choose" {choice} (the building clicked raised so), "star" (the star on
-## offer bought), "sell" {pen}, "fight". Whether it happened.
+## The one door for a player's action: "research" {id} (a tech of the tree), "build" {plan, at} (the blueprint
+## plans[plan] built on `at`), "raise" {at, choice} (the building at `at` a level up), "choose" {choice} (the building
+## clicked raised so), "star" (the star on offer bought), "sell" {pen}, "fight". Whether it happened.
 func act(what: String, data := {}) -> bool:
 	if phase != Phase.PLAN:
 		return false
 	match what:
+		"research":
+			if not home.research(str(data.get("id", ""))):
+				return false
+			_changed([{"t": "researched", "id": data.id}])
+			return true
 		"build":
 			var i := int(data.get("plan", -1))
 			if i < 0 or i >= home.plans.size():
@@ -282,6 +287,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drag = false
 	elif event is InputEventKey and event.pressed and not event.echo:
 		var k: int = event.physical_keycode
+		if hud.screen != "":
+			# A screen up (the tech tree): only Esc, to close it.
+			if k == KEY_ESCAPE and hud.teching:
+				hud.chosen.emit("close")
+			return
 		if k >= KEY_1 and k < KEY_1 + mini(home.plans.size(), 9):
 			hold(k - KEY_1)
 		elif k == KEY_ESCAPE:
@@ -292,6 +302,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif k == KEY_F3:
 			debug = not debug
 			refresh()
+		elif k == KEY_T:
+			hud.open_tech()
 		elif k == KEY_SPACE or (k == KEY_ENTER and not event.alt_pressed):
 			act("fight")
 
@@ -742,7 +754,7 @@ func _first_nest() -> void:
 
 
 ## The run's rounds, one after another, each its parts in turn (Content.phases; more parts can come between them);
-## after the battle, what it brings -- a blueprint unlocked, the next place after a boss -- till the run is over.
+## after the battle, what it brings -- the next place after a boss -- till the run is over.
 func _play() -> void:
 	while true:
 		for part in Content.phases():
@@ -776,7 +788,7 @@ func _start_round() -> void:
 	elif run.round >= run.rounds():
 		sub = Lang.t("首领来了")
 	elif run.round in Content.MINI_ROUNDS:
-		sub = Lang.t("小首领来了。打完可以解锁少见的图纸")
+		sub = Lang.t("小首领来了")
 	elif run.big():
 		sub = Lang.t("大波要来了")
 	hud.banner(Lang.t("第 %d 轮") % run.round, sub)
@@ -920,8 +932,8 @@ func _fight() -> void:
 
 
 ## After the battle, its part of the round still: what it brought (research points, won or lost; won, gold; lost, the
-## homeland hurt; what the scavengers bring back). Then the run's end, or a blueprint more (after a mini-boss an uncommon or
-## rare one), the next place after a boss. Whether the run goes on.
+## homeland hurt; what the scavengers bring back). Then the run's end, or the next place after a boss. Whether the run
+## goes on.
 func _after_fight() -> bool:
 	var result := fight.result
 	fight_view.show_loot()
@@ -965,36 +977,9 @@ func _after_fight() -> bool:
 		return false
 	part = ""
 	refresh()
-	if run.was_mini():
-		await _rare()
-	else:
-		await _reward()
 	if out.level_won:
 		await _level_end()
 	return true
-
-
-## After each round: a blueprint more for this place, one of three, unlocked for its research points -- or gold instead
-## (GAME-DESIGN 27, 28).
-func _reward() -> void:
-	await _pick(run.reward_offer(), "解锁一张新图纸")
-
-
-## After a place's mini-boss: an uncommon or rare blueprint, one of three -- or gold instead.
-func _rare() -> void:
-	await _pick(run.rare_offer(), "小首领打完了：解锁一张少见的图纸")
-
-
-func _pick(cards: Array, title: String) -> void:
-	if cards.is_empty():
-		return
-	var v: Variant = await hud.unlock(title, cards)
-	if v is Dictionary:
-		run.take_reward(v.id)
-	else:
-		run.take_reward_gold()
-	_version += 1
-	refresh()
 
 
 ## A place held: the next place picked on the map and gone to -- the homeland made afresh there, carrying nothing --

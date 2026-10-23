@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-28) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-29) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -26,9 +26,8 @@ func _init() -> void:
 	_affixes_and_recipes()
 	_schools()
 	_buying()
-	_blueprints()
+	_techs()
 	_interest()
-	_rewards()
 	_stars()
 	_star_kinds()
 	_moving_on()
@@ -86,13 +85,13 @@ func _first_round() -> void:
 	check("special ground lies behind the battle line", h.terrain.size() == 5
 		and h.terrain.keys().all(func(p: Vector2i) -> bool: return p.y >= Content.FRONT_ROWS), h.terrain)
 	check("nothing in store to start with", h.gold == 0 and h.biomass == 0 and h.genes == 0, [h.gold, h.biomass, h.genes])
-	var first := h.first_offer(rng(), 0, 3)
+	var first := h.first_offer(rng(), 3)
 	check("the first nest: one of three, all different, all of the first nests", first.size() == 3 and first[0] != first[1]
 		and first[1] != first[2] and first[0] != first[2]
 		and first.all(func(id: String) -> bool: return id in Content.FIRST_NESTS), first)
 	var never := 0
 	for s in 40:
-		for id in h.first_offer(rng(s), 0, 3):
+		for id in h.first_offer(rng(s), 3):
 			if id in ["b_white", "b_gold", "b_mutant"] or int(Content.BUILDINGS[Content.OFFERS[id].builds].cost) > Home.INCOME:
 				never += 1
 	check("never the healer, the gold or the mutant; always one the round's pay builds", never == 0, never)
@@ -550,58 +549,56 @@ func _buying() -> void:
 	check("not enough gold: nowhere", h.targets("b_gold").is_empty())
 
 
-## The blueprints (GAME-DESIGN 27, 28): none to begin with, one more to unlock after each round for research points.
-func _blueprints() -> void:
+## The tech tree (GAME-DESIGN 29): each tech researched for its research points, once the one before it on its line is
+## had; then it can be built.
+func _techs() -> void:
 	var h := Home.new(rng())
 	check("a place starts with no blueprint", h.plans.is_empty(), h.plans)
-	h.unlock("b_red")
-	var three := h.plan_offer(rng(1), 0, Content.REWARDS)
-	check("three to choose, all different", three.size() == 3 and three[0] != three[1] and three[1] != three[2]
-		and three[0] != three[2], three)
-	var feeds := 0
-	for s in 40:
-		if h.plan_offer(rng(s), 0, Content.REWARDS).any(func(id: String) -> bool: return id in ["b_pool", "b_spore"]):
-			feeds += 1
-	check("while nothing had feeds more of the population, a pool always comes", feeds == 40, feeds)
-	h.unlock("b_pool")
-	var bad := 0
-	var uncommon := 0
-	for s in 60:
-		for id in h.plan_offer(rng(s), 0, Content.REWARDS):
-			var o: Dictionary = Content.OFFERS[id]
-			if id in h.plans or int(o.get("from", 0)) > 0 or int(o.get("region", 0)) != 0:
-				bad += 1
-			if int(o.rarity) == 1:
-				uncommon += 1
-	check("none had, none from later, none of another place's; the uncommon too", bad == 0 and uncommon > 0, [bad, uncommon])
-	var rare := 0
-	for s in 30:
-		for id in h.plan_offer(rng(s), 1, Content.REWARDS, true):
-			if int(Content.OFFERS[id].rarity) < 1:
-				rare += 1
-	check("after a mini-boss: only the uncommon and the rare", rare == 0, rare)
-	check("taken: had from now on, once", h.unlock("b_blue") and "b_blue" in h.plans and not h.unlock("b_blue"))
-	var u := bare()
-	u.plans = []
-	u.genes = 2
-	check("unlocked for research points by rarity: a common 1, an uncommon 2, a rare 3", Home.unlock_price("b_pool") == 1
-		and Home.unlock_price("b_green") == 2 and Home.unlock_price("b_gold") == 3)
-	check("an uncommon for 2", u.buy_plan("b_green") and u.genes == 0 and "b_green" in u.plans, [u.genes, u.plans])
-	check("short of research points: not", not u.buy_plan("b_pool") and not "b_pool" in u.plans)
+	check("the first of each line open from the start, nothing else", Content.OFFERS.keys().all(func(id: String) -> bool:
+		return h.tech_open(id) == (Home.tech_needs(id) == "" and h.tech_here(id))))
+	check("no research points: nothing researched", not h.research("b_pool") and h.plans.is_empty())
+	h.genes = 4
+	check("the culture pool for 1", h.research("b_pool") and "b_pool" in h.plans and h.genes == 3, [h.plans, h.genes])
+	check("once only", not h.research("b_pool") and h.genes == 3)
+	check("the sampler opens with the pool; the stabilizer not yet", h.tech_open("b_sampler") and not h.tech_open("b_stab"))
+	check("the sampler for 2", h.research("b_sampler") and h.genes == 1, h.genes)
+	check("the stabilizer open now, but short of research points", h.tech_open("b_stab") and not h.can_research("b_stab")
+		and not h.research("b_stab") and h.genes == 1)
+	h.gold = 10
+	check("researched, it can be built", not h.targets("b_pool").is_empty())
 	var v := bare(1)
-	v.plans = []
-	var forge := 0
-	var theirs := 0
-	for s in 40:
-		for id in v.plan_offer(rng(s), 1, Content.REWARDS):
-			if id == "b_forge":
-				forge += 1
-			if int(Content.OFFERS[id].get("region", 1)) != 1:
-				theirs += 1
-	check("the volcano: its own forge, none of the rainforest's own", forge > 0 and theirs == 0, [forge, theirs])
-	var few := bare()
-	few.plans = Content.OFFERS.keys().filter(func(id: String) -> bool: return not id in ["b_blue", "b_green"])
-	check("two left: two to choose", few.plan_offer(rng(), 0, Content.REWARDS).size() == 2)
+	check("the volcano: its forge and flame, not the rainforest's spore pool or poison", v.tech_here("b_forge")
+		and v.tech_here("a_flame") and not v.tech_here("b_spore") and not v.tech_here("a_poison"))
+	# The tree itself: what a tech needs is a tech of every place or of its own; no line comes back on itself; every tech
+	# is in one part of the tree, under the first of its line; the first nests are the first of theirs.
+	var bad := 0
+	for id in Content.OFFERS:
+		var up := Home.tech_needs(id)
+		if up != "":
+			var here := int(Content.OFFERS[up].get("region", -1))
+			if not Content.OFFERS.has(up) or (here != -1 and here != int(Content.OFFERS[id].get("region", -1))):
+				bad += 1
+		var steps := 0
+		var at: String = id
+		while Home.tech_needs(at) != "" and steps < 10:
+			at = Home.tech_needs(at)
+			steps += 1
+		if steps >= 10:
+			bad += 1
+	check("each tech's needs a tech of every place or of its own; no line loops", bad == 0, bad)
+	var roots: Array = []
+	for panel in Content.TECH_PANELS:
+		roots.append_array(Content.TECH_PANELS[panel])
+	var lost: Array = Content.OFFERS.keys().filter(func(id: String) -> bool:
+		var at: String = id
+		while Home.tech_needs(at) != "":
+			at = Home.tech_needs(at)
+		return not at in roots)
+	check("every tech under the first of a line of the tree's parts", lost.is_empty()
+		and roots.all(func(id: String) -> bool: return Home.tech_needs(id) == ""), lost)
+	check("the first nests the first of their lines", Content.FIRST_NESTS.all(func(id: String) -> bool:
+		return Home.tech_needs(id) == ""))
+	check("every tech costs something", Content.OFFERS.keys().all(func(id: String) -> bool: return Home.tech_cost(id) >= 1))
 
 
 func _interest() -> void:
@@ -617,44 +614,6 @@ func _interest() -> void:
 	s.gold = 12
 	s.start_round(rng(), 0)
 	check("the interest comes at the start, with the round's pay", s.gold == 12 + Home.INCOME + 2, s.gold)
-
-
-## A blueprint after each round -- or gold; after a mini-boss, an uncommon or rare one (GAME-DESIGN 27).
-func _rewards() -> void:
-	var r := Run.new(7)
-	r.start_round()
-	var cards := r.reward_offer()
-	check("three blueprints, all different, none had", cards.size() == Content.REWARDS and cards[0].id != cards[1].id
-		and cards[1].id != cards[2].id and cards[0].id != cards[2].id
-		and cards.all(func(c: Dictionary) -> bool: return not c.id in r.home.plans), cards)
-	check("no research points: none had", not r.take_reward(cards[0].id) and not cards[0].id in r.home.plans)
-	r.home.genes = 5
-	check("the one taken is had, for its research points", r.take_reward(cards[0].id) and cards[0].id in r.home.plans
-		and r.home.genes == 5 - Home.unlock_price(cards[0].id), r.home.genes)
-	var gold := r.home.gold
-	r.take_reward_gold()
-	check("or 3 gold", r.home.gold == gold + Content.REWARD_GOLD)
-	var rare := 0
-	for s in 40:
-		var g := Run.new(s + 1)
-		g.move_on(1)
-		for oi in g.reward_offer():
-			if int(Content.OFFERS[oi.id].rarity) == 2:
-				rare += 1
-	check("later, the rare come too", rare > 0, rare)
-	check("after a mini-boss: none common", r.rare_offer().all(func(c: Dictionary) -> bool:
-		return int(Content.OFFERS[c.id].rarity) >= 1))
-	var m := Run.new(2)
-	m.round = 4
-	m.start_round()
-	m.make()
-	m.eat()
-	var f := m.fight()
-	f.run()
-	m.finish(f)
-	check("round 4 was a mini-boss's: a rarer blueprint after it", m.over or (m.round == 5 and m.was_mini()), m.round)
-	m.round = 7
-	check("round 6 not", not m.was_mini())
 
 
 ## The star dinosaurs (GAME-DESIGN 24): one on offer each round, bought into a pen, fed each round, sold.

@@ -307,62 +307,69 @@ const SPLIT_WORTH := 0.45               # what it breaks into, against standing 
 const BURST_WORTH := 0.25               # a burst, against a hit a second
 const CHARGE_WORTH := 0.1               # a first blow twice as hard, against a hit a second
 
-## The blueprints (图纸, GAME-DESIGN 27, 28): what can be built or stuck on -- only what lasts, nothing used up at once.
-## A place starts with none: first one of the nests of FIRST_NESTS is picked (free); after each round one of REWARDS
-## more can be unlocked (Home.plan_offer) for its research points (研究点数, UNLOCK by its rarity), or REWARD_GOLD taken
-## instead; after a mini-boss, one of the uncommon and the rare. A blueprint had can be built as often as there is gold,
-## room and population for it. type "build": a building, on an open plot of its part of the homeland -- an empty one, or
-## one with another building, pulled down for half its price back; "affix": a gene affix on a nest with a free place.
-## price: in gold (a building's is its own) -- research points buy blueprints, nothing else (the player, 2026-10-22:
-## "各管一件事"). from: the place (0-based) from which it can be had; region: only in that place. rarity: 0 common, 1
-## uncommon, 2 rare -- how often it comes to choose. Raising a building a level is no blueprint: any building can be,
-## for RAISE gold more than its level (a nest's raise a choice: one more hatched, or elite).
+## The blueprints (图纸, GAME-DESIGN 27-29): what can be built or stuck on -- only what lasts, nothing used up at once.
+## A place starts with none: first one of the nests of FIRST_NESTS is picked (free); the rest are techs of the tech
+## tree (科技树), researched while the player builds (Home.research): each for its research points (研究点数, cost),
+## once what it needs (needs: the tech before it on its line; "" for the first of a line) is had (the player,
+## 2026-10-23: "做成类似杀戮尖塔的商店……类似于做一个科技树，某些科技需要之前的科技解锁"). A blueprint had can be built
+## as often as there is gold, room and population for it. type "build": a building, on an open plot of its part of the
+## homeland -- an empty one, or one with another building, pulled down for half its price back; "affix": a gene affix
+## on a nest with a free place. price: in gold (a building's is its own) -- research points buy techs, nothing else (the
+## player, 2026-10-22: "各管一件事"). region: only in that place. rarity: how far down its line it is (0 the first, 2
+## the furthest) -- its metal, bronze, silver or gold. Raising a building a level is no blueprint: any building can be,
+## for RAISE gold more than its level (a nest's raise a choice: one more hatched, or elite). In the order of the tree,
+## line by line (TECH_PANELS).
 const OFFERS := {
-	"b_red": {"type": "build", "rarity": 0, "builds": "nest_red"},
-	"b_blue": {"type": "build", "rarity": 0, "builds": "nest_blue"},
-	"b_green": {"type": "build", "rarity": 1, "builds": "nest_green"},
-	"b_gold": {"type": "build", "rarity": 2, "builds": "nest_gold", "from": 1},
-	"b_white": {"type": "build", "rarity": 1, "builds": "nest_white"},
-	"b_scav": {"type": "build", "rarity": 1, "builds": "nest_scav"},
-	"b_mutant": {"type": "build", "rarity": 1, "builds": "nest_mutant"},
-	"b_pool": {"type": "build", "rarity": 0, "builds": "pool"},
-	"b_spore": {"type": "build", "rarity": 0, "builds": "spore_pool", "region": 0},
-	"b_totem": {"type": "build", "rarity": 1, "builds": "horde_totem"},
-	"b_sampler": {"type": "build", "rarity": 0, "builds": "sampler"},
-	"b_stab": {"type": "build", "rarity": 1, "builds": "stabilizer"},
-	"b_genebank": {"type": "build", "rarity": 1, "builds": "gene_bank"},
-	"b_mine": {"type": "build", "rarity": 0, "builds": "mine"},
-	"b_forge": {"type": "build", "rarity": 1, "builds": "forge", "region": 1},
-	"b_vault": {"type": "build", "rarity": 1, "builds": "vault"},
-	"b_hall": {"type": "build", "rarity": 1, "builds": "champion_hall"},
-	"b_tower": {"type": "build", "rarity": 1, "builds": "watchtower"},
-	"b_vanguard": {"type": "build", "rarity": 1, "builds": "vanguard"},
-	"a_shell": {"type": "affix", "price": 3, "rarity": 0, "affix": "shell"},
-	"a_blade": {"type": "affix", "price": 3, "rarity": 0, "affix": "blade"},
-	"a_haste": {"type": "affix", "price": 3, "rarity": 0, "affix": "haste"},
-	"a_hide": {"type": "affix", "price": 3, "rarity": 0, "affix": "hide"},
-	"a_horn": {"type": "affix", "price": 3, "rarity": 1, "affix": "horn"},
-	"a_acid": {"type": "affix", "price": 4, "rarity": 1, "affix": "acid"},
-	"a_wings": {"type": "affix", "price": 4, "rarity": 2, "affix": "wings", "from": 1},
-	"a_plasma": {"type": "affix", "price": 4, "rarity": 2, "affix": "plasma", "from": 1},
-	"a_poison": {"type": "affix", "price": 3, "rarity": 0, "affix": "poison", "region": 0},
-	"a_flame": {"type": "affix", "price": 4, "rarity": 1, "affix": "flame", "region": 1},
+	# The nests, and the battle's buildings that go with them.
+	"b_red": {"type": "build", "rarity": 0, "builds": "nest_red", "cost": 1, "needs": ""},
+	"b_totem": {"type": "build", "rarity": 1, "builds": "horde_totem", "cost": 3, "needs": "b_red"},
+	"b_gold": {"type": "build", "rarity": 1, "builds": "nest_gold", "cost": 3, "needs": "b_red"},
+	"b_hall": {"type": "build", "rarity": 2, "builds": "champion_hall", "cost": 3, "needs": "b_gold"},
+	"b_green": {"type": "build", "rarity": 0, "builds": "nest_green", "cost": 1, "needs": ""},
+	"b_vanguard": {"type": "build", "rarity": 1, "builds": "vanguard", "cost": 3, "needs": "b_green"},
+	"b_white": {"type": "build", "rarity": 1, "builds": "nest_white", "cost": 2, "needs": "b_green"},
+	"b_blue": {"type": "build", "rarity": 0, "builds": "nest_blue", "cost": 1, "needs": ""},
+	"b_tower": {"type": "build", "rarity": 1, "builds": "watchtower", "cost": 3, "needs": "b_blue"},
+	"b_scav": {"type": "build", "rarity": 0, "builds": "nest_scav", "cost": 1, "needs": ""},
+	# The resources, and the gene lab.
+	"b_pool": {"type": "build", "rarity": 0, "builds": "pool", "cost": 1, "needs": ""},
+	"b_spore": {"type": "build", "rarity": 1, "builds": "spore_pool", "cost": 2, "needs": "b_pool", "region": 0},
+	"b_sampler": {"type": "build", "rarity": 1, "builds": "sampler", "cost": 2, "needs": "b_pool"},
+	"b_stab": {"type": "build", "rarity": 2, "builds": "stabilizer", "cost": 3, "needs": "b_sampler"},
+	"b_genebank": {"type": "build", "rarity": 2, "builds": "gene_bank", "cost": 3, "needs": "b_stab"},
+	"b_mutant": {"type": "build", "rarity": 2, "builds": "nest_mutant", "cost": 3, "needs": "b_stab"},
+	"b_mine": {"type": "build", "rarity": 0, "builds": "mine", "cost": 1, "needs": ""},
+	"b_vault": {"type": "build", "rarity": 1, "builds": "vault", "cost": 3, "needs": "b_mine"},
+	"b_forge": {"type": "build", "rarity": 1, "builds": "forge", "cost": 3, "needs": "b_mine", "region": 1},
+	# The gene affixes: each recipe's second half after its first.
+	"a_shell": {"type": "affix", "price": 3, "rarity": 0, "affix": "shell", "cost": 2, "needs": ""},
+	"a_plasma": {"type": "affix", "price": 4, "rarity": 1, "affix": "plasma", "cost": 4, "needs": "a_shell"},
+	"a_blade": {"type": "affix", "price": 3, "rarity": 0, "affix": "blade", "cost": 2, "needs": ""},
+	"a_wings": {"type": "affix", "price": 4, "rarity": 1, "affix": "wings", "cost": 4, "needs": "a_blade"},
+	"a_flame": {"type": "affix", "price": 4, "rarity": 1, "affix": "flame", "cost": 3, "needs": "a_blade", "region": 1},
+	"a_haste": {"type": "affix", "price": 3, "rarity": 0, "affix": "haste", "cost": 2, "needs": ""},
+	"a_acid": {"type": "affix", "price": 4, "rarity": 1, "affix": "acid", "cost": 3, "needs": "a_haste"},
+	"a_poison": {"type": "affix", "price": 3, "rarity": 2, "affix": "poison", "cost": 3, "needs": "a_acid", "region": 0},
+	"a_hide": {"type": "affix", "price": 3, "rarity": 0, "affix": "hide", "cost": 2, "needs": ""},
+	"a_horn": {"type": "affix", "price": 3, "rarity": 1, "affix": "horn", "cost": 3, "needs": "a_hide"},
 }
+## The tech tree's three parts, by what their lines are for, each with the first tech of its lines, in order: the nests
+## (and the battle's buildings that go with each), the resources (and the gene lab, behind the samplers), the affixes.
+const TECH_PANELS := {"巢": ["b_red", "b_green", "b_blue", "b_scav"], "资源": ["b_pool", "b_mine"],
+	"词条": ["a_shell", "a_blade", "a_haste", "a_hide"]}
 ## The nests a place's first is picked from (the player, 2026-10-22: "开场什么建筑都没有，先三选一一个巢穴"): those
 ## the round's pay builds that can hold the first rounds by themselves -- not the healers, not the gold, not the
 ## mutants (weak but for their affixes: of 48 runs, every one that a mutant began fell in the first place).
 const FIRST_NESTS := ["b_red", "b_blue", "b_green", "b_scav"]
+const FIRST_CHOICE := 3           # of them to pick from
 ## The build bar's groups, by what the blueprints do (the player, 2026-10-21: "以能力归类"): nests hatch; the
 ## resources' buildings bring in population, research points and gold; the battle's make the nests in front of them
 ## stronger; the genes' are affixes, and the buildings that help with them.
 const GROUPS := {"nest": "巢", "resource": "资源", "battle": "战斗", "gene": "基因"}
-const REWARDS := 3
-const REWARD_GOLD := 3
 const RAISE := 2                  # a raise costs this much more than the building's level
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...
 const INTEREST_MAX := 5           # ...up to this much
 const WIN_GOLD := 2               # gold for a battle won
-const UNLOCK := [1, 2, 3]         # research points a blueprint is unlocked for: a common, an uncommon, a rare
 const HOME_POP := 2               # the population the homeland feeds of itself, before any pool (the player: 家园自带)
 ## The star dinosaurs (STARS, GAME-DESIGN 24) put away for now (the player, 2026-10-22: "暂时把明星恐龙去掉"): none
 ## comes to be had, the pens are not shown, the round has no eating. Everything of theirs is kept, to come back.
@@ -376,7 +383,7 @@ const RARITY_NAMES := ["普通", "少见", "稀有", "传说"]
 ## player, 2026-10-21: "阶段是可扩展的"). Each thing a card does happens in one of them (PHASE_OF).
 const PHASES := {
 	"start": {"name": "开始", "says": "每轮的 5 金和利息到手"},
-	"play": {"name": "玩家", "says": "造、升级、贴词条"},
+	"play": {"name": "玩家", "says": "造、升级、贴词条、研究科技"},
 	"make": {"name": "生产", "says": "建筑产研究点数、金币，巢里孵出这一轮的兵"},
 	"eat": {"name": "消耗", "says": "明星恐龙吃东西（明星恐龙先去掉了，这一步跳过）", "stars": true},
 	"fight": {"name": "战斗", "says": "兵出去打仗，打赢拿金币和研究点数"},
@@ -504,7 +511,7 @@ const LIMIT := [12, 35, 75, 114, 150, 195, 230, 260, 290, 322, 351, 385,
 	12, 35, 75, 114, 150, 195, 230, 270, 325, 380, 416, 460]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
-const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses; after each, the deck worked on
+const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses
 ## How dangerous a wave looks to the player (GAME-DESIGN 22), by its strength: one skull below the first of these, one
 ## more past each -- a feel for it, not whether it will be won (that is worked out only for the tools and F3).
 const DANGER := [30.0, 60.0, 120.0, 215.0, 380.0]
