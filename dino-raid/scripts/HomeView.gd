@@ -7,7 +7,8 @@ extends Node3D
 ## they make one, a gold ring for each time it was made elite. To the south the yard, laid out as the battle line: this
 ## round's army stands there as it will stand in battle, each unit hatched from its nest's door, gone with the battle.
 ## West of it all the star dinosaurs' pens (GAME-DESIGN 24), each star standing in its own -- asleep while it goes
-## without.
+## without (none while the stars are put away, Content.STARS_ON). Where a building works (GAME-DESIGN 28) glows blue
+## over its plots while it is placed or pointed at.
 
 const TILE := 4.0
 const PLOT := 3.6
@@ -19,6 +20,21 @@ const YARD_TURN := 0.75           # a dinosaur in the yard looks south-east: at 
 const NOWHERE := Vector2i(-1, -1)
 const ELITE_GOLD := Color(1.0, 0.8, 0.25)
 const PENNANT := Color(1.0, 0.93, 0.72)  # flown over a nest whose gift works where it stands
+## Where a building works (Game: Home.reach), lit blue (the player, 2026-10-22: "摆放的时候要有蓝色的hover来表示建筑作用
+## 范围"): light laid over each plot of it -- a bright edge along its frame, its corners brighter still, a faint wash
+## inside, breathing a little -- light, not a colour, so that it reads apart from a pond's water.
+const REACH_SHADER := """shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
+uniform vec4 tint : source_color = vec4(0.22, 0.52, 1.0, 1.0);
+void fragment() {
+	vec2 d = abs(UV - 0.5) * 2.0;
+	float e = max(d.x, d.y);
+	float edge = smoothstep(0.82, 0.95, e) * (1.0 - smoothstep(0.99, 1.0, e));
+	float corner = smoothstep(0.7, 0.95, min(d.x, d.y)) * edge;
+	float beat = 0.78 + 0.22 * sin(TIME * 3.2);
+	ALBEDO = tint.rgb * (0.12 + edge * 1.5 + corner * 1.2) * beat;
+}
+"""
 ## The star dinosaurs' pens, a column west of the homeland (Content.PENS of them), the first nearest the battle line.
 const PEN_AT := [Vector3(-18.5, 0.0, -4.0), Vector3(-18.5, 0.0, 0.2), Vector3(-18.5, 0.0, 4.4), Vector3(-18.5, 0.0, 8.6),
 	Vector3(-18.5, 0.0, 12.8)]
@@ -37,7 +53,9 @@ const STAND_IN := {"mother": "white", "doctor": "mutant", "shield": "green", "sa
 var home: Home
 var tags: Tags
 var tints := {}                   # plot -> Color, lit by Game (where a good taken up can go)
+var reach: Array = []             # the plots lit blue by Game: where the building placed or pointed at works
 var _plot_mats := {}              # plot -> StandardMaterial3D
+var _reach_marks := {}            # plot -> MeshInstance3D: its blue glow
 var _ground := {}                 # plot -> Node3D: what stands on special ground
 var _buildings := {}              # plot -> {node, look}
 var _units := {}                  # army unit id -> Node3D
@@ -75,6 +93,20 @@ func setup(p_home: Home) -> void:
 	var frame_node := MeshInstance3D.new()
 	frame_node.mesh = frames.mesh()
 	add_child(frame_node)
+	var glow := ShaderMaterial.new()
+	glow.shader = Shader.new()
+	glow.shader.code = REACH_SHADER
+	for p in _plot_mats:
+		var mark := MeshInstance3D.new()
+		var plane := PlaneMesh.new()
+		plane.size = Vector2(PLOT, PLOT)
+		mark.mesh = plane
+		mark.material_override = glow
+		mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mark.position = plot_pos(p) + Vector3(0, PLOT_TOP + 0.11, 0)
+		mark.visible = false
+		add_child(mark)
+		_reach_marks[p] = mark
 	# A post-and-rail fence along the yard's north side; a log lying where the battle line ends.
 	var fence_z := YARD_Z - 1.3
 	var span := Home.COLS * TILE + 1.0
@@ -88,7 +120,7 @@ func setup(p_home: Home) -> void:
 	var log_piece := Blocks.cylinder(0.14, Home.COLS * TILE, Color(0.36, 0.26, 0.17), Vector3(0, PLOT_TOP + 0.04, line_z), 0.13)
 	log_piece.rotation.z = PI * 0.5
 	add_child(log_piece)
-	for k in Content.PENS:
+	for k in Content.PENS if Content.STARS_ON else 0:
 		var pen := _make_pen()
 		pen.position = PEN_AT[k]
 		add_child(pen)
@@ -250,8 +282,10 @@ func lay_ground() -> void:
 	paint()
 
 
-## Lights the plots in tints; the rest their own colour (lava glows of itself).
+## Lights the plots in tints; the rest their own colour (lava glows of itself); the plots in reach glowing blue.
 func paint() -> void:
+	for p in _reach_marks:
+		_reach_marks[p].visible = p in reach
 	for p in _plot_mats:
 		var m: StandardMaterial3D = _plot_mats[p]
 		var base := plot_colour(p)

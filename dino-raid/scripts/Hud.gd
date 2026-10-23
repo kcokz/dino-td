@@ -1,12 +1,12 @@
 class_name Hud
 extends CanvasLayer
-## What the player holds and reads (GAME-DESIGN 17, 18, 24), all over the homeland on one screen: the shop's shelf
-## along the bottom, a star dinosaur on offer after it; the goods the hoarder keeps for later in a row over the
-## buttons; the gold, the button that restocks the shelf, the button that sends the army out; the place, the round, the
-## homeland's health, the biomass and genes at the top left; who comes this battle and the next, how this battle will
-## go as things stand, and what the cursor points at, at the top right; a battle's count and clock; a star dinosaur's
-## own screen (to sell it); when a place is held, the star to choose and the map; at a new place, its painting and its
-## ground. All in the one look (Style, GAME-DESIGN 21). It shows; Game decides.
+## What the player holds and reads (GAME-DESIGN 17, 18, 24, 27, 28), all over the homeland on one screen: the build
+## bar along the bottom (a star dinosaur on offer after it, while there are stars); the gold and the interest it would
+## bring, the button that sends the army out; the place, the round, the homeland's health, the population and the
+## research points at the top left; who comes this battle and the next, and what the cursor points at, at the top
+## right; a battle's count and clock; after a round, the blueprints to unlock one of; when a place is held, the map;
+## at a new place, its painting and its ground, and its first nest to pick. All in the one look (Style, GAME-DESIGN
+## 21). It shows; Game decides.
 
 signal chosen(value: Variant)
 
@@ -25,6 +25,7 @@ var _plans: Array = []            # HudParts.Plan, one for each blueprint had (g
 var _star_plan: HudParts.Plan     # the star dinosaur on offer (null: none)
 var _bar_hot := ""                # what of the bar the cursor points at: "p<i>" (plans[i]), "star", or ""
 var _bar_tip: PanelContainer      # a word over the bar on what is pointed at
+var _bar_drop := 0.0              # how far below its place the bar is, coming in (enter)
 var _bar_tip_text: Label
 var _gold: Control
 var _go: HudParts.RoundButton
@@ -149,10 +150,6 @@ func setup(p_game: Game) -> void:
 	# Bottom: the build bar, the gold, the buttons.
 	_bar = PanelContainer.new()
 	_bar.add_theme_stylebox_override("panel", Style.panel(16.0))
-	_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_bar.position = Vector2(-40, -14)
 	_root.add_child(_bar)
 	var groups := HBoxContainer.new()
 	groups.add_theme_constant_override("separation", 22)
@@ -179,8 +176,8 @@ func setup(p_game: Game) -> void:
 	_bar_tip_text.custom_minimum_size = Vector2(260, 0)
 	_bar_tip.add_child(_bar_tip_text)
 	_gold = Control.new()
-	_gold.custom_minimum_size = Vector2(130, 56)
-	_gold.size = Vector2(130, 56)
+	_gold.custom_minimum_size = Vector2(150, 76)
+	_gold.size = Vector2(150, 76)
 	_gold.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_gold.position = Vector2(20, -258)
 	_gold.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -290,6 +287,9 @@ func setup(p_game: Game) -> void:
 
 
 func _process(_delta: float) -> void:
+	# The bar at the foot of the screen, a little left of the middle, whatever it holds (it grows as blueprints come).
+	_bar.reset_size()
+	_bar.position = Vector2((_root.size.x - _bar.size.x) * 0.5 - 40.0, _root.size.y - _bar.size.y - 14.0 + _bar_drop)
 	_place_bar_tip()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
 	var tip := game.describe() if _bar_hot == "" and not _overlay.visible else ""
@@ -376,7 +376,6 @@ func _refresh_bar() -> void:
 		var b: HudParts.Plan = _plans[i]
 		var o := Content.offer({"id": home.plans[i]})
 		b.price = int(o.price)
-		b.genes = home.genes_cost(o)
 		b.pop = Content.pop_of(o)
 		b.lit = planning and not game.fits_of(i).is_empty()
 		b.held = game.held == i
@@ -419,19 +418,17 @@ func _plan_tip(i: int) -> String:
 	var id: String = home.plans[i]
 	var o := Content.offer({"id": id})
 	var asks: Array = [Lang.t("%d 金") % int(o.price)]
-	if home.genes_cost(o) > 0:
-		asks.append(Lang.t("%d 研究点数") % home.genes_cost(o))
 	var need := Content.pop_of(o)
 	if need > 0:
 		asks.append(Lang.t("%d 人口") % need)
 	elif need < 0:
 		asks.append(Lang.t("人口上限 +%d") % -need)
 	var lines: Array = [str(o.name), Content.offer_text(o), Lang.t("、").join(asks)]
+	if o.type == "build" and Content.BUILDINGS[o.builds].has("reach"):
+		lines.append(Lang.t("管：%s") % Lang.t(Content.REACH[Content.BUILDINGS[o.builds].reach]))
 	if game.phase == Game.Phase.PLAN and game.fits_of(i).is_empty():
-		if home.gold < int(o.price):
+		if not home.affordable(id):
 			lines.append(Lang.t("金币不够（你有 %d）") % home.gold)
-		elif home.genes < home.genes_cost(o):
-			lines.append(Lang.t("研究点数不够（你有 %d）") % home.genes)
 		elif home.pop_blocks({"id": id}):
 			lines.append(Lang.t("人口不够（现在 %d/%d）") % [home.pop_used(), home.pop_cap()])
 		else:
@@ -601,15 +598,16 @@ func _point_tip() -> String:
 		"hp":
 			return Lang.t("家园 %d / %d\n打输了会掉，掉光这一局就输了") % [home.hp, home.hp_max()]
 		"pop":
-			return Lang.t("人口 %d / %d\n每轮产的生物质养得活这么多：兵吃 %d，明星恐龙吃 %d") % [home.pop_used(), home.pop_cap(),
-				home.pop_used() - home.star_food(), home.star_food()]
+			return Lang.t("人口 %d / %d\n兵占的位置，用不掉也攒不下。上限：家园自带 %d，培养池、孢子池再加") % [home.pop_used(),
+				home.pop_cap(), Content.HOME_POP]
 		"research":
-			return Lang.t("研究点数 %d\n生产时 +%d；贴词条、强化牌要花") % [home.genes, home.income_genes()]
+			return Lang.t("研究点数 %d\n只用来解锁新图纸。每打一仗 +%d，输赢都有（大波、首领 +%d）；采样站每轮 +%d") % [home.genes, Run.LOOT,
+				Run.LOOT * 2, home.income_genes()]
 		"gold":
-			return Lang.t("金币 %d\n开始时 +%d，利息 +%d；生产时 +%d") % [home.gold, Home.INCOME, home.interest(),
-				home.income_gold()]
+			return Lang.t("金币 %d\n造、升级、贴词条用。每轮开始 +%d；生产时 +%d\n存着有利息：每 %d 金下一轮多 1 金，最多 %d（现在 +%d）") % [
+				home.gold, Home.INCOME, home.income_gold(), Content.INTEREST_STEP, home.interest_max(), home.interest()]
 		"army":
-			var said := Lang.t("这一轮出战 %d 只，吃 %d 生物质") % [game.ahead().fighters.size(),
+			var said := Lang.t("这一轮出战 %d 只，占 %d 人口") % [game.ahead().fighters.size(),
 				Home.food_of(game.ahead().fighters)]
 			var more := game.bonuses()
 			return said + ("\n" + more if more != "" else "")
@@ -928,6 +926,73 @@ func _place_text(p: int) -> String:
 		Lang.t("、").join(minis), Lang.t(Content.ENEMIES[lv.boss].name)]
 
 
+## After a round (GAME-DESIGN 27, 28): blueprints to unlock one of, each for its research points (Home.unlock_price) --
+## a plate under each says what it costs; one that cannot be paid for now is dimmed and says so -- or the gold instead.
+## The one unlocked goes down into the build bar. What was chosen: its card ({id}), or "gold".
+func unlock(title: String, cards: Array) -> Variant:
+	var home: Home = game.home
+	var box := _open(title, Lang.t("花研究点数解锁一张，这个地方以后一直能造。你有 %d 研究点数") % home.genes)
+	offered = cards.duplicate()
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 28)
+	box.add_child(row)
+	var views := {}
+	for i in cards.size():
+		var oi: Dictionary = cards[i]
+		var price := Home.unlock_price(oi.id)
+		var can := home.genes >= price
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 12)
+		row.add_child(col)
+		var slot := Control.new()
+		slot.custom_minimum_size = CardView.SIZE
+		slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(slot)
+		var v := CardView.new()
+		slot.add_child(v)
+		v.setup(oi)
+		v.purse = {"gold": home.gold, "genes": home.genes, "used": home.pop_used(), "cap": home.pop_cap()}
+		v.pop_need = Content.pop_of(Content.offer(oi))
+		v.genes_shown = price
+		v.set_state(can, false)
+		v.pivot_offset = CardView.SIZE * 0.5
+		_fly_in(v, Vector2.ZERO, i, cards.size())
+		v.turn_over(0.24 + i * 0.09, 0.3)
+		views[oi.id] = v
+		var plate := _button(Lang.t("解锁（%d 研究点数）") % price if can else Lang.t("研究点数不够（要 %d）") % price,
+			Vector2(CardView.SIZE.x + 30.0, 46), 16, can)
+		plate.disabled = not can
+		plate.pressed.connect(func() -> void: chosen.emit(oi))
+		col.add_child(plate)
+		if can:
+			v.clicked.connect(func(_v: CardView) -> void: chosen.emit(oi))
+	var gold := _button(Lang.t("不要，拿 %d 金") % Content.REWARD_GOLD, Vector2(200, 50), 19)
+	gold.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	gold.pressed.connect(func() -> void: chosen.emit("gold"))
+	box.add_child(gold)
+	var v: Variant = await chosen
+	if v is Dictionary:
+		await _into_bar(views[v.id])
+	_close()
+	return v
+
+
+## A blueprint unlocked going into the build bar: its card flying down to the bar's place, getting small, fading.
+func _into_bar(v: CardView) -> void:
+	var at := v.global_position
+	v.get_parent().remove_child(v)
+	_overlay.add_child(v)
+	v.global_position = at
+	v.rotation = 0.0
+	var to := Vector2(_root.size.x * 0.5, _root.size.y - 60.0) - CardView.SIZE * 0.5
+	var tw := v.create_tween().set_parallel()
+	tw.tween_property(v, "global_position", to, 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_property(v, "scale", Vector2.ONE * 0.22, 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_property(v, "modulate:a", 0.0, 0.18).set_delay(0.42)
+	await tw.finished
+
+
 ## A screen over everything: a title, cards (to click, when `pick`), buttons. What was clicked: the card's offer or
 ## the button's words.
 func choose(title: String, sub: String, cards: Array, buttons: Array, pick := true) -> Variant:
@@ -999,7 +1064,13 @@ func _fly_in(node: Control, to: Vector2, i: int, n: int) -> void:
 ## right, the coin up from below, the buttons in from the right -- one after another.
 func enter() -> void:
 	var parts: Array = [[_left, Vector2(-420, 0), 0.0], [_right, Vector2(380, 0), 0.08], [_gold, Vector2(0, 260), 0.14],
-		[_army, Vector2(320, 0), 0.2], [_bar, Vector2(0, 220), 0.26], [_go, Vector2(340, 0), 0.32], [_menu, Vector2(0, 160), 0.22]]
+		[_army, Vector2(320, 0), 0.2], [_go, Vector2(340, 0), 0.32], [_menu, Vector2(0, 160), 0.22]]
+	# The bar comes up from below to wherever it sits then (_process places it: it grows as blueprints come).
+	_bar_drop = 220.0
+	_bar.modulate.a = 0.0
+	var bar_in := _bar.create_tween().set_parallel()
+	bar_in.tween_property(self, "_bar_drop", 0.0, 0.6).set_delay(0.26).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	bar_in.tween_property(_bar, "modulate:a", 1.0, 0.3).set_delay(0.26)
 	for part in parts:
 		var c: Control = part[0]
 		var at := c.position
@@ -1057,13 +1128,14 @@ func _close() -> void:
 
 # -- Pieces -----------------------------------------------------------------------------------------------------
 
-## The gold: a big coin, struck with a ring and four diamonds, the gold on it in Roman figures; under it, what comes in
-## each round and the interest on what is kept.
+## The gold: a big coin, the gold by it; under it, always, the interest it would bring at the next round's start kept
+## as it is (the player, 2026-10-22: "攒钱还是应该有利息……最多 +5，金币旁一直显示").
 func _draw_gold() -> void:
 	var home: Home = game.home
-	HudParts.veil(_gold, Rect2(-8, 0, 140, 56), 0.5, 18.0)
+	HudParts.veil(_gold, Rect2(-8, 0, 160, 76), 0.5, 18.0)
 	Icons.draw(_gold, Icons.GOLD, Vector2(26, 28), 40.0)
 	HudParts.words(_gold, Vector2(52, 28), str(home.gold), 30, Style.GOLD_BRIGHT, Fonts.numbers(), -1, 5)
+	HudParts.words(_gold, Vector2(8, 62), Lang.t("下轮利息 +%d") % home.interest(), 15, Style.AMBER, Fonts.serif(700), -1, 3)
 
 
 ## A button in the house style (Style.theme) -- `primary` amber, for what sends things on.

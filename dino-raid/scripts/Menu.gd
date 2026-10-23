@@ -562,6 +562,8 @@ func codex() -> void:
 	medal.draw.connect(func() -> void: _medal(medal, medal.get_meta("medal", {}), 78.0))
 	var pages := [["我们的兵", _units_page()], ["巢和建筑", _buildings_page()], ["基因词条", _affixes_page()],
 		["明星恐龙", _stars_page()], ["怪物", _monsters_page()]]
+	if not Content.STARS_ON:
+		pages.remove_at(3)
 	var tab_buttons: Array = []
 	var open_page := func(k: int) -> void:
 		for ch in grid.get_children():
@@ -678,7 +680,7 @@ func _units_page() -> Array:
 		if kind == "titan":
 			from = Lang.t("明星恐龙泰坦带来的")
 		out.append({"key": "u:" + kind, "name": u.name, "kind": from, "text": "%s\n%s\n%s%s" % [Lang.t(u.role), _stats(u),
-			Lang.t("不吃生物质") if int(u.food) == 0 else Lang.t("每只吃 %d 生物质") % u.food, gift]})
+			Lang.t("不占人口") if int(u.food) == 0 else Lang.t("每只占 %d 人口") % u.food, gift]})
 	return out
 
 
@@ -697,7 +699,7 @@ func _buildings_page() -> Array:
 			text = Lang.t("孵%s。\n本事「%s」：%s%s\n升级：多孵 1 只，或者变精英") % [Lang.t(Content.UNITS[b.nest].name), Lang.t(t.name), Lang.t(t.does),
 				(Lang.t("（%s）") % Lang.t(t.when)) if t.when != "" else ""]
 		else:
-			var lines: Array = []
+			var lines: Array = [Lang.t("管：%s") % Lang.t(Content.REACH[b.reach])] if b.has("reach") else []
 			for lv in range(1, Content.LEVEL_MAX + 1):
 				lines.append(Lang.t("%d 级：%s") % [lv, Content.building_text(kind, lv)])
 			text = "\n".join(lines)
@@ -715,7 +717,7 @@ func _affixes_page() -> Array:
 				var other: String = r.affixes[1] if r.affixes[0] == a else r.affixes[0]
 				with.append(Lang.t("和%s凑在一个巢上：进化成%s") % [Lang.t(Content.AFFIXES[other].name), Lang.t(Content.UNITS[r.makes].name)])
 		var offer: Dictionary = Content.OFFERS.get("a_" + a, {})
-		var cost := Lang.t("%d 金 · %d 研究点数") % [int(offer.get("price", 0)), int(offer.get("genes", 0))]
+		var cost := Lang.t("%d 金") % int(offer.get("price", 0))
 		out.append({"key": "a:" + a, "name": af.name, "kind": Lang.t("基因词条 · ") + cost, "text": Lang.t("贴上的巢，孵的兵%s。%s") % [Lang.t(af.says),
 			("\n" + "\n".join(with)) if not with.is_empty() else ""]})
 	return out

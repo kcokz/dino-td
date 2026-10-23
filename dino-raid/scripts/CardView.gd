@@ -1,10 +1,10 @@
 class_name CardView
 extends Control
-## An offer on the shop's shelf, drawn as a card (GAME-DESIGN 15, 17, 21, 23): its painting (tools/paint_cards.py; the
-## model's portrait, Portraits, until there is one) filling the most of it; its name under it on the dark of the card,
-## a hairline in its rarity's metal (bronze, silver, gold) with a diamond on it under the name; its price on a coin
-## laid over the painting's corner, what else it costs (research points) under it, the population it takes on the
-## other corner (GAME-DESIGN 26; green, what it feeds more). Each of these can be pointed at, and lights, with a word
+## A blueprint, drawn as a card (GAME-DESIGN 15, 17, 21, 23, 27): its painting (tools/paint_cards.py; the model's
+## portrait, Portraits, until there is one) filling the most of it; its name under it on the dark of the card, a
+## hairline in its rarity's metal (bronze, silver, gold) with a diamond on it under the name; its price on a coin laid
+## over the painting's corner, the research points it is unlocked for under it (on the screen after a round,
+## GAME-DESIGN 28), the population it takes on the other corner (GAME-DESIGN 26; green, what it feeds more). Each of these can be pointed at, and lights, with a word
 ## over the card on what it asks and what there is. What it does is told only when it is pointed at or taken up (the
 ## player, 2026-10-20: "数字，文字都尽量去除……具体信息基本上都靠hover"); at rest its foot says only what kind it is. A
 ## good already had -- kept in the stash -- shows a jade token instead of a price: 存. A place on the shelf already
@@ -34,7 +34,7 @@ var kept := false                 # had already (in the stash): no price
 var affordable := true
 var chosen := false
 var marked := false               # its kind is about to be taken out of the shop: veiled red
-var genes_shown := -1             # the genes it costs here (Home.genes_cost), or -1 for what it says
+var genes_shown := 0              # the research points it is unlocked for (Home.unlock_price); 0, none shown
 var purse := {}                   # what the homeland has ({gold, genes, used, cap}); {} for none
 var pop_need := 0                 # the population it takes (Content.pop_of, Home.star_need); less than 0, it feeds more
 var hot := ""                     # the corner's figure pointed at: "price", "genes", "pop" or ""
@@ -366,14 +366,14 @@ func _token(at: Vector2, text: String) -> void:
 	_text(at + Vector2(0, px * 0.36), text, px, Color(0.04, 0.12, 0.08), Fonts.serif(900), HORIZONTAL_ALIGNMENT_CENTER)
 
 
-## The research points it costs here (none for a good had already, or a star).
+## The research points it is unlocked for (none for a good had already, or a star).
 func _genes_n() -> int:
 	if token() != "" or star != "":
 		return 0
-	return genes_shown if genes_shown >= 0 else int(c.get("genes", 0))
+	return genes_shown
 
 
-## What else it costs (research points, as many as it costs here) under the price: a flask and how many.
+## What it is unlocked for (research points) under the price: a flask and how many.
 func _genes() -> void:
 	var n := _genes_n()
 	if n <= 0:

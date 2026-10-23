@@ -145,16 +145,16 @@ class Crest extends Control:
 					at + Vector2(-5.6, 0), at + Vector2(0, -5.6)]), Style.CORAL, 1.0, true)
 
 
-## What the homeland has (under the crest): its health, its biomass, its research -- each a picture and how much there
-## is, no more (what comes in each round, and what each is for, are told when it is pointed at). `hover` names the one
-## pointed at ("hp", "biomass", "research"; "" none).
+## What the homeland has (under the crest): its health, its population (taken of its bound: a dinosaur's head), its
+## research points -- each a picture and how much there is, no more (what comes in each round, and what each is for,
+## are told when it is pointed at). `hover` names the one pointed at ("hp", "pop", "research"; "" none).
 class Purse extends Control:
 	signal pointed(which: String)
 	const CELL := 92.0
 	var hp := 0
 	var hp_max := 1
 	var pop_used := 0             # the population taken...
-	var pop_cap := 0              # ...of what the biomass made a round feeds
+	var pop_cap := 0              # ...of what the homeland and its pools feed
 	var research := 0
 	var hover := ""
 
@@ -182,7 +182,7 @@ class Purse extends Control:
 		var low := float(hp) / maxf(1.0, hp_max) < 0.35
 		var full := pop_used >= pop_cap
 		var cells := [[Icons.HEALTH, str(hp), Style.CORAL if low else Style.PARCHMENT],
-			[Icons.BIOMASS, "%d/%d" % [pop_used, pop_cap], Style.AMBER if full else Style.PARCHMENT],
+			[Icons.ARMY, "%d/%d" % [pop_used, pop_cap], Style.AMBER if full else Style.PARCHMENT],
 			[Icons.RESEARCH, str(research), Style.PARCHMENT]]
 		for i in 3:
 			var x := i * CELL
@@ -487,8 +487,8 @@ class Tag extends Control:
 ## A battle's count (top middle): our side's small green shield and how many stand, the seconds left in a hairline
 ## ring (running down round it), theirs on a red shield.
 ## One thing on the build bar (GAME-DESIGN 27): a blueprint had -- or the star dinosaur on offer -- as its painting in
-## a round window, its rarity's metal round it; under it its price in gold; at its shoulders the research points it
-## costs and the population it takes (green, +: what it feeds more). Lit when it can be built (or bought) now, all of
+## a round window, its rarity's metal round it; under it its price in gold; at its shoulder the population it takes
+## (green, +: what it feeds more). Lit when it can be built (or bought) now, all of
 ## it grey when not (the player, 2026-10-21: "灰不能造的或者用的，亮能造的用的"); taken up, raised and ringed bright;
 ## pointed at, a little larger.
 class Plan extends BaseButton:
@@ -504,7 +504,6 @@ void fragment() {
 	var key := ""                 # its painting's (Art: "b_nest_red", "a_shell", "s_queen")
 	var glyph := ""               # its first word, while there is no painting
 	var price := 0
-	var genes := 0
 	var pop := 0
 	var rarity := 0
 	var lit := true
@@ -544,11 +543,6 @@ void fragment() {
 		var low := size.y - 11.0
 		Icons.draw(self, Icons.GOLD, Vector2(c.x - 9.0, low), 17.0, lit)
 		HudParts.words(self, Vector2(c.x + 1.0, low), str(price), 14, Style.PARCHMENT, Fonts.numbers(), -1, 3)
-		if genes > 0:
-			var at := c + Vector2(-r * 0.78, -r * 0.62)
-			draw_circle(at, 9.0, Color(0.02, 0.06, 0.06, 0.92), true, -1.0, true)
-			draw_arc(at, 9.0, 0.0, TAU, 32, Color(CardView.GENES, 0.9), 1.0, true)
-			HudParts.words(self, at + Vector2(0, 4.5), str(genes), 12, Color(0.85, 1.0, 0.95), Fonts.numbers(), 0, 3)
 		if pop != 0:
 			var at := c + Vector2(r * 0.78, -r * 0.62)
 			draw_circle(at, 9.0, Color(0.03, 0.07, 0.03, 0.92), true, -1.0, true)
@@ -558,7 +552,7 @@ void fragment() {
 				Fonts.numbers(), 0, 3)
 
 
-## The round's parts in a row at the top (Content.PHASES): the one it is in lit gold, those done dim, those to come
+## The round's parts in a row at the top (Content.phases): the one it is in lit gold, those done dim, those to come
 ## dimmer, a small diamond between each two.
 class Track extends Control:
 	var part := ""
@@ -569,7 +563,7 @@ class Track extends Control:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
-		var ids: Array = Content.PHASES.keys()
+		var ids: Array = Content.phases()
 		var now := ids.find(part)
 		var step := size.x / ids.size()
 		HudParts.veil(self, Rect2(0, 0, size.x, size.y), 0.45, 16.0)
