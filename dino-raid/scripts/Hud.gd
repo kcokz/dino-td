@@ -10,6 +10,9 @@ extends CanvasLayer
 
 signal chosen(value: Variant)
 
+const TECH_W := 74.0               # the tech tree's columns, at most...
+const TECH_H := 96.0               # ...and rows
+
 const WIN := Style.JADE
 const LOSE := Style.CORAL
 const CREAM := Style.PARCHMENT
@@ -29,6 +32,7 @@ var _bar_drop := 0.0              # how far below its place the bar is, coming i
 var _bar_tip_text: Label
 var _gold: Control
 var _go: HudParts.RoundButton
+var _tech: HudParts.RoundButton    # opens the tech tree (by the bar's left end)
 var _left: VBoxContainer           # top left: the crest, the purse, the relics and the schools' gifts, the wonders
 var _crest: HudParts.Crest
 var _purse: HudParts.Purse
@@ -64,6 +68,7 @@ var _overlay: Control
 var _shade: ColorRect
 var _stowed := false             # the build bar put away (in a battle)
 var screen := ""                 # the title of the screen up, "" when none (for tools)
+var teching := false             # the tech tree is up
 var offered: Array = []          # what the screen up offers to choose from: offers, star or place ids (for tools)
 
 
@@ -188,6 +193,12 @@ func setup(p_game: Game) -> void:
 	# Bottom right: the great seal that sends the army out, the army over it.
 	_go = _round(HudParts.RoundButton.new(Icons.BATTLE, "出战！", 50.0, true), Vector2(-172, -184), "")
 	_go.pressed.connect(func() -> void: game.act("fight"))
+	# By the bar's left end (placed with it, _process): the tech tree, the research points at its shoulder.
+	_tech = HudParts.RoundButton.new(Icons.RESEARCH, "科技", 24.0)
+	_tech.pressed.connect(func() -> void: open_tech())
+	_tech.mouse_entered.connect(func() -> void: _point = "research")
+	_tech.mouse_exited.connect(func() -> void: _point = "")
+	_root.add_child(_tech)
 	_army = HudParts.ArmyTag.new()
 	_army.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_army.position = Vector2(-180, -222)
@@ -293,6 +304,8 @@ func _process(_delta: float) -> void:
 	var k := minf(1.0, (_root.size.x - 460.0) / maxf(1.0, _bar.size.x))
 	_bar.scale = Vector2.ONE * k
 	_bar.position = Vector2((_root.size.x - _bar.size.x * k) * 0.5 - 40.0, _root.size.y - _bar.size.y * k - 14.0 + _bar_drop)
+	_tech.position = Vector2(_bar.position.x - _tech.size.x - 6.0, _bar.position.y + (_bar.size.y * k - _tech.size.y) * 0.5)
+	_tech.modulate.a = _bar.modulate.a
 	_place_bar_tip()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
 	var tip := game.describe() if _bar_hot == "" and not _overlay.visible else ""
@@ -519,6 +532,10 @@ func refresh() -> void:
 	_bar.visible = not away and not _stowed and game.phase != Game.Phase.DONE
 	_go.disabled = not planning
 	_go.visible = not away
+	_tech.visible = _bar.visible
+	_tech.disabled = not planning
+	_tech.count = str(home.genes)
+	_tech.queue_redraw()
 	_go.queue_redraw()
 	_menu.visible = not fighting
 	_gold.visible = not fighting
@@ -929,71 +946,139 @@ func _place_text(p: int) -> String:
 		Lang.t("、").join(minis), Lang.t(Content.ENEMIES[lv.boss].name)]
 
 
-## After a round (GAME-DESIGN 27, 28): blueprints to unlock one of, each for its research points (Home.unlock_price) --
-## a plate under each says what it costs; one that cannot be paid for now is dimmed and says so -- or the gold instead.
-## The one unlocked goes down into the build bar. What was chosen: its card ({id}), or "gold".
-func unlock(title: String, cards: Array) -> Variant:
+## The tech tree (科技树, GAME-DESIGN 29), opened while the player builds (the 科技 button by the bar, or T): its three
+## parts side by side (Content.TECH_PANELS), each of its lines a tree -- a tech under the one it needs, a line between
+## them, bright where the one above is had. A tech had says 已有; one that can be researched is lit, with its price in
+## research points (red when there are not enough); one its line has not come to yet is grey. Pointed at, a line under
+## the parts says what it is and what it asks; clicked, it is researched if it can be -- as many as there are research
+## points for. Closed with the button or Esc.
+func open_tech() -> void:
+	if game.phase != Game.Phase.PLAN or _overlay.visible:
+		return
 	var home: Home = game.home
-	var box := _open(title, Lang.t("花研究点数解锁一张，这个地方以后一直能造。你有 %d 研究点数") % home.genes)
-	offered = cards.duplicate()
+	game._let_go()
+	teching = true
+	var box := _open(Lang.t("科技"), "")
+	var sub: Label = box.get_child(1)
+	# Each part laid out first, so that the columns can be as wide as the screen allows them all.
+	var layouts: Array = []
+	var columns := 0.0
+	for panel in Content.TECH_PANELS:
+		var slots := {}
+		var next := [0.0]
+		for root in Content.TECH_PANELS[panel]:
+			if home.tech_here(root):
+				_tech_layout(root, 0, slots, next)
+		layouts.append([panel, slots, next[0]])
+		columns += next[0]
+	var w := minf(TECH_W, (_root.size.x - 240.0) / maxf(1.0, columns))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 28)
+	row.add_theme_constant_override("separation", 14)
 	box.add_child(row)
-	var views := {}
-	for i in cards.size():
-		var oi: Dictionary = cards[i]
-		var price := Home.unlock_price(oi.id)
-		var can := home.genes >= price
+	var info := _label("", 16, Fonts.serif(600), Style.PARCHMENT)
+	info.custom_minimum_size = Vector2(760, 40)
+	info.autowrap_mode = Style.wrap()
+	var nodes := {}                  # id -> HudParts.TechNode
+	var canvases: Array = []
+	var show := func() -> void:
+		sub.text = Lang.t("你有 %d 研究点数。研究过的，这个地方一直能造") % home.genes
+		for id in nodes:
+			var n: HudParts.TechNode = nodes[id]
+			n.had = id in home.plans
+			n.open = home.tech_open(id)
+			n.enough = home.genes >= Home.tech_cost(id)
+			n.queue_redraw()
+		for c in canvases:
+			(c as Control).queue_redraw()
+	for layout in layouts:
+		var slots: Dictionary = layout[1]
+		var frame := PanelContainer.new()
+		frame.add_theme_stylebox_override("panel", Style.panel(14.0))
+		row.add_child(frame)
 		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", 12)
-		row.add_child(col)
-		var slot := Control.new()
-		slot.custom_minimum_size = CardView.SIZE
-		slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		col.add_child(slot)
-		var v := CardView.new()
-		slot.add_child(v)
-		v.setup(oi)
-		v.purse = {"gold": home.gold, "genes": home.genes, "used": home.pop_used(), "cap": home.pop_cap()}
-		v.pop_need = Content.pop_of(Content.offer(oi))
-		v.genes_shown = price
-		v.set_state(can, false)
-		v.pivot_offset = CardView.SIZE * 0.5
-		_fly_in(v, Vector2.ZERO, i, cards.size())
-		v.turn_over(0.24 + i * 0.09, 0.3)
-		views[oi.id] = v
-		var plate := _button(Lang.t("解锁（%d 研究点数）") % price if can else Lang.t("研究点数不够（要 %d）") % price,
-			Vector2(CardView.SIZE.x + 30.0, 46), 16, can)
-		plate.disabled = not can
-		plate.pressed.connect(func() -> void: chosen.emit(oi))
-		col.add_child(plate)
-		if can:
-			v.clicked.connect(func(_v: CardView) -> void: chosen.emit(oi))
-	var gold := _button(Lang.t("不要，拿 %d 金") % Content.REWARD_GOLD, Vector2(200, 50), 19)
-	gold.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	gold.pressed.connect(func() -> void: chosen.emit("gold"))
-	box.add_child(gold)
-	var v: Variant = await chosen
-	if v is Dictionary:
-		await _into_bar(views[v.id])
+		col.add_theme_constant_override("separation", 6)
+		frame.add_child(col)
+		col.add_child(_label(Lang.t(layout[0]), 17, Fonts.serif(800), Style.GOLD_BRIGHT))
+		var depth := 0
+		for id in slots:
+			depth = maxi(depth, int(slots[id].y))
+		var canvas := Control.new()
+		canvas.custom_minimum_size = Vector2(float(layout[2]) * w, (depth + 1) * TECH_H)
+		col.add_child(canvas)
+		canvases.append(canvas)
+		for id in slots:
+			var o := Content.offer({"id": id})
+			var n := HudParts.TechNode.new()
+			n.key = ("b_" + str(o.builds)) if o.type == "build" else ("a_" + str(o.affix))
+			n.glyph = str(o.name).left(1)
+			n.title = str(o.name)
+			n.cost = Home.tech_cost(id)
+			n.rarity = int(o.rarity)
+			n.position = Vector2(float(slots[id].x) * w + (w - n.size.x) * 0.5, float(slots[id].y) * TECH_H)
+			canvas.add_child(n)
+			nodes[id] = n
+			var tech: String = id
+			n.mouse_entered.connect(func() -> void: info.text = _tech_tip(tech))
+			n.mouse_exited.connect(func() -> void: info.text = "")
+			n.pressed.connect(func() -> void:
+				if game.act("research", {"id": tech}):
+					info.text = _tech_tip(tech)
+					show.call())
+		# The lines: from each tech down to those that need it, bright where it is had.
+		canvas.draw.connect(func() -> void:
+			for id in slots:
+				var up := Home.tech_needs(id)
+				if not slots.has(up):
+					continue
+				var a: Vector2 = nodes[up].position + Vector2(nodes[up].size.x * 0.5, nodes[up].size.y - 2.0)
+				var b: Vector2 = nodes[id].position + Vector2(nodes[id].size.x * 0.5, 4.0)
+				var mid := (a.y + b.y) * 0.5
+				var col_line := Color(Style.GOLD_BRIGHT, 0.85) if up in home.plans else Color(Style.GOLD_DIM, 0.4)
+				canvas.draw_polyline(PackedVector2Array([a, Vector2(a.x, mid), Vector2(b.x, mid), b]), col_line, 1.6, true))
+	box.add_child(info)
+	var done := _button("好了", Vector2(180, 48), 19, true)
+	done.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	done.pressed.connect(func() -> void: chosen.emit("close"))
+	box.add_child(done)
+	show.call()
+	while await chosen != "close":
+		pass
+	teching = false
 	_close()
-	return v
+	game.refresh()
 
 
-## A blueprint unlocked going into the build bar: its card flying down to the bar's place, getting small, fading.
-func _into_bar(v: CardView) -> void:
-	var at := v.global_position
-	v.get_parent().remove_child(v)
-	_overlay.add_child(v)
-	v.global_position = at
-	v.rotation = 0.0
-	var to := Vector2(_root.size.x * 0.5, _root.size.y - 60.0) - CardView.SIZE * 0.5
-	var tw := v.create_tween().set_parallel()
-	tw.tween_property(v, "global_position", to, 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(v, "scale", Vector2.ONE * 0.22, 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(v, "modulate:a", 0.0, 0.18).set_delay(0.42)
-	await tw.finished
+## Lays out tech `id` and those that come of it: the leaves left to right (next[0] the next free column), a tech over the
+## middle of those under it. slots: id -> Vector2(column, depth). Its column.
+func _tech_layout(id: String, depth: int, slots: Dictionary, next: Array) -> float:
+	var under: Array = Content.OFFERS.keys().filter(func(k: String) -> bool:
+		return Home.tech_needs(k) == id and game.home.tech_here(k))
+	var col := 0.0
+	if under.is_empty():
+		col = next[0]
+		next[0] += 1.0
+	else:
+		for k in under:
+			col += _tech_layout(k, depth + 1, slots, next)
+		col /= under.size()
+	slots[id] = Vector2(col, depth)
+	return col
+
+
+## What tech `id` is and what it asks, for the line under the tree.
+func _tech_tip(id: String) -> String:
+	var home: Home = game.home
+	var o := Content.offer({"id": id})
+	var build := (Lang.t("造一座 %d 金") if o.type == "build" else Lang.t("贴一个 %d 金")) % int(o.price)
+	var state := ""
+	if id in home.plans:
+		state = Lang.t("已经有了。%s") % build
+	elif not home.tech_open(id):
+		state = Lang.t("要先研究%s") % Content.offer({"id": Home.tech_needs(id)}).name
+	else:
+		state = Lang.t("研究要 %d 研究点数（你有 %d）。研究以后，%s") % [Home.tech_cost(id), home.genes, build]
+	return Lang.t("%s：%s\n%s") % [o.name, Content.offer_text(o), state]
 
 
 ## A screen over everything: a title, cards (to click, when `pick`), buttons. What was clicked: the card's offer or

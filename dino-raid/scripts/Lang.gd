@@ -436,6 +436,13 @@ const EN := {
 	"花研究点数解锁一张，这个地方以后一直能造。你有 %d 研究点数": "Spend research to unlock one: you can build it here from now on. You have %d research",
 	"解锁（%d 研究点数）": "Unlock (%d research)", "下轮利息 +%d": "Interest next round +%d",
 	"不占人口": "Takes no population", "每只占 %d 人口": "Each takes %d population",
+	# The tech tree (GAME-DESIGN 29).
+	"科技": "Tech", "词条": "Affixes", "造、升级、贴词条、研究科技": "Build, raise, stick on affixes, research",
+	"小首领来了": "A mini-boss comes", "你有 %d 研究点数。研究过的，这个地方一直能造": "You have %d research. What is researched can be built here from now on",
+	"好了": "Done", "造一座 %d 金": "builds for %d gold", "贴一个 %d 金": "sticks on for %d gold",
+	"已经有了。%s": "Researched: %s", "要先研究%s": "Research %s first",
+	"研究要 %d 研究点数（你有 %d）。研究以后，%s": "Costs %d research (you have %d). Then it %s",
+	"%s：%s\n%s": "%s: %s\n%s", "已有": "Had",
 }
 
 static var _english: Translation

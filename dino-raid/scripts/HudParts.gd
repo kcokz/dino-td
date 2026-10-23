@@ -516,11 +516,15 @@ void fragment() {
 		size = custom_minimum_size
 		focus_mode = Control.FOCUS_NONE
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		material = ShaderMaterial.new()
+		material.shader = grey_shader()
+
+	## The shader that greys a whole picture (its "grey" 0 to 1), made once.
+	static func grey_shader() -> Shader:
 		if _grey == null:
 			_grey = Shader.new()
 			_grey.code = GREY
-		material = ShaderMaterial.new()
-		material.shader = _grey
+		return _grey
 
 	func _draw() -> void:
 		(material as ShaderMaterial).set_shader_parameter("grey", 0.0 if lit else 1.0)
@@ -550,6 +554,63 @@ void fragment() {
 			var said := ("+%d" % -pop) if pop < 0 else str(pop)
 			HudParts.words(self, at + Vector2(0, 4.5), said, 12, Color(0.6, 1.0, 0.5) if pop < 0 else Color(0.9, 1.0, 0.85),
 				Fonts.numbers(), 0, 3)
+
+
+## A tech on the tech tree (GAME-DESIGN 29): its blueprint's painting in a round window, its line's metal round it, its
+## name under it, and under that its price in research points (a flask and how many; red when there are not enough) --
+## or, had, a jade 已有. Lit when it is had or can be researched, all of it grey while the tech it needs is not had;
+## pointed at, a little larger.
+class TechNode extends BaseButton:
+	const R := 22.0
+	var key := ""                 # its painting's (Art)
+	var glyph := ""               # its first word, while there is no painting
+	var title := ""
+	var cost := 0
+	var rarity := 0
+	var had := false
+	var open := false             # the tech it needs is had
+	var enough := false           # ...and the research points for it
+	var _tex: Texture2D
+	var _looked := false
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(70, 86)
+		size = custom_minimum_size
+		focus_mode = Control.FOCUS_NONE
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		material = ShaderMaterial.new()
+		material.shader = Plan.grey_shader()
+
+	func _draw() -> void:
+		var lit := had or open
+		(material as ShaderMaterial).set_shader_parameter("grey", 0.0 if lit else 1.0)
+		if not _looked:
+			_looked = true
+			_tex = Art.of(key)
+		var hot := get_draw_mode() in [DRAW_HOVER, DRAW_HOVER_PRESSED]
+		var c := Vector2(size.x * 0.5, R + 8.0)
+		var r := R * (1.08 if hot else 1.0)
+		var metal: Color = CardView.METAL[clampi(rarity, 0, CardView.METAL.size() - 1)]
+		if had:
+			draw_circle(c, r + 7.0, Color(Style.GOLD_BRIGHT, 0.22), true, -1.0, true)
+		elif open and enough:
+			draw_circle(c, r + 6.0, Color(Style.JADE, 0.16 if hot else 0.1), true, -1.0, true)
+		draw_circle(c + Vector2(0, 2), r + 2.0, Color(0, 0, 0, 0.5), true, -1.0, true)
+		if _tex != null:
+			HudParts.window(self, c, r, _tex, 1.2, Vector2(0.5, 0.48), Color.WHITE if lit else Color(0.7, 0.7, 0.7))
+		else:
+			draw_circle(c, r, Color(0.16, 0.19, 0.17), true, -1.0, true)
+			HudParts.words(self, c + Vector2(0, 7), glyph, 20, Style.PARCHMENT, Fonts.serif(900), 0, 3)
+		draw_arc(c, r, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT if had else metal, 0.95), 2.2 if had else 1.3, true)
+		HudParts.words(self, Vector2(c.x, c.y + R + 12.0), title, 13, Style.PARCHMENT if lit else Color(Style.PARCHMENT, 0.6),
+			Fonts.serif(700), 0, 3)
+		var low := size.y - 9.0
+		if had:
+			HudParts.words(self, Vector2(c.x, low), Lang.t("已有"), 13, Style.JADE, Fonts.serif(800), 0, 3)
+		else:
+			Icons.draw(self, Icons.RESEARCH, Vector2(c.x - 8.0, low), 15.0, lit)
+			HudParts.words(self, Vector2(c.x + 1.0, low), str(cost), 14,
+				Style.CORAL if open and not enough else Style.PARCHMENT, Fonts.numbers(), -1, 3)
 
 
 ## The round's parts in a row at the top (Content.phases): the one it is in lit gold, those done dim, those to come
