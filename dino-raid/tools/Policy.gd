@@ -199,9 +199,10 @@ static func best_place(run: Run) -> int:
 
 
 ## How good a homeland looks: this round's battle (and what scavengers bring back); the army its nests can make, as far
-## as what comes in feeds it; what comes in and what is kept -- for the gold school, saving and the most interest count
-## more; for any school, its own buildings (up to a few levels of them); for the genes school, nests halfway to a new
-## species.
+## as the population allows; a little room in the population; the gold and research points that come in and are kept
+## -- for the gold school, saving and the most interest count more; for any school, its own buildings (up to a few
+## levels of them); for the genes school, nests halfway to a new species. The population is a bound, not something
+## had (GAME-DESIGN 28): more of it than the nests can use is worth nothing.
 static func score(run: Run, h: Home, school := "") -> float:
 	var b := _battle(run, h)
 	var s := (300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0) + 10.0 * float(b.loot)
@@ -214,7 +215,7 @@ static func score(run: Run, h: Home, school := "") -> float:
 		strength += Content.strength(Content.unit_stats(u))
 	var fed := minf(1.0, (float(h.income_biomass() - h.star_food()) + 1.0) / maxf(1.0, float(food)))
 	s += strength * (0.4 + 0.6 * fed) * 1.5
-	s += 10.0 * h.income_gold() + 5.0 * h.income_biomass() + 4.0 * h.income_genes()
+	s += 10.0 * h.income_gold() + 4.0 * h.income_genes()
 	s += 1.0 * h.genes + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max() + 2.0 * mini(h.pop_room(), 4)
 	if school == "gold":
 		s += 3.0 * h.interest_max() + 2.0 * h.gold
