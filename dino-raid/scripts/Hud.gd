@@ -287,9 +287,12 @@ func setup(p_game: Game) -> void:
 
 
 func _process(_delta: float) -> void:
-	# The bar at the foot of the screen, a little left of the middle, whatever it holds (it grows as blueprints come).
+	# The bar at the foot of the screen, a little left of the middle, whatever it holds (it grows as blueprints come) --
+	# smaller when it would reach the buttons at either side.
 	_bar.reset_size()
-	_bar.position = Vector2((_root.size.x - _bar.size.x) * 0.5 - 40.0, _root.size.y - _bar.size.y - 14.0 + _bar_drop)
+	var k := minf(1.0, (_root.size.x - 460.0) / maxf(1.0, _bar.size.x))
+	_bar.scale = Vector2.ONE * k
+	_bar.position = Vector2((_root.size.x - _bar.size.x * k) * 0.5 - 40.0, _root.size.y - _bar.size.y * k - 14.0 + _bar_drop)
 	_place_bar_tip()
 	_info.position = Vector2(_root.size.x - 18.0 - _info.size.x, _right.position.y + _right.size.y + 10.0)
 	var tip := game.describe() if _bar_hot == "" and not _overlay.visible else ""
