@@ -454,11 +454,13 @@ static func pop_of(o: Dictionary) -> int:
 ## there grow. (2026-10-21, 48 runs by school: at 0.6, 0.66, 0.72 23 held all three, the schools far apart; all at 0.6,
 ## 44 -- every school 6 to 8 of 8. 2026-10-22, every place begun with one nest: all at 0.6, 43 held all, but the first
 ## place all but never lost a battle -- 1 of 576 -- its homeland growing fastest, the spore pools; the first at 0.8,
-## the second 0.66, the third 0.6: 40 held all, battles lost in every place.)
+## the second 0.66, the third 0.6: 40 held all, battles lost in every place. 2026-10-23, the tech tree: at those, of 37
+## runs only 22 held all; the first at 0.72 or 0.8, the second 0.66, the third 0.54: 44 of 48, though the first place
+## is lost but 6 or 7 times in 576 by the tools.)
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.8, 0.66, 0.6]
+const SHARE := [0.8, 0.66, 0.54]
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
@@ -522,14 +524,15 @@ const TERRAIN := {
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low
-## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-22, every place begun with one nest
-## picked, the population a bound, research points for blueprints, the buildings' reach (GAME-DESIGN 28) -- 48 calm
+## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-23 with the tech tree (GAME-DESIGN 29;
+## before it, 2026-10-22: every place begun with one nest picked, the population a bound, research points for
+## blueprints, the buildings' reach, GAME-DESIGN 28) -- 48 calm
 ## runs, 8 a school, the scavengers' loot not counted (with no one coming they all stand, Policy._battle), the
 ## population counted only as far as the nests use it (Policy.score); a level's curve never below the one before it,
 ## round for round. Measure again after changing what can be built or made.
-const LIMIT := [12, 35, 75, 114, 150, 195, 230, 260, 290, 322, 351, 385,
-	12, 35, 75, 114, 150, 195, 230, 260, 290, 322, 351, 385,
-	12, 35, 75, 114, 150, 195, 230, 270, 325, 380, 416, 460]
+const LIMIT := [12, 32, 82, 124, 166, 202, 235, 264, 282, 301, 328, 344,
+	12, 32, 82, 129, 181, 229, 268, 311, 343, 366, 396, 413,
+	12, 32, 82, 138, 194, 240, 286, 330, 381, 437, 496, 516]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses
