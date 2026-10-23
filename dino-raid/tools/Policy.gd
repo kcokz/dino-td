@@ -6,9 +6,9 @@ class_name Policy
 ## smart: the play that does the most good for its price -- a blueprint built, a building raised (a nest's both ways),
 ## the star on offer -- this round's battle worked out after it, and what the homeland comes to: the army its nests
 ## make (as far as the biomass coming in, less what the stars eat, feeds it), what comes in each round, what is kept
-## (gold earns interest); a place's first nest, the one that does the most good built with the round's pay; after
-## each round the blueprint it has the research points for (or the gold) that does the most good; the first place the
-## map offers. A smart one may keep to a school (Content.SCHOOLS): it leans to that school's blueprints and raises,
+## (gold earns interest); a place's first nest, the one that does the most good built with the round's pay; each
+## round, before building, the techs that would do the most good for their research points (GAME-DESIGN 29); the
+## first place the map offers. A smart one may keep to a school (Content.SCHOOLS): it leans to that school's blueprints and raises,
 ## never builds another school's own buildings (those that are not just for biomass, research or gold), and -- for
 ## gold -- saves.
 
@@ -18,6 +18,7 @@ const COMMIT := 30.0              # each level of its school's own buildings, up
 const COMMIT_UPTO := 4            # (what a school's own buildings do may only show later: more slots, cheaper affixes)
 const HOPE := 25.0                # to the genes school, a nest halfway to a new species, with room for the other half
 const ROOM := 4                   # population past what the nests use that still counts: room for the next
+const RESEARCH_WORTH := 1.0       # the least good a tech must do for each research point it costs
 
 
 ## A random play: ["build", id, target], ["raise", target, choice], ["star"], or [] when there is none.
@@ -168,30 +169,40 @@ static func best_first(run: Run, h: Home, cards: Array, _school := "") -> int:
 	return best
 
 
-## The blueprint to take after a round (`cards`: {id} each): of those it has the research points for, the one that
-## would do the most good built now, where it fits best (leaning to the school; a few places tried) -- its index in
-## `cards` -- or -1 for the gold, when none would do more than the gold is worth.
-static func best_reward(run: Run, h: Home, cards: Array, school := "") -> int:
+## The tech to research now (Home.research): of those open that there are research points for, the one that would do
+## the most good built now (gold aside; a few places tried), for its research points, leaning to the school -- "" when
+## none would do enough good for them. (What it opens further down its line is not counted: a school's own buildings
+## count for themselves, score's COMMIT.)
+static func best_research(run: Run, h: Home, school := "") -> String:
 	var t := h.clone()
 	t.gold += 30
 	var base := score(run, t, school)
-	var best := -1
-	var best_gain := 2.0 * Content.REWARD_GOLD
-	for k in cards.size():
-		var id: String = cards[k].id
-		if h.genes < Home.unlock_price(id):
+	var best := ""
+	var best_gain := RESEARCH_WORTH
+	for id in Content.OFFERS:
+		if not h.can_research(id):
 			continue
 		var lean := _lean(school_of(id), school, _others(id, school))
+		if lean <= 0.0:
+			continue
 		var u := t.clone()
 		u.unlock(id)
+		var top := 0.0
 		for at in u.targets(id).slice(0, 8):
 			var v := u.clone()
 			v.build_plan(id, at)
-			var gain := (score(run, v, school) - base) * lean
-			if gain > best_gain:
-				best_gain = gain
-				best = k
+			top = maxf(top, score(run, v, school) - base)
+		var gain := top * lean / float(Home.tech_cost(id))
+		if gain > best_gain:
+			best_gain = gain
+			best = id
 	return best
+
+
+## A tech at random of those there are research points for, or "".
+static func any_research(h: Home, rng: RandomNumberGenerator) -> String:
+	var can: Array = Content.OFFERS.keys().filter(func(id: String) -> bool: return h.can_research(id))
+	return can[rng.randi() % can.size()] if not can.is_empty() else ""
 
 
 ## The next place on the map: the first of the two (the map is shuffled already).

@@ -5,9 +5,9 @@ extends SceneTree
 ##   Godot --headless --path dino-raid --script res://tools/sim_runs.gd -- [smart|random|school] [runs] [first seed] [measure|limit|-] [school]
 ##
 ## random, smart and school play as tools/Policy.gd says; school is smart keeping to the next school (Content.SCHOOLS)
-## in turn -- or, named, to that one only. Each place's first nest: random takes one at random, the others the best (Policy.best_first). After each
-## round random takes a blueprint (or the gold) at random -- the gold when it has not the research points -- the others
-## the best (Policy.best_reward) -- after a mini-boss, of the uncommon and the rare; on the map, the first of the two.
+## in turn -- or, named, to that one only. Each place's first nest: random takes one at random, the others the best
+## (Policy.best_first). Each round, before building, random researches techs at random as far as its research points
+## go, the others the best (Policy.best_research); on the map, the first of the two.
 ## Prints,
 ## for each run, how far it got, the homeland's health at each level's end, its stars and what it built; then how many
 ## held each level -- and,
@@ -89,11 +89,6 @@ func _init() -> void:
 			if run.over:
 				line += "  died in %s (level %d) round %d" % [Content.LEVELS[run.place].name, run.level + 1, run.round]
 				break
-			var cards := run.rare_offer() if run.was_mini() else run.reward_offer()
-			if not cards.is_empty():
-				var pick := Policy.best_reward(run, run.home, cards, school) if policy != "random" else rng.randi_range(-1, cards.size() - 1)
-				if pick < 0 or not run.take_reward(cards[pick].id):
-					run.take_reward_gold()
 			if out.level_won:
 				held[run.level] += 1
 				line += "  %s hp %d/%d (lost %d)" % [Content.LEVELS[run.place].name, run.home.hp, run.home.hp_max(), losses]
@@ -157,6 +152,11 @@ func _first(run: Run, school: String) -> void:
 
 func _random(run: Run) -> void:
 	for guard in 20:
+		var tech := Policy.any_research(run.home, rng)
+		if tech == "":
+			break
+		run.home.research(tech)
+	for guard in 20:
 		var play := Policy.any_play(run.home, rng)
 		if play.is_empty():
 			break
@@ -164,6 +164,11 @@ func _random(run: Run) -> void:
 
 
 func _smart(run: Run, school: String) -> void:
+	for guard in 20:
+		var tech := Policy.best_research(run, run.home, school)
+		if tech == "":
+			break
+		run.home.research(tech)
 	for guard in 16:
 		var play := Policy.best_play(run, run.home, school)
 		if play.is_empty():

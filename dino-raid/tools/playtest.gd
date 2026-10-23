@@ -88,6 +88,8 @@ func _scripted() -> void:
 	await _aim_each("r1")
 	await _evolve()
 	for r in 3:
+		if r == 1:
+			await _tech_shots()
 		_play_all()
 		await _frames(40)
 		await _shot("bought_r%d" % game.run.round)
@@ -172,6 +174,21 @@ func _evolve() -> void:
 	await _shot("evolved")
 	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
 	game.refresh()
+
+
+## The tech tree (GAME-DESIGN 29): opened, a tech pointed at, one researched, closed.
+func _tech_shots() -> void:
+	game.home.genes += 6
+	game.hud.open_tech()
+	await _frames(20)
+	await _shot("tech_tree")
+	var open: Array = Content.OFFERS.keys().filter(func(id: String) -> bool: return game.home.can_research(id))
+	if not open.is_empty():
+		game.act("research", {"id": open[0]})
+		await _frames(8)
+		await _shot("tech_researched")
+	game.hud.chosen.emit("close")
+	await _frames(10)
 
 
 ## A free plot behind the battle line in p's column, or NOWHERE.
@@ -294,7 +311,7 @@ func _rich() -> void:
 	await _frames(10)
 	await _shot("boss_plan")
 	await _fight_shots("boss")
-	# A blueprint to unlock (none, every one being had here), then the map -- till the next place is come to.
+	# The map -- till the next place is come to.
 	for k in 3:
 		await _screens("boss")
 		if game.hud.screen.begins_with("到了"):
@@ -326,8 +343,8 @@ func _button_saying(words: String) -> Button:
 	return null
 
 
-## The screen after a battle (a blueprint to unlock, the map) or at a place's start (its first nest), shot and answered
-## -- the map with a place picked on it first. A place come to is left to the caller.
+## The screen after a battle (the map) or at a place's start (its first nest), shot and answered -- the map with a place
+## picked on it first. A place come to is left to the caller.
 func _screens(label: String) -> void:
 	while game.hud.screen == "" and not game.phase in [Game.Phase.PLAN, Game.Phase.DONE]:
 		await process_frame
@@ -345,14 +362,12 @@ func _screens(label: String) -> void:
 		await _frames(6)
 		await _shot("map_picked_" + label)
 	else:
-		await _shot(("plan_pick_" if s.begins_with("解锁") or s.begins_with("小首领") or s.begins_with("选第一个巢")
-			else "screen_") + label)
+		await _shot(("plan_pick_" if s.begins_with("选第一个巢") else "screen_") + label)
 	_answer()
 	await _frames(4)
 
 
-## Answers the screen up: the arrival, the first nest (smart: the best), a blueprint (smart: the best; else the first
-## it has the research points for -- or the gold), the next place.
+## Answers the screen up: the arrival, the first nest (smart: the best), the next place.
 func _answer() -> void:
 	var s: String = game.hud.screen
 	var offered: Array = game.hud.offered
@@ -360,13 +375,6 @@ func _answer() -> void:
 		game.hud.chosen.emit("开始")
 	elif s.begins_with("选第一个巢"):
 		game.hud.chosen.emit(offered[Policy.best_first(game.run, game.home, offered) if smart else 0])
-	elif s.begins_with("解锁") or s.begins_with("小首领"):
-		var k := Policy.best_reward(game.run, game.home, offered) if smart else \
-			offered.find_custom(func(c: Dictionary) -> bool: return game.home.genes >= Home.unlock_price(c.id))
-		if k >= 0 and k < offered.size():
-			game.hud.chosen.emit(offered[k])
-		else:
-			game.hud.chosen.emit("gold")
 	elif s.begins_with("下一站"):
 		game.hud.chosen.emit(Policy.best_place(game.run))
 
@@ -432,6 +440,10 @@ func _bot(rounds: int) -> void:
 			await _frames(3)
 			continue
 		if smart:
+			for guard in 20:
+				var tech := Policy.best_research(game.run, game.home)
+				if tech == "" or not game.act("research", {"id": tech}):
+					break
 			for guard in 16:
 				var play := Policy.best_play(game.run, game.home)
 				if play.is_empty():
@@ -461,8 +473,12 @@ func _bot(rounds: int) -> void:
 	quit()
 
 
-## Builds and raises the careless way (tools/Policy.gd any_play).
+## Researches, builds and raises the careless way (tools/Policy.gd any_research, any_play).
 func _play_all() -> void:
+	for guard in 20:
+		var tech := Policy.any_research(game.home, rng)
+		if tech == "" or not game.act("research", {"id": tech}):
+			break
 	for guard in 20:
 		var play := Policy.any_play(game.home, rng)
 		if play.is_empty():
