@@ -424,11 +424,13 @@ static func pop_of(o: Dictionary) -> int:
 ## its tier (TIER_POWER), wherever it is; each wave is SHARE of LIMIT strong for its tier. Every level is begun from
 ## nothing (Home.fresh), the calm runs that measure LIMIT too, so each level's own curve tells how strong the armies
 ## there grow. (2026-10-21, 48 runs by school: at 0.6, 0.66, 0.72 23 held all three, the schools far apart; all at 0.6,
-## 44 -- every school 6 to 8 of 8.)
+## 44 -- every school 6 to 8 of 8. 2026-10-22, every place begun with one nest: all at 0.6, 43 held all, but the first
+## place all but never lost a battle -- 1 of 576 -- its homeland growing fastest, the spore pools; the first at 0.8,
+## the second 0.66, the third 0.6: 40 held all, battles lost in every place.)
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.6, 0.6, 0.6]
+const SHARE := [0.8, 0.66, 0.6]
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot

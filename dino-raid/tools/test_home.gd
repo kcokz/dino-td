@@ -1036,20 +1036,22 @@ func _waves() -> void:
 			own += 1
 	check("the four new places their own monsters", own == 4, own)
 	# Every level being begun from nothing (GAME-DESIGN 26), the second comes about as strong as the first, round for
-	# round, and stronger later on as its own curve rises -- never weaker, past the first two rounds, but for what one
-	# monster more or less makes of it: a tenth, or one of its kinds while a wave is still a handful (its monsters
-	# bigger, the second's comes to fewer of them).
+	# round, as its share is of the first's (the first place's homeland grows fastest -- its spore pools -- so its share
+	# is the higher, GAME-DESIGN 28), and stronger later on as its own curve rises -- never weaker than that, past the
+	# first two rounds, but for what one monster more or less makes of it: a tenth, or one of its kinds while a wave is
+	# still a handful (its monsters bigger, the second's comes to fewer of them).
 	var weaker := 0
+	var share := float(Content.SHARE[1]) / float(Content.SHARE[0])
 	for place in Content.LEVELS.size():
 		var one := 0.0
 		for m in Content.LEVELS[place].mix:
 			one = maxf(one, Content.enemy_strength(m[0], Content.TIER_POWER[1]))
 		for r in range(3, Content.ROUNDS + 1):
-			var first := _strength(Content.wave(place, 0, r), 0)
+			var first := _strength(Content.wave(place, 0, r), 0) * share
 			var second := _strength(Content.wave(place, 1, r), 1)
 			if second < 0.9 * first and second < first - one:
 				weaker += 1
-	check("the second level never weaker, round for round past its first two", weaker == 0, weaker)
+	check("the second level never weaker than its share, round for round past its first two", weaker == 0, weaker)
 	var first := Content.danger(Content.wave(0, 0, 1))
 	var last := Content.danger(Content.wave(0, 2, Content.ROUNDS), Content.TIER_POWER[2])
 	check("danger: a skull or two at first, five or six at the end", first <= 2 and last >= 5 and last <= 6, [first, last])
