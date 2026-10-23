@@ -280,6 +280,17 @@ func _rich() -> void:
 	game.run.round = game.run.rounds()
 	game._version += 1
 	game.refresh()
+	# Made strong enough for the boss, so that the run goes on to the next place: every nest elite twice over.
+	if game.forecast.get("result", "") != "won":
+		for p in h.buildings:
+			if Content.is_nest(h.buildings[p].kind):
+				h.buildings[p].path = ["elite", "elite"]
+				h.buildings[p].level = Content.LEVEL_MAX
+		game.home_view.refresh_buildings(false)
+		game._version += 1
+		game.home_view.sync_army(h.army())
+		game.refresh()
+		print("boss: made elite, the forecast now %s" % game.forecast.get("result", ""))
 	await _frames(10)
 	await _shot("boss_plan")
 	await _fight_shots("boss")
