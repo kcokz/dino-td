@@ -21,12 +21,17 @@ const ROOM := 4                   # population past what the nests use that stil
 const RESEARCH_WORTH := 1.0       # the least good a tech must do for each research point it costs
 
 
-## A random play: ["build", id, target], ["raise", target], ["star"], or [] when there is none.
+## A random play: ["build", id, target], ["open", plot] (once a nest stands: the first nest first), ["raise", target],
+## ["star"], or [] when there is none.
 static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 	var can: Array = []
 	for id in h.plans:
 		for at in _careless(h, h.targets(id), id):
 			can.append(["build", id, at])
+	var nests := h.buildings.values().any(func(b: Dictionary) -> bool: return Content.is_nest(b.kind))
+	for id in h.plot_ids():
+		if nests and h.can_open(id):
+			can.append(["open", id])
 	for at in h.buildings:
 		if h.can_raise(at):
 			can.append(["raise", at])
@@ -50,6 +55,8 @@ static func play(h: Home, p: Array) -> Array:
 			return h.raise(p[1])
 		"move":
 			return h.move_building(p[1], p[2])
+		"open":
+			return h.open_plot(p[1])
 		"star":
 			return h.buy_star()
 	return []
@@ -87,7 +94,9 @@ static func _own(kind: String) -> String:
 	return "" if first.has("biomass") or first.has("genes") or first.has("gold") else str(b.school)
 
 
-## The best play for its price -- a blueprint built, a building raised, the star on offer: ["build", id, target],
+## The best play for its price -- a blueprint built, a plot opened (GAME-DESIGN 33: what it is worth, the best building
+## put on it, paid for with that cell's share of the plot's price -- the rest of it room for more), a building raised,
+## the star on offer: ["build", id, target], ["open", plot],
 ## ["raise", target, choice] or ["star"], or [] when nothing beats keeping the gold. With no nest built yet, a nest
 ## first, wherever it does the most good: one nest may lose the battle all the same, so that no one battle shows
 ## what it is worth, and keeping the gold would look better (the interest) for ever.
@@ -123,6 +132,28 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 			if gain > best_gain:
 				best_gain = gain
 				best = ["build", id, at]
+	for plot in h.plot_ids():
+		if not h.can_open(plot):
+			continue
+		var opened := h.clone()
+		opened.open_plot(plot)
+		# This cell's share of the price, the rest room for more: weighed as kept, not spent.
+		var share := ceili(float(h.open_price(plot)) / float(h.plot_cells(plot).size()))
+		for id in opened.plans:
+			var o := Content.offer({"id": id})
+			var lean := _lean(school_of(id), school, _others(id, school))
+			if o.type != "build" or lean <= 0.0:
+				continue
+			for at in opened.targets(id):
+				if opened.plot_of[at] != plot:
+					continue
+				var t := opened.clone()
+				t.build_plan(id, at)
+				t.gold += h.open_price(plot) - share
+				var gain := (score(run, t, school) - base) / float(share + opened.price_at(o, at)) * lean
+				if gain > best_gain:
+					best_gain = gain
+					best = ["open", plot]
 	for at in h.buildings:
 		if not h.can_raise(at):
 			continue
@@ -201,9 +232,9 @@ static func any_research(h: Home, rng: RandomNumberGenerator) -> String:
 	return can[rng.randi() % can.size()] if not can.is_empty() else ""
 
 
-## A nest moved to face the wave's lanes (Home.move_building; GAME-DESIGN 32): of each nest to each other plot of the
-## battle line, the move after which this round's battle goes best -- ["move", from, to] -- or [] when none does
-## better. Only when the battle would not be won as things stand, and never with no one coming.
+## A nest moved to face the wave's lanes (Home.move_building; GAME-DESIGN 32): of each nest to each other open cell,
+## the move after which this round's battle goes best -- ["move", from, to] -- or [] when none does better. Only when
+## the battle would not be won as things stand, and never with no one coming.
 static func best_move(run: Run, h: Home) -> Array:
 	if run.calm:
 		return []
@@ -215,18 +246,16 @@ static func best_move(run: Run, h: Home) -> Array:
 	for p in h.buildings:
 		if not Content.is_nest(h.buildings[p].kind):
 			continue
-		for x in Home.COLS:
-			for y in Content.FRONT_ROWS:
-				var q := Vector2i(x, y)
-				if q == p:
-					continue
-				var t := h.clone()
-				if t.move_building(p, q).is_empty():
-					continue
-				var s := _battle_worth(_battle(run, t))
-				if s > best_s + 0.01:
-					best_s = s
-					best = ["move", p, q]
+		for q in h.plot_of:
+			if q == p or not h.is_open(q):
+				continue
+			var t := h.clone()
+			if t.move_building(p, q).is_empty():
+				continue
+			var s := _battle_worth(_battle(run, t))
+			if s > best_s + 0.01:
+				best_s = s
+				best = ["move", p, q]
 	return best
 
 

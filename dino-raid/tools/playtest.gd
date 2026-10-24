@@ -65,14 +65,7 @@ func _scripted() -> void:
 	await _frames(10)
 	_check_pointing()
 	var home := game.home
-	for t in ["pond", "tree"]:
-		for p in home.terrain:
-			if home.terrain[p] == t and not home.buildings.has(p):
-				game.hover = {"plot": p, "unit": ""}
-				game.refresh()
-				await _frames(4)
-				await _shot("info_" + t)
-				break
+	await _plot_shots()
 	for p in home.buildings:
 		if Content.is_nest(home.buildings[p].kind):
 			game.hover = {"plot": p, "unit": ""}
@@ -128,27 +121,55 @@ func _aim_each(label: String) -> void:
 	game.refresh()
 
 
-## A nest evolved: a stabilizer behind it for a second affix, acid and poison had and stuck on it -- what the second
+## A plot not open yet (GAME-DESIGN 33): pointed at, what it says; clicked, the button to open it; opened for gold,
+## its mist lifting.
+func _plot_shots() -> void:
+	var home := game.home
+	home.gold += 10
+	var shut := HomeView.NOWHERE
+	for p in home.plot_of:
+		if not home.is_open(p) and home.can_open(home.plot_of[p]):
+			shut = p
+			break
+	if shut == HomeView.NOWHERE:
+		print("plots: none to open")
+		home.gold -= 10
+		return
+	game.hover = {"plot": shut, "unit": ""}
+	game.refresh()
+	await _frames(6)
+	await _shot("info_shut")
+	game._click()
+	await _frames(8)
+	await _shot("open_panel")
+	if not game.act("open", {"plot": home.plot_of[shut]}):
+		print("plots: could not open %s" % home.plot_of[shut])
+	await _frames(40)
+	await _shot("opened")
+	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
+	game.refresh()
+
+
+## A nest evolved: a stabilizer beside it for a second affix, acid and poison had and stuck on it -- what the second
 ## shows before it goes on, and the new species. (A red nest put down for it first, where there is none bare yet.)
 func _evolve() -> void:
 	var home := game.home
 	var nest := HomeView.NOWHERE
 	var spot := HomeView.NOWHERE
 	for p in home.buildings:
-		if Content.is_nest(home.buildings[p].kind) and home.buildings[p].affixes.is_empty() and _behind(p) != HomeView.NOWHERE:
+		if Content.is_nest(home.buildings[p].kind) and home.buildings[p].affixes.is_empty() and _beside(p) != HomeView.NOWHERE:
 			nest = p
 			break
 	if nest == HomeView.NOWHERE:
-		for x in Home.COLS:
-			var p := Vector2i(x, 0)
-			if not home.buildings.has(p) and _behind(p) != HomeView.NOWHERE:
+		for p in home.plot_of:
+			if home.buildable(p) and not home.buildings.has(p) and _beside(p) != HomeView.NOWHERE:
 				home.build(p, "nest_red")
 				nest = p
 				break
 	if nest != HomeView.NOWHERE:
-		spot = _behind(nest)
+		spot = _beside(nest)
 	if spot == HomeView.NOWHERE:
-		print("evolve: no nest with room behind it")
+		print("evolve: no nest with room beside it")
 		return
 	home.build(spot, "stabilizer")
 	home.unlock("a_acid")
@@ -191,44 +212,20 @@ func _tech_shots() -> void:
 	await _frames(10)
 
 
-## A free plot behind the battle line in p's column, or NOWHERE.
-func _behind(p: Vector2i) -> Vector2i:
-	for y in range(Content.FRONT_ROWS, Home.ROWS):
-		var q := Vector2i(p.x, y)
+## A free open cell beside p, or NOWHERE.
+func _beside(p: Vector2i) -> Vector2i:
+	for q in game.home.around(p):
 		if game.home.buildable(q) and not game.home.buildings.has(q):
 			return q
 	return HomeView.NOWHERE
 
 
-## A homeland built up by hand -- the battle line full of nests (the four new species, elites), behind it every school's
-## buildings, stars in their pens -- a pen pointed at, a star's own screen, a nest clicked and raised elite, its boss
-## battle, the map, the next place.
+## A homeland built up by hand -- the rainforest's map all open, every plot built up as its shape asks (Game's
+## showcase: the four new species, elites, every school's buildings), stars in their pens -- a pen pointed at, a star's
+## own screen, a nest clicked and raised elite, its boss battle, the map, the next place.
 func _rich() -> void:
 	var h := game.home
-	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree", Vector2i(3, 3): "pond"}
-	h.buildings.clear()
-	# [plot, kind, nest's choices (or a level), affixes] -- the battle line laid out for the nests' gifts: two greens
-	# guarding (a white caring behind one, scavengers behind the other), four reds swarming, a gold alone at the edge, a
-	# blue with no cover yet (nothing in front of it), a mutant with two affixes.
-	var plan := [[Vector2i(0, 0), "nest_green", ["elite"], ["shell"]],
-		[Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]], [Vector2i(2, 0), "nest_red", ["elite", "elite"], ["flame", "blade"]],
-		[Vector2i(3, 0), "nest_green", [], []], [Vector2i(5, 0), "nest_gold", ["elite"], []],
-		[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", [], ["hide"]],
-		[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_scav", ["elite"], []],
-		[Vector2i(4, 1), "nest_blue", ["elite"], []], [Vector2i(5, 1), "nest_mutant", [], ["acid", "poison"]],
-		[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "stabilizer", 1, []], [Vector2i(2, 2), "stabilizer", 1, []],
-		[Vector2i(3, 2), "horde_totem", 1, []], [Vector2i(4, 2), "champion_hall", 1, []], [Vector2i(5, 2), "watchtower", 1, []],
-		[Vector2i(0, 3), "stabilizer", 1, []], [Vector2i(1, 3), "sampler", 2, []], [Vector2i(2, 3), "vanguard", 1, []],
-		[Vector2i(3, 3), "spore_pool", 2, []], [Vector2i(4, 3), "vault", 1, []]]
-	for step in plan:
-		h.build(step[0], step[1])
-		var b: Dictionary = h.buildings[step[0]]
-		if step[2] is Array:
-			b.path = step[2].duplicate()
-			b.level = 1 + b.path.size()
-		else:
-			b.level = step[2]
-		b.affixes = step[3].duplicate()
+	Game.lay_showcase(h)
 	if Content.STARS_ON:
 		h.stars = [{"id": "doctor", "grow": 0}, {"id": "scar", "grow": 0}, {"id": "tri", "grow": 0}, {"id": "oldking", "grow": 2},
 			{"id": "belly", "grow": 0}]
@@ -271,16 +268,16 @@ func _rich() -> void:
 	await _frames(20)
 	await _shot("raised_elite")
 	game.hover = {"plot": HomeView.NOWHERE, "unit": ""}
-	# A green taken up over the gap in front of the blue: the blue would be under cover, the gold no longer alone.
+	# A green taken up over the middle of the three reds along the top: the two either side would swarm no more.
 	game.hold(h.plans.find("b_green"))
 	game.hover = {"plot": Vector2i(4, 0), "unit": ""}
 	game.refresh()
 	await _frames(10)
 	await _shot("aim_gift_tradeoff")
 	game._let_go()
-	for look in [[Vector2i(5, 1), "rich_info_miasma"], [Vector2i(1, 0), "rich_info_falcon"], [Vector2i(3, 2), "rich_info_totem"],
-			[Vector2i(0, 0), "rich_info_guard"], [Vector2i(4, 1), "rich_info_cover_off"], [Vector2i(5, 0), "rich_info_alone"],
-			[Vector2i(3, 1), "rich_info_scav"]]:
+	for look in [[Vector2i(2, 6), "rich_info_miasma"], [Vector2i(2, 1), "rich_info_falcon"], [Vector2i(2, 2), "rich_info_totem"],
+			[Vector2i(0, 0), "rich_info_guard"], [Vector2i(0, 1), "rich_info_cover"], [Vector2i(0, 6), "rich_info_alone"],
+			[Vector2i(3, 5), "rich_info_scav"]]:
 		game.hover = {"plot": look[0], "unit": ""}
 		game.refresh()
 		await _frames(4)
@@ -405,6 +402,8 @@ func _check_pointing() -> void:
 	for y in Home.ROWS:
 		for x in Home.COLS:
 			var p := Vector2i(x, y)
+			if not game.home.plot_of.has(p):
+				continue
 			var sp := game.camera.unproject_position(HomeView.plot_pos(p) + Vector3(0, 0.15, 1.2))
 			var got: Dictionary = game.home_view.pick(game.camera, sp, "tile")
 			if got.plot != p:
@@ -502,6 +501,8 @@ func _do(play: Array) -> void:
 			game.act("raise", {"at": play[1]})
 		"move":
 			game.act("move", {"from": play[1], "to": play[2]})
+		"open":
+			game.act("open", {"plot": play[1]})
 
 
 func _until_plan() -> void:
