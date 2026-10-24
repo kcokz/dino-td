@@ -1,8 +1,8 @@
 class_name Home
 extends RefCounted
-## The homeland (GAME-DESIGN 17-29): a grid of plots in the place it is in -- the top rows the battle line, for nests
-## only, where each nest's units will stand in battle; the rows behind for everything else, special ground among them
-## -- with the gold and the research points, the blueprints had (plans: what can be built), the star dinosaurs in their
+## The homeland (GAME-DESIGN 17-33): the place's map (Content.LEVELS map), plots of many shapes with bare land between
+## them, a cell each building -- the bottom middle plot open from the start, the others opened for gold (open_plot);
+## anything built on any open cell, a nest's units fighting in its column's lane -- with the gold and the research points, the blueprints had (plans: what can be built), the star dinosaurs in their
 ## pens and the one on offer (put away for now: Content.STARS_ON), and the homeland's own hit points. A place begins
 ## with nothing built and no blueprint: first a nest is picked (first_offer, unlock). A round here goes in parts
 ## (GAME-DESIGN 26, Content.PHASES). The start (start_round): the round's pay and the interest on the gold kept come
@@ -13,23 +13,26 @@ extends RefCounted
 ## not a store: what the homeland feeds of itself and what its pools feed (in the rules, the round's biomass), nothing
 ## built that would take more. When a place is held, the homeland is made afresh in the next, carrying nothing (fresh).
 ##
-## Neighbours are the four plots up, down, left and right; a column, the plots one above another. What a building does
-## for nests, it does for those in its reach only (reach, Content.REACH). Plain data and rules, nothing on screen: the
+## Neighbours are the four cells up, down, left and right (up: towards the road out); bare land between plots cuts
+## them off. A column, the cells one above another. What a building does for nests, it does for those in its reach
+## only (reach, Content.REACH). Plain data and rules, nothing on screen: the
 ## same rules for the game and for its tests.
 ##
 ## A building: {id, kind, level, path, affixes: [ids]} -- path: a nest's raises, each "elite".
 ## A blueprint (图纸): an id of Content.OFFERS -- as a card, {id} (Content.offer).
-## A unit (army): {id: "nest id:n", kind, nest: plot, row, lane, slot, of, hp_mult, atk_mult, atk_bonus, armor, range,
-##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, guard, care, scavenge, free} -- row, lane: where it
-##   stands in battle (row 0 in front; lane its column); slot, of: which of its nest's it is, of how many; guard, care,
-##   scavenge: its nest's gift, where it works in battle (Content.TRAITS, Fight); free: eating nothing.
-## Events (for the screen): bought {offer}, stored {offer}, placed {offer}, built {at}, replaced {at, was, back},
+## A unit (army): {id: "nest id:n", kind, nest: cell, row, lane, slot, of, hp_mult, atk_mult, atk_bonus, armor, range,
+##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, guard, guards, care, scavenge, free} -- row, lane:
+##   where it stands in battle (row 0 in front, the close-fighting; 1 behind, those reaching far; lane its nest's
+##   column); slot, of: which of those of its lane and row it is, of how many; guard, care, scavenge: its nest's gift,
+##   where it works in battle (Content.TRAITS, Fight) -- guards: the cell of the nest a guard keeps; free: eating
+##   nothing.
+## Events (for the screen): opened {plot, gold}, bought {offer}, stored {offer}, placed {offer}, built {at}, replaced {at, was, back},
 ## raised {at, choice}, affixed {at, affix}, star {id}, sold {id, gold}, fed {ate, hungry: [ids]}, income {gold,
 ## biomass, genes}, ash {amount}, mended {amount}.
 ## A star dinosaur (in a pen): {id, grow} -- grow: what it has grown to (Content.STARS grow_boss, grow_round).
 
 const COLS := 6
-const ROWS := 4
+const ROWS := 7
 const INCOME := 5                 # gold each round, at its start
 const ALL := 1 << 20              # biomass enough for every young (army)
 
@@ -38,7 +41,9 @@ const NOWHERE := Vector2i(-1, -1)
 
 var region := 0                   # the place (Content.LEVELS) the ark has landed in
 var buildings := {}               # Vector2i -> building
-var terrain := {}                 # Vector2i -> special ground (Content.TERRAIN)
+var plot_of := {}                 # Vector2i -> the letter of the plot the cell is in (bare land not in it): the map
+var opened: Array = []            # the plots open, by letter: built on
+var terrain := {}                 # Vector2i -> special ground (Content.TERRAIN; put away, Content.TERRAIN_ON)
 var gold := 0
 var biomass := 0                  # this round's, from its making to its eating; what is left goes to waste
 var genes := 0                    # research points (研究点数): for unlocking blueprints, nothing else
@@ -72,7 +77,8 @@ func fresh(r: int, rng: RandomNumberGenerator) -> void:
 	land(r, rng)
 
 
-## The homeland laid out in place `r`: no buildings, the special ground of the place lying about behind the battle line.
+## The homeland laid out in place `r`: its map, only its first plot open (Content.START_PLOT), nothing built -- and,
+## with Content.TERRAIN_ON, the special ground of the place lying about on its plots.
 func land(r: int, rng: RandomNumberGenerator) -> void:
 	region = r
 	buildings.clear()
@@ -80,15 +86,81 @@ func land(r: int, rng: RandomNumberGenerator) -> void:
 	biomass = 0
 	brood = []
 	fighters = []
-	var plots := _plots_all().filter(func(p: Vector2i) -> bool: return not front(p))
-	shuffle(plots, rng)
+	plot_of = map_of(r)
+	opened = [Content.START_PLOT]
 	hungry = []
-	var lie: Dictionary = Content.LEVELS[r].terrain
-	for kind in lie:
-		for k in int(lie[kind]):
-			if not plots.is_empty():
-				terrain[plots.pop_back()] = kind
+	if Content.TERRAIN_ON:
+		var plots: Array = plot_of.keys()
+		shuffle(plots, rng)
+		var lie: Dictionary = Content.LEVELS[r].terrain
+		for kind in lie:
+			for k in int(lie[kind]):
+				if not plots.is_empty():
+					terrain[plots.pop_back()] = kind
 	hp = mini(hp, hp_max())
+
+
+## Place r's map: each cell of a plot, its plot's letter (Content.LEVELS map; bare land not in it).
+static func map_of(r: int) -> Dictionary:
+	var out := {}
+	var rows: Array = Content.LEVELS[r].map
+	for y in rows.size():
+		var row: String = rows[y]
+		for x in row.length():
+			if row[x] != ".":
+				out[Vector2i(x, y)] = row[x]
+	return out
+
+
+# -- The plots (地块, GAME-DESIGN 33) -----------------------------------------------------------------------------
+
+## The cells of plot `id`, in reading order.
+func plot_cells(id: String) -> Array:
+	return _plots_all().filter(func(p: Vector2i) -> bool: return plot_of.get(p, "") == id)
+
+
+## The map's plots, by letter, in reading order of their first cells.
+func plot_ids() -> Array:
+	var out: Array = []
+	for p in _plots_all():
+		var id: String = plot_of.get(p, "")
+		if id != "" and not id in out:
+			out.append(id)
+	return out
+
+
+## Whether plot `id`, not open, is near enough an open one to be opened: at most one cell of bare land between them
+## (two steps up, down, left or right -- a corner's touch counting).
+func reachable(id: String) -> bool:
+	if id in opened:
+		return false
+	for p in plot_cells(id):
+		for q in plot_of:
+			if plot_of[q] in opened and absi(p.x - q.x) + absi(p.y - q.y) <= 2:
+				return true
+	return false
+
+
+## What opening plot `id` costs: Content.OPEN_BASE, 1 for each of its cells, Content.OPEN_MORE for each plot opened in
+## this place before it.
+func open_price(id: String) -> int:
+	return Content.OPEN_BASE + plot_cells(id).size() + Content.OPEN_MORE * (opened.size() - 1)
+
+
+## Whether plot `id` can be opened now: near an open one, and the gold for it.
+func can_open(id: String) -> bool:
+	return reachable(id) and gold >= open_price(id)
+
+
+## Plot `id` opened, paid for: its cells can be built on from now on. Its events: opened {plot, gold}; [] if it could
+## not be.
+func open_plot(id: String) -> Array:
+	if not can_open(id):
+		return []
+	var price := open_price(id)
+	gold -= price
+	opened.append(id)
+	return [{"t": "opened", "plot": id, "gold": price}]
 
 
 # -- A round ----------------------------------------------------------------------------------------------
@@ -314,9 +386,6 @@ func army(food := -1) -> Array:
 			u.id = "%d:%d" % [b.id, i]
 			u.free = free
 			made.append(u)
-		for k in made.size():
-			made[k].slot = k
-			made[k].of = made.size()
 		out.append_array(made)
 	if _star("titan") > 0:
 		out.append({"id": "titan:0", "kind": "titan", "nest": NOWHERE, "row": 0, "lane": (COLS - 1) * 0.5, "slot": 0,
@@ -324,8 +393,18 @@ func army(food := -1) -> Array:
 			"dive": false, "pierce": 0, "haste": 0, "charge": false, "size_mult": 1.0, "elite": 0, "affixes": [],
 			"evolved": false, "free": true})
 	var n := out.size()
+	var many := {}
 	for u in out:
 		u.atk_bonus = int(u.atk_bonus) + horde_bonus(n, u.nest)
+		var key := [float(u.lane), int(u.row)]
+		many[key] = int(many.get(key, 0)) + 1
+	# Each where it stands: those of a lane and row one beside another, in the order made, more behind when many.
+	var placed := {}
+	for u in out:
+		var key := [float(u.lane), int(u.row)]
+		u.slot = int(placed.get(key, 0))
+		u.of = int(many[key])
+		placed[key] = int(u.slot) + 1
 	return out
 
 
@@ -366,9 +445,8 @@ func trait_of(p: Vector2i) -> String:
 	return str(Content.BUILDINGS[buildings[p].kind].trait)
 
 
-## Whether the nest at p stands where its gift works: swarming with CLUSTER of its kind beside it; guarding in the
-## front row; under cover in the second row with a nest in front of it; alone with no nest left or right of it. The
-## others work anywhere.
+## Whether the nest at p stands where its gift works: swarming with CLUSTER of its kind beside it; guarding a nest
+## below it; under cover of a nest above it; alone with no nest beside it at all. The others work anywhere.
 func trait_on(p: Vector2i) -> bool:
 	match trait_of(p):
 		"":
@@ -376,11 +454,11 @@ func trait_on(p: Vector2i) -> bool:
 		"swarm":
 			return _beside(p, around(p)) >= Content.CLUSTER
 		"guard":
-			return p.y == 0
+			return _beside(p, [p + Vector2i.DOWN], true) == 1
 		"cover":
-			return p.y == 1 and buildings.has(Vector2i(p.x, 0))
+			return _beside(p, [p + Vector2i.UP], true) == 1
 		"alone":
-			return _beside(p, [p + Vector2i.LEFT, p + Vector2i.RIGHT], true) == 0
+			return _beside(p, around(p), true) == 0
 	return true
 
 
@@ -392,11 +470,11 @@ func trait_need(p: Vector2i) -> String:
 		"swarm":
 			return Lang.t("还差 %d 个红巢挨着") % (Content.CLUSTER - _beside(p, around(p)))
 		"guard":
-			return Lang.t("要站第一排")
+			return Lang.t("下面还没有巢挨着")
 		"cover":
-			return Lang.t("要站第二排" if p.y == 0 else "身前同一列还没有巢")
+			return Lang.t("上面还没有巢挨着")
 		"alone":
-			return Lang.t("左右有巢挨着")
+			return Lang.t("有巢挨着")
 	return ""
 
 
@@ -409,21 +487,22 @@ func _beside(p: Vector2i, plots: Array, any := false) -> int:
 	return n
 
 
-## What the nest at p gives each unit it makes: the species its affixes make of it, where it stands, how elite it is,
-## its other affixes -- the only things that make a unit itself stronger -- its gift where it works, what the schools'
-## buildings whose reach takes it in give units of its kind (the champion halls elites, the vanguard camps the front
-## row, the watchtowers those that reach far), and what the fed stars give: the front row's armour, red units' attack,
-## quicker strikes, reach, attack and hit points for all (less with the brood queen), what the old king has grown to.
+## What the nest at p gives each unit it makes: the species its affixes make of it, where it stands (its column its
+## lane; in front if it fights close, behind if it reaches far), how elite it is, its other affixes -- the only things
+## that make a unit itself stronger -- its gift where it works, what the schools' buildings whose reach takes it in give
+## units of its kind (the champion halls elites, the vanguard camps the close-fighting, the watchtowers those that
+## reach far), and what the fed stars give: the front row's armour, red units' attack, quicker strikes, reach, attack and
+## hit points for all (less with the brood queen), what the old king has grown to.
 func spec_of(p: Vector2i) -> Dictionary:
 	var b: Dictionary = buildings[p]
 	var sp := Content.species(Content.BUILDINGS[b.kind].nest, b.affixes)
 	var e: int = b.path.count("elite")
-	var s := {"kind": sp.kind, "nest": p, "row": p.y, "lane": float(p.x), "hp_mult": pow(Content.ELITE_HP, e),
+	var s := {"kind": sp.kind, "nest": p, "row": 0, "lane": float(p.x), "hp_mult": pow(Content.ELITE_HP, e),
 		"atk_mult": pow(Content.ELITE_ATK, e), "atk_bonus": 0, "armor": 0, "range": 0.0, "splash": 0.0, "dive": false,
 		"pierce": 0, "haste": 0, "charge": false, "knock": 0.0, "devour": false, "roar": false,
 		"size_mult": pow(Content.ELITE_SIZE, e), "elite": e,
 		"affixes": b.affixes.duplicate(), "evolved": sp.kind != Content.BUILDINGS[b.kind].nest,
-		"guard": false, "care": false, "scavenge": false}
+		"guard": false, "guards": NOWHERE, "care": false, "scavenge": false}
 	for a in b.affixes:
 		if a in sp.used:
 			continue
@@ -443,6 +522,8 @@ func spec_of(p: Vector2i) -> Dictionary:
 	var gift := trait_of(p)
 	var on := trait_on(p)
 	s.guard = gift == "guard" and on
+	if s.guard:
+		s.guards = p + Vector2i.DOWN
 	s.care = gift == "care"
 	s.scavenge = gift == "scavenge"
 	var reach := maxf(float(Content.UNITS[sp.kind].range), float(s.range))
@@ -457,13 +538,14 @@ func spec_of(p: Vector2i) -> Dictionary:
 		var more := 1.0 + _given("elite", p) / 100.0
 		s.hp_mult = float(s.hp_mult) * more
 		s.atk_mult = float(s.atk_mult) * more
-	if p.y == 0:
-		s.hp_mult = float(s.hp_mult) * (1.0 + _given("front", p) / 100.0)
 	var far := maxf(float(Content.UNITS[sp.kind].range), float(s.range)) >= 3.0
+	s.row = 1 if far else 0
+	if not far:
+		s.hp_mult = float(s.hp_mult) * (1.0 + _given("front", p) / 100.0)
 	if far:
 		s.pierce = int(s.pierce) + _given("ranged", p) + _star("reach")
 		s.range = maxf(float(Content.UNITS[sp.kind].range), float(s.range)) + _star("reach")
-	if p.y == 0 and _star("front_armor") > 0:
+	if not far and _star("front_armor") > 0:
 		s.armor = int(s.armor) + _star("front_armor") + (1 if diet_count("plant") >= Content.STARS_COUNT else 0)
 	if sp.kind == "red" and _star("red_atk") > 0:
 		s.atk_bonus = int(s.atk_bonus) + _star("red_atk") + (1 if diet_count("meat") >= Content.STARS_COUNT else 0)
@@ -479,48 +561,36 @@ func slots(p: Vector2i) -> int:
 	return 1 + _star("slots") + (Content.MUTANT_SLOTS if trait_of(p) == "mutant" else 0) + _given("slots", p)
 
 
-## Where the building of `kind` standing at p works (its 作用范围, Content.REACH; GAME-DESIGN 28) -- lit blue while it
-## is placed or pointed at: "near", the four plots beside it; "lanes", the battle line in its column and the columns
-## either side. A nest, where its gift looks (Content.TRAITS): a red's neighbours (more reds), the plot behind a green in
-## front (whom it guards), the plot in front of a blue in the second row (its cover), the plots either side of a gold
-## (to be empty), the other plot of a white's column (whom it heals). [] for nowhere.
+## Where the building of `kind` standing at p works (its 作用范围, Content.REACH; GAME-DESIGN 28, 33) -- lit blue while
+## it is placed or pointed at: "near", the four cells beside it. A nest, where its gift looks (Content.TRAITS): a red's
+## neighbours (more reds), the cell below a green (whom it guards), the cell above a blue (its cover), a gold's
+## neighbours (to be without nests), the rest of a white's column (whom it heals). [] for nowhere. (Bare land among
+## them holds nothing.)
 static func reach(kind: String, p: Vector2i) -> Array:
 	var b: Dictionary = Content.BUILDINGS[kind]
 	var r := str(b.get("reach", ""))
 	var out: Array = []
 	if b.has("nest"):
 		match str(b.trait):
-			"swarm":
+			"swarm", "alone":
 				r = "near"
 			"guard":
-				if p.y == 0:
-					out.append(Vector2i(p.x, 1))
+				out.append(p + Vector2i.DOWN)
 			"cover":
-				if p.y == 1:
-					out.append(Vector2i(p.x, 0))
-			"alone":
-				out = [p + Vector2i.LEFT, p + Vector2i.RIGHT]
+				out.append(p + Vector2i.UP)
 			"care":
-				if front(p):
-					out.append(Vector2i(p.x, 1 - p.y))
-	match r:
-		"near":
-			out = [p + Vector2i.UP, p + Vector2i.DOWN, p + Vector2i.LEFT, p + Vector2i.RIGHT]
-		"lanes":
-			for y in Content.FRONT_ROWS:
-				for x in range(p.x - 1, p.x + 2):
-					out.append(Vector2i(x, y))
-	return out.filter(func(q: Vector2i) -> bool: return q != p and q.x >= 0 and q.x < COLS and q.y >= 0 and q.y < ROWS)
+				for y in ROWS:
+					out.append(Vector2i(p.x, y))
+	if r == "near":
+		out = [p + Vector2i.UP, p + Vector2i.DOWN, p + Vector2i.LEFT, p + Vector2i.RIGHT]
+	return out.filter(func(q: Vector2i) -> bool: return q != p and on_map(q))
 
 
 ## Whether the building of `kind` standing at q works on p (reach, worked out without the list: this is asked for
 ## every unit made).
 static func reaches(kind: String, q: Vector2i, p: Vector2i) -> bool:
-	match str(Content.BUILDINGS[kind].get("reach", "")):
-		"near":
-			return absi(p.x - q.x) + absi(p.y - q.y) == 1
-		"lanes":
-			return front(p) and absi(p.x - q.x) <= 1
+	if str(Content.BUILDINGS[kind].get("reach", "")) == "near":
+		return absi(p.x - q.x) + absi(p.y - q.y) == 1
 	return p in reach(kind, q)
 
 
@@ -569,15 +639,16 @@ func targets(id: String) -> Array:
 	return _fits({"id": id}).filter(func(p: Vector2i) -> bool: return gold >= price_at(o, p))
 
 
-## Where a blueprint could go, the population aside: a building on a plot of its part of the homeland (a nest on the
-## battle line, anything else behind it); an affix on a nest with a place for it.
+## Where a blueprint could go, the population aside: a building on an open cell -- empty, or with another of its
+## sort to pull down (a nest for a nest, anything else for anything else); an affix on a nest with a place for it.
 func _places(oi: Dictionary) -> Array:
 	var o := Content.offer(oi)
 	match o.target:
 		"tile":
 			var nest := Content.is_nest(o.builds)
 			return _plots_all().filter(func(p: Vector2i) -> bool:
-				return buildable(p) and front(p) == nest and (not buildings.has(p) or buildings[p].kind != o.builds))
+				return buildable(p) and (not buildings.has(p)
+					or buildings[p].kind != o.builds and Content.is_nest(buildings[p].kind) == nest))
 		"nest":
 			return _plots().filter(func(p: Vector2i) -> bool:
 				var b: Dictionary = buildings[p]
@@ -655,12 +726,12 @@ func _apply(oi: Dictionary, at: Variant) -> Array:
 	return ev
 
 
-## The nest at `from` moved to `to` on the battle line, for nothing, while the player builds (v0.15: to face the lanes
-## the wave comes down) -- an empty plot, or one with another nest, the two then changing places; its level and affixes
-## go with it. Not so far that the population no longer feeds what the nests hatch (moved beside its kind, a red swarms).
-## Its events: moved {from, to}; [] if it could not be.
+## The nest at `from` moved to `to`, for nothing, while the player builds (v0.15: to face the lanes the wave comes
+## down) -- an empty open cell, or one with another nest, the two then changing places; its level and affixes go with
+## it. Not so far that the population no longer feeds what the nests hatch (moved beside its kind, a red swarms). Its
+## events: moved {from, to}; [] if it could not be.
 func move_building(from: Vector2i, to: Vector2i) -> Array:
-	if from == to or not buildings.has(from) or not Content.is_nest(buildings[from].kind) or not front(to) or not buildable(to):
+	if from == to or not buildings.has(from) or not Content.is_nest(buildings[from].kind) or not buildable(to):
 		return []
 	if buildings.has(to) and not Content.is_nest(buildings[to].kind):
 		return []
@@ -833,6 +904,8 @@ func clone() -> Home:
 	var h: Home = get_script().new(null)
 	h.region = region
 	h.buildings = buildings.duplicate(true)
+	h.plot_of = plot_of
+	h.opened = opened.duplicate()
 	h.terrain = terrain.duplicate()
 	h.gold = gold
 	h.biomass = biomass
@@ -849,16 +922,17 @@ func clone() -> Home:
 	return h
 
 
-func is_open(p: Vector2i) -> bool:
+## Whether p is on the map at all.
+static func on_map(p: Vector2i) -> bool:
 	return p.x >= 0 and p.x < COLS and p.y >= 0 and p.y < ROWS
 
 
-## Whether p is on the battle line (the top Content.FRONT_ROWS rows): nests only.
-static func front(p: Vector2i) -> bool:
-	return p.y < Content.FRONT_ROWS
+## Whether p is a cell of an open plot.
+func is_open(p: Vector2i) -> bool:
+	return plot_of.has(p) and plot_of[p] in opened
 
 
-## Whether a building can stand at p: on the grid, and not on ground nothing can be built on.
+## Whether a building can stand at p: a cell of an open plot, and not on ground nothing can be built on.
 func buildable(p: Vector2i) -> bool:
 	return is_open(p) and bool(Content.TERRAIN.get(terrain.get(p, ""), {"build": true}).build)
 

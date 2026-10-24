@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-32) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-33) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -17,6 +17,7 @@ func _init() -> void:
 	_first_round()
 	_phases()
 	_population()
+	_plots()
 	_zones()
 	_making()
 	_neighbours()
@@ -63,17 +64,27 @@ func rng(seed := 3) -> RandomNumberGenerator:
 	return r
 
 
-## A homeland with nothing built and no special ground, in the first place, plenty of everything -- its population
-## no bound (Fed) unless `fed` is false.
+## A homeland with nothing built and no special ground, in the first place, plenty of everything -- the whole map one
+## open plot (open_all) -- its population no bound (Fed) unless `fed` is false.
 func bare(region := 0, fed := true) -> Home:
 	var h: Home = Fed.new(rng()) if fed else Home.new(rng())
 	h.buildings.clear()
 	h.terrain.clear()
+	open_all(h)
 	h.region = region
 	h.gold = 20
 	h.biomass = 20
 	h.genes = 10
 	return h
+
+
+## The whole of h's map one plot, open: for the tests of other rules than the plots'.
+func open_all(h: Home) -> void:
+	h.plot_of = {}
+	for y in Home.ROWS:
+		for x in Home.COLS:
+			h.plot_of[Vector2i(x, y)] = Content.START_PLOT
+	h.opened = [Content.START_PLOT]
 
 
 func _with(stars: Array) -> Home:
@@ -87,8 +98,9 @@ func _first_round() -> void:
 	var h := Home.new(rng())
 	check("a place begins with nothing built and no blueprint", h.buildings.is_empty() and h.plans.is_empty(),
 		[h.buildings, h.plans])
-	check("special ground lies behind the battle line", h.terrain.size() == 5
-		and h.terrain.keys().all(func(p: Vector2i) -> bool: return p.y >= Content.FRONT_ROWS), h.terrain)
+	check("the place's map laid out, only its first plot open; no special ground while it is put away",
+		h.plot_of == Home.map_of(0) and h.opened == [Content.START_PLOT] and h.terrain.is_empty() and not Content.TERRAIN_ON,
+		[h.opened, h.terrain])
 	check("nothing in store to start with", h.gold == 0 and h.biomass == 0 and h.genes == 0, [h.gold, h.biomass, h.genes])
 	var first := h.first_offer(rng(), 3)
 	check("the first nest: one of three, all different, all of the first nests", first.size() == 3 and first[0] != first[1]
@@ -106,14 +118,16 @@ func _first_round() -> void:
 		[h.gold, ev])
 	check("no star while they are put away", h.star_offer == "" and not Content.STARS_ON, h.star_offer)
 	check("the homeland feeds 2 of itself", h.pop_cap() == Content.HOME_POP and h.pop_used() == 0, [h.pop_cap(), h.pop_used()])
-	h.build_plan("b_red", Vector2i(2, 0))
+	check("the first plot's cells the only places for it", h.targets("b_red") == h.plot_cells(Content.START_PLOT)
+		and h.targets("b_red").size() == 4, h.targets("b_red"))
+	h.build_plan("b_red", Vector2i(2, 5))
 	check("the first nest built with the round's pay", h.buildings.size() == 1 and h.gold == 2, h.gold)
 	check("nothing hatched before the making", h.brood.is_empty() and h.fighters.is_empty())
 	h.make()
 	check("the making: the population fed, 2; no gold or research points of their own", h.biomass == 2 and h.gold == 2
 		and h.genes == 0, [h.biomass, h.gold, h.genes])
 	var a := h.brood
-	check("one red hatched, for the front row, its column its lane", a.size() == 1 and a[0].kind == "red"
+	check("one red hatched, fighting close, in front; its column its lane", a.size() == 1 and a[0].kind == "red"
 		and int(a[0].row) == 0 and is_equal_approx(float(a[0].lane), 2.0), a)
 	h.eat()
 	check("the eating: it takes 1 and goes to fight", h.fighters.size() == 1 and h.biomass == 1, [h.fighters.size(), h.biomass])
@@ -145,14 +159,16 @@ func _phases() -> void:
 ## The population (GAME-DESIGN 26, 28): as many as the homeland feeds of itself and its pools feed; nothing is built
 ## past it.
 func _population() -> void:
-	var h := Home.new(rng())
+	var h := bare(0, false)
 	h.plans = ["b_red", "b_pool"]
 	h.gold = 50
+	h.biomass = 0
 	check("the start: 0 of 2", h.pop_used() == 0 and h.pop_cap() == Content.HOME_POP, [h.pop_used(), h.pop_cap()])
 	h.build_plan("b_red", Vector2i(2, 0))
 	var t0 := h.targets("b_red")
-	check("a red nest: not beside the red one (with their gift, three more), elsewhere on the line", t0.size() == 8
-		and not Vector2i(1, 0) in t0 and not Vector2i(3, 0) in t0 and not Vector2i(2, 1) in t0 and Vector2i(0, 0) in t0, t0)
+	check("a red nest: not beside the red one (with their gift, three more), anywhere else",
+		t0.size() == Home.COLS * Home.ROWS - 4 and not Vector2i(1, 0) in t0 and not Vector2i(3, 0) in t0
+		and not Vector2i(2, 1) in t0 and Vector2i(0, 0) in t0, t0.size())
 	h.build_plan("b_red", Vector2i(0, 0))
 	check("two: 2 of 2", h.pop_used() == 2 and h.pop_room() == 0)
 	check("full: a third goes nowhere, for the population alone", h.targets("b_red").is_empty()
@@ -184,21 +200,93 @@ func _population() -> void:
 	var nest: String = r.nest_offer()[0].id
 	r.take_first(nest)
 	r.start_round()
-	r.home.build_plan(nest, Vector2i(2, 0))
+	r.home.build_plan(nest, r.home.plot_cells(Content.START_PLOT)[0])
 	r.make()
 	r.eat()
 	check("within the population, every young hatched is fed and fights", r.home.fighters.size() == r.home.brood.size()
 		and r.home.fighters.size() == 1, [nest, r.home.fighters.size()])
 
 
+## No battle line and no back any more (GAME-DESIGN 33): anything on any open cell; a nest pulls down a nest only,
+## anything else anything else but a nest.
 func _zones() -> void:
 	var h := bare()
-	h.plans = ["b_red", "b_pool"]
-	check("a nest only on the battle line", h.targets("b_red").size() == Home.COLS * Content.FRONT_ROWS
-		and h.targets("b_red").all(func(p: Vector2i) -> bool: return Home.front(p)), h.targets("b_red"))
-	check("anything else only behind it", h.targets("b_pool").size() == Home.COLS * (Home.ROWS - Content.FRONT_ROWS)
-		and h.targets("b_pool").all(func(p: Vector2i) -> bool: return not Home.front(p)), h.targets("b_pool"))
+	h.plans = ["b_red", "b_pool", "b_mine"]
+	check("a nest anywhere open", h.targets("b_red").size() == Home.COLS * Home.ROWS, h.targets("b_red").size())
+	check("and anything else too", h.targets("b_pool").size() == Home.COLS * Home.ROWS, h.targets("b_pool").size())
+	h.build(Vector2i(0, 0), "nest_blue")
+	h.build(Vector2i(1, 0), "pool")
+	check("a nest pulls down another nest, never a pool", Vector2i(0, 0) in h.targets("b_red")
+		and not Vector2i(1, 0) in h.targets("b_red"))
+	check("a mine pulls down a pool, never a nest", Vector2i(1, 0) in h.targets("b_mine")
+		and not Vector2i(0, 0) in h.targets("b_mine"))
 	check("a blueprint not had: nowhere", h.targets("b_blue").is_empty() and h.build_plan("b_blue", Vector2i(0, 0)).is_empty())
+
+
+## The plots (GAME-DESIGN 33): each place's map, plots with bare land between, the first open, the others opened for
+## gold when near an open one.
+func _plots() -> void:
+	var touching := 0
+	for r in Content.LEVELS.size():
+		var m := Home.map_of(r)
+		check("map %d: 6 by 7, its first plot there" % r, (Content.LEVELS[r].map as Array).size() == Home.ROWS
+			and (Content.LEVELS[r].map as Array).all(func(row: String) -> bool: return row.length() == Home.COLS)
+			and m.values().has(Content.START_PLOT))
+		for p in m:
+			for d in [Vector2i.RIGHT, Vector2i.DOWN]:
+				if m.has(p + d) and m[p + d] != m[p]:
+					touching += 1
+		var h := Home.new(rng())
+		h.fresh(r, rng())
+		var reached := [Content.START_PLOT]
+		var grew := true
+		while grew:
+			grew = false
+			for id in h.plot_ids():
+				if not id in reached:
+					h.opened = reached.duplicate()
+					if h.reachable(id):
+						reached.append(id)
+						grew = true
+		check("map %d: every plot reached from the first, one by one" % r, reached.size() == h.plot_ids().size(), reached)
+	check("no two plots up, down, left or right of each other", touching == 0, touching)
+	var h := Home.new(rng())
+	h.gold = 40
+	h.plans = ["b_red"]
+	check("the rainforest: open, the bottom middle 2 by 2; shut, all else", h.opened == ["S"]
+		and h.plot_cells("S") == [Vector2i(2, 5), Vector2i(3, 5), Vector2i(2, 6), Vector2i(3, 6)]
+		and h.is_open(Vector2i(2, 5)) and not h.is_open(Vector2i(1, 4)) and not h.is_open(Vector2i(2, 4)))
+	check("near the first: the cross above, the L to the left, the one-cell plots either side; not the far ones",
+		h.reachable("C") and h.reachable("E") and h.reachable("G") and h.reachable("H") and not h.reachable("A")
+		and not h.reachable("D") and not h.reachable("S"))
+	check("a plot's price: 2, a gold for each of its cells", h.open_price("C") == 2 + 5 and h.open_price("G") == 2 + 1)
+	check("nothing built on a shut plot", not Vector2i(2, 3) in h.targets("b_red")
+		and h.build_plan("b_red", Vector2i(2, 3)).is_empty())
+	var ev := h.open_plot("C")
+	check("the cross opened: paid for, built on", ev == [{"t": "opened", "plot": "C", "gold": 7}] and h.gold == 33
+		and h.is_open(Vector2i(2, 3)) and Vector2i(2, 3) in h.targets("b_red"), [ev, h.gold])
+	check("and the next a gold dearer for each opened before; the far ones near now", h.open_price("G") == 2 + 1 + 1
+		and h.reachable("A") and h.reachable("B"))
+	check("an open plot not opened again", h.open_plot("C").is_empty() and h.gold == 33)
+	h.gold = 3
+	check("short of its price: not opened", not h.can_open("G") and h.open_plot("G").is_empty() and not "G" in h.opened)
+	var c := h.clone()
+	c.gold = 10
+	c.open_plot("G")
+	check("a copy opens its own", "G" in c.opened and not "G" in h.opened)
+	h.build(Vector2i(2, 5), "nest_red")
+	h.gold = 10
+	check("a nest moved to the cross, another plot: for nothing", not h.move_building(Vector2i(2, 5), Vector2i(2, 2)).is_empty()
+		and h.buildings.has(Vector2i(2, 2)) and h.gold == 10)
+	check("but never to a shut plot or bare land", h.move_building(Vector2i(2, 2), Vector2i(0, 6)).is_empty()
+		and h.move_building(Vector2i(2, 2), Vector2i(2, 4)).is_empty())
+	var b := Home.new(rng())
+	b.gold = 20
+	b.open_plot("C")
+	b.build(Vector2i(2, 3), "nest_red")
+	b.build(Vector2i(2, 5), "nest_red")
+	check("a cell of bare land between two reds: neither beside the other", not b.trait_on(Vector2i(2, 3))
+		and not b.trait_on(Vector2i(2, 5)))
 
 
 func _making() -> void:
@@ -264,11 +352,10 @@ func _neighbours() -> void:
 	s.build(Vector2i(3, 3), "pool")
 	check("a sampler between two pools: 1 + 2 genes", s.income_genes() == 3, s.income_genes())
 	s.build(Vector2i(4, 0), "nest_red")
-	s.build(Vector2i(4, 3), "stabilizer")
-	s.build(Vector2i(5, 2), "stabilizer")
-	s.build(Vector2i(2, 2), "stabilizer")
-	check("a stabilizer helps the nests of its column and the columns either side only", s.slots(Vector2i(4, 0)) == 3,
-		s.slots(Vector2i(4, 0)))
+	s.build(Vector2i(4, 1), "stabilizer")
+	s.build(Vector2i(5, 0), "stabilizer")
+	s.build(Vector2i(5, 1), "stabilizer")
+	check("a stabilizer helps the nests beside it only", s.slots(Vector2i(4, 0)) == 3, s.slots(Vector2i(4, 0)))
 	var sp := bare()
 	sp.build(Vector2i(2, 3), "sampler")
 	sp.build(Vector2i(1, 3), "spore_pool")
@@ -276,29 +363,29 @@ func _neighbours() -> void:
 		sp.income_genes())
 
 
-## Where each building works (GAME-DESIGN 28): its neighbours, or the battle line's three columns in front of it; a
-## nest, where its gift looks.
+## Where each building works (GAME-DESIGN 28, 33): its neighbours; a nest, where its gift looks.
 func _reach() -> void:
 	check("near: the four beside", Home.reach("pool", Vector2i(2, 2)).size() == 4 and Vector2i(2, 1) in Home.reach("pool",
 		Vector2i(2, 2)))
-	check("near, in a corner: two", Home.reach("sampler", Vector2i(0, 3)) == [Vector2i(0, 2), Vector2i(1, 3)],
-		Home.reach("sampler", Vector2i(0, 3)))
-	var lanes := Home.reach("watchtower", Vector2i(2, 3))
-	check("lanes: the battle line's six plots in its column and the two beside", lanes.size() == 6
-		and lanes.all(func(p: Vector2i) -> bool: return Home.front(p) and p.x >= 1 and p.x <= 3), lanes)
-	check("lanes at the edge: four", Home.reach("vanguard", Vector2i(5, 2)).size() == 4)
-	check("a red: its neighbours; a green in front: the one behind it; a blue in the second row: the one in front;"
-		+ " a gold: either side; a white: the other of its column", Home.reach("nest_red", Vector2i(2, 0)).size() == 3
-		and Home.reach("nest_green", Vector2i(2, 0)) == [Vector2i(2, 1)] and Home.reach("nest_green", Vector2i(2, 1)).is_empty()
-		and Home.reach("nest_blue", Vector2i(2, 1)) == [Vector2i(2, 0)] and Home.reach("nest_gold", Vector2i(0, 0)) == [Vector2i(1, 0)]
-		and Home.reach("nest_white", Vector2i(3, 1)) == [Vector2i(3, 0)])
+	check("near, in a corner: two", Home.reach("sampler", Vector2i(0, 6)) == [Vector2i(0, 5), Vector2i(1, 6)],
+		Home.reach("sampler", Vector2i(0, 6)))
+	check("every building's reach its neighbours: the totem, the hall, the tower, the camp, the stabilizer, the bank too",
+		["horde_totem", "champion_hall", "watchtower", "vanguard", "stabilizer", "gene_bank"].all(func(k: String) -> bool:
+			return Home.reach(k, Vector2i(2, 3)).size() == 4))
+	check("a red: its neighbours; a green: the one below it; a blue: the one above it; a gold: its neighbours; a white:"
+		+ " the rest of its column", Home.reach("nest_red", Vector2i(2, 0)).size() == 3
+		and Home.reach("nest_green", Vector2i(2, 0)) == [Vector2i(2, 1)] and Home.reach("nest_green", Vector2i(2, 6)).is_empty()
+		and Home.reach("nest_blue", Vector2i(2, 1)) == [Vector2i(2, 0)] and Home.reach("nest_blue", Vector2i(2, 0)).is_empty()
+		and Home.reach("nest_gold", Vector2i(0, 0)) == [Vector2i(0, 1), Vector2i(1, 0)]
+		and Home.reach("nest_white", Vector2i(3, 1)).size() == Home.ROWS - 1
+		and Home.reach("nest_white", Vector2i(3, 1)).all(func(p: Vector2i) -> bool: return p.x == 3))
 	check("the scavenger's and the mutant's gifts work anywhere: no reach", Home.reach("nest_scav", Vector2i(1, 0)).is_empty()
 		and Home.reach("nest_mutant", Vector2i(1, 0)).is_empty())
 	check("every building but a nest has its reach", Content.BUILDINGS.keys().all(func(k: String) -> bool:
 		return Content.is_nest(k) or Content.REACH.has(Content.BUILDINGS[k].get("reach", ""))))
 	var odd := 0
 	for kind in Content.BUILDINGS:
-		for q in [Vector2i(0, 0), Vector2i(2, 1), Vector2i(5, 2), Vector2i(3, 3)]:
+		for q in [Vector2i(0, 0), Vector2i(2, 1), Vector2i(5, 2), Vector2i(3, 6)]:
 			var r := Home.reach(kind, q)
 			for y in Home.ROWS:
 				for x in Home.COLS:
@@ -310,13 +397,14 @@ func _reach() -> void:
 
 ## Each nest's gift, where it stands (GAME-DESIGN 20).
 func _nest_gifts() -> void:
-	# Guarding: a green in front keeps theirs off the one behind it in its column while it stands.
+	# Guarding: a green keeps theirs off the nest below it while it stands.
 	var g := bare()
 	g.build(Vector2i(0, 0), "nest_green")
 	g.build(Vector2i(0, 1), "nest_red")
 	g.build(Vector2i(1, 1), "nest_green")
-	check("a green in front guards; in the second row it does not", g.spec_of(Vector2i(0, 0)).guard
-		and not g.spec_of(Vector2i(1, 1)).guard and g.trait_need(Vector2i(1, 1)) == "要站第一排")
+	check("a green with a nest below it guards it; with none, it does not", g.spec_of(Vector2i(0, 0)).guard
+		and g.spec_of(Vector2i(0, 0)).guards == Vector2i(0, 1) and not g.spec_of(Vector2i(1, 1)).guard
+		and g.trait_need(Vector2i(1, 1)) == "下面还没有巢挨着")
 	var gf := Fight.make(g.army(), ["grey", "grey", "grey", "grey", "purple"], 1.0)
 	var bad := 0
 	var on_guard := 0
@@ -325,12 +413,12 @@ func _nest_gifts() -> void:
 		for e in gf.step():
 			if e.t == "hit":
 				var to: Dictionary = gf.unit(e.to)
-				if to.side == "ours" and int(to.row) == 1 and float(to.lane) == 0.0 and up:
+				if to.side == "ours" and to.nest == Vector2i(0, 1) and up:
 					bad += 1
 				if to.side == "ours" and to.get("guard", false):
 					on_guard += 1
-	check("while the green stands, the red behind it is not hit; the green is", bad == 0 and on_guard > 0, [bad, on_guard])
-	# Cover: a blue in the second row with a nest in front of it reaches further and hits through armour.
+	check("while the green stands, the red below it is not hit; the green is", bad == 0 and on_guard > 0, [bad, on_guard])
+	# Cover: a blue with a nest above it reaches further and hits through armour.
 	var c := bare()
 	c.build(Vector2i(1, 0), "nest_red")
 	c.build(Vector2i(1, 1), "nest_blue")
@@ -340,22 +428,22 @@ func _nest_gifts() -> void:
 	var bare_blue := Content.unit_stats(c.spec_of(Vector2i(2, 1)))
 	check("a blue under cover: 2 m further, 1 more each hit", is_equal_approx(float(cs.range), 8.0) and int(cs.pierce) == 1
 		and is_equal_approx(float(bare_blue.range), 6.0) and int(bare_blue.pierce) == 0, [cs.range, cs.pierce, bare_blue.range])
-	check("no cover: nothing in front; in front: not the second row", c.trait_need(Vector2i(2, 1)) == "身前同一列还没有巢"
-		and c.trait_need(Vector2i(3, 0)) == "要站第二排", [c.trait_need(Vector2i(2, 1)), c.trait_need(Vector2i(3, 0))])
+	check("no cover: nothing above it", c.trait_need(Vector2i(2, 1)) == "上面还没有巢挨着"
+		and c.trait_need(Vector2i(3, 0)) == "上面还没有巢挨着", [c.trait_need(Vector2i(2, 1)), c.trait_need(Vector2i(3, 0))])
 	c.buildings[Vector2i(1, 1)].affixes = ["blade", "wings"]
 	check("a blue nest hatching fliers: no cover for those that do not reach far",
 		is_equal_approx(float(Content.unit_stats(c.spec_of(Vector2i(1, 1))).range), float(Content.UNITS.falcon.range)))
-	# Alone: a gold with no nest left or right of it is bigger and stronger.
+	# Alone: a gold with no nest beside it is bigger and stronger.
 	var a := bare()
 	a.build(Vector2i(2, 0), "nest_gold")
-	a.build(Vector2i(2, 1), "nest_red")
+	a.build(Vector2i(2, 1), "pool")
 	var lone := a.spec_of(Vector2i(2, 0))
-	check("a gold alone (one behind it does not count): +30% hit points and attack, bigger",
+	check("a gold alone (a pool beside it does not count): +30% hit points and attack, bigger",
 		is_equal_approx(float(lone.hp_mult), Content.ALONE) and is_equal_approx(float(lone.atk_mult), Content.ALONE)
 		and is_equal_approx(float(lone.size_mult), Content.ALONE_SIZE))
-	a.build(Vector2i(3, 0), "nest_red")
-	check("with a nest beside it, no more", is_equal_approx(float(a.spec_of(Vector2i(2, 0)).hp_mult), 1.0)
-		and a.trait_need(Vector2i(2, 0)) == "左右有巢挨着")
+	a.build(Vector2i(2, 1), "nest_red")
+	check("with a nest beside it -- below counts too -- no more", is_equal_approx(float(a.spec_of(Vector2i(2, 0)).hp_mult), 1.0)
+		and a.trait_need(Vector2i(2, 0)) == "有巢挨着")
 	# Care: a white heals twice as much, only its own column.
 	var w := bare()
 	w.build(Vector2i(0, 0), "nest_green")
@@ -437,7 +525,7 @@ func _affixes_and_recipes() -> void:
 	check("paid 3 gold, no research points", h.gold == 17 and h.genes == 10, [h.gold, h.genes])
 	check("one place only", h.targets("a_acid").is_empty())
 	h.build(Vector2i(2, 2), "stabilizer")
-	h.build(Vector2i(2, 3), "stabilizer")
+	h.build(Vector2i(1, 1), "stabilizer")
 	h.build_plan("a_acid", Vector2i(2, 1))
 	check("acid: reach 5", float(Content.unit_stats(h.army()[0]).range) == 5.0)
 	h.build_plan("a_poison", Vector2i(2, 1))
@@ -471,11 +559,11 @@ func _affixes_and_recipes() -> void:
 	c.build(Vector2i(4, 0), "nest_red")
 	var shell := Content.offer({"id": "a_shell"})
 	check("an affix costs gold only", c.price_at(shell, Vector2i(0, 0)) == 3 and not shell.has("genes"))
-	c.build(Vector2i(1, 3), "gene_bank")
-	check("a gene bank: a gold less for the nests in front of it, not the others", c.price_at(shell, Vector2i(0, 0)) == 2
+	c.build(Vector2i(0, 1), "gene_bank")
+	check("a gene bank: a gold less for the nests beside it, not the others", c.price_at(shell, Vector2i(0, 0)) == 2
 		and c.price_at(shell, Vector2i(4, 0)) == 3)
-	c.buildings[Vector2i(1, 3)].level = 3
-	c.build(Vector2i(0, 3), "gene_bank")
+	c.buildings[Vector2i(0, 1)].level = 3
+	c.build(Vector2i(1, 0), "gene_bank")
 	check("never below 1", c.price_at(shell, Vector2i(0, 0)) == 1)
 	c.plans = ["a_shell"]
 	c.gold = 1
@@ -487,48 +575,49 @@ func _affixes_and_recipes() -> void:
 func _schools() -> void:
 	var h := bare()
 	for x in 5:
-		h.build(Vector2i(x, 0), "nest_red")
-	h.build(Vector2i(1, 3), "horde_totem")
+		h.build(Vector2i(x, 1), "nest_red")
+	h.build(Vector2i(1, 2), "horde_totem")
 	var a := h.army()
-	var near := a.filter(func(u: Dictionary) -> bool: return (u.nest as Vector2i).x <= 2)
-	var far := a.filter(func(u: Dictionary) -> bool: return (u.nest as Vector2i).x > 2)
-	check("ten out (five reds in a row, all swarming): the totem gives +1 to those of the three columns in front of it",
-		a.size() == 10 and near.size() == 6 and near.all(func(u: Dictionary) -> bool: return int(u.atk_bonus) == 1)
+	var near := a.filter(func(u: Dictionary) -> bool: return u.nest == Vector2i(1, 1))
+	var far := a.filter(func(u: Dictionary) -> bool: return u.nest != Vector2i(1, 1))
+	check("ten out (five reds in a row, all swarming): the totem gives +1 to the units of the nest beside it only",
+		a.size() == 10 and near.size() == 2 and near.all(func(u: Dictionary) -> bool: return int(u.atk_bonus) == 1)
 		and far.all(func(u: Dictionary) -> bool: return int(u.atk_bonus) == 0), a.map(func(u: Dictionary) -> int: return u.atk_bonus))
-	h.build(Vector2i(2, 3), "horde_totem")
-	check("two totems: +2 where both reach", int(h.army()[2].atk_bonus) == 2 and int(h.army()[0].atk_bonus) == 1
+	h.build(Vector2i(1, 0), "horde_totem")
+	check("two totems: +2 where both reach", int(h.army()[2].atk_bonus) == 2 and int(h.army()[0].atk_bonus) == 0
 		and int(h.army()[8].atk_bonus) == 0)
-	h.buildings[Vector2i(2, 3)].level = 3
-	check("a totem at 3: one for every 4", h.horde_bonus(10, Vector2i(1, 0)) == 10 / 6 + 10 / 4)
+	h.buildings[Vector2i(1, 0)].level = 3
+	check("a totem at 3: one for every 4", h.horde_bonus(10, Vector2i(1, 1)) == 10 / 6 + 10 / 4)
 	var e := bare()
 	e.build(Vector2i(0, 1), "nest_red")
 	e.buildings[Vector2i(0, 1)].path = ["elite"]
 	e.build(Vector2i(1, 1), "nest_red")
 	e.build(Vector2i(4, 1), "nest_red")
 	e.buildings[Vector2i(4, 1)].path = ["elite"]
-	e.build(Vector2i(0, 3), "champion_hall")
-	check("champion hall: the elites in front of it 15% more, the rest nothing, an elite out of its reach nothing",
+	e.build(Vector2i(0, 2), "champion_hall")
+	check("champion hall: the elites beside it 15% more, the rest nothing, an elite out of its reach nothing",
 		is_equal_approx(float(e.spec_of(Vector2i(0, 1)).hp_mult), Content.ELITE_HP * 1.15)
 		and is_equal_approx(float(e.spec_of(Vector2i(1, 1)).hp_mult), 1.0)
 		and is_equal_approx(float(e.spec_of(Vector2i(4, 1)).hp_mult), Content.ELITE_HP))
 	var r := bare()
 	r.build(Vector2i(0, 1), "nest_blue")
-	r.build(Vector2i(1, 1), "nest_red")
+	r.build(Vector2i(1, 0), "nest_red")
 	r.build(Vector2i(2, 1), "nest_red")
 	r.buildings[Vector2i(2, 1)].affixes = ["acid"]
 	r.build(Vector2i(4, 1), "nest_blue")
-	r.build(Vector2i(1, 3), "watchtower")
-	check("watchtower: those in front of it that reach far +1 each hit, armour or not", int(r.spec_of(Vector2i(0, 1)).pierce) == 1
-		and int(r.spec_of(Vector2i(1, 1)).pierce) == 0 and int(r.spec_of(Vector2i(2, 1)).pierce) == 1
+	r.build(Vector2i(1, 1), "watchtower")
+	check("watchtower: those beside it that reach far +1 each hit, armour or not", int(r.spec_of(Vector2i(0, 1)).pierce) == 1
+		and int(r.spec_of(Vector2i(1, 0)).pierce) == 0 and int(r.spec_of(Vector2i(2, 1)).pierce) == 1
 		and int(r.spec_of(Vector2i(0, 1)).atk_bonus) == 0 and int(r.spec_of(Vector2i(4, 1)).pierce) == 0)
 	var v := bare()
 	v.build(Vector2i(0, 0), "nest_green")
 	v.build(Vector2i(0, 1), "nest_green")
+	v.build(Vector2i(1, 2), "nest_blue")
 	v.build(Vector2i(5, 0), "nest_green")
 	v.build(Vector2i(0, 2), "vanguard")
-	check("vanguard camp: the front row in front of it 30% more hp, the row behind nothing, out of reach nothing",
-		is_equal_approx(float(v.spec_of(Vector2i(0, 0)).hp_mult), 1.3) and is_equal_approx(float(v.spec_of(Vector2i(0, 1)).hp_mult), 1.0)
-		and is_equal_approx(float(v.spec_of(Vector2i(5, 0)).hp_mult), 1.0))
+	check("vanguard camp: the close-fighting beside it 30% more hp; those reaching far nothing, out of reach nothing",
+		is_equal_approx(float(v.spec_of(Vector2i(0, 1)).hp_mult), 1.3) and is_equal_approx(float(v.spec_of(Vector2i(0, 0)).hp_mult), 1.0)
+		and is_equal_approx(float(v.spec_of(Vector2i(1, 2)).hp_mult), 1.0) and is_equal_approx(float(v.spec_of(Vector2i(5, 0)).hp_mult), 1.0))
 	var g := bare()
 	g.build(Vector2i(4, 3), "vault")
 	check("vault: interest up to 1 more", g.interest_max() == Content.INTEREST_MAX + 1, g.interest_max())
@@ -690,7 +779,7 @@ func _lanes() -> void:
 	check("its own lane first", g._foe_of(ours).id == g.units[2].id)
 
 
-## The nests moved about the battle line for nothing, two swapped; nothing else moves (v0.15).
+## The nests moved about for nothing, two swapped; nothing else moves (v0.15; anywhere open since the plots).
 func _moves() -> void:
 	var h := bare()
 	h.build(Vector2i(0, 0), "nest_red")
@@ -700,15 +789,17 @@ func _moves() -> void:
 	h.build(Vector2i(4, 0), "nest_green")
 	h.build(Vector2i(2, 2), "pool")
 	var gold := h.gold
-	check("moved to an empty plot of the line, its level and affixes with it, for nothing",
+	check("moved to an empty cell, its level and affixes with it, for nothing",
 		not h.move_building(Vector2i(0, 0), Vector2i(3, 1)).is_empty() and not h.buildings.has(Vector2i(0, 0))
 		and h.buildings[Vector2i(3, 1)].kind == "nest_red" and int(h.buildings[Vector2i(3, 1)].level) == 2
 		and h.buildings[Vector2i(3, 1)].affixes == ["blade"] and h.gold == gold)
 	check("onto another nest: the two swapped", not h.move_building(Vector2i(3, 1), Vector2i(4, 0)).is_empty()
 		and h.buildings[Vector2i(4, 0)].kind == "nest_red" and h.buildings[Vector2i(3, 1)].kind == "nest_green")
-	check("not off the battle line, not a pool, not onto itself", h.move_building(Vector2i(4, 0), Vector2i(1, 2)).is_empty()
-		and h.move_building(Vector2i(2, 2), Vector2i(0, 0)).is_empty() and h.move_building(Vector2i(4, 0), Vector2i(4, 0)).is_empty())
+	check("not a pool, not onto a pool, not onto itself", h.move_building(Vector2i(2, 2), Vector2i(0, 0)).is_empty()
+		and h.move_building(Vector2i(4, 0), Vector2i(2, 2)).is_empty() and h.move_building(Vector2i(4, 0), Vector2i(4, 0)).is_empty())
+	check("anywhere open: no battle line any more", not h.move_building(Vector2i(4, 0), Vector2i(1, 5)).is_empty())
 	var p := Home.new(rng())
+	open_all(p)
 	p.build(Vector2i(0, 0), "nest_red")
 	p.build(Vector2i(3, 0), "nest_red")
 	check("not beside its kind past the population: two reds swarming would hatch four for two",
@@ -845,8 +936,8 @@ func _star_kinds() -> void:
 	check("the shield: 10 more hit points, one back a round", sh.hp_max() == Home.HP + 10 and sh.hp == 21, sh.hp)
 	var t := _with(["tri"])
 	t.build(Vector2i(0, 0), "nest_red")
-	t.build(Vector2i(0, 1), "nest_red")
-	check("the triceratops: the front row armour 1, not the second", int(t.spec_of(Vector2i(0, 0)).armor) == 1
+	t.build(Vector2i(0, 1), "nest_blue")
+	check("the triceratops: the close-fighting armour 1, not those that reach far", int(t.spec_of(Vector2i(0, 0)).armor) == 1
 		and int(t.spec_of(Vector2i(0, 1)).armor) == 0)
 	for id in ["mother", "shield"]:
 		t.take_star(id)
@@ -941,8 +1032,8 @@ func _moving_on() -> void:
 	check("on to the volcano", r.level == 1 and r.place == 1 and r.round == 1 and h.region == 1 and r.path == [0, 1])
 	check("the homeland made afresh: nothing built, its first nest to pick from three", h.buildings.is_empty()
 		and r.nest_offer().size() == 3)
-	check("the volcano's ground, behind the line", h.terrain.values().all(func(t: String) -> bool: return t in ["ore", "lava"])
-		and h.terrain.size() == 5 and h.terrain.keys().all(func(p: Vector2i) -> bool: return not Home.front(p)))
+	check("the volcano's map, its first plot only open", h.plot_of == Home.map_of(1) and h.opened == [Content.START_PLOT],
+		h.opened)
 	check("nothing carried (the player, 2026-10-21): no stars, gold, research points or blueprints; the hit points whole",
 		h.stars.is_empty() and h.gold == 0 and h.genes == 0 and h.plans.is_empty() and h.hp == Home.HP,
 		[h.stars, h.gold, h.genes, h.plans, h.hp])

@@ -1,13 +1,13 @@
 class_name Fight
 extends RefCounted
-## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19, 20, 32): this round's army -- standing where
-## its nests stand on the homeland's battle line -- against a wave standing in the same six lanes as its plan has them
+## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19, 20, 32, 33): this round's army -- each in its
+## nest's column, the close-fighting in front -- against a wave standing in the same six lanes as its plan has them
 ## (Content.lanes), each going for the nearest foe, those of its own lane first (LANE_PULL) -- a flier for the one
 ## furthest back -- and hitting it once it is in reach, until one side is gone or the time is up. One with a charging
 ## horn strikes its first blow twice as hard, and knocks the foe back, its blow begun undone; a devourer felling a foe
 ## grows on it; a roarer's roar and a shocker's hits make those near strike slower; one leaving poison clouds bursts a
 ## foe it fells into poison. Some fall hard: they burst, harming the other side round them, or break into smaller ones.
-## The nests' gifts: while one guarding a column stands, theirs cannot go for ours in its lane's second row; one caring
+## The nests' gifts: while one guarding a nest stands, theirs cannot go for that nest's units; one caring
 ## heals only its own lane; scavengers standing at the end bring back gold. Worked out in fixed steps with nothing
 ## random, so the same two sides always end the same way; every blow struck in a step lands at its end, so no side
 ## strikes first.
@@ -16,7 +16,7 @@ extends RefCounted
 ##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z), hp, max,
 ##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, charge, knock,
 ##    devour, roar, shock, cloud, harm, cool, fed (times it has devoured), strikes, slow_until; lane (0-5, theirs too
-##    when the wave's lanes are given); ours also row, slot, of, guard, care, scavenge (Home.army)}
+##    when the wave's lanes are given); ours also row, slot, of, nest, guard, guards, care, scavenge (Home.army)}
 ## Events of a step: hit {from, to, dmg, charge}, heal {from, to, amount}, die {id}, burst {id, at, radius},
 ## spawn {unit: the new fighter}, knock {id, by, to}, devour {id, fed, heal}, roar {id, at, radius}, cloud {at, radius}.
 
@@ -35,7 +35,7 @@ var time := 0.0
 var over := false
 var result := ""                  # "won", "lost", or "time" (lost on time)
 var _next := 1
-var _guarded := {}                # lanes (of ours) where one guarding still stands, this step
+var _guarded := {}                # the nests (cells) of ours whose guard still stands, this step
 
 
 ## `army` (Home.army's units) against `wave` at `power` -- standing in `lanes` (Content.lanes; none given, in ranks).
@@ -45,6 +45,8 @@ static func make(army: Array, wave: Array, power: float, lanes: Array = []) -> F
 		var fu := f._add("ours", u.kind, Content.unit_stats(u), str(u.id), u.get("affixes", []), 1.0)
 		fu.elite = int(u.get("elite", 0))
 		fu.guard = bool(u.get("guard", false))
+		fu.guards = u.get("guards", Home.NOWHERE)
+		fu.nest = u.get("nest", Home.NOWHERE)
 		fu.care = bool(u.get("care", false))
 		fu.scavenge = bool(u.get("scavenge", false))
 		if u.has("row"):
@@ -70,7 +72,7 @@ func step() -> Array:
 	_guarded.clear()
 	for u in units:
 		if u.get("guard", false) and int(u.hp) > 0:
-			_guarded[float(u.lane)] = true
+			_guarded[u.guards] = true
 	var blows: Array = []            # [striker, struck, attack]
 	for u in units:
 		if int(u.hp) <= 0:
@@ -247,7 +249,7 @@ func _roar(u: Dictionary, ev: Array) -> void:
 
 ## Whom u goes for: the nearest foe standing, a foe of another lane LANE_PULL metres the further for each lane between
 ## (nearest, then weakest, then the first made -- never a doubt which); a flier, the one furthest back on the other
-## side; none of ours guarded (behind one guarding its lane).
+## side; none of ours guarded (of a nest whose guard still stands).
 func _foe_of(u: Dictionary) -> Variant:
 	var best: Variant = null
 	var best_d := INF
@@ -255,7 +257,7 @@ func _foe_of(u: Dictionary) -> Variant:
 	for o in units:
 		if o.side == u.side or int(o.hp) <= 0:
 			continue
-		if int(o.get("row", 0)) == 1 and _guarded.has(float(o.get("lane", -1.0))):
+		if o.has("nest") and _guarded.has(o.nest):
 			continue
 		var d: float = -(o.pos as Vector2).x * forward if u.dive else (o.pos as Vector2).distance_to(u.pos)
 		if not u.dive and u.has("lane") and o.has("lane"):
@@ -314,8 +316,8 @@ func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Ar
 	return u
 
 
-## The ranks a side starts in. Ours stand where their nests stand on the homeland's battle line (Home): its top row in
-## front, each column a lane -- the homeland turned to face the enemy -- a nest's units side by side in their place,
+## The ranks a side starts in. Ours in their nests' columns, a column a lane -- the homeland turned to face the enemy
+## -- the close-fighting in front, those reaching far behind (Home.army's row), those of a lane and row side by side,
 ## more behind them when there are many. Theirs, with lanes, in those lanes the same way, the short-reach in front and
 ## the long-reach behind (v0.15). Theirs without (and any of ours from no nest) by reach: the short-reach ones in front,
 ## the long-reach behind, each rank spread along the line, more ranks behind when a rank is full.

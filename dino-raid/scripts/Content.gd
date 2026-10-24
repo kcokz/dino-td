@@ -125,10 +125,17 @@ const ENEMIES := {
 }
 const BURST_RADIUS := 2.0
 
-## The homeland's two parts: the top FRONT_ROWS rows (nearest the road out) are the battle line -- nests only, and a
-## nest's units stand in battle where it stands, the top row in front, its column their lane; the rows behind are for
-## everything else, a building there doing what it does for the nests of its column or the whole homeland.
-const FRONT_ROWS := 2
+## The homeland (GAME-DESIGN 33): a map of plots of many shapes (LEVELS map), bare land between them, the top nearest
+## the road out; the bottom middle plot open from the start, the others opened for gold (Home.open_plot) -- OPEN_BASE,
+## and 1 more for each of its cells, and OPEN_MORE more for each opened before it in this place. Anything can be built
+## on any open cell; what a building does for another, it does for those up, down, left or right of it, so that bare
+## land between plots cuts it off. A nest's units fight in its column's lane, the close-fighting in front, those that
+## reach far behind.
+const OPEN_BASE := 2
+const OPEN_MORE := 1
+const START_PLOT := "S"           # the plot of a map open from the start
+## The special ground put away for now (the player, 2026-10-23: "先只看摆放吧，简单点").
+const TERRAIN_ON := false
 
 ## A nest makes one a round. Each raise (up to LEVEL_MAX) makes it elite once more: each of its units ELITE_HP times the
 ## hit points, ELITE_ATK times the attack, ELITE_SIZE times as big, taking no more of the population. More units come of
@@ -143,17 +150,17 @@ const TREE_GENES := 1             # research points more a round for a sampler b
 const LAVA_GOLD := 1              # gold more a round for a mine or forge beside lava
 const VAULT_MINE := 1             # the interest's cap more for each mine or forge beside a vault
 
-## Each nest's gift (本事), the same for whatever it hatches -- most of them only where the nest stands: in front or
-## behind, its column, its neighbours. Not tied to a school: what it does fits several ways of playing. when: where it
+## Each nest's gift (本事), the same for whatever it hatches -- most of them only where the nest stands: what is up,
+## down, left or right of it (up: towards the road out), its column. Not tied to a school: what it does fits several ways of playing. when: where it
 ## works ("" anywhere); does: what it does there; says: both in short, for a card. The numbers they say are these:
 const TRAITS := {
 	"swarm": {"name": "成群", "when": "上下左右挨着红巢", "does": "多孵 1 只", "says": "挨着红巢，多孵 1 只"},
-	"guard": {"name": "护住一列", "when": "站第一排", "does": "怪要先打倒它，才打得着它身后同一列的兵",
-		"says": "站第一排，护住身后同一列的兵"},
-	"cover": {"name": "掩护射击", "when": "站第二排、身前同一列有巢", "does": "远程的兵射得远 2 米，每下多 1，不管护甲",
-		"says": "站第二排、身前有巢挡着：射得更远，每下多 1"},
-	"alone": {"name": "独当一面", "when": "同一排左右都没有巢", "does": "大一号，血和攻击 +30%",
-		"says": "左右都没有巢：大一号，血和攻击 +30%"},
+	"guard": {"name": "护住", "when": "下面挨着有巢", "does": "它的兵还站着时，怪打不着下面挨着的那个巢的兵",
+		"says": "护住下面挨着的巢：它的兵还站着，怪就打不着那个巢的兵"},
+	"cover": {"name": "掩护射击", "when": "上面挨着有巢", "does": "远程的兵射得远 2 米，每下多 1，不管护甲",
+		"says": "上面挨着有巢挡着：射得更远，每下多 1"},
+	"alone": {"name": "独当一面", "when": "上下左右都没有巢挨着", "does": "大一号，血和攻击 +30%",
+		"says": "上下左右都没有巢：大一号，血和攻击 +30%"},
 	"care": {"name": "照料", "when": "", "does": "只给同一列的兵回血，回得多一倍", "says": "只给同一列的兵回血，回得多一倍"},
 	"scavenge": {"name": "拾荒", "when": "", "does": "打完仗还站着的，每只带回 2 金（输了也算）",
 		"says": "打完仗还站着的，每只带回 2 金"},
@@ -171,8 +178,8 @@ const MUTANT_SLOTS := 1           # affix places more on a mutant nest
 ## the population (人口) more it feeds; genes (research points), gold: that much more each round; interest: the most
 ## interest this much more; and for the nests in its reach -- slots: this many more affixes; affix_off: each affix this
 ## much gold cheaper; per: every this many units in the army, +1 attack; elite: elite units' hit points and attack this
-## % more; ranged: units reaching 3 m or more this much more damage each hit, armour or not (pierce); front: the front
-## row's units this % more hit points. reach: where it works (REACH) -- a building that makes something, what its
+## % more; ranged: units reaching 3 m or more this much more damage each hit, armour or not (pierce); front: the
+## close-fighting units this % more hit points. reach: where it works (REACH) -- a building that makes something, what its
 ## neighbours add to it; one that does something for nests, the nests it does it for. cost: its price, in gold. region:
 ## only found in that place (LEVELS). school: the way of playing it is for (SCHOOLS) -- a nest is for none, its gift for
 ## several.
@@ -188,13 +195,13 @@ const BUILDINGS := {
 		"levels": [{"biomass": 3}, {"biomass": 5}, {"biomass": 8}]},
 	"spore_pool": {"name": "孢子池", "color": Color(0.55, 0.7, 0.3), "cost": 3, "region": 0, "school": "horde", "reach": "near",
 		"levels": [{"biomass": 5}, {"biomass": 7}, {"biomass": 10}]},
-	"horde_totem": {"name": "兽群图腾", "color": Color(0.7, 0.3, 0.25), "cost": 4, "school": "horde", "reach": "lanes",
+	"horde_totem": {"name": "兽群图腾", "color": Color(0.7, 0.3, 0.25), "cost": 4, "school": "horde", "reach": "near",
 		"levels": [{"per": 6}, {"per": 5}, {"per": 4}]},
 	"sampler": {"name": "采样站", "color": Color(0.72, 0.84, 0.95), "cost": 2, "school": "genes", "reach": "near",
 		"levels": [{"genes": 1}, {"genes": 2}, {"genes": 3}]},
-	"stabilizer": {"name": "稳定器", "color": Color(0.55, 0.72, 0.95), "cost": 3, "school": "genes", "reach": "lanes",
+	"stabilizer": {"name": "稳定器", "color": Color(0.55, 0.72, 0.95), "cost": 3, "school": "genes", "reach": "near",
 		"levels": [{"slots": 1}, {"slots": 1}, {"slots": 2}]},
-	"gene_bank": {"name": "基因库", "color": Color(0.45, 0.85, 0.75), "cost": 3, "school": "genes", "reach": "lanes",
+	"gene_bank": {"name": "基因库", "color": Color(0.45, 0.85, 0.75), "cost": 3, "school": "genes", "reach": "near",
 		"levels": [{"affix_off": 1}, {"affix_off": 2}, {"affix_off": 3}]},
 	"mine": {"name": "矿场", "color": Color(0.96, 0.84, 0.3), "cost": 3, "school": "gold", "reach": "near",
 		"levels": [{"gold": 1}, {"gold": 2}, {"gold": 3}]},
@@ -202,23 +209,23 @@ const BUILDINGS := {
 		"levels": [{"gold": 2}, {"gold": 3}, {"gold": 5}]},
 	"vault": {"name": "金库", "color": Color(0.85, 0.7, 0.25), "cost": 3, "school": "gold", "reach": "near",
 		"levels": [{"interest": 1}, {"interest": 2}, {"interest": 3}]},
-	"champion_hall": {"name": "冠军殿", "color": Color(0.8, 0.65, 0.95), "cost": 4, "school": "elite", "reach": "lanes",
+	"champion_hall": {"name": "冠军殿", "color": Color(0.8, 0.65, 0.95), "cost": 4, "school": "elite", "reach": "near",
 		"levels": [{"elite": 15}, {"elite": 25}, {"elite": 40}]},
-	"watchtower": {"name": "瞭望塔", "color": Color(0.5, 0.65, 0.85), "cost": 3, "school": "ranged", "reach": "lanes",
+	"watchtower": {"name": "瞭望塔", "color": Color(0.5, 0.65, 0.85), "cost": 3, "school": "ranged", "reach": "near",
 		"levels": [{"ranged": 1}, {"ranged": 2}, {"ranged": 3}]},
-	"vanguard": {"name": "前锋营", "color": Color(0.7, 0.55, 0.4), "cost": 3, "school": "front", "reach": "lanes",
+	"vanguard": {"name": "前锋营", "color": Color(0.7, 0.55, 0.4), "cost": 3, "school": "front", "reach": "near",
 		"levels": [{"front": 30}, {"front": 60}, {"front": 100}]},
 }
 ## Where a building works (its 作用范围, GAME-DESIGN 28; lit blue on the homeland while it is being placed or pointed
-## at -- the player, 2026-10-22: "邻居互相加成,摆放的时候要有蓝色的hover来表示建筑作用范围"): "near", the four plots
-## beside it, up, down, left and right; "lanes", the battle line's nests in its column and the columns either side.
-const REACH := {"near": "挨着的四块", "lanes": "前面三列的巢"}
+## at -- the player, 2026-10-22: "邻居互相加成,摆放的时候要有蓝色的hover来表示建筑作用范围"): "near", the four cells
+## beside it, up, down, left and right -- every building's since the plots (GAME-DESIGN 33).
+const REACH := {"near": "挨着的四块"}
 
 ## The ways of playing a run (流派), each with what it builds on and what it comes to late.
 const SCHOOLS := {
 	"gold": {"name": "攒钱流", "says": "金币多、利息多；矿场围着金库"},
 	"genes": {"name": "进化流", "says": "词条位多、词条便宜；凑配方进化"},
-	"horde": {"name": "兽群流", "says": "人口多，兵多；兵越多，图腾前面的兵越狠"},
+	"horde": {"name": "兽群流", "says": "人口多，兵多；兵越多，图腾挨着的巢越狠"},
 	"elite": {"name": "精英流", "says": "巢升级选精英；精英越来越强"},
 	"ranged": {"name": "远程流", "says": "蓝兵、酸液腺；远程的兵越打越狠"},
 	"front": {"name": "前锋流", "says": "前排放肉；前排的兵越来越厚"},
@@ -498,32 +505,41 @@ const TIER_POWER := [1.0, 1.25, 1.5]
 const SHARE := [0.64, 0.53, 0.43]
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
-## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
-## (TERRAIN) lie about, behind the battle line -- what makes one place's homeland unlike another's (the player,
-## 2026-10-20: "先只用地形differenciate"; the places' rules, damp, ash and the rest, are gone). ground, grass: the homeland's
-## earth and the land round it; sky: [top, horizon]; color: on the map.
+## against its `boss`. mix: which kinds come, [kind, share, from which round]. lay: what its map is like, in a few
+## words. map: its homeland (GAME-DESIGN 33), a row
+## of letters a line of cells from the top (nearest the road out) down -- "." bare land, a letter a plot, START_PLOT the
+## one open from the start; no two plots up, down, left or right of each other -- what makes one place's homeland
+## unlike another's. terrain: how many of each special cell (TERRAIN) lie about, with TERRAIN_ON only (put away; the
+## player, 2026-10-20: "先只用地形differenciate"; the places' rules, damp, ash and the rest, are gone). ground, grass: the
+## homeland's earth and the land round it; sky: [top, horizon]; color: on the map.
 const LEVELS := [
-	{"name": "雨林", "boss": "boss_rain", "minis": ["mini_rain", "mini_rain2"],
+	{"name": "雨林", "lay": "大小搭配，中间一个十字", "boss": "boss_rain", "minis": ["mini_rain", "mini_rain2"],
+		"map": ["AA.BBB", "A.C.B.", ".CCC.D", "E.C.DD", "EE...D", "..SS..", "G.SS.H"],
 		"terrain": {"pond": 3, "tree": 2}, "ground": Color(0.42, 0.36, 0.26), "grass": Color(0.24, 0.42, 0.2),
 		"sky": [Color(0.36, 0.55, 0.82), Color(0.74, 0.82, 0.88)], "color": Color(0.36, 0.62, 0.32),
 		"mix": [["grey", 0.3, 1], ["spore", 0.45, 1], ["purple", 0.25, 2]]},
-	{"name": "火山", "boss": "boss_lava", "minis": ["mini_lava", "mini_lava2"],
+	{"name": "火山", "lay": "中间一个大十字，四周小石块", "boss": "boss_lava", "minis": ["mini_lava", "mini_lava2"],
+		"map": ["AAA.BB", "...C.B", "D.CCC.", "D..C.E", ".F...E", "FF.SS.", "..SS.G"],
 		"terrain": {"ore": 3, "lava": 2}, "ground": Color(0.36, 0.3, 0.27), "grass": Color(0.32, 0.28, 0.24),
 		"sky": [Color(0.42, 0.4, 0.44), Color(0.82, 0.62, 0.48)], "color": Color(0.85, 0.36, 0.18),
 		"mix": [["grey", 0.2, 1], ["beetle", 0.45, 1], ["salamander", 0.35, 1]]},
-	{"name": "沼泽", "boss": "boss_bog", "minis": ["mini_bog", "mini_bog2"],
+	{"name": "沼泽", "lay": "小岛多，一块两三格", "boss": "boss_bog", "minis": ["mini_bog", "mini_bog2"],
+		"map": ["AA.B.C", "...B.C", "D.E.F.", "D.E.FF", ".G....", "GG.SS.", "..SS.H"],
 		"terrain": {"mire": 3, "toadstool": 2}, "ground": Color(0.32, 0.29, 0.21), "grass": Color(0.22, 0.29, 0.17),
 		"sky": [Color(0.38, 0.44, 0.4), Color(0.66, 0.7, 0.58)], "color": Color(0.46, 0.52, 0.3),
 		"mix": [["grey", 0.2, 1], ["leech", 0.45, 1], ["moth", 0.35, 2]]},
-	{"name": "冰原", "boss": "boss_ice", "minis": ["mini_ice", "mini_ice2"],
+	{"name": "冰原", "lay": "横长条，一块顾好几路", "boss": "boss_ice", "minis": ["mini_ice", "mini_ice2"],
+		"map": ["AAAA.B", ".....B", "CC.DD.", ".C..D.", "E.FF.G", "E....G", ".SSSS."],
 		"terrain": {"ice_ore": 3, "glacier": 2}, "ground": Color(0.3, 0.34, 0.42), "grass": Color(0.7, 0.75, 0.81),
 		"sky": [Color(0.46, 0.57, 0.74), Color(0.74, 0.8, 0.86)], "color": Color(0.6, 0.78, 0.95),
 		"mix": [["grey", 0.2, 1], ["frostfang", 0.45, 1], ["shard", 0.35, 2]]},
-	{"name": "荒漠", "boss": "boss_sand", "minis": ["mini_sand", "mini_sand2"],
+	{"name": "荒漠", "lay": "2×2 的方块，中间大片沙地", "boss": "boss_sand", "minis": ["mini_sand", "mini_sand2"],
+		"map": ["AA..BB", "AA..BB", "..CC..", "D.CC.E", "D....E", "..SS..", "F.SS.G"],
 		"terrain": {"oasis": 3, "ruin": 2}, "ground": Color(0.6, 0.48, 0.32), "grass": Color(0.8, 0.68, 0.46),
 		"sky": [Color(0.42, 0.6, 0.85), Color(0.95, 0.85, 0.66)], "color": Color(0.9, 0.72, 0.4),
 		"mix": [["grey", 0.2, 1], ["sandworm", 0.45, 1], ["scorpion", 0.35, 2]]},
-	{"name": "海岸", "boss": "boss_sea", "minis": ["mini_sea", "mini_sea2"],
+	{"name": "海岸", "lay": "竖长条，一块只顾一路", "boss": "boss_sea", "minis": ["mini_sea", "mini_sea2"],
+		"map": ["A.B.C.", "A.B.C.", "A.B.C.", ".D.E.F", ".D.E.F", "G....F", "G.SSS."],
 		"terrain": {"tidepool": 3, "wreck": 2}, "ground": Color(0.58, 0.52, 0.4), "grass": Color(0.2, 0.42, 0.52),
 		"sky": [Color(0.34, 0.56, 0.84), Color(0.78, 0.88, 0.92)], "color": Color(0.3, 0.6, 0.78),
 		"mix": [["grey", 0.2, 1], ["crab", 0.45, 1], ["jelly", 0.35, 2]]},
@@ -559,22 +575,23 @@ const TERRAIN := {
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low
-## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-23 with the tech tree's forks and a
-## building dearer for each of its kind there is (GAME-DESIGN 32; before them, the tech tree, GAME-DESIGN 29, and
+## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-23 with the plots (GAME-DESIGN 33: a
+## map of plots opened for gold, a building's help only to those beside it; before them, the tech tree's forks and a
+## building dearer for each of its kind there is, GAME-DESIGN 32; the tech tree, GAME-DESIGN 29, and
 ## 2026-10-22: every place begun with one nest picked, the population a bound, research points for blueprints, the
 ## buildings' reach, GAME-DESIGN 28) -- 48 calm
 ## runs, 8 a school, the scavengers' loot not counted (with no one coming they all stand, Policy._battle), the
 ## population counted only as far as the nests use it (Policy.score); a level's curve never below the one before it,
 ## round for round. Measure again after changing what can be built or made.
-const LIMIT := [12, 32, 82, 115, 154, 187, 209, 235, 251, 277, 321, 366,
-	12, 25, 65, 121, 174, 212, 240, 267, 293, 322, 359, 405,
-	12, 27, 71, 124, 177, 218, 243, 289, 339, 379, 431, 478]
+const LIMIT := [13, 29, 43, 47, 66, 98, 121, 145, 163, 182, 198, 213,
+	12, 27, 40, 52, 72, 93, 116, 139, 162, 186, 208, 227,
+	12, 30, 40, 54, 69, 88, 105, 120, 137, 163, 190, 205]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses
 ## How dangerous a wave looks to the player (GAME-DESIGN 22), by its strength: one skull below the first of these, one
 ## more past each -- a feel for it, not whether it will be won (that is worked out only for the tools and F3).
-const DANGER := [30.0, 60.0, 120.0, 215.0, 380.0]
+const DANGER := [14.0, 27.0, 54.0, 97.0, 171.0]
 
 
 ## A blueprint's numbers (oi: {id}): its name, price, type and what it goes on.
@@ -647,23 +664,23 @@ static func building_text(kind: String, lv: int) -> String:
 		"pool", "spore_pool":
 			return Lang.t("人口上限 +%d。挨着的采样站每轮多 %d 研究点数") % [l.biomass, SAMPLER_POOL]
 		"horde_totem":
-			return Lang.t("前面三列的兵：出战的兵每满 %d 只，攻击 +1") % l.per
+			return Lang.t("挨着的巢孵的兵：出战的兵每满 %d 只，攻击 +1") % l.per
 		"sampler":
 			return Lang.t("每轮产 %d 研究点数（解锁图纸用）。挨着的每个培养池、孢子池，再多 %d") % [l.genes, SAMPLER_POOL]
 		"stabilizer":
-			return Lang.t("前面三列的巢，能多贴 %d 个词条") % l.slots
+			return Lang.t("挨着的巢，能多贴 %d 个词条") % l.slots
 		"gene_bank":
-			return Lang.t("前面三列的巢，贴词条便宜 %d 金") % l.affix_off
+			return Lang.t("挨着的巢，贴词条便宜 %d 金") % l.affix_off
 		"mine", "forge":
 			return Lang.t("每轮多 %d 金币。挨着的金库，利息上限多 %d") % [l.gold, VAULT_MINE]
 		"vault":
 			return Lang.t("利息上限多 %d。挨着的每座矿场、熔炉，再多 %d") % [l.interest, VAULT_MINE]
 		"champion_hall":
-			return Lang.t("前面三列的精英兵，血和攻击再 +%d%%") % l.elite
+			return Lang.t("挨着的巢孵的精英兵，血和攻击再 +%d%%") % l.elite
 		"watchtower":
-			return Lang.t("前面三列的远程兵（够得着 3 米以上），每下多 %d 点伤害，不管护甲") % l.ranged
+			return Lang.t("挨着的巢孵的远程兵（够得着 3 米以上），每下多 %d 点伤害，不管护甲") % l.ranged
 		"vanguard":
-			return Lang.t("前面三列站第一排的兵，血 +%d%%") % l.front
+			return Lang.t("挨着的巢孵的近战兵，血 +%d%%") % l.front
 	return ""
 
 
