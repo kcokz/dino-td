@@ -5,7 +5,7 @@ extends Node3D
 ## is begun with nothing built, a nest picked from three. A round goes in parts (GAME-DESIGN 26, Content.phases), each
 ## said as it comes. The start: the round's pay and the interest on the gold kept come in. The player's: the player
 ## researches techs for research points (the tech tree, GAME-DESIGN 29), builds from the blueprints had (the build bar;
-## GAME-DESIGN 27), raises buildings (clicked: a nest's raise a choice, one more or elite), sticks gene affixes on nests
+## GAME-DESIGN 27), raises buildings (clicked: a nest raised elite), sticks gene affixes on nests
 ## -- where a building works lit blue as it is placed (GAME-DESIGN 28) -- then is done. The making, by itself: the
 ## buildings bring in research points and gold, and the nests hatch this round's young -- each out of its nest to stand
 ## in the yard as it will stand in battle. The battle, by itself: the young go out and fight, and are gone with it;
@@ -52,7 +52,7 @@ var preview := {}                 # the same with what is taken up used; {} when
 var effects := {}                 # plot -> [short lines]: what that would change there (for Tags)
 var pending := {}                 # a building clicked, to be raised: {at}; {} if none
 
-var aimed := ""                   # pointed at on the HUD, to show what it would do: a raise's choice
+var aimed := ""                   # pointed at on the HUD, to show what it would do: "raise", the raise waiting
 
 var menu: Menu
 var going := -1                   # the place picked on the map to move on to
@@ -157,8 +157,8 @@ func _process(delta: float) -> void:
 # -- What the player does --------------------------------------------------------------------------------------
 
 ## The one door for a player's action: "research" {id} (a tech of the tree), "build" {plan, at} (the blueprint
-## plans[plan] built on `at`), "raise" {at, choice} (the building at `at` a level up), "choose" {choice} (the building
-## clicked raised so), "star" (the star on offer bought), "sell" {pen}, "fight". Whether it happened.
+## plans[plan] built on `at`), "raise" {at} (the building at `at` a level up -- a nest elite), "choose" (the building
+## clicked raised), "star" (the star on offer bought), "sell" {pen}, "fight". Whether it happened.
 func act(what: String, data := {}) -> bool:
 	if phase != Phase.PLAN:
 		return false
@@ -182,7 +182,7 @@ func act(what: String, data := {}) -> bool:
 				refresh()
 			return true
 		"raise":
-			var ev := home.raise(data.get("at", HomeView.NOWHERE), str(data.get("choice", "count")))
+			var ev := home.raise(data.get("at", HomeView.NOWHERE))
 			if ev.is_empty():
 				return false
 			pending = {}
@@ -192,7 +192,7 @@ func act(what: String, data := {}) -> bool:
 		"choose":
 			if pending.is_empty():
 				return false
-			return act("raise", {"at": pending.at, "choice": data.get("choice", "count")})
+			return act("raise", {"at": pending.at})
 		"star":
 			var ev := home.buy_star()
 			if ev.is_empty():
@@ -220,7 +220,7 @@ func hold(i: int) -> void:
 	refresh()
 
 
-## What the HUD points at, to show what it would do: "count" or "elite" (the raise waiting), or "".
+## What the HUD points at, to show what it would do: "raise" (the raise waiting), or "".
 func aim(what: String) -> void:
 	aimed = what
 	refresh()
@@ -243,7 +243,7 @@ func _changed(ev: Array) -> void:
 				home_view.refresh_buildings()
 				if e.t == "replaced":
 					tags.float_text(HomeView.plot_pos(e.at) + Vector3.UP * 3.0, Lang.t("退 %d 金") % e.back, Color(1.0, 0.8, 0.4))
-				if e.t == "raised" and e.get("choice", "") == "elite":
+				if e.t == "raised" and e.get("elite", false):
 					tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, Lang.t("精英！"), HomeView.ELITE_GOLD, 28)
 				if e.t == "affixed":
 					var b: Dictionary = home.buildings[e.at]
@@ -420,10 +420,9 @@ func refresh() -> void:
 		if not pending.is_empty():
 			tints[pending.at] = HOT_TINT
 			reach = Home.reach(home.buildings[pending.at].kind, pending.at)
-			if aimed in ["count", "elite"]:
+			if aimed == "raise":
 				var at: Vector2i = pending.at
-				var choice := aimed
-				_try("raise|%s|%s" % [str(at), choice], func(h: Home) -> void: h.raise(at, choice))
+				_try("raise|%s" % str(at), func(h: Home) -> void: h.raise(at))
 		elif not good.is_empty():
 			var c := Content.offer(good)
 			var fits := fits_of(held)
@@ -552,8 +551,6 @@ func hint() -> String:
 			return Lang.t("已经是最高级")
 		if home.gold < home.raise_price(at):
 			return Lang.t("金币不够")
-		if Content.is_nest(b.kind) and not home.can_raise(at, "count"):
-			return Lang.t("人口不够多孵，只能变精英")
 		return ""
 	var good := _taken()
 	if good.is_empty():
@@ -699,8 +696,7 @@ func _building_text(p: Vector2i) -> String:
 			for pair in Content.could_become(b.affixes):
 				lines.append(Lang.t("再贴上%s，会进化成%s") % [Lang.t(Content.AFFIXES[pair[0]].name), Lang.t(Content.UNITS[pair[1]].name)])
 	if int(b.level) < Content.LEVEL_MAX:
-		lines.append(Lang.t("升到 %d 级：%s") % [int(b.level) + 1, Lang.t("多孵 1 只，或者变精英") if Content.is_nest(b.kind)
-			else Content.level_text(b.kind, int(b.level) + 1)])
+		lines.append(Lang.t("升到 %d 级：%s") % [int(b.level) + 1, Content.level_text(b.kind, int(b.level) + 1)])
 		lines.append(Lang.t("点一下升级（%d 金）") % home.raise_price(p))
 	return "\n".join(lines)
 
@@ -842,9 +838,9 @@ func fits_of(i: int) -> Array:
 	return _fits[i]
 
 
-## Whether the building clicked can be raised as `choice` (gold, the top level, and one more hatched the population).
-func raise_fits(choice: String) -> bool:
-	return not pending.is_empty() and home.can_raise(pending.at, choice)
+## Whether the building clicked can be raised (gold, the top level).
+func raise_fits() -> bool:
+	return not pending.is_empty() and home.can_raise(pending.at)
 
 
 ## The making (GAME-DESIGN 26): what the buildings bring in, said over the homeland; then the nests hatch this round's
@@ -1060,12 +1056,12 @@ static func showcase() -> Home:
 	h.buildings.clear()
 	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree"}
 	# [plot, kind, nest's choices or a level, affixes]
-	for step in [[Vector2i(0, 0), "nest_green", ["count"], ["shell"]], [Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]],
-			[Vector2i(2, 0), "nest_red", ["count", "count"], ["flame", "blade"]], [Vector2i(3, 0), "nest_green", ["count"], []],
+	for step in [[Vector2i(0, 0), "nest_green", ["elite"], ["shell"]], [Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]],
+			[Vector2i(2, 0), "nest_red", ["elite", "elite"], ["flame", "blade"]], [Vector2i(3, 0), "nest_green", [], []],
 			[Vector2i(4, 0), "nest_red", [], []], [Vector2i(5, 0), "nest_gold", ["elite"], []],
-			[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", ["count"], ["hide"]],
-			[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_blue", ["count"], ["acid"]],
-			[Vector2i(4, 1), "nest_scav", ["count"], []], [Vector2i(5, 1), "nest_mutant", ["count"], ["acid", "poison"]],
+			[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", [], ["hide"]],
+			[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_blue", ["elite"], ["acid"]],
+			[Vector2i(4, 1), "nest_scav", [], []], [Vector2i(5, 1), "nest_mutant", [], ["acid", "poison"]],
 			[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "sampler", 2, []], [Vector2i(2, 2), "horde_totem", 1, []],
 			[Vector2i(3, 2), "watchtower", 2, []], [Vector2i(4, 2), "mine", 2, []], [Vector2i(5, 2), "champion_hall", 1, []],
 			[Vector2i(0, 3), "spore_pool", 2, []], [Vector2i(1, 3), "vault", 1, []], [Vector2i(2, 3), "stabilizer", 1, []],

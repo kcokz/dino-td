@@ -497,18 +497,17 @@ func _refresh_choice() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 14)
 	_choice_box.add_child(row)
-	var ways: Array = [["count", "多孵 1 只"], ["elite", "变精英"]] if Content.is_nest(b.kind) \
-		else [["count", Lang.t("升到 %d 级") % (int(b.level) + 1)]]
-	for pair in ways:
-		var choice: String = pair[0]
-		var button := _button(pair[1], Vector2(150, 46), 17)
-		button.disabled = not game.raise_fits(choice)
-		button.mouse_entered.connect(func() -> void: game.aim(choice))
-		button.mouse_exited.connect(func() -> void:
-			if game.aimed == choice:
-				game.aim(""))
-		button.pressed.connect(func() -> void: game.act("choose", {"choice": choice}))
-		row.add_child(button)
+	var button := _button("变精英" if Content.is_nest(b.kind) else Lang.t("升到 %d 级") % (int(b.level) + 1), Vector2(150, 46), 17)
+	button.disabled = not game.raise_fits()
+	button.mouse_entered.connect(func() -> void: game.aim("raise"))
+	button.mouse_exited.connect(func() -> void:
+		if game.aimed == "raise":
+			game.aim(""))
+	button.pressed.connect(func() -> void: game.act("choose"))
+	row.add_child(button)
+	if Content.is_nest(b.kind):
+		var says := _label(Content.level_text(b.kind, int(b.level) + 1), 14, Fonts.serif(600), Style.PARCHMENT_DIM)
+		_choice_box.add_child(says)
 
 
 ## Everyone goes out: the build bar put away.

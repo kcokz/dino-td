@@ -462,7 +462,8 @@ const EN := {
 	"会飞": "Flies", "飞过前排，先咬后排。": "Flies over the front row to bite the back.", "翅膀、猎鹰兽。": "Wings, Falcon.",
 	"冲锋": "Charge", "开战第一下打双倍。": "Its first hit of a battle does double.", "冲锋角。": "Charging Horn.",
 	"跑多快": "Speed", "每秒跑几米。跑得快的先碰上敌人。": "Metres it runs a second: the quicker meet the foe first.",
-	"巢升级时选变精英：血 ×1.5、攻击 ×1.25、大一号；一个巢最多变两次。": "Chosen when a nest is raised: health ×1.5, attack ×1.25, a size bigger; twice at most.",
+	"巢升级就是变精英：血 ×1.5、攻击 ×1.25、大一号，不多占人口；一个巢最多变两次。": "Raising a nest makes it elite: health ×1.5, attack ×1.25, a size bigger, no more population; twice at most.",
+	"变精英：血 ×%s、攻击 ×%s、大一号，不多占人口": "Elite: health ×%s, attack ×%s, a size bigger, no more population",
 	# The tech tree (GAME-DESIGN 29).
 	"科技": "Tech", "词条": "Affixes", "造、升级、贴词条、研究科技": "Build, raise, stick on affixes, research",
 	"小首领来了": "A mini-boss comes", "你有 %d 研究点数。研究过的，这个地方一直能造": "You have %d research. What is researched can be built here from now on",
