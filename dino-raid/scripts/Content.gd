@@ -7,6 +7,8 @@ class_name Content
 ## metres a second; armor: taken off each hit it takes; splash: metres round its mark that also take half; heal: hit
 ## points it gives the most hurt friend in reach (instead of hitting); pierce: damage more each hit, armour or not;
 ## burst: damage to the other side round it (BURST_RADIUS) when it falls; dive: flies over the front for the back;
+## shock: those it hits strike slower for a while (SLOW, SHOCK_TIME); cloud: a foe it fells bursts into poison, this
+## much to each of its side round it (CLOUD_RADIUS), armour or not;
 ## size: the block's edge; food: the population (人口) it takes. One for each kind of nest (its gift, TRAITS, is the nest's);
 ## four are species a nest evolves into (RECIPES); the titan comes with the star of that name (STARS).
 const UNITS := {
@@ -27,9 +29,11 @@ const UNITS := {
 	"falcon": {"name": "猎鹰兽", "color": Color(0.95, 0.5, 0.2), "hp": 22, "atk": 7, "every": 0.9, "range": 1.4,
 		"speed": 4.0, "size": 1.0, "dive": true, "food": 2, "role": "进化来的：飞过前排，专咬后排"},
 	"thunder": {"name": "雷甲兽", "color": Color(0.35, 0.6, 0.95), "hp": 34, "atk": 4, "every": 1.3, "range": 1.6,
-		"speed": 2.2, "size": 1.3, "armor": 1, "splash": 1.5, "food": 2, "role": "进化来的：又硬，又电一圈"},
+		"speed": 2.2, "size": 1.3, "armor": 1, "splash": 1.5, "shock": true, "food": 2,
+		"role": "进化来的：又硬，又电一圈；被电到的出手变慢"},
 	"miasma": {"name": "毒雾兽", "color": Color(0.55, 0.85, 0.3), "hp": 10, "atk": 3, "every": 1.0, "range": 5.0,
-		"speed": 2.4, "size": 0.95, "pierce": 2, "splash": 1.2, "food": 2, "role": "进化来的：远处喷毒雾，不管护甲"},
+		"speed": 2.4, "size": 0.95, "pierce": 2, "splash": 1.2, "cloud": 3, "food": 2,
+		"role": "进化来的：远处喷毒雾，不管护甲；打死的敌人爆一团毒雾"},
 	"magma": {"name": "熔岩兽", "color": Color(0.92, 0.32, 0.12), "hp": 30, "atk": 8, "every": 1.3, "range": 1.6,
 		"speed": 2.4, "size": 1.25, "burst": 8, "food": 2, "role": "进化来的：重击，倒下时炸一圈"},
 	"titan": {"name": "巨兽", "color": Color(0.55, 0.42, 0.3), "hp": 70, "atk": 9, "every": 1.6, "range": 1.8,
@@ -231,8 +235,22 @@ const AFFIXES := {
 	"flame": {"name": "火焰", "color": Color(1.0, 0.45, 0.1), "atk": 1, "splash": 1.2, "says": "攻击 +1，一打一片（旁边 1.2 米挨一半）"},
 	"haste": {"name": "急速腺", "color": Color(1.0, 0.85, 0.25), "haste": 30, "says": "打得快 30%"},
 	"hide": {"name": "厚皮", "color": Color(0.55, 0.45, 0.35), "hp": 40, "says": "血 +40%"},
-	"horn": {"name": "冲锋角", "color": Color(0.95, 0.92, 0.8), "charge": true, "says": "开战第一下打双倍"},
+	"horn": {"name": "冲锋角", "color": Color(0.95, 0.92, 0.8), "charge": true, "knock": 2.5,
+		"says": "开战第一下打双倍，还把对方撞退 2.5 米、打断它这一下"},
+	"devour": {"name": "吞噬", "color": Color(0.75, 0.2, 0.25), "devour": true,
+		"says": "亲手咬死一个敌人：回 35% 血，这一仗攻击 +1、大一圈（最多 4 次）"},
+	"roar": {"name": "低吼", "color": Color(0.6, 0.5, 0.75), "roar": true,
+		"says": "第一下和以后每打 3 下吼一声：周围 2.2 米的敌人出手慢四成，2 秒"},
 }
+## What the affixes and species that act do (GAME-DESIGN 32), worked out in Fight with nothing random.
+const DEVOUR_HEAL := 0.35         # a devourer felling a foe: this much of its hit points back...
+const DEVOUR_MAX := 4             # ...attack +1, a tenth bigger, this many times at most
+const ROAR_EVERY := 3             # a roarer roars at its first blow and every this many after
+const ROAR_RADIUS := 2.2          # metres round it
+const ROAR_TIME := 2.0            # seconds those it reaches strike slower
+const SHOCK_TIME := 1.5           # seconds those a shocker hits strike slower
+const SLOW := 1.4                 # slowed, a fighter's blows come this many times further apart
+const CLOUD_RADIUS := 1.5         # metres round a foe felled by one that leaves a poison cloud
 
 ## What a fighter's numbers mean, in the player's words -- the codex's 属性 page (the player, 2026-10-23: "恐龙每个属性
 ## 需要明确，可以查看"). word: its mark; name; says: what it is; eg: an example (or ""). In the order a fighter's numbers
@@ -251,6 +269,10 @@ const STATS := {
 	"burst": {"word": "爆", "name": "倒下时炸一圈", "says": "倒下时，周围 2 米的敌人挨这么多伤害。", "eg": "熔岩兽、熔岩甲虫。"},
 	"dive": {"word": "飞", "name": "会飞", "says": "飞过前排，先咬后排。", "eg": "翅膀、猎鹰兽。"},
 	"charge": {"word": "冲", "name": "冲锋", "says": "开战第一下打双倍。", "eg": "冲锋角。"},
+	"knock": {"word": "撞", "name": "撞退", "says": "冲锋那一下把对方撞退几米，还打断它这一下。撞进后排的，正好挨一打一片。", "eg": "冲锋角：撞退 2.5 米。"},
+	"devour": {"word": "吞", "name": "吞噬", "says": "亲手咬死一个敌人，回 35% 血，这一仗攻击 +1、大一圈，最多 4 次。专克一大群小怪。", "eg": "吞噬。"},
+	"slow": {"word": "慢", "name": "出手变慢", "says": "被低吼吓到、被雷甲兽电到的敌人，一会儿里出手慢四成。", "eg": "低吼：周围 2.2 米，2 秒。"},
+	"cloud": {"word": "雾", "name": "毒雾爆开", "says": "被它打死的敌人爆一团毒雾，旁边 1.5 米的敌人挨几点，不管护甲。", "eg": "毒雾兽：每团 3 点。"},
 	"speed": {"word": "跑", "name": "跑多快", "says": "每秒跑几米。跑得快的先碰上敌人。", "eg": ""},
 	"elite": {"word": "精", "name": "精英", "says": "巢升级就是变精英：血 ×1.5、攻击 ×1.25、大一号，不多占人口；一个巢最多变两次。", "eg": ""},
 }
@@ -328,52 +350,59 @@ const HEAL_WORTH := 0.6                 # a hit point healed, against one dealt
 const SPLIT_WORTH := 0.45               # what it breaks into, against standing there from the start
 const BURST_WORTH := 0.25               # a burst, against a hit a second
 const CHARGE_WORTH := 0.1               # a first blow twice as hard, against a hit a second
+const KNOCK_WORTH := 0.1                # knocking the one it charges back, against a hit a second
+const DEVOUR_WORTH := 0.15              # devouring: it deals this much more
+const SLOWING_WORTH := 0.1              # roaring or shocking: it takes this much more (they strike slower)
+const CLOUD_WORTH := 0.3                # a poison cloud, against a hit a second
 
-## The blueprints (图纸, GAME-DESIGN 27-29): what can be built or stuck on -- only what lasts, nothing used up at once.
-## A place starts with none: first one of the nests of FIRST_NESTS is picked (free); the rest are techs of the tech
-## tree (科技树), researched while the player builds (Home.research): each for its research points (研究点数, cost),
-## once what it needs (needs: the tech before it on its line; "" for the first of a line) is had (the player,
-## 2026-10-23: "做成类似杀戮尖塔的商店……类似于做一个科技树，某些科技需要之前的科技解锁"). A blueprint had can be built
-## as often as there is gold, room and population for it. type "build": a building, on an open plot of its part of the
-## homeland -- an empty one, or one with another building, pulled down for half its price back; "affix": a gene affix
-## on a nest with a free place. price: in gold (a building's is its own) -- research points buy techs, nothing else (the
-## player, 2026-10-22: "各管一件事"). region: only in that place. rarity: how far down its line it is (0 the first, 2
-## the furthest) -- its metal, bronze, silver or gold. Raising a building a level is no blueprint: any building can be,
-## for RAISE gold more than its level (a nest's makes it elite). In the order of the tree,
-## line by line (TECH_PANELS).
+## The blueprints (图纸, GAME-DESIGN 27-29, 32): what can be built or stuck on -- only what lasts, nothing used up at
+## once. A place starts with none: first one of the nests of FIRST_NESTS is picked (free); the rest are techs of the
+## tech tree (科技树), researched while the player builds (Home.research): each for its research points (研究点数,
+## cost), once what it needs (needs: the tech before it on its line; "" for the first of a line) is had (the player,
+## 2026-10-23: "做成类似杀戮尖塔的商店……类似于做一个科技树，某些科技需要之前的科技解锁"). Where a line forks in two
+## (mutex: the other of the two), one of the two only, in this place: the other is shut once one is had (v0.15). A
+## blueprint had can be built as often as there is gold, room and population for it -- a building each the more of its
+## kind there are the dearer (Home.price_at). type "build": a building, on an open plot of its part of the homeland --
+## an empty one, or one with another building, pulled down for half its price back; "affix": a gene affix on a nest with
+## a free place. price: in gold (a building's is its own) -- research points buy techs, nothing else (the player,
+## 2026-10-22: "各管一件事"). region: only in that place. rarity: how far down its line it is (0 the first, 2 the
+## furthest) -- its metal, bronze, silver or gold. Raising a building a level is no blueprint: any building can be, for
+## RAISE gold more than its level (a nest's makes it elite). In the order of the tree, line by line (TECH_PANELS).
 const OFFERS := {
-	# The nests, and the battle's buildings that go with them.
+	# The nests, and the battle's buildings that go with them: the horde or the heavy, the wall or the healers.
 	"b_red": {"type": "build", "rarity": 0, "builds": "nest_red", "cost": 1, "needs": ""},
-	"b_totem": {"type": "build", "rarity": 1, "builds": "horde_totem", "cost": 3, "needs": "b_red"},
-	"b_gold": {"type": "build", "rarity": 1, "builds": "nest_gold", "cost": 3, "needs": "b_red"},
+	"b_totem": {"type": "build", "rarity": 1, "builds": "horde_totem", "cost": 3, "needs": "b_red", "mutex": "b_gold"},
+	"b_gold": {"type": "build", "rarity": 1, "builds": "nest_gold", "cost": 3, "needs": "b_red", "mutex": "b_totem"},
 	"b_hall": {"type": "build", "rarity": 2, "builds": "champion_hall", "cost": 3, "needs": "b_gold"},
 	"b_green": {"type": "build", "rarity": 0, "builds": "nest_green", "cost": 1, "needs": ""},
-	"b_vanguard": {"type": "build", "rarity": 1, "builds": "vanguard", "cost": 3, "needs": "b_green"},
-	"b_white": {"type": "build", "rarity": 1, "builds": "nest_white", "cost": 2, "needs": "b_green"},
+	"b_vanguard": {"type": "build", "rarity": 1, "builds": "vanguard", "cost": 3, "needs": "b_green", "mutex": "b_white"},
+	"b_white": {"type": "build", "rarity": 1, "builds": "nest_white", "cost": 2, "needs": "b_green", "mutex": "b_vanguard"},
 	"b_blue": {"type": "build", "rarity": 0, "builds": "nest_blue", "cost": 1, "needs": ""},
 	"b_tower": {"type": "build", "rarity": 1, "builds": "watchtower", "cost": 3, "needs": "b_blue"},
 	"b_scav": {"type": "build", "rarity": 0, "builds": "nest_scav", "cost": 1, "needs": ""},
-	# The resources, and the gene lab.
+	# The resources, and the gene lab: the bank or the mutants, the vault or the forge.
 	"b_pool": {"type": "build", "rarity": 0, "builds": "pool", "cost": 1, "needs": ""},
 	"b_spore": {"type": "build", "rarity": 1, "builds": "spore_pool", "cost": 2, "needs": "b_pool", "region": 0},
 	"b_sampler": {"type": "build", "rarity": 0, "builds": "sampler", "cost": 1, "needs": ""},
-	"b_stab": {"type": "build", "rarity": 2, "builds": "stabilizer", "cost": 3, "needs": "b_sampler"},
-	"b_genebank": {"type": "build", "rarity": 2, "builds": "gene_bank", "cost": 3, "needs": "b_stab"},
-	"b_mutant": {"type": "build", "rarity": 2, "builds": "nest_mutant", "cost": 3, "needs": "b_stab"},
+	"b_stab": {"type": "build", "rarity": 1, "builds": "stabilizer", "cost": 3, "needs": "b_sampler"},
+	"b_genebank": {"type": "build", "rarity": 2, "builds": "gene_bank", "cost": 3, "needs": "b_stab", "mutex": "b_mutant"},
+	"b_mutant": {"type": "build", "rarity": 2, "builds": "nest_mutant", "cost": 3, "needs": "b_stab", "mutex": "b_genebank"},
 	"b_mine": {"type": "build", "rarity": 0, "builds": "mine", "cost": 1, "needs": ""},
-	"b_vault": {"type": "build", "rarity": 1, "builds": "vault", "cost": 3, "needs": "b_mine"},
-	"b_forge": {"type": "build", "rarity": 1, "builds": "forge", "cost": 3, "needs": "b_mine", "region": 1},
-	# The gene affixes: each recipe's second half after its first.
+	"b_vault": {"type": "build", "rarity": 1, "builds": "vault", "cost": 3, "needs": "b_mine", "mutex": "b_forge"},
+	"b_forge": {"type": "build", "rarity": 1, "builds": "forge", "cost": 3, "needs": "b_mine", "region": 1, "mutex": "b_vault"},
+	# The gene affixes: each recipe's second half after its first; the falcon's or the magma beast's, not both.
 	"a_shell": {"type": "affix", "price": 3, "rarity": 0, "affix": "shell", "cost": 2, "needs": ""},
 	"a_plasma": {"type": "affix", "price": 4, "rarity": 1, "affix": "plasma", "cost": 4, "needs": "a_shell"},
 	"a_blade": {"type": "affix", "price": 3, "rarity": 0, "affix": "blade", "cost": 2, "needs": ""},
-	"a_wings": {"type": "affix", "price": 4, "rarity": 1, "affix": "wings", "cost": 4, "needs": "a_blade"},
-	"a_flame": {"type": "affix", "price": 4, "rarity": 1, "affix": "flame", "cost": 3, "needs": "a_blade", "region": 1},
+	"a_wings": {"type": "affix", "price": 4, "rarity": 1, "affix": "wings", "cost": 4, "needs": "a_blade", "mutex": "a_flame"},
+	"a_flame": {"type": "affix", "price": 4, "rarity": 1, "affix": "flame", "cost": 3, "needs": "a_blade", "mutex": "a_wings"},
 	"a_haste": {"type": "affix", "price": 3, "rarity": 0, "affix": "haste", "cost": 2, "needs": ""},
-	"a_acid": {"type": "affix", "price": 4, "rarity": 1, "affix": "acid", "cost": 3, "needs": "a_haste"},
+	"a_acid": {"type": "affix", "price": 4, "rarity": 1, "affix": "acid", "cost": 3, "needs": "a_haste", "mutex": "a_devour"},
 	"a_poison": {"type": "affix", "price": 3, "rarity": 2, "affix": "poison", "cost": 3, "needs": "a_acid", "region": 0},
+	"a_devour": {"type": "affix", "price": 4, "rarity": 1, "affix": "devour", "cost": 3, "needs": "a_haste", "mutex": "a_acid"},
 	"a_hide": {"type": "affix", "price": 3, "rarity": 0, "affix": "hide", "cost": 2, "needs": ""},
-	"a_horn": {"type": "affix", "price": 3, "rarity": 1, "affix": "horn", "cost": 3, "needs": "a_hide"},
+	"a_horn": {"type": "affix", "price": 3, "rarity": 1, "affix": "horn", "cost": 3, "needs": "a_hide", "mutex": "a_roar"},
+	"a_roar": {"type": "affix", "price": 3, "rarity": 1, "affix": "roar", "cost": 3, "needs": "a_hide", "mutex": "a_horn"},
 }
 ## The tech tree's three parts, by what their lines are for, each with the first tech of its lines, in order: the nests
 ## (and the battle's buildings that go with each), the resources (and the gene lab, behind the samplers -- open from the
@@ -390,6 +419,8 @@ const FIRST_CHOICE := 3           # of them to pick from
 ## stronger; the genes' are affixes, and the buildings that help with them.
 const GROUPS := {"nest": "巢", "resource": "资源", "battle": "战斗", "gene": "基因"}
 const RAISE := 2                  # a raise costs this much more than the building's level
+const MORE := 1                   # a building costs this much more for each of its kind there is already (v0.15)...
+const NEVER_MORE := ["pool", "spore_pool"]  # ...but the pools and the nests (the player's choice, 2026-10-23)
 const INTEREST_STEP := 5          # each this much gold kept to a round's end brings one more...
 const INTEREST_MAX := 5           # ...up to this much
 const WIN_GOLD := 2               # gold for a battle won
@@ -689,6 +720,11 @@ static func unit_stats(spec: Dictionary) -> Dictionary:
 	s.every = float(base.every) * 100.0 / (100.0 + float(spec.get("haste", 0)))
 	s.dive = bool(base.get("dive", false)) or bool(spec.get("dive", false))
 	s.charge = bool(spec.get("charge", false))
+	s.knock = float(spec.get("knock", 0.0))
+	s.devour = bool(spec.get("devour", false))
+	s.roar = bool(spec.get("roar", false))
+	s.shock = bool(base.get("shock", false))
+	s.cloud = int(base.get("cloud", 0))
 	s.size = float(base.size) * float(spec.get("size_mult", 1.0))
 	s.harm = 0
 	return s
@@ -706,6 +742,11 @@ static func enemy_stats(kind: String, power := 1.0) -> Dictionary:
 	s.burst = roundi(float(base.get("burst", 0)) * power)
 	s.dive = false
 	s.charge = false
+	s.knock = 0.0
+	s.devour = false
+	s.roar = false
+	s.shock = false
+	s.cloud = 0
 	return s
 
 
@@ -716,9 +757,14 @@ static func strength(s: Dictionary, power := 1.0) -> float:
 	var take := hp * TYPICAL_HIT / maxf(1.0, TYPICAL_HIT - armor) * (1.0 + REACH_WORTH if float(s.range) >= 3.0 else 1.0)
 	if s.get("dive", false):
 		take *= 1.0 + DIVE_WORTH
+	if s.get("roar", false) or s.get("shock", false):
+		take *= 1.0 + SLOWING_WORTH
 	var deal := (float(s.atk) + float(s.get("pierce", 0))) / float(s.every) * (1.0 + SPLASH_WORTH * float(s.get("splash", 0.0))) \
 		+ HEAL_WORTH * float(s.get("heal", 0)) / float(s.every) + BURST_WORTH * float(s.get("burst", 0)) \
-		+ (CHARGE_WORTH * float(s.atk) if s.get("charge", false) else 0.0)
+		+ (CHARGE_WORTH * float(s.atk) if s.get("charge", false) else 0.0) \
+		+ (KNOCK_WORTH * float(s.atk) if float(s.get("knock", 0.0)) > 0.0 else 0.0) + CLOUD_WORTH * float(s.get("cloud", 0))
+	if s.get("devour", false):
+		deal *= 1.0 + DEVOUR_WORTH
 	var n := STRENGTH_K * sqrt(take * deal)
 	if s.has("split") and ENEMIES.has(s.split):
 		n += SPLIT_WORTH * int(s.get("splits", 0)) * strength(enemy_stats(s.split, power))
@@ -764,6 +810,82 @@ static func wave(place: int, tier: int, r: int) -> Array:
 		left -= w
 	if out.is_empty():
 		out.append(weakest)
+	return out
+
+
+## How a wave stands on the field (GAME-DESIGN 32; v0.15): the round's plan of attack, the same each time for a place,
+## a level and a round, so known while the player builds. Each its weights for the six lanes (the homeland's columns,
+## 0 at the left): for those that fight close (in front), those that reach far (behind) and -- in the middle's -- the
+## heavy (the boss, the mini-bosses, the armoured). A flank comes down one side, its other side mirrored.
+const FORMATIONS := {
+	"line": {"name": "全线压境", "melee": [1, 1, 1, 1, 1, 1], "ranged": [1, 1, 1, 1, 1, 1]},
+	"flank": {"name": "侧翼突袭", "melee": [4, 4, 1.5, 1, 0.5, 0.5], "ranged": [2, 2, 1, 0.5, 0.5, 0.5]},
+	"middle": {"name": "中路重装", "heavy": [0, 0, 1, 1, 0, 0], "melee": [1, 1, 0.3, 0.3, 1, 1], "ranged": [1, 1, 0.5, 0.5, 1, 1]},
+	"pincer": {"name": "分路夹击", "melee": [3, 3, 0, 0, 3, 3], "ranged": [0.5, 0.5, 2, 2, 0.5, 0.5]},
+}
+
+
+## The plan a wave comes in (FORMATIONS): the middle with a mini-boss or the boss; the whole line the first two rounds;
+## else the four in turn over the rounds between, where the turn starts depending on the place and the level -- so
+## that each comes in every level.
+static func formation_of(place: int, tier: int, r: int) -> String:
+	if r >= ROUNDS or r in MINI_ROUNDS:
+		return "middle"
+	if r <= 2:
+		return "line"
+	var k := 0
+	for q in range(3, r):
+		if not q in MINI_ROUNDS:
+			k += 1
+	return ["flank", "pincer", "line", "middle"][(k + place + tier) % 4]
+
+
+## Whether a wave in round `r` comes down the right side, where its plan has a side.
+static func from_right(place: int, tier: int, r: int) -> bool:
+	return (place + tier + r) % 2 == 1
+
+
+## The lane (0 to 5) each of `kinds` -- a wave, in order -- stands in (GAME-DESIGN 32): the heavy first, then the rest,
+## each to the lane of its sort (heavy, close, far) furthest below its share of the plan's weights.
+static func lanes(place: int, tier: int, r: int, kinds: Array) -> Array:
+	var plan: Dictionary = FORMATIONS[formation_of(place, tier, r)]
+	var flip := from_right(place, tier, r)
+	var out: Array = []
+	out.resize(kinds.size())
+	var tally := {}
+	var order: Array = range(kinds.size())
+	var heavy := func(k: String) -> bool:
+		return k.begins_with("boss_") or k.begins_with("mini_") or int(ENEMIES[k].get("armor", 0)) >= 1
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var ha: bool = heavy.call(kinds[a])
+		var hb: bool = heavy.call(kinds[b])
+		return ha and not hb or ha == hb and a < b)
+	for i in order:
+		var k: String = kinds[i]
+		var sort := "ranged" if float(ENEMIES[k].range) >= 3.0 else "melee"
+		if plan.has("heavy") and heavy.call(k):
+			sort = "heavy"
+		var w: Array = (plan[sort] as Array).duplicate()
+		if flip:
+			w.reverse()
+		var c: Array = tally.get(sort, [0, 0, 0, 0, 0, 0])
+		var sum_w := 0.0
+		var n := 0
+		for j in 6:
+			sum_w += float(w[j])
+			n += int(c[j])
+		var best := -1
+		var best_gap := -INF
+		for j in 6:
+			if float(w[j]) <= 0.0:
+				continue
+			var gap := float(w[j]) / sum_w * (n + 1) - int(c[j])
+			if gap > best_gap + 0.0001 or absf(gap - best_gap) <= 0.0001 and absf(j - 2.5) < absf(best - 2.5):
+				best = j
+				best_gap = gap
+		c[best] = int(c[best]) + 1
+		tally[sort] = c
+		out[i] = best
 	return out
 
 

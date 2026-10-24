@@ -1,5 +1,5 @@
 extends SceneTree
-## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-29) on set-up cases, headless:
+## Checks the homeland's and the battle's rules (Home, Fight, Run; GAME-DESIGN 17-32) on set-up cases, headless:
 ##
 ##   Godot --headless --path dino-raid --script res://tools/test_home.gd
 
@@ -27,6 +27,11 @@ func _init() -> void:
 	_schools()
 	_buying()
 	_techs()
+	_forks()
+	_dearer()
+	_lanes()
+	_moves()
+	_deeds()
 	_interest()
 	_stars()
 	_star_kinds()
@@ -599,6 +604,161 @@ func _techs() -> void:
 	check("the first nests the first of their lines", Content.FIRST_NESTS.all(func(id: String) -> bool:
 		return Home.tech_needs(id) == ""))
 	check("every tech costs something", Content.OFFERS.keys().all(func(id: String) -> bool: return Home.tech_cost(id) >= 1))
+
+
+## Where a line of the tech tree forks in two, one of the two only (v0.15).
+func _forks() -> void:
+	var h := Home.new(rng())
+	h.genes = 20
+	h.research("b_red")
+	check("red's two open: the totem and the gold", h.tech_open("b_totem") and h.tech_open("b_gold"))
+	check("the totem had, the gold shut", h.research("b_totem") and h.tech_shut("b_gold") and not h.tech_open("b_gold")
+		and not h.research("b_gold") and not "b_gold" in h.plans)
+	check("and so the champion hall under it never comes", not h.tech_open("b_hall"))
+	check("each fork's two each other's other", Content.OFFERS.keys().all(func(id: String) -> bool:
+		var other := Home.tech_other(id)
+		return other == "" or (Home.tech_other(other) == id and Home.tech_needs(other) == Home.tech_needs(id))))
+	check("the flame no longer the volcano's alone: the falcon's or the magma beast's", not Content.OFFERS.a_flame.has("region")
+		and Home.tech_other("a_wings") == "a_flame")
+
+
+## A building the dearer the more of its kind there are -- not the nests, not the pools (v0.15).
+func _dearer() -> void:
+	var h := bare()
+	h.plans = ["b_mine", "b_pool", "b_red"]
+	var mine := Content.offer({"id": "b_mine"})
+	check("a first mine for its price", h.price_at(mine, null) == 3)
+	h.build_plan("b_mine", Vector2i(0, 2))
+	check("a second 1 more", h.price_at(mine, null) == 4 and h.gold == 17, [h.price_at(mine, null), h.gold])
+	h.build_plan("b_mine", Vector2i(3, 3))
+	check("a third 2 more, paid so", h.price_at(mine, null) == 5 and h.gold == 13, [h.price_at(mine, null), h.gold])
+	h.build_plan("b_pool", Vector2i(1, 2))
+	h.build_plan("b_red", Vector2i(0, 0))
+	check("pools and nests no dearer", h.price_at(Content.offer({"id": "b_pool"}), null) == 2
+		and h.price_at(Content.offer({"id": "b_red"}), null) == 3)
+	h.gold = 4
+	check("short of the dearer price: nowhere", h.targets("b_mine").is_empty() and not h.targets("b_pool").is_empty())
+
+
+## The wave in the homeland's six lanes (v0.15): known for a place, a level and a round, the boss in the middle.
+func _lanes() -> void:
+	var w := Content.wave(0, 0, 6)
+	var l := Content.lanes(0, 0, 6, w)
+	check("a lane for each, 0 to 5, the same each time", l.size() == w.size() and l == Content.lanes(0, 0, 6, w)
+		and l.all(func(j: int) -> bool: return j >= 0 and j <= 5), l)
+	var boss := Content.wave(0, 0, Content.ROUNDS)
+	var bl := Content.lanes(0, 0, Content.ROUNDS, boss)
+	check("the boss in the middle", Content.formation_of(0, 0, Content.ROUNDS) == "middle" and bl[boss.find("boss_rain")] in [2, 3], bl)
+	var flank := -1
+	var pincer := -1
+	for r in range(3, Content.ROUNDS):
+		if Content.formation_of(1, 0, r) == "flank" and flank < 0 and not r in Content.MINI_ROUNDS:
+			flank = r
+		if Content.formation_of(1, 0, r) == "pincer" and pincer < 0 and not r in Content.MINI_ROUNDS:
+			pincer = r
+	check("every plan comes in turn", flank > 0 and pincer > 0, [flank, pincer])
+	if flank > 0:
+		var fw := Content.wave(1, 0, flank)
+		var fl := Content.lanes(1, 0, flank, fw)
+		var side := [4, 5] if Content.from_right(1, 0, flank) else [0, 1]
+		var there := 0
+		for i in fw.size():
+			if fl[i] in side:
+				there += 1
+		check("a flank: the most down its side", there * 2 >= fw.size(), [there, fw.size()])
+	if pincer > 0:
+		var pw := Content.wave(1, 0, pincer)
+		var pl := Content.lanes(1, 0, pincer, pw)
+		var close_mid := 0
+		for i in pw.size():
+			if float(Content.ENEMIES[pw[i]].range) < 3.0 and pl[i] in [2, 3]:
+				close_mid += 1
+		check("a pincer: none close in the middle", close_mid == 0, close_mid)
+	var h := bare()
+	h.build(Vector2i(2, 0), "nest_red")
+	var f := Fight.make(h.army(), ["grey", "grey", "purple"], 1.0, [0, 5, 2])
+	var theirs: Array = f.units.filter(func(u: Dictionary) -> bool: return u.side == "theirs")
+	check("theirs stand in their lanes, the far-reaching behind", absf((theirs[0].pos as Vector2).y - (0 - 2.5) * Fight.LANE_GAP) < 1.0
+		and absf((theirs[1].pos as Vector2).y - (5 - 2.5) * Fight.LANE_GAP) < 1.0
+		and (theirs[2].pos as Vector2).x > (theirs[0].pos as Vector2).x, theirs.map(func(u: Dictionary) -> Vector2: return u.pos))
+	# Its own lane first: a foe a lane over but nearer is passed over for one of its own a little further.
+	var g := Fight.make(h.army(), ["grey", "grey"], 1.0, [3, 2])
+	var ours: Dictionary = g.units[0]
+	ours.pos = Vector2(-4.0, -1.3)
+	g.units[1].pos = Vector2(5.0, 1.3)
+	g.units[2].pos = Vector2(7.0, -1.3)
+	check("its own lane first", g._foe_of(ours).id == g.units[2].id)
+
+
+## The nests moved about the battle line for nothing, two swapped; nothing else moves (v0.15).
+func _moves() -> void:
+	var h := bare()
+	h.build(Vector2i(0, 0), "nest_red")
+	h.buildings[Vector2i(0, 0)].level = 2
+	h.buildings[Vector2i(0, 0)].path = ["elite"]
+	h.buildings[Vector2i(0, 0)].affixes = ["blade"]
+	h.build(Vector2i(4, 0), "nest_green")
+	h.build(Vector2i(2, 2), "pool")
+	var gold := h.gold
+	check("moved to an empty plot of the line, its level and affixes with it, for nothing",
+		not h.move_building(Vector2i(0, 0), Vector2i(3, 1)).is_empty() and not h.buildings.has(Vector2i(0, 0))
+		and h.buildings[Vector2i(3, 1)].kind == "nest_red" and int(h.buildings[Vector2i(3, 1)].level) == 2
+		and h.buildings[Vector2i(3, 1)].affixes == ["blade"] and h.gold == gold)
+	check("onto another nest: the two swapped", not h.move_building(Vector2i(3, 1), Vector2i(4, 0)).is_empty()
+		and h.buildings[Vector2i(4, 0)].kind == "nest_red" and h.buildings[Vector2i(3, 1)].kind == "nest_green")
+	check("not off the battle line, not a pool, not onto itself", h.move_building(Vector2i(4, 0), Vector2i(1, 2)).is_empty()
+		and h.move_building(Vector2i(2, 2), Vector2i(0, 0)).is_empty() and h.move_building(Vector2i(4, 0), Vector2i(4, 0)).is_empty())
+	var p := Home.new(rng())
+	p.build(Vector2i(0, 0), "nest_red")
+	p.build(Vector2i(3, 0), "nest_red")
+	check("not beside its kind past the population: two reds swarming would hatch four for two",
+		p.move_building(Vector2i(3, 0), Vector2i(1, 0)).is_empty() and p.buildings.has(Vector2i(3, 0)))
+
+
+## The affixes and species that act (v0.15), each worked out with nothing random.
+func _deeds() -> void:
+	var h := bare()
+	h.build(Vector2i(2, 0), "nest_red")
+	h.buildings[Vector2i(2, 0)].affixes = ["horn"]
+	var f := Fight.make(h.army(), ["black"], 1.0, [2])
+	var knock: Array = []
+	while not f.over and knock.is_empty():
+		knock = f.step().filter(func(e: Dictionary) -> bool: return e.t == "knock")
+	var black: Dictionary = f.units[1]
+	check("the horn's first blow knocks the foe back and undoes its blow", knock.size() == 1
+		and is_equal_approx(float(black.cool), float(black.every)), [knock, black.cool])
+	var d := bare()
+	d.build(Vector2i(2, 0), "nest_red")
+	d.buildings[Vector2i(2, 0)].affixes = ["devour"]
+	var df := Fight.make(d.army(), ["mite", "mite"], 1.0, [2, 2])
+	var fed: Array = []
+	while not df.over and fed.is_empty():
+		fed = df.step().filter(func(e: Dictionary) -> bool: return e.t == "devour")
+	check("a devourer felling a foe: attack +1, bigger", fed.size() == 1 and int(df.units[0].atk) == 4
+		and int(df.units[0].fed) == 1 and float(df.units[0].size) > float(Content.UNITS.red.size), [fed, df.units[0].atk])
+	var r := bare()
+	r.build(Vector2i(2, 0), "nest_red")
+	r.buildings[Vector2i(2, 0)].affixes = ["roar"]
+	var rf := Fight.make(r.army(), ["black"], 1.0, [2])
+	var roar: Array = []
+	while not rf.over and roar.is_empty():
+		roar = rf.step().filter(func(e: Dictionary) -> bool: return e.t == "roar")
+	check("the roarer's first blow: a roar, the foe near it slowed", roar.size() == 1
+		and float(rf.units[1].slow_until) > rf.time, [roar, rf.units[1].slow_until])
+	var m := bare()
+	m.build(Vector2i(2, 1), "nest_red")
+	m.buildings[Vector2i(2, 1)].affixes = ["acid", "poison"]
+	var mf := Fight.make(m.army(), ["mite", "mite", "mite"], 1.0, [2, 2, 2])
+	var clouds := mf.run().filter(func(e: Dictionary) -> bool: return e.t == "cloud")
+	check("a miasma beast's kills burst into poison", m.army()[0].kind == "miasma" and clouds.size() >= 1, clouds.size())
+	var s := bare()
+	s.build(Vector2i(2, 0), "nest_red")
+	s.buildings[Vector2i(2, 0)].affixes = ["shell", "plasma"]
+	var sf := Fight.make(s.army(), ["black"], 1.0, [2])
+	var hit := false
+	while not sf.over and not hit:
+		hit = sf.step().any(func(e: Dictionary) -> bool: return e.t == "hit" and e.from == 1)
+	check("a thunderback's hits slow the foe", s.army()[0].kind == "thunder" and float(sf.units[1].slow_until) > sf.time)
 
 
 func _interest() -> void:

@@ -48,6 +48,11 @@ func wave(ahead := 0) -> Array:
 	return [] if calm else Content.wave(place, level, round + ahead)
 
 
+## The lane each of them comes down (Content.lanes; GAME-DESIGN 32), in the same order.
+func wave_lanes(ahead := 0) -> Array:
+	return [] if calm else Content.lanes(place, level, round + ahead, wave(ahead))
+
+
 ## The places the map offers for the next level ([] after the last).
 func next_places() -> Array:
 	return map[level + 1] if level + 1 < map.size() else []
@@ -74,7 +79,7 @@ func eat() -> Array:
 
 ## The young fed go out against this round's wave.
 func fight() -> Fight:
-	return Fight.make(home.fighters, wave(), power())
+	return Fight.make(home.fighters, wave(), power(), wave_lanes())
 
 
 ## The strength of the young fed this round, to fight (Content.strength).

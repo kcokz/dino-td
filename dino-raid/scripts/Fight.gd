@@ -1,20 +1,24 @@
 class_name Fight
 extends RefCounted
-## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19, 20): this round's army -- standing where its
-## nests stand on the homeland's battle line -- against a wave, each going for the nearest foe -- a flier for the one
+## One battle outside the homeland, fought by itself (GAME-DESIGN 17, 19, 20, 32): this round's army -- standing where
+## its nests stand on the homeland's battle line -- against a wave standing in the same six lanes as its plan has them
+## (Content.lanes), each going for the nearest foe, those of its own lane first (LANE_PULL) -- a flier for the one
 ## furthest back -- and hitting it once it is in reach, until one side is gone or the time is up. One with a charging
-## horn strikes its first blow twice as hard. Some fall hard: they burst, harming the other side round them, or break
-## into smaller ones. The nests' gifts: while one guarding a column stands, theirs cannot go for ours in its lane's
-## second row; one caring heals only its own lane; scavengers standing at the end bring back gold. Worked out in fixed
-## steps with nothing random, so the same two sides always end the same way; every blow struck in a step lands at its
-## end, so no side strikes first.
+## horn strikes its first blow twice as hard, and knocks the foe back, its blow begun undone; a devourer felling a foe
+## grows on it; a roarer's roar and a shocker's hits make those near strike slower; one leaving poison clouds bursts a
+## foe it fells into poison. Some fall hard: they burst, harming the other side round them, or break into smaller ones.
+## The nests' gifts: while one guarding a column stands, theirs cannot go for ours in its lane's second row; one caring
+## heals only its own lane; scavengers standing at the end bring back gold. Worked out in fixed steps with nothing
+## random, so the same two sides always end the same way; every blow struck in a step lands at its end, so no side
+## strikes first.
 ##
 ## Plain data and rules, nothing on screen. A fighter:
 ##   {id, side "ours"|"theirs", kind, roster (the army unit's id, ours only), affixes, pos: Vector2 (x, z), hp, max,
-##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, charge, harm, cool;
-##    ours also row, lane, slot, of, guard, care, scavenge (Home.army)}
+##    atk, armor, every, range, speed, size, splash, heal, pierce, burst, split, splits, power, dive, charge, knock,
+##    devour, roar, shock, cloud, harm, cool, fed (times it has devoured), strikes, slow_until; lane (0-5, theirs too
+##    when the wave's lanes are given); ours also row, slot, of, guard, care, scavenge (Home.army)}
 ## Events of a step: hit {from, to, dmg, charge}, heal {from, to, amount}, die {id}, burst {id, at, radius},
-## spawn {unit: the new fighter}.
+## spawn {unit: the new fighter}, knock {id, by, to}, devour {id, fed, heal}, roar {id, at, radius}, cloud {at, radius}.
 
 const STEP := 0.1
 const LIMIT := 45.0               # seconds; the battle is lost if theirs still stand then
@@ -24,6 +28,7 @@ const SPACING := 1.8
 const OUR_FRONT := 4.0            # metres from the middle where our front row stands...
 const ROW_GAP := 3.0              # ...and the row behind it, this much further back
 const LANE_GAP := 2.6             # metres between lanes (the homeland's columns)
+const LANE_PULL := 3.0            # a foe a lane over counts as this many metres further (v0.15: its own lane first)
 
 var units: Array = []
 var time := 0.0
@@ -33,8 +38,8 @@ var _next := 1
 var _guarded := {}                # lanes (of ours) where one guarding still stands, this step
 
 
-## `army` (Home.army's units) against `wave` at `power`.
-static func make(army: Array, wave: Array, power: float) -> Fight:
+## `army` (Home.army's units) against `wave` at `power` -- standing in `lanes` (Content.lanes; none given, in ranks).
+static func make(army: Array, wave: Array, power: float, lanes: Array = []) -> Fight:
 	var f := Fight.new()
 	for u in army:
 		var fu := f._add("ours", u.kind, Content.unit_stats(u), str(u.id), u.get("affixes", []), 1.0)
@@ -47,8 +52,10 @@ static func make(army: Array, wave: Array, power: float) -> Fight:
 			fu.lane = float(u.lane)
 			fu.slot = int(u.get("slot", 0))
 			fu.of = int(u.get("of", 1))
-	for k in wave:
-		f._add("theirs", k, Content.enemy_stats(k, power), "", [], power)
+	for i in wave.size():
+		var e := f._add("theirs", wave[i], Content.enemy_stats(wave[i], power), "", [], power)
+		if i < lanes.size():
+			e.lane = float(lanes[i])
 	f._form("ours")
 	f._form("theirs")
 	return f
@@ -68,7 +75,7 @@ func step() -> Array:
 	for u in units:
 		if int(u.hp) <= 0:
 			continue
-		u.cool = maxf(0.0, float(u.cool) - STEP)
+		u.cool = maxf(0.0, float(u.cool) - STEP / (Content.SLOW if float(u.slow_until) > time else 1.0))
 		if int(u.heal) > 0 and float(u.cool) <= 0.0:
 			var hurt: Variant = _most_hurt_friend(u)
 			if hurt != null:
@@ -87,9 +94,12 @@ func step() -> Array:
 		elif float(u.cool) <= 0.0:
 			_strike(u, foe, blows)
 			u.cool = float(u.every)
+			u.strikes = int(u.strikes) + 1
+			if u.roar and (int(u.strikes) - 1) % Content.ROAR_EVERY == 0:
+				_roar(u, ev)
 	var fell: Array = []
 	for b in blows:
-		_harm(b[0], b[1], b[2], ev, fell, b[3])
+		_harm(b[0], b[1], b[2], ev, fell, b[3], b[4])
 	# Those that fell this step burst and break -- and what a burst fells, in turn.
 	var k := 0
 	while k < fell.size():
@@ -100,12 +110,25 @@ func step() -> Array:
 			for o in units.duplicate():
 				if o.side != d.side and int(o.hp) > 0 and (o.pos as Vector2).distance_to(d.pos) <= Content.BURST_RADIUS:
 					_harm(d, o, int(d.burst), ev, fell)
+		if int(d.get("cloud_of", 0)) > 0:
+			# Felled by one that leaves poison: a cloud over it, harming its own side round it, armour or not.
+			ev.append({"t": "cloud", "at": d.pos, "radius": Content.CLOUD_RADIUS})
+			for o in units.duplicate():
+				if o.side == d.side and int(o.hp) > 0 and (o.pos as Vector2).distance_to(d.pos) <= Content.CLOUD_RADIUS:
+					var was := int(o.hp)
+					o.hp = was - int(d.cloud_of)
+					ev.append({"t": "hit", "from": d.id, "to": o.id, "dmg": int(d.cloud_of), "charge": false})
+					if was > 0 and int(o.hp) <= 0:
+						ev.append({"t": "die", "id": o.id})
+						fell.append(o)
 		if str(d.get("split", "")) != "":
 			for i in int(d.splits):
 				var s := Content.enemy_stats(d.split, float(d.power))
 				var child := _add(d.side, d.split, s, "", [], float(d.power))
 				child.pos = (d.pos as Vector2) + Vector2(0.0, (i - (int(d.splits) - 1) * 0.5) * 0.9)
 				child.cool = 0.5
+				if d.has("lane"):
+					child.lane = d.lane
 				ev.append({"t": "spawn", "unit": child.duplicate()})
 	_spread()
 	var ours := alive("ours").size()
@@ -169,33 +192,62 @@ func unit(id: int) -> Variant:
 
 
 ## u strikes the foe -- its first blow twice as hard with a charging horn -- and, with splash, everyone of the foe's
-## side near it for half; to land at the step's end.
+## side near it for half; to land at the step's end. [striker, struck, attack, charged, the blow aimed at it]
 func _strike(u: Dictionary, foe: Dictionary, blows: Array) -> void:
 	var atk := int(u.atk)
 	var charged: bool = u.get("charge", false)
 	if charged:
 		atk *= 2
 		u.charge = false
-	blows.append([u, foe, atk, charged])
+	blows.append([u, foe, atk, charged, true])
 	if float(u.splash) > 0.0:
 		for o in units:
 			if o.side == foe.side and o.id != foe.id and int(o.hp) > 0 and (o.pos as Vector2).distance_to(foe.pos) <= float(u.splash):
-				blows.append([u, o, ceili(atk / 2.0), false])
+				blows.append([u, o, ceili(atk / 2.0), false, false])
 
 
-## A blow lands: less the armour (at least 1), and the striker's pierce on top. One it fells joins `fell`.
-func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array, fell: Array, charged := false) -> void:
+## A blow lands: less the armour (at least 1), and the striker's pierce on top. A charging horn's first blow knocks the
+## foe back (away from the striker), its own blow begun undone; a shocker's leaves it striking slower. One it fells joins
+## `fell` -- the striker, a devourer whose own blow it was, growing on it; one leaving poison, marking it to burst into a
+## cloud.
+func _harm(u: Dictionary, foe: Dictionary, atk: int, ev: Array, fell: Array, charged := false, aimed := false) -> void:
 	var was := int(foe.hp)
 	var dmg := maxi(1, atk - int(foe.armor)) + int(u.get("pierce", 0))
 	foe.hp = was - dmg
 	ev.append({"t": "hit", "from": u.id, "to": foe.id, "dmg": dmg, "charge": charged})
+	if charged and aimed and float(u.get("knock", 0.0)) > 0.0 and int(foe.hp) > 0:
+		var away := signf((foe.pos as Vector2).x - (u.pos as Vector2).x)
+		foe.pos = (foe.pos as Vector2) + Vector2((away if away != 0.0 else 1.0) * float(u.knock), 0.0)
+		foe.cool = float(foe.every)
+		ev.append({"t": "knock", "id": foe.id, "by": u.id, "to": foe.pos})
+	if u.get("shock", false):
+		foe.slow_until = maxf(float(foe.get("slow_until", 0.0)), time + Content.SHOCK_TIME)
 	if was > 0 and int(foe.hp) <= 0:
 		ev.append({"t": "die", "id": foe.id})
 		fell.append(foe)
+		if int(u.get("cloud", 0)) > 0:
+			foe.cloud_of = int(u.cloud)
+		if aimed and u.get("devour", false) and int(u.fed) < Content.DEVOUR_MAX and int(u.hp) > 0:
+			var back := mini(ceili(int(u.max) * Content.DEVOUR_HEAL), int(u.max) - int(u.hp))
+			u.hp = int(u.hp) + back
+			u.atk = int(u.atk) + 1
+			u.size = float(u.size) * 1.1
+			u.fed = int(u.fed) + 1
+			ev.append({"t": "devour", "id": u.id, "fed": u.fed, "heal": back})
 
 
-## Whom u goes for: the nearest foe standing (nearest, then weakest, then the first made -- never a doubt which);
-## a flier, the one furthest back on the other side; none of ours guarded (behind one guarding its lane).
+## u roars: those of the other side within ROAR_RADIUS of it (body to body) strike slower for ROAR_TIME.
+func _roar(u: Dictionary, ev: Array) -> void:
+	ev.append({"t": "roar", "id": u.id, "at": u.pos, "radius": Content.ROAR_RADIUS + float(u.size) * 0.5})
+	for o in units:
+		var gap: float = (o.pos as Vector2).distance_to(u.pos) - (float(u.size) + float(o.size)) * 0.5
+		if o.side != u.side and int(o.hp) > 0 and gap <= Content.ROAR_RADIUS:
+			o.slow_until = maxf(float(o.slow_until), time + Content.ROAR_TIME)
+
+
+## Whom u goes for: the nearest foe standing, a foe of another lane LANE_PULL metres the further for each lane between
+## (nearest, then weakest, then the first made -- never a doubt which); a flier, the one furthest back on the other
+## side; none of ours guarded (behind one guarding its lane).
 func _foe_of(u: Dictionary) -> Variant:
 	var best: Variant = null
 	var best_d := INF
@@ -206,6 +258,8 @@ func _foe_of(u: Dictionary) -> Variant:
 		if int(o.get("row", 0)) == 1 and _guarded.has(float(o.get("lane", -1.0))):
 			continue
 		var d: float = -(o.pos as Vector2).x * forward if u.dive else (o.pos as Vector2).distance_to(u.pos)
+		if not u.dive and u.has("lane") and o.has("lane"):
+			d += LANE_PULL * absf(float(u.lane) - float(o.lane))
 		if d < best_d - 0.001 or absf(d - best_d) <= 0.001 and best != null and int(o.hp) < int(best.hp):
 			best = o
 			best_d = d
@@ -252,6 +306,8 @@ func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Ar
 		"heal": int(s.heal), "pierce": int(s.get("pierce", 0)), "burst": int(s.get("burst", 0)),
 		"split": str(s.get("split", "")), "splits": int(s.get("splits", 0)), "power": power,
 		"dive": bool(s.get("dive", false)), "charge": bool(s.get("charge", false)), "harm": int(s.get("harm", 0)),
+		"knock": float(s.get("knock", 0.0)), "devour": bool(s.get("devour", false)), "roar": bool(s.get("roar", false)),
+		"shock": bool(s.get("shock", false)), "cloud": int(s.get("cloud", 0)), "fed": 0, "strikes": 0, "slow_until": 0.0,
 		"cool": 0.0, "spawned": time > 0.0}
 	units.append(u)
 	_next += 1
@@ -260,11 +316,27 @@ func _add(side: String, kind: String, s: Dictionary, roster: String, affixes: Ar
 
 ## The ranks a side starts in. Ours stand where their nests stand on the homeland's battle line (Home): its top row in
 ## front, each column a lane -- the homeland turned to face the enemy -- a nest's units side by side in their place,
-## more behind them when there are many. Theirs (and any of ours from no nest) by reach: the short-reach ones in front,
+## more behind them when there are many. Theirs, with lanes, in those lanes the same way, the short-reach in front and
+## the long-reach behind (v0.15). Theirs without (and any of ours from no nest) by reach: the short-reach ones in front,
 ## the long-reach behind, each rank spread along the line, more ranks behind when a rank is full.
 func _form(side: String) -> void:
 	var sign := -1.0 if side == "ours" else 1.0
 	var list := units.filter(func(u: Dictionary) -> bool: return u.side == side)
+	if side == "theirs":
+		var placed := {}           # [lane, behind] -> how many stand there so far
+		var many := {}
+		for u in list.filter(func(u: Dictionary) -> bool: return u.has("lane")):
+			var key := [float(u.lane), float(u.range) >= 3.0]
+			many[key] = int(many.get(key, 0)) + 1
+		for u in list.filter(func(u: Dictionary) -> bool: return u.has("lane")):
+			var key := [float(u.lane), float(u.range) >= 3.0]
+			var k := int(placed.get(key, 0))
+			placed[key] = k + 1
+			var n := mini(int(many[key]), 3)
+			var depth: float = (BACK if key[1] else FRONT) + (k / 3) * 2.0
+			var across: float = (float(u.lane) - (Home.COLS - 1) * 0.5) * LANE_GAP + ((k % 3) - (n - 1) * 0.5) * 0.85
+			u.pos = Vector2(sign * depth, across)
+		list = list.filter(func(u: Dictionary) -> bool: return not u.has("lane"))
 	for u in list.filter(func(u: Dictionary) -> bool: return u.has("row")):
 		var n := mini(int(u.of), 3)
 		var depth: float = OUR_FRONT + float(u.row) * ROW_GAP + (int(u.slot) / 3) * 0.8

@@ -233,7 +233,17 @@ func tech_here(id: String) -> bool:
 
 ## Whether tech `id` can be researched, the research points aside: found here, not had yet, what it needs had.
 func tech_open(id: String) -> bool:
-	return tech_here(id) and not id in plans and (tech_needs(id) == "" or tech_needs(id) in plans)
+	return tech_here(id) and not id in plans and (tech_needs(id) == "" or tech_needs(id) in plans) and not tech_shut(id)
+
+
+## The tech tech `id` is one of two with, where its line forks ("" for none: Content.OFFERS mutex).
+static func tech_other(id: String) -> String:
+	return str(Content.OFFERS[id].get("mutex", ""))
+
+
+## Whether tech `id` is shut here: the other of its fork had (v0.15).
+func tech_shut(id: String) -> bool:
+	return tech_other(id) != "" and tech_other(id) in plans
 
 
 ## Whether tech `id` can be researched now: open, and the research points for it.
@@ -410,7 +420,8 @@ func spec_of(p: Vector2i) -> Dictionary:
 	var e: int = b.path.count("elite")
 	var s := {"kind": sp.kind, "nest": p, "row": p.y, "lane": float(p.x), "hp_mult": pow(Content.ELITE_HP, e),
 		"atk_mult": pow(Content.ELITE_ATK, e), "atk_bonus": 0, "armor": 0, "range": 0.0, "splash": 0.0, "dive": false,
-		"pierce": 0, "haste": 0, "charge": false, "size_mult": pow(Content.ELITE_SIZE, e), "elite": e,
+		"pierce": 0, "haste": 0, "charge": false, "knock": 0.0, "devour": false, "roar": false,
+		"size_mult": pow(Content.ELITE_SIZE, e), "elite": e,
 		"affixes": b.affixes.duplicate(), "evolved": sp.kind != Content.BUILDINGS[b.kind].nest,
 		"guard": false, "care": false, "scavenge": false}
 	for a in b.affixes:
@@ -425,6 +436,9 @@ func spec_of(p: Vector2i) -> Dictionary:
 		s.pierce = int(s.pierce) + int(af.get("pierce", 0))
 		s.haste = int(s.haste) + int(af.get("haste", 0))
 		s.charge = bool(s.charge) or bool(af.get("charge", false))
+		s.knock = maxf(float(s.knock), float(af.get("knock", 0.0)))
+		s.devour = bool(s.devour) or bool(af.get("devour", false))
+		s.roar = bool(s.roar) or bool(af.get("roar", false))
 		s.hp_mult = float(s.hp_mult) * (1.0 + float(af.get("hp", 0)) / 100.0)
 	var gift := trait_of(p)
 	var on := trait_on(p)
@@ -526,15 +540,25 @@ func _given(key: String, p: Vector2i) -> int:
 ## What blueprint `o` (Content.offer) costs put on `at`, in gold: its price -- an affix's less what the gene banks whose
 ## reach takes in the nest there give, at least 1.
 func price_at(o: Dictionary, at: Variant) -> int:
-	if o.type != "affix" or not at is Vector2i:
+	if o.type == "build":
+		return int(o.price) + _more(str(o.builds))
+	if not at is Vector2i:
 		return int(o.price)
 	return maxi(1, int(o.price) - _given("affix_off", at))
+
+
+## What a building of `kind` costs more for those of its kind there are already (v0.15: Content.MORE each) -- the nests
+## and the pools nothing more.
+func _more(kind: String) -> int:
+	if Content.is_nest(kind) or kind in Content.NEVER_MORE:
+		return 0
+	return Content.MORE * buildings.values().filter(func(b: Dictionary) -> bool: return b.kind == kind).size()
 
 
 ## Whether blueprint `id` could be paid for somewhere: the gold for it where it costs least.
 func affordable(id: String) -> bool:
 	var o := Content.offer({"id": id})
-	return gold >= (1 if o.type == "affix" and _sum("affix_off") > 0 else int(o.price))
+	return gold >= (1 if o.type == "affix" and _sum("affix_off") > 0 else price_at(o, null))
 
 
 ## Where blueprint `id` can go now and be paid for there: plots (Vector2i). [] when it is not had, or cannot be paid for.
@@ -629,6 +653,32 @@ func _apply(oi: Dictionary, at: Variant) -> Array:
 			buildings[at].affixes.append(o.affix)
 			ev.append({"t": "affixed", "at": at, "affix": o.affix})
 	return ev
+
+
+## The nest at `from` moved to `to` on the battle line, for nothing, while the player builds (v0.15: to face the lanes
+## the wave comes down) -- an empty plot, or one with another nest, the two then changing places; its level and affixes
+## go with it. Not so far that the population no longer feeds what the nests hatch (moved beside its kind, a red swarms).
+## Its events: moved {from, to}; [] if it could not be.
+func move_building(from: Vector2i, to: Vector2i) -> Array:
+	if from == to or not buildings.has(from) or not Content.is_nest(buildings[from].kind) or not front(to) or not buildable(to):
+		return []
+	if buildings.has(to) and not Content.is_nest(buildings[to].kind):
+		return []
+	var h := clone()
+	h._swap(from, to)
+	if not _pop_fits(h):
+		return []
+	_swap(from, to)
+	return [{"t": "moved", "from": from, "to": to}]
+
+
+func _swap(from: Vector2i, to: Vector2i) -> void:
+	var b: Dictionary = buildings[from]
+	if buildings.has(to):
+		buildings[from] = buildings[to]
+	else:
+		buildings.erase(from)
+	buildings[to] = b
 
 
 ## A building put up at p (whatever was there pulled down), at level 1.
