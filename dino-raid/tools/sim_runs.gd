@@ -174,3 +174,8 @@ func _smart(run: Run, school: String) -> void:
 		if play.is_empty():
 			break
 		Policy.play(run.home, play)
+	for guard in 3:
+		var move := Policy.best_move(run, run.home)
+		if move.is_empty():
+			break
+		Policy.play(run.home, move)

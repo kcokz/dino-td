@@ -449,6 +449,11 @@ func _bot(rounds: int) -> void:
 				if play.is_empty():
 					break
 				_do(play)
+			for guard in 3:
+				var move := Policy.best_move(game.run, game.home)
+				if move.is_empty():
+					break
+				_do(move)
 		else:
 			_play_all()
 		await _frames(4)
@@ -495,6 +500,8 @@ func _do(play: Array) -> void:
 			game.act("build", {"plan": game.home.plans.find(play[1]), "at": play[2]})
 		"raise":
 			game.act("raise", {"at": play[1]})
+		"move":
+			game.act("move", {"from": play[1], "to": play[2]})
 
 
 func _until_plan() -> void:

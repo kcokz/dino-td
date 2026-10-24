@@ -8,7 +8,7 @@ class_name Policy
 ## make (as far as the biomass coming in, less what the stars eat, feeds it), what comes in each round, what is kept
 ## (gold earns interest); a place's first nest, the one that does the most good built with the round's pay; each
 ## round, before building, the techs that would do the most good for their research points (GAME-DESIGN 29); the
-## first place the map offers. A smart one may keep to a school (Content.SCHOOLS): it leans to that school's blueprints and raises,
+## first place the map offers; when the battle would be lost, the nests moved to face the wave's lanes. A smart one may keep to a school (Content.SCHOOLS): it leans to that school's blueprints and raises,
 ## never builds another school's own buildings (those that are not just for biomass, research or gold), and -- for
 ## gold -- saves.
 
@@ -48,6 +48,8 @@ static func play(h: Home, p: Array) -> Array:
 			return h.build_plan(p[1], p[2])
 		"raise":
 			return h.raise(p[1])
+		"move":
+			return h.move_building(p[1], p[2])
 		"star":
 			return h.buy_star()
 	return []
@@ -199,6 +201,40 @@ static func any_research(h: Home, rng: RandomNumberGenerator) -> String:
 	return can[rng.randi() % can.size()] if not can.is_empty() else ""
 
 
+## A nest moved to face the wave's lanes (Home.move_building; GAME-DESIGN 32): of each nest to each other plot of the
+## battle line, the move after which this round's battle goes best -- ["move", from, to] -- or [] when none does
+## better. Only when the battle would not be won as things stand, and never with no one coming.
+static func best_move(run: Run, h: Home) -> Array:
+	if run.calm:
+		return []
+	var b := _battle(run, h)
+	if b.won:
+		return []
+	var best_s := _battle_worth(b)
+	var best: Array = []
+	for p in h.buildings:
+		if not Content.is_nest(h.buildings[p].kind):
+			continue
+		for x in Home.COLS:
+			for y in Content.FRONT_ROWS:
+				var q := Vector2i(x, y)
+				if q == p:
+					continue
+				var t := h.clone()
+				if t.move_building(p, q).is_empty():
+					continue
+				var s := _battle_worth(_battle(run, t))
+				if s > best_s + 0.01:
+					best_s = s
+					best = ["move", p, q]
+	return best
+
+
+## What a battle's end is worth (score's battle part).
+static func _battle_worth(b: Dictionary) -> float:
+	return 300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0
+
+
 ## The next place on the map: the first of the two (the map is shuffled already).
 static func best_place(run: Run) -> int:
 	return int(run.next_places()[0])
@@ -254,7 +290,7 @@ static func _halfway(h: Home) -> int:
 ## every scavenger would stand at its end: what they bring back is not counted then, or what is measured would be
 ## scavengers, not strength.
 static func _battle(run: Run, h: Home) -> Dictionary:
-	var f := Fight.make(h.settled().fighters, run.wave(), run.power())
+	var f := Fight.make(h.settled().fighters, run.wave(), run.power(), run.wave_lanes())
 	f.run()
 	return {"won": f.result == "won", "left": f.alive("ours").size(), "harm": maxi(0, f.harm()),
 		"loot": 0 if run.calm else f.scavenged()}
