@@ -17,7 +17,7 @@ extends RefCounted
 ## for nests, it does for those in its reach only (reach, Content.REACH). Plain data and rules, nothing on screen: the
 ## same rules for the game and for its tests.
 ##
-## A building: {id, kind, level, path, affixes: [ids]} -- path: a nest's raises, each "count" or "elite".
+## A building: {id, kind, level, path, affixes: [ids]} -- path: a nest's raises, each "elite".
 ## A blueprint (图纸): an id of Content.OFFERS -- as a card, {id} (Content.offer).
 ## A unit (army): {id: "nest id:n", kind, nest: plot, row, lane, slot, of, hp_mult, atk_mult, atk_bonus, armor, range,
 ##   splash, dive, pierce, haste, charge, size_mult, elite, affixes, guard, care, scavenge, free} -- row, lane: where it
@@ -343,11 +343,10 @@ static func food_of(units: Array) -> int:
 	return n
 
 
-## How many the nest at p makes a round (before biomass and the mother): one, one more for each raise chosen so, one
-## more for a red nest swarming (its gift: CLUSTER red nests beside it), one more with the brood queen.
+## How many the nest at p makes a round (before biomass and the mother): one, one more for a red nest swarming (its
+## gift: CLUSTER red nests beside it), one more with the brood queen.
 func count(p: Vector2i) -> int:
-	var b: Dictionary = buildings[p]
-	return 1 + b.path.count("count") + (1 if trait_of(p) == "swarm" and trait_on(p) else 0) + _star("count")
+	return 1 + (1 if trait_of(p) == "swarm" and trait_on(p) else 0) + _star("count")
 
 
 ## The gift (Content.TRAITS) of the nest at p, or "".
@@ -589,35 +588,27 @@ func raise_price(p: Vector2i) -> int:
 	return _raise_price(int(buildings[p].level)) if buildings.has(p) else 0
 
 
-## Whether the building at p can be raised a level as `choice` (a nest's: "count", one more hatched, or "elite"): below
-## the top level, paid for, and -- one more hatched -- the population allowing.
-func can_raise(p: Vector2i, choice := "count") -> bool:
-	if not buildings.has(p) or int(buildings[p].level) >= Content.LEVEL_MAX or gold < raise_price(p):
-		return false
-	return choice == "elite" or not Content.is_nest(buildings[p].kind) or raise_fits(p, choice)
+## Whether the building at p can be raised a level: below the top level, and paid for. (A nest's raise makes it elite,
+## taking no more of the population; a pool's feeds more.)
+func can_raise(p: Vector2i) -> bool:
+	return buildings.has(p) and int(buildings[p].level) < Content.LEVEL_MAX and gold >= raise_price(p)
 
 
-## Whether raising the building at p as `choice` keeps the population within what the biomass feeds.
-func raise_fits(p: Vector2i, choice: String) -> bool:
-	var h := clone()
-	h._raise(p, choice)
-	return _pop_fits(h)
-
-
-## Raises the building at p a level as `choice`, paying for it. Its events; [] if it could not be.
-func raise(p: Vector2i, choice := "count") -> Array:
-	if not can_raise(p, choice):
+## Raises the building at p a level -- a nest elite once more -- paying for it. Its events; [] if it could not be.
+func raise(p: Vector2i) -> Array:
+	if not can_raise(p):
 		return []
 	gold -= raise_price(p)
-	return _raise(p, choice)
+	return _raise(p)
 
 
-func _raise(p: Vector2i, choice: String) -> Array:
+func _raise(p: Vector2i) -> Array:
 	var b: Dictionary = buildings[p]
-	if Content.is_nest(b.kind):
-		b.path.append("elite" if choice == "elite" else "count")
+	var nest := Content.is_nest(b.kind)
+	if nest:
+		b.path.append("elite")
 	b.level = mini(Content.LEVEL_MAX, int(b.level) + 1)
-	return [{"t": "raised", "at": p, "choice": choice if Content.is_nest(b.kind) else ""}]
+	return [{"t": "raised", "at": p, "elite": nest}]
 
 
 func _apply(oi: Dictionary, at: Variant) -> Array:

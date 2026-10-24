@@ -152,13 +152,12 @@ func _population() -> void:
 	check("two: 2 of 2", h.pop_used() == 2 and h.pop_room() == 0)
 	check("full: a third goes nowhere, for the population alone", h.targets("b_red").is_empty()
 		and h.pop_blocks({"id": "b_red"}))
-	check("a raise: one more, no; elite, yes", not h.can_raise(Vector2i(0, 0), "count") and h.can_raise(Vector2i(0, 0), "elite"))
-	check("so it is not raised for one more", h.raise(Vector2i(0, 0), "count").is_empty()
-		and int(h.buildings[Vector2i(0, 0)].level) == 1)
+	check("full, a nest is still raised: elite takes no more of the population", not h.raise(Vector2i(0, 0)).is_empty()
+		and int(h.buildings[Vector2i(0, 0)].level) == 2 and h.pop_used() == 2)
 	var bare_ground: Array = h.targets("b_pool").filter(func(p: Vector2i) -> bool: return not h.terrain.has(p))
 	h.build_plan("b_pool", bare_ground[0])
 	check("a culture pool: three more fed", h.pop_cap() == Content.HOME_POP + 3 and h.pop_room() == 3, [h.pop_cap(), h.pop_room()])
-	check("then the nest can hatch one more", not h.raise(Vector2i(0, 0), "count").is_empty() and h.pop_used() == 3)
+	check("then a third nest fits", not h.build_plan("b_red", Vector2i(5, 1)).is_empty() and h.pop_used() == 3, h.pop_used())
 	h.star_offer = "warlord"
 	check("a star that eats 6, with room for 2: not bought", h.star_need("warlord") == 6 and not h.can_buy_star())
 	h.star_offer = "belly"
@@ -202,17 +201,17 @@ func _making() -> void:
 	h.build(Vector2i(0, 0), "nest_red")
 	check("level 1: one", h.army().size() == 1)
 	check("a raise costs the building's level and 2", h.raise_price(Vector2i(0, 0)) == Content.RAISE + 1)
-	h.raise(Vector2i(0, 0), "count")
-	check("raised for one more: two", h.army().size() == 2 and int(h.buildings[Vector2i(0, 0)].level) == 2
-		and h.gold == 20 - 3, [h.army().size(), h.gold])
-	h.raise(Vector2i(0, 0), "elite")
+	h.raise(Vector2i(0, 0))
 	var a := h.army()
-	check("then elite: still two, half again the hit points, a quarter more attack, bigger", a.size() == 2
-		and is_equal_approx(float(a[0].hp_mult), Content.ELITE_HP) and is_equal_approx(float(a[0].atk_mult), Content.ELITE_ATK)
-		and is_equal_approx(float(a[0].size_mult), Content.ELITE_SIZE) and h.gold == 17 - 4, [a.size(), h.gold])
+	check("raised: elite -- still one, half again the hit points, a quarter more attack, bigger", a.size() == 1
+		and int(h.buildings[Vector2i(0, 0)].level) == 2 and is_equal_approx(float(a[0].hp_mult), Content.ELITE_HP)
+		and is_equal_approx(float(a[0].atk_mult), Content.ELITE_ATK) and is_equal_approx(float(a[0].size_mult), Content.ELITE_SIZE)
+		and h.gold == 20 - 3, [a.size(), h.gold])
 	var st := Content.unit_stats(a[0])
 	check("an elite red: 15 hp, 4 attack", int(st.hp) == 15 and int(st.atk) == 4, [st.hp, st.atk])
-	check("level 3 at most", not h.can_raise(Vector2i(0, 0), "elite") and h.raise(Vector2i(0, 0), "elite").is_empty())
+	h.raise(Vector2i(0, 0))
+	check("elite twice for 4 more; level 3 at most", h.buildings[Vector2i(0, 0)].path == ["elite", "elite"]
+		and h.gold == 17 - 4 and not h.can_raise(Vector2i(0, 0)) and h.raise(Vector2i(0, 0)).is_empty(), [h.gold])
 	var e := bare()
 	e.build(Vector2i(0, 0), "nest_red")
 	e.buildings[Vector2i(0, 0)].level = 3
@@ -371,8 +370,9 @@ func _nest_gifts() -> void:
 	# Scavenging: those standing at the end bring back gold.
 	var s := bare()
 	s.build(Vector2i(2, 1), "nest_scav")
-	s.buildings[Vector2i(2, 1)].path = ["count"]
+	s.build(Vector2i(3, 1), "nest_scav")
 	s.build(Vector2i(2, 0), "nest_green")
+	s.build(Vector2i(3, 0), "nest_green")
 	var sf := Fight.make(s.army(), ["mite"], 1.0)
 	sf.run()
 	check("two scavengers standing: 2 gold each", sf.result == "won" and sf.scavenged() == 2 * Content.SCAVENGE,
@@ -560,10 +560,10 @@ func _techs() -> void:
 	h.genes = 4
 	check("the culture pool for 1", h.research("b_pool") and "b_pool" in h.plans and h.genes == 3, [h.plans, h.genes])
 	check("once only", not h.research("b_pool") and h.genes == 3)
-	check("the sampler opens with the pool; the stabilizer not yet", h.tech_open("b_sampler") and not h.tech_open("b_stab"))
-	check("the sampler for 2", h.research("b_sampler") and h.genes == 1, h.genes)
+	check("the sampler open from the start; the stabilizer not yet", h.tech_open("b_sampler") and not h.tech_open("b_stab"))
+	check("the sampler for 1", h.research("b_sampler") and h.genes == 2, h.genes)
 	check("the stabilizer open now, but short of research points", h.tech_open("b_stab") and not h.can_research("b_stab")
-		and not h.research("b_stab") and h.genes == 1)
+		and not h.research("b_stab") and h.genes == 2)
 	h.gold = 10
 	check("researched, it can be built", not h.targets("b_pool").is_empty())
 	var v := bare(1)
@@ -831,17 +831,18 @@ func _formation() -> void:
 	check("the enemy meets the front row first", first.to == 1, first)
 	var many := bare()
 	many.build(Vector2i(3, 0), "nest_red")
-	many.buildings[Vector2i(3, 0)].path = ["count", "count"]
+	many.build(Vector2i(4, 0), "nest_red")
+	many.take_star("queen")
 	var f3 := Fight.make(many.army(), ["grey"], 1.0)
-	var zs: Array = f3.units.filter(func(u: Dictionary) -> bool: return u.side == "ours").map(func(u: Dictionary) -> float:
-		return (u.pos as Vector2).y)
+	var zs: Array = f3.units.filter(func(u: Dictionary) -> bool: return u.side == "ours" and is_equal_approx(float(u.lane), 3.0)) \
+		.map(func(u: Dictionary) -> float: return (u.pos as Vector2).y)
 	check("a nest's three stand side by side in its lane", zs.size() == 3 and zs[0] < zs[1] and zs[1] < zs[2], zs)
 
 
 func _fights() -> void:
 	var h := bare()
 	h.build(Vector2i(0, 0), "nest_red")
-	h.buildings[Vector2i(0, 0)].path = ["count", "count"]
+	h.build(Vector2i(1, 0), "nest_red")
 	var f1 := Fight.make(h.army(), ["grey", "grey", "purple"], 1.0)
 	var f2 := Fight.make(h.army(), ["grey", "grey", "purple"], 1.0)
 	var e1 := f1.run()
@@ -860,12 +861,12 @@ func _fights() -> void:
 func _falling_hard() -> void:
 	var h := bare()
 	h.build(Vector2i(0, 0), "nest_red")
-	h.buildings[Vector2i(0, 0)].path = ["count", "count"]
+	h.build(Vector2i(1, 0), "nest_red")
 	var f := Fight.make(h.army(), ["spore"], 1.0)
 	var ev := f.run()
 	var spawned := ev.filter(func(e: Dictionary) -> bool: return e.t == "spawn")
 	check("a spore breaks into two mites", spawned.size() == 2 and spawned[0].unit.kind == "mite", spawned.size())
-	check("and they are fought too", f.result == "won" and f.units.size() == 3 + 3, [f.result, f.units.size()])
+	check("and they are fought too", f.result == "won" and f.units.size() == 4 + 3, [f.result, f.units.size()])
 	var b := bare()
 	b.build(Vector2i(0, 0), "nest_red")
 	var g := Fight.make(b.army(), ["beetle"], 1.0)

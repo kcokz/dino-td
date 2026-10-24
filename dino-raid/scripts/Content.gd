@@ -126,8 +126,9 @@ const BURST_RADIUS := 2.0
 ## everything else, a building there doing what it does for the nests of its column or the whole homeland.
 const FRONT_ROWS := 2
 
-## A nest begins making one a round. Each raise (up to LEVEL_MAX) is a choice: "count", one more a round, or "elite",
-## each of its units ELITE_HP times the hit points, ELITE_ATK times the attack, ELITE_SIZE times as big.
+## A nest makes one a round. Each raise (up to LEVEL_MAX) makes it elite once more: each of its units ELITE_HP times the
+## hit points, ELITE_ATK times the attack, ELITE_SIZE times as big, taking no more of the population. More units come of
+## more nests (the player, 2026-10-23: "精英和多个感觉没有选择的必要，因为你要增加人数就再造就行了").
 const LEVEL_MAX := 3
 const ELITE_HP := 1.5
 const ELITE_ATK := 1.25
@@ -251,7 +252,7 @@ const STATS := {
 	"dive": {"word": "飞", "name": "会飞", "says": "飞过前排，先咬后排。", "eg": "翅膀、猎鹰兽。"},
 	"charge": {"word": "冲", "name": "冲锋", "says": "开战第一下打双倍。", "eg": "冲锋角。"},
 	"speed": {"word": "跑", "name": "跑多快", "says": "每秒跑几米。跑得快的先碰上敌人。", "eg": ""},
-	"elite": {"word": "精", "name": "精英", "says": "巢升级时选变精英：血 ×1.5、攻击 ×1.25、大一号；一个巢最多变两次。", "eg": ""},
+	"elite": {"word": "精", "name": "精英", "says": "巢升级就是变精英：血 ×1.5、攻击 ×1.25、大一号，不多占人口；一个巢最多变两次。", "eg": ""},
 }
 
 ## The star dinosaurs (明星恐龙, GAME-DESIGN 24; the player, 2026-10-20: "把奇观，存货，遗物统一一下……可以加成的系统，但又
@@ -338,7 +339,7 @@ const CHARGE_WORTH := 0.1               # a first blow twice as hard, against a 
 ## on a nest with a free place. price: in gold (a building's is its own) -- research points buy techs, nothing else (the
 ## player, 2026-10-22: "各管一件事"). region: only in that place. rarity: how far down its line it is (0 the first, 2
 ## the furthest) -- its metal, bronze, silver or gold. Raising a building a level is no blueprint: any building can be,
-## for RAISE gold more than its level (a nest's raise a choice: one more hatched, or elite). In the order of the tree,
+## for RAISE gold more than its level (a nest's makes it elite). In the order of the tree,
 ## line by line (TECH_PANELS).
 const OFFERS := {
 	# The nests, and the battle's buildings that go with them.
@@ -355,7 +356,7 @@ const OFFERS := {
 	# The resources, and the gene lab.
 	"b_pool": {"type": "build", "rarity": 0, "builds": "pool", "cost": 1, "needs": ""},
 	"b_spore": {"type": "build", "rarity": 1, "builds": "spore_pool", "cost": 2, "needs": "b_pool", "region": 0},
-	"b_sampler": {"type": "build", "rarity": 1, "builds": "sampler", "cost": 2, "needs": "b_pool"},
+	"b_sampler": {"type": "build", "rarity": 0, "builds": "sampler", "cost": 1, "needs": ""},
 	"b_stab": {"type": "build", "rarity": 2, "builds": "stabilizer", "cost": 3, "needs": "b_sampler"},
 	"b_genebank": {"type": "build", "rarity": 2, "builds": "gene_bank", "cost": 3, "needs": "b_stab"},
 	"b_mutant": {"type": "build", "rarity": 2, "builds": "nest_mutant", "cost": 3, "needs": "b_stab"},
@@ -375,8 +376,9 @@ const OFFERS := {
 	"a_horn": {"type": "affix", "price": 3, "rarity": 1, "affix": "horn", "cost": 3, "needs": "a_hide"},
 }
 ## The tech tree's three parts, by what their lines are for, each with the first tech of its lines, in order: the nests
-## (and the battle's buildings that go with each), the resources (and the gene lab, behind the samplers), the affixes.
-const TECH_PANELS := {"巢": ["b_red", "b_green", "b_blue", "b_scav"], "资源": ["b_pool", "b_mine"],
+## (and the battle's buildings that go with each), the resources (and the gene lab, behind the samplers -- open from the
+## start, the player, 2026-10-23: "研究所应该一开始就能做，不然研究点数增加太难"), the affixes.
+const TECH_PANELS := {"巢": ["b_red", "b_green", "b_blue", "b_scav"], "资源": ["b_pool", "b_sampler", "b_mine"],
 	"词条": ["a_shell", "a_blade", "a_haste", "a_hide"]}
 ## The nests a place's first is picked from (the player, 2026-10-22: "开场什么建筑都没有，先三选一一个巢穴"): those
 ## the round's pay builds that can hold the first rounds by themselves -- not the healers, not the gold, not the
@@ -410,7 +412,8 @@ const PHASES := {
 	"fight": {"name": "战斗", "says": "兵出去打仗，打赢拿金币和研究点数"},
 }
 ## The part of the round each thing a card does happens in ("每个牌的效果都要落在某个阶段"): the keys of the buildings'
-## levels and of the stars, a nest's gift (TRAITS), a nest's raise ("count" or "elite"), an affix ("affix").
+## levels and of the stars, a nest's gift (TRAITS), a nest's raise ("elite"; "count", the brood queen's one more), an
+## affix ("affix").
 const PHASE_OF := {
 	# The start: the round's pay.
 	"interest": "start",
@@ -456,11 +459,12 @@ static func pop_of(o: Dictionary) -> int:
 ## place all but never lost a battle -- 1 of 576 -- its homeland growing fastest, the spore pools; the first at 0.8,
 ## the second 0.66, the third 0.6: 40 held all, battles lost in every place. 2026-10-23, the tech tree: at those, of 37
 ## runs only 22 held all; the first at 0.72 or 0.8, the second 0.66, the third 0.54: 44 of 48, though the first place
-## is lost but 6 or 7 times in 576 by the tools.)
+## is lost but 6 or 7 times in 576 by the tools. All a fifth less, the player not getting through it in many runs:
+## 0.64, 0.53, 0.43.)
 const TIERS := 3
 const ROUNDS := 12
 const TIER_POWER := [1.0, 1.25, 1.5]
-const SHARE := [0.8, 0.66, 0.54]
+const SHARE := [0.64, 0.53, 0.43]
 
 ## The places a run goes to -- each a big level, the rounds of MINI_ROUNDS against its `minis` in turn, the last
 ## against its `boss`. mix: which kinds come, [kind, share, from which round]. terrain: how many of each special plot
@@ -631,10 +635,10 @@ static func building_text(kind: String, lv: int) -> String:
 	return ""
 
 
-## What a building does at a level, in short -- what changes when it is raised: for a nest, the choice.
+## What a building does at a level, in short -- what changes when it is raised: for a nest, elite.
 static func level_text(kind: String, lv: int) -> String:
 	if BUILDINGS[kind].has("nest"):
-		return Lang.t("二选一：多孵 1 只，或者变精英（血 ×%s、攻击 ×%s、大一号）") % [_num(ELITE_HP), _num(ELITE_ATK)]
+		return Lang.t("变精英：血 ×%s、攻击 ×%s、大一号，不多占人口") % [_num(ELITE_HP), _num(ELITE_ATK)]
 	return building_text(kind, lv)
 
 
