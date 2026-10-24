@@ -559,15 +559,16 @@ const TERRAIN := {
 ## every battle is won and everything goes to growing -- for the middle school of the six (the median of each school's
 ## average, so one school growing far past the rest does not make every wave too strong for the others), over runs
 ## keeping to each school, measured by tools/sim_runs.gd (school ... limit; tools/limit.py). Each level starts low
-## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-23 with the tech tree (GAME-DESIGN 29;
-## before it, 2026-10-22: every place begun with one nest picked, the population a bound, research points for
-## blueprints, the buildings' reach, GAME-DESIGN 28) -- 48 calm
+## again: the homeland is begun afresh, carrying nothing. Measured again 2026-10-23 with the tech tree's forks and a
+## building dearer for each of its kind there is (GAME-DESIGN 32; before them, the tech tree, GAME-DESIGN 29, and
+## 2026-10-22: every place begun with one nest picked, the population a bound, research points for blueprints, the
+## buildings' reach, GAME-DESIGN 28) -- 48 calm
 ## runs, 8 a school, the scavengers' loot not counted (with no one coming they all stand, Policy._battle), the
 ## population counted only as far as the nests use it (Policy.score); a level's curve never below the one before it,
 ## round for round. Measure again after changing what can be built or made.
-const LIMIT := [12, 32, 82, 124, 166, 202, 235, 264, 282, 301, 328, 344,
-	12, 32, 82, 129, 181, 229, 268, 311, 343, 366, 396, 413,
-	12, 32, 82, 138, 194, 240, 286, 330, 381, 437, 496, 516]
+const LIMIT := [12, 32, 82, 115, 154, 187, 209, 235, 251, 277, 321, 366,
+	12, 25, 65, 121, 174, 212, 240, 267, 293, 322, 359, 405,
+	12, 27, 71, 124, 177, 218, 243, 289, 339, 379, 431, 478]
 const BIG_ROUNDS := [4, 8, 12]          # a big wave, with the place's mini-boss or boss: BIG times as strong as the round
 const BIG := 1.15                       # would be
 const MINI_ROUNDS := [4, 8]             # the rounds against the place's mini-bosses
