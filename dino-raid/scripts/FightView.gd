@@ -5,7 +5,9 @@ extends Node3D
 ## flier flies. The striker bites (a lunge) or shoots (its shot flies, Effects); when the blow lands what it hits
 ## flashes, flinches and throws sparks, and its number rises. A heal flies green and rises round the healed. The
 ## fallen fall when the blow that felled them lands, in a puff of dust (ours) or spores (theirs); one that bursts throws
-## out a fireball, a ring of dust and shakes the camera; one that breaks lets out the smaller ones it held.
+## out a fireball, a ring of dust and shakes the camera; one that breaks lets out the smaller ones it held. Knocked
+## back, one slides off in a cloud of dust; a devourer grows on its kill; a roar rings out round the roarer; a foe
+## felled by one leaving poison bursts into a green cloud (v0.15).
 
 const HEAL := Color(0.45, 1.0, 0.5)
 const OUR_SPARKS := Color(1.0, 0.8, 0.42)      # where ours bite
@@ -135,6 +137,25 @@ func show_events(ev: Array) -> void:
 				Effects.shake(get_viewport().get_camera_3d(), 0.16, 0.3)
 				if tags:
 					tags.float_text(ground + Vector3.UP * 2.1, Lang.t("炸！"), Color(1.0, 0.6, 0.2), 22)
+			"knock":
+				var n: Node3D = _nodes.get(e.id)
+				if n:
+					Effects.puff(self, n.position + Vector3.UP * 0.2, Effects.DUST, 0.9, 8, 0.6)
+			"devour":
+				var n: Node3D = _nodes.get(e.id)
+				if n:
+					var tw := n.create_tween()
+					tw.tween_property(n, "scale", n.scale * 1.1, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+					if tags:
+						tags.float_text(n.position + Vector3.UP * 2.0, Lang.t("吞！"), Color(1.0, 0.45, 0.4), 20)
+			"roar":
+				var p: Vector2 = e.at
+				Effects.ring(self, World.ARENA + Vector3(p.x, World.GROUND_TOP + 0.1, p.y), float(e.radius), Color(0.75, 0.6, 1.0))
+			"cloud":
+				var p: Vector2 = e.at
+				var ground := World.ARENA + Vector3(p.x, World.GROUND_TOP, p.y)
+				Effects.puff(self, ground + Vector3.UP * 0.4, Color(0.55, 0.9, 0.3), 1.2, 10, 0.9)
+				Effects.ring(self, ground + Vector3.UP * 0.1, float(e.radius), Color(0.55, 0.9, 0.3))
 			"spawn":
 				var n := _add(e.unit)
 				n.scale = Vector3.ONE * 0.2

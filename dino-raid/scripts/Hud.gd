@@ -46,6 +46,7 @@ var _track: HudParts.Track         # the round's parts, at the top
 
 var _right: VBoxContainer
 var _waves: VBoxContainer
+var _lane_map: HudParts.LaneMap   # under the waves: how the wave pointed at stands in the six lanes
 var _waves_for := ""
 var _forecast: PanelContainer
 var _fc_head: Label
@@ -117,6 +118,8 @@ func setup(p_game: Game) -> void:
 	_waves.add_theme_constant_override("separation", 6)
 	_waves.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right.add_child(_waves)
+	_lane_map = HudParts.LaneMap.new()
+	right.add_child(_lane_map)
 	_forecast = PanelContainer.new()
 	_forecast.add_theme_stylebox_override("panel", Style.panel(14.0))
 	_forecast.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -391,7 +394,7 @@ func _refresh_bar() -> void:
 	for i in _plans.size():
 		var b: HudParts.Plan = _plans[i]
 		var o := Content.offer({"id": home.plans[i]})
-		b.price = int(o.price)
+		b.price = home.price_at(o, null)
 		b.pop = Content.pop_of(o)
 		b.lit = planning and not game.fits_of(i).is_empty()
 		b.held = game.held == i
@@ -433,7 +436,7 @@ func _plan_tip(i: int) -> String:
 	var home: Home = game.home
 	var id: String = home.plans[i]
 	var o := Content.offer({"id": id})
-	var asks: Array = [Lang.t("%d 金") % int(o.price)]
+	var asks: Array = [Lang.t("%d 金") % home.price_at(o, null)]
 	var need := Content.pop_of(o)
 	if need > 0:
 		asks.append(Lang.t("%d 人口") % need)
@@ -575,11 +578,22 @@ func _refresh_waves() -> void:
 	if key == _waves_for:
 		return
 	_waves_for = key
+	_lane_map.put_away()
 	for ch in _waves.get_children():
 		ch.queue_free()
-	_waves.add_child(_wave_card(Lang.t("这一仗"), _big(run, 0), run.wave(), true))
+	_waves.add_child(_wave_card(Lang.t("这一仗"), _big(run, 0), run.wave(), true, run.wave_lanes(), _plan_name(run, 0)))
 	if run.round < run.rounds():
-		_waves.add_child(_wave_card(Lang.t("下一仗"), _big(run, 1), run.wave(1), false))
+		_waves.add_child(_wave_card(Lang.t("下一仗"), _big(run, 1), run.wave(1), false, run.wave_lanes(1), _plan_name(run, 1)))
+
+
+## The plan a wave comes in, in words (Content.FORMATIONS): a flank with its side.
+func _plan_name(run: Run, ahead: int) -> String:
+	var r := run.round + ahead
+	var plan := Content.formation_of(run.place, run.level, r)
+	var said := Lang.t(Content.FORMATIONS[plan].name)
+	if plan == "flank":
+		said += Lang.t("（从右边来）") if Content.from_right(run.place, run.level, r) else Lang.t("（从左边来）")
+	return said
 
 
 ## What a wave is, if more than any other: a boss's, a mini-boss's, a big one ("" none).
@@ -591,11 +605,17 @@ func _big(run: Run, ahead: int) -> String:
 	return Lang.t("大波") if run.big(ahead) else ""
 
 
-## A wave as a card (HudParts.WaveCard): pointed at, a monster in it is told about.
-func _wave_card(title: String, tag: String, wave: Array, now: bool) -> Control:
+## A wave as a card (HudParts.WaveCard): pointed at, a monster in it is told about, and how they stand in the six
+## lanes is shown under the cards (v0.15: the player, 2026-10-23: "保留右上角小图标，hover上去可以显示一个怪物的排列").
+func _wave_card(title: String, tag: String, wave: Array, now: bool, lanes: Array, plan: String) -> Control:
 	var card := HudParts.WaveCard.new()
-	card.setup(title, tag, Content.danger(wave, game.run.power()), now, wave)
+	card.setup(title, tag, Content.danger(wave, game.run.power()), now, wave, lanes, plan)
 	card.size_flags_horizontal = Control.SIZE_SHRINK_END
+	card.mapped.connect(func(on: bool) -> void:
+		if on:
+			_lane_map.show_for(card)
+		elif _lane_map.card == card:
+			_lane_map.put_away())
 	card.pointed.connect(func(kind: String) -> void:
 		_point = ("e:" + kind) if kind != "" else ""
 		for pair in card.kinds:
@@ -986,6 +1006,7 @@ func open_tech() -> void:
 			var n: HudParts.TechNode = nodes[id]
 			n.had = id in home.plans
 			n.open = home.tech_open(id)
+			n.shut = home.tech_shut(id)
 			n.enough = home.genes >= Home.tech_cost(id)
 			n.queue_redraw()
 		for c in canvases:
@@ -1034,7 +1055,16 @@ func open_tech() -> void:
 				var b: Vector2 = nodes[id].position + Vector2(nodes[id].size.x * 0.5, 4.0)
 				var mid := (a.y + b.y) * 0.5
 				var col_line := Color(Style.GOLD_BRIGHT, 0.85) if up in home.plans else Color(Style.GOLD_DIM, 0.4)
-				canvas.draw_polyline(PackedVector2Array([a, Vector2(a.x, mid), Vector2(b.x, mid), b]), col_line, 1.6, true))
+				canvas.draw_polyline(PackedVector2Array([a, Vector2(a.x, mid), Vector2(b.x, mid), b]), col_line, 1.6, true)
+			# Where a line forks in two, one of the two only: 或 between them.
+			for id in slots:
+				var other := Home.tech_other(id)
+				if other == "" or not slots.has(other) or other < id:
+					continue
+				var c: Vector2 = (nodes[id].position + nodes[other].position) * 0.5 + Vector2(nodes[id].size.x * 0.5, 30.0)
+				canvas.draw_circle(c, 9.0, Color(0.05, 0.04, 0.03, 0.95), true, -1.0, true)
+				canvas.draw_arc(c, 9.0, 0.0, TAU, 24, Color(Style.CORAL, 0.9), 1.0, true)
+				HudParts.words(canvas, c, Lang.t("或"), 11, Style.CORAL, Fonts.serif(800), 0, 2))
 	box.add_child(info)
 	var done := _button("好了", Vector2(180, 48), 19, true)
 	done.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1071,12 +1101,17 @@ func _tech_tip(id: String) -> String:
 	var o := Content.offer({"id": id})
 	var build := (Lang.t("造一座 %d 金") if o.type == "build" else Lang.t("贴一个 %d 金")) % int(o.price)
 	var state := ""
+	var other := Home.tech_other(id)
 	if id in home.plans:
 		state = Lang.t("已经有了。%s") % build
+	elif home.tech_shut(id):
+		state = Lang.t("和%s二选一，这个地方已经选了%s") % [Content.offer({"id": other}).name, Content.offer({"id": other}).name]
 	elif not home.tech_open(id):
 		state = Lang.t("要先研究%s") % Content.offer({"id": Home.tech_needs(id)}).name
 	else:
 		state = Lang.t("研究要 %d 研究点数（你有 %d）。研究以后，%s") % [Home.tech_cost(id), home.genes, build]
+	if other != "" and not id in home.plans and not home.tech_shut(id):
+		state += Lang.t("。和%s二选一：选了一个，另一个这个地方就不能研究了") % Content.offer({"id": other}).name
 	return Lang.t("%s：%s\n%s") % [o.name, Content.offer_text(o), state]
 
 

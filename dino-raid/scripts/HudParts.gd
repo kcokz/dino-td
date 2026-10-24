@@ -272,6 +272,7 @@ class ArmyTag extends Control:
 ## ring, how many under it. Pointed at, a monster is named.
 class WaveCard extends Control:
 	signal pointed(kind: String)
+	signal mapped(on: bool)        # pointed at or left: how the wave stands to be shown (LaneMap) or put away
 	const PER_ROW := 5
 	var title := ""
 	var tag := ""
@@ -279,13 +280,22 @@ class WaveCard extends Control:
 	var now := true
 	var kinds: Array = []          # [[kind, how many], ...]
 	var hover := ""
+	var plan := ""                 # the plan the wave comes in, in words (Content.FORMATIONS)
+	var cells := {}                # [lane, behind] -> {kind: how many}: how the wave stands (Content.lanes)
 	var _pics := {}
 
-	func setup(p_title: String, p_tag: String, p_danger: int, p_now: bool, wave: Array) -> void:
+	func setup(p_title: String, p_tag: String, p_danger: int, p_now: bool, wave: Array, lanes: Array = [], p_plan := "") -> void:
 		title = p_title
 		tag = p_tag
 		danger = p_danger
 		now = p_now
+		plan = p_plan
+		cells = {}
+		for i in mini(wave.size(), lanes.size()):
+			var key := [int(lanes[i]), float(Content.ENEMIES[wave[i]].range) >= 3.0]
+			var cell: Dictionary = cells.get(key, {})
+			cell[wave[i]] = int(cell.get(wave[i], 0)) + 1
+			cells[key] = cell
 		var counts := {}
 		for k in wave:
 			counts[k] = int(counts.get(k, 0)) + 1
@@ -314,6 +324,10 @@ class WaveCard extends Control:
 		if is_instance_valid(self):
 			queue_redraw()
 
+	## A monster's picture, if loaded.
+	func pic(kind: String) -> Texture2D:
+		return _pics.get(kind)
+
 	func _r() -> float:
 		return 25.0 if now else 18.0
 
@@ -338,10 +352,13 @@ class WaveCard extends Control:
 				pointed.emit(hover)
 
 	func _notification(what: int) -> void:
-		if what == NOTIFICATION_MOUSE_EXIT and hover != "":
-			hover = ""
-			queue_redraw()
-			pointed.emit("")
+		if what == NOTIFICATION_MOUSE_ENTER and not cells.is_empty():
+			mapped.emit(true)
+		if what == NOTIFICATION_MOUSE_EXIT:
+			mapped.emit(false)
+			if hover != "":
+				hover = ""
+				pointed.emit("")
 
 	func _draw() -> void:
 		var dim := 1.0 if now else 0.72
@@ -368,6 +385,62 @@ class WaveCard extends Control:
 			HudParts.ring(self, c, _r(), Color(rim, (0.95 if kind == hover else 0.55) * dim), 1.6 if kind == hover else 1.0)
 			HudParts.words(self, c + Vector2(_r() * 0.72, _r() * 0.78), "%d" % int(kinds[i][1]), 15 if now else 13,
 				Color(Style.PARCHMENT, dim), Fonts.numbers(), 0, 4)
+
+
+## How a wave stands in the homeland's six lanes (v0.15), shown under the wave cards while one is pointed at: the six
+## lanes left to right, a plot's width each, those that reach far behind (above), those that fight close in front
+## (below, nearest the homeland) -- in each, its monsters and how many.
+class LaneMap extends Control:
+	const W := 48.0
+	const H := 56.0
+	var card: WaveCard
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		custom_minimum_size = Vector2(W * 6.0 + 20.0, 34.0 + H * 2.0 + 26.0)
+		size_flags_horizontal = Control.SIZE_SHRINK_END
+		visible = false
+
+	func show_for(p_card: WaveCard) -> void:
+		card = p_card
+		visible = true
+		queue_redraw()
+
+	func put_away() -> void:
+		card = null
+		visible = false
+
+	func _draw() -> void:
+		if card == null or not is_instance_valid(card):
+			return
+		HudParts.veil(self, Rect2(Vector2(-10, -4), size + Vector2(16, 8)), 0.8, 22.0)
+		HudParts.words(self, Vector2(size.x * 0.5, 15.0), "%s · %s" % [card.title, card.plan], 14, Style.GOLD_BRIGHT,
+			Fonts.serif(800), 0, 3)
+		var top := 32.0
+		for j in 6:
+			for row in 2:
+				var r := Rect2(10.0 + j * W + 2.0, top + row * H + 2.0, W - 4.0, H - 4.0)
+				draw_rect(r, Color(Style.GOLD, 0.05 if row == 0 else 0.09), true)
+				draw_rect(r, Color(Style.GOLD, 0.16), false, 1.0)
+		for row in 2:
+			var behind := row == 0
+			for j in 6:
+				var cell: Dictionary = card.cells.get([j, behind], {})
+				var list: Array = cell.keys()
+				list.sort_custom(func(a: String, b: String) -> bool: return int(cell[a]) > int(cell[b]))
+				for k in mini(list.size(), 2):
+					var kind: String = list[k]
+					var c := Vector2(10.0 + (j + 0.5) * W - 6.0, top + row * H + (H * 0.5 if list.size() == 1 else 16.0 + k * 24.0))
+					var tex := card.pic(kind)
+					if tex != null:
+						HudParts.window(self, c, 11.0, tex, 1.15)
+					else:
+						draw_circle(c, 11.0, (Content.ENEMIES[kind].color as Color).darkened(0.3), true, -1.0, true)
+					var boss := kind.begins_with("boss_") or kind.begins_with("mini_")
+					HudParts.ring(self, c, 11.0, Color(Style.CORAL if boss else Style.GOLD, 0.8), 1.0)
+					HudParts.words(self, c + Vector2(14.0, 1.0), "%d" % int(cell[kind]), 13, Style.PARCHMENT, Fonts.numbers(), -1, 3)
+		HudParts.words(self, Vector2(size.x * 0.5, top + H * 2.0 + 14.0), Lang.t("↓ 家园（六列和家园的六列对着）"), 12,
+			Color(Style.PARCHMENT, 0.75), Fonts.serif(600), 0, 3)
 
 
 ## A thing to choose, shown as itself (a star dinosaur): its picture -- a cut-out object floating over a soft glow of
@@ -561,7 +634,7 @@ void fragment() {
 ## or, had, a jade 已有. Lit when it is had or can be researched, all of it grey while the tech it needs is not had;
 ## pointed at, a little larger.
 class TechNode extends BaseButton:
-	const R := 22.0
+	const R := 20.0
 	var key := ""                 # its painting's (Art)
 	var glyph := ""               # its first word, while there is no painting
 	var title := ""
@@ -570,11 +643,12 @@ class TechNode extends BaseButton:
 	var had := false
 	var open := false             # the tech it needs is had
 	var enough := false           # ...and the research points for it
+	var shut := false             # the other of its fork had: never here (v0.15)
 	var _tex: Texture2D
 	var _looked := false
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(70, 86)
+		custom_minimum_size = Vector2(60, 82)
 		size = custom_minimum_size
 		focus_mode = Control.FOCUS_NONE
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -602,7 +676,10 @@ class TechNode extends BaseButton:
 			draw_circle(c, r, Color(0.16, 0.19, 0.17), true, -1.0, true)
 			HudParts.words(self, c + Vector2(0, 7), glyph, 20, Style.PARCHMENT, Fonts.serif(900), 0, 3)
 		draw_arc(c, r, 0.0, TAU, 48, Color(Style.GOLD_BRIGHT if had else metal, 0.95), 2.2 if had else 1.3, true)
-		HudParts.words(self, Vector2(c.x, c.y + R + 12.0), title, 13, Style.PARCHMENT if lit else Color(Style.PARCHMENT, 0.6),
+		if shut:
+			draw_line(c + Vector2(-r, -r) * 0.6, c + Vector2(r, r) * 0.6, Color(Style.CORAL, 0.8), 2.0, true)
+			draw_line(c + Vector2(r, -r) * 0.6, c + Vector2(-r, r) * 0.6, Color(Style.CORAL, 0.8), 2.0, true)
+		HudParts.words(self, Vector2(c.x, c.y + R + 12.0), title, 12, Style.PARCHMENT if lit else Color(Style.PARCHMENT, 0.6),
 			Fonts.serif(700), 0, 3)
 		var low := size.y - 9.0
 		if had:

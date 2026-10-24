@@ -5,7 +5,8 @@ extends Node3D
 ## is begun with nothing built, a nest picked from three. A round goes in parts (GAME-DESIGN 26, Content.phases), each
 ## said as it comes. The start: the round's pay and the interest on the gold kept come in. The player's: the player
 ## researches techs for research points (the tech tree, GAME-DESIGN 29), builds from the blueprints had (the build bar;
-## GAME-DESIGN 27), raises buildings (clicked: a nest raised elite), sticks gene affixes on nests
+## GAME-DESIGN 27), raises buildings (clicked: a nest raised elite), moves nests about the battle line for nothing to
+## face the lanes the wave comes down (dragged; GAME-DESIGN 32), sticks gene affixes on nests
 ## -- where a building works lit blue as it is placed (GAME-DESIGN 28) -- then is done. The making, by itself: the
 ## buildings bring in research points and gold, and the nests hatch this round's young -- each out of its nest to stand
 ## in the yard as it will stand in battle. The battle, by itself: the young go out and fight, and are gone with it;
@@ -69,6 +70,8 @@ var _orbit := 0.6                 # the title's camera, going slowly round
 var _cam_at := HOME_AT
 var _cam_dist := HOME_DIST
 var _drag := false
+var _from := HomeView.NOWHERE     # a nest pressed on, to be dragged to another plot of the battle line (or clicked)
+var _moving := false              # ...and dragged off it
 var _acc := 0.0
 var _fighting := false
 var _shake := 0.0
@@ -156,7 +159,8 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "research" {id} (a tech of the tree), "build" {plan, at} (the blueprint
+## The one door for a player's action: "research" {id} (a tech of the tree), "move" {from, to} (a nest moved on the
+## battle line, or two swapped), "build" {plan, at} (the blueprint
 ## plans[plan] built on `at`), "raise" {at} (the building at `at` a level up -- a nest elite), "choose" (the building
 ## clicked raised), "star" (the star on offer bought), "sell" {pen}, "fight". Whether it happened.
 func act(what: String, data := {}) -> bool:
@@ -167,6 +171,14 @@ func act(what: String, data := {}) -> bool:
 			if not home.research(str(data.get("id", ""))):
 				return false
 			_changed([{"t": "researched", "id": data.id}])
+			return true
+		"move":
+			var ev := home.move_building(data.get("from", HomeView.NOWHERE), data.get("to", HomeView.NOWHERE))
+			if ev.is_empty():
+				return false
+			pending = {}
+			aimed = ""
+			_changed(ev)
 			return true
 		"build":
 			var i := int(data.get("plan", -1))
@@ -239,7 +251,7 @@ func _changed(ev: Array) -> void:
 	_version += 1
 	for e in ev:
 		match e.t:
-			"built", "replaced", "raised", "affixed":
+			"built", "replaced", "raised", "affixed", "moved":
 				home_view.refresh_buildings()
 				if e.t == "replaced":
 					tags.float_text(HomeView.plot_pos(e.at) + Vector3.UP * 3.0, Lang.t("退 %d 金") % e.back, Color(1.0, 0.8, 0.4))
@@ -271,10 +283,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _drag:
 			_cam_at += Vector3(-event.relative.x, 0, -event.relative.y) * _cam_dist * 0.0016
 		_hover_at(event.position)
+		if _from != HomeView.NOWHERE and not _moving and hover.plot != _from:
+			_moving = true
+			refresh()
+	elif event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# A nest pressed on let go of: dragged to another plot of the battle line, moved there; else it was a click.
+		if _from != HomeView.NOWHERE:
+			var from := _from
+			var moved := _moving
+			_from = HomeView.NOWHERE
+			_moving = false
+			if moved:
+				if not act("move", {"from": from, "to": hover.plot}):
+					refresh()
+			else:
+				_click()
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				_click()
+				if phase == Phase.PLAN and held < 0 and hover.plot != HomeView.NOWHERE and home.buildings.has(hover.plot) \
+						and Content.is_nest(home.buildings[hover.plot].kind):
+					_from = hover.plot
+				else:
+					_click()
 			MOUSE_BUTTON_RIGHT:
 				_let_go()
 			MOUSE_BUTTON_WHEEL_UP:
@@ -363,8 +394,10 @@ func _pen_of(key: String) -> Vector3:
 	return HomeView.PEN_AT[0]
 
 
-## What the cursor should find, for the good taken up.
+## What the cursor should find, for the good taken up (or the nest being dragged).
 func _want() -> String:
+	if _from != HomeView.NOWHERE:
+		return "tile"
 	var good := _taken()
 	if phase != Phase.PLAN or good.is_empty():
 		return "any"
@@ -417,7 +450,23 @@ func refresh() -> void:
 			forecast = _work_out(home)
 			_forecast_at = _version
 		var good := _taken()
-		if not pending.is_empty():
+		if _moving:
+			# A nest dragged: the battle line's plots it can go to lit, the one it is over brighter, with where it
+			# would work there and what the move would change.
+			var kind: String = home.buildings[_from].kind
+			for x in Home.COLS:
+				for y in Content.FRONT_ROWS:
+					var p := Vector2i(x, y)
+					if p != _from and home.buildable(p) and (not home.buildings.has(p) or Content.is_nest(home.buildings[p].kind)):
+						tints[p] = SWAP_TINT if home.buildings.has(p) else OK_TINT
+			tints[_from] = LOOK_TINT
+			var at: Vector2i = hover.plot
+			if tints.has(at) and at != _from:
+				tints[at] = HOT_TINT
+				reach = Home.reach(kind, at)
+				var from := _from
+				_try("move|%s|%s" % [str(from), str(at)], func(h: Home) -> void: h.move_building(from, at))
+		elif not pending.is_empty():
 			tints[pending.at] = HOT_TINT
 			reach = Home.reach(home.buildings[pending.at].kind, pending.at)
 			if aimed == "raise":
@@ -463,7 +512,7 @@ func _try(key: String, what: Callable) -> void:
 
 ## How this round's battle ends if fought by `h` once its round is made and eaten -- the same rules, so the same end.
 func _work_out(h: Home) -> Dictionary:
-	var f := Fight.make(h.settled().fighters, run.wave(), run.power())
+	var f := Fight.make(h.settled().fighters, run.wave(), run.power(), run.wave_lanes())
 	var total := f.alive("ours").size()
 	f.run()
 	return {"result": f.result, "left": f.alive("ours").size(), "total": total,
@@ -544,6 +593,8 @@ func _made(h: Home) -> Dictionary:
 func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
+	if _moving:
+		return Lang.t("放到另一块阵地上：挪过去；放到别的巢上：两个换位置。不要钱")
 	if not pending.is_empty():
 		var at: Vector2i = pending.at
 		var b: Dictionary = home.buildings[at]
