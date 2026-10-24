@@ -244,13 +244,16 @@ static func best_place(run: Run) -> int:
 ## army its nests can make, as far
 ## as the population allows; a little room in the population; the gold and research points that come in and are kept
 ## -- for the gold school, saving and the most interest count more; for any school, its own buildings (up to a few
-## levels of them); for the genes school, nests halfway to a new species. The population is a bound, not something
+## levels of them; only with this round's battle won -- what they do shows later, and a homeland about to lose needs
+## fighters first); for the genes school, nests halfway to a new species. The population is a bound, not something
 ## had (GAME-DESIGN 28): it counts as far as the nests can use it and a few more (ROOM) for what comes next -- more is
 ## worth nothing.
 static func score(run: Run, h: Home, school := "", fought := true) -> float:
 	var s := 0.0
+	var losing := false
 	if fought:
 		var b := _battle(run, h)
+		losing = not b.won
 		s = (300.0 + float(b.left) * 5.0 if b.won else -float(b.harm) * 12.0) + 10.0 * float(b.loot)
 	var full := h.clone()
 	full.biomass = 999
@@ -265,7 +268,7 @@ static func score(run: Run, h: Home, school := "", fought := true) -> float:
 	s += 1.0 * h.genes + 2.0 * h.gold + 4.0 * h.interest() + 0.5 * h.hp_max() + 2.0 * mini(h.pop_room(), 4)
 	if school == "gold":
 		s += 3.0 * h.interest_max() + 2.0 * h.gold
-	if school != "":
+	if school != "" and not losing:
 		var own := 0
 		for p in h.buildings:
 			if _own(h.buildings[p].kind) == school:
