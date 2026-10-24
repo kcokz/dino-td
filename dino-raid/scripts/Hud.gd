@@ -472,13 +472,18 @@ func _star_tip() -> String:
 
 
 ## The building clicked (game.pending): its name and level, and a button for each way it can be raised, with its
-## price -- pointed at, the forecast shows what it would do; the ways it cannot be raised greyed.
+## price -- pointed at, the forecast shows what it would do; the ways it cannot be raised greyed. A plot not open yet
+## clicked: a button to open it (_refresh_open).
 func _refresh_choice() -> void:
 	var home: Home = game.home
 	var at: Variant = game.pending.get("at")
-	_choice.visible = game.phase == Game.Phase.PLAN and at != null and home.buildings.has(at)
+	var shut: bool = at != null and home.plot_of.has(at) and not home.is_open(at)
+	_choice.visible = game.phase == Game.Phase.PLAN and at != null and (home.buildings.has(at) or shut)
 	if not _choice.visible:
 		_choice_for = ""
+		return
+	if shut:
+		_refresh_open(home.plot_of[at])
 		return
 	var b: Dictionary = home.buildings[at]
 	var key := "%s|%d|%d|%d|%d" % [str(at), int(b.level), home.gold, home.pop_used(), home.pop_cap()]
@@ -511,6 +516,35 @@ func _refresh_choice() -> void:
 	if Content.is_nest(b.kind):
 		var says := _label(Content.level_text(b.kind, int(b.level) + 1), 14, Fonts.serif(600), Style.PARCHMENT_DIM)
 		_choice_box.add_child(says)
+
+
+## A plot not open yet clicked (game.pending; GAME-DESIGN 33): how big it is, and a button to open it for its price --
+## greyed when it is too far from the open ones or there is not the gold for it, and why.
+func _refresh_open(id: String) -> void:
+	var home: Home = game.home
+	var key := "open|%s|%d|%d" % [id, home.gold, home.opened.size()]
+	if key == _choice_for:
+		return
+	_choice_for = key
+	for c in _choice_box.get_children():
+		c.queue_free()
+	var head := _label(Lang.t("没开的地：%d 格") % home.plot_cells(id).size(), 16, Fonts.serif(800), Style.GOLD_BRIGHT)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_choice_box.add_child(head)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_choice_box.add_child(row)
+	var button := _button(Lang.t("开地（%d 金）") % home.open_price(id), Vector2(170, 46), 17)
+	button.disabled = not home.can_open(id)
+	button.pressed.connect(func() -> void: game.act("open", {"plot": id}))
+	row.add_child(button)
+	var why := Lang.t("开了就能造。挨着的建筑才互相加成，隔着空地就断了")
+	if not home.reachable(id):
+		why = Lang.t("离开着的地太远：先开它旁边的地")
+	elif home.gold < home.open_price(id):
+		why = Lang.t("金币不够（你有 %d）") % home.gold
+	var says := _label(why, 14, Fonts.serif(600), Style.PARCHMENT_DIM)
+	_choice_box.add_child(says)
 
 
 ## Everyone goes out: the build bar put away.
@@ -749,12 +783,9 @@ func arrive(level: int) -> void:
 	enter()
 
 
-## The special ground of place `level`, in a line: what lies about there.
+## What place `level`'s map is like, in a line (GAME-DESIGN 33).
 func _ground_text(level: int) -> String:
-	var names: Array = []
-	for t in Content.LEVELS[level].terrain:
-		names.append(Lang.t(Content.TERRAIN[t].name))
-	return Lang.t("这里有：%s") % Lang.t("、").join(names)
+	return Lang.t("地块：%s") % Lang.t(Content.LEVELS[level].lay)
 
 
 ## A star dinosaur shown to choose (HudParts.Showcase): its painting, or a medallion of its colour; its name, what it
@@ -829,7 +860,7 @@ func choose_place(run: Run) -> int:
 	detail.add_child(dbox)
 	# The place pointed at, painted, over its name.
 	var view := Control.new()
-	view.custom_minimum_size = Vector2(300, 170)
+	view.custom_minimum_size = Vector2(300, 112)
 	view.set_meta("place", -1)
 	view.draw.connect(func() -> void:
 		var pic := _art("place_" + PLACE_KEYS[clampi(int(view.get_meta("place")), 0, 5)]) if int(view.get_meta("place")) >= 0 else null
@@ -843,6 +874,24 @@ func choose_place(run: Run) -> int:
 	dbox.add_child(view)
 	var heading := _label("指着一处看看", 26, Fonts.serif(900), Style.GOLD_BRIGHT)
 	dbox.add_child(heading)
+	# Its homeland's map (GAME-DESIGN 33): the plots, the one open from the start gold.
+	var plan := Control.new()
+	plan.custom_minimum_size = Vector2(300, Home.ROWS * 15.0 + 4.0)
+	plan.set_meta("place", -1)
+	plan.draw.connect(func() -> void:
+		var pl := int(plan.get_meta("place"))
+		if pl < 0:
+			return
+		var m := Home.map_of(pl)
+		var cell := 15.0
+		var o := Vector2((plan.size.x - Home.COLS * cell) * 0.5, 2.0)
+		for p in m:
+			var r := Rect2(o + Vector2(p) * cell, Vector2(cell, cell)).grow(-1.5)
+			for pair in [[Vector2i.RIGHT, SIDE_RIGHT], [Vector2i.LEFT, SIDE_LEFT], [Vector2i.UP, SIDE_TOP], [Vector2i.DOWN, SIDE_BOTTOM]]:
+				if m.get(p + (pair[0] as Vector2i), "") == m[p]:
+					r = r.grow_side(pair[1], 1.5)
+			plan.draw_rect(r, Color(Style.GOLD_BRIGHT, 0.85) if m[p] == Content.START_PLOT else Color(Style.PARCHMENT, 0.4), true))
+	dbox.add_child(plan)
 	var text := _label("", 16, Fonts.serif(500), Style.PARCHMENT)
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	text.autowrap_mode = Style.wrap()
@@ -866,6 +915,8 @@ func choose_place(run: Run) -> int:
 		text.text = _place_text(p)
 		view.set_meta("place", p)
 		view.queue_redraw()
+		plan.set_meta("place", p)
+		plan.queue_redraw()
 	map.draw.connect(func() -> void:
 		var f := Fonts.serif(800)
 		for t in run.map.size():
@@ -953,12 +1004,14 @@ func choose_place(run: Run) -> int:
 const PLACE_KEYS := ["rain", "lava", "bog", "ice", "sand", "sea"]
 
 
-## What a place is like, for the map: its special ground, who comes there.
+## What a place is like, for the map: its homeland's map (GAME-DESIGN 33), who comes there.
 func _place_text(p: int) -> String:
 	var lv: Dictionary = Content.LEVELS[p]
-	var ground: Array = []
-	for t in lv.terrain:
-		ground.append(Lang.t("%s：%s") % [Lang.t(Content.TERRAIN[t].name), Lang.t(Content.TERRAIN[t].says)])
+	var m := Home.map_of(p)
+	var plots := {}
+	for c in m:
+		plots[m[c]] = true
+	var ground: Array = [Lang.t("地块：%s（%d 块地，共 %d 格）") % [Lang.t(lv.lay), plots.size(), m.size()]]
 	var foes: Array = lv.mix.map(func(m: Array) -> String: return Lang.t(Content.ENEMIES[m[0]].name))
 	var minis: Array = lv.minis.map(func(k: String) -> String: return Lang.t(Content.ENEMIES[k].name))
 	return Lang.t("%s\n\n会来：%s\n小首领：%s\n首领：%s") % ["\n".join(ground), Lang.t("、").join(foes),

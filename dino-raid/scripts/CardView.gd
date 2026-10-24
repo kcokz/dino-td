@@ -412,7 +412,7 @@ func footer() -> String:
 	var bits: Array = [Lang.t(Content.TYPES[c.type])]
 	if c.type == "build":
 		var b: Dictionary = Content.BUILDINGS[c.builds]
-		bits = [Lang.t("巢 · 阵地" if b.has("nest") else "后方")]
+		bits = [Lang.t("巢" if b.has("nest") else "建筑")]
 		if b.has("school"):
 			bits.append(Lang.t(Content.SCHOOLS[b.school].name))
 	bits.append(Lang.t(RARITY[int(c.rarity)]))

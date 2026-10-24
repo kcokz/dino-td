@@ -183,7 +183,7 @@ func dress(r: int) -> void:
 	rng.seed = 12 + r
 	for i in 80:
 		var at := Vector3(rng.randf_range(-70, 70), 0, rng.randf_range(-120, 40))
-		if absf(at.x) < 16 and at.z > -12 and at.z < 20:
+		if absf(at.x) < 16 and at.z > -18 and at.z < 24:
 			continue
 		if absf(at.x - ARENA.x) < FIELD.x * 0.5 + 3 and absf(at.z - ARENA.z) < FIELD.y * 0.5 + 3:
 			continue
@@ -211,7 +211,7 @@ func dress(r: int) -> void:
 ## 2026-10-20): broadleaf trees thick at the clearing's edge and thinning outward, on every side but the road north and
 ## the pens' side, bushes at their feet -- a few kinds of tree (Kit), each drawn many times at once, swaying a little.
 func _forest(rng: RandomNumberGenerator) -> void:
-	var home := Vector2(0.0, 4.0)
+	var home := Vector2(0.0, 3.0)
 	var kinds := 6
 	var trees: Array = []
 	for k in kinds:
@@ -223,9 +223,9 @@ func _forest(rng: RandomNumberGenerator) -> void:
 		tries += 1
 		var p := Vector2(rng.randf_range(-80.0, 80.0), rng.randf_range(-58.0, 60.0))
 		var d := p.distance_to(home)
-		if d < 25.0 or d > 72.0 or not _open_for_trees(p):
+		if d < 28.0 or d > 72.0 or not _open_for_trees(p):
 			continue
-		if rng.randf() > 1.2 - (d - 25.0) / 45.0:
+		if rng.randf() > 1.2 - (d - 28.0) / 45.0:
 			continue
 		var s := rng.randf_range(0.8, 1.4)
 		(trees[rng.randi() % kinds] as Array[Transform3D]).append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s),
@@ -236,7 +236,7 @@ func _forest(rng: RandomNumberGenerator) -> void:
 		tries += 1
 		var p := Vector2(rng.randf_range(-60.0, 60.0), rng.randf_range(-50.0, 50.0))
 		var d := p.distance_to(home)
-		if d < 20.5 or d > 34.0 or not _open_for_trees(p):
+		if d < 25.0 or d > 36.0 or not _open_for_trees(p):
 			continue
 		var s := rng.randf_range(0.7, 1.5)
 		bushes.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s),

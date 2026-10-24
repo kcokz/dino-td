@@ -11,9 +11,9 @@ class_name Ground
 const MIN := Vector2(-96.0, -150.0)     # the mesh's extent (x, z); past it the flat far ground (World) to the horizon
 const MAX := Vector2(96.0, 62.0)
 const STEP := 1.5
-const HOME := Rect2(-13.5, -10.5, 27.0, 27.0)       # the homeland's terrace (x, z)
+const HOME := Rect2(-13.5, -16.5, 27.0, 39.0)       # the homeland's terrace (x, z): its map and the yard south of it
 const ROAD_HALF := 2.1
-const ROAD := Vector2(-70.0, -9.0)                  # the road north, from z to z
+const ROAD := Vector2(-70.0, -15.0)                 # the road north, from z to z
 const SEED := 20261019
 
 ## What grows on each place's ground: [tuft colour at the root, at the tip, how many tufts, flower colours, pebble colour].

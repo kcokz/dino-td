@@ -702,7 +702,7 @@ func _buildings_page() -> Array:
 	var out: Array = []
 	for kind in Content.BUILDINGS:
 		var b: Dictionary = Content.BUILDINGS[kind]
-		var where := Lang.t("巢 · 阵地") if b.has("nest") else Lang.t("后方")
+		var where := Lang.t("巢") if b.has("nest") else Lang.t("建筑")
 		if b.has("school"):
 			where += " · " + Lang.t(Content.SCHOOLS[b.school].name)
 		if b.has("region"):
@@ -710,7 +710,7 @@ func _buildings_page() -> Array:
 		var text := ""
 		if b.has("nest"):
 			var t: Dictionary = Content.TRAITS[b.trait]
-			text = Lang.t("孵%s。\n本事「%s」：%s%s\n升级：多孵 1 只，或者变精英") % [Lang.t(Content.UNITS[b.nest].name), Lang.t(t.name), Lang.t(t.does),
+			text = Lang.t("孵%s。\n本事「%s」：%s%s\n升级：变精英") % [Lang.t(Content.UNITS[b.nest].name), Lang.t(t.name), Lang.t(t.does),
 				(Lang.t("（%s）") % Lang.t(t.when)) if t.when != "" else ""]
 		else:
 			var lines: Array = [Lang.t("管：%s") % Lang.t(Content.REACH[b.reach])] if b.has("reach") else []

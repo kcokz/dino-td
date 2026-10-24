@@ -5,8 +5,9 @@ extends Node3D
 ## is begun with nothing built, a nest picked from three. A round goes in parts (GAME-DESIGN 26, Content.phases), each
 ## said as it comes. The start: the round's pay and the interest on the gold kept come in. The player's: the player
 ## researches techs for research points (the tech tree, GAME-DESIGN 29), builds from the blueprints had (the build bar;
-## GAME-DESIGN 27), raises buildings (clicked: a nest raised elite), moves nests about the battle line for nothing to
-## face the lanes the wave comes down (dragged; GAME-DESIGN 32), sticks gene affixes on nests
+## GAME-DESIGN 27), raises buildings (clicked: a nest raised elite), opens plots (a plot not open yet clicked: opened
+## for gold; GAME-DESIGN 33), moves nests about for nothing to face the lanes the wave comes down (dragged; GAME-DESIGN
+## 32), sticks gene affixes on nests
 ## -- where a building works lit blue as it is placed (GAME-DESIGN 28) -- then is done. The making, by itself: the
 ## buildings bring in research points and gold, and the nests hatch this round's young -- each out of its nest to stand
 ## in the yard as it will stand in battle. The battle, by itself: the young go out and fight, and are gone with it;
@@ -23,8 +24,8 @@ signal fight_over                 # the battle fought to its end
 
 enum Phase { BUSY, PLAN, FIGHT, MOVE, DONE, TITLE }
 
-const HOME_AT := Vector3(0, 0, 4.0)
-const HOME_DIST := 44.0
+const HOME_AT := Vector3(0, 0, 5.5)
+const HOME_DIST := 51.0
 const FIGHT_AT := Vector3(0, 0, -79.0)
 const FIGHT_DIST := 18.0
 const PITCH := 54.0
@@ -70,7 +71,7 @@ var _orbit := 0.6                 # the title's camera, going slowly round
 var _cam_at := HOME_AT
 var _cam_dist := HOME_DIST
 var _drag := false
-var _from := HomeView.NOWHERE     # a nest pressed on, to be dragged to another plot of the battle line (or clicked)
+var _from := HomeView.NOWHERE     # a nest pressed on, to be dragged to another open cell (or clicked)
 var _moving := false              # ...and dragged off it
 var _acc := 0.0
 var _fighting := false
@@ -159,8 +160,8 @@ func _process(delta: float) -> void:
 
 # -- What the player does --------------------------------------------------------------------------------------
 
-## The one door for a player's action: "research" {id} (a tech of the tree), "move" {from, to} (a nest moved on the
-## battle line, or two swapped), "build" {plan, at} (the blueprint
+## The one door for a player's action: "research" {id} (a tech of the tree), "open" {plot} (a plot opened), "move"
+## {from, to} (a nest moved, or two swapped), "build" {plan, at} (the blueprint
 ## plans[plan] built on `at`), "raise" {at} (the building at `at` a level up -- a nest elite), "choose" (the building
 ## clicked raised), "star" (the star on offer bought), "sell" {pen}, "fight". Whether it happened.
 func act(what: String, data := {}) -> bool:
@@ -171,6 +172,14 @@ func act(what: String, data := {}) -> bool:
 			if not home.research(str(data.get("id", ""))):
 				return false
 			_changed([{"t": "researched", "id": data.id}])
+			return true
+		"open":
+			var ev := home.open_plot(str(data.get("plot", "")))
+			if ev.is_empty():
+				return false
+			pending = {}
+			aimed = ""
+			_changed(ev)
 			return true
 		"move":
 			var ev := home.move_building(data.get("from", HomeView.NOWHERE), data.get("to", HomeView.NOWHERE))
@@ -263,6 +272,13 @@ func _changed(ev: Array) -> void:
 					if e.affix in sp.used:
 						tags.float_text(home_view.top(e.at) + Vector3.UP * 1.5, Lang.t("进化！%s") % Lang.t(Content.UNITS[sp.kind].name),
 							(Content.UNITS[sp.kind].color as Color).lightened(0.3), 28)
+			"opened":
+				home_view.lift_mist(e.plot)
+				var cells := home.plot_cells(e.plot)
+				var mid := Vector3.ZERO
+				for p in cells:
+					mid += HomeView.plot_pos(p)
+				tags.float_text(mid / cells.size() + Vector3.UP * 2.5, Lang.t("开地 -%d 金") % e.gold, Color(1.0, 0.8, 0.4), 24)
 			"stored":
 				tags.float_text(_pen_of("keep") + Vector3(0, 3.0, 0), Lang.t("囤囤收好了"), Color(0.6, 1.0, 0.55), 22)
 			"star":
@@ -287,7 +303,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_moving = true
 			refresh()
 	elif event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		# A nest pressed on let go of: dragged to another plot of the battle line, moved there; else it was a click.
+		# A nest pressed on let go of: dragged to another open cell, moved there; else it was a click.
 		if _from != HomeView.NOWHERE:
 			var from := _from
 			var moved := _moving
@@ -353,8 +369,10 @@ func _click() -> void:
 		if at != null:
 			act("build", {"plan": held, "at": at})
 		return
-	# Nothing taken up: a building clicked is to be raised -- the HUD asks how, a nest's either way (GAME-DESIGN 27).
-	pending = {"at": at} if at != null and home.buildings.has(at) and pending.get("at") != at else {}
+	# Nothing taken up: a building clicked is to be raised (GAME-DESIGN 27), a plot not open yet to be opened (GAME-DESIGN
+	# 33) -- the HUD asks.
+	var shut: bool = at != null and home.plot_of.has(at) and not home.is_open(at)
+	pending = {"at": at} if at != null and (home.buildings.has(at) or shut) and pending.get("at") != at else {}
 	aimed = ""
 	refresh()
 
@@ -443,6 +461,7 @@ func relanguage() -> void:
 func refresh() -> void:
 	var tints := {}
 	var reach: Array = []
+	var hot := ""                 # a plot not open yet, pointed at or clicked
 	preview = {}
 	effects = {}
 	if phase == Phase.PLAN:
@@ -451,14 +470,12 @@ func refresh() -> void:
 			_forecast_at = _version
 		var good := _taken()
 		if _moving:
-			# A nest dragged: the battle line's plots it can go to lit, the one it is over brighter, with where it
-			# would work there and what the move would change.
+			# A nest dragged: the open cells it can go to lit, the one it is over brighter, with where it would work
+			# there and what the move would change.
 			var kind: String = home.buildings[_from].kind
-			for x in Home.COLS:
-				for y in Content.FRONT_ROWS:
-					var p := Vector2i(x, y)
-					if p != _from and home.buildable(p) and (not home.buildings.has(p) or Content.is_nest(home.buildings[p].kind)):
-						tints[p] = SWAP_TINT if home.buildings.has(p) else OK_TINT
+			for p in home.plot_of:
+				if p != _from and home.buildable(p) and (not home.buildings.has(p) or Content.is_nest(home.buildings[p].kind)):
+					tints[p] = SWAP_TINT if home.buildings.has(p) else OK_TINT
 			tints[_from] = LOOK_TINT
 			var at: Vector2i = hover.plot
 			if tints.has(at) and at != _from:
@@ -466,6 +483,8 @@ func refresh() -> void:
 				reach = Home.reach(kind, at)
 				var from := _from
 				_try("move|%s|%s" % [str(from), str(at)], func(h: Home) -> void: h.move_building(from, at))
+		elif not pending.is_empty() and not home.buildings.has(pending.at):
+			hot = home.plot_of.get(pending.at, "")
 		elif not pending.is_empty():
 			tints[pending.at] = HOT_TINT
 			reach = Home.reach(home.buildings[pending.at].kind, pending.at)
@@ -490,8 +509,11 @@ func refresh() -> void:
 			tints[hover.plot] = LOOK_TINT
 			if home.buildings.has(hover.plot):
 				reach = Home.reach(home.buildings[hover.plot].kind, hover.plot)
+		elif hover.plot != HomeView.NOWHERE:
+			hot = home.plot_of.get(hover.plot, "")
 	home_view.tints = tints
 	home_view.reach = reach
+	home_view.hot_plot = hot
 	home_view.paint()
 	home_view.refresh_pens()
 	hud.refresh()
@@ -521,25 +543,30 @@ func _work_out(h: Home) -> Dictionary:
 
 ## What differs between two homelands, building by building, as short lines: more or fewer hatched, a new species,
 ## elite, hardier, harder hitting, faster, an affix, more affix places; and at the plot of a building that brings
-## something in, what it brings.
+## something in, what it brings. A building is set against itself where it stood (a nest moved is still itself), a new
+## one against what stood there before it.
 func _changes(a: Home, b: Home) -> Dictionary:
 	var out := {}
 	var made_a := _made(a)
 	var made_b := _made(b)
+	var at_a := {}
+	for q in a.buildings:
+		at_a[a.buildings[q].id] = q
 	for p in b.buildings:
 		var lines: Array = []
 		var kind: String = b.buildings[p].kind
+		var q: Vector2i = at_a.get(b.buildings[p].id, p)
 		if Content.is_nest(kind):
-			var d := int(made_b.get(p, 0)) - int(made_a.get(p, 0))
+			var d := int(made_b.get(p, 0)) - int(made_a.get(q, 0))
 			if d != 0:
 				lines.append(Lang.t("%+d 只") % d)
 			var gift := b.trait_of(p)
 			if gift in ["swarm", "guard", "cover", "alone"]:
-				var was: bool = a.buildings.has(p) and a.buildings[p].kind == kind and a.trait_on(p)
+				var was: bool = a.buildings.has(q) and a.buildings[q].kind == kind and a.trait_on(q)
 				if b.trait_on(p) != was:
 					lines.append(Lang.t("%s本事「%s」") % ["+" if b.trait_on(p) else "−", Lang.t(Content.TRAITS[gift].name)])
-			if a.buildings.has(p) and a.buildings[p].kind == kind:
-				var sa := a.spec_of(p)
+			if a.buildings.has(q) and a.buildings[q].kind == kind:
+				var sa := a.spec_of(q)
 				var sb := b.spec_of(p)
 				if sb.kind != sa.kind:
 					lines.append(Lang.t("进化：") + Lang.t(Content.UNITS[sb.kind].name))
@@ -560,12 +587,13 @@ func _changes(a: Home, b: Home) -> Dictionary:
 				for af in sb.affixes:
 					if not af in sa.affixes:
 						lines.append("+" + Lang.t(Content.AFFIXES[af].name))
-				if b.slots(p) != a.slots(p):
-					lines.append(Lang.t("词条位 %+d") % (b.slots(p) - a.slots(p)))
+				if b.slots(p) != a.slots(q):
+					lines.append(Lang.t("词条位 %+d") % (b.slots(p) - a.slots(q)))
 		if not lines.is_empty():
 			out[p] = lines
 	for p in b.buildings:
-		if a.buildings.has(p) and a.buildings[p].kind == b.buildings[p].kind and a.buildings[p].level == b.buildings[p].level:
+		var q: Vector2i = at_a.get(b.buildings[p].id, p)
+		if a.buildings.has(q) and a.buildings[q].kind == b.buildings[p].kind and a.buildings[q].level == b.buildings[p].level:
 			continue
 		var lines: Array = out.get(p, [])
 		for pair in [[Lang.t("金币"), b.income_gold() - a.income_gold(), Lang.t("/轮")], [Lang.t("人口上限"), b.income_biomass() - a.income_biomass(), ""],
@@ -594,7 +622,9 @@ func hint() -> String:
 	if phase != Phase.PLAN:
 		return ""
 	if _moving:
-		return Lang.t("放到另一块阵地上：挪过去；放到别的巢上：两个换位置。不要钱")
+		return Lang.t("放到开着的空格上：挪过去；放到别的巢上：两个换位置。不要钱")
+	if not pending.is_empty() and not home.buildings.has(pending.at):
+		return ""
 	if not pending.is_empty():
 		var at: Vector2i = pending.at
 		var b: Dictionary = home.buildings[at]
@@ -632,15 +662,19 @@ func describe() -> String:
 				return _unit_text(u)
 		return ""
 	var p: Vector2i = hover.plot
-	if p == HomeView.NOWHERE:
+	if p == HomeView.NOWHERE or not home.plot_of.has(p):
 		return ""
 	var ground: String = home.terrain.get(p, "")
+	if not home.is_open(p):
+		var id: String = home.plot_of[p]
+		var size := home.plot_cells(id).size()
+		if not home.reachable(id):
+			return Lang.t("没开的地（%d 格）\n离开着的地太远：先开它旁边的地") % size
+		return Lang.t("没开的地（%d 格）\n开它要 %d 金，开了就能造。点一下开地") % [size, home.open_price(id)]
 	if not home.buildings.has(p):
 		if ground != "":
 			return "%s\n%s" % [Lang.t(Content.TERRAIN[ground].name), Lang.t(Content.TERRAIN[ground].says)]
-		if Home.front(p):
-			return Lang.t("阵地（%s）：只能造巢。巢造在这里，它孵的兵打仗时就站在这里") % (Lang.t("前排") if p.y == 0 else Lang.t("后排"))
-		return Lang.t("后方：巢以外的建筑造在这里")
+		return Lang.t("空地：什么都能造。挨着的建筑才互相加成，隔着空地就断了")
 	var text := _building_text(p)
 	if ground != "":
 		text += Lang.t("\n建在%s上：%s") % [Lang.t(Content.TERRAIN[ground].name), Lang.t(Content.TERRAIN[ground].says)]
@@ -687,10 +721,10 @@ func _unit_text(u: Dictionary) -> String:
 	if s.charge:
 		more.append(Lang.t("开战第一下双倍"))
 	if u.get("guard", false):
-		more.append(Lang.t("护住身后同一列"))
-	var ahead := Vector2i(int(u.lane), 0)
-	if int(u.get("row", 0)) == 1 and home.trait_of(ahead) == "guard" and home.trait_on(ahead):
-		more.append(Lang.t("身前有绿兵护着"))
+		more.append(Lang.t("护住下面挨着的巢"))
+	var above: Vector2i = (u.nest as Vector2i) + Vector2i.UP
+	if home.trait_of(above) == "guard" and home.trait_on(above):
+		more.append(Lang.t("上面的绿巢护着它"))
 	if u.get("care", false):
 		more.append(Lang.t("只给同一列回血"))
 	if u.get("scavenge", false):
@@ -724,7 +758,7 @@ func _building_text(p: Vector2i) -> String:
 		var made := int(_made(home).get(p, 0))
 		var want := home.count(p)
 		lines.append(Lang.t("这一轮孵 %d 只%s，打仗时站%s") % [made, (Lang.t("（人口不够，少 %d）") % (want - made)) if made < want else "",
-			Lang.t("前排") if p.y == 0 else Lang.t("后排")])
+			Lang.t("前排") if int(s.row) == 0 else Lang.t("后排")])
 		var e := int(s.elite)
 		if e > 0:
 			lines.append(Lang.t("精英%s：血 ×%s、攻击 ×%s、大一号") % ["×%d" % e if e > 1 else "", Content._num(pow(Content.ELITE_HP, e)),
@@ -732,8 +766,8 @@ func _building_text(p: Vector2i) -> String:
 		var given: Array = []
 		if e > 0 and home._given("elite", p) > 0:
 			given.append(Lang.t("冠军殿：精英再 +%d%%") % home._given("elite", p))
-		if p.y == 0 and home._given("front", p) > 0:
-			given.append(Lang.t("前锋营：前排血 +%d%%") % home._given("front", p))
+		if int(s.row) == 0 and home._given("front", p) > 0:
+			given.append(Lang.t("前锋营：近战血 +%d%%") % home._given("front", p))
 		if maxf(float(Content.UNITS[s.kind].range), float(s.range)) >= 3.0 and home._given("ranged", p) > 0:
 			given.append(Lang.t("瞭望塔：每下多 %d，不管护甲") % home._given("ranged", p))
 		var horde := home.horde_bonus(army_now().size(), p)
@@ -756,15 +790,15 @@ static func _num(x: float) -> String:
 	return ("%d" % x) if is_equal_approx(x, roundf(x)) else ("%.1f" % x)
 
 
-## What the army's size does for it, said plainly (for the HUD): what each horde totem gives the nests in front of
-## it; "" when nothing. (What the other buildings give, a nest says itself.)
+## What the army's size does for it, said plainly (for the HUD): what each horde totem gives the nests beside it; ""
+## when nothing. (What the other buildings give, a nest says itself.)
 func bonuses() -> String:
 	var parts: Array = []
 	var n := ahead().fighters.size()
 	for p in home.buildings:
 		if home.buildings[p].kind == "horde_totem":
 			var each := int(home.level_of(p).per)
-			parts.append(Lang.t("兽群图腾：出战 %d 只，它前面三列的兵攻击 +%d；再多 %d 只 +1") % [n, n / each, each - n % each])
+			parts.append(Lang.t("兽群图腾：出战 %d 只，挨着它的巢的兵攻击 +%d；再多 %d 只 +1") % [n, n / each, each - n % each])
 	# What the fed stars do for the army.
 	for k in home.stars.size():
 		if k in home.hungry:
@@ -1100,23 +1134,35 @@ func pause() -> void:
 			get_tree().quit()
 
 
-## A homeland to look at under the title: the battle line laid out for the nests' gifts -- greens guarding, reds
-## swarming, a gold alone, a blue under cover -- the rows behind built up, a pond, an old tree.
+## A homeland to look at under the title: the rainforest's map all open and built up (lay_showcase).
 static func showcase() -> Home:
 	var h := Home.new(RandomNumberGenerator.new())
+	lay_showcase(h)
+	h.biomass = 80
+	return h
+
+
+## The rainforest's map (Content.LEVELS) all open, every plot built up as its shape asks (GAME-DESIGN 33): a horde
+## totem in the middle of the cross, reds round it; a green guarding a blue under its cover, a champion hall beside the
+## green; three reds swarming along the top, a vanguard camp under them; a sampler among pools; mines about a vault;
+## the first plot's white, scavengers, mutant and spore pool; a gold alone on a plot of its own; a gene bank.
+static func lay_showcase(h: Home) -> void:
 	h.buildings.clear()
-	h.terrain = {Vector2i(0, 2): "pond", Vector2i(5, 3): "tree"}
-	# [plot, kind, nest's choices or a level, affixes]
-	for step in [[Vector2i(0, 0), "nest_green", ["elite"], ["shell"]], [Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]],
-			[Vector2i(2, 0), "nest_red", ["elite", "elite"], ["flame", "blade"]], [Vector2i(3, 0), "nest_green", [], []],
-			[Vector2i(4, 0), "nest_red", [], []], [Vector2i(5, 0), "nest_gold", ["elite"], []],
-			[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", [], ["hide"]],
-			[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_blue", ["elite"], ["acid"]],
-			[Vector2i(4, 1), "nest_scav", [], []], [Vector2i(5, 1), "nest_mutant", [], ["acid", "poison"]],
-			[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "sampler", 2, []], [Vector2i(2, 2), "horde_totem", 1, []],
-			[Vector2i(3, 2), "watchtower", 2, []], [Vector2i(4, 2), "mine", 2, []], [Vector2i(5, 2), "champion_hall", 1, []],
-			[Vector2i(0, 3), "spore_pool", 2, []], [Vector2i(1, 3), "vault", 1, []], [Vector2i(2, 3), "stabilizer", 1, []],
-			[Vector2i(3, 3), "gene_bank", 1, []], [Vector2i(4, 3), "vanguard", 2, []]]:
+	h.opened = h.plot_ids()
+	# [cell, kind, nest's raises or a level, affixes]
+	for step in [[Vector2i(2, 2), "horde_totem", 2, []], [Vector2i(2, 1), "nest_red", ["elite"], ["blade", "wings"]],
+			[Vector2i(1, 2), "nest_red", [], ["hide"]], [Vector2i(3, 2), "nest_red", ["elite", "elite"], ["flame", "blade"]],
+			[Vector2i(2, 3), "nest_red", [], ["haste"]],
+			[Vector2i(0, 0), "nest_green", ["elite"], ["shell"]], [Vector2i(0, 1), "nest_blue", ["elite"], ["acid"]],
+			[Vector2i(1, 0), "champion_hall", 1, []],
+			[Vector2i(3, 0), "nest_red", [], []], [Vector2i(4, 0), "nest_red", [], []], [Vector2i(5, 0), "nest_red", [], []],
+			[Vector2i(4, 1), "vanguard", 2, []],
+			[Vector2i(5, 3), "sampler", 2, []], [Vector2i(5, 2), "pool", 3, []], [Vector2i(4, 3), "pool", 2, []],
+			[Vector2i(5, 4), "spore_pool", 2, []],
+			[Vector2i(0, 4), "vault", 1, []], [Vector2i(0, 3), "mine", 2, []], [Vector2i(1, 4), "mine", 1, []],
+			[Vector2i(2, 5), "nest_white", [], []], [Vector2i(3, 5), "nest_scav", [], []],
+			[Vector2i(2, 6), "nest_mutant", [], ["acid", "poison"]], [Vector2i(3, 6), "pool", 1, []],
+			[Vector2i(0, 6), "nest_gold", ["elite"], []], [Vector2i(5, 6), "gene_bank", 1, []]]:
 		h.build(step[0], step[1])
 		var b: Dictionary = h.buildings[step[0]]
 		if step[2] is Array:
@@ -1125,8 +1171,6 @@ static func showcase() -> Home:
 		else:
 			b.level = step[2]
 		b.affixes = step[3].duplicate()
-	h.biomass = 80
-	return h
 
 
 # -- The camera ---------------------------------------------------------------------------------------------------

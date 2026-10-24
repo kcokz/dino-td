@@ -1,10 +1,10 @@
 class_name HomeView
 extends Node3D
-## The homeland on screen (GAME-DESIGN 17, 19, 24): its plots on the ground of the place it stands in -- the battle
-## line's two rows on top, their earth warmer, a low strip between them and the rest; the special ground behind (a pond,
-## an old tree, a vein of ore, a pool of lava) as it is -- each building made after its card's painting (Kit), bigger
+## The homeland on screen (GAME-DESIGN 17, 19, 24, 33): its map on the ground of the place it stands in -- each plot a
+## raised bed of its own shape, grass, bushes and stones on the bare land between, a plot not open yet under a mist its
+## shape shows through; the special ground (put away) as it is -- each building made after its card's painting (Kit), bigger
 ## and more to it at each level, a nest's affixes as glowing samples before it, a crest of the new species' colour when
-## they make one, a gold ring for each time it was made elite. To the south the yard, laid out as the battle line: this
+## they make one, a gold ring for each time it was made elite. To the south the yard, laid out as the battle is: this
 ## round's army stands there as it will stand in battle, each unit hatched from its nest's door, gone with the battle.
 ## West of it all the star dinosaurs' pens (GAME-DESIGN 24), each star standing in its own -- asleep while it goes
 ## without (none while the stars are put away, Content.STARS_ON). Where a building works (GAME-DESIGN 28) glows blue
@@ -13,7 +13,7 @@ extends Node3D
 const TILE := 4.0
 const PLOT := 3.6
 const PLOT_TOP := 0.15
-const YARD_Z := 11.0              # where the yard's front row stands...
+const YARD_Z := (Home.ROWS - 1) * 0.5 * TILE + 4.0   # where the yard's front row stands, south of the map...
 const YARD_ROW := 2.4             # ...and the row behind it, this much further south
 const YARD_SPREAD := 1.05         # between a nest's units side by side
 const YARD_TURN := 0.75           # a dinosaur in the yard looks south-east: at the camera, its side showing
@@ -35,7 +35,27 @@ void fragment() {
 	ALBEDO = tint.rgb * (0.12 + edge * 1.5 + corner * 1.2) * beat;
 }
 """
-## The star dinosaurs' pens, a column west of the homeland (Content.PENS of them), the first nearest the battle line.
+## A plot not open yet (GAME-DESIGN 33): a thin low mist over it, drifting a little, thinning out at the plot's edges
+## (goes_on: where the plot goes on past a cell's side, north, east, south, west, it does not), its bed and frame
+## showing through -- warmer and thicker while it is pointed at or clicked (lit), lifting when it is opened (fade).
+const MIST_SHADER := """shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
+uniform vec4 tint : source_color = vec4(0.88, 0.92, 0.96, 0.4);
+uniform float lit = 0.0;
+uniform float fade = 1.0;
+instance uniform vec4 goes_on = vec4(0.0);
+void fragment() {
+	vec3 w = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float n = 0.5 + 0.3 * sin(w.x * 0.8 + TIME * 0.35) * sin(w.z * 0.65 - TIME * 0.28)
+		+ 0.2 * sin(w.x * 1.9 - w.z * 1.3 + TIME * 0.6);
+	float d = min(min(mix(UV.y, 1.0, goes_on.x), mix(1.0 - UV.y, 1.0, goes_on.z)),
+		min(mix(1.0 - UV.x, 1.0, goes_on.y), mix(UV.x, 1.0, goes_on.w)));
+	float edge = smoothstep(0.0, 0.2, d);
+	ALBEDO = mix(tint.rgb, vec3(1.0, 0.86, 0.52), lit * 0.6);
+	ALPHA = clamp(tint.a * (0.55 + 0.7 * n) + lit * 0.14, 0.0, 1.0) * edge * fade;
+}
+"""
+## The star dinosaurs' pens, a column west of the homeland (Content.PENS of them), the first nearest the road out.
 const PEN_AT := [Vector3(-18.5, 0.0, -4.0), Vector3(-18.5, 0.0, 0.2), Vector3(-18.5, 0.0, 4.4), Vector3(-18.5, 0.0, 8.6),
 	Vector3(-18.5, 0.0, 12.8)]
 const PEN := 3.4                  # a pen's side
@@ -52,11 +72,14 @@ const STAND_IN := {"mother": "white", "doctor": "mutant", "shield": "green", "sa
 
 var home: Home
 var tags: Tags
-var tints := {}                   # plot -> Color, lit by Game (where a good taken up can go)
-var reach: Array = []             # the plots lit blue by Game: where the building placed or pointed at works
-var _plot_mats := {}              # plot -> StandardMaterial3D
-var _reach_marks := {}            # plot -> MeshInstance3D: its blue glow
-var _ground := {}                 # plot -> Node3D: what stands on special ground
+var tints := {}                   # cell -> Color, lit by Game (where a good taken up can go)
+var reach: Array = []             # the cells lit blue by Game: where the building placed or pointed at works
+var hot_plot := ""                # a plot not open yet, pointed at or clicked: its mist lit (Game)
+var _plot_mats := {}              # cell -> StandardMaterial3D
+var _reach_marks := {}            # cell -> MeshInstance3D: its blue glow
+var _ground := {}                 # cell -> Node3D: what stands on special ground
+var _mists := {}                  # plot letter -> {mat, nodes}: the mist over a plot not open yet
+var _laid: Array = []             # what lay_ground laid (laid again in a new place)
 var _buildings := {}              # plot -> {node, look}
 var _units := {}                  # army unit id -> Node3D
 var _order: Array = []            # army unit ids, as they stand in the yard
@@ -66,48 +89,7 @@ var _pens_for := ""
 
 func setup(p_home: Home) -> void:
 	home = p_home
-	# Each plot a raised bed (the player chose a Zelda-like homeland, 2026-10-20): a frame of planks, a post at each
-	# corner, earth inside it, grained as the ground is -- the frames all one mesh.
-	var frames := Kit.Maker.new()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 404
-	var plank := Color(0.56, 0.4, 0.26)
-	for y in Home.ROWS:
-		for x in Home.COLS:
-			var p := Vector2i(x, y)
-			var slab := MeshInstance3D.new()
-			slab.mesh = Blocks.rounded(Vector3(PLOT - 0.2, 0.2, PLOT - 0.2))
-			slab.position = plot_pos(p) + Vector3(0, PLOT_TOP - 0.1, 0)
-			var m := Ground.earth_material(Color.WHITE)
-			slab.material_override = m
-			_plot_mats[p] = m
-			add_child(slab)
-			var c := plot_pos(p)
-			for side in 4:
-				var turn := side * PI * 0.5
-				var shade := plank.lerp(Color(0.46, 0.34, 0.22), rng.randf())
-				frames.put(Kit.box(Vector3(PLOT, 0.2, 0.14)), Transform3D(Basis(Vector3.UP, turn),
-					c + Vector3(0, PLOT_TOP - 0.02, PLOT * 0.5 - 0.05).rotated(Vector3.UP, turn)), Kit.paint(), shade)
-				frames.put(Kit.box(Vector3(0.2, 0.3, 0.2)), Transform3D(Basis(Vector3.UP, turn),
-					c + Vector3(PLOT * 0.5 - 0.06, PLOT_TOP + 0.02, PLOT * 0.5 - 0.06).rotated(Vector3.UP, turn)), Kit.paint(), shade.darkened(0.12))
-	var frame_node := MeshInstance3D.new()
-	frame_node.mesh = frames.mesh()
-	add_child(frame_node)
-	var glow := ShaderMaterial.new()
-	glow.shader = Shader.new()
-	glow.shader.code = REACH_SHADER
-	for p in _plot_mats:
-		var mark := MeshInstance3D.new()
-		var plane := PlaneMesh.new()
-		plane.size = Vector2(PLOT, PLOT)
-		mark.mesh = plane
-		mark.material_override = glow
-		mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mark.position = plot_pos(p) + Vector3(0, PLOT_TOP + 0.11, 0)
-		mark.visible = false
-		add_child(mark)
-		_reach_marks[p] = mark
-	# A post-and-rail fence along the yard's north side; a log lying where the battle line ends.
+	# A post-and-rail fence along the yard's north side.
 	var fence_z := YARD_Z - 1.3
 	var span := Home.COLS * TILE + 1.0
 	var wood := Color(0.42, 0.31, 0.2)
@@ -116,10 +98,6 @@ func setup(p_home: Home) -> void:
 		add_child(Blocks.cylinder(0.08, 0.7, wood.darkened(0.1), Vector3(x, 0.35, fence_z), 0.07))
 	for h in [0.28, 0.55]:
 		add_child(Blocks.box(Vector3(span, 0.07, 0.07), wood, Vector3(0, h, fence_z)))
-	var line_z := plot_pos(Vector2i(0, Content.FRONT_ROWS)).z - TILE * 0.5
-	var log_piece := Blocks.cylinder(0.14, Home.COLS * TILE, Color(0.36, 0.26, 0.17), Vector3(0, PLOT_TOP + 0.04, line_z), 0.13)
-	log_piece.rotation.z = PI * 0.5
-	add_child(log_piece)
 	for k in Content.PENS if Content.STARS_ON else 0:
 		var pen := _make_pen()
 		pen.position = PEN_AT[k]
@@ -134,8 +112,8 @@ static func plot_pos(p: Vector2i) -> Vector3:
 	return Vector3((p.x - (Home.COLS - 1) * 0.5) * TILE, 0.0, (p.y - (Home.ROWS - 1) * 0.5) * TILE)
 
 
-## Where unit u (Home.army's) stands in the yard: the yard laid out as the battle line -- each nest's units in its
-## column, the front row's nearest the homeland, a nest's units side by side, more behind them when there are many.
+## Where unit u (Home.army's) stands in the yard: the yard laid out as the battle is -- each unit in its nest's column,
+## the close-fighting nearest the homeland, those of a lane and row side by side, more behind them when there are many.
 static func yard_pos(u: Dictionary) -> Vector3:
 	var n := mini(int(u.get("of", 1)), 3)
 	var slot := int(u.get("slot", 0))
@@ -144,6 +122,7 @@ static func yard_pos(u: Dictionary) -> Vector3:
 	return Vector3(x, World.GROUND_TOP, z)
 
 
+## The map's cell under ground point w (bare land too; pick leaves it out), or NOWHERE.
 static func plot_at(w: Vector3) -> Vector2i:
 	var x := roundi(w.x / TILE + (Home.COLS - 1) * 0.5)
 	var y := roundi(w.z / TILE + (Home.ROWS - 1) * 0.5)
@@ -171,22 +150,85 @@ func unit_node(id: String) -> Node3D:
 
 # -- The ground -------------------------------------------------------------------------------------------------
 
-## A plot's own colour: its special ground's, or the place's tilled earth -- warmer on the battle line.
+## A cell's own colour: its special ground's, or the place's tilled earth.
 func plot_colour(p: Vector2i) -> Color:
 	var t: String = home.terrain.get(p, "")
 	if t != "":
 		return Content.TERRAIN[t].color
-	var earth := (Content.LEVELS[home.region].ground as Color).lightened(0.22)
-	return earth.lerp(Color(0.66, 0.42, 0.3), 0.4) if Home.front(p) else earth
+	return (Content.LEVELS[home.region].ground as Color).lightened(0.22)
 
 
-## The ground laid for the place the ark is in: each plot its colour, the special ones dressed -- water and stones in
-## a pond (reeds in a mire, a palm by an oasis, shells in a tide pool), a great tree, toadstools, a fossil in the ice,
-## broken pillars; nuggets in a vein of ore, crystals in one of ice; a crust on the lava, a wreck's ribs.
+## The ground laid for the place the ark is in (GAME-DESIGN 33): each plot of its map a raised bed (the player chose a
+## Zelda-like homeland, 2026-10-20) -- earth grained as the ground is, one frame of planks round the whole plot, a post
+## wherever two planks meet, a faint groove between its cells -- the frames all one mesh; under each cell a blue glow
+## for where a building works, put out; the bare land between the plots grass, bushes and stones; over a plot not open
+## yet, a mist. And the special ones dressed (put away: Content.TERRAIN_ON) -- water and stones in a pond (reeds in a
+## mire, a palm by an oasis, shells in a tide pool), a great tree, toadstools, a fossil in the ice, broken pillars;
+## nuggets in a vein of ore, crystals in one of ice; a crust on the lava, a wreck's ribs.
 func lay_ground() -> void:
-	for n in _ground.values():
-		n.queue_free()
+	for n in _laid:
+		if is_instance_valid(n):
+			n.queue_free()
+	_laid.clear()
+	_plot_mats.clear()
+	_reach_marks.clear()
+	_mists.clear()
 	_ground.clear()
+	var frames := Kit.Maker.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 404
+	var plank := Color(0.56, 0.4, 0.26)
+	var groove := (Content.LEVELS[home.region].ground as Color).darkened(0.35)
+	var posts := {}
+	var ways := [Vector2i(0, 1), Vector2i(1, 0), Vector2i(0, -1), Vector2i(-1, 0)]   # south, east, north, west: as turned
+	for p in home.plot_of:
+		var id: String = home.plot_of[p]
+		var slab := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(TILE, 0.2, TILE)
+		slab.mesh = box
+		slab.position = plot_pos(p) + Vector3(0, PLOT_TOP - 0.1, 0)
+		var m := Ground.earth_material(Color.WHITE)
+		slab.material_override = m
+		_plot_mats[p] = m
+		_lay(slab)
+		var c := plot_pos(p)
+		for side in 4:
+			var turn := side * PI * 0.5
+			if home.plot_of.get(p + ways[side], "") == id:
+				if side < 2:
+					frames.put(Kit.box(Vector3(TILE - 0.8, 0.03, 0.06)), Transform3D(Basis(Vector3.UP, turn),
+						c + Vector3(0, PLOT_TOP + 0.005, TILE * 0.5).rotated(Vector3.UP, turn)), Kit.paint(), groove)
+				continue
+			var shade := plank.lerp(Color(0.46, 0.34, 0.22), rng.randf())
+			frames.put(Kit.box(Vector3(TILE + 0.14, 0.2, 0.14)), Transform3D(Basis(Vector3.UP, turn),
+				c + Vector3(0, PLOT_TOP - 0.02, TILE * 0.5 - 0.07).rotated(Vector3.UP, turn)), Kit.paint(), shade)
+			for e in [-1.0, 1.0]:
+				var at := c + Vector3(e * (TILE * 0.5 - 0.07), 0, TILE * 0.5 - 0.07).rotated(Vector3.UP, turn)
+				var key := Vector2i(roundi(at.x * 10.0), roundi(at.z * 10.0))
+				if not posts.has(key):
+					posts[key] = true
+					frames.put(Kit.box(Vector3(0.2, 0.3, 0.2)), Transform3D(Basis(), at + Vector3(0, PLOT_TOP + 0.02, 0)),
+						Kit.paint(), shade.darkened(0.12))
+	var frame_node := MeshInstance3D.new()
+	frame_node.mesh = frames.mesh()
+	_lay(frame_node)
+	var glow := ShaderMaterial.new()
+	glow.shader = Shader.new()
+	glow.shader.code = REACH_SHADER
+	for p in _plot_mats:
+		var mark := MeshInstance3D.new()
+		var plane := PlaneMesh.new()
+		plane.size = Vector2(PLOT, PLOT)
+		mark.mesh = plane
+		mark.material_override = glow
+		mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mark.position = plot_pos(p) + Vector3(0, PLOT_TOP + 0.11, 0)
+		mark.visible = false
+		_lay(mark)
+		_reach_marks[p] = mark
+	_lay_bare()
+	_lay_mists()
 	for p in _plot_mats:
 		var t: String = home.terrain.get(p, "")
 		if t == "":
@@ -277,13 +319,86 @@ func lay_ground() -> void:
 					var crust := Blocks.box(Vector3(0.9, 0.12, 0.7), Color(0.16, 0.12, 0.1), Vector3(-1.0 + i * 1.0, 0.06, (i - 1) * 0.8 * (1 if k % 2 == 0 else -1)))
 					crust.rotation.y = i + k
 					node.add_child(crust)
-		add_child(node)
+		_lay(node)
 		_ground[p] = node
 	paint()
 
 
-## Lights the plots in tints; the rest their own colour (lava glows of itself); the plots in reach glowing blue.
+func _lay(n: Node3D) -> void:
+	add_child(n)
+	_laid.append(n)
+
+
+## The bare land between the plots, as it grows wild there: a bush or two and a stone, the place's own greens.
+func _lay_bare() -> void:
+	var grass: Color = Content.LEVELS[home.region].grass
+	var shapes := [Kit.bush_mesh(91, 1.2, grass.darkened(0.2)), Kit.bush_mesh(92, 0.9, grass.darkened(0.32)),
+		Kit.bush_mesh(93, 1.5, grass.darkened(0.12))]
+	for y in Home.ROWS:
+		for x in Home.COLS:
+			var p := Vector2i(x, y)
+			if home.plot_of.has(p):
+				continue
+			var c := plot_pos(p)
+			var k := x * 7 + y * 13
+			for i in 2:
+				var a := float(k) * 0.9 + i * 2.6
+				var at := c + Vector3(cos(a) * 1.05, Ground.height_at(c.x, c.z), sin(a * 1.3) * 1.05)
+				var bush := MeshInstance3D.new()
+				bush.mesh = shapes[(k + i) % shapes.size()]
+				bush.position = at
+				bush.rotation.y = a
+				_lay(bush)
+			if k % 3 == 0:
+				_lay(Blocks.rock(Vector3(0.7, 0.42, 0.6), Color(0.52, 0.5, 0.46), c + Vector3(-0.9, 0, 0.8), float(k)))
+
+
+## A mist over each plot not open yet, one to a plot (lit, faded as one).
+func _lay_mists() -> void:
+	var shader := Shader.new()
+	shader.code = MIST_SHADER
+	for id in home.plot_ids():
+		if id in home.opened:
+			continue
+		var mat := ShaderMaterial.new()
+		mat.shader = shader
+		var nodes: Array = []
+		for p in home.plot_cells(id):
+			var n := MeshInstance3D.new()
+			var plane := PlaneMesh.new()
+			plane.size = Vector2(TILE, TILE)
+			n.mesh = plane
+			n.material_override = mat
+			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			n.position = plot_pos(p) + Vector3(0, PLOT_TOP + 0.45, 0)
+			var on := func(d: Vector2i) -> float: return 1.0 if home.plot_of.get(p + d, "") == id else 0.0
+			n.set_instance_shader_parameter("goes_on", Vector4(on.call(Vector2i.UP), on.call(Vector2i.RIGHT),
+				on.call(Vector2i.DOWN), on.call(Vector2i.LEFT)))
+			_lay(n)
+			nodes.append(n)
+		_mists[id] = {"mat": mat, "nodes": nodes}
+
+
+## Plot `id` just opened: its mist lifts and is gone.
+func lift_mist(id: String) -> void:
+	if not _mists.has(id):
+		return
+	var m: Dictionary = _mists[id]
+	_mists.erase(id)
+	var mat: ShaderMaterial = m.mat
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("fade", v), 1.0, 0.0, 0.9)
+	tw.tween_callback(func() -> void:
+		for n in m.nodes:
+			if is_instance_valid(n):
+				n.queue_free())
+
+
+## Lights the cells in tints; the rest their own colour (lava glows of itself); the cells in reach glowing blue; the
+## mist of the plot pointed at lit.
 func paint() -> void:
+	for id in _mists:
+		(_mists[id].mat as ShaderMaterial).set_shader_parameter("lit", 1.0 if id == hot_plot else 0.0)
 	for p in _reach_marks:
 		_reach_marks[p].visible = p in reach
 	for p in _plot_mats:
@@ -589,6 +704,8 @@ func pick(cam: Camera3D, at: Vector2, want := "any") -> Dictionary:
 	var g: Variant = Geo.ground_point(cam, at)
 	if g != null:
 		out.plot = plot_at(g)
+		if not home.plot_of.has(out.plot):
+			out.plot = NOWHERE
 	return out
 
 
