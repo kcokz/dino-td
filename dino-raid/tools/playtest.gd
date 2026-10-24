@@ -210,12 +210,12 @@ func _rich() -> void:
 	# [plot, kind, nest's choices (or a level), affixes] -- the battle line laid out for the nests' gifts: two greens
 	# guarding (a white caring behind one, scavengers behind the other), four reds swarming, a gold alone at the edge, a
 	# blue with no cover yet (nothing in front of it), a mutant with two affixes.
-	var plan := [[Vector2i(0, 0), "nest_green", ["count"], ["shell"]],
-		[Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]], [Vector2i(2, 0), "nest_red", ["count", "count"], ["flame", "blade"]],
+	var plan := [[Vector2i(0, 0), "nest_green", ["elite"], ["shell"]],
+		[Vector2i(1, 0), "nest_red", ["elite"], ["blade", "wings"]], [Vector2i(2, 0), "nest_red", ["elite", "elite"], ["flame", "blade"]],
 		[Vector2i(3, 0), "nest_green", [], []], [Vector2i(5, 0), "nest_gold", ["elite"], []],
-		[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", ["count"], ["hide"]],
-		[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_scav", ["count"], []],
-		[Vector2i(4, 1), "nest_blue", ["count"], []], [Vector2i(5, 1), "nest_mutant", ["count"], ["acid", "poison"]],
+		[Vector2i(0, 1), "nest_white", [], []], [Vector2i(1, 1), "nest_red", [], ["hide"]],
+		[Vector2i(2, 1), "nest_red", [], ["haste"]], [Vector2i(3, 1), "nest_scav", ["elite"], []],
+		[Vector2i(4, 1), "nest_blue", ["elite"], []], [Vector2i(5, 1), "nest_mutant", [], ["acid", "poison"]],
 		[Vector2i(0, 2), "pool", 3, []], [Vector2i(1, 2), "stabilizer", 1, []], [Vector2i(2, 2), "stabilizer", 1, []],
 		[Vector2i(3, 2), "horde_totem", 1, []], [Vector2i(4, 2), "champion_hall", 1, []], [Vector2i(5, 2), "watchtower", 1, []],
 		[Vector2i(0, 3), "stabilizer", 1, []], [Vector2i(1, 3), "sampler", 2, []], [Vector2i(2, 3), "vanguard", 1, []],
@@ -262,10 +262,10 @@ func _rich() -> void:
 	game._click()
 	await _frames(10)
 	await _shot("raise_choice")
-	game.aim("elite")
+	game.aim("raise")
 	await _frames(6)
 	await _shot("raise_choice_elite")
-	game.act("choose", {"choice": "elite"})
+	game.act("choose")
 	game.hover = {"plot": Vector2i(3, 0), "unit": ""}
 	game.refresh()
 	await _frames(20)
@@ -494,7 +494,7 @@ func _do(play: Array) -> void:
 		"build":
 			game.act("build", {"plan": game.home.plans.find(play[1]), "at": play[2]})
 		"raise":
-			game.act("raise", {"at": play[1], "choice": play[2]})
+			game.act("raise", {"at": play[1]})
 
 
 func _until_plan() -> void:

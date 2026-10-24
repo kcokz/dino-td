@@ -21,16 +21,15 @@ const ROOM := 4                   # population past what the nests use that stil
 const RESEARCH_WORTH := 1.0       # the least good a tech must do for each research point it costs
 
 
-## A random play: ["build", id, target], ["raise", target, choice], ["star"], or [] when there is none.
+## A random play: ["build", id, target], ["raise", target], ["star"], or [] when there is none.
 static func any_play(h: Home, rng: RandomNumberGenerator) -> Array:
 	var can: Array = []
 	for id in h.plans:
 		for at in _careless(h, h.targets(id), id):
 			can.append(["build", id, at])
 	for at in h.buildings:
-		for choice in _raises(h, at):
-			if h.can_raise(at, choice):
-				can.append(["raise", at, choice])
+		if h.can_raise(at):
+			can.append(["raise", at])
 	if h.can_buy_star():
 		can.append(["star"])
 	return can[rng.randi() % can.size()] if not can.is_empty() else []
@@ -42,18 +41,13 @@ static func _careless(h: Home, fits: Array, id: String) -> Array:
 	return fits
 
 
-## The ways the building at `at` can be raised: a nest's two, anything else's one.
-static func _raises(h: Home, at: Vector2i) -> Array:
-	return ["count", "elite"] if Content.is_nest(h.buildings[at].kind) else ["count"]
-
-
 ## Does a play (any_play's, best_play's) to `h`. Its events.
 static func play(h: Home, p: Array) -> Array:
 	match p[0]:
 		"build":
 			return h.build_plan(p[1], p[2])
 		"raise":
-			return h.raise(p[1], p[2])
+			return h.raise(p[1])
 		"star":
 			return h.buy_star()
 	return []
@@ -128,17 +122,15 @@ static func best_play(run: Run, h: Home, school := "") -> Array:
 				best_gain = gain
 				best = ["build", id, at]
 	for at in h.buildings:
-		for choice in _raises(h, at):
-			if not h.can_raise(at, choice):
-				continue
-			var t := h.clone()
-			t.raise(at, choice)
-			var of := ("elite" if choice == "elite" else "horde") if Content.is_nest(h.buildings[at].kind) \
-				else str(Content.BUILDINGS[h.buildings[at].kind].get("school", ""))
-			var gain := (score(run, t, school) - base) / float(h.raise_price(at)) * _lean(of, school)
-			if gain > best_gain:
-				best_gain = gain
-				best = ["raise", at, choice]
+		if not h.can_raise(at):
+			continue
+		var t := h.clone()
+		t.raise(at)
+		var of := "elite" if Content.is_nest(h.buildings[at].kind) else str(Content.BUILDINGS[h.buildings[at].kind].get("school", ""))
+		var gain := (score(run, t, school) - base) / float(h.raise_price(at)) * _lean(of, school)
+		if gain > best_gain:
+			best_gain = gain
+			best = ["raise", at]
 	if h.can_buy_star():
 		var t := h.clone()
 		t.buy_star()
